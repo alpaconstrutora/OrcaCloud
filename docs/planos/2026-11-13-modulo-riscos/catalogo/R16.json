@@ -1,0 +1,735 @@
+{
+  "categoria": "R16",
+  "nome": "Riscos das instalações e dos sistemas prediais",
+  "itens": [
+    {
+      "codigo": "R16.01",
+      "evento": "Instalações elétricas mal dimensionadas ou executadas",
+      "causas": [
+        "Demanda calculada sem cargas reais (ar-condicionado, cooktop, carregador veicular)",
+        "Cabo de seção menor comprado no lugar do especificado",
+        "Emendas sem conector adequado e eletrodutos com taxa de ocupação excedida",
+        "Instalador sem qualificação em eletricidade"
+      ],
+      "consequencias": [
+        "Aquecimento de condutores e início de incêndio",
+        "Choque elétrico em usuários",
+        "Rasgos em alvenaria acabada para refazer circuitos e chamados de garantia"
+      ],
+      "controles_preventivos": [
+        "Projeto elétrico com ART e memória de cálculo de demanda arquivados",
+        "Conferência de bitola e certificação dos cabos no recebimento contra o projeto",
+        "Medição de resistência de isolamento e continuidade por circuito com laudo",
+        "FVS de enfiação antes do fechamento de forros e paredes"
+      ],
+      "controles_resposta": [
+        "Desenergizar os circuitos afetados e corrigir conforme projeto revisado",
+        "Emitir laudo da instalação antes de nova energização"
+      ],
+      "sinais_alerta": [
+        "Cabo recebido com bitola ou certificação divergente do pedido",
+        "Ensaio de isolamento reprovado",
+        "Chamado de garantia por disjuntor desarmando ou tomada aquecendo"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "instalacoes",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_antiga"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "suprimentos",
+        "docs_ged"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Subdimensionamento elétrico pode causar incêndio e choque fatal",
+      "referencias": [
+        "ABNT NBR 5410 – instalações elétricas de baixa tensão",
+        "NR-10 – segurança em instalações e serviços em eletricidade"
+      ]
+    },
+    {
+      "codigo": "R16.02",
+      "evento": "Falhas de aterramento e proteção contra descargas atmosféricas",
+      "causas": [
+        "Malha de aterramento executada sem medição de resistência",
+        "Descidas do SPDA interrompidas ou danificadas durante a obra",
+        "Ausência de equipotencialização entre sistemas metálicos",
+        "DPS omitido ou mal especificado nos quadros"
+      ],
+      "consequencias": [
+        "Choque elétrico por falta de caminho para correntes de falta",
+        "Queima de equipamentos e incêndio por descarga atmosférica",
+        "Falta do laudo exigido para habite-se ou seguro"
+      ],
+      "controles_preventivos": [
+        "Medição de resistência de aterramento e continuidade com laudo e ART",
+        "Inspeção do SPDA conforme norma antes da entrega, com relatório",
+        "Conferência de DPS e barramento de equipotencialização na FVS do quadro",
+        "Registro fotográfico das conexões enterradas antes do reaterro"
+      ],
+      "controles_resposta": [
+        "Complementar a malha ou as descidas e repetir as medições",
+        "Isolar áreas com risco até a correção"
+      ],
+      "sinais_alerta": [
+        "Laudo de aterramento ausente ou com valores acima do projeto",
+        "Conexão de SPDA reaterrada sem foto",
+        "Chamados de garantia recorrentes por queima de equipamentos"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "juridica"
+      ],
+      "fases": [
+        "fundacoes",
+        "instalacoes",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_metalica",
+        "regiao_chuvosa"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "docs_ged"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Falha de aterramento ou de SPDA pode causar choque fatal e incêndio",
+      "referencias": [
+        "ABNT NBR 5419 – proteção contra descargas atmosféricas",
+        "ABNT NBR 5410 – instalações elétricas de baixa tensão"
+      ]
+    },
+    {
+      "codigo": "R16.03",
+      "evento": "Sobrecargas e falhas em quadros de distribuição",
+      "causas": [
+        "Circuitos acrescidos em obra sem revisar o balanceamento de fases",
+        "Disjuntor incompatível com a seção do condutor protegido",
+        "Quadro sem espaço reserva e com conexões mal apertadas",
+        "Componentes sem certificação Inmetro"
+      ],
+      "consequencias": [
+        "Desligamentos frequentes e queima de equipamentos",
+        "Aquecimento de barramento e incêndio no quadro",
+        "Substituição de quadros após a entrega"
+      ],
+      "controles_preventivos": [
+        "Diagrama unifilar atualizado e afixado em cada quadro",
+        "Termografia ou medição de corrente por fase com carga antes da entrega",
+        "Reaperto de conexões com torque registrado em checklist",
+        "Conferência da certificação dos disjuntores no recebimento"
+      ],
+      "controles_resposta": [
+        "Redistribuir circuitos e trocar proteções incompatíveis",
+        "Desenergizar o quadro com aquecimento até a correção"
+      ],
+      "sinais_alerta": [
+        "Desequilíbrio de corrente entre fases acima do limite na medição",
+        "Quadro com circuitos não identificados no diagrama",
+        "Chamado de garantia por desligamento recorrente"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "operacional",
+        "qualidade"
+      ],
+      "fases": [
+        "instalacoes",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_ocupada"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "suprimentos",
+        "ordens_servico"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Sobrecarga ou mau contato em quadro pode iniciar incêndio",
+      "referencias": [
+        "ABNT NBR 5410 – instalações elétricas de baixa tensão"
+      ]
+    },
+    {
+      "codigo": "R16.04",
+      "evento": "Deficiências nos sistemas de detecção e combate a incêndio",
+      "causas": [
+        "Execução iniciada sem projeto de prevenção aprovado no corpo de bombeiros",
+        "Rede de hidrantes ou sprinklers com diâmetros e pressões fora do projeto",
+        "Detectores instalados antes da limpeza fina e danificados por pó",
+        "Compartimentação e portas corta-fogo alteradas por mudança de arquitetura"
+      ],
+      "consequencias": [
+        "Não emissão do AVCB e atraso do habite-se",
+        "Combate ineficaz com risco de morte em incêndio",
+        "Interdição da edificação e responsabilização"
+      ],
+      "controles_preventivos": [
+        "Aprovação do projeto de prevenção no corpo de bombeiros arquivada antes da execução",
+        "Teste de pressão e estanqueidade da rede de hidrantes com laudo",
+        "Teste funcional de detecção e alarme por laço com relatório",
+        "Vistoria interna com checklist do corpo de bombeiros antes de pedir a vistoria oficial"
+      ],
+      "controles_resposta": [
+        "Corrigir as exigências do relatório de vistoria e reagendar",
+        "Brigada e medidas compensatórias em área ocupada até a regularização"
+      ],
+      "sinais_alerta": [
+        "Exigência do corpo de bombeiros pendente sem prazo",
+        "Teste de pressão de hidrante reprovado",
+        "Alteração de layout sem revisão do projeto de prevenção"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "prazo",
+        "reputacional"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "instalacoes",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_ocupada",
+        "subsolo",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "garantia_qualidade",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Falha do sistema de incêndio pode causar mortes e a falta de AVCB leva à interdição",
+      "referencias": [
+        "ABNT NBR 17240 – sistemas de detecção e alarme de incêndio",
+        "ABNT NBR 13714 – sistemas de hidrantes e de mangotinhos para combate a incêndio",
+        "ABNT NBR 10897 – sistemas de proteção contra incêndio por chuveiros automáticos"
+      ]
+    },
+    {
+      "codigo": "R16.05",
+      "evento": "Vazamentos nas instalações hidrossanitárias",
+      "causas": [
+        "Conexões soldáveis com adesivo insuficiente ou cura desrespeitada",
+        "Tubulação perfurada na fixação de bancadas, rodapés ou armários",
+        "Fechamento de parede ou forro sem teste de estanqueidade",
+        "Transição entre materiais incompatíveis sem conexão apropriada"
+      ],
+      "consequencias": [
+        "Danos a forros, revestimentos e unidades vizinhas",
+        "Quebra de acabamentos para localizar e reparar",
+        "Chamados de garantia e desgaste com clientes"
+      ],
+      "controles_preventivos": [
+        "Teste de estanqueidade sob pressão por trecho registrado antes do fechamento",
+        "As-built de prumadas e ramais com cotas arquivado no GED",
+        "FVS de instalação hidráulica com foto antes do revestimento",
+        "Mapa de tubulações entregue às equipes de marcenaria e bancadas"
+      ],
+      "controles_resposta": [
+        "Localizar o vazamento por geofone ou termografia e reparar",
+        "Reparar e indenizar danos a terceiros"
+      ],
+      "sinais_alerta": [
+        "Trecho fechado sem teste de estanqueidade registrado",
+        "Chamado de garantia por umidade em forro ou parede",
+        "Consumo de água anormal no hidrômetro da obra"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "instalacoes",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_ocupada"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "ordens_servico",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 5626 – sistemas prediais de água fria e água quente",
+        "ABNT NBR 8160 – sistemas prediais de esgoto sanitário"
+      ]
+    },
+    {
+      "codigo": "R16.06",
+      "evento": "Capacidade insuficiente dos sistemas de abastecimento e reservação",
+      "causas": [
+        "Consumo calculado com população inferior à real",
+        "Pressão da rede pública insuficiente sem previsão de recalque",
+        "Reservatório reduzido para ganhar área ou aliviar a estrutura",
+        "Viabilidade da concessionária não confirmada"
+      ],
+      "consequencias": [
+        "Falta de água em horários de pico nos pavimentos altos",
+        "Obra adicional de reservação e bombeamento após a entrega",
+        "Reclamações coletivas e risco de ação do condomínio"
+      ],
+      "controles_preventivos": [
+        "Carta de viabilidade da concessionária arquivada antes do projeto executivo",
+        "Memória de cálculo de consumo e reservação revisada por segundo projetista",
+        "Medição de pressão na ligação provisória registrada",
+        "Teste de vazão nos pontos mais desfavoráveis antes da entrega"
+      ],
+      "controles_resposta": [
+        "Instalar pressurização ou reservação complementar",
+        "Abastecimento por caminhão-pipa até a correção"
+      ],
+      "sinais_alerta": [
+        "Viabilidade da concessionária pendente na fase de projeto",
+        "Pressão medida na ligação abaixo da prevista",
+        "Chamado de garantia por falta de água em andares altos"
+      ],
+      "dimensoes": [
+        "operacional",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "instalacoes",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa",
+        "terreno_inclinado"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "garantia_qualidade"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 5626 – sistemas prediais de água fria e água quente"
+      ]
+    },
+    {
+      "codigo": "R16.07",
+      "evento": "Falhas nos sistemas de drenagem pluvial",
+      "causas": [
+        "Calhas e condutores dimensionados com intensidade de chuva desatualizada",
+        "Ralos e grelhas obstruídos por argamassa e entulho da obra",
+        "Caimento de lajes e pisos externos invertido",
+        "Ligação de água pluvial na rede de esgoto"
+      ],
+      "consequencias": [
+        "Alagamento de subsolo e áreas comuns",
+        "Infiltrações em cobertura e fachadas",
+        "Notificação da concessionária por ligação irregular"
+      ],
+      "controles_preventivos": [
+        "Teste de escoamento com água em calhas e ralos registrado antes da entrega",
+        "Conferência de caimento com nível na FVS de contrapiso",
+        "Limpeza e teste da rede pluvial após a última etapa de obra",
+        "Memória de cálculo com a intensidade pluviométrica local no projeto"
+      ],
+      "controles_resposta": [
+        "Desobstruir e ampliar a drenagem nos pontos críticos",
+        "Bombas provisórias no subsolo até a correção"
+      ],
+      "sinais_alerta": [
+        "FVS de caimento reprovada",
+        "Água empoçada registrada no diário após chuva",
+        "Chamado de garantia por infiltração em cobertura"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "operacional",
+        "financeira"
+      ],
+      "fases": [
+        "instalacoes",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "subsolo",
+        "regiao_chuvosa",
+        "terreno_inclinado",
+        "proximo_curso_dagua"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 10844 – instalações prediais de águas pluviais"
+      ]
+    },
+    {
+      "codigo": "R16.08",
+      "evento": "Defeitos em bombas e sistemas de pressurização",
+      "causas": [
+        "Bomba especificada fora do ponto de operação da instalação",
+        "Ausência de bomba reserva ou de alternância automática",
+        "Painel sem proteção contra falta de fase e funcionamento a seco",
+        "Conjunto instalado sem base antivibração e alinhamento"
+      ],
+      "consequencias": [
+        "Falta de água e pressão instável nos pavimentos",
+        "Queima de motores e manutenção corretiva frequente",
+        "Ruído e vibração em unidades próximas"
+      ],
+      "controles_preventivos": [
+        "Curva da bomba conferida contra a memória de cálculo antes da compra",
+        "Teste de partida, alternância e proteções com relatório de comissionamento",
+        "Plano de manutenção das bombas entregue ao síndico com protocolo",
+        "Medição de corrente e vibração na partida registrada"
+      ],
+      "controles_resposta": [
+        "Operar a bomba reserva e acionar o fabricante",
+        "Ajustar ou substituir o conjunto motobomba"
+      ],
+      "sinais_alerta": [
+        "Ordens de serviço corretivas recorrentes na mesma bomba",
+        "Comissionamento de bombas sem registro",
+        "Corrente do motor acima da nominal na medição"
+      ],
+      "dimensoes": [
+        "operacional",
+        "qualidade",
+        "financeira"
+      ],
+      "fases": [
+        "instalacoes",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "subsolo",
+        "nivel_agua_alto"
+      ],
+      "integracoes": [
+        "ordens_servico",
+        "garantia_qualidade",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R16.09",
+      "evento": "Falhas na climatização e ventilação",
+      "causas": [
+        "Carga térmica calculada sem considerar orientação solar e área envidraçada",
+        "Drenos e linhas frigoríficas sem caimento ou isolamento",
+        "Exaustão de garagem e banheiros sem a vazão de projeto",
+        "Espaço para condensadoras incompatível com o equipamento"
+      ],
+      "consequencias": [
+        "Desconforto térmico e reclamações de usuários",
+        "Condensação, goteiras e mofo em forros",
+        "Acúmulo de gases de veículos em garagem fechada"
+      ],
+      "controles_preventivos": [
+        "Memória de cálculo de carga térmica com ART arquivada",
+        "Teste de estanqueidade e vácuo das linhas frigoríficas registrado",
+        "Medição de vazão de exaustores e ventiladores no comissionamento",
+        "Teste de escoamento dos drenos antes do fechamento do forro"
+      ],
+      "controles_resposta": [
+        "Rebalancear ou substituir os equipamentos subdimensionados",
+        "Corrigir caimento e isolamento dos drenos"
+      ],
+      "sinais_alerta": [
+        "Chamado de garantia por goteira de dreno",
+        "Vazão medida abaixo do projeto",
+        "Troca de vidro ou fachada sem revisão da carga térmica"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "operacional",
+        "reputacional"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "instalacoes",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "comercial",
+        "residencial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "subsolo"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "ordens_servico"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 16401 – instalações de ar-condicionado: sistemas centrais e unitários"
+      ]
+    },
+    {
+      "codigo": "R16.10",
+      "evento": "Deficiências na instalação de elevadores e sistemas de transporte vertical",
+      "causas": [
+        "Poço e casa de máquinas com dimensões diferentes das do fabricante",
+        "Contrato do elevador fechado tarde para o prazo de fabricação",
+        "Montagem sem energia definitiva ou com tensão instável",
+        "Dispositivos de segurança não testados antes da liberação ao uso"
+      ],
+      "consequencias": [
+        "Atraso na entrega e no habite-se",
+        "Queda de cabine ou aprisionamento de usuários",
+        "Custo de adequação do poço e de remobilização do fabricante"
+      ],
+      "controles_preventivos": [
+        "Compatibilização do poço com o desenho do fabricante antes da concretagem",
+        "Pedido do elevador no marco do cronograma de suprimentos, com acompanhamento",
+        "Levantamento de prumo e dimensões do poço registrado antes da montagem",
+        "Laudo de entrega com teste do freio de segurança emitido pelo fabricante"
+      ],
+      "controles_resposta": [
+        "Interditar o equipamento com falha e acionar o fabricante",
+        "Adequar o poço conforme parecer técnico do fabricante"
+      ],
+      "sinais_alerta": [
+        "Marco de compra do elevador atrasado no planejamento",
+        "Poço com dimensão divergente no levantamento",
+        "Chamados recorrentes de parada ou aprisionamento"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "planejamento",
+        "contratos",
+        "garantia_qualidade"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Falha de dispositivo de segurança pode causar queda de cabine com vítimas",
+      "referencias": []
+    },
+    {
+      "codigo": "R16.11",
+      "evento": "Falhas em instalações de gás e sistemas de exaustão",
+      "causas": [
+        "Rede de gás revestida sem teste de estanqueidade",
+        "Ambiente com aquecedor sem ventilação permanente",
+        "Chaminés com trajeto ou diâmetro fora do projeto",
+        "Central de GLP ou abrigo de medidores sem ventilação adequada"
+      ],
+      "consequencias": [
+        "Vazamento com risco de explosão",
+        "Intoxicação por monóxido de carbono",
+        "Reprovação pela distribuidora e atraso na ligação do gás"
+      ],
+      "controles_preventivos": [
+        "Teste de estanqueidade da rede de gás com laudo e ART antes do fechamento",
+        "Conferência de ventilação permanente e chaminés por unidade na FVS",
+        "Vistoria da distribuidora de gás registrada antes da entrega",
+        "Manual do proprietário com restrição de fechamento de áreas com aquecedor"
+      ],
+      "controles_resposta": [
+        "Fechar a alimentação de gás e ventilar o ambiente",
+        "Localizar e reparar o vazamento com novo teste antes de religar"
+      ],
+      "sinais_alerta": [
+        "Prumada de gás sem laudo de estanqueidade",
+        "Alteração de área de serviço sem revisão do projeto de gás",
+        "Chamado de garantia por cheiro de gás"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "qualidade"
+      ],
+      "fases": [
+        "instalacoes",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_ocupada",
+        "edificacao_antiga"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "docs_ged"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Vazamento de gás ou exaustão deficiente pode causar explosão ou intoxicação fatal",
+      "referencias": [
+        "ABNT NBR 15526 – redes de distribuição interna para gases combustíveis"
+      ]
+    },
+    {
+      "codigo": "R16.12",
+      "evento": "Ausência ou insuficiência de testes integrados e comissionamento",
+      "causas": [
+        "Testes deixados para a semana da entrega por atraso de acabamentos",
+        "Sistemas de diferentes empreiteiros sem responsável pela integração",
+        "Energia e água definitivas ligadas tarde",
+        "Contrato sem plano de comissionamento"
+      ],
+      "consequencias": [
+        "Falhas descobertas pelo cliente depois da entrega",
+        "Adiamento da entrega e multas contratuais",
+        "Manuais, laudos e garantias de equipamentos incompletos"
+      ],
+      "controles_preventivos": [
+        "Plano de comissionamento com testes, responsáveis e datas no cronograma",
+        "Checklist de testes integrados assinado (incêndio, bombas, elevadores, gerador)",
+        "Marco de ligação definitiva de energia e água no planejamento",
+        "Pacote de manuais, laudos e garantias conferido antes da vistoria do cliente"
+      ],
+      "controles_resposta": [
+        "Mobilizar equipe de comissionamento priorizando os sistemas de segurança",
+        "Renegociar a data de entrega com registro formal"
+      ],
+      "sinais_alerta": [
+        "Atividades de teste sem data no cronograma",
+        "Ligação definitiva de energia pendente perto da entrega",
+        "Itens de comissionamento abertos na lista de verificação"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "prazo",
+        "operacional",
+        "reputacional"
+      ],
+      "fases": [
+        "instalacoes",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "planejamento",
+        "garantia_qualidade",
+        "contratos",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

@@ -1,0 +1,473 @@
+-- Módulo ÒPURA Riscos — F1.1: estrutura.
+-- Plano: docs/planos/2026-11-13-modulo-riscos.md (seção "Desenho" e item F1.1).
+--
+-- Decisões que moldam este arquivo:
+-- • Nomes com prefixo `risk_` e NENHUM colide com o banco: `risk_assessments` é do SST
+--   (laborService) e o enum `risk_level` é da Governança — os dois ficam intocados.
+-- • Riscos de Oportunidade (`opportunity_risks`) e do Imovib (`imovib_risks`) continuam onde
+--   estão (decisão do usuário, 14/11/2026). SST continua no RH: aqui só há um VÍNCULO
+--   (project_risks.sst_document_*), sem FK e sem tocar nas tabelas do SST.
+-- • SEM FOREIGN KEY para tabelas quentes (`projects`, `empreendimentos`, `contracts`,
+--   `auth.users`): REFERENCES pega ShareRowExclusiveLock nelas e já deu deadlock (40P01)
+--   contra o app ativo (ver 20270839000000). FK só entre as tabelas novas deste módulo.
+-- • RLS por CONJUNTO: `organization_id IN (SELECT public.minhas_orgs_membro())` — nunca
+--   is_org_member(...) por linha (#382). Linhas de SISTEMA (`organization_id IS NULL`:
+--   categorias e os 312 itens do catálogo) são só leitura; ninguém autenticado as grava
+--   (`NULL IN (...)` não é verdadeiro), só o seed, que roda como postgres. REGRA #5.
+-- • `risk_evaluations` é APPEND-ONLY (CA05): trigger recusa UPDATE/DELETE. Um risco com
+--   avaliação não pode ser excluído (FK RESTRICT) — encerra-se, não se apaga.
+-- • Todo objeto novo em `public` leva REVOKE nomeando `anon` (default privileges do Supabase
+--   dão GRANT nominal a anon; REVOKE de PUBLIC sozinho não fecha). REGRA #7.
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 1. Taxonomia
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.risk_categories (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID,                       -- NULL = categoria do sistema (R01–R25)
+    codigo          TEXT NOT NULL,
+    nome            TEXT NOT NULL,
+    ordem           INTEGER NOT NULL DEFAULT 0,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT risk_categories_org_codigo_uk UNIQUE NULLS NOT DISTINCT (organization_id, codigo)
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 2. Biblioteca mestre
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.risk_catalog (
+    id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id       UUID,                 -- NULL = item do sistema; org = risco próprio
+    category_id           UUID NOT NULL REFERENCES public.risk_categories(id) ON DELETE RESTRICT,
+    codigo                TEXT NOT NULL,        -- R05.06 (sistema) / P001 (próprio, gerado)
+    evento                TEXT NOT NULL,
+    causas                TEXT[] NOT NULL DEFAULT '{}',
+    consequencias         TEXT[] NOT NULL DEFAULT '{}',
+    controles_preventivos TEXT[] NOT NULL DEFAULT '{}',
+    controles_resposta    TEXT[] NOT NULL DEFAULT '{}',
+    sinais_alerta         TEXT[] NOT NULL DEFAULT '{}',
+    dimensoes             TEXT[] NOT NULL DEFAULT '{}',
+    fases                 TEXT[] NOT NULL DEFAULT '{}',
+    tipologias            TEXT[] NOT NULL DEFAULT '{}',
+    condicoes_sugestao    TEXT[] NOT NULL DEFAULT '{}',
+    integracoes           TEXT[] NOT NULL DEFAULT '{}',
+    referencias           TEXT[] NOT NULL DEFAULT '{}',
+    gatilho_critico       BOOLEAN NOT NULL DEFAULT false,
+    gatilho_motivo        TEXT,
+    -- Revisão técnica do conteúdo (F0.5). O seed nasce 'rascunho'; a tela mostra o selo.
+    revisao_tecnica       TEXT NOT NULL DEFAULT 'rascunho'
+                          CHECK (revisao_tecnica IN ('rascunho','revisado','aprovado')),
+    versao                INTEGER NOT NULL DEFAULT 1,
+    ativo                 BOOLEAN NOT NULL DEFAULT true,
+    created_by            UUID DEFAULT auth.uid(),
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT risk_catalog_org_codigo_uk UNIQUE NULLS NOT DISTINCT (organization_id, codigo),
+    CONSTRAINT risk_catalog_dimensoes_ck CHECK (dimensoes <@ ARRAY['financeira','prazo','seguranca','qualidade','juridica','ambiental','reputacional','operacional']::TEXT[]),
+    CONSTRAINT risk_catalog_fases_ck CHECK (fases <@ ARRAY['aquisicao','viabilidade','projeto_aprovacao','contratacao','inicio_obra','fundacoes','estrutura','instalacoes','acabamentos','entrega','pos_obra']::TEXT[]),
+    CONSTRAINT risk_catalog_tipologias_ck CHECK (tipologias <@ ARRAY['residencial','comercial','galpao_industrial','loteamento','reforma','obra_publica']::TEXT[]),
+    CONSTRAINT risk_catalog_gatilho_ck CHECK (NOT gatilho_critico OR NULLIF(btrim(gatilho_motivo), '') IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_risk_catalog_category ON public.risk_catalog (category_id);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 3. Faixas da matriz 5×5 por organização (sem linha = padrão da especificação)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.risk_matrix_config (
+    organization_id UUID PRIMARY KEY,
+    limite_medio    SMALLINT NOT NULL DEFAULT 5,   -- pontuação ≥ 5  → médio
+    limite_alto     SMALLINT NOT NULL DEFAULT 12,  -- pontuação ≥ 12 → alto
+    limite_critico  SMALLINT NOT NULL DEFAULT 20,  -- pontuação ≥ 20 → crítico
+    updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT risk_matrix_config_ordem_ck CHECK (1 < limite_medio AND limite_medio < limite_alto AND limite_alto < limite_critico AND limite_critico <= 25)
+);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 4. Risco contextualizado
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.project_risks (
+    id                     UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id        UUID NOT NULL,
+    numero                 INTEGER NOT NULL,     -- sequencial por organização (trigger)
+    codigo                 TEXT NOT NULL,        -- RSC-0001
+    -- Origem no catálogo: id + código + versão + CÓPIA dos textos (CA02: editar o risco da
+    -- obra nunca altera o mestre; mudar o mestre depois não reescreve o que a obra registrou).
+    catalog_id             UUID REFERENCES public.risk_catalog(id) ON DELETE SET NULL,
+    catalog_codigo         TEXT,
+    catalog_versao         INTEGER,
+    category_id            UUID REFERENCES public.risk_categories(id) ON DELETE SET NULL,
+    tipo                   TEXT NOT NULL DEFAULT 'ameaca' CHECK (tipo IN ('ameaca','oportunidade')),
+    titulo                 TEXT NOT NULL,
+    causa                  TEXT NOT NULL CHECK (btrim(causa) <> ''),
+    evento                 TEXT NOT NULL CHECK (btrim(evento) <> ''),
+    consequencia           TEXT NOT NULL CHECK (btrim(consequencia) <> ''),
+    tags                   TEXT[] NOT NULL DEFAULT '{}',
+    dimensoes              TEXT[] NOT NULL DEFAULT '{}',
+    -- Contexto (CA03). Sem FK para projects/empreendimentos/contracts (ver cabeçalho).
+    escopo                 TEXT NOT NULL CHECK (escopo IN ('corporativo','empreendimento','obra','contrato')),
+    empreendimento_id      UUID,
+    project_id             UUID,                 -- só obra (classification OBRA) — REGRA #3, no app
+    contract_id            UUID,
+    frente                 TEXT,
+    localizacao            TEXT,
+    fase                   TEXT CHECK (fase IS NULL OR fase IN ('aquisicao','viabilidade','projeto_aprovacao','contratacao','inicio_obra','fundacoes','estrutura','instalacoes','acabamentos','entrega','pos_obra')),
+    partes_afetadas        TEXT,
+    -- Responsabilidade
+    owner_user_id          UUID NOT NULL,
+    owner_nome             TEXT,
+    avaliador_user_id      UUID,
+    aprovador_user_id      UUID,
+    data_identificacao     DATE NOT NULL DEFAULT CURRENT_DATE,
+    proxima_revisao        DATE NOT NULL,
+    -- Resposta
+    controles_existentes   TEXT,
+    estrategia             TEXT CHECK (estrategia IS NULL OR estrategia IN ('evitar','mitigar','transferir','aceitar','escalar')),
+    plano_resposta         TEXT,
+    contingencia           TEXT,
+    justificativa_aceite   TEXT,
+    -- Estado
+    status                 TEXT NOT NULL DEFAULT 'identificado'
+                           CHECK (status IN ('identificado','em_avaliacao','em_tratamento','monitorado','materializado','encerrado')),
+    encerramento_motivo    TEXT,
+    encerrado_em           TIMESTAMPTZ,
+    -- Gatilho crítico (CA04): copiado do catálogo; trata o risco como crítico qualquer que seja a nota.
+    gatilho_critico        BOOLEAN NOT NULL DEFAULT false,
+    gatilho_motivo         TEXT,
+    -- Última avaliação de cada tipo, mantida pelo gatilho de risk_evaluations (só leitura no app).
+    inerente_probabilidade SMALLINT,
+    inerente_impacto       SMALLINT,
+    inerente_pontuacao     SMALLINT,
+    residual_probabilidade SMALLINT,
+    residual_impacto       SMALLINT,
+    residual_pontuacao     SMALLINT,
+    valor_esperado         NUMERIC(16,2),
+    ultima_avaliacao_em    TIMESTAMPTZ,
+    -- Vínculo com o SST do RH (decisão 2, F1.12): PGR/APR (`risk_assessments`) ou documento
+    -- regulatório (`sst_regulatory_docs`). Sem FK — o SST não ganha dependência nova.
+    sst_document_tipo      TEXT CHECK (sst_document_tipo IS NULL OR sst_document_tipo IN ('risk_assessment','sst_regulatory_doc')),
+    sst_document_id        UUID,
+    created_by             UUID DEFAULT auth.uid(),
+    created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT project_risks_org_numero_uk UNIQUE (organization_id, numero),
+    CONSTRAINT project_risks_escopo_ck CHECK (
+        (escopo <> 'obra'           OR project_id IS NOT NULL) AND
+        (escopo <> 'empreendimento' OR empreendimento_id IS NOT NULL) AND
+        (escopo <> 'contrato'       OR contract_id IS NOT NULL)),
+    CONSTRAINT project_risks_dimensoes_ck CHECK (dimensoes <@ ARRAY['financeira','prazo','seguranca','qualidade','juridica','ambiental','reputacional','operacional']::TEXT[]),
+    CONSTRAINT project_risks_aceite_ck CHECK (estrategia IS DISTINCT FROM 'aceitar' OR NULLIF(btrim(justificativa_aceite), '') IS NOT NULL),
+    CONSTRAINT project_risks_encerrado_ck CHECK (status <> 'encerrado' OR NULLIF(btrim(encerramento_motivo), '') IS NOT NULL),
+    CONSTRAINT project_risks_sst_ck CHECK ((sst_document_tipo IS NULL) = (sst_document_id IS NULL))
+);
+CREATE INDEX IF NOT EXISTS idx_project_risks_org     ON public.project_risks (organization_id, status);
+CREATE INDEX IF NOT EXISTS idx_project_risks_project ON public.project_risks (project_id) WHERE project_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_project_risks_emp     ON public.project_risks (empreendimento_id) WHERE empreendimento_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_project_risks_sst     ON public.project_risks (sst_document_id) WHERE sst_document_id IS NOT NULL;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 5. Avaliações (append-only)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.risk_evaluations (
+    id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id    UUID NOT NULL,
+    project_risk_id    UUID NOT NULL REFERENCES public.project_risks(id) ON DELETE RESTRICT,
+    tipo               TEXT NOT NULL CHECK (tipo IN ('inerente','residual')),
+    metodo             TEXT NOT NULL DEFAULT 'matriz_5x5' CHECK (metodo IN ('matriz_5x5','multidimensional')),
+    probabilidade      SMALLINT NOT NULL CHECK (probabilidade BETWEEN 1 AND 5),
+    -- {"financeira":4,"prazo":3,...}: uma nota 1–5 por dimensão (Método B).
+    impactos           JSONB NOT NULL,
+    -- Consolidado = MÁXIMO das dimensões, nunca média (a média dilui dano grave à vida).
+    -- Calculado pelo gatilho; o que o app mandar aqui é sobrescrito.
+    impacto            SMALLINT NOT NULL CHECK (impacto BETWEEN 1 AND 5),
+    pontuacao          SMALLINT GENERATED ALWAYS AS (probabilidade * impacto) STORED,
+    -- Exposição (opcional): 30% × R$ 200 mil = R$ 60 mil (CA13).
+    probabilidade_pct  NUMERIC(5,2) CHECK (probabilidade_pct IS NULL OR probabilidade_pct BETWEEN 0 AND 100),
+    perda_estimada     NUMERIC(16,2) CHECK (perda_estimada IS NULL OR perda_estimada >= 0),
+    atraso_dias        INTEGER CHECK (atraso_dias IS NULL OR atraso_dias >= 0),
+    valor_esperado     NUMERIC(16,2) GENERATED ALWAYS AS (round(probabilidade_pct / 100 * perda_estimada, 2)) STORED,
+    premissas          TEXT,
+    justificativa      TEXT NOT NULL CHECK (btrim(justificativa) <> ''),
+    evidencia_url      TEXT,
+    evidencia_document_id UUID,
+    avaliado_por       UUID DEFAULT auth.uid(),
+    avaliado_por_nome  TEXT,
+    avaliado_em        TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_risk_evaluations_risk ON public.risk_evaluations (project_risk_id, avaliado_em DESC);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 6. Ações de tratamento
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.risk_actions (
+    id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id         UUID NOT NULL,
+    project_risk_id         UUID NOT NULL REFERENCES public.project_risks(id) ON DELETE CASCADE,
+    tipo                    TEXT NOT NULL DEFAULT 'preventiva' CHECK (tipo IN ('preventiva','resposta')),
+    descricao               TEXT NOT NULL CHECK (btrim(descricao) <> ''),
+    responsavel_user_id     UUID NOT NULL,
+    responsavel_nome        TEXT,
+    prazo                   DATE NOT NULL,
+    custo_previsto          NUMERIC(16,2) NOT NULL DEFAULT 0 CHECK (custo_previsto >= 0),
+    custo_realizado         NUMERIC(16,2) CHECK (custo_realizado IS NULL OR custo_realizado >= 0),
+    status                  TEXT NOT NULL DEFAULT 'planejada' CHECK (status IN ('planejada','em_andamento','concluida','cancelada')),
+    concluida_em            DATE,
+    evidencia_url           TEXT,
+    evidencia_document_id   UUID,
+    evidencia_descricao     TEXT,
+    -- Teste de eficácia do controle (CA06): "eficaz"/"ineficaz" só com evidência anexada.
+    eficacia                TEXT NOT NULL DEFAULT 'nao_verificada' CHECK (eficacia IN ('nao_verificada','eficaz','ineficaz')),
+    eficacia_verificada_por UUID,
+    eficacia_verificada_em  TIMESTAMPTZ,
+    eficacia_observacao     TEXT,
+    task_id                 UUID,                -- espelho opcional em Tarefas (create_task)
+    created_by              UUID DEFAULT auth.uid(),
+    created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+    CONSTRAINT risk_actions_eficacia_ck CHECK (
+        eficacia = 'nao_verificada' OR evidencia_url IS NOT NULL OR evidencia_document_id IS NOT NULL),
+    CONSTRAINT risk_actions_concluida_ck CHECK (status <> 'concluida' OR concluida_em IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_risk_actions_risk  ON public.risk_actions (project_risk_id);
+CREATE INDEX IF NOT EXISTS idx_risk_actions_prazo ON public.risk_actions (organization_id, prazo) WHERE status IN ('planejada','em_andamento');
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 7. Trilha de auditoria (formato de empreendimento_audit_logs; escrita pelo serviço)
+-- ─────────────────────────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS public.risk_audit_logs (
+    id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    organization_id UUID NOT NULL,
+    project_risk_id UUID,                        -- NULL em evento de catálogo/configuração
+    entity_type     TEXT NOT NULL CHECK (entity_type IN ('risk','evaluation','action','catalog','config')),
+    entity_id       UUID,
+    entity_label    TEXT,
+    action          TEXT NOT NULL CHECK (action IN ('create','update','delete','evaluate','close','reopen','link','unlink')),
+    field_name      TEXT,
+    old_value       JSONB,
+    new_value       JSONB,
+    metadata        JSONB NOT NULL DEFAULT '{}'::jsonb,
+    reason          TEXT,
+    user_id         UUID DEFAULT auth.uid(),
+    user_email      TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_risk_audit_risk ON public.risk_audit_logs (project_risk_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_risk_audit_org  ON public.risk_audit_logs (organization_id, created_at DESC);
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 8. Gatilhos
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- 8.1 Código sequencial por organização (RSC-0001) e código de risco próprio (P001).
+CREATE OR REPLACE FUNCTION public.risk_project_risks_numerar()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+    PERFORM pg_advisory_xact_lock(hashtext('project_risks:' || NEW.organization_id::text));
+    SELECT COALESCE(MAX(numero), 0) + 1 INTO NEW.numero
+      FROM public.project_risks WHERE organization_id = NEW.organization_id;
+    NEW.codigo := 'RSC-' || lpad(NEW.numero::text, 4, '0');
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_project_risks_numerar ON public.project_risks;
+CREATE TRIGGER trg_project_risks_numerar BEFORE INSERT ON public.project_risks
+    FOR EACH ROW EXECUTE FUNCTION public.risk_project_risks_numerar();
+
+CREATE OR REPLACE FUNCTION public.risk_catalog_preparar()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE v_n INTEGER;
+BEGIN
+    IF TG_OP = 'INSERT' THEN
+        IF NEW.organization_id IS NOT NULL AND NULLIF(btrim(NEW.codigo), '') IS NULL THEN
+            PERFORM pg_advisory_xact_lock(hashtext('risk_catalog:' || NEW.organization_id::text));
+            SELECT COALESCE(MAX(NULLIF(regexp_replace(codigo, '\D', '', 'g'), '')::INTEGER), 0) + 1 INTO v_n
+              FROM public.risk_catalog
+             WHERE organization_id = NEW.organization_id AND codigo ~ '^P\d+$';
+            NEW.codigo := 'P' || lpad(v_n::text, 3, '0');
+        END IF;
+        RETURN NEW;
+    END IF;
+    -- UPDATE: conteúdo mudou → nova versão (CA02: versões rastreáveis).
+    IF (NEW.evento, NEW.causas, NEW.consequencias, NEW.controles_preventivos, NEW.controles_resposta,
+        NEW.sinais_alerta, NEW.dimensoes, NEW.gatilho_critico, NEW.gatilho_motivo, NEW.category_id)
+       IS DISTINCT FROM
+       (OLD.evento, OLD.causas, OLD.consequencias, OLD.controles_preventivos, OLD.controles_resposta,
+        OLD.sinais_alerta, OLD.dimensoes, OLD.gatilho_critico, OLD.gatilho_motivo, OLD.category_id) THEN
+        NEW.versao := OLD.versao + 1;
+    END IF;
+    NEW.updated_at := now();
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_risk_catalog_preparar ON public.risk_catalog;
+CREATE TRIGGER trg_risk_catalog_preparar BEFORE INSERT OR UPDATE ON public.risk_catalog
+    FOR EACH ROW EXECUTE FUNCTION public.risk_catalog_preparar();
+
+-- 8.2 Avaliação: valida as notas por dimensão e consolida pelo MÁXIMO.
+CREATE OR REPLACE FUNCTION public.risk_evaluations_preparar()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE v_max SMALLINT; v_ruim TEXT;
+BEGIN
+    IF jsonb_typeof(NEW.impactos) <> 'object' OR NEW.impactos = '{}'::jsonb THEN
+        RAISE EXCEPTION 'Avaliação sem impacto: informe a nota de pelo menos uma dimensão' USING ERRCODE = '23514';
+    END IF;
+    SELECT string_agg(k, ', ') INTO v_ruim
+      FROM jsonb_each(NEW.impactos) AS e(k, v)
+     WHERE k NOT IN ('financeira','prazo','seguranca','qualidade','juridica','ambiental','reputacional','operacional')
+        -- CASE e não OR: o SQL não garante a ordem do OR, e o cast de texto quebraria.
+        OR CASE WHEN jsonb_typeof(v) = 'number' THEN (v)::TEXT::NUMERIC NOT IN (1,2,3,4,5) ELSE true END;
+    IF v_ruim IS NOT NULL THEN
+        RAISE EXCEPTION 'Impacto inválido em: % (dimensões conhecidas, notas de 1 a 5)', v_ruim USING ERRCODE = '23514';
+    END IF;
+    SELECT MAX((v)::TEXT::SMALLINT) INTO v_max FROM jsonb_each(NEW.impactos) AS e(k, v);
+    NEW.impacto := v_max;
+    NEW.avaliado_em := now();
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_risk_evaluations_preparar ON public.risk_evaluations;
+CREATE TRIGGER trg_risk_evaluations_preparar BEFORE INSERT ON public.risk_evaluations
+    FOR EACH ROW EXECUTE FUNCTION public.risk_evaluations_preparar();
+
+-- 8.3 Append-only (CA05).
+CREATE OR REPLACE FUNCTION public.risk_evaluations_imutavel()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+    RAISE EXCEPTION 'Avaliação de risco é histórico: não se altera nem se exclui — registre uma nova avaliação'
+        USING ERRCODE = '42501';
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_risk_evaluations_imutavel ON public.risk_evaluations;
+CREATE TRIGGER trg_risk_evaluations_imutavel BEFORE UPDATE OR DELETE ON public.risk_evaluations
+    FOR EACH ROW EXECUTE FUNCTION public.risk_evaluations_imutavel();
+
+-- 8.4 Espelha a última avaliação de cada tipo no risco (para listar/ordenar sem join).
+CREATE OR REPLACE FUNCTION public.risk_evaluations_espelhar()
+RETURNS TRIGGER LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+    IF NEW.tipo = 'inerente' THEN
+        UPDATE public.project_risks
+           SET inerente_probabilidade = NEW.probabilidade, inerente_impacto = NEW.impacto,
+               inerente_pontuacao = NEW.pontuacao, ultima_avaliacao_em = NEW.avaliado_em,
+               valor_esperado = COALESCE(NEW.valor_esperado, valor_esperado)
+         WHERE id = NEW.project_risk_id;
+    ELSE
+        UPDATE public.project_risks
+           SET residual_probabilidade = NEW.probabilidade, residual_impacto = NEW.impacto,
+               residual_pontuacao = NEW.pontuacao, ultima_avaliacao_em = NEW.avaliado_em,
+               valor_esperado = COALESCE(NEW.valor_esperado, valor_esperado)
+         WHERE id = NEW.project_risk_id;
+    END IF;
+    RETURN NULL;
+END;
+$$;
+DROP TRIGGER IF EXISTS trg_risk_evaluations_espelhar ON public.risk_evaluations;
+CREATE TRIGGER trg_risk_evaluations_espelhar AFTER INSERT ON public.risk_evaluations
+    FOR EACH ROW EXECUTE FUNCTION public.risk_evaluations_espelhar();
+
+DROP TRIGGER IF EXISTS trg_project_risks_updated_at ON public.project_risks;
+CREATE TRIGGER trg_project_risks_updated_at BEFORE UPDATE ON public.project_risks
+    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+DROP TRIGGER IF EXISTS trg_risk_actions_updated_at ON public.risk_actions;
+CREATE TRIGGER trg_risk_actions_updated_at BEFORE UPDATE ON public.risk_actions
+    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+DROP TRIGGER IF EXISTS trg_risk_matrix_config_updated_at ON public.risk_matrix_config;
+CREATE TRIGGER trg_risk_matrix_config_updated_at BEFORE UPDATE ON public.risk_matrix_config
+    FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- Funções de gatilho não são RPC; fechar mesmo assim (REGRA #7 — todo objeto novo).
+REVOKE ALL ON FUNCTION public.risk_project_risks_numerar()  FROM anon;
+REVOKE ALL ON FUNCTION public.risk_project_risks_numerar()  FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.risk_catalog_preparar()       FROM anon;
+REVOKE ALL ON FUNCTION public.risk_catalog_preparar()       FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.risk_evaluations_preparar()   FROM anon;
+REVOKE ALL ON FUNCTION public.risk_evaluations_preparar()   FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.risk_evaluations_imutavel()   FROM anon;
+REVOKE ALL ON FUNCTION public.risk_evaluations_imutavel()   FROM PUBLIC;
+REVOKE ALL ON FUNCTION public.risk_evaluations_espelhar()   FROM anon;
+REVOKE ALL ON FUNCTION public.risk_evaluations_espelhar()   FROM PUBLIC;
+
+-- ─────────────────────────────────────────────────────────────────────────────
+-- 9. RLS e grants
+-- ─────────────────────────────────────────────────────────────────────────────
+ALTER TABLE public.risk_categories    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.risk_catalog       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.risk_matrix_config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.project_risks      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.risk_evaluations   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.risk_actions       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.risk_audit_logs    ENABLE ROW LEVEL SECURITY;
+
+-- Catálogo e categorias: lê as do sistema (NULL) e as das próprias orgs; grava só as próprias.
+DROP POLICY IF EXISTS risk_categories_select ON public.risk_categories;
+CREATE POLICY risk_categories_select ON public.risk_categories FOR SELECT TO authenticated
+    USING (organization_id IS NULL OR organization_id IN (SELECT public.minhas_orgs_membro()));
+DROP POLICY IF EXISTS risk_categories_write ON public.risk_categories;
+CREATE POLICY risk_categories_write ON public.risk_categories FOR ALL TO authenticated
+    USING (organization_id IN (SELECT public.minhas_orgs_membro()))
+    WITH CHECK (organization_id IN (SELECT public.minhas_orgs_membro()));
+
+DROP POLICY IF EXISTS risk_catalog_select ON public.risk_catalog;
+CREATE POLICY risk_catalog_select ON public.risk_catalog FOR SELECT TO authenticated
+    USING (organization_id IS NULL OR organization_id IN (SELECT public.minhas_orgs_membro()));
+DROP POLICY IF EXISTS risk_catalog_write ON public.risk_catalog;
+CREATE POLICY risk_catalog_write ON public.risk_catalog FOR ALL TO authenticated
+    USING (organization_id IN (SELECT public.minhas_orgs_membro()))
+    WITH CHECK (organization_id IN (SELECT public.minhas_orgs_membro()));
+
+-- Demais: tudo restrito às organizações de que o usuário é membro.
+DROP POLICY IF EXISTS risk_matrix_config_org ON public.risk_matrix_config;
+CREATE POLICY risk_matrix_config_org ON public.risk_matrix_config FOR ALL TO authenticated
+    USING (organization_id IN (SELECT public.minhas_orgs_membro()))
+    WITH CHECK (organization_id IN (SELECT public.minhas_orgs_membro()));
+
+DROP POLICY IF EXISTS project_risks_org ON public.project_risks;
+CREATE POLICY project_risks_org ON public.project_risks FOR ALL TO authenticated
+    USING (organization_id IN (SELECT public.minhas_orgs_membro()))
+    WITH CHECK (organization_id IN (SELECT public.minhas_orgs_membro()));
+
+DROP POLICY IF EXISTS risk_actions_org ON public.risk_actions;
+CREATE POLICY risk_actions_org ON public.risk_actions FOR ALL TO authenticated
+    USING (organization_id IN (SELECT public.minhas_orgs_membro()))
+    WITH CHECK (organization_id IN (SELECT public.minhas_orgs_membro()));
+
+-- Avaliações e auditoria: só SELECT e INSERT (sem policy de UPDATE/DELETE = negado).
+DROP POLICY IF EXISTS risk_evaluations_select ON public.risk_evaluations;
+CREATE POLICY risk_evaluations_select ON public.risk_evaluations FOR SELECT TO authenticated
+    USING (organization_id IN (SELECT public.minhas_orgs_membro()));
+DROP POLICY IF EXISTS risk_evaluations_insert ON public.risk_evaluations;
+CREATE POLICY risk_evaluations_insert ON public.risk_evaluations FOR INSERT TO authenticated
+    WITH CHECK (organization_id IN (SELECT public.minhas_orgs_membro()));
+
+DROP POLICY IF EXISTS risk_audit_logs_select ON public.risk_audit_logs;
+CREATE POLICY risk_audit_logs_select ON public.risk_audit_logs FOR SELECT TO authenticated
+    USING (organization_id IN (SELECT public.minhas_orgs_membro()));
+DROP POLICY IF EXISTS risk_audit_logs_insert ON public.risk_audit_logs;
+CREATE POLICY risk_audit_logs_insert ON public.risk_audit_logs FOR INSERT TO authenticated
+    WITH CHECK (organization_id IN (SELECT public.minhas_orgs_membro()));
+
+REVOKE ALL ON TABLE public.risk_categories    FROM anon;
+REVOKE ALL ON TABLE public.risk_categories    FROM PUBLIC;
+REVOKE ALL ON TABLE public.risk_catalog       FROM anon;
+REVOKE ALL ON TABLE public.risk_catalog       FROM PUBLIC;
+REVOKE ALL ON TABLE public.risk_matrix_config FROM anon;
+REVOKE ALL ON TABLE public.risk_matrix_config FROM PUBLIC;
+REVOKE ALL ON TABLE public.project_risks      FROM anon;
+REVOKE ALL ON TABLE public.project_risks      FROM PUBLIC;
+REVOKE ALL ON TABLE public.risk_evaluations   FROM anon;
+REVOKE ALL ON TABLE public.risk_evaluations   FROM PUBLIC;
+REVOKE ALL ON TABLE public.risk_actions       FROM anon;
+REVOKE ALL ON TABLE public.risk_actions       FROM PUBLIC;
+REVOKE ALL ON TABLE public.risk_audit_logs    FROM anon;
+REVOKE ALL ON TABLE public.risk_audit_logs    FROM PUBLIC;
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.risk_categories    TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.risk_catalog       TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.risk_matrix_config TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.project_risks      TO authenticated;
+GRANT SELECT, INSERT                 ON TABLE public.risk_evaluations   TO authenticated;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.risk_actions       TO authenticated;
+GRANT SELECT, INSERT                 ON TABLE public.risk_audit_logs    TO authenticated;
+
+COMMENT ON TABLE public.risk_catalog IS 'Biblioteca mestre de riscos. organization_id NULL = 312 itens do sistema (seed, só leitura). Plano: docs/planos/2026-11-13-modulo-riscos.md';
+COMMENT ON TABLE public.project_risks IS 'Risco contextualizado (corporativo/empreendimento/obra/contrato). Copia os textos do catálogo (CA02).';
+COMMENT ON TABLE public.risk_evaluations IS 'Avaliações inerente/residual. APPEND-ONLY por gatilho (CA05). Impacto = máximo das dimensões.';

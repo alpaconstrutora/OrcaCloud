@@ -90,6 +90,10 @@ export const NOTIF_TYPE_META: Record<string, NotifTypeMeta> = {
     // Nasce no CRM de Serviços mas o destinatário é a Engenharia, que é quem
     // vai montar o orçamento — por isso `operacional`, não `comercial`.
     engineering_request: { category: 'operacional', label: 'Solicitação de orçamento' },
+    // Módulo Riscos — cron diário `fn_risk_alerts` (aplicar_20271114639000). Link `/riscos?riskId=`.
+    risco_acao_vencida:      { category: 'operacional', label: 'Ação de risco vencida' },
+    risco_revisao_vencida:   { category: 'operacional', label: 'Revisão de risco vencida' },
+    risco_critico_sem_plano: { category: 'operacional', label: 'Risco crítico sem plano' },
 
     // ── Qualidade / pós-obra ────────────────────────────────────────────────
     manutencao_vencimento: { category: 'qualidade', label: 'Manutenção vencendo' },

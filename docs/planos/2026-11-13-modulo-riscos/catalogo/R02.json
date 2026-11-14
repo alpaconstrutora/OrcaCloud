@@ -1,0 +1,684 @@
+{
+  "categoria": "R02",
+  "nome": "Riscos fundiários e de aquisição de terrenos",
+  "itens": [
+    {
+      "codigo": "R02.01",
+      "evento": "Irregularidades na matrícula do imóvel",
+      "causas": [
+        "Cadeia dominial com transmissões não registradas ou registradas fora de ordem",
+        "Averbações de construção, demolição ou unificação pendentes",
+        "Descrição do imóvel na matrícula imprecisa ou desatualizada",
+        "Vendedor que não é o proprietário registrado ou espólio sem partilha concluída"
+      ],
+      "consequencias": [
+        "Impossibilidade de registrar a incorporação ou o loteamento",
+        "Banco recusa o terreno como garantia do financiamento à produção",
+        "Custos e meses adicionais com retificação ou ação judicial",
+        "Risco de perder o valor pago pelo terreno"
+      ],
+      "controles_preventivos": [
+        "Certidão de inteiro teor da matrícula atualizada, com até 30 dias, arquivada no GED",
+        "Análise da cadeia dominial de 20 anos com parecer jurídico assinado antes da compra",
+        "Pagamento do terreno vinculado em contrato ao registro da escritura em nome da empresa",
+        "Checklist de averbações pendentes conferido e anexado ao dossiê do terreno"
+      ],
+      "controles_resposta": [
+        "Promover retificação ou regularização registral com custo retido do vendedor",
+        "Suspender lançamento até a regularização da matrícula"
+      ],
+      "sinais_alerta": [
+        "Certidão de matrícula vencida ou ausente no dossiê do terreno no GED",
+        "Nota de exigência do cartório pendente há mais de 30 dias"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "contratos",
+        "imovib"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 6.015/1973 – registros públicos"
+      ]
+    },
+    {
+      "codigo": "R02.02",
+      "evento": "Existência de penhoras, hipotecas, indisponibilidades ou outros ônus",
+      "causas": [
+        "Vendedor com dívidas trabalhistas, fiscais ou bancárias ainda não registradas",
+        "Certidões pessoais do vendedor não levantadas em todas as comarcas de domicílio",
+        "Hipoteca anterior não baixada após quitação",
+        "Indisponibilidade decretada após a assinatura do compromisso de compra"
+      ],
+      "consequencias": [
+        "Venda considerada fraude à execução e terreno sujeito a constrição",
+        "Bloqueio do registro da incorporação e das vendas",
+        "Necessidade de quitar dívida de terceiros para liberar o imóvel"
+      ],
+      "controles_preventivos": [
+        "Certidões de ônus reais, ações reais e reipersecutórias arquivadas no GED antes da escritura",
+        "Certidões pessoais do vendedor na justiça estadual, federal e do trabalho e certidões fiscais conferidas",
+        "Consulta à central de indisponibilidade de bens registrada no dossiê",
+        "Parcela do preço retida em contrato até a baixa de ônus existentes"
+      ],
+      "controles_resposta": [
+        "Negociar quitação do ônus com compensação no preço e baixa registral",
+        "Acionar garantias contratuais contra o vendedor"
+      ],
+      "sinais_alerta": [
+        "Certidão positiva ou vencida no dossiê do terreno",
+        "Nova averbação na matrícula entre o compromisso e a escritura"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "contratos",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R02.03",
+      "evento": "Disputas judiciais sobre a propriedade",
+      "causas": [
+        "Herdeiros ou cônjuges não anuentes na venda",
+        "Ação de usucapião ou reivindicatória em curso não identificada",
+        "Contratos de gaveta anteriores com terceiros que reclamam o imóvel",
+        "Venda por procurador com procuração irregular ou revogada"
+      ],
+      "consequencias": [
+        "Obra suspensa por decisão liminar",
+        "Compradores das unidades afetados pela insegurança jurídica",
+        "Custos com honorários e anos de litígio"
+      ],
+      "controles_preventivos": [
+        "Pesquisa de distribuição de ações em nome do imóvel e dos proprietários com relatório arquivado",
+        "Verificação de estado civil, regime de bens e anuência de cônjuges registrada na escritura",
+        "Conferência da procuração e de sua validade em cartório antes da assinatura",
+        "Parecer jurídico de liberação do terreno assinado antes do pagamento"
+      ],
+      "controles_resposta": [
+        "Contratar defesa e avaliar acordo com o reclamante",
+        "Suspender vendas e comunicar compradores conforme orientação jurídica"
+      ],
+      "sinais_alerta": [
+        "Citação ou notificação judicial relacionada ao imóvel registrada no GED",
+        "Parecer jurídico do terreno ausente ou com ressalvas não resolvidas"
+      ],
+      "dimensoes": [
+        "juridica",
+        "prazo",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "docs_ged",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R02.04",
+      "evento": "Divergências entre área registrada e área efetiva",
+      "causas": [
+        "Matrícula antiga com medidas aproximadas ou sem coordenadas",
+        "Muros e cercas implantados fora das divisas registradas",
+        "Avanço de vizinhos ou do poder público sobre o terreno ao longo dos anos"
+      ],
+      "consequencias": [
+        "Potencial construtivo menor que o usado na viabilidade",
+        "Necessidade de retificação de área com anuência de confrontantes",
+        "Reprojeto e perda de unidades"
+      ],
+      "controles_preventivos": [
+        "Levantamento planialtimétrico cadastral com divisas físicas comparado à matrícula antes da compra",
+        "Laudo de conferência de área assinado por profissional com ART arquivado no GED",
+        "Preço do terreno vinculado em contrato à área efetivamente medida",
+        "Viabilidade calculada sobre a menor entre área registrada e medida"
+      ],
+      "controles_resposta": [
+        "Promover retificação administrativa de área com anuência dos confrontantes",
+        "Renegociar preço do terreno com base na área real"
+      ],
+      "sinais_alerta": [
+        "Diferença entre área da matrícula e do levantamento acima de 5% no dossiê",
+        "Projeto aprovado com área de terreno diferente da matrícula"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "terreno_inclinado"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "imovib",
+        "planta_bim"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R02.05",
+      "evento": "Erros de levantamento topográfico ou georreferenciamento",
+      "causas": [
+        "Levantamento feito sem amarração a marcos oficiais ou com sistema de referência errado",
+        "Equipe sem equipamento calibrado ou profissional sem habilitação",
+        "Curvas de nível interpoladas em área com vegetação densa sem pontos suficientes",
+        "Levantamento antigo usado depois de movimentações de terra no terreno"
+      ],
+      "consequencias": [
+        "Volumes de terraplenagem e contenções diferentes do orçado",
+        "Projeto implantado em cota ou posição incorreta",
+        "Georreferenciamento rejeitado pelo órgão fundiário ou pelo cartório"
+      ],
+      "controles_preventivos": [
+        "Levantamento planialtimétrico com ART, sistema de referência e precisão declarados no relatório",
+        "Certificado de calibração do equipamento topográfico anexado ao levantamento",
+        "Conferência de pontos de controle por segunda equipe antes do projeto executivo",
+        "Data do levantamento conferida contra movimentações de terra registradas no diário"
+      ],
+      "controles_resposta": [
+        "Refazer o levantamento nos trechos divergentes e revisar o projeto afetado",
+        "Recalcular volumes e cotas e ajustar orçamento e cronograma"
+      ],
+      "sinais_alerta": [
+        "Levantamento topográfico sem ART ou com mais de dois anos anexado ao projeto",
+        "Volume de corte e aterro medido diferente do orçado acima de 15%"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "qualidade"
+      ],
+      "fases": [
+        "aquisicao",
+        "projeto_aprovacao",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "terreno_inclinado",
+        "contencao"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "orcamento",
+        "planta_bim"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 13133 – execução de levantamento topográfico"
+      ]
+    },
+    {
+      "codigo": "R02.06",
+      "evento": "Servidões administrativas ou particulares não identificadas",
+      "causas": [
+        "Linhas de transmissão, adutoras ou gasodutos sem averbação na matrícula",
+        "Servidão de passagem constituída por uso contínuo de vizinhos",
+        "Faixa não edificável de rede de drenagem ou esgoto sob o terreno"
+      ],
+      "consequencias": [
+        "Área não edificável que reduz o aproveitamento do terreno",
+        "Necessidade de remanejar redes com custo e prazo da concessionária",
+        "Conflito com vizinhos que usam a passagem"
+      ],
+      "controles_preventivos": [
+        "Consulta formal às concessionárias de energia, água, esgoto e gás com respostas arquivadas",
+        "Vistoria do terreno e entorno com registro fotográfico de redes e passagens",
+        "Cadastro de redes públicas da prefeitura sobreposto ao levantamento topográfico",
+        "Declaração do vendedor sobre servidões existentes incluída no contrato"
+      ],
+      "controles_resposta": [
+        "Negociar relocação da rede ou da servidão com a concessionária ou o vizinho",
+        "Ajustar o projeto à faixa de servidão e revisar a viabilidade"
+      ],
+      "sinais_alerta": [
+        "Consulta a concessionárias sem resposta arquivada no dossiê do terreno",
+        "Poste, caixa de inspeção ou trilha atravessando o terreno no levantamento"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "planta_bim"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R02.07",
+      "evento": "Ocupações irregulares, invasões ou conflitos possessórios",
+      "causas": [
+        "Terreno vazio por longo período sem vigilância ou cercamento",
+        "Ocupações antigas consolidadas que podem gerar usucapião",
+        "Demora entre a compra e o início da obra"
+      ],
+      "consequencias": [
+        "Necessidade de ação possessória com prazo incerto",
+        "Custos de remoção, indenização ou reassentamento",
+        "Conflitos violentos e repercussão negativa na imprensa"
+      ],
+      "controles_preventivos": [
+        "Vistoria do terreno com relatório fotográfico datado antes da compra",
+        "Cercamento e vigilância contratados logo após a escritura, com contrato no sistema",
+        "Vistorias periódicas registradas até a mobilização do canteiro",
+        "Cláusula contratual de entrega do terreno livre e desocupado pelo vendedor"
+      ],
+      "controles_resposta": [
+        "Ingressar com ação possessória imediata e registrar boletim de ocorrência",
+        "Buscar mediação com apoio do poder público quando houver famílias no local"
+      ],
+      "sinais_alerta": [
+        "Vistoria periódica do terreno atrasada ou sem registro",
+        "Relato de construções ou movimentação de pessoas no terreno"
+      ],
+      "dimensoes": [
+        "juridica",
+        "prazo",
+        "reputacional",
+        "financeira"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R02.08",
+      "evento": "Restrições à utilização ou ao parcelamento do terreno",
+      "causas": [
+        "Restrições convencionais de loteamento registradas na matrícula, como uso unifamiliar",
+        "Área de tombamento ou entorno de bem tombado",
+        "Faixas não edificáveis de rodovias, ferrovias ou cursos d'água",
+        "Lote mínimo e exigências de doação de áreas públicas maiores que o previsto"
+      ],
+      "consequencias": [
+        "Produto planejado juridicamente impossível no terreno",
+        "Redução de área vendável ou de número de lotes",
+        "Necessidade de aprovação em órgãos adicionais de patrimônio"
+      ],
+      "controles_preventivos": [
+        "Certidão de uso do solo e diretrizes urbanísticas obtidas antes da compra e arquivadas",
+        "Leitura das restrições averbadas na matrícula registrada em parecer jurídico",
+        "Consulta a órgãos de patrimônio histórico quando houver bem tombado próximo",
+        "Estudo de massa preliminar considerando faixas não edificáveis aprovado pela incorporação"
+      ],
+      "controles_resposta": [
+        "Readequar o produto às restrições e revisar a viabilidade",
+        "Avaliar desistência da compra conforme cláusula suspensiva"
+      ],
+      "sinais_alerta": [
+        "Terreno em negociação sem certidão de uso do solo no GED",
+        "Matrícula com restrição convencional averbada sem parecer jurídico"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "proximo_curso_dagua",
+        "area_ambiental_sensivel",
+        "edificacao_antiga"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "imovib"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 6.766/1979 – parcelamento do solo urbano"
+      ]
+    },
+    {
+      "codigo": "R02.09",
+      "evento": "Passivos ambientais ou obrigações anteriores à aquisição",
+      "causas": [
+        "Uso anterior do terreno como posto de combustível, indústria ou depósito",
+        "Aterro com resíduos ou entulho feito por antigos proprietários",
+        "Termos de ajustamento de conduta ou autos de infração em nome do imóvel",
+        "Averbação de reserva legal ou área de compensação pendente"
+      ],
+      "consequencias": [
+        "Obrigação de remediação acompanha o imóvel e recai sobre o novo proprietário",
+        "Obra bloqueada até investigação e aprovação do órgão ambiental",
+        "Custos de remoção e destinação de solo contaminado"
+      ],
+      "controles_preventivos": [
+        "Avaliação ambiental preliminar com histórico de uso do terreno anexada ao dossiê",
+        "Investigação confirmatória com sondagens e análises quando houver uso de risco",
+        "Certidão negativa de débitos ambientais e consulta a autos de infração arquivadas",
+        "Cláusula de responsabilidade do vendedor por passivos com retenção de parte do preço"
+      ],
+      "controles_resposta": [
+        "Comunicar ao órgão ambiental e elaborar plano de intervenção aprovado",
+        "Acionar o vendedor pelos custos de remediação conforme contrato"
+      ],
+      "sinais_alerta": [
+        "Histórico de uso industrial ou de combustíveis no dossiê sem avaliação ambiental",
+        "Odor, manchas ou resíduos encontrados na vistoria ou na sondagem"
+      ],
+      "dimensoes": [
+        "ambiental",
+        "juridica",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "area_ambiental_sensivel",
+        "demolicao",
+        "edificacao_antiga"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Resolução CONAMA 420/2009 – qualidade do solo e áreas contaminadas"
+      ]
+    },
+    {
+      "codigo": "R02.10",
+      "evento": "Dificuldade de acesso legal ou físico ao imóvel",
+      "causas": [
+        "Terreno encravado ou com acesso por via particular de terceiros",
+        "Via de acesso não oficializada pela prefeitura",
+        "Acesso com largura, rampa ou capacidade incompatível com caminhões e equipamentos"
+      ],
+      "consequencias": [
+        "Impossibilidade de aprovar o projeto sem testada para via oficial",
+        "Custo de abertura ou pavimentação de via exigido como contrapartida",
+        "Logística de canteiro mais cara e lenta"
+      ],
+      "controles_preventivos": [
+        "Certidão de oficialização da via de acesso arquivada no dossiê",
+        "Vistoria de acesso com veículos pesados registrada em relatório com fotos",
+        "Servidão de passagem registrada na matrícula antes da compra quando necessária",
+        "Plano logístico de canteiro com rotas e restrições aprovado antes da mobilização"
+      ],
+      "controles_resposta": [
+        "Negociar servidão de passagem ou aquisição de faixa de acesso",
+        "Executar melhorias de via com acordo formal com a prefeitura"
+      ],
+      "sinais_alerta": [
+        "Terreno sem testada para via oficial no levantamento topográfico",
+        "Entregas de material atrasadas por restrição de acesso registradas no diário"
+      ],
+      "dimensoes": [
+        "juridica",
+        "operacional",
+        "financeira"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "terreno_inclinado",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "suprimentos",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R02.11",
+      "evento": "Desapropriação ou interferência de obras públicas",
+      "causas": [
+        "Terreno atingido por plano de alargamento viário ou nova infraestrutura",
+        "Decreto de utilidade pública publicado após a compra",
+        "Obra pública vizinha que bloqueia acesso ou altera o nível da via"
+      ],
+      "consequencias": [
+        "Perda de parte ou de todo o terreno com indenização inferior ao investido",
+        "Reprojeto para atender novo alinhamento",
+        "Atraso do empreendimento por interdição do entorno"
+      ],
+      "controles_preventivos": [
+        "Consulta ao plano diretor, planos viários e decretos de utilidade pública registrada antes da compra",
+        "Certidão de alinhamento e nivelamento emitida pela prefeitura arquivada no GED",
+        "Monitoramento de diários oficiais para o endereço do terreno com registro mensal",
+        "Cláusula contratual de resolução se houver decreto expropriatório anterior à escritura"
+      ],
+      "controles_resposta": [
+        "Contestar o valor da indenização com laudo de avaliação próprio",
+        "Replanejar o projeto com o novo alinhamento"
+      ],
+      "sinais_alerta": [
+        "Certidão de alinhamento indicando recuo ou faixa de melhoramento viário",
+        "Publicação oficial de projeto público na região do terreno"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "imovib"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Decreto-Lei 3.365/1941 – desapropriação por utilidade pública"
+      ]
+    },
+    {
+      "codigo": "R02.12",
+      "evento": "Compra de terreno sem diligência jurídica, técnica e urbanística adequada",
+      "causas": [
+        "Pressão comercial para fechar negócio antes de concorrentes",
+        "Confiança no vendedor ou em corretor sem conferência documental",
+        "Ausência de checklist padrão de due diligence na empresa",
+        "Orçamento de diligência considerado despesa evitável"
+      ],
+      "consequencias": [
+        "Acúmulo de riscos fundiários, ambientais e urbanísticos descobertos após o pagamento",
+        "Empreendimento inviável sobre terreno já pago",
+        "Litígio com vendedor para recuperar valores"
+      ],
+      "controles_preventivos": [
+        "Checklist padrão de due diligence com itens jurídicos, técnicos e urbanísticos concluído e assinado",
+        "Compromisso de compra com condição suspensiva até a conclusão da diligência",
+        "Aprovação da compra em comitê condicionada ao relatório de diligência no GED",
+        "Sondagem preliminar e levantamento topográfico contratados antes da escritura"
+      ],
+      "controles_resposta": [
+        "Executar diligência completa imediatamente e mapear riscos remanescentes",
+        "Acionar cláusulas de garantia e responsabilidade do vendedor"
+      ],
+      "sinais_alerta": [
+        "Terreno com escritura lavrada e checklist de diligência incompleto no sistema",
+        "Pagamento do terreno lançado no financeiro antes do relatório de diligência"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "ambiental",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "contratos",
+        "financeiro",
+        "imovib"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

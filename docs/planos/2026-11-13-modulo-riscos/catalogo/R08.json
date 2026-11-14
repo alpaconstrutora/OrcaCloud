@@ -1,0 +1,726 @@
+{
+  "categoria": "R08",
+  "nome": "Riscos de planejamento e cronograma",
+  "itens": [
+    {
+      "codigo": "R08.01",
+      "evento": "Cronograma físico irrealista",
+      "causas": [
+        "Data de entrega fixada pelo comercial antes do planejamento técnico",
+        "Durações estimadas sem base em produtividade histórica",
+        "Ausência de folga para chuvas, aprovações e mobilização",
+        "Cronograma feito sem participação do engenheiro de obra"
+      ],
+      "consequencias": [
+        "Atraso sistemático e perda de confiança no planejamento",
+        "Aceleração com horas extras e equipes adicionais",
+        "Multas contratuais e indenizações a compradores"
+      ],
+      "controles_preventivos": [
+        "Durações calculadas por quantidade e produtividade com memória registrada",
+        "Revisão do cronograma base pelo engenheiro de obra com aceite formal",
+        "Comparar prazo total com obras similares da empresa por metro quadrado",
+        "Folga de dias de chuva baseada em série histórica da região"
+      ],
+      "controles_resposta": [
+        "Rebaselinar o cronograma com aprovação da diretoria e comunicar nova data",
+        "Plano de recuperação com recursos e custo explícitos"
+      ],
+      "sinais_alerta": [
+        "Índice de desempenho de prazo abaixo de 0,9 nas primeiras medições",
+        "Percentual de atividades iniciadas com atraso no mês",
+        "Prazo contratual menor que prazo de obras similares no histórico"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "contratacao",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto",
+        "venda_na_planta",
+        "regiao_chuvosa"
+      ],
+      "integracoes": [
+        "planejamento",
+        "comercial",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R08.02",
+      "evento": "Sequenciamento inadequado das atividades",
+      "causas": [
+        "Instalações embutidas programadas depois do fechamento de alvenaria",
+        "Impermeabilização prevista após assentamento de revestimento",
+        "Ciclo de lajes sem considerar tempo de desforma e escoramento",
+        "Fachada programada sem liberação dos balancins ou do andaime"
+      ],
+      "consequencias": [
+        "Quebra de serviços prontos para corrigir a ordem",
+        "Equipes paradas aguardando frente",
+        "Risco de dano a serviços acabados"
+      ],
+      "controles_preventivos": [
+        "Usar rede de precedências padrão da empresa por tipologia",
+        "Revisão do sequenciamento com mestre e encarregados registrada em ata",
+        "Linha de balanço para pavimentos repetitivos",
+        "Checklist de pré-requisitos de cada pacote antes da liberação"
+      ],
+      "controles_resposta": [
+        "Reprogramar as frentes e definir proteção dos serviços já executados"
+      ],
+      "sinais_alerta": [
+        "Atividades sucessoras iniciadas antes da conclusão das predecessoras",
+        "Retrabalho registrado no diário com causa em ordem de execução",
+        "Equipes com dias sem frente registrados no diário"
+      ],
+      "dimensoes": [
+        "prazo",
+        "qualidade",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "estrutura_concreto"
+      ],
+      "integracoes": [
+        "planejamento",
+        "diario",
+        "ordens_servico"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R08.03",
+      "evento": "Identificação incorreta do caminho crítico",
+      "causas": [
+        "Atividades sem vínculo de dependência no software de cronograma",
+        "Datas impostas manualmente que mascaram a lógica da rede",
+        "Fornecimentos de longo prazo de entrega fora do cronograma",
+        "Aprovações externas não modeladas como atividades"
+      ],
+      "consequencias": [
+        "Esforço de aceleração aplicado na atividade errada",
+        "Atraso da entrega percebido tarde demais",
+        "Recursos desperdiçados em atividades com folga"
+      ],
+      "controles_preventivos": [
+        "Auditoria de qualidade da rede com percentual de atividades sem predecessora",
+        "Incluir compras de longo prazo e aprovações como atividades vinculadas",
+        "Limitar datas impostas a marcos contratuais justificados",
+        "Revisão mensal do caminho crítico em reunião com ata"
+      ],
+      "controles_resposta": [
+        "Recalcular o caminho crítico com a rede corrigida e redirecionar recursos"
+      ],
+      "sinais_alerta": [
+        "Percentual de atividades sem predecessora ou sucessora no cronograma",
+        "Quantidade de datas impostas no cronograma",
+        "Variação súbita do caminho crítico entre atualizações"
+      ],
+      "dimensoes": [
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "contratacao",
+        "inicio_obra",
+        "estrutura",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "insumo_importado",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "planejamento",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R08.04",
+      "evento": "Atraso na mobilização do canteiro",
+      "causas": [
+        "Ligações provisórias de água e energia pendentes na concessionária",
+        "Alvará ou CNO ainda não emitidos na data prevista",
+        "Demora na contratação de containers, tapumes e equipe inicial",
+        "Terreno com demolição ou limpeza não concluída"
+      ],
+      "consequencias": [
+        "Início das fundações adiado e efeito em todo o cronograma",
+        "Custos de equipe contratada sem frente produtiva",
+        "Consumo prematuro da folga do projeto"
+      ],
+      "controles_preventivos": [
+        "Plano de mobilização com checklist de licenças, ligações e contratos",
+        "Solicitar ligações provisórias com antecedência registrada em protocolo",
+        "Marco de início de obra condicionado a alvará e CNO no GED",
+        "Projeto de canteiro aprovado antes da contratação das instalações"
+      ],
+      "controles_resposta": [
+        "Usar gerador e caminhão-pipa como solução provisória com custo aprovado",
+        "Antecipar atividades que não dependem do canteiro completo"
+      ],
+      "sinais_alerta": [
+        "Protocolos de ligação provisória sem resposta da concessionária",
+        "Alvará ou CNO pendentes a menos de 30 dias do início previsto",
+        "Pedidos de compra de canteiro não emitidos"
+      ],
+      "dimensoes": [
+        "prazo",
+        "operacional",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "demolicao",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "planejamento",
+        "docs_ged",
+        "suprimentos",
+        "fiscal"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R08.05",
+      "evento": "Atrasos no fornecimento de materiais e equipamentos",
+      "causas": [
+        "Pedidos emitidos sem considerar prazo de fabricação de elevadores, esquadrias e estruturas",
+        "Aprovação de projetos de fabricação demorada",
+        "Fornecedor com capacidade comprometida por outras obras",
+        "Falta de cronograma de suprimentos derivado do cronograma físico"
+      ],
+      "consequencias": [
+        "Frentes paradas e ociosidade de equipes",
+        "Compras emergenciais com sobrepreço",
+        "Atraso de marcos dependentes como fachada e elevadores"
+      ],
+      "controles_preventivos": [
+        "Cronograma de suprimentos com data limite de pedido por item de longo prazo",
+        "Follow-up semanal de pedidos críticos com registro de data confirmada",
+        "Multa por atraso e cronograma de fabricação no contrato de fornecimento",
+        "Inspeção em fábrica de itens críticos antes do embarque"
+      ],
+      "controles_resposta": [
+        "Acionar fornecedor alternativo ou entrega parcial e resequenciar frentes"
+      ],
+      "sinais_alerta": [
+        "Pedidos com data de entrega posterior à necessidade do cronograma",
+        "Itens de longo prazo sem pedido emitido na data limite",
+        "Entregas recebidas com atraso por fornecedor"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "insumo_importado",
+        "estrutura_metalica",
+        "pre_moldado"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "planejamento",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R08.06",
+      "evento": "Baixa produtividade das equipes",
+      "causas": [
+        "Falta de frente liberada, material ou ferramenta no posto de trabalho",
+        "Logística vertical saturada por grua ou elevador compartilhados",
+        "Equipes recém-formadas sem experiência no serviço",
+        "Pagamento por diária sem meta de produção"
+      ],
+      "consequencias": [
+        "Atraso de atividades e consumo da folga",
+        "Custo de mão de obra por unidade acima do orçado",
+        "Necessidade de horas extras e fadiga"
+      ],
+      "controles_preventivos": [
+        "Planejamento semanal com verificação de restrições removidas antes da liberação",
+        "Medição de percentual de pacotes concluídos na semana",
+        "Programação de uso da grua e do elevador por janela de horário",
+        "Contratos com metas de produção e medição por quantidade"
+      ],
+      "controles_resposta": [
+        "Análise de causa das metas não cumpridas e ação sobre a restrição dominante"
+      ],
+      "sinais_alerta": [
+        "Percentual de planos semanais concluídos abaixo da meta",
+        "Avanço físico por homem-dia registrado no diário em queda",
+        "Efetivo do diário acima do planejado sem ganho de avanço"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "grua_ou_guindaste",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "planejamento",
+        "diario",
+        "rh"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R08.07",
+      "evento": "Dependências não identificadas entre atividades",
+      "causas": [
+        "Ensaios de estanqueidade e testes de instalações não previstos como atividades",
+        "Liberações de concessionária necessárias para energização ignoradas",
+        "Tempo de cura e secagem de contrapisos e impermeabilizações omitidos",
+        "Interface entre empreiteiros não mapeada no cronograma"
+      ],
+      "consequencias": [
+        "Atividades programadas que não podem começar na data",
+        "Atraso descoberto em cima do marco",
+        "Execução sobre base não liberada e patologias posteriores"
+      ],
+      "controles_preventivos": [
+        "Revisão do cronograma por disciplina com os projetistas e empreiteiros",
+        "Incluir tempos de espera técnicos como atividades com duração",
+        "Matriz de interfaces entre contratos anexada ao planejamento",
+        "Checklist de pré-requisitos técnicos por pacote de trabalho"
+      ],
+      "controles_resposta": [
+        "Inserir a dependência na rede, recalcular datas e comunicar as equipes"
+      ],
+      "sinais_alerta": [
+        "Atividades reprogramadas por pré-requisito não previsto",
+        "Restrições novas surgindo no planejamento semanal",
+        "Registros no diário de serviço impedido por outra equipe"
+      ],
+      "dimensoes": [
+        "prazo",
+        "qualidade"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "planejamento",
+        "diario",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R08.08",
+      "evento": "Decisões tardias do cliente, incorporador ou projetista",
+      "causas": [
+        "Escolha de acabamentos e personalizações sem data limite",
+        "Respostas a consultas técnicas sem prazo contratual",
+        "Diretoria adiando decisão de padrão ou de sistema construtivo",
+        "Projetista sobrecarregado com outras obras"
+      ],
+      "consequencias": [
+        "Frentes paradas aguardando definição",
+        "Compras de longo prazo emitidas tarde",
+        "Pleito de prorrogação e custo indireto adicional"
+      ],
+      "controles_preventivos": [
+        "Cronograma de decisões com data limite e responsável por decisão",
+        "Prazo de resposta a consultas técnicas definido no contrato de projeto",
+        "Registro formal de cada pendência de decisão com data de solicitação",
+        "Prazo de personalização das unidades previsto no contrato de venda"
+      ],
+      "controles_resposta": [
+        "Notificar formalmente o atraso de decisão e registrar o impacto em prazo e custo",
+        "Adotar especificação padrão após o prazo limite conforme contrato"
+      ],
+      "sinais_alerta": [
+        "Consultas técnicas abertas acima do prazo de resposta",
+        "Decisões vencidas no cronograma de decisões",
+        "Personalizações de unidades pendentes no comercial"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "planejamento",
+        "comercial",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R08.09",
+      "evento": "Interferência entre equipes e serviços simultâneos",
+      "causas": [
+        "Várias empreiteiras no mesmo pavimento sem programação de áreas",
+        "Disputa por grua, elevador e área de estoque",
+        "Serviços sujos programados sobre serviços acabados",
+        "Atividades incompatíveis como solda junto a material inflamável"
+      ],
+      "consequencias": [
+        "Danos a serviços prontos e retrabalho",
+        "Perda de produtividade e conflitos entre empreiteiros",
+        "Aumento do risco de acidentes por atividades sobrepostas"
+      ],
+      "controles_preventivos": [
+        "Programação semanal de ocupação de áreas por equipe",
+        "Reunião diária de coordenação entre encarregados registrada",
+        "Regras de convivência e proteção de serviços no contrato dos empreiteiros",
+        "Análise de compatibilidade de atividades simultâneas pela segurança"
+      ],
+      "controles_resposta": [
+        "Separar as frentes no tempo ou no espaço e atribuir responsabilidade pelo dano"
+      ],
+      "sinais_alerta": [
+        "Mais de três equipes programadas no mesmo pavimento",
+        "Registros de dano a serviço de outra equipe no diário",
+        "Conflitos de reserva de grua ou elevador"
+      ],
+      "dimensoes": [
+        "operacional",
+        "prazo",
+        "seguranca",
+        "qualidade"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "prazo_curto",
+        "grua_ou_guindaste"
+      ],
+      "integracoes": [
+        "planejamento",
+        "diario",
+        "sst",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R08.10",
+      "evento": "Atrasos provocados por reprojetos e retrabalhos",
+      "causas": [
+        "Incompatibilidades de projeto descobertas durante a execução",
+        "Não conformidades de execução que exigem demolição",
+        "Mudanças de produto após o lançamento",
+        "Exigências de órgãos que obrigam revisão de projeto aprovado"
+      ],
+      "consequencias": [
+        "Atividades críticas repetidas ou paralisadas",
+        "Custo adicional de projeto e de execução",
+        "Perda de marcos contratuais"
+      ],
+      "controles_preventivos": [
+        "Registro de reprojetos com estimativa de impacto em prazo antes de aprovar",
+        "Inspeção de serviços nas primeiras unidades antes da repetição",
+        "Congelamento de produto em data definida com aprovação formal",
+        "Indicador de retrabalho reportado na reunião mensal de obra"
+      ],
+      "controles_resposta": [
+        "Atualizar o cronograma com o reprojeto e buscar frentes paralelas"
+      ],
+      "sinais_alerta": [
+        "Revisões de projeto emitidas após o início da etapa correspondente",
+        "Dias de atraso atribuídos a retrabalho no relatório de obra",
+        "Não conformidades repetidas no mesmo serviço"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "qualidade"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "bim"
+      ],
+      "integracoes": [
+        "planejamento",
+        "docs_ged",
+        "garantia_qualidade"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R08.11",
+      "evento": "Falta de atualização confiável do avanço físico",
+      "causas": [
+        "Avanço estimado visualmente sem critério de medição",
+        "Atualização do cronograma esporádica ou só na véspera de relatório",
+        "Avanço físico igualado à medição financeira dos empreiteiros",
+        "Diário de obra preenchido sem quantidades executadas"
+      ],
+      "consequencias": [
+        "Atrasos ocultos até o fim da obra",
+        "Liberações bancárias e relatórios a investidores com base errada",
+        "Pagamentos adiantados em relação ao serviço executado"
+      ],
+      "controles_preventivos": [
+        "Critérios de medição de avanço documentados por atividade",
+        "Atualização semanal do cronograma com data de corte fixa",
+        "Conferência amostral do avanço declarado com fotos datadas",
+        "Conciliação entre avanço físico, medições e diário de obra"
+      ],
+      "controles_resposta": [
+        "Levantamento físico completo em campo e rebaselinamento das projeções"
+      ],
+      "sinais_alerta": [
+        "Dias desde a última atualização de avanço no cronograma",
+        "Diferença entre avanço físico e percentual medido aos empreiteiros",
+        "Diários sem quantidades de serviço registradas"
+      ],
+      "dimensoes": [
+        "operacional",
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "planejamento",
+        "diario",
+        "contratos",
+        "investidor"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R08.12",
+      "evento": "Descumprimento dos marcos contratuais e da data final de entrega",
+      "causas": [
+        "Atrasos acumulados sem plano de recuperação",
+        "Prazo de tolerância contratual já consumido",
+        "Habite-se e ligações definitivas não planejados com antecedência",
+        "Marcos de contrato público vinculados a medições não acompanhados"
+      ],
+      "consequencias": [
+        "Multas e indenizações a compradores pelo atraso",
+        "Distratos e danos reputacionais",
+        "Sanções administrativas em contratos públicos"
+      ],
+      "controles_preventivos": [
+        "Painel de marcos contratuais com data prevista e tendência",
+        "Plano de recuperação obrigatório quando a tendência ultrapassar a tolerância",
+        "Planejamento do habite-se e das ligações definitivas no cronograma",
+        "Comunicação formal periódica do prazo aos compradores"
+      ],
+      "controles_resposta": [
+        "Negociar nova data com compradores ou contratante e formalizar aditivo",
+        "Provisionar multas e indenizações no fluxo de caixa"
+      ],
+      "sinais_alerta": [
+        "Tendência da data de entrega posterior à data contratual",
+        "Folga total do caminho crítico negativa",
+        "Marcos intermediários vencidos no cronograma"
+      ],
+      "dimensoes": [
+        "prazo",
+        "juridica",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "contrato_publico",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "planejamento",
+        "contratos",
+        "comercial",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 13.786/2018 – distrato e atraso na entrega de imóveis em incorporação"
+      ]
+    }
+  ]
+}

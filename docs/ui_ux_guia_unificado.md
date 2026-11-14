@@ -218,7 +218,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §24 Portais externos (investidor/fornecedor) — a tela auditada está dentro ou fora do escopo da exceção? (fora = §4/§6.2/§8/§17 valem inteiras)
 - [ ] §25 Salvar não fecha a edição — se é formulário multi-aba/edição longa: editar permanece aberto ao salvar (só criar fecha), dirty-tracking presente, guarda de saída via `useConfirm()`
 - [ ] §26 Geometria do drawer — se a tela abre painel lateral: usa `Sheet` (herda o painel solto) ou, se é painel à mão, tem respiro + raio + deslocamento de saída somando o respiro
-- [ ] §28 Gráficos — se a tela tem gráfico: cromo, marcas, rótulo, legenda, paleta e estado vazio conferidos item a item
+- [ ] §28 Gráficos — se a tela tem gráfico: cromo, marcas, rótulo, legenda, paleta e estado vazio conferidos item a item (mapa de calor 5×5: §28.8, `MatrizCalor`)
 - [ ] §29 Barra de progresso segmentada — se a tela mostra proporção/percentual em barra: usa `SegmentedProgress` (percentual em texto + quadradinhos), não barra contínua à mão
 - [ ] §30 Malha do formulário — se a tela tem formulário: rótulo 6px / campo 16px / seção 32px / card 24px; seções do mesmo formulário no mesmo card; campos curtos em grade
 - [ ] §31 Diagrama de processo (canvas) — se a tela desenha um fluxo de nós: fundo pontilhado por `style`, cartão-nó, linha 2px com seta por costura, rótulo de aresta em chip `rounded-[6px]` sem caixa alta, caixa de grupo tracejada, controles de zoom; drawers/modais FORA da camada com `transform`
@@ -3620,6 +3620,33 @@ dias / vencem de 3 a 7 dias.
 
 > ❌ Não usar para série no tempo nem para mais de 3 faixas (vira donut ilegível): aí é
 > barra (§28.1).
+
+### 28.8 Mapa de calor 5×5 — probabilidade × impacto (`MatrizCalor`)
+
+**Criado em 14/11/2026** (módulo Riscos › aba Matriz,
+`docs/planos/2026-11-13-modulo-riscos.md` F1.9). Componente único:
+**`components/riscos/MatrizCalor.tsx`**, extraído do mapa que vivia em
+`ImovibRiscosCard.tsx` — o Imovib passou a usá-lo no tamanho `compacto` com o HTML
+idêntico ao de antes (conferido por `renderToStaticMarkup` lado a lado). Tela nova
+não desenha a grade 5×5 à mão.
+
+- **Eixos fixos:** impacto nas linhas, de 5 (topo) a 1; probabilidade nas colunas, de
+  1 a 5, com "Probabilidade →" abaixo. A tela decide a contagem e a cor de cada
+  célula (`contagem`, `corDaCelula`) — o mapa só desenha.
+- **Cor = faixa da organização** (no Riscos, `COR_CELULA_NIVEL` por
+  `nivelDaPontuacao(p × i, faixas)`), sempre com **legenda em texto** dos níveis e
+  das faixas ao lado (§28.3: a cor nunca é o único sinal), e `title` em cada célula
+  com o cruzamento, o nível e a contagem.
+- **`compacto`** (células de 36px, `span`): leitura dentro de card. **`amplo`**
+  (página inteira) + `onSelecionar`: cada célula vira `button` com `aria-pressed`;
+  a selecionada ganha anel azul (estado), o fundo continua sendo o nível; clicar de
+  novo tira o recorte. A lista abaixo mostra o recorte com a contagem no título.
+- É diagrama, não tabela de registro: o `font-semibold` do número da célula vem do
+  desenho original e fica fora de `<td>` (§7 não se aplica).
+
+> ❌ Não pintar a célula pelo nível do RISCO (gatilho crítico escala o risco, não a
+> célula): o mapa é posição P × I. O gatilho é dito numa frase abaixo do mapa e
+> aparece na lista como "Crítico · gatilho".
 
 ---
 

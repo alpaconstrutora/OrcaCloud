@@ -188,6 +188,8 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
         canViewOperational: true, canEditOperational: false,
         canEditQuality: false,
         canViewWarranty: true, canEditWarranty: false,
+        // Riscos (14/11/2026): mesmo padrão do Pós-Obra — ver sim, editar não.
+        canViewRisks: true, canEditRisks: false,
         canEditLabor: false,
         // Gestão de treinamentos fora do RH (16/10/2026). Mesmo padrão do RH:
         // ver sim, editar não. Membro já gravado SEM a chave herda do RH (ver
@@ -267,6 +269,7 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
                 canEditOperational: true,
                 canEditQuality: true,
                 canEditWarranty: true,
+                canEditRisks: true,
                 canEditP2P: true,
                 canEditProcurementPlan: true,
                 canEditSupplyContracts: true,
@@ -316,7 +319,9 @@ const MODULES_BY_PRODUCT: Record<ProductContext, { key: string; label: string; d
         // A chave segue `quality` (persistida nos planos já contratados); só o
         // rótulo acompanha a consolidação de 2026-08-26.
         { key: 'quality',    label: 'Pós-Obra & Garantia',              description: 'Chamados de assistência técnica, prazos NBR 17170 e SLAs' },
-        { key: 'pro',        label: 'ÒPURA Pro (Add-on)',               description: 'Modelos rápidos de orçamento para prestadores' },
+        // Sem valor gravado na matriz, segue o que o cargo tem em "Engenharia / Obras".
+        { key: 'riscos',     label: 'Riscos',                           description: 'Registro, avaliação e tratamento de riscos do empreendimento, da obra e do contrato' },
+        { key: 'pro',       label: 'ÒPURA Pro (Add-on)',               description: 'Modelos rápidos de orçamento para prestadores' },
         { key: 'offices',    label: 'ÒPURA Offices (Add-on)',           description: 'Projetos e especificações de arquitetura/design' },
         { key: 'ecommerce',  label: 'ÒPURA E-commerce (Add-on)',        description: 'Governança operacional e conformidade TTS' },
     ],
@@ -393,6 +398,10 @@ const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?:
     // não mudava nada, e a tela sugeria dois módulos onde há um. A chave
     // `canViewQuality` fica como está: está persistida nos perfis já gravados.
     { group: 'Operação de Obra', title: 'Pós-Obra e Garantia', view: 'canViewQuality', edit: 'canEditQuality' },
+    // Riscos (14/11/2026, docs/planos/2026-11-13-modulo-riscos.md F1.4): o roteador
+    // consulta `canViewRisks` (AppRouter) e a tela, `canEditRisks`. Sem valor
+    // gravado, herda de Obras (utils/permissaoRiscos.ts).
+    { group: 'Operação de Obra', title: 'Riscos', view: 'canViewRisks', edit: 'canEditRisks' },
 
     // --- Treinamentos --- (saiu de dentro do RH em 16/10/2026: quem gerencia
     // treinamento não é só o RH — segurança do trabalho, engenharia de obra)
@@ -588,6 +597,8 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         const roleSettings = (settings[activeProductTab] || {})[roleId];
         if (roleSettings && roleSettings[moduleKey] !== undefined) return roleSettings[moduleKey];
         if (moduleKey === 'treinamentos') return visivelNaMatriz(settings, roleId, 'rh');
+        // Riscos (14/11/2026) sem valor gravado segue "Engenharia / Obras" (utils/permissaoRiscos.ts).
+        if (moduleKey === 'riscos') return visivelNaMatriz(settings, roleId, 'obras');
         return true;
     };
 
@@ -952,6 +963,10 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         // menu e à rota (utils/permissaoTreinamentos.ts).
         if (salvas.canViewTrainings === undefined && salvas.canViewLabor !== undefined) efetivas.canViewTrainings = salvas.canViewLabor;
         if (salvas.canEditTrainings === undefined && salvas.canEditLabor !== undefined) efetivas.canEditTrainings = salvas.canEditLabor;
+        // Riscos (14/11/2026): membro gravado antes sem a chave HERDA de Obras (Orçamento),
+        // igual ao menu e à rota (utils/permissaoRiscos.ts).
+        if (salvas.canViewRisks === undefined && salvas.canViewBudget !== undefined) efetivas.canViewRisks = salvas.canViewBudget;
+        if (salvas.canEditRisks === undefined && salvas.canEditBudget !== undefined) efetivas.canEditRisks = salvas.canEditBudget;
         return efetivas;
     };
 

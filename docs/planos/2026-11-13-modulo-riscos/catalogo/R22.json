@@ -1,0 +1,726 @@
+{
+  "categoria": "R22",
+  "nome": "Riscos climáticos, naturais e externos",
+  "itens": [
+    {
+      "codigo": "R22.01",
+      "evento": "Chuvas intensas e prolongadas",
+      "causas": [
+        "Escavação e terraplenagem programadas no período chuvoso",
+        "Canteiro sem drenagem provisória",
+        "Cronograma sem dias improdutivos por chuva"
+      ],
+      "consequencias": [
+        "Dias parados e atraso em fundações e terraplenagem",
+        "Encharcamento e instabilidade de taludes e valas",
+        "Concretagem comprometida e retrabalho"
+      ],
+      "controles_preventivos": [
+        "Dias improdutivos no cronograma baseados em série histórica regional",
+        "Drenagem provisória e proteção de taludes com lona verificadas no diário",
+        "Consulta registrada da previsão meteorológica antes de concretagem e escavação",
+        "Plano de serviços cobertos alternativos para dias de chuva"
+      ],
+      "controles_resposta": [
+        "Suspender escavação e concretagem e inspecionar taludes antes de retomar",
+        "Esgotar e drenar áreas alagadas",
+        "Registrar dias improdutivos no diário para pleito de prazo"
+      ],
+      "sinais_alerta": [
+        "Previsão de chuva forte na semana programada para escavação ou concretagem",
+        "Dias improdutivos acumulados acima do previsto",
+        "Chuva registrada no diário vs dias de chuva previstos no cronograma"
+      ],
+      "dimensoes": [
+        "prazo",
+        "seguranca",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "regiao_chuvosa",
+        "escavacao_profunda",
+        "terreno_inclinado"
+      ],
+      "integracoes": [
+        "diario",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R22.02",
+      "evento": "Enchentes e alagamentos",
+      "causas": [
+        "Terreno em cota baixa ou próximo a córrego",
+        "Drenagem urbana do entorno insuficiente",
+        "Subsolo aberto durante chuva forte"
+      ],
+      "consequencias": [
+        "Inundação de subsolo e escavações",
+        "Perda de materiais, equipamentos e instalações provisórias",
+        "Danos a vizinhos por desvio de águas do canteiro"
+      ],
+      "controles_preventivos": [
+        "Consulta a mapa de inundação e histórico municipal registrada na viabilidade",
+        "Bombas de esgotamento dimensionadas e testadas com registro",
+        "Materiais e quadros elétricos acima da cota de cheia",
+        "Seguro de riscos de engenharia com cobertura de alagamento"
+      ],
+      "controles_resposta": [
+        "Evacuar áreas baixas e desligar a energia",
+        "Esgotar, limpar e inspecionar antes de retomar",
+        "Acionar o seguro com registro fotográfico"
+      ],
+      "sinais_alerta": [
+        "Alerta da defesa civil para a região",
+        "Nível do curso d'água próximo subindo",
+        "Previsão de chuva extrema com subsolo aberto"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "seguranca",
+        "ambiental"
+      ],
+      "fases": [
+        "viabilidade",
+        "inicio_obra",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "proximo_curso_dagua",
+        "subsolo",
+        "nivel_agua_alto",
+        "regiao_chuvosa"
+      ],
+      "integracoes": [
+        "diario",
+        "planejamento",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 12.608/2012 – Política Nacional de Proteção e Defesa Civil"
+      ]
+    },
+    {
+      "codigo": "R22.03",
+      "evento": "Deslizamentos e movimentos de massa",
+      "causas": [
+        "Cortes e aterros sem contenção em terreno inclinado",
+        "Saturação do solo por chuva acumulada",
+        "Remoção da vegetação da encosta"
+      ],
+      "consequencias": [
+        "Soterramento de trabalhadores",
+        "Danos a edificações vizinhas e vias",
+        "Embargo da obra e custo de estabilização"
+      ],
+      "controles_preventivos": [
+        "Investigação geotécnica e projeto de estabilidade de encosta com ART",
+        "Inspeção de taludes registrada após cada chuva forte",
+        "Drenagem e proteção superficial de taludes executadas antes do corte seguinte",
+        "Isolamento das áreas de risco em dias de chuva forte com registro"
+      ],
+      "controles_resposta": [
+        "Evacuar e isolar a área",
+        "Acionar o geotécnico e a defesa civil",
+        "Executar estabilização emergencial"
+      ],
+      "sinais_alerta": [
+        "Trincas no topo do talude ou no terreno vizinho",
+        "Surgência de água na face do talude",
+        "Chuva acumulada em 72 horas acima do limiar definido pelo geotécnico"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "financeira",
+        "prazo",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "terreno_inclinado",
+        "contencao",
+        "regiao_chuvosa",
+        "escavacao_profunda"
+      ],
+      "integracoes": [
+        "diario",
+        "sst",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Movimento de massa pode soterrar trabalhadores e atingir edificações vizinhas",
+      "referencias": [
+        "ABNT NBR 11682 – estabilidade de encostas",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R22.04",
+      "evento": "Ventos fortes e tempestades",
+      "causas": [
+        "Grua operando com vento acima do limite do fabricante",
+        "Telas e bandejas de fachada mal fixadas",
+        "Materiais leves soltos em lajes altas"
+      ],
+      "consequencias": [
+        "Tombamento de grua ou queda de carga içada",
+        "Queda de materiais sobre trabalhadores, pedestres e vizinhos",
+        "Danos a tapumes e coberturas provisórias"
+      ],
+      "controles_preventivos": [
+        "Anemômetro na grua com limite de operação registrado",
+        "Inspeção semanal de fixação de telas, bandejas e andaimes",
+        "Amarração de materiais nos pavimentos altos ao fim do expediente",
+        "Grua em giro livre fora de operação conforme procedimento"
+      ],
+      "controles_resposta": [
+        "Suspender içamentos e trabalho em altura",
+        "Isolar a área sob a fachada",
+        "Inspecionar equipamentos antes de retomar"
+      ],
+      "sinais_alerta": [
+        "Alerta meteorológico de rajadas para o dia",
+        "Leituras do anemômetro acima do limite de operação"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "operacional",
+        "prazo"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "grua_ou_guindaste",
+        "trabalho_em_altura",
+        "estrutura_metalica",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "sst",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Queda de grua ou de materiais pode matar trabalhadores e terceiros",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção",
+        "NR-35 – trabalho em altura"
+      ]
+    },
+    {
+      "codigo": "R22.05",
+      "evento": "Descargas atmosféricas",
+      "causas": [
+        "Grua e estruturas metálicas elevadas sem aterramento",
+        "Trabalho a céu aberto mantido durante tempestade",
+        "SPDA definitivo instalado tarde"
+      ],
+      "consequencias": [
+        "Morte ou queimaduras de trabalhadores",
+        "Queima de quadros provisórios e equipamentos",
+        "Princípio de incêndio no canteiro"
+      ],
+      "controles_preventivos": [
+        "Aterramento de grua, andaimes e estruturas metálicas com medição registrada",
+        "Procedimento de paralisação ao detectar tempestade com raios",
+        "Monitoramento de alerta de raios consultado pela equipe de SST",
+        "SPDA definitivo antecipado no cronograma"
+      ],
+      "controles_resposta": [
+        "Recolher trabalhadores para abrigo seguro",
+        "Prestar socorro e acionar atendimento de emergência",
+        "Inspecionar instalações elétricas antes de religar"
+      ],
+      "sinais_alerta": [
+        "Alerta de tempestade com raios para a região",
+        "Medição de resistência de aterramento vencida"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "operacional"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "grua_ou_guindaste",
+        "estrutura_metalica",
+        "trabalho_em_altura"
+      ],
+      "integracoes": [
+        "sst",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Raio atingindo trabalhador ou estrutura elevada pode causar morte",
+      "referencias": [
+        "ABNT NBR 5419 – proteção contra descargas atmosféricas",
+        "NR-10 – segurança em instalações e serviços em eletricidade"
+      ]
+    },
+    {
+      "codigo": "R22.06",
+      "evento": "Ondas de calor ou frio extremo",
+      "causas": [
+        "Trabalho pesado sob sol sem regime de pausas",
+        "Falta de hidratação e de áreas de sombra",
+        "Concretagem programada em temperatura extrema"
+      ],
+      "consequencias": [
+        "Insolação e mal súbito de trabalhadores",
+        "Queda de produtividade",
+        "Fissuração do concreto por perda de água ou pega retardada"
+      ],
+      "controles_preventivos": [
+        "Avaliação de exposição ao calor por IBUTG com regime de pausas definido",
+        "Pontos de hidratação e sombra verificados em inspeção de SST",
+        "Plano de concretagem com horário e cura adequados à temperatura",
+        "Ajuste de jornada em dias de alerta registrado"
+      ],
+      "controles_resposta": [
+        "Interromper a atividade e atender o trabalhador",
+        "Reprogramar a concretagem",
+        "Reforçar a cura úmida"
+      ],
+      "sinais_alerta": [
+        "Previsão de temperatura extrema na semana",
+        "Atendimentos ambulatoriais por mal-estar"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "prazo"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto"
+      ],
+      "integracoes": [
+        "sst",
+        "diario",
+        "rh"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "NR-15, anexo 3 – limites de tolerância para exposição ao calor",
+        "NR-21 – trabalho a céu aberto"
+      ]
+    },
+    {
+      "codigo": "R22.07",
+      "evento": "Secas e indisponibilidade de água",
+      "causas": [
+        "Rodízio de abastecimento na região",
+        "Ligação provisória de água insuficiente para o consumo da obra",
+        "Dependência de poço sem outorga"
+      ],
+      "consequencias": [
+        "Paralisação de argamassas, cura e limpeza",
+        "Custo extra com caminhão-pipa",
+        "Autuação por captação irregular"
+      ],
+      "controles_preventivos": [
+        "Reservatório provisório dimensionado para o consumo diário da obra",
+        "Contrato prévio de fornecimento por caminhão-pipa",
+        "Medição de consumo de água por etapa registrada",
+        "Outorga de captação obtida antes de usar poço"
+      ],
+      "controles_resposta": [
+        "Acionar o fornecimento alternativo",
+        "Priorizar concreto e argamassa usinados",
+        "Reprogramar serviços que consomem muita água"
+      ],
+      "sinais_alerta": [
+        "Anúncio de rodízio pela concessionária",
+        "Consumo de água acima do previsto"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "ambiental",
+        "operacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "suprimentos",
+        "diario",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R22.08",
+      "evento": "Incêndios florestais e queimadas próximas",
+      "causas": [
+        "Obra próxima a mata ou pasto na estação seca",
+        "Queima de resíduos no próprio canteiro",
+        "Vegetação seca sem roçada no perímetro"
+      ],
+      "consequencias": [
+        "Fumaça afetando a saúde e paralisando serviços",
+        "Perda de materiais e instalações provisórias",
+        "Autuação ambiental"
+      ],
+      "controles_preventivos": [
+        "Aceiro e roçada do perímetro com registro fotográfico",
+        "Proibição de queima e destinação de resíduos com comprovante",
+        "Extintores inspecionados e brigada treinada com registro",
+        "Monitoramento de focos de calor próximos na estação seca"
+      ],
+      "controles_resposta": [
+        "Evacuar e acionar o corpo de bombeiros",
+        "Levantar danos e acionar o seguro"
+      ],
+      "sinais_alerta": [
+        "Focos de calor detectados no entorno",
+        "Umidade relativa do ar muito baixa por dias seguidos"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "ambiental",
+        "prazo"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "loteamento",
+        "galpao_industrial",
+        "residencial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "area_ambiental_sensivel"
+      ],
+      "integracoes": [
+        "sst",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Resolução CONAMA 307/2002 – gestão de resíduos da construção civil"
+      ]
+    },
+    {
+      "codigo": "R22.09",
+      "evento": "Greves e interrupções de serviços essenciais",
+      "causas": [
+        "Greve de transporte público impedindo a chegada dos trabalhadores",
+        "Interrupção de energia na região",
+        "Greve da categoria na data-base sindical"
+      ],
+      "consequencias": [
+        "Dias parados e mão de obra ociosa",
+        "Concretagens programadas canceladas",
+        "Atraso em marcos contratuais"
+      ],
+      "controles_preventivos": [
+        "Calendário de datas-base e negociações sindicais acompanhado pelo RH",
+        "Gerador dimensionado para equipamentos críticos e testado",
+        "Contrato de transporte fretado contingente",
+        "Fornecedor alternativo de concreto cadastrado"
+      ],
+      "controles_resposta": [
+        "Reprogramar as atividades da semana",
+        "Acionar transporte e energia contingentes"
+      ],
+      "sinais_alerta": [
+        "Assembleias sindicais anunciadas",
+        "Faltas de trabalhadores acima da média diária"
+      ],
+      "dimensoes": [
+        "prazo",
+        "operacional",
+        "financeira"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "rh",
+        "planejamento",
+        "suprimentos",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R22.10",
+      "evento": "Bloqueios rodoviários ou interrupções logísticas",
+      "causas": [
+        "Paralisação de caminhoneiros",
+        "Interdição de rodovia de acesso",
+        "Fornecedor único distante da obra"
+      ],
+      "consequencias": [
+        "Falta de cimento, aço ou blocos e paralisação de frentes",
+        "Aumento de preço de frete e insumos",
+        "Atraso em marcos do cronograma"
+      ],
+      "controles_preventivos": [
+        "Estoque de segurança de insumos críticos definido e controlado",
+        "Fornecedores alternativos homologados em outras regiões",
+        "Acompanhamento do prazo de entrega por pedido"
+      ],
+      "controles_resposta": [
+        "Priorizar frentes com material disponível",
+        "Compra emergencial local com aprovação registrada"
+      ],
+      "sinais_alerta": [
+        "Pedidos com entrega atrasada",
+        "Notícias de paralisação ou interdição nas rotas de abastecimento"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R22.11",
+      "evento": "Epidemias e crises sanitárias",
+      "causas": [
+        "Surto de doença transmissível na região",
+        "Alojamentos e refeitórios aglomerados",
+        "Restrições sanitárias impostas pelo poder público"
+      ],
+      "consequencias": [
+        "Afastamentos em massa de trabalhadores",
+        "Paralisação ou redução de turnos",
+        "Custos com protocolos sanitários"
+      ],
+      "controles_preventivos": [
+        "Plano de contingência sanitária aprovado e divulgado",
+        "Inspeção de higiene das áreas de vivência registrada",
+        "Turnos escalonados de refeição e entrada definidos",
+        "Campanhas de vacinação com adesão registrada"
+      ],
+      "controles_resposta": [
+        "Isolar casos e rastrear contatos",
+        "Reprogramar o cronograma conforme efetivo disponível"
+      ],
+      "sinais_alerta": [
+        "Taxa de afastamentos médicos acima da média",
+        "Alertas sanitários oficiais para a região"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "rh",
+        "sst",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "NR-24 – condições sanitárias e de conforto nos locais de trabalho"
+      ]
+    },
+    {
+      "codigo": "R22.12",
+      "evento": "Mudanças econômicas, regulatórias ou políticas que afetem o empreendimento",
+      "causas": [
+        "Alta da Selic encarecendo o crédito",
+        "Mudança nas regras de financiamento habitacional",
+        "Alteração de plano diretor ou zoneamento",
+        "Reforma tributária alterando a carga sobre o setor"
+      ],
+      "consequencias": [
+        "Queda de demanda e de preço de venda",
+        "Aumento do custo financeiro da dívida",
+        "Projeto inviabilizado ou exigindo revisão"
+      ],
+      "controles_preventivos": [
+        "Análise de sensibilidade de juros, INCC e preço registrada na viabilidade",
+        "Acompanhamento de projetos de lei municipais com registro mensal",
+        "Protocolo de aprovação antes da vigência de mudança urbanística",
+        "Contratos de preço fixo para insumos de maior peso"
+      ],
+      "controles_resposta": [
+        "Revisar a viabilidade e decidir ritmo ou adiamento",
+        "Renegociar dívida e condições com o financiador"
+      ],
+      "sinais_alerta": [
+        "INCC acumulado acima do orçado",
+        "Variação da Selic frente à premissa da viabilidade",
+        "Projeto de lei de zoneamento em tramitação"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "imovib",
+        "orcamento",
+        "financeiro",
+        "investidor"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

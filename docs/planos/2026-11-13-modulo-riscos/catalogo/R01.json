@@ -1,0 +1,702 @@
+{
+  "categoria": "R01",
+  "nome": "Riscos estratégicos e de viabilidade",
+  "itens": [
+    {
+      "codigo": "R01.01",
+      "evento": "Superestimação da demanda imobiliária",
+      "causas": [
+        "Pesquisa de mercado baseada só em anúncios, sem dados de vendas efetivas da região",
+        "Extrapolação de ciclo de alta recente sem considerar juros e renda das famílias",
+        "Público-alvo definido sem checar renda compatível com o crédito disponível",
+        "Intenção de compra de eventos de lançamento tratada como demanda firme"
+      ],
+      "consequencias": [
+        "Estoque de unidades sem venda após a conclusão da obra",
+        "Receita de vendas abaixo do fluxo usado na aprovação do investimento",
+        "Necessidade de aporte adicional dos sócios para concluir a obra",
+        "Dificuldade de atingir a demanda mínima exigida pelo banco financiador"
+      ],
+      "controles_preventivos": [
+        "Estudo de mercado contratado com dados de absorção da região, arquivado no GED do empreendimento",
+        "Cenário pessimista de demanda simulado no estudo de viabilidade e aprovado pela diretoria em ata",
+        "Pré-lançamento com meta mínima de reservas registrada antes da decisão de iniciar a obra",
+        "Validação da faixa de renda do público com simulação de crédito em bancos parceiros documentada"
+      ],
+      "controles_resposta": [
+        "Revisar tabela de preços e condições de pagamento com aprovação formal da diretoria",
+        "Reprogramar o ritmo da obra por etapas para reduzir exposição de caixa",
+        "Avaliar conversão de parte do estoque para locação com estudo de rentabilidade"
+      ],
+      "sinais_alerta": [
+        "Reservas e propostas abaixo da meta mensal no funil comercial",
+        "Taxa de conversão de visitas em propostas caindo por três meses seguidos",
+        "Unidades disponíveis no espelho de vendas acima do previsto para a etapa da obra"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "aquisicao",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "comercial",
+        "imovib",
+        "investidor",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R01.02",
+      "evento": "Precificação de venda ou locação incompatível com o mercado",
+      "causas": [
+        "Preço definido a partir do custo mais margem, sem comparação com imóveis concorrentes",
+        "Amostra de comparáveis com padrão, idade ou localização diferentes do produto",
+        "Valor de aluguel estimado sem considerar vacância e carência usuais da região",
+        "Tabela não atualizada após mudança relevante de juros ou do custo da obra"
+      ],
+      "consequencias": [
+        "Preço alto trava as vendas e obriga descontos não previstos",
+        "Preço baixo esgota as unidades e reduz a margem do empreendimento",
+        "Avaliação bancária abaixo do preço de venda reprova financiamentos de compradores",
+        "Contratos de locação assinados abaixo do valor de mercado por longo prazo"
+      ],
+      "controles_preventivos": [
+        "Laudo de avaliação com comparáveis de mercado elaborado conforme norma e arquivado no GED",
+        "Tabela de preços por unidade aprovada pela diretoria com registro de versão e data",
+        "Revisão trimestral da tabela comparando preço praticado com avaliação bancária das unidades",
+        "Estudo de aluguel de mercado com vacância e carência usado na viabilidade de locação"
+      ],
+      "controles_resposta": [
+        "Reajustar tabela por tipologia de unidade com base nas propostas perdidas por preço",
+        "Oferecer condições de pagamento em vez de desconto direto, com aprovação de alçada"
+      ],
+      "sinais_alerta": [
+        "Propostas perdidas por preço registradas no funil comercial acima de um terço do total",
+        "Avaliação bancária das unidades abaixo do preço de tabela em contratos de financiamento",
+        "Desconto médio concedido nas vendas crescente em relação à tabela aprovada"
+      ],
+      "dimensoes": [
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "locacao",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "comercial",
+        "locacoes",
+        "imovib"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 14653 – avaliação de bens"
+      ]
+    },
+    {
+      "codigo": "R01.03",
+      "evento": "Estimativa incorreta da velocidade de vendas",
+      "causas": [
+        "Curva de vendas copiada de outro empreendimento com público e momento diferentes",
+        "Estrutura comercial e verba de marketing insuficientes para o ritmo previsto",
+        "Lançamento concentrado no mesmo período de outros empreendimentos vizinhos",
+        "Desconsideração do tempo de aprovação de crédito dos compradores"
+      ],
+      "consequencias": [
+        "Recebimentos abaixo do fluxo de caixa previsto durante a obra",
+        "Atraso na liberação do financiamento à produção por falta de vendas mínimas",
+        "Aumento de despesas com estande, corretagem e marketing por mais meses",
+        "Custo financeiro maior por carregamento de estoque"
+      ],
+      "controles_preventivos": [
+        "Curva de vendas mensal com faixa otimista e pessimista registrada na viabilidade",
+        "Meta de vendas por mês e por corretor cadastrada e acompanhada no módulo comercial",
+        "Fluxo de caixa da obra testado com vendas 30% abaixo da curva e aprovado pela diretoria",
+        "Plano de marketing com orçamento e cronograma de ações aprovado antes do lançamento"
+      ],
+      "controles_resposta": [
+        "Replanejar o desembolso da obra para compatibilizar com o recebimento real",
+        "Intensificar ações comerciais com orçamento adicional aprovado por alçada"
+      ],
+      "sinais_alerta": [
+        "Vendas acumuladas abaixo da curva prevista por dois meses seguidos",
+        "Percentual vendido abaixo do mínimo exigido no contrato de financiamento à produção",
+        "Tempo médio entre proposta e contrato assinado crescendo no funil comercial"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "comercial",
+        "financeiro",
+        "imovib",
+        "investidor"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R01.04",
+      "evento": "Escolha inadequada da localização do empreendimento",
+      "causas": [
+        "Terreno escolhido pelo preço baixo sem análise de infraestrutura e serviços do entorno",
+        "Desconhecimento de projetos públicos ou privados que desvalorizam a região",
+        "Acesso viário, transporte ou segurança incompatíveis com o público-alvo",
+        "Ausência de visita técnica e comercial ao local em horários diferentes"
+      ],
+      "consequencias": [
+        "Baixa atratividade do produto e vendas lentas mesmo com preço competitivo",
+        "Custos extras de infraestrutura externa exigidos pela prefeitura ou concessionárias",
+        "Valorização do imóvel abaixo da projetada pelos investidores",
+        "Dificuldade de locação e vacância prolongada"
+      ],
+      "controles_preventivos": [
+        "Relatório de análise do entorno com infraestrutura, serviços e acessos anexado ao dossiê do terreno",
+        "Consulta às diretrizes urbanísticas e projetos viários previstos registrada antes da compra",
+        "Aprovação da escolha do terreno em comitê com parecer comercial e técnico assinado",
+        "Pesquisa de preços praticados no raio de influência anexada ao estudo de viabilidade"
+      ],
+      "controles_resposta": [
+        "Reposicionar o produto ou a tipologia para o público que a localização atende",
+        "Avaliar venda do terreno ou permuta antes de iniciar investimentos maiores"
+      ],
+      "sinais_alerta": [
+        "Terreno em análise sem relatório de entorno anexado no GED",
+        "Objeção de localização recorrente nas propostas perdidas do funil comercial"
+      ],
+      "dimensoes": [
+        "financeira",
+        "reputacional",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "imovib",
+        "comercial",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R01.05",
+      "evento": "Tipologia ou padrão construtivo incompatível com o público-alvo",
+      "causas": [
+        "Planta e metragem definidas por aproveitamento máximo do terreno, não pela demanda",
+        "Padrão de acabamento acima da capacidade de pagamento do público da região",
+        "Número de vagas, áreas de lazer ou dormitórios abaixo do esperado pelo comprador",
+        "Produto copiado de outra cidade sem adaptação ao mercado local"
+      ],
+      "consequencias": [
+        "Unidades de determinada tipologia encalhadas enquanto outras esgotam",
+        "Custo de obra acima do que o preço de mercado comporta",
+        "Pedidos de personalização e alterações que atrasam a obra",
+        "Necessidade de reprojeto após o lançamento"
+      ],
+      "controles_preventivos": [
+        "Briefing de produto com perfil do público, mix de tipologias e padrão aprovado em ata",
+        "Pesquisa qualitativa ou grupo focal com potenciais compradores registrada antes do projeto",
+        "Memorial descritivo de acabamentos com custo por padrão comparado ao preço de venda",
+        "Análise do mix de unidades vendidas em empreendimentos concorrentes anexada ao estudo"
+      ],
+      "controles_resposta": [
+        "Revisar mix de unidades ainda não lançadas com estudo de impacto no projeto",
+        "Oferecer opções de personalização padronizadas com custo e prazo definidos"
+      ],
+      "sinais_alerta": [
+        "Vendas concentradas em uma tipologia e outra sem proposta no espelho de vendas",
+        "Pedidos de alteração de planta por compradores crescendo no módulo comercial"
+      ],
+      "dimensoes": [
+        "financeira",
+        "reputacional",
+        "qualidade"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "comercial",
+        "imovib",
+        "orcamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R01.06",
+      "evento": "Estudo de viabilidade econômico-financeira inconsistente",
+      "causas": [
+        "Custo de obra estimado por CUB ou valor por m² sem ajuste ao padrão e à região",
+        "Omissão de tributos, corretagem, marketing, juros ou custos de cartório",
+        "Premissas de prazo de obra e recebimento incompatíveis entre si",
+        "Planilha sem revisão independente e com fórmulas não auditadas"
+      ],
+      "consequencias": [
+        "Decisão de investimento tomada sobre margem que não existe",
+        "Aporte não previsto dos sócios ou investidores durante a obra",
+        "Conflito com investidores por resultado abaixo do prometido",
+        "Paralisação da obra por falta de recursos"
+      ],
+      "controles_preventivos": [
+        "Estudo de viabilidade versionado no sistema com premissas explícitas e data de base",
+        "Revisão do estudo por profissional que não o elaborou, com parecer assinado",
+        "Checklist de custos obrigatórios conferido e anexado antes da aprovação",
+        "Análise de sensibilidade de custo, preço e prazo registrada no estudo aprovado"
+      ],
+      "controles_resposta": [
+        "Refazer o estudo com custos reais incorridos e apresentar aos investidores",
+        "Redefinir escopo, preço ou cronograma para recompor a margem mínima aprovada"
+      ],
+      "sinais_alerta": [
+        "Orçamento executivo acima do custo previsto na viabilidade aprovada",
+        "Estudo de viabilidade sem revisão registrada ou com data-base superior a seis meses"
+      ],
+      "dimensoes": [
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "aquisicao",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "imovib",
+        "orcamento",
+        "investidor",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R01.07",
+      "evento": "Taxa de retorno inferior ao custo de capital",
+      "causas": [
+        "Custo de capital não definido ou abaixo das taxas efetivas de captação da empresa",
+        "Aumento da taxa básica de juros entre a aprovação e o lançamento",
+        "Prazo de recebimento mais longo que o previsto, reduzindo o valor presente",
+        "Margem comprimida por custos acima da viabilidade"
+      ],
+      "consequencias": [
+        "Empreendimento destrói valor mesmo com lucro contábil",
+        "Investidores e sócios deixam de aportar em projetos seguintes",
+        "Capital imobilizado que teria retorno maior em outra aplicação"
+      ],
+      "controles_preventivos": [
+        "Taxa mínima de atratividade da empresa definida e registrada em política aprovada",
+        "Cálculo de TIR e VPL do fluxo de caixa anexado ao estudo de viabilidade",
+        "Recálculo do retorno a cada revisão de orçamento ou de curva de vendas, com versão salva",
+        "Aprovação do investimento condicionada a retorno acima da taxa mínima em ata"
+      ],
+      "controles_resposta": [
+        "Rever estrutura de financiamento para reduzir custo de capital",
+        "Avaliar faseamento ou venda parcial do empreendimento"
+      ],
+      "sinais_alerta": [
+        "TIR recalculada no estudo de viabilidade abaixo da taxa mínima aprovada",
+        "Custo médio das dívidas da empresa subindo acima da premissa do estudo"
+      ],
+      "dimensoes": [
+        "financeira"
+      ],
+      "fases": [
+        "viabilidade",
+        "aquisicao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "locacao"
+      ],
+      "integracoes": [
+        "imovib",
+        "dividas",
+        "investidor",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R01.08",
+      "evento": "Subestimação do investimento necessário",
+      "causas": [
+        "Custos de terreno, aprovação, infraestrutura externa e contrapartidas não incluídos",
+        "Orçamento paramétrico usado no lugar de orçamento com projetos executivos",
+        "Contingência ausente ou abaixo do grau de indefinição dos projetos",
+        "Custos de pós-obra, assistência técnica e unidades em estoque esquecidos"
+      ],
+      "consequencias": [
+        "Falta de caixa no meio da obra e necessidade de captação emergencial",
+        "Corte de escopo ou de padrão com risco de descumprir o memorial vendido",
+        "Atraso de obra por paralisação de frentes",
+        "Retorno do investimento abaixo do previsto"
+      ],
+      "controles_preventivos": [
+        "Orçamento executivo com projetos aprovados antes do lançamento, com versão registrada",
+        "Planilha de investimento total com terreno, legalização, obra, comercial e pós-obra aprovada",
+        "Reserva de contingência definida pelo grau de definição dos projetos e registrada no orçamento",
+        "Comparação do custo por m² com obras concluídas da empresa anexada à viabilidade"
+      ],
+      "controles_resposta": [
+        "Identificar fonte de recursos adicional e renegociar cronograma de desembolso",
+        "Priorizar frentes que liberam recebimentos ou medições de financiamento"
+      ],
+      "sinais_alerta": [
+        "Custo comprometido mais saldo a contratar acima do orçamento aprovado",
+        "Consumo da contingência acima do avanço físico da obra"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "contratacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "subsolo",
+        "edificacao_antiga",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "orcamento",
+        "imovib",
+        "financeiro",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R01.09",
+      "evento": "Mudanças nas preferências dos consumidores",
+      "causas": [
+        "Ciclo longo entre concepção do produto e entrega das unidades",
+        "Mudança no perfil de trabalho e moradia, como demanda por home office",
+        "Novas exigências de sustentabilidade, vagas, pets ou áreas compartilhadas",
+        "Concorrentes lançando produtos com atributos que se tornam padrão"
+      ],
+      "consequencias": [
+        "Produto percebido como desatualizado antes da entrega",
+        "Redução de preço ou de velocidade nas unidades restantes",
+        "Pedidos de alteração em obra com custo e prazo adicionais"
+      ],
+      "controles_preventivos": [
+        "Revisão anual do briefing de produto com registro de tendências da região",
+        "Pesquisa pós-venda com compradores sobre atributos valorizados, com resultado arquivado",
+        "Projeto com flexibilidade de layout documentada no memorial para unidades não vendidas",
+        "Acompanhamento de lançamentos concorrentes com ficha comparativa atualizada no GED"
+      ],
+      "controles_resposta": [
+        "Ajustar áreas comuns ou acabamentos ainda não executados com análise de custo",
+        "Reposicionar comunicação de vendas para os atributos valorizados"
+      ],
+      "sinais_alerta": [
+        "Objeções recorrentes sobre o mesmo atributo nas propostas perdidas",
+        "Queda da conversão em tipologias específicas no espelho de vendas"
+      ],
+      "dimensoes": [
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "comercial",
+        "imovib"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R01.10",
+      "evento": "Entrada de novos concorrentes ou excesso de oferta",
+      "causas": [
+        "Vários alvarás aprovados na mesma região e período sem monitoramento",
+        "Barreira de entrada baixa no segmento escolhido",
+        "Incentivo público ou mudança de zoneamento que atrai incorporadores para a área",
+        "Concorrente com custo menor e capacidade de praticar preços mais baixos"
+      ],
+      "consequencias": [
+        "Guerra de preços e descontos para manter a velocidade de vendas",
+        "Aumento do prazo de absorção do estoque",
+        "Queda do aluguel de mercado e aumento da vacância"
+      ],
+      "controles_preventivos": [
+        "Levantamento periódico de lançamentos e alvarás na região registrado em relatório",
+        "Estudo de oferta e absorção da região anexado à viabilidade e atualizado no lançamento",
+        "Diferenciais de produto definidos e documentados no briefing em relação aos concorrentes",
+        "Cronograma de lançamento ajustado ao calendário de concorrentes, com decisão em ata"
+      ],
+      "controles_resposta": [
+        "Reforçar diferenciais e condições comerciais com orçamento aprovado",
+        "Adiar lançamento de fases ainda não iniciadas"
+      ],
+      "sinais_alerta": [
+        "Número de lançamentos concorrentes no raio de influência acima do registrado no estudo",
+        "Visitas ao estande em queda com mesmo investimento em mídia"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "locacao"
+      ],
+      "integracoes": [
+        "comercial",
+        "imovib",
+        "locacoes"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R01.11",
+      "evento": "Concentração excessiva de investimentos em uma região ou segmento",
+      "causas": [
+        "Carteira de empreendimentos formada por oportunidade, sem política de diversificação",
+        "Dependência de um único programa habitacional ou linha de financiamento",
+        "Sucesso anterior em uma região levando a novos terrenos no mesmo mercado"
+      ],
+      "consequencias": [
+        "Crise local ou do segmento afeta todos os empreendimentos ao mesmo tempo",
+        "Empreendimentos da própria empresa competindo entre si pelo mesmo comprador",
+        "Perda simultânea de caixa em várias obras"
+      ],
+      "controles_preventivos": [
+        "Política de limites de exposição por região e segmento aprovada pela diretoria",
+        "Painel de carteira com VGV e capital investido por região revisado trimestralmente",
+        "Análise de impacto na carteira anexada a cada aprovação de novo terreno",
+        "Plano de lançamentos que evita fases simultâneas no mesmo mercado, registrado em ata"
+      ],
+      "controles_resposta": [
+        "Escalonar lançamentos e priorizar caixa dos empreendimentos mais avançados",
+        "Buscar parceiros ou investidores para dividir exposição em novos projetos"
+      ],
+      "sinais_alerta": [
+        "Percentual do capital investido em uma única região acima do limite da política",
+        "Dois ou mais empreendimentos da empresa em vendas no mesmo bairro"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "aquisicao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "imovib",
+        "investidor",
+        "financeiro",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R01.12",
+      "evento": "Falta de capacidade técnica, financeira ou gerencial para executar o empreendimento",
+      "causas": [
+        "Porte ou complexidade da obra acima da experiência da equipe técnica",
+        "Várias obras simultâneas disputando o mesmo engenheiro e a mesma equipe",
+        "Capital próprio insuficiente para a contrapartida exigida pelo banco",
+        "Ausência de sistemas de controle de custo, prazo e qualidade compatíveis com o porte"
+      ],
+      "consequencias": [
+        "Atrasos, retrabalhos e estouro de custos por gestão deficiente",
+        "Reprovação na análise de risco do banco financiador",
+        "Dependência de terceiros sem capacidade de fiscalizá-los",
+        "Risco de abandono ou paralisação da obra"
+      ],
+      "controles_preventivos": [
+        "Matriz de capacidade com equipe, obras em andamento e acervo técnico revisada antes de aprovar o projeto",
+        "Organograma da obra com responsáveis nomeados e ARTs registradas antes do início",
+        "Análise de capital próprio e limite de crédito aprovada pelo financeiro em ata",
+        "Plano de contratação de gerenciadora ou consultoria quando o porte exceder o acervo da empresa"
+      ],
+      "controles_resposta": [
+        "Contratar gerenciadora ou reforçar a equipe com profissional experiente no tipo de obra",
+        "Renegociar escopo, prazo ou formar parceria com outra construtora"
+      ],
+      "sinais_alerta": [
+        "Mesmo engenheiro responsável por número de obras acima do limite definido",
+        "Desvio de prazo e custo crescente em várias obras simultâneas",
+        "Capital próprio disponível abaixo da contrapartida exigida no contrato de financiamento"
+      ],
+      "dimensoes": [
+        "operacional",
+        "financeira",
+        "prazo",
+        "qualidade"
+      ],
+      "fases": [
+        "viabilidade",
+        "aquisicao",
+        "contratacao",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "contrato_publico",
+        "muitos_terceirizados",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "rh",
+        "planejamento",
+        "financeiro",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

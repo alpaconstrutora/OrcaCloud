@@ -28,6 +28,9 @@ const FOCO_POR_VIEW: Record<string, { param: string; source: string; sourcePende
     'contas-a-pagar': { param: 'tx', source: 'CONTA_PAGAR' },
     'opura-docs': { param: 'docId', source: 'GED_DOCUMENTO', sourcePendente: 'GED_DOCUMENTO_PENDENTE' },
     'opura-processos': { param: 'instance', source: 'PROCESSO_INSTANCIA' },
+    // Módulo Riscos (14/11/2026): avisos de `fn_risk_alerts` gravam `/riscos?riskId=<id>`;
+    // `RiscosModule` consome o foco `RISCO` abrindo a ficha.
+    riscos: { param: 'riskId', source: 'RISCO' },
 };
 
 export interface DestinoDoLink {

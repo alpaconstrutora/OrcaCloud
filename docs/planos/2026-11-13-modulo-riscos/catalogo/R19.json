@@ -1,0 +1,735 @@
+{
+  "categoria": "R19",
+  "nome": "Riscos tecnológicos e de informação",
+  "itens": [
+    {
+      "codigo": "R19.01",
+      "evento": "Perda ou corrupção de documentos e projetos",
+      "causas": [
+        "Projetos salvos em computadores locais sem backup",
+        "Revisões sobrescritas sem histórico",
+        "Notebook ou pen drive perdido no canteiro",
+        "Documentos em papel deteriorados no canteiro"
+      ],
+      "consequencias": [
+        "Execução com revisão errada ou sem projeto",
+        "Custo para refazer projetos e levantamentos",
+        "Fragilidade documental em perícias e fiscalizações"
+      ],
+      "controles_preventivos": [
+        "GED centralizado com controle de revisão e backup automático monitorado",
+        "Teste de restauração de backup trimestral registrado",
+        "Emissão de projetos apenas pelo GED com lista mestra",
+        "Digitalização dos documentos assinados no canteiro"
+      ],
+      "controles_resposta": [
+        "Restaurar a partir do backup e conferir com os projetistas",
+        "Solicitar reemissão aos projetistas e registrar o incidente"
+      ],
+      "sinais_alerta": [
+        "Projeto em uso no canteiro sem registro no GED",
+        "Rotina de backup com falha",
+        "Lista mestra desatualizada"
+      ],
+      "dimensoes": [
+        "operacional",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R19.02",
+      "evento": "Ataques cibernéticos e ransomware",
+      "causas": [
+        "E-mail de phishing aberto por colaborador",
+        "Senhas fracas ou reutilizadas, sem segundo fator",
+        "Servidores e estações sem atualização de segurança",
+        "Backup conectado à mesma rede dos sistemas"
+      ],
+      "consequencias": [
+        "Paralisação de financeiro, compras e projetos",
+        "Pedido de resgate e vazamento de dados",
+        "Multas e dano reputacional"
+      ],
+      "controles_preventivos": [
+        "Autenticação em dois fatores obrigatória em e-mail e sistemas críticos",
+        "Backup isolado ou imutável com teste de restauração registrado",
+        "Treinamento antiphishing com simulação e indicador de cliques",
+        "Rotina de atualização de sistemas com relatório mensal"
+      ],
+      "controles_resposta": [
+        "Isolar as máquinas afetadas e acionar o plano de resposta a incidentes",
+        "Restaurar do backup isolado e trocar todas as credenciais",
+        "Comunicar ANPD e titulares se houver dados pessoais afetados"
+      ],
+      "sinais_alerta": [
+        "Taxa de cliques em simulação de phishing",
+        "Contas sem segundo fator habilitado",
+        "Alertas de antivírus ou de acesso suspeito"
+      ],
+      "dimensoes": [
+        "operacional",
+        "financeira",
+        "reputacional",
+        "juridica"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "contratacao",
+        "estrutura",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "financeiro",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR ISO/IEC 27001 – sistemas de gestão da segurança da informação",
+        "Lei 13.709/2018 – LGPD, proteção de dados pessoais"
+      ]
+    },
+    {
+      "codigo": "R19.03",
+      "evento": "Acesso indevido a informações confidenciais",
+      "causas": [
+        "Permissões amplas sem revisão por função",
+        "Contas de ex-colaboradores e terceiros ativas",
+        "Links públicos de compartilhamento de documentos",
+        "Propostas e contratos enviados para e-mail pessoal"
+      ],
+      "consequencias": [
+        "Vazamento de preços e propostas a concorrentes",
+        "Exposição de dados de clientes e investidores",
+        "Quebra de cláusula de confidencialidade"
+      ],
+      "controles_preventivos": [
+        "Revisão trimestral de acessos por perfil com registro",
+        "Desativação de contas no desligamento vinculada ao RH",
+        "Links de compartilhamento com expiração e senha",
+        "Trilha de acesso a documentos sigilosos monitorada"
+      ],
+      "controles_resposta": [
+        "Revogar acessos e avaliar a extensão do vazamento",
+        "Adotar medidas jurídicas contra o responsável"
+      ],
+      "sinais_alerta": [
+        "Usuários ativos já desligados no RH",
+        "Documento sigiloso com link público",
+        "Acesso fora do padrão de horário ou volume"
+      ],
+      "dimensoes": [
+        "juridica",
+        "reputacional",
+        "financeira"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "contratacao",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "rh",
+        "docs_ged",
+        "comercial",
+        "investidor"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 13.709/2018 – LGPD, proteção de dados pessoais"
+      ]
+    },
+    {
+      "codigo": "R19.04",
+      "evento": "Descumprimento da legislação de proteção de dados pessoais",
+      "causas": [
+        "Dados de clientes e colaboradores coletados sem base legal definida",
+        "Documentos pessoais circulando por e-mail e aplicativos de mensagem",
+        "Fichas de visitantes e cadastros de corretores sem política de retenção",
+        "Ausência de encarregado e de canal para titulares"
+      ],
+      "consequencias": [
+        "Sanções da ANPD e multas",
+        "Ações de titulares por exposição de dados",
+        "Perda de confiança de clientes"
+      ],
+      "controles_preventivos": [
+        "Inventário de dados pessoais com base legal por finalidade",
+        "Encarregado nomeado e canal de atendimento ao titular publicado",
+        "Política de retenção e descarte aplicada com registro",
+        "Cláusula de proteção de dados em contratos com corretores e terceiros"
+      ],
+      "controles_resposta": [
+        "Avaliar o incidente e comunicar ANPD e titulares quando exigido",
+        "Corrigir o processo e registrar o tratamento do incidente"
+      ],
+      "sinais_alerta": [
+        "Pedido de titular sem resposta no prazo",
+        "Documentos pessoais armazenados fora do sistema",
+        "Contrato com terceiro sem cláusula de dados"
+      ],
+      "dimensoes": [
+        "juridica",
+        "reputacional",
+        "financeira"
+      ],
+      "fases": [
+        "aquisicao",
+        "contratacao",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "locacao",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "comercial",
+        "rh",
+        "contratos",
+        "locacoes"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 13.709/2018 – LGPD, proteção de dados pessoais"
+      ]
+    },
+    {
+      "codigo": "R19.05",
+      "evento": "Indisponibilidade de sistemas críticos",
+      "causas": [
+        "Internet do canteiro sem redundância",
+        "Falha do provedor de nuvem",
+        "Atualização de sistema sem janela de manutenção e teste",
+        "Servidor local sem manutenção"
+      ],
+      "consequencias": [
+        "Pagamentos e medições atrasados",
+        "Apontamentos de campo perdidos ou feitos em papel",
+        "Decisões tomadas sem informação"
+      ],
+      "controles_preventivos": [
+        "Link de internet redundante no canteiro com teste mensal",
+        "SLA de disponibilidade nos contratos de sistemas",
+        "Procedimento de contingência offline para diário e apontamentos",
+        "Atualizações comunicadas e testadas em janela de manutenção"
+      ],
+      "controles_resposta": [
+        "Acionar a contingência offline e lançar os dados após o restabelecimento",
+        "Abrir chamado com o fornecedor e acompanhar o SLA"
+      ],
+      "sinais_alerta": [
+        "Horas de indisponibilidade no mês acima do SLA",
+        "Falhas de conexão do canteiro registradas",
+        "Chamados abertos com fornecedor sem solução"
+      ],
+      "dimensoes": [
+        "operacional",
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "contratacao",
+        "inicio_obra",
+        "estrutura",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "financeiro",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R19.06",
+      "evento": "Falhas de sincronização entre sistemas",
+      "causas": [
+        "Integração entre ERP, banco e aplicativo de campo sem monitoramento",
+        "Cadastros duplicados de fornecedores e obras",
+        "Aplicativo offline sincronizando com conflito de versões",
+        "Mudança de API do fornecedor sem aviso"
+      ],
+      "consequencias": [
+        "Pagamentos em duplicidade ou não efetuados",
+        "Estoques e medições divergentes",
+        "Retrabalho de conferência manual"
+      ],
+      "controles_preventivos": [
+        "Monitoramento das filas de integração com alerta de falha",
+        "Conciliação diária entre sistemas com relatório de divergências",
+        "Chave única para cadastros de fornecedores e obras",
+        "Testes de integração antes de atualizações de versão"
+      ],
+      "controles_resposta": [
+        "Reprocessar as integrações falhas e conciliar manualmente",
+        "Bloquear lotes de pagamento com divergência"
+      ],
+      "sinais_alerta": [
+        "Registros pendentes de sincronização",
+        "Divergência na conciliação bancária ou de estoque",
+        "Cadastros duplicados detectados"
+      ],
+      "dimensoes": [
+        "operacional",
+        "financeira"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "financeiro",
+        "suprimentos",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R19.07",
+      "evento": "Informações incorretas em modelos BIM",
+      "causas": [
+        "Modelos das disciplinas sem compatibilização periódica",
+        "Famílias e parâmetros de quantitativo mal configurados",
+        "Revisão de projeto 2D não refletida no modelo",
+        "Nível de desenvolvimento insuficiente para a decisão tomada"
+      ],
+      "consequencias": [
+        "Quantitativos errados no orçamento e nas compras",
+        "Interferências descobertas apenas na execução",
+        "Perda de confiança no modelo e retrabalho"
+      ],
+      "controles_preventivos": [
+        "Plano de execução BIM com responsabilidades e nível de desenvolvimento por etapa",
+        "Relatório de detecção de interferências por ciclo com pendências rastreadas",
+        "Conferência amostral de quantitativos do modelo contra levantamento manual",
+        "Versão do modelo federado vinculada à revisão dos projetos"
+      ],
+      "controles_resposta": [
+        "Corrigir o modelo e reemitir quantitativos e pranchas",
+        "Revisar compras e orçamento afetados"
+      ],
+      "sinais_alerta": [
+        "Interferências abertas sem responsável",
+        "Diferença entre quantitativo do modelo e consumo real",
+        "Revisão de projeto sem atualização do modelo"
+      ],
+      "dimensoes": [
+        "financeira",
+        "qualidade",
+        "prazo"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "estrutura",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "bim",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "planta_bim",
+        "orcamento",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Decreto 10.306/2020 – uso do BIM em obras e serviços de engenharia da administração pública federal"
+      ]
+    },
+    {
+      "codigo": "R19.08",
+      "evento": "Divergência entre a documentação digital e a obra executada",
+      "causas": [
+        "Alterações de campo sem registro formal",
+        "As-built feito de memória no fim da obra",
+        "Projeto revisado não distribuído ao canteiro",
+        "Empreiteiro executando por croqui"
+      ],
+      "consequencias": [
+        "Perfuração de tubulações em manutenção futura",
+        "Dificuldade na regularização e averbação da construção",
+        "Disputa com cliente por divergência do memorial"
+      ],
+      "controles_preventivos": [
+        "Registro de alteração de campo com aprovação e atualização do projeto no GED",
+        "As-built por etapa com fotos antes do fechamento de paredes e forros",
+        "Auditoria mensal da revisão em uso em cada frente",
+        "Entrega do as-built ao cliente com protocolo"
+      ],
+      "controles_resposta": [
+        "Levantar em campo e atualizar o as-built",
+        "Comunicar cliente e administração do condomínio sobre as divergências"
+      ],
+      "sinais_alerta": [
+        "Alterações de campo sem revisão de projeto correspondente",
+        "Frente fechada sem fotos das instalações",
+        "As-built pendente perto da entrega"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "juridica",
+        "operacional"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "bim",
+        "edificacao_antiga"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "planta_bim",
+        "diario",
+        "garantia_qualidade"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R19.09",
+      "evento": "Falhas em sensores, dispositivos IoT e telemetria",
+      "causas": [
+        "Sensores sem calibração ou bateria monitorada",
+        "Perda de sinal em subsolos e canteiros remotos",
+        "Limites de alerta não configurados",
+        "Ninguém designado para acompanhar as leituras"
+      ],
+      "consequencias": [
+        "Deslocamento de contenção ou estrutura não detectado a tempo",
+        "Decisão baseada em leitura errada",
+        "Custo de reinstalação e de leituras manuais"
+      ],
+      "controles_preventivos": [
+        "Certificado de calibração dos sensores e plano de verificação",
+        "Alerta automático de ausência de leitura",
+        "Responsável e limites de alerta definidos pelo projetista e registrados",
+        "Leitura manual de conferência periódica registrada"
+      ],
+      "controles_resposta": [
+        "Fazer leituras manuais imediatas até restabelecer o sensor",
+        "Substituir ou recalibrar os dispositivos"
+      ],
+      "sinais_alerta": [
+        "Intervalo sem leitura acima do configurado",
+        "Diferença entre leitura manual e automática",
+        "Calibração de sensor vencida"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "operacional",
+        "financeira"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contencao",
+        "escavacao_profunda",
+        "vizinhanca_proxima",
+        "subsolo"
+      ],
+      "integracoes": [
+        "diario",
+        "garantia_qualidade",
+        "ordens_servico"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Falha na instrumentação de contenção ou estrutura pode ocultar instabilidade até o colapso",
+      "referencias": []
+    },
+    {
+      "codigo": "R19.10",
+      "evento": "Uso de dados incompletos ou desatualizados para tomada de decisões",
+      "causas": [
+        "Apontamentos de campo lançados com atraso",
+        "Pedidos de compra emitidos sem lançamento do custo comprometido",
+        "Cronograma sem atualização do avanço real",
+        "Indicadores calculados com bases diferentes"
+      ],
+      "consequencias": [
+        "Decisões de compra e contratação equivocadas",
+        "Estouro de orçamento identificado tarde",
+        "Projeções erradas a investidores e bancos"
+      ],
+      "controles_preventivos": [
+        "Data de corte de lançamentos com indicador de atraso por obra",
+        "Conciliação mensal entre avanço físico e financeiro",
+        "Responsável e fonte documentados para cada indicador",
+        "Relatórios gerenciais exibindo a data da última atualização"
+      ],
+      "controles_resposta": [
+        "Congelar a decisão crítica até atualizar os dados",
+        "Revisar e comunicar as projeções corrigidas"
+      ],
+      "sinais_alerta": [
+        "Obra sem diário ou apontamento lançado há dias",
+        "Cronograma sem atualização no mês",
+        "Pedido de compra sem custo apropriado"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "planejamento",
+        "financeiro",
+        "orcamento",
+        "investidor"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R19.11",
+      "evento": "Ausência de trilhas de auditoria e controle de versões",
+      "causas": [
+        "Planilhas compartilhadas sem histórico de alteração",
+        "Usuários genéricos usados por várias pessoas",
+        "Registros aprovados editáveis sem log",
+        "Documentos sem versionamento"
+      ],
+      "consequencias": [
+        "Impossibilidade de identificar quem alterou pagamentos e aprovações",
+        "Fragilidade em auditorias, perícias e fiscalizações",
+        "Fraudes não detectadas"
+      ],
+      "controles_preventivos": [
+        "Usuários individuais e proibição de contas compartilhadas",
+        "Log de alterações em registros financeiros e aprovações revisado periodicamente",
+        "Versionamento obrigatório de documentos no GED",
+        "Auditoria interna de alterações em registros aprovados"
+      ],
+      "controles_resposta": [
+        "Reconstituir o histórico a partir de backups e e-mails",
+        "Bloquear a edição de registros aprovados e corrigir permissões"
+      ],
+      "sinais_alerta": [
+        "Alteração em título aprovado sem justificativa",
+        "Contas de usuário compartilhadas",
+        "Documentos sem versão no GED"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "financeiro",
+        "docs_ged",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R19.12",
+      "evento": "Dependência excessiva de fornecedores tecnológicos",
+      "causas": [
+        "Sistema único sem cláusula de exportação de dados",
+        "Customizações que só o fornecedor domina",
+        "Fornecedor pequeno sem garantia de continuidade",
+        "Dados guardados em formato proprietário"
+      ],
+      "consequencias": [
+        "Reajustes impostos sem alternativa",
+        "Perda de dados se o fornecedor encerrar as atividades",
+        "Migração cara e demorada"
+      ],
+      "controles_preventivos": [
+        "Cláusula contratual de exportação de dados em formato aberto",
+        "Teste periódico de exportação completa dos dados",
+        "Avaliação anual da saúde financeira e do roteiro dos fornecedores críticos",
+        "Documentação interna das integrações e customizações"
+      ],
+      "controles_resposta": [
+        "Acionar o plano de saída e migrar os dados exportados",
+        "Negociar período de transição contratual"
+      ],
+      "sinais_alerta": [
+        "Reajuste acima do índice contratual",
+        "Tempo de resposta de suporte crescente",
+        "Exportação de dados sem teste há mais de um ano"
+      ],
+      "dimensoes": [
+        "operacional",
+        "financeira"
+      ],
+      "fases": [
+        "contratacao",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "bim"
+      ],
+      "integracoes": [
+        "contratos",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

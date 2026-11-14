@@ -2,6 +2,7 @@ import React from 'react';
 import { useStore } from '../store/useStore';
 import type { Company, Organization } from '../types';
 import { podeVerTreinamentos } from './permissaoTreinamentos';
+import { podeVerRiscos } from './permissaoRiscos';
 import { temAcessoTotal } from '../lib/acessoTotal';
 
 /**
@@ -28,15 +29,15 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
 
   if (profile.group === 'DESENVOLVEDOR' || isDevEmail) {
     return {
-      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true
+      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true
     };
   }
 
-  if (!currentMember) return { ...baseMods, ecommerce: false, treinamentos: baseMods.rh !== false };
+  if (!currentMember) return { ...baseMods, ecommerce: false, treinamentos: baseMods.rh !== false, riscos: baseMods.obras !== false };
 
   if (currentMember.role === 'admin') {
     return {
-      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true
+      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true
     };
   }
 
@@ -77,6 +78,7 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
       rentals: false,
       ecommerce: false,
       treinamentos: false,
+      riscos: false,
     };
   }
 
@@ -91,12 +93,14 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
       rentals: checkModule('crm', 'canViewRentals', 'rentals'),
       ecommerce: false,
       treinamentos: false,
+      riscos: false,
     };
   }
 
   const rh = checkModule('rh', 'canViewLabor', 'rh');
+  const obras = checkModule('obras', 'canViewBudget', 'obras');
   return {
-    obras: checkModule('obras', 'canViewBudget', 'obras'),
+    obras,
     compras: checkModule('compras', 'canViewOrders', 'compras'),
     rh,
     // Gestão de treinamentos fora do RH (16/10/2026): chave própria; sem nada
@@ -105,6 +109,14 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
       permissoes: currentMember.permissions as unknown as Record<string, unknown> | undefined,
       matrizDoCargo: roleConfig,
       podeVerRh: rh,
+    }),
+    // Riscos (14/11/2026): chave própria; sem nada gravado, herda o que Obras
+    // decide para o usuário (utils/permissaoRiscos.ts) — a MESMA herança da rota
+    // (AppRouter: `isModuleAllowed('canViewRisks', 'riscos', () => isModuleAllowed('canViewBudget', 'obras'))`).
+    riscos: podeVerRiscos({
+      permissoes: currentMember.permissions as unknown as Record<string, unknown> | undefined,
+      matrizDoCargo: roleConfig,
+      podeVerObras: obras,
     }),
     offices: checkModule('offices', 'canViewOffices', 'offices'),
     pro: checkModule('pro', 'canViewPro', 'pro'),

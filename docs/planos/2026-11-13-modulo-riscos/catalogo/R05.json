@@ -1,0 +1,741 @@
+{
+  "categoria": "R05",
+  "nome": "Riscos geológicos, geotécnicos e topográficos",
+  "itens": [
+    {
+      "codigo": "R05.01",
+      "evento": "Sondagem insuficiente ou não representativa",
+      "causas": [
+        "Número de furos abaixo do exigido para a área de projeção da edificação",
+        "Furos paralisados antes do critério de impenetrável ou da profundidade necessária",
+        "Sondagem feita para outro projeto ou outra implantação no mesmo terreno",
+        "Contratação pelo menor preço de empresa sem controle de execução"
+      ],
+      "consequencias": [
+        "Fundação dimensionada sobre perfil de solo que não existe",
+        "Troca do tipo de fundação durante a obra com custo e prazo adicionais",
+        "Aumento de comprimento de estacas e de consumo de concreto"
+      ],
+      "controles_preventivos": [
+        "Laudo de sondagem SPT com número e locação de furos conforme norma aprovado pelo projetista de fundações",
+        "Planta de locação dos furos sobreposta à implantação final arquivada no GED",
+        "Sondagens complementares contratadas quando a implantação mudar, com registro da decisão",
+        "Boletins de campo assinados pelo responsável técnico com ART anexada"
+      ],
+      "controles_resposta": [
+        "Executar sondagens complementares antes de prosseguir com as fundações",
+        "Revisar o projeto de fundações com o novo perfil e atualizar orçamento"
+      ],
+      "sinais_alerta": [
+        "Projeto de fundações liberado sem laudo de sondagem anexado no GED",
+        "Comprimento de estacas executadas diferente do previsto acima de 20%"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "qualidade"
+      ],
+      "fases": [
+        "aquisicao",
+        "projeto_aprovacao",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "fundacao_profunda",
+        "subsolo",
+        "terreno_inclinado"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "orcamento",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 6484 – sondagem de simples reconhecimento com SPT",
+        "ABNT NBR 6122 – projeto e execução de fundações"
+      ]
+    },
+    {
+      "codigo": "R05.02",
+      "evento": "Capacidade de suporte do solo inferior à prevista",
+      "causas": [
+        "Camada mole ou de baixa resistência entre furos de sondagem",
+        "Parâmetros geotécnicos adotados sem correlação local ou ensaio",
+        "Fundação rasa adotada sobre aterro antigo não identificado",
+        "Ausência de prova de carga em fundações de maior porte"
+      ],
+      "consequencias": [
+        "Recalques excessivos e fissuras na estrutura",
+        "Reforço de fundações já executadas",
+        "Risco de instabilidade da edificação"
+      ],
+      "controles_preventivos": [
+        "Prova de carga estática ou ensaio dinâmico em estacas com relatório aprovado pelo projetista",
+        "Controle de nega e repique de cada estaca registrado em ficha de execução",
+        "Inspeção de cota de assentamento de fundação rasa pelo engenheiro com registro no diário",
+        "Parecer do projetista sobre parâmetros geotécnicos adotados anexado ao projeto"
+      ],
+      "controles_resposta": [
+        "Paralisar carregamentos e consultar o projetista para reforço",
+        "Instalar monitoramento de recalques nos pilares afetados"
+      ],
+      "sinais_alerta": [
+        "Fichas de execução de estacas com nega fora do especificado",
+        "Prova de carga prevista no projeto sem relatório no GED"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "fundacao_profunda",
+        "nivel_agua_alto",
+        "proximo_curso_dagua"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "docs_ged",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Fundação sobre solo com suporte insuficiente pode levar à instabilidade estrutural",
+      "referencias": [
+        "ABNT NBR 6122 – projeto e execução de fundações"
+      ]
+    },
+    {
+      "codigo": "R05.03",
+      "evento": "Presença inesperada de rochas ou matacões",
+      "causas": [
+        "Sondagem à percussão interpretando matacão como impenetrável ou não o atingindo",
+        "Região com geologia de alteração de granito e blocos soltos",
+        "Ausência de sondagem rotativa para confirmar rocha"
+      ],
+      "consequencias": [
+        "Troca de equipamento de escavação ou de tipo de estaca",
+        "Necessidade de desmonte de rocha com custo e licenças adicionais",
+        "Atraso das fundações e do subsolo"
+      ],
+      "controles_preventivos": [
+        "Sondagem mista ou rotativa nos furos que pararam em impenetrável, com laudo aprovado",
+        "Item de contingência para escavação em rocha discriminado no orçamento",
+        "Contrato de fundações com preço unitário para perfuração em rocha definido",
+        "Consulta a mapa geológico da região anexada ao relatório geotécnico"
+      ],
+      "controles_resposta": [
+        "Replanejar a frente com equipamento adequado e revisar o cronograma",
+        "Avaliar com o projetista mudança de solução de fundação"
+      ],
+      "sinais_alerta": [
+        "Furos de sondagem com impenetrável a profundidades muito diferentes entre si",
+        "Diário de obra registrando paralisação de perfuratriz por material resistente"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "fundacao_profunda",
+        "escavacao_profunda",
+        "subsolo"
+      ],
+      "integracoes": [
+        "orcamento",
+        "contratos",
+        "diario",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R05.04",
+      "evento": "Nível de água subterrânea diferente do estimado",
+      "causas": [
+        "Sondagem feita em período seco sem medição após estabilização",
+        "Lençol suspenso ou artesianismo não identificados",
+        "Variação sazonal do nível de água não considerada no projeto"
+      ],
+      "consequencias": [
+        "Necessidade de rebaixamento de lençol não orçado",
+        "Infiltrações no subsolo e subpressão em lajes e cortinas",
+        "Dificuldade de execução de estacas escavadas e de concretagem"
+      ],
+      "controles_preventivos": [
+        "Medição de nível de água após 24 horas registrada nos boletins de sondagem",
+        "Piezômetros instalados no terreno com leituras periódicas lançadas no sistema",
+        "Projeto de impermeabilização e de subpressão considerando o nível máximo provável",
+        "Plano de rebaixamento orçado como contingência quando houver subsolo"
+      ],
+      "controles_resposta": [
+        "Implantar rebaixamento com projeto e autorização para lançamento da água",
+        "Revisar com o projetista a impermeabilização e a verificação de subpressão"
+      ],
+      "sinais_alerta": [
+        "Boletins de sondagem sem leitura de nível de água após estabilização",
+        "Registro de água na escavação no diário acima da cota prevista"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "qualidade"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "subsolo",
+        "nivel_agua_alto",
+        "proximo_curso_dagua",
+        "escavacao_profunda"
+      ],
+      "integracoes": [
+        "diario",
+        "orcamento",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R05.05",
+      "evento": "Solos colapsíveis, expansivos ou muito compressíveis",
+      "causas": [
+        "Solo poroso de região de cerrado que colapsa ao ser umedecido",
+        "Argila orgânica ou turfa em baixadas e várzeas",
+        "Argila expansiva sensível à variação de umidade",
+        "Ausência de ensaios de laboratório além do SPT"
+      ],
+      "consequencias": [
+        "Recalques após vazamentos ou chuvas intensas",
+        "Trincas em pisos, alvenarias e calçadas",
+        "Reclamações de compradores e custos de assistência técnica"
+      ],
+      "controles_preventivos": [
+        "Ensaios de colapsibilidade, expansão ou adensamento com laudo quando o perfil indicar",
+        "Solução de fundação que atravesse a camada problemática aprovada pelo projetista",
+        "Projeto de drenagem que evite infiltração junto às fundações registrado no executivo",
+        "Tratamento ou substituição de solo sob pisos com ensaio de compactação registrado"
+      ],
+      "controles_resposta": [
+        "Monitorar recalques e avaliar reforço de fundações com o projetista",
+        "Corrigir vazamentos e drenagem que umedecem o solo"
+      ],
+      "sinais_alerta": [
+        "Perfil de sondagem com SPT muito baixo nas camadas superficiais",
+        "Chamados de trincas em pisos ou calçadas na assistência técnica"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "fundacoes",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "proximo_curso_dagua",
+        "nivel_agua_alto"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "garantia_qualidade",
+        "ordens_servico"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R05.06",
+      "evento": "Recalques diferenciais",
+      "causas": [
+        "Tipos de fundação diferentes sob a mesma estrutura",
+        "Cargas muito diferentes entre pilares próximos sem ajuste de projeto",
+        "Corte e aterro no mesmo terreno sob a edificação",
+        "Rebaixamento de lençol próximo provocando adensamento"
+      ],
+      "consequencias": [
+        "Fissuras em vigas, alvenarias e revestimentos",
+        "Desaprumo da edificação e travamento de esquadrias",
+        "Reforço estrutural e de fundações com a obra em andamento ou entregue"
+      ],
+      "controles_preventivos": [
+        "Plano de monitoramento de recalques com marcos nos pilares e leituras registradas",
+        "Projeto de fundações com verificação de recalque diferencial admissível documentada",
+        "Controle de compactação de aterros sob a edificação com ensaios de grau de compactação",
+        "Análise do projetista para mudanças de tipo de fundação registrada em revisão"
+      ],
+      "controles_resposta": [
+        "Aumentar a frequência de leituras e acionar o projetista quando passar do limite",
+        "Suspender carregamentos e executar reforço conforme projeto específico"
+      ],
+      "sinais_alerta": [
+        "Leitura de recalque acima do limite do plano de monitoramento",
+        "Fissuras diagonais em alvenarias registradas em inspeção ou no diário"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "terreno_inclinado",
+        "fundacao_profunda",
+        "nivel_agua_alto",
+        "estrutura_concreto"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "diario",
+        "ordens_servico"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Recalque diferencial elevado pode comprometer a estabilidade da estrutura",
+      "referencias": [
+        "ABNT NBR 6122 – projeto e execução de fundações"
+      ]
+    },
+    {
+      "codigo": "R05.07",
+      "evento": "Instabilidade de encostas ou taludes",
+      "causas": [
+        "Corte com inclinação acima da suportada pelo solo",
+        "Taludes expostos em período chuvoso sem drenagem e proteção",
+        "Sobrecarga de materiais, máquinas ou bota-fora na crista",
+        "Presença de planos de fraqueza ou solo residual saturado"
+      ],
+      "consequencias": [
+        "Deslizamento com soterramento de trabalhadores",
+        "Danos a vias, redes e imóveis vizinhos",
+        "Contenções emergenciais com custo elevado"
+      ],
+      "controles_preventivos": [
+        "Projeto de estabilidade de taludes com ART e fator de segurança declarado",
+        "Inspeção diária de taludes e drenagem registrada em checklist, reforçada após chuva",
+        "Faixa de exclusão de cargas na crista sinalizada e conferida em inspeção",
+        "Proteção superficial e drenagem executadas antes do período chuvoso conforme cronograma"
+      ],
+      "controles_resposta": [
+        "Evacuar a área abaixo do talude e isolar o acesso",
+        "Executar estabilização emergencial orientada pelo geotécnico"
+      ],
+      "sinais_alerta": [
+        "Trincas na crista ou surgência de água registradas em inspeção de taludes",
+        "Chuva acumulada acima do limite do plano de monitoramento",
+        "Inspeção diária de taludes não registrada no checklist"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "prazo",
+        "financeira",
+        "ambiental"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "terreno_inclinado",
+        "contencao",
+        "regiao_chuvosa",
+        "escavacao_profunda"
+      ],
+      "integracoes": [
+        "sst",
+        "diario",
+        "docs_ged"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Deslizamento de talude pode soterrar trabalhadores e atingir terceiros",
+      "referencias": [
+        "ABNT NBR 11682 – estabilidade de encostas",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R05.08",
+      "evento": "Ruptura de contenções e escoramentos",
+      "causas": [
+        "Escavação em nicho abaixo da cota prevista antes da execução de tirantes ou estroncas",
+        "Contenção projetada com sobrecargas ou nível de água subestimados",
+        "Estroncas retiradas antes de a estrutura definitiva assumir os esforços",
+        "Drenos da cortina obstruídos gerando empuxo hidrostático"
+      ],
+      "consequencias": [
+        "Colapso da escavação com soterramento",
+        "Danos graves a vias e edificações vizinhas",
+        "Paralisação da obra e investigação de responsabilidades"
+      ],
+      "controles_preventivos": [
+        "Sequência executiva de escavação e contenção aprovada pelo projetista e afixada na obra",
+        "Liberação de cada etapa de escavação por ficha assinada pelo engenheiro",
+        "Ensaio de protensão de tirantes com relatório arquivado antes de escavar a etapa seguinte",
+        "Instrumentação com inclinômetros ou marcos de deslocamento e leituras registradas"
+      ],
+      "controles_resposta": [
+        "Evacuar a escavação, reaterrar ou escorar emergencialmente o trecho",
+        "Acionar projetista e avaliar edificações vizinhas"
+      ],
+      "sinais_alerta": [
+        "Deslocamento horizontal acima do limite nas leituras de instrumentação",
+        "Etapa de escavação iniciada sem ficha de liberação registrada"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "financeira",
+        "prazo",
+        "juridica"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contencao",
+        "subsolo",
+        "escavacao_profunda",
+        "vizinhanca_proxima"
+      ],
+      "integracoes": [
+        "sst",
+        "garantia_qualidade",
+        "diario",
+        "docs_ged"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Ruptura de contenção pode causar soterramento e colapso de edificações vizinhas",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R05.09",
+      "evento": "Surgimento de cavidades, vazios ou estruturas enterradas",
+      "causas": [
+        "Região de rochas calcárias sujeita a dolinas e cavernas",
+        "Fundações, porões ou cisternas de construções anteriores não demolidas",
+        "Galerias, fossas ou poços antigos sem cadastro",
+        "Erosão interna por vazamento de redes"
+      ],
+      "consequencias": [
+        "Afundamento localizado do terreno sob a obra",
+        "Reprojeto de fundações e necessidade de preenchimento de vazios",
+        "Atraso das fundações"
+      ],
+      "controles_preventivos": [
+        "Pesquisa do histórico de ocupação do terreno anexada ao relatório geotécnico",
+        "Investigação geofísica ou sondagens adicionais quando houver geologia cárstica",
+        "Inspeção do fundo de escavação pelo engenheiro registrada antes de concretar",
+        "Procedimento para achado de estrutura enterrada divulgado às equipes com registro"
+      ],
+      "controles_resposta": [
+        "Isolar a área, investigar a extensão do vazio e acionar o projetista",
+        "Preencher ou remover a estrutura conforme solução aprovada"
+      ],
+      "sinais_alerta": [
+        "Perda de água de circulação ou queda brusca de SPT nos boletins de sondagem",
+        "Achado de alvenaria ou tubulação antiga registrado no diário"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "seguranca"
+      ],
+      "fases": [
+        "aquisicao",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "demolicao",
+        "edificacao_antiga",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "diario",
+        "docs_ged",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R05.10",
+      "evento": "Interferências subterrâneas não cadastradas",
+      "causas": [
+        "Redes de gás, energia ou fibra sem cadastro atualizado nas concessionárias",
+        "Escavação mecânica sem sondagem manual prévia nas áreas de rede",
+        "Ramais antigos de imóveis demolidos ativos sob o terreno"
+      ],
+      "consequencias": [
+        "Rompimento de rede de gás ou cabo energizado com risco de morte",
+        "Interrupção de serviços para a vizinhança e indenizações",
+        "Paralisação da frente até reparo pela concessionária"
+      ],
+      "controles_preventivos": [
+        "Consulta formal de interferências às concessionárias com plantas arquivadas no GED",
+        "Detecção de redes por georradar ou detector de cabos com relatório antes da escavação",
+        "Permissão de trabalho para escavação com sondagem manual nas faixas de rede",
+        "Marcação em campo das redes identificadas com registro fotográfico"
+      ],
+      "controles_resposta": [
+        "Evacuar e isolar a área e acionar a concessionária imediatamente",
+        "Registrar ocorrência e revisar o mapa de interferências"
+      ],
+      "sinais_alerta": [
+        "Escavação programada sem consulta de interferências anexada",
+        "Permissão de trabalho de escavação emitida sem detecção de redes registrada"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "prazo",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa",
+        "demolicao",
+        "escavacao_profunda"
+      ],
+      "integracoes": [
+        "sst",
+        "docs_ged",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Atingir rede de gás ou cabo energizado pode causar explosão, eletrocussão e morte",
+      "referencias": []
+    },
+    {
+      "codigo": "R05.11",
+      "evento": "Erros de cotas, níveis ou locação da obra",
+      "causas": [
+        "Referência de nível da obra diferente da adotada no projeto",
+        "Gabarito de locação montado com trena sem conferência topográfica",
+        "Marcos de referência perdidos ou deslocados durante a terraplenagem",
+        "Projetos de disciplinas diferentes com cotas incompatíveis"
+      ],
+      "consequencias": [
+        "Edificação fora do recuo ou com cota de soleira errada",
+        "Rampas de garagem e ligações de esgoto inviáveis",
+        "Demolição e refação de fundações ou pilares"
+      ],
+      "controles_preventivos": [
+        "Locação de eixos e níveis conferida por topógrafo com relatório antes de cada fundação",
+        "Marcos de referência protegidos e verificados periodicamente com registro",
+        "Compatibilização de cotas entre disciplinas registrada no modelo ou em ata",
+        "Conferência de prumo e nível a cada pavimento registrada na ficha de verificação"
+      ],
+      "controles_resposta": [
+        "Paralisar a frente e refazer a locação a partir de referência confiável",
+        "Avaliar com projetistas a correção possível sem demolição"
+      ],
+      "sinais_alerta": [
+        "Fundações iniciadas sem relatório de locação topográfica no GED",
+        "Fichas de verificação de prumo e nível com desvios acima da tolerância"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "prazo",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "terreno_inclinado",
+        "subsolo",
+        "bim"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "planta_bim",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 13133 – execução de levantamento topográfico"
+      ]
+    },
+    {
+      "codigo": "R05.12",
+      "evento": "Danos a fundações vizinhas durante escavações ou cravação de estacas",
+      "causas": [
+        "Escavação junto à divisa abaixo da cota das fundações vizinhas",
+        "Rebaixamento de lençol que provoca adensamento sob o vizinho",
+        "Vibração de cravação ou de estacas tipo Franki junto a imóveis antigos",
+        "Desconhecimento do tipo e da cota das fundações vizinhas"
+      ],
+      "consequencias": [
+        "Recalque ou colapso parcial de imóvel vizinho",
+        "Interdição do vizinho, indenizações e ações judiciais",
+        "Paralisação da obra e reforço emergencial"
+      ],
+      "controles_preventivos": [
+        "Vistoria cautelar dos vizinhos com laudo registrado antes da escavação",
+        "Investigação do tipo e cota das fundações vizinhas registrada no projeto de contenção",
+        "Monitoramento de recalques e fissuras nos vizinhos com leituras periódicas",
+        "Escavação junto à divisa em trechos alternados conforme projeto e ficha de liberação"
+      ],
+      "controles_resposta": [
+        "Paralisar a escavação, escorar o vizinho e acionar o projetista",
+        "Acionar seguro de responsabilidade civil e comunicar o proprietário vizinho"
+      ],
+      "sinais_alerta": [
+        "Escavação junto à divisa no cronograma sem laudo de vistoria cautelar",
+        "Leituras de recalque no vizinho acima do limite definido",
+        "Reclamação de trincas por vizinho registrada no diário"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "vizinhanca_proxima",
+        "subsolo",
+        "fundacao_profunda",
+        "edificacao_antiga"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "diario",
+        "contratos",
+        "sst"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Dano às fundações vizinhas pode causar colapso de edificação de terceiros",
+      "referencias": [
+        "ABNT NBR 6122 – projeto e execução de fundações"
+      ]
+    }
+  ]
+}

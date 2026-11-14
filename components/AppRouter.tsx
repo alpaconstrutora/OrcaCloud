@@ -74,11 +74,13 @@ import { VIEW_TO_CONTROLADORIA_TAB } from '../constants/controladoríaTabs';
 import type { SupplierPortalTab } from './SupplierDashboard';
 import { podeAcessarMarket } from '../utils/acessoAoMarket';
 import { podeEditarTreinamentos } from '../utils/permissaoTreinamentos';
+import { podeEditarRiscos } from '../utils/permissaoRiscos';
 import { temAcessoTotal } from '../lib/acessoTotal';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const AppraisalModule = React.lazy(() => import('./AppraisalModule'));
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
+const RiscosModule         = React.lazy(() => import('./riscos/RiscosModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
 const CentralControle       = React.lazy(() => import('./CentralControle'));
 const OpuraReports          = React.lazy(() => import('./OpuraReports'));
@@ -371,6 +373,9 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewFiscal', 'fiscal');
     } else if (['quality', 'pos-obra'].includes(activeView)) {
       allowed = isModuleAllowed('canViewQuality', 'quality');
+    } else if (activeView === 'riscos') {
+      // Chave própria; sem nada gravado, herda de Obras (utils/permissaoRiscos.ts).
+      allowed = isModuleAllowed('canViewRisks', 'riscos', () => isModuleAllowed('canViewBudget', 'obras'));
     } else if (['eng-obras', 'eng-orcamentos', 'analytic', 'parametric', 'explorer'].includes(activeView)) {
       allowed = isModuleAllowed('canViewBudget', 'obras');
     } else if (activeView.startsWith('supplies-')) {
@@ -1356,6 +1361,22 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           }}
           onOpenPedido={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('details'); setActiveView('supplies-orders'); }}
           onOpenContrato={(id) => { setSelectedContractId(id); setActiveView('supplies-contracts'); }}
+        />
+      );
+
+    // ── Riscos (14/11/2026, docs/planos/2026-11-13-modulo-riscos.md) ───────────
+    case 'riscos':
+      return (
+        // A organização NÃO vem por prop: o módulo lê `useOrgContext()` (REGRA #5),
+        // e as obras vêm de `useStore().projects`, que já é só OBRA sem projeto de
+        // sistema (REGRAS #2/#3). Só a permissão de edição é decidida aqui, onde
+        // o membro da organização ativa já está resolvido.
+        <RiscosModule
+          podeEditar={podeEditarRiscos({
+            permissoes: currentMember?.permissions as unknown as Record<string, unknown> | undefined,
+            administrador: currentProfile.group === 'DESENVOLVEDOR' || isDevEmail || !currentMember || currentMember.role === 'admin',
+            papel: currentMember?.role ?? null,
+          })}
         />
       );
 

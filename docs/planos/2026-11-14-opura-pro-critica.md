@@ -100,8 +100,8 @@ Recebido · A receber · Em execução**. Desenho confirmado: "confirmado".
   da aba): Cobrar → Recebi (Dinheiro) → Desfazer → Finalizar com pendência.
 - PR com CI verde, merge, `conferir-producao.sh` ✅.
 
-**Estado (14/11/2026): merge feito** — PR #429, `17bf992` no `main` (CI verde de primeira);
-conferência de produção registrada no passo 3 abaixo.
+**Estado (14/11/2026): publicado** — PR #429, `17bf992` no `main` (CI verde de primeira);
+`conferir-producao.sh "Aguardando pagamento"` ✅ (domínio serve `17bf992`). Frente fechada.
 - Migration aplicada (os 2 serviços existentes eram PENDENTE: backfill não tocou
   nenhuma linha). Conferido: 3 colunas, `pro_servicos_forma_pagamento_check`,
   `pro_servicos_recebimento_completo_check`; `status_check` intacto.

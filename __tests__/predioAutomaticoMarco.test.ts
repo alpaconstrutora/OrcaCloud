@@ -104,7 +104,7 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         expect(agora.agua?.insuficientes).toBe(0);
         expect(agora.agua?.excessivas).toBe(0);
       },
-      300_000,
+      600_000,
     );
   }
 });

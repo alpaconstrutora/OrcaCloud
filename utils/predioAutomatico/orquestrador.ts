@@ -73,12 +73,14 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     etapas.push({ id, rotulo: ROTULO_DA_ETAPA_DO_PREDIO[id], situacao: situacao === 'LANCOU' && n === 0 ? 'NADA_A_FAZER' : situacao, comandos: n, nota });
     opcoes.aoConcluirEtapa?.(etapas[etapas.length - 1], etapas.length, ORDEM_DAS_ETAPAS_DO_PREDIO.length);
   };
+  let ultimos: ObjectId[] = [];
   const aplicar = (lote: Command[]): number => {
     if (!lote.length) return 0;
     const r = applyBatch(m, lote);
     m = r.model;
     comandos.push(...lote);
     criados.push(...r.diff.created);
+    ultimos = r.diff.created;
     return lote.length;
   };
 
@@ -97,6 +99,9 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   const ctx: ContextoDoPredio = {
     get m() {
       return m;
+    },
+    get criadosNoUltimoLote() {
+      return ultimos;
     },
     aplicar,
   };

@@ -17,6 +17,8 @@ import type { HipotesesDoPredio } from './hipoteses';
 export interface ContextoDoPredio {
   readonly m: BlueprintModel;
   aplicar: (lote: Command[]) => number;
+  /** PA6: os ids que a última aplicação criou (as louças são planejadas para as peças do mobiliário). */
+  readonly criadosNoUltimoLote?: readonly ObjectId[];
 }
 
 export interface BaseDoPredio {

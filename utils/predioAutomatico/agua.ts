@@ -116,8 +116,6 @@ export function lancarLoucasEPontos(ctx: ContextoDoPredio, base: BaseDoPredio): 
   const pendencias: PendenciaDoPpci[] = [];
   const lista = mobiliarNivel(ctx.m, tipo, HIPOTESES_MOBILIARIO_PADRAO);
   const lote = comandosDeMobiliario(lista, tipo, ctx.m);
-  // O kernel é determinístico: a simulação dá os ids que a aplicação vai dar — os pontos das louças são planejados para eles.
-  const criados = lote.length ? applyBatch(ctx.m, lote).diff.created : [];
   // Uma pendência por tipo de achado (no prédio, uma por peça davam dezenas), com o lugar de cada ambiente.
   const agrupar = (de: (a: (typeof lista)[number]) => string[], grupo: PendenciaDoPpci['grupo'], titulo: string) => {
     const comAchado = lista.filter((a) => de(a).length);
@@ -129,6 +127,8 @@ export function lancarLoucasEPontos(ctx: ContextoDoPredio, base: BaseDoPredio): 
   agrupar((a) => a.naoCouberam, 'VERIFICACAO', 'peça(s) que não couberam');
   agrupar((a) => a.reduzidas, 'CONFERIR', 'peça(s) menores (a maior não coube)');
   let comandos = ctx.aplicar(lote);
+  // Os pontos das louças são planejados para as peças que o lote acabou de criar.
+  const criados = lote.length ? (ctx.criadosNoUltimoLote ?? []) : [];
   const loucas = pontosDasLoucasCriadas(ctx.m, criados, HIP_PONTOS, { sugerida: true });
   comandos += ctx.aplicar(loucas);
   const kit = planejarPontosDoNivel(ctx.m, tipo, HIP_PONTOS).flatMap((p) => p.comandos);
@@ -264,6 +264,17 @@ export function lancarAguaFria(
   const pe = (id: ObjectId) => ctx.m.levels.find((l) => l.id === id)?.defaultHeightMm ?? 3000;
   const hipA: HipotesesDeAgua = { ...HIPOTESES_AGUA_PADRAO, velocidadeMaxMs: VELOCIDADE_MAXIMA_NO_PREDIO_MS, raioDoShaftMm: 0, noForro: forroDaAguaDaCasa({}) };
   let comandos = 0;
+  // UM LOTE só no fim: cada aplicação custa pelo tamanho do modelo (no RL, ~0,4 s), e as redes já são planejadas em vistas
+  // que não dependem umas das outras — 2 aplicações por unidade, mais as do hall, do barrilete, do recalque e da reserva,
+  // davam 10,8 s no RL.
+  const fila: Command[] = [];
+  const enfileirar = (lote: Command[]) => {
+    fila.push(...lote);
+    return lote.length;
+  };
+  // Os pontos que o motor encosta na face (TranslateEntities) perdem a marca "sugerida" — ninguém decidiu: voltam a ser
+  // proposta depois do lote.
+  const sugeridos = new Set<ObjectId>();
   const reservatorios = (ctx.m.terminais ?? []).filter((t) => t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA');
   const inferior = reservatorios.find((t) => t.papelReservatorio === 'INFERIOR' && t.levelId === terreo?.levelId) ?? null;
   const superior = reservatorios.find((t) => t.papelReservatorio === 'SUPERIOR' && t.levelId === cobertura?.levelId) ?? null;
@@ -276,7 +287,7 @@ export function lancarAguaFria(
       const pa = planejarAlimentador(ctx.m, HIPOTESES_ALIMENTACAO_PADRAO, HIPOTESES_RESERVATORIO_PADRAO, HIPOTESES_PRESSAO_PADRAO.qMaxDoHidrometroM3h);
       if (pa.motivo) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Alimentador: ${pa.motivo}` });
       else {
-        comandos += ctx.aplicar(pa.comandos);
+        comandos += enfileirar(pa.comandos);
         resultado.alimentador = { dnMm: pa.dnMm, atende: pa.atende };
         for (const a of pa.avisos) pendencias.push({ grupo: 'CONFERIR', texto: `Alimentador: ${a}` });
       }
@@ -290,6 +301,7 @@ export function lancarAguaFria(
   const shaft = (ctx.m.nucleos ?? []).find((n) => n.tipo === 'SHAFT' && pointInPolygon(base.bloco.pontos as Point[], inteiro(centro(n.ring as Point[])))) ?? null;
   if (!shaft) {
     pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Água fria: o núcleo não tem shaft — sem onde passar a coluna; a água fria fica para o projetista.' });
+    ctx.aplicar(fila);
     return { ...resultado, comandos };
   }
   const anel = shaft.ring as Point[];
@@ -317,6 +329,7 @@ export function lancarAguaFria(
   }
   if (!C || !P0 || !Rc) {
     pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Água fria: nenhum lado do shaft dá para a circulação — sem por onde a coluna chegar aos hidrômetros.', ...comLocal(localDoElemento(ctx.m, [shaft.id])) });
+    ctx.aplicar(fila);
     return { ...resultado, comandos };
   }
 
@@ -390,10 +403,8 @@ export function lancarAguaFria(
       pendencias.push({ grupo: 'VERIFICACAO', texto: `Água fria da unidade ${r.numero}: ${pa.motivo}` });
       continue;
     }
-    // O ponto encostado na face (TranslateEntities) perde a marca "sugerida" — ninguém decidiu: volta a ser proposta.
-    const sugeridos = new Set(pts.filter((t) => t.sugerida).map((t) => t.id));
-    comandos += ctx.aplicar(semAneis(pa.comandos.filter((x) => x.type !== 'SetTrechoProps'), chaveDoTipo, chaveDoTipo(tipo, r.O.x, r.O.y, COTA_DO_HIDROMETRO_MM)));
-    comandos += ctx.aplicar((ctx.m.terminais ?? []).filter((t) => sugeridos.has(t.id) && !t.sugerida).map((t): Command => ({ type: 'SetTerminalProps', terminalId: t.id, sugerida: true })));
+    for (const t of pts) if (t.sugerida) sugeridos.add(t.id);
+    comandos += enfileirar(semAneis(pa.comandos.filter((x) => x.type !== 'SetTrechoProps'), chaveDoTipo, chaveDoTipo(tipo, r.O.x, r.O.y, COTA_DO_HIDROMETRO_MM)));
     resultado.pontos += pa.pontos;
   }
 
@@ -443,9 +454,9 @@ export function lancarAguaFria(
   const dnColuna = dnDe(pesoDoAndar * Math.max(1, andares));
   resultado.colunaDnMm = dnColuna;
   lote.unshift(trecho(tipo, C, 0, C, COTA_DO_HIDROMETRO_MM, dnColuna, ROTULO_DA_COLUNA_DE_AGUA), trecho(tipo, C, COTA_DO_HIDROMETRO_MM, C, pe(tipo), dnColuna, ROTULO_DA_COLUNA_DE_AGUA));
-  comandos += ctx.aplicar(lote);
+  comandos += enfileirar(lote);
   // Os hidrômetros, um por unidade, no nicho da parede do hall (sobre o ramal, antes da parede).
-  comandos += ctx.aplicar(
+  comandos += enfileirar(
     ramais.map((r): Command => ({
       type: 'AddTerminal', levelId: tipo, disciplina: 'AGUA_FRIA', tipo: FICHA_DO_PONTO_HIDRAULICO.HIDROMETRO.rotulo, at: r.H, cotaMm: COTA_DO_HIDROMETRO_MM,
       tipoHidraulico: 'HIDROMETRO', rotulo: `Hidrômetro ${r.numero}`, ...(r.unidadeId ? { unidadeId: r.unidadeId } : {}), sugerida: true,
@@ -468,7 +479,7 @@ export function lancarAguaFria(
       ...emL(cobertura.levelId, S, C, COTA_DO_BARRILETE_MM, dnColuna, ROTULO_DO_BARRILETE),
       trecho(cobertura.levelId, C, COTA_DO_BARRILETE_MM, C, 0, dnColuna, ROTULO_DO_BARRILETE),
     ];
-    comandos += ctx.aplicar(lb);
+    comandos += enfileirar(lb);
   } else pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Água fria: sem o reservatório superior (cobertura), a coluna fica sem origem — ligue-a ao reservatório que o projeto definir.' });
 
   // ── O recalque: do inferior, pela bomba, subindo pelo shaft até o alto do superior.
@@ -506,7 +517,7 @@ export function lancarAguaFria(
     const hman = desnivelM + perdaDistribuida(vazaoLs, 'PVC_SOLDAVEL', dn, comprimentoM + leqR).perdaMca + perdaDistribuida(vazaoLs, 'PVC_SOLDAVEL', dnS, Ls + leqS).perdaMca;
     const potCv = (1000 * G * (vazaoLs / 1000) * hman) / HIPOTESES_RECALQUE_PADRAO.rendimento / W_POR_CV;
     const motorCv = MOTORES_CV.find((x) => x >= potCv - 1e-9) ?? MOTORES_CV[MOTORES_CV.length - 1];
-    comandos += ctx.aplicar([
+    comandos += enfileirar([
       { type: 'AddTerminal', levelId: terreo.levelId, disciplina: 'AGUA_FRIA', tipo: 'Bomba de recalque', at: B, cotaMm: inferior.cotaMm, tipoHidraulico: 'BOMBA', sugerida: true } as Command,
       trecho(terreo.levelId, I, inferior.cotaMm, B, inferior.cotaMm, dnS, ROTULO_DA_SUCCAO),
       ...lr,
@@ -526,11 +537,13 @@ export function lancarAguaFria(
       if (temSistema(s)) {
         const rti = s.reservaM3 * 1000;
         resultado.rtiL = rti;
-        comandos += ctx.aplicar([{ type: 'SetTerminalProps', terminalId: superior.id, volumeL: (superior.volumeL ?? 0) + rti, volumeRtiL: rti } as Command]);
+        comandos += enfileirar([{ type: 'SetTerminalProps', terminalId: superior.id, volumeL: (superior.volumeL ?? 0) + rti, volumeRtiL: rti } as Command]);
         pendencias.push({ grupo: 'CONFERIR', texto: `Reserva de incêndio: ${s.reservaM3} m³ no reservatório superior (${s.motivo}; área total ≈ ${f1(areaM2)} m² — o bloco × os pavimentos) — ${s.fonte}. O PPCI confere com a rede de hidrantes.` });
       } else pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Reserva de incêndio: ${s.motivo}` });
     }
   }
+  ctx.aplicar(fila);
+  comandos += ctx.aplicar((ctx.m.terminais ?? []).filter((t) => sugeridos.has(t.id) && !t.sugerida).map((t): Command => ({ type: 'SetTerminalProps', terminalId: t.id, sugerida: true })));
   resultado.comandos = comandos;
   return resultado;
 }

@@ -465,3 +465,10 @@ verify_jwt = false
 # gateway não verifica JWT aqui.
 [functions.celular-diario-midia]
 verify_jwt = false
+
+# Pedido Fast (Suprimentos › Pedidos de Compra — docs/planos/2026-11-14-pedido-fast.md).
+# O portão é o código: exigirUsuario (JWT de usuário; a chave anon sozinha → 401) +
+# fn_pode_criar_pedido_de no banco. Sem JWT no gateway para a Parte 2 (link do
+# celular, token no corpo) usar a mesma função.
+[functions.pedido-fast]
+verify_jwt = false

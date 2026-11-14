@@ -1,4 +1,4 @@
-import { DocType, NumberingConfig, VariableToken } from './types';
+import { DocType, NumberingConfig, VariableToken } from './types.ts';
 
 export interface DocTypeCatalogEntry {
     label: string;

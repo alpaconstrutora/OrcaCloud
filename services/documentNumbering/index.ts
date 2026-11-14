@@ -1,5 +1,5 @@
 import { supabase } from '../../lib/supabase';
-import { buildScopeKey, formatDocumentNumber, variablesInUse } from './format';
+import { gerarNumeroDeDocumento } from './motor';
 import { resolveVariables } from './resolvers';
 import { getNumberingConfig } from './settingsService';
 import { DocType, NumberingContext } from './types';
@@ -26,21 +26,26 @@ export async function generateDocumentNumber(
     organizationId: string,
     ctx: Omit<NumberingContext, 'organizationId'>,
 ): Promise<string> {
-    const config = await getNumberingConfig(organizationId, docType);
-    const tokens = variablesInUse(config.slots);
-
-    const values = await resolveVariables(tokens, { ...ctx, organizationId });
-    // `yearSuffix` (Ofícios): o ano entra no escopo e no fim do número. Os 12 tipos
-    // anteriores não usam — para eles nada muda.
-    const year = new Date().getFullYear();
-    const scopeKey = buildScopeKey(config.slots, values, config.yearSuffix ? { year } : undefined);
-
-    const { data: seq, error } = await supabase.rpc('fn_next_document_seq', {
-        p_org_id: organizationId,
-        p_doc_type: docType,
-        p_scope_key: scopeKey,
-    });
-    if (error) throw new Error(`Falha ao gerar o número do documento: ${error.message}`);
-
-    return formatDocumentNumber(config, values, Number(seq), year);
+    // A orquestração mora em `motor.ts` (a Edge Function `pedido-fast` usa a
+    // mesma). Aqui só se pluga o que é do navegador: config e resolvedores pelos
+    // módulos de sempre (os testes que os mocam continuam valendo) e a RPC com a
+    // sessão do usuário.
+    return gerarNumeroDeDocumento(
+        {
+            lerConfig: getNumberingConfig,
+            resolver: resolveVariables,
+            reservar: async (org, tipo, scopeKey) => {
+                const { data: seq, error } = await supabase.rpc('fn_next_document_seq', {
+                    p_org_id: org,
+                    p_doc_type: tipo,
+                    p_scope_key: scopeKey,
+                });
+                if (error) throw new Error(`Falha ao gerar o número do documento: ${error.message}`);
+                return Number(seq);
+            },
+        },
+        docType,
+        organizationId,
+        ctx,
+    );
 }

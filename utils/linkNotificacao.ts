@@ -33,6 +33,12 @@ const FOCO_POR_VIEW: Record<string, { param: string; source: string; sourcePende
 export interface DestinoDoLink {
     view: string;
     foco?: { ref: string; source: string };
+    /**
+     * Pedido Fast (14/11/2026, docs/planos/2026-11-14-pedido-fast.md): o aviso
+     * "Novo Pedido Fast" grava `/supplies-orders?pedido=<id>`. A tela de pedidos
+     * não usa o foco do store — o detalhe abre por `setSelectedOrderId` no App.
+     */
+    pedidoId?: string;
 }
 
 /** `null` quando o link não é uma rota interna `/view[?query]`. */
@@ -46,6 +52,10 @@ export function destinoDoLinkDeNotificacao(link: string): DestinoDoLink | null {
     if (!link.startsWith('/')) return null;
     const [caminho, query = ''] = link.substring(1).split('?');
     if (!caminho) return null;
+    if (caminho === 'supplies-orders') {
+        const pedidoId = new URLSearchParams(query).get('pedido');
+        return pedidoId ? { view: caminho, pedidoId } : { view: caminho };
+    }
     const regra = FOCO_POR_VIEW[caminho];
     if (!regra) return { view: caminho };
     const params = new URLSearchParams(query);

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, AlertTriangle, FileCheck, X, RefreshCw, MoveHorizontal, SlidersHorizontal } from 'lucide-react';
+import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, AlertTriangle, FileCheck, X, RefreshCw, MoveHorizontal, SlidersHorizontal, Zap } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -132,6 +132,12 @@ const StatusBadge = ({ status, fob = false }: { status: string; fob?: boolean })
     );
 };
 
+// Pedido Fast (docs/planos/2026-11-14-pedido-fast.md): texto colorido ao lado do
+// número, como o status (§8) — sem pílula, sem fundo.
+const MarcaFast: React.FC = () => (
+    <span className="ml-1.5 text-sm font-normal text-violet-700" title="Pedido Fast — compra de balcão, itens lidos da foto da nota">· Fast</span>
+);
+
 // Conteúdo de cada <td> por coluna — extraído para função pura para que o <tbody>
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna.
@@ -142,7 +148,12 @@ function renderOrderCell(
 ): React.ReactNode {
     switch (key) {
         case 'number':
-            return <span className="text-sm font-normal text-gray-600">{order.number || order.id.slice(0, 8)}</span>;
+            return (
+                <span className="text-sm font-normal text-gray-600">
+                    {order.number || order.id.slice(0, 8)}
+                    {order.origem === 'FAST' && <MarcaFast />}
+                </span>
+            );
         case 'organization':
             return <span className="text-sm font-normal text-gray-700">{order.organizationName || '-'}</span>;
         case 'empreendimento':
@@ -210,6 +221,10 @@ import { useOrgContext } from '../hooks/useOrgContext';
 import { PurchaseOrder } from '../types';
 import { ehFob, rotuloStatusLogistico } from '../utils/formaEntrega';
 import PreferenciasPedidoSheet from './suprimentos/PreferenciasPedidoSheet';
+import PedidoFastFluxo from './suprimentos/PedidoFastFluxo';
+import PedidoFastMobile, { useObrasDoFast } from './suprimentos/PedidoFastMobile';
+import { fontePedidoFastLogado } from '../services/pedidoFastService';
+import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 
 interface SupplyChainOrderListProps {
     onCreateNew: () => void;
@@ -244,6 +259,14 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     // Preferências: padrões do pedido NOVO (empresa + pessoal). Plano 2026-11-09-pedido-compra-preferencias.
     const [preferenciasAbertas, setPreferenciasAbertas] = React.useState(false);
+    // Pedido Fast: Sheet no desktop; no celular (< 768 px, lido uma vez, como
+    // TasksModule/DiaryProjectsList) a tela abre no PedidoFastMobile, com a lista
+    // completa a um toque.
+    const [fastAberto, setFastAberto] = React.useState(false);
+    const [fastPendente, setFastPendente] = React.useState(false);
+    const [isMobile] = React.useState(() => typeof window !== 'undefined' && window.innerWidth < 768);
+    const [listaCompletaNoCelular, setListaCompletaNoCelular] = React.useState(false);
+    const obrasDoFast = useObrasDoFast();
     const confirm = useConfirm();
     // Pedido → número(s) da NF-e vinculada (mais de uma NF-e por pedido é possível
     // em entregas parciais). Vazio/ausente = sem NF-e.
@@ -519,6 +542,10 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         }
     }
 
+    if (isMobile && !listaCompletaNoCelular) {
+        return <PedidoFastMobile onAbrirListaCompleta={() => setListaCompletaNoCelular(true)} onVerPedido={onViewDetails} />;
+    }
+
     return (
         <>
         <div className="space-y-6">
@@ -536,6 +563,15 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     >
                         <SlidersHorizontal className="w-[15px] h-[15px]" />
                         Preferências
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => setFastAberto(true)}
+                        title="Compra de balcão já feita: foto da nota + obra, e o app cria o pedido"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
+                    >
+                        <Zap className="w-[15px] h-[15px] text-violet-600" />
+                        Pedido Fast
                     </button>
                     <button
                         onClick={onCreateNew}
@@ -886,6 +922,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
 
                                 <h3 className="text-lg font-bold text-gray-900 mb-1">
                                     {order.number || order.id.slice(0, 8)}
+                                    {order.origem === 'FAST' && <MarcaFast />}
                                 </h3>
                                 {/* Estilo herdado do card legado (uppercase/bold) — mantido para o
                                     bloco não ficar com duas tipografias; migração do card é outro escopo. */}
@@ -982,6 +1019,38 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         </div>
 
         <PreferenciasPedidoSheet open={preferenciasAbertas} onClose={() => setPreferenciasAbertas(false)} notify={notify} />
+
+        <Sheet open={fastAberto} onClose={() => { setFastAberto(false); setFastPendente(false); }} size="lg" dirty={fastPendente}>
+            <SheetHeader onClose={async () => {
+                // O X do cabeçalho não passa pela guarda `dirty` do Sheet (só Esc/fundo passam) — §25.
+                if (fastPendente && !(await confirm({
+                    title: 'Sair sem criar o pedido?',
+                    message: 'A foto já tirada não vira pedido se você fechar agora.',
+                    variant: 'warning',
+                    confirmLabel: 'Fechar',
+                    cancelLabel: 'Continuar',
+                }))) return;
+                setFastAberto(false);
+                setFastPendente(false);
+            }}>
+                <SheetTitle>Pedido Fast</SheetTitle>
+                <SheetDescription>Compra de balcão já feita: foto da nota ou recibo e a obra.</SheetDescription>
+            </SheetHeader>
+            <SheetPanel className="px-6 py-5 bg-gray-50">
+                {/* key: reabrir o Sheet começa um pedido novo */}
+                {fastAberto && (
+                    <PedidoFastFluxo
+                        fonte={fontePedidoFastLogado}
+                        obras={obrasDoFast}
+                        onPendenteChange={setFastPendente}
+                        // O Edge não devolve o pedido mapeado (obra, fornecedor, empreendimento):
+                        // recarregar é a exceção que o §22 admite.
+                        onCriado={() => { void loadOrders(); }}
+                        onVerPedido={(id) => { setFastAberto(false); onViewDetails(id); }}
+                    />
+                )}
+            </SheetPanel>
+        </Sheet>
 
         {/* Notification toast */}
         {notification && (

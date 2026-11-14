@@ -151,6 +151,12 @@ export interface PurchaseOrder {
     notesVisibleToSupplier?: boolean;
     /** Cotação que gerou o pedido (selectWinner) — aplicar_20271011000600. */
     quotationRequestId?: string | null;
+    /** 'FAST' = Pedido Fast (foto da nota + obra); null = formulário. aplicar_20271114500000. Só leitura. */
+    origem?: 'FAST' | null;
+    /** Quem criou o pedido (no Fast, quem comprou). Gravado pelo banco; só leitura. */
+    criadoPor?: string | null;
+    /** Pedido Fast: o que a IA leu da foto (com o comprador congelado). Só leitura. */
+    leituraIa?: import('../lib/pedidoFast').LeituraIaDoPedido | null;
     /** Nome do empreendimento da obra — só a RPC do portal preenche (a RLS de `empreendimentos` barra o fornecedor). */
     empreendimentoName?: string;
     items: PurchaseOrderItem[];

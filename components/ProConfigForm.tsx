@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { proService } from '../services/proService';
 import { ProPixKeyType } from '../types';
-import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft, Plus, X, AlertCircle, Check, Save } from 'lucide-react';
+import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft, Plus, X, AlertCircle, Check, Save, LogOut } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
@@ -20,9 +20,11 @@ const ALVO_ICONE = 'w-11 h-11 flex items-center justify-center';
 interface ProConfigFormProps {
   userId: string;
   onBack: () => void;
+  /** ÒPURA Pro público: sair da conta (não existe outro menu nessa casca). */
+  onSair?: () => void;
 }
 
-export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) => {
+export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack, onSair }) => {
   const confirm = useConfirm();
   const { localToast, showToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -500,6 +502,17 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           </button>
         </div>
       </form>
+
+      {onSair && (
+        <button
+          type="button"
+          onClick={onSair}
+          className="mt-6 w-full h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
+        >
+          <LogOut className="w-4 h-4" aria-hidden />
+          Sair da conta
+        </button>
+      )}
 
       {localToast && (
         <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${

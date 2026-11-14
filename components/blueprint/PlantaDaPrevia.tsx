@@ -139,7 +139,8 @@ export default function PlantaDaPrevia({ modelo, levelId, onLevelId, disciplina,
     <section className="space-y-3" data-testid="planta-da-previa">
       <div className="flex flex-wrap items-center gap-3">
         <select aria-label="Pavimento da prévia" value={nivel.id} onChange={(e) => onLevelId(e.target.value)} className="h-9 rounded-[6px] border border-gray-200 bg-white px-3 text-sm text-gray-900 focus:border-blue-500 focus:outline-none">
-          {modelo.levels.map((l) => (
+          {/* Pela cota (PA3 do prédio: o térreo do bloco nasce depois do tipo, e a lista na ordem de criação o punha no fim). */}
+          {[...modelo.levels].sort((a, b) => a.elevationMm - b.elevationMm).map((l) => (
             <option key={l.id} value={l.id}>
               {/* Prédio automático (PA2): o andar copiado diz que é cópia viva — o desenho dele se edita no tipo. */}
               {l.tipoDeId ? `${l.name} · cópia do tipo` : l.name}

@@ -5,3 +5,4 @@
 export * from './predioAutomatico/hipoteses';
 export * from './predioAutomatico/orquestrador';
 export * from './predioAutomatico/pedido';
+export * from './predioAutomatico/terreoECobertura';

@@ -64,6 +64,8 @@ export interface ProConfig {
   template_header?: string;
   template_footer?: string;
   profissao?: string;
+  /** Cidade do profissional: campo 60 do Pix Copia e Cola (migration 20271114800000). */
+  cidade?: string | null;
   templates_custom?: { id: string; titulo: string; descricao: string; valor: number; unidade?: string; quantidade?: number }[];
   created_at: string;
 }

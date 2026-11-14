@@ -19,11 +19,13 @@ import {
   Pause,
   PenLine,
   Play,
+  RefreshCw,
   RotateCcw,
   Save,
   X,
 } from 'lucide-react';
 import { useConfirm } from './ui/confirm';
+import { comprimirFoto } from '../utils/comprimirFoto';
 import { useToast } from '../hooks/useToast';
 import {
   FORMAS_DE_PAGAMENTO,
@@ -40,8 +42,8 @@ import {
 
 // PIX: o payload vem de utils/pixCopiaECola.ts, montado pelo TIPO de chave cadastrado
 // (até 14/11/2026 era por palpite aqui, e CPF com máscara virava telefone +55).
-// O cadastro do Pro ainda não tem cidade; o campo 60 do BR Code é obrigatório e os
-// bancos não o conferem com a chave. Ver docs/planos/2026-11-14-opura-pro-critica.md (passo 5).
+// A cidade vem de Ajustes (pro_config.cidade); vazia cai neste padrão, porque o campo 60
+// do BR Code é obrigatório (os bancos não o conferem com a chave).
 const CIDADE_RECEBEDOR_PADRAO = 'BRASILIA';
 
 // Assinatura: papel branco e tinta escura, gravados NO canvas (não no CSS) — a imagem
@@ -66,6 +68,9 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
   onSave
 }) => {
   const [loading, setLoading] = React.useState(true);
+  // Falha de rede ≠ serviço inexistente: antes as duas viravam "Serviço não encontrado", sem saída.
+  const [erroCarga, setErroCarga] = React.useState<string | null>(null);
+  const [tentativa, setTentativa] = React.useState(0);
   const [servico, setServico] = React.useState<any | null>(null);
   const [config, setConfig] = React.useState<any>(null);
 
@@ -127,6 +132,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
       }
       try {
         setLoading(true);
+        setErroCarga(null);
         const [servData, configData] = await Promise.all([
           supabaseListIndividualServico(servicoId),
           proService.getConfig(userId)
@@ -152,24 +158,21 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
           }
         }
         setConfig(configData);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Erro ao buscar serviço:', error);
+        setErroCarga(error?.message || 'Sem conexão.');
       } finally {
         setLoading(false);
       }
     };
     loadData();
-  }, [userId, servicoId]);
+  }, [userId, servicoId, tentativa]);
 
   // Função auxiliar de listagem individual do serviço
+  // O erro SOBE: quem chama distingue falha de rede de serviço inexistente.
   const supabaseListIndividualServico = async (id: string) => {
-    try {
-      const data = await proService.listServicos(userId);
-      return data.find((s: any) => s.id === id) || null;
-    } catch (err) {
-      console.error(err);
-      return null;
-    }
+    const data = await proService.listServicos(userId);
+    return data.find((s: any) => s.id === id) || null;
   };
 
   // Lógica de Assinatura (HTML5 Canvas + Pointer Events: dedo, caneta e mouse)
@@ -264,7 +267,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
       chave: config.pix_key,
       valor: Number(servico.pro_orcamentos?.valor || 0),
       nome: config.template_header || '',
-      cidade: CIDADE_RECEBEDOR_PADRAO,
+      cidade: config.cidade || CIDADE_RECEBEDOR_PADRAO,
     });
   }, [servico, config]);
 
@@ -285,29 +288,33 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
     return () => { vivo = false; };
   }, [pix]);
 
-  const handleFotoAntesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setAntesFoto(event.target.result as string);
-      }
-    };
-    reader.readAsDataURL(file);
+  // Foto da câmera tem 3–12 MB e ia inteira, em base64, para o banco e de volta a cada
+  // abertura da OS. Passa pelo mesmo `comprimirFoto` do Diário (2048 px, JPEG, EXIF certo,
+  // HEIC → JPEG); se não der para comprimir, sobe o arquivo como veio.
+  const lerFoto = async (file: File): Promise<string> => {
+    const pronta = await comprimirFoto(file);
+    return new Promise((ok, falha) => {
+      const leitor = new FileReader();
+      leitor.onload = () => ok(String(leitor.result || ''));
+      leitor.onerror = () => falha(leitor.error);
+      leitor.readAsDataURL(pronta);
+    });
   };
 
-  const handleFotoDepoisUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const receberFoto = async (e: React.ChangeEvent<HTMLInputElement>, guardar: (url: string) => void) => {
     const file = e.target.files?.[0];
+    e.target.value = '';
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      if (event.target?.result) {
-        setDepoisFoto(event.target.result as string);
-      }
-    };
-    reader.readAsDataURL(file);
+    try {
+      guardar(await lerFoto(file));
+    } catch (err) {
+      console.error('Erro ao ler a foto:', err);
+      showToast('Não foi possível ler a foto. Tente outra.', 'error');
+    }
   };
+
+  const handleFotoAntesUpload = (e: React.ChangeEvent<HTMLInputElement>) => receberFoto(e, setAntesFoto);
+  const handleFotoDepoisUpload = (e: React.ChangeEvent<HTMLInputElement>) => receberFoto(e, setDepoisFoto);
 
   // Lógica do Checklist
   const toggleChecklistItem = (itemId: string) => {
@@ -664,10 +671,42 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
     );
   }
 
-  if (!servico) {
+  if (erroCarga || !servico) {
     return (
-      <div className="flex-1 p-5 text-center text-slate-600">
-        Serviço não encontrado.
+      <div className="bg-white border border-slate-200 rounded-[10px] p-4 space-y-3" role={erroCarga ? 'alert' : undefined}>
+        <div className="flex items-start gap-2.5">
+          <AlertTriangle className={`w-5 h-5 shrink-0 mt-0.5 ${erroCarga ? 'text-red-700' : 'text-amber-700'}`} aria-hidden />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-slate-900">
+              {erroCarga ? 'Não foi possível abrir o serviço' : 'Serviço não encontrado'}
+            </h2>
+            <p className="text-sm text-slate-700 mt-0.5">
+              {erroCarga
+                ? 'Confira a internet e tente de novo.'
+                : 'Ele pode ter sido excluído junto com o orçamento ou o cliente.'}
+            </p>
+          </div>
+        </div>
+        <div className={`grid gap-2 ${erroCarga ? 'grid-cols-2' : 'grid-cols-1'}`}>
+          <button
+            type="button"
+            onClick={onBack}
+            className="h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
+          >
+            <ChevronLeft className="w-4 h-4" aria-hidden />
+            Voltar à agenda
+          </button>
+          {erroCarga && (
+            <button
+              type="button"
+              onClick={() => setTentativa(t => t + 1)}
+              className="h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors"
+            >
+              <RefreshCw className="w-4 h-4" aria-hidden />
+              Tentar de novo
+            </button>
+          )}
+        </div>
       </div>
     );
   }

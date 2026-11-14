@@ -1,5 +1,6 @@
 import React from 'react';
 import { proService } from '../services/proService';
+import { interpretarDitado } from '../utils/proDitado';
 import { ProCliente, ProOrcamento } from '../types';
 import ClientSelect from './ClientSelect';
 import jsPDF from 'jspdf';
@@ -99,53 +100,19 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
     recognition.start();
   };
 
+  // Leitura do ditado em utils/proDitado.ts (testado): nomes com acento e "para" solto
+  // só vira cliente se casar com um cadastrado.
   const parseVoiceText = (text: string) => {
-    const textLower = text.toLowerCase();
-    
-    // 1. Extração de Valor: procura algo como "X reais" ou "R$ X" ou apenas números
-    let extractedValor = '';
-    const valorMatch = textLower.match(/(\d+(?:[\.,]\d+)?)\s*(?:reais|real)/) || textLower.match(/r\$\s*(\d+(?:[\.,]\d+)?)/);
-    if (valorMatch) {
-      extractedValor = valorMatch[1].replace(',', '.');
+    const d = interpretarDitado(text, clientes);
+    if (d.valor) setValor(d.valor);
+    if (d.clienteId) {
+      setIsNovoCliente(false);
+      setClienteId(d.clienteId);
+    } else if (d.novoClienteNome) {
+      setIsNovoCliente(true);
+      setNovoClienteNome(d.novoClienteNome);
     }
-
-    // 2. Extração de Cliente: procura "para o cliente X" ou "para a cliente X" ou "para X"
-    let extractedClienteId = '';
-    const clienteMatch = textLower.match(/para\s+(?:o|a)?\s*cliente\s+([a-zA-Z\s]+)/) || textLower.match(/para\s+([a-zA-Z\s]+)/);
-    if (clienteMatch) {
-      const nomeBuscado = clienteMatch[1].trim().toLowerCase();
-      // Tenta encontrar na lista de clientes existentes
-      const found = clientes.find(c => c.nome.toLowerCase().includes(nomeBuscado));
-      if (found) {
-        extractedClienteId = found.id;
-        setIsNovoCliente(false);
-      } else {
-        // Se não achar, preenche o campo de novo cliente com o nome extraído!
-        setIsNovoCliente(true);
-        setNovoClienteNome(clienteMatch[1].trim());
-      }
-    }
-
-    // 3. Descrição: o restante do texto ou a frase completa limpando o valor e o cliente
-    let extractedDesc = text;
-    // Limpa o padrão de valor do texto
-    if (valorMatch) {
-      extractedDesc = extractedDesc.replace(valorMatch[0], '');
-    }
-    // Limpa o padrão de cliente do texto
-    if (clienteMatch) {
-      extractedDesc = extractedDesc.replace(clienteMatch[0], '');
-    }
-    // Remove espaços extras e limpa termos comuns de início
-    extractedDesc = extractedDesc.replace(/crie um orçamento de|orçamento de|criar orçamento para/gi, '').trim();
-    // Capitaliza a primeira letra
-    if (extractedDesc) {
-      extractedDesc = extractedDesc.charAt(0).toUpperCase() + extractedDesc.slice(1);
-    }
-
-    if (extractedValor) setValor(extractedValor);
-    if (extractedClienteId) setClienteId(extractedClienteId);
-    if (extractedDesc) setDescricao(extractedDesc);
+    if (d.descricao) setDescricao(d.descricao);
   };
 
   React.useEffect(() => {
@@ -180,7 +147,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
   }, [userId, orcamentoId]);
 
   // Função para gerar o PDF Premium (Stripe/Linear Style)
-  const generatePDF = (clientName: string, clientPhone: string, savedOrc: ProOrcamento) => {
+  const generatePDF = (clientName: string, clientPhone: string, clientAddress: string, savedOrc: ProOrcamento) => {
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -229,8 +196,8 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
     doc.setFont('helvetica', 'normal');
     doc.text(clientName, 110, 63);
     doc.text(`Telefone: ${clientPhone}`, 110, 68);
-    if (novoClienteEndereco) {
-      doc.text(`Endereço: ${novoClienteEndereco}`, 110, 73);
+    if (clientAddress) {
+      doc.text(`Endereço: ${clientAddress}`, 110, 73);
     }
 
     // Linha divisória
@@ -321,17 +288,24 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
       return;
     }
 
+    // O Safari do iPhone bloqueia `window.open` que acontece depois de um `await` (deixa de
+    // contar como toque do usuário). A aba nasce aqui, vazia, e recebe o link do WhatsApp
+    // depois de salvar; se salvar falhar, ela fecha.
+    const janelaWhatsApp = status === 'ENVIADO' ? window.open('', '_blank') : null;
+
     try {
       setLoading(true);
 
       let targetClienteId = clienteId;
       let targetClienteNome = '';
       let targetClienteTelefone = '';
+      let targetClienteEndereco = '';
 
       // Se for um novo cliente, salvamos ele primeiro
       if (isNovoCliente) {
         if (!novoClienteNome || !novoClienteTelefone) {
           showToast('Por favor, informe o nome e telefone do novo cliente.', 'error');
+          janelaWhatsApp?.close();
           setLoading(false);
           return;
         }
@@ -347,10 +321,12 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
         targetClienteId = newClient.id;
         targetClienteNome = newClient.nome;
         targetClienteTelefone = newClient.telefone;
+        targetClienteEndereco = newClient.endereco || novoClienteEndereco || '';
       } else {
         const selClient = clientes.find(c => c.id === clienteId);
         targetClienteNome = selClient?.nome || 'Cliente';
         targetClienteTelefone = selClient?.telefone || '';
+        targetClienteEndereco = selClient?.endereco || '';
       }
 
       // Salva o orçamento
@@ -369,7 +345,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
       // Se o status for ENVIADO, gera o PDF e abre o WhatsApp
       if (status === 'ENVIADO') {
-        generatePDF(targetClienteNome, targetClienteTelefone, savedOrc);
+        generatePDF(targetClienteNome, targetClienteTelefone, targetClienteEndereco, savedOrc);
 
         // Mensagem de WhatsApp rápida
         const formattedVal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(valor));
@@ -379,7 +355,8 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
         // Adiciona DDI Brasil (55) se não houver
         const targetPhone = cleanPhone.length === 11 || cleanPhone.length === 10 ? `55${cleanPhone}` : cleanPhone;
         const waUrl = `https://wa.me/${targetPhone}?text=${encoded}`;
-        window.open(waUrl, '_blank');
+        if (janelaWhatsApp) janelaWhatsApp.location.href = waUrl;
+        else window.open(waUrl, '_blank');
       }
 
       // Se o status for APROVADO, já cria automaticamente o Serviço (OS) correspondente
@@ -404,6 +381,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
       onSave();
     } catch (error) {
       console.error('Erro ao salvar orçamento:', error);
+      janelaWhatsApp?.close();
       showToast('Não foi possível salvar o orçamento. Tente novamente.', 'error');
     } finally {
       setLoading(false);

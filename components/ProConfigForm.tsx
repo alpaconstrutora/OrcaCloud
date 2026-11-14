@@ -30,6 +30,9 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
 
   // Estados dos campos de configuração
   const [templateHeader, setTemplateHeader] = useState('');
+  const [cidade, setCidade] = useState('');
+  // Rótulo ↔ campo (htmlFor/id): leitor de tela lê o rótulo, e tocar no rótulo foca o campo.
+  const idForm = React.useId();
   const [profissao, setProfissao] = useState('AR_CONDICIONADO');
   const [pixKeyType, setPixKeyType] = useState<ProPixKeyType>('CPF');
   const [pixKey, setPixKey] = useState('');
@@ -54,6 +57,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
         const data = await proService.getConfig(userId);
         if (data) {
           setTemplateHeader(data.template_header || '');
+          setCidade(data.cidade || '');
           setProfissao(data.profissao || 'AR_CONDICIONADO');
           setPixKeyType(data.pix_key_type || 'CPF');
           setPixKey(data.pix_key || '');
@@ -90,6 +94,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
       await proService.saveConfig({
         user_id: userId,
         template_header: templateHeader.trim(),
+        cidade: cidade.trim(),
         profissao,
         pix_key_type: pixKeyType,
         pix_key: pixKey.trim(),
@@ -224,8 +229,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           </h2>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-500">Nome comercial / fantasia</label>
-            <input
+            <label htmlFor={`${idForm}-nome`} className="block text-xs font-semibold text-slate-500">Nome comercial / fantasia</label>
+            <input id={`${idForm}-nome`}
               type="text"
               placeholder="Ex: Alpa Refrigeração & Climatização"
               value={templateHeader}
@@ -237,8 +242,21 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-500">Profissão principal</label>
-            <select
+            <label htmlFor={`${idForm}-cidade`} className="block text-xs font-semibold text-slate-500">Cidade</label>
+            <input id={`${idForm}-cidade`}
+              type="text"
+              placeholder="Ex: Cuiabá"
+              autoComplete="address-level2"
+              value={cidade}
+              onChange={(e) => setCidade(e.target.value)}
+              className={CAMPO}
+            />
+            <span className="block text-xs text-slate-600">Vai no código Pix: aparece no comprovante de quem paga.</span>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor={`${idForm}-profissao`} className="block text-xs font-semibold text-slate-500">Profissão principal</label>
+            <select id={`${idForm}-profissao`}
               value={profissao}
               onChange={(e) => setProfissao(e.target.value)}
               className={CAMPO}
@@ -261,8 +279,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
 
           <div className="grid grid-cols-3 gap-2.5">
             <div className="col-span-1 space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-500">Tipo de chave</label>
-              <select
+              <label htmlFor={`${idForm}-tipo-pix`} className="block text-xs font-semibold text-slate-500">Tipo de chave</label>
+              <select id={`${idForm}-tipo-pix`}
                 value={pixKeyType}
                 onChange={(e) => {
                   const tipo = e.target.value as ProPixKeyType;
@@ -279,8 +297,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               </select>
             </div>
             <div className="col-span-2 space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-500">Chave Pix</label>
-              <input
+              <label htmlFor={`${idForm}-chave-pix`} className="block text-xs font-semibold text-slate-500">Chave Pix</label>
+              <input id={`${idForm}-chave-pix`}
                 type="text"
                 placeholder={EXEMPLO_CHAVE_PIX[pixKeyType]}
                 inputMode={pixKeyType === 'CPF' || pixKeyType === 'CELULAR' ? 'numeric' : pixKeyType === 'EMAIL' ? 'email' : 'text'}
@@ -291,7 +309,6 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 aria-invalid={!!erroChavePix}
                 aria-describedby={erroChavePix ? 'erro-chave-pix' : undefined}
                 className={`${CAMPO_SEM_BORDA} ${erroChavePix ? 'border-red-400' : 'border-slate-300'}`}
-                required
               />
               {erroChavePix && (
                 <p id="erro-chave-pix" className="text-xs text-red-600" role="alert">{erroChavePix}</p>
@@ -309,8 +326,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           </h2>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-500">Mensagem / rodapé do PDF</label>
-            <textarea
+            <label htmlFor={`${idForm}-rodape`} className="block text-xs font-semibold text-slate-500">Mensagem / rodapé do PDF</label>
+            <textarea id={`${idForm}-rodape`}
               rows={2}
               placeholder="Ex: Obrigado pela preferência! Garantia de 90 dias conforme CDC."
               value={templateFooter}
@@ -334,8 +351,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             </span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500">Título do modelo</label>
-                <input
+                <label htmlFor={`${idForm}-modelo-titulo`} className="block text-xs font-semibold text-slate-500">Título do modelo</label>
+                <input id={`${idForm}-modelo-titulo`}
                   type="text"
                   placeholder="Ex: Instalação de Ar-condicionado de Janela"
                   value={tempTitulo}
@@ -344,8 +361,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500">Valor unitário / estimado (R$)</label>
-                <input
+                <label htmlFor={`${idForm}-modelo-valor`} className="block text-xs font-semibold text-slate-500">Valor unitário / estimado (R$)</label>
+                <input id={`${idForm}-modelo-valor`}
                   type="text"
                   placeholder="Ex: 350,00"
                   value={tempValor}
@@ -356,8 +373,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500">Unidade de medida</label>
-                <input
+                <label htmlFor={`${idForm}-modelo-unidade`} className="block text-xs font-semibold text-slate-500">Unidade de medida</label>
+                <input id={`${idForm}-modelo-unidade`}
                   type="text"
                   placeholder="Ex: Área (m2), metro, unidade"
                   value={tempUnidade}
@@ -366,8 +383,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500">Quantidade padrão</label>
-                <input
+                <label htmlFor={`${idForm}-modelo-qtd`} className="block text-xs font-semibold text-slate-500">Quantidade padrão</label>
+                <input id={`${idForm}-modelo-qtd`}
                   type="number"
                   placeholder="Ex: 100"
                   value={tempQuantidade}
@@ -390,8 +407,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             )}
 
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-slate-500">Descrição detalhada do serviço</label>
-              <textarea
+              <label htmlFor={`${idForm}-modelo-descricao`} className="block text-xs font-semibold text-slate-500">Descrição detalhada do serviço</label>
+              <textarea id={`${idForm}-modelo-descricao`}
                 rows={2}
                 placeholder="Descreva o que está incluso no serviço..."
                 value={tempDescricao}

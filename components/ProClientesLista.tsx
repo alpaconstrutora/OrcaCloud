@@ -1,7 +1,7 @@
 import React from 'react';
 import { proService } from '../services/proService';
 import { ProCliente } from '../types';
-import { ChevronLeft, MapPin, MessageCircle, Pencil, Plus, Trash2 } from 'lucide-react';
+import { AlertTriangle, ChevronLeft, MapPin, MessageCircle, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 
@@ -38,18 +38,22 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
 
   // Expandir histórico do cliente
   const [clienteExpandidoId, setClienteExpandidoId] = React.useState<string | null>(null);
+  // Falha de rede vira aviso com "Tentar de novo" — antes a lista ficava vazia, calada.
+  const [erro, setErro] = React.useState<string | null>(null);
 
   const fetchClientes = React.useCallback(async () => {
     try {
       setLoading(true);
+      setErro(null);
       const [cliData, orcData] = await Promise.all([
         proService.listClientes(userId),
         proService.listOrcamentos(userId)
       ]);
       setClientes(cliData);
       setOrcamentos(orcData);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao listar clientes:', error);
+      setErro(error?.message || 'Sem conexão.');
     } finally {
       setLoading(false);
     }
@@ -134,6 +138,28 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-800">
         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
         <span className="text-sm text-slate-600">Carregando clientes…</span>
+      </div>
+    );
+  }
+
+  if (erro) {
+    return (
+      <div className="bg-white border border-red-200 rounded-[10px] p-4 space-y-3" role="alert">
+        <div className="flex items-start gap-2.5">
+          <AlertTriangle className="w-5 h-5 text-red-700 shrink-0 mt-0.5" aria-hidden />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-slate-900">Não foi possível carregar os clientes</h2>
+            <p className="text-sm text-slate-700 mt-0.5">Confira a internet e tente de novo.</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={fetchClientes}
+          className="w-full h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" aria-hidden />
+          Tentar de novo
+        </button>
       </div>
     );
   }
@@ -247,8 +273,10 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
         ) : (
           clientes.map(c => {
             const orcamentosDoCliente = orcamentos.filter(o => o.cliente_id === c.id);
+            // Só o APROVADO: orçamento enviado é proposta, não serviço contratado (até 14/11/2026
+            // somava os dois e o número inflava a cada orçamento mandado).
             const totalGasto = orcamentosDoCliente
-              .filter(o => o.status === 'APROVADO' || o.status === 'ENVIADO')
+              .filter(o => o.status === 'APROVADO')
               .reduce((sum, o) => sum + Number(o.valor), 0);
 
             const estaExpandido = clienteExpandidoId === c.id;
@@ -270,7 +298,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
                     <span className="block text-xs text-slate-600">{c.telefone}</span>
                   </span>
                   <span className="block text-right space-y-1 shrink-0">
-                    <span className="block text-xs font-semibold text-slate-600">Total acumulado</span>
+                    <span className="block text-xs font-semibold text-slate-600">Total aprovado</span>
                     <span className="block font-semibold text-slate-900 text-sm tabular-nums">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalGasto)}
                     </span>

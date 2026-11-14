@@ -1,8 +1,9 @@
 import React from 'react';
 import { proService } from '../services/proService';
 import { ProOrcamento, ProServico } from '../types';
-import { HandCoins, MessageCircle, RefreshCw, Clock, MapPin, Plus } from 'lucide-react';
+import { AlertTriangle, HandCoins, MessageCircle, RefreshCw, Clock, MapPin, Plus } from 'lucide-react';
 import { resumirPainelPro, diasDesde, mensagemDeCobranca, linkWhatsApp } from '../utils/proPainelResumo';
+import { separarAgenda } from '../utils/proAgenda';
 import { montarPixCopiaECola } from '../utils/pixCopiaECola';
 
 interface ProDashboardProps {
@@ -13,7 +14,7 @@ interface ProDashboardProps {
   onNavigate: (view: string) => void;
 }
 
-// Mesmo valor de utils/pixCopiaECola + ProServicoView: o cadastro do Pro ainda não tem cidade.
+// Cidade vazia em Ajustes cai neste padrão (campo 60 do Pix é obrigatório). Mesmo valor do ProServicoView.
 const CIDADE_RECEBEDOR_PADRAO = 'BRASILIA';
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
@@ -54,10 +55,14 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
   const [servicos, setServicos] = React.useState<any[]>([]);
   const [recorrentes, setRecorrentes] = React.useState<any[]>([]);
   const [config, setConfig] = React.useState<any>(null);
+  // Falha de rede vira aviso com saída — antes virava "R$ 0,00 / Nenhum serviço", que mente.
+  const [erro, setErro] = React.useState<string | null>(null);
+  const [verTodosOrcamentos, setVerTodosOrcamentos] = React.useState(false);
 
   const fetchData = React.useCallback(async () => {
     try {
       setLoading(true);
+      setErro(null);
       const [orcData, servData, configData] = await Promise.all([
         proService.listOrcamentos(userId),
         proService.listServicos(userId),
@@ -77,8 +82,9 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
       });
 
       setRecorrentes(rec);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao buscar dados do dashboard:', error);
+      setErro(error?.message || 'Sem conexão.');
     } finally {
       setLoading(false);
     }
@@ -94,7 +100,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
   const cobrarNoWhatsApp = (s: any) => {
     const valor = Number(s.pro_orcamentos?.valor || 0);
     const pix = config?.pix_key
-      ? montarPixCopiaECola({ tipo: config.pix_key_type, chave: config.pix_key, valor, nome: config.template_header || '', cidade: CIDADE_RECEBEDOR_PADRAO })
+      ? montarPixCopiaECola({ tipo: config.pix_key_type, chave: config.pix_key, valor, nome: config.template_header || '', cidade: config.cidade || CIDADE_RECEBEDOR_PADRAO })
       : null;
     const msg = mensagemDeCobranca({
       cliente: s.pro_orcamentos?.pro_clientes?.nome || '',
@@ -151,27 +157,41 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
     window.open(waUrl, '_blank');
   };
 
-  // Filtrar serviços da agenda
-  const hoje = new Date().toDateString();
-  const servicosHoje = servicos.filter(s => {
-    if (s.status === 'CONCLUIDO') return false;
-    const targetDate = s.data_agendamento || s.pro_orcamentos?.created_at;
-    const sDate = targetDate ? new Date(targetDate).toDateString() : '';
-    return sDate === hoje || s.status === 'EM_ANDAMENTO';
-  });
-
-  const proximosServicos = servicos.filter(s => {
-    if (s.status === 'CONCLUIDO') return false;
-    const targetDate = s.data_agendamento || s.pro_orcamentos?.created_at;
-    const sDate = targetDate ? new Date(targetDate).toDateString() : '';
-    return sDate !== hoje && s.status !== 'EM_ANDAMENTO';
-  });
+  // Agenda (utils/proAgenda.ts): atrasados no topo de "Hoje"; sem data vai para o fim de "Próximos".
+  const agenda = separarAgenda(servicos);
+  const atrasados = new Set(agenda.atrasados.map(s => s.id));
+  const servicosHoje = [...agenda.atrasados, ...agenda.hoje];
+  const proximosServicos = [...agenda.proximos, ...agenda.semData];
+  const ORCAMENTOS_VISIVEIS = 3;
+  const orcamentosVisiveis = verTodosOrcamentos ? orcamentos : orcamentos.slice(0, ORCAMENTOS_VISIVEIS);
 
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8">
         <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
         <span className="text-sm text-slate-600">Carregando agenda…</span>
+      </div>
+    );
+  }
+
+  if (erro) {
+    return (
+      <div className="bg-white border border-red-200 rounded-[10px] p-4 space-y-3" role="alert">
+        <div className="flex items-start gap-2.5">
+          <AlertTriangle className="w-5 h-5 text-red-700 shrink-0 mt-0.5" aria-hidden />
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-slate-900">Não foi possível carregar a agenda</h2>
+            <p className="text-sm text-slate-700 mt-0.5">Confira a internet e tente de novo.</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={fetchData}
+          className="w-full h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors"
+        >
+          <RefreshCw className="w-4 h-4" aria-hidden />
+          Tentar de novo
+        </button>
       </div>
     );
   }
@@ -274,8 +294,9 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
                         {s.pro_orcamentos?.pro_clientes?.nome || 'Cliente sem nome'}
                       </span>
                       {s.data_agendamento && (
-                        <span className="flex items-center gap-1 text-xs font-medium text-slate-700">
+                        <span className={`flex items-center gap-1 text-xs font-medium ${atrasados.has(s.id) ? 'text-red-700' : 'text-slate-700'}`}>
                           <Clock className="w-4 h-4 shrink-0" aria-hidden />
+                          {atrasados.has(s.id) && 'Atrasado · '}
                           {new Date(s.data_agendamento).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                         </span>
                       )}
@@ -367,7 +388,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
           </div>
         ) : (
           <div className="space-y-3">
-            {orcamentos.slice(0, 3).map(o => {
+            {orcamentosVisiveis.map(o => {
               // Verifica se já tem OS correspondente
               const hasOS = servicos.find(s => s.orcamento_id === o.id);
               const st = statusDe(ROTULO_STATUS_ORCAMENTO, o.status);
@@ -411,6 +432,16 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
                 </div>
               );
             })}
+            {orcamentos.length > ORCAMENTOS_VISIVEIS && (
+              <button
+                type="button"
+                onClick={() => setVerTodosOrcamentos(v => !v)}
+                aria-expanded={verTodosOrcamentos}
+                className="inline-flex items-center gap-1 min-h-11 px-2 text-sm font-medium text-blue-700 hover:text-blue-800"
+              >
+                {verTodosOrcamentos ? 'Mostrar só os 3 mais recentes' : `Ver todos os ${orcamentos.length} orçamentos`}
+              </button>
+            )}
           </div>
         )}
       </section>
@@ -420,19 +451,19 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
         <section aria-labelledby="titulo-proximos" className="space-y-3">
           <h2 id="titulo-proximos" className="text-sm font-semibold text-slate-900">Próximos serviços</h2>
           <div className="space-y-3">
-            {proximosServicos.slice(0, 3).map(s => (
+            {proximosServicos.map(s => (
               <div key={s.id} className={`${CARTAO} space-y-3`}>
                 <button type="button" onClick={() => onViewServico(s.id)} className={AREA_CLICAVEL}>
                   <span className="min-w-0 space-y-1">
                     <span className="block font-semibold text-sm text-slate-900 truncate">
                       {s.pro_orcamentos?.pro_clientes?.nome}
                     </span>
-                    {s.data_agendamento && (
-                      <span className="flex items-center gap-1 text-xs font-medium text-slate-700">
-                        <Clock className="w-4 h-4 shrink-0" aria-hidden />
-                        {new Date(s.data_agendamento).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
-                      </span>
-                    )}
+                    <span className="flex items-center gap-1 text-xs font-medium text-slate-700">
+                      <Clock className="w-4 h-4 shrink-0" aria-hidden />
+                      {s.data_agendamento
+                        ? new Date(s.data_agendamento).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })
+                        : 'Sem data marcada'}
+                    </span>
                     <span className="block text-xs text-slate-600 truncate">
                       {s.pro_orcamentos?.descricao}
                     </span>

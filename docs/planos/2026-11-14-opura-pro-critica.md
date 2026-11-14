@@ -233,8 +233,43 @@ Pedido (mesma sessão): "Autorizado". ("A receber" já tinha sido corrigido no p
 - Fica de fora: checklist fixo de 3 etapas (editar etapas é recurso novo) e profissão
   padrão "Ar-condicionado" sem cadastro.
 
-### 6. Textos (`/impeccable clarify`) — pendente
-Status traduzido, "Faturamento", "QR Code Dinâmico", PDF com dados do emissor,
-vazios com ação.
+### 6. Textos (`/impeccable clarify`) e 7. polimento final (`/impeccable polish`) — frente `pro-textos-polimento`
 
-### 7. `/impeccable polish` — pendente
+Pedido (mesma sessão): "passos 6 (textos) e 7 (polimento final) autorizados". Feitos juntos.
+
+**O que muda — textos**
+- Erros sem jargão: toasts de falha dizem o que falhou e "Confira a internet e tente de
+  novo." (antes juntavam a mensagem crua do servidor); "Por favor…"/"com sucesso!" saem.
+- PDF do orçamento: quem emite é o profissional (nome comercial + cidade), não
+  "Profissional Autônomo Parceiro ÒPURA Pro"; comprovante: "Concluído em" pela data de
+  conclusão real (antes: data da assinatura ou o dia em que o PDF era gerado).
+- "QR Code Dinâmico" (falso — o QR é estático) → "Vai no QR Code e no Pix Copia e Cola…".
+- Excluir modelo em Ajustes avisa a verdade: só vale ao "Salvar ajustes".
+- Termos: a tela é "Ajustes" em todo lugar (título, subtítulo, botão "Salvar ajustes",
+  aviso de Pix); "Notas" → "Observações"; "Cliente & local" → "Cliente e local"; opções
+  de profissão e exemplos em capitalização normal; placeholders viram exemplos.
+- Estados vazios com o próximo passo: painel ("Criar o primeiro orçamento"; quando
+  aparecem os serviços de hoje), clientes, modelos.
+
+**O que muda — polimento**
+- Um primário azul por tela: "Cobrar" da lista "Aguardando pagamento" vira secundário
+  com destaque azul (com vários devedores, eram vários primários + "Novo orçamento").
+- "Recebido R$ 0,00" deixa de ser verde (verde só quando há valor).
+- Limpeza: imports de tipo sem uso (3) e props mortas (`onSave` do serviço desde o
+  passo 2; `onNavigate` do painel, nunca usado).
+
+**Como sei que terminou**
+- `tsc` exit 0; 6 telas sem ❌; travas + testes do Pro verdes.
+- Detector do impeccable: 38 achados na crítica → 2 (`text-[13px]` dos botões §17 do
+  computador — tamanho canônico do app; a régua do detector é o DESIGN.md do Portal do
+  Colaborador).
+- Navegador: celular 390px vazio (painel, clientes, ajustes) e com dados (painel, serviço
+  concluído com Recebi); computador; console sem erro.
+
+**Estado (14/11/2026): implementado e conferido; PRs em fila** (#434 → passo 5 → este).
+- `tsc` exit 0; 14 arquivos de trava/teste, 99 testes verdes; 6 telas sem ❌; detector 2
+  avisos intencionais; 0 erro de console; 0 escrita.
+- A crítica de 14/11 (17/40) fica encerrada pelo próprio helper: o alvo mudou desde ela.
+  Uma nova `/impeccable critique` mede a nota de agora.
+- Fica de fora: editar etapas do checklist (recurso novo); profissão padrão sem cadastro;
+  ditado e WhatsApp sem teste em aparelho real.

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { proService } from '../services/proService';
-import { ProConfig, ProPixKeyType } from '../types';
+import { ProPixKeyType } from '../types';
 import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft, Plus, X, AlertCircle, Check, Save } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
@@ -102,7 +102,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
         templates_custom: templatesCustom,
         created_at: new Date().toISOString()
       });
-      showToast('Configurações salvas com sucesso!', 'success');
+      showToast('Ajustes salvos.', 'success');
       setTimeout(onBack, 800);
     } catch (err: any) {
       console.error('Erro ao salvar configurações:', err);
@@ -169,7 +169,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
 
   const handleDeleteTemplate = async (e: React.MouseEvent, id: string) => {
     e.preventDefault();
-    if (!await confirm({ title: 'Excluir modelo?', message: 'Tem certeza que deseja excluir este modelo?', variant: 'danger' })) return;
+    if (!await confirm({ title: 'Excluir modelo?', message: 'O modelo sai da lista. A exclusão vale quando você tocar em “Salvar ajustes”.', variant: 'danger' })) return;
     setTemplatesCustom(prev => prev.filter(t => t.id !== id));
     if (tempId === id) {
       setTempId(null);
@@ -213,8 +213,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           <ChevronLeft className="w-5 h-5" aria-hidden />
         </button>
         <div>
-          <h1 className="text-base font-black text-slate-900">Configurações do perfil</h1>
-          <p className="text-xs font-semibold text-slate-600">ÒPURA Pro</p>
+          <h1 className="text-base font-black text-slate-900">Ajustes</h1>
+          <p className="text-xs text-slate-600">Seus dados, chave Pix e modelos de orçamento.</p>
         </div>
       </div>
 
@@ -232,7 +232,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             <label htmlFor={`${idForm}-nome`} className="block text-xs font-semibold text-slate-500">Nome comercial / fantasia</label>
             <input id={`${idForm}-nome`}
               type="text"
-              placeholder="Ex: Alpa Refrigeração & Climatização"
+              placeholder="Ex.: João Refrigeração"
               value={templateHeader}
               onChange={(e) => setTemplateHeader(e.target.value)}
               className={CAMPO}
@@ -245,7 +245,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             <label htmlFor={`${idForm}-cidade`} className="block text-xs font-semibold text-slate-500">Cidade</label>
             <input id={`${idForm}-cidade`}
               type="text"
-              placeholder="Ex: Cuiabá"
+              placeholder="Ex.: Cuiabá"
               autoComplete="address-level2"
               value={cidade}
               onChange={(e) => setCidade(e.target.value)}
@@ -261,12 +261,12 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               onChange={(e) => setProfissao(e.target.value)}
               className={CAMPO}
             >
-              <option value="AR_CONDICIONADO">Ar-condicionado e Refrigeração</option>
-              <option value="ELETRICISTA">Eletricista / Instalações Elétricas</option>
-              <option value="ENCANADOR">Encanador / Sistemas Hidráulicos</option>
-              <option value="PINTOR">Pintor / Acabamentos</option>
+              <option value="AR_CONDICIONADO">Ar-condicionado e refrigeração</option>
+              <option value="ELETRICISTA">Eletricista / instalações elétricas</option>
+              <option value="ENCANADOR">Encanador / sistemas hidráulicos</option>
+              <option value="PINTOR">Pintor / acabamentos</option>
             </select>
-            <span className="block text-xs text-slate-600">Determina quais os modelos de orçamento padrão serão sugeridos.</span>
+            <span className="block text-xs text-slate-600">Define os modelos prontos sugeridos no orçamento.</span>
           </div>
         </div>
 
@@ -315,7 +315,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               )}
             </div>
           </div>
-          <span className="block text-xs text-slate-600">Utilizada para gerar o QR Code Dinâmico e o código Copia e Cola ao concluir um serviço.</span>
+          <span className="block text-xs text-slate-600">Vai no QR Code e no Pix Copia e Cola da cobrança, quando você conclui um serviço.</span>
         </div>
 
         {/* Bloco: Layout de Documentos */}
@@ -329,7 +329,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             <label htmlFor={`${idForm}-rodape`} className="block text-xs font-semibold text-slate-500">Mensagem / rodapé do PDF</label>
             <textarea id={`${idForm}-rodape`}
               rows={2}
-              placeholder="Ex: Obrigado pela preferência! Garantia de 90 dias conforme CDC."
+              placeholder="Ex.: Obrigado pela preferência! Garantia de 90 dias conforme o CDC."
               value={templateFooter}
               onChange={(e) => setTemplateFooter(e.target.value)}
               className={CAMPO_TEXTO}
@@ -341,7 +341,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
         <div className={CARTAO}>
           <h2 className={TITULO_BLOCO}>
             <Sparkles className="w-4 h-4 text-slate-600" aria-hidden />
-            Modelos de orçamentos customizados
+            Meus modelos de orçamento
           </h2>
 
           {/* Form inline para cadastrar/editar template */}
@@ -354,7 +354,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 <label htmlFor={`${idForm}-modelo-titulo`} className="block text-xs font-semibold text-slate-500">Título do modelo</label>
                 <input id={`${idForm}-modelo-titulo`}
                   type="text"
-                  placeholder="Ex: Instalação de Ar-condicionado de Janela"
+                  placeholder="Ex.: Instalação de ar-condicionado de janela"
                   value={tempTitulo}
                   onChange={(e) => setTempTitulo(e.target.value)}
                   className={CAMPO}
@@ -364,7 +364,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 <label htmlFor={`${idForm}-modelo-valor`} className="block text-xs font-semibold text-slate-500">Valor unitário / estimado (R$)</label>
                 <input id={`${idForm}-modelo-valor`}
                   type="text"
-                  placeholder="Ex: 350,00"
+                  placeholder="Ex.: 350,00"
                   value={tempValor}
                   onChange={(e) => setTempValor(e.target.value)}
                   className={`${CAMPO} tabular-nums`}
@@ -376,7 +376,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 <label htmlFor={`${idForm}-modelo-unidade`} className="block text-xs font-semibold text-slate-500">Unidade de medida</label>
                 <input id={`${idForm}-modelo-unidade`}
                   type="text"
-                  placeholder="Ex: Área (m2), metro, unidade"
+                  placeholder="Ex.: m², metro, unidade"
                   value={tempUnidade}
                   onChange={(e) => setTempUnidade(e.target.value)}
                   className={CAMPO}
@@ -386,7 +386,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 <label htmlFor={`${idForm}-modelo-qtd`} className="block text-xs font-semibold text-slate-500">Quantidade padrão</label>
                 <input id={`${idForm}-modelo-qtd`}
                   type="number"
-                  placeholder="Ex: 100"
+                  placeholder="Ex.: 100"
                   value={tempQuantidade}
                   onChange={(e) => setTempQuantidade(e.target.value)}
                   className={`${CAMPO} tabular-nums`}
@@ -397,7 +397,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             {/* Cálculo do Total Estimado */}
             {tempValor && tempQuantidade && (
               <div className="bg-white p-2.5 rounded-[6px] border border-slate-200 flex justify-between items-center text-xs font-semibold text-slate-600">
-                <span>Cálculo do total estimado:</span>
+                <span>Total estimado:</span>
                 <span className="text-sm text-slate-900 font-semibold tabular-nums">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                     (parseFloat(tempValor.replace(/[^\d.,]/g, '').replace(',', '.')) || 0) * (parseFloat(tempQuantidade) || 0)
@@ -410,7 +410,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               <label htmlFor={`${idForm}-modelo-descricao`} className="block text-xs font-semibold text-slate-500">Descrição detalhada do serviço</label>
               <textarea id={`${idForm}-modelo-descricao`}
                 rows={2}
-                placeholder="Descreva o que está incluso no serviço..."
+                placeholder="O que está incluso no serviço…"
                 value={tempDescricao}
                 onChange={(e) => setTempDescricao(e.target.value)}
                 className={CAMPO_TEXTO}
@@ -441,7 +441,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           {/* Lista de templates cadastrados */}
           {templatesCustom.length === 0 ? (
             <div className="text-center py-6 bg-slate-50 rounded-[10px] border border-dashed border-slate-300">
-              <p className="text-sm text-slate-600">Nenhum modelo customizado cadastrado ainda.</p>
+              <p className="text-sm text-slate-600">Nenhum modelo seu ainda. Cadastre acima os serviços que você orça sempre.</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -494,7 +494,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             ) : (
               <>
                 <Save className="w-4 h-4" aria-hidden />
-                Salvar configurações
+                Salvar ajustes
               </>
             )}
           </button>

@@ -10,7 +10,7 @@ import { processarEventoAsaas } from "../_shared/asaasProcessar.ts"
 import { validarChavePix, tipoParaAsaas, type TipoChavePix } from "../../../utils/pixKey.ts"
 import { validateCpfCnpj } from "../../../lib/validators.ts"
 import { quarentenaDaChave, HORAS_QUARENTENA, bloqueiosDoSaqueProprio, type DestinoDoSaque } from "../../../utils/asaasGovernanca.ts"
-import { dataDoPagamentoDeBoleto, cancelamentoConfirmado } from "../../../utils/asaasBoletoPagamento.ts"
+import { dataDoPagamentoDeBoleto, cancelamentoConfirmado, decisaoDoCancelamento } from "../../../utils/asaasBoletoPagamento.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -237,23 +237,35 @@ serve(async (req: Request) => {
             try { contaDoPagamento = await contaDoRegistro(admin, sp.payment_account_id); }
             catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 503); }
             if (!contaDoPagamento) return semConta();
-            const url = sp.asaas_bill_id
-                ? `${contaDoPagamento.base}/bill/${sp.asaas_bill_id}/cancel`
-                : `${contaDoPagamento.base}/transfers/${sp.asaas_transfer_id}/cancel`;
-            const cancelRes = await fetch(url, {
-                method: sp.asaas_bill_id ? 'POST' : 'DELETE',
-                headers: cabecalhosAsaas(contaDoPagamento.apiKey),
-            });
-            const corpo = await cancelRes.json().catch(() => null);
-            if (!cancelRes.ok && cancelRes.status !== 404) {
-                const msg = corpo?.errors?.[0]?.description ?? `HTTP ${cancelRes.status}`;
-                return json({ error: `Asaas (cancelamento): ${msg}`, detail: corpo }, 502);
+            const objeto = sp.asaas_bill_id
+                ? `${contaDoPagamento.base}/bill/${sp.asaas_bill_id}`
+                : `${contaDoPagamento.base}/transfers/${sp.asaas_transfer_id}`;
+
+            // Consulta ANTES de pedir (doc "Cancelar pagamento de contas", 14/11/2026: "consulte o
+            // pagamento e valide `canBeCancelled`"): pedido que a Asaas vai recusar não sai — nem
+            // gera SMS à toa —, e o que ela já cancelou (autorizado pelo app, aviso ainda não
+            // chegou) fecha aqui. Consulta que falha não bloqueia: o pedido segue como antes.
+            const consulta = await fetch(objeto, { headers: cabecalhosAsaas(contaDoPagamento.apiKey) }).catch(() => null);
+            const atual = consulta?.ok ? await consulta.json().catch(() => null) : null;
+            const decisao = decisaoDoCancelamento(atual);
+            if (decisao.acao === 'nao_cancelavel') return json({ error: decisao.motivo }, 422);
+
+            if (decisao.acao === 'pedir') {
+                const cancelRes = await fetch(`${objeto}/cancel`, {
+                    method: sp.asaas_bill_id ? 'POST' : 'DELETE',
+                    headers: cabecalhosAsaas(contaDoPagamento.apiKey),
+                });
+                const corpo = await cancelRes.json().catch(() => null);
+                if (!cancelRes.ok && cancelRes.status !== 404) {
+                    const msg = corpo?.errors?.[0]?.description ?? `HTTP ${cancelRes.status}`;
+                    return json({ error: `Asaas (cancelamento): ${msg}`, detail: corpo }, 502);
+                }
+                // Só é cancelado quando a Asaas DIZ que cancelou. Com autorização por token
+                // SMS/app exigida, a resposta não traz CANCELLED: até 13/11/2026 o OrçaCloud
+                // marcava "cancelado" e devolvia o boleto a "aprovado" enquanto, na Asaas, o
+                // pagamento seguia agendado (plano 2026-11-13-asaas-boleto-data-e-cancelamento).
+                confirmadoNaAsaas = cancelamentoConfirmado(cancelRes.status, corpo);
             }
-            // Só é cancelado quando a Asaas DIZ que cancelou. Com autorização por token
-            // SMS/app exigida, a resposta não traz CANCELLED: até 13/11/2026 o OrçaCloud
-            // marcava "cancelado" e devolvia o boleto a "aprovado" enquanto, na Asaas, o
-            // pagamento seguia agendado (plano 2026-11-13-asaas-boleto-data-e-cancelamento).
-            confirmadoNaAsaas = cancelamentoConfirmado(cancelRes.status, corpo);
         }
 
         if (!confirmadoNaAsaas) {

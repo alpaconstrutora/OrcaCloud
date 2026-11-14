@@ -45,4 +45,5 @@ Sessão de 13/11/2026 (Claude Code, VS Code), literal:
 | 1 | `utils/asaasBoletoPagamento.ts` + teste | teste verde | ✅ 7/7 |
 | 2 | `asaas-payment`: quote devolve data mínima e vencimento; pay manda data explícita; cancel só confirma com CANCELLED | deno check; publicação da Edge pelo usuário (deploy de função é barrado para mim) | ✅ deno check; ⏳ deploy pelo usuário |
 | 3 | Tela: campo de data no "Pagar boleto via Asaas"; selo/aviso de cancelamento pedido | check-ui-standard; tsc | ✅ ui exit 0 nos dois; tsc 0; 143 testes Asaas/Contas a Pagar |
-| 4 | PR, CI, merge | CI verde; conferir-producao | ⏳ |
+| 4 | PR, CI, merge | CI verde; conferir-producao | ✅ PR #400 mesclado (`53847559`); 1ª CI caiu num teste do Diário que passou 3/3 local e no `main` (intermitente); Edge publicada pelo usuário (v24) |
+| 5 | Pedido do usuário em 14/11/2026, depois de analisar as páginas "Cancelar pagamento de contas" e "Webhook para Pague Contas" ("Quer que eu faça? Sim"): consultar `canBeCancelled` ANTES de pedir o cancelamento, como a doc manda. `decisaoDoCancelamento` (pura, 4 testes): já CANCELLED na Asaas → fecha aqui sem novo pedido; não cancelável → motivo legível sem disparar pedido nem SMS; consulta que falha → pede como antes | testes; deno check; Edge pelo usuário | ⏳ |

@@ -133,6 +133,18 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 // Status: "Em andamento" + px-6 não cabia em 130px e quebrava em duas linhas (crítica 2026-11-14).
 const DEFAULT_COL_WIDTHS_ORCAMENTO: Record<string, number> = { ...DEFAULT_COL_WIDTHS, actions: 152, 'status-budget': 150 };
 
+/** Recortes dos cards de Orçamentos (crítica 2026-11-14, passo 4): números que pedem ação e
+ *  viram filtro ao clicar (Princípio 5 do PRODUCT.md), no lugar de Total/Em Andamento/
+ *  Concluídos/Recentes — genéricos e com conta errada ("Em Andamento" contava orçamento sem
+ *  status e misturava status da obra com o do orçamento). */
+type RecorteOrcamento = 'sem-obra' | 'parados' | 'com-pedidos';
+const TRINTA_DIAS_MS = 30 * 24 * 60 * 60 * 1000;
+const RECORTES_ORCAMENTO: { key: RecorteOrcamento; label: string; dica: string; cor: 'amber' | 'orange' | 'blue'; icone: 'link' | 'relogio' | 'cadeado' }[] = [
+    { key: 'sem-obra', label: 'Sem obra vinculada', dica: 'Mostrar só os orçamentos que ainda não estão ligados a uma obra', cor: 'amber', icone: 'link' },
+    { key: 'parados', label: 'Parados há mais de 30 dias', dica: 'Mostrar só os orçamentos sem atualização há mais de 30 dias', cor: 'orange', icone: 'relogio' },
+    { key: 'com-pedidos', label: 'Com pedidos', dica: 'Mostrar só os orçamentos que já têm pedido de compra vinculado', cor: 'blue', icone: 'cadeado' },
+];
+
 /** Borda direita da célula fixa: com border-collapse a `border-r` não acompanha o sticky. */
 const BORDA_FIXA = 'inset -1px 0 0 #f3f4f6';
 /** Última coluna fixa: a borda + uma sombra curta indicando que há conteúdo rolando por baixo. */
@@ -962,19 +974,36 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // lista já filtrada e ordenada; é recorte de exibição, não reconsulta (§6.12).
     // O rótulo do grupo é o MESMO texto da célula (status capitalizado, tipo traduzido,
     // bloqueio em cascata com a obra mestre).
+    // Recorte pelos cards (só Orçamentos). Estado da sessão, não persistido: voltar à tela com a
+    // lista recortada por um card esquecido parece dado sumido. Aplicado DEPOIS de busca/filtro,
+    // com as mesmas regras das células (obra vinculada; pedidos em cascata com a obra mestre).
+    const [recorte, setRecorte] = React.useState<RecorteOrcamento | null>(null);
+    const recorteAtivo = isOrcamentoContext ? recorte : null;
+    const agoraMs = Date.now();
+    const passaNoRecorte = (p: ProjectSummary, r: RecorteOrcamento): boolean => {
+        if (r === 'sem-obra') return !getLinkedProjectData(p) && !p.settings?.linkedProjectName;
+        if (r === 'parados') return agoraMs - new Date(p.updated_at || p.created_at || 0).getTime() > TRINTA_DIAS_MS;
+        return getEffectiveOrderCount(p.id) > 0;
+    };
+    const contagemRecorte: Record<RecorteOrcamento, number> = { 'sem-obra': 0, parados: 0, 'com-pedidos': 0 };
+    if (isOrcamentoContext) {
+        for (const r of RECORTES_ORCAMENTO) contagemRecorte[r.key] = filteredProjects.filter(p => passaNoRecorte(p, r.key)).length;
+    }
+    const projetosNaTela = recorteAtivo ? filteredProjects.filter(p => passaNoRecorte(p, recorteAtivo)) : filteredProjects;
+
     const agrupamento = useAgrupamento<CampoAgruparOrcamento>('projectListGroupBy:orcamentos');
     const campoAgrupar: CampoAgruparOrcamento | 'none' =
         isOrcamentoContext && viewMode === 'list' && OPCOES_AGRUPAR_ORCAMENTO.some(o => o.value === agrupamento.campo)
             ? agrupamento.campo
             : 'none';
-    const gruposOrcamento = campoAgrupar === 'none' ? [] : agruparOrcamentos(filteredProjects, campoAgrupar, agrupamento.direcao, {
+    const gruposOrcamento = campoAgrupar === 'none' ? [] : agruparOrcamentos(projetosNaTela, campoAgrupar, agrupamento.direcao, {
         status: p => (p.settings?.budgetStatus ? capitalizeStatus(p.settings.budgetStatus) : ''),
         statusObra: p => p.settings?.obraStatus,
         bloqueado: p => getEffectiveOrderCount(p.id) > 0,
         tipoObra: p => (p.settings?.tipoObra ? (TIPO_OBRA_LABELS[p.settings.tipoObra as TipoObra] || p.settings.tipoObra) : ''),
     });
     const linhasDoCorpo: EntradaDaTela<ProjectSummary>[] = campoAgrupar === 'none'
-        ? filteredProjects.map((item, indice) => ({ tipo: 'linha', item, indice }))
+        ? projetosNaTela.map((item, indice) => ({ tipo: 'linha', item, indice }))
         : entradasDaPagina(gruposOrcamento, agrupamento.recolhidos);
 
     return (
@@ -1037,7 +1066,35 @@ const ProjectList: React.FC<ProjectListProps> = ({
             {/* KPIs genéricos desta tabela — só quando o pai não já mostra seus próprios KPIs
                 (Planejamento usa PlanningDashboard, Diário usa DiaryDashboard, ambos com
                 hideHeader=true; mostrar os dois juntos duplicava a informação). */}
-            {!hideHeader && (
+            {!hideHeader && isOrcamentoContext && (
+                // Cada card é um botão (teclado e leitor de tela: aria-pressed diz se está filtrando).
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+                    {RECORTES_ORCAMENTO.map(r => {
+                        const ativo = recorteAtivo === r.key;
+                        const icone = r.icone === 'link' ? <Link2 className="w-4 h-4" /> : r.icone === 'relogio' ? <Clock className="w-4 h-4" /> : <Lock className="w-4 h-4" />;
+                        return (
+                            <button
+                                key={r.key}
+                                type="button"
+                                aria-pressed={ativo}
+                                onClick={() => setRecorte(ativo ? null : r.key)}
+                                title={ativo ? 'Mostrar todos os orçamentos' : r.dica}
+                                className={`text-left rounded-xl transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${ativo ? 'ring-2 ring-blue-500' : 'hover:shadow-sm'}`}
+                            >
+                                <KpiCard
+                                    label={r.label}
+                                    value={contagemRecorte[r.key]}
+                                    sub={ativo ? 'Filtrando a lista · clique para ver todos' : `de ${filteredProjects.length} · clique para filtrar`}
+                                    icon={icone}
+                                    color={r.cor}
+                                    className="h-full"
+                                />
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+            {!hideHeader && !isOrcamentoContext && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                     <KpiCard label="Total" value={stats.total} sub="Registros visíveis" icon={<FolderOpen className="w-5 h-5" />} color="blue" />
                     <KpiCard label="Em Andamento" value={stats.inProgress} sub="Ativos no momento" icon={<Clock className="w-5 h-5" />} color="amber" />
@@ -1159,7 +1216,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                     <p className="mt-2 text-gray-500">Carregando...</p>
                 </div>
-            ) : filteredProjects.length === 0 ? (
+            ) : projetosNaTela.length === 0 ? (
                 <div className="text-center py-12">
                     <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">{textos.nenhum}</h3>
@@ -1171,7 +1228,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             <p className="text-sm text-gray-500">Nenhum resultado para a busca e os filtros aplicados.</p>
                             <button
                                 type="button"
-                                onClick={() => { setSearchTerm(''); setTipoFilter(''); advancedFilters.clearRules(); }}
+                                onClick={() => { setSearchTerm(''); setTipoFilter(''); advancedFilters.clearRules(); setRecorte(null); }}
                                 className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
                             >
                                 Limpar busca e filtros
@@ -1296,7 +1353,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 p-4">
-                        {filteredProjects.map(project => (
+                        {projetosNaTela.map(project => (
                             <div
                                 key={project.id}
                                 onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}

@@ -266,6 +266,17 @@ cobertura.
    **Para a PA10:** o resto do clique é trabalho da tela que já existia — a NBR 5410 da elétrica (~28 s no perfil), as
    marcas de verificação das redes (~22 s) e o desenho do canvas (~18 s).
 
+**Execução da PA7b (14/11/2026, `utils/predioAutomatico/pluvial.ts`).** Etapa PLUVIAL antes da marca (hipótese
+`pluvial`, ligada; pede a cobertura). A cobertura é laje plana com platibanda: RALOS por dentro da platibanda junto dos
+cantos (passando deles, no meio dos lados mais longos); de cada um, o CONDUTOR VERTICAL pela face externa da fachada — um
+trecho por andar no tipo, da passagem sob a laje deste andar à do de cima (a cópia viva empilha, como o tubo de queda);
+no térreo desce até enterrado, CAIXA DE AREIA ao pé, e o CONDUTOR HORIZONTAL até a SAÍDA na frente do lote (todos chegam
+nela na mesma cota — a do mais longo com a declividade da premissa). NBR 10844: Q = I·A/60 com a área do bloco; a
+intensidade das premissas pluviais do estudo (o editor passa as mesmas da gaveta do pluvial); sem cidade nem intensidade,
+150 mm/h com a pendência (a norma só permite adotá-la até 100 m²); o número de condutores pela capacidade do DN 100, no
+mínimo 2; o DN de cada um pela vazão dele. Testes: a vazão e o número de condutores à mão (R8: 480 m² → 1.200 L/min → 2
+condutores), cada ralo chega à saída passando por todos os andares, e 400 mm/h nas premissas pedem mais condutores (R4).
+
 **Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa7a.cjs`, estudo descartável arquivado):** R8 — os 22
 portões: hipótese "esgoto" ligada por padrão, o resultado com os tubos de queda, 5 tubos de queda em cada um dos 7
 andares, os 5 subindo a 2 m da cobertura, 55 trechos de ventilação, 899 de esgoto, uma caixa de inspeção e uma ligação;

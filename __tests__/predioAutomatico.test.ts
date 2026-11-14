@@ -13,6 +13,7 @@ import { diametroDeForchheimerMm } from '../utils/blueprintRecalque';
 import { FICHA_DO_MATERIAL } from '../utils/blueprintHidraulicaPressao';
 import { unidadeNoPavimento } from '../utils/blueprintUnidadesDoPredio';
 import { dnDoTuboDeQueda } from '../utils/blueprintNbr8160';
+import { capacidadeDoVerticalLMin, dnDoVertical } from '../utils/blueprintCondutoresPluviais';
 import { modelosDoCatalogo } from '../utils/blueprintSelecaoClimatizacao';
 import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
 import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
@@ -90,7 +91,7 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     const plano = planejarPredioDoPedido(p, { aoConcluirEtapa: (e, i, total) => avisos.push(`${i}/${total} ${e.id}`) });
     expect(plano.etapas.map((e) => e.id)).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO);
     expect(avisos).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO.map((id, i) => `${i + 1}/${ORDEM_DAS_ETAPAS_DO_PREDIO.length} ${id}`));
-    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
+    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'PLUVIAL:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
     expect(snapshotHash(plano.resultado)).toBe(snapshotHash(peloPainelDoBloco(p)));
     const tipo = plano.resultado.levels.find((l) => l.id === plano.tipoLevelId)!;
     expect(tipo.copiaInstalacoes).toBe(true);
@@ -615,5 +616,50 @@ describe('prédio automático — a água fria e o esgoto (PA6, PA7a)', { timeou
     expect(m.trechos.filter((t) => t.rotulo === 'Coluna de ventilação' && t.levelId === cobertura.id).length).toBe(2 * esgoto.tubosDeQueda);
     const n = plano.resumo.pavimentos;
     for (const t of esgoto.tubos) expect(t.dnMm).toBe(Math.max(dnDoTuboDeQueda(t.uhcPorAndar * n, t.uhcPorAndar, n), t.comBacia ? 100 : 0));
+  });
+
+  it('PA7b: a vazão da cobertura bate com a conta à mão (Q = I·A/60) e cada ralo chega à saída pluvial pelo condutor empilhado nos andares', () => {
+    const plano = r8();
+    const m = plano.resultado;
+    const pluvial = plano.resumo.pluvial!;
+    // À mão: o bloco de 30 × 16 m = 480 m²; sem cidade nas premissas, 150 mm/h → 1.200 L/min; DN 100 leva
+    // `capacidadeDoVerticalLMin(100)` — 2 condutores (o mínimo), cada um com a metade.
+    expect(pluvial.areaM2).toBe(480);
+    expect(pluvial.intensidadeMmH).toBe(150);
+    expect(pluvial.vazaoLMin).toBe(1200);
+    const n = Math.max(2, Math.ceil(1200 / capacidadeDoVerticalLMin(100)));
+    expect(pluvial.condutores).toBe(n);
+    expect(pluvial.dnVerticalMm).toBe(dnDoVertical(1200 / n));
+    expect(plano.pendencias.some((x) => x.grupo === 'NAO_DECIDIDO' && /escolha a cidade/.test(x.texto))).toBe(true);
+    // Cada ralo chega à saída pela rede pluvial, passando por todos os andares.
+    const chave = fazerChave(m.levels);
+    const pai = new Map<string, string>();
+    const raiz = (a: string): string => (pai.get(a) === a ? a : raiz(pai.get(a)!));
+    const une = (a: string, b: string) => {
+      for (const x of [a, b]) if (!pai.has(x)) pai.set(x, x);
+      pai.set(raiz(a), raiz(b));
+    };
+    const pluviais = m.trechos.filter((t) => t.disciplina === 'PLUVIAL');
+    for (const t of pluviais) une(chave(t.levelId, t.a.x, t.a.y, t.cotaAMm), chave(t.levelId, t.b.x, t.b.y, t.cotaBMm));
+    const saida = m.terminais.find((t) => t.tipoHidraulico === 'LIGACAO_PLUVIAL')!;
+    const kSaida = raiz(chave(saida.levelId, saida.at.x, saida.at.y, saida.cotaMm));
+    const ralos = m.terminais.filter((t) => t.tipoHidraulico === 'RALO_PLUVIAL');
+    expect(ralos).toHaveLength(n);
+    for (const r of ralos) expect(raiz(chave(r.levelId, r.at.x, r.at.y, r.cotaMm))).toBe(kSaida);
+    const andares = m.levels.filter((l) => l.id === plano.tipoLevelId || l.tipoDeId === plano.tipoLevelId);
+    for (const l of andares) expect(pluviais.filter((t) => t.levelId === l.id && t.a.x === t.b.x && t.a.y === t.b.y)).toHaveLength(n);
+    expect(m.terminais.filter((t) => t.tipoHidraulico === 'CAIXA_AREIA')).toHaveLength(n);
+  });
+
+  it('PA7b: a intensidade das premissas pluviais do estudo manda — 400 mm/h no R4 pedem mais condutores', () => {
+    const p = pedidoDoR4();
+    const plano = planejarPredioDoPedido({ ...p, entrada: { ...p.entrada, pluvial: { intensidadeMmH: 400 } } });
+    const pluvial = plano.resumo.pluvial!;
+    // O bloco de 20 × 12 m = 240 m² a 400 mm/h → 1.600 L/min.
+    expect(pluvial.intensidadeMmH).toBe(400);
+    expect(pluvial.vazaoLMin).toBe(1600);
+    expect(pluvial.condutores).toBe(Math.max(2, Math.ceil(1600 / capacidadeDoVerticalLMin(100))));
+    expect(pluvial.condutores).toBeGreaterThan(2);
+    expect(plano.pendencias.some((x) => /escolha a cidade/.test(x.texto))).toBe(false);
   });
 });

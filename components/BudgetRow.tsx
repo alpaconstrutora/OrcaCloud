@@ -7,6 +7,7 @@ import { Layers, Box, Loader2, ChevronDown, ChevronRight, Maximize2, Star, Penci
 import { BudgetEntry, SinapiItem, SinapiType, CompositionComponent } from '../types';
 import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+import { useConfirm } from './ui/confirm';
 import { Copy } from 'lucide-react';
 
 /** Posição das colunas fixas à esquerda (BudgetEditor calcula pelas larguras atuais). */
@@ -22,7 +23,8 @@ interface BudgetRowProps {
     onUpdateQuantity: (id: string, qtd: number) => void;
     onUpdatePrice: (id: string, price: number) => void;
     onUpdateBDI: (id: string, bdi: number | undefined) => void;
-    onUpdateComposition: (itemId: string, compIndex: number, updates: Partial<CompositionComponent>) => void;
+    /** CPU "abaixo do item": chamado só no "Salvar no orçamento", com a composição do rascunho. */
+    onSaveComposition: (itemId: string, novaComposicao: CompositionComponent[]) => void;
     onSaveToCustomDB: (item: SinapiItem) => void;
     onDeleteItem: (e: React.MouseEvent, id: string) => void;
     onMoveItem?: (e: React.MouseEvent, id: string, direction: 'UP' | 'DOWN') => void;
@@ -85,7 +87,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     onUpdateQuantity,
     onUpdatePrice,
     onUpdateBDI,
-    onUpdateComposition,
+    onSaveComposition,
     onSaveToCustomDB,
     onDeleteItem,
     onMoveItem,
@@ -133,12 +135,42 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     const fixa = (left: number | undefined, ultima = false): React.CSSProperties | undefined =>
         left === undefined ? undefined : { position: 'sticky', left, zIndex: 1, ...(ultima ? { boxShadow: SOMBRA_FIXA } : {}) };
 
+    // CPU "abaixo do item" com RASCUNHO (2ª crítica, 2026-11-14): editar não grava; "Salvar no
+    // orçamento" grava, "Cancelar" descarta, recolher com pendência pergunta. Mesma regra da janela.
+    const confirm = useConfirm();
+    const [compRascunho, setCompRascunho] = React.useState<CompositionComponent[] | null>(null);
+    const composicaoNaTela = compRascunho ?? item.sinapiItem?.composition ?? [];
+    const precoDoComp = (comp: CompositionComponent) => comp.price || auxiliaryItems?.get(comp.code)?.price || 0;
+    const precoUnitarioRascunho = composicaoNaTela.reduce((acc, comp) => acc + (comp.quantity || 0) * precoDoComp(comp), 0);
+    const alterarComp = (idx: number, updates: Partial<CompositionComponent>) => {
+        if (isLocked) return;
+        const nova = [...composicaoNaTela];
+        nova[idx] = { ...nova[idx], ...updates };
+        setCompRascunho(nova);
+    };
+    const descartarRascunho = async (): Promise<boolean> => {
+        if (!compRascunho) return true;
+        const ok = await confirm({
+            title: 'Descartar as alterações da composição?',
+            message: 'As quantidades e preços alterados aqui não vão para o orçamento.',
+            variant: 'warning',
+            confirmLabel: 'Descartar',
+            cancelLabel: 'Continuar editando',
+        });
+        if (ok) setCompRascunho(null);
+        return ok;
+    };
+    const alternarCpuInline = async () => {
+        if (isExpanded && !(await descartarRascunho())) return;
+        setIsExpanded(!isExpanded);
+    };
+
     const handleToggleCPU = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (viewMode === 'modal') {
             onOpenModal?.(item);
         } else if (canOpenCPU) {
-            setIsExpanded(!isExpanded);
+            void alternarCpuInline();
         }
     };
 
@@ -176,7 +208,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                     if (viewMode === 'modal') {
                                         onOpenModal?.(item);
                                     } else {
-                                        setIsExpanded(!isExpanded);
+                                        void alternarCpuInline();
                                     }
                                 }}
                                 className="text-gray-500 hover:text-blue-600 focus:outline-none transition-colors shrink-0"
@@ -321,73 +353,83 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 )}
             </tr>
 
-            {/* Composição (CPU) expandida — linha própria que atravessa a tabela inteira */}
+            {/* Composição (CPU) expandida — linha própria que atravessa a tabela inteira. O bloco
+                interno é sticky (§6.13): com a tabela rolada à direita ele continua à vista. */}
             {viewMode === 'inline' && isExpanded && canOpenCPU && (
-                <tr className="border-b border-gray-100">
-                    <td colSpan={totalCols} className="bg-gray-50/50 px-4 py-2">
-                        <div className="grid grid-cols-12 gap-2 px-4 mb-1 text-xs font-semibold text-gray-500">
-                            <div className="col-span-1 flex items-center gap-1">
-                                <Layers className="w-2.5 h-2.5" />
-                                CPU
+                <tr>
+                    <td colSpan={totalCols} className="bg-gray-50/50 px-4 py-3">
+                        <div className="sticky left-6 max-w-5xl">
+                            <div className="grid grid-cols-12 gap-2 px-3 mb-1 text-xs font-semibold text-gray-600">
+                                <div className="col-span-1 text-center">Código</div>
+                                <div className="col-span-5">Insumo / composição</div>
+                                <div className="col-span-1 text-center">Unid.</div>
+                                <div className="col-span-2 text-center" title="Coeficiente: quanto do insumo entra em 1 unidade do serviço">Coef.</div>
+                                <div className="col-span-1 text-center">Preço (R$)</div>
+                                <div className="col-span-2 text-right">Parcial por {item.sinapiItem?.unit || 'un'}</div>
                             </div>
-                            <div className="col-span-1 text-center">Código</div>
-                            <div className="col-span-4">Descrição dos Insumos/Serviços</div>
-                            <div className="col-span-1 text-center">Qtd</div>
-                            <div className="col-span-1 text-center">Unid.</div>
-                            <div className="col-span-1 text-center">Unitário</div>
-                            <div className="col-span-1 text-center"></div>
-                            <div className="col-span-2 text-right">Subtotal</div>
-                        </div>
-
-                        <div className="space-y-1">
-                            {item.sinapiItem?.composition?.map((comp, idx) => {
-                                const auxItem = auxiliaryItems?.get(comp.code);
-                                const displayPrice = comp.price || auxItem?.price || 0;
-                                const displaySubtotal = item.quantity * (comp.quantity || 0) * displayPrice;
-
-                                return (
-                                    <div key={`${item.id}-comp-${idx}`} className="grid grid-cols-12 gap-2 divide-x divide-gray-100 items-center text-sm text-gray-600 hover:bg-gray-100 py-2.5 px-4 rounded-[6px]">
-                                        <div className="col-span-1"></div>
-                                        <div className="col-span-1 text-center text-sm font-normal text-gray-600">{comp.code}</div>
-                                        <div className="col-span-4 flex items-center gap-2">
-                                            <span className={`shrink-0 text-sm font-normal ${comp.type === SinapiType.COMPOSITION ? 'text-blue-700' : 'text-amber-700'}`}>
-                                                {comp.type === SinapiType.COMPOSITION ? 'Composição' : 'Insumo'}
-                                            </span>
-                                            <span className="leading-tight text-sm" title={comp.description || ''}>{comp.description || 'Pendente de carga...'}</span>
-                                        </div>
-                                        <div className="col-span-1 text-center">
-                                            <input
-                                                type="number"
-                                                step="0.0001"
-                                                value={comp.quantity || 0}
-                                                onChange={(e) => onUpdateComposition(item.id, idx, { quantity: Number(e.target.value) })}
-                                                // Orçamento fechado: a CPU Inline ficava editável (medido 14/11/2026).
-                                                disabled={isLocked}
-                                                className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-0.5 text-sm focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:cursor-not-allowed"
-                                            />
-                                        </div>
-                                        <div className="col-span-1 text-center text-gray-400 text-sm">{comp.unit || '-'}</div>
-                                        <div className="col-span-1 text-center">
-                                            <div className="flex items-center justify-center gap-0.5 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-1 focus-within:ring-blue-400">
-                                                <span className="text-xs text-gray-500">R$</span>
-                                                <MoneyCentsInput
-                                                    value={displayPrice}
-                                                    onChange={(v) => onUpdateComposition(item.id, idx, { price: v === '' ? 0 : Number(v) })}
+                            <div className="space-y-1">
+                                {composicaoNaTela.map((comp, idx) => {
+                                    const preco = precoDoComp(comp);
+                                    const parcial = (comp.quantity || 0) * preco;
+                                    return (
+                                        <div key={`${item.id}-comp-${idx}`} className="grid grid-cols-12 gap-2 items-center text-sm text-gray-700 hover:bg-gray-100 py-2 px-3 rounded-[6px]">
+                                            <div className="col-span-1 text-center text-gray-600">{comp.code}</div>
+                                            <div className="col-span-5 flex items-center gap-2 min-w-0">
+                                                <span className={`shrink-0 ${comp.type === SinapiType.COMPOSITION ? 'text-blue-700' : 'text-amber-700'}`}>
+                                                    {comp.type === SinapiType.COMPOSITION ? 'Composição' : 'Insumo'}
+                                                </span>
+                                                <span className="leading-snug truncate" title={comp.description || ''}>{comp.description || 'Pendente de carga...'}</span>
+                                            </div>
+                                            <div className="col-span-1 text-center text-gray-600">{comp.unit || '-'}</div>
+                                            <div className="col-span-2">
+                                                <input
+                                                    type="number"
+                                                    step="0.0001"
+                                                    value={comp.quantity || 0}
+                                                    onChange={(e) => alterarComp(idx, { quantity: Number(e.target.value) })}
                                                     disabled={isLocked}
-                                                    className="w-full text-center outline-none bg-transparent py-0.5 text-sm disabled:cursor-not-allowed"
+                                                    aria-label={`Coeficiente de ${comp.description || comp.code}`}
+                                                    className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-0.5 text-sm focus:ring-2 focus:ring-blue-500 disabled:bg-gray-50 disabled:cursor-not-allowed"
                                                 />
                                             </div>
+                                            <div className="col-span-1">
+                                                <div className="flex items-center justify-center gap-0.5 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-2 focus-within:ring-blue-500">
+                                                    <MoneyCentsInput
+                                                        value={preco}
+                                                        onChange={(v) => alterarComp(idx, { price: v === '' ? 0 : Number(v) })}
+                                                        disabled={isLocked}
+                                                        aria-label={`Preço de ${comp.description || comp.code}`}
+                                                        className="w-full text-center outline-none bg-transparent py-0.5 text-sm disabled:cursor-not-allowed"
+                                                    />
+                                                </div>
+                                            </div>
+                                            <div className="col-span-2 text-right font-medium text-gray-900">
+                                                R$ {parcial.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </div>
                                         </div>
-                                        <div className="col-span-1"></div>
-                                        <div className="col-span-2 text-right font-medium text-gray-800 text-sm">
-                                            R$ {displaySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </div>
+                                    );
+                                })}
+                            </div>
+                            <div className="mt-2 pt-2 border-t border-gray-200 flex flex-wrap items-center justify-between gap-3 text-sm">
+                                <div className="text-gray-700">
+                                    Preço unitário <strong className="text-gray-900">R$ {precoUnitarioRascunho.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{item.sinapiItem?.unit || 'un'}</strong>
+                                    {' '}× {item.quantity.toLocaleString('pt-BR')} {item.sinapiItem?.unit || 'un'} = <strong className="text-gray-900">R$ {(precoUnitarioRascunho * item.quantity).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</strong> no item
+                                    {compRascunho && <span className="ml-2 text-amber-700 font-medium">· Alterações ainda não salvas no orçamento</span>}
+                                    {isLocked && <span className="ml-2 text-gray-600">· Orçamento fechado: só consulta</span>}
+                                </div>
+                                {compRascunho && (
+                                    <div className="flex items-center gap-2">
+                                        <button type="button" onClick={() => { void descartarRascunho(); }} className="px-3 py-1.5 rounded-[6px] text-sm font-bold text-gray-600 hover:bg-gray-100">Cancelar</button>
+                                        <button
+                                            type="button"
+                                            onClick={() => { onSaveComposition(item.id, compRascunho); setCompRascunho(null); }}
+                                            className="px-4 py-1.5 rounded-[6px] text-sm font-bold bg-blue-600 text-white hover:bg-blue-700"
+                                        >
+                                            Salvar no orçamento
+                                        </button>
                                     </div>
-                                );
-                            })}
-                        </div>
-                        <div className="mt-2 text-right text-xs text-gray-400 border-t border-gray-200 pt-1">
-                            * Valores calculados com base na quantidade do item pai ({item.quantity} {item.sinapiItem?.unit || 'un'})
+                                )}
+                            </div>
                         </div>
                     </td>
                 </tr>

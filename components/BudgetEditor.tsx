@@ -1817,9 +1817,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
   /** Item com o componente `compIndex` da composição alterado e o preço da composição pai
    *  recalculado (fallback de auxiliaryItems). Puro: quem decide onde aplicar é o chamador. */
-  const aplicarNaComposicao = (item: BudgetEntry, compIndex: number, updates: Partial<CompositionComponent>): BudgetEntry => {
-    const newComposition = [...(item.sinapiItem?.composition || [])];
-    newComposition[compIndex] = { ...newComposition[compIndex], ...updates };
+  /** Item com a composição trocada e o preço unitário recalculado (soma de coef. × preço, com
+   *  fallback de auxiliaryItems). Única conta de CPU — janela e "abaixo do item" usam esta. */
+  const comComposicao = (item: BudgetEntry, newComposition: CompositionComponent[]): BudgetEntry => {
     const newPrice = newComposition.reduce((acc, comp) => {
       const fallbackPrice = auxiliaryItems.get(comp.code)?.price || 0;
       const price = comp.price || fallbackPrice;
@@ -1829,6 +1829,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       ...item,
       sinapiItem: item.sinapiItem ? { ...item.sinapiItem, composition: newComposition, price: newPrice, isOverride: true } : item.sinapiItem,
     } as BudgetEntry;
+  };
+  const aplicarNaComposicao = (item: BudgetEntry, compIndex: number, updates: Partial<CompositionComponent>): BudgetEntry => {
+    const newComposition = [...(item.sinapiItem?.composition || [])];
+    newComposition[compIndex] = { ...newComposition[compIndex], ...updates };
+    return comComposicao(item, newComposition);
   };
 
   /** Janela da CPU: edita só o RASCUNHO (selectedCPUItem). O orçamento muda no "Salvar";
@@ -1868,10 +1873,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     handleCloseCPU();
   };
 
-  /** CPU no modo Inline: edição ao vivo no orçamento (a janela usa o rascunho acima). */
-  const handleUpdateComposition = (itemId: string, compIndex: number, updates: Partial<CompositionComponent>) => {
+  /** CPU "abaixo do item": o BudgetRow edita um RASCUNHO e só chama isto no "Salvar no
+   *  orçamento" — a mesma regra da janela (2ª crítica, 2026-11-14). Antes cada tecla gravava. */
+  const handleSalvarComposicao = (itemId: string, novaComposicao: CompositionComponent[]) => {
     if (isLocked) return;
-    onUpdateBudget(budget.map(item => (item.id === itemId ? aplicarNaComposicao(item, compIndex, updates) : item)));
+    onUpdateBudget(budget.map(item => (item.id === itemId ? comComposicao(item, novaComposicao) : item)));
+    setNotification({ message: 'Composição salva no orçamento.', type: 'success' });
+    setTimeout(() => setNotification(null), 3000);
   };
 
   const handleSaveToCustomDB = (item: SinapiItem) => {
@@ -3290,7 +3298,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                       onUpdateQuantity={handleUpdateQuantity}
                                       onUpdatePrice={handleUpdateItemPrice}
                                       onUpdateBDI={handleUpdateBDI}
-                                      onUpdateComposition={handleUpdateComposition}
+                                      onSaveComposition={handleSalvarComposicao}
                                       onSaveToCustomDB={handleSaveToCustomDB}
                                       onDeleteItem={handleDeleteItem}
                                       onMoveItem={!isLocked ? handleMoveItem : undefined}
@@ -4085,9 +4093,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="col-span-1 text-center">Tipo</div>
                   <div className="col-span-3">Insumo/Composição</div>
                   <div className="col-span-1 text-center">Unid.</div>
-                  <div className="col-span-2 text-center">Qtd</div>
-                  <div className="col-span-2 text-center">R$ Unitário</div>
-                  <div className="col-span-2 text-right">Subtotal</div>
+                  <div className="col-span-2 text-center" title="Coeficiente: quanto do insumo entra em 1 unidade do serviço">Coef.</div>
+                  <div className="col-span-2 text-center">Preço (R$)</div>
+                  <div className="col-span-2 text-right">Parcial por {selectedCPUItem.sinapiItem?.unit || 'un'}</div>
                 </div>
 
                 <div className="space-y-1">
@@ -4095,7 +4103,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     // Fallback to auxiliary items if price is 0
                     const auxItem = auxiliaryItems.get(comp.code);
                     const displayPrice = comp.price || auxItem?.price || 0;
-                    const displaySubtotal = selectedCPUItem.quantity * (comp.quantity || 0) * displayPrice;
+                    // Por UNIDADE do serviço (2ª crítica): antes cada linha vinha multiplicada pela
+                    // quantidade do item, ao lado de um cabeçalho "Preço unitário".
+                    const parcialPorUnidade = (comp.quantity || 0) * displayPrice;
 
                     return (
                       <div key={`${selectedCPUItem.id}-modal-comp-${idx}`} className="grid grid-cols-12 gap-2 items-center text-sm text-gray-600 hover:bg-blue-50/50 py-2.5 px-4 rounded-[6px] border border-transparent hover:border-blue-100 transition-all">
@@ -4131,7 +4141,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                           </div>
                         </div>
                         <div className="col-span-2 text-right font-bold text-blue-600">
-                          R$ {((selectedCPUItem.quantity * (comp.quantity || 0)) * displayPrice).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          R$ {parcialPorUnidade.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
                     );
@@ -4141,13 +4151,15 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
               <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-xs font-medium text-gray-500 italic">
                 <div className="flex flex-col gap-1">
-                  <div>* Os valores mostrados referem-se à quantidade total de {selectedCPUItem.quantity} {selectedCPUItem.sinapiItem?.unit || 'un'} no projeto.</div>
+                  <div>* Valores por {selectedCPUItem.sinapiItem?.unit || 'un'} do serviço; o total do item multiplica pela quantidade ({selectedCPUItem.quantity.toLocaleString('pt-BR')} {selectedCPUItem.sinapiItem?.unit || 'un'}).</div>
                   {hasCPUChanges && <div className="text-amber-700 font-bold not-italic flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Alterações ainda não salvas no orçamento</div>}
                   {isLocked && <div className="text-gray-600 not-italic">Orçamento fechado: a composição só pode ser consultada.</div>}
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-gray-900 not-italic font-bold text-base flex items-center gap-4">
-                    <span className="text-gray-500 font-medium text-xs uppercase tracking-wider">Custo Total do Item:</span>
+                    <span className="text-gray-600 font-medium text-sm">
+                      R$ {(selectedCPUItem.sinapiItem?.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{selectedCPUItem.sinapiItem?.unit || 'un'} × {selectedCPUItem.quantity.toLocaleString('pt-BR')} {selectedCPUItem.sinapiItem?.unit || 'un'} =
+                    </span>
                     <span className="bg-white px-4 py-2 rounded-[6px] border border-gray-200 shadow-sm text-blue-600">
                       R$ {(selectedCPUItem.quantity * (selectedCPUItem.sinapiItem?.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>

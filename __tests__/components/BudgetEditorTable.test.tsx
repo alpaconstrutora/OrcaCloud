@@ -319,3 +319,64 @@ describe('Estrutura da tabela da WBS', () => {
         expect(countCells(emptyRow!)).toBe(colCount);
     });
 });
+
+// ─── CPU "abaixo do item" com rascunho e conta por unidade (2ª crítica, passo 2) ─
+
+describe('CPU abaixo do item — rascunho e conta por unidade', () => {
+    const comCPU: BudgetEntry = {
+        ...makeEntry('x'),
+        quantity: 5000,
+        sinapiItem: {
+            ...makeEntry('x').sinapiItem, unit: 'm3', price: 18, type: SinapiType.COMPOSITION,
+            composition: [
+                { code: 'A', description: 'Caminhão', unit: 'h', quantity: 0.5, price: 20, type: SinapiType.INPUT },
+                { code: 'B', description: 'Servente', unit: 'h', quantity: 0.4, price: 20, type: SinapiType.INPUT },
+            ],
+        } as BudgetEntry['sinapiItem'],
+    } as BudgetEntry;
+
+    const montar = () => {
+        localStorage.setItem('budgetEditor:cpuViewMode', JSON.stringify('inline'));
+        const onUpdateBudget = vi.fn();
+        const r = render(
+            <ConfirmProvider>
+                <BudgetEditor budget={[comCPU]} settings={makeSettings()} favorites={[]} onToggleFavorite={vi.fn()}
+                    onUpdateBudget={onUpdateBudget} onUpdateSettings={vi.fn()} />
+            </ConfirmProvider>
+        );
+        fireEvent.click(within(r.container).getByTitle('Expandir CPU'));
+        return { ...r, onUpdateBudget };
+    };
+
+    it('mostra a conta POR UNIDADE: parciais somam o preço unitário; o total do item só no rodapé', () => {
+        const { container } = montar();
+        // 0,5 × 20 = 10,00 e 0,4 × 20 = 8,00 por m3; soma 18,00/m3 × 5.000 = 90.000,00
+        expect(container.textContent).toContain('R$ 10,00');
+        expect(container.textContent).toContain('R$ 8,00');
+        expect(container.textContent).toContain('R$ 18,00/m3');
+        expect(container.textContent).toContain('R$ 90.000,00');
+        expect(container.textContent).not.toContain('R$ 50.000,00'); // o parcial antigo (× quantidade)
+    });
+
+    it('editar não grava; "Salvar no orçamento" grava a composição com o preço recalculado', () => {
+        const { container, onUpdateBudget } = montar();
+        const coef = within(container).getByLabelText('Coeficiente de Caminhão');
+        fireEvent.change(coef, { target: { value: '1' } });
+        expect(onUpdateBudget).not.toHaveBeenCalled();
+        expect(container.textContent).toContain('Alterações ainda não salvas no orçamento');
+        fireEvent.click(within(container).getByRole('button', { name: 'Salvar no orçamento' }));
+        const salvo = onUpdateBudget.mock.calls.at(-1)![0] as BudgetEntry[];
+        expect(salvo[0].sinapiItem?.composition?.[0].quantity).toBe(1);
+        expect(salvo[0].sinapiItem?.price).toBe(28); // 1 × 20 + 0,4 × 20
+    });
+
+    it('"Cancelar" com alteração pergunta e descarta sem gravar', async () => {
+        const { container, onUpdateBudget } = montar();
+        fireEvent.change(within(container).getByLabelText('Coeficiente de Caminhão'), { target: { value: '1' } });
+        fireEvent.click(within(container).getByRole('button', { name: 'Cancelar' }));
+        fireEvent.click(await within(document.body).findByRole('button', { name: 'Descartar' }));
+        await new Promise(r => setTimeout(r, 0));
+        expect(onUpdateBudget).not.toHaveBeenCalled();
+        expect((within(container).getByLabelText('Coeficiente de Caminhão') as HTMLInputElement).value).toBe('0.5');
+    });
+});

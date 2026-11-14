@@ -169,6 +169,60 @@ unidade no hall (sincronizado; `Terminal.unidadeId` passa a valer para hidrômet
 embaixo); reserva técnica de incêndio.
 **Pronto quando.** R12 pede VRP; o volume do reservatório bate com a conta manual no teste.
 
+**Execução (14/11/2026, `utils/predioAutomatico/agua.ts`).** Três etapas novas — LOUÇAS e ÁGUA FRIA antes da marca
+`copiaInstalacoes` (como a elétrica: o que se desenha no tipo vai aos andares numa sincronização só) e PRESSÃO DA ÁGUA
+depois dela (só então a rede do superior chega a todos os andares). Hipótese `agua` (ligada por padrão; pede as plantas).
+- **Louças e pontos no tipo:** o kit de cada ambiente, os pontos de cada louça e os do kit da casa; sem aquecedor
+  (chuveiro elétrico — premissa). As pendências do mobiliário saem agrupadas (uma por peça davam dezenas).
+- **Rua → inferior:** o alimentador da casa (`planejarAlimentador`), rodado ANTES dos hidrômetros das unidades (ele toma
+  o primeiro hidrômetro do desenho como entrada; sem nenhum, propõe o cavalete na frente). Só até o inferior.
+- **Recalque:** bomba ao lado do inferior, sucção, e o recalque pelo canto do shaft — um trecho no térreo, um no tipo
+  (as cópias repetem) e um na cobertura até o alto do superior. DN por Forchheimer (consumo diário em 6 h), altura
+  manométrica pelo desnível + perdas, motor pela série comercial.
+- **Barrilete e coluna:** do fundo do superior ao canto do shaft (o centro é da prumada elétrica) e a coluna nele, dois
+  trechos por andar. O DN é o do trecho mais carregado (o do último andar leva o prédio inteiro — com a cópia viva todos
+  os andares têm o mesmo tubo).
+- **Hidrômetro por unidade (kernel 0.108.0: `Terminal.unidadeId` vale no HIDRÔMETRO):** no nicho da parede entre a
+  unidade e o hall, longe de vãos e pilares. A rede do andar (a coluna → os hidrômetros) corre no forro pelo EIXO do
+  corredor, com uma derivação a cada hidrômetro; no bloco em asas (L, U, T, H), pelo motor da casa só na circulação. O
+  hidrômetro é escolhido pela vazão de projeto da maior unidade (≤ ½ Qmáx: perda até 25 kPa).
+- **Rede de cada unidade:** o motor da casa (`planejarAgua`) no forro, numa VISTA só com o pavimento tipo, os cômodos e os
+  pontos da unidade e nenhum tubo de água — e o trecho que fecha anel sai do lote.
+- **Pressão:** `pressoesDaOrigem` do superior no prédio inteiro; ponto abaixo da mínima → pressurizador na saída do
+  superior (+100 kPa); estática acima de 400 kPa → VRP no ramal de cada unidade, depois do hidrômetro (no tipo: todos os
+  andares levam, e nos de cima, abaixo do ajuste, ela não atua — fica para conferir se o projeto prefere estação
+  redutora na coluna).
+- **Reserva de incêndio:** pela Tabela 4 da IT 17 do CBMMG (A-2, coluna 1, faixa da área total = bloco × pavimentos),
+  como `volumeRtiL` do superior (o volume dele cresce dela). Sem exigência (≤ 750 m² e ≤ 12 m), premissa. O PPCI (PA9)
+  confere com a rede de hidrantes.
+
+**Achados no caminho (spike de 14/11):**
+1. Com a vista inteira, a origem da unidade já estava ligada (pelo ramal do hidrômetro) à rede do hall, e o motor
+   pendurava colunas da unidade direto nela — 4 das 5 unidades do R8 numa componente só, a água passando por fora do
+   hidrômetro. Cada rede passou a ser traçada só com o que é dela; o teste confere que, sem os ramais dos hidrômetros,
+   cada componente tem os pontos de UMA unidade.
+2. "Pelas paredes", os ramais de unidades vizinhas corriam no mesmo eixo da parede comum e se ligavam — no forro (os anéis
+   de cada cômodo) não. E as descidas do forro até o hall e até a unidade entravam na parede pelo mesmo ponto do eixo:
+   o ramal da unidade sai 400 mm ao lado.
+3. No forro o motor só anda pelo anel do cômodo: para chegar ao lado de lá do corredor dava a volta pela ponta (13 m
+   para um lado e 18 m de volta) — daí o barrilete do andar pelo eixo do corredor.
+4. A 2 m/s (a da casa) o último andar ficava com −89 kPa: o hidrômetro de 3 m³/h perdia 65 kPa e o ramal da unidade, no
+   forro, tem dezenas de curvas de contorno. A rede do prédio é dimensionada a 1 m/s e o hidrômetro pela vazão.
+5. Desempenho: a coluna de cada grupo de pontos procurava lugar fugindo dos pilares e vãos de TODOS os pavimentos (na casa
+   ela atravessa os andares) — 8,7 s no R8; e o ponto de entrada do hall dentro de um pilar fazia a busca varrer a
+   parede inteira milímetro a milímetro. Vista só com o tipo e o ramal longe dos pilares: a etapa caiu de 10 s para ~2 s.
+6. Na CI o caso RL do marco passou de 300 s (os 4 casos já somavam 355 s na PA5b). A água aplica tudo num lote só (eram
+   2 aplicações por unidade e mais 5) e o kernel guarda o uid determinístico de cada semente (o mapa das cópias dos grupos
+   "unidades iguais" recalculava por sha256 o uid de cada peça copiada a cada comando) — no RL, água 10,8 → 7,2 s e louças
+   4,9 → 2,8 s, com os marcos idênticos. O que sobra é o kernel: as invariantes rodam a cada comando do lote, e o RL tem o
+   modelo maior. O tempo-limite do marco por caso foi para 600 s; o tempo do RL no worker fica para a PA10.
+
+**Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa6.cjs`, estudo descartável arquivado):** R8 — os 20
+portões: hipótese "água" ligada por padrão, resultado com os hidrômetros e a pressão, 5 hidrômetros em cada um dos 7
+andares, coluna em 7 andares, barrilete, recalque do térreo à cobertura, 2.480 trechos de água, RTI de 12 m³ no superior
+(25.440 L = 13.440 + 12.000); Ctrl+Z volta ao bloco sozinho. **Para a PA10:** o clique em "Lançar" levou 53 s para voltar
+(aplicar o resultado e redesenhar ~6 mil trechos no mesmo passo, com a máquina carregada).
+
 ### PA7 — Esgoto, ventilação e pluvial (grande)
 **O que muda.** Tubo de queda e ventilação no shaft por UHC acumulado (NBR 8160), desvio no térreo, subcoletor e CI no
 lote, pluvial da cobertura.
@@ -209,7 +263,7 @@ PA1 e PA2 podem correr em frentes paralelas.
 | PA3 | feito — `utils/predioAutomatico/terreoECobertura.ts`: térreo próprio do bloco (esqueleto do tipo, salas do condomínio, porta de entrada no TRECHO de fachada do hall voltado para a rua), núcleo único desde o térreo (elevador até o último andar com unidades, shaft até a cobertura; os do tipo saem), lance da escada no térreo, cobertura (laje, platibanda pelas paredes de fachada do tipo, área técnica nomeada) e reservatórios pela população de todos os andares (60 % inferior na casa de bombas, o resto superior sobre o núcleo). Hipóteses novas na tela; seletor da prévia pela cota. Marco regravado: pavimentos +2, paredes +11/+14/+17/+27 (R4/R8/R12/RL), contagens de núcleo iguais (as cópias nunca tiveram núcleo próprio). **Achados no caminho:** a porta não cabia no R8 (a parede de fachada corre o lado inteiro — passou a medir o trecho que faz divisa com o hall); o rótulo da laje caía sobre o nome da área técnica (a prancha escreve os dois no centro) — a laje de cobertura sai sem rótulo, a numeração é da PA4. **Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa3.cjs`, estudo descartável arquivado):** R8 — prévia com 5 salas no térreo, cobertura a +24 m e 33.600 L; "Lançar os 9 pavimentos"; rascunho com térreo, cobertura, elevador térreo→8º pav, shaft térreo→cobertura, reservatórios de 20.160 e 13.440 L; 3D com o núcleo contínuo do poço à casa de máquinas; Ctrl+Z volta ao bloco sozinho |
 | PA4 | feito — estrutura e fundações (ver a Execução da PA4). R8: 40 pilares, 10 vigas e 7 lajes em cada um dos 7 andares com unidades, a mesma malha no térreo e 40 blocos de fundação. **Achado de desempenho:** cada comando do kernel custa pelo tamanho do modelo (~49 ms no RL, +60 % com as cópias vinculadas); as fundações depois das plantas levavam 22,7 s no RL — lançadas logo depois da estrutura (antes das plantas), 2,9 s, com o MESMO modelo final (hashes iguais). Tempos do marco: R4 0,5 s · R8 1,7 s · R12 4,7 s · RL 8,4 s (a PA10 fixa o do worker). Marco regravado: só o hash do modelo mudou, e ganhou a contagem `estruturas` (201 · 546 · 1.059 · 1.179). **Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa4.cjs`, estudo descartável arquivado):** R8 — resumo com a estrutura, 40P 10V 7L iguais nos 7 andares, térreo 40P 10V 7L 40B com os pilares em prumada, Ctrl+Z volta a 0 peças; as conferências da PA3 repetidas |
 | PA5 | **PA5a feita** (ver a Execução). R8: 5 QDs + 1 QDS por andar × 7, 36 medidores (35 + condomínio), `unidadesMedidas = unidadesAtendidas` (35 = 35); NBR 5410 sem falta na instalação — a única é a da ENTRADA (298 kVA passam do padrão de baixa tensão: vira pendência "entrada em média tensão"; no R4 a entrada T5 dá 160 A contra IB 160,6 A — o padrão genérico é hipótese, conferir com a concessionária). **Desempenho do kernel (sem mudar resultado; suíte da planta 5.696 verdes, marcos com paredes/estruturas idênticos):** a cópia viva, os grupos e os ambientes só re-derivam quando o comando toca o que eles copiam; `copiasDeInstancia` e as invariantes sem buscas quadráticas — o RL foi de 275 s para 18 s, o R8 ~5 s. **Lançar sem reaplicar:** a trava compara o hash do desenho de origem (`hashDoOriginal`) e o editor empilha o resultado do worker como um passo (`runBatchPrevisto` → `ModelHistory.applyPrecomputed`). Marco com `quadros` e `terminais`. Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa5.cjs`): os 16 portões, Ctrl+Z zera quadros e medidores. PA5a no ar (#424, 12c434c). **PA5b feita** (`utils/predioAutomatico/climatizacaoERede.ts`): a climatização SÓ no tipo (opção `niveis` do gerador — as cópias recebem pela cópia viva), cada ponto de ar no QD da unidade dele (opção `quadroDoPonto`: circuitos por quadro, cada um com a vista dos seus pontos); a condensadora do cômodo sem fachada no ambiente técnico MAIS PERTO e nunca a menos de 0,9 m de outra (opção `condensadorasSeparadas` — sem ela o tipo empilhava 6 condensadoras num ponto, e as peças idênticas faziam o canônico desempatar pelo uid aleatório: o hash mudava a cada geração); a verificação da climatização nos mesmos pavimentos (as cópias saíam "sem equipamento"); eletrodutos dos quadros do tipo cujos circuitos ficam no tipo (o QS, que alimenta a cobertura, ficaria com trechos nas cópias — vai pela prumada, com aviso); a PRUMADA dos alimentadores no shaft (trecho vertical no térreo e no tipo, contínua até o último andar). O editor passa o catálogo de evaporadoras e as premissas (como na casa) e carrega o catálogo com a tela aberta. **Desempenho:** `caminhoEntre` (busca de caminho da fiação) montava o mapa de vizinhos copiando a lista a cada aresta e usava `shift()` — a conferência de eletrodutos do R8 levava 27 s; com o mapa guardado por lista e a fiação guardando a lista de cada circuito, 1,2 s (mesma busca, mesmo caminho). R8 completo ~10 s com a climatização. Marco regravado com a climatização (catálogo semente da casa); a casa idêntica |
-| PA6 | a fazer |
+| PA6 | feito (ver a Execução) — R8: 5 hidrômetros por andar × 7 (35 = as 35 unidades), coluna DN 85, recalque DN 50 (1,5 cv), RTI 12 m³, pressurizador no superior, nenhum ponto fora da faixa (dinâmica mín. 77 kPa, estática máx. 332 kPa). **R12 pede VRP** (estática máx. 207 kPa depois dela); R4 e RL fecham sem ponto fora da faixa. O volume dos reservatórios conferido à mão no teste. Kernel 0.108.0 (`Terminal.unidadeId` no hidrômetro). Marco com `trechosDeAgua` e o resumo da água; a casa idêntica. PR #433 |
 | PA7 | a fazer |
 | PA8 | a fazer |
 | PA9 | a fazer |

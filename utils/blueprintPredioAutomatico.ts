@@ -9,3 +9,4 @@ export * from './predioAutomatico/terreoECobertura';
 export * from './predioAutomatico/estrutura';
 export * from './predioAutomatico/eletrica';
 export * from './predioAutomatico/climatizacaoERede';
+export * from './predioAutomatico/agua';

@@ -98,11 +98,24 @@ export function novoUid(): ElementUid {
  * portanto duas leituras do mesmo payload produzem o mesmo uid.
  */
 export function uidDeterministico(semente: string): ElementUid {
+  const ja = UIDS_JA_CALCULADOS.get(semente);
+  if (ja !== undefined) return ja;
   const hex = sha256(semente);
   const bytes = new Uint8Array(16);
   for (let i = 0; i < 16; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  return formatarUuid(bytes, 8);
+  const uid = formatarUuid(bytes, 8);
+  if (UIDS_JA_CALCULADOS.size >= MAX_UIDS_GUARDADOS) UIDS_JA_CALCULADOS.clear();
+  UIDS_JA_CALCULADOS.set(semente, uid);
+  return uid;
 }
+
+/**
+ * PA6 do prédio automático (14/11/2026): a mesma semente dá sempre o mesmo uid — guardado. O mapa das cópias de instância
+ * de grupo (as "unidades iguais") e a cópia viva recalculam o uid de cada peça copiada a CADA comando, por sha256: no
+ * prédio em L, um terço do tempo de aplicar o lote da água. Só memória: o resultado é o mesmo; o teto evita crescer sem fim.
+ */
+const UIDS_JA_CALCULADOS = new Map<string, ElementUid>();
+const MAX_UIDS_GUARDADOS = 500_000;
 
 function formatarUuid(b: Uint8Array, versao: number): ElementUid {
   b[6] = (b[6] & 0x0f) | ((versao & 0x0f) << 4);

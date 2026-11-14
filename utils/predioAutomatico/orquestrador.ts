@@ -31,6 +31,8 @@ import { lancarReservatorios, montarCobertura, montarTerreo, SALA_BOMBAS, SALA_M
 import { lancarEstrutura, lancarFundacao, pendenciaDaFundacao } from './estrutura';
 import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
 import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedido } from './climatizacaoERede';
+import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
+import { HIPOTESES_PRESSAO_PADRAO } from '../blueprintPressaoDaRede';
 
 /** O que o prédio lê além do desenho: o bloco, o produto do estudo e a distribuição dele NESTE bloco, e o norte. */
 export interface EntradaDoPredio {
@@ -71,12 +73,14 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     etapas.push({ id, rotulo: ROTULO_DA_ETAPA_DO_PREDIO[id], situacao: situacao === 'LANCOU' && n === 0 ? 'NADA_A_FAZER' : situacao, comandos: n, nota });
     opcoes.aoConcluirEtapa?.(etapas[etapas.length - 1], etapas.length, ORDEM_DAS_ETAPAS_DO_PREDIO.length);
   };
+  let ultimos: ObjectId[] = [];
   const aplicar = (lote: Command[]): number => {
     if (!lote.length) return 0;
     const r = applyBatch(m, lote);
     m = r.model;
     comandos.push(...lote);
     criados.push(...r.diff.created);
+    ultimos = r.diff.created;
     return lote.length;
   };
 
@@ -95,6 +99,9 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   const ctx: ContextoDoPredio = {
     get m() {
       return m;
+    },
+    get criadosNoUltimoLote() {
+      return ultimos;
     },
     aplicar,
   };
@@ -222,8 +229,49 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     etapa('ELETRODUTOS', 'LANCOU', rede.comandos, `${rede.eletrodutos} trecho(s) de eletroduto${rede.bitolasAumentadas ? ` (${rede.bitolasAumentadas} com o diâmetro aumentado pela ocupação)` : ''} · prumada em ${rede.prumadas} pavimento(s)`);
   }
 
+  // ── Água fria (PA6): as louças e os pontos no tipo, e a rede da rua à torneira — também antes da marca.
+  let agua: ReturnType<typeof lancarAguaFria> | null = null;
+  let pontosDaAgua = 0;
+  if (!hip.agua) {
+    etapa('LOUCAS', 'NAO_EXIGIDA', 0, 'Desligada nas hipóteses.');
+    etapa('AGUA_FRIA', 'NAO_EXIGIDA', 0, 'Desligada nas hipóteses.');
+  } else if (!hip.plantas) {
+    etapa('LOUCAS', 'NAO_EXIGIDA', 0, 'Sem as plantas das unidades não há cômodo para as louças.');
+    etapa('AGUA_FRIA', 'NAO_EXIGIDA', 0, 'Sem as plantas das unidades não há ponto de água.');
+  } else {
+    const lou = lancarLoucasEPontos(ctx, base);
+    pendencias.push(...lou.pendencias);
+    pontosDaAgua = lou.pontos;
+    etapa('LOUCAS', 'LANCOU', lou.comandos, `${lou.pecas} peça(s) de mobiliário e ${lou.pontos} ponto(s) de água e esgoto no tipo — cada andar repete`);
+    agua = lancarAguaFria(ctx, base, terreo ? { levelId: terreo.levelId } : null, cobertura ? { levelId: cobertura.levelId } : null, 1 + mont.copias);
+    pendencias.push(...agua.pendencias);
+    etapa(
+      'AGUA_FRIA',
+      agua.hidrometros ? 'LANCOU' : 'NAO_RODOU',
+      agua.comandos,
+      agua.hidrometros
+        ? `${agua.hidrometros} hidrômetro(s) por andar · coluna DN ${agua.colunaDnMm}${agua.recalque ? ` · recalque DN ${agua.recalque.dnMm}, ${agua.recalque.motorCv.toLocaleString('pt-BR')} cv` : ''}${agua.rtiL ? ` · reserva de incêndio de ${(agua.rtiL / 1000).toLocaleString('pt-BR')} m³` : ''}`
+        : agua.pendencias.find((x) => x.grupo === 'SEM_SOLUCAO')?.texto ?? null,
+    );
+  }
+
   // ── O tipo leva as instalações aos andares (PA1): as fases seguintes desenham no tipo e os andares acompanham.
   etapa('INSTALACOES_NO_TIPO', 'LANCOU', aplicar([{ type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }]), 'Pontos, trechos, quadros e circuitos desenhados no tipo vão às cópias.');
+
+  // ── A pressão da água fria (PA6): só agora a rede do superior chega a todos os andares.
+  let pressao: ReturnType<typeof conferirPressaoDaAgua> | null = null;
+  if (!agua?.hidrometros) etapa('PRESSAO_DA_AGUA', 'NAO_EXIGIDA', 0, 'Sem a rede de água fria.');
+  else {
+    pressao = conferirPressaoDaAgua(ctx, base, agua.ramais, { ...HIPOTESES_PRESSAO_PADRAO, qMaxDoHidrometroM3h: agua.qMaxDoHidrometroM3h });
+    pendencias.push(...pressao.pendencias);
+    const kpa = (v: number | null) => (v == null ? '—' : `${Math.round(v)} kPa`);
+    etapa(
+      'PRESSAO_DA_AGUA',
+      pressao.comandos ? 'LANCOU' : 'CALCULOU',
+      pressao.comandos,
+      `${pressao.pontos} ponto(s): dinâmica mínima ${kpa(pressao.dinamicaMinKpa)}, estática máxima ${kpa(pressao.estaticaMaxKpa)}${pressao.pressurizador ? ' · pressurizador no superior' : ''}${pressao.vrp ? ' · VRP no ramal de cada unidade' : ''}`,
+    );
+  }
 
   // ── Conferência: o que a divisão, a montagem e as plantas não resolveram vira pendência.
   for (const a of avisosDoTipo) pendencias.push({ grupo: 'CONFERIR', texto: `Pavimento tipo: ${a}` });
@@ -263,6 +311,24 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       prumadas: rede?.prumadas ?? 0,
     };
   }
+  const resumoDaAgua: PlanoDoPredio['resumo']['agua'] = agua
+    ? {
+        pontos: pontosDaAgua,
+        hidrometros: agua.hidrometros,
+        unidadesMedidas: agua.hidrometros * (1 + mont.copias),
+        colunaDnMm: agua.colunaDnMm,
+        recalque: agua.recalque ? { dnMm: agua.recalque.dnMm, motorCv: agua.recalque.motorCv, alturaManometricaM: Math.round(agua.recalque.alturaManometricaM * 10) / 10 } : null,
+        alimentadorDnMm: agua.alimentador?.dnMm ?? null,
+        rtiL: agua.rtiL,
+        estaticaMaxKpa: pressao?.estaticaMaxKpa != null ? Math.round(pressao.estaticaMaxKpa) : null,
+        dinamicaMinKpa: pressao?.dinamicaMinKpa != null ? Math.round(pressao.dinamicaMinKpa) : null,
+        pressurizador: pressao?.pressurizador ?? false,
+        vrp: pressao?.vrp ?? false,
+        insuficientes: pressao?.insuficientes ?? 0,
+        excessivas: pressao?.excessivas ?? 0,
+        naoAvaliados: pressao?.naoAvaliados ?? 0,
+      }
+    : null;
   for (const s of semFachada) {
     const u = (m.unidades ?? []).find((x) => x.numero === s.numero);
     const etiquetas = u ? m.labels.filter((l) => l.levelId === mont.tipoLevelId && u.etiquetaUids.includes(l.uid)) : [];
@@ -302,6 +368,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       eletrica: resumoDaEletrica,
       estrutura: estrutura ? { pilares: estrutura.pilares, vigas: estrutura.vigas, lajes: estrutura.lajes, noTerreo: estrutura.noTerreo, eixos: estrutura.eixos, blocos: fundacao?.blocos ?? 0, estacas: fundacao?.estacas ?? 0 } : null,
       reservacao,
+      agua: resumoDaAgua,
     },
   };
 }

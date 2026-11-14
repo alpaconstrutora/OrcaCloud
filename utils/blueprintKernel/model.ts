@@ -3834,7 +3834,11 @@ export interface Terminal {
    * canônico quando ausente. A invariante recusa nos outros tipos.
    */
   quadroId?: ObjectId | null;
-  /** E4.4: a UNIDADE que este MEDIDOR mede. Só em MEDIDOR; a unidade tem de existir. Omitido sem vínculo. */
+  /**
+   * E4.4: a UNIDADE que este MEDIDOR mede. Só em MEDIDOR — e, desde a 0.108.0 (prédio automático, PA6), no HIDRÔMETRO
+   * (o hidrômetro individual da unidade, Lei 13.312/2016); a unidade tem de existir. No andar copiado do tipo, o terminal
+   * copiado guarda a unidade do tipo e mede a unidade DERIVADA daquele andar (`unidadeNoPavimento`). Omitido sem vínculo.
+   */
   unidadeId?: ObjectId | null;
   /**
    * 0.107.0 (prédio automático, PA5): o PAVIMENTO da unidade medida, quando ela é a de uma cópia viva do tipo — o medidor
@@ -7254,9 +7258,9 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (!quadrosDoModelo.has(t.quadroId)) throw new KernelError('BOARD_NOT_FOUND', `Terminal ${t.id} aponta para um quadro inexistente: ${t.quadroId}`);
       if (t.tipoEletrico !== 'ENTRADA_SERVICO' && t.tipoEletrico !== 'MEDIDOR') throw new KernelError('BAD_TERMINAL_KIND', `Terminal ${t.id} (${t.tipoEletrico ?? 'sem tipo'}) não se liga a quadro — só entrada de serviço e medidor`);
     }
-    // E4.4: só o MEDIDOR mede uma unidade — e ela existe.
+    // E4.4: só o MEDIDOR (e, 0.108.0, o HIDRÔMETRO) mede uma unidade — e ela existe.
     if (t.unidadeId) {
-      if (t.tipoEletrico !== 'MEDIDOR') throw new KernelError('BAD_TERMINAL_KIND', `Terminal ${t.id} (${t.tipoEletrico ?? 'sem tipo'}) não mede unidade — só o medidor`);
+      if (t.tipoEletrico !== 'MEDIDOR' && t.tipoHidraulico !== 'HIDROMETRO') throw new KernelError('BAD_TERMINAL_KIND', `Terminal ${t.id} (${t.tipoEletrico ?? t.tipoHidraulico ?? 'sem tipo'}) não mede unidade — só o medidor e o hidrômetro`);
       if (!unidadesDoModelo.has(t.unidadeId)) throw new KernelError('BAD_UNIT', `Terminal ${t.id} aponta para unidade inexistente: ${t.unidadeId}`);
     }
     // 0.107.0: o pavimento da unidade medida só com a unidade, e ele existe.

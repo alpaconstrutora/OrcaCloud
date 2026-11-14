@@ -335,7 +335,11 @@ import { KpiCard } from './ui/KpiCard';
 - Grade simétrica `grid-cols-1 md:grid-cols-2 lg:grid-cols-4` quando os KPIs têm
   o mesmo peso, com `gap-3`. **Cada KPI com sua própria cor semântica**, nunca
   monocromático — a cor pinta a bolha do ícone E o valor.
-- Label sempre `UPPERCASE` (é CSS: no DOM o texto fica em sentence case).
+- Label em **sentence case, sem caixa alta** (desde 13/11/2026). Era `uppercase
+  tracking-wide`; o card ficou para trás quando o app tirou a caixa alta de rótulos
+  e títulos (PR #348, 11/11/2026) e passou a ser o único rótulo gritando na tela —
+  apontado na Análise de Contratos de Serviço. A troca foi no componente: vale para
+  todo `KpiCard` do app.
 - O desenho é o do Calendário Financeiro (`FinancialCalendar.tsx`), propagado
   para o app inteiro em 12/09/2026: compacto, sem sombra, sem hover.
 
@@ -347,7 +351,7 @@ Snippet de referência (o que `KpiCard.tsx` renderiza — só para entender, nã
     <IconName className="w-4 h-4 text-blue-600" />
   </div>
   <div className="min-w-0">
-    <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Label do KPI</p>
+    <p className="text-xs text-gray-500 font-medium">Label do KPI</p>
     <p className="text-sm font-bold text-blue-700 truncate">{valor}</p>
     <p className="text-xs text-gray-500 truncate">Dica de apoio</p>
   </div>
@@ -397,6 +401,9 @@ principal e `size="sm"` nos demais:
 > fato.
 
 ### 4.3 `sm`/`lg` também tiram o `uppercase` do label — escopo por `size`
+
+> ℹ️ **Histórico desde 13/11/2026:** nenhum tamanho tem mais caixa alta no
+> label — ver §4. O que segue valendo desta seção é o espaçamento vertical.
 
 Nos tamanhos `sm`/`lg`, o label sai de `uppercase tracking-wider` para sentence
 case (o `md`, usado no resto do sistema, mantém uppercase). O componente decide

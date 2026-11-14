@@ -8,7 +8,8 @@ import { AlertTriangle, ArrowDown, ArrowRight, ArrowUp } from 'lucide-react';
  * Desenho (o do Calendário Financeiro, propagado para o app inteiro em
  * 12/09/2026): card branco `rounded-xl border-gray-200 px-4 py-3`, ícone em
  * bolha circular colorida (`w-8 h-8 rounded-full bg-{cor}-100`), rótulo
- * uppercase em cinza e valor `text-sm font-bold` na cor do KPI. Grade
+ * em cinza, SEM caixa alta (regra do app desde o #348, 11/11/2026; o card
+ * seguiu em 13/11/2026), e valor `text-sm font-bold` na cor do KPI. Grade
  * recomendada: `gap-3`.
  *
  * Uso:
@@ -58,7 +59,7 @@ export function kpiColorFromClass(cls: string): KpiColor {
 }
 
 interface KpiCardProps {
-    /** Rótulo do indicador (renderizado em uppercase) */
+    /** Rótulo do indicador, em sentence case (sem caixa alta — #348) */
     label: string;
     /** Valor principal (string ou número formatado) */
     value: string | number;
@@ -302,7 +303,7 @@ export function KpiCard({
                 </div>
             )}
             <div className="min-w-0">
-                <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">{label}</p>
+                <p className="text-xs text-gray-500 font-medium">{label}</p>
                 <p className={`${size === 'lg' ? 'text-base' : 'text-sm'} font-bold ${c.value} truncate`}>{value}</p>
                 {/* gray-500 em 12px: o gray-400 em 11px dava 2,6:1 sobre branco
                     (abaixo dos 4,5:1), medido na aba Análise de Locações (26/10/2026). */}

@@ -147,7 +147,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#F3F7F9]">
+      <div className="flex-1 flex flex-col items-center justify-center p-8">
         <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-3" />
         <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando Agenda...</span>
       </div>
@@ -155,9 +155,9 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
   }
 
   return (
-    <div className="p-5 space-y-6 bg-[#F3F7F9]">
-      {/* Header */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      {/* Header — no computador quem mostra é a casca (ProModule) */}
+      <div className="flex items-center justify-between md:hidden">
         <div>
           <h1 className="text-xl font-black text-slate-800 tracking-tight">ÒPURA Pro</h1>
           <p className="text-xs font-semibold text-slate-500">Seu controle diário de campo</p>

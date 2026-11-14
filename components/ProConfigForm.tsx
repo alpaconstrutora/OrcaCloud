@@ -178,7 +178,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center p-8 min-h-[400px] bg-[#F3F7F9]">
+      <div className="flex flex-col items-center justify-center p-8 min-h-[400px]">
         <Loader2 className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-3 text-teal-500" />
         <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando Configurações...</span>
       </div>
@@ -186,9 +186,9 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
   }
 
   return (
-    <div className="p-5 flex flex-col h-full bg-[#F3F7F9] text-slate-800 pb-20">
-      {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
+    <div className="flex flex-col text-slate-800">
+      {/* Header — no computador quem mostra é a casca (ProModule) */}
+      <div className="flex items-center gap-3 mb-6 md:hidden">
         <button onClick={onBack} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
           <ChevronLeft className="w-5 h-5" />
         </button>

@@ -100,7 +100,8 @@ Recebido · A receber · Em execução**. Desenho confirmado: "confirmado".
   da aba): Cobrar → Recebi (Dinheiro) → Desfazer → Finalizar com pendência.
 - PR com CI verde, merge, `conferir-producao.sh` ✅.
 
-**Estado (14/11/2026): implementado e conferido; falta publicar.**
+**Estado (14/11/2026): publicado** — PR #429, `17bf992` no `main` (CI verde de primeira);
+`conferir-producao.sh "Aguardando pagamento"` ✅ (domínio serve `17bf992`). Frente fechada.
 - Migration aplicada (os 2 serviços existentes eram PENDENTE: backfill não tocou
   nenhuma linha). Conferido: 3 colunas, `pro_servicos_forma_pagamento_check`,
   `pro_servicos_recebimento_completo_check`; `status_check` intacto.
@@ -114,9 +115,39 @@ Recebido · A receber · Em execução**. Desenho confirmado: "confirmado".
 - `check-ui-standard.sh`: sobra §8 nas pílulas de status do painel — preexistente,
   passo 4. O botão "Finalizar" (deste fluxo) já foi para o §17.
 
-### 3. Casca (`/impeccable adapt`) — pendente
-Barra inferior fixa com área segura e "+" central; ícones lucide; rótulos ≥ 11px;
-no computador, sem moldura de celular.
+### 3. Casca (`/impeccable adapt`) — frente `pro-casca-adapt`
+
+Pedido (mesma sessão): "autorizado".
+
+**O que muda**
+- `ProModule.tsx`: sai a moldura de celular (`md:max-w-md md:rounded-[32px]`).
+  Celular: barra inferior `fixed` com `env(safe-area-inset-bottom)`, 4 colunas
+  iguais (Agenda · Clientes · Novo · Ajustes), ícones lucide, rótulo 12px,
+  `aria-current` na ativa, alvo de 64px; a casca reserva o espaço da barra.
+  Computador: cabeçalho §20 (título/subtítulo mudam com a aba) + `TabsBar` §19.1
+  com "Atualizar" e "Novo orçamento" (§17); casca inteira numa coluna `max-w-3xl`.
+- Telas internas: sem `p-5` e sem fundo `#F3F7F9` próprios (o recuo é do Layout —
+  no celular eram 16 + 20 px de cada lado); os `pb-20/24` que desviavam da barra
+  antiga saíram. Agenda/Ajustes escondem o próprio cabeçalho em `md:`; Clientes
+  esconde só seta + título e mantém "+ Cadastrar".
+- "+" ficou como 3ª de 4 colunas iguais (rotulado "Novo"), não centralizado: com
+  4 destinos não há centro; a assimetria do `justify-around` antigo é que pesava.
+
+**Como sei que terminou**
+- Computador: sem moldura; título muda com a aba; "Atualizar" recarrega.
+- Celular (iframe 390px da mesma origem): barra visível sem rolar; último conteúdo
+  acima da barra na Agenda e no serviço (tela mais longa).
+
+**Estado (14/11/2026): implementado e conferido; falta publicar.**
+- `tsc` exit 0; `check-ui-standard` limpo no `ProModule`; nos outros 4 arquivos
+  sobra só §8 preexistente (passo 4); travas e testes do Pro verdes (50/50).
+- Navegador com dados fictícios (`pro_*` simulado na aba, escritas recusadas — 0):
+  computador mostra "Agenda"/"Clientes" com abas e "Novo orçamento" na coluna do
+  conteúdo; celular 390px com barra fixa de 4 × 64px, "Carla" (último cartão da
+  Agenda) e "Finalizar serviço"/"Pausar"/"Bloqueado" inteiros acima da barra.
+- Achado e corrigido na conferência: esconder o cabeçalho de Clientes levava
+  junto o "+ Cadastrar" no computador.
+- Não verificado: Safari/iPhone real (área segura conferida só por código).
 
 ### 4. Linguagem visual do app (`/impeccable quieter` + `typeset`) — pendente
 Sem degradê/emoji/caixa alta; §16/§17; texto ≥ 12px; `useConfirm`/toast (§14);

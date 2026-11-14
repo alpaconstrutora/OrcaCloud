@@ -288,6 +288,13 @@ export default function TelaPredioAutomatico(props: Props) {
               <span className="block text-xs text-slate-500">O QD de cada unidade no tipo vai às cópias; no térreo, um medidor por unidade de cada andar e o do condomínio. A demanda do QGBT soma as unidades pela diversidade.</span>
             </span>
           </label>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.climatizacao} disabled={!props.hipoteses.eletrica} title={props.hipoteses.eletrica ? undefined : 'A climatização liga os splits no QD da unidade — ligue a elétrica'} onChange={(e) => props.onHipoteses({ ...props.hipoteses, climatizacao: e.target.checked })} data-testid="hipotese-climatizacao" />
+            <span>
+              Climatizar as unidades (splits, linhas e drenos; o circuito no QD da unidade)
+              <span className="block text-xs text-slate-500">Pelo catálogo de evaporadoras da organização e as premissas de climatização do estudo; os eletrodutos e a prumada no shaft vêm junto.</span>
+            </span>
+          </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Numero rotulo="Porta de entrada (mm)" valor={props.hipoteses.larguraDoAcessoMm} min={900} max={3000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, larguraDoAcessoMm: v })} />
             <Numero rotulo="Pé-direito da cobertura (mm)" valor={props.hipoteses.peDireitoDaCoberturaMm} min={2200} max={6000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, peDireitoDaCoberturaMm: v })} />
@@ -331,7 +338,7 @@ export default function TelaPredioAutomatico(props: Props) {
               valor={plano.resumo.eletrica ? `${plano.resumo.eletrica.medidores} medidor(es)` : '—'}
               nota={
                 plano.resumo.eletrica
-                  ? `${plano.resumo.eletrica.quadros} QD(s) e ${plano.resumo.eletrica.circuitos} circuito(s) por andar · ${plano.resumo.eletrica.unidadesMedidas} de ${plano.resumo.eletrica.unidadesAtendidas} unidade(s) medidas${plano.resumo.eletrica.demandaKva != null ? ` · ${plano.resumo.eletrica.demandaKva.toLocaleString('pt-BR')} kVA no QGBT` : ''}`
+                  ? `${plano.resumo.eletrica.quadros} QD(s) e ${plano.resumo.eletrica.circuitos} circuito(s) por andar · ${plano.resumo.eletrica.unidadesMedidas} de ${plano.resumo.eletrica.unidadesAtendidas} unidade(s) medidas${plano.resumo.eletrica.demandaKva != null ? ` · ${plano.resumo.eletrica.demandaKva.toLocaleString('pt-BR')} kVA no QGBT` : ''}${plano.resumo.eletrica.splits != null ? ` · ${plano.resumo.eletrica.splits} split(s) por andar` : ''} · ${plano.resumo.eletrica.eletrodutos} trecho(s) de eletroduto`
                   : 'desligada nas hipóteses'
               }
             />

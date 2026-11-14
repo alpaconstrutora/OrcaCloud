@@ -30,6 +30,7 @@ import {
 import { lancarReservatorios, montarCobertura, montarTerreo, SALA_BOMBAS, SALA_MEDICAO, SALA_MEDICAO_E_BOMBAS, type BaseDoPredio, type ContextoDoPredio } from './terreoECobertura';
 import { lancarEstrutura, lancarFundacao, pendenciaDaFundacao } from './estrutura';
 import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
+import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedido } from './climatizacaoERede';
 
 /** O que o prédio lê além do desenho: o bloco, o produto do estudo e a distribuição dele NESTE bloco, e o norte. */
 export interface EntradaDoPredio {
@@ -38,6 +39,8 @@ export interface EntradaDoPredio {
   /** `distribuirProduto(...).blocos` deste bloco; `null` = produto sem tipologia (não há unidade para dividir). */
   doBloco: ProdutoDoBloco | null;
   rotacaoNorteDeg: number | null;
+  /** PA5b: o catálogo de evaporadoras e as premissas da carga térmica (do editor, como na casa); ausente = sem climatização. */
+  climatizacao?: ClimatizacaoDoPedido | null;
 }
 
 /** Por que não dá para gerar o prédio deste bloco; `null` = dá. Os mesmos motivos do painel do bloco. */
@@ -200,6 +203,25 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     );
   }
 
+  // ── Climatização (PA5b): no tipo, cada ponto de ar no QD da unidade — também antes da marca.
+  let splits: number | null = null;
+  if (!eletrica || !hip.climatizacao) etapa('CLIMATIZACAO', 'NAO_EXIGIDA', 0, !eletrica ? 'Sem a elétrica, a climatização fica para o projetista.' : 'Desligada nas hipóteses.');
+  else {
+    const c = lancarClimatizacao(ctx, base, entrada.climatizacao ?? null);
+    pendencias.push(...c.pendencias);
+    if (c.motivo && !c.comandos) pendencias.push({ grupo: 'PREMISSA', texto: `Climatização: ${c.motivo}` });
+    splits = c.equipamentos;
+    etapa('CLIMATIZACAO', c.comandos ? 'LANCOU' : 'NAO_RODOU', c.comandos, c.comandos ? `${c.equipamentos} split(s) no tipo — cada andar repete` : c.motivo);
+  }
+  // ── Eletrodutos e a prumada no shaft (PA5b).
+  let rede: ReturnType<typeof lancarEletrodutosEPrumada> | null = null;
+  if (!eletrica) etapa('ELETRODUTOS', 'NAO_EXIGIDA', 0, 'Sem a elétrica.');
+  else {
+    rede = lancarEletrodutosEPrumada(ctx, base, terreo?.levelId ?? null);
+    for (const a of new Set(rede.avisos)) pendencias.push({ grupo: 'CONFERIR', texto: `Eletrodutos: ${a}` });
+    etapa('ELETRODUTOS', 'LANCOU', rede.comandos, `${rede.eletrodutos} trecho(s) de eletroduto${rede.bitolasAumentadas ? ` (${rede.bitolasAumentadas} com o diâmetro aumentado pela ocupação)` : ''} · prumada em ${rede.prumadas} pavimento(s)`);
+  }
+
   // ── O tipo leva as instalações aos andares (PA1): as fases seguintes desenham no tipo e os andares acompanham.
   etapa('INSTALACOES_NO_TIPO', 'LANCOU', aplicar([{ type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }]), 'Pontos, trechos, quadros e circuitos desenhados no tipo vão às cópias.');
 
@@ -236,6 +258,9 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       unidadesMedidas: entrada?.unidadesMedidas.length ?? 0,
       faltas: nbr.faltas,
       avisos: nbr.avisos,
+      splits,
+      eletrodutos: rede?.eletrodutos ?? 0,
+      prumadas: rede?.prumadas ?? 0,
     };
   }
   for (const s of semFachada) {

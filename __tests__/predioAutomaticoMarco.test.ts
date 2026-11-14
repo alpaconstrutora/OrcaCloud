@@ -13,6 +13,10 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { applyBatch, emptyModel, point, sha256, snapshotHash, type Command, type Point } from '../utils/blueprintKernel';
 import { planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
+import { modelosDoCatalogo } from '../utils/blueprintSelecaoClimatizacao';
+import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
+import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
+import { MATERIAIS_SEMENTE } from '../utils/blueprintMateriais';
 import { divisasDoLote, medirTerreno, RECUOS_ZERO } from '../utils/blueprintTerreno';
 import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../utils/blueprintMassa';
 import { distribuirProduto, produtoSemente } from '../utils/blueprintProduto';
@@ -20,6 +24,12 @@ import { distribuirProduto, produtoSemente } from '../utils/blueprintProduto';
 const FIXTURE = new URL('./fixtures/predioAutomaticoMarco.json', import.meta.url);
 const GRAVAR = process.env.GRAVAR_MARCO_PREDIO === '1';
 const MEDIO = produtoSemente('RESIDENCIAL_MEDIO');
+/** PA5b: o catálogo semente e o clima do marco da casa — a climatização das unidades entra no marco. */
+const CLIMATIZACAO = {
+  hip: { ...HIPOTESES_CLIMATIZACAO_PADRAO, clima: { cidade: null, tbsExternaC: 34, tbuExternaC: 25, altitudeM: 0 } },
+  modelos: modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades }))),
+  carga: { materiais: MATERIAIS_SEMENTE.map((m, i) => ({ ...m, id: `m${i}`, organizationId: 'o', active: true, createdAt: '', updatedAt: '' })), cidadeDoContexto: null },
+};
 
 interface Caso {
   /** Lote (largura × profundidade, mm), rua ao sul. */
@@ -47,7 +57,7 @@ function predio(c: Caso) {
   ]).model;
   const massa = medirMassa(m, { terreno: medirTerreno(divisasDoLote(m.boundaries)), limites: m.boundaries, recuosBase: RECUOS_ZERO, zona: ZONA_DA_MASSA_VAZIA });
   const doBloco = distribuirProduto(m, massa, MEDIO).blocos[0];
-  const plano = planejarPredioDoPedido({ original: m, entrada: { blocoId: m.blocos![0].id, produto: MEDIO, doBloco, rotacaoNorteDeg: null }, hip: {} });
+  const plano = planejarPredioDoPedido({ original: m, entrada: { blocoId: m.blocos![0].id, produto: MEDIO, doBloco, rotacaoNorteDeg: null, climatizacao: CLIMATIZACAO }, hip: {} });
   return { model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0 };
 }
 

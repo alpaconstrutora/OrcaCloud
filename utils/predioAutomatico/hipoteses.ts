@@ -8,7 +8,7 @@ import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 
-export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'INSTALACOES_NO_TIPO' | 'CONFERENCIA';
+export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'INSTALACOES_NO_TIPO' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
@@ -20,6 +20,8 @@ export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
   COBERTURA: 'Cobertura (laje, platibanda, área técnica; a escada e o shaft chegam nela)',
   RESERVATORIOS: 'Reservatórios inferior (casa de bombas) e superior (sobre o núcleo)',
   ELETRICA: 'Elétrica coletiva (pontos, QD por unidade, QGBT e medidores, quadro de serviço, DR)',
+  CLIMATIZACAO: 'Climatização no tipo (splits, linhas e drenos; o circuito no QD da unidade)',
+  ELETRODUTOS: 'Eletrodutos por quadro e a prumada dos alimentadores no shaft',
   INSTALACOES_NO_TIPO: 'Instalações desenhadas no tipo vão aos andares (cópia viva)',
   CONFERENCIA: 'Conferência (avisos da divisão, da montagem e das plantas)',
 };
@@ -45,6 +47,8 @@ export interface HipotesesDoPredio {
   estrutura: boolean;
   /** PA5: a elétrica coletiva — pontos, QD por unidade, QGBT, medição, quadro de serviço. */
   eletrica: boolean;
+  /** PA5b: a climatização das unidades (precisa do catálogo de evaporadoras da organização) — só com a elétrica. */
+  climatizacao: boolean;
   /** Largura da porta de entrada do prédio, no hall, mm. */
   larguraDoAcessoMm: number;
   /** Pé-direito do pavimento da cobertura (a área técnica), mm. */
@@ -63,6 +67,7 @@ export const HIPOTESES_DO_PREDIO_PADRAO: HipotesesDoPredio = {
   cobertura: true,
   estrutura: true,
   eletrica: true,
+  climatizacao: true,
   larguraDoAcessoMm: 1200,
   peDireitoDaCoberturaMm: 3000,
   espessuraDaLajeMm: 120,
@@ -130,6 +135,11 @@ export interface PlanoDoPredio {
       unidadesMedidas: number;
       faltas: number;
       avisos: number;
+      /** PA5b: splits no tipo (cada cópia repete); `null` sem a climatização. */
+      splits: number | null;
+      /** PA5b: trechos de eletroduto no tipo e no térreo, e os trechos da prumada no shaft. */
+      eletrodutos: number;
+      prumadas: number;
     } | null;
     /** PA3: a reservação — pessoas contadas e o volume de cada reservatório lançado (`null` = não lançado). */
     reservacao: { pessoas: number; totalL: number; inferiorL: number | null; superiorL: number | null } | null;

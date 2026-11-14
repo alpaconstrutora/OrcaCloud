@@ -128,13 +128,21 @@ export function composicaoDaRede(model: BlueprintModel): ComposicaoDaRede {
     return a;
   };
 
-  /** As arestas do circuito (os trechos que o carregam); vazio → todas. */
+  /**
+   * As arestas do circuito (os trechos que o carregam); vazio → todas. Uma lista por circuito, guardada (PA5b do prédio
+   * automático): a mesma lista a cada ponto do circuito deixa o `caminhoEntre` reaproveitar os vizinhos dela.
+   */
+  const arestasPorCircuito = new Map<ObjectId, Aresta[]>();
   const arestasDo = (c: Circuito): Aresta[] => {
+    const guardada = arestasPorCircuito.get(c.id);
+    if (guardada) return guardada;
     const proprias = arestas.filter((a) => {
       const t = trechos[indiceDoTrecho.get((a.ref as { existente: ObjectId }).existente)!];
       return (t.circuitoIds ?? []).includes(c.id);
     });
-    return proprias.length > 0 ? proprias : arestas;
+    const lista = proprias.length > 0 ? proprias : arestas;
+    arestasPorCircuito.set(c.id, lista);
+    return lista;
   };
   const caminho = (de: No, para: No, c: Circuito): ObjectId[] | null => {
     const tentar = (lista: readonly Aresta[]) => {

@@ -7,6 +7,17 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, ModelHistory, pavimentosDoNucleo, pointInPolygon, point, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
 import { entradaDoQuadro } from '../utils/blueprintEntradaDeEnergia';
+import { modelosDoCatalogo } from '../utils/blueprintSelecaoClimatizacao';
+import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
+import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
+import { MATERIAIS_SEMENTE } from '../utils/blueprintMateriais';
+
+/** O catálogo semente e o clima do marco da casa — o que o editor passa ao prédio (PA5b). */
+const CLIMATIZACAO = {
+  hip: { ...HIPOTESES_CLIMATIZACAO_PADRAO, clima: { cidade: null, tbsExternaC: 34, tbuExternaC: 25, altitudeM: 0 } },
+  modelos: modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades }))),
+  carga: { materiais: MATERIAIS_SEMENTE.map((m, i) => ({ ...m, id: `m${i}`, organizationId: 'o', active: true, createdAt: '', updatedAt: '' })), cidadeDoContexto: null },
+};
 import { divisasDoLote, medirTerreno, RECUOS_ZERO } from '../utils/blueprintTerreno';
 import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../utils/blueprintMassa';
 import { distribuirProduto, produtoSemente } from '../utils/blueprintProduto';
@@ -73,7 +84,7 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     const plano = planejarPredioDoPedido(p, { aoConcluirEtapa: (e, i, total) => avisos.push(`${i}/${total} ${e.id}`) });
     expect(plano.etapas.map((e) => e.id)).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO);
     expect(avisos).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO.map((id, i) => `${i + 1}/${ORDEM_DAS_ETAPAS_DO_PREDIO.length} ${id}`));
-    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'CONFERENCIA:CALCULOU']);
+    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'CONFERENCIA:CALCULOU']);
     expect(snapshotHash(plano.resultado)).toBe(snapshotHash(peloPainelDoBloco(p)));
     const tipo = plano.resultado.levels.find((l) => l.id === plano.tipoLevelId)!;
     expect(tipo.copiaInstalacoes).toBe(true);
@@ -361,5 +372,64 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     expect(snapshotHash(h.current)).toBe(plano.hashDoOriginal);
     const mexido = new ModelHistory(applyCommand(p.original, { type: 'AddWall', levelId: p.original.levels[0].id, a: point(1000, 1000), b: point(3000, 1000), thicknessMm: 140, heightMm: 2800 }).model);
     expect(() => mexido.applyPrecomputed(plano.hashDoOriginal, { model: plano.resultado, diff: { created: plano.criados, updated: [], deleted: [], ancestry: {} }, hash: plano.hashDoResultado })).toThrow(/mudou desde a prévia/);
+  });
+
+  // ── PA5b (14/11/2026): a climatização no QD da unidade, os eletrodutos e a prumada ─────────────────────────────────
+
+  it('a climatização: splits no tipo, cada ponto de ar no QD da unidade dele; cada andar copiado repete; nenhuma pendência falsa nas cópias', () => {
+    const p = pedidoDoR8();
+    const plano = planejarPredioDoPedido({ ...p, entrada: { ...p.entrada, climatizacao: CLIMATIZACAO } });
+    const r = plano.resultado;
+    const splits = plano.resumo.eletrica!.splits!;
+    expect(splits).toBeGreaterThan(0);
+    const b = p.original.blocos![0];
+    const pb = p.entrada.doBloco!;
+    const ord = ordinalDoTipo(p.original, b);
+    const piso = pb.pisos.find((x) => x.ordinal === ord)!;
+    const d = dividirPavimentoDoBloco({ bloco: b, produto: MEDIO, porTipologia: piso.porTipologia, nucleoM2: pb.nucleo.m2, elevadores: pb.nucleo.elevadores, ordinalDoTipo: ord, rotacaoNorteDeg: null, direcaoDaRua: direcaoDaRua(p.original) });
+    if (!d.ok) throw new Error(d.motivo);
+    const ar = r.terminais.filter((t) => t.levelId === plano.tipoLevelId && t.tipoEletrico === 'AR_CONDICIONADO');
+    expect(ar).toHaveLength(splits);
+    for (const t of ar) {
+      const q = r.quadros.find((x) => x.id === r.circuitos.find((c) => c.id === t.circuitoId)?.quadroId)!;
+      const u = d.divisao.unidades.find((x) => pointInPolygon(x.anel as Point[], t.at));
+      if (u) expect(q.nome).toBe(`QD ${u.numero}`);
+      else expect(q.nome).toMatch(/^QD \d+$/);
+    }
+    for (const c of r.levels.filter((l) => l.tipoDeId === plano.tipoLevelId)) expect(r.terminais.filter((t) => t.levelId === c.id && t.tipoEletrico === 'AR_CONDICIONADO')).toHaveLength(splits);
+    expect(plano.pendencias.filter((x) => /Climatização/.test(x.texto) && /sem equipamento|Exaustão mecânica/.test(x.texto))).toEqual([]);
+  });
+
+  it('os eletrodutos dos QDs no tipo (as cópias repetem) e a prumada vertical no shaft do térreo ao último andar', () => {
+    const plano = planejarPredioDoPedido(pedidoDoR4());
+    const r = plano.resultado;
+    const e = plano.resumo.eletrica!;
+    expect(e.eletrodutos).toBeGreaterThan(0);
+    const copias = r.levels.filter((l) => l.tipoDeId === plano.tipoLevelId);
+    const eletrodutosDo = (L: string) => r.trechos.filter((t) => t.levelId === L && t.disciplina === 'ELETRICA' && !/^Prumada/.test(t.rotulo ?? '')).length;
+    for (const c of copias) expect(eletrodutosDo(c.id)).toBe(eletrodutosDo(plano.tipoLevelId));
+    const prumada = r.trechos.filter((t) => t.rotulo === 'Prumada elétrica — alimentadores dos QDs');
+    const terreo = r.levels.find((l) => l.name === 'Torre · 1º pav (térreo)')!;
+    expect(prumada.map((t) => t.levelId).sort()).toEqual([terreo.id, plano.tipoLevelId, ...copias.map((c) => c.id)].sort());
+    expect(prumada.every((t) => t.a.x === t.b.x && t.a.y === t.b.y && t.cotaAMm === 0 && t.cotaBMm === 3000)).toBe(true);
+    expect(new Set(prumada.map((t) => `${t.a.x},${t.a.y}`)).size).toBe(1);
+  });
+
+  it('as condensadoras não se empilham (o técnico mais perto, 0,9 m entre elas) — e o prédio sai igual gerado duas vezes', () => {
+    const p = pedidoDoR4();
+    const pedido = { ...p, entrada: { ...p.entrada, climatizacao: CLIMATIZACAO } };
+    const a = planejarPredioDoPedido(pedido);
+    const conds = a.resultado.terminais.filter((t) => t.levelId === a.tipoLevelId && t.tipoHidraulico === 'CONDENSADORA_SPLIT');
+    expect(conds.length).toBeGreaterThan(0);
+    for (const [i, c] of conds.entries()) for (const o of conds.slice(i + 1)) expect(Math.hypot(c.at.x - o.at.x, c.at.y - o.at.y)).toBeGreaterThanOrEqual(900);
+    // Peças idênticas no mesmo lugar deixavam o canônico desempatar pelo uid (aleatório): o hash mudava a cada geração.
+    expect(snapshotHash(planejarPredioDoPedido(pedido).resultado)).toBe(snapshotHash(a.resultado));
+  });
+
+  it('sem o catálogo de evaporadoras, a climatização não roda e a pendência diz o que falta', () => {
+    const plano = planejarPredioDoPedido(pedidoDoR4());
+    expect(plano.etapas.find((x) => x.id === 'CLIMATIZACAO')!.situacao).toBe('NAO_RODOU');
+    expect(plano.resumo.eletrica!.splits).toBe(0);
+    expect(plano.pendencias.some((x) => x.grupo === 'PREMISSA' && /catálogo de evaporadoras/.test(x.texto))).toBe(true);
   });
 });

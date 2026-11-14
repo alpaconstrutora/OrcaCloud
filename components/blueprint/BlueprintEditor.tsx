@@ -9186,9 +9186,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const entradaDoPredio = useMemo<EntradaDoPredio | null>(
     () =>
       blocoDoPredioId
-        ? { blocoId: blocoDoPredioId, produto: produtoDoEstudo.produto, doBloco: distribuicaoDoProduto?.blocos.find((x) => x.blocoId === blocoDoPredioId) ?? null, rotacaoNorteDeg: editor.model.georreferencia?.rotacaoNorteDeg ?? null }
+        ? {
+            blocoId: blocoDoPredioId,
+            produto: produtoDoEstudo.produto,
+            doBloco: distribuicaoDoProduto?.blocos.find((x) => x.blocoId === blocoDoPredioId) ?? null,
+            rotacaoNorteDeg: editor.model.georreferencia?.rotacaoNorteDeg ?? null,
+            // PA5b: a climatização das unidades — o catálogo de evaporadoras e as premissas, como na casa.
+            climatizacao: { hip: climatizacaoDoEstudo.hipoteses, modelos: modelosDeClimatizacao, carga: { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null } },
+          }
         : null,
-    [blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg],
+    [blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, zona.cidade?.name],
   );
   const motivoParaNaoGerarOPredio = useMemo(
     () => (telaAberta === 'predio' && entradaDoPredio ? motivoParaNaoGerarPredio(editor.model, entradaDoPredio) : null),
@@ -9845,7 +9852,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   useEffect(() => {
     // O catálogo de bombas carrega quando o cálculo abre (uma vez por abertura).
-    if (tarefaAberta === 'incendioCalculo' || tarefaAberta === 'incendioPpci' || tarefaAberta === 'selecaoSplit' || tarefaAberta === 'geradorClimatizacao' || telaAberta === 'casa') recarregarCatalogoDeTipos();
+    if (tarefaAberta === 'incendioCalculo' || tarefaAberta === 'incendioPpci' || tarefaAberta === 'selecaoSplit' || tarefaAberta === 'geradorClimatizacao' || telaAberta === 'casa' || telaAberta === 'predio') recarregarCatalogoDeTipos();
   }, [tarefaAberta, telaAberta, recarregarCatalogoDeTipos]);
   /** E3.1: o plano da rede de hidrantes — só com a tarefa aberta. */
   const planoDaRedeDeHidrantes = useMemo(

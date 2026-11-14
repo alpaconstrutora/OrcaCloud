@@ -95,3 +95,12 @@ describe('chavePorCombinacao (Agrupar por empreendimento)', () => {
         expect(chavePorCombinacao([{ id: 'e1', name: 'Aurora' }, { id: 'e1', name: 'Aurora' }])).toEqual({ key: 'e1', label: 'Aurora' });
     });
 });
+
+describe('descreverCamposComDe', () => {
+    it('contrai com "de" (cópia do nome, não "de o nome")', async () => {
+        const { descreverCamposComDe } = await import('../utils/clientPropagacao');
+        expect(descreverCamposComDe({ name: 'X' })).toBe('do nome');
+        expect(descreverCamposComDe({ email: 'a@b' })).toBe('do e-mail');
+        expect(descreverCamposComDe({ name: 'X', email: 'a@b' })).toBe('do nome e do e-mail');
+    });
+});

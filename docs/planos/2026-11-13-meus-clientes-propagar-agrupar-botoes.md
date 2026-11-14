@@ -53,3 +53,19 @@ id, na hora — não precisam de propagação.
 ## Estado
 
 3 de 3 itens com teste verde na frente `clientes-propagar-edicao`. Falta: PR + publicação.
+
+---
+
+## Adendo 14/11/2026 — "alterei o nome salve e nao perguntou"
+
+Diagnóstico: a ligação tela → pergunta funciona (teste novo
+`__tests__/components/ClientListPropagar.test.tsx`, ClientList real com
+ConfirmProvider real). A pergunta só aparece quando existe cópia a corrigir; para
+cliente sem nenhuma cópia (e quando a busca falhava) a tela ficava CALADA — e
+parecia que a pergunta tinha quebrado. Busca simulada com a RLS do usuário
+devolve as cópias normalmente.
+
+Correção: depois de mudar nome/e-mail a tela sempre responde — sem cópia,
+aviso "Nenhum outro registro do app guarda cópia do nome deste cliente — nada a
+propagar."; falha na busca, aviso de erro. Texto da pergunta corrigido de
+"cópia de o nome" para "cópia do nome".

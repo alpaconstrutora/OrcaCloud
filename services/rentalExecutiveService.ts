@@ -70,6 +70,14 @@ export interface RentalContractRow {
     original_value?: number | null;
     parent_contract_id?: string | null;
     renewal_seq?: number | null;
+    /** Colunas que só Contratos de Serviço › Análise lê (recorte por cliente,
+     *  linha do tempo e medição). Vêm em toda chamada: são baratas e evitam
+     *  dois formatos da mesma linha. */
+    start_date?: string | null;
+    client_id?: string | null;
+    number?: string | null;
+    title?: string | null;
+    billing_mode?: string | null;
 }
 
 export interface RentalExecutiveRaw {
@@ -97,14 +105,15 @@ export const rentalExecutiveService = {
         opts?: {
             throwOnError?: boolean;
             /** Domínio do contrato. Padrão `LOCACAO`; Venda de Ativos › Análise
-             *  pede `VENDAS` — o caminho contrato → parcela é o mesmo. */
-            domain?: 'LOCACAO' | 'VENDAS';
+             *  pede `VENDAS` e Contratos de Serviço › Análise pede `SERVICOS` —
+             *  o caminho contrato → parcela é o mesmo. */
+            domain?: 'LOCACAO' | 'VENDAS' | 'SERVICOS';
         },
     ): Promise<RentalExecutiveRaw | null> {
         try {
             let q = supabase
                 .from('contracts')
-                .select('id, deal_id, status, start_date, end_date, current_value, original_value, parent_contract_id, renewal_seq')
+                .select('id, deal_id, status, start_date, end_date, current_value, original_value, parent_contract_id, renewal_seq, client_id, number, title, billing_mode')
                 .eq('domain', opts?.domain ?? 'LOCACAO');
             if (organizationId) q = q.eq('organization_id', organizationId);
             if (projectId) q = q.eq('project_id', projectId);

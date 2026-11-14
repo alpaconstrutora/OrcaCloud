@@ -193,6 +193,9 @@ interface SupplyChainContractListProps {
     subtitle?: string;
     extraActions?: React.ReactNode;
     hideHeader?: boolean;
+    /** Abas do pai (§19.3 `tabsSlot`) — entre o título e os KPIs. Contratos de
+     *  Serviço passa "Contratos | Análise"; ausente = lista sem abas. */
+    tabsSlot?: React.ReactNode;
 }
 
 const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
@@ -208,6 +211,7 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     subtitle = 'Controle de empreitadas, aditivos e medições físico-financeiras.',
     extraActions,
     hideHeader = false,
+    tabsSlot,
 }) => {
     const [contracts, setContracts] = React.useState<Contract[]>([]);
     const [supplierMap, setSupplierMap] = React.useState<Record<string, string>>({});
@@ -446,6 +450,9 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                     </button>
                 </div>
             </div>
+
+            {/* Abas do pai (§19.3): título → abas → KPIs. O TabsBar já traz o mb-3. */}
+            {tabsSlot}
 
             {/* Stats Dashboard — grade simétrica do §4 (os 4 KPIs têm o mesmo peso) */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">

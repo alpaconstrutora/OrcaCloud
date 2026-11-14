@@ -127,6 +127,10 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     'obra-vinculada': 180, 'planejamento-vinculada': 180,
     client: 160, created: 140, updated: 172, 'status-budget': 130, 'status-obra': 149, lock: 128, actions: 200,
 };
+// Orçamentos não têm "Ver Detalhes" (a linha já abre o Analítico — §9.1): a coluna Ações
+// leva só lápis + duplicar + ⋮ (3 × ~30px, gap-1.5, px-6). Só o PADRÃO muda; largura que o
+// usuário arrastou continua valendo (useResizableColumns grava só as redimensionadas).
+const DEFAULT_COL_WIDTHS_ORCAMENTO: Record<string, number> = { ...DEFAULT_COL_WIDTHS, actions: 152 };
 
 // Obra a que o projeto está vinculado (por id; legado: por nome entre as obras).
 function findLinkedProject(project: ProjectSummary, projects: ProjectSummary[]): ProjectSummary | null | undefined {
@@ -245,6 +249,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const isPlanejamentoContext = classificationFilter === 'PLANEJAMENTO';
     const isDiarioContext = classificationFilter === 'DIARIO' || isDiaryView;
     const isDiaryContext = isDiarioContext;
+    const isOrcamentoContext = !isObraContext && !isPlanejamentoContext && !isDiarioContext;
 
     // Colunas ocultas por padrão conforme o contexto — evita tabela larga com colunas
     // sempre vazias (ui_ux_guia_unificado.md, avaliação 2026-08-12):
@@ -311,7 +316,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
         resetColumns,
     } = tableColumns;
 
-    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'projectListColWidths');
+    const cols = useResizableColumns(isOrcamentoContext ? DEFAULT_COL_WIDTHS_ORCAMENTO : DEFAULT_COL_WIDTHS, 'projectListColWidths');
     // Colunas visíveis, na ordem escolhida pelo usuário (arraste no header) — usada para
     // colgroup/thead/tbody. As 2 colunas extras do contexto Diário (obra-vinculada,
     // planejamento-vinculada) não fazem parte de COLUMNS (não são configuráveis/arrastáveis)
@@ -900,7 +905,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // lista já filtrada e ordenada; é recorte de exibição, não reconsulta (§6.12).
     // O rótulo do grupo é o MESMO texto da célula (status capitalizado, tipo traduzido,
     // bloqueio em cascata com a obra mestre).
-    const isOrcamentoContext = !isObraContext && !isPlanejamentoContext && !isDiarioContext;
     const agrupamento = useAgrupamento<CampoAgruparOrcamento>('projectListGroupBy:orcamentos');
     const campoAgrupar: CampoAgruparOrcamento | 'none' =
         isOrcamentoContext && viewMode === 'list' && OPCOES_AGRUPAR_ORCAMENTO.some(o => o.value === agrupamento.campo)
@@ -1179,11 +1183,13 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                         <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         <td className="px-6 py-2.5 text-right">
-                                            <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-end gap-3">
-                                                {/* Para Planejamento/Diário, o clique na linha já abre Cronograma/Diário
-                                                    (onRowClick) — um botão de texto repetindo a mesma ação duplicaria o
-                                                    controle (ui_ux_guia_unificado.md §9.1). */}
-                                                {(!isPlanejamentoContext && !isDiaryContext) && (
+                                            <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-end gap-1.5">
+                                                {/* "Ver Detalhes" só em Obras. Em Planejamento/Diário/Orçamentos o clique
+                                                    na linha já abre a ação dominante (Cronograma, Diário, Orçamento
+                                                    Analítico) — §9.1. Em Orçamentos ele ainda abria o formulário de dados,
+                                                    o mesmo do lápis: dois botões, um rótulo enganoso (crítica de
+                                                    2026-11-14). */}
+                                                {isObraContext && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }}
                                                         className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
@@ -1191,7 +1197,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                         Ver Detalhes
                                                     </button>
                                                 )}
-                                                <ActionIconButton kind="edit" className="ml-1" onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }} />
+                                                <ActionIconButton kind="edit" title={isOrcamentoContext ? 'Editar dados do orçamento' : undefined} onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }} />
                                                 <ActionIconButton
                                                     kind="duplicate"
                                                     title={isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento'}
@@ -1299,22 +1305,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     </div>
                                 </div>
 
-                                <div className="p-4 bg-gray-50 rounded-b-[10px] border-t border-gray-100 flex items-center justify-between">
-                                    <div className="flex items-center gap-1">
-                                        {!isObraContext && !isPlanejamentoContext && !isDiaryContext && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'analytic'); }}
-                                                className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
-                                                title="Orçamento Analítico"
-                                            >
-                                                <Table2 className="w-4 h-4" />
-                                            </button>
-                                        )}
-                                        {/* Para Planejamento, o clique no card já abre o Cronograma (onRowClick) —
-                                            evita duplicar a ação em botão (§9.1). */}
-                                    </div>
-                                    <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
-                                        <ActionIconButton kind="edit" title="Editar Dados" onClick={() => onEditProject(project.id)} />
+                                {/* O clique no card já abre a ação dominante (Orçamento Analítico, Cronograma,
+                                    Diário, visão da Obra) — sem botão repetindo (§9.1). Até 2026-11-14 havia
+                                    aqui um ícone "Orçamento Analítico" que fazia o mesmo que o card. */}
+                                <div className="p-4 bg-gray-50 rounded-b-[10px] border-t border-gray-100 flex items-center justify-end">
+                                    <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5">
+                                        <ActionIconButton kind="edit" title={isOrcamentoContext ? 'Editar dados do orçamento' : 'Editar Dados'} onClick={() => onEditProject(project.id)} />
                                         <ActionIconButton
                                             kind="duplicate"
                                             title={isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento'}

@@ -642,6 +642,22 @@ describe('Analítico — a EAP abre mostrando os itens', () => {
         expect(screen.getAllByText('—').length).toBeGreaterThan(0);
     });
 
+    it('grupo sem itens não usa a faixa escura (2ª crítica)', async () => {
+        await abrir();
+        const vazio = screen.getByRole('button', { name: /grupo 01 VAZIO/ }).closest('tr') as HTMLElement;
+        const cheio = screen.getByRole('button', { name: /grupo 02 COM ITEM/ }).closest('tr') as HTMLElement;
+        expect(vazio.className).not.toContain('bg-gray-800');
+        expect(cheio.className).toContain('bg-gray-800');
+    });
+
+    it('"Expandir tudo" abre só o que tem itens', async () => {
+        await abrir();
+        fireEvent.click(screen.getByTitle('Recolher tudo'));
+        fireEvent.click(screen.getByTitle('Expandir tudo'));
+        expect(screen.getByTestId('budget-row-x')).toBeTruthy();
+        expect(screen.queryByText('Etapa vazia')).toBeNull();
+    });
+
     it('subetapas vazias ficam numa linha "Mostrar"; mostrar e ocultar', async () => {
         await abrir();
         expect(screen.queryByText('Sub vazia C')).toBeNull();

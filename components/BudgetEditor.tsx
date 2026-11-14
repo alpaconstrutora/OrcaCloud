@@ -142,11 +142,13 @@ const DRAG_COL_WIDTH = 32;
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
   // 112 (era 96): "04.01.01.01" + o ícone da CPU não cabiam (medido 87 × 71 px).
   item: 112,
-  base: 84,
-  codigo: 104,
+  // Parte fixa à esquerda (arraste+Item+Base+Código+Descrição) 652 → 564 px: na 2ª crítica ela
+  // tomava 58% da área a 1280 e sobravam 3–4 colunas numéricas para rolar.
+  base: 72,
+  codigo: 88,
   // 320 (era 520): a descrição vai em até 2 linhas com o texto inteiro no title, e as colunas
   // de identificação ficam FIXAS à esquerda — com 520 a parte fixa tomava metade da tela.
-  descricao: 320,
+  descricao: 260,
   qtd: 84,
   unid: 72,
   'custo-unit': 128,
@@ -1014,15 +1016,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     return true;
   };
 
+  /** "Expandir tudo" abre só grupo/etapa/subetapa com itens (2ª crítica, 2026-11-14): abrir
+   *  tudo dava 704 linhas no Garden (302 "Nenhum item") para 2 itens. Para chegar a uma etapa
+   *  vazia, o clique no grupo ou o "N subetapas sem itens · Mostrar" continuam lá. */
   const handleExpandAll = () => {
-    const allGroupIds = settings.wbs.map(g => g.id);
-    const allPhaseIds = settings.wbs.flatMap(g => g.phases.map(p => p.id));
-    const allSubPhaseNames = settings.wbs.flatMap(g => g.phases.flatMap(p => p.subPhases));
-
-    setExpandedGroups(allGroupIds);
-    setExpandedPhases(allPhaseIds);
-    setExpandedSubPhases(allSubPhaseNames);
-    setEtapasComVaziasVisiveis(allPhaseIds);
+    expandirOndeHaItens(settings.wbs, budget);
   };
 
   const handleCollapseAll = () => {
@@ -3111,37 +3109,44 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             const isGroupExpanded = isSearching_wbs || expandedGroups.includes(group.id);
             const groupTotal = calculateGroupTotal(group.name);
             const itensDoGrupo = contagemDeItens.grupo(group.name);
+            // Grupo SEM item: linha clara e compacta; a faixa escura fica para quem tem orçamento.
+            // Na 2ª crítica (2026-11-14) 14 das 16 faixas pretas do Garden eram vazias e pesavam
+            // igual às que somavam R$ 173 mil.
+            const grupoVazio = itensDoGrupo === 0;
+            const tomGrupo = grupoVazio
+              ? { tr: 'bg-white hover:bg-gray-50 text-gray-700', fixo: 'bg-white group-hover:bg-gray-50', borda: 'border-gray-200', py: 'py-1.5', seta: 'text-gray-500', anel: 'focus-visible:ring-blue-500', meta: 'text-gray-600', mais: 'hover:bg-gray-100 text-blue-700' }
+              : { tr: 'bg-gray-800 hover:bg-gray-700 text-white', fixo: 'bg-gray-800 group-hover:bg-gray-700', borda: 'border-gray-700', py: 'py-2.5', seta: 'text-gray-300', anel: 'focus-visible:ring-white', meta: 'text-gray-300', mais: 'hover:bg-gray-600 text-blue-300' };
             const { name: groupNameDisplay } = splitName(group.name);
 
             return (
               <tbody key={group.id}>
                 {/* GROUP HEADER */}
-                <tr className="bg-gray-800 hover:bg-gray-700 transition-colors text-white group">
-                  <td style={fixaEap(esquerdaFixa.drag)} className="px-3 py-2.5 border-r border-gray-700 bg-gray-800 group-hover:bg-gray-700"></td>
-                  <td style={fixaEap(esquerdaFixa.item)} className="px-3 py-2.5 border-r border-gray-700 bg-gray-800 group-hover:bg-gray-700">
+                <tr className={`${tomGrupo.tr} transition-colors group`}>
+                  <td style={fixaEap(esquerdaFixa.drag)} className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda} ${tomGrupo.fixo}`}></td>
+                  <td style={fixaEap(esquerdaFixa.item)} className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda} ${tomGrupo.fixo}`}>
                     {/* Botão de verdade (teclado + leitor de tela): até 14/11/2026 era div sem foco. */}
-                    <button type="button" aria-expanded={isGroupExpanded} aria-label={`${isGroupExpanded ? 'Recolher' : 'Abrir'} grupo ${group.id} ${groupNameDisplay}`} onClick={() => toggleGroup(group.id)} className="flex items-center gap-1 cursor-pointer font-semibold text-sm rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
-                      {isGroupExpanded ? <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />}
+                    <button type="button" aria-expanded={isGroupExpanded} aria-label={`${isGroupExpanded ? 'Recolher' : 'Abrir'} grupo ${group.id} ${groupNameDisplay}`} onClick={() => toggleGroup(group.id)} className={`flex items-center gap-1 cursor-pointer font-semibold text-sm rounded-[4px] focus:outline-none focus-visible:ring-2 ${tomGrupo.anel}`}>
+                      {isGroupExpanded ? <ChevronDown className={`w-4 h-4 ${tomGrupo.seta} shrink-0`} /> : <ChevronRight className={`w-4 h-4 ${tomGrupo.seta} shrink-0`} />}
                       {group.id}
                     </button>
                   </td>
-                  <td colSpan={3} style={fixaEap(esquerdaFixa.base, { ultima: true })} className="px-3 py-2.5 border-r border-gray-700 bg-gray-800 group-hover:bg-gray-700">
+                  <td colSpan={3} style={fixaEap(esquerdaFixa.base, { ultima: true })} className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda} ${tomGrupo.fixo}`}>
                     {/* Contagem e total logo depois do nome (§6.12): a coluna Preço total cai fora
                         da tela numa tabela larga, e o grupo precisa dizer o que tem. */}
                     <div className="flex items-baseline gap-2 min-w-0">
                       <span className="font-semibold text-sm leading-tight truncate" title={groupNameDisplay}>{groupNameDisplay}</span>
-                      <span className="shrink-0 text-sm font-normal text-gray-300 whitespace-nowrap">
+                      <span className={`shrink-0 text-sm font-normal ${tomGrupo.meta} whitespace-nowrap`}>
                         · {rotuloItens(itensDoGrupo)}{itensDoGrupo > 0 ? ` · ${valorOuTraco(itensDoGrupo, groupTotal)}` : ''}
                       </span>
                     </div>
                   </td>
-                  <td colSpan={7} className="px-3 py-2.5 border-r border-gray-700"></td>
-                  <td className="px-3 py-2.5 border-r border-gray-700 last:border-r-0 relative">
+                  <td colSpan={7} className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda}`}></td>
+                  <td className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda} last:border-r-0 relative`}>
                       {/* Valor + "Nova etapa" + ⋮ numa linha só (§9.2): eram 6 ícones empilhados
                           embaixo do valor, e a faixa do grupo tinha 72px de altura. */}
                     <div className="flex items-center justify-end gap-1.5">
                       <span className="font-medium text-sm whitespace-nowrap">{valorOuTraco(itensDoGrupo, groupTotal)}</span>
-                      <button type="button" onClick={(e) => handleAddPhase(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-blue-300" title="Nova etapa" aria-label="Nova etapa"><Plus className="w-4 h-4" /></button>
+                      <button type="button" onClick={(e) => handleAddPhase(e, gIndex)} className={`p-1.5 rounded-[6px] ${tomGrupo.mais}`} title="Nova etapa" aria-label="Nova etapa"><Plus className="w-4 h-4" /></button>
                       <InlineDisclosureMenu
                         menuItems={[
                           { icon: <ArrowUp className="w-[18px] h-[18px]" />, label: 'Mover para cima', onClick: () => handleMoveGroup(SEM_EVENTO, gIndex, 'UP'), disabled: !canReorderGroups || gIndex === 0, title: !canReorderGroups ? MOTIVO_SEM_MOVER_GRUPO : undefined },

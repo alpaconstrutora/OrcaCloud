@@ -564,7 +564,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
           de tela não sabia que a coluna era ordenável nem em que sentido. */}
       <button
         type="button"
-        className="flex items-center gap-1.5 w-full text-left [text-transform:inherit] rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+        className="flex items-center gap-1.5 w-full text-left [text-transform:inherit] rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         aria-label={`Ordenar por ${label}`}
       >
         {label}

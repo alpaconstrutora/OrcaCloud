@@ -115,7 +115,7 @@ describe('Orçamentos — textos (crítica 2026-11-14, passo 3)', () => {
 
     it('busca sem resultado oferece limpar (não manda cadastrar), e limpar traz a lista de volta', async () => {
         await montar('ORCAMENTO');
-        fireEvent.change(screen.getByPlaceholderText('Buscar por nome ou cliente…'), { target: { value: 'zzzz' } });
+        fireEvent.change(screen.getByPlaceholderText('Buscar por código, nome, cliente ou obra…'), { target: { value: 'zzzz' } });
         expect(screen.getByText('Nenhum orçamento encontrado')).toBeTruthy();
         expect(screen.queryByText(/Cadastre/)).toBeNull();
         fireEvent.click(screen.getByRole('button', { name: 'Limpar busca e filtros' }));
@@ -188,5 +188,75 @@ describe('Orçamentos — cards que viram filtro (crítica 2026-11-14, passo 4)'
         await montar('OBRA');
         expect(screen.getByText('Total')).toBeTruthy();
         expect(screen.queryByText('Sem obra vinculada')).toBeNull();
+    });
+});
+
+describe('Lista de projetos — teclado (crítica 2026-11-14)', () => {
+    it('a linha recebe foco e abre com Enter e com Espaço; Enter num botão de dentro não abre a linha', async () => {
+        const props = await montar('ORCAMENTO');
+        const linha = screen.getByText('Garden').closest('tr') as HTMLTableRowElement;
+        expect(linha.tabIndex).toBe(0);
+        fireEvent.keyDown(linha, { key: 'Enter' });
+        expect(props.onRowClick).toHaveBeenCalledWith('o1');
+        fireEvent.keyDown(linha, { key: ' ' });
+        expect(props.onRowClick).toHaveBeenCalledTimes(2);
+        fireEvent.keyDown(screen.getByTitle('Editar dados do orçamento'), { key: 'Enter' });
+        expect(props.onRowClick).toHaveBeenCalledTimes(2);
+    });
+
+    it('o card da grade abre com Enter', async () => {
+        const props = await montar('ORCAMENTO');
+        fireEvent.click(screen.getByTitle('Visualização em Grade'));
+        const card = screen.getByText('Garden').closest('[tabindex="0"]') as HTMLElement;
+        fireEvent.keyDown(card, { key: 'Enter' });
+        expect(props.onRowClick).toHaveBeenCalledWith('o1');
+    });
+
+    it('⋮ tem nome; grade/lista dizem qual está ativa', async () => {
+        await montar('ORCAMENTO');
+        expect(screen.getAllByRole('button', { name: 'Mais ações' }).length).toBeGreaterThan(0);
+        expect(screen.getByRole('button', { name: 'Visualização em lista' }).getAttribute('aria-pressed')).toBe('true');
+        expect(screen.getByRole('button', { name: 'Visualização em grade' }).getAttribute('aria-pressed')).toBe('false');
+    });
+
+    it('a linha do grupo recolhe e expande pelo teclado (aria-expanded)', async () => {
+        await montar('ORCAMENTO');
+        fireEvent.change(screen.getByTitle('Agrupar os orçamentos'), { target: { value: 'status' } });
+        const grupo = screen.getByText('Em andamento', { selector: 'span.font-semibold' }).closest('[role="button"]') as HTMLElement;
+        expect(grupo.getAttribute('aria-expanded')).toBe('true');
+        fireEvent.keyDown(grupo, { key: 'Enter' });
+        expect(grupo.getAttribute('aria-expanded')).toBe('false');
+        expect(screen.queryByText('Garden')).toBeNull();
+        fireEvent.keyDown(grupo, { key: ' ' });
+        expect(screen.getByText('Garden')).toBeTruthy();
+    });
+});
+
+describe('Lista de projetos — busca (crítica 2026-11-14)', () => {
+    const LISTA = [
+        { id: 'o4', name: 'Casa de Furnas', code: '004', created_at: '2026-01-01', updated_at: '2026-01-01', settings: { classification: 'ORCAMENTO' } },
+        { id: 'o3', name: 'Igreja', code: '003', created_at: '2026-01-01', updated_at: '2026-01-01', settings: { classification: 'ORCAMENTO', linkedProjectId: 'b9' } },
+        { id: 'b9', name: 'Paróquia São José', created_at: '2026-01-01', updated_at: '2026-01-01', settings: { classification: 'OBRA', client: 'Arquidiocese' } },
+    ];
+    const buscar = async (termo: string) => {
+        render(
+            <ConfirmProvider>
+                <ProjectList onLoadProject={vi.fn()} onEditProject={vi.fn()} onNewProject={vi.fn()} onDuplicateProject={vi.fn()}
+                    onImportProject={vi.fn()} onExportProject={vi.fn()} projects={LISTA} classificationFilter="ORCAMENTO" />
+            </ConfirmProvider>,
+        );
+        await act(async () => { await new Promise(res => setTimeout(res, 30)); });
+        fireEvent.change(screen.getByPlaceholderText('Buscar por código, nome, cliente ou obra…'), { target: { value: termo } });
+        return ['Casa de Furnas', 'Igreja'].filter(n => screen.queryByText(n));
+    };
+
+    it('acha pelo código que se lê na 1ª coluna', async () => {
+        expect(await buscar('004')).toEqual(['Casa de Furnas']);
+    });
+    it('acha pela obra vinculada, sem acento', async () => {
+        expect(await buscar('paroquia sao jose')).toEqual(['Igreja']);
+    });
+    it('acha pelo cliente que a célula mostra (vem da obra vinculada)', async () => {
+        expect(await buscar('arquidiocese')).toEqual(['Igreja']);
     });
 });

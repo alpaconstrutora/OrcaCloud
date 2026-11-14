@@ -1693,6 +1693,16 @@ Três armadilhas, todas medidas no navegador — cada uma passa limpa em teste d
    compartilhada: em `LinhaDeGrupo`, seta + rótulo + contagem + total ficam num `div`
    `sticky left-0 -ml-6 pl-6 bg-inherit`. Vale para toda tabela com Agrupar; sem rolagem, nada muda.
 
+4. **Linha clicável precisa de teclado** (PRODUCT.md: AA com teclado completo): `<tr tabIndex={0}>` +
+   Enter/Espaço (só quando o foco está na própria linha — `e.target === e.currentTarget` —, para não
+   abrir a linha ao apertar Enter no lápis). **O Chrome não desenha `outline` no `<tr>`** (medido
+   14/11/2026): o anel de foco vai nas CÉLULAS, por `group-focus-visible:` — fundo `blue-50` + linhas
+   azuis de 2px em cima e embaixo (à esquerda na 1ª célula, à direita na última). A célula fixa passa a
+   borda dela por variável (`--borda-fixa`), porque `box-shadow` inline venceria a classe do foco.
+   Linha de grupo (§6.12) ganhou `role="button"`, `tabIndex`, `aria-expanded` e Enter/Espaço.
+   ⚠️ Ao conferir foco no Playwright, espere ~300 ms: o `index.css` dá `transition: all 0.2s` a todo
+   `button`, e o anel lido no mesmo instante do Tab sai transparente (parece defeito e não é).
+
 > ℹ️ A largura padrão de uma coluna pode ser própria do contexto (`DEFAULT_COL_WIDTHS_ORCAMENTO`):
 > `useResizableColumns` grava só o que o usuário arrastou, então mudar o padrão não pisa em ninguém.
 > ℹ️ Junto: célula de texto longo (Cliente) numa linha só (`block truncate` + `title`), nome com

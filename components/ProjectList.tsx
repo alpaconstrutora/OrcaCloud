@@ -145,6 +145,26 @@ const RECORTES_ORCAMENTO: { key: RecorteOrcamento; label: string; dica: string; 
     { key: 'com-pedidos', label: 'Com pedidos', dica: 'Mostrar só os orçamentos que já têm pedido de compra vinculado', cor: 'blue', icone: 'cadeado' },
 ];
 
+/** Foco da linha pelo teclado. O contorno do <tr> não é desenhado pelo Chrome (medido
+ *  14/11/2026), então o anel vai nas células: fundo blue-50 + linhas azuis de 2px em cima e
+ *  embaixo, à esquerda na 1ª célula e à direita na última. `--borda-fixa` é a borda da
+ *  célula fixa (vazia nas outras), somada ao anel. */
+const SOMBRA_BASE = '[box-shadow:var(--borda-fixa,0_0_#0000)]';
+const FOCO_MEIO = 'group-focus-visible:bg-blue-50 group-focus-visible:[box-shadow:inset_0_2px_0_#3b82f6,inset_0_-2px_0_#3b82f6,var(--borda-fixa,0_0_#0000)]';
+const FOCO_PRIMEIRA = 'group-focus-visible:bg-blue-50 group-focus-visible:[box-shadow:inset_2px_0_0_#3b82f6,inset_0_2px_0_#3b82f6,inset_0_-2px_0_#3b82f6,var(--borda-fixa,0_0_#0000)]';
+const FOCO_ULTIMA = 'group-focus-visible:bg-blue-50 group-focus-visible:[box-shadow:inset_-2px_0_0_#3b82f6,inset_0_2px_0_#3b82f6,inset_0_-2px_0_#3b82f6]';
+
+/** Texto para comparar na busca: sem acento e sem caixa ("orcamento" acha "Orçamento"). */
+const normalizarBusca = (t: string | null | undefined) =>
+    (t ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+/** Linha/card abrem com Enter ou Espaço — só quando o foco está NELES, não num botão de dentro
+ *  (lápis, duplicar, ⋮ já têm o próprio teclado). Espaço não rola a página. */
+const abrirPeloTeclado = (abrir: () => void) => (e: React.KeyboardEvent<HTMLElement>) => {
+    if (e.target !== e.currentTarget) return;
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); abrir(); }
+};
+
 /** Borda direita da célula fixa: com border-collapse a `border-r` não acompanha o sticky. */
 const BORDA_FIXA = 'inset -1px 0 0 #f3f4f6';
 /** Última coluna fixa: a borda + uma sombra curta indicando que há conteúdo rolando por baixo. */
@@ -393,7 +413,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
             // baixo é z-20 e, vindo depois no DOM, cortava o rótulo da coluna fixa.
             zIndex: cabecalho ? 30 : 1,
             background: cabecalho ? '#fff' : undefined,
-            boxShadow: f.ultima ? BORDA_FIXA_ULTIMA : BORDA_FIXA,
+            // Cabeçalho: sombra direto. Corpo: por variável, que a classe FOCO_* compõe com as
+            // linhas azuis do foco — box-shadow inline venceria a classe e apagaria o foco.
+            ...(cabecalho
+                ? { boxShadow: f.ultima ? BORDA_FIXA_ULTIMA : BORDA_FIXA }
+                : ({ '--borda-fixa': f.ultima ? BORDA_FIXA_ULTIMA : BORDA_FIXA } as React.CSSProperties)),
         };
     };
 
@@ -738,8 +762,15 @@ const ProjectList: React.FC<ProjectListProps> = ({
         let result = tabProjects
             .filter(p => {
                 // Projeto de sistema já sai no store — utils/systemProjects.ts
-                const matchesSearch = p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    (p.settings?.client || '').toLowerCase().includes(searchTerm.toLowerCase());
+                // Busca no que a linha MOSTRA (crítica 2026-11-14): o código lido na 1ª coluna ("004")
+                // não achava nada, nem a obra vinculada. Cliente = texto da célula (pode vir da obra).
+                const termo = normalizarBusca(searchTerm);
+                const matchesSearch = !termo || [
+                    p.code || p.settings?.code,
+                    p.name,
+                    getClientCellValue(p, projects, activeTab),
+                    findLinkedProject(p, projects)?.name || p.settings?.linkedProjectName,
+                ].some(v => normalizarBusca(v).includes(termo));
 
                 const matchesTipo = !tipoFilter || p.settings?.tipoObra === tipoFilter;
 
@@ -1112,7 +1143,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
-                        placeholder="Buscar por nome ou cliente…"
+                        placeholder="Buscar por código, nome, cliente ou obra…"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         // placeholder:text-gray-500 — sem ele o navegador usava o cinza padrão (3,0:1, abaixo do AA).
@@ -1190,6 +1221,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <div className="w-px h-5 bg-gray-200 mx-0.5"></div>
                     <button
                         onClick={() => setViewMode('grid')}
+                        aria-pressed={viewMode === 'grid'}
+                        aria-label="Visualização em grade"
                         className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'grid'
                             ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
@@ -1200,6 +1233,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </button>
                     <button
                         onClick={() => setViewMode('list')}
+                        aria-pressed={viewMode === 'list'}
+                        aria-label="Visualização em lista"
                         className={`p-1.5 rounded-[6px] transition-all ${viewMode === 'list'
                             ? 'bg-blue-600 text-white'
                             : 'text-gray-400 hover:text-gray-600'
@@ -1294,23 +1329,28 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     return (
                                     <tr
                                         key={project.id}
+                                        // Teclado (PRODUCT.md: AA com teclado completo, inclusive linha clicável):
+                                        // até 2026-11-14 a linha só abria com o mouse — pelo Tab o foco pulava
+                                        // direto para os botões de Ações.
+                                        tabIndex={0}
                                         onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
-                                        className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
+                                        onKeyDown={abrirPeloTeclado(() => onRowClick ? onRowClick(project.id) : onEditProject(project.id))}
+                                        className="hover:bg-blue-50/30 transition-colors group cursor-pointer outline-none"
                                     >
-                                        {displayColumns.map(key => (
+                                        {displayColumns.map((key, iCol) => (
                                             <td
                                                 key={key}
                                                 style={estiloFixo(key, false)}
                                                 // Célula fixa precisa de fundo opaco (o resto da linha rola por baixo);
                                                 // #fafcff = o blue-50/30 do hover da linha já composto sobre o branco.
-                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0${bordaLinhaTd} ${colunasFixas[key] ? 'bg-white group-hover:bg-[#fafcff]' : ''}`}
+                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0${bordaLinhaTd} ${SOMBRA_BASE} ${iCol === 0 ? FOCO_PRIMEIRA : FOCO_MEIO} ${colunasFixas[key] ? 'bg-white group-hover:bg-[#fafcff]' : ''}`}
                                             >
                                                 {renderProjectCell(key, project)}
                                             </td>
                                         ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
-                                        <td aria-hidden="true" className={`border-r border-gray-100${bordaLinhaTd}`}></td>
-                                        <td className={`px-6 py-2.5 text-right${bordaLinhaTd}`}>
+                                        <td aria-hidden="true" className={`border-r border-gray-100${bordaLinhaTd} ${FOCO_MEIO}`}></td>
+                                        <td className={`px-6 py-2.5 text-right${bordaLinhaTd} ${FOCO_ULTIMA}`}>
                                             <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-end gap-1.5">
                                                 {/* "Ver Detalhes" só em Obras. Em Planejamento/Diário/Orçamentos o clique
                                                     na linha já abre a ação dominante (Cronograma, Diário, Orçamento
@@ -1357,8 +1397,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         {projetosNaTela.map(project => (
                             <div
                                 key={project.id}
+                                tabIndex={0}
                                 onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
-                                className="bg-white rounded-[10px] border border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group flex flex-col"
+                                onKeyDown={abrirPeloTeclado(() => onRowClick ? onRowClick(project.id) : onEditProject(project.id))}
+                                className="bg-white rounded-[10px] border border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group flex flex-col outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                             >
                                 <div className="p-5 flex-1">
                                     <div className="flex items-start justify-between mb-4">

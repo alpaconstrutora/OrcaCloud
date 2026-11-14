@@ -223,6 +223,11 @@ export interface UseBlueprintEditor {
   run: (command: Command) => string[];
   /** Vários comandos, UM passo de histórico. Devolve os ids criados no lote. */
   runBatch: (commands: Command[]) => string[];
+  /**
+   * PA5 do prédio automático: o lote JÁ APLICADO no Web Worker sobre o desenho de agora (`hashDaBase`) entra como UM
+   * passo, sem reaplicar — as mesmas recusas, o autosave e a colaboração do `runBatch`. Base diferente: recusa.
+   */
+  runBatchPrevisto: (commands: Command[], hashDaBase: string, resultado: { model: BlueprintModel; diff: { created: string[] }; hash: string }) => string[];
   undo: () => void;
   redo: () => void;
   canUndo: boolean;
@@ -466,6 +471,12 @@ export function useBlueprintEditor(branchId: string | null, ganchos?: GanchosDeC
     [aplicar],
   );
 
+  const runBatchPrevisto = useCallback(
+    (commands: Command[], hashDaBase: string, resultado: { model: BlueprintModel; diff: { created: string[] }; hash: string }) =>
+      commands.length === 0 ? [] : aplicar(commands, () => historyRef.current.applyPrecomputed(hashDaBase, { model: resultado.model, diff: { created: resultado.diff.created, updated: [], deleted: [], ancestry: {} }, hash: resultado.hash })),
+    [aplicar],
+  );
+
   const aplicarExterno = useCallback(
     (msg: MensagemDeComando): ResultadoRemoto => {
       const r = aplicarRemoto(historyRef.current, msg);
@@ -552,6 +563,7 @@ export function useBlueprintEditor(branchId: string | null, ganchos?: GanchosDeC
     setSelectedId,
     run,
     runBatch,
+    runBatchPrevisto,
     undo,
     redo,
     canUndo: historyRef.current.canUndo,

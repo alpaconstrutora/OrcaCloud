@@ -309,28 +309,79 @@ export function conflitosDoModelo(model: BlueprintModel, opcoes: { pecas?: reado
       pontasNoMundo({ ...x, a: seg.a, b: seg.b, cotaAMm: seg.cotaAMm, cotaBMm: seg.cotaBMm }, elevacao.get(x.levelId) ?? 0),
     );
 
+  // PA7a do prédio automático (14/11/2026): os pedaços, o envelope e a CAIXA 3D de cada trecho, uma vez — o par
+  // (trecho, trecho) recalculava os do outro a cada par e media a distância até entre tubos a metros um do outro: no
+  // prédio de 8 andares com esgoto, 36 s por cálculo (a tela trava ao lançar). A caixa só PODA o par cujas caixas estão
+  // mais longe que o alcance — a distância entre os eixos é ≥ a entre as caixas (e aparar só a aumenta): o mesmo resultado.
+  const preparado = new Map(
+    trechos.map((x) => {
+      const ped = pedacosDe(x);
+      const env = envelopeDoTrecho(x);
+      const cx = { x0: Infinity, y0: Infinity, z0: Infinity, x1: -Infinity, y1: -Infinity, z1: -Infinity };
+      for (const [A, B] of ped) {
+        for (const q of [A, B]) {
+          cx.x0 = Math.min(cx.x0, q.x);
+          cx.y0 = Math.min(cx.y0, q.y);
+          cx.z0 = Math.min(cx.z0, q.z);
+          cx.x1 = Math.max(cx.x1, q.x);
+          cx.y1 = Math.max(cx.y1, q.y);
+          cx.z1 = Math.max(cx.z1, q.z);
+        }
+      }
+      return [x.id, { ped, env, cx }] as const;
+    }),
+  );
+  /** A distância entre as caixas de dois trechos (0 se se tocam) — um limite INFERIOR da distância entre os eixos. */
+  const distanciaEntreCaixas = (a: { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number }, b: typeof a) =>
+    Math.hypot(Math.max(0, a.x0 - b.x1, b.x0 - a.x1), Math.max(0, a.y0 - b.y1, b.y0 - a.y1), Math.max(0, a.z0 - b.z1, b.z0 - a.z1));
+
   // E7.2: vãos e paredes estruturais.
   const paredePorId = new Map(model.walls.map((w) => [w.id, w]));
+  // E a pegada de cada peça de estrutura e o polígono de cada vão, uma vez (eram refeitos a cada trecho), com a caixa em
+  // planta — o par cuja caixa está fora do alcance em planta, ou fora da faixa de cotas, não toca (`contraPrisma` daria nulo).
+  const caixaDoAnel = (anel: readonly Point[]) => ({
+    x0: Math.min(...anel.map((q) => q.x)),
+    y0: Math.min(...anel.map((q) => q.y)),
+    x1: Math.max(...anel.map((q) => q.x)),
+    y1: Math.max(...anel.map((q) => q.y)),
+  });
+  const estruturas = model.structures.map((s) => {
+    const es = elevacao.get(s.levelId) ?? 0;
+    const anel = pegadaEmPlanta(s);
+    return { s, anel, cx: caixaDoAnel(anel), zLo: es + s.baseMm, zHi: es + s.baseMm + s.alturaMm };
+  });
+  const vaos = model.openings.flatMap((o) => {
+    const w = paredePorId.get(o.wallId);
+    if (!w) return [];
+    const anel = anelDoVao(w, o.offsetMm, o.widthMm);
+    if (!anel) return [];
+    const ew = elevacao.get(w.levelId) ?? 0;
+    return [{ o, w, anel, cx: caixaDoAnel(anel), zLo: ew + o.sillMm, zHi: ew + o.sillMm + o.heightMm }];
+  });
+  /** A caixa do trecho fica longe da peça: fora do alcance em planta ou da faixa de cotas (com 1 mm de folga). */
+  const longe = (t: { x0: number; y0: number; z0: number; x1: number; y1: number; z1: number }, p: { cx: { x0: number; y0: number; x1: number; y1: number }; zLo: number; zHi: number }, planta: number, vertical: number) =>
+    t.x1 < p.cx.x0 - planta - 1 || t.x0 > p.cx.x1 + planta + 1 || t.y1 < p.cx.y0 - planta - 1 || t.y0 > p.cx.y1 + planta + 1 || t.z1 < p.zLo - vertical - 1 || t.z0 > p.zHi + vertical + 1;
   const paredesEstruturais = model.walls.filter((w) => (w.camadas ?? []).some((c) => c.funcao === 'ESTRUTURAL'));
 
   for (const t of trechos) {
-    const pedacos = pedacosDe(t);
+    const prepT = preparado.get(t.id)!;
+    const pedacos = prepT.ped;
     // E7.1 (05/10/2026): o duto RETANGULAR tem meia ALTURA na vertical e meia LARGURA em planta —
     // o cilindro de raio largura/2 acusaria a viga 20 cm acima de um duto de 30 cm de altura.
     // E10.2: e o ENVELOPE — isolamento, e a linha com os dois tubos (antes contava só o de líquido).
-    const env = envelopeDoTrecho(t);
+    const env = prepT.env;
     const raio = env.raioPlantaMm;
     const raioVertical = env.raioVerticalMm;
 
     // ── Contra a ESTRUTURA ───────────────────────────────────────────────
-    for (const s of model.structures) {
-      const es = elevacao.get(s.levelId) ?? 0;
-      const anel = pegadaEmPlanta(s);
+    for (const e of estruturas) {
+      if (longe(prepT.cx, e, raio, raioVertical)) continue;
+      const { s, anel } = e;
       // Um conflito por par (trecho, peça): o que está DENTRO soma pelos
       // pedaços; a folga é a menor delas.
       let r: { dentroMm: number; folgaMm: number } | null = null;
       for (const [A, B] of pedacos) {
-        const parte = contraPrisma(A, B, raioVertical, anel, es + s.baseMm, es + s.baseMm + s.alturaMm, raio);
+        const parte = contraPrisma(A, B, raioVertical, anel, e.zLo, e.zHi, raio);
         if (!parte) continue;
         r = r ? { dentroMm: r.dentroMm + parte.dentroMm, folgaMm: Math.min(r.folgaMm, parte.folgaMm) } : parte;
       }
@@ -348,16 +399,14 @@ export function conflitosDoModelo(model: BlueprintModel, opcoes: { pecas?: reado
 
     // ── E7.2: contra o VÃO de porta/janela (entre peitoril e verga) ──────
     const paredesComVaoAtravessado = new Set<ObjectId>();
-    for (const o of model.openings) {
-      const w = paredePorId.get(o.wallId);
-      if (!w) continue; // o prisma do vão está em cota ABSOLUTA — o pavimento se resolve sozinho
-      const anel = anelDoVao(w, o.offsetMm, o.widthMm);
-      if (!anel) continue;
-      const ew = elevacao.get(w.levelId) ?? 0;
+    for (const v of vaos) {
+      // O prisma do vão está em cota ABSOLUTA — o pavimento se resolve sozinho. Raio zero: só o eixo conta.
+      if (longe(prepT.cx, v, 0, 0)) continue;
+      const { o, w, anel } = v;
       let dentro = 0;
       for (const [A, B] of pedacos) {
         // Raio zero: é o EIXO que tem de estar no vão — o raspão na ombreira é parede.
-        const parte = contraPrisma(A, B, 0, anel, ew + o.sillMm, ew + o.sillMm + o.heightMm);
+        const parte = contraPrisma(A, B, 0, anel, v.zLo, v.zHi);
         if (parte) dentro += parte.dentroMm;
       }
       if (dentro <= 0) continue;
@@ -405,12 +454,14 @@ export function conflitosDoModelo(model: BlueprintModel, opcoes: { pecas?: reado
       // `id` só cresce, então o par é visitado uma vez — e nunca contra si.
       if (u.id <= t.id) continue;
       if (u.disciplina === t.disciplina) continue;
-      const envU = envelopeDoTrecho(u);
+      const prepU = preparado.get(u.id)!;
+      const envU = prepU.env;
       const alcance = Math.max(raio, raioVertical) + Math.max(envU.raioPlantaMm, envU.raioVerticalMm);
+      if (distanciaEntreCaixas(prepT.cx, prepU.cx) > alcance) continue;
       // E10.2: os dois que NASCEM NO MESMO NÓ (a linha e o dreno na evaporadora, o duto e a linha na dutada)
       // se encontram ali por projeto — mede-se a partir de onde eles se separam, não no nó.
       let pedT = pedacos;
-      let pedU = pedacosDe(u);
+      let pedU = prepU.ped;
       const comum = noEmComum(pedT, pedU);
       if (comum) {
         pedT = aparar(pedT, comum, alcance + 50);

@@ -5,6 +5,7 @@ import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft, Plus, X, Aler
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
+import { normalizarChavePix, EXEMPLO_CHAVE_PIX } from '../utils/pixCopiaECola';
 
 interface ProConfigFormProps {
   userId: string;
@@ -22,6 +23,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
   const [profissao, setProfissao] = useState('AR_CONDICIONADO');
   const [pixKeyType, setPixKeyType] = useState<ProPixKeyType>('CPF');
   const [pixKey, setPixKey] = useState('');
+  // Chave conferida pelo tipo (utils/pixCopiaECola.ts): chave errada aqui vira QR recusado na frente do cliente.
+  const [erroChavePix, setErroChavePix] = useState('');
   const [templateFooter, setTemplateFooter] = useState('');
 
   // Estados para templates customizados
@@ -59,8 +62,19 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
     }
   }, [userId]);
 
+  const conferirChavePix = (tipo: ProPixKeyType = pixKeyType, chave: string = pixKey): boolean => {
+    if (!chave.trim()) { setErroChavePix(''); return true; }
+    const r = normalizarChavePix(tipo, chave);
+    setErroChavePix(r.ok ? '' : r.motivo);
+    return r.ok;
+  };
+
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!conferirChavePix()) {
+      showToast('Revise a chave Pix antes de salvar.', 'error');
+      return;
+    }
     try {
       setSaving(true);
       await proService.saveConfig({
@@ -235,7 +249,11 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               <label className="block text-xs font-semibold text-slate-500">Tipo de Chave</label>
               <select
                 value={pixKeyType}
-                onChange={(e) => setPixKeyType(e.target.value as ProPixKeyType)}
+                onChange={(e) => {
+                  const tipo = e.target.value as ProPixKeyType;
+                  setPixKeyType(tipo);
+                  if (erroChavePix) conferirChavePix(tipo);
+                }}
                 className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-2.5 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
               >
                 <option value="CPF">CPF</option>
@@ -249,12 +267,20 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               <label className="block text-xs font-semibold text-slate-500">Chave PIX</label>
               <input
                 type="text"
-                placeholder="Insira a chave pix"
+                placeholder={EXEMPLO_CHAVE_PIX[pixKeyType]}
+                inputMode={pixKeyType === 'CPF' || pixKeyType === 'CELULAR' ? 'numeric' : pixKeyType === 'EMAIL' ? 'email' : 'text'}
+                autoCapitalize="off"
                 value={pixKey}
-                onChange={(e) => setPixKey(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+                onChange={(e) => { setPixKey(e.target.value); if (erroChavePix) setErroChavePix(''); }}
+                onBlur={() => conferirChavePix()}
+                aria-invalid={!!erroChavePix}
+                aria-describedby={erroChavePix ? 'erro-chave-pix' : undefined}
+                className={`w-full bg-slate-50 border rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium ${erroChavePix ? 'border-red-400' : 'border-slate-200'}`}
                 required
               />
+              {erroChavePix && (
+                <p id="erro-chave-pix" className="text-xs text-red-600" role="alert">{erroChavePix}</p>
+              )}
             </div>
           </div>
           <span className="block text-[8px] text-slate-400">Utilizada para gerar o QR Code Dinâmico e o código Copia e Cola ao concluir um serviço.</span>

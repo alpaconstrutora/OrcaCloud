@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { CommercialPriceTable, CommercialPriceTableItem } from './commercialPriceTableService';
 import type { SalesPlan, PolicyValidation, SimulationPolicyInput } from './salesPlanService';
-import type { EstruturaDoTipo } from '../utils/empreendimentoTipos';
+import { ESTRUTURAS_DO_TIPO, type EstruturaDoTipo } from '../utils/empreendimentoTipos';
 
 export interface BrokerPortalToken {
     id: string;
@@ -272,7 +272,8 @@ export const brokerPortalService = {
         const res = data as { valid: boolean; estrutura?: string; quadra_lote?: Record<string, { quadra: string | null; lote: string | null }> };
         const e = res?.estrutura;
         return {
-            estrutura: e === 'LOTE' || e === 'IMOVEL_UNICO' ? e : 'TORRES',
+            // Valor desconhecido (tipo novo no banco antes do código) cai em TORRES, o de sempre.
+            estrutura: ESTRUTURAS_DO_TIPO.some(x => x.value === e) ? (e as EstruturaDoTipo) : 'TORRES',
             quadraLote: res?.quadra_lote ?? {},
         };
     },

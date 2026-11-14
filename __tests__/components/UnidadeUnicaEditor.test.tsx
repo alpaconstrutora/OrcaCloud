@@ -23,7 +23,8 @@ vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => vi.fn(async ()
 import { UnidadeUnicaEditor } from '../../components/empreendimento/UnidadeUnicaEditor';
 
 const EMP = { id: 'emp-1', organization_id: 'org-1', name: 'Lote Vale do Sol', terreno_area: 134, terreno_frente: 8 };
-const montar = (estrutura: 'LOTE' | 'IMOVEL_UNICO', nomeDoTipo = estrutura === 'LOTE' ? 'Lote' : 'Casa Residencial') =>
+const NOME_PADRAO = { LOTE: 'Lote', IMOVEL_UNICO: 'Casa Residencial', UNIDADE_AUTONOMA: 'Apartamento Residencial' } as const;
+const montar = (estrutura: keyof typeof NOME_PADRAO, nomeDoTipo: string = NOME_PADRAO[estrutura]) =>
   render(<UnidadeUnicaEditor empreendimentoId="emp-1" organizationId="org-1" empreendimento={EMP as never} estrutura={estrutura} nomeDoTipo={nomeDoTipo} />);
 
 describe('UnidadeUnicaEditor', () => {
@@ -71,6 +72,7 @@ describe('UnidadeUnicaEditor', () => {
     expect(screen.queryByLabelText('Pavimento')).toBeNull();
     expect(screen.queryByLabelText('Tipo de pavimento')).toBeNull();
     expect(screen.queryByLabelText('Posição')).toBeNull();
+    expect(screen.queryByLabelText('Andar')).toBeNull(); // casa não tem andar
     expect((screen.getByLabelText('Tipologia') as HTMLInputElement).value).toBe('Casa Residencial');
     fireEvent.change(screen.getByLabelText('Área privativa (m²)'), { target: { value: '90' } });
     fireEvent.change(screen.getByLabelText('Dormitórios'), { target: { value: '3' } });
@@ -82,6 +84,26 @@ describe('UnidadeUnicaEditor', () => {
     fireEvent.click(screen.getByRole('button', { name: /Salvar terreno/ }));
     await waitFor(() => expect(svc.update).toHaveBeenCalledTimes(1));
     expect(svc.salvarUnidadeUnica).toHaveBeenCalledTimes(1);
+  });
+
+  it('UNIDADE AUTÔNOMA (apartamento, 13/11/2026): só a Unidade — sem a seção Terreno', async () => {
+    montar('UNIDADE_AUTONOMA');
+    expect(await screen.findByTestId('secao-unidade-unica')).toBeInTheDocument();
+    expect(screen.getByLabelText('Dormitórios')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Área total (m²)')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Salvar terreno/ })).toBeNull();
+    expect(screen.queryByText(/Terreno/)).toBeNull();
+    expect((screen.getByLabelText('Tipologia') as HTMLInputElement).value).toBe('Apartamento Residencial');
+    // Andar (14/11/2026) — só ele; Tipo de pavimento e Posição continuam fora.
+    expect(screen.queryByLabelText('Tipo de pavimento')).toBeNull();
+    expect(screen.queryByLabelText('Posição')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Andar'), { target: { value: '3' } });
+    fireEvent.change(screen.getByLabelText('Área privativa (m²)'), { target: { value: '72' } });
+    fireEvent.click(screen.getByRole('button', { name: /Cadastrar unidade/ }));
+    await waitFor(() => expect(svc.salvarUnidadeUnica).toHaveBeenCalledTimes(1));
+    expect(svc.salvarUnidadeUnica.mock.calls[0][1]).toEqual({ nomeDaTorre: 'Apartamento Residencial', nomeDaUnidade: 'Lote Vale do Sol', tipologia: 'Apartamento Residencial' });
+    expect(svc.salvarUnidadeUnica.mock.calls[0][2]).toEqual(expect.objectContaining({ private_area: 72, floor: 3 }));
+    expect(svc.update).not.toHaveBeenCalled();
   });
 
   it('com unidade gravada: mostra o status de venda e só salva depois de mudar algo', async () => {

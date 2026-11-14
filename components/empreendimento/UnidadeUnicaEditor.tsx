@@ -8,6 +8,9 @@
 //   Lote     — LOTE: identificação, quadra e nº; área e testada SÃO as do terreno (salvar o terreno
 //              leva os dois à unidade)
 //   Unidade  — IMOVEL_UNICO: os campos da unidade sem pavimento/posição (UnitFormFields semPavimento)
+//   Só a Unidade — UNIDADE_AUTONOMA (13/11/2026, Apartamento Residencial): o mesmo formulário do
+//              IMOVEL_UNICO, SEM a seção Terreno (o terreno é do prédio, não do empreendimento), e COM
+//              o campo "Andar" (pedido de 14/11/2026).
 //
 // Por baixo continua uma torre (implícita) com uma unidade — Espelho de Vendas, Comercial, Condomínio
 // e Portal leem unidade dentro de torre. Preço e status ficam no Espelho de Vendas/Locações, como em
@@ -23,7 +26,7 @@ import { Empreendimento, EmpreendimentoTower, EmpreendimentoUnit } from '../../t
 import TerrenoSecao, { type TerrenoGravado } from './TerrenoSecao';
 import TowerEditor from './TowerEditor';
 import UnitFormFields, { emptyUnitFormValues, unitFormFromRecord, unitFormToPayload, type UnitFormValues } from './UnitFormFields';
-import { camposDoLote, foraDoMolde, nomeDaTorreImplicita } from '../../utils/empreendimentoUnidadeUnica';
+import { camposDoLote, foraDoMolde, nomeDaTorreImplicita, temTerrenoProprio, type EstruturaUnidadeUnica } from '../../utils/empreendimentoUnidadeUnica';
 import { UNIT_STATUS_LABEL } from '../../utils/empreendimentoComercial';
 import { formatCurrency } from '../../utils/financialMath';
 
@@ -31,7 +34,7 @@ interface Props {
   empreendimentoId: string;
   organizationId: string;
   empreendimento: Empreendimento;
-  estrutura: 'LOTE' | 'IMOVEL_UNICO';
+  estrutura: EstruturaUnidadeUnica;
   /** Nome do tipo ("Lote", "Chácara", "Casa Residencial") — nome da torre implícita e tipologia padrão. */
   nomeDoTipo?: string;
   /** Depois de salvar o Terreno (ver TowerEditor). */
@@ -175,12 +178,14 @@ export const UnidadeUnicaEditor: React.FC<Props> = ({
 
   return (
     <div className="space-y-6">
-      <TerrenoSecao
-        empreendimentoId={empreendimentoId}
-        empreendimento={empreendimento}
-        onTerrenoSaved={onTerrenoSaved}
-        onSalvo={ehLote ? levarTerrenoAoLote : undefined}
-      />
+      {temTerrenoProprio(estrutura) && (
+        <TerrenoSecao
+          empreendimentoId={empreendimentoId}
+          empreendimento={empreendimento}
+          onTerrenoSaved={onTerrenoSaved}
+          onSalvo={ehLote ? levarTerrenoAoLote : undefined}
+        />
+      )}
 
       <section className={blocoCls} aria-label={ehLote ? 'Lote' : 'Unidade'} data-testid="secao-unidade-unica">
         <SecaoTitulo icon={ehLote ? LandPlot : Home} titulo={ehLote ? 'Lote' : 'Unidade'} />
@@ -222,6 +227,7 @@ export const UnidadeUnicaEditor: React.FC<Props> = ({
               onChange={patch => { setImovelForm(p => ({ ...p, ...patch })); if ('name' in patch) setErroNome(undefined); }}
               erroNome={erroNome}
               semPavimento
+              comAndar={!temTerrenoProprio(estrutura)}
               rotuloDoNome="Identificação *"
             />
           )}

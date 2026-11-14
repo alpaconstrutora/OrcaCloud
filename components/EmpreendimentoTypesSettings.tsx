@@ -45,7 +45,7 @@ interface RenderTypeCellCtx {
 
 const rotuloDaCor = (cor: string) => COLOR_OPTIONS.find(c => c.key === cor)?.label ?? cor;
 const rotuloDaEstrutura = (e: string | undefined) => ESTRUTURAS_DO_TIPO.find(x => x.value === e)?.label ?? ESTRUTURAS_DO_TIPO[0].label;
-const DICA_DA_ESTRUTURA = 'Como a aba de unidades do empreendimento se monta: torres com pavimentos e unidades, ou uma unidade só — o próprio lote, ou uma casa/chácara sobre o terreno.';
+const DICA_DA_ESTRUTURA = 'Como a aba de unidades do empreendimento se monta: torres com pavimentos e unidades, ou uma unidade só — o próprio lote, uma casa/chácara sobre o terreno, ou uma unidade sem terreno (apartamento, sala).';
 
 function renderEmpreendimentoTypeCell(key: string, type: EmpreendimentoTypeRecord, ctx: RenderTypeCellCtx): React.ReactNode {
     switch (key) {

@@ -6,7 +6,7 @@ import { Empreendimento, EmpreendimentoStatus, EmpreendimentoUnitCharacteristic 
 import TowerEditor from './TowerEditor';
 import UnidadeUnicaEditor from './UnidadeUnicaEditor';
 import { estruturaDoTipo, type EstruturaDoTipo } from '../../utils/empreendimentoTipos';
-import { ehUnidadeUnica } from '../../utils/empreendimentoUnidadeUnica';
+import { ehUnidadeUnica, temTerrenoProprio } from '../../utils/empreendimentoUnidadeUnica';
 import { EspelhoVendasTab } from './EspelhoVendasTab';
 import { EspelhoLocacoesTab } from './EspelhoLocacoesTab';
 import { SyncCenterTab } from './SyncCenterTab';
@@ -408,7 +408,10 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             </dl>
           </div>
 
-          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
+          {/* Apartamento/sala (UNIDADE_AUTONOMA, 13/11/2026): o terreno é do prédio, não do
+              empreendimento — o card some, como a seção Terreno da aba Unidade. */}
+          {(!ehUnidadeUnica(estrutura) || temTerrenoProprio(estrutura)) && (
+          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm" data-testid="card-terreno">
             <h3 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">
               <MapPin className="w-4 h-4 text-gray-400" /> Terreno
             </h3>
@@ -420,6 +423,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
               <Row label="Profundidade" value={e.terreno_profundidade != null ? `${e.terreno_profundidade} m` : undefined} />
             </dl>
           </div>
+          )}
 
           <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
             <h3 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">

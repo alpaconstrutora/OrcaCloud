@@ -7,8 +7,14 @@
 import type { EmpreendimentoUnitUpdate } from '../types';
 import type { EstruturaDoTipo } from './empreendimentoTipos';
 
-/** Unidade única é LOTE ou IMOVEL_UNICO; TORRES é o de sempre. */
-export const ehUnidadeUnica = (e: EstruturaDoTipo): e is 'LOTE' | 'IMOVEL_UNICO' => e !== 'TORRES';
+/** As estruturas de uma unidade só (torre implícita por baixo). */
+export type EstruturaUnidadeUnica = Exclude<EstruturaDoTipo, 'TORRES'>;
+
+/** Unidade única é LOTE, IMOVEL_UNICO ou UNIDADE_AUTONOMA; TORRES é o de sempre. */
+export const ehUnidadeUnica = (e: EstruturaDoTipo): e is EstruturaUnidadeUnica => e !== 'TORRES';
+
+/** Só o LOTE e o IMOVEL_UNICO têm terreno próprio; a UNIDADE_AUTONOMA (apartamento, sala) não. */
+export const temTerrenoProprio = (e: EstruturaUnidadeUnica): boolean => e !== 'UNIDADE_AUTONOMA';
 
 /**
  * Mais de uma torre ou mais de uma unidade: o tipo mudou depois do cadastro. A tela mostra Torres &
@@ -16,9 +22,9 @@ export const ehUnidadeUnica = (e: EstruturaDoTipo): e is 'LOTE' | 'IMOVEL_UNICO'
  */
 export const foraDoMolde = (qtdTorres: number, qtdUnidades: number) => qtdTorres > 1 || qtdUnidades > 1;
 
-/** Nome da torre implícita: o do tipo ("Lote", "Chácara", "Casa Residencial"). */
-export function nomeDaTorreImplicita(estrutura: 'LOTE' | 'IMOVEL_UNICO', nomeDoTipo?: string | null): string {
-  return nomeDoTipo?.trim() || (estrutura === 'LOTE' ? 'Lote' : 'Imóvel');
+/** Nome da torre implícita: o do tipo ("Lote", "Chácara", "Casa Residencial", "Apartamento Residencial"). */
+export function nomeDaTorreImplicita(estrutura: EstruturaUnidadeUnica, nomeDoTipo?: string | null): string {
+  return nomeDoTipo?.trim() || (estrutura === 'LOTE' ? 'Lote' : estrutura === 'UNIDADE_AUTONOMA' ? 'Unidade' : 'Imóvel');
 }
 
 /**

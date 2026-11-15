@@ -144,8 +144,52 @@ a mais, mas não bloqueia.
     vínculo com o orçamento, 37 itens congelados, 39 tarefas (38 com MSO), 2 `activity`, linha de base
     ativa; Central de Comando ao abrir: término 03/12 "no prazo da baseline", desvio 0d e R$ 0. Os
     dois registros de teste foram apagados (0 referências em outras tabelas; 0 restantes).
-- 2d. Atualizar existente → datas trocadas, avanço só nos itens marcados, baseline intacta.
-- 2e. .mpp → spike decide o conversor; depois, o mesmo fluxo aceita .mpp.
+- 2d. Atualizar existente → datas trocadas, avanço só nos itens marcados, baseline intacta. —
+  ✅ **feito 15/11/2026** (pedido: *"seguir para a fase 2"*; teste com gravação num planejamento
+  descartável *"Autorizado (Recomendado)"*):
+  - Botão "Importar datas" na faixa do cronograma (aba Cronograma › Programar); mesmo painel em modo
+    "atualizar" (passos Arquivo → O que muda → Confirmar).
+  - `utils/cronogramaAtualizacao.ts`: `diferencasDaAtualizacao` (datas e avanço app × arquivo) e
+    `aplicarAtualizacao` (datas + predecessoras das casadas; avanço só nas marcadas; tarefas sem custo
+    novas no outline; o resto intacto; linha de base intacta; início recua se o arquivo começa antes).
+    O casamento passou a reconhecer as tarefas sem custo que já existem (pelo nome) — reimportar não
+    duplica. A montagem (2c) foi repartida em `datasDoArquivoNoApp`, `predecessorasNoApp` e
+    `posicionarAtividades`, usadas pelas duas fases.
+  - Antes de gravar, o cronograma atual vira uma Versão do planejamento ("Antes de importar datas de
+    <arquivo> (data)") — dá para voltar. Em modo What-If, recusa com o motivo.
+  - Como sei: 9 testes da atualização (só as 3 replanejadas mudam; avanço só marcado; baseline e item
+    fora do arquivo intactos; reimportar não duplica nem muda nada; o motor não move datas) + 142 dos
+    módulos tocados; tela local no Divino REAL, sem gravar: 3 com datas novas, 33 sem mudança, 3
+    avanços diferentes, marcar 1 → "1 tarefa — só as marcadas", aviso de Versões; tabela cabe no painel.
+  - Teste com gravação (planejamento "TESTE importação — não usar" criado pela 2c e atualizado por um
+    2º arquivo: Combustíveis +2 dias úteis, Seguros 0→50% NÃO marcado, Terraplanagem 100→90% marcado):
+    prévia reconheceu as 2 tarefas sem custo existentes (0 sem par), 1 com datas novas, 36 sem mudança;
+    no banco: Combustíveis 07/08 → 19/08, Seguros 0%, Terraplanagem 90%, linha de base intacta
+    (Combustíveis segue 05/08 nela), 1 versão "Antes de importar datas de msproject-divino-v2.xml
+    (15/11/2026)", 2 `activity` (sem duplicar), 39 tarefas. Registro apagado (0 referências, 0 restantes).
+- 2e. .mpp → ✅ **decidido e feito 15/11/2026** sem conversor. Pedido do usuário: *"tentei fazer
+  uoload porem o arquivo .mpp nao é suoportado"*; respostas: .mpp = *"Orientar 'Salvar como XML'
+  (Recomendado)"*, arquivo real = *"Sim, mando os dois"* (vieram de
+  `C:\D\ALPA\0 - PROJETOS\008 - BELLA VISTA\7 - CRONOGRAMA`: `CRONOGRAMA.xlsx.mpp` e o
+  `CRONOGRAMA.xml` salvo dele pelo Project 2016).
+  - Escolher um .mpp não dá mais erro seco: abre o passo a passo (Arquivo › Salvar como › Formato XML)
+    e o mesmo passo a passo fica recolhido sempre à mão no passo 1.
+  - O arquivo real pegou 2 defeitos que o sintético não pegava, corrigidos aqui:
+    1. **EAP falsa** — o Project numera qualquer arquivo (1, 2, 2.1, 4.1.1…). Contra um orçamento de
+       outra obra, 7 tarefas casavam só pelo número. Agora o número precisa vir com ao menos uma
+       palavra significativa em comum com o item/subetapa/etapa (`nomesCompativeis`; palavras
+       genéricas como "instalação" não contam); número igual + nome diferente = sem par, com aviso
+       âmbar na prévia ("O 4.1.1 do orçamento tem outro nome — escolha à mão se for o mesmo serviço").
+    2. **Estrutura perdida** — tarefa sem custo sem referência no orçamento caía toda em "Outras
+       tarefas do cronograma". Agora `posicionarAtividades` recria os resumos do arquivo (grupo ›
+       etapa › subetapa), reaproveitando nó de mesmo nome (reimportar não duplica).
+  - Como sei: `__tests__/cronogramaArquivoReal.test.ts` com o XML real (sem recursos, calendários de
+    pessoas, autor e empresa): 30 tarefas, linha vazia do Project ignorada, 0 casamentos falsos, os 5
+    grupos e as 6 etapas de Elétrica recriados, as 4 homônimas "Instalação interruptores e tomadas"
+    cada uma no seu lugar, motor não move nenhuma data. 58 testes de cronograma/planejamento verdes.
+    Tela local sem gravar: .mpp real → passo a passo aberto; XML real → 0 casou, 7 avisos.
+  - Observação: o Bella Vista não tem ORÇAMENTO no sistema (só 3 obras sem itens), então hoje esse
+    arquivo só entra escolhendo outro orçamento-base e mandando tudo como tarefa sem custo.
 
 ### 3. Tabela com forma de cronograma — ✅ feito
 

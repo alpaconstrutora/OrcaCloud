@@ -1800,6 +1800,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
             </div>
             {isPlanejamentoContext && (
                 <ImportarCronogramaSheet
+                    modo="criar"
                     open={importarCronogramaAberto}
                     onClose={() => setImportarCronogramaAberto(false)}
                     orcamentos={onlyOrcamentos(projects).map(o => ({

@@ -17,7 +17,7 @@
  */
 import type { BudgetEntry, ProjectSchedule, ItemScheduleDetails, Baseline, OutlineNode, Predecessor } from '../types';
 import { ConstraintType, DependencyType } from '../types';
-import { seedOutlineFromBudget, insertNode, getAncestors } from './scheduleOutline';
+import { seedOutlineFromBudget, insertNode, getAncestors, findNode } from './scheduleOutline';
 import { ensureFullScheduleList } from './schedulingEngine';
 import type { CronogramaImportado, TarefaImportada } from './cronogramaLeitura';
 
@@ -90,6 +90,102 @@ function paisDasTarefas(tarefas: TarefaImportada[]): Map<string, TarefaImportada
     return pais;
 }
 
+/** Datas da tarefa do arquivo na convenção do app, com MSO segurando a data. null = sem início. */
+export function datasDoArquivoNoApp(t: TarefaImportada): Pick<ItemScheduleDetails, 'startDate' | 'endDate' | 'duration' | 'constraintType' | 'constraintDate'> | null {
+    if (!t.inicio) return null;
+    // Duração do arquivo como está (0 inclusive — o app tem tarefa de duração 0 que não é marco,
+    // ex.: "Seguros"); sem ela, os dias úteis do início ao término.
+    const duracao = t.marco ? 0 : t.duracaoDias != null ? Math.max(0, Math.round(t.duracaoDias)) : diasUteisInclusive(t.inicio, t.termino || t.inicio);
+    return { startDate: t.inicio, endDate: somarDiasUteis(t.inicio, duracao), duration: duracao, constraintType: ConstraintType.MSO, constraintDate: t.inicio };
+}
+
+/** Predecessoras do arquivo como vínculos entre ids do app. Vínculo com tarefa-resumo só conta
+ *  (o app liga tarefa a tarefa); com tarefa que ficou de fora vira aviso. */
+export function predecessorasNoApp(
+    t: TarefaImportada, porChave: Map<string, TarefaImportada>, idPorChave: Map<string, string>, avisos: string[],
+): { predecessors: Predecessor[]; comResumo: number } {
+    const predecessors: Predecessor[] = [];
+    let comResumo = 0;
+    for (const p of t.predecessoras) {
+        const alvo = porChave.get(p.chave);
+        const idAlvo = idPorChave.get(p.chave);
+        if (idAlvo) predecessors.push({ id: idAlvo, type: p.tipo as DependencyType, lag: Math.round(p.defasagemDias) });
+        else if (alvo?.resumo) comResumo++;
+        else avisos.push(`"${t.nome}": a predecessora "${alvo?.nome ?? p.chave}" ficou de fora da importação — o vínculo não entrou.`);
+    }
+    return { predecessors, comResumo };
+}
+
+/** Insere cada tarefa sem custo (nó `activity`) perto de onde estava no arquivo. O resumo (pai) da
+ *  tarefa vira um nó do outline, nesta ordem:
+ *   1. o nó do mesmo nível já existente, achado pela 1ª descendente do resumo que já está no outline
+ *      (item do orçamento ou tarefa de uma importação anterior);
+ *   2. um nó com o mesmo nome sob o mesmo pai (reimportar não duplica "Revestimento");
+ *   3. senão, o resumo do arquivo é recriado — grupo › etapa › subetapa, como no Project (abaixo da
+ *      subetapa, a tarefa fica na subetapa). Arquivo real Bella Vista, 15/11/2026: sem isso, as 30
+ *      tarefas sem custo caíam todas num grupo só e a estrutura do arquivo sumia.
+ *  Tarefa sem resumo nenhum vai para o grupo "Outras tarefas do cronograma". */
+export function posicionarAtividades(
+    outlineInicial: OutlineNode[], tarefas: TarefaImportada[], atividades: TarefaImportada[],
+    idPorChave: Map<string, string>, estaNoOutline: (id: string) => boolean, gerarId: () => string,
+): OutlineNode[] {
+    let outline = outlineInicial;
+    const pais = paisDasTarefas(tarefas);
+    const novas = new Set(atividades.map(a => idPorChave.get(a.chave)));
+    const noDoResumo = new Map<string, string | null>();
+    const TIPO_POR_PROFUNDIDADE = ['group', 'phase', 'subphase'] as const;
+
+    const acharPelaDescendente = (resumo: TarefaImportada): string | null => {
+        const i0 = tarefas.indexOf(resumo);
+        for (let i = i0 + 1; i < tarefas.length && tarefas[i].nivel > resumo.nivel; i++) {
+            const id = idPorChave.get(tarefas[i].chave);
+            if (!id || novas.has(id) || !estaNoOutline(id)) continue;
+            const cadeia = getAncestors(outline, id);           // [grupo, etapa, (subetapa), item]
+            return cadeia.length >= 2 ? cadeia[Math.min(resumo.nivel - 1, cadeia.length - 2)].id : null;
+        }
+        return null;
+    };
+    const resolverResumo = (resumo: TarefaImportada): string | null => {
+        if (noDoResumo.has(resumo.chave)) return noDoResumo.get(resumo.chave)!;
+        let id = acharPelaDescendente(resumo);
+        if (!id) {
+            const avo = pais.get(resumo.chave) ?? null;
+            const paiId = avo ? resolverResumo(avo) : null;
+            const profundidade = paiId ? getAncestors(outline, paiId).length : 0;
+            if (profundidade >= TIPO_POR_PROFUNDIDADE.length) id = paiId;
+            else {
+                const irmaos = paiId ? (findNode(outline, paiId)?.children ?? []) : outline;
+                const tipo = TIPO_POR_PROFUNDIDADE[profundidade];
+                id = irmaos.find(n => n.type === tipo && n.name === resumo.nome)?.id ?? null;
+                if (!id) {
+                    id = gerarId();
+                    outline = insertNode(outline, paiId, { id, type: tipo, name: resumo.nome, children: [] });
+                }
+            }
+        }
+        noDoResumo.set(resumo.chave, id);
+        return id;
+    };
+
+    let grupoAvulso: string | null = null;
+    for (const t of atividades) {
+        const pai = pais.get(t.chave) ?? null;
+        let paiNoOutline = pai ? resolverResumo(pai) : null;
+        if (!paiNoOutline) {
+            if (!grupoAvulso) {
+                grupoAvulso = outline.find(n => n.type === 'group' && n.name === NOME_GRUPO_AVULSO)?.id ?? null;
+                if (!grupoAvulso) {
+                    grupoAvulso = gerarId();
+                    outline = insertNode(outline, null, { id: grupoAvulso, type: 'group', name: NOME_GRUPO_AVULSO, children: [] });
+                }
+            }
+            paiNoOutline = grupoAvulso;
+        }
+        outline = insertNode(outline, paiNoOutline, { id: idPorChave.get(t.chave)!, type: 'activity', name: t.nome, children: [] });
+    }
+    return outline;
+}
+
 export function montarCronogramaImportado(e: EntradaDaMontagem): CronogramaMontado {
     const { cronograma, decisoes, orcamento, gerarId } = e;
     const avisos: string[] = [];
@@ -128,14 +224,8 @@ export function montarCronogramaImportado(e: EntradaDaMontagem): CronogramaMonta
     for (const t of folhas) {
         const id = idPorChave.get(t.chave);
         if (!id) continue;
-        const predecessors: Predecessor[] = [];
-        for (const p of t.predecessoras) {
-            const alvo = porChave.get(p.chave);
-            const idAlvo = idPorChave.get(p.chave);
-            if (idAlvo) predecessors.push({ id: idAlvo, type: p.tipo as DependencyType, lag: Math.round(p.defasagemDias) });
-            else if (alvo?.resumo) vinculosComResumo++;
-            else avisos.push(`"${t.nome}": a predecessora "${alvo?.nome ?? p.chave}" ficou de fora da importação — o vínculo não entrou.`);
-        }
+        const { predecessors, comResumo } = predecessorasNoApp(t, porChave, idPorChave, avisos);
+        vinculosComResumo += comResumo;
         const base: ItemScheduleDetails = {
             ...(padraoDoItem.get(id) ?? {}),
             id,
@@ -145,17 +235,9 @@ export function montarCronogramaImportado(e: EntradaDaMontagem): CronogramaMonta
             ...(t.marco ? { isMilestone: true } : {}),
             ...(atividades.includes(t) ? { hoursPerDay: 8, efficiencyFactor: 1.0 } : {}),
         };
-        if (t.inicio) {
-            // Duração do arquivo como está (0 inclusive — o app tem tarefa de duração 0 que não é
-            // marco, ex.: "Seguros"); sem ela, os dias úteis do início ao término.
-            const duracao = t.marco ? 0 : t.duracaoDias != null ? Math.max(0, Math.round(t.duracaoDias)) : diasUteisInclusive(t.inicio, t.termino || t.inicio);
-            Object.assign(base, {
-                startDate: t.inicio,
-                endDate: somarDiasUteis(t.inicio, duracao),
-                duration: duracao,
-                constraintType: ConstraintType.MSO,
-                constraintDate: t.inicio,
-            });
+        const datas = datasDoArquivoNoApp(t);
+        if (datas) {
+            Object.assign(base, datas);
         } else {
             avisos.push(`"${t.nome}" veio sem data de início — entrou sem datas.`);
         }
@@ -168,33 +250,7 @@ export function montarCronogramaImportado(e: EntradaDaMontagem): CronogramaMonta
     const itensDoOrcamentoSemTarefa = orcamento.filter(b => !itensUsados.has(b.id)).length;
 
     // 3) Outline: a EAP do orçamento + cada tarefa sem custo perto de onde estava no arquivo
-    let outline: OutlineNode[] = seedOutlineFromBudget(orcamento);
-    const pais = paisDasTarefas(tarefas);
-    let grupoAvulso: string | null = null;
-    for (const t of atividades) {
-        const pai = pais.get(t.chave) ?? null;
-        let paiNoOutline: string | null = null;
-        if (pai) {
-            // primeira tarefa casada com item, debaixo do mesmo pai no arquivo → o nó do outline no
-            // mesmo nível do pai (grupo, etapa ou subetapa daquele item).
-            const i0 = tarefas.indexOf(pai);
-            for (let i = i0 + 1; i < tarefas.length && tarefas[i].nivel > pai.nivel; i++) {
-                const id = idPorChave.get(tarefas[i].chave);
-                if (!id || !itensDoOrcamento.has(id)) continue;
-                const cadeia = getAncestors(outline, id);           // [grupo, etapa, (subetapa), item]
-                if (cadeia.length >= 2) paiNoOutline = cadeia[Math.min(pai.nivel - 1, cadeia.length - 2)].id;
-                break;
-            }
-        }
-        if (!paiNoOutline) {
-            if (!grupoAvulso) {
-                grupoAvulso = gerarId();
-                outline = insertNode(outline, null, { id: grupoAvulso, type: 'group', name: NOME_GRUPO_AVULSO, children: [] });
-            }
-            paiNoOutline = grupoAvulso;
-        }
-        outline = insertNode(outline, paiNoOutline, { id: idPorChave.get(t.chave)!, type: 'activity', name: t.nome, children: [] });
-    }
+    const outline = posicionarAtividades(seedOutlineFromBudget(orcamento), tarefas, atividades, idPorChave, id => itensDoOrcamento.has(id), gerarId);
 
     // 4) Linha de base ativa = datas do arquivo (mesmo formato de "Salvar linha de base")
     const comDatas = itemSchedules.filter(s => s.startDate && s.endDate);

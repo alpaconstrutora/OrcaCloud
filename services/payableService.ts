@@ -34,6 +34,8 @@ export interface PagamentoAvulsoGravado {
     due_date: string | null;
     competencia_date: string | null;
     supplier_id: string | null;
+    /** Credor colaborador (15/11/2026) — excludente com `supplier_id`. */
+    employee_id: string | null;
     party_name: string | null;
     project_id: string | null;
     cost_center_id: string | null;
@@ -412,7 +414,7 @@ export const payableService = {
     async getAvulso(id: string): Promise<PagamentoAvulsoGravado> {
         const { data, error } = await supabase
             .from('internal_transactions')
-            .select('id, organization_id, reference_id, description, amount, due_date, competencia_date, supplier_id, party_name, project_id, cost_center_id, plano_de_contas_id, category_id, category, payment_type, payment_account_id, status, business_status, approval_status, documento_path, documento_nome')
+            .select('id, organization_id, reference_id, description, amount, due_date, competencia_date, supplier_id, employee_id, party_name, project_id, cost_center_id, plano_de_contas_id, category_id, category, payment_type, payment_account_id, status, business_status, approval_status, documento_path, documento_nome')
             .eq('id', id)
             .eq('source_system', 'MANUAL')
             .single();
@@ -454,6 +456,8 @@ export const payableService = {
             amount: l.amount,
             description: l.description,
             supplier_id: l.supplier_id,
+            employee_id: l.employee_id,
+            party_type: l.party_type,
             party_name: l.party_name,
             entity_name: l.entity_name,
             project_id: l.project_id,

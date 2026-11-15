@@ -6,6 +6,8 @@
 // Medido em 17/10/2026 nos títulos a pagar abertos: `party_id` NUNCA é
 // preenchido. O favorecido vem de:
 //   • supplier_id (BOLETO, contratos, pedidos, NF-e)         → fornecedor
+//   • employee_id (pagamento avulso com credor colaborador,
+//     desde 15/11/2026 — plano 2026-11-15-credor-colaborador-no-financeiro) → colaborador
 //   • reference_id da FOLHA (source_system LABOR):
 //       labor-<folha>-indiv-<RUBRICA>-<colaborador>[-…]       → colaborador
 //       labor-<folha>-<obra>-<colaborador>-(salario|encargos)  → colaborador
@@ -24,6 +26,8 @@ export interface TituloParaPix {
     source_system?: string | null;
     party_type?: string | null;
     supplier_id?: string | null;
+    /** Credor colaborador gravado no título (excludente com supplier_id). */
+    employee_id?: string | null;
     reference_id?: string | null;
 }
 
@@ -51,6 +55,7 @@ export interface Favorecido {
 
 export function favorecidoDoTitulo(t: TituloParaPix): Favorecido {
     if (t.supplier_id) return { origem: 'fornecedor', id: t.supplier_id, motivo: null };
+    if (t.employee_id) return { origem: 'colaborador', id: t.employee_id.toLowerCase(), motivo: null };
 
     if (t.source_system === 'LABOR') {
         const colab = colaboradorDoTituloDaFolha(t.reference_id);

@@ -25,11 +25,13 @@ export interface TituloAPagar {
     party_type: string | null;
     party_name: string | null;
     supplier_id: string | null;
+    /** Credor colaborador do título (15/11/2026) — o PIX busca a chave no cadastro dele. */
+    employee_id: string | null;
     reference_id: string | null;
     description: string | null;
 }
 
-const COLS = 'id,organization_id,amount,direction,status,business_status,approval_status,due_date,transaction_date,source_system,party_type,party_name,supplier_id,reference_id,description';
+const COLS = 'id,organization_id,amount,direction,status,business_status,approval_status,due_date,transaction_date,source_system,party_type,party_name,supplier_id,employee_id,reference_id,description';
 
 /** Título a pagar da organização (já conferida pelo gate). null = não existe nela ou não é DEBIT. */
 export async function lerTitulo(admin: Admin, tituloId: string, orgId: string): Promise<TituloAPagar | null> {

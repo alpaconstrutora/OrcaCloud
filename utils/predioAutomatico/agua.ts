@@ -44,6 +44,8 @@ import { localDoElemento } from '../blueprintLocalDaPendencia';
 import type { LocalDaPendencia, PendenciaDoPpci } from '../blueprintGeradorPpci';
 import { forroDaAguaDaCasa } from '../casaAutomatica/forroEPressao';
 import type { BaseDoPredio, ContextoDoPredio } from './terreoECobertura';
+import { subsoloDaTorre } from './garagem';
+import { garagemLancada } from '../blueprintGaragemDaMassa';
 
 /** A altura do hidrômetro da unidade (o nicho na parede do hall) e do ramal que o atravessa, mm. */
 export const COTA_DO_HIDROMETRO_MM = 1000;
@@ -528,7 +530,10 @@ export function lancarAguaFria(
 
   // ── A reserva técnica de incêndio, no superior (por gravidade) — pela Tabela 4 da IT 17 do CBMMG.
   if (superior) {
-    const areaM2 = (area(base.bloco.pontos as Point[]) / 1e6) * (andares + (terreo ? 1 : 0));
+    // Com o subsolo do prédio (PA8a): a área dele entra — a garagem é parte da edificação.
+    const sub = subsoloDaTorre(ctx.m, base.bloco);
+    const subsolos = sub ? garagemLancada(ctx.m, sub).length : 0;
+    const areaM2 = (area(base.bloco.pontos as Point[]) / 1e6) * (andares + (terreo ? 1 : 0)) + (subsolos ? (area(sub!.pontos as Point[]) / 1e6) * subsolos : 0);
     const alturaM = (Math.max(...base.pisos, 0) - Math.min(...base.pisos, 0)) / 1000;
     if (areaM2 <= AREA_QUE_EXIGE_HIDRANTES_M2 && alturaM <= ALTURA_QUE_EXIGE_HIDRANTES_M) {
       pendencias.push({ grupo: 'PREMISSA', texto: `Reserva de incêndio: ${f1(areaM2)} m² e ${f1(alturaM)} m de altura — sem hidrantes pela IT 01 (até ${AREA_QUE_EXIGE_HIDRANTES_M2} m² e ${ALTURA_QUE_EXIGE_HIDRANTES_M} m); confira no PPCI.` });
@@ -538,7 +543,7 @@ export function lancarAguaFria(
         const rti = s.reservaM3 * 1000;
         resultado.rtiL = rti;
         comandos += enfileirar([{ type: 'SetTerminalProps', terminalId: superior.id, volumeL: (superior.volumeL ?? 0) + rti, volumeRtiL: rti } as Command]);
-        pendencias.push({ grupo: 'CONFERIR', texto: `Reserva de incêndio: ${s.reservaM3} m³ no reservatório superior (${s.motivo}; área total ≈ ${f1(areaM2)} m² — o bloco × os pavimentos) — ${s.fonte}. O PPCI confere com a rede de hidrantes.` });
+        pendencias.push({ grupo: 'CONFERIR', texto: `Reserva de incêndio: ${s.reservaM3} m³ no reservatório superior (${s.motivo}; área total ≈ ${f1(areaM2)} m² — o bloco × os pavimentos${subsolos ? `, mais ${subsolos} subsolo(s)` : ''}) — ${s.fonte}. O PPCI confere com a rede de hidrantes.` });
       } else pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Reserva de incêndio: ${s.motivo}` });
     }
   }

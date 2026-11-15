@@ -20,7 +20,7 @@
 import { pointInPolygon, type AgenteExtintor, type BlueprintModel, type Command, type ObjectId, type Point, type Space, type Terminal } from './blueprintKernel';
 import { construirGrafoEspacial } from './blueprintGrafoEspacial';
 import { usoDoNome } from './blueprintPrograma';
-import { caminhoDentro, candidatosDoAmbiente } from './blueprintRotaDeFuga';
+import { caminhoDentro, candidatosDoAmbiente, distanciaDentro } from './blueprintRotaDeFuga';
 
 export const FONTE_EXTINTORES = 'IT 16 do CBMMG (Portaria 69/2022), Tabelas 4 a 6';
 
@@ -243,11 +243,11 @@ export function pontosDeCobertura(s: Space): Point[] {
 /** A distância de UM ponto do ambiente às origens, pelo menor caminho. */
 export function distanciaDoPonto(rede: ReturnType<typeof redeDoPavimento>, s: Space, c: Point, origens: { ponto: Point; space: Space }[], dist: Map<string, number>): number {
   let melhor = Infinity;
-  for (const o of origens) if (o.space.id === s.id) melhor = Math.min(melhor, caminhoDentro(s, c, o.ponto)?.mm ?? Infinity);
+  for (const o of origens) if (o.space.id === s.id) melhor = Math.min(melhor, distanciaDentro(s, c, o.ponto));
   for (const p of rede.portais.get(s.id) ?? []) {
     const d = dist.get(p.chave);
     if (d == null) continue;
-    melhor = Math.min(melhor, (caminhoDentro(s, c, p.ponto)?.mm ?? Infinity) + d);
+    melhor = Math.min(melhor, distanciaDentro(s, c, p.ponto) + d);
   }
   return melhor;
 }

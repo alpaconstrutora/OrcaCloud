@@ -33,6 +33,7 @@ import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
 import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedido } from './climatizacaoERede';
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
 import { lancarEsgoto } from './esgoto';
+import { lancarSubsolos, subsoloDaTorre } from './garagem';
 import { lancarPluvial } from './pluvial';
 import { conferirIncendioDoPredio, lancarEquipamentosDeIncendio, lancarHidrantesDoPredio } from './ppci';
 import type { HipotesesIncendio } from '../blueprintIncendioClassificacao';
@@ -145,11 +146,37 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     );
   }
 
+  // ── Garagem no subsolo (PA8a): o bloco de garagem abaixo do solo que contém a torre — depois da estrutura (a malha do
+  // térreo desce) e antes da fundação (ela assenta no subsolo mais fundo).
+  let subsolos: ReturnType<typeof lancarSubsolos> | null = null;
+  const blocoDoSubsolo = subsoloDaTorre(original, b);
+  if (!hip.garagem) etapa('SUBSOLOS', 'NAO_EXIGIDA', 0, 'Desligada nas hipóteses.');
+  else if (!blocoDoSubsolo) etapa('SUBSOLOS', 'NAO_EXIGIDA', 0, 'O estudo não tem bloco de garagem abaixo do solo sob a torre.');
+  else if (!terreo) {
+    pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Garagem: sem o térreo do prédio, o subsolo "${blocoDoSubsolo.nome}" fica para o projetista (lance as vagas pelo painel do bloco).` });
+    etapa('SUBSOLOS', 'NAO_EXIGIDA', 0, 'Sem o térreo, o subsolo fica para o projetista.');
+  } else {
+    try {
+      subsolos = lancarSubsolos(ctx, base, blocoDoSubsolo, terreo.levelId, hip);
+      pendencias.push(...subsolos.pendencias);
+      etapa(
+        'SUBSOLOS',
+        'LANCOU',
+        subsolos.comandos,
+        `${subsolos.pisos.length} subsolo(s) · ${subsolos.vagas} vaga(s) (o contorno livre levaria ${subsolos.teto}) · ${subsolos.rampas} rampa(s) · ${subsolos.pilaresDaTorre} pilar(es) da torre${subsolos.pilaresDaGaragem ? ` e ${subsolos.pilaresDaGaragem} da malha estendida` : ''} por subsolo`,
+      );
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Garagem: ${motivo}.` });
+      etapa('SUBSOLOS', 'NAO_RODOU', 0, motivo);
+    }
+  }
+
   // ── Fundações (PA4): sob os pilares do pavimento que assenta no chão — o térreo, ou o tipo quando ele É o térreo. Logo
   // depois da estrutura e ANTES das plantas: não dependem delas, e cada comando custa pelo tamanho do modelo (no RL, os
   // 303 comandos levavam 22 s depois das plantas dos 8 andares).
   let fundacao: ReturnType<typeof lancarFundacao> | null = null;
-  const noChao = terreo?.levelId ?? (dv.ordinalDoTipo < 2 ? mont.tipoLevelId : null);
+  const noChao = subsolos?.maisFundoLevelId ?? terreo?.levelId ?? (dv.ordinalDoTipo < 2 ? mont.tipoLevelId : null);
   if (!estrutura) etapa('FUNDACOES', 'NAO_EXIGIDA', 0, 'Sem a estrutura, a fundação fica para o projetista.');
   else if (!noChao) etapa('FUNDACOES', 'NAO_EXIGIDA', 0, 'Sem o térreo, o pavimento que assenta no chão fica para o projetista — e a fundação com ele.');
   else {
@@ -431,7 +458,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   etapa('CONFERENCIA', 'CALCULOU', 0, pendencias.length ? `${pendencias.length} pendência(s)` : 'Nada pendente.');
 
   const pavimentos = 1 + mont.copias;
-  const pavimentosLancados = pavimentos + (terreo ? 1 : 0) + (cobertura ? 1 : 0);
+  const pavimentosLancados = pavimentos + (terreo ? 1 : 0) + (cobertura ? 1 : 0) + (subsolos?.pisos.length ?? 0);
   return {
     blocoId: b.id,
     comandos,
@@ -456,6 +483,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       terreo: terreo ? { salas: terreo.salas.map((x) => x.nome), acesso: terreo.acesso } : null,
       cobertura: cobertura ? { cotaM: cobertura.cotaMm / 1000 } : null,
       eletrica: resumoDaEletrica,
+      garagem: subsolos ? { subsolos: subsolos.pisos.map((p) => ({ nome: p.nome, vagas: p.vagas, porTipo: p.porTipo })), vagas: subsolos.vagas, teto: subsolos.teto, rampas: subsolos.rampas, pilaresDaTorre: subsolos.pilaresDaTorre, pilaresDaGaragem: subsolos.pilaresDaGaragem } : null,
       estrutura: estrutura ? { pilares: estrutura.pilares, vigas: estrutura.vigas, lajes: estrutura.lajes, noTerreo: estrutura.noTerreo, eixos: estrutura.eixos, blocos: fundacao?.blocos ?? 0, estacas: fundacao?.estacas ?? 0 } : null,
       reservacao,
       agua: resumoDaAgua,

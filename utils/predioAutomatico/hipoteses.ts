@@ -8,13 +8,14 @@ import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 
-export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'EQUIPAMENTOS_DE_INCENDIO' | 'HIDRANTES' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'INCENDIO' | 'CONFERENCIA';
+export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'SUBSOLOS' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'EQUIPAMENTOS_DE_INCENDIO' | 'HIDRANTES' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'INCENDIO' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
   PAVIMENTO_TIPO: 'Pavimento tipo (corredor, núcleo, unidades) e os andares como cópias vivas',
   TERREO: 'Térreo (hall e portaria, acesso, centro de medição, casa de bombas) e o núcleo desde ele',
   ESTRUTURA: 'Estrutura (pilares, vigas e lajes no tipo — vão às cópias —, a mesma malha no térreo, os eixos)',
+  SUBSOLOS: 'Garagem no subsolo (pavimentos, núcleo descendo, malha da torre, rampa, lajes e vagas)',
   FUNDACOES: 'Fundações (blocos e estacas sob os pilares — pré-dimensionamento, exige cálculo)',
   PLANTAS: 'Planta interna das unidades (cômodos, portas e janelas)',
   COBERTURA: 'Cobertura (laje, platibanda, área técnica; a escada e o shaft chegam nela)',
@@ -65,6 +66,14 @@ export interface HipotesesDoPredio {
   pluvial: boolean;
   /** PA9a: a classificação de incêndio, as exigências e a rota de fuga de todos os andares (só confere). */
   incendio: boolean;
+  /** PA8a: o subsolo do estudo (o bloco de garagem abaixo do solo que contém a torre) vira garagem lançada. */
+  garagem: boolean;
+  /** PA8a: inclinação máxima da rampa de veículos (a do código de obras), %. */
+  rampaDeVeiculosMaxPct: number;
+  /** PA8a: largura da rampa de veículos (mão única), mm. */
+  larguraDaRampaMm: number;
+  /** PA8a: vão máximo entre os pilares da malha estendida fora da projeção da torre, mm. */
+  vaoDaGaragemMm: number;
   /** Largura da porta de entrada do prédio, no hall, mm. */
   larguraDoAcessoMm: number;
   /** Pé-direito do pavimento da cobertura (a área técnica), mm. */
@@ -88,6 +97,10 @@ export const HIPOTESES_DO_PREDIO_PADRAO: HipotesesDoPredio = {
   esgoto: true,
   pluvial: true,
   incendio: true,
+  garagem: true,
+  rampaDeVeiculosMaxPct: 20,
+  larguraDaRampaMm: 3000,
+  vaoDaGaragemMm: 7500,
   larguraDoAcessoMm: 1200,
   peDireitoDaCoberturaMm: 3000,
   espessuraDaLajeMm: 120,
@@ -119,7 +132,7 @@ export interface PlanoDoPredio {
     esquema: EsquemaDoPavimento;
     /** Pavimentos do bloco com unidade: o tipo e as cópias. */
     pavimentos: number;
-    /** Pavimentos que o lote cria: térreo, tipo, cópias e cobertura. */
+    /** Pavimentos que o lote cria: os subsolos, o térreo, o tipo, as cópias e a cobertura. */
     pavimentosLancados: number;
     copias: number;
     unidadesPorAndar: number;
@@ -138,6 +151,15 @@ export interface PlanoDoPredio {
      * estrutura desligada.
      */
     estrutura: { pilares: number; vigas: number; lajes: number; noTerreo: number; eixos: number; blocos: number; estacas: number } | null;
+    /** PA8a: a garagem no subsolo — as vagas de cada subsolo, o teto do contorno livre, as rampas e a malha; `null` sem subsolo. */
+    garagem: {
+      subsolos: { nome: string; vagas: number; porTipo: Record<'COMUM' | 'PCD' | 'IDOSO' | 'MOTO', number> }[];
+      vagas: number;
+      teto: number;
+      rampas: number;
+      pilaresDaTorre: number;
+      pilaresDaGaragem: number;
+    } | null;
     /**
      * PA5: a elétrica coletiva — por andar (QDs, circuitos), o serviço, a medição e a entrada do QGBT (a demanda pela
      * diversidade, a categoria do padrão, as unidades atendidas × medidas); `null` desligada.

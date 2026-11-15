@@ -74,6 +74,8 @@ export function hipotesesDeIncendioDoPredio(m: BlueprintModel, descargaLevelId: 
   };
 }
 
+const metros = (m: number | null) => (m == null ? '—' : (Math.round(m * 10) / 10).toLocaleString('pt-BR'));
+
 export function conferirIncendioDoPredio(
   m: BlueprintModel,
   descargaLevelId: ObjectId,
@@ -107,7 +109,7 @@ export function conferirIncendioDoPredio(
   const sem = pf.ambientes.filter((x) => x.distanciaM == null);
   if (sem.length) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rota de fuga: ${sem.length} ambiente(s) sem caminho até a saída no térreo (${[...new Set(sem.map((x) => m.levels.find((l) => l.id === x.levelId)?.name))].join(', ')}).`, locais: sem.slice(0, 30).map(local) });
   const longe = pf.ambientes.filter((x) => x.atende === false);
-  if (longe.length) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rota de fuga: ${longe.length} ambiente(s) com o caminhamento até o local seguro acima do limite (${longe[0].rotulo}: ${longe[0].caminhamentoM ?? longe[0].distanciaM} m de ${longe[0].limiteM ?? pf.limiteM} m).`, locais: longe.slice(0, 30).map(local) });
+  if (longe.length) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rota de fuga: ${longe.length} ambiente(s) com o caminhamento até o local seguro acima do limite (${longe[0].rotulo}: ${metros(longe[0].caminhamentoM ?? longe[0].distanciaM)} m de ${metros(longe[0].limiteM ?? pf.limiteM)} m)${longe.some((x) => /^Garagem/.test(x.rotulo)) ? ' — a garagem do subsolo pede uma segunda saída (escada de emergência até o térreo) longe da primeira; fica para o projetista' : ''}.`, locais: longe.slice(0, 30).map(local) });
   return {
     divisao: c.divisao.valor,
     grupo: c.grupo?.grupo ?? null,

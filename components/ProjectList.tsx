@@ -1305,24 +1305,31 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     })}
                 </div>
             )}
-            {isPlanejamentoContext && (
-                // Planejamento: os cards moram aqui porque filtram ESTA lista (o título também vem
-                // daqui desde o item 4 da crítica de 2026-11-14 — o AppRouter não o duplica mais). Sem `disabled` enquanto calcula: botão
-                // desabilitado esconde o title que diz o motivo.
+            {isPlanejamentoContext && indicadoresPlan.estado === 'erro' && (
+                // Falha da busca do orçamento: UMA mensagem com "Tentar de novo" (guia §4.5.1),
+                // não quatro cards repetindo "Falhou" (passada final da crítica de 2026-11-14).
+                <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-white rounded-[10px] border border-gray-200 px-4 py-3 mb-3 text-sm text-gray-700">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" aria-hidden="true" />
+                    <span>Não foi possível carregar o orçamento dos planejamentos para calcular os prazos.</span>
+                    <button type="button" onClick={indicadoresPlan.tentarDeNovo} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                        Tentar de novo
+                    </button>
+                </div>
+            )}
+            {isPlanejamentoContext && indicadoresPlan.estado !== 'erro' && (
+                // Planejamento: os cards moram aqui porque filtram ESTA lista. Sem `disabled`
+                // enquanto calcula — botão desabilitado esconde o title que diz o motivo.
                 // 2×2 no celular: 4 cards empilhados ocupavam a tela de 390 px inteira (item 7).
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3" aria-busy={indicadoresPlan.estado === 'carregando'}>
                     {RECORTES_PLANEJAMENTO.map(r => {
                         const pronto = indicadoresPlan.estado === 'pronto';
-                        const falhou = indicadoresPlan.estado === 'erro';
                         const ativo = recortePlanAtivo === r.key;
                         const icone = r.icone === 'alerta' ? <AlertTriangle className="w-4 h-4" />
                             : r.icone === 'relogio' ? <Clock className="w-4 h-4" />
                             : r.icone === 'raio' ? <Zap className="w-4 h-4" />
                             : <CalendarOff className="w-4 h-4" />;
-                        // Curtas: com 4 cards lado a lado a legenda longa era cortada (14/11/2026).
-                        const sub = falhou ? 'Falhou · clique para tentar de novo'
-                            : !pronto ? 'Calculando…'
-                            // Curtas também no 2×2 do celular; a explicação longa está no title.
+                        // Legendas curtas (4 lado a lado e 2×2 no celular); a explicação longa vai no title.
+                        const sub = !pronto ? 'Calculando…'
                             : ativo ? 'Filtrando · ver todos'
                             : `de ${filteredProjects.length} · filtrar`;
                         return (
@@ -1330,14 +1337,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 key={r.key}
                                 type="button"
                                 aria-pressed={pronto ? ativo : undefined}
-                                aria-disabled={!pronto && !falhou ? true : undefined}
-                                onClick={() => {
-                                    if (falhou) { indicadoresPlan.tentarDeNovo(); return; }
-                                    if (!pronto) return;
-                                    setRecortePlan(ativo ? null : r.key);
-                                }}
-                                title={falhou ? 'Tentar calcular de novo' : !pronto ? 'Calculando — aguarde um instante' : ativo ? 'Mostrar todos os planejamentos' : r.dica}
-                                className={`text-left rounded-xl transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${ativo ? 'ring-2 ring-blue-500' : pronto || falhou ? 'hover:shadow-sm' : 'cursor-wait'}`}
+                                aria-disabled={!pronto ? true : undefined}
+                                onClick={() => { if (pronto) setRecortePlan(ativo ? null : r.key); }}
+                                title={!pronto ? 'Calculando — aguarde um instante' : ativo ? 'Mostrar todos os planejamentos' : r.dica}
+                                className={`text-left rounded-xl transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${ativo ? 'ring-2 ring-blue-500' : pronto ? 'hover:shadow-sm' : 'cursor-wait'}`}
                             >
                                 <KpiCard
                                     label={r.label}

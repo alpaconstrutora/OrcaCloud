@@ -1104,15 +1104,17 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder={isFetchingCode ? 'Carregando...' : '001'}
-                        className="w-full rounded-[6px] border border-blue-200 bg-blue-50 h-9 text-sm px-3 font-mono font-bold text-blue-700 outline-none transition-all focus:ring-2 focus:ring-blue-500"
+                        placeholder={isFetchingCode ? 'Gerando código…' : 'Ex.: 001'}
+                        className="w-full rounded-[6px] border border-gray-300 bg-white h-9 text-sm px-3 text-gray-900 tabular-nums placeholder:text-gray-500 outline-none transition-all focus:ring-2 focus:ring-blue-500"
                         value={projectCode}
                         onChange={(e) => setProjectCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                         maxLength={6}
                       />
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {mode === 'create' ? 'Sugerido automaticamente. Você pode alterar antes de salvar.' : 'Você pode corrigir o código desta obra.'}
+                    <p className="text-xs text-gray-500 mt-1">
+                      {mode === 'create'
+                        ? (projectCode ? 'Sugerido automaticamente. Você pode alterar antes de salvar.' : 'Em branco, o código é gerado ao salvar, na sequência da organização.')
+                        : 'Você pode corrigir o código desta obra.'}
                     </p>
                   </div>
 
@@ -1803,7 +1805,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               <option key={org.id} value={org.id}>{org.name}</option>
                             ))}
                           </select>
-                          <p className="text-xs text-gray-400 mt-1">Organização dona desta obra. Orçamento e planejamento derivados herdam a dela.</p>
+                          <p className="text-xs text-gray-500 mt-1">Organização dona desta obra. Orçamento e planejamento derivados herdam a dela.</p>
                         </div>
                       )}
 
@@ -1826,7 +1828,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               </option>
                             ))}
                           </select>
-                          <p className="text-xs text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
+                          <p className="text-xs text-gray-500 mt-1">Empresa do grupo responsável por esta obra.</p>
                         </div>
                       )}
                     </div>
@@ -2259,14 +2261,16 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           </label>
                           <input
                             type="text"
-                            placeholder={isFetchingCode ? 'Carregando...' : '001'}
-                            className="w-full rounded-[6px] border border-blue-200 bg-blue-50 h-9 text-sm px-3 font-mono font-bold text-blue-700 outline-none transition-all focus:ring-2 focus:ring-blue-500"
+                            placeholder={isFetchingCode ? 'Gerando código…' : 'Ex.: 001'}
+                            className="w-full rounded-[6px] border border-gray-300 bg-white h-9 text-sm px-3 text-gray-900 tabular-nums placeholder:text-gray-500 outline-none transition-all focus:ring-2 focus:ring-blue-500"
                             value={projectCode}
                             onChange={(e) => setProjectCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                             maxLength={6}
                           />
-                          <p className="text-xs text-gray-400 mt-1">
-                            {mode === 'create' ? 'Gerado automaticamente. Você pode alterar antes de salvar.' : `Você pode corrigir o código deste ${formData.classification === 'DIARIO' ? 'diário' : 'planejamento'}.`}
+                          <p className="text-xs text-gray-500 mt-1">
+                            {mode === 'create'
+                              ? (projectCode ? 'Gerado automaticamente. Você pode alterar antes de salvar.' : 'Em branco, o código é gerado ao salvar, na sequência da organização.')
+                              : `Você pode corrigir o código deste ${formData.classification === 'DIARIO' ? 'diário' : 'planejamento'}.`}
                           </p>
                         </div>
                       )}
@@ -2334,7 +2338,11 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               </option>
                             ))}
                           </select>
-                          <p className="text-xs text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {formData.classification === 'PLANEJAMENTO' ? 'Empresa do grupo responsável por este planejamento.'
+                              : formData.classification === 'DIARIO' ? 'Empresa do grupo responsável por este diário.'
+                              : 'Empresa do grupo responsável por esta obra.'}
+                          </p>
                         </div>
                       )}
                       {formData.obraPropria ? (
@@ -2347,9 +2355,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         <label className="block text-xs font-semibold text-slate-500 mb-1">
                           Cliente / Proprietário
                           {(formData.classification === 'ORCAMENTO' || formData.classification === 'PLANEJAMENTO' || formData.classification === 'DIARIO') && (
-                            <span className="ml-2 text-xs text-amber-600 font-bold uppercase tracking-tight bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
-                              Herdado da Obra
-                            </span>
+                            <span className="ml-1.5 text-xs font-normal text-amber-700">· herdado da obra</span>
                           )}
                         </label>
                         <div className="relative">

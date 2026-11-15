@@ -154,6 +154,11 @@ export const EnviarDocumentoClienteSheet: React.FC<EnviarProps> = ({
     open, onClose, cliente, documento, tipoInicial, onSalvo, onErro,
 }) => {
     const fileRef = React.useRef<HTMLInputElement>(null);
+    // ids únicos: a Sheet fechada continua no DOM, e a negociação com dois
+    // compradores monta quatro destas — id fixo faria todo <label> apontar
+    // para o campo da primeira.
+    const uid = React.useId();
+    const idDe = (campo: string) => `${uid}-${campo}`;
     const tipos = React.useMemo(() => {
         const base = tiposDoCliente(cliente.type);
         // Tipo gravado que não está na lista atual (cliente PF que virou PJ) continua escolhível.
@@ -282,26 +287,26 @@ export const EnviarDocumentoClienteSheet: React.FC<EnviarProps> = ({
                     </div>
 
                     <div className="space-y-1.5 sm:col-span-2">
-                        <label className={ROTULO} htmlFor="cliente-doc-tipo">Tipo</label>
-                        <select id="cliente-doc-tipo" className={CAMPO} value={form.tipo} onChange={ev => campo('tipo', ev.target.value)}>
+                        <label className={ROTULO} htmlFor={idDe('tipo')}>Tipo</label>
+                        <select id={idDe('tipo')} className={CAMPO} value={form.tipo} onChange={ev => campo('tipo', ev.target.value)}>
                             {tipos.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
                         </select>
                     </div>
                     {form.tipo === TIPO_DOCUMENTO_CLIENTE_OUTRO.key && (
                         <div className="space-y-1.5 sm:col-span-2">
-                            <label className={ROTULO} htmlFor="cliente-doc-tipo-livre">Que documento é</label>
-                            <input id="cliente-doc-tipo-livre" className={CAMPO} value={form.tipoLivre}
+                            <label className={ROTULO} htmlFor={idDe('tipo-livre')}>Que documento é</label>
+                            <input id={idDe('tipo-livre')} className={CAMPO} value={form.tipoLivre}
                                 onChange={ev => campo('tipoLivre', ev.target.value)} placeholder="Ex: Certidão de casamento, Procuração" />
                         </div>
                     )}
                     <div className="space-y-1.5 sm:col-span-2">
-                        <label className={ROTULO} htmlFor="cliente-doc-nome">Nome</label>
-                        <input id="cliente-doc-nome" className={CAMPO} value={form.nome}
+                        <label className={ROTULO} htmlFor={idDe('nome')}>Nome</label>
+                        <input id={idDe('nome')} className={CAMPO} value={form.nome}
                             onChange={ev => campo('nome', ev.target.value)} placeholder="Ex: RG – frente e verso" />
                     </div>
                     <div className="space-y-1.5">
-                        <label className={ROTULO} htmlFor="cliente-doc-validade">Validade</label>
-                        <input id="cliente-doc-validade" type="date" className={CAMPO} value={form.validade}
+                        <label className={ROTULO} htmlFor={idDe('validade')}>Validade</label>
+                        <input id={idDe('validade')} type="date" className={CAMPO} value={form.validade}
                             onChange={ev => campo('validade', ev.target.value)} />
                         <p className="text-xs text-gray-500">Deixe em branco se não vence.</p>
                     </div>

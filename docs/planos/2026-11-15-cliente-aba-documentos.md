@@ -115,4 +115,11 @@ Hoje o cadastro do cliente (`components/ClientForm.tsx`) tem três abas e nenhum
 - Item 5 ✅ aba Documentos no `ClientForm` — fica FORA do `<form id="client-form">` (o `<form>` continua montado, escondido), para o Enter da busca não submeter o cadastro. check-ui-standard exit 0.
 - Item 6 ✅ `components/clientes/ChecklistDocumentosCliente.tsx`, usado pelo `DealModal` no lugar do checklist manual; `DEAL_DOC_CHECKLIST` saiu do DealModal. check-ui-standard exit 0.
 - Achado no caminho: `StandardTable` (autoajuste, Anterior, Próxima) e `ColumnConfigButton` (`TableUtils.tsx`, 4 botões) não tinham `type="button"` — dentro do `<form>` da negociação, clicar neles gravaria a negociação. Corrigido na primitiva, sem mudança visual.
-- Item 7: vitest + tsc + check-org-selector-guard ✅; navegador — pendente.
+- Item 7 ✅ vitest (26) + tsc + check-org-selector-guard. Navegador (Playwright com janela, login do usuário, dev server da frente, 15/11):
+  - (a) Meus Clientes › Mônica Salles Schreer › aba Documentos: enviar PDF com validade → linha "Vence em 5 dias"; "Salvar alterações" do cadastro segue desligado; clique abre a URL assinada (auditoria `download` gravada).
+  - (b) Vendas de Ativos › Bella Vista › negociação 0009 (2 compradores): bloco da Mônica 1/8 com "RG / CNH · Arquivo · Vence em 5 dias" sem clique; bloco do Ricardo 0/8.
+  - (c) "Enviar" do item "Comprovante de renda" abre o Sheet com o tipo e o nome já preenchidos → 2/8; rede só tocou opura_documents/versions/storage/audit — nada em commercial_deals. No banco: organização = a do cliente, categoria comercial, chave em metadados.
+  - (d) Cada bloco mostra só os documentos do seu comprador.
+  - Excluir pela tabela (com confirmação) → 0/8; banco: 0 documentos de cliente, 0 arquivos de teste no storage, GED de volta a 110.
+  - (e) cliente de outra organização e (f) GED: não conferidos na tela (a regra de (e) é `useMotivoSemEscrita`; o GED lê a mesma tabela).
+  - Achado no teste: a Sheet fechada fica no DOM e a negociação com 2 compradores montava 4 campos com o MESMO id (`cliente-doc-tipo`…) — todo `<label>` apontava para o primeiro. Corrigido com `useId`.

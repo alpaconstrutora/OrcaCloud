@@ -145,8 +145,8 @@ a mais, mas não bloqueia.
     ativa; Central de Comando ao abrir: término 03/12 "no prazo da baseline", desvio 0d e R$ 0. Os
     dois registros de teste foram apagados (0 referências em outras tabelas; 0 restantes).
 - 2d. Atualizar existente → datas trocadas, avanço só nos itens marcados, baseline intacta. —
-  🟡 **código pronto 15/11/2026** (pedido: *"seguir para a fase 2"*); falta o teste com gravação num
-  planejamento descartável (pedido de autorização ao usuário):
+  ✅ **feito 15/11/2026** (pedido: *"seguir para a fase 2"*; teste com gravação num planejamento
+  descartável *"Autorizado (Recomendado)"*):
   - Botão "Importar datas" na faixa do cronograma (aba Cronograma › Programar); mesmo painel em modo
     "atualizar" (passos Arquivo → O que muda → Confirmar).
   - `utils/cronogramaAtualizacao.ts`: `diferencasDaAtualizacao` (datas e avanço app × arquivo) e
@@ -161,6 +161,12 @@ a mais, mas não bloqueia.
     fora do arquivo intactos; reimportar não duplica nem muda nada; o motor não move datas) + 142 dos
     módulos tocados; tela local no Divino REAL, sem gravar: 3 com datas novas, 33 sem mudança, 3
     avanços diferentes, marcar 1 → "1 tarefa — só as marcadas", aviso de Versões; tabela cabe no painel.
+  - Teste com gravação (planejamento "TESTE importação — não usar" criado pela 2c e atualizado por um
+    2º arquivo: Combustíveis +2 dias úteis, Seguros 0→50% NÃO marcado, Terraplanagem 100→90% marcado):
+    prévia reconheceu as 2 tarefas sem custo existentes (0 sem par), 1 com datas novas, 36 sem mudança;
+    no banco: Combustíveis 07/08 → 19/08, Seguros 0%, Terraplanagem 90%, linha de base intacta
+    (Combustíveis segue 05/08 nela), 1 versão "Antes de importar datas de msproject-divino-v2.xml
+    (15/11/2026)", 2 `activity` (sem duplicar), 39 tarefas. Registro apagado (0 referências, 0 restantes).
 - 2e. .mpp → spike decide o conversor; depois, o mesmo fluxo aceita .mpp.
 
 ### 3. Tabela com forma de cronograma — ✅ feito

@@ -82,8 +82,22 @@ dados" na falha; 1.143 testes de 68 arquivos.
   legíveis, botões h-9, sem caixa alta/itálico na tabela Vincular e no "herdada da obra".
 - Pré-existente, não mexido: `check-ui-standard` acusa `useState` na busca da aba Vincular do
   ProjectModal (igual no main; busca dentro de modal não precisa persistir).
+- **Teste com gravação** (pedido: *"Autorizado (Recomendado)"*), pela tela local, só o POST de criação
+  liberado. 1ª rodada achou 2 defeitos: (a) "Em branco" gravado como o modal gravava (budget vazio)
+  abria VAZIO logo após criar — a reidratação de `hooks/usePersistenceSync.ts` põe nos itens a coluna
+  `budget` crua e corre contra o `handleLoadProject` (que resolve o vínculo); (b) a cópia saía sem
+  `organization_id`/`empresa_id` — o gatilho `sync_org_from_empresa` tira a org da COLUNA empresa_id e
+  o Divino tem empresa só na coluna. Correção: "Em branco" nasce com o orçamento congelado (snapshot +
+  versão + budget, como a importação); a cópia leva a empresa na coluna. 2ª rodada: em branco abre com
+  os 37 itens na hora, org/empresa/cliente/vínculo/snapshot certos, código 002; cópia com org e
+  empresa, código 003 (não repete 001). 4 registros de teste apagados (0 referências em 76 chaves
+  estrangeiras; 0 restantes).
 
 ## Fora deste plano (anotado)
 - A grade do cronograma (dentro do planejamento) mostra o término de cada tarefa na convenção do motor
   (02/12 para a tarefa trabalhada até 01/12). Mexer nela muda a edição de datas — fica para outra rodada.
 - Contrastes da casca do app (sidebar/topo) e da grade do cronograma apontados pelo detector.
+- Planejamento criado pelo modal ANTIGO com budget vazio (vínculo "ao vivo") pode abrir vazio depois
+  de recarregar a página: a reidratação de `usePersistenceSync` não resolve o vínculo como o
+  `handleLoadProject`. Os criados pelo painel novo já nascem congelados e não sofrem disso.
+- O "Duplicar" antigo (Orçamentos/Obras) segue copiando o código e sem a empresa na coluna.

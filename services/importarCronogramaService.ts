@@ -122,25 +122,31 @@ export interface CriarEmBrancoEntrada {
     termino: string;
 }
 
-/** Planejamento em branco a partir de um orçamento: grava como o modal antigo gravava
- *  (budget vazio; o 1º "abrir" congela o orçamento e monta o cronograma). Código: o serviço gera
- *  na sequência da organização. */
+/** Planejamento em branco a partir de um orçamento: o que o modal antigo herdava + o orçamento JÁ
+ *  CONGELADO (snapshot, versão fixada e budget), como a importação faz. Gravar com budget vazio, como
+ *  o modal fazia, abria VAZIO logo após criar (teste com gravação, 15/11/2026): a reidratação de
+ *  hooks/usePersistenceSync.ts põe nos itens a coluna `budget` crua, sem resolver o vínculo, e corre
+ *  contra o handleLoadProject. O cronograma é montado pelo app ao abrir. Código: o serviço gera. */
 export async function criarPlanejamentoEmBranco(e: CriarEmBrancoEntrada): Promise<{ id: string }> {
     const orcamento = await projectService.loadProject(e.orcamentoId);
     if (!orcamento) throw new Error('O orçamento base não foi encontrado (pode ter sido excluído). Escolha outro.');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const o = orcamento as any;
     const herdado = herdadoDoOrcamento(o);
+    const base = orcamentoBaseDoProjeto(o);
+    if (base.budget.length === 0) throw new Error('O orçamento base está vazio — não há itens para o cronograma. Escolha outro.');
     const settings = {
         ...INITIAL_PROJECT_SETTINGS,
         ...herdado,
         name: e.nome.trim(),
         classification: 'PLANEJAMENTO' as const,
+        basedOnBudgetSnapshot: base.budget,
+        ...(base.versao ? { basedOnBudgetVersionId: base.versao.id, basedOnBudgetVersionItem: base.versao.item } : {}),
         startDate: e.inicio || o.settings?.startDate || undefined,
         endDate: e.termino || o.settings?.endDate || undefined,
     };
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const criado = await projectService.saveProject({ name: e.nome.trim(), settings: settings as any, budget: [] });
+    const criado = await projectService.saveProject({ name: e.nome.trim(), settings: settings as any, budget: base.budget });
     return { id: (criado as { id: string }).id };
 }
 
@@ -158,6 +164,15 @@ export async function duplicarPlanejamento(e: { planejamentoId: string; nome: st
     if (!original) throw new Error('O planejamento a copiar não foi encontrado (pode ter sido excluído).');
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const o = original as any;
-    const criado = await projectService.saveProject({ name: e.nome.trim(), settings: settingsDaCopia(o.settings, e.nome), budget: o.budget || [] });
+    // A empresa vai na COLUNA: é dela que o gatilho sync_org_from_empresa tira o organization_id.
+    // O Divino tem empresa só na coluna; copiar só as settings deixava a cópia SEM organização
+    // (teste com gravação, 15/11/2026 — o "Duplicar" antigo fazia o mesmo).
+    const empresaId = o.empresa_id || o.settings?.empresaId || undefined;
+    const criado = await projectService.saveProject({
+        name: e.nome.trim(),
+        settings: { ...settingsDaCopia(o.settings, e.nome), ...(empresaId ? { empresaId } : {}) },
+        budget: o.budget || [],
+        ...(empresaId ? { empresa_id: empresaId } : {}),
+    });
     return { id: (criado as { id: string }).id };
 }

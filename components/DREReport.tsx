@@ -170,7 +170,7 @@ function DetailGroup({ group, lines, comPrevisto }: { group: DREGroup; lines: DR
             {open && lines.map(l => (
                 <tr key={l.category_name} className="bg-gray-50/50 border-b border-gray-50">
                     <td className="px-6 py-2 border-r border-gray-100 pl-12 text-sm font-normal text-gray-500">{l.category_name}</td>
-                    <td className={`px-6 py-2 border-r border-gray-100 text-sm text-right tabular-nums font-normal ${l.net < 0 ? 'text-red-500' : 'text-gray-700'}`}>
+                    <td className={`px-6 py-2 border-r border-gray-100 text-sm text-right tabular-nums font-normal ${l.net < 0 ? 'text-red-600' : 'text-gray-700'}`}>
                         {formatBRL(l.net)}
                     </td>
                     {comPrevisto && (

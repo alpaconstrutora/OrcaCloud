@@ -250,7 +250,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                                 }
                                                 {fmt(margem)}
                                             </span>
-                                            <span className={`block text-xs font-normal ${isNegMargem ? 'text-red-500' : 'text-gray-500'}`}>
+                                            <span className={`block text-xs font-normal ${isNegMargem ? 'text-red-600' : 'text-gray-500'}`}>
                                                 {fmtPct(r.margem_pct)}
                                             </span>
                                         </td>

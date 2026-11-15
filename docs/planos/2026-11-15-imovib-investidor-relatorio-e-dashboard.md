@@ -111,12 +111,14 @@ provada em transação desfeita — **aplicar com OK**):
 - [x] Minor — datas da versão em UTC (congelada depois das 21h aparecia no dia seguinte): `utils/dataDeBrasilia.ts`.
 - [x] Minor — prévia sem versão dizia "nenhum cenário": usa os cenários do estudo atual; erro ao ler as versões no
   formulário dizia "não tem versão": diz que não leu.
+- Pergunta do usuário (15/11): "O problema pode ser corrigido criando histórico de versões?" — resposta: o histórico já existe (versões imutáveis); o que resolve é congelar também o RESULTADO do cálculo (indicadores, fluxo, tornado, cenários, vendas) na versão e o painel/PDF lerem dele. Oferecido como próximo passo, aguardando decisão.
 - Ruling: **os números são recalculados pelo motor atual sobre o snapshot**, não lidos do `results` congelado — assim
   indicadores, gráficos e PDF ficam coerentes entre si. Custo: uma correção futura do motor muda o que o investidor vê de
   uma versão já publicada (e pode divergir da aba Versões, que mostra o `results` do momento). Revisitar se o usuário
   quiser números imutáveis.
-- Minor (não feito): logo que falha por rede passageira fica sem logo até recarregar (cache do `null`); logo SVG/WebP
-  pequena sai sem logo (o jsPDF só aceita PNG/JPEG aqui).
+- [x] Minor (pedido do usuário, 15/11: "Corrigir problema com logo") — falha de rede não fica mais no cache de
+  `logoComoDataUrl`; logo SVG/WebP (qualquer tamanho, inclusive SVG só com viewBox) é redesenhada em PNG
+  (`utils/logoParaOPdf.ts`). Conferido no Garden com uma logo SVG trocada só na resposta: aparece na capa.
 
 ## Pendências (registradas 15/11, fora do pedido — não consertadas)
 

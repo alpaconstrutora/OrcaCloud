@@ -22,6 +22,7 @@ import { secoesDoRelatorio, capaDoRelatorio, type DadosDoRelatorio, type OpcoesD
 import { pdfDoRelatorio, type ImagemDoGrafico } from '../utils/imovibRelatorioPdf';
 import { coresCompativeisNaCopia } from '../utils/html2canvasCores';
 import { logoComoDataUrl } from '../utils/logoComoDataUrl';
+import { logoParaOPdf } from '../utils/logoParaOPdf';
 import {
     GraficoCurvaS, GraficoTornado, GraficoCenarios, GraficoVendasPorMes, GraficoComposicaoDoCapital, LinhaDoTempoDosMarcos,
     type DimensaoDoGrafico,
@@ -83,25 +84,6 @@ const proximoQuadro = () => new Promise<void>(ok => {
     const t = setTimeout(ok, 50);
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { clearTimeout(t); ok(); });
 });
-
-/** Logo reduzida para a capa (16 mm de altura não pedem 3600 px). Falha → a original. */
-async function logoReduzida(dataUrl: string | null, larguraMaxima = 480): Promise<string | null> {
-    if (!dataUrl) return null;
-    try {
-        const img = new Image();
-        await new Promise<void>((ok, erro) => { img.onload = () => ok(); img.onerror = () => erro(new Error('logo')); img.src = dataUrl; });
-        if (img.naturalWidth <= larguraMaxima) return dataUrl;
-        const c = document.createElement('canvas');
-        c.width = larguraMaxima;
-        c.height = Math.max(1, Math.round((img.naturalHeight * larguraMaxima) / img.naturalWidth));
-        const ctx = c.getContext('2d');
-        if (!ctx) return dataUrl;
-        ctx.drawImage(img, 0, 0, c.width, c.height);
-        return c.toDataURL('image/png');
-    } catch {
-        return dataUrl;
-    }
-}
 
 export async function imagensDosGraficos(d: DadosDoRelatorio, ids: GraficoId[]): Promise<Partial<Record<GraficoId, ImagemDoGrafico>>> {
     // Um gráfico que não consegue ser calculado fica de fora; os outros seguem.
@@ -178,7 +160,7 @@ export async function gerarRelatorioCompleto(d: DadosDoRelatorio, opcoes: Opcoes
             console.error('Os gráficos ficaram fora do relatório', e);
             return {};
         }),
-        logoComoDataUrl(opcoes.organizacao?.logo_url ?? null).then(l => logoReduzida(l)),
+        logoComoDataUrl(opcoes.organizacao?.logo_url ?? null).then(l => logoParaOPdf(l)),
     ]);
     const titulo = opcoes.versao ? `${d.study.name} — ${opcoes.versao.label}` : d.study.name;
     return pdfDoRelatorio(secoes, titulo, {

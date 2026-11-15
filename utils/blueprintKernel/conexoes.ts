@@ -137,6 +137,9 @@ export const CAIXAS_DE_ESGOTO: Readonly<Record<string, { cotaE: 'FUNDO' | 'TOPO'
   TANQUE_SEPTICO: { cotaE: 'TUBO', alturaPadraoMm: 1800, larguraPadraoMm: 1200, acimaDoTuboMm: 400 },
   FILTRO_ANAEROBIO: { cotaE: 'TUBO', alturaPadraoMm: 1800, larguraPadraoMm: 1500, acimaDoTuboMm: 400 },
   SUMIDOURO: { cotaE: 'TUBO', alturaPadraoMm: 3000, larguraPadraoMm: 1500, acimaDoTuboMm: 400 },
+  // 0.109.0 (PA8c): a separadora de água e óleo — cota do tubo, como o tanque; o poço de recalque — cota do fundo.
+  CAIXA_SEPARADORA: { cotaE: 'TUBO', alturaPadraoMm: 1000, larguraPadraoMm: 800, acimaDoTuboMm: 300 },
+  POCO_DE_RECALQUE: { cotaE: 'FUNDO', alturaPadraoMm: 1500, larguraPadraoMm: 1200 },
 };
 
 /** Fundo e topo da caixa de esgoto, em mm do piso do pavimento; `null` se não é caixa. */

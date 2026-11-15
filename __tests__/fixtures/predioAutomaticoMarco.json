@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "179ae7b9a06de201dc25c814805eb0eb29e8c35666db2d0488759385dc19592d",
+    "modelo": "7a784ec0aad0ec463668039fb16d88a77bdcd7e8a4f7f2fbeb9937d6d578f7f9",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -141,7 +141,7 @@
     "vagas": 0
   },
   "R8": {
-    "modelo": "b18bc0f22ad7eae05527c564286170cc2cb3a1837b1cf0807eee6bc947ca6f58",
+    "modelo": "e4ab62432a157cb3a6d5c46fde5b966065259c0e56e1ceed8b5fbcd7c8343741",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 11,
     "copias": 6,
@@ -151,7 +151,7 @@
     "nucleos": 2,
     "estruturas": 766,
     "quadros": 45,
-    "terminais": 3687,
+    "terminais": 3698,
     "trechosDeAgua": 2481,
     "agua": {
       "pontos": 85,
@@ -173,7 +173,7 @@
       "excessivas": 0,
       "naoAvaliados": 0
     },
-    "trechosDeEsgoto": 899,
+    "trechosDeEsgoto": 920,
     "esgoto": {
       "tubosDeQueda": 5,
       "pontos": 45,
@@ -346,6 +346,12 @@
       "escadasDeEmergencia": 1,
       "luzes": 128,
       "exaustores": 5,
+      "drenagem": {
+        "ralos": 6,
+        "canaletas": 1,
+        "bombas": 2,
+        "recalque": true
+      },
       "pilaresDaTorre": 40,
       "pilaresDaGaragem": 59
     },
@@ -353,7 +359,7 @@
     "vagas": 59
   },
   "R12": {
-    "modelo": "d856b8145ba82a699911f098ffae721bae93958c8fd8750e5b15b442c3ddf010",
+    "modelo": "03bec464ff5f1c958828e118826d332ad781c7f67ace2647831173c88ee82cd2",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
@@ -361,9 +367,9 @@
     "plantas": 8,
     "paredes": 944,
     "nucleos": 3,
-    "estruturas": 1428,
+    "estruturas": 1424,
     "quadros": 103,
-    "terminais": 9432,
+    "terminais": 9456,
     "trechosDeAgua": 6112,
     "agua": {
       "pontos": 144,
@@ -385,7 +391,7 @@
       "excessivas": 0,
       "naoAvaliados": 0
     },
-    "trechosDeEsgoto": 2348,
+    "trechosDeEsgoto": 2406,
     "esgoto": {
       "tubosDeQueda": 8,
       "pontos": 76,
@@ -608,29 +614,35 @@
         },
         {
           "nome": "Subsolo · 2º subsolo",
-          "vagas": 89,
+          "vagas": 88,
           "porTipo": {
-            "COMUM": 82,
+            "COMUM": 81,
             "PCD": 2,
             "IDOSO": 5,
             "MOTO": 0
           }
         }
       ],
-      "vagas": 175,
+      "vagas": 174,
       "teto": 274,
       "rampas": 2,
       "escadasDeEmergencia": 2,
       "luzes": 310,
       "exaustores": 12,
+      "drenagem": {
+        "ralos": 18,
+        "canaletas": 2,
+        "bombas": 2,
+        "recalque": true
+      },
       "pilaresDaTorre": 55,
-      "pilaresDaGaragem": 63
+      "pilaresDaGaragem": 62
     },
     "pilaresSobreVagaOuRampa": 0,
-    "vagas": 175
+    "vagas": 174
   },
   "RL": {
-    "modelo": "4af84bb18b7b706fca452de7c5ae7fbda97639ab62b844a805690b1f02010e4e",
+    "modelo": "8d3b3ccd8f49d80c27bbb1976976633280154a20671e08a221e1b677a01c4fdc",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,

@@ -1086,7 +1086,7 @@ export interface ApprovalApprover {
     id: string;
     organization_id: string;
     faixa_id: string | null;
-    entity_type: 'blueprint_snapshot' | 'doc_gen_documento' | 'purchase_request' | 'process_step' | null;
+    entity_type: 'blueprint_snapshot' | 'doc_gen_documento' | 'purchase_request' | 'process_step' | 'project_risk' | null;
     level: 1 | 2;
     user_id: string;
     /** Nome de exibição (membro da org); preenchido pelo serviço. */

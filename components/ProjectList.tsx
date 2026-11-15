@@ -2,7 +2,7 @@ import React from 'react';
 import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { projectService, ProjectData } from '../services/projectService';
 import { empreendimentoService } from '../services/empreendimentoService';
-import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2, MoveHorizontal, AlertCircle, AlertTriangle, Zap, CalendarOff } from 'lucide-react';
+import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2, MoveHorizontal, AlertCircle, AlertTriangle, CalendarOff, CalendarX2, Hourglass } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { TipoObra, OBRA_STATUSES } from '../types/project';
 
@@ -55,7 +55,7 @@ import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
 import { agruparOrcamentos, OPCOES_AGRUPAR_ORCAMENTO, type CampoAgruparOrcamento } from '../utils/orcamentoGrupos';
 import { diasEntre, hojeLocalISO, type IndicadoresDePrazo } from '../utils/planejamentoIndicadores';
 import { useIndicadoresDosPlanejamentos } from '../hooks/useIndicadoresDosPlanejamentos';
-import { situacaoDePrazo, ORDEM_SITUACAO, agruparPlanejamentos, OPCOES_AGRUPAR_PLANEJAMENTO, type CampoAgruparPlanejamento } from '../utils/planejamentoGrupos';
+import { situacaoDePrazo, ordemDoPrazo, diasPorExtenso, agruparPlanejamentos, OPCOES_AGRUPAR_PLANEJAMENTO, type CampoAgruparPlanejamento, type ChaveSituacaoPrazo } from '../utils/planejamentoGrupos';
 
 interface ProjectSettings {
     classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO' | string;
@@ -161,7 +161,7 @@ const COLUMNS_PLANEJAMENTO: ColumnConfig[] = [
     { key: 'actions',  label: 'Ações',          sortable: false },
 ];
 const DEFAULT_COL_WIDTHS_PLANEJAMENTO: Record<string, number> = {
-    ...DEFAULT_COL_WIDTHS, actions: 152, avanco: 210, prazo: 210, termino: 120, inicio: 120,
+    ...DEFAULT_COL_WIDTHS, actions: 152, avanco: 210, prazo: 210, termino: 160, inicio: 120,
 };
 const dataCurta = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
 const pct0 = (v: number) => `${Math.round(v)}%`;
@@ -178,26 +178,42 @@ const RECORTES_ORCAMENTO: { key: RecorteOrcamento; label: string; dica: string; 
     { key: 'com-pedidos', label: 'Com pedidos', dica: 'Mostrar só os orçamentos que já têm pedido de compra vinculado', cor: 'blue', icone: 'cadeado' },
 ];
 
-/** Recortes dos cards de Planejamento (crítica 2026-11-14, docs/planos/2026-11-14-planejamento-
- *  lista-critica.md, item 1). Substituem o PlanningDashboard, cujo "Progresso Médio 5.4%" era o
- *  default fixo `obraProgress` e cujas "Atividades Críticas" contavam itens órfãos do cronograma.
- *  Mesma conta da Central de Comando (utils/planejamentoIndicadores.ts); clicar filtra a lista. */
-type RecortePlanejamento = 'atrasados' | 'terminam-30' | 'criticas-abertas' | 'sem-cronograma';
-const RECORTES_PLANEJAMENTO: { key: RecortePlanejamento; label: string; dica: string; cor: 'red' | 'amber' | 'orange' | 'gray'; icone: 'alerta' | 'relogio' | 'raio' | 'calendario' }[] = [
-    { key: 'atrasados', label: 'Com tarefa atrasada', dica: 'Mostrar só os planejamentos com tarefa que passou do término sem chegar a 100%', cor: 'red', icone: 'alerta' },
+/** Recortes dos cards de Planejamento. 1ª crítica (2026-11-14): substituíram o PlanningDashboard
+ *  ("Progresso Médio 5.4%" fixo). 2ª crítica (2026-11-15, docs/planos/2026-11-15-planejamento-
+ *  lista-critica-2.md, item 5): os antigos quase não separavam nada — "com tarefa crítica em aberto"
+ *  vale para todo planejamento em curso e "com tarefa atrasada" marcava o planejamento inteiro por
+ *  uma tarefa (2/2, 1/2, 2/2, 0/2). Agora medem o TAMANHO do problema. Mesma conta da Central de
+ *  Comando (utils/planejamentoIndicadores.ts); clicar filtra a lista. */
+type RecortePlanejamento = 'vencidos' | 'atraso-15' | 'terminam-30' | 'sem-baseline';
+const DIAS_DE_ATRASO_DO_CARD = 15;
+const RECORTES_PLANEJAMENTO: { key: RecortePlanejamento; label: string; dica: string; cor: 'red' | 'amber' | 'orange' | 'gray'; icone: 'vencido' | 'atraso' | 'relogio' | 'calendario' }[] = [
+    { key: 'vencidos', label: 'Término vencido', dica: 'Mostrar só os planejamentos cujo término previsto já passou sem chegar a 100%', cor: 'red', icone: 'vencido' },
+    { key: 'atraso-15', label: `Mais de ${DIAS_DE_ATRASO_DO_CARD} dias de atraso`, dica: `Mostrar só os planejamentos cujo avanço real está mais de ${DIAS_DE_ATRASO_DO_CARD} dias atrás do previsto`, cor: 'orange', icone: 'atraso' },
     { key: 'terminam-30', label: 'Terminam em 30 dias', dica: 'Mostrar só os planejamentos com término previsto nos próximos 30 dias e ainda não concluídos', cor: 'amber', icone: 'relogio' },
-    { key: 'criticas-abertas', label: 'Com tarefa crítica em aberto', dica: 'Mostrar só os planejamentos com tarefa do caminho crítico ainda não concluída', cor: 'orange', icone: 'raio' },
-    { key: 'sem-cronograma', label: 'Sem cronograma', dica: 'Mostrar só os planejamentos cujas tarefas ainda não têm início e término', cor: 'gray', icone: 'calendario' },
+    { key: 'sem-baseline', label: 'Sem linha de base', dica: 'Mostrar só os planejamentos sem datas ou sem linha de base ativa — neles o desvio do término não pode ser medido', cor: 'gray', icone: 'calendario' },
 ];
 const passaNoRecortePlanejamento = (ind: IndicadoresDePrazo | undefined, r: RecortePlanejamento, hoje: string): boolean => {
     if (!ind) return false;
-    if (r === 'sem-cronograma') return !ind.temDatas;
-    if (r === 'atrasados') return ind.atrasadas > 0;
-    if (r === 'criticas-abertas') return ind.criticasAbertas > 0;
+    if (r === 'sem-baseline') return !ind.temDatas || !ind.fimBaseline;
+    if (r === 'vencidos') return ind.terminoVencidoDias !== null;
+    if (r === 'atraso-15') return ind.avancoFisicoPct < 100 && (ind.atrasoDias ?? 0) > DIAS_DE_ATRASO_DO_CARD;
     if (!ind.fimPrevisto || ind.avancoFisicoPct >= 100) return false;
     const dias = diasEntre(hoje, ind.fimPrevisto);
     return dias >= 0 && dias <= 30;
 };
+/** Ícone da situação de prazo — na grade, no lugar da pasta igual em todos os cards. */
+const ICONE_DA_SITUACAO: Record<ChaveSituacaoPrazo, { Icone: typeof AlertTriangle; bolha: string }> = {
+    vencido: { Icone: CalendarX2, bolha: 'bg-red-100 text-red-700' },
+    atrasado: { Icone: AlertTriangle, bolha: 'bg-red-100 text-red-700' },
+    'no-prazo': { Icone: CheckCircle2, bolha: 'bg-emerald-100 text-emerald-700' },
+    'nao-comecou': { Icone: Hourglass, bolha: 'bg-gray-100 text-gray-600' },
+    'sem-datas': { Icone: CalendarOff, bolha: 'bg-gray-100 text-gray-600' },
+    concluido: { Icone: CheckCircle2, bolha: 'bg-emerald-100 text-emerald-700' },
+};
+/** Desvio do término × linha de base, como aparece ao lado da data: "+3d" / "−2d". */
+const desvioCurto = (d: number) => `${d > 0 ? '+' : '−'}${Math.abs(d)}d`;
+const desvioPorExtenso = (d: number, fimBaseline: string) =>
+    `${diasPorExtenso(Math.abs(d))} ${d > 0 ? 'depois' : 'antes'} da linha de base (${dataCurta(fimBaseline)})`;
 
 /** Foco da linha pelo teclado. O contorno do <tr> não é desenhado pelo Chrome (medido
  *  14/11/2026), então o anel vai nas células: fundo blue-50 + linhas azuis de 2px em cima e
@@ -386,7 +402,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const colunasDoContexto = isPlanejamentoContext ? COLUMNS_PLANEJAMENTO : COLUMNS;
     const contextColumns = colunasDoContexto.filter(c => !columnsWithoutData.has(c.key));
 
-    const tableColumns = useTableColumns(colunasDoContexto, isPlanejamentoContext ? 'projectListColumns:planejamento' : 'projectListColumns');
+    // Planejamento abre pelo Prazo, pior primeiro (2ª crítica): a pergunta da tela é "qual atrasa".
+    const tableColumns = useTableColumns(colunasDoContexto, isPlanejamentoContext ? 'projectListColumns:planejamento' : 'projectListColumns',
+        isPlanejamentoContext ? { column: 'prazo', direction: 'asc' } : undefined);
     // Linhas da aba/contexto atual (Obras, Orçamentos, Planejamentos, Diários), antes
     // da busca, do tipo e do filtro avançado — base da lista de clientes do filtro.
     const tabProjects = React.useMemo(() => projects.filter(p => {
@@ -745,9 +763,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }
                 if (key === 'avanco') {
                     if (!ind.temDatas) return <span className="text-sm font-normal text-gray-500">—</span>;
+                    // A marca pinta o trecho entre o real e o previsto: o atraso à vista (2ª crítica).
                     return (
                         <SegmentedProgress
                             percent={Math.round(ind.avancoFisicoPct)}
+                            marca={ind.previstoPct}
                             tone="blue"
                             hint={`previsto ${pct0(ind.previstoPct)}`}
                             title={`Avanço físico real ${pct0(ind.avancoFisicoPct)} · previsto até hoje ${pct0(ind.previstoPct)} (ponderado pelo valor orçado, como na Central de Comando)`}
@@ -755,18 +775,32 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     );
                 }
                 if (key === 'prazo') {
+                    // Quanto atrasa, em dias, na própria célula (antes só no title: "SPI 0,85").
                     const s = situacaoDePrazo(ind);
-                    const titulo = ind.spi !== null
-                        ? `SPI ${ind.spi.toFixed(2).replace('.', ',')} — avanço real ÷ previsto até hoje${ind.atrasadas > 0 ? ` · ${ind.atrasadas} tarefa(s) com término vencido sem chegar a 100%` : ''}`
-                        : undefined;
-                    return <span className={`text-sm font-normal ${s.cor}`} title={titulo}>{s.texto}</span>;
+                    const partes: string[] = [];
+                    if (s.chave === 'vencido') partes.push(`Término previsto ${dataCurta(ind.fimPrevisto)}, ainda em ${pct0(ind.avancoFisicoPct)}`);
+                    if (ind.atrasoDias && ind.avancoEquivaleA) partes.push(`o avanço real de hoje é o que estava previsto para ${dataCurta(ind.avancoEquivaleA)} (${diasPorExtenso(ind.atrasoDias)} atrás)`);
+                    if (ind.spi !== null) partes.push(`SPI ${ind.spi.toFixed(2).replace('.', ',')}`);
+                    if (ind.atrasadas > 0) partes.push(`${ind.atrasadas} tarefa(s) passaram do último dia sem chegar a 100%`);
+                    return <span className={`text-sm font-normal ${s.cor}`} title={partes.join(' · ') || undefined}>{s.texto}</span>;
                 }
                 const data = key === 'termino' ? ind.fimPrevisto : ind.inicioPrevisto;
                 if (!data) return <span className="text-sm font-normal text-gray-500">—</span>;
-                const desvio = key === 'termino' && ind.desvioDias !== null && ind.desvioDias !== 0
-                    ? `${ind.desvioDias > 0 ? '+' : ''}${ind.desvioDias}d vs. linha de base (${dataCurta(ind.fimBaseline)})`
-                    : undefined;
-                return <span className="text-sm font-normal text-gray-700 tabular-nums" title={desvio}>{dataCurta(data)}</span>;
+                if (key === 'inicio') return <span className="text-sm font-normal text-gray-700 tabular-nums">{dataCurta(data)}</span>;
+                // Término: vermelho quando venceu sem 100%; ao lado, o desvio da linha de base.
+                const vencido = ind.terminoVencidoDias !== null;
+                const temDesvio = ind.desvioDias !== null && ind.desvioDias !== 0;
+                return (
+                    <span className="inline-flex items-baseline gap-1.5 text-sm font-normal tabular-nums whitespace-nowrap"
+                        title={[vencido ? `Venceu há ${diasPorExtenso(ind.terminoVencidoDias!)} sem chegar a 100%` : '', temDesvio ? desvioPorExtenso(ind.desvioDias!, ind.fimBaseline) : ''].filter(Boolean).join(' · ') || undefined}>
+                        <span className={vencido ? 'text-red-700' : 'text-gray-700'}>{dataCurta(data)}</span>
+                        {temDesvio && (
+                            <span className={`text-xs ${ind.desvioDias! > 0 ? 'text-red-700' : 'text-emerald-700'}`}>
+                                {desvioCurto(ind.desvioDias!)}<span className="sr-only"> em relação à linha de base</span>
+                            </span>
+                        )}
+                    </span>
+                );
             }
             default:
                 return null;
@@ -963,7 +997,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             const chave = (ind: IndicadoresDePrazo | undefined): number | string | null => {
                                 if (!ind) return null;
                                 if (sortColumn === 'avanco') return ind.temDatas ? ind.avancoFisicoPct : null;
-                                if (sortColumn === 'prazo') return ORDEM_SITUACAO.indexOf(situacaoDePrazo(ind).chave) * 10 + (ind.spi ?? 9);
+                                if (sortColumn === 'prazo') return ordemDoPrazo(ind);
                                 const d = sortColumn === 'termino' ? ind.fimPrevisto : ind.inicioPrevisto;
                                 return d || null;
                             };
@@ -1157,7 +1191,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [recortePlan, setRecortePlan] = React.useState<RecortePlanejamento | null>(null);
     const hojePlan = hojeLocalISO();
     const recortePlanAtivo = isPlanejamentoContext && indicadoresPlan.estado === 'pronto' ? recortePlan : null;
-    const contagemRecortePlan: Record<RecortePlanejamento, number> = { atrasados: 0, 'terminam-30': 0, 'criticas-abertas': 0, 'sem-cronograma': 0 };
+    const contagemRecortePlan: Record<RecortePlanejamento, number> = { vencidos: 0, 'atraso-15': 0, 'terminam-30': 0, 'sem-baseline': 0 };
+    // "Tentar de novo" some quando a busca recomeça: sem isto o foco caía no <body> (2ª crítica).
+    const focarCardsAposTentar = React.useRef(false);
+    const gradeDeCardsPlan = React.useRef<HTMLDivElement>(null);
+    React.useEffect(() => {
+        if (!focarCardsAposTentar.current || indicadoresPlan.estado === 'erro') return;
+        const primeiro = gradeDeCardsPlan.current?.querySelector<HTMLElement>('button');
+        if (!primeiro) return;
+        focarCardsAposTentar.current = false;
+        primeiro.focus();
+    }, [indicadoresPlan.estado]);
     if (isPlanejamentoContext && indicadoresPlan.estado === 'pronto') {
         for (const r of RECORTES_PLANEJAMENTO) contagemRecortePlan[r.key] = filteredProjects.filter(p => passaNoRecortePlanejamento(indicadoresPlan.porProjeto[p.id], r.key, hojePlan)).length;
     }
@@ -1183,6 +1227,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
         : isPlanejamentoContext
             ? agruparPlanejamentos(projetosNaTela, campoAgrupar as CampoAgruparPlanejamento, agrupamento.direcao, {
                 indicadores: p => indicadoresPlan.porProjeto[p.id],
+                semIndicadores: indicadoresPlan.estado === 'erro' ? 'Sem dados' : 'Calculando',
                 obra: p => findLinkedProject(p, projects)?.name || p.settings?.linkedProjectName,
                 cliente: p => getClientCellValue(p, projects, activeTab),
             })
@@ -1224,7 +1269,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
                         <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                            {isObraContext ? 'Obras' : (isPlanejamentoContext ? 'Gestão de Planejamento' : (isDiarioContext ? 'Gestão de Diário de Obras' : 'Orçamentos'))}
+                            {isObraContext ? 'Obras' : (isPlanejamentoContext ? 'Planejamentos' : (isDiarioContext ? 'Gestão de Diário de Obras' : 'Orçamentos'))}
                         </h1>
                         <p className="text-gray-500 text-sm mt-1.5 font-medium">{textos.subtitulo}</p>
                     </div>
@@ -1328,7 +1373,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-white rounded-[10px] border border-gray-200 px-4 py-3 mb-3 text-sm text-gray-700">
                     <AlertCircle className="w-4 h-4 text-red-600 shrink-0" aria-hidden="true" />
                     <span>Não foi possível carregar o orçamento dos planejamentos para calcular os prazos.</span>
-                    <button type="button" onClick={indicadoresPlan.tentarDeNovo} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                    <button type="button" onClick={() => { focarCardsAposTentar.current = true; indicadoresPlan.tentarDeNovo(); }} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
                         Tentar de novo
                     </button>
                 </div>
@@ -1337,14 +1382,15 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 // Planejamento: os cards moram aqui porque filtram ESTA lista. Sem `disabled`
                 // enquanto calcula — botão desabilitado esconde o title que diz o motivo.
                 // 2×2 no celular: 4 cards empilhados ocupavam a tela de 390 px inteira (item 7).
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3" aria-busy={indicadoresPlan.estado === 'carregando'}>
+                <div ref={gradeDeCardsPlan} className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3" aria-busy={indicadoresPlan.estado === 'carregando'}>
                     {RECORTES_PLANEJAMENTO.map(r => {
                         const pronto = indicadoresPlan.estado === 'pronto';
                         const ativo = recortePlanAtivo === r.key;
-                        const icone = r.icone === 'alerta' ? <AlertTriangle className="w-4 h-4" />
+                        const icone = r.icone === 'vencido' ? <CalendarX2 className="w-4 h-4" />
+                            : r.icone === 'atraso' ? <AlertTriangle className="w-4 h-4" />
                             : r.icone === 'relogio' ? <Clock className="w-4 h-4" />
-                            : r.icone === 'raio' ? <Zap className="w-4 h-4" />
                             : <CalendarOff className="w-4 h-4" />;
+                        const valor = pronto ? contagemRecortePlan[r.key] : '—';
                         // Legendas curtas (4 lado a lado e 2×2 no celular); a explicação longa vai no title.
                         const sub = !pronto ? 'Calculando…'
                             : ativo ? 'Filtrando · ver todos'
@@ -1359,12 +1405,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 title={!pronto ? 'Calculando — aguarde um instante' : ativo ? 'Mostrar todos os planejamentos' : r.dica}
                                 className={`text-left rounded-xl transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${ativo ? 'ring-2 ring-blue-500' : pronto ? 'hover:shadow-sm' : 'cursor-wait'}`}
                             >
+                                {/* Número um degrau maior (size lg, §4) e zero em cinza: zero não é alarme. */}
                                 <KpiCard
                                     label={r.label}
-                                    value={pronto ? contagemRecortePlan[r.key] : '—'}
+                                    value={valor}
                                     sub={sub}
                                     icon={icone}
-                                    color={pronto ? r.cor : 'gray'}
+                                    color={pronto && valor !== 0 ? r.cor : 'gray'}
+                                    size="lg"
                                     className="h-full"
                                 />
                             </button>
@@ -1661,9 +1709,21 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             >
                                 <div className="p-5 flex-1">
                                     <div className="flex items-start justify-between mb-4">
+                                        {isPlanejamentoContext ? (() => {
+                                            // A situação no lugar da pasta (igual em todos os cards): o card diz de
+                                            // relance o que pede atenção (2ª crítica). O texto ao lado já a nomeia.
+                                            const ind = indicadoresPlan.porProjeto[project.id];
+                                            const { Icone, bolha } = ind ? ICONE_DA_SITUACAO[situacaoDePrazo(ind).chave] : { Icone: Clock, bolha: 'bg-gray-100 text-gray-500' };
+                                            return (
+                                                <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${bolha}`} aria-hidden="true">
+                                                    <Icone className="w-6 h-6" />
+                                                </div>
+                                            );
+                                        })() : (
                                         <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
                                             <FolderOpen className="w-6 h-6" />
                                         </div>
+                                        )}
                                         {/* Badges de status — texto simples colorido, sem pílula/fundo/uppercase (§8).
                                             Planejamento: a situação de prazo (mesma da coluna Prazo), não os status de
                                             orçamento/obra/pedidos — a grade repetia a contradição que o item 3 tirou
@@ -1739,6 +1799,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     {ind?.temDatas && (
                                                         <SegmentedProgress
                                                             percent={Math.round(ind.avancoFisicoPct)}
+                                                            marca={ind.previstoPct}
                                                             tone="blue"
                                                             hint={`previsto ${pct0(ind.previstoPct)}`}
                                                             title={`Avanço físico real ${pct0(ind.avancoFisicoPct)} · previsto até hoje ${pct0(ind.previstoPct)}`}
@@ -1746,7 +1807,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     )}
                                                     <div className="flex items-center justify-between text-xs">
                                                         <span className="text-gray-500">Término:</span>
-                                                        <span className="text-gray-700 font-medium tabular-nums">{ind?.fimPrevisto ? dataCurta(ind.fimPrevisto) : '—'}</span>
+                                                        <span className="inline-flex items-baseline gap-1.5 font-medium tabular-nums">
+                                                            <span className={ind?.terminoVencidoDias != null ? 'text-red-700' : 'text-gray-700'}>{ind?.fimPrevisto ? dataCurta(ind.fimPrevisto) : '—'}</span>
+                                                            {ind && ind.desvioDias !== null && ind.desvioDias !== 0 && (
+                                                                <span className={ind.desvioDias > 0 ? 'text-red-700' : 'text-emerald-700'} title={desvioPorExtenso(ind.desvioDias, ind.fimBaseline)}>
+                                                                    {desvioCurto(ind.desvioDias)}<span className="sr-only"> em relação à linha de base</span>
+                                                                </span>
+                                                            )}
+                                                        </span>
                                                     </div>
                                                 </>
                                             );

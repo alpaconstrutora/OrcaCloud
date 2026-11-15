@@ -43,6 +43,9 @@ export function AgruparControles<C extends string>({ opcoes, campo, onCampo, dir
                     value={campo}
                     onChange={e => onCampo(e.target.value as C | 'none')}
                     title={title}
+                    // O `title` não é nome acessível confiável (leitor de tela pode não ler):
+                    // sem isto o seletor era anunciado só pelo valor, "Agrupar" (2ª crítica, 15/11/2026).
+                    aria-label={title}
                     className={`h-9 pl-8 pr-3 rounded-[6px] text-[13px] font-medium border appearance-none cursor-pointer transition-all ${
                         ativo
                             ? 'bg-blue-600 text-white border-blue-600 [&>option]:bg-white [&>option]:text-gray-900'

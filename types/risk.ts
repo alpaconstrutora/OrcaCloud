@@ -130,6 +130,10 @@ export interface ProjectRisk {
     ultima_avaliacao_em: string | null;
     sst_document_tipo: 'risk_assessment' | 'sst_regulatory_doc' | null;
     sst_document_id: string | null;
+    /** Alçada (F2.3). `null` = nunca enviado. */
+    approval_status: 'RASCUNHO' | 'PENDENTE' | 'APROVADO' | 'REJEITADO' | null;
+    approval_chain: { level: number; role: string; action: 'APROVADO' | 'REJEITADO'; approved_by: string; approved_at: string; notes?: string }[];
+    approval_required_levels: number | null;
     created_at: string;
     updated_at: string;
 }
@@ -204,10 +208,10 @@ export interface RiskAuditLog {
     id: string;
     organization_id: string;
     project_risk_id: string | null;
-    entity_type: 'risk' | 'evaluation' | 'action' | 'catalog' | 'config';
+    entity_type: 'risk' | 'evaluation' | 'action' | 'catalog' | 'config' | 'event' | 'link';
     entity_id: string | null;
     entity_label: string | null;
-    action: 'create' | 'update' | 'delete' | 'evaluate' | 'close' | 'reopen' | 'link' | 'unlink';
+    action: 'create' | 'update' | 'delete' | 'evaluate' | 'close' | 'reopen' | 'link' | 'unlink' | 'materialize' | 'submit' | 'approve' | 'reject';
     field_name: string | null;
     old_value: unknown;
     new_value: unknown;
@@ -217,3 +221,83 @@ export interface RiskAuditLog {
     user_email: string | null;
     created_at: string;
 }
+
+// ── Fase 2 (15/11/2026): ocorrências, vínculos, alçada, perfil da obra e sinais ──
+// Tabelas: supabase/migrations/aplicar_20271115637000_riscos_fase2.sql.
+
+export const RISK_TIPOS_OCORRENCIA = ['quase_acidente', 'acidente', 'nao_conformidade', 'dano', 'sinistro', 'atraso', 'perda', 'oportunidade_realizada', 'outro'] as const;
+export type RiskTipoOcorrencia = typeof RISK_TIPOS_OCORRENCIA[number];
+export type RiskOcorrenciaStatus = 'aberta' | 'em_tratamento' | 'encerrada';
+
+export const ROTULO_OCORRENCIA: Record<RiskTipoOcorrencia, string> = {
+    quase_acidente: 'Quase acidente', acidente: 'Acidente', nao_conformidade: 'Não conformidade', dano: 'Dano',
+    sinistro: 'Sinistro', atraso: 'Atraso', perda: 'Perda', oportunidade_realizada: 'Oportunidade realizada', outro: 'Outro',
+};
+
+export interface RiskEvent {
+    id: string;
+    organization_id: string;
+    project_risk_id: string | null;
+    project_id: string | null;
+    tipo: RiskTipoOcorrencia;
+    data_ocorrencia: string;
+    titulo: string;
+    descricao: string | null;
+    causa_raiz: string | null;
+    /** Um valor por ocorrência, mesmo afetando várias dimensões (nunca multiplica). */
+    impacto_financeiro: number | null;
+    atraso_dias: number | null;
+    dimensoes: RiskDimensao[];
+    acoes_corretivas: string | null;
+    licoes_aprendidas: string | null;
+    evidencia_url: string | null;
+    evidencia_document_id: string | null;
+    materializa: boolean;
+    avaliacao_referencia_id: string | null;
+    status: RiskOcorrenciaStatus;
+    created_at: string;
+    updated_at: string;
+}
+
+export type RiskEventInput = Pick<RiskEvent,
+    'project_id' | 'tipo' | 'data_ocorrencia' | 'titulo' | 'descricao' | 'causa_raiz' | 'impacto_financeiro' |
+    'atraso_dias' | 'dimensoes' | 'acoes_corretivas' | 'licoes_aprendidas' | 'evidencia_url' | 'evidencia_document_id' |
+    'materializa' | 'status'>;
+
+export const RISK_MODULOS_VINCULO = ['cronograma', 'contrato', 'pedido_compra', 'nao_conformidade', 'documento'] as const;
+export type RiskModuloVinculo = typeof RISK_MODULOS_VINCULO[number];
+export const ROTULO_MODULO_VINCULO: Record<RiskModuloVinculo, string> = {
+    cronograma: 'Tarefa do cronograma', contrato: 'Contrato', pedido_compra: 'Pedido de compra',
+    nao_conformidade: 'Não conformidade', documento: 'Documento',
+};
+
+export interface RiskLink {
+    id: string;
+    organization_id: string;
+    project_risk_id: string;
+    modulo: RiskModuloVinculo;
+    /** Id no sistema de origem (CA10). Cronograma: id da linha; os demais: uuid. */
+    external_id: string;
+    /** Cronograma: `{ planningProjectId }`. */
+    external_ref: Record<string, unknown>;
+    external_label: string | null;
+    created_at: string;
+}
+
+export interface RiskSinal {
+    project_risk_id: string;
+    link_id: string;
+    modulo: RiskModuloVinculo;
+    external_label: string | null;
+    sinal: string;
+    gravidade: 'alta' | 'media';
+}
+
+export interface RiskProjectProfile {
+    project_id: string;
+    organization_id: string;
+    tipologia: RiskTipologia | null;
+    condicoes: string[];
+}
+
+export type RiskApprovalStatus = 'RASCUNHO' | 'PENDENTE' | 'APROVADO' | 'REJEITADO';

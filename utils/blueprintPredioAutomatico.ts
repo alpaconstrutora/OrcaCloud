@@ -14,3 +14,4 @@ export * from './predioAutomatico/esgoto';
 export * from './predioAutomatico/pluvial';
 export * from './predioAutomatico/ppci';
 export * from './predioAutomatico/garagem';
+export * from './predioAutomatico/drenagem';

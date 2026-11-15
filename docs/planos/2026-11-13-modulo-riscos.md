@@ -159,21 +159,74 @@ tela: ler `docs/ui_ux_guia_unificado.md` e `UI_PATTERNS.md` inteiros. Depois: ro
 
 ### F2 — Operação (P0)
 
-- [ ] **F2.1 Ocorrências** (`risk_events`): materializar um risco preserva a última avaliação (CA08).
-- [ ] **F2.2 Vínculos** (`risk_links`) com tarefa do cronograma, contrato, pedido, não conformidade
-  (`non_conformances`) e documento do GED (CA10).
-- [ ] **F2.3 Alçada:** `risk_item` em `approvalService` e no CHECK de `approval_approvers`; risco
-  crítico e aceitação de risco exigem aprovação (CA12, parte alçada).
-- [ ] **F2.4 Modelos por tipologia** e sugestão por `condicoes_sugestao` (ex.: obra com subsolo
-  sugere escavação, contenção, água subterrânea e recalque).
-- [ ] **F2.5 Sinais automáticos** a partir de dados existentes: tarefa crítica atrasada
-  (planejamento), custo acima do orçado, documento obrigatório vencido (GED/contratos), insumo sem
-  pedido (painel de abastecimento).
+**Pedido (15/11/2026, mesma sessão):** "depois faremos estes testes. Inicie a fase 2" — os testes adiados são
+F0.5 (revisão técnica) e F1.12 (contador no SST).
 
-*(Os critérios de pronto da F2 serão detalhados neste arquivo ao fim da F1.)*
+**Detalhamento (15/11)**, a partir do mapeamento de `origin/main`: cronograma é JSON em
+`projects.settings.schedule.itemSchedules` do projeto PLANEJAMENTO (id estável = id da linha do orçamento;
+atrasada = `(earlyFinish ?? endDate) < hoje` e `manualRealPct < 100`, regra de `utils/planejamentoIndicadores`);
+`contracts` (`end_date`, `status`); `purchase_orders` (`delivery_date`, `actual_delivery_date`, `status`);
+`non_conformances` sem org/obra — via `work_orders.project_id`/`org_id`; `opura_documents` (`data_validade`,
+`project_id`); alçada genérica em `approvalService` + trava `fn_alcada_trava_passo` + aprovadores por tipo em
+`approval_approvers`. Tipologia da obra: `projects.tipo_obra` (residencial_multifamiliar|casa|loja|sala|galpao|
+reforma|outro) + `settings.modalidade='publica'`; não há campo de subsolo/contenção (vem do usuário).
+
+Decisões de desenho (minhas, registradas aqui):
+- Fila geral de aprovação (`fn_approval_action_queue`, Central/Financeiro) **fica de fora** nesta fase: risco tem
+  fila própria no módulo (aba Aprovações). Integrar à fila geral depois, se o usuário quiser.
+- Sinais (F2.5) nascem **dos vínculos** (F2.2): cada objeto vinculado diz se está em situação de risco. "Custo
+  acima do orçado" e "insumo sem pedido" ficam para depois (exigem regra do orçamento/abastecimento que não é
+  um objeto vinculável) — registrado em "Depois".
+
+- [x] **F2.1 Ocorrências** — tabela `risk_events` (tipo, data, descrição, causa raiz, impacto realizado R$ — um
+  valor por ocorrência, mesmo afetando várias dimensões —, atraso em dias, dimensões, ações corretivas, lições
+  aprendidas, evidência, status). Marcar "materializou o risco" grava a avaliação vigente em
+  `avaliacao_referencia_id` e põe o risco em `materializado`. Aba Ocorrências na ficha; KPI "materializados e
+  perdas" no Painel.
+  *Pronto quando:* registrar ocorrência materializando muda o status, guarda a referência da última avaliação, e
+  as avaliações anteriores continuam intactas no banco (CA08); soma de perdas no Painel = soma no banco.
+- [x] **F2.2 Vínculos** — tabela `risk_links` (`modulo` ∈ cronograma|contrato|pedido_compra|nao_conformidade|
+  documento, `external_id`, `external_ref` jsonb, rótulo do momento), único por (risco, módulo, id). Aba Vínculos
+  na ficha com seletor por módulo restrito à obra/organização do risco.
+  *Pronto quando:* vincular e desvincular grava/remove e audita (`link`/`unlink`); vincular o mesmo objeto duas
+  vezes é recusado; o id externo é o do sistema de origem (CA10).
+- [x] **F2.3 Alçada** — `project_risks` ganha `approval_status/approval_chain/approval_required_levels`;
+  entidade `project_risk` em `approvalService`, no CHECK de `approval_approvers`, em `fn_alcada_aprovadores` e
+  na trava `fn_alcada_trava_passo` (gatilho na tabela). Exige aprovação: estratégia "aceitar" ou nível crítico
+  (gatilho ou pontuação ≥ limite). Ficha mostra o motivo e "Enviar para aprovação"; aba Aprovações lista os
+  pendentes; quem não é aprovador vê o motivo do botão desligado.
+  *Pronto quando:* aprovar por quem não está na lista é recusado PELO BANCO (`ALCADA_NAO_PERMITE`); por quem
+  está, grava a cadeia e fica APROVADO; reprovar exige motivo (CA12, parte alçada).
+- [x] **F2.4 Sugestão por obra** — assistente "Sugerir riscos": escolhe a obra, a tipologia (pré-preenchida de
+  `tipo_obra`/`modalidade`) e as condições (subsolo, contenção…); lista os itens do catálogo da tipologia,
+  ordenados pelas condições que batem, e cria os escolhidos de uma vez (dono e próxima revisão comuns). O perfil
+  escolhido fica em `risk_project_profiles` para a próxima vez.
+  *Pronto quando:* obra residencial com "subsolo" sugere R05 (recalque, água subterrânea, contenção) no topo;
+  criar em lote gera um risco por item, sem duplicar item já usado na mesma obra.
+- [x] **F2.5 Sinais pelos vínculos** — função `fn_risk_sinais(p_org)` (invoker, RLS vale): tarefa do cronograma
+  atrasada ou crítica aberta; contrato vencido ou vencendo em 30 dias; pedido com entrega atrasada; NC aberta
+  vencida ou grave; documento vencido. Ficha mostra o sinal no vínculo; Registro/Painel contam "com sinal";
+  `fn_risk_alerts` ganha a regra `risco_sinal_vinculo` (1 aviso por risco/dia ao dono).
+  *Pronto quando:* cada tipo de sinal provado com um vínculo real ou de teste no banco; segunda rodada do cron no
+  mesmo dia não repete aviso.
+
+- 15/11 **F2 aplicada e provada** (usuário: "sim"). `aplicar_20271115637000` aplicada (antes: prefixo livre e
+  `fn_alcada_trava_passo`/`fn_alcada_aprovadores` idênticas às cópias usadas — conferido por diff). Ensaio com ROLLBACK
+  13/13 + 3/3 (sinais de documento e NC; recusa ALCADA_NAO_PERMITE do não aprovador). Navegador com `agente-leitura`
+  (membro da Alpa, NÃO aprovador; Dev cadastrado só para o teste como aprovador de risco): Sugerir riscos na obra
+  Coronel Lambert 345 (tipologia "reforma" pré-preenchida; subsolo+contenção → R05.08 e R14.03 no topo) criou RSC-0001/0002;
+  vínculo com pedido PO-662639 mostrou "Pedido com entrega atrasada"; seletor de NC respondeu (lista vazia — a NC do
+  banco é de outra obra); enviar para aprovação → "aguardando", sem botão Aprovar para quem não aprova; ocorrência
+  materializando → risco "Materializado"; Painel: 1 ativo, "com sinal" 1, "materializados e perdas" 1 / R$ 15.000.
+  Tudo conferido no banco; dados de teste apagados por id (riscos, auditoria, vínculo, ocorrência, perfil, aprovador).
+  Corrigido após o teste: "Nível 1 aprovado por Dev" (parecia já aprovado) → "Quem aprova o nível 1: Dev";
+  "Nenhum não conformidade encontrado" → "Nada encontrado em …". Observado: o Vite (dev) recarregou a página uma vez
+  ao otimizar dependência carregada sob demanda — só desenvolvimento.
 
 ### Depois (P1/P2, sem data)
 
+Sinais "custo acima do orçado" e "insumo sem pedido" (F2.5 adiado); risco na fila geral de aprovação
+(`fn_approval_action_queue`/Central). 
 Revisões obrigatórias por fase com fechamento; valor esperado e contingência por obra (seção
 3.3-C, parte simples); exportação com filtros (CA11); critérios normativos versionados (CA14);
 Portal do Investidor; Monte Carlo; BIM/3D; alertas preditivos.
@@ -245,6 +298,15 @@ Portal do Investidor; Monte Carlo; BIM/3D; alertas preditivos.
 - **F1: 11 de 12** — falta F1.12 (contador no SST), sem documento de SST cadastrado no banco para provar.
 - Observação: o código RSC é `max+1` por org — excluir o último risco (só possível sem avaliação) libera o número
   para o próximo. Aceito no MVP (exclusão é só para registro feito por engano).
+- 15/11 **telas da F2 escritas — em código, sem prova no navegador** (a migration `aplicar_20271115637000` ainda
+  não foi aplicada): ficha ganhou as abas Ocorrências (`RiscoOcorrencias`, materializar com `useConfirm`) e Vínculos
+  (`RiscoVinculos`, seletor por módulo restrito à org/obra do risco, sinal por vínculo) e o bloco Aprovação na aba
+  Ficha (`RiscoAlcada`: enviar, quem aprova o nível, aprovar, reprovar com motivo, cadeia); módulo ganhou a aba
+  Aprovações (`RiscosAprovacoesAba`) e o assistente "Sugerir riscos" no Registro (`RiscosSugerirSheet`); Painel com
+  "Com sinal ativo" e "Materializados e perdas"; Registro com a coluna Sinais e os recortes `com_sinal`/`materializados`
+  (mesma função do cartão, CA11). Serviço: leituras dos objetos vinculáveis (uma por módulo) e `aprovadoresDoNivel`.
+  Slug `risco_sinal_vinculo` em `notificationTypes.ts`. Testes: `riskPainel.test.ts` (fase 2), `riskVinculos.test.ts`,
+  `components/RiscosFase2.test.tsx`. Nenhum item da F2 marcado: todo "pronto quando" depende do banco.
 - Referências a conferir com atenção: IN RFB 2.021/2021 (R10.07), artigos da Lei 14.133/2021 em R24,
   limiar de 75% do art. 59 §4º (R24.02), NBR 5682 e NR-15 anexo 12 (R25), NBR 17170 e CC art. 618 (R21),
   Decreto 10.306/2020 (R19.07).

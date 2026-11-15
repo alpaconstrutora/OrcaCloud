@@ -348,7 +348,9 @@ porta da unidade (IT 08, 5.5.2.2), e na vista ficam só as áreas comuns. Teste:
 andar com extintor ao alcance e a rota iluminada. Ficam para o projetista (pendência): o eletroduto do laço do alarme e a
 barra antipânico (ela edita as portas). **CI:** os 4 casos do marco somavam 873 s na última CI verde (o RL perto dos 600 s por caso); com a
 etapa nova o limite por caso foi a 20 min — baixar o custo do RL (as invariantes a cada comando, a conferência da NBR 5410)
-é da PA10.
+é da PA10. **Conferência no app (15/11, `c:/tmp/pwtest/conferencia-predio-pa9b.cjs`, estudo descartável
+arquivado):** R8 — a lista dos equipamentos na aba PPCI; depois do Lançar, 1 extintor, 4 placas e 4 luminárias em cada um
+dos 7 andares; tudo o que as PA3–PA9a conferiam segue igual. Com a máquina sem carga, o clique no Lançar levou 13 s.
 
 ### PA10 — Fechamento
 **O que muda.** Relatório consolidado, furos no shaft, conflitos multinível, envio ao Empreendimento

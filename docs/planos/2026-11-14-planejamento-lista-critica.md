@@ -103,13 +103,21 @@ Item 1 no ar em 14/11/2026 (PR #446, a3c7923).
 > quando alguém editar depois.
 > Brief → **"Confirmado, seguir pela 2a"**
 
-**Em aberto:** arquivos reais de exemplo (um XML do Project e uma planilha que vocês usam) para
-os testes do leitor (2b).
+**Arquivos de exemplo (15/11/2026):** o usuário não tinha um XML nem uma planilha à mão e pediu
+(literal): *"Estou sem os arquivos xml e planilha agora. consegue gerar um para voce testar?"*.
+Gerados a partir da EAP real do Divino (nome anonimizado) em `__tests__/fixtures/cronograma/`
+(LEIAME.md explica cada caso). São sintéticos: um XML real do Project continua bem-vindo como teste
+a mais, mas não bloqueia.
 
 **Fases e como sei que terminou**
 - 2a. Botão atual sai de Planejamento → a tela não tem mais "Importar Excel"; Orçamentos mantém.
 - 2b. Leitores XML + modelo Excel (funções puras, testadas com os arquivos de exemplo) → teste
-  verde lendo EAP, datas, % e predecessoras do arquivo real.
+  verde lendo EAP, datas, % e predecessoras do arquivo real. — ✅ **feito 15/11/2026**:
+  `utils/cronogramaLeitura.ts` (`lerMsProjectXml`, `lerModeloExcel`, `lerLinhasDoModelo`,
+  `lerPredecessorasDoTexto`), sobre o `utils/xmlLeve.ts` existente (roda no navegador e no Node).
+  12 testes: os 58 itens do gabarito no XML; o Excel devolve exatamente o mesmo que o XML; os 4
+  tipos de vínculo e defasagens −1/+2/+5; erros com mensagem do que fazer; vínculo para tarefa
+  ausente sai com aviso. Prova de que o teste morde: um % alterado no XML derruba 2 testes.
 - 2c. Criar a partir do arquivo → numa org descartável, o planejamento nasce na lista com as
   datas do arquivo e baseline ativa; nada nasce como ORCAMENTO.
 - 2d. Atualizar existente → datas trocadas, avanço só nos itens marcados, baseline intacta.

@@ -52,6 +52,7 @@ import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
 import { agruparOrcamentos, OPCOES_AGRUPAR_ORCAMENTO, type CampoAgruparOrcamento } from '../utils/orcamentoGrupos';
 import { diasEntre, hojeLocalISO, type IndicadoresDePrazo } from '../utils/planejamentoIndicadores';
 import { useIndicadoresDosPlanejamentos } from '../hooks/useIndicadoresDosPlanejamentos';
+import { situacaoDePrazo, ORDEM_SITUACAO, agruparPlanejamentos, OPCOES_AGRUPAR_PLANEJAMENTO, type CampoAgruparPlanejamento } from '../utils/planejamentoGrupos';
 
 interface ProjectSettings {
     classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO' | string;
@@ -161,19 +162,6 @@ const DEFAULT_COL_WIDTHS_PLANEJAMENTO: Record<string, number> = {
 };
 const dataCurta = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
 const pct0 = (v: number) => `${Math.round(v)}%`;
-/** Situação de prazo pela MESMA régua da Central de Comando: SPI ≥ 1 = no prazo. */
-const situacaoDePrazo = (ind: IndicadoresDePrazo): { texto: string; cor: string; ordem: number } => {
-    if (!ind.temDatas) return { texto: 'Sem datas', cor: 'text-gray-600', ordem: 3 };
-    if (ind.avancoFisicoPct >= 100) return { texto: 'Concluído', cor: 'text-emerald-700', ordem: 4 };
-    if (ind.spi === null) return ind.atrasadas > 0
-        ? { texto: `Atrasado · ${ind.atrasadas} ${ind.atrasadas === 1 ? 'tarefa' : 'tarefas'}`, cor: 'text-red-700', ordem: 0 }
-        : { texto: 'Não começou', cor: 'text-gray-600', ordem: 2 };
-    if (ind.spi >= 1) return { texto: 'No prazo', cor: 'text-emerald-700', ordem: 1 };
-    return {
-        texto: ind.atrasadas > 0 ? `Atrasado · ${ind.atrasadas} ${ind.atrasadas === 1 ? 'tarefa' : 'tarefas'}` : 'Atrasado',
-        cor: 'text-red-700', ordem: 0,
-    };
-};
 
 /** Recortes dos cards de Orçamentos (crítica 2026-11-14, passo 4): números que pedem ação e
  *  viram filtro ao clicar (Princípio 5 do PRODUCT.md), no lugar de Total/Em Andamento/
@@ -452,11 +440,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // table-layout:fixed (§6.1).
     const tableTotalWidth = displayColumns.reduce((sum, key) => sum + cols.getWidth(key), 0) + cols.getWidth('actions');
 
-    // Colunas fixas à esquerda (Orçamentos; crítica de 2026-11-14): da 1ª coluna até "Orçamento",
+    // Colunas fixas à esquerda (Orçamentos e Planejamento; críticas de 2026-11-14): da 1ª coluna até o nome,
     // se ela estiver entre as duas primeiras (a ordem é arrastável). A tabela é mais larga que a
     // tela; sem isso, quem rolava até Status/Bloqueio/Ações perdia o nome da linha.
     const colunasFixas: Record<string, { left: number; ultima: boolean }> = {};
-    if (isOrcamentoContext) {
+    if (isOrcamentoContext || isPlanejamentoContext) {
         const iNome = displayColumns.indexOf('name');
         if (iNome >= 0 && iNome <= 1) {
             let left = 0;
@@ -968,7 +956,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             const chave = (ind: IndicadoresDePrazo | undefined): number | string | null => {
                                 if (!ind) return null;
                                 if (sortColumn === 'avanco') return ind.temDatas ? ind.avancoFisicoPct : null;
-                                if (sortColumn === 'prazo') return situacaoDePrazo(ind).ordem * 10 + (ind.spi ?? 9);
+                                if (sortColumn === 'prazo') return ORDEM_SITUACAO.indexOf(situacaoDePrazo(ind).chave) * 10 + (ind.spi ?? 9);
                                 const d = sortColumn === 'termino' ? ind.fimPrevisto : ind.inicioPrevisto;
                                 return d || null;
                             };
@@ -1135,9 +1123,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
         return total;
     };
 
-    // "Agrupar" (guia de UI §6.12) — só na lista de Orçamentos (pedido de 2026-11-14):
-    // campo, ordem dos grupos e recolher/expandir todos. As outras listas que usam este
-    // componente (Obras, Planejamento, Diário) não ganharam o controle. Os grupos saem da
+    // "Agrupar" (guia de UI §6.12) — listas de Orçamentos (pedido de 2026-11-14) e de
+    // Planejamento (item 4 da crítica de 2026-11-14): campo, ordem dos grupos e recolher/
+    // expandir todos. Obras e Diário não ganharam o controle. Os grupos saem da
     // lista já filtrada e ordenada; é recorte de exibição, não reconsulta (§6.12).
     // O rótulo do grupo é o MESMO texto da célula (status capitalizado, tipo traduzido,
     // bloqueio em cascata com a obra mestre).
@@ -1173,20 +1161,33 @@ const ProjectList: React.FC<ProjectListProps> = ({
             ? filteredProjects.filter(p => passaNoRecortePlanejamento(indicadoresPlan.porProjeto[p.id], recortePlanAtivo, hojePlan))
             : filteredProjects;
 
-    const agrupamento = useAgrupamento<CampoAgruparOrcamento>('projectListGroupBy:orcamentos');
-    const campoAgrupar: CampoAgruparOrcamento | 'none' =
-        isOrcamentoContext && viewMode === 'list' && OPCOES_AGRUPAR_ORCAMENTO.some(o => o.value === agrupamento.campo)
+    // Planejamento ganhou o mesmo Agrupar (item 4 do plano de 2026-11-14), com os campos da
+    // própria tabela (Prazo, mês de término, obra, cliente) e chave própria no navegador.
+    const temAgrupar = (isOrcamentoContext || isPlanejamentoContext) && viewMode === 'list';
+    const agrupamento = useAgrupamento<CampoAgruparOrcamento | CampoAgruparPlanejamento>(
+        isPlanejamentoContext ? 'projectListGroupBy:planejamento' : 'projectListGroupBy:orcamentos');
+    const opcoesAgrupar: { value: CampoAgruparOrcamento | CampoAgruparPlanejamento; label: string }[] =
+        isPlanejamentoContext ? OPCOES_AGRUPAR_PLANEJAMENTO : OPCOES_AGRUPAR_ORCAMENTO;
+    const campoAgrupar: CampoAgruparOrcamento | CampoAgruparPlanejamento | 'none' =
+        temAgrupar && opcoesAgrupar.some(o => o.value === agrupamento.campo)
             ? agrupamento.campo
             : 'none';
-    const gruposOrcamento = campoAgrupar === 'none' ? [] : agruparOrcamentos(projetosNaTela, campoAgrupar, agrupamento.direcao, {
-        status: p => (p.settings?.budgetStatus ? capitalizeStatus(p.settings.budgetStatus) : ''),
-        statusObra: p => p.settings?.obraStatus,
-        bloqueado: p => getEffectiveOrderCount(p.id) > 0,
-        tipoObra: p => (p.settings?.tipoObra ? (TIPO_OBRA_LABELS[p.settings.tipoObra as TipoObra] || p.settings.tipoObra) : ''),
-    });
+    const gruposDaLista = campoAgrupar === 'none' ? []
+        : isPlanejamentoContext
+            ? agruparPlanejamentos(projetosNaTela, campoAgrupar as CampoAgruparPlanejamento, agrupamento.direcao, {
+                indicadores: p => indicadoresPlan.porProjeto[p.id],
+                obra: p => findLinkedProject(p, projects)?.name || p.settings?.linkedProjectName,
+                cliente: p => getClientCellValue(p, projects, activeTab),
+            })
+            : agruparOrcamentos(projetosNaTela, campoAgrupar as CampoAgruparOrcamento, agrupamento.direcao, {
+                status: p => (p.settings?.budgetStatus ? capitalizeStatus(p.settings.budgetStatus) : ''),
+                statusObra: p => p.settings?.obraStatus,
+                bloqueado: p => getEffectiveOrderCount(p.id) > 0,
+                tipoObra: p => (p.settings?.tipoObra ? (TIPO_OBRA_LABELS[p.settings.tipoObra as TipoObra] || p.settings.tipoObra) : ''),
+            });
     const linhasDoCorpo: EntradaDaTela<ProjectSummary>[] = campoAgrupar === 'none'
         ? projetosNaTela.map((item, indice) => ({ tipo: 'linha', item, indice }))
-        : entradasDaPagina(gruposOrcamento, agrupamento.recolhidos);
+        : entradasDaPagina(gruposDaLista, agrupamento.recolhidos);
 
     return (
         <div className="space-y-6">
@@ -1200,13 +1201,18 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </div>
                     {/* Variante compacta do CTA primário (ui_ux_guia_unificado.md §17) */}
                     <div className="flex items-center gap-2">
-                        <button
-                            onClick={() => setIsImportModalOpen(true)}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[6px] hover:bg-emerald-600 hover:text-white font-medium text-[13px] transition-all active:scale-95"
-                        >
-                            <FileSpreadsheet className="w-4 h-4" />
-                            Importar Excel
-                        </button>
+                        {/* Planejamento sem "Importar Excel": o modal lê a ficha de um ORÇAMENTO e cria
+                            um orçamento (PR #449). A importação de cronograma é o item 2 do plano
+                            docs/planos/2026-11-14-planejamento-lista-critica.md. */}
+                        {!isPlanejamentoContext && (
+                            <button
+                                onClick={() => setIsImportModalOpen(true)}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[6px] hover:bg-emerald-600 hover:text-white font-medium text-[13px] transition-all active:scale-95"
+                            >
+                                <FileSpreadsheet className="w-4 h-4" />
+                                Importar Excel
+                            </button>
+                        )}
                         <button
                             onClick={() => onNewProject(classificationFilter || (activeTab === 'templates' ? 'OBRA' : 'ORCAMENTO'))}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
@@ -1277,8 +1283,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 </div>
             )}
             {isPlanejamentoContext && (
-                // Planejamento: o pai (AppRouter) desenha o título com hideHeader, e os cards
-                // moram aqui porque filtram ESTA lista. Sem `disabled` enquanto calcula: botão
+                // Planejamento: os cards moram aqui porque filtram ESTA lista (o título também vem
+                // daqui desde o item 4 da crítica de 2026-11-14 — o AppRouter não o duplica mais). Sem `disabled` enquanto calcula: botão
                 // desabilitado esconde o title que diz o motivo.
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3" aria-busy={indicadoresPlan.estado === 'carregando'}>
                     {RECORTES_PLANEJAMENTO.map(r => {
@@ -1321,7 +1327,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     })}
                 </div>
             )}
-            {!hideHeader && !isOrcamentoContext && (
+            {!hideHeader && !isOrcamentoContext && !isPlanejamentoContext && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                     <KpiCard label="Total" value={stats.total} sub="Registros visíveis" icon={<FolderOpen className="w-5 h-5" />} color="blue" />
                     <KpiCard label="Em Andamento" value={stats.inProgress} sub="Ativos no momento" icon={<Clock className="w-5 h-5" />} color="amber" />
@@ -1369,17 +1375,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
                 {/* Agrupar (§6.12): logo depois do Filtro avançado. Só no modo lista — no modo
                     blocos não há linha para agrupar (mesma regra do autofit, mais abaixo). */}
-                {isOrcamentoContext && viewMode === 'list' && (
+                {temAgrupar && (
                     <AgruparControles
-                        opcoes={OPCOES_AGRUPAR_ORCAMENTO}
+                        opcoes={opcoesAgrupar}
                         campo={campoAgrupar}
                         onCampo={agrupamento.setCampo}
                         direcao={agrupamento.direcao}
                         onDirecao={agrupamento.setDirecao}
-                        chavesDosGrupos={gruposOrcamento.map(g => g.key)}
+                        chavesDosGrupos={gruposDaLista.map(g => g.key)}
                         algumRecolhido={agrupamento.recolhidos.size > 0}
                         onAlternarTodos={agrupamento.alternarTodos}
-                        title="Agrupar os orçamentos"
+                        title={isPlanejamentoContext ? 'Agrupar os planejamentos' : 'Agrupar os orçamentos'}
                     />
                 )}
 

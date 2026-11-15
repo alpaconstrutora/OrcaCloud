@@ -132,12 +132,24 @@ Avanço/Prazo/Término/Início ficam entre 643 e 1303 px (área visível até 14
 previsto 94%, "Atrasado · 33 tarefas" (Central: 5,2%, SPI 0,06, 33 de 37); Garden = 24% × 100%,
 2 tarefas; ordenar por Avanço/Prazo/Término dá a ordem certa; Orçamentos mantém as colunas antigas.
 
-### 4. O que Orçamentos ganhou em 14/11 também em Planejamento — ⏳
+### 4. O que Orçamentos ganhou em 14/11 também em Planejamento — ✅ feito
 
-**O que muda:** colunas fixas, Agrupar e o subtítulo próprio (hoje escondido por
-`hideHeader`) deixam de depender de `isOrcamentoContext`; cabeçalho duplicado do AppRouter sai.
-**Como sei que terminou:** rolando a tabela na horizontal o nome do planejamento fica visível;
-Agrupar aparece na toolbar.
+(Item 3 no ar em 15/11/2026, PR #450.)
+
+**O que muda:**
+- Colunas fixas (Código + Planejamento) também em Planejamento.
+- Agrupar em Planejamento (`utils/planejamentoGrupos.ts`, chave `projectListGroupBy:planejamento`):
+  Prazo (Atrasado → No prazo → Não começou → Sem datas → Concluído), Mês de término, Obra
+  Vinculada, Cliente. A situação de prazo saiu do ProjectList para esse utilitário: célula e
+  grupo leem o mesmo texto.
+- O AppRouter deixa de desenhar o próprio cabeçalho (duplicado, frase de marketing em gray-400
+  2,5:1): Planejamento usa o do ProjectList — subtítulo "Clique em um planejamento para abrir o
+  cronograma; o lápis edita os dados cadastrais." em gray-500. "Importar Excel" escondido em
+  Planejamento também nesse cabeçalho (decisão da 2a).
+**Como sei que terminou (15/11, servidor local, escrita bloqueada, 0 tentativas):** um h1 só;
+subtítulo oklch(0.551…) = gray-500; 0 botões "Importar"; rolada até o fim, Código e "Garden
+Cambuhy" seguem dentro da área visível; Agrupar → Prazo dá "Atrasado 2" com as duas linhas;
+Orçamentos mantém título e "Importar Excel"; 26 testes verdes.
 
 ### 5. Acessibilidade — ⏳
 

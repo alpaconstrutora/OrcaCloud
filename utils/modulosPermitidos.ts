@@ -136,6 +136,96 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
 
 export type ModulosPermitidos = ReturnType<typeof modulosPermitidos>;
 
+// ── "Todas as organizações" (15/11/2026) ─────────────────────────────────────
+// Plano: docs/planos/2026-11-15-permissoes-todas-orgs-busca-truncate.md.
+// Até aqui, com o topo em "Todas" não havia membro resolvido e o menu caía nos
+// módulos padrão da empresa (quase tudo ligado), e o guard de rota liberava
+// qualquer tela (`!activeOrganizationId → true`). Regra nova: em "Todas", um
+// módulo aparece e abre se o usuário o tem em PELO MENOS UMA organização de que
+// é membro — ninguém perde o que usa em alguma org, e ninguém ganha o que não
+// tem em nenhuma.
+
+export interface VinculoDoUsuario { org: Organization; member: MembroDaOrg }
+
+/** Organizações em que o e-mail é membro, com o membro de cada uma. */
+export function vinculosDoUsuario(organizations: Organization[], email: string | null | undefined): VinculoDoUsuario[] {
+  if (!email) return [];
+  const alvo = email.toLowerCase();
+  const vinculos: VinculoDoUsuario[] = [];
+  for (const org of organizations) {
+    const member = org.members?.find(m => m.email?.toLowerCase() === alvo);
+    if (member) vinculos.push({ org, member });
+  }
+  return vinculos;
+}
+
+/** OU chave a chave: o módulo fica ligado se alguma das leituras o liga. */
+export function uniaoDeModulos(leituras: ModulosPermitidos[]): ModulosPermitidos {
+  const uniao: Record<string, boolean> = {};
+  for (const l of leituras) for (const [k, v] of Object.entries(l)) uniao[k] = Boolean(uniao[k]) || Boolean(v);
+  return uniao as unknown as ModulosPermitidos;
+}
+
+/**
+ * O que o menu, a Central e a busca rápida usam. Com organização no topo, é a
+ * `modulosPermitidos` de sempre; em "Todas", a união das organizações do usuário.
+ * Sem vínculo conhecido (lista ainda carregando), mantém a leitura antiga.
+ */
+export function modulosPermitidosNoContexto(entrada: EntradaModulos & { organizations: Organization[]; email?: string | null }): ModulosPermitidos {
+  const { organizations, email, ...base } = entrada;
+  if (base.activeOrg || base.profile.group === 'DESENVOLVEDOR' || base.isDevEmail) return modulosPermitidos(base);
+  const vinculos = vinculosDoUsuario(organizations, email);
+  if (!vinculos.length) return modulosPermitidos(base);
+  return uniaoDeModulos(vinculos.map(v =>
+    modulosPermitidos({ ...base, activeEmpresa: null, activeOrg: v.org, currentMember: v.member })));
+}
+
+/**
+ * Decisão de UMA chave numa organização — a regra que o guard de rota do
+ * `AppRouter` aplicava inline: admin vê tudo; permissão do membro manda; depois a
+ * matriz do cargo (por produto); sem nada gravado, `padrao` (herança, ex.:
+ * Treinamentos herda do RH, Riscos herda de Obras) ou libera.
+ * `padrao` recebe a mesma decisão NA MESMA organização — em "Todas" a herança não
+ * pode misturar organizações (RH numa, Treinamentos noutra).
+ */
+export function permitidoNaOrg(
+  member: MembroDaOrg,
+  org: Organization | undefined,
+  userPermKey: string,
+  matrixKey: string,
+  padrao?: (naMesmaOrg: (userPermKey: string, matrixKey: string) => boolean) => boolean,
+): boolean {
+  if (member.role === 'admin') return true;
+  const roleId = member.customRoleId || member.role;
+  const matrix = (org?.settings?.module_visibility || {}) as Record<string, unknown>;
+  const productCtx = (member as { productContext?: string }).productContext || 'platform';
+  const porProduto = matrix.platform !== undefined || matrix.pro !== undefined || matrix.offices !== undefined;
+  const productMatrix = (porProduto ? (matrix[productCtx] || {}) : matrix) as Record<string, Record<string, boolean>>;
+  const roleConfig = productMatrix[roleId] || {};
+  const userPerm = member.permissions ? (member.permissions as unknown as Record<string, unknown>)[userPermKey] : undefined;
+  if (userPerm !== undefined) return Boolean(userPerm);
+  if (roleConfig[matrixKey] !== undefined) return Boolean(roleConfig[matrixKey]);
+  return padrao ? padrao((u, m) => permitidoNaOrg(member, org, u, m)) : true;
+}
+
+/**
+ * Busca rápida (Ctrl+K) do `Layout`: tela → chave do menu que a mostra. Item sem
+ * entrada aqui é geral (Dashboard, Notificações, Documentos…) e sempre aparece.
+ * Mesma condição dos `NavItem`/`DropdownItem` do menu — até 15/11/2026 a busca
+ * listava todos os módulos para qualquer usuário (o clique caía no guard).
+ */
+export const MODULO_DO_ITEM_DE_BUSCA: Record<string, keyof ModulosPermitidos> = {
+  'eng-obras': 'obras', 'eng-orcamentos': 'obras', 'eng-planejamento': 'obras',
+  riscos: 'riscos',
+  'supplies-solicitacoes': 'compras', 'supplies-contracts': 'compras', 'supplies-quotations': 'compras', 'supplies-orders': 'compras',
+  'financial-dashboard': 'financeiro', 'contas-a-pagar': 'financeiro', 'project-financial': 'financeiro',
+  'fluxo-financeiro': 'financeiro', 'contas-a-receber': 'financeiro', 'boletos-pagar': 'financeiro',
+  'conta-asaas': 'financeiro', 'dividas-financiamentos': 'financeiro', 'credit-rooms': 'financeiro',
+  sales: 'crm',
+  empreendimentos: 'incorporacao', 'regulatory-maps': 'incorporacao', imovib: 'incorporacao',
+  treinamentos: 'treinamentos', 'labor-portal': 'rh',
+};
+
 /** Mesmo cálculo do menu, a partir do store — para telas fora do `Layout`. */
 export function useModulosPermitidos(profile: { group: string; email?: string }): ModulosPermitidos {
   const { companies, activeEmpresaId, organizations, activeOrganizationId } = useStore();
@@ -147,8 +237,8 @@ export function useModulosPermitidos(profile: { group: string; email?: string })
   }, [activeOrg, profile.email]);
   const isDevEmail = temAcessoTotal(profile.email);
   return React.useMemo(
-    () => modulosPermitidos({ activeEmpresa, profile, currentMember, activeOrg, isDevEmail }),
+    () => modulosPermitidosNoContexto({ activeEmpresa, profile, currentMember, activeOrg, isDevEmail, organizations, email: profile.email }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeEmpresa, profile.group, currentMember, activeOrg, isDevEmail],
+    [activeEmpresa, profile.group, profile.email, currentMember, activeOrg, isDevEmail, organizations],
   );
 }

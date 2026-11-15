@@ -13,7 +13,7 @@ import { taskService, filtroMinhasTarefas, minhaIdentidadeDeTarefas } from '../s
 import { academyService } from '../services/academyService';
 import { viewUrl } from '../lib/tabRouter';
 import { podeAcessarMarket } from '../utils/acessoAoMarket';
-import { modulosPermitidos } from '../utils/modulosPermitidos';
+import { MODULO_DO_ITEM_DE_BUSCA, modulosPermitidosNoContexto } from '../utils/modulosPermitidos';
 import { temAcessoTotal } from '../lib/acessoTotal';
 
 const ThemeModeIcon = ({ mode, className }: { mode: ThemeMode; className?: string }) => {
@@ -222,10 +222,11 @@ const Layout: React.FC<LayoutProps> = ({
 
   // Módulos habilitados e visibilidade calculada por cargo/usuário
   // Regra do menu em utils/modulosPermitidos (11/11/2026): a Central usa a mesma.
+  // Em "Todas as organizações": união das organizações do usuário (15/11/2026).
   const allowedMods = React.useMemo(
-    () => modulosPermitidos({ activeEmpresa, profile, currentMember, activeOrg, isDevEmail }),
+    () => modulosPermitidosNoContexto({ activeEmpresa, profile, currentMember, activeOrg, isDevEmail, organizations, email: profile.email }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [activeEmpresa, profile.group, currentMember, activeOrg, activeOrganizationId, isDevEmail],
+    [activeEmpresa, profile.group, profile.email, currentMember, activeOrg, activeOrganizationId, isDevEmail, organizations],
   );
 
   const mod = allowedMods;
@@ -477,8 +478,14 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'action-sort', label: 'Ordenar dados', group: 'Ação rápida', icon: ArrowUpDown },
     ];
 
-    return items;
-  }, []);
+    // Mesma decisão do menu: tela de módulo que o usuário não vê no menu não
+    // aparece na busca (até 15/11/2026 aparecia e o clique caía no guard de rota).
+    if (isDev) return items;
+    return items.filter(item => {
+      const chave = MODULO_DO_ITEM_DE_BUSCA[item.id];
+      return !chave || Boolean(mod[chave]);
+    });
+  }, [mod, isDev]);
 
   const activeCommand = React.useMemo(
     () => commandItems.find(item => item.id === activeView),

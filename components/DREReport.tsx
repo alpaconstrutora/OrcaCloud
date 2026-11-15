@@ -5,6 +5,7 @@ import { useToast } from '../hooks/useToast';
 import type { DRESummary, DRELine, DREGroup, DREProjectSummary } from '../types/financial';
 import { useResizableColumns } from './ui/TableUtils';
 import { useCargaVigente } from '../hooks/useCargaVigente';
+import { useStore } from '../store/useStore';
 import { motivoPeriodoInvalido } from '../utils/periodoControladoria';
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
 import { BarraDeEscopo, BOTAO_DA_BARRA, BotaoAutoAjuste } from './controladoria/BarraDeEscopo';
@@ -76,6 +77,14 @@ function formatPct(v: number | null): string {
 // ── Indicadores ───────────────────────────────────────────────────────────────
 
 /** Legenda de margem: a base (receita líquida) dita, e sem base não há margem. */
+/** Sinal ÚNICO na DRE (2ª crítica, 15/11/2026): o que sai do resultado aparece
+ *  NEGATIVO, no Resumo e no Por Categoria. O banco devolve as linhas "(-)" e
+ *  "(o)" já invertidas (custo 6.000 positivo, rótulo "(-)"), e o Por Categoria
+ *  mostrava o mesmo custo como −6.000 — dois sinais para o mesmo número. */
+function valorExibido(linha: string, v: number): number {
+    return linha.startsWith('(-)') || linha.startsWith('(o)') ? (v === 0 ? 0 : -v) : v; // sem −0 ("-R$ 0,00")
+}
+
 function legendaDeMargem(pct: number | null): string {
     return pct === null ? 'Sem margem: não há receita líquida no período' : `Margem ${formatPct(pct)}`;
 }
@@ -90,7 +99,6 @@ const Espaco = () => <td aria-hidden="true"></td>;
 // lançamento do período já é realizado) e a coluna só dobrava os números.
 function SummaryRow({ linha, realizado, previsto, comPrevisto }: { linha: string; realizado: number; previsto: number; comPrevisto: boolean }) {
     const isTotal = linha.startsWith('=');
-    const isDeduction = linha.startsWith('(-)');
     const isUnclassified = linha.startsWith('(!)');
 
     // Linha informativa de Sem Classificação — destaque âmbar, fora do total
@@ -117,17 +125,23 @@ function SummaryRow({ linha, realizado, previsto, comPrevisto }: { linha: string
         );
     }
 
+    // Cor por ESTADO, não por sinal (§4.5): rótulo neutro; vermelho só no TOTAL
+    // abaixo do limiar. Custo negativo é o normal de um custo, não um alarme.
+    const real = valorExibido(linha, realizado);
+    const prev = valorExibido(linha, previsto);
+    const alertaReal = isTotal && tomDoResultado(real) === 'alerta';
+    const alertaPrev = isTotal && tomDoResultado(prev) === 'alerta';
     return (
         <tr className={`${isTotal ? 'bg-gray-50 border-t-2 border-gray-200' : ''} border-b border-gray-100 last:border-0`}>
-            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm ${isTotal ? 'text-gray-900 font-medium' : isDeduction ? 'text-red-600 font-normal pl-8' : 'text-gray-700 font-normal pl-8'}`}>
+            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm ${isTotal ? 'text-gray-900 font-medium' : 'text-gray-700 font-normal pl-8'}`}>
                 {ROTULO_DA_LINHA[linha] ?? linha}
             </td>
-            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${realizado < 0 ? 'text-red-600' : isTotal ? 'text-gray-900' : 'text-gray-700'}`}>
-                {formatBRL(realizado)}
+            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${alertaReal ? 'text-red-700' : isTotal ? 'text-gray-900' : 'text-gray-700'}`}>
+                {formatBRL(real)}
             </td>
             {comPrevisto && (
-                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-normal ${previsto < 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                    {formatBRL(previsto)}
+                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-normal ${alertaPrev ? 'text-red-700' : 'text-gray-600'}`}>
+                    {formatBRL(prev)}
                 </td>
             )}
             <Espaco />
@@ -158,7 +172,7 @@ function DetailGroup({ group, lines, comPrevisto }: { group: DREGroup; lines: DR
                         {DRE_GROUP_LABELS[group]}
                     </button>
                 </td>
-                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right font-medium tabular-nums ${total < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right font-medium tabular-nums text-gray-900">
                     {formatBRL(total)}
                 </td>
                 {comPrevisto && (
@@ -171,7 +185,7 @@ function DetailGroup({ group, lines, comPrevisto }: { group: DREGroup; lines: DR
             {open && lines.map(l => (
                 <tr key={l.category_name} className="bg-gray-50/50 border-b border-gray-50">
                     <td className="px-6 py-2 border-r border-gray-100 pl-12 text-sm font-normal text-gray-500">{l.category_name}</td>
-                    <td className={`px-6 py-2 border-r border-gray-100 text-sm text-right tabular-nums font-normal ${l.net < 0 ? 'text-red-600' : 'text-gray-700'}`}>
+                    <td className="px-6 py-2 border-r border-gray-100 text-sm text-right tabular-nums font-normal text-gray-700">
                         {formatBRL(l.net)}
                     </td>
                     {comPrevisto && (
@@ -299,6 +313,7 @@ interface DREReportProps {
 
 const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
     const { showToast } = useToast();
+    const setActiveView = useStore(s => s.setActiveView);
     const { de: dateFrom, ate: dateTo, regime, obraId: projectId, setObra: setProjectId } = escopo;
     const [summary, setSummary] = React.useState<DRESummary | null>(null);
     const [projects, setProjects] = React.useState<DREProjectSummary[]>([]);
@@ -369,7 +384,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                         baixarCSV(`DRE_${dateFrom}_${dateTo}.csv`, ['Linha', 'Realizado', 'Previsto'],
                             DRE_LINE_ORDER.map(l => {
                                 const row = summary.lines.find(r => r.linha === l);
-                                return [ROTULO_DA_LINHA[l] ?? l, row?.valor_realizado ?? 0, row?.valor_previsto ?? 0];
+                                return [ROTULO_DA_LINHA[l] ?? l, valorExibido(l, row?.valor_realizado ?? 0), valorExibido(l, row?.valor_previsto ?? 0)];
                             }));
                     }}
                     className={`${BOTAO_DA_BARRA} disabled:opacity-40 disabled:cursor-not-allowed`}
@@ -391,22 +406,37 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                         const sc = summary.lines.find(l => l.linha === '(!) Sem Classificação');
                         return (
                             <AvisoSemClassificacao organizationId={organizationId} escopo={escopo}
-                                realizado={sc?.valor_realizado ?? 0} previsto={sc?.valor_previsto ?? 0} />
+                                realizado={sc?.valor_realizado ?? 0} previsto={comPrevisto ? (sc?.valor_previsto ?? 0) : 0} />
                         );
                     })()}
 
                     {/* Indicadores (§4.5): quatro, não cinco — a receita bruta é a base da
                         líquida e mora na legenda dela. Cor só por limiar (LIMIAR). */}
-                    <div className={GRADE_DE_INDICADORES}>
-                        <KpiCard destaque label="Receita líquida" value={formatBRL(summary.receita_liquida)}
-                            sub={`Receita bruta ${formatBRL(summary.receita_bruta)}`} />
-                        <KpiCard destaque label="Lucro bruto" value={formatBRL(summary.lucro_bruto)}
-                            sub={legendaDeMargem(summary.margem_bruta_pct)} tom={tomDoResultado(summary.lucro_bruto)} />
-                        <KpiCard destaque label="EBITDA" value={formatBRL(summary.ebitda)}
-                            sub={legendaDeMargem(summary.margem_ebitda_pct)} tom={tomDoResultado(summary.ebitda)} />
-                        <KpiCard destaque label="Resultado líquido" value={formatBRL(summary.resultado_liquido)}
-                            sub={legendaDeMargem(summary.margem_liquida_pct)} tom={tomDoResultado(summary.resultado_liquido)} />
-                    </div>
+                    {(() => {
+                        // Caixa conta só o CONCILIADO. Sem o pendente à vista, a diretoria lia
+                        // "prejuízo de −125%" onde havia atraso de conciliação (2ª crítica,
+                        // 15/11/2026; decisão do usuário: "Caixa + pendente visível").
+                        const pendente = (linha: string) => comPrevisto ? (summary.lines.find(l => l.linha === linha)?.valor_previsto ?? 0) : 0;
+                        const comPendente = (base: string, valor: number, linha: string) => {
+                            const p = pendente(linha);
+                            return p ? `Com o pendente: ${formatBRL(valor + p)} · ${base.charAt(0).toLowerCase()}${base.slice(1)}` : base;
+                        };
+                        const pendenteResultado = pendente('= Resultado Líquido');
+                        return (
+                            <div className={GRADE_DE_INDICADORES}>
+                                <KpiCard destaque label="Receita líquida" value={formatBRL(summary.receita_liquida)}
+                                    sub={comPendente(`Receita bruta ${formatBRL(summary.receita_bruta)}`, summary.receita_liquida, '= Receita Líquida')} />
+                                <KpiCard destaque label="Lucro bruto" value={formatBRL(summary.lucro_bruto)}
+                                    sub={comPendente(legendaDeMargem(summary.margem_bruta_pct), summary.lucro_bruto, '= Lucro Bruto')} tom={tomDoResultado(summary.lucro_bruto)} />
+                                <KpiCard destaque label="EBITDA" value={formatBRL(summary.ebitda)}
+                                    sub={comPendente(legendaDeMargem(summary.margem_ebitda_pct), summary.ebitda, '= EBITDA')} tom={tomDoResultado(summary.ebitda)} />
+                                <KpiCard destaque label="Resultado líquido" value={formatBRL(summary.resultado_liquido)}
+                                    sub={comPendente(legendaDeMargem(summary.margem_liquida_pct), summary.resultado_liquido, '= Resultado Líquido')}
+                                    tom={tomDoResultado(summary.resultado_liquido)}
+                                    acao={pendenteResultado ? { label: 'Conciliar lançamentos', onClick: () => setActiveView('bank-reconciliation') } : undefined} />
+                            </div>
+                        );
+                    })()}
 
                     {/* Toggle resumo / detalhe / por obra */}
                     <div className="flex gap-2" role="group" aria-label="Forma da tabela">
@@ -460,7 +490,8 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                                             />
                                         );
                                     })
-                                    : Object.entries(grouped).map(([group, lines]) => (
+                                    // Ordem contábil (a do DRE_GROUP_LABELS), não a de chegada do banco.
+                                    : (Object.keys(DRE_GROUP_LABELS) as DREGroup[]).filter(g => grouped[g]).map(g => [g, grouped[g]] as const).map(([group, lines]) => (
                                         <DetailGroup key={group} group={group as DREGroup} lines={lines} comPrevisto={comPrevisto} />
                                     ))
                                 }

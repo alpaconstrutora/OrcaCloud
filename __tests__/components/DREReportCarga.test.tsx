@@ -110,10 +110,10 @@ describe('DRE — falha', () => {
 });
 
 describe('DRE — margem', () => {
-    it('sem receita líquida: "Margem: —" sem seta (nem cor de "piorou")', async () => {
+    it('sem receita líquida: a legenda diz que não há margem (nem seta, nem "0%")', async () => {
         svc.getDRESummary.mockResolvedValue(resumo(0, 0, -5021.18));
         render(<Tela />);
-        const margens = await screen.findAllByText('Margem: —');
+        const margens = await screen.findAllByText('Sem margem: não há receita líquida no período');
         expect(margens).toHaveLength(3);
         for (const m of margens) expect(m.querySelector('svg')).toBeNull();
     });
@@ -121,7 +121,7 @@ describe('DRE — margem', () => {
     it('margem em pt-BR, com vírgula', async () => {
         svc.getDRESummary.mockResolvedValue(resumo(4000, 4000, -2000));
         render(<Tela />);
-        expect(await screen.findAllByText(/Margem: -50,0%/)).toHaveLength(3);
+        expect(await screen.findAllByText('Margem -50,0%')).toHaveLength(3);
     });
 });
 
@@ -156,6 +156,7 @@ describe('DRE › Por Obra', () => {
         // Receita | Custos e despesas | Resultado | Margem %
         // Intl põe espaço rígido depois de "R$"; normaliza para comparar.
         const celulas = [...total.querySelectorAll('td')].map(td => td.textContent?.replace(/\s+/g, ' ').trim());
-        expect(celulas).toEqual(['Total', 'R$ 4.000,00', 'R$ 9.021,18', '-R$ 5.021,18', '-125,5%']);
+        // + a célula vazia da coluna espaçadora (§6.1.1)
+        expect(celulas).toEqual(['Total', 'R$ 4.000,00', 'R$ 9.021,18', '-R$ 5.021,18', '-125,5%', '']);
     });
 });

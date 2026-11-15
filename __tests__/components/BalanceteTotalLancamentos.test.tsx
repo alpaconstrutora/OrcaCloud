@@ -57,7 +57,8 @@ describe('Balancete — total de lançamentos com parcela com juros', () => {
         const celula = await screen.findByText('Receita Financeira');
         // Última célula = coluna Lançamentos (a linha também tem '1.000,00', que um
         // toContain('1') aceitaria sozinho).
-        const celulas = celula.closest('tr')!.querySelectorAll('td');
+        // Sem a coluna espaçadora (§6.1.1, aria-hidden) — ela é a última célula da linha.
+        const celulas = celula.closest('tr')!.querySelectorAll('td:not([aria-hidden])');
         expect(celulas[celulas.length - 1].textContent?.trim()).toBe('1');
     });
 });

@@ -207,9 +207,23 @@ Sincronização ativa; tem "O cronograma você monta depois"; "Filtros" com text
 title do Salvar como presente; janela de Colunas com "Planejamento" e "Obra Vinculada", sem
 "Nome". 208 testes de 22 arquivos verdes.
 
-### 7. Celular — ⏳
+### 7. Celular — ✅ feito
 
-KPIs compactos (hoje os 4 cards empilhados ocupam a tela de 390 px inteira), alvos de 44 px,
-coluna sem rótulo de largura 0.
+**O que muda:**
+- **Cartão da grade em Planejamento** (o modo cartões, que é o natural no celular) mostrava "Em
+  andamento / Não Iniciado / Com pedidos" — a mesma contradição que o item 3 tirou da tabela.
+  Agora: situação de prazo no topo ("Atrasado · 2 tarefas"), Avanço real × previsto
+  (`SegmentedProgress`) e Término no lugar de "Criado em"; sem o chip de Tipo de Obra.
+- Cards de recorte em 2×2 no celular (antes 4 empilhados = 360 px); legendas curtas ("de 2 ·
+  filtrar"; a dica longa fica no title).
+- Barra de ferramentas no celular: busca na 1ª linha e os controles quebrando em linhas alinhadas
+  à esquerda (antes um controle por linha, centralizado). Desktop igual (uma linha).
+- Cabeçalho "Ações" em gray-700 como os demais (§6.11). A coluna espaçadora já tinha aria-hidden.
+- Alvos de toque: o app interno segue WCAG AA (24 px, PRODUCT.md); 8 controles abaixo de 24 px
+  ficam para o polish (item 8) — não são desta lista só (setas de ordenação do `SortableHeader`).
+**Como sei que terminou (15/11, servidor local, 390×844 com toque, escrita bloqueada, 0
+tentativas):** cards em duas linhas (234–450 px); a primeira linha da tabela passou de y=960 para
+y=690 (dentro da tela); cartão do Garden = "Atrasado · 2 tarefas · 24% previsto 100% · Término
+15/04/2026"; 1440 px sem mudança (barra em uma linha, tabela em y=314 em Planejamento e Orçamentos).
 
 ### 8. Passada final (`/impeccable polish`) — ⏳

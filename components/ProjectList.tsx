@@ -1309,7 +1309,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 // Planejamento: os cards moram aqui porque filtram ESTA lista (o título também vem
                 // daqui desde o item 4 da crítica de 2026-11-14 — o AppRouter não o duplica mais). Sem `disabled` enquanto calcula: botão
                 // desabilitado esconde o title que diz o motivo.
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3" aria-busy={indicadoresPlan.estado === 'carregando'}>
+                // 2×2 no celular: 4 cards empilhados ocupavam a tela de 390 px inteira (item 7).
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3" aria-busy={indicadoresPlan.estado === 'carregando'}>
                     {RECORTES_PLANEJAMENTO.map(r => {
                         const pronto = indicadoresPlan.estado === 'pronto';
                         const falhou = indicadoresPlan.estado === 'erro';
@@ -1321,8 +1322,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         // Curtas: com 4 cards lado a lado a legenda longa era cortada (14/11/2026).
                         const sub = falhou ? 'Falhou · clique para tentar de novo'
                             : !pronto ? 'Calculando…'
-                            : ativo ? 'Filtrando · clique para ver todos'
-                            : `de ${filteredProjects.length} · clique para filtrar`;
+                            // Curtas também no 2×2 do celular; a explicação longa está no title.
+                            : ativo ? 'Filtrando · ver todos'
+                            : `de ${filteredProjects.length} · filtrar`;
                         return (
                             <button
                                 key={r.key}
@@ -1363,8 +1365,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 régua de controles §5.1 (escala compacta §16) separada da tabela por border-b. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
               <div className="p-2 border-b border-gray-100">
-                <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                <div className="flex-1 relative w-full">
+                {/* Celular: busca na 1ª linha e os controles quebrando em linhas alinhadas à
+                    esquerda — antes cada controle ia sozinho numa linha, centralizado (item 7). */}
+                <div className="flex flex-wrap md:flex-nowrap gap-2.5 items-center">
+                <div className="relative w-full md:w-auto md:flex-1 min-w-0">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
@@ -1542,7 +1546,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className={`border-r border-gray-100${bordaLinhaTh}`} />
-                                    <th className={`px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500${bordaLinhaTh}`}>
+                                    <th className={`px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-700${bordaLinhaTh}`}>
                                         Ações
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>
@@ -1640,7 +1644,20 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
                                             <FolderOpen className="w-6 h-6" />
                                         </div>
-                                        {/* Badges de status — texto simples colorido, sem pílula/fundo/uppercase (§8) */}
+                                        {/* Badges de status — texto simples colorido, sem pílula/fundo/uppercase (§8).
+                                            Planejamento: a situação de prazo (mesma da coluna Prazo), não os status de
+                                            orçamento/obra/pedidos — a grade repetia a contradição que o item 3 tirou
+                                            da tabela (crítica 2026-11-14, item 7). */}
+                                        {isPlanejamentoContext ? (
+                                            <div className="flex flex-col items-end gap-1">
+                                                {(() => {
+                                                    const ind = indicadoresPlan.porProjeto[project.id];
+                                                    if (!ind) return <span className="text-sm font-normal text-gray-500">{indicadoresPlan.estado === 'erro' ? '—' : 'Calculando…'}</span>;
+                                                    const sit = situacaoDePrazo(ind);
+                                                    return <span className={`text-sm font-normal ${sit.cor}`}>{sit.texto}</span>;
+                                                })()}
+                                            </div>
+                                        ) : (
                                         <div className="flex flex-col items-end gap-1">
                                             {!isObraContext && project.settings?.budgetStatus && (
                                                 <span className={`text-sm font-normal ${project.settings.budgetStatus === 'Fechado' ? 'text-emerald-700' : 'text-blue-700'}`}>
@@ -1666,8 +1683,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </span>
                                             )}
                                         </div>
+                                        )}
                                     </div>
-                                    {project.settings?.tipoObra && (
+                                    {!isPlanejamentoContext && project.settings?.tipoObra && (
                                         <div className="mb-3">
                                             <span className={`px-2 py-0.5 rounded border text-xs font-semibold ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                                 {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
@@ -1694,10 +1712,30 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     )}
 
                                     <div className="space-y-2 pt-4 border-t border-gray-50">
+                                        {isPlanejamentoContext ? (() => {
+                                            const ind = indicadoresPlan.porProjeto[project.id];
+                                            return (
+                                                <>
+                                                    {ind?.temDatas && (
+                                                        <SegmentedProgress
+                                                            percent={Math.round(ind.avancoFisicoPct)}
+                                                            tone="blue"
+                                                            hint={`previsto ${pct0(ind.previstoPct)}`}
+                                                            title={`Avanço físico real ${pct0(ind.avancoFisicoPct)} · previsto até hoje ${pct0(ind.previstoPct)}`}
+                                                        />
+                                                    )}
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="text-gray-500">Término:</span>
+                                                        <span className="text-gray-700 font-medium tabular-nums">{ind?.fimPrevisto ? dataCurta(ind.fimPrevisto) : '—'}</span>
+                                                    </div>
+                                                </>
+                                            );
+                                        })() : (
                                         <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-500">Criado em:</span>
                                             <span className="text-gray-600 font-medium">{new Date(project.created_at || 0).toLocaleDateString('pt-BR')}</span>
                                         </div>
+                                        )}
                                         <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-500">Atualizado em:</span>
                                             <div className="text-right">

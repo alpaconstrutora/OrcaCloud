@@ -6,6 +6,7 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
+import userEvent from '@testing-library/user-event';
 
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn(), auth: { onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe() {} } } })), getSession: vi.fn(async () => ({ data: { session: null } })) } } }));
 const svc = vi.hoisted(() => ({
@@ -88,7 +89,9 @@ describe('Balancete — grupo pelo teclado', () => {
         const grupo = await screen.findByRole('button', { name: /Receita Bruta/ });
         expect(grupo.getAttribute('aria-expanded')).toBe('true');
         expect(screen.getByText('Venda de Imóveis')).toBeTruthy();
-        fireEvent.keyDown(grupo, { key: 'Enter' });
+        // Teclado de verdade: foco no botão + Enter (o clique nativo sobe até a linha).
+        grupo.focus();
+        await userEvent.keyboard('{Enter}');
         expect(grupo.getAttribute('aria-expanded')).toBe('false');
         expect(screen.queryByText('Venda de Imóveis')).toBeNull();
     });

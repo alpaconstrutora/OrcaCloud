@@ -4,11 +4,11 @@ import type { BalanceteLine, DREGroup } from '../types/financial'
 import { useToast } from '../hooks/useToast'
 import { formatMoney } from './ui/Format'
 import { useResizableColumns } from './ui/TableUtils'
-import { MoveHorizontal, Download, ChevronDown, ChevronRight } from 'lucide-react'
+import { Download, ChevronDown, ChevronRight } from 'lucide-react'
 import { useCargaVigente } from '../hooks/useCargaVigente'
 import { motivoPeriodoInvalido } from '../utils/periodoControladoria'
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
-import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo'
+import { BarraDeEscopo, BOTAO_DA_BARRA, BotaoAutoAjuste } from './controladoria/BarraDeEscopo'
 import type { EscopoControladoria } from './controladoria/escopo'
 import { baixarCSV } from './controladoria/csv'
 import { AvisoSemClassificacao } from './controladoria/SemClassificacao'
@@ -172,8 +172,8 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
             {motivoPeriodo ? (
                 <PeriodoInvalido motivo={motivoPeriodo} />
             ) : loading ? (
-                <div className="flex items-center justify-center py-20">
-                    <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <div className="flex items-center justify-center py-20" role="status" aria-label="Carregando">
+                    <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
                 </div>
             ) : falhou ? (
                 <FalhaDeCarga oQue="o balancete" onRetry={load} />
@@ -184,9 +184,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
             ) : (
                 <div className="bg-white border border-slate-200 rounded-[10px] shadow-sm overflow-hidden">
                     <div className="flex justify-end p-2 border-b border-slate-100">
-                        <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-slate-400 hover:text-slate-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
-                            <MoveHorizontal className="w-4 h-4" />
-                        </button>
+                        <BotaoAutoAjuste onClick={() => cols.autoFit()} />
                     </div>
                     <div className="overflow-x-auto">
                     <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', minWidth: '100%', width: Object.keys(BALANCETE_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
@@ -214,20 +212,19 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
                                     <React.Fragment key={grp}>
                                         {/* Linha de grupo */}
                                         <tr
-                                            className="bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
+                                            className="bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors"
                                             onClick={() => toggleGroup(grp)}
-                                            tabIndex={0}
-                                            role="button"
-                                            aria-expanded={open}
-                                            onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleGroup(grp) } }}
                                         >
                                             <td className="px-6 py-2.5 border-r border-gray-100">
-                                                <span className="flex items-center gap-2 text-sm font-medium text-gray-800">
+                                                {/* Botão sem onClick próprio: clique/Enter/Espaço sobem até a linha.
+                                                    A linha deixou de ser role="button" — a tabela segue tabela. */}
+                                                <button type="button" aria-expanded={open}
+                                                    className="flex items-center gap-2 text-left text-sm font-medium text-gray-800 rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                                                     {open
                                                         ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" aria-hidden="true" />
                                                         : <ChevronRight className="w-3.5 h-3.5 text-gray-500 shrink-0" aria-hidden="true" />}
                                                     {GROUP_LABEL[grp]}
-                                                </span>
+                                                </button>
                                             </td>
                                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right text-gray-800 tabular-nums">
                                                 {fmt(sub.creditos)}

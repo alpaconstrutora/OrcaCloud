@@ -87,7 +87,7 @@ contas (boletos, manuais), 33 com nome de categoria que não existe no plano da 
 | 3.2 | Gaveta (`Sheet` 2xl) com os lançamentos (data, descrição, origem · categoria, valor, situação), agrupados por motivo com o que fazer, e atalhos "Abrir Plano de Contas" / "Abrir Contas a Pagar". Regra em `services/semClassificacaoService.ts` = o LEFT JOIN de `fn_dre_summary`, sobre a mesma view (security_invoker) | `semClassificacao.test.ts` (7); frente local: 64 lançamentos, total realizado −R$ 7.619,23 = a DRE |
 | 3.3 | WIP: o nome da obra abre a DRE da obra (aba DRE + obra no escopo) | teste "clicar no nome da obra"; frente local: Garden Cambuhy → DRE filtrada |
 | 3.4 | Textos: linhas "(o)"/"(!)" viram "Amortização de principal (fora do resultado)"/"Sem classificação (fora do resultado)", sem glifo ⚠; colunas "Realizado (conciliado)"/"Previsto (pendente)" no Caixa; rodapé legível (gray-500); WIP diz o que o dado é (receita recebida, custo pago, recebido − pago — era "Reconhecida"/"Incorrido", vocabulário de POC); "Total (1 obra)"; vazio do Diário explica o que entra nele | teste "sem código interno" e "Total (1 obra)" |
-### Passo 4 — `/impeccable distill`: uma linguagem para as seis abas (este PR)
+### Passo 4 — `/impeccable distill`: uma linguagem para as seis abas
 
 Pedido: "pode seguir" (15/11/2026).
 
@@ -98,7 +98,18 @@ Pedido: "pode seguir" (15/11/2026).
 | 4.3 | Tabelas na largura toda (espaçador + `minWidth: '100%'`, §6.1.1) nas 6 abas; WIP com larguras-padrão somando 1.100 px (antes 1.140 rolava num card de 1.124); WIP e Balancete com `px-6 py-2.5 border-r` (célula alinhada ao cabeçalho, §6.6/§7.2); cabeçalhos brancos (§6.11) no WIP, Diário e SPE; Balancete sem glifos "▾▸" (ícone) e grupo pelo teclado | frente local: tabela 1.122 px = card; teste "grupo pelo teclado" |
 | 4.4 | Gráfico do Fluxo no §28: grade sólida, eixos #64748b, linha reta (não `monotone`), colunas ≤ 24 px no "por período", legenda HTML, `role="img"` com os números; menos de 3 períodos = frase. A linha "Previsto" saiu do acumulado: era o pendente de CADA período (picos de ±R$ 400 mil) e achatava o saldo real (−R$ 12 mil) numa reta | teste "poucos períodos"; print semanal: o saldo cai até −R$ 12.640,41, legível |
 | 4.5 | CSV na DRE por SPE, WIP, Balancete e Diário, no formato que DRE e Fluxo já usavam (`components/controladoria/csv.ts`) | teste "CSV um formato" |
-### Passo 5 — `/impeccable audit`: acessibilidade AA
+### Passo 5 — `/impeccable audit`: acessibilidade AA (este PR)
+
+Pedido: "pode seguir" (15/11/2026). O `audit` do Impeccable só mede; como o plano manda
+corrigir, o passo mede, corrige e mede de novo.
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 5.1 | Linhas clicáveis pelo teclado: DRE › Por Categoria (grupo) e Por Obra (obra), Balancete (grupo) — botão na 1ª célula, sem onClick próprio (clique/Enter/Espaço sobem até a linha, o padrão do SortableHeader); `aria-expanded` nos grupos; "Sem obra" não é botão | `ControladoriaAcessivel.test.tsx` (Enter com user-event) |
+| 5.2 | WIP ordena pelo `SortableHeader` (botão, `aria-sort`, ícone desenhado); setas "↕" (1,42:1) saíram. O cabeçalho era um componente declarado no render e REMONTAVA ao ordenar — o foco do teclado se perdia; virou função | teste "ordenar pelo teclado": aria-sort muda e o foco fica no botão |
+| 5.3 | Resumo / Por Categoria / Por Obra com `aria-pressed` e grupo rotulado; foco visível | teste "dizem qual está ativo" |
+| 5.4 | `BotaoAutoAjuste` compartilhado: `aria-label`, foco visível, ícone gray-500 (~4,6:1; o gray-400 do guia dá ~2,5:1 < 3:1 de componente de UI) | teste "nome acessível" |
+| 5.5 | Carregando com `role="status"`; Fluxo h3 → h2 (não pula nível depois do h1); ícone da busca e vazio do "Por Obra" sem cinza-400 | — |
 ### Passo 6 — `/impeccable polish`
 
 (Escopo de cada um no relatório da crítica; os critérios entram aqui quando o passo começar.)
@@ -108,8 +119,8 @@ Pedido: "pode seguir" (15/11/2026).
 - [x] Passo 1 — #448 (cc919c67), migration `aplicar_20271114900000` aplicada antes do merge; conferido em produção 15/11/2026
 - [x] Passo 2 — #451 (4df8f2c7); conferido em produção 15/11/2026
 - [x] Passo 3 — #458 (fd4705ef); conferido com dados reais na frente local
-- [ ] Passo 4 — frente `controladoria-linguagem`, PR a abrir
-- [ ] Passo 5
+- [x] Passo 4 — #461 (d061ba65); conferido na frente local
+- [ ] Passo 5 — frente `controladoria-acessivel`, PR aberto; falta a medição na tela (login)
 - [ ] Passo 6
 
 ## Verificação

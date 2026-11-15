@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from 'react';
-import { Search, MoveHorizontal, Download } from 'lucide-react';
+import { Search, Download } from 'lucide-react';
 import { listJournalEntries } from '../services/diarioService';
 import type { JournalEntryPair } from '../services/diarioService';
 import { useResizableColumns, usePersistedState } from './ui/TableUtils';
 import { useCargaVigente } from '../hooks/useCargaVigente';
 import { motivoPeriodoInvalido } from '../utils/periodoControladoria';
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
-import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo';
+import { BarraDeEscopo, BOTAO_DA_BARRA, BotaoAutoAjuste } from './controladoria/BarraDeEscopo';
 import type { EscopoControladoria } from './controladoria/escopo';
 import { KpiCard } from './ui/KpiCard';
 import { GRADE_DE_INDICADORES } from './controladoria/indicadores';
@@ -105,7 +105,7 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
         {/* Busca acoplada à tabela (§5.2): recorta as linhas carregadas, não o período. */}
         <div className="flex items-center gap-2 p-2 border-b border-slate-100">
           <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" aria-hidden="true" />
             <input
               type="text"
               aria-label="Buscar no diário por conta ou descrição"
@@ -115,14 +115,12 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
               className="w-full h-9 pl-9 pr-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-[6px] placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-slate-400 hover:text-slate-600 transition-all" title="Ajustar largura das colunas ao conteúdo" aria-label="Ajustar largura das colunas ao conteúdo">
-            <MoveHorizontal className="w-4 h-4" />
-          </button>
+          <BotaoAutoAjuste onClick={() => cols.autoFit()} />
         </div>
         {motivoPeriodo ? (
           <PeriodoInvalido motivo={motivoPeriodo} />
         ) : loading ? (
-          <div className="flex items-center justify-center py-16 text-slate-500 gap-2">
+          <div role="status" className="flex items-center justify-center py-16 text-gray-600 gap-2">
             <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             <span className="text-sm">Carregando lançamentos…</span>
           </div>

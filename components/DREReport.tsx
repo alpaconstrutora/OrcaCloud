@@ -1,5 +1,5 @@
 import React from 'react';
-import { Download, ChevronDown, ChevronRight, Building2, MoveHorizontal, AlertTriangle } from 'lucide-react';
+import { Download, ChevronDown, ChevronRight, Building2, AlertTriangle } from 'lucide-react';
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
 import type { DRESummary, DRELine, DREGroup, DREProjectSummary } from '../types/financial';
@@ -7,7 +7,7 @@ import { useResizableColumns } from './ui/TableUtils';
 import { useCargaVigente } from '../hooks/useCargaVigente';
 import { motivoPeriodoInvalido } from '../utils/periodoControladoria';
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
-import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo';
+import { BarraDeEscopo, BOTAO_DA_BARRA, BotaoAutoAjuste } from './controladoria/BarraDeEscopo';
 import type { EscopoControladoria } from './controladoria/escopo';
 import { AvisoSemClassificacao } from './controladoria/SemClassificacao';
 import { KpiCard } from './ui/KpiCard';
@@ -146,9 +146,16 @@ function DetailGroup({ group, lines, comPrevisto }: { group: DREGroup; lines: DR
                 className="cursor-pointer hover:bg-gray-50 border-b border-gray-100"
                 onClick={() => setOpen(o => !o)}
             >
-                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 flex items-center gap-2">
-                    {open ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />}
-                    {DRE_GROUP_LABELS[group]}
+                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                    {/* Botão sem onClick próprio: clique, Enter e Espaço sobem até a linha
+                        (o padrão do SortableHeader). Antes só o mouse abria o grupo. */}
+                    <button type="button" aria-expanded={open}
+                        className="flex items-center gap-2 text-left rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                        {open
+                            ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" aria-hidden="true" />
+                            : <ChevronRight className="w-3.5 h-3.5 text-gray-500 shrink-0" aria-hidden="true" />}
+                        {DRE_GROUP_LABELS[group]}
+                    </button>
                 </td>
                 <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right font-medium tabular-nums ${total < 0 ? 'text-red-600' : 'text-gray-900'}`}>
                     {formatBRL(total)}
@@ -188,7 +195,7 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
 
     if (projects.length === 0) {
         return (
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-400">
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-10 text-center text-sm text-gray-600">
                 Nenhuma obra com movimentação financeira no período.
             </div>
         );
@@ -206,9 +213,7 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
     return (
         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="flex justify-end p-2 border-b border-gray-100">
-                <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
-                    <MoveHorizontal className="w-4 h-4" />
-                </button>
+                <BotaoAutoAjuste onClick={() => cols.autoFit()} />
             </div>
             <div className="overflow-x-auto">
             <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableWidth, minWidth: '100%' }}>
@@ -239,8 +244,18 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
                             onClick={obraId ? () => onSelect(obraId) : undefined}
                             title={obraId ? 'Ver DRE desta obra' : 'Lançamentos sem obra (administrativo, comercial, sem projeto)'}
                         >
-                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal flex items-center gap-2 ${obraId ? 'text-gray-700' : 'text-gray-600 italic'}`}>
-                                <Building2 className="w-3.5 h-3.5 text-gray-300" aria-hidden="true" /> {p.project_name}
+                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal ${obraId ? 'text-gray-700' : 'text-gray-600 italic'}`}>
+                                {obraId ? (
+                                    // Clique, Enter e Espaço sobem até a linha, que abre a DRE da obra.
+                                    <button type="button" aria-label={`Ver a DRE de ${p.project_name}`}
+                                        className="flex items-center gap-2 text-left text-blue-700 hover:underline rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                                        <Building2 className="w-3.5 h-3.5 text-gray-500 shrink-0" aria-hidden="true" /> {p.project_name}
+                                    </button>
+                                ) : (
+                                    <span className="flex items-center gap-2">
+                                        <Building2 className="w-3.5 h-3.5 text-gray-500 shrink-0" aria-hidden="true" /> {p.project_name}
+                                    </span>
+                                )}
                             </td>
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-gray-700">{formatBRL(p.receita)}</td>
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-red-600">{formatBRL(p.custo)}</td>
@@ -371,7 +386,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
             {motivoPeriodo ? (
                 <PeriodoInvalido motivo={motivoPeriodo} />
             ) : loading ? (
-                <div className="flex items-center justify-center h-40 text-sm text-gray-500">Carregando DRE...</div>
+                <div role="status" className="flex items-center justify-center h-40 text-sm text-gray-600">Carregando DRE…</div>
             ) : falhou ? (
                 <FalhaDeCarga oQue="a DRE" onRetry={load} />
             ) : !summary ? null : (
@@ -399,11 +414,11 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                     </div>
 
                     {/* Toggle resumo / detalhe / por obra */}
-                    <div className="flex gap-2">
+                    <div className="flex gap-2" role="group" aria-label="Forma da tabela">
                         {(['resumo', 'detalhe', 'por_obra'] as const).map(m => (
-                            <button key={m} onClick={() => setViewMode(m)}
-                                className={`h-8 px-3 rounded-[6px] text-sm font-medium transition-all ${
-                                    viewMode === m ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-500 hover:border-blue-300'
+                            <button key={m} type="button" onClick={() => setViewMode(m)} aria-pressed={viewMode === m}
+                                className={`h-8 px-3 rounded-[6px] text-sm font-medium transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${
+                                    viewMode === m ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-700 hover:border-blue-300'
                                 }`}
                             >
                                 {m === 'resumo' ? 'Resumo' : m === 'detalhe' ? 'Por Categoria' : 'Por Obra'}
@@ -417,9 +432,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                     ) : (
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                         <div className="flex justify-end p-2 border-b border-gray-100">
-                            <button onClick={() => dreCols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
-                                <MoveHorizontal className="w-4 h-4" />
-                            </button>
+                            <BotaoAutoAjuste onClick={() => dreCols.autoFit()} />
                         </div>
                         <div className="overflow-x-auto">
                         <table ref={dreCols.tableRef} className="text-left border-collapse"

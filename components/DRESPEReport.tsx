@@ -2,12 +2,12 @@ import React from 'react'
 import { financialReportService } from '../services/financialReportService'
 import type { DRESPELine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
-import { TrendingUp, TrendingDown, MoveHorizontal, Download } from 'lucide-react'
+import { TrendingUp, TrendingDown, Download } from 'lucide-react'
 import { useResizableColumns } from './ui/TableUtils'
 import { useCargaVigente } from '../hooks/useCargaVigente'
 import { motivoPeriodoInvalido } from '../utils/periodoControladoria'
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
-import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo'
+import { BarraDeEscopo, BOTAO_DA_BARRA, BotaoAutoAjuste } from './controladoria/BarraDeEscopo'
 import type { EscopoControladoria } from './controladoria/escopo'
 import { baixarCSV } from './controladoria/csv'
 
@@ -105,8 +105,8 @@ const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
             {motivoPeriodo ? (
                 <PeriodoInvalido motivo={motivoPeriodo} />
             ) : loading ? (
-                <div className="flex items-center justify-center py-20">
-                    <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <div className="flex items-center justify-center py-20" role="status" aria-label="Carregando">
+                    <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
                 </div>
             ) : falhou ? (
                 <FalhaDeCarga oQue="a DRE por SPE" onRetry={load} />
@@ -128,9 +128,7 @@ const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
                 )}
                 <div className="bg-white border border-slate-200 rounded-[10px] shadow-sm overflow-hidden">
                     <div className="flex justify-end p-2 border-b border-slate-100">
-                        <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-slate-400 hover:text-slate-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
-                            <MoveHorizontal className="w-4 h-4" />
-                        </button>
+                        <BotaoAutoAjuste onClick={() => cols.autoFit()} />
                     </div>
                     <div className="overflow-x-auto">
                     <table

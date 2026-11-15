@@ -240,7 +240,7 @@ export const RiscoVinculos: React.FC<Props> = ({
                         }}
                         empty={{
                             icon: <Link2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
-                            title: `Nenhum ${ROTULO_MODULO_VINCULO[modulo].toLowerCase()} encontrado`,
+                            title: `Nada encontrado em ${ROTULO_MODULO_VINCULO[modulo].toLowerCase()}`,
                             subtitle: obraId ? 'A lista mostra só os da obra deste risco.' : 'A lista mostra só os da organização deste risco.',
                         }}
                     />

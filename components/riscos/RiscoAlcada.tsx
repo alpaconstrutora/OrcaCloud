@@ -191,7 +191,7 @@ export const RiscoAlcada: React.FC<Props> = ({ risco, faixas, podeEditar, motivo
                         <>
                             <p className="text-sm text-gray-700">
                                 {alcada.nomes.length
-                                    ? `Nível ${pendente.nivel} aprovado por ${juntarNomes(alcada.nomes)}.`
+                                    ? `Quem aprova o nível ${pendente.nivel}: ${juntarNomes(alcada.nomes)}.`
                                     : `Nível ${pendente.nivel} sem aprovador cadastrado: qualquer membro da organização aprova (Aprovações › Faixas, tipo "Risco").`}
                             </p>
                             {!alcada.pode ? (

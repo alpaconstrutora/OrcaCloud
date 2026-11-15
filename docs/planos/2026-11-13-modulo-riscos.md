@@ -178,37 +178,50 @@ Decisões de desenho (minhas, registradas aqui):
   acima do orçado" e "insumo sem pedido" ficam para depois (exigem regra do orçamento/abastecimento que não é
   um objeto vinculável) — registrado em "Depois".
 
-- [ ] **F2.1 Ocorrências** — tabela `risk_events` (tipo, data, descrição, causa raiz, impacto realizado R$ — um
+- [x] **F2.1 Ocorrências** — tabela `risk_events` (tipo, data, descrição, causa raiz, impacto realizado R$ — um
   valor por ocorrência, mesmo afetando várias dimensões —, atraso em dias, dimensões, ações corretivas, lições
   aprendidas, evidência, status). Marcar "materializou o risco" grava a avaliação vigente em
   `avaliacao_referencia_id` e põe o risco em `materializado`. Aba Ocorrências na ficha; KPI "materializados e
   perdas" no Painel.
   *Pronto quando:* registrar ocorrência materializando muda o status, guarda a referência da última avaliação, e
   as avaliações anteriores continuam intactas no banco (CA08); soma de perdas no Painel = soma no banco.
-- [ ] **F2.2 Vínculos** — tabela `risk_links` (`modulo` ∈ cronograma|contrato|pedido_compra|nao_conformidade|
+- [x] **F2.2 Vínculos** — tabela `risk_links` (`modulo` ∈ cronograma|contrato|pedido_compra|nao_conformidade|
   documento, `external_id`, `external_ref` jsonb, rótulo do momento), único por (risco, módulo, id). Aba Vínculos
   na ficha com seletor por módulo restrito à obra/organização do risco.
   *Pronto quando:* vincular e desvincular grava/remove e audita (`link`/`unlink`); vincular o mesmo objeto duas
   vezes é recusado; o id externo é o do sistema de origem (CA10).
-- [ ] **F2.3 Alçada** — `project_risks` ganha `approval_status/approval_chain/approval_required_levels`;
+- [x] **F2.3 Alçada** — `project_risks` ganha `approval_status/approval_chain/approval_required_levels`;
   entidade `project_risk` em `approvalService`, no CHECK de `approval_approvers`, em `fn_alcada_aprovadores` e
   na trava `fn_alcada_trava_passo` (gatilho na tabela). Exige aprovação: estratégia "aceitar" ou nível crítico
   (gatilho ou pontuação ≥ limite). Ficha mostra o motivo e "Enviar para aprovação"; aba Aprovações lista os
   pendentes; quem não é aprovador vê o motivo do botão desligado.
   *Pronto quando:* aprovar por quem não está na lista é recusado PELO BANCO (`ALCADA_NAO_PERMITE`); por quem
   está, grava a cadeia e fica APROVADO; reprovar exige motivo (CA12, parte alçada).
-- [ ] **F2.4 Sugestão por obra** — assistente "Sugerir riscos": escolhe a obra, a tipologia (pré-preenchida de
+- [x] **F2.4 Sugestão por obra** — assistente "Sugerir riscos": escolhe a obra, a tipologia (pré-preenchida de
   `tipo_obra`/`modalidade`) e as condições (subsolo, contenção…); lista os itens do catálogo da tipologia,
   ordenados pelas condições que batem, e cria os escolhidos de uma vez (dono e próxima revisão comuns). O perfil
   escolhido fica em `risk_project_profiles` para a próxima vez.
   *Pronto quando:* obra residencial com "subsolo" sugere R05 (recalque, água subterrânea, contenção) no topo;
   criar em lote gera um risco por item, sem duplicar item já usado na mesma obra.
-- [ ] **F2.5 Sinais pelos vínculos** — função `fn_risk_sinais(p_org)` (invoker, RLS vale): tarefa do cronograma
+- [x] **F2.5 Sinais pelos vínculos** — função `fn_risk_sinais(p_org)` (invoker, RLS vale): tarefa do cronograma
   atrasada ou crítica aberta; contrato vencido ou vencendo em 30 dias; pedido com entrega atrasada; NC aberta
   vencida ou grave; documento vencido. Ficha mostra o sinal no vínculo; Registro/Painel contam "com sinal";
   `fn_risk_alerts` ganha a regra `risco_sinal_vinculo` (1 aviso por risco/dia ao dono).
   *Pronto quando:* cada tipo de sinal provado com um vínculo real ou de teste no banco; segunda rodada do cron no
   mesmo dia não repete aviso.
+
+- 15/11 **F2 aplicada e provada** (usuário: "sim"). `aplicar_20271115637000` aplicada (antes: prefixo livre e
+  `fn_alcada_trava_passo`/`fn_alcada_aprovadores` idênticas às cópias usadas — conferido por diff). Ensaio com ROLLBACK
+  13/13 + 3/3 (sinais de documento e NC; recusa ALCADA_NAO_PERMITE do não aprovador). Navegador com `agente-leitura`
+  (membro da Alpa, NÃO aprovador; Dev cadastrado só para o teste como aprovador de risco): Sugerir riscos na obra
+  Coronel Lambert 345 (tipologia "reforma" pré-preenchida; subsolo+contenção → R05.08 e R14.03 no topo) criou RSC-0001/0002;
+  vínculo com pedido PO-662639 mostrou "Pedido com entrega atrasada"; seletor de NC respondeu (lista vazia — a NC do
+  banco é de outra obra); enviar para aprovação → "aguardando", sem botão Aprovar para quem não aprova; ocorrência
+  materializando → risco "Materializado"; Painel: 1 ativo, "com sinal" 1, "materializados e perdas" 1 / R$ 15.000.
+  Tudo conferido no banco; dados de teste apagados por id (riscos, auditoria, vínculo, ocorrência, perfil, aprovador).
+  Corrigido após o teste: "Nível 1 aprovado por Dev" (parecia já aprovado) → "Quem aprova o nível 1: Dev";
+  "Nenhum não conformidade encontrado" → "Nada encontrado em …". Observado: o Vite (dev) recarregou a página uma vez
+  ao otimizar dependência carregada sob demanda — só desenvolvimento.
 
 ### Depois (P1/P2, sem data)
 

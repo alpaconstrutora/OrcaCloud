@@ -117,6 +117,8 @@ describe('TelaPredioAutomatico (PA2)', () => {
     const ppci = screen.getByTestId('ppci-do-predio');
     expect(within(ppci).getByText('A-2')).toBeTruthy();
     expect(within(screen.getByTestId('rota-por-andar')).getAllByRole('listitem')).toHaveLength(PLANO.resumo.incendio!.andares.length);
+    // PA9b: as peças lançadas nas áreas comuns.
+    expect(within(screen.getByTestId('equipamentos-de-incendio-do-predio')).getAllByRole('listitem')).toHaveLength(Object.keys(PLANO.resumo.incendio!.equipamentos!).length);
     fireEvent.click(screen.getByRole('tab', { name: 'Resultado' }));
     const pavimento = screen.getByLabelText('Pavimento da prévia') as HTMLSelectElement;
     expect(pavimento.value).toBe(PLANO.tipoLevelId);

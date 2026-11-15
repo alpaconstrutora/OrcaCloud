@@ -14,6 +14,12 @@ import { FICHA_DO_MATERIAL } from '../utils/blueprintHidraulicaPressao';
 import { unidadeNoPavimento } from '../utils/blueprintUnidadesDoPredio';
 import { dnDoTuboDeQueda } from '../utils/blueprintNbr8160';
 import { capacidadeDoVerticalLMin, dnDoVertical } from '../utils/blueprintCondutoresPluviais';
+import { analisarExtintores } from '../utils/blueprintExtintores';
+import { analisarIluminacao } from '../utils/blueprintIluminacaoEmergencia';
+import { percursoDeFuga } from '../utils/blueprintRotaDeFuga';
+import { criteriosDoPercursoMG } from '../utils/blueprintIncendioSaidasMG';
+import { HIPOTESES_INCENDIO_PADRAO, classificarEdificacao } from '../utils/blueprintIncendioClassificacao';
+import { semOsComodosDasUnidades } from '../utils/blueprintPredioAutomatico';
 import { modelosDoCatalogo } from '../utils/blueprintSelecaoClimatizacao';
 import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
 import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
@@ -91,7 +97,7 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     const plano = planejarPredioDoPedido(p, { aoConcluirEtapa: (e, i, total) => avisos.push(`${i}/${total} ${e.id}`) });
     expect(plano.etapas.map((e) => e.id)).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO);
     expect(avisos).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO.map((id, i) => `${i + 1}/${ORDEM_DAS_ETAPAS_DO_PREDIO.length} ${id}`));
-    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'PLUVIAL:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'INCENDIO:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
+    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'PLUVIAL:NAO_EXIGIDA', 'EQUIPAMENTOS_DE_INCENDIO:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'INCENDIO:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
     expect(snapshotHash(plano.resultado)).toBe(snapshotHash(peloPainelDoBloco(p)));
     const tipo = plano.resultado.levels.find((l) => l.id === plano.tipoLevelId)!;
     expect(tipo.copiaInstalacoes).toBe(true);
@@ -689,5 +695,51 @@ describe('prédio automático — a água fria e o esgoto (PA6, PA7a)', { timeou
     const doTipo = m.stairs.filter((e) => e.levelId === plano.tipoLevelId);
     expect(doTipo.length).toBeGreaterThan(0);
     for (const e of doTipo) expect(e.ateLevelId).toBe(cobertura.id);
+  });
+
+  it('PA9b: extintores, placas e luminárias de emergência nas ÁREAS COMUNS do tipo — e cada andar copiado repete os do tipo', () => {
+    const plano = r8();
+    const m = plano.resultado;
+    expect(plano.etapas.find((e) => e.id === 'EQUIPAMENTOS_DE_INCENDIO')!.situacao).toBe('LANCOU');
+    const eq = plano.resumo.incendio!.equipamentos!;
+    expect(eq.EXTINTOR).toBeGreaterThan(0);
+    expect(eq.LUMINARIA_EMERGENCIA).toBeGreaterThan(0);
+    expect(eq.PLACA).toBeGreaterThan(0);
+    const andares = m.levels.filter((l) => l.id === plano.tipoLevelId || l.tipoDeId === plano.tipoLevelId);
+    const conta = (levelId: string, tipo: string) => m.terminais.filter((t) => t.levelId === levelId && t.tipoHidraulico === tipo).length;
+    for (const tipo of ['EXTINTOR', 'PLACA', 'LUMINARIA_EMERGENCIA']) {
+      const noTipo = conta(plano.tipoLevelId, tipo);
+      expect(noTipo).toBeGreaterThan(0);
+      for (const l of andares) expect(conta(l.id, tipo)).toBe(noTipo);
+    }
+    // Nenhuma peça dentro de uma unidade: a rota conta a partir da porta dela (IT 08, 5.5.2.2).
+    const comuns = new Set(semOsComodosDasUnidades(m, plano.tipoLevelId).filter((s) => s.levelId === plano.tipoLevelId).map((s) => s.id));
+    const doTipo = m.spaces.filter((s) => s.levelId === plano.tipoLevelId);
+    for (const t of m.terminais.filter((x) => x.levelId === plano.tipoLevelId && x.disciplina === 'INCENDIO')) {
+      const s = doTipo.filter((x) => pointInPolygon(x.ring as Point[], t.at as Point));
+      expect(s.length === 0 || s.some((x) => comuns.has(x.id))).toBe(true);
+    }
+  });
+
+  it('PA9b: no prédio pronto, toda área comum de todo andar tem extintor ao alcance e a rota iluminada', () => {
+    const plano = r8();
+    const m = plano.resultado;
+    // Sem os cômodos das unidades em nenhum andar: os do tipo e os das cópias (a mesma geometria).
+    const comunsDoTipo = new Set(semOsComodosDasUnidades(m, plano.tipoLevelId).map((x) => x.id));
+    const anel = (x: (typeof m.spaces)[number]) => x.ring.map((q) => `${q.x},${q.y}`).join(';');
+    const daUnidade = new Set(m.spaces.filter((x) => x.levelId === plano.tipoLevelId && !comunsDoTipo.has(x.id)).map(anel));
+    const andares = new Set(m.levels.filter((l) => l.id === plano.tipoLevelId || l.tipoDeId === plano.tipoLevelId).map((l) => l.id));
+    const vista = { ...m, spaces: m.spaces.filter((x) => !(andares.has(x.levelId) && daUnidade.has(anel(x)))) };
+    const terreoP = m.levels.find((l) => l.name.endsWith('(térreo)'))!;
+    const carga = classificarEdificacao(m, { ...HIPOTESES_INCENDIO_PADRAO.classificacao, divisao: 'A-2', pisoDeDescargaLevelId: terreoP.id }).carga.nivel;
+    const ext = analisarExtintores(vista, carga, HIPOTESES_INCENDIO_PADRAO.extintores);
+    const nivelDe = (id: string) => vista.spaces.find((x) => x.id === id)?.levelId ?? '';
+    expect(ext.ambientes.filter((a) => !a.atende && andares.has(nivelDe(a.spaceId))).map((a) => a.rotulo)).toEqual([]);
+    expect(ext.ambientes.filter((a) => andares.has(nivelDe(a.spaceId))).length).toBeGreaterThan(0);
+    expect(ext.pavimentosSemExtintor.filter((x) => andares.has(x.levelId))).toEqual([]);
+    const terreo = m.levels.find((l) => l.name.endsWith('(térreo)'))!;
+    const pc = percursoDeFuga(vista, 'A', terreo.id, null, criteriosDoPercursoMG('MG_CBMMG', 'A-2', HIPOTESES_INCENDIO_PADRAO.saidas));
+    const il = analisarIluminacao(vista, pc, terreo.id, HIPOTESES_INCENDIO_PADRAO.iluminacao);
+    expect(il.trechosSemLuz.filter((x) => andares.has(x.levelId))).toEqual([]);
   });
 });

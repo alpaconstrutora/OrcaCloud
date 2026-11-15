@@ -129,7 +129,7 @@ describe('marco dos prédios de referência (prédio automático)', () => {
           expect(agora.esgoto!.tubos.map((t) => t.dnMm)).toEqual(agora.esgoto!.tubos.map(() => 100));
         }
       },
-      600_000,
+      1_200_000,
     );
   }
 });

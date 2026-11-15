@@ -34,7 +34,7 @@ import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedid
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
 import { lancarEsgoto } from './esgoto';
 import { lancarPluvial } from './pluvial';
-import { conferirIncendioDoPredio } from './ppci';
+import { conferirIncendioDoPredio, lancarEquipamentosDeIncendio } from './ppci';
 import type { HipotesesIncendio } from '../blueprintIncendioClassificacao';
 import type { HipotesesPluviais } from '../blueprintPluvial';
 import { HIPOTESES_PRESSAO_PADRAO } from '../blueprintPressaoDaRede';
@@ -292,6 +292,23 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     etapa('PLUVIAL', 'LANCOU', pluvial.comandos, `${pluvial.condutores.length} condutor(es) DN ${pluvial.condutores[0]?.dnMm ?? '—'} · ${Math.round(pluvial.vazaoLMin).toLocaleString('pt-BR')} L/min de ${Math.round(pluvial.areaM2).toLocaleString('pt-BR')} m² a ${pluvial.intensidadeMmH} mm/h`);
   }
 
+  // ── Equipamentos de incêndio de cada andar (PA9b): no tipo, antes da marca — pelos motores do PPCI da planta, numa vista
+  // sem os andares copiados.
+  let equipamentos: ReturnType<typeof lancarEquipamentosDeIncendio> | null = null;
+  if (!hip.incendio) etapa('EQUIPAMENTOS_DE_INCENDIO', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
+  else {
+    try {
+      equipamentos = lancarEquipamentosDeIncendio(ctx, terreo?.levelId ?? mont.tipoLevelId, base.ultimoLevelId, new Set(copias.map((l) => l.id)), mont.tipoLevelId, entrada.incendio ?? null);
+      pendencias.push(...equipamentos.pendencias);
+      const nomes = Object.entries(equipamentos.pecas).map(([k, n]) => `${n} ${k.toLowerCase().replace(/_/g, ' ')}`);
+      etapa('EQUIPAMENTOS_DE_INCENDIO', 'LANCOU', equipamentos.comandos, nomes.length ? `${nomes.join(' · ')} no tipo, no térreo e na cobertura — cada andar repete os do tipo` : null);
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Equipamentos de incêndio: ${motivo} — lance pelo PPCI da planta.` });
+      etapa('EQUIPAMENTOS_DE_INCENDIO', 'NAO_RODOU', 0, motivo);
+    }
+  }
+
   // ── O tipo leva as instalações aos andares (PA1): as fases seguintes desenham no tipo e os andares acompanham.
   etapa('INSTALACOES_NO_TIPO', 'LANCOU', aplicar([{ type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }]), 'Pontos, trechos, quadros e circuitos desenhados no tipo vão às cópias.');
 
@@ -432,6 +449,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
             dispensadas: incendio.dispensadas,
             limiteM: incendio.rota.limiteM,
             andares: incendio.rota.andares.map(({ nome, ambientes, semRota, naoAtendem, piorM }) => ({ nome, ambientes, semRota, naoAtendem, piorM })),
+            equipamentos: equipamentos?.pecas ?? null,
           }
         : null,
       pluvial: pluvial

@@ -4,7 +4,7 @@
  * e a conta criada pelo Pro (só-Pro) que abrir outro endereço do ÒPURA volta para /pro.
  */
 import { describe, it, expect } from 'vitest';
-import { ehEnderecoDoPro, contaSoPro, destinoDaContaSoPro, ORIGEM_PRO } from '../utils/proPublico';
+import { ehEnderecoDoPro, contaSoPro, destinoDaContaSoPro, proPublicoAtivo, ORIGEM_PRO } from '../utils/proPublico';
 
 describe('ehEnderecoDoPro', () => {
   it('/pro e subcaminhos são do Pro', () => {
@@ -32,22 +32,35 @@ describe('contaSoPro', () => {
   });
 });
 
+describe('proPublicoAtivo (chave VITE_PRO_PUBLICO)', () => {
+  it('desligada: /pro NÃO monta o Pro público (cai no app normal)', () => {
+    expect(proPublicoAtivo('/pro', false)).toBe(false);
+  });
+  it('ligada: /pro monta; outros endereços continuam fora', () => {
+    expect(proPublicoAtivo('/pro', true)).toBe(true);
+    expect(proPublicoAtivo('/proposta/1', true)).toBe(false);
+  });
+});
+
 describe('destinoDaContaSoPro', () => {
   const soPro = { user_metadata: { origem: ORIGEM_PRO } };
   const interna = { user_metadata: {} };
 
-  it('conta só-Pro fora do Pro é mandada para /pro', () => {
-    expect(destinoDaContaSoPro('/', soPro)).toBe('/pro');
-    expect(destinoDaContaSoPro('/portal-cliente', soPro)).toBe('/pro');
+  it('conta só-Pro fora do Pro é mandada para /pro (chave ligada)', () => {
+    expect(destinoDaContaSoPro('/', soPro, true)).toBe('/pro');
+    expect(destinoDaContaSoPro('/portal-cliente', soPro, true)).toBe('/pro');
+  });
+  it('chave desligada: ninguém é redirecionado', () => {
+    expect(destinoDaContaSoPro('/', soPro, false)).toBeNull();
   });
   it('conta só-Pro já no Pro fica onde está', () => {
-    expect(destinoDaContaSoPro('/pro', soPro)).toBeNull();
+    expect(destinoDaContaSoPro('/pro', soPro, true)).toBeNull();
   });
   it('conta interna nunca é redirecionada (pode usar o app e o /pro)', () => {
-    expect(destinoDaContaSoPro('/', interna)).toBeNull();
-    expect(destinoDaContaSoPro('/pro', interna)).toBeNull();
+    expect(destinoDaContaSoPro('/', interna, true)).toBeNull();
+    expect(destinoDaContaSoPro('/pro', interna, true)).toBeNull();
   });
   it('sem sessão, nada a fazer aqui (o login de cada endereço decide)', () => {
-    expect(destinoDaContaSoPro('/', null)).toBeNull();
+    expect(destinoDaContaSoPro('/', null, true)).toBeNull();
   });
 });

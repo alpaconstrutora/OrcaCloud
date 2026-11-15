@@ -13,7 +13,7 @@ import { tokenDoCelularDaUrl } from './services/celular/celularLinkService';
 const AIChat      = React.lazy(() => import('./components/AIChat'));
 const ProjectModal = React.lazy(() => import('./components/ProjectModal'));
 import { supabase } from './lib/supabase';
-import { ehEnderecoDoPro, destinoDaContaSoPro, contaSoPro } from './utils/proPublico';
+import { proPublicoAtivo, destinoDaContaSoPro, contaSoPro } from './utils/proPublico';
 import { atsService } from './services/atsService';
 import { Loader2, Lock, Shield, WifiOff } from 'lucide-react';
 
@@ -677,7 +677,8 @@ const App: React.FC = () => {
   }, []);
 
   // ÒPURA Pro público: o endereço /pro monta a casca do Pro (guard abaixo, antes do login).
-  const enderecoDoPro = React.useMemo(() => ehEnderecoDoPro(window.location.pathname), []);
+  // Só com VITE_PRO_PUBLICO=1 (utils/proPublico.ts); desligado, /pro cai no app normal.
+  const enderecoDoPro = React.useMemo(() => proPublicoAtivo(window.location.pathname), []);
 
   // Conta criada pelo Pro (user_metadata.origem = 'pro') não tem nada no resto do ÒPURA:
   // qualquer outro endereço volta para /pro. Conta interna nunca é redirecionada.

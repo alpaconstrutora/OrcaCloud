@@ -144,3 +144,17 @@ Falta do usuário/jurídico: razão social, CNPJ, endereço, e-mail de privacida
 prazos (resposta, exclusão, aviso de cobrança/encerramento), foro, região dos servidores
 (transferência internacional) e se a exclusão/cópia de dados precisa de botão no app antes de abrir
 ao público. Só depois de aprovado vira página (`/pro/termos`, `/pro/privacidade`) linkada na entrada.
+
+## Publicação com o `/pro` desligado (15/11/2026)
+
+Pedido: *"vamos deixar os termos para o próximo passo. 1. temas jurídicos 2. configurar o Google e o
+e-mail no Supabase. vamos seguir com as implementações. Inclusive o #443 está aguardando merge,
+verifique"* → escolha: **"Publicar com o /pro desligado"**.
+
+- Chave `VITE_PRO_PUBLICO` (`utils/proPublico.ts › PRO_PUBLICO_ABERTO`, `proPublicoAtivo`): sem ela
+  `= '1'`, `/pro` cai no app normal (conferido: mostra a escolha de portais) e nem o redirecionamento
+  da conta só-Pro nem o ajuste do `lib/tabRouter.ts` agem. Testes cobrem os dois estados.
+- **Para abrir ao público:** (1) termos e privacidade aprovados e publicados; (2) Google e e-mail
+  configurados no Supabase (Estado acima); (3) Vercel › Settings › Environment Variables:
+  `VITE_PRO_PUBLICO = 1` em Production e um redeploy pelo painel (variável de build).
+- Para testar localmente com a chave ligada: `VITE_PRO_PUBLICO=1` no `.env.local` da frente.

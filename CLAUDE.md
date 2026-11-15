@@ -177,7 +177,7 @@ default seguro e a troca obrigou o **compilador** a apontar as 30 chamadas
 existentes, uma a uma. É a trava que o shell script não conseguia ser.
 
 ⚠️ **`AppRouter` passa `typedAllProjects` (lista completa) só para
-`ProjectList`, `PlanningDashboard`, `DiaryDashboard`, `LaborDashboard`,
+`ProjectList`, `DiaryDashboard`, `LaborDashboard`,
 `ProjectOverview`, `ProjectDiaryManager` e `FinancialSchedule`.** Todo o resto
 recebe `typedProjects` (só obras). Se uma tela nova precisa dos outros tipos,
 passe `typedAllProjects` explicitamente — e diga no código por quê.

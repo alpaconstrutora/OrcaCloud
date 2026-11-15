@@ -23,11 +23,13 @@ const AvisoPedidoFast: React.FC<Props> = ({ order, onVerFotos }) => {
     const comprador = l?.comprador?.nome || 'comprador';
     const quando = order.created_at ? new Date(order.created_at).toLocaleDateString('pt-BR') : null;
     const conferir = !JA_CONFERIDO.includes(order.status);
+    const semItens = (order.items ?? []).length === 0;
 
     const alertas: string[] = [];
     if (l) {
-        if (l.falhaDaLeitura || l.itens.length === 0) {
-            alertas.push(`A leitura da foto falhou${l.falhaDaLeitura ? ` (${l.falhaDaLeitura})` : ''}: lance os itens olhando a foto.`);
+        // Desligada (sem chave da IA, 15/11/2026) não é falha: o texto principal já diz o que fazer.
+        if (!l.leituraDesligada && l.falhaDaLeitura) {
+            alertas.push(`A leitura automática da foto falhou (${l.falhaDaLeitura}).`);
         }
         if (l.itens.length > 0 && l.conferencia && !l.conferencia.confere) {
             alertas.push(`Total da nota ${formatMoney(l.conferencia.totalDaNota)} × calculado pelos itens ${formatMoney(l.conferencia.totalCalculado)}.`);
@@ -44,7 +46,13 @@ const AvisoPedidoFast: React.FC<Props> = ({ order, onVerFotos }) => {
             <div className="flex-1 min-w-0 space-y-1">
                 <p className="text-sm text-gray-900">
                     <span className="font-semibold">Pedido Fast</span> · comprado por {comprador}{quando ? ` em ${quando}` : ''}.
-                    {conferir && <span className="text-gray-600"> Itens lidos da foto da nota — confira antes de Receber.</span>}
+                    {conferir && (
+                        <span className="text-gray-600">
+                            {semItens
+                                ? ' Lance os itens a partir da foto da nota antes de Receber.'
+                                : ' Itens lidos da foto da nota — confira antes de Receber.'}
+                        </span>
+                    )}
                 </p>
                 {conferir && alertas.length > 0 && (
                     <ul className="space-y-0.5">

@@ -226,6 +226,8 @@ async function acaoCriar(admin: Admin, userId: string, email: string, lote: stri
         retiradoPorEmployeeId: colaborador?.id ?? null,
         fornecedorIdentificado: !!fornecedor.id,
         falhaDaLeitura: arquivo.falha?.motivo ?? null,
+        // Sem chave da IA = leitura DESLIGADA por decisão (15/11/2026), não falha.
+        leituraDesligada: arquivo.falha?.codigo === 'IA_NAO_CONFIGURADA',
         hoje: hojeEmBrasilia(agora),
         agora: agora.toISOString(),
     });
@@ -250,6 +252,7 @@ async function acaoCriar(admin: Admin, userId: string, email: string, lote: stri
         itens,
         total: conferencia.somaDosItens,
         leituraFalhou: !!arquivo.falha || itens.length === 0,
+        leituraDesligada: arquivo.falha?.codigo === 'IA_NAO_CONFIGURADA',
         totalConfere: conferencia.confere,
     };
     await gravarJson(admin, `${pasta}/${ARQUIVO_DO_RESULTADO}`, resultado);
@@ -348,7 +351,7 @@ async function avisarGestores(
     const partes = [
         `${r.numero} · ${obraNome}`,
         `comprado por ${compradorNome}`,
-        r.leituraFalhou ? 'itens a lançar (leitura da foto falhou)' : `${r.itens.length} ${r.itens.length === 1 ? 'item' : 'itens'} · ${valor}`,
+        r.leituraFalhou ? 'itens a lançar pela foto' : `${r.itens.length} ${r.itens.length === 1 ? 'item' : 'itens'} · ${valor}`,
         r.fornecedorNome ? `fornecedor ${r.fornecedorNome}` : 'fornecedor a conferir',
     ];
     const { error: errAviso } = await admin.from('notifications').insert(destinatarios.map(e => ({

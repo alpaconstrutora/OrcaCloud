@@ -117,7 +117,7 @@ Frente: `bash scripts/nova-frente.sh pedido-fast` (REGRA #8).
 11. **`types/supplyChain.ts` + mapeadores de `orderService`**: `origem`, `criadoPor` (nome resolvido em lote) e `leituraIa`. *Pronto quando* tsc passar e a lista e o detalhe lerem os campos.
 12. **`utils/linkNotificacao.ts`**: `pedido_fast_criado` abre o detalhe do pedido. *Pronto quando* clicar no sino abrir o pedido.
 
-## Parte 2 — Aba "Pedido" no link `/celular?token=`. 4 de 5 (falta a prova no celular real)
+## Parte 2 — Aba "Pedido" no link `/celular?token=`. 5 de 5 (no ar, #431; aprovada no celular pelo usuário)
 
 Só começa depois da Parte 1 no ar.
 
@@ -197,8 +197,36 @@ o link `/celular` era a Parte 2 → *"sim"*.
 | 2 Edge: modo token | ✅ | deploy; sem header 401, token falso 403 "link inválido ou vencido", anon sem token 401; `respostaDoErroDoLink` testada |
 | 3 `fontePedidoFastDoLink` + `listarObrasDoLink` | ✅ | `__tests__/pedidoFastFonte.test.ts` (5) |
 | 4 aba "Pedido" no `CelularTokenGate` | ✅ | `CelularTokenGate.test.tsx` (3 abas); Playwright 390×844 sem login (RPCs e Edge interceptadas): aba → foto → obra → recusa do token derruba para "link inválido" |
-| 5 `PedidoFastDoLink` | ⏳ | falta a prova no celular real com o link de verdade (usuário) |
+| 5 `PedidoFastDoLink` | ✅ | publicado (#431, `c79a40d` conferido no domínio); **usuário: "testado e aprovado"** (15/11/2026) |
 
 **Achado na prova:** o contador de uso por link (`user_mobile_link_uso.acao`) tinha CHECK fechado em `subir`/`assinar` — a 1ª
 leitura pelo link daria 23514. A migration amplia o CHECK com `pedido_fast_ler` (40/h) e `pedido_fast_criar` (30/h).
 **Não gerei link real para testar:** gerar troca o link atual da pessoa (mesma linha de `user_mobile_links`).
+
+### 15/11/2026 — IA fica para o futuro
+
+**Pedidos do usuário (mesma sessão):** *"1. testado e aprovado 2. o uso da IA tem custos?"* → estimativa de
+~US$ 0,03–0,07 por nota com Claude Opus 5.5 → *"vamos deixar a implementacao da IA para futuro. sem custos no
+momento."* → *"1. incluir na lista de pendencias: ligar IA no futuro. 2. faça o ajuste que voce disse que vale fazer"*.
+
+- **Decisão:** a chave `ANTHROPIC_API_KEY` NÃO é cadastrada; custo zero. Sem ela a Edge nem chama a IA: guarda a
+  foto e devolve `IA_NAO_CONFIGURADA` na hora. O Pedido Fast roda como "foto + obra → pedido Retirado sem itens;
+  o gestor lança os itens pela foto".
+- **Ajuste de texto (frente `pedido-fast-texto`):** leitura desligada deixou de aparecer como falha.
+  - `lib/pedidoFast.ts`: `leituraDesligada` → observações "Itens a lançar pelo gestor a partir da foto anexada."
+    (sem "falhou"); `leitura_ia.leituraDesligada`. Teste novo em `__tests__/pedidoFast.test.ts`.
+  - Edge: passa `leituraDesligada`; aviso do sino "itens a lançar pela foto".
+  - `PedidoFastFluxo`: nota neutra (cinza) "Foto guardada. Os itens serão lançados pelo gestor a partir da foto."
+    no lugar do aviso âmbar; o âmbar fica para falha de verdade quando a IA estiver ligada.
+  - `AvisoPedidoFast`: pedido sem itens diz "Lance os itens a partir da foto da nota antes de Receber."
+
+## Pendências futuras
+
+- ⏳ **Ligar a leitura por IA** (pedido do usuário, 15/11/2026: "ligar IA no futuro"). Nada a programar — o código
+  está pronto e testado (`supabase/functions/pedido-fast/leitura.ts`, Claude Opus 5.5, structured output, fallback
+  do servidor). Para ligar:
+  1. `npx supabase secrets set ANTHROPIC_API_KEY=<chave>` (o usuário cadastra; a chave não passa pelo chat);
+  2. no Console da Anthropic, um teto mensal de gasto;
+  3. prova: um Pedido Fast real com nota de verdade — itens, fornecedor e total conferidos no detalhe.
+  Custo estimado: ~US$ 0,03–0,07 por nota (Opus 5.5). Depois de algumas semanas, comparar com Claude Haiku 5.5
+  nas mesmas fotos (≈ 40× mais barato) antes de trocar.

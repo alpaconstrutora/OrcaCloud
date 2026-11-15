@@ -133,7 +133,9 @@ describe('Pedido Fast · leitura vazia ou que falhou', () => {
         expect(linha.items).toEqual([]);
         expect(linha.status).toBe('Entregue');
         expect(linha.delivery_date).toBe('2026-11-14');
-        expect(linha.notes).toContain('Itens a lançar — leitura da foto falhou: foto ilegível');
+        expect(linha.notes).toContain('Itens a lançar pelo gestor a partir da foto anexada.');
+        expect(linha.notes).toContain('A leitura automática da foto falhou: foto ilegível');
+        expect(linha.notes).not.toContain('confira antes de Receber');
         expect(linha.notes).toContain('Fornecedor a conferir: não identificado na foto.');
     });
 
@@ -156,6 +158,18 @@ describe('Pedido Fast · leitura vazia ou que falhou', () => {
         expect(l.desconto).toBe(0);
         expect(l.total).toBe(0);
         expect(normalizarLeitura({ legivel: true, itens: [] }).legivel).toBe(false);
+    });
+});
+
+describe('Pedido Fast · leitura automática desligada (IA para o futuro, 15/11/2026)', () => {
+    it('não fala em falha: só que o gestor lança os itens pela foto', () => {
+        const linha = montarPedidoFast(entrada(leituraVazia(), {
+            supplierId: null, fornecedorIdentificado: false,
+            falhaDaLeitura: 'a leitura automática não está configurada (falta a chave da IA)', leituraDesligada: true,
+        }));
+        expect(linha.notes).toContain('Itens a lançar pelo gestor a partir da foto anexada.');
+        expect(linha.notes).not.toMatch(/falhou|chave da IA/);
+        expect(linha.leitura_ia).toMatchObject({ leituraDesligada: true, falhaDaLeitura: null });
     });
 });
 

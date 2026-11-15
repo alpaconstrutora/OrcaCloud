@@ -51,14 +51,69 @@ Ordem combinada: um de cada vez, primeiro o que mente.
   2 de 2 atrasadas, término 15/04/2026; cada recorte filtra; busca "garden" recorta os cards
   para "de 1"; Enter no card liga/desliga.
 
-### 2. "Importar Excel" cria ORÇAMENTO → importação de cronograma de verdade — ⏳ planejar (`/impeccable shape`)
+### 2. "Importar Excel" cria ORÇAMENTO → importação de cronograma de verdade — ⏳ brief aguardando confirmação
 
-**O que muda:** importação de EAP com datas (planilha e/ou MS Project) que grava
-`classification: 'PLANEJAMENTO'` e a organização do seletor do topo; modal no Dialog do app
-(`role="dialog"`, Esc, foco preso, arquivo pelo teclado). Até lá, o botão não pode seguir
-criando orçamento invisível nesta lista.
-**Como sei que terminou:** importar um arquivo de teste numa org descartável cria um
-planejamento que aparece nesta lista, com as datas do arquivo; nada nasce como ORCAMENTO.
+Item 1 no ar em 14/11/2026 (PR #446, a3c7923).
+
+**Decisões do usuário (`/impeccable shape`, 14/11/2026, respostas literais):**
+
+> Qual é o caso real? → **"Os dois"** (criar a partir do arquivo E atualizar um existente)
+> Que arquivo chega? → **"MS Project em XML, MS Project .mpp direto, Planilha Excel do modelo"**
+> Tarefa sem item no orçamento → **"Usuário decide na prévia"**
+> Botão atual enquanto isso → **"Sair da tela já (Recomendado)"**
+> Avanço ao atualizar → **"Avanço também, item a item na prévia"**
+> Linha de base → **"Ao criar, vira a baseline (Recomendado)"**
+> .mpp → **"XML + Excel primeiro, .mpp depois (Recomendado)"**
+
+**Brief**
+
+1. *Quem e para quê* — engenheiro/planejador no escritório (desktop), com um cronograma feito
+   fora do app (MS Project ou planilha). Quer que o planejamento do app reflita esse arquivo
+   sem redigitar tarefa por tarefa. Modo Operate.
+2. *Dois caminhos, uma prévia*
+   - **Criar** (lista Planejamento, botão "Importar cronograma"): escolhe a obra (a
+     organização vem da obra — REGRA #5, nunca pergunta com o topo apontando), o orçamento
+     base para casar os itens, e o arquivo. Nasce `PLANEJAMENTO` com `linkedProjectId` da obra
+     e **baseline ativa = datas do arquivo**.
+   - **Atualizar** (dentro do planejamento aberto): mesmo arquivo, mesma prévia. Troca datas e
+     predecessoras; **avanço só onde a pessoa marcar, item a item** (app × arquivo lado a lado
+     onde diferem; padrão desmarcado, para não apagar o que veio do Diário). Baseline não muda —
+     o desvio aparece na Central.
+3. *Prévia (o coração)* — tabela em painel lateral largo (`Sheet`, REGRA #4), três passos:
+   arquivo → casamento → confirmar. Cada tarefa do arquivo aparece casada com um item do
+   orçamento (por código da EAP/item e descrição normalizada) ou **sem par**; para as sem par a
+   pessoa escolhe: casar com um item, criar como tarefa sem custo, ou ignorar — com ação em lote
+   ("ignorar todas sem par"). Nada grava antes de "Confirmar"; contagem do que entra, muda e fica
+   de fora antes do botão.
+4. *Formatos* — fase A: **MS Project XML** (Salvar como → XML: EAP, início, término, duração,
+   % concluído, marcos, predecessoras com tipo e defasagem) e **modelo Excel** do app (baixar →
+   preencher → subir; mesmas colunas). Fase B: **.mpp**, depois de um spike de conversor no
+   servidor (as bibliotecas que leem .mpp são Java/.NET; Edge Function não roda).
+5. *Estados* — arquivo que não é cronograma (diz o que esperava e qual formato), arquivo vazio,
+   nenhum casamento, 500+ tarefas (prévia não pode travar), datas faltando, predecessora apontando
+   para tarefa ignorada, erro ao gravar (nada fica pela metade).
+6. *Interino (já combinado)* — o "Importar Excel" atual sai da tela de Planejamento (continua em
+   Orçamentos, onde a ficha faz sentido).
+
+**Decisões tomadas na confirmação do brief (14/11/2026, respostas literais)**
+
+> Tarefa sem custo no avanço → **"Não entra no avanço (Recomendado)"** — peso zero; aparece no
+> Gantt e conta em atrasadas/críticas, não move o % físico (a conta única não muda).
+> Datas depois de importar → **"Ficam como no arquivo (Recomendado)"** — o motor só recalcula
+> quando alguém editar depois.
+> Brief → **"Confirmado, seguir pela 2a"**
+
+**Em aberto:** arquivos reais de exemplo (um XML do Project e uma planilha que vocês usam) para
+os testes do leitor (2b).
+
+**Fases e como sei que terminou**
+- 2a. Botão atual sai de Planejamento → a tela não tem mais "Importar Excel"; Orçamentos mantém.
+- 2b. Leitores XML + modelo Excel (funções puras, testadas com os arquivos de exemplo) → teste
+  verde lendo EAP, datas, % e predecessoras do arquivo real.
+- 2c. Criar a partir do arquivo → numa org descartável, o planejamento nasce na lista com as
+  datas do arquivo e baseline ativa; nada nasce como ORCAMENTO.
+- 2d. Atualizar existente → datas trocadas, avanço só nos itens marcados, baseline intacta.
+- 2e. .mpp → spike decide o conversor; depois, o mesmo fluxo aceita .mpp.
 
 ### 3. Tabela com forma de cronograma — ⏳
 

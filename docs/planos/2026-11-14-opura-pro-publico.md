@@ -187,3 +187,13 @@ cópia e eliminação sem depender de e-mail). Frente `pro-minha-conta`.
   fora das RPCs simuladas): só-Pro baixa o arquivo (totais, fotos e assinatura presentes, sem o embed
   de filtro), confirma, vê "Conta excluída" e cai na apresentação sem sessão local; interna vê só
   "Apagar meus dados do Pro" e cai no primeiro acesso; recusa do banco aparece no aviso em português.
+
+## Termos e privacidade: dados preenchidos (15/11/2026)
+
+Usuário preencheu: Alpa Construtora e Incorporadora, CNPJ 09.264.396/0001-59, sede em Cambuí – MG,
+contato e privacidade `privacidade@alpaconstrutora.com.br`, encarregado Altair Pereira da Rosa, avisos
+de 30 dias, exclusão por e-mail em 30 dias, resposta em 15 dias, foro Cambuí – MG. Banco em São Paulo
+(`sa-east-1`) entrou no texto. **Falta a revisão jurídica:** limite de responsabilidade (Termos §9),
+bases legais (Privacidade §4), Vercel/e-mail como transferência internacional (§5) e backups (§6).
+Supabase conferido por fora no mesmo dia: provedor Google **desligado**, e-mail ligado, cadastro
+aberto; SMTP próprio só com indício (convites aceitos por contas @gmail.com) — conferir no painel.

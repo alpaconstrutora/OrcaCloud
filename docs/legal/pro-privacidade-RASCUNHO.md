@@ -2,19 +2,20 @@
 
 > **RASCUNHO para revisão jurídica — não publicar sem aprovação.** Escrito em 14/11/2026 a partir
 > do que o ÒPURA Pro guarda de fato (tabelas `pro_config`, `pro_clientes`, `pro_orcamentos`,
-> `pro_servicos` e o login). Tudo entre **[colchetes]** é dado que precisa ser confirmado ou
-> preenchido. Plano: `docs/planos/2026-11-14-opura-pro-publico.md` (P5).
+> `pro_servicos` e o login). Dados da empresa, encarregado, contato e prazos preenchidos pelo
+> usuário em 15/11/2026; o que ainda está entre **[colchetes]** é revisão jurídica. Plano:
+> `docs/planos/2026-11-14-opura-pro-publico.md` (P5).
 
 Última atualização: [data da publicação]
 
 ## 1. Quem somos
 
 O ÒPURA Pro é um aplicativo gratuito para profissionais autônomos fazerem orçamentos, cobrar pelo
-Pix e organizar os serviços. Ele é oferecido por **[razão social]**, CNPJ **[número]**, com sede em
-**[endereço]** ("nós").
+Pix e organizar os serviços. Ele é oferecido por **Alpa Construtora e Incorporadora**, CNPJ **09.264.396/0001-59**, com sede na
+**Rua Angelo Bernardo Faccio, 90, Centro, Cambuí – MG, CEP 37600-000** ("nós").
 
-Para falar sobre seus dados, escreva para **[e-mail de privacidade]**. Nosso encarregado pelo
-tratamento de dados (LGPD, art. 41) é **[nome do encarregado]**.
+Para falar sobre seus dados, escreva para **privacidade@alpaconstrutora.com.br**. Nosso encarregado pelo
+tratamento de dados (LGPD, art. 41) é **Altair Pereira da Rosa**.
 
 ## 2. Dois tipos de dado, dois papéis
 
@@ -74,9 +75,13 @@ Só com quem precisamos para o aplicativo funcionar, sempre como operadores sob 
 - **Vercel**: hospedagem do aplicativo;
 - **Google**: só se você escolher entrar com a conta Google.
 
-[Revisão jurídica: confirmar a região dos servidores do Supabase e da Vercel. Se ficarem fora do
-Brasil, há **transferência internacional** de dados (LGPD, art. 33), e esta seção precisa dizer em
-qual base ela acontece.]
+Os dados que você cadastra ficam guardados em servidores no **Brasil (São Paulo)**.
+
+[Revisão jurídica: o banco do Supabase fica em São Paulo (região `sa-east-1`, conferido em
+15/11/2026). A Vercel só entrega o aplicativo, por uma rede global, e os dados cadastrados vão do
+aparelho direto para o banco — mas a Vercel e o envio de e-mail podem registrar endereço IP e e-mail
+fora do Brasil. Confirmar se isso precisa ser citado como transferência internacional (LGPD,
+art. 33) e em qual base.]
 
 Podemos também ter de entregar dados a autoridades, quando a lei ou uma ordem judicial exigir.
 
@@ -84,7 +89,7 @@ Podemos também ter de entregar dados a autoridades, quando a lei ou uma ordem j
 
 Enquanto sua conta existir. Quando você exclui a conta pelo aplicativo (**Ajustes › Minha conta**),
 seus dados e os dos seus clientes são apagados na hora. Pedidos por e-mail são atendidos em até
-**[30] dias**. Fica guardado só o que a lei nos obrigar a manter por mais tempo.
+**30 dias**. Fica guardado só o que a lei nos obrigar a manter por mais tempo.
 [Revisão jurídica: confirmar se cópias de segurança do banco precisam ser citadas (o provedor guarda
 backups por um período; a exclusão vale para elas quando o backup expira).]
 
@@ -101,8 +106,8 @@ Você pode, a qualquer momento:
 
 A cópia e a exclusão você faz sozinho, no aplicativo: **Ajustes › Minha conta › Baixar meus dados**
 (um arquivo com tudo o que você cadastrou, inclusive fotos e assinaturas) e **Excluir minha conta**.
-Para o resto, ou se preferir, escreva para **[e-mail de privacidade]** a partir do e-mail da sua
-conta. Respondemos em até **[15] dias**.
+Para o resto, ou se preferir, escreva para **privacidade@alpaconstrutora.com.br** a partir do e-mail da sua
+conta. Respondemos em até **15 dias**.
 
 Se o pedido for sobre os dados de um **cliente** seu, encaminhamos a você, que é o controlador desses
 dados (seção 2).

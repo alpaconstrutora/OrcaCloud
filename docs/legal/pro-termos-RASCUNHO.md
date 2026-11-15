@@ -2,7 +2,8 @@
 
 > **RASCUNHO para revisão jurídica — não publicar sem aprovação.** Escrito em 14/11/2026 a partir
 > do que o ÒPURA Pro faz de fato e das decisões do usuário (gratuito, sem prazo prometido; só o Pro,
-> para autônomos). Tudo entre **[colchetes]** precisa ser confirmado ou preenchido. Plano:
+> para autônomos). Dados da empresa, contato, prazos e foro preenchidos pelo usuário em
+> 15/11/2026; o que ainda está entre **[colchetes]** é revisão jurídica. Plano:
 > `docs/planos/2026-11-14-opura-pro-publico.md` (P5).
 
 Última atualização: [data da publicação]
@@ -18,7 +19,7 @@ você:
 - registra fotos do serviço;
 - acompanha o que recebeu e quem ainda deve.
 
-Ele é oferecido por **[razão social]**, CNPJ **[número]** ("nós"). Ao criar a conta ou usar o
+Ele é oferecido por **Alpa Construtora e Incorporadora**, CNPJ **09.264.396/0001-59** ("nós"). Ao criar a conta ou usar o
 aplicativo, você concorda com estes Termos e com a **Política de Privacidade**.
 
 ## 2. Quem pode usar
@@ -31,7 +32,7 @@ compartilhe seu acesso.
 Hoje o ÒPURA Pro é **gratuito**, sem cartão de crédito. Se um dia passarmos a cobrar por ele ou por
 parte dele:
 
-- avisamos com pelo menos **[30] dias** de antecedência;
+- avisamos com pelo menos **30 dias** de antecedência;
 - nada é cobrado sem você escolher contratar;
 - você pode continuar sem pagar, se essa opção existir, ou pedir uma cópia dos seus dados antes de
   sair.
@@ -66,7 +67,7 @@ Se isso acontecer, podemos suspender ou encerrar a conta, avisando sempre que po
 
 Trabalhamos para o aplicativo funcionar bem, mas não prometemos que ele vá estar no ar o tempo todo
 nem sem erros. Podemos mudar, melhorar ou tirar funções. Se formos encerrar o ÒPURA Pro, avisamos
-com pelo menos **[30] dias** de antecedência para você pedir uma cópia dos seus dados.
+com pelo menos **30 dias** de antecedência para você pedir uma cópia dos seus dados.
 
 ## 8. Seus dados são seus
 
@@ -85,7 +86,7 @@ ou de indisponibilidade temporária do serviço gratuito.]
 
 Você pode encerrar a conta quando quiser, no próprio aplicativo: **Ajustes › Minha conta › Excluir
 minha conta**. A conta e tudo o que está nela são apagados na hora, sem volta; antes, se quiser, use
-**Baixar meus dados** para guardar uma cópia. Também dá para pedir pelo **[e-mail de contato]**.
+**Baixar meus dados** para guardar uma cópia. Também dá para pedir pelo **privacidade@alpaconstrutora.com.br**.
 
 ## 11. Mudanças nestes Termos
 
@@ -94,7 +95,7 @@ usando depois disso significa concordar com a nova versão.
 
 ## 12. Lei e foro
 
-Estes Termos seguem as leis do Brasil. Fica eleito o foro de **[comarca]**, sem prejuízo do foro do
+Estes Termos seguem as leis do Brasil. Fica eleito o foro da comarca de **Cambuí – MG**, sem prejuízo do foro do
 seu domicílio quando a lei de defesa do consumidor se aplicar.
 
-Contato: **[e-mail de contato]**.
+Contato: **privacidade@alpaconstrutora.com.br**.

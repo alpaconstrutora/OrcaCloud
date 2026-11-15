@@ -4,7 +4,10 @@
  * não se edita nem se apaga). Puro: os indicadores que a versão grava e a
  * comparação entre duas versões. Testes: __tests__/imovibVersoes.test.ts.
  */
-import type { ImovibStudy } from '../types';
+import type { ImovibStudy, ImovibRisk, ImovibScenario, ImovibLandChecklistItem } from '../types';
+import type { DadosDoRelatorio } from './imovibRelatorio';
+import type { ImovibComparable } from './imovibMercado';
+import type { ImovibPartner } from './imovibSocios';
 import { computeImovibMath } from './imovibMotor';
 import { calcularIndicadores } from './imovibIndicadores';
 import { memorialDePremissas } from './imovibMemorial';
@@ -104,6 +107,39 @@ const ESTRUTURA: { id: string; rotulo: string; chave: (s: ImovibStudy) => string
     { id: 'unit_instances', rotulo: 'Espelho de vendas', chave: s => JSON.stringify(semDatas(ordenado(s.unit_instances))), resumo: s => `${(s.unit_instances ?? []).length} unidade(s)` },
     { id: 'funding_sources', rotulo: 'Outras fontes de capital', chave: s => JSON.stringify(semDatas(ordenado(s.funding_sources))), resumo: s => `${(s.funding_sources ?? []).length} fonte(s)` },
 ];
+
+/**
+ * O snapshot gravado por `imovibService.congelarVersao`: o estudo carregado, os cenários e,
+ * desde 15/11/2026, as listas do relatório completo (versões anteriores não têm `relatorio`).
+ */
+export type SnapshotDaVersao = ImovibStudy & {
+    cenarios?: ImovibScenario[];
+    relatorio?: {
+        comparaveis?: ImovibComparable[];
+        riscos?: ImovibRisk[];
+        dueDiligence?: ImovibLandChecklistItem[];
+        socios?: ImovibPartner[];
+    };
+};
+
+/**
+ * Os dados do relatório completo de uma versão (Fase 1 do plano
+ * docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md): o estudo sem as listas
+ * penduradas no snapshot, as listas da versão e a data da versão como data do relatório.
+ * Versão sem `relatorio` (anterior a 15/11) sai com as listas vazias: cada seção diz que não há dado.
+ */
+export function dadosDoRelatorioDaVersao(snapshot: SnapshotDaVersao, versao: Pick<ImovibStudyVersion, 'created_at'>): DadosDoRelatorio {
+    const { cenarios, relatorio, ...study } = snapshot;
+    return {
+        study: study as ImovibStudy,
+        comparaveis: relatorio?.comparaveis ?? [],
+        riscos: relatorio?.riscos ?? [],
+        cenarios: cenarios ?? [],
+        dueDiligence: relatorio?.dueDiligence ?? [],
+        socios: relatorio?.socios ?? [],
+        hoje: versao.created_at.slice(0, 10),
+    };
+}
 
 /** Versão antiga não guardava `semExposicao`: exposição máxima zero quer dizer o mesmo. */
 export const semExposicaoDa = (r: ResultadosDaVersao): boolean => r.semExposicao ?? r.exposicaoMaxima <= 0;

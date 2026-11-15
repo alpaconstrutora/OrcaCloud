@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { History, AlertCircle, Loader2 } from 'lucide-react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { resultadosDoEstudo, diferencaEntreVersoes, type ImovibStudyVersion, type LadoDaComparacao } from '../utils/imovibVersoes';
+import { resultadosDoEstudo, diferencaEntreVersoes, dadosDoRelatorioDaVersao, type ImovibStudyVersion, type LadoDaComparacao, type SnapshotDaVersao } from '../utils/imovibVersoes';
+import { nomeDeArquivo } from '../utils/nomeDeArquivo';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
+import ActionIconButton from './ui/ActionIconButton';
 
 interface Props {
     study: ImovibStudy;
@@ -64,6 +66,27 @@ const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
         return () => { vivo = false; };
     }, [ladoA, ladoB, snapshots]);
 
+    // Relatório completo da versão (plano 2026-11-15, Fase 1): os dados vêm só do snapshot,
+    // então o PDF é o do estudo no instante em que foi congelado.
+    const [gerando, setGerando] = useState<string | null>(null);
+    const baixarRelatorio = async (v: ImovibStudyVersion) => {
+        if (gerando) return;
+        setGerando(v.id);
+        try {
+            const [snapshot, { secoesDoRelatorio }, { pdfDoRelatorio }] = await Promise.all([
+                snapshots[v.id] ? Promise.resolve(snapshots[v.id]) : imovibService.snapshotDaVersao(v.id),
+                import('../utils/imovibRelatorio'),
+                import('../utils/imovibRelatorioPdf'),
+            ]);
+            const pdf = pdfDoRelatorio(secoesDoRelatorio(dadosDoRelatorioDaVersao(snapshot as SnapshotDaVersao, v)), `${study.name} — ${v.label}`);
+            pdf.save(`Relatorio_${nomeDeArquivo(study.name)}_${nomeDeArquivo(v.label)}.pdf`);
+        } catch (e) {
+            setErro(`Não foi possível gerar o relatório da versão: ${(e as Error).message}`);
+        } finally {
+            setGerando(null);
+        }
+    };
+
     const atual = useMemo<LadoDaComparacao>(() => ({ snapshot: study, results: resultadosDoEstudo(study) }), [study]);
     const lado = (id: string): LadoDaComparacao | null => {
         if (id === ATUAL) return atual;
@@ -99,6 +122,17 @@ const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
                     loading={carregando}
                     dense
                     bare
+                    actions={{
+                        width: 90,
+                        render: v => (
+                            <ActionIconButton
+                                kind="download"
+                                title={gerando === v.id ? 'Gerando o relatório…' : 'Relatório da versão (PDF)'}
+                                aria-label="Relatório da versão (PDF)"
+                                onClick={() => void baixarRelatorio(v)}
+                            />
+                        ),
+                    }}
                     renderCell={(k, v) => {
                         switch (k) {
                             case 'label': return <span className="text-sm text-gray-800">{v.label}</span>;

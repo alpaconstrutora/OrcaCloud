@@ -10,6 +10,10 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 const svc = vi.hoisted(() => ({ listarVersoes: vi.fn(), snapshotDaVersao: vi.fn(), congelarVersao: vi.fn() }));
 vi.mock('../../services/imovibService', () => ({ imovibService: svc }));
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
+const pdf = vi.hoisted(() => ({ secoes: null as unknown, save: vi.fn() }));
+vi.mock('../../utils/imovibRelatorioPdf', () => ({
+    pdfDoRelatorio: (secoes: unknown) => { pdf.secoes = secoes; return { save: pdf.save }; },
+}));
 
 import ImovibVersoesTab from '../../components/ImovibVersoesTab';
 import ImovibCongelarVersao from '../../components/ImovibCongelarVersao';
@@ -63,6 +67,24 @@ describe('10.2 — aba Versões', () => {
         render(comEdicao(<ImovibVersoesTab study={estudo() as never} />));
         await screen.findAllByText('Comitê de outubro');
         expect(screen.queryByRole('button', { name: /excluir|apagar|editar/i })).toBeNull();
+    });
+});
+
+// Fase 1 do plano docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md.
+describe('relatório da versão', () => {
+    it('baixa o relatório completo da versão, com os dados e a data da versão', async () => {
+        const user = userEvent.setup();
+        const v = versao('v1', 'Comitê de outubro');
+        const risco = { id: 'r1', study_id: 'estudo-teste', category: 'legal', description: 'Matrícula com ônus', probability: 3, impact: 4, status: 'aberto', sort_order: 0 };
+        svc.listarVersoes.mockResolvedValue([v.linha]);
+        svc.snapshotDaVersao.mockResolvedValue({ ...v.snapshot, cenarios: [], relatorio: { riscos: [risco] } });
+        pdf.save.mockReset();
+        render(comEdicao(<ImovibVersoesTab study={estudo({ discount_rate: 15 }) as never} />));
+        await user.click(await screen.findByRole('button', { name: 'Relatório da versão (PDF)' }));
+        await vi.waitFor(() => expect(pdf.save).toHaveBeenCalledWith('Relatorio_Estudo_teste_Comitê_de_outubro.pdf'));
+        const secoes = pdf.secoes as { id: string; paragrafos: string[]; tabelas: { linhas: string[][] }[] }[];
+        expect(secoes.find(x => x.id === 'capa')!.paragrafos.join(' ')).toContain('10/11/2026');
+        expect(JSON.stringify(secoes.find(x => x.id === 'riscos')!.tabelas)).toContain('Matrícula com ônus');
     });
 });
 

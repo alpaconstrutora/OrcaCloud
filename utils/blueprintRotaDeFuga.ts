@@ -53,10 +53,29 @@ function visivel(s: Space, a: Point, b: Point): boolean {
   return true;
 }
 
+/**
+ * A visibilidade entre dois VÉRTICES do contorno só depende do ambiente — guardada por ambiente (PA9a do prédio
+ * automático, 14/11/2026). O caminho de cada par de portas refazia o grafo de visibilidade inteiro: na circulação de um
+ * prédio (dezenas de portas e de vértices) a rota de fuga de 900 ambientes levava 16 s, 15 deles aqui. O mesmo
+ * resultado: `visivel` é simétrica (as mesmas amostras nos dois sentidos) e o Dijkstra abaixo não muda.
+ */
+const VISIBILIDADE_ENTRE_VERTICES = new WeakMap<Space, Map<number, boolean>>();
+
 /** O caminho mais curto por DENTRO do ambiente: reto se cabe, senão pelos vértices do contorno (grafo de visibilidade). */
 export function caminhoDentro(s: Space, a: Point, b: Point): { mm: number; pontos: Point[] } | null {
   if (visivel(s, a, b)) return { mm: d2(a, b), pontos: [a, b] };
   const nos = [a, b, ...s.ring, ...s.holes.flat()];
+  let guardadas = VISIBILIDADE_ENTRE_VERTICES.get(s);
+  if (!guardadas) VISIBILIDADE_ENTRE_VERTICES.set(s, (guardadas = new Map()));
+  const N = nos.length;
+  /** Os dois primeiros nós são as pontas da consulta; dali em diante, os vértices do ambiente (a mesma ordem sempre). */
+  const ve = (i: number, j: number): boolean => {
+    if (i < 2 || j < 2) return visivel(s, nos[i], nos[j]);
+    const k = Math.min(i, j) * N + Math.max(i, j);
+    let r = guardadas!.get(k);
+    if (r === undefined) guardadas!.set(k, (r = visivel(s, nos[i], nos[j])));
+    return r;
+  };
   const dist = nos.map(() => Infinity);
   const pai = nos.map(() => -1);
   const feito = nos.map(() => false);
@@ -69,7 +88,7 @@ export function caminhoDentro(s: Space, a: Point, b: Point): { mm: number; ponto
     for (let v = 0; v < nos.length; v++) {
       if (feito[v] || v === u) continue;
       const nd = dist[u] + d2(nos[u], nos[v]);
-      if (nd < dist[v] && visivel(s, nos[u], nos[v])) {
+      if (nd < dist[v] && ve(u, v)) {
         dist[v] = nd;
         pai[v] = u;
       }

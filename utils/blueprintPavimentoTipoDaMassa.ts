@@ -522,6 +522,10 @@ export function montarPavimentoTipo(model: BlueprintModel, b: Bloco, d: DivisaoD
   const copias: Command[] = [];
   for (let i = iTipo + 1; i < pisos.length; i++) copias.push({ type: 'AddLevel', name: `${b.nome} · ${i + 1}º pav`.slice(0, 60), elevationMm: pisos[i], defaultHeightMm: b.peDireitoMm, tipoDeId: tipo, uid: uidDeterministico(`massa:pavimento-tipo:${b.uid}:copia:${i + 1}`) });
   aplicar(copias);
+  // A escada do tipo sobe até o último andar (PA9 do prédio automático, 14/11/2026): sem `ateLevelId` ela vai só ao
+  // pavimento de cima — do 4º andar em diante não havia escada, e a rota de fuga dali não chegava à saída.
+  const ultimaCopia = m.levels.find((l) => l.uid === uidDeterministico(`massa:pavimento-tipo:${b.uid}:copia:${pisos.length}`));
+  if (copias.length > 1 && ultimaCopia) aplicar(m.stairs.filter((e) => e.levelId === tipo).map((e): Command => ({ type: 'SetEscadaProps', escadaId: e.id, ateLevelId: ultimaCopia.id })));
   if (iTipo > 0) avisos.push(`O ${iTipo === 1 ? '1º pavimento (térreo)' : 'pavimento abaixo do tipo'} ficou para o projetista: portaria, lazer, pilotis.`);
 
   // Áreas desenhadas.

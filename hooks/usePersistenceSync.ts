@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { projectService } from '../services/projectService';
 import { BudgetEntry, ProjectSettings } from '../types';
 import { INITIAL_BUDGET, INITIAL_PROJECT_SETTINGS } from '../constants';
-import { marcarGravacao, precisaGravar, registrarPersistido, zerarUltimaGravacao } from '../utils/projetoPersistido';
+import { marcarErroGravacao, marcarGravacao, marcarGravando, marcarPendente, precisaGravar, registrarPersistido, zerarUltimaGravacao } from '../utils/projetoPersistido';
 
 interface UsePersistenceSyncProps {
   projectSettings: ProjectSettings | null;
@@ -179,6 +179,8 @@ export const usePersistenceSync = ({
     const savedProjectId = projectId;
     const capturedBudget = budget;
     const capturedSettings = projectSettings;
+    // Topo da tela: "Alterações não salvas" enquanto o debounce corre.
+    if (precisaGravar(savedProjectId, capturedSettings, capturedBudget)) marcarPendente();
 
     const buildSettingsToSave = (settings: ProjectSettings, bgt: BudgetEntry[]) => {
       if (settings.activeVersionId && (settings.versions?.length ?? 0) > 0) {
@@ -207,9 +209,16 @@ export const usePersistenceSync = ({
     // "quem grava por último vence", podia atropelar a edição de um colega.
     const gravarSeMudou = async () => {
       if (!precisaGravar(savedProjectId, capturedSettings, capturedBudget)) return;
-      await doSave(savedProjectId, capturedSettings, capturedBudget);
+      marcarGravando();
+      try {
+        await doSave(savedProjectId, capturedSettings, capturedBudget);
+      } catch (erro) {
+        marcarErroGravacao();
+        throw erro;
+      }
       registrarPersistido(savedProjectId, capturedSettings, capturedBudget);
-      marcarGravacao();
+      // Trocou de projeto durante a gravação: o topo já é do projeto novo — não mexe.
+      if (currentProjectIdRef.current === savedProjectId) marcarGravacao();
     };
 
     const timeoutId = setTimeout(async () => {

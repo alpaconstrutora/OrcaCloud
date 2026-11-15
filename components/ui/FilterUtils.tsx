@@ -439,6 +439,8 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
     <div className="relative" ref={panelRef}>
       <button
         onClick={() => state.setShowPanel(v => !v)}
+        aria-expanded={state.showPanel}
+        aria-haspopup="dialog"
         className={
           triggerSize === 'padrão'
             ? `flex items-center gap-2 px-4 py-4 rounded-[1.25rem] border transition-all active:scale-95 shadow-sm text-sm font-semibold whitespace-nowrap ${
@@ -469,7 +471,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
           className="bg-white rounded-xl border border-gray-200 shadow-lg p-4 z-[9000] min-w-[490px]"
         >
           <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Filtros</span>
+            <span className="text-sm font-semibold text-gray-700">Filtros</span>
             <div className="relative">
               <button
                 onClick={() => setShowSaved(v => !v)}
@@ -601,13 +603,16 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
 
           <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
             {savingName === null ? (
-              <button
-                onClick={() => setSavingName('')}
-                disabled={state.rules.length === 0}
-                className="text-xs font-semibold text-gray-500 hover:text-gray-700 disabled:opacity-40 disabled:cursor-not-allowed"
-              >
-                Salvar como...
-              </button>
+              // Desligado diz o porquê: o title fica no span (botão desabilitado não mostra o seu).
+              <span title={state.rules.length === 0 ? 'Adicione um filtro para poder salvá-lo' : undefined}>
+                <button
+                  onClick={() => setSavingName('')}
+                  disabled={state.rules.length === 0}
+                  className="text-xs font-semibold text-gray-600 hover:text-gray-800 disabled:text-gray-500 disabled:cursor-not-allowed"
+                >
+                  Salvar como…
+                </button>
+              </span>
             ) : (
               <div className="flex items-center gap-1.5">
                 <input

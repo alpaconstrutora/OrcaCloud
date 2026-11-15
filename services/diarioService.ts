@@ -56,26 +56,44 @@ function toJournalEntryPair(row: JournalEntry): JournalEntryPair {
   };
 }
 
+/** Linhas por requisição — o teto do PostgREST (guia §6.7). */
+const PAGINA = 1000;
+
+/**
+ * Todos os lançamentos do recorte, em páginas de 1000.
+ *
+ * Até 14/11/2026 havia `.limit(200)`: a tela mostrava "Total Débitos/Créditos"
+ * somando só as 200 primeiras linhas, sem avisar (guia §6.7: "nunca .limit(N)
+ * fixo"). Ordem com desempate por `journal_entry_id` — sem ele as páginas podem
+ * repetir ou pular linhas.
+ */
 export async function listJournalEntries(
   organizationId: string | null,
   opts?: { dateFrom?: string; dateTo?: string; projectId?: string }
 ): Promise<JournalEntryPair[]> {
-  let q = supabase
-    .from('vw_journal_entries')
-    .select('*')
-    .order('entry_date', { ascending: false })
-    .order('created_at', { ascending: false })
-    .limit(200);
+  const todas: JournalEntry[] = [];
+  for (let desde = 0; ; desde += PAGINA) {
+    let q = supabase
+      .from('vw_journal_entries')
+      .select('*')
+      .order('entry_date', { ascending: false })
+      .order('created_at', { ascending: false })
+      .order('journal_entry_id', { ascending: true })
+      .range(desde, desde + PAGINA - 1);
 
-  if (organizationId) q = q.eq('organization_id', organizationId);
+    if (organizationId) q = q.eq('organization_id', organizationId);
 
-  if (opts?.dateFrom) q = q.gte('entry_date', opts.dateFrom);
-  if (opts?.dateTo)   q = q.lte('entry_date', opts.dateTo);
-  if (opts?.projectId) q = q.eq('project_id', opts.projectId);
+    if (opts?.dateFrom) q = q.gte('entry_date', opts.dateFrom);
+    if (opts?.dateTo)   q = q.lte('entry_date', opts.dateTo);
+    if (opts?.projectId) q = q.eq('project_id', opts.projectId);
 
-  const { data, error } = await q;
-  if (error) throw new Error(error.message);
-  return ((data ?? []) as JournalEntry[]).map(toJournalEntryPair);
+    const { data, error } = await q;
+    if (error) throw new Error(error.message);
+    const pagina = (data ?? []) as JournalEntry[];
+    todas.push(...pagina);
+    if (pagina.length < PAGINA) break;
+  }
+  return todas.map(toJournalEntryPair);
 }
 
 export async function getJournalEntryByReference(

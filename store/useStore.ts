@@ -110,7 +110,7 @@ interface ProjectState {
      * TODOS os projetos, das quatro classificações, sem projetos de sistema.
      *
      * Use só quando a tela é explicitamente sobre orçamento/planejamento/diário
-     * (ex: ProjectList com `classificationFilter`, PlanningDashboard,
+     * (ex: ProjectList com `classificationFilter`,
      * DiaryDashboard, seletor de "vincular orçamento"). Para qualquer tela que
      * fale em "obra", use `projects`.
      */

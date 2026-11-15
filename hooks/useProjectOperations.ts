@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { marcarGravacao, registrarPersistido, zerarUltimaGravacao } from '../utils/projetoPersistido';
+import { marcarErroGravacao, marcarGravacao, marcarGravando, registrarPersistido, zerarUltimaGravacao } from '../utils/projetoPersistido';
 import { projectService } from '../services/projectService';
 import { resolveProjectBudget } from '../services/budgetResolver';
 import { contractService } from '../services/contractService';
@@ -155,6 +155,7 @@ export const useProjectOperations = ({
     setIsSaving(true);
     const b = explicitBudget ?? budget;
     const s = explicitSettings ?? projectSettings;
+    marcarGravando();
     try {
       const savedProject = await projectService.saveProject({
         id: projectId || undefined,
@@ -172,6 +173,7 @@ export const useProjectOperations = ({
       }
     } catch (error: unknown) {
       console.error("Erro ao salvar obra:", error);
+      marcarErroGravacao();
       const message = error instanceof Error ? error.message : "Erro desconhecido";
       if (!explicitBudget) showToast("Erro ao salvar obra: " + message, 'error');
       throw error;

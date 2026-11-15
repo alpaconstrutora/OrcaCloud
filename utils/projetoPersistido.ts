@@ -44,31 +44,47 @@ export function precisaGravar(id: string, settings: ProjectSettings | null | und
 /** Só para testes. */
 export function limparPersistidos(): void {
     persistido.clear();
-    ultimaGravacao = null;
+    situacao = SITUACAO_INICIAL;
 }
 
-// ── Hora da última gravação do projeto aberto (2ª crítica, 2026-11-14): o salvamento
-// automático era invisível e o "Salvar" do topo não dizia se faltava algo — o usuário clicava
-// "por garantia". O topo mostra "Salvo às HH:MM" lendo daqui (useSyncExternalStore).
-let ultimaGravacao: Date | null = null;
+// ── Situação da gravação do projeto aberto, para o topo da tela (2ª crítica, 2026-11-14): o
+// salvamento automático era invisível e o "Salvar" do topo não dizia se faltava algo — o
+// usuário clicava "por garantia". Na 1ª versão só aparecia "Salvo às HH:MM" DEPOIS de uma
+// gravação; quem só abria e olhava não via nada (relato de 14/11). Agora há sempre um estado:
+//   em_dia (+ última hora, se já gravou nesta sessão) · pendente (mudou, aguardando os 2 s) ·
+//   gravando · erro (a última tentativa falhou).
+export type EstadoGravacao = 'em_dia' | 'pendente' | 'gravando' | 'erro';
+export interface SituacaoGravacao { estado: EstadoGravacao; ultima: Date | null }
+const SITUACAO_INICIAL: SituacaoGravacao = { estado: 'em_dia', ultima: null };
+let situacao: SituacaoGravacao = SITUACAO_INICIAL;
 const ouvintes = new Set<() => void>();
-const avisar = () => ouvintes.forEach(f => f());
 
+// Objeto novo só quando muda: useSyncExternalStore compara por referência.
+function definir(parcial: Partial<SituacaoGravacao>): void {
+    const novo = { ...situacao, ...parcial };
+    if (novo.estado === situacao.estado && novo.ultima === situacao.ultima) return;
+    situacao = novo;
+    ouvintes.forEach(f => f());
+}
+
+/** Há alteração ainda não gravada (o salvamento automático vai gravar em 2 s). */
+export function marcarPendente(): void { definir({ estado: 'pendente' }); }
+/** Gravação em andamento. */
+export function marcarGravando(): void { definir({ estado: 'gravando' }); }
 /** Gravou de verdade (salvamento automático ou o botão Salvar). */
-export function marcarGravacao(): void {
-    ultimaGravacao = new Date();
-    avisar();
-}
-/** Abriu outro projeto: ainda não gravou nada nesta sessão. */
-export function zerarUltimaGravacao(): void {
-    if (ultimaGravacao === null) return;
-    ultimaGravacao = null;
-    avisar();
-}
+export function marcarGravacao(): void { definir({ estado: 'em_dia', ultima: new Date() }); }
+/** A tentativa de gravar falhou: o que está na tela NÃO está no banco. */
+export function marcarErroGravacao(): void { definir({ estado: 'erro' }); }
+/** Abriu (ou recarregou) um projeto: está em dia com o banco e nada foi gravado nesta sessão. */
+export function zerarUltimaGravacao(): void { definir({ estado: 'em_dia', ultima: null }); }
+
 export function assinarGravacoes(cb: () => void): () => void {
     ouvintes.add(cb);
     return () => { ouvintes.delete(cb); };
 }
+export function obterSituacaoGravacao(): SituacaoGravacao {
+    return situacao;
+}
 export function obterUltimaGravacao(): Date | null {
-    return ultimaGravacao;
+    return situacao.ultima;
 }

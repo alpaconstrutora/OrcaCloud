@@ -1,6 +1,6 @@
 import React from 'react';
 import { pedirAberturaDoChamado } from '../utils/warrantyNavegacao';
-import { Plus, FileSpreadsheet, FileText } from 'lucide-react';
+import { FileText } from 'lucide-react';
 import Button from './ui/Button';
 import { ProfileGroup, UserProfile, ProjectSettings, BudgetEntry, Organization, Contract, Client } from '../types';
 import { Session } from '@supabase/supabase-js';
@@ -28,8 +28,6 @@ const OrganizationCreateSheet = React.lazy(() => import('./OrganizationCreateShe
 const BudgetEditor          = React.lazy(() => import('./BudgetEditor'));
 const ParametricEstimator   = React.lazy(() => import('./ParametricEstimator'));
 const FinancialScheduleL    = React.lazy(() => import('./FinancialSchedule').then(m => ({ default: m.FinancialSchedule })));
-const PlanningDashboard     = React.lazy(() => import('./PlanningDashboard'));
-const ExcelImportModal      = React.lazy(() => import('./ExcelImportModal'));
 const ProjectDiaryManager   = React.lazy(() => import('./ProjectDiaryManager'));
 const DiaryReportViewer     = React.lazy(() => import('./DiaryReportViewer'));
 const DiaryProjectsList     = React.lazy(() => import('./DiaryProjectsList'));
@@ -184,8 +182,6 @@ export interface AppRouterProps {
   setIsCreatingQuotation: (val: boolean) => void;
   isCreatingContract: boolean;
   setIsCreatingContract: (val: boolean) => void;
-  isImportModalOpenPlanning: boolean;
-  setIsImportModalOpenPlanning: (val: boolean) => void;
   isCreatingImovibStudy: boolean;
   setIsCreatingImovibStudy: (val: boolean) => void;
   editingImovibStudyId: string | null;
@@ -228,7 +224,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     selectedContractId, setSelectedContractId, editingContract, setEditingContract,
     isCreatingOrder, setIsCreatingOrder, ordersVersion, isCreatingQuotation, setIsCreatingQuotation,
     isCreatingContract, setIsCreatingContract,
-    isImportModalOpenPlanning, setIsImportModalOpenPlanning,
     isCreatingImovibStudy, setIsCreatingImovibStudy,
     editingImovibStudyId, setEditingImovibStudyId,
     viewingImovibStudyId, setViewingImovibStudyId,
@@ -246,7 +241,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   const typedProjects = projects.filter(p => p.id).map(p => p as any as (typeof p & { id: string }));
   // Lista completa (obra + orçamento + planejamento + diário). Passe esta APENAS
   // para telas que são explicitamente sobre os outros tipos — ProjectList (que
-  // filtra por `classificationFilter`), PlanningDashboard, DiaryProjectsList,
+  // filtra por `classificationFilter`), DiaryProjectsList,
   // LaborDashboard, ProjectOverview. Todo o resto usa `typedProjects` (só obras).
   const typedAllProjects = allProjects.filter(p => p.id).map(p => p as any as (typeof p & { id: string }));
 
@@ -772,53 +767,23 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       );
 
     case 'eng-planejamento':
+      // Título, subtítulo, "Novo planejamento" e cards vêm do próprio ProjectList (item 4 da
+      // crítica de 2026-11-14): o cabeçalho que morava aqui duplicava o dele, com uma frase de
+      // marketing em gray-400 (2,5:1) no lugar do subtítulo que diz o que a linha faz.
       return (
-        <div className="space-y-6">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Planejamento</h1>
-              <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie seus planejamentos com infraestrutura de alta performance.</p>
-            </div>
-            {/* Variante compacta do CTA primário (ui_ux_guia_unificado.md §17) — ação de
-                criação é o fluxo principal desta tela, então fica isolada junto ao título,
-                mas no tamanho compacto (h-9), não mais nos 50px da escala antiga. */}
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsImportModalOpenPlanning(true)}
-                className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[6px] hover:bg-emerald-600 hover:text-white font-medium text-[13px] transition-all active:scale-95"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                Importar Excel
-              </button>
-              <button
-                onClick={() => handleNewProject('PLANEJAMENTO')}
-                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-              >
-                <Plus className="w-[15px] h-[15px]" />
-                Novo planejamento
-              </button>
-            </div>
-          </div>
-          <PlanningDashboard projects={typedAllProjects} />
-          <ProjectList
-            projects={typedAllProjects}
-            onLoadProject={handleLoadProject}
-            onEditProject={handleLoadAndEditProject}
-            onNewProject={handleNewProject}
-            onDuplicateProject={handleDuplicateProject}
-            onImportProject={handleImportProject}
-            onExportProject={handleExportProject}
-            onRowClick={(id) => handleLoadProject(id, 'planning-view')}
-            organizationId={activeOrganizationId || undefined}
-            classificationFilter="PLANEJAMENTO"
-            hideHeader={true}
-          />
-          <ExcelImportModal
-            isOpen={isImportModalOpenPlanning}
-            onClose={() => setIsImportModalOpenPlanning(false)}
-            onImport={(data) => { handleImportProject(data); setIsImportModalOpenPlanning(false); }}
-          />
-        </div>
+        <ProjectList
+          projects={typedAllProjects}
+          onLoadProject={handleLoadProject}
+          onEditProject={handleLoadAndEditProject}
+          onNewProject={handleNewProject}
+          onDuplicateProject={handleDuplicateProject}
+          onImportProject={handleImportProject}
+          onExportProject={handleExportProject}
+          onRowClick={(id) => handleLoadProject(id, 'planning-view')}
+          organizationId={activeOrganizationId || undefined}
+          classificationFilter="PLANEJAMENTO"
+          isExternalLoading={projectsLoading}
+        />
       );
 
     case 'project-diary':
@@ -1034,13 +999,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     // ── Controladoria (unificado) ──────────────────────────────────────────────
     case 'controladoria':
       return (
-        <ControladoriaModule
-          organizationId={activeOrganizationId || ''}
-          organizations={organizations}
-          userEmail={session?.user?.email}
-          defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'}
-          onOrgChange={(id) => setActiveOrganizationId(id)}
-        />
+        /* A organização vem do topo dentro do módulo (useOrgContext, REGRA #5). */
+        <ControladoriaModule defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'} />
       );
 
     case 'fiscal-nfe':
@@ -1599,13 +1559,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'financial-dre':
     case 'financial-cashflow':
       return (
-        <ControladoriaModule
-          organizationId={activeOrganizationId || ''}
-          organizations={organizations}
-          userEmail={session?.user?.email}
-          defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'}
-          onOrgChange={(id) => setActiveOrganizationId(id)}
-        />
+        /* A organização vem do topo dentro do módulo (useOrgContext, REGRA #5). */
+        <ControladoriaModule defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'} />
       );
 
     // ── Default ────────────────────────────────────────────────────────────────

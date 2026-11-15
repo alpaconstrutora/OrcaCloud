@@ -640,14 +640,20 @@ export interface DRESummary {
 
 // Comparativo de resultado por obra (fn_dre_projects_summary)
 export interface DREProjectSummary {
-    project_id: string;
+    /** null = linha "Sem obra" (lançamento sem projeto, ou em projeto que não é obra). */
+    project_id: string | null;
     project_name: string;
+    /** Receita Bruta da obra. */
     receita: number;
+    /** Custos e despesas = receita − margem (deduções, custos, despesas, financeiro, impostos). */
     custo: number;
+    /** Resultado Líquido da obra — mesma regra da linha '= Resultado Líquido' da DRE. */
     margem: number;
     receita_prev: number;
     custo_prev: number;
-    margem_pct: number | null;   // calculado no front (evita div/0)
+    /** Receita Bruta + Deduções — base da margem %. */
+    receita_liquida: number;
+    margem_pct: number | null;   // calculado no front sobre receita_liquida (evita div/0)
 }
 
 // ────────────────────────────────────────────────────────────

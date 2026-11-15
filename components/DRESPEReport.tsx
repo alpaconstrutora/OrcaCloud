@@ -1,16 +1,27 @@
 import React from 'react'
 import { financialReportService } from '../services/financialReportService'
-import type { DRESPELine, RegimeContabil } from '../types/financial'
+import type { DRESPELine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
 import { TrendingUp, TrendingDown, MoveHorizontal } from 'lucide-react'
-import Button from './ui/Button'
 import { useResizableColumns } from './ui/TableUtils'
+import { useCargaVigente } from '../hooks/useCargaVigente'
+import { motivoPeriodoInvalido } from '../utils/periodoControladoria'
+import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
+import { BarraDeEscopo } from './controladoria/BarraDeEscopo'
+import type { EscopoControladoria } from './controladoria/escopo'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-const fmtPct = (v: number | null) => v === null ? '—' : `${v.toFixed(1)}%`
+const fmtPct = (v: number | null) => v === null ? '—' : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
+
+/** Toda SPE com movimento, mas tudo zero? Em Caixa isso quase sempre é "nada conciliado". */
+function semResultadoNoPeriodo(data: DRESPELine[]): boolean {
+    return data.length > 0 && data.every(spe =>
+        COLS.every(c => (spe[c.key] as number) === 0))
+}
 
 interface Props {
     organizationId: string | null
+    escopo: EscopoControladoria
 }
 
 const COLS: { label: string; key: keyof DRESPELine; help?: string }[] = [
@@ -32,29 +43,38 @@ const PCT_MAP: Partial<Record<keyof DRESPELine, keyof DRESPELine>> = {
     resultado_liquido:  'margem_liquida_pct',
 }
 
-const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
+const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
     const { showToast } = useToast()
-    const now = new Date()
-    const [dateFrom, setDateFrom] = React.useState(`${now.getFullYear()}-01-01`)
-    const [dateTo,   setDateTo]   = React.useState(`${now.getFullYear()}-12-31`)
-    const [regime, setRegime]     = React.useState<RegimeContabil>('CAIXA')
+    const { de: dateFrom, ate: dateTo, regime } = escopo
     const [data, setData]         = React.useState<DRESPELine[]>([])
     const [loading, setLoading]   = React.useState(false)
+    const [falhou, setFalhou]     = React.useState(false)
     // §6.1 — colunas dinâmicas (1 por SPE); largura padrão 180px, ajustável por empresa.
     const cols = useResizableColumns({}, 'drespeReportColWidths', { min: 140, max: 400 })
+    const novaCarga = useCargaVigente()
+    const motivoPeriodo = motivoPeriodoInvalido(dateFrom, dateTo)
 
     const load = React.useCallback(async () => {
+        const vigente = novaCarga()
+        if (motivoPeriodoInvalido(dateFrom, dateTo)) {
+            setData([]); setFalhou(false); setLoading(false)
+            return
+        }
         setLoading(true)
+        setFalhou(false)
         try {
             const rows = await financialReportService.getDRESPESummary(organizationId, dateFrom, dateTo, regime)
-            setData(rows)
+            if (vigente()) setData(rows)
         } catch (e: unknown) {
+            if (!vigente()) return
+            setData([])
+            setFalhou(true)
             showToast('Erro ao carregar DRE por SPE', 'error')
             console.error('[DRE SPE]', e)
         } finally {
-            setLoading(false)
+            if (vigente()) setLoading(false)
         }
-    }, [organizationId, dateFrom, dateTo, regime, showToast])
+    }, [novaCarga, organizationId, dateFrom, dateTo, regime, showToast])
 
     React.useEffect(() => { load() }, [load])
 
@@ -62,48 +82,41 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
     const isDeduction = (col: keyof DRESPELine) => String(col).startsWith('deducoes') || String(col).startsWith('custos') || String(col).startsWith('despesas') || String(col).startsWith('impostos') || String(col).startsWith('resultado_financeiro')
 
     return (
-        <div className="space-y-4 px-1">
-            {/* Filtros */}
-            <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm">
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">De</label>
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Até</label>
-                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Regime</label>
-                    <select value={regime} onChange={e => setRegime(e.target.value as RegimeContabil)}
-                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="CAIXA">Regime de Caixa</option>
-                        <option value="COMPETENCIA">Regime de Competência</option>
-                    </select>
-                </div>
-                <Button variant="primary" onClick={load} disabled={loading}>
-                    {loading ? 'Carregando…' : 'Atualizar'}
-                </Button>
+        <div className="space-y-6">
+            <BarraDeEscopo escopo={escopo}
+                aplica={{ periodo: true, regime: null, obra: 'A DRE por SPE já separa o resultado por empresa: o filtro de obra não se aplica.' }}>
                 {data.length > 0 && (
-                    <span className="ml-auto text-xs text-slate-400">
+                    <span className="text-xs text-gray-600 pb-2.5">
                         {data.length} empresa{data.length !== 1 ? 's' : ''} com movimentação
                     </span>
                 )}
-            </div>
+            </BarraDeEscopo>
 
             {/* Tabela comparativa */}
-            {loading ? (
+            {motivoPeriodo ? (
+                <PeriodoInvalido motivo={motivoPeriodo} />
+            ) : loading ? (
                 <div className="flex items-center justify-center py-20">
                     <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
+            ) : falhou ? (
+                <FalhaDeCarga oQue="a DRE por SPE" onRetry={load} />
             ) : data.length === 0 ? (
-                <div className="text-center py-20 text-slate-400 text-sm">
+                <div className="text-center py-20 text-slate-600 text-sm">
                     Nenhuma empresa com movimentação financeira vinculada a obras no período.
-                    <p className="mt-2 text-xs">Certifique-se de que os projetos têm uma empresa/SPE associada.</p>
+                    <p className="mt-2 text-xs text-slate-500">Certifique-se de que os projetos têm uma empresa/SPE associada.</p>
                 </div>
             ) : (
+                <>
+                {/* Explica o "tudo zero" em vez de deixar a SPE parecer errada ao lado da DRE. */}
+                {semResultadoNoPeriodo(data) && (
+                    <p role="status" className="text-sm text-gray-600 bg-white border border-gray-100 rounded-[10px] px-4 py-3">
+                        {regime === 'CAIXA'
+                            ? 'Nenhum lançamento conciliado nas obras das SPEs neste período: no regime de Caixa só entra o que já foi conciliado. Em Competência, os lançamentos contam pela data de competência.'
+                            : 'Os lançamentos das SPEs neste período não têm valor na DRE (sem categoria de resultado ou só movimento de passivo/ativo).'}
+                        {' '}A DRE geral também soma obras sem SPE e lançamentos sem obra.
+                    </p>
+                )}
                 <div className="bg-white border border-slate-200 rounded-[10px] shadow-sm overflow-hidden">
                     <div className="flex justify-end p-2 border-b border-slate-100">
                         <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-slate-400 hover:text-slate-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
@@ -173,6 +186,7 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
                     </table>
                     </div>
                 </div>
+                </>
             )}
         </div>
     )

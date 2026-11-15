@@ -8,7 +8,7 @@ import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 
-export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'CONFERENCIA';
+export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'EQUIPAMENTOS_DE_INCENDIO' | 'HIDRANTES' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'INCENDIO' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
@@ -24,8 +24,13 @@ export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
   ELETRODUTOS: 'Eletrodutos por quadro e a prumada dos alimentadores no shaft',
   LOUCAS: 'Louças e pontos de água no tipo (o kit de cada ambiente e os pontos de cada louça)',
   AGUA_FRIA: 'Água fria (alimentador, recalque, barrilete, coluna no shaft, hidrômetro por unidade no hall, rede das unidades)',
+  ESGOTO: 'Esgoto e ventilação (ramais, tubo de queda por grupo molhado, ventilação, desvio no térreo, coletor)',
+  PLUVIAL: 'Pluvial da cobertura (ralos, condutores na fachada, caixas de areia, saída na frente)',
+  EQUIPAMENTOS_DE_INCENDIO: 'Equipamentos de incêndio de cada andar (extintores, sinalização, iluminação de emergência, alarme)',
+  HIDRANTES: 'Hidrantes, coluna de incêndio, bomba na cobertura e registro de recalque',
   INSTALACOES_NO_TIPO: 'Instalações desenhadas no tipo vão aos andares (cópia viva)',
   PRESSAO_DA_AGUA: 'Pressão da água fria no prédio inteiro (pressurizador em cima, VRP embaixo)',
+  INCENDIO: 'Incêndio: classificação, exigências e rota de fuga em todos os andares',
   CONFERENCIA: 'Conferência (avisos da divisão, da montagem e das plantas)',
 };
 
@@ -54,6 +59,12 @@ export interface HipotesesDoPredio {
   climatizacao: boolean;
   /** PA6: a água fria — louças e pontos no tipo, hidrômetro por unidade, coluna, barrilete, recalque e a pressão. */
   agua: boolean;
+  /** PA7a: o esgoto e a ventilação — pede a água (as louças vêm com ela). */
+  esgoto: boolean;
+  /** PA7b: o pluvial da cobertura — pede a cobertura. */
+  pluvial: boolean;
+  /** PA9a: a classificação de incêndio, as exigências e a rota de fuga de todos os andares (só confere). */
+  incendio: boolean;
   /** Largura da porta de entrada do prédio, no hall, mm. */
   larguraDoAcessoMm: number;
   /** Pé-direito do pavimento da cobertura (a área técnica), mm. */
@@ -74,6 +85,9 @@ export const HIPOTESES_DO_PREDIO_PADRAO: HipotesesDoPredio = {
   eletrica: true,
   climatizacao: true,
   agua: true,
+  esgoto: true,
+  pluvial: true,
+  incendio: true,
   larguraDoAcessoMm: 1200,
   peDireitoDaCoberturaMm: 3000,
   espessuraDaLajeMm: 120,
@@ -169,6 +183,41 @@ export interface PlanoDoPredio {
       insuficientes: number;
       excessivas: number;
       naoAvaliados: number;
+    } | null;
+    /**
+     * PA7a: o esgoto — por andar (tubos de queda, pontos, UHC), o maior DN de tubo de queda, a ventilação e o coletor;
+     * `null` desligado.
+     */
+    esgoto: {
+      tubosDeQueda: number;
+      pontos: number;
+      uhcPorAndar: number;
+      dnTuboDeQuedaMm: number;
+      dnVentilacaoMm: number;
+      /** Cada tubo de queda do tipo: as UHC que ele recebe por andar, se tem bacia, e o DN (a Tabela 6 pelos andares). */
+      tubos: { uhcPorAndar: number; comBacia: boolean; dnMm: number }[];
+      coletor: { dnMm: number; declividadePct: number; porGravidade: boolean } | null;
+    } | null;
+    /** PA7b: o pluvial da cobertura — a área, a intensidade, a vazão e os condutores; `null` desligado ou sem cobertura. */
+    pluvial: { areaM2: number; intensidadeMmH: number; vazaoLMin: number; condutores: number; dnVerticalMm: number; dnHorizontalMm: number | null } | null;
+    /**
+     * PA9a: o incêndio — a classificação (divisão, grupo, altura até o último andar com unidades, área), as medidas
+     * exigidas, e a rota de fuga de cada andar (ambientes, sem rota, acima do limite, a pior distância); `null` desligado.
+     */
+    incendio: {
+      divisao: string | null;
+      grupo: string | null;
+      alturaM: number;
+      areaM2: number;
+      exigidas: string[];
+      condicionais: string[];
+      dispensadas: number;
+      limiteM: number;
+      andares: { nome: string; ambientes: number; semRota: number; naoAtendem: number; piorM: number | null }[];
+      /** PA9b: as peças lançadas no tipo, no térreo e na cobertura, por tipo de ponto (cada andar copiado repete as do tipo). */
+      equipamentos: Record<string, number> | null;
+      /** PA9c: os hidrantes (no tipo — cada andar repete —, no térreo e na cobertura), a bomba e o registro de recalque. */
+      hidrantes: { tipo: number; terreo: number; cobertura: number; bomba: boolean; recalque: boolean } | null;
     } | null;
   };
 }

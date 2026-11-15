@@ -6,7 +6,7 @@
  * `TelaCasaAutomatica` (as mesmas abas, a barra com as ações e a faixa de estado).
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Building2, ChevronDown, ChevronRight, ClipboardList, MapPin, Play, Settings2, Square, Wand2 } from 'lucide-react';
+import { Building2, ChevronDown, ChevronRight, ClipboardList, Flame, MapPin, Play, Settings2, Square, Wand2 } from 'lucide-react';
 
 import Button from '../ui/Button';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
@@ -55,7 +55,7 @@ interface Props {
   lancado: string | null;
 }
 
-type Aba = 'programa' | 'hipoteses' | 'resultado' | 'relatorio';
+type Aba = 'programa' | 'hipoteses' | 'resultado' | 'ppci' | 'relatorio';
 
 const rotuloCls = 'text-xs font-semibold text-slate-500';
 const cardCls = 'rounded-[10px] border border-gray-100 bg-white p-6 shadow-sm';
@@ -149,6 +149,7 @@ export default function TelaPredioAutomatico(props: Props) {
     ...(plano
       ? ([
           { id: 'resultado', label: 'Resultado' },
+          ...(plano.resumo.incendio ? [{ id: 'ppci' as const, label: 'PPCI' }] : []),
           {
             id: 'relatorio',
             label: 'Relatório',
@@ -302,6 +303,27 @@ export default function TelaPredioAutomatico(props: Props) {
               <span className="block text-xs text-slate-500">Um hidrômetro por unidade na parede do hall; a pressão é conferida no prédio inteiro — pressurizador no superior se o último andar não chega à mínima, VRP no ramal das unidades se a estática passa de 400 kPa.</span>
             </span>
           </label>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.esgoto} disabled={!props.hipoteses.agua} title={props.hipoteses.agua ? undefined : 'O esgoto liga as louças, que vêm com a água — ligue a água fria'} onChange={(e) => props.onHipoteses({ ...props.hipoteses, esgoto: e.target.checked })} data-testid="hipotese-esgoto" />
+            <span>
+              Lançar o esgoto e a ventilação (ramais, tubo de queda por grupo molhado, desvio no térreo, coletor)
+              <span className="block text-xs text-slate-500">O tubo de queda de cada unidade empilha pelos andares e sobe 2 m acima da cobertura, com a coluna de ventilação ao lado; o DN sai das UHC acumuladas (NBR 8160).</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.incendio} onChange={(e) => props.onHipoteses({ ...props.hipoteses, incendio: e.target.checked })} data-testid="hipotese-incendio" />
+            <span>
+              Conferir o incêndio (classificação, exigências e a rota de fuga de todos os andares)
+              <span className="block text-xs text-slate-500">Pelas premissas de incêndio do estudo; sem a ocupação, A-2. A altura vai até o último andar com unidades — a cobertura técnica não conta.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.pluvial} disabled={!props.hipoteses.cobertura} title={props.hipoteses.cobertura ? undefined : 'O pluvial drena a cobertura — ligue a cobertura'} onChange={(e) => props.onHipoteses({ ...props.hipoteses, pluvial: e.target.checked })} data-testid="hipotese-pluvial" />
+            <span>
+              Lançar o pluvial da cobertura (ralos, condutores na fachada, caixas de areia, saída na frente)
+              <span className="block text-xs text-slate-500">A vazão pela área do bloco e a intensidade da cidade das premissas pluviais do estudo (NBR 10844); no mínimo dois condutores.</span>
+            </span>
+          </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Numero rotulo="Porta de entrada (mm)" valor={props.hipoteses.larguraDoAcessoMm} min={900} max={3000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, larguraDoAcessoMm: v })} />
             <Numero rotulo="Pé-direito da cobertura (mm)" valor={props.hipoteses.peDireitoDaCoberturaMm} min={2200} max={6000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, peDireitoDaCoberturaMm: v })} />
@@ -368,6 +390,20 @@ export default function TelaPredioAutomatico(props: Props) {
               }
             />
             <Dado
+              rotulo="Pluvial"
+              valor={plano.resumo.pluvial ? `${plano.resumo.pluvial.condutores} condutor(es)` : '—'}
+              nota={plano.resumo.pluvial ? `DN ${plano.resumo.pluvial.dnVerticalMm} · ${plano.resumo.pluvial.vazaoLMin.toLocaleString('pt-BR')} L/min a ${plano.resumo.pluvial.intensidadeMmH} mm/h` : 'desligado nas hipóteses'}
+            />
+            <Dado
+              rotulo="Esgoto"
+              valor={plano.resumo.esgoto ? `${plano.resumo.esgoto.tubosDeQueda} tubo(s) de queda por andar` : '—'}
+              nota={
+                plano.resumo.esgoto
+                  ? `DN ${plano.resumo.esgoto.dnTuboDeQuedaMm} · ${plano.resumo.esgoto.uhcPorAndar} UHC por andar · ventilação DN ${plano.resumo.esgoto.dnVentilacaoMm}${plano.resumo.esgoto.coletor ? ` · coletor DN ${plano.resumo.esgoto.coletor.dnMm}` : ''}`
+                  : 'desligado nas hipóteses'
+              }
+            />
+            <Dado
               rotulo="Água fria"
               valor={plano.resumo.agua ? `${plano.resumo.agua.unidadesMedidas} hidrômetro(s)` : '—'}
               nota={
@@ -421,6 +457,63 @@ export default function TelaPredioAutomatico(props: Props) {
                 ))}
               </ul>
             </section>
+          )}
+        </div>
+      )}
+
+      {/* ── PPCI (PA9a): a classificação, as exigências e a rota de fuga de cada andar ── */}
+      {abaEfetiva === 'ppci' && plano?.resumo.incendio && (
+        <div role="tabpanel" aria-label="PPCI" className={`space-y-6 ${cardCls}`} data-testid="ppci-do-predio">
+          <SecaoTitulo icon={Flame} titulo="PPCI" resumo={`${plano.resumo.incendio.exigidas.length} medida(s) exigida(s)`} />
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+            <Dado rotulo="Ocupação" valor={plano.resumo.incendio.divisao ?? '—'} nota={plano.resumo.incendio.grupo ? `grupo ${plano.resumo.incendio.grupo}` : undefined} />
+            <Dado rotulo="Altura" valor={`${plano.resumo.incendio.alturaM.toLocaleString('pt-BR')} m`} nota="do piso de descarga ao último andar com unidades" />
+            <Dado rotulo="Área construída" valor={`${plano.resumo.incendio.areaM2.toLocaleString('pt-BR')} m²`} />
+            <Dado rotulo="Medidas" valor={`${plano.resumo.incendio.exigidas.length} exigida(s)`} nota={`${plano.resumo.incendio.condicionais.length} condicional(is) · ${plano.resumo.incendio.dispensadas} dispensada(s)`} />
+          </dl>
+          <section className="space-y-2">
+            <h4 className={rotuloCls}>Medidas exigidas</h4>
+            <ul className="flex flex-wrap gap-2" data-testid="medidas-exigidas-do-predio">
+              {plano.resumo.incendio.exigidas.map((x) => (
+                <li key={x} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-sm text-gray-700">
+                  {x}
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section className="space-y-2">
+            <h4 className={rotuloCls}>Rota de fuga por andar (até o exterior no térreo, pela escada · limite de {plano.resumo.incendio.limiteM} m)</h4>
+            <ul className="divide-y divide-gray-100 text-sm" data-testid="rota-por-andar">
+              {plano.resumo.incendio.andares.map((a) => (
+                <li key={a.nome} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                  <span className="text-gray-700">{a.nome}</span>
+                  <span className={a.semRota || a.naoAtendem ? 'font-medium text-red-700' : 'text-gray-700'}>
+                    {a.semRota ? `${a.semRota} de ${a.ambientes} ambiente(s) sem rota` : `${a.ambientes} ambiente(s) com rota`}
+                    {a.naoAtendem ? ` · ${a.naoAtendem} acima do limite` : ''}
+                    {a.piorM != null ? ` · a pior a ${a.piorM.toLocaleString('pt-BR')} m` : ''}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </section>
+          {plano.resumo.incendio.equipamentos && (
+            <section className="space-y-2">
+              <h4 className={rotuloCls}>Equipamentos nas áreas comuns (o tipo, o térreo e a cobertura — cada andar repete os do tipo)</h4>
+              <ul className="flex flex-wrap gap-2" data-testid="equipamentos-de-incendio-do-predio">
+                {Object.entries(plano.resumo.incendio.equipamentos).map(([tipo, n]) => (
+                  <li key={tipo} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-sm text-gray-700">
+                    {n} · {tipo.toLowerCase().replace(/_/g, ' ')}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {plano.resumo.incendio.hidrantes && (
+            <p className="text-sm text-gray-700" data-testid="hidrantes-do-predio">
+              Hidrantes: {plano.resumo.incendio.hidrantes.tipo} por andar, {plano.resumo.incendio.hidrantes.terreo} no térreo e {plano.resumo.incendio.hidrantes.cobertura} na cobertura · coluna de incêndio ao lado do hidrante do tipo
+              {plano.resumo.incendio.hidrantes.bomba ? ' · bomba na cobertura, ao lado do reservatório superior (a reserva técnica)' : ''}
+              {plano.resumo.incendio.hidrantes.recalque ? ' · registro de recalque no passeio' : ''}
+            </p>
           )}
         </div>
       )}

@@ -1,11 +1,16 @@
 import React from 'react'
 import { financialReportService } from '../services/financialReportService'
-import type { BalanceteLine, DREGroup, RegimeContabil } from '../types/financial'
+import type { BalanceteLine, DREGroup } from '../types/financial'
 import { useToast } from '../hooks/useToast'
-import Button from './ui/Button'
 import { formatMoney } from './ui/Format'
 import { useResizableColumns } from './ui/TableUtils'
 import { MoveHorizontal } from 'lucide-react'
+import { useCargaVigente } from '../hooks/useCargaVigente'
+import { motivoPeriodoInvalido } from '../utils/periodoControladoria'
+import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
+import { BarraDeEscopo } from './controladoria/BarraDeEscopo'
+import type { EscopoControladoria } from './controladoria/escopo'
+import { AvisoSemClassificacao } from './controladoria/SemClassificacao'
 
 const BALANCETE_COL_WIDTHS: Record<string, number> = { conta: 260, creditos: 150, debitos: 150, saldo: 150, lancamentos: 130 }
 
@@ -58,31 +63,41 @@ interface GroupSubtotal {
 
 interface Props {
     organizationId: string | null
+    escopo: EscopoControladoria
 }
 
-const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
+const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
     const { showToast } = useToast()
-    const now = new Date()
-    const [dateFrom, setDateFrom] = React.useState(`${now.getFullYear()}-01-01`)
-    const [dateTo,   setDateTo]   = React.useState(`${now.getFullYear()}-12-31`)
-    const [regime,   setRegime]   = React.useState<RegimeContabil>('CAIXA')
+    const { de: dateFrom, ate: dateTo, regime, obraId } = escopo
     const [lines, setLines] = React.useState<BalanceteLine[]>([])
     const [loading, setLoading] = React.useState(false)
+    const [falhou, setFalhou] = React.useState(false)
     const [expanded, setExpanded] = React.useState<Set<DREGroup>>(new Set(GROUP_ORDER))
     const cols = useResizableColumns(BALANCETE_COL_WIDTHS, 'balanceteReportColWidths')
+    const novaCarga = useCargaVigente()
+    const motivoPeriodo = motivoPeriodoInvalido(dateFrom, dateTo)
 
     const load = React.useCallback(async () => {
+        const vigente = novaCarga()
+        if (motivoPeriodoInvalido(dateFrom, dateTo)) {
+            setLines([]); setFalhou(false); setLoading(false)
+            return
+        }
         setLoading(true)
+        setFalhou(false)
         try {
-            const data = await financialReportService.getBalancete(organizationId, dateFrom, dateTo, undefined, regime)
-            setLines(data)
+            const data = await financialReportService.getBalancete(organizationId, dateFrom, dateTo, obraId || undefined, regime)
+            if (vigente()) setLines(data)
         } catch (e: unknown) {
+            if (!vigente()) return
+            setLines([])
+            setFalhou(true)
             showToast('Erro ao carregar balancete', 'error')
             console.error('[Balancete]', e)
         } finally {
-            setLoading(false)
+            if (vigente()) setLoading(false)
         }
-    }, [organizationId, dateFrom, dateTo, regime, showToast])
+    }, [novaCarga, organizationId, dateFrom, dateTo, obraId, regime, showToast])
 
     React.useEffect(() => { load() }, [load])
 
@@ -129,58 +144,32 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
         )
 
     return (
-        <div className="space-y-4 px-1">
-            {/* Filtros */}
-            <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm">
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">De</label>
-                    <input
-                        type="date"
-                        value={dateFrom}
-                        onChange={e => setDateFrom(e.target.value)}
-                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                </div>
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Até</label>
-                    <input
-                        type="date"
-                        value={dateTo}
-                        onChange={e => setDateTo(e.target.value)}
-                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                </div>
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Regime</label>
-                    <select
-                        value={regime}
-                        onChange={e => setRegime(e.target.value as RegimeContabil)}
-                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    >
-                        <option value="CAIXA">Caixa</option>
-                        <option value="COMPETENCIA">Competência</option>
-                    </select>
-                </div>
-                <Button
-                    onClick={load}
-                    disabled={loading}
-                >
-                    {loading ? 'Carregando…' : 'Atualizar'}
-                </Button>
+        <div className="space-y-6">
+            <BarraDeEscopo escopo={escopo} aplica={{ periodo: true, regime: null, obra: null }}>
                 {lines.length > 0 && (
-                    <span className="ml-auto text-xs text-slate-400">
+                    <span className="text-xs text-gray-600 pb-2.5">
                         {lines.length} contas · {totals.n.toLocaleString('pt-BR')} lançamentos
                     </span>
                 )}
-            </div>
+            </BarraDeEscopo>
+
+            {/* Mesmo aviso da DRE: o grupo Sem Classificação leva aos lançamentos. */}
+            {!motivoPeriodo && !loading && !falhou && (
+                <AvisoSemClassificacao organizationId={organizationId} escopo={escopo}
+                    realizado={(grouped.get('SEM_CLASSIFICACAO') ?? []).reduce((s, l) => s + l.saldo_liquido, 0)} />
+            )}
 
             {/* Tabela */}
-            {loading ? (
+            {motivoPeriodo ? (
+                <PeriodoInvalido motivo={motivoPeriodo} />
+            ) : loading ? (
                 <div className="flex items-center justify-center py-20">
                     <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
+            ) : falhou ? (
+                <FalhaDeCarga oQue="o balancete" onRetry={load} />
             ) : lines.length === 0 ? (
-                <div className="text-center py-20 text-slate-400 text-sm">
+                <div className="text-center py-20 text-slate-600 text-sm">
                     Nenhum lançamento encontrado para o período selecionado.
                 </div>
             ) : (

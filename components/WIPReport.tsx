@@ -3,9 +3,13 @@ import { financialReportService } from '../services/financialReportService'
 import type { WIPLine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
 import { TrendingUp, TrendingDown, AlertTriangle, MoveHorizontal } from 'lucide-react'
-import Button from './ui/Button'
 import { formatMoney, formatPercent } from './ui/Format'
 import { useResizableColumns } from './ui/TableUtils'
+import { useCargaVigente } from '../hooks/useCargaVigente'
+import { motivoDataInvalida } from '../utils/periodoControladoria'
+import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
+import { BarraDeEscopo } from './controladoria/BarraDeEscopo'
+import type { EscopoControladoria } from './controladoria/escopo'
 
 const WIP_COL_WIDTHS: Record<string, number> = {
     project_name: 220, empresa_nome: 160, contrato_valor: 150, receita_reconhecida: 160,
@@ -38,30 +42,45 @@ function KPI({ label, value, sub, variant = 'neutral' }: {
 
 interface Props {
     organizationId: string | null
+    escopo: EscopoControladoria
+    /** Abre a DRE filtrada pela obra (aba DRE do mesmo módulo). */
+    onVerDREDaObra?: (projectId: string) => void
 }
 
-const WIPReport: React.FC<Props> = ({ organizationId }) => {
+const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) => {
     const { showToast } = useToast()
-    const today = new Date().toISOString().slice(0, 10)
-    const [dateTo, setDateTo] = React.useState(today)
+    // O WIP é uma POSIÇÃO: tudo até a data final do período da Controladoria.
+    const dateTo = escopo.ate
     const [rows, setRows] = React.useState<WIPLine[]>([])
     const [loading, setLoading] = React.useState(false)
+    const [falhou, setFalhou] = React.useState(false)
     const [sortKey, setSortKey] = React.useState<keyof WIPLine>('receita_reconhecida')
     const [sortAsc, setSortAsc] = React.useState(false)
     const cols = useResizableColumns(WIP_COL_WIDTHS, 'wipReportColWidths')
+    const novaCarga = useCargaVigente()
+    const motivoPeriodo = motivoDataInvalida(dateTo)
 
     const load = React.useCallback(async () => {
+        const vigente = novaCarga()
+        if (motivoDataInvalida(dateTo)) {
+            setRows([]); setFalhou(false); setLoading(false)
+            return
+        }
         setLoading(true)
+        setFalhou(false)
         try {
             const data = await financialReportService.getProjectWIP(organizationId, dateTo)
-            setRows(data)
+            if (vigente()) setRows(data)
         } catch (e: unknown) {
+            if (!vigente()) return
+            setRows([])
+            setFalhou(true)
             showToast('Erro ao carregar WIP', 'error')
             console.error('[WIP]', e)
         } finally {
-            setLoading(false)
+            if (vigente()) setLoading(false)
         }
-    }, [organizationId, dateTo, showToast])
+    }, [novaCarga, organizationId, dateTo, showToast])
 
     React.useEffect(() => { load() }, [load])
 
@@ -114,54 +133,43 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
     )
 
     return (
-        <div className="space-y-4 px-1">
-            {/* Filtros */}
-            <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm">
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Posição em</label>
-                    <input
-                        type="date"
-                        value={dateTo}
-                        onChange={e => setDateTo(e.target.value)}
-                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                </div>
-                <Button
-                    onClick={load}
-                    disabled={loading}
-                >
-                    {loading ? 'Carregando…' : 'Atualizar'}
-                </Button>
+        <div className="space-y-6">
+            <BarraDeEscopo escopo={escopo}
+                aplica={{
+                    periodo: false,
+                    regime: 'O WIP mostra o recebido e o pago até a data, com o pendente à parte: não muda com o regime.',
+                    obra: 'O WIP já mostra uma linha por obra: o filtro de obra não se aplica.',
+                }}>
                 {rows.length > 0 && (
-                    <span className="ml-auto text-xs text-slate-400">
+                    <span className="text-xs text-gray-600 pb-2.5">
                         {rows.length} obra{rows.length !== 1 ? 's' : ''} com movimentação
                     </span>
                 )}
-            </div>
+            </BarraDeEscopo>
 
             {/* KPIs */}
             {rows.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <KPI
-                        label="Receita Reconhecida"
+                        label="Receita recebida"
                         value={fmt(totals.receita_reconhecida)}
                         sub={`+ ${fmt(totals.receitas_pendentes)} pendente`}
                         variant="positive"
                     />
                     <KPI
-                        label="Custo Incorrido"
+                        label="Custo pago"
                         value={fmt(totals.custo_incorrido)}
                         sub={`+ ${fmt(totals.custos_pendentes)} pendente`}
                         variant="negative"
                     />
                     <KPI
-                        label="Margem Bruta Total"
+                        label="Recebido − pago"
                         value={fmt(totals.margem_bruta)}
                         sub={fmtPct(totalMargem)}
                         variant={totals.margem_bruta >= 0 ? 'positive' : 'negative'}
                     />
                     <KPI
-                        label="Saldo de Contrato"
+                        label="Saldo de contrato"
                         value={fmt(totals.saldo_contrato)}
                         sub="valor contratado não recebido"
                         variant={totals.saldo_contrato >= 0 ? 'neutral' : 'warning'}
@@ -170,12 +178,16 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
             )}
 
             {/* Tabela */}
-            {loading ? (
+            {motivoPeriodo ? (
+                <PeriodoInvalido motivo={motivoPeriodo} />
+            ) : loading ? (
                 <div className="flex items-center justify-center py-20">
                     <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
+            ) : falhou ? (
+                <FalhaDeCarga oQue="o WIP" onRetry={load} />
             ) : rows.length === 0 ? (
-                <div className="text-center py-20 text-slate-400 text-sm">
+                <div className="text-center py-20 text-slate-600 text-sm">
                     Nenhuma obra com movimentação financeira encontrada.
                 </div>
             ) : (
@@ -194,11 +206,11 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                             <tr className="bg-gray-50 text-gray-500 border-b border-gray-200">
                                 <Th label="Obra" k="project_name" />
                                 <Th label="Empresa" k="empresa_nome" />
-                                <Th label="Valor Contrato" k="contrato_valor" right />
-                                <Th label="Receita Recebida" k="receita_reconhecida" right />
-                                <Th label="Custo Incorrido" k="custo_incorrido" right />
-                                <Th label="Margem" k="margem_bruta" right />
-                                <Th label="Saldo Contrato" k="saldo_contrato" right />
+                                <Th label="Valor do contrato" k="contrato_valor" right />
+                                <Th label="Receita recebida" k="receita_reconhecida" right />
+                                <Th label="Custo pago" k="custo_incorrido" right />
+                                <Th label="Recebido − pago" k="margem_bruta" right />
+                                <Th label="Saldo de contrato" k="saldo_contrato" right />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -208,9 +220,19 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                                 return (
                                     <tr key={r.project_id} className="hover:bg-blue-50/30 transition-colors">
                                         <td className="px-4 py-3">
-                                            <p className="text-sm font-semibold text-slate-800">{r.project_name}</p>
+                                            {/* O número que preocupa (margem negativa) leva à DRE da obra,
+                                                onde se vê de que linha vem o custo (princípio 5). */}
+                                            {onVerDREDaObra ? (
+                                                <button type="button" onClick={() => onVerDREDaObra(r.project_id)}
+                                                    title={`Ver a DRE de ${r.project_name}`}
+                                                    className="text-left text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                                                    {r.project_name}
+                                                </button>
+                                            ) : (
+                                                <p className="text-sm font-semibold text-slate-800">{r.project_name}</p>
+                                            )}
                                             {r.project_code && (
-                                                <p className="text-xs text-slate-400">{r.project_code}</p>
+                                                <p className="text-xs text-slate-500">{r.project_code}</p>
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-slate-500">
@@ -259,7 +281,7 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
                         <tfoot>
                             <tr className="border-t-2 border-slate-200 bg-slate-50">
                                 <td colSpan={2} className="px-4 py-3 text-sm font-medium text-slate-600">
-                                    Total ({rows.length} obras)
+                                    Total ({rows.length} {rows.length === 1 ? 'obra' : 'obras'})
                                 </td>
                                 <td className="px-4 py-3 text-sm font-medium text-right tabular-nums text-slate-700">
                                     {fmt(totals.contrato_valor)}

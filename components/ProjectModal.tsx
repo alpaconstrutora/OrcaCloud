@@ -235,6 +235,9 @@ const OBRA_TAB_SUBTITLES: Record<ObraTabId, string> = {
   financeiro: 'Modalidade, margem, valores e os centros de custo da obra.',
 };
 
+
+/** Elementos que recebem foco pelo Tab — prisão de foco do modal de criação. */
+const FOCAVEIS_DO_DIALOGO = 'a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 interface ProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -617,6 +620,44 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     if (isOpen && mode === 'edit' && initialClassification === 'OBRA') void recarregarCentros();
   }, [isOpen, mode, initialClassification, recarregarCentros]);
 
+  // Criação é sobreposição (modal): foco entra no diálogo ao abrir e volta a quem abriu ao
+  // fechar; Tab fica preso dentro; Esc = Cancelar (crítica de Engenharia › Planejamento,
+  // 2026-11-14, item 5). Só o Esc nascido DENTRO do diálogo: gaveta interna aberta por portal
+  // trata o seu próprio Esc, e o evento sintético dela também sobe até aqui.
+  const dialogoCriarRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!isOpen || mode !== 'create') return;
+    const quemAbriu = document.activeElement as HTMLElement | null;
+    const raiz = dialogoCriarRef.current;
+    const alvo = raiz?.querySelector<HTMLElement>('input:not([type=hidden]):not([disabled])')
+      ?? raiz?.querySelector<HTMLElement>(FOCAVEIS_DO_DIALOGO);
+    alvo?.focus();
+    // Num quadro depois: no fechamento o botão de origem pode ter sido redesenhado (nó novo) —
+    // aí o foco vai para o "Novo …" da lista, marcado com data-abre-novo-projeto.
+    return () => {
+      requestAnimationFrame(() => {
+        const alvoVolta = quemAbriu?.isConnected ? quemAbriu : document.querySelector<HTMLElement>('[data-abre-novo-projeto]');
+        alvoVolta?.focus();
+      });
+    };
+  }, [isOpen, mode]);
+  const teclaNoDialogoCriar = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const raiz = dialogoCriarRef.current;
+    if (!raiz || !raiz.contains(e.target as Node) || e.defaultPrevented) return;
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      void handleRequestClose();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focaveis = [...raiz.querySelectorAll<HTMLElement>(FOCAVEIS_DO_DIALOGO)].filter(el => el.offsetParent !== null);
+    if (focaveis.length === 0) return;
+    const primeiro = focaveis[0];
+    const ultimo = focaveis[focaveis.length - 1];
+    if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+  };
+
   if (!isOpen) return null;
 
   const orgDaObra = selectedOrgId || organizationId || undefined;
@@ -823,7 +864,13 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
         : 'absolute inset-0 z-50 flex items-center justify-center p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200'
     }>
 
-      <div className={
+      <div
+        ref={mode === 'create' ? dialogoCriarRef : undefined}
+        role={mode === 'create' ? 'dialog' : undefined}
+        aria-modal={mode === 'create' ? true : undefined}
+        aria-labelledby={mode === 'create' ? 'titulo-novo-projeto' : undefined}
+        onKeyDown={mode === 'create' ? teclaNoDialogoCriar : undefined}
+        className={
         mode === 'edit'
           ? ''
           : 'relative bg-white rounded-[2.5rem] shadow-2xl w-full h-full flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200'
@@ -861,31 +908,29 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
           <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-12 py-8">
             <div className="flex items-start gap-5 flex-1 min-w-0">
               {/* Bloco de Identidade: Ícone */}
+              {/* Sem o selo "OBRA/PLAN/DIAR/BUDG" (sigla em inglês, mono, caixa alta) nem o chip
+                  "Tipo: …": o título logo ao lado já diz o que se está criando (crítica de
+                  Planejamento 2026-11-14, item 6). */}
               <div className="flex flex-col items-center gap-2 shrink-0">
                 <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                   <Building2 className="w-6 h-6" />
-                </div>
-                <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
-                  {formData.classification === 'OBRA' ? 'OBRA' : (formData.classification === 'PLANEJAMENTO' ? 'PLAN' : (formData.classification === 'DIARIO' ? 'DIAR' : 'BUDG'))}
                 </div>
               </div>
 
               <div className="flex-1 min-w-0 flex flex-col gap-1">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h2 className="text-xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+                  <h2 id="titulo-novo-projeto" className="text-xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
                     {(formData.classification as string) === 'OBRA' ? 'Nova Obra' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Novo Planejamento' : (formData.classification as string) === 'DIARIO' ? 'Novo Diário' : 'Novo Orçamento'}
                   </h2>
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
-                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Tipo:</span>
-                    <span className="text-xs font-bold text-gray-600 uppercase">
-                      {(formData.classification as string) === 'OBRA' ? 'Modelo / Obra Base' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Escopo Temporal' : (formData.classification as string) === 'DIARIO' ? 'Controle de Campo' : 'Quantitativo'}
-                    </span>
-                  </div>
                 </div>
                 <p className="text-sm text-gray-500 font-medium leading-tight max-w-4xl">
                   {initialClassification === 'OBRA'
                     ? OBRA_TAB_SUBTITLES[obraTab]
-                    : `Configure os detalhes e a localização ${(formData.classification as string) === 'PLANEJAMENTO' ? 'do planejamento' : 'do orçamento'}.`}
+                    : (formData.classification as string) === 'PLANEJAMENTO'
+                      ? 'Dados do planejamento. O cronograma você monta depois de criar, ao abrir o planejamento.'
+                      : (formData.classification as string) === 'DIARIO'
+                        ? 'Dados do diário. Os registros do dia você lança depois de criar.'
+                        : 'Configure os detalhes e a localização do orçamento.'}
                 </p>
               </div>
             </div>
@@ -1059,15 +1104,17 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     <div className="relative">
                       <input
                         type="text"
-                        placeholder={isFetchingCode ? 'Carregando...' : '001'}
-                        className="w-full rounded-[6px] border border-blue-200 bg-blue-50 h-9 text-sm px-3 font-mono font-bold text-blue-700 outline-none transition-all focus:ring-2 focus:ring-blue-500"
+                        placeholder={isFetchingCode ? 'Gerando código…' : 'Ex.: 001'}
+                        className="w-full rounded-[6px] border border-gray-300 bg-white h-9 text-sm px-3 text-gray-900 tabular-nums placeholder:text-gray-500 outline-none transition-all focus:ring-2 focus:ring-blue-500"
                         value={projectCode}
                         onChange={(e) => setProjectCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                         maxLength={6}
                       />
                     </div>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {mode === 'create' ? 'Sugerido automaticamente. Você pode alterar antes de salvar.' : 'Você pode corrigir o código desta obra.'}
+                    <p className="text-xs text-gray-500 mt-1">
+                      {mode === 'create'
+                        ? (projectCode ? 'Sugerido automaticamente. Você pode alterar antes de salvar.' : 'Em branco, o código é gerado ao salvar, na sequência da organização.')
+                        : 'Você pode corrigir o código desta obra.'}
                     </p>
                   </div>
 
@@ -1758,7 +1805,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               <option key={org.id} value={org.id}>{org.name}</option>
                             ))}
                           </select>
-                          <p className="text-xs text-gray-400 mt-1">Organização dona desta obra. Orçamento e planejamento derivados herdam a dela.</p>
+                          <p className="text-xs text-gray-500 mt-1">Organização dona desta obra. Orçamento e planejamento derivados herdam a dela.</p>
                         </div>
                       )}
 
@@ -1781,7 +1828,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               </option>
                             ))}
                           </select>
-                          <p className="text-xs text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
+                          <p className="text-xs text-gray-500 mt-1">Empresa do grupo responsável por esta obra.</p>
                         </div>
                       )}
                     </div>
@@ -2203,14 +2250,6 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                             )}
                           </>
                         )}
-                        {(formData.classification === 'DIARIO' || formData.classification === 'PLANEJAMENTO') && (
-                          <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100/50">
-                            <p className="text-sm font-bold text-blue-800">
-                              {formData.classification === 'DIARIO' ? 'Diário de Obra Ativo' : 'Planejamento Ativo'}
-                            </p>
-                            <p className="text-xs text-blue-600">Este registro gerencia dados dinâmicos do projeto.</p>
-                          </div>
-                        )}
                       </div>
 
                       {/* Código sequencial — visível para PLANEJAMENTO e DIARIO */}
@@ -2222,14 +2261,16 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           </label>
                           <input
                             type="text"
-                            placeholder={isFetchingCode ? 'Carregando...' : '001'}
-                            className="w-full rounded-[6px] border border-blue-200 bg-blue-50 h-9 text-sm px-3 font-mono font-bold text-blue-700 outline-none transition-all focus:ring-2 focus:ring-blue-500"
+                            placeholder={isFetchingCode ? 'Gerando código…' : 'Ex.: 001'}
+                            className="w-full rounded-[6px] border border-gray-300 bg-white h-9 text-sm px-3 text-gray-900 tabular-nums placeholder:text-gray-500 outline-none transition-all focus:ring-2 focus:ring-blue-500"
                             value={projectCode}
                             onChange={(e) => setProjectCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
                             maxLength={6}
                           />
-                          <p className="text-xs text-gray-400 mt-1">
-                            {mode === 'create' ? 'Gerado automaticamente. Você pode alterar antes de salvar.' : `Você pode corrigir o código deste ${formData.classification === 'DIARIO' ? 'diário' : 'planejamento'}.`}
+                          <p className="text-xs text-gray-500 mt-1">
+                            {mode === 'create'
+                              ? (projectCode ? 'Gerado automaticamente. Você pode alterar antes de salvar.' : 'Em branco, o código é gerado ao salvar, na sequência da organização.')
+                              : `Você pode corrigir o código deste ${formData.classification === 'DIARIO' ? 'diário' : 'planejamento'}.`}
                           </p>
                         </div>
                       )}
@@ -2297,7 +2338,11 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               </option>
                             ))}
                           </select>
-                          <p className="text-xs text-gray-400 mt-1">Empresa do grupo responsável por esta obra.</p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {formData.classification === 'PLANEJAMENTO' ? 'Empresa do grupo responsável por este planejamento.'
+                              : formData.classification === 'DIARIO' ? 'Empresa do grupo responsável por este diário.'
+                              : 'Empresa do grupo responsável por esta obra.'}
+                          </p>
                         </div>
                       )}
                       {formData.obraPropria ? (
@@ -2310,9 +2355,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         <label className="block text-xs font-semibold text-slate-500 mb-1">
                           Cliente / Proprietário
                           {(formData.classification === 'ORCAMENTO' || formData.classification === 'PLANEJAMENTO' || formData.classification === 'DIARIO') && (
-                            <span className="ml-2 text-xs text-amber-600 font-bold uppercase tracking-tight bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100">
-                              Herdado da Obra
-                            </span>
+                            <span className="ml-1.5 text-xs font-normal text-amber-700">· herdado da obra</span>
                           )}
                         </label>
                         <div className="relative">
@@ -2710,12 +2753,14 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
             ? 'flex items-center justify-end gap-2 border-t border-gray-100 pt-4 mt-6'
             : 'bg-gray-50 border-t border-gray-100 flex items-center shrink-0 px-12 py-8 justify-between'
           }>
-            {mode !== 'edit' && (
-              <div className="flex items-center gap-2 text-xs text-gray-400 bg-white px-3 py-1.5 rounded-full border border-gray-200 italic shadow-sm">
+            {/* Era "Sincronização ativa: 01/2025 (SP)" em toda criação — não há sincronização: é a
+                base de preços do orçamento. Só faz sentido em Orçamento (crítica 2026-11-14, item 6). */}
+            {mode !== 'edit' && (formData.classification as string) === 'ORCAMENTO' ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500 bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
                 <Cloud className="w-3.5 h-3.5" />
-                Sincronização ativa: {formData.referenceMonth} ({formData.state || 'Geral'})
+                Base SINAPI {formData.referenceMonth} · {formData.state || 'Geral'}
               </div>
-            )}
+            ) : mode !== 'edit' ? <span /> : null}
             {mode === 'edit' && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />}
             <div className="flex items-center gap-2">
               {mode === 'edit' ? (

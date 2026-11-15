@@ -32,6 +32,11 @@ import { lancarEstrutura, lancarFundacao, pendenciaDaFundacao } from './estrutur
 import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
 import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedido } from './climatizacaoERede';
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
+import { lancarEsgoto } from './esgoto';
+import { lancarPluvial } from './pluvial';
+import { conferirIncendioDoPredio, lancarEquipamentosDeIncendio, lancarHidrantesDoPredio } from './ppci';
+import type { HipotesesIncendio } from '../blueprintIncendioClassificacao';
+import type { HipotesesPluviais } from '../blueprintPluvial';
 import { HIPOTESES_PRESSAO_PADRAO } from '../blueprintPressaoDaRede';
 
 /** O que o prédio lê além do desenho: o bloco, o produto do estudo e a distribuição dele NESTE bloco, e o norte. */
@@ -43,6 +48,10 @@ export interface EntradaDoPredio {
   rotacaoNorteDeg: number | null;
   /** PA5b: o catálogo de evaporadoras e as premissas da carga térmica (do editor, como na casa); ausente = sem climatização. */
   climatizacao?: ClimatizacaoDoPedido | null;
+  /** PA7b: as premissas pluviais do estudo (a cidade, a intensidade, a declividade); ausente = as padrão. */
+  pluvial?: Partial<HipotesesPluviais> | null;
+  /** PA9a: as premissas de incêndio do estudo (o preset, a ocupação, as saídas); ausente = as padrão, com A-2. */
+  incendio?: Partial<HipotesesIncendio> | null;
 }
 
 /** Por que não dá para gerar o prédio deste bloco; `null` = dá. Os mesmos motivos do painel do bloco. */
@@ -255,6 +264,72 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     );
   }
 
+  // ── Esgoto e ventilação (PA7a): os ramais das unidades e os tubos de queda no tipo — também antes da marca.
+  let esgoto: ReturnType<typeof lancarEsgoto> | null = null;
+  if (!hip.esgoto) etapa('ESGOTO', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
+  else if (!agua) etapa('ESGOTO', 'NAO_EXIGIDA', 0, 'Sem a água, não há louças para o esgoto.');
+  else {
+    esgoto = lancarEsgoto(ctx, base, terreo ? { levelId: terreo.levelId } : null, cobertura ? { levelId: cobertura.levelId } : null, 1 + mont.copias);
+    pendencias.push(...esgoto.pendencias);
+    const maior = Math.max(0, ...esgoto.tubos.map((t) => t.dnMm));
+    etapa(
+      'ESGOTO',
+      esgoto.tubos.length ? 'LANCOU' : 'NAO_RODOU',
+      esgoto.comandos,
+      esgoto.tubos.length
+        ? `${esgoto.tubos.length} tubo(s) de queda por andar (até DN ${maior}), ${esgoto.uhcPorAndar} UHC por andar${esgoto.coletor ? ` · coletor DN ${esgoto.coletor.dnMm} a ${esgoto.coletor.declividadePct.toLocaleString('pt-BR')} %` : ''}`
+        : esgoto.pendencias.find((x) => x.grupo === 'SEM_SOLUCAO')?.texto ?? null,
+    );
+  }
+
+  // ── Pluvial da cobertura (PA7b): os condutores verticais no tipo — também antes da marca.
+  let pluvial: ReturnType<typeof lancarPluvial> | null = null;
+  if (!hip.pluvial) etapa('PLUVIAL', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
+  else if (!cobertura) etapa('PLUVIAL', 'NAO_EXIGIDA', 0, 'Sem a cobertura, o pluvial fica para o projetista.');
+  else {
+    pluvial = lancarPluvial(ctx, base, terreo ? { levelId: terreo.levelId } : null, { levelId: cobertura.levelId }, entrada.pluvial ?? null);
+    pendencias.push(...pluvial.pendencias);
+    etapa('PLUVIAL', 'LANCOU', pluvial.comandos, `${pluvial.condutores.length} condutor(es) DN ${pluvial.condutores[0]?.dnMm ?? '—'} · ${Math.round(pluvial.vazaoLMin).toLocaleString('pt-BR')} L/min de ${Math.round(pluvial.areaM2).toLocaleString('pt-BR')} m² a ${pluvial.intensidadeMmH} mm/h`);
+  }
+
+  // ── Equipamentos de incêndio de cada andar (PA9b): no tipo, antes da marca — pelos motores do PPCI da planta, numa vista
+  // sem os andares copiados.
+  let equipamentos: ReturnType<typeof lancarEquipamentosDeIncendio> | null = null;
+  if (!hip.incendio) etapa('EQUIPAMENTOS_DE_INCENDIO', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
+  else {
+    try {
+      equipamentos = lancarEquipamentosDeIncendio(ctx, terreo?.levelId ?? mont.tipoLevelId, base.ultimoLevelId, new Set(copias.map((l) => l.id)), mont.tipoLevelId, entrada.incendio ?? null);
+      pendencias.push(...equipamentos.pendencias);
+      const nomes = Object.entries(equipamentos.pecas).map(([k, n]) => `${n} ${k.toLowerCase().replace(/_/g, ' ')}`);
+      etapa('EQUIPAMENTOS_DE_INCENDIO', 'LANCOU', equipamentos.comandos, nomes.length ? `${nomes.join(' · ')} no tipo, no térreo e na cobertura — cada andar repete os do tipo` : null);
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Equipamentos de incêndio: ${motivo} — lance pelo PPCI da planta.` });
+      etapa('EQUIPAMENTOS_DE_INCENDIO', 'NAO_RODOU', 0, motivo);
+    }
+  }
+
+  // ── Hidrantes (PA9c): os hidrantes, a coluna de incêndio empilhada, a bomba na cobertura e o registro de recalque.
+  let hidrantes: ReturnType<typeof lancarHidrantesDoPredio> | null = null;
+  if (!hip.incendio) etapa('HIDRANTES', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
+  else {
+    try {
+      hidrantes = lancarHidrantesDoPredio(ctx, terreo?.levelId ?? mont.tipoLevelId, base.ultimoLevelId, new Set(copias.map((l) => l.id)), mont.tipoLevelId, cobertura ? { levelId: cobertura.levelId } : null, entrada.incendio ?? null);
+      pendencias.push(...hidrantes.pendencias);
+      const h = hidrantes.hidrantes;
+      etapa(
+        'HIDRANTES',
+        hidrantes.comandos ? 'LANCOU' : 'NAO_EXIGIDA',
+        hidrantes.comandos,
+        hidrantes.comandos ? `${h.tipo} hidrante(s) por andar, ${h.terreo} no térreo e ${h.cobertura} na cobertura · coluna de incêndio no tipo${hidrantes.bomba ? ' · bomba na cobertura' : ''}${hidrantes.recalque ? ' · registro de recalque no passeio' : ''}` : 'A classificação não exige hidrantes.',
+      );
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Hidrantes: ${motivo} — lance pelo PPCI da planta.` });
+      etapa('HIDRANTES', 'NAO_RODOU', 0, motivo);
+    }
+  }
+
   // ── O tipo leva as instalações aos andares (PA1): as fases seguintes desenham no tipo e os andares acompanham.
   etapa('INSTALACOES_NO_TIPO', 'LANCOU', aplicar([{ type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }]), 'Pontos, trechos, quadros e circuitos desenhados no tipo vão às cópias.');
 
@@ -270,6 +345,21 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       pressao.comandos ? 'LANCOU' : 'CALCULOU',
       pressao.comandos,
       `${pressao.pontos} ponto(s): dinâmica mínima ${kpa(pressao.dinamicaMinKpa)}, estática máxima ${kpa(pressao.estaticaMaxKpa)}${pressao.pressurizador ? ' · pressurizador no superior' : ''}${pressao.vrp ? ' · VRP no ramal de cada unidade' : ''}`,
+    );
+  }
+
+  // ── Incêndio (PA9a): no modelo FINAL — a classificação, as exigências e a rota de fuga de todos os andares.
+  let incendio: ReturnType<typeof conferirIncendioDoPredio> | null = null;
+  if (!hip.incendio) etapa('INCENDIO', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
+  else {
+    incendio = conferirIncendioDoPredio(m, terreo?.levelId ?? mont.tipoLevelId, base.ultimoLevelId, entrada.incendio ?? null);
+    pendencias.push(...incendio.pendencias);
+    const semRota = incendio.rota.andares.reduce((s, a) => s + a.semRota, 0);
+    etapa(
+      'INCENDIO',
+      'CALCULOU',
+      0,
+      `${incendio.divisao ?? '?'}, ${incendio.alturaM.toLocaleString('pt-BR')} m, ${Math.round(incendio.areaM2).toLocaleString('pt-BR')} m² · ${incendio.exigidas.length} medida(s) exigida(s) · rota ${semRota ? `faltando em ${semRota} ambiente(s)` : `em todos os ${incendio.rota.andares.length} pavimento(s)`}`,
     );
   }
 
@@ -369,6 +459,42 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       estrutura: estrutura ? { pilares: estrutura.pilares, vigas: estrutura.vigas, lajes: estrutura.lajes, noTerreo: estrutura.noTerreo, eixos: estrutura.eixos, blocos: fundacao?.blocos ?? 0, estacas: fundacao?.estacas ?? 0 } : null,
       reservacao,
       agua: resumoDaAgua,
+      incendio: incendio
+        ? {
+            divisao: incendio.divisao,
+            grupo: incendio.grupo,
+            alturaM: incendio.alturaM,
+            areaM2: incendio.areaM2,
+            exigidas: incendio.exigidas,
+            condicionais: incendio.condicionais,
+            dispensadas: incendio.dispensadas,
+            limiteM: incendio.rota.limiteM,
+            andares: incendio.rota.andares.map(({ nome, ambientes, semRota, naoAtendem, piorM }) => ({ nome, ambientes, semRota, naoAtendem, piorM })),
+            equipamentos: equipamentos?.pecas ?? null,
+            hidrantes: hidrantes?.comandos ? { ...hidrantes.hidrantes, bomba: hidrantes.bomba, recalque: hidrantes.recalque } : null,
+          }
+        : null,
+      pluvial: pluvial
+        ? {
+            areaM2: Math.round(pluvial.areaM2 * 10) / 10,
+            intensidadeMmH: pluvial.intensidadeMmH,
+            vazaoLMin: Math.round(pluvial.vazaoLMin),
+            condutores: pluvial.condutores.length,
+            dnVerticalMm: Math.max(0, ...pluvial.condutores.map((c) => c.dnMm)),
+            dnHorizontalMm: pluvial.dnHorizontalMm,
+          }
+        : null,
+      esgoto: esgoto?.tubos.length
+        ? {
+            tubosDeQueda: esgoto.tubos.length,
+            pontos: esgoto.pontos,
+            uhcPorAndar: esgoto.uhcPorAndar,
+            dnTuboDeQuedaMm: Math.max(...esgoto.tubos.map((t) => t.dnMm)),
+            dnVentilacaoMm: Math.max(...esgoto.tubos.map((t) => t.dnVentilacaoMm)),
+            tubos: esgoto.tubos.map((t) => ({ uhcPorAndar: t.uhcPorAndar, comBacia: t.comBacia, dnMm: t.dnMm })),
+            coletor: esgoto.coletor,
+          }
+        : null,
     },
   };
 }

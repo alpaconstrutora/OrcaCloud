@@ -27,21 +27,33 @@ const linhas: BalanceteLine[] = [
     },
 ];
 
+// O store (obra aberta no topo) puxa o cliente do Supabase, que exige env.
+vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn(), auth: { onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe() {} } } })), getSession: vi.fn(async () => ({ data: { session: null } })) } } }));
 vi.mock('../../services/financialReportService', () => ({
-    financialReportService: { getBalancete: vi.fn(() => Promise.resolve(linhas)) },
+    financialReportService: {
+        getBalancete: vi.fn(() => Promise.resolve(linhas)),
+        listObras: vi.fn(() => Promise.resolve([])),
+    },
 }));
-vi.mock('../../hooks/useToast', () => ({ useToast: () => ({ showToast: vi.fn(), localToast: null }) }));
+const toast = vi.hoisted(() => ({ showToast: () => {}, localToast: null }));
+vi.mock('../../hooks/useToast', () => ({ useToast: () => toast }));
 
 import BalanceteReport from '../../components/BalanceteReport';
+import { useEscopoControladoria } from '../../components/controladoria/escopo';
+
+function Tela() {
+    const escopo = useEscopoControladoria('org-1');
+    return <BalanceteReport organizationId="org-1" escopo={escopo} />;
+}
 
 describe('Balancete — total de lançamentos com parcela com juros', () => {
     it('conta o título UMA vez no total geral (2 categorias, 1 lançamento)', async () => {
-        render(<BalanceteReport organizationId="org-1" />);
+        render(<Tela />);
         expect(await screen.findByText('2 contas · 1 lançamentos')).toBeTruthy();
     });
 
     it('linha da Receita Financeira continua mostrando o título que caiu nela', async () => {
-        render(<BalanceteReport organizationId="org-1" />);
+        render(<Tela />);
         const celula = await screen.findByText('Receita Financeira');
         // Última célula = coluna Lançamentos (a linha também tem '1.000,00', que um
         // toContain('1') aceitaria sozinho).

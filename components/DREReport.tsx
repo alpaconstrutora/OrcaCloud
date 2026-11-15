@@ -1,10 +1,15 @@
 import React from 'react';
-import { TrendingUp, TrendingDown, Download, ChevronDown, ChevronRight, Building2, MoveHorizontal } from 'lucide-react';
+import { TrendingUp, TrendingDown, Download, ChevronDown, ChevronRight, Building2, MoveHorizontal, AlertTriangle } from 'lucide-react';
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
-import type { DRESummary, DRELine, DREGroup, DREProjectSummary, RegimeContabil } from '../types/financial';
-import Button from './ui/Button';
+import type { DRESummary, DRELine, DREGroup, DREProjectSummary } from '../types/financial';
 import { useResizableColumns } from './ui/TableUtils';
+import { useCargaVigente } from '../hooks/useCargaVigente';
+import { motivoPeriodoInvalido } from '../utils/periodoControladoria';
+import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
+import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo';
+import type { EscopoControladoria } from './controladoria/escopo';
+import { AvisoSemClassificacao } from './controladoria/SemClassificacao';
 
 // §6.3 — as linhas do DRE/comparativo têm ordem contábil fixa (Receita → Deduções →
 // Resultado), não fazem sentido reordenadas por clique de coluna; por isso as tabelas
@@ -48,31 +53,44 @@ const DRE_LINE_ORDER = [
     '(!) Sem Classificação',
 ];
 
+// O banco devolve as linhas com o prefixo contábil ('(o)', '(!)'); estes dois não são
+// vocabulário de quem lê a DRE — a tela diz o que a linha É.
+const ROTULO_DA_LINHA: Record<string, string> = {
+    '(o) Amortização de Principal': 'Amortização de principal (fora do resultado)',
+    '(!) Sem Classificação':        'Sem classificação (fora do resultado)',
+};
+
 function formatBRL(v: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 }
 
+/** "-50,0%" em pt-BR (era `toFixed`, que escrevia "-50.0%"). */
 function formatPct(v: number | null): string {
     if (v === null) return '—';
-    return `${v.toFixed(1)}%`;
+    return `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
 
 // ── KPI card ──────────────────────────────────────────────────────────────────
 
-function KPICard({ label, value, pct, positive }: { label: string; value: number; pct?: number | null; positive?: boolean }) {
-    const isPos = positive !== undefined ? positive : value >= 0;
+function KPICard({ label, value, pct }: { label: string; value: number; pct?: number | null }) {
+    const isPos = value >= 0;
     return (
         <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
             <p className={`text-2xl font-black mt-1 ${isPos ? 'text-gray-900' : 'text-red-600'}`}>
                 {formatBRL(value)}
             </p>
-            {pct !== undefined && (
-                <p className={`text-xs mt-0.5 font-semibold flex items-center gap-1 ${isPos ? 'text-green-600' : 'text-red-500'}`}>
-                    {isPos ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+            {pct !== undefined && (pct === null ? (
+                // Sem receita líquida não há margem: nem seta, nem cor de "piorou".
+                <p className="text-xs mt-0.5 font-semibold text-gray-500" title="Sem receita líquida no período, não há base para a margem">
+                    Margem: —
+                </p>
+            ) : (
+                <p className={`text-xs mt-0.5 font-semibold flex items-center gap-1 ${pct >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                    {pct >= 0 ? <TrendingUp className="w-3 h-3" aria-hidden="true" /> : <TrendingDown className="w-3 h-3" aria-hidden="true" />}
                     Margem: {formatPct(pct)}
                 </p>
-            )}
+            ))}
         </div>
     );
 }
@@ -89,13 +107,16 @@ function SummaryRow({ linha, realizado, previsto }: { linha: string; realizado: 
         const hasValue = realizado !== 0 || previsto !== 0;
         return (
             <tr className={`border-t-2 border-gray-100 ${hasValue ? 'bg-amber-50' : ''}`}>
-                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-amber-700 pl-8" title="Lançamentos sem categoria mapeada no plano de contas — não entram no Resultado Líquido. Classifique-os no Plano de Contas.">
-                    ⚠ {linha.replace('(!) ', '')}
+                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-amber-800 pl-8">
+                    <span className="flex items-center gap-1.5">
+                        {hasValue && <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-700" aria-hidden="true" />}
+                        {ROTULO_DA_LINHA[linha] ?? linha}
+                    </span>
                 </td>
                 <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${realizado < 0 ? 'text-red-600' : 'text-amber-700'}`}>
                     {formatBRL(realizado)}
                 </td>
-                <td className="px-6 py-2.5 text-sm text-right tabular-nums font-normal text-amber-500">
+                <td className="px-6 py-2.5 text-sm text-right tabular-nums font-normal text-amber-800">
                     {formatBRL(previsto)}
                 </td>
             </tr>
@@ -105,7 +126,7 @@ function SummaryRow({ linha, realizado, previsto }: { linha: string; realizado: 
     return (
         <tr className={`${isTotal ? 'bg-gray-50 border-t-2 border-gray-200' : ''} border-b border-gray-100 last:border-0`}>
             <td className={`px-6 py-2.5 border-r border-gray-100 text-sm ${isTotal ? 'text-gray-900 font-medium' : isDeduction ? 'text-red-600 font-normal pl-8' : 'text-gray-700 font-normal pl-8'}`}>
-                {linha}
+                {ROTULO_DA_LINHA[linha] ?? linha}
             </td>
             <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${realizado < 0 ? 'text-red-600' : isTotal ? 'text-gray-900' : 'text-gray-700'}`}>
                 {formatBRL(realizado)}
@@ -157,6 +178,9 @@ function DetailGroup({ group, lines }: { group: DREGroup; lines: DRELine[] }) {
 
 // ── Comparativo por Obra ──────────────────────────────────────────────────────
 
+// "Receita" = Receita Bruta; "Custos e despesas" = tudo o que sai da receita até o
+// resultado; "Resultado" = Resultado Líquido. A última linha, "Sem obra", junta o que
+// não tem obra — com ela, o Total fecha com o Resumo (receita e resultado).
 function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSummary[]; onSelect: (projectId: string) => void }) {
     const cols = useResizableColumns(PROJECT_COL_WIDTHS, 'dreProjectComparisonColWidths');
 
@@ -169,8 +193,11 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
     }
 
     const totals = projects.reduce(
-        (acc, p) => ({ receita: acc.receita + p.receita, custo: acc.custo + p.custo, margem: acc.margem + p.margem }),
-        { receita: 0, custo: 0, margem: 0 },
+        (acc, p) => ({
+            receita: acc.receita + p.receita, custo: acc.custo + p.custo, margem: acc.margem + p.margem,
+            receitaLiquida: acc.receitaLiquida + p.receita_liquida,
+        }),
+        { receita: 0, custo: 0, margem: 0, receitaLiquida: 0 },
     );
     const tableWidth = Object.keys(PROJECT_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0);
 
@@ -194,20 +221,22 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
                     <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                         <th className="px-6 py-2 text-left border-r border-gray-100 relative overflow-hidden">Obra<cols.ResizeHandle colKey="obra" /></th>
                         <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Receita<cols.ResizeHandle colKey="receita" /></th>
-                        <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Custo<cols.ResizeHandle colKey="custo" /></th>
-                        <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Margem<cols.ResizeHandle colKey="margem" /></th>
-                        <th className="px-6 py-2 text-right relative overflow-hidden">Margem %<cols.ResizeHandle colKey="margem_pct" /></th>
+                        <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Custos e despesas<cols.ResizeHandle colKey="custo" /></th>
+                        <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Resultado<cols.ResizeHandle colKey="margem" /></th>
+                        <th className="px-6 py-2 text-right relative overflow-hidden" title="Resultado sobre a receita líquida">Margem %<cols.ResizeHandle colKey="margem_pct" /></th>
                     </tr>
                 </thead>
                 <tbody>
-                    {projects.map(p => (
-                        <tr key={p.project_id}
-                            className="cursor-pointer hover:bg-blue-50/40 border-b border-gray-100 last:border-0"
-                            onClick={() => onSelect(p.project_id)}
-                            title="Ver DRE desta obra"
+                    {projects.map(p => {
+                        const obraId = p.project_id;
+                        return (
+                        <tr key={obraId ?? 'sem-obra'}
+                            className={`${obraId ? 'cursor-pointer hover:bg-blue-50/40' : ''} border-b border-gray-100 last:border-0`}
+                            onClick={obraId ? () => onSelect(obraId) : undefined}
+                            title={obraId ? 'Ver DRE desta obra' : 'Lançamentos sem obra (administrativo, comercial, sem projeto)'}
                         >
-                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 flex items-center gap-2">
-                                <Building2 className="w-3.5 h-3.5 text-gray-300" /> {p.project_name}
+                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal flex items-center gap-2 ${obraId ? 'text-gray-700' : 'text-gray-600 italic'}`}>
+                                <Building2 className="w-3.5 h-3.5 text-gray-300" aria-hidden="true" /> {p.project_name}
                             </td>
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-gray-700">{formatBRL(p.receita)}</td>
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-red-600">{formatBRL(p.custo)}</td>
@@ -218,7 +247,8 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
                                 {formatPct(p.margem_pct)}
                             </td>
                         </tr>
-                    ))}
+                        );
+                    })}
                     <tr className="bg-gray-50 border-t-2 border-gray-200">
                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-900">Total</td>
                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-gray-900">{formatBRL(totals.receita)}</td>
@@ -227,7 +257,7 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
                             {formatBRL(totals.margem)}
                         </td>
                         <td className="px-6 py-2.5 text-sm text-right tabular-nums font-normal text-gray-500">
-                            {formatPct(totals.receita ? totals.margem / totals.receita * 100 : null)}
+                            {formatPct(totals.receitaLiquida > 0 ? totals.margem / totals.receitaLiquida * 100 : null)}
                         </td>
                     </tr>
                 </tbody>
@@ -241,49 +271,55 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
 
 interface DREReportProps {
     organizationId: string | null;
+    /** Período, regime e obra — o escopo único da Controladoria (ControladoriaModule). */
+    escopo: EscopoControladoria;
 }
 
-const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
+const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
     const { showToast } = useToast();
-    const now = new Date();
-    const [dateFrom, setDateFrom] = React.useState(
-        `${now.getFullYear()}-01-01`
-    );
-    const [dateTo, setDateTo] = React.useState(
-        `${now.getFullYear()}-12-31`
-    );
+    const { de: dateFrom, ate: dateTo, regime, obraId: projectId, setObra: setProjectId } = escopo;
     const [summary, setSummary] = React.useState<DRESummary | null>(null);
     const [projects, setProjects] = React.useState<DREProjectSummary[]>([]);
-    const [obras, setObras] = React.useState<{ project_id: string; project_name: string; code: string | null }[]>([]);
-    const [projectId, setProjectId] = React.useState<string>('');   // '' = todas as obras
-    const [regime, setRegime]       = React.useState<RegimeContabil>('CAIXA');
     const [loading, setLoading] = React.useState(false);
+    const [falhou, setFalhou] = React.useState(false);
     const [viewMode, setViewMode] = React.useState<'resumo' | 'detalhe' | 'por_obra'>('resumo');
     const dreCols = useResizableColumns(DRE_COL_WIDTHS, 'dreSummaryColWidths');
+    const novaCarga = useCargaVigente();
+    const motivoPeriodo = motivoPeriodoInvalido(dateFrom, dateTo);
 
     const load = React.useCallback(async () => {
+        // Toda carga — inclusive a que não vai acontecer — invalida a anterior: uma
+        // resposta antiga não pode pousar depois que o período mudou.
+        const vigente = novaCarga();
+        if (motivoPeriodoInvalido(dateFrom, dateTo)) {
+            setSummary(null);
+            setProjects([]);
+            setFalhou(false);
+            setLoading(false);
+            return;
+        }
         setLoading(true);
+        setFalhou(false);
         try {
             const [s, p] = await Promise.all([
                 financialReportService.getDRESummary(organizationId, dateFrom, dateTo, projectId || undefined, regime),
-                financialReportService.getDREByProject(organizationId, dateFrom, dateTo),
+                financialReportService.getDREByProject(organizationId, dateFrom, dateTo, regime),
             ]);
+            if (!vigente()) return;
             setSummary(s);
             setProjects(p);
         } catch (e: unknown) {
+            if (!vigente()) return;
+            // Sem número velho na tela: a falha substitui os dados.
+            setSummary(null);
+            setProjects([]);
+            setFalhou(true);
             showToast('Erro ao carregar DRE', 'error');
             console.error('[DRE]', e);
         } finally {
-            setLoading(false);
+            if (vigente()) setLoading(false);
         }
-    }, [organizationId, dateFrom, dateTo, projectId, regime, showToast]);
-
-    // Lista de obras para o filtro (independe do período) — todas as obras
-    React.useEffect(() => {
-        financialReportService.listObras(organizationId)
-            .then(setObras)
-            .catch(e => console.error('[DRE] obras', e));
-    }, [organizationId]);
+    }, [novaCarga, organizationId, dateFrom, dateTo, projectId, regime, showToast]);
 
     React.useEffect(() => { load(); }, [load]);
 
@@ -300,73 +336,55 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">DRE</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                        Demonstrativo de Resultado do Exercício
-                    </p>
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
-                    <span className="text-gray-400 text-sm">até</span>
-                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
-                    <div className="relative">
-                        <Building2 className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <select value={projectId} onChange={e => setProjectId(e.target.value)}
-                            className="border border-gray-200 rounded-[6px] pl-9 pr-3 h-9 text-sm focus:outline-none focus:border-blue-400 bg-white max-w-[200px]">
-                            <option value="">Todas as obras</option>
-                            {obras.map(o => (
-                                <option key={o.project_id} value={o.project_id}>
-                                    {o.code ? `${o.code} · ${o.project_name}` : o.project_name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <select value={regime} onChange={e => setRegime(e.target.value as RegimeContabil)}
-                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400 bg-white">
-                        <option value="CAIXA">Caixa</option>
-                        <option value="COMPETENCIA">Competência</option>
-                    </select>
-                    <Button variant="primary" onClick={load}>
-                        Atualizar
-                    </Button>
-                    <button
-                        onClick={() => {
-                            if (!summary) return;
-                            const csv = [
-                                'Linha,Realizado,Previsto',
-                                ...DRE_LINE_ORDER.map(l => {
-                                    const row = summary.lines.find(r => r.linha === l);
-                                    return `"${l}",${row?.valor_realizado ?? 0},${row?.valor_previsto ?? 0}`;
-                                })
-                            ].join('\n');
-                            const a = document.createElement('a');
-                            a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-                            a.download = `DRE_${dateFrom}_${dateTo}.csv`;
-                            a.click();
-                        }}
-                        className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 flex items-center gap-2 transition-all"
-                    >
-                        <Download className="w-4 h-4" /> CSV
-                    </button>
-                </div>
-            </div>
+            <BarraDeEscopo escopo={escopo} aplica={{ periodo: true, regime: null, obra: null }}>
+                <button
+                    type="button"
+                    disabled={!summary}
+                    title={summary ? 'Baixar o resumo da DRE em CSV' : 'Sem DRE carregada para exportar'}
+                    onClick={() => {
+                        if (!summary) return;
+                        const csv = [
+                            'Linha,Realizado,Previsto',
+                            ...DRE_LINE_ORDER.map(l => {
+                                const row = summary.lines.find(r => r.linha === l);
+                                return `"${l}",${row?.valor_realizado ?? 0},${row?.valor_previsto ?? 0}`;
+                            })
+                        ].join('\n');
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+                        a.download = `DRE_${dateFrom}_${dateTo}.csv`;
+                        a.click();
+                    }}
+                    className={`${BOTAO_DA_BARRA} disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                    <Download className="w-4 h-4" aria-hidden="true" /> CSV
+                </button>
+            </BarraDeEscopo>
 
-            {loading ? (
-                <div className="flex items-center justify-center h-40 text-sm text-gray-400">Carregando DRE...</div>
+            {motivoPeriodo ? (
+                <PeriodoInvalido motivo={motivoPeriodo} />
+            ) : loading ? (
+                <div className="flex items-center justify-center h-40 text-sm text-gray-500">Carregando DRE...</div>
+            ) : falhou ? (
+                <FalhaDeCarga oQue="a DRE" onRetry={load} />
             ) : !summary ? null : (
                 <>
+                    {/* Sem Classificação no topo, com o caminho (antes: última linha da tabela). */}
+                    {(() => {
+                        const sc = summary.lines.find(l => l.linha === '(!) Sem Classificação');
+                        return (
+                            <AvisoSemClassificacao organizationId={organizationId} escopo={escopo}
+                                realizado={sc?.valor_realizado ?? 0} previsto={sc?.valor_previsto ?? 0} />
+                        );
+                    })()}
+
                     {/* KPIs */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                        <KPICard label="Receita Bruta"     value={summary.receita_bruta}    positive={true} />
-                        <KPICard label="Receita Líquida"   value={summary.receita_liquida}  positive={true} />
-                        <KPICard label="Lucro Bruto"       value={summary.lucro_bruto}      pct={summary.margem_bruta_pct}  positive={summary.lucro_bruto >= 0} />
-                        <KPICard label="EBITDA"            value={summary.ebitda}           pct={summary.margem_ebitda_pct} positive={summary.ebitda >= 0} />
-                        <KPICard label="Resultado Líquido" value={summary.resultado_liquido} pct={summary.margem_liquida_pct} positive={summary.resultado_liquido >= 0} />
+                        <KPICard label="Receita Bruta"     value={summary.receita_bruta} />
+                        <KPICard label="Receita Líquida"   value={summary.receita_liquida} />
+                        <KPICard label="Lucro Bruto"       value={summary.lucro_bruto}      pct={summary.margem_bruta_pct} />
+                        <KPICard label="EBITDA"            value={summary.ebitda}           pct={summary.margem_ebitda_pct} />
+                        <KPICard label="Resultado Líquido" value={summary.resultado_liquido} pct={summary.margem_liquida_pct} />
                     </div>
 
                     {/* Toggle resumo / detalhe / por obra */}
@@ -402,8 +420,8 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                             <thead>
                                 <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     <th className="px-6 py-2 text-left border-r border-gray-100 relative overflow-hidden">Linha<dreCols.ResizeHandle colKey="linha" /></th>
-                                    <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Realizado<dreCols.ResizeHandle colKey="realizado" /></th>
-                                    <th className="px-6 py-2 text-right relative overflow-hidden">Previsto<dreCols.ResizeHandle colKey="previsto" /></th>
+                                    <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">{regime === 'CAIXA' ? 'Realizado (conciliado)' : 'Realizado'}<dreCols.ResizeHandle colKey="realizado" /></th>
+                                    <th className="px-6 py-2 text-right relative overflow-hidden">{regime === 'CAIXA' ? 'Previsto (pendente)' : 'Previsto'}<dreCols.ResizeHandle colKey="previsto" /></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -430,11 +448,11 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                     )}
 
                     {/* Nota de rodapé */}
-                    <p className="text-xs text-gray-400 text-center">
+                    <p className="text-xs text-gray-500 text-center">
                         {regime === 'CAIXA'
-                            ? 'Realizado = transações conciliadas · Previsto = transações pendentes'
-                            : 'Regime de Competência: realizado = todos os lançamentos incorridos/auferidos no período (pela data de competência)'
-                        } · Período: {
+                            ? 'Caixa: realizado = lançamentos conciliados; previsto = pendentes'
+                            : 'Competência: realizado = tudo o que foi lançado no período, pela data de competência'
+                        } · Margens sobre a receita líquida · Período: {
                             new Date(dateFrom + 'T00:00:00').toLocaleDateString('pt-BR')
                         } a {new Date(dateTo + 'T00:00:00').toLocaleDateString('pt-BR')}
                     </p>

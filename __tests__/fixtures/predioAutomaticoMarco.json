@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "d2e807d39060df8537e803dfd079aaf7aa5f86b455dfb0f3d8409fd3e7652dea",
+    "modelo": "179ae7b9a06de201dc25c814805eb0eb29e8c35666db2d0488759385dc19592d",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -10,7 +10,7 @@
     "nucleos": 1,
     "estruturas": 201,
     "quadros": 11,
-    "terminais": 644,
+    "terminais": 729,
     "trechosDeAgua": 472,
     "agua": {
       "pontos": 36,
@@ -31,10 +31,114 @@
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
+    },
+    "trechosDeEsgoto": 173,
+    "esgoto": {
+      "tubosDeQueda": 2,
+      "pontos": 19,
+      "uhcPorAndar": 51,
+      "dnTuboDeQuedaMm": 100,
+      "dnVentilacaoMm": 75,
+      "tubos": [
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        }
+      ],
+      "coletor": {
+        "dnMm": 100,
+        "declividadePct": 6.47,
+        "porGravidade": true
+      }
+    },
+    "andaresComUnidade": 3,
+    "trechosPluviais": 16,
+    "pluvial": {
+      "areaM2": 240,
+      "intensidadeMmH": 150,
+      "vazaoLMin": 600,
+      "condutores": 2,
+      "dnVerticalMm": 100,
+      "dnHorizontalMm": 150
+    },
+    "incendio": {
+      "divisao": "A-2",
+      "grupo": "A",
+      "alturaM": 9,
+      "areaM2": 1225,
+      "exigidas": [
+        "Acesso de viatura na edificação",
+        "Saídas de emergência",
+        "Iluminação de emergência",
+        "Sinalização de emergência",
+        "Extintores",
+        "Hidrantes e mangotinhos"
+      ],
+      "condicionais": [
+        "Controle de materiais de acabamento"
+      ],
+      "dispensadas": 10,
+      "limiteM": 25,
+      "andares": [
+        {
+          "nome": "Torre · 1º pav (térreo)",
+          "ambientes": 4,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 33.4
+        },
+        {
+          "nome": "Torre · 2º pav (tipo)",
+          "ambientes": 21,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 61.9
+        },
+        {
+          "nome": "Torre · 3º pav",
+          "ambientes": 21,
+          "semRota": 0,
+          "naoAtendem": 2,
+          "piorM": 69.8
+        },
+        {
+          "nome": "Torre · 4º pav",
+          "ambientes": 21,
+          "semRota": 0,
+          "naoAtendem": 2,
+          "piorM": 74.3
+        },
+        {
+          "nome": "Torre · cobertura",
+          "ambientes": 1,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 62.3
+        }
+      ],
+      "equipamentos": {
+        "EXTINTOR": 4,
+        "PLACA": 12,
+        "LUMINARIA_EMERGENCIA": 11,
+        "Alimentação da luminária de emergência": 11
+      },
+      "hidrantes": {
+        "tipo": 1,
+        "terreo": 1,
+        "cobertura": 1,
+        "bomba": true,
+        "recalque": true
+      }
     }
   },
   "R8": {
-    "modelo": "8d70aacba45b771e3980bf940a709d60d36f2f8bca8314cf9da070085a777597",
+    "modelo": "085eef729d734d62578e6d8cc89da8a585ef0f70cadc95f52b3e601ed6056d94",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 10,
     "copias": 6,
@@ -44,7 +148,7 @@
     "nucleos": 2,
     "estruturas": 546,
     "quadros": 44,
-    "terminais": 3344,
+    "terminais": 3504,
     "trechosDeAgua": 2480,
     "agua": {
       "pontos": 85,
@@ -65,10 +169,157 @@
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
+    },
+    "trechosDeEsgoto": 899,
+    "esgoto": {
+      "tubosDeQueda": 5,
+      "pontos": 45,
+      "uhcPorAndar": 120,
+      "dnTuboDeQuedaMm": 100,
+      "dnVentilacaoMm": 75,
+      "tubos": [
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        }
+      ],
+      "coletor": {
+        "dnMm": 150,
+        "declividadePct": 4.74,
+        "porGravidade": true
+      }
+    },
+    "andaresComUnidade": 7,
+    "trechosPluviais": 24,
+    "pluvial": {
+      "areaM2": 480,
+      "intensidadeMmH": 150,
+      "vazaoLMin": 1200,
+      "condutores": 2,
+      "dnVerticalMm": 100,
+      "dnHorizontalMm": 200
+    },
+    "incendio": {
+      "divisao": "A-2",
+      "grupo": "A",
+      "alturaM": 21,
+      "areaM2": 4375,
+      "exigidas": [
+        "Acesso de viatura na edificação",
+        "Segurança estrutural contra incêndio",
+        "Controle de materiais de acabamento",
+        "Saídas de emergência",
+        "Iluminação de emergência",
+        "Sinalização de emergência",
+        "Extintores",
+        "Hidrantes e mangotinhos"
+      ],
+      "condicionais": [],
+      "dispensadas": 9,
+      "limiteM": 25,
+      "andares": [
+        {
+          "nome": "Torre · 1º pav (térreo)",
+          "ambientes": 7,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 34.5
+        },
+        {
+          "nome": "Torre · 2º pav (tipo)",
+          "ambientes": 48,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 59.5
+        },
+        {
+          "nome": "Torre · 3º pav",
+          "ambientes": 48,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 67.4
+        },
+        {
+          "nome": "Torre · 4º pav",
+          "ambientes": 48,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 72
+        },
+        {
+          "nome": "Torre · 5º pav",
+          "ambientes": 48,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 76.5
+        },
+        {
+          "nome": "Torre · 6º pav",
+          "ambientes": 48,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 81
+        },
+        {
+          "nome": "Torre · 7º pav",
+          "ambientes": 48,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 85.6
+        },
+        {
+          "nome": "Torre · 8º pav",
+          "ambientes": 48,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 90.1
+        },
+        {
+          "nome": "Torre · cobertura",
+          "ambientes": 1,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 82.1
+        }
+      ],
+      "equipamentos": {
+        "EXTINTOR": 4,
+        "PLACA": 17,
+        "LUMINARIA_EMERGENCIA": 15,
+        "Alimentação da luminária de emergência": 15
+      },
+      "hidrantes": {
+        "tipo": 1,
+        "terreo": 1,
+        "cobertura": 1,
+        "bomba": true,
+        "recalque": true
+      }
     }
   },
   "R12": {
-    "modelo": "22b4b56794fa06d9ab9322bc84d274090a44dde3b4c8643adc5c6b078d51d843",
+    "modelo": "a3245153f2e6c446ee0fed3b152e3272739deb279a30f8330fcd355aee76e004",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 14,
     "copias": 10,
@@ -78,7 +329,7 @@
     "nucleos": 3,
     "estruturas": 1059,
     "quadros": 101,
-    "terminais": 8657,
+    "terminais": 8953,
     "trechosDeAgua": 6110,
     "agua": {
       "pontos": 144,
@@ -99,10 +350,205 @@
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
+    },
+    "trechosDeEsgoto": 2348,
+    "esgoto": {
+      "tubosDeQueda": 8,
+      "pontos": 76,
+      "uhcPorAndar": 204,
+      "dnTuboDeQuedaMm": 100,
+      "dnVentilacaoMm": 75,
+      "tubos": [
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        }
+      ],
+      "coletor": {
+        "dnMm": 200,
+        "declividadePct": 4.74,
+        "porGravidade": true
+      }
+    },
+    "andaresComUnidade": 11,
+    "trechosPluviais": 48,
+    "pluvial": {
+      "areaM2": 720,
+      "intensidadeMmH": 150,
+      "vazaoLMin": 1800,
+      "condutores": 3,
+      "dnVerticalMm": 100,
+      "dnHorizontalMm": 200
+    },
+    "incendio": {
+      "divisao": "A-2",
+      "grupo": "A",
+      "alturaM": 33,
+      "areaM2": 9456,
+      "exigidas": [
+        "Acesso de viatura na edificação",
+        "Segurança estrutural contra incêndio",
+        "Compartimentação vertical",
+        "Controle de materiais de acabamento",
+        "Saídas de emergência",
+        "Iluminação de emergência",
+        "Alarme de incêndio",
+        "Sinalização de emergência",
+        "Extintores",
+        "Hidrantes e mangotinhos"
+      ],
+      "condicionais": [],
+      "dispensadas": 7,
+      "limiteM": 25,
+      "andares": [
+        {
+          "nome": "Torre · 1º pav (térreo)",
+          "ambientes": 10,
+          "semRota": 0,
+          "naoAtendem": 3,
+          "piorM": 41
+        },
+        {
+          "nome": "Torre · 2º pav (tipo)",
+          "ambientes": 78,
+          "semRota": 0,
+          "naoAtendem": 0,
+          "piorM": 65.6
+        },
+        {
+          "nome": "Torre · 3º pav",
+          "ambientes": 78,
+          "semRota": 0,
+          "naoAtendem": 6,
+          "piorM": 75.7
+        },
+        {
+          "nome": "Torre · 4º pav",
+          "ambientes": 78,
+          "semRota": 0,
+          "naoAtendem": 6,
+          "piorM": 81.2
+        },
+        {
+          "nome": "Torre · 5º pav",
+          "ambientes": 78,
+          "semRota": 0,
+          "naoAtendem": 6,
+          "piorM": 86.7
+        },
+        {
+          "nome": "Torre · 6º pav",
+          "ambientes": 78,
+          "semRota": 0,
+          "naoAtendem": 6,
+          "piorM": 92.2
+        },
+        {
+          "nome": "Torre · 7º pav",
+          "ambientes": 78,
+          "semRota": 0,
+          "naoAtendem": 6,
+          "piorM": 97.7
+        },
+        {
+          "nome": "Torre · 8º pav",
+          "ambientes": 78,
+          "semRota": 0,
+          "naoAtendem": 6,
+          "piorM": 103.2
+        },
+        {
+          "nome": "Torre · 9º pav",
+          "ambientes": 78,
+          "semRota": 0,
+          "naoAtendem": 6,
+          "piorM": 108.7
+        },
+        {
+          "nome": "Torre · 10º pav",
+          "ambientes": 78,
+          "semRota": 0,
+          "naoAtendem": 6,
+          "piorM": 114.1
+        },
+        {
+          "nome": "Torre · 11º pav",
+          "ambientes": 78,
+          "semRota": 0,
+          "naoAtendem": 6,
+          "piorM": 119.6
+        },
+        {
+          "nome": "Torre · 12º pav",
+          "ambientes": 78,
+          "semRota": 0,
+          "naoAtendem": 6,
+          "piorM": 125.1
+        },
+        {
+          "nome": "Torre · cobertura",
+          "ambientes": 1,
+          "semRota": 0,
+          "naoAtendem": 1,
+          "piorM": 118.8
+        }
+      ],
+      "equipamentos": {
+        "EXTINTOR": 8,
+        "PLACA": 28,
+        "LUMINARIA_EMERGENCIA": 21,
+        "Alimentação da luminária de emergência": 21,
+        "CENTRAL_ALARME": 1,
+        "ACIONADOR_MANUAL": 3,
+        "AVISADOR": 3
+      },
+      "hidrantes": {
+        "tipo": 1,
+        "terreo": 1,
+        "cobertura": 1,
+        "bomba": true,
+        "recalque": true
+      }
     }
   },
   "RL": {
-    "modelo": "722e579b12dd37c8650ae68163b245195a636941a1ad0bb12a4f060995548924",
+    "modelo": "4af84bb18b7b706fca452de7c5ae7fbda97639ab62b844a805690b1f02010e4e",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -112,7 +558,7 @@
     "nucleos": 2,
     "estruturas": 1179,
     "quadros": 100,
-    "terminais": 8812,
+    "terminais": 9094,
     "trechosDeAgua": 6708,
     "agua": {
       "pontos": 229,
@@ -133,6 +579,193 @@
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
+    },
+    "trechosDeEsgoto": 2368,
+    "esgoto": {
+      "tubosDeQueda": 13,
+      "pontos": 121,
+      "uhcPorAndar": 324,
+      "dnTuboDeQuedaMm": 100,
+      "dnVentilacaoMm": 75,
+      "tubos": [
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        }
+      ],
+      "coletor": {
+        "dnMm": 200,
+        "declividadePct": 23.97,
+        "porGravidade": true
+      }
+    },
+    "andaresComUnidade": 7,
+    "trechosPluviais": 60,
+    "pluvial": {
+      "areaM2": 1104,
+      "intensidadeMmH": 150,
+      "vazaoLMin": 2760,
+      "condutores": 5,
+      "dnVerticalMm": 100,
+      "dnHorizontalMm": 250
+    },
+    "incendio": {
+      "divisao": "A-2",
+      "grupo": "A",
+      "alturaM": 21,
+      "areaM2": 10031,
+      "exigidas": [
+        "Acesso de viatura na edificação",
+        "Segurança estrutural contra incêndio",
+        "Controle de materiais de acabamento",
+        "Saídas de emergência",
+        "Iluminação de emergência",
+        "Sinalização de emergência",
+        "Extintores",
+        "Hidrantes e mangotinhos"
+      ],
+      "condicionais": [],
+      "dispensadas": 9,
+      "limiteM": 25,
+      "andares": [
+        {
+          "nome": "Torre · 1º pav (térreo)",
+          "ambientes": 15,
+          "semRota": 0,
+          "naoAtendem": 5,
+          "piorM": 58.6
+        },
+        {
+          "nome": "Torre · 2º pav (tipo)",
+          "ambientes": 125,
+          "semRota": 1,
+          "naoAtendem": 6,
+          "piorM": 83.1
+        },
+        {
+          "nome": "Torre · 3º pav",
+          "ambientes": 125,
+          "semRota": 1,
+          "naoAtendem": 11,
+          "piorM": 97.1
+        },
+        {
+          "nome": "Torre · 4º pav",
+          "ambientes": 125,
+          "semRota": 1,
+          "naoAtendem": 11,
+          "piorM": 104.4
+        },
+        {
+          "nome": "Torre · 5º pav",
+          "ambientes": 125,
+          "semRota": 1,
+          "naoAtendem": 11,
+          "piorM": 111.7
+        },
+        {
+          "nome": "Torre · 6º pav",
+          "ambientes": 125,
+          "semRota": 1,
+          "naoAtendem": 11,
+          "piorM": 119
+        },
+        {
+          "nome": "Torre · 7º pav",
+          "ambientes": 125,
+          "semRota": 1,
+          "naoAtendem": 11,
+          "piorM": 126.3
+        },
+        {
+          "nome": "Torre · 8º pav",
+          "ambientes": 125,
+          "semRota": 1,
+          "naoAtendem": 11,
+          "piorM": 133.6
+        },
+        {
+          "nome": "Torre · cobertura",
+          "ambientes": 1,
+          "semRota": 0,
+          "naoAtendem": 1,
+          "piorM": 128.7
+        }
+      ],
+      "equipamentos": {
+        "EXTINTOR": 11,
+        "PLACA": 36,
+        "LUMINARIA_EMERGENCIA": 30,
+        "Alimentação da luminária de emergência": 30
+      },
+      "hidrantes": {
+        "tipo": 2,
+        "terreo": 2,
+        "cobertura": 2,
+        "bomba": true,
+        "recalque": true
+      }
     }
   }
 }

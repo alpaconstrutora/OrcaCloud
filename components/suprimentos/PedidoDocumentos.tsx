@@ -1,8 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, FileText, LayoutGrid, List, Loader2, Paperclip, Receipt, Search, Upload } from 'lucide-react';
-// Ilustração do topo do cartão (pedido do usuário em 14/11/2026: "altere a
-// imagem do card pelo anexo") — substitui o ícone Receipt.
-import ilustracaoNotaFiscal from '../../assets/ilustracoes/nota-fiscal.webp';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
 import CartaoRecibo from '../ui/CartaoRecibo';
@@ -42,7 +39,7 @@ import {
  *
  * Os documentos têm duas visualizações, à escolha do usuário (09/11/2026:
  * "não é para substituir e sim criar uma opção de visualização"): tabela
- * (padrão) e cartões com cara de recibo de papel (`CartaoRecibo`, guia §34).
+ * (padrão) e cartões com cara de nota fiscal de papel (`CartaoRecibo`, guia §34).
  * A busca é UMA só e vale nos dois modos.
  *
  * A lista de documentos mora no PAI (o badge da sub-aba conta ela, e ela chega
@@ -269,7 +266,6 @@ const PedidoDocumentos: React.FC<PedidoDocumentosProps> = ({
                                 <CartaoRecibo
                                     key={d.id}
                                     titulo={rotuloCategoriaDocumento(d.categoria)}
-                                    icone={<img src={ilustracaoNotaFiscal} alt="" aria-hidden className="h-20 w-auto select-none" draggable={false} />}
                                     numero={codigoCurtoDocumento(d.id)}
                                     numeroTitulo={d.id}
                                     subtitulo={formatDateTimeBR(d.createdAt)}

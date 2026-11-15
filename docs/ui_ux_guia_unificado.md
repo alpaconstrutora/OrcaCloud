@@ -1548,6 +1548,8 @@ Em 14/11/2026 para Engenharia › **Orçamentos** (a lista, `ProjectList.tsx`; p
 
 Em 14/11/2026 para Comercial › Venda de Ativos › **Unidades do edifício** (`SalesModule.tsx`; mesmo pedido "filtro grupo + botão classificação + botão expandir / recolher"). Só com um edifício aberto e no modo lista — na visão mestre as linhas são edifícios, e grade/torres não têm linha. Opções: Bloco, Andar (ordem numérica, subsolo antes do térreo, rótulo igual à célula: "Térreo", "3º") e Status (o texto da célula — a etapa da negociação que ocupa a unidade — na ordem do fluxo: Disponível → Proposta … Concluído → rótulos do cadastro). Total do grupo = soma do Preço. Função pura em `utils/unidadeVendaGrupos.ts`; Shift+clique sobre as linhas da tela sem os grupos recolhidos.
 
+Em 14/11/2026 para Comercial › **Condomínios** (`components/condominio/CondominiosModule.tsx`, tabela feita à mão; `docs/planos/2026-11-14-condominios-organizacao-agrupar.md`). Junto veio a coluna **Organização** = quem OPERA o condomínio (`orgDoCondominio`), visível também com uma org no topo (a lista traz os que ela opera e os que ela construiu). Opções: Organização (chave = id), Cidade e Centro de custo (combinação, `chavePorCombinacao`). Só contagem (`semTotal`). O controle vai logo depois da busca (a tela não tem Filtro avançado). Função pura em `utils/condominioGrupos.ts`.
+
 **Total do grupo só onde há dinheiro.** Tela de cadastro/documento (fornecedores,
 clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGrupo` com
 `semTotal`; no `StandardTable`, basta não passar `agrupamento.valor`. "R$ 0,00" num
@@ -1702,6 +1704,18 @@ Três armadilhas, todas medidas no navegador — cada uma passa limpa em teste d
    Linha de grupo (§6.12) ganhou `role="button"`, `tabIndex`, `aria-expanded` e Enter/Espaço.
    ⚠️ Ao conferir foco no Playwright, espere ~300 ms: o `index.css` dá `transition: all 0.2s` a todo
    `button`, e o anel lido no mesmo instante do Tab sai transparente (parece defeito e não é).
+
+5. **Total fixo à DIREITA** (Orçamento Analítico, 14/11/2026 — "Preço total a 1280 ainda exige
+   rolar"): com a identificação fixa à esquerda e a coluna do total fixa à direita (`sticky right:0`,
+   sombra para a esquerda `-6px 0 8px -6px`), só o meio rola. Só fixa quando o total é a última
+   coluna (com M.O/Mat/Equip ligados ele não é). Abaixo de 768px **nenhuma** coluna fica fixa: no
+   celular elas tomariam a largura toda.
+6. **Menu ⋮ em célula de tabela** (`InlineDisclosureMenu`): o painel vai para o `<body>` com
+   `position: fixed` e abre PARA CIMA quando não cabe embaixo — antes, nas últimas linhas, abria
+   para baixo e a área de rolagem o cortava; numa célula fixa (`zIndex: 1`) as linhas seguintes
+   ainda o cobriam. Dentro de diálogo Radix (`[role="dialog"]`) fica no lugar (portal para o body
+   ali seria inclicável), virando para cima pela classe. Rolar/redimensionar fecha; Esc devolve o
+   foco ao botão. Teste que procurava o item `within(linha)` passa a usar `screen`.
 
 > ℹ️ A largura padrão de uma coluna pode ser própria do contexto (`DEFAULT_COL_WIDTHS_ORCAMENTO`):
 > `useResizableColumns` grava só o que o usuário arrastou, então mudar o padrão não pisa em ninguém.
@@ -4044,23 +4058,23 @@ cartões/lista (§5.1, `LayoutGrid`/`List`, `usePersistedState` com padrão `'li
 só** para os dois modos (`StandardTable` com `search`/`onSearchChange` **e** `searchText`; a grade
 filtra com a mesma função).
 
-**Anatomia (já embutida — não reescrever):**
+**Anatomia (já embutida — não reescrever).** Desde 14/11/2026 o desenho é o da ilustração de
+nota fiscal enviada pelo usuário (*"substituir é esse desenho de recibo do cartão"*): o antigo
+papel creme com picote e serrilha saiu. Cores todas em `COR` dentro do componente, por `style`.
 
 | Peça | Como |
 |---|---|
-| Papel | creme `#FFFDF7`, `rounded-t-[6px]`, `px-5 pt-5` |
-| Sombra | `filter: drop-shadow(...)` no invólucro — acompanha a serrilha; `box-shadow` desenharia um retângulo |
-| Cabeçalho | ícone + título `text-sm font-semibold uppercase tracking-[0.25em]` centralizado; "Nº" curto `font-mono` com o id inteiro no `title` (§27) |
-| Picote | linha tracejada + meia-lua nas laterais pintada com `fundo` (a cor ATRÁS do cartão — `bg-gray-50` da grade) |
-| Linhas | `<dl>` "rótulo ··· valor": rótulo `text-xs text-gray-500`, pontilhado `flex-1`, valor `text-sm text-gray-900` à direita, cortado com `title`; `numerico` → `font-mono tabular-nums` |
-| Observação | itálico entre aspas, `text-sm text-gray-700` |
-| Código de barras | DECORATIVO (`aria-hidden`), larguras determinísticas pelo id (`barrasDoCodigo`) |
-| Serrilha | faixa `h-1.5` com dois `linear-gradient` 135°/225° de 12px, por `style` |
+| Maço | duas folhas cinza atrás (`-rotate-[3deg]` / `rotate-[2deg]`), folha principal `#FAFAFA` com sombra; o cartão ocupa a altura da linha da grade (`h-full`) e o rodapé desce (`mt-auto`) |
+| Título | laranja `text-xl font-extrabold uppercase` + sublinhado salmão; abaixo, duas faixas cinza decorativas |
+| Cupom | canto superior direito, `rotate-[3deg]`, preso por clipe (SVG): "Nº" curto `font-mono` com o id inteiro no `title` (§27), data, código de barras e serrilha escura |
+| Linhas | tabela `<dl>` de células: rótulo `text-xs text-gray-600` em cinza-claro, valor escuro (`#2D3A4E`, §32) em cinza-médio à direita, cortado com `title`; `numerico` → `font-mono tabular-nums` |
+| Observação | itálico entre aspas, `text-sm text-gray-700`, filete salmão à esquerda |
+| Decoração | faixas salmão no pé do papel, código de barras — tudo `aria-hidden`; barras determinísticas pelo id (`barrasDoCodigo`) |
 
 ```tsx
 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-6 bg-gray-50">
   <CartaoRecibo
-    titulo="Recibo" icone={<Receipt className="w-5 h-5" />}
+    titulo="Recibo"
     numero={codigoCurto(id)} numeroTitulo={id} subtitulo={formatDateTimeBR(criadoEm)}
     linhas={[{ rotulo: 'Arquivo', valor: nome, titulo: nome }, { rotulo: 'Tamanho', valor: '120 KB', numerico: true }]}
     observacao={descricao} barras={barrasDoCodigo(id)}

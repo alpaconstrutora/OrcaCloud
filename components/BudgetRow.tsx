@@ -43,6 +43,8 @@ interface BudgetRowProps {
     isLocked?: boolean;
     /** Colunas fixas (arraste, Item, Base, Código, Descrição) — guia §6.13.1. */
     esquerdaFixa?: EsquerdaFixa;
+    /** Preço total fixo à direita (BudgetEditor decide: tela larga e sem M.O/Mat/Equip). */
+    precoTotalFixo?: boolean;
 }
 
 /** Classe base de toda célula de dado — separador vertical + altura de linha (§6.6/§7.2).
@@ -69,16 +71,18 @@ const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void)
     // Tipo = texto colorido simples (§8): sem pílula, fundo nem caixa alta.
     if (type === SinapiType.SERVICE) {
         return (
-            <span className="flex items-center gap-1 shrink-0 text-sm font-normal text-purple-700">
-                <Loader2 className="w-3 h-3" />
-                Serviço
+            // Só o ícone, como o selo de Composição (pedido de 2026-11-14): a palavra tomava ~60px
+            // da Descrição. O nome fica no title e para o leitor de tela.
+            <span title="Serviço" className="flex items-center justify-center shrink-0 bg-purple-50 text-purple-700 p-1 rounded-[6px] border border-purple-200">
+                <Loader2 className="w-3 h-3" aria-hidden="true" />
+                <span className="sr-only">Serviço</span>
             </span>
         );
     }
     return (
-        <span className="flex items-center gap-1 shrink-0 text-sm font-normal text-amber-700">
-            <Box className="w-3 h-3" />
-            Insumo
+        <span title="Insumo" className="flex items-center justify-center shrink-0 bg-amber-50 text-amber-700 p-1 rounded-[6px] border border-amber-200">
+            <Box className="w-3 h-3" aria-hidden="true" />
+            <span className="sr-only">Insumo</span>
         </span>
     );
 };
@@ -108,6 +112,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     auxiliaryItems,
     isLocked,
     esquerdaFixa,
+    precoTotalFixo,
 }) => {
     const {
         attributes,
@@ -316,8 +321,12 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 {/* Espaçador (§6.1.1) — casa com o <col /> sem largura do colgroup */}
                 <td aria-hidden="true" className="border-r border-gray-100"></td>
 
-                {/* Preço total + ações. Total = valor financeiro (§7, font-medium); ações sempre visíveis (§9). */}
-                <td className={TD}>
+                {/* Preço total + ações. Total = valor financeiro (§7, font-medium); ações sempre visíveis (§9).
+                    Fixo à direita em tela larga: só o meio da tabela rola (pedido 2026-11-14). */}
+                <td
+                    style={precoTotalFixo ? { position: 'sticky', right: 0, zIndex: 1, boxShadow: '-6px 0 8px -6px rgba(15, 23, 42, 0.14)' } : undefined}
+                    className={`${TD} ${precoTotalFixo ? FUNDO_FIXO : ''}`}
+                >
                     {/* Valor + memória de cálculo + ⋮ numa linha (§9.2): eram 7 botões soltos
                         embaixo do valor, e a lixeira ficava colada em "Salvar na Base Própria". A
                         memória fica à vista: é pendência técnica (âmbar quando falta). */}

@@ -2,7 +2,7 @@ import React from 'react';
 import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { projectService, ProjectData } from '../services/projectService';
 import { empreendimentoService } from '../services/empreendimentoService';
-import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2, MoveHorizontal, AlertCircle } from 'lucide-react';
+import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2, MoveHorizontal, AlertCircle, AlertTriangle, Zap, CalendarOff } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { TipoObra, OBRA_STATUSES } from '../types/project';
 
@@ -45,10 +45,14 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
 import { KpiCard } from './ui/KpiCard';
+import { SegmentedProgress } from './ui/SegmentedProgress';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
 import { agruparOrcamentos, OPCOES_AGRUPAR_ORCAMENTO, type CampoAgruparOrcamento } from '../utils/orcamentoGrupos';
+import { diasEntre, hojeLocalISO, type IndicadoresDePrazo } from '../utils/planejamentoIndicadores';
+import { useIndicadoresDosPlanejamentos } from '../hooks/useIndicadoresDosPlanejamentos';
+import { situacaoDePrazo, ORDEM_SITUACAO, agruparPlanejamentos, OPCOES_AGRUPAR_PLANEJAMENTO, type CampoAgruparPlanejamento } from '../utils/planejamentoGrupos';
 
 interface ProjectSettings {
     classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO' | string;
@@ -133,6 +137,32 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 // Status: "Em andamento" + px-6 não cabia em 130px e quebrava em duas linhas (crítica 2026-11-14).
 const DEFAULT_COL_WIDTHS_ORCAMENTO: Record<string, number> = { ...DEFAULT_COL_WIDTHS, actions: 152, 'status-budget': 150 };
 
+/** Colunas de Planejamento (crítica 2026-11-14, item 3 de docs/planos/2026-11-14-planejamento-
+ *  lista-critica.md): forma de CRONOGRAMA, não de orçamento. Saem Status (budgetStatus), Status
+ *  Obra, Pedidos e Tipo de Obra — perguntas de orçamento/obra que nada diziam ao planejador e
+ *  contradiziam a linha ("Em andamento" + "Não Iniciado" num cronograma em curso). Entram
+ *  Avanço (real × previsto), Prazo, Término e Início, da conta única de utils/planejamentoIndicadores.ts.
+ *  Chave de armazenamento própria ('projectListColumns:planejamento'): quem já abriu a tela tinha
+ *  a ordem/visibilidade das colunas de orçamento gravadas na chave comum. */
+const COLUMNS_PLANEJAMENTO: ColumnConfig[] = [
+    { key: 'code',     label: 'Código',         sortable: true },
+    { key: 'name',     label: 'Planejamento',   sortable: true },
+    { key: 'avanco',   label: 'Avanço',         sortable: true },
+    { key: 'prazo',    label: 'Prazo',          sortable: true },
+    { key: 'termino',  label: 'Término',        sortable: true },
+    { key: 'inicio',   label: 'Início',         sortable: true },
+    { key: 'linked',   label: 'Obra Vinculada', sortable: false },
+    { key: 'client',   label: 'Cliente',        sortable: true },
+    { key: 'updated',  label: 'Atualização',    sortable: true },
+    { key: 'created',  label: 'Data de Criação', sortable: true, defaultHidden: true },
+    { key: 'actions',  label: 'Ações',          sortable: false },
+];
+const DEFAULT_COL_WIDTHS_PLANEJAMENTO: Record<string, number> = {
+    ...DEFAULT_COL_WIDTHS, actions: 152, avanco: 210, prazo: 210, termino: 120, inicio: 120,
+};
+const dataCurta = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
+const pct0 = (v: number) => `${Math.round(v)}%`;
+
 /** Recortes dos cards de Orçamentos (crítica 2026-11-14, passo 4): números que pedem ação e
  *  viram filtro ao clicar (Princípio 5 do PRODUCT.md), no lugar de Total/Em Andamento/
  *  Concluídos/Recentes — genéricos e com conta errada ("Em Andamento" contava orçamento sem
@@ -144,6 +174,27 @@ const RECORTES_ORCAMENTO: { key: RecorteOrcamento; label: string; dica: string; 
     { key: 'parados', label: 'Parados há mais de 30 dias', dica: 'Mostrar só os orçamentos sem atualização há mais de 30 dias', cor: 'orange', icone: 'relogio' },
     { key: 'com-pedidos', label: 'Com pedidos', dica: 'Mostrar só os orçamentos que já têm pedido de compra vinculado', cor: 'blue', icone: 'cadeado' },
 ];
+
+/** Recortes dos cards de Planejamento (crítica 2026-11-14, docs/planos/2026-11-14-planejamento-
+ *  lista-critica.md, item 1). Substituem o PlanningDashboard, cujo "Progresso Médio 5.4%" era o
+ *  default fixo `obraProgress` e cujas "Atividades Críticas" contavam itens órfãos do cronograma.
+ *  Mesma conta da Central de Comando (utils/planejamentoIndicadores.ts); clicar filtra a lista. */
+type RecortePlanejamento = 'atrasados' | 'terminam-30' | 'criticas-abertas' | 'sem-cronograma';
+const RECORTES_PLANEJAMENTO: { key: RecortePlanejamento; label: string; dica: string; cor: 'red' | 'amber' | 'orange' | 'gray'; icone: 'alerta' | 'relogio' | 'raio' | 'calendario' }[] = [
+    { key: 'atrasados', label: 'Com tarefa atrasada', dica: 'Mostrar só os planejamentos com tarefa que passou do término sem chegar a 100%', cor: 'red', icone: 'alerta' },
+    { key: 'terminam-30', label: 'Terminam em 30 dias', dica: 'Mostrar só os planejamentos com término previsto nos próximos 30 dias e ainda não concluídos', cor: 'amber', icone: 'relogio' },
+    { key: 'criticas-abertas', label: 'Com tarefa crítica em aberto', dica: 'Mostrar só os planejamentos com tarefa do caminho crítico ainda não concluída', cor: 'orange', icone: 'raio' },
+    { key: 'sem-cronograma', label: 'Sem cronograma', dica: 'Mostrar só os planejamentos cujas tarefas ainda não têm início e término', cor: 'gray', icone: 'calendario' },
+];
+const passaNoRecortePlanejamento = (ind: IndicadoresDePrazo | undefined, r: RecortePlanejamento, hoje: string): boolean => {
+    if (!ind) return false;
+    if (r === 'sem-cronograma') return !ind.temDatas;
+    if (r === 'atrasados') return ind.atrasadas > 0;
+    if (r === 'criticas-abertas') return ind.criticasAbertas > 0;
+    if (!ind.fimPrevisto || ind.avancoFisicoPct >= 100) return false;
+    const dias = diasEntre(hoje, ind.fimPrevisto);
+    return dias >= 0 && dias <= 30;
+};
 
 /** Foco da linha pelo teclado. O contorno do <tr> não é desenhado pelo Chrome (medido
  *  14/11/2026), então o anel vai nas células: fundo blue-50 + linhas azuis de 2px em cima e
@@ -325,9 +376,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
         return hidden;
     }, [organizations.length, isObraContext, isDiarioContext]);
 
-    const contextColumns = COLUMNS.filter(c => !columnsWithoutData.has(c.key));
+    const colunasDoContexto = isPlanejamentoContext ? COLUMNS_PLANEJAMENTO : COLUMNS;
+    const contextColumns = colunasDoContexto.filter(c => !columnsWithoutData.has(c.key));
 
-    const tableColumns = useTableColumns(COLUMNS, 'projectListColumns');
+    const tableColumns = useTableColumns(colunasDoContexto, isPlanejamentoContext ? 'projectListColumns:planejamento' : 'projectListColumns');
     // Linhas da aba/contexto atual (Obras, Orçamentos, Planejamentos, Diários), antes
     // da busca, do tipo e do filtro avançado — base da lista de clientes do filtro.
     const tabProjects = React.useMemo(() => projects.filter(p => {
@@ -347,6 +399,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     ? (p.settings?.classification === 'DIARIO' || (p.settings?.classification === 'OBRA' && (p.settings?.diaryEntries?.length || 0) > 0))
                     : isOrcamento));
     }), [projects, activeTab, classificationFilter]);
+    // Indicadores de prazo de cada planejamento (cards, colunas e ordenação de Planejamento) —
+    // busca leve do orçamento + conta da Central de Comando. Inativo nos outros contextos.
+    const indicadoresPlan = useIndicadoresDosPlanejamentos(tabProjects, isPlanejamentoContext);
     // Opções do Cliente dependem das linhas carregadas → campos em useMemo (§5.5).
     const advancedFields = React.useMemo(
         () => buildAdvancedFilterFields(distinctOptions(tabProjects, p => getClientCellValue(p, projects, activeTab)), !!isDiaryContext),
@@ -365,7 +420,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
         resetColumns,
     } = tableColumns;
 
-    const cols = useResizableColumns(isOrcamentoContext ? DEFAULT_COL_WIDTHS_ORCAMENTO : DEFAULT_COL_WIDTHS, 'projectListColWidths');
+    const cols = useResizableColumns(
+        isOrcamentoContext ? DEFAULT_COL_WIDTHS_ORCAMENTO : isPlanejamentoContext ? DEFAULT_COL_WIDTHS_PLANEJAMENTO : DEFAULT_COL_WIDTHS,
+        'projectListColWidths',
+    );
     // Colunas visíveis, na ordem escolhida pelo usuário (arraste no header) — usada para
     // colgroup/thead/tbody. As 2 colunas extras do contexto Diário (obra-vinculada,
     // planejamento-vinculada) não fazem parte de COLUMNS (não são configuráveis/arrastáveis)
@@ -382,11 +440,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // table-layout:fixed (§6.1).
     const tableTotalWidth = displayColumns.reduce((sum, key) => sum + cols.getWidth(key), 0) + cols.getWidth('actions');
 
-    // Colunas fixas à esquerda (Orçamentos; crítica de 2026-11-14): da 1ª coluna até "Orçamento",
+    // Colunas fixas à esquerda (Orçamentos e Planejamento; críticas de 2026-11-14): da 1ª coluna até o nome,
     // se ela estiver entre as duas primeiras (a ordem é arrastável). A tabela é mais larga que a
     // tela; sem isso, quem rolava até Status/Bloqueio/Ações perdia o nome da linha.
     const colunasFixas: Record<string, { left: number; ultima: boolean }> = {};
-    if (isOrcamentoContext) {
+    if (isOrcamentoContext || isPlanejamentoContext) {
         const iNome = displayColumns.indexOf('name');
         if (iNome >= 0 && iNome <= 1) {
             let left = 0;
@@ -442,6 +500,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
         'status-budget': { label: isDiaryContext ? 'Status Diário' : 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
         'status-obra': { label: isDiaryContext ? 'Total Registros' : 'Status Obra', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
         lock: { label: 'Pedidos', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+        avanco: { label: 'Avanço', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        prazo: { label: 'Prazo', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        termino: { label: 'Término', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        inicio: { label: 'Início', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     };
 
     // Conteúdo de cada <td> por coluna — extraído para função pura (fecha sobre helpers e
@@ -468,12 +530,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
                     </span>
                 ) : (
-                    <span className="text-sm text-gray-400 font-normal italic">-</span>
+                    <span className="text-sm text-gray-500 font-normal italic">-</span>
                 );
             case 'organization': {
                 const orgId = project.settings?.organizationId;
                 const org = organizations.find(o => o.id === orgId);
-                return <span className="text-sm font-normal text-gray-700">{org ? org.name : <span className="text-gray-400 italic">—</span>}</span>;
+                return <span className="text-sm font-normal text-gray-700">{org ? org.name : <span className="text-gray-500 italic">—</span>}</span>;
             }
             case 'empreendimento': {
                 const emp = empreendimentoByProject[project.id];
@@ -488,7 +550,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 )}
                             </div>
                         ) : (
-                            <span className="text-gray-400 italic">—</span>
+                            <span className="text-gray-500 italic">—</span>
                         )}
                     </span>
                 );
@@ -584,7 +646,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 {clientLabel}
                             </span>
                         ) : (
-                            <span className="text-sm font-normal text-gray-400 italic">-</span>
+                            <span className="text-sm font-normal text-gray-500 italic">-</span>
                         )}
                     </>
                 );
@@ -624,7 +686,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     project.settings?.budgetStatus ? (
                         <StatusBadge status={capitalizeStatus(project.settings.budgetStatus)} />
                     ) : (
-                        <span className="text-sm text-gray-400 font-normal italic">-</span>
+                        <span className="text-sm text-gray-500 font-normal italic">-</span>
                     )
                 );
             case 'status-obra':
@@ -637,7 +699,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     project.settings?.obraStatus ? (
                         <StatusBadge status={project.settings.obraStatus === 'Em andamento' ? 'Em andamento' : project.settings.obraStatus} />
                     ) : (
-                        <span className="text-sm text-gray-400 font-normal italic">-</span>
+                        <span className="text-sm text-gray-500 font-normal italic">-</span>
                     )
                 );
             case 'lock':
@@ -647,7 +709,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             // "Bloqueado/Livre" não dizia o quê (crítica 2026-11-14): o fato é ter pedido
                             // vinculado; não poder excluir é a consequência, dita no title. "Sem pedidos"
                             // em cinza, não verde — não é "tudo certo", é só a ausência do dado.
-                            <div className="flex items-center gap-1.5 whitespace-nowrap text-amber-600" title={`${getEffectiveOrderCount(project.id)} pedido(s) vinculado(s) — por isso não pode ser excluído`}>
+                            <div className="flex items-center gap-1.5 whitespace-nowrap text-amber-700" title={`${getEffectiveOrderCount(project.id)} pedido(s) vinculado(s) — por isso não pode ser excluído`}>
                                 <Lock className="w-4 h-4" />
                                 <span className="text-sm font-normal">Com pedidos</span>
                             </div>
@@ -659,6 +721,46 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         )}
                     </div>
                 );
+            case 'avanco':
+            case 'prazo':
+            case 'termino':
+            case 'inicio': {
+                // Planejamento: conta da Central de Comando. Enquanto o orçamento carrega, ou se a
+                // busca falhou, a célula diz isso — nunca um 0% inventado (§28.5).
+                const ind = indicadoresPlan.porProjeto[project.id];
+                if (!ind) {
+                    const falhou = indicadoresPlan.estado === 'erro';
+                    return (
+                        <span className="text-sm font-normal text-gray-500" title={falhou ? 'Não foi possível carregar o orçamento deste planejamento' : 'Calculando pelo orçamento'}>
+                            {falhou ? '—' : '…'}
+                        </span>
+                    );
+                }
+                if (key === 'avanco') {
+                    if (!ind.temDatas) return <span className="text-sm font-normal text-gray-500">—</span>;
+                    return (
+                        <SegmentedProgress
+                            percent={Math.round(ind.avancoFisicoPct)}
+                            tone="blue"
+                            hint={`previsto ${pct0(ind.previstoPct)}`}
+                            title={`Avanço físico real ${pct0(ind.avancoFisicoPct)} · previsto até hoje ${pct0(ind.previstoPct)} (ponderado pelo valor orçado, como na Central de Comando)`}
+                        />
+                    );
+                }
+                if (key === 'prazo') {
+                    const s = situacaoDePrazo(ind);
+                    const titulo = ind.spi !== null
+                        ? `SPI ${ind.spi.toFixed(2).replace('.', ',')} — avanço real ÷ previsto até hoje${ind.atrasadas > 0 ? ` · ${ind.atrasadas} tarefa(s) com término vencido sem chegar a 100%` : ''}`
+                        : undefined;
+                    return <span className={`text-sm font-normal ${s.cor}`} title={titulo}>{s.texto}</span>;
+                }
+                const data = key === 'termino' ? ind.fimPrevisto : ind.inicioPrevisto;
+                if (!data) return <span className="text-sm font-normal text-gray-500">—</span>;
+                const desvio = key === 'termino' && ind.desvioDias !== null && ind.desvioDias !== 0
+                    ? `${ind.desvioDias > 0 ? '+' : ''}${ind.desvioDias}d vs. linha de base (${dataCurta(ind.fimBaseline)})`
+                    : undefined;
+                return <span className="text-sm font-normal text-gray-700 tabular-nums" title={desvio}>{dataCurta(data)}</span>;
+            }
             default:
                 return null;
         }
@@ -843,6 +945,28 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             const empB = empreendimentoByProject[b.id]?.name || '';
                             return sortDirection === 'asc' ? empA.localeCompare(empB) : empB.localeCompare(empA);
                         }
+                        case 'avanco':
+                        case 'prazo':
+                        case 'termino':
+                        case 'inicio': {
+                            // Planejamento: pelos mesmos indicadores das células. Sem indicador
+                            // (calculando/sem datas) vai sempre para o fim, nos dois sentidos.
+                            const ia = indicadoresPlan.porProjeto[a.id];
+                            const ib = indicadoresPlan.porProjeto[b.id];
+                            const chave = (ind: IndicadoresDePrazo | undefined): number | string | null => {
+                                if (!ind) return null;
+                                if (sortColumn === 'avanco') return ind.temDatas ? ind.avancoFisicoPct : null;
+                                if (sortColumn === 'prazo') return ORDEM_SITUACAO.indexOf(situacaoDePrazo(ind).chave) * 10 + (ind.spi ?? 9);
+                                const d = sortColumn === 'termino' ? ind.fimPrevisto : ind.inicioPrevisto;
+                                return d || null;
+                            };
+                            const ka = chave(ia), kb = chave(ib);
+                            if (ka === null && kb === null) return 0;
+                            if (ka === null) return 1;
+                            if (kb === null) return -1;
+                            const cmp = typeof ka === 'number' && typeof kb === 'number' ? ka - kb : String(ka).localeCompare(String(kb));
+                            return sortDirection === 'asc' ? cmp : -cmp;
+                        }
                         case 'lock': {
                             // Aproximação direta (orderCounts), não a contagem em cascata de
                             // getEffectiveOrderCount — suficiente para ordenar bloqueado/livre.
@@ -867,7 +991,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }
                 return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
             });
-    }, [tabProjects, projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, advancedFields, isDiaryContext, organizations, orderCounts, empreendimentoByProject]);
+    }, [tabProjects, projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, advancedFields, isDiaryContext, organizations, orderCounts, empreendimentoByProject, indicadoresPlan.porProjeto]);
 
     const stats = React.useMemo(() => {
         const total = filteredProjects.length;
@@ -999,9 +1123,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
         return total;
     };
 
-    // "Agrupar" (guia de UI §6.12) — só na lista de Orçamentos (pedido de 2026-11-14):
-    // campo, ordem dos grupos e recolher/expandir todos. As outras listas que usam este
-    // componente (Obras, Planejamento, Diário) não ganharam o controle. Os grupos saem da
+    // "Agrupar" (guia de UI §6.12) — listas de Orçamentos (pedido de 2026-11-14) e de
+    // Planejamento (item 4 da crítica de 2026-11-14): campo, ordem dos grupos e recolher/
+    // expandir todos. Obras e Diário não ganharam o controle. Os grupos saem da
     // lista já filtrada e ordenada; é recorte de exibição, não reconsulta (§6.12).
     // O rótulo do grupo é o MESMO texto da célula (status capitalizado, tipo traduzido,
     // bloqueio em cascata com a obra mestre).
@@ -1020,22 +1144,72 @@ const ProjectList: React.FC<ProjectListProps> = ({
     if (isOrcamentoContext) {
         for (const r of RECORTES_ORCAMENTO) contagemRecorte[r.key] = filteredProjects.filter(p => passaNoRecorte(p, r.key)).length;
     }
-    const projetosNaTela = recorteAtivo ? filteredProjects.filter(p => passaNoRecorte(p, recorteAtivo)) : filteredProjects;
+    // Recorte pelos cards de Planejamento — mesmas regras de sessão do de Orçamentos. A conta
+    // precisa do orçamento de cada planejamento (busca leve no hook); enquanto carrega ou se
+    // falhar, o card diz isso e nada é recortado.
+    const [recortePlan, setRecortePlan] = React.useState<RecortePlanejamento | null>(null);
+    const hojePlan = hojeLocalISO();
+    const recortePlanAtivo = isPlanejamentoContext && indicadoresPlan.estado === 'pronto' ? recortePlan : null;
+    const contagemRecortePlan: Record<RecortePlanejamento, number> = { atrasados: 0, 'terminam-30': 0, 'criticas-abertas': 0, 'sem-cronograma': 0 };
+    if (isPlanejamentoContext && indicadoresPlan.estado === 'pronto') {
+        for (const r of RECORTES_PLANEJAMENTO) contagemRecortePlan[r.key] = filteredProjects.filter(p => passaNoRecortePlanejamento(indicadoresPlan.porProjeto[p.id], r.key, hojePlan)).length;
+    }
 
-    const agrupamento = useAgrupamento<CampoAgruparOrcamento>('projectListGroupBy:orcamentos');
-    const campoAgrupar: CampoAgruparOrcamento | 'none' =
-        isOrcamentoContext && viewMode === 'list' && OPCOES_AGRUPAR_ORCAMENTO.some(o => o.value === agrupamento.campo)
+    const projetosNaTela = recorteAtivo
+        ? filteredProjects.filter(p => passaNoRecorte(p, recorteAtivo))
+        : recortePlanAtivo
+            ? filteredProjects.filter(p => passaNoRecortePlanejamento(indicadoresPlan.porProjeto[p.id], recortePlanAtivo, hojePlan))
+            : filteredProjects;
+
+    // Planejamento ganhou o mesmo Agrupar (item 4 do plano de 2026-11-14), com os campos da
+    // própria tabela (Prazo, mês de término, obra, cliente) e chave própria no navegador.
+    const temAgrupar = (isOrcamentoContext || isPlanejamentoContext) && viewMode === 'list';
+    const agrupamento = useAgrupamento<CampoAgruparOrcamento | CampoAgruparPlanejamento>(
+        isPlanejamentoContext ? 'projectListGroupBy:planejamento' : 'projectListGroupBy:orcamentos');
+    const opcoesAgrupar: { value: CampoAgruparOrcamento | CampoAgruparPlanejamento; label: string }[] =
+        isPlanejamentoContext ? OPCOES_AGRUPAR_PLANEJAMENTO : OPCOES_AGRUPAR_ORCAMENTO;
+    const campoAgrupar: CampoAgruparOrcamento | CampoAgruparPlanejamento | 'none' =
+        temAgrupar && opcoesAgrupar.some(o => o.value === agrupamento.campo)
             ? agrupamento.campo
             : 'none';
-    const gruposOrcamento = campoAgrupar === 'none' ? [] : agruparOrcamentos(projetosNaTela, campoAgrupar, agrupamento.direcao, {
-        status: p => (p.settings?.budgetStatus ? capitalizeStatus(p.settings.budgetStatus) : ''),
-        statusObra: p => p.settings?.obraStatus,
-        bloqueado: p => getEffectiveOrderCount(p.id) > 0,
-        tipoObra: p => (p.settings?.tipoObra ? (TIPO_OBRA_LABELS[p.settings.tipoObra as TipoObra] || p.settings.tipoObra) : ''),
-    });
+    const gruposDaLista = campoAgrupar === 'none' ? []
+        : isPlanejamentoContext
+            ? agruparPlanejamentos(projetosNaTela, campoAgrupar as CampoAgruparPlanejamento, agrupamento.direcao, {
+                indicadores: p => indicadoresPlan.porProjeto[p.id],
+                obra: p => findLinkedProject(p, projects)?.name || p.settings?.linkedProjectName,
+                cliente: p => getClientCellValue(p, projects, activeTab),
+            })
+            : agruparOrcamentos(projetosNaTela, campoAgrupar as CampoAgruparOrcamento, agrupamento.direcao, {
+                status: p => (p.settings?.budgetStatus ? capitalizeStatus(p.settings.budgetStatus) : ''),
+                statusObra: p => p.settings?.obraStatus,
+                bloqueado: p => getEffectiveOrderCount(p.id) > 0,
+                tipoObra: p => (p.settings?.tipoObra ? (TIPO_OBRA_LABELS[p.settings.tipoObra as TipoObra] || p.settings.tipoObra) : ''),
+            });
     const linhasDoCorpo: EntradaDaTela<ProjectSummary>[] = campoAgrupar === 'none'
         ? projetosNaTela.map((item, indice) => ({ tipo: 'linha', item, indice }))
-        : entradasDaPagina(gruposOrcamento, agrupamento.recolhidos);
+        : entradasDaPagina(gruposDaLista, agrupamento.recolhidos);
+
+    // Abrir um registro troca de tela; ao voltar, o foco vai para a linha de onde a pessoa saiu
+    // (crítica de Planejamento 2026-11-14, item 5: o foco caía no <body> e quem usa teclado
+    // recomeçava do topo). sessionStorage: vale só para esta aba e esta volta.
+    const chaveUltimaAberta = `projectList:ultimaAberta:${classificationFilter ?? activeTab}`;
+    const abrirRegistro = (id: string) => {
+        try { sessionStorage.setItem(chaveUltimaAberta, id); } catch { /* sem storage: só não devolve o foco */ }
+        if (onRowClick) onRowClick(id); else onEditProject(id);
+    };
+    const carregandoLista = isLoading || !!isExternalLoading;
+    React.useEffect(() => {
+        if (carregandoLista || projetosNaTela.length === 0) return;
+        let id: string | null = null;
+        try { id = sessionStorage.getItem(chaveUltimaAberta); } catch { return; }
+        if (!id) return;
+        const idSeguro = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id.replace(/"/g, '\\"');
+        const alvo = document.querySelector<HTMLElement>(`[data-project-id="${idSeguro}"]`);
+        if (!alvo) return;
+        try { sessionStorage.removeItem(chaveUltimaAberta); } catch { /* idem */ }
+        alvo.focus({ preventScroll: true });
+        alvo.scrollIntoView?.({ block: 'nearest' });
+    }, [carregandoLista, projetosNaTela.length, chaveUltimaAberta]);
 
     return (
         <div className="space-y-6">
@@ -1049,14 +1223,20 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </div>
                     {/* Variante compacta do CTA primário (ui_ux_guia_unificado.md §17) */}
                     <div className="flex items-center gap-2">
+                        {/* Planejamento sem "Importar Excel": o modal lê a ficha de um ORÇAMENTO e cria
+                            um orçamento (PR #449). A importação de cronograma é o item 2 do plano
+                            docs/planos/2026-11-14-planejamento-lista-critica.md. */}
+                        {!isPlanejamentoContext && (
+                            <button
+                                onClick={() => setIsImportModalOpen(true)}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[6px] hover:bg-emerald-600 hover:text-white font-medium text-[13px] transition-all active:scale-95"
+                            >
+                                <FileSpreadsheet className="w-4 h-4" />
+                                Importar Excel
+                            </button>
+                        )}
                         <button
-                            onClick={() => setIsImportModalOpen(true)}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[6px] hover:bg-emerald-600 hover:text-white font-medium text-[13px] transition-all active:scale-95"
-                        >
-                            <FileSpreadsheet className="w-4 h-4" />
-                            Importar Excel
-                        </button>
-                        <button
+                            data-abre-novo-projeto
                             onClick={() => onNewProject(classificationFilter || (activeTab === 'templates' ? 'OBRA' : 'ORCAMENTO'))}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                         >
@@ -1095,8 +1275,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
             )}
 
             {/* KPIs genéricos desta tabela — só quando o pai não já mostra seus próprios KPIs
-                (Planejamento usa PlanningDashboard, Diário usa DiaryDashboard, ambos com
-                hideHeader=true; mostrar os dois juntos duplicava a informação). */}
+                (Diário usa DiaryDashboard, com hideHeader=true; mostrar os dois juntos duplicava a
+                informação). Planejamento tem os seus recortes logo abaixo. */}
             {!hideHeader && isOrcamentoContext && (
                 // Cada card é um botão (teclado e leitor de tela: aria-pressed diz se está filtrando).
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
@@ -1125,7 +1305,57 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     })}
                 </div>
             )}
-            {!hideHeader && !isOrcamentoContext && (
+            {isPlanejamentoContext && indicadoresPlan.estado === 'erro' && (
+                // Falha da busca do orçamento: UMA mensagem com "Tentar de novo" (guia §4.5.1),
+                // não quatro cards repetindo "Falhou" (passada final da crítica de 2026-11-14).
+                <div role="alert" className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-white rounded-[10px] border border-gray-200 px-4 py-3 mb-3 text-sm text-gray-700">
+                    <AlertCircle className="w-4 h-4 text-red-600 shrink-0" aria-hidden="true" />
+                    <span>Não foi possível carregar o orçamento dos planejamentos para calcular os prazos.</span>
+                    <button type="button" onClick={indicadoresPlan.tentarDeNovo} className="font-medium text-blue-600 hover:text-blue-800 hover:underline">
+                        Tentar de novo
+                    </button>
+                </div>
+            )}
+            {isPlanejamentoContext && indicadoresPlan.estado !== 'erro' && (
+                // Planejamento: os cards moram aqui porque filtram ESTA lista. Sem `disabled`
+                // enquanto calcula — botão desabilitado esconde o title que diz o motivo.
+                // 2×2 no celular: 4 cards empilhados ocupavam a tela de 390 px inteira (item 7).
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3" aria-busy={indicadoresPlan.estado === 'carregando'}>
+                    {RECORTES_PLANEJAMENTO.map(r => {
+                        const pronto = indicadoresPlan.estado === 'pronto';
+                        const ativo = recortePlanAtivo === r.key;
+                        const icone = r.icone === 'alerta' ? <AlertTriangle className="w-4 h-4" />
+                            : r.icone === 'relogio' ? <Clock className="w-4 h-4" />
+                            : r.icone === 'raio' ? <Zap className="w-4 h-4" />
+                            : <CalendarOff className="w-4 h-4" />;
+                        // Legendas curtas (4 lado a lado e 2×2 no celular); a explicação longa vai no title.
+                        const sub = !pronto ? 'Calculando…'
+                            : ativo ? 'Filtrando · ver todos'
+                            : `de ${filteredProjects.length} · filtrar`;
+                        return (
+                            <button
+                                key={r.key}
+                                type="button"
+                                aria-pressed={pronto ? ativo : undefined}
+                                aria-disabled={!pronto ? true : undefined}
+                                onClick={() => { if (pronto) setRecortePlan(ativo ? null : r.key); }}
+                                title={!pronto ? 'Calculando — aguarde um instante' : ativo ? 'Mostrar todos os planejamentos' : r.dica}
+                                className={`text-left rounded-xl transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${ativo ? 'ring-2 ring-blue-500' : pronto ? 'hover:shadow-sm' : 'cursor-wait'}`}
+                            >
+                                <KpiCard
+                                    label={r.label}
+                                    value={pronto ? contagemRecortePlan[r.key] : '—'}
+                                    sub={sub}
+                                    icon={icone}
+                                    color={pronto ? r.cor : 'gray'}
+                                    className="h-full"
+                                />
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+            {!hideHeader && !isOrcamentoContext && !isPlanejamentoContext && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                     <KpiCard label="Total" value={stats.total} sub="Registros visíveis" icon={<FolderOpen className="w-5 h-5" />} color="blue" />
                     <KpiCard label="Em Andamento" value={stats.inProgress} sub="Ativos no momento" icon={<Clock className="w-5 h-5" />} color="amber" />
@@ -1138,12 +1368,15 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 régua de controles §5.1 (escala compacta §16) separada da tabela por border-b. */}
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden flex flex-col">
               <div className="p-2 border-b border-gray-100">
-                <div className="flex flex-col md:flex-row gap-2.5 items-center">
-                <div className="flex-1 relative w-full">
+                {/* Celular: busca na 1ª linha e os controles quebrando em linhas alinhadas à
+                    esquerda — antes cada controle ia sozinho numa linha, centralizado (item 7). */}
+                <div className="flex flex-wrap md:flex-nowrap gap-2.5 items-center">
+                <div className="relative w-full md:w-auto md:flex-1 min-w-0">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
                         placeholder="Buscar por código, nome, cliente ou obra…"
+                        aria-label="Buscar por código, nome, cliente ou obra"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         // placeholder:text-gray-500 — sem ele o navegador usava o cinza padrão (3,0:1, abaixo do AA).
@@ -1173,17 +1406,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
                 {/* Agrupar (§6.12): logo depois do Filtro avançado. Só no modo lista — no modo
                     blocos não há linha para agrupar (mesma regra do autofit, mais abaixo). */}
-                {isOrcamentoContext && viewMode === 'list' && (
+                {temAgrupar && (
                     <AgruparControles
-                        opcoes={OPCOES_AGRUPAR_ORCAMENTO}
+                        opcoes={opcoesAgrupar}
                         campo={campoAgrupar}
                         onCampo={agrupamento.setCampo}
                         direcao={agrupamento.direcao}
                         onDirecao={agrupamento.setDirecao}
-                        chavesDosGrupos={gruposOrcamento.map(g => g.key)}
+                        chavesDosGrupos={gruposDaLista.map(g => g.key)}
                         algumRecolhido={agrupamento.recolhidos.size > 0}
                         onAlternarTodos={agrupamento.alternarTodos}
-                        title="Agrupar os orçamentos"
+                        title={isPlanejamentoContext ? 'Agrupar os planejamentos' : 'Agrupar os orçamentos'}
                     />
                 )}
 
@@ -1191,6 +1424,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     onClick={loadProjects}
                     className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
                     title="Atualizar dados"
+                    aria-label="Atualizar dados"
                 >
                     <RefreshCw className="w-4 h-4" />
                 </button>
@@ -1199,7 +1433,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     <ColumnConfigButton
-                        columns={contextColumns.filter(c => c.key !== 'actions')}
+                        // Mesmo rótulo do cabeçalho da tabela (que muda por contexto): a janela dizia
+                        // "Nome"/"Vinculado" e a tabela "Orçamento"/"Obra Vinculada" (crítica 2026-11-14).
+                        columns={contextColumns.filter(c => c.key !== 'actions').map(c => ({ ...c, label: PROJECT_COLUMN_HEADERS[c.key]?.label ?? c.label }))}
                         visibleColumns={tableColumns.visibleColumns}
                         showColumnConfig={tableColumns.showColumnConfig}
                         onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
@@ -1212,8 +1448,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     {viewMode === 'list' && (
                         <button
                             onClick={() => cols.autoFit()}
-                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                            className="p-1.5 rounded-[6px] text-gray-500 hover:text-gray-700 transition-all"
                             title="Ajustar largura das colunas ao conteúdo"
+                            aria-label="Ajustar largura das colunas ao conteúdo"
                         >
                             <MoveHorizontal className="w-4 h-4" />
                         </button>
@@ -1255,7 +1492,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
             ) : projetosNaTela.length === 0 ? (
                 <div className="text-center py-12">
                     <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">{textos.nenhum}</h3>
+                    {/* h2, não h3: logo abaixo do h1 da tela (salto de nível, crítica 2026-11-14). */}
+                    <h2 className="text-lg font-bold text-gray-900 mb-2">{textos.nenhum}</h2>
                     {/* Há registros na aba, mas a busca/o tipo/o filtro avançado esconderam todos: o
                         caminho é limpar, não cadastrar. Antes, com filtro avançado e sem busca, a
                         tela mandava "cadastrar o primeiro". */}
@@ -1264,7 +1502,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             <p className="text-sm text-gray-500">Nenhum resultado para a busca e os filtros aplicados.</p>
                             <button
                                 type="button"
-                                onClick={() => { setSearchTerm(''); setTipoFilter(''); advancedFilters.clearRules(); setRecorte(null); }}
+                                onClick={() => { setSearchTerm(''); setTipoFilter(''); advancedFilters.clearRules(); setRecorte(null); setRecortePlan(null); }}
                                 className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
                             >
                                 Limpar busca e filtros
@@ -1311,7 +1549,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
                                     <th aria-hidden="true" className={`border-r border-gray-100${bordaLinhaTh}`} />
-                                    <th className={`px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500${bordaLinhaTh}`}>
+                                    <th className={`px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-700${bordaLinhaTh}`}>
                                         Ações
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>
@@ -1333,8 +1571,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         // até 2026-11-14 a linha só abria com o mouse — pelo Tab o foco pulava
                                         // direto para os botões de Ações.
                                         tabIndex={0}
-                                        onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
-                                        onKeyDown={abrirPeloTeclado(() => onRowClick ? onRowClick(project.id) : onEditProject(project.id))}
+                                        data-project-id={project.id}
+                                        onClick={() => abrirRegistro(project.id)}
+                                        onKeyDown={abrirPeloTeclado(() => abrirRegistro(project.id))}
                                         className="hover:bg-blue-50/30 transition-colors group cursor-pointer outline-none"
                                     >
                                         {displayColumns.map((key, iCol) => (
@@ -1398,8 +1637,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             <div
                                 key={project.id}
                                 tabIndex={0}
-                                onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
-                                onKeyDown={abrirPeloTeclado(() => onRowClick ? onRowClick(project.id) : onEditProject(project.id))}
+                                data-project-id={project.id}
+                                onClick={() => abrirRegistro(project.id)}
+                                onKeyDown={abrirPeloTeclado(() => abrirRegistro(project.id))}
                                 className="bg-white rounded-[10px] border border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group flex flex-col outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                             >
                                 <div className="p-5 flex-1">
@@ -1407,7 +1647,20 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         <div className="w-12 h-12 rounded-xl bg-blue-100 flex items-center justify-center text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors duration-300">
                                             <FolderOpen className="w-6 h-6" />
                                         </div>
-                                        {/* Badges de status — texto simples colorido, sem pílula/fundo/uppercase (§8) */}
+                                        {/* Badges de status — texto simples colorido, sem pílula/fundo/uppercase (§8).
+                                            Planejamento: a situação de prazo (mesma da coluna Prazo), não os status de
+                                            orçamento/obra/pedidos — a grade repetia a contradição que o item 3 tirou
+                                            da tabela (crítica 2026-11-14, item 7). */}
+                                        {isPlanejamentoContext ? (
+                                            <div className="flex flex-col items-end gap-1">
+                                                {(() => {
+                                                    const ind = indicadoresPlan.porProjeto[project.id];
+                                                    if (!ind) return <span className="text-sm font-normal text-gray-500">{indicadoresPlan.estado === 'erro' ? '—' : 'Calculando…'}</span>;
+                                                    const sit = situacaoDePrazo(ind);
+                                                    return <span className={`text-sm font-normal ${sit.cor}`}>{sit.texto}</span>;
+                                                })()}
+                                            </div>
+                                        ) : (
                                         <div className="flex flex-col items-end gap-1">
                                             {!isObraContext && project.settings?.budgetStatus && (
                                                 <span className={`text-sm font-normal ${project.settings.budgetStatus === 'Fechado' ? 'text-emerald-700' : 'text-blue-700'}`}>
@@ -1433,8 +1686,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </span>
                                             )}
                                         </div>
+                                        )}
                                     </div>
-                                    {project.settings?.tipoObra && (
+                                    {!isPlanejamentoContext && project.settings?.tipoObra && (
                                         <div className="mb-3">
                                             <span className={`px-2 py-0.5 rounded border text-xs font-semibold ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                                 {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
@@ -1461,10 +1715,30 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     )}
 
                                     <div className="space-y-2 pt-4 border-t border-gray-50">
+                                        {isPlanejamentoContext ? (() => {
+                                            const ind = indicadoresPlan.porProjeto[project.id];
+                                            return (
+                                                <>
+                                                    {ind?.temDatas && (
+                                                        <SegmentedProgress
+                                                            percent={Math.round(ind.avancoFisicoPct)}
+                                                            tone="blue"
+                                                            hint={`previsto ${pct0(ind.previstoPct)}`}
+                                                            title={`Avanço físico real ${pct0(ind.avancoFisicoPct)} · previsto até hoje ${pct0(ind.previstoPct)}`}
+                                                        />
+                                                    )}
+                                                    <div className="flex items-center justify-between text-xs">
+                                                        <span className="text-gray-500">Término:</span>
+                                                        <span className="text-gray-700 font-medium tabular-nums">{ind?.fimPrevisto ? dataCurta(ind.fimPrevisto) : '—'}</span>
+                                                    </div>
+                                                </>
+                                            );
+                                        })() : (
                                         <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-500">Criado em:</span>
                                             <span className="text-gray-600 font-medium">{new Date(project.created_at || 0).toLocaleDateString('pt-BR')}</span>
                                         </div>
+                                        )}
                                         <div className="flex items-center justify-between text-xs">
                                             <span className="text-gray-500">Atualizado em:</span>
                                             <div className="text-right">

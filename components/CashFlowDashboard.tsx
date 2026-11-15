@@ -8,6 +8,11 @@ import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
 import { useResizableColumns } from './ui/TableUtils';
 import type { CashFlowSummary, CashFlowGranularity } from '../types/financial';
+import { useCargaVigente } from '../hooks/useCargaVigente';
+import { motivoPeriodoInvalido } from '../utils/periodoControladoria';
+import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
+import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo';
+import type { EscopoControladoria } from './controladoria/escopo';
 
 const CASHFLOW_COL_WIDTHS: Record<string, number> = { periodo: 160, entradas: 150, saidas: 150, saldo: 150, acumulado: 150 };
 
@@ -56,31 +61,43 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
 
 interface CashFlowDashboardProps {
     organizationId: string | null;
+    escopo: EscopoControladoria;
 }
 
-const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId }) => {
+const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId, escopo }) => {
     const { showToast } = useToast();
-    const now = new Date();
-    const [dateFrom, setDateFrom] = React.useState(`${now.getFullYear()}-01-01`);
-    const [dateTo,   setDateTo]   = React.useState(`${now.getFullYear()}-12-31`);
+    const { de: dateFrom, ate: dateTo } = escopo;
+    const idGranularidade = React.useId();
     const [granularity, setGranularity] = React.useState<CashFlowGranularity>('month');
     const [data, setData]   = React.useState<CashFlowSummary | null>(null);
     const [loading, setLoading] = React.useState(false);
+    const [falhou, setFalhou] = React.useState(false);
     const [chartMode, setChartMode] = React.useState<'acumulado' | 'periodo'>('acumulado');
     const cols = useResizableColumns(CASHFLOW_COL_WIDTHS, 'cashFlowReportColWidths');
+    const novaCarga = useCargaVigente();
+    const motivoPeriodo = motivoPeriodoInvalido(dateFrom, dateTo);
 
     const load = React.useCallback(async () => {
+        const vigente = novaCarga();
+        if (motivoPeriodoInvalido(dateFrom, dateTo)) {
+            setData(null); setFalhou(false); setLoading(false);
+            return;
+        }
         setLoading(true);
+        setFalhou(false);
         try {
             const d = await financialReportService.getCashFlow(organizationId, dateFrom, dateTo, granularity);
-            setData(d);
+            if (vigente()) setData(d);
         } catch (e: unknown) {
+            if (!vigente()) return;
+            setData(null);
+            setFalhou(true);
             showToast('Erro ao carregar fluxo de caixa', 'error');
             console.error('[CashFlow]', e);
         } finally {
-            setLoading(false);
+            if (vigente()) setLoading(false);
         }
-    }, [organizationId, dateFrom, dateTo, granularity, showToast]);
+    }, [novaCarga, organizationId, dateFrom, dateTo, granularity, showToast]);
 
     React.useEffect(() => { load(); }, [load]);
 
@@ -110,42 +127,37 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId })
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Fluxo de Caixa</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                        Entradas e saídas realizadas vs. previstas no período.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2 flex-wrap">
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
-                    <span className="text-gray-400 text-sm">até</span>
-                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
-                    <select
+            <BarraDeEscopo escopo={escopo}
+                aplica={{
+                    periodo: true,
+                    regime: 'O fluxo de caixa é sempre pelo caixa: realizado = conciliado, previsto = pendente.',
+                    obra: 'O fluxo de caixa é da organização inteira: a consulta não separa por obra.',
+                }}>
+                <div className="space-y-1.5">
+                    <label htmlFor={idGranularidade} className="block text-xs font-semibold text-slate-500">Agrupar por</label>
+                    <select id={idGranularidade}
                         value={granularity}
                         onChange={e => setGranularity(e.target.value as CashFlowGranularity)}
-                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400"
+                        className="h-9 px-3 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
-                        <option value="day">Diário</option>
-                        <option value="week">Semanal</option>
-                        <option value="month">Mensal</option>
+                        <option value="day">Dia</option>
+                        <option value="week">Semana</option>
+                        <option value="month">Mês</option>
                     </select>
-                    <button onClick={load}
-                        className="px-4 py-2 bg-blue-600 text-white rounded-xl text-sm font-bold hover:bg-blue-700 transition-all">
-                        Atualizar
-                    </button>
-                    <button onClick={exportCSV}
-                        className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 flex items-center gap-2 transition-all">
-                        <Download className="w-4 h-4" /> CSV
-                    </button>
                 </div>
-            </div>
+                <button type="button" onClick={exportCSV} disabled={!data}
+                    title={data ? 'Baixar o fluxo de caixa em CSV' : 'Sem fluxo carregado para exportar'}
+                    className={`${BOTAO_DA_BARRA} disabled:opacity-40 disabled:cursor-not-allowed`}>
+                    <Download className="w-4 h-4" aria-hidden="true" /> CSV
+                </button>
+            </BarraDeEscopo>
 
-            {loading ? (
-                <div className="flex items-center justify-center h-40 text-sm text-gray-400">Carregando fluxo de caixa...</div>
+            {motivoPeriodo ? (
+                <PeriodoInvalido motivo={motivoPeriodo} />
+            ) : loading ? (
+                <div className="flex items-center justify-center h-40 text-sm text-gray-500">Carregando fluxo de caixa...</div>
+            ) : falhou ? (
+                <FalhaDeCarga oQue="o fluxo de caixa" onRetry={load} />
             ) : !data ? null : (
                 <>
                     {/* KPIs */}

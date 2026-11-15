@@ -9098,6 +9098,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // (`blueprint_study_hidro`) e não mais no navegador — a emissão com ART amarra o
   // hash delas. Sem a tabela, o hook segue no navegador como antes.
   const hidroDoEstudo = useBlueprintHidro(study.id, study.organization_id);
+  /** INCÊNDIO (30/09/2026, E0): premissas do estudo. */
+  const incendioDoEstudo = useBlueprintIncendio(study.id, study.organization_id);
 
   // ─── CASA AUTOMÁTICA (F10, 15/10/2026) ────────────────────────────────────
   // As premissas do estudo (programa curto, disciplinas, hipóteses da tela), o motor num Web Worker e as duas
@@ -9193,9 +9195,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             rotacaoNorteDeg: editor.model.georreferencia?.rotacaoNorteDeg ?? null,
             // PA5b: a climatização das unidades — o catálogo de evaporadoras e as premissas, como na casa.
             climatizacao: { hip: climatizacaoDoEstudo.hipoteses, modelos: modelosDeClimatizacao, carga: { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null } },
+            // PA7b: as premissas pluviais do estudo (a cidade da intensidade), as mesmas da gaveta do pluvial.
+            pluvial: hidroDoEstudo.hipoteses.pluvial,
+            // PA9a: as premissas de incêndio do estudo (o preset, a ocupação, as saídas).
+            incendio: incendioDoEstudo.hipoteses,
           }
         : null,
-    [blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, zona.cidade?.name],
+    [blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, zona.cidade?.name, hidroDoEstudo.hipoteses.pluvial, incendioDoEstudo.hipoteses],
   );
   const motivoParaNaoGerarOPredio = useMemo(
     () => (telaAberta === 'predio' && entradaDoPredio ? motivoParaNaoGerarPredio(editor.model, entradaDoPredio) : null),
@@ -9722,8 +9728,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     }
     gerarCasa();
   }, [construindoCasa, motivoParaNaoGerarCasa, gerarCasa]);
-  /** INCÊNDIO (30/09/2026, E0): premissas do estudo; classificação e exigências derivadas, só com a tarefa aberta. */
-  const incendioDoEstudo = useBlueprintIncendio(study.id, study.organization_id);
+  /** INCÊNDIO (30/09/2026, E0): classificação e exigências derivadas, só com a tarefa aberta — as premissas do estudo
+   * (`incendioDoEstudo`) vêm lá em cima, junto das hidráulicas: o prédio automático (PA9a) as lê. */
   /** Incêndio E1.4: a numeração derivada (H-1, SPK-3), para o painel do ponto. */
   const numerosDeIncendio = useMemo(() => numeracaoDeIncendio(editor.model), [editor.model]);
   /** Climatização E3.4: EV-1, CD-1… derivados, para o painel do ponto e o seletor de condensadora. */

@@ -228,6 +228,66 @@ andares, coluna em 7 andares, barrilete, recalque do térreo à cobertura, 2.480
 lote, pluvial da cobertura.
 **Pronto quando.** Teste do diâmetro do tubo de queda no R12; marco grava.
 
+**Dividida em duas (14/11/2026), como a PA5:** PA7a esgoto e ventilação (com o "pronto quando"); PA7b o pluvial da
+cobertura.
+
+**Execução da PA7a (14/11/2026, `utils/predioAutomatico/esgoto.ts`).** Etapa ESGOTO antes da marca `copiaInstalacoes`
+(como a água). Hipótese `esgoto` (ligada por padrão; pede a água — as louças vêm com ela).
+- **Tubo de queda por grupo molhado:** rente à face da parede da unidade mais perto do vaso (do lado da unidade — as
+  unidades espelhadas não se encontram na parede comum), escorregando para fora de vão, pilar e de outro tubo vertical;
+  a coluna de ventilação 200 mm ao lado, ao longo da parede.
+- **Ramais:** o motor da casa (`planejarEsgoto`) numa VISTA só com o tipo, os cômodos e os pontos da unidade, e como
+  "caixas de inspeção" os pontos dos tubos de queda (a −400 mm, no forro do andar de baixo). As verticais no ponto do
+  tubo saem; cada chegada vira um nó dele. O tubo que nenhum ramal alcança sai (o motor junta o grupo pela rede).
+- **Empilhamento:** o tubo de queda de cada andar vai da junção mais baixa do andar (j, sob o piso) até `pé-direito + j`
+  — a junção do andar de cima; partido em cada cota de chegada. A cópia viva empilha.
+- **DN (NBR 8160):** tubo de queda pela Tabela 6 (UHC do grupo × os andares, a UHC de um andar; ≥ 100 com bacia); coluna
+  de ventilação pela tabela (`dnDaColunaDeVentilacao`); desvio, saída e coletor pela Tabela 7.
+- **Ventilação:** primária — o tubo de queda atravessa a laje da cobertura e sobe a 2 m (terraço); a coluna de ventilação
+  liga-se a ele embaixo (no forro do térreo, abaixo do ramal mais baixo) e em cima (0,6 m acima da laje). Os ramais de
+  ventilação de cada bacia ficam para o projetista (premissa).
+- **Térreo:** o desvio suspenso no forro até a fachada da rua (bloco retangular: um coletor pelo eixo do corredor, com uma
+  derivação a cada tubo; em asas: em linha reta até a saída), descendo 1 %; na fachada desce até sob o piso, sai para a
+  caixa de inspeção a 1 m fora, e o coletor vai até a ligação na rede pública, presumida a 1,5 m de profundidade.
+
+**Achados no caminho:**
+1. Com a "caixa" do tubo de queda funda (−3 m), as ligações diretas desciam em rampa até ela, sem a vertical final que
+   marcava a junção — e só 84 das 315 louças do R8 chegavam à rede. Com a caixa no forro de baixo e o tubo partido em
+   cada chegada, 315 de 315 (R12: 836 de 836) — o teste confere toda louça de todo andar até a ligação.
+2. No coletor suspenso do térreo, a derivação chegava ao eixo numa cota e a linha principal passava ali em outra: dois
+   nós na mesma posição, rede partida. Toda posição do desvio com mais de uma cota ganha uma vertical.
+3. Custo (R12, máquina carregada): a etapa ~5 s (um lote só de ~1.000 comandos — as invariantes rodam a cada um) e a
+   conferência +~5 s.
+4. **No app, o "Lançar" não salvava** (conferência de 14/11): a tela ficava presa mais de 4 min. O perfil do navegador
+   mostrou `conflitosDoModelo` (os choques entre redes, recalculados a cada mudança do modelo) medindo cada trecho contra
+   toda estrutura, todo vão e todo outro trecho — no R8 com as peças de climatização, 44,8 s por chamada. Agora por
+   GRADE espacial (cubos de 2 m; só mede o que divide célula, e o teste exato é o mesmo): 54 ms, os mesmos 2.141
+   conflitos (comparados com a versão anterior; R4 idem). O clique caiu para 68 s e o rascunho (3,5 MB) salva em 2 s.
+   **Para a PA10:** o resto do clique é trabalho da tela que já existia — a NBR 5410 da elétrica (~28 s no perfil), as
+   marcas de verificação das redes (~22 s) e o desenho do canvas (~18 s).
+
+**Execução da PA7b (14/11/2026, `utils/predioAutomatico/pluvial.ts`).** Etapa PLUVIAL antes da marca (hipótese
+`pluvial`, ligada; pede a cobertura). A cobertura é laje plana com platibanda: RALOS por dentro da platibanda junto dos
+cantos (passando deles, no meio dos lados mais longos); de cada um, o CONDUTOR VERTICAL pela face externa da fachada — um
+trecho por andar no tipo, da passagem sob a laje deste andar à do de cima (a cópia viva empilha, como o tubo de queda);
+no térreo desce até enterrado, CAIXA DE AREIA ao pé, e o CONDUTOR HORIZONTAL até a SAÍDA na frente do lote (todos chegam
+nela na mesma cota — a do mais longo com a declividade da premissa). NBR 10844: Q = I·A/60 com a área do bloco; a
+intensidade das premissas pluviais do estudo (o editor passa as mesmas da gaveta do pluvial); sem cidade nem intensidade,
+150 mm/h com a pendência (a norma só permite adotá-la até 100 m²); o número de condutores pela capacidade do DN 100, no
+mínimo 2; o DN de cada um pela vazão dele. Testes: a vazão e o número de condutores à mão (R8: 480 m² → 1.200 L/min → 2
+condutores), cada ralo chega à saída passando por todos os andares, e 400 mm/h nas premissas pedem mais condutores (R4).
+Marco: R4 2 condutores, R8 2, R12 3, RL 5 — todos DN 100. **Conferência no app (14/11,
+`c:/tmp/pwtest/conferencia-predio-pa7b.cjs`, estudo descartável arquivado):** R8 — 2 ralos, o condutor nos 7 andares, 2
+caixas de areia e a saída, e tudo o que a PA6/PA7a conferiam; o "Lançar" salva em 2 s (o clique, ~66 s — PA10). O único
+"erro" foi a leitura das preferências abortada com a página presa no clique. ⚠️ Vite ligado desde antes da troca de ramo:
+o `import()` do roteiro pega OUTRA instância do store (os módulos voltam do HMR com carimbo) — sem organização, a RLS
+recusa criar o estudo. Reiniciar o Vite.
+
+**Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa7a.cjs`, estudo descartável arquivado):** R8 — os 22
+portões: hipótese "esgoto" ligada por padrão, o resultado com os tubos de queda, 5 tubos de queda em cada um dos 7
+andares, os 5 subindo a 2 m da cobertura, 55 trechos de ventilação, 899 de esgoto, uma caixa de inspeção e uma ligação;
+o que a PA6 conferia (hidrômetros, coluna, RTI) segue igual; Ctrl+Z volta ao bloco sozinho.
+
 ### PA8 — Garagem e subsolo
 **O que muda.** `lancarGaragem` ampliado: rampa, pilares da malha da torre, iluminação/exaustão no quadro de serviço,
 drenagem + caixa separadora, bombas quando abaixo da rede; subsolos de R8 (1) e R12 (2) no marco.
@@ -236,6 +296,80 @@ drenagem + caixa separadora, bombas quando abaixo da rede; subsolos de R8 (1) e 
 ### PA9 — PPCI
 **O que muda.** `gerarPpci` no modelo final, casa de bombas e hidrantes conciliados com o reservatório; aba PPCI.
 **Pronto quando.** R8 classificado A-2 com rota em todos os andares.
+
+**Dividida em três (14/11/2026), a pedido de iniciar a PA9 antes da PA8 (garagem):** o gerador de PPCI da planta
+(`gerarPpci`) recusa no prédio — põe peças em todo pavimento e edita portas (a barra antipânico), e as cópias vivas
+recusam instalação e arquitetura próprias; e os ids que ele prevê só batem se nada mais numerar no meio.
+- **PA9a (esta):** a classificação, as exigências e a ROTA DE FUGA de todos os andares, no modelo final — o "pronto quando".
+- **PA9b:** os equipamentos de cada andar no tipo (extintores, sinalização, iluminação de emergência, alarme).
+- **PA9c:** os hidrantes, a rede e a casa de bombas conciliados com o reservatório (a RTI já está no superior — PA6).
+Quando a PA8 entrar (garagem, subsolos), a classificação e a rota passam a contá-los.
+
+**Execução da PA9a (`utils/predioAutomatico/ppci.ts`).** Etapa INCÊNDIO depois da marca (só confere, `CALCULOU`):
+`classificarEdificacao` com as premissas de incêndio do estudo (o editor passa as mesmas da tarefa de incêndio), a divisão
+delas ou A-2, o piso de descarga = o térreo do prédio e a ALTURA declarada = o piso do último andar com unidades (sem ela,
+a classificação tomava a cobertura técnica: 24 m no R8 em vez de 21); `exigenciasDaEdificacao`; e `percursoDeFuga` de
+todos os ambientes, resumido por andar (ambientes, sem rota, acima do limite, a pior distância) — ambiente sem rota ou
+acima do limite vira VERIFICAÇÃO com o local. Aba PPCI na tela (ocupação, altura, área, medidas exigidas, a rota por andar).
+
+**Achado: a escada parava no 3º andar.** A escada do tipo nasce sem `ateLevelId` — vai só ao pavimento de cima: no R8,
+do 4º ao 8º andar e a cobertura não tinham escada, e a rota de 241 ambientes não chegava à saída. A montagem do pavimento
+tipo (a do prédio automático e a do botão do painel do bloco) leva agora a escada até a última cópia, e com a cobertura
+até ela (a PA3 dizia que ela chegava lá). Com isso, todo ambiente de todo andar tem caminho até a saída no R8, no R4 e
+no R12 (no RL, 1 por andar fica sem caminho — asas).
+
+**Marco (14/11):** R4 A-2 9 m · R8 A-2 21 m · R12 A-2 33 m · RL A-2 21 m. **O R8 sai limpo** (nenhum ambiente sem rota nem
+acima do limite — o "pronto quando"; o marco o exige). Os outros ficam gravados como estão, com estes achados para a PA10:
+- **Caminhamento até a escada nos andares de cima:** a rota (`percursoDeFuga`) põe a boca do lance multiandares no início
+  dele só no pavimento de partida; nos de cima, na outra ponta — numa escada reta, uns 4 m adiante. No R4 o 3º andar passa
+  do limite de 25 m em 2 ambientes e o tipo, igual a ele, não. A escada real tem patamar no mesmo lugar em cada andar.
+- **Térreo comprido** (R12, RL): salas comuns a mais de 25 m da porta de entrada — o térreo pede outra saída.
+- **RL (asas):** um ambiente por andar sem caminho até a escada.
+
+**Desempenho (CI):** o RL do marco passou de 600 s na CI com a rota de fuga — `caminhoDentro` (o caminho por dentro do
+ambiente) refazia o grafo de visibilidade inteiro para cada par de portas; na circulação de um prédio, 15 dos 16 s da rota
+de 891 ambientes. A visibilidade entre vértices do contorno passou a ser guardada por ambiente: 3,9 s, o mesmo resultado
+(o marco, que grava a rota de cada andar dos quatro prédios, passa sem regravar).
+
+**Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa9a.cjs`, estudo descartável arquivado):** R8 — a aba
+PPCI com A-2, 21 m, 4.375 m², 8 medidas exigidas e a rota em 9 pavimentos (nenhum com ambiente sem rota); depois do
+Lançar, a escada do tipo chega à cobertura; tudo o que as PA3–PA7 conferiam segue igual; Ctrl+Z volta ao bloco sozinho.
+
+**Execução da PA9b (15/11/2026, `lancarEquipamentosDeIncendio` em `utils/predioAutomatico/ppci.ts`).** Etapa
+EQUIPAMENTOS DE INCÊNDIO antes da marca: extintores (com placa), sinalização da rota, iluminação de emergência (até 3
+passadas) e, quando exigidos, os dispositivos do alarme — pelos MESMOS motores e na mesma ordem do PPCI da planta, numa
+VISTA SEM OS ANDARES COPIADOS (`vistaSemAsCopias`); o tipo recebe e a cópia viva leva aos andares. Cada lote é aplicado na
+vista e no modelo real, e os ids criados têm de bater (senão para — as peças seguintes apontariam para outras). R8: 1
+extintor, 4 placas e 4 luminárias de emergência na circulação de cada andar; o térreo e a cobertura com os seus.
+**Achados:** (1) a vista sem as cópias deixava o elevador chegando a um andar que não existe nela e o medidor do térreo
+medindo a unidade de um andar inexistente — todo `...LevelId`/`levelUid` que aponta para uma cópia passa a apontar para o
+tipo na vista; (2) os motores punham extintor na varanda e placa no dormitório — em habitação (grupo A) a rota conta da
+porta da unidade (IT 08, 5.5.2.2), e na vista ficam só as áreas comuns. Teste: no prédio pronto, toda área comum de todo
+andar com extintor ao alcance e a rota iluminada. Ficam para o projetista (pendência): o eletroduto do laço do alarme e a
+barra antipânico (ela edita as portas). **CI:** os 4 casos do marco somavam 873 s na última CI verde (o RL perto dos 600 s por caso); com a
+etapa nova o limite por caso foi a 20 min — baixar o custo do RL (as invariantes a cada comando, a conferência da NBR 5410)
+é da PA10. **Conferência no app (15/11, `c:/tmp/pwtest/conferencia-predio-pa9b.cjs`, estudo descartável
+arquivado):** R8 — a lista dos equipamentos na aba PPCI; depois do Lançar, 1 extintor, 4 placas e 4 luminárias em cada um
+dos 7 andares; tudo o que as PA3–PA9a conferiam segue igual. Com a máquina sem carga, o clique no Lançar levou 13 s.
+
+**Execução da PA9c (15/11/2026, `lancarHidrantesDoPredio` em `utils/predioAutomatico/ppci.ts`).** Etapa HIDRANTES antes
+da marca, só quando a classificação exige. Os hidrantes pelo motor da planta (`proporHidrantes` — a mangueira esticada
+de porta em porta), na vista sem as cópias e COM os cômodos das unidades (a mangueira tem de alcançar dentro delas), com o
+abrigo e a placa (`kitDaPeca`): no R8, 1 hidrante na circulação de cada andar, 1 no hall do térreo e 1 na área técnica da
+cobertura, nenhum ambiente descoberto. A REDE não é a do motor da planta (ele traça a coluna inteira de uma vez, do
+pavimento da bomba ao último hidrante — recusado nos andares copiados): a COLUNA DE INCÊNDIO fica 30 cm ao lado do
+hidrante do tipo (o mais perto da escada), um trecho por andar de −400 a 2600 mm (a base é o 2600 do andar de baixo — a
+cópia viva empilha, como o tubo de queda), com o ramal no forro até o hidrante de cada pavimento. A FONTE é a reserva
+técnica no reservatório superior (a parcela da caixa de água fria — PA6) com a BOMBA de incêndio na cobertura, ao lado
+dele (sucção afogada do fundo; a jockey ligada à principal, 2 pressostatos e o manômetro): a gravidade não dá a pressão
+dos andares de cima, e o `proporFonte` da planta poria a bomba no térreo, longe da reserva. O REGISTRO DE RECALQUE no
+passeio pelo motor da planta (`proporRecalque`), ligado à coluna no térreo. Teste: todo hidrante de todo andar ligado
+pela rede de incêndio à bomba e ao registro de recalque. Fica para o cálculo do PPCI da planta: o DN da rede e a curva da
+bomba (premissa: DN 65). Marco: R4/R8/R12 com 1 hidrante por pavimento, RL com 2; todos com bomba e recalque. **Conferência no
+app (15/11, `c:/tmp/pwtest/conferencia-predio-pa9c.cjs`, estudo descartável arquivado):** R8 — a aba PPCI com os
+hidrantes; depois do Lançar, 1 hidrante em cada um dos 7 andares, a bomba na cobertura, o registro de recalque e a coluna
+em 8 trechos (os 7 andares e a cobertura); 5 placas por andar (a do abrigo entrou); tudo o que as fases anteriores
+conferiam segue igual.
 
 ### PA10 — Fechamento
 **O que muda.** Relatório consolidado, furos no shaft, conflitos multinível, envio ao Empreendimento
@@ -264,7 +398,7 @@ PA1 e PA2 podem correr em frentes paralelas.
 | PA4 | feito — estrutura e fundações (ver a Execução da PA4). R8: 40 pilares, 10 vigas e 7 lajes em cada um dos 7 andares com unidades, a mesma malha no térreo e 40 blocos de fundação. **Achado de desempenho:** cada comando do kernel custa pelo tamanho do modelo (~49 ms no RL, +60 % com as cópias vinculadas); as fundações depois das plantas levavam 22,7 s no RL — lançadas logo depois da estrutura (antes das plantas), 2,9 s, com o MESMO modelo final (hashes iguais). Tempos do marco: R4 0,5 s · R8 1,7 s · R12 4,7 s · RL 8,4 s (a PA10 fixa o do worker). Marco regravado: só o hash do modelo mudou, e ganhou a contagem `estruturas` (201 · 546 · 1.059 · 1.179). **Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa4.cjs`, estudo descartável arquivado):** R8 — resumo com a estrutura, 40P 10V 7L iguais nos 7 andares, térreo 40P 10V 7L 40B com os pilares em prumada, Ctrl+Z volta a 0 peças; as conferências da PA3 repetidas |
 | PA5 | **PA5a feita** (ver a Execução). R8: 5 QDs + 1 QDS por andar × 7, 36 medidores (35 + condomínio), `unidadesMedidas = unidadesAtendidas` (35 = 35); NBR 5410 sem falta na instalação — a única é a da ENTRADA (298 kVA passam do padrão de baixa tensão: vira pendência "entrada em média tensão"; no R4 a entrada T5 dá 160 A contra IB 160,6 A — o padrão genérico é hipótese, conferir com a concessionária). **Desempenho do kernel (sem mudar resultado; suíte da planta 5.696 verdes, marcos com paredes/estruturas idênticos):** a cópia viva, os grupos e os ambientes só re-derivam quando o comando toca o que eles copiam; `copiasDeInstancia` e as invariantes sem buscas quadráticas — o RL foi de 275 s para 18 s, o R8 ~5 s. **Lançar sem reaplicar:** a trava compara o hash do desenho de origem (`hashDoOriginal`) e o editor empilha o resultado do worker como um passo (`runBatchPrevisto` → `ModelHistory.applyPrecomputed`). Marco com `quadros` e `terminais`. Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa5.cjs`): os 16 portões, Ctrl+Z zera quadros e medidores. PA5a no ar (#424, 12c434c). **PA5b feita** (`utils/predioAutomatico/climatizacaoERede.ts`): a climatização SÓ no tipo (opção `niveis` do gerador — as cópias recebem pela cópia viva), cada ponto de ar no QD da unidade dele (opção `quadroDoPonto`: circuitos por quadro, cada um com a vista dos seus pontos); a condensadora do cômodo sem fachada no ambiente técnico MAIS PERTO e nunca a menos de 0,9 m de outra (opção `condensadorasSeparadas` — sem ela o tipo empilhava 6 condensadoras num ponto, e as peças idênticas faziam o canônico desempatar pelo uid aleatório: o hash mudava a cada geração); a verificação da climatização nos mesmos pavimentos (as cópias saíam "sem equipamento"); eletrodutos dos quadros do tipo cujos circuitos ficam no tipo (o QS, que alimenta a cobertura, ficaria com trechos nas cópias — vai pela prumada, com aviso); a PRUMADA dos alimentadores no shaft (trecho vertical no térreo e no tipo, contínua até o último andar). O editor passa o catálogo de evaporadoras e as premissas (como na casa) e carrega o catálogo com a tela aberta. **Desempenho:** `caminhoEntre` (busca de caminho da fiação) montava o mapa de vizinhos copiando a lista a cada aresta e usava `shift()` — a conferência de eletrodutos do R8 levava 27 s; com o mapa guardado por lista e a fiação guardando a lista de cada circuito, 1,2 s (mesma busca, mesmo caminho). R8 completo ~10 s com a climatização. Marco regravado com a climatização (catálogo semente da casa); a casa idêntica |
 | PA6 | feito (ver a Execução) — R8: 5 hidrômetros por andar × 7 (35 = as 35 unidades), coluna DN 85, recalque DN 50 (1,5 cv), RTI 12 m³, pressurizador no superior, nenhum ponto fora da faixa (dinâmica mín. 77 kPa, estática máx. 332 kPa). **R12 pede VRP** (estática máx. 207 kPa depois dela); R4 e RL fecham sem ponto fora da faixa. O volume dos reservatórios conferido à mão no teste. Kernel 0.108.0 (`Terminal.unidadeId` no hidrômetro). Marco com `trechosDeAgua` e o resumo da água; a casa idêntica. PR #433 |
-| PA7 | a fazer |
+| PA7 | **PA7a feita** (ver a Execução) — R8: 5 tubos de queda por andar (DN 100), 120 UHC por andar, ventilação DN 75, coletor DN 150; toda louça de todo andar chega à ligação (315 de 315; R12 836 de 836). **No R12, os tubos de queda dão DN 100 pela Tabela 6** (o marco confere cada um). Conflitos por grade (44,8 s → 54 ms, mesmo resultado). **PA7b feita** (pluvial da cobertura: R8 2 condutores DN 100 para 1.200 L/min) |
 | PA8 | a fazer |
-| PA9 | a fazer |
+| PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. **PA9b feita** (extintores, sinalização e iluminação nas áreas comuns do tipo — cada andar repete). **PA9c feita** (hidrante em todo pavimento; coluna de incêndio empilhada; bomba na cobertura ao lado da reserva técnica; registro de recalque no passeio) |
 | PA10 | a fazer |

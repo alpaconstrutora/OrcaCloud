@@ -43,9 +43,11 @@ function KPI({ label, value, sub, variant = 'neutral' }: {
 interface Props {
     organizationId: string | null
     escopo: EscopoControladoria
+    /** Abre a DRE filtrada pela obra (aba DRE do mesmo módulo). */
+    onVerDREDaObra?: (projectId: string) => void
 }
 
-const WIPReport: React.FC<Props> = ({ organizationId, escopo }) => {
+const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) => {
     const { showToast } = useToast()
     // O WIP é uma POSIÇÃO: tudo até a data final do período da Controladoria.
     const dateTo = escopo.ate
@@ -149,25 +151,25 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo }) => {
             {rows.length > 0 && (
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <KPI
-                        label="Receita Reconhecida"
+                        label="Receita recebida"
                         value={fmt(totals.receita_reconhecida)}
                         sub={`+ ${fmt(totals.receitas_pendentes)} pendente`}
                         variant="positive"
                     />
                     <KPI
-                        label="Custo Incorrido"
+                        label="Custo pago"
                         value={fmt(totals.custo_incorrido)}
                         sub={`+ ${fmt(totals.custos_pendentes)} pendente`}
                         variant="negative"
                     />
                     <KPI
-                        label="Margem Bruta Total"
+                        label="Recebido − pago"
                         value={fmt(totals.margem_bruta)}
                         sub={fmtPct(totalMargem)}
                         variant={totals.margem_bruta >= 0 ? 'positive' : 'negative'}
                     />
                     <KPI
-                        label="Saldo de Contrato"
+                        label="Saldo de contrato"
                         value={fmt(totals.saldo_contrato)}
                         sub="valor contratado não recebido"
                         variant={totals.saldo_contrato >= 0 ? 'neutral' : 'warning'}
@@ -204,11 +206,11 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo }) => {
                             <tr className="bg-gray-50 text-gray-500 border-b border-gray-200">
                                 <Th label="Obra" k="project_name" />
                                 <Th label="Empresa" k="empresa_nome" />
-                                <Th label="Valor Contrato" k="contrato_valor" right />
-                                <Th label="Receita Recebida" k="receita_reconhecida" right />
-                                <Th label="Custo Incorrido" k="custo_incorrido" right />
-                                <Th label="Margem" k="margem_bruta" right />
-                                <Th label="Saldo Contrato" k="saldo_contrato" right />
+                                <Th label="Valor do contrato" k="contrato_valor" right />
+                                <Th label="Receita recebida" k="receita_reconhecida" right />
+                                <Th label="Custo pago" k="custo_incorrido" right />
+                                <Th label="Recebido − pago" k="margem_bruta" right />
+                                <Th label="Saldo de contrato" k="saldo_contrato" right />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -218,9 +220,19 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo }) => {
                                 return (
                                     <tr key={r.project_id} className="hover:bg-blue-50/30 transition-colors">
                                         <td className="px-4 py-3">
-                                            <p className="text-sm font-semibold text-slate-800">{r.project_name}</p>
+                                            {/* O número que preocupa (margem negativa) leva à DRE da obra,
+                                                onde se vê de que linha vem o custo (princípio 5). */}
+                                            {onVerDREDaObra ? (
+                                                <button type="button" onClick={() => onVerDREDaObra(r.project_id)}
+                                                    title={`Ver a DRE de ${r.project_name}`}
+                                                    className="text-left text-sm font-semibold text-blue-700 hover:text-blue-900 hover:underline rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                                                    {r.project_name}
+                                                </button>
+                                            ) : (
+                                                <p className="text-sm font-semibold text-slate-800">{r.project_name}</p>
+                                            )}
                                             {r.project_code && (
-                                                <p className="text-xs text-slate-400">{r.project_code}</p>
+                                                <p className="text-xs text-slate-500">{r.project_code}</p>
                                             )}
                                         </td>
                                         <td className="px-4 py-3 text-sm text-slate-500">
@@ -269,7 +281,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo }) => {
                         <tfoot>
                             <tr className="border-t-2 border-slate-200 bg-slate-50">
                                 <td colSpan={2} className="px-4 py-3 text-sm font-medium text-slate-600">
-                                    Total ({rows.length} obras)
+                                    Total ({rows.length} {rows.length === 1 ? 'obra' : 'obras'})
                                 </td>
                                 <td className="px-4 py-3 text-sm font-medium text-right tabular-nums text-slate-700">
                                     {fmt(totals.contrato_valor)}

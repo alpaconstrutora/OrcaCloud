@@ -35,7 +35,7 @@ const TABS: Array<{ id: ControladoriaTab; label: string; icon: React.ElementType
 const CABECALHO: Record<ControladoriaTab, { titulo: string; subtitulo: string }> = {
     dre:       { titulo: 'DRE',             subtitulo: 'Demonstrativo de resultado do período: receita, custos, despesas e resultado.' },
     dre_spe:   { titulo: 'DRE por SPE',     subtitulo: 'O resultado de cada empresa (SPE), lado a lado, pelas obras ligadas a ela.' },
-    wip:       { titulo: 'WIP',             subtitulo: 'Obras em andamento: receita, custo e saldo de contrato até a data escolhida.' },
+    wip:       { titulo: 'WIP',             subtitulo: 'Obras em andamento: recebido, pago e saldo de contrato até a data escolhida.' },
     balancete: { titulo: 'Balancete',       subtitulo: 'Créditos, débitos e saldo de cada conta do plano no período.' },
     fluxo:     { titulo: 'Fluxo de caixa',  subtitulo: 'Entradas e saídas realizadas e previstas no período.' },
     diario:    { titulo: 'Diário contábil', subtitulo: 'Lançamentos em partida dobrada gerados automaticamente.' },
@@ -80,7 +80,7 @@ const ControladoriaModule: React.FC<Props> = ({ defaultTab = 'dre' }) => {
                 <Suspense fallback={<Carregando />}>
                     {activeTab === 'dre'       && <DREReport {...props} />}
                     {activeTab === 'dre_spe'   && <DRESPEReport {...props} />}
-                    {activeTab === 'wip'       && <WIPReport {...props} />}
+                    {activeTab === 'wip'       && <WIPReport {...props} onVerDREDaObra={id => { escopo.setObra(id); setActiveTab('dre') }} />}
                     {activeTab === 'balancete' && <BalanceteReport {...props} />}
                     {activeTab === 'fluxo'     && <CashFlowDashboard {...props} />}
                     {activeTab === 'diario'    && <DiarioReport {...props} />}

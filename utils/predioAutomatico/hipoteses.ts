@@ -8,7 +8,7 @@ import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 
-export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'EQUIPAMENTOS_DE_INCENDIO' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'INCENDIO' | 'CONFERENCIA';
+export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'EQUIPAMENTOS_DE_INCENDIO' | 'HIDRANTES' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'INCENDIO' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
@@ -27,6 +27,7 @@ export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
   ESGOTO: 'Esgoto e ventilação (ramais, tubo de queda por grupo molhado, ventilação, desvio no térreo, coletor)',
   PLUVIAL: 'Pluvial da cobertura (ralos, condutores na fachada, caixas de areia, saída na frente)',
   EQUIPAMENTOS_DE_INCENDIO: 'Equipamentos de incêndio de cada andar (extintores, sinalização, iluminação de emergência, alarme)',
+  HIDRANTES: 'Hidrantes, coluna de incêndio, bomba na cobertura e registro de recalque',
   INSTALACOES_NO_TIPO: 'Instalações desenhadas no tipo vão aos andares (cópia viva)',
   PRESSAO_DA_AGUA: 'Pressão da água fria no prédio inteiro (pressurizador em cima, VRP embaixo)',
   INCENDIO: 'Incêndio: classificação, exigências e rota de fuga em todos os andares',
@@ -215,6 +216,8 @@ export interface PlanoDoPredio {
       andares: { nome: string; ambientes: number; semRota: number; naoAtendem: number; piorM: number | null }[];
       /** PA9b: as peças lançadas no tipo, no térreo e na cobertura, por tipo de ponto (cada andar copiado repete as do tipo). */
       equipamentos: Record<string, number> | null;
+      /** PA9c: os hidrantes (no tipo — cada andar repete —, no térreo e na cobertura), a bomba e o registro de recalque. */
+      hidrantes: { tipo: number; terreo: number; cobertura: number; bomba: boolean; recalque: boolean } | null;
     } | null;
   };
 }

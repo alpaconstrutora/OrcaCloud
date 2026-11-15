@@ -352,6 +352,21 @@ etapa nova o limite por caso foi a 20 min — baixar o custo do RL (as invariant
 arquivado):** R8 — a lista dos equipamentos na aba PPCI; depois do Lançar, 1 extintor, 4 placas e 4 luminárias em cada um
 dos 7 andares; tudo o que as PA3–PA9a conferiam segue igual. Com a máquina sem carga, o clique no Lançar levou 13 s.
 
+**Execução da PA9c (15/11/2026, `lancarHidrantesDoPredio` em `utils/predioAutomatico/ppci.ts`).** Etapa HIDRANTES antes
+da marca, só quando a classificação exige. Os hidrantes pelo motor da planta (`proporHidrantes` — a mangueira esticada
+de porta em porta), na vista sem as cópias e COM os cômodos das unidades (a mangueira tem de alcançar dentro delas), com o
+abrigo e a placa (`kitDaPeca`): no R8, 1 hidrante na circulação de cada andar, 1 no hall do térreo e 1 na área técnica da
+cobertura, nenhum ambiente descoberto. A REDE não é a do motor da planta (ele traça a coluna inteira de uma vez, do
+pavimento da bomba ao último hidrante — recusado nos andares copiados): a COLUNA DE INCÊNDIO fica 30 cm ao lado do
+hidrante do tipo (o mais perto da escada), um trecho por andar de −400 a 2600 mm (a base é o 2600 do andar de baixo — a
+cópia viva empilha, como o tubo de queda), com o ramal no forro até o hidrante de cada pavimento. A FONTE é a reserva
+técnica no reservatório superior (a parcela da caixa de água fria — PA6) com a BOMBA de incêndio na cobertura, ao lado
+dele (sucção afogada do fundo; a jockey ligada à principal, 2 pressostatos e o manômetro): a gravidade não dá a pressão
+dos andares de cima, e o `proporFonte` da planta poria a bomba no térreo, longe da reserva. O REGISTRO DE RECALQUE no
+passeio pelo motor da planta (`proporRecalque`), ligado à coluna no térreo. Teste: todo hidrante de todo andar ligado
+pela rede de incêndio à bomba e ao registro de recalque. Fica para o cálculo do PPCI da planta: o DN da rede e a curva da
+bomba (premissa: DN 65).
+
 ### PA10 — Fechamento
 **O que muda.** Relatório consolidado, furos no shaft, conflitos multinível, envio ao Empreendimento
 (`services/sync/massaAdapter.ts`) conferido, tempo do R12 no worker medido e fixado aqui.
@@ -381,5 +396,5 @@ PA1 e PA2 podem correr em frentes paralelas.
 | PA6 | feito (ver a Execução) — R8: 5 hidrômetros por andar × 7 (35 = as 35 unidades), coluna DN 85, recalque DN 50 (1,5 cv), RTI 12 m³, pressurizador no superior, nenhum ponto fora da faixa (dinâmica mín. 77 kPa, estática máx. 332 kPa). **R12 pede VRP** (estática máx. 207 kPa depois dela); R4 e RL fecham sem ponto fora da faixa. O volume dos reservatórios conferido à mão no teste. Kernel 0.108.0 (`Terminal.unidadeId` no hidrômetro). Marco com `trechosDeAgua` e o resumo da água; a casa idêntica. PR #433 |
 | PA7 | **PA7a feita** (ver a Execução) — R8: 5 tubos de queda por andar (DN 100), 120 UHC por andar, ventilação DN 75, coletor DN 150; toda louça de todo andar chega à ligação (315 de 315; R12 836 de 836). **No R12, os tubos de queda dão DN 100 pela Tabela 6** (o marco confere cada um). Conflitos por grade (44,8 s → 54 ms, mesmo resultado). **PA7b feita** (pluvial da cobertura: R8 2 condutores DN 100 para 1.200 L/min) |
 | PA8 | a fazer |
-| PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. **PA9b feita** (extintores, sinalização e iluminação nas áreas comuns do tipo — cada andar repete). PA9c (hidrantes e casa de bombas) a fazer |
+| PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. **PA9b feita** (extintores, sinalização e iluminação nas áreas comuns do tipo — cada andar repete). **PA9c feita** (hidrante em todo pavimento; coluna de incêndio empilhada; bomba na cobertura ao lado da reserva técnica; registro de recalque no passeio) |
 | PA10 | a fazer |

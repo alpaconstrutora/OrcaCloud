@@ -34,7 +34,7 @@ import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedid
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
 import { lancarEsgoto } from './esgoto';
 import { lancarPluvial } from './pluvial';
-import { conferirIncendioDoPredio, lancarEquipamentosDeIncendio } from './ppci';
+import { conferirIncendioDoPredio, lancarEquipamentosDeIncendio, lancarHidrantesDoPredio } from './ppci';
 import type { HipotesesIncendio } from '../blueprintIncendioClassificacao';
 import type { HipotesesPluviais } from '../blueprintPluvial';
 import { HIPOTESES_PRESSAO_PADRAO } from '../blueprintPressaoDaRede';
@@ -309,6 +309,27 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     }
   }
 
+  // ── Hidrantes (PA9c): os hidrantes, a coluna de incêndio empilhada, a bomba na cobertura e o registro de recalque.
+  let hidrantes: ReturnType<typeof lancarHidrantesDoPredio> | null = null;
+  if (!hip.incendio) etapa('HIDRANTES', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
+  else {
+    try {
+      hidrantes = lancarHidrantesDoPredio(ctx, terreo?.levelId ?? mont.tipoLevelId, base.ultimoLevelId, new Set(copias.map((l) => l.id)), mont.tipoLevelId, cobertura ? { levelId: cobertura.levelId } : null, entrada.incendio ?? null);
+      pendencias.push(...hidrantes.pendencias);
+      const h = hidrantes.hidrantes;
+      etapa(
+        'HIDRANTES',
+        hidrantes.comandos ? 'LANCOU' : 'NAO_EXIGIDA',
+        hidrantes.comandos,
+        hidrantes.comandos ? `${h.tipo} hidrante(s) por andar, ${h.terreo} no térreo e ${h.cobertura} na cobertura · coluna de incêndio no tipo${hidrantes.bomba ? ' · bomba na cobertura' : ''}${hidrantes.recalque ? ' · registro de recalque no passeio' : ''}` : 'A classificação não exige hidrantes.',
+      );
+    } catch (e) {
+      const motivo = e instanceof Error ? e.message : String(e);
+      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Hidrantes: ${motivo} — lance pelo PPCI da planta.` });
+      etapa('HIDRANTES', 'NAO_RODOU', 0, motivo);
+    }
+  }
+
   // ── O tipo leva as instalações aos andares (PA1): as fases seguintes desenham no tipo e os andares acompanham.
   etapa('INSTALACOES_NO_TIPO', 'LANCOU', aplicar([{ type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }]), 'Pontos, trechos, quadros e circuitos desenhados no tipo vão às cópias.');
 
@@ -450,6 +471,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
             limiteM: incendio.rota.limiteM,
             andares: incendio.rota.andares.map(({ nome, ambientes, semRota, naoAtendem, piorM }) => ({ nome, ambientes, semRota, naoAtendem, piorM })),
             equipamentos: equipamentos?.pecas ?? null,
+            hidrantes: hidrantes?.comandos ? { ...hidrantes.hidrantes, bomba: hidrantes.bomba, recalque: hidrantes.recalque } : null,
           }
         : null,
       pluvial: pluvial

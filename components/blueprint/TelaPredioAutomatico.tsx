@@ -508,7 +508,13 @@ export default function TelaPredioAutomatico(props: Props) {
               </ul>
             </section>
           )}
-          <p className="text-sm text-slate-600">Os hidrantes, a rede e a casa de bombas ainda não são lançados pelo prédio automático — lance pelo PPCI da planta.</p>
+          {plano.resumo.incendio.hidrantes && (
+            <p className="text-sm text-gray-700" data-testid="hidrantes-do-predio">
+              Hidrantes: {plano.resumo.incendio.hidrantes.tipo} por andar, {plano.resumo.incendio.hidrantes.terreo} no térreo e {plano.resumo.incendio.hidrantes.cobertura} na cobertura · coluna de incêndio ao lado do hidrante do tipo
+              {plano.resumo.incendio.hidrantes.bomba ? ' · bomba na cobertura, ao lado do reservatório superior (a reserva técnica)' : ''}
+              {plano.resumo.incendio.hidrantes.recalque ? ' · registro de recalque no passeio' : ''}
+            </p>
+          )}
         </div>
       )}
 

@@ -117,6 +117,8 @@ describe('TelaPredioAutomatico (PA2)', () => {
     const ppci = screen.getByTestId('ppci-do-predio');
     expect(within(ppci).getByText('A-2')).toBeTruthy();
     expect(within(screen.getByTestId('rota-por-andar')).getAllByRole('listitem')).toHaveLength(PLANO.resumo.incendio!.andares.length);
+    // PA9c: os hidrantes, a bomba e o recalque.
+    expect(screen.getByTestId('hidrantes-do-predio').textContent).toMatch(/por andar.*bomba na cobertura.*registro de recalque/);
     // PA9b: as peças lançadas nas áreas comuns.
     expect(within(screen.getByTestId('equipamentos-de-incendio-do-predio')).getAllByRole('listitem')).toHaveLength(Object.keys(PLANO.resumo.incendio!.equipamentos!).length);
     fireEvent.click(screen.getByRole('tab', { name: 'Resultado' }));

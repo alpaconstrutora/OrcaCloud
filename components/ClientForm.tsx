@@ -13,6 +13,9 @@ import { empreendimentoService } from '../services/empreendimentoService';
 import { clientEmpreendimentoService } from '../services/clientEmpreendimentoService';
 import { masterDataService, MasterState } from '../services/masterDataService';
 import { MARITAL_STATUS_OPTIONS, MARITAL_REGIME_OPTIONS, hasSpouse } from '../constants/civilStatus';
+import DocumentosClienteTabela, { AvisoFlutuante, useAvisoFlutuante } from './clientes/DocumentosCliente';
+import { clienteDocumentosService } from '../services/clienteDocumentosService';
+import type { OpuraDocument } from '../types/documents';
 
 /**
  * Cadastro de cliente — TELA, não drawer.
@@ -61,6 +64,7 @@ const CLIENT_TABS = [
     { id: 'geral', label: 'Dados gerais' },
     { id: 'empreendimentos', label: 'Empreendimentos vinculados' },
     { id: 'contato', label: 'Endereços e contatos' },
+    { id: 'documentos', label: 'Documentos' },
 ] as const;
 
 type ClientTabId = typeof CLIENT_TABS[number]['id'];
@@ -69,6 +73,7 @@ const TAB_SUBTITLES: Record<ClientTabId, string> = {
     geral: 'Identificação, organização, portais e qualificação civil.',
     empreendimentos: 'Empreendimentos a que este cliente está ligado explicitamente.',
     contato: 'E-mail, telefone e endereço completo do cliente.',
+    documentos: 'Documentos do cliente — os mesmos que o comercial usa nas negociações.',
 };
 
 const EMPTY_FORM: Partial<Client> = {
@@ -121,6 +126,13 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
     const [orgErro, setOrgErro] = React.useState<string | null>(null);
     const [savedAt, setSavedAt] = React.useState<number | null>(null);
     const [activeTab, setActiveTab] = React.useState<ClientTabId>('geral');
+    // Aba Documentos (15/11/2026): o arquivo mora no GED (opura_documents com
+    // client_id) e grava na hora — não passa pelo "Salvar alterações" do cadastro.
+    const [documentos, setDocumentos] = React.useState<OpuraDocument[]>([]);
+    const [documentosCarregando, setDocumentosCarregando] = React.useState(false);
+    const [documentosErro, setDocumentosErro] = React.useState<string | null>(null);
+    const [documentosCarregados, setDocumentosCarregados] = React.useState(false);
+    const { aviso, notificar } = useAvisoFlutuante();
     const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
     const [formData, setFormData] = React.useState<Partial<Client>>({
         ...EMPTY_FORM,
@@ -216,6 +228,27 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
             return sa !== sb ? sa - sb : (a.name || '').localeCompare(b.name || '', 'pt-BR');
         });
     }, [empreendimentos, filtroEmpreendimento, empreendimentoIds]);
+
+    const clienteId = initialData?.id;
+    const carregarDocumentos = React.useCallback(async () => {
+        if (!clienteId) return;
+        setDocumentosCarregando(true);
+        setDocumentosErro(null);
+        try {
+            setDocumentos(await clienteDocumentosService.listar([clienteId]));
+            setDocumentosCarregados(true);
+        } catch (err) {
+            setDocumentosErro(err instanceof Error ? err.message : 'Erro ao carregar os documentos.');
+        } finally {
+            setDocumentosCarregando(false);
+        }
+    }, [clienteId]);
+
+    // Carrega só quando a aba abre pela primeira vez — quem nunca olha os
+    // documentos não paga a consulta.
+    React.useEffect(() => {
+        if (activeTab === 'documentos' && !documentosCarregados) carregarDocumentos();
+    }, [activeTab, documentosCarregados, carregarDocumentos]);
 
     const handleBack = async () => {
         if (await confirmDiscard()) onClose();
@@ -331,7 +364,42 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                 </div>
             </div>
 
-            <form id={CLIENT_FORM_ID} onSubmit={handleSubmit}>
+            {/* A aba Documentos fica FORA do <form>: a busca e os botões da tabela
+                dentro dele submeteriam o cadastro no Enter. O <form> continua montado
+                (escondido) para "Salvar alterações" seguir gravando desta aba. */}
+            {activeTab === 'documentos' && (
+                initialData && clienteId ? (
+                    <div className="space-y-3">
+                        {documentosErro && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 rounded-[10px] px-4 py-3 text-sm flex items-center justify-between gap-4">
+                                <span>{documentosErro}</span>
+                                <button type="button" onClick={carregarDocumentos} className="text-sm font-medium text-red-700 underline">Tentar de novo</button>
+                            </div>
+                        )}
+                        <DocumentosClienteTabela
+                            cliente={{
+                                id: clienteId,
+                                organization_id: initialData.organization_id,
+                                name: formData.name || initialData.name,
+                                type: initialData.type,
+                            }}
+                            documentos={documentos}
+                            onDocumentosChange={setDocumentos}
+                            loading={documentosCarregando}
+                            onNotificar={notificar}
+                            storageKey="cliente:documentos"
+                        />
+                    </div>
+                ) : (
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-6 flex items-center gap-3">
+                        <FileText className="w-5 h-5 text-gray-400 shrink-0" />
+                        <p className="text-sm text-gray-600">Salve o cliente para anexar documentos.</p>
+                    </div>
+                )
+            )}
+            <AvisoFlutuante aviso={aviso} />
+
+            <form id={CLIENT_FORM_ID} onSubmit={handleSubmit} className={activeTab === 'documentos' ? 'hidden' : undefined}>
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-6 space-y-6">
                         {activeTab === 'geral' && (

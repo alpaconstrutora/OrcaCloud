@@ -303,6 +303,7 @@ export function StandardTable<T>({
                         />
                         {/* Autofit sob comando explícito, nunca automático (§6.1.2) */}
                         <button
+                            type="button"
                             onClick={() => cols.autoFit()}
                             className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
                             title="Ajustar largura das colunas ao conteúdo"
@@ -446,6 +447,7 @@ export function StandardTable<T>({
                     </div>
                     <div className="flex items-center gap-2">
                         <button
+                            type="button"
                             onClick={() => setPage(p => Math.max(1, Math.min(p, totalPages) - 1))}
                             disabled={currentPage <= 1}
                             className="h-8 px-3 rounded-[6px] border border-gray-200 bg-white text-sm text-gray-600 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
@@ -454,6 +456,7 @@ export function StandardTable<T>({
                         </button>
                         <span>Página {currentPage} de {totalPages}</span>
                         <button
+                            type="button"
                             onClick={() => setPage(p => Math.min(totalPages, Math.min(p, totalPages) + 1))}
                             disabled={currentPage >= totalPages}
                             className="h-8 px-3 rounded-[6px] border border-gray-200 bg-white text-sm text-gray-600 hover:text-gray-900 disabled:opacity-40 disabled:cursor-not-allowed transition-all"

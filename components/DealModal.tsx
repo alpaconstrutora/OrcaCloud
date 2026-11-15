@@ -79,6 +79,9 @@ import { useConfirm } from './ui/confirm';
 import { useStore } from '../store/useStore';
 import { deveReterIrrfLocacao } from '../utils/retencaoIrrfLocacao';
 import { porDataDoLancamento } from '../utils/ordemDosLancamentos';
+import { clienteDocumentosService } from '../services/clienteDocumentosService';
+import type { OpuraDocument } from '../types/documents';
+import ChecklistDocumentosDaPessoa from './clientes/ChecklistDocumentosCliente';
 
 type TabId = 'cliente' | 'unidade' | 'pagamento' | 'parcelas' | 'partes' | 'contrato' | 'garantias';
 
@@ -101,29 +104,8 @@ interface GenerateTarget {
     contract: Contract;
 }
 
-/** Checklist de documentos exigidos do cliente/comprador, por tipo de pessoa.
- * As chaves (`key`) são o que fica gravado em commercial_deals.doc_checklist —
- * NÃO renomear sem migração de dados. Rótulos podem mudar livremente. */
-const DEAL_DOC_CHECKLIST: Record<'PF' | 'PJ', { key: string; label: string }[]> = {
-    PF: [
-        { key: 'rg_cnh', label: 'RG / CNH' },
-        { key: 'cpf', label: 'CPF' },
-        { key: 'certidao_estado_civil', label: 'Certidão de estado civil' },
-        { key: 'comprovante_residencia', label: 'Comprovante de residência' },
-        { key: 'declaracao_irpf', label: 'Declaração IRPF (último ano)' },
-        { key: 'certidao_negativa_federal', label: 'Certidão negativa federal' },
-        { key: 'comprovante_renda', label: 'Comprovante de renda (3 últimos)' },
-        { key: 'extratos_bancarios', label: 'Extratos bancários (3 meses)' },
-    ],
-    PJ: [
-        { key: 'cnpj', label: 'CNPJ' },
-        { key: 'contrato_social', label: 'Contrato social ou estatuto atualizado (última alteração)' },
-        { key: 'docs_socios', label: 'Documentos dos sócios/administradores' },
-        { key: 'certidoes_negativas_empresa', label: 'Certidões negativas da empresa' },
-        { key: 'balanco_dre_faturamento', label: 'Balanço, DRE ou faturamento' },
-        { key: 'procuracao', label: 'Procuração, se houver representante' },
-    ],
-};
+// Checklist de documentos exigidos do cliente/comprador: TIPOS_DOCUMENTO_CLIENTE
+// em types/clienteDocumentos.ts (as chaves seguem as de commercial_deals.doc_checklist).
 
 /** Tipos de Pagamento padrão do sistema, no formato de lista `PaymentType`.
  * Usado como fallback enquanto o catálogo da organização carrega. A fonte de
@@ -2230,6 +2212,29 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      *  Só para o que ainda é de cliente único (análise de crédito, locação). */
     const selectedClient = clients.find(c => c.id === formData.client_id);
 
+    // ── Documentos dos compradores (15/11/2026) ─────────────────────────────
+    // A casa dos documentos é Meus Clientes (GED, opura_documents.client_id): o
+    // checklist abaixo lê de lá e o "Enviar" grava lá. Nada disso passa pelo
+    // salvar da negociação, e ler nunca marca doc_checklist sozinho.
+    const pessoasDoChecklist = useMemo(
+        () => (isMultiBuyer ? buyerClients : (selectedClient ? [selectedClient] : [])),
+        [isMultiBuyer, buyerClients, selectedClient],
+    );
+    const idsDasPessoas = pessoasDoChecklist.map(p => p.id).join(',');
+    const [docsDasPessoas, setDocsDasPessoas] = useState<OpuraDocument[]>([]);
+    const [docsCarregando, setDocsCarregando] = useState(false);
+    useEffect(() => {
+        if (!isOpen || activeTab !== 'cliente' || !idsDasPessoas) { if (!idsDasPessoas) setDocsDasPessoas([]); return; }
+        let vivo = true;
+        setDocsCarregando(true);
+        clienteDocumentosService.listar(idsDasPessoas.split(','))
+            .then(docs => { if (vivo) setDocsDasPessoas(docs); })
+            .catch(err => { if (vivo) notifyError(err instanceof Error ? err.message : 'Erro ao carregar os documentos do cliente.'); })
+            .finally(() => { if (vivo) setDocsCarregando(false); });
+        return () => { vivo = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, activeTab, idsDasPessoas]);
+
     // ── Locação: locador e retenção de IRRF ─────────────────────────────────
     // Inquilino PJ + locador PF = o cliente retém o IRRF (utils/retencaoIrrfLocacao).
     // PF/PJ vem do cadastro de Clientes. Locador sugerido = "Cliente / proprietário"
@@ -3507,65 +3512,27 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 é `<client_id>::<doc>`; com um só, a chave legada `<doc>` continua
                                 sendo lida e gravada (negociações antigas não perdem o que já foi
                                 marcado). */}
-                            {(isMultiBuyer ? buyerClients : (selectedClient ? [selectedClient] : [])).map(pessoa => {
-                                const isPJ = pessoa.type === 'PJ';
-                                const items = DEAL_DOC_CHECKLIST[isPJ ? 'PJ' : 'PF'];
-                                const checked = formData.doc_checklist || {};
-                                const soUm = dealBuyers.length <= 1;
-                                const keyOf = (docKey: string) => soUm ? docKey : `${pessoa.id}::${docKey}`;
-                                // Um comprador que era único (chaves legadas) e ganhou companhia
-                                // continua vendo o que já marcou.
-                                const isOn = (docKey: string) => !!(checked[keyOf(docKey)] ?? (pessoa.id === formData.client_id ? checked[docKey] : false));
-                                const doneCount = items.filter(i => isOn(i.key)).length;
-                                const toggle = (docKey: string) => setFormData(prev => ({
-                                    ...prev,
-                                    doc_checklist: { ...(prev.doc_checklist || {}), [keyOf(docKey)]: !isOn(docKey) },
-                                }));
-                                return (
-                                    <div key={pessoa.id} className="space-y-4">
-                                        <div className="flex items-center justify-between border-b border-gray-100 pb-3">
-                                            <div className="flex items-center gap-2">
-                                                <FileText className="w-4 h-4 text-blue-600" />
-                                                <h3 className="text-sm font-semibold text-gray-900">
-                                                    Documentos — {isPJ ? 'Pessoa Jurídica' : 'Pessoa Física'}
-                                                    {!soUm && <span className="font-normal text-gray-500"> · {pessoa.name}</span>}
-                                                </h3>
-                                            </div>
-                                            <span className="text-sm font-normal text-blue-600">
-                                                {doneCount}/{items.length}
-                                            </span>
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2">
-                                            {items.map(item => {
-                                                const isChecked = isOn(item.key);
-                                                return (
-                                                    <button
-                                                        key={item.key}
-                                                        type="button"
-                                                        onClick={() => toggle(item.key)}
-                                                        className={`w-full flex items-center gap-3 px-4 py-3 rounded-[10px] border text-left transition-all ${
-                                                            isChecked
-                                                                ? 'bg-emerald-50 border-emerald-200'
-                                                                : 'bg-white border-gray-200 hover:border-blue-300'
-                                                        }`}
-                                                    >
-                                                        <span className={`w-6 h-6 rounded-[6px] flex items-center justify-center shrink-0 border transition-all ${
-                                                            isChecked
-                                                                ? 'bg-emerald-500 border-emerald-500 text-white'
-                                                                : 'bg-white border-gray-300 text-transparent'
-                                                        }`}>
-                                                            <Check className="w-4 h-4" />
-                                                        </span>
-                                                        <span className={`text-sm font-bold ${isChecked ? 'text-emerald-800' : 'text-gray-700'}`}>
-                                                            {item.label}
-                                                        </span>
-                                                    </button>
-                                                );
-                                            })}
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                            {pessoasDoChecklist.map(pessoa => (
+                                <ChecklistDocumentosDaPessoa
+                                    key={pessoa.id}
+                                    pessoa={pessoa}
+                                    soUm={dealBuyers.length <= 1}
+                                    ehClientePrincipal={pessoa.id === formData.client_id}
+                                    checked={formData.doc_checklist || {}}
+                                    onToggle={(chave, valor) => setFormData(prev => ({
+                                        ...prev,
+                                        doc_checklist: { ...(prev.doc_checklist || {}), [chave]: valor },
+                                    }))}
+                                    documentos={docsDasPessoas.filter(d => d.client_id === pessoa.id)}
+                                    carregando={docsCarregando}
+                                    onDocumentosChange={upd => setDocsDasPessoas(prev => {
+                                        const deles = prev.filter(d => d.client_id === pessoa.id);
+                                        const outros = prev.filter(d => d.client_id !== pessoa.id);
+                                        return [...upd(deles), ...outros];
+                                    })}
+                                    onNotificar={(msg, tipo) => (tipo === 'error' ? notifyError(msg) : notifySuccess(msg))}
+                                />
+                            ))}
                         </div>
                     )}
 

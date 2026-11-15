@@ -1,28 +1,15 @@
 import { supabase } from '../lib/supabase';
 import type { InterestRole } from './investorPortalService';
 import type { ObraDoEspelho } from '../utils/espelhoDoInvestidor';
-import type { ImovibStudy } from '../types';
-import { aplicarEstrutura, VinculoDaEstrutura } from './imovibService';
+import type { ImovibScenario } from '../types';
+import { versaoPublicadaDoSnapshot, type SnapshotDaVersao, type VersaoPublicada } from '../utils/imovibVersoes';
 
-/**
- * Estudo que fn_investor_portal_get_study devolve, montado do MESMO jeito que
- * imovibService.getStudyById monta para o app: espelho de vendas e, para estudo
- * vinculado, blocos derivados das torres do empreendimento. Item 0.6 do plano
- * docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md.
- *
- * Aceita também a resposta anterior à migration
- * aplicar_20271111700000_investor_portal_estudo_mesma_estrutura.sql (sem
- * `unit_instances` nem `estrutura_do_empreendimento`): calcula como antes.
- * As outras fontes de capital (`funding_sources`, item 4.4) vêm desde
- * aplicar_20271111980000; resposta sem elas = estudo sem fontes.
- */
-export function montarEstudoDoPortal(raw: any): ImovibStudy | null {
-    if (!raw) return null;
-    const { estrutura_do_empreendimento, blocks, ...resto } = raw;
-    const study = { ...resto, unit_instances: raw.unit_instances ?? [], funding_sources: raw.funding_sources ?? [] } as ImovibStudy;
-    aplicarEstrutura(study, blocks ?? [], (estrutura_do_empreendimento ?? undefined) as VinculoDaEstrutura | undefined);
-    return study;
-}
+const MOTIVO_DO_ESTUDO_RECUSADO: Record<string, string> = {
+    unauthorized: 'O link do portal venceu ou foi desativado.',
+    forbidden: 'Esta oportunidade não está mais publicada.',
+    sem_versao: 'Esta oportunidade ainda não tem uma versão do estudo publicada.',
+    not_found: 'A versão publicada desta oportunidade não foi encontrada.',
+};
 
 export interface InvestorPortalToken {
     id: string;
@@ -169,13 +156,26 @@ export const investorPortalTokenService = {
         return (data as any)?.milestones ?? [];
     },
 
-    async getStudyByToken(token: string, studyId: string): Promise<ImovibStudy | null> {
+    /**
+     * A versão congelada que a oportunidade publica (Fase 2 do plano
+     * docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md). O estudo do snapshot já
+     * vem montado como o app o carregou (espelho, estrutura, fontes): não passa por `montarEstudoDoPortal`.
+     */
+    async getVersaoPublicadaByToken(token: string, studyId: string): Promise<VersaoPublicada> {
         const { data, error } = await supabase.rpc('fn_investor_portal_get_study', {
             p_token: token,
             p_study_id: studyId
         });
         if (error) throw error;
-        return montarEstudoDoPortal((data as any)?.study);
+        const r = data as { valid?: boolean; error?: string; study?: SnapshotDaVersao; cenarios?: ImovibScenario[]; relatorio?: SnapshotDaVersao['relatorio']; versao?: VersaoPublicada['versao']; organizacao?: VersaoPublicada['organizacao'] } | null;
+        if (!r?.valid || !r.study || !r.versao) {
+            throw new Error(MOTIVO_DO_ESTUDO_RECUSADO[r?.error ?? ''] ?? 'Não foi possível ler o estudo desta oportunidade.');
+        }
+        return versaoPublicadaDoSnapshot(
+            { ...r.study, cenarios: r.cenarios ?? [], relatorio: r.relatorio ?? {} },
+            r.versao,
+            r.organizacao ?? { name: null, logo_url: null },
+        );
     },
 
     async submitInterestByToken(token: string, payload: SubmitInvestorPortalInterestPayload): Promise<string> {

@@ -94,6 +94,8 @@ export interface InvestorOpportunity {
     scenario_notes?: string | null;
     // novos campos de marketing, RI e vínculo ao IMOVIB
     imovib_study_id?: string | null;
+    /** Versão congelada do estudo que o investidor vê (obrigatória para publicar com estudo — plano 2026-11-15, Fase 2). */
+    imovib_version_id?: string | null;
     target_funding_value?: number | null;
     current_funding_value?: number | null;
     gallery_urls?: string[] | null;
@@ -169,7 +171,7 @@ const OPP_COLS = [
     'expected_start', 'project_id', 'is_published',
     'duration_months', 'scenario_cost_cons_pct', 'scenario_vgv_cons_pct',
     'scenario_cost_opt_pct', 'scenario_vgv_opt_pct', 'scenario_notes',
-    'imovib_study_id', 'target_funding_value', 'current_funding_value',
+    'imovib_study_id', 'imovib_version_id', 'target_funding_value', 'current_funding_value',
     'gallery_urls', 'distances_json', 'risks_json', 'team_json', 'simulation_params_json',
     'created_at',
 ].join(', ');
@@ -250,6 +252,17 @@ export const investorPortalService = {
             .single();
         if (error) throw error;
         return data as unknown as InvestorOpportunity;
+    },
+
+    /** Oportunidades que escolheram uma versão deste estudo (aba Versões do Imovib — plano 2026-11-15, Fase 2). */
+    async oportunidadesComVersaoDoEstudo(studyId: string): Promise<Pick<InvestorOpportunity, 'id' | 'title' | 'is_published' | 'imovib_version_id'>[]> {
+        const { data, error } = await supabase
+            .from('investor_opportunities')
+            .select('id, title, is_published, imovib_version_id')
+            .eq('imovib_study_id', studyId)
+            .not('imovib_version_id', 'is', null);
+        if (error) throw error;
+        return (data ?? []) as Pick<InvestorOpportunity, 'id' | 'title' | 'is_published' | 'imovib_version_id'>[];
     },
 
     async deleteOpportunity(id: string): Promise<void> {

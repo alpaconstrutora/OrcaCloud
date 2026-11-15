@@ -29,6 +29,7 @@ import { IMOVIB_DEFAULTS } from '../../constants/imovibDefaults';
 import { composicaoDoCapital, ROTULO_DO_CAPITAL, COR_DO_CAPITAL } from '../../utils/imovibFinanciamento';
 import { TITULO_VGV_LIQUIDO, vgvLiquidoPassaDoBruto, notaDoVgvLiquido } from '../../constants/imovibClassificacao';
 import { ImovibStudy } from '../../types';
+import type { VersaoPublicada } from '../../utils/imovibVersoes';
 import { InvestmentSimulator } from './InvestmentSimulator';
 import Button from '../ui/Button';
 import {
@@ -68,20 +69,28 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
 
     const [study, setStudy] = React.useState<ImovibStudy | null>(null);
     const [loadingStudy, setLoadingStudy] = React.useState(false);
+    // Plano docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md, Fase 2: o investidor
+    // vê a VERSÃO publicada; o gestor abre a mesma versão (prévia). Rascunho sem versão: o gestor
+    // vê o estudo atual, avisado de que ainda não é o que o investidor verá.
+    const [versaoPublicada, setVersaoPublicada] = React.useState<VersaoPublicada | null>(null);
+    const [erroDoEstudo, setErroDoEstudo] = React.useState<string | null>(null);
 
     React.useEffect(() => {
-        if (op.imovib_study_id) {
-            setLoadingStudy(true);
-            const loadPromise = portalToken
-                ? investorPortalTokenService.getStudyByToken(portalToken, op.imovib_study_id)
-                : imovibService.getStudyById(op.imovib_study_id, true);
-
-            loadPromise
-                .then(setStudy)
-                .catch(err => console.error('Erro ao carregar estudo do IMOVIB para o prospecto', err))
-                .finally(() => setLoadingStudy(false));
-        }
-    }, [op.imovib_study_id, portalToken]);
+        if (!op.imovib_study_id) { setStudy(null); setVersaoPublicada(null); return; }
+        let vivo = true;
+        setLoadingStudy(true);
+        setErroDoEstudo(null);
+        const versao = portalToken
+            ? investorPortalTokenService.getVersaoPublicadaByToken(portalToken, op.imovib_study_id)
+            : op.imovib_version_id ? imovibService.versaoPublicada(op.imovib_version_id) : null;
+        const carga: Promise<void> = versao
+            ? versao.then(vp => { if (vivo) { setVersaoPublicada(vp); setStudy(vp.study); } })
+            : imovibService.getStudyById(op.imovib_study_id, true).then(s => { if (vivo) { setVersaoPublicada(null); setStudy(s); } });
+        carga
+            .catch(err => { if (vivo) { setStudy(null); setVersaoPublicada(null); setErroDoEstudo((err as Error).message); } })
+            .finally(() => { if (vivo) setLoadingStudy(false); });
+        return () => { vivo = false; };
+    }, [op.imovib_study_id, op.imovib_version_id, portalToken]);
 
     const [sliderCostPct, setSliderCostPct] = React.useState(0);
     const [sliderVgvPct, setSliderVgvPct] = React.useState(0);
@@ -605,6 +614,21 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                 <BarChart3 className="w-4 h-4 text-blue-600" />
                                                 <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Dashboard de Viabilidade</span>
                                             </div>
+
+                                            {/* Versão que o investidor vê (plano 2026-11-15, Fase 2) */}
+                                            {erroDoEstudo && (
+                                                <p role="alert" className="mb-4 rounded-[10px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{erroDoEstudo}</p>
+                                            )}
+                                            {versaoPublicada && (
+                                                <p className="mb-4 text-sm text-gray-700">
+                                                    Versão <span className="font-semibold text-gray-900">{versaoPublicada.versao.label}</span> · congelada em {new Date(versaoPublicada.versao.created_at).toLocaleDateString('pt-BR')}
+                                                </p>
+                                            )}
+                                            {!versaoPublicada && study && !portalToken && (
+                                                <p className="mb-4 rounded-[10px] bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+                                                    Prévia do estudo atual. O investidor só vê uma versão congelada: escolha-a em Editar antes de publicar.
+                                                </p>
+                                            )}
 
                                             {/* Painel do Simulador Interativo */}
                                             {study ? (

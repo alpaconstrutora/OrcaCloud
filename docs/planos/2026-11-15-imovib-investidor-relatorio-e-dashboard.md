@@ -47,13 +47,15 @@ A referência (reel de code.xr, "Glassy Dashboard": glassmorphism, acentos lumin
 
 ## Fase 2 — Publicar uma versão na oportunidade (migration — aplicar só com OK)
 
-- [ ] Migration `aplicar_<prefixo>_investidor_versao_publicada.sql` (conferir prefixo com TODOS os nomes, não `ls|tail`):
+- [x] Migration `aplicar_20271115960000_investidor_versao_publicada.sql` (escrita; **aplicar com OK** antes do merge — o front lê a coluna nova) (conferir prefixo com TODOS os nomes, não `ls|tail`):
   - `investor_opportunities.imovib_version_id uuid REFERENCES imovib_study_versions(id) ON DELETE RESTRICT`;
   - gatilho BEFORE INSERT/UPDATE: versão pertence ao `imovib_study_id`; oportunidade publicada com estudo exige versão (mensagem em português); função com `REVOKE … FROM PUBLIC, anon, authenticated`;
   - `CREATE OR REPLACE fn_investor_portal_get_study(p_token, p_study_id)`: mesmas checagens de token/oportunidade publicada; devolve `snapshot` da versão publicada menos as chaves internas (lista atual + `premise_notes`), `relatorio` (as 4 listas), `versao {label, created_at}`, `organizacao {name, logo_url}`. Mantém `REVOKE PUBLIC` + `GRANT anon, authenticated` (REGRA #7, perguntas 1 e 2).
-- [ ] `OpportunityForm.tsx` (`:325`): depois do estudo, seletor "Versão publicada" (versões do estudo, mais nova primeiro, com data). Publicar com estudo e sem versão: botão desligado com o motivo no `title`.
-- [ ] `OpportunityDetail` no modo gestor lê a mesma versão (`imovibService.snapshotDaVersao`) — prévia igual ao que o investidor vê.
-- [ ] Aba Versões do Imovib: marca "publicada em: <oportunidade>".
+- [x] `OpportunityForm.tsx` (`:325`): depois do estudo, seletor "Versão publicada" (versões do estudo, mais nova primeiro, com data). Publicar com estudo e sem versão: botão desligado com o motivo no `title`.
+- [x] `OpportunityDetail` no modo gestor lê a mesma versão (`imovibService.snapshotDaVersao`) — prévia igual ao que o investidor vê.
+- [x] Aba Versões do Imovib: coluna "Para o investidor" ("Publicada em X" / "Escolhida em X (rascunho)").
+- Também: a lista de oportunidades diz o motivo e abre o editor ao publicar sem versão, e o erro de publicar aparece (antes ia só para o console); `montarEstudoDoPortal` saiu (o snapshot já vem montado).
+- **Prova (15/11, transação desfeita, como `postgres` e `anon`):** os 6 casos passaram — publicar sem versão recusa; versão de outro estudo recusa; rascunho sem versão e publicação com versão passam; RPC pelo link devolve versão, organização, cenários e riscos sem nenhuma chave interna; `anon` com token inválido → `unauthorized`, com token válido → `valid`; tirar o estudo limpa a versão. A coluna não ficou no banco (ROLLBACK).
 - **Pronto quando:** prova no banco em transação desfeita (`BEGIN … RAISE EXCEPTION 'PROVA' … ROLLBACK`): publicar sem versão recusa; versão de outro estudo recusa; RPC com token devolve a versão sem `recommendation`/`hurdle_*`/`premise_notes`; RPC chamada com `anon` sem token válido → `unauthorized`. `__tests__/segurancaMigrations.test.ts` verde.
 
 ## Fase 3 — Gráficos de props puras + PDF com capa e gráficos

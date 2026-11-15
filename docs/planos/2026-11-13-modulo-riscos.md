@@ -122,7 +122,7 @@ tela: ler `docs/ui_ux_guia_unificado.md` e `UI_PATTERNS.md` inteiros. Depois: ro
   *Pronto quando:* testes Vitest cobrem P×I nos 25 cruzamentos, as faixas padrão, o máximo
   multidimensional, o gatilho que escala independentemente da cor (CA04) e o valor esperado de
   30% × R$ 200 mil = R$ 60 mil (CA13).
-- [ ] **F1.4 Permissões e menu:** `canViewRisks`/`canEditRisks` (`types/users.ts`, matriz de
+- [x] **F1.4 Permissões e menu:** `canViewRisks`/`canEditRisks` (`types/users.ts`, matriz de
   `OrganizationUsers.tsx`), `utils/modulosPermitidos.ts`, `Layout.tsx` (desktop, mobile e busca)
   e `AppRouter.tsx` (lazy + guard).
   *Pronto quando:* usuário sem `canViewRisks` não vê o item nem abre a rota; `orgContextGuard.test.ts` verde.
@@ -234,6 +234,15 @@ Portal do Investidor; Monte Carlo; BIM/3D; alertas preditivos.
   no histórico; e "Abrir origem" de Tarefas, que só navegava com rota iniciada em `/` — não abria nada para a ação
   de risco NEM para as 11 tarefas antigas de Suprimentos (`supplies-contracts`); agora usa o resolvedor de links
   das notificações e abre a ficha do risco (`route: /riscos?riskId=`); rótulo "Riscos" na coluna Origem.
+- 15/11 **F1.4 provado no navegador** (usuário: "sim" ao roteiro; login feito pelo usuário como
+  `agente-leitura`, Membro na Alpa, admin na Garden Cambuhy). `canViewRisks` desligado pela tela Usuários ›
+  Permissões (gravou só `canViewRisks=false`, 1 membro); com a Alpa no topo: item some do menu, `#/riscos`
+  direto → "[RouteGuard] Acesso bloqueado para a rota: riscos" e cai no dashboard; com a Garden Cambuhy (admin)
+  o item aparece e a tela abre. Permissões restauradas a partir de cópia (158 chaves, idênticas — conferido).
+  Achados fora do módulo: (1) em "Todas as organizações" o guard libera QUALQUER módulo (`!activeOrganizationId →
+  true`, comportamento do app); (2) a busca rápida (Ctrl+K) lista todos os módulos sem filtrar por permissão — o
+  clique cai no guard e não abre, mas o item aparece. Os dois valem para o app inteiro, não só Riscos.
+- **F1: 11 de 12** — falta F1.12 (contador no SST), sem documento de SST cadastrado no banco para provar.
 - Observação: o código RSC é `max+1` por org — excluir o último risco (só possível sem avaliação) libera o número
   para o próximo. Aceito no MVP (exclusão é só para registro feito por engano).
 - Referências a conferir com atenção: IN RFB 2.021/2021 (R10.07), artigos da Lei 14.133/2021 em R24,

@@ -141,6 +141,31 @@ export function dadosDoRelatorioDaVersao(snapshot: SnapshotDaVersao, versao: Pic
     };
 }
 
+/**
+ * A versão que a oportunidade publica para o investidor (Fase 2 do plano 2026-11-15): o estudo do
+ * snapshot, as listas do relatório, a versão e a organização (capa do relatório). Montada igual no
+ * portal (fn_investor_portal_get_study) e na prévia do gestor (imovibService.versaoPublicada).
+ */
+export interface VersaoPublicada {
+    study: ImovibStudy;
+    cenarios: ImovibScenario[];
+    relatorio: NonNullable<SnapshotDaVersao['relatorio']>;
+    versao: { id: string; label: string; created_at: string };
+    organizacao: { name: string | null; logo_url: string | null };
+}
+
+export function versaoPublicadaDoSnapshot(
+    snapshot: SnapshotDaVersao,
+    versao: VersaoPublicada['versao'],
+    organizacao: VersaoPublicada['organizacao'],
+): VersaoPublicada {
+    const { cenarios, relatorio, ...study } = snapshot;
+    return { study: study as ImovibStudy, cenarios: cenarios ?? [], relatorio: relatorio ?? {}, versao, organizacao };
+}
+
+export const snapshotDaVersaoPublicada = (vp: VersaoPublicada): SnapshotDaVersao =>
+    ({ ...vp.study, cenarios: vp.cenarios, relatorio: vp.relatorio });
+
 /** Versão antiga não guardava `semExposicao`: exposição máxima zero quer dizer o mesmo. */
 export const semExposicaoDa = (r: ResultadosDaVersao): boolean => r.semExposicao ?? r.exposicaoMaxima <= 0;
 

@@ -13,6 +13,7 @@ import OpportunityDetail from './OpportunityDetail';
 import InterestsPanel from './InterestsPanel';
 import Button from '../ui/Button';
 import { useOrgWriteTarget } from '../../hooks/useOrgContext';
+import { useToast } from '../../hooks/useToast';
 
 interface Props {
     opportunities: InvestorOpportunity[];
@@ -45,6 +46,7 @@ const OpportunitiesTab: React.FC<Props> = ({
     const [saving, setSaving] = React.useState(false);
     const [adminTab, setAdminTab] = React.useState<AdminTab>('opportunities');
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+    const { showToast } = useToast();
     const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
 
 
@@ -107,8 +109,22 @@ const OpportunitiesTab: React.FC<Props> = ({
         }
     };
 
+    // Plano 2026-11-15, Fase 2: com estudo do Imovib, publicar exige a versão que o investidor vê.
+    const motivoParaNaoPublicar = (op: InvestorOpportunity) =>
+        !op.is_published && op.imovib_study_id && !op.imovib_version_id
+            ? 'Escolha antes, em Editar, a versão do estudo que o investidor vai ver.'
+            : null;
+    const tituloDoPublicar = (op: InvestorOpportunity) =>
+        motivoParaNaoPublicar(op) ?? (op.is_published ? 'Despublicar' : 'Publicar');
+
     const handleTogglePublish = async (op: InvestorOpportunity) => {
         if (!op.id) return;
+        const motivo = motivoParaNaoPublicar(op);
+        if (motivo) {
+            showToast(motivo, 'error');
+            setEditing(op);
+            return;
+        }
         try {
             const saved = await investorPortalService.updateOpportunity(op.id, { is_published: !op.is_published });
             onUpdate(saved);
@@ -117,6 +133,7 @@ const OpportunitiesTab: React.FC<Props> = ({
             }
         } catch (err) {
             console.error('Erro ao publicar', err);
+            showToast(`Não foi possível ${op.is_published ? 'despublicar' : 'publicar'}: ${(err as Error).message}`, 'error');
         }
     };
 
@@ -342,7 +359,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                     onClick={e => e.stopPropagation()}>
                                                     <button
                                                         onClick={() => handleTogglePublish(op)}
-                                                        title={op.is_published ? 'Despublicar' : 'Publicar'}
+                                                        title={tituloDoPublicar(op)}
                                                         className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all"
                                                     >
                                                         {op.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -416,7 +433,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                 </Button>
                                                 {isAdmin && (
                                                     <>
-                                                        <button onClick={() => handleTogglePublish(op)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                        <button onClick={() => handleTogglePublish(op)} title={tituloDoPublicar(op)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
                                                             {op.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                                         </button>
                                                         <button onClick={() => setEditing(op)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
@@ -490,7 +507,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                         <>
                                                             <button
                                                                 onClick={() => handleTogglePublish(op)}
-                                                                title={op.is_published ? 'Despublicar' : 'Publicar'}
+                                                                title={tituloDoPublicar(op)}
                                                                 className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                             >
                                                                 {op.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}

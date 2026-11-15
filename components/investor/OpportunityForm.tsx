@@ -8,6 +8,7 @@ import {
 import { opportunityProjectService } from '../../services/opportunityProjectService';
 import { imovibService } from '../../services/imovibService';
 import { ImovibStudy } from '../../types';
+import type { ImovibStudyVersion } from '../../utils/imovibVersoes';
 import { storageService } from '../../services/storageService';
 import Button from '../ui/Button';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
@@ -94,6 +95,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
         scenario_vgv_opt_pct: initial?.scenario_vgv_opt_pct ?? null,
         scenario_notes: initial?.scenario_notes ?? '',
         imovib_study_id: initial?.imovib_study_id ?? null,
+        imovib_version_id: initial?.imovib_version_id ?? null,
         target_funding_value: initial?.target_funding_value ?? null,
         current_funding_value: initial?.current_funding_value ?? null,
         gallery_urls: initial?.gallery_urls ?? [],
@@ -105,6 +107,30 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
 
     const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
         setForm(prev => ({ ...prev, [k]: v }));
+
+    // Plano docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md, Fase 2: com estudo do
+    // Imovib, o investidor vê uma VERSÃO congelada; publicar sem ela o banco recusa.
+    const [versoes, setVersoes] = React.useState<ImovibStudyVersion[] | null>(null);
+    const [voltouParaRascunho, setVoltouParaRascunho] = React.useState(false);
+    React.useEffect(() => {
+        if (!form.imovib_study_id) { setVersoes(null); return; }
+        let vivo = true;
+        setVersoes(null);
+        imovibService.listarVersoes(form.imovib_study_id)
+            .then(l => { if (vivo) setVersoes(l); })
+            .catch(err => { if (vivo) { console.error('Erro ao carregar as versões do estudo', err); setVersoes([]); } });
+        return () => { vivo = false; };
+    }, [form.imovib_study_id]);
+    // Trocar de estudo limpa a versão; se estava publicada, volta para rascunho (o banco recusaria
+    // publicada sem versão) e a tela diz isso. Tirar o estudo não exige versão: continua como está.
+    const trocarEstudo = (id: string | null) => {
+        const voltou = !!form.is_published && !!id && id !== form.imovib_study_id;
+        setVoltouParaRascunho(voltou);
+        setForm(prev => ({ ...prev, imovib_study_id: id, imovib_version_id: null, is_published: voltou ? false : prev.is_published }));
+    };
+    const motivoSemVersao = form.imovib_study_id && !form.imovib_version_id
+        ? 'Escolha a versão congelada do estudo que o investidor vai ver.'
+        : null;
 
     // Estados para upload da Galeria
     const [dragOver, setDragOver] = React.useState(false);
@@ -322,8 +348,9 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         </p>
                         <div className="flex items-center gap-2">
                             <select
+                                aria-label="Estudo do Imovib"
                                 value={form.imovib_study_id ?? ''}
-                                onChange={e => set('imovib_study_id', e.target.value || null)}
+                                onChange={e => trocarEstudo(e.target.value || null)}
                                 className="flex-1 px-4 h-9 border border-blue-200 rounded-[6px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400"
                             >
                                 <option value="">Sem vínculo</option>
@@ -336,7 +363,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     variant="secondary"
                                     size="icon"
                                     type="button"
-                                    onClick={() => set('imovib_study_id', null)}
+                                    onClick={() => trocarEstudo(null)}
                                     title="Desvincular"
                                     className="text-blue-400 hover:text-red-500 hover:bg-red-50 border-blue-200"
                                 >
@@ -344,6 +371,30 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 </Button>
                             )}
                         </div>
+                        {form.imovib_study_id && (
+                            <div className="mt-4 space-y-1.5">
+                                <label htmlFor="oportunidade-versao" className="block text-xs font-semibold text-slate-500">Versão que o investidor vê</label>
+                                <select
+                                    id="oportunidade-versao"
+                                    value={form.imovib_version_id ?? ''}
+                                    onChange={e => { set('imovib_version_id', e.target.value || null); setVoltouParaRascunho(false); }}
+                                    disabled={versoes == null}
+                                    className="w-full px-4 h-9 border border-blue-200 rounded-[6px] text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400 disabled:bg-slate-50"
+                                >
+                                    <option value="">{versoes == null ? 'Lendo as versões…' : 'Escolha a versão'}</option>
+                                    {(versoes ?? []).map(v => (
+                                        <option key={v.id} value={v.id}>{v.label} · {new Date(v.created_at).toLocaleDateString('pt-BR')}</option>
+                                    ))}
+                                </select>
+                                {versoes?.length === 0 && (
+                                    <p className="text-xs text-amber-700">Este estudo ainda não tem versão congelada: congele uma na aba Versões do estudo.</p>
+                                )}
+                                <p className="text-xs text-blue-500">O investidor vê os números desta versão; editar o estudo depois não muda o que ele recebeu.</p>
+                            </div>
+                        )}
+                        {voltouParaRascunho && (
+                            <p className="mt-2 text-xs text-amber-700">Voltou para rascunho: escolha a versão do novo estudo para publicar de novo.</p>
+                        )}
                     </section>
 
                     {/* ── Captação de Recursos ─────────────────────────── */}
@@ -1028,10 +1079,13 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             <p className="text-sm font-bold text-gray-900">Visível para investidores</p>
                             <p className="text-xs text-gray-500 mt-0.5">Rascunhos não aparecem no portal</p>
                         </div>
+                        {/* Desligado, o botão não mostra o title: o motivo fica no invólucro. */}
+                        <span title={!form.is_published && motivoSemVersao ? motivoSemVersao : undefined}>
                         <button
                             type="button"
-                            onClick={() => set('is_published', !form.is_published)}
-                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${form.is_published
+                            onClick={() => { set('is_published', !form.is_published); setVoltouParaRascunho(false); }}
+                            disabled={!form.is_published && !!motivoSemVersao}
+                            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all disabled:opacity-50 disabled:cursor-not-allowed ${form.is_published
                                 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
                                 : 'bg-gray-200 text-gray-500 hover:bg-gray-300'
                                 }`}
@@ -1039,6 +1093,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             {form.is_published ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                             {form.is_published ? 'Publicado' : 'Rascunho'}
                         </button>
+                        </span>
                     </section>
 
                     {/* ── Ações ─────────────────────────────────────────── */}

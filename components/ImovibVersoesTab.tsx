@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { History, AlertCircle, Loader2 } from 'lucide-react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
+import { investorPortalService } from '../services/investorPortalService';
 import { resultadosDoEstudo, diferencaEntreVersoes, dadosDoRelatorioDaVersao, type ImovibStudyVersion, type LadoDaComparacao, type SnapshotDaVersao } from '../utils/imovibVersoes';
 import { nomeDeArquivo } from '../utils/nomeDeArquivo';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
@@ -28,6 +29,7 @@ const COLUNAS: StandardTableColumn[] = [
     { key: 'created_at', label: 'Congelada em', width: 150 },
     { key: 'vpl', label: 'VPL', width: 150, align: 'right' },
     { key: 'tir', label: 'TIR', width: 110, align: 'right' },
+    { key: 'publicada', label: 'Para o investidor', width: 260 },
     { key: 'notes', label: 'Observações', width: 320 },
 ];
 
@@ -53,6 +55,19 @@ const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
             .finally(() => { if (vivo) setCarregando(false); });
         return () => { vivo = false; };
     }, [study.id]);
+
+    // Plano 2026-11-15, Fase 2: em que oportunidade cada versão está publicada (ou escolhida, em rascunho).
+    const [oportunidades, setOportunidades] = useState<{ id?: string; title: string; is_published?: boolean; imovib_version_id?: string | null }[]>([]);
+    useEffect(() => {
+        let vivo = true;
+        investorPortalService.oportunidadesComVersaoDoEstudo(study.id)
+            .then(l => { if (vivo) setOportunidades(l); })
+            .catch(e => console.error('Erro ao ler as oportunidades das versões', e));
+        return () => { vivo = false; };
+    }, [study.id]);
+    const paraOInvestidor = (v: ImovibStudyVersion) => oportunidades
+        .filter(o => o.imovib_version_id === v.id)
+        .map(o => (o.is_published ? `Publicada em ${o.title}` : `Escolhida em ${o.title} (rascunho)`));
 
     // O snapshot é pesado: só é lido quando a versão entra na comparação.
     useEffect(() => {
@@ -139,6 +154,10 @@ const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
                             case 'created_at': return <span className="text-sm text-gray-700">{dataHora(v.created_at)}</span>;
                             case 'vpl': return <span className="text-sm text-gray-700">{fmt(v.results.vpl, 'R$')}</span>;
                             case 'tir': return <span className="text-sm text-gray-700">{fmt(v.results.tirAnual, '% a.a.')}</span>;
+                            case 'publicada': {
+                                const l = paraOInvestidor(v);
+                                return l.length ? <span className="text-sm text-gray-700">{l.map(t => <span key={t} className="block">{t}</span>)}</span> : <span className="text-sm text-gray-500">—</span>;
+                            }
                             case 'notes': return <span className="text-sm text-gray-600">{v.notes ?? '—'}</span>;
                             default: return null;
                         }

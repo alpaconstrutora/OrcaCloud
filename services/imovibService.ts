@@ -15,7 +15,7 @@ import type { ImovibComparable } from '../utils/imovibMercado';
 import { areaEquivalenteDaVersao, type AreaEquivalenteDaPlanta, type LinhaDoQuadroI, type VersaoDoQuadro } from '../utils/imovibAreaEquivalente';
 import { versaoDoMemorial } from '../utils/nbr12721/documento';
 import { planoDeImportacao, type ImovibPartner, type SocioDaEmpresa } from '../utils/imovibSocios';
-import { resultadosDoEstudo, type ImovibStudyVersion } from '../utils/imovibVersoes';
+import { resultadosDoEstudo, versaoPublicadaDoSnapshot, type ImovibStudyVersion, type SnapshotDaVersao, type VersaoPublicada } from '../utils/imovibVersoes';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
@@ -948,6 +948,27 @@ export const imovibService = {
             .order('created_at', { ascending: false });
         if (error) throw new Error(`Falha ao ler as versões: ${error.message}`);
         return (data || []) as unknown as ImovibStudyVersion[];
+    },
+
+    /**
+     * A versão publicada numa oportunidade, como o investidor a vê (plano 2026-11-15, Fase 2): o
+     * gestor abre a prévia com os mesmos dados que fn_investor_portal_get_study entrega ao portal.
+     */
+    async versaoPublicada(versionId: string): Promise<VersaoPublicada> {
+        const { data, error } = await supabase
+            .from('imovib_study_versions')
+            .select('id, label, created_at, snapshot')
+            .eq('id', versionId)
+            .single();
+        if (error) throw new Error(`Falha ao ler a versão publicada: ${error.message}`);
+        const v = data as { id: string; label: string; created_at: string; snapshot: SnapshotDaVersao };
+        let organizacao: VersaoPublicada['organizacao'] = { name: null, logo_url: null };
+        const orgId = v.snapshot.organization_id;
+        if (orgId) {
+            const { data: o } = await supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle();
+            if (o) organizacao = o as VersaoPublicada['organizacao'];
+        }
+        return versaoPublicadaDoSnapshot(v.snapshot, { id: v.id, label: v.label, created_at: v.created_at }, organizacao);
     },
 
     async snapshotDaVersao(id: string): Promise<ImovibStudy> {

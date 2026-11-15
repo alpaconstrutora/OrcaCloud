@@ -10,6 +10,10 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 const svc = vi.hoisted(() => ({ listarVersoes: vi.fn(), snapshotDaVersao: vi.fn(), congelarVersao: vi.fn() }));
 vi.mock('../../services/imovibService', () => ({ imovibService: svc }));
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
+const oportunidades = vi.hoisted(() => ({ lista: [] as unknown[] }));
+vi.mock('../../services/investorPortalService', () => ({
+    investorPortalService: { oportunidadesComVersaoDoEstudo: () => Promise.resolve(oportunidades.lista) },
+}));
 const pdf = vi.hoisted(() => ({ secoes: null as unknown, save: vi.fn() }));
 vi.mock('../../utils/imovibRelatorioPdf', () => ({
     pdfDoRelatorio: (secoes: unknown) => { pdf.secoes = secoes; return { save: pdf.save }; },
@@ -85,6 +89,23 @@ describe('relatório da versão', () => {
         const secoes = pdf.secoes as { id: string; paragrafos: string[]; tabelas: { linhas: string[][] }[] }[];
         expect(secoes.find(x => x.id === 'capa')!.paragrafos.join(' ')).toContain('10/11/2026');
         expect(JSON.stringify(secoes.find(x => x.id === 'riscos')!.tabelas)).toContain('Matrícula com ônus');
+    });
+});
+
+describe('versão publicada para o investidor (plano 2026-11-15, Fase 2)', () => {
+    it('diz em que oportunidade cada versão está publicada (ou escolhida, em rascunho)', async () => {
+        const v1 = versao('v1', 'Comitê de outubro');
+        const v2 = versao('v2', 'Comitê de novembro');
+        svc.listarVersoes.mockResolvedValue([v2.linha, v1.linha]);
+        svc.snapshotDaVersao.mockResolvedValue(v2.snapshot);
+        oportunidades.lista = [
+            { id: 'o1', title: 'Garden — captação', is_published: true, imovib_version_id: 'v2' },
+            { id: 'o2', title: 'Garden — sócios', is_published: false, imovib_version_id: 'v1' },
+        ];
+        render(comEdicao(<ImovibVersoesTab study={estudo() as never} />));
+        expect(await screen.findByText('Publicada em Garden — captação')).toBeTruthy();
+        expect(screen.getByText('Escolhida em Garden — sócios (rascunho)')).toBeTruthy();
+        oportunidades.lista = [];
     });
 });
 

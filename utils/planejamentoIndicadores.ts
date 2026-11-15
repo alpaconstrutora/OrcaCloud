@@ -17,6 +17,8 @@ export interface FolhaDoCronograma {
 export interface IndicadoresDePrazo {
     /** Avanço físico real, 0–100, ponderado pelo valor orçado de cada item. */
     avancoFisicoPct: number;
+    /** Avanço que deveria haver até hoje pelas datas (PV ÷ total orçado), 0–100. */
+    previstoPct: number;
     /** Valor agregado (EV) e planejado até hoje (PV), na moeda do orçamento. */
     ev: number;
     pv: number;
@@ -27,7 +29,8 @@ export interface IndicadoresDePrazo {
     /** Itens no caminho crítico (motor do cronograma) e, deles, os ainda não concluídos. */
     criticas: number;
     criticasAbertas: number;
-    /** Término previsto do cronograma (ISO `AAAA-MM-DD`), '' se não há datas. */
+    /** Início e término previstos do cronograma (ISO `AAAA-MM-DD`), '' se não há datas. */
+    inicioPrevisto: string;
     fimPrevisto: string;
     /** Término da linha de base ativa e desvio em dias (positivo = atrasou). */
     fimBaseline: string;
@@ -58,7 +61,7 @@ const soDia = (v?: string): string => (v ? v.slice(0, 10) : '');
 
 export function indicadoresDePrazo(
     folhas: FolhaDoCronograma[],
-    schedule: Pick<ProjectSchedule, 'itemSchedules' | 'endDate' | 'baselines' | 'activeBaselineId'> | null | undefined,
+    schedule: Pick<ProjectSchedule, 'itemSchedules' | 'startDate' | 'endDate' | 'baselines' | 'activeBaselineId'> | null | undefined,
     hoje: string = hojeLocalISO(),
 ): IndicadoresDePrazo {
     const itens = schedule?.itemSchedules ?? [];
@@ -103,6 +106,11 @@ export function indicadoresDePrazo(
         return e && (!max || e > max) ? e : max;
     }, '');
     const fimPrevisto = maiorFim || soDia(schedule?.endDate);
+    const menorInicio = itens.reduce((min, s) => {
+        const i = soDia(s.earlyStart ?? s.startDate);
+        return i && (!min || i < min) ? i : min;
+    }, '');
+    const inicioPrevisto = menorInicio || soDia(schedule?.startDate);
 
     let fimBaseline = '';
     let desvioDias: number | null = null;
@@ -119,12 +127,14 @@ export function indicadoresDePrazo(
 
     return {
         avancoFisicoPct: pesoTotal > 0 ? (somaPonderada / pesoTotal) * 100 : 0,
+        previstoPct: pesoTotal > 0 ? (pv / pesoTotal) * 100 : 0,
         ev,
         pv,
         spi: pv > 0 ? ev / pv : null,
         atrasadas,
         criticas,
         criticasAbertas,
+        inicioPrevisto,
         fimPrevisto,
         fimBaseline,
         desvioDias,

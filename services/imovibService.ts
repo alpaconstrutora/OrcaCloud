@@ -918,10 +918,19 @@ export const imovibService = {
      * Grava o estudo como está carregado (premissas, rubricas, estrutura, espelho,
      * fontes) mais os cenários, e os indicadores do momento. A tabela não tem
      * UPDATE nem DELETE: a versão não muda depois de gravada.
+     * Desde 15/11/2026 (plano docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md,
+     * Fase 1) guarda também o que o relatório completo lê — comparáveis, riscos, due
+     * diligence e sócios —, para o PDF da versão sair igual no app e no Portal do Investidor.
      */
     async congelarVersao(study: ImovibStudy, label: string, notes: string | null): Promise<ImovibStudyVersion> {
-        const cenarios = await this.listarCenarios(study.id);
-        const snapshot = JSON.parse(JSON.stringify({ ...study, cenarios }));
+        const [cenarios, comparaveis, riscos, dueDiligence, socios] = await Promise.all([
+            this.listarCenarios(study.id),
+            this.listarComparaveis(study.id),
+            this.listarRiscos(study.id),
+            this.listarDueDiligence(study.id),
+            this.listarSocios(study.id),
+        ]);
+        const snapshot = JSON.parse(JSON.stringify({ ...study, cenarios, relatorio: { comparaveis, riscos, dueDiligence, socios } }));
         const { data, error } = await supabase
             .from('imovib_study_versions')
             .insert({ study_id: study.id, label, notes, snapshot, results: resultadosDoEstudo(study) })

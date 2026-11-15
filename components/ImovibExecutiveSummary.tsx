@@ -24,6 +24,7 @@ import { descreverFonte } from '../utils/imovibFontes';
 import { memorialDePremissas } from '../utils/imovibMemorial';
 import { criteriosDoParecer, ROTULO_DO_PARECER } from '../utils/imovibParecer';
 import ImovibParecerCard from './ImovibParecerCard';
+import { nomeDeArquivo } from '../utils/nomeDeArquivo';
 
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
@@ -170,9 +171,6 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult, op
     return { indicadores, premissas, parecer, fluxo, aportes };
 }
 
-/** Nome de arquivo sem espaço nem caractere proibido no Windows. */
-const nomeDeArquivo = (nome: string) =>
-    (nome || 'Estudo').trim().replace(/[\\/:*?"<>|]+/g, '').replace(/\s+/g, '_');
 
 const abaDoExcel = (linhas: Linha[], larguras: number[]) => {
     const ws = XLSX.utils.aoa_to_sheet(linhas);

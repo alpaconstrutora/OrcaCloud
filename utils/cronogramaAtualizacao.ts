@@ -117,7 +117,13 @@ export function aplicarAtualizacao(e: EntradaDaAtualizacao): ResultadoDaAtualiza
         const datas = datasDoArquivoNoApp(t);
         if (!datas) avisos.push(`"${t.nome}" veio sem data de início — as datas dela não mudaram.`);
         const ehNova = novas.includes(t);
-        const anterior = atuais.get(id) ?? padraoDoItem.get(id) ?? { id };
+        const anteriorCompleto = atuais.get(id) ?? padraoDoItem.get(id) ?? { id };
+        // Com datas novas, as do cálculo anterior do motor (early/late) ficam erradas — e a lista e a
+        // Central leem `earlyFinish` antes do `endDate`: sem limpar, o término velho seguia na lista
+        // até alguém reabrir o planejamento (2ª crítica, 15/11/2026). O motor refaz ao abrir.
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { earlyStart: _es, earlyFinish: _ef, lateStart: _ls, lateFinish: _lf, ...semCalculo } = anteriorCompleto as typeof anteriorCompleto & { earlyStart?: string; earlyFinish?: string; lateStart?: string; lateFinish?: string };
+        const anterior = datas ? semCalculo : anteriorCompleto;
         const trocarPct = ehNova || trocarAvanco.has(t.chave);
         trocados.set(id, {
             ...anterior,

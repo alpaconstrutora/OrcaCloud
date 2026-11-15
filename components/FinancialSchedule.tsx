@@ -4681,6 +4681,8 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 planejamentoNome={settings.name || 'Planejamento'}
                 orcamento={budget}
                 schedule={schedule}
+                // Dito ao abrir (2ª crítica): antes o What-If só barrava no clique final, depois dos 3 passos.
+                bloqueadoPor={isSimulationMode ? 'Você está no modo What-If, onde nada é gravado. Saia do What-If para importar datas.' : null}
                 onAplicar={(r: ResultadoDaAtualizacao, nomeDoArquivo: string) => {
                     if (isSimulationMode) throw new Error('Saia do modo What-If para importar datas — nesse modo nada é gravado.');
                     const hoje = new Date().toLocaleDateString('pt-BR');

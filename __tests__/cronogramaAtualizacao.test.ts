@@ -47,6 +47,18 @@ describe('diferencasDaAtualizacao', () => {
 });
 
 describe('aplicarAtualizacao', () => {
+    it('limpa as datas do cálculo anterior do motor (early/late) — a lista lê earlyFinish antes do endDate', () => {
+        // 2ª crítica, 15/11/2026: sem limpar, o término velho seguia na lista até reabrir o planejamento.
+        const comCalculo = existente();
+        comCalculo.itemSchedules = comCalculo.itemSchedules!.map(s => ({ ...s, earlyStart: '2020-01-01', earlyFinish: '2020-01-02', lateStart: '2020-01-01', lateFinish: '2020-01-02' }));
+        const r = aplicar(comCalculo);
+        const replanejada = itensDoGabarito.find((t: { muda: { datas: boolean } }) => t.muda.datas).itemId;
+        const s = r.schedule.itemSchedules!.find(x => x.id === replanejada)! as Record<string, unknown>;
+        expect(s.earlyFinish).toBeUndefined();
+        expect(s.lateStart).toBeUndefined();
+        expect(s.endDate).toBeTruthy();
+    });
+
     it('troca as datas das replanejadas; o avanço fica como estava (nada marcado)', () => {
         const r = aplicar(existente());
         expect(r.contagem).toMatchObject({ datasTrocadas: 3, avancosTrocados: 0, novasSemCusto: 2, ignoradas: 0 });

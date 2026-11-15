@@ -356,7 +356,8 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                             type="button"
                             onClick={onAutoSchedule}
                             title="Recalcula todas as datas com base em predecessores e duração"
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 text-white rounded-[6px] hover:bg-emerald-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                            // emerald-700: branco sobre emerald-600 dava 3,7:1 (detector, 2ª crítica); 700 passa de 4,5:1.
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-700 text-white rounded-[6px] hover:bg-emerald-800 font-medium text-[13px] transition-all active:scale-95 shrink-0"
                         >
                             <Wand2 className="w-[15px] h-[15px]" />
                             Auto Programar

@@ -55,7 +55,7 @@ publicado hoje continua funcionando com a função nova (3 argumentos nomeados �
 Movido para o passo 2: remover o botão "Atualizar" — a barra de filtros de cada aba é
 substituída pela barra única do módulo no passo 2, e o botão sai junto.
 
-### Passo 2 — `/impeccable layout`: o período único (este PR)
+### Passo 2 — `/impeccable layout`: o período único
 
 Pedido: "Comece" (15/11/2026, após o passo 1 no ar).
 
@@ -72,7 +72,21 @@ Pedido: "Comece" (15/11/2026, após o passo 1 no ar).
 
 Ficou para o passo 4 (distill): KPIs ainda feitos à mão — no celular o valor encosta na borda e o "−" quebra sozinho.
 
-### Passo 3 — `/impeccable clarify`: números que levam à ação
+### Passo 3 — `/impeccable clarify`: números que levam à ação (este PR)
+
+Pedido: "Pode seguir" (15/11/2026). Decisão do usuário: **"Aviso + lista em gaveta"** —
+só leitura, sem migration (alternativas recusadas: só aviso + atalho; classificar ali mesmo).
+
+Origem medida em produção (2026, Caixa): os −R$ 7.619,23 são 27 lançamentos sem plano de
+contas (boletos, manuais), 33 com nome de categoria que não existe no plano da organização
+("Material", "Encargos Patronais"…) e 4 de "Adiantamento", categoria sem grupo da DRE.
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 3.1 | "Sem Classificação" vira aviso no topo da DRE (e do Balancete), com o valor do realizado e do previsto e o botão "Ver os lançamentos" | `ControladoriaAcao.test.tsx` "aviso no topo"; na frente local com dados reais: −R$ 7.619,23 no aviso = linha da DRE |
+| 3.2 | Gaveta (`Sheet` 2xl) com os lançamentos (data, descrição, origem · categoria, valor, situação), agrupados por motivo com o que fazer, e atalhos "Abrir Plano de Contas" / "Abrir Contas a Pagar". Regra em `services/semClassificacaoService.ts` = o LEFT JOIN de `fn_dre_summary`, sobre a mesma view (security_invoker) | `semClassificacao.test.ts` (7); frente local: 64 lançamentos, total realizado −R$ 7.619,23 = a DRE |
+| 3.3 | WIP: o nome da obra abre a DRE da obra (aba DRE + obra no escopo) | teste "clicar no nome da obra"; frente local: Garden Cambuhy → DRE filtrada |
+| 3.4 | Textos: linhas "(o)"/"(!)" viram "Amortização de principal (fora do resultado)"/"Sem classificação (fora do resultado)", sem glifo ⚠; colunas "Realizado (conciliado)"/"Previsto (pendente)" no Caixa; rodapé legível (gray-500); WIP diz o que o dado é (receita recebida, custo pago, recebido − pago — era "Reconhecida"/"Incorrido", vocabulário de POC); "Total (1 obra)"; vazio do Diário explica o que entra nele | teste "sem código interno" e "Total (1 obra)" |
 ### Passo 4 — `/impeccable distill`: uma linguagem para as seis abas
 ### Passo 5 — `/impeccable audit`: acessibilidade AA
 ### Passo 6 — `/impeccable polish`
@@ -82,8 +96,8 @@ Ficou para o passo 4 (distill): KPIs ainda feitos à mão — no celular o valor
 ## Estado
 
 - [x] Passo 1 — #448 (cc919c67), migration `aplicar_20271114900000` aplicada antes do merge; conferido em produção 15/11/2026
-- [ ] Passo 2 — frente `controladoria-periodo`, PR a abrir
-- [ ] Passo 3
+- [x] Passo 2 — #451 (4df8f2c7); conferido em produção 15/11/2026
+- [ ] Passo 3 — frente `controladoria-acao`, PR a abrir
 - [ ] Passo 4
 - [ ] Passo 5
 - [ ] Passo 6

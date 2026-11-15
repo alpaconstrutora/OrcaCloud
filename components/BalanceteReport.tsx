@@ -10,6 +10,7 @@ import { motivoPeriodoInvalido } from '../utils/periodoControladoria'
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
 import { BarraDeEscopo } from './controladoria/BarraDeEscopo'
 import type { EscopoControladoria } from './controladoria/escopo'
+import { AvisoSemClassificacao } from './controladoria/SemClassificacao'
 
 const BALANCETE_COL_WIDTHS: Record<string, number> = { conta: 260, creditos: 150, debitos: 150, saldo: 150, lancamentos: 130 }
 
@@ -151,6 +152,12 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
                     </span>
                 )}
             </BarraDeEscopo>
+
+            {/* Mesmo aviso da DRE: o grupo Sem Classificação leva aos lançamentos. */}
+            {!motivoPeriodo && !loading && !falhou && (
+                <AvisoSemClassificacao organizationId={organizationId} escopo={escopo}
+                    realizado={(grouped.get('SEM_CLASSIFICACAO') ?? []).reduce((s, l) => s + l.saldo_liquido, 0)} />
+            )}
 
             {/* Tabela */}
             {motivoPeriodo ? (

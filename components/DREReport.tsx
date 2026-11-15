@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrendingUp, TrendingDown, Download, ChevronDown, ChevronRight, Building2, MoveHorizontal } from 'lucide-react';
+import { TrendingUp, TrendingDown, Download, ChevronDown, ChevronRight, Building2, MoveHorizontal, AlertTriangle } from 'lucide-react';
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
 import type { DRESummary, DRELine, DREGroup, DREProjectSummary } from '../types/financial';
@@ -9,6 +9,7 @@ import { motivoPeriodoInvalido } from '../utils/periodoControladoria';
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
 import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo';
 import type { EscopoControladoria } from './controladoria/escopo';
+import { AvisoSemClassificacao } from './controladoria/SemClassificacao';
 
 // §6.3 — as linhas do DRE/comparativo têm ordem contábil fixa (Receita → Deduções →
 // Resultado), não fazem sentido reordenadas por clique de coluna; por isso as tabelas
@@ -51,6 +52,13 @@ const DRE_LINE_ORDER = [
     '(o) Amortização de Principal',
     '(!) Sem Classificação',
 ];
+
+// O banco devolve as linhas com o prefixo contábil ('(o)', '(!)'); estes dois não são
+// vocabulário de quem lê a DRE — a tela diz o que a linha É.
+const ROTULO_DA_LINHA: Record<string, string> = {
+    '(o) Amortização de Principal': 'Amortização de principal (fora do resultado)',
+    '(!) Sem Classificação':        'Sem classificação (fora do resultado)',
+};
 
 function formatBRL(v: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -99,13 +107,16 @@ function SummaryRow({ linha, realizado, previsto }: { linha: string; realizado: 
         const hasValue = realizado !== 0 || previsto !== 0;
         return (
             <tr className={`border-t-2 border-gray-100 ${hasValue ? 'bg-amber-50' : ''}`}>
-                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-amber-700 pl-8" title="Lançamentos sem categoria mapeada no plano de contas — não entram no Resultado Líquido. Classifique-os no Plano de Contas.">
-                    ⚠ {linha.replace('(!) ', '')}
+                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-amber-800 pl-8">
+                    <span className="flex items-center gap-1.5">
+                        {hasValue && <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-700" aria-hidden="true" />}
+                        {ROTULO_DA_LINHA[linha] ?? linha}
+                    </span>
                 </td>
                 <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${realizado < 0 ? 'text-red-600' : 'text-amber-700'}`}>
                     {formatBRL(realizado)}
                 </td>
-                <td className="px-6 py-2.5 text-sm text-right tabular-nums font-normal text-amber-500">
+                <td className="px-6 py-2.5 text-sm text-right tabular-nums font-normal text-amber-800">
                     {formatBRL(previsto)}
                 </td>
             </tr>
@@ -115,7 +126,7 @@ function SummaryRow({ linha, realizado, previsto }: { linha: string; realizado: 
     return (
         <tr className={`${isTotal ? 'bg-gray-50 border-t-2 border-gray-200' : ''} border-b border-gray-100 last:border-0`}>
             <td className={`px-6 py-2.5 border-r border-gray-100 text-sm ${isTotal ? 'text-gray-900 font-medium' : isDeduction ? 'text-red-600 font-normal pl-8' : 'text-gray-700 font-normal pl-8'}`}>
-                {linha}
+                {ROTULO_DA_LINHA[linha] ?? linha}
             </td>
             <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${realizado < 0 ? 'text-red-600' : isTotal ? 'text-gray-900' : 'text-gray-700'}`}>
                 {formatBRL(realizado)}
@@ -358,6 +369,15 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                 <FalhaDeCarga oQue="a DRE" onRetry={load} />
             ) : !summary ? null : (
                 <>
+                    {/* Sem Classificação no topo, com o caminho (antes: última linha da tabela). */}
+                    {(() => {
+                        const sc = summary.lines.find(l => l.linha === '(!) Sem Classificação');
+                        return (
+                            <AvisoSemClassificacao organizationId={organizationId} escopo={escopo}
+                                realizado={sc?.valor_realizado ?? 0} previsto={sc?.valor_previsto ?? 0} />
+                        );
+                    })()}
+
                     {/* KPIs */}
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                         <KPICard label="Receita Bruta"     value={summary.receita_bruta} />
@@ -400,8 +420,8 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                             <thead>
                                 <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     <th className="px-6 py-2 text-left border-r border-gray-100 relative overflow-hidden">Linha<dreCols.ResizeHandle colKey="linha" /></th>
-                                    <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Realizado<dreCols.ResizeHandle colKey="realizado" /></th>
-                                    <th className="px-6 py-2 text-right relative overflow-hidden">Previsto<dreCols.ResizeHandle colKey="previsto" /></th>
+                                    <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">{regime === 'CAIXA' ? 'Realizado (conciliado)' : 'Realizado'}<dreCols.ResizeHandle colKey="realizado" /></th>
+                                    <th className="px-6 py-2 text-right relative overflow-hidden">{regime === 'CAIXA' ? 'Previsto (pendente)' : 'Previsto'}<dreCols.ResizeHandle colKey="previsto" /></th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -428,10 +448,10 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                     )}
 
                     {/* Nota de rodapé */}
-                    <p className="text-xs text-gray-400 text-center">
+                    <p className="text-xs text-gray-500 text-center">
                         {regime === 'CAIXA'
-                            ? 'Realizado = transações conciliadas · Previsto = transações pendentes'
-                            : 'Regime de Competência: realizado = todos os lançamentos incorridos/auferidos no período (pela data de competência)'
+                            ? 'Caixa: realizado = lançamentos conciliados; previsto = pendentes'
+                            : 'Competência: realizado = tudo o que foi lançado no período, pela data de competência'
                         } · Margens sobre a receita líquida · Período: {
                             new Date(dateFrom + 'T00:00:00').toLocaleDateString('pt-BR')
                         } a {new Date(dateTo + 'T00:00:00').toLocaleDateString('pt-BR')}

@@ -123,7 +123,9 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
           <FalhaDeCarga oQue="o diário contábil" onRetry={() => setTentativa(t => t + 1)} />
         ) : shown.length === 0 ? (
           <div className="p-12 text-center text-slate-600 text-sm">
-            {search ? 'Nenhum lançamento casa com a busca.' : 'Nenhum lançamento encontrado para o período.'}
+            {search
+              ? 'Nenhum lançamento casa com a busca.'
+              : 'Nenhum lançamento no diário neste período. Aqui entram só os lançamentos gravados em partida dobrada (débito e crédito); os demais aparecem na DRE e no Balancete.'}
           </div>
         ) : (
           <>

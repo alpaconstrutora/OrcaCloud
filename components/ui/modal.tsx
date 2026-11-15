@@ -46,6 +46,21 @@ export function Modal({
     return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose, dismissable]);
 
+  // Foco: ao abrir vai para o painel (se nenhum campo de dentro já pegou com autoFocus) e, ao
+  // fechar, volta para quem abriu. Sem isto o foco ficava no botão de trás — o leitor de tela não
+  // anunciava o diálogo e o Tab andava pela página escondida (2ª crítica de Planejamento,
+  // 15/11/2026: "Colunas visíveis" abria com o foco ainda na engrenagem).
+  const painelRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const anterior = document.activeElement as HTMLElement | null;
+    const painel = painelRef.current;
+    if (painel && !painel.contains(document.activeElement)) painel.focus({ preventScroll: true });
+    return () => {
+      if (anterior && anterior.isConnected && typeof anterior.focus === 'function') anterior.focus({ preventScroll: true });
+    };
+  }, [open]);
+
   if (!open) return null;
 
   return (
@@ -60,7 +75,9 @@ export function Modal({
         onClick={dismissable ? onClose : undefined}
       />
       <div
-        className={`relative bg-white rounded-3xl shadow-2xl w-full ${sizeClasses[size]} overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200 ${className}`}
+        ref={painelRef}
+        tabIndex={-1}
+        className={`relative bg-white rounded-3xl shadow-2xl w-full ${sizeClasses[size]} overflow-hidden flex flex-col max-h-[90vh] animate-in zoom-in-95 duration-200 outline-none ${className}`}
       >
         {children}
       </div>

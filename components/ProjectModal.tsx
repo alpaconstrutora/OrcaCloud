@@ -235,6 +235,9 @@ const OBRA_TAB_SUBTITLES: Record<ObraTabId, string> = {
   financeiro: 'Modalidade, margem, valores e os centros de custo da obra.',
 };
 
+
+/** Elementos que recebem foco pelo Tab — prisão de foco do modal de criação. */
+const FOCAVEIS_DO_DIALOGO = 'a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 interface ProjectModalProps {
   isOpen: boolean;
   onClose: () => void;
@@ -617,6 +620,44 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
     if (isOpen && mode === 'edit' && initialClassification === 'OBRA') void recarregarCentros();
   }, [isOpen, mode, initialClassification, recarregarCentros]);
 
+  // Criação é sobreposição (modal): foco entra no diálogo ao abrir e volta a quem abriu ao
+  // fechar; Tab fica preso dentro; Esc = Cancelar (crítica de Engenharia › Planejamento,
+  // 2026-11-14, item 5). Só o Esc nascido DENTRO do diálogo: gaveta interna aberta por portal
+  // trata o seu próprio Esc, e o evento sintético dela também sobe até aqui.
+  const dialogoCriarRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!isOpen || mode !== 'create') return;
+    const quemAbriu = document.activeElement as HTMLElement | null;
+    const raiz = dialogoCriarRef.current;
+    const alvo = raiz?.querySelector<HTMLElement>('input:not([type=hidden]):not([disabled])')
+      ?? raiz?.querySelector<HTMLElement>(FOCAVEIS_DO_DIALOGO);
+    alvo?.focus();
+    // Num quadro depois: no fechamento o botão de origem pode ter sido redesenhado (nó novo) —
+    // aí o foco vai para o "Novo …" da lista, marcado com data-abre-novo-projeto.
+    return () => {
+      requestAnimationFrame(() => {
+        const alvoVolta = quemAbriu?.isConnected ? quemAbriu : document.querySelector<HTMLElement>('[data-abre-novo-projeto]');
+        alvoVolta?.focus();
+      });
+    };
+  }, [isOpen, mode]);
+  const teclaNoDialogoCriar = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const raiz = dialogoCriarRef.current;
+    if (!raiz || !raiz.contains(e.target as Node) || e.defaultPrevented) return;
+    if (e.key === 'Escape') {
+      e.stopPropagation();
+      void handleRequestClose();
+      return;
+    }
+    if (e.key !== 'Tab') return;
+    const focaveis = [...raiz.querySelectorAll<HTMLElement>(FOCAVEIS_DO_DIALOGO)].filter(el => el.offsetParent !== null);
+    if (focaveis.length === 0) return;
+    const primeiro = focaveis[0];
+    const ultimo = focaveis[focaveis.length - 1];
+    if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+  };
+
   if (!isOpen) return null;
 
   const orgDaObra = selectedOrgId || organizationId || undefined;
@@ -823,7 +864,13 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
         : 'absolute inset-0 z-50 flex items-center justify-center p-12 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200'
     }>
 
-      <div className={
+      <div
+        ref={mode === 'create' ? dialogoCriarRef : undefined}
+        role={mode === 'create' ? 'dialog' : undefined}
+        aria-modal={mode === 'create' ? true : undefined}
+        aria-labelledby={mode === 'create' ? 'titulo-novo-projeto' : undefined}
+        onKeyDown={mode === 'create' ? teclaNoDialogoCriar : undefined}
+        className={
         mode === 'edit'
           ? ''
           : 'relative bg-white rounded-[2.5rem] shadow-2xl w-full h-full flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200'
@@ -872,7 +919,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
               <div className="flex-1 min-w-0 flex flex-col gap-1">
                 <div className="flex items-center gap-3 flex-wrap">
-                  <h2 className="text-xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
+                  <h2 id="titulo-novo-projeto" className="text-xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
                     {(formData.classification as string) === 'OBRA' ? 'Nova Obra' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Novo Planejamento' : (formData.classification as string) === 'DIARIO' ? 'Novo Diário' : 'Novo Orçamento'}
                   </h2>
                   <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">

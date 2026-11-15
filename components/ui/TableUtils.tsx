@@ -366,8 +366,10 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
     <>
       <button
         onClick={onToggleShow}
-        className="p-2.5 rounded-xl transition-all text-gray-400 hover:text-gray-600 relative"
+        className="p-2.5 rounded-xl transition-all text-gray-500 hover:text-gray-700 relative"
         title="Configurar Colunas"
+        aria-label="Configurar colunas"
+        aria-expanded={showColumnConfig}
       >
         <Settings className="w-5 h-5" />
       </button>

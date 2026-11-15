@@ -326,6 +326,10 @@ acima do limite — o "pronto quando"; o marco o exige). Os outros ficam gravado
 - **Térreo comprido** (R12, RL): salas comuns a mais de 25 m da porta de entrada — o térreo pede outra saída.
 - **RL (asas):** um ambiente por andar sem caminho até a escada.
 
+**Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa9a.cjs`, estudo descartável arquivado):** R8 — a aba
+PPCI com A-2, 21 m, 4.375 m², 8 medidas exigidas e a rota em 9 pavimentos (nenhum com ambiente sem rota); depois do
+Lançar, a escada do tipo chega à cobertura; tudo o que as PA3–PA7 conferiam segue igual; Ctrl+Z volta ao bloco sozinho.
+
 ### PA10 — Fechamento
 **O que muda.** Relatório consolidado, furos no shaft, conflitos multinível, envio ao Empreendimento
 (`services/sync/massaAdapter.ts`) conferido, tempo do R12 no worker medido e fixado aqui.

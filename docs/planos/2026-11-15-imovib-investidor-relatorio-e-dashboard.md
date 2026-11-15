@@ -76,20 +76,34 @@ A referência (reel de code.xr, "Glassy Dashboard": glassmorphism, acentos lumin
 
 ## Fase 4 — Dashboard do investidor (referência, cor do portal)
 
-- [ ] `components/investor/portal/ImovibPainelDoInvestidor.tsx` (props: estudo da versão, `versao`, `organizacao`, `accent`), substituindo o conteúdo da aba "Viabilidade & Investimento" do `OpportunityDetail`:
+- [x] `components/investor/portal/ImovibPainelDoInvestidor.tsx` (props: estudo da versão, `versao`, `organizacao`, `accent`), substituindo o conteúdo da aba "Viabilidade & Investimento" do `OpportunityDetail`:
   - faixa da versão ("Versão <label> · <data>") + botão "Baixar relatório (PDF)" (edição investidor, Fase 3);
   - 4 KPIs principais (VPL, TIR a.a., margem líquida, exposição máxima) + 4 de apoio (VGV, lucro, payback, múltiplo);
   - Curva S / exposição, composição do capital, cenários, sensibilidade (tornado), linha do tempo dos marcos, curva de vendas;
   - simuladores atuais (VGV/custo/prazo) num card "Simulação — não altera a versão publicada".
-- [ ] Visual da referência no vocabulário do portal: cards de vidro (`bg-white/60 backdrop-blur`, borda branca translúcida, sombra com brilho coral `P`), hover que levanta e acende, entrada suave; `prefers-reduced-motion` desliga animação; sem `dark:` (§33); responsivo até 390 px.
-- [ ] Guia: nova subseção no §24 ("painel de vidro do investidor") — padrão que o guia não cobre vira seção (REGRA #1, item 4).
+- [x] Visual da referência no vocabulário do portal: cards de vidro (`bg-white/60 backdrop-blur`, borda branca translúcida, sombra com brilho coral `P`), hover que levanta e acende, entrada suave; `prefers-reduced-motion` desliga animação; sem `dark:` (§33); responsivo até 390 px.
+- [x] Guia: nova subseção no §24 (§24.1, "painel de vidro do investidor") — padrão que o guia não cobre vira seção (REGRA #1, item 4).
+- Feito: a aba mostra o painel quando há estudo (sem estudo, o bloco antigo); o "Sensibilidade" digitado na oportunidade só aparece sem estudo. Conferido num harness na largura da aba (976 px) em 1600 px e 390 px: sem rolagem horizontal, 0 erros; correções da conferência — indicadores em uma coluna no celular, rótulos de eixo menores, marcos em lista, legenda do capital na cor de texto, eixo do tornado com margem.
 - **Pronto quando:** testes do painel (KPIs batem com `ResultadosDaVersao` da versão; simulação não muda a faixa da versão; botão PDF chama a edição investidor); `check-ui-standard.sh` nos `.tsx` tocados; navegador: link de portal com token de teste em 1600 px e 390 px, prints conferidos; 0 erros de console.
 
 ## Fase 5 — Conferências e pendências vizinhas (só registrar, não consertar sem pedido)
 
-- [ ] Conferir se o **Data Room** abre no portal por link (lê `opportunity_documents` direto → provável lista vazia em silêncio, ver memória "portal lendo tabela direto").
-- [ ] Conferir se o **investidor logado por e-mail** (sem token) consegue ler oportunidade/versão (lê por RLS de membro da org).
+- [x] Conferir se o **Data Room** abre no portal por link (lê `opportunity_documents` direto → provável lista vazia em silêncio, ver memória "portal lendo tabela direto").
+- [x] Conferir se o **investidor logado por e-mail** (sem token) consegue ler oportunidade/versão (lê por RLS de membro da org).
 - Registrar o resultado em "Pendências" deste plano.
+
+## Pendências (registradas 15/11, fora do pedido — não consertadas)
+
+- **Data Room pelo link fica vazio em silêncio.** `opportunity_documents` só tem policy para
+  `authenticated` membro da organização; o portal por token lê a tabela direto (`DataRoomPanel` →
+  `opportunityDocumentsService.list`) e recebe `[]`. Conferido pelas policies, não na tela. Conserto:
+  RPC por token (como `fn_investor_portal_get_reports`) + URL assinada por Edge Function (bucket privado).
+- **Investidor que entra por e-mail não vê oportunidades.** `investor_opportunities` e
+  `imovib_study_versions` só liberam leitura para membro da organização; o investidor logado não é
+  membro. O caminho que funciona é o link com token. Conserto: as mesmas RPCs por `auth.uid()`
+  (molde de `fn_investor_get_espelho`).
+- Minors do painel: no celular, o valor do cenário negativo encosta no rótulo e o eixo do tornado fica
+  apertado; os quadradinhos da legenda HTML saem um pouco acima do texto na captura do PDF.
 
 ---
 

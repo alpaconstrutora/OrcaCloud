@@ -37,6 +37,8 @@ export const P = {
     pageBg: '#F2F2F4',
     ink: '#1F2430',
     muted: '#8A8F9A',
+    /** Texto secundário legível (5,9:1 sobre branco); `muted` (3,3:1) fica para ícone e traço. */
+    mutedText: '#5F6573',
     chart: {
         primary: '#E1553C',
         secondary: '#6D9BD1',
@@ -79,6 +81,31 @@ export const fmtMonthShort = (d: Date) =>
 export const PortalCard: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ className = '', children, ...rest }) => (
     <div {...rest} className={`bg-white rounded-2xl border border-[#ECECEF] shadow-[0_1px_2px_rgba(16,24,40,0.04)] ${className}`}>
         {children}
+    </div>
+);
+
+// ── Vidro — painel de viabilidade do investidor ───────────────────────────────
+// Plano docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md, Fase 4: referência
+// pedida pelo usuário (painel de vidro fosco, acentos luminosos, hover animado) na paleta do
+// portal. O vidro só é vidro com algo atrás: `FundoDeVidro` põe os brilhos coral e azul, e o
+// pai precisa de `relative isolate`.
+export const VIDRO = {
+    card: 'relative rounded-2xl border border-white/70 bg-white/70 backdrop-blur-xl shadow-[0_1px_2px_rgba(31,36,48,0.06),0_10px_28px_-14px_rgba(31,36,48,0.22)]',
+    interativo: 'transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(31,36,48,0.06),0_22px_44px_-18px_rgba(225,85,60,0.45)] motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+} as const;
+
+export const PortalVidro: React.FC<React.HTMLAttributes<HTMLDivElement> & { interativo?: boolean }> = ({ interativo = false, className = '', children, ...rest }) => (
+    <div {...rest} className={`${VIDRO.card} ${interativo ? VIDRO.interativo : ''} ${className}`}>
+        {children}
+    </div>
+);
+
+export const FundoDeVidro: React.FC = () => (
+    <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-3xl">
+        <div className="absolute -top-24 -left-16 w-80 h-80 rounded-full bg-[#E1553C]/25 blur-3xl" />
+        <div className="absolute top-1/4 -right-24 w-96 h-96 rounded-full bg-[#6D9BD1]/25 blur-3xl" />
+        <div className="absolute top-2/3 -left-20 w-80 h-80 rounded-full bg-[#6D9BD1]/15 blur-3xl" />
+        <div className="absolute -bottom-24 left-1/3 w-72 h-72 rounded-full bg-[#E1553C]/15 blur-3xl" />
     </div>
 );
 

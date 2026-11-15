@@ -3237,6 +3237,27 @@ fornecedor): aplicar UI UX igual ao portal do investidor (visão do investidor)"
 de "portal externo", não uma cor por portal). É um **experimento de produto
 delimitado aos portais**, não a nova régua do app.
 
+### 24.1 Painel de vidro do investidor (15/11/2026)
+
+**Onde:** só a aba "Viabilidade & Investimento" da oportunidade com estudo do Imovib, no acesso por
+link (`components/investor/portal/ImovibPainelDoInvestidor.tsx`, `accent="portal"`). A prévia do
+gestor usa o mesmo componente com `accent="indigo"` (padrão), no vocabulário do guia.
+
+**Origem:** pedido do usuário em 15/11/2026, com um vídeo de referência (painel de vidro fosco,
+acentos luminosos, hover animado); perguntado, escolheu *"referência com a cor do portal"*. Plano:
+`docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md`, Fase 4.
+
+**Peças (no kit):** `VIDRO.card`/`VIDRO.interativo`, `PortalVidro` e `FundoDeVidro` em
+`components/portal/PortalKit.tsx`, mais `P.mutedText` (#5F6573, 5,9:1) para texto secundário — o
+`P.muted` (#8A8F9A) dá 3,3:1 e fica para ícone e traço.
+
+- O vidro só existe com algo atrás: `FundoDeVidro` (brilhos coral e azul desfocados) no pai
+  `relative isolate`. Vidro sobre fundo liso é decoração — não usar fora deste painel.
+- Hover: o cartão sobe 2px e a sombra ganha brilho coral (300ms ease-out); `motion-reduce` desliga.
+- Números principais em `text-2xl` tabular sem quebra; uma coluna no celular, duas no `sm`, quatro no `lg`.
+- Gráficos: os de `components/ImovibGraficos.tsx`, com `corPrincipal` coral; no celular, rótulos de
+  eixo mais estreitos e os marcos em lista (a linha do tempo em SVG fica ilegível em 390 px).
+
 ### Os quatro desvios (e só eles)
 
 | Elemento | Guia | Portais externos | Por quê |

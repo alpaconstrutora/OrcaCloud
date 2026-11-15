@@ -327,6 +327,9 @@ interface Props {
     onNovoAvulso?: () => void;
     /** Baixa/estorno do DARF mudam os MEMBROS (a linha DARF é derivada deles): §22. */
     onComponentesChanged?: (ids: string[], patch: Partial<Payable>) => void;
+    /** O pai recortou `rows` (ex.: "sem classificação" da Controladoria): busca,
+     *  status e origem salvos de outra visita saem do caminho ao chegar. */
+    recorteAtivo?: boolean;
 }
 
 /** Por que a linha avulsa não pode ser editada — `null` quando pode. */
@@ -377,7 +380,7 @@ function chaveDoGrupo(campo: CampoAgrupar, r: ParcelaRow): ChaveDeGrupo {
     }
 }
 
-export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, vencAno, vencMes, ocultarFuturos, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg, onEditarAvulso, onNovoAvulso, onComponentesChanged }: Props) {
+export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, vencAno, vencMes, ocultarFuturos, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg, onEditarAvulso, onNovoAvulso, onComponentesChanged, recorteAtivo }: Props) {
     const confirm = useConfirm();
     const navigateToFocus = useStore(s => s.navigateToFocus);
     // Linhas DARF com a composição aberta (chevron "Ver composição").
@@ -685,6 +688,14 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         setPage(Math.max(1, Math.min(p, totalPages)));
         if (tableScrollRef.current) tableScrollRef.current.scrollTop = 0;
     }
+
+    useEffect(() => {
+        if (!recorteAtivo) return;
+        setSearch('');
+        setStatusFiltro('all');
+        setOrigemFiltro('all');
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [recorteAtivo]);
 
     /**
      * Deep-link: localizar, destacar e rolar até o título apontado por `focusId`.

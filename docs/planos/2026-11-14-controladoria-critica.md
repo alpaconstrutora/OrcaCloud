@@ -145,7 +145,7 @@ subagentes — a partir dos artefatos que já tinha gravado).
 
 > agrupe em 2 conforme sua sugestão
 
-### Publicação 1 — a leitura da DRE (este PR)
+### Publicação 1 — a leitura da DRE (#481)
 
 | # | O que muda | Como sei que terminou |
 |---|---|---|
@@ -154,13 +154,20 @@ subagentes — a partir dos artefatos que já tinha gravado).
 | R2.3 | Cor por estado na DRE: rótulo neutro; vermelho só no total abaixo do limiar (custo negativo não é alarme) | idem |
 | R2.4 | Em Competência o aviso "sem classificação" não cita previsto (não existe nesse regime); Por Categoria na ordem contábil | idem |
 
-### Publicação 2 — o resto da crítica
+### Publicação 2 — tabelas, gaveta, campo desligado, acabamento (este PR)
 
-Cor por estado nas outras tabelas (Balancete, SPE, Por Obra, Diário); linha da gaveta "sem
-classificação" abre o lançamento de origem e o atalho "Contas a Pagar" abre filtrado; motivo do
-campo desligado acessível ("—" no campo, borda tracejada, `aria-describedby`); acabamento (CSV
-com ";" e BOM, seta da margem do WIP, "Saldo de contrato" sem contratos, coluna Valor do Diário
-à direita e "Débitos = créditos" só com lançamentos). Critérios entram aqui quando começar.
+Pedido: "sim" (15/11/2026), depois da publicação 1 no ar.
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| R2.5 | Cor por estado (§4.5) na DRE por SPE, Balancete, Por Obra, Diário e WIP: custo/dedução/saldo negativo é neutro; vermelho só em total ou margem abaixo do limiar; sem setas de tendência na margem (a do WIP descia em margem positiva até 20%, limiar sem nome) | `ControladoriaTabelasEstado.test.tsx` (falha no main); tela local: 0 células coloridas por sinal em SPE/Balancete/Diário |
+| R2.6 | Gaveta "sem classificação": cada linha abre o título (Contas a Pagar, Contas a Receber, ou o DARF em Tributos a Pagar quando é tributo fora de DARF enviado — a MESMA régua `motivoForaDeContasAPagar`); contrapartida não é link e diz por quê | idem; tela local: 65 linhas, 65 links |
+| R2.7 | "Abrir os N títulos em Contas a Pagar": recorte não salvo (viewFocus `RECORTE_SEM_CLASSIFICACAO`), limpa busca/status/origem/período salvos, aviso com "Mostrar todos os títulos"; conta títulos, não linhas (tributos de um DARF = 1 linha) | `ContasPagarDeepLink.test.tsx`; tela local: gaveta promete 56, Contas a Pagar mostra 56 |
+| R2.8 | Campo desligado: "De" do WIP diz "Não se aplica" (não a data das outras abas), borda tracejada, motivo em `aria-describedby` (o `title` de campo desligado não chega ao leitor de tela) | teste + medição: os 4 campos no mesmo topo (273 px) no WIP e na DRE |
+| R2.9 | CSV com ";" , vírgula decimal e BOM (o Excel pt-BR abre em colunas e com acento); WIP "Saldo de contrato" "—" sem contratos; Diário: Valor à direita com tabular-nums, "Débitos = créditos" só com lançamento | testes |
+
+Fora desta rodada (registrados na crítica, não pedidos): Por Obra ignora o filtro de obra; 2×
+"Adiantamento" no Balancete; eixo do Fluxo; atalhos de período.
 
 ## Estado
 
@@ -170,8 +177,8 @@ com ";" e BOM, seta da margem do WIP, "Saldo de contrato" sem contratos, coluna 
 - [x] Passo 4 — #461 (d061ba65); conferido na frente local
 - [x] Passo 5 — #467 (fe350c2d); medido na tela local e em produção; auditoria 9/20 → 15/20
 - [x] Passo 6 — #471 (feb21d5d); conferido em produção ("Saldo com o previsto" R$ 184.392,21)
-- [ ] 2ª rodada, publicação 1 — frente `controladoria-r2-leitura`, PR a abrir
-- [ ] 2ª rodada, publicação 2 — a abrir depois da 1
+- [x] 2ª rodada, publicação 1 — #481 (c3096ec); conferida em produção 15/11/2026
+- [ ] 2ª rodada, publicação 2 — frente `controladoria-r2-tabelas`, PR a abrir
 
 ## Verificação
 

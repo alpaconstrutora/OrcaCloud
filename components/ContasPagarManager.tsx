@@ -8,7 +8,7 @@ import PagamentoAvulsoSheet from './financeiro/PagamentoAvulsoSheet';
 import { invoiceService } from '../services/invoiceService';
 import { payableService, payableParty } from '../services/payableService';
 import { darfService } from '../services/darfService';
-import { colapsarDarfs, soOsDeContasAPagar } from '../utils/darf';
+import { colapsarDarfs, linhaContemId, soOsDeContasAPagar } from '../utils/darf';
 import { exportService } from '../services/exportService';
 import { Invoice, Payable, type Darf } from '../types/financial';
 import type { Organization } from '../types';
@@ -257,7 +257,18 @@ export default function ContasPagarManager({ organizations }: Props) {
     // Tributo só entra nas parcelas com o DARF fechado — enviado para aprovação
     // (pedido de 09/11/2026); FGTS segue avulso. `soOsDeContasAPagar` corta o resto.
     const [darfs, setDarfs] = useState<Darf[]>([]);
-    const linhas = useMemo(() => colapsarDarfs(soOsDeContasAPagar(payables, darfs), darfs), [payables, darfs]);
+    /** Recorte vindo da gaveta "Sem classificação" da Controladoria (ver o efeito do viewFocus). */
+    const [recorte, setRecorte] = useState<string[] | null>(null);
+    const todasAsLinhas = useMemo(() => colapsarDarfs(soOsDeContasAPagar(payables, darfs), darfs), [payables, darfs]);
+    const linhas = useMemo(
+        () => (recorte ? todasAsLinhas.filter(l => recorte.some(id => linhaContemId(l, id))) : todasAsLinhas),
+        [todasAsLinhas, recorte],
+    );
+    // Conta TÍTULOS, não linhas: os tributos de um DARF aparecem numa linha só.
+    const achadosNoRecorte = useMemo(
+        () => (recorte ? recorte.filter(id => todasAsLinhas.some(l => linhaContemId(l, id))).length : 0),
+        [todasAsLinhas, recorte],
+    );
     // Recorte de PARCELAS após busca/status/período — reportado pelo filho, para
     // o export (abaixo) sair igual ao que a tabela mostra, não a lista inteira.
     const [payablesVisible, setPayablesVisible] = useState<Payable[]>([]);
@@ -351,6 +362,21 @@ export default function ContasPagarManager({ organizations }: Props) {
     useEffect(() => {
         if (focusPayableId && visao !== 'parcelas') setVisao('parcelas');
     }, [focusPayableId, visao, setVisao]);
+
+    // "Abrir os N títulos em Contas a Pagar" da gaveta "Sem classificação" da
+    // Controladoria: chega como viewFocus RECORTE_SEM_CLASSIFICACAO com os ids
+    // separados por vírgula. Recorte NÃO salvo (é a resposta àquele clique, mesmo
+    // contrato do VENCIDOS_DO_CLIENTE de Contas a Receber); período e filtros salvos
+    // saem do caminho, senão a lista chegaria vazia sem explicação.
+    const recortePedido = viewFocus?.source === 'RECORTE_SEM_CLASSIFICACAO' ? viewFocus.ref : undefined;
+    useEffect(() => {
+        if (!recortePedido) return;
+        setRecorte(recortePedido.split(',').filter(Boolean));
+        handleClearPeriod();
+        setVisao('parcelas');
+        setViewFocus(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [recortePedido]);
 
     const handleFocusConsumed = React.useCallback((achou: boolean, limpouFiltros: boolean) => {
         setViewFocus(null);
@@ -1037,6 +1063,21 @@ export default function ContasPagarManager({ organizations }: Props) {
                             onFechamentoChange={setFechamento}
                         />
                     ) : visao === 'parcelas' ? (
+                        <>
+                        {recorte && (
+                            <div role="status" className="flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-[10px] px-4 py-2.5 mb-3 text-sm text-blue-900">
+                                <span>
+                                    Mostrando só os <span className="font-semibold">{achadosNoRecorte}</span> títulos
+                                    sem classificação na DRE, vindos da Controladoria (a busca, os filtros e o período anteriores foram limpos).
+                                    {achadosNoRecorte > linhas.length && ' Os tributos de um mesmo DARF ficam numa linha só.'}
+                                    {achadosNoRecorte < recorte.length && ` ${recorte.length - achadosNoRecorte} não estão na lista carregada de Contas a Pagar (confira a organização selecionada no topo).`}
+                                </span>
+                                <button type="button" onClick={() => setRecorte(null)}
+                                    className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-900 hover:underline focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 rounded-sm">
+                                    <X className="w-3.5 h-3.5" aria-hidden="true" /> Mostrar todos os títulos
+                                </button>
+                            </div>
+                        )}
                         <ContasPagarParcelas
                             rows={linhas}
                             organizationId={effectiveOrgId}
@@ -1064,7 +1105,9 @@ export default function ContasPagarManager({ organizations }: Props) {
                             logoDaOrg={orgId => organizations?.find(o => o.id === orgId)?.logoUrl}
                             onEditarAvulso={row => setAvulso({ orgId: row.organization_id, editId: row.id })}
                             onNovoAvulso={novoPagamentoAvulso}
+                            recorteAtivo={recorte !== null}
                         />
+                        </>
                     ) : (
                     /* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — toolbar e
                        conteúdo dividem um único card (border/rounded/shadow só no container

@@ -2,7 +2,7 @@ import React from 'react'
 import { financialReportService } from '../services/financialReportService'
 import type { DRESPELine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
-import { TrendingUp, TrendingDown, Download } from 'lucide-react'
+import { Download } from 'lucide-react'
 import { useResizableColumns } from './ui/TableUtils'
 import { useCargaVigente } from '../hooks/useCargaVigente'
 import { motivoPeriodoInvalido } from '../utils/periodoControladoria'
@@ -10,6 +10,7 @@ import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
 import { BarraDeEscopo, BOTAO_DA_BARRA, BotaoAutoAjuste } from './controladoria/BarraDeEscopo'
 import type { EscopoControladoria } from './controladoria/escopo'
 import { baixarCSV } from './controladoria/csv'
+import { tomDoResultado } from './controladoria/indicadores'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtPct = (v: number | null) => v === null ? '—' : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
@@ -170,18 +171,17 @@ const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
                                         {data.map(spe => {
                                             const v = spe[col.key] as number
                                             const pct = pctKey ? spe[pctKey] as number | null : null
-                                            const isNeg = v < 0
+                                            // Cor por estado (§4.5): vermelho só no TOTAL abaixo do limiar;
+                                            // dedução e custo negativos são o normal, não alarme. Sem seta:
+                                            // margem é posição, não tendência.
+                                            const alerta = isTotalRow && tomDoResultado(v) === 'alerta'
                                             return (
                                                 <td key={spe.empresa_id} className="px-6 py-2.5 border-r border-gray-100 text-right tabular-nums">
-                                                    <span className={`text-sm font-medium ${isNeg ? 'text-red-600' : v > 0 && isTotalRow ? 'text-emerald-700' : 'text-gray-800'}`}>
+                                                    <span className={`text-sm font-medium ${alerta ? 'text-red-700' : isTotalRow ? 'text-gray-900' : 'text-gray-800'}`}>
                                                         {fmt(v)}
                                                     </span>
                                                     {pct !== null && (
-                                                        <span className={`text-xs font-normal flex items-center justify-end gap-0.5 ${pct >= 0 ? 'text-green-700' : 'text-red-600'}`}>
-                                                            {pct >= 0
-                                                                ? <TrendingUp className="w-3 h-3" aria-hidden="true" />
-                                                                : <TrendingDown className="w-3 h-3" aria-hidden="true" />
-                                                            }
+                                                        <span className={`block text-xs font-normal ${pct < 0 ? 'text-red-700' : 'text-gray-600'}`}>
                                                             {fmtPct(pct)}
                                                         </span>
                                                     )}

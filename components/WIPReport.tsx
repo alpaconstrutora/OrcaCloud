@@ -2,7 +2,7 @@ import React from 'react'
 import { financialReportService } from '../services/financialReportService'
 import type { WIPLine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
-import { TrendingUp, TrendingDown, AlertTriangle, Download } from 'lucide-react'
+import { AlertTriangle, Download } from 'lucide-react'
 import { formatMoney, formatPercent } from './ui/Format'
 import { useResizableColumns, SortableHeader } from './ui/TableUtils'
 import { useCargaVigente } from '../hooks/useCargaVigente'
@@ -94,6 +94,8 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
     const totalMargem = totals.receita_reconhecida
         ? (totals.margem_bruta / totals.receita_reconhecida * 100)
         : null
+    // Nenhuma obra com valor de contrato: saldo de contrato não existe (não é zero).
+    const temContrato = totals.contrato_valor > 0
 
     const handleSort = (key: keyof WIPLine) => {
         if (sortKey === key) setSortAsc(v => !v)
@@ -153,8 +155,9 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                     <KpiCard destaque label="Recebido − pago" value={fmt(totals.margem_bruta)}
                         sub={totalMargem === null ? 'Sem receita recebida: sem margem' : `Margem ${pctBR(totalMargem)}`}
                         tom={tomDoResultado(totals.margem_bruta)} />
-                    <KpiCard destaque label="Saldo de contrato" value={fmt(totals.saldo_contrato)}
-                        sub="Contratado ainda não recebido"
+                    {/* Sem contrato nenhum, "R$ 0,00" afirmava que tudo foi recebido. */}
+                    <KpiCard destaque label="Saldo de contrato" value={temContrato ? fmt(totals.saldo_contrato) : '—'}
+                        sub={temContrato ? 'Contratado ainda não recebido' : 'Nenhuma obra com valor de contrato'}
                         tom={totals.saldo_contrato < 0 ? 'atencao' : 'neutro'}
                         title={totals.saldo_contrato < 0 ? 'Recebido acima do valor do contrato: confira o contrato ou os recebimentos' : undefined} />
                 </div>
@@ -240,17 +243,14 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                                 </span>
                                             )}
                                         </td>
-                                        <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${isNegMargem ? 'text-red-600' : 'text-gray-800'}`}>
+                                        {/* Sem seta: ela descia em margem POSITIVA até 20% (limiar sem nome)
+                                            e margem é posição, não tendência. Só o negativo é alerta (§4.5). */}
+                                        <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${isNegMargem ? 'text-red-700' : 'text-gray-800'}`}>
                                             <span className="flex items-center justify-end gap-1">
-                                                {isNegMargem
-                                                    ? <AlertTriangle className="w-3 h-3 shrink-0" />
-                                                    : r.margem_pct !== null && r.margem_pct > 20
-                                                        ? <TrendingUp className="w-3 h-3 shrink-0" />
-                                                        : <TrendingDown className="w-3 h-3 shrink-0" />
-                                                }
+                                                {isNegMargem && <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />}
                                                 {fmt(margem)}
                                             </span>
-                                            <span className={`block text-xs font-normal ${isNegMargem ? 'text-red-600' : 'text-gray-500'}`}>
+                                            <span className={`block text-xs font-normal ${isNegMargem ? 'text-red-700' : 'text-gray-600'}`}>
                                                 {fmtPct(r.margem_pct)}
                                             </span>
                                         </td>
@@ -268,7 +268,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                     Total ({rows.length} {rows.length === 1 ? 'obra' : 'obras'})
                                 </td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-gray-700">
-                                    {fmt(totals.contrato_valor)}
+                                    {temContrato ? fmt(totals.contrato_valor) : '—'}
                                 </td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-gray-900">
                                     {fmt(totals.receita_reconhecida)}
@@ -276,12 +276,12 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                 <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-gray-900">
                                     {fmt(totals.custo_incorrido)}
                                 </td>
-                                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums ${totals.margem_bruta >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
+                                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums ${totals.margem_bruta >= 0 ? 'text-gray-900' : 'text-red-700'}`}>
                                     {fmt(totals.margem_bruta)}
                                     <span className="block text-xs font-normal text-gray-500">{fmtPct(totalMargem)}</span>
                                 </td>
                                 <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-gray-700">
-                                    {fmt(totals.saldo_contrato)}
+                                    {temContrato ? fmt(totals.saldo_contrato) : '—'}
                                 </td>
                                 <td aria-hidden="true"></td>
                             </tr>

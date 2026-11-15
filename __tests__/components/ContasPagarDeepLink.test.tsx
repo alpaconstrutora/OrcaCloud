@@ -104,6 +104,15 @@ describe('ContasPagarParcelas — deep-link por viewFocus', () => {
         expect(onClearPeriod).not.toHaveBeenCalled();
     });
 
+    it('recorte da Controladoria: busca/status/origem salvos saem do caminho', async () => {
+        // O pai já recortou `rows` (sem classificação na DRE); um filtro salvo de outra
+        // visita escondia o recorte inteiro e a lista chegava vazia sem explicação.
+        window.localStorage.setItem('contasPagarParcelas:search', JSON.stringify('cimento'));
+        renderTela({ recorteAtivo: true });
+        expect(await screen.findByText('Medição 7 do contrato')).toBeInTheDocument();
+        expect(JSON.parse(window.localStorage.getItem('contasPagarParcelas:search') ?? '""')).toBe('');
+    });
+
     it('reporta achou=false quando o título não está no recorte carregado', async () => {
         const onFocusConsumed = vi.fn();
 

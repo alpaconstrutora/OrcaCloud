@@ -22,6 +22,10 @@ export interface SegmentedProgressProps {
     tone?: 'emerald' | 'amber' | 'blue' | 'red';
     /** Texto ao lado do percentual (ex.: "↑12% vs últimos 5"). */
     hint?: React.ReactNode;
+    /** Onde deveria estar (0–100). Os quadradinhos entre o real e essa marca ficam em vermelho
+     *  claro — o tamanho do atraso à vista (Planejamento: real × previsto, 2ª crítica 15/11/2026).
+     *  Sem efeito quando o real já alcançou a marca. */
+    marca?: number;
     title?: string;
     className?: string;
 }
@@ -33,9 +37,12 @@ const FILL: Record<NonNullable<SegmentedProgressProps['tone']>, string> = {
     red: 'bg-red-500',
 };
 
-export function SegmentedProgress({ percent, segments = 12, tone, hint, title, className = '' }: SegmentedProgressProps) {
+export function SegmentedProgress({ percent, segments = 12, tone, hint, marca, title, className = '' }: SegmentedProgressProps) {
     const pct = Math.max(0, Math.min(100, Number.isFinite(percent) ? percent : 0));
     const filled = Math.round(pct / 100 * segments);
+    const ate = marca !== undefined && Number.isFinite(marca)
+        ? Math.round(Math.max(0, Math.min(100, marca)) / 100 * segments)
+        : filled;
     const fill = FILL[tone ?? (pct >= 50 ? 'emerald' : 'amber')];
     return (
         <div className={`flex flex-col gap-1 min-w-0 ${className}`} title={title}>
@@ -47,7 +54,7 @@ export function SegmentedProgress({ percent, segments = 12, tone, hint, title, c
                 da árvore de acessibilidade, senão o leitor dizia "0%" duas vezes. */}
             <div className="flex items-center gap-0.5" aria-hidden="true">
                 {Array.from({ length: segments }, (_, i) => (
-                    <span key={i} className={`h-2.5 w-2 rounded-[2px] ${i < filled ? fill : 'bg-gray-200'}`} />
+                    <span key={i} className={`h-2.5 w-2 rounded-[2px] ${i < filled ? fill : i < ate ? 'bg-red-200' : 'bg-gray-200'}`} />
                 ))}
             </div>
         </div>

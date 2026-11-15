@@ -111,9 +111,9 @@ const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
             ) : falhou ? (
                 <FalhaDeCarga oQue="a DRE por SPE" onRetry={load} />
             ) : data.length === 0 ? (
-                <div className="text-center py-20 text-slate-600 text-sm">
+                <div className="text-center py-20 text-gray-600 text-sm">
                     Nenhuma empresa com movimentação financeira vinculada a obras no período.
-                    <p className="mt-2 text-xs text-slate-500">Certifique-se de que os projetos têm uma empresa/SPE associada.</p>
+                    <p className="mt-2 text-xs text-gray-500">Certifique-se de que os projetos têm uma empresa/SPE associada.</p>
                 </div>
             ) : (
                 <>
@@ -126,8 +126,8 @@ const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
                         {' '}A DRE geral também soma obras sem SPE e lançamentos sem obra.
                     </p>
                 )}
-                <div className="bg-white border border-slate-200 rounded-[10px] shadow-sm overflow-hidden">
-                    <div className="flex justify-end p-2 border-b border-slate-100">
+                <div className="bg-white border border-gray-200 rounded-[10px] shadow-sm overflow-hidden">
+                    <div className="flex justify-end p-2 border-b border-gray-100">
                         <BotaoAutoAjuste onClick={() => cols.autoFit()} />
                     </div>
                     <div className="overflow-x-auto">
@@ -158,7 +158,7 @@ const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
                                 <th aria-hidden="true" />
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-50">
+                        <tbody className="divide-y divide-gray-50">
                             {COLS.map(col => {
                                 const pctKey = PCT_MAP[col.key]
                                 const isTotalRow = isTotal(col.key)

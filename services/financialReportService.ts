@@ -229,6 +229,10 @@ export const financialReportService = {
         const total_entradas = points.reduce((s, p) => s + p.credit_real, 0);
         const total_saidas   = points.reduce((s, p) => s + p.debit_real,  0);
         const last = points[points.length - 1];
+        // `saldo_prev` é o PENDENTE DE CADA PERÍODO (fn_cash_flow: cp − dp por período), não
+        // um acumulado. Até 15/11/2026 somava-se só o do último período, e o card "Saldo com
+        // o previsto" repetia o realizado (crítica, passo 6).
+        const pendentes = points.reduce((s, p) => s + (p.saldo_prev ?? 0), 0);
 
         return {
             period_from:          dateFrom,
@@ -238,17 +242,8 @@ export const financialReportService = {
             total_entradas,
             total_saidas,
             saldo_final:          last?.saldo_acumulado ?? 0,
-            saldo_previsto_final: (last?.saldo_acumulado ?? 0) + (last?.saldo_prev ?? 0),
+            saldo_previsto_final: (last?.saldo_acumulado ?? 0) + pendentes,
         };
     },
 
-    // ── Helpers de formatação ─────────────────────────────────
-    formatBRL(value: number): string {
-        return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-    },
-
-    formatPct(value: number | null): string {
-        if (value === null) return '—';
-        return `${value.toFixed(1)}%`;
-    },
 };

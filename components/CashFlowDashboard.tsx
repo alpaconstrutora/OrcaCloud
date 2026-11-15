@@ -6,6 +6,7 @@ import {
 import { Download } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import { GRADE_DE_INDICADORES, tomDoSaldo } from './controladoria/indicadores';
+import { baixarCSV } from './controladoria/csv';
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
 import { useResizableColumns } from './ui/TableUtils';
@@ -121,14 +122,9 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId, e
 
     const exportCSV = () => {
         if (!data) return;
-        const rows = ['Período,Entradas,Saídas,Saldo,Acumulado',
-            ...data.points.map(p =>
-                `"${p.period_label}",${p.credit_real},${p.debit_real},${p.saldo_real},${p.saldo_acumulado}`
-            )];
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([rows.join('\n')], { type: 'text/csv' }));
-        a.download = `FluxoCaixa_${dateFrom}_${dateTo}.csv`;
-        a.click();
+        baixarCSV(`FluxoCaixa_${dateFrom}_${dateTo}.csv`,
+            ['Período', 'Entradas', 'Saídas', 'Saldo', 'Acumulado', 'Pendente do período'],
+            data.points.map(p => [p.period_label, p.credit_real, p.debit_real, p.saldo_real, p.saldo_acumulado, p.saldo_prev]));
     };
 
     return (

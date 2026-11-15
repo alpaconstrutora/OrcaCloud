@@ -170,12 +170,12 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
             ) : falhou ? (
                 <FalhaDeCarga oQue="o WIP" onRetry={load} />
             ) : rows.length === 0 ? (
-                <div className="text-center py-20 text-slate-600 text-sm">
+                <div className="text-center py-20 text-gray-600 text-sm">
                     Nenhuma obra com movimentação financeira encontrada.
                 </div>
             ) : (
-                <div className="bg-white border border-slate-200 rounded-[10px] shadow-sm overflow-hidden">
-                    <div className="flex justify-end p-2 border-b border-slate-100">
+                <div className="bg-white border border-gray-200 rounded-[10px] shadow-sm overflow-hidden">
+                    <div className="flex justify-end p-2 border-b border-gray-100">
                         <BotaoAutoAjuste onClick={() => cols.autoFit()} />
                     </div>
                     <div className="overflow-x-auto">
@@ -196,7 +196,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                 <th aria-hidden="true" />
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-50">
+                        <tbody className="divide-y divide-gray-50">
                             {sorted.map(r => {
                                 const margem = r.margem_bruta
                                 const isNegMargem = margem < 0
@@ -212,19 +212,19 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                                     {r.project_name}
                                                 </button>
                                             ) : (
-                                                <p className="text-sm font-semibold text-slate-800">{r.project_name}</p>
+                                                <p className="text-sm font-semibold text-gray-800">{r.project_name}</p>
                                             )}
                                             {r.project_code && (
-                                                <p className="text-xs text-slate-500">{r.project_code}</p>
+                                                <p className="text-xs text-gray-500">{r.project_code}</p>
                                             )}
                                         </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-slate-500">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
                                             {r.empresa_nome ?? '—'}
                                         </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-slate-600">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-gray-600">
                                             {r.contrato_valor > 0 ? fmt(r.contrato_valor) : '—'}
                                         </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-emerald-700 font-semibold">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-gray-800 font-medium">
                                             {fmt(r.receita_reconhecida)}
                                             {r.receitas_pendentes > 0 && (
                                                 <span className="block text-xs font-normal text-gray-500">
@@ -232,7 +232,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-red-600">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-gray-800 font-medium">
                                             {fmt(r.custo_incorrido)}
                                             {r.custos_pendentes > 0 && (
                                                 <span className="block text-xs font-normal text-gray-500">
@@ -240,7 +240,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                                 </span>
                                             )}
                                         </td>
-                                        <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-semibold ${isNegMargem ? 'text-red-600' : 'text-emerald-700'}`}>
+                                        <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${isNegMargem ? 'text-red-600' : 'text-gray-800'}`}>
                                             <span className="flex items-center justify-end gap-1">
                                                 {isNegMargem
                                                     ? <AlertTriangle className="w-3 h-3 shrink-0" />
@@ -254,7 +254,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                                 {fmtPct(r.margem_pct)}
                                             </span>
                                         </td>
-                                        <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums ${r.saldo_contrato < 0 ? 'text-amber-600 font-semibold' : 'text-slate-600'}`}>
+                                        <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums ${r.saldo_contrato < 0 ? 'text-amber-700 font-medium' : 'text-gray-800 font-medium'}`}>
                                             {r.contrato_valor > 0 ? fmt(r.saldo_contrato) : '—'}
                                         </td>
                                         <td aria-hidden="true"></td>
@@ -263,24 +263,24 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                             })}
                         </tbody>
                         <tfoot>
-                            <tr className="border-t-2 border-slate-200 bg-gray-50">
-                                <td colSpan={2} className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-slate-600">
+                            <tr className="border-t-2 border-gray-200 bg-gray-50">
+                                <td colSpan={2} className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-600">
                                     Total ({rows.length} {rows.length === 1 ? 'obra' : 'obras'})
                                 </td>
-                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-slate-700">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-gray-700">
                                     {fmt(totals.contrato_valor)}
                                 </td>
-                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-emerald-700">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-gray-900">
                                     {fmt(totals.receita_reconhecida)}
                                 </td>
-                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-red-600">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-gray-900">
                                     {fmt(totals.custo_incorrido)}
                                 </td>
-                                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums ${totals.margem_bruta >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums ${totals.margem_bruta >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                                     {fmt(totals.margem_bruta)}
                                     <span className="block text-xs font-normal text-gray-500">{fmtPct(totalMargem)}</span>
                                 </td>
-                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-slate-700">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-gray-700">
                                     {fmt(totals.saldo_contrato)}
                                 </td>
                                 <td aria-hidden="true"></td>

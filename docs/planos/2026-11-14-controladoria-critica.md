@@ -98,7 +98,7 @@ Pedido: "pode seguir" (15/11/2026).
 | 4.3 | Tabelas na largura toda (espaçador + `minWidth: '100%'`, §6.1.1) nas 6 abas; WIP com larguras-padrão somando 1.100 px (antes 1.140 rolava num card de 1.124); WIP e Balancete com `px-6 py-2.5 border-r` (célula alinhada ao cabeçalho, §6.6/§7.2); cabeçalhos brancos (§6.11) no WIP, Diário e SPE; Balancete sem glifos "▾▸" (ícone) e grupo pelo teclado | frente local: tabela 1.122 px = card; teste "grupo pelo teclado" |
 | 4.4 | Gráfico do Fluxo no §28: grade sólida, eixos #64748b, linha reta (não `monotone`), colunas ≤ 24 px no "por período", legenda HTML, `role="img"` com os números; menos de 3 períodos = frase. A linha "Previsto" saiu do acumulado: era o pendente de CADA período (picos de ±R$ 400 mil) e achatava o saldo real (−R$ 12 mil) numa reta | teste "poucos períodos"; print semanal: o saldo cai até −R$ 12.640,41, legível |
 | 4.5 | CSV na DRE por SPE, WIP, Balancete e Diário, no formato que DRE e Fluxo já usavam (`components/controladoria/csv.ts`) | teste "CSV um formato" |
-### Passo 5 — `/impeccable audit`: acessibilidade AA (este PR)
+### Passo 5 — `/impeccable audit`: acessibilidade AA
 
 Pedido: "pode seguir" (15/11/2026). O `audit` do Impeccable só mede; como o plano manda
 corrigir, o passo mede, corrige e mede de novo.
@@ -110,7 +110,20 @@ corrigir, o passo mede, corrige e mede de novo.
 | 5.3 | Resumo / Por Categoria / Por Obra com `aria-pressed` e grupo rotulado; foco visível | teste "dizem qual está ativo" |
 | 5.4 | `BotaoAutoAjuste` compartilhado: `aria-label`, foco visível, ícone gray-500 (~4,6:1; o gray-400 do guia dá ~2,5:1 < 3:1 de componente de UI) | teste "nome acessível" |
 | 5.5 | Carregando com `role="status"`; Fluxo h3 → h2 (não pula nível depois do h1); ícone da busca e vazio do "Por Obra" sem cinza-400 | — |
-### Passo 6 — `/impeccable polish`
+### Passo 6 — `/impeccable polish` (este PR)
+
+Pedido: "siga" (15/11/2026). Passada independente (o registro da crítica já fechou sozinho:
+o código mudou desde ela).
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 6.1 | Fluxo: "Saldo com o previsto" soma os pendentes de TODOS os períodos (era só o do último → o card repetia o realizado: −R$ 12.640,41 nos dois) | `fluxoSaldoComPrevisto.test.ts`; frente local: R$ 184.392,21 ≠ realizado |
+| 6.2 | Um tom de cinza nas tabelas (slate → gray, exceto o rótulo §21, que é slate por regra); WIP com valor financeiro no tom do §7 (gray-800 medium), cor só para estado (margem negativa, saldo de contrato negativo); célula "Empresa" gray-700 | prints 1440 da frente local |
+| 6.3 | CSV da DRE e do Fluxo pelo `baixarCSV` (um formato só nas 6 abas; o Fluxo exporta também o pendente do período; a DRE, os rótulos legíveis) | — |
+| 6.4 | Código morto: `formatPct`/`formatBRL` do serviço (o `toFixed` que escrevia "-50.0%"), import `React` do Diário | `tsc --noUnusedLocals` sem achado nos arquivos da Controladoria |
+
+Medição final na frente local (perfil com login próprio): 6 abas sem erro de console, 390 px sem
+rolagem lateral, 0 escritas.
 
 (Escopo de cada um no relatório da crítica; os critérios entram aqui quando o passo começar.)
 
@@ -120,8 +133,8 @@ corrigir, o passo mede, corrige e mede de novo.
 - [x] Passo 2 — #451 (4df8f2c7); conferido em produção 15/11/2026
 - [x] Passo 3 — #458 (fd4705ef); conferido com dados reais na frente local
 - [x] Passo 4 — #461 (d061ba65); conferido na frente local
-- [ ] Passo 5 — frente `controladoria-acessivel`, PR aberto; falta a medição na tela (login)
-- [ ] Passo 6
+- [x] Passo 5 — #467 (fe350c2d); medido na tela local e em produção; auditoria 9/20 → 15/20
+- [ ] Passo 6 — frente `controladoria-polimento`, PR a abrir
 
 ## Verificação
 

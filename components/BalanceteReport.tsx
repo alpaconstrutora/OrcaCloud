@@ -178,12 +178,12 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
             ) : falhou ? (
                 <FalhaDeCarga oQue="o balancete" onRetry={load} />
             ) : lines.length === 0 ? (
-                <div className="text-center py-20 text-slate-600 text-sm">
+                <div className="text-center py-20 text-gray-600 text-sm">
                     Nenhum lançamento encontrado para o período selecionado.
                 </div>
             ) : (
-                <div className="bg-white border border-slate-200 rounded-[10px] shadow-sm overflow-hidden">
-                    <div className="flex justify-end p-2 border-b border-slate-100">
+                <div className="bg-white border border-gray-200 rounded-[10px] shadow-sm overflow-hidden">
+                    <div className="flex justify-end p-2 border-b border-gray-100">
                         <BotaoAutoAjuste onClick={() => cols.autoFit()} />
                     </div>
                     <div className="overflow-x-auto">
@@ -202,7 +202,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
                                 <th aria-hidden="true" />
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-50">
+                        <tbody className="divide-y divide-gray-50">
                             {GROUP_ORDER.map(grp => {
                                 const grpLines = grouped.get(grp)
                                 if (!grpLines) return null
@@ -212,7 +212,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
                                     <React.Fragment key={grp}>
                                         {/* Linha de grupo */}
                                         <tr
-                                            className="bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors"
+                                            className="bg-gray-50 cursor-pointer hover:bg-gray-100 transition-colors"
                                             onClick={() => toggleGroup(grp)}
                                         >
                                             <td className="px-6 py-2.5 border-r border-gray-100">

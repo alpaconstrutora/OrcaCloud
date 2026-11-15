@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "780b6a5f028aaf7b2af69b8db87652834ec57adbb25dc1d06b67fbf78dfb6a9e",
+    "modelo": "179ae7b9a06de201dc25c814805eb0eb29e8c35666db2d0488759385dc19592d",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -10,7 +10,7 @@
     "nucleos": 1,
     "estruturas": 201,
     "quadros": 11,
-    "terminais": 713,
+    "terminais": 729,
     "trechosDeAgua": 472,
     "agua": {
       "pontos": 36,
@@ -127,11 +127,18 @@
         "PLACA": 12,
         "LUMINARIA_EMERGENCIA": 11,
         "Alimentação da luminária de emergência": 11
+      },
+      "hidrantes": {
+        "tipo": 1,
+        "terreo": 1,
+        "cobertura": 1,
+        "bomba": true,
+        "recalque": true
       }
     }
   },
   "R8": {
-    "modelo": "6012101d755ac0b41e6714353abc62dbc703f6d4ba8650d70446e94817728140",
+    "modelo": "085eef729d734d62578e6d8cc89da8a585ef0f70cadc95f52b3e601ed6056d94",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 10,
     "copias": 6,
@@ -141,7 +148,7 @@
     "nucleos": 2,
     "estruturas": 546,
     "quadros": 44,
-    "terminais": 3480,
+    "terminais": 3504,
     "trechosDeAgua": 2480,
     "agua": {
       "pontos": 85,
@@ -301,11 +308,18 @@
         "PLACA": 17,
         "LUMINARIA_EMERGENCIA": 15,
         "Alimentação da luminária de emergência": 15
+      },
+      "hidrantes": {
+        "tipo": 1,
+        "terreo": 1,
+        "cobertura": 1,
+        "bomba": true,
+        "recalque": true
       }
     }
   },
   "R12": {
-    "modelo": "d826598e03b55b9cef22dbc06ddbc60cd016c93bf7b590715f5c0e20264b37f1",
+    "modelo": "a3245153f2e6c446ee0fed3b152e3272739deb279a30f8330fcd355aee76e004",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 14,
     "copias": 10,
@@ -315,7 +329,7 @@
     "nucleos": 3,
     "estruturas": 1059,
     "quadros": 101,
-    "terminais": 8921,
+    "terminais": 8953,
     "trechosDeAgua": 6110,
     "agua": {
       "pontos": 144,
@@ -523,11 +537,18 @@
         "CENTRAL_ALARME": 1,
         "ACIONADOR_MANUAL": 3,
         "AVISADOR": 3
+      },
+      "hidrantes": {
+        "tipo": 1,
+        "terreo": 1,
+        "cobertura": 1,
+        "bomba": true,
+        "recalque": true
       }
     }
   },
   "RL": {
-    "modelo": "947d2a125e3888e1b330481a0174bfd9ebbc9246911c6510ac4eec50c0cfaaae",
+    "modelo": "4af84bb18b7b706fca452de7c5ae7fbda97639ab62b844a805690b1f02010e4e",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -537,7 +558,7 @@
     "nucleos": 2,
     "estruturas": 1179,
     "quadros": 100,
-    "terminais": 9052,
+    "terminais": 9094,
     "trechosDeAgua": 6708,
     "agua": {
       "pontos": 229,
@@ -737,6 +758,13 @@
         "PLACA": 36,
         "LUMINARIA_EMERGENCIA": 30,
         "Alimentação da luminária de emergência": 30
+      },
+      "hidrantes": {
+        "tipo": 2,
+        "terreo": 2,
+        "cobertura": 2,
+        "bomba": true,
+        "recalque": true
       }
     }
   }

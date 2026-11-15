@@ -17,6 +17,8 @@ import { analisarSinalizacao, proporSinalizacao } from '../blueprintSinalizacao'
 import { analisarIluminacao, proporIluminacao } from '../blueprintIluminacaoEmergencia';
 import { analisarAlarme, proporAlarme } from '../blueprintDeteccaoAlarme';
 import { kitDaPeca } from '../blueprintKitsIncendio';
+import { proporHidrantes, coberturaDosHidrantes } from '../blueprintCoberturaIncendio';
+import { proporRecalque } from '../blueprintCasaDeBombas';
 import type { ContextoDoPredio } from './terreoECobertura';
 import { classificarEdificacao, exigenciasDaEdificacao, HIPOTESES_INCENDIO_PADRAO, type HipotesesIncendio } from '../blueprintIncendioClassificacao';
 import { percursoDeFuga } from '../blueprintRotaDeFuga';
@@ -106,7 +108,6 @@ export function conferirIncendioDoPredio(
   if (sem.length) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rota de fuga: ${sem.length} ambiente(s) sem caminho até a saída no térreo (${[...new Set(sem.map((x) => m.levels.find((l) => l.id === x.levelId)?.name))].join(', ')}).`, locais: sem.slice(0, 30).map(local) });
   const longe = pf.ambientes.filter((x) => x.atende === false);
   if (longe.length) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rota de fuga: ${longe.length} ambiente(s) com o caminhamento até o local seguro acima do limite (${longe[0].rotulo}: ${longe[0].caminhamentoM ?? longe[0].distanciaM} m de ${longe[0].limiteM ?? pf.limiteM} m).`, locais: longe.slice(0, 30).map(local) });
-  if (exigidas.some((x) => x.medida === 'HIDRANTES')) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Incêndio: os hidrantes, a rede e a casa de bombas ainda não são lançados pelo prédio automático (PA9c) — lance pelo PPCI da planta.' });
   return {
     divisao: c.divisao.valor,
     grupo: c.grupo?.grupo ?? null,
@@ -236,4 +237,141 @@ function semOsComodosDasUnidades(m: BlueprintModel, tipoLevelId: ObjectId): Blue
     if (s) daUnidade.add(s.id);
   }
   return m.spaces.filter((s) => !daUnidade.has(s.id));
+}
+
+// ─── PA9c: hidrantes, coluna de incêndio, bomba e registro de recalque ───────
+
+/** A coluna de incêndio fica a isto do hidrante do tipo, ao lado (o motor da planta faz o mesmo — 30 cm em x). */
+const COLUNA_AO_LADO_DO_HIDRANTE_MM = 300;
+/** A cota do ramal de incêndio no forro (a do motor da planta). */
+const COTA_DO_RAMAL_DE_INCENDIO_MM = 2600;
+/** DN da rede de hidrantes (2½") — o cálculo hidráulico do PPCI da planta confere. */
+const DN_DA_REDE_DE_INCENDIO_MM = 65;
+/** A bomba de incêndio ao lado do reservatório superior, na cobertura, mm; e a jockey e os pressostatos ao lado dela. */
+const BOMBA_AO_LADO_DO_RESERVATORIO_MM = 1500;
+const PASSO_NA_CASA_DE_BOMBAS_MM = 600;
+const COTA_DAS_BOMBAS_MM = 300;
+
+export interface HidrantesDoPredio {
+  comandos: number;
+  /** Hidrantes no tipo (cada andar repete), no térreo e na cobertura. */
+  hidrantes: { tipo: number; terreo: number; cobertura: number };
+  bomba: boolean;
+  recalque: boolean;
+  pendencias: PendenciaDoPpci[];
+}
+
+/**
+ * Os HIDRANTES e a rede (PA9c, 15/11/2026). O motor da planta (`proporHidrantes`, a cobertura pela mangueira esticada de
+ * porta em porta) propõe na vista sem as cópias — com os cômodos das unidades: a mangueira tem de alcançar dentro delas.
+ * A rede não é a do motor da planta (ela traça a coluna inteira de uma vez, do pavimento da bomba ao último hidrante — nos
+ * andares copiados isso é recusado): a COLUNA DE INCÊNDIO fica ao lado do hidrante do tipo, um trecho por andar de
+ * `−400` a `2600` (a base de cada um é o 2600 do andar de baixo, como o tubo de queda — a cópia viva empilha), com o ramal
+ * no forro até o hidrante de cada pavimento. A FONTE é a reserva técnica no reservatório superior (a parcela de incêndio
+ * da caixa de água fria — PA6) com a BOMBA de incêndio na cobertura, ao lado dele: a gravidade não dá a pressão dos
+ * andares de cima. O REGISTRO DE RECALQUE vai no passeio pelo motor da planta, ligado à coluna no térreo.
+ */
+export function lancarHidrantesDoPredio(
+  ctx: ContextoDoPredio,
+  descargaLevelId: ObjectId,
+  ultimoLevelId: ObjectId,
+  copias: ReadonlySet<ObjectId>,
+  tipoLevelId: ObjectId,
+  cobertura: { levelId: ObjectId } | null,
+  hipParcial: Partial<HipotesesIncendio> | null,
+): HidrantesDoPredio {
+  const pendencias: PendenciaDoPpci[] = [];
+  const { hip } = hipotesesDeIncendioDoPredio(ctx.m, descargaLevelId, ultimoLevelId, hipParcial);
+  const resultado: HidrantesDoPredio = { comandos: 0, hidrantes: { tipo: 0, terreo: 0, cobertura: 0 }, bomba: false, recalque: false, pendencias };
+  if (!exigenciasDaEdificacao(classificarEdificacao(ctx.m, hip.classificacao)).medidas.some((x) => x.medida === 'HIDRANTES' && x.estado === 'EXIGIDA')) return resultado;
+  const pe = (id: ObjectId) => ctx.m.levels.find((l) => l.id === id)?.defaultHeightMm ?? 3000;
+  let v = vistaSemAsCopias(ctx.m, copias, tipoLevelId);
+  let comandos = 0;
+  const aplicar = (lote: Command[]): number => {
+    if (!lote.length) return 0;
+    const rv = applyBatch(v, lote);
+    v = rv.model;
+    comandos += ctx.aplicar(lote);
+    const real = ctx.criadosNoUltimoLote ?? [];
+    if (real.length !== rv.diff.created.length || real.some((id, i) => id !== rv.diff.created[i])) throw new Error('os ids criados na vista sem as cópias divergem dos do prédio');
+    return lote.length;
+  };
+
+  // ── Os hidrantes (com o abrigo e a placa — o kit da peça, como no PPCI da planta).
+  const p = proporHidrantes(v, hip.hidraulica);
+  aplicar(p.comandos.length ? kitDaPeca(v, p.comandos).comandos : []);
+  const nomes = new Map(v.spaces.map((x) => [x.id, x.name ?? 'ambiente']));
+  for (const id of p.semSolucao) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Hidrante: ${nomes.get(id) ?? id} fica fora do alcance de qualquer posição proposta.` });
+  const ehHidrante = (t: { tipoHidraulico?: string | null }) => t.tipoHidraulico === 'HIDRANTE_SIMPLES' || t.tipoHidraulico === 'HIDRANTE_DUPLO' || t.tipoHidraulico === 'MANGOTINHO';
+  const hidrantesDe = (levelId: ObjectId | null) => (levelId ? (v.terminais ?? []).filter((t) => t.levelId === levelId && ehHidrante(t)) : []);
+  const doTipo = hidrantesDe(tipoLevelId);
+  resultado.hidrantes = { tipo: doTipo.length, terreo: descargaLevelId !== tipoLevelId ? hidrantesDe(descargaLevelId).length : 0, cobertura: hidrantesDe(cobertura?.levelId ?? null).length };
+  if (!doTipo.length) {
+    pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Hidrantes: o tipo ficou sem hidrante — sem onde pôr a coluna de incêndio.' });
+    resultado.comandos = comandos;
+    return resultado;
+  }
+
+  // ── A coluna ao lado do hidrante do tipo (o mais perto do núcleo — junto à escada) e os ramais de cada pavimento.
+  const escada = (v.stairs ?? []).find((e) => e.levelId === tipoLevelId);
+  const ref = escada ? escada.pontos[0] : doTipo[0].at;
+  const h0 = [...doTipo].sort((a, b) => Math.hypot(a.at.x - ref.x, a.at.y - ref.y) - Math.hypot(b.at.x - ref.x, b.at.y - ref.y))[0];
+  const P = { x: h0.at.x + COLUNA_AO_LADO_DO_HIDRANTE_MM, y: h0.at.y } as Point;
+  const z = COTA_DO_RAMAL_DE_INCENDIO_MM;
+  const dn = hip.rede?.dnMm ?? DN_DA_REDE_DE_INCENDIO_MM;
+  const tubo = (levelId: ObjectId, a: Point, ca: number, b: Point, cb: number): Command => ({ type: 'AddTrecho', levelId, disciplina: 'INCENDIO', a: { x: a.x, y: a.y }, b: { x: b.x, y: b.y }, cotaAMm: ca, cotaBMm: cb, bitolaMm: dn, sugerido: true, rotulo: 'Coluna de incêndio' } as Command);
+  const ramal = (levelId: ObjectId, h: { at: Point; cotaMm: number }): Command[] => {
+    const k = { x: h.at.x, y: P.y } as Point;
+    const pts = [P, k, h.at as Point].filter((q, i, arr) => i === 0 || q.x !== arr[i - 1].x || q.y !== arr[i - 1].y);
+    return [...pts.slice(1).map((q, i) => ({ ...(tubo(levelId, pts[i], z, q, z) as object), rotulo: 'Ramal do hidrante' }) as Command), { ...(tubo(levelId, h.at as Point, z, h.at as Point, h.cotaMm) as object), rotulo: 'Ramal do hidrante' } as Command];
+  };
+  const lote: Command[] = [tubo(tipoLevelId, P, z - pe(tipoLevelId), P, z)];
+  for (const h of doTipo) lote.push(...ramal(tipoLevelId, h as { at: Point; cotaMm: number }));
+  if (descargaLevelId !== tipoLevelId) for (const h of hidrantesDe(descargaLevelId)) lote.push(...ramal(descargaLevelId, h as { at: Point; cotaMm: number }));
+  if (cobertura) {
+    // A coluna chega à cobertura (o 2600 do último andar é o −400 dela) e sobe ao ramal dela.
+    lote.push(tubo(cobertura.levelId, P, z - pe(ultimoLevelId), P, z));
+    for (const h of hidrantesDe(cobertura.levelId)) lote.push(...ramal(cobertura.levelId, h as { at: Point; cotaMm: number }));
+  }
+  aplicar(lote);
+
+  // ── A bomba na cobertura, ao lado do reservatório superior (sucção afogada do fundo dele), que recalca na coluna.
+  const superior = (v.terminais ?? []).find((t) => t.tipoHidraulico === 'RESERVATORIO' && t.disciplina === 'AGUA_FRIA' && t.papelReservatorio === 'SUPERIOR' && t.levelId === cobertura?.levelId) ?? null;
+  if (cobertura && superior) {
+    const S = superior.at as Point;
+    const B = { x: S.x + BOMBA_AO_LADO_DO_RESERVATORIO_MM, y: S.y } as Point;
+    const J = { x: B.x + PASSO_NA_CASA_DE_BOMBAS_MM, y: B.y } as Point;
+    const L = cobertura.levelId;
+    const peca = (tipo: string, at: Point, extra: Record<string, unknown> = {}): Command => ({ type: 'AddTerminal', levelId: L, disciplina: 'INCENDIO', tipo, tipoHidraulico: tipo, at: { x: at.x, y: at.y }, cotaMm: COTA_DAS_BOMBAS_MM, sugerida: true, ...extra }) as Command;
+    aplicar([peca('BOMBA_INCENDIO', B)]);
+    const principal = (v.terminais ?? []).find((t) => t.tipoHidraulico === 'BOMBA_INCENDIO' && t.levelId === L)!;
+    const naCasa: Command[] = [
+      // Sucção: do fundo do superior à bomba.
+      { ...(tubo(L, S, superior.cotaMm, S, COTA_DAS_BOMBAS_MM) as object), rotulo: 'Sucção da bomba de incêndio' } as Command,
+      { ...(tubo(L, S, COTA_DAS_BOMBAS_MM, B, COTA_DAS_BOMBAS_MM) as object), rotulo: 'Sucção da bomba de incêndio' } as Command,
+      // Recalque: da bomba ao topo da coluna, no forro.
+      { ...(tubo(L, B, COTA_DAS_BOMBAS_MM, B, z) as object), rotulo: 'Recalque da bomba de incêndio' } as Command,
+      ...[{ x: P.x, y: B.y } as Point, P].filter((q, i, arr) => (i === 0 ? q.x !== B.x || q.y !== B.y : q.x !== arr[i - 1].x || q.y !== arr[i - 1].y)).map((q, i, arr) => ({ ...(tubo(L, i === 0 ? B : arr[i - 1], z, q, z) as object), rotulo: 'Recalque da bomba de incêndio' }) as Command),
+      // A jockey ligada à principal, os pressostatos e o manômetro sobre o tubo dela.
+      peca('BOMBA_JOCKEY', J, { bombaPrincipalId: principal.id }),
+      { ...(tubo(L, J, COTA_DAS_BOMBAS_MM, B, COTA_DAS_BOMBAS_MM) as object), rotulo: 'Barrilete das bombas' } as Command,
+      peca('PRESSOSTATO', { x: B.x + PASSO_NA_CASA_DE_BOMBAS_MM / 3, y: B.y } as Point),
+      peca('PRESSOSTATO', { x: B.x + (2 * PASSO_NA_CASA_DE_BOMBAS_MM) / 3, y: B.y } as Point),
+      peca('MANOMETRO', { x: B.x + PASSO_NA_CASA_DE_BOMBAS_MM / 6, y: B.y } as Point),
+    ];
+    aplicar(naCasa);
+    resultado.bomba = true;
+    pendencias.push({ grupo: 'CONFERIR', texto: `Hidrantes: a reserva técnica fica no reservatório superior (parcela da caixa de água fria, ${((superior.volumeRtiL ?? 0) / 1000).toLocaleString('pt-BR')} m³) e a bomba de incêndio na cobertura, ao lado dele, com a jockey e os pressostatos — a curva da bomba e o DN da rede saem do cálculo hidráulico do PPCI da planta.` });
+  } else pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Hidrantes: sem o reservatório superior na cobertura, a fonte da rede de incêndio (bomba e reserva) fica para o projetista.' });
+
+  // ── O registro de recalque no passeio, ligado à rede no térreo.
+  const rc = proporRecalque(v, hip);
+  aplicar(rc.comandos);
+  resultado.recalque = rc.comandos.length > 0;
+  for (const x of rc.pendencias) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: x });
+  // A cobertura de todos os ambientes da vista (as cópias são iguais ao tipo).
+  const cob = coberturaDosHidrantes(v, hip.hidraulica);
+  if (cob.descobertos.length) pendencias.push({ grupo: 'VERIFICACAO', texto: `Hidrantes: ${cob.descobertos.length} ambiente(s) fora do alcance da mangueira.` });
+  resultado.comandos = comandos;
+  return resultado;
 }

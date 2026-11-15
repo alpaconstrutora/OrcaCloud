@@ -97,7 +97,7 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     const plano = planejarPredioDoPedido(p, { aoConcluirEtapa: (e, i, total) => avisos.push(`${i}/${total} ${e.id}`) });
     expect(plano.etapas.map((e) => e.id)).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO);
     expect(avisos).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO.map((id, i) => `${i + 1}/${ORDEM_DAS_ETAPAS_DO_PREDIO.length} ${id}`));
-    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'PLUVIAL:NAO_EXIGIDA', 'EQUIPAMENTOS_DE_INCENDIO:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'INCENDIO:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
+    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'PLUVIAL:NAO_EXIGIDA', 'EQUIPAMENTOS_DE_INCENDIO:NAO_EXIGIDA', 'HIDRANTES:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'INCENDIO:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
     expect(snapshotHash(plano.resultado)).toBe(snapshotHash(peloPainelDoBloco(p)));
     const tipo = plano.resultado.levels.find((l) => l.id === plano.tipoLevelId)!;
     expect(tipo.copiaInstalacoes).toBe(true);
@@ -741,5 +741,36 @@ describe('prédio automático — a água fria e o esgoto (PA6, PA7a)', { timeou
     const pc = percursoDeFuga(vista, 'A', terreo.id, null, criteriosDoPercursoMG('MG_CBMMG', 'A-2', HIPOTESES_INCENDIO_PADRAO.saidas));
     const il = analisarIluminacao(vista, pc, terreo.id, HIPOTESES_INCENDIO_PADRAO.iluminacao);
     expect(il.trechosSemLuz.filter((x) => andares.has(x.levelId))).toEqual([]);
+  });
+
+  it('PA9c: um hidrante em todo pavimento, e todo hidrante de todo andar ligado pela coluna à bomba da cobertura e ao registro de recalque', () => {
+    const plano = r8();
+    const m = plano.resultado;
+    expect(plano.etapas.find((e) => e.id === 'HIDRANTES')!.situacao).toBe('LANCOU');
+    const h = plano.resumo.incendio!.hidrantes!;
+    expect([h.bomba, h.recalque]).toEqual([true, true]);
+    const ehHidrante = (t: { tipoHidraulico?: string | null }) => /^(HIDRANTE_SIMPLES|HIDRANTE_DUPLO|MANGOTINHO)$/.test(t.tipoHidraulico ?? '');
+    const hidrantes = m.terminais.filter(ehHidrante);
+    const andares = m.levels.filter((l) => l.id === plano.tipoLevelId || l.tipoDeId === plano.tipoLevelId);
+    for (const l of andares) expect(hidrantes.filter((t) => t.levelId === l.id)).toHaveLength(h.tipo);
+    const chave = fazerChave(m.levels);
+    const pai = new Map<string, string>();
+    const raiz = (a: string): string => (pai.get(a) === a ? a : raiz(pai.get(a)!));
+    const une = (a: string, b: string) => {
+      for (const x of [a, b]) if (!pai.has(x)) pai.set(x, x);
+      pai.set(raiz(a), raiz(b));
+    };
+    for (const t of m.trechos.filter((t) => t.disciplina === 'INCENDIO')) une(chave(t.levelId, t.a.x, t.a.y, t.cotaAMm), chave(t.levelId, t.b.x, t.b.y, t.cotaBMm));
+    const no = (t: (typeof m.terminais)[number]) => chave(t.levelId, t.at.x, t.at.y, t.cotaMm);
+    const bomba = m.terminais.find((t) => t.tipoHidraulico === 'BOMBA_INCENDIO')!;
+    const recalque = m.terminais.find((t) => t.tipoHidraulico === 'HIDRANTE_RECALQUE')!;
+    expect(m.levels.find((l) => l.id === bomba.levelId)!.name).toBe('Torre · cobertura');
+    expect(m.terminais.find((t) => t.tipoHidraulico === 'BOMBA_JOCKEY')!.bombaPrincipalId).toBe(bomba.id);
+    const kBomba = raiz(no(bomba));
+    expect(raiz(no(recalque))).toBe(kBomba);
+    const fora = hidrantes.filter((t) => !pai.has(no(t)) || raiz(no(t)) !== kBomba);
+    expect(fora.map((t) => m.levels.find((l) => l.id === t.levelId)!.name)).toEqual([]);
+    // A reserva técnica fica no superior (a sucção da bomba sai do fundo dele).
+    expect(m.terminais.find((t) => t.papelReservatorio === 'SUPERIOR')!.volumeRtiL).toBeGreaterThan(0);
   });
 });

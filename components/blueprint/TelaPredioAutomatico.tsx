@@ -395,7 +395,7 @@ export default function TelaPredioAutomatico(props: Props) {
               valor={plano.resumo.garagem ? `${plano.resumo.garagem.vagas} vaga(s)` : '—'}
               nota={
                 plano.resumo.garagem
-                  ? `${plano.resumo.garagem.subsolos.length} subsolo(s) · ${plano.resumo.garagem.rampas} rampa(s) · o contorno livre levaria ${plano.resumo.garagem.teto}`
+                  ? `${plano.resumo.garagem.subsolos.length} subsolo(s) · ${plano.resumo.garagem.rampas} rampa(s)${plano.resumo.garagem.escadasDeEmergencia ? ` · ${plano.resumo.garagem.escadasDeEmergencia} escada(s) de emergência` : ''}${plano.resumo.garagem.exaustores ? ` · ${plano.resumo.garagem.exaustores} exaustor(es)` : ''} · o contorno livre levaria ${plano.resumo.garagem.teto}`
                   : props.hipoteses.garagem
                     ? 'sem bloco de garagem abaixo do solo no estudo'
                     : 'desligada nas hipóteses'

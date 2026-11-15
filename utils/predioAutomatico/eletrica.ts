@@ -20,7 +20,7 @@ import { pointInPolygon } from '../blueprintKernel';
 import type { BlueprintModel, Command, ObjectId, Point, Terminal } from '../blueprintKernel';
 import { centroDeCargas } from '../blueprintCentroDeCargas';
 import { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos } from '../blueprintCircuitosAutomaticos';
-import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO, preDimensionarQuadroCompleto, sugerirDPS } from '../blueprintEletricaDimensionamento';
+import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO, preDimensionarCircuito, preDimensionarQuadroCompleto, sugerirDPS } from '../blueprintEletricaDimensionamento';
 import { entradaDoQuadro, padraoDeEntrada } from '../blueprintEntradaDeEnergia';
 import { comandosDasSugestoesDeDR, conferirNbr5410, sugerirDRs } from '../blueprintNbr5410';
 import { comandosDePontosDoNivel } from '../blueprintPontosEletricosDoNivel';
@@ -32,6 +32,14 @@ export const POTENCIA_DA_BOMBA_DE_RECALQUE_W = 2200;
 /** Uma luz de teto a cada tantos m² nas salas comuns do térreo e da cobertura (hipótese de projeto). */
 export const AREA_POR_LUMINARIA_COMUM_M2 = 20;
 
+/** PA8b: a garagem de cada subsolo — o quadro dela (QDG, filho do QS) e os exaustores. */
+export interface EletricaDaGaragem {
+  levelId: ObjectId;
+  quadro: Point;
+  exaustores: Point[];
+  potenciaDoExaustorW: number;
+}
+
 export interface EletricaDoPredio {
   comandos: number;
   pontos: { tomadas: number; luzes: number; interruptores: number };
@@ -40,6 +48,8 @@ export interface EletricaDoPredio {
   /** Circuitos das unidades no tipo (cada cópia repete). */
   circuitos: number;
   servico: { circuitos: number; motores: number };
+  /** PA8b: por subsolo, os circuitos do quadro da garagem, as luzes e os exaustores; vazio sem subsolo. */
+  garagem: { levelId: ObjectId; circuitos: number; luzes: number; exaustores: number }[];
   medidores: number;
   drs: number;
   qgbtId: ObjectId | null;
@@ -68,6 +78,7 @@ export function lancarEletrica(
   base: BaseDoPredio,
   terreo: { levelId: ObjectId; medicao: Point | null; bombas: Point | null } | null,
   cobertura: { levelId: ObjectId } | null,
+  garagens: EletricaDaGaragem[] = [],
 ): EletricaDoPredio {
   const { tipoLevelId: tipo } = base;
   const avisos: string[] = [];
@@ -173,6 +184,35 @@ export function lancarEletrica(
     drs += dr.length;
   }
 
+  // ── A garagem de cada subsolo (PA8b): os pontos pela norma (uma luz a cada `AREA_POR_LUMINARIA_COMUM_M2`), os
+  // exaustores, e um QUADRO DA GARAGEM (filho do QS) junto ao hall com os circuitos dela — a garagem é grande (2.400 m² no
+  // R8) e longe do térreo: pendurados direto no QS, os circuitos atravessavam o prédio.
+  const garagem: EletricaDoPredio['garagem'] = [];
+  for (const gq of garagens) {
+    const pontosG = comandosDePontosDoNivel(ctx.m, gq.levelId, { peDireitoMm: pe(gq.levelId), areaPorLuminariaM2: AREA_POR_LUMINARIA_COMUM_M2 });
+    const exaustores: Command[] = gq.exaustores.map((at, i) => ({ type: 'AddTerminal', levelId: gq.levelId, disciplina: 'ELETRICA', tipo: 'Exaustor', at, cotaMm: 2400, tipoEletrico: 'VENTILADOR_EXAUSTOR', potenciaW: gq.potenciaDoExaustorW, rotulo: `Exaustor da garagem ${i + 1}`, sugerida: true }));
+    comandos += ctx.aplicar([...pontosG, ...exaustores]);
+    const nome = ctx.m.levels.find((l) => l.id === gq.levelId)?.name.split('·').pop()?.trim() ?? 'subsolo';
+    const qdg = criar({ type: 'AddQuadro', levelId: gq.levelId, nome: `QDG — garagem (${nome})`.slice(0, 60), at: gq.quadro, cotaMm: 1600, tipo: 'QD', quadroPaiId: qs, ligacao: 'FFF', tensaoV: 220 });
+    const plano = planejarCircuitos(ctx.m, gq.levelId, qdg, HIPOTESES_CIRCUITOS_PADRAO, HIPOTESES_ELETRICAS_PADRAO);
+    comandos += ctx.aplicar(plano.comandos);
+    for (const f of plano.foraDoPlano) if (!/ponto de dados/.test(f.motivo)) avisos.push(`QDG ${nome}: ${f.motivo}`);
+    // Os circuitos da garagem são longos (40 m no R8): a seção que a queda de tensão pede (6.2.7) — a 1,5 mm² padrão da
+    // iluminação passava de 4 %.
+    comandos += ctx.aplicar(
+      (ctx.m.circuitos ?? [])
+        .filter((c) => c.quadroId === qdg)
+        .map((c) => ({ c, s: preDimensionarCircuito(ctx.m, c, HIPOTESES_ELETRICAS_PADRAO).secaoParaQuedaMm2 }))
+        .filter((x) => x.s != null)
+        .map((x): Command => ({ type: 'SetCircuitoProps', circuitoId: x.c.id, secaoMm2: x.s! })),
+    );
+    const dr = comandosDasSugestoesDeDR(sugerirDRs(ctx.m, qdg, HIPOTESES_ELETRICAS_PADRAO));
+    comandos += ctx.aplicar(dr);
+    drs += dr.length;
+    servico += plano.circuitos.length;
+    garagem.push({ levelId: gq.levelId, circuitos: plano.circuitos.length, luzes: pontosG.filter((c) => /^ILUMINACAO/.test(tipoDe(c) ?? '')).length, exaustores: exaustores.length });
+  }
+
   // ── Medição no térreo: a entrada de serviço, o medidor do condomínio e um por unidade de cada andar.
   let medidores = 0;
   if (terreo && ondeMedicao) {
@@ -190,7 +230,7 @@ export function lancarEletrica(
   }
   // DPS no QGBT (a classe da hipótese).
   comandos += ctx.aplicar([{ type: 'SetQuadroProps', quadroId: qgbt, dps: sugerirDPS(HIPOTESES_ELETRICAS_PADRAO) }]);
-  return { comandos, pontos, quadros, circuitos, servico: { circuitos: servico, motores: motores.length }, medidores, drs, qgbtId: qgbt, avisos };
+  return { comandos, pontos, quadros, circuitos, servico: { circuitos: servico, motores: motores.length }, garagem, medidores, drs, qgbtId: qgbt, avisos };
 }
 
 /** Depois da cópia viva: a entrada do QGBT (demanda pela diversidade, categoria, unidades atendidas × medidas) e a NBR 5410. */

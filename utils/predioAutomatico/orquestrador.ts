@@ -33,7 +33,7 @@ import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
 import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedido } from './climatizacaoERede';
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
 import { lancarEsgoto } from './esgoto';
-import { lancarSubsolos, subsoloDaTorre } from './garagem';
+import { lancarSubsolos, POTENCIA_DO_EXAUSTOR_W, subsoloDaTorre } from './garagem';
 import { lancarPluvial } from './pluvial';
 import { conferirIncendioDoPredio, lancarEquipamentosDeIncendio, lancarHidrantesDoPredio } from './ppci';
 import type { HipotesesIncendio } from '../blueprintIncendioClassificacao';
@@ -236,13 +236,13 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   else {
     const medicao = terreo?.salas.find((x) => x.nome === SALA_MEDICAO || x.nome === SALA_MEDICAO_E_BOMBAS)?.ponto ?? null;
     const bombasNoTerreo = terreo?.salas.find((x) => x.nome === SALA_BOMBAS || x.nome === SALA_MEDICAO_E_BOMBAS)?.ponto ?? null;
-    eletrica = lancarEletrica(ctx, base, terreo ? { levelId: terreo.levelId, medicao, bombas: bombasNoTerreo } : null, cobertura ? { levelId: cobertura.levelId } : null);
+    eletrica = lancarEletrica(ctx, base, terreo ? { levelId: terreo.levelId, medicao, bombas: bombasNoTerreo } : null, cobertura ? { levelId: cobertura.levelId } : null, (subsolos?.eletrica ?? []).map((x) => ({ ...x, potenciaDoExaustorW: POTENCIA_DO_EXAUSTOR_W })));
     for (const a of eletrica.avisos) pendencias.push({ grupo: 'CONFERIR', texto: `Elétrica: ${a}` });
     etapa(
       'ELETRICA',
       'LANCOU',
       eletrica.comandos,
-      `${eletrica.quadros} QD(s) e ${eletrica.circuitos} circuito(s) por andar · ${eletrica.servico.circuitos} circuito(s) de serviço · ${eletrica.medidores} medidor(es) · ${eletrica.drs} DR(s)`,
+      `${eletrica.quadros} QD(s) e ${eletrica.circuitos} circuito(s) por andar · ${eletrica.servico.circuitos} circuito(s) de serviço${eletrica.garagem.length ? ` (na garagem: ${eletrica.garagem.reduce((s, x) => s + x.luzes, 0)} luz(es) e ${eletrica.garagem.reduce((s, x) => s + x.exaustores, 0)} exaustor(es), um QDG por subsolo)` : ''} · ${eletrica.medidores} medidor(es) · ${eletrica.drs} DR(s)`,
     );
   }
 
@@ -483,7 +483,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       terreo: terreo ? { salas: terreo.salas.map((x) => x.nome), acesso: terreo.acesso } : null,
       cobertura: cobertura ? { cotaM: cobertura.cotaMm / 1000 } : null,
       eletrica: resumoDaEletrica,
-      garagem: subsolos ? { subsolos: subsolos.pisos.map((p) => ({ nome: p.nome, vagas: p.vagas, porTipo: p.porTipo })), vagas: subsolos.vagas, teto: subsolos.teto, rampas: subsolos.rampas, pilaresDaTorre: subsolos.pilaresDaTorre, pilaresDaGaragem: subsolos.pilaresDaGaragem } : null,
+      garagem: subsolos ? { subsolos: subsolos.pisos.map((p) => ({ nome: p.nome, vagas: p.vagas, porTipo: p.porTipo })), vagas: subsolos.vagas, teto: subsolos.teto, rampas: subsolos.rampas, escadasDeEmergencia: subsolos.escadasDeEmergencia, luzes: eletrica?.garagem.reduce((s, x) => s + x.luzes, 0) ?? 0, exaustores: eletrica?.garagem.reduce((s, x) => s + x.exaustores, 0) ?? 0, pilaresDaTorre: subsolos.pilaresDaTorre, pilaresDaGaragem: subsolos.pilaresDaGaragem } : null,
       estrutura: estrutura ? { pilares: estrutura.pilares, vigas: estrutura.vigas, lajes: estrutura.lajes, noTerreo: estrutura.noTerreo, eixos: estrutura.eixos, blocos: fundacao?.blocos ?? 0, estacas: fundacao?.estacas ?? 0 } : null,
       reservacao,
       agua: resumoDaAgua,

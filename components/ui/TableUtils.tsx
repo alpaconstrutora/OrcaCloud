@@ -365,6 +365,7 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
   return (
     <>
       <button
+        type="button"
         onClick={onToggleShow}
         className="p-2.5 rounded-xl transition-all text-gray-500 hover:text-gray-700 relative"
         title="Configurar Colunas"
@@ -416,6 +417,7 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
                 e, com as duas classes na string, quem vence é a que sai por último
                 no CSS gerado — não a que se escreveu por último. Mesmo rodapé do §25. */}
             <button
+              type="button"
               onClick={onReset}
               className="mr-auto h-9 px-3 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-[6px] transition-colors"
             >
@@ -424,6 +426,7 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
             <div className="flex items-center gap-2">
               {onSaveDefault && (
                 <button
+                  type="button"
                   onClick={onSaveDefault}
                   disabled={savingDefault}
                   className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all disabled:opacity-50"
@@ -433,6 +436,7 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
                 </button>
               )}
               <button
+                type="button"
                 onClick={onToggleShow}
                 className="h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
               >

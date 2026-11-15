@@ -22,9 +22,10 @@
       "nome": "SERVIÇOS INICIAIS",
       "resumo": true,
       "marco": false,
-      "inicio": "2026-07-27",
-      "termino": "2026-11-30",
-      "percentual": 71,
+      "inicio": "2026-07-24",
+      "termino": "2026-12-02",
+      "duracaoDias": 94,
+      "percentual": 72,
       "itemId": null,
       "origem": "grupo",
       "predecessoras": []
@@ -36,8 +37,9 @@
       "nome": "Serviços Técnicos",
       "resumo": true,
       "marco": false,
-      "inicio": "2026-08-01",
-      "termino": "2026-11-30",
+      "inicio": "2026-08-05",
+      "termino": "2026-12-02",
+      "duracaoDias": 86,
       "percentual": 85,
       "itemId": null,
       "origem": "etapa",
@@ -50,8 +52,9 @@
       "nome": "Fiscalização/Acompanhamento/Gerenciamento - ART",
       "resumo": false,
       "marco": false,
-      "inicio": "2026-08-01",
-      "termino": "2026-11-30",
+      "inicio": "2026-08-05",
+      "termino": "2026-12-02",
+      "duracaoDias": 86,
       "percentual": 85,
       "itemId": "fe6b855d-17b0-4c4e-bc52-298eb16bc7bd",
       "origem": "item",
@@ -59,10 +62,16 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-11-30",
+        "duracao": 86,
         "percentual": 82
       },
+      "importadoNoApp": {
+        "inicio": "2026-08-05",
+        "termino": "2026-12-03",
+        "duracao": 86
+      },
       "muda": {
-        "datas": false,
+        "datas": true,
         "percentual": true
       },
       "nomeSemAcento": false
@@ -75,7 +84,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-07",
+      "termino": "2026-08-06",
+      "duracaoDias": 4,
       "percentual": 0,
       "itemId": null,
       "origem": "etapa",
@@ -89,7 +99,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-07",
+      "termino": "2026-08-06",
+      "duracaoDias": 5,
       "percentual": 0,
       "itemId": "1996023b-6b89-4e79-9660-9dd9b745a965",
       "origem": "item",
@@ -97,7 +108,13 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-07",
+        "duracao": 5,
         "percentual": 0
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-01",
+        "termino": "2026-08-07",
+        "duracao": 5
       },
       "muda": {
         "datas": false,
@@ -114,6 +131,7 @@
       "marco": false,
       "inicio": "2026-08-01",
       "termino": "2026-08-01",
+      "duracaoDias": 0,
       "percentual": 0,
       "itemId": "ca5554f4-d39b-4640-beb1-3f57f461697c",
       "origem": "item",
@@ -121,7 +139,13 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-01",
+        "duracao": 0,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-01",
+        "termino": "2026-08-01",
+        "duracao": 0
       },
       "muda": {
         "datas": false,
@@ -137,7 +161,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-28",
+      "termino": "2026-08-27",
+      "duracaoDias": 19,
       "percentual": 0,
       "itemId": null,
       "origem": "etapa",
@@ -151,7 +176,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-24",
-      "termino": "2026-08-28",
+      "termino": "2026-08-27",
+      "duracaoDias": 4,
       "percentual": 0,
       "itemId": null,
       "origem": "subetapa",
@@ -165,7 +191,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-24",
-      "termino": "2026-08-25",
+      "termino": "2026-08-24",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "816106b9-5ec6-4d4d-9667-f9afbeaa4bd9",
       "origem": "item",
@@ -173,7 +200,13 @@
       "noApp": {
         "inicio": "2026-08-24",
         "termino": "2026-08-25",
+        "duracao": 1,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-24",
+        "termino": "2026-08-25",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -189,7 +222,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-24",
-      "termino": "2026-08-28",
+      "termino": "2026-08-27",
+      "duracaoDias": 4,
       "percentual": 0,
       "itemId": "cbeccbac-62b6-4885-8e34-3448c99cf06c",
       "origem": "item",
@@ -197,7 +231,13 @@
       "noApp": {
         "inicio": "2026-08-24",
         "termino": "2026-08-28",
+        "duracao": 4,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-24",
+        "termino": "2026-08-28",
+        "duracao": 4
       },
       "muda": {
         "datas": false,
@@ -213,7 +253,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-03",
+      "termino": "2026-08-01",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "f960d62f-c4d5-4665-b344-bec6f187093e",
       "origem": "item",
@@ -221,7 +262,13 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-03",
+        "duracao": 1,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-01",
+        "termino": "2026-08-03",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -237,7 +284,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-03",
+      "termino": "2026-08-01",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": null,
       "origem": "subetapa",
@@ -251,7 +299,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-03",
+      "termino": "2026-08-01",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "77789222-d272-4cb1-8756-1b913b30f7b2",
       "origem": "item",
@@ -259,7 +308,13 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-03",
+        "duracao": 1,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-01",
+        "termino": "2026-08-03",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -275,7 +330,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-03",
+      "termino": "2026-08-01",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "f8dfff76-b907-4d8b-9e6a-c8b1d7f336db",
       "origem": "item",
@@ -283,7 +339,13 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-03",
+        "duracao": 1,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-01",
+        "termino": "2026-08-03",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -299,7 +361,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-03",
+      "termino": "2026-08-01",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "6c146e73-c0ed-454a-8ce8-86100bcb70fa",
       "origem": "item",
@@ -307,7 +370,13 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-03",
+        "duracao": 1,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-01",
+        "termino": "2026-08-03",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -323,7 +392,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-03",
+      "termino": "2026-08-01",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "6d1afd0c-a4aa-4347-a938-41a0f76178f2",
       "origem": "item",
@@ -331,7 +401,13 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-03",
+        "duracao": 1,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-01",
+        "termino": "2026-08-03",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -346,8 +422,9 @@
       "nome": "Mobilização do canteiro",
       "resumo": false,
       "marco": false,
-      "inicio": "2026-07-27",
-      "termino": "2026-07-31",
+      "inicio": "2026-07-24",
+      "termino": "2026-07-30",
+      "duracaoDias": 5,
       "percentual": 100,
       "itemId": null,
       "origem": "sem-par",
@@ -362,6 +439,7 @@
       "marco": true,
       "inicio": "2026-07-31",
       "termino": "2026-07-31",
+      "duracaoDias": 0,
       "percentual": 0,
       "itemId": null,
       "origem": "sem-par",
@@ -382,7 +460,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-12",
+      "termino": "2026-08-14",
+      "duracaoDias": 10,
       "percentual": 0,
       "itemId": null,
       "origem": "grupo",
@@ -396,7 +475,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-12",
+      "termino": "2026-08-14",
+      "duracaoDias": 10,
       "percentual": 0,
       "itemId": null,
       "origem": "etapa",
@@ -409,8 +489,9 @@
       "nome": "Consumos Combustíveis e Lubrificantes",
       "resumo": false,
       "marco": false,
-      "inicio": "2026-08-01",
-      "termino": "2026-08-12",
+      "inicio": "2026-08-05",
+      "termino": "2026-08-14",
+      "duracaoDias": 8,
       "percentual": 0,
       "itemId": "9667fbd7-5fbd-49ac-a769-f8da8b7bb012",
       "origem": "item",
@@ -418,10 +499,16 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-12",
+        "duracao": 8,
         "percentual": null
       },
+      "importadoNoApp": {
+        "inicio": "2026-08-05",
+        "termino": "2026-08-17",
+        "duracao": 8
+      },
       "muda": {
-        "datas": false,
+        "datas": true,
         "percentual": false
       },
       "nomeSemAcento": false
@@ -434,7 +521,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-04",
+      "termino": "2026-08-03",
+      "duracaoDias": 2,
       "percentual": 0,
       "itemId": "4e1e93d5-895d-4010-85a4-9fab36d168f1",
       "origem": "item",
@@ -442,7 +530,13 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-04",
+        "duracao": 2,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-01",
+        "termino": "2026-08-04",
+        "duracao": 2
       },
       "muda": {
         "datas": false,
@@ -458,7 +552,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-03",
+      "termino": "2026-08-01",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "e357fe4f-d8ca-4f85-8899-41eaf8356b49",
       "origem": "item",
@@ -466,7 +561,13 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-03",
+        "duracao": 1,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-01",
+        "termino": "2026-08-03",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -482,7 +583,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-03",
+      "termino": "2026-08-01",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "8d8cafda-6546-4cca-a963-0f1a131afcec",
       "origem": "item",
@@ -490,7 +592,13 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-03",
+        "duracao": 1,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-01",
+        "termino": "2026-08-03",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -506,8 +614,9 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-24",
-      "percentual": 11,
+      "termino": "2026-08-21",
+      "duracaoDias": 15,
+      "percentual": 13,
       "itemId": null,
       "origem": "grupo",
       "predecessoras": []
@@ -520,8 +629,9 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-24",
-      "percentual": 11,
+      "termino": "2026-08-21",
+      "duracaoDias": 15,
+      "percentual": 13,
       "itemId": null,
       "origem": "etapa",
       "predecessoras": []
@@ -534,7 +644,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-01",
-      "termino": "2026-08-04",
+      "termino": "2026-08-03",
+      "duracaoDias": 2,
       "percentual": 100,
       "itemId": "cd589544-7bc2-4d31-ae9b-a7bfc4c925b3",
       "origem": "item",
@@ -549,7 +660,13 @@
       "noApp": {
         "inicio": "2026-08-01",
         "termino": "2026-08-04",
+        "duracao": 2,
         "percentual": 80
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-01",
+        "termino": "2026-08-04",
+        "duracao": 2
       },
       "muda": {
         "datas": false,
@@ -565,7 +682,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-04",
-      "termino": "2026-08-05",
+      "termino": "2026-08-04",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "f57d9f01-1a55-4923-956c-d9ff130b7ad8",
       "origem": "item",
@@ -580,7 +698,13 @@
       "noApp": {
         "inicio": "2026-08-04",
         "termino": "2026-08-05",
+        "duracao": 1,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-04",
+        "termino": "2026-08-05",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -596,7 +720,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-05",
-      "termino": "2026-08-24",
+      "termino": "2026-08-21",
+      "duracaoDias": 13,
       "percentual": 0,
       "itemId": "25e89a8d-6027-4b23-9be2-332b3052f05b",
       "origem": "item",
@@ -611,7 +736,13 @@
       "noApp": {
         "inicio": "2026-08-05",
         "termino": "2026-08-24",
+        "duracao": 13,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-05",
+        "termino": "2026-08-24",
+        "duracao": 13
       },
       "muda": {
         "datas": false,
@@ -627,7 +758,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-05",
-      "termino": "2026-12-02",
+      "termino": "2026-12-01",
+      "duracaoDias": 85,
       "percentual": 5,
       "itemId": null,
       "origem": "grupo",
@@ -641,7 +773,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-28",
-      "termino": "2026-09-03",
+      "termino": "2026-09-02",
+      "duracaoDias": 4,
       "percentual": 0,
       "itemId": null,
       "origem": "etapa",
@@ -655,7 +788,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-28",
-      "termino": "2026-09-03",
+      "termino": "2026-09-02",
+      "duracaoDias": 4,
       "percentual": 0,
       "itemId": "52a6ed8d-24d5-4f1c-9310-3913a9f8ada5",
       "origem": "item",
@@ -663,7 +797,13 @@
       "noApp": {
         "inicio": "2026-08-28",
         "termino": "2026-09-03",
+        "duracao": 4,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-28",
+        "termino": "2026-09-03",
+        "duracao": 4
       },
       "muda": {
         "datas": false,
@@ -679,7 +819,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-09-04",
-      "termino": "2026-09-17",
+      "termino": "2026-09-11",
+      "duracaoDias": 6,
       "percentual": 0,
       "itemId": null,
       "origem": "etapa",
@@ -693,7 +834,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-09-04",
-      "termino": "2026-09-07",
+      "termino": "2026-09-04",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "c6db69a2-6786-491c-bf80-b18f48a0f896",
       "origem": "item",
@@ -708,7 +850,13 @@
       "noApp": {
         "inicio": "2026-09-04",
         "termino": "2026-09-07",
+        "duracao": 1,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-09-04",
+        "termino": "2026-09-07",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -723,8 +871,9 @@
       "nome": "Estaca Hélice Contínua - 69 x C30 - 10m",
       "resumo": false,
       "marco": false,
-      "inicio": "2026-09-10",
-      "termino": "2026-09-14",
+      "inicio": "2026-09-07",
+      "termino": "2026-09-10",
+      "duracaoDias": 4,
       "percentual": 0,
       "itemId": "46b46186-2c73-4925-a160-9673e877909a",
       "origem": "item",
@@ -739,10 +888,16 @@
       "noApp": {
         "inicio": "2026-09-07",
         "termino": "2026-09-11",
+        "duracao": 4,
         "percentual": null
       },
+      "importadoNoApp": {
+        "inicio": "2026-09-07",
+        "termino": "2026-09-11",
+        "duracao": 4
+      },
       "muda": {
-        "datas": true,
+        "datas": false,
         "percentual": false
       },
       "nomeSemAcento": false
@@ -754,8 +909,9 @@
       "nome": "Estaca Hélice Contínua - 9 x C30 - 6m",
       "resumo": false,
       "marco": false,
-      "inicio": "2026-09-14",
-      "termino": "2026-09-17",
+      "inicio": "2026-09-11",
+      "termino": "2026-09-11",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "640e7fed-a8bd-440b-8cb2-6c51c062b54d",
       "origem": "item",
@@ -770,10 +926,16 @@
       "noApp": {
         "inicio": "2026-09-11",
         "termino": "2026-09-14",
+        "duracao": 1,
         "percentual": null
       },
+      "importadoNoApp": {
+        "inicio": "2026-09-11",
+        "termino": "2026-09-14",
+        "duracao": 1
+      },
       "muda": {
-        "datas": true,
+        "datas": false,
         "percentual": false
       },
       "nomeSemAcento": false
@@ -785,8 +947,9 @@
       "nome": "arrasamentos de estacas",
       "resumo": true,
       "marco": false,
-      "inicio": "2026-09-12",
-      "termino": "2026-09-27",
+      "inicio": "2026-09-14",
+      "termino": "2026-09-28",
+      "duracaoDias": 11,
       "percentual": 0,
       "itemId": null,
       "origem": "etapa",
@@ -799,8 +962,9 @@
       "nome": "Arrasamento Mecânico de Estacas",
       "resumo": false,
       "marco": false,
-      "inicio": "2026-09-12",
-      "termino": "2026-09-27",
+      "inicio": "2026-09-14",
+      "termino": "2026-09-28",
+      "duracaoDias": 11,
       "percentual": 0,
       "itemId": "806202a6-43b0-4c66-acb2-bc0b0f8fe8b1",
       "origem": "item",
@@ -815,10 +979,16 @@
       "noApp": {
         "inicio": "2026-09-14",
         "termino": "2026-09-29",
+        "duracao": 11,
         "percentual": null
       },
+      "importadoNoApp": {
+        "inicio": "2026-09-14",
+        "termino": "2026-09-29",
+        "duracao": 11
+      },
       "muda": {
-        "datas": true,
+        "datas": false,
         "percentual": false
       },
       "nomeSemAcento": false
@@ -831,7 +1001,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-05",
-      "termino": "2026-12-02",
+      "termino": "2026-12-01",
+      "duracaoDias": 85,
       "percentual": 0,
       "itemId": null,
       "origem": "etapa",
@@ -845,7 +1016,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-11-18",
-      "termino": "2026-11-26",
+      "termino": "2026-11-25",
+      "duracaoDias": 6,
       "percentual": 0,
       "itemId": "34cefe29-394e-4f26-adba-29693e2c8fab",
       "origem": "item",
@@ -860,7 +1032,13 @@
       "noApp": {
         "inicio": "2026-11-18",
         "termino": "2026-11-26",
+        "duracao": 6,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-11-18",
+        "termino": "2026-11-26",
+        "duracao": 6
       },
       "muda": {
         "datas": false,
@@ -876,7 +1054,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-09-29",
-      "termino": "2026-09-30",
+      "termino": "2026-09-29",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "f0962348-7c83-4ad2-9e84-6566d6866e69",
       "origem": "item",
@@ -891,7 +1070,13 @@
       "noApp": {
         "inicio": "2026-09-29",
         "termino": "2026-09-30",
+        "duracao": 1,
         "percentual": 0
+      },
+      "importadoNoApp": {
+        "inicio": "2026-09-29",
+        "termino": "2026-09-30",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -907,7 +1092,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-09-30",
-      "termino": "2026-12-02",
+      "termino": "2026-12-01",
+      "duracaoDias": 45,
       "percentual": 0,
       "itemId": null,
       "origem": "subetapa",
@@ -921,7 +1107,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-09-30",
-      "termino": "2026-10-12",
+      "termino": "2026-10-09",
+      "duracaoDias": 8,
       "percentual": 0,
       "itemId": "f3f2519d-19b7-4169-8cc4-ec5e12bae2da",
       "origem": "item",
@@ -936,7 +1123,13 @@
       "noApp": {
         "inicio": "2026-09-30",
         "termino": "2026-10-12",
+        "duracao": 8,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-09-30",
+        "termino": "2026-10-12",
+        "duracao": 8
       },
       "muda": {
         "datas": false,
@@ -952,7 +1145,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-10-12",
-      "termino": "2026-10-22",
+      "termino": "2026-10-21",
+      "duracaoDias": 8,
       "percentual": 0,
       "itemId": "50b732af-46fd-436c-a4fe-315129e34a52",
       "origem": "item",
@@ -967,7 +1161,13 @@
       "noApp": {
         "inicio": "2026-10-12",
         "termino": "2026-10-22",
+        "duracao": 8,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-10-12",
+        "termino": "2026-10-22",
+        "duracao": 8
       },
       "muda": {
         "datas": false,
@@ -983,7 +1183,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-10-22",
-      "termino": "2026-11-02",
+      "termino": "2026-10-30",
+      "duracaoDias": 7,
       "percentual": 0,
       "itemId": "6dbae852-ff6e-462b-b500-302ca753dc94",
       "origem": "item",
@@ -998,7 +1199,13 @@
       "noApp": {
         "inicio": "2026-10-22",
         "termino": "2026-11-02",
+        "duracao": 7,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-10-22",
+        "termino": "2026-11-02",
+        "duracao": 7
       },
       "muda": {
         "datas": false,
@@ -1014,7 +1221,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-11-02",
-      "termino": "2026-11-18",
+      "termino": "2026-11-17",
+      "duracaoDias": 12,
       "percentual": 0,
       "itemId": "2c443606-750f-4ffb-a5c9-765a7344f02f",
       "origem": "item",
@@ -1029,7 +1237,13 @@
       "noApp": {
         "inicio": "2026-11-02",
         "termino": "2026-11-18",
+        "duracao": 12,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-11-02",
+        "termino": "2026-11-18",
+        "duracao": 12
       },
       "muda": {
         "datas": false,
@@ -1045,7 +1259,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-11-18",
-      "termino": "2026-12-02",
+      "termino": "2026-12-01",
+      "duracaoDias": 10,
       "percentual": 0,
       "itemId": "f3d9749a-df50-455e-8efe-79bc8566a2d6",
       "origem": "item",
@@ -1060,7 +1275,13 @@
       "noApp": {
         "inicio": "2026-11-18",
         "termino": "2026-12-02",
+        "duracao": 10,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-11-18",
+        "termino": "2026-12-02",
+        "duracao": 10
       },
       "muda": {
         "datas": false,
@@ -1076,7 +1297,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-05",
-      "termino": "2026-08-06",
+      "termino": "2026-08-05",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "6647b379-0d11-43bb-b935-f7b2b646ebc6",
       "origem": "item",
@@ -1084,7 +1306,13 @@
       "noApp": {
         "inicio": "2026-08-05",
         "termino": "2026-08-06",
+        "duracao": 1,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-05",
+        "termino": "2026-08-06",
+        "duracao": 1
       },
       "muda": {
         "datas": false,
@@ -1100,7 +1328,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-05",
-      "termino": "2026-08-11",
+      "termino": "2026-08-10",
+      "duracaoDias": 4,
       "percentual": 0,
       "itemId": null,
       "origem": "subetapa",
@@ -1114,7 +1343,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-05",
-      "termino": "2026-08-11",
+      "termino": "2026-08-10",
+      "duracaoDias": 4,
       "percentual": 0,
       "itemId": "c03b2f07-4e5f-46f4-a47d-00fbf3f176e1",
       "origem": "item",
@@ -1122,7 +1352,13 @@
       "noApp": {
         "inicio": "2026-08-05",
         "termino": "2026-08-11",
+        "duracao": 4,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-05",
+        "termino": "2026-08-11",
+        "duracao": 4
       },
       "muda": {
         "datas": false,
@@ -1138,7 +1374,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-05",
-      "termino": "2026-08-10",
+      "termino": "2026-08-07",
+      "duracaoDias": 3,
       "percentual": 0,
       "itemId": "62c9bc3d-57c8-4dbe-8266-f73141ac4cf9",
       "origem": "item",
@@ -1146,7 +1383,13 @@
       "noApp": {
         "inicio": "2026-08-05",
         "termino": "2026-08-10",
+        "duracao": 3,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-05",
+        "termino": "2026-08-10",
+        "duracao": 3
       },
       "muda": {
         "datas": false,
@@ -1162,7 +1405,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-06",
-      "termino": "2026-08-25",
+      "termino": "2026-08-24",
+      "duracaoDias": 13,
       "percentual": 40,
       "itemId": null,
       "origem": "etapa",
@@ -1176,7 +1420,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-06",
-      "termino": "2026-08-25",
+      "termino": "2026-08-24",
+      "duracaoDias": 13,
       "percentual": 40,
       "itemId": "f497738c-ac13-482c-8e23-00cb61d25f50",
       "origem": "item",
@@ -1191,7 +1436,13 @@
       "noApp": {
         "inicio": "2026-08-06",
         "termino": "2026-08-25",
+        "duracao": 13,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-06",
+        "termino": "2026-08-25",
+        "duracao": 13
       },
       "muda": {
         "datas": false,
@@ -1207,7 +1458,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-09-04",
-      "termino": "2026-09-16",
+      "termino": "2026-09-15",
+      "duracaoDias": 8,
       "percentual": 0,
       "itemId": null,
       "origem": "etapa",
@@ -1221,7 +1473,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-09-04",
-      "termino": "2026-09-16",
+      "termino": "2026-09-15",
+      "duracaoDias": 8,
       "percentual": 0,
       "itemId": "ef3504fb-0efe-4228-8a05-e8fb8e050645",
       "origem": "item",
@@ -1236,7 +1489,13 @@
       "noApp": {
         "inicio": "2026-09-04",
         "termino": "2026-09-16",
+        "duracao": 8,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-09-04",
+        "termino": "2026-09-16",
+        "duracao": 8
       },
       "muda": {
         "datas": false,
@@ -1252,7 +1511,8 @@
       "resumo": true,
       "marco": false,
       "inicio": "2026-08-25",
-      "termino": "2026-08-28",
+      "termino": "2026-09-01",
+      "duracaoDias": 6,
       "percentual": 0,
       "itemId": null,
       "origem": "etapa",
@@ -1266,7 +1526,8 @@
       "resumo": false,
       "marco": false,
       "inicio": "2026-08-25",
-      "termino": "2026-08-27",
+      "termino": "2026-08-26",
+      "duracaoDias": 2,
       "percentual": 0,
       "itemId": "ae800c6f-b114-4f5e-a796-ec52199b6d83",
       "origem": "item",
@@ -1281,7 +1542,13 @@
       "noApp": {
         "inicio": "2026-08-25",
         "termino": "2026-08-27",
+        "duracao": 2,
         "percentual": null
+      },
+      "importadoNoApp": {
+        "inicio": "2026-08-25",
+        "termino": "2026-08-27",
+        "duracao": 2
       },
       "muda": {
         "datas": false,
@@ -1296,8 +1563,9 @@
       "nome": "Impermeabilização de Muro com Manta Asfáltica",
       "resumo": false,
       "marco": false,
-      "inicio": "2026-08-27",
-      "termino": "2026-08-28",
+      "inicio": "2026-09-01",
+      "termino": "2026-09-01",
+      "duracaoDias": 1,
       "percentual": 0,
       "itemId": "f54c1252-a7e3-4574-8b7a-4e5cf391c27e",
       "origem": "item",
@@ -1312,10 +1580,16 @@
       "noApp": {
         "inicio": "2026-08-27",
         "termino": "2026-08-28",
+        "duracao": 1,
         "percentual": null
       },
+      "importadoNoApp": {
+        "inicio": "2026-09-01",
+        "termino": "2026-09-02",
+        "duracao": 1
+      },
       "muda": {
-        "datas": false,
+        "datas": true,
         "percentual": false
       },
       "nomeSemAcento": false
@@ -1330,6 +1604,7 @@
       "marco": false,
       "inicio": "2026-09-01",
       "termino": "2026-09-16",
+      "duracaoDias": 12,
       "percentual": 30,
       "predecessoras": []
     },
@@ -1341,6 +1616,7 @@
       "marco": false,
       "inicio": "2026-09-01",
       "termino": "2026-09-04",
+      "duracaoDias": 4,
       "percentual": 100,
       "predecessoras": []
     },
@@ -1352,6 +1628,7 @@
       "marco": false,
       "inicio": "2026-09-03",
       "termino": "2026-09-08",
+      "duracaoDias": 4,
       "percentual": 60,
       "predecessoras": [
         {
@@ -1369,6 +1646,7 @@
       "marco": false,
       "inicio": "2026-09-09",
       "termino": "2026-09-09",
+      "duracaoDias": 1,
       "percentual": 0,
       "predecessoras": [
         {
@@ -1386,6 +1664,7 @@
       "marco": false,
       "inicio": "2026-09-09",
       "termino": "2026-09-16",
+      "duracaoDias": 6,
       "percentual": 0,
       "predecessoras": [
         {
@@ -1403,6 +1682,7 @@
       "marco": false,
       "inicio": "2026-09-15",
       "termino": "2026-09-16",
+      "duracaoDias": 2,
       "percentual": 0,
       "predecessoras": [
         {
@@ -1420,6 +1700,7 @@
       "marco": true,
       "inicio": "2026-09-16",
       "termino": "2026-09-16",
+      "duracaoDias": 0,
       "percentual": 0,
       "predecessoras": [
         {

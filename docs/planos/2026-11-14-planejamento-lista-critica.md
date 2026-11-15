@@ -119,7 +119,31 @@ a mais, mas não bloqueia.
   tipos de vínculo e defasagens −1/+2/+5; erros com mensagem do que fazer; vínculo para tarefa
   ausente sai com aviso. Prova de que o teste morde: um % alterado no XML derruba 2 testes.
 - 2c. Criar a partir do arquivo → numa org descartável, o planejamento nasce na lista com as
-  datas do arquivo e baseline ativa; nada nasce como ORCAMENTO.
+  datas do arquivo e baseline ativa; nada nasce como ORCAMENTO. — ✅ **feito 15/11/2026**
+  (pedido: *"comece"*; teste com gravação *"Autorizado"* pelo usuário, criar → conferir → apagar):
+  - `utils/cronogramaCasamento.ts` (EAP, depois nome normalizado; cada item uma vez);
+    `utils/cronogramaMontagem.ts` (schedule pronto: itens a partir do padrão do
+    `ensureFullScheduleList`, datas do arquivo com MSO, tarefa sem custo = nó `activity` perto de onde
+    estava no arquivo, predecessoras, linha de base ativa com a cascata de valor do app);
+    `services/importarCronogramaService.ts` (liga no ORÇAMENTO base, org herdada dele, orçamento
+    congelado em `basedOnBudgetSnapshot` + `budget`); `components/ImportarCronogramaSheet.tsx`
+    (painel 4xl, 3 passos; modelo Excel para baixar em `utils/cronogramaModelo.ts`); botão
+    "Importar cronograma" no cabeçalho de Planejamento.
+  - **Convenção de datas descoberta:** no app término = início + duração (sex→seg = 1); no Project
+    Finish = último dia trabalhado. A montagem usa a `Duration` do arquivo (o leitor passou a lê-la);
+    sem ela, dias úteis do início ao término. Duração 0 sem marco existe ("Seguros") e é respeitada.
+  - **Medido no 1º teste com gravação e corrigido:** (a) "desvio de custo −R$ 416 mil" ao abrir —
+    itens casados sem `totalLaborCost`; (b) "+2d" ao abrir — o arquivo de TESTE tinha vínculos
+    violados e o motor do app (que roda ao abrir) empurrou as sucessoras. Arquivos de teste refeitos
+    com replanejamento consistente; dois testes novos travam os dois casos ("sem desvio de custo",
+    "o motor não move nenhuma data").
+  - **Limite (dito ao usuário):** as datas ficam como no arquivo enquanto o arquivo respeitar os
+    próprios vínculos (o Project garante); se não, ao abrir o app empurra as sucessoras.
+  - Como sei que terminou: 32 testes de importação + 99 dos módulos tocados verdes; tela local (escrita
+    bloqueada) nos 3 passos; teste com gravação: nasceu PLANEJAMENTO, código 002 da org do orçamento,
+    vínculo com o orçamento, 37 itens congelados, 39 tarefas (38 com MSO), 2 `activity`, linha de base
+    ativa; Central de Comando ao abrir: término 03/12 "no prazo da baseline", desvio 0d e R$ 0. Os
+    dois registros de teste foram apagados (0 referências em outras tabelas; 0 restantes).
 - 2d. Atualizar existente → datas trocadas, avanço só nos itens marcados, baseline intacta.
 - 2e. .mpp → spike decide o conversor; depois, o mesmo fluxo aceita .mpp.
 

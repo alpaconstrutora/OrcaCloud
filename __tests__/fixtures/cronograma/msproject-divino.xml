@@ -4,7 +4,7 @@
   <Name>Obra Exemplo — Cronograma replanejado.xml</Name>
   <Title>Obra Exemplo — Cronograma replanejado</Title>
   <ScheduleFromStart>1</ScheduleFromStart>
-  <StartDate>2026-07-27T08:00:00</StartDate>
+  <StartDate>2026-07-24T08:00:00</StartDate>
   <FinishDate>2026-12-02T17:00:00</FinishDate>
   <CalendarUID>1</CalendarUID>
   <DefaultStartTime>08:00:00</DefaultStartTime>
@@ -35,7 +35,7 @@
       <Name>Obra Exemplo — Cronograma replanejado</Name>
       <OutlineNumber>0</OutlineNumber>
       <OutlineLevel>0</OutlineLevel>
-      <Start>2026-07-27T08:00:00</Start>
+      <Start>2026-07-24T08:00:00</Start>
       <Finish>2026-12-02T17:00:00</Finish>
       <Summary>1</Summary>
     </Task>
@@ -48,14 +48,14 @@
       <WBS>01</WBS>
       <OutlineNumber>1</OutlineNumber>
       <OutlineLevel>1</OutlineLevel>
-      <Start>2026-07-27T08:00:00</Start>
-      <Finish>2026-11-30T17:00:00</Finish>
-      <Duration>PT728H0M0S</Duration>
+      <Start>2026-07-24T08:00:00</Start>
+      <Finish>2026-12-02T17:00:00</Finish>
+      <Duration>PT752H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
       <Critical>0</Critical>
-      <PercentComplete>71</PercentComplete>
+      <PercentComplete>72</PercentComplete>
     </Task>
     <Task>
       <UID>2</UID>
@@ -66,8 +66,8 @@
       <WBS>01.01</WBS>
       <OutlineNumber>1.1</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
-      <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-11-30T17:00:00</Finish>
+      <Start>2026-08-05T08:00:00</Start>
+      <Finish>2026-12-02T17:00:00</Finish>
       <Duration>PT688H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -84,8 +84,8 @@
       <WBS>01.01.01</WBS>
       <OutlineNumber>1.1.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
-      <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-11-30T17:00:00</Finish>
+      <Start>2026-08-05T08:00:00</Start>
+      <Finish>2026-12-02T17:00:00</Finish>
       <Duration>PT688H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -103,8 +103,8 @@
       <OutlineNumber>1.2</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-07T17:00:00</Finish>
-      <Duration>PT40H0M0S</Duration>
+      <Finish>2026-08-06T17:00:00</Finish>
+      <Duration>PT32H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -121,7 +121,7 @@
       <OutlineNumber>1.2.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-07T17:00:00</Finish>
+      <Finish>2026-08-06T17:00:00</Finish>
       <Duration>PT40H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -140,7 +140,7 @@
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
       <Finish>2026-08-01T17:00:00</Finish>
-      <Duration>PT8H0M0S</Duration>
+      <Duration>PT0H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -157,8 +157,8 @@
       <OutlineNumber>1.3</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-28T17:00:00</Finish>
-      <Duration>PT160H0M0S</Duration>
+      <Finish>2026-08-27T17:00:00</Finish>
+      <Duration>PT152H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -175,8 +175,8 @@
       <OutlineNumber>1.3.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-24T08:00:00</Start>
-      <Finish>2026-08-28T17:00:00</Finish>
-      <Duration>PT40H0M0S</Duration>
+      <Finish>2026-08-27T17:00:00</Finish>
+      <Duration>PT32H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -193,8 +193,8 @@
       <OutlineNumber>1.3.1.1</OutlineNumber>
       <OutlineLevel>4</OutlineLevel>
       <Start>2026-08-24T08:00:00</Start>
-      <Finish>2026-08-25T17:00:00</Finish>
-      <Duration>PT16H0M0S</Duration>
+      <Finish>2026-08-24T17:00:00</Finish>
+      <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -211,8 +211,8 @@
       <OutlineNumber>1.3.1.2</OutlineNumber>
       <OutlineLevel>4</OutlineLevel>
       <Start>2026-08-24T08:00:00</Start>
-      <Finish>2026-08-28T17:00:00</Finish>
-      <Duration>PT40H0M0S</Duration>
+      <Finish>2026-08-27T17:00:00</Finish>
+      <Duration>PT32H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -229,7 +229,7 @@
       <OutlineNumber>1.3.2</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-03T17:00:00</Finish>
+      <Finish>2026-08-01T17:00:00</Finish>
       <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -247,7 +247,7 @@
       <OutlineNumber>1.3.3</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-03T17:00:00</Finish>
+      <Finish>2026-08-01T17:00:00</Finish>
       <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -265,7 +265,7 @@
       <OutlineNumber>1.3.3.1</OutlineNumber>
       <OutlineLevel>4</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-03T17:00:00</Finish>
+      <Finish>2026-08-01T17:00:00</Finish>
       <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -283,7 +283,7 @@
       <OutlineNumber>1.3.3.2</OutlineNumber>
       <OutlineLevel>4</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-03T17:00:00</Finish>
+      <Finish>2026-08-01T17:00:00</Finish>
       <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -301,7 +301,7 @@
       <OutlineNumber>1.3.4</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-03T17:00:00</Finish>
+      <Finish>2026-08-01T17:00:00</Finish>
       <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -319,7 +319,7 @@
       <OutlineNumber>1.3.5</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-03T17:00:00</Finish>
+      <Finish>2026-08-01T17:00:00</Finish>
       <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -336,8 +336,8 @@
       <WBS>01.04</WBS>
       <OutlineNumber>1.4</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
-      <Start>2026-07-27T08:00:00</Start>
-      <Finish>2026-07-31T17:00:00</Finish>
+      <Start>2026-07-24T08:00:00</Start>
+      <Finish>2026-07-30T17:00:00</Finish>
       <Duration>PT40H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -380,8 +380,8 @@
       <OutlineNumber>2</OutlineNumber>
       <OutlineLevel>1</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-12T17:00:00</Finish>
-      <Duration>PT64H0M0S</Duration>
+      <Finish>2026-08-14T17:00:00</Finish>
+      <Duration>PT80H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -398,8 +398,8 @@
       <OutlineNumber>2.1</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-12T17:00:00</Finish>
-      <Duration>PT64H0M0S</Duration>
+      <Finish>2026-08-14T17:00:00</Finish>
+      <Duration>PT80H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -415,8 +415,8 @@
       <WBS>02.01.01</WBS>
       <OutlineNumber>2.1.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
-      <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-12T17:00:00</Finish>
+      <Start>2026-08-05T08:00:00</Start>
+      <Finish>2026-08-14T17:00:00</Finish>
       <Duration>PT64H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -434,7 +434,7 @@
       <OutlineNumber>2.1.2</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-04T17:00:00</Finish>
+      <Finish>2026-08-03T17:00:00</Finish>
       <Duration>PT16H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -452,7 +452,7 @@
       <OutlineNumber>2.1.3</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-03T17:00:00</Finish>
+      <Finish>2026-08-01T17:00:00</Finish>
       <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -470,7 +470,7 @@
       <OutlineNumber>2.1.4</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-03T17:00:00</Finish>
+      <Finish>2026-08-01T17:00:00</Finish>
       <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -488,13 +488,13 @@
       <OutlineNumber>3</OutlineNumber>
       <OutlineLevel>1</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-24T17:00:00</Finish>
-      <Duration>PT128H0M0S</Duration>
+      <Finish>2026-08-21T17:00:00</Finish>
+      <Duration>PT120H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
       <Critical>0</Critical>
-      <PercentComplete>11</PercentComplete>
+      <PercentComplete>13</PercentComplete>
     </Task>
     <Task>
       <UID>24</UID>
@@ -506,13 +506,13 @@
       <OutlineNumber>3.1</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-24T17:00:00</Finish>
-      <Duration>PT128H0M0S</Duration>
+      <Finish>2026-08-21T17:00:00</Finish>
+      <Duration>PT120H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
       <Critical>0</Critical>
-      <PercentComplete>11</PercentComplete>
+      <PercentComplete>13</PercentComplete>
     </Task>
     <Task>
       <UID>25</UID>
@@ -524,7 +524,7 @@
       <OutlineNumber>3.1.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-01T08:00:00</Start>
-      <Finish>2026-08-04T17:00:00</Finish>
+      <Finish>2026-08-03T17:00:00</Finish>
       <Duration>PT16H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
@@ -549,8 +549,8 @@
       <OutlineNumber>3.1.2</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-04T08:00:00</Start>
-      <Finish>2026-08-05T17:00:00</Finish>
-      <Duration>PT16H0M0S</Duration>
+      <Finish>2026-08-04T17:00:00</Finish>
+      <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -574,8 +574,8 @@
       <OutlineNumber>3.1.3</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-05T08:00:00</Start>
-      <Finish>2026-08-24T17:00:00</Finish>
-      <Duration>PT112H0M0S</Duration>
+      <Finish>2026-08-21T17:00:00</Finish>
+      <Duration>PT104H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -599,8 +599,8 @@
       <OutlineNumber>4</OutlineNumber>
       <OutlineLevel>1</OutlineLevel>
       <Start>2026-08-05T08:00:00</Start>
-      <Finish>2026-12-02T17:00:00</Finish>
-      <Duration>PT688H0M0S</Duration>
+      <Finish>2026-12-01T17:00:00</Finish>
+      <Duration>PT680H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -617,8 +617,8 @@
       <OutlineNumber>4.1</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
       <Start>2026-08-28T08:00:00</Start>
-      <Finish>2026-09-03T17:00:00</Finish>
-      <Duration>PT40H0M0S</Duration>
+      <Finish>2026-09-02T17:00:00</Finish>
+      <Duration>PT32H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -635,8 +635,8 @@
       <OutlineNumber>4.1.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-28T08:00:00</Start>
-      <Finish>2026-09-03T17:00:00</Finish>
-      <Duration>PT40H0M0S</Duration>
+      <Finish>2026-09-02T17:00:00</Finish>
+      <Duration>PT32H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -653,8 +653,8 @@
       <OutlineNumber>4.2</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
       <Start>2026-09-04T08:00:00</Start>
-      <Finish>2026-09-17T17:00:00</Finish>
-      <Duration>PT80H0M0S</Duration>
+      <Finish>2026-09-11T17:00:00</Finish>
+      <Duration>PT48H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -671,8 +671,8 @@
       <OutlineNumber>4.2.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-09-04T08:00:00</Start>
-      <Finish>2026-09-07T17:00:00</Finish>
-      <Duration>PT16H0M0S</Duration>
+      <Finish>2026-09-04T17:00:00</Finish>
+      <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -695,9 +695,9 @@
       <WBS>04.02.02</WBS>
       <OutlineNumber>4.2.2</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
-      <Start>2026-09-10T08:00:00</Start>
-      <Finish>2026-09-14T17:00:00</Finish>
-      <Duration>PT24H0M0S</Duration>
+      <Start>2026-09-07T08:00:00</Start>
+      <Finish>2026-09-10T17:00:00</Finish>
+      <Duration>PT32H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -720,9 +720,9 @@
       <WBS>04.02.03</WBS>
       <OutlineNumber>4.2.3</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
-      <Start>2026-09-14T08:00:00</Start>
-      <Finish>2026-09-17T17:00:00</Finish>
-      <Duration>PT32H0M0S</Duration>
+      <Start>2026-09-11T08:00:00</Start>
+      <Finish>2026-09-11T17:00:00</Finish>
+      <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -745,9 +745,9 @@
       <WBS>04.03</WBS>
       <OutlineNumber>4.3</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
-      <Start>2026-09-12T08:00:00</Start>
-      <Finish>2026-09-27T17:00:00</Finish>
-      <Duration>PT80H0M0S</Duration>
+      <Start>2026-09-14T08:00:00</Start>
+      <Finish>2026-09-28T17:00:00</Finish>
+      <Duration>PT88H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -763,9 +763,9 @@
       <WBS>04.03.01</WBS>
       <OutlineNumber>4.3.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
-      <Start>2026-09-12T08:00:00</Start>
-      <Finish>2026-09-27T17:00:00</Finish>
-      <Duration>PT80H0M0S</Duration>
+      <Start>2026-09-14T08:00:00</Start>
+      <Finish>2026-09-28T17:00:00</Finish>
+      <Duration>PT88H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -789,8 +789,8 @@
       <OutlineNumber>4.4</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
       <Start>2026-08-05T08:00:00</Start>
-      <Finish>2026-12-02T17:00:00</Finish>
-      <Duration>PT688H0M0S</Duration>
+      <Finish>2026-12-01T17:00:00</Finish>
+      <Duration>PT680H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -807,8 +807,8 @@
       <OutlineNumber>4.4.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-11-18T08:00:00</Start>
-      <Finish>2026-11-26T17:00:00</Finish>
-      <Duration>PT56H0M0S</Duration>
+      <Finish>2026-11-25T17:00:00</Finish>
+      <Duration>PT48H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -832,8 +832,8 @@
       <OutlineNumber>4.4.2</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-09-29T08:00:00</Start>
-      <Finish>2026-09-30T17:00:00</Finish>
-      <Duration>PT16H0M0S</Duration>
+      <Finish>2026-09-29T17:00:00</Finish>
+      <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -857,8 +857,8 @@
       <OutlineNumber>4.4.3</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-09-30T08:00:00</Start>
-      <Finish>2026-12-02T17:00:00</Finish>
-      <Duration>PT368H0M0S</Duration>
+      <Finish>2026-12-01T17:00:00</Finish>
+      <Duration>PT360H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -875,8 +875,8 @@
       <OutlineNumber>4.4.3.1</OutlineNumber>
       <OutlineLevel>4</OutlineLevel>
       <Start>2026-09-30T08:00:00</Start>
-      <Finish>2026-10-12T17:00:00</Finish>
-      <Duration>PT72H0M0S</Duration>
+      <Finish>2026-10-09T17:00:00</Finish>
+      <Duration>PT64H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -900,8 +900,8 @@
       <OutlineNumber>4.4.3.2</OutlineNumber>
       <OutlineLevel>4</OutlineLevel>
       <Start>2026-10-12T08:00:00</Start>
-      <Finish>2026-10-22T17:00:00</Finish>
-      <Duration>PT72H0M0S</Duration>
+      <Finish>2026-10-21T17:00:00</Finish>
+      <Duration>PT64H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -925,8 +925,8 @@
       <OutlineNumber>4.4.3.3</OutlineNumber>
       <OutlineLevel>4</OutlineLevel>
       <Start>2026-10-22T08:00:00</Start>
-      <Finish>2026-11-02T17:00:00</Finish>
-      <Duration>PT64H0M0S</Duration>
+      <Finish>2026-10-30T17:00:00</Finish>
+      <Duration>PT56H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -950,8 +950,8 @@
       <OutlineNumber>4.4.3.4</OutlineNumber>
       <OutlineLevel>4</OutlineLevel>
       <Start>2026-11-02T08:00:00</Start>
-      <Finish>2026-11-18T17:00:00</Finish>
-      <Duration>PT104H0M0S</Duration>
+      <Finish>2026-11-17T17:00:00</Finish>
+      <Duration>PT96H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -975,8 +975,8 @@
       <OutlineNumber>4.4.3.5</OutlineNumber>
       <OutlineLevel>4</OutlineLevel>
       <Start>2026-11-18T08:00:00</Start>
-      <Finish>2026-12-02T17:00:00</Finish>
-      <Duration>PT88H0M0S</Duration>
+      <Finish>2026-12-01T17:00:00</Finish>
+      <Duration>PT80H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -1000,8 +1000,8 @@
       <OutlineNumber>4.4.4</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-05T08:00:00</Start>
-      <Finish>2026-08-06T17:00:00</Finish>
-      <Duration>PT16H0M0S</Duration>
+      <Finish>2026-08-05T17:00:00</Finish>
+      <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -1018,8 +1018,8 @@
       <OutlineNumber>4.4.5</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-05T08:00:00</Start>
-      <Finish>2026-08-11T17:00:00</Finish>
-      <Duration>PT40H0M0S</Duration>
+      <Finish>2026-08-10T17:00:00</Finish>
+      <Duration>PT32H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -1036,8 +1036,8 @@
       <OutlineNumber>4.4.5.1</OutlineNumber>
       <OutlineLevel>4</OutlineLevel>
       <Start>2026-08-05T08:00:00</Start>
-      <Finish>2026-08-11T17:00:00</Finish>
-      <Duration>PT40H0M0S</Duration>
+      <Finish>2026-08-10T17:00:00</Finish>
+      <Duration>PT32H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -1054,8 +1054,8 @@
       <OutlineNumber>4.4.5.2</OutlineNumber>
       <OutlineLevel>4</OutlineLevel>
       <Start>2026-08-05T08:00:00</Start>
-      <Finish>2026-08-10T17:00:00</Finish>
-      <Duration>PT32H0M0S</Duration>
+      <Finish>2026-08-07T17:00:00</Finish>
+      <Duration>PT24H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -1072,8 +1072,8 @@
       <OutlineNumber>4.5</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
       <Start>2026-08-06T08:00:00</Start>
-      <Finish>2026-08-25T17:00:00</Finish>
-      <Duration>PT112H0M0S</Duration>
+      <Finish>2026-08-24T17:00:00</Finish>
+      <Duration>PT104H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -1090,8 +1090,8 @@
       <OutlineNumber>4.5.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-06T08:00:00</Start>
-      <Finish>2026-08-25T17:00:00</Finish>
-      <Duration>PT112H0M0S</Duration>
+      <Finish>2026-08-24T17:00:00</Finish>
+      <Duration>PT104H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -1115,8 +1115,8 @@
       <OutlineNumber>4.6</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
       <Start>2026-09-04T08:00:00</Start>
-      <Finish>2026-09-16T17:00:00</Finish>
-      <Duration>PT72H0M0S</Duration>
+      <Finish>2026-09-15T17:00:00</Finish>
+      <Duration>PT64H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -1133,8 +1133,8 @@
       <OutlineNumber>4.6.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-09-04T08:00:00</Start>
-      <Finish>2026-09-16T17:00:00</Finish>
-      <Duration>PT72H0M0S</Duration>
+      <Finish>2026-09-15T17:00:00</Finish>
+      <Duration>PT64H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -1158,8 +1158,8 @@
       <OutlineNumber>4.7</OutlineNumber>
       <OutlineLevel>2</OutlineLevel>
       <Start>2026-08-25T08:00:00</Start>
-      <Finish>2026-08-28T17:00:00</Finish>
-      <Duration>PT32H0M0S</Duration>
+      <Finish>2026-09-01T17:00:00</Finish>
+      <Duration>PT48H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>1</Summary>
@@ -1176,8 +1176,8 @@
       <OutlineNumber>4.7.1</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
       <Start>2026-08-25T08:00:00</Start>
-      <Finish>2026-08-27T17:00:00</Finish>
-      <Duration>PT24H0M0S</Duration>
+      <Finish>2026-08-26T17:00:00</Finish>
+      <Duration>PT16H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>
@@ -1200,9 +1200,9 @@
       <WBS>04.07.02</WBS>
       <OutlineNumber>4.7.2</OutlineNumber>
       <OutlineLevel>3</OutlineLevel>
-      <Start>2026-08-27T08:00:00</Start>
-      <Finish>2026-08-28T17:00:00</Finish>
-      <Duration>PT16H0M0S</Duration>
+      <Start>2026-09-01T08:00:00</Start>
+      <Finish>2026-09-01T17:00:00</Finish>
+      <Duration>PT8H0M0S</Duration>
       <DurationFormat>7</DurationFormat>
       <Milestone>0</Milestone>
       <Summary>0</Summary>

@@ -30,9 +30,12 @@ export interface TarefaImportada {
     /** Tem tarefas filhas — as datas dela vêm das filhas, não se casa com item. */
     resumo: boolean;
     marco: boolean;
-    /** AAAA-MM-DD ('' se o arquivo não trouxer). */
+    /** AAAA-MM-DD ('' se o arquivo não trouxer). `termino` = último dia trabalhado (convenção do
+     *  MS Project — o app usa início + duração; a conversão é da montagem, não do leitor). */
     inicio: string;
     termino: string;
+    /** Dias de trabalho como o arquivo diz (Duration do Project / coluna "Duração"); null se não trouxer. */
+    duracaoDias: number | null;
     /** 0–100. */
     percentual: number;
     predecessoras: PredecessoraImportada[];
@@ -66,6 +69,14 @@ const limitar = (n: number) => Math.max(0, Math.min(100, Math.round(n)));
 const TIPO_MSPDI: Record<string, TipoVinculo> = { '0': 'FF', '1': 'FS', '2': 'SF', '3': 'SS' };
 
 const texto = (el: ElementoXml | null, nome: string): string => (el ? (filho(el, nome)?.texto ?? '').trim() : '');
+
+/** "PT64H0M0S" (ISO 8601, horas de trabalho) → dias, pelo MinutesPerDay do projeto. */
+const duracaoIso = (v: string, minutosPorDia: number): number | null => {
+    const m = v.match(/^P(?:(\d+(?:\.\d+)?)D)?(?:T(?:(\d+(?:\.\d+)?)H)?(?:(\d+(?:\.\d+)?)M)?(?:(\d+(?:\.\d+)?)S)?)?$/);
+    if (!m) return null;
+    const minutos = Number(m[1] ?? 0) * minutosPorDia + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0) + Number(m[4] ?? 0) / 60;
+    return Math.round((minutos / minutosPorDia) * 100) / 100;
+};
 
 export function lerMsProjectXml(conteudo: string): CronogramaImportado {
     let raiz: ElementoXml;
@@ -114,6 +125,7 @@ export function lerMsProjectXml(conteudo: string): CronogramaImportado {
             marco: texto(t, 'Milestone') === '1',
             inicio: soDia(texto(t, 'Start')),
             termino: soDia(texto(t, 'Finish')),
+            duracaoDias: texto(t, 'Duration') ? duracaoIso(texto(t, 'Duration'), minutosPorDia) : null,
             percentual: pct === '' ? 0 : limitar(Number(pct)),
             predecessoras: preds,
         });
@@ -124,10 +136,10 @@ export function lerMsProjectXml(conteudo: string): CronogramaImportado {
 
 // ── Modelo Excel do app ──────────────────────────────────────────────────────────────────
 
-const normalizar = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const normalizar = (s: unknown) => String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
 
 /** Cabeçalhos aceitos (sem acento, sem caixa). A 1ª forma é a do modelo. */
-const CABECALHOS: Record<'eap' | 'tarefa' | 'inicio' | 'termino' | 'predecessoras' | 'percentual' | 'marco', string[]> = {
+const CABECALHOS: Record<'eap' | 'tarefa' | 'inicio' | 'termino' | 'predecessoras' | 'percentual' | 'marco' | 'duracao', string[]> = {
     eap: ['eap', 'wbs', 'item'],
     tarefa: ['tarefa', 'nome', 'nome da tarefa', 'descricao'],
     inicio: ['inicio', 'data de inicio'],
@@ -135,6 +147,7 @@ const CABECALHOS: Record<'eap' | 'tarefa' | 'inicio' | 'termino' | 'predecessora
     predecessoras: ['predecessoras', 'predecessora'],
     percentual: ['% concluido', '% concluida', 'percentual concluido', 'avanco', '% completo'],
     marco: ['marco'],
+    duracao: ['duracao (dias uteis)', 'duracao', 'duracao (dias)', 'dias uteis'],
 };
 const OBRIGATORIOS = ['eap', 'tarefa', 'inicio', 'termino'] as const;
 
@@ -215,6 +228,12 @@ export function lerLinhasDoModelo(linhas: unknown[][], titulo = ''): CronogramaI
             marco: ['sim', 's', 'x', '1', 'true'].includes(marcoTxt),
             inicio,
             termino,
+            duracaoDias: (() => {
+                if (col.duracao < 0) return null;
+                const v = l[col.duracao];
+                const n = typeof v === 'number' ? v : Number(String(v ?? '').replace(',', '.').trim());
+                return String(v ?? '').trim() === '' || Number.isNaN(n) ? null : n;
+            })(),
             percentual: col.percentual >= 0 ? percentualDaCelula(l[col.percentual]) : 0,
             predecessoras: preds.filter(p => !Number.isNaN(p.defasagemDias)).map(p => ({ chave: p.eap, tipo: p.tipo, defasagemDias: p.defasagemDias })),
         };

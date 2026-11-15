@@ -18,7 +18,7 @@ const normal = (c: CronogramaImportado) => {
     const eapPorChave = new Map(c.tarefas.map(t => [t.chave, t.eap]));
     return c.tarefas.map(t => ({
         eap: t.eap, nome: t.nome, nivel: t.nivel, resumo: t.resumo, marco: t.marco,
-        inicio: t.inicio, termino: t.termino, percentual: t.percentual,
+        inicio: t.inicio, termino: t.termino, duracaoDias: t.duracaoDias, percentual: t.percentual,
         predecessoras: t.predecessoras.map(p => `${eapPorChave.get(p.chave)} ${p.tipo} ${p.defasagemDias}`),
     }));
 };
@@ -37,8 +37,8 @@ describe('MS Project XML (MSPDI)', () => {
         for (const g of gabarito.tarefas) {
             const t = porUid.get(String(g.uid));
             expect(t, `UID ${g.uid}`).toBeDefined();
-            expect({ eap: t!.eap, nome: t!.nome, resumo: t!.resumo, marco: t!.marco, inicio: t!.inicio, termino: t!.termino, percentual: t!.percentual })
-                .toEqual({ eap: g.eap, nome: g.nome, resumo: g.resumo, marco: g.marco, inicio: g.inicio, termino: g.termino, percentual: g.percentual });
+            expect({ eap: t!.eap, nome: t!.nome, resumo: t!.resumo, marco: t!.marco, inicio: t!.inicio, termino: t!.termino, duracaoDias: t!.duracaoDias, percentual: t!.percentual })
+                .toEqual({ eap: g.eap, nome: g.nome, resumo: g.resumo, marco: g.marco, inicio: g.inicio, termino: g.termino, duracaoDias: g.duracaoDias, percentual: g.percentual });
             expect(t!.predecessoras).toEqual(g.predecessoras.map((p: { uid: number; tipo: string; defasagemDias: number }) =>
                 ({ chave: String(p.uid), tipo: p.tipo, defasagemDias: p.defasagemDias })));
         }
@@ -57,6 +57,8 @@ describe('MS Project XML (MSPDI)', () => {
         expect(porNome.get('Cura do concreto')!.predecessoras[0]).toMatchObject({ tipo: 'FF', defasagemDias: 5 });
         expect(porNome.get('Desforma')!.predecessoras[0]).toMatchObject({ tipo: 'SF', defasagemDias: -1 });
         expect(porNome.get('Laje do térreo liberada')!.marco).toBe(true);
+        expect(porNome.get('Laje do térreo liberada')!.duracaoDias).toBe(0);
+        expect(porNome.get('Formas do pavimento térreo')!.duracaoDias).toBe(4);   // ter 01 → sex 04
     });
 
     it('arquivo que não é XML do Project explica o que fazer', () => {

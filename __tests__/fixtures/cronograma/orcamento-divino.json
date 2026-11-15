@@ -1,0 +1,486 @@
+{
+  "observacao": "Orçamento (projects.budget) do planejamento Divino, só os campos que o casamento usa. Mesma ordem do banco.",
+  "itens": [
+    {
+      "id": "c6db69a2-6786-491c-bf80-b18f48a0f896",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.02. Estaca Hélice Contínua",
+      "subPhase": "04.02.01. Estaca Hélice Contínua - 6 x C25 - 10m",
+      "quantity": 60,
+      "sinapiItem": {
+        "code": "100651",
+        "description": "ESTACA HÉLICE CONTÍNUA, DIÂMETRO DE 30 CM, INCLUSO CONCRETO FCK=30MPA E ARMADURA MÍNIMA (EXCLUSIVE BOMBEAMENTO, MOBILIZAÇÃO E DESMOBILIZAÇÃO). AF_12/2019",
+        "unit": "M",
+        "price": 144.83
+      }
+    },
+    {
+      "id": "46b46186-2c73-4925-a160-9673e877909a",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.02. Estaca Hélice Contínua",
+      "subPhase": "04.02.02. Estaca Hélice Contínua - 69 x C30 - 10m",
+      "quantity": 690,
+      "sinapiItem": {
+        "code": "100651",
+        "description": "ESTACA HÉLICE CONTÍNUA, DIÂMETRO DE 30 CM, INCLUSO CONCRETO FCK=30MPA E ARMADURA MÍNIMA (EXCLUSIVE BOMBEAMENTO, MOBILIZAÇÃO E DESMOBILIZAÇÃO). AF_12/2019",
+        "unit": "M",
+        "price": 144.83
+      }
+    },
+    {
+      "id": "640e7fed-a8bd-440b-8cb2-6c51c062b54d",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.02. Estaca Hélice Contínua",
+      "subPhase": "04.02.03. Estaca Hélice Contínua - 9 x C30 - 6m",
+      "quantity": 54,
+      "sinapiItem": {
+        "code": "100651",
+        "description": "ESTACA HÉLICE CONTÍNUA, DIÂMETRO DE 30 CM, INCLUSO CONCRETO FCK=30MPA E ARMADURA MÍNIMA (EXCLUSIVE BOMBEAMENTO, MOBILIZAÇÃO E DESMOBILIZAÇÃO). AF_12/2019",
+        "unit": "M",
+        "price": 144.83
+      }
+    },
+    {
+      "id": "34cefe29-394e-4f26-adba-29693e2c8fab",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.04. BLOCO DE CORoAMENTO e viga baldrame",
+      "subPhase": "04.04.01. Lastro de Concreto Magro",
+      "quantity": 125,
+      "sinapiItem": {
+        "code": "96619",
+        "description": "LASTRO DE CONCRETO MAGRO, APLICADO EM BLOCOS DE COROAMENTO OU SAPATAS, ESPESSURA DE 5 CM. AF_01/2024",
+        "unit": "M2",
+        "price": 39.94
+      }
+    },
+    {
+      "id": "52a6ed8d-24d5-4f1c-9310-3913a9f8ada5",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.01. LOCAÇÃO",
+      "subPhase": "04.01.01. Locação da Obra (Gabarito)",
+      "quantity": 80,
+      "sinapiItem": {
+        "code": "99059",
+        "description": "LOCAÇÃO CONVENCIONAL DE OBRA, UTILIZANDO GABARITO DE TÁBUAS CORRIDAS PONTALETADAS A CADA 2,00M - 2 UTILIZAÇÕES. AF_03/2024",
+        "unit": "M",
+        "price": 70.05
+      }
+    },
+    {
+      "id": "f0962348-7c83-4ad2-9e84-6566d6866e69",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.04. BLOCO DE CORoAMENTO e viga baldrame",
+      "subPhase": "04.04.02. Escavação Mecanizada",
+      "quantity": 45,
+      "sinapiItem": {
+        "code": "96521",
+        "description": "ESCAVAÇÃO MECANIZADA PARA BLOCO DE COROAMENTO OU SAPATA COM RETROESCAVADEIRA (INCLUINDO ESCAVAÇÃO PARA COLOCAÇÃO DE FÔRMAS). AF_01/2024",
+        "unit": "M3",
+        "price": 45.95
+      }
+    },
+    {
+      "id": "f3f2519d-19b7-4169-8cc4-ec5e12bae2da",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.04. BLOCO DE CORoAMENTO e viga baldrame",
+      "subPhase": "04.04.03. Formas",
+      "quantity": 73.4,
+      "sinapiItem": {
+        "code": "96528",
+        "description": "FABRICAÇÃO, MONTAGEM E DESMONTAGEM DE FÔRMA PARA BLOCO DE COROAMENTO, EM MADEIRA SERRADA, E=25 MM, 1 UTILIZAÇÃO. AF_01/2024",
+        "unit": "M2",
+        "price": 167.87
+      }
+    },
+    {
+      "id": "50b732af-46fd-436c-a4fe-315129e34a52",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.04. BLOCO DE CORoAMENTO e viga baldrame",
+      "subPhase": "04.04.03. Formas",
+      "quantity": 73.4,
+      "sinapiItem": {
+        "code": "96531",
+        "description": "FABRICAÇÃO, MONTAGEM E DESMONTAGEM DE FÔRMA PARA BLOCO DE COROAMENTO, EM MADEIRA SERRADA, E=25 MM, 2 UTILIZAÇÕES. AF_01/2024",
+        "unit": "M2",
+        "price": 114.91
+      }
+    },
+    {
+      "id": "6dbae852-ff6e-462b-b500-302ca753dc94",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.04. BLOCO DE CORoAMENTO e viga baldrame",
+      "subPhase": "04.04.03. Formas",
+      "quantity": 73.4,
+      "sinapiItem": {
+        "code": "96534",
+        "description": "FABRICAÇÃO, MONTAGEM E DESMONTAGEM DE FÔRMA PARA BLOCO DE COROAMENTO, EM MADEIRA SERRADA, E=25 MM, 4 UTILIZAÇÕES. AF_01/2024",
+        "unit": "M2",
+        "price": 87.33
+      }
+    },
+    {
+      "id": "2c443606-750f-4ffb-a5c9-765a7344f02f",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.04. BLOCO DE CORoAMENTO e viga baldrame",
+      "subPhase": "04.04.03. Formas",
+      "quantity": 73.4,
+      "sinapiItem": {
+        "code": "96537",
+        "description": "FABRICAÇÃO, MONTAGEM E DESMONTAGEM DE FÔRMA PARA BLOCO DE COROAMENTO, EM CHAPA DE MADEIRA COMPENSADA RESINADA, E=17 MM, 2 UTILIZAÇÕES. AF_01/2024",
+        "unit": "M2",
+        "price": 194.2
+      }
+    },
+    {
+      "id": "f3d9749a-df50-455e-8efe-79bc8566a2d6",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.04. BLOCO DE CORoAMENTO e viga baldrame",
+      "subPhase": "04.04.03. Formas",
+      "quantity": 73.4,
+      "sinapiItem": {
+        "code": "96540",
+        "description": "FABRICAÇÃO, MONTAGEM E DESMONTAGEM DE FÔRMA PARA BLOCO DE COROAMENTO, EM CHAPA DE MADEIRA COMPENSADA RESINADA, E=17 MM, 4 UTILIZAÇÕES. AF_01/2024",
+        "unit": "M2",
+        "price": 141.24
+      }
+    },
+    {
+      "id": "6647b379-0d11-43bb-b935-f7b2b646ebc6",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.04. BLOCO DE CORoAMENTO e viga baldrame",
+      "subPhase": "04.04.04. Concretagem",
+      "quantity": 14.75,
+      "sinapiItem": {
+        "code": "96557",
+        "description": "CONCRETAGEM DE BLOCO DE COROAMENTO OU VIGA BALDRAME, FCK 30 MPA, COM USO DE BOMBA - LANÇAMENTO, ADENSAMENTO E ACABAMENTO. AF_01/2024",
+        "unit": "M3",
+        "price": 646.75
+      }
+    },
+    {
+      "id": "f497738c-ac13-482c-8e23-00cb61d25f50",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.05. CONTENÇÃO VIZINHO",
+      "subPhase": "04.05.01. Escoramentos de Terrenos de Vizinhos",
+      "quantity": 112,
+      "sinapiItem": {
+        "code": "100351",
+        "description": "MURO DE ARRIMO COM BLOCOS DE CONCRETO ESTRUTURAL E PILARES INTERMEDIÁRIOS, COM ALTURA MAIOR QUE 1,6 M E MENOR OU IGUAL A 2,8 M (EXCETO FUNDAÇÃO). AF_11/2024",
+        "unit": "M2",
+        "price": 477.9416913660001
+      }
+    },
+    {
+      "id": "806202a6-43b0-4c66-acb2-bc0b0f8fe8b1",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.03. arrasamentos de estacas",
+      "subPhase": "04.03.01. Arrasamento Mecânico de Estacas",
+      "quantity": 112,
+      "sinapiItem": {
+        "code": "95601",
+        "description": "ARRASAMENTO MECANICO DE ESTACA DE CONCRETO ARMADO, DIAMETROS DE ATÉ 40 CM. AF_05/2021",
+        "unit": "UN",
+        "price": 22.56
+      }
+    },
+    {
+      "id": "ae800c6f-b114-4f5e-a796-ec52199b6d83",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.07. impermeabilizações",
+      "subPhase": "04.07.01. Impermeabilização de Baldrames com Manta Asfáltica",
+      "quantity": 125,
+      "sinapiItem": {
+        "code": "98546",
+        "description": "IMPERMEABILIZAÇÃO DE SUPERFÍCIE COM MANTA ASFÁLTICA, UMA CAMADA, INCLUSIVE APLICAÇÃO DE PRIMER ASFÁLTICO, E=4MM. AF_09/2023",
+        "unit": "M2",
+        "price": 128.59
+      }
+    },
+    {
+      "id": "f54c1252-a7e3-4574-8b7a-4e5cf391c27e",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.07. impermeabilizações",
+      "subPhase": "04.07.02. Impermeabilização de Muro com Manta Asfáltica",
+      "quantity": 40,
+      "sinapiItem": {
+        "code": "98546",
+        "description": "IMPERMEABILIZAÇÃO DE SUPERFÍCIE COM MANTA ASFÁLTICA, UMA CAMADA, INCLUSIVE APLICAÇÃO DE PRIMER ASFÁLTICO, E=4MM. AF_09/2023",
+        "unit": "M2",
+        "price": 128.59
+      }
+    },
+    {
+      "id": "c03b2f07-4e5f-46f4-a47d-00fbf3f176e1",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.04. BLOCO DE CORoAMENTO e viga baldrame",
+      "subPhase": "04.04.05. Armação",
+      "quantity": 371,
+      "sinapiItem": {
+        "code": "92919",
+        "description": "ARMAÇÃO DE ESTRUTURAS DIVERSAS DE CONCRETO ARMADO, EXCETO VIGAS, PILARES, LAJES E FUNDAÇÕES, UTILIZANDO AÇO CA-50 DE 10,0 MM - MONTAGEM. AF_06/2022",
+        "unit": "KG",
+        "price": 11.86
+      }
+    },
+    {
+      "id": "62c9bc3d-57c8-4dbe-8266-f73141ac4cf9",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.04. BLOCO DE CORoAMENTO e viga baldrame",
+      "subPhase": "04.04.05. Armação",
+      "quantity": 104,
+      "sinapiItem": {
+        "code": "92915",
+        "description": "ARMAÇÃO DE ESTRUTURAS DIVERSAS DE CONCRETO ARMADO, EXCETO VIGAS, PILARES, LAJES E FUNDAÇÕES, UTILIZANDO AÇO CA-60 DE 5,0 MM - MONTAGEM. AF_06/2022",
+        "unit": "KG",
+        "price": 17.25
+      }
+    },
+    {
+      "id": "ef3504fb-0efe-4228-8a05-e8fb8e050645",
+      "group": "04. FUNDAÇÕES",
+      "phase": "04.06. PROVAS DE CARGA EM ESTACAS",
+      "subPhase": "04.06.01. Provas de Cargas em Estacas",
+      "quantity": 615,
+      "sinapiItem": {
+        "code": "104108",
+        "description": "ARMAÇÃO DE PILAR OU VIGA DE ESTRUTURA DE CONCRETO ARMADO EMBUTIDA EM ALVENARIA DE VEDAÇÃO UTILIZANDO AÇO CA-50 DE 10,0 MM - MONTAGEM. AF_06/2022",
+        "unit": "KG",
+        "price": 12.73
+      }
+    },
+    {
+      "id": "1996023b-6b89-4e79-9660-9dd9b745a965",
+      "group": "01. SERVIÇOS INICIAIS",
+      "phase": "01.02. Serviços Preliminares",
+      "subPhase": "01.02.01. Cópias e Plotagens",
+      "quantity": 20,
+      "sinapiItem": {
+        "code": "90772",
+        "description": "AUXILIAR DE ESCRITORIO COM ENCARGOS COMPLEMENTARES",
+        "unit": "H",
+        "price": 26.07
+      }
+    },
+    {
+      "id": "ca5554f4-d39b-4640-beb1-3f57f461697c",
+      "group": "01. SERVIÇOS INICIAIS",
+      "phase": "01.02. Serviços Preliminares",
+      "subPhase": "01.02.02. Seguros",
+      "quantity": 0,
+      "sinapiItem": {
+        "code": "100321",
+        "description": "TÉCNICO EM SEGURANÇA DO TRABALHO COM ENCARGOS COMPLEMENTARES",
+        "unit": "MES",
+        "price": 8338.09
+      }
+    },
+    {
+      "id": "08ac5c6f-ee41-4062-8ad1-4e6bdd32ceed",
+      "group": "01. SERVIÇOS INICIAIS",
+      "phase": "01.02. Serviços Preliminares",
+      "subPhase": "01.02.03. Assessorias Contábil e Jurídica",
+      "quantity": 0.1,
+      "sinapiItem": {
+        "code": "40811",
+        "description": "ENGENHEIRO CIVIL DE OBRA JUNIOR (MENSALISTA)",
+        "unit": "MES",
+        "price": 22442.18
+      }
+    },
+    {
+      "id": "816106b9-5ec6-4d4d-9667-f9afbeaa4bd9",
+      "group": "01. SERVIÇOS INICIAIS",
+      "phase": "01.03. Instalações Provisórias",
+      "subPhase": "01.03.01. Tapumes/Cercas",
+      "quantity": 40,
+      "sinapiItem": {
+        "code": "105130",
+        "description": "EXECUÇÃO DE PILARETES PARA TAPUMES E CONSTRUÇÕES TEMPORÁRIAS. AF_03/2024",
+        "unit": "M",
+        "price": 29.57
+      }
+    },
+    {
+      "id": "cbeccbac-62b6-4885-8e34-3448c99cf06c",
+      "group": "01. SERVIÇOS INICIAIS",
+      "phase": "01.03. Instalações Provisórias",
+      "subPhase": "01.03.01. Tapumes/Cercas",
+      "quantity": 80,
+      "sinapiItem": {
+        "code": "98459",
+        "description": "TAPUME COM TELHA METÁLICA. AF_03/2024",
+        "unit": "M2",
+        "price": 81.57
+      }
+    },
+    {
+      "id": "77789222-d272-4cb1-8756-1b913b30f7b2",
+      "group": "01. SERVIÇOS INICIAIS",
+      "phase": "01.03. Instalações Provisórias",
+      "subPhase": "01.03.03. Placa de Obra",
+      "quantity": 1,
+      "sinapiItem": {
+        "code": "37559",
+        "description": "PLACA DE SINALIZACAO DE SEGURANCA CONTRA INCENDIO, FOTOLUMINESCENTE, RETANGULAR, *12 X 40* CM, EM PVC *2* MM ANTI-CHAMAS (SIMBOLOS, CORES E PICTOGRAMAS CONFORME NBR 16820)",
+        "unit": "UN",
+        "price": 14.18
+      }
+    },
+    {
+      "id": "f8dfff76-b907-4d8b-9e6a-c8b1d7f336db",
+      "group": "01. SERVIÇOS INICIAIS",
+      "phase": "01.03. Instalações Provisórias",
+      "subPhase": "01.03.03. Placa de Obra",
+      "quantity": 1,
+      "sinapiItem": {
+        "code": "34721",
+        "description": "PLACA DE SINALIZACAO EM CHAPA DE ALUMINIO COM PINTURA REFLETIVA, E = 2 MM",
+        "unit": "M2",
+        "price": 1265.77
+      }
+    },
+    {
+      "id": "f960d62f-c4d5-4665-b344-bec6f187093e",
+      "group": "01. SERVIÇOS INICIAIS",
+      "phase": "01.03. Instalações Provisórias",
+      "subPhase": "01.03.02. Canteiro de Obras Depósitos/Escritórios/Proteção Transeuntes",
+      "quantity": 6,
+      "sinapiItem": {
+        "code": "10775",
+        "description": "LOCACAO DE CONTAINER 2,30 X 6,00 M, ALT. 2,50 M, COM 1 SANITARIO, PARA ESCRITORIO, COMPLETO, SEM DIVISORIAS INTERNAS (NAO INCLUI MOBILIZACAO/DESMOBILIZACAO)",
+        "unit": "MES",
+        "price": 1010
+      }
+    },
+    {
+      "id": "6c146e73-c0ed-454a-8ce8-86100bcb70fa",
+      "group": "01. SERVIÇOS INICIAIS",
+      "phase": "01.03. Instalações Provisórias",
+      "subPhase": "01.03.04. Ligação Provisória de Água",
+      "quantity": 35,
+      "sinapiItem": {
+        "code": "105147",
+        "description": "CURVA PPR 90 GRAUS, DN 20 MM, INSTALADO EM RESERVAÇÃO PREDIAL DE ÁGUA - FORNECIMENTO E INSTALAÇÃO. AF_04/2024",
+        "unit": "UN",
+        "price": 17.13
+      }
+    },
+    {
+      "id": "6d1afd0c-a4aa-4347-a938-41a0f76178f2",
+      "group": "01. SERVIÇOS INICIAIS",
+      "phase": "01.03. Instalações Provisórias",
+      "subPhase": "01.03.05. Ligação Provisória de Energia",
+      "quantity": 30,
+      "sinapiItem": {
+        "code": "105147",
+        "description": "CURVA PPR 90 GRAUS, DN 20 MM, INSTALADO EM RESERVAÇÃO PREDIAL DE ÁGUA - FORNECIMENTO E INSTALAÇÃO. AF_04/2024",
+        "unit": "UN",
+        "price": 17.13
+      }
+    },
+    {
+      "id": "e357fe4f-d8ca-4f85-8899-41eaf8356b49",
+      "group": "02. ADMINISTRAÇÃO DA OBRA E DESPESAS GERAIS",
+      "phase": "02.01. Administração da Obra e Despesas Gerais",
+      "subPhase": "02.01.03. EPI/EPC",
+      "quantity": 0.33,
+      "sinapiItem": {
+        "code": "4385",
+        "description": "PARALELEPIPEDO GRANITICO OU BASALTICO, PARA PAVIMENTACAO, SEM FRETE (VARIACAO REGIONAL DE PECAS POR M2)",
+        "unit": "MIL",
+        "price": 4736.51
+      }
+    },
+    {
+      "id": "4e1e93d5-895d-4010-85a4-9fab36d168f1",
+      "group": "02. ADMINISTRAÇÃO DA OBRA E DESPESAS GERAIS",
+      "phase": "02.01. Administração da Obra e Despesas Gerais",
+      "subPhase": "02.01.02. Consumos de Água e Luz",
+      "quantity": 83,
+      "sinapiItem": {
+        "code": "105147",
+        "description": "CURVA PPR 90 GRAUS, DN 20 MM, INSTALADO EM RESERVAÇÃO PREDIAL DE ÁGUA - FORNECIMENTO E INSTALAÇÃO. AF_04/2024",
+        "unit": "UN",
+        "price": 17.13
+      }
+    },
+    {
+      "id": "8d8cafda-6546-4cca-a963-0f1a131afcec",
+      "group": "02. ADMINISTRAÇÃO DA OBRA E DESPESAS GERAIS",
+      "phase": "02.01. Administração da Obra e Despesas Gerais",
+      "subPhase": "02.01.04. PCMAT/PCMSO",
+      "quantity": 47,
+      "sinapiItem": {
+        "code": "105147",
+        "description": "CURVA PPR 90 GRAUS, DN 20 MM, INSTALADO EM RESERVAÇÃO PREDIAL DE ÁGUA - FORNECIMENTO E INSTALAÇÃO. AF_04/2024",
+        "unit": "UN",
+        "price": 17.13
+      }
+    },
+    {
+      "id": "cd589544-7bc2-4d31-ae9b-a7bfc4c925b3",
+      "group": "03. TRABALHOS EM TERRA",
+      "phase": "03.01. Trabalhos em Terra",
+      "subPhase": "03.01.01. Terraplanagem nível +1,19",
+      "quantity": 500,
+      "sinapiItem": {
+        "code": "101235",
+        "description": "ESCAVAÇÃO VERTICAL PARA INFRAESTRUTURA, COM CARGA, DESCARGA E TRANSPORTE DE SOLO DE 1ª CATEGORIA, COM ESCAVADEIRA HIDRÁULICA (CAÇAMBA: 0,8 M³ / 111HP), FROTA DE 5 CAMINHÕES BASCULANTES DE 14 M³, DMT DE 2 KM E VELOCIDADE MÉDIA 19 KM/H. AF_05/2020",
+        "unit": "M3",
+        "price": 18.62
+      }
+    },
+    {
+      "id": "f57d9f01-1a55-4923-956c-d9ff130b7ad8",
+      "group": "03. TRABALHOS EM TERRA",
+      "phase": "03.01. Trabalhos em Terra",
+      "subPhase": "03.01.02. Compactação de Solo",
+      "quantity": 1000,
+      "sinapiItem": {
+        "code": "100577",
+        "description": "REGULARIZAÇÃO E COMPACTAÇÃO DE SUBLEITO DE SOLO PREDOMINANTEMENTE ARENOSO, PARA OBRAS DE CONSTRUÇÃO DE PAVIMENTOS. AF_09/2024",
+        "unit": "M2",
+        "price": 1.45
+      }
+    },
+    {
+      "id": "25e89a8d-6027-4b23-9be2-332b3052f05b",
+      "group": "03. TRABALHOS EM TERRA",
+      "phase": "03.01. Trabalhos em Terra",
+      "subPhase": "03.01.03. Bota-Fora (Transporte De Material Excedente)",
+      "quantity": 1500,
+      "sinapiItem": {
+        "code": "97641",
+        "description": "REMOÇÃO DE FORRO DE GESSO, DE FORMA MANUAL, SEM REAPROVEITAMENTO. AF_09/2023",
+        "unit": "M2",
+        "price": 3.21
+      }
+    },
+    {
+      "id": "fe6b855d-17b0-4c4e-bc52-298eb16bc7bd",
+      "group": "01. SERVIÇOS INICIAIS",
+      "phase": "01.01. Serviços Técnicos",
+      "subPhase": "01.01.01. Fiscalização/Acompanhamento/Gerenciamento - ART",
+      "quantity": 0.5,
+      "sinapiItem": {
+        "code": "93567",
+        "description": "ENGENHEIRO CIVIL DE OBRA PLENO COM ENCARGOS COMPLEMENTARES",
+        "unit": "MES",
+        "price": 24307.68
+      }
+    },
+    {
+      "id": "9667fbd7-5fbd-49ac-a769-f8da8b7bb012",
+      "group": "02. ADMINISTRAÇÃO DA OBRA E DESPESAS GERAIS",
+      "phase": "02.01. Administração da Obra e Despesas Gerais",
+      "subPhase": "02.01.01. Consumos Combustíveis e Lubrificantes",
+      "quantity": 63.07,
+      "sinapiItem": {
+        "code": "4221",
+        "description": "OLEO DIESEL COMBUSTIVEL COMUM METROPOLITANO S-10 OU S-500",
+        "unit": "L",
+        "price": 5.82
+      }
+    }
+  ]
+}

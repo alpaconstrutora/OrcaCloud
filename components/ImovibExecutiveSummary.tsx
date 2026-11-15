@@ -12,7 +12,6 @@ import { calcularIndicadores, textoDoPayback, motivoSemPayback } from '../utils/
 import { Activity, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Banknote, ClipboardCheck } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import { CABECALHO_TABELA } from './ui/cabecalhoDeTabela';
-import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, Legend } from 'recharts';
 import { jsPDF } from 'jspdf';
 import html2canvas from 'html2canvas';
 import { coresCompativeisNaCopia } from '../utils/html2canvasCores';
@@ -25,6 +24,7 @@ import { memorialDePremissas } from '../utils/imovibMemorial';
 import { criteriosDoParecer, ROTULO_DO_PARECER } from '../utils/imovibParecer';
 import ImovibParecerCard from './ImovibParecerCard';
 import { nomeDeArquivo } from '../utils/nomeDeArquivo';
+import { GraficoCurvaS } from './ImovibGraficos';
 
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
@@ -244,16 +244,17 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
     const exportarRelatorio = async () => {
         setGerandoRelatorio(true);
         try {
-            const [comparaveis, riscos, cenarios, dueDiligence, socios, { secoesDoRelatorio }, { pdfDoRelatorio }] = await Promise.all([
+            // Plano 2026-11-15, Fase 3: com capa (organização) e os gráficos de cada seção.
+            const [comparaveis, riscos, cenarios, dueDiligence, socios, organizacao, { gerarRelatorioCompleto }] = await Promise.all([
                 imovibService.listarComparaveis(study.id),
                 imovibService.listarRiscos(study.id),
                 imovibService.listarCenarios(study.id),
                 imovibService.listarDueDiligence(study.id),
                 imovibService.listarSocios(study.id),
-                import('../utils/imovibRelatorio'),
-                import('../utils/imovibRelatorioPdf'),
+                imovibService.organizacaoDoEstudo(study.organization_id),
+                import('./ImovibGraficosParaPdf'),
             ]);
-            const pdf = pdfDoRelatorio(secoesDoRelatorio({ study, comparaveis, riscos, cenarios, dueDiligence, socios }), study.name);
+            const pdf = await gerarRelatorioCompleto({ study, comparaveis, riscos, cenarios, dueDiligence, socios }, { organizacao });
             pdf.save(`Relatorio_${nomeDeArquivo(study.name)}.pdf`);
         } catch (err) {
             showToast(`Erro ao gerar o relatório completo: ${(err as Error).message}`, 'error');
@@ -490,45 +491,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                             Curva S e Linha de Exposição
                         </h3>
                     </div>
-                    <div className="h-[400px] w-full">
-                        <ResponsiveContainer width="100%" height="100%">
-                            <ComposedChart
-                                data={cashFlowData.monthlyFlows}
-                                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                            >
-                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
-                                <XAxis
-                                    dataKey="name"
-                                    tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }}
-                                    tickLine={false}
-                                    axisLine={false}
-                                    minTickGap={30}
-                                />
-                                <YAxis
-                                    tickFormatter={(value) => `R$ ${(value / 1000000).toFixed(1)} M`}
-                                    tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }}
-                                    tickLine={false}
-                                    axisLine={false}
-                                />
-                                <Tooltip
-                                    formatter={(value: any) => formatCurrency(Number(value))}
-                                    labelStyle={{ fontWeight: 800, color: '#0f172a' }}
-                                    contentStyle={{ borderRadius: '16px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)' }}
-                                />
-                                <Legend wrapperStyle={{ paddingTop: '20px', fontWeight: 600, fontSize: '13px' }} />
-                                <Bar yAxisId={0} dataKey="net" name="Caixa Líquido no Mês" fill="#cbd5e1" radius={[4, 4, 0, 0]} opacity={0.5} />
-                                <Line
-                                    type="monotone"
-                                    dataKey="acc"
-                                    name="Exposição de Caixa (Acumulado)"
-                                    stroke="#0f172a"
-                                    strokeWidth={4}
-                                    dot={false}
-                                    activeDot={{ r: 8, fill: '#0f172a', stroke: '#fff', strokeWidth: 2 }}
-                                />
-                            </ComposedChart>
-                        </ResponsiveContainer>
-                    </div>
+                    <GraficoCurvaS dados={cashFlowData.monthlyFlows} />
                 </div>
 
                 {/* Extended Sections for PDF Export */}

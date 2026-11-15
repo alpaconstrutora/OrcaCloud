@@ -19,29 +19,9 @@ const AMOSTRA_CAMPO_LIVRE = (rotulo: string): DocTipTap => ({
     ],
 });
 
-const logoCache = new Map<string, Promise<string | null>>();
-
-/** Logo como data URL — o pdfmake não baixa imagens por URL. Falha → sem logo. */
-export function logoComoDataUrl(url?: string | null): Promise<string | null> {
-    if (!url) return Promise.resolve(null);
-    if (url.startsWith('data:image/')) return Promise.resolve(url);
-    let p = logoCache.get(url);
-    if (!p) {
-        p = fetch(url)
-            .then(r => (r.ok ? r.blob() : null))
-            .then(blob => blob && blob.type.startsWith('image/')
-                ? new Promise<string | null>(resolve => {
-                    const fr = new FileReader();
-                    fr.onload = () => resolve(typeof fr.result === 'string' ? fr.result : null);
-                    fr.onerror = () => resolve(null);
-                    fr.readAsDataURL(blob);
-                })
-                : null)
-            .catch(() => null);
-        logoCache.set(url, p);
-    }
-    return p;
-}
+// Mora em utils/logoComoDataUrl.ts desde 15/11/2026: o relatório do Imovib usa sem trazer o pdfmake.
+export { logoComoDataUrl } from '../../utils/logoComoDataUrl';
+import { logoComoDataUrl } from '../../utils/logoComoDataUrl';
 
 export interface EntradaPrevia {
     conteudo: DocTipTap;

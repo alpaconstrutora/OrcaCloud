@@ -88,12 +88,12 @@ const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
         if (gerando) return;
         setGerando(v.id);
         try {
-            const [snapshot, { secoesDoRelatorio }, { pdfDoRelatorio }] = await Promise.all([
+            const [snapshot, organizacao, { gerarRelatorioCompleto }] = await Promise.all([
                 snapshots[v.id] ? Promise.resolve(snapshots[v.id]) : imovibService.snapshotDaVersao(v.id),
-                import('../utils/imovibRelatorio'),
-                import('../utils/imovibRelatorioPdf'),
+                imovibService.organizacaoDoEstudo(study.organization_id),
+                import('./ImovibGraficosParaPdf'),
             ]);
-            const pdf = pdfDoRelatorio(secoesDoRelatorio(dadosDoRelatorioDaVersao(snapshot as SnapshotDaVersao, v)), `${study.name} — ${v.label}`);
+            const pdf = await gerarRelatorioCompleto(dadosDoRelatorioDaVersao(snapshot as SnapshotDaVersao, v), { versao: v, organizacao });
             pdf.save(`Relatorio_${nomeDeArquivo(study.name)}_${nomeDeArquivo(v.label)}.pdf`);
         } catch (e) {
             setErro(`Não foi possível gerar o relatório da versão: ${(e as Error).message}`);

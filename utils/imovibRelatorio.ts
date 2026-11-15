@@ -14,7 +14,7 @@ import { criteriosDoParecer, ROTULO_DO_PARECER } from './imovibParecer';
 import { terrenoMaximo, precoMinimo, custoMaximoDeObra, vendasMinimas, type PontoDeEquilibrio } from './imovibEquilibrio';
 import { resumoDosComparaveis, type ImovibComparable } from './imovibMercado';
 import { marcosDoEstudo } from './imovibCronograma';
-import { aplicarCenario } from './imovibCenarios';
+import { fluxoAnual, dadosDosCenarios, GRAFICOS_DA_SECAO, type GraficoId } from './imovibGraficos';
 import { compararRegimes } from './imovibComparacaoDeRegimes';
 import { ROTULO_DO_REGIME, type RegimeTributarioDoEstudo } from './imovibTributos';
 import { resultadoPorSocio, type ImovibPartner } from './imovibSocios';
@@ -31,6 +31,25 @@ export interface SecaoDoRelatorio {
     tabelas: TabelaDoRelatorio[];
     /** A frase que substitui o conteúdo quando não há dado. */
     vazio: string | null;
+    /** Gráficos da seção (GRAFICOS_DA_SECAO); seção vazia não tem gráfico. Plano 2026-11-15, Fase 3. */
+    graficos: GraficoId[];
+}
+
+/**
+ * Plano docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md, Fase 3.
+ * - `edicao: 'investidor'`: sem a seção de parecer (parecer, justificativa e critérios são internos,
+ *   como no Portal do Investidor);
+ * - `versao`: o relatório é de uma versão congelada — a capa diz qual e de quando.
+ */
+export interface OpcoesDoRelatorio {
+    edicao?: 'interna' | 'investidor';
+    versao?: { label: string; created_at: string } | null;
+}
+
+export interface CapaDoRelatorio {
+    titulo: string;
+    subtitulo: string;
+    destaques: { rotulo: string; valor: string }[];
 }
 
 export interface DadosDoRelatorio {
@@ -53,26 +72,44 @@ const ponto = (p: PontoDeEquilibrio, f: (v: number) => string) =>
     p.valor == null ? (p.motivo === 'sem_vgv' ? 'Sem VGV' : p.motivo === 'acima_do_vgv' ? 'Nem vendendo tudo' : 'Não existe') : f(p.valor);
 const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const dataBR = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
+const linhaDaData = (hoje: string, versao: OpcoesDoRelatorio['versao']) =>
+    versao ? `Versão ${versao.label} · congelada em ${dataBR(versao.created_at)}` : `Relatório gerado em ${dataBR(hoje)}`;
+
+/** Título, versão (ou data) e os quatro números da capa visual do PDF. */
+export function capaDoRelatorio(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorio = {}): CapaDoRelatorio {
+    const r = computeImovibMath(d.study);
+    const ind = calcularIndicadores(r, d.study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate);
+    return {
+        titulo: d.study.name,
+        subtitulo: linhaDaData(d.hoje ?? hojeISO(), opcoes.versao),
+        destaques: [
+            { rotulo: 'VGV', valor: brl(r.vgvTotal) },
+            { rotulo: 'VPL', valor: brl(r.vpl) },
+            { rotulo: 'TIR', valor: Number.isFinite(r.annualIrr) ? `${num(r.annualIrr)}% a.a.` : 'Sem TIR' },
+            { rotulo: 'Margem líquida', valor: ind.margemLiquidaSobreVgv == null ? '—' : pct(ind.margemLiquidaSobreVgv * 100) },
+        ],
+    };
+}
 
 const ROTULO_DO_RISCO: Record<ImovibRisk['category'], string> = { legal: 'Legal', mercado: 'Mercado', construcao: 'Construção', financeiro: 'Financeiro', ambiental: 'Ambiental', outro: 'Outro' };
 const STATUS_DO_RISCO: Record<ImovibRisk['status'], string> = { aberto: 'Aberto', mitigado: 'Mitigado', aceito: 'Aceito', encerrado: 'Encerrado' };
 const STATUS_DA_DD: Record<ImovibLandChecklistItem['status'], string> = { pendente: 'Pendente', ok: 'Ok', problema: 'Com problema', nao_se_aplica: 'Não se aplica' };
 
-export function secoesDoRelatorio(d: DadosDoRelatorio): SecaoDoRelatorio[] {
+export function secoesDoRelatorio(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorio = {}): SecaoDoRelatorio[] {
     const { study } = d;
     const hoje = d.hoje ?? hojeISO();
     const r = computeImovibMath(study);
     const tma = study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate;
     const ind = calcularIndicadores(r, tma);
     const secao = (id: SecaoId, titulo: string, s: Partial<SecaoDoRelatorio> = {}): SecaoDoRelatorio =>
-        ({ id, titulo, paragrafos: [], tabelas: [], vazio: null, ...s });
+        ({ id, titulo, paragrafos: [], tabelas: [], vazio: null, ...s, graficos: s.graficos ?? (s.vazio ? [] : GRAFICOS_DA_SECAO[id]) });
 
     // 1. Capa e parecer
     const parecer = study.recommendation ? ROTULO_DO_PARECER[study.recommendation] : 'Não registrado';
     const capa = secao('capa', 'Capa e parecer', {
         paragrafos: [
             `Estudo: ${study.name}${study.version ? ` (v${study.version})` : ''}`,
-            `Relatório gerado em ${dataBR(hoje)}`,
+            linhaDaData(hoje, opcoes.versao),
             `Parecer: ${parecer}${study.recommended_by ? `, por ${study.recommended_by}` : ''}${study.recommended_at ? ` em ${new Date(study.recommended_at).toLocaleDateString('pt-BR')}` : ''}`,
             ...(study.recommendation_notes ? [`Justificativa: ${study.recommendation_notes}`] : []),
         ],
@@ -174,30 +211,19 @@ export function secoesDoRelatorio(d: DadosDoRelatorio): SecaoDoRelatorio[] {
     });
 
     // 7. Fluxo anual
-    const anos = new Map<number, { rec: number; cus: number; liq: number; acc: number }>();
-    for (const f of r.monthlyFlows) {
-        const ano = Math.ceil(f.month / 12);
-        const a = anos.get(ano) ?? { rec: 0, cus: 0, liq: 0, acc: 0 };
-        a.rec += f.rev; a.cus += f.cost; a.liq += f.net; a.acc = f.acc;
-        anos.set(ano, a);
-    }
     const fluxo = secao('fluxo', 'Fluxo de caixa anual', {
         paragrafos: ['Caixa do acionista (depois da dívida), sem desconto.'],
-        tabelas: [{ colunas: ['Ano', 'Receitas', 'Custos', 'Caixa do ano', 'Acumulado no fim do ano'], linhas: [...anos.entries()].map(([ano, a]) => [`Ano ${ano}`, brl(a.rec), brl(a.cus), brl(a.liq), brl(a.acc)]) }],
+        tabelas: [{ colunas: ['Ano', 'Receitas', 'Custos', 'Caixa do ano', 'Acumulado no fim do ano'], linhas: fluxoAnual(r.monthlyFlows).map(a => [a.name, brl(a.rev), brl(a.cost), brl(a.net), brl(a.acc)]) }],
     });
 
     // 8. Sensibilidade e cenários
+    // Sem cenário salvo, o tornado continua valendo (não depende deles): a seção diz e mostra só ele.
     const sensibilidade = d.cenarios.length === 0
-        ? secao('sensibilidade', 'Sensibilidade e cenários', { vazio: 'Sem cenários salvos (aba Sensibilidade e Risco).' })
+        ? secao('sensibilidade', 'Sensibilidade e cenários', { paragrafos: ['Sem cenários salvos (aba Sensibilidade e Risco).'], graficos: ['tornado'] })
         : secao('sensibilidade', 'Sensibilidade e cenários', {
             tabelas: [{
                 colunas: ['Cenário', 'VPL', 'TIR'],
-                linhas: [['Estudo', brl(r.vpl), Number.isFinite(r.annualIrr) ? `${num(r.annualIrr)}% a.a.` : 'Sem TIR'],
-                    ...d.cenarios.map(c => {
-                        const a = aplicarCenario(study, c.choques);
-                        const rc = computeImovibMath(a.study, a.options);
-                        return [c.name, brl(rc.vpl), Number.isFinite(rc.annualIrr) ? `${num(rc.annualIrr)}% a.a.` : 'Sem TIR'];
-                    })],
+                linhas: dadosDosCenarios(study, d.cenarios, r).map(c => [c.nome, brl(c.vpl), Number.isFinite(c.tirAnual) ? `${num(c.tirAnual)}% a.a.` : 'Sem TIR']),
             }],
         });
 
@@ -233,5 +259,6 @@ export function secoesDoRelatorio(d: DadosDoRelatorio): SecaoDoRelatorio[] {
         ],
     });
 
-    return [capa, indicadores, premissas, mercado, produto, cronograma, fluxo, sensibilidade, riscos, dueDiligence, tributos, capital];
+    const todas = [capa, indicadores, premissas, mercado, produto, cronograma, fluxo, sensibilidade, riscos, dueDiligence, tributos, capital];
+    return opcoes.edicao === 'investidor' ? todas.filter(x => x.id !== 'capa') : todas;
 }

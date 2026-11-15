@@ -13,6 +13,12 @@ interface ProModuleProps {
   userId: string;
   /** Só no ÒPURA Pro público (`/pro`): "Sair da conta" em Ajustes. Dentro do app, o "Sair" é do menu. */
   onSair?: () => void;
+  /** Conta criada pelo Pro: "Minha conta" oferece "Excluir minha conta" (ProMinhaConta). */
+  contaSoPro?: boolean;
+  /** Depois de "Apagar meus dados do Pro". Sem isto, volta ao painel. */
+  onDadosApagados?: () => void;
+  /** Depois de "Excluir minha conta": encerrar a sessão (só o Pro público passa). */
+  onContaExcluida?: () => void;
 }
 
 /**
@@ -39,7 +45,7 @@ const ABAS: { id: AbaPro; label: string; titulo: string; subtitulo: string }[] =
   { id: 'pro-config', label: 'Ajustes', titulo: 'Ajustes', subtitulo: 'Seus dados, chave Pix e modelos de orçamento.' },
 ];
 
-export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, userId, onSair }) => {
+export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, userId, onSair, contaSoPro, onDadosApagados, onContaExcluida }) => {
   // Estados para navegação interna de registros
   const [selectedOrcamentoId, setSelectedOrcamentoId] = React.useState<string | null>(null);
   const [selectedServicoId, setSelectedServicoId] = React.useState<string | null>(null);
@@ -161,6 +167,9 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
             userId={userId}
             onBack={() => onChangeView('pro-dashboard')}
             onSair={onSair}
+            contaSoPro={contaSoPro}
+            onDadosApagados={onDadosApagados}
+            onContaExcluida={onContaExcluida}
           />
         )}
       </div>

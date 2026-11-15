@@ -380,6 +380,25 @@ export const FICHA_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, FichaDoPon
     medidasMm: { larguraMm: 1500, profundidadeMm: 1500, alturaMm: 3000 },
     ajuda: 'Infiltração do efluente tratado no solo (NBR 13969) — o destino final do esgoto sem rede pública. A cota é a do tubo de entrada.',
   },
+  CAIXA_SEPARADORA: {
+    rotulo: 'Caixa separadora de água e óleo',
+    sigla: 'CSAO',
+    grupo: ESGOTO,
+    // A cota é a do TUBO (entrada e saída), como no tanque séptico; a tampa fica 30 cm acima dela.
+    cotaMm: { ESGOTO: -400 },
+    dnMinimoMm: { ESGOTO: 100 },
+    medidasMm: { larguraMm: 800, profundidadeMm: 1500, alturaMm: 1000 },
+    ajuda: 'Recebe a lavagem do piso da garagem (com óleo e combustível) e só deixa passar a água para a rede — o óleo fica retido para a limpeza. A cota é a do tubo de entrada.',
+  },
+  POCO_DE_RECALQUE: {
+    rotulo: 'Poço de recalque (bombas de drenagem)',
+    sigla: 'PR',
+    grupo: ESGOTO,
+    cotaMm: { ESGOTO: -1500 },
+    dnMinimoMm: { ESGOTO: 100 },
+    medidasMm: { larguraMm: 1200, profundidadeMm: 1200, alturaMm: 1500 },
+    ajuda: 'Onde a drenagem do subsolo se junta quando o piso fica abaixo da rede pública: as bombas (uma reserva) a levam até a caixa de inspeção do térreo. A cota é a do fundo.',
+  },
   CAIXA_GORDURA: {
     rotulo: 'Caixa de gordura',
     sigla: 'CG',

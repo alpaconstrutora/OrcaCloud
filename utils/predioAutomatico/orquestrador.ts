@@ -34,6 +34,7 @@ import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedid
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
 import { lancarEsgoto } from './esgoto';
 import { lancarSubsolos, POTENCIA_DO_EXAUSTOR_W, subsoloDaTorre } from './garagem';
+import { lancarDrenagemDaGaragem } from './drenagem';
 import { lancarPluvial } from './pluvial';
 import { conferirIncendioDoPredio, lancarEquipamentosDeIncendio, lancarHidrantesDoPredio } from './ppci';
 import type { HipotesesIncendio } from '../blueprintIncendioClassificacao';
@@ -319,6 +320,23 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     etapa('PLUVIAL', 'LANCOU', pluvial.comandos, `${pluvial.condutores.length} condutor(es) DN ${pluvial.condutores[0]?.dnMm ?? '—'} · ${Math.round(pluvial.vazaoLMin).toLocaleString('pt-BR')} L/min de ${Math.round(pluvial.areaM2).toLocaleString('pt-BR')} m² a ${pluvial.intensidadeMmH} mm/h`);
   }
 
+  // ── A drenagem da garagem (PA8c): depois do esgoto (o recalque chega à caixa de inspeção dele) e da elétrica (as bombas
+  // no quadro da garagem); antes dos equipamentos de incêndio — o circuito das bombas pega os pontos soltos do subsolo, e a
+  // alimentação das luminárias de emergência fica fora de circuito, como nos outros andares.
+  let drenagem: ReturnType<typeof lancarDrenagemDaGaragem> | null = null;
+  if (!subsolos) etapa('DRENAGEM_DA_GARAGEM', 'NAO_EXIGIDA', 0, 'Sem subsolo.');
+  else if (!hip.esgoto || !terreo) etapa('DRENAGEM_DA_GARAGEM', 'NAO_EXIGIDA', 0, 'Sem o esgoto, a drenagem da garagem fica para o projetista.');
+  else {
+    drenagem = lancarDrenagemDaGaragem(ctx, subsolos, terreo.levelId);
+    pendencias.push(...drenagem.pendencias);
+    etapa(
+      'DRENAGEM_DA_GARAGEM',
+      'LANCOU',
+      drenagem.comandos,
+      `${drenagem.ralos} ralo(s) e ${drenagem.canaletas} canaleta(s) · caixa separadora${drenagem.bombas ? ` · poço com ${drenagem.bombas} bombas${drenagem.recalque ? ', recalque à caixa de inspeção do térreo' : ''}` : ' · acima da rede (gravidade)'}`,
+    );
+  }
+
   // ── Equipamentos de incêndio de cada andar (PA9b): no tipo, antes da marca — pelos motores do PPCI da planta, numa vista
   // sem os andares copiados.
   let equipamentos: ReturnType<typeof lancarEquipamentosDeIncendio> | null = null;
@@ -483,7 +501,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       terreo: terreo ? { salas: terreo.salas.map((x) => x.nome), acesso: terreo.acesso } : null,
       cobertura: cobertura ? { cotaM: cobertura.cotaMm / 1000 } : null,
       eletrica: resumoDaEletrica,
-      garagem: subsolos ? { subsolos: subsolos.pisos.map((p) => ({ nome: p.nome, vagas: p.vagas, porTipo: p.porTipo })), vagas: subsolos.vagas, teto: subsolos.teto, rampas: subsolos.rampas, escadasDeEmergencia: subsolos.escadasDeEmergencia, luzes: eletrica?.garagem.reduce((s, x) => s + x.luzes, 0) ?? 0, exaustores: eletrica?.garagem.reduce((s, x) => s + x.exaustores, 0) ?? 0, pilaresDaTorre: subsolos.pilaresDaTorre, pilaresDaGaragem: subsolos.pilaresDaGaragem } : null,
+      garagem: subsolos ? { subsolos: subsolos.pisos.map((p) => ({ nome: p.nome, vagas: p.vagas, porTipo: p.porTipo })), vagas: subsolos.vagas, teto: subsolos.teto, rampas: subsolos.rampas, escadasDeEmergencia: subsolos.escadasDeEmergencia, luzes: eletrica?.garagem.reduce((s, x) => s + x.luzes, 0) ?? 0, exaustores: eletrica?.garagem.reduce((s, x) => s + x.exaustores, 0) ?? 0, drenagem: drenagem ? { ralos: drenagem.ralos, canaletas: drenagem.canaletas, bombas: drenagem.bombas, recalque: drenagem.recalque } : null, pilaresDaTorre: subsolos.pilaresDaTorre, pilaresDaGaragem: subsolos.pilaresDaGaragem } : null,
       estrutura: estrutura ? { pilares: estrutura.pilares, vigas: estrutura.vigas, lajes: estrutura.lajes, noTerreo: estrutura.noTerreo, eixos: estrutura.eixos, blocos: fundacao?.blocos ?? 0, estacas: fundacao?.estacas ?? 0 } : null,
       reservacao,
       agua: resumoDaAgua,

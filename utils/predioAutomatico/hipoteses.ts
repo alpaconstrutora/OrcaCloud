@@ -8,7 +8,7 @@ import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 
-export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'SUBSOLOS' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'EQUIPAMENTOS_DE_INCENDIO' | 'HIDRANTES' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'INCENDIO' | 'CONFERENCIA';
+export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'SUBSOLOS' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'DRENAGEM_DA_GARAGEM' | 'EQUIPAMENTOS_DE_INCENDIO' | 'HIDRANTES' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'INCENDIO' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
@@ -27,6 +27,7 @@ export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
   AGUA_FRIA: 'Água fria (alimentador, recalque, barrilete, coluna no shaft, hidrômetro por unidade no hall, rede das unidades)',
   ESGOTO: 'Esgoto e ventilação (ramais, tubo de queda por grupo molhado, ventilação, desvio no térreo, coletor)',
   PLUVIAL: 'Pluvial da cobertura (ralos, condutores na fachada, caixas de areia, saída na frente)',
+  DRENAGEM_DA_GARAGEM: 'Drenagem da garagem (ralos, canaletas, caixa separadora, poço e bombas de recalque)',
   EQUIPAMENTOS_DE_INCENDIO: 'Equipamentos de incêndio de cada andar (extintores, sinalização, iluminação de emergência, alarme)',
   HIDRANTES: 'Hidrantes, coluna de incêndio, bomba na cobertura e registro de recalque',
   INSTALACOES_NO_TIPO: 'Instalações desenhadas no tipo vão aos andares (cópia viva)',
@@ -162,6 +163,8 @@ export interface PlanoDoPredio {
       /** PA8b: as luzes e os exaustores de todos os subsolos (no quadro da garagem de cada um); 0 sem a elétrica. */
       luzes: number;
       exaustores: number;
+      /** PA8c: a drenagem — ralos e canaletas de todos os subsolos, as bombas do poço; `null` sem ela. */
+      drenagem: { ralos: number; canaletas: number; bombas: number; recalque: boolean } | null;
       pilaresDaTorre: number;
       pilaresDaGaragem: number;
     } | null;

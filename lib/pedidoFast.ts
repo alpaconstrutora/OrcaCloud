@@ -300,14 +300,24 @@ export interface ContextoDasObservacoes {
     fornecedorIdentificado: boolean;
     /** Motivo da falha da leitura, quando falhou. */
     falhaDaLeitura?: string | null;
+    /**
+     * Leitura automática DESLIGADA (sem chave da IA) — decisão do usuário em 15/11/2026:
+     * "IA para o futuro, sem custos". Não é falha: o gestor lança os itens pela foto.
+     */
+    leituraDesligada?: boolean;
 }
 
 /** Observações internas do pedido — o que o gestor precisa conferir. */
 export function observacoesDoFast(c: ContextoDasObservacoes): string {
     const l = c.leitura;
-    const linhas = [`Pedido Fast — comprado por ${c.compradorNome || 'comprador'}. Itens lidos da foto: confira antes de Receber.`];
-    if (c.falhaDaLeitura || l.itens.length === 0) {
-        linhas.push(`Itens a lançar — leitura da foto falhou${c.falhaDaLeitura ? `: ${c.falhaDaLeitura}` : '.'}`);
+    const comprador = c.compradorNome || 'comprador';
+    const semItens = l.itens.length === 0;
+    const linhas = [semItens
+        ? `Pedido Fast — comprado por ${comprador}. Itens a lançar pelo gestor a partir da foto anexada.`
+        : `Pedido Fast — comprado por ${comprador}. Itens lidos da foto: confira antes de Receber.`];
+    // Desligada não é falha (o texto acima já diz o que fazer); falha de verdade ganha o motivo.
+    if (!c.leituraDesligada && (c.falhaDaLeitura || semItens)) {
+        linhas.push(`A leitura automática da foto falhou${c.falhaDaLeitura ? `: ${c.falhaDaLeitura}` : '.'}`);
     }
     if (!c.fornecedorIdentificado) {
         linhas.push(`Fornecedor a conferir: ${l.fornecedor.nome || 'não identificado na foto'}.`);
@@ -332,6 +342,8 @@ export interface EntradaDoPedidoFast {
     retiradoPorEmployeeId: string | null;
     fornecedorIdentificado: boolean;
     falhaDaLeitura?: string | null;
+    /** Leitura automática desligada (sem chave da IA) — ver `ContextoDasObservacoes`. */
+    leituraDesligada?: boolean;
     /** AAAA-MM-DD no fuso de Brasília. */
     hoje: string;
     /** ISO do momento da criação. */
@@ -359,6 +371,7 @@ export function montarPedidoFast(e: EntradaDoPedidoFast) {
             conferencia,
             fornecedorIdentificado: e.fornecedorIdentificado,
             falhaDaLeitura: e.falhaDaLeitura,
+            leituraDesligada: e.leituraDesligada,
         }),
         notes_visible_to_supplier: false,
         is_financial_approved: false,
@@ -371,7 +384,8 @@ export function montarPedidoFast(e: EntradaDoPedidoFast) {
             ...e.leitura,
             conferencia,
             comprador: { id: e.compradorUserId, nome: e.compradorNome },
-            falhaDaLeitura: e.falhaDaLeitura ?? null,
+            falhaDaLeitura: e.leituraDesligada ? null : (e.falhaDaLeitura ?? null),
+            leituraDesligada: !!e.leituraDesligada,
         } satisfies LeituraIaDoPedido,
     };
 }
@@ -381,6 +395,8 @@ export interface LeituraIaDoPedido extends LeituraFast {
     conferencia: ConferenciaDoTotal;
     comprador: { id: string; nome: string };
     falhaDaLeitura: string | null;
+    /** Pedidos antigos (antes de 15/11/2026) não têm o campo: ausente = false. */
+    leituraDesligada?: boolean;
 }
 
 /** O que a tela mostra no fim ("Pedido PC-… criado · N itens · R$ …"). */
@@ -392,5 +408,7 @@ export interface ResultadoDoPedidoFast {
     itens: ItemDoPedidoFast[];
     total: number;
     leituraFalhou: boolean;
+    /** Sem itens porque a leitura automática está desligada (não é falha). */
+    leituraDesligada?: boolean;
     totalConfere: boolean;
 }

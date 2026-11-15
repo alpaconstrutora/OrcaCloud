@@ -1,5 +1,5 @@
 import React from 'react';
-import { Camera, ImagePlus, X, Loader2, CheckCircle2, AlertTriangle, Building2, Search, RotateCcw, ArrowRight, Receipt } from 'lucide-react';
+import { Camera, ImagePlus, X, Loader2, CheckCircle2, AlertTriangle, Building2, Search, RotateCcw, ArrowRight, Receipt, ImageIcon } from 'lucide-react';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
 import { formatMoney } from '../ui/Format';
 import { MAX_FOTOS_FAST, type ResultadoDoPedidoFast } from '../../lib/pedidoFast';
@@ -160,7 +160,7 @@ const PedidoFastFluxo: React.FC<Props> = ({ fonte, obras, chaveUltimaObra = 'ped
                             <p className="text-base font-semibold text-gray-900">Pedido {resultado.numero} criado</p>
                             <p className="text-sm text-gray-600 mt-0.5">
                                 {resultado.leituraFalhou
-                                    ? 'Com a foto anexada. Os itens ficam para o gestor lançar.'
+                                    ? 'Com a foto anexada. Os itens serão lançados pelo gestor a partir da foto.'
                                     : `${resultado.itens.length} ${resultado.itens.length === 1 ? 'item' : 'itens'} · ${formatMoney(resultado.total)}`}
                             </p>
                             <p className="text-sm text-gray-600">
@@ -273,7 +273,15 @@ const PedidoFastFluxo: React.FC<Props> = ({ fonte, obras, chaveUltimaObra = 'ped
                             </span>
                         </p>
                     )}
-                    {leitura.tipo === 'lida' && (leitura.lote.falha || leitura.lote.leitura.itens.length === 0) && (
+                    {/* Leitura automática DESLIGADA (sem chave da IA — "IA para o futuro", 15/11/2026):
+                        não é erro, é o modo de hoje. Texto neutro, sem âmbar. */}
+                    {leitura.tipo === 'lida' && leitura.lote.falha?.codigo === 'IA_NAO_CONFIGURADA' && (
+                        <p className="flex items-start gap-2 text-sm text-gray-700">
+                            <ImageIcon className="w-4 h-4 shrink-0 mt-0.5 text-gray-500" />
+                            Foto guardada. Os itens serão lançados pelo gestor a partir da foto.
+                        </p>
+                    )}
+                    {leitura.tipo === 'lida' && leitura.lote.falha?.codigo !== 'IA_NAO_CONFIGURADA' && (leitura.lote.falha || leitura.lote.leitura.itens.length === 0) && (
                         <p className="flex items-start gap-2 text-sm text-amber-800 bg-amber-50 border border-amber-100 rounded-[6px] px-3 py-2">
                             <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                             <span>

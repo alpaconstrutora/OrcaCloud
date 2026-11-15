@@ -74,6 +74,7 @@ import { podeAcessarMarket } from '../utils/acessoAoMarket';
 import { podeEditarTreinamentos } from '../utils/permissaoTreinamentos';
 import { podeEditarRiscos } from '../utils/permissaoRiscos';
 import { temAcessoTotal } from '../lib/acessoTotal';
+import { permitidoNaOrg, vinculosDoUsuario } from '../utils/modulosPermitidos';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
 const AppraisalModule = React.lazy(() => import('./AppraisalModule'));
@@ -261,38 +262,29 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   // Fora do guard de rota porque também decide o que aparece DENTRO de uma tela:
   // a aba Mapa Regulatório da Planta Inteligente leva a mesma trava que a rota
   // `regulatory-maps` levava — a regra mora aqui uma vez só, não copiada no módulo.
-  const isModuleAllowed = React.useCallback((userPermKey: string, matrixKey: string, padrao?: () => boolean): boolean => {
+  // A decisão por organização mora em `permitidoNaOrg` (utils/modulosPermitidos):
+  // admin vê tudo; permissão do membro; matriz do cargo; sem nada gravado, herda
+  // (`padrao`, na MESMA organização) ou libera.
+  // "Todas as organizações" (15/11/2026): liberava QUALQUER tela; agora libera se
+  // o usuário tem o módulo em pelo menos uma organização de que é membro.
+  // Plano: docs/planos/2026-11-15-permissoes-todas-orgs-busca-truncate.md.
+  const isModuleAllowed = React.useCallback((
+    userPermKey: string,
+    matrixKey: string,
+    padrao?: (naMesmaOrg: (userPermKey: string, matrixKey: string) => boolean) => boolean,
+  ): boolean => {
     // Desenvolvedores sempre têm acesso total
-    if (currentProfile.group === 'DESENVOLVEDOR' || isDevEmail || !activeOrganizationId) return true;
-    // Sem membro correspondente na organização selecionada (pode estar carregando)
-    if (!currentMember) return true;
-    // Admins da organização sempre têm acesso total
-    if (currentMember.role === 'admin') return true;
-
-    const roleId = currentMember.customRoleId || currentMember.role;
-    const matrix = activeOrg?.settings?.module_visibility || {};
-
-    // Suporte ao novo formato por produto — retrocompatível
-    const productCtx = (currentMember as any).productContext || 'platform';
-    let productMatrix: Record<string, Record<string, boolean>>;
-    if ((matrix as any).platform !== undefined || (matrix as any).pro !== undefined || (matrix as any).offices !== undefined) {
-      productMatrix = ((matrix as any)[productCtx] as Record<string, Record<string, boolean>>) || {};
-    } else {
-      productMatrix = matrix as Record<string, Record<string, boolean>>;
+    if (currentProfile.group === 'DESENVOLVEDOR' || isDevEmail) return true;
+    if (activeOrganizationId) {
+      // Sem membro correspondente na organização selecionada (pode estar carregando)
+      if (!currentMember) return true;
+      return permitidoNaOrg(currentMember, activeOrg, userPermKey, matrixKey, padrao);
     }
-    const roleConfig = productMatrix[roleId] || {};
-
-    const userPerm = currentMember.permissions ? (currentMember.permissions as any)[userPermKey] : undefined;
-    if (userPerm !== undefined) {
-      return !!userPerm;
-    }
-    if (roleConfig[matrixKey] !== undefined) {
-      return !!roleConfig[matrixKey];
-    }
-    // Nada gravado: o padrão é liberar — ou herdar de outro módulo, quando a
-    // chave nasceu de dentro dele (Treinamentos herda do RH, 16/10/2026).
-    return padrao ? padrao() : true;
-  }, [currentProfile.group, isDevEmail, activeOrganizationId, currentMember, activeOrg]);
+    const vinculos = vinculosDoUsuario(organizations, session?.user?.email);
+    // Sem vínculo conhecido (lista de organizações ainda carregando): não bloqueia.
+    if (!vinculos.length) return true;
+    return vinculos.some(v => permitidoNaOrg(v.member, v.org, userPermKey, matrixKey, padrao));
+  }, [currentProfile.group, isDevEmail, activeOrganizationId, currentMember, activeOrg, organizations, session?.user?.email]);
 
   // O Mapa Regulatório deixou de ser item de menu e virou aba da Planta
   // Inteligente (docs/planos/2026-10-10-mapa-regulatorio-dentro-da-planta.md). O
@@ -344,7 +336,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
 
     if (activeView === 'treinamentos') {
       // Chave própria; sem nada gravado, herda do RH (utils/permissaoTreinamentos.ts).
-      allowed = isModuleAllowed('canViewTrainings', 'treinamentos', () => isModuleAllowed('canViewLabor', 'rh'));
+      allowed = isModuleAllowed('canViewTrainings', 'treinamentos', naOrg => naOrg('canViewLabor', 'rh'));
     } else if (activeView.startsWith('labor-') || activeView === 'labor-management') {
       allowed = isModuleAllowed('canViewLabor', 'rh');
     } else if (activeView === 'pro-dashboard') {
@@ -370,7 +362,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewQuality', 'quality');
     } else if (activeView === 'riscos') {
       // Chave própria; sem nada gravado, herda de Obras (utils/permissaoRiscos.ts).
-      allowed = isModuleAllowed('canViewRisks', 'riscos', () => isModuleAllowed('canViewBudget', 'obras'));
+      allowed = isModuleAllowed('canViewRisks', 'riscos', naOrg => naOrg('canViewBudget', 'obras'));
     } else if (['eng-obras', 'eng-orcamentos', 'analytic', 'parametric', 'explorer'].includes(activeView)) {
       allowed = isModuleAllowed('canViewBudget', 'obras');
     } else if (activeView.startsWith('supplies-')) {

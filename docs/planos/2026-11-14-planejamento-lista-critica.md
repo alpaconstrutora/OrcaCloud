@@ -177,11 +177,35 @@ engrenagem em oklch(0.551…) = gray-500. 26 testes do plano + 60 dos componente
 `check-ui-standard` no ProjectModal acusa o `searchTerm` em useState (l. 276) — já existia no
 main; é a busca do seletor de cliente do formulário (exceção §3.1).
 
-### 6. Textos — ⏳
+### 6. Textos — ✅ feito
 
-"5.4%"/vírgula (some com o item 1), subtítulo de marketing, modal Novo ("01/2025",
-"ESCOPO TEMPORAL", "dados dinâmicos"), nomes da janela de colunas = cabeçalho, "FILTROS",
-motivo do "Salvar como…", código "001" sugerido repetido.
+(Item 5 no ar em 15/11/2026, PR #453.)
+
+**O que muda:**
+- Modal "Novo …" (criação): saem o selo "OBRA/PLAN/DIAR/BUDG" (sigla em inglês, mono) e o chip
+  "Tipo: Escopo Temporal/Controle de Campo/…"; sai a caixa "Planejamento Ativo — Este registro
+  gerencia dados dinâmicos do projeto"; subtítulo diz o que vem depois ("Dados do planejamento. O
+  cronograma você monta depois de criar, ao abrir o planejamento."; Diário tinha "do orçamento" —
+  corrigido); rodapé "Sincronização ativa: 01/2025 (SP)" (não havia sincronização) vira "Base
+  SINAPI 01/2025 · SP", só em Orçamento.
+- Filtro avançado: "FILTROS" sem caixa alta; "Salvar como…" desligado diz o motivo ("Adicione um
+  filtro para poder salvá-lo", no span — botão desabilitado não mostra title).
+- Janela de Colunas usa o rótulo do cabeçalho em todos os contextos ("Orçamento"/"Obra
+  Vinculada", não "Nome"/"Vinculado").
+- "5.4%" e "Próximo Vencimento" saíram no item 1; o subtítulo de marketing, no item 4.
+
+**Não é bug (registrado):** código "001" repetido — `get_next_planejamento_code` numera POR
+ORGANIZAÇÃO (Garden e Divino estão em orgs diferentes); com o topo em "Todas" o Novo ainda não
+sabe a org e sugere 001.
+
+**Visto para o item 8 (polish), no mesmo modal:** código sugerido em azul-claro (§32), selo
+"HERDADO DA OBRA" em caixa alta, "Empresa do grupo responsável por esta obra" em Planejamento.
+
+**Como sei que terminou (15/11, servidor local, escrita bloqueada, 0 tentativas):** no dialog
+"Novo Planejamento" nenhum de PLAN / Escopo Temporal / Planejamento Ativo / dados dinâmicos /
+Sincronização ativa; tem "O cronograma você monta depois"; "Filtros" com text-transform none;
+title do Salvar como presente; janela de Colunas com "Planejamento" e "Obra Vinculada", sem
+"Nome". 208 testes de 22 arquivos verdes.
 
 ### 7. Celular — ⏳
 

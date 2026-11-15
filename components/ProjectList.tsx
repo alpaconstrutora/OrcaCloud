@@ -1426,7 +1426,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     <ColumnConfigButton
-                        columns={contextColumns.filter(c => c.key !== 'actions')}
+                        // Mesmo rótulo do cabeçalho da tabela (que muda por contexto): a janela dizia
+                        // "Nome"/"Vinculado" e a tabela "Orçamento"/"Obra Vinculada" (crítica 2026-11-14).
+                        columns={contextColumns.filter(c => c.key !== 'actions').map(c => ({ ...c, label: PROJECT_COLUMN_HEADERS[c.key]?.label ?? c.label }))}
                         visibleColumns={tableColumns.visibleColumns}
                         showColumnConfig={tableColumns.showColumnConfig}
                         onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}

@@ -908,12 +908,12 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
           <div className="border-b border-gray-100 bg-gray-50/50 flex justify-between items-start gap-6 shrink-0 px-12 py-8">
             <div className="flex items-start gap-5 flex-1 min-w-0">
               {/* Bloco de Identidade: Ícone */}
+              {/* Sem o selo "OBRA/PLAN/DIAR/BUDG" (sigla em inglês, mono, caixa alta) nem o chip
+                  "Tipo: …": o título logo ao lado já diz o que se está criando (crítica de
+                  Planejamento 2026-11-14, item 6). */}
               <div className="flex flex-col items-center gap-2 shrink-0">
                 <div className="bg-blue-600 p-2.5 rounded-xl text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                   <Building2 className="w-6 h-6" />
-                </div>
-                <div className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm text-center">
-                  {formData.classification === 'OBRA' ? 'OBRA' : (formData.classification === 'PLANEJAMENTO' ? 'PLAN' : (formData.classification === 'DIARIO' ? 'DIAR' : 'BUDG'))}
                 </div>
               </div>
 
@@ -922,17 +922,15 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   <h2 id="titulo-novo-projeto" className="text-xl font-extrabold text-gray-900 tracking-tight flex items-center gap-2">
                     {(formData.classification as string) === 'OBRA' ? 'Nova Obra' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Novo Planejamento' : (formData.classification as string) === 'DIARIO' ? 'Novo Diário' : 'Novo Orçamento'}
                   </h2>
-                  <div className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-100 rounded-md border border-gray-200 shadow-sm">
-                    <span className="text-[9px] font-black text-gray-400 uppercase tracking-tighter">Tipo:</span>
-                    <span className="text-xs font-bold text-gray-600 uppercase">
-                      {(formData.classification as string) === 'OBRA' ? 'Modelo / Obra Base' : (formData.classification as string) === 'PLANEJAMENTO' ? 'Escopo Temporal' : (formData.classification as string) === 'DIARIO' ? 'Controle de Campo' : 'Quantitativo'}
-                    </span>
-                  </div>
                 </div>
                 <p className="text-sm text-gray-500 font-medium leading-tight max-w-4xl">
                   {initialClassification === 'OBRA'
                     ? OBRA_TAB_SUBTITLES[obraTab]
-                    : `Configure os detalhes e a localização ${(formData.classification as string) === 'PLANEJAMENTO' ? 'do planejamento' : 'do orçamento'}.`}
+                    : (formData.classification as string) === 'PLANEJAMENTO'
+                      ? 'Dados do planejamento. O cronograma você monta depois de criar, ao abrir o planejamento.'
+                      : (formData.classification as string) === 'DIARIO'
+                        ? 'Dados do diário. Os registros do dia você lança depois de criar.'
+                        : 'Configure os detalhes e a localização do orçamento.'}
                 </p>
               </div>
             </div>
@@ -2250,14 +2248,6 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                             )}
                           </>
                         )}
-                        {(formData.classification === 'DIARIO' || formData.classification === 'PLANEJAMENTO') && (
-                          <div className="p-4 bg-blue-50/50 rounded-xl border border-blue-100/50">
-                            <p className="text-sm font-bold text-blue-800">
-                              {formData.classification === 'DIARIO' ? 'Diário de Obra Ativo' : 'Planejamento Ativo'}
-                            </p>
-                            <p className="text-xs text-blue-600">Este registro gerencia dados dinâmicos do projeto.</p>
-                          </div>
-                        )}
                       </div>
 
                       {/* Código sequencial — visível para PLANEJAMENTO e DIARIO */}
@@ -2757,12 +2747,14 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
             ? 'flex items-center justify-end gap-2 border-t border-gray-100 pt-4 mt-6'
             : 'bg-gray-50 border-t border-gray-100 flex items-center shrink-0 px-12 py-8 justify-between'
           }>
-            {mode !== 'edit' && (
-              <div className="flex items-center gap-2 text-xs text-gray-400 bg-white px-3 py-1.5 rounded-full border border-gray-200 italic shadow-sm">
+            {/* Era "Sincronização ativa: 01/2025 (SP)" em toda criação — não há sincronização: é a
+                base de preços do orçamento. Só faz sentido em Orçamento (crítica 2026-11-14, item 6). */}
+            {mode !== 'edit' && (formData.classification as string) === 'ORCAMENTO' ? (
+              <div className="flex items-center gap-2 text-xs text-gray-500 bg-white px-3 py-1.5 rounded-full border border-gray-200 shadow-sm">
                 <Cloud className="w-3.5 h-3.5" />
-                Sincronização ativa: {formData.referenceMonth} ({formData.state || 'Geral'})
+                Base SINAPI {formData.referenceMonth} · {formData.state || 'Geral'}
               </div>
-            )}
+            ) : mode !== 'edit' ? <span /> : null}
             {mode === 'edit' && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />}
             <div className="flex items-center gap-2">
               {mode === 'edit' ? (

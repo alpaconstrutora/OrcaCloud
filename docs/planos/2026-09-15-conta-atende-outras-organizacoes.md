@@ -19,10 +19,12 @@ que também existia para plano de contas. 13 movimentos da Itaú apontam para CC
 | Data | Pergunta | Resposta |
 |---|---|---|
 | 2026-09-15 | Org sem plano de contas: lista vazia ou plano das outras orgs? | Nem um nem outro por padrão: a conta tem UMA org dona e, **se configurada**, atende outras (algumas ou todas). |
+| 2026-11-15 | Credor colaborador no Extrato segue o "Atende também" da conta? | **Não.** Segue RH › Colaboradores › "Disponibilizar Colaborador" (`employee_org_shares`): na conta, os colaboradores ativos da org **dona** + os disponibilizados para ela. "Atende também" continua valendo para CC, plano de contas, obra, fornecedor e cliente. |
 
 Decisões minhas (a confirmar na tela):
 - "Atender" vale para as **dimensões de classificação** do extrato: centro de custo, plano
-  de contas, obra, fornecedor/credor, cliente, colaborador. Regras e memória de
+  de contas, obra, fornecedor/credor, cliente, ~~colaborador~~ (saiu em 2026-11-15, ver a
+  decisão acima). Regras e memória de
   classificação continuam por org dona da conta.
 - Modelo: `payment_accounts.serves_all_organizations` (bool) + tabela
   `payment_account_organizations (payment_account_id, organization_id)`.
@@ -57,6 +59,7 @@ Decisões minhas (a confirmar na tela):
 - [x] 6 LazySelect com `<optgroup>` — conferido: "Alpa (22)" / "Garden Cambuhy SPE (3)"
 - [x] 7 CostCenterSelect agrupado — cabeçalhos por org no drawer do lote; teste puro
 - [x] 8 rótulo "— outra organização —" com UUID no `title`
+- [ ] 9 (2026-11-15) Credor colaborador pela disponibilização — `laborService.listCredoresColaboradoresDaOrg(orgDona)` + efeito próprio em `BankReconciliation.tsx` (`orgDonaDaConta`); teste `__tests__/laborServiceCredoresDaOrg.test.ts`. Pronto quando: na conta Sicredi - Garden o drawer de Credor lista os da Garden + os disponibilizados para ela (e não Josmar/Airton), e na Inter aparecem Rogério e iago.
 
 Não verificado na tela (conta de leitura é Membro, não gestor — RLS barra a gravação):
 salvar o "Atende também" de verdade. O caminho de escrita foi provado por sonda

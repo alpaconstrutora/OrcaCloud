@@ -1,8 +1,10 @@
 import { supabase } from '../lib/supabase';
 import type {
     ProjectRisk, ProjectRiskInput, RiskAction, RiskActionInput, RiskAuditLog, RiskCatalogItem, RiskCategoryRow,
-    RiskEvaluation, RiskEvaluationInput, RiskMatrixConfig,
+    RiskEvaluation, RiskEvaluationInput, RiskEvent, RiskEventInput, RiskLink, RiskMatrixConfig, RiskModuloVinculo,
+    RiskProjectProfile, RiskSinal,
 } from '../types/risk';
+import { approvalService } from './approvalService';
 import { RISK_MATRIZ_PADRAO } from '../utils/riskScoring';
 
 /**
@@ -342,6 +344,139 @@ export const riskService = {
         const contagem: Record<string, number> = {};
         for (const row of data ?? []) if (row.sst_document_id) contagem[row.sst_document_id] = (contagem[row.sst_document_id] ?? 0) + 1;
         return contagem;
+    },
+    // ══ Fase 2 (15/11/2026) — plano F2.1–F2.5 ══════════════════════════════════════
+
+    // ── F2.1 Ocorrências ─────────────────────────────────────────────────────
+    async listarOcorrencias(params: { riskId?: string; organizationId?: string | null }): Promise<RiskEvent[]> {
+        let q = supabase.from('risk_events').select('*').order('data_ocorrencia', { ascending: false });
+        if (params.riskId) q = q.eq('project_risk_id', params.riskId);
+        if (params.organizationId) q = q.eq('organization_id', params.organizationId);
+        const { data, error } = await q;
+        if (error) throw error;
+        return (data ?? []) as RiskEvent[];
+    },
+
+    /**
+     * Registra a ocorrência. Com `materializa`, o banco guarda a avaliação vigente
+     * (`avaliacao_referencia_id`, CA08) e põe o risco em "materializado"; aqui só
+     * relemos o risco e auditamos.
+     */
+    async registrarOcorrencia(r: ProjectRisk, input: RiskEventInput): Promise<{ ocorrencia: RiskEvent; risco: ProjectRisk }> {
+        const { data, error } = await supabase.from('risk_events')
+            .insert({ ...input, organization_id: r.organization_id, project_risk_id: r.id, project_id: input.project_id ?? r.project_id })
+            .select('*').single();
+        if (error) throw error;
+        const ocorrencia = data as RiskEvent;
+        await auditar([{ organization_id: r.organization_id, project_risk_id: r.id, entity_type: 'event', entity_id: ocorrencia.id,
+            entity_label: ocorrencia.titulo.slice(0, 120), action: ocorrencia.materializa ? 'materialize' : 'create',
+            new_value: { tipo: ocorrencia.tipo, impacto_financeiro: ocorrencia.impacto_financeiro, atraso_dias: ocorrencia.atraso_dias } }]);
+        const risco = (await this.obterRisco(r.id)) ?? r;
+        return { ocorrencia, risco };
+    },
+
+    async atualizarOcorrencia(r: ProjectRisk, antes: RiskEvent, patch: Partial<RiskEventInput>): Promise<RiskEvent> {
+        const { materializa: _m, ...semMaterializa } = patch;   // materializar é só na criação
+        const mudancas = diffParaAuditoria(antes as unknown as Record<string, unknown>, semMaterializa as Record<string, unknown>);
+        if (!mudancas.length) return antes;
+        const dados = Object.fromEntries(mudancas.map(m => [m.field_name, m.new_value]));
+        const { data, error } = await supabase.from('risk_events').update(dados).eq('id', antes.id).select('*').single();
+        if (error) throw error;
+        const ev = data as RiskEvent;
+        await auditar(mudancas.map(m => ({ organization_id: r.organization_id, project_risk_id: r.id, entity_type: 'event' as const,
+            entity_id: ev.id, entity_label: ev.titulo.slice(0, 120), action: 'update' as const, ...m })));
+        return ev;
+    },
+
+    // ── F2.2 Vínculos ────────────────────────────────────────────────────────
+    async listarVinculos(params: { riskId?: string; organizationId?: string | null }): Promise<RiskLink[]> {
+        let q = supabase.from('risk_links').select('*').order('created_at');
+        if (params.riskId) q = q.eq('project_risk_id', params.riskId);
+        if (params.organizationId) q = q.eq('organization_id', params.organizationId);
+        const { data, error } = await q;
+        if (error) throw error;
+        return (data ?? []) as RiskLink[];
+    },
+
+    /** Vincula um objeto de outro módulo (id do sistema de origem — CA10). Duplicado = erro 23505. */
+    async vincular(r: ProjectRisk, alvo: { modulo: RiskModuloVinculo; externalId: string; externalRef?: Record<string, unknown>; rotulo: string }): Promise<RiskLink> {
+        const { data, error } = await supabase.from('risk_links').insert({
+            organization_id: r.organization_id, project_risk_id: r.id, modulo: alvo.modulo,
+            external_id: alvo.externalId, external_ref: alvo.externalRef ?? {}, external_label: alvo.rotulo,
+        }).select('*').single();
+        if (error) throw error;
+        const link = data as RiskLink;
+        await auditar([{ organization_id: r.organization_id, project_risk_id: r.id, entity_type: 'link', entity_id: link.id,
+            entity_label: alvo.rotulo, action: 'link', new_value: { modulo: alvo.modulo, external_id: alvo.externalId } }]);
+        return link;
+    },
+
+    async desvincular(r: ProjectRisk, link: RiskLink): Promise<void> {
+        const { error } = await supabase.from('risk_links').delete().eq('id', link.id);
+        if (error) throw error;
+        await auditar([{ organization_id: r.organization_id, project_risk_id: r.id, entity_type: 'link', entity_id: link.id,
+            entity_label: link.external_label, action: 'unlink', old_value: { modulo: link.modulo, external_id: link.external_id } }]);
+    },
+
+    // ── F2.5 Sinais (calculados no banco pelos vínculos; a RLS de cada origem vale) ──
+    async listarSinais(organizationId?: string | null): Promise<RiskSinal[]> {
+        const { data, error } = await supabase.rpc('fn_risk_sinais', { p_org: organizationId ?? null });
+        if (error) throw error;
+        return (data ?? []) as RiskSinal[];
+    },
+
+    // ── F2.3 Alçada (aprovadores por tipo 'project_risk'; o banco trava quem não pode) ──
+    async enviarParaAprovacao(r: ProjectRisk, motivo: string): Promise<ProjectRisk> {
+        await approvalService.submit('project_risk', r.id, {}, { organizationId: r.organization_id, amount: 0, semFaixa: 'exigir1' });
+        await auditar([{ organization_id: r.organization_id, project_risk_id: r.id, entity_type: 'risk', entity_id: r.id,
+            entity_label: `${r.codigo} ${r.titulo}`, action: 'submit', reason: motivo }]);
+        return (await this.obterRisco(r.id)) ?? r;
+    },
+
+    async aprovar(r: ProjectRisk, nivel: 1 | 2, emailDeQuemAprova: string, observacao?: string): Promise<ProjectRisk> {
+        await approvalService.approve('project_risk', r.id, nivel, emailDeQuemAprova,
+            { level1_label: 'Aprovação do risco', level2_label: 'Aprovação do risco (2º nível)' }, observacao);
+        await auditar([{ organization_id: r.organization_id, project_risk_id: r.id, entity_type: 'risk', entity_id: r.id,
+            entity_label: `${r.codigo} ${r.titulo}`, action: 'approve', reason: observacao ?? null, metadata: { nivel } }]);
+        return (await this.obterRisco(r.id)) ?? r;
+    },
+
+    async reprovar(r: ProjectRisk, emailDeQuemReprova: string, motivo: string): Promise<ProjectRisk> {
+        if (!motivo.trim()) throw new Error('Informe o motivo da reprovação.');
+        await approvalService.reject('project_risk', r.id, emailDeQuemReprova, motivo);
+        await auditar([{ organization_id: r.organization_id, project_risk_id: r.id, entity_type: 'risk', entity_id: r.id,
+            entity_label: `${r.codigo} ${r.titulo}`, action: 'reject', reason: motivo }]);
+        return (await this.obterRisco(r.id)) ?? r;
+    },
+
+    /** Pode aprovar o nível? Mesma regra do banco (lista vazia = liberado a todos). */
+    async podeAprovar(organizationId: string, nivel: 1 | 2): Promise<boolean> {
+        const { data, error } = await supabase.rpc('fn_alcada_pode_aprovar', { p_org: organizationId, p_entity: 'project_risk', p_valor: 0, p_nivel: nivel });
+        if (error) throw error;
+        return Boolean(data);
+    },
+
+    // ── F2.4 Perfil da obra e criação em lote ────────────────────────────────
+    async obterPerfilObra(projectId: string): Promise<RiskProjectProfile | null> {
+        const { data, error } = await supabase.from('risk_project_profiles')
+            .select('project_id, organization_id, tipologia, condicoes').eq('project_id', projectId).maybeSingle();
+        if (error) throw error;
+        return data as RiskProjectProfile | null;
+    },
+
+    async salvarPerfilObra(perfil: RiskProjectProfile): Promise<void> {
+        const { error } = await supabase.from('risk_project_profiles').upsert(perfil, { onConflict: 'project_id' });
+        if (error) throw error;
+    },
+
+    /** Cria um risco por item do catálogo (CA02: cada um copia os textos). Falha de um não derruba os outros. */
+    async criarEmLote(organizationId: string, fichas: ProjectRiskInput[]): Promise<{ criados: ProjectRisk[]; falhas: { titulo: string; erro: string }[] }> {
+        const criados: ProjectRisk[] = []; const falhas: { titulo: string; erro: string }[] = [];
+        for (const f of fichas) {
+            try { criados.push(await this.criarRisco(organizationId, f)); }
+            catch (e) { falhas.push({ titulo: f.titulo, erro: e instanceof Error ? e.message : String(e) }); }
+        }
+        return { criados, falhas };
     },
 };
 

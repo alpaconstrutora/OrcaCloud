@@ -8,7 +8,7 @@ import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 
-export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'CONFERENCIA';
+export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'INCENDIO' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
@@ -28,6 +28,7 @@ export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
   PLUVIAL: 'Pluvial da cobertura (ralos, condutores na fachada, caixas de areia, saída na frente)',
   INSTALACOES_NO_TIPO: 'Instalações desenhadas no tipo vão aos andares (cópia viva)',
   PRESSAO_DA_AGUA: 'Pressão da água fria no prédio inteiro (pressurizador em cima, VRP embaixo)',
+  INCENDIO: 'Incêndio: classificação, exigências e rota de fuga em todos os andares',
   CONFERENCIA: 'Conferência (avisos da divisão, da montagem e das plantas)',
 };
 
@@ -60,6 +61,8 @@ export interface HipotesesDoPredio {
   esgoto: boolean;
   /** PA7b: o pluvial da cobertura — pede a cobertura. */
   pluvial: boolean;
+  /** PA9a: a classificação de incêndio, as exigências e a rota de fuga de todos os andares (só confere). */
+  incendio: boolean;
   /** Largura da porta de entrada do prédio, no hall, mm. */
   larguraDoAcessoMm: number;
   /** Pé-direito do pavimento da cobertura (a área técnica), mm. */
@@ -82,6 +85,7 @@ export const HIPOTESES_DO_PREDIO_PADRAO: HipotesesDoPredio = {
   agua: true,
   esgoto: true,
   pluvial: true,
+  incendio: true,
   larguraDoAcessoMm: 1200,
   peDireitoDaCoberturaMm: 3000,
   espessuraDaLajeMm: 120,
@@ -194,6 +198,21 @@ export interface PlanoDoPredio {
     } | null;
     /** PA7b: o pluvial da cobertura — a área, a intensidade, a vazão e os condutores; `null` desligado ou sem cobertura. */
     pluvial: { areaM2: number; intensidadeMmH: number; vazaoLMin: number; condutores: number; dnVerticalMm: number; dnHorizontalMm: number | null } | null;
+    /**
+     * PA9a: o incêndio — a classificação (divisão, grupo, altura até o último andar com unidades, área), as medidas
+     * exigidas, e a rota de fuga de cada andar (ambientes, sem rota, acima do limite, a pior distância); `null` desligado.
+     */
+    incendio: {
+      divisao: string | null;
+      grupo: string | null;
+      alturaM: number;
+      areaM2: number;
+      exigidas: string[];
+      condicionais: string[];
+      dispensadas: number;
+      limiteM: number;
+      andares: { nome: string; ambientes: number; semRota: number; naoAtendem: number; piorM: number | null }[];
+    } | null;
   };
 }
 

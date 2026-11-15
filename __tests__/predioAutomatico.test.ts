@@ -67,7 +67,7 @@ const pedidoDoR4 = (uso: 'RESIDENCIAL' | 'GARAGEM' = 'RESIDENCIAL') => pedidoDo(
 /** O R8 do marco (lote 40 × 60, bloco 30 × 16, 8 pavimentos: 5 unidades por andar, um elevador). */
 const pedidoDoR8 = () => pedidoDo([40000, 60000], [point(5000, 20000), point(35000, 20000), point(35000, 36000), point(5000, 36000)], 8);
 /** O caminho da PA2 (sem térreo nem cobertura) — o que o teste de equivalência compara com os botões de antes. */
-const SO_O_TIPO = { terreo: false, cobertura: false, estrutura: false, eletrica: false, agua: false, esgoto: false };
+const SO_O_TIPO = { terreo: false, cobertura: false, estrutura: false, eletrica: false, agua: false, esgoto: false, incendio: false };
 
 /** O caminho de antes: "Montar neste estudo" e depois "Gerar a planta das unidades", dois lotes. */
 function peloPainelDoBloco(p: PedidoDoPredio): BlueprintModel {
@@ -91,7 +91,7 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     const plano = planejarPredioDoPedido(p, { aoConcluirEtapa: (e, i, total) => avisos.push(`${i}/${total} ${e.id}`) });
     expect(plano.etapas.map((e) => e.id)).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO);
     expect(avisos).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO.map((id, i) => `${i + 1}/${ORDEM_DAS_ETAPAS_DO_PREDIO.length} ${id}`));
-    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'PLUVIAL:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
+    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'PLUVIAL:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'INCENDIO:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
     expect(snapshotHash(plano.resultado)).toBe(snapshotHash(peloPainelDoBloco(p)));
     const tipo = plano.resultado.levels.find((l) => l.id === plano.tipoLevelId)!;
     expect(tipo.copiaInstalacoes).toBe(true);
@@ -661,5 +661,33 @@ describe('prédio automático — a água fria e o esgoto (PA6, PA7a)', { timeou
     expect(pluvial.condutores).toBe(Math.max(2, Math.ceil(1600 / capacidadeDoVerticalLMin(100))));
     expect(pluvial.condutores).toBeGreaterThan(2);
     expect(plano.pendencias.some((x) => /escolha a cidade/.test(x.texto))).toBe(false);
+  });
+
+  it('PA9a, "pronto quando": o R8 classificado A-2, com a altura até o último andar com unidades, e rota de fuga em todos os andares', () => {
+    const plano = r8();
+    const m = plano.resultado;
+    const inc = plano.resumo.incendio!;
+    expect(plano.etapas.find((e) => e.id === 'INCENDIO')!.situacao).toBe('CALCULOU');
+    expect(inc.divisao).toBe('A-2');
+    expect(inc.grupo).toBe('A');
+    // O 8º pavimento a 21 m do térreo — a cobertura técnica (24 m) não conta.
+    const elev = (nome: string) => m.levels.find((l) => l.name === nome)!.elevationMm;
+    expect(inc.alturaM).toBe((elev('Torre · 8º pav') - elev('Torre · 1º pav (térreo)')) / 1000);
+    expect(inc.exigidas).toContain('Saídas de emergência');
+    // Rota em TODOS os andares: o térreo, os 7 com unidades e a cobertura — nenhum ambiente sem caminho nem acima do limite.
+    const andares = m.levels.filter((l) => l.id === plano.tipoLevelId || l.tipoDeId === plano.tipoLevelId).map((l) => l.name);
+    for (const nome of andares) expect(inc.andares.find((a) => a.nome === nome)?.ambientes ?? 0).toBeGreaterThan(0);
+    expect(inc.andares.filter((a) => a.semRota > 0 || a.naoAtendem > 0)).toEqual([]);
+    expect(inc.andares.map((a) => a.nome)).toContain('Torre · cobertura');
+    expect(plano.pendencias.some((x) => x.grupo === 'VERIFICACAO' && /Rota de fuga/.test(x.texto))).toBe(false);
+  });
+
+  it('PA9a: a escada do tipo vai até a cobertura (sem isso, do 4º andar em diante não havia escada e a rota não saía)', () => {
+    const plano = r8();
+    const m = plano.resultado;
+    const cobertura = m.levels.find((l) => l.name === 'Torre · cobertura')!;
+    const doTipo = m.stairs.filter((e) => e.levelId === plano.tipoLevelId);
+    expect(doTipo.length).toBeGreaterThan(0);
+    for (const e of doTipo) expect(e.ateLevelId).toBe(cobertura.id);
   });
 });

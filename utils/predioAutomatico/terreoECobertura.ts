@@ -216,6 +216,8 @@ export function montarCobertura(ctx: ContextoDoPredio, base: BaseDoPredio, hip: 
   const cotaMm = base.pisos[base.pisos.length - 1] + b.peDireitoMm;
   n += ctx.aplicar([{ type: 'AddLevel', name: `${b.nome} · cobertura`.slice(0, 60), elevationMm: cotaMm, defaultHeightMm: hip.peDireitoDaCoberturaMm, uid: uidDaCobertura(b) }]);
   const cob = ctx.m.levels.find((l) => l.uid === uidDaCobertura(b))!.id;
+  // A escada do tipo chega à cobertura (a área técnica tem de ter saída — PA9).
+  n += ctx.aplicar(ctx.m.stairs.filter((e) => e.levelId === base.tipoLevelId).map((e): Command => ({ type: 'SetEscadaProps', escadaId: e.id, ateLevelId: cob })));
   // Sem rótulo: a prancha escreve o da estrutura no centro da peça e o nome do ambiente no centro do espaço — aqui a laje
   // É o espaço, e os dois textos caíam um sobre o outro. A numeração das lajes (L1, L2…) vem com a estrutura (PA4).
   // PA4: com a estrutura lançada, a laje do último andar (o teto dele) JÁ é a da cobertura — outra aqui dobraria.

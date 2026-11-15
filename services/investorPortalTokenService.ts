@@ -161,10 +161,12 @@ export const investorPortalTokenService = {
      * docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md). O estudo do snapshot já
      * vem montado como o app o carregou (espelho, estrutura, fontes): não passa por `montarEstudoDoPortal`.
      */
-    async getVersaoPublicadaByToken(token: string, studyId: string): Promise<VersaoPublicada> {
-        const { data, error } = await supabase.rpc('fn_investor_portal_get_study', {
+    async getVersaoPublicadaByToken(token: string, opportunityId: string): Promise<VersaoPublicada> {
+        // Pela OPORTUNIDADE (revisão da Fase 2): duas oportunidades publicadas do mesmo estudo podem
+        // publicar versões diferentes; pelo estudo, o investidor via a da mais nova.
+        const { data, error } = await supabase.rpc('fn_investor_portal_get_versao', {
             p_token: token,
-            p_study_id: studyId
+            p_opportunity_id: opportunityId,
         });
         if (error) throw error;
         const r = data as { valid?: boolean; error?: string; study?: SnapshotDaVersao; cenarios?: ImovibScenario[]; relatorio?: SnapshotDaVersao['relatorio']; versao?: VersaoPublicada['versao']; organizacao?: VersaoPublicada['organizacao'] } | null;

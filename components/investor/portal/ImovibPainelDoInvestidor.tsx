@@ -61,7 +61,7 @@ const ACCENTS: Record<Accent, { card: string; interativo: string; fundo: boolean
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 const num = (v: number, casas = 2) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas });
 const tir = (v: number) => (Number.isFinite(v) ? `${num(v)}% a.a.` : 'Sem TIR');
-const dataBR = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
+import { dataBRDeBrasilia as dataBR } from '../../../utils/dataDeBrasilia';
 
 /** Tela estreita (celular): rótulos dos gráficos menores e marcos em lista. Sem matchMedia (teste), desktop. */
 function useTelaEstreita(): boolean {
@@ -228,7 +228,7 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <Cartao accent={accent} titulo="Cenários" subtitulo={cenarios.length ? 'VPL do estudo e de cada cenário avaliado' : 'Nenhum cenário salvo nesta versão'}>
+                <Cartao accent={accent} titulo="Cenários" subtitulo={cenarios.length ? 'VPL do estudo e de cada cenário avaliado' : versaoPublicada ? 'Nenhum cenário salvo nesta versão' : 'Nenhum cenário salvo no estudo'}>
                     <GraficoCenarios linhas={linhasDosCenarios} corPrincipal={a.serie} larguraDosRotulos={estreita ? 84 : 140} className="h-56" />
                 </Cartao>
                 <Cartao accent={accent} titulo="Sensibilidade do VPL" subtitulo="Quanto cada premissa move o VPL, para cima e para baixo">

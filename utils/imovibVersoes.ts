@@ -12,6 +12,7 @@ import { computeImovibMath } from './imovibMotor';
 import { calcularIndicadores } from './imovibIndicadores';
 import { memorialDePremissas } from './imovibMemorial';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
+import { diaDeBrasilia } from './dataDeBrasilia';
 
 /** Indicadores do momento do congelamento. Número que não existe (TIR sem troca de sinal) é null: o JSON não guarda NaN. */
 export interface ResultadosDaVersao {
@@ -137,7 +138,7 @@ export function dadosDoRelatorioDaVersao(snapshot: SnapshotDaVersao, versao: Pic
         cenarios: cenarios ?? [],
         dueDiligence: relatorio?.dueDiligence ?? [],
         socios: relatorio?.socios ?? [],
-        hoje: versao.created_at.slice(0, 10),
+        hoje: diaDeBrasilia(versao.created_at),
     };
 }
 
@@ -154,13 +155,51 @@ export interface VersaoPublicada {
     organizacao: { name: string | null; logo_url: string | null };
 }
 
+/** Colunas internas do estudo (parecer, critérios, notas de fonte): não vão ao investidor. A mesma
+ *  lista que fn_investor_portal_get_versao tira no banco. */
+export const CHAVES_INTERNAS_DO_ESTUDO = [
+    'premise_notes', 'recommendation', 'recommendation_notes', 'recommended_by', 'recommended_at',
+    'hurdle_irr_spread', 'hurdle_margin_percent', 'hurdle_max_exposure', 'recommendation_snapshot', 'recommended_by_user_id',
+] as const;
+
+/** Os campos de cada lista que o relatório e o painel usam — o resto (notas, fonte, responsável,
+ *  quem conferiu) é interno. Os mesmos que fn_investor_portal_get_versao monta no banco. */
+export const CAMPOS_PARA_O_INVESTIDOR = {
+    cenarios: ['id', 'name', 'kind', 'choques', 'sort_order'],
+    comparaveis: ['id', 'name', 'distance_km', 'launch_date', 'total_units', 'sold_units', 'price_sqm'],
+    riscos: ['id', 'category', 'description', 'probability', 'impact', 'mitigation', 'status', 'sort_order'],
+    dueDiligence: ['id', 'item_key', 'label', 'status', 'notes', 'sort_order'],
+    socios: ['id', 'name', 'share_percent', 'capital_percent', 'sort_order'],
+} as const;
+
+const so = <T>(lista: T[] | undefined, campos: readonly string[]): T[] =>
+    (lista ?? []).map(x => Object.fromEntries(campos.filter(c => c in (x as object)).map(c => [c, (x as Record<string, unknown>)[c]])) as T);
+
+/**
+ * O que o investidor vê de uma versão, igual no portal e na prévia do gestor (revisão da Fase 2):
+ * o estudo sem as chaves internas e as listas só com os campos do relatório.
+ */
 export function versaoPublicadaDoSnapshot(
     snapshot: SnapshotDaVersao,
     versao: VersaoPublicada['versao'],
     organizacao: VersaoPublicada['organizacao'],
 ): VersaoPublicada {
-    const { cenarios, relatorio, ...study } = snapshot;
-    return { study: study as ImovibStudy, cenarios: cenarios ?? [], relatorio: relatorio ?? {}, versao, organizacao };
+    const { cenarios, relatorio, ...resto } = snapshot;
+    const study = { ...resto } as Record<string, unknown>;
+    for (const k of CHAVES_INTERNAS_DO_ESTUDO) delete study[k];
+    const C = CAMPOS_PARA_O_INVESTIDOR;
+    return {
+        study: study as unknown as ImovibStudy,
+        cenarios: so(cenarios, C.cenarios),
+        relatorio: {
+            comparaveis: so(relatorio?.comparaveis, C.comparaveis),
+            riscos: so(relatorio?.riscos, C.riscos),
+            dueDiligence: so(relatorio?.dueDiligence, C.dueDiligence),
+            socios: so(relatorio?.socios, C.socios),
+        },
+        versao,
+        organizacao,
+    };
 }
 
 export const snapshotDaVersaoPublicada = (vp: VersaoPublicada): SnapshotDaVersao =>

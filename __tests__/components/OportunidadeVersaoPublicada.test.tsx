@@ -73,4 +73,11 @@ describe('oportunidade com estudo do Imovib publica uma versão', () => {
         await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
         expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ imovib_study_id: 'e2', imovib_version_id: null, is_published: false }), []);
     });
+
+    it('falha ao ler as versões: diz que não leu, não que não há versão', async () => {
+        svc.listarVersoes.mockRejectedValue(new Error('rede caiu'));
+        render(<OpportunityForm initial={{ title: 'Garden', imovib_study_id: 'e1' }} organizationId="org" onSave={vi.fn()} onClose={vi.fn()} />);
+        expect(await screen.findByText('Não foi possível ler as versões do estudo: rede caiu')).toBeTruthy();
+        expect(screen.queryByText(/ainda não tem versão congelada/)).toBeNull();
+    });
 });

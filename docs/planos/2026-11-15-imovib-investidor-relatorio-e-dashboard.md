@@ -92,6 +92,32 @@ A referência (reel de code.xr, "Glassy Dashboard": glassmorphism, acentos lumin
 - [x] Conferir se o **investidor logado por e-mail** (sem token) consegue ler oportunidade/versão (lê por RLS de membro da org).
 - Registrar o resultado em "Pendências" deste plano.
 
+## Revisão independente das Fases 2–5 (15/11)
+
+Sem Critical. Corrigido (testes RED→GREEN; migration `aplicar_20271115970000_investidor_versao_por_oportunidade.sql`,
+provada em transação desfeita — **aplicar com OK**):
+
+- [x] **Important** — a RPC mandava as listas do relatório inteiras (notas e vínculo dos sócios, notas e fonte dos
+  comparáveis, responsável do risco, quem conferiu a due diligence). Agora cada lista vai só com os campos do relatório
+  (`CAMPOS_PARA_O_INVESTIDOR`, igual no banco e no front).
+- [x] **Important** — a prévia do gestor não tirava as chaves internas (o PDF baixado nela levaria as fontes das premissas);
+  e no portal a edição do investidor dizia "N de N premissas sem fonte". `versaoPublicadaDoSnapshot` faz o mesmo recorte
+  da RPC; a edição do investidor sai sem as colunas Fonte/Data e sem a contagem.
+- [x] **Important** — duas oportunidades publicadas do mesmo estudo: o investidor via a versão da mais nova. Nova
+  `fn_investor_portal_get_versao(token, oportunidade)`; a antiga (por estudo) delega para ela, até o app novo estar no ar.
+- [x] Minor — estudo de outra organização: gatilho e RPC conferem que o estudo é da organização da oportunidade/do link.
+- [x] Minor — falha na captura (ou num gráfico) derrubava o PDF: sai só com texto e tabelas.
+- [x] Minor — aba em segundo plano pausava a geração (`requestAnimationFrame`): `setTimeout` de 50 ms como alternativa.
+- [x] Minor — datas da versão em UTC (congelada depois das 21h aparecia no dia seguinte): `utils/dataDeBrasilia.ts`.
+- [x] Minor — prévia sem versão dizia "nenhum cenário": usa os cenários do estudo atual; erro ao ler as versões no
+  formulário dizia "não tem versão": diz que não leu.
+- Ruling: **os números são recalculados pelo motor atual sobre o snapshot**, não lidos do `results` congelado — assim
+  indicadores, gráficos e PDF ficam coerentes entre si. Custo: uma correção futura do motor muda o que o investidor vê de
+  uma versão já publicada (e pode divergir da aba Versões, que mostra o `results` do momento). Revisitar se o usuário
+  quiser números imutáveis.
+- Minor (não feito): logo que falha por rede passageira fica sem logo até recarregar (cache do `null`); logo SVG/WebP
+  pequena sai sem logo (o jsPDF só aceita PNG/JPEG aqui).
+
 ## Pendências (registradas 15/11, fora do pedido — não consertadas)
 
 - **Data Room pelo link fica vazio em silêncio.** `opportunity_documents` só tem policy para

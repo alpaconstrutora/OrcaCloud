@@ -28,7 +28,7 @@ import { calcularIndicadores, textoDoPayback } from '../../utils/imovibIndicador
 import { IMOVIB_DEFAULTS } from '../../constants/imovibDefaults';
 import { composicaoDoCapital, ROTULO_DO_CAPITAL, COR_DO_CAPITAL } from '../../utils/imovibFinanciamento';
 import { TITULO_VGV_LIQUIDO, vgvLiquidoPassaDoBruto, notaDoVgvLiquido } from '../../constants/imovibClassificacao';
-import { ImovibStudy } from '../../types';
+import { ImovibStudy, ImovibScenario } from '../../types';
 import type { VersaoPublicada } from '../../utils/imovibVersoes';
 import ImovibPainelDoInvestidor from './portal/ImovibPainelDoInvestidor';
 import { InvestmentSimulator } from './InvestmentSimulator';
@@ -75,6 +75,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
     // vê o estudo atual, avisado de que ainda não é o que o investidor verá.
     const [versaoPublicada, setVersaoPublicada] = React.useState<VersaoPublicada | null>(null);
     const [erroDoEstudo, setErroDoEstudo] = React.useState<string | null>(null);
+    // Prévia sem versão: os cenários do estudo atual (a versão traz os dela).
+    const [cenariosAoVivo, setCenariosAoVivo] = React.useState<ImovibScenario[]>([]);
 
     React.useEffect(() => {
         if (!op.imovib_study_id) { setStudy(null); setVersaoPublicada(null); return; }
@@ -82,11 +84,12 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
         setLoadingStudy(true);
         setErroDoEstudo(null);
         const versao = portalToken
-            ? investorPortalTokenService.getVersaoPublicadaByToken(portalToken, op.imovib_study_id)
+            ? investorPortalTokenService.getVersaoPublicadaByToken(portalToken, op.id!)
             : op.imovib_version_id ? imovibService.versaoPublicada(op.imovib_version_id) : null;
         const carga: Promise<void> = versao
             ? versao.then(vp => { if (vivo) { setVersaoPublicada(vp); setStudy(vp.study); } })
-            : imovibService.getStudyById(op.imovib_study_id, true).then(s => { if (vivo) { setVersaoPublicada(null); setStudy(s); } });
+            : Promise.all([imovibService.getStudyById(op.imovib_study_id, true), imovibService.listarCenarios(op.imovib_study_id)])
+                .then(([s, c]) => { if (vivo) { setVersaoPublicada(null); setStudy(s); setCenariosAoVivo(c); } });
         carga
             .catch(err => { if (vivo) { setStudy(null); setVersaoPublicada(null); setErroDoEstudo((err as Error).message); } })
             .finally(() => { if (vivo) setLoadingStudy(false); });
@@ -615,7 +618,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                             <ImovibPainelDoInvestidor
                                                 versaoPublicada={versaoPublicada}
                                                 study={study}
-                                                cenarios={versaoPublicada?.cenarios ?? []}
+                                                cenarios={versaoPublicada?.cenarios ?? cenariosAoVivo}
                                                 accent={portalToken ? 'portal' : 'indigo'}
                                                 aviso={!versaoPublicada && !portalToken ? (
                                                     <p className="rounded-[10px] bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">

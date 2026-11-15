@@ -77,7 +77,12 @@ function graficoDe(id: GraficoId, d: DadosDoRelatorio): React.ReactElement | nul
     }
 }
 
-const proximoQuadro = () => new Promise<void>(ok => requestAnimationFrame(() => ok()));
+// Aba em segundo plano pausa o requestAnimationFrame (a geração ficava parada até voltar): quem
+// chegar primeiro, o quadro ou 50 ms, libera.
+const proximoQuadro = () => new Promise<void>(ok => {
+    const t = setTimeout(ok, 50);
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { clearTimeout(t); ok(); });
+});
 
 /** Logo reduzida para a capa (16 mm de altura não pedem 3600 px). Falha → a original. */
 async function logoReduzida(dataUrl: string | null, larguraMaxima = 480): Promise<string | null> {
@@ -99,7 +104,16 @@ async function logoReduzida(dataUrl: string | null, larguraMaxima = 480): Promis
 }
 
 export async function imagensDosGraficos(d: DadosDoRelatorio, ids: GraficoId[]): Promise<Partial<Record<GraficoId, ImagemDoGrafico>>> {
-    const graficos = [...new Set(ids)].map(id => ({ id, el: graficoDe(id, d) })).filter((g): g is { id: GraficoId; el: React.ReactElement } => !!g.el);
+    // Um gráfico que não consegue ser calculado fica de fora; os outros seguem.
+    const graficos = [...new Set(ids)].flatMap(id => {
+        try {
+            const el = graficoDe(id, d);
+            return el ? [{ id, el }] : [];
+        } catch (e) {
+            console.error(`Gráfico "${TITULO[id]}" ficou fora do relatório`, e);
+            return [];
+        }
+    });
     if (!graficos.length) return {};
     const html2canvas = (await import('html2canvas')).default;
     const caixa = document.createElement('div');
@@ -159,7 +173,11 @@ export interface OpcoesDoRelatorioCompleto extends OpcoesDoRelatorio {
 export async function gerarRelatorioCompleto(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorioCompleto = {}): Promise<jsPDF> {
     const secoes = secoesDoRelatorio(d, opcoes);
     const [imagens, logo] = await Promise.all([
-        imagensDosGraficos(d, secoes.flatMap(s => s.graficos)),
+        // Falha na captura (html2canvas) não derruba o relatório: sai só com texto e tabelas.
+        imagensDosGraficos(d, secoes.flatMap(s => s.graficos)).catch(e => {
+            console.error('Os gráficos ficaram fora do relatório', e);
+            return {};
+        }),
         logoComoDataUrl(opcoes.organizacao?.logo_url ?? null).then(l => logoReduzida(l)),
     ]);
     const titulo = opcoes.versao ? `${d.study.name} — ${opcoes.versao.label}` : d.study.name;

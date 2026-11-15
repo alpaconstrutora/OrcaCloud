@@ -1,13 +1,14 @@
 import React from 'react'
 import { financialReportService } from '../services/financialReportService'
-import type { DRESPELine, RegimeContabil } from '../types/financial'
+import type { DRESPELine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
 import { TrendingUp, TrendingDown, MoveHorizontal } from 'lucide-react'
-import Button from './ui/Button'
 import { useResizableColumns } from './ui/TableUtils'
 import { useCargaVigente } from '../hooks/useCargaVigente'
-import { anoCorrente, motivoPeriodoInvalido } from '../utils/periodoControladoria'
+import { motivoPeriodoInvalido } from '../utils/periodoControladoria'
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
+import { BarraDeEscopo } from './controladoria/BarraDeEscopo'
+import type { EscopoControladoria } from './controladoria/escopo'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtPct = (v: number | null) => v === null ? '—' : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
@@ -20,6 +21,7 @@ function semResultadoNoPeriodo(data: DRESPELine[]): boolean {
 
 interface Props {
     organizationId: string | null
+    escopo: EscopoControladoria
 }
 
 const COLS: { label: string; key: keyof DRESPELine; help?: string }[] = [
@@ -41,11 +43,9 @@ const PCT_MAP: Partial<Record<keyof DRESPELine, keyof DRESPELine>> = {
     resultado_liquido:  'margem_liquida_pct',
 }
 
-const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
+const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
     const { showToast } = useToast()
-    const [dateFrom, setDateFrom] = React.useState(() => anoCorrente().de)
-    const [dateTo,   setDateTo]   = React.useState(() => anoCorrente().ate)
-    const [regime, setRegime]     = React.useState<RegimeContabil>('CAIXA')
+    const { de: dateFrom, ate: dateTo, regime } = escopo
     const [data, setData]         = React.useState<DRESPELine[]>([])
     const [loading, setLoading]   = React.useState(false)
     const [falhou, setFalhou]     = React.useState(false)
@@ -82,36 +82,15 @@ const DRESPEReport: React.FC<Props> = ({ organizationId }) => {
     const isDeduction = (col: keyof DRESPELine) => String(col).startsWith('deducoes') || String(col).startsWith('custos') || String(col).startsWith('despesas') || String(col).startsWith('impostos') || String(col).startsWith('resultado_financeiro')
 
     return (
-        <div className="space-y-4 px-1">
-            {/* Filtros */}
-            <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm">
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">De</label>
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Até</label>
-                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Regime</label>
-                    <select value={regime} onChange={e => setRegime(e.target.value as RegimeContabil)}
-                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
-                        <option value="CAIXA">Regime de Caixa</option>
-                        <option value="COMPETENCIA">Regime de Competência</option>
-                    </select>
-                </div>
-                <Button variant="primary" onClick={load} disabled={loading}>
-                    {loading ? 'Carregando…' : 'Atualizar'}
-                </Button>
+        <div className="space-y-6">
+            <BarraDeEscopo escopo={escopo}
+                aplica={{ periodo: true, regime: null, obra: 'A DRE por SPE já separa o resultado por empresa: o filtro de obra não se aplica.' }}>
                 {data.length > 0 && (
-                    <span className="ml-auto text-xs text-slate-400">
+                    <span className="text-xs text-gray-600 pb-2.5">
                         {data.length} empresa{data.length !== 1 ? 's' : ''} com movimentação
                     </span>
                 )}
-            </div>
+            </BarraDeEscopo>
 
             {/* Tabela comparativa */}
             {motivoPeriodo ? (

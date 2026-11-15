@@ -1023,13 +1023,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     // ── Controladoria (unificado) ──────────────────────────────────────────────
     case 'controladoria':
       return (
-        <ControladoriaModule
-          organizationId={activeOrganizationId || ''}
-          organizations={organizations}
-          userEmail={session?.user?.email}
-          defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'}
-          onOrgChange={(id) => setActiveOrganizationId(id)}
-        />
+        /* A organização vem do topo dentro do módulo (useOrgContext, REGRA #5). */
+        <ControladoriaModule defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'} />
       );
 
     case 'fiscal-nfe':
@@ -1588,13 +1583,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'financial-dre':
     case 'financial-cashflow':
       return (
-        <ControladoriaModule
-          organizationId={activeOrganizationId || ''}
-          organizations={organizations}
-          userEmail={session?.user?.email}
-          defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'}
-          onOrgChange={(id) => setActiveOrganizationId(id)}
-        />
+        /* A organização vem do topo dentro do módulo (useOrgContext, REGRA #5). */
+        <ControladoriaModule defaultTab={VIEW_TO_CONTROLADORIA_TAB[activeView] || 'dre'} />
       );
 
     // ── Default ────────────────────────────────────────────────────────────────

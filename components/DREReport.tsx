@@ -12,6 +12,7 @@ import type { EscopoControladoria } from './controladoria/escopo';
 import { AvisoSemClassificacao } from './controladoria/SemClassificacao';
 import { KpiCard } from './ui/KpiCard';
 import { GRADE_DE_INDICADORES, tomDoResultado } from './controladoria/indicadores';
+import { baixarCSV } from './controladoria/csv';
 
 // §6.3 — as linhas do DRE/comparativo têm ordem contábil fixa (Receita → Deduções →
 // Resultado), não fazem sentido reordenadas por clique de coluna; por isso as tabelas
@@ -365,17 +366,11 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                     title={summary ? 'Baixar o resumo da DRE em CSV' : 'Sem DRE carregada para exportar'}
                     onClick={() => {
                         if (!summary) return;
-                        const csv = [
-                            'Linha,Realizado,Previsto',
-                            ...DRE_LINE_ORDER.map(l => {
+                        baixarCSV(`DRE_${dateFrom}_${dateTo}.csv`, ['Linha', 'Realizado', 'Previsto'],
+                            DRE_LINE_ORDER.map(l => {
                                 const row = summary.lines.find(r => r.linha === l);
-                                return `"${l}",${row?.valor_realizado ?? 0},${row?.valor_previsto ?? 0}`;
-                            })
-                        ].join('\n');
-                        const a = document.createElement('a');
-                        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-                        a.download = `DRE_${dateFrom}_${dateTo}.csv`;
-                        a.click();
+                                return [ROTULO_DA_LINHA[l] ?? l, row?.valor_realizado ?? 0, row?.valor_previsto ?? 0];
+                            }));
                     }}
                     className={`${BOTAO_DA_BARRA} disabled:opacity-40 disabled:cursor-not-allowed`}
                 >

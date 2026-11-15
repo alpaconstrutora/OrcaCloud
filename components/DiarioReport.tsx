@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Search, Download } from 'lucide-react';
 import { listJournalEntries } from '../services/diarioService';
 import type { JournalEntryPair } from '../services/diarioService';
@@ -101,9 +101,9 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
       )}
 
       {/* Tabela */}
-      <div className="bg-white rounded-[10px] border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-[10px] border border-gray-200 overflow-hidden">
         {/* Busca acoplada à tabela (§5.2): recorta as linhas carregadas, não o período. */}
-        <div className="flex items-center gap-2 p-2 border-b border-slate-100">
+        <div className="flex items-center gap-2 p-2 border-b border-gray-100">
           <div className="relative flex-1 min-w-0">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500" aria-hidden="true" />
             <input
@@ -127,7 +127,7 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
         ) : falhou ? (
           <FalhaDeCarga oQue="o diário contábil" onRetry={() => setTentativa(t => t + 1)} />
         ) : shown.length === 0 ? (
-          <div className="p-12 text-center text-slate-600 text-sm">
+          <div className="p-12 text-center text-gray-600 text-sm">
             {search
               ? 'Nenhum lançamento casa com a busca.'
               : 'Nenhum lançamento no diário neste período. Aqui entram só os lançamentos gravados em partida dobrada (débito e crédito); os demais aparecem na DRE e no Balancete.'}
@@ -168,7 +168,7 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
                     </td>
                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-blue-700">{e.debitAccount}</td>
                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-emerald-700">{e.creditAccount}</td>
-                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-slate-800 whitespace-nowrap">
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 whitespace-nowrap">
                       {fmt(e.debitAmount)}
                     </td>
                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal">

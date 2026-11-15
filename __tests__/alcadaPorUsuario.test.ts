@@ -83,7 +83,8 @@ describe('alvoDaAlcada — faixa ou tipo', () => {
     });
     it('a lista de tipos tem rótulo para cada um e bate com o CHECK do banco', () => {
         expect(ENTIDADES_POR_TIPO.map(t => t.entity).sort())
-            .toEqual(['blueprint_snapshot', 'doc_gen_documento', 'process_step', 'purchase_request']);
+            // project_risk: módulo Riscos F2.3 (aplicar_20271115637000 acrescentou ao CHECK).
+            .toEqual(['blueprint_snapshot', 'doc_gen_documento', 'process_step', 'project_risk', 'purchase_request']);
         expect(ENTIDADES_POR_TIPO.every(t => t.rotulo.length > 0)).toBe(true);
     });
 });

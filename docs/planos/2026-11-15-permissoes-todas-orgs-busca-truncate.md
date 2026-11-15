@@ -15,7 +15,7 @@ Os três achados vieram do teste do módulo Riscos (`docs/planos/2026-11-13-modu
 | Data | Pergunta | Resposta |
 |---|---|---|
 | 15/11 | Em "Todas", qual módulo aparece/abre? | **O que o usuário tem em pelo menos uma organização de que é membro** (união). Decidido por mim como padrão e informado ao usuário, que pode pedir outra regra. Ninguém perde o que usa em alguma org; ninguém ganha o que não tem em nenhuma. |
-| 15/11 | TRUNCATE: aplicar no banco? | Pendente de autorização do usuário (muda privilégio em ~540 tabelas de produção). |
+| 15/11 | TRUNCATE: aplicar no banco? | **"Sim"** — aplicada em 15/11. |
 
 ## Plano
 
@@ -32,7 +32,7 @@ Os três achados vieram do teste do módulo Riscos (`docs/planos/2026-11-13-modu
 - [x] **4. Busca rápida filtra por permissão** — `MODULO_DO_ITEM_DE_BUSCA` (tela → chave do menu, mesma
   condição dos itens do menu); item sem entrada é geral e sempre aparece.
   *Pronto quando:* teste confere que toda tela mapeada existe na busca e toda chave existe no menu.
-- [ ] **5. TRUNCATE** — `aplicar_20271115463000_revoke_truncate_authenticated_anon.sql`: REVOKE em todas as
+- [x] **5. TRUNCATE** — `aplicar_20271115463000_revoke_truncate_authenticated_anon.sql`: REVOKE em todas as
   tabelas de public + default privileges do `postgres`.
   *Pronto quando:* aplicada; a conferência devolve 1 | 1 (só `spatial_ref_sys`, do PostGIS).
 
@@ -47,6 +47,9 @@ Os três achados vieram do teste do módulo Riscos (`docs/planos/2026-11-13-modu
   membro na Alpa e admin na Garden Cambuhy): "Todas" mostra a união (Riscos visível pela Garden), busca
   rápida normal, rotas de módulo abrem, console sem erro. O caso "esconder em Todas" não tem usuário real
   disponível (o agente-leitura é admin numa org) — provado pelos testes.
+- 15/11: **migration aplicada** — conferência 1 | 1 (`spatial_ref_sys`); padrão do postgres `anon=arwdxtm`/`authenticated=arwdxtm`
+  (sem `D`); 588 tabelas com SELECT+INSERT para authenticated, iguais a antes; app recarregado: Pedidos com 23 linhas,
+  console sem erro de permissão.
 - Fora do escopo, anotado: `podeEditarRiscos` em "Todas" sem membro resolvido continua editando (a escrita
   já pergunta a organização).
 

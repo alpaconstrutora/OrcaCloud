@@ -365,7 +365,11 @@ dele (sucção afogada do fundo; a jockey ligada à principal, 2 pressostatos e 
 dos andares de cima, e o `proporFonte` da planta poria a bomba no térreo, longe da reserva. O REGISTRO DE RECALQUE no
 passeio pelo motor da planta (`proporRecalque`), ligado à coluna no térreo. Teste: todo hidrante de todo andar ligado
 pela rede de incêndio à bomba e ao registro de recalque. Fica para o cálculo do PPCI da planta: o DN da rede e a curva da
-bomba (premissa: DN 65).
+bomba (premissa: DN 65). Marco: R4/R8/R12 com 1 hidrante por pavimento, RL com 2; todos com bomba e recalque. **Conferência no
+app (15/11, `c:/tmp/pwtest/conferencia-predio-pa9c.cjs`, estudo descartável arquivado):** R8 — a aba PPCI com os
+hidrantes; depois do Lançar, 1 hidrante em cada um dos 7 andares, a bomba na cobertura, o registro de recalque e a coluna
+em 8 trechos (os 7 andares e a cobertura); 5 placas por andar (a do abrigo entrou); tudo o que as fases anteriores
+conferiam segue igual.
 
 ### PA10 — Fechamento
 **O que muda.** Relatório consolidado, furos no shaft, conflitos multinível, envio ao Empreendimento

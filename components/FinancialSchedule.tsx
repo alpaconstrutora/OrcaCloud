@@ -1,4 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
+import ImportarCronogramaSheet from './ImportarCronogramaSheet';
+import type { ResultadoDaAtualizacao } from '../utils/cronogramaAtualizacao';
+import { useToast } from '../hooks/useToast';
 import Button from './ui/Button';
 
 import jsPDF from 'jspdf';
@@ -1959,6 +1962,11 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         const hasNewerVersion = newVersionId || contentChanged;
         return { linkedVersions, linkedActive, pinnedId, pinnedItem, hasNewerVersion, newVersionId, contentChanged };
     }, [projects, settings.linkedProjectId, settings.basedOnBudgetVersionId, settings.basedOnBudgetVersionItem, settings.basedOnBudgetSnapshot]);
+
+    // Importar datas de um cronograma (fase 2d de docs/planos/2026-11-14-planejamento-lista-critica.md).
+    // Antes de gravar, o cronograma atual vira uma Versão do planejamento — dá para voltar a ele.
+    const [importarDatasAberto, setImportarDatasAberto] = useState(false);
+    const { showToast } = useToast();
 
     // Arquiva o cronograma atual como uma PlanningVersion (snapshot completo + pin atual).
     const snapshotCurrentPlanning = React.useCallback((description: string): PlanningVersion => {
@@ -3974,6 +3982,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 handleApplyAutoAllItems={handleApplyAutoAllItems}
                 handleDisableAutoAllItems={handleDisableAutoAllItems}
                 onOpenCrewClassification={() => setIsCrewClassifModalOpen(true)}
+                onImportarCronograma={() => setImportarDatasAberto(true)}
                 budgetLength={budget.length}
                 autoCount={budget.filter(b => (schedule.itemSchedules || []).some(s => s.id === b.id && s.autoDuration)).length}
                 allAuto={budget.length > 0 && budget.filter(b => (schedule.itemSchedules || []).some(s => s.id === b.id && s.autoDuration)).length >= budget.length}
@@ -4664,6 +4673,29 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     onResolve={handleResolveLevelingIssues}
                 />
             )}
+
+            <ImportarCronogramaSheet
+                modo="atualizar"
+                open={importarDatasAberto}
+                onClose={() => setImportarDatasAberto(false)}
+                planejamentoNome={settings.name || 'Planejamento'}
+                orcamento={budget}
+                schedule={schedule}
+                onAplicar={(r: ResultadoDaAtualizacao, nomeDoArquivo: string) => {
+                    if (isSimulationMode) throw new Error('Saia do modo What-If para importar datas — nesse modo nada é gravado.');
+                    const hoje = new Date().toLocaleDateString('pt-BR');
+                    const arquivada = snapshotCurrentPlanning(`Antes de importar datas de ${nomeDoArquivo} (${hoje})`);
+                    setSchedule(r.schedule);
+                    onUpdateSettings({
+                        ...settings,
+                        ...pendingPinRef.current,
+                        planningVersions: [...(settings.planningVersions || []), arquivada],
+                        schedule: r.schedule,
+                    });
+                    setImportarDatasAberto(false);
+                    showToast(`Cronograma atualizado: ${r.contagem.datasTrocadas} tarefa(s) com datas novas, ${r.contagem.avancosTrocados} avanço(s) trocado(s). A versão anterior está em Versões.`);
+                }}
+            />
 
             <BaselineModal
                 isOpen={isBaselineModalOpen}

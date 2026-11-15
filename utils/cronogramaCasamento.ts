@@ -78,7 +78,15 @@ export function chavesDosItens(orcamento: ItemDoOrcamento[]): Map<string, { eaps
     return saida;
 }
 
-export function casarComOrcamento(cronograma: CronogramaImportado, orcamento: ItemDoOrcamento[]): ResultadoDoCasamento {
+/** Tarefa que já existe no planejamento e não é item do orçamento (nó `activity` — tarefa sem custo).
+ *  Ao ATUALIZAR, casa pelo nome depois dos itens: reimportar o arquivo não duplica a "Mobilização". */
+export interface TarefaAvulsaExistente { id: string; nome: string }
+
+export function casarComOrcamento(
+    cronograma: CronogramaImportado,
+    orcamento: ItemDoOrcamento[],
+    avulsasExistentes: TarefaAvulsaExistente[] = [],
+): ResultadoDoCasamento {
     const chaves = chavesDosItens(orcamento);
     const porEap = new Map<string, string>();
     const porNome = new Map<string, string[]>();
@@ -105,6 +113,20 @@ export function casarComOrcamento(cronograma: CronogramaImportado, orcamento: It
         if (c.itemId) continue;
         const id = (porNome.get(normalizarNome(c.tarefa.nome)) ?? []).find(x => !usados.has(x));
         if (id) { c.itemId = id; c.motivo = 'nome'; usados.add(id); }
+    }
+    // 3ª passada: tarefas sem custo que já existem no planejamento (só ao atualizar), pelo nome.
+    if (avulsasExistentes.length) {
+        const porNomeAvulsa = new Map<string, string[]>();
+        for (const a of avulsasExistentes) {
+            const n = normalizarNome(a.nome);
+            if (!porNomeAvulsa.has(n)) porNomeAvulsa.set(n, []);
+            porNomeAvulsa.get(n)!.push(a.id);
+        }
+        for (const c of casamentos) {
+            if (c.itemId) continue;
+            const id = (porNomeAvulsa.get(normalizarNome(c.tarefa.nome)) ?? []).find(x => !usados.has(x));
+            if (id) { c.itemId = id; c.motivo = 'nome'; usados.add(id); }
+        }
     }
     return { casamentos, itensSemTarefa: orcamento.map(i => i.id).filter(id => !usados.has(id)) };
 }

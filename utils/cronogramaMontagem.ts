@@ -90,6 +90,71 @@ function paisDasTarefas(tarefas: TarefaImportada[]): Map<string, TarefaImportada
     return pais;
 }
 
+/** Datas da tarefa do arquivo na convenção do app, com MSO segurando a data. null = sem início. */
+export function datasDoArquivoNoApp(t: TarefaImportada): Pick<ItemScheduleDetails, 'startDate' | 'endDate' | 'duration' | 'constraintType' | 'constraintDate'> | null {
+    if (!t.inicio) return null;
+    // Duração do arquivo como está (0 inclusive — o app tem tarefa de duração 0 que não é marco,
+    // ex.: "Seguros"); sem ela, os dias úteis do início ao término.
+    const duracao = t.marco ? 0 : t.duracaoDias != null ? Math.max(0, Math.round(t.duracaoDias)) : diasUteisInclusive(t.inicio, t.termino || t.inicio);
+    return { startDate: t.inicio, endDate: somarDiasUteis(t.inicio, duracao), duration: duracao, constraintType: ConstraintType.MSO, constraintDate: t.inicio };
+}
+
+/** Predecessoras do arquivo como vínculos entre ids do app. Vínculo com tarefa-resumo só conta
+ *  (o app liga tarefa a tarefa); com tarefa que ficou de fora vira aviso. */
+export function predecessorasNoApp(
+    t: TarefaImportada, porChave: Map<string, TarefaImportada>, idPorChave: Map<string, string>, avisos: string[],
+): { predecessors: Predecessor[]; comResumo: number } {
+    const predecessors: Predecessor[] = [];
+    let comResumo = 0;
+    for (const p of t.predecessoras) {
+        const alvo = porChave.get(p.chave);
+        const idAlvo = idPorChave.get(p.chave);
+        if (idAlvo) predecessors.push({ id: idAlvo, type: p.tipo as DependencyType, lag: Math.round(p.defasagemDias) });
+        else if (alvo?.resumo) comResumo++;
+        else avisos.push(`"${t.nome}": a predecessora "${alvo?.nome ?? p.chave}" ficou de fora da importação — o vínculo não entrou.`);
+    }
+    return { predecessors, comResumo };
+}
+
+/** Insere cada tarefa sem custo (nó `activity`) perto de onde estava no arquivo: no nó do outline
+ *  do mesmo nível do pai dela, achado pela 1ª irmã/descendente do pai que já está no outline;
+ *  sem referência, num grupo "Outras tarefas do cronograma". */
+export function posicionarAtividades(
+    outlineInicial: OutlineNode[], tarefas: TarefaImportada[], atividades: TarefaImportada[],
+    idPorChave: Map<string, string>, estaNoOutline: (id: string) => boolean, gerarId: () => string,
+): OutlineNode[] {
+    let outline = outlineInicial;
+    const pais = paisDasTarefas(tarefas);
+    let grupoAvulso: string | null = null;
+    const novas = new Set(atividades.map(a => idPorChave.get(a.chave)));
+    for (const t of atividades) {
+        const pai = pais.get(t.chave) ?? null;
+        let paiNoOutline: string | null = null;
+        if (pai) {
+            const i0 = tarefas.indexOf(pai);
+            for (let i = i0 + 1; i < tarefas.length && tarefas[i].nivel > pai.nivel; i++) {
+                const id = idPorChave.get(tarefas[i].chave);
+                if (!id || novas.has(id) || !estaNoOutline(id)) continue;
+                const cadeia = getAncestors(outline, id);           // [grupo, etapa, (subetapa), item]
+                if (cadeia.length >= 2) paiNoOutline = cadeia[Math.min(pai.nivel - 1, cadeia.length - 2)].id;
+                break;
+            }
+        }
+        if (!paiNoOutline) {
+            if (!grupoAvulso) {
+                grupoAvulso = outline.find(n => n.type === 'group' && n.name === NOME_GRUPO_AVULSO)?.id ?? null;
+                if (!grupoAvulso) {
+                    grupoAvulso = gerarId();
+                    outline = insertNode(outline, null, { id: grupoAvulso, type: 'group', name: NOME_GRUPO_AVULSO, children: [] });
+                }
+            }
+            paiNoOutline = grupoAvulso;
+        }
+        outline = insertNode(outline, paiNoOutline, { id: idPorChave.get(t.chave)!, type: 'activity', name: t.nome, children: [] });
+    }
+    return outline;
+}
+
 export function montarCronogramaImportado(e: EntradaDaMontagem): CronogramaMontado {
     const { cronograma, decisoes, orcamento, gerarId } = e;
     const avisos: string[] = [];
@@ -128,14 +193,8 @@ export function montarCronogramaImportado(e: EntradaDaMontagem): CronogramaMonta
     for (const t of folhas) {
         const id = idPorChave.get(t.chave);
         if (!id) continue;
-        const predecessors: Predecessor[] = [];
-        for (const p of t.predecessoras) {
-            const alvo = porChave.get(p.chave);
-            const idAlvo = idPorChave.get(p.chave);
-            if (idAlvo) predecessors.push({ id: idAlvo, type: p.tipo as DependencyType, lag: Math.round(p.defasagemDias) });
-            else if (alvo?.resumo) vinculosComResumo++;
-            else avisos.push(`"${t.nome}": a predecessora "${alvo?.nome ?? p.chave}" ficou de fora da importação — o vínculo não entrou.`);
-        }
+        const { predecessors, comResumo } = predecessorasNoApp(t, porChave, idPorChave, avisos);
+        vinculosComResumo += comResumo;
         const base: ItemScheduleDetails = {
             ...(padraoDoItem.get(id) ?? {}),
             id,
@@ -145,17 +204,9 @@ export function montarCronogramaImportado(e: EntradaDaMontagem): CronogramaMonta
             ...(t.marco ? { isMilestone: true } : {}),
             ...(atividades.includes(t) ? { hoursPerDay: 8, efficiencyFactor: 1.0 } : {}),
         };
-        if (t.inicio) {
-            // Duração do arquivo como está (0 inclusive — o app tem tarefa de duração 0 que não é
-            // marco, ex.: "Seguros"); sem ela, os dias úteis do início ao término.
-            const duracao = t.marco ? 0 : t.duracaoDias != null ? Math.max(0, Math.round(t.duracaoDias)) : diasUteisInclusive(t.inicio, t.termino || t.inicio);
-            Object.assign(base, {
-                startDate: t.inicio,
-                endDate: somarDiasUteis(t.inicio, duracao),
-                duration: duracao,
-                constraintType: ConstraintType.MSO,
-                constraintDate: t.inicio,
-            });
+        const datas = datasDoArquivoNoApp(t);
+        if (datas) {
+            Object.assign(base, datas);
         } else {
             avisos.push(`"${t.nome}" veio sem data de início — entrou sem datas.`);
         }
@@ -168,33 +219,7 @@ export function montarCronogramaImportado(e: EntradaDaMontagem): CronogramaMonta
     const itensDoOrcamentoSemTarefa = orcamento.filter(b => !itensUsados.has(b.id)).length;
 
     // 3) Outline: a EAP do orçamento + cada tarefa sem custo perto de onde estava no arquivo
-    let outline: OutlineNode[] = seedOutlineFromBudget(orcamento);
-    const pais = paisDasTarefas(tarefas);
-    let grupoAvulso: string | null = null;
-    for (const t of atividades) {
-        const pai = pais.get(t.chave) ?? null;
-        let paiNoOutline: string | null = null;
-        if (pai) {
-            // primeira tarefa casada com item, debaixo do mesmo pai no arquivo → o nó do outline no
-            // mesmo nível do pai (grupo, etapa ou subetapa daquele item).
-            const i0 = tarefas.indexOf(pai);
-            for (let i = i0 + 1; i < tarefas.length && tarefas[i].nivel > pai.nivel; i++) {
-                const id = idPorChave.get(tarefas[i].chave);
-                if (!id || !itensDoOrcamento.has(id)) continue;
-                const cadeia = getAncestors(outline, id);           // [grupo, etapa, (subetapa), item]
-                if (cadeia.length >= 2) paiNoOutline = cadeia[Math.min(pai.nivel - 1, cadeia.length - 2)].id;
-                break;
-            }
-        }
-        if (!paiNoOutline) {
-            if (!grupoAvulso) {
-                grupoAvulso = gerarId();
-                outline = insertNode(outline, null, { id: grupoAvulso, type: 'group', name: NOME_GRUPO_AVULSO, children: [] });
-            }
-            paiNoOutline = grupoAvulso;
-        }
-        outline = insertNode(outline, paiNoOutline, { id: idPorChave.get(t.chave)!, type: 'activity', name: t.nome, children: [] });
-    }
+    const outline = posicionarAtividades(seedOutlineFromBudget(orcamento), tarefas, atividades, idPorChave, id => itensDoOrcamento.has(id), gerarId);
 
     // 4) Linha de base ativa = datas do arquivo (mesmo formato de "Salvar linha de base")
     const comDatas = itemSchedules.filter(s => s.startDate && s.endDate);

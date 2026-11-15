@@ -35,6 +35,7 @@ import {
     UsersRound,
     Wand2,
     Workflow,
+    FileUp,
 } from 'lucide-react';
 import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, abaEfetiva } from '../blueprint/Ribbon';
 import MenuDeVistas, { GrupoDeVistas } from '../ui/MenuDeVistas';
@@ -78,6 +79,8 @@ interface ScheduleHeaderProps {
     handleApplyAutoAllItems: () => void;
     handleDisableAutoAllItems: () => void;
     onOpenCrewClassification: () => void;
+    /** Importar datas de um cronograma do MS Project (XML) ou do modelo Excel (fase 2d). */
+    onImportarCronograma?: () => void;
     budgetLength: number;
     autoCount: number;
     allAuto: boolean;
@@ -207,6 +210,7 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     handleApplyAutoAllItems,
     handleDisableAutoAllItems,
     onOpenCrewClassification,
+    onImportarCronograma,
     budgetLength,
     autoCount,
     allAuto,
@@ -400,6 +404,9 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     <>
                         <GrupoDoRibbon rotulo="Programar">
                             <BotaoDoRibbon icone={RefreshCw} rotulo="Recalcular" onClick={() => handleRecalculate()} ajuda="Recalcula as distribuições a partir das datas atuais" />
+                            {onImportarCronograma && (
+                                <BotaoDoRibbon icone={FileUp} rotulo="Importar datas" onClick={onImportarCronograma} ajuda="Atualizar as datas a partir de um cronograma do MS Project (XML) ou do modelo Excel" />
+                            )}
                         </GrupoDoRibbon>
                         <GrupoDoRibbon rotulo="Recursos">
                             <BotaoDoRibbon icone={Users} rotulo="Nivelar" onClick={handleLevelResources} ajuda="Nivelamento automático de recursos" />

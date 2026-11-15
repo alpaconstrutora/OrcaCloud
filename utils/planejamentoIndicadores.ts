@@ -24,12 +24,21 @@ export interface IndicadoresDePrazo {
     pv: number;
     /** EV/PV; `null` quando nada estava previsto até hoje (sem datas ou tudo no futuro). */
     spi: number | null;
-    /** Itens com término antes de hoje e avanço abaixo de 100%. */
+    /** Itens cujo último dia trabalhado já passou com avanço abaixo de 100%. */
     atrasadas: number;
+    /** Atraso em dias corridos pelo cronograma ganho: o avanço real de hoje é o que estava previsto
+     *  para `avancoEquivaleA`; atraso = hoje − essa data. 0 = em dia; `null` quando nada estava
+     *  previsto até hoje (sem datas ou tudo no futuro). */
+    atrasoDias: number | null;
+    avancoEquivaleA: string;
+    /** Dias desde o término previsto, se ele já passou sem chegar a 100%; senão `null`. */
+    terminoVencidoDias: number | null;
     /** Itens no caminho crítico (motor do cronograma) e, deles, os ainda não concluídos. */
     criticas: number;
     criticasAbertas: number;
-    /** Início e término previstos do cronograma (ISO `AAAA-MM-DD`), '' se não há datas. */
+    /** Início e término previstos do cronograma (ISO `AAAA-MM-DD`), '' se não há datas. O término é
+     *  o ÚLTIMO DIA TRABALHADO (o "Término" do MS Project e o do cabeçalho do planejamento), não o
+     *  `endDate` cru do motor — ver `ultimoDiaTrabalhado`. */
     inicioPrevisto: string;
     fimPrevisto: string;
     /** Término da linha de base ativa e desvio em dias (positivo = atrasou). */
@@ -59,6 +68,29 @@ const fracaoDecorrida = (inicio: string, fim: string, hoje: string): number => {
 /** Datas vêm como 'AAAA-MM-DD' ou ISO completo; a comparação é por dia. */
 const soDia = (v?: string): string => (v ? v.slice(0, 10) : '');
 
+const somarDias = (iso: string, n: number): string =>
+    new Date(new Date(iso + 'T00:00:00Z').getTime() + n * 86400000).toISOString().slice(0, 10);
+const ehDiaUtil = (iso: string): boolean => {
+    const d = new Date(iso + 'T00:00:00Z').getUTCDay();
+    return d !== 0 && d !== 6;
+};
+
+/**
+ * Último dia trabalhado de uma tarefa — o "Término" que o planejador conhece (MS Project, cabeçalho
+ * do planejamento). O motor grava `endDate = início + duração` em dias úteis, que é o dia útil
+ * SEGUINTE ao último trabalhado: Divino, tarefa de 18/11 com 10 dias úteis → endDate 02/12,
+ * trabalhada até 01/12 (= Término declarado). A lista mostrava 02/12 e o cabeçalho 01/12 (2ª crítica,
+ * 15/11/2026). Marco (fim = início) é o próprio dia. Seg–sex; feriados do calendário do cronograma
+ * não entram (raro: só erra se o dia útil anterior ao fim for feriado).
+ */
+export function ultimoDiaTrabalhado(inicio: string, fimDoMotor: string): string {
+    if (!fimDoMotor) return '';
+    if (!inicio || fimDoMotor <= inicio) return fimDoMotor;
+    let d = somarDias(fimDoMotor, -1);
+    while (d > inicio && !ehDiaUtil(d)) d = somarDias(d, -1);
+    return d;
+}
+
 export function indicadoresDePrazo(
     folhas: FolhaDoCronograma[],
     schedule: Pick<ProjectSchedule, 'itemSchedules' | 'startDate' | 'endDate' | 'baselines' | 'activeBaselineId'> | null | undefined,
@@ -75,6 +107,7 @@ export function indicadoresDePrazo(
     let criticas = 0;
     let criticasAbertas = 0;
     let temDatas = false;
+    const comDatas: { ini: string; fim: string; orcado: number }[] = [];
 
     for (const folha of folhas) {
         const sched = porId.get(folha.id);
@@ -90,9 +123,13 @@ export function indicadoresDePrazo(
         const fim = soDia(sched?.earlyFinish ?? sched?.endDate);
         if (ini && fim) {
             temDatas = true;
+            // PV na convenção do motor: o trabalho ocupa [início, fim) — no último dia trabalhado
+            // ainda falta esse dia.
             pv += fracaoDecorrida(ini, fim, hoje) * orcado;
+            comDatas.push({ ini, fim, orcado });
         }
-        if (fim && fim < hoje && real < 1) atrasadas++;
+        const ultimoDia = ultimoDiaTrabalhado(ini, fim);
+        if (ultimoDia && ultimoDia < hoje && real < 1) atrasadas++;
         if (sched?.isCritical) {
             criticas++;
             if (real < 1) criticasAbertas++;
@@ -102,7 +139,7 @@ export function indicadoresDePrazo(
     // Término previsto: como na Central de Comando, o maior término entre os itens do
     // cronograma; sem nenhum, o término declarado no próprio cronograma.
     const maiorFim = itens.reduce((max, s) => {
-        const e = soDia(s.earlyFinish ?? s.endDate);
+        const e = ultimoDiaTrabalhado(soDia(s.earlyStart ?? s.startDate), soDia(s.earlyFinish ?? s.endDate));
         return e && (!max || e > max) ? e : max;
     }, '');
     const fimPrevisto = maiorFim || soDia(schedule?.endDate);
@@ -118,20 +155,50 @@ export function indicadoresDePrazo(
         ? schedule.baselines?.find(b => b.id === schedule.activeBaselineId)
         : undefined;
     if (baseline) {
+        // Término × término: a linha de base guarda o fim do motor também.
         fimBaseline = Object.values(baseline.itemDates).reduce((max, d) => {
-            const e = soDia(d.endDate);
+            const e = ultimoDiaTrabalhado(soDia(d.startDate), soDia(d.endDate));
             return e && (!max || e > max) ? e : max;
         }, '');
         if (fimBaseline && fimPrevisto) desvioDias = diasEntre(fimBaseline, fimPrevisto);
     }
 
+    // Cronograma ganho (earned schedule): a última data em que o PV planejado ainda não passava do
+    // EV de hoje. Atraso em DIAS sem depender de linha de base — o planejador pergunta "quanto
+    // atrasa", não "qual o SPI".
+    let atrasoDias: number | null = null;
+    let avancoEquivaleA = '';
+    if (pv > 0) {
+        if (ev >= pv) {
+            atrasoDias = 0;
+            avancoEquivaleA = hoje;
+        } else {
+            const pvEm = (dia: string) => comDatas.reduce((t, c) => t + fracaoDecorrida(c.ini, c.fim, dia) * c.orcado, 0);
+            const base = comDatas.reduce((min, c) => (!min || c.ini < min ? c.ini : min), '');
+            let lo = 0;
+            let hi = Math.max(0, diasEntre(base, hoje));
+            while (lo < hi) {
+                const meio = Math.ceil((lo + hi) / 2);
+                if (pvEm(somarDias(base, meio)) <= ev + 1e-9) lo = meio; else hi = meio - 1;
+            }
+            avancoEquivaleA = somarDias(base, lo);
+            atrasoDias = diasEntre(avancoEquivaleA, hoje);
+        }
+    }
+
+    const avancoFisicoPct = pesoTotal > 0 ? (somaPonderada / pesoTotal) * 100 : 0;
+    const terminoVencidoDias = fimPrevisto && fimPrevisto < hoje && avancoFisicoPct < 100 ? diasEntre(fimPrevisto, hoje) : null;
+
     return {
-        avancoFisicoPct: pesoTotal > 0 ? (somaPonderada / pesoTotal) * 100 : 0,
+        avancoFisicoPct,
         previstoPct: pesoTotal > 0 ? (pv / pesoTotal) * 100 : 0,
         ev,
         pv,
         spi: pv > 0 ? ev / pv : null,
         atrasadas,
+        atrasoDias,
+        avancoEquivaleA,
+        terminoVencidoDias,
         criticas,
         criticasAbertas,
         inicioPrevisto,

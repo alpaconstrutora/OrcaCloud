@@ -127,6 +127,41 @@ rolagem lateral, 0 escritas.
 
 (Escopo de cada um no relatório da crítica; os critérios entram aqui quando o passo começar.)
 
+## 2ª rodada — crítica de 15/11/2026 (27/40)
+
+### Pedido original
+
+> /impeccable critique controladoria
+
+Sessão: 475598e2-eda4-4794-941f-d458b7a27c35 · 15/11/2026. Crítica arquivada em
+`.impeccable/critique/2026-11-15T21-44-03Z__components-controladoriamodule-tsx.md`
+(16/40 → **27/40**; avaliador B terminou em modo degradado — limite semanal da API dos
+subagentes — a partir dos artefatos que já tinha gravado).
+
+> (perguntas da crítica) "O que a DRE deve mostrar ao abrir?" → **Caixa + pendente visível (Recomendado)** ·
+> "Quanto resolver agora?" → **Todos os 5**
+
+> um de cada vez siginifica uma publicacao de cada vez?
+
+> agrupe em 2 conforme sua sugestão
+
+### Publicação 1 — a leitura da DRE (este PR)
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| R2.1 | Caixa continua a abertura, mas cada indicador diz "· com o pendente: R$ X" e o Resultado líquido ganha a ação "Conciliar lançamentos" (vai à Conciliação). Antes: −125,5% em Caixa sem nenhuma pista de que a Competência dava +16,5% | `ControladoriaLeituraCaixa.test.tsx` (falha no main, passa aqui) |
+| R2.2 | Um sinal só: o que sai do resultado é negativo no Resumo, no Por Categoria e no CSV (o banco devolve "(-) Custos" positivo; o Por Categoria mostrava o mesmo custo negativo) | idem |
+| R2.3 | Cor por estado na DRE: rótulo neutro; vermelho só no total abaixo do limiar (custo negativo não é alarme) | idem |
+| R2.4 | Em Competência o aviso "sem classificação" não cita previsto (não existe nesse regime); Por Categoria na ordem contábil | idem |
+
+### Publicação 2 — o resto da crítica
+
+Cor por estado nas outras tabelas (Balancete, SPE, Por Obra, Diário); linha da gaveta "sem
+classificação" abre o lançamento de origem e o atalho "Contas a Pagar" abre filtrado; motivo do
+campo desligado acessível ("—" no campo, borda tracejada, `aria-describedby`); acabamento (CSV
+com ";" e BOM, seta da margem do WIP, "Saldo de contrato" sem contratos, coluna Valor do Diário
+à direita e "Débitos = créditos" só com lançamentos). Critérios entram aqui quando começar.
+
 ## Estado
 
 - [x] Passo 1 — #448 (cc919c67), migration `aplicar_20271114900000` aplicada antes do merge; conferido em produção 15/11/2026
@@ -134,7 +169,9 @@ rolagem lateral, 0 escritas.
 - [x] Passo 3 — #458 (fd4705ef); conferido com dados reais na frente local
 - [x] Passo 4 — #461 (d061ba65); conferido na frente local
 - [x] Passo 5 — #467 (fe350c2d); medido na tela local e em produção; auditoria 9/20 → 15/20
-- [ ] Passo 6 — frente `controladoria-polimento`, PR a abrir
+- [x] Passo 6 — #471 (feb21d5d); conferido em produção ("Saldo com o previsto" R$ 184.392,21)
+- [ ] 2ª rodada, publicação 1 — frente `controladoria-r2-leitura`, PR a abrir
+- [ ] 2ª rodada, publicação 2 — a abrir depois da 1
 
 ## Verificação
 

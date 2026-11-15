@@ -22,10 +22,12 @@ const COLUNAS: StandardTableColumn[] = [
 
 const ACAO: Record<RiskAuditLog['action'], string> = {
     create: 'Criação', update: 'Alteração', delete: 'Exclusão', evaluate: 'Avaliação', close: 'Encerramento',
-    reopen: 'Reabertura', link: 'Vínculo', unlink: 'Vínculo desfeito',
+    reopen: 'Reabertura', link: 'Vínculo', unlink: 'Vínculo desfeito', materialize: 'Materialização',
+    submit: 'Enviado para aprovação', approve: 'Aprovação', reject: 'Reprovação',
 };
 const ENTIDADE: Record<RiskAuditLog['entity_type'], string> = {
     risk: 'Ficha', evaluation: 'Avaliação', action: 'Ação', catalog: 'Catálogo', config: 'Configuração',
+    event: 'Ocorrência', link: 'Vínculo',
 };
 
 /** Valor legível: rótulo do enum quando o campo tem um, data em dd/mm/aaaa, lista com vírgula. */

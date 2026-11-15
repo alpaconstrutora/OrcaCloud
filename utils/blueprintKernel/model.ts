@@ -3555,6 +3555,11 @@ export const TIPOS_DE_PONTO_HIDRAULICO = [
   'TANQUE_SEPTICO',
   'FILTRO_ANAEROBIO',
   'SUMIDOURO',
+  // 15/11/2026 (0.109.0, PA8c do prédio automático): a drenagem da garagem no subsolo — a caixa separadora de água e
+  // óleo (o piso da garagem leva óleo; a NBR 8160 a pede antes da rede) e o poço de recalque com as bombas (o piso abaixo
+  // da rede pública não escoa por gravidade).
+  'CAIXA_SEPARADORA',
+  'POCO_DE_RECALQUE',
   'REGISTRO_GAVETA',
   'REGISTRO_PRESSAO',
   'VALVULA_RETENCAO',
@@ -3720,6 +3725,8 @@ export const DISCIPLINAS_DO_PONTO_HIDRAULICO: Record<TipoDePontoHidraulico, Disc
   CAIXA_AREIA: PLU,
   LIGACAO_PLUVIAL: PLU,
   TANQUE_SEPTICO: ESG,
+  CAIXA_SEPARADORA: ESG,
+  POCO_DE_RECALQUE: ESG,
   FILTRO_ANAEROBIO: ESG,
   SUMIDOURO: ESG,
   CAIXA_GORDURA: ESG,

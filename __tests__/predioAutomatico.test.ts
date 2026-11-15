@@ -43,7 +43,10 @@ import {
   conferirPlanoDoPredio,
   motivoParaNaoGerarPredio,
   NOME_DA_COBERTURA,
+  AREA_POR_RALO_DA_GARAGEM_M2,
   NOME_DA_ESCADA_DE_EMERGENCIA,
+  ROTULO_DA_DRENAGEM,
+  ROTULO_DO_RECALQUE_DA_DRENAGEM,
   NOME_DA_GARAGEM,
   NOME_DO_HALL_DO_SUBSOLO,
   RENOVACOES_POR_HORA_DA_GARAGEM,
@@ -106,7 +109,7 @@ describe('prédio automático — o motor (PA2)', { timeout: 180_000 }, () => {
     const plano = planejarPredioDoPedido(p, { aoConcluirEtapa: (e, i, total) => avisos.push(`${i}/${total} ${e.id}`) });
     expect(plano.etapas.map((e) => e.id)).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO);
     expect(avisos).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO.map((id, i) => `${i + 1}/${ORDEM_DAS_ETAPAS_DO_PREDIO.length} ${id}`));
-    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'SUBSOLOS:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'PLUVIAL:NAO_EXIGIDA', 'EQUIPAMENTOS_DE_INCENDIO:NAO_EXIGIDA', 'HIDRANTES:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'INCENDIO:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
+    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'SUBSOLOS:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'PLUVIAL:NAO_EXIGIDA', 'DRENAGEM_DA_GARAGEM:NAO_EXIGIDA', 'EQUIPAMENTOS_DE_INCENDIO:NAO_EXIGIDA', 'HIDRANTES:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'INCENDIO:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
     expect(snapshotHash(plano.resultado)).toBe(snapshotHash(peloPainelDoBloco(p)));
     const tipo = plano.resultado.levels.find((l) => l.id === plano.tipoLevelId)!;
     expect(tipo.copiaInstalacoes).toBe(true);
@@ -957,5 +960,52 @@ describe('prédio automático — a garagem no subsolo (PA8a)', { timeout: 120_0
     const fora = doSubsolo.filter((t) => t.tipoEletrico !== 'INTERRUPTOR' && t.tipoEletrico !== 'ILUMINACAO_PAREDE' && !circuitosDoQdg.has(t.circuitoId ?? ''));
     expect(fora.map((t) => t.tipoEletrico)).toEqual([]);
     expect(p.pendencias.filter((x) => /PRE-DIM/.test(x.texto) && /Garagem/.test(x.texto)).map((x) => x.texto)).toEqual([]);
+  });
+
+  it('PA8c: a drenagem da garagem — ralos fora das vagas e a canaleta no pé da rampa, todos ligados à caixa separadora; o poço com 2 bombas no QDG e o recalque até a caixa de inspeção do térreo', () => {
+    const p = planejarPredioDoPedido({ ...comSubsolos(1), hip: { ...SO_A_GARAGEM, plantas: true, agua: true, esgoto: true, eletrica: true, climatizacao: false } });
+    const m = p.resultado;
+    const [s1] = subsolos(m);
+    const terreo = m.levels.find((l) => l.name.endsWith('(térreo)'))!;
+    expect(p.etapas.find((e) => e.id === 'DRENAGEM_DA_GARAGEM')!.situacao).toBe('LANCOU');
+    const doS1 = (m.terminais ?? []).filter((t) => t.levelId === s1.id);
+    const sep = doS1.filter((t) => t.tipoHidraulico === 'CAIXA_SEPARADORA');
+    const poco = doS1.filter((t) => t.tipoHidraulico === 'POCO_DE_RECALQUE');
+    expect([sep.length, poco.length]).toEqual([1, 1]);
+    const ralos = doS1.filter((t) => t.tipoHidraulico === 'RALO_SECO');
+    const garagem = m.spaces.find((x) => x.levelId === s1.id && x.name === NOME_DA_GARAGEM)!;
+    expect(ralos.length).toBeGreaterThanOrEqual(Math.ceil(garagem.areaMm2 / 1e6 / AREA_POR_RALO_DA_GARAGEM_M2));
+    const canaletas = doS1.filter((t) => t.tipoHidraulico === 'RALO_LINEAR');
+    const rampa = m.stairs.find((e) => e.levelId === s1.id && e.tipo === 'RAMPA')!;
+    expect(canaletas.map((t) => t.at)).toEqual([rampa.pontos[0]]);
+    // Nenhum ralo, nem a separadora, nem o poço sobre uma vaga.
+    const vagas = (m.vagas ?? []).filter((v) => v.levelId === s1.id).map((v) => contornoDaVaga(v));
+    expect([...ralos, ...sep, ...poco].filter((t) => vagas.some((v) => pointInPolygon(v, t.at as Point))).map((t) => t.tipoHidraulico)).toEqual([]);
+    // A rede: de cada ralo e da canaleta, pelos trechos (pontas na mesma posição e cota), até a separadora; dela ao poço.
+    const trechos = (m.trechos ?? []).filter((t) => t.levelId === s1.id && t.rotulo === ROTULO_DA_DRENAGEM);
+    const no = (x: number, y: number, z: number) => `${x},${y},${z}`;
+    const viz = new Map<string, string[]>();
+    for (const t of trechos) {
+      const a = no(t.a.x, t.a.y, t.cotaAMm);
+      const b = no(t.b.x, t.b.y, t.cotaBMm);
+      viz.set(a, [...(viz.get(a) ?? []), b]);
+      viz.set(b, [...(viz.get(b) ?? []), a]);
+    }
+    const alcancados = new Set([no(sep[0].at.x, sep[0].at.y, -400)]);
+    const fila = [...alcancados];
+    while (fila.length) for (const v of viz.get(fila.pop()!) ?? []) if (!alcancados.has(v)) (alcancados.add(v), fila.push(v));
+    expect([...ralos, ...canaletas].filter((r) => !alcancados.has(no(r.at.x, r.at.y, 0))).map((r) => r.at)).toEqual([]);
+    expect(alcancados.has(no(poco[0].at.x, poco[0].at.y, -900))).toBe(true);
+    // O recalque sobe do poço e chega à caixa de inspeção do esgoto no térreo.
+    const ci = (m.terminais ?? []).find((t) => t.levelId === terreo.id && t.tipoHidraulico === 'CAIXA_INSPECAO' && t.disciplina === 'ESGOTO')!;
+    const recalque = (m.trechos ?? []).filter((t) => t.rotulo === ROTULO_DO_RECALQUE_DA_DRENAGEM);
+    expect(recalque.some((t) => t.levelId === s1.id && t.a.x === poco[0].at.x && t.a.y === poco[0].at.y)).toBe(true);
+    expect(recalque.some((t) => t.levelId === terreo.id && t.b.x === ci.at.x && t.b.y === ci.at.y)).toBe(true);
+    // As duas bombas no quadro da garagem, cada uma no seu circuito.
+    const qdg = m.quadros.find((q) => q.levelId === s1.id && /^QDG/.test(q.nome))!;
+    const bombas = doS1.filter((t) => t.tipoEletrico === 'MOTOR_BOMBA');
+    expect(bombas.length).toBe(2);
+    expect(bombas.every((t) => m.circuitos.find((c) => c.id === t.circuitoId)?.quadroId === qdg.id)).toBe(true);
+    expect(p.resumo.garagem!.drenagem).toEqual({ ralos: ralos.length, canaletas: 1, bombas: 2, recalque: true });
   });
 });

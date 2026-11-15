@@ -7732,7 +7732,7 @@ export default function BlueprintCanvas({
         }
         const grande = meio >= 14;
         ctx.font = `bold ${Math.round(11 * fz)}px ui-sans-serif, system-ui, sans-serif`;
-        if (grande && (t.tipoHidraulico === 'RESERVATORIO' || t.tipoHidraulico === 'CAIXA_INSPECAO' || t.tipoHidraulico === 'CAIXA_GORDURA')) {
+        if (grande && (t.tipoHidraulico === 'RESERVATORIO' || t.tipoHidraulico === 'CAIXA_INSPECAO' || t.tipoHidraulico === 'CAIXA_GORDURA' || t.tipoHidraulico === 'CAIXA_SEPARADORA' || t.tipoHidraulico === 'POCO_DE_RECALQUE')) {
           // Peça grande: o nome DENTRO, em branco; o volume da caixa d'água junto.
           ctx.fillStyle = '#ffffff';
           ctx.textAlign = 'center';

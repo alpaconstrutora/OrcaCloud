@@ -2,7 +2,7 @@ import React from 'react';
 import { Archive, FileText, HardHat, Lock, MapPin, RotateCcw, ShieldCheck, Trash2, UserCheck } from 'lucide-react';
 import type {
     ProjectRisk, ProjectRiskInput, RiskAction, RiskAuditLog, RiskCategoryRow, RiskDimensao, RiskEscopo, RiskEstrategia,
-    RiskEvaluation, RiskFase, RiskMatrixConfig, RiskStatus,
+    RiskEvaluation, RiskEvent, RiskFase, RiskLink, RiskMatrixConfig, RiskSinal, RiskStatus,
 } from '../../types/risk';
 import { RISK_DIMENSOES, RISK_FASES, RISK_ROTULO } from '../../types/risk';
 import { riskService, type DocumentoSst } from '../../services/riskService';
@@ -20,6 +20,9 @@ import { faixasDe, hojeLocalISO, nivelNaOrg } from '../../utils/riskPainel';
 import { RiscoAvaliacoes } from './RiscoAvaliacoes';
 import { RiscoAcoes } from './RiscoAcoes';
 import { RiscoHistorico } from './RiscoHistorico';
+import { RiscoOcorrencias } from './RiscoOcorrencias';
+import { RiscoVinculos } from './RiscoVinculos';
+import { RiscoAlcada } from './RiscoAlcada';
 import {
     AREA, BOTAO_PERIGO, BOTAO_PRIMARIO, BOTAO_SECUNDARIO, CAMPO, COM_ERRO, ErroDoCampo, NivelTexto, ROTULO,
     useEuNaOrg, useMembrosComConta, useObrasDaOrg,
@@ -29,9 +32,10 @@ import {
  * Ficha do risco em painel lateral (F1.6/F1.7/F1.8/F1.11/F1.12 de
  * docs/planos/2026-11-13-modulo-riscos.md; UI_PATTERNS §3: ver/editar/criar = Sheet).
  *
- * Abas internas: Ficha (Identificação · Contexto · Responsabilidade · Resposta ·
- * vínculo SST, um formulário só — §30) · Avaliações · Ações · Histórico. Nenhum
- * drawer aninhado: avaliação e ação abrem o formulário DENTRO da ficha.
+ * Abas internas: Ficha (alçada F2.3 + Identificação · Contexto · Responsabilidade ·
+ * Resposta · vínculo SST, um formulário só — §30) · Avaliações · Ações · Ocorrências
+ * (F2.1) · Vínculos (F2.2/F2.5) · Histórico. Nenhum drawer aninhado: avaliação, ação,
+ * ocorrência e o seletor de vínculo abrem DENTRO da ficha.
  *
  * §25: editar e salvar NÃO fecha (grava + "Salvo"); criar fecha — o guia é
  * explícito ("criar → grava → toast → fecha"). Saída com pendência pergunta
@@ -41,7 +45,7 @@ import {
  * CA03: salvar sem causa, evento, consequência, contexto (o campo do escopo), dono
  * ou próxima revisão é bloqueado com erro POR CAMPO e foco no primeiro (UI_PATTERNS §6.4).
  */
-export type SecaoFicha = 'ficha' | 'avaliacoes' | 'acoes' | 'historico';
+export type SecaoFicha = 'ficha' | 'avaliacoes' | 'acoes' | 'ocorrencias' | 'vinculos' | 'historico';
 
 export type AberturaFicha =
     | { modo: 'novo'; orgId: string; inicial: ProjectRiskInput; seq: number }
@@ -62,6 +66,11 @@ interface Props {
     onSalvo: (r: ProjectRisk) => void;
     onExcluido: (r: ProjectRisk) => void;
     onAcoesDoRisco: (riskId: string, acoes: RiskAction[]) => void;
+    /** Fase 2: sinais de TODOS os riscos carregados (`fn_risk_sinais`); a ficha filtra os dela. */
+    sinais: RiskSinal[];
+    onOcorrenciasDoRisco: (riskId: string, ocorrencias: RiskEvent[]) => void;
+    /** Recalcular os sinais depois de vincular/desvincular. */
+    onAtualizarSinais: () => void;
 }
 
 /** Ficha nova "do zero" (o catálogo usa `fichaDoCatalogo`, com o mesmo `base`). */
@@ -128,7 +137,7 @@ export const RiscoFicha: React.FC<Props> = (props) => {
 
 const FichaConteudo: React.FC<Props & { abertura: AberturaFicha }> = ({
     abertura, onClose, podeEditar, motivoSemEdicao, categorias, empreendimentos, contratos, faixasPorOrg,
-    onSalvo, onExcluido, onAcoesDoRisco,
+    onSalvo, onExcluido, onAcoesDoRisco, sinais, onOcorrenciasDoRisco, onAtualizarSinais,
 }) => {
     const { showToast } = useToast();
     const confirm = useConfirm();
@@ -158,6 +167,13 @@ const FichaConteudo: React.FC<Props & { abertura: AberturaFicha }> = ({
     const [historico, setHistorico] = React.useState<RiskAuditLog[]>([]);
     const [carregandoHist, setCarregandoHist] = React.useState(false);
     const [docsSst, setDocsSst] = React.useState<DocumentoSst[]>([]);
+    // Fase 2 — cada leitura falha sozinha e mostra o erro na própria aba (sem derrubar a ficha).
+    const [ocorrencias, setOcorrencias] = React.useState<RiskEvent[]>([]);
+    const [carregandoOcorr, setCarregandoOcorr] = React.useState(abertura.modo === 'editar');
+    const [erroOcorr, setErroOcorr] = React.useState<string | null>(null);
+    const [vinculos, setVinculos] = React.useState<RiskLink[]>([]);
+    const [carregandoVinc, setCarregandoVinc] = React.useState(abertura.modo === 'editar');
+    const [erroVinc, setErroVinc] = React.useState<string | null>(null);
 
     const [encerrando, setEncerrando] = React.useState(false);
     const [motivoEnc, setMotivoEnc] = React.useState('');
@@ -184,6 +200,28 @@ const FichaConteudo: React.FC<Props & { abertura: AberturaFicha }> = ({
         return () => { vivo = false; };
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [riskId]);
+
+    const carregarOcorrencias = React.useCallback(() => {
+        if (!riskId) return;
+        setCarregandoOcorr(true);
+        setErroOcorr(null);
+        riskService.listarOcorrencias({ riskId })
+            .then(setOcorrencias)
+            .catch(err => setErroOcorr(errorMessage(err, 'erro desconhecido')))
+            .finally(() => setCarregandoOcorr(false));
+    }, [riskId]);
+    const carregarVinculos = React.useCallback(() => {
+        if (!riskId) return;
+        setCarregandoVinc(true);
+        setErroVinc(null);
+        riskService.listarVinculos({ riskId })
+            .then(setVinculos)
+            .catch(err => setErroVinc(errorMessage(err, 'erro desconhecido')))
+            .finally(() => setCarregandoVinc(false));
+    }, [riskId]);
+    // Contam nas abas: carregam na abertura, como avaliações e ações.
+    React.useEffect(() => { carregarOcorrencias(); carregarVinculos(); }, [carregarOcorrencias, carregarVinculos]);
+    const sinaisDoRisco = React.useMemo(() => (riskId ? sinais.filter(x => x.project_risk_id === riskId) : []), [sinais, riskId]);
 
     const carregarHistorico = React.useCallback(() => {
         if (!riskId) return;
@@ -330,6 +368,16 @@ const FichaConteudo: React.FC<Props & { abertura: AberturaFicha }> = ({
     };
 
     const acoesMudaram = (lista: RiskAction[]) => { setAcoes(lista); if (risco) onAcoesDoRisco(risco.id, lista); };
+    const ocorrenciasMudaram = (lista: RiskEvent[]) => { setOcorrencias(lista); if (risco) onOcorrenciasDoRisco(risco.id, lista); };
+    /**
+     * Risco relido do banco por uma ação que não é a ficha (materializar, alçada): o cabeçalho
+     * reflete o status novo, e o formulário recebe o status — senão o próximo "Salvar" o desfaria.
+     */
+    const riscoRelido = (r: ProjectRisk) => {
+        setRisco(r);
+        setForm(p => ({ ...p, status: r.status }));
+        onSalvo(r);
+    };
 
     const nivel = risco ? nivelNaOrg(risco, faixasPorOrg) : null;
     const orgNome = organizations.find(o => o.id === orgId)?.name;
@@ -342,6 +390,12 @@ const FichaConteudo: React.FC<Props & { abertura: AberturaFicha }> = ({
         { id: 'ficha' as const, label: 'Ficha' },
         { id: 'avaliacoes' as const, label: 'Avaliações', badge: avaliacoes.length || undefined, badgeTitulo: 'avaliações registradas' },
         { id: 'acoes' as const, label: 'Ações', badge: acoes.length || undefined, badgeTitulo: 'ações de tratamento' },
+        { id: 'ocorrencias' as const, label: 'Ocorrências', badge: ocorrencias.length || undefined, badgeTitulo: 'ocorrências registradas' },
+        {
+            id: 'vinculos' as const, label: 'Vínculos', badge: vinculos.length || undefined,
+            badgeTom: sinaisDoRisco.length ? 'alerta' as const : undefined,
+            badgeTitulo: sinaisDoRisco.length ? `vínculos · ${sinaisDoRisco.length} com sinal` : 'vínculos',
+        },
         { id: 'historico' as const, label: 'Histórico' },
     ];
 
@@ -356,6 +410,9 @@ const FichaConteudo: React.FC<Props & { abertura: AberturaFicha }> = ({
                         <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-1">
                             <NivelTexto nivel={nivel} gatilho={risco.gatilho_critico} />
                             <span>· {RISK_ROTULO.status[risco.status]}</span>
+                            {risco.approval_status === 'PENDENTE' && <span className="text-amber-700">· aguardando aprovação</span>}
+                            {risco.approval_status === 'APROVADO' && <span className="text-emerald-700">· aprovado</span>}
+                            {risco.approval_status === 'REJEITADO' && <span className="text-red-700">· reprovado</span>}
                             {orgNome && <span>· {orgNome}</span>}
                         </span>
                     ) : (
@@ -413,6 +470,11 @@ const FichaConteudo: React.FC<Props & { abertura: AberturaFicha }> = ({
                                     </button>
                                 </div>
                             </div>
+                        )}
+
+                        {risco && (
+                            <RiscoAlcada risco={risco} faixas={faixas} podeEditar={podeEditar} motivoSemEdicao={motivoSemEdicao}
+                                fichaSuja={dirty} onRisco={riscoRelido} />
                         )}
 
                         <fieldset disabled={somenteLeitura} className="min-w-0">
@@ -617,7 +679,7 @@ const FichaConteudo: React.FC<Props & { abertura: AberturaFicha }> = ({
                                             ) : (
                                                 <>
                                                     <input id="rf-status" type="text" readOnly className={CAMPO.replace('bg-white', 'bg-gray-50')} value={RISK_ROTULO.status[form.status]} />
-                                                    <p className="text-xs text-gray-600">{form.status === 'encerrado' ? 'Para mudar, reabra o risco.' : 'Materialização é tratada na fase 2 do módulo.'}</p>
+                                                    <p className="text-xs text-gray-600">{form.status === 'encerrado' ? 'Para mudar, reabra o risco.' : 'Mudou ao registrar uma ocorrência que materializou o risco (aba Ocorrências).'}</p>
                                                 </>
                                             )}
                                         </div>
@@ -701,6 +763,18 @@ const FichaConteudo: React.FC<Props & { abertura: AberturaFicha }> = ({
                 {aba === 'acoes' && risco && (
                     <RiscoAcoes risco={risco} acoes={acoes} carregando={carregandoAcoes}
                         podeEditar={podeEditar} motivoSemEdicao={motivoSemEdicao} onAcoes={acoesMudaram} />
+                )}
+
+                {aba === 'ocorrencias' && risco && (
+                    <RiscoOcorrencias risco={risco} ocorrencias={ocorrencias} carregando={carregandoOcorr} erro={erroOcorr}
+                        onTentarDeNovo={carregarOcorrencias} podeEditar={podeEditar} motivoSemEdicao={motivoSemEdicao}
+                        onOcorrencias={ocorrenciasMudaram} onRisco={riscoRelido} />
+                )}
+
+                {aba === 'vinculos' && risco && (
+                    <RiscoVinculos risco={risco} vinculos={vinculos} carregando={carregandoVinc} erro={erroVinc}
+                        onTentarDeNovo={carregarVinculos} sinais={sinaisDoRisco} podeEditar={podeEditar} motivoSemEdicao={motivoSemEdicao}
+                        onVinculos={setVinculos} onAtualizarSinais={onAtualizarSinais} />
                 )}
 
                 {aba === 'historico' && risco && (

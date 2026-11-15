@@ -2705,7 +2705,10 @@ function entidadeDoPontoHidraulico(
     case 'FILTRO_ANAEROBIO':
       return { entidade: 'IFCTANK', predefinido: '.USERDEFINED.' };
     case 'SUMIDOURO':
+    case 'POCO_DE_RECALQUE':
       return { entidade: 'IFCDISTRIBUTIONCHAMBERELEMENT', predefinido: '.SUMP.' };
+    case 'CAIXA_SEPARADORA':
+      return { entidade: 'IFCINTERCEPTOR', predefinido: '.OIL.' };
     case 'REGISTRO_GAVETA':
       return { entidade: 'IFCVALVE', predefinido: '.ISOLATING.' };
     case 'REGISTRO_PRESSAO':

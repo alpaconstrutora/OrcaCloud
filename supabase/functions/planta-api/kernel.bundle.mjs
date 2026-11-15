@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.108.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.109.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -681,6 +681,11 @@ var TIPOS_DE_PONTO_HIDRAULICO = [
   "TANQUE_SEPTICO",
   "FILTRO_ANAEROBIO",
   "SUMIDOURO",
+  // 15/11/2026 (0.109.0, PA8c do prédio automático): a drenagem da garagem no subsolo — a caixa separadora de água e
+  // óleo (o piso da garagem leva óleo; a NBR 8160 a pede antes da rede) e o poço de recalque com as bombas (o piso abaixo
+  // da rede pública não escoa por gravidade).
+  "CAIXA_SEPARADORA",
+  "POCO_DE_RECALQUE",
   "REGISTRO_GAVETA",
   "REGISTRO_PRESSAO",
   "VALVULA_RETENCAO",
@@ -807,6 +812,8 @@ var DISCIPLINAS_DO_PONTO_HIDRAULICO = {
   CAIXA_AREIA: PLU,
   LIGACAO_PLUVIAL: PLU,
   TANQUE_SEPTICO: ESG,
+  CAIXA_SEPARADORA: ESG,
+  POCO_DE_RECALQUE: ESG,
   FILTRO_ANAEROBIO: ESG,
   SUMIDOURO: ESG,
   CAIXA_GORDURA: ESG,
@@ -3750,7 +3757,10 @@ var CAIXAS_DE_ESGOTO = {
   // E7.1: o tanque, o filtro e o sumidouro — a cota é a do tubo, 40 cm abaixo da tampa.
   TANQUE_SEPTICO: { cotaE: "TUBO", alturaPadraoMm: 1800, larguraPadraoMm: 1200, acimaDoTuboMm: 400 },
   FILTRO_ANAEROBIO: { cotaE: "TUBO", alturaPadraoMm: 1800, larguraPadraoMm: 1500, acimaDoTuboMm: 400 },
-  SUMIDOURO: { cotaE: "TUBO", alturaPadraoMm: 3e3, larguraPadraoMm: 1500, acimaDoTuboMm: 400 }
+  SUMIDOURO: { cotaE: "TUBO", alturaPadraoMm: 3e3, larguraPadraoMm: 1500, acimaDoTuboMm: 400 },
+  // 0.109.0 (PA8c): a separadora de água e óleo — cota do tubo, como o tanque; o poço de recalque — cota do fundo.
+  CAIXA_SEPARADORA: { cotaE: "TUBO", alturaPadraoMm: 1e3, larguraPadraoMm: 800, acimaDoTuboMm: 300 },
+  POCO_DE_RECALQUE: { cotaE: "FUNDO", alturaPadraoMm: 1500, larguraPadraoMm: 1200 }
 };
 function extensaoVerticalDaCaixa(t) {
   const c = t.tipoHidraulico ? CAIXAS_DE_ESGOTO[t.tipoHidraulico] : void 0;
@@ -7484,7 +7494,10 @@ function entidadeDoPontoHidraulico(tipo) {
     case "FILTRO_ANAEROBIO":
       return { entidade: "IFCTANK", predefinido: ".USERDEFINED." };
     case "SUMIDOURO":
+    case "POCO_DE_RECALQUE":
       return { entidade: "IFCDISTRIBUTIONCHAMBERELEMENT", predefinido: ".SUMP." };
+    case "CAIXA_SEPARADORA":
+      return { entidade: "IFCINTERCEPTOR", predefinido: ".OIL." };
     case "REGISTRO_GAVETA":
       return { entidade: "IFCVALVE", predefinido: ".ISOLATING." };
     case "REGISTRO_PRESSAO":
@@ -8349,6 +8362,25 @@ var FICHA_DO_PONTO_HIDRAULICO = {
     dnMinimoMm: { ESGOTO: 100 },
     medidasMm: { larguraMm: 1500, profundidadeMm: 1500, alturaMm: 3e3 },
     ajuda: "Infiltra\xE7\xE3o do efluente tratado no solo (NBR 13969) \u2014 o destino final do esgoto sem rede p\xFAblica. A cota \xE9 a do tubo de entrada."
+  },
+  CAIXA_SEPARADORA: {
+    rotulo: "Caixa separadora de \xE1gua e \xF3leo",
+    sigla: "CSAO",
+    grupo: ESGOTO,
+    // A cota é a do TUBO (entrada e saída), como no tanque séptico; a tampa fica 30 cm acima dela.
+    cotaMm: { ESGOTO: -400 },
+    dnMinimoMm: { ESGOTO: 100 },
+    medidasMm: { larguraMm: 800, profundidadeMm: 1500, alturaMm: 1e3 },
+    ajuda: "Recebe a lavagem do piso da garagem (com \xF3leo e combust\xEDvel) e s\xF3 deixa passar a \xE1gua para a rede \u2014 o \xF3leo fica retido para a limpeza. A cota \xE9 a do tubo de entrada."
+  },
+  POCO_DE_RECALQUE: {
+    rotulo: "Po\xE7o de recalque (bombas de drenagem)",
+    sigla: "PR",
+    grupo: ESGOTO,
+    cotaMm: { ESGOTO: -1500 },
+    dnMinimoMm: { ESGOTO: 100 },
+    medidasMm: { larguraMm: 1200, profundidadeMm: 1200, alturaMm: 1500 },
+    ajuda: "Onde a drenagem do subsolo se junta quando o piso fica abaixo da rede p\xFAblica: as bombas (uma reserva) a levam at\xE9 a caixa de inspe\xE7\xE3o do t\xE9rreo. A cota \xE9 a do fundo."
   },
   CAIXA_GORDURA: {
     rotulo: "Caixa de gordura",

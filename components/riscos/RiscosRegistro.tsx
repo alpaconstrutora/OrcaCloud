@@ -1,15 +1,16 @@
 import React from 'react';
-import { ShieldAlert, X } from 'lucide-react';
-import type { ProjectRisk, RiskMatrixConfig, RiskNivel, RiskStatus } from '../../types/risk';
+import { AlertTriangle, ShieldAlert, X } from 'lucide-react';
+import type { ProjectRisk, RiskMatrixConfig, RiskNivel, RiskSinal, RiskStatus } from '../../types/risk';
 import { RISK_ROTULO } from '../../types/risk';
 import { pontuacaoVigente, riscoAtivo } from '../../utils/riskScoring';
-import { nivelNaOrg, recortarRiscos, ROTULO_RECORTE, type ContextoRecorte, type RecorteRisco } from '../../utils/riskPainel';
+import { gravidadeMaxima, nivelNaOrg, recortarRiscos, ROTULO_RECORTE, type ContextoRecorte, type RecorteRisco } from '../../utils/riskPainel';
 import { FilterPopover } from '../ui/FilterPopover';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
 import { formatDateBR } from '../ui/Format';
 import { NivelTexto } from './riscosUi';
 import type { SecaoFicha } from './RiscoFicha';
+import { COR_GRAVIDADE } from './RiscoVinculos';
 
 /**
  * Aba Registro (F1.9): todos os riscos da organização do topo (ou de todas, em
@@ -73,11 +74,13 @@ interface Props {
     obrasDosRiscos: { id: string; name: string }[];
     podeEditar: boolean;
     onAbrir: (r: ProjectRisk, secao?: SecaoFicha) => void;
+    /** Fase 2 (F2.5): sinais dos vínculos por risco — coluna "Sinais". */
+    sinaisPorRisco: Map<string, RiskSinal[]>;
 }
 
 export const RiscosRegistro: React.FC<Props> = ({
     riscos, carregando, filtros, setFiltro, limparFiltros, ctx, faixasPorOrg, rotuloEscopo, nomeCategoria, nomeOrg,
-    mostrarOrg, obrasDosRiscos, podeEditar, onAbrir,
+    mostrarOrg, obrasDosRiscos, podeEditar, onAbrir, sinaisPorRisco,
 }) => {
     const colunas = React.useMemo<StandardTableColumn[]>(() => [
         { key: 'codigo', label: 'Código', sortable: true, width: 100 },
@@ -90,6 +93,7 @@ export const RiscosRegistro: React.FC<Props> = ({
         { key: 'nivel', label: 'Nível', sortable: true, width: 150 },
         { key: 'pontuacao', label: 'Inerente → residual', sortable: true, width: 160, align: 'right' },
         { key: 'status', label: 'Status', sortable: true, width: 140 },
+        { key: 'sinais', label: 'Sinais', sortable: true, width: 110 },
         { key: 'revisao', label: 'Próxima revisão', sortable: true, width: 150 },
     ], [mostrarOrg]);
 
@@ -142,6 +146,7 @@ export const RiscosRegistro: React.FC<Props> = ({
                         case 'nivel': { const n = nivelNaOrg(r, faixasPorOrg); return n ? NIVEL_ORDEM[n] * 100 + (pontuacaoVigente(r) ?? 0) : -1; }
                         case 'pontuacao': return pontuacaoVigente(r) ?? -1;
                         case 'status': return RISK_ROTULO.status[r.status];
+                        case 'sinais': { const s = sinaisPorRisco.get(r.id); return (gravidadeMaxima(s) === 'alta' ? 1000 : 0) + (s?.length ?? 0); }
                         case 'revisao': return r.proxima_revisao;
                         default: return r.titulo;
                     }
@@ -164,6 +169,19 @@ export const RiscosRegistro: React.FC<Props> = ({
                             </span>
                         );
                         case 'status': return <span className={`text-sm font-normal ${COR_STATUS_RISCO[r.status]}`}>{RISK_ROTULO.status[r.status]}</span>;
+                        case 'sinais': {
+                            // §8: quantidade como texto colorido pela gravidade mais alta; a lista inteira no `title`.
+                            const s = sinaisPorRisco.get(r.id);
+                            const g = gravidadeMaxima(s);
+                            if (!s || !g) return <span className="text-sm font-normal text-gray-600" title="Nenhum objeto vinculado com sinal">—</span>;
+                            const t = s.map(x => `${x.sinal}${x.external_label ? ` (${x.external_label})` : ''}`).join('\n');
+                            return (
+                                <span className={`inline-flex items-center gap-1 text-sm font-normal ${COR_GRAVIDADE[g]}`} title={t}>
+                                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                                    {s.length}<span className="sr-only"> sinal{s.length === 1 ? '' : 'is'}, gravidade {g === 'alta' ? 'alta' : 'média'}</span>
+                                </span>
+                            );
+                        }
                         case 'revisao': {
                             const vencida = riscoAtivo(r) && r.proxima_revisao < ctx.hoje;
                             return <span className={`text-sm font-normal ${vencida ? 'text-red-700' : 'text-gray-600'}`} title={vencida ? 'Revisão vencida' : undefined}>

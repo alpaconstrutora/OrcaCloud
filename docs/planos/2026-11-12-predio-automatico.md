@@ -326,6 +326,11 @@ acima do limite — o "pronto quando"; o marco o exige). Os outros ficam gravado
 - **Térreo comprido** (R12, RL): salas comuns a mais de 25 m da porta de entrada — o térreo pede outra saída.
 - **RL (asas):** um ambiente por andar sem caminho até a escada.
 
+**Desempenho (CI):** o RL do marco passou de 600 s na CI com a rota de fuga — `caminhoDentro` (o caminho por dentro do
+ambiente) refazia o grafo de visibilidade inteiro para cada par de portas; na circulação de um prédio, 15 dos 16 s da rota
+de 891 ambientes. A visibilidade entre vértices do contorno passou a ser guardada por ambiente: 3,9 s, o mesmo resultado
+(o marco, que grava a rota de cada andar dos quatro prédios, passa sem regravar).
+
 **Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa9a.cjs`, estudo descartável arquivado):** R8 — a aba
 PPCI com A-2, 21 m, 4.375 m², 8 medidas exigidas e a rota em 9 pavimentos (nenhum com ambiente sem rota); depois do
 Lançar, a escada do tipo chega à cobertura; tudo o que as PA3–PA7 conferiam segue igual; Ctrl+Z volta ao bloco sozinho.

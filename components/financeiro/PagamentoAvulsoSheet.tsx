@@ -10,6 +10,7 @@ import CostCenterSelect from '../CostCenterSelect';
 import PlanoContasSelect from '../PlanoContasSelect';
 import HierarchicalSelect from '../HierarchicalSelect';
 import { supplierService } from '../../services/supplierService';
+import { laborService, type CredorColaborador } from '../../services/laborService';
 import { financialRegistryService } from '../../services/financialRegistryService';
 import { projectService } from '../../services/projectService';
 import { payableService, type PagamentoAvulsoGravado } from '../../services/payableService';
@@ -63,6 +64,7 @@ type ProjetoOpcao = { id: string; name: string; settings?: { isSystemProject?: b
 function formVazio(): FormPagamentoAvulso {
     return {
         supplierId: null,
+        employeeId: null,
         credorNome: '',
         descricao: '',
         valorTotal: 0,
@@ -111,6 +113,9 @@ const PagamentoAvulsoSheet: React.FC<Props> = ({ open, organizationId, editId, o
     const fileRef = useRef<HTMLInputElement>(null);
 
     const [fornecedores, setFornecedores] = useState<{ id: string; name: string; nickname?: string | null; document?: string | null; category?: string | null }[]>([]);
+    // Credor pode ser colaborador (15/11/2026, plano 2026-11-15-credor-colaborador-no-financeiro):
+    // os da organização do título + os disponibilizados para ela — mesma regra do Extrato.
+    const [colaboradores, setColaboradores] = useState<CredorColaborador[]>([]);
     const [centros, setCentros] = useState<CostCenter[]>([]);
     const [planos, setPlanos] = useState<CostCenter[]>([]);
     const [contasFinanceiras, setContasFinanceiras] = useState<ChartOfAccount[]>([]);
@@ -124,15 +129,17 @@ const PagamentoAvulsoSheet: React.FC<Props> = ({ open, organizationId, editId, o
         let vivo = true;
         Promise.all([
             supplierService.listSuppliers(organizationId).catch(() => []),
+            laborService.listCredoresColaboradoresDaOrg(organizationId).catch(() => [] as CredorColaborador[]),
             financialRegistryService.listCostCenters(organizationId).catch(() => []),
             financialRegistryService.listPlanoContas(organizationId).catch(() => []),
             financialRegistryService.listChartOfAccounts(organizationId).catch(() => []),
             financialRegistryService.listPaymentAccounts().catch(() => []),
             // `listProjects` já devolve só OBRA (REGRA #3) e sem projeto de sistema (REGRA #2).
             projectService.listProjects({ organizationId }).catch(() => []),
-        ]).then(([sup, cc, pc, cf, contas, projs]) => {
+        ]).then(([sup, colabs, cc, pc, cf, contas, projs]) => {
             if (!vivo) return;
             setFornecedores((sup || []) as typeof fornecedores);
+            setColaboradores(colabs || []);
             setCentros(cc || []);
             setPlanos(pc || []);
             setContasFinanceiras(cf || []);
@@ -170,6 +177,7 @@ const PagamentoAvulsoSheet: React.FC<Props> = ({ open, organizationId, editId, o
                 const f: FormPagamentoAvulso = {
                     ...formVazio(),
                     supplierId: t.supplier_id,
+                    employeeId: t.employee_id ?? null,
                     credorNome: t.party_name ?? '',
                     descricao: t.description ?? '',
                     valorTotal: Number(t.amount) || 0,
@@ -186,7 +194,7 @@ const PagamentoAvulsoSheet: React.FC<Props> = ({ open, organizationId, editId, o
                 setGravado(t);
                 setForm(f);
                 setValorTexto(String(Number(t.amount) || ''));
-                setCredorLivre(t.supplier_id ? '' : (t.party_name ?? ''));
+                setCredorLivre(t.supplier_id || t.employee_id ? '' : (t.party_name ?? ''));
                 setSnapshot(JSON.stringify(f));
             })
             .catch(e => { if (vivo) setErro(e instanceof Error ? e.message : 'Não foi possível abrir o título.'); })
@@ -211,9 +219,33 @@ const PagamentoAvulsoSheet: React.FC<Props> = ({ open, organizationId, editId, o
         setForm(f => ({ ...f, costCenterId: id, paymentAccountId: r.conta }));
     };
 
-    // Nome do credor: o do fornecedor escolhido; senão, o digitado.
+    // Credor = fornecedor OU colaborador, no mesmo drawer. O colaborador entra com id
+    // `emp:<id>` e categoria "Colaborador" (mesmo formato do Extrato).
+    const credores = useMemo(() => [
+        ...fornecedores,
+        ...colaboradores.map(c => ({ id: `emp:${c.id}`, name: c.name, category: 'Colaborador' })),
+    ], [fornecedores, colaboradores]);
+    const escolherCredor = (id: string) => {
+        if (!id.startsWith('emp:')) {
+            setForm(f => ({ ...f, supplierId: id || null, employeeId: null }));
+            return;
+        }
+        const employeeId = id.slice(4);
+        const colab = colaboradores.find(c => c.id === employeeId);
+        // O cadastro do colaborador já diz o CC e o plano — preenche o que está vazio,
+        // só se forem desta organização (as listas já vêm recortadas por ela).
+        const plano = colab?.plano_de_contas_id && planos.some(p => p.id === colab.plano_de_contas_id) ? colab.plano_de_contas_id : null;
+        setForm(f => ({ ...f, supplierId: null, employeeId, planoDeContasId: f.planoDeContasId || plano }));
+        if (!form.costCenterId && colab?.cost_center_id && centros.some(c => c.id === colab.cost_center_id)) {
+            trocarCentro(colab.cost_center_id);
+        }
+    };
+
+    // Nome do credor: o do cadastro escolhido; senão, o digitado.
     const fornecedor = fornecedores.find(s => s.id === form.supplierId);
-    const credorNome = fornecedor ? fornecedor.name : credorLivre;
+    const colaborador = colaboradores.find(c => c.id === form.employeeId);
+    const credorNome = fornecedor?.name ?? colaborador?.name ?? credorLivre;
+    const temCredorCadastrado = !!(form.supplierId || form.employeeId);
     const projetoEscolhido = form.projeto
         ? (projetos.find(p => p.id === form.projeto!.id) ?? form.projeto)
         : null;
@@ -225,7 +257,7 @@ const PagamentoAvulsoSheet: React.FC<Props> = ({ open, organizationId, editId, o
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [isEdit, form.valorTotal, form.parcelas, form.periodicidade, form.primeiroVencimento]);
 
-    const dirty = JSON.stringify(form) !== snapshot || !!arquivo || removerAnexo || credorLivre !== (gravado && !gravado.supplier_id ? (gravado.party_name ?? '') : '');
+    const dirty = JSON.stringify(form) !== snapshot || !!arquivo || removerAnexo || credorLivre !== (gravado && !gravado.supplier_id && !gravado.employee_id ? (gravado.party_name ?? '') : '');
 
     async function fechar() {
         if (dirty && !salvando) {
@@ -312,17 +344,18 @@ const PagamentoAvulsoSheet: React.FC<Props> = ({ open, organizationId, editId, o
                 {/* Quem recebe e o quê */}
                 <div className="space-y-4">
                     <SecaoTitulo icon={User} titulo="Credor e descrição" />
-                    <Campo label="Fornecedor" dica={form.supplierId ? null : 'Sem cadastro? Deixe em branco e escreva o nome abaixo.'}>
+                    <Campo label="Credor" dica={temCredorCadastrado ? null : 'Fornecedor ou colaborador. Sem cadastro? Deixe em branco e escreva o nome abaixo.'}>
                         <SupplierSelect
-                            suppliers={fornecedores}
-                            value={form.supplierId ?? ''}
-                            onChange={id => set('supplierId', id || null)}
-                            placeholder="Selecionar fornecedor"
+                            suppliers={credores}
+                            value={form.employeeId ? `emp:${form.employeeId}` : (form.supplierId ?? '')}
+                            onChange={escolherCredor}
+                            placeholder="Selecionar fornecedor ou colaborador"
                             size="sm"
                             title="Selecionar credor"
+                            fallbackLabel={isEdit && temCredorCadastrado ? (gravado?.party_name ?? undefined) : undefined}
                         />
                     </Campo>
-                    {!form.supplierId && (
+                    {!temCredorCadastrado && (
                         <Campo label="Credor sem cadastro">
                             <input
                                 type="text"

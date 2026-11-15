@@ -40,6 +40,15 @@ describe('favorecidoDoTitulo', () => {
         expect(favorecidoDoTitulo({ source_system: 'PROLABORE', reference_id: '363AA981-EEEC-42F3-8731-5EE70CDF19B5' }))
             .toEqual({ origem: 'socio', id: '363aa981-eeec-42f3-8731-5ee70cdf19b5', motivo: null });
     });
+    // 15/11/2026 — credor colaborador em título avulso (plano 2026-11-15-credor-colaborador-no-financeiro).
+    it('colaborador pelo employee_id do título (pagamento avulso)', () => {
+        expect(favorecidoDoTitulo({ source_system: 'MANUAL', party_type: 'EMPLOYEE', employee_id: COLAB }))
+            .toEqual({ origem: 'colaborador', id: COLAB, motivo: null });
+    });
+    it('employee_id ganha do reference_id da folha', () => {
+        const outro = '11111111-2222-3333-4444-555555555555';
+        expect(favorecidoDoTitulo({ source_system: 'LABOR', employee_id: outro, reference_id: `labor-${FOLHA}-indiv-ADIANTAMENTO-${COLAB}` }).id).toBe(outro);
+    });
     it('o resto é avulso', () => {
         expect(favorecidoDoTitulo({ source_system: 'COMMERCIAL', party_type: 'TAX' }).origem).toBe('avulso');
         expect(favorecidoDoTitulo({ source_system: 'PROJECT' }).motivo).toMatch(/digite/);

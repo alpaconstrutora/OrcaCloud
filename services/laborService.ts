@@ -736,6 +736,14 @@ function erroDeEmployee(error: { code?: string; message?: string }): unknown {
 // SERVICE
 // ============================================================
 
+/** Colaborador oferecido como credor no Financeiro (Extrato, Pagamento Avulso). */
+export interface CredorColaborador {
+    id: string;
+    name: string;
+    cost_center_id?: string | null;
+    plano_de_contas_id?: string | null;
+}
+
 export const laborService = {
 
     // ── EMPLOYEES ──────────────────────────────────────────
@@ -791,8 +799,11 @@ export const laborService = {
      * pagamento NÃO alarga esta lista — ele vale para CC, plano de contas, obra,
      * fornecedor e cliente. Por isso recebe UMA org (a dona da conta), não a lista
      * de orgs atendidas.
+     *
+     * Também usada pelo Pagamento Avulso (15/11/2026): o CC e o plano de contas do
+     * colaborador preenchem o título quando ele é o credor.
      */
-    async listCredoresColaboradoresDaOrg(orgId: string): Promise<{ id: string; name: string }[]> {
+    async listCredoresColaboradoresDaOrg(orgId: string): Promise<CredorColaborador[]> {
         const { data: shared, error: sharedErr } = await supabase
             .from('employee_org_shares')
             .select('employee_id')
@@ -802,7 +813,7 @@ export const laborService = {
 
         const { data, error } = await supabase
             .from('employees')
-            .select('id, name')
+            .select('id, name, cost_center_id, plano_de_contas_id')
             .eq('status', 'ATIVO')
             .or(sharedIds.length > 0
                 ? `org_id.eq.${orgId},id.in.(${sharedIds.join(',')})`

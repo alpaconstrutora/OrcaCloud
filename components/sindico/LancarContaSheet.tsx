@@ -69,7 +69,7 @@ function formVazio(condominio: CondominioDoFinanceiro | null, hoje: string): For
         contasDisponiveis: (condominio?.contas ?? []).map(a => a.id),
     }).conta;
     return {
-        supplierId: null, credorNome: '', descricao: '', valorTotal: 0, projeto: null,
+        supplierId: null, employeeId: null, credorNome: '', descricao: '', valorTotal: 0, projeto: null,
         costCenterId: raiz?.id ?? null, planoDeContasId: null, categoryId: null, categoryName: null,
         formaPagamento: null, paymentAccountId: conta, competencia: '', parcelas: 1, periodicidade: 'Mensal',
         primeiroVencimento: hoje, jaPago: false, dataPagamento: hoje,
@@ -78,7 +78,7 @@ function formVazio(condominio: CondominioDoFinanceiro | null, hoje: string): For
 
 function formDoTitulo(t: TituloDoCondominio, hoje: string): FormPagamentoAvulso {
     return {
-        supplierId: t.supplierId, credorNome: t.credor ?? '', descricao: t.descricao ?? '', valorTotal: Number(t.valor) || 0,
+        supplierId: t.supplierId, employeeId: null, credorNome: t.credor ?? '', descricao: t.descricao ?? '', valorTotal: Number(t.valor) || 0,
         projeto: null, costCenterId: t.centroId, planoDeContasId: t.planoId, categoryId: t.categoriaId, categoryName: t.categoria,
         formaPagamento: (t.formaPagamento as FormaPagamentoAvulso | null) ?? null, paymentAccountId: t.contaId,
         competencia: (t.competencia ?? '').slice(0, 7), parcelas: 1, periodicidade: 'Mensal',

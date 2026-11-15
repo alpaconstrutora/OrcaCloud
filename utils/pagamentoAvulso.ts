@@ -31,7 +31,11 @@ export const MAX_PARCELAS_AVULSO = 120;
 export interface FormPagamentoAvulso {
     /** Fornecedor de Meus Fornecedores, quando escolhido. Ganha do texto livre. */
     supplierId: string | null;
-    /** Nome a gravar como contraparte: o do fornecedor escolhido, ou o digitado. */
+    /** Colaborador como credor (15/11/2026). Excludente com `supplierId`: se os dois
+     *  vierem, fica o colaborador (o banco recusa os dois juntos —
+     *  `internal_transactions_credor_unico_chk`). */
+    employeeId: string | null;
+    /** Nome a gravar como contraparte: o do credor escolhido, ou o digitado. */
     credorNome: string;
     descricao: string;
     /** Valor TOTAL; com N parcelas, é dividido. */
@@ -69,9 +73,10 @@ export interface LinhaPagamentoAvulso {
     amount: number;
     description: string;
     supplier_id: string | null;
+    employee_id: string | null;
     party_name: string | null;
     entity_name: string | null;
-    party_type: 'SUPPLIER';
+    party_type: 'SUPPLIER' | 'EMPLOYEE';
     project_id: string | null;
     cost_center_id: string | null;
     plano_de_contas_id: string | null;
@@ -171,6 +176,7 @@ export function montarTitulosAvulsos(f: FormPagamentoAvulso, grupoId: string): L
     const credor = f.credorNome.trim() || null;
     const projectId = obraDoLancamento(f.projeto);
     const pago = f.jaPago && n === 1;
+    const employeeId = f.employeeId || null;
 
     return previa.map((p, i) => ({
         source_system: 'MANUAL',
@@ -185,10 +191,11 @@ export function montarTitulosAvulsos(f: FormPagamentoAvulso, grupoId: string): L
         competencia_date: somarMeses(competenciaBase, meses * i),
         amount: p.valor,
         description: n > 1 ? `${descricao} (${i + 1}/${n})` : descricao,
-        supplier_id: f.supplierId || null,
+        supplier_id: employeeId ? null : (f.supplierId || null),
+        employee_id: employeeId,
         party_name: credor,
         entity_name: credor,
-        party_type: 'SUPPLIER',
+        party_type: employeeId ? 'EMPLOYEE' : 'SUPPLIER',
         project_id: projectId,
         cost_center_id: f.costCenterId || null,
         plano_de_contas_id: f.planoDeContasId || null,

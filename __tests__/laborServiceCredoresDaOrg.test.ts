@@ -48,6 +48,8 @@ describe('laborService.listCredoresColaboradoresDaOrg', () => {
         expect(chamadas).toContainEqual({ tabela: 'employee_org_shares', metodo: 'eq', args: ['target_org_id', 'org-garden'] });
         expect(doEmployees('or')).toEqual([['org_id.eq.org-garden']]);
         expect(doEmployees('eq')).toEqual([['status', 'ATIVO']]);
+        // CC e plano do colaborador: o Pagamento Avulso preenche o título com eles.
+        expect(doEmployees('select')).toEqual([['id, name, cost_center_id, plano_de_contas_id']]);
         expect(r).toEqual([{ id: 'e1', name: 'Nei' }]);
     });
 

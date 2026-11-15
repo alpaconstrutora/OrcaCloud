@@ -14,6 +14,7 @@ const HOJE = '2026-10-17';
 function form(over: Partial<FormPagamentoAvulso> = {}): FormPagamentoAvulso {
     return {
         supplierId: null,
+        employeeId: null,
         credorNome: 'Cartório do 1º Ofício',
         descricao: 'Registro de escritura',
         valorTotal: 100,
@@ -128,6 +129,25 @@ describe('pagamento avulso · montarTitulosAvulsos', () => {
         const [t] = montarTitulosAvulsos(form({ credorNome: '   ' }), 'g');
         expect(t.party_name).toBeNull();
         expect(t.entity_name).toBeNull();
+    });
+
+    // 15/11/2026 — credor pode ser colaborador (plano 2026-11-15-credor-colaborador-no-financeiro).
+    it('credor colaborador: grava employee_id, party_type EMPLOYEE e nenhum supplier_id', () => {
+        const ts = montarTitulosAvulsos(form({ employeeId: 'e1', credorNome: 'Nei', parcelas: 2 }), 'g');
+        expect(ts).toHaveLength(2);
+        for (const t of ts) {
+            expect(t).toMatchObject({ employee_id: 'e1', supplier_id: null, party_type: 'EMPLOYEE', party_name: 'Nei' });
+        }
+    });
+
+    it('credor fornecedor: employee_id nulo e party_type SUPPLIER', () => {
+        const [t] = montarTitulosAvulsos(form({ supplierId: 's1', credorNome: 'ABR Telhas' }), 'g');
+        expect(t).toMatchObject({ supplier_id: 's1', employee_id: null, party_type: 'SUPPLIER' });
+    });
+
+    it('os dois preenchidos (não deveria acontecer): fica o colaborador — o banco recusa os dois juntos', () => {
+        const [t] = montarTitulosAvulsos(form({ supplierId: 's1', employeeId: 'e1', credorNome: 'Nei' }), 'g');
+        expect(t).toMatchObject({ supplier_id: null, employee_id: 'e1', party_type: 'EMPLOYEE' });
     });
 });
 

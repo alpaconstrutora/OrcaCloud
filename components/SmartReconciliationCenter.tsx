@@ -39,7 +39,9 @@ interface CandidateTx {
 function partyInfo(name?: string | null, partyType?: string, direction?: 'CREDIT' | 'DEBIT') {
     if (!name) return null;
     const isClient = partyType ? partyType === 'CLIENT' : direction === 'CREDIT';
-    return { label: isClient ? 'Cliente' : 'Fornecedor', name, isClient };
+    // Lado a pagar = Credor (fornecedor OU colaborador) — 15/11/2026,
+    // plano 2026-11-15-credor-colaborador-no-financeiro.
+    return { label: isClient ? 'Cliente' : 'Credor', name, isClient };
 }
 interface SuggestionRow {
     id: string;

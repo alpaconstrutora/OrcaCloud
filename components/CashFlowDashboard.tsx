@@ -8,6 +8,9 @@ import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
 import { useResizableColumns } from './ui/TableUtils';
 import type { CashFlowSummary, CashFlowGranularity } from '../types/financial';
+import { useCargaVigente } from '../hooks/useCargaVigente';
+import { anoCorrente, motivoPeriodoInvalido } from '../utils/periodoControladoria';
+import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
 
 const CASHFLOW_COL_WIDTHS: Record<string, number> = { periodo: 160, entradas: 150, saidas: 150, saldo: 150, acumulado: 150 };
 
@@ -60,27 +63,38 @@ interface CashFlowDashboardProps {
 
 const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId }) => {
     const { showToast } = useToast();
-    const now = new Date();
-    const [dateFrom, setDateFrom] = React.useState(`${now.getFullYear()}-01-01`);
-    const [dateTo,   setDateTo]   = React.useState(`${now.getFullYear()}-12-31`);
+    const [dateFrom, setDateFrom] = React.useState(() => anoCorrente().de);
+    const [dateTo,   setDateTo]   = React.useState(() => anoCorrente().ate);
     const [granularity, setGranularity] = React.useState<CashFlowGranularity>('month');
     const [data, setData]   = React.useState<CashFlowSummary | null>(null);
     const [loading, setLoading] = React.useState(false);
+    const [falhou, setFalhou] = React.useState(false);
     const [chartMode, setChartMode] = React.useState<'acumulado' | 'periodo'>('acumulado');
     const cols = useResizableColumns(CASHFLOW_COL_WIDTHS, 'cashFlowReportColWidths');
+    const novaCarga = useCargaVigente();
+    const motivoPeriodo = motivoPeriodoInvalido(dateFrom, dateTo);
 
     const load = React.useCallback(async () => {
+        const vigente = novaCarga();
+        if (motivoPeriodoInvalido(dateFrom, dateTo)) {
+            setData(null); setFalhou(false); setLoading(false);
+            return;
+        }
         setLoading(true);
+        setFalhou(false);
         try {
             const d = await financialReportService.getCashFlow(organizationId, dateFrom, dateTo, granularity);
-            setData(d);
+            if (vigente()) setData(d);
         } catch (e: unknown) {
+            if (!vigente()) return;
+            setData(null);
+            setFalhou(true);
             showToast('Erro ao carregar fluxo de caixa', 'error');
             console.error('[CashFlow]', e);
         } finally {
-            setLoading(false);
+            if (vigente()) setLoading(false);
         }
-    }, [organizationId, dateFrom, dateTo, granularity, showToast]);
+    }, [novaCarga, organizationId, dateFrom, dateTo, granularity, showToast]);
 
     React.useEffect(() => { load(); }, [load]);
 
@@ -144,8 +158,12 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId })
                 </div>
             </div>
 
-            {loading ? (
-                <div className="flex items-center justify-center h-40 text-sm text-gray-400">Carregando fluxo de caixa...</div>
+            {motivoPeriodo ? (
+                <PeriodoInvalido motivo={motivoPeriodo} />
+            ) : loading ? (
+                <div className="flex items-center justify-center h-40 text-sm text-gray-500">Carregando fluxo de caixa...</div>
+            ) : falhou ? (
+                <FalhaDeCarga oQue="o fluxo de caixa" onRetry={load} />
             ) : !data ? null : (
                 <>
                     {/* KPIs */}

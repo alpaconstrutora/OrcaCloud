@@ -6,6 +6,9 @@ import Button from './ui/Button'
 import { formatMoney } from './ui/Format'
 import { useResizableColumns } from './ui/TableUtils'
 import { MoveHorizontal } from 'lucide-react'
+import { useCargaVigente } from '../hooks/useCargaVigente'
+import { anoCorrente, motivoPeriodoInvalido } from '../utils/periodoControladoria'
+import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
 
 const BALANCETE_COL_WIDTHS: Record<string, number> = { conta: 260, creditos: 150, debitos: 150, saldo: 150, lancamentos: 130 }
 
@@ -62,27 +65,38 @@ interface Props {
 
 const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
     const { showToast } = useToast()
-    const now = new Date()
-    const [dateFrom, setDateFrom] = React.useState(`${now.getFullYear()}-01-01`)
-    const [dateTo,   setDateTo]   = React.useState(`${now.getFullYear()}-12-31`)
+    const [dateFrom, setDateFrom] = React.useState(() => anoCorrente().de)
+    const [dateTo,   setDateTo]   = React.useState(() => anoCorrente().ate)
     const [regime,   setRegime]   = React.useState<RegimeContabil>('CAIXA')
     const [lines, setLines] = React.useState<BalanceteLine[]>([])
     const [loading, setLoading] = React.useState(false)
+    const [falhou, setFalhou] = React.useState(false)
     const [expanded, setExpanded] = React.useState<Set<DREGroup>>(new Set(GROUP_ORDER))
     const cols = useResizableColumns(BALANCETE_COL_WIDTHS, 'balanceteReportColWidths')
+    const novaCarga = useCargaVigente()
+    const motivoPeriodo = motivoPeriodoInvalido(dateFrom, dateTo)
 
     const load = React.useCallback(async () => {
+        const vigente = novaCarga()
+        if (motivoPeriodoInvalido(dateFrom, dateTo)) {
+            setLines([]); setFalhou(false); setLoading(false)
+            return
+        }
         setLoading(true)
+        setFalhou(false)
         try {
             const data = await financialReportService.getBalancete(organizationId, dateFrom, dateTo, undefined, regime)
-            setLines(data)
+            if (vigente()) setLines(data)
         } catch (e: unknown) {
+            if (!vigente()) return
+            setLines([])
+            setFalhou(true)
             showToast('Erro ao carregar balancete', 'error')
             console.error('[Balancete]', e)
         } finally {
-            setLoading(false)
+            if (vigente()) setLoading(false)
         }
-    }, [organizationId, dateFrom, dateTo, regime, showToast])
+    }, [novaCarga, organizationId, dateFrom, dateTo, regime, showToast])
 
     React.useEffect(() => { load() }, [load])
 
@@ -175,12 +189,16 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
             </div>
 
             {/* Tabela */}
-            {loading ? (
+            {motivoPeriodo ? (
+                <PeriodoInvalido motivo={motivoPeriodo} />
+            ) : loading ? (
                 <div className="flex items-center justify-center py-20">
                     <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
+            ) : falhou ? (
+                <FalhaDeCarga oQue="o balancete" onRetry={load} />
             ) : lines.length === 0 ? (
-                <div className="text-center py-20 text-slate-400 text-sm">
+                <div className="text-center py-20 text-slate-600 text-sm">
                     Nenhum lançamento encontrado para o período selecionado.
                 </div>
             ) : (

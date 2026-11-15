@@ -3,6 +3,7 @@ import type {
     DRELine, DRESummary, DRESummaryLine, CashFlowPoint, CashFlowSummary, CashFlowGranularity,
     FinancialCategory, DREProjectSummary, BalanceteLine, DRESPELine, WIPLine, RegimeContabil,
 } from '../types/financial';
+import { hojeLocalISO, margemSobreReceitaLiquida } from '../utils/periodoControladoria';
 
 export const financialReportService = {
 
@@ -97,9 +98,10 @@ export const financialReportService = {
             lucro_bruto,
             ebitda,
             resultado_liquido,
-            margem_bruta_pct:   receita_bruta ? (lucro_bruto  / receita_bruta * 100) : null,
-            margem_ebitda_pct:  receita_bruta ? (ebitda       / receita_bruta * 100) : null,
-            margem_liquida_pct: receita_bruta ? (resultado_liquido / receita_bruta * 100) : null,
+            // Base única: receita LÍQUIDA (a mesma da DRE por SPE e do Por Obra).
+            margem_bruta_pct:   margemSobreReceitaLiquida(lucro_bruto, receita_liquida),
+            margem_ebitda_pct:  margemSobreReceitaLiquida(ebitda, receita_liquida),
+            margem_liquida_pct: margemSobreReceitaLiquida(resultado_liquido, receita_liquida),
         };
     },
 
@@ -117,20 +119,25 @@ export const financialReportService = {
     },
 
     // ── DRE por Obra (comparativo) ────────────────────────────
+    // Uma linha por obra + "Sem obra" (project_id null). Somadas, receita = Receita
+    // Bruta e margem = Resultado Líquido do Resumo, no mesmo regime
+    // (aplicar_20271114900000_dre_por_obra_regime_e_sem_obra.sql).
     async getDREByProject(
         organizationId: string | null,
         dateFrom: string,
         dateTo: string,
+        regime: RegimeContabil = 'CAIXA',
     ): Promise<DREProjectSummary[]> {
         const { data, error } = await supabase.rpc('fn_dre_projects_summary', {
             p_organization_id: organizationId || null,
             p_date_from:       dateFrom,
             p_date_to:         dateTo,
+            p_regime:          regime,
         });
         if (error) throw error;
         return ((data || []) as Omit<DREProjectSummary, 'margem_pct'>[]).map(r => ({
             ...r,
-            margem_pct: r.receita ? (r.margem / r.receita * 100) : null,
+            margem_pct: margemSobreReceitaLiquida(r.margem, r.receita_liquida),
         }));
     },
 
@@ -170,9 +177,9 @@ export const financialReportService = {
         return ((data || []) as Omit<DRESPELine, 'margem_bruta_pct' | 'margem_ebitda_pct' | 'margem_liquida_pct'>[])
             .map(r => ({
                 ...r,
-                margem_bruta_pct:   r.receita_bruta  ? (r.lucro_bruto       / r.receita_bruta  * 100) : null,
-                margem_ebitda_pct:  r.receita_bruta  ? (r.ebitda            / r.receita_bruta  * 100) : null,
-                margem_liquida_pct: r.receita_liquida ? (r.resultado_liquido / r.receita_liquida * 100) : null,
+                margem_bruta_pct:   margemSobreReceitaLiquida(r.lucro_bruto, r.receita_liquida),
+                margem_ebitda_pct:  margemSobreReceitaLiquida(r.ebitda, r.receita_liquida),
+                margem_liquida_pct: margemSobreReceitaLiquida(r.resultado_liquido, r.receita_liquida),
             }));
     },
 
@@ -183,7 +190,7 @@ export const financialReportService = {
     ): Promise<WIPLine[]> {
         const { data, error } = await supabase.rpc('fn_project_wip', {
             p_organization_id: organizationId || null,
-            p_date_to:         dateTo ?? new Date().toISOString().slice(0, 10),
+            p_date_to:         dateTo ?? hojeLocalISO(),
         });
         if (error) throw error;
         return (data || []) as WIPLine[];

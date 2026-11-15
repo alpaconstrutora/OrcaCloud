@@ -226,4 +226,30 @@ tentativas):** cards em duas linhas (234–450 px); a primeira linha da tabela p
 y=690 (dentro da tela); cartão do Garden = "Atrasado · 2 tarefas · 24% previsto 100% · Término
 15/04/2026"; 1440 px sem mudança (barra em uma linha, tabela em y=314 em Planejamento e Orçamentos).
 
-### 8. Passada final (`/impeccable polish`) — ⏳
+### 8. Passada final (`/impeccable polish`) — ✅ feito
+
+(Item 7 no ar em 15/11/2026, PR #455.) O registro da crítica apontava para
+`PlanningDashboard.tsx`, apagado no item 1 — passada independente, sem backlog do snapshot.
+
+**O que muda:**
+- Falha ao carregar o orçamento dos planejamentos: UMA mensagem (`role="alert"`) com "Tentar de
+  novo" no lugar dos 4 cards repetindo "Falhou" (guia §4.5.1); células com "—".
+- Modal "Novo": o "001" em azul-claro era o PLACEHOLDER, que parecia valor (e com o topo em "Todas"
+  nada é sugerido) — campo de código no padrão dos demais (valor gray-900, placeholder "Ex.: 001");
+  a dica diz a verdade quando vazio ("Em branco, o código é gerado ao salvar, na sequência da
+  organização" — `projectService` gera); "HERDADO DA OBRA" (caixa alta, fundo) vira "· herdado da
+  obra" em texto; "Empresa do grupo responsável por este planejamento/diário"; dicas sob os campos
+  gray-400 → gray-500.
+
+**Decidido não mexer:** setas de ordenação com 19 px de altura passam pela exceção de espaçamento
+da WCAG 2.5.8 (nenhum alvo acima/abaixo); aumentar mudaria o cabeçalho de TODAS as tabelas do app.
+O seletor de contexto do topo continuar "Obra X" depois de abrir um planejamento é da casca, fora
+desta tela.
+
+**Como sei que terminou (15/11, servidor local, escrita bloqueada, 0 tentativas):** falha forçada
+→ 1 alerta, 0 cards, células "—"; "Tentar de novo" → "Calculando…" com aria-busy → 2/1/2/0; código
+do Novo com valor gray-900 e placeholder "Ex.: 001"; revisão do caminho inteiro (itens 1, 4 e 5
+reexecutados) sem regressão.
+
+**Plano concluído, exceto o item 2:** 2a no ar; 2b–2e aguardam arquivos reais de exemplo (XML do
+MS Project e planilha usada pela equipe).

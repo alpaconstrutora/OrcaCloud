@@ -468,7 +468,6 @@ const App: React.FC = () => {
 
   const { localToast, showToast } = useToast();
 
-  const [isImportModalOpenPlanning, setIsImportModalOpenPlanning] = React.useState(false);
   const [isCreatingOrder, setIsCreatingOrder] = React.useState(false);
   const [ordersVersion, setOrdersVersion] = React.useState(0);
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(
@@ -1108,8 +1107,6 @@ const App: React.FC = () => {
         setIsCreatingQuotation={setIsCreatingQuotation}
         isCreatingContract={isCreatingContract}
         setIsCreatingContract={setIsCreatingContract}
-        isImportModalOpenPlanning={isImportModalOpenPlanning}
-        setIsImportModalOpenPlanning={setIsImportModalOpenPlanning}
         isCreatingImovibStudy={isCreatingImovibStudy}
         setIsCreatingImovibStudy={setIsCreatingImovibStudy}
         editingImovibStudyId={editingImovibStudyId}

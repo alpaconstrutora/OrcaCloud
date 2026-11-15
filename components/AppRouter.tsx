@@ -1,6 +1,6 @@
 import React from 'react';
 import { pedirAberturaDoChamado } from '../utils/warrantyNavegacao';
-import { Plus, FileSpreadsheet, FileText } from 'lucide-react';
+import { Plus, FileText } from 'lucide-react';
 import Button from './ui/Button';
 import { ProfileGroup, UserProfile, ProjectSettings, BudgetEntry, Organization, Contract, Client } from '../types';
 import { Session } from '@supabase/supabase-js';
@@ -28,7 +28,6 @@ const OrganizationCreateSheet = React.lazy(() => import('./OrganizationCreateShe
 const BudgetEditor          = React.lazy(() => import('./BudgetEditor'));
 const ParametricEstimator   = React.lazy(() => import('./ParametricEstimator'));
 const FinancialScheduleL    = React.lazy(() => import('./FinancialSchedule').then(m => ({ default: m.FinancialSchedule })));
-const ExcelImportModal      = React.lazy(() => import('./ExcelImportModal'));
 const ProjectDiaryManager   = React.lazy(() => import('./ProjectDiaryManager'));
 const DiaryReportViewer     = React.lazy(() => import('./DiaryReportViewer'));
 const DiaryProjectsList     = React.lazy(() => import('./DiaryProjectsList'));
@@ -183,8 +182,6 @@ export interface AppRouterProps {
   setIsCreatingQuotation: (val: boolean) => void;
   isCreatingContract: boolean;
   setIsCreatingContract: (val: boolean) => void;
-  isImportModalOpenPlanning: boolean;
-  setIsImportModalOpenPlanning: (val: boolean) => void;
   isCreatingImovibStudy: boolean;
   setIsCreatingImovibStudy: (val: boolean) => void;
   editingImovibStudyId: string | null;
@@ -227,7 +224,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     selectedContractId, setSelectedContractId, editingContract, setEditingContract,
     isCreatingOrder, setIsCreatingOrder, ordersVersion, isCreatingQuotation, setIsCreatingQuotation,
     isCreatingContract, setIsCreatingContract,
-    isImportModalOpenPlanning, setIsImportModalOpenPlanning,
     isCreatingImovibStudy, setIsCreatingImovibStudy,
     editingImovibStudyId, setEditingImovibStudyId,
     viewingImovibStudyId, setViewingImovibStudyId,
@@ -781,14 +777,11 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             {/* Variante compacta do CTA primário (ui_ux_guia_unificado.md §17) — ação de
                 criação é o fluxo principal desta tela, então fica isolada junto ao título,
                 mas no tamanho compacto (h-9), não mais nos 50px da escala antiga. */}
+            {/* Sem "Importar Excel" aqui (14/11/2026): o modal lia a ficha exportada de um
+                ORÇAMENTO e criava um orçamento, invisível nesta lista. A importação de
+                cronograma (MS Project XML / modelo Excel) é o item 2 de
+                docs/planos/2026-11-14-planejamento-lista-critica.md. */}
             <div className="flex items-center gap-2">
-              <button
-                onClick={() => setIsImportModalOpenPlanning(true)}
-                className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[6px] hover:bg-emerald-600 hover:text-white font-medium text-[13px] transition-all active:scale-95"
-              >
-                <FileSpreadsheet className="w-4 h-4" />
-                Importar Excel
-              </button>
               <button
                 onClick={() => handleNewProject('PLANEJAMENTO')}
                 className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
@@ -813,11 +806,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             classificationFilter="PLANEJAMENTO"
             hideHeader={true}
             isExternalLoading={projectsLoading}
-          />
-          <ExcelImportModal
-            isOpen={isImportModalOpenPlanning}
-            onClose={() => setIsImportModalOpenPlanning(false)}
-            onImport={(data) => { handleImportProject(data); setIsImportModalOpenPlanning(false); }}
           />
         </div>
       );

@@ -6,6 +6,7 @@
  */
 import type { ImovibStudy, ImovibRisk, ImovibScenario, ImovibLandChecklistItem } from '../types';
 import type { DadosDoRelatorio } from './imovibRelatorio';
+import type { CalculoDaVersao } from './imovibCalculoDaVersao';
 import type { ImovibComparable } from './imovibMercado';
 import type { ImovibPartner } from './imovibSocios';
 import { computeImovibMath } from './imovibMotor';
@@ -115,6 +116,8 @@ const ESTRUTURA: { id: string; rotulo: string; chave: (s: ImovibStudy) => string
  */
 export type SnapshotDaVersao = ImovibStudy & {
     cenarios?: ImovibScenario[];
+    /** Fase 6 (plano 2026-11-15): o resultado do cálculo no congelamento. Versões anteriores não têm. */
+    calculo?: CalculoDaVersao;
     relatorio?: {
         comparaveis?: ImovibComparable[];
         riscos?: ImovibRisk[];
@@ -130,7 +133,7 @@ export type SnapshotDaVersao = ImovibStudy & {
  * Versão sem `relatorio` (anterior a 15/11) sai com as listas vazias: cada seção diz que não há dado.
  */
 export function dadosDoRelatorioDaVersao(snapshot: SnapshotDaVersao, versao: Pick<ImovibStudyVersion, 'created_at'>): DadosDoRelatorio {
-    const { cenarios, relatorio, ...study } = snapshot;
+    const { cenarios, relatorio, calculo: _calculo, ...study } = snapshot;
     return {
         study: study as ImovibStudy,
         comparaveis: relatorio?.comparaveis ?? [],
@@ -153,6 +156,8 @@ export interface VersaoPublicada {
     relatorio: NonNullable<SnapshotDaVersao['relatorio']>;
     versao: { id: string; label: string; created_at: string };
     organizacao: { name: string | null; logo_url: string | null };
+    /** Fase 6: os números congelados para o investidor; null em versão anterior (o painel calcula). */
+    calculo: CalculoDaVersao['investidor'] | null;
 }
 
 /** Colunas internas do estudo (parecer, critérios, notas de fonte): não vão ao investidor. A mesma
@@ -184,7 +189,7 @@ export function versaoPublicadaDoSnapshot(
     versao: VersaoPublicada['versao'],
     organizacao: VersaoPublicada['organizacao'],
 ): VersaoPublicada {
-    const { cenarios, relatorio, ...resto } = snapshot;
+    const { cenarios, relatorio, calculo, ...resto } = snapshot;
     const study = { ...resto } as Record<string, unknown>;
     for (const k of CHAVES_INTERNAS_DO_ESTUDO) delete study[k];
     const C = CAMPOS_PARA_O_INVESTIDOR;
@@ -199,11 +204,20 @@ export function versaoPublicadaDoSnapshot(
         },
         versao,
         organizacao,
+        // Só a parte do investidor: a edição interna (com parecer) nunca entra aqui.
+        calculo: calculo?.investidor ?? null,
     };
 }
 
 export const snapshotDaVersaoPublicada = (vp: VersaoPublicada): SnapshotDaVersao =>
     ({ ...vp.study, cenarios: vp.cenarios, relatorio: vp.relatorio });
+
+/** Os números congelados de uma edição do relatório da versão (null = versão anterior à Fase 6). */
+export function congeladoDaVersao(calculo: CalculoDaVersao | null | undefined, edicao: 'interna' | 'investidor') {
+    if (!calculo) return null;
+    const { capa, graficos } = calculo.investidor;
+    return { capa, graficos, secoes: edicao === 'investidor' ? calculo.investidor.secoes : calculo.interno.secoes };
+}
 
 /** Versão antiga não guardava `semExposicao`: exposição máxima zero quer dizer o mesmo. */
 export const semExposicaoDa = (r: ResultadosDaVersao): boolean => r.semExposicao ?? r.exposicaoMaxima <= 0;

@@ -169,12 +169,13 @@ export const investorPortalTokenService = {
             p_opportunity_id: opportunityId,
         });
         if (error) throw error;
-        const r = data as { valid?: boolean; error?: string; study?: SnapshotDaVersao; cenarios?: ImovibScenario[]; relatorio?: SnapshotDaVersao['relatorio']; versao?: VersaoPublicada['versao']; organizacao?: VersaoPublicada['organizacao'] } | null;
+        const r = data as { valid?: boolean; error?: string; study?: SnapshotDaVersao; cenarios?: ImovibScenario[]; relatorio?: SnapshotDaVersao['relatorio']; calculo?: VersaoPublicada['calculo']; versao?: VersaoPublicada['versao']; organizacao?: VersaoPublicada['organizacao'] } | null;
         if (!r?.valid || !r.study || !r.versao) {
             throw new Error(MOTIVO_DO_ESTUDO_RECUSADO[r?.error ?? ''] ?? 'Não foi possível ler o estudo desta oportunidade.');
         }
         return versaoPublicadaDoSnapshot(
-            { ...r.study, cenarios: r.cenarios ?? [], relatorio: r.relatorio ?? {} },
+            // Fase 6: o banco manda só a parte do investidor do cálculo congelado, em chave própria.
+            { ...r.study, cenarios: r.cenarios ?? [], relatorio: r.relatorio ?? {}, calculo: r.calculo ? ({ investidor: r.calculo } as SnapshotDaVersao['calculo']) : undefined },
             r.versao,
             r.organizacao ?? { name: null, logo_url: null },
         );

@@ -92,6 +92,23 @@ A referência (reel de code.xr, "Glassy Dashboard": glassmorphism, acentos lumin
 - [x] Conferir se o **investidor logado por e-mail** (sem token) consegue ler oportunidade/versão (lê por RLS de membro da org).
 - Registrar o resultado em "Pendências" deste plano.
 
+## Fase 6 — Números congelados na versão (pedido de 15/11)
+
+> Uma decisão sua: 1. Pergunta: O problema pode ser corrigido criando historico de versões?
+>
+> (resposta: o histórico já existe; o que resolve é a versão guardar também o RESULTADO do cálculo e o painel/PDF lerem dele — "Quer que eu faça?") → "1. Quer que eu faça? sim"
+>
+> Sessão: 21a9ea95-c34e-43cc-8a0f-7d21ef9ed2a0 · 2026-11-15
+
+- [x] `utils/imovibCalculoDaVersao.ts`: `calculoDaVersao(dados, versao)` → `{ versaoDoCalculo, investidor: { capa, secoes, indicadores, graficos }, interno: { secoes } }`, já como volta do banco (NaN → null). `indicadoresDoEstudo` e `graficosDoEstudo` são os mesmos cálculos que a tela faz ao vivo.
+- [x] `congelarVersao` grava `snapshot.calculo` (import dinâmico do cálculo).
+- [x] Painel lê `versaoPublicada.calculo` (indicadores e gráficos); sem ele (prévia, versão anterior) calcula na hora. A simulação continua calculando, de propósito.
+- [x] PDF: `gerarRelatorioCompleto(..., { congelado })` usa seções, capa e gráficos guardados — o motor não roda; aba Versões usa a edição interna congelada, o painel a do investidor (`congeladoDaVersao`).
+- [x] Migration `aplicar_20271115980000_investidor_calculo_congelado.sql`: `calculo` sai de `study` e só `calculo.investidor` vai ao portal, em chave própria (sem ela o `interno`, com o parecer, iria dentro de `study`). **Aplicar ANTES do merge da Fase 6.**
+- **Pronto quando:** `ImovibNumerosCongelados.test.tsx` (um cálculo "impossível" — VPL 123.456 — aparece igual no painel, no PDF e no portal; a edição interna não entra no recorte do investidor), `imovibCalculoDaVersao.test.ts` (cálculo = o da tela; sobrevive ao JSON), contrato da RPC; prova no banco em transação desfeita: `[vpl congelado=123456] [secao=SECAO DO INVESTIDOR] [study tem calculo=f] [resposta cita o interno=f]`.
+- Decisão: o `results` (ResultadosDaVersao) que a aba Versões compara continua como era; agora é o mesmo número que o painel mostra (ambos do congelamento).
+- Não conferido de ponta a ponta: congelar uma versão de verdade grava no banco (há 0 versões); depende de o usuário congelar uma.
+
 ## Revisão independente das Fases 2–5 (15/11)
 
 Sem Critical. Corrigido (testes RED→GREEN; migration `aplicar_20271115970000_investidor_versao_por_oportunidade.sql`,
@@ -112,7 +129,8 @@ provada em transação desfeita — **aplicar com OK**):
 - [x] Minor — prévia sem versão dizia "nenhum cenário": usa os cenários do estudo atual; erro ao ler as versões no
   formulário dizia "não tem versão": diz que não leu.
 - Pergunta do usuário (15/11): "O problema pode ser corrigido criando histórico de versões?" — resposta: o histórico já existe (versões imutáveis); o que resolve é congelar também o RESULTADO do cálculo (indicadores, fluxo, tornado, cenários, vendas) na versão e o painel/PDF lerem dele. Oferecido como próximo passo, aguardando decisão.
-- Ruling: **os números são recalculados pelo motor atual sobre o snapshot**, não lidos do `results` congelado — assim
+- ~~Ruling: **os números são recalculados pelo motor atual sobre o snapshot**~~ → resolvido na Fase 6 (números congelados).
+- (histórico) Ruling: **os números são recalculados pelo motor atual sobre o snapshot**, não lidos do `results` congelado — assim
   indicadores, gráficos e PDF ficam coerentes entre si. Custo: uma correção futura do motor muda o que o investidor vê de
   uma versão já publicada (e pode divergir da aba Versões, que mostra o `results` do momento). Revisitar se o usuário
   quiser números imutáveis.

@@ -13,12 +13,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import type { jsPDF } from 'jspdf';
-import { computeImovibMath } from '../utils/imovibMotor';
-import { tornado, CHOQUES_PADRAO } from '../utils/imovibSensibilidade';
-import { marcosDoEstudo } from '../utils/imovibCronograma';
-import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
-import { fluxoAnual, dadosDosCenarios, dadosDasVendas, fatiasDoCapital, type GraficoId } from '../utils/imovibGraficos';
-import { secoesDoRelatorio, capaDoRelatorio, type DadosDoRelatorio, type OpcoesDoRelatorio } from '../utils/imovibRelatorio';
+import type { GraficoId } from '../utils/imovibGraficos';
+import { secoesDoRelatorio, capaDoRelatorio, type DadosDoRelatorio, type OpcoesDoRelatorio, type CapaDoRelatorio, type SecaoDoRelatorio } from '../utils/imovibRelatorio';
+import { graficosDoEstudo, type DadosDosGraficos } from '../utils/imovibCalculoDaVersao';
 import { pdfDoRelatorio, type ImagemDoGrafico } from '../utils/imovibRelatorioPdf';
 import { coresCompativeisNaCopia } from '../utils/html2canvasCores';
 import { logoComoDataUrl } from '../utils/logoComoDataUrl';
@@ -49,32 +46,26 @@ const TITULO: Record<GraficoId, string> = {
     capital: 'De onde vem o dinheiro',
 };
 
-/** O gráfico de cada id, ou null quando não há o que desenhar. */
-function graficoDe(id: GraficoId, d: DadosDoRelatorio): React.ReactElement | null {
-    const { study } = d;
-    const r = computeImovibMath(study);
+/** O gráfico de cada id, ou null quando não há o que desenhar. Os dados vêm prontos: do cálculo
+ *  congelado na versão (Fase 6) ou calculados agora (`graficosDoEstudo`). */
+function graficoDe(id: GraficoId, g: DadosDosGraficos): React.ReactElement | null {
     const dim = DIMENSAO[id];
     switch (id) {
         case 'curva_s':
-            return r.monthlyFlows.length ? <GraficoCurvaS dados={r.monthlyFlows} larguraDoEixo={84} dimensao={dim} animado={false} /> : null;
+            return g.curvaS.length ? <GraficoCurvaS dados={g.curvaS} larguraDoEixo={84} dimensao={dim} animado={false} /> : null;
         case 'fluxo_anual':
-            return r.monthlyFlows.length ? <GraficoCurvaS dados={fluxoAnual(r.monthlyFlows)} rotuloBarra="Caixa do ano" rotuloLinha="Acumulado no fim do ano" larguraDoEixo={84} dimensao={dim} animado={false} /> : null;
-        case 'tornado': {
-            const barras = tornado(study, 'vpl', CHOQUES_PADRAO);
-            return barras.length && Number.isFinite(barras[0].base) ? <GraficoTornado barras={barras} metrica="vpl" choques={CHOQUES_PADRAO} comLegenda dimensao={dim} animado={false} /> : null;
-        }
+            return g.fluxoAnual.length ? <GraficoCurvaS dados={g.fluxoAnual} rotuloBarra="Caixa do ano" rotuloLinha="Acumulado no fim do ano" larguraDoEixo={84} dimensao={dim} animado={false} /> : null;
+        case 'tornado':
+            return g.tornado.length && g.tornado[0].base != null && Number.isFinite(g.tornado[0].base)
+                ? <GraficoTornado barras={g.tornado} metrica="vpl" choques={g.choques} comLegenda dimensao={dim} animado={false} /> : null;
         case 'cenarios':
-            return d.cenarios.length ? <GraficoCenarios linhas={dadosDosCenarios(study, d.cenarios, r)} dimensao={dim} animado={false} /> : null;
+            return g.cenarios.length > 1 ? <GraficoCenarios linhas={g.cenarios} dimensao={dim} animado={false} /> : null;
         case 'marcos':
-            return <LinhaDoTempoDosMarcos marcos={marcosDoEstudo(study, r)} dimensao={dim} />;
-        case 'vendas': {
-            const dados = dadosDasVendas(r, Number(study.sales_start_month ?? IMOVIB_DEFAULTS.sales_start_month));
-            return dados.some(x => x.vendas > 0) ? <GraficoVendasPorMes dados={dados} dimensao={dim} animado={false} /> : null;
-        }
-        case 'capital': {
-            const fatias = fatiasDoCapital(r.capital);
-            return fatias.length ? <GraficoComposicaoDoCapital fatias={fatias} dimensao={dim} animado={false} /> : null;
-        }
+            return <LinhaDoTempoDosMarcos marcos={g.marcos} dimensao={dim} />;
+        case 'vendas':
+            return g.vendas.some(x => x.vendas > 0) ? <GraficoVendasPorMes dados={g.vendas} dimensao={dim} animado={false} /> : null;
+        case 'capital':
+            return g.capital.length ? <GraficoComposicaoDoCapital fatias={g.capital} dimensao={dim} animado={false} /> : null;
     }
 }
 
@@ -85,11 +76,11 @@ const proximoQuadro = () => new Promise<void>(ok => {
     if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { clearTimeout(t); ok(); });
 });
 
-export async function imagensDosGraficos(d: DadosDoRelatorio, ids: GraficoId[]): Promise<Partial<Record<GraficoId, ImagemDoGrafico>>> {
+export async function imagensDosGraficos(dadosDosGraficos: DadosDosGraficos, ids: GraficoId[]): Promise<Partial<Record<GraficoId, ImagemDoGrafico>>> {
     // Um gráfico que não consegue ser calculado fica de fora; os outros seguem.
     const graficos = [...new Set(ids)].flatMap(id => {
         try {
-            const el = graficoDe(id, d);
+            const el = graficoDe(id, dadosDosGraficos);
             return el ? [{ id, el }] : [];
         } catch (e) {
             console.error(`Gráfico "${TITULO[id]}" ficou fora do relatório`, e);
@@ -150,13 +141,22 @@ export async function imagensDosGraficos(d: DadosDoRelatorio, ids: GraficoId[]):
 
 export interface OpcoesDoRelatorioCompleto extends OpcoesDoRelatorio {
     organizacao?: { name: string | null; logo_url: string | null } | null;
+    /**
+     * Fase 6: os números congelados na versão — seções da edição pedida, capa e dados dos gráficos.
+     * Com eles o motor não roda: o PDF da versão sai igual para sempre.
+     */
+    congelado?: { capa: CapaDoRelatorio; secoes: SecaoDoRelatorio[]; graficos: DadosDosGraficos } | null;
 }
 
 export async function gerarRelatorioCompleto(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorioCompleto = {}): Promise<jsPDF> {
-    const secoes = secoesDoRelatorio(d, opcoes);
+    const c = opcoes.congelado;
+    const secoes = c ? c.secoes : secoesDoRelatorio(d, opcoes);
+    const capa = c ? c.capa : capaDoRelatorio(d, opcoes);
     const [imagens, logo] = await Promise.all([
         // Falha na captura (html2canvas) não derruba o relatório: sai só com texto e tabelas.
-        imagensDosGraficos(d, secoes.flatMap(s => s.graficos)).catch(e => {
+        Promise.resolve()
+            .then(() => imagensDosGraficos(c ? c.graficos : graficosDoEstudo(d.study, d.cenarios), secoes.flatMap(s => s.graficos)))
+            .catch(e => {
             console.error('Os gráficos ficaram fora do relatório', e);
             return {};
         }),
@@ -164,7 +164,7 @@ export async function gerarRelatorioCompleto(d: DadosDoRelatorio, opcoes: Opcoes
     ]);
     const titulo = opcoes.versao ? `${d.study.name} — ${opcoes.versao.label}` : d.study.name;
     return pdfDoRelatorio(secoes, titulo, {
-        capa: { ...capaDoRelatorio(d, opcoes), organizacao: opcoes.organizacao?.name ?? null, logo },
+        capa: { ...capa, organizacao: opcoes.organizacao?.name ?? null, logo },
         imagens,
     });
 }

@@ -43,13 +43,14 @@ describe('10.6 — o portal calcula o mesmo número do app', () => {
 });
 
 describe('contrato com a função publicada (versão publicada pela oportunidade, plano 2026-11-15)', () => {
-    // A definição que vale é a da migration mais recente que recria a função.
+    // A definição que vale é a da migration mais recente que recria cada função.
     const pasta = resolve(__dirname, '../supabase/migrations');
-    const ultima = readdirSync(pasta)
-        .filter(f => f.endsWith('.sql') && /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.fn_investor_portal_get_versao/i.test(readFileSync(`${pasta}/${f}`, 'utf-8')))
+    const ultimaQueDefine = (funcao: string) => readFileSync(`${pasta}/${readdirSync(pasta)
+        .filter(f => f.endsWith('.sql') && new RegExp(`CREATE\\s+OR\\s+REPLACE\\s+FUNCTION\\s+public\\.${funcao}\\(`, 'i').test(readFileSync(`${pasta}/${f}`, 'utf-8')))
         .sort((a, b) => (a.match(/\d{14}/)?.[0] ?? '').localeCompare(b.match(/\d{14}/)?.[0] ?? ''))
-        .pop()!;
-    const sql = readFileSync(`${pasta}/${ultima}`, 'utf-8');
+        .pop()!}`, 'utf-8');
+    const sql = ultimaQueDefine('fn_investor_portal_get_versao');
+    const sqlDaAntiga = ultimaQueDefine('fn_investor_portal_get_study');
     const chave = (k: string) => new RegExp(`'${k}'\\s*,`).test(sql);
 
     it('serve o snapshot da versão publicada na oportunidade, não o estudo vivo', () => {
@@ -59,7 +60,7 @@ describe('contrato com a função publicada (versão publicada pela oportunidade
         expect(sql).toMatch(/"error":"sem_versao"/);
         // O estudo é da organização do link, e a RPC antiga (por estudo) delega para a por oportunidade.
         expect(sql).toMatch(/s\.organization_id = v_org_id/);
-        expect(sql).toMatch(/RETURN public\.fn_investor_portal_get_versao\(p_token, v_opp_id\)/);
+        expect(sqlDaAntiga).toMatch(/RETURN public\.fn_investor_portal_get_versao\(p_token, v_opp_id\)/);
     });
 
     it('devolve as chaves que getVersaoPublicadaByToken consome', () => {
@@ -79,8 +80,13 @@ describe('contrato com a função publicada (versão publicada pela oportunidade
     it('tira do link toda coluna interna de governança (parecer, notas, mínimos) e as listas penduradas', async () => {
         const { CHAVES_INTERNAS_DO_ESTUDO } = await import('../utils/imovibVersoes');
         const fora = /snapshot\s*-\s*ARRAY\[([^\]]*)\]/i.exec(sql)?.[1] ?? '';
-        for (const k of [...CHAVES_INTERNAS_DO_ESTUDO, 'cenarios', 'relatorio']) {
+        for (const k of [...CHAVES_INTERNAS_DO_ESTUDO, 'cenarios', 'relatorio', 'calculo']) {
             expect(fora, k).toContain(`'${k}'`);
         }
+    });
+
+    it('Fase 6: o cálculo congelado vai em chave própria, só a parte do investidor', () => {
+        expect(sql).toMatch(/'calculo',\s*v_ver\.snapshot -> 'calculo' -> 'investidor'/);
+        expect(sql).not.toMatch(/'interno'/);
     });
 });

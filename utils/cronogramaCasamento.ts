@@ -8,6 +8,10 @@
  *  1. EAP — o número da tarefa no arquivo é o número do item no app. O app numera pelo PREFIXO do
  *     nome da subetapa ("04.02.01. Estaca…") + a posição do item dentro dela ("04.02.01.02"); a
  *     subetapa com um item só também responde pelo número dela ("04.02.01").
+ *     O número SOZINHO não basta: o MS Project numera qualquer arquivo (1, 2, 2.1, 4.1.1…), então
+ *     a tarefa também tem de dividir ao menos uma palavra significativa com o item, a subetapa ou
+ *     a etapa. Arquivo real da obra Bella Vista (15/11/2026): sem essa trava, 7 tarefas casaram
+ *     pelo número com itens de outro orçamento. Número igual + nome diferente = sem par, com aviso.
  *  2. Nome — sem acento, sem caixa, espaços colapsados: o nome da subetapa (sem o número), o
  *     começo da descrição SINAPI (até a 1ª vírgula/ponto) ou a descrição inteira.
  * Tarefa-resumo nunca casa (as datas dela vêm das filhas).
@@ -30,6 +34,8 @@ export interface CasamentoProposto {
     /** Item do orçamento proposto; null = sem par (o usuário decide). */
     itemId: string | null;
     motivo: MotivoDoCasamento | null;
+    /** Sem par, mas o orçamento tem um item com o MESMO número de EAP e outro nome — a prévia avisa. */
+    mesmoNumeroOutroNome?: string;
 }
 
 export interface ResultadoDoCasamento {
@@ -49,15 +55,32 @@ export const nomeSemNumero = (nome: string | null | undefined): string => (nome 
 /** EAP comparável: sem zeros à esquerda em cada nível ("04.02.01" = "4.2.1"). */
 const eapComparavel = (eap: string) => eap.split('.').filter(Boolean).map(n => String(Number(n))).join('.');
 
-/** Chaves de EAP e de nome de cada item, na ordem do orçamento. */
-export function chavesDosItens(orcamento: ItemDoOrcamento[]): Map<string, { eaps: string[]; nomes: string[] }> {
+/** Palavras que não identificam serviço nenhum (aparecem em metade das descrições SINAPI). */
+const PALAVRAS_GENERICAS = new Set([
+    'para', 'com', 'sem', 'entre', 'sobre', 'tipo', 'incluso', 'inclusive', 'total', 'geral', 'parcial',
+    'instalacao', 'execucao', 'servico', 'servicos', 'fornecimento', 'montagem', 'aplicacao',
+    'assentamento', 'colocacao', 'fabricacao', 'retirada', 'remocao',
+]);
+const palavrasSignificativas = (nome: string): string[] =>
+    normalizarNome(nome).split(' ').filter(w => w.length >= 4 && !PALAVRAS_GENERICAS.has(w));
+
+/** A tarefa e o item falam da mesma coisa? (ao menos uma palavra significativa em comum) */
+export function nomesCompativeis(nomeDaTarefa: string, nomesDoItem: string[]): boolean {
+    const daTarefa = new Set(palavrasSignificativas(nomeDaTarefa));
+    if (!daTarefa.size) return false;
+    return nomesDoItem.some(n => palavrasSignificativas(n).some(w => daTarefa.has(w)));
+}
+
+/** Chaves de EAP e de nome de cada item, na ordem do orçamento. `contexto` = nomes da subetapa e
+ *  da etapa (só para conferir o casamento por EAP; não casa sozinho por nome). */
+export function chavesDosItens(orcamento: ItemDoOrcamento[]): Map<string, { eaps: string[]; nomes: string[]; contexto: string[] }> {
     const porSub = new Map<string, ItemDoOrcamento[]>();
     for (const it of orcamento) {
         const k = it.subPhase ?? '';
         if (!porSub.has(k)) porSub.set(k, []);
         porSub.get(k)!.push(it);
     }
-    const saida = new Map<string, { eaps: string[]; nomes: string[] }>();
+    const saida = new Map<string, { eaps: string[]; nomes: string[]; contexto: string[] }>();
     for (const [sub, itens] of porSub) {
         const num = numeroDaEap(sub);
         itens.forEach((it, i) => {
@@ -72,7 +95,7 @@ export function chavesDosItens(orcamento: ItemDoOrcamento[]): Map<string, { eaps
                 normalizarNome(desc.split(/[,.]/)[0]),
                 normalizarNome(desc),
             ].filter(Boolean);
-            saida.set(it.id, { eaps, nomes });
+            saida.set(it.id, { eaps, nomes, contexto: [nomeSemNumero(sub), nomeSemNumero(it.phase)].filter(Boolean) });
         });
     }
     return saida;
@@ -106,13 +129,16 @@ export function casarComOrcamento(
     // o item que a EAP de outra tarefa aponta.
     for (const c of casamentos) {
         const id = c.tarefa.eap ? porEap.get(eapComparavel(c.tarefa.eap)) : undefined;
-        if (id && !usados.has(id)) { c.itemId = id; c.motivo = 'eap'; usados.add(id); }
+        if (!id || usados.has(id)) continue;
+        const k = chaves.get(id)!;
+        if (nomesCompativeis(c.tarefa.nome, [...k.nomes, ...k.contexto])) { c.itemId = id; c.motivo = 'eap'; usados.add(id); }
+        else c.mesmoNumeroOutroNome = id;
     }
     // 2ª passada: nome — o primeiro item ainda livre com esse nome (homônimos casam na ordem).
     for (const c of casamentos) {
         if (c.itemId) continue;
         const id = (porNome.get(normalizarNome(c.tarefa.nome)) ?? []).find(x => !usados.has(x));
-        if (id) { c.itemId = id; c.motivo = 'nome'; usados.add(id); }
+        if (id) { c.itemId = id; c.motivo = 'nome'; usados.add(id); delete c.mesmoNumeroOutroNome; }
     }
     // 3ª passada: tarefas sem custo que já existem no planejamento (só ao atualizar), pelo nome.
     if (avulsasExistentes.length) {

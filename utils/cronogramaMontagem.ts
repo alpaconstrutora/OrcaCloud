@@ -17,7 +17,7 @@
  */
 import type { BudgetEntry, ProjectSchedule, ItemScheduleDetails, Baseline, OutlineNode, Predecessor } from '../types';
 import { ConstraintType, DependencyType } from '../types';
-import { seedOutlineFromBudget, insertNode, getAncestors } from './scheduleOutline';
+import { seedOutlineFromBudget, insertNode, getAncestors, findNode } from './scheduleOutline';
 import { ensureFullScheduleList } from './schedulingEngine';
 import type { CronogramaImportado, TarefaImportada } from './cronogramaLeitura';
 
@@ -116,30 +116,61 @@ export function predecessorasNoApp(
     return { predecessors, comResumo };
 }
 
-/** Insere cada tarefa sem custo (nó `activity`) perto de onde estava no arquivo: no nó do outline
- *  do mesmo nível do pai dela, achado pela 1ª irmã/descendente do pai que já está no outline;
- *  sem referência, num grupo "Outras tarefas do cronograma". */
+/** Insere cada tarefa sem custo (nó `activity`) perto de onde estava no arquivo. O resumo (pai) da
+ *  tarefa vira um nó do outline, nesta ordem:
+ *   1. o nó do mesmo nível já existente, achado pela 1ª descendente do resumo que já está no outline
+ *      (item do orçamento ou tarefa de uma importação anterior);
+ *   2. um nó com o mesmo nome sob o mesmo pai (reimportar não duplica "Revestimento");
+ *   3. senão, o resumo do arquivo é recriado — grupo › etapa › subetapa, como no Project (abaixo da
+ *      subetapa, a tarefa fica na subetapa). Arquivo real Bella Vista, 15/11/2026: sem isso, as 30
+ *      tarefas sem custo caíam todas num grupo só e a estrutura do arquivo sumia.
+ *  Tarefa sem resumo nenhum vai para o grupo "Outras tarefas do cronograma". */
 export function posicionarAtividades(
     outlineInicial: OutlineNode[], tarefas: TarefaImportada[], atividades: TarefaImportada[],
     idPorChave: Map<string, string>, estaNoOutline: (id: string) => boolean, gerarId: () => string,
 ): OutlineNode[] {
     let outline = outlineInicial;
     const pais = paisDasTarefas(tarefas);
-    let grupoAvulso: string | null = null;
     const novas = new Set(atividades.map(a => idPorChave.get(a.chave)));
-    for (const t of atividades) {
-        const pai = pais.get(t.chave) ?? null;
-        let paiNoOutline: string | null = null;
-        if (pai) {
-            const i0 = tarefas.indexOf(pai);
-            for (let i = i0 + 1; i < tarefas.length && tarefas[i].nivel > pai.nivel; i++) {
-                const id = idPorChave.get(tarefas[i].chave);
-                if (!id || novas.has(id) || !estaNoOutline(id)) continue;
-                const cadeia = getAncestors(outline, id);           // [grupo, etapa, (subetapa), item]
-                if (cadeia.length >= 2) paiNoOutline = cadeia[Math.min(pai.nivel - 1, cadeia.length - 2)].id;
-                break;
+    const noDoResumo = new Map<string, string | null>();
+    const TIPO_POR_PROFUNDIDADE = ['group', 'phase', 'subphase'] as const;
+
+    const acharPelaDescendente = (resumo: TarefaImportada): string | null => {
+        const i0 = tarefas.indexOf(resumo);
+        for (let i = i0 + 1; i < tarefas.length && tarefas[i].nivel > resumo.nivel; i++) {
+            const id = idPorChave.get(tarefas[i].chave);
+            if (!id || novas.has(id) || !estaNoOutline(id)) continue;
+            const cadeia = getAncestors(outline, id);           // [grupo, etapa, (subetapa), item]
+            return cadeia.length >= 2 ? cadeia[Math.min(resumo.nivel - 1, cadeia.length - 2)].id : null;
+        }
+        return null;
+    };
+    const resolverResumo = (resumo: TarefaImportada): string | null => {
+        if (noDoResumo.has(resumo.chave)) return noDoResumo.get(resumo.chave)!;
+        let id = acharPelaDescendente(resumo);
+        if (!id) {
+            const avo = pais.get(resumo.chave) ?? null;
+            const paiId = avo ? resolverResumo(avo) : null;
+            const profundidade = paiId ? getAncestors(outline, paiId).length : 0;
+            if (profundidade >= TIPO_POR_PROFUNDIDADE.length) id = paiId;
+            else {
+                const irmaos = paiId ? (findNode(outline, paiId)?.children ?? []) : outline;
+                const tipo = TIPO_POR_PROFUNDIDADE[profundidade];
+                id = irmaos.find(n => n.type === tipo && n.name === resumo.nome)?.id ?? null;
+                if (!id) {
+                    id = gerarId();
+                    outline = insertNode(outline, paiId, { id, type: tipo, name: resumo.nome, children: [] });
+                }
             }
         }
+        noDoResumo.set(resumo.chave, id);
+        return id;
+    };
+
+    let grupoAvulso: string | null = null;
+    for (const t of atividades) {
+        const pai = pais.get(t.chave) ?? null;
+        let paiNoOutline = pai ? resolverResumo(pai) : null;
         if (!paiNoOutline) {
             if (!grupoAvulso) {
                 grupoAvulso = outline.find(n => n.type === 'group' && n.name === NOME_GRUPO_AVULSO)?.id ?? null;

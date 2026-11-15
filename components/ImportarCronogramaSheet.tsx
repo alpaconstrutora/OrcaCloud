@@ -69,6 +69,9 @@ export function ImportarCronogramaSheet(props: Props) {
     const [cronograma, setCronograma] = React.useState<CronogramaImportado | null>(null);
     const [lendo, setLendo] = React.useState(false);
     const [erroLeitura, setErroLeitura] = React.useState<string | null>(null);
+    // .mpp (formato binário do MS Project) não é lido — decisão de 15/11/2026: orientar "Salvar como
+    // XML" em vez de um conversor no servidor (plano, fase 2e). Escolher um .mpp abre o passo a passo.
+    const [escolheuMpp, setEscolheuMpp] = React.useState(false);
     const [orcamentoId, setOrcamentoId] = React.useState('');
     const [base, setBase] = React.useState<OrcamentoBase | null>(null);
     const [carregandoBase, setCarregandoBase] = React.useState(false);
@@ -85,20 +88,20 @@ export function ImportarCronogramaSheet(props: Props) {
         if (!open) return;
         setPasso(1); setArquivo(null); setCronograma(null); setErroLeitura(null); setOrcamentoId(''); setBase(null);
         setErroBase(null); setNome(''); setDecisoes(new Map()); setSoPendentes(false); setErroSalvar(null);
-        setTrocarAvanco(new Set());
+        setTrocarAvanco(new Set()); setEscolheuMpp(false);
         // Atualizar: o orçamento e o nome são os do planejamento aberto.
         if (props.modo === 'atualizar') { setBase({ budget: props.orcamento, versao: null, bdi: 0 }); setNome(props.planejamentoNome); }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
     const lerArquivo = async (f: File) => {
-        setArquivo(f); setCronograma(null); setErroLeitura(null); setLendo(true);
+        setArquivo(f); setCronograma(null); setErroLeitura(null); setEscolheuMpp(false); setLendo(true);
         try {
             const ext = f.name.toLowerCase().split('.').pop();
             let c: CronogramaImportado;
             if (ext === 'xml') c = lerMsProjectXml(await f.text());
             else if (ext === 'xlsx') c = await lerModeloExcel(await f.arrayBuffer());
-            else if (ext === 'mpp') throw new ErroDeLeituraDeCronograma('Arquivo .mpp ainda não é lido aqui. No MS Project, use Arquivo › Salvar como › XML e importe o XML.');
+            else if (ext === 'mpp') { setEscolheuMpp(true); setArquivo(null); return; }
             else throw new ErroDeLeituraDeCronograma('Use um arquivo .xml (MS Project) ou .xlsx (modelo Excel).');
             setCronograma(c);
             if (!nome.trim()) setNome((c.titulo || f.name.replace(/\.[^.]+$/, '')).trim());
@@ -272,6 +275,7 @@ export function ImportarCronogramaSheet(props: Props) {
                             <div aria-live="polite">
                                 {lendo && <p className="flex items-center gap-2 text-sm text-gray-600"><Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" /> Lendo o arquivo…</p>}
                                 {erroLeitura && <p role="alert" className="flex items-start gap-2 text-sm text-red-700"><AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />{erroLeitura}</p>}
+                                {escolheuMpp && <p role="alert" className="flex items-start gap-2 text-sm text-amber-800"><AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />Arquivo .mpp: salve como XML no MS Project (passo a passo abaixo) e escolha o .xml.</p>}
                                 {cronograma && (
                                     <p className="flex items-start gap-2 text-sm text-gray-700">
                                         <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0 text-emerald-600" aria-hidden="true" />
@@ -280,6 +284,20 @@ export function ImportarCronogramaSheet(props: Props) {
                                     </p>
                                 )}
                             </div>
+                            <details open={escolheuMpp} className="rounded-[10px] border border-gray-200 bg-white text-sm">
+                                <summary className="cursor-pointer select-none px-3 py-2 font-medium text-gray-800">
+                                    {escolheuMpp ? 'O arquivo .mpp precisa ser salvo como XML antes' : 'Tem um arquivo .mpp? Veja como gerar o XML no MS Project'}
+                                </summary>
+                                <div className="space-y-2 border-t border-gray-100 px-3 py-3 text-gray-700">
+                                    {escolheuMpp && <p>O .mpp é o formato próprio do MS Project e não é lido aqui. O XML que o próprio Project gera traz tudo: EAP, datas, durações, % concluído e predecessoras.</p>}
+                                    <ol className="list-decimal space-y-1 pl-5">
+                                        <li>Abra o cronograma no Microsoft Project.</li>
+                                        <li>Vá em <span className="font-medium text-gray-900">Arquivo › Salvar como</span> (em algumas versões, <span className="font-medium text-gray-900">Arquivo › Exportar › Salvar projeto como arquivo</span>).</li>
+                                        <li>Em <span className="font-medium text-gray-900">Tipo</span>, escolha <span className="font-medium text-gray-900">Formato XML (*.xml)</span> e salve.</li>
+                                        <li>Volte aqui e escolha o arquivo <span className="font-medium text-gray-900">.xml</span> que foi salvo.</li>
+                                    </ol>
+                                </div>
+                            </details>
                         </section>
 
                         {atualizar ? (
@@ -443,6 +461,7 @@ export function ImportarCronogramaSheet(props: Props) {
                                                     <p className="mt-1 text-xs text-gray-500">
                                                         {repetido ? <span className="text-red-700">Este item já está em outra tarefa.</span>
                                                             : c.itemId && d?.tipo === 'item' && d.itemId === c.itemId ? `Casou ${c.motivo === 'eap' ? 'pela EAP' : 'pelo nome'}`
+                                                            : !c.itemId && c.mesmoNumeroOutroNome && d?.tipo !== 'item' ? <span className="text-amber-800">{`O ${c.tarefa.eap} do orçamento tem outro nome — escolha à mão se for o mesmo serviço`}</span>
                                                             : !c.itemId ? 'Sem par no orçamento' : 'Escolha sua'}
                                                     </p>
                                                 </td>

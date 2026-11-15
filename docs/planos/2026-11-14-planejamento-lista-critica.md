@@ -167,7 +167,29 @@ a mais, mas não bloqueia.
     no banco: Combustíveis 07/08 → 19/08, Seguros 0%, Terraplanagem 90%, linha de base intacta
     (Combustíveis segue 05/08 nela), 1 versão "Antes de importar datas de msproject-divino-v2.xml
     (15/11/2026)", 2 `activity` (sem duplicar), 39 tarefas. Registro apagado (0 referências, 0 restantes).
-- 2e. .mpp → spike decide o conversor; depois, o mesmo fluxo aceita .mpp.
+- 2e. .mpp → ✅ **decidido e feito 15/11/2026** sem conversor. Pedido do usuário: *"tentei fazer
+  uoload porem o arquivo .mpp nao é suoportado"*; respostas: .mpp = *"Orientar 'Salvar como XML'
+  (Recomendado)"*, arquivo real = *"Sim, mando os dois"* (vieram de
+  `C:\D\ALPA\0 - PROJETOS\008 - BELLA VISTA\7 - CRONOGRAMA`: `CRONOGRAMA.xlsx.mpp` e o
+  `CRONOGRAMA.xml` salvo dele pelo Project 2016).
+  - Escolher um .mpp não dá mais erro seco: abre o passo a passo (Arquivo › Salvar como › Formato XML)
+    e o mesmo passo a passo fica recolhido sempre à mão no passo 1.
+  - O arquivo real pegou 2 defeitos que o sintético não pegava, corrigidos aqui:
+    1. **EAP falsa** — o Project numera qualquer arquivo (1, 2, 2.1, 4.1.1…). Contra um orçamento de
+       outra obra, 7 tarefas casavam só pelo número. Agora o número precisa vir com ao menos uma
+       palavra significativa em comum com o item/subetapa/etapa (`nomesCompativeis`; palavras
+       genéricas como "instalação" não contam); número igual + nome diferente = sem par, com aviso
+       âmbar na prévia ("O 4.1.1 do orçamento tem outro nome — escolha à mão se for o mesmo serviço").
+    2. **Estrutura perdida** — tarefa sem custo sem referência no orçamento caía toda em "Outras
+       tarefas do cronograma". Agora `posicionarAtividades` recria os resumos do arquivo (grupo ›
+       etapa › subetapa), reaproveitando nó de mesmo nome (reimportar não duplica).
+  - Como sei: `__tests__/cronogramaArquivoReal.test.ts` com o XML real (sem recursos, calendários de
+    pessoas, autor e empresa): 30 tarefas, linha vazia do Project ignorada, 0 casamentos falsos, os 5
+    grupos e as 6 etapas de Elétrica recriados, as 4 homônimas "Instalação interruptores e tomadas"
+    cada uma no seu lugar, motor não move nenhuma data. 58 testes de cronograma/planejamento verdes.
+    Tela local sem gravar: .mpp real → passo a passo aberto; XML real → 0 casou, 7 avisos.
+  - Observação: o Bella Vista não tem ORÇAMENTO no sistema (só 3 obras sem itens), então hoje esse
+    arquivo só entra escolhendo outro orçamento-base e mandando tudo como tarefa sem custo.
 
 ### 3. Tabela com forma de cronograma — ✅ feito
 

@@ -40,6 +40,9 @@ import { FileDownloadIcon } from '@hugeicons/core-free-icons';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 import ExcelImportModal from './ExcelImportModal';
+import ImportarCronogramaSheet from './ImportarCronogramaSheet';
+import { useStore } from '../store/useStore';
+import { onlyOrcamentos } from '../utils/projectClassification';
 import { BudgetEntry } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
@@ -330,6 +333,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // F2: filtros sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('projectListFilters:search', '');
     const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
+    // Importar cronograma (MS Project XML / modelo Excel) — só em Planejamento (fase 2c do plano
+    // docs/planos/2026-11-14-planejamento-lista-critica.md).
+    const [importarCronogramaAberto, setImportarCronogramaAberto] = React.useState(false);
+    const recarregarProjetosDoStore = useStore(s => s.fetchProjects);
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('projectListFilters:viewMode', 'list');
     const [activeTab, setActiveTab] = React.useState<'budgets' | 'templates'>(
         classificationFilter === 'OBRA' ? 'templates' : 'budgets'
@@ -1226,6 +1233,16 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         {/* Planejamento sem "Importar Excel": o modal lê a ficha de um ORÇAMENTO e cria
                             um orçamento (PR #449). A importação de cronograma é o item 2 do plano
                             docs/planos/2026-11-14-planejamento-lista-critica.md. */}
+                        {isPlanejamentoContext && (
+                            <button
+                                type="button"
+                                onClick={() => setImportarCronogramaAberto(true)}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[6px] hover:bg-emerald-600 hover:text-white font-medium text-[13px] transition-all active:scale-95"
+                            >
+                                <FileSpreadsheet className="w-4 h-4" />
+                                Importar cronograma
+                            </button>
+                        )}
                         {!isPlanejamentoContext && (
                             <button
                                 onClick={() => setIsImportModalOpen(true)}
@@ -1781,6 +1798,26 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 )
             )}
             </div>
+            {isPlanejamentoContext && (
+                <ImportarCronogramaSheet
+                    open={importarCronogramaAberto}
+                    onClose={() => setImportarCronogramaAberto(false)}
+                    orcamentos={onlyOrcamentos(projects).map(o => ({
+                        id: o.id,
+                        name: o.name,
+                        code: o.code || o.settings?.code,
+                        // Obra só quando acrescenta algo (orçamento com o nome da obra repetia "X — X").
+                        obra: (n => (n && n !== o.name ? n : null))(findLinkedProject(o, projects)?.name),
+                    }))}
+                    onCriado={(id, nome) => {
+                        setImportarCronogramaAberto(false);
+                        notify(`Planejamento "${nome}" criado com o cronograma importado.`);
+                        void recarregarProjetosDoStore();
+                        // Abre o planejamento novo (o mesmo caminho do clique na linha).
+                        if (onRowClick) onRowClick(id);
+                    }}
+                />
+            )}
             <ExcelImportModal
                 isOpen={isImportModalOpen}
                 onClose={() => setIsImportModalOpen(false)}

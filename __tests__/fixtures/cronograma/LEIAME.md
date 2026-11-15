@@ -18,9 +18,14 @@ trocado por "Obra Exemplo".
 
 Situações de teste embutidas (ver `gabarito.json`):
 
-- **Datas replanejadas** em 3 itens (Estaca hélice 04.02.02 e 04.02.03 +3 dias; Arrasamento 04.03.01 −2 dias).
+- **Datas replanejadas** em 3 itens, de forma CONSISTENTE com os vínculos (como o Project grava): 3 dias
+  úteis de atraso, mesma duração, em itens que não são predecessores de ninguém (Fiscalização 01.01.01,
+  Combustíveis 02.01.01, Impermeabilização de muro 04.07.02). Arquivo que não respeita os próprios vínculos
+  tem as datas empurradas pelo motor do app ao abrir o planejamento — ver o teste da montagem.
+- **Convenção de término:** `Finish` = último dia trabalhado e `Duration` = dias de trabalho (como o MS
+  Project). No app, término = início + duração; `gabarito.json` traz os dois (`termino` e `importadoNoApp`).
 - **% diferente do app** em 3 itens (Terraplanagem 80→100, Fiscalização 82→85, Escoramento vazio→40).
-- **Sem par no orçamento:** "Mobilização do canteiro" e o marco "Aprovação do projeto na prefeitura"; a
+- **Sem par no orçamento:** "Mobilização do canteiro" (24 a 30/07) e o marco "Aprovação do projeto na prefeitura"; a
   Terraplanagem tem a Mobilização como predecessora (vínculo para tarefa que o usuário pode ignorar).
 - **Nome sem acento e em minúsculas:** "tapume com telha metalica" (casamento tem de normalizar).
 - **Item do orçamento fora do arquivo:** Assessorias Contábeis (01.02.03) — ao atualizar, fica como está.

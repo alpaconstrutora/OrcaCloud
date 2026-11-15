@@ -43,6 +43,9 @@ export const ENTITY_TAG: Record<ActionQueueItem['entity'], string> = {
     blueprint_snapshot: 'Planta',
     purchase_request: 'Solicitação',
     doc_gen_documento: 'Ofício',
+    // Risco (F2.3, 15/11/2026): a fila geral ainda não traz riscos — eles têm fila própria
+    // no módulo Riscos (aba Aprovações); o rótulo existe porque o tipo é da alçada.
+    project_risk:   'Risco',
     // DARF (26/10/2026): a guia inteira é UM item; aprovar/rejeitar vale para todos os tributos dela.
     darf:           'DARF',
 };

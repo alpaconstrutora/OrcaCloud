@@ -64,7 +64,9 @@ export type ApprovalEntity =
     | 'process_step'
     | 'blueprint_snapshot'
     | 'purchase_request'
-    | 'doc_gen_documento';
+    | 'doc_gen_documento'
+    // Módulo Riscos (F2.3, 15/11/2026): sem valor; aprovadores por tipo; fila própria no módulo.
+    | 'project_risk';
 
 interface EntityMeta {
     /** Tabela no banco. */
@@ -102,6 +104,7 @@ const ENTITY_META: Record<ApprovalEntity, EntityMeta> = {
     // chama submit() com `amount: 0`, `organizationId` explícito e
     // `semFaixa: 'exigir1'` — `valueField` aponta para coluna inexistente e nunca é lido.
     doc_gen_documento:  { table: 'doc_gen_documentos',  valueField: 'amount' },
+    project_risk:       { table: 'project_risks',       valueField: 'amount' },  // sem valor: chamador passa amount 0
 };
 
 export interface ResolvedLevels {

@@ -15,6 +15,7 @@ export const ENTIDADES_POR_TIPO = [
     { entity: 'doc_gen_documento', rotulo: 'Ofício' },
     { entity: 'purchase_request', rotulo: 'Solicitação de compra' },
     { entity: 'process_step', rotulo: 'Etapa de processo' },
+    { entity: 'project_risk', rotulo: 'Risco (aceitação ou crítico)' },
 ] as const;
 
 export type EntidadePorTipo = (typeof ENTIDADES_POR_TIPO)[number]['entity'];

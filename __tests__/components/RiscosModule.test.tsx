@@ -36,6 +36,10 @@ vi.mock('../../services/riskService', () => ({
         listarDocumentosSst: vi.fn(async () => []),
         obterRisco: vi.fn(async () => null),
         criarRisco: (...a: unknown[]) => criarRisco(...a),
+        // Fase 2: sem sinais/ocorrências/vínculos, a tela da fase 1 tem de ficar igual.
+        listarSinais: vi.fn(async () => []),
+        listarOcorrencias: vi.fn(async () => []),
+        listarVinculos: vi.fn(async () => []),
     },
     fichaDoCatalogo: vi.fn(),
 }));

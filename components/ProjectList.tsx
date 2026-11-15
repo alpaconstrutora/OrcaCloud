@@ -45,6 +45,7 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
 import { KpiCard } from './ui/KpiCard';
+import { SegmentedProgress } from './ui/SegmentedProgress';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
@@ -134,6 +135,45 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 // usuário arrastou continua valendo (useResizableColumns grava só as redimensionadas).
 // Status: "Em andamento" + px-6 não cabia em 130px e quebrava em duas linhas (crítica 2026-11-14).
 const DEFAULT_COL_WIDTHS_ORCAMENTO: Record<string, number> = { ...DEFAULT_COL_WIDTHS, actions: 152, 'status-budget': 150 };
+
+/** Colunas de Planejamento (crítica 2026-11-14, item 3 de docs/planos/2026-11-14-planejamento-
+ *  lista-critica.md): forma de CRONOGRAMA, não de orçamento. Saem Status (budgetStatus), Status
+ *  Obra, Pedidos e Tipo de Obra — perguntas de orçamento/obra que nada diziam ao planejador e
+ *  contradiziam a linha ("Em andamento" + "Não Iniciado" num cronograma em curso). Entram
+ *  Avanço (real × previsto), Prazo, Término e Início, da conta única de utils/planejamentoIndicadores.ts.
+ *  Chave de armazenamento própria ('projectListColumns:planejamento'): quem já abriu a tela tinha
+ *  a ordem/visibilidade das colunas de orçamento gravadas na chave comum. */
+const COLUMNS_PLANEJAMENTO: ColumnConfig[] = [
+    { key: 'code',     label: 'Código',         sortable: true },
+    { key: 'name',     label: 'Planejamento',   sortable: true },
+    { key: 'avanco',   label: 'Avanço',         sortable: true },
+    { key: 'prazo',    label: 'Prazo',          sortable: true },
+    { key: 'termino',  label: 'Término',        sortable: true },
+    { key: 'inicio',   label: 'Início',         sortable: true },
+    { key: 'linked',   label: 'Obra Vinculada', sortable: false },
+    { key: 'client',   label: 'Cliente',        sortable: true },
+    { key: 'updated',  label: 'Atualização',    sortable: true },
+    { key: 'created',  label: 'Data de Criação', sortable: true, defaultHidden: true },
+    { key: 'actions',  label: 'Ações',          sortable: false },
+];
+const DEFAULT_COL_WIDTHS_PLANEJAMENTO: Record<string, number> = {
+    ...DEFAULT_COL_WIDTHS, actions: 152, avanco: 210, prazo: 210, termino: 120, inicio: 120,
+};
+const dataCurta = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '');
+const pct0 = (v: number) => `${Math.round(v)}%`;
+/** Situação de prazo pela MESMA régua da Central de Comando: SPI ≥ 1 = no prazo. */
+const situacaoDePrazo = (ind: IndicadoresDePrazo): { texto: string; cor: string; ordem: number } => {
+    if (!ind.temDatas) return { texto: 'Sem datas', cor: 'text-gray-600', ordem: 3 };
+    if (ind.avancoFisicoPct >= 100) return { texto: 'Concluído', cor: 'text-emerald-700', ordem: 4 };
+    if (ind.spi === null) return ind.atrasadas > 0
+        ? { texto: `Atrasado · ${ind.atrasadas} ${ind.atrasadas === 1 ? 'tarefa' : 'tarefas'}`, cor: 'text-red-700', ordem: 0 }
+        : { texto: 'Não começou', cor: 'text-gray-600', ordem: 2 };
+    if (ind.spi >= 1) return { texto: 'No prazo', cor: 'text-emerald-700', ordem: 1 };
+    return {
+        texto: ind.atrasadas > 0 ? `Atrasado · ${ind.atrasadas} ${ind.atrasadas === 1 ? 'tarefa' : 'tarefas'}` : 'Atrasado',
+        cor: 'text-red-700', ordem: 0,
+    };
+};
 
 /** Recortes dos cards de Orçamentos (crítica 2026-11-14, passo 4): números que pedem ação e
  *  viram filtro ao clicar (Princípio 5 do PRODUCT.md), no lugar de Total/Em Andamento/
@@ -348,9 +388,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
         return hidden;
     }, [organizations.length, isObraContext, isDiarioContext]);
 
-    const contextColumns = COLUMNS.filter(c => !columnsWithoutData.has(c.key));
+    const colunasDoContexto = isPlanejamentoContext ? COLUMNS_PLANEJAMENTO : COLUMNS;
+    const contextColumns = colunasDoContexto.filter(c => !columnsWithoutData.has(c.key));
 
-    const tableColumns = useTableColumns(COLUMNS, 'projectListColumns');
+    const tableColumns = useTableColumns(colunasDoContexto, isPlanejamentoContext ? 'projectListColumns:planejamento' : 'projectListColumns');
     // Linhas da aba/contexto atual (Obras, Orçamentos, Planejamentos, Diários), antes
     // da busca, do tipo e do filtro avançado — base da lista de clientes do filtro.
     const tabProjects = React.useMemo(() => projects.filter(p => {
@@ -370,6 +411,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     ? (p.settings?.classification === 'DIARIO' || (p.settings?.classification === 'OBRA' && (p.settings?.diaryEntries?.length || 0) > 0))
                     : isOrcamento));
     }), [projects, activeTab, classificationFilter]);
+    // Indicadores de prazo de cada planejamento (cards, colunas e ordenação de Planejamento) —
+    // busca leve do orçamento + conta da Central de Comando. Inativo nos outros contextos.
+    const indicadoresPlan = useIndicadoresDosPlanejamentos(tabProjects, isPlanejamentoContext);
     // Opções do Cliente dependem das linhas carregadas → campos em useMemo (§5.5).
     const advancedFields = React.useMemo(
         () => buildAdvancedFilterFields(distinctOptions(tabProjects, p => getClientCellValue(p, projects, activeTab)), !!isDiaryContext),
@@ -388,7 +432,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
         resetColumns,
     } = tableColumns;
 
-    const cols = useResizableColumns(isOrcamentoContext ? DEFAULT_COL_WIDTHS_ORCAMENTO : DEFAULT_COL_WIDTHS, 'projectListColWidths');
+    const cols = useResizableColumns(
+        isOrcamentoContext ? DEFAULT_COL_WIDTHS_ORCAMENTO : isPlanejamentoContext ? DEFAULT_COL_WIDTHS_PLANEJAMENTO : DEFAULT_COL_WIDTHS,
+        'projectListColWidths',
+    );
     // Colunas visíveis, na ordem escolhida pelo usuário (arraste no header) — usada para
     // colgroup/thead/tbody. As 2 colunas extras do contexto Diário (obra-vinculada,
     // planejamento-vinculada) não fazem parte de COLUMNS (não são configuráveis/arrastáveis)
@@ -465,6 +512,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
         'status-budget': { label: isDiaryContext ? 'Status Diário' : 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
         'status-obra': { label: isDiaryContext ? 'Total Registros' : 'Status Obra', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
         lock: { label: 'Pedidos', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+        avanco: { label: 'Avanço', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        prazo: { label: 'Prazo', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        termino: { label: 'Término', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        inicio: { label: 'Início', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     };
 
     // Conteúdo de cada <td> por coluna — extraído para função pura (fecha sobre helpers e
@@ -682,6 +733,46 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         )}
                     </div>
                 );
+            case 'avanco':
+            case 'prazo':
+            case 'termino':
+            case 'inicio': {
+                // Planejamento: conta da Central de Comando. Enquanto o orçamento carrega, ou se a
+                // busca falhou, a célula diz isso — nunca um 0% inventado (§28.5).
+                const ind = indicadoresPlan.porProjeto[project.id];
+                if (!ind) {
+                    const falhou = indicadoresPlan.estado === 'erro';
+                    return (
+                        <span className="text-sm font-normal text-gray-500" title={falhou ? 'Não foi possível carregar o orçamento deste planejamento' : 'Calculando pelo orçamento'}>
+                            {falhou ? '—' : '…'}
+                        </span>
+                    );
+                }
+                if (key === 'avanco') {
+                    if (!ind.temDatas) return <span className="text-sm font-normal text-gray-500">—</span>;
+                    return (
+                        <SegmentedProgress
+                            percent={Math.round(ind.avancoFisicoPct)}
+                            tone="blue"
+                            hint={`previsto ${pct0(ind.previstoPct)}`}
+                            title={`Avanço físico real ${pct0(ind.avancoFisicoPct)} · previsto até hoje ${pct0(ind.previstoPct)} (ponderado pelo valor orçado, como na Central de Comando)`}
+                        />
+                    );
+                }
+                if (key === 'prazo') {
+                    const s = situacaoDePrazo(ind);
+                    const titulo = ind.spi !== null
+                        ? `SPI ${ind.spi.toFixed(2).replace('.', ',')} — avanço real ÷ previsto até hoje${ind.atrasadas > 0 ? ` · ${ind.atrasadas} tarefa(s) com término vencido sem chegar a 100%` : ''}`
+                        : undefined;
+                    return <span className={`text-sm font-normal ${s.cor}`} title={titulo}>{s.texto}</span>;
+                }
+                const data = key === 'termino' ? ind.fimPrevisto : ind.inicioPrevisto;
+                if (!data) return <span className="text-sm font-normal text-gray-500">—</span>;
+                const desvio = key === 'termino' && ind.desvioDias !== null && ind.desvioDias !== 0
+                    ? `${ind.desvioDias > 0 ? '+' : ''}${ind.desvioDias}d vs. linha de base (${dataCurta(ind.fimBaseline)})`
+                    : undefined;
+                return <span className="text-sm font-normal text-gray-700 tabular-nums" title={desvio}>{dataCurta(data)}</span>;
+            }
             default:
                 return null;
         }
@@ -866,6 +957,28 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             const empB = empreendimentoByProject[b.id]?.name || '';
                             return sortDirection === 'asc' ? empA.localeCompare(empB) : empB.localeCompare(empA);
                         }
+                        case 'avanco':
+                        case 'prazo':
+                        case 'termino':
+                        case 'inicio': {
+                            // Planejamento: pelos mesmos indicadores das células. Sem indicador
+                            // (calculando/sem datas) vai sempre para o fim, nos dois sentidos.
+                            const ia = indicadoresPlan.porProjeto[a.id];
+                            const ib = indicadoresPlan.porProjeto[b.id];
+                            const chave = (ind: IndicadoresDePrazo | undefined): number | string | null => {
+                                if (!ind) return null;
+                                if (sortColumn === 'avanco') return ind.temDatas ? ind.avancoFisicoPct : null;
+                                if (sortColumn === 'prazo') return situacaoDePrazo(ind).ordem * 10 + (ind.spi ?? 9);
+                                const d = sortColumn === 'termino' ? ind.fimPrevisto : ind.inicioPrevisto;
+                                return d || null;
+                            };
+                            const ka = chave(ia), kb = chave(ib);
+                            if (ka === null && kb === null) return 0;
+                            if (ka === null) return 1;
+                            if (kb === null) return -1;
+                            const cmp = typeof ka === 'number' && typeof kb === 'number' ? ka - kb : String(ka).localeCompare(String(kb));
+                            return sortDirection === 'asc' ? cmp : -cmp;
+                        }
                         case 'lock': {
                             // Aproximação direta (orderCounts), não a contagem em cascata de
                             // getEffectiveOrderCount — suficiente para ordenar bloqueado/livre.
@@ -890,7 +1003,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }
                 return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
             });
-    }, [tabProjects, projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, advancedFields, isDiaryContext, organizations, orderCounts, empreendimentoByProject]);
+    }, [tabProjects, projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, advancedFields, isDiaryContext, organizations, orderCounts, empreendimentoByProject, indicadoresPlan.porProjeto]);
 
     const stats = React.useMemo(() => {
         const total = filteredProjects.length;
@@ -1047,7 +1160,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // precisa do orçamento de cada planejamento (busca leve no hook); enquanto carrega ou se
     // falhar, o card diz isso e nada é recortado.
     const [recortePlan, setRecortePlan] = React.useState<RecortePlanejamento | null>(null);
-    const indicadoresPlan = useIndicadoresDosPlanejamentos(tabProjects, isPlanejamentoContext);
     const hojePlan = hojeLocalISO();
     const recortePlanAtivo = isPlanejamentoContext && indicadoresPlan.estado === 'pronto' ? recortePlan : null;
     const contagemRecortePlan: Record<RecortePlanejamento, number> = { atrasados: 0, 'terminam-30': 0, 'criticas-abertas': 0, 'sem-cronograma': 0 };

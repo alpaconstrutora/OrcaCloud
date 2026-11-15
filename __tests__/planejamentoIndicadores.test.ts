@@ -42,6 +42,9 @@ describe('indicadoresDePrazo', () => {
         } as never, HOJE);
         expect(metade.pv).toBeCloseTo(500, 5);
         expect(metade.spi).toBeCloseTo(0.5, 5);
+        expect(metade.previstoPct).toBeCloseTo(50, 5);
+        expect(metade.avancoFisicoPct).toBeCloseTo(25, 5);
+        expect(metade.inicioPrevisto).toBe('2026-11-04');
 
         const futuro = indicadoresDePrazo([{ id: 'a', orcado: 1000 }], {
             itemSchedules: [{ id: 'a', startDate: '2026-12-01', endDate: '2026-12-31' }],

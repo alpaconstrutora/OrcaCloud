@@ -115,13 +115,22 @@ os testes do leitor (2b).
 - 2d. Atualizar existente → datas trocadas, avanço só nos itens marcados, baseline intacta.
 - 2e. .mpp → spike decide o conversor; depois, o mesmo fluxo aceita .mpp.
 
-### 3. Tabela com forma de cronograma — ⏳
+### 3. Tabela com forma de cronograma — ✅ feito
 
-**O que muda:** colunas Início, Término, Avanço real × previsto (`SegmentedProgress`, §29),
-Atraso/SPI — da mesma conta do item 1; Status do orçamento, Pedidos e Tipo de Obra fora do
-padrão em PLANEJAMENTO; Ações 152 px.
-**Como sei que terminou:** em 1440 px as colunas de prazo cabem sem rolar; "Em andamento ×
-Não Iniciado" não aparece mais na mesma linha.
+(2a — botão "Importar Excel" fora de Planejamento — no ar em 15/11/2026, PR #449. 2b aguarda
+arquivos reais de exemplo do usuário; o item 3 seguiu antes por não depender deles.)
+
+**O que muda:** Planejamento ganha conjunto de colunas próprio (`COLUMNS_PLANEJAMENTO`, chave
+`projectListColumns:planejamento`): Código, Planejamento, **Avanço** (real em `SegmentedProgress`
+tom neutro + "previsto X%"), **Prazo** (régua da Central: SPI ≥ 1 = no prazo; "Atrasado · N
+tarefas"; SPI no title), **Término** (desvio da linha de base no title), **Início**, Obra
+Vinculada, Cliente, Atualização; Data de Criação oculta por padrão. Saem Status, Status Obra,
+Pedidos e Tipo de Obra. Ações 152 px. As quatro colunas novas ordenam pela mesma conta.
+O utilitário ganhou `inicioPrevisto` e `previstoPct` (PV ÷ total orçado).
+**Como sei que terminou (15/11, servidor local, escrita bloqueada, 0 tentativas):** em 1440 px
+Avanço/Prazo/Término/Início ficam entre 643 e 1303 px (área visível até 1407); Divino = 5% ×
+previsto 94%, "Atrasado · 33 tarefas" (Central: 5,2%, SPI 0,06, 33 de 37); Garden = 24% × 100%,
+2 tarefas; ordenar por Avanço/Prazo/Término dá a ordem certa; Orçamentos mantém as colunas antigas.
 
 ### 4. O que Orçamentos ganhou em 14/11 também em Planejamento — ⏳
 

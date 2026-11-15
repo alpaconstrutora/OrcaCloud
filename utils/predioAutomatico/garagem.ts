@@ -22,6 +22,7 @@ import { applyBatch, contornoDaEscada, contornoDaVaga, pegadaEmPlanta, pointInPo
 import type { BlueprintModel, Bloco, Command, ObjectId, Point, TipoDeVaga } from '../blueprintKernel';
 import { garagemLancada, nomeDoPiso, uidDoPisoDaGaragem, vagasDoContorno } from '../blueprintGaragemDaMassa';
 import { HIPOTESES_VAGAS_PADRAO, planejarVagas } from '../blueprintVagasAutomaticas';
+import { candidatosDoAmbiente, caminhoDentro } from '../blueprintRotaDeFuga';
 import type { PendenciaDoPpci } from '../blueprintGeradorPpci';
 import type { HipotesesDoPredio } from './hipoteses';
 import type { BaseDoPredio, ContextoDoPredio } from './terreoECobertura';
@@ -57,6 +58,24 @@ interface Rampa {
 
 export const NOME_DA_GARAGEM = 'Garagem';
 export const NOME_DO_HALL_DO_SUBSOLO = 'Hall do subsolo (escada e elevadores)';
+export const NOME_DA_ESCADA_DE_EMERGENCIA = 'Escada de emergência da garagem';
+/** Os patamares da escada de emergência da garagem (embaixo, com a porta; em cima, com a saída no térreo), mm. */
+const PATAMAR_DA_ESCADA_MM = 1200;
+/**
+ * O caminhamento máximo na garagem até o local seguro (a boca de uma escada): IT 08 do CBMMG, Tabela 5 — tipo X (o mais
+ * restritivo, sem as características declaradas), demais pavimentos, mais de uma saída, sem chuveiros nem detecção.
+ */
+export const CAMINHAMENTO_NA_GARAGEM_M = 35;
+/** A folga da conta da escolha (a rota de verdade contorna pilares e o patamar), m. */
+const FOLGA_DO_CAMINHAMENTO_M = 2;
+export const MAX_ESCADAS_DE_EMERGENCIA = 3;
+/**
+ * A exaustão mecânica da garagem (hipóteses de projeto, PA8b): renovações do volume por hora, a vazão e a potência de cada
+ * exaustor. O ar entra pela rampa; os exaustores ficam na parede do fundo, oposta a ela.
+ */
+export const RENOVACOES_POR_HORA_DA_GARAGEM = 6;
+export const VAZAO_DO_EXAUSTOR_M3H = 10000;
+export const POTENCIA_DO_EXAUSTOR_W = 1100;
 
 interface Local {
   u: number;
@@ -127,6 +146,19 @@ function quadroDaFrente(anel: readonly Point[], rua: Point | null): QuadroDaFren
   return q;
 }
 
+/** O quadro de uma borda do contorno: origem na ponta `i`, `u` ao longo dela, `v` para dentro. */
+function quadroDaBorda(anel: readonly Point[], i: number): QuadroDaFrente {
+  const c = centro(anel);
+  const a = anel[i];
+  const b = anel[(i + 1) % anel.length];
+  const L = dist(a, b);
+  let n = { x: (b.y - a.y) / L, y: -(b.x - a.x) / L };
+  if (n.x * ((a.x + b.x) / 2 - c.x) + n.y * ((a.y + b.y) / 2 - c.y) < 0) n = { x: -n.x, y: -n.y };
+  const q: QuadroDaFrente = { o: a, u: { x: (b.x - a.x) / L, y: (b.y - a.y) / L }, v: { x: -n.x, y: -n.y }, largura: L, profundidade: 0 };
+  q.profundidade = Math.max(...anel.map((p) => paraLocal(q, p).v));
+  return q;
+}
+
 /** O bloco de garagem abaixo do solo que contém a torre (o subsolo do estudo); `null` = o prédio não tem subsolo. */
 export function subsoloDaTorre(model: BlueprintModel, torre: Bloco): Bloco | null {
   const areaDaTorre = Math.abs(polygonArea(torre.pontos as Point[]));
@@ -154,6 +186,10 @@ export interface SubsolosLancados {
   /** As vagas que o contorno levaria sem nenhum obstáculo (o número do "Lançar vagas" do painel). */
   teto: number;
   rampas: number;
+  /** PA8b: as escadas de emergência da garagem (as outras saídas), do subsolo mais fundo ao térreo — saída no jardim. */
+  escadasDeEmergencia: number;
+  /** PA8b: onde a elétrica põe o quadro da garagem (QDG) e os exaustores de cada subsolo. */
+  eletrica: { levelId: ObjectId; quadro: Point; exaustores: Point[] }[];
   pilaresDaTorre: number;
   pilaresDaGaragem: number;
   pendencias: PendenciaDoPpci[];
@@ -198,6 +234,24 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
   // ── As portas do hall (no mesmo lugar das do térreo) e as paredes que cedem aos pilares.
   const lote: Command[] = [];
   const paredesDoTerreo = ctx.m.walls.filter((w) => w.levelId === terreoLevelId);
+  /** Os centros das portas do hall (os mesmos em todo subsolo) — de onde a garagem chega à escada do núcleo. */
+  const portasDoHall: Point[] = [];
+  // A parede do hall mais voltada para a frente: no térreo ela é a fachada (sem porta para a garagem); no subsolo ganha
+  // a porta junto ao pé da escada — sem ela, os cantos da frente contornavam o hall até a porta do fundo (40 m no R8).
+  const frenteDoHall = (() => {
+    if (!anelDoHall || !escadas.length || !base.rua) return null;
+    const c = centro(anelDoHall);
+    let melhor: { a: Point; b: Point; nota: number } | null = null;
+    anelDoHall.forEach((a, k) => {
+      const b = anelDoHall[(k + 1) % anelDoHall.length];
+      const L = dist(a, b);
+      let n = { x: (b.y - a.y) / L, y: -(b.x - a.x) / L };
+      if (n.x * ((a.x + b.x) / 2 - c.x) + n.y * ((a.y + b.y) / 2 - c.y) < 0) n = { x: -n.x, y: -n.y };
+      const nota = n.x * base.rua!.x + n.y * base.rua!.y;
+      if (L >= 1800 && (!melhor || nota > melhor.nota + 1e-9)) melhor = { a, b, nota };
+    });
+    return melhor as { a: Point; b: Point; nota: number } | null;
+  })();
   for (const p of pisos) {
     const doPiso = ctx.m.walls.filter((w) => w.levelId === p.levelId);
     for (const w of doPiso) lote.push({ type: 'SetCedeSobreposicao', id: w.id, cede: true });
@@ -218,6 +272,7 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
           const s = (meio.x - w.a.x) * u.x + (meio.y - w.a.y) * u.y;
           if (s - o.widthMm / 2 < 50 || s + o.widthMm / 2 > L - 50) continue;
           lote.push({ type: 'AddOpening', wallId: w.id, kind: 'door', offsetMm: Math.round(s - o.widthMm / 2), widthMm: o.widthMm, heightMm: o.heightMm, sillMm: 0 });
+          if (p === pisos[0]) portasDoHall.push(inteiro({ x: w.a.x + u.x * s, y: w.a.y + u.y * s }));
           portas++;
         }
       }
@@ -226,6 +281,19 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
       // Sem porta para copiar: no meio da parede mais longa do hall.
       const w = [...doHall].sort((a, b) => dist(b.a, b.b) - dist(a.a, a.b))[0];
       lote.push({ type: 'AddOpening', wallId: w.id, kind: 'door', offsetMm: Math.round(dist(w.a, w.b) / 2 - 450), widthMm: 900, heightMm: 2100, sillMm: 0 });
+      if (p === pisos[0]) portasDoHall.push(inteiro({ x: (w.a.x + w.b.x) / 2, y: (w.a.y + w.b.y) / 2 }));
+    }
+    if (frenteDoHall) {
+      const w = doHall.find((x) => (dist(x.a, frenteDoHall.a) < 1 && dist(x.b, frenteDoHall.b) < 1) || (dist(x.a, frenteDoHall.b) < 1 && dist(x.b, frenteDoHall.a) < 1));
+      const L = w ? dist(w.a, w.b) : 0;
+      const jaTem = w && lote.some((c) => c.type === 'AddOpening' && (c as { wallId?: string }).wallId === w.id);
+      if (w && !jaTem) {
+        const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+        const pe = escadas[0].pontos[0];
+        const sPe = Math.max(500 + 450, Math.min(L - 500 - 450, (pe.x - w.a.x) * u.x + (pe.y - w.a.y) * u.y));
+        lote.push({ type: 'AddOpening', wallId: w.id, kind: 'door', offsetMm: Math.round(sPe - 450), widthMm: 900, heightMm: 2100, sillMm: 0 });
+        if (p === pisos[0]) portasDoHall.push(inteiro({ x: w.a.x + u.x * sPe, y: w.a.y + u.y * sPe }));
+      }
     }
   }
 
@@ -359,6 +427,89 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
     return out;
   };
 
+  // ── As saídas de emergência da garagem (PA8b): a garagem grande com a escada do núcleo só passa do caminhamento da IT 08
+  // (no R8, 45 m de 35 m). Escadas de emergência encostadas no contorno, fora da projeção da torre e longe da rampa, uma a
+  // uma onde o ponto mais longe (os que a rota mede: os cantos recuados e o centro) mais melhora, até todos ficarem dentro
+  // de `CAMINHAMENTO_NA_GARAGEM_M` — no máximo `MAX_ESCADAS_DE_EMERGENCIA`. Cada uma sobe de cada subsolo ao de cima e do
+  // 1º ao térreo da torre; a caixa fecha em cada subsolo (a porta no patamar de baixo) e no térreo, com a porta para o
+  // jardim — a rota chega ao exterior. Fora do térreo, a boca dela já é local seguro.
+  const aneisDasSaidas: Point[][] = [];
+  const eNucleo = escadas[0] ?? null;
+  if (eNucleo && ehRetangulo(contorno)) {
+    const lance = eNucleo.pontos.slice(1).reduce((t, p, i) => t + dist(eNucleo.pontos[i], p), 0);
+    const comp = PATAMAR_DA_ESCADA_MM + lance + PATAMAR_DA_ESCADA_MM;
+    // Do eixo da contenção ao eixo da parede da caixa: a meia contenção, a largura da escada com folga e a meia parede.
+    const fundo = PAREDE_DE_CONTENCAO_MM / 2 + 100 + eNucleo.larguraMm + 100 + 75;
+    const eixo = PAREDE_DE_CONTENCAO_MM / 2 + 100 + eNucleo.larguraMm / 2;
+    // O caminho de cada ponto medido até a boca da escada do núcleo: por dentro da garagem até a porta do hall mais perto
+    // (o hall é furo) e dali à boca, reto.
+    const garagemSintetica = { ring: contorno, holes: anelDoHall ? [anelDoHall] : [] } as unknown as Parameters<typeof caminhoDentro>[0];
+    const medidos = candidatosDoAmbiente(garagemSintetica).candidatos;
+    const boca = eNucleo.pontos[0];
+    let atual = medidos.map((pt) => Math.min(...portasDoHall.map((d) => (caminhoDentro(garagemSintetica, pt, d)?.mm ?? Infinity) + dist(d, boca)), Infinity));
+    const evitar = [
+      engordar(base.bloco.pontos as Point[], 1000),
+      ...pilaresDoTerreo.map((x) => engordar(pegadaEmPlanta(x), FOLGA_DA_RAMPA_MM)),
+      ...(anelDoHall ? [engordar(anelDoHall, FOLGA_DA_RAMPA_MM)] : []),
+      ...rampas.flatMap((r) => pisos.flatMap((x) => ocupadoPelaRampa(r, x.levelId))).map((o) => engordar(o, FOLGA_DA_RAMPA_MM)),
+    ];
+    const alvoMm = (CAMINHAMENTO_NA_GARAGEM_M - FOLGA_DO_CAMINHAMENTO_M) * 1000;
+    while (aneisDasSaidas.length < MAX_ESCADAS_DE_EMERGENCIA && Math.max(...atual) > alvoMm) {
+      let melhor: { nota: number; qb: QuadroDaFrente; u0: number; dPorta: number[] } | null = null;
+      for (let i = 0; i < contorno.length; i++) {
+        const qb = quadroDaBorda(contorno, i);
+        for (let u0 = PAREDE_DE_CONTENCAO_MM / 2; u0 + comp <= qb.largura - PAREDE_DE_CONTENCAO_MM / 2 + 1e-6; u0 += 500) {
+          const anel = retangulo(qb, u0, u0 + comp, 0, fundo);
+          if ([...evitar, ...aneisDasSaidas.map((x) => engordar(x, 1000))].some((o) => sobrepoe(anel, o))) continue;
+          // A porta da caixa fica na parede de dentro, no patamar de baixo; dali à boca, o patamar.
+          const portaDela = paraMundo(qb, { u: u0 + PATAMAR_DA_ESCADA_MM / 2, v: fundo });
+          const dPorta = medidos.map((pt) => dist(pt, portaDela) + PATAMAR_DA_ESCADA_MM);
+          const nota = Math.max(...atual.map((d, k) => Math.min(d, dPorta[k])));
+          if (!melhor || nota < melhor.nota - 1e-6) melhor = { nota, qb, u0, dPorta };
+        }
+      }
+      if (!melhor || melhor.nota >= Math.max(...atual) - 1e-6) break;
+      const { qb, u0, dPorta } = melhor;
+      atual = atual.map((d, k) => Math.min(d, dPorta[k]));
+      const nome = aneisDasSaidas.length ? `Escada de emergência ${aneisDasSaidas.length + 1}` : 'Escada de emergência';
+      aneisDasSaidas.push(retangulo(qb, u0, u0 + comp, 0, fundo));
+      const P = (u: number, v: number) => paraMundo(qb, { u, v });
+      const [a, b, c, d] = [P(u0, 0), P(u0 + comp, 0), P(u0 + comp, fundo), P(u0, fundo)];
+      // As paredes da caixa: as três que não são a contenção em cada subsolo; as quatro no térreo (no jardim não há contenção).
+      const lados = (levelId: ObjectId, comContencao: boolean): Command[] =>
+        [...(comContencao ? [[a, b]] : []), [b, c], [c, d], [d, a]].map(([x, y]): Command => ({ type: 'AddWall', levelId, a: x, b: y, thicknessMm: 150, heightMm: ctx.m.levels.find((l) => l.id === levelId)?.defaultHeightMm ?? g.peDireitoMm }));
+      comandos += ctx.aplicar([...pisos.flatMap((p) => lados(p.levelId, false)), ...lados(terreoLevelId, true)]);
+      // As portas, na parede de dentro (c → d): no patamar de baixo em cada subsolo; no de cima, no térreo (para o jardim).
+      const porta = (levelId: ObjectId, uMeio: number): Command | null => {
+        const w = ctx.m.walls.find((x) => x.levelId === levelId && dist(x.a, c) < 1 && dist(x.b, d) < 1);
+        if (!w) return null;
+        // A parede corre de c (u0 + comp) para d (u0): a distância desde c.
+        return { type: 'AddOpening', wallId: w.id, kind: 'door', offsetMm: Math.round(u0 + comp - uMeio - 450), widthMm: 900, heightMm: 2100, sillMm: 0 };
+      };
+      for (const p of pisos) {
+        const x = porta(p.levelId, u0 + PATAMAR_DA_ESCADA_MM / 2);
+        if (x) lote.push(x);
+      }
+      const x = porta(terreoLevelId, u0 + comp - PATAMAR_DA_ESCADA_MM / 2);
+      if (x) lote.push(x);
+      for (const p of pisos)
+        lote.push({
+          type: 'AddEscada',
+          levelId: p.levelId,
+          pontos: [P(u0 + PATAMAR_DA_ESCADA_MM, eixo), P(u0 + PATAMAR_DA_ESCADA_MM + lance, eixo)],
+          tipo: 'ESCADA',
+          larguraMm: eNucleo.larguraMm,
+          alvoEspelhoMm: eNucleo.alvoEspelhoMm,
+          rotulo: nome,
+          ...(eNucleo.protecao ? { protecao: eNucleo.protecao } : {}),
+        });
+    }
+    // A conta da escolha é estimativa (por dentro da garagem sem as caixas novas); quem acusa o que passar do limite é a
+    // conferência de incêndio do prédio (PA9a), pela rota de verdade.
+    if (aneisDasSaidas.length)
+      pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: ${aneisDasSaidas.length} escada(s) de emergência junto ao contorno, onde o ponto mais longe da garagem fica mais perto de uma saída (o caminhamento até ${pct(CAMINHAMENTO_NA_GARAGEM_M)} m — IT 08, Tabela 5, tipo X, mais de uma saída), com a caixa fechada em cada subsolo e a saída no jardim do térreo; o hall do núcleo ganha a porta da frente, junto ao pé da escada — confira a proteção das escadas (enclausuradas) e a descarga no térreo.` });
+  }
+
   // ── Fora da projeção da torre: os eixos dela estendidos ao contorno, com vão de até `vaoDaGaragemMm`.
   const extensao: Point[] = [];
   let tiradosDaRampa = 0;
@@ -385,6 +536,7 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
         if (pointInPolygon(torre, p)) continue;
         if (pilaresDoTerreo.some((s) => dist(s.pontos[0], p) < 1200)) continue;
         if (noHall && pointInPolygon(noHall, p)) continue;
+        if (aneisDasSaidas.some((x) => pointInPolygon(engordar(x, FOLGA_DA_RAMPA_MM), p))) continue;
         if (rampas.some((r) => pisos.some((x) => ocupadoPelaRampa(r, x.levelId).some((o) => pointInPolygon(engordar(o, FOLGA_DA_RAMPA_MM), p))))) {
           tiradosDaRampa++;
           continue;
@@ -432,11 +584,17 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
     const doPiso = ctx.m.spaces.filter((s) => s.levelId === p.levelId);
     const h = anelDoHall ? doPiso.find((s) => noAmbiente(s, inteiro(centro(escadas[0].pontos)))) : null;
     if (h) nomes.push({ type: 'NameSpace', spaceId: h.id, name: NOME_DO_HALL_DO_SUBSOLO });
-    const gar = [...doPiso].filter((s) => s.id !== h?.id).sort((a, b) => b.areaMm2 - a.areaMm2)[0];
+    const dasSaidas = aneisDasSaidas.map((x) => doPiso.find((s) => s.id !== h?.id && noAmbiente(s, inteiro(centro(x))))).filter((x): x is NonNullable<typeof x> => !!x);
+    for (const e2 of dasSaidas) nomes.push({ type: 'NameSpace', spaceId: e2.id, name: NOME_DA_ESCADA_DE_EMERGENCIA });
+    const gar = [...doPiso].filter((s) => s.id !== h?.id && !dasSaidas.includes(s)).sort((a, b) => b.areaMm2 - a.areaMm2)[0];
     if (gar) {
       nomes.push({ type: 'NameSpace', spaceId: gar.id, name: NOME_DA_GARAGEM });
       garagens.set(p.levelId, gar.id);
     }
+  }
+  for (const x of aneisDasSaidas) {
+    const e2 = ctx.m.spaces.find((s) => s.levelId === terreoLevelId && noAmbiente(s, inteiro(centro(x))));
+    if (e2) nomes.push({ type: 'NameSpace', spaceId: e2.id, name: NOME_DA_ESCADA_DE_EMERGENCIA });
   }
   comandos += ctx.aplicar(nomes);
 
@@ -474,8 +632,37 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
     const n = doPiso.filter((pp) => ocupado.some((o) => sobrepoe(pp, o))).length;
     if (n) pendencias.push({ grupo: 'VERIFICACAO', texto: `Garagem: ${n} pilar(es) sobre vaga ou rampa no ${p.nome} — confira.` });
   }
-  pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Garagem: a iluminação, a exaustão, a drenagem com a caixa separadora e as bombas do subsolo ainda não são lançadas pelo prédio automático (PA8b).' });
+  pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Garagem: a drenagem com a caixa separadora e as bombas do subsolo ainda não são lançadas pelo prédio automático (PA8c).' });
   const total = saida.reduce((s, p) => s + p.vagas, 0);
+  // PA8b: o quadro da garagem do lado de fora da porta da frente do hall (ou junto ao hall), e os exaustores na parede do
+  // fundo — a oposta à frente, por onde a rampa traz o ar —, em espaços iguais, fugindo das caixas de escada e dos pilares.
+  function ondeVaiAEletrica(): SubsolosLancados['eletrica'] {
+    const area = Math.abs(polygonArea(contorno)) / 1e6;
+    const n = Math.max(1, Math.ceil((area * (g.peDireitoMm / 1000) * RENOVACOES_POR_HORA_DA_GARAGEM) / VAZAO_DO_EXAUSTOR_M3H));
+    const ocupado = [...aneisDasSaidas, ...(anelDoHall ? [anelDoHall] : [])].map((x) => engordar(x, 600));
+    return pisos.map((p) => {
+      const pilares = ctx.m.structures.filter((s) => s.levelId === p.levelId && s.kind === 'PILAR').map((s) => engordar(pegadaEmPlanta(s), 400));
+      const livre = (pt: Point) => !ocupado.some((o) => pointInPolygon(o, pt)) && !pilares.some((o) => pointInPolygon(o, pt));
+      const exaustores: Point[] = [];
+      for (let k = 0; k < n; k++) {
+        const u = ((k + 0.5) * q.largura) / n;
+        const v = q.profundidade - PAREDE_DE_CONTENCAO_MM / 2 - 400;
+        const tentativa = [0, 1000, -1000, 2000, -2000, 3000, -3000, 4000, -4000, 5000, -5000, 6000, -6000].map((du) => paraMundo(q, { u: Math.max(600, Math.min(q.largura - 600, u + du)), v })).find(livre);
+        if (tentativa) exaustores.push(tentativa);
+      }
+      let quadro = anelDoHall ? inteiro(centro(anelDoHall)) : paraMundo(q, { u: q.largura / 2, v: q.profundidade / 2 });
+      if (frenteDoHall && base.rua) {
+        const m0 = { x: (frenteDoHall.a.x + frenteDoHall.b.x) / 2, y: (frenteDoHall.a.y + frenteDoHall.b.y) / 2 };
+        const L = dist(frenteDoHall.a, frenteDoHall.b);
+        const u = { x: (frenteDoHall.b.x - frenteDoHall.a.x) / L, y: (frenteDoHall.b.y - frenteDoHall.a.y) / L };
+        // Do lado de fora (para a rua), na ponta da parede longe da porta (que fica junto ao pé da escada).
+        const pe = escadas[0].pontos[0];
+        const lado = (pe.x - m0.x) * u.x + (pe.y - m0.y) * u.y > 0 ? -1 : 1;
+        quadro = inteiro({ x: m0.x + u.x * lado * (L / 2 - 400) + base.rua.x * 300, y: m0.y + u.y * lado * (L / 2 - 400) + base.rua.y * 300 });
+      }
+      return { levelId: p.levelId, quadro, exaustores };
+    });
+  }
   return {
     comandos,
     pisos: saida,
@@ -483,6 +670,8 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
     vagas: total,
     teto: vagasDoContorno(contorno).length * pisos.length,
     rampas: rampas.length,
+    escadasDeEmergencia: aneisDasSaidas.length,
+    eletrica: ondeVaiAEletrica(),
     pilaresDaTorre: pilaresDoTerreo.length,
     pilaresDaGaragem: extensao.length,
     pendencias,

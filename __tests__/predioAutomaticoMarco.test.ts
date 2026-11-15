@@ -6,6 +6,8 @@
  * Na PA0 o prédio é o que existe hoje: a massa (bloco + produto) → o pavimento tipo (M6a, com núcleo e cópias vivas) → a
  * planta interna das unidades (M6b). Os subsolos de R8 e R12 entram com a garagem (PA8).
  *
+ * PA8b (15/11/2026): a garagem ganha as escadas de emergência (a rota do subsolo fecha) e a elétrica (QDG, luzes, exaustores).
+ *
  * PA8a (15/11/2026): o R8 ganha 1 subsolo e o R12, 2 — o bloco de garagem no retângulo do lote, como o gerador de massa
  * faz (`SUBSOLO_1`/`SUBSOLO_2`) — e o marco grava a garagem e confere o "pronto": nenhum pilar sobre vaga ou rampa.
  *
@@ -142,11 +144,10 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // PA9a, "pronto quando": o R8 classificado A-2 com rota de fuga em todos os andares. Nos outros a rota fica GRAVADA
         // como está (térreo comprido no R12 e no RL, e o caminhamento até a boca da escada nos andares de cima — a rota põe a
         // boca do lance multiandares na outra ponta dele): o marco acusa qualquer mudança.
-        // PA8a: a garagem do subsolo (40 × 60 m, uma escada no núcleo) passa do caminhamento no fundo — ela pede uma segunda
-        // saída, que fica em pendência; o marco grava o subsolo como está e exige a rota limpa nos andares da torre.
+        // PA8b: com a escada de emergência da garagem, a rota limpa em todos os andares do R8 — o subsolo inclusive.
         if (nome === 'R8') {
           expect(agora.incendio!.divisao).toBe('A-2');
-          expect(agora.incendio!.andares.filter((a) => !/subsolo/.test(a.nome) && (a.semRota > 0 || a.naoAtendem > 0))).toEqual([]);
+          expect(agora.incendio!.andares.filter((a) => a.semRota > 0 || a.naoAtendem > 0)).toEqual([]);
         }
         // PA8a, "pronto quando": no R8 (e no R12) nenhum pilar sobre vaga ou rampa; os subsolos de R8 (1) e R12 (2).
         if (caso.subsolos) {
@@ -154,6 +155,11 @@ describe('marco dos prédios de referência (prédio automático)', () => {
           expect(agora.garagem?.rampas).toBe(caso.subsolos);
           expect(agora.pilaresSobreVagaOuRampa).toBe(0);
           expect(agora.garagem!.vagas).toBeGreaterThanOrEqual(agora.unidadesPorAndar * agora.andaresComUnidade);
+          // PA8b: a garagem com escada(s) de emergência e a rota dentro do caminhamento em todo subsolo; exaustores e luzes.
+          expect(agora.garagem!.escadasDeEmergencia).toBeGreaterThan(0);
+          expect(agora.incendio!.andares.filter((a) => /subsolo/.test(a.nome) && (a.semRota > 0 || a.naoAtendem > 0))).toEqual([]);
+          expect(agora.garagem!.exaustores).toBeGreaterThan(0);
+          expect(agora.garagem!.luzes).toBeGreaterThan(0);
         } else expect(agora.garagem).toBeNull();
         if (nome === 'R12') {
           expect(n).toBe(11);

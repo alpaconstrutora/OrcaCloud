@@ -157,6 +157,11 @@ export interface PlanoDoPredio {
       vagas: number;
       teto: number;
       rampas: number;
+      /** PA8b: as escadas de emergência da garagem (as outras saídas além da do núcleo). */
+      escadasDeEmergencia: number;
+      /** PA8b: as luzes e os exaustores de todos os subsolos (no quadro da garagem de cada um); 0 sem a elétrica. */
+      luzes: number;
+      exaustores: number;
       pilaresDaTorre: number;
       pilaresDaGaragem: number;
     } | null;

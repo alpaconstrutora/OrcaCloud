@@ -92,6 +92,17 @@ function pertoDoFuro(f: { anel: Point[]; x0: number; x1: number; y0: number; y1:
   }
   return false;
 }
+/** O trecho passa a mais de 1 mm de toda aresta do anel (sem cruzá-la)? Com uma ponta dentro, ele fica todo dentro. */
+function longeDasArestas(anel: Point[], a: Point, b: Point): boolean {
+  const [x0, x1, y0, y1] = [Math.min(a.x, b.x) - 1, Math.max(a.x, b.x) + 1, Math.min(a.y, b.y) - 1, Math.max(a.y, b.y) + 1];
+  for (let i = 0; i < anel.length; i++) {
+    const c = anel[i];
+    const d = anel[(i + 1) % anel.length];
+    if (Math.max(c.x, d.x) < x0 || Math.min(c.x, d.x) > x1 || Math.max(c.y, d.y) < y0 || Math.min(c.y, d.y) > y1) continue;
+    if (cruzam(a, b, c, d) || aoSegmento(c, a, b) <= 1 || aoSegmento(d, a, b) <= 1 || aoSegmento(a, c, d) <= 1 || aoSegmento(b, c, d) <= 1) return false;
+  }
+  return true;
+}
 /** O ponto está dentro do anel a mais de 1 mm de toda borda dele. */
 function folgadoNoAnel(anel: Point[], p: Point): boolean {
   if (!pointInPolygon(anel, p)) return false;
@@ -113,13 +124,13 @@ function visivel(s: Space, a: Point, b: Point): boolean {
   // duas a mais de 1 mm da borda, todo o trecho fica a mais de 1 mm dela (a distância à borda é côncava por dentro) — toda
   // amostra cai dentro; e com o trecho a mais de 1 mm de cada furo (sem cruzar aresta, sem ponta dentro), nenhuma cai
   // nele. A mesma resposta da amostragem, sem amostrar — vale também com a ponta na borda (porta, vértice do anel).
+  // No anel que não é convexo (a garagem com a caixa da escada encostada no contorno), o mesmo vale com o trecho a mais de
+  // 1 mm de toda aresta do anel: com a 1ª amostra dentro e sem chegar perto da borda, o trecho todo fica dentro.
   const f = formaDoAmbiente(s);
-  if (f.convexo) {
-    const n0 = Math.max(2, Math.ceil(d2(a, b) / 250));
-    const s1 = { x: a.x + (b.x - a.x) / n0, y: a.y + (b.y - a.y) / n0 };
-    const s2 = { x: a.x + ((b.x - a.x) * (n0 - 1)) / n0, y: a.y + ((b.y - a.y) * (n0 - 1)) / n0 };
-    if (folgadoNoAnel(s.ring, s1) && folgadoNoAnel(s.ring, s2) && !f.furos.some((c) => pertoDoFuro(c, s1, s2))) return true;
-  }
+  const n0 = Math.max(2, Math.ceil(d2(a, b) / 250));
+  const s1 = { x: a.x + (b.x - a.x) / n0, y: a.y + (b.y - a.y) / n0 };
+  const s2 = { x: a.x + ((b.x - a.x) * (n0 - 1)) / n0, y: a.y + ((b.y - a.y) * (n0 - 1)) / n0 };
+  if (folgadoNoAnel(s.ring, s1) && (f.convexo ? folgadoNoAnel(s.ring, s2) : longeDasArestas(s.ring, s1, s2)) && !f.furos.some((c) => pertoDoFuro(c, s1, s2))) return true;
   const n = Math.max(2, Math.ceil(d2(a, b) / 250));
   for (let k = 1; k < n; k++) {
     const t = k / n;

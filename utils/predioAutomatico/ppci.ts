@@ -20,6 +20,7 @@ import { kitDaPeca } from '../blueprintKitsIncendio';
 import { proporHidrantes, coberturaDosHidrantes } from '../blueprintCoberturaIncendio';
 import { proporRecalque } from '../blueprintCasaDeBombas';
 import type { ContextoDoPredio } from './terreoECobertura';
+import { NOME_DA_ESCADA_DE_EMERGENCIA } from './garagem';
 import { classificarEdificacao, exigenciasDaEdificacao, HIPOTESES_INCENDIO_PADRAO, type HipotesesIncendio } from '../blueprintIncendioClassificacao';
 import { percursoDeFuga } from '../blueprintRotaDeFuga';
 import { criteriosDoPercursoMG } from '../blueprintIncendioSaidasMG';
@@ -300,7 +301,8 @@ export function lancarHidrantesDoPredio(
   };
 
   // ── Os hidrantes (com o abrigo e a placa — o kit da peça, como no PPCI da planta).
-  const p = proporHidrantes(v, hip.hidraulica);
+  // A caixa da escada de emergência da garagem no térreo (PA8b) fica no jardim, fora do prédio: não pede hidrante.
+  const p = proporHidrantes({ ...v, spaces: v.spaces.filter((x) => !(x.levelId === descargaLevelId && x.name === NOME_DA_ESCADA_DE_EMERGENCIA)) }, hip.hidraulica);
   aplicar(p.comandos.length ? kitDaPeca(v, p.comandos).comandos : []);
   const nomes = new Map(v.spaces.map((x) => [x.id, x.name ?? 'ambiente']));
   for (const id of p.semSolucao) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Hidrante: ${nomes.get(id) ?? id} fica fora do alcance de qualquer posição proposta.` });

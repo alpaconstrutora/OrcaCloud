@@ -43,8 +43,11 @@ import {
   conferirPlanoDoPredio,
   motivoParaNaoGerarPredio,
   NOME_DA_COBERTURA,
+  NOME_DA_ESCADA_DE_EMERGENCIA,
   NOME_DA_GARAGEM,
   NOME_DO_HALL_DO_SUBSOLO,
+  RENOVACOES_POR_HORA_DA_GARAGEM,
+  VAZAO_DO_EXAUSTOR_M3H,
   ORDEM_DAS_ETAPAS_DO_PREDIO,
   planejarPredioDoPedido,
   SALA_BOMBAS,
@@ -94,8 +97,9 @@ function peloPainelDoBloco(p: PedidoDoPredio): BlueprintModel {
   return applyCommand(pl.model, { type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }).model;
 }
 
-// PA4: o R8 com a estrutura leva uns 3 s por plano — e o teste da trava gera, reaplica e confere o hash.
-describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
+// PA4: o R8 com a estrutura leva uns 3 s por plano — e o teste da trava gera, reaplica e confere o hash. PA8b: o R8 completo
+// reaplicado leva ~16 s aqui e passou dos 60 s na CI (máquina 3–4× mais lenta) — 180 s.
+describe('prédio automático — o motor (PA2)', { timeout: 180_000 }, () => {
   it('as etapas rodam na ordem e o lote dá o mesmo prédio dos dois botões do painel do bloco, com o tipo levando as instalações', () => {
     const p = { ...pedidoDoR4(), hip: SO_O_TIPO };
     const avisos: string[] = [];
@@ -831,7 +835,7 @@ describe('prédio automático — a garagem no subsolo (PA8a)', { timeout: 120_0
       expect(n.levelId).toBe(s1.id);
       expect(pavimentosDoNucleo(m, n).map((l) => l.id)).toContain(p.tipoLevelId);
     }
-    const escadas = m.stairs.filter((e) => e.levelId === s1.id && e.tipo === 'ESCADA');
+    const escadas = m.stairs.filter((e) => e.levelId === s1.id && e.tipo === 'ESCADA' && !/^Escada de emergência/.test(e.rotulo ?? ''));
     expect(escadas.map((e) => e.ateLevelId)).toEqual([terreo.id]);
     const hall = m.spaces.find((s) => s.levelId === s1.id && s.name === NOME_DO_HALL_DO_SUBSOLO)!;
     expect(hall).toBeDefined();
@@ -905,5 +909,53 @@ describe('prédio automático — a garagem no subsolo (PA8a)', { timeout: 120_0
     const desligada = planejarPredioDoPedido({ ...comSubsolos(1), hip: { ...SO_A_GARAGEM, garagem: false } });
     expect(desligada.etapas.find((e) => e.id === 'SUBSOLOS')!.nota).toMatch(/Desligada/);
     expect(desligada.resultado.levels.filter((l) => l.elevationMm < 0)).toEqual([]);
+  });
+
+  it('PA8b: a garagem ganha a escada de emergência — caixa fechada no subsolo e no térreo, porta para o jardim — e a rota dela fica no limite', () => {
+    for (const n of [1, 2] as const) {
+      const p = plano(n);
+      const m = p.resultado;
+      const subs = subsolos(m);
+      const terreo = m.levels.find((l) => l.name.endsWith('(térreo)'))!;
+      const emerg = m.stairs.filter((e) => /^Escada de emergência/.test(e.rotulo ?? ''));
+      expect(emerg.length).toBe(p.resumo.garagem!.escadasDeEmergencia * subs.length);
+      expect(p.resumo.garagem!.escadasDeEmergencia).toBeGreaterThan(0);
+      // Uma por subsolo, empilhadas: a do 1º sobe ao térreo da torre, a de baixo ao de cima.
+      for (const e of emerg) expect(e.ateLevelId).toBe(e.levelId === subs[0].id ? terreo.id : subs[subs.indexOf(subs.find((l) => l.id === e.levelId)!) - 1].id);
+      // A caixa é um ambiente no subsolo e no térreo (fora da torre), com porta.
+      for (const l of [subs[0], terreo]) {
+        const caixa = m.spaces.find((x) => x.levelId === l.id && x.name === NOME_DA_ESCADA_DE_EMERGENCIA)!;
+        expect(caixa).toBeDefined();
+        const paredes = m.walls.filter((w) => w.levelId === l.id && w.thicknessMm === 150 && caixa.ring.some((q) => Math.hypot(q.x - w.a.x, q.y - w.a.y) < 1));
+        expect(m.openings.some((o) => o.kind === 'door' && paredes.some((w) => w.id === o.wallId))).toBe(true);
+      }
+      // A rota de fuga de cada subsolo (A-2, IT 08 de MG): a garagem dentro do caminhamento.
+      const pc = percursoDeFuga(m, 'A', terreo.id, null, criteriosDoPercursoMG('MG_CBMMG', 'A-2', HIPOTESES_INCENDIO_PADRAO.saidas));
+      const garagens = pc.ambientes.filter((a) => a.rotulo === NOME_DA_GARAGEM);
+      expect(garagens.length).toBe(subs.length);
+      expect(garagens.map((a) => a.atende)).toEqual(garagens.map(() => true));
+    }
+  });
+
+  it('PA8b: a elétrica da garagem — um QDG por subsolo (filho do QS), luzes pela norma, exaustores pela renovação, tudo em circuito do QDG e sem falta de queda de tensão', () => {
+    const p = planejarPredioDoPedido({ ...comSubsolos(1), hip: { ...SO_A_GARAGEM, eletrica: true, climatizacao: false } });
+    const m = p.resultado;
+    const [s1] = subsolos(m);
+    const qs = m.quadros.find((q) => q.nome === 'QS — serviço')!;
+    const qdg = m.quadros.filter((q) => q.levelId === s1.id);
+    expect(qdg.map((q) => q.quadroPaiId)).toEqual([qs.id]);
+    const doSubsolo = (m.terminais ?? []).filter((t) => t.levelId === s1.id && t.disciplina === 'ELETRICA');
+    const exaustores = doSubsolo.filter((t) => t.tipoEletrico === 'VENTILADOR_EXAUSTOR');
+    const garagem = m.spaces.find((x) => x.levelId === s1.id && x.name === NOME_DA_GARAGEM)!;
+    const volumeM3 = (40000 * 60000 / 1e6) * 3;
+    expect(exaustores.length).toBe(Math.ceil((volumeM3 * RENOVACOES_POR_HORA_DA_GARAGEM) / VAZAO_DO_EXAUSTOR_M3H));
+    expect(exaustores.every((t) => pointInPolygon(garagem.ring as Point[], t.at as Point))).toBe(true);
+    expect(doSubsolo.filter((t) => /^ILUMINACAO_TETO/.test(t.tipoEletrico ?? '')).length).toBeGreaterThan(50);
+    expect(p.resumo.garagem!.exaustores).toBe(exaustores.length);
+    // Tudo no QDG — menos a alimentação das luminárias de emergência (o PPCI), que não entra em circuito em andar nenhum.
+    const circuitosDoQdg = new Set(m.circuitos.filter((c) => c.quadroId === qdg[0].id).map((c) => c.id));
+    const fora = doSubsolo.filter((t) => t.tipoEletrico !== 'INTERRUPTOR' && t.tipoEletrico !== 'ILUMINACAO_PAREDE' && !circuitosDoQdg.has(t.circuitoId ?? ''));
+    expect(fora.map((t) => t.tipoEletrico)).toEqual([]);
+    expect(p.pendencias.filter((x) => /PRE-DIM/.test(x.texto) && /Garagem/.test(x.texto)).map((x) => x.texto)).toEqual([]);
   });
 });

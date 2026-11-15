@@ -6,6 +6,9 @@ import { TrendingUp, TrendingDown, AlertTriangle, MoveHorizontal } from 'lucide-
 import Button from './ui/Button'
 import { formatMoney, formatPercent } from './ui/Format'
 import { useResizableColumns } from './ui/TableUtils'
+import { useCargaVigente } from '../hooks/useCargaVigente'
+import { hojeLocalISO, motivoDataInvalida } from '../utils/periodoControladoria'
+import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
 
 const WIP_COL_WIDTHS: Record<string, number> = {
     project_name: 220, empresa_nome: 160, contrato_valor: 150, receita_reconhecida: 160,
@@ -42,26 +45,38 @@ interface Props {
 
 const WIPReport: React.FC<Props> = ({ organizationId }) => {
     const { showToast } = useToast()
-    const today = new Date().toISOString().slice(0, 10)
-    const [dateTo, setDateTo] = React.useState(today)
+    // Hoje no fuso do navegador (toISOString dava amanhã à noite — UTC).
+    const [dateTo, setDateTo] = React.useState(() => hojeLocalISO())
     const [rows, setRows] = React.useState<WIPLine[]>([])
     const [loading, setLoading] = React.useState(false)
+    const [falhou, setFalhou] = React.useState(false)
     const [sortKey, setSortKey] = React.useState<keyof WIPLine>('receita_reconhecida')
     const [sortAsc, setSortAsc] = React.useState(false)
     const cols = useResizableColumns(WIP_COL_WIDTHS, 'wipReportColWidths')
+    const novaCarga = useCargaVigente()
+    const motivoPeriodo = motivoDataInvalida(dateTo)
 
     const load = React.useCallback(async () => {
+        const vigente = novaCarga()
+        if (motivoDataInvalida(dateTo)) {
+            setRows([]); setFalhou(false); setLoading(false)
+            return
+        }
         setLoading(true)
+        setFalhou(false)
         try {
             const data = await financialReportService.getProjectWIP(organizationId, dateTo)
-            setRows(data)
+            if (vigente()) setRows(data)
         } catch (e: unknown) {
+            if (!vigente()) return
+            setRows([])
+            setFalhou(true)
             showToast('Erro ao carregar WIP', 'error')
             console.error('[WIP]', e)
         } finally {
-            setLoading(false)
+            if (vigente()) setLoading(false)
         }
-    }, [organizationId, dateTo, showToast])
+    }, [novaCarga, organizationId, dateTo, showToast])
 
     React.useEffect(() => { load() }, [load])
 
@@ -170,12 +185,16 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
             )}
 
             {/* Tabela */}
-            {loading ? (
+            {motivoPeriodo ? (
+                <PeriodoInvalido motivo={motivoPeriodo} />
+            ) : loading ? (
                 <div className="flex items-center justify-center py-20">
                     <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
                 </div>
+            ) : falhou ? (
+                <FalhaDeCarga oQue="o WIP" onRetry={load} />
             ) : rows.length === 0 ? (
-                <div className="text-center py-20 text-slate-400 text-sm">
+                <div className="text-center py-20 text-slate-600 text-sm">
                     Nenhuma obra com movimentação financeira encontrada.
                 </div>
             ) : (

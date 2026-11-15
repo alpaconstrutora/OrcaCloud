@@ -3,6 +3,9 @@ import { BookOpen, Search, MoveHorizontal } from 'lucide-react';
 import { listJournalEntries } from '../services/diarioService';
 import type { JournalEntryPair } from '../services/diarioService';
 import { useResizableColumns, usePersistedState } from './ui/TableUtils';
+import { useCargaVigente } from '../hooks/useCargaVigente';
+import { hojeLocalISO, motivoPeriodoInvalido } from '../utils/periodoControladoria';
+import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
 
 const DIARIO_COL_WIDTHS: Record<string, number> = {
   data: 110, descricao: 220, origem: 110, contaDebito: 150, contaCredito: 150, valor: 140, status: 120,
@@ -27,24 +30,35 @@ interface Props {
 export default function DiarioReport({ organizationId }: Props) {
   const [entries, setEntries] = useState<JournalEntryPair[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState('');
+  const [falhou, setFalhou] = useState(false);
+  const [tentativa, setTentativa] = useState(0);
   const [search, setSearch] = usePersistedState<string>('diarioReport:search', '');
   const cols = useResizableColumns(DIARIO_COL_WIDTHS, 'diarioReportColWidths');
+  const novaCarga = useCargaVigente();
 
-  const now = new Date();
-  const defaultFrom = `${now.getFullYear()}-01-01`;
-  const defaultTo   = now.toISOString().slice(0, 10);
-  const [dateFrom, setDateFrom] = useState(defaultFrom);
-  const [dateTo,   setDateTo]   = useState(defaultTo);
+  // Até hoje, no fuso do navegador (toISOString dava amanhã à noite — UTC).
+  const [dateFrom, setDateFrom] = useState(() => `${new Date().getFullYear()}-01-01`);
+  const [dateTo,   setDateTo]   = useState(() => hojeLocalISO());
+  const motivoPeriodo = motivoPeriodoInvalido(dateFrom, dateTo);
 
   useEffect(() => {
+    const vigente = novaCarga();
+    if (motivoPeriodoInvalido(dateFrom, dateTo)) {
+      setEntries([]); setFalhou(false); setLoading(false);
+      return;
+    }
     setLoading(true);
-    setError('');
+    setFalhou(false);
     listJournalEntries(organizationId, { dateFrom, dateTo })
-      .then(setEntries)
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [organizationId, dateFrom, dateTo]);
+      .then(d => { if (vigente()) setEntries(d); })
+      .catch(e => {
+        if (!vigente()) return;
+        setEntries([]);
+        setFalhou(true);
+        console.error('[Diário]', e);
+      })
+      .finally(() => { if (vigente()) setLoading(false); });
+  }, [novaCarga, organizationId, dateFrom, dateTo, tentativa]);
 
   const shown = entries.filter(e =>
     !search ||
@@ -93,7 +107,9 @@ export default function DiarioReport({ organizationId }: Props) {
         </div>
       </div>
 
-      {/* Totalizadores */}
+      {/* Totalizadores — só com dado de verdade: zero durante a falha ou com
+          período incompleto seria um número afirmado sobre o que não foi lido. */}
+      {!motivoPeriodo && !loading && !falhou && (
       <div className="grid grid-cols-3 gap-4">
         {[
           { label: 'Lançamentos',    val: shown.length,          color: 'text-slate-800' },
@@ -106,18 +122,21 @@ export default function DiarioReport({ organizationId }: Props) {
           </div>
         ))}
       </div>
+      )}
 
       {/* Tabela */}
       <div className="bg-white rounded-[10px] border border-slate-200 overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-slate-400 gap-2">
+        {motivoPeriodo ? (
+          <PeriodoInvalido motivo={motivoPeriodo} />
+        ) : loading ? (
+          <div className="flex items-center justify-center py-16 text-slate-500 gap-2">
             <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
             <span className="text-sm">Carregando lançamentos…</span>
           </div>
-        ) : error ? (
-          <div className="p-8 text-center text-red-600 text-sm font-medium">{error}</div>
+        ) : falhou ? (
+          <FalhaDeCarga oQue="o diário contábil" onRetry={() => setTentativa(t => t + 1)} />
         ) : shown.length === 0 ? (
-          <div className="p-12 text-center text-slate-400 text-sm">
+          <div className="p-12 text-center text-slate-600 text-sm">
             Nenhum lançamento encontrado para o período.
           </div>
         ) : (

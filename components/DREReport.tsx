@@ -2,12 +2,13 @@ import React from 'react';
 import { TrendingUp, TrendingDown, Download, ChevronDown, ChevronRight, Building2, MoveHorizontal } from 'lucide-react';
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
-import type { DRESummary, DRELine, DREGroup, DREProjectSummary, RegimeContabil } from '../types/financial';
-import Button from './ui/Button';
+import type { DRESummary, DRELine, DREGroup, DREProjectSummary } from '../types/financial';
 import { useResizableColumns } from './ui/TableUtils';
 import { useCargaVigente } from '../hooks/useCargaVigente';
-import { anoCorrente, motivoPeriodoInvalido } from '../utils/periodoControladoria';
+import { motivoPeriodoInvalido } from '../utils/periodoControladoria';
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
+import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo';
+import type { EscopoControladoria } from './controladoria/escopo';
 
 // §6.3 — as linhas do DRE/comparativo têm ordem contábil fixa (Receita → Deduções →
 // Resultado), não fazem sentido reordenadas por clique de coluna; por isso as tabelas
@@ -259,17 +260,15 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
 
 interface DREReportProps {
     organizationId: string | null;
+    /** Período, regime e obra — o escopo único da Controladoria (ControladoriaModule). */
+    escopo: EscopoControladoria;
 }
 
-const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
+const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
     const { showToast } = useToast();
-    const [dateFrom, setDateFrom] = React.useState(() => anoCorrente().de);
-    const [dateTo, setDateTo] = React.useState(() => anoCorrente().ate);
+    const { de: dateFrom, ate: dateTo, regime, obraId: projectId, setObra: setProjectId } = escopo;
     const [summary, setSummary] = React.useState<DRESummary | null>(null);
     const [projects, setProjects] = React.useState<DREProjectSummary[]>([]);
-    const [obras, setObras] = React.useState<{ project_id: string; project_name: string; code: string | null }[]>([]);
-    const [projectId, setProjectId] = React.useState<string>('');   // '' = todas as obras
-    const [regime, setRegime]       = React.useState<RegimeContabil>('CAIXA');
     const [loading, setLoading] = React.useState(false);
     const [falhou, setFalhou] = React.useState(false);
     const [viewMode, setViewMode] = React.useState<'resumo' | 'detalhe' | 'por_obra'>('resumo');
@@ -311,13 +310,6 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
         }
     }, [novaCarga, organizationId, dateFrom, dateTo, projectId, regime, showToast]);
 
-    // Lista de obras para o filtro (independe do período) — todas as obras
-    React.useEffect(() => {
-        financialReportService.listObras(organizationId)
-            .then(setObras)
-            .catch(e => console.error('[DRE] obras', e));
-    }, [organizationId]);
-
     React.useEffect(() => { load(); }, [load]);
 
     // Agrupar detalhe por dre_group
@@ -333,61 +325,30 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
 
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">DRE</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                        Demonstrativo de Resultado do Exercício
-                    </p>
-                </div>
-                <div className="flex items-center gap-3 flex-wrap">
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
-                    <span className="text-gray-400 text-sm">até</span>
-                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
-                    <div className="relative">
-                        <Building2 className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <select value={projectId} onChange={e => setProjectId(e.target.value)}
-                            className="border border-gray-200 rounded-[6px] pl-9 pr-3 h-9 text-sm focus:outline-none focus:border-blue-400 bg-white max-w-[200px]">
-                            <option value="">Todas as obras</option>
-                            {obras.map(o => (
-                                <option key={o.project_id} value={o.project_id}>
-                                    {o.code ? `${o.code} · ${o.project_name}` : o.project_name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-                    <select value={regime} onChange={e => setRegime(e.target.value as RegimeContabil)}
-                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400 bg-white">
-                        <option value="CAIXA">Caixa</option>
-                        <option value="COMPETENCIA">Competência</option>
-                    </select>
-                    <Button variant="primary" onClick={load}>
-                        Atualizar
-                    </Button>
-                    <button
-                        onClick={() => {
-                            if (!summary) return;
-                            const csv = [
-                                'Linha,Realizado,Previsto',
-                                ...DRE_LINE_ORDER.map(l => {
-                                    const row = summary.lines.find(r => r.linha === l);
-                                    return `"${l}",${row?.valor_realizado ?? 0},${row?.valor_previsto ?? 0}`;
-                                })
-                            ].join('\n');
-                            const a = document.createElement('a');
-                            a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
-                            a.download = `DRE_${dateFrom}_${dateTo}.csv`;
-                            a.click();
-                        }}
-                        className="px-4 py-2 bg-gray-100 text-gray-600 rounded-xl text-sm font-bold hover:bg-gray-200 flex items-center gap-2 transition-all"
-                    >
-                        <Download className="w-4 h-4" /> CSV
-                    </button>
-                </div>
-            </div>
+            <BarraDeEscopo escopo={escopo} aplica={{ periodo: true, regime: null, obra: null }}>
+                <button
+                    type="button"
+                    disabled={!summary}
+                    title={summary ? 'Baixar o resumo da DRE em CSV' : 'Sem DRE carregada para exportar'}
+                    onClick={() => {
+                        if (!summary) return;
+                        const csv = [
+                            'Linha,Realizado,Previsto',
+                            ...DRE_LINE_ORDER.map(l => {
+                                const row = summary.lines.find(r => r.linha === l);
+                                return `"${l}",${row?.valor_realizado ?? 0},${row?.valor_previsto ?? 0}`;
+                            })
+                        ].join('\n');
+                        const a = document.createElement('a');
+                        a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+                        a.download = `DRE_${dateFrom}_${dateTo}.csv`;
+                        a.click();
+                    }}
+                    className={`${BOTAO_DA_BARRA} disabled:opacity-40 disabled:cursor-not-allowed`}
+                >
+                    <Download className="w-4 h-4" aria-hidden="true" /> CSV
+                </button>
+            </BarraDeEscopo>
 
             {motivoPeriodo ? (
                 <PeriodoInvalido motivo={motivoPeriodo} />

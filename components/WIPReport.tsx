@@ -3,12 +3,13 @@ import { financialReportService } from '../services/financialReportService'
 import type { WIPLine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
 import { TrendingUp, TrendingDown, AlertTriangle, MoveHorizontal } from 'lucide-react'
-import Button from './ui/Button'
 import { formatMoney, formatPercent } from './ui/Format'
 import { useResizableColumns } from './ui/TableUtils'
 import { useCargaVigente } from '../hooks/useCargaVigente'
-import { hojeLocalISO, motivoDataInvalida } from '../utils/periodoControladoria'
+import { motivoDataInvalida } from '../utils/periodoControladoria'
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
+import { BarraDeEscopo } from './controladoria/BarraDeEscopo'
+import type { EscopoControladoria } from './controladoria/escopo'
 
 const WIP_COL_WIDTHS: Record<string, number> = {
     project_name: 220, empresa_nome: 160, contrato_valor: 150, receita_reconhecida: 160,
@@ -41,12 +42,13 @@ function KPI({ label, value, sub, variant = 'neutral' }: {
 
 interface Props {
     organizationId: string | null
+    escopo: EscopoControladoria
 }
 
-const WIPReport: React.FC<Props> = ({ organizationId }) => {
+const WIPReport: React.FC<Props> = ({ organizationId, escopo }) => {
     const { showToast } = useToast()
-    // Hoje no fuso do navegador (toISOString dava amanhã à noite — UTC).
-    const [dateTo, setDateTo] = React.useState(() => hojeLocalISO())
+    // O WIP é uma POSIÇÃO: tudo até a data final do período da Controladoria.
+    const dateTo = escopo.ate
     const [rows, setRows] = React.useState<WIPLine[]>([])
     const [loading, setLoading] = React.useState(false)
     const [falhou, setFalhou] = React.useState(false)
@@ -129,30 +131,19 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
     )
 
     return (
-        <div className="space-y-4 px-1">
-            {/* Filtros */}
-            <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm">
-                <div className="flex flex-col gap-1">
-                    <label className="text-xs font-semibold text-slate-500">Posição em</label>
-                    <input
-                        type="date"
-                        value={dateTo}
-                        onChange={e => setDateTo(e.target.value)}
-                        className="border border-slate-200 rounded-lg px-3 py-1.5 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                </div>
-                <Button
-                    onClick={load}
-                    disabled={loading}
-                >
-                    {loading ? 'Carregando…' : 'Atualizar'}
-                </Button>
+        <div className="space-y-6">
+            <BarraDeEscopo escopo={escopo}
+                aplica={{
+                    periodo: false,
+                    regime: 'O WIP mostra o recebido e o pago até a data, com o pendente à parte: não muda com o regime.',
+                    obra: 'O WIP já mostra uma linha por obra: o filtro de obra não se aplica.',
+                }}>
                 {rows.length > 0 && (
-                    <span className="ml-auto text-xs text-slate-400">
+                    <span className="text-xs text-gray-600 pb-2.5">
                         {rows.length} obra{rows.length !== 1 ? 's' : ''} com movimentação
                     </span>
                 )}
-            </div>
+            </BarraDeEscopo>
 
             {/* KPIs */}
             {rows.length > 0 && (

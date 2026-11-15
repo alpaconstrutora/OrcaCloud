@@ -55,10 +55,22 @@ publicado hoje continua funcionando com a função nova (3 argumentos nomeados �
 Movido para o passo 2: remover o botão "Atualizar" — a barra de filtros de cada aba é
 substituída pela barra única do módulo no passo 2, e o botão sai junto.
 
-### Passo 2 — `/impeccable layout`: o período único
-De/Até, regime e obra sobem para o `ControladoriaModule`, numa barra só; a obra aberta no
-topo vira o valor inicial; título/subtítulo por aba no módulo; abas no `TabsBar` (§19.1).
-Critérios: a definir ao começar o passo (este arquivo será atualizado).
+### Passo 2 — `/impeccable layout`: o período único (este PR)
+
+Pedido: "Comece" (15/11/2026, após o passo 1 no ar).
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 2.1 | Período, regime e obra num estado só, no `ControladoriaModule` (`components/controladoria/escopo.ts`); sobrevive à troca de aba, não vai ao localStorage (período velho reaberto = número que ninguém pediu) | `ControladoriaEscopoUnico.test.tsx` "período e regime escolhidos na DRE valem no Balancete"; na frente local, março + Competência ficaram nas 6 abas |
+| 2.2 | Uma barra de escopo para as 6 abas (`BarraDeEscopo.tsx`, §5.3, antes dos KPIs): rótulos associados, anel de foco sólido, h-9; o que não vale na aba fica desligado mostrando "Não se aplica" e o motivo no `title` (WIP: "De" desligado e "Até" vira "Posição em") | testes "desligado E diz por quê", "voltar devolve o regime", "WIP: Posição em", "rótulo associado" |
+| 2.3 | Sem "Atualizar" (a aba recarrega ao mudar o escopo) | teste "sem botão Atualizar" |
+| 2.4 | Título e subtítulo por aba no módulo (§19.1/§20); as abas no `TabsBar` (role=tab, aria-selected, setas, `flex-wrap` — no celular as 6 aparecem); ordem título → abas → escopo → conteúdo | teste "título → abas → barra"; 390 px: 6 de 6 abas visíveis, sem rolagem lateral |
+| 2.5 | A obra aberta no topo é o ponto de partida do filtro de obra (só se for OBRA, pela lista do `fn_list_obras`) | testes "obra do topo" e "projeto que não é obra" |
+| 2.6 | Balancete e Diário passam a respeitar a obra (os serviços já aceitavam e as telas nunca passavam) | teste do Balancete com `undefined`/obra; Diário pelo `projectId` |
+| 2.7 | Organização pelo `useOrgContext` dentro do módulo; o `AppRouter` deixa de passar `activeOrganizationId \|\| ''` (REGRA #5) — baseline 27 → 25 | `orgContextGuard` verde com o baseline apertado |
+| 2.8 | Gutter próprio removido (Diário `p-6`, demais `px-1`); busca do Diário acoplada à tabela (§5.2) | prints 1440 da frente local |
+
+Ficou para o passo 4 (distill): KPIs ainda feitos à mão — no celular o valor encosta na borda e o "−" quebra sozinho.
 
 ### Passo 3 — `/impeccable clarify`: números que levam à ação
 ### Passo 4 — `/impeccable distill`: uma linguagem para as seis abas
@@ -69,8 +81,8 @@ Critérios: a definir ao começar o passo (este arquivo será atualizado).
 
 ## Estado
 
-- [ ] Passo 1 — código e testes prontos na frente `controladoria-numeros`; falta aplicar a migration (autorização do usuário) e publicar
-- [ ] Passo 2
+- [x] Passo 1 — #448 (cc919c67), migration `aplicar_20271114900000` aplicada antes do merge; conferido em produção 15/11/2026
+- [ ] Passo 2 — frente `controladoria-periodo`, PR a abrir
 - [ ] Passo 3
 - [ ] Passo 4
 - [ ] Passo 5

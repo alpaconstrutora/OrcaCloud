@@ -35,6 +35,8 @@ const svc = vi.hoisted(() => ({
     getDREByProject: vi.fn(),
     listObras: vi.fn(),
 }));
+// O store (obra aberta no topo) puxa o cliente do Supabase, que exige env.
+vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn(), auth: { onAuthStateChange: vi.fn(() => ({ data: { subscription: { unsubscribe() {} } } })), getSession: vi.fn(async () => ({ data: { session: null } })) } } }));
 vi.mock('../../services/financialReportService', () => ({ financialReportService: svc }));
 // showToast estável, como no app (useCallback em hooks/useToast.ts): uma função nova a
 // cada render recriaria o `load` e dispararia cargas extras que o app não faz.
@@ -42,6 +44,14 @@ const toast = vi.hoisted(() => ({ showToast: () => {}, localToast: null }));
 vi.mock('../../hooks/useToast', () => ({ useToast: () => toast }));
 
 import DREReport from '../../components/DREReport';
+import { useEscopoControladoria } from '../../components/controladoria/escopo';
+
+// O escopo (período, regime, obra) é do ControladoriaModule desde o passo 2;
+// aqui a DRE recebe o mesmo hook que o módulo usa.
+function Tela() {
+    const escopo = useEscopoControladoria('org-1');
+    return <DREReport organizationId="org-1" escopo={escopo} />;
+}
 
 const ano = new Date().getFullYear();
 
@@ -57,7 +67,7 @@ describe('DRE — resposta fora de ordem', () => {
         const atual = adiada<DRESummary>();
         svc.getDRESummary.mockReturnValueOnce(antiga.promise).mockReturnValueOnce(atual.promise);
 
-        render(<DREReport organizationId="org-1" />);
+        render(<Tela />);
         await waitFor(() => expect(svc.getDRESummary).toHaveBeenCalledTimes(1));
 
         fireEvent.change(screen.getByDisplayValue(`${ano}-01-01`), { target: { value: '2010-01-01' } });
@@ -74,7 +84,7 @@ describe('DRE — resposta fora de ordem', () => {
 describe('DRE — período inválido não consulta', () => {
     it('início depois do fim: diz o motivo e não chama o banco', async () => {
         svc.getDRESummary.mockResolvedValue(resumo(100));
-        render(<DREReport organizationId="org-1" />);
+        render(<Tela />);
         await waitFor(() => expect(svc.getDRESummary).toHaveBeenCalledTimes(1));
 
         fireEvent.change(screen.getByDisplayValue(`${ano}-01-01`), { target: { value: `${ano + 1}-06-01` } });
@@ -88,7 +98,7 @@ describe('DRE — período inválido não consulta', () => {
 describe('DRE — falha', () => {
     it('mostra "Tentar de novo" no lugar dos números, e tentar de novo carrega', async () => {
         svc.getDRESummary.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce(resumo(4000));
-        render(<DREReport organizationId="org-1" />);
+        render(<Tela />);
 
         const botao = await screen.findByRole('button', { name: 'Tentar de novo' });
         expect(screen.getByRole('alert').textContent).toContain('Não foi possível carregar a DRE');
@@ -102,7 +112,7 @@ describe('DRE — falha', () => {
 describe('DRE — margem', () => {
     it('sem receita líquida: "Margem: —" sem seta (nem cor de "piorou")', async () => {
         svc.getDRESummary.mockResolvedValue(resumo(0, 0, -5021.18));
-        render(<DREReport organizationId="org-1" />);
+        render(<Tela />);
         const margens = await screen.findAllByText('Margem: —');
         expect(margens).toHaveLength(3);
         for (const m of margens) expect(m.querySelector('svg')).toBeNull();
@@ -110,7 +120,7 @@ describe('DRE — margem', () => {
 
     it('margem em pt-BR, com vírgula', async () => {
         svc.getDRESummary.mockResolvedValue(resumo(4000, 4000, -2000));
-        render(<DREReport organizationId="org-1" />);
+        render(<Tela />);
         expect(await screen.findAllByText(/Margem: -50,0%/)).toHaveLength(3);
     });
 });
@@ -125,7 +135,7 @@ describe('DRE › Por Obra', () => {
 
     it('pede o "Por Obra" no MESMO regime da DRE', async () => {
         svc.getDRESummary.mockResolvedValue(resumo(4000, 4000, -5021.18));
-        render(<DREReport organizationId="org-1" />);
+        render(<Tela />);
         await waitFor(() => expect(svc.getDREByProject).toHaveBeenCalledWith('org-1', `${ano}-01-01`, `${ano}-12-31`, 'CAIXA'));
 
         fireEvent.change(screen.getByDisplayValue('Caixa'), { target: { value: 'COMPETENCIA' } });
@@ -135,7 +145,7 @@ describe('DRE › Por Obra', () => {
     it('"Sem obra" aparece, não abre DRE de obra, e o Total fecha com o Resultado Líquido', async () => {
         svc.getDRESummary.mockResolvedValue(resumo(4000, 4000, -5021.18));
         svc.getDREByProject.mockResolvedValue(linhas);
-        render(<DREReport organizationId="org-1" />);
+        render(<Tela />);
         fireEvent.click(await screen.findByRole('button', { name: 'Por Obra' }));
 
         const semObra = (await screen.findByText('Sem obra')).closest('tr')!;

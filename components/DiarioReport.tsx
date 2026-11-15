@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
-import { BookOpen, Search, MoveHorizontal } from 'lucide-react';
+import { Search, MoveHorizontal } from 'lucide-react';
 import { listJournalEntries } from '../services/diarioService';
 import type { JournalEntryPair } from '../services/diarioService';
 import { useResizableColumns, usePersistedState } from './ui/TableUtils';
 import { useCargaVigente } from '../hooks/useCargaVigente';
-import { hojeLocalISO, motivoPeriodoInvalido } from '../utils/periodoControladoria';
+import { motivoPeriodoInvalido } from '../utils/periodoControladoria';
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
+import { BarraDeEscopo } from './controladoria/BarraDeEscopo';
+import type { EscopoControladoria } from './controladoria/escopo';
 
 const DIARIO_COL_WIDTHS: Record<string, number> = {
   data: 110, descricao: 220, origem: 110, contaDebito: 150, contaCredito: 150, valor: 140, status: 120,
@@ -25,9 +27,10 @@ const SOURCE_LABEL: Record<string, string> = {
 
 interface Props {
   organizationId: string | null;
+  escopo: EscopoControladoria;
 }
 
-export default function DiarioReport({ organizationId }: Props) {
+export default function DiarioReport({ organizationId, escopo }: Props) {
   const [entries, setEntries] = useState<JournalEntryPair[]>([]);
   const [loading, setLoading] = useState(true);
   const [falhou, setFalhou] = useState(false);
@@ -36,9 +39,7 @@ export default function DiarioReport({ organizationId }: Props) {
   const cols = useResizableColumns(DIARIO_COL_WIDTHS, 'diarioReportColWidths');
   const novaCarga = useCargaVigente();
 
-  // Até hoje, no fuso do navegador (toISOString dava amanhã à noite — UTC).
-  const [dateFrom, setDateFrom] = useState(() => `${new Date().getFullYear()}-01-01`);
-  const [dateTo,   setDateTo]   = useState(() => hojeLocalISO());
+  const { de: dateFrom, ate: dateTo, obraId } = escopo;
   const motivoPeriodo = motivoPeriodoInvalido(dateFrom, dateTo);
 
   useEffect(() => {
@@ -49,7 +50,7 @@ export default function DiarioReport({ organizationId }: Props) {
     }
     setLoading(true);
     setFalhou(false);
-    listJournalEntries(organizationId, { dateFrom, dateTo })
+    listJournalEntries(organizationId, { dateFrom, dateTo, projectId: obraId || undefined })
       .then(d => { if (vigente()) setEntries(d); })
       .catch(e => {
         if (!vigente()) return;
@@ -58,7 +59,7 @@ export default function DiarioReport({ organizationId }: Props) {
         console.error('[Diário]', e);
       })
       .finally(() => { if (vigente()) setLoading(false); });
-  }, [novaCarga, organizationId, dateFrom, dateTo, tentativa]);
+  }, [novaCarga, organizationId, dateFrom, dateTo, obraId, tentativa]);
 
   const shown = entries.filter(e =>
     !search ||
@@ -71,41 +72,9 @@ export default function DiarioReport({ organizationId }: Props) {
   const totalCredit = shown.reduce((s, e) => s + e.creditAmount, 0);
 
   return (
-    <div className="p-6 space-y-6">
-      {/* Cabeçalho */}
-      <div className="flex items-center gap-3">
-        <div className="p-2.5 bg-blue-50 text-blue-600 rounded-xl">
-          <BookOpen className="w-5 h-5" />
-        </div>
-        <div>
-          <h2 className="text-xl font-black text-slate-800">Diário Contábil</h2>
-          <p className="text-xs text-slate-400 font-medium mt-0.5">
-            Lançamentos em partida dobrada gerados automaticamente
-          </p>
-        </div>
-      </div>
-
-      {/* Filtros */}
-      <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-wrap gap-3 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <input
-            type="text"
-            placeholder="Buscar conta ou descrição…"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 h-9 text-sm border border-slate-200 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-          />
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">De</span>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            className="text-sm border border-slate-200 rounded-[6px] px-3 h-9 outline-none focus:ring-2 focus:ring-blue-500/20" />
-          <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">até</span>
-          <input type="date" value={dateTo}   onChange={e => setDateTo(e.target.value)}
-            className="text-sm border border-slate-200 rounded-[6px] px-3 h-9 outline-none focus:ring-2 focus:ring-blue-500/20" />
-        </div>
-      </div>
+    <div className="space-y-6">
+      <BarraDeEscopo escopo={escopo}
+        aplica={{ periodo: true, regime: 'O diário lista os lançamentos como foram gerados, cada um na sua data: não há regime.', obra: null }} />
 
       {/* Totalizadores — só com dado de verdade: zero durante a falha ou com
           período incompleto seria um número afirmado sobre o que não foi lido. */}
@@ -126,6 +95,23 @@ export default function DiarioReport({ organizationId }: Props) {
 
       {/* Tabela */}
       <div className="bg-white rounded-[10px] border border-slate-200 overflow-hidden">
+        {/* Busca acoplada à tabela (§5.2): recorta as linhas carregadas, não o período. */}
+        <div className="flex items-center gap-2 p-2 border-b border-slate-100">
+          <div className="relative flex-1 min-w-0">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" aria-hidden="true" />
+            <input
+              type="text"
+              aria-label="Buscar no diário por conta ou descrição"
+              placeholder="Buscar conta ou descrição…"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              className="w-full h-9 pl-9 pr-3 text-sm text-gray-900 bg-white border border-gray-200 rounded-[6px] placeholder:text-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            />
+          </div>
+          <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-slate-400 hover:text-slate-600 transition-all" title="Ajustar largura das colunas ao conteúdo" aria-label="Ajustar largura das colunas ao conteúdo">
+            <MoveHorizontal className="w-4 h-4" />
+          </button>
+        </div>
         {motivoPeriodo ? (
           <PeriodoInvalido motivo={motivoPeriodo} />
         ) : loading ? (
@@ -137,15 +123,10 @@ export default function DiarioReport({ organizationId }: Props) {
           <FalhaDeCarga oQue="o diário contábil" onRetry={() => setTentativa(t => t + 1)} />
         ) : shown.length === 0 ? (
           <div className="p-12 text-center text-slate-600 text-sm">
-            Nenhum lançamento encontrado para o período.
+            {search ? 'Nenhum lançamento casa com a busca.' : 'Nenhum lançamento encontrado para o período.'}
           </div>
         ) : (
           <>
-            <div className="flex justify-end p-2 border-b border-slate-100">
-              <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-slate-400 hover:text-slate-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
-                <MoveHorizontal className="w-4 h-4" />
-              </button>
-            </div>
             <div className="overflow-x-auto">
             <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: Object.keys(DIARIO_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
               <colgroup>

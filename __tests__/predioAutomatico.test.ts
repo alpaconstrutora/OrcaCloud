@@ -5,7 +5,8 @@
  * das unidades") mais a marca do tipo.
  */
 import { describe, expect, it } from 'vitest';
-import { applyBatch, applyCommand, emptyModel, ModelHistory, pavimentosDoNucleo, pointInPolygon, point, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
+import { applyBatch, applyCommand, contornoDaEscada, contornoDaVaga, emptyModel, ModelHistory, pavimentosDoNucleo, pegadaEmPlanta, pointInPolygon, point, polygonArea, recorteComum, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
+import { garagemLancada, lancarGaragem } from '../utils/blueprintGaragemDaMassa';
 import { entradaDoQuadro } from '../utils/blueprintEntradaDeEnergia';
 import { fazerChave } from '../utils/blueprintGrafoDeRede';
 import { HIPOTESES_PRESSAO_PADRAO, pressoesDaOrigem } from '../utils/blueprintPressaoDaRede';
@@ -42,6 +43,8 @@ import {
   conferirPlanoDoPredio,
   motivoParaNaoGerarPredio,
   NOME_DA_COBERTURA,
+  NOME_DA_GARAGEM,
+  NOME_DO_HALL_DO_SUBSOLO,
   ORDEM_DAS_ETAPAS_DO_PREDIO,
   planejarPredioDoPedido,
   SALA_BOMBAS,
@@ -55,7 +58,7 @@ import {
 const MEDIO = produtoSemente('RESIDENCIAL_MEDIO');
 
 /** Um prédio do marco: lote (largura × profundidade) com a rua ao sul e o bloco — só o bloco, nada montado. */
-function pedidoDo(lote: [number, number], pontos: Point[], pavimentos: number, uso: 'RESIDENCIAL' | 'GARAGEM' = 'RESIDENCIAL'): PedidoDoPredio {
+function pedidoDo(lote: [number, number], pontos: Point[], pavimentos: number, uso: 'RESIDENCIAL' | 'GARAGEM' = 'RESIDENCIAL', subsolos = 0): PedidoDoPredio {
   const [w, d] = lote;
   let m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }]).model;
   const t = m.levels[0].id;
@@ -63,9 +66,11 @@ function pedidoDo(lote: [number, number], pontos: Point[], pavimentos: number, u
   m = applyBatch(m, [
     div(0, 0, w, 0, 'FRENTE'), div(w, 0, w, d, 'LATERAL_DIREITA'), div(w, d, 0, d, 'FUNDOS'), div(0, d, 0, 0, 'LATERAL_ESQUERDA'),
     { type: 'AddBloco', levelId: t, nome: 'Torre', pontos, pavimentos, ...(uso === 'GARAGEM' ? { uso } : {}) },
+    // PA8a: o subsolo como o gerador de massa o põe — o bloco de garagem no retângulo do lote, abaixo do solo.
+    ...(subsolos ? [{ type: 'AddBloco', levelId: t, nome: 'Subsolo', pontos: [point(0, 0), point(w, 0), point(w, d), point(0, d)], pavimentos: subsolos, cotaBaseMm: -3000 * subsolos, uso: 'GARAGEM' } as Command] : []),
   ]).model;
   const massa = medirMassa(m, { terreno: medirTerreno(divisasDoLote(m.boundaries)), limites: m.boundaries, recuosBase: RECUOS_ZERO, zona: ZONA_DA_MASSA_VAZIA });
-  const doBloco = distribuirProduto(m, massa, MEDIO).blocos[0] ?? null;
+  const doBloco = distribuirProduto(m, massa, MEDIO).blocos.find((x) => x.blocoId === m.blocos![0].id) ?? null;
   return { original: m, entrada: { blocoId: m.blocos![0].id, produto: MEDIO, doBloco, rotacaoNorteDeg: null }, hip: {} };
 }
 /** O R4 do marco (lote 30 × 40, bloco 20 × 12, 4 pavimentos: 2 unidades por andar, sem elevador). */
@@ -97,7 +102,7 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     const plano = planejarPredioDoPedido(p, { aoConcluirEtapa: (e, i, total) => avisos.push(`${i}/${total} ${e.id}`) });
     expect(plano.etapas.map((e) => e.id)).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO);
     expect(avisos).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO.map((id, i) => `${i + 1}/${ORDEM_DAS_ETAPAS_DO_PREDIO.length} ${id}`));
-    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'PLUVIAL:NAO_EXIGIDA', 'EQUIPAMENTOS_DE_INCENDIO:NAO_EXIGIDA', 'HIDRANTES:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'INCENDIO:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
+    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'SUBSOLOS:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'ESGOTO:NAO_EXIGIDA', 'PLUVIAL:NAO_EXIGIDA', 'EQUIPAMENTOS_DE_INCENDIO:NAO_EXIGIDA', 'HIDRANTES:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'INCENDIO:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
     expect(snapshotHash(plano.resultado)).toBe(snapshotHash(peloPainelDoBloco(p)));
     const tipo = plano.resultado.levels.find((l) => l.id === plano.tipoLevelId)!;
     expect(tipo.copiaInstalacoes).toBe(true);
@@ -772,5 +777,133 @@ describe('prédio automático — a água fria e o esgoto (PA6, PA7a)', { timeou
     expect(fora.map((t) => m.levels.find((l) => l.id === t.levelId)!.name)).toEqual([]);
     // A reserva técnica fica no superior (a sucção da bomba sai do fundo dele).
     expect(m.terminais.find((t) => t.papelReservatorio === 'SUPERIOR')!.volumeRtiL).toBeGreaterThan(0);
+  });
+});
+
+describe('prédio automático — a garagem no subsolo (PA8a)', { timeout: 120_000 }, () => {
+  /** Só a arquitetura, a estrutura e a garagem: o subsolo não depende das instalações (e o teste fica rápido). */
+  const SO_A_GARAGEM = { plantas: false, eletrica: false, agua: false, esgoto: false, pluvial: false, incendio: false };
+  const comSubsolos = (n: 1 | 2): PedidoDoPredio =>
+    n === 1
+      ? { ...pedidoDo([40000, 60000], [point(5000, 20000), point(35000, 20000), point(35000, 36000), point(5000, 36000)], 8, 'RESIDENCIAL', 1), hip: SO_A_GARAGEM }
+      : { ...pedidoDo([50000, 60000], [point(5000, 20000), point(45000, 20000), point(45000, 38000), point(5000, 38000)], 12, 'RESIDENCIAL', 2), hip: SO_A_GARAGEM };
+  const cache = new Map<number, ReturnType<typeof planejarPredioDoPedido>>();
+  const plano = (n: 1 | 2) => {
+    if (!cache.has(n)) cache.set(n, planejarPredioDoPedido(comSubsolos(n)));
+    return cache.get(n)!;
+  };
+  const subsolos = (m: BlueprintModel) => m.levels.filter((l) => l.elevationMm < 0).sort((a, b) => b.elevationMm - a.elevationMm);
+  const sobrepoe = (a: Point[], b: Point[]) => Math.abs(polygonArea(recorteComum(a, b))) > 1;
+  /** As rampas que ocupam o pavimento: a que parte dele e a que chega nele (de baixo, furando o piso). */
+  const rampasDo = (m: BlueprintModel, levelId: string) => m.stairs.filter((e) => e.tipo === 'RAMPA' && (e.levelId === levelId || e.ateLevelId === levelId));
+
+  it('PA8a, "pronto quando": no R8 com 1 subsolo nenhum pilar sobre vaga ou rampa — e as vagas cobrem as unidades', () => {
+    const p = plano(1);
+    const m = p.resultado;
+    expect(p.etapas.find((e) => e.id === 'SUBSOLOS')!.situacao).toBe('LANCOU');
+    const [s1] = subsolos(m);
+    expect(s1.name).toBe('Subsolo · 1º subsolo');
+    const pilares = m.structures.filter((s) => s.levelId === s1.id && s.kind === 'PILAR');
+    // A malha da torre desce inteira; fora da projeção dela, os eixos estendidos.
+    expect(pilares.length).toBeGreaterThan(m.structures.filter((s) => s.kind === 'PILAR' && s.levelId === p.tipoLevelId).length);
+    const vagas = (m.vagas ?? []).filter((v) => v.levelId === s1.id);
+    const ocupado = [...vagas.map((v) => contornoDaVaga(v)), ...rampasDo(m, s1.id).map((e) => contornoDaEscada(e))];
+    expect(pilares.filter((s) => ocupado.some((o) => sobrepoe(pegadaEmPlanta(s), o))).map((s) => s.rotulo)).toEqual([]);
+    expect(vagas.length).toBe(p.resumo.garagem!.vagas);
+    expect(vagas.length).toBeGreaterThanOrEqual(p.resumo.unidades);
+    // A rampa de veículos desce da calçada (a cota do térreo) ao 1º subsolo, junto à frente.
+    const [rampa] = rampasDo(m, s1.id);
+    expect(rampa.veicular).toBe(true);
+    expect(rampa.desdeCotaMm).toBe(0);
+    expect(Math.min(...rampa.pontos.map((q) => q.y))).toBeLessThan(1000);
+    // Nenhuma vaga na frente da rampa (a chegada, 5 m) — o carro sai dela e manobra.
+    const baixo = rampa.pontos[0];
+    const chegada = [point(baixo.x - 1500, baixo.y), point(baixo.x + 1500, baixo.y), point(baixo.x + 1500, baixo.y + 5000), point(baixo.x - 1500, baixo.y + 5000)];
+    expect(vagas.filter((v) => sobrepoe(contornoDaVaga(v), chegada)).map((v) => v.numero)).toEqual([]);
+  });
+
+  it('PA8a: o núcleo desce ao subsolo — o elevador e o shaft partem dele, a escada sobe ao térreo da torre e o hall fecha com a porta', () => {
+    const p = plano(1);
+    const m = p.resultado;
+    const [s1] = subsolos(m);
+    const terreo = m.levels.find((l) => l.name.endsWith('(térreo)'))!;
+    for (const n of m.nucleos ?? []) {
+      expect(n.levelId).toBe(s1.id);
+      expect(pavimentosDoNucleo(m, n).map((l) => l.id)).toContain(p.tipoLevelId);
+    }
+    const escadas = m.stairs.filter((e) => e.levelId === s1.id && e.tipo === 'ESCADA');
+    expect(escadas.map((e) => e.ateLevelId)).toEqual([terreo.id]);
+    const hall = m.spaces.find((s) => s.levelId === s1.id && s.name === NOME_DO_HALL_DO_SUBSOLO)!;
+    expect(hall).toBeDefined();
+    expect(pointInPolygon(hall.ring as Point[], escadas[0].pontos[0] as Point)).toBe(true);
+    const paredesDoHall = m.walls.filter((w) => w.levelId === s1.id && w.thicknessMm === 150);
+    expect(m.openings.filter((o) => paredesDoHall.some((w) => w.id === o.wallId) && o.kind === 'door').length).toBeGreaterThan(0);
+    // A garagem é o resto do pavimento, com o hall como furo.
+    const garagem = m.spaces.find((s) => s.levelId === s1.id && s.name === NOME_DA_GARAGEM)!;
+    expect(garagem.holes.length).toBe(1);
+  });
+
+  it('PA8a: a fundação assenta no subsolo mais fundo; os pavimentos têm os uids do "Lançar vagas" do painel, que recusa lançar de novo', () => {
+    const p = plano(2);
+    const m = p.resultado;
+    const [s1, s2] = subsolos(m);
+    expect([s1.name, s2.name]).toEqual(['Subsolo · 1º subsolo', 'Subsolo · 2º subsolo']);
+    const fundacao = m.structures.filter((s) => s.kind === 'BLOCO_COROAMENTO' || s.kind === 'ESTACA');
+    expect(fundacao.length).toBeGreaterThan(0);
+    expect(new Set(fundacao.map((s) => s.levelId))).toEqual(new Set([s2.id]));
+    const g = m.blocos!.find((b) => b.uso === 'GARAGEM')!;
+    expect(garagemLancada(m, g).map((l) => l.id).sort()).toEqual([s1.id, s2.id].sort());
+    expect(() => lancarGaragem(m, g)).toThrow(/já estão lançadas/);
+    // E o prédio também não lança por cima das vagas do painel.
+    const antes = comSubsolos(2);
+    const ja = lancarGaragem(antes.original, antes.original.blocos!.find((b) => b.uso === 'GARAGEM')!);
+    const outro = planejarPredioDoPedido({ ...antes, original: ja.model });
+    expect(outro.etapas.find((e) => e.id === 'SUBSOLOS')!.situacao).toBe('NAO_RODOU');
+    expect(outro.pendencias.some((x) => /já estão lançadas/.test(x.texto))).toBe(true);
+  });
+
+  it('PA8a: R12 com 2 subsolos — a rampa de baixo em vaivém; nenhum pilar nem vaga na rampa que parte, na que chega de baixo ou na chegada delas', () => {
+    const p = plano(2);
+    const m = p.resultado;
+    const [s1, s2] = subsolos(m);
+    expect(p.resumo.garagem!.rampas).toBe(2);
+    const entrada = m.stairs.find((e) => e.levelId === s1.id && e.tipo === 'RAMPA')!;
+    const vaivem = m.stairs.find((e) => e.levelId === s2.id && e.tipo === 'RAMPA')!;
+    expect(entrada.desdeCotaMm).toBe(0);
+    expect(vaivem.ateLevelId).toBe(s1.id);
+    // Afastada da frente pelo patamar (o carro chega embaixo e vira), e na outra faixa.
+    expect(Math.min(...vaivem.pontos.map((q) => q.y))).toBeGreaterThanOrEqual(5000);
+    for (const l of [s1, s2]) {
+      const ocupado = [...(m.vagas ?? []).filter((v) => v.levelId === l.id).map((v) => contornoDaVaga(v)), ...rampasDo(m, l.id).map((e) => contornoDaEscada(e))];
+      const pilares = m.structures.filter((s) => s.levelId === l.id && s.kind === 'PILAR');
+      expect(pilares.filter((s) => ocupado.some((o) => sobrepoe(pegadaEmPlanta(s), o))).length).toBe(0);
+    }
+    // No 1º subsolo, a rampa que chega do 2º fura o piso: nenhuma vaga sobre ela.
+    expect((m.vagas ?? []).filter((v) => v.levelId === s1.id && sobrepoe(contornoDaVaga(v), contornoDaEscada(vaivem))).map((v) => v.numero)).toEqual([]);
+    expect(p.resumo.garagem!.subsolos.map((x) => x.vagas).every((n) => n > 0)).toBe(true);
+  });
+
+  it('PA8a: a laje de cada subsolo (o teto dele) cobre o contorno menos o vão da rampa que sai dele', () => {
+    const p = plano(2);
+    const m = p.resultado;
+    for (const l of subsolos(m)) {
+      const lajes = m.structures.filter((s) => s.levelId === l.id && s.kind === 'LAJE');
+      const area = lajes.reduce((a, s) => a + Math.abs(polygonArea(s.pontos as Point[])), 0);
+      const rampa = m.stairs.find((e) => e.levelId === l.id && e.tipo === 'RAMPA')!;
+      const vao = Math.abs(polygonArea(contornoDaEscada(rampa)));
+      // O vão é o da rampa — encostado na parede, ele vai até o eixo dela (a meia espessura a mais).
+      expect(50000 * 60000 - area).toBeGreaterThanOrEqual(vao - 1);
+      expect(50000 * 60000 - area).toBeLessThanOrEqual(1.05 * vao);
+      expect(lajes.some((s) => sobrepoe(s.pontos as Point[], contornoDaEscada(rampa)))).toBe(false);
+    }
+  });
+
+  it('PA8a: sem bloco de garagem abaixo do solo a etapa não roda; desligada nas hipóteses, o subsolo fica para o painel', () => {
+    const sem = planejarPredioDoPedido({ ...pedidoDoR8(), hip: SO_A_GARAGEM });
+    expect(sem.etapas.find((e) => e.id === 'SUBSOLOS')!.situacao).toBe('NAO_EXIGIDA');
+    expect(sem.resumo.garagem).toBeNull();
+    const desligada = planejarPredioDoPedido({ ...comSubsolos(1), hip: { ...SO_A_GARAGEM, garagem: false } });
+    expect(desligada.etapas.find((e) => e.id === 'SUBSOLOS')!.nota).toMatch(/Desligada/);
+    expect(desligada.resultado.levels.filter((l) => l.elevationMm < 0)).toEqual([]);
   });
 });

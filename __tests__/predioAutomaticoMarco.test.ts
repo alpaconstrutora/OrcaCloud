@@ -6,13 +6,16 @@
  * Na PA0 o prédio é o que existe hoje: a massa (bloco + produto) → o pavimento tipo (M6a, com núcleo e cópias vivas) → a
  * planta interna das unidades (M6b). Os subsolos de R8 e R12 entram com a garagem (PA8).
  *
+ * PA8a (15/11/2026): o R8 ganha 1 subsolo e o R12, 2 — o bloco de garagem no retângulo do lote, como o gerador de massa
+ * faz (`SUBSOLO_1`/`SUBSOLO_2`) — e o marco grava a garagem e confere o "pronto": nenhum pilar sobre vaga ou rampa.
+ *
  * PA2 (13/11/2026): o prédio sai do ORQUESTRADOR (`planejarPredioDoPedido`), que encadeia os mesmos motores e marca o tipo
  * com `copiaInstalacoes` — o hash do modelo muda só por essa marca; contagens iguais.
  */
 import { dnDoTuboDeQueda } from '../utils/blueprintNbr8160';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyBatch, emptyModel, point, sha256, snapshotHash, type Command, type Point } from '../utils/blueprintKernel';
+import { applyBatch, contornoDaEscada, contornoDaVaga, emptyModel, pegadaEmPlanta, point, polygonArea, recorteComum, sha256, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
 import { planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
 import { modelosDoCatalogo } from '../utils/blueprintSelecaoClimatizacao';
 import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
@@ -37,12 +40,14 @@ interface Caso {
   lote: [number, number];
   bloco: Point[];
   pavimentos: number;
+  /** PA8a: subsolos de garagem (o bloco no retângulo do lote, pé-direito de 3 m). */
+  subsolos?: number;
 }
 /** Os prédios de referência do plano (as unidades por andar saem do produto médio na fatia do bloco). */
 const CASOS: Record<string, Caso> = {
   R4: { lote: [30000, 40000], bloco: [point(5000, 15000), point(25000, 15000), point(25000, 27000), point(5000, 27000)], pavimentos: 4 },
-  R8: { lote: [40000, 60000], bloco: [point(5000, 20000), point(35000, 20000), point(35000, 36000), point(5000, 36000)], pavimentos: 8 },
-  R12: { lote: [50000, 60000], bloco: [point(5000, 20000), point(45000, 20000), point(45000, 38000), point(5000, 38000)], pavimentos: 12 },
+  R8: { lote: [40000, 60000], bloco: [point(5000, 20000), point(35000, 20000), point(35000, 36000), point(5000, 36000)], pavimentos: 8, subsolos: 1 },
+  R12: { lote: [50000, 60000], bloco: [point(5000, 20000), point(45000, 20000), point(45000, 38000), point(5000, 38000)], pavimentos: 12, subsolos: 2 },
   RL: { lote: [60000, 60000], bloco: [point(5000, 5000), point(45000, 5000), point(45000, 21000), point(21000, 21000), point(21000, 50000), point(5000, 50000)], pavimentos: 8 },
 };
 
@@ -55,11 +60,24 @@ function predio(c: Caso) {
   m = applyBatch(m, [
     div(0, 0, w, 0, 'FRENTE'), div(w, 0, w, d, 'LATERAL_DIREITA'), div(w, d, 0, d, 'FUNDOS'), div(0, d, 0, 0, 'LATERAL_ESQUERDA'),
     { type: 'AddBloco', levelId: t, nome: 'Torre', pontos: c.bloco, pavimentos: c.pavimentos },
+    ...(c.subsolos ? [{ type: 'AddBloco', levelId: t, nome: 'Subsolo', pontos: [point(0, 0), point(w, 0), point(w, d), point(0, d)], pavimentos: c.subsolos, cotaBaseMm: -3000 * c.subsolos, peDireitoMm: 3000, uso: 'GARAGEM' } as Command] : []),
   ]).model;
   const massa = medirMassa(m, { terreno: medirTerreno(divisasDoLote(m.boundaries)), limites: m.boundaries, recuosBase: RECUOS_ZERO, zona: ZONA_DA_MASSA_VAZIA });
-  const doBloco = distribuirProduto(m, massa, MEDIO).blocos[0];
+  const doBloco = distribuirProduto(m, massa, MEDIO).blocos.find((x) => x.blocoId === m.blocos![0].id)!;
   const plano = planejarPredioDoPedido({ original: m, entrada: { blocoId: m.blocos![0].id, produto: MEDIO, doBloco, rotacaoNorteDeg: null, climatizacao: CLIMATIZACAO }, hip: {} });
-  return { model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0, agua: plano.resumo.agua, esgoto: plano.resumo.esgoto, pluvial: plano.resumo.pluvial, incendio: plano.resumo.incendio, pavimentos: plano.resumo.pavimentos };
+  return { garagem: plano.resumo.garagem, model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0, agua: plano.resumo.agua, esgoto: plano.resumo.esgoto, pluvial: plano.resumo.pluvial, incendio: plano.resumo.incendio, pavimentos: plano.resumo.pavimentos };
+}
+
+/** PA8a, "pronto quando": os pilares dos subsolos que pisam numa vaga, numa rampa ou na rampa que chega de baixo. */
+function pilaresSobreVagaOuRampa(m: BlueprintModel): number {
+  const subsolos = m.levels.filter((l) => l.elevationMm < 0).sort((a, b) => b.elevationMm - a.elevationMm);
+  const rampas = (levelId: string) => m.stairs.filter((e) => e.tipo === 'RAMPA' && (e.levelId === levelId || e.ateLevelId === levelId)).map((e) => contornoDaEscada(e));
+  let n = 0;
+  for (const l of subsolos) {
+    const ocupado = [...(m.vagas ?? []).filter((v) => v.levelId === l.id).map((v) => contornoDaVaga(v)), ...rampas(l.id)];
+    n += m.structures.filter((s) => s.levelId === l.id && s.kind === 'PILAR').filter((s) => ocupado.some((o) => Math.abs(polygonArea(recorteComum(pegadaEmPlanta(s), o))) > 1)).length;
+  }
+  return n;
 }
 
 /** O que o marco guarda de um prédio. */
@@ -92,6 +110,10 @@ function marcoDoPredio(c: Caso) {
     pluvial: p.pluvial,
     // PA9a: a classificação de incêndio e a rota de fuga de cada andar.
     incendio: p.incendio,
+    // PA8a: a garagem no subsolo (as vagas de cada um, as rampas, a malha) e os pilares sobre vaga ou rampa.
+    garagem: p.garagem,
+    pilaresSobreVagaOuRampa: pilaresSobreVagaOuRampa(m),
+    vagas: (m.vagas ?? []).length,
   };
 }
 
@@ -120,10 +142,19 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // PA9a, "pronto quando": o R8 classificado A-2 com rota de fuga em todos os andares. Nos outros a rota fica GRAVADA
         // como está (térreo comprido no R12 e no RL, e o caminhamento até a boca da escada nos andares de cima — a rota põe a
         // boca do lance multiandares na outra ponta dele): o marco acusa qualquer mudança.
+        // PA8a: a garagem do subsolo (40 × 60 m, uma escada no núcleo) passa do caminhamento no fundo — ela pede uma segunda
+        // saída, que fica em pendência; o marco grava o subsolo como está e exige a rota limpa nos andares da torre.
         if (nome === 'R8') {
           expect(agora.incendio!.divisao).toBe('A-2');
-          expect(agora.incendio!.andares.filter((a) => a.semRota > 0 || a.naoAtendem > 0)).toEqual([]);
+          expect(agora.incendio!.andares.filter((a) => !/subsolo/.test(a.nome) && (a.semRota > 0 || a.naoAtendem > 0))).toEqual([]);
         }
+        // PA8a, "pronto quando": no R8 (e no R12) nenhum pilar sobre vaga ou rampa; os subsolos de R8 (1) e R12 (2).
+        if (caso.subsolos) {
+          expect(agora.garagem?.subsolos.length).toBe(caso.subsolos);
+          expect(agora.garagem?.rampas).toBe(caso.subsolos);
+          expect(agora.pilaresSobreVagaOuRampa).toBe(0);
+          expect(agora.garagem!.vagas).toBeGreaterThanOrEqual(agora.unidadesPorAndar * agora.andaresComUnidade);
+        } else expect(agora.garagem).toBeNull();
         if (nome === 'R12') {
           expect(n).toBe(11);
           expect(agora.esgoto!.tubos.map((t) => t.dnMm)).toEqual(agora.esgoto!.tubos.map(() => 100));

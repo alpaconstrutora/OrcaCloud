@@ -293,6 +293,52 @@ o que a PA6 conferia (hidrômetros, coluna, RTI) segue igual; Ctrl+Z volta ao bl
 drenagem + caixa separadora, bombas quando abaixo da rede; subsolos de R8 (1) e R12 (2) no marco.
 **Pronto quando.** No R8 nenhum pilar sobre vaga ou rampa.
 
+**Dividida em duas (15/11/2026), como a PA7 e a PA9:** **PA8a** — o subsolo como arquitetura e estrutura (pavimentos,
+núcleo descendo, malha, rampa, laje e vagas; é onde mora o "pronto quando"); **PA8b** — as instalações da garagem
+(iluminação e exaustão no quadro de serviço, drenagem com a caixa separadora e as bombas quando o piso fica abaixo da
+rede).
+
+**Execução da PA8a (15/11/2026, `lancarSubsolos` em `utils/predioAutomatico/garagem.ts`).** O subsolo do estudo é o
+bloco de GARAGEM abaixo do solo que contém a torre — o que o gerador de massa já põe no retângulo do lote
+(`SUBSOLO_1`/`SUBSOLO_2`); sem ele, a etapa SUBSOLOS não roda. Ela entra depois da ESTRUTURA (a malha do térreo desce) e
+antes das FUNDAÇÕES, que passam a assentar no subsolo mais fundo. Os pavimentos têm os uids do "Lançar vagas" do painel do
+bloco (`uidDoPisoDaGaragem`, os nomes de `nomeDoPiso`): um não lança por cima do outro — com as vagas já lançadas pelo
+painel, a etapa para com a pendência. Em cada subsolo: as paredes de contenção no contorno; o NÚCLEO descendo (elevador e
+shaft passam a partir do mais fundo; a escada sobe lance a lance, a do 1º ao térreo da torre — explícito, porque o desenho
+tem outro pavimento na cota 0, o de referência da massa); o HALL do núcleo do térreo fechado igual, com a porta no mesmo
+lugar; os PILARES da torre em prumada e, fora da projeção dela, os eixos dela estendidos ao contorno com vão de até 7,5 m
+(hipótese) — sem vigas: o teto da garagem é laje lisa (poupa altura e deixa a rampa passar sem cortar viga); a LAJE de
+cada subsolo no contorno, em pedaços retangulares em volta do vão da rampa que sai dele (a laje não tem furo); a RAMPA de
+veículos de mão única (3 m, até 20 % — hipóteses) junto à frente, fugindo dos pilares da torre, do núcleo e da escada: a
+de entrada desce da calçada (a parede da frente) para dentro; com dois subsolos, a de baixo vai em VAIVÉM, afastada da
+frente por um patamar de 5,5 m onde o carro vira. Na ponta de cada rampa que encosta num piso fica uma área de CHEGADA de
+5 m sem vaga nem pilar estendido. As VAGAS pelo lançador da E2.5, que já contorna paredes, pilares, núcleo e escadas — a
+rampa que chega de baixo fura o piso e a chegada é livre, então as duas entram na vista dele como rampas de mentira. A
+conferência do "pronto" roda no fim da etapa (pilar sobre vaga ou rampa vira pendência). **Achados no caminho:** (1) o
+hall pegava o ambiente da garagem — o ponto da escada cai no FURO dela, e `pointInPolygon` no anel dizia que sim; (2) a
+1ª versão deixava a vaga S1-1 colada na saída de baixo da rampa e, no vaivém, a rampa de baixo terminava contra a parede
+da frente — vieram a chegada e o patamar; (3) no R12 as duas faixas coladas não cabem nos 20 m de frente com patamar e
+chegada: a de baixo é procurada sozinha, o mais perto da de entrada, e cai entre os pilares da torre (a pendência diz);
+(4) as vigas da torre copiadas no subsolo viravam obstáculo para as vagas (o lançador só ignora laje) — saíram;
+(5) a área da reserva técnica de incêndio (PA6) passou a contar os subsolos, como o PPCI já contava. **A garagem pede
+uma segunda saída:** no R8 (40 × 60 m, uma escada no núcleo) o fundo fica a 45 m da escada (limite 35 m) — a pendência
+da rota diz que a garagem pede uma escada de emergência longe da primeira; o marco exige a rota limpa só nos andares da
+torre. **Desempenho:** o lançador de extintores testava ~100 mil segmentos na garagem (cada um amostrado a cada 25 cm em
+`visivel`) — 22 s de 36 s da etapa no R12. `visivel` ganhou um atalho EXATO: as amostras ficam todas entre a 1ª e a
+última; no ambiente convexo, com essas duas a mais de 1 mm da borda e o trecho a mais de 1 mm de cada furo, toda amostra
+cai dentro (a distância à borda é côncava por dentro) — a mesma resposta sem amostrar; e o caminho pelos vértices fica
+guardado por ambiente e pontas. Extintores 22 s → 2,9 s; o R12 completo com 2 subsolos em ~46 s, o mesmo de antes da
+garagem. Hash do R8 e do R12 completos idêntico antes e depois da otimização; marco da casa idêntico. **Marco
+regravado:** R4 e RL com o modelo idêntico (só os campos novos `garagem`, `vagas`, `pilaresSobreVagaOuRampa`); R8 e R12 com
+os subsolos — e a reserva técnica de incêndio sobe (R8 12 → 16 m³, R12 16 → 20 m³) porque a área passa a contar a
+garagem, com o que dela decorre (1 trecho de água a mais no R8; 0,4 m de altura manométrica no R12). **Conferência no app
+(15/11, `c:/tmp/pwtest/conferencia-predio-pa8a.cjs`, estudo descartável arquivado):** R8 com o bloco de subsolo — a
+hipótese da garagem ligada, "Garagem 60 vaga(s) · 1 subsolo · 1 rampa" no resultado, o subsolo primeiro na prévia;
+"Lançar os 10 pavimentos" (14,5 s); no salvo: elevador e shaft partindo do 1º subsolo, 100 pilares e 100 blocos de
+fundação nele (o térreo sem bloco), 2 pedaços de laje, a rampa veicular da calçada, 60 vagas e nenhum pilar sobre vaga
+ou rampa, Garagem e Hall nomeados, a escada subindo ao térreo da torre; tudo o que as fases anteriores conferiam segue
+igual (a RTI conferida passou a 16 m³); Ctrl+Z volta ao bloco sozinho.
+
 ### PA9 — PPCI
 **O que muda.** `gerarPpci` no modelo final, casa de bombas e hidrantes conciliados com o reservatório; aba PPCI.
 **Pronto quando.** R8 classificado A-2 com rota em todos os andares.
@@ -399,6 +445,6 @@ PA1 e PA2 podem correr em frentes paralelas.
 | PA5 | **PA5a feita** (ver a Execução). R8: 5 QDs + 1 QDS por andar × 7, 36 medidores (35 + condomínio), `unidadesMedidas = unidadesAtendidas` (35 = 35); NBR 5410 sem falta na instalação — a única é a da ENTRADA (298 kVA passam do padrão de baixa tensão: vira pendência "entrada em média tensão"; no R4 a entrada T5 dá 160 A contra IB 160,6 A — o padrão genérico é hipótese, conferir com a concessionária). **Desempenho do kernel (sem mudar resultado; suíte da planta 5.696 verdes, marcos com paredes/estruturas idênticos):** a cópia viva, os grupos e os ambientes só re-derivam quando o comando toca o que eles copiam; `copiasDeInstancia` e as invariantes sem buscas quadráticas — o RL foi de 275 s para 18 s, o R8 ~5 s. **Lançar sem reaplicar:** a trava compara o hash do desenho de origem (`hashDoOriginal`) e o editor empilha o resultado do worker como um passo (`runBatchPrevisto` → `ModelHistory.applyPrecomputed`). Marco com `quadros` e `terminais`. Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa5.cjs`): os 16 portões, Ctrl+Z zera quadros e medidores. PA5a no ar (#424, 12c434c). **PA5b feita** (`utils/predioAutomatico/climatizacaoERede.ts`): a climatização SÓ no tipo (opção `niveis` do gerador — as cópias recebem pela cópia viva), cada ponto de ar no QD da unidade dele (opção `quadroDoPonto`: circuitos por quadro, cada um com a vista dos seus pontos); a condensadora do cômodo sem fachada no ambiente técnico MAIS PERTO e nunca a menos de 0,9 m de outra (opção `condensadorasSeparadas` — sem ela o tipo empilhava 6 condensadoras num ponto, e as peças idênticas faziam o canônico desempatar pelo uid aleatório: o hash mudava a cada geração); a verificação da climatização nos mesmos pavimentos (as cópias saíam "sem equipamento"); eletrodutos dos quadros do tipo cujos circuitos ficam no tipo (o QS, que alimenta a cobertura, ficaria com trechos nas cópias — vai pela prumada, com aviso); a PRUMADA dos alimentadores no shaft (trecho vertical no térreo e no tipo, contínua até o último andar). O editor passa o catálogo de evaporadoras e as premissas (como na casa) e carrega o catálogo com a tela aberta. **Desempenho:** `caminhoEntre` (busca de caminho da fiação) montava o mapa de vizinhos copiando a lista a cada aresta e usava `shift()` — a conferência de eletrodutos do R8 levava 27 s; com o mapa guardado por lista e a fiação guardando a lista de cada circuito, 1,2 s (mesma busca, mesmo caminho). R8 completo ~10 s com a climatização. Marco regravado com a climatização (catálogo semente da casa); a casa idêntica |
 | PA6 | feito (ver a Execução) — R8: 5 hidrômetros por andar × 7 (35 = as 35 unidades), coluna DN 85, recalque DN 50 (1,5 cv), RTI 12 m³, pressurizador no superior, nenhum ponto fora da faixa (dinâmica mín. 77 kPa, estática máx. 332 kPa). **R12 pede VRP** (estática máx. 207 kPa depois dela); R4 e RL fecham sem ponto fora da faixa. O volume dos reservatórios conferido à mão no teste. Kernel 0.108.0 (`Terminal.unidadeId` no hidrômetro). Marco com `trechosDeAgua` e o resumo da água; a casa idêntica. PR #433 |
 | PA7 | **PA7a feita** (ver a Execução) — R8: 5 tubos de queda por andar (DN 100), 120 UHC por andar, ventilação DN 75, coletor DN 150; toda louça de todo andar chega à ligação (315 de 315; R12 836 de 836). **No R12, os tubos de queda dão DN 100 pela Tabela 6** (o marco confere cada um). Conflitos por grade (44,8 s → 54 ms, mesmo resultado). **PA7b feita** (pluvial da cobertura: R8 2 condutores DN 100 para 1.200 L/min) |
-| PA8 | a fazer |
+| PA8 | **PA8a feita** (ver a Execução) — subsolo do estudo lançado: R8 1 subsolo com 60 vagas (o contorno livre levaria 91), 1 rampa, 40 pilares da torre + 60 da malha estendida, fundação no subsolo; R12 2 subsolos com 177 vagas e a rampa em vaivém; **nenhum pilar sobre vaga ou rampa** (o marco confere). A garagem pede uma 2ª saída (pendência). PA8b (iluminação/exaustão, drenagem, caixa separadora, bombas) a fazer |
 | PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. **PA9b feita** (extintores, sinalização e iluminação nas áreas comuns do tipo — cada andar repete). **PA9c feita** (hidrante em todo pavimento; coluna de incêndio empilhada; bomba na cobertura ao lado da reserva técnica; registro de recalque no passeio) |
 | PA10 | a fazer |

@@ -135,21 +135,24 @@
         "bomba": true,
         "recalque": true
       }
-    }
+    },
+    "garagem": null,
+    "pilaresSobreVagaOuRampa": 0,
+    "vagas": 0
   },
   "R8": {
-    "modelo": "085eef729d734d62578e6d8cc89da8a585ef0f70cadc95f52b3e601ed6056d94",
+    "modelo": "5fb8e047dcf809a86cd578dd404b7a9c5af5cca99d7c3137de1dffce51f8c167",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
-    "pavimentos": 10,
+    "pavimentos": 11,
     "copias": 6,
     "unidadesPorAndar": 5,
     "plantas": 5,
-    "paredes": 371,
+    "paredes": 379,
     "nucleos": 2,
-    "estruturas": 546,
+    "estruturas": 766,
     "quadros": 44,
-    "terminais": 3504,
-    "trechosDeAgua": 2480,
+    "terminais": 3555,
+    "trechosDeAgua": 2481,
     "agua": {
       "pontos": 85,
       "hidrometros": 5,
@@ -161,7 +164,7 @@
         "alturaManometricaM": 29.9
       },
       "alimentadorDnMm": 32,
-      "rtiL": 12000,
+      "rtiL": 16000,
       "estaticaMaxKpa": 332,
       "dinamicaMinKpa": 77,
       "pressurizador": true,
@@ -224,7 +227,7 @@
       "divisao": "A-2",
       "grupo": "A",
       "alturaM": 21,
-      "areaM2": 4375,
+      "areaM2": 6826,
       "exigidas": [
         "Acesso de viatura na edificação",
         "Segurança estrutural contra incêndio",
@@ -239,6 +242,13 @@
       "dispensadas": 9,
       "limiteM": 25,
       "andares": [
+        {
+          "nome": "Subsolo · 1º subsolo",
+          "ambientes": 2,
+          "semRota": 0,
+          "naoAtendem": 1,
+          "piorM": 135.1
+        },
         {
           "nome": "Torre · 1º pav (térreo)",
           "ambientes": 7,
@@ -304,10 +314,10 @@
         }
       ],
       "equipamentos": {
-        "EXTINTOR": 4,
-        "PLACA": 17,
-        "LUMINARIA_EMERGENCIA": 15,
-        "Alimentação da luminária de emergência": 15
+        "EXTINTOR": 13,
+        "PLACA": 33,
+        "LUMINARIA_EMERGENCIA": 26,
+        "Alimentação da luminária de emergência": 26
       },
       "hidrantes": {
         "tipo": 1,
@@ -316,21 +326,42 @@
         "bomba": true,
         "recalque": true
       }
-    }
+    },
+    "garagem": {
+      "subsolos": [
+        {
+          "nome": "Subsolo · 1º subsolo",
+          "vagas": 60,
+          "porTipo": {
+            "COMUM": 54,
+            "PCD": 2,
+            "IDOSO": 4,
+            "MOTO": 0
+          }
+        }
+      ],
+      "vagas": 60,
+      "teto": 91,
+      "rampas": 1,
+      "pilaresDaTorre": 40,
+      "pilaresDaGaragem": 60
+    },
+    "pilaresSobreVagaOuRampa": 0,
+    "vagas": 60
   },
   "R12": {
-    "modelo": "a3245153f2e6c446ee0fed3b152e3272739deb279a30f8330fcd355aee76e004",
+    "modelo": "016042ad153a70b07db4f2d324bec78cdeb2b1e937920b0f1ffefd2361f4d9cb",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
-    "pavimentos": 14,
+    "pavimentos": 16,
     "copias": 10,
     "unidadesPorAndar": 8,
     "plantas": 8,
-    "paredes": 908,
+    "paredes": 924,
     "nucleos": 3,
-    "estruturas": 1059,
+    "estruturas": 1434,
     "quadros": 101,
-    "terminais": 8953,
-    "trechosDeAgua": 6110,
+    "terminais": 9083,
+    "trechosDeAgua": 6112,
     "agua": {
       "pontos": 144,
       "hidrometros": 8,
@@ -339,12 +370,12 @@
       "recalque": {
         "dnMm": 75,
         "motorCv": 5,
-        "alturaManometricaM": 41.8
+        "alturaManometricaM": 42.2
       },
       "alimentadorDnMm": 50,
-      "rtiL": 16000,
+      "rtiL": 20000,
       "estaticaMaxKpa": 207,
-      "dinamicaMinKpa": 81,
+      "dinamicaMinKpa": 80,
       "pressurizador": true,
       "vrp": true,
       "insuficientes": 0,
@@ -420,7 +451,7 @@
       "divisao": "A-2",
       "grupo": "A",
       "alturaM": 33,
-      "areaM2": 9456,
+      "areaM2": 15590,
       "exigidas": [
         "Acesso de viatura na edificação",
         "Segurança estrutural contra incêndio",
@@ -438,10 +469,24 @@
       "limiteM": 25,
       "andares": [
         {
+          "nome": "Subsolo · 2º subsolo",
+          "ambientes": 2,
+          "semRota": 0,
+          "naoAtendem": 1,
+          "piorM": 151.8
+        },
+        {
+          "nome": "Subsolo · 1º subsolo",
+          "ambientes": 2,
+          "semRota": 0,
+          "naoAtendem": 1,
+          "piorM": 141.8
+        },
+        {
           "nome": "Torre · 1º pav (térreo)",
           "ambientes": 10,
           "semRota": 0,
-          "naoAtendem": 3,
+          "naoAtendem": 2,
           "piorM": 41
         },
         {
@@ -530,13 +575,13 @@
         }
       ],
       "equipamentos": {
-        "EXTINTOR": 8,
-        "PLACA": 28,
-        "LUMINARIA_EMERGENCIA": 21,
-        "Alimentação da luminária de emergência": 21,
+        "EXTINTOR": 27,
+        "PLACA": 69,
+        "LUMINARIA_EMERGENCIA": 45,
+        "Alimentação da luminária de emergência": 45,
         "CENTRAL_ALARME": 1,
-        "ACIONADOR_MANUAL": 3,
-        "AVISADOR": 3
+        "ACIONADOR_MANUAL": 7,
+        "AVISADOR": 5
       },
       "hidrantes": {
         "tipo": 1,
@@ -545,7 +590,38 @@
         "bomba": true,
         "recalque": true
       }
-    }
+    },
+    "garagem": {
+      "subsolos": [
+        {
+          "nome": "Subsolo · 1º subsolo",
+          "vagas": 87,
+          "porTipo": {
+            "COMUM": 80,
+            "PCD": 2,
+            "IDOSO": 5,
+            "MOTO": 0
+          }
+        },
+        {
+          "nome": "Subsolo · 2º subsolo",
+          "vagas": 90,
+          "porTipo": {
+            "COMUM": 83,
+            "PCD": 2,
+            "IDOSO": 5,
+            "MOTO": 0
+          }
+        }
+      ],
+      "vagas": 177,
+      "teto": 274,
+      "rampas": 2,
+      "pilaresDaTorre": 55,
+      "pilaresDaGaragem": 66
+    },
+    "pilaresSobreVagaOuRampa": 0,
+    "vagas": 177
   },
   "RL": {
     "modelo": "4af84bb18b7b706fca452de7c5ae7fbda97639ab62b844a805690b1f02010e4e",
@@ -766,6 +842,9 @@
         "bomba": true,
         "recalque": true
       }
-    }
+    },
+    "garagem": null,
+    "pilaresSobreVagaOuRampa": 0,
+    "vagas": 0
   }
 }

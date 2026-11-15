@@ -49,8 +49,8 @@ export function garagemLancada(model: BlueprintModel, b: Pick<Bloco, 'uid' | 'pa
   return model.levels.filter((l) => uids.has(l.uid));
 }
 
-/** "1º subsolo" (o mais perto do solo é o 1º), "térreo", "2º pav". */
-function nomeDoPiso(b: Bloco, i: number): { nome: string; prefixo: string } {
+/** "1º subsolo" (o mais perto do solo é o 1º), "térreo", "2º pav". O prédio automático (PA8) usa os mesmos nomes. */
+export function nomeDoPiso(b: Bloco, i: number): { nome: string; prefixo: string } {
   const cota = b.cotaBaseMm + i * b.peDireitoMm;
   if (cota < 0) {
     // Subsolos contados de cima para baixo: o pavimento cujo piso está em −1 pé-direito é o 1º.

@@ -43,8 +43,83 @@ export function limiteDoPercursoM(grupo: string | null, comSprinklers: boolean, 
 const d2 = (a: Point, b: Point) => Math.hypot(b.x - a.x, b.y - a.y);
 const dentro = (s: Space, p: Point) => pointInPolygon(s.ring, p) && !s.holes.some((h) => pointInPolygon(h, p));
 
+/**
+ * A forma do ambiente que dispensa a amostragem (PA8a do prédio automático, 15/11/2026): o anel é convexo, e as caixas
+ * dos furos. A garagem do subsolo (o retângulo do lote, com o hall do núcleo como furo) fazia o extintor testar ~100 mil
+ * segmentos amostrados a cada 25 cm — 22 s de 36 s. Guardada por ambiente, como a visibilidade entre vértices.
+ */
+const FORMA_DO_AMBIENTE = new WeakMap<Space, { convexo: boolean; furos: { anel: Point[]; x0: number; x1: number; y0: number; y1: number }[] }>();
+function formaDoAmbiente(s: Space) {
+  let f = FORMA_DO_AMBIENTE.get(s);
+  if (!f) {
+    let sinal = 0;
+    let convexo = s.ring.length >= 3;
+    for (let i = 0; i < s.ring.length && convexo; i++) {
+      const p = s.ring[i];
+      const q = s.ring[(i + 1) % s.ring.length];
+      const r = s.ring[(i + 2) % s.ring.length];
+      const cruz = (q.x - p.x) * (r.y - q.y) - (q.y - p.y) * (r.x - q.x);
+      if (Math.abs(cruz) < 1e-6) continue;
+      if (sinal === 0) sinal = Math.sign(cruz);
+      else if (Math.sign(cruz) !== sinal) convexo = false;
+    }
+    const furos = s.holes.map((h) => ({ anel: h, x0: Math.min(...h.map((p) => p.x)), x1: Math.max(...h.map((p) => p.x)), y0: Math.min(...h.map((p) => p.y)), y1: Math.max(...h.map((p) => p.y)) }));
+    FORMA_DO_AMBIENTE.set(s, (f = { convexo, furos }));
+  }
+  return f;
+}
+/** Distância do ponto ao segmento. */
+function aoSegmento(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  const L2 = dx * dx + dy * dy;
+  const t = L2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2)) : 0;
+  return Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t));
+}
+/** Os segmentos se cruzam (ou se tocam)? */
+function cruzam(a: Point, b: Point, c: Point, d: Point): boolean {
+  const o = (p: Point, q: Point, r: Point) => Math.sign((q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x));
+  return o(a, b, c) !== o(a, b, d) && o(c, d, a) !== o(c, d, b);
+}
+/** O segmento passa a até 1 mm do furo (ou entra nele)? Longe assim, nenhuma amostra do segmento cai no furo. */
+function pertoDoFuro(f: { anel: Point[]; x0: number; x1: number; y0: number; y1: number }, a: Point, b: Point): boolean {
+  if (Math.max(a.x, b.x) < f.x0 - 1 || Math.min(a.x, b.x) > f.x1 + 1 || Math.max(a.y, b.y) < f.y0 - 1 || Math.min(a.y, b.y) > f.y1 + 1) return false;
+  if (pointInPolygon(f.anel, a) || pointInPolygon(f.anel, b)) return true;
+  for (let i = 0; i < f.anel.length; i++) {
+    const c = f.anel[i];
+    const d = f.anel[(i + 1) % f.anel.length];
+    if (cruzam(a, b, c, d) || aoSegmento(c, a, b) <= 1 || aoSegmento(d, a, b) <= 1 || aoSegmento(a, c, d) <= 1 || aoSegmento(b, c, d) <= 1) return true;
+  }
+  return false;
+}
+/** O ponto está dentro do anel a mais de 1 mm de toda borda dele. */
+function folgadoNoAnel(anel: Point[], p: Point): boolean {
+  if (!pointInPolygon(anel, p)) return false;
+  for (let i = 0; i < anel.length; i++) {
+    const a = anel[i];
+    const b = anel[(i + 1) % anel.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const L2 = dx * dx + dy * dy;
+    const t = L2 > 0 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2)) : 0;
+    if (Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t)) <= 1) return false;
+  }
+  return true;
+}
+
 /** O segmento cabe no ambiente (amostrado a cada 25 cm; a borda conta como dentro). */
 function visivel(s: Space, a: Point, b: Point): boolean {
+  // Atalho EXATO: as amostras ficam todas no trecho entre a 1ª e a última (t = 1/n e (n−1)/n). No anel convexo, com essas
+  // duas a mais de 1 mm da borda, todo o trecho fica a mais de 1 mm dela (a distância à borda é côncava por dentro) — toda
+  // amostra cai dentro; e com o trecho a mais de 1 mm de cada furo (sem cruzar aresta, sem ponta dentro), nenhuma cai
+  // nele. A mesma resposta da amostragem, sem amostrar — vale também com a ponta na borda (porta, vértice do anel).
+  const f = formaDoAmbiente(s);
+  if (f.convexo) {
+    const n0 = Math.max(2, Math.ceil(d2(a, b) / 250));
+    const s1 = { x: a.x + (b.x - a.x) / n0, y: a.y + (b.y - a.y) / n0 };
+    const s2 = { x: a.x + ((b.x - a.x) * (n0 - 1)) / n0, y: a.y + ((b.y - a.y) * (n0 - 1)) / n0 };
+    if (folgadoNoAnel(s.ring, s1) && folgadoNoAnel(s.ring, s2) && !f.furos.some((c) => pertoDoFuro(c, s1, s2))) return true;
+  }
   const n = Math.max(2, Math.ceil(d2(a, b) / 250));
   for (let k = 1; k < n; k++) {
     const t = k / n;
@@ -61,9 +136,41 @@ function visivel(s: Space, a: Point, b: Point): boolean {
  */
 const VISIBILIDADE_ENTRE_VERTICES = new WeakMap<Space, Map<number, boolean>>();
 
+/**
+ * Os caminhos que não saem retos, guardados por ambiente e pelas pontas (PA8a): o extintor mede cada ponto da garagem até a
+ * porta dela UMA vez por candidata — a mesma conta centenas de vezes. Devolve cópia (quem chama pode mexer nos pontos).
+ */
+const CAMINHOS_GUARDADOS = new WeakMap<Space, Map<string, { mm: number; pontos: Point[] } | null>>();
+
 /** O caminho mais curto por DENTRO do ambiente: reto se cabe, senão pelos vértices do contorno (grafo de visibilidade). */
 export function caminhoDentro(s: Space, a: Point, b: Point): { mm: number; pontos: Point[] } | null {
   if (visivel(s, a, b)) return { mm: d2(a, b), pontos: [a, b] };
+  let guardados = CAMINHOS_GUARDADOS.get(s);
+  if (!guardados) CAMINHOS_GUARDADOS.set(s, (guardados = new Map()));
+  const chave = `${a.x},${a.y},${b.x},${b.y}`;
+  if (!guardados.has(chave)) {
+    if (guardados.size > 200_000) guardados.clear();
+    guardados.set(chave, caminhoPelosVertices(s, a, b));
+  }
+  const r = guardados.get(chave)!;
+  return r ? { mm: r.mm, pontos: r.pontos.map((p) => ({ ...p })) } : null;
+}
+
+/** Só o comprimento do `caminhoDentro` (Infinity sem caminho) — sem copiar os pontos: o extintor mede centenas de milhares. */
+export function distanciaDentro(s: Space, a: Point, b: Point): number {
+  if (visivel(s, a, b)) return d2(a, b);
+  let guardados = CAMINHOS_GUARDADOS.get(s);
+  if (!guardados) CAMINHOS_GUARDADOS.set(s, (guardados = new Map()));
+  const chave = `${a.x},${a.y},${b.x},${b.y}`;
+  let r = guardados.get(chave);
+  if (r === undefined) {
+    if (guardados.size > 200_000) guardados.clear();
+    guardados.set(chave, (r = caminhoPelosVertices(s, a, b)));
+  }
+  return r ? r.mm : Infinity;
+}
+
+function caminhoPelosVertices(s: Space, a: Point, b: Point): { mm: number; pontos: Point[] } | null {
   const nos = [a, b, ...s.ring, ...s.holes.flat()];
   let guardadas = VISIBILIDADE_ENTRE_VERTICES.get(s);
   if (!guardadas) VISIBILIDADE_ENTRE_VERTICES.set(s, (guardadas = new Map()));

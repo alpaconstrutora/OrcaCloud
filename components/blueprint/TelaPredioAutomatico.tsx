@@ -324,10 +324,20 @@ export default function TelaPredioAutomatico(props: Props) {
               <span className="block text-xs text-slate-500">A vazão pela área do bloco e a intensidade da cidade das premissas pluviais do estudo (NBR 10844); no mínimo dois condutores.</span>
             </span>
           </label>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.garagem} disabled={!props.hipoteses.terreo} title={props.hipoteses.terreo ? undefined : 'O subsolo desce do térreo (o núcleo e a malha vêm dele) — ligue o térreo'} onChange={(e) => props.onHipoteses({ ...props.hipoteses, garagem: e.target.checked })} data-testid="hipotese-garagem" />
+            <span>
+              Lançar a garagem do subsolo (núcleo descendo, malha da torre, rampa, laje e vagas)
+              <span className="block text-xs text-slate-500">O bloco de garagem abaixo do solo que contém a torre vira os subsolos; a rampa sai junto à frente e as vagas contornam pilares, núcleo e rampa. Sem esse bloco no estudo, nada muda.</span>
+            </span>
+          </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Numero rotulo="Porta de entrada (mm)" valor={props.hipoteses.larguraDoAcessoMm} min={900} max={3000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, larguraDoAcessoMm: v })} />
             <Numero rotulo="Pé-direito da cobertura (mm)" valor={props.hipoteses.peDireitoDaCoberturaMm} min={2200} max={6000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, peDireitoDaCoberturaMm: v })} />
             <Numero rotulo="Laje de cobertura (mm)" valor={props.hipoteses.espessuraDaLajeMm} min={80} max={400} passo={10} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, espessuraDaLajeMm: v })} />
+            <Numero rotulo="Rampa de veículos (% máx.)" valor={props.hipoteses.rampaDeVeiculosMaxPct} min={8} max={25} passo={0.5} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, rampaDeVeiculosMaxPct: v })} />
+            <Numero rotulo="Largura da rampa (mm)" valor={props.hipoteses.larguraDaRampaMm} min={2750} max={6000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, larguraDaRampaMm: v })} />
+            <Numero rotulo="Vão da malha da garagem (mm)" valor={props.hipoteses.vaoDaGaragemMm} min={4000} max={10000} passo={100} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, vaoDaGaragemMm: v })} />
             <Numero rotulo="Platibanda (mm)" valor={props.hipoteses.alturaDaPlatibandaMm} min={300} max={3000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, alturaDaPlatibandaMm: v })} />
             <Numero
               rotulo="Reservatório superior acima da laje (mm)"
@@ -378,6 +388,17 @@ export default function TelaPredioAutomatico(props: Props) {
                 plano.resumo.estrutura
                   ? `${plano.resumo.estrutura.vigas} viga(s) · ${plano.resumo.estrutura.lajes} laje(s)${plano.resumo.estrutura.blocos ? ` · ${plano.resumo.estrutura.blocos} bloco(s) de fundação` : ''}`
                   : 'desligada nas hipóteses'
+              }
+            />
+            <Dado
+              rotulo="Garagem"
+              valor={plano.resumo.garagem ? `${plano.resumo.garagem.vagas} vaga(s)` : '—'}
+              nota={
+                plano.resumo.garagem
+                  ? `${plano.resumo.garagem.subsolos.length} subsolo(s) · ${plano.resumo.garagem.rampas} rampa(s) · o contorno livre levaria ${plano.resumo.garagem.teto}`
+                  : props.hipoteses.garagem
+                    ? 'sem bloco de garagem abaixo do solo no estudo'
+                    : 'desligada nas hipóteses'
               }
             />
             <Dado

@@ -1,0 +1,18 @@
+{
+  "name": "ÒPURA Pro",
+  "short_name": "ÒPURA Pro",
+  "description": "Orçamento no WhatsApp, Pix na hora e a agenda do seu serviço. Grátis.",
+  "id": "/pro",
+  "start_url": "/pro?utm_source=pwa",
+  "scope": "/pro",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#2563eb",
+  "background_color": "#f8fafc",
+  "lang": "pt-BR",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

@@ -11,6 +11,8 @@ interface ProModuleProps {
   activeView: string;
   onChangeView: (view: string) => void;
   userId: string;
+  /** Só no ÒPURA Pro público (`/pro`): "Sair da conta" em Ajustes. Dentro do app, o "Sair" é do menu. */
+  onSair?: () => void;
 }
 
 /**
@@ -37,7 +39,7 @@ const ABAS: { id: AbaPro; label: string; titulo: string; subtitulo: string }[] =
   { id: 'pro-config', label: 'Ajustes', titulo: 'Ajustes', subtitulo: 'Seus dados, chave Pix e modelos de orçamento.' },
 ];
 
-export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, userId }) => {
+export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, userId, onSair }) => {
   // Estados para navegação interna de registros
   const [selectedOrcamentoId, setSelectedOrcamentoId] = React.useState<string | null>(null);
   const [selectedServicoId, setSelectedServicoId] = React.useState<string | null>(null);
@@ -158,6 +160,7 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
           <ProConfigForm
             userId={userId}
             onBack={() => onChangeView('pro-dashboard')}
+            onSair={onSair}
           />
         )}
       </div>

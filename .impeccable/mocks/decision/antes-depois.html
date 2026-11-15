@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>ÒPURA Pro — antes e depois</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 390px; height: 844px; overflow: hidden; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #F8FAFC; color: #0F172A; }
+  .topo { display: flex; justify-content: space-between; align-items: center; padding: 18px 16px 0; }
+  .marca { font-weight: 900; font-size: 18px; }
+  .entrar { font-size: 15px; font-weight: 500; color: #1D4ED8; }
+  h1 { font-weight: 900; font-size: 28px; line-height: 1.12; letter-spacing: -0.02em; padding: 20px 16px 0; }
+  .tag { font-size: 13px; font-weight: 700; margin: 18px 16px 6px; color: #92400E; }
+  .tag.depois { color: #1D4ED8; }
+  .caderno { margin: 0 16px; background: #FEF3C7; border-radius: 4px; padding: 14px 16px; height: 176px;
+    background-image: repeating-linear-gradient(#FEF3C7 0 27px, #FCD34D 27px 28px); font-family: "Segoe Print", "Comic Sans MS", cursive; color: #78350F; transform: rotate(-1.2deg); }
+  .caderno p { font-size: 17px; line-height: 28px; }
+  .risco { text-decoration: line-through; }
+  .depois-card { margin: 0 16px; background: #fff; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px; display: grid; grid-template-columns: 1fr 96px; gap: 12px; }
+  .pdf b { display: block; font-size: 15px; }
+  .pdf span { display: block; font-size: 13px; color: #475569; margin-top: 4px; }
+  .ok { margin-top: 10px; font-size: 13px; font-weight: 600; color: #047857; }
+  .qr { width: 96px; height: 96px; border: 1px solid #CBD5E1; border-radius: 6px;
+    background: repeating-conic-gradient(#0F172A 0 25%, #fff 0 50%) 0 0 / 12px 12px; }
+  .acao { position: absolute; left: 16px; right: 16px; bottom: 24px; }
+  .btn { height: 52px; border-radius: 6px; background: #2563EB; color: #fff; font-weight: 600; font-size: 17px; display: flex; align-items: center; justify-content: center; }
+  .nota { text-align: center; font-size: 13px; color: #475569; margin-top: 10px; }
+</style>
+</head>
+<body>
+  <div class="topo"><span class="marca">ÒPURA Pro</span><span class="entrar">Entrar</span></div>
+  <h1>O mesmo serviço. Outro jeito de cobrar.</h1>
+  <p class="tag">Antes</p>
+  <div class="caderno">
+    <p>Dona Marta — limpeza ar</p>
+    <p><span class="risco">R$ 150</span> R$ 180 ??</p>
+    <p>"depois te mando o pix"</p>
+    <p>cobrar sexta!!!</p>
+    <p>chave? cpf ou cel?</p>
+  </div>
+  <p class="tag depois">Com o ÒPURA Pro</p>
+  <div class="depois-card">
+    <div class="pdf">
+      <b>Orçamento — João Refrigeração</b>
+      <span>Limpeza de split · R$ 180,00</span>
+      <span>Enviado no WhatsApp 09:41</span>
+      <p class="ok">Recebido · Pix · 14/11</p>
+    </div>
+    <div class="qr" aria-label="QR Code do Pix"></div>
+  </div>
+  <div class="acao">
+    <div class="btn">Criar conta grátis</div>
+    <p class="nota">Grátis. Sem cartão, sem senha.</p>
+  </div>
+</body>
+</html>

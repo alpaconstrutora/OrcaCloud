@@ -13,6 +13,7 @@ import { tokenDoCelularDaUrl } from './services/celular/celularLinkService';
 const AIChat      = React.lazy(() => import('./components/AIChat'));
 const ProjectModal = React.lazy(() => import('./components/ProjectModal'));
 import { supabase } from './lib/supabase';
+import { proPublicoAtivo, destinoDaContaSoPro, contaSoPro } from './utils/proPublico';
 import { atsService } from './services/atsService';
 import { Loader2, Lock, Shield, WifiOff } from 'lucide-react';
 
@@ -194,6 +195,9 @@ const SupplierDashboardPublic = React.lazy(() => import('./components/SupplierDa
 const TrainingPortal = React.lazy(() => import('./components/training/TrainingPortal'));
 // Portal do Síndico (20/10/2026): casca própria, carrega os dados por token.
 const SindicoPortal = React.lazy(() => import('./components/sindico/SindicoPortal'));
+// ÒPURA Pro público (/pro, 14/11/2026): casca própria, fora do <Layout> — o autônomo de fora
+// usa SÓ o Pro. docs/planos/2026-11-14-opura-pro-publico.md
+const ProPublico = React.lazy(() => import('./components/pro/ProPublico'));
 
 // Portal do Investidor via token público
 const InvestorPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
@@ -672,6 +676,23 @@ const App: React.FC = () => {
     return tokenDoCelularDaUrl(pathname, search) ?? '';
   }, []);
 
+  // ÒPURA Pro público: o endereço /pro monta a casca do Pro (guard abaixo, antes do login).
+  // Só com VITE_PRO_PUBLICO=1 (utils/proPublico.ts); desligado, /pro cai no app normal.
+  const enderecoDoPro = React.useMemo(() => proPublicoAtivo(window.location.pathname), []);
+
+  // Conta criada pelo Pro (user_metadata.origem = 'pro') não tem nada no resto do ÒPURA:
+  // qualquer outro endereço volta para /pro. Conta interna nunca é redirecionada.
+  React.useEffect(() => {
+    const destino = destinoDaContaSoPro(window.location.pathname, session?.user);
+    if (destino) window.location.replace(destino);
+  }, [session]);
+
+  // Escolha de portal que sobrou de outra sessão neste navegador não pode validar (e
+  // derrubar) a conta do Pro: no /pro não há portal.
+  React.useEffect(() => {
+    if (enderecoDoPro && selectedLoginGroup && contaSoPro(session?.user)) setSelectedLoginGroup(null);
+  }, [enderecoDoPro, selectedLoginGroup, setSelectedLoginGroup, session]);
+
   const sindicoPortalToken = React.useMemo(() => {
     if (window.location.pathname === '/portal-sindico') {
       return new URLSearchParams(window.location.search).get('token');
@@ -798,6 +819,11 @@ const App: React.FC = () => {
   // condômino entra pela aba Condomínio do PORTAL DO CLIENTE, e na aposentadoria
   // a base tinha 0 links ativos. Link antigo que ainda circule cai no app
   // normal (tela de login), não numa rota quebrada.
+  if (enderecoDoPro) return (
+    <React.Suspense fallback={<div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>}>
+      <ProPublico />
+    </React.Suspense>
+  );
   if (portalToken) return <PortalTokenGate token={portalToken} />;
   if (clientPortalToken) return <ClientPortalTokenGate token={clientPortalToken} />;
   if (brokerPortalToken) return <BrokerPortalTokenGate token={brokerPortalToken} />;

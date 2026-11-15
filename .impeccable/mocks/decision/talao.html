@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>ÒPURA Pro — talão de recibo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 390px; height: 844px; overflow: hidden; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #E2E8F0; color: #0F172A; }
+  .topo { display: flex; justify-content: space-between; align-items: center; padding: 18px 16px 0; }
+  .marca { font-weight: 900; font-size: 18px; }
+  .entrar { font-size: 15px; font-weight: 500; color: #1D4ED8; }
+  h1 { font-weight: 900; font-size: 28px; line-height: 1.12; letter-spacing: -0.02em; padding: 18px 16px 16px; }
+  .talao { margin: 0 16px; }
+  .canhoto { background: #fff; padding: 16px; position: relative; }
+  .canhoto + .canhoto { border-top: 2px dashed #94A3B8; }
+  .canhoto:first-child { border-radius: 10px 10px 0 0; }
+  .num { font-size: 12px; font-weight: 600; color: #64748B; display: flex; justify-content: space-between; }
+  .serv { font-size: 18px; font-weight: 700; margin-top: 6px; }
+  .val { font-size: 26px; font-weight: 900; margin-top: 2px; font-variant-numeric: tabular-nums; }
+  .meta { font-size: 13px; color: #475569; margin-top: 6px; }
+  .carimbo { position: absolute; right: 14px; top: 46px; border: 3px solid #047857; color: #047857; font-weight: 900; font-size: 15px;
+    padding: 4px 8px; border-radius: 4px; transform: rotate(-12deg); letter-spacing: .04em; }
+  .linhas { display: grid; gap: 6px; margin-top: 8px; }
+  .linhas div { font-size: 15px; display: flex; gap: 8px; align-items: center; }
+  .linhas i { width: 18px; height: 18px; border-radius: 4px; background: #2563EB; display: inline-block; }
+  .ultimo { border-radius: 0 0 10px 10px; }
+  .btn { height: 52px; border-radius: 6px; background: #2563EB; color: #fff; font-weight: 600; font-size: 17px; display: flex; align-items: center; justify-content: center; margin-top: 12px; }
+  .nota { text-align: center; font-size: 13px; color: #475569; margin-top: 8px; }
+</style>
+</head>
+<body>
+  <div class="topo"><span class="marca">ÒPURA Pro</span><span class="entrar">Entrar</span></div>
+  <h1>O talão do autônomo, agora no celular.</h1>
+  <div class="talao">
+    <div class="canhoto">
+      <p class="num"><span>Orçamento nº 001</span><span>14/11</span></p>
+      <p class="serv">Limpeza de split 12.000 BTUs</p>
+      <p class="val">R$ 180,00</p>
+      <p class="meta">Dona Marta · enviado no WhatsApp com PDF</p>
+      <span class="carimbo">RECEBIDO</span>
+    </div>
+    <div class="canhoto">
+      <p class="num"><span>Canhoto 2</span><span>no dia</span></p>
+      <div class="linhas">
+        <div><i></i>Pix na hora, com QR</div>
+        <div><i></i>Assinatura do cliente no celular</div>
+        <div><i></i>Quem ainda te deve, numa lista</div>
+      </div>
+    </div>
+    <div class="canhoto ultimo">
+      <p class="num"><span>Canhoto 3</span><span>seu</span></p>
+      <div class="btn">Criar conta grátis</div>
+      <p class="nota">Grátis. Sem cartão, sem senha.</p>
+    </div>
+  </div>
+</body>
+</html>

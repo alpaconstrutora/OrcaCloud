@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { ProCliente, ProOrcamento, ProServico, ProConfig } from '../types';
+import type { MeusDadosDoPro } from '../utils/proMeusDados';
 
 export const proService = {
   // ==========================================
@@ -305,6 +306,50 @@ export const proService = {
       if (error) throw error;
       return data;
     }
+  },
+
+  // ==========================================
+  // MINHA CONTA (15/11/2026 — docs/planos/2026-11-14-opura-pro-publico.md, "Minha conta")
+  // ==========================================
+  /** Tudo do Pro de quem está logado, lido pelo RLS do próprio usuário (para "Baixar meus dados"). */
+  async exportarMeusDados(userId: string): Promise<MeusDadosDoPro> {
+    const [conta, ajustes, clientes, orcamentos, servicos] = await Promise.all([
+      supabase.auth.getUser(),
+      supabase.from('pro_config').select('*').eq('user_id', userId).maybeSingle(),
+      supabase.from('pro_clientes').select('*').eq('user_id', userId).order('created_at'),
+      supabase.from('pro_orcamentos').select('*').eq('user_id', userId).order('created_at'),
+      supabase
+        .from('pro_servicos')
+        .select('*, pro_orcamentos!inner(user_id)')
+        .eq('pro_orcamentos.user_id', userId)
+        .order('created_at'),
+    ]);
+    for (const r of [ajustes, clientes, orcamentos, servicos]) {
+      if (r.error) throw r.error;
+    }
+    return {
+      conta: { id: userId, email: conta.data.user?.email ?? null },
+      ajustes: ajustes.data,
+      clientes: clientes.data || [],
+      orcamentos: orcamentos.data || [],
+      // O embed só serve de filtro; não vai para o arquivo.
+      servicos: (servicos.data || []).map(({ pro_orcamentos: _filtro, ...servico }) => servico),
+    };
+  },
+
+  /** Apaga serviços, orçamentos, clientes e ajustes do Pro de quem chama; a conta continua. */
+  async apagarMeusDados(): Promise<void> {
+    const { error } = await supabase.rpc('pro_apagar_meus_dados');
+    if (error) throw error;
+  },
+
+  /**
+   * Exclui a conta de quem chama (e, em cascata, tudo do Pro). O banco só aceita conta criada pelo
+   * Pro e sem vínculo nenhum com o resto do ÒPURA — recusa com mensagem pronta para a tela.
+   */
+  async excluirMinhaConta(): Promise<void> {
+    const { error } = await supabase.rpc('pro_excluir_minha_conta');
+    if (error) throw error;
   },
 
   // Helper para obter templates padrão por profissão

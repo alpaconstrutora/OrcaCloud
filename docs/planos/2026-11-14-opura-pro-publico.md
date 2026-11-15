@@ -142,8 +142,8 @@ e `docs/legal/pro-privacidade-RASCUNHO.md`, a partir do que o Pro guarda de fato
 Política de Privacidade" no login (`Auth.tsx`, `InvestorLogin.tsx`) sem nenhum texto existir.
 Falta do usuário/jurídico: razão social, CNPJ, endereço, e-mail de privacidade, encarregado (DPO),
 prazos (resposta, exclusão, aviso de cobrança/encerramento), foro, região dos servidores
-(transferência internacional) e se a exclusão/cópia de dados precisa de botão no app antes de abrir
-ao público. Só depois de aprovado vira página (`/pro/termos`, `/pro/privacidade`) linkada na entrada.
+(transferência internacional). A exclusão/cópia de dados já tem botão no app (seção "Minha conta"
+abaixo) e os rascunhos foram atualizados para dizer isso. Só depois de aprovado vira página (`/pro/termos`, `/pro/privacidade`) linkada na entrada.
 
 ## Publicação com o `/pro` desligado (15/11/2026)
 
@@ -158,3 +158,32 @@ verifique"* → escolha: **"Publicar com o /pro desligado"**.
   configurados no Supabase (Estado acima); (3) Vercel › Settings › Environment Variables:
   `VITE_PRO_PUBLICO = 1` em Production e um redeploy pelo painel (variável de build).
 - Para testar localmente com a chave ligada: `VITE_PRO_PUBLICO=1` no `.env.local` da frente.
+
+## Minha conta: baixar meus dados e excluir a conta (15/11/2026)
+
+Escolha do usuário depois do merge do #443: **"Excluir conta e baixar meus dados"** (LGPD art. 18 —
+cópia e eliminação sem depender de e-mail). Frente `pro-minha-conta`.
+
+- **Ajustes › Minha conta** (`components/pro/ProMinhaConta.tsx`, dentro do `ProConfigForm`):
+  - **Baixar meus dados** — todo mundo. Arquivo `opura-pro-meus-dados-AAAA-MM-DD.json` montado no
+    navegador (`utils/proMeusDados.ts`, testes em `__tests__/proMeusDados.test.ts`) com o que o próprio
+    usuário lê pelo RLS: ajustes, clientes, orçamentos e serviços, com fotos e assinaturas (moram nas
+    linhas como data URL — não há arquivo no storage).
+  - **Excluir minha conta** — só conta só-Pro. RPC `pro_excluir_minha_conta()` (SECURITY DEFINER):
+    exige `auth.uid()`, `origem = 'pro'`, nenhuma linha em `organization_members` e — a trava de fato,
+    porque `user_metadata` o próprio usuário edita — nenhuma linha em NENHUMA tabela do `public` com FK
+    para `auth.users` (fora `pro_*` e `profiles`), varrida pelo catálogo. Aí `DELETE FROM auth.users`
+    e o resto vai em cascata. Depois: aviso "Conta excluída", `signOut({ scope: 'local' })` e volta à
+    apresentação.
+  - **Apagar meus dados do Pro** — conta interna (no lugar de excluir). RPC `pro_apagar_meus_dados()`
+    (SECURITY INVOKER, RLS); a conta fica e o Pro volta ao primeiro acesso.
+- Migration `aplicar_20271115100000_pro_minha_conta.sql` — **aplicada** em 15/11 (`db query -f`);
+  REVOKE de PUBLIC/anon, GRANT a authenticated (conferido no catálogo).
+- **Prova no banco, sem gravar** (bloco DO que termina em exceção): conta só-Pro com dados excluída
+  em 43 ms (conta, profile, clientes, serviços = 0); recusadas: membro de organização, conta sem a
+  marca, conta com registro fora do Pro (`offices_leads`) e chamada sem sessão. Conferido depois que
+  nada ficou.
+- **Prova na tela** (Playwright, 390 px, todas as chamadas ao Supabase interceptadas, nenhuma escrita
+  fora das RPCs simuladas): só-Pro baixa o arquivo (totais, fotos e assinatura presentes, sem o embed
+  de filtro), confirma, vê "Conta excluída" e cai na apresentação sem sessão local; interna vê só
+  "Apagar meus dados do Pro" e cai no primeiro acesso; recusa do banco aparece no aviso em português.

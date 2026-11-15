@@ -6,6 +6,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 import { normalizarChavePix, EXEMPLO_CHAVE_PIX } from '../utils/pixCopiaECola';
+import ProMinhaConta from './pro/ProMinhaConta';
 
 // Linguagem visual do app (§16/§17/§21/§32): cartão, campo (valor nunca cinza-claro), botões.
 const CARTAO = 'bg-white p-4 border border-slate-200 rounded-[10px] space-y-3.5';
@@ -22,9 +23,15 @@ interface ProConfigFormProps {
   onBack: () => void;
   /** ÒPURA Pro público: sair da conta (não existe outro menu nessa casca). */
   onSair?: () => void;
+  /** Conta criada pelo Pro: "Minha conta" oferece "Excluir minha conta" (ProMinhaConta). */
+  contaSoPro?: boolean;
+  /** Depois de "Apagar meus dados do Pro". Sem isto, volta ao painel. */
+  onDadosApagados?: () => void;
+  /** Depois de "Excluir minha conta": encerrar a sessão (só o Pro público passa). */
+  onContaExcluida?: () => void;
 }
 
-export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack, onSair }) => {
+export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack, onSair, contaSoPro, onDadosApagados, onContaExcluida }) => {
   const confirm = useConfirm();
   const { localToast, showToast } = useToast();
   const [loading, setLoading] = useState(true);
@@ -502,6 +509,17 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack, on
           </button>
         </div>
       </form>
+
+      {/* Cópia e exclusão dos dados (LGPD art. 18) — docs/planos/2026-11-14-opura-pro-publico.md */}
+      <div className="mt-6">
+        <ProMinhaConta
+          userId={userId}
+          contaSoPro={!!contaSoPro}
+          avisar={showToast}
+          onDadosApagados={onDadosApagados ?? onBack}
+          onContaExcluida={onContaExcluida}
+        />
+      </div>
 
       {onSair && (
         <button

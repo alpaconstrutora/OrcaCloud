@@ -83,8 +83,9 @@ ou de indisponibilidade temporária do serviço gratuito.]
 
 ## 10. Encerrar a conta
 
-Você pode encerrar a conta quando quiser, pelo **[e-mail de contato]**. [Produto: não há botão de
-exclusão no aplicativo.]
+Você pode encerrar a conta quando quiser, no próprio aplicativo: **Ajustes › Minha conta › Excluir
+minha conta**. A conta e tudo o que está nela são apagados na hora, sem volta; antes, se quiser, use
+**Baixar meus dados** para guardar uma cópia. Também dá para pedir pelo **[e-mail de contato]**.
 
 ## 11. Mudanças nestes Termos
 

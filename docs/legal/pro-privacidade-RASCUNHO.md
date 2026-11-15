@@ -82,8 +82,11 @@ Podemos também ter de entregar dados a autoridades, quando a lei ou uma ordem j
 
 ## 6. Por quanto tempo guardamos
 
-Enquanto sua conta existir. Se você pedir para excluir a conta, apagamos seus dados e os dos seus
-clientes em até **[30] dias**, exceto o que a lei nos obrigar a guardar por mais tempo.
+Enquanto sua conta existir. Quando você exclui a conta pelo aplicativo (**Ajustes › Minha conta**),
+seus dados e os dos seus clientes são apagados na hora. Pedidos por e-mail são atendidos em até
+**[30] dias**. Fica guardado só o que a lei nos obrigar a manter por mais tempo.
+[Revisão jurídica: confirmar se cópias de segurança do banco precisam ser citadas (o provedor guarda
+backups por um período; a exclusão vale para elas quando o backup expira).]
 
 ## 7. Seus direitos (LGPD, art. 18)
 
@@ -96,11 +99,10 @@ Você pode, a qualquer momento:
 - saber com quem compartilhamos os dados;
 - revogar o consentimento, quando ele for a base do tratamento.
 
-Para isso, escreva para **[e-mail de privacidade]** a partir do e-mail da sua conta. Respondemos em
-até **[15] dias**.
-
-[Produto: hoje não existe botão de "excluir minha conta" nem de "baixar meus dados" no aplicativo;
-o pedido é por e-mail. Avaliar se o jurídico exige o botão antes da abertura ao público.]
+A cópia e a exclusão você faz sozinho, no aplicativo: **Ajustes › Minha conta › Baixar meus dados**
+(um arquivo com tudo o que você cadastrou, inclusive fotos e assinaturas) e **Excluir minha conta**.
+Para o resto, ou se preferir, escreva para **[e-mail de privacidade]** a partir do e-mail da sua
+conta. Respondemos em até **[15] dias**.
 
 Se o pedido for sobre os dados de um **cliente** seu, encaminhamos a você, que é o controlador desses
 dados (seção 2).

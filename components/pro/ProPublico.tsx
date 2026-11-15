@@ -7,7 +7,7 @@ import { ProModule } from '../ProModule';
 import { ProEntrada } from './ProEntrada';
 import { ProApresentacao } from './ProApresentacao';
 import { ProPrimeiroAcesso } from './ProPrimeiroAcesso';
-import { ORIGEM_PRO, ENDERECO_PRO } from '../../utils/proPublico';
+import { ORIGEM_PRO, ENDERECO_PRO, contaSoPro } from '../../utils/proPublico';
 
 /**
  * ÒPURA Pro público — a casca de `/pro` (14/11/2026, docs/planos/2026-11-14-opura-pro-publico.md).
@@ -119,6 +119,20 @@ export const ProPublico: React.FC = () => {
     setView(VIEW_INICIAL);
   };
 
+  // A conta já não existe no servidor: só limpar a sessão deste aparelho e voltar à apresentação.
+  const encerrarAposExclusao = async () => {
+    await supabase.auth.signOut({ scope: 'local' }).catch(() => undefined);
+    setSession(null);
+    setTemCadastro(null);
+    setView(VIEW_INICIAL);
+  };
+
+  // Dados do Pro apagados, conta mantida: sem cadastro, volta ao primeiro acesso.
+  const aposApagarDados = () => {
+    setView(VIEW_INICIAL);
+    conferirCadastro();
+  };
+
   if (carregando || (session && temCadastro === null)) {
     return (
       <div className="min-h-[100dvh] bg-slate-50 flex items-center justify-center" role="status">
@@ -147,7 +161,15 @@ export const ProPublico: React.FC = () => {
   return (
     <div className="min-h-[100dvh] bg-slate-50">
       <main className="px-4 pt-[max(1rem,env(safe-area-inset-top))] md:px-6 md:pt-6 md:mx-auto md:max-w-3xl">
-        <ProModule activeView={view} onChangeView={setView} userId={userId} onSair={sair} />
+        <ProModule
+          activeView={view}
+          onChangeView={setView}
+          userId={userId}
+          onSair={sair}
+          contaSoPro={contaSoPro({ user_metadata: session.user.user_metadata })}
+          onDadosApagados={aposApagarDados}
+          onContaExcluida={encerrarAposExclusao}
+        />
       </main>
     </div>
   );

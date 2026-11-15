@@ -1,22 +1,16 @@
 import React, { useMemo, useState } from 'react';
 import { TrendingUp } from 'lucide-react';
-import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import { ImovibStudy } from '../types';
 import { tornado, MetricaDoEstudo } from '../utils/imovibSensibilidade';
 import { VARIAVEIS_DO_ESTUDO, ROTULO_DA_VARIAVEL, UNIDADE_DA_VARIAVEL, VariavelDoEstudo } from '../utils/imovibVariacoes';
-import { ChartCard, ChartEmpty, Legend, GRID, TICK, CATEGORY_TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR, INITIAL_DIMENSION, COR_PIORA, COR_MELHORA } from './analysis/chartKit';
+import { ROTULO_DA_METRICA, formatarMetrica } from '../utils/imovibGraficos';
+import { GraficoTornado } from './ImovibGraficos';
+import { ChartCard, ChartEmpty, Legend, COR_PIORA, COR_MELHORA } from './analysis/chartKit';
 
-export const ROTULO_DA_METRICA: Record<MetricaDoEstudo, string> = {
-    tir: 'TIR', vpl: 'VPL', margem: 'Margem líquida', exposicao: 'Exposição máxima',
-};
+// Rótulo e formato da métrica moram em utils/imovibGraficos (plano 2026-11-15, Fase 3); ficam
+// reexportados aqui porque a grade, o estresse, os cenários e o Monte Carlo importam daqui.
+export { ROTULO_DA_METRICA, formatarMetrica } from '../utils/imovibGraficos';
 
-/** Valor da métrica no formato da tela. */
-export const formatarMetrica = (m: MetricaDoEstudo, v: number): string => {
-    if (!Number.isFinite(v)) return '—';
-    if (m === 'tir') return `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% a.a.`;
-    if (m === 'margem') return `${(v * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
-};
 
 const COR_PIOR = COR_PIORA;
 const COR_MELHOR = COR_MELHORA;
@@ -37,28 +31,6 @@ const ImovibTornadoCard: React.FC<ImovibTornadoCardProps> = ({ study, choques, o
     const [editandoChoques, setEditandoChoques] = useState(false);
     const barras = useMemo(() => tornado(study, metrica, choques), [study, metrica, choques]);
     const base = barras[0]?.base ?? NaN;
-    // Uma barra por choque (+d e −d), cada uma colorida pelo próprio efeito. Empilhar
-    // "pior" e "melhor" somava os dois quando caíam do mesmo lado da base.
-    const rel = (v: number) => (Number.isFinite(v - base) ? v - base : 0);
-    const dados = barras.map(b => {
-        const d = choques[b.variavel].toLocaleString('pt-BR');
-        const u = UNIDADE_DA_VARIAVEL[b.variavel];
-        const sem = !Number.isFinite(b.acima) ? ` · sem ${ROTULO_DA_METRICA[metrica]} com +${d}` : !Number.isFinite(b.abaixo) ? ` · sem ${ROTULO_DA_METRICA[metrica]} com −${d}` : '';
-        return {
-            nome: `${b.rotulo} ±${d} ${u}${sem}`,
-            cima: rel(b.acima),
-            baixo: rel(b.abaixo),
-            cimaAbs: b.acima,
-            baixoAbs: b.abaixo,
-            rotuloCima: `+${d} ${u}`,
-            rotuloBaixo: `−${d} ${u}`,
-        };
-    });
-    const cor = (delta: number) => (delta >= 0 ? COR_MELHOR : COR_PIOR);
-    // Nome acessível com os números (§28.5): quem não vê o gráfico lê a faixa de cada premissa.
-    const nomeDoGrafico = `Tornado de ${ROTULO_DA_METRICA[metrica]}, estudo como está ${formatarMetrica(metrica, base)}: `
-        + barras.map(b => `${b.rotulo} de ${formatarMetrica(metrica, b.abaixo)} a ${formatarMetrica(metrica, b.acima)}`).join('; ');
-
     return (
         <ChartCard title="Gráfico tornado" subtitle={`Quanto cada premissa move a métrica (${ROTULO_DA_METRICA[metrica]}), para cima e para baixo. Estudo como está: ${formatarMetrica(metrica, base)}`}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
@@ -111,30 +83,7 @@ const ImovibTornadoCard: React.FC<ImovibTornadoCardProps> = ({ study, choques, o
             {!Number.isFinite(base) ? (
                 <ChartEmpty>{metrica === 'tir' ? 'O estudo não tem TIR: escolha VPL, margem ou exposição.' : 'Sem dados para calcular.'}</ChartEmpty>
             ) : (
-                <div className="h-[360px]" role="img" aria-label={nomeDoGrafico}>
-                    <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                        <BarChart accessibilityLayer={false} layout="vertical" data={dados} margin={{ top: 4, right: 16, left: 0, bottom: 0 }} barSize={9} barGap={2}>
-                            <CartesianGrid horizontal={false} stroke={GRID} />
-                            <XAxis type="number" tick={TICK} axisLine={false} tickLine={false} tickFormatter={(v: number) => formatarMetrica(metrica, v + base)} />
-                            <YAxis type="category" dataKey="nome" width={230} tick={CATEGORY_TICK} axisLine={false} tickLine={false} />
-                            <Tooltip
-                                contentStyle={TOOLTIP_STYLE}
-                                cursor={TOOLTIP_CURSOR}
-                                formatter={(_v: unknown, nome: unknown, item: { payload?: { cimaAbs: number; baixoAbs: number; rotuloCima: string; rotuloBaixo: string } }) => [
-                                    formatarMetrica(metrica, nome === 'cima' ? item.payload!.cimaAbs : item.payload!.baixoAbs),
-                                    `Choque ${nome === 'cima' ? item.payload!.rotuloCima : item.payload!.rotuloBaixo}`,
-                                ]}
-                            />
-                            <ReferenceLine x={0} stroke="#94a3b8" />
-                            <Bar dataKey="cima">
-                                {dados.map((d, i) => <Cell key={i} fill={cor(d.cima)} />)}
-                            </Bar>
-                            <Bar dataKey="baixo">
-                                {dados.map((d, i) => <Cell key={i} fill={cor(d.baixo)} />)}
-                            </Bar>
-                        </BarChart>
-                    </ResponsiveContainer>
-                </div>
+                <GraficoTornado barras={barras} metrica={metrica} choques={choques} />
             )}
         </ChartCard>
     );

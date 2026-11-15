@@ -962,13 +962,15 @@ export const imovibService = {
             .single();
         if (error) throw new Error(`Falha ao ler a versão publicada: ${error.message}`);
         const v = data as { id: string; label: string; created_at: string; snapshot: SnapshotDaVersao };
-        let organizacao: VersaoPublicada['organizacao'] = { name: null, logo_url: null };
-        const orgId = v.snapshot.organization_id;
-        if (orgId) {
-            const { data: o } = await supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle();
-            if (o) organizacao = o as VersaoPublicada['organizacao'];
-        }
+        const organizacao = await this.organizacaoDoEstudo(v.snapshot.organization_id);
         return versaoPublicadaDoSnapshot(v.snapshot, { id: v.id, label: v.label, created_at: v.created_at }, organizacao);
+    },
+
+    /** Nome e logo da organização do estudo, para a capa do relatório. Sem leitura → capa sem os dois. */
+    async organizacaoDoEstudo(orgId: string | null | undefined): Promise<VersaoPublicada['organizacao']> {
+        if (!orgId) return { name: null, logo_url: null };
+        const { data } = await supabase.from('organizations').select('name, logo_url').eq('id', orgId).maybeSingle();
+        return (data as VersaoPublicada['organizacao'] | null) ?? { name: null, logo_url: null };
     },
 
     async snapshotDaVersao(id: string): Promise<ImovibStudy> {

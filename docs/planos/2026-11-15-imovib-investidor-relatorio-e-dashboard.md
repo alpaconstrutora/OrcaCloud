@@ -60,11 +60,18 @@ A referência (reel de code.xr, "Glassy Dashboard": glassmorphism, acentos lumin
 
 ## Fase 3 — Gráficos de props puras + PDF com capa e gráficos
 
-- [ ] `components/imovib/graficos/` (props puras, `animado?: boolean`, tamanho fixo opcional): `GraficoCurvaS` (fluxo líquido + acumulado/exposição), `GraficoComposicaoDoCapital`, `GraficoCenarios`, `GraficoTornado`, `GraficoCurvaDeVendas`, `LinhaDoTempoDosMarcos`. As telas atuais (Resumo Executivo, Tornado, OpportunityDetail) passam a usá-los — sem mudança visual no app. §28 do guia (cromo, rótulo, paleta validada, vazio próprio).
-- [ ] `utils/imovibGraficosParaPdf.ts`: monta os gráficos fora da tela (contêiner oculto, `animado={false}`), captura com html2canvas + `coresCompativeisNaCopia`, devolve `Record<GraficoId, dataURL>`.
-- [ ] `utils/imovibRelatorio.ts`: opção `edicao: 'interna' | 'investidor'` (investidor: sem parecer/critérios; capa com organização e versão); cada seção declara `graficos: GraficoId[]` (indicadores → Curva S; fluxo → Curva S anual; sensibilidade → tornado + cenários; cronograma → marcos + curva de vendas; capital → composição).
-- [ ] `utils/imovibRelatorioPdf.ts`: capa visual (logo via `logoComoDataUrl` de `services/docGen`, título, versão/data, 4 KPIs em grade) e imagens de gráfico na seção, com quebra de página que não corta imagem.
-- [ ] O "Relatório completo" do Resumo Executivo também ganha capa e gráficos (edição interna).
+- [x] ~~`components/imovib/graficos/`~~ → `components/ImovibGraficos.tsx` + dados em `utils/imovibGraficos.ts` (decisão: os componentes do Imovib moram soltos em `components/` com o prefixo; seguir o padrão). Props puras, `animado?: boolean`, tamanho fixo opcional): `GraficoCurvaS` (fluxo líquido + acumulado/exposição), `GraficoComposicaoDoCapital`, `GraficoCenarios`, `GraficoTornado`, `GraficoCurvaDeVendas`, `LinhaDoTempoDosMarcos`. As telas atuais (Resumo Executivo, Tornado, OpportunityDetail) passam a usá-los — sem mudança visual no app. §28 do guia (cromo, rótulo, paleta validada, vazio próprio).
+- [x] `components/ImovibGraficosParaPdf.tsx` (JSX; `utils/` não tem `.tsx`): monta os gráficos fora da tela (contêiner oculto, `animado={false}`), captura com html2canvas + `coresCompativeisNaCopia`, devolve `Record<GraficoId, dataURL>`.
+- [x] `utils/imovibRelatorio.ts`: opção `edicao: 'interna' | 'investidor'` (investidor: sem parecer/critérios; capa com organização e versão); cada seção declara `graficos: GraficoId[]` (indicadores → Curva S; fluxo → Curva S anual; sensibilidade → tornado + cenários; cronograma → marcos + curva de vendas; capital → composição).
+- [x] `utils/imovibRelatorioPdf.ts`: capa visual (logo via `logoComoDataUrl` de `services/docGen`, título, versão/data, 4 KPIs em grade) e imagens de gráfico na seção, com quebra de página que não corta imagem.
+- [x] O "Relatório completo" do Resumo Executivo também ganha capa e gráficos (edição interna); a aba Versões também (`gerarRelatorioCompleto`).
+- Decisões tomadas na execução:
+  - sem cenário salvo, a seção de sensibilidade não fica vazia: diz "Sem cenários salvos" e mantém o **tornado** (ele não depende de cenário);
+  - **uma captura só** (html2canvas copia a página inteira a cada chamada) e cada gráfico é recortado dela, em **JPEG**; a logo é reduzida a 480 px e o PNG vai com compressão. Medido no Garden: 47 s / 40 MB → **10,4 s / 556 KB**;
+  - logo sobre fundo branco na faixa escura (logo feita para papel sumia);
+  - legenda da Curva S na cor de texto (§28.3) e eixo mais largo no PDF;
+  - `logoComoDataUrl` mudou de `services/docGen/previa.ts` para `utils/logoComoDataUrl.ts` (reexportada lá): importar de `previa` trazia o pdfmake para o relatório.
+- Minors (registrados, não feitos): no gráfico de vendas o maior valor do eixo quebra em duas linhas ("340 / mil"); a legenda HTML do chartKit sai com o quadradinho um pouco acima do texto na captura; gerar leva ~10 s (botão mostra "Gerando...").
 - **Pronto quando:** testes puros das seções (edição investidor não contém "Parecer"/hurdles; cada seção lista seus gráficos); teste dos componentes de gráfico com dado e vazio; PDF real gerado no navegador do Garden aberto e conferido página a página (capa, gráficos nítidos, nenhum corte).
 
 ## Fase 4 — Dashboard do investidor (referência, cor do portal)

@@ -7,16 +7,18 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-const svc = vi.hoisted(() => ({ listarVersoes: vi.fn(), snapshotDaVersao: vi.fn(), congelarVersao: vi.fn() }));
+const svc = vi.hoisted(() => ({ listarVersoes: vi.fn(), snapshotDaVersao: vi.fn(), congelarVersao: vi.fn(), organizacaoDoEstudo: vi.fn() }));
 vi.mock('../../services/imovibService', () => ({ imovibService: svc }));
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
 const oportunidades = vi.hoisted(() => ({ lista: [] as unknown[] }));
 vi.mock('../../services/investorPortalService', () => ({
     investorPortalService: { oportunidadesComVersaoDoEstudo: () => Promise.resolve(oportunidades.lista) },
 }));
-const pdf = vi.hoisted(() => ({ secoes: null as unknown, save: vi.fn() }));
+// A captura dos gráficos (html2canvas) não roda no jsdom: devolve uma imagem pronta.
+vi.mock('html2canvas', () => ({ default: async () => ({ toDataURL: () => 'data:image/png;base64,AAAA', width: 10, height: 5 }) }));
+const pdf = vi.hoisted(() => ({ secoes: null as unknown, extras: null as unknown, save: vi.fn() }));
 vi.mock('../../utils/imovibRelatorioPdf', () => ({
-    pdfDoRelatorio: (secoes: unknown) => { pdf.secoes = secoes; return { save: pdf.save }; },
+    pdfDoRelatorio: (secoes: unknown, _nome: unknown, extras: unknown) => { pdf.secoes = secoes; pdf.extras = extras; return { save: pdf.save }; },
 }));
 
 import ImovibVersoesTab from '../../components/ImovibVersoesTab';
@@ -83,12 +85,20 @@ describe('relatório da versão', () => {
         svc.listarVersoes.mockResolvedValue([v.linha]);
         svc.snapshotDaVersao.mockResolvedValue({ ...v.snapshot, cenarios: [], relatorio: { riscos: [risco] } });
         pdf.save.mockReset();
+        // jsdom não desenha em <canvas>: o recorte de cada gráfico usa um contexto falso.
+        vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({ drawImage: () => {} } as never);
+        vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/jpeg;base64,AAAA');
         render(comEdicao(<ImovibVersoesTab study={estudo({ discount_rate: 15 }) as never} />));
         await user.click(await screen.findByRole('button', { name: 'Relatório da versão (PDF)' }));
-        await vi.waitFor(() => expect(pdf.save).toHaveBeenCalledWith('Relatorio_Estudo_teste_Comitê_de_outubro.pdf'));
+        // Gera o relatório inteiro (motor, tornado, gráficos fora da tela): ~0,7 s sozinho, 1,6 s com a suíte.
+        await vi.waitFor(() => expect(pdf.save).toHaveBeenCalledWith('Relatorio_Estudo_teste_Comitê_de_outubro.pdf'), { timeout: 10_000 });
         const secoes = pdf.secoes as { id: string; paragrafos: string[]; tabelas: { linhas: string[][] }[] }[];
         expect(secoes.find(x => x.id === 'capa')!.paragrafos.join(' ')).toContain('10/11/2026');
         expect(JSON.stringify(secoes.find(x => x.id === 'riscos')!.tabelas)).toContain('Matrícula com ônus');
+        // Fase 3: capa com a versão e os gráficos das seções.
+        const extras = pdf.extras as { capa: { subtitulo: string }; imagens: Record<string, unknown> };
+        expect(extras.capa.subtitulo).toBe('Versão Comitê de outubro · congelada em 10/11/2026');
+        expect(Object.keys(extras.imagens)).toEqual(expect.arrayContaining(['curva_s', 'fluxo_anual', 'tornado', 'marcos']));
     });
 });
 

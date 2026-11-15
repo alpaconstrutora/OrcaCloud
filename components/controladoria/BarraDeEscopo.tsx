@@ -1,4 +1,5 @@
 import React from 'react';
+import { MoveHorizontal } from 'lucide-react';
 import type { RegimeContabil } from '../../types/financial';
 import type { EscopoControladoria } from './escopo';
 
@@ -86,3 +87,18 @@ export const BOTAO_DA_BARRA =
     'flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] ' +
     'hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 ' +
     'focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500';
+
+/** Ajustar largura das colunas ao conteúdo (§6.1.2), com nome acessível e foco
+ *  visível. Ícone em gray-500 (~4,6:1): o gray-400 do snippet do guia dá ~2,5:1,
+ *  abaixo dos 3:1 de componente de interface que o AA pede (PRODUCT.md). */
+export const BotaoAutoAjuste: React.FC<{ onClick: () => void }> = ({ onClick }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        title="Ajustar largura das colunas ao conteúdo"
+        aria-label="Ajustar largura das colunas ao conteúdo"
+        className="p-1.5 rounded-[6px] text-gray-500 hover:text-gray-800 hover:bg-gray-50 transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+    >
+        <MoveHorizontal className="w-4 h-4" aria-hidden="true" />
+    </button>
+);

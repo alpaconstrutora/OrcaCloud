@@ -3,7 +3,7 @@ import {
     LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
     ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { Download, MoveHorizontal } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import { GRADE_DE_INDICADORES, tomDoSaldo } from './controladoria/indicadores';
 import { financialReportService } from '../services/financialReportService';
@@ -13,7 +13,7 @@ import type { CashFlowSummary, CashFlowGranularity } from '../types/financial';
 import { useCargaVigente } from '../hooks/useCargaVigente';
 import { motivoPeriodoInvalido } from '../utils/periodoControladoria';
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
-import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo';
+import { BarraDeEscopo, BOTAO_DA_BARRA, BotaoAutoAjuste } from './controladoria/BarraDeEscopo';
 import type { EscopoControladoria } from './controladoria/escopo';
 
 const CASHFLOW_COL_WIDTHS: Record<string, number> = { periodo: 160, entradas: 150, saidas: 150, saldo: 150, acumulado: 150 };
@@ -161,7 +161,7 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId, e
             {motivoPeriodo ? (
                 <PeriodoInvalido motivo={motivoPeriodo} />
             ) : loading ? (
-                <div className="flex items-center justify-center h-40 text-sm text-gray-500">Carregando fluxo de caixa...</div>
+                <div role="status" className="flex items-center justify-center h-40 text-sm text-gray-600">Carregando fluxo de caixa…</div>
             ) : falhou ? (
                 <FalhaDeCarga oQue="o fluxo de caixa" onRetry={load} />
             ) : !data ? null : (
@@ -181,9 +181,9 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId, e
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4">
                         <div className="flex flex-wrap items-start justify-between gap-3">
                             <div>
-                                <h3 className="text-sm font-semibold text-gray-700">
+                                <h2 className="text-sm font-semibold text-gray-700">
                                     {chartMode === 'acumulado' ? 'Saldo acumulado' : 'Entradas e saídas por período'}
-                                </h3>
+                                </h2>
                                 <p className="text-xs text-gray-500 mt-0.5">
                                     {chartMode === 'acumulado'
                                         ? 'Entradas menos saídas conciliadas, somadas período a período. Os pendentes estão em "Saldo com o previsto".'
@@ -246,10 +246,8 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId, e
                     {/* Tabela de períodos */}
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                         <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                            <h3 className="text-sm font-semibold text-gray-700">Detalhamento por período</h3>
-                            <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
-                                <MoveHorizontal className="w-4 h-4" />
-                            </button>
+                            <h2 className="text-sm font-semibold text-gray-700">Detalhamento por período</h2>
+                            <BotaoAutoAjuste onClick={() => cols.autoFit()} />
                         </div>
                         <div className="overflow-x-auto">
                             <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', minWidth: '100%', width: Object.keys(CASHFLOW_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>

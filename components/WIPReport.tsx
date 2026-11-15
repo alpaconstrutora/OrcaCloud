@@ -2,13 +2,13 @@ import React from 'react'
 import { financialReportService } from '../services/financialReportService'
 import type { WIPLine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
-import { TrendingUp, TrendingDown, AlertTriangle, MoveHorizontal, Download } from 'lucide-react'
+import { TrendingUp, TrendingDown, AlertTriangle, Download } from 'lucide-react'
 import { formatMoney, formatPercent } from './ui/Format'
-import { useResizableColumns } from './ui/TableUtils'
+import { useResizableColumns, SortableHeader } from './ui/TableUtils'
 import { useCargaVigente } from '../hooks/useCargaVigente'
 import { motivoDataInvalida } from '../utils/periodoControladoria'
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
-import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo'
+import { BarraDeEscopo, BOTAO_DA_BARRA, BotaoAutoAjuste } from './controladoria/BarraDeEscopo'
 import type { EscopoControladoria } from './controladoria/escopo'
 import { KpiCard } from './ui/KpiCard'
 import { GRADE_DE_INDICADORES, pctBR, tomDoResultado } from './controladoria/indicadores'
@@ -100,19 +100,24 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
         else { setSortKey(key); setSortAsc(false) }
     }
 
-    const SortIcon = ({ k }: { k: keyof WIPLine }) => {
-        if (sortKey !== k) return <span className="text-slate-300 ml-1">↕</span>
-        return <span className="text-blue-500 ml-1">{sortAsc ? '↑' : '↓'}</span>
-    }
-
-    const Th = ({ label, k, right }: { label: string; k: keyof WIPLine; right?: boolean }) => (
-        <th
-            className={`px-6 py-2 border-r border-gray-100 cursor-pointer select-none hover:bg-gray-50 transition-colors text-xs font-semibold text-gray-700 relative overflow-hidden ${right ? 'text-right' : ''}`}
-            onClick={() => handleSort(k)}
+    // Cabeçalho ordenável = o SortableHeader do app (§6.8): botão no <th> (Tab, Enter,
+    // Espaço), aria-sort, ícone desenhado. Antes era <th onClick> com setas "↕" em texto
+    // a 1,42:1 — só o mouse ordenava e o leitor de tela não sabia a ordem.
+    // Função, não componente: um componente declarado aqui dentro seria um TIPO novo a
+    // cada render — o React remontaria o <th> ao ordenar e o foco do teclado se perderia.
+    const th = (label: string, k: keyof WIPLine, right?: boolean) => (
+        <SortableHeader
+            key={k}
+            label={label}
+            colKey={k}
+            uppercase={false}
+            sortColumn={sortKey}
+            sortDirection={sortAsc ? 'asc' : 'desc'}
+            onSort={key => handleSort(key as keyof WIPLine)}
+            className={`px-6 py-2 border-r border-gray-100 text-xs overflow-hidden ${right ? '[&>button]:justify-end' : ''}`}
         >
-            {label}<SortIcon k={k} />
             <cols.ResizeHandle colKey={k} />
-        </th>
+        </SortableHeader>
     )
 
     return (
@@ -159,8 +164,8 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
             {motivoPeriodo ? (
                 <PeriodoInvalido motivo={motivoPeriodo} />
             ) : loading ? (
-                <div className="flex items-center justify-center py-20">
-                    <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <div className="flex items-center justify-center py-20" role="status" aria-label="Carregando">
+                    <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" aria-hidden="true" />
                 </div>
             ) : falhou ? (
                 <FalhaDeCarga oQue="o WIP" onRetry={load} />
@@ -171,9 +176,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
             ) : (
                 <div className="bg-white border border-slate-200 rounded-[10px] shadow-sm overflow-hidden">
                     <div className="flex justify-end p-2 border-b border-slate-100">
-                        <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-slate-400 hover:text-slate-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
-                            <MoveHorizontal className="w-4 h-4" />
-                        </button>
+                        <BotaoAutoAjuste onClick={() => cols.autoFit()} />
                     </div>
                     <div className="overflow-x-auto">
                     <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', minWidth: '100%', width: Object.keys(WIP_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
@@ -183,13 +186,13 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                         </colgroup>
                         <thead>
                             <tr className="bg-white text-gray-700 border-b border-gray-200">
-                                <Th label="Obra" k="project_name" />
-                                <Th label="Empresa" k="empresa_nome" />
-                                <Th label="Valor do contrato" k="contrato_valor" right />
-                                <Th label="Receita recebida" k="receita_reconhecida" right />
-                                <Th label="Custo pago" k="custo_incorrido" right />
-                                <Th label="Recebido − pago" k="margem_bruta" right />
-                                <Th label="Saldo de contrato" k="saldo_contrato" right />
+                                {th('Obra', 'project_name')}
+                                {th('Empresa', 'empresa_nome')}
+                                {th('Valor do contrato', 'contrato_valor', true)}
+                                {th('Receita recebida', 'receita_reconhecida', true)}
+                                {th('Custo pago', 'custo_incorrido', true)}
+                                {th('Recebido − pago', 'margem_bruta', true)}
+                                {th('Saldo de contrato', 'saldo_contrato', true)}
                                 <th aria-hidden="true" />
                             </tr>
                         </thead>
@@ -247,7 +250,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                                 }
                                                 {fmt(margem)}
                                             </span>
-                                            <span className={`block text-xs font-normal ${isNegMargem ? 'text-red-500' : 'text-gray-500'}`}>
+                                            <span className={`block text-xs font-normal ${isNegMargem ? 'text-red-600' : 'text-gray-500'}`}>
                                                 {fmtPct(r.margem_pct)}
                                             </span>
                                         </td>

@@ -94,6 +94,8 @@ export const NOTIF_TYPE_META: Record<string, NotifTypeMeta> = {
     risco_acao_vencida:      { category: 'operacional', label: 'Ação de risco vencida' },
     risco_revisao_vencida:   { category: 'operacional', label: 'Revisão de risco vencida' },
     risco_critico_sem_plano: { category: 'operacional', label: 'Risco crítico sem plano' },
+    // Fase 2 (aplicar_20271115637000): sinal num objeto vinculado ao risco (contrato, pedido, NC, documento, cronograma).
+    risco_sinal_vinculo:     { category: 'operacional', label: 'Sinal em risco vinculado' },
 
     // ── Qualidade / pós-obra ────────────────────────────────────────────────
     manutencao_vencimento: { category: 'qualidade', label: 'Manutenção vencendo' },

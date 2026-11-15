@@ -4,7 +4,8 @@ vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
 import type { ProjectRisk, RiskAction } from '../types/risk';
 import {
-    acoesEmAtraso, exposicao, hojeLocalISO, principaisRiscos, recortarRiscos, riscosComPlano, type ContextoRecorte,
+    acoesEmAtraso, exposicao, gravidadeMaxima, hojeLocalISO, nivelPendenteDaAlcada, perdasRealizadas, principaisRiscos, recortarRiscos,
+    riscosComPlano, riscosComSinal, riscosParaAprovacao, sinaisPorRisco, type ContextoRecorte,
 } from '../utils/riskPainel';
 import { filtrarRegistro, type FiltrosRegistro } from '../components/riscos/RiscosRegistro';
 import { validarFicha, fichaVazia } from '../components/riscos/RiscoFicha';
@@ -22,7 +23,8 @@ const risco = (p: Partial<ProjectRisk>): ProjectRisk => ({
     plano_resposta: null, contingencia: null, justificativa_aceite: null, status: 'identificado', encerramento_motivo: null,
     encerrado_em: null, gatilho_critico: false, gatilho_motivo: null, inerente_probabilidade: null, inerente_impacto: null,
     inerente_pontuacao: null, residual_probabilidade: null, residual_impacto: null, residual_pontuacao: null, valor_esperado: null,
-    ultima_avaliacao_em: null, sst_document_tipo: null, sst_document_id: null, created_at: '', updated_at: '', ...p,
+    ultima_avaliacao_em: null, sst_document_tipo: null, sst_document_id: null,
+    approval_status: null, approval_chain: [], approval_required_levels: null, created_at: '', updated_at: '', ...p,
 });
 const acao = (p: Partial<RiskAction>): RiskAction => ({
     id: 'a', organization_id: 'org-a', project_risk_id: 'r', tipo: 'preventiva', descricao: 'd', responsavel_user_id: 'u',
@@ -92,5 +94,71 @@ describe('ficha — campos obrigatórios (CA03)', () => {
             project_id: 'obra-1', proxima_revisao: '2026-12-01', estrategia: 'aceitar' as const, gatilho_critico: true };
         expect(Object.keys(validarFicha(f)).sort()).toEqual(['gatilho_motivo', 'justificativa_aceite']);
         expect(validarFicha({ ...f, justificativa_aceite: 'custo', gatilho_motivo: 'vida' })).toEqual({});
+    });
+});
+
+describe('Fase 2 — sinais, materializados e perdas: cartões do Painel = lista do Registro (CA11)', () => {
+    const sinais = [
+        { project_risk_id: 'r1', link_id: 'l1', modulo: 'contrato' as const, external_label: 'Contrato 012', sinal: 'Contrato vencido', gravidade: 'alta' as const },
+        { project_risk_id: 'r1', link_id: 'l2', modulo: 'documento' as const, external_label: 'Documento · Alvará', sinal: 'Documento vence em 10 dia(s)', gravidade: 'media' as const },
+        { project_risk_id: 'r3', link_id: 'l3', modulo: 'pedido_compra' as const, external_label: 'Pedido PC-1', sinal: 'Pedido com entrega atrasada', gravidade: 'alta' as const },
+        // sinal num risco ENCERRADO não conta como "com sinal ativo"
+        { project_risk_id: 'r4', link_id: 'l4', modulo: 'contrato' as const, external_label: 'Contrato 9', sinal: 'Contrato vencido', gravidade: 'alta' as const },
+    ];
+    const comMat = [...riscos, risco({ id: 'r6', status: 'materializado' })];
+    const ctx2: ContextoRecorte = { ...ctx, comSinal: riscosComSinal(sinais) };
+    const reg2 = (recorte: FiltrosRegistro['recorte']) =>
+        filtrarRegistro(comMat, { ...semFiltro, recorte }, ctx2, () => '', () => '').map(r => r.id);
+
+    it('"com sinal" = ativos com ≥1 sinal; "materializados" = status materializado; o Registro mostra a mesma lista', () => {
+        expect(recortarRiscos(comMat, 'com_sinal', ctx2).map(r => r.id)).toEqual(['r1', 'r3']);
+        expect(recortarRiscos(comMat, 'materializados', ctx2).map(r => r.id)).toEqual(['r6']);
+        for (const rec of ['com_sinal', 'materializados'] as const) {
+            expect(reg2(rec)).toEqual(recortarRiscos(comMat, rec, ctx2).map(r => r.id));
+        }
+        // sem sinais carregados (ou a função do banco indisponível), ninguém tem sinal
+        expect(recortarRiscos(comMat, 'com_sinal', ctx).length).toBe(0);
+    });
+
+    it('sinais por risco e a gravidade mais alta (coluna "Sinais")', () => {
+        const m = sinaisPorRisco(sinais);
+        expect(m.get('r1')?.length).toBe(2);
+        expect(gravidadeMaxima(m.get('r1'))).toBe('alta');
+        expect(gravidadeMaxima([{ gravidade: 'media' }])).toBe('media');
+        expect(gravidadeMaxima(undefined)).toBeNull();
+    });
+
+    it('perdas = soma do impacto financeiro, um valor por ocorrência; sem valor não entra', () => {
+        expect(perdasRealizadas([{ impacto_financeiro: 1500.1 }, { impacto_financeiro: null }, { impacto_financeiro: 200.2 }]))
+            .toEqual({ total: 1700.3, comValor: 2 });
+        expect(perdasRealizadas([])).toEqual({ total: 0, comValor: 0 });
+    });
+});
+
+describe('Fase 2 — fila da aba Aprovações (F2.3)', () => {
+    const base = { estrategia: null, approval_status: null, approval_chain: [], approval_required_levels: null } as const;
+    const fila = [
+        risco({ id: 'a1', ...base, estrategia: 'aceitar', justificativa_aceite: 'x' }),                         // falta enviar
+        risco({ id: 'a2', ...base, gatilho_critico: true, gatilho_motivo: 'vida', approval_status: 'PENDENTE' }), // pendente
+        risco({ id: 'a3', ...base, inerente_pontuacao: 20, approval_status: 'REJEITADO' }),                    // reprovado, ainda exige
+        risco({ id: 'a4', ...base, inerente_pontuacao: 20, approval_status: 'APROVADO' }),                     // aprovado: fora
+        risco({ id: 'a5', ...base, inerente_pontuacao: 6 }),                                                    // não exige: fora
+        risco({ id: 'a6', ...base, estrategia: 'aceitar', status: 'encerrado' }),                               // encerrado: fora
+    ];
+    it('pendentes, a enviar e reprovados entram; aprovado, sem exigência e encerrado ficam fora', () => {
+        expect(riscosParaAprovacao(fila, {}).map(l => [l.risco.id, l.situacao])).toEqual([
+            ['a1', 'falta_enviar'], ['a2', 'pendente'], ['a3', 'reprovado'],
+        ]);
+    });
+    it('faixas da organização do risco decidem o crítico', () => {
+        const r = risco({ id: 'b1', ...base, inerente_pontuacao: 16, organization_id: 'org-b' });
+        expect(riscosParaAprovacao([r], {}).length).toBe(0);
+        expect(riscosParaAprovacao([r], { 'org-b': { limite_medio: 4, limite_alto: 9, limite_critico: 16 } }).length).toBe(1);
+    });
+    it('nível pendente: só a rodada depois da última reprovação conta', () => {
+        const passo = (level: 1 | 2, action: 'APROVADO' | 'REJEITADO') => ({ level, role: 'x', action, approved_by: 'a@x', approved_at: '' });
+        expect(nivelPendenteDaAlcada({ approval_chain: [], approval_required_levels: 1 })).toEqual({ nivel: 1, de: 1 });
+        expect(nivelPendenteDaAlcada({ approval_chain: [passo(1, 'APROVADO')], approval_required_levels: 2 })).toEqual({ nivel: 2, de: 2 });
+        expect(nivelPendenteDaAlcada({ approval_chain: [passo(1, 'APROVADO'), passo(1, 'REJEITADO')], approval_required_levels: 2 })).toEqual({ nivel: 1, de: 2 });
     });
 });

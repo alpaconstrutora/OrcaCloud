@@ -285,6 +285,15 @@ Portal do Investidor; Monte Carlo; BIM/3D; alertas preditivos.
 - **F1: 11 de 12** — falta F1.12 (contador no SST), sem documento de SST cadastrado no banco para provar.
 - Observação: o código RSC é `max+1` por org — excluir o último risco (só possível sem avaliação) libera o número
   para o próximo. Aceito no MVP (exclusão é só para registro feito por engano).
+- 15/11 **telas da F2 escritas — em código, sem prova no navegador** (a migration `aplicar_20271115637000` ainda
+  não foi aplicada): ficha ganhou as abas Ocorrências (`RiscoOcorrencias`, materializar com `useConfirm`) e Vínculos
+  (`RiscoVinculos`, seletor por módulo restrito à org/obra do risco, sinal por vínculo) e o bloco Aprovação na aba
+  Ficha (`RiscoAlcada`: enviar, quem aprova o nível, aprovar, reprovar com motivo, cadeia); módulo ganhou a aba
+  Aprovações (`RiscosAprovacoesAba`) e o assistente "Sugerir riscos" no Registro (`RiscosSugerirSheet`); Painel com
+  "Com sinal ativo" e "Materializados e perdas"; Registro com a coluna Sinais e os recortes `com_sinal`/`materializados`
+  (mesma função do cartão, CA11). Serviço: leituras dos objetos vinculáveis (uma por módulo) e `aprovadoresDoNivel`.
+  Slug `risco_sinal_vinculo` em `notificationTypes.ts`. Testes: `riskPainel.test.ts` (fase 2), `riskVinculos.test.ts`,
+  `components/RiscosFase2.test.tsx`. Nenhum item da F2 marcado: todo "pronto quando" depende do banco.
 - Referências a conferir com atenção: IN RFB 2.021/2021 (R10.07), artigos da Lei 14.133/2021 em R24,
   limiar de 75% do art. 59 §4º (R24.02), NBR 5682 e NR-15 anexo 12 (R25), NBR 17170 e CC art. 618 (R21),
   Decreto 10.306/2020 (R19.07).

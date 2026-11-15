@@ -1,6 +1,6 @@
 import React from 'react';
-import { Lock, Plus } from 'lucide-react';
-import type { ProjectRisk, RiskAction, RiskCatalogItem, RiskCategoryRow, RiskMatrixConfig } from '../../types/risk';
+import { Lock, Plus, Sparkles } from 'lucide-react';
+import type { ProjectRisk, RiskAction, RiskCatalogItem, RiskCategoryRow, RiskEvent, RiskMatrixConfig, RiskSinal } from '../../types/risk';
 import { RISK_ROTULO } from '../../types/risk';
 import { fichaDoCatalogo, riskService } from '../../services/riskService';
 import { errorMessage, targetOrgIds, useOrgContext, useOrgWriteTarget } from '../../hooks/useOrgContext';
@@ -8,21 +8,27 @@ import { useToast } from '../../hooks/useToast';
 import { useStore } from '../../store/useStore';
 import { usePersistedState } from '../ui/TableUtils';
 import { TabsBar } from '../ui/TabsBar';
-import { faixasDe, hojeLocalISO, riscosComPlano, type ContextoRecorte, type RecorteRisco } from '../../utils/riskPainel';
+import {
+    faixasDe, hojeLocalISO, riscosComPlano, riscosComSinal, riscosParaAprovacao, sinaisPorRisco, type ContextoRecorte, type RecorteRisco,
+} from '../../utils/riskPainel';
 import { MOTIVO_SEM_EDICAO_RISCOS } from '../../utils/permissaoRiscos';
 import { RISK_MATRIZ_PADRAO } from '../../utils/riskScoring';
-import { BOTAO_PRIMARIO, useObrasDaOrg } from './riscosUi';
+import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, useObrasDaOrg } from './riscosUi';
 import { RiscoFicha, fichaVazia, type AberturaFicha, type ContratoCurto, type EmpreendimentoCurto, type SecaoFicha } from './RiscoFicha';
 import { RiscosRegistro, type FiltrosRegistro } from './RiscosRegistro';
 import { RiscosPainel } from './RiscosPainel';
 import { RiscosMatriz } from './RiscosMatriz';
 import { RiscosAcoesAba, type FiltrosAcoes } from './RiscosAcoesAba';
 import { CatalogoItemSheet, RiscoProprioSheet, RiscosCatalogo } from './RiscosCatalogo';
+import { RiscosAprovacoesAba } from './RiscosAprovacoesAba';
+import { RiscosSugerirSheet } from './RiscosSugerirSheet';
 
 /**
  * Módulo ÒPURA Riscos — casca da tela (F1.4–F1.9 de docs/planos/2026-11-13-modulo-riscos.md).
  *
  * Anatomia (guia §19/§20): título → abas → (KPIs no Painel) → toolbar acoplada → tabela.
+ * Fase 2 (15/11/2026): aba Aprovações (F2.3), "Sugerir riscos" no Registro (F2.4), sinais dos
+ * vínculos (F2.5) e ocorrências (F2.1) carregados junto, sem segurar a lista.
  * Um componente só é dono do título, das abas e dos dados (§19.3, "alternativa que
  * o Extrato usa"); cada aba é um filho que recebe a lista já carregada.
  *
@@ -34,13 +40,14 @@ import { CatalogoItemSheet, RiscoProprioSheet, RiscosCatalogo } from './RiscosCa
  *
  * §22: criar/editar/excluir atualiza o array local; nada recarrega a lista inteira.
  */
-type Aba = 'painel' | 'registro' | 'matriz' | 'acoes' | 'catalogo';
+type Aba = 'painel' | 'registro' | 'matriz' | 'acoes' | 'aprovacoes' | 'catalogo';
 
 const ABAS: { id: Aba; label: string }[] = [
     { id: 'painel', label: 'Painel' },
     { id: 'registro', label: 'Registro' },
     { id: 'matriz', label: 'Matriz' },
     { id: 'acoes', label: 'Ações' },
+    { id: 'aprovacoes', label: 'Aprovações' },
     { id: 'catalogo', label: 'Catálogo' },
 ];
 
@@ -50,6 +57,7 @@ const CABECALHO: Record<Aba, { titulo: string; subtitulo: string }> = {
     registro: { titulo: 'Registro de riscos', subtitulo: 'Todos os riscos do empreendimento, da obra e do contrato, com dono, nível e próxima revisão.' },
     matriz: { titulo: 'Matriz de riscos', subtitulo: 'Probabilidade × impacto dos riscos ativos, na avaliação inerente ou residual.' },
     acoes: { titulo: 'Ações de tratamento', subtitulo: 'O plano de tratamento de todos os riscos: responsável, prazo, custo e eficácia.' },
+    aprovacoes: { titulo: 'Aprovações de risco', subtitulo: 'Riscos aceitos ou críticos que esperam aprovação, ou que exigem e ainda não foram enviados.' },
     catalogo: { titulo: 'Catálogo de riscos', subtitulo: 'A biblioteca de riscos da construção civil e os riscos próprios da sua organização.' },
 };
 
@@ -93,6 +101,13 @@ const RiscosModule: React.FC<Props> = ({ podeEditar }) => {
     const [carregandoCatalogo, setCarregandoCatalogo] = React.useState(false);
     const [erroCatalogo, setErroCatalogo] = React.useState<string | null>(null);
 
+    // Fase 2 — sinais dos vínculos e ocorrências: não seguram a lista e falham sozinhos (até a
+    // migration da fase 2 existir no banco, vêm vazios e a tela da fase 1 continua igual).
+    const [sinais, setSinais] = React.useState<RiskSinal[]>([]);
+    const [ocorrencias, setOcorrencias] = React.useState<RiskEvent[]>([]);
+    const [carregandoFase2, setCarregandoFase2] = React.useState(true);
+    const [sugerirOrg, setSugerirOrg] = React.useState<string | null>(null);
+
     const [ficha, setFicha] = React.useState<AberturaFicha | null>(null);
     const [itemCatalogo, setItemCatalogo] = React.useState<RiskCatalogItem | null>(null);
     const [proprioOrg, setProprioOrg] = React.useState<string | null>(null);
@@ -125,6 +140,17 @@ const RiscosModule: React.FC<Props> = ({ podeEditar }) => {
             riskService.listarEmpreendimentos(orgId).catch(() => [] as EmpreendimentoCurto[]),
             riskService.listarContratos(orgId).catch(() => [] as ContratoCurto[]),
         ]).then(([emps, cts]) => { if (minha === seq.current) { setEmpreendimentos(emps); setContratos(cts); } });
+        setCarregandoFase2(true);
+        Promise.all([
+            riskService.listarSinais(orgId).catch(() => [] as RiskSinal[]),
+            riskService.listarOcorrencias({ organizationId: orgId }).catch(() => [] as RiskEvent[]),
+        ]).then(([sn, oc]) => { if (minha === seq.current) { setSinais(sn); setOcorrencias(oc); } })
+            .finally(() => { if (minha === seq.current) setCarregandoFase2(false); });
+    }, [orgId]);
+
+    /** Os sinais são do banco (`fn_risk_sinais`): depois de vincular/desvincular, relê só eles. */
+    const atualizarSinais = React.useCallback(() => {
+        riskService.listarSinais(orgId).then(setSinais).catch(() => undefined);
     }, [orgId]);
     React.useEffect(() => { void carregar(); }, [carregar]);
 
@@ -150,7 +176,13 @@ const RiscosModule: React.FC<Props> = ({ podeEditar }) => {
 
     // ── Rótulos e contexto compartilhados pelas abas (estáveis: a paginação zera pela identidade) ──
     const hoje = hojeLocalISO();
-    const ctx = React.useMemo<ContextoRecorte>(() => ({ hoje, faixasPorOrg, comPlano: riscosComPlano(acoes) }), [hoje, faixasPorOrg, acoes]);
+    const ctx = React.useMemo<ContextoRecorte>(
+        () => ({ hoje, faixasPorOrg, comPlano: riscosComPlano(acoes), comSinal: riscosComSinal(sinais) }),
+        [hoje, faixasPorOrg, acoes, sinais],
+    );
+    const sinaisDoRisco = React.useMemo(() => sinaisPorRisco(sinais), [sinais]);
+    const filaAprovacao = React.useMemo(() => riscosParaAprovacao(riscos, faixasPorOrg), [riscos, faixasPorOrg]);
+    const pendentesDeAprovacao = filaAprovacao.filter(l => l.situacao === 'pendente').length;
     const nomeObra = React.useMemo(() => new Map(obrasTodas.map(o => [o.id, o.name])), [obrasTodas]);
     const nomeEmp = React.useMemo(() => new Map(empreendimentos.map(e => [e.id, e.name])), [empreendimentos]);
     const nomeContrato = React.useMemo(() => new Map(contratos.map(c => [c.id, [c.number, c.title].filter(Boolean).join(' · ') || 'Contrato sem número'])), [contratos]);
@@ -227,6 +259,20 @@ const RiscosModule: React.FC<Props> = ({ podeEditar }) => {
     const acoesDoRisco = React.useCallback((riskId: string, lista: RiskAction[]) => {
         setAcoes(prev => [...prev.filter(a => a.project_risk_id !== riskId), ...lista].sort((a, b) => a.prazo.localeCompare(b.prazo)));
     }, []);
+    const ocorrenciasDoRisco = React.useCallback((riskId: string, lista: RiskEvent[]) => {
+        setOcorrencias(prev => [...prev.filter(o => o.project_risk_id !== riskId), ...lista]
+            .sort((a, b) => b.data_ocorrencia.localeCompare(a.data_ocorrencia)));
+    }, []);
+    const riscosCriados = React.useCallback((criados: ProjectRisk[]) => {
+        setRiscos(prev => [...criados.filter(c => !prev.some(x => x.id === c.id)), ...prev]);
+    }, []);
+
+    /** Assistente "Sugerir riscos" (F2.4): a obra é de UMA organização — em "Todas", pergunta (REGRA #5). */
+    const sugerirRiscos = async () => {
+        const alvo = await resolveWriteOrg('single');
+        if (!alvo) return;
+        setSugerirOrg(targetOrgIds(alvo)[0]);
+    };
 
     // ── Foco vindo de aviso (`/riscos?riskId=` → `RISCO`, utils/linkNotificacao.ts) ──
     const riscosRef = React.useRef(riscos);
@@ -277,8 +323,20 @@ const RiscosModule: React.FC<Props> = ({ podeEditar }) => {
                 )}
             </div>
 
-            {/* §19.1 — abas; ação primária §17 à direita */}
-            <TabsBar<Aba> tabs={ABAS} value={abaEfetiva} onChange={setAba}>
+            {/* §19.1 — abas; ação primária §17 à direita (o assistente, secundário, ao lado dela no Registro) */}
+            <TabsBar<Aba>
+                tabs={ABAS.map(a => (a.id === 'aprovacoes' && filaAprovacao.length
+                    ? { ...a, badge: filaAprovacao.length, badgeTom: pendentesDeAprovacao ? 'alerta' as const : undefined,
+                        badgeTitulo: `${pendentesDeAprovacao} aguardando aprovação · ${filaAprovacao.length - pendentesDeAprovacao} a enviar ou reprovados` }
+                    : a))}
+                value={abaEfetiva} onChange={setAba}>
+                {abaEfetiva === 'registro' && (
+                    <span className="inline-flex" title={podeEditar ? 'Sugerir riscos do catálogo para uma obra, pela tipologia e pelas condições dela' : motivo}>
+                        <button type="button" onClick={() => void sugerirRiscos()} disabled={!podeEditar} className={BOTAO_SECUNDARIO}>
+                            <Sparkles className="w-[15px] h-[15px]" /> Sugerir riscos
+                        </button>
+                    </span>
+                )}
                 {acaoPrimaria && (
                     <span className="inline-flex" title={podeEditar ? undefined : motivo}>
                         <button type="button" onClick={() => void acaoPrimaria.onClick()} disabled={!podeEditar} className={BOTAO_PRIMARIO}>
@@ -299,13 +357,14 @@ const RiscosModule: React.FC<Props> = ({ podeEditar }) => {
             {abaEfetiva === 'painel' && (
                 <RiscosPainel riscos={riscos} acoes={acoes} ctx={ctx} faixasPorOrg={faixasPorOrg} carregando={carregando}
                     rotuloEscopo={rotuloEscopo} nomeCategoria={nomeCategoria}
-                    onRecorte={abrirRecorte} onAcoesEmAtraso={abrirAcoesEmAtraso} onAbrir={r => abrirRisco(r)} />
+                    onRecorte={abrirRecorte} onAcoesEmAtraso={abrirAcoesEmAtraso} onAbrir={r => abrirRisco(r)}
+                    ocorrencias={ocorrencias} carregandoFase2={carregandoFase2} />
             )}
             {abaEfetiva === 'registro' && (
                 <RiscosRegistro riscos={riscos} carregando={carregando} filtros={filtrosRegistro} setFiltro={setFiltroRegistro}
                     limparFiltros={() => setFiltrosRegistro(FILTROS_REGISTRO_VAZIOS)} ctx={ctx} faixasPorOrg={faixasPorOrg}
                     rotuloEscopo={rotuloEscopo} nomeCategoria={nomeCategoria} nomeOrg={nomeOrg} mostrarOrg={isAllOrgs}
-                    obrasDosRiscos={obrasDosRiscos} podeEditar={podeEditar} onAbrir={abrirRisco} />
+                    obrasDosRiscos={obrasDosRiscos} podeEditar={podeEditar} onAbrir={abrirRisco} sinaisPorRisco={sinaisDoRisco} />
             )}
             {abaEfetiva === 'matriz' && (
                 <RiscosMatriz riscos={riscos} carregando={carregando} faixasDoMapa={orgId ? faixasDe(faixasPorOrg, orgId) : RISK_MATRIZ_PADRAO}
@@ -315,6 +374,10 @@ const RiscosModule: React.FC<Props> = ({ podeEditar }) => {
                 <RiscosAcoesAba acoes={acoes} riscosPorId={riscosPorId} carregando={carregando} hoje={hoje}
                     filtros={filtrosAcoes} setFiltro={setFiltroAcoes} onAbrir={r => abrirRisco(r, 'acoes')} />
             )}
+            {abaEfetiva === 'aprovacoes' && (
+                <RiscosAprovacoesAba riscos={riscos} faixasPorOrg={faixasPorOrg} carregando={carregando}
+                    rotuloEscopo={rotuloEscopo} onAbrir={abrirRisco} />
+            )}
             {abaEfetiva === 'catalogo' && (
                 <RiscosCatalogo itens={catalogo} categorias={categorias} carregando={carregandoCatalogo} erro={erroCatalogo}
                     onTentarDeNovo={() => void carregarCatalogo()} onAbrir={setItemCatalogo} onUsar={i => void usarDoCatalogo(i)}
@@ -323,7 +386,12 @@ const RiscosModule: React.FC<Props> = ({ podeEditar }) => {
 
             <RiscoFicha abertura={ficha} onClose={() => setFicha(null)} podeEditar={podeEditar} motivoSemEdicao={motivo}
                 categorias={categorias} empreendimentos={empreendimentos} contratos={contratos} faixasPorOrg={faixasPorOrg}
-                onSalvo={riscoSalvo} onExcluido={riscoExcluido} onAcoesDoRisco={acoesDoRisco} />
+                onSalvo={riscoSalvo} onExcluido={riscoExcluido} onAcoesDoRisco={acoesDoRisco}
+                sinais={sinais} onOcorrenciasDoRisco={ocorrenciasDoRisco} onAtualizarSinais={atualizarSinais} />
+
+            {sugerirOrg && (
+                <RiscosSugerirSheet orgId={sugerirOrg} riscos={riscos} onClose={() => setSugerirOrg(null)} onCriados={riscosCriados} />
+            )}
 
             <CatalogoItemSheet item={itemCatalogo} categorias={categorias} podeEditar={podeEditar} motivoSemEdicao={motivo}
                 onClose={() => setItemCatalogo(null)} onUsar={i => void usarDoCatalogo(i)} />

@@ -1,10 +1,10 @@
 import React from 'react';
-import { Banknote, CalendarX2, ClipboardList, Clock, Flame, ShieldAlert } from 'lucide-react';
-import type { ProjectRisk, RiskAction, RiskFase, RiskMatrixConfig } from '../../types/risk';
+import { AlertTriangle, Banknote, CalendarX2, ClipboardList, Clock, Flame, OctagonAlert, ShieldAlert } from 'lucide-react';
+import type { ProjectRisk, RiskAction, RiskEvent, RiskFase, RiskMatrixConfig } from '../../types/risk';
 import { RISK_ROTULO } from '../../types/risk';
 import { pontuacaoVigente } from '../../utils/riskScoring';
 import {
-    acoesEmAtraso, distribuicao, exposicao, nivelNaOrg, principaisRiscos, recortarRiscos,
+    acoesEmAtraso, distribuicao, exposicao, nivelNaOrg, perdasRealizadas, principaisRiscos, recortarRiscos,
     type ContextoRecorte, type RecorteRisco,
 } from '../../utils/riskPainel';
 import { KpiCard } from '../ui/KpiCard';
@@ -33,6 +33,10 @@ interface Props {
     onRecorte: (recorte: RecorteRisco) => void;
     onAcoesEmAtraso: () => void;
     onAbrir: (r: ProjectRisk) => void;
+    /** Fase 2 (F2.1): ocorrências — a soma do impacto financeiro é a "perda". */
+    ocorrencias: RiskEvent[];
+    /** Sinais e ocorrências chegam depois da lista (não a seguram); até lá, "…". */
+    carregandoFase2: boolean;
 }
 
 const COLS_TOP: StandardTableColumn[] = [
@@ -53,6 +57,7 @@ type LinhaDist = { chave: string | null; nome: string; total: number; criticos: 
 
 export const RiscosPainel: React.FC<Props> = ({
     riscos, acoes, ctx, faixasPorOrg, carregando, rotuloEscopo, nomeCategoria, onRecorte, onAcoesEmAtraso, onAbrir,
+    ocorrencias, carregandoFase2,
 }) => {
     const ativos = React.useMemo(() => recortarRiscos(riscos, 'ativos', ctx), [riscos, ctx]);
     const criticos = React.useMemo(() => recortarRiscos(riscos, 'criticos', ctx), [riscos, ctx]);
@@ -60,6 +65,9 @@ export const RiscosPainel: React.FC<Props> = ({
     const revisoes = React.useMemo(() => recortarRiscos(riscos, 'revisao_vencida', ctx), [riscos, ctx]);
     const atrasadas = React.useMemo(() => acoesEmAtraso(acoes, ctx.hoje), [acoes, ctx.hoje]);
     const exp = React.useMemo(() => exposicao(riscos), [riscos]);
+    const comSinal = React.useMemo(() => recortarRiscos(riscos, 'com_sinal', ctx), [riscos, ctx]);
+    const materializados = React.useMemo(() => recortarRiscos(riscos, 'materializados', ctx), [riscos, ctx]);
+    const perdas = React.useMemo(() => perdasRealizadas(ocorrencias), [ocorrencias]);
     const top = React.useMemo(() => principaisRiscos(riscos, 10), [riscos]);
 
     const porFase = React.useMemo<LinhaDist[]>(() => distribuicao(riscos, r => r.fase, faixasPorOrg)
@@ -94,7 +102,7 @@ export const RiscosPainel: React.FC<Props> = ({
     return (
         <div className="space-y-6">
             {/* §20.1: TabsBar já dá os 12px até aqui; depois dos KPIs a pergunta muda (lista), então 24px do space-y-6. */}
-            <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-6 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                 <KpiCard label="Riscos ativos" value={v(ativos.length)} icon={<ShieldAlert className="w-4 h-4" />} color="blue"
                     sub="não encerrados nem materializados" onClick={() => onRecorte('ativos')} title="Ver os riscos ativos na aba Registro" />
                 <KpiCard label="Críticos" value={v(criticos.length)} icon={<Flame className="w-4 h-4" />} color="red"
@@ -107,6 +115,12 @@ export const RiscosPainel: React.FC<Props> = ({
                     sub={`valor esperado de ${exp.comValor} de ${ativos.length} ativos`} onClick={() => onRecorte('ativos')} title="Soma do valor esperado (probabilidade % × perda) dos riscos ativos" />
                 <KpiCard label="Revisões vencidas" value={v(revisoes.length)} icon={<CalendarX2 className="w-4 h-4" />} color="rose"
                     sub="ativos com a revisão atrasada" onClick={() => onRecorte('revisao_vencida')} title="Ver os riscos com revisão vencida na aba Registro" />
+                <KpiCard label="Com sinal ativo" value={carregando || carregandoFase2 ? '…' : comSinal.length} icon={<AlertTriangle className="w-4 h-4" />} color="amber"
+                    sub="ativos com sinal num objeto vinculado" onClick={() => onRecorte('com_sinal')} title="Ver os riscos ativos com sinal nos vínculos na aba Registro" />
+                <KpiCard label="Materializados e perdas" value={v(materializados.length)} icon={<OctagonAlert className="w-4 h-4" />} color="red"
+                    sub={carregando || carregandoFase2 ? 'somando as perdas…'
+                        : `perdas de ${formatMoney(perdas.total)} em ${perdas.comValor} ocorrência${perdas.comValor === 1 ? '' : 's'} com valor`}
+                    onClick={() => onRecorte('materializados')} title="Ver os riscos materializados na aba Registro. Perda = soma do impacto financeiro das ocorrências" />
             </div>
 
             <section className="space-y-3" aria-labelledby="painel-top">

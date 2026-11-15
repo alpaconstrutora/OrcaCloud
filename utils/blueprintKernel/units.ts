@@ -747,7 +747,14 @@
  * canônico já levava a unidade de qualquer terminal. Desenho antigo só muda pela string. Provado antes do bump: com a
  * string em 0.107.0, os goldens, os dois marcos e o teste do uso coletivo passaram.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.108.0';
+/**
+ * ─── 0.108.0 → 0.109.0 (15/11/2026) — A DRENAGEM DA GARAGEM ─────────────────
+ *
+ * Prédio automático, PA8c (`docs/planos/2026-11-12-predio-automatico.md`): o ponto de esgoto aceita `CAIXA_SEPARADORA`
+ * (separadora de água e óleo, cota do TUBO como o tanque séptico) e `POCO_DE_RECALQUE` (o poço das bombas de drenagem,
+ * cota do FUNDO). Vocabulário novo, forma igual — desenho antigo só muda pela string.
+ */
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.109.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

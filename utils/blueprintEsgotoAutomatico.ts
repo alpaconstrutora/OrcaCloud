@@ -343,7 +343,7 @@ function espacoDe(model: BlueprintModel, t: Terminal): Space | null {
 }
 
 /** O que NÃO é fonte de esgoto: as caixas de passagem e os destinos. */
-const PASSAGEM_OU_DESTINO = new Set(['CAIXA_INSPECAO', 'LIGACAO_ESGOTO', 'TANQUE_SEPTICO', 'FILTRO_ANAEROBIO', 'SUMIDOURO']);
+const PASSAGEM_OU_DESTINO = new Set(['CAIXA_INSPECAO', 'LIGACAO_ESGOTO', 'TANQUE_SEPTICO', 'FILTRO_ANAEROBIO', 'SUMIDOURO', 'CAIXA_SEPARADORA', 'POCO_DE_RECALQUE']);
 
 /** Os pontos de esgoto tipados do desenho (fora as caixas de inspeção). */
 export function fontesDeEsgoto(model: BlueprintModel): Terminal[] {

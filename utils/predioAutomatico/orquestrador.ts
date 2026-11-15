@@ -8,7 +8,7 @@
  * PA3 (14/11/2026): o térreo (salas do condomínio, acesso e o núcleo desde ele), a cobertura e os reservatórios — ver
  * `terreoECobertura.ts`.
  */
-import { applyBatch, snapshotHash } from '../blueprintKernel';
+import { aplicarLote, snapshotHash } from '../blueprintKernel';
 import { localDoElemento } from '../blueprintLocalDaPendencia';
 import type { LocalDaPendencia } from '../blueprintGeradorPpci';
 import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
@@ -87,7 +87,8 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   let ultimos: ObjectId[] = [];
   const aplicar = (lote: Command[]): number => {
     if (!lote.length) return 0;
-    const r = applyBatch(m, lote);
+    // Sem o hash de cada lote (PA10a): o do resultado sai uma vez, no fim.
+    const r = aplicarLote(m, lote);
     m = r.model;
     comandos.push(...lote);
     criados.push(...r.diff.created);

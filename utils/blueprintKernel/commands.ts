@@ -6630,6 +6630,16 @@ function assertMotorDeLancamento(model: BlueprintModel, motor: MotorDeLancamento
 
 /** Aplica um lote na ordem dada, abortando inteiro no primeiro erro. */
 export function applyBatch(model: BlueprintModel, commands: Command[]): CommandResult {
+  const r = aplicarLote(model, commands);
+  return { ...r, hash: snapshotHash(r.model) };
+}
+
+/**
+ * O `applyBatch` SEM o hash do fim (PA10a do prédio automático, 15/11/2026): quem encadeia milhares de lotes e só quer o
+ * modelo — o prédio automático, que calcula o hash do resultado uma vez — pagava ~18 ms de `snapshotHash` por lote num
+ * modelo grande, descartado. A mesma aplicação: invariantes e arranjo a cada comando, como no `applyBatch`.
+ */
+export function aplicarLote(model: BlueprintModel, commands: Command[]): { model: BlueprintModel; diff: Diff } {
   let current = model;
   const merged = emptyDiff();
 
@@ -6644,7 +6654,7 @@ export function applyBatch(model: BlueprintModel, commands: Command[]): CommandR
     Object.assign(merged.ancestry, result.diff.ancestry);
   }
 
-  return { model: current, diff: merged, hash: snapshotHash(current) };
+  return { model: current, diff: merged };
 }
 
 

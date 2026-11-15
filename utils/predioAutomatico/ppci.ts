@@ -10,7 +10,7 @@
  * térreo do prédio; e a ALTURA é a do piso do último andar com unidades — a cobertura técnica não conta (IT 01: a altura
  * vai do piso de descarga ao piso do último pavimento ocupado). Sem a altura declarada a classificação tomava a cobertura.
  */
-import { applyBatch, pointInPolygon } from '../blueprintKernel';
+import { aplicarLote, pointInPolygon } from '../blueprintKernel';
 import type { BlueprintModel, Command, ObjectId, Point } from '../blueprintKernel';
 import { analisarExtintores, proporExtintores } from '../blueprintExtintores';
 import { analisarSinalizacao, proporSinalizacao } from '../blueprintSinalizacao';
@@ -196,7 +196,7 @@ export function lancarEquipamentosDeIncendio(
   let comandos = 0;
   const aplicar = (lote: Command[]): number => {
     if (!lote.length) return 0;
-    const rv = applyBatch(v, lote);
+    const rv = aplicarLote(v, lote);
     v = rv.model;
     comandos += ctx.aplicar(lote);
     const real = ctx.criadosNoUltimoLote ?? [];
@@ -292,7 +292,7 @@ export function lancarHidrantesDoPredio(
   let comandos = 0;
   const aplicar = (lote: Command[]): number => {
     if (!lote.length) return 0;
-    const rv = applyBatch(v, lote);
+    const rv = aplicarLote(v, lote);
     v = rv.model;
     comandos += ctx.aplicar(lote);
     const real = ctx.criadosNoUltimoLote ?? [];

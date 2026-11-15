@@ -335,6 +335,21 @@ de 891 ambientes. A visibilidade entre vértices do contorno passou a ser guarda
 PPCI com A-2, 21 m, 4.375 m², 8 medidas exigidas e a rota em 9 pavimentos (nenhum com ambiente sem rota); depois do
 Lançar, a escada do tipo chega à cobertura; tudo o que as PA3–PA7 conferiam segue igual; Ctrl+Z volta ao bloco sozinho.
 
+**Execução da PA9b (15/11/2026, `lancarEquipamentosDeIncendio` em `utils/predioAutomatico/ppci.ts`).** Etapa
+EQUIPAMENTOS DE INCÊNDIO antes da marca: extintores (com placa), sinalização da rota, iluminação de emergência (até 3
+passadas) e, quando exigidos, os dispositivos do alarme — pelos MESMOS motores e na mesma ordem do PPCI da planta, numa
+VISTA SEM OS ANDARES COPIADOS (`vistaSemAsCopias`); o tipo recebe e a cópia viva leva aos andares. Cada lote é aplicado na
+vista e no modelo real, e os ids criados têm de bater (senão para — as peças seguintes apontariam para outras). R8: 1
+extintor, 4 placas e 4 luminárias de emergência na circulação de cada andar; o térreo e a cobertura com os seus.
+**Achados:** (1) a vista sem as cópias deixava o elevador chegando a um andar que não existe nela e o medidor do térreo
+medindo a unidade de um andar inexistente — todo `...LevelId`/`levelUid` que aponta para uma cópia passa a apontar para o
+tipo na vista; (2) os motores punham extintor na varanda e placa no dormitório — em habitação (grupo A) a rota conta da
+porta da unidade (IT 08, 5.5.2.2), e na vista ficam só as áreas comuns. Teste: no prédio pronto, toda área comum de todo
+andar com extintor ao alcance e a rota iluminada. Ficam para o projetista (pendência): o eletroduto do laço do alarme e a
+barra antipânico (ela edita as portas). **CI:** os 4 casos do marco somavam 873 s na última CI verde (o RL perto dos 600 s por caso); com a
+etapa nova o limite por caso foi a 20 min — baixar o custo do RL (as invariantes a cada comando, a conferência da NBR 5410)
+é da PA10.
+
 ### PA10 — Fechamento
 **O que muda.** Relatório consolidado, furos no shaft, conflitos multinível, envio ao Empreendimento
 (`services/sync/massaAdapter.ts`) conferido, tempo do R12 no worker medido e fixado aqui.
@@ -364,5 +379,5 @@ PA1 e PA2 podem correr em frentes paralelas.
 | PA6 | feito (ver a Execução) — R8: 5 hidrômetros por andar × 7 (35 = as 35 unidades), coluna DN 85, recalque DN 50 (1,5 cv), RTI 12 m³, pressurizador no superior, nenhum ponto fora da faixa (dinâmica mín. 77 kPa, estática máx. 332 kPa). **R12 pede VRP** (estática máx. 207 kPa depois dela); R4 e RL fecham sem ponto fora da faixa. O volume dos reservatórios conferido à mão no teste. Kernel 0.108.0 (`Terminal.unidadeId` no hidrômetro). Marco com `trechosDeAgua` e o resumo da água; a casa idêntica. PR #433 |
 | PA7 | **PA7a feita** (ver a Execução) — R8: 5 tubos de queda por andar (DN 100), 120 UHC por andar, ventilação DN 75, coletor DN 150; toda louça de todo andar chega à ligação (315 de 315; R12 836 de 836). **No R12, os tubos de queda dão DN 100 pela Tabela 6** (o marco confere cada um). Conflitos por grade (44,8 s → 54 ms, mesmo resultado). **PA7b feita** (pluvial da cobertura: R8 2 condutores DN 100 para 1.200 L/min) |
 | PA8 | a fazer |
-| PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. PA9b (equipamentos por andar) e PA9c (hidrantes e casa de bombas) a fazer |
+| PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. **PA9b feita** (extintores, sinalização e iluminação nas áreas comuns do tipo — cada andar repete). PA9c (hidrantes e casa de bombas) a fazer |
 | PA10 | a fazer |

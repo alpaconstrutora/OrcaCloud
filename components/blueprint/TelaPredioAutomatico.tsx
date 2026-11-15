@@ -496,7 +496,19 @@ export default function TelaPredioAutomatico(props: Props) {
               ))}
             </ul>
           </section>
-          <p className="text-sm text-slate-600">Os equipamentos de cada andar (extintores, sinalização, iluminação, alarme) e os hidrantes ainda não são lançados pelo prédio automático — lance pelo PPCI da planta.</p>
+          {plano.resumo.incendio.equipamentos && (
+            <section className="space-y-2">
+              <h4 className={rotuloCls}>Equipamentos nas áreas comuns (o tipo, o térreo e a cobertura — cada andar repete os do tipo)</h4>
+              <ul className="flex flex-wrap gap-2" data-testid="equipamentos-de-incendio-do-predio">
+                {Object.entries(plano.resumo.incendio.equipamentos).map(([tipo, n]) => (
+                  <li key={tipo} className="rounded-md border border-gray-200 bg-gray-50 px-2 py-1 text-sm text-gray-700">
+                    {n} · {tipo.toLowerCase().replace(/_/g, ' ')}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          <p className="text-sm text-slate-600">Os hidrantes, a rede e a casa de bombas ainda não são lançados pelo prédio automático — lance pelo PPCI da planta.</p>
         </div>
       )}
 

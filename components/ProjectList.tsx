@@ -530,12 +530,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
                     </span>
                 ) : (
-                    <span className="text-sm text-gray-400 font-normal italic">-</span>
+                    <span className="text-sm text-gray-500 font-normal italic">-</span>
                 );
             case 'organization': {
                 const orgId = project.settings?.organizationId;
                 const org = organizations.find(o => o.id === orgId);
-                return <span className="text-sm font-normal text-gray-700">{org ? org.name : <span className="text-gray-400 italic">—</span>}</span>;
+                return <span className="text-sm font-normal text-gray-700">{org ? org.name : <span className="text-gray-500 italic">—</span>}</span>;
             }
             case 'empreendimento': {
                 const emp = empreendimentoByProject[project.id];
@@ -550,7 +550,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 )}
                             </div>
                         ) : (
-                            <span className="text-gray-400 italic">—</span>
+                            <span className="text-gray-500 italic">—</span>
                         )}
                     </span>
                 );
@@ -646,7 +646,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 {clientLabel}
                             </span>
                         ) : (
-                            <span className="text-sm font-normal text-gray-400 italic">-</span>
+                            <span className="text-sm font-normal text-gray-500 italic">-</span>
                         )}
                     </>
                 );
@@ -686,7 +686,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     project.settings?.budgetStatus ? (
                         <StatusBadge status={capitalizeStatus(project.settings.budgetStatus)} />
                     ) : (
-                        <span className="text-sm text-gray-400 font-normal italic">-</span>
+                        <span className="text-sm text-gray-500 font-normal italic">-</span>
                     )
                 );
             case 'status-obra':
@@ -699,7 +699,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     project.settings?.obraStatus ? (
                         <StatusBadge status={project.settings.obraStatus === 'Em andamento' ? 'Em andamento' : project.settings.obraStatus} />
                     ) : (
-                        <span className="text-sm text-gray-400 font-normal italic">-</span>
+                        <span className="text-sm text-gray-500 font-normal italic">-</span>
                     )
                 );
             case 'lock':
@@ -709,7 +709,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             // "Bloqueado/Livre" não dizia o quê (crítica 2026-11-14): o fato é ter pedido
                             // vinculado; não poder excluir é a consequência, dita no title. "Sem pedidos"
                             // em cinza, não verde — não é "tudo certo", é só a ausência do dado.
-                            <div className="flex items-center gap-1.5 whitespace-nowrap text-amber-600" title={`${getEffectiveOrderCount(project.id)} pedido(s) vinculado(s) — por isso não pode ser excluído`}>
+                            <div className="flex items-center gap-1.5 whitespace-nowrap text-amber-700" title={`${getEffectiveOrderCount(project.id)} pedido(s) vinculado(s) — por isso não pode ser excluído`}>
                                 <Lock className="w-4 h-4" />
                                 <span className="text-sm font-normal">Com pedidos</span>
                             </div>
@@ -1189,6 +1189,28 @@ const ProjectList: React.FC<ProjectListProps> = ({
         ? projetosNaTela.map((item, indice) => ({ tipo: 'linha', item, indice }))
         : entradasDaPagina(gruposDaLista, agrupamento.recolhidos);
 
+    // Abrir um registro troca de tela; ao voltar, o foco vai para a linha de onde a pessoa saiu
+    // (crítica de Planejamento 2026-11-14, item 5: o foco caía no <body> e quem usa teclado
+    // recomeçava do topo). sessionStorage: vale só para esta aba e esta volta.
+    const chaveUltimaAberta = `projectList:ultimaAberta:${classificationFilter ?? activeTab}`;
+    const abrirRegistro = (id: string) => {
+        try { sessionStorage.setItem(chaveUltimaAberta, id); } catch { /* sem storage: só não devolve o foco */ }
+        if (onRowClick) onRowClick(id); else onEditProject(id);
+    };
+    const carregandoLista = isLoading || !!isExternalLoading;
+    React.useEffect(() => {
+        if (carregandoLista || projetosNaTela.length === 0) return;
+        let id: string | null = null;
+        try { id = sessionStorage.getItem(chaveUltimaAberta); } catch { return; }
+        if (!id) return;
+        const idSeguro = typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(id) : id.replace(/"/g, '\\"');
+        const alvo = document.querySelector<HTMLElement>(`[data-project-id="${idSeguro}"]`);
+        if (!alvo) return;
+        try { sessionStorage.removeItem(chaveUltimaAberta); } catch { /* idem */ }
+        alvo.focus({ preventScroll: true });
+        alvo.scrollIntoView?.({ block: 'nearest' });
+    }, [carregandoLista, projetosNaTela.length, chaveUltimaAberta]);
+
     return (
         <div className="space-y-6">
             {!hideHeader && (
@@ -1214,6 +1236,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             </button>
                         )}
                         <button
+                            data-abre-novo-projeto
                             onClick={() => onNewProject(classificationFilter || (activeTab === 'templates' ? 'OBRA' : 'ORCAMENTO'))}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                         >
@@ -1346,6 +1369,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <input
                         type="text"
                         placeholder="Buscar por código, nome, cliente ou obra…"
+                        aria-label="Buscar por código, nome, cliente ou obra"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         // placeholder:text-gray-500 — sem ele o navegador usava o cinza padrão (3,0:1, abaixo do AA).
@@ -1393,6 +1417,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     onClick={loadProjects}
                     className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
                     title="Atualizar dados"
+                    aria-label="Atualizar dados"
                 >
                     <RefreshCw className="w-4 h-4" />
                 </button>
@@ -1414,8 +1439,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     {viewMode === 'list' && (
                         <button
                             onClick={() => cols.autoFit()}
-                            className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                            className="p-1.5 rounded-[6px] text-gray-500 hover:text-gray-700 transition-all"
                             title="Ajustar largura das colunas ao conteúdo"
+                            aria-label="Ajustar largura das colunas ao conteúdo"
                         >
                             <MoveHorizontal className="w-4 h-4" />
                         </button>
@@ -1457,7 +1483,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
             ) : projetosNaTela.length === 0 ? (
                 <div className="text-center py-12">
                     <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">{textos.nenhum}</h3>
+                    {/* h2, não h3: logo abaixo do h1 da tela (salto de nível, crítica 2026-11-14). */}
+                    <h2 className="text-lg font-bold text-gray-900 mb-2">{textos.nenhum}</h2>
                     {/* Há registros na aba, mas a busca/o tipo/o filtro avançado esconderam todos: o
                         caminho é limpar, não cadastrar. Antes, com filtro avançado e sem busca, a
                         tela mandava "cadastrar o primeiro". */}
@@ -1535,8 +1562,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         // até 2026-11-14 a linha só abria com o mouse — pelo Tab o foco pulava
                                         // direto para os botões de Ações.
                                         tabIndex={0}
-                                        onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
-                                        onKeyDown={abrirPeloTeclado(() => onRowClick ? onRowClick(project.id) : onEditProject(project.id))}
+                                        data-project-id={project.id}
+                                        onClick={() => abrirRegistro(project.id)}
+                                        onKeyDown={abrirPeloTeclado(() => abrirRegistro(project.id))}
                                         className="hover:bg-blue-50/30 transition-colors group cursor-pointer outline-none"
                                     >
                                         {displayColumns.map((key, iCol) => (
@@ -1600,8 +1628,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             <div
                                 key={project.id}
                                 tabIndex={0}
-                                onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
-                                onKeyDown={abrirPeloTeclado(() => onRowClick ? onRowClick(project.id) : onEditProject(project.id))}
+                                data-project-id={project.id}
+                                onClick={() => abrirRegistro(project.id)}
+                                onKeyDown={abrirPeloTeclado(() => abrirRegistro(project.id))}
                                 className="bg-white rounded-[10px] border border-gray-200 shadow-sm hover:border-blue-300 hover:shadow-md transition-all cursor-pointer group flex flex-col outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2"
                             >
                                 <div className="p-5 flex-1">

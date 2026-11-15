@@ -439,6 +439,8 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
     <div className="relative" ref={panelRef}>
       <button
         onClick={() => state.setShowPanel(v => !v)}
+        aria-expanded={state.showPanel}
+        aria-haspopup="dialog"
         className={
           triggerSize === 'padrão'
             ? `flex items-center gap-2 px-4 py-4 rounded-[1.25rem] border transition-all active:scale-95 shadow-sm text-sm font-semibold whitespace-nowrap ${

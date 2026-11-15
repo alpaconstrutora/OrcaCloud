@@ -95,6 +95,9 @@ const ActionIconButton = React.forwardRef<HTMLButtonElement, ActionIconButtonPro
         ref={ref}
         type="button"
         title={title ?? defaults.title}
+        // Botão só de ícone: o nome acessível vem do aria-label (o title é o último recurso
+        // da especificação e alguns leitores não o anunciam). Quem passar aria-label manda.
+        aria-label={props['aria-label'] ?? title ?? defaults.title}
         className={`${BASE} ${sizeClasses.button} ${TONE_CLASSES[resolvedTone]} ${className}`}
         {...props}
       >

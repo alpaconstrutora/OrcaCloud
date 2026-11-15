@@ -151,12 +151,31 @@ subtítulo oklch(0.551…) = gray-500; 0 botões "Importar"; rolada até o fim, 
 Cambuhy" seguem dentro da área visível; Agrupar → Prazo dá "Atrasado 2" com as duas linhas;
 Orçamentos mantém título e "Importar Excel"; 26 testes verdes.
 
-### 5. Acessibilidade — ⏳
+### 5. Acessibilidade — ✅ feito
 
-**O que muda:** Esc nos modais Novo/Importar; foco volta à linha ao voltar do planejamento;
-contrastes do subtítulo (2,5:1), traço "-" (2,6:1) e "Com pedidos" (3,2:1); rótulo na busca;
-`aria-label` nos botões só de ícone; `aria-expanded` no Filtro avançado; h2 no vazio.
-**Como sei que terminou:** roteiro de teclado + medição de contraste na tela, todos ≥ 4,5:1.
+(Item 4 no ar em 15/11/2026, PR #452.)
+
+**O que muda:**
+- Modal de criação (`ProjectModal`, modo create — vale para obra/orçamento/planejamento/diário):
+  `role="dialog"` + `aria-modal` + nome ("Novo Planejamento"); foco entra no 1º campo; Tab preso
+  dentro; Esc nascido dentro = Cancelar; ao fechar o foco volta a quem abriu (ou ao "Novo …" da
+  lista, `data-abre-novo-projeto`, se o botão foi redesenhado). O modal de importar não existe
+  mais em Planejamento (2a).
+- Foco volta à linha de onde a pessoa saiu ao voltar do planejamento (sessionStorage por contexto,
+  `data-project-id` na linha e no card da grade).
+- Contraste: traço de vazio e "—" gray-400 (2,6:1) → gray-500; "Com pedidos" amber-600 (3,2:1) →
+  amber-700; ícones de Colunas e Ajustar largura gray-400 → gray-500. O subtítulo já saiu no item 4.
+- Nomes acessíveis: busca com `aria-label`; Atualizar, Ajustar largura e Configurar colunas com
+  `aria-label` (Colunas também `aria-expanded`); `ActionIconButton` passa a pôr o `title` também em
+  `aria-label` (o app inteiro); Filtro avançado com `aria-expanded` + `aria-haspopup="dialog"`.
+- Vazio: `h2` em vez de `h3` (não salta nível depois do `h1`).
+**Como sei que terminou (15/11, servidor local, escrita bloqueada, 0 tentativas):** dialog "Novo
+Planejamento" com foco dentro; 80 Tabs e Shift+Tab continuam dentro; Esc fecha e o foco volta ao
+botão "Novo planejamento"; Enter na linha do Divino → planejamento → "Voltar para Gestão de
+Planejamento" → foco na linha do Divino; Filtro avançado aria-expanded false→true; traço e
+engrenagem em oklch(0.551…) = gray-500. 26 testes do plano + 60 dos componentes tocados verdes.
+`check-ui-standard` no ProjectModal acusa o `searchTerm` em useState (l. 276) — já existia no
+main; é a busca do seletor de cliente do formulário (exceção §3.1).
 
 ### 6. Textos — ⏳
 

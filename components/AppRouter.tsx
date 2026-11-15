@@ -28,7 +28,6 @@ const OrganizationCreateSheet = React.lazy(() => import('./OrganizationCreateShe
 const BudgetEditor          = React.lazy(() => import('./BudgetEditor'));
 const ParametricEstimator   = React.lazy(() => import('./ParametricEstimator'));
 const FinancialScheduleL    = React.lazy(() => import('./FinancialSchedule').then(m => ({ default: m.FinancialSchedule })));
-const PlanningDashboard     = React.lazy(() => import('./PlanningDashboard'));
 const ExcelImportModal      = React.lazy(() => import('./ExcelImportModal'));
 const ProjectDiaryManager   = React.lazy(() => import('./ProjectDiaryManager'));
 const DiaryReportViewer     = React.lazy(() => import('./DiaryReportViewer'));
@@ -246,7 +245,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   const typedProjects = projects.filter(p => p.id).map(p => p as any as (typeof p & { id: string }));
   // Lista completa (obra + orçamento + planejamento + diário). Passe esta APENAS
   // para telas que são explicitamente sobre os outros tipos — ProjectList (que
-  // filtra por `classificationFilter`), PlanningDashboard, DiaryProjectsList,
+  // filtra por `classificationFilter`), DiaryProjectsList,
   // LaborDashboard, ProjectOverview. Todo o resto usa `typedProjects` (só obras).
   const typedAllProjects = allProjects.filter(p => p.id).map(p => p as any as (typeof p & { id: string }));
 
@@ -799,7 +798,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
               </button>
             </div>
           </div>
-          <PlanningDashboard projects={typedAllProjects} />
+          {/* Os cards de Planejamento moram no ProjectList (filtram a lista) — o antigo
+              PlanningDashboard mostrava um 5.4% fixo e não filtrava nada (crítica 2026-11-14). */}
           <ProjectList
             projects={typedAllProjects}
             onLoadProject={handleLoadProject}
@@ -812,6 +812,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             organizationId={activeOrganizationId || undefined}
             classificationFilter="PLANEJAMENTO"
             hideHeader={true}
+            isExternalLoading={projectsLoading}
           />
           <ExcelImportModal
             isOpen={isImportModalOpenPlanning}

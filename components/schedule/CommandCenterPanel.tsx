@@ -26,10 +26,12 @@ import {
 } from 'recharts';
 import { HierarchyNode, ProjectSchedule, BudgetEntry } from '../../types';
 import { scheduleConstraintsService, weeklyCommitmentsService } from '../../services/scheduleConstraintsService';
+import { indicadoresDePrazo, hojeLocalISO } from '../../utils/planejamentoIndicadores';
 
 // ─── Helpers ──────────────────────────────────────────────────
 
-const today = () => new Date().toISOString().split('T')[0];
+// Dia local (não UTC) — o mesmo "hoje" da conta de prazo em utils/planejamentoIndicadores.ts.
+const today = () => hojeLocalISO();
 
 const fmtDate = (iso?: string) => {
     if (!iso) return '—';
@@ -39,19 +41,6 @@ const fmtDate = (iso?: string) => {
 
 const fmtPct = (v: number) => `${v.toFixed(1)}%`;
 const fmtBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
-
-function daysBetween(a: string, b: string): number {
-    return Math.round(
-        (new Date(b + 'T00:00:00Z').getTime() - new Date(a + 'T00:00:00Z').getTime()) / 86400000
-    );
-}
-
-function elapsedFraction(start: string, end: string): number {
-    const t = today();
-    if (t <= start) return 0;
-    if (t >= end) return 1;
-    return daysBetween(start, t) / Math.max(1, daysBetween(start, end));
-}
 
 function flatLeaves(nodes: HierarchyNode[]): HierarchyNode[] {
     const acc: HierarchyNode[] = [];
@@ -71,38 +60,19 @@ function computeKpis(
     approvedMeasurements: number,
 ) {
     const leaves = flatLeaves(hierarchy);
-    const todayStr = today();
 
     const budgetById: Record<string, BudgetEntry> = {};
     budget.forEach(b => { budgetById[b.id] = b; });
 
-    let totalBudget = 0;
-    let ev = 0;
-    let pv = 0;
-    let physicalWeightedSum = 0;
-    let physicalWeightTotal = 0;
-    let atrasadas = 0;
-
-    leaves.forEach(leaf => {
-        const sched = schedule.itemSchedules?.find(s => s.id === leaf.id);
+    // Prazo (avanço físico, EV/PV/SPI, atrasadas, término, desvio da linha de base): conta
+    // única em utils/planejamentoIndicadores.ts — a lista Engenharia › Planejamento usa a mesma.
+    const folhas = leaves.map(leaf => {
         const b = budgetById[leaf.id];
-        const budgeted = b ? b.quantity * b.sinapiItem.price : (leaf.budgetedTotal ?? 0);
-        totalBudget += budgeted;
-
-        const realPct = (sched?.manualRealPct ?? 0) / 100;
-        if (budgeted > 0) {
-            physicalWeightedSum += realPct * budgeted;
-            physicalWeightTotal += budgeted;
-        }
-        ev += realPct * budgeted;
-
-        const s = sched?.earlyStart ?? sched?.startDate;
-        const e = sched?.earlyFinish ?? sched?.endDate;
-        if (s && e) pv += elapsedFraction(s, e) * budgeted;
-        if (e && e < todayStr && realPct < 1) atrasadas++;
+        return { id: leaf.id, orcado: b ? b.quantity * b.sinapiItem.price : (leaf.budgetedTotal ?? 0) };
     });
-
-    const physicalPct = physicalWeightTotal > 0 ? (physicalWeightedSum / physicalWeightTotal) * 100 : 0;
+    const prazo = indicadoresDePrazo(folhas, schedule);
+    const totalBudget = folhas.reduce((s, f) => s + f.orcado, 0);
+    const { ev, atrasadas, avancoFisicoPct: physicalPct } = prazo;
 
     // AC (Actual Cost) — custo real = compras de material (orders) + medições de empreitada
     // APROVADAS (mão de obra terceirizada). Sem as medições, obras de empreitada teriam o AC
@@ -114,7 +84,7 @@ function computeKpis(
 
     // EVM real: SPI (prazo) e CPI (custo). BAC = orçamento total; EAC = previsão de custo
     // final assumindo a mesma eficiência (CPI) observada até aqui; ETC = quanto falta gastar.
-    const spi = pv > 0 ? ev / pv : null;
+    const { spi } = prazo;
     const bac = totalBudget;
     const cpi = ac > 0 ? ev / ac : null;
     const eac = cpi !== null && cpi > 0 ? bac / cpi : null;
@@ -125,24 +95,13 @@ function computeKpis(
         return sched?.isCritical;
     });
 
-    const projectEnd = schedule.itemSchedules?.reduce((max, s) => {
-        const e = s.earlyFinish ?? s.endDate;
-        if (!e) return max;
-        return !max || e > max ? e : max;
-    }, '') ?? schedule.endDate ?? '';
+    const { fimPrevisto: projectEnd, fimBaseline: baselineEnd, desvioDias: devioDias } = prazo;
 
-    let baselineEnd = '';
-    let devioDias: number | null = null;
     let costVarianceVsBaseline: number | null = null;
     let hhVarianceVsBaseline: number | null = null;
     if (schedule.activeBaselineId && schedule.baselines) {
         const bl = schedule.baselines.find(b => b.id === schedule.activeBaselineId);
         if (bl) {
-            baselineEnd = Object.values(bl.itemDates).reduce((max, d) => {
-                return !max || d.endDate > max ? d.endDate : max;
-            }, '');
-            if (baselineEnd && projectEnd) devioDias = daysBetween(baselineEnd, projectEnd);
-
             if (bl.itemData) {
                 // node.variation já foi calculado contra esta mesma baseline em buildHierarchy;
                 // basta somar as folhas. workVariance vem do ItemScheduleDetails (calculado no motor).

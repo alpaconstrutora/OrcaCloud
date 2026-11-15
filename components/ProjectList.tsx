@@ -2,7 +2,7 @@ import React from 'react';
 import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { projectService, ProjectData } from '../services/projectService';
 import { empreendimentoService } from '../services/empreendimentoService';
-import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2, MoveHorizontal, AlertCircle } from 'lucide-react';
+import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2, MoveHorizontal, AlertCircle, AlertTriangle, Zap, CalendarOff } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { TipoObra, OBRA_STATUSES } from '../types/project';
 
@@ -49,6 +49,8 @@ import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
 import { agruparOrcamentos, OPCOES_AGRUPAR_ORCAMENTO, type CampoAgruparOrcamento } from '../utils/orcamentoGrupos';
+import { diasEntre, hojeLocalISO, type IndicadoresDePrazo } from '../utils/planejamentoIndicadores';
+import { useIndicadoresDosPlanejamentos } from '../hooks/useIndicadoresDosPlanejamentos';
 
 interface ProjectSettings {
     classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO' | string;
@@ -144,6 +146,27 @@ const RECORTES_ORCAMENTO: { key: RecorteOrcamento; label: string; dica: string; 
     { key: 'parados', label: 'Parados há mais de 30 dias', dica: 'Mostrar só os orçamentos sem atualização há mais de 30 dias', cor: 'orange', icone: 'relogio' },
     { key: 'com-pedidos', label: 'Com pedidos', dica: 'Mostrar só os orçamentos que já têm pedido de compra vinculado', cor: 'blue', icone: 'cadeado' },
 ];
+
+/** Recortes dos cards de Planejamento (crítica 2026-11-14, docs/planos/2026-11-14-planejamento-
+ *  lista-critica.md, item 1). Substituem o PlanningDashboard, cujo "Progresso Médio 5.4%" era o
+ *  default fixo `obraProgress` e cujas "Atividades Críticas" contavam itens órfãos do cronograma.
+ *  Mesma conta da Central de Comando (utils/planejamentoIndicadores.ts); clicar filtra a lista. */
+type RecortePlanejamento = 'atrasados' | 'terminam-30' | 'criticas-abertas' | 'sem-cronograma';
+const RECORTES_PLANEJAMENTO: { key: RecortePlanejamento; label: string; dica: string; cor: 'red' | 'amber' | 'orange' | 'gray'; icone: 'alerta' | 'relogio' | 'raio' | 'calendario' }[] = [
+    { key: 'atrasados', label: 'Com tarefa atrasada', dica: 'Mostrar só os planejamentos com tarefa que passou do término sem chegar a 100%', cor: 'red', icone: 'alerta' },
+    { key: 'terminam-30', label: 'Terminam em 30 dias', dica: 'Mostrar só os planejamentos com término previsto nos próximos 30 dias e ainda não concluídos', cor: 'amber', icone: 'relogio' },
+    { key: 'criticas-abertas', label: 'Com tarefa crítica em aberto', dica: 'Mostrar só os planejamentos com tarefa do caminho crítico ainda não concluída', cor: 'orange', icone: 'raio' },
+    { key: 'sem-cronograma', label: 'Sem cronograma', dica: 'Mostrar só os planejamentos cujas tarefas ainda não têm início e término', cor: 'gray', icone: 'calendario' },
+];
+const passaNoRecortePlanejamento = (ind: IndicadoresDePrazo | undefined, r: RecortePlanejamento, hoje: string): boolean => {
+    if (!ind) return false;
+    if (r === 'sem-cronograma') return !ind.temDatas;
+    if (r === 'atrasados') return ind.atrasadas > 0;
+    if (r === 'criticas-abertas') return ind.criticasAbertas > 0;
+    if (!ind.fimPrevisto || ind.avancoFisicoPct >= 100) return false;
+    const dias = diasEntre(hoje, ind.fimPrevisto);
+    return dias >= 0 && dias <= 30;
+};
 
 /** Foco da linha pelo teclado. O contorno do <tr> não é desenhado pelo Chrome (medido
  *  14/11/2026), então o anel vai nas células: fundo blue-50 + linhas azuis de 2px em cima e
@@ -1020,7 +1043,23 @@ const ProjectList: React.FC<ProjectListProps> = ({
     if (isOrcamentoContext) {
         for (const r of RECORTES_ORCAMENTO) contagemRecorte[r.key] = filteredProjects.filter(p => passaNoRecorte(p, r.key)).length;
     }
-    const projetosNaTela = recorteAtivo ? filteredProjects.filter(p => passaNoRecorte(p, recorteAtivo)) : filteredProjects;
+    // Recorte pelos cards de Planejamento — mesmas regras de sessão do de Orçamentos. A conta
+    // precisa do orçamento de cada planejamento (busca leve no hook); enquanto carrega ou se
+    // falhar, o card diz isso e nada é recortado.
+    const [recortePlan, setRecortePlan] = React.useState<RecortePlanejamento | null>(null);
+    const indicadoresPlan = useIndicadoresDosPlanejamentos(tabProjects, isPlanejamentoContext);
+    const hojePlan = hojeLocalISO();
+    const recortePlanAtivo = isPlanejamentoContext && indicadoresPlan.estado === 'pronto' ? recortePlan : null;
+    const contagemRecortePlan: Record<RecortePlanejamento, number> = { atrasados: 0, 'terminam-30': 0, 'criticas-abertas': 0, 'sem-cronograma': 0 };
+    if (isPlanejamentoContext && indicadoresPlan.estado === 'pronto') {
+        for (const r of RECORTES_PLANEJAMENTO) contagemRecortePlan[r.key] = filteredProjects.filter(p => passaNoRecortePlanejamento(indicadoresPlan.porProjeto[p.id], r.key, hojePlan)).length;
+    }
+
+    const projetosNaTela = recorteAtivo
+        ? filteredProjects.filter(p => passaNoRecorte(p, recorteAtivo))
+        : recortePlanAtivo
+            ? filteredProjects.filter(p => passaNoRecortePlanejamento(indicadoresPlan.porProjeto[p.id], recortePlanAtivo, hojePlan))
+            : filteredProjects;
 
     const agrupamento = useAgrupamento<CampoAgruparOrcamento>('projectListGroupBy:orcamentos');
     const campoAgrupar: CampoAgruparOrcamento | 'none' =
@@ -1095,8 +1134,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
             )}
 
             {/* KPIs genéricos desta tabela — só quando o pai não já mostra seus próprios KPIs
-                (Planejamento usa PlanningDashboard, Diário usa DiaryDashboard, ambos com
-                hideHeader=true; mostrar os dois juntos duplicava a informação). */}
+                (Diário usa DiaryDashboard, com hideHeader=true; mostrar os dois juntos duplicava a
+                informação). Planejamento tem os seus recortes logo abaixo. */}
             {!hideHeader && isOrcamentoContext && (
                 // Cada card é um botão (teclado e leitor de tela: aria-pressed diz se está filtrando).
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
@@ -1118,6 +1157,51 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     sub={ativo ? 'Filtrando a lista · clique para ver todos' : `de ${filteredProjects.length} · clique para filtrar`}
                                     icon={icone}
                                     color={r.cor}
+                                    className="h-full"
+                                />
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+            {isPlanejamentoContext && (
+                // Planejamento: o pai (AppRouter) desenha o título com hideHeader, e os cards
+                // moram aqui porque filtram ESTA lista. Sem `disabled` enquanto calcula: botão
+                // desabilitado esconde o title que diz o motivo.
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-3" aria-busy={indicadoresPlan.estado === 'carregando'}>
+                    {RECORTES_PLANEJAMENTO.map(r => {
+                        const pronto = indicadoresPlan.estado === 'pronto';
+                        const falhou = indicadoresPlan.estado === 'erro';
+                        const ativo = recortePlanAtivo === r.key;
+                        const icone = r.icone === 'alerta' ? <AlertTriangle className="w-4 h-4" />
+                            : r.icone === 'relogio' ? <Clock className="w-4 h-4" />
+                            : r.icone === 'raio' ? <Zap className="w-4 h-4" />
+                            : <CalendarOff className="w-4 h-4" />;
+                        // Curtas: com 4 cards lado a lado a legenda longa era cortada (14/11/2026).
+                        const sub = falhou ? 'Falhou · clique para tentar de novo'
+                            : !pronto ? 'Calculando…'
+                            : ativo ? 'Filtrando · clique para ver todos'
+                            : `de ${filteredProjects.length} · clique para filtrar`;
+                        return (
+                            <button
+                                key={r.key}
+                                type="button"
+                                aria-pressed={pronto ? ativo : undefined}
+                                aria-disabled={!pronto && !falhou ? true : undefined}
+                                onClick={() => {
+                                    if (falhou) { indicadoresPlan.tentarDeNovo(); return; }
+                                    if (!pronto) return;
+                                    setRecortePlan(ativo ? null : r.key);
+                                }}
+                                title={falhou ? 'Tentar calcular de novo' : !pronto ? 'Calculando — aguarde um instante' : ativo ? 'Mostrar todos os planejamentos' : r.dica}
+                                className={`text-left rounded-xl transition-shadow focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 ${ativo ? 'ring-2 ring-blue-500' : pronto || falhou ? 'hover:shadow-sm' : 'cursor-wait'}`}
+                            >
+                                <KpiCard
+                                    label={r.label}
+                                    value={pronto ? contagemRecortePlan[r.key] : '—'}
+                                    sub={sub}
+                                    icon={icone}
+                                    color={pronto ? r.cor : 'gray'}
                                     className="h-full"
                                 />
                             </button>
@@ -1264,7 +1348,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             <p className="text-sm text-gray-500">Nenhum resultado para a busca e os filtros aplicados.</p>
                             <button
                                 type="button"
-                                onClick={() => { setSearchTerm(''); setTipoFilter(''); advancedFilters.clearRules(); setRecorte(null); }}
+                                onClick={() => { setSearchTerm(''); setTipoFilter(''); advancedFilters.clearRules(); setRecorte(null); setRecortePlan(null); }}
                                 className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
                             >
                                 Limpar busca e filtros

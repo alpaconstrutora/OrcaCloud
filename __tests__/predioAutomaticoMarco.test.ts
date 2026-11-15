@@ -6,6 +6,8 @@
  * Na PA0 o prédio é o que existe hoje: a massa (bloco + produto) → o pavimento tipo (M6a, com núcleo e cópias vivas) → a
  * planta interna das unidades (M6b). Os subsolos de R8 e R12 entram com a garagem (PA8).
  *
+ * PA8c (15/11/2026): a drenagem da garagem — ralos, canaletas, caixa separadora, poço com 2 bombas e o recalque.
+ *
  * PA8b (15/11/2026): a garagem ganha as escadas de emergência (a rota do subsolo fecha) e a elétrica (QDG, luzes, exaustores).
  *
  * PA8a (15/11/2026): o R8 ganha 1 subsolo e o R12, 2 — o bloco de garagem no retângulo do lote, como o gerador de massa
@@ -160,6 +162,9 @@ describe('marco dos prédios de referência (prédio automático)', () => {
           expect(agora.incendio!.andares.filter((a) => /subsolo/.test(a.nome) && (a.semRota > 0 || a.naoAtendem > 0))).toEqual([]);
           expect(agora.garagem!.exaustores).toBeGreaterThan(0);
           expect(agora.garagem!.luzes).toBeGreaterThan(0);
+          // PA8c: a drenagem — o fundo do poço abaixo da rede, 2 bombas e o recalque até a caixa de inspeção.
+          expect(agora.garagem!.drenagem).toMatchObject({ bombas: 2, recalque: true });
+          expect(agora.garagem!.drenagem!.ralos).toBeGreaterThan(0);
         } else expect(agora.garagem).toBeNull();
         if (nome === 'R12') {
           expect(n).toBe(11);

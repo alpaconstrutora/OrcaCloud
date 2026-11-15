@@ -781,6 +781,37 @@ export const laborService = {
         return data || [];
     },
 
+    /**
+     * Colaboradores que podem ser CREDOR num lançamento da organização `orgId`
+     * (Financeiro › Extratos): os ativos DELA + os disponibilizados para ela em
+     * RH › Colaboradores › "Disponibilizar Colaborador" (`employee_org_shares`).
+     *
+     * Regra do usuário (15/11/2026): a disponibilização é o que diz por quais
+     * organizações o colaborador pode ser pago. O "Atende também" da conta de
+     * pagamento NÃO alarga esta lista — ele vale para CC, plano de contas, obra,
+     * fornecedor e cliente. Por isso recebe UMA org (a dona da conta), não a lista
+     * de orgs atendidas.
+     */
+    async listCredoresColaboradoresDaOrg(orgId: string): Promise<{ id: string; name: string }[]> {
+        const { data: shared, error: sharedErr } = await supabase
+            .from('employee_org_shares')
+            .select('employee_id')
+            .eq('target_org_id', orgId);
+        if (sharedErr) throw sharedErr;
+        const sharedIds = (shared || []).map(s => s.employee_id);
+
+        const { data, error } = await supabase
+            .from('employees')
+            .select('id, name')
+            .eq('status', 'ATIVO')
+            .or(sharedIds.length > 0
+                ? `org_id.eq.${orgId},id.in.(${sharedIds.join(',')})`
+                : `org_id.eq.${orgId}`)
+            .order('name', { ascending: true });
+        if (error) throw error;
+        return data || [];
+    },
+
     async listOrgsWithActiveEmployees(): Promise<string[]> {
         const { data, error } = await supabase
             .from('employees')

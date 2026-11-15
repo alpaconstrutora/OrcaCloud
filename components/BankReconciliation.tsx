@@ -30,6 +30,7 @@ import { supabase } from '../lib/supabase';
 import { financialSyncService } from '../services/financialSyncService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { financialRegistryService } from '../services/financialRegistryService';
+import { laborService } from '../services/laborService';
 import { useStore } from '../store/useStore';
 import { useOrgWriteTarget, useWritableOrganizations, errorMessage } from '../hooks/useOrgContext';
 import { motivoParaNaoMudarOrganizacao, planoDaMudanca, type OrgDasDimensoes } from '../utils/extratoMudarOrganizacao';
@@ -987,10 +988,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         loadRules();
     }, [organizationId]);
 
-    // Organizações cujas dimensões (CC, plano de contas, obra, fornecedor, cliente,
-    // colaborador) a conta selecionada pode usar: a DONA + as que ela "atende também"
+    // Organizações cujas dimensões (CC, plano de contas, obra, fornecedor, cliente)
+    // a conta selecionada pode usar: a DONA + as que ela "atende também"
     // (lista específica, ou todas as do usuário). Regra de produto de 2026-09-15 — ver
     // docs/planos/2026-09-15-conta-atende-outras-organizacoes.md. Sem conta: só a org efetiva.
+    // COLABORADOR não segue esta lista desde 15/11/2026 — ver `orgDonaDaConta` abaixo.
     const orgsDaConta = useMemo<string[]>(() => {
         if (!effectiveOrgId) return [];
         const acc = accounts.find(a => a.id === selectedAccountId);
@@ -1000,6 +1002,30 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         return [...new Set([effectiveOrgId, ...atendidas])];
     }, [effectiveOrgId, selectedAccountId, accounts, userOrganizations]);
     const orgsDaContaKey = orgsDaConta.join(',');
+    // Credor colaborador: os da organização DONA da conta + os disponibilizados para ela
+    // (RH › Colaboradores › "Disponibilizar Colaborador"). Regra do usuário de 15/11/2026:
+    // a disponibilização diz por quais organizações o colaborador pode ser pago; o
+    // "Atende também" da conta não alarga essa lista. Até então vinha de `orgsDaConta`
+    // e conta que atende "todas" listava todo mundo. Efeito próprio (não o de
+    // `orgsDaContaKey`): duas contas "todas" de donas diferentes têm a mesma lista
+    // de orgs atendidas, e trocar entre elas não recarregaria.
+    const orgDonaDaConta = useMemo<string | null>(
+        () => accounts.find(a => a.id === selectedAccountId)?.organization_id || effectiveOrgId || null,
+        [accounts, selectedAccountId, effectiveOrgId],
+    );
+    useEffect(() => {
+        if (!orgDonaDaConta) return;
+        let cancelado = false;
+        laborService.listCredoresColaboradoresDaOrg(orgDonaDaConta)
+            .then(data => {
+                if (cancelado) return;
+                setMasterEmployees(data.map(e => e.name));
+                // Colaborador entra no drawer de Credor com a categoria "Colaborador" (sem documento).
+                setEmployeeRegistros(data.map(e => ({ id: `emp:${e.id}`, name: e.name, category: 'Colaborador' })));
+            })
+            .catch(error => console.error('Error loading employees:', error));
+        return () => { cancelado = true; };
+    }, [orgDonaDaConta]);
     // Para onde um lançamento do extrato pode MUDAR de organização: a dona da conta + as que
     // ela atende, dentre as que o usuário grava (RLS de bank_transactions = is_org_member).
     // Da CONTA, não de `effectiveOrgId` (que segue o topo quando ele aponta uma org).
@@ -1039,7 +1065,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         if (orgsDaConta.length === 0) return;
         loadSuppliers(orgsDaConta);
         loadClients(orgsDaConta);
-        loadEmployees(orgsDaConta);
         loadProjects(orgsDaConta);
         loadCostCenters(orgsDaConta);
         loadPlanoContas(orgsDaConta);
@@ -1282,24 +1307,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             console.error('Error syncing categories:', err);
         } finally {
             setIsLoading(false);
-        }
-    };
-
-    const loadEmployees = async (orgIds: string[]) => {
-        try {
-            const { data } = await supabase
-                .from('employees')
-                .select('id, name')
-                .in('org_id', orgIds)
-                .eq('status', 'ATIVO')
-                .order('name', { ascending: true });
-            if (data) {
-                setMasterEmployees(data.map(e => e.name));
-                // Colaborador entra no drawer de Credor com a categoria "Colaborador" (sem documento).
-                setEmployeeRegistros(data.map(e => ({ id: `emp:${e.id}`, name: e.name, category: 'Colaborador' })));
-            }
-        } catch (error) {
-            console.error('Error loading employees:', error);
         }
     };
 

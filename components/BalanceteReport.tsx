@@ -4,12 +4,13 @@ import type { BalanceteLine, DREGroup } from '../types/financial'
 import { useToast } from '../hooks/useToast'
 import { formatMoney } from './ui/Format'
 import { useResizableColumns } from './ui/TableUtils'
-import { MoveHorizontal } from 'lucide-react'
+import { MoveHorizontal, Download, ChevronDown, ChevronRight } from 'lucide-react'
 import { useCargaVigente } from '../hooks/useCargaVigente'
 import { motivoPeriodoInvalido } from '../utils/periodoControladoria'
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
-import { BarraDeEscopo } from './controladoria/BarraDeEscopo'
+import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo'
 import type { EscopoControladoria } from './controladoria/escopo'
+import { baixarCSV } from './controladoria/csv'
 import { AvisoSemClassificacao } from './controladoria/SemClassificacao'
 
 const BALANCETE_COL_WIDTHS: Record<string, number> = { conta: 260, creditos: 150, debitos: 150, saldo: 150, lancamentos: 130 }
@@ -47,7 +48,7 @@ const fmt = formatMoney
 function colorSaldo(v: number) {
     if (v > 0) return 'text-emerald-700 font-medium'
     if (v < 0) return 'text-red-600 font-medium'
-    return 'text-slate-400 font-normal'
+    return 'text-gray-500 font-normal'
 }
 
 // ── Tipos internos ────────────────────────────────────────────────────────────
@@ -151,6 +152,14 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
                         {lines.length} contas · {totals.n.toLocaleString('pt-BR')} lançamentos
                     </span>
                 )}
+                <button type="button" disabled={lines.length === 0}
+                    title={lines.length ? 'Baixar o balancete em CSV' : 'Sem contas para exportar'}
+                    onClick={() => baixarCSV(`Balancete_${dateFrom}_${dateTo}.csv`,
+                        ['Grupo', 'Conta', 'Créditos', 'Débitos', 'Saldo líquido', 'Lançamentos'],
+                        lines.map(l => [GROUP_LABEL[l.dre_group as DREGroup] ?? l.dre_group, l.category_name, l.creditos, l.debitos, l.saldo_liquido, l.n_transacoes]))}
+                    className={`${BOTAO_DA_BARRA} disabled:opacity-40 disabled:cursor-not-allowed`}>
+                    <Download className="w-4 h-4" aria-hidden="true" /> CSV
+                </button>
             </BarraDeEscopo>
 
             {/* Mesmo aviso da DRE: o grupo Sem Classificação leva aos lançamentos. */}
@@ -180,17 +189,19 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
                         </button>
                     </div>
                     <div className="overflow-x-auto">
-                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: Object.keys(BALANCETE_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', minWidth: '100%', width: Object.keys(BALANCETE_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
                         <colgroup>
                             {Object.keys(BALANCETE_COL_WIDTHS).map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+                            <col />
                         </colgroup>
                         <thead>
                             <tr className="bg-white text-gray-700 border-b border-gray-200 text-xs font-semibold">
                                 <th className="px-6 py-2 border-r border-gray-100 relative overflow-hidden">Conta / Categoria<cols.ResizeHandle colKey="conta" /></th>
                                 <th className="px-6 py-2 border-r border-gray-100 text-right relative overflow-hidden">Créditos<cols.ResizeHandle colKey="creditos" /></th>
                                 <th className="px-6 py-2 border-r border-gray-100 text-right relative overflow-hidden">Débitos<cols.ResizeHandle colKey="debitos" /></th>
-                                <th className="px-6 py-2 border-r border-gray-100 text-right relative overflow-hidden">Saldo Líquido<cols.ResizeHandle colKey="saldo" /></th>
-                                <th className="px-6 py-2 text-right relative overflow-hidden">Lançamentos<cols.ResizeHandle colKey="lancamentos" /></th>
+                                <th className="px-6 py-2 border-r border-gray-100 text-right relative overflow-hidden">Saldo líquido<cols.ResizeHandle colKey="saldo" /></th>
+                                <th className="px-6 py-2 border-r border-gray-100 text-right relative overflow-hidden">Lançamentos<cols.ResizeHandle colKey="lancamentos" /></th>
+                                <th aria-hidden="true" />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -203,50 +214,56 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
                                     <React.Fragment key={grp}>
                                         {/* Linha de grupo */}
                                         <tr
-                                            className="bg-slate-50/80 cursor-pointer hover:bg-slate-100 transition-colors"
+                                            className="bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                                             onClick={() => toggleGroup(grp)}
+                                            tabIndex={0}
+                                            role="button"
+                                            aria-expanded={open}
+                                            onKeyDown={e => { if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); toggleGroup(grp) } }}
                                         >
-                                            <td className="px-5 py-2.5 flex items-center gap-2">
-                                                <span className="text-slate-400 text-xs select-none">
-                                                    {open ? '▾' : '▸'}
-                                                </span>
-                                                <span className="text-sm font-medium text-slate-600">
+                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                <span className="flex items-center gap-2 text-sm font-medium text-gray-800">
+                                                    {open
+                                                        ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" aria-hidden="true" />
+                                                        : <ChevronRight className="w-3.5 h-3.5 text-gray-500 shrink-0" aria-hidden="true" />}
                                                     {GROUP_LABEL[grp]}
                                                 </span>
                                             </td>
-                                            <td className="px-4 py-2.5 text-table-body text-right text-slate-500 tabular-nums">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right text-gray-800 tabular-nums">
                                                 {fmt(sub.creditos)}
                                             </td>
-                                            <td className="px-4 py-2.5 text-table-body text-right text-slate-500 tabular-nums">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right text-gray-800 tabular-nums">
                                                 {fmt(sub.debitos)}
                                             </td>
-                                            <td className={`px-4 py-2.5 text-form-label text-right tabular-nums ${colorSaldo(sub.saldo)}`}>
+                                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums ${colorSaldo(sub.saldo)}`}>
                                                 {fmt(sub.saldo)}
                                             </td>
-                                            <td className="px-4 py-2.5 text-table-body text-right text-slate-400">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-right text-gray-600 tabular-nums">
                                                 {sub.n.toLocaleString('pt-BR')}
                                             </td>
+                                            <td aria-hidden="true"></td>
                                         </tr>
 
                                         {/* Linhas de detalhe */}
                                         {open && grpLines.map((l, i) => (
                                             <tr key={l.category_id ?? `${grp}-${i}`}
                                                 className="hover:bg-blue-50/30 transition-colors">
-                                                <td className="px-5 py-2 pl-11 text-sm text-slate-700">
+                                                <td className="px-6 py-2.5 pl-12 border-r border-gray-100 text-sm font-normal text-gray-700">
                                                     {l.category_name}
                                                 </td>
-                                                <td className="px-4 py-2 text-sm text-right text-slate-600 tabular-nums">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right text-gray-800 tabular-nums">
                                                     {fmt(l.creditos)}
                                                 </td>
-                                                <td className="px-4 py-2 text-sm text-right text-slate-600 tabular-nums">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right text-gray-800 tabular-nums">
                                                     {fmt(l.debitos)}
                                                 </td>
-                                                <td className={`px-4 py-2 text-sm text-right tabular-nums ${colorSaldo(l.saldo_liquido)}`}>
+                                                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums ${colorSaldo(l.saldo_liquido)}`}>
                                                     {fmt(l.saldo_liquido)}
                                                 </td>
-                                                <td className="px-4 py-2 text-sm text-right text-slate-400 tabular-nums">
+                                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-right text-gray-600 tabular-nums">
                                                     {l.n_transacoes.toLocaleString('pt-BR')}
                                                 </td>
+                                                <td aria-hidden="true"></td>
                                             </tr>
                                         ))}
                                     </React.Fragment>
@@ -256,22 +273,23 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
 
                         {/* Totais */}
                         <tfoot>
-                            <tr className="border-t-2 border-slate-200 bg-slate-50">
-                                <td className="px-5 py-3 text-sm font-medium text-slate-700">
-                                    Total Geral
+                            <tr className="border-t-2 border-gray-200 bg-gray-50">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-900">
+                                    Total geral
                                 </td>
-                                <td className="px-4 py-3 text-sm font-medium text-right text-slate-700 tabular-nums">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right text-gray-900 tabular-nums">
                                     {fmt(totals.creditos)}
                                 </td>
-                                <td className="px-4 py-3 text-sm font-medium text-right text-slate-700 tabular-nums">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right text-gray-900 tabular-nums">
                                     {fmt(totals.debitos)}
                                 </td>
-                                <td className={`px-4 py-3 text-sm text-right tabular-nums ${colorSaldo(totals.saldo)}`}>
+                                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums ${colorSaldo(totals.saldo)}`}>
                                     {fmt(totals.saldo)}
                                 </td>
-                                <td className="px-4 py-3 text-sm font-medium text-right text-slate-500 tabular-nums">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right text-gray-700 tabular-nums">
                                     {totals.n.toLocaleString('pt-BR')}
                                 </td>
+                                <td aria-hidden="true"></td>
                             </tr>
                         </tfoot>
                     </table>

@@ -1,13 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Search, MoveHorizontal } from 'lucide-react';
+import { Search, MoveHorizontal, Download } from 'lucide-react';
 import { listJournalEntries } from '../services/diarioService';
 import type { JournalEntryPair } from '../services/diarioService';
 import { useResizableColumns, usePersistedState } from './ui/TableUtils';
 import { useCargaVigente } from '../hooks/useCargaVigente';
 import { motivoPeriodoInvalido } from '../utils/periodoControladoria';
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
-import { BarraDeEscopo } from './controladoria/BarraDeEscopo';
+import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo';
 import type { EscopoControladoria } from './controladoria/escopo';
+import { KpiCard } from './ui/KpiCard';
+import { GRADE_DE_INDICADORES } from './controladoria/indicadores';
+import { baixarCSV } from './controladoria/csv';
 
 const DIARIO_COL_WIDTHS: Record<string, number> = {
   data: 110, descricao: 220, origem: 110, contaDebito: 150, contaCredito: 150, valor: 140, status: 120,
@@ -74,22 +77,26 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
   return (
     <div className="space-y-6">
       <BarraDeEscopo escopo={escopo}
-        aplica={{ periodo: true, regime: 'O diário lista os lançamentos como foram gerados, cada um na sua data: não há regime.', obra: null }} />
+        aplica={{ periodo: true, regime: 'O diário lista os lançamentos como foram gerados, cada um na sua data: não há regime.', obra: null }}>
+        <button type="button" disabled={shown.length === 0}
+          title={shown.length ? 'Baixar os lançamentos da tela em CSV' : 'Sem lançamentos para exportar'}
+          onClick={() => baixarCSV(`Diario_${dateFrom}_${dateTo}.csv`,
+            ['Data', 'Descrição', 'Origem', 'Conta débito', 'Conta crédito', 'Valor', 'Situação'],
+            shown.map(e => [e.entryDate, e.description, SOURCE_LABEL[e.sourceSystem ?? ''] ?? e.sourceSystem, e.debitAccount, e.creditAccount, e.debitAmount, e.status === 'CONCILIATED' ? 'Conciliado' : 'Pendente']))}
+          className={`${BOTAO_DA_BARRA} disabled:opacity-40 disabled:cursor-not-allowed`}>
+          <Download className="w-4 h-4" aria-hidden="true" /> CSV
+        </button>
+      </BarraDeEscopo>
 
       {/* Totalizadores — só com dado de verdade: zero durante a falha ou com
           período incompleto seria um número afirmado sobre o que não foi lido. */}
       {!motivoPeriodo && !loading && !falhou && (
-      <div className="grid grid-cols-3 gap-4">
-        {[
-          { label: 'Lançamentos',    val: shown.length,          color: 'text-slate-800' },
-          { label: 'Total Débitos',  val: fmt(totalDebit),       color: 'text-blue-700' },
-          { label: 'Total Créditos', val: fmt(totalCredit),      color: 'text-emerald-700' },
-        ].map(s => (
-          <div key={s.label} className="bg-white rounded-2xl border border-slate-200 p-5">
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-1">{s.label}</p>
-            <p className={`text-2xl font-black ${s.color}`}>{s.val}</p>
-          </div>
-        ))}
+      <div className={GRADE_DE_INDICADORES}>
+        <KpiCard destaque label="Lançamentos" value={shown.length.toLocaleString('pt-BR')}
+          sub={search ? 'Os que casam com a busca' : 'No período'} />
+        <KpiCard destaque label="Total de débitos" value={fmt(totalDebit)} />
+        <KpiCard destaque label="Total de créditos" value={fmt(totalCredit)}
+          sub={Math.abs(totalDebit - totalCredit) < 0.005 ? 'Débitos = créditos' : `Diferença de ${fmt(totalDebit - totalCredit)}`} />
       </div>
       )}
 
@@ -130,31 +137,33 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
         ) : (
           <>
             <div className="overflow-x-auto">
-            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: Object.keys(DIARIO_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
+            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', minWidth: '100%', width: Object.keys(DIARIO_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
               <colgroup>
                 {Object.keys(DIARIO_COL_WIDTHS).map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+                <col />
               </colgroup>
               <thead>
-                <tr className="bg-gray-50 text-gray-500 border-b border-gray-200">
+                <tr className="bg-white text-gray-700 border-b border-gray-200">
                   {[
                     ['data', 'Data'], ['descricao', 'Descrição'], ['origem', 'Origem'],
                     ['contaDebito', 'Conta Débito'], ['contaCredito', 'Conta Crédito'], ['valor', 'Valor'], ['status', 'Status'],
                   ].map(([key, h]) => (
-                    <th key={key} className="px-6 py-2 border-r border-gray-100 last:border-r-0 font-semibold text-xs text-gray-500 whitespace-nowrap relative overflow-hidden">
+                    <th key={key} className="px-6 py-2 border-r border-gray-100 font-semibold text-xs text-gray-700 whitespace-nowrap relative overflow-hidden">
                       {h}
                       <cols.ResizeHandle colKey={key} />
                     </th>
                   ))}
+                  <th aria-hidden="true" />
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
                 {shown.map(e => (
                   <tr key={e.journalEntryId} className="hover:bg-blue-50/50 transition-colors">
-                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-slate-500 whitespace-nowrap">
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">
                       {fmtDate(e.entryDate)}
                     </td>
-                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-slate-700 truncate" title={e.description}>
-                      {e.description}
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
+                      <span className="block truncate" title={e.description}>{e.description}</span>
                     </td>
                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-indigo-700">
                       {SOURCE_LABEL[e.sourceSystem ?? ''] ?? (e.sourceSystem ?? '—')}
@@ -164,11 +173,12 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-slate-800 whitespace-nowrap">
                       {fmt(e.debitAmount)}
                     </td>
-                    <td className="px-6 py-2.5 text-sm font-normal">
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal">
                       <span className={e.status === 'CONCILIATED' ? 'text-emerald-700' : 'text-amber-700'}>
                         {e.status === 'CONCILIATED' ? 'Conciliado' : 'Pendente'}
                       </span>
                     </td>
+                    <td aria-hidden="true"></td>
                   </tr>
                 ))}
               </tbody>

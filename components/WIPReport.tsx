@@ -2,43 +2,26 @@ import React from 'react'
 import { financialReportService } from '../services/financialReportService'
 import type { WIPLine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
-import { TrendingUp, TrendingDown, AlertTriangle, MoveHorizontal } from 'lucide-react'
+import { TrendingUp, TrendingDown, AlertTriangle, MoveHorizontal, Download } from 'lucide-react'
 import { formatMoney, formatPercent } from './ui/Format'
 import { useResizableColumns } from './ui/TableUtils'
 import { useCargaVigente } from '../hooks/useCargaVigente'
 import { motivoDataInvalida } from '../utils/periodoControladoria'
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
-import { BarraDeEscopo } from './controladoria/BarraDeEscopo'
+import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo'
 import type { EscopoControladoria } from './controladoria/escopo'
+import { KpiCard } from './ui/KpiCard'
+import { GRADE_DE_INDICADORES, pctBR, tomDoResultado } from './controladoria/indicadores'
+import { baixarCSV } from './controladoria/csv'
 
 const WIP_COL_WIDTHS: Record<string, number> = {
-    project_name: 220, empresa_nome: 160, contrato_valor: 150, receita_reconhecida: 160,
-    custo_incorrido: 150, margem_bruta: 150, saldo_contrato: 150,
+    // Soma 1.100 px: cabe na área de 1.124 px a 1440 (sidebar aberta) sem rolar.
+    project_name: 220, empresa_nome: 150, contrato_valor: 140, receita_reconhecida: 150,
+    custo_incorrido: 140, margem_bruta: 150, saldo_contrato: 150,
 }
 
 const fmt = formatMoney
 const fmtPct = (v: number | null) => formatPercent(v, { asPoints: true, decimals: 1 })
-
-function KPI({ label, value, sub, variant = 'neutral' }: {
-    label: string
-    value: string
-    sub?: string
-    variant?: 'positive' | 'negative' | 'neutral' | 'warning'
-}) {
-    const colors = {
-        positive: 'text-emerald-700',
-        negative: 'text-red-600',
-        warning:  'text-amber-600',
-        neutral:  'text-slate-800',
-    }
-    return (
-        <div className="bg-white rounded-2xl border border-slate-100 shadow-sm p-5">
-            <p className="text-xs font-black text-slate-400 uppercase tracking-widest">{label}</p>
-            <p className={`text-xl font-black mt-1 ${colors[variant]}`}>{value}</p>
-            {sub && <p className="text-xs text-slate-400 mt-0.5">{sub}</p>}
-        </div>
-    )
-}
 
 interface Props {
     organizationId: string | null
@@ -124,7 +107,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
 
     const Th = ({ label, k, right }: { label: string; k: keyof WIPLine; right?: boolean }) => (
         <th
-            className={`px-6 py-2 border-r border-gray-100 last:border-r-0 cursor-pointer select-none hover:bg-slate-100 transition-colors text-xs font-semibold text-slate-500 relative overflow-hidden ${right ? 'text-right' : ''}`}
+            className={`px-6 py-2 border-r border-gray-100 cursor-pointer select-none hover:bg-gray-50 transition-colors text-xs font-semibold text-gray-700 relative overflow-hidden ${right ? 'text-right' : ''}`}
             onClick={() => handleSort(k)}
         >
             {label}<SortIcon k={k} />
@@ -145,35 +128,30 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                         {rows.length} obra{rows.length !== 1 ? 's' : ''} com movimentação
                     </span>
                 )}
+                <button type="button" disabled={rows.length === 0}
+                    title={rows.length ? 'Baixar o WIP em CSV' : 'Sem obras para exportar'}
+                    onClick={() => baixarCSV(`WIP_${dateTo}.csv`,
+                        ['Obra', 'Código', 'Empresa', 'Valor do contrato', 'Receita recebida', 'Receita pendente', 'Custo pago', 'Custo pendente', 'Recebido − pago', 'Saldo de contrato'],
+                        sorted.map(r => [r.project_name, r.project_code, r.empresa_nome, r.contrato_valor, r.receita_reconhecida, r.receitas_pendentes, r.custo_incorrido, r.custos_pendentes, r.margem_bruta, r.saldo_contrato]))}
+                    className={`${BOTAO_DA_BARRA} disabled:opacity-40 disabled:cursor-not-allowed`}>
+                    <Download className="w-4 h-4" aria-hidden="true" /> CSV
+                </button>
             </BarraDeEscopo>
 
-            {/* KPIs */}
+            {/* Indicadores (§4.5): neutros; alerta só por limiar (LIMIAR). */}
             {rows.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <KPI
-                        label="Receita recebida"
-                        value={fmt(totals.receita_reconhecida)}
-                        sub={`+ ${fmt(totals.receitas_pendentes)} pendente`}
-                        variant="positive"
-                    />
-                    <KPI
-                        label="Custo pago"
-                        value={fmt(totals.custo_incorrido)}
-                        sub={`+ ${fmt(totals.custos_pendentes)} pendente`}
-                        variant="negative"
-                    />
-                    <KPI
-                        label="Recebido − pago"
-                        value={fmt(totals.margem_bruta)}
-                        sub={fmtPct(totalMargem)}
-                        variant={totals.margem_bruta >= 0 ? 'positive' : 'negative'}
-                    />
-                    <KPI
-                        label="Saldo de contrato"
-                        value={fmt(totals.saldo_contrato)}
-                        sub="valor contratado não recebido"
-                        variant={totals.saldo_contrato >= 0 ? 'neutral' : 'warning'}
-                    />
+                <div className={GRADE_DE_INDICADORES}>
+                    <KpiCard destaque label="Receita recebida" value={fmt(totals.receita_reconhecida)}
+                        sub={`+ ${fmt(totals.receitas_pendentes)} pendente`} />
+                    <KpiCard destaque label="Custo pago" value={fmt(totals.custo_incorrido)}
+                        sub={`+ ${fmt(totals.custos_pendentes)} pendente`} />
+                    <KpiCard destaque label="Recebido − pago" value={fmt(totals.margem_bruta)}
+                        sub={totalMargem === null ? 'Sem receita recebida: sem margem' : `Margem ${pctBR(totalMargem)}`}
+                        tom={tomDoResultado(totals.margem_bruta)} />
+                    <KpiCard destaque label="Saldo de contrato" value={fmt(totals.saldo_contrato)}
+                        sub="Contratado ainda não recebido"
+                        tom={totals.saldo_contrato < 0 ? 'atencao' : 'neutro'}
+                        title={totals.saldo_contrato < 0 ? 'Recebido acima do valor do contrato: confira o contrato ou os recebimentos' : undefined} />
                 </div>
             )}
 
@@ -198,12 +176,13 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                         </button>
                     </div>
                     <div className="overflow-x-auto">
-                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: Object.keys(WIP_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
+                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', minWidth: '100%', width: Object.keys(WIP_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
                         <colgroup>
                             {Object.keys(WIP_COL_WIDTHS).map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+                            <col />
                         </colgroup>
                         <thead>
-                            <tr className="bg-gray-50 text-gray-500 border-b border-gray-200">
+                            <tr className="bg-white text-gray-700 border-b border-gray-200">
                                 <Th label="Obra" k="project_name" />
                                 <Th label="Empresa" k="empresa_nome" />
                                 <Th label="Valor do contrato" k="contrato_valor" right />
@@ -211,6 +190,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                 <Th label="Custo pago" k="custo_incorrido" right />
                                 <Th label="Recebido − pago" k="margem_bruta" right />
                                 <Th label="Saldo de contrato" k="saldo_contrato" right />
+                                <th aria-hidden="true" />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -219,7 +199,7 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                 const isNegMargem = margem < 0
                                 return (
                                     <tr key={r.project_id} className="hover:bg-blue-50/30 transition-colors">
-                                        <td className="px-4 py-3">
+                                        <td className="px-6 py-2.5 border-r border-gray-100">
                                             {/* O número que preocupa (margem negativa) leva à DRE da obra,
                                                 onde se vê de que linha vem o custo (princípio 5). */}
                                             {onVerDREDaObra ? (
@@ -235,29 +215,29 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                                 <p className="text-xs text-slate-500">{r.project_code}</p>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-slate-500">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-slate-500">
                                             {r.empresa_nome ?? '—'}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-right tabular-nums text-slate-600">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-slate-600">
                                             {r.contrato_valor > 0 ? fmt(r.contrato_valor) : '—'}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-right tabular-nums text-emerald-700 font-semibold">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-emerald-700 font-semibold">
                                             {fmt(r.receita_reconhecida)}
                                             {r.receitas_pendentes > 0 && (
-                                                <span className="block text-xs font-normal text-slate-400">
+                                                <span className="block text-xs font-normal text-gray-500">
                                                     +{fmt(r.receitas_pendentes)} pend.
                                                 </span>
                                             )}
                                         </td>
-                                        <td className="px-4 py-3 text-sm text-right tabular-nums text-red-600">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-red-600">
                                             {fmt(r.custo_incorrido)}
                                             {r.custos_pendentes > 0 && (
-                                                <span className="block text-xs font-normal text-slate-400">
+                                                <span className="block text-xs font-normal text-gray-500">
                                                     +{fmt(r.custos_pendentes)} pend.
                                                 </span>
                                             )}
                                         </td>
-                                        <td className={`px-4 py-3 text-sm text-right tabular-nums font-semibold ${isNegMargem ? 'text-red-600' : 'text-emerald-700'}`}>
+                                        <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-semibold ${isNegMargem ? 'text-red-600' : 'text-emerald-700'}`}>
                                             <span className="flex items-center justify-end gap-1">
                                                 {isNegMargem
                                                     ? <AlertTriangle className="w-3 h-3 shrink-0" />
@@ -267,38 +247,40 @@ const WIPReport: React.FC<Props> = ({ organizationId, escopo, onVerDREDaObra }) 
                                                 }
                                                 {fmt(margem)}
                                             </span>
-                                            <span className={`block text-xs font-normal ${isNegMargem ? 'text-red-500' : 'text-slate-400'}`}>
+                                            <span className={`block text-xs font-normal ${isNegMargem ? 'text-red-500' : 'text-gray-500'}`}>
                                                 {fmtPct(r.margem_pct)}
                                             </span>
                                         </td>
-                                        <td className={`px-4 py-3 text-sm text-right tabular-nums ${r.saldo_contrato < 0 ? 'text-amber-600 font-semibold' : 'text-slate-600'}`}>
+                                        <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums ${r.saldo_contrato < 0 ? 'text-amber-600 font-semibold' : 'text-slate-600'}`}>
                                             {r.contrato_valor > 0 ? fmt(r.saldo_contrato) : '—'}
                                         </td>
+                                        <td aria-hidden="true"></td>
                                     </tr>
                                 )
                             })}
                         </tbody>
                         <tfoot>
-                            <tr className="border-t-2 border-slate-200 bg-slate-50">
-                                <td colSpan={2} className="px-4 py-3 text-sm font-medium text-slate-600">
+                            <tr className="border-t-2 border-slate-200 bg-gray-50">
+                                <td colSpan={2} className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-slate-600">
                                     Total ({rows.length} {rows.length === 1 ? 'obra' : 'obras'})
                                 </td>
-                                <td className="px-4 py-3 text-sm font-medium text-right tabular-nums text-slate-700">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-slate-700">
                                     {fmt(totals.contrato_valor)}
                                 </td>
-                                <td className="px-4 py-3 text-sm font-medium text-right tabular-nums text-emerald-700">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-emerald-700">
                                     {fmt(totals.receita_reconhecida)}
                                 </td>
-                                <td className="px-4 py-3 text-sm font-medium text-right tabular-nums text-red-600">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-red-600">
                                     {fmt(totals.custo_incorrido)}
                                 </td>
-                                <td className={`px-4 py-3 text-sm font-medium text-right tabular-nums ${totals.margem_bruta >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
+                                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums ${totals.margem_bruta >= 0 ? 'text-emerald-700' : 'text-red-600'}`}>
                                     {fmt(totals.margem_bruta)}
-                                    <span className="block text-xs font-normal text-slate-400">{fmtPct(totalMargem)}</span>
+                                    <span className="block text-xs font-normal text-gray-500">{fmtPct(totalMargem)}</span>
                                 </td>
-                                <td className="px-4 py-3 text-sm font-medium text-right tabular-nums text-slate-700">
+                                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums text-slate-700">
                                     {fmt(totals.saldo_contrato)}
                                 </td>
+                                <td aria-hidden="true"></td>
                             </tr>
                         </tfoot>
                     </table>

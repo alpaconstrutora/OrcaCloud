@@ -1,9 +1,11 @@
 import React from 'react';
 import {
-    AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip,
-    ResponsiveContainer, ReferenceLine, Legend,
+    LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+    ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-import { TrendingUp, TrendingDown, DollarSign, Download, MoveHorizontal } from 'lucide-react';
+import { Download, MoveHorizontal } from 'lucide-react';
+import { KpiCard } from './ui/KpiCard';
+import { GRADE_DE_INDICADORES, tomDoSaldo } from './controladoria/indicadores';
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
 import { useResizableColumns } from './ui/TableUtils';
@@ -20,44 +22,47 @@ function formatBRL(v: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 }
 
-function formatBRLShort(v: number): string {
-    if (Math.abs(v) >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1)}M`;
-    if (Math.abs(v) >= 1_000)    return `R$ ${(v / 1_000).toFixed(0)}k`;
+/** Eixo em unidade compacta (§28.2): "R$ 12 mil", "R$ 1,2 mi". O valor exato fica
+ *  no tooltip e na tabela. */
+function formatBRLCompacto(v: number): string {
+    const a = Math.abs(v);
+    const sinal = v < 0 ? '-' : '';
+    if (a >= 1_000_000) return `${sinal}R$ ${(a / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
+    if (a >= 1_000)     return `${sinal}R$ ${(a / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} mil`;
     return formatBRL(v);
 }
 
-interface KPIProps { label: string; value: number; icon: React.ElementType; color: string; positive?: boolean }
-function KPICard({ label, value, icon: Icon, color, positive }: KPIProps) {
-    const isPos = positive !== undefined ? positive : value >= 0;
-    return (
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-start gap-4 shadow-sm">
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
-                <Icon className="w-5 h-5" />
-            </div>
-            <div>
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
-                <p className={`text-xl font-black mt-0.5 ${isPos ? 'text-gray-900' : 'text-red-600'}`}>
-                    {formatBRL(value)}
-                </p>
-            </div>
-        </div>
-    );
-}
+// Gráficos no vocabulário do §28: grade hairline sólida, eixos em #64748b, linhas de
+// 2 px retas (curva suavizada inventa valores entre os períodos), colunas ≤ 24 px,
+// legenda em HTML, ênfase de UM matiz (#3b82f6) + contexto cinza (#94a3b8, §28.4).
+const COR = { principal: '#3b82f6', contexto: '#94a3b8', grade: '#f1f5f9', eixo: '#64748b' } as const;
+const EIXO = { fontSize: 11, fill: COR.eixo };
 
-const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) => {
+const Dica = ({ active, payload, label }: { active?: boolean; payload?: { name: string; value: number; color: string }[]; label?: string }) => {
     if (!active || !payload?.length) return null;
     return (
-        <div className="bg-white border border-gray-200 rounded-xl shadow-xl p-3 text-xs space-y-1 min-w-[180px]">
-            <p className="font-black text-gray-700 mb-2">{label}</p>
+        <div className="bg-white border border-gray-200 rounded-[10px] shadow-lg px-3 py-2 text-xs space-y-1 min-w-[180px]">
+            <p className="text-gray-500">{label}</p>
             {payload.map(p => (
                 <div key={p.name} className="flex justify-between gap-4">
-                    <span style={{ color: p.color }} className="font-semibold">{p.name}</span>
-                    <span className="font-bold text-gray-900 tabular-nums">{formatBRL(p.value)}</span>
+                    <span className="text-gray-500">{p.name}</span>
+                    <span className="font-medium text-gray-800 tabular-nums">{formatBRL(p.value)}</span>
                 </div>
             ))}
         </div>
     );
 };
+
+const Legenda: React.FC<{ itens: { nome: string; cor: string }[] }> = ({ itens }) => (
+    <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2" aria-hidden="true">
+        {itens.map(i => (
+            <span key={i.nome} className="inline-flex items-center gap-1.5 text-xs text-gray-500">
+                <span className="w-2.5 h-2.5 rounded-[2px]" style={{ backgroundColor: i.cor }} />
+                {i.nome}
+            </span>
+        ))}
+    </div>
+);
 
 interface CashFlowDashboardProps {
     organizationId: string | null;
@@ -107,9 +112,10 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId, e
             name:           p.period_label,
             'Entradas':     p.credit_real,
             'Saídas':       -p.debit_real,
+            // Colunas lado a lado, as duas para cima: a altura compara o tamanho.
+            SaidasPositivas: p.debit_real,
             'Saldo':        p.saldo_real,
             'Acumulado':    p.saldo_acumulado,
-            'Previsto':     p.saldo_prev,
         }));
     }, [data]);
 
@@ -160,89 +166,96 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId, e
                 <FalhaDeCarga oQue="o fluxo de caixa" onRetry={load} />
             ) : !data ? null : (
                 <>
-                    {/* KPIs */}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <KPICard label="Total Entradas"    value={data.total_entradas}      icon={TrendingUp}   color="bg-green-50 text-green-600"  positive={true} />
-                        <KPICard label="Total Saídas"      value={-data.total_saidas}       icon={TrendingDown} color="bg-red-50 text-red-600"     positive={false} />
-                        <KPICard label="Saldo Realizado"   value={data.saldo_final}         icon={DollarSign}   color="bg-blue-50 text-blue-600"    positive={data.saldo_final >= 0} />
-                        <KPICard label="Saldo c/ Previsto" value={data.saldo_previsto_final} icon={DollarSign}  color="bg-purple-50 text-purple-600" positive={data.saldo_previsto_final >= 0} />
+                    {/* Indicadores (§4.5): entradas e saídas neutras; saldo em alerta só abaixo
+                        do limiar (LIMIAR.saldoAlerta). */}
+                    <div className={GRADE_DE_INDICADORES}>
+                        <KpiCard destaque label="Entradas" value={formatBRL(data.total_entradas)} sub="Conciliadas no período" />
+                        <KpiCard destaque label="Saídas" value={formatBRL(data.total_saidas)} sub="Conciliadas no período" />
+                        <KpiCard destaque label="Saldo realizado" value={formatBRL(data.saldo_final)}
+                            sub="Entradas − saídas" tom={tomDoSaldo(data.saldo_final)} />
+                        <KpiCard destaque label="Saldo com o previsto" value={formatBRL(data.saldo_previsto_final)}
+                            sub="Realizado + pendentes do período" tom={tomDoSaldo(data.saldo_previsto_final)} />
                     </div>
 
-                    {/* Toggle gráfico */}
-                    <div className="flex gap-2">
-                        {(['acumulado', 'periodo'] as const).map(m => (
-                            <button key={m} onClick={() => setChartMode(m)}
-                                className={`h-8 px-3 rounded-[6px] text-sm font-medium transition-all ${
-                                    chartMode === m ? 'bg-blue-600 text-white' : 'bg-white border border-gray-200 text-gray-500 hover:border-blue-300'
-                                }`}
-                            >
-                                {m === 'acumulado' ? 'Saldo Acumulado' : 'Por Período'}
-                            </button>
-                        ))}
-                    </div>
-
-                    {/* Gráfico */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-                        <ResponsiveContainer width="100%" height={320}>
-                            {chartMode === 'acumulado' ? (
-                                <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
-                                    <defs>
-                                        <linearGradient id="gradAcum" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%"  stopColor="#2563eb" stopOpacity={0.15} />
-                                            <stop offset="95%" stopColor="#2563eb" stopOpacity={0} />
-                                        </linearGradient>
-                                        <linearGradient id="gradPrev" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%"  stopColor="#a855f7" stopOpacity={0.10} />
-                                            <stop offset="95%" stopColor="#a855f7" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-                                    <YAxis tickFormatter={formatBRLShort} tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={80} />
-                                    <ReferenceLine y={0} stroke="#e5e7eb" />
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                                    <Area type="monotone" dataKey="Acumulado" stroke="#2563eb" fill="url(#gradAcum)" strokeWidth={2} dot={false} />
-                                    <Area type="monotone" dataKey="Previsto"  stroke="#a855f7" fill="url(#gradPrev)" strokeWidth={2} dot={false} strokeDasharray="5 3" />
-                                </AreaChart>
-                            ) : (
-                                <AreaChart data={chartData} margin={{ top: 4, right: 8, bottom: 0, left: 8 }}>
-                                    <defs>
-                                        <linearGradient id="gradEnt" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%"  stopColor="#16a34a" stopOpacity={0.15} />
-                                            <stop offset="95%" stopColor="#16a34a" stopOpacity={0} />
-                                        </linearGradient>
-                                        <linearGradient id="gradSai" x1="0" y1="0" x2="0" y2="1">
-                                            <stop offset="5%"  stopColor="#dc2626" stopOpacity={0.10} />
-                                            <stop offset="95%" stopColor="#dc2626" stopOpacity={0} />
-                                        </linearGradient>
-                                    </defs>
-                                    <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                                    <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} />
-                                    <YAxis tickFormatter={formatBRLShort} tick={{ fontSize: 11, fill: '#9ca3af' }} tickLine={false} axisLine={false} width={80} />
-                                    <ReferenceLine y={0} stroke="#e5e7eb" />
-                                    <Tooltip content={<CustomTooltip />} />
-                                    <Legend wrapperStyle={{ fontSize: 11 }} />
-                                    <Area type="monotone" dataKey="Entradas" stroke="#16a34a" fill="url(#gradEnt)" strokeWidth={2} dot={false} />
-                                    <Area type="monotone" dataKey="Saídas"   stroke="#dc2626" fill="url(#gradSai)" strokeWidth={2} dot={false} />
-                                    <Area type="monotone" dataKey="Saldo"    stroke="#2563eb" fill="none"          strokeWidth={2} dot={false} strokeDasharray="4 2" />
-                                </AreaChart>
-                            )}
-                        </ResponsiveContainer>
+                    {/* Gráfico (§28) */}
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-700">
+                                    {chartMode === 'acumulado' ? 'Saldo acumulado' : 'Entradas e saídas por período'}
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-0.5">
+                                    {chartMode === 'acumulado'
+                                        ? 'Entradas menos saídas conciliadas, somadas período a período. Os pendentes estão em "Saldo com o previsto".'
+                                        : 'Valores conciliados em cada período.'}
+                                </p>
+                            </div>
+                            <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1" role="group" aria-label="Forma do gráfico">
+                                {(['acumulado', 'periodo'] as const).map(m => (
+                                    <button key={m} type="button" onClick={() => setChartMode(m)} aria-pressed={chartMode === m}
+                                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                                            chartMode === m ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}>
+                                        {m === 'acumulado' ? 'Saldo acumulado' : 'Por período'}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                        {chartData.length < 3 ? (
+                            // Poucos pontos viram frase (§28.5): um ou dois períodos não fazem tendência.
+                            <p className="min-h-[160px] flex items-center justify-center text-sm text-gray-500 text-center">
+                                {chartData.length === 0
+                                    ? 'Nenhuma movimentação no período.'
+                                    : 'Poucos períodos para um gráfico: os valores estão na tabela abaixo.'}
+                            </p>
+                        ) : (
+                            <>
+                                {/* Série única (acumulado) não tem legenda: o título a nomeia (§28.3). */}
+                                {chartMode === 'periodo' && (
+                                    <Legenda itens={[{ nome: 'Entradas', cor: COR.principal }, { nome: 'Saídas', cor: COR.contexto }]} />
+                                )}
+                                <div className="mt-3" style={{ height: 280 }} role="img"
+                                    aria-label={chartMode === 'acumulado'
+                                        ? `Saldo acumulado: de ${formatBRL(chartData[0].Acumulado)} em ${chartData[0].name} a ${formatBRL(chartData[chartData.length - 1].Acumulado)} em ${chartData[chartData.length - 1].name}.`
+                                        : `Entradas e saídas em ${chartData.length} períodos: ${formatBRL(data.total_entradas)} de entradas e ${formatBRL(data.total_saidas)} de saídas.`}>
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        {chartMode === 'acumulado' ? (
+                                            <LineChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} accessibilityLayer={false}>
+                                                <CartesianGrid vertical={false} stroke={COR.grade} />
+                                                <XAxis dataKey="name" tick={EIXO} tickLine={false} axisLine={false} />
+                                                <YAxis tickFormatter={formatBRLCompacto} tick={EIXO} tickLine={false} axisLine={false} width={96} />
+                                                <ReferenceLine y={0} stroke="#cbd5e1" />
+                                                <Tooltip content={<Dica />} cursor={{ stroke: '#e2e8f0' }} />
+                                                <Line type="linear" dataKey="Acumulado" stroke={COR.principal} strokeWidth={2} dot={false} isAnimationActive={false} />
+                                            </LineChart>
+                                        ) : (
+                                            <BarChart data={chartData} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} accessibilityLayer={false}>
+                                                <CartesianGrid vertical={false} stroke={COR.grade} />
+                                                <XAxis dataKey="name" tick={EIXO} tickLine={false} axisLine={false} />
+                                                <YAxis tickFormatter={formatBRLCompacto} tick={EIXO} tickLine={false} axisLine={false} width={96} />
+                                                <Tooltip content={<Dica />} cursor={{ fill: '#f8fafc' }} />
+                                                <Bar dataKey="Entradas" fill={COR.principal} radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
+                                                <Bar dataKey="SaidasPositivas" name="Saídas" fill={COR.contexto} radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false} />
+                                            </BarChart>
+                                        )}
+                                    </ResponsiveContainer>
+                                </div>
+                            </>
+                        )}
                     </div>
 
                     {/* Tabela de períodos */}
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100 bg-gray-50/50">
-                            <h3 className="text-xs font-semibold text-gray-500">Detalhamento por Período</h3>
+                        <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                            <h3 className="text-sm font-semibold text-gray-700">Detalhamento por período</h3>
                             <button onClick={() => cols.autoFit()} className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all" title="Ajustar largura das colunas ao conteúdo">
                                 <MoveHorizontal className="w-4 h-4" />
                             </button>
                         </div>
                         <div className="overflow-x-auto">
-                            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: Object.keys(CASHFLOW_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
+                            <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', minWidth: '100%', width: Object.keys(CASHFLOW_COL_WIDTHS).reduce((s, k) => s + cols.getWidth(k), 0) }}>
                                 <colgroup>
                                     {Object.keys(CASHFLOW_COL_WIDTHS).map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+                                    <col />
                                 </colgroup>
                                 <thead>
                                     <tr className="bg-white text-gray-700 border-b border-gray-200 text-xs font-semibold">
@@ -250,21 +263,23 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId, e
                                         <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Entradas<cols.ResizeHandle colKey="entradas" /></th>
                                         <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Saídas<cols.ResizeHandle colKey="saidas" /></th>
                                         <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Saldo<cols.ResizeHandle colKey="saldo" /></th>
-                                        <th className="px-6 py-2 text-right relative overflow-hidden">Acumulado<cols.ResizeHandle colKey="acumulado" /></th>
+                                        <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Acumulado<cols.ResizeHandle colKey="acumulado" /></th>
+                                        <th aria-hidden="true" />
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-100">
                                     {data.points.map(p => (
                                         <tr key={p.period_label} className="hover:bg-blue-50/50 transition-colors">
                                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{p.period_label}</td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-green-600 font-medium">{formatBRL(p.credit_real)}</td>
-                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-red-500 font-medium">{formatBRL(p.debit_real)}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-gray-800 font-medium">{formatBRL(p.credit_real)}</td>
+                                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums text-gray-800 font-medium">{formatBRL(p.debit_real)}</td>
                                             <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${p.saldo_real >= 0 ? 'text-gray-900' : 'text-red-600'}`}>
                                                 {formatBRL(p.saldo_real)}
                                             </td>
-                                            <td className={`px-6 py-2.5 text-sm text-right tabular-nums font-medium ${p.saldo_acumulado >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${p.saldo_acumulado >= 0 ? 'text-gray-800' : 'text-red-600'}`}>
                                                 {formatBRL(p.saldo_acumulado)}
                                             </td>
+                                            <td aria-hidden="true"></td>
                                         </tr>
                                     ))}
                                 </tbody>

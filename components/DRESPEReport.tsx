@@ -2,13 +2,14 @@ import React from 'react'
 import { financialReportService } from '../services/financialReportService'
 import type { DRESPELine } from '../types/financial'
 import { useToast } from '../hooks/useToast'
-import { TrendingUp, TrendingDown, MoveHorizontal } from 'lucide-react'
+import { TrendingUp, TrendingDown, MoveHorizontal, Download } from 'lucide-react'
 import { useResizableColumns } from './ui/TableUtils'
 import { useCargaVigente } from '../hooks/useCargaVigente'
 import { motivoPeriodoInvalido } from '../utils/periodoControladoria'
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga'
-import { BarraDeEscopo } from './controladoria/BarraDeEscopo'
+import { BarraDeEscopo, BOTAO_DA_BARRA } from './controladoria/BarraDeEscopo'
 import type { EscopoControladoria } from './controladoria/escopo'
+import { baixarCSV } from './controladoria/csv'
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 const fmtPct = (v: number | null) => v === null ? '—' : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`
@@ -90,6 +91,14 @@ const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
                         {data.length} empresa{data.length !== 1 ? 's' : ''} com movimentação
                     </span>
                 )}
+                <button type="button" disabled={data.length === 0}
+                    title={data.length ? 'Baixar a DRE por SPE em CSV' : 'Sem empresas para exportar'}
+                    onClick={() => baixarCSV(`DRE_SPE_${dateFrom}_${dateTo}.csv`,
+                        ['Linha', ...data.map(spe => spe.empresa_nome)],
+                        COLS.map(c => [c.label, ...data.map(spe => spe[c.key] as number)]))}
+                    className={`${BOTAO_DA_BARRA} disabled:opacity-40 disabled:cursor-not-allowed`}>
+                    <Download className="w-4 h-4" aria-hidden="true" /> CSV
+                </button>
             </BarraDeEscopo>
 
             {/* Tabela comparativa */}
@@ -127,26 +136,28 @@ const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
                     <table
                         ref={cols.tableRef}
                         className="text-left border-collapse"
-                        style={{ tableLayout: 'fixed', width: 220 + data.reduce((s, spe) => s + cols.getWidth(spe.empresa_id), 0) }}
+                        style={{ tableLayout: 'fixed', minWidth: '100%', width: 220 + data.reduce((s, spe) => s + cols.getWidth(spe.empresa_id), 0) }}
                     >
                         <colgroup>
                             <col style={{ width: '220px' }} />
                             {data.map(spe => <col key={spe.empresa_id} data-col-key={spe.empresa_id} style={{ width: `${cols.getWidth(spe.empresa_id)}px` }} />)}
+                            <col />
                         </colgroup>
                         <thead>
-                            <tr className="bg-slate-50 border-b border-slate-200">
-                                <th className="px-5 py-2 text-xs font-semibold text-gray-700 sticky left-0 bg-white">
-                                    Linha DRE
+                            <tr className="bg-white border-b border-gray-200">
+                                <th className="px-6 py-2 border-r border-gray-100 text-xs font-semibold text-gray-700 sticky left-0 bg-white">
+                                    Linha da DRE
                                 </th>
                                 {data.map(spe => (
-                                    <th key={spe.empresa_id} className="px-4 py-2 text-xs font-semibold text-slate-600 text-right relative overflow-hidden">
+                                    <th key={spe.empresa_id} className="px-6 py-2 border-r border-gray-100 text-xs font-semibold text-gray-700 text-right relative overflow-hidden">
                                         {spe.empresa_nome}
-                                        <span className="block text-slate-400 font-normal">
+                                        <span className="block text-gray-500 font-normal">
                                             {spe.n_transacoes} lançamentos
                                         </span>
                                         <cols.ResizeHandle colKey={spe.empresa_id} />
                                     </th>
                                 ))}
+                                <th aria-hidden="true" />
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-50">
@@ -154,8 +165,8 @@ const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
                                 const pctKey = PCT_MAP[col.key]
                                 const isTotalRow = isTotal(col.key)
                                 return (
-                                    <tr key={col.key} className={isTotalRow ? 'bg-slate-50/70' : 'hover:bg-blue-50/20'}>
-                                        <td className={`px-5 py-2.5 sticky left-0 text-sm ${isTotalRow ? 'bg-slate-50/70 font-medium text-slate-700' : 'bg-white'} ${!isTotalRow && isDeduction(col.key) ? 'text-slate-500 pl-8 font-normal' : !isTotalRow ? 'font-normal text-slate-600' : ''}`}>
+                                    <tr key={col.key} className={isTotalRow ? 'bg-gray-50' : 'hover:bg-blue-50/20'}>
+                                        <td className={`px-6 py-2.5 border-r border-gray-100 sticky left-0 text-sm ${isTotalRow ? 'bg-gray-50 font-medium text-gray-900' : 'bg-white'} ${!isTotalRow && isDeduction(col.key) ? 'text-gray-700 pl-10 font-normal' : !isTotalRow ? 'font-normal text-gray-700' : ''}`}>
                                             {col.label}
                                         </td>
                                         {data.map(spe => {
@@ -163,15 +174,15 @@ const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
                                             const pct = pctKey ? spe[pctKey] as number | null : null
                                             const isNeg = v < 0
                                             return (
-                                                <td key={spe.empresa_id} className="px-4 py-2.5 text-right tabular-nums">
-                                                    <span className={`text-sm font-medium ${isNeg ? 'text-red-600' : v > 0 && isTotalRow ? 'text-emerald-700' : 'text-slate-700'}`}>
+                                                <td key={spe.empresa_id} className="px-6 py-2.5 border-r border-gray-100 text-right tabular-nums">
+                                                    <span className={`text-sm font-medium ${isNeg ? 'text-red-600' : v > 0 && isTotalRow ? 'text-emerald-700' : 'text-gray-800'}`}>
                                                         {fmt(v)}
                                                     </span>
                                                     {pct !== null && (
-                                                        <span className={`ml-2 text-xs font-normal flex items-center justify-end gap-0.5 ${pct >= 0 ? 'text-green-600' : 'text-red-500'}`}>
+                                                        <span className={`text-xs font-normal flex items-center justify-end gap-0.5 ${pct >= 0 ? 'text-green-700' : 'text-red-600'}`}>
                                                             {pct >= 0
-                                                                ? <TrendingUp className="w-3 h-3" />
-                                                                : <TrendingDown className="w-3 h-3" />
+                                                                ? <TrendingUp className="w-3 h-3" aria-hidden="true" />
+                                                                : <TrendingDown className="w-3 h-3" aria-hidden="true" />
                                                             }
                                                             {fmtPct(pct)}
                                                         </span>
@@ -179,6 +190,7 @@ const DRESPEReport: React.FC<Props> = ({ organizationId, escopo }) => {
                                                 </td>
                                             )
                                         })}
+                                        <td aria-hidden="true"></td>
                                     </tr>
                                 )
                             })}

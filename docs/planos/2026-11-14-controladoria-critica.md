@@ -72,7 +72,7 @@ Pedido: "Comece" (15/11/2026, após o passo 1 no ar).
 
 Ficou para o passo 4 (distill): KPIs ainda feitos à mão — no celular o valor encosta na borda e o "−" quebra sozinho.
 
-### Passo 3 — `/impeccable clarify`: números que levam à ação (este PR)
+### Passo 3 — `/impeccable clarify`: números que levam à ação
 
 Pedido: "Pode seguir" (15/11/2026). Decisão do usuário: **"Aviso + lista em gaveta"** —
 só leitura, sem migration (alternativas recusadas: só aviso + atalho; classificar ali mesmo).
@@ -87,7 +87,17 @@ contas (boletos, manuais), 33 com nome de categoria que não existe no plano da 
 | 3.2 | Gaveta (`Sheet` 2xl) com os lançamentos (data, descrição, origem · categoria, valor, situação), agrupados por motivo com o que fazer, e atalhos "Abrir Plano de Contas" / "Abrir Contas a Pagar". Regra em `services/semClassificacaoService.ts` = o LEFT JOIN de `fn_dre_summary`, sobre a mesma view (security_invoker) | `semClassificacao.test.ts` (7); frente local: 64 lançamentos, total realizado −R$ 7.619,23 = a DRE |
 | 3.3 | WIP: o nome da obra abre a DRE da obra (aba DRE + obra no escopo) | teste "clicar no nome da obra"; frente local: Garden Cambuhy → DRE filtrada |
 | 3.4 | Textos: linhas "(o)"/"(!)" viram "Amortização de principal (fora do resultado)"/"Sem classificação (fora do resultado)", sem glifo ⚠; colunas "Realizado (conciliado)"/"Previsto (pendente)" no Caixa; rodapé legível (gray-500); WIP diz o que o dado é (receita recebida, custo pago, recebido − pago — era "Reconhecida"/"Incorrido", vocabulário de POC); "Total (1 obra)"; vazio do Diário explica o que entra nele | teste "sem código interno" e "Total (1 obra)" |
-### Passo 4 — `/impeccable distill`: uma linguagem para as seis abas
+### Passo 4 — `/impeccable distill`: uma linguagem para as seis abas (este PR)
+
+Pedido: "pode seguir" (15/11/2026).
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 4.1 | Indicadores no `KpiCard destaque` (§4.5) na DRE, WIP, Fluxo e Diário; cor só por limiar com nome (`components/controladoria/indicadores.ts`: resultado/saldo < 0 = alerta, com o aviso que não depende de cor); DRE com 4 (a receita bruta vira legenda da líquida); margem na legenda; grade 1 coluna no celular | `ControladoriaLinguagem.test.tsx` "indicadores"; frente local: 4 indicadores nas 4 abas, 390 px sem valor cortado |
+| 4.2 | DRE: "Previsto" só no Caixa (em Competência repetia o realizado) | teste "Previsto só no Caixa"; frente local: cabeçalhos em Competência = Linha · Realizado |
+| 4.3 | Tabelas na largura toda (espaçador + `minWidth: '100%'`, §6.1.1) nas 6 abas; WIP com larguras-padrão somando 1.100 px (antes 1.140 rolava num card de 1.124); WIP e Balancete com `px-6 py-2.5 border-r` (célula alinhada ao cabeçalho, §6.6/§7.2); cabeçalhos brancos (§6.11) no WIP, Diário e SPE; Balancete sem glifos "▾▸" (ícone) e grupo pelo teclado | frente local: tabela 1.122 px = card; teste "grupo pelo teclado" |
+| 4.4 | Gráfico do Fluxo no §28: grade sólida, eixos #64748b, linha reta (não `monotone`), colunas ≤ 24 px no "por período", legenda HTML, `role="img"` com os números; menos de 3 períodos = frase. A linha "Previsto" saiu do acumulado: era o pendente de CADA período (picos de ±R$ 400 mil) e achatava o saldo real (−R$ 12 mil) numa reta | teste "poucos períodos"; print semanal: o saldo cai até −R$ 12.640,41, legível |
+| 4.5 | CSV na DRE por SPE, WIP, Balancete e Diário, no formato que DRE e Fluxo já usavam (`components/controladoria/csv.ts`) | teste "CSV um formato" |
 ### Passo 5 — `/impeccable audit`: acessibilidade AA
 ### Passo 6 — `/impeccable polish`
 
@@ -97,8 +107,8 @@ contas (boletos, manuais), 33 com nome de categoria que não existe no plano da 
 
 - [x] Passo 1 — #448 (cc919c67), migration `aplicar_20271114900000` aplicada antes do merge; conferido em produção 15/11/2026
 - [x] Passo 2 — #451 (4df8f2c7); conferido em produção 15/11/2026
-- [ ] Passo 3 — frente `controladoria-acao`, PR a abrir
-- [ ] Passo 4
+- [x] Passo 3 — #458 (fd4705ef); conferido com dados reais na frente local
+- [ ] Passo 4 — frente `controladoria-linguagem`, PR a abrir
 - [ ] Passo 5
 - [ ] Passo 6
 

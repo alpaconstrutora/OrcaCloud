@@ -97,8 +97,9 @@ function peloPainelDoBloco(p: PedidoDoPredio): BlueprintModel {
   return applyCommand(pl.model, { type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }).model;
 }
 
-// PA4: o R8 com a estrutura leva uns 3 s por plano — e o teste da trava gera, reaplica e confere o hash.
-describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
+// PA4: o R8 com a estrutura leva uns 3 s por plano — e o teste da trava gera, reaplica e confere o hash. PA8b: o R8 completo
+// reaplicado leva ~16 s aqui e passou dos 60 s na CI (máquina 3–4× mais lenta) — 180 s.
+describe('prédio automático — o motor (PA2)', { timeout: 180_000 }, () => {
   it('as etapas rodam na ordem e o lote dá o mesmo prédio dos dois botões do painel do bloco, com o tipo levando as instalações', () => {
     const p = { ...pedidoDoR4(), hip: SO_O_TIPO };
     const avisos: string[] = [];

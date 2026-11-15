@@ -1087,6 +1087,24 @@ function tensaoDoQuadro(quadro: Quadro, circuitos: readonly Circuito[]): number 
   return melhor;
 }
 
+/**
+ * O pré-dimensionamento GUARDADO durante uma conferência (PA10a do prédio automático, 15/11/2026). A NBR 5410 pré-dimensiona
+ * todos os quadros duas vezes (o DR da 5.1.3.2.2 e a regra do quadro) e a entrada do QGBT outra vez, sobe e desce a árvore
+ * de quadros a cada uma — no R12, 7,6 s refazendo a mesma conta sobre o mesmo modelo. Dentro de
+ * `comPreDimensionamentoGuardado` (uma conferência síncrona, que só LÊ os resultados) a chamada de fora é guardada por
+ * modelo, hipóteses e quadro; fora dele, nada muda.
+ */
+let PRE_DIM_GUARDADO: WeakMap<BlueprintModel, WeakMap<HipotesesEletricas, Map<string, PreDimensionamentoDoQuadro | null>>> | null = null;
+export function comPreDimensionamentoGuardado<T>(fn: () => T): T {
+  if (PRE_DIM_GUARDADO) return fn();
+  PRE_DIM_GUARDADO = new WeakMap();
+  try {
+    return fn();
+  } finally {
+    PRE_DIM_GUARDADO = null;
+  }
+}
+
 export function preDimensionarQuadroCompleto(
   model: BlueprintModel,
   quadroId: string,
@@ -1095,6 +1113,22 @@ export function preDimensionarQuadroCompleto(
   visitados: ReadonlySet<string> = new Set(),
   /** E4.2: só a chamada de fora sobe a cadeia até a origem; as recursivas (filhos, pais) não — senão pai ↔ filho se chamam para sempre. */
   comCadeia = true,
+): PreDimensionamentoDoQuadro | null {
+  if (!PRE_DIM_GUARDADO || visitados.size > 0 || !comCadeia) return preDimensionarQuadroCompletoSemGuardar(model, quadroId, hip, visitados, comCadeia);
+  let porHip = PRE_DIM_GUARDADO.get(model);
+  if (!porHip) PRE_DIM_GUARDADO.set(model, (porHip = new WeakMap()));
+  let porQuadro = porHip.get(hip);
+  if (!porQuadro) porHip.set(hip, (porQuadro = new Map()));
+  if (!porQuadro.has(quadroId)) porQuadro.set(quadroId, preDimensionarQuadroCompletoSemGuardar(model, quadroId, hip, visitados, comCadeia));
+  return porQuadro.get(quadroId)!;
+}
+
+function preDimensionarQuadroCompletoSemGuardar(
+  model: BlueprintModel,
+  quadroId: string,
+  hip: HipotesesEletricas,
+  visitados: ReadonlySet<string>,
+  comCadeia: boolean,
 ): PreDimensionamentoDoQuadro | null {
   const quadro = (model.quadros ?? []).find((q) => q.id === quadroId);
   if (!quadro) return null;

@@ -115,7 +115,7 @@ const Dashboard: React.FC<DashboardProps> = ({ budget, settings, onNavigate }) =
           <div>
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold text-gray-900">Curva ABC Executiva</h1>
-              <span className="px-2 py-0.5 bg-blue-50 text-blue-600 text-xs font-black uppercase rounded-full border border-blue-100">
+              <span className="text-sm font-normal text-blue-600">
                 {settings.name || 'Projeto sem nome'}
               </span>
             </div>
@@ -260,11 +260,11 @@ const Dashboard: React.FC<DashboardProps> = ({ budget, settings, onNavigate }) =
               {chartData.map((item) => (
                 <tr key={item.fullName} className="hover:bg-blue-50/20 transition-colors group">
                   <td className="px-6 py-3 text-center">
-                    <span className="text-xs font-bold text-gray-500">{item.id}º</span>
+                    <span className="text-sm font-normal text-gray-600">{item.id}º</span>
                   </td>
                   <td className="px-6 py-3">
                     <div className="flex flex-col">
-                      <span className="text-sm font-bold text-gray-900 group-hover:text-blue-600 transition-colors">
+                      <span className="text-sm font-normal text-gray-700 group-hover:text-blue-600 transition-colors">
                         {item.name}
                       </span>
                       {item.shortId && (
@@ -273,12 +273,12 @@ const Dashboard: React.FC<DashboardProps> = ({ budget, settings, onNavigate }) =
                     </div>
                   </td>
                   <td className="px-6 py-3 text-right">
-                    <span className="text-sm font-bold text-gray-900">
+                    <span className="text-sm font-medium text-gray-800">
                       R$ {item.custo.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                   </td>
                   <td className="px-6 py-3 text-center">
-                    <span className="text-xs font-medium text-gray-600">{item.percentual.toFixed(1)}%</span>
+                    <span className="text-sm font-normal text-gray-600">{item.percentual.toFixed(1)}%</span>
                   </td>
                   <td className="px-6 py-3 text-center">
                     <div className="flex items-center gap-2 justify-center">
@@ -288,13 +288,13 @@ const Dashboard: React.FC<DashboardProps> = ({ budget, settings, onNavigate }) =
                           style={{ width: `${item.acumulado}%` }}
                         ></div>
                       </div>
-                      <span className="text-xs font-bold text-gray-700">{item.acumulado}%</span>
+                      <span className="text-sm font-normal text-gray-600">{item.acumulado}%</span>
                     </div>
                   </td>
                   <td className="px-6 py-3 text-center">
-                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-bold ${item.classe === 'A' ? 'bg-blue-100 text-blue-700' :
-                      item.classe === 'B' ? 'bg-emerald-100 text-emerald-700' :
-                        'bg-gray-100 text-gray-600'
+                    <span className={`text-sm font-normal ${item.classe === 'A' ? 'text-blue-700' :
+                      item.classe === 'B' ? 'text-emerald-700' :
+                        'text-gray-600'
                       }`}>
                       Classe {item.classe}
                     </span>

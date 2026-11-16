@@ -92,6 +92,51 @@ PayrollEventModal §8/§14); e o item "Produção" deste plano, que ficou desmar
 registrada como **comentário no PR** deste pedido — o plano não ganha um item que só poderia
 ser marcado com outro commit depois do merge (foi o que deixou o "Produção" acima desmarcado).
 
+Publicado no PR #517 (`ff93030`); prova de produção no comentário do PR.
+
+## Pedido posterior 2 (16/11/2026, mesma sessão)
+
+Pergunta minha: *"a troca de duração passou por 7 arquivos que já tinham 65 linhas de alertas
+antigos… Quer que eu corrija também?"* — resposta:
+
+> sim
+
+Os 7 arquivos e o que o `check-ui-standard.sh` acusava (idêntico a `origin/main`, nenhum veio da
+troca de duração):
+
+- [x] **`Dashboard.tsx`** (Curva ABC) — §7: posição, descrição, % e acumulado em `text-sm
+  font-normal`; custo `font-medium` (dinheiro). §8: "Classe A/B/C" e o nome do projeto ao lado do
+  título viram texto colorido (sem pílula/fundo/caixa alta).
+- [x] **`ParametricEstimator.tsx`** — §7 nas tabelas da Curva S e de Quantitativos (sem
+  `font-bold`/`font-black`/`font-mono`; dinheiro `font-medium`; unidade em texto). §8: as
+  etiquetas "Produto Atual"/"Estudo Comparativo" sobre a borda dos cartões viram legenda de texto
+  dentro do cartão. §14: "Converter para Analítico" (substitui o orçamento → `variant: 'danger'`) e
+  "aplicar as taxas do cenário" pelo `useConfirm()`.
+- [x] **`ProjectOverview.tsx`** e **`TaxReport.tsx`** — §8: a pílula maiúscula dentro do cabeçalho
+  escuro ("Status: …", "Consultor IR …") vira texto claro. O cabeçalho "hero" fica (§20: linguagem
+  deliberada, não se migra sem decisão).
+- [x] **`RentalsDashboard.tsx`** — o §8 era falso positivo (bolinha da legenda e rótulo na mesma
+  linha), mas o rótulo `text-xs font-black text-gray-400 uppercase` contrariava a legenda da §28.3:
+  agora quadrado `w-2.5 h-2.5 rounded-[2px]` + `text-xs text-gray-500`.
+- [x] **`SupplyChainQuotationComparison.tsx`** (36 linhas) — §7 nas células da matriz, no rodapé
+  (total, forma/condição de pagamento, entrega) e na tabela da contraproposta (campo de preço
+  `h-9 rounded-[6px] text-sm font-normal text-gray-900`, §7.1/§32); §17 nos 5 botões de ação
+  (`h-9 rounded-[6px] text-[13px] font-medium`, sem caixa alta/sombra); §8 na situação da
+  negociação, em "Histórico"/"WhatsApp" (chips `rounded-[6px]`) e no autor do histórico.
+- [x] **`investor/HoldingsList.tsx`** — §7 na tabela (nome, cotas, progresso; patrimônio
+  `font-medium`); §8 no status da tabela e do cartão.
+
+*Pronto quando:* `check-ui-standard.sh` com exit 0 nos 7 (conferido) e as telas medidas no
+harness `docs/spikes/alertas-ui-sete-telas` (todas exigem login): 0 texto com peso > 500 em `<td>`,
+0 `font-mono` em `<td>`, 0 pílula maiúscula, botões de ação da cotação com 36 px/6 px/peso 500,
+"Converter" abre o diálogo do app e nenhum `confirm()` nativo; prints conferidos. Teste novo
+`ParametricConverterConfirma.test.tsx` (vermelho com o arquivo antigo, verde com o novo).
+
 ## Fora do escopo (registrado, não feito)
 
 - ~~Durações de 500/700 ms em conteúdo de aba~~ — feito no pedido posterior acima.
+- `ParametricEstimator`: a sub-aba "Cenários" (`intelTab === 'scenarios'`) não tem botão na lista
+  de abas — o painel (com o "aplicar taxas", agora pelo `useConfirm`) é inalcançável hoje.
+- Fora dos alertas, nas mesmas telas, seguem em caixa alta/peso pesado: as abas e o rodapé do modal
+  de contraproposta, os rótulos dos indicadores do cabeçalho da Visão da obra, o botão "Baixar PDF
+  completo" do IR. Não eram alertas do script; ficam para quando a tela for tocada.

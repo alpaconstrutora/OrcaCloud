@@ -117,24 +117,24 @@ const HoldingsList: React.FC<Props> = ({
                                         <div className="w-10 h-10 rounded-lg bg-blue-50 flex items-center justify-center text-blue-600">
                                             <Building2 className="w-5 h-5" />
                                         </div>
-                                        <span className="font-bold text-gray-900">{proj.name}</span>
+                                        <span className="text-sm font-normal text-gray-700">{proj.name}</span>
                                     </div>
                                 </td>
                                 <td className="px-6 py-4 text-center">
-                                    <span className="px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 text-xs font-bold uppercase tracking-wider">
+                                    <span className="text-sm font-normal text-gray-600">
                                         {proj.status}
                                     </span>
                                 </td>
-                                <td className="px-6 py-4 text-center font-bold text-blue-600 text-sm">{proj.cota}</td>
+                                <td className="px-6 py-4 text-center text-sm font-normal text-gray-600">{proj.cota}</td>
                                 <td className="px-6 py-4">
                                     <div className="flex items-center gap-3">
                                         <div className="flex-1 bg-gray-100 h-1.5 rounded-full overflow-hidden">
                                             <div className="bg-blue-600 h-full" style={{ width: `${proj.progress}%` }} />
                                         </div>
-                                        <span className="text-xs font-bold text-gray-400">{proj.progress}%</span>
+                                        <span className="text-sm font-normal text-gray-600">{proj.progress}%</span>
                                     </div>
                                 </td>
-                                <td className="px-6 py-4 text-right font-black text-gray-900">
+                                <td className="px-6 py-4 text-right text-sm font-medium text-gray-800">
                                     {typeof proj.equity === 'number'
                                         ? proj.equity.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
                                         : proj.equity}
@@ -154,7 +154,7 @@ const HoldingsList: React.FC<Props> = ({
                         onClick={() => onSelectAsset(proj)}
                     >
                         <div className="h-40 bg-slate-100 relative">
-                            <div className="absolute top-4 left-4 bg-white/90 backdrop-blur px-3 py-1 rounded-full text-xs font-black text-blue-600 uppercase tracking-widest">
+                            <div className="absolute top-4 left-4 text-sm font-normal text-blue-700">
                                 {proj.status}
                             </div>
                         </div>

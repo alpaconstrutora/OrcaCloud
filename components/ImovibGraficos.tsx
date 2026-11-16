@@ -236,39 +236,72 @@ export const GraficoComposicaoDoCapital: React.FC<ComumDosGraficos & { fatias: F
 // ── Linha do tempo: obra, vendas e marcos ────────────────────────────────────
 
 /**
+ * Geometria da linha do tempo. PDF (`dimensao` fixa): o desenho de sempre, que a captura escala.
+ * Tela: pixels reais — o SVG mede a largura do cartão e desenha nela, com as fontes dos outros
+ * gráficos (12 px nas categorias, como CATEGORY_TICK; 11 px nos rótulos, como TICK) e altura
+ * compacta. Antes a tela usava o viewBox de 760×150 esticado: num cartão de ~1550 px tudo dobrava
+ * (pedido de 16/11/2026: "despadronizado… exageradamente grande").
+ */
+const GEOMETRIA_DA_LINHA = {
+    pdf: { esq: 70, dir: 16, faixas: [8, 52], barra: 14, rotuloDaFaixa: 10, fCategoria: 11, fRotulo: 10, abaixoDaBarra: 28, eixo: 100, marcos: [118, 134], altura: 150 },
+    tela: { esq: 84, dir: 12, faixas: [4, 36], barra: 8, rotuloDaFaixa: 8, fCategoria: 12, fRotulo: 11, abaixoDaBarra: 23, eixo: 76, marcos: [95, 110], altura: 118 },
+} as const;
+
+/** Largura do contêiner em px (ResizeObserver); 0 até a primeira medida. */
+function useLarguraDoConteiner<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
+    const ref = React.useRef<T>(null);
+    const [largura, setLargura] = React.useState(0);
+    React.useLayoutEffect(() => {
+        const el = ref.current;
+        if (!el) return;
+        const medir = () => setLargura(Math.round(el.getBoundingClientRect().width));
+        medir();
+        if (typeof ResizeObserver === 'undefined') return;
+        const ro = new ResizeObserver(medir);
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, []);
+    return [ref, largura];
+}
+
+/**
  * Faixas de obra (início → habite-se) e de vendas (lançamento → fim das vendas) numa régua de
  * meses, com os outros marcos como pontos. SVG puro: sai igual na tela e na captura do PDF.
  */
 export const LinhaDoTempoDosMarcos: React.FC<{ marcos: MarcoDoEstudo[]; dimensao?: DimensaoDoGrafico; className?: string; corPrincipal?: string }> = ({ marcos, dimensao, className = 'w-full', corPrincipal = SERIE_PRINCIPAL }) => {
+    const [ref, larguraMedida] = useLarguraDoConteiner<HTMLDivElement>();
+    const G = dimensao ? GEOMETRIA_DA_LINHA.pdf : GEOMETRIA_DA_LINHA.tela;
     const mes = (id: MarcoDoEstudo['id']) => marcos.find(m => m.id === id)?.mes ?? null;
     const comMes = marcos.filter(m => m.mes != null);
     const fim = Math.max(1, mes('encerramento') ?? 0, ...comMes.map(m => m.mes!));
-    const L = dimensao?.largura ?? 760;
-    const A = dimensao?.altura ?? 150;
-    const esq = 70, dir = 16;
-    const x = (m: number) => esq + ((m - 1) / Math.max(1, fim - 1)) * (L - esq - dir);
+    const L = dimensao?.largura ?? larguraMedida;
+    const A = dimensao?.altura ?? G.altura;
+    const x = (m: number) => G.esq + ((m - 1) / Math.max(1, fim - 1)) * (L - G.esq - G.dir);
     const faixa = (rotulo: string, de: number | null, ate: number | null, y: number, cor: string) => (de == null || ate == null ? null : (
         <g>
-            <text x={0} y={y + 10} fontSize={11} fill="#475569">{rotulo}</text>
-            <rect x={x(de)} y={y} width={Math.max(4, x(ate) - x(de))} height={14} rx={4} fill={cor} />
-            <text x={x(de)} y={y + 28} fontSize={10} fill="#64748b">{`mês ${de}–${ate}`}</text>
+            <text x={0} y={y + G.rotuloDaFaixa} fontSize={G.fCategoria} fill="#475569">{rotulo}</text>
+            <rect x={x(de)} y={y} width={Math.max(4, x(ate) - x(de))} height={G.barra} rx={4} fill={cor} />
+            <text x={x(de)} y={y + G.abaixoDaBarra} fontSize={G.fRotulo} fill="#64748b">{`mês ${de}–${ate}`}</text>
         </g>
     ));
     const pontos = comMes.filter(m => !['inicio_obra', 'habite_se', 'lancamento', 'fim_das_vendas'].includes(m.id));
     const rotulo = `Linha do tempo: ${comMes.map(m => `${m.rotulo} mês ${m.mes}`).join('; ')}.`;
-    return (
-        <svg role="img" aria-label={rotulo} viewBox={`0 0 ${L} ${A}`} width={dimensao ? L : '100%'} height={dimensao ? A : undefined} className={dimensao ? undefined : className}>
-            {faixa('Obra', mes('inicio_obra'), mes('habite_se'), 8, corPrincipal)}
-            {faixa('Vendas', mes('lancamento'), mes('fim_das_vendas'), 52, SERIE_CONTEXTO)}
-            <line x1={esq} x2={L - dir} y1={100} y2={100} stroke="#cbd5e1" />
+    const desenho = (
+        <svg role="img" aria-label={rotulo} viewBox={`0 0 ${L} ${A}`} width={L} height={A}>
+            {faixa('Obra', mes('inicio_obra'), mes('habite_se'), G.faixas[0], corPrincipal)}
+            {faixa('Vendas', mes('lancamento'), mes('fim_das_vendas'), G.faixas[1], SERIE_CONTEXTO)}
+            <line x1={G.esq} x2={L - G.dir} y1={G.eixo} y2={G.eixo} stroke="#cbd5e1" />
             {pontos.map((m, i) => (
                 <g key={m.id}>
-                    <circle cx={x(m.mes!)} cy={100} r={4} fill="#0f172a" />
+                    <circle cx={x(m.mes!)} cy={G.eixo} r={4} fill="#0f172a" />
                     {/* Ponto na ponta da régua: o texto cresce para dentro, não sai da borda. */}
-                    <text x={x(m.mes!)} y={i % 2 === 0 ? 118 : 134} fontSize={10} fill="#475569"
-                        textAnchor={x(m.mes!) > L - 120 ? 'end' : x(m.mes!) < esq + 60 ? 'start' : 'middle'}>{`${m.rotulo} · ${m.mes}`}</text>
+                    <text x={x(m.mes!)} y={G.marcos[i % 2]} fontSize={G.fRotulo} fill="#475569"
+                        textAnchor={x(m.mes!) > L - 120 ? 'end' : x(m.mes!) < G.esq + 60 ? 'start' : 'middle'}>{`${m.rotulo} · ${m.mes}`}</text>
                 </g>
             ))}
         </svg>
     );
+    if (dimensao) return desenho;
+    // Tela: antes da primeira medida, só a altura (sem pular o layout).
+    return <div ref={ref} className={className} style={{ minHeight: A }}>{L > 0 ? desenho : null}</div>;
 };

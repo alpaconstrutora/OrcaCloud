@@ -183,12 +183,13 @@ const COMPETITOR_COLS = 'id, organization_id, opportunity_id, name, price_per_m2
 export const investorPortalService = {
     // ─── Reports ─────────────────────────────────────────────────────────────
 
-    async listReports(organizationId: string, investorId?: string, category?: ReportCategory): Promise<InvestorReport[]> {
+    /** `organizationId` null = "Todas as organizações" (REGRA #5): sem filtro, a RLS recorta às do usuário. */
+    async listReports(organizationId: string | null | undefined, investorId?: string, category?: ReportCategory): Promise<InvestorReport[]> {
         let query = supabase
             .from('investor_reports')
             .select(REPORT_COLS)
-            .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
+        if (organizationId) query = query.eq('organization_id', organizationId);
 
         if (investorId) {
             query = query.or(`investor_id.eq.${investorId},investor_id.is.null`);
@@ -219,12 +220,13 @@ export const investorPortalService = {
 
     // ─── Opportunities ────────────────────────────────────────────────────────
 
-    async listOpportunities(organizationId: string, onlyPublished = false): Promise<InvestorOpportunity[]> {
+    /** `organizationId` null = "Todas as organizações" (REGRA #5): sem filtro, a RLS recorta às do usuário. */
+    async listOpportunities(organizationId: string | null | undefined, onlyPublished = false): Promise<InvestorOpportunity[]> {
         let query = supabase
             .from('investor_opportunities')
             .select(OPP_COLS)
-            .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
+        if (organizationId) query = query.eq('organization_id', organizationId);
 
         if (onlyPublished) query = query.eq('is_published', true);
 

@@ -50,7 +50,6 @@ describe('contrato com a função publicada (versão publicada pela oportunidade
         .sort((a, b) => (a.match(/\d{14}/)?.[0] ?? '').localeCompare(b.match(/\d{14}/)?.[0] ?? ''))
         .pop()!}`, 'utf-8');
     const sql = ultimaQueDefine('fn_investor_portal_get_versao');
-    const sqlDaAntiga = ultimaQueDefine('fn_investor_portal_get_study');
     const chave = (k: string) => new RegExp(`'${k}'\\s*,`).test(sql);
 
     it('serve o snapshot da versão publicada na oportunidade, não o estudo vivo', () => {
@@ -58,9 +57,16 @@ describe('contrato com a função publicada (versão publicada pela oportunidade
         expect(sql).toMatch(/FROM public\.imovib_study_versions/);
         expect(sql).not.toMatch(/row_to_json\(s\)/);
         expect(sql).toMatch(/"error":"sem_versao"/);
-        // O estudo é da organização do link, e a RPC antiga (por estudo) delega para a por oportunidade.
-        expect(sql).toMatch(/s\.organization_id = v_org_id/);
-        expect(sqlDaAntiga).toMatch(/RETURN public\.fn_investor_portal_get_versao\(p_token, v_opp_id\)/);
+        // Fase 7 (16/11): oportunidade de qualquer organização do investidor ("Disponível em todas");
+        // o estudo tem de ser da organização da OPORTUNIDADE.
+        expect(sql).toMatch(/organization_id = ANY\(v_orgs\)/);
+        expect(sql).toMatch(/fn_orgs_do_investidor\(v_tok\.investor_id\)/);
+        expect(sql).toMatch(/s\.organization_id = v_opp\.organization_id/);
+    });
+
+    it('a RPC antiga, por estudo, saiu (Fase 7)', () => {
+        const todas = readdirSync(pasta).filter(f => f.endsWith('.sql')).map(f => readFileSync(`${pasta}/${f}`, 'utf-8')).join('\n');
+        expect(todas).toMatch(/DROP FUNCTION IF EXISTS public\.fn_investor_portal_get_study\(TEXT, UUID\)/);
     });
 
     it('devolve as chaves que getVersaoPublicadaByToken consome', () => {

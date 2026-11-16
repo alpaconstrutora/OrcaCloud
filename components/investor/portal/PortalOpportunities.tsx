@@ -29,6 +29,26 @@ const STATUS_TONE: Record<OpportunityStatus, PillTone> = {
 const pct = (v?: number | null) =>
     v == null ? '—' : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
+/**
+ * Linha expandida: só o que tem valor (pedido de 16/11/2026 — 7 de 8 campos eram "—"). A localização
+ * já aparece sob o nome na própria linha; "Rentabilidade projetada" só quando digitada (antes caía no
+ * ROI, que a linha já mostra).
+ */
+function camposDaLinha(o: InvestorOpportunity): { rotulo: string; valor: string }[] {
+    const campos: [string, string | null][] = [
+        ['Área do terreno', o.land_area_m2 ? `${o.land_area_m2.toLocaleString('pt-BR')} m²` : null],
+        ['Área construída', o.built_area_m2 ? `${o.built_area_m2.toLocaleString('pt-BR')} m²` : null],
+        ['Pavimentos', o.floors != null ? String(o.floors) : null],
+        ['Custo estimado', o.cost_estimate ? fmtBRL(o.cost_estimate) : null],
+        ['Prazo', o.duration_months ? `${o.duration_months} meses` : null],
+        ['Rentabilidade projetada', o.projected_yield?.trim() || null],
+        ['Início previsto', o.expected_start
+            ? new Date(`${o.expected_start}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+            : null],
+    ];
+    return campos.filter((c): c is [string, string] => c[1] != null).map(([rotulo, valor]) => ({ rotulo, valor }));
+}
+
 const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, investorProfile, portalToken }) => {
     // VGV/ROI/TIR: os da versão publicada do Imovib, quando houver (utils/oportunidadeNumerosDaVersao.ts).
     const opportunities = React.useMemo(() => recebidas.map(comNumerosDaVersao), [recebidas]);
@@ -36,9 +56,15 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
     const [sending, setSending] = React.useState<string | null>(null);
     const [sent, setSent] = React.useState<string[]>([]);
     const [error, setError] = React.useState<string | null>(null);
-    // Conferência de 16/11 (plano 2026-11-15, Fase 7): o detalhe — viabilidade e documentos — abre
-    // abaixo da lista; antes, pelo link, a oportunidade não tinha como chegar ao painel nem ao Data Room.
+    // Conferência de 16/11 (plano 2026-11-15, Fase 7): o detalhe — viabilidade e documentos. Desde o
+    // pedido de 16/11 ("a lista ocupa metade da tela") ele é uma tela própria: a lista sai enquanto
+    // ele está aberto e "← Oportunidades" volta, com a linha ainda expandida.
     const [aberta, setAberta] = React.useState<{ opp: InvestorOpportunity; aba: AbaDoDetalhe } | null>(null);
+    const listaRef = React.useRef<HTMLDivElement>(null);
+    const voltarParaALista = () => {
+        setAberta(null);
+        requestAnimationFrame(() => listaRef.current?.scrollIntoView?.({ block: 'start' }));
+    };
 
     const submitInterest = async (opp: InvestorOpportunity) => {
         if (!portalToken || !opp.id) return;
@@ -62,8 +88,21 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
         }
     };
 
+    if (aberta && portalToken) {
+        return (
+            <PortalOportunidadeDetalhe
+                key={aberta.opp.id}
+                opportunity={aberta.opp}
+                portalToken={portalToken}
+                aba={aberta.aba}
+                onAba={aba => setAberta(a => (a ? { ...a, aba } : a))}
+                onVoltar={voltarParaALista}
+            />
+        );
+    }
+
     return (
-        <div className="space-y-3">
+        <div ref={listaRef} className="space-y-3 scroll-mt-4 portal-troca">
             <PortalCard className="overflow-hidden">
                 <CardHeader
                     title="Oportunidades"
@@ -107,6 +146,7 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                                 const funding = o.target_funding_value && o.current_funding_value != null
                                     ? Math.min(100, (o.current_funding_value / o.target_funding_value) * 100)
                                     : null;
+                                const campos = isOpen ? camposDaLinha(o) : [];
                                 return (
                                     <React.Fragment key={key}>
                                         <tr
@@ -137,28 +177,15 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                                         </tr>
                                         {isOpen && (
                                             <tr className="bg-[#FDF8F6] border-t border-[#F3D9D1]">
-                                                <Td colSpan={7} className="pb-4 portal-desdobra">
-                                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-1 max-w-3xl">
-                                                        <DetailField label="Localização">
-                                                            {o.location_city
-                                                                ? `${o.location_city}${o.location_state ? `/${o.location_state}` : ''}`
-                                                                : '—'}
-                                                        </DetailField>
-                                                        <DetailField label="Área do terreno">{o.land_area_m2 ? `${o.land_area_m2.toLocaleString('pt-BR')} m²` : '—'}</DetailField>
-                                                        <DetailField label="Área construída">{o.built_area_m2 ? `${o.built_area_m2.toLocaleString('pt-BR')} m²` : '—'}</DetailField>
-                                                        <DetailField label="Pavimentos">{o.floors ?? '—'}</DetailField>
-                                                        <DetailField label="Custo estimado">{o.cost_estimate ? fmtBRL(o.cost_estimate) : '—'}</DetailField>
-                                                        <DetailField label="Prazo">{o.duration_months ? `${o.duration_months} meses` : '—'}</DetailField>
-                                                        <DetailField label="Rentabilidade projetada">{o.projected_yield || pct(o.roi_pct)}</DetailField>
-                                                        <DetailField label="Início previsto">
-                                                            {o.expected_start
-                                                                ? new Date(`${o.expected_start}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-                                                                : '—'}
-                                                        </DetailField>
-                                                    </div>
+                                                <Td colSpan={7} className="pt-3 pb-4 portal-desdobra">
+                                                    {campos.length > 0 && (
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-1 max-w-3xl mb-4">
+                                                            {campos.map(c => <DetailField key={c.rotulo} label={c.rotulo}>{c.valor}</DetailField>)}
+                                                        </div>
+                                                    )}
 
                                                     {funding != null && (
-                                                        <div className="mt-4 max-w-md">
+                                                        <div className="mb-4 max-w-md">
                                                             <div className="flex items-center justify-between text-[12px] text-[#8A8F9A] mb-1.5">
                                                                 <span>Captação</span>
                                                                 <span className="tabular-nums">
@@ -171,7 +198,7 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                                                         </div>
                                                     )}
 
-                                                    <div className="flex flex-wrap items-center gap-2 mt-4">
+                                                    <div className="flex flex-wrap items-center gap-2">
                                                         {portalToken && o.id && (
                                                             sent.includes(o.id) ? (
                                                                 <span className="portal-confirma inline-flex items-center gap-2 h-9 px-4 rounded-[8px] bg-[#E7F6EC] text-[#1F7A3D] text-[13px] font-semibold">
@@ -217,17 +244,6 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                     </table>
                 </div>
             </PortalCard>
-
-            {aberta && portalToken && (
-                <PortalOportunidadeDetalhe
-                    key={aberta.opp.id}
-                    opportunity={aberta.opp}
-                    portalToken={portalToken}
-                    aba={aberta.aba}
-                    onAba={aba => setAberta(a => (a ? { ...a, aba } : a))}
-                    onFechar={() => setAberta(null)}
-                />
-            )}
 
             {/* Galeria — só quando há capa cadastrada, para não deixar bloco vazio */}
             {opportunities.some(o => o.thumbnail_url) && (

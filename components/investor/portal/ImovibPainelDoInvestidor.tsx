@@ -21,6 +21,7 @@ import { estudoComPrazoDoPortal } from '../../../utils/imovibVariacoes';
 import { indicadoresDoEstudo, graficosDoEstudo } from '../../../utils/imovibCalculoDaVersao';
 import { dadosDoRelatorioDaVersao, snapshotDaVersaoPublicada, type VersaoPublicada } from '../../../utils/imovibVersoes';
 import { nomeDeArquivo } from '../../../utils/nomeDeArquivo';
+import { linhaDaVersao } from '../../../utils/imovibRelatorio';
 import {
     GraficoCurvaS, GraficoComposicaoDoCapital, GraficoCenarios, GraficoTornado, GraficoVendasPorMes, LinhaDoTempoDosMarcos,
 } from '../../ImovibGraficos';
@@ -63,7 +64,6 @@ const ACCENTS: Record<Accent, { card: string; interativo: string; fundo: boolean
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 const num = (v: number, casas = 2) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas });
 const tir = (v: number | null) => (v != null && Number.isFinite(v) ? `${num(v)}% a.a.` : 'Sem TIR');
-import { dataBRDeBrasilia as dataBR } from '../../../utils/dataDeBrasilia';
 
 /** Tela estreita (celular): rótulos dos gráficos menores e marcos em lista. Sem matchMedia (teste), desktop. */
 function useTelaEstreita(): boolean {
@@ -95,6 +95,49 @@ const Cartao: React.FC<{ accent: Accent; titulo: string; subtitulo?: string; cla
     );
 };
 
+/**
+ * "Baixar relatório (PDF)": a edição do investidor do relatório completo da versão. Exportado para o
+ * cabeçalho do detalhe da oportunidade no portal (pedido de 16/11/2026: um cabeçalho só, acima das
+ * abas); dentro do painel continua na prévia do gestor.
+ */
+export const BotaoDoRelatorio: React.FC<{ versaoPublicada: VersaoPublicada; accent?: Accent }> = ({ versaoPublicada, accent = 'indigo' }) => {
+    const a = ACCENTS[accent];
+    const [gerando, setGerando] = React.useState(false);
+    const [erroDoPdf, setErroDoPdf] = React.useState<string | null>(null);
+    const baixarPdf = async () => {
+        if (gerando) return;
+        setGerando(true);
+        setErroDoPdf(null);
+        try {
+            const { gerarRelatorioCompleto } = await import('../../ImovibGraficosParaPdf');
+            const vp = versaoPublicada;
+            const pdf = await gerarRelatorioCompleto(dadosDoRelatorioDaVersao(snapshotDaVersaoPublicada(vp), vp.versao),
+                { edicao: 'investidor', versao: vp.versao, organizacao: vp.organizacao, congelado: vp.calculo });
+            pdf.save(`Relatorio_${nomeDeArquivo(vp.study.name)}_${nomeDeArquivo(vp.versao.label)}.pdf`);
+        } catch (e) {
+            setErroDoPdf(`Não foi possível gerar o relatório: ${(e as Error).message}`);
+        } finally {
+            setGerando(false);
+        }
+    };
+    return (
+        <div className="flex flex-col items-end gap-1.5">
+            <button
+                type="button"
+                onClick={() => void baixarPdf()}
+                disabled={gerando}
+                aria-label="Baixar relatório (PDF)"
+                title={gerando ? 'Gerando o relatório com os gráficos: leva alguns segundos.' : 'O relatório completo desta versão, com os gráficos.'}
+                className={`inline-flex items-center gap-2 h-10 px-4 rounded-[10px] text-white text-sm font-semibold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-4 disabled:opacity-60 disabled:cursor-wait ${a.botao}`}
+            >
+                {gerando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                {gerando ? 'Gerando o relatório…' : 'Baixar relatório (PDF)'}
+            </button>
+            {erroDoPdf && <p role="alert" className="max-w-xs rounded-[10px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{erroDoPdf}</p>}
+        </div>
+    );
+};
+
 interface Props {
     /** A versão publicada; null na prévia do gestor sem versão (estudo atual). */
     versaoPublicada: VersaoPublicada | null;
@@ -104,9 +147,14 @@ interface Props {
     accent?: Accent;
     /** Aviso acima dos números (prévia do gestor). */
     aviso?: React.ReactNode;
+    /**
+     * Sem a linha "Viabilidade do empreendimento" + versão + PDF: quem monta o painel já mostra
+     * nome, versão e o botão no próprio cabeçalho (detalhe da oportunidade no portal, 16/11/2026).
+     */
+    semTitulo?: boolean;
 }
 
-const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cenarios, accent = 'indigo', aviso }) => {
+const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cenarios, accent = 'indigo', aviso, semTitulo = false }) => {
     const a = ACCENTS[accent];
     const estreita = useTelaEstreita();
     const tma = study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate;
@@ -126,24 +174,6 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
     const indSim = React.useMemo(() => calcularIndicadores(sim, tma), [sim, tma]);
     const simulando = custo !== 0 || preco !== 0 || prazo !== 0;
 
-    const [gerando, setGerando] = React.useState(false);
-    const [erroDoPdf, setErroDoPdf] = React.useState<string | null>(null);
-    const baixarPdf = async () => {
-        if (!versaoPublicada || gerando) return;
-        setGerando(true);
-        setErroDoPdf(null);
-        try {
-            const { gerarRelatorioCompleto } = await import('../../ImovibGraficosParaPdf');
-            const vp = versaoPublicada;
-            const pdf = await gerarRelatorioCompleto(dadosDoRelatorioDaVersao(snapshotDaVersaoPublicada(vp), vp.versao),
-                { edicao: 'investidor', versao: vp.versao, organizacao: vp.organizacao, congelado: vp.calculo });
-            pdf.save(`Relatorio_${nomeDeArquivo(vp.study.name)}_${nomeDeArquivo(vp.versao.label)}.pdf`);
-        } catch (e) {
-            setErroDoPdf(`Não foi possível gerar o relatório: ${(e as Error).message}`);
-        } finally {
-            setGerando(false);
-        }
-    };
 
     const principais = [
         { rotulo: 'VPL', valor: brl(ind.vpl), apoio: `a ${num(ind.tma)}% a.a. (taxa mínima)` },
@@ -173,31 +203,17 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
         <div className="relative isolate space-y-5">
             {a.fundo && <FundoDeVidro />}
 
-            <div className={`flex flex-wrap items-end justify-between gap-3 ${a.assenta}`}>
-                <div className="min-w-0">
-                    <h3 className={`text-xl font-semibold tracking-tight ${a.titulo}`}>Viabilidade do empreendimento</h3>
-                    <p className={`text-sm mt-1 ${a.secundario}`}>
-                        {versaoPublicada
-                            ? `Versão ${versaoPublicada.versao.label} · congelada em ${dataBR(versaoPublicada.versao.created_at)}`
-                            : 'Estudo atual (sem versão publicada)'}
-                    </p>
+            {!semTitulo && (
+                <div className={`flex flex-wrap items-end justify-between gap-3 ${a.assenta}`}>
+                    <div className="min-w-0">
+                        <h3 className={`text-xl font-semibold tracking-tight ${a.titulo}`}>Viabilidade do empreendimento</h3>
+                        <p className={`text-sm mt-1 ${a.secundario}`}>
+                            {versaoPublicada ? linhaDaVersao(versaoPublicada.versao) : 'Estudo atual (sem versão publicada)'}
+                        </p>
+                    </div>
+                    {versaoPublicada && <BotaoDoRelatorio versaoPublicada={versaoPublicada} accent={accent} />}
                 </div>
-                {versaoPublicada && (
-                    <button
-                        type="button"
-                        onClick={() => void baixarPdf()}
-                        disabled={gerando}
-                        aria-label="Baixar relatório (PDF)"
-                        title={gerando ? 'Gerando o relatório com os gráficos: leva alguns segundos.' : 'O relatório completo desta versão, com os gráficos.'}
-                        className={`inline-flex items-center gap-2 h-10 px-4 rounded-[10px] text-white text-sm font-semibold shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-4 disabled:opacity-60 disabled:cursor-wait ${a.botao}`}
-                    >
-                        {gerando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                        {gerando ? 'Gerando o relatório…' : 'Baixar relatório (PDF)'}
-                    </button>
-                )}
-            </div>
-
-            {erroDoPdf && <p role="alert" className="rounded-[10px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{erroDoPdf}</p>}
+            )}
             {aviso}
 
             <section aria-label="Indicadores da versão" className="space-y-3">

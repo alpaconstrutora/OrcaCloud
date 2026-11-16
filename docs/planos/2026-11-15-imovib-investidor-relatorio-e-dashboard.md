@@ -76,20 +76,62 @@ A referência (reel de code.xr, "Glassy Dashboard": glassmorphism, acentos lumin
 
 ## Fase 4 — Dashboard do investidor (referência, cor do portal)
 
-- [ ] `components/investor/portal/ImovibPainelDoInvestidor.tsx` (props: estudo da versão, `versao`, `organizacao`, `accent`), substituindo o conteúdo da aba "Viabilidade & Investimento" do `OpportunityDetail`:
+- [x] `components/investor/portal/ImovibPainelDoInvestidor.tsx` (props: estudo da versão, `versao`, `organizacao`, `accent`), substituindo o conteúdo da aba "Viabilidade & Investimento" do `OpportunityDetail`:
   - faixa da versão ("Versão <label> · <data>") + botão "Baixar relatório (PDF)" (edição investidor, Fase 3);
   - 4 KPIs principais (VPL, TIR a.a., margem líquida, exposição máxima) + 4 de apoio (VGV, lucro, payback, múltiplo);
   - Curva S / exposição, composição do capital, cenários, sensibilidade (tornado), linha do tempo dos marcos, curva de vendas;
   - simuladores atuais (VGV/custo/prazo) num card "Simulação — não altera a versão publicada".
-- [ ] Visual da referência no vocabulário do portal: cards de vidro (`bg-white/60 backdrop-blur`, borda branca translúcida, sombra com brilho coral `P`), hover que levanta e acende, entrada suave; `prefers-reduced-motion` desliga animação; sem `dark:` (§33); responsivo até 390 px.
-- [ ] Guia: nova subseção no §24 ("painel de vidro do investidor") — padrão que o guia não cobre vira seção (REGRA #1, item 4).
+- [x] Visual da referência no vocabulário do portal: cards de vidro (`bg-white/60 backdrop-blur`, borda branca translúcida, sombra com brilho coral `P`), hover que levanta e acende, entrada suave; `prefers-reduced-motion` desliga animação; sem `dark:` (§33); responsivo até 390 px.
+- [x] Guia: nova subseção no §24 (§24.1, "painel de vidro do investidor") — padrão que o guia não cobre vira seção (REGRA #1, item 4).
+- Feito: a aba mostra o painel quando há estudo (sem estudo, o bloco antigo); o "Sensibilidade" digitado na oportunidade só aparece sem estudo. Conferido num harness na largura da aba (976 px) em 1600 px e 390 px: sem rolagem horizontal, 0 erros; correções da conferência — indicadores em uma coluna no celular, rótulos de eixo menores, marcos em lista, legenda do capital na cor de texto, eixo do tornado com margem.
 - **Pronto quando:** testes do painel (KPIs batem com `ResultadosDaVersao` da versão; simulação não muda a faixa da versão; botão PDF chama a edição investidor); `check-ui-standard.sh` nos `.tsx` tocados; navegador: link de portal com token de teste em 1600 px e 390 px, prints conferidos; 0 erros de console.
 
 ## Fase 5 — Conferências e pendências vizinhas (só registrar, não consertar sem pedido)
 
-- [ ] Conferir se o **Data Room** abre no portal por link (lê `opportunity_documents` direto → provável lista vazia em silêncio, ver memória "portal lendo tabela direto").
-- [ ] Conferir se o **investidor logado por e-mail** (sem token) consegue ler oportunidade/versão (lê por RLS de membro da org).
+- [x] Conferir se o **Data Room** abre no portal por link (lê `opportunity_documents` direto → provável lista vazia em silêncio, ver memória "portal lendo tabela direto").
+- [x] Conferir se o **investidor logado por e-mail** (sem token) consegue ler oportunidade/versão (lê por RLS de membro da org).
 - Registrar o resultado em "Pendências" deste plano.
+
+## Revisão independente das Fases 2–5 (15/11)
+
+Sem Critical. Corrigido (testes RED→GREEN; migration `aplicar_20271115970000_investidor_versao_por_oportunidade.sql`,
+provada em transação desfeita — **aplicar com OK**):
+
+- [x] **Important** — a RPC mandava as listas do relatório inteiras (notas e vínculo dos sócios, notas e fonte dos
+  comparáveis, responsável do risco, quem conferiu a due diligence). Agora cada lista vai só com os campos do relatório
+  (`CAMPOS_PARA_O_INVESTIDOR`, igual no banco e no front).
+- [x] **Important** — a prévia do gestor não tirava as chaves internas (o PDF baixado nela levaria as fontes das premissas);
+  e no portal a edição do investidor dizia "N de N premissas sem fonte". `versaoPublicadaDoSnapshot` faz o mesmo recorte
+  da RPC; a edição do investidor sai sem as colunas Fonte/Data e sem a contagem.
+- [x] **Important** — duas oportunidades publicadas do mesmo estudo: o investidor via a versão da mais nova. Nova
+  `fn_investor_portal_get_versao(token, oportunidade)`; a antiga (por estudo) delega para ela, até o app novo estar no ar.
+- [x] Minor — estudo de outra organização: gatilho e RPC conferem que o estudo é da organização da oportunidade/do link.
+- [x] Minor — falha na captura (ou num gráfico) derrubava o PDF: sai só com texto e tabelas.
+- [x] Minor — aba em segundo plano pausava a geração (`requestAnimationFrame`): `setTimeout` de 50 ms como alternativa.
+- [x] Minor — datas da versão em UTC (congelada depois das 21h aparecia no dia seguinte): `utils/dataDeBrasilia.ts`.
+- [x] Minor — prévia sem versão dizia "nenhum cenário": usa os cenários do estudo atual; erro ao ler as versões no
+  formulário dizia "não tem versão": diz que não leu.
+- Pergunta do usuário (15/11): "O problema pode ser corrigido criando histórico de versões?" — resposta: o histórico já existe (versões imutáveis); o que resolve é congelar também o RESULTADO do cálculo (indicadores, fluxo, tornado, cenários, vendas) na versão e o painel/PDF lerem dele. Oferecido como próximo passo, aguardando decisão.
+- Ruling: **os números são recalculados pelo motor atual sobre o snapshot**, não lidos do `results` congelado — assim
+  indicadores, gráficos e PDF ficam coerentes entre si. Custo: uma correção futura do motor muda o que o investidor vê de
+  uma versão já publicada (e pode divergir da aba Versões, que mostra o `results` do momento). Revisitar se o usuário
+  quiser números imutáveis.
+- [x] Minor (pedido do usuário, 15/11: "Corrigir problema com logo") — falha de rede não fica mais no cache de
+  `logoComoDataUrl`; logo SVG/WebP (qualquer tamanho, inclusive SVG só com viewBox) é redesenhada em PNG
+  (`utils/logoParaOPdf.ts`). Conferido no Garden com uma logo SVG trocada só na resposta: aparece na capa.
+
+## Pendências (registradas 15/11, fora do pedido — não consertadas)
+
+- **Data Room pelo link fica vazio em silêncio.** `opportunity_documents` só tem policy para
+  `authenticated` membro da organização; o portal por token lê a tabela direto (`DataRoomPanel` →
+  `opportunityDocumentsService.list`) e recebe `[]`. Conferido pelas policies, não na tela. Conserto:
+  RPC por token (como `fn_investor_portal_get_reports`) + URL assinada por Edge Function (bucket privado).
+- **Investidor que entra por e-mail não vê oportunidades.** `investor_opportunities` e
+  `imovib_study_versions` só liberam leitura para membro da organização; o investidor logado não é
+  membro. O caminho que funciona é o link com token. Conserto: as mesmas RPCs por `auth.uid()`
+  (molde de `fn_investor_get_espelho`).
+- Minors do painel: no celular, o valor do cenário negativo encosta no rótulo e o eixo do tornado fica
+  apertado; os quadradinhos da legenda HTML saem um pouco acima do texto na captura do PDF.
 
 ---
 

@@ -42,11 +42,11 @@ describe('10.6 — o portal calcula o mesmo número do app', () => {
     });
 });
 
-describe('contrato com a função publicada (versão publicada, plano 2026-11-15)', () => {
+describe('contrato com a função publicada (versão publicada pela oportunidade, plano 2026-11-15)', () => {
     // A definição que vale é a da migration mais recente que recria a função.
     const pasta = resolve(__dirname, '../supabase/migrations');
     const ultima = readdirSync(pasta)
-        .filter(f => f.endsWith('.sql') && /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.fn_investor_portal_get_study/i.test(readFileSync(`${pasta}/${f}`, 'utf-8')))
+        .filter(f => f.endsWith('.sql') && /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.fn_investor_portal_get_versao/i.test(readFileSync(`${pasta}/${f}`, 'utf-8')))
         .sort((a, b) => (a.match(/\d{14}/)?.[0] ?? '').localeCompare(b.match(/\d{14}/)?.[0] ?? ''))
         .pop()!;
     const sql = readFileSync(`${pasta}/${ultima}`, 'utf-8');
@@ -55,8 +55,11 @@ describe('contrato com a função publicada (versão publicada, plano 2026-11-15
     it('serve o snapshot da versão publicada na oportunidade, não o estudo vivo', () => {
         expect(sql).toMatch(/imovib_version_id/);
         expect(sql).toMatch(/FROM public\.imovib_study_versions/);
-        expect(sql).not.toMatch(/FROM public\.imovib_studies/);
+        expect(sql).not.toMatch(/row_to_json\(s\)/);
         expect(sql).toMatch(/"error":"sem_versao"/);
+        // O estudo é da organização do link, e a RPC antiga (por estudo) delega para a por oportunidade.
+        expect(sql).toMatch(/s\.organization_id = v_org_id/);
+        expect(sql).toMatch(/RETURN public\.fn_investor_portal_get_versao\(p_token, v_opp_id\)/);
     });
 
     it('devolve as chaves que getVersaoPublicadaByToken consome', () => {
@@ -65,10 +68,18 @@ describe('contrato com a função publicada (versão publicada, plano 2026-11-15
         }
     });
 
-    it('tira do link toda coluna interna de governança (parecer, notas, mínimos) e as listas penduradas', () => {
+    it('as listas do relatório vão recortadas, com os mesmos campos do front', async () => {
+        const { CAMPOS_PARA_O_INVESTIDOR } = await import('../utils/imovibVersoes');
+        for (const [lista, campos] of Object.entries(CAMPOS_PARA_O_INVESTIDOR)) {
+            expect(sql, lista).toContain(`ARRAY[${campos.map(c => `'${c}'`).join(', ')}]`);
+        }
+        expect(sql).not.toMatch(/'relatorio',\s*COALESCE\(v_ver\.snapshot -> 'relatorio'/);
+    });
+
+    it('tira do link toda coluna interna de governança (parecer, notas, mínimos) e as listas penduradas', async () => {
+        const { CHAVES_INTERNAS_DO_ESTUDO } = await import('../utils/imovibVersoes');
         const fora = /snapshot\s*-\s*ARRAY\[([^\]]*)\]/i.exec(sql)?.[1] ?? '';
-        for (const k of ['premise_notes', 'recommendation', 'recommendation_notes', 'recommended_by', 'recommended_at', 'recommended_by_user_id',
-            'recommendation_snapshot', 'hurdle_irr_spread', 'hurdle_margin_percent', 'hurdle_max_exposure', 'cenarios', 'relatorio']) {
+        for (const k of [...CHAVES_INTERNAS_DO_ESTUDO, 'cenarios', 'relatorio']) {
             expect(fora, k).toContain(`'${k}'`);
         }
     });

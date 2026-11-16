@@ -15,6 +15,7 @@ import { terrenoMaximo, precoMinimo, custoMaximoDeObra, vendasMinimas, type Pont
 import { resumoDosComparaveis, type ImovibComparable } from './imovibMercado';
 import { marcosDoEstudo } from './imovibCronograma';
 import { fluxoAnual, dadosDosCenarios, GRAFICOS_DA_SECAO, type GraficoId } from './imovibGraficos';
+import { dataBRDeBrasilia } from './dataDeBrasilia';
 import { compararRegimes } from './imovibComparacaoDeRegimes';
 import { ROTULO_DO_REGIME, type RegimeTributarioDoEstudo } from './imovibTributos';
 import { resultadoPorSocio, type ImovibPartner } from './imovibSocios';
@@ -73,7 +74,7 @@ const ponto = (p: PontoDeEquilibrio, f: (v: number) => string) =>
 const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const dataBR = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
 const linhaDaData = (hoje: string, versao: OpcoesDoRelatorio['versao']) =>
-    versao ? `Versão ${versao.label} · congelada em ${dataBR(versao.created_at)}` : `Relatório gerado em ${dataBR(hoje)}`;
+    versao ? `Versão ${versao.label} · congelada em ${dataBRDeBrasilia(versao.created_at)}` : `Relatório gerado em ${dataBR(hoje)}`;
 
 /** Título, versão (ou data) e os quatro números da capa visual do PDF. */
 export function capaDoRelatorio(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorio = {}): CapaDoRelatorio {
@@ -162,11 +163,19 @@ export function secoesDoRelatorio(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorio
     // 3. Premissas (memorial)
     const memorial = memorialDePremissas(study, { rubricasAtivas: r.capexRubricasAtivas });
     const semFonte = memorial.filter(l => !l.fonte).length;
+    // Edição do investidor: as notas de fonte são internas (não vão ao portal), então nem a coluna
+    // nem a contagem de "sem fonte" — que diria "N de N sem fonte" para todo estudo.
+    const doInvestidor = opcoes.edicao === 'investidor';
     const premissas = secao('premissas', 'Premissas', {
-        paragrafos: [`${semFonte} de ${memorial.length} premissas sem fonte anotada. "Padrão" é o valor do sistema para campo vazio.`],
+        paragrafos: doInvestidor
+            ? ['"Padrão" é o valor do sistema para campo vazio.']
+            : [`${semFonte} de ${memorial.length} premissas sem fonte anotada. "Padrão" é o valor do sistema para campo vazio.`],
         tabelas: [{
-            colunas: ['Grupo', 'Premissa', 'Valor', 'Fonte', 'Data'],
-            linhas: memorial.map(l => [l.grupo, l.premissa, `${valorDoMemorial(l.valor, l.unidade)}${l.ehPadrao ? ' (padrão)' : ''}`, l.fonte ?? '—', l.data ? dataBR(l.data) : '—']),
+            colunas: doInvestidor ? ['Grupo', 'Premissa', 'Valor'] : ['Grupo', 'Premissa', 'Valor', 'Fonte', 'Data'],
+            linhas: memorial.map(l => {
+                const base = [l.grupo, l.premissa, `${valorDoMemorial(l.valor, l.unidade)}${l.ehPadrao ? ' (padrão)' : ''}`];
+                return doInvestidor ? base : [...base, l.fonte ?? '—', l.data ? dataBR(l.data) : '—'];
+            }),
         }],
     });
 

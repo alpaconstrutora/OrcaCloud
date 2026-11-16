@@ -111,14 +111,16 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
     // Plano docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md, Fase 2: com estudo do
     // Imovib, o investidor vê uma VERSÃO congelada; publicar sem ela o banco recusa.
     const [versoes, setVersoes] = React.useState<ImovibStudyVersion[] | null>(null);
+    const [erroDasVersoes, setErroDasVersoes] = React.useState<string | null>(null);
     const [voltouParaRascunho, setVoltouParaRascunho] = React.useState(false);
     React.useEffect(() => {
         if (!form.imovib_study_id) { setVersoes(null); return; }
         let vivo = true;
         setVersoes(null);
+        setErroDasVersoes(null);
         imovibService.listarVersoes(form.imovib_study_id)
             .then(l => { if (vivo) setVersoes(l); })
-            .catch(err => { if (vivo) { console.error('Erro ao carregar as versões do estudo', err); setVersoes([]); } });
+            .catch(err => { if (vivo) { console.error('Erro ao carregar as versões do estudo', err); setVersoes([]); setErroDasVersoes((err as Error).message); } });
         return () => { vivo = false; };
     }, [form.imovib_study_id]);
     // Trocar de estudo limpa a versão; se estava publicada, volta para rascunho (o banco recusaria
@@ -386,7 +388,10 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                         <option key={v.id} value={v.id}>{v.label} · {new Date(v.created_at).toLocaleDateString('pt-BR')}</option>
                                     ))}
                                 </select>
-                                {versoes?.length === 0 && (
+                                {erroDasVersoes && (
+                                    <p className="text-xs text-red-700">Não foi possível ler as versões do estudo: {erroDasVersoes}</p>
+                                )}
+                                {versoes?.length === 0 && !erroDasVersoes && (
                                     <p className="text-xs text-amber-700">Este estudo ainda não tem versão congelada: congele uma na aba Versões do estudo.</p>
                                 )}
                                 <p className="text-xs text-blue-500">O investidor vê os números desta versão; editar o estudo depois não muda o que ele recebeu.</p>

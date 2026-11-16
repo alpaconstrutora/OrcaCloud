@@ -22,6 +22,7 @@ import { secoesDoRelatorio, capaDoRelatorio, type DadosDoRelatorio, type OpcoesD
 import { pdfDoRelatorio, type ImagemDoGrafico } from '../utils/imovibRelatorioPdf';
 import { coresCompativeisNaCopia } from '../utils/html2canvasCores';
 import { logoComoDataUrl } from '../utils/logoComoDataUrl';
+import { logoParaOPdf } from '../utils/logoParaOPdf';
 import {
     GraficoCurvaS, GraficoTornado, GraficoCenarios, GraficoVendasPorMes, GraficoComposicaoDoCapital, LinhaDoTempoDosMarcos,
     type DimensaoDoGrafico,
@@ -77,29 +78,24 @@ function graficoDe(id: GraficoId, d: DadosDoRelatorio): React.ReactElement | nul
     }
 }
 
-const proximoQuadro = () => new Promise<void>(ok => requestAnimationFrame(() => ok()));
-
-/** Logo reduzida para a capa (16 mm de altura não pedem 3600 px). Falha → a original. */
-async function logoReduzida(dataUrl: string | null, larguraMaxima = 480): Promise<string | null> {
-    if (!dataUrl) return null;
-    try {
-        const img = new Image();
-        await new Promise<void>((ok, erro) => { img.onload = () => ok(); img.onerror = () => erro(new Error('logo')); img.src = dataUrl; });
-        if (img.naturalWidth <= larguraMaxima) return dataUrl;
-        const c = document.createElement('canvas');
-        c.width = larguraMaxima;
-        c.height = Math.max(1, Math.round((img.naturalHeight * larguraMaxima) / img.naturalWidth));
-        const ctx = c.getContext('2d');
-        if (!ctx) return dataUrl;
-        ctx.drawImage(img, 0, 0, c.width, c.height);
-        return c.toDataURL('image/png');
-    } catch {
-        return dataUrl;
-    }
-}
+// Aba em segundo plano pausa o requestAnimationFrame (a geração ficava parada até voltar): quem
+// chegar primeiro, o quadro ou 50 ms, libera.
+const proximoQuadro = () => new Promise<void>(ok => {
+    const t = setTimeout(ok, 50);
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => { clearTimeout(t); ok(); });
+});
 
 export async function imagensDosGraficos(d: DadosDoRelatorio, ids: GraficoId[]): Promise<Partial<Record<GraficoId, ImagemDoGrafico>>> {
-    const graficos = [...new Set(ids)].map(id => ({ id, el: graficoDe(id, d) })).filter((g): g is { id: GraficoId; el: React.ReactElement } => !!g.el);
+    // Um gráfico que não consegue ser calculado fica de fora; os outros seguem.
+    const graficos = [...new Set(ids)].flatMap(id => {
+        try {
+            const el = graficoDe(id, d);
+            return el ? [{ id, el }] : [];
+        } catch (e) {
+            console.error(`Gráfico "${TITULO[id]}" ficou fora do relatório`, e);
+            return [];
+        }
+    });
     if (!graficos.length) return {};
     const html2canvas = (await import('html2canvas')).default;
     const caixa = document.createElement('div');
@@ -159,8 +155,12 @@ export interface OpcoesDoRelatorioCompleto extends OpcoesDoRelatorio {
 export async function gerarRelatorioCompleto(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorioCompleto = {}): Promise<jsPDF> {
     const secoes = secoesDoRelatorio(d, opcoes);
     const [imagens, logo] = await Promise.all([
-        imagensDosGraficos(d, secoes.flatMap(s => s.graficos)),
-        logoComoDataUrl(opcoes.organizacao?.logo_url ?? null).then(l => logoReduzida(l)),
+        // Falha na captura (html2canvas) não derruba o relatório: sai só com texto e tabelas.
+        imagensDosGraficos(d, secoes.flatMap(s => s.graficos)).catch(e => {
+            console.error('Os gráficos ficaram fora do relatório', e);
+            return {};
+        }),
+        logoComoDataUrl(opcoes.organizacao?.logo_url ?? null).then(l => logoParaOPdf(l)),
     ]);
     const titulo = opcoes.versao ? `${d.study.name} — ${opcoes.versao.label}` : d.study.name;
     return pdfDoRelatorio(secoes, titulo, {

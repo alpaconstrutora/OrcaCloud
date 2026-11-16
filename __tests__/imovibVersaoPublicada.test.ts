@@ -46,8 +46,8 @@ describe('versão publicada', () => {
 
     it('pelo link: a RPC devolve a versão, a organização e as listas', async () => {
         rpc.resposta = { valid: true, study: { ...(baseStudy() as object) }, cenarios, relatorio: { riscos }, versao, organizacao };
-        const vp = await investorPortalTokenService.getVersaoPublicadaByToken('tok', 'estudo-teste');
-        expect(rpc.chamadas[0]).toEqual(['fn_investor_portal_get_study', { p_token: 'tok', p_study_id: 'estudo-teste' }]);
+        const vp = await investorPortalTokenService.getVersaoPublicadaByToken('tok', 'oportunidade-1');
+        expect(rpc.chamadas[0]).toEqual(['fn_investor_portal_get_versao', { p_token: 'tok', p_opportunity_id: 'oportunidade-1' }]);
         expect(vp.study.name).toBe('Estudo teste');
         expect(vp.cenarios).toEqual(cenarios);
         expect(vp.relatorio.riscos).toEqual(riscos);
@@ -57,13 +57,13 @@ describe('versão publicada', () => {
 
     it('oportunidade sem versão publicada: diz em português', async () => {
         rpc.resposta = { valid: false, error: 'sem_versao' };
-        await expect(investorPortalTokenService.getVersaoPublicadaByToken('tok', 'estudo-teste'))
+        await expect(investorPortalTokenService.getVersaoPublicadaByToken('tok', 'oportunidade-1'))
             .rejects.toThrow('Esta oportunidade ainda não tem uma versão do estudo publicada.');
     });
 
     it('link vencido: diz em português', async () => {
         rpc.resposta = { valid: false, error: 'unauthorized' };
-        await expect(investorPortalTokenService.getVersaoPublicadaByToken('tok', 'estudo-teste'))
+        await expect(investorPortalTokenService.getVersaoPublicadaByToken('tok', 'oportunidade-1'))
             .rejects.toThrow('O link do portal venceu ou foi desativado.');
     });
 

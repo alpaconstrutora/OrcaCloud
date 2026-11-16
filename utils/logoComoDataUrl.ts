@@ -21,6 +21,8 @@ export function logoComoDataUrl(url?: string | null): Promise<string | null> {
                 : null)
             .catch(() => null);
         logoCache.set(url, p);
+        // Falha (rede, servidor) não fica no cache: senão a logo sumia até recarregar a página.
+        p.then(v => { if (v == null) logoCache.delete(url); });
     }
     return p;
 }

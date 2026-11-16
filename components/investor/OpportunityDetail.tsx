@@ -28,8 +28,9 @@ import { calcularIndicadores, textoDoPayback } from '../../utils/imovibIndicador
 import { IMOVIB_DEFAULTS } from '../../constants/imovibDefaults';
 import { composicaoDoCapital, ROTULO_DO_CAPITAL, COR_DO_CAPITAL } from '../../utils/imovibFinanciamento';
 import { TITULO_VGV_LIQUIDO, vgvLiquidoPassaDoBruto, notaDoVgvLiquido } from '../../constants/imovibClassificacao';
-import { ImovibStudy } from '../../types';
+import { ImovibStudy, ImovibScenario } from '../../types';
 import type { VersaoPublicada } from '../../utils/imovibVersoes';
+import ImovibPainelDoInvestidor from './portal/ImovibPainelDoInvestidor';
 import { InvestmentSimulator } from './InvestmentSimulator';
 import Button from '../ui/Button';
 import {
@@ -74,6 +75,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
     // vê o estudo atual, avisado de que ainda não é o que o investidor verá.
     const [versaoPublicada, setVersaoPublicada] = React.useState<VersaoPublicada | null>(null);
     const [erroDoEstudo, setErroDoEstudo] = React.useState<string | null>(null);
+    // Prévia sem versão: os cenários do estudo atual (a versão traz os dela).
+    const [cenariosAoVivo, setCenariosAoVivo] = React.useState<ImovibScenario[]>([]);
 
     React.useEffect(() => {
         if (!op.imovib_study_id) { setStudy(null); setVersaoPublicada(null); return; }
@@ -81,11 +84,12 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
         setLoadingStudy(true);
         setErroDoEstudo(null);
         const versao = portalToken
-            ? investorPortalTokenService.getVersaoPublicadaByToken(portalToken, op.imovib_study_id)
+            ? investorPortalTokenService.getVersaoPublicadaByToken(portalToken, op.id!)
             : op.imovib_version_id ? imovibService.versaoPublicada(op.imovib_version_id) : null;
         const carga: Promise<void> = versao
             ? versao.then(vp => { if (vivo) { setVersaoPublicada(vp); setStudy(vp.study); } })
-            : imovibService.getStudyById(op.imovib_study_id, true).then(s => { if (vivo) { setVersaoPublicada(null); setStudy(s); } });
+            : Promise.all([imovibService.getStudyById(op.imovib_study_id, true), imovibService.listarCenarios(op.imovib_study_id)])
+                .then(([s, c]) => { if (vivo) { setVersaoPublicada(null); setStudy(s); setCenariosAoVivo(c); } });
         carga
             .catch(err => { if (vivo) { setStudy(null); setVersaoPublicada(null); setErroDoEstudo((err as Error).message); } })
             .finally(() => { if (vivo) setLoadingStudy(false); });
@@ -608,26 +612,29 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                 {/* ── ABA: Cenários ── */}
                                 {pitchTab === 'cenarios' && (
                                     <div className="space-y-8">
-                                        {/* Dashboard Financeiro */}
+                                        {/* Plano 2026-11-15, Fase 4: com estudo do Imovib, o painel de viabilidade
+                                            (versão publicada; prévia do estudo atual para o gestor sem versão). */}
+                                        {study ? (
+                                            <ImovibPainelDoInvestidor
+                                                versaoPublicada={versaoPublicada}
+                                                study={study}
+                                                cenarios={versaoPublicada?.cenarios ?? cenariosAoVivo}
+                                                accent={portalToken ? 'portal' : 'indigo'}
+                                                aviso={!versaoPublicada && !portalToken ? (
+                                                    <p className="rounded-[10px] bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+                                                        Prévia do estudo atual. O investidor só vê uma versão congelada: escolha-a em Editar antes de publicar.
+                                                    </p>
+                                                ) : undefined}
+                                            />
+                                        ) : (
                                         <div>
                                             <div className="flex items-center gap-2 mb-4">
                                                 <BarChart3 className="w-4 h-4 text-blue-600" />
                                                 <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Dashboard de Viabilidade</span>
                                             </div>
 
-                                            {/* Versão que o investidor vê (plano 2026-11-15, Fase 2) */}
                                             {erroDoEstudo && (
                                                 <p role="alert" className="mb-4 rounded-[10px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{erroDoEstudo}</p>
-                                            )}
-                                            {versaoPublicada && (
-                                                <p className="mb-4 text-sm text-gray-700">
-                                                    Versão <span className="font-semibold text-gray-900">{versaoPublicada.versao.label}</span> · congelada em {new Date(versaoPublicada.versao.created_at).toLocaleDateString('pt-BR')}
-                                                </p>
-                                            )}
-                                            {!versaoPublicada && study && !portalToken && (
-                                                <p className="mb-4 rounded-[10px] bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
-                                                    Prévia do estudo atual. O investidor só vê uma versão congelada: escolha-a em Editar antes de publicar.
-                                                </p>
                                             )}
 
                                             {/* Painel do Simulador Interativo */}
@@ -836,6 +843,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                 </div>
                                             </div>
                                         </div>
+                                        )}
 
                                         {/* Simulador de Investimento */}
                                         <InvestmentSimulator
@@ -881,7 +889,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                             </div>
                                         )}
 
-                                        {/* Sensibilidade Fallback */}
+                                        {/* Sensibilidade Fallback — com estudo, o painel já traz cenários e tornado. */}
+                                        {!study && (
                                         <div>
                                             <div className="flex items-center gap-2 mb-4">
                                                 <TrendingUp className="w-4 h-4 text-blue-600" />
@@ -889,6 +898,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                             </div>
                                             <ScenarioComparison opportunity={op} />
                                         </div>
+                                        )}
 
                                         {/* CTA Manifestar Interesse */}
                                         <div className="pt-4">

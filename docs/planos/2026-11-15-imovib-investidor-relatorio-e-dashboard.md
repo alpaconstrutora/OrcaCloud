@@ -19,6 +19,47 @@ Respostas do usuário (15/11):
 
 A referência (reel de code.xr, "Glassy Dashboard": glassmorphism, acentos luminosos, hover animado, responsivo, gráficos interativos) foi lida só pela legenda — o Instagram pede login para o vídeo.
 
+## Estado (16/11/2026)
+
+**Implementação: concluída e no ar.** Produção conferida de fora em 15/11: o domínio serve `8a6f581` (= `origin/main`)
+e os textos novos de cada fase estão nos arquivos servidos.
+
+| Fase | O quê | PR | No main | Migration |
+|---|---|---|---|---|
+| 1 | Versão congelada guarda as listas do relatório | #476 | `e6bee0b8` | — |
+| 2 | Oportunidade publica uma versão; portal lê a versão | #478 | `da11a75c` | `aplicar_20271115960000` ✅ aplicada |
+| 3 | Relatório completo com capa e gráficos | #482 | `12bbbab7` | — |
+| 4–5 | Painel de vidro no portal; conferências | #483 | `9fa883a0` | `aplicar_20271115970000` ✅ aplicada (revisão) |
+| Revisão | Listas recortadas, leitura pela oportunidade, prévia = portal, logo | #483 | `9fa883a0` | (a de cima) |
+| 6 | Números congelados na versão | #484 | `8a6f581d` | `aplicar_20271115980000` ✅ aplicada |
+
+Itens do plano: **todos marcados**, nenhum `[ ]` em aberto.
+
+### Pendências
+
+**Conferência com dado real (depende do usuário)**
+- [ ] Congelar uma versão do Garden Cambuhy (Imovib › Versões) e publicá-la numa oportunidade (Portal do Investidor ›
+  Oportunidades › Editar › "Versão que o investidor vê"). Em 15/11 o banco tinha **0 versões e 0 oportunidades com estudo**:
+  o painel foi conferido num harness com o estudo de teste, o PDF no Garden com escritas bloqueadas e o portal por
+  transações desfeitas — o caminho completo com uma versão real ainda não rodou.
+
+**Fora do pedido, registradas e não consertadas (conferidas pelas policies)**
+- [ ] Data Room pelo link fica vazio em silêncio (`opportunity_documents` só tem policy de membro da organização).
+- [ ] Investidor que entra por e-mail não vê oportunidades (`investor_opportunities`/`imovib_study_versions` idem).
+
+**Limpeza (precisa de migration — só com OK)**
+- [ ] Remover `fn_investor_portal_get_study(token, estudo)`: ficou só para o app publicado antes do #483, que já saiu
+  do ar; hoje ela só delega para `fn_investor_portal_get_versao`.
+
+**Minors (visuais, não feitos)**
+- [ ] Celular: no gráfico de cenários o valor negativo encosta no rótulo; os valores do eixo do tornado ficam apertados.
+- [ ] PDF: o maior valor do eixo do gráfico de vendas quebra em duas linhas ("340 / mil"); o quadradinho da legenda
+  HTML sai um pouco acima do texto na captura.
+- [ ] Gerar o relatório completo leva ~10 s (o botão mostra "Gerando...").
+
+**Fora do plano, achado ao fechar a frente (16/11):** o `node_modules` do checkout de integração estava vazio desde
+15/11 19:17 (outra sessão); reinstalado com `npm ci` a pedido do usuário (735 pacotes, 108 executáveis).
+
 ## Contexto — o que já existe (origin/main, 15/11)
 
 - **Caminho até o investidor:** `investor_opportunities.imovib_study_id` → `components/investor/OpportunityDetail.tsx` (aba "Viabilidade & Investimento", `:600`) carrega o estudo **vivo** por `investorPortalTokenService.getStudyByToken` → RPC `fn_investor_portal_get_study` (vigente em `aplicar_20271112980000_imovib_governanca_pendencias.sql:116`, já tira parecer, hurdles e `premise_notes`). Mostra KPIs, `LineChart` do fluxo, `PieChart` do capital, cenários e sliders (VGV/custo/prazo). Visual azul/índigo, fora do PortalKit.

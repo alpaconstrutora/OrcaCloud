@@ -1,6 +1,7 @@
 import React from 'react';
 import { Building2, CheckCircle2, ChevronDown, ExternalLink, FolderOpen, LineChart, MapPin, Send } from 'lucide-react';
 import PortalOportunidadeDetalhe, { type AbaDoDetalhe } from './PortalOportunidadeDetalhe';
+import { comNumerosDaVersao } from '../../../utils/oportunidadeNumerosDaVersao';
 import {
     InvestorOpportunity, OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_TYPE_LABELS, OpportunityStatus,
 } from '../../../services/investorPortalService';
@@ -28,7 +29,9 @@ const STATUS_TONE: Record<OpportunityStatus, PillTone> = {
 const pct = (v?: number | null) =>
     v == null ? '—' : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
-const PortalOpportunities: React.FC<Props> = ({ opportunities, investorProfile, portalToken }) => {
+const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, investorProfile, portalToken }) => {
+    // VGV/ROI/TIR: os da versão publicada do Imovib, quando houver (utils/oportunidadeNumerosDaVersao.ts).
+    const opportunities = React.useMemo(() => recebidas.map(comNumerosDaVersao), [recebidas]);
     const [expanded, setExpanded] = React.useState<string | null>(null);
     const [sending, setSending] = React.useState<string | null>(null);
     const [sent, setSent] = React.useState<string[]>([]);

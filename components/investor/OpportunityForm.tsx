@@ -912,6 +912,11 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             <BarChart3 className="w-4 h-4 text-blue-600" />
                             <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Dados Financeiros</span>
                         </div>
+                        {form.imovib_version_id && (
+                            <p className="-mt-2 mb-4 text-xs text-blue-600">
+                                Com a versão do Imovib escolhida, o investidor vê VGV, ROI e TIR da versão. Os campos abaixo valem só sem estudo vinculado.
+                            </p>
+                        )}
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-semibold text-slate-500 mb-1.5">VGV (R$)</label>

@@ -211,6 +211,23 @@ provada em transação desfeita — **aplicar com OK**):
   `logoComoDataUrl`; logo SVG/WebP (qualquer tamanho, inclusive SVG só com viewBox) é redesenhada em PNG
   (`utils/logoParaOPdf.ts`). Conferido no Garden com uma logo SVG trocada só na resposta: aparece na capa.
 
+## Lista de oportunidades com os números da versão (pedido de 16/11)
+
+> "VGV, ROI, TIR e Ticket mínimo não são gerados no imovib?" → "sim" (a lista do portal do Tiago mostrava
+> VGV/ROI/TIR em "—" com a versão publicada).
+
+- [x] Com versão publicada, as listas (portal e gestor) e o detalhe mostram VGV, ROI e TIR da VERSÃO
+  (`utils/oportunidadeNumerosDaVersao.ts`); ROI = "Retorno sobre o capital" do Imovib (lucro ÷ exposição
+  máxima — 39,2% no Garden). Ticket mínimo e status não existem no estudo: seguem os do formulário, que
+  ganhou o aviso "o investidor vê VGV, ROI e TIR da versão".
+- [x] Gestor: `listOpportunities`/`add`/`update` trazem `indicadores_da_versao` pelo embed
+  `imovib_study_versions!imovib_version_id` (conferido no PostgREST de produção: 200; dica errada → 400).
+  O campo é só leitura (nunca vai no insert/update); "Editar" abre a oportunidade original.
+- [x] Portal: migration `aplicar_20271116300000_investidor_oportunidades_indicadores_da_versao.sql`
+  (fn_investor_portal_get_opportunities + LEFT JOIN da versão) — provada em transação desfeita com o
+  token do Tiago e APLICADA em 16/11 com OK do usuário. Conferida de fora (anon, link do Tiago):
+  Garden com vgv 11.648.000, TIR 19,0, ROI 39,2; só `calculo.investidor.indicadores` (nada interno).
+
 ## Pendências (registradas 15/11, fora do pedido — não consertadas)
 
 - **Data Room pelo link fica vazio em silêncio.** `opportunity_documents` só tem policy para

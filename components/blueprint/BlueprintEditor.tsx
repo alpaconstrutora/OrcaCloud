@@ -978,7 +978,7 @@ import PainelGrupo from './PainelGrupo';
 import { quadroDeUnidades, rotuloDaUnidade, unidadePorEtiqueta } from '../../utils/blueprintUnidades';
 import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
 import { memorialDeCalculoEletrico, memorialDescritivoEletrico, memorialExecutivoEletrico } from '../../utils/blueprintMemorialEletrico';
-import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
+import { comPreDimensionamentoGuardado, ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
 import { alvoDoAtalho, ehEspacoDeEspelhar, ehAnotacaoDoAtalho, ehFerramentaSimples, letraDoAtalho } from '../../utils/blueprintAtalhos';
 import { IGUALAR_TUDO, ROTULO_DA_PROPRIEDADE, comandosParaIgualar, type OQueIgualar, type PropriedadeDaAbertura, type PropriedadeDaParede } from '../../utils/blueprintIgualar';
@@ -5399,11 +5399,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   const resultadoEletrico = useMemo(
     () =>
-      verificacoesEletricas(
-        editor.model,
-        hipotesesEletricas,
-        executivoEletrico.responsavel,
-        conferirNbr5410(editor.model, null, hipotesesEletricas),
+      // PA10a: as verificações e a NBR do modelo inteiro pré-dimensionam os mesmos quadros — num escopo só, guardado.
+      comPreDimensionamentoGuardado(() =>
+        verificacoesEletricas(
+          editor.model,
+          hipotesesEletricas,
+          executivoEletrico.responsavel,
+          conferirNbr5410(editor.model, null, hipotesesEletricas),
+        ),
       ),
     [editor.model, hipotesesEletricas, executivoEletrico.responsavel],
   );

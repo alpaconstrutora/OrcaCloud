@@ -245,6 +245,24 @@ ficha já tinha login; opção desligada sem destaque no teclado; `listEmployees
 testes de "OrganizationList devolve a promessa" e de e-mail com espaços; cabeçalho do
 `CreatableCombobox` ainda fala só de catálogo.
 
+## Pedido de 16/11 (2º): os menores também
+
+> implemente os itens Deixados para depois (menores)
+
+Cada item com teste visto falhando antes (exceto o 9, que é só comentário):
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 1 | Lista vazia sem `onCreate` não diz "digite para cadastrar"; o campo fica desligado com "Carregando colaboradores…" enquanto a lista carrega | teste do combobox com `vazio` + teste da tela carregando |
+| 2 | Aviso de falha da Edge traz o motivo real (corpo da resposta) e termina com ponto | teste com `error.context.json()` |
+| 3 | Enter no combobox nunca envia o formulário | `fireEvent.keyDown` devolve `false` (preventDefault) com a lista fechada e sem resultado |
+| 4 | Depois do convite com pendência, o rodapé vira "Fechar" (sem reenviar o formulário nem regravar a ficha) | teste: após pendência não há "Enviar Convite"; "Fechar" fecha e limpa |
+| 5 | Toast diz o que aconteceu: e-mail enviado ou pessoa que já tinha conta; ficha vinculada agora ou já vinculada | dois testes de texto do toast |
+| 6 | Opção ativa no teclado é anunciada (`aria-activedescendant`) e destacada, inclusive a desligada | teste do combobox |
+| 7 | Seletor usa consulta enxuta (`laborService.listColaboradoresParaConvite`), sem `*` nem alocações | teste do serviço com supabase simulado |
+| 8 | Testes que faltavam: `OrganizationList` devolve a promessa do `onSave`; `membroPorEmail` normaliza o e-mail | os dois testes |
+| 9 | Cabeçalho do `CreatableCombobox` cita o uso §7.1.3 | leitura |
+
 ## Estado
 
 - [x] Tarefa 1 — combobox (b981f8922)

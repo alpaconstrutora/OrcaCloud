@@ -79,3 +79,47 @@ describe('CreatableCombobox — opção desligada', () => {
         expect(screen.queryByText('Não vinculado ao catálogo.')).toBeNull();
     });
 });
+
+// Pedido de 16/11 (2º) — os menores da revisão.
+describe('CreatableCombobox — teclado e lista vazia', () => {
+    it('Enter nunca envia o formulário: lista fechada', () => {
+        render(<Campo />);
+        const input = screen.getByRole('combobox');
+        // sem foco a lista está fechada; preventDefault faz o fireEvent devolver false
+        expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false);
+    });
+
+    it('Enter nunca envia o formulário: lista aberta sem resultado', () => {
+        render(<Campo value="zzz" />);
+        const input = screen.getByRole('combobox');
+        fireEvent.focus(input);
+        expect(screen.getByText('Nenhum resultado.')).toBeTruthy();
+        expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false);
+    });
+
+    it('opção ativa é anunciada (aria-activedescendant), inclusive a desligada', () => {
+        render(<Campo />);
+        const input = screen.getByRole('combobox');
+        fireEvent.focus(input);
+        expect(input.getAttribute('aria-activedescendant')).toBe(screen.getByRole('option', { name: /Ana/ }).id);
+        fireEvent.keyDown(input, { key: 'ArrowDown' });
+        const bia = screen.getByRole('option', { name: /Bia/ });
+        expect(bia.id).not.toBe('');
+        expect(input.getAttribute('aria-activedescendant')).toBe(bia.id);
+        expect(bia.className).toContain('bg-gray-100');
+    });
+
+    it('lista vazia sem onCreate usa o texto do campo, não "digite para cadastrar"', () => {
+        render(<Campo options={[]} vazio="Nenhum colaborador cadastrado nesta organização." />);
+        fireEvent.focus(screen.getByRole('combobox'));
+        expect(screen.getByText('Nenhum colaborador cadastrado nesta organização.')).toBeTruthy();
+        expect(screen.queryByText(/digite para cadastrar/)).toBeNull();
+    });
+
+    it('lista vazia sem onCreate e sem texto próprio também não oferece cadastrar', () => {
+        render(<Campo options={[]} />);
+        fireEvent.focus(screen.getByRole('combobox'));
+        expect(screen.queryByText(/digite para cadastrar/)).toBeNull();
+        expect(screen.getByText('Nada cadastrado.')).toBeTruthy();
+    });
+});

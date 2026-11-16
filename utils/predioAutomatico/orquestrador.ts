@@ -33,7 +33,7 @@ import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
 import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedido } from './climatizacaoERede';
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
 import { lancarEsgoto } from './esgoto';
-import { rebaixarAguaNasAreasMolhadas, type RebaixoDaAgua } from './desvios';
+import { rebaixarAguaNoForro, type RebaixoDaAgua } from './desvios';
 import { compatibilizarPredio } from './compatibilizacao';
 import { lancarSubsolos, POTENCIA_DO_EXAUSTOR_W, subsoloDaTorre } from './garagem';
 import { lancarDrenagemDaGaragem } from './drenagem';
@@ -304,17 +304,24 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     esgoto = lancarEsgoto(ctx, base, terreo ? { levelId: terreo.levelId } : null, cobertura ? { levelId: cobertura.levelId } : null, 1 + mont.copias);
     pendencias.push(...esgoto.pendencias);
     // PA10b: nos banheiros, lavabos e área de serviço a água corre no forro REBAIXADO, abaixo dos ramais de esgoto do
-    // andar de cima (no forro comum as duas redes se cruzavam); cada andar repete pela cópia viva.
-    rebaixoDaAgua = rebaixarAguaNasAreasMolhadas(ctx, mont.tipoLevelId);
-    if (rebaixoDaAgua.trechos)
-      pendencias.push({ grupo: 'CONFERIR', texto: `Água fria: nos ${rebaixoDaAgua.comodos} cômodo(s) molhado(s) de cada andar (banheiros, lavabos, área de serviço) a água corre a ${(rebaixoDaAgua.cotaMm / 1000).toLocaleString('pt-BR')} m do piso, abaixo dos ramais de esgoto do andar de cima — o forro rebaixado neles (o programa admite 2,30 m de pé-direito); nos outros cômodos, na faixa de sempre.` });
+    // andar de cima (no forro comum as duas redes se cruzavam); PA12: e nos cômodos secos por onde passa ramal do andar de
+    // cima, logo abaixo dele. Cada andar repete pela cópia viva.
+    rebaixoDaAgua = rebaixarAguaNoForro(ctx, mont.tipoLevelId);
+    if (rebaixoDaAgua.trechos) {
+      const m = (mm: number) => (mm / 1000).toLocaleString('pt-BR');
+      const r = rebaixoDaAgua;
+      pendencias.push({
+        grupo: 'CONFERIR',
+        texto: `Água fria: nos ${r.comodos} cômodo(s) molhado(s) de cada andar (banheiros, lavabos, área de serviço) a água corre a ${m(r.cotaMm)} m do piso, abaixo dos ramais de esgoto do andar de cima — o forro rebaixado neles (o programa admite 2,30 m de pé-direito)${r.comodosSecos ? `; nos ${r.comodosSecos} cômodo(s) seco(s) por onde passa ramal do andar de cima (cozinha, circulação, sala, dormitórios), a ${m(r.cotaSecoMm)} m — logo abaixo do ramal, que já pede forro ali, com 2,50 m livres (NBR 15575)` : ''}; nos outros cômodos, na faixa de sempre.${r.contornos ? ` ${r.contornos} trecho(s) de água rebaixada contornam em planta um tubo de queda.` : ''}`,
+      });
+    }
     const maior = Math.max(0, ...esgoto.tubos.map((t) => t.dnMm));
     etapa(
       'ESGOTO',
       esgoto.tubos.length ? 'LANCOU' : 'NAO_RODOU',
       esgoto.comandos + rebaixoDaAgua.comandos,
       esgoto.tubos.length
-        ? `${esgoto.tubos.length} tubo(s) de queda por andar (até DN ${maior}), ${esgoto.uhcPorAndar} UHC por andar${esgoto.coletor ? ` · coletor DN ${esgoto.coletor.dnMm} a ${esgoto.coletor.declividadePct.toLocaleString('pt-BR')} %` : ''}${rebaixoDaAgua.trechos ? ` · a água no forro rebaixado de ${rebaixoDaAgua.comodos} cômodo(s) molhado(s)` : ''}`
+        ? `${esgoto.tubos.length} tubo(s) de queda por andar (até DN ${maior}), ${esgoto.uhcPorAndar} UHC por andar${esgoto.coletor ? ` · coletor DN ${esgoto.coletor.dnMm} a ${esgoto.coletor.declividadePct.toLocaleString('pt-BR')} %` : ''}${rebaixoDaAgua.trechos ? ` · a água no forro rebaixado de ${rebaixoDaAgua.comodos} cômodo(s) molhado(s)${rebaixoDaAgua.comodosSecos ? ` e ${rebaixoDaAgua.comodosSecos} seco(s) sob o ramal de cima` : ''}` : ''}`
         : esgoto.pendencias.find((x) => x.grupo === 'SEM_SOLUCAO')?.texto ?? null,
     );
   }

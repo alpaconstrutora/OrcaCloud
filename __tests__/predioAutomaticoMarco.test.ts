@@ -161,9 +161,10 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // PA10b: o rebaixo da água nas áreas molhadas não parte a rede — todo ponto segue ligado à origem (o "jogo" de 1 mm e o
         // corte rente à ponta partiam: 55 pontos sem pressão no R12).
         expect(agora.agua?.naoAvaliados).toBe(0);
-        // PA10b: a água abaixo dos ramais do andar de cima nas áreas molhadas — os encontros água × esgoto que sobram são o
-        // ramal cruzando cômodo seco a caminho do shaft (estavam: R4 62, R8 252, R12 911, RL 1.195).
-        expect(agora.aguaXEsgoto).toBeLessThanOrEqual(({ R4: 6, R8: 25, R12: 180, RL: 300 } as Record<string, number>)[nome]);
+        // PA10b: a água abaixo dos ramais do andar de cima nas áreas molhadas (estavam: R4 62, R8 252, R12 911, RL 1.195); PA12
+        // ("água abaixo do ramal"): também nos cômodos secos por onde passa o ramal, e contornando o tubo de queda do banheiro
+        // (R4 4, R8 18, R12 141, RL 244 → zero). O 1 do R12 é da garagem: as duas redes do próprio subsolo, fora do tipo.
+        expect(agora.aguaXEsgoto).toBe(({ R4: 0, R8: 0, R12: 1, RL: 0 } as Record<string, number>)[nome]);
         // PA11, "pronto quando": nenhum eletroduto atravessa a caixa de uma evaporadora ou de um exaustor.
         expect(agora.eletrodutoNoEquipamento).toBe(0);
         // PA7a, "pronto quando": o diâmetro do tubo de queda pela Tabela 6 da NBR 8160 — UHC do grupo × os andares, a

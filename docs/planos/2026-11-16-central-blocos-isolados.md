@@ -193,9 +193,15 @@ paralelo, cada uma com o próprio limite de 8 s; cada resultado é aplicado ao e
 
 ## Estado
 
-- [ ] Tarefa 1 — função própria do meu_dia
-- [ ] Tarefa 2 — `fontesSeparadas`
-- [ ] Tarefa 3 — plano B no `load()`
+- [x] Tarefa 1 — função própria do meu_dia (4cfdee8; aplicada em produção 16/11, md5 do meu_dia
+      igual antes/depois/sozinha em "Todas" e na Alpa; bootstrap 545–584 ms)
+- [x] Tarefa 2 — `fontesSeparadas` (754179e)
+- [x] Tarefa 3 — plano B no `load()` (2c0f55d)
+- [x] Revisão final independente: 0 crítico, 2 importantes corrigidos em 20079f7 — org trocada volta
+      ao esqueleto (a fila da empresa anterior ficava até ~16 s, com Aprovar) e alerta que cai entra no
+      aviso "Parte da fila não carregou (…)". Menores adiados: "plano B pegajoso" (pular o bootstrap
+      por alguns minutos depois de um 57014), o Caixa esperar os 6 blocos, Atualizar no plano B
+      substituir a lista de alertas pela 1ª que chega.
 - [ ] Tarefa 4 — publicação e prova na tela
 
 ## Verificação

@@ -54,7 +54,7 @@ export const OutlineRowMenu: React.FC<{ node: HierarchyNode; actions: OutlineAct
                 <MoreVertical className="w-3.5 h-3.5" />
             </button>
             {open && (
-                <div className="absolute left-0 top-full mt-1 z-[120] w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1 text-left animate-in fade-in zoom-in duration-150">
+                <div className="absolute left-0 top-full mt-1 z-[120] w-48 bg-white rounded-xl shadow-xl border border-gray-100 py-1 text-left animate-in fade-in zoom-in-95 duration-150">
                     {children.map(ct => (
                         <button key={ct} onClick={() => run(() => actions.onAddChild(node.id, ct))}
                             className="w-full flex items-center gap-2 px-3 py-1.5 text-button font-medium text-gray-600 hover:bg-gray-50">

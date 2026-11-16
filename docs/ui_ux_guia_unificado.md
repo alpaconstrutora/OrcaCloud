@@ -145,6 +145,7 @@ Ao aplicar o padrão numa nova tela, marque cada item:
 - [ ] **`dark:` só por classe (§33)** — sem `dark:` em código novo; conferir a tela com o sistema em modo escuro (tem de ficar igual à do modo claro)
 - [ ] **Malha do formulário (§30)** — rótulo→campo `space-y-1.5`, campos `gap-x-6 gap-y-4`, seção `space-y-4` com título `pb-3`, seções `space-y-8` no card; campo curto (data/select/valor) nunca em coluna única; sem `pb-10` morto
 - [ ] **Cartão de recibo (§34)** — se a lista também aparece como papel: `CartaoRecibo` como alternativa à tabela (alternador persistido, padrão `'list'`), uma busca só para os dois modos
+- [ ] **Animação de entrada (§35)** — modal `animate-in fade-in zoom-in-95 duration-200`, toast `slide-in-from-bottom-4`, menu `slide-in-from-top-2`; nunca `zoom-in` sem número nem classe inventada; nada em laço fora de "carregando"
 - [ ] **Gráficos (§28)** — card `ChartCard` (título §21 + subtítulo com a base do dado), grade hairline sólida, marcas finas com ponta arredondada, rótulo direto só na ponta em cor de TEXTO, legenda HTML quando há 2+ séries, paleta validada, estado vazio próprio, `—`/vazio em vez de zero quando não medido
 
 ---
@@ -225,6 +226,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §32 Valor de campo — nenhum `<input>`/`<textarea>` com o valor em cinza-claro (automático/só-leitura incluído)
 - [ ] §33 `dark:` só por classe — a tela fica IDÊNTICA com o sistema em modo escuro e em modo claro; não escrever `dark:` em código novo (a variante é por classe e nada liga a classe)
 - [ ] §34 Cartão de recibo — se a tela mostra comprovantes como papel: `CartaoRecibo`, só como alternativa à tabela, busca única nos dois modos
+- [ ] §35 Animação de entrada — se a tela tem modal/toast/menu/aba que entra: classes do vocabulário da §35 (`zoom-in-95`, nunca `zoom-in` puro), duração 200–300 ms em código novo, nada em laço fora de "carregando"
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -3317,9 +3319,9 @@ As classes vivem em `index.css` (bloco "Portais externos (§24) › movimento"),
   que mostram o que chegou continuam (200 ms); o realce pula; os brilhos não animam.
 - **Hover do vidro:** `transition-[translate,box-shadow]` — no Tailwind v4 o `-translate-y-*` é a
   propriedade `translate`; com `transform` na lista o cartão subia num salto.
-- ⚠️ **`animate-in`, `fade-in`, `slide-in-from-*` e `zoom-in-*` não existem neste Tailwind** (não há
-  plugin; o CSS de produção não tem nenhuma regra delas, conferido em 16/11). No portal do investidor
-  foram trocadas pelas classes acima; no resto do app (≈437 usos) seguem sem efeito — pendência.
+- ✅ **`animate-in`, `fade-in`, `slide-in-from-*` e `zoom-in-*` passaram a valer em 16/11/2026** (§35,
+  `tw-animate-css`). Até então não geravam CSS nenhum, e no portal do investidor foram trocadas pelas
+  classes acima — que continuam sendo as do portal.
 
 ### Os quatro desvios (e só eles)
 
@@ -4181,6 +4183,57 @@ papel creme com picote e serrilha saiu. Cores todas em `COR` dentro do component
 > num `<span title>` em volta), `useConfirm()` (§14), valor escuro (§32), sem `dark:` (§33).
 > ❌ Não é status badge: nada de carimbo/pílula de status no cartão (§8).
 > ❌ `font-mono` aqui é do papel (números do cupom) — não vale como licença para `font-mono` em `<td>` (§7).
+
+---
+
+## 35. ANIMAÇÃO DE ENTRADA — `animate-in` (tw-animate-css)
+
+**Origem (16/11/2026):** a pendência anotada no §24.2 — as classes `animate-in`, `fade-in`,
+`zoom-in-95` e `slide-in-from-*` estavam em ~437 lugares do app e **não geravam CSS nenhum**: vêm do
+plugin de animação, que o `index.css` não importava (no Tailwind v4 não há `tailwind.config` com
+plugin; o build não reclama de classe desconhecida). Pedido do usuário: *"Corrija pendência"*. Hoje o
+`index.css` importa o **`tw-animate-css`** (sucessor oficial do `tailwindcss-animate` para o v4) e
+as entradas valem. Plano: `docs/planos/2026-11-16-animacoes-de-entrada.md`.
+
+**Vocabulário — o que o app já usa; código novo usa igual:**
+
+| Onde | Classes |
+|---|---|
+| Painel do modal | `animate-in fade-in zoom-in-95 duration-200` |
+| Véu do modal (`fixed inset-0 bg-black/…`) | `animate-in fade-in duration-200` |
+| Toast / aviso no pé da tela (§13) | `animate-in slide-in-from-bottom-4 duration-300` |
+| Menu ou popover que abre para baixo | `animate-in fade-in slide-in-from-top-2 duration-200` |
+| Conteúdo de aba ou de tela | `animate-in fade-in duration-300` |
+| Painel que entra pela lateral | `animate-in slide-in-from-right duration-300` (100% da largura) |
+
+- **Duração = o `duration-*` da mesma linha** (o mesmo que já vale para a transição); sem ele, 150 ms.
+  Código novo: 200–300 ms. Os 500/700 ms que já existiam em conteúdo de aba ficaram como estavam —
+  não é varredura.
+- **`zoom-in` sem número cresce do ZERO** (escala 0). Modal e menu entram de 95%: `zoom-in-95`.
+  Os 12 que havia foram trocados.
+- **Só classe que existe.** `__tests__/animacoesDeEntrada.test.ts` compila o `index.css` com o mesmo
+  compilador do build e exige regra para TODA classe `animate-*`, `fade-in*`, `zoom-in*` e
+  `slide-in-from-*` usada no código. Nome inventado quebra o CI — havia três (`animate-fade-in`,
+  `animate-slide-up`, `animate-pulse-subtle`). Tirar o `@import "tw-animate-css"` também quebra.
+- **Só entrada.** O app não usa `animate-out`/`slide-out-to-*`: sair é desmontar.
+- **Nada em laço para destacar estado.** `animate-spin`/`animate-pulse` só para "carregando" (§11).
+  O marcador da etapa atual do pedido (`OrderLifeline`) tinha `animate-pulse-subtle`, que nunca
+  funcionou; ficou parado, como sempre foi visto.
+- **Menos movimento (`prefers-reduced-motion`):** o `index.css` zera deslocamento e escala de toda
+  `.animate-in` — fica só o esmaecimento.
+- **Compõe com `-translate-x-1/2`:** a animação mexe em `transform`, e o Tailwind v4 centraliza com a
+  propriedade `translate`; as duas somam. Medido no Chromium: o aviso centralizado fica no centro
+  durante a entrada.
+- **Durante a entrada, um `fixed` DENTRO do elemento que anima se posiciona por ele, não pela janela**
+  (`transform` cria bloco de contenção). Dura a entrada (≤ 0,7 s). Overlay de modal vai como irmão do
+  conteúdo da tela ou por portal, não dentro de um `animate-in` que acabou de montar.
+- **PDF por `html2canvas`:** a cópia fotografada sai sem animação — `coresCompativeisNaCopia` (que toda
+  captura chama no `onclone`) injeta `animation: none`. O html2canvas 1.4 lê o estilo da cópia antes
+  de zerar a animação, então sem isso um `fade-in` dentro da área capturada sairia transparente.
+  Captura nova passa por ele.
+
+> ❌ Portais externos (§24.2) e a tela "Bom dia" (§20.3) têm movimento próprio (`portal-*`,
+> `central-*`, curva e tempos deles). Não trocar pelas classes desta seção, nem o contrário.
 
 ---
 

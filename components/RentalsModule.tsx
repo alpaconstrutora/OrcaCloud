@@ -1999,7 +1999,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     </div>
                 </div>
                 {property.client_id && (
-                    <div className="absolute top-24 left-6 z-10 animate-in fade-in zoom-in duration-500">
+                    <div className="absolute top-24 left-6 z-10 animate-in fade-in zoom-in-95 duration-500">
                         <div className="px-4 py-2 bg-white/90 backdrop-blur-md rounded-2xl border border-white shadow-xl flex items-center gap-2">
                             <User className="w-3.5 h-3.5 text-blue-600" />
                             <span className="text-[9px] font-black text-blue-900 uppercase tracking-widest leading-none">

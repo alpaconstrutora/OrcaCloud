@@ -145,7 +145,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
     const botaoSecundario = 'flex items-center gap-1.5 h-9 px-3.5 text-[13px] font-medium rounded-[6px] border transition-all disabled:opacity-50 disabled:cursor-not-allowed';
 
     return (
-        <div className="space-y-6 pb-20 animate-fade-in">
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300">
             {/* Cabeçalho (§20): título solto, fora de card; ações à direita. */}
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div className="flex items-start gap-3 min-w-0">

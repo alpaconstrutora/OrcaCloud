@@ -251,7 +251,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                             </select>
                         </div>
                         {eventUnit !== 'fixed' && (
-                            <div className="md:col-span-2 animate-in zoom-in duration-200">
+                            <div className="md:col-span-2 animate-in zoom-in-95 duration-200">
                                 <label className="block text-xs font-semibold text-slate-500 mb-1">
                                     Quantidade {eventUnit === 'days' ? '(Dias)' : '(Hrs)'}
                                 </label>

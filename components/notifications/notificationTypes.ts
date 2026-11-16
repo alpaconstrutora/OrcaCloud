@@ -66,6 +66,9 @@ export const NOTIF_TYPE_META: Record<string, NotifTypeMeta> = {
     // `rental_renewal` é o slug histórico de LOCAÇÃO (20270827000003) e continua
     // como está para não reclassificar o que já foi emitido; os demais domínios
     // usam `contrato_vencimento`.
+    // ⚠️ Produtor dos dois ELIMINADO em 16/11/2026 (job `daily-rental-renewal-alerts` e
+    // `generate_rental_renewal_alerts`, migration aplicar_20271116600000). Os rótulos ficam
+    // para não exibir slug cru caso algum aviso antigo reapareça (restauração de backup).
     rental_renewal:      { category: 'contratos', label: 'Renovação de locação' },
     contrato_vencimento: { category: 'contratos', label: 'Vencimento de contrato' },
     contrato_reajuste:   { category: 'contratos', label: 'Reajuste de contrato' },

@@ -149,8 +149,18 @@ describe('alertasDasFontes', () => {
     });
 
     it('divergência zerada não vira alerta; valor divergente vira HIGH', () => {
-        expect(alertasDasFontes({ divergences: ok(semDivergencia) })).toEqual({ estado: 'ok', data: [] });
+        expect(alertasDasFontes({ divergences: ok(semDivergencia) })).toEqual({ estado: 'ok', data: [], faltou: [] });
         const r = alertasDasFontes({ divergences: ok({ as_of: HOJE, counts: { value_mismatch: 2, bank_without_internal: 0, internal_without_bank: 0 } } as never) });
-        expect(r).toEqual({ estado: 'ok', data: [expect.objectContaining({ id: 'div-mismatch', severity: 'HIGH', title: '2 lançamento(s) com valor divergente', view: 'bank-reconciliation' })] });
+        expect(r).toEqual({ estado: 'ok', faltou: [], data: [expect.objectContaining({ id: 'div-mismatch', severity: 'HIGH', title: '2 lançamento(s) com valor divergente', view: 'bank-reconciliation' })] });
+    });
+
+    // Revisão final (16/11): no plano B, o bloco que costuma cair é o dos alertas
+    // financeiros (o mais pesado). Se outra fonte chegou, o cartão fica "ok" — e o
+    // que caiu tem de aparecer no aviso da fila, senão o gestor conclui que não há alerta.
+    it('fonte que caiu entra em `faltou`, com o nome que o aviso da fila mostra; a que ainda não chegou, não', () => {
+        expect(alertasDasFontes({ financial: caiu, divergences: ok(semDivergencia), reajustes: caiu }))
+            .toEqual({ estado: 'ok', data: [], faltou: ['alertas financeiros', 'reajustes de contrato'] });
+        expect(alertasDasFontes({ divergences: caiu, bottlenecks: caiu, reajustes: ok([]) }))
+            .toEqual({ estado: 'ok', data: [], faltou: ['divergências de conciliação', 'gargalos de processo'] });
     });
 });

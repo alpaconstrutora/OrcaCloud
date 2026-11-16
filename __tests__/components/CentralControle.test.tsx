@@ -332,4 +332,28 @@ describe('CentralControle · tela "Bom dia"', () => {
         await new Promise(r => setTimeout(r, 50));
         expect(screen.queryByText('Boleto velha')).not.toBeInTheDocument();
     });
+
+    // Revisão final (16/11): a trava acima barra a resposta ATRASADA; o que a org
+    // anterior já pintou também não pode ficar — no plano B seriam até ~16 s com
+    // botão Aprovar de outra empresa debaixo do seletor do topo (REGRA #5).
+    it('trocar de org volta os cartões ao esqueleto: nada da org anterior fica na tela', async () => {
+        bootstrap
+            .mockResolvedValueOnce(painel({ action_queue: { ok: true, data: [aprovacao('da-o1')] } }))
+            .mockRejectedValueOnce(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes({ action_queue: nunca, meu_dia: nunca }));
+        const { rerender } = montar();
+        expect(await within(cartao('Minha fila')).findByText('Boleto da-o1')).toBeInTheDocument();
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledWith('o2'));
+        expect(screen.queryByText('Boleto da-o1')).not.toBeInTheDocument();
+        expect(cartao('Minha fila')).toHaveAttribute('aria-busy', 'true');
+        expect(cartao('Contas a pagar')).toHaveAttribute('aria-busy', 'true');
+    });
+
+    it('alerta financeiro que cai aparece no aviso da fila, mesmo com os outros alertas chegando', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes({ financial_alerts: caiu }));
+        montar();
+        expect(await screen.findByText(/Parte da fila não carregou \(alertas financeiros\)\./)).toBeInTheDocument();
+    });
 });

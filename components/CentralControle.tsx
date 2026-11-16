@@ -16,7 +16,7 @@ import { useStore } from '../store/useStore';
 import { useModulosPermitidos } from '../utils/modulosPermitidos';
 import {
     saudacaoPorHora, comoChamar, diaEmSaoPaulo, montarFila, itemEmDestaque, contagemDoDia,
-    alertasDasFontes, type AlertaDoDia, type FontesDeAlerta,
+    alertasDasFontes, type AlertasDoDia, type FontesDeAlerta,
 } from '../utils/meuDia';
 import { Saudacao } from './central/Saudacao';
 import { MinhaFila, type FiltroDaFila } from './central/MinhaFila';
@@ -57,7 +57,7 @@ function estadoDe(f: Fonte<unknown>): EstadoDoCartao {
 const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNavigate }) => {
     const [fila, setFila] = React.useState<Fonte<ActionQueueItem[]>>(CARREGANDO);
     const [meuDia, setMeuDia] = React.useState<Fonte<MeuDia>>(CARREGANDO);
-    const [alertas, setAlertas] = React.useState<Fonte<AlertaDoDia[]>>(CARREGANDO);
+    const [alertas, setAlertas] = React.useState<AlertasDoDia>(CARREGANDO);
     const [scorecards, setScorecards] = React.useState<Fonte<ProjectScorecard[]>>(CARREGANDO);
     const [approvalConfig, setApprovalConfig] = React.useState<FinancialApprovalConfig[]>([]);
     const [approvalModal, setApprovalModal] = React.useState<{ item: ActionQueueItem; mode: 'approve' | 'reject' } | null>(null);
@@ -86,6 +86,10 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // Cada `load` é uma carga. Resposta de carga velha (organização trocada,
     // Atualizar de novo) não pinta a tela — o plano B estica essa janela para ~16 s.
     const cargaAtual = React.useRef(0);
+    // De que organização é o que está na tela. Org nova volta os cartões ao
+    // esqueleto (como o caixa): no plano B, sem isso, a fila da empresa anterior
+    // ficava até ~16 s — com botão Aprovar — debaixo do seletor da nova (REGRA #5).
+    const orgNaTela = React.useRef<string | null | undefined>(undefined);
 
     // `opcoes` pode chegar como o evento do clique (onTentarDeNovo={load}): só
     // `realcar === true` conta como rodada de "Atualizar".
@@ -93,6 +97,13 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         const minha = ++cargaAtual.current;
         const vale = () => cargaAtual.current === minha;
         setCarregando(true);
+        if (orgNaTela.current !== organizationId) {
+            orgNaTela.current = organizationId;
+            setFila(CARREGANDO);
+            setMeuDia(CARREGANDO);
+            setAlertas(CARREGANDO);
+            setScorecards(CARREGANDO);
+        }
 
         // ── Uma chamada para as consultas pesadas ─────────────────────────
         // Até 24/09/2026 as OITO saíam juntas num `Promise.allSettled`, por
@@ -263,6 +274,8 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         fila.estado === 'erro' ? 'aprovações' : null,
         meuDia.estado === 'erro' ? 'tarefas e contas' : null,
         alertas.estado === 'erro' ? 'alertas' : null,
+        // Alerta que caiu com outro de pé: o cartão está "ok", mas falta um pedaço.
+        ...(alertas.estado === 'ok' ? alertas.faltou : []),
     ].filter((p): p is string => !!p);
 
     const hora = new Date().getHours();

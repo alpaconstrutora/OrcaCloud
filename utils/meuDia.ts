@@ -77,15 +77,23 @@ function fBRL(v: number | null | undefined): string {
     return v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
+/** Estado do cartão de alertas. `faltou`: fontes que CAÍRAM (não as que ainda não
+ *  chegaram), com o nome que o aviso "Parte da fila não carregou (…)" mostra. */
+export type AlertasDoDia =
+    | { estado: 'carregando' }
+    | { estado: 'erro' }
+    | { estado: 'ok'; data: AlertaDoDia[]; faltou: string[] };
+
 /**
  * Os alertas do dia (os mesmos da Central antiga: financeiros, divergências de
  * conciliação, gargalos de processo e reajustes vencidos), a partir do que já
  * chegou. Basta UMA fonte para o cartão sair do esqueleto — no plano B elas chegam
  * uma a uma, e a Minha fila (que espera os alertas) não pode ficar presa ao bloco
- * mais lento. Todas caídas = erro; nenhuma chegou ainda = carregando.
+ * mais lento. Todas caídas = erro; nenhuma chegou ainda = carregando. A que caiu
+ * com outra de pé vai para `faltou`: sem isso, o gestor vê a fila sem os alertas
+ * financeiros e conclui que não há nenhum.
  */
-export function alertasDasFontes(f: FontesDeAlerta):
-    { estado: 'carregando' } | { estado: 'erro' } | { estado: 'ok'; data: AlertaDoDia[] } {
+export function alertasDasFontes(f: FontesDeAlerta): AlertasDoDia {
     const lista: AlertaDoDia[] = [];
     let algumChegou = false;
     if (f.financial?.status === 'fulfilled') {
@@ -123,7 +131,14 @@ export function alertasDasFontes(f: FontesDeAlerta):
             amount: c.current_value,
         }));
     }
-    if (algumChegou) return { estado: 'ok', data: lista };
+    if (algumChegou) {
+        const nomes: [keyof FontesDeAlerta, string][] = [
+            ['financial', 'alertas financeiros'], ['divergences', 'divergências de conciliação'],
+            ['bottlenecks', 'gargalos de processo'], ['reajustes', 'reajustes de contrato'],
+        ];
+        const faltou = nomes.filter(([k]) => f[k]?.status === 'rejected').map(([, nome]) => nome);
+        return { estado: 'ok', data: lista, faltou };
+    }
     const pendente = !f.financial || !f.divergences || !f.bottlenecks || !f.reajustes;
     return pendente ? { estado: 'carregando' } : { estado: 'erro' };
 }

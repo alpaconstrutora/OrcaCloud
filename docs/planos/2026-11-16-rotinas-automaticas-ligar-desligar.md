@@ -273,7 +273,10 @@ tabela de registro só-acréscimo; no front, catálogo puro → service → tela
 - [x] Item 2 — catálogo: `utils/rotinasAutomaticas.ts` (23 rotinas, frases conferidas no código
   em 16/11), `__tests__/rotinasAutomaticas.test.ts` 16/16
 - [x] Item 3 — service: `services/rotinasAutomaticasService.ts`, `__tests__/rotinasAutomaticasService.test.ts` 5/5
-- [ ] Item 4 — tela
+- [x] Item 4 — tela: `components/settings/RotinasAutomaticasSettings.tsx`, teste 8/8,
+  `check-ui-standard.sh` exit 0. Interruptor NÃO vira antes de gravar (mostra só o estado do
+  banco); o `title` das falhas mostra o erro só quando a ÚLTIMA execução falhou (a RPC devolve a
+  mensagem da última execução, não da última falha).
 - [ ] Item 5 — folha nas Configurações
 - [ ] Item 6 — conferência real e publicação
 

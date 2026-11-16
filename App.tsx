@@ -200,7 +200,8 @@ const SindicoPortal = React.lazy(() => import('./components/sindico/SindicoPorta
 const ProPublico = React.lazy(() => import('./components/pro/ProPublico'));
 
 // Portal do Investidor via token público
-const InvestorPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
+// `onLogout` só vem no login por e-mail (16/11/2026): a mesma casca do link, com "Sair".
+const InvestorPortalTokenGate: React.FC<{ token: string; onLogout?: () => void }> = ({ token, onLogout }) => {
   const [state, setState] = React.useState<'loading' | 'ok' | 'error'>('loading');
   const [investorData, setInvestorData] = React.useState<any>(null);
   const [orgId, setOrgId] = React.useState('');
@@ -246,6 +247,7 @@ const InvestorPortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
           investorProfile={investorData}
           portalToken={token}
           isPreview
+          onLogout={onLogout}
         />
       </React.Suspense>
     </div>
@@ -947,6 +949,19 @@ const App: React.FC = () => {
   }
   if (selectedLoginGroup === ProfileGroup.BROKER && portalTokenDoLogin) {
     return <BrokerPortalTokenGate token={portalTokenDoLogin} onLogout={sairDoPortal} />;
+  }
+  // Investidor (16/11/2026): o login por e-mail abre a casca do link (portal_token_para_mim('investidor')).
+  // O e-mail reservado da conta interna entra sem token e segue pelo app — por isso o guard espera só a
+  // sincronização (não o token), para não mostrar o app por um instante antes da casca.
+  if (selectedLoginGroup === ProfileGroup.INVESTOR && !profileSynchronized) {
+    return (
+      <div className="min-h-screen bg-[#F2F2F4] flex items-center justify-center">
+        <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+      </div>
+    );
+  }
+  if (selectedLoginGroup === ProfileGroup.INVESTOR && portalTokenDoLogin) {
+    return <InvestorPortalTokenGate token={portalTokenDoLogin} onLogout={sairDoPortal} />;
   }
   if (selectedLoginGroup === ProfileGroup.SINDICO && portalTokenDoLogin) {
     return (

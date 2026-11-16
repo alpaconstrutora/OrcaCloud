@@ -46,6 +46,26 @@ const Quadro: React.FC<{ dimensao?: DimensaoDoGrafico; className: string; rotulo
         </div>
     );
 
+/**
+ * Legenda: na tela, a do chartKit (HTML); no PDF (`dimensao` fixa), em SVG — a captura do html2canvas
+ * desenha o quadradinho do flex acima do texto, e o SVG sai alinhado (como a linha do tempo).
+ */
+const Legenda: React.FC<{ items: { label: string; color: string }[]; svg?: boolean }> = ({ items, svg }) => {
+    if (!svg) return <Legend items={items} />;
+    let x = 0;
+    const pos = items.map(i => { const atual = x; x += 22 + i.label.length * 6.6; return atual; });
+    return (
+        <svg width={x} height={16} className="mb-2 block" aria-hidden="true">
+            {items.map((i, n) => (
+                <g key={i.label} transform={`translate(${pos[n]}, 0)`}>
+                    <rect x={0} y={3} width={10} height={10} rx={2} fill={i.color} />
+                    <text x={15} y={12} fontSize={12} fill="#6b7280">{i.label}</text>
+                </g>
+            ))}
+        </svg>
+    );
+};
+
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 
 // ── Curva S: caixa do mês (barras) e exposição acumulada (linha) ─────────────
@@ -92,7 +112,9 @@ export const GraficoTornado: React.FC<ComumDosGraficos & {
     comLegenda?: boolean;
     /** Largura da coluna dos rótulos (px); no celular, menor, para sobrar barra. */
     larguraDosRotulos?: number;
-}> = ({ barras, metrica, choques, comLegenda = false, larguraDosRotulos = 230, dimensao, animado = true, className = 'h-[360px]' }) => {
+    /** Valores do eixo compactos ("1,3 mi") — no celular "R$ 1.306.511" se atropelava. */
+    eixoCompacto?: boolean;
+}> = ({ barras, metrica, choques, comLegenda = false, larguraDosRotulos = 230, eixoCompacto = false, dimensao, animado = true, className = 'h-[360px]' }) => {
     const base = barras[0]?.base ?? NaN;
     const dados = dadosDoTornado(barras, metrica, choques);
     const cor = (delta: number) => (delta >= 0 ? COR_MELHORA : COR_PIORA);
@@ -101,7 +123,8 @@ export const GraficoTornado: React.FC<ComumDosGraficos & {
             {/* Margem direita: o valor da ponta do eixo cortava ("R$ 4.306.51"). */}
             <BarChart accessibilityLayer={false} layout="vertical" data={dados} margin={{ top: 4, right: 40, left: 0, bottom: 0 }} barSize={9} barGap={2}>
                 <CartesianGrid horizontal={false} stroke={GRID} />
-                <XAxis type="number" tick={TICK} axisLine={false} tickLine={false} tickFormatter={(v: number) => formatarMetrica(metrica, v + base)} />
+                <XAxis type="number" tick={TICK} axisLine={false} tickLine={false}
+                    tickFormatter={(v: number) => (eixoCompacto && (metrica === 'vpl' || metrica === 'exposicao') ? compactAxis(v + base) : formatarMetrica(metrica, v + base))} />
                 <YAxis type="category" dataKey="nome" width={larguraDosRotulos} tick={CATEGORY_TICK} axisLine={false} tickLine={false} />
                 <Tooltip
                     contentStyle={TOOLTIP_STYLE}
@@ -123,7 +146,7 @@ export const GraficoTornado: React.FC<ComumDosGraficos & {
     );
     return comLegenda ? (
         <div className="space-y-2">
-            <Legend items={[{ label: 'Piora', color: COR_PIORA }, { label: 'Melhora', color: COR_MELHORA }]} />
+            <Legenda svg={!!dimensao} items={[{ label: 'Piora', color: COR_PIORA }, { label: 'Melhora', color: COR_MELHORA }]} />
             {grafico}
         </div>
     ) : grafico;
@@ -135,7 +158,7 @@ export const GraficoCenarios: React.FC<ComumDosGraficos & { linhas: LinhaDoCenar
     const rotulo = `VPL por cenário: ${linhas.map(l => `${l.nome} ${brl(l.vpl)}`).join('; ')}.`;
     return (
         <div className="space-y-2">
-            <Legend items={[{ label: 'Estudo', color: corPrincipal }, { label: 'Cenários salvos', color: SERIE_CONTEXTO }]} />
+            <Legenda svg={!!dimensao} items={[{ label: 'Estudo', color: corPrincipal }, { label: 'Cenários salvos', color: SERIE_CONTEXTO }]} />
             <Quadro dimensao={dimensao} className={className} rotulo={rotulo}>
                 <BarChart accessibilityLayer={false} layout="vertical" data={linhas} margin={{ top: 4, right: 96, left: 0, bottom: 0 }} barSize={14}>
                     <CartesianGrid horizontal={false} stroke={GRID} />
@@ -145,7 +168,12 @@ export const GraficoCenarios: React.FC<ComumDosGraficos & { linhas: LinhaDoCenar
                     <ReferenceLine x={0} stroke="#94a3b8" />
                     <Bar dataKey="vpl" radius={[0, 4, 4, 0]} isAnimationActive={animado}>
                         {linhas.map((l, i) => <Cell key={i} fill={i === 0 ? corPrincipal : SERIE_CONTEXTO} />)}
-                        <LabelList dataKey="vpl" position="right" fontSize={11} fill="#64748b" formatter={(v: unknown) => compactAxis(Number(v))} />
+                        {/* O valor vai à direita da ponta direita da barra: na barra negativa, isso é o zero —
+                            "right" o punha à esquerda da ponta, em cima do nome do cenário. */}
+                        <LabelList dataKey="vpl" content={(p: { x?: number | string; y?: number | string; width?: number | string; height?: number | string; value?: unknown }) => {
+                            const x = Number(p.x ?? 0), w = Number(p.width ?? 0), y = Number(p.y ?? 0), h = Number(p.height ?? 0);
+                            return <text x={Math.max(x, x + w) + 4} y={y + h / 2} dy={4} fontSize={11} fill="#64748b">{compactAxis(Number(p.value))}</text>;
+                        }} />
                     </Bar>
                 </BarChart>
             </Quadro>
@@ -155,20 +183,20 @@ export const GraficoCenarios: React.FC<ComumDosGraficos & { linhas: LinhaDoCenar
 
 // ── Vendas por mês e estoque ─────────────────────────────────────────────────
 
-export const GraficoVendasPorMes: React.FC<ComumDosGraficos & { dados: MesDeVendas[]; comLegenda?: boolean; corPrincipal?: string }> = ({ dados, comLegenda = true, corPrincipal = SERIE_PRINCIPAL, dimensao, animado = true, className = 'h-56' }) => {
+export const GraficoVendasPorMes: React.FC<ComumDosGraficos & { dados: MesDeVendas[]; comLegenda?: boolean; corPrincipal?: string; larguraDoEixo?: number }> = ({ dados, comLegenda = true, corPrincipal = SERIE_PRINCIPAL, larguraDoEixo = 56, dimensao, animado = true, className = 'h-56' }) => {
     const pico = dados.reduce((m, d) => (d.vendas > m.vendas ? d : m), { mes: '', vendas: 0, estoque: 0 });
     const vendido = dados.reduce((a, d) => a + d.vendas, 0);
     const rotulo = `Vendas por mês: ${moneyBRL(vendido)} vendidos de ${dados[0]?.mes ?? ''} a ${dados[dados.length - 1]?.mes ?? ''}; maior venda em ${pico.mes}, ${moneyBRL(pico.vendas)}; estoque no fim ${moneyBRL(dados[dados.length - 1]?.estoque ?? 0)}.`;
     return (
         <>
-            {comLegenda && <Legend items={[{ label: 'Vendas do mês', color: corPrincipal }, { label: 'Estoque', color: SERIE_CONTEXTO }]} />}
+            {comLegenda && <Legenda svg={!!dimensao} items={[{ label: 'Vendas do mês', color: corPrincipal }, { label: 'Estoque', color: SERIE_CONTEXTO }]} />}
             <Quadro dimensao={dimensao} className={className} rotulo={rotulo}>
                 {/* Eixos separados: a venda do mês é ~1/36 do estoque inicial e sumiria no mesmo eixo. */}
                 <ComposedChart accessibilityLayer={false} data={dados} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                     <CartesianGrid vertical={false} stroke={GRID} />
                     <XAxis dataKey="mes" tick={TICK} axisLine={false} tickLine={false} minTickGap={24} />
-                    <YAxis yAxisId="vendas" tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} width={56} />
-                    <YAxis yAxisId="estoque" orientation="right" tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} width={56} />
+                    <YAxis yAxisId="vendas" tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} width={larguraDoEixo} />
+                    <YAxis yAxisId="estoque" orientation="right" tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} width={larguraDoEixo} />
                     <Tooltip contentStyle={TOOLTIP_STYLE} cursor={TOOLTIP_CURSOR} formatter={(v: unknown) => moneyBRL(Number(v))} />
                     <Bar yAxisId="vendas" dataKey="vendas" name="Vendas do mês" fill={corPrincipal} radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={animado} />
                     <Line yAxisId="estoque" dataKey="estoque" name="Estoque" stroke={SERIE_CONTEXTO} strokeWidth={2} dot={false} type="monotone" isAnimationActive={animado} />

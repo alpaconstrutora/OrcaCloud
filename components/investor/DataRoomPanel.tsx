@@ -16,6 +16,8 @@ interface Props {
     organizationId: string;
     isAdmin: boolean;
     uploadedBy?: string;
+    /** Portal do Investidor por link (sessão anônima): lista e baixa pelo token (Fase 7, 16/11/2026). */
+    portalToken?: string;
 }
 
 const CATEGORIES: DocumentCategory[] = [
@@ -49,10 +51,11 @@ function getMimeColor(mime?: string): string {
     return 'bg-gray-100 text-gray-600';
 }
 
-const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin, uploadedBy }) => {
+const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin, uploadedBy, portalToken }) => {
     const [docs, setDocs] = React.useState<OpportunityDocument[]>([]);
     const [loading, setLoading] = React.useState(true);
-    const [error, setError] = React.useState(false);
+    const [error, setError] = React.useState<string | null>(null);
+    const [erroDoDownload, setErroDoDownload] = React.useState<string | null>(null);
 
     // Upload state
     const [dragOver, setDragOver] = React.useState(false);
@@ -72,12 +75,12 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
 
     const load = React.useCallback(() => {
         setLoading(true);
-        setError(false);
-        opportunityDocumentsService.list(opportunityId)
+        setError(null);
+        (portalToken ? opportunityDocumentsService.listByToken(portalToken, opportunityId) : opportunityDocumentsService.list(opportunityId))
             .then(setDocs)
-            .catch(() => setError(true))
+            .catch(e => setError((e as Error).message || 'Erro ao carregar.'))
             .finally(() => setLoading(false));
-    }, [opportunityId]);
+    }, [opportunityId, portalToken]);
 
     React.useEffect(() => { load(); }, [load]);
 
@@ -127,11 +130,14 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
 
     const handleDownload = async (doc: OpportunityDocument) => {
         setDownloading(doc.id!);
+        setErroDoDownload(null);
         try {
-            const url = await opportunityDocumentsService.getSignedUrl(doc.file_path);
+            const url = portalToken
+                ? await opportunityDocumentsService.getSignedUrlByToken(portalToken, opportunityId, doc.file_path)
+                : await opportunityDocumentsService.getSignedUrl(doc.file_path);
             window.open(url, '_blank', 'noopener,noreferrer');
-        } catch {
-            alert('Erro ao gerar link de download.');
+        } catch (e) {
+            setErroDoDownload(`Não foi possível baixar "${doc.name}": ${(e as Error).message}`);
         } finally {
             setDownloading(null);
         }
@@ -170,7 +176,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
         return (
             <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-600">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>Erro ao carregar. <button onClick={load} className="underline font-bold">Tentar novamente</button></span>
+                <span>{error} <button onClick={load} className="underline font-bold">Tentar novamente</button></span>
             </div>
         );
     }
@@ -276,6 +282,13 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
                             Cancelar
                         </button>
                     </div>
+                </div>
+            )}
+
+            {erroDoDownload && (
+                <div role="alert" className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-600">
+                    <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                    <span>{erroDoDownload}</span>
                 </div>
             )}
 

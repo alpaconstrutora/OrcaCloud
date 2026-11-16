@@ -63,7 +63,7 @@ function graficoDe(id: GraficoId, g: DadosDosGraficos): React.ReactElement | nul
         case 'marcos':
             return <LinhaDoTempoDosMarcos marcos={g.marcos} dimensao={dim} />;
         case 'vendas':
-            return g.vendas.some(x => x.vendas > 0) ? <GraficoVendasPorMes dados={g.vendas} dimensao={dim} animado={false} /> : null;
+            return g.vendas.some(x => x.vendas > 0) ? <GraficoVendasPorMes dados={g.vendas} larguraDoEixo={72} dimensao={dim} animado={false} /> : null;
         case 'capital':
             return g.capital.length ? <GraficoComposicaoDoCapital fatias={g.capital} dimensao={dim} animado={false} /> : null;
     }

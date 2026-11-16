@@ -944,6 +944,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                         organizationId={organizationId}
                                         isAdmin={isAdmin}
                                         uploadedBy={uploadedBy}
+                                        portalToken={portalToken}
                                     />
                                 )}
 

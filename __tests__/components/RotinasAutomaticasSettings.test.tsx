@@ -79,6 +79,26 @@ describe('RotinasAutomaticasSettings', () => {
         expect(screen.getByText('0 9 * * 1-5')).toBeTruthy();
     });
 
+    it('cabe na área das Configurações (~840 px em tela de 1440): interruptor logo após o nome, sem rolagem lateral', async () => {
+        // Visto no app (16/11): com 1200 px de colunas o interruptor ficava fora da vista em 1440.
+        const { container } = montar();
+        await screen.findByText(nome('process-sla-sweep'));
+        const cabecalhos = screen.getAllByRole('columnheader').map(h => (h.textContent ?? '').trim()).filter(Boolean);
+        expect(cabecalhos.slice(0, 2)).toEqual(['Rotina', 'Situação']);
+        const larguras = [...container.querySelectorAll('col[data-col-key]')].map(c => parseFloat((c as HTMLElement).style.width) || 0);
+        expect(larguras.length).toBe(5);
+        expect(larguras.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(840);
+    });
+
+    it('e-mail longo na nota "Desligada por" quebra linha em vez de cortar', async () => {
+        listar.mockResolvedValue(LISTA.map(r => (r.jobname === 'hourly-bi-report-check'
+            ? { ...r, ultimaAlteracao: { em: '2026-11-16T15:00:00Z', porEmail: 'desenvolvedor@alpaconstrutora.com.br', ativaDepois: false } }
+            : { ...r })));
+        montar();
+        const nota = await screen.findByText(/Desligada por desenvolvedor@alpaconstrutora\.com\.br/);
+        expect(nota.className).toContain('[overflow-wrap:anywhere]');
+    });
+
     it('falhas da semana com o erro da última execução no title', async () => {
         montar();
         const falhas = await screen.findByText('3 falhas');

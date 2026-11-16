@@ -16,12 +16,15 @@ import { GRUPOS_ROTINA, quandoRoda, rotinaMeta } from '../../utils/rotinasAutoma
  * as organizações — cada rotina é um job único.
  */
 
+// A área das Configurações tem ~840 px numa tela de 1440 (menu lateral + menu da página):
+// as larguras somam 830 e a tabela é `dense` (§6.9) para não nascer com rolagem lateral.
+// O interruptor vem logo depois do nome — é a ação da tela e nunca pode ficar fora da vista.
 const COLUMNS: StandardTableColumn[] = [
-    { key: 'rotina', label: 'Rotina', sortable: true, width: 420 },
-    { key: 'quando', label: 'Quando roda', sortable: true, width: 230 },
-    { key: 'ultima', label: 'Última execução', sortable: true, width: 170 },
-    { key: 'falhas', label: 'Falhas em 7 dias', sortable: true, width: 150 },
-    { key: 'ativa', label: 'Situação', sortable: true, width: 230 },
+    { key: 'rotina', label: 'Rotina', sortable: true, width: 330 },
+    { key: 'ativa', label: 'Situação', sortable: true, width: 150 },
+    { key: 'quando', label: 'Quando roda', sortable: true, width: 140 },
+    { key: 'ultima', label: 'Última execução', sortable: true, width: 120 },
+    { key: 'falhas', label: 'Falhas em 7 dias', sortable: true, width: 90 },
 ];
 
 const ORDEM_DOS_GRUPOS = GRUPOS_ROTINA.map(g => g.id);
@@ -117,7 +120,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
                 );
             case 'quando': {
                 const texto = quandoRoda(r.schedule);
-                return <span className="block truncate text-sm font-normal text-gray-600" title={`Expressão (horário de Brasília = GMT−3): ${r.schedule}`}>{texto}</span>;
+                return <span className="block text-sm font-normal text-gray-600" title={`Expressão (horário de Brasília = GMT−3): ${r.schedule}`}>{texto}</span>;
             }
             case 'ultima':
                 if (!r.ultima) {
@@ -159,13 +162,13 @@ const RotinasAutomaticasSettings: React.FC = () => {
                             title={ocupado ? 'Gravando…' : r.ativa ? 'Desligar para todas as organizações' : 'Ligar para todas as organizações'}
                         />
                         {desligouQuem && (
-                            <span className="block text-[13px] text-gray-500">
+                            <span className="block text-[13px] text-gray-500 [overflow-wrap:anywhere]">
                                 Desligada por {desligouQuem.porEmail ?? 'alguém sem e-mail'} em {dataCurta(desligouQuem.em)}
                             </span>
                         )}
                         {religadaFora && (
                             <span
-                                className="block text-[13px] text-amber-700"
+                                className="block text-[13px] text-amber-700 [overflow-wrap:anywhere]"
                                 title="Foi desligada nesta tela e voltou a ligar por fora dela — por exemplo, uma atualização do sistema que reagendou a rotina. Se ela deve ficar desligada, desligue de novo."
                             >
                                 Religada fora desta tela · desligada por {religadaFora.porEmail ?? 'alguém sem e-mail'} em {dataCurta(religadaFora.em)}
@@ -223,6 +226,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
 
             <StandardTable<RotinaAutomatica>
                 storageKey="configuracoes:rotinas-automaticas"
+                dense
                 columns={COLUMNS}
                 rows={rotinas}
                 rowKey={r => r.jobname}

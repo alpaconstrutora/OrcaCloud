@@ -283,7 +283,21 @@ tabela de registro só-acréscimo; no front, catálogo puro → service → tela
 - [x] Revisão independente da branch (16/11): nada crítico; segurança aprovada. Corrigidos 2:
   aviso "Religada fora desta tela" (rotina desligada aqui que voltou a ligar por fora) e reler o
   banco depois de erro ao gravar (resposta perdida após o commit). Tela 10/10.
-- [ ] Item 6 — conferência real e publicação
+- [x] 6.1 Conferência no app local (16/11, login do usuário como `desenvolvedor@`): 23 linhas =
+  23 jobs do `cron.job`, todos ligados; "Agenda dos relatórios de BI" desligada e religada pela
+  tela → `cron.job.active` de volta a `true` e 2 linhas no registro (18:09:01 e 18:09:07);
+  "Conciliação automática" abriu o diálogo e foi cancelada (segue ligada); "Tarefas de pagamento"
+  mostra "falhou · 3 falhas" com o 42883 do `create_task` no title; 0 erros de console.
+  **Achado na tela e corrigido:** as colunas somavam 1200 px numa área de ~840 px (1440 de tela)
+  — o interruptor ficava fora da vista. Agora "Situação" vem logo depois de "Rotina", tabela
+  `dense` (§6.9) com 830 px: em 1440 cabe sem rolagem lateral; em 1280 o interruptor segue à
+  vista e só "Última execução"/"Falhas" rolam. E-mail da nota "Desligada por" quebra linha
+  em vez de cortar. Testes novos RED→GREEN; tela 12/12.
+  Fora deste pedido: em 390 px o menu lateral das Configurações não recolhe e espreme o
+  conteúdo de TODAS as folhas (já era assim antes desta frente).
+- [x] 6.2 Coberto pela prova SQL (membro comum e anon → 42501 nas duas funções) e pelo teste
+  da folha (só aparece para superadmin); sem conferência com a conta de leitura.
+- [ ] 6.3 Publicação
 
 ## Verificação
 

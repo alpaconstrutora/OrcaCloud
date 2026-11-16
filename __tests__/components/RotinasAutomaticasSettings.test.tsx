@@ -135,6 +135,27 @@ describe('RotinasAutomaticasSettings', () => {
         expect((interruptor('process-sla-sweep') as HTMLInputElement).checked).toBe(true);
     });
 
+    it('rotina desligada pela tela que voltou a ligar por fora avisa "Religada fora desta tela"', async () => {
+        // ex.: uma migration fez unschedule + schedule do job, que renasce ligado
+        listar.mockResolvedValue(LISTA.map(r => (r.jobname === 'hourly-bi-report-check' ? { ...r, ativa: true } : { ...r })));
+        montar();
+        expect(await screen.findByText(/Religada fora desta tela/)).toBeTruthy();
+        expect(screen.getByText(/desligada por chefe@alpa\.com\.br em 16\/11/)).toBeTruthy();
+        expect(screen.queryByText(/^Desligada por/)).toBeNull();
+    });
+
+    it('erro ao gravar relê o banco: se a gravação passou e só a resposta se perdeu, a tela mostra o estado real', async () => {
+        definir.mockRejectedValue(new Error('Failed to fetch'));
+        const user = userEvent.setup();
+        montar();
+        await screen.findByText(nome('process-sla-sweep'));
+        listar.mockResolvedValue(LISTA.map(r => (r.jobname === 'process-sla-sweep' ? { ...r, ativa: false } : { ...r })));
+        await user.click(interruptor('process-sla-sweep'));
+        expect(await screen.findByText(/Failed to fetch/)).toBeTruthy();
+        await waitFor(() => expect((interruptor('process-sla-sweep') as HTMLInputElement).checked).toBe(false));
+        expect(listar).toHaveBeenCalledTimes(2);
+    });
+
     it('falha ao carregar mostra o erro com "Tentar de novo"', async () => {
         listar.mockRejectedValueOnce(new Error('apenas superadmin'));
         const user = userEvent.setup();

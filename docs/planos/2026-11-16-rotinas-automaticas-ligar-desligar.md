@@ -280,6 +280,9 @@ tabela de registro só-acréscimo; no front, catálogo puro → service → tela
 - [x] Item 5 — folha nas Configurações: `components/Settings.tsx` (folha depois de "Banco de
   Dados", só com `is_superadmin()` = true), `__tests__/components/SettingsRotinasAutomaticas.test.tsx`
   2/2; `tsc --noEmit` 0 erros; 7 travas de UI/org 43/43; `check-ui-standard.sh` exit 0
+- [x] Revisão independente da branch (16/11): nada crítico; segurança aprovada. Corrigidos 2:
+  aviso "Religada fora desta tela" (rotina desligada aqui que voltou a ligar por fora) e reler o
+  banco depois de erro ao gravar (resposta perdida após o commit). Tela 10/10.
 - [ ] Item 6 — conferência real e publicação
 
 ## Verificação
@@ -292,3 +295,10 @@ no repositório para rodar de novo depois de qualquer mudança nas duas funçõe
 - `cron.job_run_details` cresce sem limpeza: 474 mil linhas / 329 MB desde 25/02/2026.
 - `daily-payment-tasks` falha desde 06/08/2026 (59×): passa `p_priority := 1` (integer) para
   `create_task(…, smallint, …)`. Quando funcionava, criava uma tarefa por membro da org.
+- ⚠️ **Migration que reagenda um job o RELIGA.** O padrão do repo é `cron.unschedule(nome)` +
+  `cron.schedule(nome, …)` (36 migrations); o job renasce com `active = true`, desfazendo o
+  "desligado" feito nesta tela. A tela avisa ("Religada fora desta tela"), mas o certo, ao
+  reagendar um job, é ler `active` antes do unschedule e reaplicar com `cron.alter_job` depois.
+- A janela da listagem são as últimas 150 mil execuções (≈ 36 dias no ritmo de 16/11). Mais jobs
+  por minuto, ou uma limpeza do histórico com retenção < 32 dias, fazem a rotina mensal aparecer
+  sem "Última execução" no fim do mês.

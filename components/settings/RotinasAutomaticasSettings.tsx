@@ -69,6 +69,12 @@ const RotinasAutomaticasSettings: React.FC = () => {
     }, []);
     React.useEffect(() => { void carregar(); }, [carregar]);
 
+    // Depois de um erro ao gravar, relê sem esqueleto: se o banco gravou e só a resposta se
+    // perdeu (rede, tempo esgotado), a tela não pode ficar mostrando o estado antigo.
+    const releSemEsqueleto = React.useCallback(async () => {
+        try { setRotinas(await rotinasAutomaticasService.listar()); } catch { /* o aviso de erro já está na tela */ }
+    }, []);
+
     const alternar = async (r: RotinaAutomatica) => {
         const meta = rotinaMeta(r.jobname);
         const ligar = !r.ativa;
@@ -89,6 +95,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
         } catch (e) {
             const motivo = e instanceof Error ? e.message : String(e);
             avisar(`Não foi possível ${ligar ? 'ligar' : 'desligar'} "${meta.nome}": ${motivo}`, 'erro');
+            await releSemEsqueleto();
         } finally {
             setGravando(prev => { const s = new Set(prev); s.delete(r.jobname); return s; });
         }
@@ -135,7 +142,11 @@ const RotinasAutomaticasSettings: React.FC = () => {
             }
             case 'ativa': {
                 const ocupado = gravando.has(r.jobname);
-                const desligouQuem = !r.ativa && r.ultimaAlteracao && !r.ultimaAlteracao.ativaDepois ? r.ultimaAlteracao : null;
+                const alteracao = r.ultimaAlteracao;
+                const desligouQuem = !r.ativa && alteracao && !alteracao.ativaDepois ? alteracao : null;
+                // Desligada pela tela e ligada de novo por fora dela — o caso comum é uma migration
+                // que reagenda o job com unschedule + schedule: o job renasce ligado.
+                const religadaFora = r.ativa && alteracao && !alteracao.ativaDepois ? alteracao : null;
                 return (
                     <div className="space-y-0.5">
                         <TableSwitch
@@ -150,6 +161,14 @@ const RotinasAutomaticasSettings: React.FC = () => {
                         {desligouQuem && (
                             <span className="block text-[13px] text-gray-500">
                                 Desligada por {desligouQuem.porEmail ?? 'alguém sem e-mail'} em {dataCurta(desligouQuem.em)}
+                            </span>
+                        )}
+                        {religadaFora && (
+                            <span
+                                className="block text-[13px] text-amber-700"
+                                title="Foi desligada nesta tela e voltou a ligar por fora dela — por exemplo, uma atualização do sistema que reagendou a rotina. Se ela deve ficar desligada, desligue de novo."
+                            >
+                                Religada fora desta tela · desligada por {religadaFora.porEmail ?? 'alguém sem e-mail'} em {dataCurta(religadaFora.em)}
                             </span>
                         )}
                     </div>

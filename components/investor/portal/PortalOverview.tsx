@@ -184,7 +184,7 @@ const PortalOverview: React.FC<Props> = ({
                     </tr>
                     {isOpen && (
                         <tr className="bg-[#FDF8F6] border-t border-[#F3D9D1]">
-                            <Td colSpan={5} className="pb-4">
+                            <Td colSpan={5} className="pb-4 portal-desdobra">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-1 max-w-3xl">
                                     <DetailField label="Vencimento">{fmtDate(c.due_date)}</DetailField>
                                     <DetailField label="Pagamento">{fmtDate(c.paid_date)}</DetailField>
@@ -457,7 +457,7 @@ const PortalOverview: React.FC<Props> = ({
                                             </tr>
                                             {isOpen && (
                                                 <tr className="bg-[#FDF8F6] border-t border-[#F3D9D1]">
-                                                    <Td colSpan={5} className="pb-4">
+                                                    <Td colSpan={5} className="pb-4 portal-desdobra">
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-1 max-w-3xl">
                                                             <DetailField label="Localização">{h.location || '—'}</DetailField>
                                                             <DetailField label="Capital aportado">{h.invested ? fmtBRLCents(h.invested) : '—'}</DetailField>

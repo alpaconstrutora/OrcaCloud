@@ -30,7 +30,7 @@ import { P, VIDRO, FundoDeVidro } from '../../portal/PortalKit';
 type Accent = 'portal' | 'indigo';
 
 /** Cada variante por extenso: o JIT do Tailwind não enxerga classe montada em runtime (§24). */
-const ACCENTS: Record<Accent, { card: string; interativo: string; fundo: boolean; serie: string; botao: string; titulo: string; texto: string; secundario: string; trilho: string }> = {
+const ACCENTS: Record<Accent, { card: string; interativo: string; fundo: boolean; serie: string; botao: string; titulo: string; texto: string; secundario: string; trilho: string; assenta: string; foco: string }> = {
     portal: {
         card: VIDRO.card,
         interativo: VIDRO.interativo,
@@ -41,6 +41,9 @@ const ACCENTS: Record<Accent, { card: string; interativo: string; fundo: boolean
         texto: 'text-[#1F2430]',
         secundario: 'text-[#5F6573]',
         trilho: 'accent-[#E1553C]',
+        // O momento do painel (index.css): a luz acende atrás do vidro e os cartões entram em foco.
+        assenta: 'portal-assenta',
+        foco: 'portal-foco',
     },
     indigo: {
         card: 'bg-white rounded-[10px] border border-gray-100 shadow-sm',
@@ -52,6 +55,8 @@ const ACCENTS: Record<Accent, { card: string; interativo: string; fundo: boolean
         texto: 'text-gray-900',
         secundario: 'text-gray-600',
         trilho: 'accent-blue-600',
+        assenta: '',
+        foco: '',
     },
 };
 
@@ -74,12 +79,15 @@ function useTelaEstreita(): boolean {
     return estreita;
 }
 
+/** Atraso da cascata de entrada (`--atraso`, index.css). Curto e com teto: ninguém espera a tela. */
+const atrasoDe = (ms: number) => ({ '--atraso': `${ms}ms` }) as React.CSSProperties;
+
 /** Cartão de gráfico. Fora do painel: declarado dentro, cada render seria um componente novo e
  *  mover a simulação remontaria todos os gráficos. */
-const Cartao: React.FC<{ accent: Accent; titulo: string; subtitulo?: string; className?: string; children: React.ReactNode }> = ({ accent, titulo, subtitulo, className = '', children }) => {
+const Cartao: React.FC<{ accent: Accent; titulo: string; subtitulo?: string; className?: string; atraso?: number; children: React.ReactNode }> = ({ accent, titulo, subtitulo, className = '', atraso = 0, children }) => {
     const a = ACCENTS[accent];
     return (
-        <section aria-label={titulo} className={`${a.card} ${a.interativo} p-5 ${className}`}>
+        <section aria-label={titulo} style={atrasoDe(atraso)} className={`${a.card} ${a.interativo} ${a.assenta} p-5 ${className}`}>
             <h4 className={`text-[15px] font-semibold tracking-tight ${a.titulo}`}>{titulo}</h4>
             {subtitulo && <p className={`text-[13px] mt-0.5 ${a.secundario}`}>{subtitulo}</p>}
             <div className="mt-4">{children}</div>
@@ -165,7 +173,7 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
         <div className="relative isolate space-y-5">
             {a.fundo && <FundoDeVidro />}
 
-            <div className="flex flex-wrap items-end justify-between gap-3">
+            <div className={`flex flex-wrap items-end justify-between gap-3 ${a.assenta}`}>
                 <div className="min-w-0">
                     <h3 className={`text-xl font-semibold tracking-tight ${a.titulo}`}>Viabilidade do empreendimento</h3>
                     <p className={`text-sm mt-1 ${a.secundario}`}>
@@ -195,15 +203,15 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
             <section aria-label="Indicadores da versão" className="space-y-3">
                 {/* Uma coluna no celular: "R$ 13.272.583" em duas colunas de 390 px cortava. */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                    {principais.map(k => (
-                        <div key={k.rotulo} className={`${a.card} ${a.interativo} px-5 py-4 min-w-0`}>
+                    {principais.map((k, i) => (
+                        <div key={k.rotulo} style={atrasoDe(60 + i * 50)} className={`${a.card} ${a.interativo} ${a.foco} px-5 py-4 min-w-0`}>
                             <p className={`text-[13px] ${a.secundario}`}>{k.rotulo}</p>
                             <p className={`mt-1 text-2xl leading-tight font-bold tracking-tight tabular-nums whitespace-nowrap ${a.texto}`}>{k.valor}</p>
                             {k.apoio && <p className={`mt-1 text-[12px] ${a.secundario}`}>{k.apoio}</p>}
                         </div>
                     ))}
                 </div>
-                <div className={`${a.card} grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-black/5 overflow-hidden`}>
+                <div style={atrasoDe(260)} className={`${a.card} ${a.assenta} grid grid-cols-2 lg:grid-cols-4 divide-x divide-y lg:divide-y-0 divide-black/5 overflow-hidden`}>
                     {apoio.map(k => (
                         <div key={k.rotulo} className="px-5 py-3 min-w-0">
                             <p className={`text-[13px] ${a.secundario}`}>{k.rotulo}</p>
@@ -214,26 +222,26 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
             </section>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                <Cartao accent={accent} titulo="Caixa e exposição" subtitulo="Caixa do mês e acumulado do acionista, sem desconto" className="lg:col-span-2">
+                <Cartao accent={accent} atraso={300} titulo="Caixa e exposição" subtitulo="Caixa do mês e acumulado do acionista, sem desconto" className="lg:col-span-2">
                     <GraficoCurvaS dados={g.curvaS} rotuloBarra="Caixa do mês" rotuloLinha="Acumulado" larguraDoEixo={84} className="h-72 w-full" />
                 </Cartao>
-                <Cartao accent={accent} titulo="De onde vem o dinheiro" subtitulo="Composição do capital calculada pelo motor">
+                <Cartao accent={accent} atraso={340} titulo="De onde vem o dinheiro" subtitulo="Composição do capital calculada pelo motor">
                     {fatias.length ? <GraficoComposicaoDoCapital fatias={fatias} className="h-72" /> : <p className={`text-sm ${a.secundario}`}>Sem capital a mostrar.</p>}
                 </Cartao>
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                <Cartao accent={accent} titulo="Cenários" subtitulo={cenarios.length ? 'VPL do estudo e de cada cenário avaliado' : versaoPublicada ? 'Nenhum cenário salvo nesta versão' : 'Nenhum cenário salvo no estudo'}>
+                <Cartao accent={accent} atraso={360} titulo="Cenários" subtitulo={cenarios.length ? 'VPL do estudo e de cada cenário avaliado' : versaoPublicada ? 'Nenhum cenário salvo nesta versão' : 'Nenhum cenário salvo no estudo'}>
                     <GraficoCenarios linhas={linhasDosCenarios} corPrincipal={a.serie} larguraDosRotulos={estreita ? 84 : 140} className="h-56" />
                 </Cartao>
-                <Cartao accent={accent} titulo="Sensibilidade do VPL" subtitulo="Quanto cada premissa move o VPL, para cima e para baixo">
+                <Cartao accent={accent} atraso={380} titulo="Sensibilidade do VPL" subtitulo="Quanto cada premissa move o VPL, para cima e para baixo">
                     {barras.length && barras[0].base != null && Number.isFinite(barras[0].base)
                         ? <GraficoTornado barras={barras} metrica="vpl" choques={g.choques} comLegenda larguraDosRotulos={estreita ? 120 : 200} eixoCompacto={estreita} className="h-[300px]" />
                         : <p className={`text-sm ${a.secundario}`}>Sem dados para calcular.</p>}
                 </Cartao>
             </div>
 
-            <Cartao accent={accent} titulo="Cronograma e vendas" subtitulo="Obra, vendas e marcos; VGV vendido por mês e estoque que resta">
+            <Cartao accent={accent} atraso={400} titulo="Cronograma e vendas" subtitulo="Obra, vendas e marcos; VGV vendido por mês e estoque que resta">
                 <div className="space-y-5">
                     {estreita ? (
                         <ol aria-label="Marcos" className="space-y-1.5">
@@ -251,7 +259,7 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
                 </div>
             </Cartao>
 
-            <section aria-label="Simulação" className={`${a.card} p-5`}>
+            <section aria-label="Simulação" style={atrasoDe(420)} className={`${a.card} ${a.assenta} p-5`}>
                 <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
                         <h4 className={`text-[15px] font-semibold tracking-tight ${a.titulo}`}>Simulação — não altera a versão publicada</h4>

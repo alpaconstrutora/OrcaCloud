@@ -38,6 +38,7 @@ import PortalFiscal from './investor/portal/PortalFiscal';
 import PortalAnnouncements from './investor/portal/PortalAnnouncements';
 import PortalSpes, { PortalSpe } from './investor/portal/PortalSpes';
 import PortalEspelho from './investor/portal/PortalEspelho';
+import { useRealceDaAbaAtiva } from '../hooks/useRealceDaAbaAtiva';
 
 interface InvestorDashboardProps {
     activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios' | 'espelho';
@@ -613,6 +614,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     // (isStandalone). No app autenticado a navegação já vem do Layout global.
     const isStandalone = !!portalToken;
     const investorDisplayName = investorProfile?.name || 'Investidor';
+    // O realce da aba ativa desliza até a aba nova (barra lateral e barra do celular).
+    const realceLateral = useRealceDaAbaAtiva<HTMLElement>(activeTab);
+    const realceInferior = useRealceDaAbaAtiva<HTMLDivElement>(activeTab);
 
     return (
         <div className={isStandalone
@@ -660,7 +664,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         </button>
 
                         {isAccountMenuOpen && (
-                            <div className="absolute right-0 top-full z-[1000] mt-2 w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl" role="menu">
+                            <div className="portal-menu absolute right-0 top-full z-[1000] mt-2 w-[280px] overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-2xl" role="menu">
                                 <div className="border-b border-gray-100 px-4 py-3">
                                     <div className="flex items-center gap-3">
                                         <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[#E1553C] text-sm font-bold text-white">
@@ -702,14 +706,23 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
 
             <div className={isStandalone ? 'md:flex md:flex-1 md:overflow-hidden md:min-h-0' : ''}>
                 {isStandalone && (
-                    <aside className="w-64 border-r border-gray-100 bg-gray-50 p-4 flex-col gap-1 shrink-0 overflow-y-auto hidden md:flex">
+                    <aside ref={realceLateral.ref} className="relative w-64 border-r border-gray-100 bg-gray-50 p-4 flex-col gap-1 shrink-0 overflow-y-auto hidden md:flex">
+                        {realceLateral.pos && (
+                            <span
+                                aria-hidden="true"
+                                className={`absolute left-0 top-0 rounded-xl bg-[#FDEDE8] border border-[#F3D9D1] ${realceLateral.transicao}`}
+                                style={{ width: realceLateral.pos.largura, height: realceLateral.pos.altura, transform: `translate(${realceLateral.pos.x}px, ${realceLateral.pos.y}px)` }}
+                            />
+                        )}
                         {navTabs.map(tab => (
                             <button
                                 key={tab.id}
+                                data-ativo={activeTab === tab.id ? 'true' : undefined}
+                                aria-current={activeTab === tab.id ? 'page' : undefined}
                                 onClick={() => setActiveTab(tab.id as TabId)}
-                                className={`flex items-center gap-3 w-full px-4 py-2.5 rounded-xl text-sm font-medium transition-all duration-150 ${
+                                className={`relative flex items-center gap-3 w-full px-4 py-2.5 rounded-xl border border-transparent text-sm font-medium transition-colors duration-150 ${
                                     activeTab === tab.id
-                                        ? 'bg-[#FDEDE8] border border-[#F3D9D1] text-[#C24428] font-semibold'
+                                        ? 'text-[#C24428] font-semibold'
                                         : 'text-gray-500 hover:text-gray-900 hover:bg-white'
                                 }`}
                             >
@@ -906,7 +919,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     </div>
                 </main>
             ) : (
-            <main className="min-h-[500px]">
+            <main key={isPublicExperience ? activeTab : undefined} className={`min-h-[500px] ${isPublicExperience ? 'portal-troca' : ''}`}>
+                {/* No portal, trocar de aba entra o conteúdo novo (portal-troca, index.css). As abas já
+                    montam ao entrar (activeTab === …), então a key não muda o que é carregado. */}
                 {activeTab === 'dashboard' && (
                     isPublicExperience ? (
                         <PortalOverview
@@ -1191,21 +1206,27 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 const moreActive = moreTabs.some(t => t.id === activeTab);
                 return (
                     <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)]">
-                        <div className="flex">
+                        <div ref={realceInferior.ref} className="relative flex">
+                            {realceInferior.pos && (
+                                <span
+                                    aria-hidden="true"
+                                    className={`absolute top-0 left-0 w-8 h-0.5 bg-[#E1553C] rounded-full ${realceInferior.transicao}`}
+                                    style={{ transform: `translateX(${realceInferior.pos.x + realceInferior.pos.largura / 2 - 16}px)` }}
+                                />
+                            )}
                             {barTabs.map(tab => {
                                 const isActive = activeTab === tab.id;
                                 const isVisible = enabledTabIds.includes(tab.id);
                                 return (
                                     <button
                                         key={tab.id}
+                                        data-ativo={isActive ? 'true' : undefined}
+                                        aria-current={isActive ? 'page' : undefined}
                                         onClick={() => setActiveTab(tab.id as TabId)}
                                         className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
                                             ${isActive ? 'text-[#C24428]' : isAdmin && !isVisible ? 'text-gray-200' : 'text-gray-400'}
                                         `}
                                     >
-                                        {isActive && (
-                                            <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-[#E1553C] rounded-full" />
-                                        )}
                                         <span className={`transition-transform duration-200 ${isActive ? 'scale-110' : ''}`}>
                                             {tab.icon}
                                         </span>
@@ -1218,14 +1239,12 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             })}
                             {hasMore && (
                                 <button
+                                    data-ativo={moreActive ? 'true' : undefined}
                                     onClick={() => setShowMoreSheet(true)}
                                     className={`flex flex-col items-center justify-center gap-1 flex-1 min-w-0 py-3 px-1 transition-all duration-200 relative
                                         ${moreActive ? 'text-[#C24428]' : 'text-gray-400'}
                                     `}
                                 >
-                                    {moreActive && (
-                                        <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-[#E1553C] rounded-full" />
-                                    )}
                                     <span className={`transition-transform duration-200 ${moreActive ? 'scale-110' : ''}`}>
                                         <MoreHorizontal className="w-4 h-4" />
                                     </span>
@@ -1247,9 +1266,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 const moreTabs = navTabs.length > MAX_BAR ? navTabs.slice(MAX_BAR - 1) : [];
                 return (
                     <div className="md:hidden fixed inset-0 z-[200]" onClick={() => setShowMoreSheet(false)}>
-                        <div className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" />
+                        <div className="portal-veu absolute inset-0 bg-black/40 backdrop-blur-sm" />
                         <div
-                            className="absolute bottom-0 inset-x-0 bg-white rounded-t-[2rem] shadow-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))] animate-in slide-in-from-bottom duration-200"
+                            className="portal-gaveta absolute bottom-0 inset-x-0 bg-white rounded-t-[2rem] shadow-2xl p-4 pb-[calc(1rem+env(safe-area-inset-bottom))]"
                             onClick={e => e.stopPropagation()}
                         >
                             <div className="w-10 h-1.5 bg-gray-200 rounded-full mx-auto mb-4" />
@@ -1268,7 +1287,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                                     : 'bg-gray-50 border-gray-100 text-gray-600'
                                             }`}
                                         >
-                                            <span className={isActive ? 'text-blue-500' : 'text-gray-400'}>{tab.icon}</span>
+                                            <span className={isActive ? 'text-[#C24428]' : 'text-gray-400'}>{tab.icon}</span>
                                             <span className="text-sm font-black uppercase tracking-tight">{tab.label}</span>
                                             {isAdmin && !isVisible && <EyeOff className="w-3.5 h-3.5 ml-auto text-gray-300" />}
                                         </button>

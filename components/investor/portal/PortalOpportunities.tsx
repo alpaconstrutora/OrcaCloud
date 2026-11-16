@@ -137,7 +137,7 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                                         </tr>
                                         {isOpen && (
                                             <tr className="bg-[#FDF8F6] border-t border-[#F3D9D1]">
-                                                <Td colSpan={7} className="pb-4">
+                                                <Td colSpan={7} className="pb-4 portal-desdobra">
                                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-1 max-w-3xl">
                                                         <DetailField label="Localização">
                                                             {o.location_city
@@ -174,7 +174,7 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                                                     <div className="flex flex-wrap items-center gap-2 mt-4">
                                                         {portalToken && o.id && (
                                                             sent.includes(o.id) ? (
-                                                                <span className="inline-flex items-center gap-2 h-9 px-4 rounded-[8px] bg-[#E7F6EC] text-[#1F7A3D] text-[13px] font-semibold">
+                                                                <span className="portal-confirma inline-flex items-center gap-2 h-9 px-4 rounded-[8px] bg-[#E7F6EC] text-[#1F7A3D] text-[13px] font-semibold">
                                                                     <CheckCircle2 className="w-4 h-4" />
                                                                     Interesse registrado
                                                                 </span>

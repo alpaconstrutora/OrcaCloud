@@ -54,7 +54,7 @@ const PortalOportunidadeDetalhe: React.FC<Props> = ({ opportunity, portalToken, 
     ];
 
     return (
-        <section ref={ref} aria-label={opportunity.title} className="scroll-mt-4">
+        <section ref={ref} aria-label={opportunity.title} className="scroll-mt-4 portal-entra">
             <PortalCard className="overflow-hidden">
                 <div className="flex items-center justify-between gap-3 px-5 pt-4">
                     <h3 className="text-[15px] font-semibold text-[#1F2430] tracking-tight truncate">{opportunity.title}</h3>
@@ -63,7 +63,8 @@ const PortalOportunidadeDetalhe: React.FC<Props> = ({ opportunity, portalToken, 
                     </GhostButton>
                 </div>
                 <PortalTabs tabs={abas} active={aba} onChange={id => onAba(id as AbaDoDetalhe)} />
-                <div className="p-5">
+                {/* key: trocar de aba entra o conteúdo novo (portal-troca, index.css). */}
+                <div key={aba} className="p-5 portal-troca">
                     {aba === 'viabilidade' && comEstudo && (
                         carregando ? <PortalLoading label="Carregando a viabilidade..." />
                             : erro ? <p role="alert" className="text-sm text-[#5F6573]">{erro}</p>

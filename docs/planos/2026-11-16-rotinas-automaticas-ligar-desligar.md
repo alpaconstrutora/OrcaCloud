@@ -270,7 +270,8 @@ tabela de registro só-acréscimo; no front, catálogo puro → service → tela
   (ensaio e banco aplicado); listar ≈ 420 ms como superadmin (3 medidas: 442/418/420 ms).
   `FOR UPDATE` em `cron.job` trocado por `pg_advisory_xact_lock` — o postgres do Supabase só
   tem SELECT em `cron.job` (42501 medido no ensaio).
-- [ ] Item 2 — catálogo
+- [x] Item 2 — catálogo: `utils/rotinasAutomaticas.ts` (23 rotinas, frases conferidas no código
+  em 16/11), `__tests__/rotinasAutomaticas.test.ts` 16/16
 - [ ] Item 3 — service
 - [ ] Item 4 — tela
 - [ ] Item 5 — folha nas Configurações

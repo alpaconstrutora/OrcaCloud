@@ -15,6 +15,7 @@ import type { ImovibComparable } from '../utils/imovibMercado';
 import { areaEquivalenteDaVersao, type AreaEquivalenteDaPlanta, type LinhaDoQuadroI, type VersaoDoQuadro } from '../utils/imovibAreaEquivalente';
 import { versaoDoMemorial } from '../utils/nbr12721/documento';
 import { planoDeImportacao, type ImovibPartner, type SocioDaEmpresa } from '../utils/imovibSocios';
+import { diaDeBrasilia } from '../utils/dataDeBrasilia';
 import { resultadosDoEstudo, versaoPublicadaDoSnapshot, type ImovibStudyVersion, type SnapshotDaVersao, type VersaoPublicada } from '../utils/imovibVersoes';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
@@ -930,7 +931,16 @@ export const imovibService = {
             this.listarDueDiligence(study.id),
             this.listarSocios(study.id),
         ]);
-        const snapshot = JSON.parse(JSON.stringify({ ...study, cenarios, relatorio: { comparaveis, riscos, dueDiligence, socios } }));
+        // Fase 6 (plano 2026-11-15): congela também o RESULTADO (indicadores, gráficos, capa e seções),
+        // para os números da versão nunca mudarem com uma correção futura do motor.
+        const agora = new Date().toISOString();
+        // import(): o cálculo traz o gerador do relatório, que o resto do app não precisa carregar.
+        const { calculoDaVersao } = await import('../utils/imovibCalculoDaVersao');
+        const calculo = calculoDaVersao(
+            { study, comparaveis, riscos, cenarios, dueDiligence, socios, hoje: diaDeBrasilia(agora) },
+            { label, created_at: agora },
+        );
+        const snapshot = JSON.parse(JSON.stringify({ ...study, cenarios, relatorio: { comparaveis, riscos, dueDiligence, socios }, calculo }));
         const { data, error } = await supabase
             .from('imovib_study_versions')
             .insert({ study_id: study.id, label, notes, snapshot, results: resultadosDoEstudo(study) })

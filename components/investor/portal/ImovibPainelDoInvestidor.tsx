@@ -14,14 +14,11 @@
 import React from 'react';
 import { Download, Loader2, RotateCcw } from 'lucide-react';
 import type { ImovibStudy, ImovibScenario } from '../../../types';
-import { computeImovibMath } from '../../../utils/imovibMotor';
 import { useImovibMath } from '../../../hooks/useImovibMath';
 import { calcularIndicadores, textoDoPayback } from '../../../utils/imovibIndicadores';
 import { IMOVIB_DEFAULTS } from '../../../constants/imovibDefaults';
 import { estudoComPrazoDoPortal } from '../../../utils/imovibVariacoes';
-import { tornado, CHOQUES_PADRAO } from '../../../utils/imovibSensibilidade';
-import { marcosDoEstudo } from '../../../utils/imovibCronograma';
-import { dadosDosCenarios, dadosDasVendas, fatiasDoCapital } from '../../../utils/imovibGraficos';
+import { indicadoresDoEstudo, graficosDoEstudo } from '../../../utils/imovibCalculoDaVersao';
 import { dadosDoRelatorioDaVersao, snapshotDaVersaoPublicada, type VersaoPublicada } from '../../../utils/imovibVersoes';
 import { nomeDeArquivo } from '../../../utils/nomeDeArquivo';
 import {
@@ -60,7 +57,7 @@ const ACCENTS: Record<Accent, { card: string; interativo: string; fundo: boolean
 
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 const num = (v: number, casas = 2) => v.toLocaleString('pt-BR', { maximumFractionDigits: casas });
-const tir = (v: number) => (Number.isFinite(v) ? `${num(v)}% a.a.` : 'Sem TIR');
+const tir = (v: number | null) => (v != null && Number.isFinite(v) ? `${num(v)}% a.a.` : 'Sem TIR');
 import { dataBRDeBrasilia as dataBR } from '../../../utils/dataDeBrasilia';
 
 /** Tela estreita (celular): rótulos dos gráficos menores e marcos em lista. Sem matchMedia (teste), desktop. */
@@ -105,13 +102,12 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
     const a = ACCENTS[accent];
     const estreita = useTelaEstreita();
     const tma = study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate;
-    const r = React.useMemo(() => computeImovibMath(study), [study]);
-    const ind = React.useMemo(() => calcularIndicadores(r, tma), [r, tma]);
-    const barras = React.useMemo(() => tornado(study, 'vpl', CHOQUES_PADRAO), [study]);
-    const linhasDosCenarios = React.useMemo(() => dadosDosCenarios(study, cenarios, r), [study, cenarios, r]);
-    const marcos = React.useMemo(() => marcosDoEstudo(study, r), [study, r]);
-    const vendas = React.useMemo(() => dadosDasVendas(r, Number(study.sales_start_month ?? IMOVIB_DEFAULTS.sales_start_month)), [r, study.sales_start_month]);
-    const fatias = React.useMemo(() => fatiasDoCapital(r.capital), [r]);
+    // Fase 6: a versão traz os números congelados no congelamento — o painel lê deles, não do motor.
+    // Sem eles (prévia do estudo atual, ou versão anterior à Fase 6), calcula agora, pelas mesmas funções.
+    const congelado = versaoPublicada?.calculo ?? null;
+    const ind = React.useMemo(() => congelado?.indicadores ?? indicadoresDoEstudo(study), [congelado, study]);
+    const g = React.useMemo(() => congelado?.graficos ?? graficosDoEstudo(study, cenarios), [congelado, study, cenarios]);
+    const { tornado: barras, cenarios: linhasDosCenarios, marcos, vendas, capital: fatias } = g;
 
     // Simulação: à parte da versão.
     const [custo, setCusto] = React.useState(0);
@@ -132,7 +128,7 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
             const { gerarRelatorioCompleto } = await import('../../ImovibGraficosParaPdf');
             const vp = versaoPublicada;
             const pdf = await gerarRelatorioCompleto(dadosDoRelatorioDaVersao(snapshotDaVersaoPublicada(vp), vp.versao),
-                { edicao: 'investidor', versao: vp.versao, organizacao: vp.organizacao });
+                { edicao: 'investidor', versao: vp.versao, organizacao: vp.organizacao, congelado: vp.calculo });
             pdf.save(`Relatorio_${nomeDeArquivo(vp.study.name)}_${nomeDeArquivo(vp.versao.label)}.pdf`);
         } catch (e) {
             setErroDoPdf(`Não foi possível gerar o relatório: ${(e as Error).message}`);
@@ -141,18 +137,17 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
         }
     };
 
-    const exposicao = Math.max(0, -r.maxExposure);
     const principais = [
-        { rotulo: 'VPL', valor: brl(r.vpl), apoio: `a ${num(tma)}% a.a. (taxa mínima)` },
-        { rotulo: 'TIR', valor: tir(r.annualIrr), apoio: 'do capital investido' },
-        { rotulo: 'Margem líquida', valor: ind.margemLiquidaSobreVgv == null ? '—' : `${num(ind.margemLiquidaSobreVgv * 100)}%`, apoio: 'sobre o VGV' },
-        { rotulo: 'Exposição máxima', valor: brl(exposicao), apoio: ind.semExposicao ? 'o caixa não fica negativo' : ind.mesDaExposicaoMaxima ? `no mês ${ind.mesDaExposicaoMaxima}` : '' },
+        { rotulo: 'VPL', valor: brl(ind.vpl), apoio: `a ${num(ind.tma)}% a.a. (taxa mínima)` },
+        { rotulo: 'TIR', valor: tir(ind.tirAnual), apoio: 'do capital investido' },
+        { rotulo: 'Margem líquida', valor: ind.margemLiquidaPct == null ? '—' : `${num(ind.margemLiquidaPct)}%`, apoio: 'sobre o VGV' },
+        { rotulo: 'Exposição máxima', valor: brl(ind.exposicaoMaxima), apoio: ind.semExposicao ? 'o caixa não fica negativo' : ind.mesDaExposicaoMaxima ? `no mês ${ind.mesDaExposicaoMaxima}` : '' },
     ];
     const apoio = [
-        { rotulo: 'VGV', valor: brl(r.vgvTotal) },
+        { rotulo: 'VGV', valor: brl(ind.vgv) },
         { rotulo: 'Lucro líquido', valor: brl(ind.lucroLiquido) },
-        { rotulo: 'Payback', valor: textoDoPayback(ind) },
-        { rotulo: 'Múltiplo do capital', valor: ind.multiploDoCapital == null ? '—' : `${num(ind.multiploDoCapital)}x` },
+        { rotulo: 'Payback', valor: ind.payback },
+        { rotulo: 'Múltiplo do capital', valor: ind.multiplo == null ? '—' : `${num(ind.multiplo)}x` },
     ];
 
     const controle = (rotulo: string, valor: number, set: (n: number) => void, min: number, max: number, passo: number, unidade: string) => (
@@ -220,7 +215,7 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
                 <Cartao accent={accent} titulo="Caixa e exposição" subtitulo="Caixa do mês e acumulado do acionista, sem desconto" className="lg:col-span-2">
-                    <GraficoCurvaS dados={r.monthlyFlows} rotuloBarra="Caixa do mês" rotuloLinha="Acumulado" larguraDoEixo={84} className="h-72 w-full" />
+                    <GraficoCurvaS dados={g.curvaS} rotuloBarra="Caixa do mês" rotuloLinha="Acumulado" larguraDoEixo={84} className="h-72 w-full" />
                 </Cartao>
                 <Cartao accent={accent} titulo="De onde vem o dinheiro" subtitulo="Composição do capital calculada pelo motor">
                     {fatias.length ? <GraficoComposicaoDoCapital fatias={fatias} className="h-72" /> : <p className={`text-sm ${a.secundario}`}>Sem capital a mostrar.</p>}
@@ -232,8 +227,8 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
                     <GraficoCenarios linhas={linhasDosCenarios} corPrincipal={a.serie} larguraDosRotulos={estreita ? 84 : 140} className="h-56" />
                 </Cartao>
                 <Cartao accent={accent} titulo="Sensibilidade do VPL" subtitulo="Quanto cada premissa move o VPL, para cima e para baixo">
-                    {barras.length && Number.isFinite(barras[0].base)
-                        ? <GraficoTornado barras={barras} metrica="vpl" choques={CHOQUES_PADRAO} comLegenda larguraDosRotulos={estreita ? 120 : 200} className="h-[300px]" />
+                    {barras.length && barras[0].base != null && Number.isFinite(barras[0].base)
+                        ? <GraficoTornado barras={barras} metrica="vpl" choques={g.choques} comLegenda larguraDosRotulos={estreita ? 120 : 200} className="h-[300px]" />
                         : <p className={`text-sm ${a.secundario}`}>Sem dados para calcular.</p>}
                 </Cartao>
             </div>

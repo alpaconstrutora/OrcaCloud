@@ -82,7 +82,8 @@ export interface BarraDoGraficoTornado {
  */
 export function dadosDoTornado(barras: BarraDoTornado[], metrica: MetricaDoEstudo, choques: Record<VariavelDoEstudo, number>): BarraDoGraficoTornado[] {
     const base = barras[0]?.base ?? NaN;
-    const rel = (v: number) => (Number.isFinite(v - base) ? v - base : 0);
+    // Do banco, um lado sem a métrica volta null (NaN não cabe no JSON): null - base seria um número.
+    const rel = (v: number | null) => (v != null && Number.isFinite(v - base) ? v - base : 0);
     return barras.map(b => {
         const d = choques[b.variavel].toLocaleString('pt-BR');
         const u = UNIDADE_DA_VARIAVEL[b.variavel];

@@ -3,7 +3,7 @@ import { History, AlertCircle, Loader2 } from 'lucide-react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { investorPortalService } from '../services/investorPortalService';
-import { resultadosDoEstudo, diferencaEntreVersoes, dadosDoRelatorioDaVersao, type ImovibStudyVersion, type LadoDaComparacao, type SnapshotDaVersao } from '../utils/imovibVersoes';
+import { resultadosDoEstudo, diferencaEntreVersoes, dadosDoRelatorioDaVersao, congeladoDaVersao, type ImovibStudyVersion, type LadoDaComparacao, type SnapshotDaVersao } from '../utils/imovibVersoes';
 import { nomeDeArquivo } from '../utils/nomeDeArquivo';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ActionIconButton from './ui/ActionIconButton';
@@ -93,7 +93,8 @@ const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
                 imovibService.organizacaoDoEstudo(study.organization_id),
                 import('./ImovibGraficosParaPdf'),
             ]);
-            const pdf = await gerarRelatorioCompleto(dadosDoRelatorioDaVersao(snapshot as SnapshotDaVersao, v), { versao: v, organizacao });
+            const pdf = await gerarRelatorioCompleto(dadosDoRelatorioDaVersao(snapshot as SnapshotDaVersao, v),
+                { versao: v, organizacao, congelado: congeladoDaVersao((snapshot as SnapshotDaVersao).calculo, 'interna') });
             pdf.save(`Relatorio_${nomeDeArquivo(study.name)}_${nomeDeArquivo(v.label)}.pdf`);
         } catch (e) {
             setErro(`Não foi possível gerar o relatório da versão: ${(e as Error).message}`);

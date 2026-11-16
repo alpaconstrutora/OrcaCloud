@@ -485,7 +485,7 @@ conferiam segue igual.
 é também o que pesa na CI); **PA10b** — relatório consolidado, furos no shaft e conflitos multinível; **PA10c** — o envio
 ao Empreendimento conferido e os achados da rota de fuga deixados pela PA9a (ver "Pendências em aberto").
 
-**Execução da PA10a (15/11/2026, em curso).** Perfil de CPU do R12 completo (2 subsolos, 5.390 comandos), e só cortes que
+**Execução da PA10a (15–16/11/2026).** Perfil de CPU do R12 completo (2 subsolos, 5.390 comandos), e só cortes que
 dão o MESMO resultado — o marco (o hash do modelo dos quatro prédios) e o da casa passam sem regravar:
 1. **Invariantes do kernel** (`assertModelInvariants`, que roda a cada COMANDO — de propósito, ver `aplicarSemHash`): a
    conferência "o pavimento existe" percorria a lista de pavimentos a cada peça (25 lugares); um conjunto montado uma vez
@@ -506,9 +506,20 @@ que a tela abre; gerar antes deles dava uma prévia que nascia VELHA (o resultad
 "Gerar" passou a ficar desligado, com o motivo, enquanto a entrada carrega. **R12 de ponta a ponta no app** (Vite de
 desenvolvimento, `c:/tmp/pwtest/conferencia-predio-pa10a.cjs`, estudo descartável arquivado): gerar 57 s · clique no
 Lançar 61 s · salvar o rascunho 9 s · Ctrl+Z 1,5 s; salvo com 16 pavimentos, 2 subsolos, 174 vagas, 21,6 mil trechos,
-9,5 mil pontos, 103 quadros. **Tempo fixado (proposta):** no app de desenvolvimento, o R12 completo gera em até 90 s, o
-clique no Lançar volta em até 90 s e o rascunho salva em até 30 s. Falta: o perfil do clique no Lançar (o trabalho da
-tela depois do resultado) e o PR.
+9,5 mil pontos, 103 quadros. **O clique no Lançar** (perfil do Chrome do clique ao rascunho salvo): o grosso era a tela
+pré-dimensionando a elétrica — as verificações do executivo elétrico e a NBR 5410 do modelo inteiro e do pavimento, cada
+uma refazendo a árvore de quadros (o pré-dimensionamento de um quadro desce aos filhos e sobe aos pais: com 103 quadros,
+quadrático) e cada circuito. **5.** O guardado passou a valer também DENTRO da recursão (por quadro e `comCadeia`: o
+`visitados` só exclui ancestrais, e o kernel recusa ciclo de alimentação, então numa árvore o resultado não depende
+dele) e por circuito (pelo próprio objeto); a tela confere as verificações e a NBR do modelo inteiro num escopo só.
+Medido no Node, intercalado, o cálculo da tela no Lançar do R12: **14,0 → 5,3 s** (−62 %); o R12 completo 47,7 → 40,3 s;
+o mesmo hash. **Dois achados de ambiente na conferência:** (a) o Chrome da conferência desenha a planta em software
+(SwiftShader) — com os 21,6 mil trechos do R12, o processo de GPU tomava ~5 núcleos e o rascunho não salvava; com a
+placa de vídeo (`GPU=1` no roteiro) salva; (b) a máquina é compartilhada (outras sessões com suítes e Vites): o mesmo R12
+gera em 57 s com ela quieta e em 190–240 s carregada — só a medição intercalada compara antes e depois. **Tempo
+fixado:** no app de desenvolvimento, com a máquina quieta, o R12 completo gera em até 90 s, o clique no Lançar volta em
+até 90 s e o rascunho salva em até 30 s (medido: 57 · 61 · 9 s, antes do corte 5); o erro de console que aparece com a
+tela ocupada é o sino de notificações abortando a contagem — não é do prédio.
 
 PA1 e PA2 podem correr em frentes paralelas.
 
@@ -519,7 +530,7 @@ tela (o motor não decide); "fase" = trabalho previsto.
 
 | Área | Pendência | Onde fica |
 |---|---|---|
-| Desempenho | Clique no "Lançar" do R12: 61 s (trabalho da tela: NBR 5410, marcas de verificação das redes, canvas) | PA10a |
+| Desempenho | Clique no "Lançar" do R12: o que sobra depois da PA10a é o desenho da planta (21,6 mil trechos) e as marcas de verificação das redes | depois da PA10 |
 | Desempenho | Gerar o R12 no worker: 57 s no app de desenvolvimento | PA10a (tempo fixado) |
 | Desempenho | Marco do RL perto do limite da CI (20 min por caso); o bloco "o motor (PA2)" subiu para 180 s depois de deixar a main vermelha (15/11) | PA10a |
 | Fechamento | Relatório consolidado do prédio (o de hoje é a lista de pendências por etapa) | PA10b |
@@ -563,4 +574,4 @@ tela (o motor não decide); "fase" = trabalho previsto.
 | PA7 | **PA7a feita** (ver a Execução) — R8: 5 tubos de queda por andar (DN 100), 120 UHC por andar, ventilação DN 75, coletor DN 150; toda louça de todo andar chega à ligação (315 de 315; R12 836 de 836). **No R12, os tubos de queda dão DN 100 pela Tabela 6** (o marco confere cada um). Conflitos por grade (44,8 s → 54 ms, mesmo resultado). **PA7b feita** (pluvial da cobertura: R8 2 condutores DN 100 para 1.200 L/min) |
 | PA8 | **PA8c feita** (drenagem: ralos e canaletas em pente, caixa separadora, poço com 2 bombas no QDG e recalque à CI do térreo; kernel 0.109.0). **PA8b feita** (escada(s) de emergência da garagem — rota do subsolo limpa no R8 e no R12; QDG, luzes e exaustores). **PA8a feita** (ver a Execução) — subsolo do estudo lançado: R8 1 subsolo com 60 vagas (o contorno livre levaria 91), 1 rampa, 40 pilares da torre + 60 da malha estendida, fundação no subsolo; R12 2 subsolos com 177 vagas e a rampa em vaivém; **nenhum pilar sobre vaga ou rampa** (o marco confere). A garagem pede uma 2ª saída (pendência). — a PA8 está completa |
 | PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. **PA9b feita** (extintores, sinalização e iluminação nas áreas comuns do tipo — cada andar repete). **PA9c feita** (hidrante em todo pavimento; coluna de incêndio empilhada; bomba na cobertura ao lado da reserva técnica; registro de recalque no passeio) |
-| PA10 | **PA10a em curso** (desempenho: R12 completo 63,6 → 43,1 s com o mesmo resultado; o "Gerar" espera a entrada carregar — a prévia do R12 nascia velha; R12 de ponta a ponta no app: gerar 57 s, Lançar 61 s, salvar 9 s). PA10b (relatório, furos no shaft, conflitos multinível) e PA10c (envio ao Empreendimento, achados da rota) a fazer — ver "Pendências em aberto" |
+| PA10 | **PA10a feita** (desempenho com o mesmo resultado: R12 completo 63,6 → 40,3 s, o cálculo da tela no Lançar 14,0 → 5,3 s; o "Gerar" espera a entrada carregar — a prévia do R12 nascia velha; R12 de ponta a ponta no app: gerar 57 s, Lançar 61 s, salvar 9 s com a máquina quieta; tempo fixado 90/90/30 s). PA10b (relatório, furos no shaft, conflitos multinível) e PA10c (envio ao Empreendimento, achados da rota) a fazer — ver "Pendências em aberto" |

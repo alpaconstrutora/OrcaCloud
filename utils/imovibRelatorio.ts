@@ -73,8 +73,16 @@ const ponto = (p: PontoDeEquilibrio, f: (v: number) => string) =>
     p.valor == null ? (p.motivo === 'sem_vgv' ? 'Sem VGV' : p.motivo === 'acima_do_vgv' ? 'Nem vendendo tudo' : 'Não existe') : f(p.valor);
 const hojeISO = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 const dataBR = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
+/**
+ * "Versão <nome>" — sem repetir a palavra: o nome padrão de uma versão congelada já é
+ * "Versão de dd/mm/aaaa" (ImovibCongelarVersao), e saía "Versão Versão de 16/11/2026" (16/11/2026).
+ */
+export const rotuloDaVersao = (label: string) => (/^vers(ã|a)o(\s|$)/i.test(label.trim()) ? label : `Versão ${label}`);
+/** "Versão de 16/11/2026 · congelada em 16/11/2026" — painel do investidor, detalhe do portal e capa do PDF. */
+export const linhaDaVersao = (versao: { label: string; created_at: string }) =>
+    `${rotuloDaVersao(versao.label)} · congelada em ${dataBRDeBrasilia(versao.created_at)}`;
 const linhaDaData = (hoje: string, versao: OpcoesDoRelatorio['versao']) =>
-    versao ? `Versão ${versao.label} · congelada em ${dataBRDeBrasilia(versao.created_at)}` : `Relatório gerado em ${dataBR(hoje)}`;
+    versao ? linhaDaVersao(versao) : `Relatório gerado em ${dataBR(hoje)}`;
 
 /** Título, versão (ou data) e os quatro números da capa visual do PDF. */
 export function capaDoRelatorio(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorio = {}): CapaDoRelatorio {

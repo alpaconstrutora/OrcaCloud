@@ -10,7 +10,8 @@ import { supabase } from '../lib/supabase';
 
 export interface RotinaAutomatica {
     jobid: number;
-    jobname: string;
+    /** NULL = job criado sem nome (`cron.schedule(expr, cmd)`) — endereçado pelo jobid. */
+    jobname: string | null;
     /** Expressão cron em GMT — ver `quandoRoda`. */
     schedule: string;
     /** Estado REAL de `cron.job.active`. */
@@ -18,12 +19,14 @@ export interface RotinaAutomatica {
     ultima: { inicio: string; status: string; mensagem: string | null } | null;
     execucoes7d: number;
     falhas7d: number;
+    /** Última execução que FALHOU na janela (40 dias), independente de como terminou a última. */
+    ultimoErro: { em: string; mensagem: string } | null;
     ultimaAlteracao: { em: string; porEmail: string | null; ativaDepois: boolean } | null;
 }
 
 interface LinhaDoBanco {
     jobid: number;
-    jobname: string;
+    jobname: string | null;
     schedule: string;
     active: boolean;
     ultima_inicio: string | null;
@@ -31,6 +34,8 @@ interface LinhaDoBanco {
     ultima_mensagem: string | null;
     execucoes_7d: number;
     falhas_7d: number;
+    ultimo_erro_em: string | null;
+    ultimo_erro_mensagem: string | null;
     alterado_em: string | null;
     alterado_por_email: string | null;
     alterado_ativo_depois: boolean | null;
@@ -47,6 +52,7 @@ function daLinha(l: LinhaDoBanco): RotinaAutomatica {
             : null,
         execucoes7d: l.execucoes_7d ?? 0,
         falhas7d: l.falhas_7d ?? 0,
+        ultimoErro: l.ultimo_erro_em ? { em: l.ultimo_erro_em, mensagem: l.ultimo_erro_mensagem ?? '' } : null,
         ultimaAlteracao: l.alterado_em
             ? { em: l.alterado_em, porEmail: l.alterado_por_email, ativaDepois: !!l.alterado_ativo_depois }
             : null,
@@ -60,15 +66,18 @@ export const rotinasAutomaticasService = {
         return ((data ?? []) as LinhaDoBanco[]).map(daLinha);
     },
 
-    /** Liga/desliga para TODAS as organizações. Devolve a linha já no estado novo. */
-    async definir(jobname: string, ativa: boolean): Promise<RotinaAutomatica> {
-        const { data, error } = await supabase.rpc('fn_rotina_automatica_definir', {
-            p_jobname: jobname,
-            p_ativo: ativa,
-        });
+    /**
+     * Liga/desliga para TODAS as organizações. Devolve a linha já no estado novo.
+     * Com nome, endereça pelo nome (sobrevive a reagendamento); sem nome, pelo `jobid`.
+     */
+    async definir(jobname: string | null, ativa: boolean, jobid?: number): Promise<RotinaAutomatica> {
+        const args = jobname === null
+            ? { p_jobname: null, p_ativo: ativa, p_jobid: jobid ?? null }
+            : { p_jobname: jobname, p_ativo: ativa };
+        const { data, error } = await supabase.rpc('fn_rotina_automatica_definir', args);
         if (error) throw new Error(error.message);
         const linha = ((data ?? []) as LinhaDoBanco[])[0];
-        if (!linha) throw new Error(`A rotina ${jobname} não voltou do banco.`);
+        if (!linha) throw new Error(`A rotina ${jobname ?? `#${jobid}`} não voltou do banco.`);
         return daLinha(linha);
     },
 

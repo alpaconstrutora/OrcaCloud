@@ -140,8 +140,26 @@ const CATALOGO: Record<string, MetaRotina> = {
     },
 };
 
-export function rotinaMeta(jobname: string): MetaRotina {
+/** `jobname` NULL é job criado por `cron.schedule(expr, cmd)` sem nome — identificado pelo jobid. */
+export function rotinaMeta(jobname: string | null, jobid?: number): MetaRotina {
+    if (jobname === null) {
+        return { nome: `Rotina sem nome (#${jobid ?? '?'})`, grupo: 'outras', oQueFaz: '', sensivel: false };
+    }
     return CATALOGO[jobname] ?? { nome: jobname, grupo: 'outras', oQueFaz: '', sensivel: false };
+}
+
+const STATUS_DA_EXECUCAO: Record<string, string> = {
+    succeeded: 'concluída',
+    failed: 'falhou',
+    running: 'rodando',
+    starting: 'iniciando',
+    connecting: 'conectando',
+    sending: 'enviando',
+};
+
+/** Status de `cron.job_run_details` em português; status desconhecido passa como veio. */
+export function statusDaExecucao(status: string): string {
+    return STATUS_DA_EXECUCAO[status] ?? status;
 }
 
 /** GMT (fuso do pg_cron neste banco) → BRT. Brasil sem horário de verão desde 2019. */

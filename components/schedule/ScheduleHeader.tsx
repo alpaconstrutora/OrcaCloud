@@ -37,7 +37,8 @@ import {
     Workflow,
     FileUp,
 } from 'lucide-react';
-import Ribbon, { BarraDeOpcoes, BotaoDoRibbon, GrupoDoRibbon, abaEfetiva } from '../blueprint/Ribbon';
+import Ribbon, { BarraDeOpcoes, BotaoDoAcessoRapido, BotaoDoRibbon, GrupoDoRibbon, abaEfetiva } from '../blueprint/Ribbon';
+import AcessoRapido, { GrupoDoAcessoRapido } from '../blueprint/AcessoRapido';
 import MenuDeVistas, { GrupoDeVistas } from '../ui/MenuDeVistas';
 import MenuDoRibbon from '../ui/MenuDoRibbon';
 import { usePersistedState } from '../ui/TableUtils';
@@ -167,15 +168,33 @@ const ROTULO_DA_VISTA: Record<ScheduleViewMode, string> = Object.fromEntries(
  * na tela (Tabela ou Gantt): Estrutura mexe nos nós e Vista nas colunas. Nas
  * outras vistas elas somem (aba vazia não aparece — §19.5) e a aba salva cai
  * em Cronograma, que é a que vale em qualquer vista.
+ *
+ * ⚠️ A aba EXPORTAR saiu em 16/11/2026: PDF, Excel e CSV foram para o grupo
+ * Arquivo do acesso rápido, sempre à vista (decisão do usuário). Quem tinha
+ * "exportar" salvo em `schedule:abaDoRibbon` cai em Cronograma pelo
+ * `abaEfetiva` — não precisa migrar a chave.
  */
 const ABAS_DO_PLANEJAMENTO = [
     { id: 'estrutura', rotulo: 'Estrutura', naGrade: true },
     { id: 'cronograma', rotulo: 'Cronograma', naGrade: false },
     { id: 'orcamento', rotulo: 'Orçamento', naGrade: false },
-    { id: 'exportar', rotulo: 'Exportar', naGrade: false },
     { id: 'vista', rotulo: 'Vista', naGrade: true },
 ] as const;
 type AbaDoPlanejamento = (typeof ABAS_DO_PLANEJAMENTO)[number]['id'];
+
+/**
+ * A ordem padrão dos grupos do ACESSO RÁPIDO (16/11/2026). O usuário arrasta a
+ * alça e a ordem dele fica em `schedule:ordemDoAcessoRapido`; grupo novo que
+ * não esteja na ordem salva entra no fim (`ordenarGrupos`).
+ */
+const ORDEM_PADRAO_DO_ACESSO_RAPIDO = ['vistas-cronograma', 'vistas-analise', 'vistas-execucao', 'estrutura', 'arquivo'];
+
+/** Id do grupo do acesso rápido para cada grupo de vistas — o rótulo do grupo sem acento. */
+const ID_DO_GRUPO_DE_VISTAS: Record<string, string> = {
+    Cronograma: 'vistas-cronograma',
+    Análise: 'vistas-analise',
+    Execução: 'vistas-execucao',
+};
 
 const ESCALAS: readonly { id: ScheduleTimeScale; rotulo: string }[] = [
     { id: 'day', rotulo: 'Dia' },
@@ -254,6 +273,15 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     const abasDoRibbon = ABAS_DO_PLANEJAMENTO.filter((a) => emGrade || !a.naGrade);
     const aba = abaEfetiva(abasDoRibbon, abaSalva, 'cronograma');
 
+    /* A faixa RECOLHIDA (16/11/2026, a mesma da Planta): só a fileira das abas
+       fica. Persistida — quem trabalha num notebook recolhe uma vez. A barra de
+       opções (escala, período) fica fora do Ribbon e continua à vista. */
+    const [ribbonRecolhido, setRibbonRecolhido] = usePersistedState<boolean>('schedule:ribbonRecolhido', false);
+    const [ordemDoAcessoRapido, setOrdemDoAcessoRapido] = usePersistedState<string[]>(
+        'schedule:ordemDoAcessoRapido',
+        ORDEM_PADRAO_DO_ACESSO_RAPIDO,
+    );
+
     // Colunas, níveis: cada grade guarda o seu — o ribbon fala com a que está na tela.
     const colunas = noGantt ? COLUNAS_DO_GANTT : COLUNAS_DA_TABELA;
     const ocultas = noGantt ? ganttCollapsedCols : collapsedCols;
@@ -266,6 +294,93 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
         ? schedule.baselines?.find((b) => b.id === schedule.activeBaselineId)?.name || 'Baseline'
         : 'Baseline';
 
+    /**
+     * ─── OS GRUPOS DO ACESSO RÁPIDO (16/11/2026) ─────────────────────────────
+     *
+     * A linha de ícones da Planta Inteligente, trazida para cá a pedido do
+     * usuário (*"implemente menu e botões em engenharia > planejamento como foi
+     * implementado em incorporação > planta inteligente"*; escolha: "Vistas +
+     * Estrutura + Arquivo"). Cada família é um grupo com alça que se arrasta.
+     *
+     * - VISTAS: as doze em ícone, nos três grupos do seletor. O seletor da
+     *   esquerda continua — é ele que NOMEIA a vista atual (a Planta faz igual).
+     * - ESTRUTURA: expandir/recolher a EAP inteira — o gesto mais repetido em
+     *   Tabela e Gantt. Só existe com a grade na tela (grupo que a vista não
+     *   admite não entra, como na Planta).
+     * - ARQUIVO: importar, exportar e TELA CHEIA. A tela cheia mora aqui pelo
+     *   mesmo motivo da Planta: à vista em qualquer aba, para sair do modo.
+     */
+    const gruposDoAcessoRapido: GrupoDoAcessoRapido[] = [
+        ...VISTAS_DO_PLANEJAMENTO.map((grupo) => ({
+            id: ID_DO_GRUPO_DE_VISTAS[grupo.rotulo] ?? `vistas-${grupo.rotulo}`,
+            rotulo: `Vistas de ${grupo.rotulo.toLowerCase()}`,
+            botoes: (
+                <>
+                    {grupo.itens.map((v) => (
+                        <BotaoDoAcessoRapido
+                            key={v.id}
+                            icone={v.icone}
+                            rotulo={`Vista: ${v.rotulo}`}
+                            ativo={viewMode === v.id}
+                            onClick={() => setViewMode(v.id)}
+                        />
+                    ))}
+                </>
+            ),
+        })),
+        ...(emGrade
+            ? [
+                  {
+                      id: 'estrutura',
+                      // Não "Estrutura": é o nome do grupo da aba Estrutura, e dois
+                      // `role=group` com o mesmo nome confundem leitor de tela.
+                      rotulo: 'Expandir e recolher',
+                      botoes: (
+                          <>
+                              <BotaoDoAcessoRapido
+                                  icone={ChevronsUpDown}
+                                  rotulo={allExpanded ? 'Expandir todos os níveis — já estão todos expandidos' : 'Expandir todos os níveis'}
+                                  onClick={handleExpandAll}
+                                  disabled={allExpanded}
+                              />
+                              <BotaoDoAcessoRapido icone={ChevronsDownUp} rotulo="Recolher todos os níveis" onClick={handleCollapseAll} />
+                          </>
+                      ),
+                  },
+              ]
+            : []),
+        {
+            id: 'arquivo',
+            rotulo: 'Arquivo',
+            botoes: (
+                <>
+                    {onImportarCronograma && (
+                        <BotaoDoAcessoRapido
+                            icone={FileUp}
+                            rotulo="Importar datas de um cronograma do MS Project (XML) ou do modelo Excel"
+                            onClick={onImportarCronograma}
+                        />
+                    )}
+                    <BotaoDoAcessoRapido
+                        icone={isExportingPDF ? Loader2 : FileDown}
+                        girando={isExportingPDF}
+                        rotulo={isExportingPDF ? 'Exportar PDF — gerando o arquivo…' : 'Exportar PDF'}
+                        onClick={handleExportPDF}
+                        disabled={isExportingPDF}
+                    />
+                    <BotaoDoAcessoRapido icone={FileSpreadsheet} rotulo="Exportar Excel" onClick={handleExportExcel} />
+                    <BotaoDoAcessoRapido icone={FileText} rotulo="Exportar CSV" onClick={handleExportCSV} />
+                    <BotaoDoAcessoRapido
+                        icone={telaCheia ? Minimize2 : Maximize2}
+                        rotulo={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
+                        onClick={onAlternarTelaCheia}
+                        ativo={telaCheia}
+                    />
+                </>
+            ),
+        },
+    ];
+
     return (
         // Sem faixa de título (10/10/2026): o mesmo da Planta Inteligente (P2.62/P2.63) —
         // *"a fim de ganhar mais espaço vertical, decidmos nao exibir o título e o
@@ -277,15 +392,27 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
         <>
         {/* RIBBON (§19.5) — o mesmo da Planta Inteligente, aqui dentro do card
             de cromo da tela (§19.1): seletor de vista à esquerda, abas de
-            comandos, acesso rápido à direita e, em Tabela/Gantt, a barra de
-            opções da vista embaixo. Sem `overflow-hidden` no card: os menus
-            (vista, colunas, níveis) são `absolute` e seriam cortados. O `border-b`
-            do ribbon só fica quando há barra de opções abaixo dele. */}
+            comandos, o aviso e a ação primária à direita; embaixo das abas o
+            ACESSO RÁPIDO (linha de ícones em grupos que se arrastam) e o painel
+            da aba; em Tabela/Gantt, a barra de opções da vista. A faixa se
+            recolhe (setinha ou duplo clique na aba), como na Planta. Sem
+            `overflow-hidden` no card: os menus (vista, colunas, níveis) são
+            `absolute` e seriam cortados. O `border-b` do ribbon só fica quando
+            há barra de opções abaixo dele. */}
         <div className={`rounded-[10px] border border-gray-100 bg-white shadow-sm ${emGrade ? '' : '[&>[role=toolbar]]:border-b-0'}`}>
             <Ribbon
                 abas={abasDoRibbon}
                 ativa={aba}
                 onEscolher={setAbaSalva}
+                recolhido={ribbonRecolhido}
+                onRecolher={setRibbonRecolhido}
+                acessoRapido={
+                    <AcessoRapido
+                        ordem={Array.isArray(ordemDoAcessoRapido) ? ordemDoAcessoRapido : []}
+                        onOrdem={setOrdemDoAcessoRapido}
+                        grupos={gruposDoAcessoRapido}
+                    />
+                }
                 ariaLabel="Ferramentas do planejamento"
                 esquerda={
                     <>
@@ -336,22 +463,11 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                                 </span>
                             </div>
                         )}
-                        {/* Tela cheia — o mesmo botão de MODO da Planta: ícone só,
-                            `aria-pressed`, aceso enquanto vale. À vista em qualquer
-                            aba porque é o único caminho para SAIR do modo. */}
-                        <button
-                            type="button"
-                            onClick={onAlternarTelaCheia}
-                            title={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
-                            aria-label={telaCheia ? 'Sair da tela cheia' : 'Tela cheia'}
-                            aria-pressed={telaCheia}
-                            className={`flex items-center justify-center h-9 w-9 rounded-[6px] border transition-all ${
-                                telaCheia ? 'bg-blue-50 border-blue-200 text-blue-700 hover:bg-blue-100' : 'bg-gray-50 border-gray-200 text-gray-400 hover:text-gray-600 hover:bg-gray-100'
-                            }`}
-                        >
-                            {telaCheia ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
-                        </button>
-                        {/* Ação primária (§17) — sempre visível, em qualquer vista. */}
+                        {/* A TELA CHEIA saiu daqui em 16/11/2026: mora no grupo
+                            Arquivo do acesso rápido, como na Planta. */}
+                        {/* Ação primária (§17, `h-9` compacto) — sempre visível, em
+                            qualquer vista. Não copia a medida do "Publicar versão"
+                            da Planta (`py-1.5 text-sm`): o guia manda aqui. */}
                         <button
                             type="button"
                             onClick={onAutoSchedule}
@@ -447,14 +563,6 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                             onClick={onOpenVersions}
                             ajuda={hasNewerBudgetVersion ? 'Há uma versão mais nova do orçamento — versões do planejamento' : 'Versões do planejamento'}
                         />
-                    </GrupoDoRibbon>
-                )}
-
-                {aba === 'exportar' && (
-                    <GrupoDoRibbon rotulo="Exportar">
-                        <BotaoDoRibbon icone={isExportingPDF ? Loader2 : FileDown} rotulo={isExportingPDF ? 'Gerando PDF…' : 'PDF'} onClick={handleExportPDF} disabled={isExportingPDF} />
-                        <BotaoDoRibbon icone={FileSpreadsheet} rotulo="Excel" onClick={handleExportExcel} />
-                        <BotaoDoRibbon icone={FileText} rotulo="CSV" onClick={handleExportCSV} />
                     </GrupoDoRibbon>
                 )}
 

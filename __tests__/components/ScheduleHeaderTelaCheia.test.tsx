@@ -7,10 +7,13 @@
  * O que interessa provar: o botão existe em qualquer aba (é o único caminho
  * para SAIR do modo), tem `aria-pressed` acompanhando o estado, troca de
  * rótulo/ícone quando o modo vale e dispara o alternar do pai.
+ *
+ * Desde 16/11/2026 o botão mora no grupo ARQUIVO do acesso rápido (a linha de
+ * ícones sob as abas), como o da Planta — não mais no slot direito do ribbon.
  */
 
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import ScheduleHeader from '../../components/schedule/ScheduleHeader';
@@ -82,6 +85,8 @@ describe('ScheduleHeader — Tela cheia', () => {
 
     const botao = screen.getByRole('button', { name: /^tela cheia$/i });
     expect(botao).toHaveAttribute('aria-pressed', 'false');
+    // mora no grupo Arquivo do acesso rápido, como na Planta
+    expect(within(screen.getByRole('group', { name: 'Arquivo' })).getByRole('button', { name: /^tela cheia$/i })).toBe(botao);
     expect(screen.queryByRole('button', { name: /^sair da tela cheia$/i })).toBeNull();
 
     await userEvent.setup().click(botao);

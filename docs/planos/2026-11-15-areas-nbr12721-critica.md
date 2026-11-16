@@ -125,7 +125,17 @@ Pedido seguinte, literal:
 
 ## Estado
 
+**16/11/2026 — NO AR.** PR #488 mesclado por squash (`e7d4e365`); CI verde no commit do merge e na ponta
+do `main` (`a1b40bb2`); produção conferida de fora (`conferir-producao.sh`: o domínio serve o `main` com
+"Frações no Empreendimento" e "Mostrar também" nos bundles). Branch `feat/areas-nbr12721-critica` apagada.
+
 15/11/2026: harden 2/2 · clarify 2/2 · shape 6/6 · distill 2/2 · layout 2/2 · polish 4/4.
+
+Em aberto (fora do escopo desta rodada, nenhum item do plano):
+- [ ] Diálogo do `useConfirm` (`components/ui/modal.tsx`) sem nome acessível — o título não está ligado por
+  `aria-labelledby`; vale para todas as confirmações do app.
+- [ ] Rodar `/impeccable critique` de novo na tela para medir a nota depois das correções (a crítica de 15/11
+  ficou fechada no `.impeccable/critique/`).
 
 Desvios do plano, registrados:
 - A faixa de etapas não virou arquivo próprio (`EtapasNbr12721.tsx`): é `FaixaDeEtapas` dentro de

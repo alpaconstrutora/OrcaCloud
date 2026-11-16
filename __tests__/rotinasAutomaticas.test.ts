@@ -89,12 +89,13 @@ describe('rotina sem nome (jobname NULL no pg_cron)', () => {
 });
 
 describe('statusDaExecucao — status do pg_cron em português', () => {
-    it('traduz os cinco status do cron.job_run_details', () => {
+    it('traduz os seis status do cron.job_run_details', () => {
         expect(statusDaExecucao('succeeded')).toBe('concluída');
         expect(statusDaExecucao('failed')).toBe('falhou');
         expect(statusDaExecucao('running')).toBe('rodando');
         expect(statusDaExecucao('starting')).toBe('iniciando');
         expect(statusDaExecucao('connecting')).toBe('conectando');
+        expect(statusDaExecucao('sending')).toBe('enviando');
     });
     it('status desconhecido passa como veio', () => {
         expect(statusDaExecucao('novo-status')).toBe('novo-status');

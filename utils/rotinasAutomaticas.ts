@@ -154,6 +154,7 @@ const STATUS_DA_EXECUCAO: Record<string, string> = {
     running: 'rodando',
     starting: 'iniciando',
     connecting: 'conectando',
+    sending: 'enviando',
 };
 
 /** Status de `cron.job_run_details` em português; status desconhecido passa como veio. */

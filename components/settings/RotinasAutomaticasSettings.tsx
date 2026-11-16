@@ -41,13 +41,15 @@ function partes(fmt: Intl.DateTimeFormat, iso: string): Record<string, string> {
 const dataHora = (iso: string) => { const p = partes(DATA_HORA_BRT, iso); return `${p.day}/${p.month} ${p.hour}:${p.minute}`; };
 const dataCurta = (iso: string) => { const p = partes(DATA_BRT, iso); return `${p.day}/${p.month}`; };
 
-type Aviso = { id: number; mensagem: string; tipo: 'sucesso' | 'erro' };
+type Aviso = { mensagem: string; tipo: 'sucesso' | 'erro' };
 
-/** Rotina sem nome no pg_cron (jobname NULL) é identificada pelo jobid. */
-const chaveDa = (r: RotinaAutomatica) => r.jobname ?? `#${r.jobid}`;
+/** Linha da tela = jobid (chave de cron.job). Pelo nome, um job chamado "#77" colidiria com a
+ *  rotina sem nome de jobid 77; reagendar troca o jobid, mas a linha clicada é trocada pela
+ *  devolvida pelo banco. */
+const chaveDa = (r: RotinaAutomatica) => String(r.jobid);
 const metaDa = (r: RotinaAutomatica) => rotinaMeta(r.jobname, r.jobid);
 const execucoes = (n: number) => `${n} ${n === 1 ? 'execução' : 'execuções'}`;
-const RODANDO = new Set(['running', 'starting', 'connecting']);
+const RODANDO = new Set(['running', 'starting', 'connecting', 'sending']);
 
 const RotinasAutomaticasSettings: React.FC = () => {
     const confirm = useConfirm();
@@ -59,7 +61,9 @@ const RotinasAutomaticasSettings: React.FC = () => {
     const timerDoAviso = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const avisar = React.useCallback((mensagem: string, tipo: Aviso['tipo']) => {
-        setAviso(prev => ({ id: (prev?.id ?? 0) + 1, mensagem, tipo }));   // id novo = a entrada anima de novo
+        // Mesma região montada: o segundo aviso troca o TEXTO, e o leitor de tela anuncia. A
+        // animação de entrada roda quando o aviso aparece, não a cada troca.
+        setAviso({ mensagem, tipo });
         if (timerDoAviso.current) clearTimeout(timerDoAviso.current);
         timerDoAviso.current = setTimeout(() => setAviso(null), 4500);
     }, []);
@@ -154,8 +158,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
                 // O erro vem da última execução que FALHOU — não da última execução, que pode ter
                 // passado ou estar rodando agora.
                 const titulo = `${r.falhas7d} de ${execucoes(r.execucoes7d)} nos últimos 7 dias ${r.falhas7d === 1 ? 'falhou' : 'falharam'}.`
-                    + (r.ultimoErro ? `
-Último erro (${dataHora(r.ultimoErro.em)}): ${r.ultimoErro.mensagem}` : '');
+                    + (r.ultimoErro ? '\n' + `Último erro (${dataHora(r.ultimoErro.em)}): ${r.ultimoErro.mensagem}` : '');
                 return (
                     <span className="text-sm font-normal text-red-600" title={titulo}>
                         {r.falhas7d} {r.falhas7d === 1 ? 'falha' : 'falhas'}
@@ -223,7 +226,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
                     <p className="text-sm text-gray-500 mt-1">
                         {carregando && rotinas.length === 0
                             ? 'O que o sistema faz sozinho, em horário marcado.'
-                            : `${rotinas.length} rotinas · ${ligadas} ligadas.`}
+                            : `${rotinas.length} ${rotinas.length === 1 ? 'rotina' : 'rotinas'} · ${ligadas} ${ligadas === 1 ? 'ligada' : 'ligadas'}.`}
                         {' '}Ligar ou desligar vale para todas as organizações. Horários de Brasília.
                     </p>
                 </div>
@@ -250,7 +253,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
                 rows={rotinas}
                 rowKey={chaveDa}
                 loading={carregando}
-                searchText={r => { const m = metaDa(r); return `${m.nome} ${chaveDa(r)} ${m.oQueFaz}`; }}
+                searchText={r => { const m = metaDa(r); return `${m.nome} ${r.jobname ?? ''} ${m.oQueFaz}`; }}
                 searchPlaceholder="Buscar rotina..."
                 sortValue={sortValue}
                 renderCell={renderCell}
@@ -270,7 +273,6 @@ const RotinasAutomaticasSettings: React.FC = () => {
 
             {aviso && (
                 <div
-                    key={aviso.id}
                     role={aviso.tipo === 'erro' ? 'alert' : 'status'}
                     className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
                         aviso.tipo === 'sucesso' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'

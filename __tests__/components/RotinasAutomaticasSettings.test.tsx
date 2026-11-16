@@ -5,7 +5,7 @@
  *
  * O que trava:
  *   1. grupos na ordem do catálogo; horário traduzido; job fora do catálogo em "Outras";
- *   2. falhas da semana com o erro da última execução no title;
+ *   2. falhas da semana: "X de N execuções" e o ÚLTIMO ERRO (da última que falhou) no title;
  *   3. "Desligada por X em dd/mm" a partir do registro de alterações;
  *   4. desligar rotina sensível pede confirmação com o que deixa de acontecer
  *      (cancelar não grava); as demais, e LIGAR, não perguntam;
@@ -178,6 +178,39 @@ describe('RotinasAutomaticasSettings', () => {
         const caixa = aviso.closest('[role="status"]') as HTMLElement;
         expect(caixa.className).toContain('animate-in');
         expect(caixa.className).toContain('slide-in-from-bottom-4');
+    });
+
+    // ── Achados da revisão da frente rotinas-pendencias ──
+    it('job com NOME "#77" e rotina sem nome de jobid 77 não se confundem', async () => {
+        const comNome = rotina('#77', { jobid: 500 });
+        const semNome = rotina(null, { jobid: 77 });
+        listar.mockResolvedValue([comNome, semNome]);
+        definir.mockResolvedValue({ ...semNome, ativa: false });
+        const erro = vi.spyOn(console, 'error').mockImplementation(() => {});
+        const user = userEvent.setup();
+        montar();
+        await user.click(await screen.findByRole('checkbox', { name: 'Rotina Rotina sem nome (#77)' }));
+        await waitFor(() => expect((screen.getByRole('checkbox', { name: 'Rotina Rotina sem nome (#77)' }) as HTMLInputElement).checked).toBe(false));
+        expect((screen.getByRole('checkbox', { name: 'Rotina #77' }) as HTMLInputElement).checked).toBe(true);
+        expect(erro.mock.calls.some(c => String(c[0]).includes('same key'))).toBe(false);
+        erro.mockRestore();
+    });
+
+    it('segundo aviso com o primeiro ainda na tela troca o texto da MESMA região (leitor de tela anuncia)', async () => {
+        const user = userEvent.setup();
+        montar();
+        await screen.findByText(nome('process-sla-sweep'));
+        await user.click(interruptor('process-sla-sweep'));
+        const primeiro = (await screen.findByText(`${nome('process-sla-sweep')}: desligada.`)).closest('[role="status"]');
+        await user.click(interruptor('hourly-bi-report-check'));
+        const segundo = (await screen.findByText(`${nome('hourly-bi-report-check')}: ligada.`)).closest('[role="status"]');
+        expect(segundo).toBe(primeiro);
+    });
+
+    it('com uma rotina só, o resumo fala no singular', async () => {
+        listar.mockResolvedValue([rotina('process-sla-sweep')]);
+        montar();
+        expect(await screen.findByText(/^1 rotina · 1 ligada\./)).toBeTruthy();
     });
 
     it('falhas da semana com o erro da última execução no title', async () => {

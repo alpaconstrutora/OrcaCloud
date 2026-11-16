@@ -243,7 +243,7 @@ const AcademyPlayerView: React.FC<Props> = ({
 
     if (carregando && !conteudo) {
         return (
-            <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+            <div className="space-y-6 animate-in fade-in duration-300 pb-4">
                 {Cabecalho}
                 <div className="text-center py-12">
                     <Loader2 className="w-8 h-8 text-blue-600 mx-auto animate-spin" />
@@ -255,7 +255,7 @@ const AcademyPlayerView: React.FC<Props> = ({
 
     if (erro || !conteudo || !aulaAtiva) {
         return (
-            <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+            <div className="space-y-6 animate-in fade-in duration-300 pb-4">
                 {Cabecalho}
                 <div className="text-center py-12">
                     <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -272,7 +272,7 @@ const AcademyPlayerView: React.FC<Props> = ({
     );
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+        <div className="space-y-6 animate-in fade-in duration-300 pb-4">
             {Cabecalho}
 
             {/* Ciência da mudança: só mostrar o aviso não prova que a pessoa

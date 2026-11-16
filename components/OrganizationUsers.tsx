@@ -1091,7 +1091,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
             .filter(section => section.modules.length > 0);
 
         return (
-            <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+            <div className="space-y-6 animate-in fade-in duration-300 pb-4">
                 {/* Cabeçalho — mesmo padrão de ContractDetailView.tsx: seta "voltar" +
                     identidade do registro, título em text-2xl (detalhe, não raiz de lista) */}
                 <div className="flex items-center gap-4">

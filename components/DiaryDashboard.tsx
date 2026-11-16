@@ -96,7 +96,7 @@ const DiaryDashboard: React.FC<DiaryDashboardProps> = ({ projects }) => {
     if (diaryProjects.length === 0 && onlyDiarios(projects).length === 0) return null;
 
     return (
-        <div className="space-y-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
+        <div className="space-y-6 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 <StatCard
                     title="Total de Projetos"

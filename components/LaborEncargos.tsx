@@ -264,7 +264,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
 
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
             {/* 1. Título */}
             <div>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Encargos Sociais</h1>

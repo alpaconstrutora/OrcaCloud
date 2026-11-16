@@ -38,7 +38,7 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
     const hasData = totalInvested > 0 || totalEarnings > 0;
 
     return (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-8 animate-in fade-in duration-300">
             {!hasData && (
                 <div className="flex items-center gap-3 bg-gray-50 border border-gray-100 rounded-2xl px-5 py-3">
                     <Info className="w-4 h-4 text-gray-400 shrink-0" />

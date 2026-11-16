@@ -3943,7 +3943,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
         // overlay absolute em main), `bg-gray-50` (o mesmo do shell) e
         // `p-4 md:p-6` (§20.2.1 do guia: casca própria repete o gutter).
         <div
-            className={`space-y-6 animate-in fade-in duration-500 pb-20 ${telaCheia ? 'fixed inset-0 z-40 overflow-y-auto bg-gray-50 p-4 md:p-6' : ''}`}
+            className={`space-y-6 animate-in fade-in duration-300 pb-20 ${telaCheia ? 'fixed inset-0 z-40 overflow-y-auto bg-gray-50 p-4 md:p-6' : ''}`}
             data-tela-cheia={telaCheia ? '' : undefined}
         >
             {/* Header */}

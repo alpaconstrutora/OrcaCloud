@@ -982,7 +982,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     isPublicExperience ? (
                         <PortalFinance contributions={investorContributions} projectNames={projectNames} />
                     ) : (
-                        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <section>
                                 <div className="flex items-center gap-3 mb-8">
                                     <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
@@ -997,7 +997,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     isPublicExperience ? (
                         <PortalFiscal contributions={investorContributions} projectNames={projectNames} />
                     ) : (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <TaxReport
                                 investorContributions={investorContributions}
                                 activeProjects={activeProjects}

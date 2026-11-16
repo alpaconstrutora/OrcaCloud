@@ -2001,6 +2001,24 @@ desenhado.
 > não silenciar o check. Ocorrências: `PropertyModal.tsx`, aba "Gestão de
 > Unidades" (as 11 legendas da matriz geradora).
 
+### 8.2 Avatar de inicial não é pílula de status (16/11/2026)
+
+Círculo pequeno com a **inicial de uma pessoa** (autor de um registro, membro de
+equipe) é avatar, não badge: `rounded-full` é a forma dele, e ele não descreve estado
+de registro nenhum. A inicial é **conteúdo** — vai maiúscula no próprio texto
+(`email.substring(0, 1).toUpperCase()`), nunca por `uppercase` na classe. Assim a
+checagem do §8 no `check-ui-standard.sh` (`rounded-full` + `uppercase` no mesmo
+className) continua acusando só pílula de verdade.
+
+```tsx
+<div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-xs font-black text-slate-500">
+  {log.user_email?.substring(0, 1).toUpperCase()}
+</div>
+```
+
+> ❌ Não vale para mais de uma letra: "ADM", "RH", "PJ" num círculo é selo → §8 inteiro.
+> Primeira ocorrência: `PayrollEventModal.tsx` (histórico de lançamentos da folha).
+
 ---
 
 ## 9. COLUNA DE AÇÕES

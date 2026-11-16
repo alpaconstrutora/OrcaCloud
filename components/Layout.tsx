@@ -1696,7 +1696,7 @@ const Layout: React.FC<LayoutProps> = ({
       )}
       {/* Notification Toast Portal-like position */}
       {toast && (
-        <div className="fixed top-24 right-8 z-[500] max-w-xs animate-in slide-in-from-right-full duration-500">
+        <div className="fixed top-24 right-8 z-[500] max-w-xs animate-in slide-in-from-right-full duration-300">
           <div className="bg-indigo-600 text-white p-4 rounded-2xl shadow-2xl shadow-indigo-900/50 border border-indigo-500 flex items-start gap-4">
             <div className="p-2 bg-white/20 rounded-xl">
               <Bell className="w-5 h-5 text-white" />

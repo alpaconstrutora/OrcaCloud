@@ -57,9 +57,41 @@ anterior: *"cerca de 437 usos, no resto do app, de classes de animação que nã
   identidade, só esmaece. No app (visão do investidor pelo link, `vite preview` do build): o esqueleto
   de carregamento esmaece 0 → 0,22 → 0,58 (`enter`, 0,3 s); depois de carregar, nenhum elemento preso;
   0 erros de console.
-- [ ] **Produção** — PR, CI verde, merge, `conferir-producao.sh` com texto novo do bundle.
+- [x] **Produção** — PR #515, CI verde no PR e na `main`, merge `ee11605`; `conferir-producao.sh
+  "data-captura-sem-animacao"` → domínio serve `ee11605` com o texto; CSS servido
+  (`/assets/index-BJdcyN5B.css`) com `.animate-in{`, `@keyframes enter`, `.zoom-in-95{`,
+  `.slide-in-from-bottom-4{` e o bloco de menos movimento.
+
+## Pedido posterior (16/11/2026, mesma sessão)
+
+> corrigir Pontos em aberto:
+> 1. Abas lentas:\
+> 2. Alertas antigos
+> 3. Plano no repositório
+
+Os três pontos em aberto do relatório do #515: entradas de 500/700 ms; os alertas do
+`check-ui-standard.sh` que já existiam em dois arquivos tocados (OrderReceiptModal §7,
+PayrollEventModal §8/§14); e o item "Produção" deste plano, que ficou desmarcado.
+
+- [x] **Abas lentas** — os 102 trechos de classe com `animate-in` e `duration-500` (86),
+  `duration-700` (15) ou `duration-400` (1), em 44 arquivos, passaram para `duration-300` (§35).
+  Antes de trocar: nenhum desses trechos — nem o resto da linha, nem classe que continua na
+  linha seguinte — tinha `transition`, que herdaria a duração. Trava nova no
+  `animacoesDeEntrada.test.ts`: "entrada dura no máximo 300 ms". *Pronto quando:* a trava fica
+  vermelha sem a troca (conferido) e verde com ela.
+- [x] **Alertas antigos** — `OrderReceiptModal.tsx` (§7/§7.1): descrição, código, quantidade
+  pedida, campo de quantidade recebida, seletor de problema e o "OK" em `text-sm font-normal`
+  (sem `font-bold`/`font-black`/`font-mono`; "OK" como status em texto colorido, §8).
+  `PayrollEventModal.tsx`: excluir lançamento manual pelo `useConfirm()` (§14, `variant:
+  'danger'`, mensagem diz que o cálculo do colaborador é refeito); o avatar da inicial no
+  histórico não é pílula — a letra vai maiúscula no texto, guia §8.2 nova. *Pronto quando:*
+  `check-ui-standard.sh` sem violação nos dois arquivos.
+- [x] **Plano** — este arquivo, item "Produção" marcado com a evidência.
+
+**Publicação deste pedido:** a prova de produção (`conferir-producao.sh` + CI da `main`) fica
+registrada como **comentário no PR** deste pedido — o plano não ganha um item que só poderia
+ser marcado com outro commit depois do merge (foi o que deixou o "Produção" acima desmarcado).
 
 ## Fora do escopo (registrado, não feito)
 
-- Durações de 500/700 ms em conteúdo de aba ficaram como os autores escreveram (o guia pede
-  200–300 ms para código novo; reduzir as existentes seria varredura sem pedido).
+- ~~Durações de 500/700 ms em conteúdo de aba~~ — feito no pedido posterior acima.

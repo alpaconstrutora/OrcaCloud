@@ -1127,7 +1127,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
     return (
         <>
-        <div className="space-y-6 animate-in fade-in duration-500 pb-12">
+        <div className="space-y-6 animate-in fade-in duration-300 pb-12">
             {/* Cabeçalho §20 — h1 solto + subtitulo mt-1.5, NUNCA dentro de card
                 ou hero. Mesmo desenho de Comercial > Locacao (Gestao de Unidades):
                 titulo, subtitulo e, logo abaixo, a toolbar de abas. */}
@@ -1152,7 +1152,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                     onClick={handleRegenerateOrderNumber}
                                 />
                             )}
-                            <span className={`text-sm font-normal ${getStatusStyles(order.status)} animate-in fade-in duration-700`}>
+                            <span className={`text-sm font-normal ${getStatusStyles(order.status)} animate-in fade-in duration-300`}>
                                 {rotuloStatusLogistico(order.status, pedidoFob)}
                             </span>
                         </div>

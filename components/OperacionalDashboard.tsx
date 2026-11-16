@@ -175,7 +175,7 @@ const OperacionalDashboard: React.FC<Props> = ({ projectId, orgId, tipoObra }) =
   return (
     <div className="space-y-6">
       {/* KPIs */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 animate-in fade-in slide-in-from-top-4 duration-700">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8 animate-in fade-in slide-in-from-top-4 duration-300">
         <KpiCard
           label="OEs ativas"
           value={inProgress}

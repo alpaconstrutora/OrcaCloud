@@ -1122,7 +1122,7 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
     ));
 
     return (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
             {desktopTabsBar}
 
             {/* ⚠️ O card de abas é renderizado SEMPRE — nunca atrás de

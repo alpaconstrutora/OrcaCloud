@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { X, Plus, Loader2, Check } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { useConfirm } from './ui/confirm';
 import { payrollService, PayrollRun, PayrollRubric, PayrollEvent, PayrollItem, PayrollAuditLog, PayrollResultWithEmployee, EmployeeRecurringRubric } from '../services/payrollService';
 import { payrollEngine } from '../services/payrollEngine';
 import {
@@ -31,6 +32,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
     rubrics, runEvents, results, executing,
     onClose, onEventSaved,
 }) => {
+    const confirm = useConfirm();
     const [runItems, setRunItems]               = useState<PayrollItem[]>([]);
     const [eventHistory, setEventHistory]       = useState<PayrollAuditLog[]>([]);
     const [showEventHistory, setShowEventHistory] = useState(false);
@@ -324,8 +326,9 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                     </div>
                                     <p className="text-xs font-bold text-slate-700">{log.description}</p>
                                     <div className="flex items-center gap-2">
-                                        <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-xs font-black text-slate-500 uppercase">
-                                            {log.user_email?.substring(0, 1)}
+                                        {/* Avatar da inicial (guia §8.2): a letra é conteúdo, vai maiúscula no texto. */}
+                                        <div className="w-4 h-4 rounded-full bg-slate-200 flex items-center justify-center text-xs font-black text-slate-500">
+                                            {log.user_email?.substring(0, 1).toUpperCase()}
                                         </div>
                                         <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter">{log.user_email}</span>
                                     </div>
@@ -405,10 +408,14 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                                             kind="delete"
                                                             size="sm"
                                                             title="Excluir Lançamento"
-                                                            onClick={() => {
-                                                                if (confirm('Deseja excluir este lançamento manual?')) {
-                                                                    handleDeleteEvent(ev.id!);
-                                                                }
+                                                            onClick={async () => {
+                                                                const ok = await confirm({
+                                                                    title: 'Excluir lançamento manual?',
+                                                                    message: 'O lançamento sai da folha e o cálculo deste colaborador é refeito. Essa ação não pode ser desfeita.',
+                                                                    variant: 'danger',
+                                                                    confirmLabel: 'Excluir',
+                                                                });
+                                                                if (ok) await handleDeleteEvent(ev.id!);
                                                             }}
                                                         />
                                                     </div>

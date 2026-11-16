@@ -992,7 +992,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     };
 
     const renderResumo = () => (
-        <div className="space-y-8 animate-in fade-in duration-500">
+        <div className="space-y-8 animate-in fade-in duration-300">
 
             {/* KPI Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -1474,7 +1474,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     );
 
     const renderExtrato = () => (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-300">
             <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
                 <div className="p-8 border-b border-gray-50 flex justify-between items-center">
                     <div>
@@ -1582,7 +1582,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     );
 
     return (
-        <div className="p-2 space-y-6 animate-in fade-in duration-500">
+        <div className="p-2 space-y-6 animate-in fade-in duration-300">
             {tabsBar}
 
             {settings.name === 'Gestão Comercial' && (
@@ -1673,7 +1673,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
             {conciliacaoData && (
                 <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300">
-                    <div className="bg-white rounded-[2.5rem] shadow-2xl p-10 w-full max-w-2xl border border-gray-100 animate-in slide-in-from-bottom-8 duration-500">
+                    <div className="bg-white rounded-[2.5rem] shadow-2xl p-10 w-full max-w-2xl border border-gray-100 animate-in slide-in-from-bottom-8 duration-300">
                         <div className="flex justify-between items-center mb-8">
                             <div>
                                 <h3 className="text-2xl font-normal text-gray-900 tracking-tight">Conciliação Bancária</h3>

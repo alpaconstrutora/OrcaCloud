@@ -68,7 +68,7 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
   if (!metrics) return null;
 
   return (
-    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+    <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
       
       {/* 1. PAINEL EXECUTIVO (TOPO) — toolbar de botões (§5.3 do ui_ux_guia_unificado.md):
           escopo (período) à direita do título, controles compactos h-9/rounded-[6px].

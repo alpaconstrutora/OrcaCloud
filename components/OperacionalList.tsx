@@ -366,7 +366,7 @@ const OperacionalList: React.FC<Props> = ({ projectId, orgId, onViewDetail, onCr
   return (
     <div className="space-y-6">
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3 animate-in fade-in slide-in-from-top-4 duration-700">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3 animate-in fade-in slide-in-from-top-4 duration-300">
         <KpiCard label="Total" value={kpis.total} sub="Ordens de execução" icon={<ClipboardList className="w-5 h-5" />} color="blue" />
         <KpiCard label="Em Execução" value={kpis.inProgress} sub="Ativas" icon={<TrendingUp className="w-5 h-5" />} color="indigo" />
         <KpiCard label="Atrasadas" value={kpis.overdue} sub={`${kpis.blocked} bloqueadas`} icon={<AlertTriangle className="w-5 h-5" />} color={kpis.overdue > 0 ? "red" : "gray"} />

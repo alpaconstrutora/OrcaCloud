@@ -136,7 +136,7 @@ const OrderLifeline: React.FC<OrderLifelineProps> = ({ status, estimatedDelivery
                                     </span>
                                 )}
                                 {isCurrent && estimatedDelivery && (
-                                    <div className={`absolute -bottom-10 whitespace-nowrap px-3 py-1.5 rounded-lg border animate-in fade-in slide-in-from-top-2 duration-700 ${A.badge}`}>
+                                    <div className={`absolute -bottom-10 whitespace-nowrap px-3 py-1.5 rounded-lg border animate-in fade-in slide-in-from-top-2 duration-300 ${A.badge}`}>
                                         <div className="flex items-center gap-2">
                                             <Clock className={`w-3.5 h-3.5 ${A.badgeIcon}`} />
                                             <span className={`text-xs font-bold uppercase tracking-tight ${A.badgeText}`}>Prev: {estimatedDelivery}</span>

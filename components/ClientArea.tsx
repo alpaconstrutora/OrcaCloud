@@ -675,7 +675,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         const quickTabs = tabs.filter(t => t.id !== 'dashboard').slice(0, 4);
 
         return (
-            <div className="animate-in fade-in duration-500">
+            <div className="animate-in fade-in duration-300">
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden space-y-0">
                     {/* Hero */}
@@ -802,7 +802,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         const quickTabs = tabs.filter(t => t.id !== 'dashboard').slice(0, 4);
 
         return (
-            <div className="animate-in fade-in duration-500">
+            <div className="animate-in fade-in duration-300">
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden space-y-0">
                     {/* Hero */}
@@ -927,7 +927,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         if (!settings.id || budget.length === 0) {
             // Estado vazio §12 dentro do card §16
             return (
-                <div data-tour="dashboard-resumo" className="bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12 px-6 animate-in fade-in duration-500">
+                <div data-tour="dashboard-resumo" className="bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12 px-6 animate-in fade-in duration-300">
                     <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Acompanhamento de Obra</h3>
                     <p className="text-sm text-gray-500 max-w-xl mx-auto">
@@ -938,7 +938,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         }
 
         return (
-            <div data-tour="dashboard-resumo" className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div data-tour="dashboard-resumo" className="grid grid-cols-1 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                 {/* Main Metrics (2/3) */}
                 <div className="lg:col-span-2 space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -1113,7 +1113,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         const isServicos = ehServicos(clientCategory);
 
         return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
             {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
             {desktopTabsBar}
 
@@ -1559,7 +1559,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         };
 
         return (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                 {/* §4 — KpiCard canônico; §20.1 mb-3 (KPIs e cromo são um bloco só) */}
                 <div data-tour="financeiro-resumo" className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
                     <div className="relative">
@@ -2119,7 +2119,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         };
 
         return (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
 
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
@@ -2309,7 +2309,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         };
 
         return (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
 
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
@@ -2520,7 +2520,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             return (
                 <>
                 {desktopTabsBar}
-                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 flex flex-col items-center justify-center py-12 animate-in fade-in duration-500">
+                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 flex flex-col items-center justify-center py-12 animate-in fade-in duration-300">
                     <HardHat className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2 text-center">Cronograma ainda não disponível</h3>
                     <p className="text-sm text-gray-500 text-center">O acompanhamento da obra aparecerá aqui assim que o planejamento for publicado.</p>
@@ -2543,7 +2543,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         const onTrack = pv.onSchedule !== false;
 
         return (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                 {/* Cabeçalho + progresso geral */}
                 <div data-tour="obra-progresso" className="bg-[#E1553C] rounded-[10px] p-6 text-white">
                     <div className="flex items-start justify-between flex-wrap gap-4">
@@ -2660,7 +2660,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             return (
                 <>
                 {desktopTabsBar}
-                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 flex flex-col items-center justify-center py-12 animate-in fade-in duration-500">
+                <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 flex flex-col items-center justify-center py-12 animate-in fade-in duration-300">
                     <TrendingUp className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-bold text-gray-900 mb-2 text-center">Cronograma físico-financeiro ainda não disponível</h3>
                     <p className="text-sm text-gray-500 text-center">Ele aparecerá aqui assim que o planejamento com valores for publicado.</p>
@@ -2684,7 +2684,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         const pctToday = fv.totalPlanned > 0 ? Math.round((fv.plannedTodayValue / fv.totalPlanned) * 100) : 0;
 
         return (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                 <div className="bg-[#E1553C] rounded-[10px] p-6 text-white">
                     <div>
                         <h3 className="text-sm font-bold tracking-tight">Cronograma Físico-Financeiro</h3>
@@ -2788,7 +2788,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
             <>
             {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
             {desktopTabsBar}
-            <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-300">
                 <div className="flex justify-between items-center mb-6">
                     <div className="flex flex-col gap-2">
                         <h3 className="text-sm font-bold text-gray-900 tracking-tight">Sua Casa, Sua História</h3>
@@ -2899,7 +2899,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         };
 
         return (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
 
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
@@ -3287,7 +3287,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         };
 
         return (
-            <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                 {/* ══ MOBILE ══ */}
                 <div className="md:hidden -mx-4">
                     {/* Mini hero */}
@@ -4623,7 +4623,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </>
                 )}
                 {activeTab === 'visual' && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                         {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
                         {desktopTabsBar}
                         <ProjectGallery
@@ -4711,7 +4711,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     </>
                 )}
                 {activeTab === 'suporte' && (
-                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                    <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                         {/* §19.3 — esta aba não tem faixa de KPI: as abas abrem o conteúdo */}
                         {desktopTabsBar}
                         {/* ══ MOBILE ══ */}
@@ -4746,7 +4746,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     const PRIORITY_TEXT_COLOR: Record<string, string> = { Urgente: 'text-red-600', Alta: 'text-orange-600', Média: 'text-amber-700', Baixa: 'text-gray-500' };
                     const REQUEST_STATUS_TEXT_COLOR: Record<string, string> = { Aberto: 'text-amber-700', 'Em Andamento': 'text-blue-700', Aguardando: 'text-purple-700', Resolvido: 'text-emerald-700', Cancelado: 'text-gray-400' };
                     return (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
                             {/* KPIs §4 (KpiCard canônico) → abas → toolbar de botões §5.3 → lista */}
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
                                 <KpiCard label="Abertos" value={abertos} icon={<Wrench className="w-4 h-4" />} color="amber" />

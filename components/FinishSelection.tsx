@@ -45,7 +45,7 @@ const FinishSelection: React.FC = () => {
     const categories = Array.from(new Set(FINISH_OPTIONS.map(o => o.category)));
 
     return (
-        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="bg-gradient-to-br from-indigo-600 to-blue-700 rounded-[10px] p-6 text-white relative overflow-hidden shadow-sm">
                 <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -mr-20 -mt-20" />
                 <div className="relative z-10 max-w-2xl">

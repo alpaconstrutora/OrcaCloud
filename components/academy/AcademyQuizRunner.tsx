@@ -141,7 +141,7 @@ const AcademyQuizRunner: React.FC<Props> = ({
 
     if (erro) {
         return (
-            <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+            <div className="space-y-6 animate-in fade-in duration-300 pb-4">
                 {Cabecalho}
                 <div className="text-center py-12">
                     <XCircle className="w-12 h-12 text-rose-400 mx-auto mb-4" />
@@ -155,7 +155,7 @@ const AcademyQuizRunner: React.FC<Props> = ({
     if (resultado) {
         const aprovado = resultado.aprovado;
         return (
-            <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+            <div className="space-y-6 animate-in fade-in duration-300 pb-4">
                 {Cabecalho}
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-8 text-center">
                     {aprovado
@@ -199,7 +199,7 @@ const AcademyQuizRunner: React.FC<Props> = ({
 
     if (!prova || !questao) {
         return (
-            <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+            <div className="space-y-6 animate-in fade-in duration-300 pb-4">
                 {Cabecalho}
                 <div className="text-center py-12">
                     <Loader2 className="w-8 h-8 text-blue-600 mx-auto animate-spin" />
@@ -213,7 +213,7 @@ const AcademyQuizRunner: React.FC<Props> = ({
     const selecionadas = respostas[questao.id] ?? [];
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+        <div className="space-y-6 animate-in fade-in duration-300 pb-4">
             {Cabecalho}
 
             <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">

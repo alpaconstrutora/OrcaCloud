@@ -2865,7 +2865,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     );
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-300">
 
             {orgTargetModal}
 
@@ -4980,7 +4980,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
             {/* Audit Logs Section */}
             {activeView === 'conciliated' && auditLogs.length > 0 && (
-                <div className="mt-8 space-y-4 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="mt-8 space-y-4 animate-in slide-in-from-bottom-4 duration-300">
                     <h4 className="text-xs font-black text-gray-400 px-4 flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4" />
                         Trilha de Auditoria Recente

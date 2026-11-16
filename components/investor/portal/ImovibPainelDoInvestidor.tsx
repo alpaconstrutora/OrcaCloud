@@ -27,11 +27,12 @@ import {
 } from '../../ImovibGraficos';
 import { SERIE_PRINCIPAL } from '../../analysis/chartKit';
 import { P, VIDRO, FundoDeVidro } from '../../portal/PortalKit';
+import type { ChaveDoCapital } from '../../../utils/imovibFinanciamento';
 
 type Accent = 'portal' | 'indigo';
 
 /** Cada variante por extenso: o JIT do Tailwind não enxerga classe montada em runtime (§24). */
-const ACCENTS: Record<Accent, { card: string; interativo: string; fundo: boolean; serie: string; botao: string; titulo: string; texto: string; secundario: string; trilho: string; assenta: string; foco: string }> = {
+const ACCENTS: Record<Accent, { card: string; interativo: string; fundo: boolean; serie: string; botao: string; titulo: string; texto: string; secundario: string; trilho: string; assenta: string; foco: string; capital?: Record<ChaveDoCapital, string> }> = {
     portal: {
         card: VIDRO.card,
         interativo: VIDRO.interativo,
@@ -45,6 +46,8 @@ const ACCENTS: Record<Accent, { card: string; interativo: string; fundo: boolean
         // O momento do painel (index.css): a luz acende atrás do vidro e os cartões entram em foco.
         assenta: 'portal-assenta',
         foco: 'portal-foco',
+        // Rosca "De onde vem o dinheiro" na paleta do portal (P.capital); o indigo usa a cor do app.
+        capital: P.capital,
     },
     indigo: {
         card: 'bg-white rounded-[10px] border border-gray-100 shadow-sm',
@@ -242,7 +245,7 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
                     <GraficoCurvaS dados={g.curvaS} rotuloBarra="Caixa do mês" rotuloLinha="Acumulado" larguraDoEixo={84} className="h-72 w-full" />
                 </Cartao>
                 <Cartao accent={accent} atraso={340} titulo="De onde vem o dinheiro" subtitulo="Composição do capital calculada pelo motor">
-                    {fatias.length ? <GraficoComposicaoDoCapital fatias={fatias} className="h-72" /> : <p className={`text-sm ${a.secundario}`}>Sem capital a mostrar.</p>}
+                    {fatias.length ? <GraficoComposicaoDoCapital fatias={fatias} cores={a.capital} className="h-72" /> : <p className={`text-sm ${a.secundario}`}>Sem capital a mostrar.</p>}
                 </Cartao>
             </div>
 

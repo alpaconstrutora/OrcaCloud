@@ -208,17 +208,26 @@ export const GraficoVendasPorMes: React.FC<ComumDosGraficos & { dados: MesDeVend
 
 // ── Composição do capital ────────────────────────────────────────────────────
 
-export const GraficoComposicaoDoCapital: React.FC<ComumDosGraficos & { fatias: FatiaDoCapital[] }> = ({ fatias, dimensao, animado = true, className = 'h-64' }) => {
-    const rotulo = `De onde vem o dinheiro: ${fatias.map(f => `${f.nome} ${f.pct.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`).join('; ')}.`;
+/**
+ * `cores`: paleta por fonte, no lugar da cor gravada na fatia (a do app) — o Portal do Investidor
+ * passa `P.capital` (16/11/2026). A legenda leva o percentual: algumas cores do portal ficam abaixo
+ * de 3:1 no branco, e o rótulo escrito é o que identifica a fatia (skill dataviz, regra de alívio).
+ */
+export const GraficoComposicaoDoCapital: React.FC<ComumDosGraficos & { fatias: FatiaDoCapital[]; cores?: Partial<Record<FatiaDoCapital['chave'], string>> }> = ({ fatias, cores, dimensao, animado = true, className = 'h-64' }) => {
+    const pct = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+    const rotulo = `De onde vem o dinheiro: ${fatias.map(f => `${f.nome} ${pct(f.pct)}`).join('; ')}.`;
+    const dados = fatias.map(f => ({ ...f, cor: cores?.[f.chave] ?? f.cor }));
+    const pctDoNome = new Map(dados.map(f => [f.nome, f.pct]));
     return (
         <Quadro dimensao={dimensao} className={className} rotulo={rotulo}>
             <PieChart accessibilityLayer={false}>
-                <Pie data={fatias} cx="50%" cy="45%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="pct" nameKey="nome" isAnimationActive={animado}>
-                    {fatias.map(f => <Cell key={f.chave} fill={f.cor} />)}
+                <Pie data={dados} cx="50%" cy="45%" innerRadius={60} outerRadius={80} paddingAngle={5} dataKey="pct" nameKey="nome" isAnimationActive={animado}>
+                    {dados.map(f => <Cell key={f.chave} fill={f.cor} />)}
                 </Pie>
-                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: unknown) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`} />
-                {/* Rótulo na cor de TEXTO (§28.3): o roxo da fatia lido como texto ficava abaixo de 4,5:1. */}
-                <LegendaDoRecharts verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: 11 }} formatter={(v: string) => <span style={{ color: '#475569' }}>{v}</span>} />
+                <Tooltip contentStyle={TOOLTIP_STYLE} formatter={(v: unknown) => pct(Number(v))} />
+                {/* Rótulo na cor de TEXTO (§28.3): a cor da fatia lida como texto ficava abaixo de 4,5:1. */}
+                <LegendaDoRecharts verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: 11 }}
+                    formatter={(v: string) => <span style={{ color: '#475569' }}>{pctDoNome.has(v) ? `${v} · ${pct(pctDoNome.get(v)!)}` : v}</span>} />
             </PieChart>
         </Quadro>
     );

@@ -44,6 +44,21 @@ export const P = {
         secondary: '#6D9BD1',
         tertiary: '#C6CAD1',
     },
+    /**
+     * Rosca "De onde vem o dinheiro" no painel do investidor (16/11/2026 — no lugar do índigo/roxo do
+     * app). Validada pelo skill dataviz em TODAS as combinações de fatias presentes (fatia 0% some),
+     * na ordem fixa e com a volta da última para a primeira: pior par para daltônico ΔE 10,7 (meta 8),
+     * pior par em visão normal ΔE 15,3 (piso 15). O azul-claro do portal (#6D9BD1) e o cinza não
+     * passam no piso de croma — lidos como fatia, viram cinza. Azul, verde e amarelo ficam abaixo de
+     * 3:1 no branco: a legenda leva o percentual (rótulo visível). Cor segue a fonte, nunca a posição.
+     */
+    capital: {
+        proprio: '#E1553C',
+        divida: '#2F5F98',
+        vendasNaObra: '#4C93DB',
+        permuta: '#16A085',
+        terceiros: '#EDA100',
+    },
 } as const;
 
 export const fmtBRL = (v: number) =>

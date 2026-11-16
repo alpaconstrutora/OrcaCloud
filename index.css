@@ -718,3 +718,50 @@ fieldset.imovib-ro:disabled :is(input, select, textarea, button) {
 }
 @keyframes central-cresce { from { transform: scaleX(0); } to { transform: none; } }
 .theme-midnight .central-trilho { stroke: var(--opura-mid-raised); }
+
+/* Portais externos (§24) › movimento (16/11/2026, pedido "/impeccable animate portal do investidor").
+   Mesma regra da "Bom dia": o movimento explica o que mudou e nada se repete ao atualizar.
+   As classes animate-in, fade-in, slide-in-from-(lado) e zoom-in-(n) NÃO existem neste Tailwind (não há
+   plugin): no portal elas foram trocadas por estas. Com `prefers-reduced-motion`, nada se
+   desloca, cresce nem desfoca; os esmaecimentos que mostram o que chegou continuam.
+   - .portal-troca: conteúdo da aba que entrou (casca do portal e abas do detalhe).
+   - .portal-entra: bloco que abre abaixo da lista (detalhe da oportunidade).
+   - .portal-desdobra: célula da linha expandida da tabela — revela de cima para baixo.
+   - .portal-confirma: o selo que substitui o botão depois da ação ("Interesse registrado").
+   - .portal-menu / .portal-veu / .portal-gaveta: menu da conta, véu e gaveta "Mais opções".
+   - .portal-indicador: o realce da aba ativa desliza até a aba nova (barra lateral e inferior).
+   - .portal-luz / .portal-assenta / .portal-foco: o momento do painel de viabilidade — a luz
+     acende atrás do vidro e os cartões entram em foco, em cascata curta (--atraso).
+   `backwards`, não `both`: o fim de toda entrada é o estado natural, e `both` deixaria o
+   `transform: none` final por cima do hover do vidro (o cartão que sobe 2px). */
+.portal-troca, .portal-entra, .portal-confirma, .portal-menu, .portal-veu, .portal-gaveta, .portal-luz,
+.portal-assenta, .portal-foco { animation: portal-aparece 200ms ease-out backwards; }
+.portal-desdobra { animation: portal-aparece 160ms ease-out backwards; }
+@keyframes portal-aparece { from { opacity: 0; } to { opacity: 1; } }
+
+@media (prefers-reduced-motion: no-preference) {
+    .portal-troca { animation: portal-sobe 220ms cubic-bezier(0.16, 1, 0.3, 1) backwards; --portal-dy: 4px; }
+    .portal-entra { animation: portal-sobe 340ms cubic-bezier(0.16, 1, 0.3, 1) backwards; --portal-dy: 10px; }
+    .portal-desdobra { animation: portal-desdobra 260ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+    .portal-confirma { animation: portal-confirma 240ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+    .portal-menu { transform-origin: top right; animation: portal-menu 160ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+    .portal-gaveta { animation: portal-gaveta 300ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+    .portal-indicador { transition: transform 280ms cubic-bezier(0.16, 1, 0.3, 1); }
+    .portal-luz > * { animation: portal-luz 900ms cubic-bezier(0.16, 1, 0.3, 1) backwards; }
+    .portal-luz > :nth-child(2) { animation-delay: 80ms; }
+    .portal-luz > :nth-child(3) { animation-delay: 160ms; }
+    .portal-luz > :nth-child(4) { animation-delay: 240ms; }
+    .portal-assenta { animation: portal-sobe 520ms cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: var(--atraso, 0ms); --portal-dy: 10px; }
+    .portal-foco { animation: portal-foco 560ms cubic-bezier(0.16, 1, 0.3, 1) backwards; animation-delay: var(--atraso, 0ms); }
+}
+@keyframes portal-sobe { from { opacity: 0; transform: translateY(var(--portal-dy, 6px)); } to { opacity: 1; transform: none; } }
+@keyframes portal-desdobra { from { opacity: 0.3; clip-path: inset(0 0 100% 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
+@keyframes portal-confirma { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: none; } }
+@keyframes portal-menu { from { opacity: 0; transform: translateY(-4px) scale(0.97); } to { opacity: 1; transform: none; } }
+@keyframes portal-gaveta { from { transform: translateY(100%); } to { transform: none; } }
+@keyframes portal-luz { from { opacity: 0; transform: scale(0.7); } to { opacity: 1; transform: none; } }
+/* Entra em foco: o desfoque é do próprio cartão (pequeno, uma vez), não do vidro de trás. */
+@keyframes portal-foco {
+    from { opacity: 0; transform: translateY(10px); filter: blur(6px); }
+    to   { opacity: 1; transform: none; filter: none; }
+}

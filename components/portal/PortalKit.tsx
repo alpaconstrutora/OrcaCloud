@@ -89,9 +89,11 @@ export const PortalCard: React.FC<React.HTMLAttributes<HTMLDivElement>> = ({ cla
 // pedida pelo usuário (painel de vidro fosco, acentos luminosos, hover animado) na paleta do
 // portal. O vidro só é vidro com algo atrás: `FundoDeVidro` põe os brilhos coral e azul, e o
 // pai precisa de `relative isolate`.
+// `translate`, não `transform`: no Tailwind v4 o `-translate-y-0.5` usa a propriedade `translate`;
+// com `transition-[transform,…]` o cartão subia num salto (conferido em 16/11).
 export const VIDRO = {
     card: 'relative rounded-2xl border border-white/70 bg-white/70 backdrop-blur-xl shadow-[0_1px_2px_rgba(31,36,48,0.06),0_10px_28px_-14px_rgba(31,36,48,0.22)]',
-    interativo: 'transition-[transform,box-shadow] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(31,36,48,0.06),0_22px_44px_-18px_rgba(225,85,60,0.45)] motion-reduce:transition-none motion-reduce:hover:translate-y-0',
+    interativo: 'transition-[translate,box-shadow] duration-300 ease-out hover:-translate-y-0.5 hover:shadow-[0_1px_2px_rgba(31,36,48,0.06),0_22px_44px_-18px_rgba(225,85,60,0.45)] motion-reduce:transition-none motion-reduce:hover:translate-y-0',
 } as const;
 
 export const PortalVidro: React.FC<React.HTMLAttributes<HTMLDivElement> & { interativo?: boolean }> = ({ interativo = false, className = '', children, ...rest }) => (
@@ -100,8 +102,9 @@ export const PortalVidro: React.FC<React.HTMLAttributes<HTMLDivElement> & { inte
     </div>
 );
 
+/** `portal-luz` (index.css): ao abrir o painel, os brilhos acendem atrás do vidro, uma vez. */
 export const FundoDeVidro: React.FC = () => (
-    <div aria-hidden="true" className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-3xl">
+    <div aria-hidden="true" className="portal-luz pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-3xl">
         <div className="absolute -top-24 -left-16 w-80 h-80 rounded-full bg-[#E1553C]/25 blur-3xl" />
         <div className="absolute top-1/4 -right-24 w-96 h-96 rounded-full bg-[#6D9BD1]/25 blur-3xl" />
         <div className="absolute top-2/3 -left-20 w-80 h-80 rounded-full bg-[#6D9BD1]/15 blur-3xl" />

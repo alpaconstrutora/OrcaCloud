@@ -3294,6 +3294,33 @@ acentos luminosos, hover animado); perguntado, escolheu *"referência com a cor 
 - Gráficos: os de `components/ImovibGraficos.tsx`, com `corPrincipal` coral; no celular, rótulos de
   eixo mais estreitos e os marcos em lista (a linha do tempo em SVG fica ilegível em 390 px).
 
+### 24.2 Movimento do Portal do Investidor (16/11/2026)
+
+**Origem:** pedido do usuário, "/impeccable animate portal do investidor (visão do investidor - link)".
+As classes vivem em `index.css` (bloco "Portais externos (§24) › movimento"), no mesmo molde da tela
+"Bom dia": o movimento explica o que mudou e nada se repete ao atualizar.
+
+| Momento | Classe | O que faz |
+|---|---|---|
+| Abrir "Ver viabilidade" (o momento do portal) | `portal-luz` (no `FundoDeVidro`), `portal-foco` (4 indicadores), `portal-assenta` (resto) | os brilhos acendem atrás do vidro (900 ms) e os cartões entram em foco — desfoque curto que assenta, cascata por `--atraso` com teto de ~420 ms |
+| Trocar de aba (casca do link e abas do detalhe) | `portal-troca` + `key` da aba | o conteúdo novo sobe 4 px e aparece (220 ms) |
+| Realce da aba ativa (barra lateral e barra do celular) | `useRealceDaAbaAtiva` + `portal-indicador` | um realce só, que desliza até a aba nova (280 ms); ao abrir a tela não desliza |
+| Linha expandida da tabela | `portal-desdobra` no `Td` | revela de cima para baixo (`clip-path`, 260 ms) |
+| Detalhe da oportunidade | `portal-entra` | abre abaixo da lista (340 ms) |
+| Depois da ação | `portal-confirma` | "Interesse registrado" assenta no lugar do botão |
+| Menu da conta, gaveta "Mais opções" | `portal-menu`, `portal-veu` + `portal-gaveta` | abrem do canto / sobem do pé |
+
+- **Curva única:** `cubic-bezier(0.16, 1, 0.3, 1)`. Sem bounce, sem laço, nada em loop.
+- **`backwards`, nunca `both`:** o fim de toda entrada é o estado natural; `both` deixaria o fim da
+  animação por cima do hover do vidro.
+- **Menos movimento (`prefers-reduced-motion`):** nada se desloca, cresce ou desfoca; os esmaecimentos
+  que mostram o que chegou continuam (200 ms); o realce pula; os brilhos não animam.
+- **Hover do vidro:** `transition-[translate,box-shadow]` — no Tailwind v4 o `-translate-y-*` é a
+  propriedade `translate`; com `transform` na lista o cartão subia num salto.
+- ⚠️ **`animate-in`, `fade-in`, `slide-in-from-*` e `zoom-in-*` não existem neste Tailwind** (não há
+  plugin; o CSS de produção não tem nenhuma regra delas, conferido em 16/11). No portal do investidor
+  foram trocadas pelas classes acima; no resto do app (≈437 usos) seguem sem efeito — pendência.
+
 ### Os quatro desvios (e só eles)
 
 | Elemento | Guia | Portais externos | Por quê |

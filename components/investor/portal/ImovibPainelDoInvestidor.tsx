@@ -274,7 +274,7 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
                     ) : (
                         <LinhaDoTempoDosMarcos marcos={marcos} corPrincipal={a.serie} />
                     )}
-                    {vendas.some(x => x.vendas > 0) && <GraficoVendasPorMes dados={vendas} corPrincipal={a.serie} />}
+                    {vendas.some(x => x.vendas > 0) && <GraficoVendasPorMes dados={vendas} corPrincipal={a.serie} larguraDoEixo={64} />}
                 </div>
             </Cartao>
 

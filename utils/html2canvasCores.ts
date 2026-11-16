@@ -76,6 +76,7 @@ function criarConversor(doc: Document): (cor: string) => string {
  */
 export function coresCompativeisNaCopia(raiz: HTMLElement, opcoes: { semSombra?: boolean } = {}): number {
     const doc = raiz.ownerDocument;
+    semAnimacaoNaCopia(doc);
     const view = doc.defaultView;
     if (!view) return 0;
     const converter = criarConversor(doc);
@@ -104,6 +105,21 @@ export function coresCompativeisNaCopia(raiz: HTMLElement, opcoes: { semSombra?:
         }
     }
     return reescritas;
+}
+
+/**
+ * Na cópia, nenhuma animação roda: a foto é do estado final. O html2canvas 1.4 monta a cópia num
+ * iframe, onde as animações recomeçam do zero, e lê o estilo calculado de cada elemento ANTES de
+ * zerar a duração delas (`ElementContainer`) — um `animate-in fade-in` dentro da área capturada
+ * sairia transparente no PDF. As entradas passaram a valer em 16/11/2026 (tw-animate-css, guia §35).
+ */
+function semAnimacaoNaCopia(doc: Document): void {
+    const cabeca = doc.head ?? doc.documentElement;
+    if (!cabeca || cabeca.querySelector('style[data-captura-sem-animacao]')) return;
+    const estilo = doc.createElement('style');
+    estilo.setAttribute('data-captura-sem-animacao', '');
+    estilo.textContent = '*, *::before, *::after { animation: none !important; }';
+    cabeca.appendChild(estilo);
 }
 
 /** Exposto para teste: troca as funções de cor de um valor CSS com um conversor dado. */

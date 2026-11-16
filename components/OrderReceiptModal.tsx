@@ -101,7 +101,7 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
 
     return (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-3xl w-full max-w-4xl h-full max-h-[92vh] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200 border border-gray-200">
+            <div className="bg-white rounded-3xl w-full max-w-4xl h-full max-h-[92vh] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in-95 duration-200 border border-gray-200">
                 {/* Header */}
                 <div className="p-8 border-b border-gray-50 flex items-center justify-between bg-gray-50/30 shrink-0">
                     <div className="flex items-center gap-4">

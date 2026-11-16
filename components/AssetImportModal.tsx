@@ -475,7 +475,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-fade-in">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-300">
       <div className="bg-white rounded-[2rem] shadow-2xl w-full max-w-5xl h-full max-h-[85vh] overflow-hidden flex flex-col border border-gray-100">
         
         {/* Cabeçalho */}

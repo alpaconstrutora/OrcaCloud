@@ -87,7 +87,7 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
 
     return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
-            <div className="bg-white rounded-[10px] shadow-xl w-full max-w-lg overflow-hidden flex flex-col border animate-in fade-in zoom-in duration-200 border-gray-200">
+            <div className="bg-white rounded-[10px] shadow-xl w-full max-w-lg overflow-hidden flex flex-col border animate-in fade-in zoom-in-95 duration-200 border-gray-200">
                 <div className="flex items-center justify-between p-4 border-b">
                     <h3 className="font-black text-slate-800 text-lg">Definições do Cronograma</h3>
                     <button onClick={onClose} className="p-1 hover:bg-gray-100 rounded-[6px] text-gray-400">

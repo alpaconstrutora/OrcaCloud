@@ -153,6 +153,22 @@ BEGIN
     v := pg_temp.au(sa, 'SELECT active::text FROM public.fn_rotina_automatica_definir(NULL, true)');
     PERFORM pg_temp.confere(v LIKE '22004:%', 'sem nome e sem jobid é recusado — veio ' || v);
 
+    -- ── revisão da frente rotinas-pendencias (migration aplicar_20271116914200) ──
+    -- rotina SEM falha não traz mensagem de erro (o LEFT JOIN não pode inventar uma)
+    v := pg_temp.au(sa, $q$SELECT count(*)::text FROM public.fn_rotinas_automaticas_listar()
+                           WHERE ultimo_erro_em IS NULL AND ultimo_erro_mensagem IS NOT NULL$q$);
+    PERFORM pg_temp.confere(v = 'ok:0', 'rotina sem erro não traz mensagem de erro — veio ' || v);
+    -- histórico montado na transação para a rotina sem nome (runid acima de tudo; ROLLBACK apaga):
+    --   A falhou com início e fim · B falhou sem início (fim há 1 h) · C órfã de reinício, sem início nem fim
+    INSERT INTO cron.job_run_details (jobid, runid, status, return_message, start_time, end_time)
+    SELECT sem_nome, mx + 1000, 'failed', 'ERRO-A', now() - interval '2 hours', now() - interval '2 hours' FROM (SELECT max(runid) mx FROM cron.job_run_details) t
+    UNION ALL SELECT sem_nome, mx + 2000, 'failed', 'ERRO-B', NULL, now() - interval '1 hour' FROM (SELECT max(runid) mx FROM cron.job_run_details) t
+    UNION ALL SELECT sem_nome, mx + 3000, 'failed', 'server restarted', NULL, NULL FROM (SELECT max(runid) mx FROM cron.job_run_details) t;
+    v := pg_temp.au(sa, format($q$SELECT falhas_7d || '|' || execucoes_7d || '|' || ultimo_erro_mensagem || '|' || (ultimo_erro_em IS NOT NULL)
+                                  FROM public.fn_rotinas_automaticas_listar() WHERE jobid = %s$q$, sem_nome));
+    PERFORM pg_temp.confere(v = 'ok:2|2|ERRO-B|true',
+        'falha sem início conta na semana; órfã sem data não esconde o último erro (esperado 2|2|ERRO-B|true) — veio ' || v);
+
     -- ── membro comum: recusado nas duas ─────────────────────────────────────
     v := pg_temp.au(m, 'SELECT count(*)::text FROM public.fn_rotinas_automaticas_listar()');
     PERFORM pg_temp.confere(v = recusa, 'membro não lista — veio ' || v);

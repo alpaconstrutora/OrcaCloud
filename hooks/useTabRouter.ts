@@ -1,5 +1,5 @@
 import { useEffect, useCallback } from 'react';
-import { parseHashView, syncViewToUrl } from '../lib/tabRouter';
+import { parseHashView, syncViewToUrl, ehAvisoDeSaidaDeOutraAba } from '../lib/tabRouter';
 import { haPendenciaDeSaida, limparPendencias } from '../lib/guardaDeSaida';
 
 /**
@@ -36,12 +36,14 @@ export function useTabRouter(
   }, [activeView, setActiveView, confirmarSaida]);
 
   // Cross-tab sign-out sync: when any tab logs out, all others log out too.
+  // `onSignedOut` NÃO pode reenviar o aviso (o App passa `sairPorAvisoDeOutraAba`); o
+  // aviso da própria aba é ignorado aqui — ver `ehAvisoDeSaidaDeOutraAba`.
   const stableOnSignedOut = useCallback(onSignedOut, []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!('BroadcastChannel' in window)) return;
     const ch = new BroadcastChannel('orca_auth_sync');
     ch.onmessage = (e: MessageEvent) => {
-      if (e.data?.type === 'SIGNED_OUT') stableOnSignedOut();
+      if (ehAvisoDeSaidaDeOutraAba(e.data)) stableOnSignedOut();
     };
     return () => ch.close();
   }, [stableOnSignedOut]);

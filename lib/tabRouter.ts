@@ -41,10 +41,34 @@ export function viewUrl(view: string): string {
   return `${base}#/${view}`;
 }
 
+/**
+ * Identidade DESTE documento (aba/janela) no aviso de saída. O BroadcastChannel entrega a
+ * mensagem a todo OUTRO objeto de canal com o mesmo nome — inclusive o ouvinte da própria
+ * aba (`hooks/useTabRouter`), que é outro objeto. Sem a identidade, a aba que clicou em
+ * "Sair" ouvia o próprio aviso e saía de novo (ver `ehAvisoDeSaidaDeOutraAba`).
+ */
+const ESTA_ABA = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+
 /** Broadcast a sign-out event to all other tabs/windows of this app. */
 export function broadcastSignOut(): void {
   if (typeof window === 'undefined' || !('BroadcastChannel' in window)) return;
   const ch = new BroadcastChannel('orca_auth_sync');
-  ch.postMessage({ type: 'SIGNED_OUT' });
+  ch.postMessage({ type: 'SIGNED_OUT', origem: ESTA_ABA });
   ch.close();
+}
+
+/**
+ * O aviso recebido é um "Sair" de OUTRA aba? (o da própria aba é ignorado).
+ *
+ * ⚠️ Quem recebe NÃO reenvia o aviso — `sairPorAvisoDeOutraAba` (store/useStore.ts) chama
+ * `logout({ avisarOutrasAbas: false })`. Até 16/11/2026 o ouvinte chamava `logout()`, que
+ * reenviava: cada aba que ouvia avisava as outras e a si mesma, sem fim — >1.000 avisos em
+ * 0,3 s medidos em produção, e cada reenvio reiniciava a navegação para "/" (com 3 abas
+ * abertas nenhuma terminava de carregar). Teste: `__tests__/sairEcoEntreAbas.test.ts`.
+ *
+ * Aviso sem `origem` (aba ainda rodando o build anterior) conta como de outra aba.
+ */
+export function ehAvisoDeSaidaDeOutraAba(dados: unknown): boolean {
+  const d = dados as { type?: unknown; origem?: unknown } | null | undefined;
+  return d?.type === 'SIGNED_OUT' && d.origem !== ESTA_ABA;
 }

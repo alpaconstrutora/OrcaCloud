@@ -395,7 +395,7 @@ import { ContractModal } from './components/ContractModal';
 import SupplyChainOrderForm from './components/SupplyChainOrderForm';
 import { INITIAL_PROJECT_SETTINGS } from './constants';
 import { BudgetEntry, ProjectSettings, Organization, Contract, Client, ProfileGroup } from './types';
-import { useStore } from './store/useStore';
+import { useStore, sairPorAvisoDeOutraAba } from './store/useStore';
 import { destinoDoLinkDeNotificacao } from './utils/linkNotificacao';
 import { useToast } from './hooks/useToast';
 import { usePersistenceSync } from './hooks/usePersistenceSync';
@@ -505,7 +505,9 @@ const App: React.FC = () => {
   }, [activeView, confirmarSaida, setActiveView]);
 
   // Multi-tab routing: sync URL hash → state and handle cross-tab auth events.
-  useTabRouter(activeView, setActiveView, useStore.getState().logout, confirmarSaida);
+  // O "Sair" de outra aba NÃO pode ser `logout` puro: ele reenvia o aviso e as abas
+  // ficavam se derrubando sem fim (16/11/2026, __tests__/sairEcoEntreAbas.test.ts).
+  useTabRouter(activeView, setActiveView, sairPorAvisoDeOutraAba, confirmarSaida);
 
   // Ensure the URL hash reflects the current view on first render.
   React.useEffect(() => {

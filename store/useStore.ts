@@ -153,7 +153,8 @@ interface ProjectState {
     activeEmpresaId: string | null;
     setActiveEmpresaId: (id: string | null) => void;
     fetchCompanies: () => Promise<void>;
-    logout: () => void;
+    /** `avisarOutrasAbas: false` só para quem RESPONDE ao aviso de outra aba (`sairPorAvisoDeOutraAba`). */
+    logout: (opcoes?: { avisarOutrasAbas?: boolean }) => void;
 }
 
 export const useStore = create<AuthState & UIState & ProjectState>((set, get) => ({
@@ -365,11 +366,14 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
             console.error("Error listing organizations:", err);
         }
     },
-    logout: () => {
+    logout: (opcoes) => {
         // "Sair" de quem entrou por uma página de login própria volta a ela, não ao
         // seletor (16/10/2026). Lido ANTES de zerar o grupo.
         const destino = destinoAposSair(get().selectedLoginGroup);
-        broadcastSignOut();
+        // Só quem clicou em "Sair" avisa as outras abas; quem responde ao aviso não
+        // reenvia — o reenvio virava eco infinito entre abas (lib/tabRouter.ts,
+        // ehAvisoDeSaidaDeOutraAba).
+        if (opcoes?.avisarOutrasAbas !== false) broadcastSignOut();
         if (typeof window !== 'undefined') {
             // Remove só chaves de sessão/contexto (auth do Supabase + prefixo orca_).
             // NÃO usar localStorage.clear(): isso apagava preferências de UI (colunas
@@ -394,3 +398,11 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
         if (typeof window !== 'undefined') window.location.href = destino;
     }
 }));
+
+/**
+ * O que uma aba faz ao ouvir o "Sair" de OUTRA aba (`hooks/useTabRouter`, ligado no App):
+ * sai também, sem reenviar o aviso. Ver `ehAvisoDeSaidaDeOutraAba` em lib/tabRouter.ts.
+ */
+export const sairPorAvisoDeOutraAba = (): void => {
+    useStore.getState().logout({ avisarOutrasAbas: false });
+};

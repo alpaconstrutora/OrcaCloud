@@ -84,7 +84,7 @@ Itens do plano: **todos marcados**, nenhum `[ ]` em aberto.
 - [x] Minors: cenário negativo no celular (valor à direita do zero), eixo do tornado no celular (compacto), eixo do
   gráfico de vendas no PDF (mais largo), legenda na captura (em SVG no PDF; a HTML do chartKit não mudou).
 - Prova no banco (16/11, transação desfeita): `[1 situacao=ok token_gravado=1] [1b mesmo token=t] [1c nao_cadastrado] [2 valid=true docs=1 nome=Matricula.pdf] [2b rascunho: forbidden] [2c token inválido: unauthorized] [3 get_study existe=f]` (a foto da oportunidade fica fora do Data Room). Testes: `validateAccessPortais` (6, 7), `DataRoomPanelPortal` (3), `InvestorDashboardSair` (2); suítes 136 arquivos, 1109/1109; tsc sem erro. Celular e PDF conferidos no navegador (cenários, tornado, eixo de vendas, legenda).
-- [ ] Migration `aplicar_20271116100000_investidor_login_email_e_dataroom.sql` aplicada (com OK) e Edge Function `investor-portal-dataroom-download` publicada pelo usuário; sonda: token inválido → 403.
+- [x] Migration `aplicar_20271116100000_investidor_login_email_e_dataroom.sql` aplicada (com OK, 16/11) e Edge Function `investor-portal-dataroom-download` publicada pelo usuário (16/11). Sonda de fora: sem chave → 401; chave pública + token inválido → 403 `unauthorized`; corpo vazio → 400.
 - [ ] Conferência com dado real (depois do deploy): congelar versão do Garden, oportunidade de teste publicada,
   painel e PDF pelo link do portal; despublicar no fim.
 

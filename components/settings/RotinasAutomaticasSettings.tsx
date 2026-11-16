@@ -4,7 +4,7 @@ import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import TableSwitch from '../ui/TableSwitch';
 import { useConfirm } from '../ui/confirm';
 import { rotinasAutomaticasService, RotinaAutomatica } from '../../services/rotinasAutomaticasService';
-import { GRUPOS_ROTINA, quandoRoda, rotinaMeta } from '../../utils/rotinasAutomaticas';
+import { GRUPOS_ROTINA, quandoRoda, rotinaMeta, statusDaExecucao } from '../../utils/rotinasAutomaticas';
 
 /**
  * Configurações › Rotinas automáticas — liga/desliga os jobs do pg_cron.
@@ -41,7 +41,13 @@ function partes(fmt: Intl.DateTimeFormat, iso: string): Record<string, string> {
 const dataHora = (iso: string) => { const p = partes(DATA_HORA_BRT, iso); return `${p.day}/${p.month} ${p.hour}:${p.minute}`; };
 const dataCurta = (iso: string) => { const p = partes(DATA_BRT, iso); return `${p.day}/${p.month}`; };
 
-type Aviso = { mensagem: string; tipo: 'sucesso' | 'erro' };
+type Aviso = { id: number; mensagem: string; tipo: 'sucesso' | 'erro' };
+
+/** Rotina sem nome no pg_cron (jobname NULL) é identificada pelo jobid. */
+const chaveDa = (r: RotinaAutomatica) => r.jobname ?? `#${r.jobid}`;
+const metaDa = (r: RotinaAutomatica) => rotinaMeta(r.jobname, r.jobid);
+const execucoes = (n: number) => `${n} ${n === 1 ? 'execução' : 'execuções'}`;
+const RODANDO = new Set(['running', 'starting', 'connecting']);
 
 const RotinasAutomaticasSettings: React.FC = () => {
     const confirm = useConfirm();
@@ -53,7 +59,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
     const timerDoAviso = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const avisar = React.useCallback((mensagem: string, tipo: Aviso['tipo']) => {
-        setAviso({ mensagem, tipo });
+        setAviso(prev => ({ id: (prev?.id ?? 0) + 1, mensagem, tipo }));   // id novo = a entrada anima de novo
         if (timerDoAviso.current) clearTimeout(timerDoAviso.current);
         timerDoAviso.current = setTimeout(() => setAviso(null), 4500);
     }, []);
@@ -79,7 +85,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
     }, []);
 
     const alternar = async (r: RotinaAutomatica) => {
-        const meta = rotinaMeta(r.jobname);
+        const meta = metaDa(r);
         const ligar = !r.ativa;
         if (!ligar && meta.sensivel) {
             const ok = await confirm({
@@ -90,29 +96,30 @@ const RotinasAutomaticasSettings: React.FC = () => {
             });
             if (!ok) return;
         }
-        setGravando(prev => new Set(prev).add(r.jobname));
+        const chave = chaveDa(r);
+        setGravando(prev => new Set(prev).add(chave));
         try {
-            const atual = await rotinasAutomaticasService.definir(r.jobname, ligar);
-            setRotinas(prev => prev.map(x => (x.jobname === r.jobname ? atual : x)));   // §22: só a linha
+            const atual = await rotinasAutomaticasService.definir(r.jobname, ligar, r.jobid);
+            setRotinas(prev => prev.map(x => (chaveDa(x) === chave ? atual : x)));   // §22: só a linha
             avisar(`${meta.nome}: ${atual.ativa ? 'ligada' : 'desligada'}.`, 'sucesso');
         } catch (e) {
             const motivo = e instanceof Error ? e.message : String(e);
             avisar(`Não foi possível ${ligar ? 'ligar' : 'desligar'} "${meta.nome}": ${motivo}`, 'erro');
             await releSemEsqueleto();
         } finally {
-            setGravando(prev => { const s = new Set(prev); s.delete(r.jobname); return s; });
+            setGravando(prev => { const s = new Set(prev); s.delete(chave); return s; });
         }
     };
 
     const ligadas = rotinas.filter(r => r.ativa).length;
 
     const renderCell = (key: string, r: RotinaAutomatica): React.ReactNode => {
-        const meta = rotinaMeta(r.jobname);
+        const meta = metaDa(r);
         switch (key) {
             case 'rotina':
                 return (
                     <div className="min-w-0">
-                        <span className="block truncate text-sm font-normal text-gray-700" title={r.jobname}>{meta.nome}</span>
+                        <span className="block truncate text-sm font-normal text-gray-700" title={r.jobname ?? `jobid ${r.jobid}`}>{meta.nome}</span>
                         {meta.oQueFaz && (
                             <span className="block text-[13px] text-gray-500 line-clamp-2" title={meta.oQueFaz}>{meta.oQueFaz}</span>
                         )}
@@ -124,19 +131,31 @@ const RotinasAutomaticasSettings: React.FC = () => {
             }
             case 'ultima':
                 if (!r.ultima) {
-                    return <span className="text-sm font-normal text-gray-600" title="Nenhuma execução registrada no histórico recente">—</span>;
+                    return <span className="text-sm font-normal text-gray-600" title="Nenhuma execução nos últimos 40 dias">—</span>;
                 }
                 return (
-                    <span className="text-sm font-normal text-gray-600 tabular-nums" title={`Situação: ${r.ultima.status}`}>
+                    <span className="text-sm font-normal text-gray-600 tabular-nums" title={`Situação: ${statusDaExecucao(r.ultima.status)}`}>
                         {dataHora(r.ultima.inicio)}
                         {r.ultima.status === 'failed' && <span className="text-red-600"> · falhou</span>}
+                        {RODANDO.has(r.ultima.status) && <span> · {statusDaExecucao(r.ultima.status)}</span>}
                     </span>
                 );
             case 'falhas': {
-                if (r.falhas7d === 0) return <span className="text-sm font-normal text-gray-600">Nenhuma</span>;
-                const titulo = r.ultima?.status === 'failed' && r.ultima.mensagem
-                    ? `Erro da última execução: ${r.ultima.mensagem}`
-                    : 'A última execução terminou sem erro.';
+                if (r.execucoes7d === 0 && r.falhas7d === 0) {
+                    return <span className="text-sm font-normal text-gray-600" title="Nenhuma execução nos últimos 7 dias">Sem execução</span>;
+                }
+                if (r.falhas7d === 0) {
+                    return (
+                        <span className="text-sm font-normal text-gray-600" title={`${execucoes(r.execucoes7d)} nos últimos 7 dias, nenhuma falhou`}>
+                            Nenhuma
+                        </span>
+                    );
+                }
+                // O erro vem da última execução que FALHOU — não da última execução, que pode ter
+                // passado ou estar rodando agora.
+                const titulo = `${r.falhas7d} de ${execucoes(r.execucoes7d)} nos últimos 7 dias ${r.falhas7d === 1 ? 'falhou' : 'falharam'}.`
+                    + (r.ultimoErro ? `
+Último erro (${dataHora(r.ultimoErro.em)}): ${r.ultimoErro.mensagem}` : '');
                 return (
                     <span className="text-sm font-normal text-red-600" title={titulo}>
                         {r.falhas7d} {r.falhas7d === 1 ? 'falha' : 'falhas'}
@@ -144,7 +163,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
                 );
             }
             case 'ativa': {
-                const ocupado = gravando.has(r.jobname);
+                const ocupado = gravando.has(chaveDa(r));
                 const alteracao = r.ultimaAlteracao;
                 const desligouQuem = !r.ativa && alteracao && !alteracao.ativaDepois ? alteracao : null;
                 // Desligada pela tela e ligada de novo por fora dela — o caso comum é uma migration
@@ -184,7 +203,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
 
     const sortValue = (key: string, r: RotinaAutomatica) => {
         switch (key) {
-            case 'rotina': return rotinaMeta(r.jobname).nome;
+            case 'rotina': return metaDa(r).nome;
             case 'quando': return quandoRoda(r.schedule);
             case 'ultima': return r.ultima?.inicio ?? '';
             case 'falhas': return r.falhas7d;
@@ -229,16 +248,16 @@ const RotinasAutomaticasSettings: React.FC = () => {
                 dense
                 columns={COLUMNS}
                 rows={rotinas}
-                rowKey={r => r.jobname}
+                rowKey={chaveDa}
                 loading={carregando}
-                searchText={r => { const m = rotinaMeta(r.jobname); return `${m.nome} ${r.jobname} ${m.oQueFaz}`; }}
+                searchText={r => { const m = metaDa(r); return `${m.nome} ${chaveDa(r)} ${m.oQueFaz}`; }}
                 searchPlaceholder="Buscar rotina..."
                 sortValue={sortValue}
                 renderCell={renderCell}
                 agrupamento={{
                     opcoes: [{ value: 'grupo', label: 'Grupo' }],
                     chave: (_campo, r) => {
-                        const g = rotinaMeta(r.jobname).grupo;
+                        const g = metaDa(r).grupo;
                         return { key: g, label: ROTULO_DO_GRUPO[g] ?? g };
                     },
                     semRotulo: () => 'Sem grupo',
@@ -251,8 +270,9 @@ const RotinasAutomaticasSettings: React.FC = () => {
 
             {aviso && (
                 <div
+                    key={aviso.id}
                     role={aviso.tipo === 'erro' ? 'alert' : 'status'}
-                    className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium ${
+                    className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
                         aviso.tipo === 'sucesso' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                     }`}
                 >

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { rotinaMeta, quandoRoda, GRUPOS_ROTINA } from '../utils/rotinasAutomaticas';
+import { rotinaMeta, quandoRoda, statusDaExecucao, GRUPOS_ROTINA } from '../utils/rotinasAutomaticas';
 
 /**
  * Catálogo das rotinas do pg_cron — Configurações › Rotinas automáticas.
@@ -78,5 +78,25 @@ describe('quandoRoda (cron em GMT → texto em BRT)', () => {
         // mensal com hora < 3 GMT: em BRT cairia no dia anterior — não traduz
         expect(quandoRoda('0 2 1 * *')).toBe('0 2 1 * *');
         expect(quandoRoda('')).toBe('');
+    });
+});
+
+// Pendências da revisão do #513 — docs/planos/2026-11-16-rotinas-automaticas-pendencias-menores.md
+describe('rotina sem nome (jobname NULL no pg_cron)', () => {
+    it('vira "Rotina sem nome (#N)" em Outras', () => {
+        expect(rotinaMeta(null, 77)).toEqual({ nome: 'Rotina sem nome (#77)', grupo: 'outras', oQueFaz: '', sensivel: false });
+    });
+});
+
+describe('statusDaExecucao — status do pg_cron em português', () => {
+    it('traduz os cinco status do cron.job_run_details', () => {
+        expect(statusDaExecucao('succeeded')).toBe('concluída');
+        expect(statusDaExecucao('failed')).toBe('falhou');
+        expect(statusDaExecucao('running')).toBe('rodando');
+        expect(statusDaExecucao('starting')).toBe('iniciando');
+        expect(statusDaExecucao('connecting')).toBe('conectando');
+    });
+    it('status desconhecido passa como veio', () => {
+        expect(statusDaExecucao('novo-status')).toBe('novo-status');
     });
 });

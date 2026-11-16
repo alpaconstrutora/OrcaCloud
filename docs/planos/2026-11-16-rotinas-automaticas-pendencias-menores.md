@@ -61,4 +61,13 @@ Referência: a lista "Pendências menores" do fechamento do PR #513
 
 ## Estado
 
-- [ ] 1 · [ ] 2 · [ ] 3 · [ ] 4 · [ ] 5
+- [x] **1 Banco** — migration APLICADA em 16/11.
+  - RED antes: `42703 column "ultimo_erro_em" does not exist`.
+  - Ensaio e banco aplicado: TUDO OK. Só existe a assinatura `(text, boolean, bigint)`.
+  - Listar ~497 ms (era ~420), janela de 40 dias = 161 mil execuções desde 07/10.
+  - A prova passou a contar só o registro desta transação: a linha real da conferência do #513 a
+    quebrava ("achou 2").
+- [x] **2 Catálogo** 19/19 · **3 Service** 6/6 · **4 Tela** 19/19.
+  - Cada teste novo RED→GREEN, exceto "Gravando…", que fixa um comportamento que já existia.
+  - `tsc` 0 erros (PowerShell, heap 12 GB); `check-ui-standard` exit 0; `animacoesDeEntrada` verde.
+- [ ] **5 Publicação**

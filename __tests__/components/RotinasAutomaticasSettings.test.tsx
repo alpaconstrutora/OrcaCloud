@@ -30,10 +30,11 @@ import RotinasAutomaticasSettings from '../../components/settings/RotinasAutomat
 import { ConfirmProvider } from '../../components/ui/confirm';
 import { rotinaMeta } from '../../utils/rotinasAutomaticas';
 
-const rotina = (jobname: string, extra: Partial<RotinaAutomatica> = {}): RotinaAutomatica => ({
-    jobid: Math.floor(Math.random() * 1e6), jobname, schedule: '5 * * * *', ativa: true,
+let proximoJobid = 101;   // fixo por ordem de criação — nada aleatório na fixture
+const rotina = (jobname: string | null, extra: Partial<RotinaAutomatica> = {}): RotinaAutomatica => ({
+    jobid: proximoJobid++, jobname, schedule: '5 * * * *', ativa: true,
     ultima: { inicio: '2026-11-16T17:05:00Z', status: 'succeeded', mensagem: '1 row' },
-    execucoes7d: 168, falhas7d: 0, ultimaAlteracao: null, ...extra,
+    execucoes7d: 168, falhas7d: 0, ultimoErro: null, ultimaAlteracao: null, ...extra,
 });
 
 const LISTA: RotinaAutomatica[] = [
@@ -42,6 +43,7 @@ const LISTA: RotinaAutomatica[] = [
     rotina('daily-payment-tasks', {
         schedule: '0 7 * * *', falhas7d: 3,
         ultima: { inicio: '2026-11-16T07:00:00Z', status: 'failed', mensagem: 'ERROR: function public.create_task(…) does not exist' },
+        ultimoErro: { em: '2026-11-16T07:00:00Z', mensagem: 'ERROR: function public.create_task(…) does not exist' },
     }),
     rotina('hourly-bi-report-check', {
         schedule: '0 * * * *', ativa: false,
@@ -61,8 +63,8 @@ describe('RotinasAutomaticasSettings', () => {
     beforeEach(() => {
         localStorage.clear();
         listar.mockReset().mockResolvedValue(LISTA.map(r => ({ ...r })));
-        definir.mockReset().mockImplementation(async (job: string, ativa: boolean) => ({
-            ...LISTA.find(r => r.jobname === job)!, ativa,
+        definir.mockReset().mockImplementation(async (job: string | null, ativa: boolean, jobid?: number) => ({
+            ...LISTA.find(r => (job === null ? r.jobid === jobid : r.jobname === job))!, ativa,
         }));
     });
 
@@ -99,6 +101,85 @@ describe('RotinasAutomaticasSettings', () => {
         expect(nota.className).toContain('[overflow-wrap:anywhere]');
     });
 
+    // ── Pendências da revisão do #513 (docs/planos/2026-11-16-rotinas-automaticas-pendencias-menores.md) ──
+    it('falhas: o title traz "X de N execuções" e o ÚLTIMO ERRO, mesmo que a última execução tenha passado', async () => {
+        listar.mockResolvedValue([rotina('process-sla-sweep', {
+            falhas7d: 2, execucoes7d: 168,
+            ultima: { inicio: '2026-11-16T17:05:00Z', status: 'succeeded', mensagem: '1 row' },
+            ultimoErro: { em: '2026-11-16T07:00:00Z', mensagem: 'ERROR: timeout' },
+        })]);
+        montar();
+        const titulo = (await screen.findByText('2 falhas')).getAttribute('title') ?? '';
+        expect(titulo).toContain('2 de 168 execuções nos últimos 7 dias falharam');
+        expect(titulo).toContain('Último erro (16/11 04:00): ERROR: timeout');
+        expect(titulo).not.toContain('terminou sem erro');
+    });
+
+    it('última execução rodando agora: diz "rodando" em português e as falhas não dizem "terminou sem erro"', async () => {
+        listar.mockResolvedValue([rotina('process-sla-sweep', {
+            falhas7d: 1, execucoes7d: 50,
+            ultima: { inicio: '2026-11-16T17:05:00Z', status: 'running', mensagem: null },
+            ultimoErro: { em: '2026-11-16T16:05:00Z', mensagem: 'ERROR: x' },
+        })]);
+        montar();
+        expect(await screen.findByText(/· rodando/)).toBeTruthy();
+        expect(screen.getByTitle('Situação: rodando')).toBeTruthy();
+        expect(screen.getByText('1 falha').getAttribute('title')).not.toContain('terminou sem erro');
+    });
+
+    it('status da última execução em português no title', async () => {
+        listar.mockResolvedValue([rotina('process-sla-sweep')]);
+        montar();
+        expect(await screen.findByTitle('Situação: concluída')).toBeTruthy();
+    });
+
+    it('sem execução na semana diz "Sem execução"; com execuções e sem falha, o title conta as execuções', async () => {
+        listar.mockResolvedValue([
+            rotina('process-sla-sweep', { execucoes7d: 0, falhas7d: 0, ultima: null }),
+            rotina('asaas-status-sync', { execucoes7d: 672, falhas7d: 0 }),
+        ]);
+        montar();
+        expect((await screen.findByText('Sem execução')).getAttribute('title')).toBe('Nenhuma execução nos últimos 7 dias');
+        expect(screen.getByText('Nenhuma').getAttribute('title')).toBe('672 execuções nos últimos 7 dias, nenhuma falhou');
+    });
+
+    it('rotina sem nome aparece como "Rotina sem nome (#N)" e liga/desliga pelo jobid', async () => {
+        const semNome = rotina(null, { jobid: 77 });
+        listar.mockResolvedValue([semNome, rotina('process-sla-sweep')]);
+        definir.mockResolvedValue({ ...semNome, ativa: false });
+        const user = userEvent.setup();
+        montar();
+        await user.click(await screen.findByRole('checkbox', { name: 'Rotina Rotina sem nome (#77)' }));
+        await waitFor(() => expect(definir).toHaveBeenCalledWith(null, false, 77));
+        await waitFor(() => expect((screen.getByRole('checkbox', { name: 'Rotina Rotina sem nome (#77)' }) as HTMLInputElement).checked).toBe(false));
+        expect((interruptor('process-sla-sweep') as HTMLInputElement).checked).toBe(true);
+    });
+
+    it('enquanto grava, o interruptor fica desligado com o motivo "Gravando…"', async () => {
+        let terminar!: (r: RotinaAutomatica) => void;
+        definir.mockImplementation(() => new Promise<RotinaAutomatica>(res => { terminar = res; }));
+        const user = userEvent.setup();
+        montar();
+        await screen.findByText(nome('process-sla-sweep'));
+        await user.click(interruptor('process-sla-sweep'));
+        await waitFor(() => expect((interruptor('process-sla-sweep') as HTMLInputElement).disabled).toBe(true));
+        expect(screen.getByTitle('Gravando…')).toBeTruthy();
+        terminar({ ...LISTA[0], ativa: false });
+        await waitFor(() => expect((interruptor('process-sla-sweep') as HTMLInputElement).disabled).toBe(false));
+        expect(screen.queryByTitle('Gravando…')).toBeNull();
+    });
+
+    it('o aviso no pé da tela entra com a animação do guia (§35)', async () => {
+        const user = userEvent.setup();
+        montar();
+        await screen.findByText(nome('process-sla-sweep'));
+        await user.click(interruptor('process-sla-sweep'));
+        const aviso = await screen.findByText(`${nome('process-sla-sweep')}: desligada.`);
+        const caixa = aviso.closest('[role="status"]') as HTMLElement;
+        expect(caixa.className).toContain('animate-in');
+        expect(caixa.className).toContain('slide-in-from-bottom-4');
+    });
+
     it('falhas da semana com o erro da última execução no title', async () => {
         montar();
         const falhas = await screen.findByText('3 falhas');
@@ -115,7 +196,7 @@ describe('RotinasAutomaticasSettings', () => {
         montar();
         await screen.findByText(nome('process-sla-sweep'));
         await user.click(interruptor('process-sla-sweep'));
-        await waitFor(() => expect(definir).toHaveBeenCalledWith('process-sla-sweep', false));
+        await waitFor(() => expect(definir).toHaveBeenCalledWith('process-sla-sweep', false, expect.any(Number)));
         expect(screen.queryByRole('button', { name: 'Desligar' })).toBeNull();
         await waitFor(() => expect((interruptor('process-sla-sweep') as HTMLInputElement).checked).toBe(false));
     });
@@ -132,7 +213,7 @@ describe('RotinasAutomaticasSettings', () => {
 
         await user.click(interruptor('asaas-status-sync'));
         await user.click(await screen.findByRole('button', { name: 'Desligar' }));
-        await waitFor(() => expect(definir).toHaveBeenCalledWith('asaas-status-sync', false));
+        await waitFor(() => expect(definir).toHaveBeenCalledWith('asaas-status-sync', false, expect.any(Number)));
     });
 
     it('ligar rotina sensível não pede confirmação', async () => {
@@ -141,7 +222,7 @@ describe('RotinasAutomaticasSettings', () => {
         montar();
         await screen.findByText(nome('asaas-status-sync'));
         await user.click(interruptor('asaas-status-sync'));
-        await waitFor(() => expect(definir).toHaveBeenCalledWith('asaas-status-sync', true));
+        await waitFor(() => expect(definir).toHaveBeenCalledWith('asaas-status-sync', true, expect.any(Number)));
         expect(screen.queryByRole('button', { name: 'Desligar' })).toBeNull();
     });
 

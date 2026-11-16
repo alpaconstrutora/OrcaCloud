@@ -14,13 +14,14 @@ const LINHA_COMPLETA = {
     jobid: 7, jobname: 'process-sla-sweep', schedule: '5 * * * *', active: true,
     ultima_inicio: '2026-11-16T17:05:00Z', ultima_status: 'failed', ultima_mensagem: 'ERROR: x',
     execucoes_7d: 168, falhas_7d: 3,
+    ultimo_erro_em: '2026-11-16T07:00:00Z', ultimo_erro_mensagem: 'ERROR: create_task',
     alterado_em: '2026-11-16T15:00:00Z', alterado_por_email: 'a@b.com', alterado_ativo_depois: true,
 };
 
 const LINHA_SEM_HISTORICO = {
     ...LINHA_COMPLETA, jobid: 8, jobname: 'x-nova',
     ultima_inicio: null, ultima_status: null, ultima_mensagem: null,
-    execucoes_7d: 0, falhas_7d: 0,
+    execucoes_7d: 0, falhas_7d: 0, ultimo_erro_em: null, ultimo_erro_mensagem: null,
     alterado_em: null, alterado_por_email: null, alterado_ativo_depois: null,
 };
 
@@ -35,10 +36,12 @@ describe('rotinasAutomaticasService', () => {
             jobid: 7, jobname: 'process-sla-sweep', schedule: '5 * * * *', ativa: true,
             ultima: { inicio: '2026-11-16T17:05:00Z', status: 'failed', mensagem: 'ERROR: x' },
             execucoes7d: 168, falhas7d: 3,
+            ultimoErro: { em: '2026-11-16T07:00:00Z', mensagem: 'ERROR: create_task' },
             ultimaAlteracao: { em: '2026-11-16T15:00:00Z', porEmail: 'a@b.com', ativaDepois: true },
         });
         expect(rotinas[1].ultima).toBeNull();
         expect(rotinas[1].ultimaAlteracao).toBeNull();
+        expect(rotinas[1].ultimoErro).toBeNull();
     });
 
     it('definir manda jobname e estado e devolve a linha mapeada', async () => {
@@ -47,6 +50,14 @@ describe('rotinasAutomaticasService', () => {
         expect(rpc).toHaveBeenCalledWith('fn_rotina_automatica_definir', { p_jobname: 'process-sla-sweep', p_ativo: false });
         expect(r.ativa).toBe(false);
         expect(r.jobname).toBe('process-sla-sweep');
+    });
+
+    it('rotina sem nome (jobname NULL): definir manda o jobid', async () => {
+        rpc.mockResolvedValue({ data: [{ ...LINHA_COMPLETA, jobid: 77, jobname: null, active: false }], error: null });
+        const r = await rotinasAutomaticasService.definir(null, false, 77);
+        expect(rpc).toHaveBeenCalledWith('fn_rotina_automatica_definir', { p_jobname: null, p_ativo: false, p_jobid: 77 });
+        expect(r.jobname).toBeNull();
+        expect(r.jobid).toBe(77);
     });
 
     it('erro da RPC vira exceção com a mensagem do banco', async () => {

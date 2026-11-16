@@ -4,14 +4,15 @@
  * Decisão do usuário (16/10): *"Manter 2,80 m, furar vigas"* — a rede que passa de um cômodo ao outro no forro
  * atravessa a viga, e cada passagem vira FURO PREVISTO na lista para o calculista (posição, diâmetro e a viga).
  *
- * A lista sai dos encontros trecho × peça estrutural (`conflitosDoModelo`): viga, viga de fundação (baldrame) e laje.
+ * A lista sai dos encontros trecho × peça estrutural (`conflitosDoModelo`): viga, viga de fundação (baldrame) e laje — e,
+ * desde a PA10b do prédio automático, das passagens de prumada na laje (`passagensNaLaje`), que não são mais conflito.
  * Para a viga, os critérios que DISPENSAM a verificação do furo (NBR 6118, 13.2.5.1 — furo que atravessa a viga na
  * direção da largura) entram como HIPÓTESES, para conferir: diâmetro até 12 cm e até h/3; a pelo menos 2h da face do
  * apoio; furos de um mesmo tramo a pelo menos 2h entre si. Fora deles, "verificar com o calculista" — nunca
  * "proibido": quem decide a armadura em volta do furo é ele. Na laje, a passagem é listada (o shaft, a coluna, o tubo
  * de queda) sem critério de dispensa.
  */
-import { conflitosDoModelo, envelopeDoTrecho, type BlueprintModel, type ObjectId, type Point, type Structural, type Trecho } from './blueprintKernel';
+import { conflitosDoModelo, envelopeDoTrecho, passagensNaLaje, type BlueprintModel, type Conflito, type ObjectId, type PassagemNaLaje, type Point, type Structural, type Trecho } from './blueprintKernel';
 
 export interface HipotesesDosFuros {
   /** Diâmetro máximo do furo que dispensa a verificação, mm. */
@@ -111,7 +112,12 @@ export function distanciaAoApoioDaViga(peca: Pick<Structural, 'kind' | 'levelId'
  * Os furos previstos do modelo — um por (trecho, peça) que se encontram — com a avaliação dos critérios na viga.
  * Ordenados por peça e posição ao longo dela.
  */
-export function furosPrevistos(model: BlueprintModel, hip: HipotesesDosFuros = HIPOTESES_DOS_FUROS_PADRAO): FuroPrevisto[] {
+/** `ja`: os conflitos e as passagens do modelo, quando quem chama já os calculou (o relatório do prédio) — a mesma lista. */
+export function furosPrevistos(
+  model: BlueprintModel,
+  hip: HipotesesDosFuros = HIPOTESES_DOS_FUROS_PADRAO,
+  ja?: { conflitos: readonly Conflito[]; passagens: readonly PassagemNaLaje[] },
+): FuroPrevisto[] {
   const porId = new Map((model.trechos ?? []).map((t) => [t.id, t]));
   const pecas = new Map((model.structures ?? []).map((s) => [s.id, s]));
   const pilares = (model.structures ?? []).filter((s) => s.kind === 'PILAR');
@@ -120,8 +126,13 @@ export function furosPrevistos(model: BlueprintModel, hip: HipotesesDosFuros = H
   // o diâmetro é o do feixe — os tubos lado a lado, com o vão entre eles, mais a folga. Contados um a um, cada furo
   // tinha o outro "a menos de 2h" e todos saíam "verificar".
   const grupos = new Map<string, { peca: Structural; t: Trecho; ids: ObjectId[]; tubosMm: number[]; ponto: Point; cotaMm: number; direcao: 'HORIZONTAL' | 'VERTICAL' }>();
-  for (const c of conflitosDoModelo(model)) {
-    if (c.classe !== 'ESTRUTURA') continue;
+  // PA10b do prédio automático (16/11/2026): a prumada atravessando a laje saiu dos conflitos (é passagem, não choque) —
+  // e entra aqui por `passagensNaLaje`, na mesma ordem (trecho, peça) e sem repetir o par: a lista é a mesma de antes.
+  const pares = new Map<string, { trechoId: ObjectId; outroId: ObjectId }>();
+  for (const c of ja?.conflitos ?? conflitosDoModelo(model)) if (c.classe === 'ESTRUTURA') pares.set(`${c.trechoId}|${c.outroId}`, c);
+  for (const p of ja?.passagens ?? passagensNaLaje(model)) if (!pares.has(`${p.trechoId}|${p.lajeId}`)) pares.set(`${p.trechoId}|${p.lajeId}`, { trechoId: p.trechoId, outroId: p.lajeId });
+  const emOrdem = [...pares.values()].sort((x, y) => (x.trechoId < y.trechoId ? -1 : x.trechoId > y.trechoId ? 1 : 0) || (x.outroId < y.outroId ? -1 : x.outroId > y.outroId ? 1 : 0));
+  for (const c of emOrdem) {
     const peca = pecas.get(c.outroId);
     const t = porId.get(c.trechoId);
     if (!peca || !t || !['VIGA', 'VIGA_FUNDACAO', 'LAJE'].includes(peca.kind)) continue;

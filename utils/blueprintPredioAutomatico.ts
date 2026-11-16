@@ -15,3 +15,5 @@ export * from './predioAutomatico/pluvial';
 export * from './predioAutomatico/ppci';
 export * from './predioAutomatico/garagem';
 export * from './predioAutomatico/drenagem';
+export * from './predioAutomatico/desvios';
+export * from './predioAutomatico/compatibilizacao';

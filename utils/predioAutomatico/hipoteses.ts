@@ -7,6 +7,7 @@
 import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
+import type { CompatibilizacaoDoPredio } from './compatibilizacao';
 
 export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'SUBSOLOS' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'DRENAGEM_DA_GARAGEM' | 'EQUIPAMENTOS_DE_INCENDIO' | 'HIDRANTES' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'INCENDIO' | 'CONFERENCIA';
 
@@ -228,6 +229,8 @@ export interface PlanoDoPredio {
       tubos: { uhcPorAndar: number; comBacia: boolean; dnMm: number }[];
       coletor: { dnMm: number; declividadePct: number; porGravidade: boolean } | null;
     } | null;
+    /** PA10b: a compatibilização do prédio inteiro — conflitos, encostos, passagens na laje e furos para o calculista. */
+    compatibilizacao: Omit<CompatibilizacaoDoPredio, 'pendencias'>;
     /** PA7b: o pluvial da cobertura — a área, a intensidade, a vazão e os condutores; `null` desligado ou sem cobertura. */
     pluvial: { areaM2: number; intensidadeMmH: number; vazaoLMin: number; condutores: number; dnVerticalMm: number; dnHorizontalMm: number | null } | null;
     /**

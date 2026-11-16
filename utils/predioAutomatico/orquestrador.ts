@@ -33,6 +33,8 @@ import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
 import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedido } from './climatizacaoERede';
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
 import { lancarEsgoto } from './esgoto';
+import { rebaixarAguaNasAreasMolhadas, type RebaixoDaAgua } from './desvios';
+import { compatibilizarPredio } from './compatibilizacao';
 import { lancarSubsolos, POTENCIA_DO_EXAUSTOR_W, subsoloDaTorre } from './garagem';
 import { lancarDrenagemDaGaragem } from './drenagem';
 import { lancarPluvial } from './pluvial';
@@ -295,18 +297,24 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
 
   // ── Esgoto e ventilação (PA7a): os ramais das unidades e os tubos de queda no tipo — também antes da marca.
   let esgoto: ReturnType<typeof lancarEsgoto> | null = null;
+  let rebaixoDaAgua: RebaixoDaAgua | null = null;
   if (!hip.esgoto) etapa('ESGOTO', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
   else if (!agua) etapa('ESGOTO', 'NAO_EXIGIDA', 0, 'Sem a água, não há louças para o esgoto.');
   else {
     esgoto = lancarEsgoto(ctx, base, terreo ? { levelId: terreo.levelId } : null, cobertura ? { levelId: cobertura.levelId } : null, 1 + mont.copias);
     pendencias.push(...esgoto.pendencias);
+    // PA10b: nos banheiros, lavabos e área de serviço a água corre no forro REBAIXADO, abaixo dos ramais de esgoto do
+    // andar de cima (no forro comum as duas redes se cruzavam); cada andar repete pela cópia viva.
+    rebaixoDaAgua = rebaixarAguaNasAreasMolhadas(ctx, mont.tipoLevelId);
+    if (rebaixoDaAgua.trechos)
+      pendencias.push({ grupo: 'CONFERIR', texto: `Água fria: nos ${rebaixoDaAgua.comodos} cômodo(s) molhado(s) de cada andar (banheiros, lavabos, área de serviço) a água corre a ${(rebaixoDaAgua.cotaMm / 1000).toLocaleString('pt-BR')} m do piso, abaixo dos ramais de esgoto do andar de cima — o forro rebaixado neles (o programa admite 2,30 m de pé-direito); nos outros cômodos, na faixa de sempre.` });
     const maior = Math.max(0, ...esgoto.tubos.map((t) => t.dnMm));
     etapa(
       'ESGOTO',
       esgoto.tubos.length ? 'LANCOU' : 'NAO_RODOU',
-      esgoto.comandos,
+      esgoto.comandos + rebaixoDaAgua.comandos,
       esgoto.tubos.length
-        ? `${esgoto.tubos.length} tubo(s) de queda por andar (até DN ${maior}), ${esgoto.uhcPorAndar} UHC por andar${esgoto.coletor ? ` · coletor DN ${esgoto.coletor.dnMm} a ${esgoto.coletor.declividadePct.toLocaleString('pt-BR')} %` : ''}`
+        ? `${esgoto.tubos.length} tubo(s) de queda por andar (até DN ${maior}), ${esgoto.uhcPorAndar} UHC por andar${esgoto.coletor ? ` · coletor DN ${esgoto.coletor.dnMm} a ${esgoto.coletor.declividadePct.toLocaleString('pt-BR')} %` : ''}${rebaixoDaAgua.trechos ? ` · a água no forro rebaixado de ${rebaixoDaAgua.comodos} cômodo(s) molhado(s)` : ''}`
         : esgoto.pendencias.find((x) => x.grupo === 'SEM_SOLUCAO')?.texto ?? null,
     );
   }
@@ -474,6 +482,9 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       ...(etiquetas.length ? { locais: [{ levelId: mont.tipoLevelId, ids: etiquetas.map((l) => l.id), ponto: etiquetas[0].at }] } : {}),
     });
   }
+  // PA10b: o relatório de compatibilização do prédio inteiro — conflitos, encostos, passagens na laje e furos.
+  const { pendencias: daCompatibilizacao, ...compatibilizacao } = compatibilizarPredio(m);
+  pendencias.push(...daCompatibilizacao);
   etapa('CONFERENCIA', 'CALCULOU', 0, pendencias.length ? `${pendencias.length} pendência(s)` : 'Nada pendente.');
 
   const pavimentos = 1 + mont.copias;
@@ -506,6 +517,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       estrutura: estrutura ? { pilares: estrutura.pilares, vigas: estrutura.vigas, lajes: estrutura.lajes, noTerreo: estrutura.noTerreo, eixos: estrutura.eixos, blocos: fundacao?.blocos ?? 0, estacas: fundacao?.estacas ?? 0 } : null,
       reservacao,
       agua: resumoDaAgua,
+      compatibilizacao,
       incendio: incendio
         ? {
             divisao: incendio.divisao,

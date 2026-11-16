@@ -69,10 +69,10 @@ export function lancarClimatizacao(ctx: ContextoDoPredio, base: BaseDoPredio, pe
   });
   const comandos = ctx.aplicar(plano.comandos);
   const equipamentos = plano.comandos.filter((c) => c.type === 'AddTerminal' && (c as { tipoEletrico?: string | null }).tipoEletrico === 'AR_CONDICIONADO').length;
-  // O "conflito" de 0 mm é ENCOSTO (redes lado a lado) — a mesma leitura da casa: vira uma linha só.
-  const encostos = plano.pendencias.filter((x) => x.grupo === 'CONFLITO' && /\(0 mm dentro\)/.test(x.texto)).length;
-  const pendencias: PendenciaDoPpci[] = plano.pendencias.filter((x) => !(x.grupo === 'CONFLITO' && /\(0 mm dentro\)/.test(x.texto))).map((x) => ({ ...x, texto: `Climatização: ${x.texto}` }));
-  if (encostos) pendencias.push({ grupo: 'CONFERIR', texto: `Climatização: ${encostos} encosto(s) entre redes (lado a lado, nenhum eixo dentro) — o afastamento entre redes não é tratado` });
+  // PA10b: os conflitos de trecho (abertura, estrutura, rede, equipamento) e os encostos de 0 mm saem no relatório de
+  // compatibilização do prédio inteiro (`compatibilizacao.ts`), contados e com o local — aqui eram uma linha por trecho.
+  const deTrecho = (x: PendenciaDoPpci) => x.grupo === 'CONFLITO' && /^[a-z ]+: trecho \S+ × /.test(x.texto);
+  const pendencias: PendenciaDoPpci[] = plano.pendencias.filter((x) => !deTrecho(x)).map((x) => ({ ...x, texto: `Climatização: ${x.texto}` }));
   const travou = plano.etapas.find((e) => e.situacao === 'NAO_RODOU');
   return { comandos, equipamentos, pendencias, motivo: comandos ? null : (travou?.nota ?? 'nada a climatizar') };
 }

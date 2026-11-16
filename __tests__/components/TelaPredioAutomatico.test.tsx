@@ -121,6 +121,14 @@ describe('TelaPredioAutomatico (PA2)', () => {
     expect(screen.getByTestId('hidrantes-do-predio').textContent).toMatch(/por andar.*bomba na cobertura.*registro de recalque/);
     // PA9b: as peças lançadas nas áreas comuns.
     expect(within(screen.getByTestId('equipamentos-de-incendio-do-predio')).getAllByRole('listitem')).toHaveLength(Object.keys(PLANO.resumo.incendio!.equipamentos!).length);
+    // PA10b: a aba Compatibilização — os conflitos, as prumadas na laje e a lista de furos para o calculista.
+    fireEvent.click(screen.getByRole('tab', { name: 'Compatibilização' }));
+    const comp = PLANO.resumo.compatibilizacao;
+    const painel = screen.getByTestId('compatibilizacao-do-predio');
+    expect(within(painel).getByText(`${comp.passagens.furos} furo(s)`)).toBeTruthy();
+    expect(within(painel).getByText(`${comp.passagens.noNucleo} no shaft · ${comp.passagens.embutidas} eletroduto(s) embutido(s)`)).toBeTruthy();
+    expect(comp.furos.lista.length).toBeGreaterThan(0);
+    expect(within(painel).getByText(String(comp.furos.lista.length))).toBeTruthy();
     fireEvent.click(screen.getByRole('tab', { name: 'Resultado' }));
     const pavimento = screen.getByLabelText('Pavimento da prévia') as HTMLSelectElement;
     expect(pavimento.value).toBe(PLANO.tipoLevelId);

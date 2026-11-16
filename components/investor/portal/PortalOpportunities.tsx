@@ -1,5 +1,6 @@
 import React from 'react';
-import { Building2, CheckCircle2, ChevronDown, ExternalLink, MapPin, Send } from 'lucide-react';
+import { Building2, CheckCircle2, ChevronDown, ExternalLink, FolderOpen, LineChart, MapPin, Send } from 'lucide-react';
+import PortalOportunidadeDetalhe, { type AbaDoDetalhe } from './PortalOportunidadeDetalhe';
 import {
     InvestorOpportunity, OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_TYPE_LABELS, OpportunityStatus,
 } from '../../../services/investorPortalService';
@@ -32,6 +33,9 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities, investorProfile, 
     const [sending, setSending] = React.useState<string | null>(null);
     const [sent, setSent] = React.useState<string[]>([]);
     const [error, setError] = React.useState<string | null>(null);
+    // Conferência de 16/11 (plano 2026-11-15, Fase 7): o detalhe — viabilidade e documentos — abre
+    // abaixo da lista; antes, pelo link, a oportunidade não tinha como chegar ao painel nem ao Data Room.
+    const [aberta, setAberta] = React.useState<{ opp: InvestorOpportunity; aba: AbaDoDetalhe } | null>(null);
 
     const submitInterest = async (opp: InvestorOpportunity) => {
         if (!portalToken || !opp.id) return;
@@ -181,6 +185,18 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities, investorProfile, 
                                                                 </PrimaryButton>
                                                             )
                                                         )}
+                                                        {portalToken && o.id && o.imovib_study_id && (
+                                                            <SoftButton onClick={() => setAberta({ opp: o, aba: 'viabilidade' })}>
+                                                                <LineChart className="w-4 h-4" />
+                                                                Ver viabilidade
+                                                            </SoftButton>
+                                                        )}
+                                                        {portalToken && o.id && (
+                                                            <SoftButton onClick={() => setAberta({ opp: o, aba: 'documentos' })}>
+                                                                <FolderOpen className="w-4 h-4" />
+                                                                Documentos
+                                                            </SoftButton>
+                                                        )}
                                                         {o.link && (
                                                             <SoftButton onClick={() => window.open(o.link, '_blank', 'noopener')}>
                                                                 <ExternalLink className="w-4 h-4" />
@@ -198,6 +214,17 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities, investorProfile, 
                     </table>
                 </div>
             </PortalCard>
+
+            {aberta && portalToken && (
+                <PortalOportunidadeDetalhe
+                    key={aberta.opp.id}
+                    opportunity={aberta.opp}
+                    portalToken={portalToken}
+                    aba={aberta.aba}
+                    onAba={aba => setAberta(a => (a ? { ...a, aba } : a))}
+                    onFechar={() => setAberta(null)}
+                />
+            )}
 
             {/* Galeria — só quando há capa cadastrada, para não deixar bloco vazio */}
             {opportunities.some(o => o.thumbnail_url) && (

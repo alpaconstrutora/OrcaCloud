@@ -643,7 +643,14 @@ motor só desviava de pilar. Agora `ligarNaRede` junta aos obstáculos as caixas
 tubo + 50 mm, porque a ocupação ainda aumenta o diâmetro), menos a que tem uma das pontas a menos de 50 mm (a ligação da
 própria peça, como o kernel conta), infladas como o pilar pela luz (raio + 50 mm); sem contorno com elas, a reta de antes
 (nunca pior). Conflitos com equipamento, antes → depois: R4 9 → 0, R8 63 → 7, R12 330 → 88, RL 133 → 21 — os que sobram
-são da linha frigorígena (PA13). O marco da casa ficou idêntico (nas casas nenhuma reta da rede cruzava peça).
+são dos dutos de ar (a exaustão do banheiro, `MECANICA`) — PA13. O marco da casa ficou idêntico (nas casas nenhuma reta
+da rede cruzava peça).
+
+**Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pa11.cjs`, o R8, estudo descartável arquivado): a aba
+Compatibilização com 886 conflitos (245 em porta ou janela · 4 em pilar · 630 encontros entre redes · 7 em equipamento — eram
+1.012 e 63), o conflito com equipamento do Relatório só com dutos (7); no rascunho salvo depois do Lançar, 588 peças de
+climatização, 3.606 trechos de eletroduto e nenhum dentro de evaporadora ou exaustor (o kernel com as caixas: só os 7
+dutos). Sem erro de console.
 
 ### PA12 — A água × esgoto que sobra
 **O que muda.** Diagnóstico (16/11, os quatro prédios gerados): os encontros que sobram são a água do andar no forro
@@ -659,8 +666,8 @@ contorno), com cada sobra explicada; a água continua chegando a todo ponto (`na
 marco da casa idêntico; no app, a água a ~2,57 m nos cômodos secos sob o ramal, no tipo e nas cópias.
 
 ### PA13 — Os encontros da climatização
-**O que muda.** A linha frigorígena atravessando a caixa de outra evaporadora ou de um exaustor (R8 7, R12 88, RL 21 —
-o que sobrou da PA11); a linha frigorígena e os dutos × eletroduto; o dreno × água; o dreno do ar passando por porta ou
+**O que muda.** O duto de ar (a exaustão do banheiro) atravessando a caixa de uma evaporadora ou de um exaustor (R8 7, R12
+88, RL 21 — o que sobrou da PA11); a linha frigorígena e os dutos × eletroduto; o dreno × água; o dreno do ar passando por porta ou
 janela. Diagnóstico por tipo na abertura da fase, como na PA11.
 **Pronto quando.** Cada tipo com o número antes → depois no marco e uma trava do que zerar; marco da casa idêntico ou
 cada mudança justificada.
@@ -685,7 +692,7 @@ quatro "a decidir" de 16/11 viraram as fases PA11–PA14 (pedido de 16/11).
 | Desempenho | Gerar o R12 no worker: 57 s no app de desenvolvimento, dentro do tempo fixado na PA10a (90 s gerar · 90 s Lançar · 30 s salvar) — vigiar a cada fase | acompanhamento |
 | Desempenho | Marco do RL perto do limite da CI (20 min por caso; a CI inteira leva 31–39 min nos últimos PRs); o bloco "o motor (PA2)" subiu para 180 s depois de deixar a main vermelha (15/11) | acompanhamento |
 | Compatibilização | Água × esgoto que sobra: o ramal do andar de cima atravessando cômodo seco a caminho do shaft (R8 18, R12 141, RL 244) — no relatório, com o local | PA12 |
-| Compatibilização | Encontros da climatização (linha frigorígena e dutos × eletroduto, dreno × água; a linha frigorígena atravessando outra evaporadora ou exaustor: R8 7, R12 88, RL 21) e o dreno do ar passando por porta ou janela — no relatório | PA13 |
+| Compatibilização | Encontros da climatização (linha frigorígena e dutos × eletroduto, dreno × água; o duto de ar atravessando evaporadora ou exaustor: R8 7, R12 88, RL 21) e o dreno do ar passando por porta ou janela — no relatório | PA13 |
 | Compatibilização | ~~Eletroduto lançado depois da climatização atravessando a caixa da evaporadora (R8: 56)~~ — resolvido: o eletroduto contorna a evaporadora e o exaustor (zero nos quatro prédios) | feito na PA11 |
 | Compatibilização | Forro rebaixado a 2,30 m nos banheiros, lavabos e área de serviço (a água abaixo dos ramais de cima) — confira com a arquitetura | projetista |
 | Rota de fuga | Prédio com a circulação acima de 40 m da escada única (mesmo com a detecção): a 2ª escada no fim do corredor — hoje só a pendência | projetista |
@@ -754,7 +761,7 @@ para o projetista está em "Pendências em aberto". Kernel em `blueprint-kernel-
 | PA8 | **PA8c feita** (drenagem: ralos e canaletas em pente, caixa separadora, poço com 2 bombas no QDG e recalque à CI do térreo; kernel 0.109.0). **PA8b feita** (escada(s) de emergência da garagem — rota do subsolo limpa no R8 e no R12; QDG, luzes e exaustores). **PA8a feita** (ver a Execução) — subsolo do estudo lançado: R8 1 subsolo com 60 vagas (o contorno livre levaria 91), 1 rampa, 40 pilares da torre + 60 da malha estendida, fundação no subsolo; R12 2 subsolos com 177 vagas e a rampa em vaivém; **nenhum pilar sobre vaga ou rampa** (o marco confere). A garagem pedia uma 2ª saída — resolvida na PA8b. — a PA8 está completa |
 | PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. **PA9b feita** (extintores, sinalização e iluminação nas áreas comuns do tipo — cada andar repete). **PA9c feita** (hidrante em todo pavimento; coluna de incêndio empilhada; bomba na cobertura ao lado da reserva técnica; registro de recalque no passeio) |
 | PA10 | **PA10a feita** (desempenho com o mesmo resultado: R12 completo 63,6 → 40,3 s, o cálculo da tela no Lançar 14,0 → 5,3 s; o "Gerar" espera a entrada carregar — a prévia do R12 nascia velha; R12 de ponta a ponta no app: gerar 57 s, Lançar 61 s, salvar 9 s com a máquina quieta; tempo fixado 90/90/30 s). **PA10b feita** (a prumada na laje é passagem, não conflito, no app inteiro; a água no forro rebaixado das áreas molhadas — água × esgoto R4 62 → 4, R8 252 → 18, R12 911 → 141, RL 1.195 → 244; o relatório de compatibilização na aba nova; conferida no app com o R8). **PA10c feita** (o envio ao Empreendimento manda as unidades da planta — R8 35 em vez da estimativa de 47 —, a numeração das cópias 201…; a rota de fuga limpa nos quatro prédios: caixas de escada, corredor do apartamento fora da medição, resíduo de geometria ignorado, detecção no R12 e no RL, 2ª porta no térreo do RL) — ver "Pendências em aberto" |
-| PA11 | feita, em publicação — o eletroduto contorna a caixa da evaporadora e do exaustor (`planejarEletrodutos`): eletroduto dentro de equipamento R4 9 → 0, R8 56 → 0, R12 242 → 0, RL 112 → 0 (o marco trava zero); de quebra, menos encontros entre redes (R8 700 → 630) e +3 caixas de passagem por andar no R8 (as curvas do contorno, regra da NBR 5410). Marco da casa idêntico |
+| PA11 | feita, em publicação (#518; conferida no app com o R8) — o eletroduto contorna a caixa da evaporadora e do exaustor (`planejarEletrodutos`): eletroduto dentro de equipamento R4 9 → 0, R8 56 → 0, R12 242 → 0, RL 112 → 0 (o marco trava zero); de quebra, menos encontros entre redes (R8 700 → 630) e +3 caixas de passagem por andar no R8 (as curvas do contorno, regra da NBR 5410). Marco da casa idêntico |
 | PA12 | decidido (água abaixo do ramal) — em execução |
 | PA13 | a seguir |
 | PA14 | a seguir |

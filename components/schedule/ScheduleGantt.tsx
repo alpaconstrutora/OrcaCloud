@@ -1,3 +1,4 @@
+import { terminoParaExibir, calendarioDoCronograma, fimDoMotorParaTrabalharAte } from '../../utils/planejamentoIndicadores';
 import React, { useLayoutEffect, useRef, useState } from 'react';
 import ReactDOM from 'react-dom';
 import { ChevronDown, ChevronRight, Camera, ArrowRightToLine } from 'lucide-react';
@@ -140,6 +141,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
     outlineActions,
     measurementRollup,
 }) => {
+    // Término mostrado = ÚLTIMO DIA TRABALHADO (o motor guarda o dia útil seguinte) — 2ª crítica, 16/11/2026.
+    const cal = calendarioDoCronograma(schedule);
 
     const formatDateDisplay = (dateString?: string) => {
         if (!dateString) return '-';
@@ -666,17 +669,17 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         </div>
 
                         <div data-gantt-col="gEnd" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-gray-500" style={getGanttColStyle('gEnd')}>
-                            {itemSchedule?.endDate ? fmtLocalDate(itemSchedule.endDate) : '-'}
+                            {itemSchedule?.endDate ? fmtLocalDate(terminoParaExibir(itemSchedule.startDate, itemSchedule.endDate, cal)) : '-'}
                         </div>
 
                         <div data-gantt-col="gEsEf" className="shrink-0 border-r border-gray-100 flex flex-col items-center justify-center bg-blue-50/20 text-xs font-medium text-blue-600 leading-tight" style={getGanttColStyle('gEsEf')}>
                             <span>{itemSchedule?.earlyStart ? fmtLocalDate(itemSchedule.earlyStart, { day: '2-digit', month: '2-digit' }) : '-'}</span>
-                            <span>{itemSchedule?.earlyFinish ? fmtLocalDate(itemSchedule.earlyFinish, { day: '2-digit', month: '2-digit' }) : '-'}</span>
+                            <span>{itemSchedule?.earlyFinish ? fmtLocalDate(terminoParaExibir(itemSchedule.earlyStart, itemSchedule.earlyFinish, cal), { day: '2-digit', month: '2-digit' }) : '-'}</span>
                         </div>
 
                         <div data-gantt-col="gLsLf" className="shrink-0 border-r border-gray-100 flex flex-col items-center justify-center bg-orange-50/20 text-xs font-medium text-orange-600 leading-tight" style={getGanttColStyle('gLsLf')}>
                             <span>{formatDateDisplay(itemSchedule?.lateStart)?.split('/')?.slice(0, 2)?.join('/') || '-'}</span>
-                            <span>{formatDateDisplay(itemSchedule?.lateFinish)?.split('/')?.slice(0, 2)?.join('/') || '-'}</span>
+                            <span>{formatDateDisplay(terminoParaExibir(itemSchedule?.lateStart, itemSchedule?.lateFinish, cal) || undefined)?.split('/')?.slice(0, 2)?.join('/') || '-'}</span>
                         </div>
 
                         <div data-gantt-col="gFloat" className="shrink-0 border-r border-gray-100 flex items-center justify-center text-xs font-medium text-indigo-600 bg-white" style={getGanttColStyle('gFloat')}>
@@ -879,18 +882,20 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         )}
 
                                         <div className="opacity-0 group-hover/bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none">
-                                            {fmtLocalDate(itemSchedule.startDate)} - {itemSchedule.endDate ? fmtLocalDate(itemSchedule.endDate) : ''} ({itemSchedule.duration}d{isSplit ? ' de trabalho, dividida' : ''})
+                                            {fmtLocalDate(itemSchedule.startDate)} - {itemSchedule.endDate ? fmtLocalDate(terminoParaExibir(itemSchedule.startDate, itemSchedule.endDate, cal)) : ''} ({itemSchedule.duration}d{isSplit ? ' de trabalho, dividida' : ''})
                                             {itemSchedule.totalFloat ? ` | Folga: ${itemSchedule.totalFloat}d` : ''}
                                         </div>
                                     </div>
 
                                     {/* Extend to project end button */}
-                                    {projectEndDate && itemSchedule.endDate && itemSchedule.endDate < projectEndDate && (
+                                    {projectEndDate && itemSchedule.endDate && terminoParaExibir(itemSchedule.startDate, itemSchedule.endDate, cal) < projectEndDate.slice(0, 10) && (
                                         <button
                                             title={`Estender até o fim do planejamento (${new Date(projectEndDate).toLocaleDateString('pt-BR')})`}
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                handleUpdateItemSchedule(item.id, 'endDate', projectEndDate);
+                                                // O término do planejamento é o ÚLTIMO dia trabalhado; o motor guarda o dia
+                                                // útil seguinte — gravar o término direto deixava a tarefa um dia antes.
+                                                handleUpdateItemSchedule(item.id, 'endDate', fimDoMotorParaTrabalharAte(projectEndDate.slice(0, 10), cal));
                                             }}
                                             // `absolute left-full`, fora do fluxo: dentro do flex de largura fixa
                                             // ele ocupava 32px e a BARRA encolhia para caber — toda barra saía 32px
@@ -986,13 +991,13 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             {(() => {
                                 // FIM do nó-pai é sempre derivado (read-only): mostra o rollup (máx dos filhos),
                                 // nunca um endDate antigo armazenado que poderia ficar "preso".
-                                const effectiveDate = node.earlyFinish;
+                                const effectiveDate = terminoParaExibir(node.earlyStart, node.earlyFinish, cal);
                                 return effectiveDate ? fmtLocalDate(effectiveDate) : '';
                             })()}
                         </div>
                         <div data-gantt-col="gEsEf" className="shrink-0 border-r border-gray-200 flex flex-col items-center justify-center text-xs font-medium text-blue-600 leading-tight" style={getGanttColStyle('gEsEf')}>
                             {node.earlyStart ? <span>{fmtLocalDate(node.earlyStart, { day: '2-digit', month: '2-digit' })}</span> : null}
-                            {node.earlyFinish ? <span>{fmtLocalDate(node.earlyFinish, { day: '2-digit', month: '2-digit' })}</span> : null}
+                            {node.earlyFinish ? <span>{fmtLocalDate(terminoParaExibir(node.earlyStart, node.earlyFinish, cal), { day: '2-digit', month: '2-digit' })}</span> : null}
                         </div>
                         <div data-gantt-col="gLsLf" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gLsLf')}></div>
                         <div data-gantt-col="gFloat" className="shrink-0 border-r border-gray-200" style={getGanttColStyle('gFloat')}></div>
@@ -1101,7 +1106,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     />
 
                                     <div className="opacity-0 group-hover/summary-bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none font-medium">
-                                        {node.name}: {fmtLocalDate(node.earlyStart)} - {fmtLocalDate(node.earlyFinish)} ({durationDays.toFixed(0)}d)
+                                        {node.name}: {fmtLocalDate(node.earlyStart)} - {fmtLocalDate(terminoParaExibir(node.earlyStart, node.earlyFinish, cal))} ({durationDays.toFixed(0)}d)
                                     </div>
                                 </div>
                             );

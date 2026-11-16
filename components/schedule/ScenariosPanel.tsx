@@ -1,3 +1,4 @@
+import { terminoParaExibir, calendarioDoCronograma } from '../../utils/planejamentoIndicadores';
 import React, { useState } from 'react';
 import {
     FlaskConical,
@@ -51,10 +52,15 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
     const scenarios = schedule.scenarios ?? [];
 
     // Current schedule stats (base)
+    // Término = último dia trabalhado de cada tarefa (o motor guarda o dia útil seguinte).
+    const cal = calendarioDoCronograma(schedule);
     const baseEndDate = schedule.itemSchedules?.reduce((max, s) => {
-        if (!s.endDate) return max;
-        return !max || s.endDate > max ? s.endDate : max;
+        const fim = terminoParaExibir(s.startDate, s.endDate, cal);
+        if (!fim) return max;
+        return !max || fim > max ? fim : max;
     }, '') ?? schedule.endDate ?? '';
+    // O cenário só guarda o maior fim do motor: volta-se um dia de trabalho a partir do início do cronograma.
+    const fimDoCenario = (s: ScheduleScenario) => terminoParaExibir(schedule.startDate, scenarioEndDate(s), cal);
 
     const baseCost = schedule.itemSchedules?.reduce((sum, s) => sum + (s.plannedValue ?? 0), 0) ?? 0;
     const baseCriticalCount = schedule.itemSchedules?.filter(s => s.isCritical).length ?? 0;
@@ -159,10 +165,10 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
                                 base={<span className="font-bold text-gray-700">{fmtDate(baseEndDate)}</span>}
                                 scenarios={displayScenarios}
                                 render={s => {
-                                    const delta = baseEndDate ? daysBetween(baseEndDate, scenarioEndDate(s)) : 0;
+                                    const delta = baseEndDate ? daysBetween(baseEndDate, fimDoCenario(s)) : 0;
                                     return (
                                         <div className="flex flex-col items-center gap-0.5">
-                                            <span className="font-bold text-gray-700">{fmtDate(scenarioEndDate(s))}</span>
+                                            <span className="font-bold text-gray-700">{fmtDate(fimDoCenario(s))}</span>
                                             <DeltaBadge days={delta} />
                                         </div>
                                     );
@@ -283,7 +289,7 @@ export const ScenariosPanel: React.FC<Props> = ({ schedule, onApplyScenario, onD
                                     {selected.has(s.id) && <CheckCircle2 className="w-4 h-4 text-purple-500 shrink-0" />}
                                 </div>
                                 <p className="text-xs text-gray-400 mt-0.5">{new Date(s.createdAt).toLocaleDateString('pt-BR')}</p>
-                                <p className="text-xs font-semibold text-gray-700 mt-1">{fmtDate(s.result.endDate)}</p>
+                                <p className="text-xs font-semibold text-gray-700 mt-1">{fmtDate(fimDoCenario(s))}</p>
                             </div>
                         ))}
                     </div>

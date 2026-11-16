@@ -4,9 +4,9 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { projectService } from '../services/projectService';
 import { lerMsProjectXml, lerModeloExcel, ErroDeLeituraDeCronograma, type CronogramaImportado } from '../utils/cronogramaLeitura';
 import { casarComOrcamento, type ResultadoDoCasamento } from '../utils/cronogramaCasamento';
-import { type DecisaoDaTarefa, somarDiasUteis } from '../utils/cronogramaMontagem';
+import { type DecisaoDaTarefa } from '../utils/cronogramaMontagem';
 import { orcamentoBaseDoProjeto, criarPlanejamentoDoCronograma, criarPlanejamentoEmBranco, duplicarPlanejamento, type OrcamentoBase } from '../services/importarCronogramaService';
-import { indicadoresDePrazo, folhasDoOrcamento, diasEntre, type IndicadoresDePrazo } from '../utils/planejamentoIndicadores';
+import { indicadoresDePrazo, folhasDoOrcamento, diasEntre, terminoParaExibir, calendarioDoCronograma, type IndicadoresDePrazo } from '../utils/planejamentoIndicadores';
 import { situacaoDePrazo, diasPorExtenso } from '../utils/planejamentoGrupos';
 import { gerarModeloDeCronograma, NOME_DO_MODELO } from '../utils/cronogramaModelo';
 import { aplicarAtualizacao, diferencasDaAtualizacao, avulsasDoOutline, type ResultadoDaAtualizacao } from '../utils/cronogramaAtualizacao';
@@ -324,6 +324,9 @@ export function ImportarCronogramaSheet(props: Props) {
         return { ini: ini[0] ?? '', fim: fim[fim.length - 1] ?? '' };
     })() : null;
     const orcamentoEscolhido = orcamentos.find(o => o.id === orcamentoId);
+    // Término mostrado = último dia trabalhado (as diferenças guardam o fim do motor, o dia útil seguinte).
+    const calAtual = calendarioDoCronograma(scheduleAtual);
+    const fimVisto = (d: { inicio: string; termino: string }) => terminoParaExibir(d.inicio, d.termino, calAtual);
     const mudaNaAtualizacao = (chave: string) => {
         const dif = diferencas.get(chave);
         return !!dif && (dif.mudaDatas || dif.mudaPercentual);
@@ -586,7 +589,6 @@ export function ImportarCronogramaSheet(props: Props) {
                                         const d = decisoes.get(t.chave);
                                         const valor = d?.tipo === 'item' ? d.itemId : d?.tipo === 'ignorar' ? VALOR_IGNORAR : VALOR_SEM_CUSTO;
                                         const repetido = d?.tipo === 'item' && (usoDoItem.get(d.itemId) ?? 0) > 1;
-                                        const fimNoApp = t.inicio ? somarDiasUteis(t.inicio, t.marco ? 0 : Math.max(0, Math.round(t.duracaoDias ?? 0))) : '';
                                         return (
                                             <tr key={t.chave} className="align-top max-md:grid max-md:grid-cols-[auto_1fr] max-md:gap-x-3 max-md:gap-y-1 max-md:px-3 max-md:py-3">
                                                 <td className="px-3 py-2 text-gray-700 tabular-nums whitespace-nowrap max-md:p-0">{t.eap || '—'}</td>
@@ -597,7 +599,7 @@ export function ImportarCronogramaSheet(props: Props) {
                                                     const dif = atualizar ? diferencas.get(t.chave) : undefined;
                                                     if (!dif) return (
                                                         <>
-                                                            <td className="px-3 py-2 text-gray-700 tabular-nums whitespace-nowrap max-md:p-0" title={t.inicio ? `No app: ${dataBr(t.inicio)} a ${dataBr(fimNoApp)} (término = início + duração, como o motor do cronograma conta)` : undefined}>
+                                                            <td className="px-3 py-2 text-gray-700 tabular-nums whitespace-nowrap max-md:p-0">
                                                                 {t.inicio ? `${dataCurta(t.inicio)} – ${dataCurta(t.termino)}` : '—'}
                                                             </td>
                                                             <td className="px-3 py-2 text-gray-700 tabular-nums text-right max-md:p-0 max-md:text-left">{t.percentual}%</td>
@@ -609,8 +611,8 @@ export function ImportarCronogramaSheet(props: Props) {
                                                             <td className="px-3 py-2 tabular-nums whitespace-nowrap max-md:p-0">
                                                                 {dif.mudaDatas ? (
                                                                     <span className="flex flex-col text-gray-900">
-                                                                        <span className="text-gray-500 line-through" aria-label={`No app: ${dataBr(dif.noApp.inicio)} a ${dataBr(dif.noApp.termino)}`}>{dataCurta(dif.noApp.inicio)} – {dataCurta(dif.noApp.termino)}</span>
-                                                                        <span aria-label={`No arquivo: ${dataBr(dif.doArquivo.inicio)} a ${dataBr(dif.doArquivo.termino)}`}>{dataCurta(dif.doArquivo.inicio)} – {dataCurta(dif.doArquivo.termino)}</span>
+                                                                        <span className="text-gray-500 line-through" aria-label={`No app: ${dataBr(dif.noApp.inicio)} a ${dataBr(fimVisto(dif.noApp))}`}>{dataCurta(dif.noApp.inicio)} – {dataCurta(fimVisto(dif.noApp))}</span>
+                                                                        <span aria-label={`No arquivo: ${dataBr(dif.doArquivo.inicio)} a ${dataBr(fimVisto(dif.doArquivo))}`}>{dataCurta(dif.doArquivo.inicio)} – {dataCurta(fimVisto(dif.doArquivo))}</span>
                                                                     </span>
                                                                 ) : <span className="text-gray-600">sem mudança</span>}
                                                             </td>

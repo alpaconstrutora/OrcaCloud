@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ImportarCronogramaSheet from './ImportarCronogramaSheet';
+import { calendarioDoCronograma } from '../utils/planejamentoIndicadores';
 import type { ResultadoDaAtualizacao } from '../utils/cronogramaAtualizacao';
 import { useToast } from '../hooks/useToast';
 import Button from './ui/Button';
@@ -3248,12 +3249,12 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
 
     const handleExportExcel = () => {
         const projectName = projects?.find(p => p.id === settings.id)?.name || settings.name || 'Cronograma_Projeto';
-        exportScheduleToXlsx(hierarchy, projectName);
+        exportScheduleToXlsx(hierarchy, projectName, calendarioDoCronograma(schedule));
     };
 
     const handleExportCSV = () => {
         const projectName = projects?.find(p => p.id === settings.id)?.name || settings.name || 'Cronograma_Projeto';
-        exportScheduleToCsv(hierarchy, projectName);
+        exportScheduleToCsv(hierarchy, projectName, calendarioDoCronograma(schedule));
     };
 
     const getPhotosForItem = (itemId: string): string[] => {
@@ -4450,7 +4451,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 )}
 
                 {viewMode === 'network' && (
-                    <NetworkDiagramView hierarchy={hierarchy} />
+                    <NetworkDiagramView hierarchy={hierarchy} calendario={calendarioDoCronograma(schedule)} />
                 )}
 
                 {/* Content Area - Only visible in Table or Gantt mode.

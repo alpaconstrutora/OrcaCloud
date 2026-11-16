@@ -1,3 +1,4 @@
+import { terminoParaExibir, calendarioDoCronograma } from '../../utils/planejamentoIndicadores';
 import React, { useState, useMemo } from 'react';
 import {
     Building2,
@@ -54,6 +55,7 @@ function buildEapTree(
 ): { tree: EapNode[]; unassigned: EapNode } {
     const schedById: Record<string, typeof schedule.itemSchedules extends Array<infer T> ? T : never> = {};
     (schedule.itemSchedules ?? []).forEach(s => { (schedById as any)[s.id] = s; });
+    const cal = calendarioDoCronograma(schedule);
 
     // Group items by location path
     const map = new Map<string, {
@@ -91,7 +93,8 @@ function buildEapTree(
             budgetedTotal += b;
             weightedPct += ((sched?.manualRealPct ?? 0) / 100) * b;
             start = minDate(start, sched?.earlyStart ?? sched?.startDate);
-            end = maxDate(end, sched?.earlyFinish ?? sched?.endDate);
+            // Término = último dia trabalhado (o motor guarda o dia útil seguinte).
+            end = maxDate(end, terminoParaExibir(sched?.earlyStart ?? sched?.startDate, sched?.earlyFinish ?? sched?.endDate, cal) || undefined);
         });
         return {
             budgetedTotal,
@@ -229,9 +232,14 @@ export const EapPanel: React.FC<Props> = ({ hierarchy, schedule, onUpdateLocatio
 
     const schedById = useMemo(() => {
         const m: Record<string, any> = {};
-        (schedule.itemSchedules ?? []).forEach(s => { m[s.id] = s; });
+        const cal = calendarioDoCronograma(schedule);
+        // `fimExibido`: o término que as linhas mostram (último dia trabalhado, com o calendário).
+        (schedule.itemSchedules ?? []).forEach(s => {
+            m[s.id] = { ...s, fimExibido: terminoParaExibir(s.earlyStart ?? s.startDate, s.earlyFinish ?? s.endDate, cal) };
+        });
         return m;
-    }, [schedule.itemSchedules]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [schedule.itemSchedules, schedule.workSchedule, schedule.holidays, schedule.useWorkingDays]);
 
     const leafById = useMemo(() => {
         const m: Record<string, HierarchyNode> = {};
@@ -510,7 +518,7 @@ const ItemRowCompact: React.FC<{
 
     const realPct = sched?.manualRealPct ?? 0;
     const start = sched?.earlyStart ?? sched?.startDate;
-    const end = sched?.earlyFinish ?? sched?.endDate;
+    const end = sched?.fimExibido || (sched?.earlyFinish ?? sched?.endDate);
     const isEditing = editing === itemId;
 
     return (

@@ -70,9 +70,26 @@ const soDia = (v?: string): string => (v ? v.slice(0, 10) : '');
 
 const somarDias = (iso: string, n: number): string =>
     new Date(new Date(iso + 'T00:00:00Z').getTime() + n * 86400000).toISOString().slice(0, 10);
-const ehDiaUtil = (iso: string): boolean => {
-    const d = new Date(iso + 'T00:00:00Z').getUTCDay();
-    return d !== 0 && d !== 6;
+/** Calendário do cronograma (o mesmo que o motor recebe): dias da semana de trabalho e feriados. */
+export interface CalendarioDeTrabalho {
+    /** 0=Dom … 6=Sáb; padrão seg–sex. */
+    workDays?: number[];
+    /** 'AAAA-MM-DD'. */
+    holidays?: string[];
+    /** `false` = o cronograma conta dias corridos (todo dia é de trabalho). */
+    useWorkingDays?: boolean;
+}
+/** O calendário de um cronograma, no formato que estes utilitários entendem. */
+export const calendarioDoCronograma = (schedule?: { workSchedule?: { workDays?: number[] }; holidays?: string[]; useWorkingDays?: boolean } | null): CalendarioDeTrabalho => ({
+    workDays: schedule?.workSchedule?.workDays,
+    holidays: schedule?.holidays,
+    useWorkingDays: schedule?.useWorkingDays,
+});
+const ehDiaUtil = (iso: string, cal?: CalendarioDeTrabalho): boolean => {
+    if (cal?.useWorkingDays === false) return true;
+    const dias = cal?.workDays?.length ? cal.workDays : [1, 2, 3, 4, 5];
+    if (!dias.includes(new Date(iso + 'T00:00:00Z').getUTCDay())) return false;
+    return !cal?.holidays?.includes(iso);
 };
 
 /**
@@ -80,23 +97,39 @@ const ehDiaUtil = (iso: string): boolean => {
  * do planejamento). O motor grava `endDate = início + duração` em dias úteis, que é o dia útil
  * SEGUINTE ao último trabalhado: Divino, tarefa de 18/11 com 10 dias úteis → endDate 02/12,
  * trabalhada até 01/12 (= Término declarado). A lista mostrava 02/12 e o cabeçalho 01/12 (2ª crítica,
- * 15/11/2026). Marco (fim = início) é o próprio dia. Seg–sex; feriados do calendário do cronograma
- * não entram (raro: só erra se o dia útil anterior ao fim for feriado).
+ * 15/11/2026). Marco (fim = início) é o próprio dia. Com o calendário do cronograma (dias de trabalho e
+ * feriados — o mesmo que o motor usa); sem ele, seg–sex.
  */
-export function ultimoDiaTrabalhado(inicio: string, fimDoMotor: string): string {
+export function ultimoDiaTrabalhado(inicio: string, fimDoMotor: string, cal?: CalendarioDeTrabalho): string {
     if (!fimDoMotor) return '';
     if (!inicio || fimDoMotor <= inicio) return fimDoMotor;
     let d = somarDias(fimDoMotor, -1);
-    while (d > inicio && !ehDiaUtil(d)) d = somarDias(d, -1);
+    while (d > inicio && !ehDiaUtil(d, cal)) d = somarDias(d, -1);
     return d;
 }
 
+/** O caminho inverso: para a tarefa TRABALHAR até `ultimoDia`, o fim do motor é o próximo dia de
+ *  trabalho depois dele ("Estender até o fim do planejamento" gravava o término declarado como fim
+ *  do motor e a tarefa parava um dia útil antes). */
+export function fimDoMotorParaTrabalharAte(ultimoDia: string, cal?: CalendarioDeTrabalho): string {
+    if (!ultimoDia) return '';
+    let d = somarDias(ultimoDia, 1);
+    for (let i = 0; i < 366 && !ehDiaUtil(d, cal); i++) d = somarDias(d, 1);
+    return d;
+}
+
+/** Término para MOSTRAR (aceita ISO completo): o último dia trabalhado. Use em toda tela que exibe o
+ *  fim de uma tarefa — grade, Gantt, EAP, rede, cenários, exportação (2ª crítica, 16/11/2026). */
+export const terminoParaExibir = (inicio: string | null | undefined, fimDoMotor: string | null | undefined, cal?: CalendarioDeTrabalho): string =>
+    ultimoDiaTrabalhado(soDia(inicio ?? undefined), soDia(fimDoMotor ?? undefined), cal);
+
 export function indicadoresDePrazo(
     folhas: FolhaDoCronograma[],
-    schedule: Pick<ProjectSchedule, 'itemSchedules' | 'startDate' | 'endDate' | 'baselines' | 'activeBaselineId'> | null | undefined,
+    schedule: Pick<ProjectSchedule, 'itemSchedules' | 'startDate' | 'endDate' | 'baselines' | 'activeBaselineId' | 'workSchedule' | 'holidays' | 'useWorkingDays'> | null | undefined,
     hoje: string = hojeLocalISO(),
 ): IndicadoresDePrazo {
     const itens = schedule?.itemSchedules ?? [];
+    const cal = calendarioDoCronograma(schedule);
     const porId = new Map(itens.map(s => [s.id, s]));
 
     let somaPonderada = 0;
@@ -128,7 +161,7 @@ export function indicadoresDePrazo(
             pv += fracaoDecorrida(ini, fim, hoje) * orcado;
             comDatas.push({ ini, fim, orcado });
         }
-        const ultimoDia = ultimoDiaTrabalhado(ini, fim);
+        const ultimoDia = ultimoDiaTrabalhado(ini, fim, cal);
         if (ultimoDia && ultimoDia < hoje && real < 1) atrasadas++;
         if (sched?.isCritical) {
             criticas++;
@@ -139,7 +172,7 @@ export function indicadoresDePrazo(
     // Término previsto: como na Central de Comando, o maior término entre os itens do
     // cronograma; sem nenhum, o término declarado no próprio cronograma.
     const maiorFim = itens.reduce((max, s) => {
-        const e = ultimoDiaTrabalhado(soDia(s.earlyStart ?? s.startDate), soDia(s.earlyFinish ?? s.endDate));
+        const e = ultimoDiaTrabalhado(soDia(s.earlyStart ?? s.startDate), soDia(s.earlyFinish ?? s.endDate), cal);
         return e && (!max || e > max) ? e : max;
     }, '');
     const fimPrevisto = maiorFim || soDia(schedule?.endDate);
@@ -157,7 +190,7 @@ export function indicadoresDePrazo(
     if (baseline) {
         // Término × término: a linha de base guarda o fim do motor também.
         fimBaseline = Object.values(baseline.itemDates).reduce((max, d) => {
-            const e = ultimoDiaTrabalhado(soDia(d.startDate), soDia(d.endDate));
+            const e = ultimoDiaTrabalhado(soDia(d.startDate), soDia(d.endDate), cal);
             return e && (!max || e > max) ? e : max;
         }, '');
         if (fimBaseline && fimPrevisto) desvioDias = diasEntre(fimBaseline, fimPrevisto);

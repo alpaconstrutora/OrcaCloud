@@ -1,3 +1,4 @@
+import { terminoParaExibir, type CalendarioDeTrabalho } from '../../utils/planejamentoIndicadores';
 import React from 'react';
 import { GitBranch } from 'lucide-react';
 import { HierarchyNode, ItemScheduleDetails } from '../../types';
@@ -5,6 +6,8 @@ import { SchedulingEngine } from '../../utils/schedulingEngine';
 
 interface NetworkDiagramViewProps {
     hierarchy: HierarchyNode[];
+    /** Calendário do cronograma: o término mostrado é o último dia trabalhado. */
+    calendario?: CalendarioDeTrabalho;
 }
 
 const CARD_W = 176;
@@ -34,7 +37,7 @@ const fmtDate = (iso?: string) => {
  * destacado. Layout puramente calculado (sem medir DOM) — rank = maior caminho
  * a partir de uma tarefa sem predecessoras (dentro do conjunto visível).
  */
-const NetworkDiagramView: React.FC<NetworkDiagramViewProps> = ({ hierarchy }) => {
+const NetworkDiagramView: React.FC<NetworkDiagramViewProps> = ({ hierarchy, calendario }) => {
     const leaves = React.useMemo(() => flattenLeaves(hierarchy).filter(n => n.schedule), [hierarchy]);
 
     const { columns, edges, error, width, height } = React.useMemo(() => {
@@ -181,7 +184,7 @@ const NetworkDiagramView: React.FC<NetworkDiagramViewProps> = ({ hierarchy }) =>
                                     {node.name.length > 24 ? `${node.name.slice(0, 24)}…` : node.name}
                                 </text>
                                 <text x={10} y={48} fontSize={9} fill="#6b7280">
-                                    {fmtDate(sched?.earlyStart)} → {fmtDate(sched?.earlyFinish)}
+                                    {fmtDate(sched?.earlyStart)} → {fmtDate(terminoParaExibir(sched?.earlyStart, sched?.earlyFinish, calendario) || undefined)}
                                 </text>
                                 <text x={10} y={60} fontSize={9} fill="#9ca3af">
                                     Folga: {sched?.totalFloat ?? '—'}d

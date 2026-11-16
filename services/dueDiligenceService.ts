@@ -190,7 +190,7 @@ export const dueDiligenceService = {
         });
 
         const { data, error } = await supabase.functions.invoke('read-matricula', {
-            body: { fileBase64, mediaType: file.type },
+            body: { fileBase64, mediaType: file.type, organization_id: organizationId },
         });
         if (error) throw new Error(error.message ?? 'Erro ao processar matrícula');
         if (data?.error) throw new Error(data.error);

@@ -13,12 +13,33 @@ export interface RespostaDaIa {
   mudancas: MudancasDaIa | null;
   /** Por que não veio da IA (para a tela dizer "intérprete local: …"). */
   indisponivel: string | null;
+  /** O servidor RECUSOU (403 sem acesso / 429 limite do dia): a IA existe, `indisponivel` traz o motivo dele. */
+  recusada?: boolean;
 }
 
-export async function pedirMudancasAIa(pedido: string, contexto: unknown): Promise<RespostaDaIa> {
+/**
+ * 403 (sem acesso à organização do estudo) e 429 (limite diário de uso) não são "IA não configurada": devolve
+ * a mensagem que o servidor deu, lida de `error.context` como em `rastrearPlantaComIa`. Outros erros → null
+ * (quem chama mantém o tratamento de sempre).
+ */
+async function recusaDoServidor(error: unknown): Promise<string | null> {
+  const ctx = (error as { context?: Response }).context;
+  if (!ctx || (ctx.status !== 403 && ctx.status !== 429)) return null;
+  let detalhe: string | null = null;
   try {
-    const { data, error } = await supabase.functions.invoke('planta-ia', { body: { pedido, contexto } });
+    detalhe = typeof ctx.json === 'function' ? ((await ctx.json()) as { error?: string })?.error ?? null : null;
+  } catch {
+    detalhe = null;
+  }
+  return detalhe ?? (ctx.status === 429 ? 'limite diário da IA atingido' : 'sem acesso à IA neste estudo');
+}
+
+export async function pedirMudancasAIa(pedido: string, contexto: unknown, studyId: string): Promise<RespostaDaIa> {
+  try {
+    const { data, error } = await supabase.functions.invoke('planta-ia', { body: { pedido, contexto, study_id: studyId } });
     if (error) {
+      const recusa = await recusaDoServidor(error);
+      if (recusa) return { mudancas: null, indisponivel: recusa, recusada: true };
       const msg = (error as { message?: string }).message ?? String(error);
       return { mudancas: null, indisponivel: /Failed to send|Failed to fetch|non-2xx|503/i.test(msg) ? 'IA não configurada ou indisponível' : msg };
     }
@@ -41,10 +62,12 @@ export interface RespostaDaIaDaMassa {
   indisponivel: string | null;
 }
 
-export async function pedirMudancasDaMassaAIa(pedido: string, contexto: unknown): Promise<RespostaDaIaDaMassa> {
+export async function pedirMudancasDaMassaAIa(pedido: string, contexto: unknown, studyId: string): Promise<RespostaDaIaDaMassa> {
   try {
-    const { data, error } = await supabase.functions.invoke('planta-ia', { body: { pedido, contexto, modo: 'massa' } });
+    const { data, error } = await supabase.functions.invoke('planta-ia', { body: { pedido, contexto, modo: 'massa', study_id: studyId } });
     if (error) {
+      const recusa = await recusaDoServidor(error);
+      if (recusa) return { mudancas: null, indisponivel: recusa };
       const msg = (error as { message?: string }).message ?? String(error);
       return { mudancas: null, indisponivel: /Failed to send|Failed to fetch|non-2xx|503/i.test(msg) ? 'IA não configurada ou indisponível' : msg };
     }
@@ -69,9 +92,9 @@ export interface RespostaDoRastreio {
   indisponivel: string | null;
 }
 
-export async function rastrearPlantaComIa(imagemBase64: string, tipoDaImagem: 'image/png' | 'image/jpeg', largura: number, altura: number): Promise<RespostaDoRastreio> {
+export async function rastrearPlantaComIa(imagemBase64: string, tipoDaImagem: 'image/png' | 'image/jpeg', largura: number, altura: number, studyId: string): Promise<RespostaDoRastreio> {
   try {
-    const { data, error } = await supabase.functions.invoke('planta-ia', { body: { modo: 'rastrear', imagem: imagemBase64, tipoDaImagem, largura, altura } });
+    const { data, error } = await supabase.functions.invoke('planta-ia', { body: { modo: 'rastrear', imagem: imagemBase64, tipoDaImagem, largura, altura, study_id: studyId } });
     if (error) {
       const ctx = (error as { context?: Response }).context;
       let detalhe: string | null = null;

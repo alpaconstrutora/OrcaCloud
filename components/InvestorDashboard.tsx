@@ -561,7 +561,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         if (!e.target.files?.length || !orgId) return;
         const file = e.target.files[0];
         try {
-            const path = `reports/${Date.now()}_${file.name}`;
+            // A org no caminho é o que a policy do bucket confere (aplicar_20271116900800).
+            const path = `reports/${orgId}/${Date.now()}_${file.name}`;
             await storageService.uploadFile('documents', path, file);
             const url = storageService.getPublicUrl('documents', path);
             const saved = await investorPortalService.addReport({

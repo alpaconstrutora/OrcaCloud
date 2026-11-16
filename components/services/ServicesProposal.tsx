@@ -13,6 +13,7 @@ import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import { getServicesProposalNumberLockReason, regenerateServicesProposalNumber } from '../../services/servicesProposalNumberRegenService';
+import { escapeHtml } from '../../supabase/functions/_shared/html';
 
 interface Props {
   opportunityId: string;
@@ -184,7 +185,7 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <title>Proposta ${proposal?.proposal_number ?? ''}</title>
+  <title>Proposta ${escapeHtml(proposal?.proposal_number ?? '')}</title>
   <style>
     body { font-family: Arial, sans-serif; margin: 40px; color: #1a1a1a; }
     h1 { font-size: 22px; color: #1d4ed8; margin-bottom: 4px; }
@@ -200,9 +201,9 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
 </head>
 <body>
   <h1>Proposta Comercial</h1>
-  <div class="number">${proposal?.proposal_number ?? 'Nova proposta'} &nbsp;|&nbsp; ${new Date().toLocaleDateString('pt-BR')}</div>
+  <div class="number">${escapeHtml(proposal?.proposal_number ?? 'Nova proposta')} &nbsp;|&nbsp; ${new Date().toLocaleDateString('pt-BR')}</div>
 
-  ${form.scope ? `<h2>Escopo do Serviço</h2><p style="white-space:pre-line;font-size:13px">${form.scope}</p>` : ''}
+  ${form.scope ? `<h2>Escopo do Serviço</h2><p style="white-space:pre-line;font-size:13px">${escapeHtml(form.scope)}</p>` : ''}
 
   ${isEngineering ? `
   <h2>Composição do Valor</h2>
@@ -222,23 +223,23 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
     <tbody>
       ${budget.items.map(it => `
         <tr>
-          <td>${it.description}</td>
-          <td>${it.unit}</td>
-          <td>${it.quantity}</td>
+          <td>${escapeHtml(it.description)}</td>
+          <td>${escapeHtml(it.unit)}</td>
+          <td>${escapeHtml(it.quantity)}</td>
           <td>${fmt(it.unit_price)}</td>
           <td>${fmt(it.total)}</td>
         </tr>
       `).join('')}
       <tr class="total-row" style="background:#f0fdf4">
-        <td colspan="4" style="text-align:right">Total (com margem ${budget.margin_pct}%)</td>
+        <td colspan="4" style="text-align:right">Total (com margem ${escapeHtml(budget.margin_pct)}%)</td>
         <td style="color:#16a34a">${fmt(total)}</td>
       </tr>
     </tbody>
   </table>
   ` : `<h2>Valor</h2><p style="font-size:22px;font-weight:bold;color:#16a34a">${fmt(total)}</p>`}
 
-  ${form.payment_terms ? `<h2>Condições de Pagamento</h2><p style="font-size:13px;white-space:pre-line">${form.payment_terms}</p>` : ''}
-  ${form.delivery_term_days ? `<h2>Prazo de Execução</h2><p style="font-size:13px">${form.delivery_term_days} dias corridos</p>` : ''}
+  ${form.payment_terms ? `<h2>Condições de Pagamento</h2><p style="font-size:13px;white-space:pre-line">${escapeHtml(form.payment_terms)}</p>` : ''}
+  ${form.delivery_term_days ? `<h2>Prazo de Execução</h2><p style="font-size:13px">${escapeHtml(form.delivery_term_days)} dias corridos</p>` : ''}
   ${form.valid_until ? `<h2>Validade da Proposta</h2><p style="font-size:13px">Até ${new Date(form.valid_until).toLocaleDateString('pt-BR')}</p>` : ''}
 
   <h2>Assinatura</h2>

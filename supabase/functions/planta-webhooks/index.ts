@@ -106,10 +106,12 @@ serve(async (req: Request) => {
     } else {
       const corpo: CorpoDoWebhook = { id: e.id, evento: e.evento, criado_em: e.created_at, tentativa, organizacao_id: e.organization_id, dados: e.payload };
       const texto = JSON.stringify(corpo);
-      const assinatura = await assinar(w.segredo, texto);
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
       try {
+        // Dentro do try: um segredo que o WebCrypto recusa (ex.: vazio) vira
+        // falha DESTA entrega, não aborta o lote das outras organizações.
+        const assinatura = await assinar(w.segredo, texto);
         const r = await fetch(w.url, {
           method: 'POST',
           redirect: 'manual',

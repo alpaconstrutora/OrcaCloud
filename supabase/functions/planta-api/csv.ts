@@ -8,13 +8,18 @@
 // em português espera isso); decimal com vírgula; célula com `;`, aspas ou
 // quebra de linha vai entre aspas (aspas dobradas); CRLF; BOM no início para
 // o Excel abrir em UTF-8 sem perguntar.
+//
+// Célula de TEXTO que começa com `=`, `+`, `-`, `@`, tab ou CR ganha um `'` na
+// frente (OWASP, CSV injection): nome de ambiente/estudo vem do usuário e o
+// Excel avaliaria como fórmula. Número (`typeof number`) nunca passa por aqui.
 
 /** CSV das abas: `## Aba`, `;` como separador, decimal com vírgula, BOM. */
 export function csvDasAbas(abas: { nome: string; linhas: unknown[][] }[]): string {
   const celula = (v: unknown): string => {
     if (v === null || v === undefined) return '';
     if (typeof v === 'number') return Number.isInteger(v) ? String(v) : v.toFixed(4).replace(/0+$/, '').replace(/\.$/, '').replace('.', ',');
-    const s = String(v);
+    const t = String(v);
+    const s = /^[=+\-@\t\r]/.test(t) ? `'${t}` : t;
     return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const blocos = abas.map((a) => [`## ${a.nome}`, ...a.linhas.map((l) => l.map(celula).join(';'))].join('\r\n'));

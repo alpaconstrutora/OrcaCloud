@@ -154,11 +154,16 @@ export async function exigirUsuario(req: Request): Promise<ResultadoAuth> {
 }
 
 /**
- * O chamador é gestor de ALGUMA organização? Para operações sobre dado GLOBAL,
- * sem organização dona — o caso do `sinapi-import`, que grava na tabela de
- * preços usada por todos os tenants.
+ * O chamador é SUPERADMINISTRADOR da plataforma (`public.superadmins`)? Para
+ * operações sobre dado GLOBAL, sem organização dona — o caso do `sinapi-import`,
+ * que grava na tabela de preços usada por todos os tenants.
+ *
+ * Ser owner/admin de alguma organização NÃO basta: qualquer conta cria a
+ * própria organização como owner (`create_organization_v2`), então "gestor de
+ * qualquer org" equivalia a "qualquer usuário logado". É a mesma regra das
+ * policies de dado global com `is_superadmin()` (ÒPURA Market, cidades/bairros).
  */
-export async function exigirGestorDeQualquerOrg(req: Request): Promise<ResultadoAuth> {
+export async function exigirSuperadmin(req: Request): Promise<ResultadoAuth> {
     const usuario = await exigirUsuario(req);
     if (!usuario.ok) return usuario;
 
@@ -167,21 +172,22 @@ export async function exigirGestorDeQualquerOrg(req: Request): Promise<Resultado
         auth: { autoRefreshToken: false, persistSession: false },
     });
 
-    const { data: membros } = await admin
-        .from('organization_members')
-        .select('role')
+    // `superadmins.email` é gravado em minúsculas; `usuario.email` já vem assim.
+    // Erro na consulta nega (fail closed), não libera.
+    const { data: superadmin, error } = await admin
+        .from('superadmins')
+        .select('email')
         .eq('email', usuario.email)
-        .in('role', PAPEIS_GESTORES)
-        .limit(1);
+        .maybeSingle();
 
-    if (!membros || membros.length === 0) {
+    if (error || !superadmin) {
         return {
             ok: false,
             status: 403,
-            erro: 'Operação restrita a administradores ou proprietários.',
+            erro: 'Operação restrita aos administradores da plataforma.',
         };
     }
-    return { ...usuario, papel: membros[0].role };
+    return { ...usuario, papel: 'superadmin' };
 }
 
 /** Converte a falha em Response, preservando os headers de CORS da function. */

@@ -6,6 +6,7 @@ import { projectService } from '../services/projectService';
 import { ProfileGroup, UserProfile } from '../types';
 import { loginFeitoNestaAba, marcarLoginNestaAba, limparLoginNestaAba } from '../lib/loginNestaAba';
 import { tipoDoLinkDeAcesso, linkDeAcesso } from '../lib/linkDeAcesso';
+import { limparCacheDoStorage } from '../lib/cacheDoStorage';
 
 interface UseAuthSyncProps {
   session: any;
@@ -75,6 +76,9 @@ export const useAuthSync = ({
         marcarLoginNestaAba(newSession!.user.email);
       }
       setSession(newSession);
+      // Todo caminho de saída (Layout, portais, desconexão forçada, sessão expirada,
+      // outra aba) passa por aqui: arquivos do Storage em cache não sobrevivem à sessão.
+      if (event === 'SIGNED_OUT') limparCacheDoStorage();
       if (!newSession) {
         limparLoginNestaAba();
         setPortalTokenDoLogin?.(null);

@@ -2,7 +2,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { chamadaDeCron } from "../_shared/auth.ts"
+import { chamadaDeCron, exigirMembro, respostaDeErro } from "../_shared/auth.ts"
+import { escapeHtml } from "../_shared/html.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -17,8 +18,15 @@ const json = (body: unknown, status = 200) =>
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-function render(template: string, vars: Record<string, string>): string {
-    return template.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? '');
+// `escape` é aplicado só ao VALOR substituído, nunca ao template: o HTML do
+// template é da organização e continua valendo; o dado (party_name, descrição…)
+// pode vir de fora (ex.: síndico pelo portal) e não pode virar marcação.
+function render(
+    template: string,
+    vars: Record<string, string>,
+    escape: (valor: string) => string = (valor) => valor,
+): string {
+    return template.replace(/\{\{(\w+)\}\}/g, (_, key) => escape(vars[key] ?? ''));
 }
 
 function fmtBRL(n: number): string {
@@ -43,8 +51,8 @@ serve(async (req: Request) => {
 
     const authHeader = req.headers.get('Authorization') ?? '';
     // Cron compara com CRON_SECRET (ver _shared/auth.ts). O caminho manual
-    // abaixo continua igual: JWT do usuário via supabase.functions.invoke,
-    // validado em getUser() e restrito ao organization_id do body.
+    // abaixo: JWT do usuário via supabase.functions.invoke, validado em
+    // getUser(), e o chamador precisa ser MEMBRO do organization_id do body.
     const isCron     = chamadaDeCron(req);
 
     // Admin client sempre com service_role para as queries
@@ -69,6 +77,14 @@ serve(async (req: Request) => {
         } catch { /* body vazio */ }
 
         if (!manualOrgId) return json({ error: 'organization_id obrigatório no modo manual.' }, 400);
+
+        // Autenticar não basta: todas as consultas abaixo rodam como
+        // service_role e o e-mail sai para os devedores da org do body. Sem
+        // esta checagem, qualquer usuário logado disparava a régua de outro
+        // tenant. Fica DEPOIS do getUser()/400 de propósito: a sonda de
+        // scripts/check-rls-postura.sh manda '{}' sem token e espera 401.
+        const vinculo = await exigirMembro(req, manualOrgId);
+        if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
     } else {
         // Cron: aceita org_id opcional para filtrar
         try {
@@ -184,8 +200,10 @@ serve(async (req: Request) => {
 
                 if (existing) { totalSkipped++; continue; }
 
+                // Assunto é texto puro (sem escape, senão apareceria `&amp;`);
+                // corpo é HTML, então os valores entram escapados.
                 const subject  = render(rule.subject_template, templateVars);
-                const htmlBody = render(rule.body_template, templateVars);
+                const htmlBody = render(rule.body_template, templateVars, escapeHtml);
 
                 let sendStatus: 'sent' | 'failed' = 'sent';
                 let errorMsg: string | null = null;

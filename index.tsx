@@ -11,6 +11,7 @@ import { queryClient } from './lib/queryClient';
 import { ConfirmProvider } from './components/ui/confirm';
 import { ToastProvider } from './components/ui/toast';
 import { reloadOnceForChunkError } from './utils/chunkLoadError';
+import { CACHE_STORAGE_LEGADO } from './lib/cacheDoStorage';
 
 // Chunk de um deploy anterior sumiu do servidor (aba aberta durante a publicação):
 // o Vite avisa por este evento em QUALQUER import dinâmico — inclusive os que não
@@ -79,6 +80,9 @@ if ('serviceWorker' in navigator) {
   // entradas antigas para não deixar dado velho ocupando storage.
   if ('caches' in window) {
     caches.delete('supabase-api-cache').catch(() => {});
+    // Idem o cache legado do Storage, que guardava arquivo PRIVADO (ver
+    // lib/cacheDoStorage.ts). O SW novo não grava mais nele.
+    caches.delete(CACHE_STORAGE_LEGADO).catch(() => {});
   }
   // Tabs abertas por muito tempo: checa atualização do SW periodicamente (e ao voltar o foco).
   navigator.serviceWorker.ready.then((reg) => {

@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { chamadaDeCron } from "../_shared/auth.ts"
+import { escapeHtml } from "../_shared/html.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -91,10 +92,10 @@ serve(async (req: Request) => {
               <span style="font-size: 18px;">🔔</span>
               <span style="color: #fbbf24; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;">Alerta de Tarefa</span>
             </div>
-            <h1 style="color: #f1f5f9; font-size: 20px; font-weight: 800; margin: 0; line-height: 1.3;">${task.title}</h1>
+            <h1 style="color: #f1f5f9; font-size: 20px; font-weight: 800; margin: 0; line-height: 1.3;">${escapeHtml(task.title)}</h1>
           </div>
           <div style="padding: 28px;">
-            ${task.description ? `<p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">${task.description}</p>` : ''}
+            ${task.description ? `<p style="color: #475569; font-size: 14px; line-height: 1.6; margin: 0 0 20px;">${escapeHtml(task.description)}</p>` : ''}
             <div style="background: #fff7ed; border: 1px solid #fed7aa; border-radius: 8px; padding: 14px 16px; display: flex; align-items: center; gap: 10px; margin-bottom: 20px;">
               <span style="font-size: 16px;">⏰</span>
               <div>

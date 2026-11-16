@@ -11,6 +11,17 @@
  * Nada aqui grava no banco: presença e broadcast são efêmeros. O que persiste
  * continua sendo o rascunho salvo por cada cliente (idêntico dos dois lados
  * quando os comandos convergem) e as versões publicadas.
+ *
+ * ⚠️ CANAIS PRIVADOS (15/11/2026, achado de segurança F58). O canal era público:
+ * qualquer um com o id do ramo — um LEITOR, ou só a chave anon — difundia um
+ * `comando` que o editor de quem estava no ramo aplicava e GRAVAVA com a RLS
+ * dele. Agora são dois canais `private`, autorizados pelas policies de
+ * `realtime.messages` (`aplicar_20271116905800_blueprint_canal_ramo_privado.sql`):
+ * `blueprint:ramo:<id>` (presença e aviso de travas; todo membro da organização
+ * do ramo entra e escreve) e `blueprint:ramo:<id>:comandos` (todo membro ouve; só
+ * quem NÃO é leitor escreve). São dois porque o Realtime autoriza a escrita por
+ * canal, não por evento — e o leitor continua podendo avisar travas. O `comando`
+ * só é ouvido no canal de comandos: no outro, o leitor escreve.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { RealtimeChannel } from '@supabase/supabase-js';
@@ -68,6 +79,9 @@ export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceb
   const conectadoRef = useRef(false);
   const [avisos, setAvisos] = useState<AvisoDeColaboracao[]>([]);
   const canalRef = useRef<RealtimeChannel | null>(null);
+  /** O canal dos comandos do kernel e se ele está inscrito (o `difundir` só manda com ele `SUBSCRIBED`). */
+  const canalDeComandosRef = useRef<RealtimeChannel | null>(null);
+  const comandosConectadoRef = useRef(false);
   const presencaRef = useRef<{ levelId: string | null; selecionados: string[] }>({ levelId: null, selecionados: [] });
   const aoReceberRef = useRef(aoReceber);
   aoReceberRef.current = aoReceber;
@@ -87,13 +101,11 @@ export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceb
       setConectado(false);
       return;
     }
-    const canal = supabase.channel(`blueprint:ramo:${branchId}`, { config: { presence: { key: userId }, broadcast: { self: false, ack: false } } });
+    const canal = supabase.channel(`blueprint:ramo:${branchId}`, { config: { private: true, presence: { key: userId }, broadcast: { self: false, ack: false } } });
+    const canalDeComandos = supabase.channel(`blueprint:ramo:${branchId}:comandos`, { config: { private: true, broadcast: { self: false, ack: false } } });
     canalRef.current = canal;
-    canal
-      .on('presence', { event: 'sync' }, () => {
-        const estado = canal.presenceState<EstadoDePresenca>();
-        setEstados(Object.values(estado).flat());
-      })
+    canalDeComandosRef.current = canalDeComandos;
+    canalDeComandos
       .on('broadcast', { event: 'comando' }, ({ payload }: { payload: MensagemDeComando }) => {
         if (!payload || payload.autorId === identidadeRef.current.userId) return;
         const r = aoReceberRef.current(payload);
@@ -112,6 +124,14 @@ export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceb
           ]);
         }
       })
+      .subscribe((status: string) => {
+        comandosConectadoRef.current = status === 'SUBSCRIBED';
+      });
+    canal
+      .on('presence', { event: 'sync' }, () => {
+        const estado = canal.presenceState<EstadoDePresenca>();
+        setEstados(Object.values(estado).flat());
+      })
       .on('broadcast', { event: 'travas' }, ({ payload }: { payload: { autorId: string; autorNome: string; texto: string | null } }) => {
         if (!payload || payload.autorId === identidadeRef.current.userId) return;
         aoMudarTravasRef.current?.(payload.autorNome, payload.texto);
@@ -124,9 +144,12 @@ export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceb
       });
     return () => {
       canalRef.current = null;
+      canalDeComandosRef.current = null;
       conectadoRef.current = false;
+      comandosConectadoRef.current = false;
       setConectado(false);
       void supabase.removeChannel(canal);
+      void supabase.removeChannel(canalDeComandos);
     };
   }, [habilitado, branchId, userId, meuEstado]);
 
@@ -156,9 +179,9 @@ export function useBlueprintColaboracao({ branchId, userId, email, nome, aoReceb
    * resposta certa — e ela some sozinha quando o canal conecta.
    */
   const difundir = useCallback((comandos: Command[], hashDepois: string) => {
-    const canal = canalRef.current;
+    const canal = canalDeComandosRef.current;
     const { userId: u, nome: n, email: e } = identidadeRef.current;
-    if (!canal || !conectadoRef.current || !u || comandos.length === 0) return;
+    if (!canal || !comandosConectadoRef.current || !u || comandos.length === 0) return;
     const msg = novaMensagem(u, n || e || 'alguém', comandos, hashDepois);
     void canal.send({ type: 'broadcast', event: 'comando', payload: msg });
   }, []);

@@ -478,7 +478,7 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
                                 summary={summary}
                                 dateFrom={dateFrom}
                                 dateTo={dateTo}
-                                organizationName={orgName}
+                                organizationId={organizationId}
                                 onNarrativeChange={setNarrative}
                             />
                             {organizationId ? (

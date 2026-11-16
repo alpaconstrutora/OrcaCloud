@@ -23,6 +23,7 @@ import { destinoAposSair } from '../lib/entradasDoPortal';
 import { companyService } from '../services/companyService';
 import { INITIAL_PROJECT_SETTINGS, INITIAL_BUDGET } from '../constants';
 import { getInitialView, syncViewToUrl, broadcastSignOut } from '../lib/tabRouter';
+import { limparCacheDoStorage } from '../lib/cacheDoStorage';
 
 interface SessionData {
     user?: { id: string; email?: string; [key: string]: unknown };
@@ -382,6 +383,8 @@ export const useStore = create<AuthState & UIState & ProjectState>((set, get) =>
                 .filter(k => k.startsWith('sb-') || k.startsWith('orca_'))
                 .forEach(k => localStorage.removeItem(k));
             sessionStorage.clear();
+            // Arquivos do Storage guardados pelo Service Worker não sobrevivem à sessão.
+            limparCacheDoStorage();
         }
         set({
             session: null,

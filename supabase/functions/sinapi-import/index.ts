@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { exigirGestorDeQualquerOrg, respostaDeErro } from "../_shared/auth.ts"
+import { exigirSuperadmin, respostaDeErro } from "../_shared/auth.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -16,6 +16,25 @@ const json = (body: unknown, status = 200) =>
         status,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
+
+// Colunas que a importação grava — exatamente as que o `SinapiImportModal`
+// monta. Qualquer outra chave do lote é descartada antes do upsert com
+// service_role (que ignora a RLS): o cliente não escolhe colunas.
+const COLUNAS_SINAPI_ITEM = [
+    'code', 'reference_date', 'description', 'unit', 'type', 'nature',
+    'category', 'price', 'prices', 'composition', 'source', 'origin',
+] as const;
+
+const soColunasPermitidas = (item: unknown): Record<string, unknown> => {
+    const linha: Record<string, unknown> = {};
+    if (!item || typeof item !== 'object') return linha;
+    for (const coluna of COLUNAS_SINAPI_ITEM) {
+        if (Object.prototype.hasOwnProperty.call(item, coluna)) {
+            linha[coluna] = (item as Record<string, unknown>)[coluna];
+        }
+    }
+    return linha;
+};
 
 /**
  * Importa uma competência SINAPI a partir de batches JSON enviados pelo browser.
@@ -36,7 +55,7 @@ serve(async (req: Request) => {
         return new Response('ok', { headers: corsHeaders });
     }
 
-    // Sessão e papel são validados por `exigirGestorDeQualquerOrg`, abaixo.
+    // Sessão e papel são validados por `exigirSuperadmin`, abaixo.
 
     try {
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -50,9 +69,11 @@ serve(async (req: Request) => {
         // O dado é GLOBAL (sem organization_id): é a tabela de preços que
         // alimenta os orçamentos de TODOS os tenants, e o upsert é por
         // (code, reference_date) — sobrescreve preço existente, não só acrescenta.
-        // Por isso a exigência é ser gestor de alguma organização, e não
-        // membro de uma específica: não existe organização dona deste dado.
-        const vinculo = await exigirGestorDeQualquerOrg(req);
+        // Não existe organização dona deste dado, e "gestor de alguma
+        // organização" não restringia nada: qualquer conta cria a própria org
+        // como owner. Por isso a exigência é ser superadministrador da
+        // plataforma (`public.superadmins`), como no dado global do ÒPURA Market.
+        const vinculo = await exigirSuperadmin(req);
         if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
 
         const adminClient = createClient(supabaseUrl, serviceKey, {
@@ -69,7 +90,7 @@ serve(async (req: Request) => {
         if (Array.isArray(items) && items.length > 0) {
             const { error } = await adminClient
                 .from('sinapi_items')
-                .upsert(items, { onConflict: 'code,reference_date', ignoreDuplicates: false });
+                .upsert(items.map(soColunasPermitidas), { onConflict: 'code,reference_date', ignoreDuplicates: false });
             if (error) throw error;
         }
 

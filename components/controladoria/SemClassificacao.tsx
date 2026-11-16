@@ -78,6 +78,7 @@ const GavetaSemClassificacao: React.FC<{
 }> = ({ organizationId, escopo, onClose }) => {
     const setActiveView = useStore(s => s.setActiveView);
     const setManagementTab = useStore(s => s.setManagementTab);
+    const navigateToFocus = useStore(s => s.navigateToFocus);
     const [itens, setItens] = React.useState<LancamentoSemClassificacao[] | null>(null);
     const [falhou, setFalhou] = React.useState(false);
     const [tentativa, setTentativa] = React.useState(0);
@@ -105,11 +106,32 @@ const GavetaSemClassificacao: React.FC<{
     }, [itens]);
     const totalRealizado = (itens ?? []).filter(i => i.realizado).reduce((s, i) => s + i.valor, 0);
 
+    // Os títulos a pagar desta lista: o atalho abre Contas a Pagar SÓ com eles
+    // (recorte não salvo — ContasPagarManager). Antes abria a lista inteira e a
+    // pessoa tinha de achar os 60 de novo (2ª crítica, 15/11/2026).
+    const aPagar = [...new Set((itens ?? []).filter(i => i.titulo === 'pagar').map(i => i.id))];
+
     const irPara = (onde: 'plano' | 'pagar') => {
         onClose();
         if (onde === 'plano') { setManagementTab('plano_contas'); setActiveView('organization'); }
+        else if (aPagar.length > 0) navigateToFocus('contas-a-pagar', aPagar.join(','), 'RECORTE_SEM_CLASSIFICACAO');
         else setActiveView('contas-a-pagar');
     };
+
+    /** A linha abre o título onde o plano de contas se corrige. */
+    const abrirTitulo = (i: LancamentoSemClassificacao) => {
+        onClose();
+        if (i.titulo === 'pagar') navigateToFocus('contas-a-pagar', i.id, 'CONTA_PAGAR');
+        else if (i.titulo === 'receber') navigateToFocus('contas-a-receber', i.id, 'CONTA_RECEBER');
+        else if (i.titulo === 'tributo') {
+            if (i.darfId) navigateToFocus('tributos-a-pagar', i.darfId, 'DARF');
+            else setActiveView('tributos-a-pagar');
+        }
+    };
+    const ONDE: Record<'pagar' | 'receber' | 'tributo', string> = {
+        pagar: 'Contas a Pagar', receber: 'Contas a Receber', tributo: 'Tributos a Pagar',
+    };
+    const nTributos = (itens ?? []).filter(i => i.titulo === 'tributo').length;
 
     return (
         <Sheet open onClose={onClose} size="2xl">
@@ -164,12 +186,20 @@ const GavetaSemClassificacao: React.FC<{
                                         <tr key={i.chave}>
                                             <td className="px-3 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600 whitespace-nowrap">{dataBR(i.data)}</td>
                                             <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700 max-w-0 w-full">
-                                                <span className="block truncate" title={i.descricao}>{i.descricao}</span>
+                                                {i.titulo ? (
+                                                    <button type="button" onClick={() => abrirTitulo(i)}
+                                                        title={`Abrir em ${ONDE[i.titulo]}: ${i.descricao}`}
+                                                        className="block max-w-full truncate text-left text-blue-700 hover:underline rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
+                                                        {i.descricao}
+                                                    </button>
+                                                ) : (
+                                                    <span className="block truncate" title={`${i.descricao} — contrapartida: não é título a pagar nem a receber`}>{i.descricao}</span>
+                                                )}
                                                 <span className="block truncate text-xs text-gray-600" title={`${i.origem} · ${i.categoria ?? 'sem plano de contas'}`}>
                                                     {i.origem} · {i.categoria ? `“${i.categoria}”` : 'sem plano de contas'}
                                                 </span>
                                             </td>
-                                            <td className={`px-3 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums whitespace-nowrap ${i.valor < 0 ? 'text-red-700' : 'text-gray-800'}`}>{brl(i.valor)}</td>
+                                            <td className={`px-3 py-2.5 border-r border-gray-100 text-sm font-medium text-right tabular-nums whitespace-nowrap text-gray-800`}>{brl(i.valor)}</td>
                                             <td className={`px-3 py-2.5 text-sm font-normal whitespace-nowrap ${i.status === 'CONCILIATED' ? 'text-emerald-700' : 'text-amber-700'}`}>
                                                 {i.status === 'CONCILIATED' ? 'Conciliado' : 'Pendente'}
                                             </td>
@@ -182,6 +212,11 @@ const GavetaSemClassificacao: React.FC<{
                             {itens.length} {itens.length === 1 ? 'lançamento' : 'lançamentos'}
                             {' '}· no realizado: <span className="font-medium text-gray-800 tabular-nums">{brl(totalRealizado)}</span>
                             {regime === 'CAIXA' && ' (Caixa conta só o conciliado; os pendentes estão no previsto)'}.
+                            {nTributos > 0 && <>
+                                {' '}{nTributos === 1 ? '1 é tributo fora de DARF enviado e se resolve' : `${nTributos} são tributos fora de DARF enviado e se resolvem`} em
+                                {' '}<button type="button" onClick={() => { onClose(); setActiveView('tributos-a-pagar'); }}
+                                    className="font-medium text-blue-700 hover:underline rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">Tributos a Pagar</button>.
+                            </>}
                         </p>
                     </>
                 )}
@@ -193,7 +228,7 @@ const GavetaSemClassificacao: React.FC<{
                 </button>
                 <button type="button" onClick={() => irPara('pagar')}
                     className="h-9 px-3.5 rounded-[6px] bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2">
-                    Abrir Contas a Pagar
+                    {aPagar.length > 0 ? `Abrir ${aPagar.length === 1 ? 'o título' : `os ${aPagar.length} títulos`} em Contas a Pagar` : 'Abrir Contas a Pagar'}
                 </button>
             </SheetFooter>
         </Sheet>

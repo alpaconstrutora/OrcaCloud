@@ -112,8 +112,9 @@ describe('Fluxo de caixa — gráfico só com tendência', () => {
 });
 
 describe('CSV — um formato para as seis abas', () => {
-    it('vírgula entre colunas, texto entre aspas (aspas escapadas), número com ponto', () => {
+    // ";" e vírgula decimal desde a 2ª crítica (15/11/2026): o Excel pt-BR abre direto.
+    it('";" entre colunas, texto entre aspas (aspas escapadas), número com vírgula decimal', () => {
         expect(montarCSV(['Obra', 'Valor'], [['Garden "A"', 1234.567], [null, -5]]))
-            .toBe('"Obra","Valor"\n"Garden ""A""",1234.57\n,-5');
+            .toBe('"Obra";"Valor"\n"Garden ""A""";1234,57\n;-5');
     });
 });

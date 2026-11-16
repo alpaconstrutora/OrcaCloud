@@ -45,10 +45,11 @@ const GROUP_ORDER: DREGroup[] = [
 
 const fmt = formatMoney
 
+/** Saldo devedor ou credor é a natureza da conta, não um alarme: verde/vermelho
+ *  por sinal pintava metade do balancete de "problema" (§4.5; 2ª crítica,
+ *  15/11/2026). O sinal já está no número. */
 function colorSaldo(v: number) {
-    if (v > 0) return 'text-emerald-700 font-medium'
-    if (v < 0) return 'text-red-600 font-medium'
-    return 'text-gray-500 font-normal'
+    return v === 0 ? 'text-gray-600 font-normal' : 'text-gray-800 font-medium'
 }
 
 // ── Tipos internos ────────────────────────────────────────────────────────────

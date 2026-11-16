@@ -96,7 +96,7 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
           sub={search ? 'Os que casam com a busca' : 'No período'} />
         <KpiCard destaque label="Total de débitos" value={fmt(totalDebit)} />
         <KpiCard destaque label="Total de créditos" value={fmt(totalCredit)}
-          sub={Math.abs(totalDebit - totalCredit) < 0.005 ? 'Débitos = créditos' : `Diferença de ${fmt(totalDebit - totalCredit)}`} />
+          sub={shown.length === 0 ? undefined : Math.abs(totalDebit - totalCredit) < 0.005 ? 'Débitos = créditos' : `Diferença de ${fmt(totalDebit - totalCredit)}`} />
       </div>
       )}
 
@@ -146,7 +146,7 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
                     ['data', 'Data'], ['descricao', 'Descrição'], ['origem', 'Origem'],
                     ['contaDebito', 'Conta Débito'], ['contaCredito', 'Conta Crédito'], ['valor', 'Valor'], ['status', 'Status'],
                   ].map(([key, h]) => (
-                    <th key={key} className="px-6 py-2 border-r border-gray-100 font-semibold text-xs text-gray-700 whitespace-nowrap relative overflow-hidden">
+                    <th key={key} className={`px-6 py-2 border-r border-gray-100 font-semibold text-xs text-gray-700 whitespace-nowrap relative overflow-hidden ${key === 'valor' ? 'text-right' : ''}`}>
                       {h}
                       <cols.ResizeHandle colKey={key} />
                     </th>
@@ -163,12 +163,13 @@ export default function DiarioReport({ organizationId, escopo }: Props) {
                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
                       <span className="block truncate" title={e.description}>{e.description}</span>
                     </td>
-                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-indigo-700">
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">
                       {SOURCE_LABEL[e.sourceSystem ?? ''] ?? (e.sourceSystem ?? '—')}
                     </td>
-                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-blue-700">{e.debitAccount}</td>
-                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-emerald-700">{e.creditAccount}</td>
-                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 whitespace-nowrap">
+                    {/* Origem e contas em texto neutro (§4.5): a cor ficava sem significado. */}
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{e.debitAccount}</td>
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{e.creditAccount}</td>
+                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 whitespace-nowrap text-right tabular-nums">
                       {fmt(e.debitAmount)}
                     </td>
                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal">

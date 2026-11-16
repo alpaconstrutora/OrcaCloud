@@ -112,7 +112,7 @@ function SummaryRow({ linha, realizado, previsto, comPrevisto }: { linha: string
                         {ROTULO_DA_LINHA[linha] ?? linha}
                     </span>
                 </td>
-                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${realizado < 0 ? 'text-red-600' : 'text-amber-700'}`}>
+                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-amber-800`}>
                     {formatBRL(realizado)}
                 </td>
                 {comPrevisto && (
@@ -273,11 +273,12 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
                                 )}
                             </td>
                             <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-gray-700">{formatBRL(p.receita)}</td>
-                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-red-600">{formatBRL(p.custo)}</td>
-                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right font-medium tabular-nums ${p.margem < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                            {/* Cor por estado (§4.5): custo é custo, não alarme; vermelho só na margem abaixo do limiar. */}
+                            <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-gray-700">{formatBRL(p.custo)}</td>
+                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right font-medium tabular-nums ${tomDoResultado(p.margem) === 'alerta' ? 'text-red-700' : 'text-gray-900'}`}>
                                 {formatBRL(p.margem)}
                             </td>
-                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-normal ${(p.margem_pct ?? 0) < 0 ? 'text-red-600' : 'text-green-700'}`}>
+                            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-normal ${(p.margem_pct ?? 0) < 0 ? 'text-red-700' : 'text-gray-600'}`}>
                                 {formatPct(p.margem_pct)}
                             </td>
                             <Espaco />
@@ -287,8 +288,8 @@ function ProjectComparisonTable({ projects, onSelect }: { projects: DREProjectSu
                     <tr className="bg-gray-50 border-t-2 border-gray-200">
                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-900">Total</td>
                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-gray-900">{formatBRL(totals.receita)}</td>
-                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-red-600">{formatBRL(totals.custo)}</td>
-                        <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${totals.margem < 0 ? 'text-red-600' : 'text-gray-900'}`}>
+                        <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-gray-900">{formatBRL(totals.custo)}</td>
+                        <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${tomDoResultado(totals.margem) === 'alerta' ? 'text-red-700' : 'text-gray-900'}`}>
                             {formatBRL(totals.margem)}
                         </td>
                         <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-normal text-gray-600">

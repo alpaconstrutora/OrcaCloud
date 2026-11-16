@@ -9203,9 +9203,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         : null,
     [blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, zona.cidade?.name, hidroDoEstudo.hipoteses.pluvial, incendioDoEstudo.hipoteses],
   );
+  /**
+   * PA10a (15/11/2026): o que a entrada do prédio lê chega aos poucos (o catálogo de evaporadoras, os materiais, as
+   * premissas do estudo). Gerar antes de tudo chegar dava uma prévia que nascia VELHA — no R12, 3 minutos de geração e
+   * "o produto ou as hipóteses mudaram depois da prévia — gere de novo" (a climatização tinha saído sem o catálogo).
+   */
+  const carregandoAEntradaDoPredio =
+    catalogoCarregando || biblioteca.carregando || produtoDoEstudo.carregando || climatizacaoDoEstudo.carregando || hidroDoEstudo.carregando || incendioDoEstudo.carregando;
   const motivoParaNaoGerarOPredio = useMemo(
-    () => (telaAberta === 'predio' && entradaDoPredio ? motivoParaNaoGerarPredio(editor.model, entradaDoPredio) : null),
-    [telaAberta, entradaDoPredio, editor.model],
+    () =>
+      telaAberta === 'predio' && entradaDoPredio
+        ? (motivoParaNaoGerarPredio(editor.model, entradaDoPredio) ??
+          (carregandoAEntradaDoPredio ? 'Carregando as premissas do estudo (o catálogo de evaporadoras, os materiais e as premissas de climatização, água e incêndio) — um instante.' : null))
+        : null,
+    [telaAberta, entradaDoPredio, editor.model, carregandoAEntradaDoPredio],
   );
   const provaDoPredio = useMemo(
     () => (telaAberta === 'predio' && predio.plano && entradaDoPredio ? conferirPlanoDoPredio(editor.model, predio.plano, entradaDoPredio) : null),

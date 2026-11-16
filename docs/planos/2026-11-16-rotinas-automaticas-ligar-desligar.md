@@ -266,7 +266,7 @@ tabela de registro só-acréscimo; no front, catálogo puro → service → tela
 
 - [x] Desenho aprovado pelo usuário (16/11)
 - [x] Plano de implementação escrito (16/11)
-- [x] Item 1 — banco: migration `aplicar_20271116900000` APLICADA em 16/11; prova TUDO OK
+- [x] Item 1 — banco: migration `aplicar_20271116907000` (nasceu `20271116900000`, renomeada por colisão com outra frente) APLICADA em 16/11; prova TUDO OK
   (ensaio e banco aplicado); listar ≈ 420 ms como superadmin (3 medidas: 442/418/420 ms).
   `FOR UPDATE` em `cron.job` trocado por `pg_advisory_xact_lock` — o postgres do Supabase só
   tem SELECT em `cron.job` (42501 medido no ensaio).

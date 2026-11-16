@@ -1,7 +1,7 @@
 -- scripts/teste-rotinas-automaticas.sql
 -- Prova: Configurações › Rotinas automáticas — só superadmin lista e liga/desliga os jobs do
 -- pg_cron; cada mudança fica registrada; pedir o estado que já está não grava nada.
--- Migration: supabase/migrations/aplicar_20271116900000_rotinas_automaticas_ligar_desligar.sql
+-- Migration: supabase/migrations/aplicar_20271116907000_rotinas_automaticas_ligar_desligar.sql
 -- Plano:     docs/planos/2026-11-16-rotinas-automaticas-ligar-desligar.md (Task 1)
 --
 -- Personagens (contas reais):
@@ -16,7 +16,7 @@
 --
 -- Ensaio (migration ainda não aplicada):
 --   bash scripts/montar-ensaio.sh -o /tmp/e.sql scripts/teste-rotinas-automaticas.sql \
---        supabase/migrations/aplicar_20271116900000_rotinas_automaticas_ligar_desligar.sql
+--        supabase/migrations/aplicar_20271116907000_rotinas_automaticas_ligar_desligar.sql
 --   npx supabase db query --linked -f /tmp/e.sql
 -- Depois de aplicada:
 --   npx supabase db query --linked -f scripts/teste-rotinas-automaticas.sql

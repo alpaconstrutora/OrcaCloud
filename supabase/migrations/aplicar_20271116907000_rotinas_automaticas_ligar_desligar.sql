@@ -3,6 +3,12 @@
 -- Date: 2026-11-16
 -- Plano: docs/planos/2026-11-16-rotinas-automaticas-ligar-desligar.md (Task 1)
 -- Prova: scripts/teste-rotinas-automaticas.sql
+--
+-- ⚠️ JÁ APLICADA em 16/11/2026 com o nome antigo
+--    `aplicar_20271116900000_rotinas_automaticas_ligar_desligar.sql`.
+--    Renomeada para 20271116907000 porque outra frente chegou antes ao `main` com o
+--    mesmo prefixo (aplicar_20271116900000_rls_portal_tokens_sem_leitura_anon.sql).
+--    NÃO rodar de novo: a tabela e as duas funções já existem no banco.
 -- ==========================================================================
 -- Pedido do usuário (16/11/2026): "coloque todas com opcão para ativa-las e desativalas"
 -- — as 23 rotinas do pg_cron, em Configurações › Rotinas automáticas.

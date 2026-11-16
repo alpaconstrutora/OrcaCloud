@@ -650,9 +650,9 @@ tela (o motor não decide); "fase" = trabalho previsto.
 
 ## Estado
 
-**Resumo (16/11/2026):** PA0 a PA10b **no ar** — último merge 637bca4 (#499), produção servindo esse commit e a CI do
-main verde. **PA10c feita** (envio ao Empreendimento com as unidades do prédio e a rota de fuga limpa nos quatro
-prédios) — publicada com o PR dela; o que fica está em "Pendências em aberto". Kernel em `blueprint-kernel-ts-0.109.0`.
+**Resumo (16/11/2026):** **as fases PA0 a PA10c estão no ar** — último merge 6206737 (#503), produção servindo esse
+commit e a CI do main verde. O plano está concluído; o que fica (de propósito para o projetista, ou para depois) está em
+"Pendências em aberto". Kernel em `blueprint-kernel-ts-0.109.0`.
 
 | Fase | PR | Commit no main |
 |---|---|---|
@@ -674,7 +674,7 @@ prédios) — publicada com o PR dela; o que fica está em "Pendências em abert
 | PA9c — hidrantes, coluna, bomba e recalque | #459 | 0df7667 |
 | PA10a — desempenho e o tempo do R12 fixado | #495 | d1b7f59 |
 | PA10b — laje = passagem, água rebaixada, compatibilização | #499 | 637bca4 |
-| PA10c — envio ao Empreendimento e achados da rota | (este PR) | — |
+| PA10c — envio ao Empreendimento e achados da rota | #503 | 6206737 |
 
 | Fase | Situação |
 |---|---|

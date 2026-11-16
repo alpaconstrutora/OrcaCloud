@@ -1,7 +1,7 @@
 import React from 'react';
 import { supabase } from '../lib/supabase';
 import { MOCK_SINAPI_DB } from '../constants';
-import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, Layers, Percent, Landmark , HelpCircle, Tags } from 'lucide-react';
+import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, Layers, Percent, Landmark , HelpCircle, Tags, Timer } from 'lucide-react';
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import NomenclaturaTable from './settings/NomenclaturaTable';
@@ -20,6 +20,8 @@ import PisRatesSettings from './PisRatesSettings';
 import CofinsRatesSettings from './CofinsRatesSettings';
 import PortalHelpSettings from './PortalHelpSettings';
 import BrandsSettings from './settings/BrandsSettings';
+import RotinasAutomaticasSettings from './settings/RotinasAutomaticasSettings';
+import { rotinasAutomaticasService } from '../services/rotinasAutomaticasService';
 
 type SettingsLeafId =
     | 'nomenclatura'
@@ -27,7 +29,7 @@ type SettingsLeafId =
     | 'cat-empreendimentos' | 'cat-caracteristicas-unidade' | 'cat-financeiro' | 'cat-pagamentos'
     | 'catalogo-marcas'
     | 'indices' | 'tributos-geral' | 'tributos-inss' | 'tributos-pis' | 'tributos-cofins'
-    | 'whatsapp' | 'email' | 'database' | 'ajuda-portais';
+    | 'whatsapp' | 'email' | 'database' | 'rotinas-automaticas' | 'ajuda-portais';
 
 interface SettingsNavLeaf { id: SettingsLeafId; label: string; }
 interface SettingsNavNode {
@@ -69,12 +71,33 @@ const SETTINGS_NAV: SettingsNavNode[] = [
     { id: 'ajuda-portais', label: 'Ajuda dos Portais', icon: HelpCircle, leafId: 'ajuda-portais' },
 ];
 
+// Rotinas automáticas (16/11/2026) — liga/desliga os jobs do pg_cron para TODAS as
+// organizações; só superadmin vê (o banco recusa as RPCs para os demais).
+// docs/planos/2026-11-16-rotinas-automaticas-ligar-desligar.md
+const NO_ROTINAS_AUTOMATICAS: SettingsNavNode = {
+    id: 'rotinas-automaticas', label: 'Rotinas automáticas', icon: Timer, leafId: 'rotinas-automaticas',
+};
+
+function navDasConfiguracoes(ehSuperadmin: boolean): SettingsNavNode[] {
+    if (!ehSuperadmin) return SETTINGS_NAV;
+    const depoisDe = SETTINGS_NAV.findIndex(n => n.id === 'database') + 1;
+    return [...SETTINGS_NAV.slice(0, depoisDe), NO_ROTINAS_AUTOMATICAS, ...SETTINGS_NAV.slice(depoisDe)];
+}
+
 const Settings: React.FC = () => {
     const confirm = useConfirm();
     // Nomenclatura é a folha inicial (agora item de nível único, sem submenu).
     const [activeLeaf, setActiveLeaf] = React.useState<SettingsLeafId>('nomenclatura');
     const [openNavNodes, setOpenNavNodes] = React.useState<Record<string, boolean>>({});
     const toggleNavNode = (id: string) => setOpenNavNodes(o => ({ ...o, [id]: !o[id] }));
+
+    const [ehSuperadmin, setEhSuperadmin] = React.useState(false);
+    React.useEffect(() => {
+        let vivo = true;
+        rotinasAutomaticasService.souSuperadmin().then(sim => { if (vivo) setEhSuperadmin(sim); });
+        return () => { vivo = false; };
+    }, []);
+    const nav = React.useMemo(() => navDasConfiguracoes(ehSuperadmin), [ehSuperadmin]);
 
 
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
@@ -188,7 +211,7 @@ const Settings: React.FC = () => {
 
             <div className="flex gap-6 items-start">
                 <aside className="w-64 shrink-0 bg-gray-50 border border-gray-100 rounded-[10px] p-2 flex flex-col gap-0.5">
-                    {SETTINGS_NAV.map(node => node.children ? (
+                    {nav.map(node => node.children ? (
                         <div key={node.id}>
                             <button
                                 onClick={() => toggleNavNode(node.id)}
@@ -459,6 +482,7 @@ const Settings: React.FC = () => {
                 </div>
             )}
 
+            {activeLeaf === 'rotinas-automaticas' && ehSuperadmin && <RotinasAutomaticasSettings />}
             {activeLeaf === 'ajuda-portais' && <PortalHelpSettings />}
             {activeLeaf === 'cat-clientes' && <ClientCategoriesSettings />}
             {activeLeaf === 'cat-fornecedores' && <SupplierCategoriesSettings />}

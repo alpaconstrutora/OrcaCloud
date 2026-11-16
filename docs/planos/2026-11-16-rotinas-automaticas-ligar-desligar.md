@@ -277,7 +277,9 @@ tabela de registro só-acréscimo; no front, catálogo puro → service → tela
   `check-ui-standard.sh` exit 0. Interruptor NÃO vira antes de gravar (mostra só o estado do
   banco); o `title` das falhas mostra o erro só quando a ÚLTIMA execução falhou (a RPC devolve a
   mensagem da última execução, não da última falha).
-- [ ] Item 5 — folha nas Configurações
+- [x] Item 5 — folha nas Configurações: `components/Settings.tsx` (folha depois de "Banco de
+  Dados", só com `is_superadmin()` = true), `__tests__/components/SettingsRotinasAutomaticas.test.tsx`
+  2/2; `tsc --noEmit` 0 erros; 7 travas de UI/org 43/43; `check-ui-standard.sh` exit 0
 - [ ] Item 6 — conferência real e publicação
 
 ## Verificação

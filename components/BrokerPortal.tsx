@@ -134,7 +134,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
         .filter(g => g.items.length > 0);
 
     return (
-        <div className={isStandalone ? 'flex flex-col h-screen bg-white text-gray-800 overflow-hidden font-sans' : 'animate-in fade-in slide-in-from-top-4 duration-700'}>
+        <div className={isStandalone ? 'flex flex-col h-screen bg-white text-gray-800 overflow-hidden font-sans' : 'animate-in fade-in slide-in-from-top-4 duration-300'}>
             {/* Casca do portal público — banner + header + sidebar (Fase 1+2 do redesign) */}
             {/* Só no acesso pelo LINK. Quem entrou por e-mail e senha (`onLogout`
                 presente, 16/10/2026) não está num link público. */}

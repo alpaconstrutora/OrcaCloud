@@ -519,7 +519,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
     };
 
     return (
-        <div className="space-y-6 animate-in slide-in-from-right-4 duration-500 pb-20">
+        <div className="space-y-6 animate-in slide-in-from-right-4 duration-300 pb-20">
             {/* Header — mesmo padrão de página de SupplyChainQuotationComparison.tsx */}
             <div className="flex items-center justify-between bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
                 <div className="flex items-center gap-4">

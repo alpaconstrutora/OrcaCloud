@@ -162,6 +162,7 @@ import { desdobrarDerivacoes } from './blueprintEletrodutoSemDerivacao';
 import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, ramaisDaLajeDeCima, saidaDoRebaixoPelaParede, type FaixaDoForro } from './blueprintRotaPeloForro';
 import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
+import { cantosDaPeca, volumesDasPecasDeClimatizacao } from './blueprintRede';
 import { comodoDoPonto, encaminhamentoPorAmbiente } from './blueprintEncaminhamentoPorAmbiente';
 import { arvorePelasTravessias } from './blueprintForroEntreComodos';
 import { ambienteDoPonto } from './blueprintAgrupamentoDePontos';
@@ -252,6 +253,13 @@ export const RAIO_DE_ENCAIXE_ELETRICO_MM = 600;
  * `fracaoDentro` não mudam: são os mesmos da água, do esgoto e do pluvial.
  */
 export const FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM = 50;
+
+/**
+ * PA11 do prédio automático (16/11/2026): a reta da rede desvia da caixa de uma peça de climatização quando passa a
+ * menos do raio do tubo mais esta folga da faixa de cotas dela, mm — o diâmetro lançado é o mínimo e a ocupação ainda
+ * o aumenta (até 85 mm).
+ */
+export const FOLGA_VERTICAL_DO_EQUIPAMENTO_MM = 50;
 
 /**
  * Task 3, correção 2: a maior folga com que o anel EM ESQUADRO de `g` (`anelDoPilar`, lados afastados em paralelo e
@@ -517,10 +525,38 @@ export function planejarEletrodutos(
    */
   const outrasNaFaixa = (levelId: ObjectId, cota: number): Point[][] =>
     hip.noForro ? [...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)] : [];
+  /**
+   * PA11 do prédio automático (16/11/2026): a reta na cota da rede desvia também da CAIXA das peças de climatização
+   * (evaporadora, exaustor) — o eletroduto, lançado depois da climatização, cruzava a parede bem onde a evaporadora está
+   * pendurada e passava por dentro dela (R8: 56 no prédio inteiro). Vale a caixa que a rede alcança na vertical (o tubo
+   * e `FOLGA_VERTICAL_DO_EQUIPAMENTO_MM`, porque o diâmetro ainda cresce pela ocupação) e que não tem uma das pontas a
+   * menos de 50 mm (a ligação da própria peça, como o kernel conta, segue reta). Inflada como o pilar pela luz.
+   */
+  let caixasDeClimatizacao: Map<ObjectId, { anel: Point[]; zLo: number; zHi: number }[]> | null = null;
+  const equipamentosNaReta = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }, cota: number): { inflados: Point[][]; reais: Point[][] } => {
+    if (!caixasDeClimatizacao) {
+      caixasDeClimatizacao = new Map();
+      for (const v of volumesDasPecasDeClimatizacao(model)) {
+        const lista = caixasDeClimatizacao.get(v.levelId) ?? [];
+        lista.push({ anel: cantosDaPeca(v.at, v, v.rotacaoGraus) as Point[], zLo: v.cotaMm - v.alturaMm / 2, zHi: v.cotaMm + v.alturaMm / 2 });
+        caixasDeClimatizacao.set(v.levelId, lista);
+      }
+    }
+    const rv = hip.bitolaMm / 2 + FOLGA_VERTICAL_DO_EQUIPAMENTO_MM;
+    const reais = (caixasDeClimatizacao.get(levelId) ?? [])
+      .filter((c) => cota + rv > c.zLo && cota - rv < c.zHi)
+      .map((c) => c.anel)
+      .filter((g) => { const ligacao = anelDoPilar(g, 50) as Point[]; return !pointInPolygon(ligacao, a as Point) && !pointInPolygon(ligacao, b as Point); });
+    return { inflados: reais.length ? pilaresInflados(reais, a, b, hip.bitolaMm / 2 + FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM) : [], reais };
+  };
   const ligarNaRede = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }, cota: number): void => {
     const outras = outrasNaFaixa(levelId, cota);
     // Task 3, correção 2: sem contorno com os pilares inflados, a pegada real (o de antes, nunca pior).
-    const desvio = desvioDoPilar(a, b, [...pilaresDaReta(levelId, a, b), ...outras]) ?? (pelaLuzDoAmbiente ? desvioDoPilar(a, b, [...pegadas(levelId), ...outras]) : null);
+    const tentar = (eq: { inflados: Point[][]; reais: Point[][] } | null) =>
+      desvioDoPilar(a, b, [...pilaresDaReta(levelId, a, b), ...outras, ...(eq?.inflados ?? [])]) ?? (pelaLuzDoAmbiente ? desvioDoPilar(a, b, [...pegadas(levelId), ...outras, ...(eq?.reais ?? [])]) : null);
+    // PA11: com as caixas de climatização; sem contorno com elas, o de antes (nunca pior).
+    const eq = equipamentosNaReta(levelId, a, b, cota);
+    const desvio = (eq.reais.length ? tentar(eq) : null) ?? tentar(null);
     if (desvio == null) {
       semContorno++;
       addTrecho(levelId, a, cota, b, cota);

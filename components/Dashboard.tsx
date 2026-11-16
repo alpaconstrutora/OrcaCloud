@@ -100,7 +100,7 @@ const Dashboard: React.FC<DashboardProps> = ({ budget, settings, onNavigate }) =
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
+    <div className="space-y-6 animate-in fade-in duration-300">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
         <div className="flex items-center gap-4">
           {onNavigate && (

@@ -334,7 +334,7 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
     const divParcelas = diverge(cp?.paymentInstallments, formData.paymentInstallments);
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-300">
             {/* Cabeçalho §20 — h1 solto, subtítulo mt-1.5, ações à direita.
                 Mesmo desenho do detalhe do pedido (SupplyChainOrderDetails). */}
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">

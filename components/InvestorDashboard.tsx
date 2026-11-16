@@ -6,8 +6,8 @@ import { useOrgContext } from '../hooks/useOrgContext';
 import { Investor, investorService } from '../services/investorService';
 import { projectService, ProjectData } from '../services/projectService';
 import { investorPortalService, InvestorReport, InvestorOpportunity, ReportCategory } from '../services/investorPortalService';
-import { announcementsService } from '../services/announcementsService';
 import CommunicationCenter from './investor/CommunicationCenter';
+import AnnouncementsManager from './investor/AnnouncementsManager';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import MobilePreviewFrame from './MobilePreviewFrame';
@@ -982,7 +982,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     isPublicExperience ? (
                         <PortalFinance contributions={investorContributions} projectNames={projectNames} />
                     ) : (
-                        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <section>
                                 <div className="flex items-center gap-3 mb-8">
                                     <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
@@ -997,7 +997,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     isPublicExperience ? (
                         <PortalFiscal contributions={investorContributions} projectNames={projectNames} />
                     ) : (
-                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-700">
+                        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300">
                             <TaxReport
                                 investorContributions={investorContributions}
                                 activeProjects={activeProjects}
@@ -1105,11 +1105,14 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 prev.map(a => a.id === id ? { ...a, acknowledged: true } : a)
                             )}
                         />
+                    ) : isAdmin ? (
+                        // Gestor: CRUD dos comunicados, na organização do TOPO (REGRA #5) — lida
+                        // dentro do componente, não daqui (16/11/2026).
+                        <AnnouncementsManager />
                     ) : (
                         <CommunicationCenter
                             organizationId={orgId ?? ''}
                             investorId={investorProfile?.id}
-                            isAdmin={isAdmin}
                         />
                     )
                 )}

@@ -250,7 +250,7 @@ const UnidadeTab: React.FC<Props> = ({ dados, loading, desktopTabsBar }) => {
     }
 
     return (
-        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 space-y-6">
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-300 space-y-6">
             {desktopTabsBar}
 
             {dados.unidades.map((u: PortalUnidadeNegociada) => {

@@ -104,4 +104,21 @@ describe('animações de entrada (tw-animate-css)', () => {
     it('zoom-in sem número cresce do ZERO — modal e menu do app entram de 95% (zoom-in-95)', () => {
         expect(usos.get('zoom-in') ?? []).toEqual([]);
     });
+
+    it('entrada dura no máximo 300 ms (pedido de 16/11: "abas lentas" — havia 500 e 700 ms)', () => {
+        // Só o trecho de classe que tem `animate-in` (o `duration-*` dele é a duração da entrada).
+        const lentas: string[] = [];
+        for (const arq of arquivosDoApp()) {
+            fs.readFileSync(arq, 'utf8').split('\n').forEach((linha, i) => {
+                if (!linha.includes('animate-in')) return;
+                for (const pedaco of linha.split(/["'`{}]/)) {
+                    if (!pedaco.includes('animate-in')) continue;
+                    for (const m of pedaco.matchAll(/(?<![\w-])duration-(\d+)(?![\w-])/g)) {
+                        if (Number(m[1]) > 300) lentas.push(`${path.relative(RAIZ, arq)}:${i + 1} duration-${m[1]}`);
+                    }
+                }
+            });
+        }
+        expect(lentas).toEqual([]);
+    });
 });

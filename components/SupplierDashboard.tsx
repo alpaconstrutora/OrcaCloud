@@ -357,7 +357,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     };
 
     const renderOverview = () => (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 {/* Recent Negotiations & Orders (3/4) */}
                 <div className="lg:col-span-3 space-y-6">
@@ -493,7 +493,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
             const activeOrder = orders.find(o => o.id === activeNegotiationId);
 
             return (
-                <div className="space-y-6 animate-in fade-in duration-500">
+                <div className="space-y-6 animate-in fade-in duration-300">
                     <button
                         onClick={() => setActiveNegotiationId(null)}
                         className="flex items-center gap-2 text-xs font-black text-gray-400 hover:text-indigo-600 uppercase tracking-widest transition-colors mb-4 group"
@@ -526,7 +526,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         ].filter(n => n.item.toLowerCase().includes(searchNegotiations.toLowerCase()) || n.project.toLowerCase().includes(searchNegotiations.toLowerCase()));
 
         return (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-2 border-b border-gray-100 bg-white">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -616,7 +616,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                                     </div>
 
                                     {bidAnalysis[neg.id] && (
-                                        <div className="bg-indigo-50/50 p-4 rounded-[10px] border border-indigo-100/50 animate-in slide-in-from-top-4 duration-500">
+                                        <div className="bg-indigo-50/50 p-4 rounded-[10px] border border-indigo-100/50 animate-in slide-in-from-top-4 duration-300">
                                             <div className="flex items-start gap-3">
                                                 <div className={`p-2 rounded-[6px] ${bidAnalysis[neg.id]?.type === 'warning' ? 'bg-amber-100 text-amber-600' :
                                                     bidAnalysis[neg.id]?.type === 'success' ? 'bg-emerald-100 text-emerald-600' :
@@ -697,7 +697,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         if (activeOrderId) {
             if (orderViewMode === 'details') {
                 return (
-                    <div className={`${drillCard} animate-in fade-in slide-in-from-right-4 duration-500`}>
+                    <div className={`${drillCard} animate-in fade-in slide-in-from-right-4 duration-300`}>
                         <SupplyChainOrderDetails
                             orderId={activeOrderId}
                             onBack={() => {
@@ -756,7 +756,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 };
 
                 return (
-                    <div className={`${drillCard} animate-in fade-in slide-in-from-right-4 duration-500`}>
+                    <div className={`${drillCard} animate-in fade-in slide-in-from-right-4 duration-300`}>
                         <div className="flex items-center justify-between mb-8">
                             <button
                                 onClick={() => {
@@ -869,7 +869,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                         )}
 
                         {isEditingLogistics && (
-                            <div className={`mt-6 p-6 rounded-[10px] border animate-in fade-in slide-in-from-top-4 duration-500 ${drillPanel}`}>
+                            <div className={`mt-6 p-6 rounded-[10px] border animate-in fade-in slide-in-from-top-4 duration-300 ${drillPanel}`}>
                                 <h4 className={`text-sm font-semibold uppercase tracking-wider mb-6 ${drillPanelLabel}`}>Datas por Estágio</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                                     <div className="space-y-2">
@@ -908,7 +908,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         }
 
         return (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-2 border-b border-gray-100 bg-white flex items-center justify-end">
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
@@ -1093,7 +1093,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 // vocabulário do portal por fora, o conteúdo do app por dentro,
                 // com o acento coral vindo do `accent`.
                 return (
-                    <div className={`${drillCard} animate-in fade-in slide-in-from-right-4 duration-500`}>
+                    <div className={`${drillCard} animate-in fade-in slide-in-from-right-4 duration-300`}>
                         <QuotationResponseForm
                             request={quotation}
                             supplierId={effectiveSupplier.id}
@@ -1117,7 +1117,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
         );
 
         return (
-            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700">
+            <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-2 border-b border-gray-100 bg-white">
                         <div className="flex flex-col md:flex-row gap-2.5 items-center">
@@ -1194,7 +1194,7 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
     };
 
     const renderDocuments = () => (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-300">
             {effectiveSupplier ? (
                 <InvoiceManager supplier={effectiveSupplier} portalToken={portalToken} />
             ) : (

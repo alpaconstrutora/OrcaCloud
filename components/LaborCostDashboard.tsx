@@ -87,7 +87,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
     );
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500">
+        <div className="space-y-6 animate-in fade-in duration-300">
             {/* 1. Título */}
             <div>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Custo por Obra</h1>

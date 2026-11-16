@@ -246,7 +246,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                     <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8">
                         <div>
                             <div className="flex items-center gap-2 mb-2">
-                                <span className="bg-blue-500/30 text-blue-100 text-xs font-black px-2 py-0.5 rounded-full uppercase tracking-widest border border-blue-400/30">
+                                <span className="text-sm font-normal text-blue-100">
                                     Status: {settings.obraStatus || 'Em Andamento'}
                                 </span>
                                 {settings.code && (

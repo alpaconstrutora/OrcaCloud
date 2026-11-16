@@ -1,5 +1,6 @@
 import React from 'react';
 import Button from './ui/Button';
+import { useConfirm } from './ui/confirm';
 import { ProjectSettings, BudgetEntry } from '../types';
 import { parametricService } from '../services/parametricService';
 import { exportService } from '../services/exportService';
@@ -105,6 +106,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
   // `organizations[0]` — ver hooks/useOrgContext.tsx.
   const organizations = useStore(state => state.organizations);
   const { orgId: contextOrgId } = useOrgContext();
+  const confirm = useConfirm();
   const organization = organizations.find(o => o.id === contextOrgId);
 
   const [financialData, setFinancialData] = React.useState<{
@@ -179,13 +181,20 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
   // Aggregate for Pie Chart (by main phase if needed, currently using subphases for detail)
   const pieData = chartData;
 
-  const handleConvertToAddDetailed = () => {
+  const handleConvertToAddDetailed = async () => {
     const isFinancial = activeTab === 'financial';
-    const message = isFinancial
-      ? 'Deseja converter a estimativa FINANCEIRA (Verbas por etapa) em um orçamento analítico detalhado?'
-      : 'Deseja converter a lista de QUANTITATIVOS (Insumos NBR 12.721) em um orçamento analítico detalhado?';
+    const ok = await confirm({
+      title: isFinancial
+        ? 'Converter a estimativa financeira em orçamento analítico?'
+        : 'Converter os quantitativos em orçamento analítico?',
+      message: isFinancial
+        ? 'As verbas por etapa viram um orçamento analítico detalhado, editável item por item. Isso substitui qualquer orçamento existente.'
+        : 'Os insumos da NBR 12.721 viram um orçamento analítico detalhado, editável item por item. Isso substitui qualquer orçamento existente.',
+      variant: 'danger',
+      confirmLabel: 'Converter',
+    });
 
-    if (window.confirm(`${message}\n\nIsso permitirá a edição item por item e substituirá qualquer orçamento existente.`)) {
+    if (ok) {
       const items = isFinancial ? financialItems : quantitativeItems;
 
       onUpdateBudget(items);
@@ -957,16 +966,16 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                             <tbody className="divide-y divide-gray-50">
                               {parametricService.generateSCurveData(totalValue, simulationDuration).map((row) => (
                                 <tr key={row.month} className="hover:bg-gray-50/50 transition-colors">
-                                  <td className="px-6 py-3 font-bold text-gray-700">Mês {row.month}</td>
-                                  <td className="px-6 py-3 text-right font-mono text-table-body text-blue-600 font-bold">
+                                  <td className="px-6 py-3 text-sm font-normal text-gray-700">Mês {row.month}</td>
+                                  <td className="px-6 py-3 text-right text-sm font-medium text-gray-800">
                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.periodic)}
                                   </td>
-                                  <td className="px-6 py-3 text-right font-mono text-table-body text-gray-900 font-bold">
+                                  <td className="px-6 py-3 text-right text-sm font-medium text-gray-800">
                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(row.cumulative)}
                                   </td>
                                   <td className="px-6 py-3 text-right">
                                     <div className="flex items-center justify-end gap-2">
-                                      <span className="text-xs font-black text-gray-400">{((row.cumulative / totalValue) * 100).toFixed(1)}%</span>
+                                      <span className="text-sm font-normal text-gray-600">{((row.cumulative / totalValue) * 100).toFixed(1)}%</span>
                                       <div className="w-16 h-1 bg-gray-100 rounded-full overflow-hidden">
                                         <div className="h-full bg-blue-600" style={{ width: `${(row.cumulative / totalValue) * 100}%` }}></div>
                                       </div>
@@ -993,7 +1002,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                         <div className="p-8 bg-blue-50/30 rounded-3xl border border-blue-100 relative">
-                          <span className="absolute -top-3 left-8 px-3 py-1 bg-blue-600 text-white text-xs font-black rounded-full uppercase tracking-widest leading-none">Produto Atual</span>
+                          <p className="text-sm font-semibold text-blue-700 mb-2">Produto atual</p>
                           <h4 className="text-lg font-black text-gray-900 mb-1">{settings.standard}</h4>
                           <p className="text-xs font-bold text-blue-600 uppercase mb-6 tracking-tight">{CUB_STANDARDS_DATA[settings.standard]?.label}</p>
 
@@ -1010,7 +1019,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                         </div>
 
                         <div className="p-8 bg-white rounded-3xl border border-gray-100 shadow-xl relative">
-                          <span className="absolute -top-3 left-8 px-3 py-1 bg-emerald-600 text-white text-xs font-black rounded-full uppercase tracking-widest leading-none">Estudo Comparativo</span>
+                          <p className="text-sm font-semibold text-emerald-700 mb-4">Estudo comparativo</p>
                           <div className="mb-6">
                             <label className="block text-xs font-semibold text-slate-500 mb-2">Selecionar Padrão Alternativo</label>
                             <select
@@ -1132,10 +1141,14 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                                   <Button
                                     variant="ghost"
                                     size="icon"
-                                    onClick={() => {
-                                      if (window.confirm("Deseja aplicar as taxas deste cenário na simulação atual?")) {
-                                        setKFactor(snap.kFactor);
-                                      }
+                                    onClick={async () => {
+                                      const ok = await confirm({
+                                        title: 'Aplicar as taxas deste cenário?',
+                                        message: 'A simulação atual passa a usar o fator K deste cenário.',
+                                        variant: 'default',
+                                        confirmLabel: 'Aplicar',
+                                      });
+                                      if (ok) setKFactor(snap.kFactor);
                                     }}
                                     className="bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-600 shadow-sm"
                                     title="Restaurar Parâmetros"
@@ -1262,16 +1275,16 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                           const coef = (item.quantity / (settings.area || 1));
                           return (
                             <tr key={idx} className="hover:bg-indigo-50/30 transition-colors group">
-                              <td className="px-6 py-4 font-bold text-gray-700 group-hover:text-indigo-700 transition-colors">
+                              <td className="px-6 py-4 font-normal text-gray-700 group-hover:text-indigo-700 transition-colors">
                                 {item.sinapiItem.description.replace('NBR 12721 - ', '')}
                               </td>
                               <td className="px-6 py-4 text-center">
-                                <span className="px-2 py-1 bg-gray-100 rounded text-xs font-bold text-gray-500 uppercase">{item.sinapiItem.unit}</span>
+                                <span className="text-sm font-normal text-gray-600">{item.sinapiItem.unit}</span>
                               </td>
-                              <td className="px-6 py-4 text-right font-black text-gray-900 bg-gray-50/30">
+                              <td className="px-6 py-4 text-right font-normal text-gray-700 bg-gray-50/30">
                                 {item.quantity.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}
                               </td>
-                              <td className="px-6 py-4 text-right text-gray-500 font-mono text-table-body">
+                              <td className="px-6 py-4 text-right text-sm font-normal text-gray-600">
                                 {coef.toLocaleString('pt-BR', { maximumFractionDigits: 4 })}
                               </td>
                             </tr>

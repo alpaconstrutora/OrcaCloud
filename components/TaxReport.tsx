@@ -55,7 +55,7 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
                 </div>
                 <div className="relative z-10 max-w-2xl">
                     <div className="flex items-center gap-2 mb-4">
-                        <span className="px-3 py-1 bg-white/20 rounded-full text-xs font-black uppercase tracking-widest border border-white/10">
+                        <span className="text-sm font-medium text-indigo-200">
                             Consultor IR {year}
                         </span>
                     </div>

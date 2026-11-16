@@ -198,8 +198,8 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
             </ResponsiveContainer>
           </div>
           <div className="flex items-center justify-center gap-6 mt-4">
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full border-2 border-blue-500 border-dashed" /><span className="text-xs font-black text-gray-400 uppercase">Planejado</span></div>
-              <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-emerald-500" /><span className="text-xs font-black text-gray-400 uppercase">Realizado</span></div>
+              <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-[2px] border-2 border-blue-500 border-dashed" /><span className="text-xs text-gray-500">Planejado</span></div>
+              <div className="flex items-center gap-2"><div className="w-2.5 h-2.5 rounded-[2px] bg-emerald-500" /><span className="text-xs text-gray-500">Realizado</span></div>
           </div>
         </div>
 

@@ -306,27 +306,27 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                 <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 min-w-[300px]">Item / Especificação</th>
                                 {responses.map(resp => (
                                     <th key={resp.id} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 border-l border-gray-100 text-center min-w-[200px]">
-                                        <div className="flex flex-col items-center gap-1">
+                                        <div className="flex flex-col items-center gap-1 normal-case tracking-normal font-normal">
                                             <User className="w-4 h-4 text-blue-500" />
-                                            <span className="text-gray-900">{getSupplierDisplayName({ name: resp.supplierName || '-', nickname: resp.supplierNickname }, nameMode)}</span>
+                                            <span className="text-sm font-medium text-gray-900">{getSupplierDisplayName({ name: resp.supplierName || '-', nickname: resp.supplierNickname }, nameMode)}</span>
                                             <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
                                                 {resp.negotiationStatus !== 'Original' && (
-                                                    <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest ${resp.negotiationStatus === 'Contraproposta' ? 'bg-orange-100 text-orange-600' :
-                                                        resp.negotiationStatus === 'Nova Proposta' ? 'bg-indigo-100 text-indigo-600' :
-                                                            resp.negotiationStatus === 'Aceita' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
+                                                    <span className={`text-xs font-normal ${resp.negotiationStatus === 'Contraproposta' ? 'text-orange-700' :
+                                                        resp.negotiationStatus === 'Nova Proposta' ? 'text-indigo-700' :
+                                                            resp.negotiationStatus === 'Aceita' ? 'text-green-700' : 'text-red-600'
                                                         }`}>
                                                         {resp.negotiationStatus === 'Nova Proposta' ? 'Fornecedor Contrapropôs' : resp.negotiationStatus}
                                                     </span>
                                                 )}
                                                 <button
                                                     onClick={() => handleStartNegotiation(resp, 'history')}
-                                                    className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-gray-100 text-gray-500 hover:bg-gray-200 transition-colors"
+                                                    className="px-2 py-0.5 rounded-[6px] text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
                                                 >
                                                     Histórico
                                                 </button>
                                                 <button
                                                     onClick={() => handleWhatsAppShare(resp.id)}
-                                                    className="px-2 py-0.5 rounded-full text-[8px] font-black uppercase tracking-widest bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 transition-colors flex items-center gap-1"
+                                                    className="px-2 py-0.5 rounded-[6px] text-xs font-medium bg-[#25D366]/10 text-green-700 hover:bg-[#25D366]/20 transition-colors flex items-center gap-1"
                                                     title="Chamar no WhatsApp"
                                                 >
                                                     <MessageCircle className="w-2.5 h-2.5 fill-current" />
@@ -342,10 +342,10 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                             {request.items.map(reqItem => (
                                 <tr key={reqItem.code} className="hover:bg-gray-50/30 transition-colors">
                                     <td className="px-6 py-5">
-                                        <p className="text-sm font-bold text-gray-900">{reqItem.description}</p>
+                                        <p className="text-sm font-normal text-gray-700">{reqItem.description}</p>
                                         <div className="flex items-center gap-2 mt-1">
-                                            <span className="text-xs font-mono font-bold text-gray-400">#{reqItem.code}</span>
-                                            <span className="text-xs font-black text-blue-600 uppercase bg-blue-50 px-1.5 py-0.5 rounded">{reqItem.quantity} {reqItem.unit}</span>
+                                            <span className="text-sm font-normal text-gray-500">#{reqItem.code}</span>
+                                            <span className="text-sm font-normal text-blue-600">{reqItem.quantity} {reqItem.unit}</span>
                                         </div>
                                     </td>
                                     {responses.map(resp => {
@@ -357,23 +357,23 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                 {effective ? (
                                                     <div className="space-y-1">
                                                         <div className="flex flex-col items-center">
-                                                            <p className={`text-sm font-black ${isLowest ? 'text-green-600' : (effective.isNegotiated ? 'text-orange-600' : 'text-gray-900')}`}>
+                                                            <p className={`text-sm font-medium ${isLowest ? 'text-green-600' : (effective.isNegotiated ? 'text-orange-600' : 'text-gray-900')}`}>
                                                                 {fmt(effective.unitPrice)}
                                                             </p>
                                                             {effective.isNegotiated && (
-                                                                <span className="text-[8px] font-black text-orange-500 uppercase tracking-tighter">Negociado</span>
+                                                                <span className="text-xs font-normal text-orange-600">Negociado</span>
                                                             )}
                                                         </div>
-                                                        <p className="text-xs font-bold text-gray-400">Total: {fmt(effective.total)}</p>
+                                                        <p className="text-sm font-normal text-gray-600">Total: {fmt(effective.total)}</p>
                                                         {isLowest && (
-                                                            <div className="flex items-center justify-center gap-1 text-[9px] font-black text-green-500 uppercase tracking-widest">
+                                                            <div className="flex items-center justify-center gap-1 text-xs font-normal text-green-700">
                                                                 <TrendingDown className="w-3 h-3" />
                                                                 Melhor Preço
                                                             </div>
                                                         )}
                                                     </div>
                                                 ) : (
-                                                    <span className="text-xs font-bold text-gray-300 uppercase tracking-widest italic">Não cotado</span>
+                                                    <span className="text-sm font-normal text-gray-500 italic">Não cotado</span>
                                                 )}
                                             </td>
                                         );
@@ -383,7 +383,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
 
                             {/* Totals Row */}
                             <tr className="bg-gray-900 text-white">
-                                <td className="px-6 py-6 text-right text-table-body font-black uppercase tracking-widest opacity-60">Valor Total da Proposta</td>
+                                <td className="px-6 py-6 text-right text-sm font-normal text-gray-300">Valor Total da Proposta</td>
                                 {responses.map(resp => {
                                     const total = resp.items.reduce((acc, item) => acc + (getEffectiveItem(resp, item.code)?.total || 0), 0);
                                     const pm = resp.counterProposal?.paymentMethod || resp.paymentMethod || 'A combinar';
@@ -395,11 +395,11 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                         <td key={resp.id} className="px-6 py-6 text-center border-l border-white/10">
                                             <div className="flex flex-col items-center">
                                                 {resp.counterProposal && (
-                                                    <span className="text-xs font-bold opacity-30 line-through mb-0.5">
+                                                    <span className="text-sm font-normal text-gray-400 line-through mb-0.5">
                                                         {fmt(resp.items.reduce((acc, i) => acc + (i.total || 0), 0))}
                                                     </span>
                                                 )}
-                                                <p className={`text-lg font-black ${resp.counterProposal ? 'text-orange-400' : ''}`}>{fmt(total)}</p>
+                                                <p className={`text-sm font-medium ${resp.counterProposal ? 'text-orange-400' : ''}`}>{fmt(total)}</p>
                                             </div>
                                         </td>
                                     );
@@ -408,7 +408,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
 
                             {/* Payment Method Info */}
                             <tr className="bg-gray-50/30">
-                                <td className="px-6 py-4 text-right text-xs font-black uppercase tracking-widest text-gray-400 border-b border-gray-100">Forma de Pagamento</td>
+                                <td className="px-6 py-4 text-right text-sm font-normal text-gray-500 border-b border-gray-100">Forma de Pagamento</td>
                                 {responses.map(resp => {
                                     const original = resp.paymentMethod || 'Não informado';
                                     const negotiated = resp.counterProposal?.paymentMethod;
@@ -418,9 +418,9 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                         <td key={resp.id} className="px-6 py-4 text-center border-l border-gray-100 border-b border-gray-100">
                                             <div className="flex flex-col items-center justify-center">
                                                 {hasChanged && (
-                                                    <span className="text-[9px] font-bold text-gray-400 line-through mb-0.5">{original}</span>
+                                                    <span className="text-sm font-normal text-gray-500 line-through mb-0.5">{original}</span>
                                                 )}
-                                                <div className="flex items-center gap-1.5 text-xs font-bold text-gray-900">
+                                                <div className="flex items-center gap-1.5 text-sm font-normal text-gray-700">
                                                     <CreditCard className={`w-3.5 h-3.5 ${hasChanged ? 'text-orange-500' : 'text-blue-500'}`} />
                                                     <span className={hasChanged ? 'text-orange-600' : ''}>{negotiated || original}</span>
                                                 </div>
@@ -432,7 +432,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
 
                             {/* Payment Terms Info */}
                             <tr className="bg-gray-50/30">
-                                <td className="px-6 py-4 text-right text-xs font-black uppercase tracking-widest text-gray-400 border-b border-gray-100">Condições de Pagamento</td>
+                                <td className="px-6 py-4 text-right text-sm font-normal text-gray-500 border-b border-gray-100">Condições de Pagamento</td>
                                 {responses.map(resp => {
                                     const renderTerm = (type: string, days?: number, inst?: number) => {
                                         if (type === 'Vista') return `${days || 0} Dias`;
@@ -448,9 +448,9 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                         <td key={resp.id} className="px-6 py-4 text-center border-l border-gray-100 border-b border-gray-100">
                                             <div className="flex flex-col items-center justify-center">
                                                 {hasChanged && (
-                                                    <span className="text-[9px] font-bold text-gray-400 line-through mb-0.5">{original}</span>
+                                                    <span className="text-sm font-normal text-gray-500 line-through mb-0.5">{original}</span>
                                                 )}
-                                                <div className="text-xs font-bold text-gray-900 uppercase tracking-tighter">
+                                                <div className="text-sm font-normal text-gray-700">
                                                     <span className={hasChanged ? 'text-orange-600' : ''}>{negotiated || original}</span>
                                                 </div>
                                             </div>
@@ -461,7 +461,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
 
                             {/* Delivery Info */}
                             <tr className="bg-gray-50/50">
-                                <td className="px-6 py-4 text-right text-xs font-black uppercase tracking-widest text-gray-400">Entrega Estimada</td>
+                                <td className="px-6 py-4 text-right text-sm font-normal text-gray-500">Entrega Estimada</td>
                                 {responses.map(resp => {
                                     const originalDate = resp.deliveryDate ? new Date(resp.deliveryDate + 'T12:00:00').toLocaleDateString('pt-BR') : 'Não informado';
                                     const cp = resp.counterProposal;
@@ -477,18 +477,18 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                             <div className="flex flex-col items-center justify-center gap-1">
                                                 <div className="flex flex-col items-center">
                                                     {dateChanged && (
-                                                        <span className="text-[9px] font-bold text-gray-400 line-through">{originalDate}</span>
+                                                        <span className="text-sm font-normal text-gray-500 line-through">{originalDate}</span>
                                                     )}
-                                                    <div className="flex items-center gap-2 text-xs font-bold text-gray-900">
+                                                    <div className="flex items-center gap-2 text-sm font-normal text-gray-700">
                                                         <Calendar className={`w-3.5 h-3.5 ${dateChanged ? 'text-orange-500' : 'text-blue-500'}`} />
                                                         <span className={dateChanged ? 'text-orange-600' : ''}>{negotiatedDate || originalDate}</span>
                                                     </div>
                                                 </div>
                                                 <div className="flex flex-col items-center">
                                                     {methodChanged && (
-                                                        <span className="text-[8px] font-bold text-gray-400 line-through">{originalMethod}</span>
+                                                        <span className="text-sm font-normal text-gray-500 line-through">{originalMethod}</span>
                                                     )}
-                                                    <p className={`text-[9px] font-bold uppercase tracking-widest ${methodChanged ? 'text-orange-500' : 'text-gray-400'}`}>
+                                                    <p className={`text-sm font-normal ${methodChanged ? 'text-orange-600' : 'text-gray-500'}`}>
                                                         {negotiatedMethod || originalMethod}
                                                     </p>
                                                 </div>
@@ -509,7 +509,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                     <button
                                                         onClick={() => handleNegotiationAction(resp.id, true)}
                                                         disabled={processing}
-                                                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-green-600 text-white rounded-xl text-xs font-black uppercase tracking-widest hover:bg-green-700 shadow-md transition-all active:scale-95"
+                                                        className="w-full flex items-center justify-center gap-1.5 h-9 px-3.5 bg-green-600 text-white rounded-[6px] text-[13px] font-medium hover:bg-green-700 transition-all active:scale-95"
                                                     >
                                                         <CheckCircle2 className="w-4 h-4" />
                                                         Aceitar Proposta
@@ -517,7 +517,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                     <button
                                                         onClick={() => handleNegotiationAction(resp.id, false)}
                                                         disabled={processing}
-                                                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-white text-red-600 border border-red-200 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-red-50 transition-all active:scale-95"
+                                                        className="w-full flex items-center justify-center gap-1.5 h-9 px-3.5 bg-white text-red-600 border border-red-200 rounded-[6px] text-[13px] font-medium hover:bg-red-50 transition-all active:scale-95"
                                                     >
                                                         <XCircle className="w-4 h-4" />
                                                         Recusar
@@ -525,7 +525,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                     <button
                                                         onClick={() => handleStartNegotiation(resp)}
                                                         disabled={processing || negotiatingId !== null}
-                                                        className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-xl text-xs font-black uppercase tracking-widest hover:bg-indigo-100 transition-all active:scale-95"
+                                                        className="w-full flex items-center justify-center gap-1.5 h-9 px-3.5 bg-indigo-50 text-indigo-600 border border-indigo-100 rounded-[6px] text-[13px] font-medium hover:bg-indigo-100 transition-all active:scale-95"
                                                     >
                                                         <MessageSquare className="w-4 h-4" />
                                                         Contrapropor
@@ -536,9 +536,9 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                     <button
                                                         onClick={() => handleSelectWinner(resp.id)}
                                                         disabled={processing || resp.status === 'Selecionada' || negotiatingId !== null}
-                                                        className={`w-full py-3 rounded-xl text-xs font-black uppercase tracking-widest transition-all shadow-md active:scale-95 flex items-center justify-center gap-2 ${resp.status === 'Selecionada'
-                                                            ? 'bg-green-600 text-white cursor-default shadow-green-900/10'
-                                                            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-900/10'
+                                                        className={`w-full h-9 px-3.5 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 flex items-center justify-center gap-1.5 ${resp.status === 'Selecionada'
+                                                            ? 'bg-green-600 text-white cursor-default'
+                                                            : 'bg-blue-600 text-white hover:bg-blue-700'
                                                             }`}
                                                     >
                                                         {resp.status === 'Selecionada' ? (
@@ -558,7 +558,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                         <button
                                                             onClick={() => handleStartNegotiation(resp)}
                                                             disabled={processing || negotiatingId !== null}
-                                                            className="w-full py-2.5 rounded-xl text-xs font-black uppercase tracking-widest border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-all flex items-center justify-center gap-2"
+                                                            className="w-full h-9 px-3.5 rounded-[6px] text-[13px] font-medium border border-indigo-200 text-indigo-600 hover:bg-indigo-50 transition-all flex items-center justify-center gap-1.5"
                                                         >
                                                             <TrendingDown className="w-4 h-4" />
                                                             Contraproposta
@@ -718,16 +718,16 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                 {responses.find(r => r.id === negotiatingId)?.items.map((item, idx) => (
                                                     <tr key={item.code} className="hover:bg-white transition-all">
                                                         <td className="px-6 py-4">
-                                                            <div className="text-sm font-bold text-gray-900">{item.description}</div>
-                                                            <div className="text-xs font-medium text-gray-400 uppercase">{item.code}</div>
+                                                            <div className="text-sm font-normal text-gray-700">{item.description}</div>
+                                                            <div className="text-sm font-normal text-gray-500">{item.code}</div>
                                                         </td>
-                                                        <td className="px-6 py-4 text-center font-bold text-gray-600">{item.quantity} {item.unit}</td>
-                                                        <td className="px-6 py-4 text-right font-black text-gray-400 line-through">
+                                                        <td className="px-6 py-4 text-center text-sm font-normal text-gray-600">{item.quantity} {item.unit}</td>
+                                                        <td className="px-6 py-4 text-right text-sm font-medium text-gray-500 line-through">
                                                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(item.unitPrice)}
                                                         </td>
                                                         <td className="px-6 py-4 text-right">
                                                             <div className="flex items-center justify-end">
-                                                                <span className="text-gray-400 mr-1 text-xs font-black">R$</span>
+                                                                <span className="text-gray-500 mr-1 text-sm font-normal">R$</span>
                                                                 <MoneyCentsInput
                                                                     value={counterFormData.items[idx]?.unitPrice}
                                                                     onChange={(v) => {
@@ -735,7 +735,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                                         newItems[idx] = { ...newItems[idx], unitPrice: v === '' ? 0 : Number(v) };
                                                                         setCounterFormData(prev => ({ ...prev, items: newItems }));
                                                                     }}
-                                                                    className="w-24 px-3 py-2 bg-white border border-indigo-200 rounded-xl text-sm font-black text-indigo-600 focus:ring-4 focus:ring-indigo-50 outline-none transition-all text-right"
+                                                                    className="w-24 h-9 px-3 bg-white border border-indigo-200 rounded-[6px] text-sm font-normal text-gray-900 focus:ring-4 focus:ring-indigo-50 outline-none transition-all text-right"
                                                                 />
                                                             </div>
                                                         </td>
@@ -754,10 +754,10 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                 <div className="bg-gray-50 rounded-2xl p-6 border border-gray-100 shadow-sm">
                                                     <div className="flex items-center justify-between mb-4">
                                                         <div className="flex items-center gap-3">
-                                                            <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-tight ${event.author === 'Comprador' ? 'bg-indigo-100 text-indigo-700' : 'bg-orange-100 text-orange-700'}`}>
+                                                            <span className={`text-sm font-normal ${event.author === 'Comprador' ? 'text-indigo-700' : 'text-orange-700'}`}>
                                                                 {event.author === 'Comprador' ? 'Sua Sugestão' : 'Fornecedor'}
                                                             </span>
-                                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">{event.action}</span>
+                                                            <span className="text-sm font-normal text-gray-500">{event.action}</span>
                                                         </div>
                                                         <time className="text-xs font-medium text-gray-400">{new Date(event.timestamp).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</time>
                                                     </div>

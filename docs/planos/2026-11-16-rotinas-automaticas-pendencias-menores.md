@@ -70,4 +70,28 @@ Referência: a lista "Pendências menores" do fechamento do PR #513
 - [x] **2 Catálogo** 19/19 · **3 Service** 6/6 · **4 Tela** 19/19.
   - Cada teste novo RED→GREEN, exceto "Gravando…", que fixa um comportamento que já existia.
   - `tsc` 0 erros (PowerShell, heap 12 GB); `check-ui-standard` exit 0; `animacoesDeEntrada` verde.
+- [x] **Revisão independente** (16/11): 0 crítico, 0 importante; 7 menores + 4 detalhes, todos
+  resolvidos aqui, porque o pedido é justamente fechar as pendências menores.
+  - **Banco** — `aplicar_20271116914200_…_revisao`, APLICADA. RED antes: "23 com mensagem de erro
+    sem erro" e `1|1|server restarted|false`; ensaio e banco TUDO OK; listar 500–620 ms.
+    - mensagem de erro só quando há erro;
+    - falha órfã (sem início nem fim) não esconde o último erro;
+    - falha só com fim conta na semana;
+    - sonda da busca pula linha sem horário;
+    - definir acha de novo depois da trava.
+  - **Tela** (RED→GREEN):
+    - linha por `jobid` (um job chamado "#77" não colide com a rotina sem nome #77);
+    - o aviso mantém a mesma região viva (o segundo aviso é anunciado);
+    - "1 rotina · 1 ligada";
+    - `sending` → "enviando";
+    - `'\n'` explícito no title.
+  - Sem teste automático, conferidos por leitura e medição:
+    - a sonda pulando órfã: o corte real é igual ao simulado pela revisão;
+    - o reagendamento no meio do clique: não dá para intercalar duas sessões na prova.
+  - `starting`/`connecting`/`sending` são traduzidos ("iniciando"/"conectando"/"enviando"), não
+    "rodando" como dizia a decisão 3. Só `running` aparece como "rodando" na prática, porque linha
+    sem início não vira "última execução".
+  - Registro `#<jobid>` × job com nome literal "#<n>": aceito no banco (nenhum nome começa com
+    "#"), com comentário na migration.
+  - Suíte das rotinas e travas 84/84; `tsc` 0 erros; `check-ui-standard` exit 0.
 - [ ] **5 Publicação**

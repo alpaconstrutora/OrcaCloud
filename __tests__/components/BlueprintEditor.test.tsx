@@ -1738,7 +1738,7 @@ describe('BlueprintEditor · quantitativos', () => {
     await user.type(within(tela).getByLabelText('Pedido para a massa'), 'duas torres com apartamentos entre 65 e 75 m²');
     await user.click(within(tela).getByTestId('enviar-pedido-da-massa'));
     const turno = await within(tela).findByTestId('turno-da-massa');
-    expect(pedirMudancasDaMassaAIa).toHaveBeenCalledWith('duas torres com apartamentos entre 65 e 75 m²', expect.objectContaining({ produto: expect.anything(), configuracao: expect.anything() }));
+    expect(pedirMudancasDaMassaAIa).toHaveBeenCalledWith('duas torres com apartamentos entre 65 e 75 m²', expect.objectContaining({ produto: expect.anything(), configuracao: expect.anything() }), 'std_1');
     expect(turno).toHaveTextContent(/intérprete local — IA não configurada ou indisponível/);
     expect(turno).toHaveTextContent(/2 dorm\.: 58 → 65 m² \(faixa 65–75\)/);
     expect(turno).toHaveTextContent(/implantações: duas torres/);

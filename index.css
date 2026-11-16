@@ -1,6 +1,24 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700&display=swap');
 @import "tailwindcss";
+/* Animações de entrada: `animate-in` + `fade-in` / `zoom-in-95` / `slide-in-from-(lado)-(n)` (guia §35).
+   Sem esta linha as classes não geram CSS nenhum — foi assim até 16/11/2026, com ~437 usos parados em
+   silêncio. A trava é __tests__/animacoesDeEntrada.test.ts (compila este arquivo e exige regra para
+   toda classe da família usada no código). */
+@import "tw-animate-css";
+
+/* Menos movimento (`prefers-reduced-motion`): as entradas só esmaecem — nada desliza nem cresce.
+   Fora de camada de propósito: vence as utilitárias (`slide-in-from-*`, `zoom-in-*`), que moram em
+   `@layer utilities`, sem depender de ordem nem de especificidade. */
+@media (prefers-reduced-motion: reduce) {
+  .animate-in {
+    --tw-enter-translate-x: 0;
+    --tw-enter-translate-y: 0;
+    --tw-enter-scale: 1;
+    --tw-enter-rotate: 0;
+    --tw-enter-blur: 0;
+  }
+}
 
 /* `dark:` SÓ POR CLASSE (19/10/2026; guia §33; plano docs/planos/2026-10-19-dark-so-por-classe.md).
    Sem esta linha o Tailwind v4 gera `dark:` como `@media (prefers-color-scheme: dark)`, ou seja, segue o
@@ -721,8 +739,8 @@ fieldset.imovib-ro:disabled :is(input, select, textarea, button) {
 
 /* Portais externos (§24) › movimento (16/11/2026, pedido "/impeccable animate portal do investidor").
    Mesma regra da "Bom dia": o movimento explica o que mudou e nada se repete ao atualizar.
-   As classes animate-in, fade-in, slide-in-from-(lado) e zoom-in-(n) NÃO existem neste Tailwind (não há
-   plugin): no portal elas foram trocadas por estas. Com `prefers-reduced-motion`, nada se
+   O portal usa estas classes, não as entradas genéricas do app (animate-in…, §35): aqui o movimento
+   tem curva e tempos próprios do vocabulário do portal. Com `prefers-reduced-motion`, nada se
    desloca, cresce nem desfoca; os esmaecimentos que mostram o que chegou continuam.
    - .portal-troca: conteúdo da aba que entrou (casca do portal e abas do detalhe).
    - .portal-entra: bloco que abre abaixo da lista (detalhe da oportunidade).

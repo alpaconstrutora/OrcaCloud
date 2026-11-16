@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -43,6 +44,14 @@ serve(async (req: Request) => {
 
     if (tokError || !tok || !tok.is_active || new Date(tok.expires_at) < new Date()) {
         return json({ error: 'Link inválido ou expirado' }, 403);
+    }
+
+    // Segmento `.`/`..` (também `%2e`, `\`, `%2f`) passaria pelo prefixo do Caso 1
+    // e, na URL assinada pela service_role, sairia da pasta do workspace. Recusa
+    // antes de assinar — vale também para caminho já gravado em
+    // partner_requests.attachment_paths antes da trava da RPC.
+    if (!caminhoSemTravessia(storagePath)) {
+        return json({ error: 'Caminho de arquivo inválido' }, 400);
     }
 
     // Caso 1: arquivo enviado pelo próprio workspace (partner-uploads/{workspace_id}/...) —

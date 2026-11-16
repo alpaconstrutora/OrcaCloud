@@ -6289,11 +6289,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         indicadores: (melhorGerada?.avaliacao ?? avaliacao).indicadores.map((i) => ({ chave: i.chave, nota: i.nota, explicacao: i.explicacao })),
         decisoes: melhorGerada?.decisoes ?? [],
       };
-      const resposta = await pedirMudancasAIa(pedido, contexto);
+      const resposta = await pedirMudancasAIa(pedido, contexto, study.id);
       let origem: 'IA' | 'LOCAL' = 'IA';
       let mudancas = resposta.mudancas;
+      // Recusa do servidor (sem acesso / limite do dia) não é "IA não configurada": o turno diz o motivo.
+      const recusaDaIa = resposta.recusada ? resposta.indisponivel : null;
       if (!mudancas) {
-        setIaDisponivel(false);
+        if (!recusaDaIa) setIaDisponivel(false);
         origem = 'LOCAL';
         mudancas = interpretarPedidoLocal(pedido, programaDoEstudo.programa);
       } else setIaDisponivel(true);
@@ -6305,7 +6307,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       programaDoEstudo.setPrograma(r.programa);
       setHipotesesDoGerador(r.gerador);
       setHipotesesDaAvaliacao(r.avaliacao);
-      setTurnos((ts) => ts.map((t) => (t.id === turno.id ? turnoComMudancas(t, origem, mudancas!, r) : t)));
+      setTurnos((ts) => ts.map((t) => (t.id === turno.id ? { ...turnoComMudancas(t, origem, mudancas!, r), erro: recusaDaIa } : t)));
       if (r.aplicadas.length > 0) {
         regeracaoPendente.current = { turnoId: turno.id, antes: melhorGerada };
         gerador.gerar({ ...entradaDoGerador.entrada, programa: r.programa }, r.gerador, Array.from({ length: r.gerador.sementes }, (_, i) => i + 1));
@@ -6932,7 +6934,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         tipo = 'image/jpeg';
         dados = paraIa.toDataURL('image/jpeg', 0.92).split(',')[1] ?? '';
       }
-      const resposta = await rastrearPlantaComIa(dados, tipo, paraIa.width, paraIa.height);
+      const resposta = await rastrearPlantaComIa(dados, tipo, paraIa.width, paraIa.height, study.id);
       if (!resposta.tracado) {
         setErroDoRastreio(`A IA não respondeu: ${resposta.indisponivel ?? 'sem motivo informado'}.`);
         return;
@@ -12943,7 +12945,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   : null
               }
               onProduto={produtoDoEstudo.setProduto}
-              onPedirIa={pedirMudancasDaMassaAIa}
+              onPedirIa={(pedido, contexto) => pedirMudancasDaMassaAIa(pedido, contexto, study.id)}
               empreendimento={massaDoEmpreendimentoNaTela}
             />
           </div>

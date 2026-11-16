@@ -177,9 +177,10 @@ describe('tours: geral + por aba (v2, 04/10/2026)', () => {
   });
 
   it('chave do "já viu": tour geral sem sufixo (marcas antigas valem); aba com sufixo', () => {
-    expect(chaveDoTour('parceiro', 'tok')).toBe('portalHelp:tour:parceiro:tok');
-    expect(chaveDoTour('parceiro', 'tok', 'geral')).toBe('portalHelp:tour:parceiro:tok');
-    expect(chaveDoTour('parceiro', 'tok', 'documentos')).toBe('portalHelp:tour:parceiro:tok:documentos');
+    const base = chaveDoTour('parceiro', 'tok');
+    expect(base).toMatch(/^portalHelp:tourv2:parceiro:[0-9a-f]{64}$/);
+    expect(chaveDoTour('parceiro', 'tok', 'geral')).toBe(base);
+    expect(chaveDoTour('parceiro', 'tok', 'documentos')).toBe(`${base}:documentos`);
   });
 
   it('tourLabel', () => {

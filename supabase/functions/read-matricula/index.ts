@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { exigirMembro, respostaDeErro } from "../_shared/auth.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -89,12 +90,34 @@ serve(async (req: Request) => {
     const { data: { user }, error: authError } = await userClient.auth.getUser();
     if (authError || !user) return json({ error: 'Token inválido' }, 401);
 
-    const { fileBase64, mediaType } = await req.json() as {
+    const { fileBase64, mediaType, organization_id } = await req.json() as {
         fileBase64: string;
         mediaType: string;
+        organization_id?: string;
     };
 
     if (!fileBase64 || !mediaType) return json({ error: 'Arquivo (fileBase64) e mediaType são obrigatórios.' }, 400);
+
+    // Autorização: membro da organização que recebe os itens de due diligence —
+    // a mesma que a RLS de due_diligence_items exige para gravá-los.
+    const vinculo = await exigirMembro(req, organization_id);
+    if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
+
+    // Limite diário de uso da chave de IA da plataforma, por usuário (somando
+    // todas as orgs dele) e por organização, contado no banco ANTES da chamada
+    // paga (_read_matricula_cota, só service_role executa). Estouro → 54000 → 429.
+    const admin = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', {
+        auth: { autoRefreshToken: false, persistSession: false },
+    });
+    const { error: erroCota } = await admin.rpc('_read_matricula_cota', {
+        p_user: vinculo.userId,
+        p_org: organization_id,
+    });
+    if (erroCota) {
+        if (erroCota.code === '54000') return json({ error: erroCota.message }, 429);
+        console.error('[read-matricula] erro ao conferir o limite de uso:', erroCota);
+        return json({ error: 'Não foi possível conferir o limite de uso da IA.' }, 500);
+    }
 
     // PDF vira bloco document; imagem (matrícula escaneada) vira bloco image.
     const isImage = mediaType.startsWith('image/');

@@ -27,6 +27,12 @@
 // no próprio fundo antes de propor (`utils/blueprintRastrear.ts`) e nada é gravado sem o usuário confirmar.
 // Modelo: `PLANTA_RASTREAR_MODELO` (padrão claude-opus-5-5), com recuo para claude-sonnet-4-6 se o primeiro
 // não estiver disponível para a chave.
+//
+// QUEM PODE E QUANTO (15/11/2026): cada chamada à Anthropic é paga na chave do servidor, então o token sozinho não
+// basta. O corpo traz `study_id`; a organização é a do estudo, lida com o token do PRÓPRIO usuário (RLS — o
+// cliente não escolhe a organização). Antes de CADA chamada paga, `_planta_ia_cota` (service_role; migration
+// aplicar_20271116906800) confere que o usuário é membro da organização em organization_members (403) e soma o
+// uso do dia, por usuário e por organização (429 ao passar do limite). `pedido` vai até 2000 caracteres.
 
 // @ts-ignore
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
@@ -40,6 +46,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const PEDIDO_MAX = 2000;
 
 const USOS = ['SALA', 'COZINHA', 'DORMITORIO', 'SUITE', 'BANHEIRO', 'LAVABO', 'AREA_DE_SERVICO', 'VARANDA', 'CIRCULACAO', 'GARAGEM', 'ESCRITORIO', 'DEPOSITO', 'OUTRO'];
 const INDICADORES = ['programa', 'legal', 'eficiencia', 'circulacao', 'compacidade', 'insolacao', 'ventilacao', 'corredores', 'adjacencias', 'privacidade', 'acessibilidade', 'estrutura', 'modulacao', 'custo', 'paredes', 'fachada', 'shafts', 'hidraulica'];
@@ -205,12 +213,32 @@ serve(async (req: Request) => {
   } = await userClient.auth.getUser();
   if (authError || !user) return json({ error: 'Token inválido' }, 401);
 
-  let body: { pedido?: string; contexto?: unknown; modo?: string; imagem?: string; tipoDaImagem?: string; largura?: number; altura?: number };
+  let body: { pedido?: string; contexto?: unknown; modo?: string; imagem?: string; tipoDaImagem?: string; largura?: number; altura?: number; study_id?: unknown } | null;
   try {
     body = await req.json();
   } catch {
     return json({ error: 'Corpo inválido' }, 400);
   }
+  if (!body || typeof body !== 'object') return json({ error: 'Corpo inválido' }, 400);
+
+  // A organização é a do estudo, lida com o token do usuário (RLS): quem não vê o estudo não usa a IA por ele.
+  const studyId = typeof body.study_id === 'string' ? body.study_id : '';
+  if (!UUID.test(studyId)) return json({ error: 'study_id ausente ou inválido' }, 400);
+  const { data: estudo, error: erroDoEstudo } = await userClient.from('blueprint_studies').select('organization_id').eq('id', studyId).maybeSingle();
+  if (erroDoEstudo) return json({ error: 'Não foi possível conferir o estudo.' }, 500);
+  const organizacao = (estudo as { organization_id?: string | null } | null)?.organization_id ?? null;
+  if (!organizacao) return json({ error: 'Sem acesso a este estudo.' }, 403);
+
+  // Antes de CADA chamada paga: membro da organização + cota do dia (migration aplicar_20271116906800).
+  // Devolve a resposta de recusa, ou null quando pode chamar. Qualquer falha fecha: nada é chamado.
+  const admin = createClient(supabaseUrl, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '', { auth: { autoRefreshToken: false, persistSession: false } });
+  const recusaDaCota = async (tipo: 'pedido' | 'rastrear'): Promise<Response | null> => {
+    const { error } = await admin.rpc('_planta_ia_cota', { p_user: user.id, p_org: organizacao, p_tipo: tipo });
+    if (!error) return null;
+    if (error.code === '42501') return json({ error: 'Sem acesso à IA desta organização.' }, 403);
+    if (error.code === '54000') return json({ error: error.message || 'Limite diário da IA atingido. Tente de novo amanhã.' }, 429);
+    return json({ error: 'Não foi possível conferir o limite de uso da IA.' }, 500);
+  };
 
   if (body.modo === 'rastrear') {
     const imagem = typeof body.imagem === 'string' ? body.imagem : '';
@@ -243,12 +271,16 @@ serve(async (req: Request) => {
       });
     try {
       const preferido = Deno.env.get('PLANTA_RASTREAR_MODELO') || 'claude-opus-5-5';
+      const recusa = await recusaDaCota('rastrear');
+      if (recusa) return recusa;
       let res = await chamar(preferido);
       let modelo = preferido;
       if (!res.ok && (res.status === 404 || res.status === 400)) {
         const txt = await res.text();
         if (/model/i.test(txt) && preferido !== 'claude-sonnet-4-6') {
           modelo = 'claude-sonnet-4-6';
+          const recusaDoRecuo = await recusaDaCota('rastrear');
+          if (recusaDoRecuo) return recusaDoRecuo;
           res = await chamar(modelo);
         } else return json({ error: `Anthropic API: ${txt}` }, 502);
       }
@@ -261,13 +293,17 @@ serve(async (req: Request) => {
       return json({ error: String(err) }, 500);
     }
   }
-  const pedido = (body.pedido ?? '').toString().trim();
+  let pedido = (body.pedido ?? '').toString().trim();
   if (!pedido) return json({ error: 'Pedido vazio' }, 400);
+  // Teto do pedido: corta em PEDIDO_MAX sem partir um par substituto (emoji etc.) ao meio.
+  if (pedido.length > PEDIDO_MAX) pedido = pedido.slice(0, /[\uD800-\uDBFF]/.test(pedido[PEDIDO_MAX - 1]) ? PEDIDO_MAX - 1 : PEDIDO_MAX);
   const contexto = JSON.stringify(body.contexto ?? {}).slice(0, 20000);
   const massa = body.modo === 'massa';
   const ferramenta = massa ? FERRAMENTA_MASSA : FERRAMENTA;
 
   try {
+    const recusa = await recusaDaCota('pedido');
+    if (recusa) return recusa;
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': anthropicKey, 'anthropic-version': '2023-06-01' },

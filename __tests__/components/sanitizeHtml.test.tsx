@@ -74,6 +74,60 @@ describe('sanitizeHtml · neutraliza o que chega das tabelas org-scoped', () => 
         expect(limpo).toContain('noopener');
     });
 
+    /** Lê o `rel` do primeiro <a> da saída — `null` se não houver. */
+    const relDe = (html: string): string | null => {
+        const div = document.createElement('div');
+        div.innerHTML = sanitizeHtml(html);
+        return div.querySelector('a')?.getAttribute('rel') ?? null;
+    };
+
+    it('target=_blank mantém a saída de sempre: rel="noopener noreferrer"', () => {
+        expect(relDe('<a href="https://exemplo.test" target="_blank">ir</a>')).toBe('noopener noreferrer');
+        expect(relDe('<a href="https://exemplo.test" target="_blank" rel="opener">ir</a>')).toBe('noopener noreferrer');
+    });
+
+    it('target nomeado também ganha noopener — janela nova herda window.opener', () => {
+        expect(relDe('<a href="https://atacante.test" target="doc">ir</a>')).toBe('noopener noreferrer');
+    });
+
+    it('_blank em outra caixa ou com espaço ganha noopener, mesmo com rel="opener"', () => {
+        for (const target of ['_BLANK', '_Blank', ' _blank', '_blank ']) {
+            const rel = relDe(`<a href="https://atacante.test" target="${target}" rel="opener">ir</a>`);
+            const tokens = (rel ?? '').split(/\s+/);
+            expect(tokens).toContain('noopener');
+            expect(tokens).toContain('noreferrer');
+        }
+    });
+
+    it('target com espaço em volta é decidido pelo valor aparado que sai', () => {
+        // O DOMPurify apara o atributo; o rel tem de bater com o target emitido.
+        const saida = (target: string) => {
+            const div = document.createElement('div');
+            div.innerHTML = sanitizeHtml(`<a href="https://exemplo.test" target="${target}">ir</a>`);
+            const a = div.querySelector('a')!;
+            return { target: a.getAttribute('target'), rel: a.getAttribute('rel') };
+        };
+        expect(saida(' _self ')).toEqual({ target: '_self', rel: null });
+        expect(saida(' ')).toEqual({ target: '', rel: null });
+        expect(saida(' _BLANK')).toEqual({ target: '_BLANK', rel: 'noopener noreferrer' });
+        expect(saida(' doc ')).toEqual({ target: 'doc', rel: 'noopener noreferrer' });
+    });
+
+    it('acrescenta ao rel existente sem apagar os outros tokens', () => {
+        expect(relDe('<a href="https://exemplo.test" target="doc" rel="nofollow">ir</a>'))
+            .toBe('nofollow noopener noreferrer');
+        expect(relDe('<a href="https://exemplo.test" target="doc" rel="NoOpener">ir</a>'))
+            .toBe('NoOpener noreferrer');
+    });
+
+    it('_self, _top, _parent e target vazio ficam como estão', () => {
+        for (const target of ['_self', '_SELF', '_top', '_parent', '']) {
+            expect(relDe(`<a href="https://exemplo.test" target="${target}">ir</a>`)).toBeNull();
+            expect(relDe(`<a href="https://exemplo.test" target="${target}" rel="nofollow">ir</a>`)).toBe('nofollow');
+        }
+        expect(relDe('<a href="https://exemplo.test">ir</a>')).toBeNull();
+    });
+
     it('entrada nula ou vazia vira string vazia, nunca "null"', () => {
         expect(sanitizeHtml(null)).toBe('');
         expect(sanitizeHtml(undefined)).toBe('');

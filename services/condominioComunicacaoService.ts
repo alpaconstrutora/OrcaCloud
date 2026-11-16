@@ -260,7 +260,23 @@ export const condominioComunicacaoService = {
             }
             return data.signedUrl;
         }
-        if (doc.url) return doc.url;
+        if (doc.url) {
+            // O link e texto livre gravado por qualquer membro da org, e quem
+            // abre atribui o retorno ao `location` de uma aba em branco que tem
+            // a origem do app: um `javascript:` ali rodaria script com a sessao
+            // de quem clicou. Recusa so esse esquema; o resto segue como antes.
+            // O esquema vem do mesmo parser que o navegador usa ao navegar, que
+            // ignora espacos/controles nas pontas e caixa. Link que nem esse
+            // parser aceita ja falhava ao navegar - recusa tambem.
+            let protocolo: string;
+            try {
+                protocolo = new URL(doc.url, document.baseURI).protocol;
+            } catch {
+                throw new Error('Link do documento invalido.');
+            }
+            if (protocolo === 'javascript:') throw new Error('Link do documento invalido.');
+            return doc.url;
+        }
         throw new Error('Documento sem arquivo nem link.');
     },
 };

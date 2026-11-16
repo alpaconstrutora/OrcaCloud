@@ -33,7 +33,7 @@ interface OrderLifelineProps {
 const ACCENTS = {
     indigo: {
         line: 'bg-indigo-600 shadow-[0_0_20px_rgba(79,70,229,0.4)]',
-        current: 'bg-indigo-600 text-white scale-110 shadow-xl shadow-indigo-200 ring-4 ring-indigo-50 animate-pulse-subtle',
+        current: 'bg-indigo-600 text-white scale-110 shadow-xl shadow-indigo-200 ring-4 ring-indigo-50',
         done: 'bg-indigo-100 text-indigo-600',
         label: 'text-indigo-600',
         badge: 'bg-indigo-50 border-indigo-100',

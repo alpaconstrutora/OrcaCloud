@@ -1,6 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import { OpuraDocument } from '../../types';
+import { escapeHtml, escapeAttr } from '../../supabase/functions/_shared/html';
 
 export interface DocumentQrLabelModalProps {
   doc: OpuraDocument;
@@ -137,15 +138,15 @@ export const DocumentQrLabelModal: React.FC<DocumentQrLabelModalProps> = ({ doc,
                         </head>
                         <body>
                           <div class="label-card">
-                            <img src="${qrCodeImageUrl}" />
+                            <img src="${escapeAttr(qrCodeImageUrl)}" />
                             <div>
-                              <h4>${doc.nome}</h4>
-                              <p>REVISÃO ATIVA: V${doc.active_version?.version_number || 1}</p>
-                              <p style="font-size: 7px; color: #999; margin-top: 0.5mm;">VALIDAÇÃO: ${publicValidationUrl.replace('https://', '').replace('http://', '')}</p>
+                              <h4>${escapeHtml(doc.nome)}</h4>
+                              <p>REVISÃO ATIVA: V${escapeHtml(doc.active_version?.version_number || 1)}</p>
+                              <p style="font-size: 7px; color: #999; margin-top: 0.5mm;">VALIDAÇÃO: ${escapeHtml(publicValidationUrl.replace('https://', '').replace('http://', ''))}</p>
                             </div>
                             <div class="footer">
                               <span>ÓPURA DOCS</span>
-                              <span>${new Date().toLocaleDateString()}</span>
+                              <span>${escapeHtml(new Date().toLocaleDateString())}</span>
                             </div>
                           </div>
                           <script>

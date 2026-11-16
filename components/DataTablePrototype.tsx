@@ -114,7 +114,7 @@ export default function DataTablePrototype({ onBack }: { onBack: () => void }) {
   const totalBudget = data.reduce((acc, row) => acc + (row.quantity * row.price), 0);
 
   return (
-    <div className="w-full h-full flex flex-col p-6 animate-fade-in space-y-6">
+    <div className="w-full h-full flex flex-col p-6 animate-in fade-in duration-300 space-y-6">
       
       {/* Cabeçalho */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">

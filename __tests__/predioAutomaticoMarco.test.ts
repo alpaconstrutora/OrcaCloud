@@ -17,6 +17,7 @@
  * com `copiaInstalacoes` — o hash do modelo muda só por essa marca; contagens iguais.
  */
 import { dnDoTuboDeQueda } from '../utils/blueprintNbr8160';
+import { volumesDasPecasDeClimatizacao } from '../utils/blueprintRede';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { applyBatch, conflitosDoModelo, contornoDaEscada, contornoDaVaga, emptyModel, pegadaEmPlanta, point, polygonArea, recorteComum, sha256, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
@@ -90,6 +91,12 @@ function aguaXEsgoto(m: BlueprintModel): number {
   return conflitosDoModelo(m).filter((c) => c.classe === 'REDE' && [d.get(c.trechoId), d.get(c.outroId)].sort().join('×') === 'AGUA_FRIA×ESGOTO').length;
 }
 
+/** PA11: os trechos de eletroduto que atravessam a caixa de uma peça de climatização (evaporadora, exaustor). */
+function eletrodutoNoEquipamento(m: BlueprintModel): number {
+  const d = new Map((m.trechos ?? []).map((t) => [t.id, t.disciplina]));
+  return conflitosDoModelo(m, { pecas: volumesDasPecasDeClimatizacao(m) }).filter((c) => c.classe === 'EQUIPAMENTO' && d.get(c.trechoId) === 'ELETRICA').length;
+}
+
 /** O que o marco guarda de um prédio. */
 function marcoDoPredio(c: Caso) {
   const p = predio(c);
@@ -128,6 +135,8 @@ function marcoDoPredio(c: Caso) {
     // esgoto — a água no forro rebaixado das áreas molhadas, abaixo dos ramais do andar de cima (eram 252 no R8).
     compatibilizacao: { conflitos: p.compatibilizacao.conflitos, encostos: p.compatibilizacao.encostos, passagens: p.compatibilizacao.passagens, furos: p.compatibilizacao.furos.lista.length },
     aguaXEsgoto: aguaXEsgoto(m),
+    // PA11: o eletroduto contorna a caixa da evaporadora e do exaustor (eram R4 9, R8 56, R12 242, RL 112).
+    eletrodutoNoEquipamento: eletrodutoNoEquipamento(m),
   };
 }
 
@@ -155,6 +164,8 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // PA10b: a água abaixo dos ramais do andar de cima nas áreas molhadas — os encontros água × esgoto que sobram são o
         // ramal cruzando cômodo seco a caminho do shaft (estavam: R4 62, R8 252, R12 911, RL 1.195).
         expect(agora.aguaXEsgoto).toBeLessThanOrEqual(({ R4: 6, R8: 25, R12: 180, RL: 300 } as Record<string, number>)[nome]);
+        // PA11, "pronto quando": nenhum eletroduto atravessa a caixa de uma evaporadora ou de um exaustor.
+        expect(agora.eletrodutoNoEquipamento).toBe(0);
         // PA7a, "pronto quando": o diâmetro do tubo de queda pela Tabela 6 da NBR 8160 — UHC do grupo × os andares, a
         // UHC de um andar, e nunca abaixo de 100 com bacia. No R12 (11 andares com unidades), todos DN 100.
         const n = agora.andaresComUnidade;

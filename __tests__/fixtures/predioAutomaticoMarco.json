@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "1f19293320ea69e23a86bbca9940b7301b2a0d9bac48e06732737790879d7464",
+    "modelo": "b139a59d7d3470f41fcdb079f476e1c3eab7e7ad65d38b4d9f5f57b5359ac007",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -10,7 +10,7 @@
     "nucleos": 1,
     "estruturas": 201,
     "quadros": 11,
-    "terminais": 729,
+    "terminais": 735,
     "trechosDeAgua": 502,
     "agua": {
       "pontos": 36,
@@ -143,8 +143,8 @@
       "conflitos": {
         "ABERTURA": 30,
         "PILAR": 2,
-        "REDE": 111,
-        "EQUIPAMENTO": 9,
+        "REDE": 102,
+        "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
       "encostos": 0,
@@ -155,10 +155,11 @@
       },
       "furos": 40
     },
-    "aguaXEsgoto": 4
+    "aguaXEsgoto": 4,
+    "eletrodutoNoEquipamento": 0
   },
   "R8": {
-    "modelo": "ba187bf018819ab7e62fb5546f70dbac6c7dd963b7c23f7c8f0edb907f0253de",
+    "modelo": "460732ab00859533e7ce3213447d697c42c85074d6bc867336f51b6f72e00303",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 11,
     "copias": 6,
@@ -168,7 +169,7 @@
     "nucleos": 2,
     "estruturas": 766,
     "quadros": 45,
-    "terminais": 3698,
+    "terminais": 3719,
     "trechosDeAgua": 2775,
     "agua": {
       "pontos": 85,
@@ -378,8 +379,8 @@
       "conflitos": {
         "ABERTURA": 245,
         "PILAR": 4,
-        "REDE": 700,
-        "EQUIPAMENTO": 63,
+        "REDE": 630,
+        "EQUIPAMENTO": 7,
         "OUTRO": 0
       },
       "encostos": 0,
@@ -390,10 +391,11 @@
       },
       "furos": 106
     },
-    "aguaXEsgoto": 18
+    "aguaXEsgoto": 18,
+    "eletrodutoNoEquipamento": 0
   },
   "R12": {
-    "modelo": "965e8e6f1caaecb4e7bb01932d8c31b2b350f3a0fd8a7f480825935ec0a85572",
+    "modelo": "c445fbab9b26510123d222758b96db6cb8c8ee60508c432d2b3fc7d699358064",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
@@ -403,7 +405,7 @@
     "nucleos": 3,
     "estruturas": 1424,
     "quadros": 103,
-    "terminais": 9533,
+    "terminais": 9599,
     "trechosDeAgua": 6871,
     "agua": {
       "pontos": 144,
@@ -679,11 +681,11 @@
       "conflitos": {
         "ABERTURA": 330,
         "PILAR": 1,
-        "REDE": 2092,
-        "EQUIPAMENTO": 330,
+        "REDE": 1872,
+        "EQUIPAMENTO": 88,
         "OUTRO": 0
       },
-      "encostos": 57,
+      "encostos": 46,
       "passagens": {
         "furos": 744,
         "noNucleo": 71,
@@ -691,10 +693,11 @@
       },
       "furos": 173
     },
-    "aguaXEsgoto": 141
+    "aguaXEsgoto": 141,
+    "eletrodutoNoEquipamento": 0
   },
   "RL": {
-    "modelo": "89c70c398923a3860dbb8651d330fb972c7fc7aba61f3308b80afeabde7d2e96",
+    "modelo": "05cf3b2648d58c4642d07a59e12091a84487ed65a189acb8095d29f595e9b3b7",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -704,7 +707,7 @@
     "nucleos": 2,
     "estruturas": 1179,
     "quadros": 100,
-    "terminais": 9243,
+    "terminais": 9306,
     "trechosDeAgua": 7436,
     "agua": {
       "pontos": 229,
@@ -924,8 +927,8 @@
       "conflitos": {
         "ABERTURA": 504,
         "PILAR": 33,
-        "REDE": 1680,
-        "EQUIPAMENTO": 133,
+        "REDE": 1491,
+        "EQUIPAMENTO": 21,
         "OUTRO": 2
       },
       "encostos": 44,
@@ -936,6 +939,7 @@
       },
       "furos": 246
     },
-    "aguaXEsgoto": 244
+    "aguaXEsgoto": 244,
+    "eletrodutoNoEquipamento": 0
   }
 }

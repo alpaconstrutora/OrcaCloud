@@ -34,8 +34,8 @@ import { HIPOTESES_PADRAO, agrupamentoDoCircuito, comprimentoDoCircuito } from '
 import { desvioDoPilar, fracaoDentro, pegadasDePilares } from '../utils/blueprintObstaculosEstruturais';
 import { BITOLAS_DE_ELETRODUTO_MM, cotaDaRede } from '../utils/blueprintEletrodutos';
 import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
-import { POLITICA_PADRAO, computeQuantities } from '../utils/blueprintKernel';
-import { medidasDoTerminal } from '../utils/blueprintRede';
+import { POLITICA_PADRAO, computeQuantities, conflitosDoModelo, type Point } from '../utils/blueprintKernel';
+import { cantosDaPeca, medidasDoTerminal, volumesDasPecasDeClimatizacao } from '../utils/blueprintRede';
 import { itensDaLegendaEletrica } from '../utils/blueprintPranchaEletrica';
 import { materiaisEletricos } from '../utils/blueprintListaDeMateriaisEletrica';
 import { paredesDoForro } from '../utils/blueprintRotaPeloForro';
@@ -448,6 +448,30 @@ describe('E6.3 — o eletroduto desvia da estrutura', () => {
     // teto 5,85 m, desce 2,5 m, com duas curvas = 15,55 m equivalentes > 15 m — a NBR pede mesmo a caixa e, sem
     // caixas, o plano avisa. Esse aviso é outro assunto; no cômodo COM luz de teto não sai — ver "padrão pela luz".)
     expect(plano.avisos.filter((a) => !a.includes('NBR 5410 6.2.11.1.7'))).toEqual([]);
+  });
+
+  it('PA11 do prédio automático — a reta na cota da rede CONTORNA a caixa da evaporadora que ela atravessaria; abaixo da rede, segue reta', () => {
+    const EV = (cotaMm: number): Command => ({ type: 'AddTerminal', disciplina: 'FRIGORIGENA', tipo: 'EV', tipoHidraulico: 'EVAPORADORA_HI_WALL', at: point(3000, 1000), cotaMm }) as unknown as Command;
+    const eletrodutoNaPeca = (m: BlueprintModel) => {
+      const d = new Map((m.trechos ?? []).map((t) => [t.id, t.disciplina]));
+      return conflitosDoModelo(m, { pecas: volumesDasPecasDeClimatizacao(m) }).filter((c) => c.classe === 'EQUIPAMENTO' && d.get(c.trechoId) === 'ELETRICA');
+    };
+    // A caixa (900 × 220 × 300, centro a 2,70 m) alcança a rede no teto (2,80 m): a reta do quadro à tomada a cruzaria.
+    const alta = sala(6000, [{ x: 5925, y: 1000, cota: 300, tipo: 'TUG' }], [EV(2700)]);
+    const plano = planejarEletrodutos(alta.m, quadroDe(alta.m), semCaixas);
+    const hz = horizontais(plano.comandos);
+    expect(hz.length).toBeGreaterThan(1); // por um canto da caixa
+    const caixa = volumesDasPecasDeClimatizacao(alta.m).map((v) => cantosDaPeca(v.at, v, v.rotacaoGraus) as Point[]);
+    for (const c of hz) expect(fracaoDentro(c.a, c.b, caixa)).toBe(0);
+    for (const c of hz) expect(c.circuitoIds).toEqual([alta.c1]);
+    expect(eletrodutoNaPeca(applyBatch(alta.m, plano.comandos).model)).toEqual([]);
+    expect(plano.avisos.filter((a) => !a.includes('NBR 5410 6.2.11.1.7'))).toEqual([]);
+
+    // A mesma peça a 1,50 m (a caixa vai a 1,65 m, longe da rede): a reta de sempre, sem conflito.
+    const baixa = sala(6000, [{ x: 5925, y: 1000, cota: 300, tipo: 'TUG' }], [EV(1500)]);
+    const reto = planejarEletrodutos(baixa.m, quadroDe(baixa.m), semCaixas);
+    expect(horizontais(reto.comandos)).toHaveLength(1);
+    expect(eletrodutoNaPeca(applyBatch(baixa.m, reto.comandos).model)).toEqual([]);
   });
 
   it('⚠️ viga de teto: a rede corre 10 cm abaixo do fundo dela (e avisa); viga baixa demais → fica no teto e avisa do cruzamento', () => {

@@ -1,7 +1,8 @@
 import type { LucideIcon } from 'lucide-react';
 import {
     Award, BookOpen, Briefcase, Building2, ClipboardList, DollarSign, FileSignature, FileText,
-    Building, FolderOpen, GraduationCap, HardHat, History, Megaphone, Package, Receipt, Truck, Users, Wallet,
+    Building, FolderOpen, GraduationCap, HardHat, History, Megaphone, Package, PieChart, Receipt, Sparkles,
+    TrendingUp, Truck, Users, Wallet,
 } from 'lucide-react';
 import { ProfileGroup } from '../types';
 
@@ -17,14 +18,17 @@ import { ProfileGroup } from '../types';
  *  - `App.tsx`: o efeito de rota força o grupo em memória quando o pathname bate
  *    com `rota` e não há `?token=`; o cartão do seletor troca o endereço para a
  *    rota ANTES de escolher o grupo; sem sessão, renderiza `PortalLogin` com a
- *    entrada do grupo; um login recusado volta o endereço para "/".
+ *    entrada do grupo (o Investidor, `InvestorLogin`); um login recusado volta o
+ *    endereço para "/".
  *  - `components/portal/PortalLogin.tsx`: identidade (cor, ícone, textos).
  *  - `store/useStore.ts` (`logout`): "Sair" volta à página do próprio portal.
  *
  * ⚠️ As classes de cor estão escritas POR EXTENSO: o JIT do Tailwind não enxerga
  * classe montada em runtime (`bg-${cor}-600` nunca entraria no CSS).
  *
- * Investidor, Crédito, Colaborador e Desenvolvedor NÃO têm entrada própria: entram
+ * Investidor entrou em 16/11/2026 (docs/planos/2026-11-16-portal-investidor-rota-propria.md),
+ * com a tela própria animada (`components/portal/InvestorLogin.tsx`) no lugar do
+ * `PortalLogin`. Crédito, Colaborador e Desenvolvedor NÃO têm entrada própria: entram
  * pelo seletor e pelo `Auth` genérico. Incluir um deles aqui é decisão de produto —
  * o teste `__tests__/entradasDoPortal.test.ts` trava o conjunto.
  */
@@ -103,6 +107,15 @@ const SKY: CoresDaEntrada = {
     painel: 'bg-sky-700', painelTexto: 'text-sky-100', painelRodape: 'text-sky-200',
     iconeMovel: 'bg-sky-600', botao: 'bg-sky-600 hover:bg-sky-700',
     link: 'text-sky-700 hover:text-sky-900', foco: 'focus:border-sky-500 focus:ring-sky-500/30',
+};
+
+// Coral dos portais externos (§24, `P` do `PortalKit`: accent #E1553C, accentHover
+// #C8452E, accentSoftText #C24428) — a cor do InvestorLogin, do cartão do seletor e do
+// portal. SÓLIDO, sem degradê (pedido do usuário, 11/11/2026).
+const CORAL: CoresDaEntrada = {
+    painel: 'bg-[#E1553C]', painelTexto: 'text-white/85', painelRodape: 'text-white/70',
+    iconeMovel: 'bg-[#E1553C]', botao: 'bg-[#E1553C] hover:bg-[#C8452E]',
+    link: 'text-[#C24428] hover:text-[#E1553C]', foco: 'focus:border-[#E1553C] focus:ring-[#E1553C]/30',
 };
 
 const RODAPE_CONVITE = 'Não recebeu o convite? Fale com a construtora.';
@@ -213,6 +226,27 @@ export const ENTRADAS_DO_PORTAL: Readonly<Partial<Record<ProfileGroup, EntradaDo
         rodape: 'Não recebeu o convite? Fale com a administradora do condomínio.',
         cores: SKY,
     },
+    // Portal do Investidor (16/11/2026, docs/planos/2026-11-16-portal-investidor-rota-propria.md).
+    // A tela de login é a própria, animada (`components/portal/InvestorLogin.tsx`, #364): o
+    // App a escolhe ANTES do `PortalLogin`. A identidade abaixo espelha a dela. "Primeiro
+    // acesso" = o "Criar conta" do InvestorLogin.
+    [ProfileGroup.INVESTOR]: {
+        grupo: ProfileGroup.INVESTOR,
+        rota: '/portal-investidor',
+        titulo: 'Portal do Investidor',
+        assinatura: 'ÒPURA',
+        descricao: 'Gestão de patrimônio, cotas e novos empreendimentos.',
+        dica: 'Use o e-mail cadastrado na construtora.',
+        icone: TrendingUp,
+        destaques: [
+            { icone: PieChart, titulo: 'Sua carteira', texto: 'Obras, cotas, aportes e retorno.' },
+            { icone: FileText, titulo: 'Relatórios', texto: 'Prestação de contas e documentos da SPE.' },
+            { icone: Sparkles, titulo: 'Oportunidades', texto: 'Novos empreendimentos para investir.' },
+        ],
+        permitePrimeiroAcesso: true,
+        rodape: RODAPE_CONVITE,
+        cores: CORAL,
+    },
 };
 
 /** Entrada própria do grupo, ou `null` quando o grupo entra pelo seletor comum. */
@@ -225,9 +259,13 @@ export function rotaDeEntradaDoPortal(grupo: ProfileGroup | null | undefined): s
     return entradaDoPortal(grupo)?.rota ?? null;
 }
 
-/** A entrada cujo endereço é `pathname`, ou `null` (ex.: "/" ou uma rota pública). */
+/**
+ * A entrada cujo endereço é `pathname`, ou `null` (ex.: "/" ou uma rota pública).
+ * Sem diferença de maiúsculas: `/portal-Investidor` (como foi escrito no pedido de
+ * 16/11/2026) abre o mesmo portal que `/portal-investidor`.
+ */
 export function entradaDaRota(pathname: string): EntradaDoPortal | null {
-    const limpo = pathname.replace(/\/+$/, '') || '/';
+    const limpo = pathname.replace(/\/+$/, '').toLowerCase() || '/';
     return Object.values(ENTRADAS_DO_PORTAL).find(e => e.rota === limpo) ?? null;
 }
 

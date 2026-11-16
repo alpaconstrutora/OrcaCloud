@@ -6,7 +6,7 @@
  *  1. identidade, "Voltar para Portais" chama onBack, e só o lado ENTRAR é ativo;
  *  2. entrar marca o login NESTA aba antes do signIn, com e-mail normalizado;
  *  3. erro do Supabase em português;
- *  4. esqueci a senha esconde a senha e manda o link de volta para "/";
+ *  4. esqueci a senha esconde a senha e manda o link de volta para /portal-investidor (16/11/2026);
  *  5. botão desabilitado diz o motivo;
  *  6. criar conta troca o lado ativo (inert) e, sem sessão, volta a entrar com a mensagem.
  */
@@ -83,7 +83,7 @@ describe('InvestorLogin', () => {
         expect(await screen.findByRole('alert')).toHaveTextContent('E-mail ou senha incorretos.');
     });
 
-    it('4. esqueci a senha: sem campo de senha, redirectTo volta para a raiz', async () => {
+    it('4. esqueci a senha: sem campo de senha, redirectTo volta para a página do portal', async () => {
         resetPasswordForEmail.mockResolvedValue({ error: null });
         const user = userEvent.setup();
         render(<InvestorLogin />);
@@ -97,7 +97,7 @@ describe('InvestorLogin', () => {
 
         await waitFor(() => expect(resetPasswordForEmail).toHaveBeenCalledWith(
             EMAIL,
-            { redirectTo: `${window.location.origin}/` },
+            { redirectTo: `${window.location.origin}/portal-investidor` },
         ));
         expect(await screen.findByRole('status')).toHaveTextContent(/enviamos as instruções/);
 
@@ -132,7 +132,7 @@ describe('InvestorLogin', () => {
         await waitFor(() => expect(signUp).toHaveBeenCalledWith({
             email: EMAIL,
             password: '123456',
-            options: { emailRedirectTo: `${window.location.origin}/` },
+            options: { emailRedirectTo: `${window.location.origin}/portal-investidor` },
         }));
         expect(await screen.findByRole('status')).toHaveTextContent(/Conta criada/);
         expect(screen.getByTestId('lado-cadastro')).toHaveAttribute('inert');

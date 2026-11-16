@@ -758,9 +758,10 @@ const App: React.FC = () => {
 
   // ── Entrada própria dos portais (sem token) = login por e-mail e senha ─────────
   // /portal-parceiro (03/10/2026), /portal-treinamentos (15/10) e, desde 16/10,
-  // /portal-cliente, /portal-fornecedor e /portal-corretor — o mapa é
-  // `lib/entradasDoPortal.ts`. Sem token, a rota abre a página de login PRÓPRIA do
-  // portal (`PortalLogin`), em vez do seletor. Também é para onde o convite e o
+  // /portal-cliente, /portal-fornecedor e /portal-corretor; /portal-sindico (20/10) e
+  // /portal-investidor (16/11) — o mapa é `lib/entradasDoPortal.ts`. Sem token, a rota
+  // abre a página de login PRÓPRIA do portal (`PortalLogin`; o Investidor,
+  // `InvestorLogin`), em vez do seletor. Também é para onde o convite e o
   // "esqueci a senha" apontam (#type=invite|recovery): o ResetPassword abre, e ao
   // concluir o grupo já é o do portal, então a pessoa cai nele.
   // Quando força: sem sessão, vindo do link, ou com sessão e nenhum portal
@@ -896,14 +897,15 @@ const App: React.FC = () => {
   );
   if (!loadingSession && !session) {
     // Portais com entrada própria (Cliente, Fornecedor, Parceiro, Corretor,
-    // Treinamentos — 16/10/2026) têm página de login exclusiva, sem "Voltar para
-    // Portais": a saída para o seletor é só a recusa (efeito acima).
+    // Treinamentos — 16/10/2026; Síndico 20/10; Investidor 16/11) têm página de login
+    // exclusiva, sem "Voltar para Portais": a saída para o seletor é só a recusa
+    // (efeito acima).
+    // Investidor: entrada própria em /portal-investidor (16/11/2026,
+    // docs/planos/2026-11-16-portal-investidor-rota-propria.md), mas com a tela
+    // própria animada entrar ↔ criar conta (#364) — checada ANTES do PortalLogin.
+    if (selectedLoginGroup === ProfileGroup.INVESTOR) return <InvestorLogin />;
     const entrada = entradaDoPortal(selectedLoginGroup);
     if (entrada) return <PortalLogin entrada={entrada} />;
-    // Investidor: tela própria com a troca animada entrar ↔ criar conta (11/11/2026,
-    // docs/planos/2026-11-11-login-investidor-animado.md). Continua chegando pelo
-    // seletor, com "Voltar para Portais" — não é uma entrada própria com rota.
-    if (selectedLoginGroup === ProfileGroup.INVESTOR) return <InvestorLogin onBack={() => setSelectedLoginGroup(null)} />;
     return <Auth group={selectedLoginGroup || undefined} onBack={() => setSelectedLoginGroup(null)} />;
   }
   if (authError) return (

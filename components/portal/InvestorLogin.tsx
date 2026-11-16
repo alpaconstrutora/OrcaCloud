@@ -4,6 +4,8 @@ import { supabase } from '../../lib/supabase';
 import { marcarLoginNestaAba } from '../../lib/loginNestaAba';
 import { P } from './PortalKit';
 import { mensagemDeErroDeLogin, mensagemDeErroDePrimeiroAcesso } from './PortalLogin';
+import { rotaDeEntradaDoPortal } from '../../lib/entradasDoPortal';
+import { ProfileGroup } from '../../types';
 
 /**
  * Login do Portal do Investidor (11/11/2026, docs/planos/2026-11-11-login-investidor-animado.md).
@@ -13,11 +15,12 @@ import { mensagemDeErroDeLogin, mensagemDeErroDePrimeiroAcesso } from './PortalL
  * "Entrar" (formulário à esquerda, boas-vindas à direita) e "Criar conta"
  * (invertido); os campos saem e entram escalonados.
  *
- * O Investidor não tem entrada própria (`lib/entradasDoPortal.ts`): chega aqui
- * pelo seletor de portais, e o `App.tsx` escolhe esta tela no lugar do `Auth`
- * genérico. Mantém o que o `Auth` fazia para o investidor — "Voltar para
- * Portais", cadastro e "esqueci a senha" voltando para "/" — com as mensagens do
- * Supabase em português (as mesmas do `PortalLogin`).
+ * Desde 16/11/2026 o Investidor tem entrada própria em `/portal-investidor`
+ * (`lib/entradasDoPortal.ts`, docs/planos/2026-11-16-portal-investidor-rota-propria.md):
+ * o `App.tsx` escolhe esta tela no lugar do `PortalLogin` das outras entradas. Como
+ * elas, a página é exclusiva — sem "Voltar para Portais" (`onBack` ficou opcional e
+ * o App não o passa) — e o cadastro e o "esqueci a senha" mandam o link de volta
+ * para a rota do portal. Mensagens do Supabase em português (as mesmas do `PortalLogin`).
  *
  * Cor: o coral dos portais externos (§24, `P.accent` = #E1553C do `PortalKit`), o
  * mesmo que o investidor vê lá dentro — SÓLIDO no painel, no rastro e no botão, sem
@@ -151,7 +154,9 @@ const InvestorLogin: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
         setErro(null);
         setSucesso(null);
         setEnviando(true);
-        const voltarPara = `${window.location.origin}/`;
+        // O link do e-mail (confirmar conta, nova senha) volta à página do portal, como
+        // no PortalLogin — não ao seletor.
+        const voltarPara = `${window.location.origin}${rotaDeEntradaDoPortal(ProfileGroup.INVESTOR) ?? '/'}`;
         try {
             if (modo === 'entrar') {
                 // Login feito NESTA aba: só ela pode desconectar a conta se o portal

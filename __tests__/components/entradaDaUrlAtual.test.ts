@@ -34,7 +34,16 @@ describe('entradaDaUrlAtual', () => {
     });
 
     it('rota que não é entrada própria → null', () => {
+        window.history.replaceState(null, '', '/celular');
+        expect(entradaDaUrlAtual()).toBeNull();
+    });
+
+    it('Investidor (16/11/2026): /portal-investidor sem token é a entrada; com token, o gate do link', () => {
         window.history.replaceState(null, '', '/portal-investidor');
+        expect(entradaDaUrlAtual()?.grupo).toBe(ProfileGroup.INVESTOR);
+        window.history.replaceState(null, '', '/portal-Investidor');
+        expect(entradaDaUrlAtual()?.grupo).toBe(ProfileGroup.INVESTOR);
+        window.history.replaceState(null, '', '/portal-investidor?token=abc');
         expect(entradaDaUrlAtual()).toBeNull();
     });
 });

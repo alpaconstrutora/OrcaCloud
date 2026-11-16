@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { itensDoLote, tiposPresentes, origemDaFila, origensDoFiltro, ORIGENS_DA_FILA, ORIGEM_FILA } from '../utils/filaAprovacao';
+import { itensDoLote, tiposDoFiltro, TIPOS_DA_FILA, origemDaFila, origensDoFiltro, ORIGENS_DA_FILA, ORIGEM_FILA } from '../utils/filaAprovacao';
 
 const item = (id: string, approval_status = 'PENDENTE') => ({ id, approval_status });
 
@@ -15,14 +15,31 @@ describe('itensDoLote', () => {
     });
 });
 
-describe('tiposPresentes', () => {
-    it('só os tipos que existem na fila, na ordem do mapa', () => {
-        const itens = [{ entity: 'darf' }, { entity: 'transaction' }, { entity: 'darf' }];
-        expect(tiposPresentes(itens, ['transaction', 'darf', 'contract'], 'all')).toEqual(['transaction', 'darf']);
+describe('tiposDoFiltro', () => {
+    const MAPA = ['transaction', 'contract', 'purchase_order', 'process_step', 'blueprint_snapshot',
+        'purchase_request', 'doc_gen_documento', 'project_risk', 'darf'];
+
+    // 16/11/2026: mesma regra do filtro Origem — fila sem DARF não pode esconder o tipo DARF.
+    it('fila vazia: todos os tipos que a fila pode trazer, na ordem do mapa', () => {
+        expect(tiposDoFiltro([], MAPA, 'all')).toEqual(['transaction', 'blueprint_snapshot', 'purchase_request', 'doc_gen_documento', 'darf']);
     });
 
-    it('o tipo escolhido continua na lista mesmo sem itens (para o usuário poder trocar)', () => {
-        expect(tiposPresentes([{ entity: 'transaction' }], ['transaction', 'contract'], 'contract')).toEqual(['transaction', 'contract']);
+    it('tipo que a fila NÃO traz (contrato e compra desde 26/10, risco tem fila própria) fica fora', () => {
+        expect(tiposDoFiltro([], MAPA, 'all')).not.toEqual(expect.arrayContaining(['contract']));
+        expect(tiposDoFiltro([], MAPA, 'all')).not.toContain('purchase_order');
+        expect(tiposDoFiltro([], MAPA, 'all')).not.toContain('project_risk');
+    });
+
+    it('…a menos que apareça na fila (esquecer no catálogo não esconde)', () => {
+        expect(tiposDoFiltro([{ entity: 'process_step' }], MAPA, 'all')).toContain('process_step');
+    });
+
+    it('o tipo escolhido continua na lista mesmo fora do catálogo (para o usuário poder trocar)', () => {
+        expect(tiposDoFiltro([], MAPA, 'contract')).toContain('contract');
+    });
+
+    it('todo tipo do catálogo tem lugar no mapa de rótulos', () => {
+        for (const t of TIPOS_DA_FILA) expect(MAPA).toContain(t);
     });
 });
 

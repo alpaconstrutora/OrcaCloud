@@ -6,7 +6,8 @@
  * O filtro só oferecia as origens com item na fila naquele momento. Sem DARF
  * pendente (e com o tributo solto fora da fila desde 09/11), "Tributo" sumia —
  * junto com Folha, Obra, NF-e, Planta, Ofício… Agora oferece o catálogo inteiro
- * (utils/filaAprovacao.ORIGENS_DA_FILA) e o DARF conta como Tributo.
+ * (utils/filaAprovacao.ORIGENS_DA_FILA) e o DARF conta como Tributo. O filtro
+ * Tipo ganhou a mesma regra (TIPOS_DA_FILA) — sem DARF pendente, "DARF" sumia.
  */
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
@@ -58,6 +59,14 @@ describe('Aprovação Financeira › filtro Origem', () => {
             expect(opcoes(s)).toContain(o);
         }
         expect(opcoes(s)[0]).toBe('Todas as origens');
+    });
+
+    it('filtro Tipo: fila só com título ainda oferece DARF, Planta, Solicitação e Ofício', async () => {
+        fila.itens = [item('t1', 'transaction', 'COMMERCIAL', 'Comissão')];
+        await abrir();
+        const tipo = screen.getByDisplayValue('Todos os tipos') as HTMLSelectElement;
+        await screen.findByText('Comissão');
+        expect(opcoes(tipo)).toEqual(['Todos os tipos', 'Transação', 'Planta', 'Solicitação', 'Ofício', 'DARF']);
     });
 
     it('"Tributo" recorta DARF e FGTS avulso juntos', async () => {

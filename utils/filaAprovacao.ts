@@ -14,13 +14,23 @@ export function itensDoLote<T extends { id: string; approval_status: string; pod
 }
 
 /**
- * Tipos oferecidos no filtro "Tipo" da fila: só os que existem nela (desde 26/10/2026
- * contrato e pedido de compra não entram mais — o pago são as parcelas), na ordem do
- * mapa de rótulos. O escolhido fica na lista mesmo vazio, para dar para trocar.
+ * Todo tipo (`entity`) que `fn_approval_action_queue` pode devolver: título, DARF,
+ * planta, solicitação de compra e ofício. Fora de propósito: contrato e pedido de
+ * compra (saíram da fila em 26/10/2026 — o pago são as parcelas), etapa de processo
+ * e risco (filas próprias). O mapa de rótulos `ENTITY_TAG` tem todos porque é o
+ * vocabulário da alçada, não o da fila.
  */
-export function tiposPresentes<T extends string>(itens: { entity: string }[], ordem: T[], escolhido: string): T[] {
-    const presentes = new Set(itens.map(i => i.entity));
-    return ordem.filter(k => presentes.has(k) || k === escolhido);
+export const TIPOS_DA_FILA = ['transaction', 'darf', 'blueprint_snapshot', 'purchase_request', 'doc_gen_documento'] as const;
+
+/**
+ * Tipos oferecidos no filtro "Tipo" da fila, na ordem do mapa de rótulos. Até
+ * 16/11/2026 eram só os presentes na fila — sem DARF pendente, o tipo DARF sumia
+ * (o mesmo defeito do filtro Origem). Agora: o catálogo + o que vier nas linhas
+ * (esquecer no catálogo não esconde) + o escolhido (para dar para trocar).
+ */
+export function tiposDoFiltro<T extends string>(itens: { entity: string }[], ordem: T[], escolhido: string): T[] {
+    const oferecidos = new Set<string>([...TIPOS_DA_FILA, ...itens.map(i => i.entity), escolhido]);
+    return ordem.filter(k => oferecidos.has(k));
 }
 
 /**

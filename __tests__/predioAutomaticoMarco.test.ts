@@ -19,7 +19,7 @@
 import { dnDoTuboDeQueda } from '../utils/blueprintNbr8160';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { applyBatch, contornoDaEscada, contornoDaVaga, emptyModel, pegadaEmPlanta, point, polygonArea, recorteComum, sha256, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
+import { applyBatch, conflitosDoModelo, contornoDaEscada, contornoDaVaga, emptyModel, pegadaEmPlanta, point, polygonArea, recorteComum, sha256, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
 import { planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
 import { modelosDoCatalogo } from '../utils/blueprintSelecaoClimatizacao';
 import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
@@ -69,7 +69,7 @@ function predio(c: Caso) {
   const massa = medirMassa(m, { terreno: medirTerreno(divisasDoLote(m.boundaries)), limites: m.boundaries, recuosBase: RECUOS_ZERO, zona: ZONA_DA_MASSA_VAZIA });
   const doBloco = distribuirProduto(m, massa, MEDIO).blocos.find((x) => x.blocoId === m.blocos![0].id)!;
   const plano = planejarPredioDoPedido({ original: m, entrada: { blocoId: m.blocos![0].id, produto: MEDIO, doBloco, rotacaoNorteDeg: null, climatizacao: CLIMATIZACAO }, hip: {} });
-  return { garagem: plano.resumo.garagem, model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0, agua: plano.resumo.agua, esgoto: plano.resumo.esgoto, pluvial: plano.resumo.pluvial, incendio: plano.resumo.incendio, pavimentos: plano.resumo.pavimentos };
+  return { garagem: plano.resumo.garagem, model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0, agua: plano.resumo.agua, esgoto: plano.resumo.esgoto, pluvial: plano.resumo.pluvial, incendio: plano.resumo.incendio, pavimentos: plano.resumo.pavimentos, compatibilizacao: plano.resumo.compatibilizacao };
 }
 
 /** PA8a, "pronto quando": os pilares dos subsolos que pisam numa vaga, numa rampa ou na rampa que chega de baixo. */
@@ -82,6 +82,12 @@ function pilaresSobreVagaOuRampa(m: BlueprintModel): number {
     n += m.structures.filter((s) => s.levelId === l.id && s.kind === 'PILAR').filter((s) => ocupado.some((o) => Math.abs(polygonArea(recorteComum(pegadaEmPlanta(s), o))) > 1)).length;
   }
   return n;
+}
+
+/** PA10b: os encontros água fria × esgoto no prédio inteiro. */
+function aguaXEsgoto(m: BlueprintModel): number {
+  const d = new Map((m.trechos ?? []).map((t) => [t.id, t.disciplina]));
+  return conflitosDoModelo(m).filter((c) => c.classe === 'REDE' && [d.get(c.trechoId), d.get(c.outroId)].sort().join('×') === 'AGUA_FRIA×ESGOTO').length;
 }
 
 /** O que o marco guarda de um prédio. */
@@ -118,6 +124,10 @@ function marcoDoPredio(c: Caso) {
     garagem: p.garagem,
     pilaresSobreVagaOuRampa: pilaresSobreVagaOuRampa(m),
     vagas: (m.vagas ?? []).length,
+    // PA10b: a compatibilização (conflitos por tipo, encostos, prumadas na laje, furos da lista) e os encontros água fria ×
+    // esgoto — a água no forro rebaixado das áreas molhadas, abaixo dos ramais do andar de cima (eram 252 no R8).
+    compatibilizacao: { conflitos: p.compatibilizacao.conflitos, encostos: p.compatibilizacao.encostos, passagens: p.compatibilizacao.passagens, furos: p.compatibilizacao.furos.lista.length },
+    aguaXEsgoto: aguaXEsgoto(m),
   };
 }
 
@@ -139,6 +149,12 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         expect(agora.agua?.vrp).toBe(nome === 'R12');
         expect(agora.agua?.insuficientes).toBe(0);
         expect(agora.agua?.excessivas).toBe(0);
+        // PA10b: o rebaixo da água nas áreas molhadas não parte a rede — todo ponto segue ligado à origem (o "jogo" de 1 mm e o
+        // corte rente à ponta partiam: 55 pontos sem pressão no R12).
+        expect(agora.agua?.naoAvaliados).toBe(0);
+        // PA10b: a água abaixo dos ramais do andar de cima nas áreas molhadas — os encontros água × esgoto que sobram são o
+        // ramal cruzando cômodo seco a caminho do shaft (estavam: R4 62, R8 252, R12 911, RL 1.195).
+        expect(agora.aguaXEsgoto).toBeLessThanOrEqual(({ R4: 6, R8: 25, R12: 180, RL: 300 } as Record<string, number>)[nome]);
         // PA7a, "pronto quando": o diâmetro do tubo de queda pela Tabela 6 da NBR 8160 — UHC do grupo × os andares, a
         // UHC de um andar, e nunca abaixo de 100 com bacia. No R12 (11 andares com unidades), todos DN 100.
         const n = agora.andaresComUnidade;

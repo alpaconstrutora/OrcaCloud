@@ -5716,7 +5716,18 @@ function comprimentoDoCircuito(model, circuito) {
 }
 var n1 = (v) => v.toFixed(1).replace(".", ",");
 var mm22 = (v) => String(v).replace(".", ",");
+var CIRCUITO_GUARDADO = null;
 function preDimensionarCircuito(model, circuito, hipDeclaradas = HIPOTESES_PADRAO) {
+  if (!CIRCUITO_GUARDADO) return preDimensionarCircuitoSemGuardar(model, circuito, hipDeclaradas);
+  let porHip = CIRCUITO_GUARDADO.get(model);
+  if (!porHip) CIRCUITO_GUARDADO.set(model, porHip = /* @__PURE__ */ new WeakMap());
+  let porCircuito = porHip.get(hipDeclaradas);
+  if (!porCircuito) porHip.set(hipDeclaradas, porCircuito = /* @__PURE__ */ new WeakMap());
+  let r = porCircuito.get(circuito);
+  if (!r) porCircuito.set(circuito, r = preDimensionarCircuitoSemGuardar(model, circuito, hipDeclaradas));
+  return r;
+}
+function preDimensionarCircuitoSemGuardar(model, circuito, hipDeclaradas) {
   const hip = { ...hipDeclaradas, circuitosAgrupados: agrupamentoDoCircuito(model, circuito.id, hipDeclaradas) };
   const pontos = (model.terminais ?? []).filter((t) => t.circuitoId === circuito.id && t.tipoEletrico !== "INTERRUPTOR");
   const comPotencia = pontos.filter((t) => t.potenciaW != null);
@@ -5915,7 +5926,18 @@ function tensaoDoQuadro(quadro, circuitos) {
   for (const [v, k] of contagem) if (k > n4) melhor = v, n4 = k;
   return melhor;
 }
+var PRE_DIM_GUARDADO = null;
 function preDimensionarQuadroCompleto(model, quadroId, hip = HIPOTESES_PADRAO, visitados = /* @__PURE__ */ new Set(), comCadeia = true) {
+  if (!PRE_DIM_GUARDADO) return preDimensionarQuadroCompletoSemGuardar(model, quadroId, hip, visitados, comCadeia);
+  let porHip = PRE_DIM_GUARDADO.get(model);
+  if (!porHip) PRE_DIM_GUARDADO.set(model, porHip = /* @__PURE__ */ new WeakMap());
+  let porQuadro = porHip.get(hip);
+  if (!porQuadro) porHip.set(hip, porQuadro = /* @__PURE__ */ new Map());
+  const chave = `${quadroId}|${comCadeia ? 1 : 0}`;
+  if (!porQuadro.has(chave)) porQuadro.set(chave, preDimensionarQuadroCompletoSemGuardar(model, quadroId, hip, visitados, comCadeia));
+  return porQuadro.get(chave);
+}
+function preDimensionarQuadroCompletoSemGuardar(model, quadroId, hip, visitados, comCadeia) {
   const quadro = (model.quadros ?? []).find((q) => q.id === quadroId);
   if (!quadro) return null;
   const pai = quadro.quadroPaiId ? (model.quadros ?? []).find((q) => q.id === quadro.quadroPaiId) ?? null : null;

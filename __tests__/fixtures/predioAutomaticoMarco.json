@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "7a784ec0aad0ec463668039fb16d88a77bdcd7e8a4f7f2fbeb9937d6d578f7f9",
+    "modelo": "1f19293320ea69e23a86bbca9940b7301b2a0d9bac48e06732737790879d7464",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -11,7 +11,7 @@
     "estruturas": 201,
     "quadros": 11,
     "terminais": 729,
-    "trechosDeAgua": 472,
+    "trechosDeAgua": 502,
     "agua": {
       "pontos": 36,
       "hidrometros": 2,
@@ -25,7 +25,7 @@
       "alimentadorDnMm": 25,
       "rtiL": 8000,
       "estaticaMaxKpa": 215,
-      "dinamicaMinKpa": 83,
+      "dinamicaMinKpa": 80,
       "pressurizador": true,
       "vrp": false,
       "insuficientes": 0,
@@ -138,10 +138,27 @@
     },
     "garagem": null,
     "pilaresSobreVagaOuRampa": 0,
-    "vagas": 0
+    "vagas": 0,
+    "compatibilizacao": {
+      "conflitos": {
+        "ABERTURA": 30,
+        "PILAR": 2,
+        "REDE": 111,
+        "EQUIPAMENTO": 9,
+        "OUTRO": 0
+      },
+      "encostos": 0,
+      "passagens": {
+        "furos": 53,
+        "noNucleo": 22,
+        "embutidas": 93
+      },
+      "furos": 40
+    },
+    "aguaXEsgoto": 4
   },
   "R8": {
-    "modelo": "e4ab62432a157cb3a6d5c46fde5b966065259c0e56e1ceed8b5fbcd7c8343741",
+    "modelo": "ba187bf018819ab7e62fb5546f70dbac6c7dd963b7c23f7c8f0edb907f0253de",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 11,
     "copias": 6,
@@ -152,7 +169,7 @@
     "estruturas": 766,
     "quadros": 45,
     "terminais": 3698,
-    "trechosDeAgua": 2481,
+    "trechosDeAgua": 2775,
     "agua": {
       "pontos": 85,
       "hidrometros": 5,
@@ -166,7 +183,7 @@
       "alimentadorDnMm": 32,
       "rtiL": 16000,
       "estaticaMaxKpa": 332,
-      "dinamicaMinKpa": 77,
+      "dinamicaMinKpa": 74,
       "pressurizador": true,
       "vrp": false,
       "insuficientes": 0,
@@ -356,10 +373,27 @@
       "pilaresDaGaragem": 59
     },
     "pilaresSobreVagaOuRampa": 0,
-    "vagas": 59
+    "vagas": 59,
+    "compatibilizacao": {
+      "conflitos": {
+        "ABERTURA": 245,
+        "PILAR": 4,
+        "REDE": 700,
+        "EQUIPAMENTO": 63,
+        "OUTRO": 0
+      },
+      "encostos": 0,
+      "passagens": {
+        "furos": 306,
+        "noNucleo": 47,
+        "embutidas": 487
+      },
+      "furos": 106
+    },
+    "aguaXEsgoto": 18
   },
   "R12": {
-    "modelo": "03bec464ff5f1c958828e118826d332ad781c7f67ace2647831173c88ee82cd2",
+    "modelo": "efbf7bede1a92f9b7ce506851d209d10b64faf2adba719e32cccfe2d1e1f6450",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
@@ -370,7 +404,7 @@
     "estruturas": 1424,
     "quadros": 103,
     "terminais": 9456,
-    "trechosDeAgua": 6112,
+    "trechosDeAgua": 6871,
     "agua": {
       "pontos": 144,
       "hidrometros": 8,
@@ -384,7 +418,7 @@
       "alimentadorDnMm": 50,
       "rtiL": 20000,
       "estaticaMaxKpa": 207,
-      "dinamicaMinKpa": 80,
+      "dinamicaMinKpa": 77,
       "pressurizador": true,
       "vrp": true,
       "insuficientes": 0,
@@ -639,10 +673,27 @@
       "pilaresDaGaragem": 62
     },
     "pilaresSobreVagaOuRampa": 0,
-    "vagas": 174
+    "vagas": 174,
+    "compatibilizacao": {
+      "conflitos": {
+        "ABERTURA": 330,
+        "PILAR": 1,
+        "REDE": 2092,
+        "EQUIPAMENTO": 330,
+        "OUTRO": 0
+      },
+      "encostos": 57,
+      "passagens": {
+        "furos": 744,
+        "noNucleo": 71,
+        "embutidas": 1270
+      },
+      "furos": 173
+    },
+    "aguaXEsgoto": 141
   },
   "RL": {
-    "modelo": "8d3b3ccd8f49d80c27bbb1976976633280154a20671e08a221e1b677a01c4fdc",
+    "modelo": "d91b10b7dbc2a8bb1c8efaf1383038688df267a961460596fb7d6cd79b2de37a",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -653,7 +704,7 @@
     "estruturas": 1179,
     "quadros": 100,
     "terminais": 9094,
-    "trechosDeAgua": 6708,
+    "trechosDeAgua": 7436,
     "agua": {
       "pontos": 229,
       "hidrometros": 13,
@@ -667,7 +718,7 @@
       "alimentadorDnMm": 50,
       "rtiL": 16000,
       "estaticaMaxKpa": 332,
-      "dinamicaMinKpa": 57,
+      "dinamicaMinKpa": 54,
       "pressurizador": true,
       "vrp": false,
       "insuficientes": 0,
@@ -863,6 +914,23 @@
     },
     "garagem": null,
     "pilaresSobreVagaOuRampa": 0,
-    "vagas": 0
+    "vagas": 0,
+    "compatibilizacao": {
+      "conflitos": {
+        "ABERTURA": 504,
+        "PILAR": 33,
+        "REDE": 1680,
+        "EQUIPAMENTO": 133,
+        "OUTRO": 2
+      },
+      "encostos": 44,
+      "passagens": {
+        "furos": 783,
+        "noNucleo": 46,
+        "embutidas": 1292
+      },
+      "furos": 246
+    },
+    "aguaXEsgoto": 244
   }
 }

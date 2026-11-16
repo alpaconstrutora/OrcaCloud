@@ -6,18 +6,19 @@
  * `TelaCasaAutomatica` (as mesmas abas, a barra com as ações e a faixa de estado).
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Building2, ChevronDown, ChevronRight, ClipboardList, Flame, MapPin, Play, Settings2, Square, Wand2 } from 'lucide-react';
+import { Building2, ChevronDown, ChevronRight, CircleDot, ClipboardList, Flame, MapPin, Play, Settings2, Square, Wand2 } from 'lucide-react';
 
 import Button from '../ui/Button';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import PlantaDaPrevia, { type DisciplinaDaPrevia, type MarcaNaPrevia } from './PlantaDaPrevia';
 import { Numero } from './TelaCasaAutomatica';
+import { TabelaFurosPrevistos } from './TabelaFurosPrevistos';
 import { disciplinaDoLocal } from '../../utils/blueprintLocalDaPendencia';
 import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type PendenciaDoPpci, type SituacaoDaEtapa } from '../../utils/blueprintGeradorPpci';
 import { ROTULO_DO_ESQUEMA } from '../../utils/blueprintPavimentoTipoDaMassa';
 import type { Produto, ProdutoDoBloco } from '../../utils/blueprintProduto';
-import type { HipotesesDoPredio } from '../../utils/blueprintPredioAutomatico';
+import type { HipotesesDoPredio, PlanoDoPredio } from '../../utils/blueprintPredioAutomatico';
 import type { EstadoDoPredioAutomatico } from '../../hooks/usePredioAutomatico';
 
 const COR_DA_SITUACAO: Record<SituacaoDaEtapa, string> = {
@@ -55,7 +56,7 @@ interface Props {
   lancado: string | null;
 }
 
-type Aba = 'programa' | 'hipoteses' | 'resultado' | 'ppci' | 'relatorio';
+type Aba = 'programa' | 'hipoteses' | 'resultado' | 'ppci' | 'compatibilizacao' | 'relatorio';
 
 const rotuloCls = 'text-xs font-semibold text-slate-500';
 const cardCls = 'rounded-[10px] border border-gray-100 bg-white p-6 shadow-sm';
@@ -67,6 +68,52 @@ function Dado({ rotulo, valor, nota }: { rotulo: string; valor: React.ReactNode;
       <dt className={rotuloCls}>{rotulo}</dt>
       <dd className="text-lg font-semibold text-gray-900 tabular-nums">{valor}</dd>
       {nota && <dd className="text-xs text-slate-500">{nota}</dd>}
+    </div>
+  );
+}
+
+/** PA10b: a aba Compatibilização — conflitos, encostos, passagens na laje e a lista de furos para o calculista. */
+function PainelDaCompatibilizacao({ c, pavimentos }: { c: NonNullable<PlanoDoPredio['resumo']['compatibilizacao']>; pavimentos: ReadonlyMap<string, string> }) {
+  const totalDeConflitos = Object.values(c.conflitos).reduce((s, n) => s + n, 0);
+  const porTipo = [
+    [c.conflitos.ABERTURA, 'em porta ou janela'],
+    [c.conflitos.PILAR, 'em pilar'],
+    [c.conflitos.REDE, 'encontro(s) entre redes'],
+    [c.conflitos.EQUIPAMENTO, 'em equipamento'],
+    [c.conflitos.OUTRO, 'em outra peça'],
+  ]
+    .filter(([n]) => (n as number) > 0)
+    .map(([n, r]) => `${n} ${r}`)
+    .join(' · ');
+  return (
+    <div role="tabpanel" aria-label="Compatibilização" className={`space-y-6 ${cardCls}`} data-testid="compatibilizacao-do-predio">
+      <SecaoTitulo icon={CircleDot} titulo="Compatibilização" resumo={`${totalDeConflitos} conflito(s) · ${c.furos.lista.length} furo(s) para o calculista`} />
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4">
+        <Dado rotulo="Conflitos" valor={totalDeConflitos.toLocaleString('pt-BR')} nota={porTipo || 'nenhuma rede dentro de outro corpo, nem redes se cruzando'} />
+        <Dado rotulo="Encostos" valor={c.encostos.toLocaleString('pt-BR')} nota="o tubo rente a pilar, vão ou equipamento: o eixo fora, a espessura alcança" />
+        <Dado rotulo="Prumadas na laje" valor={`${c.passagens.furos.toLocaleString('pt-BR')} furo(s)`} nota={`${c.passagens.noNucleo} no shaft · ${c.passagens.embutidas} eletroduto(s) embutido(s)`} />
+        <Dado rotulo="Furos para o calculista" valor={c.furos.lista.length.toLocaleString('pt-BR')} nota={`${c.furos.emViga} em viga (${c.furos.verificar} a verificar) · ${c.furos.emBaldrame} em baldrame · ${c.furos.emLaje} em laje`} />
+      </dl>
+      <p className="text-sm text-slate-600">Contados no prédio inteiro. A prumada que atravessa a laje é passagem, não conflito; a rede que atravessa viga ou laje vira furo previsto. Os locais de cada conflito estão no Relatório.</p>
+      {c.porPavimento.length > 0 && (
+        <section className="space-y-2">
+          <h4 className={rotuloCls}>Por pavimento</h4>
+          <ul className="divide-y divide-gray-100 text-sm" data-testid="compatibilizacao-por-pavimento">
+            {c.porPavimento.map((p) => (
+              <li key={p.nome} className="flex flex-wrap items-center justify-between gap-2 py-1.5">
+                <span className="text-gray-700">{p.nome}</span>
+                <span className={p.conflitos ? 'font-medium text-red-700' : 'text-gray-700'}>
+                  {p.conflitos} conflito(s) · {p.encostos} encosto(s)
+                </span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+      <section className="space-y-2">
+        <h4 className={rotuloCls}>Furos previstos para o calculista (o tipo e os pavimentos únicos — cada andar copiado repete os do tipo)</h4>
+        <TabelaFurosPrevistos furos={c.furos.lista} pavimentos={pavimentos} />
+      </section>
     </div>
   );
 }
@@ -150,6 +197,7 @@ export default function TelaPredioAutomatico(props: Props) {
       ? ([
           { id: 'resultado', label: 'Resultado' },
           ...(plano.resumo.incendio ? [{ id: 'ppci' as const, label: 'PPCI' }] : []),
+          ...(plano.resumo.compatibilizacao ? [{ id: 'compatibilizacao' as const, label: 'Compatibilização' }] : []),
           {
             id: 'relatorio',
             label: 'Relatório',
@@ -537,6 +585,11 @@ export default function TelaPredioAutomatico(props: Props) {
             </p>
           )}
         </div>
+      )}
+
+      {/* ── Compatibilização (PA10b): conflitos, encostos, passagens na laje e os furos para o calculista ── */}
+      {abaEfetiva === 'compatibilizacao' && plano?.resumo.compatibilizacao && (
+        <PainelDaCompatibilizacao c={plano.resumo.compatibilizacao} pavimentos={new Map(plano.resultado.levels.map((l) => [l.id, l.name]))} />
       )}
 
       {/* ── Relatório: as pendências por grupo ── */}

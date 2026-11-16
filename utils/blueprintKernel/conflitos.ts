@@ -426,6 +426,11 @@ export function conflitosDoModelo(model: BlueprintModel, opcoes: { pecas?: reado
       // pedaços; a folga é a menor delas.
       let r: { dentroMm: number; folgaMm: number } | null = null;
       for (const [A, B] of pedacos) {
+        // PA10b do prédio automático (16/11/2026): a PRUMADA atravessando a laje é PASSAGEM — um furo, previsto como o da
+        // escada e o do núcleo — e não choque (`passagensNaLaje` as lista). No R8 eram ~800 dos 1.221 "conflitos" (tubo
+        // de queda, ramal descendo, eletroduto descendo do teto, coluna) e escondiam os de verdade. O pedaço que corre
+        // DENTRO da laje (horizontal ou inclinado) continua contando.
+        if (s.kind === 'LAJE' && ehPedacoVertical(A, B)) continue;
         const parte = contraPrisma(A, B, raioVertical, anel, e.zLo, e.zHi, raio);
         if (!parte) continue;
         r = r ? { dentroMm: r.dentroMm + parte.dentroMm, folgaMm: Math.min(r.folgaMm, parte.folgaMm) } : parte;
@@ -598,4 +603,89 @@ function anelDoVao(w: { a: Point; b: Point; thicknessMm: number }, offsetMm: num
   const p0 = { x: w.a.x + u.x * offsetMm, y: w.a.y + u.y * offsetMm };
   const p1 = { x: w.a.x + u.x * (offsetMm + larguraMm), y: w.a.y + u.y * (offsetMm + larguraMm) };
   return cantosDaParede(p0 as Point, p1 as Point, w.thicknessMm);
+}
+
+/** O pedaço é vertical (a prumada): as pontas no mesmo ponto em planta, a menos de 1 mm. */
+function ehPedacoVertical(A: Ponto3, B: Ponto3): boolean {
+  return Math.hypot(B.x - A.x, B.y - A.y) < 1;
+}
+
+/**
+ * Uma PASSAGEM de prumada pela laje (PA10b do prédio automático, 16/11/2026): o pedaço vertical de um trecho dentro da
+ * espessura de uma laje. `FURO` = atravessa a laje inteira (o tubo de queda, a coluna, o condutor — pede o furo, ou a
+ * passagem no shaft); `EMBUTIDO` = a ponta fica dentro da laje (o eletroduto que desce do teto até a caixa). Sai da lista
+ * de conflitos (`conflitosDoModelo`) e entra aqui, com o diâmetro do furo (o do envelope do trecho).
+ */
+export interface PassagemNaLaje {
+  trechoId: ObjectId;
+  lajeId: ObjectId;
+  /** O pavimento da LAJE (a laje é o teto dele). */
+  levelId: ObjectId;
+  at: Point;
+  diametroMm: number;
+  disciplina: Trecho['disciplina'];
+  tipo: 'FURO' | 'EMBUTIDO';
+  /** A passagem cai dentro de um núcleo (shaft ou caixa de elevador) que já fura a laje — não pede furo próprio. */
+  noNucleo: boolean;
+}
+
+export function passagensNaLaje(model: BlueprintModel): PassagemNaLaje[] {
+  const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+  const peDireito = new Map(model.levels.map((l) => [l.id, l.defaultHeightMm]));
+  const lajes = model.structures
+    .filter((s) => s.kind === 'LAJE')
+    .map((s) => {
+      const es = elevacao.get(s.levelId) ?? 0;
+      const anel = pegadaEmPlanta(s);
+      const xs = anel.map((q) => q.x);
+      const ys = anel.map((q) => q.y);
+      return { s, anel, x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys), y1: Math.max(...ys), zLo: es + s.baseMm, zHi: es + s.baseMm + s.alturaMm };
+    });
+  // Os núcleos (shaft, elevador) com a faixa de cotas que atravessam: do piso de partida ao teto do de chegada.
+  const ordenados = [...model.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+  const nucleos = (model.nucleos ?? []).map((n) => {
+    const de = elevacao.get(n.levelId) ?? 0;
+    const ate = n.ateLevelId ? model.levels.find((l) => l.id === n.ateLevelId) : ordenados[ordenados.length - 1];
+    return { ring: n.ring as Point[], zLo: de, zHi: (ate?.elevationMm ?? de) + (ate?.defaultHeightMm ?? 0) };
+  });
+  const saida: PassagemNaLaje[] = [];
+  for (const t of model.trechos ?? []) {
+    const env = envelopeDoTrecho(t);
+    const pedacos = segmentosDoEletroduto(t, peDireito.get(t.levelId) ?? 0).map((seg) =>
+      pontasNoMundo({ ...t, a: seg.a, b: seg.b, cotaAMm: seg.cotaAMm, cotaBMm: seg.cotaBMm }, elevacao.get(t.levelId) ?? 0),
+    );
+    for (const [A, B] of pedacos) {
+      if (!ehPedacoVertical(A, B)) continue;
+      const zA = Math.min(A.z, B.z) - env.raioVerticalMm;
+      const zB = Math.max(A.z, B.z) + env.raioVerticalMm;
+      const p = { x: A.x, y: A.y };
+      for (const l of lajes) {
+        if (zB <= l.zLo || zA >= l.zHi) continue;
+        // O tubo rente à borda também fura (o conflito contava o raio): o eixo dentro, ou a menos de um raio da borda.
+        const r = env.raioPlantaMm;
+        if (p.x < l.x0 - r || p.x > l.x1 + r || p.y < l.y0 - r || p.y > l.y1 + r) continue;
+        if (!pointInPolygon(l.anel, p) && distanciaAoAnel(l.anel, p) >= r) continue;
+        const atravessa = Math.min(A.z, B.z) <= l.zLo + 1 && Math.max(A.z, B.z) >= l.zHi - 1;
+        saida.push({
+          trechoId: t.id,
+          lajeId: l.s.id,
+          levelId: l.s.levelId,
+          at: { x: Math.round(p.x), y: Math.round(p.y) },
+          diametroMm: Math.round(2 * env.raioPlantaMm),
+          disciplina: t.disciplina,
+          tipo: atravessa ? 'FURO' : 'EMBUTIDO',
+          // A laje que o núcleo atravessa: acima do pé dele e até a que fica logo sobre o topo (o shaft sai na cobertura).
+          noNucleo: nucleos.some((n) => l.zHi > n.zLo + 1 && l.zLo <= n.zHi + 1 && pointInPolygon(n.ring, p)),
+        });
+      }
+    }
+  }
+  return saida;
+}
+
+/** A menor distância em planta de P às arestas do anel, mm. */
+function distanciaAoAnel(anel: readonly Point[], p: Point): number {
+  let d = Infinity;
+  for (let i = 0; i < anel.length; i++) d = Math.min(d, distanciaPontoSegmento(p, anel[i], anel[(i + 1) % anel.length]));
+  return d;
 }

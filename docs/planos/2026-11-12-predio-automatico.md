@@ -521,9 +521,50 @@ fixado:** no app de desenvolvimento, com a máquina quieta, o R12 completo gera 
 até 90 s e o rascunho salva em até 30 s (medido: 57 · 61 · 9 s, antes do corte 5); o erro de console que aparece com a
 tela ocupada é o sino de notificações abortando a contagem — não é do prédio.
 
+**Execução da PA10b (16/11/2026).** Medido no R8 antes de mexer: 1.221 "conflitos", ~800 deles a PRUMADA atravessando a
+laje (tubo de queda, coluna, ramal descendo, eletroduto descendo do teto) — escondiam os de verdade; e 252 encontros água
+fria × esgoto: a água corre no forro (20 cm abaixo do teto) e os ramais de esgoto do andar de CIMA correm sob a laje dele,
+de 15 a 40 cm abaixo do teto — na casa não há andar de cima. Decisões do usuário (perguntas de múltipla escolha):
+1. **"Furo, no app inteiro"** — no kernel, a prumada que atravessa a laje deixa de ser conflito e vira PASSAGEM
+   (`passagensNaLaje`: `FURO` quando atravessa, `EMBUTIDO` quando a ponta fica dentro — o eletroduto que desce do teto —,
+   `noNucleo` quando cai num shaft ou caixa de elevador que já fura a laje; o tubo rente à borda conta, como contava o
+   conflito). O pedaço que corre DENTRO da laje continua conflito. Os furos previstos (a lista do calculista, F14c) e a
+   travessia do duto do exaustor (climatização) passaram a ler as passagens — **o marco da casa passa sem regravar**.
+2. **"Desvio só no cruzamento"** (a água desce num "U" sob o ramal) — tentado e medido: resolveu ~5 % (os cruzamentos
+   ficam colados nos nós da rede de água dentro das áreas molhadas). Voltei a perguntar.
+3. **"Forro rebaixado nas áreas molhadas"** (`predioAutomatico/desvios.ts`) — nos banheiros, lavabos e área de serviço a
+   água corre a 52 cm do teto (2,48 m do piso no tipo de 3 m), abaixo da faixa do esgoto de cima; nos outros cômodos
+   segue no forro e desce na parede ao entrar no molhado (a cozinha fica de fora: pé-direito de 2,50 m). Roda no tipo,
+   antes da cópia viva. Pendência CONFERIR com o forro de 2,30 m. **Dois achados da conferência de pressão** (a ligação
+   da rede é pela ponta EXATA): o "jogo" horizontal de 1 mm que a rede usa para casar pontas era tratado como vertical e
+   apagado, e o corte rente à ponta de um trecho descartava o pedaço minúsculo — no R12, 55 pontos ficaram sem pressão.
+   Agora vertical é só o trecho parado em planta com cotas diferentes, corte a menos de 5 mm da ponta não corta, e a
+   descida sai em todo nó onde se encontram pedaços nas duas cotas; o marco trava `naoAvaliados = 0`.
+
+**Água × esgoto** (o marco grava `aguaXEsgoto`): R4 62 → 4, R8 252 → 18, R12 911 → 141, RL 1.195 → 244. O que sobra é
+o ramal do andar de cima atravessando cômodo SECO (sala, circulação) a caminho do shaft — fica no relatório, com o local.
+A pressão dinâmica mínima cai 3 kPa (o desvio a mais na água), sem ponto insuficiente.
+
+**Relatório consolidado** (`predioAutomatico/compatibilizacao.ts`, na Conferência, sobre o modelo final; aba
+**Compatibilização** na tela): conflitos do prédio inteiro por tipo — rede em porta ou janela, em pilar, em equipamento
+(com as caixas das peças de climatização), e o ENCONTRO entre redes (o kernel só registra o par que se toca ou se cruza,
+sempre com 0 mm — por isso rede × rede é sempre conflito, como na casa, F27) —, por rede e por pavimento, com os locais no
+tipo e nos pavimentos únicos (as cópias repetem o tipo); encostos de raspão (tubo rente a pilar, vão ou equipamento);
+prumadas na laje (furo próprio, no shaft, eletroduto embutido); e a lista de furos para o calculista sem os andares
+copiados e sem as passagens que não furam. As 30 linhas soltas de conflito da climatização (uma por trecho, sem local)
+saíram — o relatório as cobre. No R8: 245 redes em porta ou janela (189 do dreno do ar), 4 em pilar, 63 em equipamento
+(56 eletrodutos lançados depois da climatização cruzando caixa de evaporadora — ninguém contava), 700 encontros entre
+redes (o grosso é climatização × eletroduto), 306 prumadas furando a laje fora do shaft, 47 no shaft, 487 eletrodutos
+embutidos; 106 furos na lista. Custo no R12: ~0,3 s.
+**Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pa10b.cjs`, o R8 com 1 subsolo, estudo descartável arquivado):
+a aba Compatibilização com os números do marco (1.012 conflitos, 306 furos na laje, 47 no shaft, 487 embutidos, 106
+furos na tabela, 10 pavimentos na lista), o conflito consolidado do Relatório abrindo o tipo na planta com as marcas, as
+linhas soltas da climatização fora, e no rascunho salvo depois do Lançar a água a 2,48 m nos 7 andares (124 trechos em
+cada — o tipo e as cópias), sem erro de console.
+
 PA1 e PA2 podem correr em frentes paralelas.
 
-## Pendências em aberto (15/11/2026)
+## Pendências em aberto (16/11/2026)
 
 O que o prédio automático ainda não faz, ou faz e deixa para conferir. "Projetista" = fica de propósito como pendência na
 tela (o motor não decide); "fase" = trabalho previsto.
@@ -533,10 +574,11 @@ tela (o motor não decide); "fase" = trabalho previsto.
 | Desempenho | Clique no "Lançar" do R12: o que sobra depois da PA10a é o desenho da planta (21,6 mil trechos) e as marcas de verificação das redes | depois da PA10 |
 | Desempenho | Gerar o R12 no worker: 57 s no app de desenvolvimento | PA10a (tempo fixado) |
 | Desempenho | Marco do RL perto do limite da CI (20 min por caso); o bloco "o motor (PA2)" subiu para 180 s depois de deixar a main vermelha (15/11) | PA10a |
-| Fechamento | Relatório consolidado do prédio (o de hoje é a lista de pendências por etapa) | PA10b |
-| Fechamento | Furos no shaft por onde passam as prumadas (previsto no plano; a medir na PA10b) | PA10b |
-| Fechamento | Conflitos multinível — choques entre redes de pavimentos diferentes (previsto no plano; a medir na PA10b) | PA10b |
 | Fechamento | Envio ao Empreendimento (`massaAdapter`) conferido com o prédio lançado | PA10c |
+| Compatibilização | Água × esgoto que sobra: o ramal do andar de cima atravessando cômodo seco a caminho do shaft (R8 18, R12 141, RL 244) — no relatório, com o local | depois da PA10 |
+| Compatibilização | Encontros da climatização (linha frigorígena e dutos × eletroduto, dreno × água) e o dreno do ar passando por porta ou janela — no relatório | depois da PA10 |
+| Compatibilização | Eletroduto lançado depois da climatização atravessando a caixa da evaporadora (R8: 56) — no relatório | depois da PA10 |
+| Compatibilização | Forro rebaixado a 2,30 m nos banheiros, lavabos e área de serviço (a água abaixo dos ramais de cima) — confira com a arquitetura | projetista |
 | Rota de fuga | Nos andares de cima, a boca do lance multiandares fica na outra ponta da escada (R4: 2 ambientes do 3º andar passam de 25 m) | PA10c |
 | Rota de fuga | Térreo comprido (R12, RL): salas comuns a mais de 25 m da porta — pede outra saída | PA10c |
 | Rota de fuga | RL (bloco em L): um ambiente por andar sem caminho até a escada (as asas) | PA10c |
@@ -574,4 +616,4 @@ tela (o motor não decide); "fase" = trabalho previsto.
 | PA7 | **PA7a feita** (ver a Execução) — R8: 5 tubos de queda por andar (DN 100), 120 UHC por andar, ventilação DN 75, coletor DN 150; toda louça de todo andar chega à ligação (315 de 315; R12 836 de 836). **No R12, os tubos de queda dão DN 100 pela Tabela 6** (o marco confere cada um). Conflitos por grade (44,8 s → 54 ms, mesmo resultado). **PA7b feita** (pluvial da cobertura: R8 2 condutores DN 100 para 1.200 L/min) |
 | PA8 | **PA8c feita** (drenagem: ralos e canaletas em pente, caixa separadora, poço com 2 bombas no QDG e recalque à CI do térreo; kernel 0.109.0). **PA8b feita** (escada(s) de emergência da garagem — rota do subsolo limpa no R8 e no R12; QDG, luzes e exaustores). **PA8a feita** (ver a Execução) — subsolo do estudo lançado: R8 1 subsolo com 60 vagas (o contorno livre levaria 91), 1 rampa, 40 pilares da torre + 60 da malha estendida, fundação no subsolo; R12 2 subsolos com 177 vagas e a rampa em vaivém; **nenhum pilar sobre vaga ou rampa** (o marco confere). A garagem pede uma 2ª saída (pendência). — a PA8 está completa |
 | PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. **PA9b feita** (extintores, sinalização e iluminação nas áreas comuns do tipo — cada andar repete). **PA9c feita** (hidrante em todo pavimento; coluna de incêndio empilhada; bomba na cobertura ao lado da reserva técnica; registro de recalque no passeio) |
-| PA10 | **PA10a feita** (desempenho com o mesmo resultado: R12 completo 63,6 → 40,3 s, o cálculo da tela no Lançar 14,0 → 5,3 s; o "Gerar" espera a entrada carregar — a prévia do R12 nascia velha; R12 de ponta a ponta no app: gerar 57 s, Lançar 61 s, salvar 9 s com a máquina quieta; tempo fixado 90/90/30 s). PA10b (relatório, furos no shaft, conflitos multinível) e PA10c (envio ao Empreendimento, achados da rota) a fazer — ver "Pendências em aberto" |
+| PA10 | **PA10a feita** (desempenho com o mesmo resultado: R12 completo 63,6 → 40,3 s, o cálculo da tela no Lançar 14,0 → 5,3 s; o "Gerar" espera a entrada carregar — a prévia do R12 nascia velha; R12 de ponta a ponta no app: gerar 57 s, Lançar 61 s, salvar 9 s com a máquina quieta; tempo fixado 90/90/30 s). **PA10b feita** (a prumada na laje é passagem, não conflito, no app inteiro; a água no forro rebaixado das áreas molhadas — água × esgoto R8 252 → 18; o relatório de compatibilização na aba nova). PA10c (envio ao Empreendimento, achados da rota) a fazer — ver "Pendências em aberto" |

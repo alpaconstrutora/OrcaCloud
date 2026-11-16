@@ -103,7 +103,7 @@ export { applyCommand, applyBatch, aplicarLote, ModelHistory } from './commands'
 
 // CLASH de instalação. Saída PRÓPRIA, de propósito: ela NÃO vira desconto no
 // quantitativo — ver o cabeçalho de `conflitos.ts`.
-export { conflitosDoModelo, distanciaEntreEixos3D, envelopeDoTrecho, pontasNoMundo, type Conflito, type VolumeDePeca } from './conflitos';
+export { conflitosDoModelo, distanciaEntreEixos3D, envelopeDoTrecho, passagensNaLaje, pontasNoMundo, type Conflito, type PassagemNaLaje, type VolumeDePeca } from './conflitos';
 export { segmentosDoEletroduto, type SegmentoDoTrecho } from './caminhoDoEletroduto';
 // CLASH arquitetônico (E0.4): vão × estrutura, escada × pilar, escada × altura livre. Mesma
 // natureza (pendência, não desconto), tipo próprio porque a peça não é um trecho.

@@ -38,7 +38,7 @@
  * Split e Linha e dreno) é o que as fixa.
  */
 import type { BlueprintModel, Command, ObjectId, Terminal } from './blueprintKernel';
-import { POLITICA_PADRAO, applyBatch, computeQuantities, conflitosArquitetonicos, conflitosDoModelo, TIPOS_DE_EVAPORADORA, TIPOS_DE_TERMINAL_DE_AR } from './blueprintKernel';
+import { POLITICA_PADRAO, applyBatch, computeQuantities, conflitosArquitetonicos, conflitosDoModelo, passagensNaLaje, TIPOS_DE_EVAPORADORA, TIPOS_DE_TERMINAL_DE_AR } from './blueprintKernel';
 import type { HipotesesClimatizacao } from './blueprintClimatizacao';
 import { cargaTermicaDoEstudo, type CargaTermicaDoNivel, type ContextoDaCarga } from './blueprintCargaTermica';
 import { selecaoDoNivel, type ModeloDoCatalogo } from './blueprintSelecaoClimatizacao';
@@ -324,12 +324,11 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
       continue;
     }
     // F21: o duto do exaustor que SOBE à cobertura atravessa a laje (e o telhado) por projeto — furo previsto, não conflito.
-    if (c.classe === 'ESTRUTURA' && dutoPelaCobertura.has(c.trechoId) && lajePorId.has(c.outroId)) {
-      furosNaLaje++;
-      continue;
-    }
+    // (Desde a PA10b do prédio automático a prumada na laje já não sai como conflito; a contagem vem das passagens, abaixo.)
+    if (c.classe === 'ESTRUTURA' && dutoPelaCobertura.has(c.trechoId) && lajePorId.has(c.outroId)) continue;
     pendencia('CONFLITO', `${c.classe.replace(/_/g, ' ').toLowerCase()}: trecho ${c.trechoId} × ${c.outroId} (${um(c.comprimentoDentroMm, 0)} mm dentro).`);
   }
+  furosNaLaje = new Set(passagensNaLaje(m).filter((p) => dutoPelaCobertura.has(p.trechoId) && novos.has(p.trechoId)).map((p) => `${p.trechoId}|${p.lajeId}`)).size;
   if (furosNaLaje) pendencia('CONFERIR', `${furosNaLaje} travessia(s) de laje do duto de exaustão até a cobertura — furo a prever com o calculista.`);
   if (furosEmViga) pendencia('CONFERIR', `${furosEmViga} travessia(s) de viga da linha e do dreno — furo a aprovar com o calculista (na lista de furos previstos).`);
   // F6 (10/10/2026): o equipamento lançado × parede, vão, estrutura e móvel (a caixa inteira).

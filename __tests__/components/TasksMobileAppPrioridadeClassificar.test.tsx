@@ -94,7 +94,9 @@ describe('Minhas Tarefas (celular) — Prioridade e Classificar', () => {
     montar()
     expect(await screen.findByRole('button', { name: 'Classificar — ordem atual: Título (A–Z)' })).toBeInTheDocument()
     // Todas: seção "Próximos 7 dias" com armação (amanhã) e Bloco (depois de amanhã) — por título, armação antes.
-    const proximos = screen.getByRole('region', { name: 'Próximos 7 dias' })
+    // findBy: o botão Classificar aparece antes de a fonte devolver as tarefas; na CI carregada a
+    // seção ainda não existia no getBy síncrono (falhou no PR #491, 16/11/2026, passando local).
+    const proximos = await screen.findByRole('region', { name: 'Próximos 7 dias' })
     expect(ordemDosTitulos(proximos, ['Bloco', 'armação'])).toEqual(['armação', 'Bloco'])
   })
 })

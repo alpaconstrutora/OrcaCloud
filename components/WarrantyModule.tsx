@@ -2463,7 +2463,7 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
          * três já foram tentados e rejeitados numa tarefa anterior justamente
          * por não serem "tela". Padrão copiado de `ContractDetailView.tsx`.
          */
-        <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+        <div className="space-y-6 animate-in fade-in duration-300 pb-4">
             {/* Cabeçalho — seta voltar + <h1> text-2xl (3xl é só topo de lista-raiz, §20) */}
             <div className="flex flex-col md:flex-row md:items-start justify-between gap-4">
                 <div className="flex items-center gap-4 min-w-0">

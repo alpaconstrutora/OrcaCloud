@@ -146,7 +146,7 @@ const HoldingsList: React.FC<Props> = ({
                 </div>
             </>
         ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                 {holdings.map((proj, i) => (
                     <div
                         key={proj.id ?? i}

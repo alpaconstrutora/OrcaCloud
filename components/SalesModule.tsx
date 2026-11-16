@@ -1640,7 +1640,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     </div>
                 </div>
                 {property.client_id && (
-                    <div className="absolute top-24 left-6 z-10 animate-in fade-in zoom-in-95 duration-500">
+                    <div className="absolute top-24 left-6 z-10 animate-in fade-in zoom-in-95 duration-300">
                         <div className="px-4 py-2 bg-white/90 backdrop-blur-md rounded-[10px] border border-white shadow-xl flex items-center gap-2">
                             <User className="w-3.5 h-3.5 text-blue-600" />
                             <span className="text-[9px] font-black text-blue-900 uppercase tracking-widest leading-none">
@@ -2578,7 +2578,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             )}
 
             {activeTab === 'price-tables' && selectedBuildingId && currentBuilding && effectiveOrganizationId && (
-                <div className="animate-in slide-in-from-bottom-5 duration-500">
+                <div className="animate-in slide-in-from-bottom-5 duration-300">
                     <PriceTableManager
                         organizationId={effectiveOrganizationId}
                         properties={properties}
@@ -2589,7 +2589,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             )}
 
             {activeTab === 'sales-plans' && selectedBuildingId && currentBuilding && effectiveOrganizationId && (
-                <div className="animate-in slide-in-from-bottom-5 duration-500">
+                <div className="animate-in slide-in-from-bottom-5 duration-300">
                     <SalesPlanManager
                         organizationId={effectiveOrganizationId}
                         buildingId={selectedBuildingId}

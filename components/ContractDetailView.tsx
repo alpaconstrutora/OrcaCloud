@@ -1402,7 +1402,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     return (
         /* §20.1 — 24px do cabeçalho até o cromo; as barras de cromo empilhadas
            (abas §19.1 → botões §5.3) levam mb-3 entre si. */
-        <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+        <div className="space-y-6 animate-in fade-in duration-300 pb-4">
             {/* Header */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
                 <div className="flex items-center gap-4">
@@ -1643,7 +1643,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             )}
 
             {hasDivergence && (
-                <div className="bg-amber-50 border border-amber-100 p-4 rounded-[10px] flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-500 shadow-sm">
+                <div className="bg-amber-50 border border-amber-100 p-4 rounded-[10px] flex items-center justify-between gap-4 animate-in fade-in slide-in-from-top-4 duration-300 shadow-sm">
                     <div className="flex items-center gap-4">
                         <div className="w-10 h-10 bg-amber-100 rounded-[6px] flex items-center justify-center shrink-0">
                             <AlertCircle className="w-5 h-5 text-amber-600" />
@@ -1668,7 +1668,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* Tab: Visão Geral */}
             {ovGroup && (
-                <div className={`grid gap-4 animate-in slide-in-from-bottom-4 duration-500 ${ovColunaUnica ? 'grid-cols-1' : 'grid-cols-3'}`}>
+                <div className={`grid gap-4 animate-in slide-in-from-bottom-4 duration-300 ${ovColunaUnica ? 'grid-cols-1' : 'grid-cols-3'}`}>
                     <div className={ovColunaUnica ? 'space-y-3' : 'col-span-2 space-y-3'}>
                         {/* Status & Timing */}
                         {showOv('resumo') && (
@@ -1771,7 +1771,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         )}
 
                         {showOv('riscos') && budgetDifferences.length > 0 && (
-                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4 animate-in fade-in slide-in-from-top-4 duration-300">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-2">
                                         <TrendingUp className="w-5 h-5 text-amber-500" />
@@ -2337,7 +2337,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* Tab: Emissão */}
             {activeTab === 'emissao' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
                     {/* Status do contrato. Veio da aba Resumo: é aqui que o
                         documento é versionado, emitido e enviado para
                         assinatura, então é aqui que se muda o status. */}
@@ -2438,7 +2438,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* Tab: Itens do Contrato */}
             {activeTab === 'items' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
                     {itemsSubTab === 'itens' && (<>
                     {/* §4 — KpiCard canônico, uma cor semântica por métrica.
                         Antes eram três cards reimplementados à mão. */}
@@ -2815,7 +2815,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* Tab: Aditivos */}
             {activeTab === 'addendums' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
                     <div className="flex justify-between items-center mb-2">
                         <div>
                             <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
@@ -2900,7 +2900,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* Tab: Medições */}
             {activeTab === 'measurements' && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
                     <div className="flex justify-between items-center mb-2">
                         <div>
                             <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
@@ -3126,7 +3126,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
                 return (
                     // Dados Gerais: 12px entre os cards, o ritmo do Resumo (5bdda9b8).
-                    <div className={`${financeSubTab === 'dados' ? 'space-y-3' : 'space-y-6'} animate-in slide-in-from-bottom-4 duration-500`}>
+                    <div className={`${financeSubTab === 'dados' ? 'space-y-3' : 'space-y-6'} animate-in slide-in-from-bottom-4 duration-300`}>
                         {/* Sub-aba Dados Gerais: condições financeiras do contrato —
                             Valores, Condições de Pagamento e Centro de Custo e
                             Orçamento. Editáveis aqui (e só aqui): é o que define os
@@ -3589,7 +3589,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 const penaltyStatusColor = PENALTY_STATUS_COLORS;
                 const penaltyStatusLabel = PENALTY_STATUS_LABELS;
                 return (
-                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
                         <div className="mb-2">
                             <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
                                 <AlertCircle className="w-5 h-5 text-red-500" /> Penalidades <span className="text-sm font-normal text-red-600">{penalties.length} registro(s)</span>
@@ -3686,7 +3686,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
 
             {/* Tab: Avaliação de Desempenho (Fase 7.3 — Manual §17) */}
             {activeTab === 'evaluation' && contract && (
-                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
+                <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
                     <div className="mb-2">
                         <h3 className="text-xl font-medium text-gray-900 tracking-tight flex items-center gap-3">
                             <BarChart3 className="w-5 h-5 text-violet-500" /> Avaliação de Desempenho <span className="text-sm font-normal text-violet-600">{evaluations.length} registro(s)</span>

@@ -169,7 +169,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
     if (loading) return <div className="p-8 text-center animate-pulse font-bold text-gray-400">CARREGANDO NEGOCIAÇÃO...</div>;
 
     return (
-        <div className="flex flex-col h-[750px] bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+        <div className="flex flex-col h-[750px] bg-white rounded-[2.5rem] border border-gray-100 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-300">
             {/* Header */}
             <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50 backdrop-blur-md">
                 <div className="flex items-center gap-4">

@@ -312,7 +312,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
 
     if (carregando) {
         return (
-            <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+            <div className="space-y-6 animate-in fade-in duration-300 pb-4">
                 {Cabecalho}
                 <div className="text-center py-12">
                     <Loader2 className="w-8 h-8 text-blue-600 mx-auto animate-spin" />
@@ -324,7 +324,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
 
     if (!versao) {
         return (
-            <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+            <div className="space-y-6 animate-in fade-in duration-300 pb-4">
                 {Cabecalho}
                 <div className="text-center py-12">
                     <BookOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -346,7 +346,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
     }
 
     return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-4">
+        <div className="space-y-6 animate-in fade-in duration-300 pb-4">
             {Cabecalho}
 
             {somenteLeitura && (

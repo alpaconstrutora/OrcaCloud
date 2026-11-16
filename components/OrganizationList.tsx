@@ -425,7 +425,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
         <div className="space-y-8">
             {/* Organizations Tab Content */}
             {activeTab === 'organizations' && (
-                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
                     <div>
                         <h1 className="text-3xl font-black text-gray-900 tracking-tight">Organizações</h1>
                         <p className="text-gray-400 text-sm mt-1.5 font-medium">Clique numa organização para torná-la ativa; em Detalhes ficam a empresa matriz e as empresas do grupo.</p>
@@ -624,7 +624,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
             )}
 
             {/* Other Tabs Rendering with Filtering */}
-            <div className="min-h-[60vh] animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="min-h-[60vh] animate-in fade-in slide-in-from-bottom-4 duration-300">
                 {activeTab === 'clients' && (
                     <ClientList onClientsChange={onClientsChange} organizationId={activeOrganizationId || undefined} />
                 )}

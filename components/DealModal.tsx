@@ -3449,7 +3449,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 correção é feita em Meus Clientes. Em venda mostra o comprador
                                 clicado na lista acima (o primeiro, por padrão). */}
                             {conferenceClient && (
-                                <div className="p-6 bg-white rounded-[10px] border border-gray-100 space-y-4 animate-in slide-in-from-left-4 duration-500 shadow-sm">
+                                <div className="p-6 bg-white rounded-[10px] border border-gray-100 space-y-4 animate-in slide-in-from-left-4 duration-300 shadow-sm">
                                     <div className="flex items-center justify-between border-b border-gray-100 pb-3">
                                         <div className="flex items-center gap-2">
                                             <UserCheck className="w-4 h-4 text-blue-600" />
@@ -3638,7 +3638,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             {/* Coluna da direita: a unidade clicada na lista. */}
                             <div className="space-y-4 min-w-0">
                                 {expandedProperty && (
-                                    <div className="p-6 bg-white rounded-[10px] border border-gray-100 flex items-center gap-6 animate-in slide-in-from-left-4 duration-500 shadow-sm">
+                                    <div className="p-6 bg-white rounded-[10px] border border-gray-100 flex items-center gap-6 animate-in slide-in-from-left-4 duration-300 shadow-sm">
                                         <div className="w-20 h-20 rounded-[6px] border-2 border-white shadow-lg overflow-hidden bg-white shrink-0">
                                             {expandedProperty.images?.[0] ?
                                                 <img src={expandedProperty.images[0]} className="w-full h-full object-cover" alt="Preview" /> :
@@ -3696,7 +3696,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         { label: 'Orientação', icon: <Compass className="w-3.5 h-3.5" />, value: expandedProperty.sun_orientation ? (sunLabel[expandedProperty.sun_orientation] || expandedProperty.sun_orientation) : '—' },
                                     ];
                                     return (
-                                        <div className="grid grid-cols-4 gap-3 animate-in slide-in-from-left-4 duration-500">
+                                        <div className="grid grid-cols-4 gap-3 animate-in slide-in-from-left-4 duration-300">
                                             {specs.map((s) => (
                                                 <div key={s.label} className="p-3 bg-white rounded-[10px] border border-gray-100 flex flex-col gap-1">
                                                     <div className="flex items-center gap-1.5 text-gray-400">
@@ -4896,7 +4896,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </select>
 
                                 {selectedBroker && (
-                                    <div className="p-4 bg-amber-50 rounded-[10px] border border-amber-100 flex items-center gap-4 animate-in slide-in-from-left-4 duration-400">
+                                    <div className="p-4 bg-amber-50 rounded-[10px] border border-amber-100 flex items-center gap-4 animate-in slide-in-from-left-4 duration-300">
                                         <div className="w-10 h-10 bg-amber-100 rounded-[6px] flex items-center justify-center shrink-0">
                                             <UserCheck className="w-5 h-5 text-amber-600" />
                                         </div>

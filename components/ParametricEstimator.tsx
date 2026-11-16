@@ -223,7 +223,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
   ];
 
   return (
-    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-500 pb-20">
+    <div className="max-w-7xl mx-auto space-y-8 animate-in fade-in duration-300 pb-20">
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
@@ -1035,7 +1035,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                           </div>
 
                           {comparisonData ? (
-                            <div className="space-y-4 animate-in fade-in duration-500">
+                            <div className="space-y-4 animate-in fade-in duration-300">
                               <div className="flex justify-between items-center py-3 border-b border-emerald-100">
                                 <span className="text-sm font-medium text-gray-600">Diferença de Custo</span>
                                 <div className="text-right">

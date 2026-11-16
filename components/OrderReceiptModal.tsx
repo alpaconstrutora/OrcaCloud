@@ -157,11 +157,11 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                                         return (
                                             <tr key={`${row.code}-${idx}`} className={`transition-colors ${isShort ? 'bg-amber-50/40' : 'hover:bg-gray-50/40'}`}>
                                                 <td className="px-5 py-4">
-                                                    <p className="font-bold text-gray-900 text-sm">{row.description}</p>
-                                                    <p className="font-mono text-xs text-gray-400 mt-0.5">{[row.code, row.unit].filter(Boolean).join(' · ')}</p>
+                                                    <p className="text-sm font-normal text-gray-700">{row.description}</p>
+                                                    <p className="text-sm font-normal text-gray-600 mt-0.5">{[row.code, row.unit].filter(Boolean).join(' · ')}</p>
                                                 </td>
-                                                <td className="px-5 py-4 text-right font-black text-gray-500">
-                                                    {row.quantityOrdered} <span className="text-xs font-bold text-gray-400">{row.unit}</span>
+                                                <td className="px-5 py-4 text-right text-sm font-normal text-gray-600">
+                                                    {row.quantityOrdered} <span className="text-gray-500">{row.unit}</span>
                                                 </td>
                                                 <td className="px-5 py-4 text-right">
                                                     <input
@@ -177,7 +177,7 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                                                                 issue: val >= row.quantityOrdered ? undefined : (row.issue ?? 'faltando'),
                                                             });
                                                         }}
-                                                        className={`w-24 text-right rounded-xl border p-2 text-sm font-bold outline-none focus:ring-2 transition-all ${
+                                                        className={`w-24 text-right rounded-xl border p-2 text-sm font-normal outline-none focus:ring-2 transition-all ${
                                                             isShort
                                                                 ? 'border-amber-300 bg-amber-50 text-amber-800 focus:ring-amber-300'
                                                                 : 'border-emerald-200 bg-emerald-50 text-emerald-800 focus:ring-emerald-300'
@@ -189,13 +189,13 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                                                         <select
                                                             value={row.issue ?? 'faltando'}
                                                             onChange={e => updateRow(idx, { issue: e.target.value as any })}
-                                                            className="bg-white rounded-lg border border-amber-200 text-form-input font-bold text-amber-800 p-2 outline-none focus:ring-2 focus:ring-amber-300"
+                                                            className="bg-white rounded-lg border border-amber-200 text-form-input font-normal text-amber-800 p-2 outline-none focus:ring-2 focus:ring-amber-300"
                                                         >
                                                             <option value="faltando">Em falta / Menor Qtd</option>
                                                             <option value="quebrado">Quebrado / Avariado</option>
                                                         </select>
                                                     ) : (
-                                                        <span className="flex items-center gap-1.5 text-emerald-600 text-xs font-bold">
+                                                        <span className="flex items-center gap-1.5 text-sm font-normal text-emerald-700">
                                                             <CheckCircle2 className="w-3.5 h-3.5" />
                                                             OK
                                                         </span>

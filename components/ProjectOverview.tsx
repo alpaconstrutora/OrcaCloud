@@ -236,7 +236,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
     );
 
     return (
-        <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-500 pb-12">
+        <div className="space-y-8 animate-in slide-in-from-bottom-4 duration-300 pb-12">
             {/* Header with high level stats */}
             <div className="relative overflow-hidden bg-gradient-to-br from-blue-900 via-indigo-900 to-blue-800 p-8 rounded-[2.5rem] shadow-xl">
                 <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/3"></div>

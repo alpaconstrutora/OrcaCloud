@@ -19,7 +19,7 @@ import { analisarAlarme, proporAlarme } from '../blueprintDeteccaoAlarme';
 import { kitDaPeca } from '../blueprintKitsIncendio';
 import { proporHidrantes, coberturaDosHidrantes } from '../blueprintCoberturaIncendio';
 import { proporRecalque } from '../blueprintCasaDeBombas';
-import type { ContextoDoPredio } from './terreoECobertura';
+import { trechoNaParede, type ContextoDoPredio } from './terreoECobertura';
 import { NOME_DA_ESCADA_DE_EMERGENCIA } from './garagem';
 import { classificarEdificacao, exigenciasDaEdificacao, HIPOTESES_INCENDIO_PADRAO, type HipotesesIncendio } from '../blueprintIncendioClassificacao';
 import { percursoDeFuga } from '../blueprintRotaDeFuga';
@@ -110,7 +110,9 @@ export function conferirIncendioDoPredio(
   const sem = pf.ambientes.filter((x) => x.distanciaM == null);
   if (sem.length) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rota de fuga: ${sem.length} ambiente(s) sem caminho até a saída no térreo (${[...new Set(sem.map((x) => m.levels.find((l) => l.id === x.levelId)?.name))].join(', ')}).`, locais: sem.slice(0, 30).map(local) });
   const longe = pf.ambientes.filter((x) => x.atende === false);
-  if (longe.length) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rota de fuga: ${longe.length} ambiente(s) com o caminhamento até o local seguro acima do limite (${longe[0].rotulo}: ${metros(longe[0].caminhamentoM ?? longe[0].distanciaM)} m de ${metros(longe[0].limiteM ?? pf.limiteM)} m)${longe.some((x) => /^Garagem/.test(x.rotulo)) ? ' — a garagem do subsolo pede uma segunda saída (escada de emergência até o térreo) longe da primeira; fica para o projetista' : ''}.`, locais: longe.slice(0, 30).map(local) });
+  // PA10c: nos andares acima do térreo (fora da garagem), o que passa do limite mesmo com a detecção pede a 2ª escada.
+  const nosAndares = longe.some((x) => x.levelId !== descargaLevelId && !/^Garagem/.test(x.rotulo) && (m.levels.find((l) => l.id === x.levelId)?.elevationMm ?? 0) >= 0);
+  if (longe.length) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rota de fuga: ${longe.length} ambiente(s) com o caminhamento até o local seguro acima do limite (${longe[0].rotulo}: ${metros(longe[0].caminhamentoM ?? longe[0].distanciaM)} m de ${metros(longe[0].limiteM ?? pf.limiteM)} m)${longe.some((x) => /^Garagem/.test(x.rotulo)) ? ' — a garagem do subsolo pede uma segunda saída (escada de emergência até o térreo) longe da primeira; fica para o projetista' : ''}${nosAndares ? ' — nos andares, com uma escada, a circulação passa do limite: uma 2ª escada longe da primeira (ou declarar as características construtivas Y/Z, IT 08 Tabela 3) fica para o projetista' : ''}.`, locais: longe.slice(0, 30).map(local) });
   return {
     divisao: c.divisao.valor,
     grupo: c.grupo?.grupo ?? null,
@@ -166,6 +168,50 @@ export interface EquipamentosDeIncendioDoPredio {
   /** Por tipo de peça (o tipo do ponto: extintor, placa, luminária…), no tipo, no térreo e na cobertura. */
   pecas: Record<string, number>;
   pendencias: PendenciaDoPpci[];
+  /** PA10c: a 2ª porta para o exterior lançada no térreo (a sala comum mais longe passava do limite com a da frente). */
+  saidaNoTerreo: boolean;
+  /** PA10c: a detecção lançada nas áreas comuns porque a circulação passava do limite com uma escada (não por exigência). */
+  deteccaoPelaRota: boolean;
+}
+
+/** PA10c: a largura da 2ª porta para o exterior no térreo (2 unidades de passagem de 0,55 m + folga, a da entrada). */
+export const LARGURA_DA_SAIDA_DO_TERREO_MM = 1200;
+
+/**
+ * A 2ª PORTA PARA O EXTERIOR no térreo (PA10c, 16/11/2026, decisão do usuário: "porta no fim da asa"): na CIRCULAÇÃO do
+ * térreo, no trecho de parede que dá para FORA (do outro lado, nenhum ambiente do térreo) mais perto do ponto mais
+ * desfavorável da sala que passa do limite. Sem trecho que comporte a porta (largura + 15 cm de cada lado, fora das
+ * aberturas que já existem), `null`.
+ */
+export function portaDeSaidaNoTerreo(m: BlueprintModel, terreoLevelId: ObjectId, alvo: Point, larguraMm = LARGURA_DA_SAIDA_DO_TERREO_MM): Extract<Command, { type: 'AddOpening' }> | null {
+  const doTerreo = m.spaces.filter((s) => s.levelId === terreoLevelId);
+  const circulacoes = doTerreo.filter((s) => /^Circulação/.test(s.name ?? ''));
+  const dentroDeAlgum = (q: Point) => doTerreo.some((s) => pointInPolygon(s.ring as Point[], q));
+  let melhor: { cmd: Extract<Command, { type: 'AddOpening' }>; d: number } | null = null;
+  for (const w of m.walls.filter((x) => x.levelId === terreoLevelId)) {
+    const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+    if (L < larguraMm + 300) continue;
+    const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+    const n = { x: -u.y, y: u.x };
+    const ocupado = m.openings.filter((o) => o.wallId === w.id).map((o) => [o.offsetMm - 150, o.offsetMm + o.widthMm + 150] as const);
+    for (const s of circulacoes) {
+      const t = trechoNaParede(w, s.ring as Point[]);
+      if (!t || t.fim - t.ini < larguraMm + 300) continue;
+      // O centro mais perto do alvo, dentro do trecho.
+      const proj = (alvo.x - w.a.x) * u.x + (alvo.y - w.a.y) * u.y;
+      const c = Math.max(t.ini + larguraMm / 2 + 150, Math.min(t.fim - larguraMm / 2 - 150, proj));
+      const ini = Math.round(c - larguraMm / 2);
+      if (ocupado.some(([a, b]) => ini < b && ini + larguraMm > a)) continue;
+      const p = { x: w.a.x + u.x * c, y: w.a.y + u.y * c };
+      const fora = (lado: number) => ({ x: p.x + n.x * lado * (w.thicknessMm / 2 + 200), y: p.y + n.y * lado * (w.thicknessMm / 2 + 200) });
+      // Um lado na circulação, o outro fora de todo ambiente do térreo: a parede é de fachada.
+      const daFachada = [1, -1].some((lado) => pointInPolygon(s.ring as Point[], fora(lado)) && !dentroDeAlgum(fora(-lado)));
+      if (!daFachada) continue;
+      const d = Math.hypot(p.x - alvo.x, p.y - alvo.y);
+      if (!melhor || d < melhor.d) melhor = { cmd: { type: 'AddOpening', wallId: w.id, kind: 'door', offsetMm: ini, widthMm: larguraMm, heightMm: 2100, sillMm: 0 }, d };
+    }
+  }
+  return melhor?.cmd ?? null;
 }
 
 /**
@@ -206,6 +252,25 @@ export function lancarEquipamentosDeIncendio(
   };
   const grupo = c.divisao.valor?.trim().charAt(0).toUpperCase() || null;
   const percurso = () => percursoDeFuga(v, grupo, descargaLevelId, hip.saidas.percursoMaximoM, criteriosDoPercursoMG(c.preset, c.divisao.valor, hip.saidas));
+  const acimaDoLimite = (pc: ReturnType<typeof percurso>, noTerreo: boolean) =>
+    pc.ambientes.filter((a) => (a.levelId === descargaLevelId) === noTerreo && a.caminhamentoM != null && a.limiteM != null && a.caminhamentoM > a.limiteM + 1e-9);
+  // PA10c (decisão do usuário): a sala comum do térreo longe demais da porta da frente ganha a 2ª porta para o exterior,
+  // ANTES dos equipamentos — a sinalização e a iluminação já leem a rota com ela.
+  let saidaNoTerreo = false;
+  const longeNoTerreo = acimaDoLimite(percurso(), true);
+  if (longeNoTerreo.length) {
+    const pior = longeNoTerreo.reduce((a, b) => (b.caminhamentoM! - b.limiteM! > a.caminhamentoM! - a.limiteM! ? b : a));
+    const porta = portaDeSaidaNoTerreo(v, descargaLevelId, pior.origem);
+    if (porta) {
+      aplicar([porta]);
+      saidaNoTerreo = true;
+      pendencias.push({
+        grupo: 'CONFERIR',
+        texto: `Térreo: ${longeNoTerreo.length} ambiente(s) passavam do limite até a porta da frente (${pior.rotulo}: ${metros(pior.caminhamentoM!)} m de ${metros(pior.limiteM!)} m) — 2ª porta para o exterior (${metros(LARGURA_DA_SAIDA_DO_TERREO_MM / 1000)} m) na circulação, na fachada mais perto; confira com a arquitetura o caminho dela até a via pública.`,
+        locais: [{ levelId: descargaLevelId, ids: [pior.spaceId], ponto: pior.origem as Point }],
+      });
+    }
+  }
   if (exigida('EXTINTORES')) {
     const p = proporExtintores(v, analisarExtintores(v, c.carga.nivel, hip.extintores), hip.extintores);
     aplicar(p.comandos.length ? kitDaPeca(v, p.comandos).comandos : []);
@@ -221,12 +286,33 @@ export function lancarEquipamentosDeIncendio(
       aplicar(kitDaPeca(v, lote).comandos);
     }
   }
-  if (exigida('DETECCAO') || exigida('ALARME')) {
-    aplicar(kitDaPeca(v, proporAlarme(v, analisarAlarme(v, exigida('DETECCAO'), exigida('ALARME')))).comandos);
+  // PA10c (decisão do usuário: "detecção + pendência"): com uma escada, a circulação longe dela passa de 25 m (IT 08,
+  // Tabela 5, saída única sem detecção); com detecção nas áreas comuns o limite é 40 m. Lançada quando a rota pede, mesmo
+  // sem a norma exigir a detecção; o que ainda passar fica na conferência (a 2ª escada, ou declarar Y/Z).
+  const temDetector = (mm: BlueprintModel) => (mm.terminais ?? []).some((t) => t.tipoHidraulico === 'DETECTOR_FUMACA' || t.tipoHidraulico === 'DETECTOR_TEMPERATURA' || t.tipoHidraulico === 'DETECTOR_CHAMA');
+  const longeNosAndares = !exigida('DETECCAO') && !temDetector(v) ? acimaDoLimite(percurso(), false) : [];
+  const deteccaoPelaRota = longeNosAndares.length > 0;
+  if (deteccaoPelaRota) {
+    const pior = longeNosAndares.reduce((a, b) => (b.caminhamentoM! > a.caminhamentoM! ? b : a));
+    pendencias.push({
+      grupo: 'CONFERIR',
+      texto: `Detecção: a circulação passa do limite até a escada com saída única (${pior.rotulo}: ${metros(pior.caminhamentoM!)} m de ${metros(pior.limiteM!)} m — IT 08, Tabela 5) — detectores de fumaça nas áreas comuns de cada andar, com a central e os acionadores, para valer o limite com detecção.`,
+      locais: [{ levelId: pior.levelId, ids: [pior.spaceId], ponto: pior.origem as Point }],
+    });
+  }
+  if (exigida('DETECCAO') || exigida('ALARME') || deteccaoPelaRota) {
+    let analise = analisarAlarme(v, exigida('DETECCAO') || deteccaoPelaRota, exigida('ALARME') || deteccaoPelaRota);
+    // Pela rota (sem a norma exigir): os detectores só nos pavimentos em que ela passou do limite — na vista, o tipo (as
+    // cópias repetem); a garagem e o térreo ficam como estavam.
+    if (deteccaoPelaRota && !exigida('DETECCAO')) {
+      const niveis = new Set(longeNosAndares.map((a) => a.levelId));
+      analise = { ...analise, ambientes: analise.ambientes.filter((a) => niveis.has(a.levelId)) };
+    }
+    aplicar(kitDaPeca(v, proporAlarme(v, analise)).comandos);
     pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Alarme: o eletroduto do laço (da central aos dispositivos de cada andar, pela prumada) fica para o projetista — o prédio automático lança a central e os dispositivos.' });
   }
   if (exigida('SAIDAS_EMERGENCIA')) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Saídas de emergência: a barra antipânico nas portas da rota (que a análise de saídas pedir) fica para o PPCI da planta — ela edita as portas, e as dos andares copiados vêm do tipo.' });
-  return { comandos, pecas, pendencias };
+  return { comandos, pecas, pendencias, saidaNoTerreo, deteccaoPelaRota };
 }
 
 /** Os ambientes do pavimento tipo que NÃO são de unidade (circulação, núcleo) — e todos os dos outros pavimentos. */

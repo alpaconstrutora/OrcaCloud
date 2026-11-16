@@ -22,7 +22,7 @@
  * os ambientes de dentro das unidades não são medidos; o corredor comum, sim. Sem critérios, o
  * limite antigo por grupo (de memória, CONFERIR).
  */
-import { pointInPolygon, type BlueprintModel, type Escada, type ObjectId, type Point, type Space } from './blueprintKernel';
+import { pointInPolygon, uidDaCopia, type BlueprintModel, type Escada, type ObjectId, type Point, type Space } from './blueprintKernel';
 import { construirGrafoEspacial } from './blueprintGrafoEspacial';
 import { usoDoNome } from './blueprintPrograma';
 import { FONTE_IT08_MG, limiteDaTabela5, type CriteriosDoPercursoMG } from './blueprintIncendioSaidasMG';
@@ -402,10 +402,14 @@ export function percursoDeFuga(
   // D1.2: o LOCAL SEGURO da IT 08 (5.5.2.1) — fora do pavimento de descarga, a boca da escada já é
   // a chegada: um segundo Dijkstra com a escada ligada ao exterior por 0 mm.
   const adjSeguro = new Map([...adj].map(([k, v]) => [k, [...v]]));
-  const escadasPorNivel = new Map<ObjectId, Set<ObjectId>>();
+  // As saídas de um andar são as CAIXAS de escada, não as peças (PA10c do prédio automático, 16/11/2026): a escada que
+  // chega de baixo e a que sobe dali, no mesmo eixo, são a mesma caixa — contadas por peça, o pavimento tipo do prédio
+  // tinha "mais de uma saída" (35 m em vez de 25 m) e os andares de cima, com a mesma caixa, não.
+  const caixaDaEscada = (e: Escada) => e.pontos.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).sort().join(';');
+  const escadasPorNivel = new Map<ObjectId, Set<string>>();
   for (const e of model.stairs ?? []) {
     for (const levelId of pavimentosDaEscada(model, e)) {
-      escadasPorNivel.set(levelId, new Set([...(escadasPorNivel.get(levelId) ?? []), e.id]));
+      escadasPorNivel.set(levelId, new Set([...(escadasPorNivel.get(levelId) ?? []), caixaDaEscada(e)]));
       if (levelId === descargaLevelId) continue;
       const chave = `escada:${e.id}:${levelId}`;
       adjSeguro.set(chave, [...(adjSeguro.get(chave) ?? []), { para: SAIDA, mm: 0, pedacos: [] }]);
@@ -417,6 +421,17 @@ export function percursoDeFuga(
   const ocupados = new Set(model.spaces.map((s) => s.levelId));
   const edificacaoTerrea = ocupados.size <= 1;
   const DENTRO_DA_UNIDADE = new Set(['SALA', 'COZINHA', 'DORMITORIO', 'SUITE', 'BANHEIRO', 'LAVABO', 'AREA_DE_SERVICO', 'VARANDA']);
+  // PA10c do prédio automático (16/11/2026): o cômodo é da unidade também quando a ETIQUETA dele é de uma unidade — o
+  // corredor DENTRO do apartamento chama "Circulação" como o comum, e pelo nome era medido (o R4 reprovava por ele). As
+  // etiquetas dos andares copiados são as do tipo com o uid da cópia.
+  const etiquetasDeUnidade = new Set<string>((model.unidades ?? []).flatMap((u) => u.etiquetaUids));
+  for (const l of model.levels) {
+    if (l.tipoDeId === undefined) continue;
+    for (const u of model.unidades ?? []) for (const uid of u.etiquetaUids) etiquetasDeUnidade.add(uidDaCopia(l.uid, uid));
+  }
+  const etiquetasPorNivel = new Map<ObjectId, Point[]>();
+  for (const l of model.labels) if (etiquetasDeUnidade.has(l.uid)) etiquetasPorNivel.set(l.levelId, [...(etiquetasPorNivel.get(l.levelId) ?? []), l.at as Point]);
+  const ehDaUnidade = (s: Space) => (etiquetasPorNivel.get(s.levelId) ?? []).some((p) => dentro(s, p));
   const limiteDoAmbiente = (s: Space) => {
     if (!criterios || percursoMaximoM != null) return { limiteM, motivo };
     const terreo = s.levelId === descargaLevelId;
@@ -436,7 +451,10 @@ export function percursoDeFuga(
     return { pedacos, pelaEscada };
   };
 
-  const ambientes: RotaDoAmbiente[] = model.spaces.map((s, idx) => {
+  // Um "ambiente" de menos de 0,1 m² é resíduo de geometria (duas paredes que se encontram desalinhadas por milímetros —
+  // o RL tinha um triângulo de 0,0002 m² por andar, "sem rota"): não é ocupado, não se mede.
+  const areaMm2 = (r: readonly Point[]) => Math.abs(r.reduce((t, q, i) => t + q.x * r[(i + 1) % r.length].y - r[(i + 1) % r.length].x * q.y, 0)) / 2;
+  const ambientes: RotaDoAmbiente[] = model.spaces.flatMap((s, idx) => (areaMm2(s.ring) >= 100_000 ? [{ s, idx }] : [])).map(({ s, idx }) => {
     const portais = portaisDoAmbiente.get(s.id) ?? [];
     const rotulo = s.name || `Ambiente ${idx + 1}`;
     const { candidatos, centro } = candidatosDoAmbiente(s);
@@ -454,7 +472,7 @@ export function percursoDeFuga(
     const lim = limiteDoAmbiente(s);
     // D1.2: o caminhamento até o local seguro, do ponto mais desfavorável (A-2: dentro da unidade não se mede).
     let caminhamentoM: number | null = null;
-    const naUnidade = criterios?.divisao === 'A-2' && DENTRO_DA_UNIDADE.has(usoDoNome(s.name) ?? '');
+    const naUnidade = criterios?.divisao === 'A-2' && (DENTRO_DA_UNIDADE.has(usoDoNome(s.name) ?? '') || ehDaUnidade(s));
     if (seguro && !naUnidade) {
       let piorSeguro: number | null = null;
       for (const c of candidatos) {

@@ -159,14 +159,14 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // UHC de um andar, e nunca abaixo de 100 com bacia. No R12 (11 andares com unidades), todos DN 100.
         const n = agora.andaresComUnidade;
         for (const t of agora.esgoto!.tubos) expect(t.dnMm).toBe(Math.max(dnDoTuboDeQueda(t.uhcPorAndar * n, t.uhcPorAndar, n), t.comBacia ? 100 : 0));
-        // PA9a, "pronto quando": o R8 classificado A-2 com rota de fuga em todos os andares. Nos outros a rota fica GRAVADA
-        // como está (térreo comprido no R12 e no RL, e o caminhamento até a boca da escada nos andares de cima — a rota põe a
-        // boca do lance multiandares na outra ponta dele): o marco acusa qualquer mudança.
-        // PA8b: com a escada de emergência da garagem, a rota limpa em todos os andares do R8 — o subsolo inclusive.
-        if (nome === 'R8') {
-          expect(agora.incendio!.divisao).toBe('A-2');
-          expect(agora.incendio!.andares.filter((a) => a.semRota > 0 || a.naoAtendem > 0)).toEqual([]);
-        }
+        // PA9a, "pronto quando": A-2 com rota de fuga em todos os andares. PA10c: nos quatro prédios — o tipo contava a
+        // escada que chega e a que sobe como duas saídas, o corredor DENTRO do apartamento era medido (A-2 conta da porta da
+        // unidade), um resíduo de geometria de 0,0002 m² era "ambiente sem rota" no RL; e, por decisão do usuário, a
+        // detecção nas áreas comuns do tipo quando a circulação passa de 25 m com uma escada (R12, RL) e a 2ª porta para o
+        // exterior no térreo comprido (RL). PA8b: a garagem com a escada de emergência — o subsolo inclusive.
+        expect(agora.incendio!.divisao).toBe('A-2');
+        expect(agora.incendio!.andares.filter((a) => a.semRota > 0 || a.naoAtendem > 0)).toEqual([]);
+        expect(Boolean(agora.incendio!.equipamentos?.DETECTOR_FUMACA)).toBe(nome === 'R12' || nome === 'RL');
         // PA8a, "pronto quando": no R8 (e no R12) nenhum pilar sobre vaga ou rampa; os subsolos de R8 (1) e R12 (2).
         if (caso.subsolos) {
           expect(agora.garagem?.subsolos.length).toBe(caso.subsolos);

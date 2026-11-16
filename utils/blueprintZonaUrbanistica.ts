@@ -181,12 +181,17 @@ export function lerRecuoEscalonado(texto?: string | null): RecuoEscalonado | nul
   return { aPartirDoPavimento, recuoMm };
 }
 
-/** O ordinal do pavimento para o escalonamento e o gabarito: 1 = o mais baixo com cota ≥ 0; subsolo = 0. */
+/**
+ * O ordinal do pavimento para o escalonamento, o gabarito e o número da unidade: 1 = a cota mais baixa ≥ 0; subsolo = 0.
+ * Conta COTAS, não pavimentos: dois pavimentos na mesma cota são o mesmo andar (PA10c do prédio automático, 16/11/2026 —
+ * o térreo do lote e o térreo próprio do bloco ficam os dois na cota 0; contados um a um, o tipo virava o 3º, e as
+ * unidades dos andares copiados saíam "Torre · 3º pav · 101" em vez de 201).
+ */
 export function ordinalDoPavimento(levels: readonly { id: string; elevationMm: number }[], levelId: string | null): number {
   if (!levelId) return 0;
-  const acima = [...levels].filter((l) => l.elevationMm >= 0).sort((a, b) => a.elevationMm - b.elevationMm);
-  const i = acima.findIndex((l) => l.id === levelId);
-  return i < 0 ? 0 : i + 1;
+  const l = levels.find((x) => x.id === levelId);
+  if (!l || l.elevationMm < 0) return 0;
+  return new Set(levels.filter((x) => x.elevationMm >= 0 && x.elevationMm <= l.elevationMm).map((x) => x.elevationMm)).size;
 }
 
 export interface AfastamentoProgressivo {

@@ -562,6 +562,52 @@ furos na tabela, 10 pavimentos na lista), o conflito consolidado do Relatório a
 linhas soltas da climatização fora, e no rascunho salvo depois do Lançar a água a 2,48 m nos 7 andares (124 trechos em
 cada — o tipo e as cópias), sem erro de console.
 
+**Execução da PA10c (16/11/2026).**
+
+*Envio ao Empreendimento* (`services/sync/massaAdapter.ts`). Conferido com os quatro prédios lançados: o envio mandava a
+ESTIMATIVA da massa pela área — unidade no térreo de uso comum e quantas "caberiam" por andar — e não o que o prédio
+desenhou (R4 8 × 6, R8 47 × 35, R12 96 × 88, RL 111 × 91). Decisão do usuário: **"unidades do prédio"** — o bloco com o
+pavimento tipo montado e unidades desenhadas manda as unidades da planta: os andares que têm unidade, o número (101,
+201…), a tipologia e a área privativa MEDIDA (o preço-semente sai dela), a área comum do bloco rateada pela privativa. A
+chave segue `<bloco>:<ordinal>:<posição>` (a posição sai do número): a unidade que existe nos dois casa com a já enviada;
+a que só a estimativa tinha (T01, 106…) vira órfã — o motor nunca apaga. Sem o tipo montado, a estimativa de antes. O aviso
+diz quanto a estimativa daria, e o da garagem lançada, as vagas desenhadas. **Achado no caminho:** `ordinalDoPavimento`
+contava PAVIMENTOS, e o térreo do lote e o do bloco estão os dois na cota 0 — o tipo virava o 3º, e as unidades dos
+andares copiados saíam "Torre · 3º pav · 101" em vez de 201 (no app e no envio). Passou a contar COTAS (o mesmo andar);
+vale também para o recuo escalonado da zona.
+
+*Rota de fuga.* Os três achados anotados na PA9a não eram o que pareciam:
+1. "A boca do lance multiandares na outra ponta" — não era: a circulação mais longe ficava a 26,6 m da escada em TODOS os
+   andares do R4, o tipo inclusive. O tipo passava porque a escada que chega do térreo e a que sobe à cobertura (o mesmo
+   eixo, a mesma caixa) contavam como DUAS saídas (limite de 35 m em vez de 25 m). Corrigido no motor da rota: as saídas
+   de um andar são as caixas de escada.
+2. E a "Circulação" que reprovava no R4 é o corredor DENTRO do apartamento — a A-2 conta da porta da unidade (IT 08,
+   5.5.2.2), mas o motor reconhecia o cômodo da unidade só pelo nome (sala, dormitório…). Passou a reconhecer também pela
+   etiqueta da unidade (no tipo e nas cópias). O R4 fica limpo sem nada a lançar.
+3. "As asas do RL sem caminho" — um triângulo de 0,0002 m² onde duas paredes se encontram desalinhadas por milímetros: a
+   rota passou a ignorar "ambiente" de menos de 0,1 m².
+
+Com isso, o que sobrou é de projeto, e o usuário decidiu:
+- **"Detecção + pendência"**: com uma escada, a circulação comum do R12 (até 29,6 m) e do RL (até 37,3 m) passa dos 25 m da
+  saída única; com detecção o limite é 40 m (Tabela 5). O prédio lança a detecção (o motor de alarme da planta: detectores
+  de fumaça nas áreas comuns do TIPO — as cópias repetem —, central, acionadores e avisadores) quando a rota pede, mesmo
+  sem a norma exigir; pendência CONFERIR com o local. O que passar mesmo assim fica na conferência, que agora diz que falta
+  uma 2ª escada (ou declarar Y/Z).
+- **"Porta no fim da asa"**: o térreo do RL tinha uma porta só, e as salas comuns da asa ficavam a 40–51 m dela (35 m no
+  térreo com saída única). Quando alguma sala do térreo passa do limite, o prédio abre uma 2ª porta para o exterior
+  (1,20 m) na circulação, no trecho de fachada mais perto do pior ponto — antes dos equipamentos, para a sinalização e a
+  iluminação já lerem a rota com ela; pendência CONFERIR (o caminho dela até a via pública é da arquitetura).
+
+Resultado (o marco trava): a rota limpa em TODOS os andares dos quatro prédios; detecção só no R12 (17 detectores no
+tipo) e no RL (27); R4 e R8 com o mesmo modelo de antes.
+
+**Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pa10c.cjs`, o RL, estudo descartável arquivado): a aba PPCI
+com a rota em todos os 9 andares sem ambiente sem rota nem acima do limite; no Relatório a 2ª porta do térreo e a
+detecção, cada uma levando à planta (a porta no fim da asa comprida); no rascunho salvo, o térreo com 2 portas para o
+exterior, 9 detectores de fumaça em cada um dos 7 andares e a central, as 91 unidades numeradas 101…713; e o envio ao
+Empreendimento calculado na página com o modelo salvo (nada gravado no Empreendimento): 91 unidades, 13 por andar,
+nenhuma no térreo. Sem erro de console.
+
 PA1 e PA2 podem correr em frentes paralelas.
 
 ## Pendências em aberto (16/11/2026)
@@ -574,14 +620,14 @@ tela (o motor não decide); "fase" = trabalho previsto.
 | Desempenho | Clique no "Lançar" do R12: o que sobra depois da PA10a é o desenho da planta (21,6 mil trechos) e as marcas de verificação das redes | depois da PA10 |
 | Desempenho | Gerar o R12 no worker: 57 s no app de desenvolvimento, dentro do tempo fixado na PA10a (90 s gerar · 90 s Lançar · 30 s salvar) — vigiar a cada fase | acompanhamento |
 | Desempenho | Marco do RL perto do limite da CI (20 min por caso; a CI inteira leva ~31 min); o bloco "o motor (PA2)" subiu para 180 s depois de deixar a main vermelha (15/11) | acompanhamento |
-| Fechamento | Envio ao Empreendimento (`massaAdapter`) conferido com o prédio lançado | PA10c |
 | Compatibilização | Água × esgoto que sobra: o ramal do andar de cima atravessando cômodo seco a caminho do shaft (R8 18, R12 141, RL 244) — no relatório, com o local | depois da PA10 |
 | Compatibilização | Encontros da climatização (linha frigorígena e dutos × eletroduto, dreno × água) e o dreno do ar passando por porta ou janela — no relatório | depois da PA10 |
 | Compatibilização | Eletroduto lançado depois da climatização atravessando a caixa da evaporadora (R8: 56) — no relatório | depois da PA10 |
 | Compatibilização | Forro rebaixado a 2,30 m nos banheiros, lavabos e área de serviço (a água abaixo dos ramais de cima) — confira com a arquitetura | projetista |
-| Rota de fuga | Nos andares de cima, a boca do lance multiandares fica na outra ponta da escada (R4: 2 ambientes do 3º andar passam de 25 m) | PA10c |
-| Rota de fuga | Térreo comprido (R12, RL): salas comuns a mais de 25 m da porta — pede outra saída | PA10c |
-| Rota de fuga | RL (bloco em L): um ambiente por andar sem caminho até a escada (as asas) | PA10c |
+| Rota de fuga | Prédio com a circulação acima de 40 m da escada única (mesmo com a detecção): a 2ª escada no fim do corredor — hoje só a pendência | projetista |
+| Rota de fuga | Características construtivas (X/Y/Z, IT 08 Tabela 3) não declaradas: a Tabela 5 usa X, o mais restritivo — declarar na premissa muda os limites | projetista |
+| Rota de fuga | A 2ª porta do térreo (RL): o caminho dela até a via pública e a calçada | projetista |
+| Envio ao Empreendimento | Unidades já enviadas pela estimativa que o prédio não tem (T01, a 6ª por andar…) ficam órfãs no Empreendimento — o motor nunca apaga | projetista |
 | PPCI | DN da rede de hidrantes e curva da bomba (premissa DN 65) — o cálculo hidráulico do PPCI da planta | projetista |
 | PPCI | Eletroduto do laço do alarme; barra antipânico nas portas da rota | projetista |
 | Garagem | Rampa de mão única e as curvas de concordância; mão dupla pelo número de vagas — o código de obras | projetista |
@@ -605,8 +651,8 @@ tela (o motor não decide); "fase" = trabalho previsto.
 ## Estado
 
 **Resumo (16/11/2026):** PA0 a PA10b **no ar** — último merge 637bca4 (#499), produção servindo esse commit e a CI do
-main verde. **Falta só a PA10c** (o envio ao Empreendimento conferido e os três achados da rota de fuga — ver "Pendências
-em aberto"). Kernel em `blueprint-kernel-ts-0.109.0`.
+main verde. **PA10c feita** (envio ao Empreendimento com as unidades do prédio e a rota de fuga limpa nos quatro
+prédios) — publicada com o PR dela; o que fica está em "Pendências em aberto". Kernel em `blueprint-kernel-ts-0.109.0`.
 
 | Fase | PR | Commit no main |
 |---|---|---|
@@ -628,7 +674,7 @@ em aberto"). Kernel em `blueprint-kernel-ts-0.109.0`.
 | PA9c — hidrantes, coluna, bomba e recalque | #459 | 0df7667 |
 | PA10a — desempenho e o tempo do R12 fixado | #495 | d1b7f59 |
 | PA10b — laje = passagem, água rebaixada, compatibilização | #499 | 637bca4 |
-| PA10c — envio ao Empreendimento e achados da rota | — | a fazer |
+| PA10c — envio ao Empreendimento e achados da rota | (este PR) | — |
 
 | Fase | Situação |
 |---|---|
@@ -642,4 +688,4 @@ em aberto"). Kernel em `blueprint-kernel-ts-0.109.0`.
 | PA7 | **PA7a feita** (ver a Execução) — R8: 5 tubos de queda por andar (DN 100), 120 UHC por andar, ventilação DN 75, coletor DN 150; toda louça de todo andar chega à ligação (315 de 315; R12 836 de 836). **No R12, os tubos de queda dão DN 100 pela Tabela 6** (o marco confere cada um). Conflitos por grade (44,8 s → 54 ms, mesmo resultado). **PA7b feita** (pluvial da cobertura: R8 2 condutores DN 100 para 1.200 L/min) |
 | PA8 | **PA8c feita** (drenagem: ralos e canaletas em pente, caixa separadora, poço com 2 bombas no QDG e recalque à CI do térreo; kernel 0.109.0). **PA8b feita** (escada(s) de emergência da garagem — rota do subsolo limpa no R8 e no R12; QDG, luzes e exaustores). **PA8a feita** (ver a Execução) — subsolo do estudo lançado: R8 1 subsolo com 60 vagas (o contorno livre levaria 91), 1 rampa, 40 pilares da torre + 60 da malha estendida, fundação no subsolo; R12 2 subsolos com 177 vagas e a rampa em vaivém; **nenhum pilar sobre vaga ou rampa** (o marco confere). A garagem pede uma 2ª saída (pendência). — a PA8 está completa |
 | PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. **PA9b feita** (extintores, sinalização e iluminação nas áreas comuns do tipo — cada andar repete). **PA9c feita** (hidrante em todo pavimento; coluna de incêndio empilhada; bomba na cobertura ao lado da reserva técnica; registro de recalque no passeio) |
-| PA10 | **PA10a feita** (desempenho com o mesmo resultado: R12 completo 63,6 → 40,3 s, o cálculo da tela no Lançar 14,0 → 5,3 s; o "Gerar" espera a entrada carregar — a prévia do R12 nascia velha; R12 de ponta a ponta no app: gerar 57 s, Lançar 61 s, salvar 9 s com a máquina quieta; tempo fixado 90/90/30 s). **PA10b feita** (a prumada na laje é passagem, não conflito, no app inteiro; a água no forro rebaixado das áreas molhadas — água × esgoto R4 62 → 4, R8 252 → 18, R12 911 → 141, RL 1.195 → 244; o relatório de compatibilização na aba nova; conferida no app com o R8). PA10c (envio ao Empreendimento, achados da rota) a fazer — ver "Pendências em aberto" |
+| PA10 | **PA10a feita** (desempenho com o mesmo resultado: R12 completo 63,6 → 40,3 s, o cálculo da tela no Lançar 14,0 → 5,3 s; o "Gerar" espera a entrada carregar — a prévia do R12 nascia velha; R12 de ponta a ponta no app: gerar 57 s, Lançar 61 s, salvar 9 s com a máquina quieta; tempo fixado 90/90/30 s). **PA10b feita** (a prumada na laje é passagem, não conflito, no app inteiro; a água no forro rebaixado das áreas molhadas — água × esgoto R4 62 → 4, R8 252 → 18, R12 911 → 141, RL 1.195 → 244; o relatório de compatibilização na aba nova; conferida no app com o R8). **PA10c feita** (o envio ao Empreendimento manda as unidades da planta — R8 35 em vez da estimativa de 47 —, a numeração das cópias 201…; a rota de fuga limpa nos quatro prédios: caixas de escada, corredor do apartamento fora da medição, resíduo de geometria ignorado, detecção no R12 e no RL, 2ª porta no térreo do RL) — ver "Pendências em aberto" |

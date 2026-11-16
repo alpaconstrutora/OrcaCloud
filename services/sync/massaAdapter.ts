@@ -17,6 +17,16 @@
 // ⚠️ A unidade da massa NÃO existe no desenho: a chave é texto determinístico
 // "<uid do bloco>:<ordinal do pavimento>:<posição>". Mudar o mix renumera — o
 // motor reporta as que sumiram como órfãs e NUNCA apaga (regra do motor).
+//
+// PA10c do prédio automático (16/11/2026, decisão do usuário: "unidades do prédio"):
+// quando o bloco tem o pavimento tipo MONTADO com unidades (o prédio automático
+// lançado, ou o tipo montado à mão com as plantas), o envio manda as unidades DA
+// PLANTA — os andares que têm unidade, o número (101, 201…), a tipologia e a área
+// privativa medida — em vez da estimativa pela área. A estimativa punha unidade no
+// térreo de uso comum e contava 6 por andar onde a divisão real coube 5 (R8: 47 ×
+// 35). A chave segue "<bloco>:<ordinal>:<posição>" (a posição sai do número), então
+// a unidade que existe nos dois casa com a já enviada; a que só a estimativa tinha
+// vira órfã.
 
 import { supabase } from '../../lib/supabase';
 import { getSnapshot, listSnapshots } from '../blueprintService';
@@ -30,7 +40,10 @@ import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../../utils/blueprintMassa';
 import { distribuirProduto, produtoDaColuna, type Produto } from '../../utils/blueprintProduto';
 import { financeiroDaMassa } from '../../utils/blueprintFinanceiroMassa';
 import { modeloDoPayloadPublicado } from './modeloPublicado';
-import { direcaoDaRua, nomeDaUnidadeDaMassa as nomeDaUnidade, ordinalDoTipo, type UnidadeDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
+import { direcaoDaRua, nomeDaUnidadeDaMassa as nomeDaUnidade, ordinalDoTipo, pavimentoTipoMontado, type UnidadeDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
+import { unidadesDoPredio, type UnidadeDoPredio } from '../../utils/blueprintUnidadesDoPredio';
+import { ordinalDoPavimento } from '../../utils/blueprintZonaUrbanistica';
+import { garagemLancada } from '../../utils/blueprintGaragemDaMassa';
 import { dividirPavimentoDoBloco } from '../../utils/blueprintPavimentoOrtogonal';
 import { CanonicalSide, CanonicalTower, CanonicalUnit } from './types';
 
@@ -57,6 +70,8 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
   if (produto.tipologias.length === 0) warnings.push('O estudo não tem produto: defina as tipologias na tela Produto (Terreno › Massa › Produto) antes de enviar.');
 
   const towers: CanonicalTower[] = [];
+  // As unidades do prédio (origens e as dos andares copiados), lidas uma vez e só se algum bloco tem o tipo montado.
+  let predio: ReturnType<typeof unidadesDoPredio> | undefined;
   const liveUnitSourceIds = new Set<string>();
   const liveTowerSourceIds = new Set<string>();
 
@@ -80,6 +95,17 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
       const u = divisao.divisao.unidades.find((x) => x.posicao === posicao);
       return u && u.tipologiaId === tipologiaId ? u : null;
     };
+    // PA10c: o bloco com o tipo montado e unidades desenhadas manda as unidades da planta.
+    const doPredio = unidadesDoBlocoLancado(model, b, () => (predio ??= unidadesDoPredio(model)));
+    if (doPredio.length) {
+      const torre = torreDoPredio(b, pb.pisos.length, construidaAcima, doPredio, produto, model, naPosicao, fin.custoM2Base);
+      for (const u of torre.units) liveUnitSourceIds.add(u.sourceId);
+      towers.push(torre);
+      const estimadas = pb.pisos.reduce((s, p) => s + p.unidades, 0);
+      if (estimadas !== doPredio.length) warnings.push(`"${b.nome}": vão as ${doPredio.length} unidade(s) desenhadas no prédio (a estimativa da massa daria ${estimadas}).`);
+      continue;
+    }
+
     const vgvDoBloco = pb.pisos.reduce((s, p) => s + Object.entries(p.porTipologia).reduce((ss, [id, q]) => ss + q * (tipologias.get(id)?.areaPrivativaM2 ?? 0) * (tipologias.get(id)?.precoM2 ?? 0), 0), 0);
 
     const units: CanonicalUnit[] = [];
@@ -139,10 +165,95 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
     });
   }
   for (const b of dist.blocos.filter((x) => x.uso === 'GARAGEM')) {
-    warnings.push(`"${b.nome}" é garagem: não vira torre (${b.vagas} vaga(s) entram como hipótese do produto).`);
+    // PA10c: a garagem lançada (o subsolo do prédio automático) diz as vagas desenhadas, não a estimativa.
+    const bloco = (model.blocos ?? []).find((x) => x.id === b.blocoId);
+    const pisos = new Set(bloco ? garagemLancada(model, bloco).map((l) => l.id) : []);
+    const desenhadas = (model.vagas ?? []).filter((v) => pisos.has(v.levelId)).length;
+    warnings.push(
+      pisos.size
+        ? `"${b.nome}" é garagem: não vira torre (${desenhadas} vaga(s) desenhadas na garagem lançada; a estimativa da massa daria ${b.vagas}).`
+        : `"${b.nome}" é garagem: não vira torre (${b.vagas} vaga(s) entram como hipótese do produto).`,
+    );
   }
 
   return { origin: 'massa', empreendimento, towers, commonAreaCandidates: [], liveTowerSourceIds, liveUnitSourceIds, warnings: warnings.concat(fin.avisos.filter((a) => /CUB|custo de obra/i.test(a))) };
+}
+
+/** As unidades desenhadas do bloco: as do pavimento tipo montado dele e as dos andares copiados desse tipo. */
+function unidadesDoBlocoLancado(model: BlueprintModel, b: { uid: string }, todas: () => ReturnType<typeof unidadesDoPredio>): UnidadeDoPredio[] {
+  const tipo = pavimentoTipoMontado(model, b);
+  if (!tipo || !(model.unidades ?? []).some((u) => u.etiquetaUids.length)) return [];
+  const doBloco = new Set([tipo.id, ...model.levels.filter((l) => l.tipoDeId === tipo.id).map((l) => l.id)]);
+  return todas().unidades.filter((u) => (u.levelId ? doBloco.has(u.levelId) : u.medida.levelIds.includes(tipo.id)));
+}
+
+/**
+ * A torre com as unidades da planta (PA10c). O pavimento da unidade dá o andar (`floor` = ordinal − 1); a posição sai do
+ * número ("101" no 2º pavimento = posição 1), e a chave é a mesma da estimativa — "<bloco>:<ordinal>:<posição>". A área
+ * comum do bloco (a construída acima do solo menos as privativas medidas) é rateada pela privativa, como na estimativa.
+ */
+function torreDoPredio(
+  b: { uid: string; nome: string },
+  pisos: number,
+  construidaAcimaM2: number,
+  unidades: UnidadeDoPredio[],
+  produto: Produto,
+  model: BlueprintModel,
+  naPosicao: (posicao: number, tipologiaId: string) => UnidadeDoPavimento | null,
+  custoM2Base: number | null,
+): CanonicalTower {
+  const porNome = new Map(produto.tipologias.map((t) => [t.nome, t]));
+  const linhas = unidades.map((u) => {
+    const levelId = u.levelId ?? u.medida.levelIds[0] ?? null;
+    const ordinal = ordinalDoPavimento(model.levels, levelId);
+    const prefixo = ordinal - 1 <= 0 ? 'T' : String(ordinal - 1);
+    const resto = u.numero.startsWith(prefixo) ? u.numero.slice(prefixo.length) : '';
+    const pos = /^\d{2,}$/.test(resto) ? Number(resto) : null;
+    return { u, ordinal, pos, t: u.tipologia ? (porNome.get(u.tipologia) ?? null) : null, privativa: r2(u.medida.areaPrivativaMm2 / 1e6) };
+  });
+  const privativaTotal = linhas.reduce((s, l) => s + l.privativa, 0);
+  const comumDoBloco = Math.max(0, construidaAcimaM2 - privativaTotal);
+  const vgv = linhas.reduce((s, l) => s + l.privativa * (l.t?.precoM2 ?? 0), 0);
+  const ordinais = [...new Set(linhas.map((l) => l.ordinal))];
+  const porAndar = Math.max(0, ...ordinais.map((o) => linhas.filter((l) => l.ordinal === o).length));
+  const units: CanonicalUnit[] = linhas.map(({ u, ordinal, pos, t, privativa }) => {
+    const sourceId = pos != null ? `${b.uid}:${ordinal}:${pos}` : `${b.uid}:unidade:${u.chave}`;
+    const comum = privativaTotal > 0 ? r2((comumDoBloco * privativa) / privativaTotal) : 0;
+    const lugar = pos != null && t ? naPosicao(pos, t.id) : null;
+    return {
+      sourceId,
+      fields: {
+        name: u.numero,
+        floor: ordinal - 1,
+        ...(u.tipologia ? { typology: u.tipologia } : {}),
+        private_area: privativa,
+        common_area: comum,
+        total_area: r2(privativa + comum),
+        ...(t ? { bedrooms: t.dormitorios } : {}),
+      },
+      createOnly: {
+        blueprint_massa_chave: sourceId,
+        floor_tipo: (ordinal <= 1 ? 'TERREO' : 'TIPO') as FloorTipo,
+        is_vendavel: true,
+        status: 'DISPONIVEL' as UnitStatus,
+        ...(t && t.precoM2 > 0 ? { price: r2(privativa * t.precoM2) } : {}),
+        ...(lugar ? { sun_orientation: lugar.solCardinal } : {}),
+        ...(lugar?.posicaoNoLote ? { position_type: lugar.posicaoNoLote } : {}),
+      } satisfies Partial<EmpreendimentoUnitInsert> as Record<string, unknown>,
+    };
+  });
+  return {
+    sourceId: b.uid,
+    matchName: b.nome,
+    fields: {
+      floors_count: pisos,
+      units_per_floor: porAndar,
+      ...(custoM2Base != null ? { construction_cost_sqm: custoM2Base } : {}),
+      ...(privativaTotal > 0 && vgv > 0 ? { sales_price_sqm: r2(vgv / privativaTotal) } : {}),
+    },
+    createOnly: { blueprint_bloco_uid: b.uid, name: b.nome },
+    units,
+  };
 }
 
 export async function loadMassaSide(empreendimento: Empreendimento): Promise<CanonicalSide> {

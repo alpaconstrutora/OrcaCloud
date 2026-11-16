@@ -5,7 +5,7 @@ import {
 } from 'recharts';
 import { Download } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
-import { GRADE_DE_INDICADORES, tomDoSaldo } from './controladoria/indicadores';
+import { GRADE_DE_INDICADORES, tomDoSaldo, formatBRLCompacto } from './controladoria/indicadores';
 import { baixarCSV } from './controladoria/csv';
 import { financialReportService } from '../services/financialReportService';
 import { useToast } from '../hooks/useToast';
@@ -23,15 +23,6 @@ function formatBRL(v: number): string {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 }
 
-/** Eixo em unidade compacta (§28.2): "R$ 12 mil", "R$ 1,2 mi". O valor exato fica
- *  no tooltip e na tabela. */
-function formatBRLCompacto(v: number): string {
-    const a = Math.abs(v);
-    const sinal = v < 0 ? '-' : '';
-    if (a >= 1_000_000) return `${sinal}R$ ${(a / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
-    if (a >= 1_000)     return `${sinal}R$ ${(a / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: 0 })} mil`;
-    return formatBRL(v);
-}
 
 // Gráficos no vocabulário do §28: grade hairline sólida, eixos em #64748b, linhas de
 // 2 px retas (curva suavizada inventa valores entre os períodos), colunas ≤ 24 px,

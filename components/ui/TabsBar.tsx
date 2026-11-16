@@ -41,6 +41,9 @@ interface TabsBarProps<T extends string> {
      *  compra (`SupplyChainOrderDetails`): sub-aba tem de ter a MESMA cor da barra
      *  principal logo acima — e no link do fornecedor (§24) ela é coral. */
     accent?: 'blue' | 'orange' | 'indigo' | 'portal';
+    /** 'manual': a seta só move o foco; Enter/Espaço escolhem a aba. Para painéis que
+     *  consultam o servidor a cada troca (ver `moverEntreAbas`). Padrão: automática. */
+    ativacao?: 'automatica' | 'manual';
 }
 
 /* Classes por extenso — o JIT do Tailwind não enxerga classe montada em runtime. */
@@ -51,12 +54,12 @@ const ACCENTS = {
     portal: { ativa: 'bg-white text-[#C24428] shadow-sm', contador: 'text-[#E1553C]', novo: 'font-semibold text-[#C24428]', anel: 'focus-visible:ring-[#C24428]' },
 };
 
-export function TabsBar<T extends string>({ tabs, value, onChange, children, className = '', bare, accent = 'blue' }: TabsBarProps<T>) {
+export function TabsBar<T extends string>({ tabs, value, onChange, children, className = '', bare, accent = 'blue', ativacao = 'automatica' }: TabsBarProps<T>) {
     const cor = ACCENTS[accent];
     const algumaAtiva = tabs.some(t => t.id === value);
     /* flex-wrap, nunca overflow-x-auto — rolagem horizontal esconde aba sem avisar (§19.1) */
     const trilho = (
-            <div role="tablist" onKeyDown={moverEntreAbas} className={`flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full ${bare ? className : ''}`}>
+            <div role="tablist" onKeyDown={e => moverEntreAbas(e, ativacao === 'automatica')} className={`flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full ${bare ? className : ''}`}>
                 {tabs.map((t, i) => {
                     const active = t.id === value;
                     return (

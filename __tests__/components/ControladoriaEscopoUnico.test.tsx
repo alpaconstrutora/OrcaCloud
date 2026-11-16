@@ -91,7 +91,7 @@ describe('Controladoria — escopo único', () => {
         useStore.setState({ projectId: 'obra-1' });
         render(<ControladoriaModule />);
         await waitFor(() => expect((screen.getByLabelText('Obra') as HTMLSelectElement).value).toBe('obra-1'));
-        await waitFor(() => expect(svc.getDRESummary).toHaveBeenLastCalledWith('org-1', `${ano}-01-01`, `${ano}-12-31`, 'obra-1', 'CAIXA'));
+        await waitFor(() => expect(svc.getDRESummary).toHaveBeenCalledWith('org-1', `${ano}-01-01`, `${ano}-12-31`, 'obra-1', 'CAIXA'));
     });
 
     it('projeto do topo que não é obra (orçamento, planejamento) não vira filtro', async () => {

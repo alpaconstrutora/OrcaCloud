@@ -65,13 +65,16 @@ describe('DRE — resposta fora de ordem', () => {
     it('a resposta antiga que chega por último NÃO substitui a do filtro atual', async () => {
         const antiga = adiada<DRESummary>();
         const atual = adiada<DRESummary>();
-        svc.getDRESummary.mockReturnValueOnce(antiga.promise).mockReturnValueOnce(atual.promise);
+        // Pelo período pedido (a DRE também pede o mesmo período do ano anterior, que
+        // aqui fica sem resposta útil): a do ano corrente demora, a de 2010 chega antes.
+        svc.getDRESummary.mockImplementation(async (_o: unknown, de: string) =>
+            de === `${ano}-01-01` ? antiga.promise : de === '2010-01-01' ? atual.promise : null);
 
         render(<Tela />);
-        await waitFor(() => expect(svc.getDRESummary).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(svc.getDRESummary).toHaveBeenCalledWith('org-1', `${ano}-01-01`, `${ano}-12-31`, undefined, 'CAIXA'));
 
         fireEvent.change(screen.getByDisplayValue(`${ano}-01-01`), { target: { value: '2010-01-01' } });
-        await waitFor(() => expect(svc.getDRESummary).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(svc.getDRESummary).toHaveBeenCalledWith('org-1', '2010-01-01', `${ano}-12-31`, undefined, 'CAIXA'));
 
         await act(async () => { atual.resolve(resumo(222)); });
         await act(async () => { antiga.resolve(resumo(663388)); });
@@ -85,19 +88,28 @@ describe('DRE — período inválido não consulta', () => {
     it('início depois do fim: diz o motivo e não chama o banco', async () => {
         svc.getDRESummary.mockResolvedValue(resumo(100));
         render(<Tela />);
-        await waitFor(() => expect(svc.getDRESummary).toHaveBeenCalledTimes(1));
+        await waitFor(() => expect(svc.getDRESummary).toHaveBeenCalled());
+        const antes = svc.getDRESummary.mock.calls.length;
 
         fireEvent.change(screen.getByDisplayValue(`${ano}-01-01`), { target: { value: `${ano + 1}-06-01` } });
 
         expect(await screen.findByText('A data inicial é depois da final.')).toBeTruthy();
-        expect(svc.getDRESummary).toHaveBeenCalledTimes(1);
+        // Nem o período inválido nem o "ano anterior" dele vão ao banco.
+        expect(svc.getDRESummary).toHaveBeenCalledTimes(antes);
         expect(screen.queryByText('R$ 100,00')).toBeNull();
     });
 });
 
 describe('DRE — falha', () => {
     it('mostra "Tentar de novo" no lugar dos números, e tentar de novo carrega', async () => {
-        svc.getDRESummary.mockRejectedValueOnce(new Error('timeout')).mockResolvedValueOnce(resumo(4000));
+        // 1ª carga do período falha; a 2ª (tentar de novo) responde. O ano anterior fica de fora.
+        let doPeriodo = 0;
+        svc.getDRESummary.mockImplementation(async (_o: unknown, de: string) => {
+            if (de !== `${ano}-01-01`) return null;
+            doPeriodo += 1;
+            if (doPeriodo === 1) throw new Error('timeout');
+            return resumo(4000);
+        });
         render(<Tela />);
 
         const botao = await screen.findByRole('button', { name: 'Tentar de novo' });

@@ -21,8 +21,12 @@ const PASSO: Record<string, number | 'primeira' | 'ultima'> = {
     End: 'ultima',
 };
 
-/** `onKeyDown` do elemento com `role="tablist"`. */
-export function moverEntreAbas(e: React.KeyboardEvent<HTMLElement>): void {
+/** `onKeyDown` do elemento com `role="tablist"`.
+ *  `ativar = false` é a ATIVAÇÃO MANUAL do WAI-ARIA: a seta só leva o foco e o
+ *  Enter/Espaço (o clique nativo do botão) escolhe. Para abas cujo painel carrega do
+ *  servidor (Controladoria): com a automática, atravessar 5 abas pelas setas
+ *  disparava 5 cargas. */
+export function moverEntreAbas(e: React.KeyboardEvent<HTMLElement>, ativar = true): void {
     const passo = PASSO[e.key];
     if (passo === undefined || e.altKey || e.ctrlKey || e.metaKey) return;
     const trilho = e.currentTarget;
@@ -37,7 +41,7 @@ export function moverEntreAbas(e: React.KeyboardEvent<HTMLElement>): void {
     e.preventDefault();
     if (destino === atual) return;
     abas[destino].focus();
-    abas[destino].click();
+    if (ativar) abas[destino].click();
 }
 
 /**

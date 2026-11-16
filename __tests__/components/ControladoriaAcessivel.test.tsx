@@ -71,7 +71,7 @@ describe('DRE — tudo que o mouse faz, o teclado faz', () => {
         expect(screen.queryByRole('button', { name: /Sem obra/ })).toBeNull();
         obra.focus();
         await userEvent.keyboard('{Enter}');
-        await waitFor(() => expect(svc.getDRESummary).toHaveBeenLastCalledWith('org-1', `${ano}-01-01`, `${ano}-12-31`, 'obra-1', 'CAIXA'));
+        await waitFor(() => expect(svc.getDRESummary).toHaveBeenCalledWith('org-1', `${ano}-01-01`, `${ano}-12-31`, 'obra-1', 'CAIXA'));
     });
 
     it('o botão de ajustar colunas tem nome acessível', async () => {

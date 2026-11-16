@@ -154,7 +154,7 @@ subagentes — a partir dos artefatos que já tinha gravado).
 | R2.3 | Cor por estado na DRE: rótulo neutro; vermelho só no total abaixo do limiar (custo negativo não é alarme) | idem |
 | R2.4 | Em Competência o aviso "sem classificação" não cita previsto (não existe nesse regime); Por Categoria na ordem contábil | idem |
 
-### Publicação 2 — tabelas, gaveta, campo desligado, acabamento (este PR)
+### Publicação 2 — tabelas, gaveta, campo desligado, acabamento (#485)
 
 Pedido: "sim" (15/11/2026), depois da publicação 1 no ar.
 
@@ -166,8 +166,25 @@ Pedido: "sim" (15/11/2026), depois da publicação 1 no ar.
 | R2.8 | Campo desligado: "De" do WIP diz "Não se aplica" (não a data das outras abas), borda tracejada, motivo em `aria-describedby` (o `title` de campo desligado não chega ao leitor de tela) | teste + medição: os 4 campos no mesmo topo (273 px) no WIP e na DRE |
 | R2.9 | CSV com ";" , vírgula decimal e BOM (o Excel pt-BR abre em colunas e com acento); WIP "Saldo de contrato" "—" sem contratos; Diário: Valor à direita com tabular-nums, "Débitos = créditos" só com lançamento | testes |
 
-Fora desta rodada (registrados na crítica, não pedidos): Por Obra ignora o filtro de obra; 2×
-"Adiantamento" no Balancete; eixo do Fluxo; atalhos de período.
+### Publicação 3 — o que a crítica registrou e tinha ficado fora (este PR)
+
+> incluir nas proximas etapas Deixei fora o que a crítica registrou
+
+(15/11/2026) Perguntas feitas e respostas:
+
+> "Contra o quê os números devem ser comparados?" → **Mesmo período do ano anterior (Recomendado)** ·
+> "Quais atalhos de período devem aparecer ao lado das datas?" → **Mês, mês anterior, trimestre, ano (Recomendado)**
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| R3.1 | Comparativo: a DRE pede também o mesmo período do ano anterior (em paralelo; se falhar, a DRE abre sem o "vs."). Cards com a variação ("−86,7% vs. 2025"; "vs. mesmo período de 2025" em recorte do ano; "vs. um ano antes" se cruza anos); coluna "2025" no Resumo e no Por Categoria; entra no CSV | `ControladoriaTerceira.test.tsx` (falha no main); tela local: Resultado 2025 = R$ 2.485,35 |
+| R3.2 | Atalhos Mês · Mês anterior · Trimestre · Ano (rótulo curto; o `title` diz o período por extenso). A barra passou a ter duas linhas FIXAS no desktop (período + ações; regime + obra): tudo numa linha cabia na DRE e não no WIP/Fluxo, e a barra mudava de altura ao trocar de aba | teste; medição: 150 px nas 3 abas a 1440 e a 1280; a 390 os atalhos ficam dentro do card |
+| R3.3 | Por Obra respeita a obra escolhida na barra | teste |
+| R3.4 | Balancete: a 2ª "Adiantamento" era a categoria pelo NOME numa organização sem ela no plano (fn_balancete agrupa por id; Garden SPE: 4 lançamentos). A linha agora diz "Fora do plano de contas da organização do lançamento" | teste; tela local |
+| R3.5 | Eixo do Fluxo com uma casa abaixo de 10 mil ("R$ 2,5 mil", não "3 mil") — `formatBRLCompacto` foi para `controladoria/indicadores.ts` | teste |
+| R3.6 | Abas da Controladoria com ativação MANUAL (`TabsBar ativacao="manual"`, opcional; as outras ~70 telas seguem automáticas): a seta só leva o foco, Enter/Espaço escolhem | teste; tela local: 3 setas = 0 cargas da DRE |
+| R3.7 | `aria-controls` no grupo do Por Categoria (só quando aberto, quando as linhas existem) | teste |
+| R3.8 | 390 px: a DRE ocupa a largura do card (sem as larguras fixas de 620 px), valor nunca quebra, rótulo quebra; sem a coluna do ano anterior (os cards dizem a variação) | medição: tabela 348 = card 348, sem rolagem interna |
 
 ## Estado
 
@@ -178,7 +195,8 @@ Fora desta rodada (registrados na crítica, não pedidos): Por Obra ignora o fil
 - [x] Passo 5 — #467 (fe350c2d); medido na tela local e em produção; auditoria 9/20 → 15/20
 - [x] Passo 6 — #471 (feb21d5d); conferido em produção ("Saldo com o previsto" R$ 184.392,21)
 - [x] 2ª rodada, publicação 1 — #481 (c3096ec); conferida em produção 15/11/2026
-- [ ] 2ª rodada, publicação 2 — frente `controladoria-r2-tabelas`, PR a abrir
+- [x] 2ª rodada, publicação 2 — #485 (8a66231); conferida em produção 16/11/2026
+- [ ] 2ª rodada, publicação 3 — frente `controladoria-r3`, PR a abrir
 
 ## Verificação
 

@@ -168,7 +168,7 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
     <div className="border-b border-slate-200 px-4 py-3" data-testid="versao-nbr12721">
       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Áreas NBR 12721</h3>
       {!quadro ? (
-        <p className="mt-1 text-[11px] text-slate-500">
+        <p className="mt-1 text-xs text-slate-600">
           Esta versão não tem os quadros congelados — publicada antes da tela de Áreas, ou sem unidades. Publique de novo para congelar.
         </p>
       ) : (
@@ -192,7 +192,7 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
             {(['TECNICA', 'JURIDICA'] as TipoDeAprovacaoNbr12721[]).map((t) => {
               const a = aprovacoes.find((x) => x.tipo === t);
               return (
-                <li key={t} className="text-[11px] text-slate-600">
+                <li key={t} className="text-xs text-slate-700">
                   {ROTULO[t]}:{' '}
                   {a ? (
                     <span className="text-emerald-700">
@@ -200,7 +200,7 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
                       {a.observacao && <span className="block text-slate-500">“{a.observacao}”</span>}
                     </span>
                   ) : (
-                    <span className="text-slate-400">pendente</span>
+                    <span className="text-slate-500">pendente</span>
                   )}
                 </li>
               );
@@ -257,7 +257,7 @@ export default function SecaoNbr12721DaVersao({ snapshotId, podeAprovar = true }
         </>
       )}
       {erro && (
-        <p className="mt-1 text-[11px] text-red-700" role="alert">
+        <p className="mt-1 text-xs text-red-700" role="alert">
           {erro}
         </p>
       )}

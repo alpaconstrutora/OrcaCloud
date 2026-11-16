@@ -200,6 +200,33 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
 
   React.useEffect(() => { load(); }, [load]);
 
+  // LINK DIRETO (15/11/2026): `#/empreendimentos?id=<id>` abre a ficha — é por ele que a tela
+  // Áreas NBR 12721 da Planta, aberta pelo botão da ficha, volta para ela. Lido na montagem e a
+  // cada troca de endereço; usado, o parâmetro sai (voltar à lista não reabre a ficha). Fora da
+  // lista desta organização (topo em outra org), busca pelo id — a RLS decide se pode ver.
+  const idDoHash = (h: string) => (h.startsWith('#/empreendimentos?') ? new URLSearchParams(h.split('?')[1]).get('id') : null);
+  const [fichaPedida, setFichaPedida] = React.useState<string | null>(() => (typeof window !== 'undefined' ? idDoHash(window.location.hash) : null));
+  React.useEffect(() => {
+    const aoMudar = () => {
+      const id = idDoHash(window.location.hash);
+      if (id) setFichaPedida(id);
+    };
+    window.addEventListener('hashchange', aoMudar);
+    return () => window.removeEventListener('hashchange', aoMudar);
+  }, []);
+  React.useEffect(() => {
+    if (!fichaPedida || loading) return;
+    const id = fichaPedida;
+    setFichaPedida(null);
+    if (window.location.hash.startsWith('#/empreendimentos?')) window.history.replaceState(null, '', '#/empreendimentos');
+    const naLista = items.find(i => i.id === id);
+    if (naLista) { setSelected(naLista); return; }
+    empreendimentoService.getById(id)
+      .then(e => { if (e) setSelected(e as Empreendimento); else notify('Esse empreendimento não está entre os que você pode ver — confira a organização no topo.', 'error'); })
+      .catch(() => notify('Não foi possível abrir o empreendimento. Tente de novo pela lista.', 'error'));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fichaPedida, loading, items]);
+
   const [tipoNameMap, setTipoNameMap] = React.useState<Record<string, string>>({});
   React.useEffect(() => {
     empreendimentoTypeService.list(orgIdParam)

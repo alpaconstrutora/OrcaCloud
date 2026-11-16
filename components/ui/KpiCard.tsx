@@ -287,13 +287,18 @@ export function KpiCard({
         );
     }
 
+    // Cartão clicável é BOTÃO (15/11/2026): era um `<div onClick>` sem papel nem foco — o
+    // teclado não chegava nele (o "Cálculo bloqueado" das Áreas NBR 12721 levava às
+    // pendências só pelo mouse). Sem `onClick`, segue `<div>`.
+    const Casca = (isClickable ? 'button' : 'div') as 'div';
     return (
-        <div
+        <Casca
+            {...(isClickable ? { type: 'button' } : {})}
             onClick={onClick}
             title={title}
             className={[
                 'bg-white rounded-xl border border-gray-200 px-4 py-3 flex items-center gap-3',
-                isClickable ? 'cursor-pointer transition-transform active:scale-[0.98]' : '',
+                isClickable ? 'w-full text-left cursor-pointer transition-transform active:scale-[0.98] outline-none focus-visible:ring-2 focus-visible:ring-blue-500' : '',
                 className,
             ].join(' ')}
         >
@@ -309,7 +314,7 @@ export function KpiCard({
                     (abaixo dos 4,5:1), medido na aba Análise de Locações (26/10/2026). */}
                 {sub && <p className="text-xs text-gray-500 truncate">{sub}</p>}
             </div>
-        </div>
+        </Casca>
     );
 }
 

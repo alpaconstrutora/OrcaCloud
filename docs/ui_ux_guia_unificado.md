@@ -3604,8 +3604,10 @@ Toda paleta categórica ou ordinal passa por
 > ℹ️ **Barra horizontal empilhada** (16/11/2026, `components/TasksDashboard.tsx` › "Quem está
 > com o quê"): segmentos **retos**, com `stroke="#ffffff" strokeWidth={2}` para o respiro de 2px
 > na cor da superfície entre eles. Não usa raio na ponta, porque o último segmento muda de linha
-> para linha. O total vai na ponta por `<LabelList>` no ÚLTIMO segmento da pilha, em cor de texto.
-> A legenda HTML leva a contagem de cada parte.
+> para linha. O total vai na ponta, em cor de texto, desenhado pelo último segmento NÃO VAZIO
+> da linha (`<LabelList content>` em cada `<Bar>`, ver `totalNaPonta`). Um `LabelList` só no
+> último `<Bar>` some quando esse segmento é zero, e a linha fica sem número. A legenda HTML
+> leva a contagem de cada parte.
 > ❌ Cor de status (vermelho/verde de bom/ruim) como "série 4". ❌ Paleta gerada
 > por índice (`COLORS[i % n]`) — a 9ª cor é indistinguível. ❌ Cor atribuída pela
 > posição: filtrar não pode repintar quem sobrou.

@@ -86,9 +86,34 @@ sem WITH CHECK separado; RPCs DEFINER sem autorização (`hire_candidate`,
 - [x] migrations renomeadas para `2027111690xxxx`
 - [x] produção conferida por leitura: `partner_portal_create_request` e `fn_set_broker_property_access` iguais ao repositório; bucket `documents` só com as 4 policies antigas; e-mails de `organization_members`/`superadmins` todos minúsculos
 - [x] `tsc` exit 0; Vitest local: falhas só de ambiente (sem `.env`; CRLF no `espelhoDoInvestidor`; `PainelVersoes` passa isolado 39/39)
-- [ ] CI do PR verde
-- [ ] migrations do passo 1 aplicadas
-- [ ] merge + produção conferida
-- [ ] migration do F8
-- [ ] Edge Functions publicadas e provadas de fora
-- [ ] senha do F2 trocada (usuário)
+- [x] CI do PR verde (#514, head `5413c2c1`)
+- [x] migrations do passo 1 aplicadas pelo usuário (16/11): F1 e F4 conferidas pela saída
+  (`portal_tokens` e `broker_portal_tokens` sem leitura de anon); as outras seis sem erro e
+  conferidas por leitura (policies, grants, corpo das funções)
+- [x] merge 16/11 (squash `baed0dd6`); `conferir-producao.sh` OK; CI da `main` verde
+- [x] migration do F8 aplicada pelo usuário: as 5 policies novas (`documents_select_org`,
+  `documents_insert_org`, `documents_insert_nf_parceiro`, `documents_update_org`,
+  `documents_delete_org`) no ar, nenhuma das 4 antigas; anon `object/list/documents` = `[]`
+- [x] Edge Functions publicadas pelo usuário (16/11, ~23:17 UTC), cada uma +1 versão e
+  `verify_jwt` inalterado: `sinapi-import` v13, `read-matricula` v6,
+  `partner-portal-download` v8, `planta-ia` v7, `planta-webhooks` v5, `planta-api` v81,
+  `dunning-notifier` v14, `task-alert-notifier` v28
+- [x] provadas de fora (POST sem header / chave publicável / token lixo):
+  `check-rls-postura.sh` limpo nas 9 verificações; `sinapi-import`, `planta-webhooks` e
+  `planta-api` (GET) = 401 nos três; `read-matricula` e `planta-ia` = 401 sem header e
+  **503 com a chave publicável** — `ANTHROPIC_API_KEY` não está configurada em produção e a
+  function para ali, antes do `getUser()` e sem custo; a cota e o "precisa ser membro"
+  só ficam exercitáveis quando a chave for configurada; `partner-portal-download` = 400
+  sem token (o portão é o token do portal)
+- [ ] senha do F2 trocada (usuário) — segue no histórico do git até ser trocada
+
+### O que ficou de fora de propósito
+
+- **`bi-narrative` não foi publicada.** Ela não existe em produção (nunca teve deploy);
+  publicar agora ligaria uma funcionalidade de IA paga. O código com o F61 está na `main`
+  e a migration do F61 (cota) já está no banco — publicar é decisão de produto.
+- **Bucket `documents` continua `public = true`.** O F8 fechou a LISTAGEM por anon e
+  restringiu leitura/escrita autenticadas à organização do caminho, mas quem tem o
+  caminho exato de um arquivo ainda baixa pela URL pública sem login (conferido: HEAD 200).
+  Tornar o bucket privado é o F9 (sem patch): as URLs públicas estão gravadas em linhas
+  do banco e precisariam virar URL assinada na leitura.

@@ -9,6 +9,7 @@ import {
 import type { TaskRecord, EmployeeOption, ProjectOption, TaskDefaults } from './TaskForm'
 import type { TaskStatus } from '../services/taskService'
 import { uniqueStatusesByName, statusGroupKeyOf, statusOfGroupKey, statusNameKey } from '../utils/taskStatusByName'
+import { PRIORIDADE_TAREFA, ORIGEM_TAREFA, rotuloOrigem } from '../utils/tarefaRotulos'
 import type { GroupByField } from './TasksModule'
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils'
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils'
@@ -48,23 +49,9 @@ interface Props {
   }
 }
 
-// ── Prioridade ────────────────────────────────────────────────────────────────
-const PRIORITY_META: Record<number, { label: string; flag: string }> = {
-  1: { label: 'Urgente', flag: 'text-red-500'    },
-  2: { label: 'Alta',    flag: 'text-orange-400' },
-  3: { label: 'Normal',  flag: 'text-blue-400'   },
-  4: { label: 'Baixa',   flag: 'text-slate-300'  },
-}
-
-const MODULE_LABEL: Record<string, { label: string; cls: string }> = {
-  manual:      { label: 'Manual',      cls: 'text-slate-500' },
-  operacional: { label: 'Operacional', cls: 'text-amber-700' },
-  financeiro:  { label: 'Financeiro',  cls: 'text-emerald-700' },
-  rh:          { label: 'RH',          cls: 'text-purple-700' },
-  compras:     { label: 'Compras',     cls: 'text-indigo-700' },
-  oficios:     { label: 'Ofícios',     cls: 'text-sky-700' },
-  riscos:      { label: 'Riscos',      cls: 'text-red-700' },
-}
+// ── Prioridade e origem: rótulos compartilhados com o Painel (utils/tarefaRotulos) ──
+const PRIORITY_META = PRIORIDADE_TAREFA
+const MODULE_LABEL  = ORIGEM_TAREFA
 
 // ── Colunas (visibilidade, ordem arrastável e ordenação via useTableColumns) ──
 // Toda coluna de valor único é ordenável (§6.3). 'actions' é estrutural: fica fora
@@ -454,7 +441,7 @@ const TasksList: React.FC<Props> = ({
     const taskStatus = t.status_id ? statusMap[t.status_id] : null
     const isDone     = taskStatus ? taskStatus.is_done : t.status === 'done'
     const prio       = PRIORITY_META[t.priority] ?? PRIORITY_META[3]
-    const mod        = MODULE_LABEL[t.source_module] ?? MODULE_LABEL.manual
+    const mod        = rotuloOrigem(t.source_module)
     const assignee   = t.assignee_employee_id ? empMap[t.assignee_employee_id] : null
     const proj       = t.project_id ? projMap[t.project_id] : null
     const route      = t.source_ref?.route

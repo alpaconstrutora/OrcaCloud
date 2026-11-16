@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "b139a59d7d3470f41fcdb079f476e1c3eab7e7ad65d38b4d9f5f57b5359ac007",
+    "modelo": "63eb9edf65d3d5dcb36f489b5b56f45a284f0a1dd6f7c3da45ba7c7727c43ad1",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -11,7 +11,7 @@
     "estruturas": 201,
     "quadros": 11,
     "terminais": 735,
-    "trechosDeAgua": 502,
+    "trechosDeAgua": 511,
     "agua": {
       "pontos": 36,
       "hidrometros": 2,
@@ -25,7 +25,7 @@
       "alimentadorDnMm": 25,
       "rtiL": 8000,
       "estaticaMaxKpa": 215,
-      "dinamicaMinKpa": 80,
+      "dinamicaMinKpa": 79,
       "pressurizador": true,
       "vrp": false,
       "insuficientes": 0,
@@ -143,7 +143,7 @@
       "conflitos": {
         "ABERTURA": 30,
         "PILAR": 2,
-        "REDE": 102,
+        "REDE": 98,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
@@ -155,11 +155,11 @@
       },
       "furos": 40
     },
-    "aguaXEsgoto": 4,
+    "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0
   },
   "R8": {
-    "modelo": "460732ab00859533e7ce3213447d697c42c85074d6bc867336f51b6f72e00303",
+    "modelo": "fdccfd5258cd668532ecbd35b1a2075e4f1bf57a39fde2bf0d4cecee04c47a54",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 11,
     "copias": 6,
@@ -170,7 +170,7 @@
     "estruturas": 766,
     "quadros": 45,
     "terminais": 3719,
-    "trechosDeAgua": 2775,
+    "trechosDeAgua": 2817,
     "agua": {
       "pontos": 85,
       "hidrometros": 5,
@@ -184,7 +184,7 @@
       "alimentadorDnMm": 32,
       "rtiL": 16000,
       "estaticaMaxKpa": 332,
-      "dinamicaMinKpa": 74,
+      "dinamicaMinKpa": 75,
       "pressurizador": true,
       "vrp": false,
       "insuficientes": 0,
@@ -379,7 +379,7 @@
       "conflitos": {
         "ABERTURA": 245,
         "PILAR": 4,
-        "REDE": 630,
+        "REDE": 612,
         "EQUIPAMENTO": 7,
         "OUTRO": 0
       },
@@ -391,11 +391,11 @@
       },
       "furos": 106
     },
-    "aguaXEsgoto": 18,
+    "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0
   },
   "R12": {
-    "modelo": "c445fbab9b26510123d222758b96db6cb8c8ee60508c432d2b3fc7d699358064",
+    "modelo": "5a6f164fae3883425d1ba4ab57aed16e68bdb9fcc4cd47a93b883b3e4c119b0c",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
@@ -406,7 +406,7 @@
     "estruturas": 1424,
     "quadros": 103,
     "terminais": 9599,
-    "trechosDeAgua": 6871,
+    "trechosDeAgua": 7025,
     "agua": {
       "pontos": 144,
       "hidrometros": 8,
@@ -420,7 +420,7 @@
       "alimentadorDnMm": 50,
       "rtiL": 20000,
       "estaticaMaxKpa": 207,
-      "dinamicaMinKpa": 77,
+      "dinamicaMinKpa": 76,
       "pressurizador": true,
       "vrp": true,
       "insuficientes": 0,
@@ -681,7 +681,7 @@
       "conflitos": {
         "ABERTURA": 330,
         "PILAR": 1,
-        "REDE": 1872,
+        "REDE": 1732,
         "EQUIPAMENTO": 88,
         "OUTRO": 0
       },
@@ -693,11 +693,11 @@
       },
       "furos": 173
     },
-    "aguaXEsgoto": 141,
+    "aguaXEsgoto": 1,
     "eletrodutoNoEquipamento": 0
   },
   "RL": {
-    "modelo": "05cf3b2648d58c4642d07a59e12091a84487ed65a189acb8095d29f595e9b3b7",
+    "modelo": "34da9b43cdc3ac1235cf3a08230f99350cbb403fa60b58cfd8a3a1587322c63b",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -708,7 +708,7 @@
     "estruturas": 1179,
     "quadros": 100,
     "terminais": 9306,
-    "trechosDeAgua": 7436,
+    "trechosDeAgua": 7625,
     "agua": {
       "pontos": 229,
       "hidrometros": 13,
@@ -722,7 +722,7 @@
       "alimentadorDnMm": 50,
       "rtiL": 16000,
       "estaticaMaxKpa": 332,
-      "dinamicaMinKpa": 54,
+      "dinamicaMinKpa": 55,
       "pressurizador": true,
       "vrp": false,
       "insuficientes": 0,
@@ -927,7 +927,7 @@
       "conflitos": {
         "ABERTURA": 504,
         "PILAR": 33,
-        "REDE": 1491,
+        "REDE": 1247,
         "EQUIPAMENTO": 21,
         "OUTRO": 2
       },
@@ -939,7 +939,7 @@
       },
       "furos": 246
     },
-    "aguaXEsgoto": 244,
+    "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0
   }
 }

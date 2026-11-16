@@ -272,7 +272,7 @@ tabela de registro só-acréscimo; no front, catálogo puro → service → tela
   tem SELECT em `cron.job` (42501 medido no ensaio).
 - [x] Item 2 — catálogo: `utils/rotinasAutomaticas.ts` (23 rotinas, frases conferidas no código
   em 16/11), `__tests__/rotinasAutomaticas.test.ts` 16/16
-- [ ] Item 3 — service
+- [x] Item 3 — service: `services/rotinasAutomaticasService.ts`, `__tests__/rotinasAutomaticasService.test.ts` 5/5
 - [ ] Item 4 — tela
 - [ ] Item 5 — folha nas Configurações
 - [ ] Item 6 — conferência real e publicação

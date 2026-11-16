@@ -175,7 +175,8 @@ interface OrganizationListProps {
     organizations: Organization[];
     onCreate: () => void;
     onEdit: (org: Organization) => void;
-    onSave?: (org: Organization) => void;
+    /** Devolve a promessa da gravação — o convite a partir do RH espera por ela para ler o login do membro. */
+    onSave?: (org: Organization) => void | Promise<void>;
     onDelete: (id: string) => void;
     onSelect: (org: Organization) => void;
     

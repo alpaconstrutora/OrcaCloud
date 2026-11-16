@@ -426,6 +426,21 @@ export const organizationService = {
         if (error) throw error;
     },
 
+    // Login (`auth.users.id`) do membro desta organização com este e-mail; `null` se a
+    // linha não existe ou o membro ainda não tem conta. Quem preenche `user_id` é o
+    // gatilho `fn_org_member_fill_user_id` a partir do e-mail. Usado pelo convite a
+    // partir de um colaborador do RH para vincular a ficha ao login (16/11/2026).
+    async userIdDoMembro(organizationId: string, email: string): Promise<string | null> {
+        const { data, error } = await supabase
+            .from('organization_members')
+            .select('user_id')
+            .eq('organization_id', organizationId)
+            .eq('email', email.trim().toLowerCase())
+            .maybeSingle();
+        if (error) throw error;
+        return (data?.user_id as string | null | undefined) ?? null;
+    },
+
     // Grava papel/cargo/permissões de UM membro, pelo id.
     //
     // Existe porque o caminho antigo (Configurações › Usuários › checkbox de

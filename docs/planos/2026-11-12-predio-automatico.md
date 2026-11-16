@@ -572,8 +572,8 @@ tela (o motor não decide); "fase" = trabalho previsto.
 | Área | Pendência | Onde fica |
 |---|---|---|
 | Desempenho | Clique no "Lançar" do R12: o que sobra depois da PA10a é o desenho da planta (21,6 mil trechos) e as marcas de verificação das redes | depois da PA10 |
-| Desempenho | Gerar o R12 no worker: 57 s no app de desenvolvimento | PA10a (tempo fixado) |
-| Desempenho | Marco do RL perto do limite da CI (20 min por caso); o bloco "o motor (PA2)" subiu para 180 s depois de deixar a main vermelha (15/11) | PA10a |
+| Desempenho | Gerar o R12 no worker: 57 s no app de desenvolvimento, dentro do tempo fixado na PA10a (90 s gerar · 90 s Lançar · 30 s salvar) — vigiar a cada fase | acompanhamento |
+| Desempenho | Marco do RL perto do limite da CI (20 min por caso; a CI inteira leva ~31 min); o bloco "o motor (PA2)" subiu para 180 s depois de deixar a main vermelha (15/11) | acompanhamento |
 | Fechamento | Envio ao Empreendimento (`massaAdapter`) conferido com o prédio lançado | PA10c |
 | Compatibilização | Água × esgoto que sobra: o ramal do andar de cima atravessando cômodo seco a caminho do shaft (R8 18, R12 141, RL 244) — no relatório, com o local | depois da PA10 |
 | Compatibilização | Encontros da climatização (linha frigorígena e dutos × eletroduto, dreno × água) e o dreno do ar passando por porta ou janela — no relatório | depois da PA10 |
@@ -587,7 +587,7 @@ tela (o motor não decide); "fase" = trabalho previsto.
 | Garagem | Rampa de mão única e as curvas de concordância; mão dupla pelo número de vagas — o código de obras | projetista |
 | Garagem | Laje sobre o subsolo e os pilares da malha estendida (vão de até 7,5 m) — pré-dimensionamento, exige cálculo | projetista |
 | Garagem | Subsolo de contorno não retangular: rampa e laje à mão; piso acima da rede: a separadora por gravidade à mão | projetista |
-| Elétrica | Entrada em média tensão quando a demanda passa do padrão de baixa tensão (R8: 298 kVA) | projetista |
+| Elétrica | Entrada em média tensão quando a demanda passa do padrão de baixa tensão (R8: 465 kVA com a climatização e a garagem) | projetista |
 | Elétrica | Eletrodutos do quadro de serviço e dos QDGs (térreo, cobertura, elevador, garagem) | projetista |
 | Água e esgoto | Cota da rede pública presumida (1,5 m); caixa sifonada/de gordura não lançadas (ligado direto ao tubo de queda) | projetista |
 | Fundações | Pré-dimensionamento pelas hipóteses da gaveta — exige sondagem e cálculo (NBR 6122) | projetista |
@@ -604,6 +604,32 @@ tela (o motor não decide); "fase" = trabalho previsto.
 
 ## Estado
 
+**Resumo (16/11/2026):** PA0 a PA10b **no ar** — último merge 637bca4 (#499), produção servindo esse commit e a CI do
+main verde. **Falta só a PA10c** (o envio ao Empreendimento conferido e os três achados da rota de fuga — ver "Pendências
+em aberto"). Kernel em `blueprint-kernel-ts-0.109.0`.
+
+| Fase | PR | Commit no main |
+|---|---|---|
+| PA0 — plano e marco | #388 | c35ccbb |
+| PA1 — instalações na cópia viva (kernel 0.106.0) | #390 | d75771a |
+| PA2 — orquestrador, tela e o tipo | #401 | 473e53b |
+| PA3 — térreo, cobertura e reservatórios | #413 | e428cab |
+| PA4 — estrutura e fundações | #419 | 8d90cd4 |
+| PA5a — elétrica coletiva (kernel 0.107.0) | #424 | 12c434c |
+| PA5b — climatização, eletrodutos e prumada | #427 | 358974c |
+| PA6 — água fria (kernel 0.108.0) | #433 | 7088354 |
+| PA7a — esgoto e ventilação | #440 | 7bef1f1 |
+| PA7b — pluvial da cobertura | #444 | b1d5eef |
+| PA8a — garagem no subsolo | #465 | a047901 |
+| PA8b — escadas de emergência e elétrica da garagem | #470 | ca61bd1 |
+| PA8c — drenagem da garagem (kernel 0.109.0) | #480 | 5dba184 |
+| PA9a — classificação de incêndio e rota de fuga | #447 | ee08cf5 |
+| PA9b — equipamentos de incêndio | #457 | 87e303f |
+| PA9c — hidrantes, coluna, bomba e recalque | #459 | 0df7667 |
+| PA10a — desempenho e o tempo do R12 fixado | #495 | d1b7f59 |
+| PA10b — laje = passagem, água rebaixada, compatibilização | #499 | 637bca4 |
+| PA10c — envio ao Empreendimento e achados da rota | — | a fazer |
+
 | Fase | Situação |
 |---|---|
 | PA0 | feito — marco com R4 (4 pav · 2 un/andar · 72 paredes), R8 (8 · 5 · 357), R12 (12 · 8 · 891), RL em L (8 · 13 · 910); grava em ~4 s e repete idêntico; tsc limpo. As unidades por andar saem do produto médio na largura de cada bloco (o plano previa 2/2/4 — fica a variedade medida) |
@@ -616,4 +642,4 @@ tela (o motor não decide); "fase" = trabalho previsto.
 | PA7 | **PA7a feita** (ver a Execução) — R8: 5 tubos de queda por andar (DN 100), 120 UHC por andar, ventilação DN 75, coletor DN 150; toda louça de todo andar chega à ligação (315 de 315; R12 836 de 836). **No R12, os tubos de queda dão DN 100 pela Tabela 6** (o marco confere cada um). Conflitos por grade (44,8 s → 54 ms, mesmo resultado). **PA7b feita** (pluvial da cobertura: R8 2 condutores DN 100 para 1.200 L/min) |
 | PA8 | **PA8c feita** (drenagem: ralos e canaletas em pente, caixa separadora, poço com 2 bombas no QDG e recalque à CI do térreo; kernel 0.109.0). **PA8b feita** (escada(s) de emergência da garagem — rota do subsolo limpa no R8 e no R12; QDG, luzes e exaustores). **PA8a feita** (ver a Execução) — subsolo do estudo lançado: R8 1 subsolo com 60 vagas (o contorno livre levaria 91), 1 rampa, 40 pilares da torre + 60 da malha estendida, fundação no subsolo; R12 2 subsolos com 177 vagas e a rampa em vaivém; **nenhum pilar sobre vaga ou rampa** (o marco confere). A garagem pede uma 2ª saída (pendência). — a PA8 está completa |
 | PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. **PA9b feita** (extintores, sinalização e iluminação nas áreas comuns do tipo — cada andar repete). **PA9c feita** (hidrante em todo pavimento; coluna de incêndio empilhada; bomba na cobertura ao lado da reserva técnica; registro de recalque no passeio) |
-| PA10 | **PA10a feita** (desempenho com o mesmo resultado: R12 completo 63,6 → 40,3 s, o cálculo da tela no Lançar 14,0 → 5,3 s; o "Gerar" espera a entrada carregar — a prévia do R12 nascia velha; R12 de ponta a ponta no app: gerar 57 s, Lançar 61 s, salvar 9 s com a máquina quieta; tempo fixado 90/90/30 s). **PA10b feita** (a prumada na laje é passagem, não conflito, no app inteiro; a água no forro rebaixado das áreas molhadas — água × esgoto R8 252 → 18; o relatório de compatibilização na aba nova). PA10c (envio ao Empreendimento, achados da rota) a fazer — ver "Pendências em aberto" |
+| PA10 | **PA10a feita** (desempenho com o mesmo resultado: R12 completo 63,6 → 40,3 s, o cálculo da tela no Lançar 14,0 → 5,3 s; o "Gerar" espera a entrada carregar — a prévia do R12 nascia velha; R12 de ponta a ponta no app: gerar 57 s, Lançar 61 s, salvar 9 s com a máquina quieta; tempo fixado 90/90/30 s). **PA10b feita** (a prumada na laje é passagem, não conflito, no app inteiro; a água no forro rebaixado das áreas molhadas — água × esgoto R4 62 → 4, R8 252 → 18, R12 911 → 141, RL 1.195 → 244; o relatório de compatibilização na aba nova; conferida no app com o R8). PA10c (envio ao Empreendimento, achados da rota) a fazer — ver "Pendências em aberto" |

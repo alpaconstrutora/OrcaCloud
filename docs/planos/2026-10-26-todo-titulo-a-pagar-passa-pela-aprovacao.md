@@ -130,6 +130,10 @@ REGRA #7: toda função nova com `REVOKE … FROM PUBLIC, anon` + `GRANT … TO 
   Filtro "Tipo" só com os tipos presentes (`utils/filaAprovacao.tiposPresentes`); Central com o
   rótulo "DARFs" no resumo (o resumo lê a fila). **Pronto quando:** a fila do desenvolvedor só
   traz `transaction` (teste a seco: 409 títulos, 0 contratos, 0 pedidos) e o resumo idem.
+  > 16/11/2026 (PR #516, *"no filtro Origem falta Tributos"*): "só os presentes" escondia
+  > DARF/Tributo quando não havia nenhum pendente. Os filtros Tipo e Origem passaram a oferecer
+  > o catálogo do que a fila PODE trazer (`TIPOS_DA_FILA`/`ORIGENS_DA_FILA`) + o presente + o
+  > escolhido; `tiposPresentes` virou `tiposDoFiltro`. Contrato e pedido seguem fora (não vêm).
 
 ### Serviços
 

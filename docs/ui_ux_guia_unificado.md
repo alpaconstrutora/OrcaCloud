@@ -1928,7 +1928,11 @@ colaborador daqui.
   continua na lista, porque sumir sem explicação vira "a pessoa não aparece" (o mesmo
   argumento de "botão desligado sempre diz o motivo").
 - **`avisoSemVinculo`** troca o "Não vinculado ao catálogo." pelo que o texto solto
-  significa NAQUELE formulário.
+  significa NAQUELE formulário; **`vazio`** diz o que a lista vazia significa (sem
+  `onCreate`, nunca "digite para cadastrar"). Enquanto a lista carrega, o campo fica
+  desligado com "Carregando…" no lugar de mostrar uma lista vazia que mente.
+- **Enter nunca envia o formulário em volta** e a opção ativa é anunciada
+  (`aria-activedescendant`) — o componente já garante; não reescrever na tela.
 - A lista vem de `laborService.listEmployees(orgId)` — colaboradores da organização **e**
   os disponibilizados para ela (`employee_org_shares`).
 

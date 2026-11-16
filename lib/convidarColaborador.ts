@@ -4,7 +4,7 @@
 // colaborador já cadastrado em vez de redigitar nome e e-mail. Esta função decide
 // quem aparece na busca e quem aparece desligado.
 // Plano: docs/planos/2026-11-16-usuarios-convidar-colaborador.md
-import type { Employee } from '../services/laborService';
+import type { ColaboradorParaConvite } from '../services/laborService';
 import type { OrganizationMember } from '../types/users';
 
 export interface OpcaoColaborador {
@@ -40,7 +40,7 @@ const FORA_DA_LISTA = new Set(['DESLIGADO', 'INATIVO']);
 const normalizarEmail = (email?: string | null) => (email ?? '').trim().toLowerCase();
 
 export function opcoesDeColaborador(
-    employees: Employee[],
+    employees: ColaboradorParaConvite[],
     members: OrganizationMember[],
     contexto?: ContextoDoConvite,
 ): OpcaoColaborador[] {

@@ -1,8 +1,11 @@
 /**
- * organizationService.reapontarFichasDoLogin — "Reenviar convite" troca o login (id novo) e a
- * ficha do colaborador vinculada ao antigo precisa acompanhar. Cada ficha é gravada sozinha:
- * uma ficha barrada pela trava do vínculo (42501) não pode derrubar as outras.
- * Revisão final de docs/planos/2026-11-16-usuarios-convidar-colaborador.md (achado 3).
+ * organizationService — as duas consultas do convite a partir do RH
+ * (docs/planos/2026-11-16-usuarios-convidar-colaborador.md):
+ *  - reapontarFichasDoLogin: "Reenviar convite" troca o login (id novo) e a ficha do colaborador
+ *    vinculada ao antigo precisa acompanhar. Cada ficha é gravada sozinha: uma ficha barrada pela
+ *    trava do vínculo (42501) não pode derrubar as outras (revisão final, achado 3);
+ *  - membroPorEmail: procura pelo e-mail normalizado e distingue "linha não existe" de "sem
+ *    login" (achado 5; teste pedido em 16/11, 2º, item 8).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -19,6 +22,7 @@ vi.mock('../lib/supabase', () => ({
                 select: () => cadeia,
                 update: (v: unknown) => { registro.update = v; return cadeia; },
                 eq: (col: string, val: unknown) => { registro.filtros.push([col, val]); return cadeia; },
+                maybeSingle: () => cadeia,
                 then: (ok: (r: unknown) => unknown, erro?: (e: unknown) => unknown) => {
                     const id = registro.filtros.find(([c]) => c === 'id')?.[1];
                     const r = registro.update ? respostaDoUpdate(id) : respostaDoSelect;
@@ -59,5 +63,21 @@ describe('reapontarFichasDoLogin', () => {
         respostaDoUpdate = () => ({ data: [], error: null });
         const r = await organizationService.reapontarFichasDoLogin('u-1', 'u-2');
         expect(r).toEqual({ trocadas: 0, falhas: ['Ana: sem permissão para alterar a ficha'] });
+    });
+});
+
+describe('membroPorEmail', () => {
+    it('procura pelo e-mail sem espaços e em minúsculas', async () => {
+        respostaDoSelect = { data: { user_id: 'u-1' }, error: null };
+        const r = await organizationService.membroPorEmail('org-1', '  Ana@X.com ');
+        expect(r).toEqual({ userId: 'u-1' });
+        expect(chamadas[0]).toMatchObject({ tabela: 'organization_members', filtros: [['organization_id', 'org-1'], ['email', 'ana@x.com']] });
+    });
+
+    it('linha que não existe é null; linha sem login é userId null', async () => {
+        respostaDoSelect = { data: null, error: null };
+        expect(await organizationService.membroPorEmail('org-1', 'a@x.com')).toBeNull();
+        respostaDoSelect = { data: { user_id: null }, error: null };
+        expect(await organizationService.membroPorEmail('org-1', 'a@x.com')).toEqual({ userId: null });
     });
 });

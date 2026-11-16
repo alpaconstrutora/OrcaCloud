@@ -17,7 +17,7 @@ vi.mock('../../services/organizationService', () => ({
     organizationService: { updateMemberAccess: vi.fn(), urlAssinaturaMembro: vi.fn(), membroPorEmail: vi.fn(), reapontarFichasDoLogin: vi.fn() },
 }));
 vi.mock('../../services/laborService', () => ({
-    laborService: { listEmployees: vi.fn(), updateEmployee: vi.fn() },
+    laborService: { listColaboradoresParaConvite: vi.fn(), updateEmployee: vi.fn() },
 }));
 vi.mock('../../lib/supabase', () => ({
     supabase: { functions: { invoke: vi.fn() }, from: vi.fn(), rpc: vi.fn() },
@@ -37,9 +37,10 @@ const COLABORADORES = [
     { id: 'e2', org_id: ORG, name: 'Dora Reis', status: 'ATIVO', email: 'dora@x.com', user_id: null },
     { id: 'e3', org_id: ORG, name: 'Maria Souza', status: 'ATIVO', email: 'm1@exemplo.com', user_id: 'u-1' },
     { id: 'e4', org_id: 'org-2', name: 'Ester Prado', status: 'ATIVO', email: '', user_id: null }, // disponibilizada pela SPE
+    { id: 'e5', org_id: ORG, name: 'Fábio Nunes', status: 'ATIVO', email: 'fabio@x.com', user_id: 'u-77' }, // login de outra org
 ];
 
-const listEmployees = laborService.listEmployees as unknown as ReturnType<typeof vi.fn>;
+const listColaboradoresParaConvite = laborService.listColaboradoresParaConvite as unknown as ReturnType<typeof vi.fn>;
 const updateEmployee = laborService.updateEmployee as unknown as ReturnType<typeof vi.fn>;
 const membroPorEmail = organizationService.membroPorEmail as unknown as ReturnType<typeof vi.fn>;
 const invoke = supabase.functions.invoke as unknown as ReturnType<typeof vi.fn>;
@@ -59,7 +60,7 @@ const Tela = ({ onUpdateMembers = vi.fn() }: { onUpdateMembers?: (m: unknown[]) 
 
 const abrirConvite = async () => {
     fireEvent.click(screen.getByText('Convidar membro'));
-    await waitFor(() => expect(listEmployees).toHaveBeenCalledWith(ORG));
+    await waitFor(() => expect(listColaboradoresParaConvite).toHaveBeenCalledWith(ORG));
     const campo = screen.getByRole('combobox', { name: 'Colaborador' });
     fireEvent.focus(campo);
     await screen.findByRole('option', { name: /Carlos Lima/ });
@@ -75,7 +76,7 @@ const chamadasCom = (chave: 'email' | 'user_id') =>
 beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
-    listEmployees.mockResolvedValue(COLABORADORES);
+    listColaboradoresParaConvite.mockResolvedValue(COLABORADORES);
     updateEmployee.mockResolvedValue({});
     membroPorEmail.mockResolvedValue({ userId: 'u-9' });
     invoke.mockResolvedValue({ data: { success: true }, error: null });
@@ -313,5 +314,87 @@ describe('Reenviar convite — a ficha acompanha o login novo', () => {
         render(<Tela />);
         reenviar();
         await screen.findByText(/ficha do colaborador continua ligada ao login antigo/);
+    });
+});
+
+// Pedido de 16/11 (2º) — os menores da revisão (itens 1, 2, 4 e 5 do plano).
+describe('Convite — o que a tela diz', () => {
+    const listar = laborService.listColaboradoresParaConvite as unknown as ReturnType<typeof vi.fn>;
+
+    it('enquanto a lista carrega, o campo fica desligado dizendo isso', async () => {
+        let soltar: (v: unknown) => void = () => {};
+        listar.mockReturnValue(new Promise(r => { soltar = r; }));
+        render(<Tela />);
+        fireEvent.click(screen.getByText('Convidar membro'));
+        const campo = screen.getByRole('combobox', { name: 'Colaborador' }) as HTMLInputElement;
+        expect(campo.disabled).toBe(true);
+        expect(campo.placeholder).toBe('Carregando colaboradores…');
+        soltar(COLABORADORES);
+        await waitFor(() => expect(campo.disabled).toBe(false));
+    });
+
+    it('organização sem colaboradores: a lista diz isso, sem oferecer cadastro', async () => {
+        listar.mockResolvedValue([]);
+        render(<Tela />);
+        fireEvent.click(screen.getByText('Convidar membro'));
+        const campo = screen.getByRole('combobox', { name: 'Colaborador' }) as HTMLInputElement;
+        await waitFor(() => expect(campo.disabled).toBe(false));
+        fireEvent.focus(campo);
+        expect(screen.getByText('Nenhum colaborador ativo nesta organização.')).toBeTruthy();
+        expect(screen.queryByText(/digite para cadastrar/)).toBeNull();
+    });
+
+    it('falha da Edge: o aviso traz o motivo real, com ponto final', async () => {
+        invoke.mockResolvedValue({
+            data: null,
+            error: {
+                message: 'Edge Function returned a non-2xx status code',
+                context: { json: async () => ({ error: 'Somente administradores ou proprietários podem convidar membros' }) },
+            },
+        });
+        render(<Tela />);
+        await abrirConvite();
+        escolher('Dora Reis');
+        enviar();
+        await screen.findByText(/Somente administradores ou proprietários podem convidar membros\./);
+        expect(screen.queryByText(/non-2xx/)).toBeNull();
+    });
+
+    it('depois de uma pendência o rodapé vira "Fechar": não reenvia nem regrava a ficha', async () => {
+        membroPorEmail.mockResolvedValue({ userId: null });
+        render(<Tela />);
+        await abrirConvite();
+        escolher('Carlos Lima');
+        fireEvent.change(campoEmail(), { target: { value: 'carlos@x.com' } });
+        enviar();
+        await screen.findByText(/a conta de acesso ainda não existe/);
+        expect(screen.queryByText('Enviar Convite')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Fechar' }));
+        expect(screen.queryByText('Convidar Novo Membro')).toBeNull();
+        expect(chamadasCom('email')).toHaveLength(1);
+        // reabrir começa limpo
+        fireEvent.click(screen.getByText('Convidar membro'));
+        expect(campoNome().value).toBe('');
+        expect(screen.getByText('Enviar Convite')).toBeTruthy();
+    });
+
+    it('pessoa que já tinha conta: o toast não diz que mandou e-mail', async () => {
+        invoke.mockResolvedValue({ data: { success: true, alreadyRegistered: true }, error: null });
+        render(<Tela />);
+        await abrirConvite();
+        escolher('Dora Reis');
+        enviar();
+        await screen.findByText(/Dora Reis já tinha conta no sistema: entrou na organização sem e-mail de convite/);
+        expect(screen.getByText(/ficha do colaborador vinculada/)).toBeTruthy();
+        expect(screen.queryByText(/Convite enviado/)).toBeNull();
+    });
+
+    it('ficha que já tinha login: o toast diz que já estava vinculada, sem regravar', async () => {
+        render(<Tela />);
+        await abrirConvite();
+        escolher('Fábio Nunes');
+        enviar();
+        await screen.findByText(/Convite enviado para fabio@x\.com — a ficha do colaborador já estava vinculada a um login/);
+        expect(chamadasCom('user_id')).toHaveLength(0);
     });
 });

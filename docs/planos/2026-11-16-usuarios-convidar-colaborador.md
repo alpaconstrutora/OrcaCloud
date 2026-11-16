@@ -267,7 +267,10 @@ Cada item com teste visto falhando antes (exceto o 9, que é só comentário):
 
 - [x] Tarefa 1 — combobox (b981f8922)
 - [x] Tarefa 2 — regra de quem aparece (a7b52a404)
-- [x] Tarefa 3 — convite (b88cc3818) + correções da revisão
+- [x] Tarefa 3 — convite (b88cc3818) + correções da revisão (e6ecc78fb)
+- [x] Menores (pedido de 16/11, 2º): 9 de 9 — itens 3, 6, 1 (componente) e 9 no commit do combobox;
+  1 (tela), 2, 4, 5, 7 e 8 no commit seguinte. Itens 8: os dois testes foram vistos falhando contra
+  um mutante (normalização retirada; `return` retirado) e passando contra o código real
 - [ ] Tarefa 4 — verificação e publicação: tipos ✅, testes da área ✅; **falta** a tela real (precisa de
   e-mail de teste e de uma conta admin que NÃO seja superadmin — o desenvolvedor pula a trava do
   vínculo), PR e merge

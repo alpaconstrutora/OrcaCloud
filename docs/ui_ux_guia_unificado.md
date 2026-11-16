@@ -3599,7 +3599,15 @@ Toda paleta categórica ou ordinal passa por
 | Série principal + contexto | `#3b82f6` + `#94a3b8` | forma "ênfase"; o cinza é recessivo de propósito |
 | Status de unidade | alugada `#9333ea` · disponível `#059669` · reservada `#d97706` · manutenção `#94a3b8` · outros `#cbd5e1` | as mesmas famílias do texto de status na tabela (§8); ΔE 7,9 exige a legenda com números como codificação secundária |
 | Faixas de atraso | a vencer `#94a3b8` · `#f87171` · `#ef4444` · `#b91c1c` · `#7f1d1d` | rampa de um matiz, ponta clara 2,77:1 |
+| Situação do prazo (barra empilhada) | em dia `#3b82f6` · atrasada `#ef4444` · sem prazo `#94a3b8` | Minhas Tarefas › Painel, 16/11/2026. Validador: ΔE 15,0 no pior par para daltonismo (deutan), 24,3 em visão normal. O cinza reprova o piso de croma e tem 2,56:1 sobre branco **de propósito** (é o estado neutro, como o "contexto" e o "a vencer"). Por isso a legenda leva os totais ("Atrasadas (6)") e a ponta da barra leva o número em texto |
 
+> ℹ️ **Barra horizontal empilhada** (16/11/2026, `components/TasksDashboard.tsx` › "Quem está
+> com o quê"): segmentos **retos**, com `stroke="#ffffff" strokeWidth={2}` para o respiro de 2px
+> na cor da superfície entre eles. Não usa raio na ponta, porque o último segmento muda de linha
+> para linha. O total vai na ponta, em cor de texto, desenhado pelo último segmento NÃO VAZIO
+> da linha (`<LabelList content>` em cada `<Bar>`, ver `totalNaPonta`). Um `LabelList` só no
+> último `<Bar>` some quando esse segmento é zero, e a linha fica sem número. A legenda HTML
+> leva a contagem de cada parte.
 > ❌ Cor de status (vermelho/verde de bom/ruim) como "série 4". ❌ Paleta gerada
 > por índice (`COLORS[i % n]`) — a 9ª cor é indistinguível. ❌ Cor atribuída pela
 > posição: filtrar não pode repintar quem sobrou.

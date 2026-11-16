@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { isObra } from '../utils/projectClassification'
-import { Plus, CheckSquare, AlertTriangle, Settings2, Layers, List, Kanban, LayoutGrid, FolderOpen, FolderCog, CalendarClock, Smartphone } from 'lucide-react'
+import { Plus, CheckSquare, AlertTriangle, Settings2, Layers, List, Kanban, LayoutGrid, FolderOpen, FolderCog, CalendarClock, Smartphone, BarChart3 } from 'lucide-react'
 
 export type GroupByField = 'none' | 'status' | 'assignee' | 'priority' | 'project' | 'source'
 export type FilterView   = 'today' | 'all' | 'overdue'
@@ -29,9 +29,11 @@ import { destinoDoLinkDeNotificacao } from '../utils/linkNotificacao'
 import { STATUS_NONE, statusNameKey, statusesOfOrg, statusByNameInOrg, statusOfGroupKey, openStatusOfOrg, doneStatusOfOrg } from '../utils/taskStatusByName'
 import MobilePreviewFrame from './MobilePreviewFrame'
 import TasksMobileApp from './TasksMobileApp'
+import TasksDashboard from './TasksDashboard'
 import { isSystemProject, excludeSystemProjects, SYSTEM_PROJECT_NAMES_SQL } from '../utils/systemProjects'
 
-type ViewMode = 'list' | 'board'
+// 'dashboard' = Painel de análise (docs/planos/2026-11-15-tarefas-painel-analise.md)
+type ViewMode = 'list' | 'board' | 'dashboard'
 
 interface Props {
   activeOrganizationId?: string
@@ -65,6 +67,9 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
   const [fFolder, setFFolder]         = usePersistedState('tasksListFilters:folder', '')
   const [tasks, setTasks]             = useState<TaskRecord[]>([])
   const [loading, setLoading]         = useState(true)
+  // O Painel distingue "falhou" de "não há tarefas" (§28.5): sem isto, erro de leitura
+  // virava um painel zerado afirmando que não há nada.
+  const [loadError, setLoadError]     = useState(false)
   const [editing, setEditing]         = useState<TaskRecord | null>(null)
   const [showForm, setShowForm]       = useState(false)
   const [showMobilePreview, setShowMobilePreview] = useState(false)
@@ -125,8 +130,8 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
       .order('due_date', { ascending: true, nullsFirst: false })
       .order('priority', { ascending: true })
 
-    if (error) { console.error('[tasks] load', error); setTasks([]) }
-    else        { setTasks((data ?? []) as unknown as TaskRecord[]) }
+    if (error) { console.error('[tasks] load', error); setTasks([]); setLoadError(true) }
+    else        { setTasks((data ?? []) as unknown as TaskRecord[]); setLoadError(false) }
     setLoading(false)
   }, [])
 
@@ -189,7 +194,7 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
   // ── Recorte e contadores ─────────────────────────────────────────────────
   // Ordem: organização → espaço/pasta → prazo. Hoje/Atrasadas são contadas DEPOIS
   // do recorte de espaço/pasta, para o número do popover bater com a tabela.
-  const { today, overdue, visible, noSpaceCount } = useMemo(() => {
+  const { today, overdue, visible, noSpaceCount, escopo } = useMemo(() => {
     const now          = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const endOfToday   = new Date(startOfToday.getTime() + 86_400_000)
@@ -231,6 +236,9 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
     return {
       today, overdue, noSpaceCount,
       visible: [...visibleParents, ...getAllDescendants(new Set(visibleParents.map(t => t.id)))],
+      // Painel: o mesmo recorte da Lista com Prazo "Todas" (organização → espaço/pasta →
+      // descendentes). O Painel separa sozinho hoje/atrasadas, por isso ignora o Prazo.
+      escopo: [...parents, ...getAllDescendants(new Set(parents.map(t => t.id)))],
     }
   }, [tasks, ctxOrgId, view, fSpace, fFolder])
 
@@ -502,16 +510,19 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
     { value: FOLDER_NONE, label: 'Sem pasta' },
     ...activeSpace.folders.map(f => ({ value: f.id, label: f.name })),
   ] : []
-  const scopeControls = (
+  const prazoControl = (
+    <FilterPopover<FilterView>
+      label="Prazo"
+      icon={<CalendarClock className="w-3.5 h-3.5" />}
+      value={view}
+      onChange={setView}
+      allValue="all"
+      options={viewOptions}
+    />
+  )
+  // Espaço / Pasta / gerenciar espaços — valem para Lista, Kanban e Painel.
+  const spaceControls = (
     <>
-      <FilterPopover<FilterView>
-        label="Prazo"
-        icon={<CalendarClock className="w-3.5 h-3.5" />}
-        value={view}
-        onChange={setView}
-        allValue="all"
-        options={viewOptions}
-      />
       <FilterPopover
         label="Espaço"
         icon={<LayoutGrid className="w-3.5 h-3.5" />}
@@ -537,6 +548,7 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
       </button>
     </>
   )
+  const scopeControls = <>{prazoControl}{spaceControls}</>
 
   // Estado vazio: diz qual recorte esconde as tarefas e oferece "Ver todas".
   const scopeActive = view !== 'all' || !!fSpace
@@ -548,6 +560,17 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
     ].filter(Boolean).join(' ') + '.',
     action: scopeActive ? { label: 'Ver todas as tarefas', onClick: () => { setView('all'); setFSpace(''); setFFolder('') } } : undefined,
   }
+
+  // Painel: ignora o Prazo, então o vazio só pode vir do espaço/pasta.
+  const painelEmptyHint = {
+    message: [
+      'Nenhuma tarefa',
+      fSpace === SPACE_NONE ? 'sem espaço' : activeSpace ? `no espaço ${activeSpace.name}` : '',
+      activeSpace && fFolder === FOLDER_NONE ? 'sem pasta' : activeSpace && fFolder ? `na pasta ${activeSpace.folders.find(f => f.id === fFolder)?.name ?? ''}` : '',
+    ].filter(Boolean).join(' ') + '.',
+    action: fSpace ? { label: 'Ver todas as tarefas', onClick: () => { setFSpace(''); setFFolder('') } } : undefined,
+  }
+  const verAtrasadasNaLista = () => { setView('overdue'); setViewMode('list') }
 
   // Espaço/pasta que uma tarefa nova herda do recorte ativo.
   const scopeDefaults: TaskDefaults = {
@@ -571,7 +594,11 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-black text-slate-900 tracking-tight">Tarefas</h1>
-          <p className="text-slate-400 text-sm mt-1.5 font-medium">Sua agenda pessoal de pendências</p>
+          <p className="text-gray-500 text-sm mt-1.5 font-medium">
+            {viewMode === 'dashboard'
+              ? 'Como estão as tarefas que você vê: o que está aberto hoje e o que foi feito no período.'
+              : 'Sua agenda pessoal de pendências'}
+          </p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {/* Toggle List / Board */}
@@ -597,10 +624,19 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
               <Kanban className="w-3.5 h-3.5" />
               Kanban
             </button>
+            <button
+              onClick={() => setViewMode('dashboard')}
+              title="Painel de análise das tarefas"
+              className={`flex items-center gap-1.5 h-full px-3 text-sm font-medium transition-all
+                ${viewMode === 'dashboard' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:bg-slate-50'}`}
+            >
+              <BarChart3 className="w-3.5 h-3.5" />
+              Painel
+            </button>
           </div>
 
-          {/* Seletor Group By */}
-          <div className="relative">
+          {/* Seletor Group By — não existe no Painel (ele não agrupa linhas) */}
+          {viewMode !== 'dashboard' && <div className="relative">
             <Layers className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
             <select
               value={groupBy}
@@ -617,7 +653,7 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
               <option value="project">Obra</option>
               <option value="source">Origem</option>
             </select>
-          </div>
+          </div>}
 
           <button
             onClick={openStatusManager}
@@ -646,7 +682,8 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
       </div>
 
       {/* Banner atrasadas — só no modo inbox */}
-      {view === 'today' && overdue.length > 0 && (
+      {/* No Painel o próprio indicador "Atrasadas" já diz isso (e o Painel ignora o Prazo). */}
+      {viewMode !== 'dashboard' && view === 'today' && overdue.length > 0 && (
         <div className="bg-red-50 border border-red-200 rounded-xl px-4 py-3 flex items-center gap-3 text-xs font-bold text-red-700">
           <AlertTriangle className="w-4 h-4" />
           Você tem <span className="font-black">{overdue.length}</span> tarefa(s) atrasada(s).
@@ -658,7 +695,21 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
 
       {/* ── Conteúdo (sem rail: Prazo / Espaço / Pasta vivem na toolbar) ── */}
       <div className="min-w-0">
-          {viewMode === 'list' ? (
+          {viewMode === 'dashboard' ? (
+            <TasksDashboard
+              tasks={escopo}
+              loading={loading}
+              loadError={loadError}
+              onRetry={load}
+              employees={employees}
+              obras={obras}
+              spaces={spaceOptions}
+              scopeControls={spaceControls}
+              emptyHint={painelEmptyHint}
+              onOpenTask={(t) => openTaskForm({ task: t })}
+              onVerAtrasadas={verAtrasadasNaLista}
+            />
+          ) : viewMode === 'list' ? (
             <TasksList
               tasks={visible}
               loading={loading}

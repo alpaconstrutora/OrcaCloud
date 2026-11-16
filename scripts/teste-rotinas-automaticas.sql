@@ -1,8 +1,11 @@
 -- scripts/teste-rotinas-automaticas.sql
 -- Prova: Configurações › Rotinas automáticas — só superadmin lista e liga/desliga os jobs do
 -- pg_cron; cada mudança fica registrada; pedir o estado que já está não grava nada.
--- Migration: supabase/migrations/aplicar_20271116907000_rotinas_automaticas_ligar_desligar.sql
--- Plano:     docs/planos/2026-11-16-rotinas-automaticas-ligar-desligar.md (Task 1)
+-- Migrations: supabase/migrations/aplicar_20271116907000_rotinas_automaticas_ligar_desligar.sql
+--             supabase/migrations/aplicar_20271116913700_rotinas_automaticas_pendencias.sql
+--             (último erro, janela de 40 dias, rotina sem nome por p_jobid)
+-- Planos:    docs/planos/2026-11-16-rotinas-automaticas-ligar-desligar.md (Task 1)
+--            docs/planos/2026-11-16-rotinas-automaticas-pendencias-menores.md (item 1)
 --
 -- Personagens (contas reais):
 --   sa — um superadmin (e-mail em public.superadmins);
@@ -16,7 +19,7 @@
 --
 -- Ensaio (migration ainda não aplicada):
 --   bash scripts/montar-ensaio.sh -o /tmp/e.sql scripts/teste-rotinas-automaticas.sql \
---        supabase/migrations/aplicar_20271116907000_rotinas_automaticas_ligar_desligar.sql
+--        supabase/migrations/aplicar_20271116913700_rotinas_automaticas_pendencias.sql
 --   npx supabase db query --linked -f /tmp/e.sql
 -- Depois de aplicada:
 --   npx supabase db query --linked -f scripts/teste-rotinas-automaticas.sql
@@ -62,7 +65,7 @@ DO $$
 DECLARE
     rotina CONSTANT TEXT := 'hourly-bi-report-check';
     sa UUID; sa_email TEXT; m UUID;
-    total INT; antes BOOLEAN; registros INT; v TEXT;
+    total INT; antes BOOLEAN; registros INT; v TEXT; sem_nome BIGINT;
     recusa CONSTANT TEXT := '42501:apenas superadmin';
 BEGIN
     -- ── fixtures (uid tirado de auth.users ANTES de qualquer SET ROLE) ──────
@@ -99,7 +102,8 @@ BEGIN
         'cron.job.active mudou de verdade');
     SELECT count(*) INTO registros FROM public.rotinas_automaticas_alteracoes r
      WHERE r.jobname = rotina AND r.ativo_antes = antes AND r.ativo_depois = NOT antes
-       AND r.alterado_por = sa AND r.alterado_por_email = sa_email;
+       AND r.alterado_por = sa AND r.alterado_por_email = sa_email
+       AND r.alterado_em >= now();   -- só as desta transação: o registro real já tem linhas
     PERFORM pg_temp.confere(registros = 1, 'uma linha no registro com quem mudou — achou ' || registros);
     v := pg_temp.au(sa, format($q$SELECT alterado_ativo_depois::text || '|' || alterado_por_email
                                   FROM public.fn_rotinas_automaticas_listar() WHERE jobname = %L$q$, rotina));
@@ -109,11 +113,45 @@ BEGIN
     v := pg_temp.au(sa, format('SELECT active::text FROM public.fn_rotina_automatica_definir(%L, %L)', rotina, NOT antes));
     PERFORM pg_temp.confere(v = 'ok:' || (NOT antes), 'definir repetido devolve a linha — veio ' || v);
     PERFORM pg_temp.confere((SELECT count(*) FROM public.rotinas_automaticas_alteracoes r WHERE r.jobname = rotina
-                              AND r.alterado_por = sa) = 1, 'definir repetido não grava registro');
+                              AND r.alterado_por = sa AND r.alterado_em >= now()) = 1,
+        'definir repetido não grava registro');
 
     -- ── rotina inexistente ──────────────────────────────────────────────────
     v := pg_temp.au(sa, 'SELECT active::text FROM public.fn_rotina_automatica_definir(''nao-existe'', true)');
     PERFORM pg_temp.confere(v = 'P0002:rotina não encontrada: nao-existe', 'rotina inexistente — veio ' || v);
+
+    -- ── pedido sem "ligar" nem "desligar" / sem rotina ──────────────────────
+    v := pg_temp.au(sa, format('SELECT active::text FROM public.fn_rotina_automatica_definir(%L, NULL)', rotina));
+    PERFORM pg_temp.confere(v LIKE '22004:%', 'p_ativo NULL é recusado — veio ' || v);
+    PERFORM pg_temp.confere((SELECT j.active FROM cron.job j WHERE j.jobname = rotina) = NOT antes,
+        'p_ativo NULL não mexeu no job');
+
+    -- ── pendências da revisão (plano 2026-11-16-rotinas-automaticas-pendencias-menores) ──
+    -- rotina com falha na semana traz o ÚLTIMO ERRO, mesmo que a última execução tenha passado
+    v := pg_temp.au(sa, $q$SELECT count(*)::text FROM public.fn_rotinas_automaticas_listar()
+                           WHERE falhas_7d > 0 AND (ultimo_erro_em IS NULL OR ultimo_erro_mensagem IS NULL)$q$);
+    PERFORM pg_temp.confere(v = 'ok:0', 'toda rotina com falha na semana traz o último erro — veio ' || v);
+    -- "última execução" nunca é uma linha sem início (starting)
+    v := pg_temp.au(sa, $q$SELECT count(*)::text FROM public.fn_rotinas_automaticas_listar()
+                           WHERE ultima_status IS NOT NULL AND ultima_inicio IS NULL$q$);
+    PERFORM pg_temp.confere(v = 'ok:0', 'nenhuma última execução sem início — veio ' || v);
+    -- rotina SEM NOME: lista, desliga por p_jobid e registra como #jobid
+    sem_nome := cron.schedule('0 0 1 1 *', 'SELECT 1');
+    PERFORM pg_temp.confere((SELECT j.jobname FROM cron.job j WHERE j.jobid = sem_nome) IS NULL,
+        'fixture: job sem nome criado na transação');
+    v := pg_temp.au(sa, format('SELECT (jobname IS NULL)::text FROM public.fn_rotinas_automaticas_listar() WHERE jobid = %s', sem_nome));
+    PERFORM pg_temp.confere(v = 'ok:true', 'listar mostra a rotina sem nome — veio ' || v);
+    v := pg_temp.au(sa, format('SELECT active::text FROM public.fn_rotina_automatica_definir(NULL, false, %s)', sem_nome));
+    PERFORM pg_temp.confere(v = 'ok:false', 'rotina sem nome desliga por p_jobid — veio ' || v);
+    PERFORM pg_temp.confere((SELECT j.active FROM cron.job j WHERE j.jobid = sem_nome) = false,
+        'cron.job.active da rotina sem nome mudou de verdade');
+    PERFORM pg_temp.confere((SELECT count(*) FROM public.rotinas_automaticas_alteracoes r
+                              WHERE r.jobname = '#' || sem_nome AND r.ativo_depois = false) = 1,
+        'registro da rotina sem nome grava #jobid');
+    v := pg_temp.au(sa, format('SELECT alterado_ativo_depois::text FROM public.fn_rotinas_automaticas_listar() WHERE jobid = %s', sem_nome));
+    PERFORM pg_temp.confere(v = 'ok:false', 'listar mostra a alteração da rotina sem nome — veio ' || v);
+    v := pg_temp.au(sa, 'SELECT active::text FROM public.fn_rotina_automatica_definir(NULL, true)');
+    PERFORM pg_temp.confere(v LIKE '22004:%', 'sem nome e sem jobid é recusado — veio ' || v);
 
     -- ── membro comum: recusado nas duas ─────────────────────────────────────
     v := pg_temp.au(m, 'SELECT count(*)::text FROM public.fn_rotinas_automaticas_listar()');
@@ -131,17 +169,21 @@ BEGIN
 
     -- ── forma (REGRA #7) ────────────────────────────────────────────────────
     PERFORM pg_temp.confere(
+        to_regprocedure('public.fn_rotina_automatica_definir(text,boolean,bigint)') IS NOT NULL
+        AND to_regprocedure('public.fn_rotina_automatica_definir(text,boolean)') IS NULL,
+        'definir só existe na assinatura (text, boolean, bigint) — sem sobrecarga ambígua');
+    PERFORM pg_temp.confere(
         NOT has_function_privilege('anon', 'public.fn_rotinas_automaticas_listar()', 'EXECUTE')
-        AND NOT has_function_privilege('anon', 'public.fn_rotina_automatica_definir(text,boolean)', 'EXECUTE')
+        AND NOT has_function_privilege('anon', 'public.fn_rotina_automatica_definir(text,boolean,bigint)', 'EXECUTE')
         AND has_function_privilege('authenticated', 'public.fn_rotinas_automaticas_listar()', 'EXECUTE')
-        AND has_function_privilege('authenticated', 'public.fn_rotina_automatica_definir(text,boolean)', 'EXECUTE')
+        AND has_function_privilege('authenticated', 'public.fn_rotina_automatica_definir(text,boolean,bigint)', 'EXECUTE')
         AND NOT EXISTS (SELECT 1 FROM pg_proc p, aclexplode(p.proacl) a
                          WHERE p.oid IN ('public.fn_rotinas_automaticas_listar()'::regprocedure,
-                                         'public.fn_rotina_automatica_definir(text,boolean)'::regprocedure)
+                                         'public.fn_rotina_automatica_definir(text,boolean,bigint)'::regprocedure)
                            AND a.grantee = 0)
         AND (SELECT bool_and(p.prosecdef) FROM pg_proc p
               WHERE p.oid IN ('public.fn_rotinas_automaticas_listar()'::regprocedure,
-                              'public.fn_rotina_automatica_definir(text,boolean)'::regprocedure)),
+                              'public.fn_rotina_automatica_definir(text,boolean,bigint)'::regprocedure)),
         'funções: SECURITY DEFINER, sem PUBLIC/anon, com authenticated');
     PERFORM pg_temp.confere(
         NOT has_table_privilege('authenticated', 'public.rotinas_automaticas_alteracoes', 'SELECT')

@@ -33,3 +33,15 @@ export function pctBR(v: number | null): string {
 /** Grade do §4.5: 1 coluna no celular (o valor não se espreme nem quebra), 2 a partir
  *  de sm, até 4 lado a lado em telas largas. */
 export const GRADE_DE_INDICADORES = 'grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-3';
+
+/** Eixo em unidade compacta (§28.2): "R$ 12 mil", "R$ 1,2 mi". O valor exato fica
+ *  no tooltip e na tabela. */
+export function formatBRLCompacto(v: number): string {
+    const a = Math.abs(v);
+    const sinal = v < 0 ? '-' : '';
+    if (a >= 1_000_000) return `${sinal}R$ ${(a / 1_000_000).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} mi`;
+    // Uma casa abaixo de 10 mil: com zero casas, as marcas 2.500/3.750/5.000 viravam
+    // "3 mil", "4 mil", "5 mil" — o eixo pulava de um jeito que o dado não pula.
+    if (a >= 1_000)     return `${sinal}R$ ${(a / 1_000).toLocaleString('pt-BR', { maximumFractionDigits: a < 10_000 ? 1 : 0 })} mil`;
+    return brl(v);
+}

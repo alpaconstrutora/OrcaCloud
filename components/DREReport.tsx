@@ -6,7 +6,8 @@ import type { DRESummary, DRELine, DREGroup, DREProjectSummary } from '../types/
 import { useResizableColumns } from './ui/TableUtils';
 import { useCargaVigente } from '../hooks/useCargaVigente';
 import { useStore } from '../store/useStore';
-import { motivoPeriodoInvalido } from '../utils/periodoControladoria';
+import { motivoPeriodoInvalido, periodoDoAnoAnterior, nomeDoAnoAnterior } from '../utils/periodoControladoria';
+import { tendenciaDaSerie } from '../lib/dashboardFinanceiro';
 import { FalhaDeCarga, PeriodoInvalido } from './controladoria/EstadosDaCarga';
 import { BarraDeEscopo, BOTAO_DA_BARRA, BotaoAutoAjuste } from './controladoria/BarraDeEscopo';
 import type { EscopoControladoria } from './controladoria/escopo';
@@ -18,7 +19,7 @@ import { baixarCSV } from './controladoria/csv';
 // §6.3 — as linhas do DRE/comparativo têm ordem contábil fixa (Receita → Deduções →
 // Resultado), não fazem sentido reordenadas por clique de coluna; por isso as tabelas
 // abaixo usam <th> simples (sem SortableHeader), mas ganham resize+autofit (§6.1/§6.1.2).
-const DRE_COL_WIDTHS: Record<string, number> = { linha: 260, realizado: 180, previsto: 180 };
+const DRE_COL_WIDTHS: Record<string, number> = { linha: 260, realizado: 180, previsto: 180, anterior: 180 };
 const PROJECT_COL_WIDTHS: Record<string, number> = { obra: 220, receita: 150, custo: 150, margem: 150, margem_pct: 110 };
 
 // ── Labels e ordem dos grupos ─────────────────────────────────────────────────
@@ -89,6 +90,24 @@ function legendaDeMargem(pct: number | null): string {
     return pct === null ? 'Sem margem: não há receita líquida no período' : `Margem ${formatPct(pct)}`;
 }
 
+/** Celular (< 640 px). Na tela estreita a tabela da DRE ocupa a largura do card, sem
+ *  as larguras fixas de coluna (que somavam 620 px e escondiam o Realizado atrás de
+ *  rolagem interna a 390 px — 2ª crítica), e sem a coluna do ano anterior (os cards
+ *  já dizem a variação). */
+function useTelaEstreita(): boolean {
+    const consulta = '(max-width: 639px)';
+    const [estreita, setEstreita] = React.useState(() =>
+        typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia(consulta).matches);
+    React.useEffect(() => {
+        if (typeof window.matchMedia !== 'function') return;
+        const mq = window.matchMedia(consulta);
+        const ouvir = () => setEstreita(mq.matches);
+        mq.addEventListener('change', ouvir);
+        return () => mq.removeEventListener('change', ouvir);
+    }, []);
+    return estreita;
+}
+
 // Coluna espaçadora (§6.1.1): a tabela estica até a largura do card e a folga fica
 // NELA, não espalhada entre as colunas de dado nem como faixa branca fora da tabela.
 const Espaco = () => <td aria-hidden="true"></td>;
@@ -97,7 +116,12 @@ const Espaco = () => <td aria-hidden="true"></td>;
 
 // `comPrevisto`: só no Caixa. Em Competência o "previsto" repetia o realizado (todo
 // lançamento do período já é realizado) e a coluna só dobrava os números.
-function SummaryRow({ linha, realizado, previsto, comPrevisto }: { linha: string; realizado: number; previsto: number; comPrevisto: boolean }) {
+// `anterior`: mesmo período do ano anterior (undefined = sem a coluna).
+function SummaryRow({ linha, realizado, previsto, comPrevisto, anterior, estreito = false }: {
+    linha: string; realizado: number; previsto: number; comPrevisto: boolean; anterior?: number; estreito?: boolean;
+}) {
+    const px = estreito ? 'px-2' : 'px-6';
+    const ind = estreito ? 'pl-4' : 'pl-8';
     const isTotal = linha.startsWith('=');
     const isUnclassified = linha.startsWith('(!)');
 
@@ -106,21 +130,26 @@ function SummaryRow({ linha, realizado, previsto, comPrevisto }: { linha: string
         const hasValue = realizado !== 0 || (comPrevisto && previsto !== 0);
         return (
             <tr className={`border-t-2 border-gray-100 ${hasValue ? 'bg-amber-50' : ''}`}>
-                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-amber-800 pl-8">
+                <td className={`${px} py-2.5 border-r border-gray-100 text-sm font-normal text-amber-800 ${ind}`}>
                     <span className="flex items-center gap-1.5">
                         {hasValue && <AlertTriangle className="w-3.5 h-3.5 shrink-0 text-amber-700" aria-hidden="true" />}
                         {ROTULO_DA_LINHA[linha] ?? linha}
                     </span>
                 </td>
-                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium text-amber-800`}>
+                <td className={`${px} py-2.5 border-r border-gray-100 text-sm text-right whitespace-nowrap tabular-nums font-medium text-amber-800`}>
                     {formatBRL(realizado)}
                 </td>
                 {comPrevisto && (
-                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-normal text-amber-800">
+                    <td className={`${px} py-2.5 border-r border-gray-100 text-sm text-right whitespace-nowrap tabular-nums font-normal text-amber-800`}>
                         {formatBRL(previsto)}
                     </td>
                 )}
-                <Espaco />
+                {anterior !== undefined && (
+                    <td className={`${px} py-2.5 border-r border-gray-100 text-sm text-right whitespace-nowrap tabular-nums font-normal text-amber-800`}>
+                        {formatBRL(anterior)}
+                    </td>
+                )}
+                {!estreito && <Espaco />}
             </tr>
         );
     }
@@ -133,27 +162,39 @@ function SummaryRow({ linha, realizado, previsto, comPrevisto }: { linha: string
     const alertaPrev = isTotal && tomDoResultado(prev) === 'alerta';
     return (
         <tr className={`${isTotal ? 'bg-gray-50 border-t-2 border-gray-200' : ''} border-b border-gray-100 last:border-0`}>
-            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm ${isTotal ? 'text-gray-900 font-medium' : 'text-gray-700 font-normal pl-8'}`}>
+            <td className={`${px} py-2.5 border-r border-gray-100 text-sm ${isTotal ? 'text-gray-900 font-medium' : `text-gray-700 font-normal ${ind}`}`}>
                 {ROTULO_DA_LINHA[linha] ?? linha}
             </td>
-            <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-medium ${alertaReal ? 'text-red-700' : isTotal ? 'text-gray-900' : 'text-gray-700'}`}>
+            <td className={`${px} py-2.5 border-r border-gray-100 text-sm text-right whitespace-nowrap tabular-nums font-medium ${alertaReal ? 'text-red-700' : isTotal ? 'text-gray-900' : 'text-gray-700'}`}>
                 {formatBRL(real)}
             </td>
             {comPrevisto && (
-                <td className={`px-6 py-2.5 border-r border-gray-100 text-sm text-right tabular-nums font-normal ${alertaPrev ? 'text-red-700' : 'text-gray-600'}`}>
+                <td className={`${px} py-2.5 border-r border-gray-100 text-sm text-right whitespace-nowrap tabular-nums font-normal ${alertaPrev ? 'text-red-700' : 'text-gray-600'}`}>
                     {formatBRL(prev)}
                 </td>
             )}
-            <Espaco />
+            {anterior !== undefined && (
+                <td className={`${px} py-2.5 border-r border-gray-100 text-sm text-right whitespace-nowrap tabular-nums font-normal text-gray-600`}>
+                    {formatBRL(valorExibido(linha, anterior))}
+                </td>
+            )}
+            {!estreito && <Espaco />}
         </tr>
     );
 }
 
 // ── Detalhe expansível por grupo ──────────────────────────────────────────────
 
-function DetailGroup({ group, lines, comPrevisto }: { group: DREGroup; lines: DRELine[]; comPrevisto: boolean }) {
+// `anterior`: o mesmo grupo no ano anterior, por categoria (undefined = sem a coluna).
+function DetailGroup({ group, lines, comPrevisto, anterior, estreito = false }: {
+    group: DREGroup; lines: DRELine[]; comPrevisto: boolean; anterior?: Map<string, number>; estreito?: boolean;
+}) {
     const [open, setOpen] = React.useState(false);
+    const idBase = React.useId();
+    const px = estreito ? 'px-2' : 'px-6';
+    const ind2 = estreito ? 'pl-6' : 'pl-12';
     const total = lines.reduce((s, l) => s + l.net, 0);
+    const totalAnterior = anterior ? [...anterior.values()].reduce((s, v) => s + v, 0) : 0;
 
     return (
         <>
@@ -161,10 +202,13 @@ function DetailGroup({ group, lines, comPrevisto }: { group: DREGroup; lines: DR
                 className="cursor-pointer hover:bg-gray-50 border-b border-gray-100"
                 onClick={() => setOpen(o => !o)}
             >
-                <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800">
+                <td className={`${px} py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800`}>
                     {/* Botão sem onClick próprio: clique, Enter e Espaço sobem até a linha
                         (o padrão do SortableHeader). Antes só o mouse abria o grupo. */}
+                    {/* aria-controls: o leitor de tela sabe QUAIS linhas o grupo abre (só
+                        existem abertas, então só aí a referência é dada). */}
                     <button type="button" aria-expanded={open}
+                        aria-controls={open ? lines.map((_, i) => `${idBase}-${i}`).join(' ') : undefined}
                         className="flex items-center gap-2 text-left rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                         {open
                             ? <ChevronDown className="w-3.5 h-3.5 text-gray-500 shrink-0" aria-hidden="true" />
@@ -172,28 +216,38 @@ function DetailGroup({ group, lines, comPrevisto }: { group: DREGroup; lines: DR
                         {DRE_GROUP_LABELS[group]}
                     </button>
                 </td>
-                <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right font-medium tabular-nums text-gray-900">
+                <td className={`${px} py-2.5 border-r border-gray-100 text-sm text-right whitespace-nowrap font-medium tabular-nums text-gray-900`}>
                     {formatBRL(total)}
                 </td>
                 {comPrevisto && (
-                    <td className="px-6 py-2.5 border-r border-gray-100 text-sm text-right text-gray-600 tabular-nums font-normal">
+                    <td className={`${px} py-2.5 border-r border-gray-100 text-sm text-right whitespace-nowrap text-gray-600 tabular-nums font-normal`}>
                         {formatBRL(lines.reduce((s, l) => s + l.pending_credit - l.pending_debit, 0))}
                     </td>
                 )}
-                <Espaco />
+                {anterior && (
+                    <td className={`${px} py-2.5 border-r border-gray-100 text-sm text-right whitespace-nowrap tabular-nums font-normal text-gray-600`}>
+                        {formatBRL(totalAnterior)}
+                    </td>
+                )}
+                {!estreito && <Espaco />}
             </tr>
-            {open && lines.map(l => (
-                <tr key={l.category_name} className="bg-gray-50/50 border-b border-gray-50">
-                    <td className="px-6 py-2 border-r border-gray-100 pl-12 text-sm font-normal text-gray-500">{l.category_name}</td>
-                    <td className="px-6 py-2 border-r border-gray-100 text-sm text-right tabular-nums font-normal text-gray-700">
+            {open && lines.map((l, i) => (
+                <tr key={l.category_name} id={`${idBase}-${i}`} className="bg-gray-50/50 border-b border-gray-50">
+                    <td className={`${px} py-2 border-r border-gray-100 ${ind2} text-sm font-normal text-gray-500`}>{l.category_name}</td>
+                    <td className={`${px} py-2 border-r border-gray-100 text-sm text-right whitespace-nowrap tabular-nums font-normal text-gray-700`}>
                         {formatBRL(l.net)}
                     </td>
                     {comPrevisto && (
-                        <td className="px-6 py-2 border-r border-gray-100 text-sm text-right tabular-nums font-normal text-gray-600">
+                        <td className={`${px} py-2 border-r border-gray-100 text-sm text-right whitespace-nowrap tabular-nums font-normal text-gray-600`}>
                             {formatBRL(l.pending_credit - l.pending_debit)}
                         </td>
                     )}
-                    <Espaco />
+                    {anterior && (
+                        <td className={`${px} py-2 border-r border-gray-100 text-sm text-right whitespace-nowrap tabular-nums font-normal text-gray-600`}>
+                            {formatBRL(anterior.get(l.category_name) ?? 0)}
+                        </td>
+                    )}
+                    {!estreito && <Espaco />}
                 </tr>
             ))}
         </>
@@ -317,6 +371,9 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
     const setActiveView = useStore(s => s.setActiveView);
     const { de: dateFrom, ate: dateTo, regime, obraId: projectId, setObra: setProjectId } = escopo;
     const [summary, setSummary] = React.useState<DRESummary | null>(null);
+    /** Mesmo período do ano anterior (decisão do usuário, 3ª publicação). null = sem comparativo. */
+    const [anterior, setAnterior] = React.useState<DRESummary | null>(null);
+    const estreito = useTelaEstreita();
     const [projects, setProjects] = React.useState<DREProjectSummary[]>([]);
     const [loading, setLoading] = React.useState(false);
     const [falhou, setFalhou] = React.useState(false);
@@ -332,6 +389,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
         const vigente = novaCarga();
         if (motivoPeriodoInvalido(dateFrom, dateTo)) {
             setSummary(null);
+            setAnterior(null);
             setProjects([]);
             setFalhou(false);
             setLoading(false);
@@ -340,17 +398,26 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
         setLoading(true);
         setFalhou(false);
         try {
-            const [s, p] = await Promise.all([
+            const ant = periodoDoAnoAnterior(dateFrom, dateTo);
+            const [s, p, a] = await Promise.all([
                 financialReportService.getDRESummary(organizationId, dateFrom, dateTo, projectId || undefined, regime),
                 financialReportService.getDREByProject(organizationId, dateFrom, dateTo, regime),
+                // O comparativo não derruba a DRE: se falhar, os cards ficam sem o "vs.".
+                // Promise.resolve().then: até um erro síncrono do serviço vira "sem comparativo".
+                Promise.resolve()
+                    .then(() => financialReportService.getDRESummary(organizationId, ant.de, ant.ate, projectId || undefined, regime))
+                    .then(r => r ?? null)
+                    .catch((e: unknown) => { console.error('[DRE] ano anterior', e); return null; }),
             ]);
             if (!vigente()) return;
             setSummary(s);
+            setAnterior(a);
             setProjects(p);
         } catch (e: unknown) {
             if (!vigente()) return;
             // Sem número velho na tela: a falha substitui os dados.
             setSummary(null);
+            setAnterior(null);
             setProjects([]);
             setFalhou(true);
             showToast('Erro ao carregar DRE', 'error');
@@ -373,6 +440,21 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
         }, {});
     }, [summary]);
 
+    // Ano anterior: por grupo e categoria (Por Categoria) e o nome do período.
+    const anteriorPorGrupo = React.useMemo(() => {
+        if (!anterior) return null;
+        const m = new Map<string, Map<string, number>>();
+        for (const l of anterior.detail) {
+            const g = m.get(l.dre_group) ?? new Map<string, number>();
+            g.set(l.category_name, (g.get(l.category_name) ?? 0) + l.net);
+            m.set(l.dre_group, g);
+        }
+        return m;
+    }, [anterior]);
+    const nomeAnterior = nomeDoAnoAnterior(dateFrom, dateTo);
+    const colunaAnterior = nomeAnterior.charAt(0).toUpperCase() + nomeAnterior.slice(1);
+    const comAnterior = !!anterior && !estreito;
+
     return (
         <div className="space-y-6">
             <BarraDeEscopo escopo={escopo} aplica={{ periodo: true, regime: null, obra: null }}>
@@ -382,10 +464,12 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                     title={summary ? 'Baixar o resumo da DRE em CSV' : 'Sem DRE carregada para exportar'}
                     onClick={() => {
                         if (!summary) return;
-                        baixarCSV(`DRE_${dateFrom}_${dateTo}.csv`, ['Linha', 'Realizado', 'Previsto'],
+                        baixarCSV(`DRE_${dateFrom}_${dateTo}.csv`, ['Linha', 'Realizado', 'Previsto', ...(anterior ? [colunaAnterior] : [])],
                             DRE_LINE_ORDER.map(l => {
                                 const row = summary.lines.find(r => r.linha === l);
-                                return [ROTULO_DA_LINHA[l] ?? l, valorExibido(l, row?.valor_realizado ?? 0), valorExibido(l, row?.valor_previsto ?? 0)];
+                                const ant = anterior?.lines.find(r => r.linha === l);
+                                return [ROTULO_DA_LINHA[l] ?? l, valorExibido(l, row?.valor_realizado ?? 0), valorExibido(l, row?.valor_previsto ?? 0),
+                                    ...(anterior ? [valorExibido(l, ant?.valor_realizado ?? 0)] : [])];
                             }));
                     }}
                     className={`${BOTAO_DA_BARRA} disabled:opacity-40 disabled:cursor-not-allowed`}
@@ -423,17 +507,27 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                             return p ? `Com o pendente: ${formatBRL(valor + p)} · ${base.charAt(0).toLowerCase()}${base.slice(1)}` : base;
                         };
                         const pendenteResultado = pendente('= Resultado Líquido');
+                        // "vs. 2025": o realizado de hoje contra o do mesmo período um ano antes.
+                        const vsAnterior = (atual: number, antes: number | undefined) => {
+                            if (antes === undefined) return null;
+                            const t = tendenciaDaSerie([antes, atual], 'sobe', undefined, formatBRL);
+                            return t && { ...t, base: `vs. ${nomeAnterior}` };
+                        };
                         return (
                             <div className={GRADE_DE_INDICADORES}>
                                 <KpiCard destaque label="Receita líquida" value={formatBRL(summary.receita_liquida)}
-                                    sub={comPendente(`Receita bruta ${formatBRL(summary.receita_bruta)}`, summary.receita_liquida, '= Receita Líquida')} />
+                                    sub={comPendente(`Receita bruta ${formatBRL(summary.receita_bruta)}`, summary.receita_liquida, '= Receita Líquida')}
+                                    tendencia={vsAnterior(summary.receita_liquida, anterior?.receita_liquida)} />
                                 <KpiCard destaque label="Lucro bruto" value={formatBRL(summary.lucro_bruto)}
-                                    sub={comPendente(legendaDeMargem(summary.margem_bruta_pct), summary.lucro_bruto, '= Lucro Bruto')} tom={tomDoResultado(summary.lucro_bruto)} />
+                                    sub={comPendente(legendaDeMargem(summary.margem_bruta_pct), summary.lucro_bruto, '= Lucro Bruto')} tom={tomDoResultado(summary.lucro_bruto)}
+                                    tendencia={vsAnterior(summary.lucro_bruto, anterior?.lucro_bruto)} />
                                 <KpiCard destaque label="EBITDA" value={formatBRL(summary.ebitda)}
-                                    sub={comPendente(legendaDeMargem(summary.margem_ebitda_pct), summary.ebitda, '= EBITDA')} tom={tomDoResultado(summary.ebitda)} />
+                                    sub={comPendente(legendaDeMargem(summary.margem_ebitda_pct), summary.ebitda, '= EBITDA')} tom={tomDoResultado(summary.ebitda)}
+                                    tendencia={vsAnterior(summary.ebitda, anterior?.ebitda)} />
                                 <KpiCard destaque label="Resultado líquido" value={formatBRL(summary.resultado_liquido)}
                                     sub={comPendente(legendaDeMargem(summary.margem_liquida_pct), summary.resultado_liquido, '= Resultado Líquido')}
                                     tom={tomDoResultado(summary.resultado_liquido)}
+                                    tendencia={vsAnterior(summary.resultado_liquido, anterior?.resultado_liquido)}
                                     acao={pendenteResultado ? { label: 'Conciliar lançamentos', onClick: () => setActiveView('bank-reconciliation') } : undefined} />
                             </div>
                         );
@@ -454,7 +548,8 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
 
                     {/* Tabela */}
                     {viewMode === 'por_obra' ? (
-                        <ProjectComparisonTable projects={projects} onSelect={pid => { setProjectId(pid); setViewMode('resumo'); }} />
+                        // Com uma obra escolhida na barra, o Por Obra mostra só ela (antes ignorava o filtro).
+                        <ProjectComparisonTable projects={projectId ? projects.filter(p => p.project_id === projectId) : projects} onSelect={pid => { setProjectId(pid); setViewMode('resumo'); }} />
                     ) : (
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                         <div className="flex justify-end p-2 border-b border-gray-100">
@@ -462,19 +557,26 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                         </div>
                         <div className="overflow-x-auto">
                         <table ref={dreCols.tableRef} className="text-left border-collapse"
-                            style={{ tableLayout: 'fixed', minWidth: '100%', width: dreCols.getWidth('linha') + dreCols.getWidth('realizado') + (comPrevisto ? dreCols.getWidth('previsto') : 0) }}>
-                            <colgroup>
-                                <col data-col-key="linha" style={{ width: `${dreCols.getWidth('linha')}px` }} />
-                                <col data-col-key="realizado" style={{ width: `${dreCols.getWidth('realizado')}px` }} />
-                                {comPrevisto && <col data-col-key="previsto" style={{ width: `${dreCols.getWidth('previsto')}px` }} />}
-                                <col />
-                            </colgroup>
+                            style={estreito ? { tableLayout: 'auto', width: '100%' } : {
+                                tableLayout: 'fixed', minWidth: '100%',
+                                width: dreCols.getWidth('linha') + dreCols.getWidth('realizado') + (comPrevisto ? dreCols.getWidth('previsto') : 0) + (comAnterior ? dreCols.getWidth('anterior') : 0),
+                            }}>
+                            {!estreito && (
+                                <colgroup>
+                                    <col data-col-key="linha" style={{ width: `${dreCols.getWidth('linha')}px` }} />
+                                    <col data-col-key="realizado" style={{ width: `${dreCols.getWidth('realizado')}px` }} />
+                                    {comPrevisto && <col data-col-key="previsto" style={{ width: `${dreCols.getWidth('previsto')}px` }} />}
+                                    {comAnterior && <col data-col-key="anterior" style={{ width: `${dreCols.getWidth('anterior')}px` }} />}
+                                    <col />
+                                </colgroup>
+                            )}
                             <thead>
                                 <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                    <th className="px-6 py-2 text-left border-r border-gray-100 relative overflow-hidden">Linha<dreCols.ResizeHandle colKey="linha" /></th>
-                                    <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">{regime === 'CAIXA' ? 'Realizado (conciliado)' : 'Realizado'}<dreCols.ResizeHandle colKey="realizado" /></th>
-                                    {comPrevisto && <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden">Previsto (pendente)<dreCols.ResizeHandle colKey="previsto" /></th>}
-                                    <th aria-hidden="true" />
+                                    <th className={`${estreito ? 'px-2' : 'px-6'} py-2 text-left border-r border-gray-100 relative overflow-hidden`}>Linha{!estreito && <dreCols.ResizeHandle colKey="linha" />}</th>
+                                    <th className={`${estreito ? 'px-2' : 'px-6'} py-2 text-right border-r border-gray-100 relative overflow-hidden`}>{regime === 'CAIXA' ? 'Realizado (conciliado)' : 'Realizado'}{!estreito && <dreCols.ResizeHandle colKey="realizado" />}</th>
+                                    {comPrevisto && <th className={`${estreito ? 'px-2' : 'px-6'} py-2 text-right border-r border-gray-100 relative overflow-hidden`}>Previsto (pendente){!estreito && <dreCols.ResizeHandle colKey="previsto" />}</th>}
+                                    {comAnterior && <th className="px-6 py-2 text-right border-r border-gray-100 relative overflow-hidden" title="Realizado do mesmo período, um ano antes">{colunaAnterior}<dreCols.ResizeHandle colKey="anterior" /></th>}
+                                    {!estreito && <th aria-hidden="true" />}
                                 </tr>
                             </thead>
                             <tbody>
@@ -488,12 +590,15 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId, escopo }) => {
                                                 realizado={row?.valor_realizado ?? 0}
                                                 previsto={row?.valor_previsto ?? 0}
                                                 comPrevisto={comPrevisto}
+                                                anterior={comAnterior ? (anterior!.lines.find(l => l.linha === linha)?.valor_realizado ?? 0) : undefined}
+                                                estreito={estreito}
                                             />
                                         );
                                     })
                                     // Ordem contábil (a do DRE_GROUP_LABELS), não a de chegada do banco.
                                     : (Object.keys(DRE_GROUP_LABELS) as DREGroup[]).filter(g => grouped[g]).map(g => [g, grouped[g]] as const).map(([group, lines]) => (
-                                        <DetailGroup key={group} group={group as DREGroup} lines={lines} comPrevisto={comPrevisto} />
+                                        <DetailGroup key={group} group={group as DREGroup} lines={lines} comPrevisto={comPrevisto}
+                                            anterior={comAnterior ? (anteriorPorGrupo?.get(group) ?? new Map()) : undefined} estreito={estreito} />
                                     ))
                                 }
                             </tbody>

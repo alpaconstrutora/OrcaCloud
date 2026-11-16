@@ -51,3 +51,51 @@ export function margemSobreReceitaLiquida(valor: number, receitaLiquida: number)
     if (!(receitaLiquida > 0)) return null;
     return (valor / receitaLiquida) * 100;
 }
+
+// ── Comparativo com o ano anterior (2ª crítica, 3ª publicação — decisão do usuário:
+//    "Mesmo período do ano anterior": tira a sazonalidade da obra e da venda) ──────
+
+/** A mesma data um ano antes; 29/02 vira 28/02. */
+export function menosUmAno(iso: string): string {
+    const [a, m, d] = iso.split('-');
+    const dia = m === '02' && d === '29' ? '28' : d;
+    return `${Number(a) - 1}-${m}-${dia}`;
+}
+
+/** O mesmo período, um ano antes. */
+export function periodoDoAnoAnterior(de: string, ate: string): { de: string; ate: string } {
+    return { de: menosUmAno(de), ate: menosUmAno(ate) };
+}
+
+/** Como chamar o período de comparação: "2025" para o ano cheio, "mesmo período de
+ *  2025" para um recorte dentro do ano, "um ano antes" quando o recorte cruza anos. */
+export function nomeDoAnoAnterior(de: string, ate: string): string {
+    const anoDe = de.slice(0, 4), anoAte = ate.slice(0, 4);
+    const anterior = Number(anoDe) - 1;
+    if (anoDe !== anoAte) return 'um ano antes';
+    if (de.slice(5) === '01-01' && ate.slice(5) === '12-31') return String(anterior);
+    return `mesmo período de ${anterior}`;
+}
+
+// ── Atalhos de período (decisão do usuário: "Mês, mês anterior, trimestre, ano").
+//    Rótulo curto (a barra cabe numa linha a 1280 px); o `title` diz o período por
+//    extenso. As datas continuam editáveis ao lado. ────────────────────────────────
+
+export interface AtalhoDePeriodo { id: 'mes' | 'mes_anterior' | 'trimestre' | 'ano'; rotulo: string; extenso: string; de: string; ate: string }
+
+const dois = (n: number) => String(n).padStart(2, '0');
+const ultimoDia = (a: number, m1: number) => new Date(a, m1, 0).getDate(); // m1 = mês 1–12
+
+export function atalhosDePeriodo(agora: Date = new Date()): AtalhoDePeriodo[] {
+    const a = agora.getFullYear();
+    const m = agora.getMonth() + 1;
+    const mesAnt = m === 1 ? 12 : m - 1;
+    const anoMesAnt = m === 1 ? a - 1 : a;
+    const tri = Math.floor((m - 1) / 3) * 3 + 1; // 1º mês do trimestre
+    return [
+        { id: 'mes', rotulo: 'Mês', extenso: 'Este mês', de: `${a}-${dois(m)}-01`, ate: `${a}-${dois(m)}-${dois(ultimoDia(a, m))}` },
+        { id: 'mes_anterior', rotulo: 'Mês anterior', extenso: 'Mês anterior', de: `${anoMesAnt}-${dois(mesAnt)}-01`, ate: `${anoMesAnt}-${dois(mesAnt)}-${dois(ultimoDia(anoMesAnt, mesAnt))}` },
+        { id: 'trimestre', rotulo: 'Trimestre', extenso: 'Este trimestre', de: `${a}-${dois(tri)}-01`, ate: `${a}-${dois(tri + 2)}-${dois(ultimoDia(a, tri + 2))}` },
+        { id: 'ano', rotulo: 'Ano', extenso: 'Este ano', ...anoCorrente(agora) },
+    ];
+}

@@ -2,6 +2,7 @@ import React from 'react';
 import { MoveHorizontal } from 'lucide-react';
 import type { RegimeContabil } from '../../types/financial';
 import type { EscopoControladoria } from './escopo';
+import { atalhosDePeriodo } from '../../utils/periodoControladoria';
 
 // Barra de escopo (guia §5.3) das seis abas da Controladoria. É a MESMA barra em
 // todas: muda o que vale, não o lugar. O que não se aplica à aba fica desligado e
@@ -41,8 +42,13 @@ export const BarraDeEscopo: React.FC<{
 }> = ({ escopo, aplica, children }) => {
     const id = React.useId();
     const motivoDe = aplica.periodo ? undefined : 'Esta aba é uma posição numa data: vale só a data final.';
+    const atalhos = atalhosDePeriodo();
     return (
-        <div className="flex flex-col lg:flex-row gap-3 lg:items-end justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        // Duas linhas FIXAS no desktop: período (+ ações da aba à direita) e, embaixo,
+        // regime e obra. Com os atalhos, tudo numa linha só cabia em umas abas e não em
+        // outras (o WIP e o Fluxo têm mais ações) — a barra mudava de altura ao trocar de
+        // aba e os indicadores pulavam. No celular: período, escopo, ações.
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_auto] gap-x-3 gap-y-2 bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3">
             <div className="flex flex-wrap items-end gap-x-3 gap-y-2">
                 <div className="space-y-1.5" title={motivoDe}>
                     {/* 1º filho: o space-y (v4) dá margem a todo filho menos o último — se o motivo fosse o último, o campo ganhava 6 px e a barra desalinhava. */}
@@ -63,6 +69,24 @@ export const BarraDeEscopo: React.FC<{
                     <input id={`${id}-ate`} type="date" value={escopo.ate}
                         onChange={e => escopo.setAte(e.target.value)} className={CAMPO} />
                 </div>
+                {/* Atalhos (3ª publicação): escrevem as duas datas de uma vez; as datas
+                    continuam editáveis. No WIP valem pela data final ("Posição em"). */}
+                <div role="group" aria-label="Atalhos de período" className="flex items-center bg-gray-50 p-0.5 rounded-[6px] border border-gray-200 h-9 max-sm:w-full">
+                    {atalhos.map(at => {
+                        const ativo = aplica.periodo ? escopo.de === at.de && escopo.ate === at.ate : escopo.ate === at.ate;
+                        return (
+                            <button key={at.id} type="button" aria-pressed={ativo}
+                                title={`${at.extenso}: ${at.de.split('-').reverse().join('/')} a ${at.ate.split('-').reverse().join('/')}`}
+                                onClick={() => { escopo.setDe(at.de); escopo.setAte(at.ate); }}
+                                className={`h-full px-2 max-sm:flex-1 max-sm:px-1 max-sm:text-xs rounded-[4px] text-[13px] font-medium whitespace-nowrap transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                                    ativo ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}>
+                                {at.rotulo}
+                            </button>
+                        );
+                    })}
+                </div>
+            </div>
+            <div className="flex flex-wrap items-end gap-x-3 gap-y-2 lg:col-start-1 lg:row-start-2">
                 <div className="space-y-1.5" title={aplica.regime ?? undefined}>
                     <Motivo id={`${id}-motivo-regime`} texto={aplica.regime} />
                     <label htmlFor={`${id}-regime`} className={ROTULO}>Regime</label>
@@ -84,7 +108,7 @@ export const BarraDeEscopo: React.FC<{
                     <select id={`${id}-obra`} value={aplica.obra === null ? escopo.obraId : NAO_SE_APLICA} disabled={aplica.obra !== null}
                         aria-describedby={aplica.obra !== null ? `${id}-motivo-obra` : undefined}
                         onChange={e => escopo.setObra(e.target.value)}
-                        className={`${CAMPO} pr-8 w-full sm:w-auto sm:max-w-[260px] truncate`}>
+                        className={`${CAMPO} pr-8 w-full sm:w-auto sm:max-w-[220px] truncate`}>
                         <option value="">Todas as obras</option>
                         {aplica.obra !== null && <option value={NAO_SE_APLICA}>Não se aplica</option>}
                         {escopo.obras.map(o => (
@@ -95,7 +119,7 @@ export const BarraDeEscopo: React.FC<{
                     </select>
                 </div>
             </div>
-            {children && <div className="flex flex-wrap items-end gap-2 shrink-0">{children}</div>}
+            {children && <div className="flex flex-wrap items-end gap-2 lg:col-start-2 lg:row-start-1 lg:justify-end">{children}</div>}
         </div>
     );
 };

@@ -248,6 +248,15 @@ const BalanceteReport: React.FC<Props> = ({ organizationId, escopo }) => {
                                                 className="hover:bg-blue-50/30 transition-colors">
                                                 <td className="px-6 py-2.5 pl-12 border-r border-gray-100 text-sm font-normal text-gray-700">
                                                     {l.category_name}
+                                                    {/* Sem id = o lançamento traz só o NOME e a organização dele não tem
+                                                        essa categoria no plano (fn_balancete agrupa por id): sem isto a
+                                                        mesma "Adiantamento" aparecia duas vezes, sem explicação. */}
+                                                    {!l.category_id && l.category_name !== '(Sem Categoria)' && (
+                                                        <span className="block text-xs text-gray-600"
+                                                            title="O lançamento traz este nome, mas o plano de contas da organização dele não tem a categoria. Cadastre-a no Plano de Contas ou troque a categoria no título.">
+                                                            Fora do plano de contas da organização do lançamento
+                                                        </span>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-right text-gray-800 tabular-nums">
                                                     {fmt(l.creditos)}

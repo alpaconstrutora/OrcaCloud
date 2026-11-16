@@ -74,6 +74,8 @@ const ControladoriaModule: React.FC<Props> = ({ defaultTab = 'dre' }) => {
                 tabs={TABS.map(t => ({ id: t.id, label: t.label, icon: <t.icon className="w-3.5 h-3.5" aria-hidden="true" /> }))}
                 value={activeTab}
                 onChange={setActiveTab}
+                // Cada aba consulta o servidor ao abrir: a seta só leva o foco (3ª publicação).
+                ativacao="manual"
             />
 
             <div role="tabpanel" aria-label={titulo}>

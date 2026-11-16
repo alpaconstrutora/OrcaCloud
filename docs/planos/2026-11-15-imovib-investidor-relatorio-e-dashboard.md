@@ -223,9 +223,10 @@ provada em transação desfeita — **aplicar com OK**):
 - [x] Gestor: `listOpportunities`/`add`/`update` trazem `indicadores_da_versao` pelo embed
   `imovib_study_versions!imovib_version_id` (conferido no PostgREST de produção: 200; dica errada → 400).
   O campo é só leitura (nunca vai no insert/update); "Editar" abre a oportunidade original.
-- [ ] Portal: migration `aplicar_20271116300000_investidor_oportunidades_indicadores_da_versao.sql`
+- [x] Portal: migration `aplicar_20271116300000_investidor_oportunidades_indicadores_da_versao.sql`
   (fn_investor_portal_get_opportunities + LEFT JOIN da versão) — provada em transação desfeita com o
-  token do Tiago; aplicar só com OK. Sem ela o portal cai nos campos manuais (nada quebra).
+  token do Tiago e APLICADA em 16/11 com OK do usuário. Conferida de fora (anon, link do Tiago):
+  Garden com vgv 11.648.000, TIR 19,0, ROI 39,2; só `calculo.investidor.indicadores` (nada interno).
 
 ## Pendências (registradas 15/11, fora do pedido — não consertadas)
 

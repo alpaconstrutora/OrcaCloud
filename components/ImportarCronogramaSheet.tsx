@@ -1,11 +1,13 @@
 import React from 'react';
-import { FileUp, Download, AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { FileUp, Download, AlertTriangle, CheckCircle2, Loader2, FilePlus2, Copy } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import { projectService } from '../services/projectService';
 import { lerMsProjectXml, lerModeloExcel, ErroDeLeituraDeCronograma, type CronogramaImportado } from '../utils/cronogramaLeitura';
 import { casarComOrcamento, type ResultadoDoCasamento } from '../utils/cronogramaCasamento';
 import { type DecisaoDaTarefa, somarDiasUteis } from '../utils/cronogramaMontagem';
-import { orcamentoBaseDoProjeto, criarPlanejamentoDoCronograma, type OrcamentoBase } from '../services/importarCronogramaService';
+import { orcamentoBaseDoProjeto, criarPlanejamentoDoCronograma, criarPlanejamentoEmBranco, duplicarPlanejamento, type OrcamentoBase } from '../services/importarCronogramaService';
+import { indicadoresDePrazo, folhasDoOrcamento, diasEntre, type IndicadoresDePrazo } from '../utils/planejamentoIndicadores';
+import { situacaoDePrazo, diasPorExtenso } from '../utils/planejamentoGrupos';
 import { gerarModeloDeCronograma, NOME_DO_MODELO } from '../utils/cronogramaModelo';
 import { aplicarAtualizacao, diferencasDaAtualizacao, avulsasDoOutline, type ResultadoDaAtualizacao } from '../utils/cronogramaAtualizacao';
 import { genId } from '../utils/scheduleOutline';
@@ -22,6 +24,12 @@ import type { BudgetEntry, ProjectSchedule } from '../types';
  * predecessoras das tarefas casadas; o avanço só nas linhas marcadas (padrão desmarcado); a linha
  * de base não muda; o que o arquivo não traz fica como está. Quem grava é o pai (onAplicar), que
  * antes guarda o cronograma atual em Versões do planejamento.
+ *
+ * 2ª crítica (15/11/2026, publicação 2 de docs/planos/2026-11-15-planejamento-lista-critica-2.md):
+ * o modo "criar" virou o ÚNICO "Novo planejamento" — havia duas portas (modal central com o
+ * orçamento escondido na 2ª aba e "Criar" ligado com tudo vazio; e este painel, com a ordem oposta).
+ * Três origens: em branco a partir de um orçamento, importar arquivo, duplicar. O orçamento vem
+ * primeiro e a organização vem dele.
  */
 
 export interface OrcamentoParaEscolher {
@@ -30,10 +38,35 @@ export interface OrcamentoParaEscolher {
     code?: string | null;
     /** Obra a que o orçamento está vinculado (só para a pessoa reconhecer). */
     obra?: string | null;
+    /** Nome da organização do orçamento — é a do planejamento (cascata). */
+    organizacao?: string | null;
 }
 
+export interface PlanejamentoParaCopiar {
+    id: string;
+    name: string;
+    code?: string | null;
+    organizacao?: string | null;
+}
+
+export type OrigemDoPlanejamento = 'branco' | 'arquivo' | 'duplicar';
+
+const ORIGENS: { valor: OrigemDoPlanejamento; titulo: string; descricao: string; Icone: typeof FileUp }[] = [
+    { valor: 'branco', titulo: 'Em branco', descricao: 'Com os itens de um orçamento; você monta as datas no cronograma.', Icone: FilePlus2 },
+    { valor: 'arquivo', titulo: 'Importar arquivo', descricao: 'MS Project (XML) ou o modelo Excel, casado com os itens do orçamento.', Icone: FileUp },
+    { valor: 'duplicar', titulo: 'Duplicar', descricao: 'Copia um planejamento: cronograma, orçamento congelado e vínculo.', Icone: Copy },
+];
+
 type Props = { open: boolean; onClose: () => void } & (
-    | { modo: 'criar'; orcamentos: OrcamentoParaEscolher[]; onCriado: (id: string, nome: string) => void }
+    | {
+        modo: 'criar';
+        orcamentos: OrcamentoParaEscolher[];
+        planejamentos: PlanejamentoParaCopiar[];
+        /** Abrir já numa origem (o "Duplicar" da linha abre em 'duplicar' com o planejamento escolhido). */
+        origemInicial?: OrigemDoPlanejamento;
+        copiarDe?: string;
+        onCriado: (id: string, nome: string, origem: OrigemDoPlanejamento) => void;
+    }
     | {
         modo: 'atualizar';
         planejamentoNome: string;
@@ -41,6 +74,8 @@ type Props = { open: boolean; onClose: () => void } & (
         orcamento: BudgetEntry[];
         schedule: ProjectSchedule | undefined;
         onAplicar: (resultado: ResultadoDaAtualizacao, nomeDoArquivo: string) => void | Promise<void>;
+        /** Motivo que impede atualizar (ex.: modo What-If) — dito ao abrir, não no clique final. */
+        bloqueadoPor?: string | null;
     }
 );
 
@@ -52,6 +87,8 @@ const PASSOS: { n: Passo; rotulo: string }[] = [
 ];
 
 const dataBr = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
+/** Data curta COM ano ("05/08/26"): sem ano, um cronograma que cruza o ano ficava ambíguo. */
+const dataCurta = (iso: string) => (iso ? `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(2, 4)}` : '—');
 const VALOR_SEM_CUSTO = '__sem-custo__';
 const VALOR_IGNORAR = '__ignorar__';
 
@@ -62,6 +99,17 @@ export function ImportarCronogramaSheet(props: Props) {
     const { open, onClose } = props;
     const atualizar = props.modo === 'atualizar';
     const orcamentos = props.modo === 'criar' ? props.orcamentos : [];
+    const planejamentos = props.modo === 'criar' ? props.planejamentos : [];
+    const bloqueadoPor = props.modo === 'atualizar' ? props.bloqueadoPor ?? null : null;
+    const [origem, setOrigem] = React.useState<OrigemDoPlanejamento>('branco');
+    const [copiarId, setCopiarId] = React.useState('');
+    const [inicio, setInicio] = React.useState('');
+    const [termino, setTermino] = React.useState('');
+    // O nome é preenchido sozinho (orçamento, arquivo, cópia) até a pessoa digitar o dela.
+    const nomeAutomatico = React.useRef(true);
+    // Troca de passo: foco no conteúdo novo (ver o efeito junto dos motivos).
+    const conteudoRef = React.useRef<HTMLDivElement>(null);
+    const passoAnterior = React.useRef<Passo>(1);
     const scheduleAtual = props.modo === 'atualizar' ? props.schedule : undefined;
     const [passo, setPasso] = React.useState<Passo>(1);
     const [trocarAvanco, setTrocarAvanco] = React.useState<Set<string>>(new Set());
@@ -89,8 +137,18 @@ export function ImportarCronogramaSheet(props: Props) {
         setPasso(1); setArquivo(null); setCronograma(null); setErroLeitura(null); setOrcamentoId(''); setBase(null);
         setErroBase(null); setNome(''); setDecisoes(new Map()); setSoPendentes(false); setErroSalvar(null);
         setTrocarAvanco(new Set()); setEscolheuMpp(false);
+        setInicio(''); setTermino(''); nomeAutomatico.current = true;
+        passoAnterior.current = 1;
+        // Atualizar abre filtrando "Só o que muda" (as 3 mudanças não ficam diluídas em 38 linhas).
+        setSoPendentes(props.modo === 'atualizar');
         // Atualizar: o orçamento e o nome são os do planejamento aberto.
         if (props.modo === 'atualizar') { setBase({ budget: props.orcamento, versao: null, bdi: 0 }); setNome(props.planejamentoNome); }
+        if (props.modo === 'criar') {
+            setOrigem(props.origemInicial ?? 'branco');
+            const copia = props.copiarDe ? props.planejamentos.find(x => x.id === props.copiarDe) : undefined;
+            setCopiarId(copia?.id ?? '');
+            if (copia) setNome(`${copia.name} (cópia)`);
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
@@ -104,7 +162,8 @@ export function ImportarCronogramaSheet(props: Props) {
             else if (ext === 'mpp') { setEscolheuMpp(true); setArquivo(null); return; }
             else throw new ErroDeLeituraDeCronograma('Use um arquivo .xml (MS Project) ou .xlsx (modelo Excel).');
             setCronograma(c);
-            if (!nome.trim()) setNome((c.titulo || f.name.replace(/\.[^.]+$/, '')).trim());
+            // Só ao CRIAR: ao atualizar, o nome é o do planejamento aberto (o título do arquivo não o troca).
+            if (!atualizar && nomeAutomatico.current) setNome((c.titulo || f.name.replace(/\.[^.]+$/, '')).trim());
         } catch (err) {
             setErroLeitura(err instanceof ErroDeLeituraDeCronograma ? err.message : 'Não foi possível ler o arquivo.');
         } finally {
@@ -115,6 +174,9 @@ export function ImportarCronogramaSheet(props: Props) {
     const escolherOrcamento = async (id: string) => {
         setOrcamentoId(id); setBase(null); setErroBase(null);
         if (!id) return;
+        // Em branco: o nome sai do orçamento (o app já sabe — não pede de novo).
+        const o = orcamentos.find(x => x.id === id);
+        if (o && origem === 'branco' && nomeAutomatico.current) setNome(`${o.name} — Planejamento`);
         setCarregandoBase(true);
         try {
             const p = await projectService.loadProject(id);
@@ -145,6 +207,14 @@ export function ImportarCronogramaSheet(props: Props) {
         return aplicarAtualizacao({ schedule: scheduleAtual, orcamento: props.orcamento, cronograma, decisoes, trocarAvanco, gerarId: () => `previa-${++n}` });
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [passo, cronograma, decisoes, trocarAvanco, scheduleAtual]);
+
+    // A consequência, não só a contagem: término e prazo antes → depois (mesma conta da lista).
+    const prazoAntesDepois: { antes: IndicadoresDePrazo; depois: IndicadoresDePrazo } | null = React.useMemo(() => {
+        if (props.modo !== 'atualizar' || !previa || !scheduleAtual) return null;
+        const folhas = folhasDoOrcamento(props.orcamento);
+        return { antes: indicadoresDePrazo(folhas, scheduleAtual), depois: indicadoresDePrazo(folhas, previa.schedule) };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [previa, scheduleAtual]);
 
     // Ao entrar no passo 2 pela 1ª vez: casadas → item; sem par → "sem custo" (não perde tarefa).
     const irParaCasamento = () => {
@@ -198,9 +268,23 @@ export function ImportarCronogramaSheet(props: Props) {
                 return;
             }
             const { id } = await criarPlanejamentoDoCronograma({ orcamentoId, nome, cronograma, decisoes, nomeDoArquivo: arquivo.name });
-            props.onCriado(id, nome.trim());
+            props.onCriado(id, nome.trim(), 'arquivo');
         } catch (err) {
             setErroSalvar(err instanceof Error ? err.message : atualizar ? 'Não foi possível atualizar o cronograma.' : 'Não foi possível criar o planejamento.');
+        } finally {
+            setSalvando(false);
+        }
+    };
+
+    const criarSemArquivo = async () => {
+        setSalvando(true); setErroSalvar(null);
+        try {
+            const { id } = origem === 'duplicar'
+                ? await duplicarPlanejamento({ planejamentoId: copiarId, nome })
+                : await criarPlanejamentoEmBranco({ orcamentoId, nome, inicio, termino });
+            if (props.modo === 'criar') props.onCriado(id, nome.trim(), origem);
+        } catch (err) {
+            setErroSalvar(err instanceof Error ? err.message : 'Não foi possível criar o planejamento.');
         } finally {
             setSalvando(false);
         }
@@ -215,13 +299,23 @@ export function ImportarCronogramaSheet(props: Props) {
     };
 
     // Motivo do botão desligado (sempre dito — memória do projeto: botão desligado diz por quê).
-    const motivoPasso1 = lendo ? 'Lendo o arquivo…'
-        : !cronograma ? 'Escolha o arquivo do cronograma'
-        : atualizar ? null
-        : !orcamentoId ? 'Escolha o orçamento base'
+    const motivoDoOrcamento = !orcamentoId ? 'Escolha o orçamento base'
         : carregandoBase ? 'Carregando o orçamento…'
-        : !base ? 'O orçamento escolhido não pode ser usado'
-        : !nome.trim() ? 'Dê um nome ao planejamento' : null;
+        : !base ? 'O orçamento escolhido não pode ser usado' : null;
+    const motivoDoArquivo = lendo ? 'Lendo o arquivo…' : !cronograma ? 'Escolha o arquivo do cronograma' : null;
+    const motivoPasso1 = atualizar ? (bloqueadoPor ?? motivoDoArquivo)
+        : origem === 'duplicar' ? (!copiarId ? 'Escolha o planejamento a copiar' : !nome.trim() ? 'Dê um nome ao planejamento' : null)
+        : origem === 'branco' ? (motivoDoOrcamento ?? (!nome.trim() ? 'Dê um nome ao planejamento'
+            : inicio && termino && termino < inicio ? 'O término previsto é antes do início' : null))
+        : (motivoDoOrcamento ?? (!nome.trim() ? 'Dê um nome ao planejamento' : motivoDoArquivo));
+    const comPassos = atualizar || origem === 'arquivo';
+    const rotuloDoPasso = (n: Passo) => (atualizar && n === 1 ? 'Arquivo' : atualizar && n === 2 ? 'O que muda' : !atualizar && n === 1 ? 'Origem, orçamento e arquivo' : PASSOS[n - 1].rotulo);
+    // Troca de passo: foco no conteúdo novo e anúncio (o botão clicado some — o foco caía no <body>).
+    // Só quando o PASSO muda com o painel aberto (abrir é do Sheet; voltar ao 1 ao reabrir não conta).
+    React.useEffect(() => {
+        if (open && passoAnterior.current !== passo) conteudoRef.current?.focus({ preventScroll: true });
+        passoAnterior.current = passo;
+    }, [passo, open]);
     const motivoPasso2 = duplicadas ? `${duplicadas} item(ns) do orçamento escolhido(s) em mais de uma tarefa — cada item só pode ficar em uma` : null;
 
     const periodo = cronograma ? (() => {
@@ -230,32 +324,142 @@ export function ImportarCronogramaSheet(props: Props) {
         return { ini: ini[0] ?? '', fim: fim[fim.length - 1] ?? '' };
     })() : null;
     const orcamentoEscolhido = orcamentos.find(o => o.id === orcamentoId);
+    const mudaNaAtualizacao = (chave: string) => {
+        const dif = diferencas.get(chave);
+        return !!dif && (dif.mudaDatas || dif.mudaPercentual);
+    };
     const linhas = casamento ? casamento.casamentos.filter(c => {
         if (!soPendentes) return true;
         const d = decisoes.get(c.tarefa.chave);
-        return !c.itemId || (d?.tipo === 'item' && (usoDoItem.get(d.itemId) ?? 0) > 1) || d?.tipo !== 'item';
+        const precisaDecidir = !c.itemId || (d?.tipo === 'item' && (usoDoItem.get(d.itemId) ?? 0) > 1) || d?.tipo !== 'item';
+        return atualizar ? precisaDecidir || mudaNaAtualizacao(c.tarefa.chave) : precisaDecidir;
     }) : [];
+    // Atualizar: o que muda vem primeiro (ordem do arquivo dentro de cada bloco).
+    if (atualizar) linhas.sort((a, b) => Number(mudaNaAtualizacao(b.tarefa.chave)) - Number(mudaNaAtualizacao(a.tarefa.chave)));
+    const sujo = !salvando && (!!arquivo || !!orcamentoId || !!copiarId || (!nomeAutomatico.current && !!nome.trim()));
 
     return (
-        <Sheet open={open} onClose={onClose} size="4xl" dirty={!!arquivo && !salvando}>
+        <Sheet open={open} onClose={onClose} size="4xl" dirty={sujo}>
             <SheetHeader onClose={onClose}>
-                <SheetTitle>{atualizar ? 'Importar datas do cronograma' : 'Importar cronograma'}</SheetTitle>
+                <SheetTitle>{atualizar ? 'Importar datas do cronograma' : 'Novo planejamento'}</SheetTitle>
                 <SheetDescription>{atualizar
                     ? 'Atualiza as datas deste planejamento a partir de um cronograma do MS Project (XML) ou do modelo Excel. O que o arquivo não traz fica como está.'
-                    : 'Cria um planejamento a partir de um cronograma do MS Project (XML) ou do modelo Excel.'}</SheetDescription>
+                    : 'Escolha de onde vem o cronograma. O orçamento base traz os itens e a organização.'}</SheetDescription>
+                {comPassos && (
                 <ol className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm" aria-label="Passos">
                     {PASSOS.map(p => (
                         <li key={p.n} aria-current={passo === p.n ? 'step' : undefined}
                             className={passo === p.n ? 'font-semibold text-blue-700' : passo > p.n ? 'text-gray-700' : 'text-gray-500'}>
-                            {p.n}. {atualizar && p.n === 1 ? 'Arquivo' : atualizar && p.n === 2 ? 'O que muda' : p.rotulo}
+                            {p.n}. {rotuloDoPasso(p.n)}
                         </li>
                     ))}
                 </ol>
+                )}
+                {comPassos && <p className="sr-only" aria-live="polite">{`Passo ${passo} de 3: ${rotuloDoPasso(passo)}`}</p>}
             </SheetHeader>
 
             <SheetPanel className="p-6">
+              <div ref={conteudoRef} tabIndex={-1} className="outline-none">
                 {passo === 1 && (
                     <div className="space-y-8">
+                        {bloqueadoPor && (
+                            <p role="alert" className="flex items-start gap-2 rounded-[10px] border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+                                <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />{bloqueadoPor}
+                            </p>
+                        )}
+                        {!atualizar && (
+                            <fieldset className="space-y-3">
+                                <legend className="text-sm font-semibold text-gray-900">De onde vem o cronograma</legend>
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                                    {ORIGENS.map(({ valor, titulo, descricao, Icone }) => {
+                                        const ativa = origem === valor;
+                                        return (
+                                            <label key={valor}
+                                                className={`flex cursor-pointer items-start gap-3 rounded-[10px] border p-3 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 ${ativa ? 'border-blue-500 bg-blue-50' : 'border-gray-200 bg-white hover:bg-gray-50'}`}>
+                                                <input type="radio" name="origem-do-planejamento" value={valor} checked={ativa}
+                                                    onChange={() => { setOrigem(valor); setErroSalvar(null); }}
+                                                    className="mt-1 h-4 w-4 shrink-0 accent-blue-600" />
+                                                <span className="min-w-0">
+                                                    <span className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
+                                                        <Icone className={`w-4 h-4 ${ativa ? 'text-blue-600' : 'text-gray-500'}`} aria-hidden="true" />{titulo}
+                                                    </span>
+                                                    <span className="mt-0.5 block text-xs text-gray-600">{descricao}</span>
+                                                </span>
+                                            </label>
+                                        );
+                                    })}
+                                </div>
+                            </fieldset>
+                        )}
+
+                        {!atualizar && origem === 'duplicar' && (
+                            <section className="space-y-4">
+                                <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3">Planejamento a copiar e nome</h3>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="planejamento-copiar" className={rotulo}>Planejamento a copiar</label>
+                                        <select id="planejamento-copiar" className={campo} value={copiarId}
+                                            onChange={e => {
+                                                setCopiarId(e.target.value);
+                                                const x = planejamentos.find(pl => pl.id === e.target.value);
+                                                if (x && nomeAutomatico.current) setNome(`${x.name} (cópia)`);
+                                            }}>
+                                            <option value="">Escolha o planejamento…</option>
+                                            {planejamentos.map(pl => (
+                                                <option key={pl.id} value={pl.id}>{[pl.code, pl.name].filter(Boolean).join(' · ')}{pl.organizacao ? ` — ${pl.organizacao}` : ''}</option>
+                                            ))}
+                                        </select>
+                                        <p className="text-xs text-gray-500">Copia o cronograma, o orçamento congelado e o vínculo. A cópia fica na mesma organização e ganha o próximo código dela.</p>
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="nome-planejamento" className={rotulo}>Nome do planejamento</label>
+                                        <input id="nome-planejamento" className={campo} value={nome} onChange={e => { nomeAutomatico.current = false; setNome(e.target.value); }} placeholder="Ex.: Cronograma executivo — Torre A" />
+                                    </div>
+                                </div>
+                            </section>
+                        )}
+
+                        {!atualizar && origem !== 'duplicar' && (
+                        <section className="space-y-4">
+                            <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3">Orçamento base e nome</h3>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+                                <div className="space-y-1.5">
+                                    <label htmlFor="orcamento-base" className={rotulo}>Orçamento base</label>
+                                    <select id="orcamento-base" className={campo} value={orcamentoId} onChange={e => void escolherOrcamento(e.target.value)}>
+                                        <option value="">Escolha o orçamento…</option>
+                                        {orcamentos.map(o => (
+                                            <option key={o.id} value={o.id}>{[o.code, o.name].filter(Boolean).join(' · ')}{o.obra ? ` — ${o.obra}` : ''}</option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-gray-500">
+                                        {carregandoBase ? 'Carregando os itens…'
+                                            : erroBase ? <span className="text-red-700">{erroBase}</span>
+                                            : base ? `${base.budget.length} itens · ${base.versao ? `versão v${base.versao.item}` : 'orçamento atual'}${orcamentoEscolhido?.organizacao ? ` · organização ${orcamentoEscolhido.organizacao}` : ''}`
+                                            : origem === 'arquivo' ? 'As tarefas do arquivo casam com os itens deste orçamento.' : 'Os itens deste orçamento viram as tarefas do cronograma.'}
+                                    </p>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <label htmlFor="nome-planejamento" className={rotulo}>Nome do planejamento</label>
+                                    <input id="nome-planejamento" className={campo} value={nome} onChange={e => { nomeAutomatico.current = false; setNome(e.target.value); }} placeholder="Ex.: Cronograma executivo — Torre A" />
+                                </div>
+                                {origem === 'branco' && (
+                                    <>
+                                        <div className="space-y-1.5">
+                                            <label htmlFor="inicio-previsto" className={rotulo}>Início previsto <span className="font-normal text-gray-500">(opcional)</span></label>
+                                            <input id="inicio-previsto" type="date" className={campo} value={inicio} onChange={e => setInicio(e.target.value)} />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label htmlFor="termino-previsto" className={rotulo}>Término previsto <span className="font-normal text-gray-500">(opcional)</span></label>
+                                            <input id="termino-previsto" type="date" className={campo} value={termino} onChange={e => setTermino(e.target.value)}
+                                                aria-invalid={inicio && termino && termino < inicio ? true : undefined} />
+                                        </div>
+                                    </>
+                                )}
+                            </div>
+                        </section>
+                        )}
+
+                        {(atualizar || origem === 'arquivo') && (
                         <section className="space-y-4">
                             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-gray-100 pb-3">
                                 <h3 className="text-sm font-semibold text-gray-900">Arquivo do cronograma</h3>
@@ -300,36 +504,16 @@ export function ImportarCronogramaSheet(props: Props) {
                             </details>
                         </section>
 
-                        {atualizar ? (
+                        )}
+
+                        {atualizar && (
                             <p className="text-sm text-gray-700">
                                 As tarefas do arquivo casam com os {base?.budget.length ?? 0} itens do orçamento deste planejamento
                                 {avulsasExistentes.length > 0 && ` e com as ${avulsasExistentes.length} tarefa(s) sem custo que ele já tem`}.
                             </p>
-                        ) : (
-                        <section className="space-y-4">
-                            <h3 className="text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3">Orçamento base e nome</h3>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                                <div className="space-y-1.5">
-                                    <label htmlFor="orcamento-base" className={rotulo}>Orçamento base</label>
-                                    <select id="orcamento-base" className={campo} value={orcamentoId} onChange={e => void escolherOrcamento(e.target.value)}>
-                                        <option value="">Escolha o orçamento…</option>
-                                        {orcamentos.map(o => (
-                                            <option key={o.id} value={o.id}>{[o.code, o.name].filter(Boolean).join(' · ')}{o.obra ? ` — ${o.obra}` : ''}</option>
-                                        ))}
-                                    </select>
-                                    <p className="text-xs text-gray-500">
-                                        {carregandoBase ? 'Carregando os itens…'
-                                            : erroBase ? <span className="text-red-700">{erroBase}</span>
-                                            : base ? `${base.budget.length} itens · ${base.versao ? `versão v${base.versao.item}` : 'orçamento atual'} · a organização vem dele`
-                                            : 'As tarefas do arquivo casam com os itens deste orçamento.'}
-                                    </p>
-                                </div>
-                                <div className="space-y-1.5">
-                                    <label htmlFor="nome-planejamento" className={rotulo}>Nome do planejamento</label>
-                                    <input id="nome-planejamento" className={campo} value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex.: Cronograma executivo — Torre A" />
-                                </div>
-                            </div>
-                        </section>
+                        )}
+                        {!atualizar && origem !== 'arquivo' && erroSalvar && (
+                            <p role="alert" className="flex items-start gap-2 text-sm text-red-700"><AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />{erroSalvar}</p>
                         )}
                     </div>
                 )}
@@ -345,7 +529,7 @@ export function ImportarCronogramaSheet(props: Props) {
                             </p>
                             <label className="flex items-center gap-2 text-sm text-gray-700">
                                 <input type="checkbox" checked={soPendentes} onChange={e => setSoPendentes(e.target.checked)} />
-                                Só o que precisa de decisão
+                                {atualizar ? 'Só o que muda ou precisa de decisão' : 'Só o que precisa de decisão'}
                             </label>
                         </div>
                         {atualizar && (() => {
@@ -376,16 +560,18 @@ export function ImportarCronogramaSheet(props: Props) {
                         )}
                         <div className="overflow-x-auto rounded-[10px] border border-gray-200">
                             {/* Larguras fixas: a tarefa ocupa o resto e quebra linha — o seletor não estoura o painel. */}
-                            <table className="w-full table-fixed text-sm">
+                            {/* Abaixo de md a tabela vira lista empilhada: 5 colunas fixas não cabem em 340 px
+                                (a tarefa virava uma letra por linha — 2ª crítica). */}
+                            <table className="w-full table-fixed text-sm max-md:block max-md:min-w-0">
                                 <caption className="sr-only">Tarefas do arquivo e o item do orçamento de cada uma</caption>
                                 <colgroup>
                                     <col className="w-[96px]" />
                                     <col />
-                                    <col className="w-[112px]" />
+                                    <col className={atualizar ? 'w-[150px]' : 'w-[168px]'} />
                                     <col className={atualizar ? 'w-[124px]' : 'w-[64px]'} />
                                     <col className="w-[240px]" />
                                 </colgroup>
-                                <thead className="bg-white border-b border-gray-200">
+                                <thead className="bg-white border-b border-gray-200 max-md:hidden">
                                     <tr className="text-left text-gray-700">
                                         <th scope="col" className="px-3 py-2 font-semibold whitespace-nowrap">EAP</th>
                                         <th scope="col" className="px-3 py-2 font-semibold">Tarefa do arquivo</th>
@@ -394,7 +580,7 @@ export function ImportarCronogramaSheet(props: Props) {
                                         <th scope="col" className="px-3 py-2 font-semibold">No planejamento</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-100">
+                                <tbody className="divide-y divide-gray-100 max-md:block">
                                     {linhas.map(c => {
                                         const t = c.tarefa;
                                         const d = decisoes.get(t.chave);
@@ -402,33 +588,33 @@ export function ImportarCronogramaSheet(props: Props) {
                                         const repetido = d?.tipo === 'item' && (usoDoItem.get(d.itemId) ?? 0) > 1;
                                         const fimNoApp = t.inicio ? somarDiasUteis(t.inicio, t.marco ? 0 : Math.max(0, Math.round(t.duracaoDias ?? 0))) : '';
                                         return (
-                                            <tr key={t.chave} className="align-top">
-                                                <td className="px-3 py-2 text-gray-700 tabular-nums whitespace-nowrap">{t.eap || '—'}</td>
-                                                <td className="px-3 py-2 text-gray-900 break-words">
+                                            <tr key={t.chave} className="align-top max-md:grid max-md:grid-cols-[auto_1fr] max-md:gap-x-3 max-md:gap-y-1 max-md:px-3 max-md:py-3">
+                                                <td className="px-3 py-2 text-gray-700 tabular-nums whitespace-nowrap max-md:p-0">{t.eap || '—'}</td>
+                                                <td className="px-3 py-2 text-gray-900 break-words max-md:p-0 max-md:min-w-0">
                                                     {t.nome}{t.marco && <span className="text-gray-500"> · marco</span>}
                                                 </td>
                                                 {(() => {
                                                     const dif = atualizar ? diferencas.get(t.chave) : undefined;
                                                     if (!dif) return (
                                                         <>
-                                                            <td className="px-3 py-2 text-gray-700 tabular-nums whitespace-nowrap" title={t.inicio ? `No app: ${dataBr(t.inicio)} a ${dataBr(fimNoApp)} (término = início + duração, como o motor do cronograma conta)` : undefined}>
-                                                                {t.inicio ? `${dataBr(t.inicio).slice(0, 5)} – ${dataBr(t.termino).slice(0, 5)}` : '—'}
+                                                            <td className="px-3 py-2 text-gray-700 tabular-nums whitespace-nowrap max-md:p-0" title={t.inicio ? `No app: ${dataBr(t.inicio)} a ${dataBr(fimNoApp)} (término = início + duração, como o motor do cronograma conta)` : undefined}>
+                                                                {t.inicio ? `${dataCurta(t.inicio)} – ${dataCurta(t.termino)}` : '—'}
                                                             </td>
-                                                            <td className="px-3 py-2 text-gray-700 tabular-nums text-right">{t.percentual}%</td>
+                                                            <td className="px-3 py-2 text-gray-700 tabular-nums text-right max-md:p-0 max-md:text-left">{t.percentual}%</td>
                                                         </>
                                                     );
                                                     const marcado = trocarAvanco.has(t.chave);
                                                     return (
                                                         <>
-                                                            <td className="px-3 py-2 tabular-nums whitespace-nowrap">
+                                                            <td className="px-3 py-2 tabular-nums whitespace-nowrap max-md:p-0">
                                                                 {dif.mudaDatas ? (
                                                                     <span className="flex flex-col text-gray-900">
-                                                                        <span className="text-gray-500 line-through" aria-label={`No app: ${dataBr(dif.noApp.inicio)} a ${dataBr(dif.noApp.termino)}`}>{dataBr(dif.noApp.inicio).slice(0, 5)} – {dataBr(dif.noApp.termino).slice(0, 5)}</span>
-                                                                        <span aria-label={`No arquivo: ${dataBr(dif.doArquivo.inicio)} a ${dataBr(dif.doArquivo.termino)}`}>{dataBr(dif.doArquivo.inicio).slice(0, 5)} – {dataBr(dif.doArquivo.termino).slice(0, 5)}</span>
+                                                                        <span className="text-gray-500 line-through" aria-label={`No app: ${dataBr(dif.noApp.inicio)} a ${dataBr(dif.noApp.termino)}`}>{dataCurta(dif.noApp.inicio)} – {dataCurta(dif.noApp.termino)}</span>
+                                                                        <span aria-label={`No arquivo: ${dataBr(dif.doArquivo.inicio)} a ${dataBr(dif.doArquivo.termino)}`}>{dataCurta(dif.doArquivo.inicio)} – {dataCurta(dif.doArquivo.termino)}</span>
                                                                     </span>
                                                                 ) : <span className="text-gray-600">sem mudança</span>}
                                                             </td>
-                                                            <td className="px-3 py-2 tabular-nums text-right whitespace-nowrap">
+                                                            <td className="px-3 py-2 tabular-nums text-right whitespace-nowrap max-md:p-0 max-md:text-left">
                                                                 {dif.mudaPercentual ? (
                                                                     <label className="inline-flex items-center gap-2 text-gray-900">
                                                                         {dif.noApp.percentual}% → {dif.doArquivo.percentual}%
@@ -441,7 +627,7 @@ export function ImportarCronogramaSheet(props: Props) {
                                                         </>
                                                     );
                                                 })()}
-                                                <td className="px-3 py-2">
+                                                <td className="px-3 py-2 max-md:col-span-2 max-md:p-0 max-md:pt-1 max-md:min-w-0">
                                                     <label className="sr-only" htmlFor={`decisao-${t.chave}`}>No planejamento: {t.nome}</label>
                                                     <select id={`decisao-${t.chave}`} value={valor} onChange={e => mudarDecisao(t.chave, e.target.value)}
                                                         className={`${campo} ${repetido ? 'border-red-400' : ''}`} aria-invalid={repetido || undefined}>
@@ -469,7 +655,7 @@ export function ImportarCronogramaSheet(props: Props) {
                                         );
                                     })}
                                     {linhas.length === 0 && (
-                                        <tr><td colSpan={5} className="px-3 py-8 text-center text-sm text-gray-600">Nada precisa de decisão — todas as tarefas casaram com um item.</td></tr>
+                                        <tr><td colSpan={5} className="px-3 py-8 text-center text-sm text-gray-600">{atualizar ? 'Nada muda e nada precisa de decisão — o arquivo traz as mesmas datas e o mesmo avanço.' : 'Nada precisa de decisão — todas as tarefas casaram com um item.'}</td></tr>
                                     )}
                                 </tbody>
                             </table>
@@ -491,6 +677,28 @@ export function ImportarCronogramaSheet(props: Props) {
                                 <div><dt className={rotulo}>Tarefas sem custo novas</dt><dd className="text-gray-900">{previa.contagem.novasSemCusto}</dd></div>
                                 <div><dt className={rotulo}>Ignoradas</dt><dd className="text-gray-900">{previa.contagem.ignoradas}</dd></div>
                                 <div className="sm:col-span-2"><dt className={rotulo}>Linha de base</dt><dd className="text-gray-900">Não muda — o desvio contra ela aparece na Central de Comando.</dd></div>
+                                {prazoAntesDepois && (() => {
+                                    const { antes, depois } = prazoAntesDepois;
+                                    const mudouFim = antes.fimPrevisto !== depois.fimPrevisto;
+                                    const delta = antes.fimPrevisto && depois.fimPrevisto ? diasEntre(antes.fimPrevisto, depois.fimPrevisto) : 0;
+                                    const sitAntes = situacaoDePrazo(antes).texto;
+                                    const sitDepois = situacaoDePrazo(depois).texto;
+                                    return (
+                                        <>
+                                            <div>
+                                                <dt className={rotulo}>Término</dt>
+                                                <dd className="text-gray-900 tabular-nums">
+                                                    {mudouFim ? `${dataBr(antes.fimPrevisto)} → ${dataBr(depois.fimPrevisto)} (${delta > 0 ? '+' : '−'}${diasPorExtenso(Math.abs(delta))})` : `${dataBr(depois.fimPrevisto)} — não muda`}
+                                                    {depois.fimBaseline && <span className="text-gray-600"> · linha de base {dataBr(depois.fimBaseline)}</span>}
+                                                </dd>
+                                            </div>
+                                            <div>
+                                                <dt className={rotulo}>Prazo</dt>
+                                                <dd className="text-gray-900">{sitAntes === sitDepois ? `Continua ${sitDepois.charAt(0).toLowerCase()}${sitDepois.slice(1)}` : `${sitAntes} → ${sitDepois}`}</dd>
+                                            </div>
+                                        </>
+                                    );
+                                })()}
                             </dl>
                         ) : (
                             <p className="text-sm text-gray-600">O cronograma deste planejamento ainda não carregou.</p>
@@ -511,7 +719,7 @@ export function ImportarCronogramaSheet(props: Props) {
                         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 rounded-[10px] border border-gray-200 p-4 text-sm">
                             <div><dt className={rotulo}>Planejamento</dt><dd className="text-gray-900">{nome.trim()}</dd></div>
                             <div><dt className={rotulo}>Orçamento base</dt><dd className="text-gray-900">{orcamentoEscolhido?.name} · {base.versao ? `versão v${base.versao.item}` : 'orçamento atual'}</dd></div>
-                            <div><dt className={rotulo}>Organização</dt><dd className="text-gray-900">A do orçamento base{orcamentoEscolhido?.obra ? ` (obra ${orcamentoEscolhido.obra})` : ''}</dd></div>
+                            <div><dt className={rotulo}>Organização</dt><dd className="text-gray-900">{orcamentoEscolhido?.organizacao || 'A do orçamento base'}{orcamentoEscolhido?.obra ? ` (obra ${orcamentoEscolhido.obra})` : ''}</dd></div>
                             <div><dt className={rotulo}>Período do arquivo</dt><dd className="text-gray-900 tabular-nums">{dataBr(periodo!.ini)} a {dataBr(periodo!.fim)}</dd></div>
                             <div><dt className={rotulo}>Tarefas</dt><dd className="text-gray-900">{contagem.itens} com item · {contagem.semCusto} sem custo · {contagem.ignorar} ignorada(s)</dd></div>
                             <div><dt className={rotulo}>Itens do orçamento sem tarefa</dt><dd className="text-gray-900">{contagem.foraDoArquivo} (entram sem datas)</dd></div>
@@ -527,6 +735,7 @@ export function ImportarCronogramaSheet(props: Props) {
                         {erroSalvar && <p role="alert" className="flex items-start gap-2 text-sm text-red-700"><AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />{erroSalvar}</p>}
                     </div>
                 )}
+              </div>
             </SheetPanel>
 
             <SheetFooter>
@@ -537,7 +746,15 @@ export function ImportarCronogramaSheet(props: Props) {
                     ) : (
                         <button type="button" onClick={() => setPasso((passo - 1) as Passo)} disabled={salvando} className="h-9 px-3.5 rounded-[6px] border border-gray-300 bg-white text-[13px] font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-60">Voltar</button>
                     )}
-                    {passo < 3 ? (
+                    {!comPassos ? (
+                        <span title={motivoPasso1 ?? undefined}>
+                            <button type="button" onClick={() => void criarSemArquivo()} disabled={!!motivoPasso1 || salvando}
+                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] bg-blue-600 text-white text-[13px] font-medium hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed">
+                                {salvando && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
+                                {salvando ? 'Criando…' : 'Criar planejamento'}
+                            </button>
+                        </span>
+                    ) : passo < 3 ? (
                         <span title={(passo === 1 ? motivoPasso1 : motivoPasso2) ?? undefined}>
                             <button type="button"
                                 onClick={() => (passo === 1 ? irParaCasamento() : setPasso(3))}

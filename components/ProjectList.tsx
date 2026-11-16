@@ -40,9 +40,9 @@ import { FileDownloadIcon } from '@hugeicons/core-free-icons';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 
 import ExcelImportModal from './ExcelImportModal';
-import ImportarCronogramaSheet from './ImportarCronogramaSheet';
+import ImportarCronogramaSheet, { type OrigemDoPlanejamento } from './ImportarCronogramaSheet';
 import { useStore } from '../store/useStore';
-import { onlyOrcamentos } from '../utils/projectClassification';
+import { onlyOrcamentos, onlyPlanejamentos } from '../utils/projectClassification';
 import { BudgetEntry } from '../types';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
@@ -351,7 +351,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
     // Importar cronograma (MS Project XML / modelo Excel) — só em Planejamento (fase 2c do plano
     // docs/planos/2026-11-14-planejamento-lista-critica.md).
-    const [importarCronogramaAberto, setImportarCronogramaAberto] = React.useState(false);
+    // "Novo planejamento" = painel único com 3 origens (2ª crítica, publicação 2): o modal central
+    // deixou de criar planejamento. `copiarDe` vem do "Duplicar" da linha.
+    const [novoPlanejamento, setNovoPlanejamento] = React.useState<{ origem: OrigemDoPlanejamento; copiarDe?: string } | null>(null);
+    const organizacoesDoStore = useStore(s => s.organizations);
+    const nomeDaOrganizacao = (p: ProjectSummary) => {
+        const id = (p as { organization_id?: string | null }).organization_id || p.settings?.organizationId;
+        return organizacoesDoStore.find(o => o.id === id)?.name ?? null;
+    };
     const recarregarProjetosDoStore = useStore(s => s.fetchProjects);
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('projectListFilters:viewMode', 'list');
     const [activeTab, setActiveTab] = React.useState<'budgets' | 'templates'>(
@@ -891,7 +898,13 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
     const handleDuplicate = (e: React.MouseEvent, id: string) => {
         e.stopPropagation();
-        onDuplicateProject(id);
+        duplicar(id);
+    };
+    // Planejamento duplica pelo painel (nome e confirmação; a cópia ganha código próprio — o
+    // "Duplicar" direto copiava o código e deixava dois "001"). Os outros tipos seguem como eram.
+    const duplicar = (id: string) => {
+        if (isPlanejamentoContext) setNovoPlanejamento({ origem: 'duplicar', copiarDe: id });
+        else onDuplicateProject(id);
     };
 
     const handleExport = (e: React.MouseEvent, id: string) => {
@@ -1275,19 +1288,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     </div>
                     {/* Variante compacta do CTA primário (ui_ux_guia_unificado.md §17) */}
                     <div className="flex items-center gap-2">
-                        {/* Planejamento sem "Importar Excel": o modal lê a ficha de um ORÇAMENTO e cria
-                            um orçamento (PR #449). A importação de cronograma é o item 2 do plano
-                            docs/planos/2026-11-14-planejamento-lista-critica.md. */}
-                        {isPlanejamentoContext && (
-                            <button
-                                type="button"
-                                onClick={() => setImportarCronogramaAberto(true)}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-50 text-emerald-700 border border-emerald-100 rounded-[6px] hover:bg-emerald-600 hover:text-white font-medium text-[13px] transition-all active:scale-95"
-                            >
-                                <FileSpreadsheet className="w-4 h-4" />
-                                Importar cronograma
-                            </button>
-                        )}
+                        {/* Planejamento sem "Importar Excel" (o modal lê a ficha de um ORÇAMENTO — PR #449)
+                            e sem "Importar cronograma" separado: importar é uma das origens do
+                            "Novo planejamento" (2ª crítica, publicação 2). */}
                         {!isPlanejamentoContext && (
                             <button
                                 onClick={() => setIsImportModalOpen(true)}
@@ -1299,7 +1302,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         )}
                         <button
                             data-abre-novo-projeto
-                            onClick={() => onNewProject(classificationFilter || (activeTab === 'templates' ? 'OBRA' : 'ORCAMENTO'))}
+                            onClick={() => (isPlanejamentoContext
+                                ? setNovoPlanejamento({ origem: 'branco' })
+                                : onNewProject(classificationFilter || (activeTab === 'templates' ? 'OBRA' : 'ORCAMENTO')))}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                         >
                             <Plus className="w-[15px] h-[15px]" />
@@ -1673,7 +1678,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 <ActionIconButton
                                                     kind="duplicate"
                                                     title={isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento'}
-                                                    onClick={(e) => { e.stopPropagation(); onDuplicateProject(project.id); }}
+                                                    onClick={(e) => { e.stopPropagation(); duplicar(project.id); }}
                                                 />
                                                 <InlineDisclosureMenu
                                                     menuItems={[
@@ -1843,7 +1848,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         <ActionIconButton
                                             kind="duplicate"
                                             title={isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento'}
-                                            onClick={() => onDuplicateProject(project.id)}
+                                            onClick={() => duplicar(project.id)}
                                         />
                                         <InlineDisclosureMenu
                                             menuItems={[
@@ -1869,18 +1874,29 @@ const ProjectList: React.FC<ProjectListProps> = ({
             {isPlanejamentoContext && (
                 <ImportarCronogramaSheet
                     modo="criar"
-                    open={importarCronogramaAberto}
-                    onClose={() => setImportarCronogramaAberto(false)}
+                    open={!!novoPlanejamento}
+                    origemInicial={novoPlanejamento?.origem}
+                    copiarDe={novoPlanejamento?.copiarDe}
+                    onClose={() => setNovoPlanejamento(null)}
                     orcamentos={onlyOrcamentos(projects).map(o => ({
                         id: o.id,
                         name: o.name,
                         code: o.code || o.settings?.code,
                         // Obra só quando acrescenta algo (orçamento com o nome da obra repetia "X — X").
                         obra: (n => (n && n !== o.name ? n : null))(findLinkedProject(o, projects)?.name),
+                        organizacao: nomeDaOrganizacao(o),
                     }))}
-                    onCriado={(id, nome) => {
-                        setImportarCronogramaAberto(false);
-                        notify(`Planejamento "${nome}" criado com o cronograma importado.`);
+                    planejamentos={onlyPlanejamentos(projects).map(pl => ({
+                        id: pl.id,
+                        name: pl.name,
+                        code: pl.code || pl.settings?.code,
+                        organizacao: nomeDaOrganizacao(pl),
+                    }))}
+                    onCriado={(id, nome, origem) => {
+                        setNovoPlanejamento(null);
+                        notify(origem === 'arquivo' ? `Planejamento "${nome}" criado com o cronograma importado.`
+                            : origem === 'duplicar' ? `Planejamento "${nome}" criado como cópia.`
+                            : `Planejamento "${nome}" criado — monte as datas no cronograma.`);
                         void recarregarProjetosDoStore();
                         // Abre o planejamento novo (o mesmo caminho do clique na linha).
                         if (onRowClick) onRowClick(id);

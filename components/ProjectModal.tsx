@@ -873,7 +873,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
         className={
         mode === 'edit'
           ? ''
-          : 'relative bg-white rounded-[2.5rem] shadow-2xl w-full h-full flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200'
+          : 'relative bg-white rounded-[10px] shadow-2xl w-full h-full flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200'
       }>
 
         {/* Header */}
@@ -2080,7 +2080,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         </div>
                       ) : (
                         <table className="w-full text-left">
-                          <thead className="bg-white text-xs font-bold uppercase text-gray-700">
+                          <thead className="bg-white text-xs font-semibold text-gray-700">
                             <tr>
                               <th className="px-4 py-2">Projeto / Recurso</th>
                               <th className="px-4 py-2">Tipo</th>
@@ -2088,7 +2088,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               <th className="px-4 py-2">Ação</th>
                             </tr>
                           </thead>
-                          <tbody className="divide-y divide-gray-100 italic">
+                          <tbody className="divide-y divide-gray-100">
                             {projects.filter(p =>
                               ((p.settings?.classification === 'OBRA') || (formData.classification === 'PLANEJAMENTO' && p.settings?.classification === 'ORCAMENTO')) &&
                               (p.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -2198,7 +2198,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           <input
                             type="text"
                             placeholder={(formData.classification as string) === 'OBRA' ? "Ex: Modelo de Prédio Residencial" : (formData.classification as string) === 'PLANEJAMENTO' ? "Ex: Cronograma Previsto - Jan/2026" : (formData.classification as string) === 'DIARIO' ? "Ex: Diário da Equipe de Pintura" : "Ex: Residencial Vista Alegre"}
-                            className="pl-10 w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            className="pl-10 w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                             value={formData.name}
                             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                             autoFocus
@@ -2291,7 +2291,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                               </label>
                               <div className="w-full rounded-lg border border-indigo-200 bg-indigo-50/60 p-2.5 font-medium text-indigo-800 text-sm flex items-center justify-between">
                                 <span>{inheritedOrgName || 'Herdada da obra vinculada'}</span>
-                                <span className="text-xs font-semibold text-indigo-400 uppercase tracking-wide">herdada da obra</span>
+                                <span className="text-xs font-medium text-indigo-700">herdada da obra</span>
                               </div>
                             </div>
                           );
@@ -2365,7 +2365,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                             placeholder={formData.classification === 'OBRA' ? "Ex: João Silva" : "Vincule uma obra para definir o cliente"}
                             readOnly={formData.classification === 'ORCAMENTO' || formData.classification === 'PLANEJAMENTO' || formData.classification === 'DIARIO'}
                             className={`pl-10 w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 outline-none transition-all ${formData.classification === 'ORCAMENTO' || formData.classification === 'PLANEJAMENTO' || formData.classification === 'DIARIO'
-                              ? 'bg-gray-50 text-gray-500 cursor-not-allowed border-dashed'
+                              ? 'bg-gray-50 text-gray-900 placeholder:text-gray-600 cursor-not-allowed border-dashed'
                               : 'focus:ring-2 focus:ring-blue-500'
                               }`}
                             value={formData.client}
@@ -2491,7 +2491,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                             <input
                               type="text"
                               placeholder="Ex: Equipe de Engenharia / Terceiros"
-                              className="pl-10 w-full rounded-[6px] border border-gray-300 h-9 px-3 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
+                              className="pl-10 w-full rounded-[6px] border border-gray-300 h-9 px-3 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500 outline-none transition-all text-sm"
                               value={formData.responsibleTeam}
                               onChange={(e) => setFormData({ ...formData, responsibleTeam: e.target.value })}
                             />
@@ -2599,7 +2599,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           <Cloud className={`w-5 h-5 ${formData.autoSave ? 'animate-pulse' : ''}`} />
                         </div>
                         <div>
-                          <h4 className="text-sm font-bold text-gray-800">Salvamento Automático</h4>
+                          <h3 className="text-sm font-bold text-gray-800">Salvamento Automático</h3>
                           <p className="text-xs text-gray-500">Sincroniza alterações na nuvem em tempo real.</p>
                         </div>
                       </div>
@@ -2775,7 +2775,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                 <button
                   type="button"
                   onClick={handleRequestClose}
-                  className="px-6 py-2 bg-white border border-gray-300 text-gray-700 rounded-xl font-bold hover:bg-gray-50 transition-all shadow-sm"
+                  className="h-9 px-3.5 bg-white border border-gray-300 text-gray-800 rounded-[6px] text-[13px] font-medium hover:bg-gray-50 transition-all"
                 >
                   Cancelar
                 </button>
@@ -2785,7 +2785,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                 disabled={isSubmitting || (mode === 'edit' && !dirty)}
                 className={mode === 'edit'
                   ? 'disabled:opacity-60 disabled:cursor-not-allowed'
-                  : 'px-8 py-2 rounded-xl shadow-lg shadow-blue-100 disabled:opacity-60 disabled:cursor-not-allowed'}
+                  : 'h-9 px-3.5 rounded-[6px] text-[13px] disabled:opacity-60 disabled:cursor-not-allowed'}
               >
                 {isSubmitting ? 'Salvando...' : mode === 'create'
                   ? (formData.classification === 'OBRA' ? 'Criar Obra' : formData.classification === 'PLANEJAMENTO' ? 'Criar Planejamento' : 'Criar Orçamento')

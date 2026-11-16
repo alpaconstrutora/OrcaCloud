@@ -47,6 +47,11 @@ vencido, desvio término × término) e dos grupos; tela local sem gravar (Divin
 lista = cabeçalho; Garden: "Vencido há N dias" no topo); tsc, padrão de UI, suíte do módulo; CI verde;
 conferido em produção.
 
+✅ **No ar em 15/11/2026 — PR #479 (222ab59), conferido em produção e CI do main verde.** Tela local:
+Divino "Atrasado · 105 dias" e Término 01/12/2026 (= cabeçalho); Garden "Vencido há 215 dias" no topo;
+cards 1/2/1/2; foco no diálogo de colunas e de volta; foco no 1º card após "Tentar de novo"; grupo "Sem
+dados" na falha; 1.143 testes de 68 arquivos.
+
 ## Publicação 2 — criar e importar
 
 1. Painel único "Novo planejamento" com 3 origens (em branco a partir de um orçamento, importar
@@ -61,7 +66,38 @@ conferido em produção.
 **Como sei que terminou:** testes; tela local; teste com gravação num planejamento descartável
 (com autorização na hora) e apagado depois; CI verde; conferido em produção.
 
+**Feito (local):**
+- `ImportarCronogramaSheet` modo criar = "Novo planejamento": origem em 3 cartões (rádio); em branco
+  e duplicar num passo só, importar com os 3 passos de antes; orçamento primeiro; nome preenchido
+  sozinho (orçamento, arquivo, "(cópia)"); organização pelo nome; "Criar" desligado diz o que falta.
+- Serviço: `criarPlanejamentoEmBranco` grava como o modal gravava (herda do orçamento o mesmo que o
+  "Vincular" copiava — `herdadoDoOrcamento`); `duplicarPlanejamento` copia sem o código
+  (`settingsDaCopia`) — o "Duplicar" antigo deixava dois "001". O "Duplicar" da linha abre o painel.
+- Lista: sai "Importar cronograma"; "Novo planejamento" abre o painel (o modal não cria mais planejamento).
+- Importar datas: abre com "Só o que muda ou precisa de decisão", alteradas no topo; confirmação com
+  Término antes → depois (+N dias, linha de base) e Prazo antes → depois; What-If avisa ao abrir.
+  `aplicarAtualizacao` limpa early/late das tarefas com datas novas (a lista lia o término velho).
+- Foco no conteúdo a cada passo + anúncio "Passo N de 3"; passo 2 empilhado abaixo de md; datas com
+  ano; "Auto Programar" emerald-700; ProjectModal: cantos 10px, h4→h3, placeholders e valor herdado
+  legíveis, botões h-9, sem caixa alta/itálico na tabela Vincular e no "herdada da obra".
+- Pré-existente, não mexido: `check-ui-standard` acusa `useState` na busca da aba Vincular do
+  ProjectModal (igual no main; busca dentro de modal não precisa persistir).
+- **Teste com gravação** (pedido: *"Autorizado (Recomendado)"*), pela tela local, só o POST de criação
+  liberado. 1ª rodada achou 2 defeitos: (a) "Em branco" gravado como o modal gravava (budget vazio)
+  abria VAZIO logo após criar — a reidratação de `hooks/usePersistenceSync.ts` põe nos itens a coluna
+  `budget` crua e corre contra o `handleLoadProject` (que resolve o vínculo); (b) a cópia saía sem
+  `organization_id`/`empresa_id` — o gatilho `sync_org_from_empresa` tira a org da COLUNA empresa_id e
+  o Divino tem empresa só na coluna. Correção: "Em branco" nasce com o orçamento congelado (snapshot +
+  versão + budget, como a importação); a cópia leva a empresa na coluna. 2ª rodada: em branco abre com
+  os 37 itens na hora, org/empresa/cliente/vínculo/snapshot certos, código 002; cópia com org e
+  empresa, código 003 (não repete 001). 4 registros de teste apagados (0 referências em 76 chaves
+  estrangeiras; 0 restantes).
+
 ## Fora deste plano (anotado)
 - A grade do cronograma (dentro do planejamento) mostra o término de cada tarefa na convenção do motor
   (02/12 para a tarefa trabalhada até 01/12). Mexer nela muda a edição de datas — fica para outra rodada.
 - Contrastes da casca do app (sidebar/topo) e da grade do cronograma apontados pelo detector.
+- Planejamento criado pelo modal ANTIGO com budget vazio (vínculo "ao vivo") pode abrir vazio depois
+  de recarregar a página: a reidratação de `usePersistenceSync` não resolve o vínculo como o
+  `handleLoadProject`. Os criados pelo painel novo já nascem congelados e não sofrem disso.
+- O "Duplicar" antigo (Orçamentos/Obras) segue copiando o código e sem a empresa na coluna.

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     saudacaoPorHora, comoChamar, diaEmSaoPaulo, diasDeAtraso, montarFila, itemEmDestaque,
-    contagemDoDia, fraseResumo, percentualConciliado, type AlertaDoDia,
+    contagemDoDia, fraseResumo, percentualConciliado, alertasDasFontes, type AlertaDoDia,
 } from '../utils/meuDia';
 import type { ActionQueueItem } from '../services/approvalService';
 import type { MeuDia } from '../services/centralControleService';
@@ -118,5 +118,39 @@ describe('percentualConciliado', () => {
     it('sem extrato no período: null, não 0%', () => {
         expect(percentualConciliado({ conciliadas: 0, pendentes: 0, conciliadas_anterior: 2, pendentes_anterior: 0 }))
             .toEqual({ pct: null, base: 0, variacao: null });
+    });
+});
+
+/**
+ * Plano B da Central (docs/planos/2026-11-16-central-blocos-isolados.md, Tarefa 3):
+ * quando os blocos chegam um a um, o cartão de alertas mostra o que já chegou — a
+ * Minha fila não pode ficar esperando o bloco mais lento.
+ */
+describe('alertasDasFontes', () => {
+    const ok = <T,>(value: T): PromiseSettledResult<T> => ({ status: 'fulfilled', value });
+    const caiu: PromiseSettledResult<never> = { status: 'rejected', reason: new Error('57014') };
+    const semDivergencia = { as_of: HOJE, counts: { value_mismatch: 0, bank_without_internal: 0, internal_without_bank: 0 } } as never;
+    const reajuste = { id: 'c1', number: '12/2025', title: 'Aluguel', reajuste_index: 'IGPM', reajuste_proximo: '2026-11-01', current_value: 1500 };
+
+    it('só reajustes chegou: ok com os reajustes, sem esperar os outros', () => {
+        const r = alertasDasFontes({ reajustes: ok([reajuste]) });
+        expect(r.estado).toBe('ok');
+        expect(r.estado === 'ok' && r.data.map(a => a.id)).toEqual(['reajuste-c1']);
+        expect(r.estado === 'ok' && r.data[0]).toMatchObject({ severity: 'MEDIUM', view: 'contracts-reajuste', title: 'Contrato 12/2025 com reajuste vencido', amount: 1500 });
+    });
+
+    it('nada chegou ainda: carregando', () => {
+        expect(alertasDasFontes({})).toEqual({ estado: 'carregando' });
+        expect(alertasDasFontes({ financial: caiu })).toEqual({ estado: 'carregando' });
+    });
+
+    it('todas caíram: erro', () => {
+        expect(alertasDasFontes({ financial: caiu, divergences: caiu, bottlenecks: caiu, reajustes: caiu })).toEqual({ estado: 'erro' });
+    });
+
+    it('divergência zerada não vira alerta; valor divergente vira HIGH', () => {
+        expect(alertasDasFontes({ divergences: ok(semDivergencia) })).toEqual({ estado: 'ok', data: [] });
+        const r = alertasDasFontes({ divergences: ok({ as_of: HOJE, counts: { value_mismatch: 2, bank_without_internal: 0, internal_without_bank: 0 } } as never) });
+        expect(r).toEqual({ estado: 'ok', data: [expect.objectContaining({ id: 'div-mismatch', severity: 'HIGH', title: '2 lançamento(s) com valor divergente', view: 'bank-reconciliation' })] });
     });
 });

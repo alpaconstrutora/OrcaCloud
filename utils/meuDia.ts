@@ -7,6 +7,10 @@
 // manhã/tarde/noite e "vencido" sem depender de quando o teste roda.
 import type { ActionQueueItem } from '../services/approvalService';
 import type { ContaDoDia, MeuDia, TarefaDoDia } from '../services/centralControleService';
+import type { FinancialAlert } from '../services/financialIntelligenceService';
+import type { contractIndexService } from '../services/contractIndexService';
+import type { ReconciliationDivergences } from '../types/financial';
+import type { ProcessStepBottleneck } from '../types/process';
 
 export type Saudacao = 'Bom dia' | 'Boa tarde' | 'Boa noite';
 
@@ -59,6 +63,69 @@ export interface AlertaDoDia {
     description: string;
     amount?: number | null;
     view: string;
+}
+
+/** As quatro fontes do cartão de alertas. `undefined` = ainda não chegou. */
+export interface FontesDeAlerta {
+    financial?: PromiseSettledResult<FinancialAlert[]>;
+    divergences?: PromiseSettledResult<ReconciliationDivergences>;
+    bottlenecks?: PromiseSettledResult<ProcessStepBottleneck[]>;
+    reajustes?: PromiseSettledResult<Awaited<ReturnType<typeof contractIndexService.listDueForReajuste>>>;
+}
+
+function fBRL(v: number | null | undefined): string {
+    return v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+
+/**
+ * Os alertas do dia (os mesmos da Central antiga: financeiros, divergências de
+ * conciliação, gargalos de processo e reajustes vencidos), a partir do que já
+ * chegou. Basta UMA fonte para o cartão sair do esqueleto — no plano B elas chegam
+ * uma a uma, e a Minha fila (que espera os alertas) não pode ficar presa ao bloco
+ * mais lento. Todas caídas = erro; nenhuma chegou ainda = carregando.
+ */
+export function alertasDasFontes(f: FontesDeAlerta):
+    { estado: 'carregando' } | { estado: 'erro' } | { estado: 'ok'; data: AlertaDoDia[] } {
+    const lista: AlertaDoDia[] = [];
+    let algumChegou = false;
+    if (f.financial?.status === 'fulfilled') {
+        algumChegou = true;
+        f.financial.value.forEach((a, i) => lista.push({
+            id: `fin-${i}-${a.ref_id ?? a.title}`,
+            severity: a.severity,
+            title: a.title,
+            description: a.project_name ? `${a.description} · ${a.project_name}` : a.description,
+            amount: a.amount,
+            view: 'financial-dashboard',
+        }));
+    }
+    if (f.divergences?.status === 'fulfilled') {
+        algumChegou = true;
+        const d = f.divergences.value;
+        if (d.counts.value_mismatch > 0) lista.push({ id: 'div-mismatch', severity: 'HIGH', view: 'bank-reconciliation', title: `${d.counts.value_mismatch} lançamento(s) com valor divergente`, description: `Banco × sistema não batem — apurado em ${d.as_of}` });
+        if (d.counts.bank_without_internal > 0) lista.push({ id: 'div-bank', severity: 'MEDIUM', view: 'bank-reconciliation', title: `${d.counts.bank_without_internal} lançamento(s) do banco sem correspondência`, description: `Sem contrapartida no sistema — apurado em ${d.as_of}` });
+        if (d.counts.internal_without_bank > 0) lista.push({ id: 'div-internal', severity: 'MEDIUM', view: 'bank-reconciliation', title: `${d.counts.internal_without_bank} lançamento(s) do sistema sem correspondência`, description: `Sem contrapartida no banco — apurado em ${d.as_of}` });
+    }
+    if (f.bottlenecks?.status === 'fulfilled') {
+        algumChegou = true;
+        f.bottlenecks.value.filter(b => b.overdue_count > 0).forEach(b => lista.push({
+            id: `proc-${b.step_name}`, severity: 'HIGH', view: 'opura-processos',
+            title: `${b.overdue_count} etapa(s) atrasada(s) em "${b.step_name}"`,
+            description: `${b.active_count} ativa(s) no total nessa etapa`,
+        }));
+    }
+    if (f.reajustes?.status === 'fulfilled') {
+        algumChegou = true;
+        f.reajustes.value.forEach(c => lista.push({
+            id: `reajuste-${c.id}`, severity: 'MEDIUM', view: 'contracts-reajuste',
+            title: `Contrato ${c.number} com reajuste vencido`,
+            description: `${c.reajuste_index} · venceu ${new Date(c.reajuste_proximo).toLocaleDateString('pt-BR')} · valor atual ${fBRL(c.current_value)}`,
+            amount: c.current_value,
+        }));
+    }
+    if (algumChegou) return { estado: 'ok', data: lista };
+    const pendente = !f.financial || !f.divergences || !f.bottlenecks || !f.reajustes;
+    return pendente ? { estado: 'carregando' } : { estado: 'erro' };
 }
 
 export type ItemDaFila =

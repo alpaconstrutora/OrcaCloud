@@ -16,7 +16,7 @@ import { useStore } from '../store/useStore';
 import { useModulosPermitidos } from '../utils/modulosPermitidos';
 import {
     saudacaoPorHora, comoChamar, diaEmSaoPaulo, montarFila, itemEmDestaque, contagemDoDia,
-    type AlertaDoDia,
+    alertasDasFontes, type AlertaDoDia, type FontesDeAlerta,
 } from '../utils/meuDia';
 import { Saudacao } from './central/Saudacao';
 import { MinhaFila, type FiltroDaFila } from './central/MinhaFila';
@@ -54,10 +54,6 @@ function estadoDe(f: Fonte<unknown>): EstadoDoCartao {
     return f.estado;
 }
 
-function fBRL(v: number | null | undefined): string {
-    return v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-}
-
 const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNavigate }) => {
     const [fila, setFila] = React.useState<Fonte<ActionQueueItem[]>>(CARREGANDO);
     const [meuDia, setMeuDia] = React.useState<Fonte<MeuDia>>(CARREGANDO);
@@ -87,9 +83,15 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     const verFinanceiro = !!mod.financeiro;
     const verObras = !!mod.obras;
 
+    // Cada `load` é uma carga. Resposta de carga velha (organização trocada,
+    // Atualizar de novo) não pinta a tela — o plano B estica essa janela para ~16 s.
+    const cargaAtual = React.useRef(0);
+
     // `opcoes` pode chegar como o evento do clique (onTentarDeNovo={load}): só
     // `realcar === true` conta como rodada de "Atualizar".
     const load = React.useCallback(async (opcoes?: { realcar?: boolean }) => {
+        const minha = ++cargaAtual.current;
+        const vale = () => cargaAtual.current === minha;
         setCarregando(true);
 
         // ── Uma chamada para as consultas pesadas ─────────────────────────
@@ -99,7 +101,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         // 11/11/2026, também o bloco `meu_dia`). As duas leituras de tabela
         // (reajuste e config de alçada) continuam soltas — são baratas.
         //
-        // O isolamento por fonte NÃO se perdeu: a função SQL embrulha cada
+        // Erro comum de um bloco fica no bloco: a função SQL embrulha cada
         // consulta no próprio `BEGIN … EXCEPTION`, e cada cartão mostra o
         // próprio "Não carregou".
         const [bootstrapR, reajusteR, approvalConfigR] = await Promise.allSettled([
@@ -107,73 +109,74 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             contractIndexService.listDueForReajuste(organizationId),
             financialApprovalService.listConfig(organizationId),
         ]);
+        if (!vale()) return;
 
-        // Uma falha da chamada consolidada (rede, timeout) derruba todas as
-        // fontes juntas — é o preço de trocar N round-trips por um.
-        const painel = bootstrapR.status === 'fulfilled' ? bootstrapR.value : undefined;
-        const falhaGeral = bootstrapR.status === 'rejected' ? bootstrapR.reason : undefined;
-        const fonte = <T,>(chave: keyof CentralControleBootstrap): PromiseSettledResult<T> =>
-            painel
-                ? comoSettled(painel[chave] as never, String(chave)) as PromiseSettledResult<T>
-                : { status: 'rejected', reason: falhaGeral ?? new Error('Painel indisponível.') };
+        // Config de alçadas — não crítica: sem ela o modal só usa rótulos padrão.
+        if (approvalConfigR.status === 'fulfilled') setApprovalConfig(approvalConfigR.value);
+        else console.error('[CentralControle] approval config:', approvalConfigR.reason);
+
         const paraFonte = <T,>(r: PromiseSettledResult<T>, nome: string): Fonte<T> => {
             if (r.status === 'fulfilled') return { estado: 'ok', data: r.value };
             console.error(`[CentralControle] ${nome}:`, r.reason);
             return { estado: 'erro' };
         };
+        const logarSeCaiu = (r: PromiseSettledResult<unknown>, nome: string) => {
+            if (r.status === 'rejected') console.error(`[CentralControle] ${nome}:`, r.reason);
+        };
+        logarSeCaiu(reajusteR, 'reajustes');
 
         // Alertas: os mesmos da Central antiga (alertas financeiros, divergências
-        // de conciliação, gargalos de processo e reajustes vencidos). As
-        // "N transações aguardando aprovação" saíram: a Minha fila já as lista.
-        const financialR = fonte<FinancialAlert[]>('financial_alerts');
-        const divergenceR = fonte<ReconciliationDivergences>('divergences');
-        const bottlenecksR = fonte<ProcessStepBottleneck[]>('bottlenecks');
-        const lista: AlertaDoDia[] = [];
-        let algumAlertaCarregou = false;
-        if (financialR.status === 'fulfilled') {
-            algumAlertaCarregou = true;
-            financialR.value.forEach((a, i) => lista.push({
-                id: `fin-${i}-${a.ref_id ?? a.title}`,
-                severity: a.severity,
-                title: a.title,
-                description: a.project_name ? `${a.description} · ${a.project_name}` : a.description,
-                amount: a.amount,
-                view: 'financial-dashboard',
-            }));
-        } else console.error('[CentralControle] financial alerts:', financialR.reason);
-        if (divergenceR.status === 'fulfilled') {
-            algumAlertaCarregou = true;
-            const d = divergenceR.value;
-            if (d.counts.value_mismatch > 0) lista.push({ id: 'div-mismatch', severity: 'HIGH', view: 'bank-reconciliation', title: `${d.counts.value_mismatch} lançamento(s) com valor divergente`, description: `Banco × sistema não batem — apurado em ${d.as_of}` });
-            if (d.counts.bank_without_internal > 0) lista.push({ id: 'div-bank', severity: 'MEDIUM', view: 'bank-reconciliation', title: `${d.counts.bank_without_internal} lançamento(s) do banco sem correspondência`, description: `Sem contrapartida no sistema — apurado em ${d.as_of}` });
-            if (d.counts.internal_without_bank > 0) lista.push({ id: 'div-internal', severity: 'MEDIUM', view: 'bank-reconciliation', title: `${d.counts.internal_without_bank} lançamento(s) do sistema sem correspondência`, description: `Sem contrapartida no banco — apurado em ${d.as_of}` });
-        } else console.error('[CentralControle] divergences:', divergenceR.reason);
-        if (bottlenecksR.status === 'fulfilled') {
-            algumAlertaCarregou = true;
-            bottlenecksR.value.filter(b => b.overdue_count > 0).forEach(b => lista.push({
-                id: `proc-${b.step_name}`, severity: 'HIGH', view: 'opura-processos',
-                title: `${b.overdue_count} etapa(s) atrasada(s) em "${b.step_name}"`,
-                description: `${b.active_count} ativa(s) no total nessa etapa`,
-            }));
-        } else console.error('[CentralControle] bottlenecks:', bottlenecksR.reason);
-        if (reajusteR.status === 'fulfilled') {
-            algumAlertaCarregou = true;
-            reajusteR.value.forEach(c => lista.push({
-                id: `reajuste-${c.id}`, severity: 'MEDIUM', view: 'contracts-reajuste',
-                title: `Contrato ${c.number} com reajuste vencido`,
-                description: `${c.reajuste_index} · venceu ${new Date(c.reajuste_proximo).toLocaleDateString('pt-BR')} · valor atual ${fBRL(c.current_value)}`,
-                amount: c.current_value,
-            }));
-        } else console.error('[CentralControle] reajustes:', reajusteR.reason);
-        setAlertas(algumAlertaCarregou ? { estado: 'ok', data: lista } : { estado: 'erro' });
-
-        setFila(paraFonte(fonte<ActionQueueItem[]>('action_queue'), 'action queue'));
-        setMeuDia(paraFonte(fonte<MeuDia>('meu_dia'), 'meu dia'));
-        setScorecards(paraFonte(fonte<ProjectScorecard[]>('scorecards'), 'scorecards'));
-
-        // Config de alçadas — não crítica: sem ela o modal só usa rótulos padrão.
-        if (approvalConfigR.status === 'fulfilled') setApprovalConfig(approvalConfigR.value);
-        else console.error('[CentralControle] approval config:', approvalConfigR.reason);
+        // de conciliação, gargalos de processo e reajustes vencidos) — montados em
+        // `alertasDasFontes`. As "N transações aguardando aprovação" saíram: a
+        // Minha fila já as lista.
+        if (bootstrapR.status === 'fulfilled') {
+            const painel = bootstrapR.value;
+            const fonte = <T,>(chave: keyof CentralControleBootstrap): PromiseSettledResult<T> =>
+                comoSettled(painel[chave] as never, String(chave)) as PromiseSettledResult<T>;
+            const financial = fonte<FinancialAlert[]>('financial_alerts');
+            const divergences = fonte<ReconciliationDivergences>('divergences');
+            const bottlenecks = fonte<ProcessStepBottleneck[]>('bottlenecks');
+            logarSeCaiu(financial, 'financial alerts');
+            logarSeCaiu(divergences, 'divergences');
+            logarSeCaiu(bottlenecks, 'bottlenecks');
+            setAlertas(alertasDasFontes({ financial, divergences, bottlenecks, reajustes: reajusteR }));
+            setFila(paraFonte(fonte<ActionQueueItem[]>('action_queue'), 'action queue'));
+            setMeuDia(paraFonte(fonte<MeuDia>('meu_dia'), 'meu dia'));
+            setScorecards(paraFonte(fonte<ProjectScorecard[]>('scorecards'), 'scorecards'));
+        } else {
+            // ── Plano B (16/11/2026) ──────────────────────────────────────
+            // A chamada única caiu inteira — estouro dos 8 s (o cancelamento não é
+            // pego pelo EXCEPTION dos blocos: um bloco lento leva os sete) ou rede.
+            // Pede os blocos um a um, cada um com o próprio limite, e pinta cada
+            // cartão quando o dele chega. Só aqui: no caminho normal, seis RPCs
+            // juntas é a rajada que o bootstrap resolveu.
+            // Plano: docs/planos/2026-11-16-central-blocos-isolados.md
+            console.error('[CentralControle] chamada única caiu; pedindo por bloco:', bootstrapR.reason);
+            const f = centralControleService.fontesSeparadas(organizationId);
+            const alertas: FontesDeAlerta = { reajustes: reajusteR };
+            const assentar = <T,>(p: Promise<T>, aplicar: (r: PromiseSettledResult<T>) => void) =>
+                p.then(
+                    (value): PromiseSettledResult<T> => ({ status: 'fulfilled', value }),
+                    (reason): PromiseSettledResult<T> => ({ status: 'rejected', reason }),
+                ).then(r => { if (vale()) aplicar(r); });
+            // O cartão de alertas sai do esqueleto com a 1ª fonte que chegar: a Minha
+            // fila espera por ele e não pode ficar presa ao bloco mais lento.
+            const alerta = <K extends 'financial' | 'divergences' | 'bottlenecks'>(chave: K, nome: string) =>
+                (r: NonNullable<FontesDeAlerta[K]>) => {
+                    logarSeCaiu(r, nome);
+                    alertas[chave] = r;
+                    setAlertas(alertasDasFontes({ ...alertas }));
+                };
+            await Promise.all([
+                assentar(f.financial_alerts, alerta('financial', 'financial alerts')),
+                assentar(f.divergences, alerta('divergences', 'divergences')),
+                assentar(f.bottlenecks, alerta('bottlenecks', 'bottlenecks')),
+                assentar(f.action_queue, r => setFila(paraFonte(r, 'action queue'))),
+                assentar(f.meu_dia, r => setMeuDia(paraFonte(r, 'meu dia'))),
+                assentar(f.scorecards, r => setScorecards(paraFonte(r, 'scorecards'))),
+            ]);
+            if (!vale()) return;
+        }
 
         setCarregando(false);
         if (opcoes?.realcar === true) setRodada(r => r + 1);

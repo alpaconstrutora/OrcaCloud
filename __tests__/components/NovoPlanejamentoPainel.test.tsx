@@ -28,7 +28,8 @@ vi.mock('../../hooks/useIndicadoresDosPlanejamentos', () => ({
 
 import ProjectList from '../../components/ProjectList';
 import ImportarCronogramaSheet from '../../components/ImportarCronogramaSheet';
-import { herdadoDoOrcamento, settingsDaCopia } from '../../services/importarCronogramaService';
+import { herdadoDoOrcamento } from '../../services/importarCronogramaService';
+import { settingsDaCopia, dadosDaCopia } from '../../utils/copiaDeProjeto';
 
 const PROJETOS = [
     { id: 'orc1', name: 'Igreja Divino', code: '003', created_at: '2026-01-01', updated_at: '2026-01-01', settings: { classification: 'ORCAMENTO' } },
@@ -127,5 +128,11 @@ describe('serviço — o que o planejamento novo herda e o que a cópia leva', (
         const c = settingsDaCopia({ code: '001', classification: 'PLANEJAMENTO', schedule: { startDate: '2026-08-01' } }, ' Divino (cópia) ');
         expect(c).not.toHaveProperty('code');
         expect(c).toMatchObject({ name: 'Divino (cópia)', classification: 'PLANEJAMENTO', schedule: { startDate: '2026-08-01' } });
+    });
+    it('a cópia leva a empresa na COLUNA (dela o gatilho tira a organização), também quando só a coluna tem', () => {
+        const d = dadosDaCopia({ empresa_id: 'emp1', settings: { code: '001', classification: 'ORCAMENTO' }, budget: [] }, 'Garden (Cópia)');
+        expect(d).toMatchObject({ name: 'Garden (Cópia)', empresa_id: 'emp1', settings: { empresaId: 'emp1', name: 'Garden (Cópia)' } });
+        expect(d.settings).not.toHaveProperty('code');
+        expect(dadosDaCopia({ settings: { classification: 'OBRA' } }, 'X')).not.toHaveProperty('empresa_id');
     });
 });

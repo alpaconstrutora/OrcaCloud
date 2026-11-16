@@ -15,6 +15,7 @@ import type { BudgetEntry, BudgetVersion } from '../types';
 import type { CronogramaImportado } from '../utils/cronogramaLeitura';
 import { montarCronogramaImportado, type DecisaoDaTarefa, type CronogramaMontado } from '../utils/cronogramaMontagem';
 import { genId } from '../utils/scheduleOutline';
+import { dadosDaCopia } from '../utils/copiaDeProjeto';
 
 export interface OrcamentoBase {
     budget: BudgetEntry[];
@@ -150,29 +151,11 @@ export async function criarPlanejamentoEmBranco(e: CriarEmBrancoEntrada): Promis
     return { id: (criado as { id: string }).id };
 }
 
-/** Configurações da cópia: tudo do original, com o nome novo e SEM o código — o serviço gera o
- *  próximo da organização. O "Duplicar" antigo copiava o código e deixava dois "001". */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function settingsDaCopia(original: any, nome: string) {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { code: _codigo, ...resto } = original ?? {};
-    return { ...resto, name: nome.trim() };
-}
-
 export async function duplicarPlanejamento(e: { planejamentoId: string; nome: string }): Promise<{ id: string }> {
     const original = await projectService.loadProject(e.planejamentoId);
     if (!original) throw new Error('O planejamento a copiar não foi encontrado (pode ter sido excluído).');
+    // Sem o código (o serviço gera o próximo) e com a empresa na coluna (dela sai a organização).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const o = original as any;
-    // A empresa vai na COLUNA: é dela que o gatilho sync_org_from_empresa tira o organization_id.
-    // O Divino tem empresa só na coluna; copiar só as settings deixava a cópia SEM organização
-    // (teste com gravação, 15/11/2026 — o "Duplicar" antigo fazia o mesmo).
-    const empresaId = o.empresa_id || o.settings?.empresaId || undefined;
-    const criado = await projectService.saveProject({
-        name: e.nome.trim(),
-        settings: { ...settingsDaCopia(o.settings, e.nome), ...(empresaId ? { empresaId } : {}) },
-        budget: o.budget || [],
-        ...(empresaId ? { empresa_id: empresaId } : {}),
-    });
+    const criado = await projectService.saveProject(dadosDaCopia(original as any, e.nome));
     return { id: (criado as { id: string }).id };
 }

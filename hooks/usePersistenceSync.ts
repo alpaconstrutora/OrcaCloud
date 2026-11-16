@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { projectService } from '../services/projectService';
+import { carregarProjeto } from '../services/carregarProjeto';
 import { BudgetEntry, ProjectSettings } from '../types';
 import { INITIAL_BUDGET, INITIAL_PROJECT_SETTINGS } from '../constants';
 import { marcarErroGravacao, marcarGravacao, marcarGravando, marcarPendente, precisaGravar, registrarPersistido, zerarUltimaGravacao } from '../utils/projetoPersistido';
@@ -250,14 +251,16 @@ export const usePersistenceSync = ({
       if (projectId && session?.user?.id) {
         setIsRehydrating(true);
         try {
-          const projectData = await projectService.loadProject(projectId);
-          if (projectData) {
-            const loadedSettings = { ...INITIAL_PROJECT_SETTINGS, ...projectData.settings };
+          // O MESMO carregador da abertura (handleLoadProject): antes, aqui os itens eram a coluna
+          // `budget` CRUA — planejamento vinculado "ao vivo" ao orçamento abria VAZIO quando esta
+          // reidratação chegava depois da abertura (publicação 3, 15/11/2026).
+          const carregado = await carregarProjeto(projectId);
+          if (carregado) {
             // O banco tem isto: o salvamento automático não regrava só por ter recarregado.
-            registrarPersistido(projectId, loadedSettings, projectData.budget || []);
+            registrarPersistido(projectId, carregado.settingsDoBanco, carregado.budgetDoBanco);
             zerarUltimaGravacao();
-            setProjectSettings(loadedSettings);
-            setBudget(projectData.budget || []);
+            setProjectSettings(carregado.settings);
+            setBudget(carregado.budget);
           } else {
             setProjectId(null);
             setProjectSettings(INITIAL_PROJECT_SETTINGS);

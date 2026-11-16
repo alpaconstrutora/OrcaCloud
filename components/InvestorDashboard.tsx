@@ -2,6 +2,7 @@ import React from 'react';
 import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { TrendingUp, PieChart as PieChartIcon, Building2, Boxes, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, CheckCircle2, XCircle, ChevronDown, HelpCircle, MoreHorizontal, LogOut } from 'lucide-react';
 import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
+import { useOrgContext } from '../hooks/useOrgContext';
 import { Investor, investorService } from '../services/investorService';
 import { projectService, ProjectData } from '../services/projectService';
 import { investorPortalService, InvestorReport, InvestorOpportunity, ReportCategory } from '../services/investorPortalService';
@@ -138,6 +139,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         || profile?.role === UserProfile.DEVELOPER
         || profile?.group === 'DESENVOLVEDOR'
     );
+    // REGRA #5 (16/11/2026 — "Se no topo estava todas as organizações e não apareceu"): na visão do
+    // gestor, oportunidades e relatórios seguem o seletor do topo; "Todas" = null = sem filtro (a RLS
+    // recorta). Antes caíam na organização do INVESTOR selecionado e sumia o que era de outra org.
+    const { orgId: orgDoTopo } = useOrgContext();
+    const orgDaLista = isAdmin ? orgDoTopo : orgId;
     const isPublicExperience = isPreview || !!portalToken;
 
     const [showMobilePreview, setShowMobilePreview] = React.useState(false);
@@ -519,10 +525,10 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     setSummaries(computedSummaries);
                 }
 
-                if (orgId) {
+                if (isAdmin || orgId) {
                     const [r, o] = await Promise.all([
-                        investorPortalService.listReports(orgId, investorProfile?.id ?? undefined),
-                        investorPortalService.listOpportunities(orgId, !isAdmin),
+                        investorPortalService.listReports(orgDaLista, investorProfile?.id ?? undefined),
+                        investorPortalService.listOpportunities(orgDaLista, !isAdmin),
                     ]);
                     setReports(r);
                     setOpportunities(o);
@@ -536,7 +542,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         }
         loadData();
         return () => { cancelled = true; };
-    }, [orgId, investorProfile?.id, portalToken]);
+    }, [orgId, orgDaLista, investorProfile?.id, portalToken]);
 
     React.useEffect(() => {
         if (activeTab === 'dashboard' && !aiInsight) {

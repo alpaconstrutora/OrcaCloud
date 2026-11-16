@@ -20,7 +20,7 @@ import { pointInPolygon } from '../blueprintKernel';
 import type { BlueprintModel, Command, ObjectId, Point, Terminal } from '../blueprintKernel';
 import { centroDeCargas } from '../blueprintCentroDeCargas';
 import { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos } from '../blueprintCircuitosAutomaticos';
-import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO, preDimensionarCircuito, preDimensionarQuadroCompleto, sugerirDPS } from '../blueprintEletricaDimensionamento';
+import { comPreDimensionamentoGuardado, HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO, preDimensionarCircuito, preDimensionarQuadroCompleto, sugerirDPS } from '../blueprintEletricaDimensionamento';
 import { entradaDoQuadro, padraoDeEntrada } from '../blueprintEntradaDeEnergia';
 import { comandosDasSugestoesDeDR, conferirNbr5410, sugerirDRs } from '../blueprintNbr5410';
 import { comandosDePontosDoNivel } from '../blueprintPontosEletricosDoNivel';
@@ -235,7 +235,10 @@ export function lancarEletrica(
 
 /** Depois da cópia viva: a entrada do QGBT (demanda pela diversidade, categoria, unidades atendidas × medidas) e a NBR 5410. */
 export function conferirEletricaDoPredio(m: BlueprintModel, qgbtId: ObjectId) {
-  const e = entradaDoQuadro(m, qgbtId, HIPOTESES_ELETRICAS_PADRAO);
-  const nbr = conferirNbr5410(m, null, HIPOTESES_ELETRICAS_PADRAO);
-  return { entrada: e, nbr };
+  // PA10a: a entrada e a NBR pré-dimensionam os mesmos quadros — uma vez, guardado.
+  return comPreDimensionamentoGuardado(() => {
+    const e = entradaDoQuadro(m, qgbtId, HIPOTESES_ELETRICAS_PADRAO);
+    const nbr = conferirNbr5410(m, null, HIPOTESES_ELETRICAS_PADRAO);
+    return { entrada: e, nbr };
+  });
 }

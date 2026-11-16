@@ -6022,6 +6022,9 @@ function conferirMedidas(
 }
 
 export function assertModelInvariants(model: BlueprintModel): void {
+  // Os ids dos pavimentos, uma vez por chamada (PA10a): a conferência "o pavimento existe" percorria a lista a cada peça,
+  // e as invariantes rodam a cada comando — no prédio, milhares de comandos sobre dezenas de milhares de peças.
+  const idsDeNivel = new Set(model.levels.map((l) => l.id));
   // PA5 do prédio (14/11/2026): as buscas por id, uma vez — a invariante roda a cada comando, e "cada ponto procura o
   // circuito dele" era quadrática (no RL: 5 mil pontos × 2 mil circuitos; 16 s num lote da elétrica).
   const paredePorId = new Map(model.walls.map((w) => [w.id, w]));
@@ -6411,7 +6414,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
       assertIntegerMm(p.x, `${b.id}.${ponta}.x`);
       assertIntegerMm(p.y, `${b.id}.${ponta}.y`);
     }
-    if (!model.levels.some((l) => l.id === b.levelId)) {
+    if (!idsDeNivel.has(b.levelId)) {
       throw new KernelError('LEVEL_NOT_FOUND', `Limite ${b.id} num nível inexistente: ${b.levelId}`);
     }
     // Restrição do lote: só a RESTRICAO tem faixa, e tem sempre.
@@ -6508,7 +6511,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
       assertIntegerMm(s.profundidadeMm, `${s.id}.profundidadeMm`);
     }
 
-    if (!model.levels.some((l) => l.id === s.levelId)) {
+    if (!idsDeNivel.has(s.levelId)) {
       throw new KernelError(
         'LEVEL_NOT_FOUND',
         `Estrutura ${s.id} num nível inexistente: ${s.levelId}`,
@@ -6592,7 +6595,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     assertIntegerMm(r.espessuraMm, `${r.id}.espessuraMm`);
     assertIntegerMm(r.baseMm, `${r.id}.baseMm`);
 
-    if (!model.levels.some((l) => l.id === r.levelId)) {
+    if (!idsDeNivel.has(r.levelId)) {
       throw new KernelError('LEVEL_NOT_FOUND', `Água ${r.id} num nível inexistente: ${r.levelId}`);
     }
   }
@@ -6658,7 +6661,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     const declaradosComDona = new Set<ElementUid>();
     for (const a of model.ambientesDeclarados ?? []) {
-      if (!model.levels.some((l) => l.id === a.levelId)) throw new KernelError('BAD_DECLARED_SPACE', `Ambiente declarado ${a.id}: pavimento inexistente`);
+      if (!idsDeNivel.has(a.levelId)) throw new KernelError('BAD_DECLARED_SPACE', `Ambiente declarado ${a.id}: pavimento inexistente`);
       if (typeof a.nome !== 'string' || !a.nome || a.nome !== a.nome.trim() || a.nome.length > MAX_NOME_DE_AMBIENTE_DECLARADO) {
         throw new KernelError('BAD_DECLARED_SPACE', `Ambiente declarado ${a.id}: nome vazio, com espaços nas pontas ou maior que ${MAX_NOME_DE_AMBIENTE_DECLARADO} caracteres`);
       }
@@ -6700,7 +6703,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     const etiquetaPorUid = new Map((model.labels ?? []).map((l) => [l.uid, l]));
     for (const g of model.grupos ?? []) {
       if (typeof g.nome !== 'string' || !g.nome.trim() || g.nome.length > MAX_NOME_DE_GRUPO) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: nome vazio ou maior que ${MAX_NOME_DE_GRUPO} caracteres`);
-      if (!model.levels.some((l) => l.id === g.levelId)) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: pavimento inexistente`);
+      if (!idsDeNivel.has(g.levelId)) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: pavimento inexistente`);
       if (!Number.isInteger(g.pivo.x) || !Number.isInteger(g.pivo.y)) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: pivô não inteiro`);
       const conferir = (uid: ElementUid, peca: { levelId: ObjectId } | undefined, familia: string) => {
         if (!peca) throw new KernelError('BAD_GROUP', `Grupo ${g.id}: ${familia} de origem inexistente ${uid}`);
@@ -6786,7 +6789,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
 
   // Vagas: pavimento existente, tipo conhecido, medidas inteiras positivas, giro inteiro em [0, 360).
   for (const v of model.vagas ?? []) {
-    if (!model.levels.some((l) => l.id === v.levelId)) throw new KernelError('BAD_PARKING', `Vaga ${v.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(v.levelId)) throw new KernelError('BAD_PARKING', `Vaga ${v.id}: pavimento inexistente`);
     if (!TIPOS_DE_VAGA.includes(v.tipo)) throw new KernelError('BAD_PARKING', `Vaga ${v.id}: tipo desconhecido ${String(v.tipo)}`);
     assertIntegerMm(v.at.x, `${v.id}.at.x`);
     assertIntegerMm(v.at.y, `${v.id}.at.y`);
@@ -6797,7 +6800,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
 
   // Componentes: pavimento existente, tipo do catálogo, família coerente, medidas inteiras positivas, giro em [0, 360), rótulo curto.
   for (const c of model.componentes ?? []) {
-    if (!model.levels.some((l) => l.id === c.levelId)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(c.levelId)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: pavimento inexistente`);
     const ficha = CATALOGO_DE_COMPONENTES[c.tipoId] as FichaDoComponente | undefined;
     if (!ficha) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: tipo desconhecido ${String(c.tipoId)}`);
     if (!FAMILIAS_DE_COMPONENTE.includes(c.familia)) throw new KernelError('BAD_COMPONENT', `Componente ${c.id}: família desconhecida ${String(c.familia)}`);
@@ -6823,7 +6826,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
   for (const a of model.anotacoes ?? []) {
     if (!TIPOS_DE_ANOTACAO.includes(a.tipo)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: tipo desconhecido ${String(a.tipo)}`);
     const vista = a.vista as { tipo: string; levelId?: ObjectId; corteId?: ObjectId; direcao?: string };
-    if (vista.tipo === 'PLANTA' && !model.levels.some((l) => l.id === vista.levelId)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: pavimento inexistente`);
+    if (vista.tipo === 'PLANTA' && !idsDeNivel.has(vista.levelId ?? '')) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: pavimento inexistente`);
     else if (vista.tipo === 'CORTE' && !(model.sections ?? []).some((c) => c.id === vista.corteId)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: corte inexistente`);
     else if (vista.tipo === 'ELEVACAO' && !['FRENTE', 'FUNDOS', 'LATERAL_DIREITA', 'LATERAL_ESQUERDA'].includes(vista.direcao ?? '')) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: elevação desconhecida`);
     else if (!['PLANTA', 'CORTE', 'ELEVACAO'].includes(vista.tipo)) throw new KernelError('BAD_ANNOTATION', `Anotação ${a.id}: vista desconhecida`);
@@ -6869,7 +6872,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
   // Guarda-corpos (E7.3): pavimento existente, tipo e material da lista, ≥ 2 vértices inteiros sem trecho nulo, altura inteira positiva, rótulo curto.
   // TRECHO DE RODAPÉ (0.55.0): pavimento vivo, ≥ 2 vértices inteiros, altura na faixa.
   for (const r of model.rodapes ?? []) {
-    if (!model.levels.some((l) => l.id === r.levelId)) throw new KernelError('BAD_BASEBOARD', `Rodapé ${r.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(r.levelId)) throw new KernelError('BAD_BASEBOARD', `Rodapé ${r.id}: pavimento inexistente`);
     if (!Array.isArray(r.pontos) || r.pontos.length < 2) throw new KernelError('BAD_BASEBOARD', `Rodapé ${r.id}: precisa de 2 vértices ou mais`);
     r.pontos.forEach((p, i) => {
       assertIntegerMm(p.x, `${r.id}.pontos[${i}].x`);
@@ -6880,7 +6883,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
   }
   // SUB-REGIÃO (0.53.0): pavimento vivo, material da lista, contorno inteiro com ≥ 3 vértices, nome curto.
   for (const s of model.subRegioes ?? []) {
-    if (!model.levels.some((l) => l.id === s.levelId)) throw new KernelError('BAD_SUBREGION', `Sub-região ${s.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(s.levelId)) throw new KernelError('BAD_SUBREGION', `Sub-região ${s.id}: pavimento inexistente`);
     if (!MATERIAIS_DE_SUB_REGIAO.includes(s.material)) throw new KernelError('BAD_SUBREGION', `Sub-região ${s.id}: material desconhecido ${String(s.material)}`);
     if (!Array.isArray(s.pontos) || s.pontos.length < 3) throw new KernelError('BAD_SUBREGION', `Sub-região ${s.id}: o contorno precisa de pelo menos 3 vértices`);
     s.pontos.forEach((p, i) => {
@@ -6907,7 +6910,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
   // LOTEAMENTO (0.58.0): pavimento vivo, contorno inteiro, nome/numero curtos,
   // quadra existente, testada dentro da lista de arestas, via com eixo aberto.
   for (const q of model.quadras ?? []) {
-    if (!model.levels.some((l) => l.id === q.levelId)) throw new KernelError('BAD_BLOCK', `Quadra ${q.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(q.levelId)) throw new KernelError('BAD_BLOCK', `Quadra ${q.id}: pavimento inexistente`);
     if (!Array.isArray(q.pontos) || q.pontos.length < 3) throw new KernelError('BAD_BLOCK', `Quadra ${q.id}: o contorno precisa de pelo menos 3 vértices`);
     q.pontos.forEach((p, i) => {
       assertIntegerMm(p.x, `${q.id}.pontos[${i}].x`);
@@ -6916,7 +6919,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (typeof q.nome !== 'string' || q.nome.trim().length === 0 || q.nome.length > MAX_NOME_DE_QUADRA) throw new KernelError('BAD_BLOCK', `Quadra ${q.id}: nome vazio ou maior que ${MAX_NOME_DE_QUADRA} caracteres`);
   }
   for (const l of model.lotes ?? []) {
-    if (!model.levels.some((x) => x.id === l.levelId)) throw new KernelError('BAD_PLOT', `Lote ${l.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(l.levelId)) throw new KernelError('BAD_PLOT', `Lote ${l.id}: pavimento inexistente`);
     if (l.quadraId != null && !(model.quadras ?? []).some((q) => q.id === l.quadraId)) throw new KernelError('BAD_PLOT', `Lote ${l.id}: quadra inexistente ${l.quadraId}`);
     if (!TIPOS_DE_LOTE.includes(l.tipo)) throw new KernelError('BAD_PLOT', `Lote ${l.id}: tipo desconhecido ${String(l.tipo)}`);
     if (!Array.isArray(l.pontos) || l.pontos.length < 3) throw new KernelError('BAD_PLOT', `Lote ${l.id}: o contorno precisa de pelo menos 3 vértices`);
@@ -6930,7 +6933,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
   }
   for (const v of model.vias ?? []) {
-    if (!model.levels.some((l) => l.id === v.levelId)) throw new KernelError('BAD_STREET', `Via ${v.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(v.levelId)) throw new KernelError('BAD_STREET', `Via ${v.id}: pavimento inexistente`);
     if (!Array.isArray(v.eixo) || v.eixo.length < 2) throw new KernelError('BAD_STREET', `Via ${v.id}: o eixo precisa de pelo menos 2 vértices`);
     v.eixo.forEach((p, i) => {
       assertIntegerMm(p.x, `${v.id}.eixo[${i}].x`);
@@ -6941,7 +6944,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (typeof v.nome !== 'string' || v.nome.trim().length === 0 || v.nome.length > MAX_NOME_DE_VIA) throw new KernelError('BAD_STREET', `Via ${v.id}: nome vazio ou maior que ${MAX_NOME_DE_VIA} caracteres`);
   }
   for (const a of model.areasPublicas ?? []) {
-    if (!model.levels.some((l) => l.id === a.levelId)) throw new KernelError('BAD_PUBLIC_AREA', `Área pública ${a.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(a.levelId)) throw new KernelError('BAD_PUBLIC_AREA', `Área pública ${a.id}: pavimento inexistente`);
     if (!TIPOS_DE_AREA_PUBLICA.includes(a.tipo)) throw new KernelError('BAD_PUBLIC_AREA', `Área pública ${a.id}: tipo desconhecido ${String(a.tipo)}`);
     if (!Array.isArray(a.pontos) || a.pontos.length < 3) throw new KernelError('BAD_PUBLIC_AREA', `Área pública ${a.id}: o contorno precisa de pelo menos 3 vértices`);
     a.pontos.forEach((p, i) => {
@@ -6952,7 +6955,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
   }
   // ÁREA DE OPERAÇÃO (0.83.0): pavimento vivo, >= 3 vértices inteiros, risco da lista, nome curto e aparado.
   for (const a of model.areasDeOperacao ?? []) {
-    if (!model.levels.some((l) => l.id === a.levelId)) throw new KernelError('BAD_OPERATION_AREA', `Área de operação ${a.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(a.levelId)) throw new KernelError('BAD_OPERATION_AREA', `Área de operação ${a.id}: pavimento inexistente`);
     if (!Array.isArray(a.pontos) || a.pontos.length < 3) throw new KernelError('BAD_OPERATION_AREA', `Área de operação ${a.id}: o contorno precisa de pelo menos 3 vértices`);
     a.pontos.forEach((p, i) => {
       assertIntegerMm(p.x, `${a.id}.pontos[${i}].x`);
@@ -6965,16 +6968,16 @@ export function assertModelInvariants(model: BlueprintModel): void {
   // uso da lista, pavimentos e piso a piso inteiros dentro dos limites, cota inteira.
   // CÂMERA (0.99.0): pavimento vivo e o resto por `assertCamera`.
   for (const c of model.cameras ?? []) {
-    if (!model.levels.some((l) => l.id === c.levelId)) throw new KernelError('BAD_CAMERA', `Câmera ${c.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(c.levelId)) throw new KernelError('BAD_CAMERA', `Câmera ${c.id}: pavimento inexistente`);
     assertCamera(c);
   }
   // MURO (0.104.0): pavimento vivo e o resto por `assertMuro`.
   for (const m of model.muros ?? []) {
-    if (!model.levels.some((l) => l.id === m.levelId)) throw new KernelError('BAD_MURO', `Muro ${m.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(m.levelId)) throw new KernelError('BAD_MURO', `Muro ${m.id}: pavimento inexistente`);
     assertMuro(m);
   }
   for (const b of model.blocos ?? []) {
-    if (!model.levels.some((l) => l.id === b.levelId)) throw new KernelError('BAD_MASS', `Bloco ${b.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(b.levelId)) throw new KernelError('BAD_MASS', `Bloco ${b.id}: pavimento inexistente`);
     if (!Array.isArray(b.pontos) || b.pontos.length < 3) throw new KernelError('BAD_MASS', `Bloco ${b.id}: o contorno precisa de pelo menos 3 vértices`);
     b.pontos.forEach((p, i) => {
       assertIntegerMm(p.x, `${b.id}.pontos[${i}].x`);
@@ -6988,14 +6991,14 @@ export function assertModelInvariants(model: BlueprintModel): void {
   }
   // VISTA DEPENDENTE (0.51.0): pavimento vivo, nome, recorte inteiro e não degenerado, escala inteira.
   for (const v of model.vistasDependentes ?? []) {
-    if (!model.levels.some((l) => l.id === v.levelId)) throw new KernelError('BAD_DEPENDENT_VIEW', `Vista dependente ${v.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(v.levelId)) throw new KernelError('BAD_DEPENDENT_VIEW', `Vista dependente ${v.id}: pavimento inexistente`);
     if (typeof v.nome !== 'string' || v.nome.trim().length === 0 || v.nome.length > MAX_NOME_DE_VISTA_DEPENDENTE) throw new KernelError('BAD_DEPENDENT_VIEW', `Vista dependente ${v.id}: nome vazio ou maior que ${MAX_NOME_DE_VISTA_DEPENDENTE}`);
     for (const k of ['minX', 'minY', 'maxX', 'maxY'] as const) assertIntegerMm(v.recorte[k], `${v.id}.recorte.${k}`);
     if (v.recorte.minX >= v.recorte.maxX || v.recorte.minY >= v.recorte.maxY) throw new KernelError('BAD_DEPENDENT_VIEW', `Vista dependente ${v.id}: recorte degenerado`);
     if (!Number.isInteger(v.denominador) || v.denominador < 1) throw new KernelError('BAD_DEPENDENT_VIEW', `Vista dependente ${v.id}: escala tem de ser inteira ≥ 1`);
   }
   for (const g of model.guardaCorpos ?? []) {
-    if (!model.levels.some((l) => l.id === g.levelId)) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: pavimento inexistente`);
+    if (!idsDeNivel.has(g.levelId)) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: pavimento inexistente`);
     if (!TIPOS_DE_GUARDA_CORPO.includes(g.tipo)) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: tipo desconhecido ${String(g.tipo)}`);
     if (!MATERIAIS_DE_GUARDA_CORPO.includes(g.material)) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: material desconhecido ${String(g.material)}`);
     if (!Array.isArray(g.pontos) || g.pontos.length < 2) throw new KernelError('BAD_RAILING', `Guarda-corpo ${g.id}: precisa de 2 vértices ou mais`);
@@ -7132,7 +7135,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
       throw new KernelError('BAD_STAIR_KIND', `Tipo "${e.tipo}" em ${e.id} — só ESCADA ou RAMPA`);
     }
 
-    if (!model.levels.some((l) => l.id === e.levelId)) {
+    if (!idsDeNivel.has(e.levelId)) {
       throw new KernelError('LEVEL_NOT_FOUND', `Escada ${e.id} num nível inexistente: ${e.levelId}`);
     }
   }
@@ -7176,7 +7179,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
       throw new KernelError('BAD_DISCIPLINE', `Disciplina "${t.disciplina}" em ${t.id}`);
     }
 
-    if (!model.levels.some((l) => l.id === t.levelId)) {
+    if (!idsDeNivel.has(t.levelId)) {
       throw new KernelError('LEVEL_NOT_FOUND', `Trecho ${t.id} num nível inexistente: ${t.levelId}`);
     }
 
@@ -7244,7 +7247,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
       throw new KernelError('BAD_TERMINAL_KIND', `Terminal ${t.id} sem tipo`);
     }
 
-    if (!model.levels.some((l) => l.id === t.levelId)) {
+    if (!idsDeNivel.has(t.levelId)) {
       throw new KernelError(
         'LEVEL_NOT_FOUND',
         `Terminal ${t.id} num nível inexistente: ${t.levelId}`,
@@ -7273,7 +7276,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     // 0.107.0: o pavimento da unidade medida só com a unidade, e ele existe.
     if (t.unidadeLevelId) {
       if (!t.unidadeId) throw new KernelError('BAD_UNIT', `Terminal ${t.id} tem o pavimento da unidade sem a unidade`);
-      if (!model.levels.some((l) => l.id === t.unidadeLevelId)) throw new KernelError('LEVEL_NOT_FOUND', `Terminal ${t.id} aponta para um pavimento inexistente: ${t.unidadeLevelId}`);
+      if (!idsDeNivel.has(t.unidadeLevelId)) throw new KernelError('LEVEL_NOT_FOUND', `Terminal ${t.id} aponta para um pavimento inexistente: ${t.unidadeLevelId}`);
     }
     if (t.potenciaW != null && (!Number.isFinite(t.potenciaW) || t.potenciaW < 0)) {
       throw new KernelError('BAD_POWER', `Potência inválida em ${t.id}: ${t.potenciaW}`);
@@ -7439,7 +7442,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (!q.nome || !q.nome.trim()) {
       throw new KernelError('BAD_BOARD_NAME', `Quadro ${q.id} sem nome`);
     }
-    if (!model.levels.some((l) => l.id === q.levelId)) {
+    if (!idsDeNivel.has(q.levelId)) {
       throw new KernelError('LEVEL_NOT_FOUND', `Quadro ${q.id} num nível inexistente: ${q.levelId}`);
     }
     conferirMedidas(q, `Quadro ${q.id}`);

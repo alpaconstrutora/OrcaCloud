@@ -42,7 +42,7 @@ import {
   TIPOS_DE_USO_ESPECIFICO,
   type HipotesesEletricas,
 } from './blueprintEletricaDimensionamento';
-import { sugerirInDoDR } from './blueprintEletricaDimensionamento';
+import { comPreDimensionamentoGuardado, sugerirInDoDR } from './blueprintEletricaDimensionamento';
 import { entradaDoQuadro, padraoDeEntrada } from './blueprintEntradaDeEnergia';
 import { composicaoDaRede } from './blueprintFiacao';
 
@@ -892,6 +892,8 @@ export function conferirNbr5410(
   levelId: ObjectId | null = null,
   hipoteses: HipotesesEletricas = HIPOTESES_PADRAO,
 ): ConferenciaNbr5410 {
+  // PA10a: o pré-dimensionamento dos quadros guardado durante a conferência (as regras o refaziam por quadro).
+  return comPreDimensionamentoGuardado(() => {
   const regras = [
     regra9521(model, levelId),
     regra95221(model, levelId),
@@ -915,4 +917,5 @@ export function conferirNbr5410(
     faltas: todos.filter((a) => a.nivel === 'FALTA').length,
     avisos: todos.filter((a) => a.nivel === 'AVISO').length,
   };
+  });
 }

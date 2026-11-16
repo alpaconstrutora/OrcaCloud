@@ -678,10 +678,32 @@ export interface PreDimensionamentoDoCircuito {
   naoAvaliado: string[];
 }
 
+/**
+ * O pré-dimensionamento de CADA CIRCUITO guardado durante a conferência (PA10a): a regra de pré-dimensionamento da NBR
+ * 5410 e o de cada quadro o refazem por circuito. Guardado pelo próprio objeto do circuito (a mesma entrada), por modelo e
+ * hipóteses, só dentro de `comPreDimensionamentoGuardado`.
+ */
+let CIRCUITO_GUARDADO: WeakMap<BlueprintModel, WeakMap<HipotesesEletricas, WeakMap<Circuito, PreDimensionamentoDoCircuito>>> | null = null;
+
 export function preDimensionarCircuito(
   model: BlueprintModel,
   circuito: Circuito,
   hipDeclaradas: HipotesesEletricas = HIPOTESES_PADRAO,
+): PreDimensionamentoDoCircuito {
+  if (!CIRCUITO_GUARDADO) return preDimensionarCircuitoSemGuardar(model, circuito, hipDeclaradas);
+  let porHip = CIRCUITO_GUARDADO.get(model);
+  if (!porHip) CIRCUITO_GUARDADO.set(model, (porHip = new WeakMap()));
+  let porCircuito = porHip.get(hipDeclaradas);
+  if (!porCircuito) porHip.set(hipDeclaradas, (porCircuito = new WeakMap()));
+  let r = porCircuito.get(circuito);
+  if (!r) porCircuito.set(circuito, (r = preDimensionarCircuitoSemGuardar(model, circuito, hipDeclaradas)));
+  return r;
+}
+
+function preDimensionarCircuitoSemGuardar(
+  model: BlueprintModel,
+  circuito: Circuito,
+  hipDeclaradas: HipotesesEletricas,
 ): PreDimensionamentoDoCircuito {
   // AGRUPAMENTO MEDIDO (15/09/2026): com eletroduto lançado, a Tabela 42 usa
   // quantos circuitos dividem o pior trecho do caminho deste — é a conta que a
@@ -1087,6 +1109,32 @@ function tensaoDoQuadro(quadro: Quadro, circuitos: readonly Circuito[]): number 
   return melhor;
 }
 
+/**
+ * O pré-dimensionamento GUARDADO durante uma conferência (PA10a do prédio automático, 15/11/2026). A NBR 5410 pré-dimensiona
+ * todos os quadros duas vezes (o DR da 5.1.3.2.2 e a regra do quadro) e a entrada do QGBT outra vez, sobe e desce a árvore
+ * de quadros a cada uma — no R12, 7,6 s refazendo a mesma conta sobre o mesmo modelo. Dentro de
+ * `comPreDimensionamentoGuardado` (uma conferência síncrona, que só LÊ os resultados) a chamada de fora é guardada por
+ * modelo, hipóteses e quadro; fora dele, nada muda.
+ */
+let PRE_DIM_GUARDADO: WeakMap<BlueprintModel, WeakMap<HipotesesEletricas, Map<string, PreDimensionamentoDoQuadro | null>>> | null = null;
+/*
+ * As chamadas de DENTRO da recursão (aos filhos e aos pais) também ficam guardadas, por quadro e `comCadeia`: `visitados`
+ * só tira da soma os quadros que já são ancestrais (a guarda contra ciclo), e o kernel recusa ciclo de alimentação
+ * (`assertModelInvariants`) — numa árvore, o filho de um quadro nunca é ancestral dele, e o resultado não depende de
+ * `visitados`. Sem isso, cada quadro refazia a árvore inteira abaixo e a cadeia acima (103 quadros no R12).
+ */
+export function comPreDimensionamentoGuardado<T>(fn: () => T): T {
+  if (PRE_DIM_GUARDADO) return fn();
+  PRE_DIM_GUARDADO = new WeakMap();
+  CIRCUITO_GUARDADO = new WeakMap();
+  try {
+    return fn();
+  } finally {
+    PRE_DIM_GUARDADO = null;
+    CIRCUITO_GUARDADO = null;
+  }
+}
+
 export function preDimensionarQuadroCompleto(
   model: BlueprintModel,
   quadroId: string,
@@ -1095,6 +1143,23 @@ export function preDimensionarQuadroCompleto(
   visitados: ReadonlySet<string> = new Set(),
   /** E4.2: só a chamada de fora sobe a cadeia até a origem; as recursivas (filhos, pais) não — senão pai ↔ filho se chamam para sempre. */
   comCadeia = true,
+): PreDimensionamentoDoQuadro | null {
+  if (!PRE_DIM_GUARDADO) return preDimensionarQuadroCompletoSemGuardar(model, quadroId, hip, visitados, comCadeia);
+  let porHip = PRE_DIM_GUARDADO.get(model);
+  if (!porHip) PRE_DIM_GUARDADO.set(model, (porHip = new WeakMap()));
+  let porQuadro = porHip.get(hip);
+  if (!porQuadro) porHip.set(hip, (porQuadro = new Map()));
+  const chave = `${quadroId}|${comCadeia ? 1 : 0}`;
+  if (!porQuadro.has(chave)) porQuadro.set(chave, preDimensionarQuadroCompletoSemGuardar(model, quadroId, hip, visitados, comCadeia));
+  return porQuadro.get(chave)!;
+}
+
+function preDimensionarQuadroCompletoSemGuardar(
+  model: BlueprintModel,
+  quadroId: string,
+  hip: HipotesesEletricas,
+  visitados: ReadonlySet<string>,
+  comCadeia: boolean,
 ): PreDimensionamentoDoQuadro | null {
   const quadro = (model.quadros ?? []).find((q) => q.id === quadroId);
   if (!quadro) return null;

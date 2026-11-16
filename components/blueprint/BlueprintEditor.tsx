@@ -980,7 +980,7 @@ import PainelGrupo from './PainelGrupo';
 import { quadroDeUnidades, rotuloDaUnidade, unidadePorEtiqueta } from '../../utils/blueprintUnidades';
 import { hashDaBaseEletrica, memorialEletrico, verificacoesEletricas } from '../../utils/blueprintEletricaExecutivo';
 import { memorialDeCalculoEletrico, memorialDescritivoEletrico, memorialExecutivoEletrico } from '../../utils/blueprintMemorialEletrico';
-import { ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
+import { comPreDimensionamentoGuardado, ocupacaoDoTrecho } from '../../utils/blueprintEletricaDimensionamento';
 import PainelEletricaExecutivo from './PainelEletricaExecutivo';
 import { alvoDoAtalho, ehEspacoDeEspelhar, ehAnotacaoDoAtalho, ehFerramentaSimples, letraDoAtalho } from '../../utils/blueprintAtalhos';
 import { IGUALAR_TUDO, ROTULO_DA_PROPRIEDADE, comandosParaIgualar, type OQueIgualar, type PropriedadeDaAbertura, type PropriedadeDaParede } from '../../utils/blueprintIgualar';
@@ -5455,11 +5455,14 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   );
   const resultadoEletrico = useMemo(
     () =>
-      verificacoesEletricas(
-        editor.model,
-        hipotesesEletricas,
-        executivoEletrico.responsavel,
-        conferirNbr5410(editor.model, null, hipotesesEletricas),
+      // PA10a: as verificações e a NBR do modelo inteiro pré-dimensionam os mesmos quadros — num escopo só, guardado.
+      comPreDimensionamentoGuardado(() =>
+        verificacoesEletricas(
+          editor.model,
+          hipotesesEletricas,
+          executivoEletrico.responsavel,
+          conferirNbr5410(editor.model, null, hipotesesEletricas),
+        ),
       ),
     [editor.model, hipotesesEletricas, executivoEletrico.responsavel],
   );
@@ -9259,9 +9262,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         : null,
     [blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, zona.cidade?.name, hidroDoEstudo.hipoteses.pluvial, incendioDoEstudo.hipoteses],
   );
+  /**
+   * PA10a (15/11/2026): o que a entrada do prédio lê chega aos poucos (o catálogo de evaporadoras, os materiais, as
+   * premissas do estudo). Gerar antes de tudo chegar dava uma prévia que nascia VELHA — no R12, 3 minutos de geração e
+   * "o produto ou as hipóteses mudaram depois da prévia — gere de novo" (a climatização tinha saído sem o catálogo).
+   */
+  const carregandoAEntradaDoPredio =
+    catalogoCarregando || biblioteca.carregando || produtoDoEstudo.carregando || climatizacaoDoEstudo.carregando || hidroDoEstudo.carregando || incendioDoEstudo.carregando;
   const motivoParaNaoGerarOPredio = useMemo(
-    () => (telaAberta === 'predio' && entradaDoPredio ? motivoParaNaoGerarPredio(editor.model, entradaDoPredio) : null),
-    [telaAberta, entradaDoPredio, editor.model],
+    () =>
+      telaAberta === 'predio' && entradaDoPredio
+        ? (motivoParaNaoGerarPredio(editor.model, entradaDoPredio) ??
+          (carregandoAEntradaDoPredio ? 'Carregando as premissas do estudo (o catálogo de evaporadoras, os materiais e as premissas de climatização, água e incêndio) — um instante.' : null))
+        : null,
+    [telaAberta, entradaDoPredio, editor.model, carregandoAEntradaDoPredio],
   );
   const provaDoPredio = useMemo(
     () => (telaAberta === 'predio' && predio.plano && entradaDoPredio ? conferirPlanoDoPredio(editor.model, predio.plano, entradaDoPredio) : null),

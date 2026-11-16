@@ -18,7 +18,7 @@
  *
  * Fica para a PA8b: iluminação e exaustão no quadro de serviço, drenagem, caixa separadora e bombas.
  */
-import { applyBatch, contornoDaEscada, contornoDaVaga, pegadaEmPlanta, pointInPolygon, polygonArea, recorteComum } from '../blueprintKernel';
+import { aplicarLote, contornoDaEscada, contornoDaVaga, pegadaEmPlanta, pointInPolygon, polygonArea, recorteComum } from '../blueprintKernel';
 import type { BlueprintModel, Bloco, Command, ObjectId, Point, TipoDeVaga } from '../blueprintKernel';
 import { garagemLancada, nomeDoPiso, uidDoPisoDaGaragem, vagasDoContorno } from '../blueprintGaragemDaMassa';
 import { HIPOTESES_VAGAS_PADRAO, planejarVagas } from '../blueprintVagasAutomaticas';
@@ -665,7 +665,7 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
       const meioB = { x: (l[1].x + l[2].x) / 2, y: (l[1].y + l[2].y) / 2 };
       falsas.push({ type: 'AddEscada', levelId: p.levelId, pontos: [inteiro(meioA), inteiro(meioB)], tipo: 'RAMPA', larguraMm: Math.round(dist(l[0], l[3])), alvoEspelhoMm: 175 });
     }
-    const vista = falsas.length ? applyBatch(ctx.m, falsas).model : ctx.m;
+    const vista = falsas.length ? aplicarLote(ctx.m, falsas).model : ctx.m;
     const spaceId = garagens.get(p.levelId);
     const plano = planejarVagas(vista, p.levelId, hipVagas, spaceId ? { tipo: 'AMBIENTE', spaceId } : { tipo: 'PAVIMENTO' });
     const porTipo: Record<TipoDeVaga, number> = { COMUM: 0, PCD: 0, IDOSO: 0, MOTO: 0 };

@@ -181,6 +181,8 @@ export function distanciaDentro(s: Space, a: Point, b: Point): number {
   return r ? r.mm : Infinity;
 }
 
+const PONTO_AO_VERTICE = new WeakMap<Space, Map<string, boolean>>();
+
 function caminhoPelosVertices(s: Space, a: Point, b: Point): { mm: number; pontos: Point[] } | null {
   const nos = [a, b, ...s.ring, ...s.holes.flat()];
   let guardadas = VISIBILIDADE_ENTRE_VERTICES.get(s);
@@ -188,7 +190,21 @@ function caminhoPelosVertices(s: Space, a: Point, b: Point): { mm: number; ponto
   const N = nos.length;
   /** Os dois primeiros nós são as pontas da consulta; dali em diante, os vértices do ambiente (a mesma ordem sempre). */
   const ve = (i: number, j: number): boolean => {
-    if (i < 2 || j < 2) return visivel(s, nos[i], nos[j]);
+    if (i < 2 && j < 2) return visivel(s, nos[i], nos[j]);
+    if (i < 2 || j < 2) {
+      // De uma ponta da consulta a um vértice (PA10a): o extintor mede o MESMO ponto contra centenas de candidatas — a
+      // visibilidade dele a cada vértice é guardada por ambiente (a mesma conta; `visivel` é simétrica).
+      const [p, v] = i < 2 ? [nos[i], j] : [nos[j], i];
+      let doPonto = PONTO_AO_VERTICE.get(s);
+      if (!doPonto) PONTO_AO_VERTICE.set(s, (doPonto = new Map()));
+      const chave = `${p.x},${p.y}|${v}`;
+      let r = doPonto.get(chave);
+      if (r === undefined) {
+        if (doPonto.size > 200_000) doPonto.clear();
+        doPonto.set(chave, (r = visivel(s, nos[i], nos[j])));
+      }
+      return r;
+    }
     const k = Math.min(i, j) * N + Math.max(i, j);
     let r = guardadas!.get(k);
     if (r === undefined) guardadas!.set(k, (r = visivel(s, nos[i], nos[j])));

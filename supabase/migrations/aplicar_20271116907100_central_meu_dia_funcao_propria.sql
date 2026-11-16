@@ -2,6 +2,11 @@
 -- Central de Controle: `meu_dia` ganha função própria (16/11/2026)
 -- Plano: docs/planos/2026-11-16-central-blocos-isolados.md (Tarefa 1)
 --
+-- ⚠️ Nasceu como aplicar_20271116907000_… e foi renomeada: o prefixo colidiu com
+-- aplicar_20271116907000_rotinas_automaticas_ligar_desligar.sql, que chegou ao
+-- main antes. JÁ APLICADA em produção em 16/11/2026, com o nome antigo — não há
+-- o que rodar de novo. (Reaplicar não quebra: só CREATE OR REPLACE + REVOKE/GRANT.)
+--
 -- Por quê: o `statement_timeout` de 8 s do `authenticated` vale para a chamada
 -- INTEIRA de `fn_central_controle_bootstrap`, e o cancelamento (57014) não é pego
 -- pelo `EXCEPTION WHEN OTHERS` dos blocos — um bloco lento derruba os sete (foi o

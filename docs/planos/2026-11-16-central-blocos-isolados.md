@@ -55,7 +55,8 @@ paralelo, cada uma com o próprio limite de 8 s; cada resultado é aplicado ao e
 ### Tarefa 1: `fn_central_meu_dia` própria; o bootstrap passa a chamá-la
 
 **Arquivos:**
-- Criar: `supabase/migrations/aplicar_20271116907000_central_meu_dia_funcao_propria.sql`
+- Criar: `supabase/migrations/aplicar_20271116907100_central_meu_dia_funcao_propria.sql`
+  (nasceu `…907000…`; renomeada porque o prefixo colidiu com a das rotinas automáticas, que chegou antes ao main)
 
 **Interfaces:**
 - Produz: `public.fn_central_meu_dia(p_organization_id uuid) RETURNS jsonb` — STABLE, plpgsql,

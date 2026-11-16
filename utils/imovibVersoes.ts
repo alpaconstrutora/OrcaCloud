@@ -148,7 +148,7 @@ export function dadosDoRelatorioDaVersao(snapshot: SnapshotDaVersao, versao: Pic
 /**
  * A versão que a oportunidade publica para o investidor (Fase 2 do plano 2026-11-15): o estudo do
  * snapshot, as listas do relatório, a versão e a organização (capa do relatório). Montada igual no
- * portal (fn_investor_portal_get_study) e na prévia do gestor (imovibService.versaoPublicada).
+ * portal (fn_investor_portal_get_versao) e na prévia do gestor (imovibService.versaoPublicada).
  */
 export interface VersaoPublicada {
     study: ImovibStudy;

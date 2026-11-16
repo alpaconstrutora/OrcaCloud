@@ -228,7 +228,7 @@ const ImovibPainelDoInvestidor: React.FC<Props> = ({ versaoPublicada, study, cen
                 </Cartao>
                 <Cartao accent={accent} titulo="Sensibilidade do VPL" subtitulo="Quanto cada premissa move o VPL, para cima e para baixo">
                     {barras.length && barras[0].base != null && Number.isFinite(barras[0].base)
-                        ? <GraficoTornado barras={barras} metrica="vpl" choques={g.choques} comLegenda larguraDosRotulos={estreita ? 120 : 200} className="h-[300px]" />
+                        ? <GraficoTornado barras={barras} metrica="vpl" choques={g.choques} comLegenda larguraDosRotulos={estreita ? 120 : 200} eixoCompacto={estreita} className="h-[300px]" />
                         : <p className={`text-sm ${a.secundario}`}>Sem dados para calcular.</p>}
                 </Cartao>
             </div>

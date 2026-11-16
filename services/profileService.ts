@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { ProfileGroup } from '../types';
 
-export type PortalComToken = 'cliente' | 'fornecedor' | 'corretor' | 'sindico';
+export type PortalComToken = 'cliente' | 'fornecedor' | 'corretor' | 'sindico' | 'investidor';
 
 /**
  * Cliente, Fornecedor e Corretor (16/10/2026): a validação é a RPC
@@ -92,21 +92,10 @@ export const profileService = {
 
             if (group === ProfileGroup.CLIENT) return validarPorTokenDoPortal('cliente', 'Portal do Cliente', 'cliente');
 
-            if (group === ProfileGroup.INVESTOR) {
-                const { data: investors, error } = await supabase
-                    .from('investors') // Table to be created
-                    .select('email')
-                    .eq('email', lowerEmail);
-
-                if (error) {
-                    // Table might not exist or connection issue - DENY by default for security
-                    console.error("Investor table check error:", error.message);
-                    return { isValid: false, error: 'Erro de validação de investidor. Por favor, contate o suporte.' };
-                }
-
-                if (investors && investors.length > 0) return { isValid: true };
-                return { isValid: false, error: 'Seu e-mail não está na lista de investidores autorizados.' };
-            }
+            // Investidor (16/11/2026, plano docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md,
+            // Fase 7): a mesma RPC dos outros portais. Antes lia `investors` direto — a RLS só libera membro
+            // da organização, então o investidor de fora era recusado (ou entrava sem ver oportunidade).
+            if (group === ProfileGroup.INVESTOR) return validarPorTokenDoPortal('investidor', 'Portal do Investidor', 'investidor');
 
             if (group === ProfileGroup.SUPPLIER) return validarPorTokenDoPortal('fornecedor', 'Portal do Fornecedor', 'fornecedor');
 

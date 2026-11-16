@@ -60,6 +60,38 @@ Itens do plano: **todos marcados**, nenhum `[ ]` em aberto.
 **Fora do plano, achado ao fechar a frente (16/11):** o `node_modules` do checkout de integração estava vazio desde
 15/11 19:17 (outra sessão); reinstalado com `npm ci` a pedido do usuário (735 pacotes, 108 executáveis).
 
+## Fase 7 — Resolver as pendências (pedido de 16/11)
+
+> rsolver pendencias
+>
+> Respostas (16/11): conferência com dado real → **"Pode fazer você"** (congelo uma versão do Garden, publico uma
+> oportunidade de teste, confiro, despublico; a versão fica no histórico). Data Room → **"Sim, eu publico a função"**
+> (o usuário roda o `functions deploy`).
+>
+> Sessão: 21a9ea95-c34e-43cc-8a0f-7d21ef9ed2a0 · 2026-11-16
+
+- [x] Login do investidor por e-mail abre a casca do link (padrão de Cliente/Fornecedor/Corretor/Síndico):
+  `portal_token_para_mim('investidor')`; `validateAccess` por ela (o e-mail reservado `financeiro@` segue como está);
+  `InvestorPortalTokenGate` com `onLogout` ("Sair" no menu da conta e em "Mais opções"; a faixa "Acesso via link
+  público" só no link). **Pronto quando:** teste de `validateAccess` e da casca com `onLogout`; prova da RPC em transação
+  desfeita (investidor com e-mail → token criado/renovado; sem cadastro → `nao_cadastrado`).
+- [x] Data Room pelo link: `fn_investor_portal_get_dataroom(token, oportunidade)` (oportunidade publicada da org do
+  token) + Edge Function `investor-portal-dataroom-download` (mesma RPC com a credencial do chamador; só assina o que
+  está na lista; service_role só para assinar) + `DataRoomPanel` em modo portal. **Pronto quando:** testes do serviço
+  e do painel; prova da RPC; função publicada pelo usuário e sonda HTTP (token inválido → 403).
+- [x] Remover `fn_investor_portal_get_study` (compatibilidade, já sem chamador). **Pronto quando:** `git grep` sem
+  chamada no front; prova `DROP` em transação desfeita.
+- [x] Minors: cenário negativo no celular (valor à direita do zero), eixo do tornado no celular (compacto), eixo do
+  gráfico de vendas no PDF (mais largo), legenda na captura (em SVG no PDF; a HTML do chartKit não mudou).
+- Prova no banco (16/11, transação desfeita): `[1 situacao=ok token_gravado=1] [1b mesmo token=t] [1c nao_cadastrado] [2 valid=true docs=1 nome=Matricula.pdf] [2b rascunho: forbidden] [2c token inválido: unauthorized] [3 get_study existe=f]` (a foto da oportunidade fica fora do Data Room). Testes: `validateAccessPortais` (6, 7), `DataRoomPanelPortal` (3), `InvestorDashboardSair` (2); suítes 136 arquivos, 1109/1109; tsc sem erro. Celular e PDF conferidos no navegador (cenários, tornado, eixo de vendas, legenda).
+- [x] Migration `aplicar_20271116100000_investidor_login_email_e_dataroom.sql` aplicada (com OK, 16/11) e Edge Function `investor-portal-dataroom-download` publicada pelo usuário (16/11). Sonda de fora: sem chave → 401; chave pública + token inválido → 403 `unauthorized`; corpo vazio → 400.
+- [x] **Pedido de 16/11, durante a conferência:** *"em minha organização > investidor : existe abaixo de organizações um checkbox chamado Disponível em todas as organizações. Então todas as oprtunidades de todas as organizacoes deveriam estar disponiveis para o investido Tiago"*. Migration `aplicar_20271116200000_investidor_oportunidades_das_orgs.sql`: lista de oportunidades, versão publicada, Data Room e "Manifestar interesse" passam a aceitar oportunidade de qualquer organização do investidor (`fn_orgs_do_investidor`, como resumo/obras/SPEs já faziam desde o #316); estudo, capa e documentos são os da organização da OPORTUNIDADE; o interesse é gravado na organização da oportunidade (antes ia para a do link). Prova em transação desfeita: `[1 Tiago vê a da SPE=t] [2 versao=PROVA ORGS capa=Construção do Edifício Garden Cambuhy SPE] [3 dataroom valid=true docs=1] [4 interesse na SPE=t] [5 não compartilhado vê a da SPE=f] [6 não compartilhado abre a versão: forbidden]`.
+- [x] **Achado da conferência:** pelo LINK, a aba Oportunidades (`PortalOpportunities`) era uma lista que só expandia — o painel, o PDF e o Data Room moravam no `OpportunityDetail`, que só o app interno abria. Agora a linha expandida tem **"Ver viabilidade"** (com estudo) e **"Documentos"**, que abrem `PortalOportunidadeDetalhe` abaixo da lista (não em tela cheia), com abas Viabilidade e Documentos. Teste `PortalOportunidadeDetalhe.test.tsx` (4).
+- [x] **Conferência com dado real (16/11), app da frente contra o banco de produção, link real do Tiago (escritas bloqueadas):** versão "Conferência do portal" do Garden gravada (montada com o código do congelamento, cálculo congelado; 1 linha), oportunidade de teste publicada na SPE, documento no Data Room (`relatorio-viabilidade-conferencia.pdf`, 553.874 bytes). Resultado: oportunidade na lista do Tiago (é da SPE; ele é da Alpa, compartilhado); painel com a versão e os números do Garden (VPL R$ 706.968, TIR 19% a.a., margem 20,41%, exposição R$ 6.059.583 no mês 28); PDF do investidor em 2,7 s, 525 KB, 13 páginas, capa da SPE, sem parecer/critérios/fontes; Data Room: função 200, link assinado, arquivo baixado com os mesmos 553.874 bytes; 0 erros.
+- [ ] Depois do merge: conferir em produção e **despublicar** a oportunidade de teste (a versão "Conferência do portal" fica no histórico do Garden; o documento fica no Data Room da oportunidade despublicada).
+- ~~Conferência com dado real (depois do deploy): congelar versão do Garden, oportunidade de teste publicada,
+  painel e PDF pelo link do portal; despublicar no fim.~~ → feita (acima).
+
 ## Contexto — o que já existe (origin/main, 15/11)
 
 - **Caminho até o investidor:** `investor_opportunities.imovib_study_id` → `components/investor/OpportunityDetail.tsx` (aba "Viabilidade & Investimento", `:600`) carrega o estudo **vivo** por `investorPortalTokenService.getStudyByToken` → RPC `fn_investor_portal_get_study` (vigente em `aplicar_20271112980000_imovib_governanca_pendencias.sql:116`, já tira parecer, hurdles e `premise_notes`). Mostra KPIs, `LineChart` do fluxo, `PieChart` do capital, cenários e sliders (VGV/custo/prazo). Visual azul/índigo, fora do PortalKit.

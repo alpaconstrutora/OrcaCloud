@@ -121,6 +121,33 @@ export const opportunityDocumentsService = {
         return data as unknown as OpportunityDocument;
     },
 
+    // ── Pelo link do Portal do Investidor (sessão anônima) ──────────────────────
+    // Plano docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md, Fase 7: a tabela e o
+    // bucket só liberam membro da organização; pelo link, a lista vem da RPC do token e o arquivo
+    // da Edge Function que assina só o que a RPC listou.
+
+    async listByToken(token: string, opportunityId: string): Promise<OpportunityDocument[]> {
+        const { data, error } = await supabase.rpc('fn_investor_portal_get_dataroom', { p_token: token, p_opportunity_id: opportunityId });
+        if (error) throw new Error(error.message);
+        const r = data as { valid?: boolean; error?: string; documents?: OpportunityDocument[] } | null;
+        if (!r?.valid) {
+            throw new Error(r?.error === 'unauthorized'
+                ? 'O link do portal venceu ou foi desativado.'
+                : 'Esta oportunidade não está mais publicada.');
+        }
+        return r.documents ?? [];
+    },
+
+    async getSignedUrlByToken(token: string, opportunityId: string, filePath: string): Promise<string> {
+        const { data, error } = await supabase.functions.invoke('investor-portal-dataroom-download', {
+            body: { token, opportunityId, filePaths: [filePath] },
+        });
+        if (error) throw new Error(error.message);
+        const url = (data as { urls?: Record<string, string> } | null)?.urls?.[filePath];
+        if (!url) throw new Error('Arquivo não disponível para este acesso.');
+        return url;
+    },
+
     async getSignedUrl(filePath: string, expiresInSeconds = 3600): Promise<string> {
         const { data, error } = await supabase.storage
             .from(BUCKET)

@@ -962,7 +962,7 @@ export const imovibService = {
 
     /**
      * A versão publicada numa oportunidade, como o investidor a vê (plano 2026-11-15, Fase 2): o
-     * gestor abre a prévia com os mesmos dados que fn_investor_portal_get_study entrega ao portal.
+     * gestor abre a prévia com os mesmos dados que fn_investor_portal_get_versao entrega ao portal.
      */
     async versaoPublicada(versionId: string): Promise<VersaoPublicada> {
         const { data, error } = await supabase

@@ -74,4 +74,20 @@ describe('validateAccess — portais com token', () => {
         rpc.mockResolvedValue({ data: { situacao: 'nao_cadastrado' }, error: null });
         expect((await profileService.validateAccess(EMAIL, ProfileGroup.SINDICO)).error).toBe('Seu e-mail não está cadastrado como síndico autorizado.');
     });
+
+    // Fase 7 do plano docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md (16/11/2026).
+    it('6. investidor: a mesma RPC, portal "investidor", e o token chega ao App (antes lia a tabela direta)', async () => {
+        rpc.mockResolvedValue({ data: { situacao: 'ok', token: 'tok-i' }, error: null });
+        expect(await profileService.validateAccess('investidor@exemplo.com.br', ProfileGroup.INVESTOR)).toEqual({ isValid: true, portalToken: 'tok-i' });
+        expect(rpc.mock.calls[0]).toEqual(['portal_token_para_mim', { p_portal: 'investidor' }]);
+
+        rpc.mockResolvedValue({ data: { situacao: 'nao_cadastrado' }, error: null });
+        expect((await profileService.validateAccess('investidor@exemplo.com.br', ProfileGroup.INVESTOR)).error).toBe('Seu e-mail não está cadastrado como investidor autorizado.');
+    });
+
+    it('7. e-mail reservado do investidor segue entrando sem token (conta interna)', async () => {
+        expect(await profileService.validateAccess('financeiro@alpaconstrutora.com.br', ProfileGroup.INVESTOR)).toEqual({ isValid: true });
+        expect(rpc).not.toHaveBeenCalled();
+    });
 });
+

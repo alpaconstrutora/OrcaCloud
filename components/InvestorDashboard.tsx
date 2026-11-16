@@ -1,6 +1,6 @@
 import React from 'react';
 import { moverEntreAbas } from './ui/abasPeloTeclado';
-import { TrendingUp, PieChart as PieChartIcon, Building2, Boxes, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, CheckCircle2, XCircle, ChevronDown, HelpCircle, MoreHorizontal } from 'lucide-react';
+import { TrendingUp, PieChart as PieChartIcon, Building2, Boxes, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, CheckCircle2, XCircle, ChevronDown, HelpCircle, MoreHorizontal, LogOut } from 'lucide-react';
 import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
 import { Investor, investorService } from '../services/investorService';
 import { projectService, ProjectData } from '../services/projectService';
@@ -52,6 +52,11 @@ interface InvestorDashboardProps {
     portalToken?: string;
     /** Sobrescreve enabledTabIds derivado de investorProfile.settings (usado pela prévia mobile). */
     overrideEnabledTabIds?: string[];
+    /**
+     * Só no login por e-mail (16/11/2026, como Cliente/Fornecedor/Corretor): a mesma casca do link, com
+     * "Sair". Sem ele é o acesso pelo link (faixa "Acesso via link público", sem sair).
+     */
+    onLogout?: () => void;
 }
 
 type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios' | 'espelho';
@@ -101,7 +106,7 @@ const TAB_TITLES: Record<TabId, string> = {
 
 const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     activeTab: initialTab, settings, organizationId, profile, investorProfile, onUpdateSettings,
-    isPreview = false, portalToken, overrideEnabledTabIds,
+    isPreview = false, portalToken, overrideEnabledTabIds, onLogout,
 }) => {
     // Org canônica: prop activeOrganizationId tem precedência; settings.organizationId
     // só existe quando um projeto está carregado, então sem ele o portal não salvava.
@@ -609,9 +614,22 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             : 'portal-mobile-font space-y-6 pb-24 md:pb-12'}>{/* §20 — space-y-6 na raiz */}
 
             {/* ══ Casca do portal público — banner + header + sidebar (espelha o Portal do Cliente) ══ */}
-            {isStandalone && (
+            {isStandalone && !onLogout && (
                 <div className="hidden md:flex h-9 bg-[#FDEDE8] border-b border-[#F3D9D1] items-center justify-center gap-3 shrink-0 text-xs font-bold text-[#C24428] uppercase tracking-wider">
                     <span>Acesso via link público</span>
+                </div>
+            )}
+            {/* Celular, login por e-mail: "Sair" sempre à mão (o "Mais opções" só existe com mais de 5 abas). */}
+            {isStandalone && onLogout && (
+                <div className="md:hidden flex h-12 items-center justify-between border-b border-gray-100 bg-white px-4 shrink-0">
+                    <span className="text-sm font-semibold text-gray-900">Portal do Investidor</span>
+                    <button
+                        type="button"
+                        onClick={onLogout}
+                        className="inline-flex h-9 items-center gap-1.5 rounded-[8px] px-3 text-[13px] font-medium text-gray-700 hover:bg-gray-50"
+                    >
+                        <LogOut className="h-4 w-4" /> Sair
+                    </button>
                 </div>
             )}
             {isStandalone && (
@@ -658,6 +676,17 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                         <HelpCircle className="h-4 w-4 text-gray-400" />
                                         <span className="flex-1">Dúvidas? Fale com a incorporadora.</span>
                                     </button>
+                                    {onLogout && (
+                                        <button
+                                            type="button"
+                                            onClick={() => { setIsAccountMenuOpen(false); onLogout(); }}
+                                            className="flex w-full items-center gap-3 rounded-xl px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50"
+                                            role="menuitem"
+                                        >
+                                            <LogOut className="h-4 w-4 text-gray-400" />
+                                            <span className="flex-1">Sair</span>
+                                        </button>
+                                    )}
                                 </div>
                             </div>
                         )}

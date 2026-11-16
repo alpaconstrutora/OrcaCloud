@@ -34,7 +34,19 @@ if (eRamo || !ramo) throw new Error(`ramo: ${eRamo?.message}`);
 const historia = new ModelHistory(modelFromCanonicalPayload(parseCanonicalPayload(JSON.stringify(ramo.draft_payload))));
 console.log('rascunho lido: hash', historia.hash.slice(0, 12), '· bate com o banco?', historia.hash === ramo.draft_hash, '· ambientes', historia.current.spaces.map((s) => `${s.id}:${s.name ?? '-'}`).slice(0, 6).join(' '));
 
-const canal = sb.channel(`blueprint:ramo:${branchId}`, { config: { presence: { key: 'prova-zeca' }, broadcast: { self: false } } });
+// Canais PRIVADOS (achado F58): presença no do ramo; comandos no `:comandos` (o login precisa ser membro e não leitor).
+const canal = sb.channel(`blueprint:ramo:${branchId}`, { config: { private: true, presence: { key: 'prova-zeca' }, broadcast: { self: false } } });
+const canalDeComandos = sb.channel(`blueprint:ramo:${branchId}:comandos`, { config: { private: true, broadcast: { self: false } } });
+await new Promise<void>((resolve, reject) => {
+  const t = setTimeout(() => reject(new Error('canal de comandos sem SUBSCRIBED em 15 s')), 15000);
+  canalDeComandos.subscribe((status) => {
+    console.log('canal de comandos:', status);
+    if (status === 'SUBSCRIBED') {
+      clearTimeout(t);
+      resolve();
+    }
+  });
+});
 await new Promise<void>((resolve, reject) => {
   const t = setTimeout(() => reject(new Error('sem SUBSCRIBED em 15 s')), 15000);
   canal.subscribe(async (status) => {
@@ -54,14 +66,15 @@ await espera(12000);
 const cmd = { type: 'NameSpace', spaceId: spaceRenomear, name: novoNome } as const;
 const r = historia.apply(cmd);
 const msg = novaMensagem('prova-zeca', 'Zeca da Prova', [cmd], r.hash);
-await canal.send({ type: 'broadcast', event: 'comando', payload: msg });
+await canalDeComandos.send({ type: 'broadcast', event: 'comando', payload: msg });
 console.log('comando difundido:', JSON.stringify(cmd), 'hashDepois', r.hash.slice(0, 12));
 await espera(6000);
 // Comando inválido: spaceId inexistente → o navegador acusa conflito com o autor.
-await canal.send({ type: 'broadcast', event: 'comando', payload: novaMensagem('prova-zeca', 'Zeca da Prova', [{ type: 'NameSpace', spaceId: 'spc_nao_existe', name: 'X' }], 'hash-falso') });
+await canalDeComandos.send({ type: 'broadcast', event: 'comando', payload: novaMensagem('prova-zeca', 'Zeca da Prova', [{ type: 'NameSpace', spaceId: 'spc_nao_existe', name: 'X' }], 'hash-falso') });
 console.log('comando inválido difundido');
 await espera(8000);
 await canal.untrack();
 await sb.removeChannel(canal);
+await sb.removeChannel(canalDeComandos);
 console.log('segundo cliente saiu');
 process.exit(0);

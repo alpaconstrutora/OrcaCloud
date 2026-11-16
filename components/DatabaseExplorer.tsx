@@ -26,6 +26,7 @@ import {
 import { sinapiService, SinapiReference } from '../services/sinapiService';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { supabase } from '../lib/supabase';
+import { temAcessoTotal } from '../lib/acessoTotal';
 import { SinapiItem, SinapiType, BudgetEntry, CompositionComponent } from '../types';
 import SaveConfirmationModal from './SaveConfirmationModal';
 import DatabasePickerModal from './DatabasePickerModal';
@@ -133,21 +134,17 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
      * existia uma sessão.
      *
      * Este gate é de USABILIDADE, não de segurança: quem manda é o
-     * `exigirGestorDeQualquerOrg` em `supabase/functions/sinapi-import`. Aqui
-     * só evita oferecer um botão que vai responder 403 — esconder no navegador
-     * nunca protege nada (é a categoria 2 da própria auditoria).
+     * `exigirSuperadmin` em `supabase/functions/sinapi-import` (só
+     * superadministrador da plataforma — owner/admin de organização não, porque
+     * qualquer conta cria a própria org como owner). Aqui só evita oferecer um
+     * botão que vai responder 403 — esconder no navegador nunca protege nada
+     * (é a categoria 2 da própria auditoria).
      */
     const session = useStore(s => s.session);
-    const organizations = useStore(s => s.organizations);
-    const podeImportarSinapi = React.useMemo(() => {
-        const email = session?.user?.email?.toLowerCase();
-        if (!email) return false;
-        return organizations.some(org =>
-            (org.members ?? []).some(m =>
-                m.email?.toLowerCase() === email && (m.role === 'owner' || m.role === 'admin')
-            )
-        );
-    }, [session, organizations]);
+    const podeImportarSinapi = React.useMemo(
+        () => temAcessoTotal(session?.user?.email),
+        [session],
+    );
 
     // Estados de Busca — F2: sobrevivem a navegação/reload.
     const [searchTerm, setSearchTerm] = usePersistedState('databaseExplorerFilters:term', '');

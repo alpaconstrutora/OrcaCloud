@@ -159,11 +159,18 @@ export default defineConfig(({ mode }) => {
               },
             },
             {
-              // Cache Supabase storage (images/docs uploaded as evidence)
-              urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/.*/i,
+              // Storage do Supabase: cacheia SÓ bucket PÚBLICO (/object/public/ e
+              // /render/image/public/ — o que getPublicUrl gera). Download
+              // autenticado (/object/<bucket>/..., /render/image/authenticated/) e
+              // URL assinada (/object/sign/...) NÃO casam aqui e vão sempre à rede:
+              // o cache é chaveado só pela URL, sobrevivia ao logout e devolvia
+              // arquivo privado sem passar pela RLS do Storage. Nome novo de
+              // propósito: o antigo ('supabase-storage-cache') tinha arquivo privado
+              // e é apagado no boot e ao sair (lib/cacheDoStorage.ts).
+              urlPattern: /^https:\/\/[^/]+\.supabase\.co\/storage\/v1\/(?:object|render\/image)\/public\//i,
               handler: 'CacheFirst',
               options: {
-                cacheName: 'supabase-storage-cache',
+                cacheName: 'supabase-storage-public-cache',
                 expiration: { maxEntries: 200, maxAgeSeconds: 60 * 60 * 24 * 30 },
                 cacheableResponse: { statuses: [0, 200] },
               },

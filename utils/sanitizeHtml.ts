@@ -15,6 +15,12 @@ type Purify = { sanitize: (s: string, cfg?: unknown) => string; addHook?: (...a:
 
 let instancia: Purify | null = null;
 
+/** Elementos cujo `target` navega outra janela. Hoje só `a` passa na allowlist. */
+const TAGS_COM_TARGET = new Set(['A', 'AREA', 'FORM']);
+
+/** Targets que ficam na própria aba — não expõem `window.opener`. */
+const TARGETS_MESMA_ABA = new Set(['', '_self', '_top', '_parent']);
+
 function resolverDOMPurify(): Purify {
     if (instancia) return instancia;
 
@@ -41,11 +47,34 @@ function resolverDOMPurify(): Purify {
 
     // `target="_blank"` sem `rel="noopener"` deixa a página aberta manipular a
     // origem por `window.opener`. DOMPurify não faz isso sozinho.
+    //
+    // E não é só `_blank`: QUALQUER target que abra ou reaproveite outra janela
+    // (`target="doc"`, `target="_BLANK"`, `target=" _blank"`) entrega o
+    // `window.opener` — e o navegador só aplica o noopener implícito ao `_blank`
+    // exato, que `rel="opener"` ainda desliga. Só `_self`/`_top`/`_parent` e o
+    // vazio ficam na mesma aba. A comparação é sem caixa e sobre o valor JÁ
+    // aparado: o DOMPurify apara o atributo e regrava antes deste hook, então o
+    // que se compara aqui é exatamente o target que vai para o navegador (que
+    // não apara — por isso não se apara de novo aqui).
     if (typeof candidato.addHook === 'function') {
         candidato.addHook('afterSanitizeAttributes', (node: Element) => {
-            if (node.tagName === 'A' && node.getAttribute('target') === '_blank') {
+            if (!TAGS_COM_TARGET.has(node.tagName)) return;
+            const target = node.getAttribute('target');
+            if (target === null) return;
+            if (target === '_blank') {
+                // Caso histórico: saída mantida idêntica.
                 node.setAttribute('rel', 'noopener noreferrer');
+                return;
             }
+            if (TARGETS_MESMA_ABA.has(target.toLowerCase())) return;
+            // Acrescenta sem apagar os tokens que o autor já pôs (`nofollow`...).
+            // `noopener`/`noreferrer` prevalecem sobre `opener` pela spec.
+            const tokens = (node.getAttribute('rel') ?? '').split(/\s+/).filter(Boolean);
+            const presentes = new Set(tokens.map((t) => t.toLowerCase()));
+            for (const obrigatorio of ['noopener', 'noreferrer']) {
+                if (!presentes.has(obrigatorio)) tokens.push(obrigatorio);
+            }
+            node.setAttribute('rel', tokens.join(' '));
         });
     }
 

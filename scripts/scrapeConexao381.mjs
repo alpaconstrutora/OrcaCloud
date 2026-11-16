@@ -2,12 +2,30 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import fs from 'fs';
 
-// 1. Carrega variáveis de ambiente do .env
+// 1. Carrega variáveis de ambiente do .env.local (não versionado) e do .env.
+//    O dotenv não sobrescreve o que já foi definido, então .env.local prevalece.
+//    Credenciais NUNCA ficam no código: defina no .env.local
+//      SCRAPER_EMAIL=...
+//      SCRAPER_PASSWORD=...
+//    (VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY vêm do .env).
+dotenv.config({ path: '.env.local' });
 dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://oxedkknreghxrgenyjiu.supabase.co';
-// Usamos a chave anon padrão se a env VITE_SUPABASE_ANON_KEY não estiver no processo
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_IgIC72BIXClNix4ARLo0QA_0UGDrnzW';
+const supabaseUrl = process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+const scraperEmail = process.env.SCRAPER_EMAIL;
+const scraperPassword = process.env.SCRAPER_PASSWORD;
+
+const faltando = [
+  ['VITE_SUPABASE_URL', supabaseUrl],
+  ['VITE_SUPABASE_ANON_KEY', supabaseKey],
+  ['SCRAPER_EMAIL', scraperEmail],
+  ['SCRAPER_PASSWORD', scraperPassword],
+].filter(([, valor]) => !valor).map(([nome]) => nome);
+if (faltando.length > 0) {
+  console.error(`[CONFIG ERROR] Variáveis ausentes (defina no .env/.env.local): ${faltando.join(', ')}`);
+  process.exit(1);
+}
 
 const supabase = createClient(supabaseUrl, supabaseKey);
 
@@ -72,8 +90,8 @@ async function main() {
   // 1. Efetuar Login de Desenvolvimento
   console.log('[SUPABASE] Autenticando usuário...');
   const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-    email: 'altair.rosa@alpaconstrutora.com.br',
-    password: 'coiote'
+    email: scraperEmail,
+    password: scraperPassword
   });
 
   if (authError) {
@@ -86,7 +104,7 @@ async function main() {
   const { data: memberData } = await supabase
     .from('organization_members')
     .select('organization_id')
-    .eq('email', 'altair.rosa@alpaconstrutora.com.br')
+    .eq('email', scraperEmail)
     .limit(1);
 
   if (!memberData || memberData.length === 0) {

@@ -81,10 +81,10 @@ export const biReportService = {
         kpis: BIExecutiveSummary['kpis'],
         dateFrom: string,
         dateTo: string,
-        organizationName?: string,
+        organizationId?: string | null,
     ): Promise<string> {
         const { data, error } = await supabase.functions.invoke('bi-narrative', {
-            body: { kpis, dateFrom, dateTo, organizationName },
+            body: { kpis, dateFrom, dateTo, organization_id: organizationId || null },
         });
         if (error) throw new Error(error.message ?? 'Erro ao gerar narrativa');
         if (data?.error) throw new Error(data.error);

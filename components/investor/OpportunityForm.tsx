@@ -146,7 +146,8 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
             const urls: string[] = [];
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
-                const path = `gallery/${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
+                // A org no caminho é o que a policy do bucket confere (aplicar_20271116900800).
+                const path = `gallery/${organizationId}/${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
                 await storageService.uploadFile('documents', path, file);
                 const url = storageService.getPublicUrl('documents', path);
                 urls.push(url);

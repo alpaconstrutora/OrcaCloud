@@ -7,11 +7,11 @@ interface Props {
     summary: BIExecutiveSummary;
     dateFrom: string;
     dateTo: string;
-    organizationName?: string;
+    organizationId?: string | null;
     onNarrativeChange?: (text: string | null) => void;
 }
 
-const BINarrativeCard: React.FC<Props> = ({ summary, dateFrom, dateTo, organizationName, onNarrativeChange }) => {
+const BINarrativeCard: React.FC<Props> = ({ summary, dateFrom, dateTo, organizationId, onNarrativeChange }) => {
     const [narrative, setNarrative] = useState<string | null>(null);
     const [loading, setLoading]     = useState(false);
     const [error, setError]         = useState<string | null>(null);
@@ -22,7 +22,7 @@ const BINarrativeCard: React.FC<Props> = ({ summary, dateFrom, dateTo, organizat
         setError(null);
         try {
             const text = await biReportService.generateNarrative(
-                summary.kpis, dateFrom, dateTo, organizationName,
+                summary.kpis, dateFrom, dateTo, organizationId,
             );
             setNarrative(text);
             onNarrativeChange?.(text);

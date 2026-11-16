@@ -1,3 +1,4 @@
+import { terminoParaExibir, calendarioDoCronograma } from '../../utils/planejamentoIndicadores';
 import React from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
@@ -143,6 +144,9 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
     visibleNatures,
     outlineActions,
 }) => {
+    // O término mostrado é o ÚLTIMO DIA TRABALHADO (como no MS Project e no cabeçalho); o motor guarda o
+    // dia útil seguinte. A lista e a Central já mostram assim (2ª crítica de Planejamento, 16/11/2026).
+    const cal = calendarioDoCronograma(schedule);
     const flatRows = React.useMemo(
         () => flattenScheduleHierarchy(hierarchy, expandedNodes, visibleSummaryLevels, visibleNatures),
         [hierarchy, expandedNodes, visibleSummaryLevels, visibleNatures]
@@ -392,15 +396,15 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                             />
                                         </td>
                                         <td className="px-1 py-2 text-center">
-                                            <div className="text-xs font-medium text-gray-500">{formatDateDisplay(itemSchedule.endDate)}</div>
+                                            <div className="text-xs font-medium text-gray-500">{formatDateDisplay(terminoParaExibir(itemSchedule.startDate, itemSchedule.endDate, cal))}</div>
                                         </td>
                                         <td className={`px-1 py-2 text-center bg-blue-50/20 text-table-body font-medium ${node.isCritical ? 'text-red-500' : 'text-blue-600'}`}>
                                             <div>{formatDateDisplay(node.earlyStart)}</div>
-                                            <div>{formatDateDisplay(node.earlyFinish)}</div>
+                                            <div>{formatDateDisplay(terminoParaExibir(node.earlyStart, node.earlyFinish, cal))}</div>
                                         </td>
                                         <td className="px-1 py-2 text-center bg-orange-50/20 text-table-body font-medium text-orange-600">
                                             <div>{formatDateDisplay(node.lateStart)}</div>
-                                            <div>{formatDateDisplay(node.lateFinish)}</div>
+                                            <div>{formatDateDisplay(terminoParaExibir(node.lateStart, node.lateFinish, cal))}</div>
                                         </td>
                                         <td className="px-1 py-2 text-center font-medium text-table-body text-indigo-600">
                                             {node.totalFloat !== undefined ? `${node.totalFloat}d` : '-'}
@@ -592,7 +596,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                                         </td>
                                         <td className="px-1 py-2 text-center">
                                             {/* FIM do nó-pai é sempre derivado (read-only): mostra o rollup (máx dos filhos) */}
-                                            <div className="text-xs font-medium text-gray-500">{formatDateDisplay(node.earlyFinish)}</div>
+                                            <div className="text-xs font-medium text-gray-500">{formatDateDisplay(terminoParaExibir(node.earlyStart, node.earlyFinish, cal))}</div>
                                         </td>
                                         <td className="px-1 py-3"></td>
                                         <td className="px-1 py-3"></td>

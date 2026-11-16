@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { indicadoresDePrazo, folhasDoOrcamento, hojeLocalISO, diasEntre, ultimoDiaTrabalhado } from '../utils/planejamentoIndicadores';
+import { indicadoresDePrazo, folhasDoOrcamento, hojeLocalISO, diasEntre, ultimoDiaTrabalhado, fimDoMotorParaTrabalharAte, terminoParaExibir, calendarioDoCronograma } from '../utils/planejamentoIndicadores';
 
 // Conta de prazo única da Central de Comando e da lista Engenharia › Planejamento
 // (crítica 2026-11-14). Hoje fixo para os testes não dependerem do relógio.
@@ -137,6 +137,30 @@ describe('apoio', () => {
         expect(ultimoDiaTrabalhado('2026-11-20', '2026-11-20')).toBe('2026-11-20'); // marco
         expect(ultimoDiaTrabalhado('', '2026-11-20')).toBe('2026-11-20');
         expect(ultimoDiaTrabalhado('2026-11-20', '')).toBe('');
+    });
+
+    it('com o calendário do cronograma: feriado e sábado de trabalho mudam o último dia trabalhado', () => {
+        // 01/12/2026 (ter) feriado: tarefa com fim do motor 02/12 trabalhou até 30/11 (seg).
+        expect(ultimoDiaTrabalhado('2026-11-18', '2026-12-02', { holidays: ['2026-12-01'] })).toBe('2026-11-30');
+        // seg–sáb: fim do motor seg 16/11 → trabalhou até sáb 14/11.
+        expect(ultimoDiaTrabalhado('2026-11-09', '2026-11-16', { workDays: [1, 2, 3, 4, 5, 6] })).toBe('2026-11-14');
+        // dias corridos: o dia anterior, mesmo domingo.
+        expect(ultimoDiaTrabalhado('2026-11-09', '2026-11-16', { useWorkingDays: false })).toBe('2026-11-15');
+    });
+
+    it('fimDoMotorParaTrabalharAte é o inverso (o "Estender até o fim do planejamento" gravava um dia a menos)', () => {
+        expect(fimDoMotorParaTrabalharAte('2026-12-01')).toBe('2026-12-02');
+        expect(fimDoMotorParaTrabalharAte('2026-11-13')).toBe('2026-11-16'); // sex → seg
+        expect(fimDoMotorParaTrabalharAte('2026-11-30', { holidays: ['2026-12-01'] })).toBe('2026-12-02');
+        // ida e volta
+        expect(ultimoDiaTrabalhado('2026-11-18', fimDoMotorParaTrabalharAte('2026-12-01'))).toBe('2026-12-01');
+    });
+
+    it('terminoParaExibir aceita ISO completo e vazio', () => {
+        expect(terminoParaExibir('2026-11-18T00:00:00.000Z', '2026-12-02T00:00:00.000Z')).toBe('2026-12-01');
+        expect(terminoParaExibir(undefined, null)).toBe('');
+        expect(calendarioDoCronograma({ workSchedule: { workDays: [1, 2, 3, 4, 5, 6] }, holidays: ['2026-12-25'] }))
+            .toEqual({ workDays: [1, 2, 3, 4, 5, 6], holidays: ['2026-12-25'], useWorkingDays: undefined });
     });
 
     it('hoje é o dia LOCAL (às 22h em Brasília o UTC já virou o dia)', () => {

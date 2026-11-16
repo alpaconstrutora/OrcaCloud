@@ -2,6 +2,7 @@ import * as XLSX from 'xlsx';
 // @ts-ignore
 import { saveAs } from 'file-saver';
 import { HierarchyNode, DependencyType } from '../types';
+import { terminoParaExibir, type CalendarioDeTrabalho } from './planejamentoIndicadores';
 
 interface ScheduleExportRow {
     'WBS': string;
@@ -44,7 +45,7 @@ const fmtResources = (node: HierarchyNode) => {
  * Achata a hierarquia (WBS) em linhas ordenadas para exportação, preservando a
  * indentação via prefixo de espaços no nome e o código WBS de cada nó.
  */
-function flattenForExport(nodes: HierarchyNode[], idToLabel: Record<string, string>, rows: ScheduleExportRow[] = []): ScheduleExportRow[] {
+function flattenForExport(nodes: HierarchyNode[], idToLabel: Record<string, string>, rows: ScheduleExportRow[] = [], cal?: CalendarioDeTrabalho): ScheduleExportRow[] {
     nodes.forEach(node => {
         const indent = '  '.repeat(node.level);
         rows.push({
@@ -52,7 +53,10 @@ function flattenForExport(nodes: HierarchyNode[], idToLabel: Record<string, stri
             'Tarefa': `${indent}${node.name}${node.isMilestone ? ' ◆' : ''}`,
             'Tipo': TYPE_LABEL[node.type] || node.type,
             'Início': fmtDate(node.type === 'item' ? node.schedule?.startDate : node.earlyStart),
-            'Término': fmtDate(node.type === 'item' ? node.schedule?.endDate : node.earlyFinish),
+            // Último dia trabalhado (como no MS Project); o motor guarda o dia útil seguinte.
+            'Término': fmtDate(node.type === 'item'
+                ? terminoParaExibir(node.schedule?.startDate, node.schedule?.endDate, cal)
+                : terminoParaExibir(node.earlyStart, node.earlyFinish, cal)),
             'Duração (dias)': node.type === 'item' ? (node.schedule?.duration ?? '') : '',
             '% Real': node.type === 'item'
                 ? `${(node.schedule?.manualRealPct ?? 0).toFixed(0)}%`
@@ -65,7 +69,7 @@ function flattenForExport(nodes: HierarchyNode[], idToLabel: Record<string, stri
             'Recursos': node.type === 'item' ? fmtResources(node) : '',
         });
         if (node.children && node.children.length > 0) {
-            flattenForExport(node.children, idToLabel, rows);
+            flattenForExport(node.children, idToLabel, rows, cal);
         }
     });
     return rows;
@@ -79,9 +83,9 @@ function buildIdToLabel(nodes: HierarchyNode[], map: Record<string, string> = {}
     return map;
 }
 
-function buildSheet(hierarchy: HierarchyNode[]): XLSX.WorkSheet {
+function buildSheet(hierarchy: HierarchyNode[], cal?: CalendarioDeTrabalho): XLSX.WorkSheet {
     const idToLabel = buildIdToLabel(hierarchy);
-    const rows = flattenForExport(hierarchy, idToLabel);
+    const rows = flattenForExport(hierarchy, idToLabel, [], cal);
     const ws = XLSX.utils.json_to_sheet(rows);
     ws['!cols'] = [
         { wch: 12 }, { wch: 50 }, { wch: 10 }, { wch: 12 }, { wch: 12 },
@@ -91,8 +95,8 @@ function buildSheet(hierarchy: HierarchyNode[]): XLSX.WorkSheet {
     return ws;
 }
 
-export function exportScheduleToXlsx(hierarchy: HierarchyNode[], projectName: string) {
-    const ws = buildSheet(hierarchy);
+export function exportScheduleToXlsx(hierarchy: HierarchyNode[], projectName: string, cal?: CalendarioDeTrabalho) {
+    const ws = buildSheet(hierarchy, cal);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Cronograma');
     const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
@@ -100,8 +104,8 @@ export function exportScheduleToXlsx(hierarchy: HierarchyNode[], projectName: st
     saveAs(blob, `Cronograma_${projectName.replace(/\s+/g, '_')}.xlsx`);
 }
 
-export function exportScheduleToCsv(hierarchy: HierarchyNode[], projectName: string) {
-    const ws = buildSheet(hierarchy);
+export function exportScheduleToCsv(hierarchy: HierarchyNode[], projectName: string, cal?: CalendarioDeTrabalho) {
+    const ws = buildSheet(hierarchy, cal);
     // ';' como delimitador para abrir corretamente no Excel em configuração PT-BR
     const csv = XLSX.utils.sheet_to_csv(ws, { FS: ';' });
     const blob = new Blob(['﻿' + csv], { type: 'text/csv;charset=utf-8' });

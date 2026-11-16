@@ -118,8 +118,32 @@ organização, os 2 planejamentos já congelados. A correção é para não acon
 do orçamento; orçamento comum devolve os próprios) e da cópia (sem código, com empresa); tela local;
 CI verde; conferido em produção.
 
+✅ **Publicação 3 no ar em 16/11/2026 — PR #487 (45bb46b).**
+
+## Publicação 4 — término = último dia trabalhado em todo o cronograma
+
+Pedido (16/11/2026), depois da recomendação "1. Término na grade do cronograma":
+
+> qual a proxima etapa?
+
+> de acordo
+
+A lista e a Central mostram o último dia trabalhado desde a publicação 1; a grade, o Gantt e o resto
+mostravam o `endDate` do motor (o dia útil seguinte) — o planejador via 01/12 na lista e 02/12 na tarefa.
+
+- `ultimoDiaTrabalhado` com o calendário do cronograma (`workSchedule.workDays`, `holidays`,
+  `useWorkingDays`) — a conta da lista também fica exata; `terminoParaExibir`; `fimDoMotorParaTrabalharAte`.
+- Grade e Gantt (término, EF, LF de tarefa e grupo, dicas das barras), EAP, diagrama de rede, cenários,
+  exportação Excel/CSV e as diferenças do "Importar datas".
+- "Estender até o fim do planejamento" gravava o término declarado como fim do motor (a tarefa parava um
+  dia útil antes): agora grava `fimDoMotorParaTrabalharAte(término)`.
+- Só exibição, salvo o "Estender": o motor grava igual; o término na grade já era só leitura.
+
+**Como sei:** testes (feriado, sábado trabalhado, dias corridos, ida e volta); tela local no Divino sem
+gravar (engenheiro civil 30/11 seg → 27/11 sex; grupos no Gantt 01/12/26 = cabeçalho; marco mantém a data);
+1.345 testes de 84 arquivos.
+
 ## Fora deste plano (anotado)
-- A grade do cronograma (dentro do planejamento) mostra o término de cada tarefa na convenção do motor
-  (02/12 para a tarefa trabalhada até 01/12). Mexer nela muda a edição de datas — fica para outra rodada.
+- ~~A grade do cronograma mostra o término na convenção do motor~~ → publicação 4.
 - Contrastes da casca do app (sidebar/topo) e da grade do cronograma apontados pelo detector.
 - ~~Planejamento antigo abrindo vazio após recarregar~~ e ~~"Duplicar" de Orçamentos/Obras~~ → publicação 3.

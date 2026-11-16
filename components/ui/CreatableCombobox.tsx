@@ -42,6 +42,14 @@ export interface CreatableComboboxProps<T extends { id: string; name: string }> 
     ariaLabel?: string;
     /** Aviso sob o campo quando há texto ainda não cadastrado (ex.: "Marca nova — será cadastrada ao salvar."). */
     avisoNovo?: string;
+    /** Sem `onCreate`: aviso sob o campo quando o texto não está vinculado a nenhum item. */
+    avisoSemVinculo?: string;
+    /**
+     * Motivo de a opção não poder ser escolhida (ex.: "Já é usuário desta organização").
+     * Com motivo, a opção aparece desligada, mostra o motivo no lugar do hint e não é
+     * escolhida por clique, Enter nem pelo vínculo automático ao sair do campo.
+     */
+    getDisabledReason?: (item: T) => string | undefined;
 }
 
 const INPUT_PADRAO =
@@ -52,6 +60,7 @@ const INPUT_PADRAO =
 export function CreatableCombobox<T extends { id: string; name: string }>({
     value, selectedId, options, onSelect, onTextChange, onCreate, getHint, placeholder,
     disabled, disabledReason, inputClassName = INPUT_PADRAO, id, ariaLabel, avisoNovo = 'Novo no catálogo — será cadastrado ao salvar.',
+    avisoSemVinculo = 'Não vinculado ao catálogo.', getDisabledReason,
 }: CreatableComboboxProps<T>) {
     const inputRef = React.useRef<HTMLInputElement>(null);
     const panelRef = React.useRef<HTMLDivElement>(null);
@@ -94,6 +103,7 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
     React.useEffect(() => { setAtivo(0); }, [termo, open]);
 
     const escolher = (item: T) => {
+        if (getDisabledReason?.(item)) return;
         onSelect(item);
         setOpen(false);
         setErro(null);
@@ -139,7 +149,7 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
         // Texto idêntico a um item existente (ignorando caixa/acento) vincula sozinho.
         if (!selectedId && value.trim()) {
             const igual = acharPorNome(options, value);
-            if (igual) onSelect(igual);
+            if (igual && !getDisabledReason?.(igual)) onSelect(igual);
         }
     };
 
@@ -173,7 +183,7 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
             {erro && <p className="mt-1 text-xs text-red-600">{erro}</p>}
             {!erro && naoCadastrado && (
                 <p className="mt-1 text-xs text-gray-400">
-                    {onCreate ? avisoNovo : 'Não vinculado ao catálogo.'}
+                    {onCreate ? avisoNovo : avisoSemVinculo}
                 </p>
             )}
 
@@ -187,7 +197,8 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
                     onMouseDown={e => e.preventDefault()}
                 >
                     {resultados.map((o, i) => {
-                        const hint = getHint?.(o);
+                        const motivoDesligada = getDisabledReason?.(o);
+                        const hint = motivoDesligada ?? getHint?.(o);
                         const escolhido = o.id === selectedId;
                         return (
                             <button
@@ -195,15 +206,19 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
                                 type="button"
                                 role="option"
                                 aria-selected={escolhido}
+                                aria-disabled={motivoDesligada ? true : undefined}
+                                title={motivoDesligada}
                                 onClick={() => escolher(o)}
                                 onMouseEnter={() => setAtivo(i)}
                                 className={`w-full flex items-center justify-between gap-3 px-3 py-1.5 min-h-9 rounded-[6px] text-sm text-left transition-colors ${
-                                    i === ativo ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+                                    motivoDesligada
+                                        ? 'text-gray-500 cursor-not-allowed'
+                                        : i === ativo ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
                                 }`}
                             >
                                 <span className="min-w-0">
                                     <span className="block truncate font-medium">{o.name}</span>
-                                    {hint && <span className="block truncate text-xs text-gray-400">{hint}</span>}
+                                    {hint && <span className={`block truncate text-xs ${motivoDesligada ? 'text-gray-500' : 'text-gray-400'}`}>{hint}</span>}
                                 </span>
                                 {escolhido && <Check className="w-4 h-4 shrink-0" />}
                             </button>

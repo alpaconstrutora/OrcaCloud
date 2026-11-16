@@ -93,11 +93,33 @@ dados" na falha; 1.143 testes de 68 arquivos.
   empresa, código 003 (não repete 001). 4 registros de teste apagados (0 referências em 76 chaves
   estrangeiras; 0 restantes).
 
+✅ **Publicação 2 no ar em 15/11/2026 — PR #486 (0fb0d90), conferida em produção.**
+
+## Publicação 3 — os dois problemas antigos achados no teste com gravação
+
+Pedido (mesma sessão, 15/11/2026):
+
+> incluir os dois problemas antigos nas proximaas etapas
+
+> continue
+
+Levantamento no banco (só leitura, 15/11/2026): hoje nenhum dos dois afeta dados — 0 cópias sem
+organização, os 2 planejamentos já congelados. A correção é para não acontecer de novo.
+
+1. **Planejamento abre vazio depois de recarregar.** A reidratação de `hooks/usePersistenceSync.ts`
+   punha nos itens a coluna `budget` crua; a abertura (`handleLoadProject`) resolve o vínculo com o
+   orçamento (`resolveProjectBudget`). Os dois passam a usar UM carregador (`carregarProjeto`), e a
+   corrida entre eles deixa de importar — chegam ao mesmo orçamento.
+2. **"Duplicar" de Orçamentos e Obras** (`handleDuplicateProject`): copiava o código (dois "001") e
+   não levava a empresa na coluna (cópia sem `organization_id` — o gatilho `sync_org_from_empresa`
+   lê a coluna). Passa a usar a mesma cópia do painel de Planejamento (`dadosDaCopia`).
+
+**Como sei que terminou:** testes do carregador (planejamento vinculado sem snapshot devolve os itens
+do orçamento; orçamento comum devolve os próprios) e da cópia (sem código, com empresa); tela local;
+CI verde; conferido em produção.
+
 ## Fora deste plano (anotado)
 - A grade do cronograma (dentro do planejamento) mostra o término de cada tarefa na convenção do motor
   (02/12 para a tarefa trabalhada até 01/12). Mexer nela muda a edição de datas — fica para outra rodada.
 - Contrastes da casca do app (sidebar/topo) e da grade do cronograma apontados pelo detector.
-- Planejamento criado pelo modal ANTIGO com budget vazio (vínculo "ao vivo") pode abrir vazio depois
-  de recarregar a página: a reidratação de `usePersistenceSync` não resolve o vínculo como o
-  `handleLoadProject`. Os criados pelo painel novo já nascem congelados e não sofrem disso.
-- O "Duplicar" antigo (Orçamentos/Obras) segue copiando o código e sem a empresa na coluna.
+- ~~Planejamento antigo abrindo vazio após recarregar~~ e ~~"Duplicar" de Orçamentos/Obras~~ → publicação 3.

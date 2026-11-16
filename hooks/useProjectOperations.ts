@@ -1,7 +1,8 @@
 import { useState, useCallback } from 'react';
 import { marcarErroGravacao, marcarGravacao, marcarGravando, registrarPersistido, zerarUltimaGravacao } from '../utils/projetoPersistido';
 import { projectService } from '../services/projectService';
-import { resolveProjectBudget } from '../services/budgetResolver';
+import { carregarProjeto } from '../services/carregarProjeto';
+import { dadosDaCopia } from '../utils/copiaDeProjeto';
 import { contractService } from '../services/contractService';
 import { organizationService } from '../services/organizationService';
 import { useConfirm } from '../components/ui/confirm';
@@ -217,19 +218,17 @@ export const useProjectOperations = ({
     try {
       const originalProject = await projectService.loadProject(id);
       if (!originalProject) throw new Error("Projeto original não encontrado.");
-      const newSettings = { ...originalProject.settings, name: `${originalProject.settings.name} (Cópia)` };
-      const savedProject = await projectService.saveProject({
-        name: newSettings.name,
-        settings: newSettings,
-        budget: originalProject.budget || []
-      });
+      // Mesma cópia do "Novo planejamento › Duplicar" (utils/copiaDeProjeto.ts): sem o código — antes
+      // ficavam dois "001" — e com a empresa na coluna — antes a cópia podia sair sem organização.
+      const savedProject = await projectService.saveProject(dadosDaCopia(originalProject, `${originalProject.settings.name} (Cópia)`));
       if (savedProject) {
         showToast("Projeto duplicado com sucesso!");
         fetchProjects(organizations);
       }
     } catch (error) {
       console.error("Erro ao duplicar projeto:", error);
-      showToast("Erro ao duplicar projeto.", 'error');
+      // O motivo de verdade (ex.: "Já existe um orçamento chamado …") no lugar de um erro genérico.
+      showToast(error instanceof Error && error.message ? error.message : "Erro ao duplicar projeto.", 'error');
     } finally {
       setIsSaving(false);
     }
@@ -276,32 +275,24 @@ export const useProjectOperations = ({
     }
   };
 
-  const handleLoadProject = async (id: string, targetView: string | null = null) => {
+  // Abre o projeto e devolve as settings carregadas (o "editar" usa); para fora sai `handleLoadProject`.
+  const abrirProjeto = async (id: string, targetView: string | null = null): Promise<ProjectSettings | null> => {
     try {
-      const projectData = await projectService.loadProject(id);
-      if (projectData) {
-        const loadedSettings = { ...INITIAL_PROJECT_SETTINGS, ...projectData.settings, ...(projectData.code ? { code: projectData.code } : {}) };
+      // O MESMO carregador da reidratação (services/carregarProjeto.ts): os dois disparam juntos ao
+      // trocar o projeto ativo e, antes, chegavam a orçamentos diferentes (planejamento abria vazio).
+      const carregado = await carregarProjeto(id, {
+        findByName: (name) => projects.find((p) => p.name === name && (p.settings?.classification === 'ORCAMENTO' || p.settings?.classification === 'OBRA')),
+      });
+      if (carregado) {
+        const loadedSettings = carregado.settings;
         setProjectId(id);
-        // Versionamento orçamento × planejamento: o planejamento é FIXADO a uma versão do
-        // orçamento (basedOnBudgetVersionId) e sempre carrega aquela versão congelada — não drifta.
-        const resolved = await resolveProjectBudget(
-          { ...projectData, settings: loadedSettings },
-          { findByName: (name) => projects.find((p) => p.name === name && (p.settings?.classification === 'ORCAMENTO' || p.settings?.classification === 'OBRA')) },
-        );
-        let projectBudget = resolved.budget;
-        // O que o banco tem, ANTES do congelamento da versão (logo abaixo): assim o salvamento
-        // automático só grava se algo mudou — e o congelamento, que precisa ir para o banco,
-        // aparece como mudança e é gravado (utils/projetoPersistido.ts).
-        registrarPersistido(id, loadedSettings, projectData.budget || []);
+        // O que o banco tem, ANTES do congelamento da versão: assim o salvamento automático só grava
+        // se algo mudou — e o congelamento, que precisa ir para o banco, aparece como mudança e é
+        // gravado (utils/projetoPersistido.ts).
+        registrarPersistido(id, carregado.settingsDoBanco, carregado.budgetDoBanco);
         zerarUltimaGravacao();
-        if (resolved.snapshotToPersist) {
-          // A resolução congelou a versão agora (primeira abertura ou migração).
-          loadedSettings.basedOnBudgetSnapshot = resolved.snapshotToPersist;
-          if (resolved.versionId) loadedSettings.basedOnBudgetVersionId = resolved.versionId;
-          if (resolved.versionItem !== undefined) loadedSettings.basedOnBudgetVersionItem = resolved.versionItem;
-        }
         setProjectSettings(loadedSettings);
-        setBudget(projectBudget);
+        setBudget(carregado.budget);
 
         let finalView = targetView === 'schedule' ? null : targetView;
         if (!finalView) {
@@ -325,9 +316,13 @@ export const useProjectOperations = ({
     }
   };
 
+  const handleLoadProject = async (id: string, targetView: string | null = null): Promise<void> => {
+    await abrirProjeto(id, targetView);
+  };
+
   const handleLoadAndEditProject = async (id: string) => {
     const viewBeforeEdit = activeView;
-    const settings = await handleLoadProject(id, null);
+    const settings = await abrirProjeto(id, null);
     if (settings) {
       setActiveView(viewBeforeEdit);
       setProjectModalInitialClassification(settings.classification);

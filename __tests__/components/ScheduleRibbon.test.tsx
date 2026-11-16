@@ -9,6 +9,11 @@
  * barra de opções embaixo), as abas somem fora de Tabela/Gantt e a salva cai
  * em Cronograma, a aba persiste, e cada comando chama o handler certo da
  * vista ativa.
+ *
+ * 16/11/2026 — *"implemente menu e botões em engenharia > planejamento como foi
+ * implementado em incorporação > planta inteligente"*: o ACESSO RÁPIDO da
+ * Planta (linha de ícones em grupos que se arrastam) e a faixa que se
+ * RECOLHE. A aba Exportar saiu — PDF/Excel/CSV moram no grupo Arquivo.
  */
 
 import React from 'react';
@@ -82,19 +87,19 @@ const nomesDasAbas = () => screen.getAllByRole('tab').map((t) => t.textContent);
 describe('ScheduleHeader — ribbon no estilo da Planta Inteligente', () => {
   beforeEach(() => localStorage.clear());
 
-  it('linha 1: seletor de vista à esquerda e acesso rápido à direita, dentro do role=toolbar', () => {
+  it('linha 1: seletor de vista à esquerda e Auto Programar à direita, dentro do role=toolbar', () => {
     render(<ScheduleHeader {...props()} />);
     const toolbar = screen.getByRole('toolbar', { name: 'Ferramentas do planejamento' });
     // o seletor mostra a vista atual e abre em menu
-    expect(within(toolbar).getByRole('button', { name: /Gantt/ })).toHaveAttribute('aria-haspopup', 'menu');
-    // acesso rápido: Tela cheia + Auto Programar, sempre visíveis
-    expect(within(toolbar).getByRole('button', { name: /^tela cheia$/i })).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: 'Gantt' })).toHaveAttribute('aria-haspopup', 'menu');
     expect(within(toolbar).getByRole('button', { name: /Auto Programar/ })).toBeInTheDocument();
+    // a tela cheia mora no acesso rápido (grupo Arquivo), também dentro da toolbar
+    expect(within(toolbar).getByRole('button', { name: /^tela cheia$/i })).toBeInTheDocument();
   });
 
-  it('em Tabela/Gantt existem as 5 abas e a barra de opções começa pelo nome da vista', () => {
+  it('em Tabela/Gantt existem as 4 abas e a barra de opções começa pelo nome da vista', () => {
     const { unmount } = render(<ScheduleHeader {...props({ viewMode: 'gantt' })} />);
-    expect(nomesDasAbas()).toEqual(['Estrutura', 'Cronograma', 'Orçamento', 'Exportar', 'Vista']);
+    expect(nomesDasAbas()).toEqual(['Estrutura', 'Cronograma', 'Orçamento', 'Vista']);
     const barra = screen.getByRole('region', { name: 'Opções da ferramenta' });
     expect(barra.textContent).toMatch(/^Gantt/);
     expect(within(barra).getByRole('group', { name: 'Escala de tempo' })).toBeInTheDocument();
@@ -108,7 +113,7 @@ describe('ScheduleHeader — ribbon no estilo da Planta Inteligente', () => {
   it('fora da grade (Curva S) somem Estrutura e Vista, não há barra de opções e a aba salva cai em Cronograma', () => {
     localStorage.setItem('schedule:abaDoRibbon', JSON.stringify('estrutura'));
     render(<ScheduleHeader {...props({ viewMode: 's-curve' })} />);
-    expect(nomesDasAbas()).toEqual(['Cronograma', 'Orçamento', 'Exportar']);
+    expect(nomesDasAbas()).toEqual(['Cronograma', 'Orçamento']);
     expect(screen.getByRole('tab', { name: 'Cronograma' })).toHaveAttribute('aria-selected', 'true');
     expect(screen.queryByRole('region', { name: 'Opções da ferramenta' })).toBeNull();
     // e o acesso rápido continua lá
@@ -118,19 +123,26 @@ describe('ScheduleHeader — ribbon no estilo da Planta Inteligente', () => {
   it('a aba escolhida persiste em schedule:abaDoRibbon', async () => {
     const user = userEvent.setup();
     const { unmount } = render(<ScheduleHeader {...props()} />);
-    await user.click(screen.getByRole('tab', { name: 'Exportar' }));
-    expect(screen.getByRole('button', { name: 'Excel' })).toBeInTheDocument();
+    await user.click(screen.getByRole('tab', { name: 'Orçamento' }));
+    expect(screen.getByRole('button', { name: /Sincronizar/ })).toBeInTheDocument();
     unmount();
 
     render(<ScheduleHeader {...props()} />);
-    expect(screen.getByRole('tab', { name: 'Exportar' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByRole('tab', { name: 'Orçamento' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('quem tinha a aba Exportar salva (antes de 16/11/2026) cai em Cronograma', () => {
+    localStorage.setItem('schedule:abaDoRibbon', JSON.stringify('exportar'));
+    render(<ScheduleHeader {...props()} />);
+    expect(screen.getByRole('tab', { name: 'Cronograma' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.queryByRole('tab', { name: 'Exportar' })).toBeNull();
   });
 
   it('trocar a vista pelo menu chama setViewMode; o menu é agrupado', async () => {
     const user = userEvent.setup();
     const setViewMode = vi.fn();
     render(<ScheduleHeader {...props({ setViewMode })} />);
-    await user.click(screen.getByRole('button', { name: /Gantt/ }));
+    await user.click(screen.getByRole('button', { name: 'Gantt' }));
     const menu = screen.getByRole('menu', { name: 'Vista do planejamento' });
     expect(within(menu).getByRole('menuitemradio', { name: 'Gantt' })).toHaveAttribute('aria-checked', 'true');
     expect(menu.textContent).toMatch(/Cronograma.*Análise.*Execução/);
@@ -209,5 +221,102 @@ describe('ScheduleHeader — ribbon no estilo da Planta Inteligente', () => {
     await user.click(screen.getByRole('button', { name: 'Mês' }));
     expect(setTimeScale).toHaveBeenCalledWith('month');
     expect(screen.getByRole('button', { name: 'Sem' })).toHaveAttribute('aria-pressed', 'true');
+  });
+  describe('acesso rápido (a linha de ícones da Planta)', () => {
+    const acesso = () => screen.getByTestId('acesso-rapido');
+    const grupos = () =>
+      Array.from(acesso().querySelectorAll('[data-grupo-do-acesso-rapido]')).map((g) => g.getAttribute('data-grupo-do-acesso-rapido'));
+
+    it('fica dentro da toolbar, com os grupos na ordem padrão', () => {
+      render(<ScheduleHeader {...props({ viewMode: 'gantt' })} />);
+      expect(screen.getByRole('toolbar', { name: 'Ferramentas do planejamento' })).toContainElement(acesso());
+      expect(grupos()).toEqual(['vistas-cronograma', 'vistas-analise', 'vistas-execucao', 'estrutura', 'arquivo']);
+      // cada grupo tem a alça de arrastar
+      expect(within(acesso()).getByRole('button', { name: 'Arrastar o grupo Arquivo' })).toBeInTheDocument();
+    });
+
+    it('as doze vistas em ícone: a atual acesa, o clique troca a vista', async () => {
+      const user = userEvent.setup();
+      const setViewMode = vi.fn();
+      render(<ScheduleHeader {...props({ viewMode: 'gantt', setViewMode })} />);
+      const vistas = within(acesso()).getAllByRole('button', { name: /^Vista: / });
+      expect(vistas).toHaveLength(12);
+      expect(within(acesso()).getByRole('button', { name: 'Vista: Gantt' })).toHaveAttribute('aria-pressed', 'true');
+      expect(within(acesso()).getByRole('button', { name: 'Vista: Tabela' })).toHaveAttribute('aria-pressed', 'false');
+      await user.click(within(acesso()).getByRole('button', { name: 'Vista: Curva S' }));
+      expect(setViewMode).toHaveBeenCalledWith('s-curve');
+    });
+
+    it('Expandir/Recolher só com a grade na tela; expandir desligado diz por quê', async () => {
+      const user = userEvent.setup();
+      const handleCollapseAll = vi.fn();
+      const { unmount } = render(<ScheduleHeader {...props({ viewMode: 'table', allExpanded: true, handleCollapseAll })} />);
+      const grupo = within(acesso()).getByRole('group', { name: 'Expandir e recolher' });
+      const expandir = within(grupo).getByRole('button', { name: /^Expandir todos os níveis/ });
+      expect(expandir).toBeDisabled();
+      expect(expandir).toHaveAttribute('title', expect.stringContaining('já estão todos expandidos'));
+      await user.click(within(grupo).getByRole('button', { name: 'Recolher todos os níveis' }));
+      expect(handleCollapseAll).toHaveBeenCalledTimes(1);
+      unmount();
+
+      render(<ScheduleHeader {...props({ viewMode: 's-curve' })} />);
+      expect(grupos()).not.toContain('estrutura');
+    });
+
+    it('Arquivo: importar, PDF, Excel e CSV chamam os handlers; PDF desligado enquanto gera', async () => {
+      const user = userEvent.setup();
+      const onImportarCronograma = vi.fn();
+      const handleExportPDF = vi.fn();
+      const handleExportExcel = vi.fn();
+      const handleExportCSV = vi.fn();
+      const { unmount } = render(
+        <ScheduleHeader {...props({ viewMode: 's-curve', onImportarCronograma, handleExportPDF, handleExportExcel, handleExportCSV })} />,
+      );
+      const arquivo = within(acesso()).getByRole('group', { name: 'Arquivo' });
+      await user.click(within(arquivo).getByRole('button', { name: /^Importar datas/ }));
+      await user.click(within(arquivo).getByRole('button', { name: 'Exportar PDF' }));
+      await user.click(within(arquivo).getByRole('button', { name: 'Exportar Excel' }));
+      await user.click(within(arquivo).getByRole('button', { name: 'Exportar CSV' }));
+      expect(onImportarCronograma).toHaveBeenCalledTimes(1);
+      expect(handleExportPDF).toHaveBeenCalledTimes(1);
+      expect(handleExportExcel).toHaveBeenCalledTimes(1);
+      expect(handleExportCSV).toHaveBeenCalledTimes(1);
+      // ação pontual não leva aria-pressed
+      expect(within(arquivo).getByRole('button', { name: 'Exportar Excel' })).not.toHaveAttribute('aria-pressed');
+      unmount();
+
+      render(<ScheduleHeader {...props({ isExportingPDF: true })} />);
+      expect(within(acesso()).getByRole('button', { name: /^Exportar PDF — gerando/ })).toBeDisabled();
+    });
+
+    it('a ordem arrastada vale ao reabrir (schedule:ordemDoAcessoRapido)', () => {
+      localStorage.setItem('schedule:ordemDoAcessoRapido', JSON.stringify(['arquivo', 'vistas-execucao']));
+      render(<ScheduleHeader {...props({ viewMode: 'gantt' })} />);
+      expect(grupos()).toEqual(['arquivo', 'vistas-execucao', 'vistas-cronograma', 'vistas-analise', 'estrutura']);
+    });
+  });
+
+  describe('recolher a faixa (como na Planta)', () => {
+    it('recolhida: somem acesso rápido e painel; abas e barra de opções ficam; persiste', async () => {
+      const user = userEvent.setup();
+      localStorage.setItem('schedule:abaDoRibbon', JSON.stringify('estrutura'));
+      const { unmount } = render(<ScheduleHeader {...props({ viewMode: 'gantt' })} />);
+      expect(screen.getByRole('button', { name: 'Novo grupo' })).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Recolher a faixa de comandos' }));
+
+      expect(screen.queryByTestId('acesso-rapido')).toBeNull();
+      expect(screen.queryByRole('button', { name: 'Novo grupo' })).toBeNull();
+      expect(nomesDasAbas()).toEqual(['Estrutura', 'Cronograma', 'Orçamento', 'Vista']);
+      expect(screen.getByRole('region', { name: 'Opções da ferramenta' })).toBeInTheDocument();
+      expect(JSON.parse(localStorage.getItem('schedule:ribbonRecolhido') ?? 'null')).toBe(true);
+      unmount();
+
+      // reabre recolhida; clicar numa aba devolve tudo
+      render(<ScheduleHeader {...props({ viewMode: 'gantt' })} />);
+      expect(screen.queryByTestId('acesso-rapido')).toBeNull();
+      await user.click(screen.getByRole('tab', { name: 'Cronograma' }));
+      expect(screen.getByTestId('acesso-rapido')).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Recalcular' })).toBeInTheDocument();
+    });
   });
 });

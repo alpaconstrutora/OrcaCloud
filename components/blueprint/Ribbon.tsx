@@ -255,6 +255,66 @@ export function BotaoDoRibbon({
 }
 
 /**
+ * O botão SÓ DE ÍCONE do acesso rápido (a linha sob as abas, `AcessoRapido.tsx`).
+ *
+ * Mesmo desenho do `BotaoBarra` do editor da Planta (`BlueprintEditor.tsx`):
+ * borda, sombra leve e `p-1.5`, para a linha de ícones ler como uma régua de
+ * ferramentas e não como texto solto. Nasceu aqui (16/11/2026) quando o
+ * Planejamento ganhou o mesmo acesso rápido — *"implemente menu e botões em
+ * engenharia > planejamento como foi implementado em incorporação > planta
+ * inteligente"*. ⚠️ O `BotaoBarra` da Planta continua local por ora (o editor
+ * tem dezenas de frentes abertas); quem tocar lá troca pelo deste arquivo.
+ *
+ * `title` + `aria-label` = o rótulo, porque botão só com ícone não tem nome
+ * acessível nenhum sem isso. `aria-pressed` só quando `ativo` é passado —
+ * vista atual, tela cheia —, nunca em ação pontual (exportar). Desligado, o
+ * rótulo deve dizer o PORQUÊ (é o único texto que o botão tem).
+ */
+export function BotaoDoAcessoRapido({
+  icone: Icone,
+  texto,
+  rotulo,
+  onClick,
+  disabled,
+  ativo,
+  girando,
+}: {
+  icone?: React.ComponentType<{ className?: string }>;
+  /** Em vez do ícone, um texto curto ("1:100") — para o que não tem símbolo. */
+  texto?: string;
+  rotulo: string;
+  onClick: () => void;
+  disabled?: boolean;
+  /** Botão de MODO (vista atual, tela cheia): aceso enquanto vale, com `aria-pressed`. */
+  ativo?: boolean;
+  /** Ícone girando — trabalho em andamento (gerando o PDF). */
+  girando?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={rotulo}
+      aria-label={rotulo}
+      aria-pressed={ativo === undefined ? undefined : ativo}
+      /* `cursor-not-allowed`, e NÃO `pointer-events-none` (como o `BotaoBarra` da
+         Planta): sem hover o `title` com o MOTIVO do botão desligado nunca aparece
+         ("Todos os níveis já estão expandidos"). Mesma escolha do `BotaoDoRibbon`. */
+      className={`rounded-md border p-1.5 shadow-sm transition-colors disabled:cursor-not-allowed disabled:opacity-40 ${
+        ativo ? 'border-blue-300 bg-blue-50 text-blue-700 hover:bg-blue-100' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'
+      }`}
+    >
+      {Icone ? (
+        <Icone className={`h-4 w-4 ${girando ? 'animate-spin' : ''}`} />
+      ) : (
+        <span className="block h-4 min-w-4 text-[10px] font-semibold leading-4 tabular-nums">{texto}</span>
+      )}
+    </button>
+  );
+}
+
+/**
  * A barra de opções da ferramenta ativa — a Options Bar do Revit.
  *
  * Uma linha fina, cinza, com o NOME da ferramenta à esquerda: é ela que responde

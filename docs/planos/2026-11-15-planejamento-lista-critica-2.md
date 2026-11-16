@@ -143,6 +143,8 @@ mostravam o `endDate` do motor (o dia útil seguinte) — o planejador via 01/12
 gravar (engenheiro civil 30/11 seg → 27/11 sex; grupos no Gantt 01/12/26 = cabeçalho; marco mantém a data);
 1.345 testes de 84 arquivos.
 
+✅ **Publicação 4 no ar em 16/11/2026 — PR #492 (2041aff), conferida em produção; CI do main verde.**
+
 ## Fora deste plano (anotado)
 - ~~A grade do cronograma mostra o término na convenção do motor~~ → publicação 4.
 - Contrastes da casca do app (sidebar/topo) e da grade do cronograma apontados pelo detector.

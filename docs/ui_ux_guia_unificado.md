@@ -2570,11 +2570,26 @@ incoporação < planta inteligente e aplique em Gestão de Planejamento"*):
 
 - **linha 1** — trilho de abas do §19.1 (`role="tab"`, ativa `bg-white
   text-blue-600 shadow-sm`), com um slot `esquerda` para o que se usa o tempo
-  todo (o seletor de vista) e o acesso rápido — sempre visível, em qualquer
-  aba. Quando são muitos botões (a Planta tem 27: desfazer, refazer, copiar,
-  colar, vistas, zoom…), vão no slot `acessoRapido`, linha própria sob as abas,
-  alinhada à esquerda; quando são dois (Planejamento: tela cheia + a ação
-  primária §17), cabem no slot `direita`, encostados na borda;
+  todo (o seletor de vista) e o slot `direita` (o estado/aviso e a ação
+  primária §17, encostados na borda). O **acesso rápido** — botões só de
+  ícone, sempre visíveis em qualquer aba — vai no slot `acessoRapido`: linha
+  própria sob as abas, alinhada à esquerda, em grupos com alça que o usuário
+  arrasta (`blueprint/AcessoRapido.tsx`, ordem persistida por editor). A Planta
+  tem ~30 (desfazer, refazer, copiar, colar, vistas, zoom…); o Planejamento
+  (16/11/2026 — *"implemente menu e botões em engenharia > planejamento como
+  foi implementado em incorporação > planta inteligente"*) tem as 12 vistas em
+  três grupos, Expandir/Recolher a EAP (só em Tabela/Gantt) e Arquivo
+  (importar, PDF, Excel, CSV, **tela cheia**). O botão é o
+  **`BotaoDoAcessoRapido`** de `Ribbon.tsx` (borda, `p-1.5`, `title` +
+  `aria-label` = rótulo, `aria-pressed` só em modo; desligado com
+  `cursor-not-allowed`, **sem** `pointer-events-none`, para o `title` com o
+  motivo aparecer). Grupo que a vista não admite não é passado. A tela cheia
+  mora no acesso rápido nos dois editores: à vista em qualquer aba;
+- **recolher a faixa** — `recolhido`/`onRecolher` no `Ribbon`: a setinha ao
+  lado das abas, ou duplo clique numa aba, deixa só a fileira das abas (o
+  clique numa aba devolve tudo). Estado persistido por editor
+  (`blueprint:ribbonRecolhido`, `schedule:ribbonRecolhido`). A barra de opções
+  (linha 3) fica fora do `Ribbon` e continua à vista recolhida;
 - **linha 2** — o painel da aba ativa: `GrupoDoRibbon`s com o rótulo em caixa
   alta `text-[10px] text-slate-400` **embaixo** dos controles, divisória à
   direita, `flex-wrap`; `BotaoDoRibbon` (ícone lucide `h-4 w-4` + rótulo,
@@ -2625,8 +2640,9 @@ Companheiros genéricos, em `components/ui/`:
 > ✅ **Vista ≠ comando.** As doze "abas" do Planejamento (Tabela, Gantt, Curva
 > S, Recursos…) eram VISTAS num trilho §19.1, com três emojis de ícone; no
 > ribbon elas são o seletor da esquerda (ícone lucide, três grupos), e as abas
-> viram comandos por natureza (Estrutura · Cronograma · Orçamento · Exportar ·
-> Vista). Comando que só faz sentido com a grade na tela (Estrutura, Vista)
+> viram comandos por natureza (Estrutura · Cronograma · Orçamento · Vista; a
+> aba Exportar existiu até 16/11/2026 e virou o grupo Arquivo do acesso
+> rápido). Comando que só faz sentido com a grade na tela (Estrutura, Vista)
 > some nas outras vistas; a aba salva cai na `preferida` (Cronograma).
 > ✅ Numa **página** (não num editor de tela inteira), o ribbon vai dentro do
 > card de cromo do §19.1 (`rounded-[10px] border shadow-sm`) — **sem

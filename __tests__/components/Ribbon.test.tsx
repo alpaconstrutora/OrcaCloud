@@ -11,7 +11,7 @@ import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import Ribbon, { BarraDeOpcoes, GrupoDoRibbon, MenuDoRibbon, abaEfetiva } from '../../components/blueprint/Ribbon';
+import Ribbon, { BarraDeOpcoes, BotaoDoAcessoRapido, GrupoDoRibbon, MenuDoRibbon, abaEfetiva } from '../../components/blueprint/Ribbon';
 
 /** Ícone qualquer — o `MenuDoRibbon` só precisa de um componente. */
 function Icone({ className }: { className?: string }) {
@@ -195,6 +195,48 @@ describe('Ribbon', () => {
       unmount();
       montarMenu(() => {}, 0);
       expect(screen.getByRole('button', { name: /^Acabamentos/ })).not.toHaveTextContent(/\d/);
+    });
+  });
+  // 16/11/2026: o botão só de ícone do acesso rápido, exportado para o Planejamento usar o
+  // mesmo da Planta. O que importa: nome acessível = rótulo, `aria-pressed` só em modo, e o
+  // desligado continua com hover (o `title` é o único lugar que diz o PORQUÊ).
+  describe('BotaoDoAcessoRapido', () => {
+    const Icone = ({ className }: { className?: string }) => <svg data-testid="icone" className={className} />;
+
+    it('nome acessível e dica = rótulo; ação pontual sem aria-pressed; o clique avisa', async () => {
+      const onClick = vi.fn();
+      render(<BotaoDoAcessoRapido icone={Icone} rotulo="Exportar Excel" onClick={onClick} />);
+      const botao = screen.getByRole('button', { name: 'Exportar Excel' });
+      expect(botao).toHaveAttribute('title', 'Exportar Excel');
+      expect(botao).not.toHaveAttribute('aria-pressed');
+      await userEvent.setup().click(botao);
+      expect(onClick).toHaveBeenCalledTimes(1);
+    });
+
+    it('modo: aria-pressed acompanha `ativo` e o aceso é azul-claro', () => {
+      const { rerender } = render(<BotaoDoAcessoRapido icone={Icone} rotulo="Tela cheia" onClick={() => {}} ativo={false} />);
+      expect(screen.getByRole('button', { name: 'Tela cheia' })).toHaveAttribute('aria-pressed', 'false');
+      rerender(<BotaoDoAcessoRapido icone={Icone} rotulo="Tela cheia" onClick={() => {}} ativo />);
+      const aceso = screen.getByRole('button', { name: 'Tela cheia' });
+      expect(aceso).toHaveAttribute('aria-pressed', 'true');
+      expect(aceso.className).toMatch(/bg-blue-50/);
+    });
+
+    it('desligado: não dispara e NÃO tira o hover (pointer-events), senão o motivo some', async () => {
+      const onClick = vi.fn();
+      render(<BotaoDoAcessoRapido icone={Icone} rotulo="Expandir — já está tudo expandido" onClick={onClick} disabled />);
+      const botao = screen.getByRole('button', { name: /^Expandir/ });
+      expect(botao).toBeDisabled();
+      expect(botao.className).not.toMatch(/pointer-events-none/);
+      expect(botao.className).toMatch(/cursor-not-allowed/);
+    });
+
+    it('girando: o ícone ganha animate-spin; sem ícone, mostra o texto curto', () => {
+      const { unmount } = render(<BotaoDoAcessoRapido icone={Icone} rotulo="Exportar PDF — gerando" onClick={() => {}} girando />);
+      expect(screen.getByTestId('icone').getAttribute('class')).toMatch(/animate-spin/);
+      unmount();
+      render(<BotaoDoAcessoRapido texto="1:100" rotulo="Escala 1:100" onClick={() => {}} />);
+      expect(screen.getByRole('button', { name: 'Escala 1:100' })).toHaveTextContent('1:100');
     });
   });
 });

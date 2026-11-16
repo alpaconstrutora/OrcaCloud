@@ -218,9 +218,38 @@ export function opcoesDeColaborador(employees: Employee[], members: Organization
 - [ ] **Limpeza** do convite de teste (membro e ficha voltam ao que eram), combinada com o usuário.
 - [ ] **PR** com o corpo pela skill `pr`; CI verde lido antes do merge; merge e conferência em produção (`scripts/conferir-producao.sh "Colaborador (opcional)"`).
 
+## Revisão final do branch (16/11, revisor independente) — o que mudou no plano
+
+Cinco achados conferidos no código e no banco e corrigidos, cada um com teste visto falhando antes:
+
+1. **(crítico)** Convidar o e-mail de quem já é membro sobrescrevia papel e permissões dessa pessoa
+   (upsert por organização+e-mail, o convite vinha por último). Agora o convite para antes de gravar
+   qualquer coisa e avisa. Vale também para o convite sem colaborador.
+2. **Colaborador disponibilizado por outra org:** o gatilho `trg_employees_vinculo_so_gestor` exige
+   owner/admin da org **do colaborador** (não da que convida) para gravar `user_id` ou um e-mail de
+   login na ficha. O Foco de revisão 1 do plano esperava "grava" — errado. Agora a opção vem
+   desligada com "Disponibilizado por X — só owner ou admin de lá vincula a um login"
+   (`ContextoDoConvite` em `opcoesDeColaborador`), e o 42501 vira a frase `MOTIVO_VINCULO_SO_GESTOR`.
+3. **"Reenviar convite" apagava o login não confirmado e criava outro;** a ficha ficava no id antigo.
+   `organizationService.reapontarFichasDoLogin(antigo, novo)` roda depois do reenvio da aba Usuários.
+4. **Homônimos:** o vínculo automático ao sair do campo pegava a primeira ficha de mesmo nome. Agora
+   só vincula com exatamente uma; a lista mostra cargo e origem; escolher ficha sem e-mail não apaga o
+   e-mail já digitado.
+5. **"Membro adicionado." podia ser falso:** a gravação do membro não avisa quando falha. A interface
+   `userIdDoMembro` virou `membroPorEmail(org, email) → { userId } | null` — `null` = a linha não existe.
+
+**Deixados para depois (menores):** texto "digite para cadastrar" na lista vazia sem `onCreate`;
+pontuação/erro da Edge genérico no aviso; Enter no combobox fechado envia o formulário; reenviar o
+formulário depois de uma pendência regrava o e-mail; toast "colaborador vinculado" também quando a
+ficha já tinha login; opção desligada sem destaque no teclado; `listEmployees` traz colunas demais;
+testes de "OrganizationList devolve a promessa" e de e-mail com espaços; cabeçalho do
+`CreatableCombobox` ainda fala só de catálogo.
+
 ## Estado
 
-- [ ] Tarefa 1 — combobox
-- [ ] Tarefa 2 — regra de quem aparece
-- [ ] Tarefa 3 — convite
-- [ ] Tarefa 4 — verificação e publicação
+- [x] Tarefa 1 — combobox (b981f8922)
+- [x] Tarefa 2 — regra de quem aparece (a7b52a404)
+- [x] Tarefa 3 — convite (b88cc3818) + correções da revisão
+- [ ] Tarefa 4 — verificação e publicação: tipos ✅, testes da área ✅; **falta** a tela real (precisa de
+  e-mail de teste e de uma conta admin que NÃO seja superadmin — o desenvolvedor pula a trava do
+  vínculo), PR e merge

@@ -18,7 +18,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Loader2, Plus } from 'lucide-react';
-import { acharPorNome, deveOferecerCadastro, filtrarPorNome, normalizarNome } from '../../utils/catalogoNome';
+import { chaveBusca, deveOferecerCadastro, filtrarPorNome, normalizarNome } from '../../utils/catalogoNome';
 
 export interface CreatableComboboxProps<T extends { id: string; name: string }> {
     /** Texto atual do campo (nome escolhido ou digitado). */
@@ -146,10 +146,12 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
         // ficava aberta por cima do formulário). Clicar numa opção não passa por
         // aqui — o painel faz preventDefault no mousedown e o foco fica no input.
         setOpen(false);
-        // Texto idêntico a um item existente (ignorando caixa/acento) vincula sozinho.
+        // Texto idêntico a UM item existente (ignorando caixa/acento) vincula sozinho. Com dois
+        // ou mais itens de mesmo nome (homônimos, ex.: dois "José da Silva"), não adivinha.
         if (!selectedId && value.trim()) {
-            const igual = acharPorNome(options, value);
-            if (igual && !getDisabledReason?.(igual)) onSelect(igual);
+            const alvo = chaveBusca(value);
+            const iguais = options.filter(o => chaveBusca(o.name) === alvo);
+            if (iguais.length === 1 && !getDisabledReason?.(iguais[0])) onSelect(iguais[0]);
         }
     };
 

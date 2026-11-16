@@ -14,7 +14,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 vi.mock('../../services/organizationService', () => ({
-    organizationService: { updateMemberAccess: vi.fn(), urlAssinaturaMembro: vi.fn(), userIdDoMembro: vi.fn() },
+    organizationService: { updateMemberAccess: vi.fn(), urlAssinaturaMembro: vi.fn(), membroPorEmail: vi.fn(), reapontarFichasDoLogin: vi.fn() },
 }));
 vi.mock('../../services/laborService', () => ({
     laborService: { listEmployees: vi.fn(), updateEmployee: vi.fn() },
@@ -33,14 +33,15 @@ import { supabase } from '../../lib/supabase';
 const ORG = 'org-1';
 const MEMBROS = [{ id: 'm1', code: '001', name: 'Maria', email: 'm1@exemplo.com', role: 'member' as const, joinedAt: '2026-01-01', permissions: {}, userId: 'u-1' }];
 const COLABORADORES = [
-    { id: 'e1', org_id: ORG, name: 'Carlos Lima', status: 'ATIVO', email: '', user_id: null },
+    { id: 'e1', org_id: ORG, name: 'Carlos Lima', status: 'ATIVO', email: '', user_id: null, role: 'Pedreiro' },
     { id: 'e2', org_id: ORG, name: 'Dora Reis', status: 'ATIVO', email: 'dora@x.com', user_id: null },
     { id: 'e3', org_id: ORG, name: 'Maria Souza', status: 'ATIVO', email: 'm1@exemplo.com', user_id: 'u-1' },
+    { id: 'e4', org_id: 'org-2', name: 'Ester Prado', status: 'ATIVO', email: '', user_id: null }, // disponibilizada pela SPE
 ];
 
 const listEmployees = laborService.listEmployees as unknown as ReturnType<typeof vi.fn>;
 const updateEmployee = laborService.updateEmployee as unknown as ReturnType<typeof vi.fn>;
-const userIdDoMembro = organizationService.userIdDoMembro as unknown as ReturnType<typeof vi.fn>;
+const membroPorEmail = organizationService.membroPorEmail as unknown as ReturnType<typeof vi.fn>;
 const invoke = supabase.functions.invoke as unknown as ReturnType<typeof vi.fn>;
 
 const Tela = ({ onUpdateMembers = vi.fn() }: { onUpdateMembers?: (m: unknown[]) => void | Promise<void> }) => (
@@ -76,10 +77,13 @@ beforeEach(() => {
     localStorage.clear();
     listEmployees.mockResolvedValue(COLABORADORES);
     updateEmployee.mockResolvedValue({});
-    userIdDoMembro.mockResolvedValue('u-9');
+    membroPorEmail.mockResolvedValue({ userId: 'u-9' });
     invoke.mockResolvedValue({ data: { success: true }, error: null });
     useStore.setState({
-        organizations: [{ id: ORG, name: 'Alpa', members: MEMBROS, customRoles: [] } as never],
+        organizations: [
+            { id: ORG, name: 'Alpa', members: MEMBROS, customRoles: [] } as never,
+            { id: 'org-2', name: 'SPE Garden', members: [], customRoles: [] } as never,
+        ],
         currentProfile: { group: 'DESENVOLVEDOR' } as never,
         session: { user: { email: 'admin@exemplo.com' } } as never,
     });
@@ -119,7 +123,7 @@ describe('Convidar membro a partir de um colaborador', () => {
         const gravouEmail = updateEmployee.mock.calls.findIndex(([, u]) => 'email' in u);
         expect(updateEmployee.mock.invocationCallOrder[gravouEmail]).toBeLessThan(invoke.mock.invocationCallOrder[0]);
         expect(invoke.mock.calls[0][1].body.email).toBe('novo@x.com');
-        expect(userIdDoMembro).toHaveBeenCalledWith(ORG, 'novo@x.com');
+        expect(membroPorEmail).toHaveBeenCalledWith(ORG, 'novo@x.com');
         expect(onUpdateMembers).toHaveBeenCalledTimes(1);
         await waitFor(() => expect(screen.queryByText('Convidar Novo Membro')).toBeNull());
     });
@@ -144,20 +148,33 @@ describe('Convidar membro a partir de um colaborador', () => {
         enviar();
         await waitFor(() => expect(onUpdateMembers).toHaveBeenCalledTimes(1));
         await new Promise(r => setTimeout(r, 20));
-        expect(userIdDoMembro).not.toHaveBeenCalled();
+        expect(membroPorEmail).not.toHaveBeenCalled();
         liberar();
-        await waitFor(() => expect(userIdDoMembro).toHaveBeenCalledWith(ORG, 'dora@x.com'));
+        await waitFor(() => expect(membroPorEmail).toHaveBeenCalledWith(ORG, 'dora@x.com'));
     });
 
     it('sem login: vínculo pendente, modal aberto', async () => {
-        userIdDoMembro.mockResolvedValue(null);
+        membroPorEmail.mockResolvedValue({ userId: null });
         render(<Tela />);
         await abrirConvite();
         escolher('Dora Reis');
         enviar();
         await screen.findByText(/RH › Colaboradores/);
+        expect(screen.getByText(/a conta de acesso ainda não existe/)).toBeTruthy();
         expect(chamadasCom('user_id')).toHaveLength(0);
         expect(screen.getByText('Convidar Novo Membro')).toBeTruthy();
+    });
+
+    it('linha do membro não gravada: o aviso diz isso, não "conta não existe"', async () => {
+        membroPorEmail.mockResolvedValue(null);
+        render(<Tela />);
+        await abrirConvite();
+        escolher('Dora Reis');
+        enviar();
+        await screen.findByText(/O membro não foi gravado na organização/);
+        expect(screen.queryByText(/Membro adicionado/)).toBeNull();
+        expect(screen.queryByText(/a conta de acesso ainda não existe/)).toBeNull();
+        expect(chamadasCom('user_id')).toHaveLength(0);
     });
 
     it('falha na ficha: convite segue e o aviso diz', async () => {
@@ -182,7 +199,7 @@ describe('Convidar membro a partir de um colaborador', () => {
         await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
         await new Promise(r => setTimeout(r, 20));
         expect(updateEmployee).not.toHaveBeenCalled();
-        expect(userIdDoMembro).not.toHaveBeenCalled();
+        expect(membroPorEmail).not.toHaveBeenCalled();
     });
 
     it('gravação do membro falha: botão volta, aviso diz e não tenta vincular', async () => {
@@ -193,7 +210,61 @@ describe('Convidar membro a partir de um colaborador', () => {
         enviar();
         await screen.findByText(/O membro não foi gravado na organização: sem permissão/);
         expect(screen.getByText('Enviar Convite')).toBeTruthy();
-        expect(userIdDoMembro).not.toHaveBeenCalled();
+        expect(membroPorEmail).not.toHaveBeenCalled();
+    });
+
+    it('e-mail de quem já é membro: não convida, não grava e avisa (não rebaixa o papel)', async () => {
+        const onUpdateMembers = vi.fn();
+        render(<Tela onUpdateMembers={onUpdateMembers} />);
+        await abrirConvite();
+        escolher('Carlos Lima');
+        fireEvent.change(campoEmail(), { target: { value: 'M1@exemplo.com' } });
+        enviar();
+        await screen.findByText(/já é de um usuário desta organização/);
+        expect(invoke).not.toHaveBeenCalled();
+        expect(onUpdateMembers).not.toHaveBeenCalled();
+        expect(updateEmployee).not.toHaveBeenCalled();
+    });
+
+    it('a lista mostra o cargo e a origem (homônimos e disponibilizados se distinguem)', async () => {
+        render(<Tela />);
+        await abrirConvite();
+        expect(screen.getByRole('option', { name: /Carlos Lima/ }).textContent).toContain('Pedreiro');
+        expect(screen.getByRole('option', { name: /Ester Prado/ }).textContent).toContain('disponibilizado por SPE Garden');
+    });
+
+    it('disponibilizado por org onde quem convida não é owner/admin: desligado com o motivo', async () => {
+        useStore.setState({
+            currentProfile: { group: 'GESTOR' } as never,
+            organizations: [
+                { id: ORG, name: 'Alpa', members: [...MEMBROS, { id: 'm9', email: 'admin@exemplo.com', role: 'owner' }], customRoles: [] } as never,
+                { id: 'org-2', name: 'SPE Garden', members: [{ id: 'm8', email: 'admin@exemplo.com', role: 'member' }], customRoles: [] } as never,
+            ],
+        });
+        render(<Tela />);
+        await abrirConvite();
+        const ester = screen.getByRole('option', { name: /Ester Prado/ });
+        expect(ester.getAttribute('aria-disabled')).toBe('true');
+        expect(ester.textContent).toContain('Disponibilizado por SPE Garden — só owner ou admin de lá vincula a um login');
+    });
+
+    it('vínculo negado pelo banco (42501): o aviso traz o motivo', async () => {
+        updateEmployee.mockImplementation((_id: string, upd: Record<string, unknown>) =>
+            'user_id' in upd ? Promise.reject({ code: '42501', message: 'só owner ou admin…' }) : Promise.resolve({}));
+        render(<Tela />);
+        await abrirConvite();
+        escolher('Dora Reis');
+        enviar();
+        await screen.findByText(/Só owner ou admin da organização vincula o colaborador/);
+    });
+
+    it('escolher ficha sem e-mail mantém o e-mail já digitado', async () => {
+        render(<Tela />);
+        await abrirConvite();
+        fireEvent.change(campoEmail(), { target: { value: 'carlos@x.com' } });
+        escolher('Carlos Lima');
+        expect(campoEmail().value).toBe('carlos@x.com');
+        expect(campoNome().value).toBe('Carlos Lima');
     });
 
     it('sem colaborador: convite como hoje', async () => {
@@ -205,6 +276,42 @@ describe('Convidar membro a partir de um colaborador', () => {
         await waitFor(() => expect(invoke).toHaveBeenCalledTimes(1));
         await new Promise(r => setTimeout(r, 20));
         expect(updateEmployee).not.toHaveBeenCalled();
-        expect(userIdDoMembro).not.toHaveBeenCalled();
+        expect(membroPorEmail).not.toHaveBeenCalled();
+    });
+});
+
+// "Reenviar convite" (resend: true) apaga o login ainda não confirmado e cria outro, com id
+// novo; o gatilho do banco reaponta a linha do membro, mas não a ficha do colaborador.
+describe('Reenviar convite — a ficha acompanha o login novo', () => {
+    const reapontar = organizationService.reapontarFichasDoLogin as unknown as ReturnType<typeof vi.fn>;
+    const reenviar = () => {
+        fireEvent.click(screen.getAllByTitle('Mais ações')[0]);
+        fireEvent.click(screen.getByText('Reenviar convite'));
+    };
+
+    it('login trocou: reaponta as fichas do antigo para o novo', async () => {
+        membroPorEmail.mockResolvedValueOnce({ userId: 'u-1' }).mockResolvedValueOnce({ userId: 'u-2' });
+        reapontar.mockResolvedValue({ trocadas: 1, falhas: [] });
+        render(<Tela />);
+        reenviar();
+        await waitFor(() => expect(reapontar).toHaveBeenCalledWith('u-1', 'u-2'));
+        expect(membroPorEmail.mock.invocationCallOrder[0]).toBeLessThan(invoke.mock.invocationCallOrder[0]);
+        await screen.findByText('Convite reenviado para m1@exemplo.com');
+    });
+
+    it('login não trocou: não mexe em ficha', async () => {
+        membroPorEmail.mockResolvedValue({ userId: 'u-1' });
+        render(<Tela />);
+        reenviar();
+        await screen.findByText('Convite reenviado para m1@exemplo.com');
+        expect(reapontar).not.toHaveBeenCalled();
+    });
+
+    it('reapontar falhou: avisa que a ficha ficou no login antigo', async () => {
+        membroPorEmail.mockResolvedValueOnce({ userId: 'u-1' }).mockResolvedValueOnce({ userId: 'u-2' });
+        reapontar.mockResolvedValue({ trocadas: 0, falhas: ['Carlos Lima: sem permissão'] });
+        render(<Tela />);
+        reenviar();
+        await screen.findByText(/ficha do colaborador continua ligada ao login antigo/);
     });
 });

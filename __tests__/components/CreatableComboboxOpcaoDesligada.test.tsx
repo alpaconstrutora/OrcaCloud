@@ -65,6 +65,14 @@ describe('CreatableCombobox — opção desligada', () => {
         expect(onSelect).toHaveBeenCalledWith(OPCOES[0]);
     });
 
+    it('blur com nome repetido (homônimos) não vincula sozinho', () => {
+        const onSelect = vi.fn();
+        const homonimos: Item[] = [{ id: 'a', name: 'José da Silva' }, { id: 'b', name: 'José da Silva' }];
+        render(<Campo options={homonimos} getDisabledReason={undefined} value="josé da silva" onSelect={onSelect} />);
+        fireEvent.blur(screen.getByRole('combobox'));
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
     it('avisoSemVinculo troca o aviso sem onCreate', () => {
         render(<Campo value="Zé" avisoSemVinculo="Nenhum colaborador escolhido — o convite não fica vinculado ao RH." />);
         expect(screen.getByText('Nenhum colaborador escolhido — o convite não fica vinculado ao RH.')).toBeTruthy();

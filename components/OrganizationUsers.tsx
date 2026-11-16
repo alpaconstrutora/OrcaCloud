@@ -19,6 +19,16 @@ import LinkDoCelularBloco, { motivoGerarBloqueadoPara } from './celular/LinkDoCe
 import { CreatableCombobox } from './ui/CreatableCombobox';
 import { laborService, type Employee } from '../services/laborService';
 import { opcoesDeColaborador, type OpcaoColaborador } from '../lib/convidarColaborador';
+import { MOTIVO_VINCULO_SO_GESTOR } from '../lib/vinculoColaboradorUsuario';
+
+const comPonto = (s: string) => (/[.!?]$/.test(s) ? s : `${s}.`);
+
+/** Erro do Supabase ao gravar a ficha: 42501 é a trava do vínculo (só owner/admin da org do colaborador). */
+const motivoDoErroNaFicha = (err: unknown): { texto: string; semPermissao: boolean } => {
+    const e = err as { code?: string; message?: string } | null;
+    if (e?.code === '42501') return { texto: MOTIVO_VINCULO_SO_GESTOR, semPermissao: true };
+    return { texto: e?.message || 'erro desconhecido', semPermissao: false };
+};
 
 // §6.3: toda coluna de valor único é ordenável. "Função / Cargo" é composta
 // (papel + nome do cargo customizado opcional na mesma célula) — exceção
@@ -682,9 +692,16 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const [erroColaboradores, setErroColaboradores] = useState(false);
     const [colaboradorTexto, setColaboradorTexto] = useState('');
     const [colaboradorEscolhido, setColaboradorEscolhido] = useState<OpcaoColaborador | null>(null);
+    // Vincular a ficha a um login exige owner/admin da organização DO colaborador
+    // (gatilho trg_employees_vinculo_so_gestor; desenvolvedor passa, como no banco).
     const opcoesColaborador = React.useMemo(
-        () => opcoesDeColaborador(colaboradoresDaOrg, members),
-        [colaboradoresDaOrg, members],
+        () => opcoesDeColaborador(colaboradoresDaOrg, members, organizationId ? {
+            organizationId,
+            nomeDaOrg: id => organizations.find(o => o.id === id)?.name,
+            podeVincularNaOrg: id => isDeveloper || ['owner', 'admin'].includes(
+                organizations.find(o => o.id === id)?.members?.find(m => (m.email || '').toLowerCase() === userEmail)?.role ?? ''),
+        } : undefined),
+        [colaboradoresDaOrg, members, organizationId, organizations, isDeveloper, userEmail],
     );
     React.useEffect(() => {
         if (!isInviteModalOpen || !organizationId) return;
@@ -736,14 +753,27 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         const email = newMemberEmail.trim().toLowerCase();
         const colaborador = colaboradorEscolhido;
         const pendenciasDaFicha: string[] = [];
+        let fichaNegadaPorPermissao = false;
+
+        // E-mail de quem já é membro: o upsert por (organização, e-mail) sobrescreveria o papel e
+        // as permissões dessa pessoa com os do convite (rebaixaria um admin a membro, calado).
+        if (members.some(m => (m.email || '').trim().toLowerCase() === email)) {
+            setIsInviting(false);
+            setInviteError(colaborador
+                ? 'Este e-mail já é de um usuário desta organização. Para vincular a ficha a ele, use RH › Colaboradores › Usuário do sistema.'
+                : 'Este e-mail já é de um usuário desta organização.');
+            return;
+        }
 
         // 1) Ficha sem e-mail recebe o digitado ANTES do convite. Ficha que já tem e-mail
         //    não muda: o login pode usar outro endereço (desenho › "Não pode acontecer").
         if (colaborador && !colaborador.email) {
             try {
                 await laborService.updateEmployee(colaborador.id, { email });
-            } catch {
-                pendenciasDaFicha.push('O e-mail não foi gravado na ficha do colaborador.');
+            } catch (err: unknown) {
+                const motivo = motivoDoErroNaFicha(err);
+                fichaNegadaPorPermissao ||= motivo.semPermissao;
+                pendenciasDaFicha.push(comPonto(`O e-mail não foi gravado na ficha do colaborador: ${motivo.texto}`));
             }
         }
 
@@ -783,14 +813,20 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         // 2) Vínculo ficha → login, só se a ficha ainda não tem um.
         if (colaborador && !colaborador.userId && organizationId && !erroAoGravarMembro) {
             try {
-                const userId = await organizationService.userIdDoMembro(organizationId, email);
-                if (userId) {
-                    await laborService.updateEmployee(colaborador.id, { user_id: userId });
+                // A gravação do membro não avisa quando falha (handleUpsertOrganization só dá
+                // um alert e o upsert por membro não confere erro): a prova é a linha existir.
+                const membro = await organizationService.membroPorEmail(organizationId, email);
+                if (!membro) {
+                    erroAoGravarMembro = 'a linha do membro não foi encontrada depois de gravar';
+                } else if (membro.userId) {
+                    await laborService.updateEmployee(colaborador.id, { user_id: membro.userId });
                 } else {
                     pendenciasDaFicha.push('O colaborador não foi vinculado ao login: a conta de acesso ainda não existe.');
                 }
-            } catch {
-                pendenciasDaFicha.push('O colaborador não foi vinculado ao login.');
+            } catch (err: unknown) {
+                const motivo = motivoDoErroNaFicha(err);
+                fichaNegadaPorPermissao ||= motivo.semPermissao;
+                pendenciasDaFicha.push(comPonto(`O colaborador não foi vinculado ao login: ${motivo.texto}`));
             }
         }
         setIsInviting(false);
@@ -804,7 +840,10 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     ? `O membro não foi gravado na organização: ${erroAoGravarMembro}.`
                     : emailError ? `Membro adicionado, mas o e-mail de convite não pôde ser enviado: ${emailError}` : 'Membro adicionado.',
                 ...pendenciasDaFicha,
-                ...(pendenciasDaFicha.length > 0 ? ['Resolva em RH › Colaboradores.'] : []),
+                ...(pendenciasDaFicha.length === 0 ? []
+                    : fichaNegadaPorPermissao
+                        ? ['Peça a um owner ou admin da organização do colaborador para concluir em RH › Colaboradores.']
+                        : ['Resolva em RH › Colaboradores.']),
             ];
             setInviteError(partes.join(' '));
             // Leave modal open so user can see the warning
@@ -872,6 +911,11 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
             notify('Selecione uma organização específica para reenviar o convite.', 'error');
             return;
         }
+        // O reenvio apaga o login ainda não confirmado e cria outro, com id novo. O gatilho do
+        // banco reaponta a linha do membro, mas não a ficha do colaborador vinculada a ele —
+        // por isso o login de antes é lido aqui e as fichas são reapontadas depois.
+        const loginAntes = await organizationService.membroPorEmail(organizationId, member.email)
+            .then(m => m?.userId ?? null).catch(() => null);
         const { data, error } = await supabase.functions.invoke('invite-member', {
             body: { email: member.email, name: member.name, organizationId, role: member.role, resend: true },
         });
@@ -890,6 +934,17 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         } else if (data?.alreadyConfirmed) {
             notify(`${member.email} já possui conta ativa no sistema.`, 'error');
         } else {
+            const loginDepois = loginAntes
+                ? await organizationService.membroPorEmail(organizationId, member.email).then(m => m?.userId ?? null).catch(() => null)
+                : null;
+            if (loginAntes && loginDepois && loginDepois !== loginAntes) {
+                const r = await organizationService.reapontarFichasDoLogin(loginAntes, loginDepois)
+                    .catch((err: unknown) => ({ trocadas: 0, falhas: [err instanceof Error ? err.message : 'erro desconhecido'] }));
+                if (r.falhas.length > 0) {
+                    notify(`Convite reenviado, mas a ficha do colaborador continua ligada ao login antigo (${r.falhas.join('; ')}). Refaça o vínculo em RH › Colaboradores.`, 'error');
+                    return;
+                }
+            }
             notify(`Convite reenviado para ${member.email}`, 'success');
         }
     };
@@ -1842,13 +1897,14 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                 setColaboradorEscolhido(o);
                                                 setColaboradorTexto(o.name);
                                                 setNewMemberName(o.name);
-                                                setNewMemberEmail(o.email);
+                                                // ficha sem e-mail não apaga o que já foi digitado
+                                                setNewMemberEmail(atual => o.email || atual);
                                             }}
                                             onTextChange={texto => {
                                                 setColaboradorTexto(texto);
                                                 setColaboradorEscolhido(null);
                                             }}
-                                            getHint={o => o.email || 'sem e-mail'}
+                                            getHint={o => [o.email || 'sem e-mail', o.cargo, o.origem && `disponibilizado por ${o.origem}`].filter(Boolean).join(' · ')}
                                             getDisabledReason={o => o.motivoDesligado}
                                             placeholder="Buscar colaborador do RH"
                                             disabled={erroColaboradores}

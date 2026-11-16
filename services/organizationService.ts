@@ -426,11 +426,13 @@ export const organizationService = {
         if (error) throw error;
     },
 
-    // Login (`auth.users.id`) do membro desta organização com este e-mail; `null` se a
-    // linha não existe ou o membro ainda não tem conta. Quem preenche `user_id` é o
-    // gatilho `fn_org_member_fill_user_id` a partir do e-mail. Usado pelo convite a
-    // partir de um colaborador do RH para vincular a ficha ao login (16/11/2026).
-    async userIdDoMembro(organizationId: string, email: string): Promise<string | null> {
+    // Linha do membro desta organização com este e-mail: `null` = a linha não existe;
+    // `userId: null` = existe, mas o membro ainda não tem conta (`auth.users`). Quem
+    // preenche `user_id` é o gatilho `fn_org_member_fill_user_id` a partir do e-mail.
+    // Usado pelo convite a partir de um colaborador do RH para vincular a ficha ao
+    // login (16/11/2026) — e para não dizer "conta não existe" quando o que falhou
+    // foi a gravação do membro.
+    async membroPorEmail(organizationId: string, email: string): Promise<{ userId: string | null } | null> {
         const { data, error } = await supabase
             .from('organization_members')
             .select('user_id')
@@ -438,7 +440,39 @@ export const organizationService = {
             .eq('email', email.trim().toLowerCase())
             .maybeSingle();
         if (error) throw error;
-        return (data?.user_id as string | null | undefined) ?? null;
+        if (!data) return null;
+        return { userId: (data.user_id as string | null | undefined) ?? null };
+    },
+
+    // "Reenviar convite" (Edge invite-member, resend) apaga o login ainda não confirmado
+    // e cria outro, com id novo. O gatilho fn_auth_user_link_org_members reaponta a linha
+    // do membro, mas não `employees.user_id` (sem FK, por desenho) — a ficha ficaria
+    // apontando para um id que não existe mais. Cada ficha é gravada sozinha: a trava do
+    // vínculo (42501, só owner/admin da org do colaborador) numa não derruba as outras.
+    async reapontarFichasDoLogin(userIdAntigo: string, userIdNovo: string): Promise<{ trocadas: number; falhas: string[] }> {
+        const { data, error } = await supabase
+            .from('employees')
+            .select('id, name')
+            .eq('user_id', userIdAntigo);
+        if (error) throw error;
+        let trocadas = 0;
+        const falhas: string[] = [];
+        for (const ficha of (data ?? []) as { id: string; name: string }[]) {
+            const { data: gravadas, error: erro } = await supabase
+                .from('employees')
+                .update({ user_id: userIdNovo })
+                .eq('id', ficha.id)
+                .select('id');
+            if (erro) {
+                const e = erro as { code?: string; message?: string };
+                falhas.push(`${ficha.name}: ${e.code === '42501' ? 'só owner ou admin da organização do colaborador vincula' : e.message}`);
+            } else if (!gravadas || gravadas.length === 0) {
+                falhas.push(`${ficha.name}: sem permissão para alterar a ficha`);
+            } else {
+                trocadas++;
+            }
+        }
+        return { trocadas, falhas };
     },
 
     // Grava papel/cargo/permissões de UM membro, pelo id.

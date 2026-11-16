@@ -55,6 +55,42 @@ describe('opcoesDeColaborador', () => {
         expect(o.motivoDesligado).toBeUndefined();
     });
 
+    it('leva o cargo, para distinguir homônimos', () => {
+        const [o] = opcoesDeColaborador([colab('1', 'José', { role: 'Pedreiro' })], []);
+        expect(o.cargo).toBe('Pedreiro');
+    });
+
+    describe('colaborador disponibilizado por outra organização', () => {
+        const ctx = (gestorEm: string[]) => ({
+            organizationId: 'org-1',
+            nomeDaOrg: (id: string) => ({ 'org-2': 'SPE Garden' } as Record<string, string>)[id],
+            podeVincularNaOrg: (id: string) => gestorEm.includes(id),
+        });
+
+        it('quem convida não é owner/admin da org do colaborador: desligado com o motivo', () => {
+            const [o] = opcoesDeColaborador([colab('1', 'Ana', { org_id: 'org-2' })], [], ctx([]));
+            expect(o.origem).toBe('SPE Garden');
+            expect(o.motivoDesligado).toBe('Disponibilizado por SPE Garden — só owner ou admin de lá vincula a um login');
+        });
+
+        it('quem convida é owner/admin de lá: convidável, com a origem', () => {
+            const [o] = opcoesDeColaborador([colab('1', 'Ana', { org_id: 'org-2' })], [], ctx(['org-2']));
+            expect(o.origem).toBe('SPE Garden');
+            expect(o.motivoDesligado).toBeUndefined();
+        });
+
+        it('org de origem fora da lista de quem convida: nome genérico', () => {
+            const [o] = opcoesDeColaborador([colab('1', 'Ana', { org_id: 'org-9' })], [], ctx([]));
+            expect(o.origem).toBe('outra organização');
+        });
+
+        it('colaborador da própria organização não ganha origem nem motivo', () => {
+            const [o] = opcoesDeColaborador([colab('1', 'Ana')], [], ctx([]));
+            expect(o.origem).toBeUndefined();
+            expect(o.motivoDesligado).toBeUndefined();
+        });
+    });
+
     it('ordena por nome em pt-BR', () => {
         const r = opcoesDeColaborador([colab('1', 'Érica'), colab('2', 'Ana'), colab('3', 'bruno')], []);
         expect(r.map(o => o.name)).toEqual(['Ana', 'bruno', 'Érica']);

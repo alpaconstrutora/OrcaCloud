@@ -28,9 +28,8 @@ import { idsPagosSemAlcada } from '../services/alcadaDaBaixa';
 import { darfService } from '../services/darfService';
 import { chavePorMes, chavePorNome, chavePorRotulo, MESES } from '../utils/agruparLinhas';
 import { niveisAprovadosNaRodada } from '../utils/situacaoAprovacaoTitulo';
-import { itensDoLote, tiposPresentes } from '../utils/filaAprovacao';
+import { itensDoLote, tiposPresentes, origemDaFila, origensDoFiltro } from '../utils/filaAprovacao';
 import { motivoSemAlcada, vezDeTexto, juntarNomes, ENTIDADES_POR_TIPO } from '../utils/alcada';
-import { ORIGEM_PT, origemLabel } from '../utils/origemLabel';
 
 // ─── dispatch por entidade ───────────────────────────────────
 // A fila é unificada; cada ação vai ao serviço de domínio correto.
@@ -49,24 +48,6 @@ export const ENTITY_TAG: Record<ActionQueueItem['entity'], string> = {
     // DARF (26/10/2026): a guia inteira é UM item; aprovar/rejeitar vale para todos os tributos dela.
     darf:           'DARF',
 };
-
-/**
- * Rótulo da coluna/filtro "Origem" (26/10/2026 — todo título a pagar passa pela
- * fila, ~460 por mês; a origem é o que permite aprovar por blocos, ex.: a folha
- * do mês). Título usa o vocabulário de Contas a Pagar; os demais, o tipo.
- */
-const ORIGEM_FILA: Record<string, string> = {
-    ...ORIGEM_PT,
-    TRIBUTO: 'Tributo',
-    COMMERCIAL: 'Comercial',
-    CONTRATO: 'Contrato',
-    PEDIDO: 'Pedido de compra',
-    PLANTA: 'Planta',
-    SOLICITACAO_COMPRA: 'Solicitação de compra',
-    OFICIO: 'Ofício',
-};
-const origemDaFila = (i: ActionQueueItem): string | null =>
-    i.origem ? (ORIGEM_FILA[i.origem] ?? origemLabel(i.origem)) : null;
 
 /** Próximo nível a aprovar — só a rodada atual conta (reenvio depois de rejeição recomeça). */
 const proximoNivel = (i: ActionQueueItem): 1 | 2 => (niveisAprovadosNaRodada(i.approval_chain).includes(1) ? 2 : 1);
@@ -382,11 +363,8 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
             .filter(i => !vencMes || (i.due_date ?? '').slice(5, 7) === vencMes),
         [items, entityFilter, origemFilter, vencAno, vencMes],
     );
-    // Origens presentes na fila (o filtro só oferece o que existe), em ordem alfabética.
-    const origensPresentes = useMemo(
-        () => [...new Set(items.map(origemDaFila).filter((o): o is string => !!o))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
-        [items],
-    );
+    // Todas as origens que a fila pode trazer, com ou sem item agora (16/11/2026 — utils/filaAprovacao).
+    const origensDoFiltroLista = useMemo(() => origensDoFiltro(items, origemFilter), [items, origemFilter]);
     // Lote: selecionado, pendente e NA TELA — o que o filtro escondeu não entra (utils/filaAprovacao).
     const selecionados = useMemo(() => itensDoLote(rows, selected), [rows, selected]);
     const totalSelecionado = selecionados.reduce((soma, i) => soma + (Number(i.amount) || 0), 0);
@@ -519,7 +497,7 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                             className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                         >
                             <option value="">Todas as origens</option>
-                            {origensPresentes.map(o => <option key={o} value={o}>{o}</option>)}
+                            {origensDoFiltroLista.map(o => <option key={o} value={o}>{o}</option>)}
                         </select>
                         {/* Ano/Mês do vencimento — independentes entre si (15/10/2026). */}
                         <select

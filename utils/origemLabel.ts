@@ -33,6 +33,10 @@ export const ORIGEM_PT: Record<string, string> = {
     // Guia que agrupa tributos (Tributos a Pagar › DARFs, 21/10/2026): os
     // tributos do DARF saem da lista e entram como UMA linha (`colapsarDarfs`).
     DARF: 'DARF',
+    // 16/11/2026: as duas apareciam pelo fallback, em inglês ("Asset Maintenance",
+    // "Asaas Fee"). Mesmos nomes de `financeiroFlowService.ORIGEM_LABEL`.
+    ASSET_MAINTENANCE: 'Manutenção de ativo',
+    ASAAS_FEE: 'Taxa do Asaas',
 };
 
 /**

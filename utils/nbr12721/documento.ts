@@ -63,6 +63,18 @@ export interface DocumentoNbr12721 {
   congeladoEm: string;
   aprovacoes: AprovacaoDoDocumento[];
   saida: SaidaNbr12721;
+  /** PRÉVIA do rascunho (15/11/2026): calculada ao vivo, sem versão, sem hash e sem
+   *  aprovação. O cabeçalho, o título e o nome do arquivo dizem isso — o papel não pode
+   *  ser confundido com o documento publicado. */
+  previa?: boolean;
+}
+
+/**
+ * O documento da PRÉVIA do rascunho — o mesmo desenho do documento da versão, a partir da
+ * saída que a tela já calculou. Serve à tela (colunas e grupos da norma) e ao "Baixar prévia".
+ */
+export function documentoDaPrevia(estudo: string, saida: SaidaNbr12721, versaoMotor: string, geradaEm = new Date()): DocumentoNbr12721 {
+  return { estudo, empresa: '', responsavel: null, registro: null, revisao: 0, hash: '', versaoMotor, congeladoEm: geradaEm.toISOString(), aprovacoes: [], saida, previa: true };
 }
 
 const ROTULO_DA_APROVACAO: Record<AprovacaoDoDocumento['tipo'], string> = { TECNICA: 'Técnica', JURIDICA: 'Jurídica' };
@@ -226,7 +238,8 @@ export function tabelasDoDocumentoNbr12721(d: DocumentoNbr12721): TabelaDoDocume
     total: null,
   });
 
-  tabelas.push({
+  // A prévia não tem aprovação (nem pode ter: não é versão).
+  if (!d.previa) tabelas.push({
     titulo: 'Aprovações',
     aba: 'Aprovações',
     colunas: [
@@ -252,6 +265,16 @@ export function situacaoDasAprovacoes(aprovacoes: readonly Pick<AprovacaoDoDocum
 
 /** As linhas do cabeçalho (resumo), na ordem em que o PDF e a aba "Resumo" as mostram. */
 export function cabecalhoDoDocumentoNbr12721(d: DocumentoNbr12721): [string, string][] {
+  if (d.previa) {
+    return [
+      ['Documento', 'PRÉVIA do rascunho — não publicada: sem versão, sem hash e sem aprovação'],
+      ...(d.empresa ? [['Empresa', d.empresa] as [string, string]] : []),
+      ['Estudo', d.estudo],
+      ['Gerada em', new Date(d.congeladoEm).toLocaleString('pt-BR')],
+      ['Motor', d.versaoMotor],
+      ['Situação do cálculo', d.saida.status === 'success' ? 'Sem pendência bloqueante' : 'COM pendência bloqueante'],
+    ];
+  }
   return [
     ['Empresa', d.empresa],
     ...(d.responsavel ? [['Responsável técnico', d.registro ? `${d.responsavel} — ${d.registro}` : d.responsavel] as [string, string]] : []),
@@ -279,14 +302,14 @@ export function celulaFormatada(valor: string | number, formato: FormatoDaColuna
 }
 
 /** Nome de arquivo sem acento nem espaço: `areas_nbr12721_<estudo>_v<revisão>`. */
-export function nomeDoArquivoNbr12721(d: Pick<DocumentoNbr12721, 'estudo' | 'revisao'>): string {
+export function nomeDoArquivoNbr12721(d: Pick<DocumentoNbr12721, 'estudo' | 'revisao' | 'previa'>): string {
   const base = d.estudo
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-zA-Z0-9_-]+/g, '_')
     .replace(/^_+|_+$/g, '')
     .slice(0, 80);
-  return `areas_nbr12721_${base || 'estudo'}_v${d.revisao}`;
+  return `areas_nbr12721_${base || 'estudo'}_${d.previa ? 'previa' : `v${d.revisao}`}`;
 }
 
 export interface VersaoCandidataAoMemorial {

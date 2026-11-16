@@ -132,6 +132,7 @@ import {
   Thermometer,
   ScanSearch,
   SlidersHorizontal,
+  ChevronRight,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import MenuExibir, { type ItemDeExibicao } from './MenuExibir';
@@ -948,7 +949,8 @@ import { empreendimentoTipologiaPlantasService } from '../../services/empreendim
 import { chaveDaTipologia } from '../../utils/espelhoPlantaDaTipologia';
 import type { ImagemDoDecorado } from '../../utils/espelhoDecoradoDaTipologia';
 import type { CorteGravado } from '../../utils/espelhoDecoradoDaPlanta';
-import TelaAreasNbr12721 from './TelaAreasNbr12721';
+import TelaAreasNbr12721, { type SituacaoDoDocumentoNaTela } from './TelaAreasNbr12721';
+import { TELAS_DO_LINK_DIRETO } from './telasDoLinkDireto';
 import type { TelaDoLinkDireto } from './telasDoLinkDireto';
 import { blueprintNbr12721Service } from '../../services/blueprintNbr12721Service';
 import { congelamentoNbr12721, entradaDoEstudo, HIPOTESES_NBR12721_PADRAO, type HipotesesNbr12721 } from '../../utils/blueprintNbr12721';
@@ -1512,6 +1514,12 @@ interface Props {
   onBack: () => void;
   /** Tela a abrir ao montar (link direto vindo do Empreendimento); ausente = o editor. */
   telaInicial?: TelaDoLinkDireto | null;
+  /**
+   * De onde o link direto veio (15/11/2026, crítica das Áreas NBR 12721): 'empreendimento' =
+   * do botão da ficha do Empreendimento — a trilha mostra o nome dele e a seta volta para lá,
+   * não para o desenho. O endereço guarda isso junto com a tela (F5 fica nela).
+   */
+  origemDaTela?: 'empreendimento' | null;
   /** DESIGN OPTIONS (E6.1): abrir outra alternativa (ramo) do estudo — quem monta o editor troca o `branchId`. */
   onTrocarRamo?: (branchId: string) => void;
   /**
@@ -1576,7 +1584,7 @@ const TAREFAS_COM_RESPIRO: ReadonlySet<string> = new Set([
   'geradorClimatizacao',
 ]);
 
-export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo, onAbrirMapaRegulatorio, telaInicial }: Props) {
+export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo, onAbrirMapaRegulatorio, telaInicial, origemDaTela = null }: Props) {
   // MULTIUSUÁRIO (E10.1): o editor pergunta aos ganchos ANTES de aplicar (trava de
   // outra pessoa, somente leitura) e difunde DEPOIS. Os ganchos leem refs porque o
   // canal e as permissões nascem mais abaixo, depois do próprio editor.
@@ -3364,6 +3372,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         return;
       }
       if (e.key.toLowerCase() !== 'z') return;
+      // Ctrl+Z dentro de um campo de texto é do CAMPO (desfaz a digitação), como o Ctrl+D
+      // acima. Sem isto, Ctrl+Z na busca ou no coeficiente das Áreas NBR 12721 desfazia o
+      // último comando do MODELO — e a gravação automática levava isso ao rascunho
+      // (crítica /impeccable de 15/11/2026).
+      const alvoZ = e.target as HTMLElement | null;
+      if (alvoZ && (/^(INPUT|TEXTAREA|SELECT)$/.test(alvoZ.tagName) || alvoZ.isContentEditable)) return;
       e.preventDefault();
       if (desfazerBloqueado) return;
       if (e.shiftKey) editor.redo();
@@ -3380,6 +3394,48 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const [hipotesesNbr12721, setHipotesesNbr12721] = useState<HipotesesNbr12721>(HIPOTESES_NBR12721_PADRAO);
   // Fase 10: `canEditAreaEngine` vale de fato — sem ela a tela Áreas NBR 12721 abre só para leitura (o banco confere também).
   const edicaoAreasNbr = useAreasNbr12721PodeEditar(study.organization_id);
+  // ÁREAS NBR 12721 — a situação do DOCUMENTO (15/11/2026, crítica /impeccable): a última versão
+  // publicada com quadro, as aprovações e o Empreendimento ligado. Alimenta a faixa de etapas e
+  // a trilha "‹Empreendimento› › Áreas NBR 12721". Só leitura; lida quando a tela abre.
+  const [situacaoNbr, setSituacaoNbr] = useState<SituacaoDoDocumentoNaTela>({ estado: 'carregando' });
+  const [empreendimentoDoEstudo, setEmpreendimentoDoEstudo] = useState<{ id: string; nome: string } | null>(null);
+  const [recargaNbr, setRecargaNbr] = useState(0);
+  useEffect(() => {
+    if (telaAberta !== 'areas-nbr12721') return;
+    let vivo = true;
+    setSituacaoNbr({ estado: 'carregando' });
+    blueprintSnapshotNbr12721Service
+      .situacaoDoDocumento(study.id)
+      .then((s) => {
+        if (!vivo) return;
+        setSituacaoNbr({ estado: 'pronto', versao: s.versao, empreendimento: s.empreendimento ? { nome: s.empreendimento.nome, fracoesLevadas: s.empreendimento.fracoesLevadas } : null });
+        setEmpreendimentoDoEstudo(s.empreendimento ? { id: s.empreendimento.id, nome: s.empreendimento.nome } : null);
+      })
+      .catch(() => vivo && setSituacaoNbr({ estado: 'erro' }));
+    return () => {
+      vivo = false;
+    };
+  }, [telaAberta, study.id, recargaNbr]);
+  // O endereço guarda a tela do link direto enquanto ela está aberta (F5 fica nela; o link pode
+  // ser mandado) e volta a `#/blueprint` quando ela fecha — o "voltar à lista não reabre o
+  // estudo" do BlueprintModule continua valendo.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const h = window.location.hash;
+    if (telaAberta && (TELAS_DO_LINK_DIRETO as readonly string[]).includes(telaAberta)) {
+      if (h === '#/blueprint' || h.startsWith('#/blueprint?')) {
+        window.history.replaceState(null, '', `#/blueprint?studyId=${study.id}&tela=${telaAberta}${origemDaTela ? `&origem=${origemDaTela}` : ''}`);
+      }
+    } else if (h.startsWith('#/blueprint?')) {
+      window.history.replaceState(null, '', '#/blueprint');
+    }
+  }, [telaAberta, study.id, origemDaTela]);
+  useEffect(
+    () => () => {
+      if (typeof window !== 'undefined' && window.location.hash.startsWith('#/blueprint?')) window.history.replaceState(null, '', '#/blueprint');
+    },
+    [],
+  );
   useEffect(() => {
     if (telaAberta !== 'areas-nbr12721' && telaAberta !== 'unidades') return;
     let vivo = true;
@@ -12067,22 +12123,45 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       </>
     ) : null;
 
-  const cabecalhoDaTela = (titulo: string, subtitulo: string, Icone: React.ElementType, secao = 'Elétrica') => (
+  /**
+   * Cabeçalho das telas da Planta. `voltar` troca o destino da seta e a trilha (15/11/2026: a tela
+   * Áreas NBR 12721 aberta pelo Empreendimento volta para ele, e a trilha diz "‹Empreendimento› ›").
+   * A trilha "Planta Inteligente · …" era `text-gray-400` (2,5:1): agora `text-gray-500`.
+   */
+  const cabecalhoDaTela = (titulo: string, subtitulo: string, Icone: React.ElementType, secao = 'Elétrica', voltar?: { rotulo: string; onClick: () => void }) => (
     <div className="flex items-center gap-4">
       <button
         type="button"
-        onClick={() => setTelaAberta(null)}
+        onClick={voltar?.onClick ?? (() => setTelaAberta(null))}
         className="p-2.5 bg-white border border-gray-200 rounded-[6px] text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-all shadow-sm active:scale-95 group"
-        title="Voltar ao editor"
-        aria-label="Voltar ao editor"
+        title={voltar ? `Voltar a ${voltar.rotulo}` : 'Voltar ao editor'}
+        aria-label={voltar ? `Voltar a ${voltar.rotulo}` : 'Voltar ao editor'}
       >
         <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
       </button>
       <div className="min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <span className="text-xs font-medium text-blue-600">{study.name}</span>
-          <span className="w-1 h-1 bg-gray-300 rounded-full" />
-          <span className="text-xs font-medium text-gray-400">Planta Inteligente · {secao}</span>
+          {voltar ? (
+            <nav aria-label="Trilha de navegação" className="flex items-center gap-1.5 text-xs font-medium">
+              <button type="button" onClick={voltar.onClick} className="text-blue-600 hover:underline">
+                {voltar.rotulo}
+              </button>
+              <ChevronRight className="w-3.5 h-3.5 text-gray-400" aria-hidden="true" />
+              <span className="text-gray-600" aria-current="page">
+                {titulo}
+              </span>
+              <span className="w-1 h-1 bg-gray-300 rounded-full ml-1" aria-hidden="true" />
+              <span className="text-gray-500">
+                {study.name} · Planta Inteligente
+              </span>
+            </nav>
+          ) : (
+            <>
+              <span className="text-xs font-medium text-blue-600">{study.name}</span>
+              <span className="w-1 h-1 bg-gray-300 rounded-full" />
+              <span className="text-xs font-medium text-gray-500">Planta Inteligente · {secao}</span>
+            </>
+          )}
         </div>
         <h1 className="flex items-center gap-2 text-2xl font-black text-gray-900 tracking-tight">
           <Icone className="h-6 w-6 text-blue-700" />
@@ -13580,11 +13659,28 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="areas-nbr12721">
           {cabecalhoDaTela(
             'Áreas NBR 12721',
-            'Os Quadros I, II e IV-B da incorporação e as frações ideais, calculados ao vivo a partir do desenho: classifique cada ambiente (cobertura, coeficiente, divisão do comum) e os quadros mudam na hora. Os andares copiados do pavimento tipo entram com as unidades deles.',
+            'Os Quadros I, II e IV-B e as frações ideais da incorporação, calculados ao vivo a partir do desenho e da classificação de cada ambiente.',
             Scale,
             'Analisar',
+            origemDaTela === 'empreendimento' && empreendimentoDoEstudo
+              ? {
+                  rotulo: empreendimentoDoEstudo.nome,
+                  onClick: () => {
+                    window.location.hash = `#/empreendimentos?id=${empreendimentoDoEstudo.id}`;
+                  },
+                }
+              : undefined,
           )}
           <TelaAreasNbr12721
+            nomeDoEstudo={study.name}
+            situacaoDoDocumento={situacaoNbr}
+            onRecarregarSituacao={() => setRecargaNbr((n) => n + 1)}
+            onAbrirUnidades={() => setTelaAberta('unidades')}
+            onAbrirVersoes={() => {
+              setTelaAberta(null);
+              setRelatorio('versoes');
+            }}
+            onDesfazer={edicaoAreasNbr.pode ? editor.undo : undefined}
             model={editor.model}
             hipoteses={hipotesesNbr12721}
             onSalvarHipoteses={

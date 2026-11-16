@@ -37,6 +37,17 @@ import { AgruparControles, LinhaDeGrupo } from './Agrupamento';
  * responsabilidade de quem renderiza (§7): `text-sm font-normal text-gray-700`,
  * `font-medium` só em valor financeiro.
  */
+/** Borda direita da célula fixa: com a tabela em `border-separate`, por sombra (§6.13.1). */
+const BORDA_FIXA = 'inset -1px 0 0 #f3f4f6';
+/** Última coluna fixa: a borda + sombra curta dizendo que há conteúdo rolando por baixo. */
+const BORDA_FIXA_ULTIMA = `${BORDA_FIXA}, 6px 0 8px -6px rgba(15, 23, 42, 0.14)`;
+/** Anel de foco da linha clicável, desenhado nas células (o Chrome não desenha anel no `<tr>`);
+ *  compõe com `--borda-fixa` da célula fixa — box-shadow inline venceria a classe e apagaria o foco. */
+const SOMBRA_FIXA = '[box-shadow:var(--borda-fixa,0_0_#0000)]';
+const FOCO_MEIO = 'group-focus-visible:bg-blue-50 group-focus-visible:[box-shadow:inset_0_2px_0_#3b82f6,inset_0_-2px_0_#3b82f6,var(--borda-fixa,0_0_#0000)]';
+const FOCO_PRIMEIRA = 'group-focus-visible:bg-blue-50 group-focus-visible:[box-shadow:inset_2px_0_0_#3b82f6,inset_0_2px_0_#3b82f6,inset_0_-2px_0_#3b82f6,var(--borda-fixa,0_0_#0000)]';
+const FOCO_ULTIMA = 'group-focus-visible:bg-blue-50 group-focus-visible:[box-shadow:inset_-2px_0_0_#3b82f6,inset_0_2px_0_#3b82f6,inset_0_-2px_0_#3b82f6]';
+
 export interface StandardTableColumn extends ColumnConfig {
     /** Largura inicial em px — o autofit e o arraste ajustam a partir daqui. */
     width: number;
@@ -75,7 +86,8 @@ interface StandardTableProps<T> {
     rowLabel?: (row: T) => string;
     rowClassName?: (row: T) => string;
     loading?: boolean;
-    empty?: { icon?: React.ReactNode; title: string; subtitle?: string };
+    /** Estado vazio (§12). `acao`: o caminho para resolver, quando há um (vazio que orienta). */
+    empty?: { icon?: React.ReactNode; title: string; subtitle?: string; acao?: { rotulo: string; onClick: () => void } };
     /** §6.9 — dentro de `Sheet`/modal a largura é escassa: `px-3` em vez de `px-6`. */
     dense?: boolean;
     /** Controles extras da toolbar (selects de filtro, `AdvancedFilterPanel`). */
@@ -117,7 +129,18 @@ interface StandardTableProps<T> {
         selected: Set<string>;
         onChange: (next: Set<string>) => void;
         canSelect?: (row: T) => boolean;
+        /** Nome acessível da caixa da linha ("Selecionar Hall (Térreo)"). Sem ele, usa `rowLabel`. */
+        label?: (row: T) => string;
     };
+    /** Cabeçalho em DOIS níveis (15/11/2026, Quadros da NBR 12721): um rótulo sobre um conjunto de
+     *  colunas, como os grupos da norma ("Área privativa", "Área comum proporcional"…). O rótulo
+     *  cobre as colunas do grupo que estão visíveis e LADO A LADO na ordem da tela — se o usuário
+     *  separar as colunas de um grupo, o rótulo aparece sobre cada trecho. */
+    gruposDeColunas?: { rotulo: string; colunas: string[] }[];
+    /** 1ª coluna de dado fixa à esquerda ao rolar na horizontal (§6.13.1) — junto com a caixa
+     *  de seleção, se houver. Troca `border-collapse` por `border-separate` (a costura entre
+     *  células fixas vaza texto no Chrome com collapse). */
+    colunaFixa?: boolean;
     /** "Agrupar" §6.12 (opt-in). O campo escolhido persiste em `${storageKey}:groupBy`. */
     agrupamento?: {
         opcoes: { value: string; label: string }[];
@@ -142,6 +165,7 @@ export function StandardTable<T>({
     columns, storageKey, rows, rowKey, renderCell, sortValue, searchText, searchPlaceholder = 'Buscar...',
     search: controlledSearch, onSearchChange, searchScope, actions, onRowClick, rowLabel, rowClassName, loading, empty, dense, filters, toolbarRight, filtersPanel, toolbarTop,
     footer, renderTotals, totaisPorColuna, renderExpanded, maxHeight = '70vh', defaultSort, bare, selection, pagination, agrupamento: agrupar,
+    gruposDeColunas, colunaFixa,
 }: StandardTableProps<T>) {
     const allColumns: ColumnConfig[] = useMemo(
         () => (actions ? [...columns, { key: 'actions', label: actions.label ?? 'Ações', sortable: false }] : columns),
@@ -252,6 +276,61 @@ export function StandardTable<T>({
         if (next.has(id)) next.delete(id); else next.add(id);
         selection.onChange(next);
     };
+    // Shift+clique (§10.1): marca o intervalo entre a última caixa clicada SEM Shift (a âncora) e
+    // esta — sobre as linhas na ordem da tela, sem os grupos recolhidos (§6.12), todas as páginas
+    // (§6.7). A âncora zera quando a ordem muda (busca, ordenação, agrupamento).
+    const ancora = React.useRef<number | null>(null);
+    useEffect(() => { ancora.current = null; }, [search, tableColumns.sortColumn, tableColumns.sortDirection, campoAgrupar]);
+    const clicarCaixa = (id: string, shift: boolean) => {
+        if (!selection) return;
+        const i = linhas.findIndex(r => rowKey(r) === id);
+        if (shift && ancora.current !== null && i >= 0) {
+            const [de, ate] = ancora.current < i ? [ancora.current, i] : [i, ancora.current];
+            const next = new Set(selection.selected);
+            linhas.slice(de, ate + 1).forEach(r => { if (selection.canSelect?.(r) ?? true) next.add(rowKey(r)); });
+            selection.onChange(next);
+            return;
+        }
+        toggleOne(id);
+        ancora.current = i >= 0 ? i : null;
+    };
+    const nomeDaCaixa = (row: T) => selection?.label?.(row) ?? (rowLabel ? `Selecionar: ${rowLabel(row)}` : 'Selecionar a linha');
+
+    // Coluna fixa (§6.13.1): a caixa de seleção (se houver) e a 1ª coluna de dado.
+    const chaveFixa = colunaFixa ? dataKeys[0] : undefined;
+    const estiloFixo = (qual: 'caixa' | 'dado', cabecalho: boolean): React.CSSProperties | undefined => {
+        if (!colunaFixa) return undefined;
+        const ultima = qual === 'dado';
+        return {
+            position: 'sticky',
+            left: qual === 'caixa' ? 0 : selection ? 40 : 0,
+            // 30 no cabeçalho: a alça de redimensionar das colunas que rolam por baixo é z-20.
+            zIndex: cabecalho ? 30 : 1,
+            ...(cabecalho
+                ? { background: '#fff', boxShadow: ultima ? BORDA_FIXA_ULTIMA : BORDA_FIXA }
+                : ({ '--borda-fixa': ultima ? BORDA_FIXA_ULTIMA : BORDA_FIXA } as React.CSSProperties)),
+        };
+    };
+    // Com border-separate a borda do <tr> não é desenhada: a divisória entre linhas vai para a célula.
+    const bordaTh = colunaFixa ? ' border-b border-gray-200' : '';
+    const bordaTd = colunaFixa ? ' border-b border-gray-200 group-last:border-b-0' : '';
+    const fundoFixo = 'bg-white group-hover:bg-[#f7fbff]';
+    // Foco da linha clicável nas CÉLULAS (§6.13.1, item 4): o Chrome não desenha anel no <tr>.
+    const foco = (pos: 'primeira' | 'meio' | 'ultima') => (!onRowClick ? '' : pos === 'primeira' ? FOCO_PRIMEIRA : pos === 'ultima' ? FOCO_ULTIMA : FOCO_MEIO);
+
+    // Cabeçalho em dois níveis: trechos de colunas VISÍVEIS e vizinhas do mesmo grupo.
+    const grupoDaColuna = new Map<string, string>();
+    gruposDeColunas?.forEach(g => g.colunas.forEach(k => grupoDaColuna.set(k, g.rotulo)));
+    const trechos: { chave: string; rotulo: string | null; n: number }[] = [];
+    if (gruposDeColunas) {
+        dataKeys.forEach((k, i) => {
+            const rotulo = grupoDaColuna.get(k) ?? null;
+            const ult = trechos[trechos.length - 1];
+            // A coluna fixa fica num trecho só dela (a célula do grupo tem de ser fixa também).
+            if (ult && rotulo !== null && ult.rotulo === rotulo && !(chaveFixa && i === 1)) ult.n += 1;
+            else trechos.push({ chave: k, rotulo, n: 1 });
+        });
+    }
 
     return (
         <div className={bare ? '' : 'bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden'}>
@@ -326,10 +405,15 @@ export function StandardTable<T>({
                     {empty?.icon ?? <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />}
                     <h3 className="text-lg font-bold text-gray-900 mb-2">{empty?.title ?? 'Nenhum registro encontrado'}</h3>
                     <p className="text-sm text-gray-500">{empty?.subtitle ?? (search ? 'Tente ajustar a busca.' : '')}</p>
+                    {empty?.acao && (
+                        <button type="button" onClick={empty.acao.onClick} className="mt-4 inline-flex h-9 items-center rounded-[6px] border border-gray-200 bg-white px-3.5 text-sm font-medium text-blue-700 hover:bg-blue-50">
+                            {empty.acao.rotulo}
+                        </button>
+                    )}
                 </div>
             ) : (
                 <div className="overflow-auto" style={{ maxHeight }}>
-                    <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth + (selection ? 40 : 0), minWidth: '100%' }}>
+                    <table ref={cols.tableRef} className={`text-left ${colunaFixa ? 'border-separate border-spacing-0' : 'border-collapse'}`} style={{ tableLayout: 'fixed', width: tableTotalWidth + (selection ? 40 : 0), minWidth: '100%' }}>
                         <colgroup>
                             {selection && <col style={{ width: '40px' }} />}
                             {dataKeys.map(key => (
@@ -339,11 +423,31 @@ export function StandardTable<T>({
                             <col />
                             {showActions && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
                         </colgroup>
-                        <thead>
-                            <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                        {/* Com dois níveis, o <thead> inteiro fica fixo (as duas linhas juntas). */}
+                        <thead className={gruposDeColunas ? 'sticky top-0 z-10 bg-white' : undefined}>
+                            {gruposDeColunas && (
+                                <tr className="bg-white text-gray-700 font-semibold text-xs">
+                                    {selection && <th aria-hidden="true" style={estiloFixo('caixa', true)} className="border-r border-b border-gray-100" />}
+                                    {trechos.map(t => (
+                                        <th
+                                            key={t.chave}
+                                            colSpan={t.n}
+                                            scope={t.rotulo ? 'colgroup' : undefined}
+                                            style={t.chave === chaveFixa ? estiloFixo('dado', true) : undefined}
+                                            className={`${px} py-1.5 text-center text-xs font-semibold text-gray-700 border-r border-gray-100 ${t.rotulo ? 'border-b border-gray-200' : 'border-b border-gray-100'}`}
+                                        >
+                                            {t.rotulo}
+                                        </th>
+                                    ))}
+                                    <th aria-hidden="true" className="border-r border-b border-gray-100" />
+                                    {showActions && <th aria-hidden="true" className="border-b border-gray-100" />}
+                                </tr>
+                            )}
+                            <tr className={`${gruposDeColunas ? '' : 'sticky top-0 z-10 '}bg-white text-gray-700 font-semibold text-xs border-b border-gray-200`}>
                                 {selection && (
-                                    <th className="w-10 px-4 py-2 border-r border-gray-100 text-center">
+                                    <th style={estiloFixo('caixa', true)} className={`w-10 px-4 py-2 border-r border-gray-100 text-center${bordaTh}`}>
                                         <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                                            aria-label="Selecionar todas as linhas visíveis"
                                             checked={allVisibleSelected} disabled={selectableVisible.length === 0} onChange={toggleAllVisible} />
                                     </th>
                                 )}
@@ -352,14 +456,15 @@ export function StandardTable<T>({
                                         sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection}
                                         onSort={tableColumns.handleColumnSort}
                                         onMoveColumn={tableColumns.moveColumn}
-                                        className={`${px} py-2 border-r border-gray-100 overflow-hidden ${alignClass(key)}`}>
+                                        style={key === chaveFixa ? estiloFixo('dado', true) : undefined}
+                                        className={`${px} py-2 border-r border-gray-100 overflow-hidden ${alignClass(key)}${bordaTh}`}>
                                         <cols.ResizeHandle colKey={key} />
                                     </SortableHeader>
                                 ))}
                                 {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
-                                <th aria-hidden="true" className="border-r border-gray-100" />
+                                <th aria-hidden="true" className={`border-r border-gray-100${bordaTh}`} />
                                 {showActions && (
-                                    <th className={`${px} py-2 text-right relative overflow-hidden text-sm font-semibold text-gray-700`}>
+                                    <th className={`${px} py-2 text-right relative overflow-hidden text-sm font-semibold text-gray-700${bordaTh}`}>
                                         {actions!.label ?? 'Ações'}
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>
@@ -387,25 +492,30 @@ export function StandardTable<T>({
                                         e.preventDefault();
                                         onRowClick(row);
                                     } : undefined}
-                                    className={`hover:bg-blue-50/50 transition-colors ${onRowClick ? 'cursor-pointer focus:outline-none focus-visible:bg-blue-50/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/40' : ''} ${rowClassName?.(row) ?? ''}`}
+                                    // `group`: a célula fixa acompanha o hover e o foco da linha (§6.13.1).
+                                    className={`group hover:bg-blue-50/50 transition-colors ${onRowClick ? 'cursor-pointer outline-none' : ''} ${rowClassName?.(row) ?? ''}`}
                                 >
                                     {selection && (
-                                        <td className="px-4 py-2.5 border-r border-gray-100 text-center" onClick={e => e.stopPropagation()}>
+                                        <td style={estiloFixo('caixa', false)} className={`px-4 py-2.5 border-r border-gray-100 text-center${bordaTd} ${colunaFixa ? `${SOMBRA_FIXA} ${fundoFixo}` : ''} ${foco('primeira')}`} onClick={e => e.stopPropagation()}>
                                             {(selection.canSelect?.(row) ?? true) && (
                                                 <input type="checkbox" className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                    checked={selection.selected.has(rowKey(row))} onChange={() => toggleOne(rowKey(row))} />
+                                                    aria-label={nomeDaCaixa(row)}
+                                                    title="Segure Shift e clique para marcar um intervalo"
+                                                    checked={selection.selected.has(rowKey(row))}
+                                                    onChange={e => clicarCaixa(rowKey(row), (e.nativeEvent as MouseEvent).shiftKey === true)} />
                                             )}
                                         </td>
                                     )}
-                                    {dataKeys.map(key => (
-                                        <td key={key} className={`${px} py-2.5 border-r border-gray-100 ${alignClass(key)}`}>
+                                    {dataKeys.map((key, iCol) => (
+                                        <td key={key} style={key === chaveFixa ? estiloFixo('dado', false) : undefined}
+                                            className={`${px} py-2.5 border-r border-gray-100 ${alignClass(key)}${bordaTd} ${key === chaveFixa ? `${SOMBRA_FIXA} ${fundoFixo}` : ''} ${foco(iCol === 0 && !selection ? 'primeira' : 'meio')}`}>
                                             {renderCell(key, row)}
                                         </td>
                                     ))}
                                     {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
-                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
+                                    <td aria-hidden="true" className={`border-r border-gray-100${bordaTd} ${foco(showActions ? 'meio' : 'ultima')}`}></td>
                                     {showActions && (
-                                        <td className={`${px} py-2.5 text-right`} onClick={e => e.stopPropagation()}>
+                                        <td className={`${px} py-2.5 text-right${bordaTd} ${foco('ultima')}`} onClick={e => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1.5">{actions!.render(row)}</div>
                                         </td>
                                     )}
@@ -417,14 +527,15 @@ export function StandardTable<T>({
                             {renderTotals?.(visibleCount)}
                             {totaisPorColuna && filtered.length > 0 && (
                                 <tr className="bg-gray-50 border-t-2 border-gray-200">
-                                    {selection && <td className="border-r border-gray-100"></td>}
+                                    {selection && <td style={estiloFixo('caixa', false)} className={`border-r border-gray-100 ${colunaFixa ? `${SOMBRA_FIXA} bg-gray-50 border-t-2 border-t-gray-200` : ''}`}></td>}
                                     {dataKeys.map(key => (
-                                        <td key={key} className={`${px} py-2.5 border-r border-gray-100 ${alignClass(key)}`}>
+                                        <td key={key} style={key === chaveFixa ? estiloFixo('dado', false) : undefined}
+                                            className={`${px} py-2.5 border-r border-gray-100 ${alignClass(key)} ${colunaFixa ? `bg-gray-50 border-t-2 border-t-gray-200 ${key === chaveFixa ? SOMBRA_FIXA : ''}` : ''}`}>
                                             {totaisPorColuna(key, filtered)}
                                         </td>
                                     ))}
-                                    <td aria-hidden="true" className="border-r border-gray-100"></td>
-                                    {showActions && <td></td>}
+                                    <td aria-hidden="true" className={`border-r border-gray-100 ${colunaFixa ? 'border-t-2 border-t-gray-200' : ''}`}></td>
+                                    {showActions && <td className={colunaFixa ? 'border-t-2 border-t-gray-200' : undefined}></td>}
                                 </tr>
                             )}
                         </tbody>

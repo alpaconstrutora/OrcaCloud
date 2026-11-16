@@ -84,7 +84,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   const confirmar = useConfirm();
   const [criandoAreas, setCriandoAreas] = React.useState(false);
   const abrirAreasNaPlanta = (studyId: string) => {
-    window.location.hash = `#/blueprint?studyId=${studyId}&tela=areas-nbr12721`;
+    // `origem=empreendimento` (15/11/2026): a tela mostra a trilha com este empreendimento e a
+    // seta volta para cá (`#/empreendimentos?id=`), não para o desenho da Planta.
+    window.location.hash = `#/blueprint?studyId=${studyId}&tela=areas-nbr12721&origem=empreendimento`;
   };
   const [pendingCuradoria, setPendingCuradoria] = React.useState(0);
   // Quantas propostas o empreendimento já teve: sem nenhuma, o bloco Curadoria nem aparece na Sincronização.
@@ -280,24 +282,24 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             <div className="p-3 bg-blue-50 text-blue-600 rounded-[10px]">
               <Building2 className="w-6 h-6" />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <h1 className="text-2xl font-black text-gray-900 tracking-tight">{e.name}</h1>
-                <span className={`text-sm font-normal ${STATUS_TEXT_COLOR[e.status]}`}>
+                <span className={`whitespace-nowrap text-sm font-normal ${STATUS_TEXT_COLOR[e.status]}`}>
                   {STATUS_LABELS[e.status]}
                 </span>
                 {tipoLabel && (
-                  <span className="text-sm font-normal text-gray-500">
+                  <span className="whitespace-nowrap text-sm font-normal text-gray-500">
                     · {tipoLabel}
                   </span>
                 )}
               </div>
-              <p className="text-xs text-gray-400 font-medium mt-0.5">
+              <p className="text-xs text-gray-500 font-medium mt-0.5">
                 {e.code ? `${e.code} · ` : ''}{e.spe_razao_social || e.developer_name || 'Sem SPE definida'}
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 md:justify-end shrink-0">
             {/* "Sincronizar do Estudo" NÃO mora aqui: a mesma ação já existe na aba Centro de
                 Sincronização, onde ela tem contexto (divergências, última sync) e desabilita
                 sozinha quando não há o que sincronizar. Ter as duas era o mesmo controle em
@@ -306,7 +308,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             {e.imovib_study_id && onGoToStudy && (
               <button
                 onClick={onGoToStudy}
-                className="flex items-center gap-1.5 h-9 px-3.5 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
+                className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
               >
                 <BarChart3 className="w-[15px] h-[15px]" /> Ver Estudo
               </button>
@@ -315,7 +317,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
               <button
                 onClick={() => abrirAreasNaPlanta(e.blueprint_study_id!)}
                 title="Abre o estudo vinculado da Planta na tela Áreas NBR 12721 (Quadros I, II e IV-B e frações)"
-                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
+                className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
               >
                 <Scale className="w-4 h-4" /> Áreas NBR 12721
               </button>
@@ -324,7 +326,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
                 onClick={() => void criarEstudoDeAreas()}
                 disabled={criandoAreas}
                 title="Sem estudo da Planta vinculado: cria um estudo de áreas (sem desenho) a partir deste empreendimento"
-                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
+                className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
               >
                 <Scale className="w-4 h-4" /> {criandoAreas ? 'Criando…' : 'Criar estudo de áreas'}
               </button>
@@ -332,13 +334,13 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             <button
               onClick={handleGenerateMemorial}
               disabled={generatingMemorial}
-              className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
+              className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
             >
               <ScrollText className="w-4 h-4" /> {generatingMemorial ? 'Gerando...' : 'Minuta do Memorial'}
             </button>
             <button
               onClick={onEdit}
-              className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+              className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
             >
               <Edit className="w-[15px] h-[15px]" /> Editar
             </button>
@@ -359,7 +361,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             >
               <t.icon className="w-3.5 h-3.5" /> {t.label}
               {t.badge != null && t.badge > 0 && (
-                <span className="ml-0.5 min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-[10px] font-bold">
+                <span className="ml-0.5 min-w-[18px] h-[18px] px-1 inline-flex items-center justify-center rounded-full bg-amber-500 text-white text-xs font-bold">
                   {t.badge}
                 </span>
               )}
@@ -434,7 +436,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
               <Row label="Estudo de Arquitetura" value={e.blueprint_study_id ? (blueprintStudyName || 'Estudo não encontrado') : undefined} />
               <Row label="Obra Vinculada" value={e.project_id ? (obraVinculada?.name || 'Obra não encontrada') : undefined} />
             </dl>
-            <p className="text-[11px] text-gray-400 font-medium mt-4">
+            <p className="text-xs text-gray-500 font-medium mt-4">
               Gerencie estes vínculos (e os demais: orçamento, planejamento, contratos) na aba Vinculações.
             </p>
           </div>
@@ -555,14 +557,14 @@ const formatDate = (iso: string): string => {
 
 const Row: React.FC<{ label: string; value?: string }> = ({ label, value }) => (
   <div className="flex justify-between gap-4">
-    <dt className="text-gray-400 font-semibold">{label}</dt>
+    <dt className="text-gray-500 font-semibold">{label}</dt>
     <dd className="text-gray-800 font-bold text-right">{value || '—'}</dd>
   </div>
 );
 
 const Metric: React.FC<{ label: string; value: string }> = ({ label, value }) => (
   <div className="bg-gray-50/60 border border-gray-100 rounded-[10px] p-4">
-    <span className="text-xs font-semibold text-gray-400 block mb-1">{label}</span>
+    <span className="text-xs font-semibold text-gray-500 block mb-1">{label}</span>
     <span className="text-lg font-bold text-gray-800">{value}</span>
   </div>
 );

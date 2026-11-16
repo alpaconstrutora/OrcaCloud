@@ -624,7 +624,7 @@ export const VinculacoesTab: React.FC<Props> = ({
             key={a.id}
             link={a}
             // Os quadros moram no estudo da Planta: o vínculo é o da seção "Planta Inteligente" — aqui só abre.
-            onOpen={() => { window.location.hash = `#/blueprint?studyId=${String(a.meta?.studyId ?? '')}&tela=areas-nbr12721`; }}
+            onOpen={() => { window.location.hash = `#/blueprint?studyId=${String(a.meta?.studyId ?? '')}&tela=areas-nbr12721&origem=empreendimento`; }}
           />
         ))}
       </LinkSection>

@@ -179,6 +179,12 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
     return (TELAS_DO_LINK_DIRETO as readonly string[]).includes(t ?? '') ? (t as TelaDoLinkDireto) : null;
   };
   const [telaPedida, setTelaPedida] = useState<TelaDoLinkDireto | null>(() => (typeof window !== 'undefined' ? telaDoHash(window.location.hash) : null));
+  // `&origem=empreendimento` (15/11/2026): o link veio da ficha do Empreendimento — a tela
+  // mostra a trilha com o nome dele e a seta volta para lá. O editor regrava o endereço com
+  // tela + origem enquanto a tela está aberta, então F5 volta ao mesmo lugar.
+  const origemDoHash = (h: string): 'empreendimento' | null =>
+    h.includes('?') && new URLSearchParams(h.split('?')[1]).get('origem') === 'empreendimento' ? 'empreendimento' : null;
+  const [origemPedida, setOrigemPedida] = useState<'empreendimento' | null>(() => (typeof window !== 'undefined' ? origemDoHash(window.location.hash) : null));
   // D4 (10/10/2026): o link que chega com o módulo JÁ montado (a lista de plantas na
   // tela). A vista continua "blueprint" — o roteador não remonta nada —, então o
   // pedido só era lido na montagem e ficava sem efeito. Agora a troca de endereço
@@ -190,6 +196,7 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
       const id = new URLSearchParams(h.split('?')[1]).get('studyId');
       if (id) {
         setTelaPedida(telaDoHash(h));
+        setOrigemPedida(origemDoHash(h));
         setEstudoPedido(id);
       }
     };
@@ -328,6 +335,7 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
         study={aberto.study}
         branchId={aberto.branchId}
         telaInicial={telaPedida}
+        origemDaTela={origemPedida}
         onTrocarRamo={(branchId) => setAberto((a) => (a ? { ...a, branchId } : a))}
         onAbrirMapaRegulatorio={
           podeVerMapaRegulatorio
@@ -343,6 +351,7 @@ export default function BlueprintModule({ podeVerMapaRegulatorio = true }: { pod
           setAberto(null);
           // A tela pedida pelo link vale só para aquele estudo: o próximo abre no editor.
           setTelaPedida(null);
+          setOrigemPedida(null);
           carregar();
         }}
       />

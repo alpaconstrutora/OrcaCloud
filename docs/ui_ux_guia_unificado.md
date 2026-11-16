@@ -367,6 +367,8 @@ Snippet de referência (o que `KpiCard.tsx` renderiza — só para entender, nã
 > ❌ Nunca reimplementar o card manualmente numa tela nova — foi assim que o
 > valor de um KPI apareceu com `font-normal` em vez de `font-bold` em
 > `ProjectFinancialManager.tsx`. Use o componente.
+> ℹ️ **Cartão com `onClick` é `<button>` desde 15/11/2026** (era `<div onClick>` sem papel nem foco — o
+> teclado não chegava nele). Passe `title` dizendo para onde ele leva. Sem `onClick`, segue `<div>`.
 
 ### 4.1 `sub` é opcional — omita quando for redundante
 
@@ -1441,6 +1443,18 @@ const COLUMNS: StandardTableColumn[] = [                 // só colunas de DADO
 > "Total" `text-xs font-semibold text-gray-500`; `null` deixa a célula vazia.
 > ✅ Ação primária §17: na barra §5.3/§19.1 da tela, ou em `toolbarRight` quando
 > a tela não tem barra própria.
+> ✅ **Desde 15/11/2026 (crítica das Áreas NBR 12721, `docs/planos/2026-11-15-areas-nbr12721-critica.md`):**
+> - **`gruposDeColunas`** — cabeçalho em DOIS níveis: `[{ rotulo: 'Área privativa', colunas: ['c1','c2'] }]`.
+>   O rótulo cobre as colunas visíveis e vizinhas do grupo (`colSpan`, `scope="colgroup"`); se o usuário
+>   separar as colunas de um grupo, o rótulo aparece sobre cada trecho. Com dois níveis o `<thead>` inteiro
+>   é que fica fixo. Uso: quadros da norma (NBR 12721), qualquer tabela que reproduz um documento com grupos.
+> - **`colunaFixa`** — a 1ª coluna de dado (e a caixa de seleção) fica fixa ao rolar na horizontal: a
+>   receita do §6.13.1 (border-separate, borda/sombra por `--borda-fixa`, foco nas células) dentro do componente.
+> - **Seleção (§10):** toda caixa tem nome acessível (`selection.label(row)`, senão "Selecionar: " + `rowLabel`)
+>   e **Shift+clique** marca o intervalo desde a última caixa clicada sem Shift (§10.1), sobre as linhas na
+>   ordem da tela. Vale para TODA tabela com `selection`.
+> - **Linha clicável (`onRowClick`):** o anel de foco é desenhado nas células (o Chrome não desenha no `<tr>`).
+> - **`empty.acao`** — o estado vazio pode trazer o caminho para resolver (`{ rotulo, onClick }`): vazio que orienta.
 > ❌ Não passe `rows` já ordenados "na mão" e depois ignore `sortValue` — a
 > ordenação pelo cabeçalho é dele. Filtro de **escopo** (período, conta) fica
 > fora; filtro de **recorte** (status, tipo) entra em `filters`.
@@ -2379,6 +2393,12 @@ tela, não navegação de módulo), esta é a forma canônica. **Referência:
 > ✅ **`badgeTom: 'novo'`** pinta o contador na cor de destaque, em `font-semibold`
 > — novidade ainda não vista (ex.: "1 atualizado" em Enviados). Vermelho
 > (`'alerta'`) fica para o que pede ação/erro.
+> ✅ **Contador com contraste AA (15/11/2026):** era `text-blue-400` na ativa e `text-gray-400` nas
+> outras (2,5–2,6:1); agora o tom do rótulo ativo e `text-gray-500`. Mudou no componente: vale para todo `TabsBar`.
+> ✅ **`grupo` (15/11/2026):** abas com `grupo` vêm juntas e o trilho escreve o nome do grupo antes da 1ª
+> (texto `aria-hidden`, não aba — as setas pulam ele), com divisória entre grupos. Para telas com abas de
+> natureza diferente lado a lado — ex.: Áreas NBR 12721, **Entrada** (o que se preenche) | **Quadros** (o
+> que sai calculado). Não é árvore (§19.2): continua um trilho só, um nível.
 >
 > ```tsx
 > <TabsBar tabs={[{ id: 'ciclos', label: 'Ciclos', badge: cycles.length }, { id: 'pdi', label: 'PDI' }]}

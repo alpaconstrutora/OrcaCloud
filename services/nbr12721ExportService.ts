@@ -102,7 +102,7 @@ export const nbr12721ExportService = {
   /** A pasta de trabalho: "Resumo" + uma aba por tabela, números como número (a planilha soma). */
   pastaXlsx(d: DocumentoNbr12721): XLSX.WorkBook {
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([['Áreas NBR 12721 — Quadros da versão publicada'], [], ...cabecalhoDoDocumentoNbr12721(d)]), 'Resumo');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[d.previa ? 'Áreas NBR 12721 — PRÉVIA do rascunho (não publicada)' : 'Áreas NBR 12721 — Quadros da versão publicada'], [], ...cabecalhoDoDocumentoNbr12721(d)]), 'Resumo');
     for (const t of tabelasDoDocumentoNbr12721(d)) {
       const linhas: (string | number)[][] = [t.colunas.map((c) => c.titulo), ...t.linhas];
       if (t.total && t.linhas.length) linhas.push(t.total);
@@ -127,11 +127,13 @@ export const nbr12721ExportService = {
     const MARGEM = 8;
     const fimDaUltimaTabela = () => (doc as unknown as { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY;
     // Cada página leva no rodapé o que identifica o documento: empresa, versão e hash.
-    const rodape = `${d.empresa ? `${d.empresa} · ` : ''}${d.estudo} · Versão ${d.revisao} · hash ${d.hash.slice(0, 16)}`;
+    const rodape = d.previa
+      ? `${d.empresa ? `${d.empresa} · ` : ''}${d.estudo} · PRÉVIA do rascunho — não publicada`
+      : `${d.empresa ? `${d.empresa} · ` : ''}${d.estudo} · Versão ${d.revisao} · hash ${d.hash.slice(0, 16)}`;
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(13);
-    doc.text('Áreas NBR 12721 — Quadros I, II e IV-B', 12, 14);
+    doc.text(d.previa ? 'Áreas NBR 12721 — PRÉVIA do rascunho (não publicada)' : 'Áreas NBR 12721 — Quadros I, II e IV-B', 12, 14);
     doc.setFontSize(8.5);
     let y = 21;
     for (const [rotulo, valor] of cabecalhoDoDocumentoNbr12721(d)) {

@@ -24,6 +24,10 @@ export interface TabsBarItem<T extends string = string> {
     badgeTom?: 'alerta' | 'novo';
     /** O que o contador conta (vira `title` dele) — número solto não se explica. */
     badgeTitulo?: string;
+    /** Grupo da aba (ex.: "Entrada" × "Quadros" nas Áreas NBR 12721). Abas do mesmo grupo
+     *  vêm juntas; o trilho escreve o nome do grupo antes da 1ª e põe uma divisória entre grupos.
+     *  Sem `grupo` em nenhuma aba, nada muda. */
+    grupo?: string;
 }
 
 interface TabsBarProps<T extends string> {
@@ -43,12 +47,15 @@ interface TabsBarProps<T extends string> {
     accent?: 'blue' | 'orange' | 'indigo' | 'portal';
 }
 
-/* Classes por extenso — o JIT do Tailwind não enxerga classe montada em runtime. */
+/* Classes por extenso — o JIT do Tailwind não enxerga classe montada em runtime.
+ * Contador: até 15/11/2026 era o tom 400 (`text-blue-400` na aba ativa, `text-gray-400` nas
+ * outras) — 2,5–2,6:1, abaixo dos 4,5:1 do AA (medido na crítica das Áreas NBR 12721). Agora
+ * é o tom do rótulo da aba ativa e `text-gray-500` nas inativas (≈ 4,7:1 sobre o trilho). */
 const ACCENTS = {
-    blue: { ativa: 'bg-white text-blue-600 shadow-sm', contador: 'text-blue-400', novo: 'font-semibold text-blue-600', anel: 'focus-visible:ring-blue-500' },
-    orange: { ativa: 'bg-white text-orange-600 shadow-sm', contador: 'text-orange-400', novo: 'font-semibold text-orange-600', anel: 'focus-visible:ring-orange-500' },
-    indigo: { ativa: 'bg-white text-indigo-600 shadow-sm', contador: 'text-indigo-400', novo: 'font-semibold text-indigo-600', anel: 'focus-visible:ring-indigo-500' },
-    portal: { ativa: 'bg-white text-[#C24428] shadow-sm', contador: 'text-[#E1553C]', novo: 'font-semibold text-[#C24428]', anel: 'focus-visible:ring-[#C24428]' },
+    blue: { ativa: 'bg-white text-blue-600 shadow-sm', contador: 'text-blue-600', novo: 'font-semibold text-blue-600', anel: 'focus-visible:ring-blue-500' },
+    orange: { ativa: 'bg-white text-orange-600 shadow-sm', contador: 'text-orange-700', novo: 'font-semibold text-orange-600', anel: 'focus-visible:ring-orange-500' },
+    indigo: { ativa: 'bg-white text-indigo-600 shadow-sm', contador: 'text-indigo-600', novo: 'font-semibold text-indigo-600', anel: 'focus-visible:ring-indigo-500' },
+    portal: { ativa: 'bg-white text-[#C24428] shadow-sm', contador: 'text-[#C24428]', novo: 'font-semibold text-[#C24428]', anel: 'focus-visible:ring-[#C24428]' },
 };
 
 export function TabsBar<T extends string>({ tabs, value, onChange, children, className = '', bare, accent = 'blue' }: TabsBarProps<T>) {
@@ -59,9 +66,18 @@ export function TabsBar<T extends string>({ tabs, value, onChange, children, cla
             <div role="tablist" onKeyDown={moverEntreAbas} className={`flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full ${bare ? className : ''}`}>
                 {tabs.map((t, i) => {
                     const active = t.id === value;
+                    // Começo de grupo: o nome do grupo (texto, não aba — as setas pulam ele) e, a
+                    // partir do 2º grupo, uma divisória. O nome é `aria-hidden`: o rótulo de cada
+                    // aba já se explica, e o leitor de tela não ouve "Quadros" como se fosse aba.
+                    const inicioDeGrupo = !!t.grupo && t.grupo !== tabs[i - 1]?.grupo;
                     return (
+                        <React.Fragment key={t.id}>
+                        {inicioDeGrupo && (
+                            <span aria-hidden="true" className={`flex items-center gap-1 h-7 pr-1 text-xs font-medium text-gray-500 select-none ${i > 0 ? 'pl-2 ml-1 border-l border-gray-200' : 'pl-2'}`}>
+                                {t.grupo}
+                            </span>
+                        )}
                         <button
-                            key={t.id}
                             type="button"
                             role="tab"
                             aria-selected={active}
@@ -75,9 +91,10 @@ export function TabsBar<T extends string>({ tabs, value, onChange, children, cla
                             {t.label}
                             {t.badge !== undefined && t.badge !== 0 && (
                                 <span title={t.badgeTitulo}
-                                    className={`text-xs ${t.badgeTom === 'alerta' ? 'font-semibold text-red-600' : t.badgeTom === 'novo' ? cor.novo : active ? cor.contador : 'text-gray-400'}`}>{t.badge}</span>
+                                    className={`text-xs ${t.badgeTom === 'alerta' ? 'font-semibold text-red-600' : t.badgeTom === 'novo' ? cor.novo : active ? cor.contador : 'text-gray-500'}`}>{t.badge}</span>
                             )}
                         </button>
+                        </React.Fragment>
                     );
                 })}
             </div>

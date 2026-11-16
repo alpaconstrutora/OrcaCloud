@@ -179,6 +179,50 @@ export const blueprintSnapshotNbr12721Service = {
     return r;
   },
 
+  /**
+   * A situação do documento para a faixa de etapas da tela Áreas NBR 12721 (15/11/2026):
+   * a ÚLTIMA versão com quadro congelado (revisão, hash e aprovações), e o Empreendimento
+   * ligado com a informação de as frações já terem sido levadas (unidade com
+   * `fracao_ideal_origem = 'MOTOR'`). Só leitura.
+   */
+  async situacaoDoDocumento(studyId: string): Promise<{
+    versao: { revisao: number; hash: string; tecnica: boolean; juridica: boolean } | null;
+    empreendimento: { id: string; nome: string; fracoesLevadas: boolean } | null;
+  }> {
+    const [quadros, emp] = await Promise.all([
+      supabase.from('blueprint_snapshot_nbr12721').select('snapshot_id, hash').eq('study_id', studyId),
+      blueprintSnapshotNbr12721Service.empreendimentoDoEstudo(studyId),
+    ]);
+    if (quadros.error) fail('situacaoDoDocumento', quadros.error);
+    const linhas = (quadros.data ?? []) as { snapshot_id: string; hash: string }[];
+    let versao: { revisao: number; hash: string; tecnica: boolean; juridica: boolean } | null = null;
+    if (linhas.length) {
+      const ids = linhas.map((l) => l.snapshot_id);
+      const [snaps, aprov] = await Promise.all([
+        supabase.from('blueprint_snapshots').select('id, revision').in('id', ids),
+        supabase.from('blueprint_snapshot_nbr12721_aprovacoes').select('snapshot_id, tipo').in('snapshot_id', ids),
+      ]);
+      if (snaps.error) fail('situacaoDoDocumento', snaps.error);
+      if (aprov.error) fail('situacaoDoDocumento', aprov.error);
+      const ultima = ((snaps.data ?? []) as { id: string; revision: number }[]).sort((a, b) => b.revision - a.revision)[0];
+      if (ultima) {
+        const tipos = ((aprov.data ?? []) as { snapshot_id: string; tipo: TipoDeAprovacaoNbr12721 }[]).filter((a) => a.snapshot_id === ultima.id).map((a) => a.tipo);
+        versao = { revisao: ultima.revision, hash: linhas.find((l) => l.snapshot_id === ultima.id)?.hash ?? '', tecnica: tipos.includes('TECNICA'), juridica: tipos.includes('JURIDICA') };
+      }
+    }
+    let empreendimento: { id: string; nome: string; fracoesLevadas: boolean } | null = null;
+    if (emp) {
+      const { count, error } = await supabase
+        .from('empreendimento_units')
+        .select('id, empreendimento_towers!inner(empreendimento_id)', { count: 'exact', head: true })
+        .eq('empreendimento_towers.empreendimento_id', emp.id)
+        .eq('fracao_ideal_origem', 'MOTOR');
+      if (error) fail('situacaoDoDocumento', error);
+      empreendimento = { id: emp.id, nome: emp.name, fracoesLevadas: (count ?? 0) > 0 };
+    }
+    return { versao, empreendimento };
+  },
+
   /** Aprova pela RPC — é ela que confere organização, pendência e ordem; o erro do banco sobe com o motivo. */
   async aprovar(snapshotId: string, tipo: TipoDeAprovacaoNbr12721, observacao: string | null): Promise<string> {
     const { data, error } = await supabase.rpc('aprovar_nbr12721_da_versao', { p_snapshot_id: snapshotId, p_tipo: tipo, p_observacao: observacao });

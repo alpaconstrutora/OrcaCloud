@@ -6291,6 +6291,26 @@ describe('BlueprintEditor · ocultar componentes na planta baixa', () => {
     fireEvent.keyDown(window, { key: 'd', ctrlKey: true });
     expect(await screen.findByRole('button', { name: /^P2 · Pilar/ })).toBeInTheDocument();
   });
+
+  it('Ctrl+Z dentro de um campo de texto é do campo: não desfaz o modelo (crítica 15/11/2026)', async () => {
+    loadBranchModel.mockResolvedValue(await comPilar());
+    await montar();
+    const user = userEvent.setup();
+    await abrirComponentes(user);
+    await user.click(await screen.findByRole('button', { name: /^P1 · Pilar/ }));
+    fireEvent.keyDown(window, { key: 'd', ctrlKey: true });
+    expect(await screen.findByRole('button', { name: /^P2 · Pilar/ })).toBeInTheDocument();
+    // Um campo de texto qualquer (a busca, o coeficiente): o Ctrl+Z nele não chega ao modelo.
+    const campo = document.createElement('input');
+    document.body.appendChild(campo);
+    campo.focus();
+    fireEvent.keyDown(campo, { key: 'z', ctrlKey: true });
+    expect(screen.getByRole('button', { name: /^P2 · Pilar/ })).toBeInTheDocument();
+    campo.remove();
+    // Fora do campo, o atalho continua desfazendo.
+    fireEvent.keyDown(window, { key: 'z', ctrlKey: true });
+    await waitFor(() => expect(screen.queryByRole('button', { name: /^P2 · Pilar/ })).toBeNull());
+  });
 });
 
 /**

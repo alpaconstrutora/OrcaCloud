@@ -66,7 +66,7 @@ const comprimento = (w: Pick<Wall, 'a' | 'b'>) => dist(w.a, w.b);
  * O trecho da parede (mm desde a ponta `a`) que faz divisa com o ambiente: os vértices do anel a até 300 mm do eixo
  * dela, projetados nele e limitados às pontas; null quando o ambiente não encosta.
  */
-function trechoNaParede(w: Pick<Wall, 'a' | 'b'>, anel: readonly Point[]): { ini: number; fim: number } | null {
+export function trechoNaParede(w: Pick<Wall, 'a' | 'b'>, anel: readonly Point[]): { ini: number; fim: number } | null {
   const L = comprimento(w);
   if (L <= 0) return null;
   const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };

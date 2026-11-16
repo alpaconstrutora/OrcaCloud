@@ -104,14 +104,14 @@
           "nome": "Torre · 3º pav",
           "ambientes": 21,
           "semRota": 0,
-          "naoAtendem": 2,
+          "naoAtendem": 0,
           "piorM": 69.8
         },
         {
           "nome": "Torre · 4º pav",
           "ambientes": 21,
           "semRota": 0,
-          "naoAtendem": 2,
+          "naoAtendem": 0,
           "piorM": 74.3
         },
         {
@@ -393,7 +393,7 @@
     "aguaXEsgoto": 18
   },
   "R12": {
-    "modelo": "efbf7bede1a92f9b7ce506851d209d10b64faf2adba719e32cccfe2d1e1f6450",
+    "modelo": "965e8e6f1caaecb4e7bb01932d8c31b2b350f3a0fd8a7f480825935ec0a85572",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
@@ -403,7 +403,7 @@
     "nucleos": 3,
     "estruturas": 1424,
     "quadros": 103,
-    "terminais": 9456,
+    "terminais": 9533,
     "trechosDeAgua": 6871,
     "agua": {
       "pontos": 144,
@@ -509,7 +509,7 @@
       ],
       "condicionais": [],
       "dispensadas": 7,
-      "limiteM": 25,
+      "limiteM": 40,
       "andares": [
         {
           "nome": "Subsolo · 2º subsolo",
@@ -543,77 +543,77 @@
           "nome": "Torre · 3º pav",
           "ambientes": 78,
           "semRota": 0,
-          "naoAtendem": 6,
+          "naoAtendem": 0,
           "piorM": 75.7
         },
         {
           "nome": "Torre · 4º pav",
           "ambientes": 78,
           "semRota": 0,
-          "naoAtendem": 6,
+          "naoAtendem": 0,
           "piorM": 81.2
         },
         {
           "nome": "Torre · 5º pav",
           "ambientes": 78,
           "semRota": 0,
-          "naoAtendem": 6,
+          "naoAtendem": 0,
           "piorM": 86.7
         },
         {
           "nome": "Torre · 6º pav",
           "ambientes": 78,
           "semRota": 0,
-          "naoAtendem": 6,
+          "naoAtendem": 0,
           "piorM": 92.2
         },
         {
           "nome": "Torre · 7º pav",
           "ambientes": 78,
           "semRota": 0,
-          "naoAtendem": 6,
+          "naoAtendem": 0,
           "piorM": 97.7
         },
         {
           "nome": "Torre · 8º pav",
           "ambientes": 78,
           "semRota": 0,
-          "naoAtendem": 6,
+          "naoAtendem": 0,
           "piorM": 103.2
         },
         {
           "nome": "Torre · 9º pav",
           "ambientes": 78,
           "semRota": 0,
-          "naoAtendem": 6,
+          "naoAtendem": 0,
           "piorM": 108.7
         },
         {
           "nome": "Torre · 10º pav",
           "ambientes": 78,
           "semRota": 0,
-          "naoAtendem": 6,
+          "naoAtendem": 0,
           "piorM": 114.1
         },
         {
           "nome": "Torre · 11º pav",
           "ambientes": 78,
           "semRota": 0,
-          "naoAtendem": 6,
+          "naoAtendem": 0,
           "piorM": 119.6
         },
         {
           "nome": "Torre · 12º pav",
           "ambientes": 78,
           "semRota": 0,
-          "naoAtendem": 6,
+          "naoAtendem": 0,
           "piorM": 125.1
         },
         {
           "nome": "Torre · cobertura",
           "ambientes": 1,
           "semRota": 0,
-          "naoAtendem": 1,
+          "naoAtendem": 0,
           "piorM": 118.8
         }
       ],
@@ -623,6 +623,7 @@
         "LUMINARIA_EMERGENCIA": 46,
         "Alimentação da luminária de emergência": 46,
         "CENTRAL_ALARME": 1,
+        "DETECTOR_FUMACA": 17,
         "ACIONADOR_MANUAL": 11,
         "AVISADOR": 5
       },
@@ -693,7 +694,7 @@
     "aguaXEsgoto": 141
   },
   "RL": {
-    "modelo": "d91b10b7dbc2a8bb1c8efaf1383038688df267a961460596fb7d6cd79b2de37a",
+    "modelo": "89c70c398923a3860dbb8651d330fb972c7fc7aba61f3308b80afeabde7d2e96",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -703,7 +704,7 @@
     "nucleos": 2,
     "estruturas": 1179,
     "quadros": 100,
-    "terminais": 9094,
+    "terminais": 9243,
     "trechosDeAgua": 7436,
     "agua": {
       "pontos": 229,
@@ -832,77 +833,81 @@
       ],
       "condicionais": [],
       "dispensadas": 9,
-      "limiteM": 25,
+      "limiteM": 40,
       "andares": [
         {
           "nome": "Torre · 1º pav (térreo)",
           "ambientes": 15,
           "semRota": 0,
-          "naoAtendem": 5,
-          "piorM": 58.6
+          "naoAtendem": 0,
+          "piorM": 32.9
         },
         {
           "nome": "Torre · 2º pav (tipo)",
-          "ambientes": 125,
-          "semRota": 1,
-          "naoAtendem": 6,
+          "ambientes": 124,
+          "semRota": 0,
+          "naoAtendem": 0,
           "piorM": 83.1
         },
         {
           "nome": "Torre · 3º pav",
-          "ambientes": 125,
-          "semRota": 1,
-          "naoAtendem": 11,
+          "ambientes": 124,
+          "semRota": 0,
+          "naoAtendem": 0,
           "piorM": 97.1
         },
         {
           "nome": "Torre · 4º pav",
-          "ambientes": 125,
-          "semRota": 1,
-          "naoAtendem": 11,
+          "ambientes": 124,
+          "semRota": 0,
+          "naoAtendem": 0,
           "piorM": 104.4
         },
         {
           "nome": "Torre · 5º pav",
-          "ambientes": 125,
-          "semRota": 1,
-          "naoAtendem": 11,
+          "ambientes": 124,
+          "semRota": 0,
+          "naoAtendem": 0,
           "piorM": 111.7
         },
         {
           "nome": "Torre · 6º pav",
-          "ambientes": 125,
-          "semRota": 1,
-          "naoAtendem": 11,
+          "ambientes": 124,
+          "semRota": 0,
+          "naoAtendem": 0,
           "piorM": 119
         },
         {
           "nome": "Torre · 7º pav",
-          "ambientes": 125,
-          "semRota": 1,
-          "naoAtendem": 11,
+          "ambientes": 124,
+          "semRota": 0,
+          "naoAtendem": 0,
           "piorM": 126.3
         },
         {
           "nome": "Torre · 8º pav",
-          "ambientes": 125,
-          "semRota": 1,
-          "naoAtendem": 11,
+          "ambientes": 124,
+          "semRota": 0,
+          "naoAtendem": 0,
           "piorM": 133.6
         },
         {
           "nome": "Torre · cobertura",
           "ambientes": 1,
           "semRota": 0,
-          "naoAtendem": 1,
+          "naoAtendem": 0,
           "piorM": 128.7
         }
       ],
       "equipamentos": {
         "EXTINTOR": 11,
-        "PLACA": 36,
-        "LUMINARIA_EMERGENCIA": 30,
-        "Alimentação da luminária de emergência": 30
+        "PLACA": 44,
+        "LUMINARIA_EMERGENCIA": 31,
+        "Alimentação da luminária de emergência": 31,
+        "CENTRAL_ALARME": 1,
+        "DETECTOR_FUMACA": 27,
+        "ACIONADOR_MANUAL": 6,
+        "AVISADOR": 3
       },
       "hidrantes": {
         "tipo": 2,

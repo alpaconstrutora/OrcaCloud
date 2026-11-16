@@ -10,6 +10,7 @@ import {
 import { Investor } from '../../services/investorService';
 import OpportunityForm from './OpportunityForm';
 import OpportunityDetail from './OpportunityDetail';
+import { comNumerosDaVersao } from '../../utils/oportunidadeNumerosDaVersao';
 import InterestsPanel from './InterestsPanel';
 import Button from '../ui/Button';
 import { useOrgWriteTarget } from '../../hooks/useOrgContext';
@@ -122,7 +123,7 @@ const OpportunitiesTab: React.FC<Props> = ({
         const motivo = motivoParaNaoPublicar(op);
         if (motivo) {
             showToast(motivo, 'error');
-            setEditing(op);
+            editar(op);
             return;
         }
         try {
@@ -138,10 +139,14 @@ const OpportunitiesTab: React.FC<Props> = ({
     };
 
     const visibleOpportunities = isAdmin ? opportunities : opportunities.filter(o => o.is_published);
+    // VGV/ROI/TIR exibidos: os da versão publicada do Imovib, quando houver (utils/oportunidadeNumerosDaVersao.ts).
+    // Editar abre a ORIGINAL: o formulário mostra e grava só os campos digitados à mão.
+    const exibidas = visibleOpportunities.map(comNumerosDaVersao);
+    const editar = (op: InvestorOpportunity) => setEditing(opportunities.find(o => o.id === op.id) ?? op);
 
     // ── Pipeline executivo ────────────────────────────────────────────────────
     const activeOpps = opportunities.filter(o => o.status !== 'encerrada' && o.is_published);
-    const totalVgv = activeOpps.reduce((sum, o) => sum + (o.vgv ?? 0), 0);
+    const totalVgv = activeOpps.reduce((sum, o) => sum + (comNumerosDaVersao(o).vgv ?? 0), 0);
     const statusCounts = (['estudo','viabilidade','lancamento','captacao'] as OpportunityStatus[])
         .map(s => ({ status: s, count: opportunities.filter(o => o.status === s).length }))
         .filter(x => x.count > 0);
@@ -274,7 +279,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                         </div>
                     ) : viewMode === 'grid' ? (
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {visibleOpportunities.map(op => (
+                            {exibidas.map(op => (
                                 <div
                                     key={op.id}
                                     className="group bg-[#0B1727] rounded-3xl overflow-hidden relative cursor-pointer hover:scale-[1.01] transition-transform duration-200"
@@ -365,7 +370,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                         {op.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                                     </button>
                                                     <button
-                                                        onClick={() => setEditing(op)}
+                                                        onClick={() => editar(op)} title="Editar"
                                                         className="p-2 bg-white/10 hover:bg-blue-600 text-white rounded-lg transition-all"
                                                     >
                                                         <Pencil className="w-3.5 h-3.5" />
@@ -387,7 +392,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                         /* Modo lista */
                         <>
                             <div className="md:hidden space-y-4">
-                                {visibleOpportunities.map(op => (
+                                {exibidas.map(op => (
                                     <div key={op.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0">
@@ -436,7 +441,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                         <button onClick={() => handleTogglePublish(op)} title={tituloDoPublicar(op)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
                                                             {op.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                                         </button>
-                                                        <button onClick={() => setEditing(op)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
+                                                        <button onClick={() => editar(op)} title="Editar" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
                                                             <Pencil className="w-3.5 h-3.5" />
                                                         </button>
                                                     </>
@@ -459,7 +464,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-50">
-                                    {visibleOpportunities.map(op => (
+                                    {exibidas.map(op => (
                                         <tr key={op.id} className="hover:bg-blue-50/30 transition-colors group">
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col">
@@ -513,7 +518,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                                 {op.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                                                             </button>
                                                             <button
-                                                                onClick={() => setEditing(op)}
+                                                                onClick={() => editar(op)} title="Editar"
                                                                 className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
                                                             >
                                                                 <Pencil className="w-3.5 h-3.5" />

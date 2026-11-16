@@ -15,6 +15,7 @@ import { investorPortalTokenService } from '../../services/investorPortalTokenSe
 import ScenarioComparison from './ScenarioComparison';
 import LinkedProjectPanel from './LinkedProjectPanel';
 import DataRoomPanel from './DataRoomPanel';
+import { comNumerosDaVersao } from '../../utils/oportunidadeNumerosDaVersao';
 import OpportunityPhotosPanel from './OpportunityPhotosPanel';
 import DueDiligencePanel from './DueDiligencePanel';
 import RiskMatrixPanel from './RiskMatrixPanel';
@@ -54,7 +55,9 @@ const ROLES: InterestRole[] = ['investidor', 'arquiteto', 'engenheiro', 'projeti
 type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'documentos' | 'interesses' | 'due-diligence' | 'riscos' | 'aquisicao' | 'comite';
 type FormStep = 'view' | 'form' | 'success';
 
-const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, isAdmin = false, uploadedBy, investorProfile, portalToken, onClose }) => {
+const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdmin = false, uploadedBy, investorProfile, portalToken, onClose }) => {
+    // VGV/ROI/TIR: os da versão publicada do Imovib, quando houver (utils/oportunidadeNumerosDaVersao.ts).
+    const op = React.useMemo(() => comNumerosDaVersao(opportunity), [opportunity]);
     const [formStep, setFormStep] = React.useState<FormStep>('view');
     const [pitchTab, setPitchTab] = React.useState<PitchTab>('pitch');
     const [saving, setSaving] = React.useState(false);

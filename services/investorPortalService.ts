@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import type { IndicadoresDoPainel } from '../utils/imovibCalculoDaVersao';
 
 export type ReportCategory =
     | 'relatorio' | 'contrato' | 'spe' | 'matricula' | 'licenca'
@@ -96,6 +97,11 @@ export interface InvestorOpportunity {
     imovib_study_id?: string | null;
     /** Versão congelada do estudo que o investidor vê (obrigatória para publicar com estudo — plano 2026-11-15, Fase 2). */
     imovib_version_id?: string | null;
+    /**
+     * Só leitura: `snapshot.calculo.investidor.indicadores` da versão publicada (null sem versão).
+     * Exibir VGV/ROI/TIR por utils/oportunidadeNumerosDaVersao.ts. Nunca vai num insert/update.
+     */
+    indicadores_da_versao?: Partial<IndicadoresDoPainel> | null;
     target_funding_value?: number | null;
     current_funding_value?: number | null;
     gallery_urls?: string[] | null;
@@ -174,7 +180,23 @@ const OPP_COLS = [
     'imovib_study_id', 'imovib_version_id', 'target_funding_value', 'current_funding_value',
     'gallery_urls', 'distances_json', 'risks_json', 'team_json', 'simulation_params_json',
     'created_at',
+    // Só leitura: os indicadores da versão publicada (VGV/ROI/TIR da lista — utils/oportunidadeNumerosDaVersao.ts).
+    'versao_publicada:imovib_study_versions!imovib_version_id(indicadores:snapshot->calculo->investidor->indicadores)',
 ].join(', ');
+
+type LinhaDaOportunidade = Omit<InvestorOpportunity, 'indicadores_da_versao'> & {
+    versao_publicada?: { indicadores?: Partial<IndicadoresDoPainel> | null } | null;
+};
+/** Linha do select → oportunidade, com o embed da versão achatado em `indicadores_da_versao`. */
+const daLinha = (row: LinhaDaOportunidade): InvestorOpportunity => {
+    const { versao_publicada, ...o } = row;
+    return { ...o, indicadores_da_versao: versao_publicada?.indicadores ?? null };
+};
+/** `indicadores_da_versao` é só leitura: nunca vai num insert/update (não é coluna). */
+const semCamposDeLeitura = <T extends Partial<InvestorOpportunity>>(o: T): Omit<T, 'indicadores_da_versao'> => {
+    const { indicadores_da_versao: _leitura, ...resto } = o;
+    return resto;
+};
 
 const INTEREST_COLS = 'id, organization_id, opportunity_id, contact_name, contact_email, contact_phone, role, message, stage, created_at';
 
@@ -232,28 +254,28 @@ export const investorPortalService = {
 
         const { data, error } = await query;
         if (error) throw error;
-        return (data ?? []) as unknown as InvestorOpportunity[];
+        return ((data ?? []) as unknown as LinhaDaOportunidade[]).map(daLinha);
     },
 
     async addOpportunity(opp: Omit<InvestorOpportunity, 'id' | 'created_at'>): Promise<InvestorOpportunity> {
         const { data, error } = await supabase
             .from('investor_opportunities')
-            .insert({ ...opp, status: opp.status ?? 'estudo', is_published: opp.is_published ?? false })
+            .insert({ ...semCamposDeLeitura(opp), status: opp.status ?? 'estudo', is_published: opp.is_published ?? false })
             .select(OPP_COLS)
             .single();
         if (error) throw error;
-        return data as unknown as InvestorOpportunity;
+        return daLinha(data as unknown as LinhaDaOportunidade);
     },
 
     async updateOpportunity(id: string, patch: Partial<Omit<InvestorOpportunity, 'id' | 'organization_id' | 'created_at'>>): Promise<InvestorOpportunity> {
         const { data, error } = await supabase
             .from('investor_opportunities')
-            .update(patch)
+            .update(semCamposDeLeitura(patch))
             .eq('id', id)
             .select(OPP_COLS)
             .single();
         if (error) throw error;
-        return data as unknown as InvestorOpportunity;
+        return daLinha(data as unknown as LinhaDaOportunidade);
     },
 
     /** Oportunidades que escolheram uma versão deste estudo (aba Versões do Imovib — plano 2026-11-15, Fase 2). */

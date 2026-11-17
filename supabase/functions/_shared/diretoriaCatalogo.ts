@@ -156,3 +156,41 @@ export function detalheDoGrupo(g: GrupoParaTexto): string {
     }
     return partes.join(' · ');
 }
+
+// ── Melhorou × piorou (a mesma conta na tela e no e-mail) ───────────────────────
+/** A foto de uma segunda-feira (diretoria_semana_numeros, somada nas orgs). */
+export interface FotoDaSemana {
+    semana: string;
+    por_tipo: Record<string, { quantidade: number; valor: number | null }>;
+    determinacoes_vencidas: number;
+}
+
+export interface LinhaComparacao { rotulo: string; antes: number; agora: number; veredito: 'melhorou' | 'piorou' | 'igual' }
+
+/**
+ * Quantidade por tipo agora (soma dos grupos) × a foto da semana anterior; menos é melhor em
+ * todos. Entra o tipo que aparece de um lado ou do outro, na ordem do catálogo; silenciado
+ * fica fora dos dois lados. Por último, as determinações vencidas.
+ */
+export function compararSemanas(
+    grupos: readonly { tipo: TipoExcecao; quantidade: number }[],
+    anterior: FotoDaSemana,
+    silenciados: ReadonlySet<string>,
+    determinacoesVencidasAgora: number,
+): LinhaComparacao[] {
+    const veredito = (antes: number, agora: number): LinhaComparacao['veredito'] =>
+        agora < antes ? 'melhorou' : agora > antes ? 'piorou' : 'igual';
+    const agora = new Map<string, number>();
+    for (const g of grupos) if (!silenciados.has(g.tipo)) agora.set(g.tipo, (agora.get(g.tipo) ?? 0) + g.quantidade);
+    const antes = new Map<string, number>();
+    for (const [t, v] of Object.entries(anterior.por_tipo ?? {})) if (!silenciados.has(t) && t in TIPOS) antes.set(t, v?.quantidade ?? 0);
+    const linhas: LinhaComparacao[] = (Object.keys(TIPOS) as TipoExcecao[])
+        .filter(t => antes.has(t) || agora.has(t))
+        .map(t => {
+            const a = antes.get(t) ?? 0, b = agora.get(t) ?? 0;
+            return { rotulo: TIPOS[t].nome, antes: a, agora: b, veredito: veredito(a, b) };
+        });
+    const dv = anterior.determinacoes_vencidas ?? 0;
+    linhas.push({ rotulo: 'Determinações vencidas', antes: dv, agora: determinacoesVencidasAgora, veredito: veredito(dv, determinacoesVencidasAgora) });
+    return linhas;
+}

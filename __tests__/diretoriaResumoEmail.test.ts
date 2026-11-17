@@ -1,5 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import { montarResumo, type DadosDoResumo } from '../supabase/functions/diretoria-resumo-semanal/resumo';
+import { compararSemanas } from '../supabase/functions/_shared/diretoriaCatalogo';
+
+describe('compararSemanas (a mesma conta na tela e no e-mail)', () => {
+    const foto = { semana: '2026-11-09', por_tipo: { conta_vencida: { quantidade: 700, valor: 1 }, parcela_cliente: { quantidade: 2, valor: 1 } }, determinacoes_vencidas: 3 };
+    const agora = [{ tipo: 'conta_vencida' as const, quantidade: 690 }, { tipo: 'conta_vencida' as const, quantidade: 4 }, { tipo: 'tarefa_vencida' as const, quantidade: 1 }];
+
+    it('soma os grupos do tipo, compara com a foto, menos é melhor; tipos dos dois lados entram', () => {
+        expect(compararSemanas(agora, foto, new Set(), 3)).toEqual([
+            { rotulo: 'Conta a pagar vencida', antes: 700, agora: 694, veredito: 'melhorou' },
+            { rotulo: 'Parcela de cliente vencida', antes: 2, agora: 0, veredito: 'melhorou' },
+            { rotulo: 'Tarefa vencida', antes: 0, agora: 1, veredito: 'piorou' },
+            { rotulo: 'Determinações vencidas', antes: 3, agora: 3, veredito: 'igual' },
+        ]);
+    });
+
+    it('silenciado não entra nem de um lado nem do outro', () => {
+        expect(compararSemanas(agora, foto, new Set(['conta_vencida']), 0).map(l => l.rotulo))
+            .toEqual(['Parcela de cliente vencida', 'Tarefa vencida', 'Determinações vencidas']);
+    });
+});
 
 // Plano: docs/planos/2026-11-17-opura-ceo.md (Tarefa 10). O HTML do resumo semanal é puro:
 // recebe o que fn_diretoria_resumo_dados devolve e monta assunto, HTML e texto.

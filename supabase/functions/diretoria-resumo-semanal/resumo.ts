@@ -7,7 +7,7 @@
  * piorou · 4. o resto em números. Os tipos que a pessoa marcou como barulho ficam fora de tudo.
  */
 import {
-    TIPOS, tituloDoGrupo, detalheDoGrupo, dataBr, diasAte, semanaDe, type TipoExcecao,
+    TIPOS, tituloDoGrupo, detalheDoGrupo, dataBr, diasAte, semanaDe, compararSemanas, type TipoExcecao,
 } from '../_shared/diretoriaCatalogo.ts';
 import { escapeHtml, escapeAttr } from '../_shared/html.ts';
 
@@ -102,25 +102,16 @@ export function montarResumo(d: DadosDoResumo, linkDoApp: string): { assunto: st
         }),
     ];
 
-    // 3. Melhorou × piorou (menos é melhor em todos os tipos)
-    const agoraPorTipo = new Map<string, number>();
-    for (const g of grupos) agoraPorTipo.set(g.tipo, (agoraPorTipo.get(g.tipo) ?? 0) + g.quantidade);
-    const linhasComparacao: Linha[] = [];
-    if (d.semana_anterior) {
-        const antesPorTipo = new Map<string, number>();
-        for (const [t, v] of Object.entries(d.semana_anterior.por_tipo ?? {})) {
-            if (!sil.has(t) && t in TIPOS) antesPorTipo.set(t, v.quantidade ?? 0);
-        }
-        const tipos = (Object.keys(TIPOS) as TipoExcecao[]).filter(t => antesPorTipo.has(t) || agoraPorTipo.has(t));
-        const compara = (rotulo: string, antes: number, agora: number): Linha => {
-            const veredito = agora < antes ? 'melhorou' : agora > antes ? 'piorou' : 'igual';
-            const cor = veredito === 'melhorou' ? '#047857' : veredito === 'piorou' ? '#b91c1c' : '#64748b';
-            const t = `${rotulo}: ${antes} → ${agora} (${veredito})`;
-            return { texto: `• ${t}`, html: `<li style="margin:0 0 4px">${escapeHtml(`${rotulo}: ${antes} → ${agora}`)} <span style="color:${cor}">(${veredito})</span></li>` };
-        };
-        for (const t of tipos) linhasComparacao.push(compara(TIPOS[t].nome, antesPorTipo.get(t) ?? 0, agoraPorTipo.get(t) ?? 0));
-        linhasComparacao.push(compara('Determinações vencidas', d.semana_anterior.determinacoes_vencidas ?? 0, vencidas.length));
-    }
+    // 3. Melhorou × piorou (menos é melhor em todos os tipos) — a mesma conta da tela
+    const linhasComparacao: Linha[] = d.semana_anterior
+        ? compararSemanas(grupos, d.semana_anterior, sil, vencidas.length).map(l => {
+            const cor = l.veredito === 'melhorou' ? '#047857' : l.veredito === 'piorou' ? '#b91c1c' : '#64748b';
+            return {
+                texto: `• ${l.rotulo}: ${l.antes} → ${l.agora} (${l.veredito})`,
+                html: `<li style="margin:0 0 4px">${escapeHtml(`${l.rotulo}: ${l.antes} → ${l.agora}`)} <span style="color:${cor}">(${l.veredito})</span></li>`,
+            };
+        })
+        : [];
 
     // 4. O resto, em números
     const restoPorTipo = new Map<TipoExcecao, number>();

@@ -87,6 +87,7 @@ export const VisaoReuniao: React.FC = () => {
     const porTipo = React.useMemo(() => {
         const m = new Map<TipoExcecao, { grupos: number; itens: number; valor: number }>();
         for (const g of excecoes) {
+            if (g.severidade === 'critico') continue; // já estão no bloco 1 — igual ao e-mail
             const t = m.get(g.tipo) ?? { grupos: 0, itens: 0, valor: 0 };
             m.set(g.tipo, { grupos: t.grupos + 1, itens: t.itens + g.quantidade, valor: t.valor + (g.valor ?? 0) });
         }

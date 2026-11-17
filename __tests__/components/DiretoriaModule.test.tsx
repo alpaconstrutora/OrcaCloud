@@ -415,3 +415,14 @@ describe('Reunião da semana — resumo por e-mail e "melhorou × piorou"', () =
         expect(within(bloco).getAllByText('piorou').length).toBe(2);
     });
 });
+
+describe('Reunião da semana — "4. O resto, em números" igual ao e-mail', () => {
+    it('só os grupos que NÃO pedem decisão (os críticos já estão no bloco 1)', async () => {
+        preferencias.mockResolvedValue({ visao: 'reuniao', silenciados: [], resumoSemanal: false });
+        montar();
+        const bloco = await screen.findByRole('region', { name: /O resto, em números/ });
+        expect(within(bloco).getByText('Parcela de cliente vencida')).toBeTruthy();
+        expect(within(bloco).getByText('Documento de colaborador vencido')).toBeTruthy();
+        expect(within(bloco).queryByText('Conta a pagar vencida')).toBeNull();
+    });
+});

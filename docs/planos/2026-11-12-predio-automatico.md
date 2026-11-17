@@ -763,20 +763,27 @@ composição da fiação da rede para o desenho (14,5 s, dos quais ~10 s em `are
 
 PA1 e PA2 podem correr em frentes paralelas.
 
-## Pendências em aberto (16/11/2026, depois da PA10c)
+## Pendências em aberto (17/11/2026, depois da PA14)
 
 O que o prédio automático ainda não faz, ou faz e deixa para conferir. "Projetista" = fica de propósito como pendência na
 tela (o motor não decide); "acompanhamento" = vigiar a cada mudança; "a decidir" = trabalho possível, sem fase. Os
-quatro "a decidir" de 16/11 viraram as fases PA11–PA14 (pedido de 16/11).
+quatro "a decidir" de 16/11 viraram as fases PA11–PA14, todas no ar: as linhas riscadas são o que elas resolveram,
+e o que deixaram entrou como linha nova. Os números são do marco no main
+(`__tests__/fixtures/predioAutomaticoMarco.json`); "decisão do usuário" só onde a escolha veio da pergunta de múltipla
+escolha.
 
 | Área | Pendência | Onde fica |
 |---|---|---|
 | Desempenho | Clique no "Lançar" do R12: 37 s depois da PA14 (limite 60 s); o que sobra é o pré-dimensionamento dos 103 quadros na conferência da NBR 5410 (7 s), as marcas de verificação (ventilação, pluvial, climatização) e o desenho | a decidir |
-| Desempenho | Gerar o R12 no worker: 54,5 s no app depois da PA13 (Lançar 50,7 s, salvar 9,6 s), dentro do tempo fixado na PA10a (90 s gerar · 90 s Lançar · 30 s salvar) — vigiar a cada fase | acompanhamento |
-| Desempenho | Marco do RL perto do limite da CI (20 min por caso; a CI inteira leva 31–39 min nos últimos PRs); o bloco "o motor (PA2)" subiu para 180 s depois de deixar a main vermelha (15/11) | acompanhamento |
+| Desempenho | R12 de ponta a ponta no app depois da PA14: gerar ~54 s, Lançar 37 s, salvar 9–12 s — dentro do tempo fixado (gerar 90 s · Lançar 60 s, desde a PA14 · salvar 30 s; portões em `c:/tmp/pwtest/conferencia-predio-pa10a.cjs`) — vigiar a cada fase | acompanhamento |
+| Desempenho | Marco do RL perto do limite da CI (20 min por caso; a CI inteira leva 30–39 min nos PRs da PA11–PA14; o `TowerEditorTerrenoDaPlanta`, instável sob carga, caiu uma vez no #529 e passou rodando de novo só o que falhou); o bloco "o motor (PA2)" subiu para 180 s depois de deixar a main vermelha (15/11) | acompanhamento |
 | Compatibilização | ~~Água × esgoto que sobra: o ramal do andar de cima atravessando cômodo seco a caminho do shaft (R8 18, R12 141, RL 244)~~ — resolvido: a água abaixo do ramal também nos cômodos secos; sobra 1 na garagem do R12 (redes do próprio subsolo) | feito na PA12 |
 | Compatibilização | Forro rebaixado a 2,57 m (2,50 m livres) nos cômodos secos por onde passa o ramal do andar de cima — confira com a arquitetura | projetista |
-| Compatibilização | Encontros da climatização (linha frigorígena e dutos × eletroduto, dreno × água; o duto de ar atravessando evaporadora ou exaustor: R8 7, R12 88, RL 21) e o dreno do ar passando por porta ou janela — no relatório | eletroduto × linha/duto feito na PA13 (sobram as descidas); dreno × porta/janela e água × dreno/linha ficam para o projetista (decisão de 16/11) |
+| Compatibilização | ~~Eletroduto × linha frigorígena e × duto de ar, os três na faixa de 2,35 m sob a viga (R8 336, R12 1.111, RL 833)~~ — resolvido: o eletroduto junto da laje; sobram as descidas (linha abaixo) | feito na PA13 |
+| Compatibilização | As descidas do eletroduto cruzando a linha frigorígena e o duto de ar junto da parede, a caminho da tomada (R8 14, R12 44, RL 91 — `eletrodutoXClimatizacao` no marco) | a decidir |
+| Compatibilização | O duto de ar (a exaustão do banheiro) atravessando a caixa de uma evaporadora ou de um exaustor (R8 7, R12 88, RL 21) — o que sobrou da PA11; a PA13 não mexeu no duto | a decidir |
+| Compatibilização | As descidas da água cruzando o dreno e a linha frigorígena (no tipo do R8: 13 × dreno, 12 × linha, no diagnóstico da PA13) — a PA13 previa "se o caminho for simples" e não mexeu | a decidir |
+| Compatibilização | O dreno do ar, por gravidade a ~2,10 m no eixo da parede, passando sobre porta ou pelo alto de janela (27 no tipo do R8, 38 no do RL) — no relatório | projetista (decisão do usuário, 16/11) |
 | Compatibilização | O eletroduto junto da laje cruzando a descida da louça do andar de cima pela laje (R8 32, R12 104, RL 91) — onde a vizinhança é densa demais para o contorno, ou o QD da unidade fica logo abaixo dela | a decidir |
 | Compatibilização | Furos em viga do eletroduto junto da laje (+4 a +8 por prédio, nas travessias fora do apoio) — confira com o calculista | projetista |
 | Compatibilização | ~~Eletroduto lançado depois da climatização atravessando a caixa da evaporadora (R8: 56)~~ — resolvido: o eletroduto contorna a evaporadora e o exaustor (zero nos quatro prédios) | feito na PA11 |
@@ -807,10 +814,12 @@ quatro "a decidir" de 16/11 viraram as fases PA11–PA14 (pedido de 16/11).
 
 ## Estado
 
-**Resumo (16/11/2026):** **as fases PA0 a PA10c estão no ar** — merge 6206737 (#503), produção servindo esse commit e
-a CI do main verde. Pedido de 16/11: PA11 a PA14 (os quatro "a decidir"). **PA11 no ar** (a16c71c, #518 — o eletroduto
-contorna a evaporadora e o exaustor); **PA12 no ar** (2b363ad, #520 — água × esgoto zerado no tipo dos quatro prédios); **PA13 no ar** (4d0f1e7, #525 — eletroduto junto da laje; o dreno fica como pendência); **PA14 no ar** (19caa13, #527 — o Lançar do R12 51 → 37 s). O pedido de 16/11 está entregue: PA11 a PA14 no ar. O que fica de propósito
-para o projetista está em "Pendências em aberto". Kernel em `blueprint-kernel-ts-0.109.0` (a PA11 não toca o kernel).
+**Resumo (17/11/2026):** **todas as fases estão no ar** — PA0 a PA10c (o plano de 12/11) e PA11 a PA14 (o pedido de
+16/11, os quatro "a decidir"). Último merge de código: 19caa13 (#527, PA14); o plano, em #529 (6b055c1) e nesta revisão.
+A produção serve o main e a CI do main está verde. Nada em andamento. O que sobra está em "Pendências em aberto": cinco
+"a decidir" (sem fase — o tempo que sobra no Lançar e quatro encontros de redes), o que fica de propósito para o
+projetista e o que é acompanhamento. Kernel em `blueprint-kernel-ts-0.109.0` (PA11–PA14 não mudam a versão; a PA14 mexe
+na fiação do kernel sem mudar o modelo).
 
 | Fase | PR | Commit no main |
 |---|---|---|

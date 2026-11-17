@@ -611,6 +611,8 @@ describe('CentralControle · tela "Bom dia"', () => {
             expect(cashflow).not.toHaveBeenCalledWith('o1', 30);                       // não disputa com a chamada única
             responder(painel());
             await waitFor(() => expect(cashflow).toHaveBeenCalledWith('o1', 30));
+            // …e o esmaecido acaba quando o caixa novo chega.
+            await waitFor(() => expect(within(c).getByLabelText('R$ 1.000').closest('[aria-busy="true"]')).toBeNull());
         } finally {
             raf.mockRestore();
         }

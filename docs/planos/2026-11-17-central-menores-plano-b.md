@@ -309,4 +309,21 @@ do pegajoso não vazar.
 
 ## Estado
 
-- [ ] Tarefa 1 · [ ] Tarefa 2 · [ ] Tarefa 3 · [ ] Tarefa 4 · [ ] Tarefa 5
+- [x] Tarefa 1 · [x] Tarefa 2 · [x] Tarefa 3 · [x] Tarefa 4 — cada uma com o teste visto falhando antes (17/11).
+- [x] Tarefa 5 (parte local): `typecheck` exit=0; suíte inteira só com as falhas conhecidas do Windows
+  (espelhoDoInvestidor/CRLF; PainelVersoes por carga, 39/39 isolado).
+- [x] Revisão final (revisor novo): sem crítico; 1 importante corrigido — faltava o teste da trava
+  "alerta da org anterior nunca entra na nova" (provado vermelho com a trava removida).
+- [ ] PR · CI · merge · prova em produção.
+
+**Deixado para depois (menores da revisão):**
+- Carga descartada da mesma org liga o pegajoso mesmo com a carga mais nova tendo respondido
+  (Atualizar + "Tentar de novo" sobrepostos): até 5 min de blocos separados sem precisar.
+- Troca de org com blocos do plano B da anterior em voo: o caixa da nova sai junto com a chamada
+  única dela (1 consulta a mais; no caso comum já era assim antes).
+- "Todas" chega como `''` (AppRouter), não `null`: comportamento certo, comentário/teste falam de `null`.
+
+**Achados pré-existentes, fora desta frente:**
+- "Tentar de novo" do caixa seguido de troca de org: a resposta velha pinta o caixa da org anterior
+  na nova (REGRA #5) — reproduzido pelo revisor.
+- Concluir tarefa que falha depois de trocar de org recarrega a org antiga (só por leitura).

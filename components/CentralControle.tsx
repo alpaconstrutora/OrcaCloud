@@ -14,6 +14,7 @@ import {
 } from '../services/centralControleService';
 import { useStore } from '../store/useStore';
 import { useModulosPermitidos } from '../utils/modulosPermitidos';
+import { memoriaDoPlanoB } from '../utils/planoBPegajoso';
 import {
     saudacaoPorHora, comoChamar, diaEmSaoPaulo, montarFila, itemEmDestaque, contagemDoDia,
     alertasDasFontes, type AlertasDoDia, type FontesDeAlerta,
@@ -126,11 +127,19 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         // Erro comum de um bloco fica no bloco: a função SQL embrulha cada
         // consulta no próprio `BEGIN … EXCEPTION`, e cada cartão mostra o
         // próprio "Não carregou".
+        //
+        // Plano B pegajoso (17/11/2026): se a chamada única desta org caiu há menos
+        // de 5 minutos, nem tenta — vai direto aos blocos (utils/planoBPegajoso.ts).
+        const pular = memoriaDoPlanoB.pularChamadaUnica(organizationId);
         const [bootstrapR, reajusteR, approvalConfigR] = await Promise.allSettled([
-            centralControleService.bootstrap(organizationId),
+            pular
+                ? Promise.reject(new Error('plano B pegajoso: a chamada única caiu há menos de 5 minutos'))
+                : centralControleService.bootstrap(organizationId),
             contractIndexService.listDueForReajuste(organizationId),
             financialApprovalService.listConfig(organizationId),
         ]);
+        // A queda é real mesmo que esta carga já tenha sido descartada.
+        if (!pular && bootstrapR.status === 'rejected') memoriaDoPlanoB.marcarQueCaiu(organizationId);
         if (!vale()) return;
         setEsperandoChamadaUnica(false);
 
@@ -173,9 +182,11 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             // pego pelo EXCEPTION dos blocos: um bloco lento leva os sete) ou rede.
             // Pede os blocos um a um, cada um com o próprio limite, e pinta cada
             // cartão quando o dele chega. Só aqui: no caminho normal, seis RPCs
-            // juntas é a rajada que o bootstrap resolveu.
-            // Plano: docs/planos/2026-11-16-central-blocos-isolados.md
-            console.error('[CentralControle] chamada única caiu; pedindo por bloco:', bootstrapR.reason);
+            // juntas é a rajada que o bootstrap resolveu — ou nos 5 minutos seguintes
+            // a uma queda (pegajoso).
+            // Planos: docs/planos/2026-11-16-central-blocos-isolados.md e
+            // docs/planos/2026-11-17-central-menores-plano-b.md
+            if (!pular) console.error('[CentralControle] chamada única caiu; pedindo por bloco:', bootstrapR.reason);
             const f = centralControleService.fontesSeparadas(organizationId);
             // Parte do que está na tela (Atualizar na mesma org); org nova parte do zero.
             const fontesAlerta: FontesDeAlerta = { ...fontesDeAlertaNaTela.current, reajustes: reajusteR };

@@ -44,6 +44,7 @@ vi.mock('../../components/FinancialApprovalModule', () => ({
 }));
 
 import CentralControle from '../../components/CentralControle';
+import { memoriaDoPlanoB, PLANO_B_PEGAJOSO_MS } from '../../utils/planoBPegajoso';
 
 const HOJE = '2026-11-11';
 
@@ -97,6 +98,7 @@ const cartao = (titulo: string) => screen.getByRole('heading', { name: titulo, l
 beforeEach(() => {
     bootstrap.mockReset();
     fontesSeparadas.mockReset();
+    memoriaDoPlanoB.esquecer();
     reajustes.mockReset().mockResolvedValue([]);
     cashflow.mockReset().mockResolvedValue([{ data_ref: HOJE, cr_previsto: 0, db_previsto: 0, saldo_dia: 0, saldo_acum: 1000 }]);
     atualizarTarefa.mockReset().mockResolvedValue(undefined);
@@ -412,5 +414,41 @@ describe('CentralControle · tela "Bom dia"', () => {
         montar();
         await waitFor(() => expect(fontesSeparadas).toHaveBeenCalled());
         await waitFor(() => expect(cashflow).toHaveBeenCalledTimes(1));
+    });
+
+    it('plano B pegajoso: depois de cair, o Atualizar vai direto aos blocos', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes());
+        montar();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledTimes(2));
+        expect(bootstrap).toHaveBeenCalledTimes(1);
+    });
+
+    it('plano B pegajoso: passados 5 minutos, volta a tentar a chamada única', async () => {
+        const agora = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+        try {
+            bootstrap.mockRejectedValueOnce(TIMEOUT).mockResolvedValue(painel());
+            fontesSeparadas.mockImplementation(() => fontes());
+            montar();
+            await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+            agora.mockReturnValue(1_000_000 + PLANO_B_PEGAJOSO_MS);
+            await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+            await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+            expect(fontesSeparadas).toHaveBeenCalledTimes(1);
+        } finally {
+            agora.mockRestore();
+        }
+    });
+
+    it('plano B pegajoso é por organização: a outra org tenta a chamada única', async () => {
+        bootstrap.mockRejectedValueOnce(TIMEOUT).mockResolvedValue(painel());
+        fontesSeparadas.mockImplementation(() => fontes());
+        const { rerender } = montar();
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledWith('o1'));
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
+        expect(fontesSeparadas).toHaveBeenCalledTimes(1);
     });
 });

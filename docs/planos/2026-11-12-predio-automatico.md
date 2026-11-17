@@ -705,9 +705,33 @@ linha e dreno, se o caminho for simples. O dreno não muda (pendência). Antes, 
 88, RL 21 — o que sobrou da PA11); a linha frigorígena e os dutos × eletroduto; o dreno × água; o dreno do ar passando por porta ou
 janela. Diagnóstico por tipo na abertura da fase, como na PA11.
 **Pronto quando.** Encontros eletroduto × linha frigorígena e × duto de ar zerados no tipo dos quatro prédios (trava no
-marco); `eletrodutoNoEquipamento` segue zero; os furos em viga a mais listados para o calculista; o dreno × porta/janela
+marco) — *revisto na execução: zerados os HORIZONTAIS; sobram as descidas cruzando a linha/duto junto da parede, contadas
+no marco*; `eletrodutoNoEquipamento` segue zero; os furos em viga a mais listados para o calculista; o dreno × porta/janela
 continua no relatório, como pendência explícita; marco da casa idêntico (a casa já lança no forro) ou cada mudança
 justificada.
+
+**Execução da PA13 (16/11/2026).**
+- O eletroduto do prédio passou para a faixa da elétrica do forro da casa (`HIPOTESES_ELETRODUTO_DO_PREDIO`, 4,5 cm abaixo
+  do teto, como a casa), e a etapa ELETRODUTOS passou para DEPOIS da água, do esgoto e do pluvial — junto da laje, a rede
+  precisa ver as prumadas, os ramais do andar de cima e as descidas das louças de cima pela laje para desviar deles.
+- O andar de cima do tipo é a 1ª cópia, ainda sem instalações (a cópia viva entra no fim): o planejador recebe
+  `comOAndarDeCima` — o que o tipo tem sob o piso (trechos e as peças de climatização no piso, como o ponto de dreno)
+  espelhado no pavimento de cima. Só para planejar.
+- O desvio da PA11 vale também para as peças do pavimento de cima (o ponto de dreno no piso de cima, que o eletroduto na
+  laje cruzava), e a DESCIDA do forro trata a evaporadora/exaustor pendurado na parede como um vão (desce ao lado e corre
+  por baixo até a tomada, como sob a janela — F18).
+- **Desempenho** (o achado da fase): com o esgoto já lançado, a faixa do forro tem centenas de obstáculos e o contorno da
+  reta (`desvioDoPilar`, grafo de visibilidade quadrático nos cantos) levou o R4 a 60 s e o RL a 5–8 min. Corrigido: os
+  obstáculos da faixa guardados por pavimento e cota, só os perto da reta (`PERTO_DA_RETA_MM` = 500), o obstáculo que contém
+  a ponta fora (o quadro logo abaixo da descida da louça de cima), e um teto no grafo só no prédio
+  (`noForro.grafoAteNos` = 120; acima dele, contorno só dos pilares e das peças). A casa segue sem teto — o teto mudava
+  um caso do marco dela. Tempos (máquina quieta): R4 3 s · R8 20 s · R12 74 s · RL 98 s (PA12: ~16 s no R8).
+- Resultado (PA12 → PA13): encontros entre redes R4 98 → 59, R8 612 → 295, R12 1.732 → 621, RL 1.247 → 530; eletroduto ×
+  linha frigorígena R8 203 → 14, R12 462 → 44, RL 378 → 28; × duto de ar R8 133 → 0, R12 649 → 0, RL 455 → 63 (as descidas
+  e a chegada na tomada do ar a 2,20 m); furos em viga para o calculista +4/+5/+8 (o eletroduto atravessando viga pelas
+  travessias, como na casa). Novo e explicado: eletroduto × esgoto do andar de cima R8 32, R12 104, RL 91 — o eletroduto
+  na laje cruzando a descida da louça de cima pela laje, onde o contorno desiste (vizinhança densa, teto do grafo) ou o
+  quadro da unidade está logo abaixo dela. O dreno × porta/janela não muda (decisão: pendência).
 
 ### PA14 — O tempo do "Lançar" no R12
 **O que muda.** O clique no "Lançar" do R12 (61 s no app na PA10a): o que sobra é o desenho da planta (21,6 mil
@@ -730,7 +754,9 @@ quatro "a decidir" de 16/11 viraram as fases PA11–PA14 (pedido de 16/11).
 | Desempenho | Marco do RL perto do limite da CI (20 min por caso; a CI inteira leva 31–39 min nos últimos PRs); o bloco "o motor (PA2)" subiu para 180 s depois de deixar a main vermelha (15/11) | acompanhamento |
 | Compatibilização | ~~Água × esgoto que sobra: o ramal do andar de cima atravessando cômodo seco a caminho do shaft (R8 18, R12 141, RL 244)~~ — resolvido: a água abaixo do ramal também nos cômodos secos; sobra 1 na garagem do R12 (redes do próprio subsolo) | feito na PA12 |
 | Compatibilização | Forro rebaixado a 2,57 m (2,50 m livres) nos cômodos secos por onde passa o ramal do andar de cima — confira com a arquitetura | projetista |
-| Compatibilização | Encontros da climatização (linha frigorígena e dutos × eletroduto, dreno × água; o duto de ar atravessando evaporadora ou exaustor: R8 7, R12 88, RL 21) e o dreno do ar passando por porta ou janela — no relatório | PA13 (o dreno × porta/janela fica para o projetista, decisão de 16/11) |
+| Compatibilização | Encontros da climatização (linha frigorígena e dutos × eletroduto, dreno × água; o duto de ar atravessando evaporadora ou exaustor: R8 7, R12 88, RL 21) e o dreno do ar passando por porta ou janela — no relatório | eletroduto × linha/duto feito na PA13 (sobram as descidas); dreno × porta/janela e água × dreno/linha ficam para o projetista (decisão de 16/11) |
+| Compatibilização | O eletroduto junto da laje cruzando a descida da louça do andar de cima pela laje (R8 32, R12 104, RL 91) — onde a vizinhança é densa demais para o contorno, ou o QD da unidade fica logo abaixo dela | a decidir |
+| Compatibilização | Furos em viga do eletroduto junto da laje (+4 a +8 por prédio, nas travessias fora do apoio) — confira com o calculista | projetista |
 | Compatibilização | ~~Eletroduto lançado depois da climatização atravessando a caixa da evaporadora (R8: 56)~~ — resolvido: o eletroduto contorna a evaporadora e o exaustor (zero nos quatro prédios) | feito na PA11 |
 | Compatibilização | Forro rebaixado a 2,30 m nos banheiros, lavabos e área de serviço (a água abaixo dos ramais de cima) — confira com a arquitetura | projetista |
 | Rota de fuga | Prédio com a circulação acima de 40 m da escada única (mesmo com a detecção): a 2ª escada no fim do corredor — hoje só a pendência | projetista |
@@ -761,7 +787,7 @@ quatro "a decidir" de 16/11 viraram as fases PA11–PA14 (pedido de 16/11).
 
 **Resumo (16/11/2026):** **as fases PA0 a PA10c estão no ar** — merge 6206737 (#503), produção servindo esse commit e
 a CI do main verde. Pedido de 16/11: PA11 a PA14 (os quatro "a decidir"). **PA11 no ar** (a16c71c, #518 — o eletroduto
-contorna a evaporadora e o exaustor); **PA12 feita, em publicação** (água × esgoto zerado no tipo dos quatro prédios); PA13 decidida (eletroduto junto da laje; o dreno fica como pendência); PA14 a seguir. O que fica de propósito
+contorna a evaporadora e o exaustor); **PA12 no ar** (2b363ad, #520 — água × esgoto zerado no tipo dos quatro prédios); **PA13 feita, em publicação** (eletroduto junto da laje; o dreno fica como pendência); PA14 a seguir. O que fica de propósito
 para o projetista está em "Pendências em aberto". Kernel em `blueprint-kernel-ts-0.109.0` (a PA11 não toca o kernel).
 
 | Fase | PR | Commit no main |
@@ -786,6 +812,7 @@ para o projetista está em "Pendências em aberto". Kernel em `blueprint-kernel-
 | PA10b — laje = passagem, água rebaixada, compatibilização | #499 | 637bca4 |
 | PA10c — envio ao Empreendimento e achados da rota | #503 | 6206737 |
 | PA11 — eletroduto contorna a evaporadora e o exaustor | #518 | a16c71c |
+| PA12 — água abaixo do ramal de cima também nos cômodos secos | #520 | 2b363ad |
 
 | Fase | Situação |
 |---|---|
@@ -801,6 +828,6 @@ para o projetista está em "Pendências em aberto". Kernel em `blueprint-kernel-
 | PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. **PA9b feita** (extintores, sinalização e iluminação nas áreas comuns do tipo — cada andar repete). **PA9c feita** (hidrante em todo pavimento; coluna de incêndio empilhada; bomba na cobertura ao lado da reserva técnica; registro de recalque no passeio) |
 | PA10 | **PA10a feita** (desempenho com o mesmo resultado: R12 completo 63,6 → 40,3 s, o cálculo da tela no Lançar 14,0 → 5,3 s; o "Gerar" espera a entrada carregar — a prévia do R12 nascia velha; R12 de ponta a ponta no app: gerar 57 s, Lançar 61 s, salvar 9 s com a máquina quieta; tempo fixado 90/90/30 s). **PA10b feita** (a prumada na laje é passagem, não conflito, no app inteiro; a água no forro rebaixado das áreas molhadas — água × esgoto R4 62 → 4, R8 252 → 18, R12 911 → 141, RL 1.195 → 244; o relatório de compatibilização na aba nova; conferida no app com o R8). **PA10c feita** (o envio ao Empreendimento manda as unidades da planta — R8 35 em vez da estimativa de 47 —, a numeração das cópias 201…; a rota de fuga limpa nos quatro prédios: caixas de escada, corredor do apartamento fora da medição, resíduo de geometria ignorado, detecção no R12 e no RL, 2ª porta no térreo do RL) — ver "Pendências em aberto" |
 | PA11 | feita, no ar (#518, a16c71c; conferida no app com o R8) — o eletroduto contorna a caixa da evaporadora e do exaustor (`planejarEletrodutos`): eletroduto dentro de equipamento R4 9 → 0, R8 56 → 0, R12 242 → 0, RL 112 → 0 (o marco trava zero); de quebra, menos encontros entre redes (R8 700 → 630) e +3 caixas de passagem por andar no R8 (as curvas do contorno, regra da NBR 5410). Marco da casa idêntico |
-| PA12 | feita, em publicação (conferida no app com o R8) — a água abaixo do ramal de cima também nos cômodos secos (2,57 m) e contornando o tubo de queda do banheiro: água × esgoto R4 4 → 0, R8 18 → 0, R12 141 → 1 (garagem), RL 244 → 0 |
-| PA13 | decidida (eletroduto junto da laje; dreno × porta/janela fica como pendência) — a seguir |
+| PA12 | feita, no ar (#520, 2b363ad; conferida no app com o R8) — a água abaixo do ramal de cima também nos cômodos secos (2,57 m) e contornando o tubo de queda do banheiro: água × esgoto R4 4 → 0, R8 18 → 0, R12 141 → 1 (garagem), RL 244 → 0 |
+| PA13 | feita, em publicação — eletroduto junto da laje (faixa da elétrica do forro, etapa depois do esgoto, o andar de cima espelhado para o desvio): encontros entre redes R8 612 → 295, RL 1.247 → 530, eletroduto × duto zerado no R8 e no R12; desempenho domado (RL 98 s); eletroduto × esgoto de cima R8 32, R12 104, RL 91 (explicado); dreno × porta/janela = pendência |
 | PA14 | a seguir |

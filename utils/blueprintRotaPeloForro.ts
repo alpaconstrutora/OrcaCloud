@@ -19,12 +19,13 @@
  * Com afastamentos diferentes, a descida de uma disciplina não cruza o ramal de outra; com cotas diferentes, as
  * travessias não se encontram. Um afastamento ≥ raio + raio do vizinho é responsabilidade das hipóteses.
  */
-import { anelRecuado, distanciaEntreEixos3D, envelopeDoTrecho, envelopeValido, pavimentosDoNucleo, pegadaEmPlanta, pointInPolygon, type BlueprintModel, type DisciplinaDeRede, type ObjectId, type Point, type Wall } from './blueprintKernel';
+import { anelRecuado, distanciaEntreEixos3D, envelopeDoTrecho, envelopeValido, pavimentosDoNucleo, pegadaEmPlanta, pointInPolygon, type BlueprintModel, type DisciplinaDeRede, type ObjectId, type Point, type VolumeDePeca, type Wall } from './blueprintKernel';
 import { semEspiculas } from './blueprintDistribuicao';
 import { anelDoPilar, fracaoDentro, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { encaixarNaParede } from './blueprintRotaPelasParedes';
 import { HIPOTESES_DOS_FUROS_PADRAO, distanciaAoApoioDaViga } from './blueprintFurosPrevistos';
 import { TOLERANCIA_DO_LADO_MM, paredeContemLado, paredeDoLado } from './blueprintLadoDaParede';
+import { cantosDaPeca, volumesDasPecasDeClimatizacao } from './blueprintRede';
 
 type P2 = { x: number; y: number };
 
@@ -892,6 +893,34 @@ function ladosForaDoVao(model: BlueprintModel, levelId: ObjectId, w: P2, zLo: nu
   return ladosDoVao(model, levelId, w, zLo, zHi, raioMm, true);
 }
 
+/**
+ * PA13 do prédio automático (16/11/2026): a peça de climatização pendurada na parede (a evaporadora, o exaustor) conta
+ * como um VÃO para a descida — a vertical da laje à tomada logo abaixo da evaporadora passava por dentro dela; desce ao
+ * lado e corre por baixo, como sob a janela (F18). O trecho dela na parede: as projeções dos cantos no eixo, entre a
+ * cota de baixo e a de cima da caixa (a cota da peça é o centro).
+ */
+const volumesPorModelo = new WeakMap<BlueprintModel, Map<ObjectId, VolumeDePeca[]>>();
+function volumesDoNivel(model: BlueprintModel, levelId: ObjectId): VolumeDePeca[] {
+  let porNivel = volumesPorModelo.get(model);
+  if (!porNivel) {
+    porNivel = new Map();
+    for (const v of volumesDasPecasDeClimatizacao(model)) porNivel.set(v.levelId, [...(porNivel.get(v.levelId) ?? []), v]);
+    volumesPorModelo.set(model, porNivel);
+  }
+  return porNivel.get(levelId) ?? [];
+}
+function pecasComoVaos(model: BlueprintModel, levelId: ObjectId, parede: Wall, u: P2, L: number): { offsetMm: number; widthMm: number; sillMm: number; heightMm: number }[] {
+  const out: { offsetMm: number; widthMm: number; sillMm: number; heightMm: number }[] = [];
+  for (const v of volumesDoNivel(model, levelId)) {
+    const cantos = cantosDaPeca(v.at, v, v.rotacaoGraus);
+    const ts = cantos.map((c) => (c.x - parede.a.x) * u.x + (c.y - parede.a.y) * u.y);
+    const ds = cantos.map((c) => Math.abs((c.x - parede.a.x) * u.y - (c.y - parede.a.y) * u.x));
+    if (Math.min(...ds) > parede.thicknessMm / 2 + 30 || Math.max(...ts) < 0 || Math.min(...ts) > L) continue;
+    out.push({ offsetMm: Math.min(...ts), widthMm: Math.max(...ts) - Math.min(...ts), sillMm: v.cotaMm - v.alturaMm / 2, heightMm: v.alturaMm });
+  }
+  return out;
+}
+
 function ladosDoVao(model: BlueprintModel, levelId: ObjectId, w: P2, zLo: number, zHi: number, raioMm: number, todos: boolean): P2[] {
   for (const parede of model.walls) {
     if (parede.levelId !== levelId) continue;
@@ -901,8 +930,7 @@ function ladosDoVao(model: BlueprintModel, levelId: ObjectId, w: P2, zLo: number
     const t = (w.x - parede.a.x) * u.x + (w.y - parede.a.y) * u.y;
     const d = Math.abs((w.x - parede.a.x) * u.y - (w.y - parede.a.y) * u.x);
     if (d > parede.thicknessMm / 2 + 1 || t < -1 || t > L + 1) continue;
-    for (const v of model.openings) {
-      if (v.wallId !== parede.id) continue;
+    for (const v of [...model.openings.filter((o) => o.wallId === parede.id), ...pecasComoVaos(model, levelId, parede, u, L)]) {
       const de = v.offsetMm - raioMm;
       const ate = v.offsetMm + v.widthMm + raioMm;
       if (t <= de || t >= ate) continue;

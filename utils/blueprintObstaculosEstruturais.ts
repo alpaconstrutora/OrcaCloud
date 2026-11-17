@@ -111,7 +111,7 @@ export const AFASTAMENTO_DO_CONTORNO_MM = 100;
  * `[]` = não atravessa (reta serve); `null` = não há contorno por cantos
  * (pilares encostados) — quem chama avisa e segue reto.
  */
-export function desvioDoPilar(a: P2, b: P2, pegadas: readonly Point[][]): P2[] | null {
+export function desvioDoPilar(a: P2, b: P2, pegadas: readonly Point[][], opcoes: { grafoAteNos?: number } = {}): P2[] | null {
   if (fracaoDentro(a, b, pegadas) === 0) return [];
   const livre = (p: P2, q: P2) => fracaoDentro(p, q, pegadas) === 0 && !dentroDeAlguma(pegadas, p) && !dentroDeAlguma(pegadas, q);
   const d = (p: P2, q: P2) => Math.hypot(q.x - p.x, q.y - p.y);
@@ -145,6 +145,10 @@ export function desvioDoPilar(a: P2, b: P2, pegadas: readonly Point[][]): P2[] |
   // F24 da casa automática (17/10/2026): mais de um pilar no caminho (a diagonal longa do esgoto enterrado sob a casa em
   // L) — o menor caminho pelos cantos de TODOS os pilares (grafo de visibilidade). Antes, sem um canto ou par do mesmo
   // pilar livre, o tubo seguia reto pelos dois.
+  // PA13 do prédio automático (16/11/2026): o grafo é quadrático nos cantos — com dezenas de tubos na faixa do forro (as
+  // descidas das louças de cima pela laje) o RL levava minutos. `grafoAteNos` = desiste (null) acima disso; ausente = sem
+  // teto, como sempre.
+  if (opcoes.grafoAteNos != null && 2 + pegadas.length * 4 > opcoes.grafoAteNos) return null;
   const nos: P2[] = [a, b, ...pegadas.flatMap(cantosDe).filter((w) => !dentroDeAlguma(pegadas, w))];
   const dist = nos.map(() => Infinity);
   const veio = nos.map(() => -1);

@@ -97,6 +97,16 @@ function eletrodutoNoEquipamento(m: BlueprintModel): number {
   return conflitosDoModelo(m, { pecas: volumesDasPecasDeClimatizacao(m) }).filter((c) => c.classe === 'EQUIPAMENTO' && d.get(c.trechoId) === 'ELETRICA').length;
 }
 
+/** PA13: os encontros do eletroduto com a climatização (linha frigorígena, duto de ar) e com o esgoto, no prédio inteiro. */
+function eletrodutoX(m: BlueprintModel, outras: readonly string[]): number {
+  const d = new Map((m.trechos ?? []).map((t) => [t.id, t.disciplina as string]));
+  return conflitosDoModelo(m).filter((c) => {
+    if (c.classe !== 'REDE') return false;
+    const par = [d.get(c.trechoId), d.get(c.outroId)];
+    return par.includes('ELETRICA') && par.some((x) => x !== undefined && outras.includes(x));
+  }).length;
+}
+
 /** O que o marco guarda de um prédio. */
 function marcoDoPredio(c: Caso) {
   const p = predio(c);
@@ -137,6 +147,12 @@ function marcoDoPredio(c: Caso) {
     aguaXEsgoto: aguaXEsgoto(m),
     // PA11: o eletroduto contorna a caixa da evaporadora e do exaustor (eram R4 9, R8 56, R12 242, RL 112).
     eletrodutoNoEquipamento: eletrodutoNoEquipamento(m),
+    // PA13 ("eletroduto junto da laje"): o eletroduto na faixa da elétrica do forro, acima da linha frigorígena e do duto
+    // de ar (os três corriam a 2,35 m, sob a viga). Eletroduto × linha e duto, antes (PA12): R8 336, R12 1.111, RL 833. O
+    // que sobra são as descidas do eletroduto cruzando a linha/duto junto da parede. E o eletroduto × esgoto passa a
+    // contar as descidas das louças de cima pela laje (o quadro da unidade logo abaixo de uma delas é inevitável).
+    eletrodutoXClimatizacao: eletrodutoX(m, ['FRIGORIGENA', 'MECANICA']),
+    eletrodutoXEsgoto: eletrodutoX(m, ['ESGOTO']),
   };
 }
 

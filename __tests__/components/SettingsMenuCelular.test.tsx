@@ -69,6 +69,18 @@ describe('Settings › menu das seções no celular', () => {
         expect(await screen.findByText('tela do inss')).toBeTruthy();
     });
 
+    it('pelo teclado: escolher a seção devolve o foco ao botão (a lista some e levaria o foco junto)', async () => {
+        const user = userEvent.setup();
+        await montar();
+        botaoMenu().focus();
+        await user.keyboard('{Enter}');
+        expect(botaoMenu().getAttribute('aria-expanded')).toBe('true');
+        screen.getByRole('button', { name: 'Banco de Dados' }).focus();
+        await user.keyboard('{Enter}');
+        expect(botaoMenu().getAttribute('aria-expanded')).toBe('false');
+        expect(document.activeElement).toBe(botaoMenu());
+    });
+
     it('de lg para cima a árvore fica sempre à vista, ao lado da folha, e o botão some', async () => {
         await montar();
         expect(botaoMenu().className.split(/\s+/)).toContain('lg:hidden');

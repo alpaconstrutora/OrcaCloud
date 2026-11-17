@@ -93,8 +93,14 @@ const Settings: React.FC = () => {
     // Abaixo de `lg` (celular e tablet) a árvore recolhe atrás de um botão com a seção atual —
     // ao lado da folha ela tomava 256 px de 358 a 390 px de tela. Escolher folha fecha;
     // abrir grupo não. De `lg` para cima nada muda (guia §19.2).
+    // Com o menu aberto (só acontece abaixo de `lg`), a lista some ao escolher e levaria o foco
+    // do teclado junto — ele volta para o botão. De `lg` para cima o menu nunca abre: nada muda.
     const [menuAberto, setMenuAberto] = React.useState(false);
-    const escolherFolha = (id: SettingsLeafId) => { setActiveLeaf(id); setMenuAberto(false); };
+    const botaoMenuRef = React.useRef<HTMLButtonElement>(null);
+    const escolherFolha = (id: SettingsLeafId) => {
+        setActiveLeaf(id);
+        if (menuAberto) { setMenuAberto(false); botaoMenuRef.current?.focus(); }
+    };
 
     const [ehSuperadmin, setEhSuperadmin] = React.useState(false);
     React.useEffect(() => {
@@ -225,6 +231,7 @@ const Settings: React.FC = () => {
             <div className="flex flex-col lg:flex-row gap-6 items-stretch lg:items-start">
                 <aside className="w-full lg:w-64 shrink-0 bg-gray-50 border border-gray-100 rounded-[10px] p-2">
                     <button
+                        ref={botaoMenuRef}
                         type="button"
                         onClick={() => setMenuAberto(a => !a)}
                         aria-expanded={menuAberto}

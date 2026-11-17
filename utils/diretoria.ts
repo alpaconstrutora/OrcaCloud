@@ -4,11 +4,11 @@
  * moram em supabase/functions/_shared/diretoriaCatalogo.ts (o mesmo do e-mail semanal).
  */
 import {
-    TIPOS, AREAS, SEVERIDADES, tituloDoGrupo, detalheDoGrupo, brl, dataBr,
+    TIPOS, AREAS, SEVERIDADES, tituloDoGrupo, detalheDoGrupo, brl, dataBr, diasAte, semanaDe,
     type TipoExcecao, type Area, type Severidade,
 } from '../supabase/functions/_shared/diretoriaCatalogo';
 
-export { TIPOS, AREAS, SEVERIDADES, tituloDoGrupo, detalheDoGrupo, brl, dataBr };
+export { TIPOS, AREAS, SEVERIDADES, tituloDoGrupo, detalheDoGrupo, brl, dataBr, diasAte, semanaDe };
 export type { TipoExcecao, Area, Severidade };
 
 // ── Tipos do que `fn_diretoria_painel` devolve ──────────────────────────────────
@@ -65,26 +65,6 @@ export interface PainelDiretoria {
     areas: LinhaArea[];
     determinacoes: Determinacao[];
     cobrancas: Cobranca[];
-}
-
-// ── Datas ───────────────────────────────────────────────────────────────────────
-const diaUTC = (iso: string) => Date.UTC(+iso.slice(0, 4), +iso.slice(5, 7) - 1, +iso.slice(8, 10));
-const isoDe = (ms: number) => new Date(ms).toISOString().slice(0, 10);
-
-/** Dias de `hoje` até `iso` (negativo = já passou). Datas puras, sem fuso. */
-export function diasAte(iso: string, hoje: string): number {
-    return Math.round((diaUTC(iso) - diaUTC(hoje)) / 86_400_000);
-}
-
-/** Semana ISO de `hoje`: número e segunda a domingo. */
-export function semanaDe(hoje: string): { numero: number; inicio: string; fim: string } {
-    const ms = diaUTC(hoje);
-    const diaDaSemana = (new Date(ms).getUTCDay() + 6) % 7; // segunda = 0
-    const inicio = ms - diaDaSemana * 86_400_000;
-    const quinta = inicio + 3 * 86_400_000;
-    const anoDaQuinta = new Date(quinta).getUTCFullYear();
-    const numero = Math.floor((quinta - Date.UTC(anoDaQuinta, 0, 1)) / (7 * 86_400_000)) + 1;
-    return { numero, inicio: isoDe(inicio), fim: isoDe(inicio + 6 * 86_400_000) };
 }
 
 // ── Hierarquia ──────────────────────────────────────────────────────────────────

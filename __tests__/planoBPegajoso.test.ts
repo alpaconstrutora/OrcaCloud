@@ -28,6 +28,15 @@ describe('memória do plano B', () => {
         expect(m.pularChamadaUnica(null)).toBe(true);
     });
 
+    // O AppRouter entrega "Todas" como '' (`activeOrganizationId || ''`), não null.
+    it('"Todas" chega como texto vazio: é a mesma chave de null', () => {
+        const m = criarMemoriaDoPlanoB(() => 0);
+        m.marcarQueCaiu('');
+        expect(m.pularChamadaUnica(null)).toBe(true);
+        expect(m.pularChamadaUnica('')).toBe(true);
+        expect(m.pularChamadaUnica('o1')).toBe(false);
+    });
+
     it('esquecer zera', () => {
         const m = criarMemoriaDoPlanoB(() => 0);
         m.marcarQueCaiu('o1');

@@ -14,7 +14,7 @@ import { createRoot } from 'react-dom/client';
 import { flushSync } from 'react-dom';
 import type { jsPDF } from 'jspdf';
 import type { GraficoId } from '../utils/imovibGraficos';
-import { secoesDoRelatorio, capaDoRelatorio, type DadosDoRelatorio, type OpcoesDoRelatorio, type CapaDoRelatorio, type SecaoDoRelatorio } from '../utils/imovibRelatorio';
+import { secoesDoRelatorio, capaDoRelatorio, subtituloSemVersaoRepetida, type DadosDoRelatorio, type OpcoesDoRelatorio, type CapaDoRelatorio, type SecaoDoRelatorio } from '../utils/imovibRelatorio';
 import { graficosDoEstudo, type DadosDosGraficos } from '../utils/imovibCalculoDaVersao';
 import { pdfDoRelatorio, type ImagemDoGrafico } from '../utils/imovibRelatorioPdf';
 import { coresCompativeisNaCopia } from '../utils/html2canvasCores';
@@ -151,7 +151,7 @@ export interface OpcoesDoRelatorioCompleto extends OpcoesDoRelatorio {
 export async function gerarRelatorioCompleto(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorioCompleto = {}): Promise<jsPDF> {
     const c = opcoes.congelado;
     const secoes = c ? c.secoes : secoesDoRelatorio(d, opcoes);
-    const capa = c ? c.capa : capaDoRelatorio(d, opcoes);
+    const capa = c ? { ...c.capa, subtitulo: subtituloSemVersaoRepetida(c.capa.subtitulo) } : capaDoRelatorio(d, opcoes);
     const [imagens, logo] = await Promise.all([
         // Falha na captura (html2canvas) não derruba o relatório: sai só com texto e tabelas.
         Promise.resolve()

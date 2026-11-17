@@ -76,7 +76,7 @@ export const GraficoCurvaS: React.FC<ComumDosGraficos & {
     dados: PontoDaCurvaS[];
     rotuloBarra?: string;
     rotuloLinha?: string;
-    /** Largura do eixo dos valores (px). No PDF, mais larga para "R$ 7.0 M" não quebrar em duas linhas. */
+    /** Largura do eixo dos valores (px). No PDF, mais larga para "-3,5 mi" não quebrar em duas linhas. */
     larguraDoEixo?: number;
 }> = ({ dados, rotuloBarra = 'Caixa Líquido no Mês', rotuloLinha = 'Exposição de Caixa (Acumulado)', larguraDoEixo, dimensao, animado = true, className = 'h-[400px] w-full' }) => {
     const minimo = dados.reduce((m, d) => Math.min(m, d.acc), 0);
@@ -86,7 +86,8 @@ export const GraficoCurvaS: React.FC<ComumDosGraficos & {
             <ComposedChart accessibilityLayer={false} data={dados} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E5E7EB" />
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} tickLine={false} axisLine={false} minTickGap={30} />
-                <YAxis tickFormatter={(value: number) => `R$ ${(value / 1000000).toFixed(1)} M`} tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} tickLine={false} axisLine={false} width={larguraDoEixo} />
+                {/* Régua compacta em pt-BR, como os outros gráficos ("-3,5 mi"); era "R$ -3.5 M" (17/11). */}
+                <YAxis tickFormatter={compactAxis} tick={{ fontSize: 11, fill: '#64748b', fontWeight: 600 }} tickLine={false} axisLine={false} width={larguraDoEixo} />
                 <Tooltip
                     formatter={(value: unknown) => brl(Number(value))}
                     labelStyle={{ fontWeight: 800, color: '#0f172a' }}

@@ -65,16 +65,19 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     const [carregando, setCarregando] = React.useState(true);
     // A vez do caixa: só a resposta da chamada única (ok ou falha), não os blocos do
     // plano B — esperar `carregando` segurava o caixa até o bloco mais lento (~16 s).
-    const [esperandoChamadaUnica, setEsperandoChamadaUnica] = React.useState(true);
-    // O mesmo, lido de forma SÍNCRONA pelo efeito do caixa: na troca de org o `load` da
-    // nova liga a espera no mesmo commit em que o efeito do caixa roda, e o estado ainda
-    // dizia `false` (render anterior) — o caixa da org nova saía junto com a chamada
-    // única dela, disputando o banco (revisão do #538). O estado segue nas dependências
-    // do efeito só para dispará-lo de novo quando a espera acaba.
+    // Lida de forma SÍNCRONA (ref) pelo efeito do caixa: na troca de org o `load` da nova
+    // liga a espera no mesmo commit em que o efeito do caixa roda, e um estado ainda
+    // diria `false` (render anterior) — o caixa da org nova saía junto com a chamada
+    // única dela (revisão do #538).
     const esperandoChamadaUnicaRef = React.useRef(true);
+    // O que redispara o efeito quando a espera ACABA é um CONTADOR, não um booleano:
+    // com as respostas chegando antes de o React renderizar a espera ligada (serviço
+    // com cache), `true → false` no mesmo lote se anulava e o caixa da org nova ficava
+    // em esqueleto para sempre (revisão do #546; __tests__/components/CentralControleForaDoAct).
+    const [vezDoCaixa, setVezDoCaixa] = React.useState(0);
     const esperarChamadaUnica = React.useCallback((sim: boolean) => {
         esperandoChamadaUnicaRef.current = sim;
-        setEsperandoChamadaUnica(sim);
+        if (!sim) setVezDoCaixa(v => v + 1);
     }, []);
     const [filtro, setFiltro] = React.useState<FiltroDaFila>('tudo');
     // Números sobem até o valor só na PRIMEIRA carga da tela; atualizar não anima.
@@ -326,7 +329,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             return;
         }
         carregarCaixa();
-    }, [carregarCaixa, podeCarregar, verFinanceiro, esperandoChamadaUnica, organizationId, periodoCaixa]);
+    }, [carregarCaixa, podeCarregar, verFinanceiro, vezDoCaixa, organizationId, periodoCaixa]);
 
     // ── Derivados ──────────────────────────────────────────────────────────
     const dadosMeuDia = meuDia.estado === 'ok' ? meuDia.data : null;

@@ -100,8 +100,21 @@ interface Acumulado {
   retornos: { comando: string }[];
 }
 
+/**
+ * PA14 do prédio automático (16/11/2026): a composição guardada por modelo — o canvas, o editor, a conferência da NBR 5410
+ * e o painel pediam a MESMA rede a cada render (no Lançar do R12, ~14 s cada vez). O modelo do kernel não muda depois de
+ * criado, e quem lê a composição não a altera.
+ */
+const composicoesGuardadas = new WeakMap<BlueprintModel, ComposicaoDaRede>();
+
 /** A composição de TODA a rede elétrica do desenho. */
 export function composicaoDaRede(model: BlueprintModel): ComposicaoDaRede {
+  let c = composicoesGuardadas.get(model);
+  if (!c) composicoesGuardadas.set(model, (c = comporARede(model)));
+  return c;
+}
+
+function comporARede(model: BlueprintModel): ComposicaoDaRede {
   const saida: ComposicaoDaRede = new Map();
   const trechos = (model.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA');
   const circuitos = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
@@ -133,13 +146,24 @@ export function composicaoDaRede(model: BlueprintModel): ComposicaoDaRede {
    * automático): a mesma lista a cada ponto do circuito deixa o `caminhoEntre` reaproveitar os vizinhos dela.
    */
   const arestasPorCircuito = new Map<ObjectId, Aresta[]>();
+  // PA14 do prédio automático (16/11/2026): as arestas de cada circuito numa passada só, na ordem de `arestas` — filtrar
+  // TODOS os eletrodutos para cada circuito levava ~10 s no Lançar do R12 (30 mil trechos × centenas de circuitos).
+  let arestasDoCircuito: Map<ObjectId, Aresta[]> | null = null;
   const arestasDo = (c: Circuito): Aresta[] => {
     const guardada = arestasPorCircuito.get(c.id);
     if (guardada) return guardada;
-    const proprias = arestas.filter((a) => {
-      const t = trechos[indiceDoTrecho.get((a.ref as { existente: ObjectId }).existente)!];
-      return (t.circuitoIds ?? []).includes(c.id);
-    });
+    if (!arestasDoCircuito) {
+      arestasDoCircuito = new Map();
+      for (const a of arestas) {
+        const t = trechos[indiceDoTrecho.get((a.ref as { existente: ObjectId }).existente)!];
+        for (const cid of new Set(t.circuitoIds ?? [])) {
+          const l = arestasDoCircuito.get(cid);
+          if (l) l.push(a);
+          else arestasDoCircuito.set(cid, [a]);
+        }
+      }
+    }
+    const proprias = arestasDoCircuito.get(c.id) ?? [];
     const lista = proprias.length > 0 ? proprias : arestas;
     arestasPorCircuito.set(c.id, lista);
     return lista;

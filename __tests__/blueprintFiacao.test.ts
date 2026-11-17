@@ -115,6 +115,18 @@ describe('esquemas de ligação · a fiação caminha pela rede', () => {
     expect(c.lista.find((x) => x.tipo === 'RETORNO')?.comando).toBe('a');
   });
 
+  it('PA14 do prédio — a composição é guardada por modelo: o mesmo modelo devolve a mesma composição; o modelo novo, a dele', () => {
+    const { m, ids } = casa({ comInterruptor: true });
+    const c1 = composicaoDaRede(m);
+    expect(composicaoDaRede(m)).toBe(c1);
+    // Um comando qualquer gera outro modelo: outra composição, com a mesma fiação do trecho que não mudou.
+    const m2 = applyCommand(m, { type: 'SetTrechoProps', trechoId: ids.ramalLuz, condutores: 9 }).model;
+    const c2 = composicaoDaRede(m2);
+    expect(c2).not.toBe(c1);
+    expect(c2.get(ids.ramalLuz)!.declarados).toBe(9);
+    expect(c1.get(ids.ramalLuz)!.declarados).not.toBe(9);
+  });
+
   it('luz SEM interruptor: exige fase do quadro como a tomada — e nada de retorno', () => {
     const { m, ids } = casa({ comInterruptor: false });
     expect(tipos(m, ids.ramalLuz)).toEqual(['FASE', 'NEUTRO', 'TERRA']);

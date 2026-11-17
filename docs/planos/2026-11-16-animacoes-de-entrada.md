@@ -173,9 +173,44 @@ saiu do app inteiro), então as quatro telas foram limpas inteiras.
 gerenciador, "Fechar Compra" abre o diálogo do app (0 diálogo nativo), botão do IR 36 px/peso 500
 com o motivo no `title` em volta; prints conferidos.
 
+## Pedido posterior 4 (17/11/2026, mesma sessão)
+
+> Corrigir problemas com cenários
+>
+> Sessão: 21a9ea95-c34e-43cc-8a0f-7d21ef9ed2a0 · 2026-11-17
+
+Diagnóstico (`ParametricEstimator`, lido em `origin/main` 6b055c1): os cenários eram um
+`useState` da tela, e daí vinham os outros defeitos.
+
+- [x] **Somem ao sair da tela/recarregar** — passam a morar em `settings.parametricScenarios`
+  (tipo `ParametricScenario` em `types/project.ts`). O autosave do projeto já grava qualquer campo
+  das configurações (`usePersistenceSync` compara o JSON inteiro), e abrir o projeto carrega o
+  objeto inteiro: **sem migration**. A carga do CUB passa a depender só dos campos que as
+  consultas leem — com `[settings]` inteiro, cada cenário salvo recarregaria a tela.
+- [x] **"Restaurar" só trazia o fator K** — o cenário nem guardava a composição do BDI. Agora
+  guarda BDI (composição), K, sensibilidade (materiais/mão de obra) e prazo, e aplicar traz tudo;
+  se o padrão ou a área do orçamento mudaram desde então, o diálogo avisa que o valor não volta.
+- [x] **"Salvar cenário" durante o carregamento** gravava R$ 0,00 (→ "Infinity%"): desligado
+  enquanto carrega ou sem valor, com o motivo no `title` em volta (§9.2).
+- [x] **Excluir e "Limpar tudo" apagavam sem perguntar** → `useConfirm()` (§14).
+- [x] **Numeração repetia** depois de excluir ("Cenário 2" duas vezes) → maior número + 1.
+- [x] **"Variação VGV"** (é custo, não VGV; verde quando o atual ficava mais caro, vermelho em
+  0%) → "Diferença para o atual" em texto neutro ("12,3% abaixo do atual", "igual ao atual").
+- [x] **Data**: só a hora → data e hora (o cenário agora atravessa dias). Lista lateral da aba
+  financeira: BDI sem arredondar ("31.234567%"), letra de 9 px → pt-BR e `text-xs`.
+- [x] Sobra do pedido posterior 3: "DURAÇÃO DA OBRA:" (caixa alta escrita no texto, não por
+  classe — escapou da medição por `text-transform`) → "Duração da obra".
+
+Regras puras em `utils/cenariosParametricos.ts`. *Pronto quando:* `cenariosParametricos.test.ts`
+e `ParametricCenarios.test.tsx` vermelhos com o código antigo (5 de 5 na tela) e verdes com o
+novo; no harness, salvar → sair da tela → voltar mantém os cenários, aplicar traz K e lucro,
+excluir e limpar perguntam, 0 diálogo nativo, 0 erro de console.
+
 ## Fora do escopo (registrado, não feito)
 
 - ~~Durações de 500/700 ms em conteúdo de aba~~ — feito no pedido posterior acima.
 - ~~Aba "Cenários" inalcançável; caixa alta nas mesmas telas~~ — feito no pedido posterior 3.
-- Os cenários do paramétrico vivem só no estado da tela (somem ao sair) — comportamento de sempre,
-  não mexido.
+- ~~Os cenários do paramétrico vivem só no estado da tela (somem ao sair)~~ — feito no pedido
+  posterior 4.
+- A simulação em si (BDI e fator K mexidos na tela, fora de um cenário) continua só na tela, como
+  sempre: salvar um cenário é o jeito de guardá-la. Cenário não tem renomear.

@@ -89,6 +89,39 @@ export type TechnicalConfig =
   | TechnicalConfigGalpao
   | TechnicalConfigGenerico;
 
+/** Composição do BDI usada no orçamento paramétrico (percentuais). */
+export interface BdiComposition {
+    taxes: number;
+    profit: number;
+    risk: number;
+    insurance: number;
+    admin: number;
+    guarantee: number;
+    finance: number;
+}
+
+/**
+ * Cenário salvo no orçamento paramétrico (`settings.parametricScenarios`). Guarda tudo o que
+ * reproduz o valor: composição do BDI, fator K, sensibilidade e prazo — e o padrão/área do
+ * projeto naquele momento, para avisar quando mudaram. Regras em utils/cenariosParametricos.ts.
+ */
+export interface ParametricScenario {
+    id: string;
+    number: number;
+    name: string;
+    /** ISO 8601. */
+    createdAt: string;
+    totalValue: number;
+    costPerM2: number;
+    bdi: number;
+    bdiComposition: BdiComposition;
+    kFactor: number;
+    sensitivity: { materials: number; labor: number };
+    durationMonths: number;
+    area: number;
+    standard: string;
+}
+
 export interface ProjectSettings {
     id?: string;
     name: string;
@@ -123,15 +156,9 @@ export interface ProjectSettings {
     lastCubUpdate?: Date;
     customCubRates?: Record<string, Record<string, number>>;
     kFactor?: number;
-    bdiComposition?: {
-        taxes: number;
-        profit: number;
-        risk: number;
-        insurance: number;
-        admin: number;
-        guarantee: number;
-        finance: number;
-        };
+    bdiComposition?: BdiComposition;
+    /** Cenários salvos no orçamento paramétrico (até 17/11/2026 viviam só no estado da tela). */
+    parametricScenarios?: ParametricScenario[];
     wbs: WBSGroup[];
     versions?: BudgetVersion[];
     activeVersionId?: string;

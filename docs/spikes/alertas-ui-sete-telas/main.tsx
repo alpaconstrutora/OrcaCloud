@@ -8,6 +8,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../../index.css';
 import { ConfirmProvider } from '../../../components/ui/confirm';
+import { ToastProvider } from '../../../components/ui/toast';
 import Dashboard from '../../../components/Dashboard';
 import ParametricEstimator from '../../../components/ParametricEstimator';
 import ProjectOverview from '../../../components/ProjectOverview';
@@ -32,10 +33,12 @@ Object.assign(parametricService, {
     getRegionalComparisonDataAsync: fixo([{ state: 'MS', rate: 2851 }, { state: 'SP', rate: 2990 }]),
     getMixComparisonAsync: fixo({ standard: 'R8-A', total: 3_100_000, m2: 3100 }),
 });
-const generateParametricBudgetAsync = parametricService.generateParametricBudgetAsync;
-parametricService.generateParametricBudgetAsync = (async (s: any) => {
-    try { return await generateParametricBudgetAsync(s); } catch { return []; }
-}) as any;
+// Etapas com valor (17/11/2026): "Salvar cenário" fica desligado quando o orçamento dá R$ 0,00.
+parametricService.generateParametricBudgetAsync = fixo([
+    ['01.01.01 Fundação', 'Materiais', 420_000], ['01.02.01 Estrutura', 'Materiais', 610_000],
+    ['01.03.01 Alvenaria', 'Mão de Obra', 260_000], ['01.04.01 Instalações', 'Materiais', 330_000],
+    ['01.05.01 Acabamento', 'Mão de Obra', 380_000],
+].map(([subPhase, nature, price], i) => ({ id: `e${i}`, subPhase, quantity: 1, sinapiItem: { code: `E${i}`, description: subPhase, nature, price, unit: 'vb' } })));
 Object.assign(rentalsDashboardService, {
     getDashboardMetrics: fixo(P({
         valorTotalPatrimonio: 12_400_000, receitaMensal: 68_000, yieldMensal: 0.0055, taxaOcupacao: 0.82,
@@ -102,10 +105,30 @@ const CONTRIB = P([
 ]);
 
 const nada = () => {};
+
+/**
+ * Faz o papel do App (17/11/2026): guarda as configurações do projeto — onde os cenários moram — e
+ * desmonta/monta a tela com "Sair da tela"/"Voltar", como trocar de menu e voltar.
+ */
+function ParametricoComProjeto() {
+    const [settings, setSettings] = React.useState(SETTINGS);
+    const [aberta, setAberta] = React.useState(true);
+    return (
+        <div>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
+                <button data-harness="sair" onClick={() => setAberta(false)}>Sair da tela</button>
+                <button data-harness="voltar" onClick={() => setAberta(true)}>Voltar</button>
+                <span data-harness="gravados">{(settings.parametricScenarios ?? []).length} gravado(s) no projeto</span>
+            </div>
+            {aberta && <ParametricEstimator settings={settings} onUpdateBudget={nada} onUpdateSettings={setSettings} onNavigate={nada} />}
+        </div>
+    );
+}
+
 const tela = new URLSearchParams(location.search).get('tela') ?? 'dashboard';
 const TELAS: Record<string, React.ReactNode> = {
     dashboard: <Dashboard budget={BUDGET} settings={SETTINGS} />,
-    parametrico: <ParametricEstimator settings={SETTINGS} onUpdateBudget={nada} onUpdateSettings={nada} onNavigate={nada} />,
+    parametrico: <ParametricoComProjeto />,
     visao: <ProjectOverview settings={SETTINGS} budget={BUDGET} projects={[]} onNavigate={nada} onLoadProject={fixo(null)} />,
     locacoes: <RentalsDashboard organizationId="org1" />,
     cotacoes: <SupplyChainQuotationComparison requestId="req1" onBack={nada} />,
@@ -115,7 +138,9 @@ const TELAS: Record<string, React.ReactNode> = {
 };
 
 createRoot(document.getElementById('raiz')!).render(
-    <ConfirmProvider>
-        <div style={{ padding: 24, maxWidth: 1440, margin: '0 auto' }} data-tela={tela}>{TELAS[tela]}</div>
-    </ConfirmProvider>,
+    <ToastProvider>
+        <ConfirmProvider>
+            <div style={{ padding: 24, maxWidth: 1440, margin: '0 auto' }} data-tela={tela}>{TELAS[tela]}</div>
+        </ConfirmProvider>
+    </ToastProvider>,
 );

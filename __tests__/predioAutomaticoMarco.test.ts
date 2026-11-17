@@ -204,6 +204,10 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // PA17, "pronto quando": a descida da água na FACE da parede não cruza o dreno do ar nem a linha frigorígena, que
         // correm no eixo (era: no tipo do R8, 13 × dreno e 12 × linha — e cada andar copiado repetia).
         expect(agora.aguaXClimatizacao).toBe(0);
+        // PA18: a linha frigorígena fora do forro (a 2,35 m, pelo eixo das paredes) contorna a subida do QD da unidade —
+        // eram a subida do quadro × a linha (R4 6, R8 14, R12 44, RL 28). Sobra a descida do eletroduto até a tomada passando
+        // pelo duto do exaustor que corre junto da parede (R4 1, RL 5 por andar; escorregar 40 cm não basta).
+        expect(agora.eletrodutoXClimatizacao).toBe(({ R4: 3, R8: 0, R12: 0, RL: 35 } as Record<string, number>)[nome]);
         // PA7a, "pronto quando": o diâmetro do tubo de queda pela Tabela 6 da NBR 8160 — UHC do grupo × os andares, a
         // UHC de um andar, e nunca abaixo de 100 com bacia. No R12 (11 andares com unidades), todos DN 100.
         const n = agora.andaresComUnidade;

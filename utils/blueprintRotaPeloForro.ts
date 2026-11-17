@@ -470,12 +470,7 @@ export function prumadasQueCruzam(model: BlueprintModel, levelId: ObjectId, cota
   // E a LUZ de teto (na face do forro) e o QUADRO: o eletroduto vai subir dali até a faixa dele, atravessando as de
   // baixo (a travessia da fria passava bem onde os eletrodutos do quadro sobem).
   if (disciplina !== 'ELETRICA') {
-    for (const q of model.quadros ?? []) {
-      if (q.levelId !== levelId || q.cotaMm >= cotaMm) continue;
-      const h = Math.ceil(RAIO_DA_SUBIDA_DO_QUADRO_MM + raioMm + folgaMm);
-      const { x, y } = q.at;
-      saida.push([{ x: x - h, y: y - h }, { x: x + h, y: y - h }, { x: x + h, y: y + h }, { x: x - h, y: y + h }] as Point[]);
-    }
+    saida.push(...subidasDosQuadros(model, levelId, cotaMm, raioMm, folgaMm));
     for (const t of model.terminais ?? []) {
       if (t.levelId !== levelId || t.tipoEletrico !== 'ILUMINACAO_TETO' || t.cotaMm >= cotaMm) continue;
       const h = Math.ceil(RAIO_DO_ELETRODUTO_DA_LUZ_MM + raioMm + folgaMm);
@@ -488,6 +483,22 @@ export function prumadasQueCruzam(model: BlueprintModel, levelId: ObjectId, cota
 
 /** Os eletrodutos que sobem do quadro (o tronco chega a DN 75). */
 const RAIO_DA_SUBIDA_DO_QUADRO_MM = 37.5;
+
+/**
+ * A SUBIDA dos eletrodutos de cada quadro do pavimento abaixo de `cotaMm` (até a rede, no teto) — um quadrado com o raio
+ * do tronco, o de quem passa e a folga. PA18 do prédio automático (17/11/2026): também para a linha frigorígena FORA do
+ * forro (a 2,35 m, pelas paredes) — corria no eixo da parede e cruzava a subida do QD da unidade (R8 2, R12 4 por andar).
+ */
+export function subidasDosQuadros(model: BlueprintModel, levelId: ObjectId, cotaMm: number, raioMm: number, folgaMm = 10): Point[][] {
+  const saida: Point[][] = [];
+  for (const q of model.quadros ?? []) {
+    if (q.levelId !== levelId || q.cotaMm >= cotaMm) continue;
+    const h = Math.ceil(RAIO_DA_SUBIDA_DO_QUADRO_MM + raioMm + folgaMm);
+    const { x, y } = q.at;
+    saida.push([{ x: x - h, y: y - h }, { x: x + h, y: y - h }, { x: x + h, y: y + h }, { x: x - h, y: y + h }] as Point[]);
+  }
+  return saida;
+}
 /** O eletroduto que sobe da luminária (DN 25). */
 const RAIO_DO_ELETRODUTO_DA_LUZ_MM = 12.5;
 

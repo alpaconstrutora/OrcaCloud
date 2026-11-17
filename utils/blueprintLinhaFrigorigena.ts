@@ -49,7 +49,7 @@ import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, desvioDoPilar, fundoDaVigaMais
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { componentesSugeridos, lancesDaPrumada, pavimentosEntre, pontoDaPrumada } from './blueprintPrumadaClimatizacao';
 import { HIPOTESES_DA_LINHA_PADRAO, type HipotesesDaLinha } from './blueprintClimatizacao';
-import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, encaixaNoAnel, fundoDaVigaSobre, paredesDoForro, prumadasQueCruzam, type FaixaDoForro } from './blueprintRotaPeloForro';
+import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, encaixaNoAnel, fundoDaVigaSobre, paredesDoForro, prumadasQueCruzam, subidasDosQuadros, type FaixaDoForro } from './blueprintRotaPeloForro';
 import type { ItemConferido } from './blueprintConferenciaClimatizacao';
 
 // ─── E5.2: a tabela por capacidade (HIPÓTESE de fabricante) ──────────────────
@@ -782,7 +782,10 @@ export function planejarLinhasFrigorigenas(
     } else if (precisaLinha) {
       const paredesDaRota = noForro ? paredesDoForro(base, levelId, noForro.faixa.afastamentoDaFaceMm) : undefined;
       // F14b: as prumadas das outras redes (as colunas de água) que cruzam a faixa da linha são obstáculo.
-      const prumadas = noForro ? prumadasQueCruzam(base, levelId, cotaLinha, 'FRIGORIGENA', 2 * (faixa.succaoMm / 2 + isolamentoMm) + 5) : [];
+      // PA18 do prédio automático (17/11/2026): fora do forro (a 2,35 m, pelo eixo das paredes), a subida do quadro — a
+      // linha corria pela parede do QD da unidade e cruzava os eletrodutos que sobem dele.
+      const raioDaLinha = 2 * (faixa.succaoMm / 2 + isolamentoMm) + 5;
+      const prumadas = noForro ? prumadasQueCruzam(base, levelId, cotaLinha, 'FRIGORIGENA', raioDaLinha) : subidasDosQuadros(base, levelId, cotaLinha, raioDaLinha);
       const caminho = caminhoEmPlanta(base, levelId, s.evaporadora.at, saidaAt, hip, paredesDaRota, prumadas);
       if (!caminho.pelaParede) avisos.push('sem parede ao alcance: a linha vai em reta (desviando de pilar)');
       const baseLinha = { levelId, disciplina: 'FRIGORIGENA' as const, bitolaMm: faixa.liquidoMm, bitolaSuccaoMm: faixa.succaoMm, isolamentoMm, sugerido: true };

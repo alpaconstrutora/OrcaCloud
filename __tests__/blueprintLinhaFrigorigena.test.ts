@@ -15,6 +15,8 @@ import { modelosDoCatalogo, selecaoDoNivel } from '../utils/blueprintSelecaoClim
 import { planejarEquipamentosSplit } from '../utils/blueprintPosicaoSplit';
 import { conferenciaDaLinha, drenosConferidos, drenosTrechoATrecho, faixaDaLinha, linhaExistente, linhasConferidas, planejarLinhasFrigorigenas, raioMinimoDaCurvaMm, saidaPelaParede, sistemasDoNivel } from '../utils/blueprintLinhaFrigorigena';
 import { marcasDeVerificacao } from '../utils/blueprintVerificacaoRede';
+import { subidasDosQuadros } from '../utils/blueprintRotaPeloForro';
+import { fracaoDentro } from '../utils/blueprintObstaculosEstruturais';
 
 const catalogo = modelosDoCatalogo(SEMENTES_DE_TIPOS.map((s, i) => ({ id: `t${i}`, nome: s.nome, familia: s.propriedades.familia, active: true, propriedades: s.propriedades })));
 const hipClima: HipotesesClimatizacao = { ...HIPOTESES_CLIMATIZACAO_PADRAO, clima: { cidade: null, tbsExternaC: 34, tbuExternaC: 25, altitudeM: 0 } };
@@ -310,5 +312,28 @@ describe('F14d — a evaporadora na parede externa; a linha e o dreno saem junto
     const x = sistemasDoNivel(m, t)[0];
     // A condensadora do lado de DENTRO da casa: não há parede entre as duas.
     expect(saidaPelaParede(m, x.evaporadora, { ...x.condensadora, at: point(2000, 2000) })).toBeNull();
+  });
+});
+
+describe('PA18 do prédio automático — a linha fora do forro contorna a subida do quadro', () => {
+  it('o QD no eixo da parede por onde a linha passa (a 2,50 m): a linha passa por fora da subida dos eletrodutos dele, e segue ligada', () => {
+    const { m, t } = casaComSplit();
+    // Onde a linha corre sem o quadro: o lance na cota da linha que chega ao eixo de uma parede.
+    const antes = applyBatch(m, planejarLinhasFrigorigenas(m, t, hipLinha).comandos).model;
+    const naCota = (mm: BlueprintModel) => trechos(mm).filter((x) => x.disciplina === 'FRIGORIGENA' && x.cotaAMm === 2500 && x.cotaBMm === 2500 && (x.a.x !== x.b.x || x.a.y !== x.b.y));
+    const eixoY = new Set(m.walls.filter((w) => w.a.y === w.b.y).map((w) => w.a.y));
+    const lance = naCota(antes).find((x) => eixoY.has(x.b.y) && x.a.x === x.b.x)!;
+    const noEixo = point(lance.b.x, lance.b.y);
+    const comQuadro = applyCommand(m, { type: 'AddQuadro', levelId: t, nome: 'QD', at: noEixo, cotaMm: 1600 }).model;
+    const raioDaLinha = 2 * (faixaDaLinha(sistemasDoNivel(comQuadro, t)[0].evaporadora.capacidadeBtuH ?? null).succaoMm / 2 + 13) + 5;
+    const subida = subidasDosQuadros(comQuadro, t, 2500, raioDaLinha);
+    expect(subida).toHaveLength(1);
+    // Antes (sem o quadro como obstáculo), a linha passava pelo meio da subida.
+    expect(naCota(antes).some((x) => fracaoDentro(x.a, x.b, subida) > 0)).toBe(true);
+    const plano = planejarLinhasFrigorigenas(comQuadro, t, hipLinha);
+    expect(plano.aCriar).toHaveLength(1);
+    const depois = applyBatch(comQuadro, plano.comandos).model;
+    for (const x of naCota(depois)) expect(fracaoDentro(x.a, x.b, subida)).toBe(0);
+    expect(linhaExistente(depois, sistemasDoNivel(depois, t)[0])).not.toBeNull();
   });
 });

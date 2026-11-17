@@ -35,4 +35,9 @@ Na espera, `if (caixaDaOrg.current === organizationId) setCaixaTrocando(caixaDoP
 
 ## Estado
 
-- [ ] Tarefas 1–2 · [ ] Tarefa 3
+- [x] Tarefas 1–2 — cada uma vista falhando antes (17/11): T1 por mutante (sucesso sem desligar o esmaecido); T2 vermelho no código antigo.
+- [x] Tarefa 3 (parte local): `typecheck` exit=0; suíte inteira só com as falhas conhecidas do Windows.
+- [x] Revisão final (revisor novo): sem crítico nem importante. Menor acatado: o teste do fim agora prova que o
+  esmaecido acaba PORQUE o caixa de 30 dias chegou (resposta controlada com valor novo; segue esmaecido até ela) —
+  vermelho num mutante que desliga o esmaecido cedo.
+- [ ] PR · CI · merge · prova em produção.

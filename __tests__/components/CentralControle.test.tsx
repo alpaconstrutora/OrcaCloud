@@ -609,10 +609,15 @@ describe('CentralControle · tela "Bom dia"', () => {
             await userEvent.click(within(c).getByRole('button', { name: '30 dias' }));
             expect(within(c).getByLabelText('R$ 1.000').closest('[aria-busy="true"]')).not.toBeNull();
             expect(cashflow).not.toHaveBeenCalledWith('o1', 30);                       // não disputa com a chamada única
+            let responder30!: (v: unknown) => void;
+            cashflow.mockReturnValueOnce(new Promise(r => { responder30 = r; }));
             responder(painel());
             await waitFor(() => expect(cashflow).toHaveBeenCalledWith('o1', 30));
-            // …e o esmaecido acaba quando o caixa novo chega.
-            await waitFor(() => expect(within(c).getByLabelText('R$ 1.000').closest('[aria-busy="true"]')).toBeNull());
+            // Segue esmaecido enquanto o caixa de 30 dias não chega…
+            expect(within(c).getByLabelText('R$ 1.000').closest('[aria-busy="true"]')).not.toBeNull();
+            // …e acaba QUANDO ele chega (valor novo, fora do esmaecido).
+            responder30([{ data_ref: HOJE, cr_previsto: 0, db_previsto: 0, saldo_dia: 0, saldo_acum: 3000 }]);
+            await waitFor(() => expect(within(c).getByLabelText('R$ 3.000').closest('[aria-busy="true"]')).toBeNull());
         } finally {
             raf.mockRestore();
         }

@@ -1,7 +1,19 @@
 import React from 'react';
 import Button from './ui/Button';
+import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
-import { ProjectSettings, BudgetEntry } from '../types';
+import { useToast } from '../hooks/useToast';
+import { ProjectSettings, BudgetEntry, ParametricScenario } from '../types';
+import {
+  lerCenarios,
+  criarCenario,
+  comparacaoComAtual,
+  diferencasDeContexto,
+  formatarPercentual,
+  formatarFatorK,
+  formatarVariacao,
+  formatarDataHora,
+} from '../utils/cenariosParametricos';
 import { parametricService } from '../services/parametricService';
 import { exportService } from '../services/exportService';
 import { CUB_STANDARDS_DATA } from '../constants';
@@ -46,7 +58,6 @@ import {
   Copy,
   Trash2,
   RefreshCw,
-  TrendingDown,
   CheckCircle2,
   ChevronDown
 } from 'lucide-react';
@@ -100,7 +111,10 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
   const [simulationDuration, setSimulationDuration] = React.useState(18);
   const [compareStandard, setCompareStandard] = React.useState<string>('');
   const [comparisonData, setComparisonData] = React.useState<{ standard: string; total: number; m2: number } | null>(null);
-  const [snapshots, setSnapshots] = React.useState<any[]>([]);
+  // Cenários moram no projeto (settings.parametricScenarios) e o autosave grava no banco.
+  // Até 17/11/2026 eram um useState daqui: sumiam ao trocar de tela ou recarregar.
+  const cenarios = React.useMemo(() => lerCenarios(settings.parametricScenarios), [settings.parametricScenarios]);
+  const { showToast } = useToast();
   const [showExportMenu, setShowExportMenu] = React.useState(false);
   // Organização do seletor do topo (com herança de empresa/obra). NUNCA
   // `organizations[0]` — ver hooks/useOrgContext.tsx.
@@ -119,6 +133,13 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
   const [regionalData, setRegionalData] = React.useState<{ state: string; rate: number }[]>([]);
 
   const quantitativeItems = parametricService.generateQuantitativeBudget(settings);
+
+  // Só o que as consultas do CUB leem (services/parametricService.ts). Depender de `settings`
+  // inteiro recarregaria tudo — e piscaria "Consultando dados do CUB…" — a cada cenário salvo.
+  const chaveDasConsultas = JSON.stringify([
+    settings.area, settings.standard, settings.location, settings.referenceMonth,
+    settings.socialChargesMode, settings.cubRate, settings.kFactor, settings.bdi, settings.bdiComposition,
+  ]);
 
   React.useEffect(() => {
     const loadData = async () => {
@@ -142,7 +163,8 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
       }
     };
     loadData();
-  }, [settings]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- a chave cobre os campos que as consultas leem
+  }, [chaveDasConsultas]);
 
   const { items: financialItems } = financialData;
 
@@ -180,6 +202,79 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
   // Aggregate for Pie Chart (by main phase if needed, currently using subphases for detail)
   // Aggregate for Pie Chart (by main phase if needed, currently using subphases for detail)
   const pieData = chartData;
+
+  const moeda = (valor: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor);
+
+  const gravarCenarios = (novos: ParametricScenario[]) => {
+    onUpdateSettings({ ...settings, parametricScenarios: novos });
+  };
+
+  // Durante o carregamento o valor ainda é 0 — o cenário sairia com R$ 0,00 ("Infinity%" na comparação).
+  const motivoSemSalvar = loading
+    ? 'Aguarde: carregando os dados do CUB'
+    : totalValue > 0
+      ? null
+      : 'Sem valor para salvar: não há CUB para o padrão, o local e o mês de referência deste orçamento';
+
+  const salvarCenario = () => {
+    if (motivoSemSalvar) return;
+    const novo = criarCenario({
+      totalValue,
+      costPerM2,
+      bdi: totalBdiPerc,
+      bdiComposition: { ...bdiComposition },
+      kFactor,
+      sensitivity: { materials: sensMaterials, labor: sensLabor },
+      durationMonths: simulationDuration,
+      area: settings.area,
+      standard: settings.standard,
+    }, cenarios);
+    gravarCenarios([novo, ...cenarios]);
+    showToast(`${novo.name} salvo neste orçamento.`);
+  };
+
+  const aplicarCenario = async (cenario: ParametricScenario) => {
+    const mudou = diferencasDeContexto(cenario, { standard: settings.standard, area: settings.area });
+    const ok = await confirm({
+      title: `Aplicar os parâmetros do ${cenario.name}?`,
+      message:
+        `A simulação passa a usar BDI ${formatarPercentual(cenario.bdi)}, fator K ${formatarFatorK(cenario.kFactor)}, ` +
+        `materiais ${formatarVariacao(cenario.sensitivity.materials)}, mão de obra ${formatarVariacao(cenario.sensitivity.labor)} ` +
+        `e prazo de ${cenario.durationMonths} meses.` +
+        (mudou.length > 0
+          ? `\n\nO orçamento mudou desde que o cenário foi salvo (${mudou.join('; ')}), então o valor não volta a ser ${moeda(cenario.totalValue)}.`
+          : ''),
+      variant: 'default',
+      confirmLabel: 'Aplicar',
+    });
+    if (!ok) return;
+    setBdiComposition({ ...cenario.bdiComposition });
+    setKFactor(cenario.kFactor);
+    setSensMaterials(cenario.sensitivity.materials);
+    setSensLabor(cenario.sensitivity.labor);
+    setSimulationDuration(cenario.durationMonths);
+    showToast(`Parâmetros do ${cenario.name} aplicados.`);
+  };
+
+  const excluirCenario = async (cenario: ParametricScenario) => {
+    const ok = await confirm({
+      title: `Excluir o ${cenario.name}?`,
+      message: 'O cenário sai deste orçamento. Essa ação não pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (ok) gravarCenarios(cenarios.filter(c => c.id !== cenario.id));
+  };
+
+  const excluirTodosOsCenarios = async () => {
+    const ok = await confirm({
+      title: cenarios.length === 1 ? 'Excluir o cenário salvo?' : `Excluir os ${cenarios.length} cenários salvos?`,
+      message: 'Os cenários saem deste orçamento. Essa ação não pode ser desfeita.',
+      variant: 'danger',
+      confirmLabel: cenarios.length === 1 ? 'Excluir' : 'Excluir todos',
+    });
+    if (ok) gravarCenarios([]);
+  };
 
   const handleConvertToAddDetailed = async () => {
     const isFinancial = activeTab === 'financial';
@@ -243,26 +338,17 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
           </p>
         </div>
         <div className="flex gap-4">
-          <button
-            onClick={() => {
-              const snapshot = {
-                id: Date.now(),
-                name: `Cenário ${snapshots.length + 1} (${settings.standard})`,
-                totalValue,
-                costPerM2,
-                bdi: totalBdiPerc,
-                kFactor,
-                area: settings.area,
-                standard: settings.standard,
-                timestamp: new Date().toLocaleTimeString()
-              };
-              setSnapshots([snapshot, ...snapshots]);
-            }}
-            className="flex items-center gap-2 px-6 py-4 bg-orange-50 text-orange-700 border border-orange-100 rounded-2xl hover:bg-orange-100 transition-all shadow-lg shadow-orange-100/50 font-bold"
-          >
-            <Activity className="w-5 h-5" />
-            <span>Salvar Cenário</span>
-          </button>
+          {/* §9.2: o motivo de estar desligado vai no title do invólucro (botão desligado não mostra o próprio). */}
+          <span title={motivoSemSalvar ?? undefined} className="inline-flex">
+            <button
+              onClick={salvarCenario}
+              disabled={!!motivoSemSalvar}
+              className="flex items-center gap-2 px-6 py-4 bg-orange-50 text-orange-700 border border-orange-100 rounded-2xl hover:bg-orange-100 transition-all shadow-lg shadow-orange-100/50 font-bold disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-orange-50"
+            >
+              <Activity className="w-5 h-5" />
+              <span>Salvar cenário</span>
+            </button>
+          </span>
           <div className="relative">
             <Button
               variant="secondary"
@@ -553,24 +639,24 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                       </div>
                     </div>
 
-                    {snapshots.length > 0 && (
+                    {cenarios.length > 0 && (
                       <div className="pt-6 border-t border-gray-100 space-y-4">
-                        <h4 className="text-xs font-black text-gray-400">Cenários Salvos ({snapshots.length})</h4>
+                        <h4 className="text-xs font-semibold text-gray-500">Cenários salvos ({cenarios.length})</h4>
                         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
-                          {snapshots.map((snap) => (
-                            <div key={snap.id} className="p-3 bg-gray-50 border border-gray-100 rounded-xl hover:border-orange-200 transition-all group">
-                              <div className="flex justify-between items-start mb-2">
-                                <span className="text-xs font-bold text-gray-800">{snap.name}</span>
-                                <span className="text-xs text-gray-400 font-mono">{snap.timestamp}</span>
+                          {cenarios.map((cenario) => (
+                            <div key={cenario.id} className="p-3 bg-gray-50 border border-gray-100 rounded-xl hover:border-orange-200 transition-all group">
+                              <div className="flex justify-between items-start gap-2 mb-2">
+                                <span className="text-sm font-medium text-gray-900">{cenario.name}</span>
+                                <span className="text-xs text-gray-500 whitespace-nowrap">{formatarDataHora(cenario.createdAt)}</span>
                               </div>
                               <div className="flex justify-between items-end">
                                 <div>
-                                  <p className="text-xs font-bold text-blue-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(snap.totalValue)}</p>
-                                  <p className="text-[9px] text-gray-500">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(snap.costPerM2)}/m²</p>
+                                  <p className="text-sm font-semibold text-blue-700">{moeda(cenario.totalValue)}</p>
+                                  <p className="text-xs text-gray-500">{moeda(cenario.costPerM2)}/m²</p>
                                 </div>
-                                <div className="text-right">
-                                  <p className="text-[9px] font-bold text-gray-400">BDI: {snap.bdi}%</p>
-                                  <p className="text-[9px] font-bold text-gray-400">K: x{snap.kFactor.toFixed(2)}</p>
+                                <div className="text-right text-xs text-gray-500">
+                                  <p>BDI {formatarPercentual(cenario.bdi)}</p>
+                                  <p>Fator K {formatarFatorK(cenario.kFactor)}</p>
                                 </div>
                               </div>
                             </div>
@@ -590,7 +676,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                       { id: 'scurve', label: 'Curva S', icon: Calendar },
                       { id: 'mix', label: 'Estudo de mix', icon: Split },
                       // O painel "Cenários" existia desde o início sem botão (inalcançável) — 16/11/2026.
-                      { id: 'scenarios', label: `Cenários${snapshots.length ? ` (${snapshots.length})` : ''}`, icon: Copy },
+                      { id: 'scenarios', label: `Cenários${cenarios.length ? ` (${cenarios.length})` : ''}`, icon: Copy },
                       { id: 'milestones', label: 'Milestones', icon: CheckCircle2 }
                     ].map(tab => (
                       <button
@@ -864,7 +950,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                           </div>
                         </div>
                         <div className="flex items-center gap-4 bg-white p-4 rounded-2xl border border-gray-100 shadow-sm">
-                          <span className="text-xs font-bold text-gray-500 whitespace-nowrap">DURAÇÃO DA OBRA:</span>
+                          <span className="text-xs font-semibold text-gray-500 whitespace-nowrap">Duração da obra</span>
                           <div className="flex items-center gap-3">
                             <input
                               type="range" min="6" max="60" step="1"
@@ -1083,89 +1169,69 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                             <p className="text-sm text-gray-500 font-medium">Histórico de simulações e comparativos de viabilidade.</p>
                           </div>
                         </div>
-                        {snapshots.length > 0 && (
+                        {cenarios.length > 0 && (
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setSnapshots([])}
+                            onClick={excluirTodosOsCenarios}
                             className="text-red-600 hover:text-red-700 hover:bg-transparent normal-case tracking-normal"
                           >
-                            <Trash2 className="w-3.5 h-3.5" /> Limpar Tudo
+                            <Trash2 className="w-3.5 h-3.5" /> Limpar tudo
                           </Button>
                         )}
                       </div>
 
-                      {snapshots.length === 0 ? (
+                      {cenarios.length === 0 ? (
                         <div className="flex flex-col items-center justify-center p-20 bg-gray-50/50 rounded-3xl border-2 border-dashed border-gray-100">
                           <div className="p-6 bg-white rounded-full shadow-sm mb-4">
                             <Activity className="w-10 h-10 text-gray-200" />
                           </div>
-                          <p className="text-sm font-bold text-gray-400">Nenhum cenário salvo ainda.</p>
-                          <p className="text-sm text-gray-500 mt-2">Use o botão "Salvar Cenário" no topo da página para começar.</p>
+                          <p className="text-sm font-medium text-gray-700">Nenhum cenário salvo ainda.</p>
+                          <p className="text-sm text-gray-500 mt-2">Use o botão "Salvar cenário" no topo da página para começar. Os cenários ficam guardados neste orçamento.</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-1 gap-4">
-                          {snapshots.map((snap) => {
-                            const diff = ((totalValue / snap.totalValue) - 1) * 100;
+                          {cenarios.map((cenario) => {
+                            const comparacao = comparacaoComAtual(cenario.totalValue, totalValue);
+                            const { materials, labor } = cenario.sensitivity;
                             return (
-                              <div key={snap.id} className="group bg-white p-6 rounded-3xl border border-gray-100 shadow-xl hover:border-orange-200 transition-all flex flex-col lg:flex-row lg:items-center gap-8 relative overflow-hidden">
+                              <div key={cenario.id} className="group bg-white p-6 rounded-3xl border border-gray-100 shadow-xl hover:border-orange-200 transition-all flex flex-col lg:flex-row lg:items-center gap-8 relative overflow-hidden">
                                 <div className="absolute top-0 left-0 w-1.5 h-full bg-orange-500/20 group-hover:bg-orange-500 transition-colors"></div>
 
-                                <div className="flex-1">
-                                  <div className="flex items-center gap-2 mb-1">
-                                    <h4 className="font-black text-gray-900 group-hover:text-orange-700 transition-colors">{snap.name}</h4>
-                                    <span className="text-xs font-bold text-gray-400">{snap.timestamp}</span>
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex flex-wrap items-baseline gap-x-2 mb-2">
+                                    <h4 className="font-black text-gray-900 group-hover:text-orange-700 transition-colors">{cenario.name}</h4>
+                                    <span className="text-xs text-gray-500">{formatarDataHora(cenario.createdAt)}</span>
                                   </div>
-                                  <div className="flex gap-4">
-                                    <span className="text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-[6px]">Padrão {snap.standard}</span>
-                                    <span className="text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-[6px]">BDI {snap.bdi.toFixed(2)}%</span>
-                                    <span className="text-xs font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-[6px]">Fator K {snap.kFactor.toFixed(2)}</span>
+                                  <div className="flex flex-wrap gap-2">
+                                    <span className="text-xs font-medium text-blue-700 bg-blue-50 px-2 py-0.5 rounded-[6px]">Padrão {cenario.standard}</span>
+                                    <span className="text-xs font-medium text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-[6px]">BDI {formatarPercentual(cenario.bdi)}</span>
+                                    <span className="text-xs font-medium text-purple-700 bg-purple-50 px-2 py-0.5 rounded-[6px]">Fator K {formatarFatorK(cenario.kFactor)}</span>
                                   </div>
+                                  <p className="text-xs text-gray-500 mt-2">
+                                    Materiais {formatarVariacao(materials)} · Mão de obra {formatarVariacao(labor)} · Prazo {cenario.durationMonths} meses
+                                  </p>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-4 lg:gap-12 text-right">
                                   <div>
-                                    <p className="text-xs font-semibold text-gray-500 mb-1 leading-none">Custo Total</p>
-                                    <p className="text-lg font-black text-gray-900">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(snap.totalValue)}</p>
+                                    <p className="text-xs font-semibold text-gray-500 mb-1 leading-none">Valor total</p>
+                                    <p className="text-lg font-black text-gray-900">{moeda(cenario.totalValue)}</p>
                                   </div>
                                   <div>
-                                    <p className="text-xs font-semibold text-gray-500 mb-1 leading-none">Variação VGV</p>
-                                    <div className="flex items-center justify-end gap-1">
-                                      {diff > 0 ? <TrendingUp className="w-4 h-4 text-emerald-500" /> : <TrendingDown className="w-4 h-4 text-red-500" />}
-                                      <span className={`text-lg font-black ${diff > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                        {diff > 0 ? '+' : ''}{diff.toFixed(1)}%
-                                      </span>
-                                    </div>
+                                    <p className="text-xs font-semibold text-gray-500 mb-1 leading-none">Diferença para o atual</p>
+                                    <p className="text-sm font-medium text-gray-700 leading-7">{comparacao ?? '—'}</p>
                                   </div>
                                 </div>
 
-                                <div className="flex items-center gap-2 lg:border-l lg:pl-8 lg:ml-4 border-gray-100">
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={async () => {
-                                      const ok = await confirm({
-                                        title: 'Aplicar as taxas deste cenário?',
-                                        message: 'A simulação atual passa a usar o fator K deste cenário.',
-                                        variant: 'default',
-                                        confirmLabel: 'Aplicar',
-                                      });
-                                      if (ok) setKFactor(snap.kFactor);
-                                    }}
-                                    className="bg-gray-50 text-gray-400 hover:bg-blue-50 hover:text-blue-600 shadow-sm"
-                                    title="Restaurar Parâmetros"
-                                  >
-                                    <RefreshCw className="w-5 h-5" />
-                                  </Button>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    onClick={() => setSnapshots(snapshots.filter(s => s.id !== snap.id))}
-                                    className="bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-600 shadow-sm"
-                                    title="Excluir"
-                                  >
-                                    <Trash2 className="w-5 h-5" />
-                                  </Button>
+                                <div className="flex items-center gap-1.5 lg:border-l lg:pl-8 lg:ml-4 border-gray-100">
+                                  <ActionIconButton
+                                    kind="history"
+                                    icon={<RefreshCw className="w-4 h-4" />}
+                                    title="Aplicar os parâmetros deste cenário"
+                                    onClick={() => aplicarCenario(cenario)}
+                                  />
+                                  <ActionIconButton kind="delete" onClick={() => excluirCenario(cenario)} />
                                 </div>
                               </div>
                             );

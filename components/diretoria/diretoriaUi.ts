@@ -58,9 +58,14 @@ export function plural(n: number, um: string, varios: string): string {
     return `${n} ${n === 1 ? um : varios}`;
 }
 
-/** Erro de gravação legível. 42501 = falta a permissão no banco (a tela mostra o motivo, não o código). */
+/**
+ * Erro de gravação legível. O 42501 da PERMISSÃO Diretoria (`_diretoria_exige_editar`) vira o motivo
+ * em português; outro 42501 (ex.: create_task recusando quem não é membro) mostra a mensagem do banco
+ * — antes todo 42501 virava "sem permissão", e o diretor lia que não tinha a permissão que tinha.
+ */
 export function mensagemDeErro(e: unknown, fallback: string): string {
-    if ((e as { code?: string } | null)?.code === '42501') {
+    const erro = e as { code?: string; message?: string } | null;
+    if (erro?.code === '42501' && /permissão "Diretoria \(CEO\)/.test(erro.message ?? '')) {
         return 'Sem a permissão "Diretoria (CEO) · editar" nesta organização. Peça a um administrador.';
     }
     return errorMessage(e, fallback);

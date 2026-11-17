@@ -161,8 +161,20 @@ export function detalheDoGrupo(g: GrupoParaTexto): string {
 /** A foto de uma segunda-feira (diretoria_semana_numeros, somada nas orgs). */
 export interface FotoDaSemana {
     semana: string;
+    /** Quantas organizações têm a foto (o banco soma só essas). */
+    orgs?: number;
     por_tipo: Record<string, { quantidade: number; valor: number | null }>;
     determinacoes_vencidas: number;
+}
+
+/**
+ * A foto da semana passada cobre só parte das organizações (uma ganhou a permissão nesta semana):
+ * comparar somas de conjuntos diferentes daria "piorou" em tudo. Devolve o aviso, ou null se dá
+ * para comparar.
+ */
+export function comparacaoIncompleta(anterior: FotoDaSemana, organizacoesAgora: number): string | null {
+    if (anterior.orgs == null || anterior.orgs >= organizacoesAgora) return null;
+    return `A comparação volta quando as ${organizacoesAgora} organizações tiverem a foto da semana passada (hoje ${anterior.orgs} tem).`;
 }
 
 export interface LinhaComparacao { rotulo: string; antes: number; agora: number; veredito: 'melhorou' | 'piorou' | 'igual' }

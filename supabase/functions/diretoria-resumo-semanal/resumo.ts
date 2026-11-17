@@ -7,7 +7,7 @@
  * piorou · 4. o resto em números. Os tipos que a pessoa marcou como barulho ficam fora de tudo.
  */
 import {
-    TIPOS, tituloDoGrupo, detalheDoGrupo, dataBr, diasAte, semanaDe, compararSemanas, type TipoExcecao,
+    TIPOS, tituloDoGrupo, detalheDoGrupo, dataBr, diasAte, semanaDe, compararSemanas, comparacaoIncompleta, type TipoExcecao,
 } from '../_shared/diretoriaCatalogo.ts';
 import { escapeHtml, escapeAttr } from '../_shared/html.ts';
 
@@ -41,6 +41,7 @@ export interface DadosDoResumo {
     silenciados: unknown;
     semana_anterior: null | {
         semana: string;
+        orgs?: number;
         por_tipo: Record<string, { quantidade: number; valor: number | null }>;
         determinacoes_vencidas: number;
     };
@@ -93,17 +94,18 @@ export function montarResumo(d: DadosDoResumo, linkDoApp: string): { assunto: st
     // 2. Determinações
     const linhasDet: Linha[] = [
         ...vencidas.map(x => {
-            const t = `VENCIDA desde ${dataBr(x.prazo)}: ${x.titulo} — ${nome(x.responsavel_user_id)}`;
+            const t = `VENCIDA desde ${dataBr(x.prazo)}: ${x.titulo} — ${nome(x.responsavel_user_id)}${variasOrgs ? ` [${orgDe(x.organization_id)}]` : ''}`;
             return { texto: `• ${t}`, html: `<li style="margin:0 0 6px;color:#b91c1c">${escapeHtml(t)}</li>` };
         }),
         ...daSemana.map(x => {
-            const t = `Vence ${dataBr(x.prazo)}: ${x.titulo} — ${nome(x.responsavel_user_id)}`;
+            const t = `Vence ${dataBr(x.prazo)}: ${x.titulo} — ${nome(x.responsavel_user_id)}${variasOrgs ? ` [${orgDe(x.organization_id)}]` : ''}`;
             return { texto: `• ${t}`, html: `<li style="margin:0 0 6px">${escapeHtml(t)}</li>` };
         }),
     ];
 
     // 3. Melhorou × piorou (menos é melhor em todos os tipos) — a mesma conta da tela
-    const linhasComparacao: Linha[] = d.semana_anterior
+    const incompleta = d.semana_anterior ? comparacaoIncompleta(d.semana_anterior, d.orgs.length) : null;
+    const linhasComparacao: Linha[] = d.semana_anterior && !incompleta
         ? compararSemanas(grupos, d.semana_anterior, sil, vencidas.length).map(l => {
             const cor = l.veredito === 'melhorou' ? '#047857' : l.veredito === 'piorou' ? '#b91c1c' : '#64748b';
             return {
@@ -122,7 +124,7 @@ export function montarResumo(d: DadosDoResumo, linkDoApp: string): { assunto: st
     const assunto = `Diretoria — semana ${semana.numero} (${dataBr(semana.inicio).slice(0, 5)} a ${dataBr(semana.fim).slice(0, 5)}): `
         + `${pedem}, ${plural(vencidas.length, 'determinação vencida', 'determinações vencidas')}`;
 
-    const semComparacao = 'A comparação começa na próxima semana (a primeira foto é tirada nesta segunda).';
+    const semComparacao = incompleta ?? 'A comparação começa na próxima semana (a primeira foto é tirada nesta segunda).';
     const rodape = 'Para tirar um tipo deste e-mail, marque-o como barulho no painel. '
         + 'Você recebe este resumo porque ligou "Receber toda segunda" no painel da Diretoria.';
 
@@ -130,7 +132,7 @@ export function montarResumo(d: DadosDoResumo, linkDoApp: string): { assunto: st
         assunto, '',
         '1. Pede decisão', ...(linhasCriticas.length ? linhasCriticas.map(l => l.texto) : ['• Nada.']), '',
         '2. Determinações', ...(linhasDet.length ? linhasDet.map(l => l.texto) : ['• Nenhuma vencida nem vencendo esta semana.']), '',
-        '3. Melhorou × piorou desde a semana passada', ...(d.semana_anterior ? linhasComparacao.map(l => l.texto) : [semComparacao]), '',
+        '3. Melhorou × piorou desde a semana passada', ...(linhasComparacao.length ? linhasComparacao.map(l => l.texto) : [semComparacao]), '',
         '4. O resto, em números', resto || 'Nada fora do trilho.', '',
         `Abrir o painel: ${linkDoApp}`, rodape,
     ].join('\n');
@@ -148,7 +150,7 @@ export function montarResumo(d: DadosDoResumo, linkDoApp: string): { assunto: st
     <h1 style="font-size:17px;margin:6px 0 0;color:#0f172a">${escapeHtml(assunto)}</h1>
     ${secao('1. Pede decisão', lista(linhasCriticas, 'Nada.'))}
     ${secao('2. Determinações', lista(linhasDet, 'Nenhuma vencida nem vencendo esta semana.'))}
-    ${secao('3. Melhorou × piorou desde a semana passada', d.semana_anterior ? lista(linhasComparacao, '') : `<p style="margin:0;color:#64748b">${escapeHtml(semComparacao)}</p>`)}
+    ${secao('3. Melhorou × piorou desde a semana passada', linhasComparacao.length ? lista(linhasComparacao, '') : `<p style="margin:0;color:#64748b">${escapeHtml(semComparacao)}</p>`)}
     ${secao('4. O resto, em números', `<p style="margin:0">${escapeHtml(resto || 'Nada fora do trilho.')}</p>`)}
     <p style="margin:24px 0 0"><a href="${escapeAttr(linkDoApp)}" style="display:inline-block;background:#2563eb;color:#ffffff;text-decoration:none;padding:10px 18px;border-radius:8px">Abrir o painel da Diretoria</a></p>
     <p style="margin:18px 0 0;color:#94a3b8;font-size:12px">${escapeHtml(rodape)}</p>

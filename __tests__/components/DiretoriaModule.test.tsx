@@ -246,6 +246,27 @@ describe('Diretoria — tela', () => {
         await waitFor(() => expect(painel).toHaveBeenCalledTimes(2));
     });
 
+    // Revisão (17/11): responsável que saiu da org é ignorado pelo banco — o aviso diz isso; e um 42501
+    // que NÃO é da permissão Diretoria não pode virar "sem permissão".
+    it('"Cobrar" com responsável que saiu da organização: o aviso conta quem ficou de fora', async () => {
+        const user = userEvent.setup();
+        cobrar.mockResolvedValue({ criadas: 1, ja_abertas: 0, ignorados: 1 });
+        montar();
+        const linha = await linhaDoGrupo('694 contas a pagar vencidas');
+        await user.click(within(linha).getByRole('button', { name: /^Cobrar/ }));
+        expect(await screen.findByText(/1 pessoa não é mais da organização e ficou de fora/)).toBeTruthy();
+    });
+
+    it('erro 42501 que não é da permissão Diretoria mostra a mensagem do banco', async () => {
+        const user = userEvent.setup();
+        cobrar.mockRejectedValue(Object.assign(new Error('a tarefa só vai para a agenda de um membro da organização dela'), { code: '42501' }));
+        montar();
+        const linha = await linhaDoGrupo('694 contas a pagar vencidas');
+        await user.click(within(linha).getByRole('button', { name: /^Cobrar/ }));
+        expect(await screen.findByText(/a tarefa só vai para a agenda de um membro/)).toBeTruthy();
+        expect(screen.queryByText(/Sem a permissão "Diretoria \(CEO\) · editar"/)).toBeNull();
+    });
+
     it('grupo já cobrado mostra "cobrado em dd/mm" no lugar do botão', async () => {
         painel.mockResolvedValue(painelBase({
             cobrancas: [{ organization_id: 'org-a', excecao_chave: 'k-conta', tipo: 'conta_vencida', titulo: '694 contas',
@@ -424,5 +445,21 @@ describe('Reunião da semana — "4. O resto, em números" igual ao e-mail', () 
         expect(within(bloco).getByText('Parcela de cliente vencida')).toBeTruthy();
         expect(within(bloco).getByText('Documento de colaborador vencido')).toBeTruthy();
         expect(within(bloco).queryByText('Conta a pagar vencida')).toBeNull();
+    });
+});
+
+describe('troca da organização do topo (revisão #13)', () => {
+    it('com a gaveta de determinação aberta, trocar a org do topo fecha a gaveta (não grava na org antiga)', async () => {
+        const user = userEvent.setup();
+        const tela = render(<ConfirmProvider><DiretoriaModule onNavigate={vi.fn()} /></ConfirmProvider>);
+        const linha = await linhaDoGrupo('694 contas a pagar vencidas');
+        await user.click(within(linha).getByRole('button', { name: 'Virar determinação' }));
+        expect(await screen.findByRole('dialog', { name: 'Nova determinação' })).toBeTruthy();
+        orgDoTopo = 'org-b';
+        useStore.setState({ activeOrganizationId: 'org-b' });
+        tela.rerender(<ConfirmProvider><DiretoriaModule onNavigate={vi.fn()} /></ConfirmProvider>);
+        await waitFor(() => expect(painel).toHaveBeenLastCalledWith('org-b'));
+        expect(await linhaDoGrupo('694 contas a pagar vencidas')).toBeTruthy();   // painel novo já na tela
+        expect(screen.queryByRole('dialog', { name: 'Nova determinação' })).toBeNull();
     });
 });

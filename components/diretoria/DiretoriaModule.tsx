@@ -72,6 +72,8 @@ const DiretoriaModule: React.FC<Props> = ({ onNavigate }) => {
     const [resumoSemanal, setResumoSemanal] = React.useState(false);
     const [cadastroAberto, setCadastroAberto] = React.useState(false);
     const [formulario, setFormulario] = React.useState<{ orgId: string | null; inicial?: InicialDeterminacao; n: number } | null>(null);
+    // Trocou a organização do topo: a gaveta aberta era da org anterior — fecha (revisão de 17/11).
+    React.useEffect(() => { setFormulario(null); }, [orgId]);
 
     // ── Preferências (visão + silenciados): uma vez; falhar não segura a tela ──
     React.useEffect(() => {
@@ -159,10 +161,16 @@ const DiretoriaModule: React.FC<Props> = ({ onNavigate }) => {
     };
 
     // ── Gravações (sempre seguidas de uma releitura sem esqueleto) ──
-    const avisoDaCobranca = (criadas: number, jaAbertas: number) => {
-        if (criadas === 0) return 'Nada novo: quem responde já tinha cobrança aberta.';
+    const avisoDaCobranca = (criadas: number, jaAbertas: number, ignorados = 0) => {
+        // Quem saiu da organização (aprovador antigo, responsável de área) o banco deixa de fora.
+        const fora = ignorados > 0
+            ? ` ${plural(ignorados, 'pessoa não é mais da organização e ficou de fora', 'pessoas não são mais da organização e ficaram de fora')}.`
+            : '';
+        if (criadas === 0) {
+            return (jaAbertas > 0 ? 'Nada novo: quem responde já tinha cobrança aberta.' : 'Ninguém foi cobrado.') + fora;
+        }
         const parte = `${plural(criadas, 'tarefa criada', 'tarefas criadas')} na agenda de quem responde`;
-        return jaAbertas > 0 ? `${parte}; ${plural(jaAbertas, 'pessoa já tinha', 'pessoas já tinham')} cobrança aberta.` : `Cobrança enviada: ${parte}.`;
+        return (jaAbertas > 0 ? `${parte}; ${plural(jaAbertas, 'pessoa já tinha', 'pessoas já tinham')} cobrança aberta.` : `Cobrança enviada: ${parte}.`) + fora;
     };
 
     const cobrar = async (g: GrupoExcecao) => {
@@ -171,7 +179,7 @@ const DiretoriaModule: React.FC<Props> = ({ onNavigate }) => {
                 orgId: g.org_id, chave: g.chave, tipo: g.tipo, titulo: tituloDoGrupo(g),
                 responsaveis: g.responsaveis, tela: TIPOS[g.tipo].tela,
             });
-            showToast(avisoDaCobranca(r?.criadas ?? 0, r?.ja_abertas ?? 0));
+            showToast(avisoDaCobranca(r?.criadas ?? 0, r?.ja_abertas ?? 0, r?.ignorados ?? 0), (r?.criadas ?? 0) + (r?.ja_abertas ?? 0) > 0 ? 'success' : 'error');
             reler();
         } catch (e) {
             showToast(mensagemDeErro(e, 'Não foi possível cobrar.'), 'error');
@@ -179,7 +187,7 @@ const DiretoriaModule: React.FC<Props> = ({ onNavigate }) => {
     };
 
     const cobrarTodos = async (gs: GrupoExcecao[]) => {
-        let criadas = 0, jaAbertas = 0;
+        let criadas = 0, jaAbertas = 0, ignorados = 0;
         const falhas: unknown[] = [];
         for (const g of gs) {
             try {
@@ -189,12 +197,13 @@ const DiretoriaModule: React.FC<Props> = ({ onNavigate }) => {
                 });
                 criadas += r?.criadas ?? 0;
                 jaAbertas += r?.ja_abertas ?? 0;
+                ignorados += r?.ignorados ?? 0;
             } catch (e) { falhas.push(e); }
         }
         if (falhas.length) {
-            showToast(`${avisoDaCobranca(criadas, jaAbertas)} ${plural(falhas.length, 'grupo não foi cobrado', 'grupos não foram cobrados')}: ${mensagemDeErro(falhas[0], 'erro desconhecido')}`, criadas ? 'success' : 'error');
+            showToast(`${avisoDaCobranca(criadas, jaAbertas, ignorados)} ${plural(falhas.length, 'grupo não foi cobrado', 'grupos não foram cobrados')}: ${mensagemDeErro(falhas[0], 'erro desconhecido')}`, criadas ? 'success' : 'error');
         } else {
-            showToast(avisoDaCobranca(criadas, jaAbertas));
+            showToast(avisoDaCobranca(criadas, jaAbertas, ignorados));
         }
         reler();
     };

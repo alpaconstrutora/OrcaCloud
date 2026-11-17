@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { montarResumo, type DadosDoResumo } from '../supabase/functions/diretoria-resumo-semanal/resumo';
-import { compararSemanas } from '../supabase/functions/_shared/diretoriaCatalogo';
+import { compararSemanas, comparacaoIncompleta } from '../supabase/functions/_shared/diretoriaCatalogo';
 
 describe('compararSemanas (a mesma conta na tela e no e-mail)', () => {
     const foto = { semana: '2026-11-09', por_tipo: { conta_vencida: { quantidade: 700, valor: 1 }, parcela_cliente: { quantidade: 2, valor: 1 } }, determinacoes_vencidas: 3 };
@@ -97,5 +97,24 @@ describe('resumo semanal da Diretoria (e-mail)', () => {
     it('com mais de uma organização, cada item diz de qual é', () => {
         const d = base({ orgs: [{ id: 'a', nome: 'Alpa Construtora' }, { id: 'b', nome: 'SPE Garden' }] });
         expect(montarResumo(d, 'https://app.x').texto).toContain('[Alpa Construtora]');
+    });
+});
+
+describe('revisão (17/11): foto parcial e organização das determinações', () => {
+    const foto = { semana: '2026-11-09', orgs: 1, por_tipo: { conta_vencida: { quantidade: 700, valor: 1 } }, determinacoes_vencidas: 0 };
+
+    it('foto de só parte das organizações: não compara (seria "piorou" em tudo) e diz por quê', () => {
+        const d = base({ orgs: [{ id: 'a', nome: 'Alpa Construtora' }, { id: 'b', nome: 'SPE Garden' }], semana_anterior: foto });
+        const { texto } = montarResumo(d, 'https://app.x');
+        expect(texto).toContain('A comparação volta quando as 2 organizações tiverem a foto da semana passada (hoje 1 tem)');
+        expect(texto).not.toContain('700 → 694');
+        expect(comparacaoIncompleta(foto, 2)).toContain('hoje 1 tem');
+        expect(comparacaoIncompleta(foto, 1)).toBeNull();
+        expect(comparacaoIncompleta({ ...foto, orgs: undefined }, 3)).toBeNull();
+    });
+
+    it('com mais de uma organização, a determinação também diz de qual é', () => {
+        const d = base({ orgs: [{ id: 'a', nome: 'Alpa Construtora' }, { id: 'b', nome: 'SPE Garden' }] });
+        expect(montarResumo(d, 'https://app.x').texto).toContain('VENCIDA desde 10/11/2026: Renegociar <b>Concreteira</b> — Lia Souza [Alpa Construtora]');
     });
 });

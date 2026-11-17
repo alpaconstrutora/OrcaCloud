@@ -77,6 +77,8 @@ export const VisaoPorResponsavel: React.FC = () => {
     const aCobrar = grupos.filter(g => !ultimaCobranca(g.chave, painel.cobrancas) && g.responsaveis.length > 0 && d.podeEditarOrg(g.org_id));
     const motivoCobrarTudo = aCobrar.length
         ? null
+        : grupos.length === 0
+            ? 'Nada a cobrar: não há nada fora do trilho nesta pessoa.'
         : grupos.some(g => !d.podeEditarOrg(g.org_id))
             ? MOTIVO_SEM_EDICAO_DIRETORIA
             : 'Nada a cobrar: os grupos desta pessoa já foram cobrados nos últimos 14 dias.';

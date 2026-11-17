@@ -67,7 +67,7 @@ export const diretoriaService = {
     concluir: (id: string) => chamar<void>('fn_diretoria_concluir', { p_id: id }),
 
     cobrar: (c: { orgId: string; chave: string; tipo: TipoExcecao; titulo: string; responsaveis: string[]; tela: string }) =>
-        chamar<{ criadas: number; ja_abertas: number }>('fn_diretoria_cobrar', {
+        chamar<{ criadas: number; ja_abertas: number; ignorados?: number }>('fn_diretoria_cobrar', {
             p_org: c.orgId, p_chave: c.chave, p_tipo: c.tipo, p_titulo: c.titulo,
             p_responsaveis: c.responsaveis, p_view: c.tela,
         }),

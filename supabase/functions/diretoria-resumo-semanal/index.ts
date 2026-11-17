@@ -50,13 +50,15 @@ serve(async (req: Request) => {
   } else {
     const vinculo = await exigirUsuario(req);
     if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
-    // A permissão é do banco: o painel, chamado COMO o usuário, só traz org em que ele a tem.
+    // A permissão é do banco: `_diretoria_orgs`, chamada COMO o usuário, devolve as orgs em que ele a
+    // tem (a mesma regra do painel, sem montar o painel inteiro). Erro do banco ≠ falta de permissão.
     const comoUsuario = createClient(supabaseUrl, anonKey, {
       global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
       auth: { autoRefreshToken: false, persistSession: false },
     });
-    const { data: painel, error } = await comoUsuario.rpc('fn_diretoria_painel', { p_org: null });
-    if (error || !Array.isArray(painel?.orgs) || painel.orgs.length === 0) {
+    const { data: orgs, error } = await comoUsuario.rpc('_diretoria_orgs', { p_editar: false });
+    if (error) return json({ error: `Não foi possível conferir a permissão: ${error.message}` }, 500);
+    if (!Array.isArray(orgs) || orgs.length === 0) {
       return json({ error: 'Sem a permissão "Diretoria (CEO)" em nenhuma organização.' }, 403);
     }
     destinatarios = [vinculo.userId];

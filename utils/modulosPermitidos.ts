@@ -184,7 +184,19 @@ export function uniaoDeModulos(leituras: ModulosPermitidos[]): ModulosPermitidos
  */
 export function modulosPermitidosNoContexto(entrada: EntradaModulos & { organizations: Organization[]; email?: string | null }): ModulosPermitidos {
   const { organizations, email, ...base } = entrada;
-  if (base.activeOrg || base.profile.group === 'DESENVOLVEDOR' || base.isDevEmail) return modulosPermitidos(base);
+  if (base.activeOrg || base.profile.group === 'DESENVOLVEDOR' || base.isDevEmail) {
+    const m = modulosPermitidos(base);
+    // Diretoria fica fora do atalho do grupo DESENVOLVEDOR (vale a flag, utils/permissaoDiretoria.ts):
+    // em "Todas", sem membro ativo, vale a flag em alguma organização do usuário — a mesma conta do
+    // guard do AppRouter (revisão de 17/11; antes o menu escondia e a rota abria).
+    if (!base.activeOrg && !base.isDevEmail && !m.diretoria
+        && vinculosDoUsuario(organizations, email).some(v => podeVerDiretoria({
+          permissoes: v.member.permissions as unknown as Record<string, unknown> | undefined, acessoTotal: false,
+        }))) {
+      return { ...m, diretoria: true };
+    }
+    return m;
+  }
   const vinculos = vinculosDoUsuario(organizations, email);
   if (!vinculos.length) return modulosPermitidos(base);
   return uniaoDeModulos(vinculos.map(v =>

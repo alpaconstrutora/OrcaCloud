@@ -11,7 +11,7 @@
 import React from 'react';
 import { CalendarDays, Gavel, Mail, Send } from 'lucide-react';
 import {
-    TIPOS, brl, colunaDaDeterminacao, compararSemanas, dataBr, diasAte, nomeDe, ordenarPorGravidade, semanaDe, tituloDoGrupo,
+    TIPOS, brl, colunaDaDeterminacao, comparacaoIncompleta, compararSemanas, dataBr, diasAte, nomeDe, ordenarPorGravidade, semanaDe, tituloDoGrupo,
     type ColunaDeterminacao, type TipoExcecao,
 } from '../../utils/diretoria';
 import { useDiretoria } from './DiretoriaContexto';
@@ -39,6 +39,8 @@ const ComparacaoSemanal: React.FC<{ vencidasAgora: number }> = ({ vencidasAgora 
     if (!painel.semana_anterior) {
         return <p className="text-gray-500">A comparação começa depois da primeira foto da semana, tirada toda segunda às 07:00.</p>;
     }
+    const incompleta = comparacaoIncompleta(painel.semana_anterior, painel.orgs.length);
+    if (incompleta) return <p className="text-gray-500">{incompleta}</p>;
     const linhas = compararSemanas(excecoes, painel.semana_anterior, new Set(silenciados), vencidasAgora);
     return (
         <ul className="space-y-1">

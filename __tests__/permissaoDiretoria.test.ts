@@ -84,3 +84,36 @@ describe('menu: chave diretoria em modulosPermitidos', () => {
         expect(MODULO_DO_ITEM_DE_BUSCA.diretoria).toBe('diretoria');
     });
 });
+
+describe('Usuários › padrões e Permissões detalhadas (revisão: admin ganhava a Diretoria por padrão)', () => {
+    it('admin e owner NÃO recebem a Diretoria no padrão do papel (o resto continua tudo ligado)', async () => {
+        const { getDefaultPermissions } = await import('../components/OrganizationUsers');
+        for (const papel of ['admin', 'owner'] as const) {
+            const p = getDefaultPermissions(papel) as Record<string, unknown>;
+            expect(p.canViewDiretoria).toBe(false);
+            expect(p.canEditDiretoria).toBe(false);
+            expect(p.canEditRisks).toBe(true);
+        }
+        for (const papel of ['member', 'viewer'] as const) {
+            expect((getDefaultPermissions(papel) as Record<string, unknown>).canViewDiretoria).toBe(false);
+        }
+    });
+
+    it('"Diretoria (CEO)" tem grupo próprio: marcar o grupo "Geral" não liga a Diretoria', async () => {
+        const { DETAILED_PERMISSIONS } = await import('../components/OrganizationUsers');
+        const d = DETAILED_PERMISSIONS.find(x => x.view === 'canViewDiretoria')!;
+        expect(d.edit).toBe('canEditDiretoria');
+        expect(d.group).not.toBe('Geral');
+        expect(DETAILED_PERMISSIONS.filter(x => x.group === d.group)).toHaveLength(1);
+    });
+});
+
+describe('menu em "Todas" para o grupo DESENVOLVEDOR sem acesso total (revisão #14)', () => {
+    it('vê a Diretoria se tem a flag em alguma organização — a mesma conta do guard do AppRouter', () => {
+        const a = org('a', [membro(EU)]);
+        const b = org('b', [membro(EU, { permissions: { canViewDiretoria: true } as never })]);
+        const dev = { activeEmpresa: null, profile: { group: 'DESENVOLVEDOR' }, isDevEmail: false, currentMember: null, activeOrg: undefined };
+        expect(modulosPermitidosNoContexto({ ...dev, organizations: [a, b], email: EU }).diretoria).toBe(true);
+        expect(modulosPermitidosNoContexto({ ...dev, organizations: [a], email: EU }).diretoria).toBe(false);
+    });
+});

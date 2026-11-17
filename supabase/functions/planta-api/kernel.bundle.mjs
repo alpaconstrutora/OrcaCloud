@@ -4129,7 +4129,13 @@ function exigenciaDoPonto(t, lig, luzComComando, interruptorPrecisaDeFase) {
   if (ehLuz2(t) && luzComComando) return { fases: 0, neutro: true, terra: true };
   return { fases: fasesDa(lig), neutro: lig === "FN", terra: true };
 }
+var composicoesGuardadas = /* @__PURE__ */ new WeakMap();
 function composicaoDaRede(model) {
+  let c = composicoesGuardadas.get(model);
+  if (!c) composicoesGuardadas.set(model, c = comporARede(model));
+  return c;
+}
+function comporARede(model) {
   const saida = /* @__PURE__ */ new Map();
   const trechos = (model.trechos ?? []).filter((t) => t.disciplina === "ELETRICA");
   const circuitos = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
@@ -4153,13 +4159,22 @@ function composicaoDaRede(model) {
     return a;
   };
   const arestasPorCircuito = /* @__PURE__ */ new Map();
+  let arestasDoCircuito = null;
   const arestasDo = (c) => {
     const guardada = arestasPorCircuito.get(c.id);
     if (guardada) return guardada;
-    const proprias = arestas.filter((a) => {
-      const t = trechos[indiceDoTrecho.get(a.ref.existente)];
-      return (t.circuitoIds ?? []).includes(c.id);
-    });
+    if (!arestasDoCircuito) {
+      arestasDoCircuito = /* @__PURE__ */ new Map();
+      for (const a of arestas) {
+        const t = trechos[indiceDoTrecho.get(a.ref.existente)];
+        for (const cid of new Set(t.circuitoIds ?? [])) {
+          const l = arestasDoCircuito.get(cid);
+          if (l) l.push(a);
+          else arestasDoCircuito.set(cid, [a]);
+        }
+      }
+    }
+    const proprias = arestasDoCircuito.get(c.id) ?? [];
     const lista = proprias.length > 0 ? proprias : arestas;
     arestasPorCircuito.set(c.id, lista);
     return lista;
@@ -5394,9 +5409,9 @@ var ROTULO_DO_PONTO_ELETRICO = {
 // utils/blueprintZonaUrbanistica.ts
 function ordinalDoPavimento(levels, levelId) {
   if (!levelId) return 0;
-  const acima = [...levels].filter((l) => l.elevationMm >= 0).sort((a, b) => a.elevationMm - b.elevationMm);
-  const i = acima.findIndex((l) => l.id === levelId);
-  return i < 0 ? 0 : i + 1;
+  const l = levels.find((x) => x.id === levelId);
+  if (!l || l.elevationMm < 0) return 0;
+  return new Set(levels.filter((x) => x.elevationMm >= 0 && x.elevationMm <= l.elevationMm).map((x) => x.elevationMm)).size;
 }
 
 // utils/blueprintUnidadesDoPredio.ts

@@ -744,6 +744,23 @@ trechos) e as marcas de verificação das redes — medir onde vai o tempo antes
 **Pronto quando.** O tempo do Lançar do R12 medido no app (intercalado, com a máquina quieta) cai, e o novo limite fica
 fixado no teste de desempenho da PA10a; o modelo lançado é o mesmo (hash igual).
 
+**Execução da PA14 (16/11/2026).** Medido antes de mexer: o perfil do Chrome no clique do Lançar do R12 (depois da PA13:
+51 s, 29.953 trechos) — todo o tempo é o RENDER do editor recalculando o que deriva do modelo novo: a conferência da
+NBR 5410 (18,5 s: o pré-dimensionamento dos 103 quadros 7,4 s, a fiação dentro da regra do eletroduto 7,1 s), a
+composição da fiação da rede para o desenho (14,5 s, dos quais ~10 s em `arestasDo`), as marcas de verificação das redes
+(9,2 s: ventilação 3,6, condutores pluviais 3,4) e da climatização (5,9 s). Feito, sem mudar resultado:
+- `arestasDo` (`utils/blueprintKernel/fiacao.ts`): as arestas de cada circuito numa passada só, na mesma ordem — antes,
+  cada circuito filtrava os 30 mil eletrodutos.
+- `composicaoDaRede` guardada por modelo (o canvas, o editor, a conferência da NBR 5410 e o painel pediam a mesma rede a
+  cada render; o modelo do kernel não muda depois de criado e ninguém altera a composição — conferido). Bundle da
+  planta-api regerado.
+- A/B intercalado no app (o R12 de ponta a ponta, máquina quieta): **Lançar 51,3 / 51,1 s → 37,3 / 36,9 s**; gerar e
+  salvar iguais (~54 s, ~9–12 s). Os dois marcos idênticos (o modelo lançado é o mesmo).
+- O limite fixado passa a ser gerar ≤ 90 s, **Lançar ≤ 60 s** (era 90 s) e salvar ≤ 30 s — portões no roteiro do R12
+  (`c:/tmp/pwtest/conferencia-predio-pa10a.cjs`).
+- Fica para depois (ganho menor, mexe em algoritmo): o pré-dimensionamento dos quadros (a 1ª conta de cada um, já guardada
+  dentro da conferência desde a PA10a), a ventilação e os condutores pluviais nas marcas de verificação.
+
 PA1 e PA2 podem correr em frentes paralelas.
 
 ## Pendências em aberto (16/11/2026, depois da PA10c)
@@ -754,7 +771,7 @@ quatro "a decidir" de 16/11 viraram as fases PA11–PA14 (pedido de 16/11).
 
 | Área | Pendência | Onde fica |
 |---|---|---|
-| Desempenho | Clique no "Lançar" do R12: o que sobra depois da PA10a é o desenho da planta (21,6 mil trechos) e as marcas de verificação das redes | PA14 |
+| Desempenho | Clique no "Lançar" do R12: 37 s depois da PA14 (limite 60 s); o que sobra é o pré-dimensionamento dos 103 quadros na conferência da NBR 5410 (7 s), as marcas de verificação (ventilação, pluvial, climatização) e o desenho | a decidir |
 | Desempenho | Gerar o R12 no worker: 54,5 s no app depois da PA13 (Lançar 50,7 s, salvar 9,6 s), dentro do tempo fixado na PA10a (90 s gerar · 90 s Lançar · 30 s salvar) — vigiar a cada fase | acompanhamento |
 | Desempenho | Marco do RL perto do limite da CI (20 min por caso; a CI inteira leva 31–39 min nos últimos PRs); o bloco "o motor (PA2)" subiu para 180 s depois de deixar a main vermelha (15/11) | acompanhamento |
 | Compatibilização | ~~Água × esgoto que sobra: o ramal do andar de cima atravessando cômodo seco a caminho do shaft (R8 18, R12 141, RL 244)~~ — resolvido: a água abaixo do ramal também nos cômodos secos; sobra 1 na garagem do R12 (redes do próprio subsolo) | feito na PA12 |
@@ -792,7 +809,7 @@ quatro "a decidir" de 16/11 viraram as fases PA11–PA14 (pedido de 16/11).
 
 **Resumo (16/11/2026):** **as fases PA0 a PA10c estão no ar** — merge 6206737 (#503), produção servindo esse commit e
 a CI do main verde. Pedido de 16/11: PA11 a PA14 (os quatro "a decidir"). **PA11 no ar** (a16c71c, #518 — o eletroduto
-contorna a evaporadora e o exaustor); **PA12 no ar** (2b363ad, #520 — água × esgoto zerado no tipo dos quatro prédios); **PA13 feita, em publicação** (eletroduto junto da laje; o dreno fica como pendência); PA14 a seguir. O que fica de propósito
+contorna a evaporadora e o exaustor); **PA12 no ar** (2b363ad, #520 — água × esgoto zerado no tipo dos quatro prédios); **PA13 no ar** (4d0f1e7, #525 — eletroduto junto da laje; o dreno fica como pendência); **PA14 feita, em publicação** (o Lançar do R12 51 → 37 s). O que fica de propósito
 para o projetista está em "Pendências em aberto". Kernel em `blueprint-kernel-ts-0.109.0` (a PA11 não toca o kernel).
 
 | Fase | PR | Commit no main |
@@ -818,6 +835,7 @@ para o projetista está em "Pendências em aberto". Kernel em `blueprint-kernel-
 | PA10c — envio ao Empreendimento e achados da rota | #503 | 6206737 |
 | PA11 — eletroduto contorna a evaporadora e o exaustor | #518 | a16c71c |
 | PA12 — água abaixo do ramal de cima também nos cômodos secos | #520 | 2b363ad |
+| PA13 — eletroduto junto da laje | #525 | 4d0f1e7 |
 
 | Fase | Situação |
 |---|---|
@@ -834,5 +852,5 @@ para o projetista está em "Pendências em aberto". Kernel em `blueprint-kernel-
 | PA10 | **PA10a feita** (desempenho com o mesmo resultado: R12 completo 63,6 → 40,3 s, o cálculo da tela no Lançar 14,0 → 5,3 s; o "Gerar" espera a entrada carregar — a prévia do R12 nascia velha; R12 de ponta a ponta no app: gerar 57 s, Lançar 61 s, salvar 9 s com a máquina quieta; tempo fixado 90/90/30 s). **PA10b feita** (a prumada na laje é passagem, não conflito, no app inteiro; a água no forro rebaixado das áreas molhadas — água × esgoto R4 62 → 4, R8 252 → 18, R12 911 → 141, RL 1.195 → 244; o relatório de compatibilização na aba nova; conferida no app com o R8). **PA10c feita** (o envio ao Empreendimento manda as unidades da planta — R8 35 em vez da estimativa de 47 —, a numeração das cópias 201…; a rota de fuga limpa nos quatro prédios: caixas de escada, corredor do apartamento fora da medição, resíduo de geometria ignorado, detecção no R12 e no RL, 2ª porta no térreo do RL) — ver "Pendências em aberto" |
 | PA11 | feita, no ar (#518, a16c71c; conferida no app com o R8) — o eletroduto contorna a caixa da evaporadora e do exaustor (`planejarEletrodutos`): eletroduto dentro de equipamento R4 9 → 0, R8 56 → 0, R12 242 → 0, RL 112 → 0 (o marco trava zero); de quebra, menos encontros entre redes (R8 700 → 630) e +3 caixas de passagem por andar no R8 (as curvas do contorno, regra da NBR 5410). Marco da casa idêntico |
 | PA12 | feita, no ar (#520, 2b363ad; conferida no app com o R8) — a água abaixo do ramal de cima também nos cômodos secos (2,57 m) e contornando o tubo de queda do banheiro: água × esgoto R4 4 → 0, R8 18 → 0, R12 141 → 1 (garagem), RL 244 → 0 |
-| PA13 | feita, em publicação — eletroduto junto da laje (faixa da elétrica do forro, etapa depois do esgoto, o andar de cima espelhado para o desvio): encontros entre redes R8 612 → 295, RL 1.247 → 530, eletroduto × duto zerado no R8 e no R12; desempenho domado (RL 98 s); eletroduto × esgoto de cima R8 32, R12 104, RL 91 (explicado); dreno × porta/janela = pendência |
-| PA14 | a seguir |
+| PA13 | feita, no ar (#525, 4d0f1e7; conferida no app — R8 e o R12 de ponta a ponta) — eletroduto junto da laje (faixa da elétrica do forro, etapa depois do esgoto, o andar de cima espelhado para o desvio): encontros entre redes R8 612 → 295, RL 1.247 → 530, eletroduto × duto zerado no R8 e no R12; desempenho domado (RL 98 s); eletroduto × esgoto de cima R8 32, R12 104, RL 91 (explicado); dreno × porta/janela = pendência |
+| PA14 | feita, em publicação — o Lançar do R12 no app 51 → 37 s (a fiação da rede: arestas por circuito numa passada e a composição guardada por modelo); limite fixado em 60 s; modelo idêntico |

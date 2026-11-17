@@ -326,8 +326,9 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         if (esperandoChamadaUnicaRef.current) {
             // Período trocado com a chamada única em voo: o gráfico na tela é do período
             // anterior — esmaece até o novo chegar, como na troca de período normal. Não
-            // busca já: disputaria o banco com a chamada única (revisão do #546).
-            if (caixaDaOrg.current === organizationId && caixaDoPeriodo.current !== periodoCaixa) setCaixaTrocando(true);
+            // busca já: disputaria o banco com a chamada única (revisão do #546). Voltou ao
+            // período que já está na tela (90→30→90): desliga (revisão do #551).
+            if (caixaDaOrg.current === organizationId) setCaixaTrocando(caixaDoPeriodo.current !== periodoCaixa);
             return;
         }
         carregarCaixa();

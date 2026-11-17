@@ -617,4 +617,23 @@ describe('CentralControle · tela "Bom dia"', () => {
             raf.mockRestore();
         }
     });
+
+    // Revisão do #551: de volta ao período que já está na tela, o gráfico não pode seguir
+    // esmaecido até a chamada única voltar e o caixa ser buscado de novo.
+    it('90 → 30 → 90 com o Atualizar em voo: de volta ao período da tela, o gráfico não fica esmaecido', async () => {
+        const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 0);
+        try {
+            bootstrap.mockResolvedValueOnce(painel()).mockReturnValueOnce(nunca());
+            montar();
+            const c = await waitFor(() => { const el = cartao('Caixa projetado'); expect(within(el).getByLabelText('R$ 1.000')).toBeInTheDocument(); return el; });
+            await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));   // chamada única pendente
+            await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+            await userEvent.click(within(c).getByRole('button', { name: '30 dias' }));
+            expect(within(c).getByLabelText('R$ 1.000').closest('[aria-busy="true"]')).not.toBeNull();
+            await userEvent.click(within(c).getByRole('button', { name: '90 dias' }));
+            expect(within(c).getByLabelText('R$ 1.000').closest('[aria-busy="true"]')).toBeNull();
+        } finally {
+            raf.mockRestore();
+        }
+    });
 });

@@ -203,7 +203,14 @@ paralelo, cada uma com o próprio limite de 8 s; cada resultado é aplicado ao e
       aviso "Parte da fila não carregou (…)". Menores adiados: "plano B pegajoso" (pular o bootstrap
       por alguns minutos depois de um 57014), o Caixa esperar os 6 blocos, Atualizar no plano B
       substituir a lista de alertas pela 1ª que chega.
-- [ ] Tarefa 4 — publicação e prova na tela
+- [x] Tarefa 4 — publicação e prova na tela: #521 mesclado (770b3e8; a 1ª CI caiu só no
+      `migrationsPrefixo` — o prefixo …907000 colidiu com o das rotinas automáticas, renomeado para
+      …907100 com aviso de "já aplicada" no cabeçalho). Produção servindo 770b3e8
+      (`conferir-producao.sh`). Prova na aba do Chrome, em "Todas": com a chamada única e a de Obras
+      respondendo 57014 simulado, saíram as 6 RPCs separadas (inclusive `fn_central_meu_dia`) e depois
+      o caixa; todos os cartões carregaram e só Obras disse "Não carregou." Aba recarregada (sem o
+      desvio): UMA chamada (`fn_central_controle_bootstrap`, 765 ms, 200) + caixa, Obras com 7 obras,
+      e os mesmos números do plano B (148 itens, 791 títulos, 27 %).
 
 ## Verificação
 

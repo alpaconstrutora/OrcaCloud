@@ -1100,7 +1100,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         if (newRole === 'owner') {
             const ok = await confirm({
                 title: `Tornar ${alvo.name} proprietário?`,
-                message: 'Esta pessoa passa a ter todas as permissões da organização. O cargo e as permissões atuais são substituídos.',
+                message: 'Esta pessoa passa a ter todas as permissões da organização, menos a Diretoria (CEO), que só liga quem a marcar em Permissões detalhadas. O cargo e as permissões atuais são substituídos.',
                 variant: 'warning',
                 confirmLabel: 'Tornar proprietário',
             });

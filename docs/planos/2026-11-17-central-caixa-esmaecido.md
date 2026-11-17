@@ -40,4 +40,8 @@ Na espera, `if (caixaDaOrg.current === organizationId) setCaixaTrocando(caixaDoP
 - [x] Revisão final (revisor novo): sem crítico nem importante. Menor acatado: o teste do fim agora prova que o
   esmaecido acaba PORQUE o caixa de 30 dias chegou (resposta controlada com valor novo; segue esmaecido até ela) —
   vermelho num mutante que desliga o esmaecido cedo.
-- [ ] PR · CI · merge · prova em produção.
+- [x] PR #555 · CI verde (`285a0d1`) · merge `838ac9e` · domínio servindo `838ac9e` · CI da `main` verde (17/11).
+- [x] Prova em produção ("Todas", desvio de `fetch` só no navegador): Atualizar com a chamada única atrasada 8 s;
+  "30 dias" → saldo de 90 dias esmaecido; de volta a "90 dias" → sem esmaecer na hora (chamada única ainda
+  pendente); no fim, o caixa de 90 dias (91 pontos) buscado 48 ms depois da chamada única. Recarregada: 1 chamada
+  única (811 ms) e o caixa depois dela.

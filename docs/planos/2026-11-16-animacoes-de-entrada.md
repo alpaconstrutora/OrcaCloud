@@ -132,11 +132,50 @@ harness `docs/spikes/alertas-ui-sete-telas` (todas exigem login): 0 texto com pe
 "Converter" abre o diálogo do app e nenhum `confirm()` nativo; prints conferidos. Teste novo
 `ParametricConverterConfirma.test.tsx` (vermelho com o arquivo antigo, verde com o novo).
 
+Publicado no PR #523 (`9ad453e`); prova de produção no comentário do PR.
+
+## Pedido posterior 3 (16/11/2026, mesma sessão)
+
+Os dois pontos que o #523 deixou registrados ("aba Cenários inalcançável"; "caixa alta/peso pesado
+nas mesmas telas: abas e rodapé do modal de contraproposta, rótulos dos indicadores da Visão da
+obra, botão Baixar PDF do IR") — resposta:
+
+> Corrigir estes pontos
+
+Decisão de escopo: a caixa alta não estava só nos itens listados — a Visão da obra tinha 17, o IR
+9, a comparação de cotações (fora do modal) 3 e o paramétrico 18 + textos já escritos em
+maiúsculas. Corrigir só os listados deixaria as mesmas telas pela metade (guia §21: a caixa alta
+saiu do app inteiro), então as quatro telas foram limpas inteiras.
+
+- [x] **Aba "Cenários"** (`ParametricEstimator`) — o painel existia desde o commit inicial sem
+  botão. A aba entra entre "Estudo de mix" e "Milestones" (a ordem do próprio tipo `intelTab`),
+  com a contagem: "Cenários (1)". A barra de sub-abas passa ao vocabulário do §19.1/§21
+  (`px-3 h-7 rounded-[6px] text-sm font-medium`, rótulos em sentence case, inativa `text-gray-700`).
+  Teste `ParametricAbaCenarios.test.tsx` (vermelho sem a aba).
+- [x] **Modal de contraproposta** (`SupplyChainQuotationComparison`) — abas `h-9 text-sm
+  font-medium`; cabeçalho da tabela §6.2; histórico e rodapé sem caixa alta; Cancelar/Enviar §17.
+  O modal de confirmação feito à mão (`pendingConfirm`, §14 proíbe) virou `useConfirm()` com título
+  e variante (fechar compra, aceitar, recusar = `danger`, regerar número = `warning`). Fora do modal:
+  cabeçalho da matriz §6.2, selo do número `rounded-[6px]`, "Carregando mapa comparativo…".
+  Teste `CotacaoConfirmaPeloDialogo.test.tsx` (vermelho com o modal antigo).
+- [x] **Visão da obra** (`ProjectOverview`) — rótulos do cabeçalho escuro (Custo orçado, Progresso
+  físico, Execução financeira, Previsão de ROI) e todos os rótulos/seções da tela em
+  `text-xs font-semibold` sem caixa alta; "Acessar módulo" `text-sm font-medium`.
+- [x] **IR** (`TaxReport`) — "Baixar PDF completo" §17 compacto; desligado, o motivo ("Disponível
+  em breve") num `<span title>` em volta (botão desligado não mostra `title` — §9.2); rótulos sem
+  caixa alta.
+- [x] **Paramétrico** — rótulos do cabeçalho (Fator K, Preço sugerido), KPIs, legendas, réguas dos
+  sliders, cabeçalhos das tabelas, painel de cenários; o selo "IMPACTO ALTO" era pílula de status
+  disfarçada (`toUpperCase()` no JS escapava do script) → texto colorido (§8).
+
+*Pronto quando:* `check-ui-standard.sh` exit 0 nos 4; no harness, **0 elemento com
+`text-transform: uppercase`** em cada uma das 4 telas e no modal, aba "Cenários (1)" abre o
+gerenciador, "Fechar Compra" abre o diálogo do app (0 diálogo nativo), botão do IR 36 px/peso 500
+com o motivo no `title` em volta; prints conferidos.
+
 ## Fora do escopo (registrado, não feito)
 
 - ~~Durações de 500/700 ms em conteúdo de aba~~ — feito no pedido posterior acima.
-- `ParametricEstimator`: a sub-aba "Cenários" (`intelTab === 'scenarios'`) não tem botão na lista
-  de abas — o painel (com o "aplicar taxas", agora pelo `useConfirm`) é inalcançável hoje.
-- Fora dos alertas, nas mesmas telas, seguem em caixa alta/peso pesado: as abas e o rodapé do modal
-  de contraproposta, os rótulos dos indicadores do cabeçalho da Visão da obra, o botão "Baixar PDF
-  completo" do IR. Não eram alertas do script; ficam para quando a tela for tocada.
+- ~~Aba "Cenários" inalcançável; caixa alta nas mesmas telas~~ — feito no pedido posterior 3.
+- Os cenários do paramétrico vivem só no estado da tela (somem ao sair) — comportamento de sempre,
+  não mexido.

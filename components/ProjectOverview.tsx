@@ -226,7 +226,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
             </div>
             <h3 className="text-lg font-black text-gray-900 mb-2">{label}</h3>
             <p className="text-sm text-gray-500 font-medium leading-relaxed flex-1">{description}</p>
-            <div className="mt-6 flex items-center text-blue-600 text-xs font-black uppercase tracking-widest gap-1 group-hover:gap-2 transition-all">
+            <div className="mt-6 flex items-center text-blue-600 text-sm font-medium gap-1 group-hover:gap-2 transition-all">
                 Acessar Módulo <ChevronRight className="w-4 h-4" />
             </div>
             <div className="absolute top-0 right-0 p-4 opacity-5 group-hover:opacity-10 transition-opacity">
@@ -261,7 +261,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
 
                         <div className="flex items-center gap-4">
                             <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/10">
-                                <p className="text-xs font-black text-blue-200 uppercase tracking-widest mb-1">Custo Orçado</p>
+                                <p className="text-xs font-semibold text-blue-200 mb-1">Custo Orçado</p>
                                 <p className="text-xl font-black text-white">
                                     {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalBudgetVal)}
                                 </p>
@@ -271,7 +271,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="space-y-2">
-                            <div className="flex justify-between text-xs font-black text-blue-200 uppercase tracking-widest">
+                            <div className="flex justify-between text-xs font-semibold text-blue-200">
                                 <span>Progresso Físico</span>
                                 <span>{executionProgress}%</span>
                             </div>
@@ -280,7 +280,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <div className="flex justify-between text-xs font-black text-blue-200 uppercase tracking-widest">
+                            <div className="flex justify-between text-xs font-semibold text-blue-200">
                                 <span>Execução Financeira</span>
                                 <span>{budgetExecution}%</span>
                             </div>
@@ -289,7 +289,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                             </div>
                         </div>
                         <div className="space-y-2">
-                            <div className="flex justify-between text-xs font-black text-blue-200 uppercase tracking-widest">
+                            <div className="flex justify-between text-xs font-semibold text-blue-200">
                                 <span>Previsão de ROI</span>
                                 <span>{roi}%</span>
                             </div>
@@ -306,7 +306,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                 <div className="lg:col-span-2 space-y-6">
                     <div className="flex items-center justify-between">
                         <h2 className="text-xl font-black text-gray-900 tracking-tight">Centros de Gestão</h2>
-                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Acesse os módulos da sua obra</p>
+                        <p className="text-sm text-gray-500">Acesse os módulos da sua obra</p>
                     </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -381,23 +381,23 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                         {/* Financeiro */}
                         {(settings.valorEstimado || settings.valorContratado || settings.margemAlvo) && (
                             <div>
-                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><DollarSign className="w-3 h-3" />Gestão Financeira</p>
+                                <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1.5"><DollarSign className="w-3 h-3" />Gestão Financeira</p>
                                 <div className="grid grid-cols-3 gap-3">
                                     {settings.valorEstimado != null && (
                                         <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                            <p className="text-xs text-gray-400 font-bold uppercase">Estimado</p>
+                                            <p className="text-xs font-semibold text-gray-500">Estimado</p>
                                             <p className="text-sm font-black text-gray-900 mt-0.5">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(settings.valorEstimado)}</p>
                                         </div>
                                     )}
                                     {settings.valorContratado != null && (
                                         <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                            <p className="text-xs text-gray-400 font-bold uppercase">Contratado</p>
+                                            <p className="text-xs font-semibold text-gray-500">Contratado</p>
                                             <p className="text-sm font-black text-gray-900 mt-0.5">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', notation: 'compact' }).format(settings.valorContratado)}</p>
                                         </div>
                                     )}
                                     {settings.margemAlvo != null && (
                                         <div className="bg-gray-50 rounded-xl p-3 border border-gray-100">
-                                            <p className="text-xs text-gray-400 font-bold uppercase">Margem Alvo</p>
+                                            <p className="text-xs font-semibold text-gray-500">Margem Alvo</p>
                                             <p className="text-sm font-black text-emerald-700 mt-0.5">{settings.margemAlvo}%</p>
                                         </div>
                                     )}
@@ -408,7 +408,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                         {/* Equipe */}
                         {(settings.mestreObras || settings.encarregado || settings.tecnicoSeguranca || settings.almoxarife) && (
                             <div>
-                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><Users className="w-3 h-3" />Equipe de Campo</p>
+                                <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1.5"><Users className="w-3 h-3" />Equipe de Campo</p>
                                 <div className="grid grid-cols-2 gap-2">
                                     {[
                                         { label: 'Mestre', value: settings.mestreObras },
@@ -417,7 +417,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                                         { label: 'Almoxarife', value: settings.almoxarife },
                                     ].filter(i => i.value).map(({ label, value }) => (
                                         <div key={label} className="flex items-center gap-2">
-                                            <span className="text-xs font-black text-gray-400 uppercase w-24 shrink-0">{label}</span>
+                                            <span className="text-xs font-semibold text-gray-500 w-24 shrink-0">{label}</span>
                                             <span className="text-xs font-bold text-gray-800">{value}</span>
                                         </div>
                                     ))}
@@ -428,7 +428,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                         {/* Indicadores do tipo */}
                         {template && template.indicators.length > 0 && (
                             <div>
-                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><BarChart2 className="w-3 h-3" />KPIs para este tipo de obra</p>
+                                <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1.5"><BarChart2 className="w-3 h-3" />KPIs para este tipo de obra</p>
                                 <div className="flex flex-wrap gap-2">
                                     {template.indicators.map(ind => (
                                         <span key={ind.key} className="px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-xs font-bold text-indigo-700">
@@ -442,7 +442,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                         {/* Painel de documentação com status */}
                         {(template?.required_docs?.length || settings.artRrt || settings.alvara || settings.matriculaCNO) ? (
                             <div>
-                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-2 flex items-center gap-1.5"><FileText className="w-3 h-3" />Painel de Documentação</p>
+                                <p className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-1.5"><FileText className="w-3 h-3" />Painel de Documentação</p>
                                 <div className="space-y-1.5">
                                     {(() => {
                                         // Build unified doc list: template required_docs + fallback fixed fields
@@ -490,7 +490,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                 <div className="space-y-6">
                     <div>
                         <h2 className="text-xl font-black text-gray-900 tracking-tight">Mural da Obra</h2>
-                        <p className="text-xs font-black text-gray-400 uppercase tracking-widest mt-1">Alertas e notificações recentes</p>
+                        <p className="text-sm text-gray-500 mt-1">Alertas e notificações recentes</p>
                     </div>
 
                     <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden h-full flex flex-col">
@@ -511,7 +511,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                                     </div>
                                     <div>
                                         <p className="text-sm font-bold text-gray-800 leading-snug group-hover:text-blue-600 transition-colors">{msg.text}</p>
-                                        <div className="flex items-center gap-1 mt-1 font-bold text-xs text-gray-400 uppercase tracking-widest">
+                                        <div className="flex items-center gap-1 mt-1 text-xs text-gray-500">
                                             <Clock className="w-3 h-3" />
                                             {msg.time}
                                         </div>
@@ -539,7 +539,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                                         <span className="text-xs font-black text-gray-400">{milestone.date}</span>
                                     </div>
                                 )) : (
-                                    <p className="text-xs text-gray-400 font-bold uppercase italic">Nenhum marco pendente</p>
+                                    <p className="text-sm text-gray-500 italic">Nenhum marco pendente</p>
                                 )}
                             </div>
                         </div>

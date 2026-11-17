@@ -28,6 +28,7 @@ import { appSettingsService } from '../services/appSettingsService';
 import ActionIconButton from './ui/ActionIconButton';
 import { getQuotationNumberLockReason, regenerateQuotationNumber } from '../services/quotationNumberRegenService';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { useConfirm, type ConfirmOptions } from './ui/confirm';
 import { FORMAS_DE_ENTREGA } from '../utils/formaEntrega';
 
 interface SupplyChainQuotationComparisonProps {
@@ -42,7 +43,6 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
     const [processing, setProcessing] = React.useState(false);
     const [negotiatingId, setNegotiatingId] = React.useState<string | null>(null);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
-    const [pendingConfirm, setPendingConfirm] = React.useState<{ message: string; onConfirm: () => void } | null>(null);
     // "Regerar número" — trava: já existe resposta de fornecedor.
     const [numberLockReason, setNumberLockReason] = React.useState<string | null>(null);
     const [isRegeneratingNumber, setIsRegeneratingNumber] = React.useState(false);
@@ -54,8 +54,10 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
         setTimeout(() => setNotification(null), 4500);
     };
 
-    const askConfirm = (message: string, onConfirm: () => void) => {
-        setPendingConfirm({ message, onConfirm });
+    // Confirmação pelo diálogo do app (guia §14). Era um modal feito à mão (`pendingConfirm`).
+    const confirm = useConfirm();
+    const askConfirm = async (opcoes: ConfirmOptions, onConfirm: () => void) => {
+        if (await confirm(opcoes)) onConfirm();
     };
 
     React.useEffect(() => {
@@ -70,7 +72,12 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
     const handleRegenerateNumber = () => {
         if (!request) return;
         askConfirm(
-            `O número atual (${request.number ?? '—'}) será substituído por um novo, gerado pela máscara vigente em Configurações do Sistema › Nomenclatura. O anterior fica registrado no histórico. A troca é gravada na hora.`,
+            {
+                title: 'Regerar o número da cotação?',
+                message: `O número atual (${request.number ?? '—'}) será substituído por um novo, gerado pela máscara vigente em Configurações do Sistema › Nomenclatura. O anterior fica registrado no histórico. A troca é gravada na hora.`,
+                variant: 'warning',
+                confirmLabel: 'Regerar',
+            },
             () => {
                 (async () => {
                     setIsRegeneratingNumber(true);
@@ -139,7 +146,11 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
 
     const handleSelectWinner = (responseId: string) => {
         askConfirm(
-            "Deseja selecionar este fornecedor como vencedor? Isso gerará um Pedido de Compra rascunho.",
+            {
+                title: 'Selecionar este fornecedor como vencedor?',
+                message: 'Isso gera um Pedido de Compra em rascunho.',
+                confirmLabel: 'Fechar compra',
+            },
             () => {
                 (async () => {
                     setProcessing(true);
@@ -174,8 +185,10 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
     };
 
     const handleNegotiationAction = (responseId: string, accept: boolean) => {
-        const msg = accept ? "Deseja aceitar os valores desta proposta?" : "Deseja recusar esta proposta?";
-        askConfirm(msg, () => {
+        const opcoes: ConfirmOptions = accept
+            ? { title: 'Aceitar os valores desta proposta?', confirmLabel: 'Aceitar' }
+            : { title: 'Recusar esta proposta?', variant: 'danger', confirmLabel: 'Recusar' };
+        askConfirm(opcoes, () => {
             (async () => {
                 setProcessing(true);
                 try {
@@ -238,7 +251,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
         window.open(`https://api.whatsapp.com/send?text=${encoded}`, '_blank');
     };
 
-    if (loading) return <div className="p-8 text-center animate-pulse font-bold text-gray-400">CARREGANDO MAPA COMPARATIVO...</div>;
+    if (loading) return <div className="p-8 text-center animate-pulse text-sm text-gray-500">Carregando mapa comparativo…</div>;
     if (!request) return <div className="p-8 text-center text-red-500 font-bold">Cotação não encontrada.</div>;
 
     const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
@@ -281,7 +294,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                     <div>
                         <div className="flex items-center gap-3">
                             <h1 className="text-2xl font-black text-gray-900 tracking-tight">Mapa de Cotação</h1>
-                            <span className="px-2 py-0.5 rounded-lg text-xs font-black uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100">
+                            <span className="px-2 py-0.5 rounded-[6px] text-xs font-medium bg-blue-50 text-blue-700 border border-blue-100">
                                 {request.number}
                             </span>
                             <ActionIconButton
@@ -303,9 +316,9 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                     <table className="w-full text-left border-collapse">
                         <thead>
                             <tr className="bg-gray-50/50">
-                                <th className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 min-w-[300px]">Item / Especificação</th>
+                                <th className="px-6 py-5 text-xs font-semibold text-gray-700 border-b border-gray-100 min-w-[300px]">Item / Especificação</th>
                                 {responses.map(resp => (
-                                    <th key={resp.id} className="px-6 py-5 text-xs font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 border-l border-gray-100 text-center min-w-[200px]">
+                                    <th key={resp.id} className="px-6 py-5 text-xs font-semibold text-gray-700 border-b border-gray-100 border-l border-gray-100 text-center min-w-[200px]">
                                         <div className="flex flex-col items-center gap-1 normal-case tracking-normal font-normal">
                                             <User className="w-4 h-4 text-blue-500" />
                                             <span className="text-sm font-medium text-gray-900">{getSupplierDisplayName({ name: resp.supplierName || '-', nickname: resp.supplierNickname }, nameMode)}</span>
@@ -604,13 +617,13 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                         <div className="flex bg-indigo-50/20 px-8 border-b border-gray-100">
                             <button
                                 onClick={() => setNegotiationTab('form')}
-                                className={`px-6 py-4 text-button font-black uppercase tracking-widest border-b-2 transition-all ${negotiationTab === 'form' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
+                                className={`px-4 h-9 text-sm font-medium border-b-2 transition-all ${negotiationTab === 'form' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
                             >
                                 Nova Proposta
                             </button>
                             <button
                                 onClick={() => setNegotiationTab('history')}
-                                className={`px-6 py-4 text-button font-black uppercase tracking-widest border-b-2 transition-all ${negotiationTab === 'history' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
+                                className={`px-4 h-9 text-sm font-medium border-b-2 transition-all ${negotiationTab === 'history' ? 'border-indigo-600 text-indigo-900' : 'border-transparent text-gray-700 hover:text-gray-900'}`}
                             >
                                 Histórico ({responses.find(r => r.id === negotiatingId)?.negotiationHistory?.length || 0})
                             </button>
@@ -708,10 +721,10 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                         <table className="w-full text-left">
                                             <thead>
                                                 <tr className="bg-gray-100/50">
-                                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest">Item</th>
-                                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-center">Qtd</th>
-                                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right">Preço Atual</th>
-                                                    <th className="px-6 py-4 text-xs font-black text-gray-400 uppercase tracking-widest text-right">Novo Preço</th>
+                                                    <th className="px-6 py-4 text-xs font-semibold text-gray-700">Item</th>
+                                                    <th className="px-6 py-4 text-xs font-semibold text-gray-700 text-center">Qtd</th>
+                                                    <th className="px-6 py-4 text-xs font-semibold text-gray-700 text-right">Preço Atual</th>
+                                                    <th className="px-6 py-4 text-xs font-semibold text-gray-700 text-right">Novo Preço</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="divide-y divide-gray-100">
@@ -764,7 +777,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
 
                                                     {event.changes.items && event.changes.items.length > 0 && (
                                                         <div className="space-y-2 mb-4">
-                                                            <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Alterações de Preço:</p>
+                                                            <p className="text-xs font-semibold text-gray-500">Alterações de Preço:</p>
                                                             <div className="grid grid-cols-1 gap-2">
                                                                 {event.changes.items.map(change => (
                                                                     <div key={change.code} className="flex items-center justify-between text-xs py-2 px-3 bg-white rounded-lg border border-gray-100">
@@ -782,13 +795,13 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                     <div className="grid grid-cols-2 gap-4">
                                                         {event.changes.deliveryDate && (
                                                             <div className="text-xs space-y-1">
-                                                                <span className="font-black text-gray-400 uppercase tracking-widest block">Entrega:</span>
+                                                                <span className="font-semibold text-gray-500 block">Entrega:</span>
                                                                 <span className="font-bold text-gray-900">{event.changes.deliveryDate.new}</span>
                                                             </div>
                                                         )}
                                                         {event.changes.paymentMethod && (
                                                             <div className="text-xs space-y-1">
-                                                                <span className="font-black text-gray-400 uppercase tracking-widest block">Pagamento:</span>
+                                                                <span className="font-semibold text-gray-500 block">Pagamento:</span>
                                                                 <span className="font-bold text-gray-900">{event.changes.paymentMethod.new}</span>
                                                             </div>
                                                         )}
@@ -805,7 +818,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                     ) : (
                                         <div className="text-center py-12">
                                             <Info className="w-8 h-8 text-gray-200 mx-auto mb-3" />
-                                            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">Sem histórico disponível</p>
+                                            <p className="text-gray-500 text-sm">Sem histórico disponível</p>
                                         </div>
                                     )}
                                 </div>
@@ -813,23 +826,23 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                         </div>
 
                         <div className="px-8 py-6 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
-                            <div className="flex items-center gap-4 text-gray-400 text-xs font-bold uppercase tracking-widest">
+                            <div className="flex items-center gap-2 text-gray-600 text-sm">
                                 <AlertTriangle className="w-4 h-4 text-orange-500" />
                                 O fornecedor será notificado para aceitar ou recusar estes valores.
                             </div>
                             <div className="flex items-center gap-3">
                                 <button
                                     onClick={() => setNegotiatingId(null)}
-                                    className="px-6 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest text-gray-700 hover:text-gray-900 transition-all"
+                                    className="h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-gray-700 hover:bg-gray-100 hover:text-gray-900 transition-all"
                                 >
                                     Cancelar
                                 </button>
                                 <button
                                     onClick={handleSendCounterProposal}
                                     disabled={processing}
-                                    className="px-8 py-3.5 rounded-2xl text-xs font-black uppercase tracking-widest bg-indigo-600 text-white hover:bg-indigo-700 shadow-lg shadow-indigo-900/10 active:scale-95 transition-all flex items-center gap-2"
+                                    className="h-9 px-3.5 rounded-[6px] text-[13px] font-medium bg-indigo-600 text-white hover:bg-indigo-700 active:scale-95 transition-all flex items-center gap-1.5"
                                 >
-                                    {processing ? 'ENVIANDO...' : (
+                                    {processing ? 'Enviando…' : (
                                         <>
                                             <Send className="w-4 h-4" />
                                             Enviar Contraproposta
@@ -850,28 +863,6 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
             </div>
         )}
 
-        {/* Inline confirm modal */}
-        {pendingConfirm && (
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
-                <div className="bg-white rounded-3xl shadow-2xl max-w-md w-full p-8 border border-gray-100 animate-in zoom-in-95 duration-200">
-                    <p className="text-sm font-medium text-gray-700 mb-6 leading-relaxed">{pendingConfirm.message}</p>
-                    <div className="flex justify-end gap-3">
-                        <button
-                            onClick={() => setPendingConfirm(null)}
-                            className="px-6 py-3 bg-white border border-gray-200 rounded-2xl text-button font-black uppercase tracking-widest text-gray-700 hover:text-gray-900 transition-all"
-                        >
-                            Cancelar
-                        </button>
-                        <button
-                            onClick={() => { pendingConfirm.onConfirm(); setPendingConfirm(null); }}
-                            className="px-6 py-3 bg-gray-900 text-white rounded-2xl text-button font-black uppercase tracking-widest hover:bg-blue-600 transition-all"
-                        >
-                            Confirmar
-                        </button>
-                    </div>
-                </div>
-            </div>
-        )}
         </>
     );
 };

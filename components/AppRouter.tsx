@@ -73,6 +73,7 @@ import type { SupplierPortalTab } from './SupplierDashboard';
 import { podeAcessarMarket } from '../utils/acessoAoMarket';
 import { podeEditarTreinamentos } from '../utils/permissaoTreinamentos';
 import { podeEditarRiscos } from '../utils/permissaoRiscos';
+import { podeVerDiretoria } from '../utils/permissaoDiretoria';
 import { temAcessoTotal } from '../lib/acessoTotal';
 import { permitidoNaOrg, vinculosDoUsuario } from '../utils/modulosPermitidos';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
@@ -80,6 +81,7 @@ const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplate
 const AppraisalModule = React.lazy(() => import('./AppraisalModule'));
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const RiscosModule         = React.lazy(() => import('./riscos/RiscosModule'));
+const DiretoriaModule      = React.lazy(() => import('./diretoria/DiretoriaModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
 const CentralControle       = React.lazy(() => import('./CentralControle'));
 const OpuraReports          = React.lazy(() => import('./OpuraReports'));
@@ -268,6 +270,21 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   // "Todas as organizações" (15/11/2026): liberava QUALQUER tela; agora libera se
   // o usuário tem o módulo em pelo menos uma organização de que é membro.
   // Plano: docs/planos/2026-11-15-permissoes-todas-orgs-busca-truncate.md.
+  // Diretoria (ÒPURA CEO, 17/11/2026): fora de `isModuleAllowed`, que libera admin e, sem nada
+  // gravado, libera por padrão. Aqui só a flag ou o acesso total — a regra do banco
+  // (`_diretoria_orgs`, utils/permissaoDiretoria.ts). Enquanto membro/organizações carregam,
+  // deixa abrir: quem barra os dados é o painel no banco (42501).
+  const podeAbrirDiretoria = React.useMemo(() => {
+    if (isDevEmail) return true;
+    if (activeOrganizationId) {
+      if (!currentMember) return true;
+      return podeVerDiretoria({ permissoes: currentMember.permissions as unknown as Record<string, unknown> | undefined, acessoTotal: false });
+    }
+    const vinculos = vinculosDoUsuario(organizations, session?.user?.email);
+    if (!vinculos.length) return true;
+    return vinculos.some(v => podeVerDiretoria({ permissoes: v.member.permissions as unknown as Record<string, unknown> | undefined, acessoTotal: false }));
+  }, [isDevEmail, activeOrganizationId, currentMember, organizations, session?.user?.email]);
+
   const isModuleAllowed = React.useCallback((
     userPermKey: string,
     matrixKey: string,
@@ -360,6 +377,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       allowed = isModuleAllowed('canViewFiscal', 'fiscal');
     } else if (['quality', 'pos-obra'].includes(activeView)) {
       allowed = isModuleAllowed('canViewQuality', 'quality');
+    } else if (activeView === 'diretoria') {
+      allowed = podeAbrirDiretoria;
     } else if (activeView === 'riscos') {
       // Chave própria; sem nada gravado, herda de Obras (utils/permissaoRiscos.ts).
       allowed = isModuleAllowed('canViewRisks', 'riscos', naOrg => naOrg('canViewBudget', 'obras'));
@@ -385,7 +404,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       console.warn(`[RouteGuard] Acesso bloqueado para a rota: ${activeView}. Redirecionando para dashboard.`);
       setActiveView('dashboard');
     }
-  }, [activeView, isModuleAllowed, isDevEmail, currentProfile.group, setActiveView]);
+  }, [activeView, isModuleAllowed, podeAbrirDiretoria, isDevEmail, currentProfile.group, setActiveView]);
 
   // ── Render interno (envolto em Suspense para lazy components) ───────────────
   const renderContent = () => {
@@ -1331,6 +1350,12 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           })}
         />
       );
+
+    // ── Diretoria (ÒPURA CEO, 17/11/2026, docs/planos/2026-11-17-opura-ceo.md) ────
+    case 'diretoria':
+      // Organização pelo `useOrgContext()` dentro do módulo (REGRA #5); quem pode editar em
+      // cada organização vem do próprio painel (banco), não daqui.
+      return <DiretoriaModule onNavigate={setActiveView} />;
 
     // ── Central de Controle ─────────────────────────────────────────────────────
     case 'central':

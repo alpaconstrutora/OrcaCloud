@@ -154,7 +154,7 @@ interface OrganizationUsersProps {
     onUpdateAll: (updates: { members?: OrganizationMember[], customRoles?: OrganizationCustomRole[], settings?: any }) => void;
 }
 
-const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
+export const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
     const baseViewer: UserPermissions = {
         canViewBudget: true, canEditBudget: false,
         canViewCompositions: true, canEditCompositions: false,
@@ -217,6 +217,9 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
         canViewWarranty: true, canEditWarranty: false,
         // Riscos (14/11/2026): mesmo padrão do Pós-Obra — ver sim, editar não.
         canViewRisks: true, canEditRisks: false,
+        // Diretoria / ÒPURA CEO (17/11/2026): desligada para todos os cargos, admin inclusive;
+        // só liga quem marcar aqui (utils/permissaoDiretoria.ts, conferida também no banco).
+        canViewDiretoria: false, canEditDiretoria: false,
         canEditLabor: false,
         // Gestão de treinamentos fora do RH (16/10/2026). Mesmo padrão do RH:
         // ver sim, editar não. Membro já gravado SEM a chave herda do RH (ver
@@ -270,10 +273,16 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
         // onde a tela usa o padrão do papel como fallback.
         case 'owner':
         case 'admin':
-            return Object.keys(baseViewer).reduce((acc, key) => ({
-                ...acc,
-                [key]: true
-            }), {} as UserPermissions);
+            return {
+                ...Object.keys(baseViewer).reduce((acc, key) => ({
+                    ...acc,
+                    [key]: true
+                }), {} as UserPermissions),
+                // Diretoria / ÒPURA CEO (17/11/2026): desligada TAMBÉM para owner/admin (decisão 3 do
+                // plano). Sem isto o reduce acima ligava ver+editar, e salvar qualquer dado de um
+                // admin gravava a permissão — que o banco aceita (`_diretoria_orgs`).
+                canViewDiretoria: false, canEditDiretoria: false,
+            };
         case 'member':
             // `member` = operacional: edita o que produz obra/compra/venda,
             // mas não mexe em cadastro mestre, organização, contábil, RH
@@ -375,11 +384,16 @@ const SUBTAB_HEADERS: Record<'members' | 'roles' | 'visibility', { title: string
 // Espelha a navegação real de `components/Layout.tsx`. Ao adicionar um item novo
 // ao menu lateral, adicione a permissão correspondente aqui — e a chave em
 // `UserPermissions` (types/users.ts) + o default em `getDefaultPermissions`.
-const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?: string }[] = [
+export const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?: string }[] = [
     // --- Geral ---
     { group: 'Geral', title: 'Central de Controle', view: 'canViewCommandCenter' },
     { group: 'Geral', title: 'Minhas Tarefas', view: 'canViewTasks', edit: 'canEditTasks' },
     { group: 'Geral', title: 'Notificações', view: 'canViewNotifications' },
+    // Diretoria / ÒPURA CEO (17/11/2026, docs/planos/2026-11-17-opura-ceo.md): o banco confere
+    // as mesmas flags no painel e nas gravações (`_diretoria_orgs`). Vem desligada.
+    // Grupo PRÓPRIO: no grupo "Geral", marcar o grupo inteiro (para dar Tarefas a alguém) ligava junto o
+    // painel da diretoria (revisão de 17/11).
+    { group: 'Diretoria', title: 'Diretoria (CEO)', view: 'canViewDiretoria', edit: 'canEditDiretoria' },
 
     // --- Inteligência de Negócios ---
     { group: 'Inteligência de Negócios', title: 'BI Executivo', view: 'canViewBi' },
@@ -1086,7 +1100,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         if (newRole === 'owner') {
             const ok = await confirm({
                 title: `Tornar ${alvo.name} proprietário?`,
-                message: 'Esta pessoa passa a ter todas as permissões da organização. O cargo e as permissões atuais são substituídos.',
+                message: 'Esta pessoa passa a ter todas as permissões da organização, menos a Diretoria (CEO), que só liga quem a marcar em Permissões detalhadas. O cargo e as permissões atuais são substituídos.',
                 variant: 'warning',
                 confirmLabel: 'Tornar proprietário',
             });

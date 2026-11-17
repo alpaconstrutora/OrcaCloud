@@ -228,6 +228,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §33 `dark:` só por classe — a tela fica IDÊNTICA com o sistema em modo escuro e em modo claro; não escrever `dark:` em código novo (a variante é por classe e nada liga a classe)
 - [ ] §34 Cartão de recibo — se a tela mostra comprovantes como papel: `CartaoRecibo`, só como alternativa à tabela, busca única nos dois modos
 - [ ] §35 Animação de entrada — se a tela tem modal/toast/menu/aba que entra: classes do vocabulário da §35 (`zoom-in-95`, nunca `zoom-in` puro), duração 200–300 ms em código novo, nada em laço fora de "carregando"
+- [ ] §36 Fila de exceções em lista — se a tela é fila de itens heterogêneos (não lista de registros): linha de grupo, separador por gravidade, quadro de cartões e árvore de pessoas conferidos item a item
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -4342,6 +4343,49 @@ as entradas valem. Plano: `docs/planos/2026-11-16-animacoes-de-entrada.md`.
 
 > ❌ Portais externos (§24.2) e a tela "Bom dia" (§20.3) têm movimento próprio (`portal-*`,
 > `central-*`, curva e tempos deles). Não trocar pelas classes desta seção, nem o contrário.
+
+---
+
+## 36. FILA DE EXCEÇÕES EM LISTA — linha de grupo, quadro de cartões e árvore de pessoas
+
+**Criado em 17/11/2026 (Diretoria / ÒPURA CEO, `components/diretoria/*`)**, a partir do protótipo
+das três visões aprovado pelo usuário. Plano: `docs/planos/2026-11-17-opura-ceo.md`.
+
+Vale quando a tela não é lista de REGISTROS homogêneos (uma linha = um registro, colunas
+comparáveis — aí é tabela, §6/§7/`StandardTable`), e sim uma **fila de coisas a resolver de
+naturezas diferentes** (conta vencida, entrega atrasada, documento vencido), cada uma com frase
+própria e ações. Numa tabela, "Valor" ficaria vazio para documento e "Conta" para tarefa.
+
+- **Linha do grupo** (`GrupoExcecao.tsx`): `<li aria-labelledby>` com o título. Chevron
+  `h-6 w-6` na 1ª posição, como o §6.13 (`aria-expanded` + `aria-controls`, nome fixo
+  "Detalhes de <título>"). Bolinha da gravidade `w-2 h-2 rounded-full` com o nome em `sr-only`
+  (a cor nunca é o único sinal). Título `text-sm font-medium text-gray-900`; frase de detalhe
+  `text-sm text-gray-600`; metadados em `text-xs text-gray-500` (tipo com a regra no `title`,
+  organização quando há mais de uma, responsável). Ações à direita, em bloco `flex-wrap` que
+  desce para baixo do texto no celular: a dominante em texto azul (`h-8 px-2 rounded-[6px]
+  text-sm font-medium text-blue-600`, §9); as outras em `ActionIconButton` com ícone próprio
+  (§9.2). Desligada, a ação diz o motivo num `<span title>`. Ação já feita ("cobrado em 16/11")
+  **substitui** o botão, em `text-emerald-700` com ícone.
+- **Separador por gravidade**: o desenho da linha de grupo do §6.12 (`bg-slate-50 border-b
+  border-slate-200`, contagem em chip `rounded-[6px] bg-slate-200`) num `<h2>`, com a bolinha.
+  Não é cabeçalho de tabela (§6.11 não se aplica).
+- **Itens do grupo**: bloco recolhido sob a linha (`hidden` fechado), `divide-y`, valor
+  `font-medium text-gray-800`, "há N dias". Mostrando menos que o total, uma linha diz quantos e
+  um link "Abrir em <tela de origem>" leva à lista inteira.
+- **Quadro de cartões** (2×2, `grid-cols-1 sm:grid-cols-2`): coluna `bg-gray-50 rounded-[10px]
+  border border-gray-100 p-2` com `<h3>` (bolinha + nome + contagem); cartão branco
+  `rounded-[10px] border-gray-200 p-3`; prazo como texto colorido (§8 — vencido `text-red-700`,
+  até 3 dias `text-amber-700`); coluna vazia escreve que está vazia.
+- **Árvore de pessoas** (quem responde a quem): `role="tree"` PLANO, cada nó `role="treeitem"`
+  com `aria-level` e `aria-selected`, foco itinerante (Tab entra uma vez; ↑/↓/Home/End andam; a
+  escolha acompanha o foco), recuo de 20px por nível. Avatar com UMA inicial (§8.2). Contagens em
+  chip `rounded-[6px] text-xs` (`bg-slate-100` neutro, `bg-red-50 text-red-700` para o que pede
+  decisão), com o que contam no `title` e em `sr-only` — é contagem, não status (§8 não se aplica).
+  Não é a árvore de navegação do §19.2: aqui o nó escolhe o assunto do painel ao lado.
+
+> ❌ Não usar para lista de registros homogêneos (contas a pagar, fornecedores, pedidos): é tabela.
+> ✅ Continua valendo: §9.2 (motivo do desligado no invólucro), §14 (`useConfirm`), §30 nos
+> formulários, §32 (valor escuro), §35 (popover `animate-in fade-in slide-in-from-top-2`).
 
 ---
 

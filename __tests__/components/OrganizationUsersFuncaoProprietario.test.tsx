@@ -83,11 +83,14 @@ describe('coluna Função — quem pode promover a proprietário', () => {
 });
 
 describe('promover e rebaixar', () => {
-    it('promover a proprietário pede confirmação e grava TODAS as permissões, sem cargo', async () => {
+    // Diretoria (CEO) vem desligada para TODOS os papéis, proprietário inclusive (docs/planos/2026-11-17-opura-ceo.md,
+    // decisão 3): só liga quem marcar em Permissões detalhadas — o banco confere a flag.
+    it('promover a proprietário pede confirmação e grava todas as permissões, menos a Diretoria, sem cargo', async () => {
         const { container } = montar('ana@exemplo.com');
         fireEvent.change(selectDaLinha(container, 'Bia'), { target: { value: 'owner' } });
 
         expect(await screen.findByText('Tornar Bia proprietário?')).toBeTruthy();
+        expect(screen.getByText(/todas as permissões da organização, menos a Diretoria \(CEO\)/)).toBeTruthy();
         expect(updateMemberAccess).not.toHaveBeenCalled();
         fireEvent.click(screen.getByText('Tornar proprietário'));
 
@@ -96,7 +99,10 @@ describe('promover e rebaixar', () => {
         expect(id).toBe('bia');
         expect(patch.role).toBe('owner');
         expect(patch.customRoleId).toBeNull();
-        const valores = Object.values(patch.permissions);
+        const { canViewDiretoria, canEditDiretoria, ...resto } = patch.permissions;
+        expect(canViewDiretoria).toBe(false);
+        expect(canEditDiretoria).toBe(false);
+        const valores = Object.values(resto);
         expect(valores.length).toBeGreaterThan(20);
         expect(valores.every(v => v === true)).toBe(true);
     });

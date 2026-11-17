@@ -1,6 +1,6 @@
 import React from 'react';
 import { assinarGravacoes, obterSituacaoGravacao } from '../utils/projetoPersistido';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes, Smartphone, Wallet, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes, Smartphone, Wallet, ShieldAlert, Gavel } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -440,6 +440,7 @@ const Layout: React.FC<LayoutProps> = ({
     const items: CommandItem[] = [
       { id: 'dashboard', label: 'Dashboard', group: 'Geral', icon: LayoutDashboard },
       { id: 'tarefas', label: 'Minhas tarefas', group: 'Geral', icon: CheckSquare, shortcut: 'N' },
+      { id: 'diretoria', label: 'Diretoria (CEO)', group: 'Geral', icon: Gavel },
       { id: 'meus-treinamentos', label: 'Meus treinamentos', group: 'Geral', icon: GraduationCap },
       { id: 'treinamentos', label: 'Portal de Treinamentos', group: 'Portais', icon: GraduationCap },
       { id: 'labor-portal', label: 'Portal do Colaborador', group: 'Portais', icon: Smartphone },
@@ -480,7 +481,9 @@ const Layout: React.FC<LayoutProps> = ({
 
     // Mesma decisão do menu: tela de módulo que o usuário não vê no menu não
     // aparece na busca (até 15/11/2026 aparecia e o clique caía no guard de rota).
-    if (isDev) return items;
+    // Diretoria (17/11/2026) fica fora do atalho de desenvolvedor: só a flag ou o acesso
+    // total abrem — a mesma regra do banco (utils/permissaoDiretoria.ts).
+    if (isDev) return items.filter(item => item.id !== 'diretoria' || Boolean(mod.diretoria));
     return items.filter(item => {
       const chave = MODULO_DO_ITEM_DE_BUSCA[item.id];
       return !chave || Boolean(mod[chave]);
@@ -799,6 +802,9 @@ const Layout: React.FC<LayoutProps> = ({
           {(profile.group === 'USUARIO' || profile.group === 'DESENVOLVEDOR' || isDevEmail) && (
             <>
               <NavItem id="central" icon={LayoutDashboard} label="Central de Controle" />
+              {/* Diretoria (ÒPURA CEO, 17/11/2026): só com a permissão "Diretoria (CEO)" ou acesso
+                  total — sem atalho de admin/desenvolvedor (utils/permissaoDiretoria.ts). */}
+              {mod.diretoria && <NavItem id="diretoria" icon={Gavel} label="Diretoria" />}
 
               <NavDropdown
                 label="Especialidades"
@@ -1313,6 +1319,7 @@ const Layout: React.FC<LayoutProps> = ({
                 {(mod.ecommerce || isDev) && <NavItem id="ecommerce-dashboard" icon={Shield} label="ÒPURA E-commerce" forceFull />}
               </div>
 
+              {mod.diretoria && <NavItem id="diretoria" icon={Gavel} label="Diretoria" forceFull />}
               <NavItem id="tarefas" icon={CheckSquare} label="Minhas Tarefas" badge={openTaskCount || undefined} forceFull />
               <NavItem id="meus-treinamentos" icon={GraduationCap} label="Meus Treinamentos" badge={pendingTrainingCount || undefined} forceFull />
               <NavItem id="notifications-center" icon={Bell} label="Notificações" badge={unreadCount > 0 ? unreadCount : undefined} forceFull />

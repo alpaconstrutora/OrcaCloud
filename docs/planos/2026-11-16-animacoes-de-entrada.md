@@ -8,6 +8,28 @@ Sessão `21a9ea95-c34e-43cc-8a0f-7d21ef9ed2a0`, 16/11/2026, ~17h. A pendência �
 registrado ao terminar o movimento do Portal do Investidor (guia §24.2), nas palavras da mensagem
 anterior: *"cerca de 437 usos, no resto do app, de classes de animação que não têm efeito nenhum"*.
 
+## Estado (17/11/2026)
+
+**Tudo no ar.** O pedido original e os 5 pedidos posteriores estão no `main`, sem migration. A prova de produção de
+cada PR (domínio servindo o squash, texto novo no bundle, CI da `main` verde, patch do merge = patch da branch) está
+no comentário do próprio PR.
+
+| Pedido | O quê | PR | No main |
+|---|---|---|---|
+| Original (16/11) | `animate-in` e companheiras passam a valer (`tw-animate-css`), trava, guia §35 | #515 | `ee11605c` |
+| Posterior 1 (16/11) | Entradas em 300 ms; alertas antigos em 2 telas; item "Produção" | #517 | `ff93030f` |
+| Posterior 2 (16/11) | Alertas antigos do `check-ui-standard` em 7 telas | #523 | `9ad453ec` |
+| Posterior 3 (16/11) | Aba Cenários alcançável; caixa alta fora de 4 telas; confirmação da cotação pelo app | #528 | `61b64288` |
+| Posterior 4 (17/11) | Cenários do paramétrico gravados no projeto; aplicar traz BDI e K; excluir pergunta | #532 | `d55343e3` |
+| Posterior 5 (17/11) | Simulação guardada no orçamento; renomear cenário; voltar aos valores do projeto | #535 | `f295b36c` |
+
+Itens do plano: **todos marcados**. O que segue aberto está em "Fora do escopo", no fim do arquivo:
+
+- [ ] Arrastar um controle deslizante da simulação grava a cada passo. Não foi medido no App real. Se travar, gravar
+  só ao soltar o controle.
+- [ ] A simulação gravada não foi conferida num orçamento real: o harness provou, mas conferir no banco exige mexer
+  num orçamento de verdade.
+
 ## Diagnóstico
 
 - `animate-in`, `fade-in`, `zoom-in-95`, `slide-in-from-*` são classes do plugin de animação
@@ -173,6 +195,8 @@ saiu do app inteiro), então as quatro telas foram limpas inteiras.
 gerenciador, "Fechar Compra" abre o diálogo do app (0 diálogo nativo), botão do IR 36 px/peso 500
 com o motivo no `title` em volta; prints conferidos.
 
+Publicado no PR #528 (`61b6428`); prova de produção no comentário do PR.
+
 ## Pedido posterior 4 (17/11/2026, mesma sessão)
 
 > Corrigir problemas com cenários
@@ -206,6 +230,8 @@ e `ParametricCenarios.test.tsx` vermelhos com o código antigo (5 de 5 na tela) 
 novo; no harness, salvar → sair da tela → voltar mantém os cenários, aplicar traz K e lucro,
 excluir e limpar perguntam, 0 diálogo nativo, 0 erro de console.
 
+Publicado no PR #532 (`d55343e`); prova de produção no comentário do PR.
+
 ## Pedido posterior 5 (17/11/2026, mesma sessão)
 
 > Corrigir também
@@ -234,6 +260,9 @@ gravado, sem botão de renomear) e verdes com o novo; abrir a tela não chama `o
 no harness, K, lucro, sensibilidade e prazo sobrevivem a sair/voltar, renomear com Enter/clicar
 fora grava e Esc não, "Voltar aos valores do projeto" pergunta e volta ao K e lucro do projeto.
 
+Publicado no PR #535 (`f295b36`); prova de produção no comentário do PR. A 1ª rodada da CI do PR falhou em
+`PortalHelpSettings.test.tsx`, um arquivo que o PR não toca e que passou 3 de 3 vezes localmente. A 2ª rodada passou.
+
 ## Fora do escopo (registrado, não feito)
 
 - ~~Durações de 500/700 ms em conteúdo de aba~~ — feito no pedido posterior acima.
@@ -245,3 +274,5 @@ fora grava e Esc não, "Voltar aos valores do projeto" pergunta e volta ao K e l
 - Arrastar um controle deslizante da simulação grava a cada passo (o App re-renderiza e o
   autosave reinicia a espera de 2 s). No harness: 17 ms por passo (mediana; p90 22 ms), um
   quadro. No App real não medido — se travar, gravar só ao soltar o controle.
+- A simulação gravada (#535) foi provada nos testes e no harness, não num orçamento real. Conferir pede alguém mexer
+  na simulação de um orçamento e uma leitura de `settings.parametricSimulation` no banco.

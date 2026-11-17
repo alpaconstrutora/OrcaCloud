@@ -19,12 +19,13 @@ Respostas do usuário (15/11):
 
 A referência (reel de code.xr, "Glassy Dashboard": glassmorphism, acentos luminosos, hover animado, responsivo, gráficos interativos) foi lida só pela legenda — o Instagram pede login para o vídeo.
 
-## Estado (16/11/2026)
+## Estado (17/11/2026)
 
-**Implementação: concluída e no ar (Fases 1–7, #476 #478 #482 #483 #484 #493).** Pendências da Fase 7 resolvidas em 16/11; conferência com dado real feita em produção. Produção conferida de fora em 15/11: o domínio serve `8a6f581` (= `origin/main`)
-e os textos novos de cada fase estão nos arquivos servidos.
+**Implementação: concluída e no ar.** Fases 1–7 e os pedidos posteriores sobre o painel estão no `main`, com as cinco
+migrations aplicadas. Conferido em 17/11 no banco (só leitura): as funções do portal usam `fn_orgs_do_investidor` e a
+`fn_investor_portal_get_study` não existe mais.
 
-| Fase | O quê | PR | No main | Migration |
+| Fase / pedido | O quê | PR | No main | Migration |
 |---|---|---|---|---|
 | 1 | Versão congelada guarda as listas do relatório | #476 | `e6bee0b8` | — |
 | 2 | Oportunidade publica uma versão; portal lê a versão | #478 | `da11a75c` | `aplicar_20271115960000` ✅ aplicada |
@@ -32,33 +33,45 @@ e os textos novos de cada fase estão nos arquivos servidos.
 | 4–5 | Painel de vidro no portal; conferências | #483 | `9fa883a0` | `aplicar_20271115970000` ✅ aplicada (revisão) |
 | Revisão | Listas recortadas, leitura pela oportunidade, prévia = portal, logo | #483 | `9fa883a0` | (a de cima) |
 | 6 | Números congelados na versão | #484 | `8a6f581d` | `aplicar_20271115980000` ✅ aplicada |
+| 7 | Login por e-mail, Data Room pelo link, `get_study` removida, minors; oportunidades de todas as orgs do investidor | #493 | `52fddb7b` | `aplicar_20271116100000` e `aplicar_20271116200000` ✅ aplicadas |
+| 16/11 | Gestor: oportunidades e relatórios seguem o seletor do topo ("Todas" = todas) | #497 | `1bde6d33` | — |
+| 16/11 | Listas e detalhe: VGV, ROI e TIR da versão publicada | #502 | `a0c57ae7` | `aplicar_20271116300000` ✅ aplicada |
+| 16/11 | Movimento no portal pelo link (luz atrás do vidro, realce que desliza, abas e linhas que entram) | #505 | `ade11d60` | — |
+| 16/11 | Oportunidade aberta vira tela própria ("← Oportunidades"); painel sobe ~360 px | #509 | `bb8e4f39` | — |
+| 16/11 | "De onde vem o dinheiro" na paleta coral do portal (sai o índigo/roxo do app) | #510 | `aa0d6cde` | — |
+| 16/11 | "Cronograma e vendas" no tamanho dos outros gráficos (o SVG deixa de escalar ~2×) | #512 | `3e53de61` | — |
+
+Os PRs #489 e #494 só atualizaram este plano.
+
+**Dado real no banco (lido em 17/11):** 1 oportunidade, **Garden Cambuhy**, publicada com a versão real
+"Versão de 16/11/2026". O Garden tem 2 versões: essa e a "Conferência do portal", que fica no histórico. A oportunidade
+de teste e o documento dela no Data Room não existem mais. O Data Room do Garden está vazio (0 documentos).
 
 Itens do plano: **todos marcados**, nenhum `[ ]` em aberto.
 
 ### Pendências
 
-**Conferência com dado real (depende do usuário)**
-- [ ] Congelar uma versão do Garden Cambuhy (Imovib › Versões) e publicá-la numa oportunidade (Portal do Investidor ›
-  Oportunidades › Editar › "Versão que o investidor vê"). Em 15/11 o banco tinha **0 versões e 0 oportunidades com estudo**:
-  o painel foi conferido num harness com o estudo de teste, o PDF no Garden com escritas bloqueadas e o portal por
-  transações desfeitas — o caminho completo com uma versão real ainda não rodou.
+As pendências de 16/11 foram resolvidas na Fase 7 (#493):
 
-**Fora do pedido, registradas e não consertadas (conferidas pelas policies)**
-- [ ] Data Room pelo link fica vazio em silêncio (`opportunity_documents` só tem policy de membro da organização).
-- [ ] Investidor que entra por e-mail não vê oportunidades (`investor_opportunities`/`imovib_study_versions` idem).
+- [x] ~~Conferência com dado real~~: feita em produção em 16/11 (#493, abaixo), e hoje o Garden está publicado com uma versão real.
+- [x] ~~Data Room pelo link vazio em silêncio~~: RPC `fn_investor_portal_get_dataroom` + Edge Function
+  `investor-portal-dataroom-download` (publicada pelo usuário em 16/11).
+- [x] ~~Investidor que entra por e-mail não vê oportunidades~~: o login por e-mail abre a mesma casca do link
+  (`portal_token_para_mim('investidor')`).
+- [x] ~~Remover `fn_investor_portal_get_study`~~: removida (conferido em 17/11: a função não existe).
+- [x] ~~Minors do celular e do PDF~~ (cenário negativo, eixo do tornado, eixo de vendas, legenda na captura).
 
-**Limpeza (precisa de migration — só com OK)**
-- [ ] Remover `fn_investor_portal_get_study(token, estudo)`: ficou só para o app publicado antes do #483, que já saiu
-  do ar; hoje ela só delega para `fn_investor_portal_get_versao`.
-
-**Minors (visuais, não feitos)**
-- [ ] Celular: no gráfico de cenários o valor negativo encosta no rótulo; os valores do eixo do tornado ficam apertados.
-- [ ] PDF: o maior valor do eixo do gráfico de vendas quebra em duas linhas ("340 / mil"); o quadradinho da legenda
-  HTML sai um pouco acima do texto na captura.
-- [ ] Gerar o relatório completo leva ~10 s (o botão mostra "Gerando...").
+**Ainda em aberto**
+- [ ] **Minor:** gerar o relatório completo leva tempo. Foram 10,4 s no Garden (Fase 3), 2,7 s na conferência da
+  frente e 11 s no 1º carregamento em produção; o botão mostra "Gerando...". Não foi atacado.
+- [ ] **Não conferido no navegador:** o painel com a versão real "Versão de 16/11/2026" (só a "Conferência do portal"
+  foi aberta pelo link). Basta abrir o Garden pelo link do Tiago.
 
 **Fora do plano, achado ao fechar a frente (16/11):** o `node_modules` do checkout de integração estava vazio desde
 15/11 19:17 (outra sessão); reinstalado com `npm ci` a pedido do usuário (735 pacotes, 108 executáveis).
+
+**Desdobramento:** ao terminar o movimento do portal (#505), ficaram registradas "cerca de 437 classes de animação sem
+efeito no resto do app". Resolvidas no plano `2026-11-16-animacoes-de-entrada.md` (#515 e seguintes).
 
 ## Fase 7 — Resolver as pendências (pedido de 16/11)
 
@@ -180,7 +193,7 @@ Itens do plano: **todos marcados**, nenhum `[ ]` em aberto.
 - [x] Migration `aplicar_20271115980000_investidor_calculo_congelado.sql`: `calculo` sai de `study` e só `calculo.investidor` vai ao portal, em chave própria (sem ela o `interno`, com o parecer, iria dentro de `study`). **Aplicar ANTES do merge da Fase 6.**
 - **Pronto quando:** `ImovibNumerosCongelados.test.tsx` (um cálculo "impossível" — VPL 123.456 — aparece igual no painel, no PDF e no portal; a edição interna não entra no recorte do investidor), `imovibCalculoDaVersao.test.ts` (cálculo = o da tela; sobrevive ao JSON), contrato da RPC; prova no banco em transação desfeita: `[vpl congelado=123456] [secao=SECAO DO INVESTIDOR] [study tem calculo=f] [resposta cita o interno=f]`.
 - Decisão: o `results` (ResultadosDaVersao) que a aba Versões compara continua como era; agora é o mesmo número que o painel mostra (ambos do congelamento).
-- Não conferido de ponta a ponta: congelar uma versão de verdade grava no banco (há 0 versões); depende de o usuário congelar uma.
+- ~~Não conferido de ponta a ponta: congelar uma versão de verdade grava no banco (há 0 versões); depende de o usuário congelar uma.~~ → conferido em produção em 16/11 (Fase 7). Em 17/11 o Garden tinha a versão real "Versão de 16/11/2026" publicada.
 
 ## Revisão independente das Fases 2–5 (15/11)
 
@@ -228,7 +241,10 @@ provada em transação desfeita — **aplicar com OK**):
   token do Tiago e APLICADA em 16/11 com OK do usuário. Conferida de fora (anon, link do Tiago):
   Garden com vgv 11.648.000, TIR 19,0, ROI 39,2; só `calculo.investidor.indicadores` (nada interno).
 
-## Pendências (registradas 15/11, fora do pedido — não consertadas)
+## Pendências (registradas 15/11, fora do pedido) — histórico
+
+> **Todas resolvidas na Fase 7 (#493, 16/11).** O texto abaixo é o registro de 15/11. O estado atual está em
+> "Estado (17/11/2026)", no topo.
 
 - **Data Room pelo link fica vazio em silêncio.** `opportunity_documents` só tem policy para
   `authenticated` membro da organização; o portal por token lê a tabela direto (`DataRoomPanel` →
@@ -245,7 +261,7 @@ provada em transação desfeita — **aplicar com OK**):
 
 ## Arquivos principais
 
-`services/imovibService.ts` · `utils/imovibVersoes.ts` · `utils/imovibRelatorio.ts` · `utils/imovibRelatorioPdf.ts` · `utils/imovibGraficosParaPdf.ts` (novo) · `components/imovib/graficos/*` (novos) · `components/ImovibExecutiveSummary.tsx` · `components/ImovibVersoesTab.tsx` · `components/investor/OpportunityForm.tsx` · `components/investor/OpportunityDetail.tsx` · `components/investor/portal/ImovibPainelDoInvestidor.tsx` (novo) · `services/investorPortalTokenService.ts` (`montarEstudoDoPortal`) · migration nova · `docs/ui_ux_guia_unificado.md` §24.
+`services/imovibService.ts` · `utils/imovibVersoes.ts` · `utils/imovibRelatorio.ts` · `utils/imovibRelatorioPdf.ts` · `components/ImovibGraficosParaPdf.tsx` (novo; o plano dizia `utils/imovibGraficosParaPdf.ts`) · `components/ImovibGraficos.tsx` + `utils/imovibGraficos.ts` (novos; o plano dizia `components/imovib/graficos/*`) · `utils/imovibCalculoDaVersao.ts` (Fase 6) · `utils/oportunidadeNumerosDaVersao.ts` (#502) · `components/investor/portal/PortalOportunidadeDetalhe.tsx` (Fase 7) · `components/ImovibExecutiveSummary.tsx` · `components/ImovibVersoesTab.tsx` · `components/investor/OpportunityForm.tsx` · `components/investor/OpportunityDetail.tsx` · `components/investor/portal/ImovibPainelDoInvestidor.tsx` (novo) · `services/investorPortalTokenService.ts` (`montarEstudoDoPortal`) · migration nova · `docs/ui_ux_guia_unificado.md` §24.
 
 ## Verificação (cada fase, na frente)
 

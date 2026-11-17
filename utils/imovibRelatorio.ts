@@ -78,6 +78,11 @@ const dataBR = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
  * "Versão de dd/mm/aaaa" (ImovibCongelarVersao), e saía "Versão Versão de 16/11/2026" (16/11/2026).
  */
 export const rotuloDaVersao = (label: string) => (/^vers(ã|a)o(\s|$)/i.test(label.trim()) ? label : `Versão ${label}`);
+/**
+ * A capa fica gravada na versão (Fase 6) e a versão é imutável: a que foi congelada antes do
+ * `rotuloDaVersao` (#509) guardou "Versão Versão de 16/11/2026 · …" (Garden, 16/11 05h43). Corrige na leitura.
+ */
+export const subtituloSemVersaoRepetida = (subtitulo: string) => subtitulo.replace(/^vers(ã|a)o\s+(?=vers(ã|a)o(\s|$))/i, '');
 /** "Versão de 16/11/2026 · congelada em 16/11/2026" — painel do investidor, detalhe do portal e capa do PDF. */
 export const linhaDaVersao = (versao: { label: string; created_at: string }) =>
     `${rotuloDaVersao(versao.label)} · congelada em ${dataBRDeBrasilia(versao.created_at)}`;

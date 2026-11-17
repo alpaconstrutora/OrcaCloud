@@ -3,7 +3,7 @@
  * do PDF prefixavam "Versão " e saía "Versão Versão de 16/11/2026" (visto no portal do Tiago, 16/11).
  */
 import { describe, it, expect } from 'vitest';
-import { linhaDaVersao, rotuloDaVersao } from '../utils/imovibRelatorio';
+import { linhaDaVersao, rotuloDaVersao, subtituloSemVersaoRepetida } from '../utils/imovibRelatorio';
 
 describe('rótulo da versão', () => {
     it('nome que já começa por "Versão" não ganha outro "Versão"', () => {
@@ -22,5 +22,16 @@ describe('rótulo da versão', () => {
             .toBe('Versão de 16/11/2026 · congelada em 16/11/2026');
         expect(linhaDaVersao({ label: 'Comitê de novembro', created_at: '2026-11-15T13:40:00Z' }))
             .toBe('Versão Comitê de novembro · congelada em 15/11/2026');
+    });
+
+    it('capa congelada antes do #509 perde o "Versão" repetido; as outras ficam como estão', () => {
+        expect(subtituloSemVersaoRepetida('Versão Versão de 16/11/2026 · congelada em 16/11/2026'))
+            .toBe('Versão de 16/11/2026 · congelada em 16/11/2026');
+        expect(subtituloSemVersaoRepetida('Versão versão 2 · congelada em 16/11/2026')).toBe('versão 2 · congelada em 16/11/2026');
+        expect(subtituloSemVersaoRepetida('Versão Versionamento · congelada em 16/11/2026'))
+            .toBe('Versão Versionamento · congelada em 16/11/2026');
+        expect(subtituloSemVersaoRepetida('Versão de 16/11/2026 · congelada em 16/11/2026'))
+            .toBe('Versão de 16/11/2026 · congelada em 16/11/2026');
+        expect(subtituloSemVersaoRepetida('Relatório gerado em 17/11/2026')).toBe('Relatório gerado em 17/11/2026');
     });
 });

@@ -79,6 +79,15 @@ describe('números congelados na versão', () => {
         expect(interno.output()).toContain('SECAO CONGELADA INTERNA');
     });
 
+    it('capa congelada antes do #509 ("Versão Versão de …") sai sem a palavra repetida', async () => {
+        // Garden, "Versão de 16/11/2026", congelada às 05h43 de 16/11 — antes de `rotuloDaVersao` (#509).
+        const c = calculoImpossivel();
+        c.investidor.capa.subtitulo = 'Versão Versão de 16/11/2026 · congelada em 16/11/2026';
+        const pdf = await gerarRelatorioCompleto(dados(), { edicao: 'investidor', versao, congelado: congeladoDaVersao(c, 'investidor') });
+        expect(pdf.output()).toContain('Versão de 16/11/2026 · congelada em 16/11/2026');
+        expect(pdf.output()).not.toContain('Versão Versão');
+    });
+
     it('o portal recebe o cálculo do investidor em chave própria', async () => {
         const c = calculoImpossivel();
         rpc.resposta = { valid: true, study: baseStudy(), cenarios: [], relatorio: {}, calculo: c.investidor, versao, organizacao };

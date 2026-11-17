@@ -61,17 +61,54 @@ As pendências de 16/11 foram resolvidas na Fase 7 (#493):
 - [x] ~~Remover `fn_investor_portal_get_study`~~: removida (conferido em 17/11: a função não existe).
 - [x] ~~Minors do celular e do PDF~~ (cenário negativo, eixo do tornado, eixo de vendas, legenda na captura).
 
-**Ainda em aberto**
-- [ ] **Minor:** gerar o relatório completo leva tempo. Foram 10,4 s no Garden (Fase 3), 2,7 s na conferência da
-  frente e 11 s no 1º carregamento em produção; o botão mostra "Gerando...". Não foi atacado.
-- [ ] **Não conferido no navegador:** o painel com a versão real "Versão de 16/11/2026" (só a "Conferência do portal"
-  foi aberta pelo link). Basta abrir o Garden pelo link do Tiago.
+**Fechadas em 17/11**
+- [x] **Minor:** gerar o relatório completo levava tempo (10,4 s no Garden na Fase 3; 11 s no 1º carregamento em
+  produção em 16/11). Não foi atacado, mas não se repetiu: em 17/11, em produção, levou **3,2 s** no 1º clique, num
+  navegador sem cache.
+- [x] **Painel com a versão real conferido no navegador** (17/11): ver "Conferência do Garden com a versão real", abaixo.
+
+Nenhuma pendência aberta.
 
 **Fora do plano, achado ao fechar a frente (16/11):** o `node_modules` do checkout de integração estava vazio desde
 15/11 19:17 (outra sessão); reinstalado com `npm ci` a pedido do usuário (735 pacotes, 108 executáveis).
 
 **Desdobramento:** ao terminar o movimento do portal (#505), ficaram registradas "cerca de 437 classes de animação sem
 efeito no resto do app". Resolvidas no plano `2026-11-16-animacoes-de-entrada.md` (#515 e seguintes).
+
+## Conferência do Garden com a versão real (pedido de 17/11)
+
+> Pode abri o painel do Garden
+>
+> (depois do relatório da conferência, que achou os dois defeitos abaixo) → "Sim"
+>
+> Sessão: 21a9ea95-c34e-43cc-8a0f-7d21ef9ed2a0 · 2026-11-17
+
+**Conferência em produção** (orcacloud.vercel.app, link do Tiago, escritas bloqueadas, 1920 px e 390 px):
+- **Lista:** só o Garden, com VGV R$ 11.648.000, ROI 39,2% e TIR 19% da versão.
+- **Faixa:** "Versão de 16/11/2026 · congelada em 16/11/2026".
+- **Indicadores:** VPL R$ 706.968, TIR 19% a.a., margem 20,41%, exposição R$ 6.059.583 no mês 28, lucro R$ 2.377.357,
+  payback mês 29, múltiplo 1,38x.
+- **Gráficos e Documentos:** os 6 cartões presentes; a aba Documentos diz "Nenhum documento no data room".
+- **PDF do investidor:** 3,2 s, 13 páginas, 515 KB, sem parecer, critérios ou fontes.
+- **Geral:** 0 erros, 0 escritas tentadas, sem rolagem horizontal.
+
+Dois defeitos achados e corrigidos:
+
+- [x] **A capa do PDF dizia "Versão Versão de 16/11/2026".**
+  - **Causa:** a versão foi congelada às 05h43 de 16/11, antes do `rotuloDaVersao` (#509). A capa fica gravada na versão
+    (Fase 6), e a versão é imutável.
+  - **Correção:** `subtituloSemVersaoRepetida` (`utils/imovibRelatorio.ts`) corrige na leitura, em
+    `gerarRelatorioCompleto` (portal e aba Versões).
+  - *Pronto quando:* `imovibLinhaDaVersao.test.ts` e `ImovibNumerosCongelados.test.tsx` ("capa congelada antes do
+    #509…") ficam vermelhos sem a correção e verdes com ela.
+- [x] **O eixo da "Caixa e exposição" estava em formato americano** ("R$ 7.0 M", "R$ -3.5 M"), na tela e no PDF.
+  - **Correção:** passa a `compactAxis` ("7 mi", "-3,5 mi"), a régua dos outros gráficos. Vale também no Resumo
+    Executivo do app, que usa o mesmo `GraficoCurvaS`.
+  - *Pronto quando:* `GraficoCurvaSEixo.test.tsx` fica vermelho com o formatador antigo ('R$ -7.0 M') e verde com o novo.
+- **Conferido antes do merge:** build da frente contra o banco de produção, link do Tiago, escritas bloqueadas. Capa
+  "Versão de 16/11/2026 · congelada em 16/11/2026"; eixo "7 mi … -7 mi" na tela e no PDF; 0 erros.
+- **Fica como está, por decisão do #510:** os gráficos do PDF seguem as cores do app (azul e roxo); só o painel do
+  portal usa o coral.
 
 ## Fase 7 — Resolver as pendências (pedido de 16/11)
 

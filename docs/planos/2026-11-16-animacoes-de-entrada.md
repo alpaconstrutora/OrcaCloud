@@ -206,11 +206,42 @@ e `ParametricCenarios.test.tsx` vermelhos com o código antigo (5 de 5 na tela) 
 novo; no harness, salvar → sair da tela → voltar mantém os cenários, aplicar traz K e lucro,
 excluir e limpar perguntam, 0 diálogo nativo, 0 erro de console.
 
+## Pedido posterior 5 (17/11/2026, mesma sessão)
+
+> Corrigir também
+>
+> Sessão: 21a9ea95-c34e-43cc-8a0f-7d21ef9ed2a0 · 2026-11-17
+
+"Também" = os dois itens que o pedido posterior 4 deixou em "Fora do escopo".
+
+- [x] **A simulação some ao sair da tela** (BDI, fator K, sensibilidade e prazo mexidos fora de um
+  cenário). Passa a morar em `settings.parametricSimulation` (tipo `ParametricSimulation`), um
+  campo **à parte** de `bdiComposition`/`kFactor` do projeto — simular não muda o BDI das
+  Configurações nem o valor que `parametricService` calcula. Sem simulação gravada, a tela segue o
+  BDI e o K do projeto; igual a eles, o campo nem é gravado (abrir a tela não suja o projeto).
+  Cada mudança é UMA gravação: aplicar um cenário trocava 5 estados seguidos, e 5
+  `onUpdateSettings` a partir do mesmo `settings` deixariam só o último.
+- [x] **Voltar aos valores do projeto**: com a simulação guardada não há mais "sair e voltar"
+  para zerar. Botão no painel do BDI, só quando a simulação difere do projeto, com confirmação
+  (`useConfirm`, §14).
+- [x] **Renomear cenário**: lápis (`ActionIconButton kind="edit"`) abre o nome num campo `h-9`;
+  Enter ou clicar fora grava, Esc desiste. Nome vazio ou igual não grava; corta em 80 caracteres.
+  Confirmações citam nome livre entre aspas ('Excluir o cenário "Otimista"?').
+- [x] No mesmo painel: "BDI calculado: 39.28%" e "x1.35" → pt-BR ("39,28%", "x1,35").
+
+*Pronto quando:* testes novos vermelhos com o código anterior (13: regras puras ausentes, nada
+gravado, sem botão de renomear) e verdes com o novo; abrir a tela não chama `onUpdateSettings`;
+no harness, K, lucro, sensibilidade e prazo sobrevivem a sair/voltar, renomear com Enter/clicar
+fora grava e Esc não, "Voltar aos valores do projeto" pergunta e volta ao K e lucro do projeto.
+
 ## Fora do escopo (registrado, não feito)
 
 - ~~Durações de 500/700 ms em conteúdo de aba~~ — feito no pedido posterior acima.
 - ~~Aba "Cenários" inalcançável; caixa alta nas mesmas telas~~ — feito no pedido posterior 3.
 - ~~Os cenários do paramétrico vivem só no estado da tela (somem ao sair)~~ — feito no pedido
   posterior 4.
-- A simulação em si (BDI e fator K mexidos na tela, fora de um cenário) continua só na tela, como
-  sempre: salvar um cenário é o jeito de guardá-la. Cenário não tem renomear.
+- ~~A simulação em si (BDI e fator K fora de um cenário) continua só na tela; cenário não tem
+  renomear~~ — feito no pedido posterior 5.
+- Arrastar um controle deslizante da simulação grava a cada passo (o App re-renderiza e o
+  autosave reinicia a espera de 2 s). No harness: 17 ms por passo (mediana; p90 22 ms), um
+  quadro. No App real não medido — se travar, gravar só ao soltar o controle.

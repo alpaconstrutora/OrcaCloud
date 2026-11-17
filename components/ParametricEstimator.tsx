@@ -3,9 +3,14 @@ import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
-import { ProjectSettings, BudgetEntry, ParametricScenario } from '../types';
+import { ProjectSettings, BudgetEntry, ParametricScenario, ParametricSimulation } from '../types';
 import {
   lerCenarios,
+  lerSimulacao,
+  simulacaoDoProjeto,
+  mesmaSimulacao,
+  renomearCenario,
+  referenciaAoCenario,
   criarCenario,
   comparacaoComAtual,
   diferencasDeContexto,
@@ -58,6 +63,7 @@ import {
   Copy,
   Trash2,
   RefreshCw,
+  RotateCcw,
   CheckCircle2,
   ChevronDown
 } from 'lucide-react';
@@ -96,19 +102,26 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
   const [activeTab, setActiveTab] = React.useState<'financial' | 'quantitative' | 'intelligence'>('financial');
   const [intelTab, setIntelTab] = React.useState<'trends' | 'regional' | 'sensitivity' | 'scurve' | 'mix' | 'scenarios' | 'milestones'>('trends');
   const [loading, setLoading] = React.useState(true);
-  const [bdiComposition, setBdiComposition] = React.useState(settings.bdiComposition || {
-    taxes: 8.5,
-    profit: 12,
-    risk: 2,
-    insurance: 1,
-    admin: 5,
-    guarantee: 0,
-    finance: 0
-  });
-  const [kFactor, setKFactor] = React.useState(settings.kFactor || 1.0);
-  const [sensMaterials, setSensMaterials] = React.useState(0);
-  const [sensLabor, setSensLabor] = React.useState(0);
-  const [simulationDuration, setSimulationDuration] = React.useState(18);
+  // A simulação (BDI, fator K, sensibilidade, prazo) mora no orçamento — settings.parametricSimulation,
+  // à parte do BDI/K das Configurações — e o autosave grava. Até 17/11/2026 era useState daqui e voltava
+  // ao padrão ao sair da tela. Sem simulação gravada, ela segue o BDI e o K do projeto.
+  const simulacaoBase = React.useMemo(
+    () => simulacaoDoProjeto({ bdiComposition: settings.bdiComposition, kFactor: settings.kFactor }),
+    [settings.bdiComposition, settings.kFactor],
+  );
+  const simulacao = React.useMemo(
+    () => lerSimulacao(settings.parametricSimulation, { bdiComposition: settings.bdiComposition, kFactor: settings.kFactor }),
+    [settings.parametricSimulation, settings.bdiComposition, settings.kFactor],
+  );
+  const { bdiComposition, kFactor, durationMonths: simulationDuration } = simulacao;
+  const { materials: sensMaterials, labor: sensLabor } = simulacao.sensitivity;
+  const temSimulacaoGravada = !mesmaSimulacao(simulacao, simulacaoBase);
+  // UMA gravação por mudança: várias seguidas partiriam do mesmo `settings` e só a última ficaria.
+  const atualizarSimulacao = (parcial: Partial<ParametricSimulation>) => {
+    const nova = { ...simulacao, ...parcial };
+    onUpdateSettings({ ...settings, parametricSimulation: mesmaSimulacao(nova, simulacaoBase) ? undefined : nova });
+  };
+  const [renomeando, setRenomeando] = React.useState<{ id: string; nome: string } | null>(null);
   const [compareStandard, setCompareStandard] = React.useState<string>('');
   const [comparisonData, setComparisonData] = React.useState<{ standard: string; total: number; m2: number } | null>(null);
   // Cenários moram no projeto (settings.parametricScenarios) e o autosave grava no banco.
@@ -236,7 +249,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
   const aplicarCenario = async (cenario: ParametricScenario) => {
     const mudou = diferencasDeContexto(cenario, { standard: settings.standard, area: settings.area });
     const ok = await confirm({
-      title: `Aplicar os parâmetros do ${cenario.name}?`,
+      title: `Aplicar os parâmetros do ${referenciaAoCenario(cenario)}?`,
       message:
         `A simulação passa a usar BDI ${formatarPercentual(cenario.bdi)}, fator K ${formatarFatorK(cenario.kFactor)}, ` +
         `materiais ${formatarVariacao(cenario.sensitivity.materials)}, mão de obra ${formatarVariacao(cenario.sensitivity.labor)} ` +
@@ -248,17 +261,39 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
       confirmLabel: 'Aplicar',
     });
     if (!ok) return;
-    setBdiComposition({ ...cenario.bdiComposition });
-    setKFactor(cenario.kFactor);
-    setSensMaterials(cenario.sensitivity.materials);
-    setSensLabor(cenario.sensitivity.labor);
-    setSimulationDuration(cenario.durationMonths);
-    showToast(`Parâmetros do ${cenario.name} aplicados.`);
+    atualizarSimulacao({
+      bdiComposition: { ...cenario.bdiComposition },
+      kFactor: cenario.kFactor,
+      sensitivity: { ...cenario.sensitivity },
+      durationMonths: cenario.durationMonths,
+    });
+    showToast(`Parâmetros do ${referenciaAoCenario(cenario)} aplicados.`);
+  };
+
+  const voltarAosValoresDoProjeto = async () => {
+    const ok = await confirm({
+      title: 'Voltar aos valores do projeto?',
+      message:
+        'A simulação volta ao BDI e ao fator K das configurações do projeto, sem variação de materiais e mão de obra, ' +
+        `e o prazo volta a ${simulacaoBase.durationMonths} meses. Para guardar a simulação atual, salve um cenário antes.`,
+      variant: 'default',
+      confirmLabel: 'Voltar',
+    });
+    if (!ok) return;
+    onUpdateSettings({ ...settings, parametricSimulation: undefined });
+    showToast('Simulação de volta aos valores do projeto.');
+  };
+
+  const confirmarNome = () => {
+    if (!renomeando) return;
+    const novos = renomearCenario(cenarios, renomeando.id, renomeando.nome);
+    setRenomeando(null);
+    if (novos) gravarCenarios(novos);
   };
 
   const excluirCenario = async (cenario: ParametricScenario) => {
     const ok = await confirm({
-      title: `Excluir o ${cenario.name}?`,
+      title: `Excluir o ${referenciaAoCenario(cenario)}?`,
       message: 'O cenário sai deste orçamento. Essa ação não pode ser desfeita.',
       variant: 'danger',
       confirmLabel: 'Excluir',
@@ -445,13 +480,26 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
       <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-8 rounded-3xl shadow-2xl shadow-blue-200 text-white">
         <div className="flex flex-col xl:flex-row gap-12 items-start">
           <div className="flex-1 space-y-6 w-full">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <Activity className="w-6 h-6 text-blue-200" />
                 <h2 className="text-xl font-black">BI: Composição de BDI & Fator K</h2>
               </div>
-              <div className="flex items-center gap-2 px-3 py-1 bg-white/20 rounded-lg text-xs font-bold">
-                BDI calculado: {totalBdiPerc.toFixed(2)}%
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Só aparece quando a simulação gravada difere do BDI/K das Configurações do projeto. */}
+                {temSimulacaoGravada && (
+                  <button
+                    type="button"
+                    onClick={voltarAosValoresDoProjeto}
+                    className="inline-flex items-center gap-1.5 h-8 px-3 rounded-lg border border-white/20 bg-white/10 text-xs font-semibold text-white hover:bg-white/20 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-white/40"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Voltar aos valores do projeto
+                  </button>
+                )}
+                <div className="flex items-center gap-2 px-3 py-1 bg-white/20 rounded-lg text-xs font-bold">
+                  BDI calculado: {formatarPercentual(totalBdiPerc)}
+                </div>
               </div>
             </div>
 
@@ -470,7 +518,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                   <input
                     type="number"
                     value={bdiComposition[item.key as keyof typeof bdiComposition]}
-                    onChange={(e) => setBdiComposition({ ...bdiComposition, [item.key]: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => atualizarSimulacao({ bdiComposition: { ...bdiComposition, [item.key]: parseFloat(e.target.value) || 0 } })}
                     className="w-full bg-white/10 border border-white/20 rounded-[6px] px-3 h-9 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-white/30"
                   />
                 </div>
@@ -484,12 +532,12 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                     <span className="text-sm font-semibold text-blue-100">Fator K (Complexidade/Logística)</span>
                     <Info className="w-3 h-3 text-blue-300 cursor-help" />
                   </div>
-                  <span className="text-2xl font-black">x{kFactor.toFixed(2)}</span>
+                  <span className="text-2xl font-black">{formatarFatorK(kFactor)}</span>
                 </div>
                 <input
                   type="range" min="0.5" max="2.0" step="0.01"
                   value={kFactor}
-                  onChange={(e) => setKFactor(parseFloat(e.target.value))}
+                  onChange={(e) => atualizarSimulacao({ kFactor: parseFloat(e.target.value) })}
                   className="w-full h-2 bg-blue-400 rounded-lg appearance-none cursor-pointer accent-white"
                 />
               </div>
@@ -829,7 +877,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                             <input
                               type="range" min="-30" max="30" step="1"
                               value={sensMaterials}
-                              onChange={(e) => setSensMaterials(Number(e.target.value))}
+                              onChange={(e) => atualizarSimulacao({ sensitivity: { materials: Number(e.target.value), labor: sensLabor } })}
                               className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-orange-600"
                             />
                             <div className="flex justify-between mt-2 text-xs items-center text-gray-500">
@@ -849,7 +897,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                             <input
                               type="range" min="-10" max="20" step="1"
                               value={sensLabor}
-                              onChange={(e) => setSensLabor(Number(e.target.value))}
+                              onChange={(e) => atualizarSimulacao({ sensitivity: { materials: sensMaterials, labor: Number(e.target.value) } })}
                               className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-orange-600"
                             />
                             <div className="flex justify-between mt-2 text-xs items-center text-gray-500">
@@ -869,7 +917,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                             <input
                               type="range" min="0" max="150" step="5"
                               value={80 + (sensLabor * 2)}
-                              onChange={(e) => setSensLabor((Number(e.target.value) - 80) / 2)}
+                              onChange={(e) => atualizarSimulacao({ sensitivity: { materials: sensMaterials, labor: (Number(e.target.value) - 80) / 2 } })}
                               className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-orange-600"
                             />
                             <div className="flex justify-between mt-2 text-xs items-center text-gray-500">
@@ -889,7 +937,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                             <input
                               type="range" min="0" max="30" step="0.5"
                               value={bdiComposition.taxes}
-                              onChange={(e) => setBdiComposition({ ...bdiComposition, taxes: Number(e.target.value) })}
+                              onChange={(e) => atualizarSimulacao({ bdiComposition: { ...bdiComposition, taxes: Number(e.target.value) } })}
                               className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
                             />
                             <p className="text-xs text-gray-500 mt-2">Impacto direto no BDI Total</p>
@@ -905,7 +953,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                             <input
                               type="range" min="0" max="40" step="1"
                               value={bdiComposition.profit}
-                              onChange={(e) => setBdiComposition({ ...bdiComposition, profit: Number(e.target.value) })}
+                              onChange={(e) => atualizarSimulacao({ bdiComposition: { ...bdiComposition, profit: Number(e.target.value) } })}
                               className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-emerald-600"
                             />
                             <p className="text-xs text-gray-500 mt-2">Ajuste de Rentabilidade Desejada</p>
@@ -955,7 +1003,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                             <input
                               type="range" min="6" max="60" step="1"
                               value={simulationDuration}
-                              onChange={(e) => setSimulationDuration(Number(e.target.value))}
+                              onChange={(e) => atualizarSimulacao({ durationMonths: Number(e.target.value) })}
                               className="w-32 h-1.5 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
                             />
                             <span className="text-sm font-black text-blue-600 w-12">{simulationDuration}M</span>
@@ -1200,7 +1248,28 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
 
                                 <div className="flex-1 min-w-0">
                                   <div className="flex flex-wrap items-baseline gap-x-2 mb-2">
-                                    <h4 className="font-black text-gray-900 group-hover:text-orange-700 transition-colors">{cenario.name}</h4>
+                                    {renomeando?.id === cenario.id ? (
+                                      <input
+                                        type="text"
+                                        aria-label="Nome do cenário"
+                                        autoFocus
+                                        maxLength={80}
+                                        value={renomeando.nome}
+                                        onChange={(e) => setRenomeando({ id: cenario.id, nome: e.target.value })}
+                                        onKeyDown={(e) => {
+                                          if (e.key !== 'Enter' && e.key !== 'Escape') return;
+                                          e.preventDefault();
+                                          // O campo sai da tela em seguida: a marca impede o blur de gravar de novo (ou de gravar o que o Esc desistiu).
+                                          e.currentTarget.dataset.encerrado = '1';
+                                          if (e.key === 'Enter') confirmarNome();
+                                          else setRenomeando(null);
+                                        }}
+                                        onBlur={(e) => { if (!e.currentTarget.dataset.encerrado) confirmarNome(); }}
+                                        className="h-9 w-full max-w-sm px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                      />
+                                    ) : (
+                                      <h4 className="font-black text-gray-900 group-hover:text-orange-700 transition-colors">{cenario.name}</h4>
+                                    )}
                                     <span className="text-xs text-gray-500">{formatarDataHora(cenario.createdAt)}</span>
                                   </div>
                                   <div className="flex flex-wrap gap-2">
@@ -1225,6 +1294,11 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                                 </div>
 
                                 <div className="flex items-center gap-1.5 lg:border-l lg:pl-8 lg:ml-4 border-gray-100">
+                                  <ActionIconButton
+                                    kind="edit"
+                                    title="Renomear cenário"
+                                    onClick={() => setRenomeando({ id: cenario.id, nome: cenario.name })}
+                                  />
                                   <ActionIconButton
                                     kind="history"
                                     icon={<RefreshCw className="w-4 h-4" />}

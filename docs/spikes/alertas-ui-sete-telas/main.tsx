@@ -119,6 +119,7 @@ function ParametricoComProjeto() {
                 <button data-harness="sair" onClick={() => setAberta(false)}>Sair da tela</button>
                 <button data-harness="voltar" onClick={() => setAberta(true)}>Voltar</button>
                 <span data-harness="gravados">{(settings.parametricScenarios ?? []).length} gravado(s) no projeto</span>
+                <span data-harness="simulacao">{settings.parametricSimulation ? `simulação gravada: K ${settings.parametricSimulation.kFactor}` : 'sem simulação gravada'}</span>
             </div>
             {aberta && <ParametricEstimator settings={settings} onUpdateBudget={nada} onUpdateSettings={setSettings} onNavigate={nada} />}
         </div>

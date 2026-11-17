@@ -122,6 +122,19 @@ export interface ParametricScenario {
     standard: string;
 }
 
+/**
+ * Simulação do orçamento paramétrico (`settings.parametricSimulation`): o BDI, o fator K, a
+ * sensibilidade e o prazo mexidos na tela. Campo à parte de `bdiComposition`/`kFactor` do
+ * projeto — simular não muda o BDI das Configurações. Ausente = a simulação segue o projeto.
+ * Regras em utils/cenariosParametricos.ts.
+ */
+export interface ParametricSimulation {
+    bdiComposition: BdiComposition;
+    kFactor: number;
+    sensitivity: { materials: number; labor: number };
+    durationMonths: number;
+}
+
 export interface ProjectSettings {
     id?: string;
     name: string;
@@ -159,6 +172,8 @@ export interface ProjectSettings {
     bdiComposition?: BdiComposition;
     /** Cenários salvos no orçamento paramétrico (até 17/11/2026 viviam só no estado da tela). */
     parametricScenarios?: ParametricScenario[];
+    /** Simulação do paramétrico guardada no orçamento (até 17/11/2026 sumia ao sair da tela). */
+    parametricSimulation?: ParametricSimulation;
     wbs: WBSGroup[];
     versions?: BudgetVersion[];
     activeVersionId?: string;

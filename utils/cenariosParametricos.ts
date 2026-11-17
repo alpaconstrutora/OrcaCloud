@@ -3,7 +3,7 @@
  * 17/11/2026). Os cenários moram em `settings.parametricScenarios`; o autosave do projeto
  * (hooks/usePersistenceSync.ts) grava no banco. Até essa data viviam só no estado da tela.
  */
-import type { BdiComposition, ParametricScenario } from '../types';
+import type { BdiComposition, ParametricScenario, ParametricSimulation } from '../types';
 
 export type DadosDoCenario = Omit<ParametricScenario, 'id' | 'number' | 'name' | 'createdAt'>;
 
@@ -45,6 +45,70 @@ export function lerCenarios(bruto: unknown): ParametricScenario[] {
             standard: typeof c.standard === 'string' ? c.standard : '',
         }];
     });
+}
+
+// ─── Simulação guardada no orçamento (settings.parametricSimulation) ─────────────────────
+// Pedido "Corrigir também" (17/11/2026): até aqui o BDI, o K, a sensibilidade e o prazo
+// mexidos na tela voltavam ao padrão ao sair dela.
+
+/** Composição usada quando o projeto não tem BDI próprio (a mesma que a tela usava). */
+export const COMPOSICAO_PADRAO: BdiComposition = { taxes: 8.5, profit: 12, risk: 2, insurance: 1, admin: 5, guarantee: 0, finance: 0 };
+export const PRAZO_PADRAO_MESES = 18;
+
+const positivo = (v: unknown): v is number => numeroValido(v) && v > 0;
+
+/** O ponto de partida: BDI e fator K das Configurações do projeto, sem variação, 18 meses. */
+export function simulacaoDoProjeto(projeto: { bdiComposition?: unknown; kFactor?: unknown }): ParametricSimulation {
+    return {
+        bdiComposition: projeto.bdiComposition && typeof projeto.bdiComposition === 'object'
+            ? lerComposicao(projeto.bdiComposition)
+            : { ...COMPOSICAO_PADRAO },
+        kFactor: positivo(projeto.kFactor) ? projeto.kFactor : 1,
+        sensitivity: { materials: 0, labor: 0 },
+        durationMonths: PRAZO_PADRAO_MESES,
+    };
+}
+
+/** Lê a simulação gravada; o que faltar ou vier estragado fica com o valor do projeto. */
+export function lerSimulacao(bruto: unknown, projeto: { bdiComposition?: unknown; kFactor?: unknown }): ParametricSimulation {
+    const base = simulacaoDoProjeto(projeto);
+    if (!bruto || typeof bruto !== 'object') return base;
+    const s = bruto as Record<string, unknown>;
+    const sens = (s.sensitivity && typeof s.sensitivity === 'object' ? s.sensitivity : {}) as Record<string, unknown>;
+    return {
+        bdiComposition: s.bdiComposition && typeof s.bdiComposition === 'object' ? lerComposicao(s.bdiComposition) : base.bdiComposition,
+        kFactor: positivo(s.kFactor) ? s.kFactor : base.kFactor,
+        sensitivity: {
+            materials: numeroValido(sens.materials) ? sens.materials : 0,
+            labor: numeroValido(sens.labor) ? sens.labor : 0,
+        },
+        durationMonths: positivo(s.durationMonths) ? s.durationMonths : base.durationMonths,
+    };
+}
+
+export function mesmaSimulacao(a: ParametricSimulation, b: ParametricSimulation): boolean {
+    return a.kFactor === b.kFactor
+        && a.durationMonths === b.durationMonths
+        && a.sensitivity.materials === b.sensitivity.materials
+        && a.sensitivity.labor === b.sensitivity.labor
+        && CHAVES_BDI.every(chave => a.bdiComposition[chave] === b.bdiComposition[chave]);
+}
+
+// ─── Renomear ────────────────────────────────────────────────────────────────────────────
+
+const MAX_NOME = 80;
+
+/** Lista com o cenário renomeado, ou null quando não há o que gravar (nome vazio, igual ou id sumido). */
+export function renomearCenario(cenarios: ParametricScenario[], id: string, nome: string): ParametricScenario[] | null {
+    const limpo = nome.replace(/\s+/g, ' ').trim().slice(0, MAX_NOME);
+    const alvo = cenarios.find(c => c.id === id);
+    if (!limpo || !alvo || alvo.name === limpo) return null;
+    return cenarios.map(c => (c.id === id ? { ...c, name: limpo } : c));
+}
+
+/** Como o cenário aparece numa frase: "Cenário 1 (R8-N)" como está; nome livre vira 'cenário "Otimista"'. */
+export function referenciaAoCenario(cenario: ParametricScenario): string {
+    return /^cen[aá]rio\b/i.test(cenario.name) ? cenario.name : `cenário "${cenario.name}"`;
 }
 
 /** Maior número já usado + 1 — excluir o "Cenário 1" não faz o próximo repetir um nome. */

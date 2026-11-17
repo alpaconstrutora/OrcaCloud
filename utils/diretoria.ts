@@ -4,12 +4,12 @@
  * moram em supabase/functions/_shared/diretoriaCatalogo.ts (o mesmo do e-mail semanal).
  */
 import {
-    TIPOS, AREAS, SEVERIDADES, tituloDoGrupo, detalheDoGrupo, brl, dataBr, diasAte, semanaDe,
-    type TipoExcecao, type Area, type Severidade,
+    TIPOS, AREAS, SEVERIDADES, tituloDoGrupo, detalheDoGrupo, brl, dataBr, diasAte, semanaDe, compararSemanas,
+    type TipoExcecao, type Area, type Severidade, type FotoDaSemana, type LinhaComparacao,
 } from '../supabase/functions/_shared/diretoriaCatalogo';
 
-export { TIPOS, AREAS, SEVERIDADES, tituloDoGrupo, detalheDoGrupo, brl, dataBr, diasAte, semanaDe };
-export type { TipoExcecao, Area, Severidade };
+export { TIPOS, AREAS, SEVERIDADES, tituloDoGrupo, detalheDoGrupo, brl, dataBr, diasAte, semanaDe, compararSemanas };
+export type { TipoExcecao, Area, Severidade, FotoDaSemana, LinhaComparacao };
 
 // ── Tipos do que `fn_diretoria_painel` devolve ──────────────────────────────────
 export interface ItemExcecao { id: string; titulo: string; valor: number | null; dias: number | null; data: string | null }
@@ -65,6 +65,8 @@ export interface PainelDiretoria {
     areas: LinhaArea[];
     determinacoes: Determinacao[];
     cobrancas: Cobranca[];
+    /** Foto da segunda-feira passada (diretoria_semana_numeros, somada nas orgs); null sem foto. */
+    semana_anterior: FotoDaSemana | null;
 }
 
 // ── Hierarquia ──────────────────────────────────────────────────────────────────

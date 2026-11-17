@@ -15,6 +15,8 @@ export type VisaoDiretoria = 'fila' | 'responsavel' | 'reuniao';
 export const VISOES: readonly VisaoDiretoria[] = ['fila', 'responsavel', 'reuniao'];
 const CHAVE_VISAO = 'diretoria.visao';
 const CHAVE_SILENCIADOS = 'diretoria.silenciados';
+/** true = recebe o resumo toda segunda (fn_diretoria_resumo_destinatarios lê esta chave). */
+const CHAVE_RESUMO = 'diretoria.resumo_semanal';
 
 export interface ErroDoBanco extends Error { code?: string }
 
@@ -39,6 +41,7 @@ function normalizar(d: Partial<PainelDiretoria> | null): PainelDiretoria {
         areas: d?.areas ?? [],
         determinacoes: d?.determinacoes ?? [],
         cobrancas: d?.cobrancas ?? [],
+        semana_anterior: d?.semana_anterior ?? null,
     };
 }
 
@@ -70,13 +73,14 @@ export const diretoriaService = {
         }),
 
     /** Visão escolhida e tipos silenciados ("É barulho") — preferências da pessoa, valem em qualquer org. */
-    async preferencias(): Promise<{ visao: VisaoDiretoria | null; silenciados: TipoExcecao[] }> {
+    async preferencias(): Promise<{ visao: VisaoDiretoria | null; silenciados: TipoExcecao[]; resumoSemanal: boolean }> {
         const linhas = await preferenciasService.listarDoUsuario();
         const valor = (chave: string) => linhas.find(l => l.chave === chave)?.valor;
         const v = valor(CHAVE_VISAO);
         return {
             visao: typeof v === 'string' && (VISOES as readonly string[]).includes(v) ? (v as VisaoDiretoria) : null,
             silenciados: lerSilenciados(valor(CHAVE_SILENCIADOS)),
+            resumoSemanal: valor(CHAVE_RESUMO) === true,
         };
     },
 
@@ -84,4 +88,18 @@ export const diretoriaService = {
 
     gravarSilenciados: (tipos: readonly string[]) =>
         preferenciasService.gravar('USUARIO', {}, CHAVE_SILENCIADOS, juntarSilenciados(tipos)),
+
+    /** Liga/desliga o resumo por e-mail das segundas para a pessoa (desligar apaga a linha). */
+    gravarResumoSemanal: (ligado: boolean) =>
+        preferenciasService.gravar('USUARIO', {}, CHAVE_RESUMO, ligado ? true : null),
+
+    /**
+     * Manda AGORA uma prévia do resumo só para quem pediu (Edge Function diretoria-resumo-semanal;
+     * a permissão é conferida lá pelo banco). Devolve quantos e-mails saíram.
+     */
+    async enviarPrevia(): Promise<number> {
+        const { data, error } = await supabase.functions.invoke('diretoria-resumo-semanal', { body: {} });
+        if (error) throw new Error(`A prévia não saiu: ${error.message}. Se a função do resumo ainda não foi publicada, ela só funciona depois disso.`);
+        return Number((data as { enviados?: number } | null)?.enviados ?? 0);
+    },
 };

@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const rpc = vi.fn();
-vi.mock('../lib/supabase', () => ({ supabase: { rpc: (...a: unknown[]) => rpc(...a) } }));
+const invoke = vi.fn();
+vi.mock('../lib/supabase', () => ({ supabase: { rpc: (...a: unknown[]) => rpc(...a), functions: { invoke: (...a: unknown[]) => invoke(...a) } } }));
 const listarDoUsuario = vi.fn();
 const gravar = vi.fn();
 vi.mock('../services/preferenciasService', () => ({
@@ -11,7 +12,7 @@ vi.mock('../services/preferenciasService', () => ({
 import { diretoriaService } from '../services/diretoriaService';
 
 // Plano: docs/planos/2026-11-17-opura-ceo.md (Tarefa 5).
-beforeEach(() => { rpc.mockReset(); listarDoUsuario.mockReset(); gravar.mockReset(); });
+beforeEach(() => { rpc.mockReset(); invoke.mockReset(); listarDoUsuario.mockReset(); gravar.mockReset(); });
 
 describe('diretoriaService', () => {
     it('painel: org do topo (ou null = "Todas") e listas vazias quando o banco não manda', async () => {
@@ -58,9 +59,9 @@ describe('diretoriaService', () => {
             { escopo: 'USUARIO', chave: 'diretoria.silenciados', valor: 'conta_vencida,xyz' },
             { escopo: 'USUARIO', chave: 'planta.exibir.cotas', valor: true },
         ]);
-        expect(await diretoriaService.preferencias()).toEqual({ visao: 'reuniao', silenciados: ['conta_vencida'] });
+        expect(await diretoriaService.preferencias()).toEqual({ visao: 'reuniao', silenciados: ['conta_vencida'], resumoSemanal: false });
         listarDoUsuario.mockResolvedValue([{ escopo: 'USUARIO', chave: 'diretoria.visao', valor: 'outra' }]);
-        expect(await diretoriaService.preferencias()).toEqual({ visao: null, silenciados: [] });
+        expect(await diretoriaService.preferencias()).toEqual({ visao: null, silenciados: [], resumoSemanal: false });
 
         await diretoriaService.gravarVisao('responsavel');
         expect(gravar).toHaveBeenLastCalledWith('USUARIO', {}, 'diretoria.visao', 'responsavel');
@@ -68,5 +69,27 @@ describe('diretoriaService', () => {
         expect(gravar).toHaveBeenLastCalledWith('USUARIO', {}, 'diretoria.silenciados', 'conta_vencida,tarefa_vencida');
         await diretoriaService.gravarSilenciados([]);
         expect(gravar).toHaveBeenLastCalledWith('USUARIO', {}, 'diretoria.silenciados', null);
+    });
+
+    it('resumo por e-mail: liga/desliga na preferência diretoria.resumo_semanal (desligar apaga a linha)', async () => {
+        listarDoUsuario.mockResolvedValue([{ escopo: 'USUARIO', chave: 'diretoria.resumo_semanal', valor: true }]);
+        expect((await diretoriaService.preferencias()).resumoSemanal).toBe(true);
+        await diretoriaService.gravarResumoSemanal(true);
+        expect(gravar).toHaveBeenLastCalledWith('USUARIO', {}, 'diretoria.resumo_semanal', true);
+        await diretoriaService.gravarResumoSemanal(false);
+        expect(gravar).toHaveBeenLastCalledWith('USUARIO', {}, 'diretoria.resumo_semanal', null);
+    });
+
+    it('prévia: chama a function diretoria-resumo-semanal; falha vira mensagem legível', async () => {
+        invoke.mockResolvedValue({ data: { modo: 'previa', enviados: 1 }, error: null });
+        expect(await diretoriaService.enviarPrevia()).toBe(1);
+        expect(invoke).toHaveBeenCalledWith('diretoria-resumo-semanal', { body: {} });
+        invoke.mockResolvedValue({ data: null, error: { message: 'Failed to send a request to the Edge Function' } });
+        await expect(diretoriaService.enviarPrevia()).rejects.toThrow(/prévia não saiu/i);
+    });
+
+    it('painel sem semana_anterior vira null', async () => {
+        rpc.mockResolvedValue({ data: { hoje: '2026-11-17' }, error: null });
+        expect((await diretoriaService.painel('a')).semana_anterior).toBeNull();
     });
 });

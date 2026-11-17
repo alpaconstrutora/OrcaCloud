@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "bc770898f0cbc66bcc7d088144a239c2b94d9c75695113b3688e0ee34dd80649",
+    "modelo": "a069036d754e27a57ce800cb95186e3c20a806ba6ab0dbac5f9b2333f73d4403",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -10,8 +10,8 @@
     "nucleos": 1,
     "estruturas": 201,
     "quadros": 11,
-    "terminais": 792,
-    "trechosDeAgua": 511,
+    "terminais": 795,
+    "trechosDeAgua": 448,
     "agua": {
       "pontos": 36,
       "hidrometros": 2,
@@ -25,14 +25,14 @@
       "alimentadorDnMm": 25,
       "rtiL": 8000,
       "estaticaMaxKpa": 215,
-      "dinamicaMinKpa": 79,
+      "dinamicaMinKpa": 80,
       "pressurizador": true,
       "vrp": false,
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
     },
-    "trechosDeEsgoto": 173,
+    "trechosDeEsgoto": 170,
     "esgoto": {
       "tubosDeQueda": 2,
       "pontos": 19,
@@ -143,7 +143,7 @@
       "conflitos": {
         "ABERTURA": 27,
         "PILAR": 2,
-        "REDE": 57,
+        "REDE": 47,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
@@ -157,11 +157,12 @@
     },
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
-    "eletrodutoXClimatizacao": 6,
-    "eletrodutoXEsgoto": 10
+    "eletrodutoXClimatizacao": 9,
+    "eletrodutoXEsgoto": 12,
+    "aguaXClimatizacao": 0
   },
   "R8": {
-    "modelo": "5cb305c5b4924506210a7d810ce2f2db68d213ee17b85d93c322f85253da8a12",
+    "modelo": "e6560022483a3d40a102382ddab314a768cd0b0ae8a2ca23825b92ee1d985f14",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 11,
     "copias": 6,
@@ -171,8 +172,8 @@
     "nucleos": 2,
     "estruturas": 766,
     "quadros": 45,
-    "terminais": 4055,
-    "trechosDeAgua": 2789,
+    "terminais": 4069,
+    "trechosDeAgua": 2488,
     "agua": {
       "pontos": 85,
       "hidrometros": 5,
@@ -186,14 +187,14 @@
       "alimentadorDnMm": 32,
       "rtiL": 16000,
       "estaticaMaxKpa": 332,
-      "dinamicaMinKpa": 75,
+      "dinamicaMinKpa": 76,
       "pressurizador": true,
       "vrp": false,
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
     },
-    "trechosDeEsgoto": 921,
+    "trechosDeEsgoto": 928,
     "esgoto": {
       "tubosDeQueda": 5,
       "pontos": 45,
@@ -379,9 +380,9 @@
     "vagas": 59,
     "compatibilizacao": {
       "conflitos": {
-        "ABERTURA": 245,
+        "ABERTURA": 224,
         "PILAR": 4,
-        "REDE": 266,
+        "REDE": 77,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
@@ -396,10 +397,11 @@
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
     "eletrodutoXClimatizacao": 14,
-    "eletrodutoXEsgoto": 7
+    "eletrodutoXEsgoto": 0,
+    "aguaXClimatizacao": 0
   },
   "R12": {
-    "modelo": "95ce93e0e9e64db0a70c775e569266670c4bc954eb2f1522488d68b76584f934",
+    "modelo": "f75c0ed765a5479665beb66823e0ec6237f3b7fea8484845b44395189c53db1d",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
@@ -409,8 +411,8 @@
     "nucleos": 3,
     "estruturas": 1424,
     "quadros": 103,
-    "terminais": 10457,
-    "trechosDeAgua": 6959,
+    "terminais": 10468,
+    "trechosDeAgua": 6112,
     "agua": {
       "pontos": 144,
       "hidrometros": 8,
@@ -424,14 +426,14 @@
       "alimentadorDnMm": 50,
       "rtiL": 20000,
       "estaticaMaxKpa": 207,
-      "dinamicaMinKpa": 76,
+      "dinamicaMinKpa": 77,
       "pressurizador": true,
       "vrp": true,
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
     },
-    "trechosDeEsgoto": 2394,
+    "trechosDeEsgoto": 2383,
     "esgoto": {
       "tubosDeQueda": 8,
       "pontos": 76,
@@ -683,27 +685,28 @@
     "vagas": 174,
     "compatibilizacao": {
       "conflitos": {
-        "ABERTURA": 319,
-        "PILAR": 1,
-        "REDE": 516,
+        "ABERTURA": 308,
+        "PILAR": 2,
+        "REDE": 198,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
-      "encostos": 46,
+      "encostos": 45,
       "passagens": {
         "furos": 744,
         "noNucleo": 71,
         "embutidas": 1270
       },
-      "furos": 179
+      "furos": 176
     },
     "aguaXEsgoto": 1,
     "eletrodutoNoEquipamento": 0,
     "eletrodutoXClimatizacao": 44,
-    "eletrodutoXEsgoto": 10
+    "eletrodutoXEsgoto": 0,
+    "aguaXClimatizacao": 0
   },
   "RL": {
-    "modelo": "03d5ba328d66e9a00e1bb127a12e89f096d5d5ffd2b3beaf01cfd699aa5cf816",
+    "modelo": "3c4f2989b9c1ee23254df51467851e9c321d7f1729dcb78d9d53bbaad10bb1ad",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -713,8 +716,8 @@
     "nucleos": 2,
     "estruturas": 1179,
     "quadros": 100,
-    "terminais": 10146,
-    "trechosDeAgua": 7576,
+    "terminais": 10167,
+    "trechosDeAgua": 6582,
     "agua": {
       "pontos": 229,
       "hidrometros": 13,
@@ -728,14 +731,14 @@
       "alimentadorDnMm": 50,
       "rtiL": 16000,
       "estaticaMaxKpa": 332,
-      "dinamicaMinKpa": 55,
+      "dinamicaMinKpa": 57,
       "pressurizador": true,
       "vrp": false,
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
     },
-    "trechosDeEsgoto": 2382,
+    "trechosDeEsgoto": 2375,
     "esgoto": {
       "tubosDeQueda": 13,
       "pontos": 121,
@@ -931,13 +934,13 @@
     "vagas": 0,
     "compatibilizacao": {
       "conflitos": {
-        "ABERTURA": 469,
+        "ABERTURA": 441,
         "PILAR": 31,
-        "REDE": 395,
+        "REDE": 184,
         "EQUIPAMENTO": 0,
         "OUTRO": 2
       },
-      "encostos": 42,
+      "encostos": 45,
       "passagens": {
         "furos": 783,
         "noNucleo": 46,
@@ -948,6 +951,7 @@
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
     "eletrodutoXClimatizacao": 63,
-    "eletrodutoXEsgoto": 12
+    "eletrodutoXEsgoto": 12,
+    "aguaXClimatizacao": 0
   }
 }

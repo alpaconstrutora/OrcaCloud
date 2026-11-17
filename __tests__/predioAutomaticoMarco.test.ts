@@ -91,6 +91,12 @@ function aguaXEsgoto(m: BlueprintModel): number {
   return conflitosDoModelo(m).filter((c) => c.classe === 'REDE' && [d.get(c.trechoId), d.get(c.outroId)].sort().join('×') === 'AGUA_FRIA×ESGOTO').length;
 }
 
+/** PA17: os encontros da água fria com o dreno do ar e a linha frigorígena, no prédio inteiro. */
+function aguaXClimatizacao(m: BlueprintModel): number {
+  const d = new Map((m.trechos ?? []).map((t) => [t.id, t.disciplina]));
+  return conflitosDoModelo(m).filter((c) => c.classe === 'REDE' && ['AGUA_FRIA×DRENO_AC', 'AGUA_FRIA×FRIGORIGENA'].includes([d.get(c.trechoId), d.get(c.outroId)].sort().join('×'))).length;
+}
+
 /** PA11: os trechos de eletroduto que atravessam a caixa de uma peça de climatização (evaporadora, exaustor). */
 function eletrodutoNoEquipamento(m: BlueprintModel): number {
   const d = new Map((m.trechos ?? []).map((t) => [t.id, t.disciplina]));
@@ -153,6 +159,7 @@ function marcoDoPredio(c: Caso) {
     // contar as descidas das louças de cima pela laje (o quadro da unidade logo abaixo de uma delas é inevitável).
     eletrodutoXClimatizacao: eletrodutoX(m, ['FRIGORIGENA', 'MECANICA']),
     eletrodutoXEsgoto: eletrodutoX(m, ['ESGOTO']),
+    aguaXClimatizacao: aguaXClimatizacao(m),
   };
 }
 
@@ -191,8 +198,12 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // passava pela descida da louça de cima que não via; no prédio, os pilares só os da vizinhança — o teto do grafo
         // estourava e a reta saía pela descida). Eletroduto × esgoto (era R4 12, R8 32, R12 104, RL 91). Sobram: R4 a luz da
         // área de serviço 13 mm abaixo do ralo seco de cima (a ponta dentro); R8 e RL a vizinhança densa (o teto do grafo);
-        // R12 a descida do eletroduto na parede pelo ramal de cima (PA18).
-        expect(agora.eletrodutoXEsgoto).toBe(({ R4: 10, R8: 7, R12: 10, RL: 12 } as Record<string, number>)[nome]);
+        // R12 a descida do eletroduto na parede pelo ramal de cima (PA18). PA17 (a água desce na face): o R8 e o R12 zeram; no
+        // R4, um eletroduto a mais chega à mesma luz sob o ralo (12).
+        expect(agora.eletrodutoXEsgoto).toBe(({ R4: 12, R8: 0, R12: 0, RL: 12 } as Record<string, number>)[nome]);
+        // PA17, "pronto quando": a descida da água na FACE da parede não cruza o dreno do ar nem a linha frigorígena, que
+        // correm no eixo (era: no tipo do R8, 13 × dreno e 12 × linha — e cada andar copiado repetia).
+        expect(agora.aguaXClimatizacao).toBe(0);
         // PA7a, "pronto quando": o diâmetro do tubo de queda pela Tabela 6 da NBR 8160 — UHC do grupo × os andares, a
         // UHC de um andar, e nunca abaixo de 100 com bacia. No R12 (11 andares com unidades), todos DN 100.
         const n = agora.andaresComUnidade;

@@ -12,6 +12,7 @@ import { agruparLinhas, chavePorNome, chavePorRotulo, entradasDaPagina, type Cha
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { casaBuscaColaborador } from '../utils/buscaColaborador';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
+import { useWritableOrganizations } from '../hooks/useOrgContext';
 
 const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Colaborador', sortable: true },
@@ -222,6 +223,14 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
     };
 
     const orgName = (id: string) => organizations.find(o => o.id === id)?.name || 'Desconhecida';
+
+    // Colaborador disponibilizado por outra organização (employee_org_shares) aparece aqui, mas
+    // só membro da org DONA o altera — a RLS de employees recusa o resto (0 linhas, sem erro).
+    const orgsGravaveis = useWritableOrganizations();
+    const idsGravaveis = useMemo(() => new Set(orgsGravaveis.map(o => o.id)), [orgsGravaveis]);
+    const motivoSoLeitura = (emp: Employee): string | null => idsGravaveis.has(emp.org_id)
+        ? null
+        : `Disponibilizado por ${orgName(emp.org_id)}: só quem é membro de ${orgName(emp.org_id)} altera este colaborador`;
 
     const filtered = useMemo(() => applyFilterRules(
         employees
@@ -486,29 +495,43 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
                                         ))}
                                     {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                     <td aria-hidden="true" className="border-r border-gray-100"></td>
-                                    {tableColumns.visibleColumns.includes('actions') && (
+                                    {tableColumns.visibleColumns.includes('actions') && (() => {
+                                        // Botão desligado não recebe o mouse: o motivo vai no invólucro.
+                                        const motivo = motivoSoLeitura(emp) ?? undefined;
+                                        return (
                                         <td className="px-6 py-2.5 text-right">
                                             <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                <ActionIconButton kind="edit" onClick={() => onEdit(emp)} />
+                                                <span className="inline-flex" title={motivo}>
+                                                    <ActionIconButton kind="edit" disabled={!!motivo} onClick={() => onEdit(emp)} />
+                                                </span>
                                                 {organizations.length > 1 && (
-                                                    <ActionIconButton
-                                                        kind="share"
-                                                        title="Disponibilizar para outras organizações"
-                                                        tone={(emp.shared_orgs?.length ?? 0) > 0 ? 'attention' : 'neutral'}
-                                                        onClick={() => setSharingEmployee(emp)}
-                                                    />
+                                                    <span className="inline-flex" title={motivo}>
+                                                        <ActionIconButton
+                                                            kind="share"
+                                                            title="Disponibilizar para outras organizações"
+                                                            tone={(emp.shared_orgs?.length ?? 0) > 0 ? 'attention' : 'neutral'}
+                                                            disabled={!!motivo}
+                                                            onClick={() => setSharingEmployee(emp)}
+                                                        />
+                                                    </span>
                                                 )}
-                                                <ActionIconButton
-                                                    kind={emp.status === 'ATIVO' ? 'delete' : 'view'}
-                                                    icon={emp.status === 'ATIVO' ? <UserMinus className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
-                                                    title={emp.status === 'ATIVO' ? 'Inativar' : 'Reativar'}
-                                                    tone={emp.status === 'ATIVO' ? 'danger' : 'neutral'}
-                                                    onClick={() => handleToggleStatus(emp)}
-                                                />
-                                                <ActionIconButton kind="delete" title="Excluir permanentemente" onClick={() => handleDeleteEmployee(emp)} />
+                                                <span className="inline-flex" title={motivo}>
+                                                    <ActionIconButton
+                                                        kind={emp.status === 'ATIVO' ? 'delete' : 'view'}
+                                                        icon={emp.status === 'ATIVO' ? <UserMinus className="w-4 h-4" /> : <UserCheck className="w-4 h-4" />}
+                                                        title={emp.status === 'ATIVO' ? 'Inativar' : 'Reativar'}
+                                                        tone={emp.status === 'ATIVO' ? 'danger' : 'neutral'}
+                                                        disabled={!!motivo}
+                                                        onClick={() => handleToggleStatus(emp)}
+                                                    />
+                                                </span>
+                                                <span className="inline-flex" title={motivo}>
+                                                    <ActionIconButton kind="delete" title="Excluir permanentemente" disabled={!!motivo} onClick={() => handleDeleteEmployee(emp)} />
+                                                </span>
                                             </div>
                                         </td>
-                                    )}
+                                        );
+                                    })()}
                                 </tr>
                                 );
                             })}

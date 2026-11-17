@@ -13,8 +13,11 @@
 -- Migration: supabase/migrations/aplicar_20271117910000_rh_rpcs_autorizacao.sql
 -- Plano: docs/planos/2026-11-17-rh-rpcs-autorizacao.md
 --
--- Personagem: a — membro comum (não superadmin) da org A (926cf626); fora das orgs B e C, e não
--- é corretor nelas; vira membro da org C nesta transação.
+-- Personagem: a — membro comum (não superadmin) da org A (926cf626); fora das orgs B, C e D, e
+-- não é corretor nelas; vira membro da org C nesta transação.
+-- Revisão (17/11, migration …910100): o colaborador de férias e do diário tem de ser DA org do
+-- registro ou disponibilizado PARA ela (não basta para "uma org sua"); resposta de avaliação e
+-- candidato gravados por outra org no ciclo/vaga não entram na conta.
 --
 -- BEGIN … ROLLBACK: não grava nada. Falha = RAISE EXCEPTION 'FALHOU: …'; sucesso = a linha
 -- final 'TUDO OK'. Sem a migration, falha em "a contrata candidato da org B" (é o RED).
@@ -77,12 +80,13 @@ $$;
 DO $$
 DECLARE
     org_a CONSTANT UUID := '926cf626-ba49-4ee4-9f35-472822fb90e6';
-    org_b UUID; org_c UUID; a UUID; u UUID; v TEXT;
-    emp_a UUID; emp_a2 UUID; emp_b UUID; emp_bs UUID;
-    job_a UUID; job_b UUID; cand_a UUID; cand_b UUID; cand_ab UUID;
-    dia_a UUID; dia_b UUID; dia_ax UUID; ciclo_a UUID; ciclo_b UUID;
+    org_b UUID; org_c UUID; org_d UUID; a UUID; u UUID; v TEXT;
+    emp_a UUID; emp_a2 UUID; emp_b UUID; emp_bs UUID; emp_bc UUID; emp_bd UUID;
+    job_a UUID; job_a2 UUID; job_b UUID; cand_a UUID; cand_a2 UUID; cand_b UUID; cand_ab UUID;
+    dia_a UUID; dia_b UUID; dia_ax UUID; dia_ac UUID; dia_as UUID; ciclo_a UUID; ciclo_b UUID;
     sem_org CONSTANT TEXT := '42501:sem acesso: você não é membro da organização ';
-    sem_colab CONSTANT TEXT := '42501:sem acesso ao colaborador: não é de uma organização sua nem foi disponibilizado para uma delas';
+    sem_colab_ferias CONSTANT TEXT := '42501:sem acesso ao colaborador: não é da organização informada nem foi disponibilizado para ela';
+    sem_colab_diario CONSTANT TEXT := '42501:sem acesso ao colaborador: não é da organização do diário de mão de obra nem foi disponibilizado para ela';
     upd CONSTANT TEXT := 'WITH u AS (UPDATE public.employees SET %s WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u';
     del CONSTANT TEXT := 'WITH u AS (DELETE FROM public.employees WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u';
     ver CONSTANT TEXT := 'SELECT count(*)::text FROM public.employees WHERE id = %L';
@@ -102,9 +106,12 @@ BEGIN
     SELECT o.id INTO org_c FROM public.organizations o
      WHERE o.id NOT IN (org_a, org_b) AND NOT EXISTS (SELECT 1 FROM public.organization_members m WHERE m.organization_id = o.id AND m.user_id = a)
      ORDER BY o.id LIMIT 1;
-    PERFORM pg_temp.confere(org_b IS NOT NULL AND org_c IS NOT NULL, 'fixture: duas orgs (B, C) fora das de a');
+    SELECT o.id INTO org_d FROM public.organizations o
+     WHERE o.id NOT IN (org_a, org_b, org_c) AND NOT EXISTS (SELECT 1 FROM public.organization_members m WHERE m.organization_id = o.id AND m.user_id = a)
+     ORDER BY o.id LIMIT 1;
+    PERFORM pg_temp.confere(org_b IS NOT NULL AND org_c IS NOT NULL AND org_d IS NOT NULL, 'fixture: três orgs (B, C, D) fora das de a');
     PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.broker_profiles bp
-                                          WHERE bp.organization_id IN (org_b, org_c) AND bp.is_active
+                                          WHERE bp.organization_id IN (org_b, org_c, org_d) AND bp.is_active
                                             AND lower(bp.email) = (SELECT lower(email) FROM auth.users WHERE id = a)),
         'fixture: a não é corretor das orgs B e C');
     INSERT INTO public.organization_members (organization_id, user_id, email, role)
@@ -115,21 +122,40 @@ BEGIN
     INSERT INTO public.employees (org_id, name, status) VALUES (org_b, 'TRH colaborador B', 'ATIVO') RETURNING id INTO emp_b;
     INSERT INTO public.employees (org_id, name, status) VALUES (org_b, 'TRH colaborador B disponibilizado', 'ATIVO') RETURNING id INTO emp_bs;
     INSERT INTO public.employee_org_shares (employee_id, target_org_id, granted_by) VALUES (emp_bs, org_a, 'teste-rh-rpcs-autorizacao');
+    -- da org B, disponibilizado para C (org de a, mas não a A) e para D (que não é de a)
+    INSERT INTO public.employees (org_id, name, status) VALUES (org_b, 'TRH colaborador B para C', 'ATIVO') RETURNING id INTO emp_bc;
+    INSERT INTO public.employee_org_shares (employee_id, target_org_id, granted_by) VALUES (emp_bc, org_c, 'teste-rh-rpcs-autorizacao');
+    INSERT INTO public.employees (org_id, name, status) VALUES (org_b, 'TRH colaborador B para D', 'ATIVO') RETURNING id INTO emp_bd;
+    INSERT INTO public.employee_org_shares (employee_id, target_org_id, granted_by) VALUES (emp_bd, org_d, 'teste-rh-rpcs-autorizacao');
 
     INSERT INTO public.job_openings (org_id, titulo, cargo, quantidade) VALUES (org_a, 'TRH vaga A', 'Pedreiro', 5) RETURNING id INTO job_a;
     INSERT INTO public.job_openings (org_id, titulo, cargo, quantidade) VALUES (org_b, 'TRH vaga B', 'Pedreiro', 5) RETURNING id INTO job_b;
     INSERT INTO public.candidates (org_id, job_id, nome) VALUES (org_a, job_a, 'TRH candidato A') RETURNING id INTO cand_a;
     INSERT INTO public.candidates (org_id, job_id, nome) VALUES (org_b, job_b, 'TRH candidato B') RETURNING id INTO cand_b;
     INSERT INTO public.candidates (org_id, job_id, nome) VALUES (org_a, job_b, 'TRH candidato A com vaga B') RETURNING id INTO cand_ab;
+    -- vaga de A para 2; um membro de B grava na vaga de A um candidato dele já CONTRATADO (a RLS de
+    -- candidates só confere o org_id do candidato; job_id é só FK)
+    INSERT INTO public.job_openings (org_id, titulo, cargo, quantidade) VALUES (org_a, 'TRH vaga A2', 'Servente', 2) RETURNING id INTO job_a2;
+    INSERT INTO public.candidates (org_id, job_id, nome) VALUES (org_a, job_a2, 'TRH candidato A2') RETURNING id INTO cand_a2;
+    INSERT INTO public.candidates (org_id, job_id, nome, stage) VALUES (org_b, job_a2, 'TRH injetado por B', 'CONTRATADO');
 
     INSERT INTO public.labor_diary_entries (org_id, data, status) VALUES (org_a, CURRENT_DATE, 'ABERTO') RETURNING id INTO dia_a;
     INSERT INTO public.labor_diary_entries (org_id, data, status) VALUES (org_b, CURRENT_DATE, 'ABERTO') RETURNING id INTO dia_b;
     INSERT INTO public.labor_diary_entries (org_id, data, status) VALUES (org_a, CURRENT_DATE - 1, 'ABERTO') RETURNING id INTO dia_ax;
+    INSERT INTO public.labor_diary_entries (org_id, data, status) VALUES (org_a, CURRENT_DATE - 2, 'ABERTO') RETURNING id INTO dia_ac;
+    INSERT INTO public.labor_diary_entries (org_id, data, status) VALUES (org_a, CURRENT_DATE - 3, 'ABERTO') RETURNING id INTO dia_as;
     INSERT INTO public.labor_diary_workers (diary_entry_id, employee_id, horas_trabalhadas, horas_extras, presente) VALUES
-        (dia_a, emp_a, 8, 0, true), (dia_b, emp_b, 8, 0, true), (dia_ax, emp_a, 8, 0, true), (dia_ax, emp_b, 8, 0, true);
+        (dia_a, emp_a, 8, 0, true), (dia_b, emp_b, 8, 0, true), (dia_ax, emp_a, 8, 0, true), (dia_ax, emp_b, 8, 0, true),
+        (dia_ac, emp_bc, 8, 0, true), (dia_as, emp_bs, 8, 0, true);
 
     INSERT INTO public.evaluation_cycles (org_id, nome, periodo_inicio, periodo_fim) VALUES (org_a, 'TRH ciclo A', CURRENT_DATE - 30, CURRENT_DATE) RETURNING id INTO ciclo_a;
     INSERT INTO public.evaluation_cycles (org_id, nome, periodo_inicio, periodo_fim) VALUES (org_b, 'TRH ciclo B', CURRENT_DATE - 30, CURRENT_DATE) RETURNING id INTO ciclo_b;
+    -- ciclo de A: a nota do gestor de A, mais duas respostas que um membro de B consegue gravar
+    -- (a RLS de evaluation_responses só confere o org_id da resposta; cycle_id é só FK)
+    INSERT INTO public.evaluation_responses (org_id, cycle_id, evaluatee_id, tipo, nota_media, status) VALUES
+        (org_a, ciclo_a, emp_a, 'GESTOR', 5, 'CONCLUIDA'),
+        (org_b, ciclo_a, emp_a, 'PAR', 1, 'CONCLUIDA'),
+        (org_b, ciclo_a, emp_b, 'GESTOR', 2, 'CONCLUIDA');
 
     -- ── hire_candidate ───────────────────────────────────────────────────────
     PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.hire_candidate(%L)::text', cand_b)),
@@ -140,12 +166,22 @@ BEGIN
         'ok:%', 'a contrata candidato da org A');
     PERFORM pg_temp.confere((SELECT stage FROM public.candidates WHERE id = cand_a) = 'CONTRATADO',
         'candidato da org A ficou CONTRATADO');
+    PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.hire_candidate(%L)::text', cand_a2)),
+        'ok:%', 'a contrata o 1º de 2 da vaga A2');
+    PERFORM pg_temp.confere((SELECT status FROM public.job_openings WHERE id = job_a2) IS DISTINCT FROM 'FECHADA',
+        'vaga A2 (2 vagas, 1 contratado de A) segue aberta: o candidato que B gravou nela não conta');
 
     -- ── create_vacation_period ───────────────────────────────────────────────
     PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.create_vacation_period(%L, %L, %L)::text', emp_b, org_b, '2026-01-01')),
         sem_org || 'informada', 'a cria período de férias na org B');
     PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.create_vacation_period(%L, %L, %L)::text', emp_b, org_a, '2026-01-01')),
-        sem_colab, 'a cria período na org A para colaborador da org B que ele não enxerga');
+        sem_colab_ferias, 'a cria período na org A para colaborador da org B que ele não enxerga');
+    PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.create_vacation_period(%L, %L, %L)::text', emp_bd, org_a, '2026-01-01')),
+        sem_colab_ferias, 'a cria período na org A para colaborador da org B disponibilizado para D (que não é de a)');
+    PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.create_vacation_period(%L, %L, %L)::text', emp_bc, org_a, '2026-01-01')),
+        sem_colab_ferias, 'a cria período na org A para colaborador disponibilizado para C, não para A');
+    PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.create_vacation_period(%L, %L, %L)::text', emp_bc, org_c, '2026-01-01')),
+        'ok:%', 'a cria período na org C para colaborador disponibilizado para C');
     PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.create_vacation_period(%L, %L, %L)::text', emp_a, org_a, '2026-01-01')),
         'ok:%', 'a cria período na org A para colaborador da org A');
     PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.create_vacation_period(%L, %L, %L)::text', emp_bs, org_a, '2026-01-01')),
@@ -155,17 +191,25 @@ BEGIN
     PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.close_labor_diary(%L)::text', dia_b)),
         sem_org || 'do diário de mão de obra', 'a fecha diário da org B');
     PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.close_labor_diary(%L)::text', dia_ax)),
-        sem_colab, 'a fecha diário da org A com presente da org B que ele não enxerga');
+        sem_colab_diario, 'a fecha diário da org A com presente da org B que ele não enxerga');
     PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.time_entries WHERE employee_id = emp_b),
         'diário recusado não deixou apontamento');
+    PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.close_labor_diary(%L)::text', dia_ac)),
+        sem_colab_diario, 'a fecha diário da org A com presente disponibilizado para C, não para A');
+    PERFORM pg_temp.da(pg_temp.au(a, format('SELECT (public.close_labor_diary(%L)->>''success'')', dia_as)),
+        'ok:true', 'a fecha diário da org A com presente disponibilizado para A');
     PERFORM pg_temp.da(pg_temp.au(a, format('SELECT (public.close_labor_diary(%L)->>''success'')', dia_a)),
         'ok:true', 'a fecha diário da org A');
 
     -- ── consolidate_evaluation_cycle ─────────────────────────────────────────
     PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.consolidate_evaluation_cycle(%L)::text', ciclo_b)),
         sem_org || 'do ciclo de avaliação', 'a consolida ciclo da org B');
-    PERFORM pg_temp.da(pg_temp.au(a, format('SELECT (public.consolidate_evaluation_cycle(%L)->>''success'')', ciclo_a)),
-        'ok:true', 'a consolida ciclo da org A');
+    PERFORM pg_temp.da(pg_temp.au(a, format('SELECT (public.consolidate_evaluation_cycle(%L)->>''consolidados'')', ciclo_a)),
+        'ok:1', 'a consolida ciclo da org A (só o avaliado de A)');
+    PERFORM pg_temp.confere((SELECT nota_final FROM public.evaluation_results WHERE cycle_id = ciclo_a AND employee_id = emp_a) = 5,
+        'nota final do colaborador de A = 5 (a nota que B gravou no ciclo de A não entra)');
+    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.evaluation_results WHERE cycle_id = ciclo_a AND employee_id = emp_b),
+        'colaborador de B não ganha resultado no ciclo de A');
 
     -- ── esocial_create_batch ─────────────────────────────────────────────────
     PERFORM pg_temp.da(pg_temp.au(a, format('SELECT public.esocial_create_batch(%L, %L)::text', org_b, 'NAO_PERIODICOS')),
@@ -219,7 +263,9 @@ BEGIN
                                 AND (SELECT prosecdef FROM pg_proc WHERE oid = fn::regprocedure),
             'privilégios de ' || fn || ': DEFINER, authenticated e service_role sim, anon não');
     END LOOP;
-    FOREACH fn IN ARRAY ARRAY['public._rh_exige_org(uuid,text)', 'public._rh_exige_colaborador(uuid)'] LOOP
+    PERFORM pg_temp.confere(to_regprocedure('public._rh_exige_colaborador(uuid)') IS NULL,
+        'a versão de 1 argumento do helper de colaborador não existe mais');
+    FOREACH fn IN ARRAY ARRAY['public._rh_exige_org(uuid,text)', 'public._rh_exige_colaborador(uuid,uuid,text)'] LOOP
         PERFORM pg_temp.confere(NOT has_function_privilege('authenticated', fn, 'EXECUTE')
                                 AND NOT has_function_privilege('anon', fn, 'EXECUTE'),
             'helper ' || fn || ' não é chamável pela API');

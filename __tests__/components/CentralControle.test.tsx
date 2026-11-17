@@ -579,4 +579,21 @@ describe('CentralControle · tela "Bom dia"', () => {
         await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledWith('o1'));
         expect(bootstrap.mock.calls.map(c => c[0])).toEqual(['o1', 'o2']);
     });
+
+    it('"Tentar de novo" do caixa e Atualizar na mesma org: a resposta pinta', async () => {
+        let responder!: (v: unknown) => void;
+        bootstrap.mockResolvedValueOnce(painel()).mockReturnValue(nunca());
+        cashflow.mockReset()
+            .mockRejectedValueOnce(TIMEOUT)
+            .mockReturnValueOnce(new Promise(r => { responder = r; }));
+        montar();
+        await waitFor(() => expect(within(cartao('Caixa projetado')).getByText('Não carregou.')).toBeInTheDocument());
+        await userEvent.click(within(cartao('Caixa projetado')).getByRole('button', { name: /Tentar de novo/ }));
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));  // chamada única pendente
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+        responder([{ data_ref: HOJE, cr_previsto: 0, db_previsto: 0, saldo_dia: 0, saldo_acum: 1234 }]);
+        const c = cartao('Caixa projetado');
+        await waitFor(() => expect(within(c).getByLabelText('R$ 1.234')).toBeInTheDocument());
+        expect(c).toHaveAttribute('aria-busy', 'false');
+    });
 });

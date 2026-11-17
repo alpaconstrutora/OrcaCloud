@@ -6,7 +6,9 @@
  * - "Todas as organizações" (null) lista sem filtro — a RLS recorta (REGRA #5);
  * - gravar que a RLS barrou volta 0 linhas SEM erro: o serviço tem de acusar, senão a tela diz "salvo";
  * - comunicado com aceite/voto não muda nem some — o investidor confirmou AQUELE texto, e o
- *   `ON DELETE CASCADE` apagaria as respostas junto.
+ *   `ON DELETE CASCADE` apagaria as respostas junto. Quem recusa é o gatilho do banco (17/11,
+ *   migration 20271117970000, prova em scripts/teste-investidor-comunicados-voto-e-trava.sql); o
+ *   serviço traduz a recusa (HINT 'comunicado_com_respostas', DETAIL = nº) para a tela.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
@@ -78,22 +80,37 @@ describe('announcementsService.create', () => {
     });
 });
 
+/** O que o PostgREST devolve quando o gatilho da trava recusa. */
+const recusaDoBanco = (respostas: number) => ({
+    data: null,
+    error: { code: '23514', message: 'Este comunicado já tem…', details: String(respostas), hint: 'comunicado_com_respostas' },
+});
+
 describe('announcementsService.update', () => {
-    it('recusa editar comunicado que já tem resposta', async () => {
-        db.queue.push({ data: null, error: null, count: 1 });
-        await expect(announcementsService.update('a1', { title: 'novo' })).rejects.toBeInstanceOf(AnnouncementBlockedError);
-        expect(db.calls.some(c => c.ops.some(([m]) => m === 'update'))).toBe(false);
+    it('banco recusa (comunicado com resposta) → AnnouncementBlockedError com o nº de respostas', async () => {
+        db.queue.push(recusaDoBanco(2));
+        const erro = await announcementsService.update('a1', { title: 'novo' }).catch(e => e);
+        expect(erro).toBeInstanceOf(AnnouncementBlockedError);
+        expect(erro.respostas).toBe(2);
+        expect(erro.message).toMatch(/2 respostas de investidor e não pode ser editado/);
     });
 
-    it('sem resposta: grava e devolve a linha', async () => {
-        db.queue.push({ data: null, error: null, count: 0 }, { data: [{ id: 'a1', title: 'novo' }], error: null });
+    it('outro erro do banco passa como veio', async () => {
+        const outro = { code: '42501', message: 'permission denied', details: null, hint: null };
+        db.queue.push({ data: null, error: outro });
+        await expect(announcementsService.update('a1', { title: 'novo' })).rejects.toBe(outro);
+    });
+
+    it('sem resposta: grava numa consulta só e devolve a linha', async () => {
+        db.queue.push({ data: [{ id: 'a1', title: 'novo' }], error: null });
         const r = await announcementsService.update('a1', { title: 'novo' });
-        expect(arg(1, 'update')).toEqual([{ title: 'novo' }]);
+        expect(db.calls).toHaveLength(1);
+        expect(arg(0, 'update')).toEqual([{ title: 'novo' }]);
         expect(r.title).toBe('novo');
     });
 
     it('0 linhas gravadas (RLS) vira erro de permissão, não "salvo"', async () => {
-        db.queue.push({ data: null, error: null, count: 0 }, { data: [], error: null });
+        db.queue.push({ data: [], error: null });
         await expect(announcementsService.update('a1', { title: 'novo' })).rejects.toThrow(/dono ou um administrador/);
     });
 });
@@ -113,21 +130,22 @@ describe('announcementsService.publish', () => {
 });
 
 describe('announcementsService.remove', () => {
-    it('recusa excluir comunicado que já tem resposta (o CASCADE apagaria aceites e votos)', async () => {
-        db.queue.push({ data: null, error: null, count: 3 });
-        await expect(announcementsService.remove('a1')).rejects.toBeInstanceOf(AnnouncementBlockedError);
-        expect(db.calls.some(c => c.ops.some(([m]) => m === 'delete'))).toBe(false);
+    it('banco recusa (o CASCADE apagaria aceites e votos) → AnnouncementBlockedError', async () => {
+        db.queue.push(recusaDoBanco(3));
+        const erro = await announcementsService.remove('a1').catch(e => e);
+        expect(erro).toBeInstanceOf(AnnouncementBlockedError);
+        expect(erro.message).toMatch(/3 respostas de investidor e não pode ser excluído/);
     });
 
     it('sem resposta: exclui', async () => {
-        db.queue.push({ data: null, error: null, count: 0 }, { data: [{ id: 'a1' }], error: null });
+        db.queue.push({ data: [{ id: 'a1' }], error: null });
         await announcementsService.remove('a1');
-        expect(ops(1)).toContain('delete');
-        expect(arg(1, 'eq')).toEqual(['id', 'a1']);
+        expect(ops(0)).toContain('delete');
+        expect(arg(0, 'eq')).toEqual(['id', 'a1']);
     });
 
     it('0 linhas excluídas (RLS) vira erro de permissão', async () => {
-        db.queue.push({ data: null, error: null, count: 0 }, { data: [], error: null });
+        db.queue.push({ data: [], error: null });
         await expect(announcementsService.remove('a1')).rejects.toThrow(/dono ou um administrador/);
     });
 });

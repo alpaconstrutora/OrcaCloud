@@ -52,6 +52,23 @@ Decisões do usuário para a PA13 (16/11/2026, múltipla escolha, com o protóti
   cruzamento segue no relatório para o projetista. Descartadas: a parede sem vão com bomba de dreno (no app inteiro, ou só
   no prédio).
 
+### Pedido de 17/11/2026 — PA15 a PA18
+
+Mesma sessão, com PA0–PA14 no ar e as pendências revistas (#531):
+
+> As 5 pendências precisa de alguma decisão minha ?
+
+Resposta: nenhuma pede escolha agora — cada uma tem um caminho técnico que não muda o projeto nem o que já foi decidido;
+o que é do usuário é a prioridade. Recomendação: uma fase por item, na ordem (4) o duto de ar × evaporadora/exaustor, (2)
+o eletroduto junto da laje × a descida da louça de cima, (5) as descidas da água × dreno e linha, (3) as descidas do
+eletroduto × linha e duto; o (1), o tempo que sobra no Lançar, fica (já dentro do limite). Uma decisão só volta ao usuário
+se o caminho técnico não resolver (o QD da unidade mudando de parede ou de cômodo; a evaporadora mudando de parede).
+Então:
+
+> Pode fazer seguindo a sua recomendação
+
+Viraram as fases PA15 (4), PA16 (2), PA17 (5) e PA18 (3).
+
 ## Contexto lido no código (origin/main, 12/11/2026)
 
 - **Arquitetura do prédio já existe:** `dividirPavimentoDoBloco`/`montarPavimentoTipoDoBloco`
@@ -761,6 +778,61 @@ composição da fiação da rede para o desenho (14,5 s, dos quais ~10 s em `are
 - Fica para depois (ganho menor, mexe em algoritmo): o pré-dimensionamento dos quadros (a 1ª conta de cada um, já guardada
   dentro da conferência desde a PA10a), a ventilação e os condutores pluviais nas marcas de verificação.
 
+### PA15 — O duto do exaustor contorna evaporadora e exaustor
+**O que muda.** `planejarRedeDeAr` (`utils/blueprintRedeDeAr.ts`, vale para o editor, a casa e o prédio): o duto de ar
+desvia da CAIXA das peças de climatização que ele alcança na vertical, como a PA11 fez com o eletroduto.
+**Pronto quando.** Nenhuma rede dentro de evaporadora ou exaustor nos quatro prédios (o marco trava o conflito com
+equipamento em zero); teste que falha no código de antes; o marco da casa idêntico; os encontros entre redes não sobem.
+
+**Execução da PA15 (17/11/2026).** Diagnóstico (os quatro prédios gerados): todos os 7/88/21 eram o duto do EXAUSTOR do
+banheiro, que sobe ao forro e corre reto até a fachada mais perto (C7), em duas situações, no tipo e nas cópias:
+- a descarga caía na fachada bem diante de uma evaporadora pendurada nela (R8 1, R12 7, RL 1 por andar) — o duto entrava
+  na caixa (2,05 a 2,35 m) para chegar à parede;
+- o duto passava pelo exaustor do banheiro vizinho alinhado com ele (R12 1, RL 2 por andar).
+
+Feito:
+- `descargaNaFachada` ganhou `evitar`: o trecho da parede diante de peça encostada nela (até 40 cm da face, na altura do
+  duto) e o trecho por onde corre ou atravessa um tubo na altura do duto (até 15 cm da face — o dreno da evaporadora, a
+  ~2,11 m dentro da parede, e o eletroduto que desce à tomada do ar: a 1ª versão, sem os tubos, punha a descarga bem na
+  saída do dreno e o R8 subia de 295 para 316 encontros) não servem; a descarga corre pela parede até o lugar livre mais
+  perto. Deslocada, o duto passa por um ponto diante dela (`frente`) e chega de frente à parede — em diagonal, cruzava o
+  que corre rente a ela.
+- O contorno do duto (`comDesvioDePilar`) recebe as caixas que o duto alcança na vertical (a meia altura dele + 50 mm),
+  menos a da ligação (a própria peça, a menos de 50 mm), infladas pela meia largura + 50 mm; sem contorno com elas, o de
+  antes (só os pilares) — nunca pior. Vale para o duto do exaustor e para o tronco da rede dutada.
+- Sem deslocamento nada muda (o mesmo traçado de antes): o marco da casa ficou idêntico.
+
+Resultado (o marco trava `EQUIPAMENTO = 0`): conflito com equipamento R8 7 → 0, R12 88 → 0, RL 21 → 0; encontros entre
+redes R8 295 → 288, R12 621 → 610, RL 530 → 474 (o duto deixou de cruzar o dreno e a água junto da fachada); eletroduto ×
+climatização RL 91 → 63. Novo e explicado: no R12 o duto que contorna o exaustor vizinho passa rente a um tubo de queda
+(1 por andar). O eletroduto, lançado depois e ajustando-se aos dutos novos, ganhou caixas de passagem (R12 +2, RL +4 por
+andar). R4 idêntico. Tempos iguais (R8 18 s, R12 70 s, RL 94 s no Node).
+
+**Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pa15.cjs`, o R8, estudo descartável arquivado): gerar em
+16,8 s; a aba Compatibilização com 537 conflitos (245 em porta ou janela · 4 em pilar · 288 encontros entre redes —
+nenhum em equipamento; eram 7); o Relatório sem conflito "atravessando um equipamento"; no rascunho salvo depois do
+Lançar, 588 peças de climatização, 119 trechos de duto e 56 venezianas de descarga, nenhuma rede dentro de evaporadora ou
+exaustor em nenhum andar e nenhuma veneziana diante de evaporadora. Sem erro de console.
+
+### PA16 — O eletroduto junto da laje × a descida da louça de cima
+**O que muda.** `planejarEletrodutos` no prédio (PA13): onde o contorno desiste (vizinhança densa, teto do grafo) e onde o
+quadro da unidade fica logo abaixo da descida da louça do andar de cima. Diagnóstico por causa na abertura da fase; o QD
+se desloca na MESMA parede — mudar de parede ou de cômodo volta ao usuário.
+**Pronto quando.** Eletroduto × esgoto (R8 32, R12 104, RL 91) cai, cada sobra explicada, o marco trava o número; tempo
+do R12 dentro do limite; marco da casa idêntico.
+
+### PA17 — As descidas da água × dreno e linha
+**O que muda.** A descida da água do forro ao ponto que cruza o dreno da evaporadora (a ~2,10 m na parede) e a linha
+frigorígena: a água desvia — o dreno não muda (decisão de 16/11).
+**Pronto quando.** Água × dreno e água × linha no tipo dos quatro prédios zerados ou explicados, travados no marco; a água
+segue chegando a todo ponto (`naoAvaliados = 0`); marco da casa idêntico ou justificado.
+
+### PA18 — As descidas do eletroduto × linha e duto
+**O que muda.** A descida do eletroduto da laje à tomada do ar (a 2,20 m) que cruza a linha frigorígena e o duto junto da
+parede: descer ao lado.
+**Pronto quando.** `eletrodutoXClimatizacao` (R8 14, R12 44, RL 63 depois da PA15) cai, cada sobra explicada; marco da
+casa idêntico.
+
 PA1 e PA2 podem correr em frentes paralelas.
 
 ## Pendências em aberto (17/11/2026, depois da PA14)
@@ -780,11 +852,11 @@ escolha.
 | Compatibilização | ~~Água × esgoto que sobra: o ramal do andar de cima atravessando cômodo seco a caminho do shaft (R8 18, R12 141, RL 244)~~ — resolvido: a água abaixo do ramal também nos cômodos secos; sobra 1 na garagem do R12 (redes do próprio subsolo) | feito na PA12 |
 | Compatibilização | Forro rebaixado a 2,57 m (2,50 m livres) nos cômodos secos por onde passa o ramal do andar de cima — confira com a arquitetura | projetista |
 | Compatibilização | ~~Eletroduto × linha frigorígena e × duto de ar, os três na faixa de 2,35 m sob a viga (R8 336, R12 1.111, RL 833)~~ — resolvido: o eletroduto junto da laje; sobram as descidas (linha abaixo) | feito na PA13 |
-| Compatibilização | As descidas do eletroduto cruzando a linha frigorígena e o duto de ar junto da parede, a caminho da tomada (R8 14, R12 44, RL 91 — `eletrodutoXClimatizacao` no marco) | a decidir |
-| Compatibilização | O duto de ar (a exaustão do banheiro) atravessando a caixa de uma evaporadora ou de um exaustor (R8 7, R12 88, RL 21) — o que sobrou da PA11; a PA13 não mexeu no duto | a decidir |
-| Compatibilização | As descidas da água cruzando o dreno e a linha frigorígena (no tipo do R8: 13 × dreno, 12 × linha, no diagnóstico da PA13) — a PA13 previa "se o caminho for simples" e não mexeu | a decidir |
+| Compatibilização | As descidas do eletroduto cruzando a linha frigorígena e o duto de ar junto da parede, a caminho da tomada (R8 14, R12 44, RL 63 — `eletrodutoXClimatizacao` no marco; o RL era 91 antes da PA15) | PA18 (pedido de 17/11) |
+| Compatibilização | ~~O duto de ar (a exaustão do banheiro) atravessando a caixa de uma evaporadora ou de um exaustor (R8 7, R12 88, RL 21)~~ — resolvido: a descarga sai da frente da evaporadora e o duto contorna o exaustor vizinho; zero nos quatro prédios | feito na PA15 |
+| Compatibilização | As descidas da água cruzando o dreno e a linha frigorígena (no tipo do R8: 13 × dreno, 12 × linha, no diagnóstico da PA13) — a PA13 previa "se o caminho for simples" e não mexeu | PA17 (pedido de 17/11) |
 | Compatibilização | O dreno do ar, por gravidade a ~2,10 m no eixo da parede, passando sobre porta ou pelo alto de janela (27 no tipo do R8, 38 no do RL) — no relatório | projetista (decisão do usuário, 16/11) |
-| Compatibilização | O eletroduto junto da laje cruzando a descida da louça do andar de cima pela laje (R8 32, R12 104, RL 91) — onde a vizinhança é densa demais para o contorno, ou o QD da unidade fica logo abaixo dela | a decidir |
+| Compatibilização | O eletroduto junto da laje cruzando a descida da louça do andar de cima pela laje (R8 32, R12 104, RL 91) — onde a vizinhança é densa demais para o contorno, ou o QD da unidade fica logo abaixo dela | PA16 (pedido de 17/11) |
 | Compatibilização | Furos em viga do eletroduto junto da laje (+4 a +8 por prédio, nas travessias fora do apoio) — confira com o calculista | projetista |
 | Compatibilização | ~~Eletroduto lançado depois da climatização atravessando a caixa da evaporadora (R8: 56)~~ — resolvido: o eletroduto contorna a evaporadora e o exaustor (zero nos quatro prédios) | feito na PA11 |
 | Compatibilização | Forro rebaixado a 2,30 m nos banheiros, lavabos e área de serviço (a água abaixo dos ramais de cima) — confira com a arquitetura | projetista |
@@ -814,12 +886,11 @@ escolha.
 
 ## Estado
 
-**Resumo (17/11/2026):** **todas as fases estão no ar** — PA0 a PA10c (o plano de 12/11) e PA11 a PA14 (o pedido de
-16/11, os quatro "a decidir"). Último merge de código: 19caa13 (#527, PA14); o plano, em #529 (6b055c1) e nesta revisão.
-A produção serve o main e a CI do main está verde. Nada em andamento. O que sobra está em "Pendências em aberto": cinco
-"a decidir" (sem fase — o tempo que sobra no Lançar e quatro encontros de redes), o que fica de propósito para o
-projetista e o que é acompanhamento. Kernel em `blueprint-kernel-ts-0.109.0` (PA11–PA14 não mudam a versão; a PA14 mexe
-na fiação do kernel sem mudar o modelo).
+**Resumo (17/11/2026):** PA0 a PA10c (o plano de 12/11) e PA11 a PA14 (o pedido de 16/11) estão no ar. Pedido de
+17/11: PA15 a PA18 (quatro das cinco "a decidir", uma fase cada, na ordem recomendada) — **PA15 em publicação** (o duto do
+exaustor contorna evaporadora e exaustor). O tempo que sobra no Lançar fica (já dentro do limite). O que fica de propósito
+para o projetista e o que é acompanhamento estão em "Pendências em aberto". Kernel em `blueprint-kernel-ts-0.109.0`
+(PA11–PA15 não mudam a versão).
 
 | Fase | PR | Commit no main |
 |---|---|---|
@@ -846,6 +917,7 @@ na fiação do kernel sem mudar o modelo).
 | PA12 — água abaixo do ramal de cima também nos cômodos secos | #520 | 2b363ad |
 | PA13 — eletroduto junto da laje | #525 | 4d0f1e7 |
 | PA14 — o Lançar do R12 51 → 37 s | #527 | 19caa13 |
+| PA15 — o duto do exaustor contorna evaporadora e exaustor | — | em publicação |
 
 | Fase | Situação |
 |---|---|
@@ -864,3 +936,7 @@ na fiação do kernel sem mudar o modelo).
 | PA12 | feita, no ar (#520, 2b363ad; conferida no app com o R8) — a água abaixo do ramal de cima também nos cômodos secos (2,57 m) e contornando o tubo de queda do banheiro: água × esgoto R4 4 → 0, R8 18 → 0, R12 141 → 1 (garagem), RL 244 → 0 |
 | PA13 | feita, no ar (#525, 4d0f1e7; conferida no app — R8 e o R12 de ponta a ponta) — eletroduto junto da laje (faixa da elétrica do forro, etapa depois do esgoto, o andar de cima espelhado para o desvio): encontros entre redes R8 612 → 295, RL 1.247 → 530, eletroduto × duto zerado no R8 e no R12; desempenho domado (RL 98 s); eletroduto × esgoto de cima R8 32, R12 104, RL 91 (explicado); dreno × porta/janela = pendência |
 | PA14 | feita, no ar (#527, 19caa13; A/B intercalado no app) — o Lançar do R12 no app 51 → 37 s (a fiação da rede: arestas por circuito numa passada e a composição guardada por modelo); limite fixado em 60 s; modelo idêntico |
+| PA15 | feita, em publicação (conferida no app com o R8) — o duto do exaustor: a descarga fora da frente da evaporadora e dos tubos na parede, chegando de frente; o contorno da caixa do exaustor vizinho. Conflito com equipamento R8 7 → 0, R12 88 → 0, RL 21 → 0 (o marco trava); encontros entre redes R8 295 → 288, R12 621 → 610, RL 530 → 474; marco da casa idêntico |
+| PA16 | a fazer (pedido de 17/11) — eletroduto junto da laje × descida da louça de cima |
+| PA17 | a fazer (pedido de 17/11) — descidas da água × dreno e linha |
+| PA18 | a fazer (pedido de 17/11) — descidas do eletroduto × linha e duto |

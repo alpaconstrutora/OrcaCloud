@@ -5,7 +5,8 @@
  * disponível, renovação e exaustão (banheiro sem janela sem exaustor = FALTA).
  */
 import { describe, expect, it } from 'vitest';
-import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
+import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
+import { volumesDasPecasDeClimatizacao } from '../utils/blueprintRede';
 import { conexoesDerivadas } from '../utils/blueprintKernel/conexoes';
 import { HIPOTESES_CLIMATIZACAO_PADRAO, HIPOTESES_DO_AR_PADRAO, hipotesesClimatizacaoDaColuna, type HipotesesClimatizacao } from '../utils/blueprintClimatizacao';
 import { cargaTermicaDoNivel } from '../utils/blueprintCargaTermica';
@@ -197,6 +198,52 @@ describe('climatização E7.3 · exaustão e renovação', () => {
     const carga2 = cargaTermicaDoNivel(comEx, hipClima, t);
     const plano = planejarRedeDeAr(comEx, t, vazoesDosTerminais(comEx, carga2, hip), hip);
     expect(exaustoresDoNivel(applyBatch(comEx, plano.comandos).model, t).map((x) => x.chegaNaFachada)).toEqual([true]);
+  });
+
+  /** PA15: uma sala L × P (paredes externas de 15 cm) com o que for posto nela, e o duto planejado. */
+  function salaComExaustor(L: number, P: number, pecas: (t: string, cota: number) => Command[]) {
+    const a = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = a.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    let m = applyBatch(a, [w(0, 0, L, 0), w(L, 0, L, P), w(L, P, 0, P), w(0, P, 0, 0)]).model;
+    // Sem viga, o duto corre a 2,575 m (teto − 10 cm − meia altura): as peças vão para essa altura, como no prédio a 2,20 m.
+    const cota = cotaDoDutoNoForro(m, t, hip);
+    m = applyBatch(m, pecas(t, cota)).model;
+    const plano = planejarRedeDeAr(m, t, new Map(), hip);
+    expect(plano.motivo).toBeNull();
+    const depois = applyBatch(m, plano.comandos).model;
+    const conflitos = conflitosDoModelo(depois, { pecas: volumesDasPecasDeClimatizacao(depois) });
+    return { depois, conflitos, dutos: trechos(depois).filter((x) => x.disciplina === 'MECANICA') };
+  }
+  const exaustor = (t: string, x: number, y: number, cota: number): Command => ({ type: 'AddTerminal', levelId: t, disciplina: 'MECANICA', tipo: 'Exaustor', tipoHidraulico: 'EXAUSTOR_AR', at: point(x, y), cotaMm: cota, larguraMm: 400, profundidadeMm: 400, alturaMm: 400 }) as Command;
+
+  it('PA15 do prédio automático: a descarga do exaustor sai da frente da evaporadora pendurada na fachada e do dreno que corre na parede, e o duto chega de frente', () => {
+    const { depois, conflitos, dutos } = salaComExaustor(6000, 6000, (t, cota) => [
+      exaustor(t, 3000, 900, cota + 25),
+      // A evaporadora na face de dentro da parede sul, bem diante do exaustor (900 × 220 × 300, na altura do duto).
+      { type: 'AddTerminal', levelId: t, disciplina: 'FRIGORIGENA', tipo: 'Split hi-wall', tipoHidraulico: 'EVAPORADORA_HI_WALL', at: point(3000, 185), cotaMm: cota, larguraMm: 900, profundidadeMm: 220, alturaMm: 300, rotacaoGraus: 0 } as Command,
+      // O dreno dela correndo dentro da parede, para a direita.
+      { type: 'AddTrecho', levelId: t, disciplina: 'DRENO_AC', a: point(3450, 0), b: point(4500, 0), cotaAMm: cota, cotaBMm: cota - 5, bitolaMm: 25 } as Command,
+    ]);
+    // Antes: reto do exaustor à parede sul, por dentro da evaporadora (e cruzando o dreno).
+    expect(conflitos.filter((c) => c.classe === 'EQUIPAMENTO')).toEqual([]);
+    expect(conflitos.filter((c) => c.classe === 'REDE')).toEqual([]);
+    const veneziana = terminais(depois).find((x) => x.tipoHidraulico === 'VENEZIANA_AR')!;
+    // Para a esquerda (o dreno toma a direita): fora da evaporadora (2.550–3.450) com a folga do contorno.
+    expect(veneziana.at.y).toBe(-75);
+    expect(veneziana.at.x).toBeLessThanOrEqual(2550 - 100);
+    // O último lance chega de frente: na mesma reta da veneziana, perpendicular à parede.
+    const ultimo = dutos.find((d) => (d.b.x === veneziana.at.x && d.b.y === veneziana.at.y) || (d.a.x === veneziana.at.x && d.a.y === veneziana.at.y))!;
+    expect(ultimo.a.x).toBe(ultimo.b.x);
+  });
+
+  it('PA15 do prédio automático: o duto de um exaustor contorna o exaustor do banheiro vizinho alinhado com ele', () => {
+    const { conflitos, dutos } = salaComExaustor(6000, 8000, (t, cota) => [exaustor(t, 3000, 2500, cota + 25), exaustor(t, 3000, 1200, cota + 25)]);
+    // Antes: o duto do de cima descia reto pela caixa do de baixo até a fachada sul.
+    expect(conflitos.filter((c) => c.classe === 'EQUIPAMENTO')).toEqual([]);
+    // Os dois chegam à fachada sul; o de cima por fora da caixa do de baixo (mais de um lance no forro).
+    const doDeCima = dutos.filter((d) => d.cotaAMm === d.cotaBMm && (d.a.x !== 3000 || d.b.x !== 3000));
+    expect(doDeCima.length).toBeGreaterThan(0);
   });
 
   it('sem rede de dutos a conferência não inventa: REDE fica "não avaliado"', () => {

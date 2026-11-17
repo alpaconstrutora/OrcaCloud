@@ -183,6 +183,10 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         expect(agora.aguaXEsgoto).toBe(({ R4: 0, R8: 0, R12: 1, RL: 0 } as Record<string, number>)[nome]);
         // PA11, "pronto quando": nenhum eletroduto atravessa a caixa de uma evaporadora ou de um exaustor.
         expect(agora.eletrodutoNoEquipamento).toBe(0);
+        // PA15, "pronto quando": nenhuma rede atravessa a caixa de uma evaporadora ou de um exaustor — o que sobrava da PA11
+        // era o duto do exaustor (R8 7, R12 88, RL 21): a descarga diante da evaporadora pendurada na fachada e o duto pelo
+        // exaustor do banheiro vizinho alinhado.
+        expect(agora.compatibilizacao?.conflitos.EQUIPAMENTO).toBe(0);
         // PA7a, "pronto quando": o diâmetro do tubo de queda pela Tabela 6 da NBR 8160 — UHC do grupo × os andares, a
         // UHC de um andar, e nunca abaixo de 100 com bacia. No R12 (11 andares com unidades), todos DN 100.
         const n = agora.andaresComUnidade;

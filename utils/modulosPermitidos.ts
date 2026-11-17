@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore';
 import type { Company, Organization } from '../types';
 import { podeVerTreinamentos } from './permissaoTreinamentos';
 import { podeVerRiscos } from './permissaoRiscos';
+import { podeVerDiretoria } from './permissaoDiretoria';
 import { temAcessoTotal } from '../lib/acessoTotal';
 
 /**
@@ -26,18 +27,25 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
   const baseMods = activeEmpresa?.modulos_habilitados || {
     obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: false, offices: false, reformas: false
   };
+  // Diretoria (ÒPURA CEO, 17/11/2026): fora de todos os atalhos (DESENVOLVEDOR, admin, sem
+  // membro) — só a flag do membro ou o acesso total, a mesma regra do banco
+  // (`_diretoria_orgs`). Ver utils/permissaoDiretoria.ts.
+  const diretoria = podeVerDiretoria({
+    permissoes: currentMember?.permissions as unknown as Record<string, unknown> | undefined,
+    acessoTotal: isDevEmail,
+  });
 
   if (profile.group === 'DESENVOLVEDOR' || isDevEmail) {
     return {
-      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true
+      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true, diretoria
     };
   }
 
-  if (!currentMember) return { ...baseMods, ecommerce: false, treinamentos: baseMods.rh !== false, riscos: baseMods.obras !== false };
+  if (!currentMember) return { ...baseMods, ecommerce: false, treinamentos: baseMods.rh !== false, riscos: baseMods.obras !== false, diretoria };
 
   if (currentMember.role === 'admin') {
     return {
-      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true
+      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true, diretoria
     };
   }
 
@@ -79,6 +87,7 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
       ecommerce: false,
       treinamentos: false,
       riscos: false,
+      diretoria,
     };
   }
 
@@ -94,6 +103,7 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
       ecommerce: false,
       treinamentos: false,
       riscos: false,
+      diretoria,
     };
   }
 
@@ -130,7 +140,8 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
     financeiro: baseMods.financeiro !== false,
     reformas: baseMods.reformas !== false,
     estoque: baseMods.estoque !== false,
-    broker_portal: baseMods.broker_portal !== false
+    broker_portal: baseMods.broker_portal !== false,
+    diretoria,
   };
 }
 
@@ -216,7 +227,7 @@ export function permitidoNaOrg(
  */
 export const MODULO_DO_ITEM_DE_BUSCA: Record<string, keyof ModulosPermitidos> = {
   'eng-obras': 'obras', 'eng-orcamentos': 'obras', 'eng-planejamento': 'obras',
-  riscos: 'riscos',
+  riscos: 'riscos', diretoria: 'diretoria',
   'supplies-solicitacoes': 'compras', 'supplies-contracts': 'compras', 'supplies-quotations': 'compras', 'supplies-orders': 'compras',
   'financial-dashboard': 'financeiro', 'contas-a-pagar': 'financeiro', 'project-financial': 'financeiro',
   'fluxo-financeiro': 'financeiro', 'contas-a-receber': 'financeiro', 'boletos-pagar': 'financeiro',

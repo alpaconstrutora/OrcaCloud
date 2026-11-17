@@ -217,6 +217,9 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
         canViewWarranty: true, canEditWarranty: false,
         // Riscos (14/11/2026): mesmo padrão do Pós-Obra — ver sim, editar não.
         canViewRisks: true, canEditRisks: false,
+        // Diretoria / ÒPURA CEO (17/11/2026): desligada para todos os cargos, admin inclusive;
+        // só liga quem marcar aqui (utils/permissaoDiretoria.ts, conferida também no banco).
+        canViewDiretoria: false, canEditDiretoria: false,
         canEditLabor: false,
         // Gestão de treinamentos fora do RH (16/10/2026). Mesmo padrão do RH:
         // ver sim, editar não. Membro já gravado SEM a chave herda do RH (ver
@@ -380,6 +383,9 @@ const DETAILED_PERMISSIONS: { group: string; title: string; view: string; edit?:
     { group: 'Geral', title: 'Central de Controle', view: 'canViewCommandCenter' },
     { group: 'Geral', title: 'Minhas Tarefas', view: 'canViewTasks', edit: 'canEditTasks' },
     { group: 'Geral', title: 'Notificações', view: 'canViewNotifications' },
+    // Diretoria / ÒPURA CEO (17/11/2026, docs/planos/2026-11-17-opura-ceo.md): o banco confere
+    // as mesmas flags no painel e nas gravações (`_diretoria_orgs`). Vem desligada.
+    { group: 'Geral', title: 'Diretoria (CEO)', view: 'canViewDiretoria', edit: 'canEditDiretoria' },
 
     // --- Inteligência de Negócios ---
     { group: 'Inteligência de Negócios', title: 'BI Executivo', view: 'canViewBi' },

@@ -413,6 +413,10 @@ export interface UserPermissions {
     /** Módulo Riscos (14/11/2026). Sem valor gravado, herda de Obras — ver utils/permissaoRiscos.ts. */
     canViewRisks?: boolean;
     canEditRisks?: boolean;
+    /** Diretoria / ÒPURA CEO (17/11/2026). Desligada para todos, sem herança; o banco confere a
+     *  mesma flag (`_diretoria_orgs`) — ver utils/permissaoDiretoria.ts. */
+    canViewDiretoria?: boolean;
+    canEditDiretoria?: boolean;
 
     // --- Treinamentos (gestão da Academia) ---
     // Saiu de dentro do RH em 16/10/2026: quem gerencia treinamento não é só o RH

@@ -5,17 +5,18 @@ import { rotinaMeta, quandoRoda, statusDaExecucao, GRUPOS_ROTINA } from '../util
  * Catálogo das rotinas do pg_cron — Configurações › Rotinas automáticas.
  * Plano: docs/planos/2026-11-16-rotinas-automaticas-ligar-desligar.md (Task 2).
  *
- * A lista abaixo são os 23 jobs que existiam em 16/11/2026. Job novo sem entrada no
- * catálogo não quebra a tela: aparece em "Outras" com o nome técnico.
+ * A lista abaixo são os 23 jobs que existiam em 16/11/2026, mais `limpar-historico-rotinas`
+ * (criado no mesmo dia, plano 2026-11-16-rotinas-automaticas-pontos-abertos.md). Job novo sem
+ * entrada no catálogo não quebra a tela: aparece em "Outras" com o nome técnico.
  */
-const AS_23_DE_16_11 = [
+const ROTINAS = [
     'process-sla-sweep', 'process-overdue-sweep', 'daily-financial-notifications', 'daily-payment-tasks',
     'task-alert-notifier', 'riscos-alertas-diarios', 'manutencao-vencimento-alerts', 'opura-docs-vencimento-alerts',
     'daily-academy-alerts', 'warranty-sla-sweep', 'vencimento-portal-alerts',
     'dunning-notifier-hourly', 'asaas-status-sync', 'asaas-conta-extrato', 'reconciliation-engine-sweep',
     'email-capture-sync', 'email-capture-busca-diaria', 'fiscal-fallback-polling',
     'financial-report-hourly', 'hourly-bi-report-check', 'monthly-investor-report',
-    'planta-webhooks-retentativas', 'opura-market-feeds-diario',
+    'planta-webhooks-retentativas', 'opura-market-feeds-diario', 'limpar-historico-rotinas',
 ];
 
 const SENSIVEIS = [
@@ -25,9 +26,9 @@ const SENSIVEIS = [
 ];
 
 describe('rotinaMeta', () => {
-    it('cobre as 23 rotinas de 16/11/2026', () => {
-        expect(AS_23_DE_16_11).toHaveLength(23);
-        for (const n of AS_23_DE_16_11) {
+    it('cobre as 24 rotinas de 16/11/2026', () => {
+        expect(ROTINAS).toHaveLength(24);
+        for (const n of ROTINAS) {
             const m = rotinaMeta(n);
             expect(m.grupo, n).not.toBe('outras');
             expect(m.oQueFaz.length, n).toBeGreaterThan(0);
@@ -36,9 +37,16 @@ describe('rotinaMeta', () => {
     });
 
     it('sensíveis são exatamente as 9 do desenho, e toda sensível diz o que para', () => {
-        const sensiveis = AS_23_DE_16_11.filter(n => rotinaMeta(n).sensivel);
+        const sensiveis = ROTINAS.filter(n => rotinaMeta(n).sensivel);
         expect(sensiveis.sort()).toEqual([...SENSIVEIS].sort());
         for (const n of SENSIVEIS) expect(rotinaMeta(n).aoDesligar, n).toBeTruthy();
+    });
+
+    it('a limpeza do histórico é técnica e não pede confirmação para desligar', () => {
+        const m = rotinaMeta('limpar-historico-rotinas');
+        expect(m.grupo).toBe('tecnicas');
+        expect(m.sensivel).toBe(false);
+        expect(m.oQueFaz).toMatch(/60 dias/);
     });
 
     it('os grupos do desenho, na ordem', () => {

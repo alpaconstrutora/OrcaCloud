@@ -138,6 +138,10 @@ const CATALOGO: Record<string, MetaRotina> = {
         nome: 'Anúncios do ÒPURA Market', grupo: 'tecnicas', sensivel: false,
         oQueFaz: 'Importa os anúncios das fontes cadastradas no ÒPURA Market Intelligence.',
     },
+    'limpar-historico-rotinas': {
+        nome: 'Limpeza do histórico das rotinas', grupo: 'tecnicas', sensivel: false,
+        oQueFaz: 'Apaga os registros de execução das rotinas com mais de 60 dias. Desligada, o histórico volta a crescer sem limite.',
+    },
 };
 
 /** `jobname` NULL é job criado por `cron.schedule(expr, cmd)` sem nome — identificado pelo jobid. */

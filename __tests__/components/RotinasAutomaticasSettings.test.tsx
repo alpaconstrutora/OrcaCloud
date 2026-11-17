@@ -219,6 +219,69 @@ describe('RotinasAutomaticasSettings', () => {
         expect(falhas.getAttribute('title')).toContain('create_task');
     });
 
+    // ── Sem mouse (docs/planos/2026-11-16-rotinas-automaticas-pontos-abertos.md, Tarefa 3) ──
+    // O title só aparece ao passar o mouse: teclado e toque precisam ver o mesmo como TEXTO.
+    const detalhes = (job: string) => screen.getByRole('region', { name: `Detalhes de ${nome(job)}` });
+
+    it('teclado: "3 falhas" é um botão que abre os detalhes com a contagem e o último erro por escrito', async () => {
+        const user = userEvent.setup();
+        montar();
+        const botao = await screen.findByRole('button', { name: /3 falhas/ });
+        expect(botao.getAttribute('aria-expanded')).toBe('false');
+        expect(screen.queryByRole('region', { name: `Detalhes de ${nome('daily-payment-tasks')}` })).toBeNull();
+
+        botao.focus();
+        await user.keyboard('{Enter}');
+
+        expect(botao.getAttribute('aria-expanded')).toBe('true');
+        const painel = detalhes('daily-payment-tasks');
+        expect(botao.getAttribute('aria-controls')).toBe(painel.id);
+        expect(within(painel).getByText('3 de 168 execuções nos últimos 7 dias falharam.')).toBeTruthy();
+        expect(within(painel).getByText('Último erro (16/11 04:00)')).toBeTruthy();
+        expect(within(painel).getByText('ERROR: function public.create_task(…) does not exist')).toBeTruthy();
+        expect(within(painel).getByText('16/11 04:00 · falhou')).toBeTruthy();
+
+        await user.keyboard('{Enter}');
+        expect(botao.getAttribute('aria-expanded')).toBe('false');
+        expect(screen.queryByRole('region', { name: `Detalhes de ${nome('daily-payment-tasks')}` })).toBeNull();
+    });
+
+    it('toque: "Nenhuma" e "Sem execução" também abrem; sem execução em 40 dias diz isso por escrito', async () => {
+        const user = userEvent.setup();
+        listar.mockResolvedValue([
+            rotina('process-sla-sweep', { execucoes7d: 0, falhas7d: 0, ultima: null }),
+            rotina('asaas-status-sync', { execucoes7d: 672, falhas7d: 0 }),
+        ]);
+        montar();
+        await user.click(await screen.findByRole('button', { name: /Sem execução/ }));
+        const semExecucao = detalhes('process-sla-sweep');
+        expect(within(semExecucao).getByText('Nenhuma nos últimos 40 dias')).toBeTruthy();
+        expect(within(semExecucao).getByText('Nenhuma execução nos últimos 7 dias.')).toBeTruthy();
+
+        await user.click(screen.getByRole('button', { name: /Nenhuma/ }));
+        expect(within(detalhes('asaas-status-sync')).getByText('672 execuções nos últimos 7 dias, nenhuma falhou.')).toBeTruthy();
+    });
+
+    it('detalhes trazem o que faz por inteiro, o nome técnico e a expressão do horário', async () => {
+        const user = userEvent.setup();
+        montar();
+        await user.click(await screen.findByRole('button', { name: /3 falhas/ }));
+        const painel = detalhes('daily-payment-tasks');
+        expect(within(painel).getByText(rotinaMeta('daily-payment-tasks').oQueFaz)).toBeTruthy();
+        expect(within(painel).getByText('daily-payment-tasks')).toBeTruthy();
+        expect(within(painel).getByText(/0 7 \* \* \*/)).toBeTruthy();
+    });
+
+    it('"Religada fora desta tela": a explicação aparece por escrito nos detalhes', async () => {
+        const user = userEvent.setup();
+        listar.mockResolvedValue([rotina('process-sla-sweep', {
+            ativa: true, ultimaAlteracao: { em: '2026-11-16T15:00:00Z', porEmail: 'chefe@alpa.com.br', ativaDepois: false },
+        })]);
+        montar();
+        await user.click(await screen.findByRole('button', { name: /Nenhuma/ }));
+        expect(within(detalhes('process-sla-sweep')).getByText(/voltou a ligar por fora dela/)).toBeTruthy();
+    });
+
     it('rotina desligada diz quem desligou e quando', async () => {
         montar();
         expect(await screen.findByText(/Desligada por chefe@alpa\.com\.br em 16\/11/)).toBeTruthy();

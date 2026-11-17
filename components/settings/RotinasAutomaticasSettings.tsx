@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, CheckCircle, Timer } from 'lucide-react';
+import { AlertCircle, CheckCircle, ChevronDown, Timer } from 'lucide-react';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import TableSwitch from '../ui/TableSwitch';
 import { useConfirm } from '../ui/confirm';
@@ -50,6 +50,19 @@ const chaveDa = (r: RotinaAutomatica) => String(r.jobid);
 const metaDa = (r: RotinaAutomatica) => rotinaMeta(r.jobname, r.jobid);
 const execucoes = (n: number) => `${n} ${n === 1 ? 'execução' : 'execuções'}`;
 const RODANDO = new Set(['running', 'starting', 'connecting', 'sending']);
+const idDetalhes = (r: RotinaAutomatica) => `rotina-detalhes-${r.jobid}`;
+const EXPLICA_RELIGADA = 'Foi desligada nesta tela e voltou a ligar por fora dela — por exemplo, uma atualização do sistema que reagendou a rotina. Se ela deve ficar desligada, desligue de novo.';
+
+/** A frase das execuções da semana — a mesma no title (mouse) e nos detalhes (teclado e toque). */
+function fraseDaSemana(r: RotinaAutomatica): string {
+    if (r.execucoes7d === 0 && r.falhas7d === 0) return 'Nenhuma execução nos últimos 7 dias.';
+    if (r.falhas7d === 0) return `${execucoes(r.execucoes7d)} nos últimos 7 dias, nenhuma falhou.`;
+    return `${r.falhas7d} de ${execucoes(r.execucoes7d)} nos últimos 7 dias ${r.falhas7d === 1 ? 'falhou' : 'falharam'}.`;
+}
+
+/** Desligada pela tela e ligada de novo por fora dela — o caso comum é uma migration que
+ *  reagenda o job com unschedule + schedule: o job renasce ligado. */
+const religadaFora = (r: RotinaAutomatica) => (r.ativa && r.ultimaAlteracao && !r.ultimaAlteracao.ativaDepois ? r.ultimaAlteracao : null);
 
 const RotinasAutomaticasSettings: React.FC = () => {
     const confirm = useConfirm();
@@ -58,6 +71,9 @@ const RotinasAutomaticasSettings: React.FC = () => {
     const [erroDeCarga, setErroDeCarga] = React.useState<string | null>(null);
     const [gravando, setGravando] = React.useState<Set<string>>(() => new Set());
     const [aviso, setAviso] = React.useState<Aviso | null>(null);
+    // Linha com os detalhes abertos (uma por vez). O title some para quem usa teclado ou toque:
+    // tudo o que ele diz aparece por escrito ali.
+    const [aberta, setAberta] = React.useState<string | null>(null);
     const timerDoAviso = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const avisar = React.useCallback((mensagem: string, tipo: Aviso['tipo']) => {
@@ -145,33 +161,47 @@ const RotinasAutomaticasSettings: React.FC = () => {
                     </span>
                 );
             case 'falhas': {
+                let conteudo: React.ReactNode;
                 if (r.execucoes7d === 0 && r.falhas7d === 0) {
-                    return <span className="text-sm font-normal text-gray-600" title="Nenhuma execução nos últimos 7 dias">Sem execução</span>;
-                }
-                if (r.falhas7d === 0) {
-                    return (
+                    conteudo = <span className="text-sm font-normal text-gray-600" title="Nenhuma execução nos últimos 7 dias">Sem execução</span>;
+                } else if (r.falhas7d === 0) {
+                    conteudo = (
                         <span className="text-sm font-normal text-gray-600" title={`${execucoes(r.execucoes7d)} nos últimos 7 dias, nenhuma falhou`}>
                             Nenhuma
                         </span>
                     );
+                } else {
+                    // O erro vem da última execução que FALHOU — não da última execução, que pode ter
+                    // passado ou estar rodando agora.
+                    const titulo = fraseDaSemana(r)
+                        + (r.ultimoErro ? '\n' + `Último erro (${dataHora(r.ultimoErro.em)}): ${r.ultimoErro.mensagem}` : '');
+                    conteudo = (
+                        <span className="text-sm font-normal text-red-600" title={titulo}>
+                            {r.falhas7d} {r.falhas7d === 1 ? 'falha' : 'falhas'}
+                        </span>
+                    );
                 }
-                // O erro vem da última execução que FALHOU — não da última execução, que pode ter
-                // passado ou estar rodando agora.
-                const titulo = `${r.falhas7d} de ${execucoes(r.execucoes7d)} nos últimos 7 dias ${r.falhas7d === 1 ? 'falhou' : 'falharam'}.`
-                    + (r.ultimoErro ? '\n' + `Último erro (${dataHora(r.ultimoErro.em)}): ${r.ultimoErro.mensagem}` : '');
+                const chave = chaveDa(r);
+                const aberto = aberta === chave;
                 return (
-                    <span className="text-sm font-normal text-red-600" title={titulo}>
-                        {r.falhas7d} {r.falhas7d === 1 ? 'falha' : 'falhas'}
-                    </span>
+                    <button
+                        type="button"
+                        aria-expanded={aberto}
+                        aria-controls={aberto ? idDetalhes(r) : undefined}
+                        onClick={() => setAberta(aberto ? null : chave)}
+                        className="-mx-1 inline-flex items-center gap-1 rounded-[6px] px-1 py-0.5 text-left transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                    >
+                        {conteudo}
+                        <ChevronDown aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 text-gray-500 transition-transform ${aberto ? 'rotate-180' : ''}`} />
+                        <span className="sr-only">{aberto ? ' — ocultar detalhes' : ' — ver detalhes'}</span>
+                    </button>
                 );
             }
             case 'ativa': {
                 const ocupado = gravando.has(chaveDa(r));
                 const alteracao = r.ultimaAlteracao;
                 const desligouQuem = !r.ativa && alteracao && !alteracao.ativaDepois ? alteracao : null;
-                // Desligada pela tela e ligada de novo por fora dela — o caso comum é uma migration
-                // que reagenda o job com unschedule + schedule: o job renasce ligado.
-                const religadaFora = r.ativa && alteracao && !alteracao.ativaDepois ? alteracao : null;
+                const religada = religadaFora(r);
                 return (
                     <div className="space-y-0.5">
                         <TableSwitch
@@ -188,12 +218,9 @@ const RotinasAutomaticasSettings: React.FC = () => {
                                 Desligada por {desligouQuem.porEmail ?? 'alguém sem e-mail'} em {dataCurta(desligouQuem.em)}
                             </span>
                         )}
-                        {religadaFora && (
-                            <span
-                                className="block text-[13px] text-amber-700 [overflow-wrap:anywhere]"
-                                title="Foi desligada nesta tela e voltou a ligar por fora dela — por exemplo, uma atualização do sistema que reagendou a rotina. Se ela deve ficar desligada, desligue de novo."
-                            >
-                                Religada fora desta tela · desligada por {religadaFora.porEmail ?? 'alguém sem e-mail'} em {dataCurta(religadaFora.em)}
+                        {religada && (
+                            <span className="block text-[13px] text-amber-700 [overflow-wrap:anywhere]" title={EXPLICA_RELIGADA}>
+                                Religada fora desta tela · desligada por {religada.porEmail ?? 'alguém sem e-mail'} em {dataCurta(religada.em)}
                             </span>
                         )}
                     </div>
@@ -202,6 +229,52 @@ const RotinasAutomaticasSettings: React.FC = () => {
             default:
                 return null;
         }
+    };
+
+    // Linha de detalhes logo abaixo da rotina — o que o title diz, por escrito.
+    const renderExpanded = (r: RotinaAutomatica, visibleCount: number): React.ReactNode => {
+        if (aberta !== chaveDa(r)) return null;
+        const meta = metaDa(r);
+        const religada = religadaFora(r);
+        const rotulo = 'text-gray-500';
+        const valor = 'text-gray-700 [overflow-wrap:anywhere]';
+        return (
+            <tr className="bg-gray-50/60">
+                <td colSpan={visibleCount} className="px-3 py-3">
+                    <dl
+                        id={idDetalhes(r)}
+                        role="region"
+                        aria-label={`Detalhes de ${meta.nome}`}
+                        className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-[max-content_minmax(0,1fr)]"
+                    >
+                        {meta.oQueFaz && (<>
+                            <dt className={rotulo}>O que faz</dt>
+                            <dd className={valor}>{meta.oQueFaz}</dd>
+                        </>)}
+                        <dt className={rotulo}>Nome técnico</dt>
+                        <dd className={valor}>{r.jobname ?? `sem nome (jobid ${r.jobid})`}</dd>
+                        <dt className={rotulo}>Quando roda</dt>
+                        <dd className={valor}>{quandoRoda(r.schedule)} · expressão do pg_cron {r.schedule} (GMT; Brasília = GMT−3)</dd>
+                        <dt className={rotulo}>Última execução</dt>
+                        <dd className={`${valor} tabular-nums`}>
+                            {r.ultima ? `${dataHora(r.ultima.inicio)} · ${statusDaExecucao(r.ultima.status)}` : 'Nenhuma nos últimos 40 dias'}
+                        </dd>
+                        <dt className={rotulo}>Últimos 7 dias</dt>
+                        <dd className={valor}>{fraseDaSemana(r)}</dd>
+                        {r.ultimoErro && (<>
+                            <dt className={rotulo}>Último erro ({dataHora(r.ultimoErro.em)})</dt>
+                            <dd>
+                                <pre className="whitespace-pre-wrap rounded-[6px] border border-gray-200 bg-white px-2 py-1.5 font-mono text-[12px] text-gray-700 [overflow-wrap:anywhere]">{r.ultimoErro.mensagem}</pre>
+                            </dd>
+                        </>)}
+                        {religada && (<>
+                            <dt className="text-amber-700">Religada fora desta tela</dt>
+                            <dd className={valor}>{EXPLICA_RELIGADA}</dd>
+                        </>)}
+                    </dl>
+                </td>
+            </tr>
+        );
     };
 
     const sortValue = (key: string, r: RotinaAutomatica) => {
@@ -257,6 +330,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
                 searchPlaceholder="Buscar rotina..."
                 sortValue={sortValue}
                 renderCell={renderCell}
+                renderExpanded={renderExpanded}
                 agrupamento={{
                     opcoes: [{ value: 'grupo', label: 'Grupo' }],
                     chave: (_campo, r) => {

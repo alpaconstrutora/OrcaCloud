@@ -286,7 +286,13 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             })
             .catch(err => {
                 console.error('[CentralControle] cashflow:', err);
-                if (vale()) { setCaixa({ estado: 'erro' }); setCaixaTrocando(false); }
+                if (!vale()) return;
+                // O erro também é DESTA org: sem gravar, a troca de org não levava o cartão
+                // ao esqueleto e o "Não carregou." da anterior ficava na nova durante a
+                // espera da chamada única dela (revisão final, 17/11/2026).
+                caixaDaOrg.current = organizationId;
+                setCaixa({ estado: 'erro' });
+                setCaixaTrocando(false);
             });
         return () => { if (vale()) caixaAtual.current++; };
     }, [organizationId, periodoCaixa]);

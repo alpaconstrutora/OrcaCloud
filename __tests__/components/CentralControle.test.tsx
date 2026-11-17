@@ -549,4 +549,17 @@ describe('CentralControle · tela "Bom dia"', () => {
         await new Promise(r => setTimeout(r, 30));
         expect(bootstrap.mock.calls.map(c => c[0])).toEqual(['o1', 'o2']);
     });
+
+    // Revisão final (17/11): com o caixa da org nova esperando de fato a chamada única
+    // dela, o "Não carregou." da org anterior ficava na tela da nova durante a espera.
+    it('trocar de org com o caixa da anterior caído: o cartão vai ao esqueleto na hora', async () => {
+        bootstrap.mockResolvedValueOnce(painel()).mockReturnValue(nunca());
+        cashflow.mockReset().mockRejectedValueOnce(TIMEOUT);
+        const { rerender } = montar();
+        await waitFor(() => expect(within(cartao('Caixa projetado')).getByText('Não carregou.')).toBeInTheDocument());
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
+        expect(within(cartao('Caixa projetado')).queryByText('Não carregou.')).not.toBeInTheDocument();
+        expect(cartao('Caixa projetado')).toHaveAttribute('aria-busy', 'true');
+    });
 });

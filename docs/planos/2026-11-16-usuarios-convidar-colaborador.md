@@ -292,6 +292,17 @@ para o bloqueio; o convite usou o alias `alpaconstrutora+teste@gmail.com` (mesma
 - **Limpeza** (`limpar-convite-1.sql`, travada pelo estado do teste): membro, e-mail da ficha e
   `workers` desfeitos; banco igual à foto de antes, salvo `employees.updated_at` do Rogério (o gatilho
   carimba now()).
+- **2ª tentativa, ~1 h depois (cota liberada) — caminho feliz VISTO:** a tela disse "Convite enviado
+  para alpaconstrutora+teste@gmail.com — ficha do colaborador vinculada." e fechou; no banco, login
+  novo `7b9c6920…` criado, membro e ficha do Rogério (e-mail + `user_id`) apontando para ele.
+- **"Reenviar convite":** "Convite reenviado…"; o login NÃO trocou (mesmo id, `invited_at` novo). A
+  Edge só apaga e recria quando o Auth responde "already registered"; para convidado ainda não
+  confirmado o Auth hoje reenvia mantendo o id — a ficha segue certa sem reapontar. O
+  `reapontarFichasDoLogin` (achado 3) fica de proteção para o caso de troca de id; esse ramo não pôde
+  ser visto na tela, só nos testes.
+- **Limpeza 2** (`limpar-convite-2.sql`): membro, ficha (e-mail e login), login de teste e `workers`
+  desfeitos; banco igual à foto de antes (de novo só `updated_at` do Rogério); 0 sobras do e-mail e do
+  login de teste.
 
 ## Estado
 
@@ -301,6 +312,6 @@ para o bloqueio; o convite usou o alias `alpaconstrutora+teste@gmail.com` (mesma
 - [x] Menores (pedido de 16/11, 2º): 9 de 9 — itens 3, 6, 1 (componente) e 9 no commit do combobox;
   1 (tela), 2, 4, 5, 7 e 8 no commit seguinte. Itens 8: os dois testes foram vistos falhando contra
   um mutante (normalização retirada; `return` retirado) e passando contra o código real
-- [ ] Tarefa 4 — verificação e publicação: tipos ✅, testes da área ✅; tela real ✅ exceto o caminho
-  feliz do convite (bloqueado pelo limite de e-mail do Auth — ver "Teste na tela real"); defeito do
-  grupo DESENVOLVEDOR corrigido; **falta** decidir sobre o caminho feliz, PR e merge
+- [ ] Tarefa 4 — verificação e publicação: tipos ✅, testes da área ✅; tela real ✅ (caminho feliz
+  visto na 2ª tentativa; ramo "login trocou" do reenvio só nos testes); defeito do grupo
+  DESENVOLVEDOR corrigido (031004027); **falta** PR e merge

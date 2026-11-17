@@ -161,7 +161,7 @@
     "eletrodutoXEsgoto": 12
   },
   "R8": {
-    "modelo": "2d6c75b3a3e77ded400fd5e2050cf3eee8cfc6d029705a93755a690acda12748",
+    "modelo": "4f5796f23ba4b0d76e7b2594984a57dcbe1ba97d1defacbaa4317668ef213223",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 11,
     "copias": 6,
@@ -381,8 +381,8 @@
       "conflitos": {
         "ABERTURA": 245,
         "PILAR": 4,
-        "REDE": 295,
-        "EQUIPAMENTO": 7,
+        "REDE": 288,
+        "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
       "encostos": 0,
@@ -399,7 +399,7 @@
     "eletrodutoXEsgoto": 32
   },
   "R12": {
-    "modelo": "917d686602e8d876aadb563810c1516c5d3e16ade902a5171ebeaea1f94032e2",
+    "modelo": "81b5c2a97cdc041822340a79db170182ad9707af5654fab1a2ed3c8cecae0f37",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
@@ -409,7 +409,7 @@
     "nucleos": 3,
     "estruturas": 1424,
     "quadros": 103,
-    "terminais": 10292,
+    "terminais": 10314,
     "trechosDeAgua": 6959,
     "agua": {
       "pontos": 144,
@@ -685,8 +685,8 @@
       "conflitos": {
         "ABERTURA": 319,
         "PILAR": 1,
-        "REDE": 621,
-        "EQUIPAMENTO": 88,
+        "REDE": 610,
+        "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
       "encostos": 46,
@@ -703,7 +703,7 @@
     "eletrodutoXEsgoto": 104
   },
   "RL": {
-    "modelo": "14ff59b74698c3e8f813b22e996ccbe8a98f5ab1764f599d6422cd904e0c1e1e",
+    "modelo": "73522d1b5850e62dbb77c260670018c73feeed4d2ce6cede41b6fc10def7ec98",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -713,7 +713,7 @@
     "nucleos": 2,
     "estruturas": 1179,
     "quadros": 100,
-    "terminais": 9992,
+    "terminais": 10020,
     "trechosDeAgua": 7576,
     "agua": {
       "pontos": 229,
@@ -933,8 +933,8 @@
       "conflitos": {
         "ABERTURA": 469,
         "PILAR": 31,
-        "REDE": 530,
-        "EQUIPAMENTO": 21,
+        "REDE": 474,
+        "EQUIPAMENTO": 0,
         "OUTRO": 2
       },
       "encostos": 42,
@@ -947,7 +947,7 @@
     },
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
-    "eletrodutoXClimatizacao": 91,
+    "eletrodutoXClimatizacao": 63,
     "eletrodutoXEsgoto": 91
   }
 }

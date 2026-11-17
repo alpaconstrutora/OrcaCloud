@@ -526,4 +526,27 @@ describe('CentralControle · tela "Bom dia"', () => {
         expect(cartao('Caixa projetado').innerHTML).not.toMatch(/1\.111/);
         expect(cartao('Caixa projetado')).toHaveAttribute('aria-busy', 'true');
     });
+
+    it('concluir tarefa que falha depois de trocar de org não recarrega a org anterior', async () => {
+        let rejeitarGravacao!: (e: unknown) => void;
+        atualizarTarefa.mockReset().mockReturnValueOnce(new Promise((_, rej) => { rejeitarGravacao = rej; }));
+        bootstrap
+            .mockResolvedValueOnce(painel({
+                meu_dia: { ok: true, data: meuDia({
+                    tarefas: {
+                        pendentes: [{ id: 't1', org_id: 'o1', title: 'Ligar para o fornecedor', due_date: '2026-11-11T15:00:00Z', priority: 2, source_module: 'manual', source_ref: null }],
+                        qtd_pendentes: 1, concluidas_hoje: 0,
+                    },
+                }) },
+            }))
+            .mockResolvedValue(painel());
+        const { rerender } = montar();
+        await userEvent.click(await screen.findByRole('button', { name: 'Concluir tarefa' }));
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        rejeitarGravacao(new Error('falhou a gravação'));
+        await new Promise(r => setTimeout(r, 30));
+        expect(bootstrap.mock.calls.map(c => c[0])).toEqual(['o1', 'o2']);
+    });
 });

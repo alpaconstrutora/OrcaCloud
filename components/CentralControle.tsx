@@ -366,9 +366,13 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             await taskService.update(id, { status: 'done' });
         } catch (err) {
             console.error('[CentralControle] concluir tarefa:', err);
-            load();
+            // Recarrega para a tarefa voltar à fila — só se a tela ainda é da org em que
+            // ela foi concluída. Trocada a org no meio, este `load` é o da org ANTERIOR:
+            // repunha `orgNaTela` e pintava a org antiga debaixo do seletor novo (REGRA #5;
+            // revisão do #538). A tarefa não está na tela da org nova: nada a repor.
+            if (orgNaTela.current === organizationId) load();
         }
-    }, [load, tirarDaFila]);
+    }, [load, tirarDaFila, organizationId]);
 
     const aprovacaoFeita = React.useCallback((item: ActionQueueItem) => {
         setApprovalModal(null);

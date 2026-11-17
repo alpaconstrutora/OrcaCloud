@@ -710,15 +710,17 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const [colaboradorTexto, setColaboradorTexto] = useState('');
     const [colaboradorEscolhido, setColaboradorEscolhido] = useState<OpcaoColaborador | null>(null);
     // Vincular a ficha a um login exige owner/admin da organização DO colaborador
-    // (gatilho trg_employees_vinculo_so_gestor; desenvolvedor passa, como no banco).
+    // (gatilho trg_employees_vinculo_so_gestor). Quem pula a trava no banco é is_superadmin()
+    // (public.superadmins = temAcessoTotal) — NÃO o group DESENVOLVEDOR, que qualquer membro
+    // ganha ao entrar pela "Área do Desenvolvedor" (visto na tela real, 17/11).
     const opcoesColaborador = React.useMemo(
         () => opcoesDeColaborador(colaboradoresDaOrg, members, organizationId ? {
             organizationId,
             nomeDaOrg: id => organizations.find(o => o.id === id)?.name,
-            podeVincularNaOrg: id => isDeveloper || ['owner', 'admin'].includes(
+            podeVincularNaOrg: id => isDevEmail || ['owner', 'admin'].includes(
                 organizations.find(o => o.id === id)?.members?.find(m => (m.email || '').toLowerCase() === userEmail)?.role ?? ''),
         } : undefined),
-        [colaboradoresDaOrg, members, organizationId, organizations, isDeveloper, userEmail],
+        [colaboradoresDaOrg, members, organizationId, organizations, isDevEmail, userEmail],
     );
     React.useEffect(() => {
         if (!isInviteModalOpen || !organizationId) return;

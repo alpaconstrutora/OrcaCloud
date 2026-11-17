@@ -228,6 +228,13 @@ describe('Convidar membro a partir de um colaborador', () => {
     });
 
     it('a lista mostra o cargo e a origem (homônimos e disponibilizados se distinguem)', async () => {
+        // quem convida é admin também na SPE — senão a opção da Ester vem desligada e mostra o motivo
+        useStore.setState({
+            organizations: [
+                { id: ORG, name: 'Alpa', members: MEMBROS, customRoles: [] } as never,
+                { id: 'org-2', name: 'SPE Garden', members: [{ id: 'm8', email: 'admin@exemplo.com', role: 'admin' }], customRoles: [] } as never,
+            ],
+        });
         render(<Tela />);
         await abrirConvite();
         expect(screen.getByRole('option', { name: /Carlos Lima/ }).textContent).toContain('Pedreiro');
@@ -247,6 +254,33 @@ describe('Convidar membro a partir de um colaborador', () => {
         const ester = screen.getByRole('option', { name: /Ester Prado/ });
         expect(ester.getAttribute('aria-disabled')).toBe('true');
         expect(ester.textContent).toContain('Disponibilizado por SPE Garden — só owner ou admin de lá vincula a um login');
+    });
+
+    // Visto na tela real (17/11): entrar pela "Área do Desenvolvedor" põe group = DESENVOLVEDOR para
+    // QUALQUER membro, mas o banco só deixa vincular quem está em public.superadmins (= temAcessoTotal).
+    it('entrou pela Área do Desenvolvedor sem ser superadmin: disponibilizado continua desligado', async () => {
+        useStore.setState({
+            currentProfile: { group: 'DESENVOLVEDOR' } as never,
+            organizations: [
+                { id: ORG, name: 'Alpa', members: [...MEMBROS, { id: 'm9', email: 'admin@exemplo.com', role: 'admin' }], customRoles: [] } as never,
+                { id: 'org-2', name: 'SPE Garden', members: [{ id: 'm8', email: 'admin@exemplo.com', role: 'member' }], customRoles: [] } as never,
+            ],
+        });
+        render(<Tela />);
+        await abrirConvite();
+        const ester = screen.getByRole('option', { name: /Ester Prado/ });
+        expect(ester.getAttribute('aria-disabled')).toBe('true');
+        expect(ester.textContent).toContain('Disponibilizado por SPE Garden — só owner ou admin de lá vincula a um login');
+    });
+
+    it('superadmin (acesso total) vincula em qualquer org: disponibilizado liberado', async () => {
+        useStore.setState({
+            currentProfile: { group: 'GESTOR' } as never,
+            session: { user: { email: 'desenvolvedor@alpaconstrutora.com.br' } } as never,
+        });
+        render(<Tela />);
+        await abrirConvite();
+        expect(screen.getByRole('option', { name: /Ester Prado/ }).getAttribute('aria-disabled')).toBeNull();
     });
 
     it('vínculo negado pelo banco (42501): o aviso traz o motivo', async () => {

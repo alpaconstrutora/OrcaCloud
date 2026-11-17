@@ -263,6 +263,36 @@ Cada item com teste visto falhando antes (exceto o 9, que é só comentário):
 | 8 | Testes que faltavam: `OrganizationList` devolve a promessa do `onSave`; `membroPorEmail` normaliza o e-mail | os dois testes |
 | 9 | Cabeçalho do `CreatableCombobox` cita o uso §7.1.3 | leitura |
 
+## Teste na tela real (17/11)
+
+Vite da frente (127.0.0.1:3163) contra o banco de produção, conta `agente-leitura` (admin da Garden
+Cambuhy, membro na Alpa, não superadmin), roteiro `c:/tmp/pwtest/convite-colab.cjs`. E-mail de teste:
+o usuário deu `alpaconstrutora@gmail.com`, que já é login e já é membro da Garden Cambuhy — usado só
+para o bloqueio; o convite usou o alias `alpaconstrutora+teste@gmail.com` (mesma caixa, login novo).
+
+- **Defeito achado e corrigido:** os 4 colaboradores disponibilizados pela Alpa vinham LIBERADOS. O
+  usuário entrou pela "Área do Desenvolvedor", que põe `group = DESENVOLVEDOR` para qualquer membro;
+  `podeVincularNaOrg` usava esse `isDeveloper`, mas o banco só pula a trava para `is_superadmin()`
+  (`public.superadmins` = `temAcessoTotal`). Agora usa `isDevEmail`. Teste visto falhando antes
+  ("entrou pela Área do Desenvolvedor sem ser superadmin…"); o teste de "cargo e origem" passou a pôr
+  quem convida como admin da SPE (só passava porque o grupo liberava).
+- **Visto certo (sem gravar, escritas abortadas):** 7 opções; Altair e iago "Já é usuário desta
+  organização"; os 4 da Alpa "Disponibilizado por Alpa… — só owner ou admin de lá vincula a um login";
+  Clovis (DESLIGADO) fora; ↓ anuncia inclusive as desligadas; clique em desligada não escolhe; Enter
+  com a lista fechada não envia; e-mail de quem já é membro (com espaços e maiúsculas) bloqueado com
+  "Este e-mail já é de um usuário desta organização." e nenhuma chamada à Edge.
+- **Convite gravando (Rogério + alias):** a Edge devolveu 422 "email rate limit exceeded" (limite de
+  e-mails do Auth do projeto; último e-mail registrado em auth.users: 16/11 12:37). A tela fez o que o
+  desenho manda: e-mail gravado na ficha antes, membro gravado, aviso com o motivo real + "Reenviar
+  convite" + "conta de acesso ainda não existe". O caminho feliz (login criado → ficha vinculada) NÃO
+  foi visto na tela — depende do limite de e-mail.
+- **Efeito antigo, não desta frente:** gravar membros regrava a organização inteira e
+  `organizations.resources.workers` ganhou os 3 colaboradores próprios (listOrganizations mistura o RH
+  em resources e o save devolve). Acontece também no convite sem colaborador.
+- **Limpeza** (`limpar-convite-1.sql`, travada pelo estado do teste): membro, e-mail da ficha e
+  `workers` desfeitos; banco igual à foto de antes, salvo `employees.updated_at` do Rogério (o gatilho
+  carimba now()).
+
 ## Estado
 
 - [x] Tarefa 1 — combobox (b981f8922)
@@ -271,6 +301,6 @@ Cada item com teste visto falhando antes (exceto o 9, que é só comentário):
 - [x] Menores (pedido de 16/11, 2º): 9 de 9 — itens 3, 6, 1 (componente) e 9 no commit do combobox;
   1 (tela), 2, 4, 5, 7 e 8 no commit seguinte. Itens 8: os dois testes foram vistos falhando contra
   um mutante (normalização retirada; `return` retirado) e passando contra o código real
-- [ ] Tarefa 4 — verificação e publicação: tipos ✅, testes da área ✅; **falta** a tela real (precisa de
-  e-mail de teste e de uma conta admin que NÃO seja superadmin — o desenvolvedor pula a trava do
-  vínculo), PR e merge
+- [ ] Tarefa 4 — verificação e publicação: tipos ✅, testes da área ✅; tela real ✅ exceto o caminho
+  feliz do convite (bloqueado pelo limite de e-mail do Auth — ver "Teste na tela real"); defeito do
+  grupo DESENVOLVEDOR corrigido; **falta** decidir sobre o caminho feliz, PR e merge

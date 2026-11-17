@@ -264,23 +264,31 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
 
     // Caixa projetado: única fonte com parâmetro de período, por isso fora do
     // bootstrap. Espera o mesmo portão no primeiro carregamento.
+    //
+    // Geração das buscas do caixa: só a mais nova pinta. Cada busca e cada rodada do
+    // efeito abaixo (org, período, Atualizar) descartam as pendentes — inclusive a do
+    // "Tentar de novo" do cartão, que chama `carregarCaixa` fora do efeito e perdia o
+    // cancelamento: com troca de org no meio, o saldo da empresa anterior pintava o
+    // cartão debaixo do seletor da nova (REGRA #5; revisão do #538, 17/11/2026).
+    const caixaAtual = React.useRef(0);
     const carregarCaixa = React.useCallback(() => {
-        let cancelado = false;
+        const minha = ++caixaAtual.current;
+        const vale = () => caixaAtual.current === minha;
         const mesmaOrg = caixaDaOrg.current === organizationId;
         setCaixa(c => (mesmaOrg && c.estado === 'ok' ? c : CARREGANDO));
         setCaixaTrocando(mesmaOrg);
         financialIntelligenceService.getCashflowProjection(organizationId, periodoCaixa)
             .then(pontos => {
-                if (cancelado) return;
+                if (!vale()) return;
                 caixaDaOrg.current = organizationId;
                 setCaixa({ estado: 'ok', data: pontos });
                 setCaixaTrocando(false);
             })
             .catch(err => {
                 console.error('[CentralControle] cashflow:', err);
-                if (!cancelado) { setCaixa({ estado: 'erro' }); setCaixaTrocando(false); }
+                if (vale()) { setCaixa({ estado: 'erro' }); setCaixaTrocando(false); }
             });
-        return () => { cancelado = true; };
+        return () => { if (vale()) caixaAtual.current++; };
     }, [organizationId, periodoCaixa]);
 
     // O caixa espera o bootstrap responder (abrir a tela, Atualizar, trocar de org):
@@ -292,6 +300,8 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // antes o caixa da org nova saía junto com a chamada única dela.
     React.useEffect(() => {
         if (!podeCarregar || !verFinanceiro) return;
+        // Descarta busca pendente que não nasceu desta rodada (o "Tentar de novo").
+        caixaAtual.current++;
         // Org nova: o gráfico na tela é de outra empresa — esqueleto já, mesmo esperando a vez.
         if (caixaDaOrg.current !== undefined && caixaDaOrg.current !== organizationId) setCaixa(CARREGANDO);
         if (esperandoChamadaUnicaRef.current) return;

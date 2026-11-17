@@ -507,4 +507,23 @@ describe('CentralControle · tela "Bom dia"', () => {
         responderO2(painel());
         await waitFor(() => expect(cashflow).toHaveBeenCalledWith('o2', 90));
     });
+
+    it('"Tentar de novo" do caixa e troca de org: a resposta da org anterior não pinta a nova', async () => {
+        let responderO1!: (v: unknown) => void;
+        bootstrap.mockResolvedValueOnce(painel()).mockReturnValue(nunca());
+        cashflow.mockReset()
+            .mockRejectedValueOnce(TIMEOUT)
+            .mockReturnValueOnce(new Promise(r => { responderO1 = r; }));
+        const { rerender } = montar();
+        await waitFor(() => expect(within(cartao('Caixa projetado')).getByText('Não carregou.')).toBeInTheDocument());
+        await userEvent.click(within(cartao('Caixa projetado')).getByRole('button', { name: /Tentar de novo/ }));
+        expect(cashflow).toHaveBeenCalledTimes(2);
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
+        responderO1([{ data_ref: HOJE, cr_previsto: 0, db_previsto: 0, saldo_dia: 0, saldo_acum: 1111 }]);
+        await new Promise(r => setTimeout(r, 30));
+        // O saldo é o NumeroQueSobe (anima a partir de 0): o valor final está no aria-label.
+        expect(cartao('Caixa projetado').innerHTML).not.toMatch(/1\.111/);
+        expect(cartao('Caixa projetado')).toHaveAttribute('aria-busy', 'true');
+    });
 });

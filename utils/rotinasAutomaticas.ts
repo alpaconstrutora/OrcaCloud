@@ -118,6 +118,10 @@ const CATALOGO: Record<string, MetaRotina> = {
         nome: 'Relatório da Inteligência Financeira', grupo: 'relatorios', sensivel: false,
         oQueFaz: 'Envia por e-mail os relatórios da Inteligência Financeira agendados para a hora.',
     },
+    'diretoria-resumo-semanal': {
+        nome: 'Resumo semanal da Diretoria', grupo: 'relatorios', sensivel: false,
+        oQueFaz: 'Toda segunda às 07:00 tira a foto da semana do painel da Diretoria e manda o resumo por e-mail a quem ligou "Receber toda segunda". Desligada, a comparação "melhorou × piorou" perde a semana.',
+    },
     'hourly-bi-report-check': {
         nome: 'Agenda dos relatórios de BI', grupo: 'relatorios', sensivel: false,
         oQueFaz: 'Recalcula a próxima data de envio dos relatórios de BI agendados.',

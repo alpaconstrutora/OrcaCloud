@@ -246,6 +246,33 @@ describe('climatização E7.3 · exaustão e renovação', () => {
     expect(doDeCima.length).toBeGreaterThan(0);
   });
 
+  /** PA19: a tomada na face da parede, a 1,30 m, e — depois do duto — a descida do eletroduto até ela. */
+  const tomada = (t: string, x: number, y: number): Command => ({ type: 'AddTerminal', levelId: t, disciplina: 'ELETRICA', tipo: 'TUG', at: point(x, y), cotaMm: 1300, tipoEletrico: 'TUG', potenciaW: 100 }) as Command;
+  const comADescida = (m: BlueprintModel, x: number, y: number) => {
+    const t = m.levels[0].id;
+    return conflitosDoModelo(applyBatch(m, [{ type: 'AddTrecho', levelId: t, disciplina: 'ELETRICA', a: point(x, y), b: point(x, y), cotaAMm: 2700, cotaBMm: 1300, bitolaMm: 25 } as Command]).model).filter((c) => c.classe === 'REDE');
+  };
+
+  it('PA19 do prédio automático: o duto do exaustor que correria rente à face de uma parede interna contorna a descida da tomada dela (o eixo a 200 mm), pelo lado do cômodo', () => {
+    // A parede interna x = 3.000 (10 cm, faces 2.950 e 3.050); o exaustor a 70 mm da face leste; a fachada sul a 1,5 m; a
+    // tomada na face leste, no meio do caminho. Antes: o duto reto em x = 3.120, a 70 mm da descida.
+    const parede = (t: string): Command => ({ type: 'AddWall', levelId: t, a: point(3000, 0), b: point(3000, 8000), thicknessMm: 100, heightMm: 2800 });
+    const { depois, dutos } = salaComExaustor(6000, 8000, (t, cota) => [parede(t), tomada(t, 3050, 800), exaustor(t, 3120, 1500, cota + 25)]);
+    expect(comADescida(depois, 3050, 800)).toEqual([]);
+    // Pelo lado do cômodo: nenhum lance passa para o outro lado da parede.
+    for (const d of dutos) expect(Math.min(d.a.x, d.b.x)).toBeGreaterThan(3050);
+    // A descarga não muda: na fachada sul, diante do exaustor.
+    expect(terminais(depois).find((x) => x.tipoHidraulico === 'VENEZIANA_AR')!.at).toEqual({ x: 3120, y: -75 });
+  });
+
+  it('PA19: o duto que atravessa a parede da tomada a 60 mm dela passa ao lado (o lavabo do R4)', () => {
+    // A parede interna y = 3.000 (15 cm); o exaustor ao norte dela, a fachada sul mais perto; a tomada na face norte, 60 mm
+    // ao lado de onde o duto a atravessaria.
+    const parede = (t: string): Command => ({ type: 'AddWall', levelId: t, a: point(0, 3000), b: point(8000, 3000), thicknessMm: 150, heightMm: 2800 });
+    const { depois } = salaComExaustor(8000, 8000, (t, cota) => [parede(t), tomada(t, 4060, 3075), exaustor(t, 4000, 3700, cota + 25)]);
+    expect(comADescida(depois, 4060, 3075)).toEqual([]);
+  });
+
   it('sem rede de dutos a conferência não inventa: REDE fica "não avaliado"', () => {
     const { m, t } = sala();
     const carga = cargaTermicaDoNivel(m, hipClima, t);

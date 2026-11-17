@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "9ac9005b8ebffe8c29beae4e30b7476754bc0e9ac21d7dccabb3209bc69ec7d8",
+    "modelo": "9ac52286d6d6717cf4c6615f1ea1f8bd426459c62f87d217274343569e97dd76",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -11,7 +11,7 @@
     "estruturas": 201,
     "quadros": 11,
     "terminais": 795,
-    "trechosDeAgua": 448,
+    "trechosDeAgua": 454,
     "agua": {
       "pontos": 36,
       "hidrometros": 2,
@@ -143,7 +143,7 @@
       "conflitos": {
         "ABERTURA": 27,
         "PILAR": 2,
-        "REDE": 41,
+        "REDE": 35,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
@@ -157,7 +157,7 @@
     },
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
-    "eletrodutoXClimatizacao": 3,
+    "eletrodutoXClimatizacao": 0,
     "eletrodutoXEsgoto": 12,
     "aguaXClimatizacao": 0
   },
@@ -401,7 +401,7 @@
     "aguaXClimatizacao": 0
   },
   "R12": {
-    "modelo": "7a709c9b91b8f3b7fbebc72b01364f24caf4b3f785a48f2addd43280a8f505d1",
+    "modelo": "17d09d33a082a784413bf4e25a18c374fb926a6b575812215016c2d5359a0f16",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
@@ -706,7 +706,7 @@
     "aguaXClimatizacao": 0
   },
   "RL": {
-    "modelo": "ab309874ed31105770e409c87cb948a066e697628fd04cc559ab487e89cd1230",
+    "modelo": "40fd9c1c4a4058bcd67abecea131817ad337e65dd0e33d84daecc2db250302ad",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -936,7 +936,7 @@
       "conflitos": {
         "ABERTURA": 441,
         "PILAR": 31,
-        "REDE": 156,
+        "REDE": 121,
         "EQUIPAMENTO": 0,
         "OUTRO": 2
       },
@@ -950,7 +950,7 @@
     },
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
-    "eletrodutoXClimatizacao": 35,
+    "eletrodutoXClimatizacao": 0,
     "eletrodutoXEsgoto": 12,
     "aguaXClimatizacao": 0
   }

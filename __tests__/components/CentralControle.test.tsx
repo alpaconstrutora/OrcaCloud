@@ -470,4 +470,28 @@ describe('CentralControle · tela "Bom dia"', () => {
         await waitFor(() => expect(cartao('Minha fila')).toHaveAttribute('aria-busy', 'false'));
         expect(screen.queryByText('Alerta da o1')).not.toBeInTheDocument();
     });
+
+    // ── Pendências da revisão do #538 (17/11/2026): docs/planos/2026-11-17-central-caixa-e-troca-de-org.md ──
+
+    it('carga descartada pela mesma org não liga o pegajoso quando a mais nova respondeu', async () => {
+        let rejeitar2!: (e: unknown) => void;
+        bootstrap
+            .mockResolvedValueOnce(painel({ scorecards: { ok: false, erro: 'timeout' } }))
+            .mockReturnValueOnce(new Promise((_, rej) => { rejeitar2 = rej; }))
+            .mockResolvedValue(painel());
+        fontesSeparadas.mockImplementation(() => fontes());
+        montar();
+        await waitFor(() => expect(within(cartao('Obras')).getByText('Não carregou.')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));      // carga 2: pendente
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+        await userEvent.click(within(cartao('Obras')).getByRole('button', { name: /Tentar de novo/ })); // carga 3: responde
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        expect(within(cartao('Obras')).queryByText('Não carregou.')).not.toBeInTheDocument();
+        rejeitar2(TIMEOUT);                                                               // a carga 2, já descartada, cai
+        await new Promise(r => setTimeout(r, 20));
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(4));
+        expect(fontesSeparadas).not.toHaveBeenCalled();
+    });
 });

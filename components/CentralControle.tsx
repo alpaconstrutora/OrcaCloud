@@ -138,8 +138,13 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             contractIndexService.listDueForReajuste(organizationId),
             financialApprovalService.listConfig(organizationId),
         ]);
-        // A queda é real mesmo que esta carga já tenha sido descartada.
-        if (!pular && bootstrapR.status === 'rejected') memoriaDoPlanoB.marcarQueCaiu(organizationId);
+        // A queda conta mesmo com esta carga descartada pela TROCA de org (a org dela
+        // continua caindo). Descartada por carga mais nova da MESMA org, quem decide é a
+        // mais nova: senão uma resposta velha ligava o pegajoso com a chamada única já de
+        // volta (Atualizar + "Tentar de novo" sobrepostos — revisão do #538).
+        if (!pular && bootstrapR.status === 'rejected' && (vale() || orgNaTela.current !== organizationId)) {
+            memoriaDoPlanoB.marcarQueCaiu(organizationId);
+        }
         if (!vale()) return;
         setEsperandoChamadaUnica(false);
 

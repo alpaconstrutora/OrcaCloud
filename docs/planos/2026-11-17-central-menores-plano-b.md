@@ -314,7 +314,12 @@ do pegajoso não vazar.
   (espelhoDoInvestidor/CRLF; PainelVersoes por carga, 39/39 isolado).
 - [x] Revisão final (revisor novo): sem crítico; 1 importante corrigido — faltava o teste da trava
   "alerta da org anterior nunca entra na nova" (provado vermelho com a trava removida).
-- [ ] PR · CI · merge · prova em produção.
+- [x] PR #538 · CI verde (`1cbea3e`) · merge `9e7e778` · domínio servindo `9e7e778` · CI da `main` verde (17/11).
+- [x] Prova em produção (aba logada, "Todas", desvio de `fetch` só no navegador: chamada única caindo na hora,
+  Obras caindo após 6 s): 1º Atualizar → blocos separados, `fn_cashflow_projection` pedido junto com os
+  blocos e respondido 5,6 s antes de Obras cair; 2º Atualizar → **nenhuma** chamada única (pegajoso), só os
+  blocos; pílulas "Tudo 148 · Alertas 12" iguais em todas as amostras (lista não encolheu); só Obras com
+  "Não carregou.". Recarregada a página: 1 chamada única (841 ms) + caixa, Obras de volta.
 
 **Deixado para depois (menores da revisão):**
 - Carga descartada da mesma org liga o pegajoso mesmo com a carga mais nova tendo respondido

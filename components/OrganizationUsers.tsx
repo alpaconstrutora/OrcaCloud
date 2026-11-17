@@ -16,6 +16,32 @@ import { agruparMembros, OPCOES_AGRUPAR_MEMBRO, ROTULO_FUNCAO, type CampoAgrupar
 import { useDepartamentosDaOrg } from '../hooks/useDepartamentosDaOrg';
 import { temAcessoTotal } from '../lib/acessoTotal';
 import LinkDoCelularBloco, { motivoGerarBloqueadoPara } from './celular/LinkDoCelularBloco';
+import { CreatableCombobox } from './ui/CreatableCombobox';
+import { laborService, type ColaboradorParaConvite } from '../services/laborService';
+import { opcoesDeColaborador, type OpcaoColaborador } from '../lib/convidarColaborador';
+import { MOTIVO_VINCULO_SO_GESTOR } from '../lib/vinculoColaboradorUsuario';
+
+const comPonto = (s: string) => (/[.!?]$/.test(s) ? s : `${s}.`);
+
+/**
+ * Motivo real de uma falha da Edge Function: o supabase-js só diz "Edge Function returned a
+ * non-2xx status code"; o motivo (ex.: "Somente administradores…") vem no corpo da resposta.
+ */
+async function motivoDaFalhaDaEdge(error: { message: string; context?: unknown }): Promise<string> {
+    try {
+        const ctx = error.context as { json?: () => Promise<{ error?: string }> } | undefined;
+        const corpo = ctx?.json ? await ctx.json() : null;
+        if (corpo?.error) return corpo.error;
+    } catch { /* corpo ilegível: fica a mensagem genérica */ }
+    return error.message;
+}
+
+/** Erro do Supabase ao gravar a ficha: 42501 é a trava do vínculo (só owner/admin da org do colaborador). */
+const motivoDoErroNaFicha = (err: unknown): { texto: string; semPermissao: boolean } => {
+    const e = err as { code?: string; message?: string } | null;
+    if (e?.code === '42501') return { texto: MOTIVO_VINCULO_SO_GESTOR, semPermissao: true };
+    return { texto: e?.message || 'erro desconhecido', semPermissao: false };
+};
 
 // §6.3: toda coluna de valor único é ordenável. "Função / Cargo" é composta
 // (papel + nome do cargo customizado opcional na mesma célula) — exceção
@@ -121,7 +147,8 @@ interface OrganizationUsersProps {
     /** Avisa que a edição foi aberta, para quem mandou limpar o pedido — senão voltaria a abrir ao reentrar na aba. */
     onAbriuMembro?: () => void;
     members: OrganizationMember[];
-    onUpdateMembers: (updatedMembers: OrganizationMember[]) => void;
+    /** Pode devolver a promessa da gravação: o convite a partir do RH espera por ela antes de ler o login do membro. */
+    onUpdateMembers: (updatedMembers: OrganizationMember[]) => void | Promise<void>;
     customRoles: OrganizationCustomRole[];
     onUpdateCustomRoles: (updatedRoles: OrganizationCustomRole[]) => void;
     onUpdateAll: (updates: { members?: OrganizationMember[], customRoles?: OrganizationCustomRole[], settings?: any }) => void;
@@ -672,6 +699,41 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     const [isInviting, setIsInviting] = useState(false);
     const [inviteError, setInviteError] = useState<string | null>(null);
 
+    // Convidar a partir de um colaborador do RH (16/11/2026 — docs/planos/2026-11-16-usuarios-convidar-colaborador.md).
+    // A lista traz os colaboradores da organização e os disponibilizados para ela.
+    const [colaboradoresDaOrg, setColaboradoresDaOrg] = useState<ColaboradorParaConvite[]>([]);
+    const [erroColaboradores, setErroColaboradores] = useState(false);
+    const [carregandoColaboradores, setCarregandoColaboradores] = useState(false);
+    // Convite feito (membro gravado) mas com pendência: o rodapé vira "Fechar" — reenviar o
+    // formulário regravaria a ficha e esbarraria no "já é usuário desta organização".
+    const [conviteConcluido, setConviteConcluido] = useState(false);
+    const [colaboradorTexto, setColaboradorTexto] = useState('');
+    const [colaboradorEscolhido, setColaboradorEscolhido] = useState<OpcaoColaborador | null>(null);
+    // Vincular a ficha a um login exige owner/admin da organização DO colaborador
+    // (gatilho trg_employees_vinculo_so_gestor). Quem pula a trava no banco é is_superadmin()
+    // (public.superadmins = temAcessoTotal) — NÃO o group DESENVOLVEDOR, que qualquer membro
+    // ganha ao entrar pela "Área do Desenvolvedor" (visto na tela real, 17/11).
+    const opcoesColaborador = React.useMemo(
+        () => opcoesDeColaborador(colaboradoresDaOrg, members, organizationId ? {
+            organizationId,
+            nomeDaOrg: id => organizations.find(o => o.id === id)?.name,
+            podeVincularNaOrg: id => isDevEmail || ['owner', 'admin'].includes(
+                organizations.find(o => o.id === id)?.members?.find(m => (m.email || '').toLowerCase() === userEmail)?.role ?? ''),
+        } : undefined),
+        [colaboradoresDaOrg, members, organizationId, organizations, isDevEmail, userEmail],
+    );
+    React.useEffect(() => {
+        if (!isInviteModalOpen || !organizationId) return;
+        let vivo = true;
+        setErroColaboradores(false);
+        setCarregandoColaboradores(true);
+        laborService.listColaboradoresParaConvite(organizationId)
+            .then(lista => { if (vivo) setColaboradoresDaOrg(lista); })
+            .catch(() => { if (vivo) setErroColaboradores(true); })
+            .finally(() => { if (vivo) setCarregandoColaboradores(false); });
+        return () => { vivo = false; };
+    }, [isInviteModalOpen, organizationId]);
+
     // Role State
     const [isRoleModalOpen, setIsRoleModalOpen] = useState(false);
     const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
@@ -709,10 +771,37 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         setIsInviting(true);
         setInviteError(null);
 
+        const email = newMemberEmail.trim().toLowerCase();
+        const colaborador = colaboradorEscolhido;
+        const pendenciasDaFicha: string[] = [];
+        let fichaNegadaPorPermissao = false;
+
+        // E-mail de quem já é membro: o upsert por (organização, e-mail) sobrescreveria o papel e
+        // as permissões dessa pessoa com os do convite (rebaixaria um admin a membro, calado).
+        if (members.some(m => (m.email || '').trim().toLowerCase() === email)) {
+            setIsInviting(false);
+            setInviteError(colaborador
+                ? 'Este e-mail já é de um usuário desta organização. Para vincular a ficha a ele, use RH › Colaboradores › Usuário do sistema.'
+                : 'Este e-mail já é de um usuário desta organização.');
+            return;
+        }
+
+        // 1) Ficha sem e-mail recebe o digitado ANTES do convite. Ficha que já tem e-mail
+        //    não muda: o login pode usar outro endereço (desenho › "Não pode acontecer").
+        if (colaborador && !colaborador.email) {
+            try {
+                await laborService.updateEmployee(colaborador.id, { email });
+            } catch (err: unknown) {
+                const motivo = motivoDoErroNaFicha(err);
+                fichaNegadaPorPermissao ||= motivo.semPermissao;
+                pendenciasDaFicha.push(comPonto(`O e-mail não foi gravado na ficha do colaborador: ${motivo.texto}`));
+            }
+        }
+
         const newMember: OrganizationMember = {
             id: crypto.randomUUID(),
             name: newMemberName,
-            email: newMemberEmail,
+            email,
             role: newMemberRole,
             customRoleId: newMemberCustomRoleId || undefined,
             joinedAt: new Date().toISOString(),
@@ -721,28 +810,96 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         };
 
         let emailError: string | null = null;
+        // A Edge não manda e-mail para quem já tem conta no sistema (`alreadyRegistered`): a
+        // pessoa só entra na organização. O toast não pode dizer "convite enviado" nesse caso.
+        let jaTinhaConta = false;
         try {
             if (organizationId) {
-                const { error: fnError } = await supabase.functions.invoke('invite-member', {
-                    body: { email: newMemberEmail, name: newMemberName, organizationId, role: newMemberRole },
+                const { data: resposta, error: fnError } = await supabase.functions.invoke('invite-member', {
+                    body: { email, name: newMemberName, organizationId, role: newMemberRole },
                 });
-                if (fnError) emailError = fnError.message;
+                if (fnError) emailError = await motivoDaFalhaDaEdge(fnError);
+                else if (resposta?.error) emailError = String(resposta.error);
+                else jaTinhaConta = !!resposta?.alreadyRegistered;
             }
         } catch (err: unknown) {
             emailError = err instanceof Error ? err.message : 'Erro desconhecido';
-        } finally {
-            setIsInviting(false);
         }
 
-        // Always add the member to the local list
-        onUpdateMembers([...members, newMember]);
+        // Always add the member to the local list. Aguardar: quando o e-mail já tinha login,
+        // a Edge não cria a linha de membro — quem cria é esta gravação, e o vínculo abaixo
+        // precisa dela para achar o `user_id`.
+        let erroAoGravarMembro: string | null = null;
+        try {
+            await onUpdateMembers([...members, newMember]);
+        } catch (err: unknown) {
+            erroAoGravarMembro = err instanceof Error ? err.message : 'Erro desconhecido';
+        }
 
-        if (emailError) {
-            setInviteError(`Membro adicionado, mas o e-mail de convite não pôde ser enviado: ${emailError}`);
-            // Leave modal open so user can see the warning
+        // 2) Vínculo ficha → login, só se a ficha ainda não tem um.
+        let vinculouAgora = false;
+        if (colaborador && !colaborador.userId && organizationId && !erroAoGravarMembro) {
+            try {
+                // A gravação do membro não avisa quando falha (handleUpsertOrganization só dá
+                // um alert e o upsert por membro não confere erro): a prova é a linha existir.
+                const membro = await organizationService.membroPorEmail(organizationId, email);
+                if (!membro) {
+                    erroAoGravarMembro = 'a linha do membro não foi encontrada depois de gravar';
+                } else if (membro.userId) {
+                    await laborService.updateEmployee(colaborador.id, { user_id: membro.userId });
+                    vinculouAgora = true;
+                } else {
+                    pendenciasDaFicha.push('O colaborador não foi vinculado ao login: a conta de acesso ainda não existe.');
+                }
+            } catch (err: unknown) {
+                const motivo = motivoDoErroNaFicha(err);
+                fichaNegadaPorPermissao ||= motivo.semPermissao;
+                pendenciasDaFicha.push(comPonto(`O colaborador não foi vinculado ao login: ${motivo.texto}`));
+            }
+        }
+        setIsInviting(false);
+
+        if (erroAoGravarMembro && colaborador && !colaborador.userId) {
+            pendenciasDaFicha.push('O colaborador não foi vinculado ao login.');
+        }
+        if (emailError || erroAoGravarMembro || pendenciasDaFicha.length > 0) {
+            const partes = [
+                erroAoGravarMembro
+                    ? comPonto(`O membro não foi gravado na organização: ${erroAoGravarMembro}`)
+                    : emailError
+                        ? `${comPonto(`Membro adicionado, mas o e-mail de convite não pôde ser enviado: ${emailError}`)} Para tentar de novo, use "Reenviar convite" na linha do membro.`
+                        : 'Membro adicionado.',
+                ...pendenciasDaFicha,
+                ...(pendenciasDaFicha.length === 0 ? []
+                    : fichaNegadaPorPermissao
+                        ? ['Peça a um owner ou admin da organização do colaborador para concluir em RH › Colaboradores.']
+                        : ['Resolva em RH › Colaboradores.']),
+            ];
+            setInviteError(partes.join(' '));
+            // Membro gravado: não há o que reenviar daqui (o rodapé vira "Fechar").
+            // Membro NÃO gravado: "Enviar Convite" continua, para tentar de novo.
+            if (!erroAoGravarMembro) setConviteConcluido(true);
         } else {
             setIsInviteModalOpen(false);
             resetInviteForm();
+            if (colaborador) {
+                const base = jaTinhaConta
+                    ? `${newMember.name} já tinha conta no sistema: entrou na organização sem e-mail de convite`
+                    : `Convite enviado para ${email}`;
+                const ficha = vinculouAgora ? ' — ficha do colaborador vinculada.'
+                    : colaborador.userId ? ' — a ficha do colaborador já estava vinculada a um login.'
+                    : '.';
+                notify(base + ficha, 'success');
+            }
+        }
+    };
+
+    const fecharConvite = () => {
+        setIsInviteModalOpen(false);
+        setInviteError(null);
+        if (conviteConcluido) {
+            resetInviteForm();
+            setConviteConcluido(false);
         }
     };
 
@@ -753,6 +910,8 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         setNewMemberName('');
         setNewMemberPermissions(getDefaultPermissions('member'));
         setNewMemberProductContext('platform');
+        setColaboradorTexto('');
+        setColaboradorEscolhido(null);
     };
 
     const handleOpenEditMember = (member: OrganizationMember) => {
@@ -801,24 +960,32 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
             notify('Selecione uma organização específica para reenviar o convite.', 'error');
             return;
         }
+        // O reenvio apaga o login ainda não confirmado e cria outro, com id novo. O gatilho do
+        // banco reaponta a linha do membro, mas não a ficha do colaborador vinculada a ele —
+        // por isso o login de antes é lido aqui e as fichas são reapontadas depois.
+        const loginAntes = await organizationService.membroPorEmail(organizationId, member.email)
+            .then(m => m?.userId ?? null).catch(() => null);
         const { data, error } = await supabase.functions.invoke('invite-member', {
             body: { email: member.email, name: member.name, organizationId, role: member.role, resend: true },
         });
         if (error) {
-            // Try to read the actual error message from the JSON body
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const ctx = (error as any).context;
-            let msg = error.message;
-            try {
-                const body = ctx ? await ctx.json() : null;
-                if (body?.error) msg = body.error;
-            } catch { /* ignore */ }
-            notify(`Não foi possível reenviar o convite: ${msg}`, 'error');
+            notify(`Não foi possível reenviar o convite: ${await motivoDaFalhaDaEdge(error)}`, 'error');
         } else if (data?.error) {
             notify(`Não foi possível reenviar o convite: ${data.error}`, 'error');
         } else if (data?.alreadyConfirmed) {
             notify(`${member.email} já possui conta ativa no sistema.`, 'error');
         } else {
+            const loginDepois = loginAntes
+                ? await organizationService.membroPorEmail(organizationId, member.email).then(m => m?.userId ?? null).catch(() => null)
+                : null;
+            if (loginAntes && loginDepois && loginDepois !== loginAntes) {
+                const r = await organizationService.reapontarFichasDoLogin(loginAntes, loginDepois)
+                    .catch((err: unknown) => ({ trocadas: 0, falhas: [err instanceof Error ? err.message : 'erro desconhecido'] }));
+                if (r.falhas.length > 0) {
+                    notify(`Convite reenviado, mas a ficha do colaborador continua ligada ao login antigo (${r.falhas.join('; ')}). Refaça o vínculo em RH › Colaboradores.`, 'error');
+                    return;
+                }
+            }
             notify(`Convite reenviado para ${member.email}`, 'success');
         }
     };
@@ -1749,13 +1916,46 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                     <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl h-full max-h-[90vh] flex flex-col animate-in fade-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
                         <div className="p-6 border-b border-gray-100 flex items-center justify-between">
                             <h3 className="text-lg font-bold text-gray-900">Convidar Novo Membro</h3>
-                            <button onClick={() => setIsInviteModalOpen(false)} className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors">
+                            <button onClick={fecharConvite} className="text-gray-400 hover:text-gray-600 p-2 rounded-lg hover:bg-gray-100 transition-colors">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
                         <div className="flex-1 overflow-y-auto p-6">
 
                             <form onSubmit={handleInvite} className="space-y-6">
+                                {/* Convidar a partir de um colaborador do RH (guia §7.1.3): preenche nome e
+                                    e-mail; quem já é usuário desta organização vem desligado, com o motivo. */}
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label htmlFor="convite-colaborador" className="block text-xs font-semibold text-slate-500 mb-1">Colaborador (opcional)</label>
+                                        <CreatableCombobox<OpcaoColaborador>
+                                            id="convite-colaborador"
+                                            ariaLabel="Colaborador"
+                                            value={colaboradorTexto}
+                                            selectedId={colaboradorEscolhido?.id ?? null}
+                                            options={opcoesColaborador}
+                                            onSelect={o => {
+                                                setColaboradorEscolhido(o);
+                                                setColaboradorTexto(o.name);
+                                                setNewMemberName(o.name);
+                                                // ficha sem e-mail não apaga o que já foi digitado
+                                                setNewMemberEmail(atual => o.email || atual);
+                                            }}
+                                            onTextChange={texto => {
+                                                setColaboradorTexto(texto);
+                                                setColaboradorEscolhido(null);
+                                            }}
+                                            getHint={o => [o.email || 'sem e-mail', o.cargo, o.origem && `disponibilizado por ${o.origem}`].filter(Boolean).join(' · ')}
+                                            getDisabledReason={o => o.motivoDesligado}
+                                            placeholder="Buscar colaborador do RH"
+                                            disabled={erroColaboradores || carregandoColaboradores}
+                                            disabledReason={carregandoColaboradores ? 'Carregando colaboradores…' : 'Não foi possível carregar os colaboradores'}
+                                            vazio="Nenhum colaborador ativo nesta organização."
+                                            avisoSemVinculo="Nenhum colaborador escolhido — o convite não fica vinculado ao RH."
+                                            inputClassName="w-full pl-3 pr-8 h-9 text-sm text-gray-900 placeholder:text-gray-400 border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:cursor-not-allowed"
+                                        />
+                                    </div>
+                                </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-xs font-semibold text-slate-500 mb-1">Nome</label>
@@ -1778,6 +1978,9 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                             className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500"
                                             placeholder="email@empresa.com"
                                         />
+                                        {colaboradorEscolhido && !colaboradorEscolhido.email && (
+                                            <p className="mt-1 text-xs text-gray-500">Será gravado na ficha do colaborador.</p>
+                                        )}
                                     </div>
                                 </div>
 
@@ -1868,10 +2071,16 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     </div>
                                 )}
                                 <div className="flex justify-end gap-3 pt-6 border-t border-gray-100 mt-6">
-                                    <button type="button" onClick={() => { setIsInviteModalOpen(false); setInviteError(null); }} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
-                                    <Button type="submit" disabled={isInviting}>
-                                        {isInviting ? 'Enviando...' : 'Enviar Convite'}
-                                    </Button>
+                                    {conviteConcluido ? (
+                                        <Button type="button" onClick={fecharConvite}>Fechar</Button>
+                                    ) : (
+                                        <>
+                                            <button type="button" onClick={fecharConvite} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>
+                                            <Button type="submit" disabled={isInviting}>
+                                                {isInviting ? 'Enviando...' : 'Enviar Convite'}
+                                            </Button>
+                                        </>
+                                    )}
                                 </div>
                             </form>
                         </div>

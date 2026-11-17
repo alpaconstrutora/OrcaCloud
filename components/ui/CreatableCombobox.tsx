@@ -1,14 +1,23 @@
-// components/ui/CreatableCombobox.tsx — campo de catálogo com "Cadastrar 'X'"
+// components/ui/CreatableCombobox.tsx — campo com busca que escolhe um item de uma lista
 //
-// Guia §7.1.2 (docs/ui_ux_guia_unificado.md). Campo de formulário que escolhe
-// um item de um catálogo PEQUENO e criável (marca, modelo) — não é entidade com
-// drawer próprio (§7.1.1: cliente/fornecedor/CC/plano de contas).
+// Dois usos (docs/ui_ux_guia_unificado.md):
+//  - §7.1.2 catálogo PEQUENO e criável (marca, modelo), COM `onCreate`: oferece
+//    "Cadastrar 'X'" — não é entidade com drawer próprio (§7.1.1: cliente/
+//    fornecedor/CC/plano de contas);
+//  - §7.1.3 aproveitar um registro que já existe (colaborador do RH no convite
+//    de Usuários), SEM `onCreate`: não cadastra nada; `getDisabledReason` mostra
+//    desligada, com o motivo, a opção que não pode ser escolhida; `avisoSemVinculo`
+//    e `vazio` dizem o que o texto solto e a lista vazia significam naquele formulário.
 //
 // Regras que o componente garante sozinho:
 //  - nunca bloqueia: o texto digitado fica no campo mesmo sem escolher nada
 //    (`onTextChange`); quem salva transforma em cadastro (resolverMarcaModelo);
 //  - não oferece cadastrar o que já existe, ignorando maiúsculas E acento;
-//  - sair do campo com um texto igual a um item existente vincula o item;
+//  - sair do campo com um texto igual a UM item existente vincula o item (com
+//    homônimos, não adivinha; opção desligada nunca é vinculada);
+//  - Enter nunca envia o formulário em volta: escolhe a opção ativa ou não faz nada;
+//  - a opção ativa no teclado é anunciada (`aria-activedescendant`) e destacada,
+//    inclusive a desligada — senão o leitor de tela e o olho ficam sem saber onde estão;
 //  - a lista sai por PORTAL em `document.body` com `position: fixed` — dentro
 //    do SheetPanel (rolável, com transform) um `absolute` seria cortado;
 //  - Escape fecha SÓ a lista (stopPropagation): o Sheet em volta escuta
@@ -18,7 +27,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown, Loader2, Plus } from 'lucide-react';
-import { acharPorNome, deveOferecerCadastro, filtrarPorNome, normalizarNome } from '../../utils/catalogoNome';
+import { chaveBusca, deveOferecerCadastro, filtrarPorNome, normalizarNome } from '../../utils/catalogoNome';
 
 export interface CreatableComboboxProps<T extends { id: string; name: string }> {
     /** Texto atual do campo (nome escolhido ou digitado). */
@@ -42,6 +51,16 @@ export interface CreatableComboboxProps<T extends { id: string; name: string }> 
     ariaLabel?: string;
     /** Aviso sob o campo quando há texto ainda não cadastrado (ex.: "Marca nova — será cadastrada ao salvar."). */
     avisoNovo?: string;
+    /** Sem `onCreate`: aviso sob o campo quando o texto não está vinculado a nenhum item. */
+    avisoSemVinculo?: string;
+    /**
+     * Motivo de a opção não poder ser escolhida (ex.: "Já é usuário desta organização").
+     * Com motivo, a opção aparece desligada, mostra o motivo no lugar do hint e não é
+     * escolhida por clique, Enter nem pelo vínculo automático ao sair do campo.
+     */
+    getDisabledReason?: (item: T) => string | undefined;
+    /** Sem `onCreate`: texto da lista quando não há nenhuma opção (padrão "Nada cadastrado."). */
+    vazio?: string;
 }
 
 const INPUT_PADRAO =
@@ -52,7 +71,10 @@ const INPUT_PADRAO =
 export function CreatableCombobox<T extends { id: string; name: string }>({
     value, selectedId, options, onSelect, onTextChange, onCreate, getHint, placeholder,
     disabled, disabledReason, inputClassName = INPUT_PADRAO, id, ariaLabel, avisoNovo = 'Novo no catálogo — será cadastrado ao salvar.',
+    avisoSemVinculo = 'Não vinculado ao catálogo.', getDisabledReason, vazio = 'Nada cadastrado.',
 }: CreatableComboboxProps<T>) {
+    const idBase = React.useId();
+    const idDaOpcao = (i: number) => `${idBase}-opcao-${i}`;
     const inputRef = React.useRef<HTMLInputElement>(null);
     const panelRef = React.useRef<HTMLDivElement>(null);
     const [open, setOpen] = React.useState(false);
@@ -94,6 +116,7 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
     React.useEffect(() => { setAtivo(0); }, [termo, open]);
 
     const escolher = (item: T) => {
+        if (getDisabledReason?.(item)) return;
         onSelect(item);
         setOpen(false);
         setErro(null);
@@ -123,8 +146,11 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
         }
         if (e.key === 'ArrowDown') { e.preventDefault(); setOpen(true); setAtivo(i => Math.min(i + 1, Math.max(total - 1, 0))); return; }
         if (e.key === 'ArrowUp') { e.preventDefault(); setAtivo(i => Math.max(i - 1, 0)); return; }
-        if (e.key === 'Enter' && open && total > 0) {
+        if (e.key === 'Enter') {
+            // Nunca envia o formulário em volta (no convite de Usuários, enviar = mandar
+            // e-mail de verdade): com a lista aberta escolhe a opção ativa; senão, nada.
             e.preventDefault();
+            if (!open || total === 0) return;
             if (ativo < resultados.length) escolher(resultados[ativo]);
             else void cadastrar();
         }
@@ -136,10 +162,12 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
         // ficava aberta por cima do formulário). Clicar numa opção não passa por
         // aqui — o painel faz preventDefault no mousedown e o foco fica no input.
         setOpen(false);
-        // Texto idêntico a um item existente (ignorando caixa/acento) vincula sozinho.
+        // Texto idêntico a UM item existente (ignorando caixa/acento) vincula sozinho. Com dois
+        // ou mais itens de mesmo nome (homônimos, ex.: dois "José da Silva"), não adivinha.
         if (!selectedId && value.trim()) {
-            const igual = acharPorNome(options, value);
-            if (igual) onSelect(igual);
+            const alvo = chaveBusca(value);
+            const iguais = options.filter(o => chaveBusca(o.name) === alvo);
+            if (iguais.length === 1 && !getDisabledReason?.(iguais[0])) onSelect(iguais[0]);
         }
     };
 
@@ -154,6 +182,7 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
                 role="combobox"
                 aria-expanded={open}
                 aria-autocomplete="list"
+                aria-activedescendant={open && total > 0 ? idDaOpcao(Math.min(ativo, total - 1)) : undefined}
                 aria-label={ariaLabel}
                 autoComplete="off"
                 value={value}
@@ -173,7 +202,7 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
             {erro && <p className="mt-1 text-xs text-red-600">{erro}</p>}
             {!erro && naoCadastrado && (
                 <p className="mt-1 text-xs text-gray-400">
-                    {onCreate ? avisoNovo : 'Não vinculado ao catálogo.'}
+                    {onCreate ? avisoNovo : avisoSemVinculo}
                 </p>
             )}
 
@@ -187,23 +216,29 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
                     onMouseDown={e => e.preventDefault()}
                 >
                     {resultados.map((o, i) => {
-                        const hint = getHint?.(o);
+                        const motivoDesligada = getDisabledReason?.(o);
+                        const hint = motivoDesligada ?? getHint?.(o);
                         const escolhido = o.id === selectedId;
                         return (
                             <button
                                 key={o.id}
+                                id={idDaOpcao(i)}
                                 type="button"
                                 role="option"
                                 aria-selected={escolhido}
+                                aria-disabled={motivoDesligada ? true : undefined}
+                                title={motivoDesligada}
                                 onClick={() => escolher(o)}
                                 onMouseEnter={() => setAtivo(i)}
                                 className={`w-full flex items-center justify-between gap-3 px-3 py-1.5 min-h-9 rounded-[6px] text-sm text-left transition-colors ${
-                                    i === ativo ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
+                                    motivoDesligada
+                                        ? `text-gray-500 cursor-not-allowed ${i === ativo ? 'bg-gray-100' : ''}`
+                                        : i === ativo ? 'bg-blue-50 text-blue-700' : 'text-gray-700 hover:bg-gray-50'
                                 }`}
                             >
                                 <span className="min-w-0">
                                     <span className="block truncate font-medium">{o.name}</span>
-                                    {hint && <span className="block truncate text-xs text-gray-400">{hint}</span>}
+                                    {hint && <span className={`block truncate text-xs ${motivoDesligada ? 'text-gray-500' : 'text-gray-400'}`}>{hint}</span>}
                                 </span>
                                 {escolhido && <Check className="w-4 h-4 shrink-0" />}
                             </button>
@@ -211,11 +246,13 @@ export function CreatableCombobox<T extends { id: string; name: string }>({
                     })}
                     {resultados.length === 0 && !podeCadastrar && (
                         <p className="px-3 py-2 text-sm text-gray-400">
-                            {options.length === 0 ? 'Nada cadastrado ainda — digite para cadastrar.' : 'Nenhum resultado.'}
+                            {options.length > 0 ? 'Nenhum resultado.'
+                                : onCreate ? 'Nada cadastrado ainda — digite para cadastrar.' : vazio}
                         </p>
                     )}
                     {podeCadastrar && (
                         <button
+                            id={idDaOpcao(resultados.length)}
                             type="button"
                             onClick={() => void cadastrar()}
                             onMouseEnter={() => setAtivo(resultados.length)}

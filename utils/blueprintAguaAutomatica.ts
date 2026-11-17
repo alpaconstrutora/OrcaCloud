@@ -121,6 +121,13 @@ export interface HipotesesDeAgua {
    */
   noForro?: { aguaFria: FaixaDoForro; aguaQuente: FaixaDoForro; folgaSobAVigaMm: number } | null;
   /**
+   * PA17 do prédio automático (17/11/2026): no forro, a descida até a peça embutida desce NA FACE da parede (no próprio
+   * ponto), como a do eletroduto (F14b), e não no eixo — no eixo correm o dreno do ar (~2,10 m) e a linha frigorígena
+   * (2,35 m), e a descida da água os cruzava (R8: 13 × dreno e 12 × linha no tipo). Ausente = no eixo, como sempre (a
+   * casa).
+   */
+  descidaNaFace?: boolean;
+  /**
    * F16 da casa automática (16/10/2026): a folga, além dos raios, entre a coluna desta água e a prumada da OUTRA água
    * já traçada. Ausente = `AFASTAMENTO_ENTRE_COLUNAS_MM` (50).
    */
@@ -444,7 +451,9 @@ export function planejarAgua(
   };
   /** F14b: do nó no forro à peça (ou à origem) embutida na parede — os pedaços da descida. */
   const pedacosDaDescida = (levelId: ObjectId, q: Ponto2, cota: number, alvo: Ponto2, cotaDoAlvo: number) => {
-    const w = encaixarNaParede(alvo, paredesDe(levelId), raioDeEncaixe)?.q ?? null;
+    const encaixe = encaixarNaParede(alvo, paredesDe(levelId), raioDeEncaixe);
+    // PA17: no prédio, na face (o próprio ponto), longe do dreno e da linha que correm no eixo.
+    const w = encaixe ? (hip.descidaNaFace ? { x: alvo.x, y: alvo.y } : encaixe.q) : null;
     return descidaDoForro(model, levelId, { q, cotaDaFaixaMm: cota, alvo, cotaDoAlvoMm: cotaDoAlvo, naParede: w, raioMm: RAIO_NA_DESCIDA_MM, folgaSobAVigaMm: hip.noForro!.folgaSobAVigaMm + (noForro?.degrauNaParedeMm ?? 0), disciplina });
   };
   const descer = (levelId: ObjectId, q: Ponto2, cota: number, alvo: Ponto2, cotaDoAlvo: number) => {

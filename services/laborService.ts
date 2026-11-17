@@ -737,6 +737,9 @@ function erroDeEmployee(error: { code?: string; message?: string }): unknown {
 // ============================================================
 
 /** Colaborador oferecido como credor no Financeiro (Extrato, Pagamento Avulso). */
+/** O que o campo "Colaborador" do convite de Usuários precisa de cada ficha. */
+export type ColaboradorParaConvite = Pick<Employee, 'id' | 'org_id' | 'name' | 'email' | 'user_id' | 'status' | 'role'>;
+
 export interface CredorColaborador {
     id: string;
     name: string;
@@ -821,6 +824,31 @@ export const laborService = {
             .order('name', { ascending: true });
         if (error) throw error;
         return data || [];
+    },
+
+    /**
+     * Lista do campo "Colaborador" do convite de Usuários (16/11/2026): os da
+     * organização + os disponibilizados para ela (`employee_org_shares`), só com as
+     * colunas que o seletor usa — `listEmployees` traz `*` e as alocações. Quem
+     * aparece ou vem desligado é decidido em `lib/convidarColaborador.ts`.
+     */
+    async listColaboradoresParaConvite(orgId: string): Promise<ColaboradorParaConvite[]> {
+        const { data: shared, error: sharedErr } = await supabase
+            .from('employee_org_shares')
+            .select('employee_id')
+            .eq('target_org_id', orgId);
+        if (sharedErr) throw sharedErr;
+        const sharedIds = (shared || []).map(s => s.employee_id);
+
+        const { data, error } = await supabase
+            .from('employees')
+            .select('id, org_id, name, email, user_id, status, role')
+            .or(sharedIds.length > 0
+                ? `org_id.eq.${orgId},id.in.(${sharedIds.join(',')})`
+                : `org_id.eq.${orgId}`)
+            .order('name', { ascending: true });
+        if (error) throw error;
+        return (data || []) as ColaboradorParaConvite[];
     },
 
     async listOrgsWithActiveEmployees(): Promise<string[]> {

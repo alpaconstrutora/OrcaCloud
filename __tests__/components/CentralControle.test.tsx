@@ -451,4 +451,23 @@ describe('CentralControle · tela "Bom dia"', () => {
         await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
         expect(fontesSeparadas).toHaveBeenCalledTimes(1);
     });
+
+    // Revisão final (17/11): sem zerar `fontesDeAlertaNaTela` na troca de org, o plano B
+    // da org nova partia das fontes da anterior — alerta de outra empresa, com atalho,
+    // debaixo do seletor do topo (REGRA #5) até o bloco financeiro da nova chegar.
+    it('plano B nas duas orgs: alerta da org anterior nunca entra na nova', async () => {
+        const fin = [{ alert_type: 'CASHFLOW_RISK', severity: 'HIGH', title: 'Alerta da o1', description: 'Conta X', amount: 100, project_id: null, project_name: null, ref_id: 'r1' }];
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas
+            .mockImplementationOnce(() => fontes({ financial_alerts: () => Promise.resolve(fin) }))
+            .mockImplementationOnce(() => fontes({ financial_alerts: nunca }));
+        const { rerender } = montar();
+        expect(await screen.findByText('Alerta da o1')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledWith('o2'));
+        // As outras fontes da o2 chegam (a fila sai do esqueleto); a financeira, não.
+        await waitFor(() => expect(cartao('Minha fila')).toHaveAttribute('aria-busy', 'false'));
+        expect(screen.queryByText('Alerta da o1')).not.toBeInTheDocument();
+    });
 });

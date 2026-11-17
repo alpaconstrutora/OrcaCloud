@@ -177,7 +177,12 @@ sem ser membro da org dona. Por isso ninguém usa hoje a edição pelo compartil
     `-visibilidade`, `-superadmin`, `-pagamento`, `teste-vinculo-colaborador-envolvidos`,
     `teste-link-celular-diario` e `teste-link-celular-tarefas`.
   - **`check-rls-postura.sh`:** "postura limpa nas 9 verificações".
-- [ ] Tarefa 4 — revisão feita e corrigida (seção abaixo); falta PR, CI, merge e publicação.
+- [x] **Tarefa 4:** a revisão foi feita e corrigida (seção abaixo).
+  - **PR #537:** CI SUCCESS no `0e4f63a`; merge por squash = `44f48b7` (17/11 ~11:16).
+  - **Produção:** `conferir-producao` diz "O domínio serve exatamente origin/main (44f48b7)",
+    com o texto "Disponibilizado por" no bundle.
+  - **CI do `main` no `44f48b7`:** success (11:42).
+  - Esta marcação foi num PR só de documentação, depois do merge.
 
 ## Revisão independente (17/11) — 0 crítico, 2 importantes, 8 menores
 

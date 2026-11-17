@@ -1,0 +1,125 @@
+// @vitest-environment jsdom
+/**
+ * CreatableCombobox — opção desligada com motivo e aviso sem vínculo configurável.
+ * Pedido de 16/11/2026 (Usuários › Convidar membro a partir de um colaborador do RH):
+ * quem já é usuário da organização aparece na lista, desligado, dizendo por quê
+ * (botão desligado sempre diz o motivo), e não pode ser escolhido por nenhum caminho.
+ * Plano: docs/planos/2026-11-16-usuarios-convidar-colaborador.md (Tarefa 1).
+ */
+import React from 'react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { vi, describe, it, expect } from 'vitest';
+import { CreatableCombobox } from '../../components/ui/CreatableCombobox';
+
+type Item = { id: string; name: string };
+const OPCOES: Item[] = [{ id: '1', name: 'Ana' }, { id: '2', name: 'Bia' }];
+const motivo = (o: Item) => (o.id === '2' ? 'Já é usuário desta organização' : undefined);
+
+const Campo = (props: Partial<React.ComponentProps<typeof CreatableCombobox<Item>>>) => (
+    <CreatableCombobox<Item>
+        value=""
+        selectedId={null}
+        options={OPCOES}
+        onSelect={() => {}}
+        onTextChange={() => {}}
+        getDisabledReason={motivo}
+        ariaLabel="Colaborador"
+        {...props}
+    />
+);
+
+describe('CreatableCombobox — opção desligada', () => {
+    it('mostra o motivo e não escolhe no clique', () => {
+        const onSelect = vi.fn();
+        render(<Campo onSelect={onSelect} />);
+        fireEvent.focus(screen.getByRole('combobox'));
+        const bia = screen.getByRole('option', { name: /Bia/ });
+        expect(bia.getAttribute('aria-disabled')).toBe('true');
+        expect(bia.textContent).toContain('Já é usuário desta organização');
+        fireEvent.click(bia);
+        expect(onSelect).not.toHaveBeenCalled();
+        // a opção habilitada continua escolhível
+        fireEvent.click(screen.getByRole('option', { name: /Ana/ }));
+        expect(onSelect).toHaveBeenCalledWith(OPCOES[0]);
+    });
+
+    it('Enter na opção desligada não escolhe', () => {
+        const onSelect = vi.fn();
+        render(<Campo onSelect={onSelect} />);
+        const input = screen.getByRole('combobox');
+        fireEvent.focus(input);
+        fireEvent.keyDown(input, { key: 'ArrowDown' });
+        fireEvent.keyDown(input, { key: 'Enter' });
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('blur com o nome exato da desligada não vincula', () => {
+        const onSelect = vi.fn();
+        const { unmount } = render(<Campo value="Bia" onSelect={onSelect} />);
+        fireEvent.blur(screen.getByRole('combobox'));
+        expect(onSelect).not.toHaveBeenCalled();
+        unmount();
+
+        render(<Campo value="Ana" onSelect={onSelect} />);
+        fireEvent.blur(screen.getByRole('combobox'));
+        expect(onSelect).toHaveBeenCalledWith(OPCOES[0]);
+    });
+
+    it('blur com nome repetido (homônimos) não vincula sozinho', () => {
+        const onSelect = vi.fn();
+        const homonimos: Item[] = [{ id: 'a', name: 'José da Silva' }, { id: 'b', name: 'José da Silva' }];
+        render(<Campo options={homonimos} getDisabledReason={undefined} value="josé da silva" onSelect={onSelect} />);
+        fireEvent.blur(screen.getByRole('combobox'));
+        expect(onSelect).not.toHaveBeenCalled();
+    });
+
+    it('avisoSemVinculo troca o aviso sem onCreate', () => {
+        render(<Campo value="Zé" avisoSemVinculo="Nenhum colaborador escolhido — o convite não fica vinculado ao RH." />);
+        expect(screen.getByText('Nenhum colaborador escolhido — o convite não fica vinculado ao RH.')).toBeTruthy();
+        expect(screen.queryByText('Não vinculado ao catálogo.')).toBeNull();
+    });
+});
+
+// Pedido de 16/11 (2º) — os menores da revisão.
+describe('CreatableCombobox — teclado e lista vazia', () => {
+    it('Enter nunca envia o formulário: lista fechada', () => {
+        render(<Campo />);
+        const input = screen.getByRole('combobox');
+        // sem foco a lista está fechada; preventDefault faz o fireEvent devolver false
+        expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false);
+    });
+
+    it('Enter nunca envia o formulário: lista aberta sem resultado', () => {
+        render(<Campo value="zzz" />);
+        const input = screen.getByRole('combobox');
+        fireEvent.focus(input);
+        expect(screen.getByText('Nenhum resultado.')).toBeTruthy();
+        expect(fireEvent.keyDown(input, { key: 'Enter' })).toBe(false);
+    });
+
+    it('opção ativa é anunciada (aria-activedescendant), inclusive a desligada', () => {
+        render(<Campo />);
+        const input = screen.getByRole('combobox');
+        fireEvent.focus(input);
+        expect(input.getAttribute('aria-activedescendant')).toBe(screen.getByRole('option', { name: /Ana/ }).id);
+        fireEvent.keyDown(input, { key: 'ArrowDown' });
+        const bia = screen.getByRole('option', { name: /Bia/ });
+        expect(bia.id).not.toBe('');
+        expect(input.getAttribute('aria-activedescendant')).toBe(bia.id);
+        expect(bia.className).toContain('bg-gray-100');
+    });
+
+    it('lista vazia sem onCreate usa o texto do campo, não "digite para cadastrar"', () => {
+        render(<Campo options={[]} vazio="Nenhum colaborador cadastrado nesta organização." />);
+        fireEvent.focus(screen.getByRole('combobox'));
+        expect(screen.getByText('Nenhum colaborador cadastrado nesta organização.')).toBeTruthy();
+        expect(screen.queryByText(/digite para cadastrar/)).toBeNull();
+    });
+
+    it('lista vazia sem onCreate e sem texto próprio também não oferece cadastrar', () => {
+        render(<Campo options={[]} />);
+        fireEvent.focus(screen.getByRole('combobox'));
+        expect(screen.queryByText(/digite para cadastrar/)).toBeNull();
+        expect(screen.getByText('Nada cadastrado.')).toBeTruthy();
+    });
+});

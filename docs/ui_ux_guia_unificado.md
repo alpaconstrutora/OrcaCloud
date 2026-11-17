@@ -194,6 +194,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §7 Tabela — `<tbody>` e TDs (tipografia por tipo de dado)
 - [ ] §7.1 Campos editáveis inline dentro de TD
 - [ ] §7.1.2 Se o formulário escolhe marca/modelo (catálogo criável): usa `BrandModelPicker`/`CreatableCombobox` com a org do registro, não `<select>` nem texto livre
+- [ ] §7.1.3 Se o formulário aproveita um colaborador do RH: `CreatableCombobox` sem `onCreate`, opção indisponível desligada com o motivo (`getDisabledReason`), aviso sem vínculo próprio do formulário
 - [ ] §7.2 Altura da linha — `py-2.5` em toda `<td>`
 - [ ] §7.3 Planilha densa de itens (exceção — exige os 3 critérios)
 - [ ] §8 Status Badge
@@ -1898,6 +1899,45 @@ O que o componente garante (não reescrever na tela):
 > ativo/item vinculado. A tela grava ids — nunca reescreve o texto à mão.
 > ❌ Não usar `<select>` nativo listando o catálogo (era o "Selecione a Marca..."
 > da Gestão de Ativos): sem busca, sem cadastrar, e gravava o NOME.
+
+### 7.1.3 Escolher colaborador (pessoa do RH) num formulário = `CreatableCombobox` sem `onCreate`
+
+**Criado em 2026-11-16** com Minha organização › Usuários › Convidar membro
+(`docs/planos/2026-11-16-usuarios-convidar-colaborador.md`). Colaborador não é
+entidade de drawer do §7.1.1 nem catálogo criável do §7.1.2: o formulário só
+**aproveita** quem o RH já cadastrou (para preencher nome, e-mail…), e digitar sem
+escolher continua valendo (o campo é opcional). O campo é o mesmo
+`components/ui/CreatableCombobox.tsx`, **sem `onCreate`** — não se cadastra
+colaborador daqui.
+
+```tsx
+<CreatableCombobox<OpcaoColaborador>
+  ariaLabel="Colaborador"
+  value={texto} selectedId={escolhido?.id ?? null}
+  options={opcoesDeColaborador(colaboradores, membros)}   // lib/convidarColaborador.ts
+  onSelect={o => { setEscolhido(o); setTexto(o.name); /* preenche os outros campos */ }}
+  onTextChange={t => { setTexto(t); setEscolhido(null); }}  // digitar desvincula
+  getHint={o => o.email || 'sem e-mail'}
+  getDisabledReason={o => o.motivoDesligado}                // "Já é usuário desta organização"
+  avisoSemVinculo="Nenhum colaborador escolhido — o convite não fica vinculado ao RH."
+/>
+```
+
+- **Opção que não pode ser escolhida aparece desligada, com o motivo** (`getDisabledReason`):
+  some da escolha por clique, Enter e pelo vínculo automático ao sair do campo — mas
+  continua na lista, porque sumir sem explicação vira "a pessoa não aparece" (o mesmo
+  argumento de "botão desligado sempre diz o motivo").
+- **`avisoSemVinculo`** troca o "Não vinculado ao catálogo." pelo que o texto solto
+  significa NAQUELE formulário; **`vazio`** diz o que a lista vazia significa (sem
+  `onCreate`, nunca "digite para cadastrar"). Enquanto a lista carrega, o campo fica
+  desligado com "Carregando…" no lugar de mostrar uma lista vazia que mente.
+- **Enter nunca envia o formulário em volta** e a opção ativa é anunciada
+  (`aria-activedescendant`) — o componente já garante; não reescrever na tela.
+- A lista vem de `laborService.listEmployees(orgId)` — colaboradores da organização **e**
+  os disponibilizados para ela (`employee_org_shares`).
+
+> ❌ Não usar `<select>` nativo listando colaboradores: sem busca, e não tem como dizer
+> por que uma opção está desligada.
 
 ### 7.2 Altura da linha — padding vertical padrão
 

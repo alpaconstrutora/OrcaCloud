@@ -87,4 +87,12 @@ O "Ficou de fora" daquele relatório tinha dois itens:
   migrationsPrefixo verdes (57 no total com os novos); check-ui-standard e check-xss-sinks limpos.
 
 ### 5. Publicação
-- [ ] PR, CI verde, merge, `conferir-producao.sh`.
+- [x] PR, CI verde, merge, `conferir-producao.sh`.
+  **Feito 17/11:** PR #545 (CI 41 min verde), squash `a0d9577e`; `conferir-producao.sh` → o domínio
+  serve `a0d9577` com "aguardando sua resposta" e "o voto não pode ser mudado" no bundle; CI da
+  `main` (run 44131520062) verde no `a0d9577`. Migration aplicada antes do merge (item 1).
+
+## Situação
+
+5 de 5 itens. Fica de fora (não pedido): conferir no app logado e no link de um investidor real —
+votar de verdade gravaria resposta de investidor; a prova do banco e a da tela cobrem o caminho.

@@ -1,6 +1,6 @@
 import React from 'react';
 import { moverEntreAbas } from './ui/abasPeloTeclado';
-import { TrendingUp, PieChart as PieChartIcon, Building2, Boxes, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, CheckCircle2, XCircle, ChevronDown, HelpCircle, MoreHorizontal, LogOut } from 'lucide-react';
+import { TrendingUp, PieChart as PieChartIcon, Building2, Boxes, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, XCircle, ChevronDown, HelpCircle, MoreHorizontal, LogOut } from 'lucide-react';
 import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { Investor, investorService } from '../services/investorService';
@@ -1047,53 +1047,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             onDelete={handleDeleteReport}
                             openConfirm={openConfirm}
                         />
-                        {portalToken && (
-                            <section className="space-y-4">
-                                <div className="flex items-center gap-3">
-                                    <Bell className="w-4 h-4 text-blue-600" />
-                                    <h3 className="text-lg font-black text-gray-900">Comunicados</h3>
-                                </div>
-                                {portalAnnouncements.length === 0 ? (
-                                    <div className="text-center py-12 bg-white rounded-3xl border border-gray-100">
-                                        <Bell className="w-10 h-10 text-gray-200 mx-auto mb-3" />
-                                        <p className="font-bold text-gray-500">Nenhum comunicado publicado.</p>
-                                    </div>
-                                ) : portalAnnouncements.map((ann: any) => (
-                                    <div key={ann.id} className="bg-white rounded-3xl border border-gray-100 shadow-sm p-6 space-y-3">
-                                        <div className="flex items-start justify-between gap-4">
-                                            <div>
-                                                <span className="text-xs font-bold text-blue-500 uppercase tracking-widest">{ann.type}</span>
-                                                <h4 className="text-lg font-black text-gray-900 mt-0.5">{ann.title}</h4>
-                                                <p className="text-sm text-gray-500 mt-2 leading-relaxed">{ann.body}</p>
-                                            </div>
-                                            {ann.acknowledged
-                                                ? <CheckCircle2 className="w-6 h-6 text-emerald-500 flex-shrink-0 mt-1" />
-                                                : ann.requires_acknowledgment && (
-                                                    <Button
-                                                        onClick={() => {
-                                                            investorPortalTokenService.acknowledgeByToken(portalToken, ann.id)
-                                                                .then(() => setPortalAnnouncements(prev =>
-                                                                    prev.map(a => a.id === ann.id ? { ...a, acknowledged: true } : a)
-                                                                ))
-                                                                .catch(e => console.error(e));
-                                                        }}
-                                                        className="flex-shrink-0"
-                                                    >
-                                                        <CheckCircle2 className="w-3.5 h-3.5" />
-                                                        Confirmar
-                                                    </Button>
-                                                )
-                                            }
-                                        </div>
-                                        {ann.published_at && (
-                                            <p className="text-xs text-gray-400 font-bold uppercase tracking-widest">
-                                                {new Date(ann.published_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })}
-                                            </p>
-                                        )}
-                                    </div>
-                                ))}
-                            </section>
-                        )}
                     </div>
                 )}
                 {activeTab === 'comunicados' && (
@@ -1101,8 +1054,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         <PortalAnnouncements
                             announcements={portalAnnouncements}
                             portalToken={portalToken}
-                            onAcknowledged={(id) => setPortalAnnouncements(prev =>
-                                prev.map(a => a.id === id ? { ...a, acknowledged: true } : a)
+                            onAcknowledged={(id, resposta) => setPortalAnnouncements(prev =>
+                                prev.map(a => a.id === id ? { ...a, acknowledged: true, ...resposta } : a)
                             )}
                         />
                     ) : isAdmin ? (

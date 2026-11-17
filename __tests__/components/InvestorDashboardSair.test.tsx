@@ -28,8 +28,9 @@ vi.mock('../../services/investorPortalTokenService', () => ({
         getOpportunitiesByToken: () => Promise.resolve([]),
         getAnnouncementsByToken: () => Promise.resolve([]),
         getSpesByToken: () => Promise.resolve([]),
-        acknowledgeByToken: () => Promise.resolve(),
+        acknowledgeByToken: () => Promise.resolve({ vote_option: null, acknowledged_at: null }),
     },
+    RespostaRecusadaError: class extends Error {},
 }));
 globalThis.ResizeObserver = class { observe() {} unobserve() {} disconnect() {} } as never;
 

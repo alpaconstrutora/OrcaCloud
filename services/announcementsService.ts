@@ -69,13 +69,15 @@ function exigirUmaLinha(data: unknown, acao: string): InvestorAnnouncement {
     return linhas[0];
 }
 
-async function exigirSemRespostas(id: string, acao: 'editado' | 'excluído'): Promise<void> {
-    const { count, error } = await supabase
-        .from('investor_acknowledgments')
-        .select('id', { count: 'exact', head: true })
-        .eq('announcement_id', id);
-    if (error) throw error;
-    if ((count ?? 0) > 0) throw new AnnouncementBlockedError(count ?? 0, acao);
+/**
+ * A trava de comunicado respondido mora no BANCO (gatilho trg_investor_announcements_trava_respondido,
+ * migration 20271117970000): recusa com HINT 'comunicado_com_respostas' e DETAIL = nº de respostas.
+ * Aqui só vira o erro que a tela já sabe mostrar.
+ */
+function falhaDaGravacao(error: unknown, acao: 'editado' | 'excluído'): unknown {
+    const e = error as { hint?: string | null; details?: string | null } | null;
+    if (e?.hint === 'comunicado_com_respostas') return new AnnouncementBlockedError(Number(e.details) || 1, acao);
+    return error;
 }
 
 const ANN_COLS = 'id, organization_id, project_id, title, body, type, published_at, requires_acknowledgment, created_at';
@@ -157,17 +159,16 @@ export const announcementsService = {
     },
 
     /**
-     * Edita. Comunicado com aceite/voto NÃO muda: o investidor confirmou aquele texto. A conferência
-     * é feita aqui, na hora de gravar, porque uma resposta pode chegar com o painel aberto.
+     * Edita. Comunicado com aceite/voto NÃO muda: o investidor confirmou aquele texto. Quem recusa é
+     * o banco, na hora de gravar — uma resposta pode chegar com o painel aberto.
      */
     async update(id: string, patch: Partial<AnnouncementDraft>): Promise<InvestorAnnouncement> {
-        await exigirSemRespostas(id, 'editado');
         const { data, error } = await supabase
             .from('investor_announcements')
             .update(patch)
             .eq('id', id)
             .select(ANN_COLS);
-        if (error) throw error;
+        if (error) throw falhaDaGravacao(error, 'editado');
         const linha = exigirUmaLinha(data, 'alterar');
         return { ...linha, ack_count: 0 };
     },
@@ -178,19 +179,18 @@ export const announcementsService = {
             .update({ published_at: new Date().toISOString() })
             .eq('id', id)
             .select(ANN_COLS);
-        if (error) throw error;
+        if (error) throw falhaDaGravacao(error, 'editado');
         return exigirUmaLinha(data, 'publicar');
     },
 
-    /** Exclui. Com aceite/voto, recusa: o `ON DELETE CASCADE` apagaria as respostas junto. */
+    /** Exclui. Com aceite/voto, o banco recusa: o `ON DELETE CASCADE` apagaria as respostas junto. */
     async remove(id: string): Promise<void> {
-        await exigirSemRespostas(id, 'excluído');
         const { data, error } = await supabase
             .from('investor_announcements')
             .delete()
             .eq('id', id)
             .select('id');
-        if (error) throw error;
+        if (error) throw falhaDaGravacao(error, 'excluído');
         exigirUmaLinha(data, 'excluir');
     },
 

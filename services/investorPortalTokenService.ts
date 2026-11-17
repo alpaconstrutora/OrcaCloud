@@ -11,6 +11,27 @@ const MOTIVO_DO_ESTUDO_RECUSADO: Record<string, string> = {
     not_found: 'A versão publicada desta oportunidade não foi encontrada.',
 };
 
+/** Recusas de fn_investor_portal_acknowledge (vêm como `{valid:false,error}`, não como erro). */
+const MOTIVO_DA_RESPOSTA_RECUSADA: Record<string, string> = {
+    token_invalid: 'O link do portal venceu ou foi desativado. Peça um novo link a quem envia os comunicados.',
+    not_found: 'Este comunicado não está mais disponível.',
+    vote_required: 'Escolha Sim, Não ou Abstenção para votar.',
+};
+
+/** O que ficou gravado da resposta do investidor — a 2ª resposta não troca a 1ª. */
+export interface RespostaDoComunicado {
+    vote_option: string | null;
+    acknowledged_at: string | null;
+}
+
+/** O banco recusou a resposta (link vencido, comunicado retirado, votação sem voto) — mensagem pronta. */
+export class RespostaRecusadaError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'RespostaRecusadaError';
+    }
+}
+
 export interface InvestorPortalToken {
     id: string;
     org_id: string;
@@ -95,13 +116,22 @@ export const investorPortalTokenService = {
         return (data as any)?.announcements ?? [];
     },
 
-    async acknowledgeByToken(token: string, announcementId: string, voteOption?: string): Promise<void> {
-        const { error } = await supabase.rpc('fn_investor_portal_acknowledge', {
+    /**
+     * Confirma a leitura (e, na votação, vota). A RPC recusa devolvendo `{valid:false}` sem erro —
+     * antes isso passava calado e a tela marcava "Confirmado" sem nada gravado.
+     */
+    async acknowledgeByToken(token: string, announcementId: string, voteOption?: string): Promise<RespostaDoComunicado> {
+        const { data, error } = await supabase.rpc('fn_investor_portal_acknowledge', {
             p_token: token,
             p_announcement_id: announcementId,
             p_vote_option: voteOption ?? null,
         });
         if (error) throw error;
+        const r = (data ?? {}) as { valid?: boolean; error?: string; vote_option?: string | null; acknowledged_at?: string | null };
+        if (!r.valid) {
+            throw new RespostaRecusadaError(MOTIVO_DA_RESPOSTA_RECUSADA[r.error ?? ''] ?? 'Não foi possível registrar sua resposta.');
+        }
+        return { vote_option: r.vote_option ?? null, acknowledged_at: r.acknowledged_at ?? null };
     },
 
     async getOpportunitiesByToken(token: string): Promise<any[]> {

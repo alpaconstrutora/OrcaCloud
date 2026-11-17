@@ -83,7 +83,16 @@ pré-existentes que ela achou — todos em `components/CentralControle.tsx` (+ `
 - [x] Tarefa 6 (parte local): `typecheck` exit=0; suíte inteira só com as falhas conhecidas do Windows.
 - [x] Revisão final (revisor novo): sem crítico; 1 importante corrigido — regressão da Tarefa 3: o
   "Não carregou." do caixa da org anterior ficava na nova durante a espera (o erro não gravava `caixaDaOrg`).
-- [ ] PR · CI · merge · prova em produção.
+- [x] PR #546 · CI verde (`52d55f2`) · merge `17db364` · domínio servindo `a0d9577` (contém o merge) · CI da `main` verde (17/11).
+- [x] Prova em produção (desvio de `fetch` só no navegador; contexto devolvido a "Todas"):
+  - caixa de "Todas" caído → troca para a Alpa com a chamada única dela atrasada 6 s: o cartão foi ao
+    esqueleto na hora (sem o "Não carregou." anterior) e `fn_cashflow_projection` da Alpa saiu 28 ms DEPOIS
+    da chamada única dela;
+  - caixa da Alpa caído → "Tentar de novo" atrasado 16 s → troca para "Todas" (chamada única atrasada 17 s):
+    a resposta da Alpa (saldo −10.958) chegou com a tela em "Todas" e NÃO pintou (esqueleto); depois veio
+    o caixa de "Todas" (R$ 10.503.886).
+  - Recarregada: 1 chamada única (807 ms) e o caixa depois dela.
+  - Tarefas 2 e 5 só nos testes (a 5 gravaria uma tarefa real).
 
 **Deixado para depois (menores da revisão):**
 - Fragilidade latente: se bootstrap/reajustes/config respondessem antes do React renderizar a espera

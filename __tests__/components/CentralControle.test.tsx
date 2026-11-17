@@ -31,7 +31,8 @@ vi.mock('../../services/centralControleService', async (importOriginal) => {
         fontesSeparadas: (...a: unknown[]) => fontesSeparadas(...a),
     } };
 });
-vi.mock('../../services/contractIndexService', () => ({ contractIndexService: { listDueForReajuste: async () => [] } }));
+const reajustes = vi.fn();
+vi.mock('../../services/contractIndexService', () => ({ contractIndexService: { listDueForReajuste: (...a: unknown[]) => reajustes(...a) } }));
 vi.mock('../../services/financialApprovalService', () => ({ financialApprovalService: { listConfig: async () => [] } }));
 const cashflow = vi.fn();
 vi.mock('../../services/financialIntelligenceService', () => ({ financialIntelligenceService: { getCashflowProjection: (...a: unknown[]) => cashflow(...a) } }));
@@ -96,6 +97,7 @@ const cartao = (titulo: string) => screen.getByRole('heading', { name: titulo, l
 beforeEach(() => {
     bootstrap.mockReset();
     fontesSeparadas.mockReset();
+    reajustes.mockReset().mockResolvedValue([]);
     cashflow.mockReset().mockResolvedValue([{ data_ref: HOJE, cr_previsto: 0, db_previsto: 0, saldo_dia: 0, saldo_acum: 1000 }]);
     atualizarTarefa.mockReset().mockResolvedValue(undefined);
     estado = {
@@ -372,5 +374,35 @@ describe('CentralControle · tela "Bom dia"', () => {
         montar();
         expect(await screen.findByText(/Parte da fila não carregou \(alertas financeiros\)\./)).toBeInTheDocument();
         await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+    });
+
+    it('Atualizar no plano B: alerta de fonte que ainda não respondeu continua na fila', async () => {
+        const fin = [{ alert_type: 'CASHFLOW_RISK', severity: 'HIGH', title: 'Saldo negativo previsto', description: 'Conta X', amount: 100, project_id: null, project_name: null, ref_id: 'r1' }];
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas
+            .mockImplementationOnce(() => fontes({ financial_alerts: () => Promise.resolve(fin) }))
+            .mockImplementationOnce(() => fontes({ financial_alerts: nunca }));
+        montar();
+        expect(await screen.findByText('Saldo negativo previsto')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledTimes(2));
+        await new Promise(r => setTimeout(r, 50));
+        expect(screen.getByText('Saldo negativo previsto')).toBeInTheDocument();
+    });
+
+    it('Atualizar no plano B: reajuste e 1º alerta caídos não voltam a fila ao esqueleto', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas
+            .mockImplementationOnce(() => fontes())
+            .mockImplementationOnce(() => fontes({ financial_alerts: caiu, divergences: nunca, bottlenecks: nunca }));
+        montar();
+        await waitFor(() => expect(cartao('Minha fila')).toHaveAttribute('aria-busy', 'false'));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        reajustes.mockRejectedValue(TIMEOUT);
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledTimes(2));
+        await new Promise(r => setTimeout(r, 50));
+        expect(cartao('Minha fila')).toHaveAttribute('aria-busy', 'false');
     });
 });

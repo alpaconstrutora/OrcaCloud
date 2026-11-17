@@ -90,6 +90,12 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // esqueleto (como o caixa): no plano B, sem isso, a fila da empresa anterior
     // ficava até ~16 s — com botão Aprovar — debaixo do seletor da nova (REGRA #5).
     const orgNaTela = React.useRef<string | null | undefined>(undefined);
+    // As fontes que geraram o cartão de alertas que está na tela. No plano B, o
+    // Atualizar parte delas: cada fonte troca SÓ a própria parte quando chega. Sem
+    // isso a 1ª a chegar substituía a lista inteira (os alertas das outras sumiam) e,
+    // com reajustes e essa 1ª caídos, a Minha fila voltava ao esqueleto (17/11/2026).
+    // Zerado na troca de org: alerta de outra empresa nunca entra na nova.
+    const fontesDeAlertaNaTela = React.useRef<FontesDeAlerta>({});
 
     // `opcoes` pode chegar como o evento do clique (onTentarDeNovo={load}): só
     // `realcar === true` conta como rodada de "Atualizar".
@@ -99,6 +105,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         setCarregando(true);
         if (orgNaTela.current !== organizationId) {
             orgNaTela.current = organizationId;
+            fontesDeAlertaNaTela.current = {};
             setFila(CARREGANDO);
             setMeuDia(CARREGANDO);
             setAlertas(CARREGANDO);
@@ -150,7 +157,8 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             logarSeCaiu(financial, 'financial alerts');
             logarSeCaiu(divergences, 'divergences');
             logarSeCaiu(bottlenecks, 'bottlenecks');
-            setAlertas(alertasDasFontes({ financial, divergences, bottlenecks, reajustes: reajusteR }));
+            fontesDeAlertaNaTela.current = { financial, divergences, bottlenecks, reajustes: reajusteR };
+            setAlertas(alertasDasFontes(fontesDeAlertaNaTela.current));
             setFila(paraFonte(fonte<ActionQueueItem[]>('action_queue'), 'action queue'));
             setMeuDia(paraFonte(fonte<MeuDia>('meu_dia'), 'meu dia'));
             setScorecards(paraFonte(fonte<ProjectScorecard[]>('scorecards'), 'scorecards'));
@@ -164,7 +172,8 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             // Plano: docs/planos/2026-11-16-central-blocos-isolados.md
             console.error('[CentralControle] chamada única caiu; pedindo por bloco:', bootstrapR.reason);
             const f = centralControleService.fontesSeparadas(organizationId);
-            const alertas: FontesDeAlerta = { reajustes: reajusteR };
+            // Parte do que está na tela (Atualizar na mesma org); org nova parte do zero.
+            const fontesAlerta: FontesDeAlerta = { ...fontesDeAlertaNaTela.current, reajustes: reajusteR };
             const assentar = <T,>(p: Promise<T>, aplicar: (r: PromiseSettledResult<T>) => void) =>
                 p.then(
                     (value): PromiseSettledResult<T> => ({ status: 'fulfilled', value }),
@@ -175,8 +184,9 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             const alerta = <K extends 'financial' | 'divergences' | 'bottlenecks'>(chave: K, nome: string) =>
                 (r: NonNullable<FontesDeAlerta[K]>) => {
                     logarSeCaiu(r, nome);
-                    alertas[chave] = r;
-                    setAlertas(alertasDasFontes({ ...alertas }));
+                    fontesAlerta[chave] = r;
+                    fontesDeAlertaNaTela.current = { ...fontesAlerta };
+                    setAlertas(alertasDasFontes(fontesDeAlertaNaTela.current));
                 };
             await Promise.all([
                 assentar(f.financial_alerts, alerta('financial', 'financial alerts')),

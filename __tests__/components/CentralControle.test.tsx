@@ -356,4 +356,21 @@ describe('CentralControle · tela "Bom dia"', () => {
         montar();
         expect(await screen.findByText(/Parte da fila não carregou \(alertas financeiros\)\./)).toBeInTheDocument();
     });
+
+    // ── Menores do #521 (17/11/2026): docs/planos/2026-11-17-central-menores-plano-b.md ──
+
+    it('alerta que não monta não trava a tela: os cartões carregam e o aviso cita a fonte', async () => {
+        bootstrap.mockResolvedValue(painel({ financial_alerts: { ok: true, data: null } }));
+        montar();
+        expect(await screen.findByText(/Parte da fila não carregou \(alertas financeiros\)\./)).toBeInTheDocument();
+        expect(cartao('Contas a pagar')).toHaveAttribute('aria-busy', 'false');
+    });
+
+    it('plano B: alerta que não monta não deixa o Atualizar preso em "carregando"', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes({ financial_alerts: () => Promise.resolve(null) }));
+        montar();
+        expect(await screen.findByText(/Parte da fila não carregou \(alertas financeiros\)\./)).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+    });
 });

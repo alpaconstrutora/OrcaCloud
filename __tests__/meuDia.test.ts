@@ -163,4 +163,11 @@ describe('alertasDasFontes', () => {
         expect(alertasDasFontes({ divergences: caiu, bottlenecks: caiu, reajustes: ok([]) }))
             .toEqual({ estado: 'ok', data: [], faltou: ['divergências de conciliação', 'gargalos de processo'] });
     });
+
+    // 17/11 (menores do #521): `forEach` em valor nulo lançava dentro do `load` — no
+    // caminho normal nenhum cartão saía do esqueleto; no plano B o Atualizar travava.
+    it('fonte que chega mas não monta (valor nulo) entra em `faltou` em vez de lançar', () => {
+        const r = alertasDasFontes({ financial: ok(null as never), divergences: ok(semDivergencia), reajustes: ok([reajuste]) });
+        expect(r).toEqual({ estado: 'ok', faltou: ['alertas financeiros'], data: [expect.objectContaining({ id: 'reajuste-c1' })] });
+    });
 });

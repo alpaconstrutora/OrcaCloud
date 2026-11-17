@@ -275,7 +275,9 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // a do "Tentar de novo" do cartão, que chama `carregarCaixa` fora do efeito: com troca
     // de org no meio, o saldo da empresa anterior pintava o cartão debaixo do seletor da
     // nova (REGRA #5; revisão do #538, 17/11/2026). A da MESMA org e período continua
-    // valendo: o Atualizar não joga fora uma resposta certa (revisão do #546).
+    // valendo. (O que impede o Atualizar de jogar fora a resposta certa do "Tentar de
+    // novo" é, sobretudo, o efeito não rodar de novo quando a espera LIGA — só o contador
+    // `vezDoCaixa`, quando ela acaba; a busca que sai depois vence pela geração.)
     const caixaAtual = React.useRef(0);
     const ultimaBuscaCaixa = React.useRef<{ org: string | null; periodo: PeriodoCaixa } | null>(null);
     const carregarCaixa = React.useCallback(() => {

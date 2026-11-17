@@ -58,7 +58,9 @@ vi.mock('../../components/FinancialApprovalModule', () => ({ ENTITY_TAG: {}, App
 
 import CentralControle from '../../components/CentralControle';
 
-const dormir = (ms: number) => new Promise(r => setTimeout(r, ms));
+// Espera consultando por timer (sem `act`), em vez de tempo fixo: na CI (2–4 vCPU, suíte
+// inteira) 200 ms podiam não bastar e a falha pareceria regressão (revisão do #546).
+const ate = (f: () => void) => vi.waitFor(f, { timeout: 3000, interval: 5 });
 
 it('troca de org com as respostas já resolvidas: o caixa da org nova sai', async () => {
     const div = document.createElement('div');
@@ -66,12 +68,10 @@ it('troca de org com as respostas já resolvidas: o caixa da org nova sai', asyn
     const root = createRoot(div);
     try {
         root.render(<CentralControle organizationId="o1" userEmail="ana@alpa.com.br" onNavigate={() => {}} />);
-        await dormir(200);
-        expect(cashflow).toHaveBeenCalledWith('o1', 90);
+        await ate(() => expect(cashflow).toHaveBeenCalledWith('o1', 90));
         root.render(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={() => {}} />);
-        await dormir(300);
-        expect(bootstrap).toHaveBeenCalledWith('o2');
-        expect(cashflow).toHaveBeenCalledWith('o2', 90);
+        await ate(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
+        await ate(() => expect(cashflow).toHaveBeenCalledWith('o2', 90));
     } finally {
         root.unmount();
         div.remove();

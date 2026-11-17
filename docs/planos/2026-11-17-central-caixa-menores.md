@@ -23,7 +23,7 @@ projetado de `components/CentralControle.tsx`. Só app, sem banco.
 | Item | Decisão | Por quê |
 |---|---|---|
 | Ref × estado da espera | Estado-CONTADOR `vezDoCaixa` (soma 1 quando a espera acaba) nas deps do efeito, no lugar do booleano; o ref síncrono continua decidindo se espera | `true→false` no mesmo lote se anula; contador não |
-| Atualizar descarta resposta válida | O efeito só descarta a busca pendente se ela é de OUTRA org ou OUTRO período (`ultimaBuscaCaixa`); a limpeza do efeito deixa de invalidar | Resposta da mesma org e período é válida; a busca mais nova continua vencendo pela geração |
+| Atualizar descarta resposta válida | O efeito só descarta a busca pendente se ela é de OUTRA org ou OUTRO período (`ultimaBuscaCaixa`); a limpeza do efeito deixa de invalidar | Resposta da mesma org e período é válida; a busca mais nova continua vencendo pela geração. **Nota da revisão final:** depois da Tarefa 4, quem segura a resposta é sobretudo o contador (o Atualizar nem redispara o efeito ao ligar a espera); a invalidação condicional ficou como defesa, sem efeito visível próprio |
 | Período trocado com a chamada única em voo | Esmaece o gráfico (`caixaTrocando`) até o novo chegar; NÃO busca na hora | Mesmo comportamento da troca de período normal, sem disputar o banco com a chamada única |
 | Teste faltando | Teste novo, provado vermelho com o lado `orgNaTela.current !== organizationId` removido | Código já certo; o teste é a trava |
 
@@ -61,4 +61,14 @@ projetado de `components/CentralControle.tsx`. Só app, sem banco.
 
 ## Estado
 
-- [ ] Tarefas 1–4 · [ ] Tarefa 5
+- [x] Tarefas 1–4 — cada uma com o teste visto falhando antes (17/11); Tarefa 1 por mutante (condição só `vale()`).
+- [x] Tarefa 5 (parte local): `typecheck` exit=0; suíte inteira só com as falhas conhecidas do Windows.
+- [x] Revisão final (revisor novo): sem crítico; 1 importante corrigido — o teste fora do `act` esperava
+  tempo fixo (200/300 ms) e podia cair na CI; agora consulta até acontecer (`vi.waitFor`), vermelho com o
+  mutante booleano.
+- [ ] PR · CI · merge · prova em produção.
+
+**Deixado para depois (menores da revisão):**
+- 90→30→90 durante a chamada única: o gráfico (já do período escolhido) fica esmaecido até a chamada única
+  voltar e o caixa ser buscado de novo — só esmaece mais tempo. Ajuste: `setCaixaTrocando(caixaDoPeriodo !== periodo)` na espera.
+- O teste da Tarefa 3 não confere o FIM do esmaecido (funciona hoje; não está travado).

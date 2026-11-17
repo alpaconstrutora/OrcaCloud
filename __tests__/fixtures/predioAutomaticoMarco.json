@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "a069036d754e27a57ce800cb95186e3c20a806ba6ab0dbac5f9b2333f73d4403",
+    "modelo": "9ac9005b8ebffe8c29beae4e30b7476754bc0e9ac21d7dccabb3209bc69ec7d8",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -143,7 +143,7 @@
       "conflitos": {
         "ABERTURA": 27,
         "PILAR": 2,
-        "REDE": 47,
+        "REDE": 41,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
@@ -157,12 +157,12 @@
     },
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
-    "eletrodutoXClimatizacao": 9,
+    "eletrodutoXClimatizacao": 3,
     "eletrodutoXEsgoto": 12,
     "aguaXClimatizacao": 0
   },
   "R8": {
-    "modelo": "e6560022483a3d40a102382ddab314a768cd0b0ae8a2ca23825b92ee1d985f14",
+    "modelo": "c0c77bc7758309ac2af8973730b9a7b18a9bca0e6207cd769fe7b81e3047dcce",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 11,
     "copias": 6,
@@ -382,7 +382,7 @@
       "conflitos": {
         "ABERTURA": 224,
         "PILAR": 4,
-        "REDE": 77,
+        "REDE": 56,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
@@ -396,12 +396,12 @@
     },
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
-    "eletrodutoXClimatizacao": 14,
+    "eletrodutoXClimatizacao": 0,
     "eletrodutoXEsgoto": 0,
     "aguaXClimatizacao": 0
   },
   "R12": {
-    "modelo": "f75c0ed765a5479665beb66823e0ec6237f3b7fea8484845b44395189c53db1d",
+    "modelo": "7a709c9b91b8f3b7fbebc72b01364f24caf4b3f785a48f2addd43280a8f505d1",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
@@ -687,7 +687,7 @@
       "conflitos": {
         "ABERTURA": 308,
         "PILAR": 2,
-        "REDE": 198,
+        "REDE": 154,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
@@ -701,12 +701,12 @@
     },
     "aguaXEsgoto": 1,
     "eletrodutoNoEquipamento": 0,
-    "eletrodutoXClimatizacao": 44,
+    "eletrodutoXClimatizacao": 0,
     "eletrodutoXEsgoto": 0,
     "aguaXClimatizacao": 0
   },
   "RL": {
-    "modelo": "3c4f2989b9c1ee23254df51467851e9c321d7f1729dcb78d9d53bbaad10bb1ad",
+    "modelo": "ab309874ed31105770e409c87cb948a066e697628fd04cc559ab487e89cd1230",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -936,7 +936,7 @@
       "conflitos": {
         "ABERTURA": 441,
         "PILAR": 31,
-        "REDE": 184,
+        "REDE": 156,
         "EQUIPAMENTO": 0,
         "OUTRO": 2
       },
@@ -950,7 +950,7 @@
     },
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
-    "eletrodutoXClimatizacao": 63,
+    "eletrodutoXClimatizacao": 35,
     "eletrodutoXEsgoto": 12,
     "aguaXClimatizacao": 0
   }

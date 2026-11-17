@@ -96,47 +96,52 @@ export type AlertasDoDia =
 export function alertasDasFontes(f: FontesDeAlerta): AlertasDoDia {
     const lista: AlertaDoDia[] = [];
     let algumChegou = false;
-    if (f.financial?.status === 'fulfilled') {
-        algumChegou = true;
-        f.financial.value.forEach((a, i) => lista.push({
-            id: `fin-${i}-${a.ref_id ?? a.title}`,
-            severity: a.severity,
-            title: a.title,
-            description: a.project_name ? `${a.description} · ${a.project_name}` : a.description,
-            amount: a.amount,
-            view: 'financial-dashboard',
-        }));
-    }
-    if (f.divergences?.status === 'fulfilled') {
-        algumChegou = true;
-        const d = f.divergences.value;
-        if (d.counts.value_mismatch > 0) lista.push({ id: 'div-mismatch', severity: 'HIGH', view: 'bank-reconciliation', title: `${d.counts.value_mismatch} lançamento(s) com valor divergente`, description: `Banco × sistema não batem — apurado em ${d.as_of}` });
-        if (d.counts.bank_without_internal > 0) lista.push({ id: 'div-bank', severity: 'MEDIUM', view: 'bank-reconciliation', title: `${d.counts.bank_without_internal} lançamento(s) do banco sem correspondência`, description: `Sem contrapartida no sistema — apurado em ${d.as_of}` });
-        if (d.counts.internal_without_bank > 0) lista.push({ id: 'div-internal', severity: 'MEDIUM', view: 'bank-reconciliation', title: `${d.counts.internal_without_bank} lançamento(s) do sistema sem correspondência`, description: `Sem contrapartida no banco — apurado em ${d.as_of}` });
-    }
-    if (f.bottlenecks?.status === 'fulfilled') {
-        algumChegou = true;
-        f.bottlenecks.value.filter(b => b.overdue_count > 0).forEach(b => lista.push({
-            id: `proc-${b.step_name}`, severity: 'HIGH', view: 'opura-processos',
-            title: `${b.overdue_count} etapa(s) atrasada(s) em "${b.step_name}"`,
-            description: `${b.active_count} ativa(s) no total nessa etapa`,
-        }));
-    }
-    if (f.reajustes?.status === 'fulfilled') {
-        algumChegou = true;
-        f.reajustes.value.forEach(c => lista.push({
-            id: `reajuste-${c.id}`, severity: 'MEDIUM', view: 'contracts-reajuste',
-            title: `Contrato ${c.number} com reajuste vencido`,
-            description: `${c.reajuste_index} · venceu ${new Date(c.reajuste_proximo).toLocaleDateString('pt-BR')} · valor atual ${fBRL(c.current_value)}`,
-            amount: c.current_value,
-        }));
-    }
+    // Fonte que chegou mas não monta (ex.: bloco `{ ok: true, data: null }`) conta como
+    // caída: entra em `faltou` em vez de lançar. Lançar aqui travava o `load` da Central
+    // inteira — no caminho normal nenhum cartão saía do esqueleto (17/11/2026).
+    const naoMontou = new Set<keyof FontesDeAlerta>();
+    const montar = <T,>(chave: keyof FontesDeAlerta, r: PromiseSettledResult<T> | undefined, fazer: (v: T) => AlertaDoDia[]) => {
+        if (r?.status !== 'fulfilled') return;
+        try {
+            lista.push(...fazer(r.value));
+            algumChegou = true;
+        } catch (err) {
+            naoMontou.add(chave);
+            console.error('[meuDia] alertas: fonte não montou:', chave, err);
+        }
+    };
+    montar('financial', f.financial, v => v.map((a, i) => ({
+        id: `fin-${i}-${a.ref_id ?? a.title}`,
+        severity: a.severity,
+        title: a.title,
+        description: a.project_name ? `${a.description} · ${a.project_name}` : a.description,
+        amount: a.amount,
+        view: 'financial-dashboard',
+    })));
+    montar('divergences', f.divergences, d => {
+        const saida: AlertaDoDia[] = [];
+        if (d.counts.value_mismatch > 0) saida.push({ id: 'div-mismatch', severity: 'HIGH', view: 'bank-reconciliation', title: `${d.counts.value_mismatch} lançamento(s) com valor divergente`, description: `Banco × sistema não batem — apurado em ${d.as_of}` });
+        if (d.counts.bank_without_internal > 0) saida.push({ id: 'div-bank', severity: 'MEDIUM', view: 'bank-reconciliation', title: `${d.counts.bank_without_internal} lançamento(s) do banco sem correspondência`, description: `Sem contrapartida no sistema — apurado em ${d.as_of}` });
+        if (d.counts.internal_without_bank > 0) saida.push({ id: 'div-internal', severity: 'MEDIUM', view: 'bank-reconciliation', title: `${d.counts.internal_without_bank} lançamento(s) do sistema sem correspondência`, description: `Sem contrapartida no banco — apurado em ${d.as_of}` });
+        return saida;
+    });
+    montar('bottlenecks', f.bottlenecks, v => v.filter(b => b.overdue_count > 0).map((b): AlertaDoDia => ({
+        id: `proc-${b.step_name}`, severity: 'HIGH', view: 'opura-processos',
+        title: `${b.overdue_count} etapa(s) atrasada(s) em "${b.step_name}"`,
+        description: `${b.active_count} ativa(s) no total nessa etapa`,
+    })));
+    montar('reajustes', f.reajustes, v => v.map((c): AlertaDoDia => ({
+        id: `reajuste-${c.id}`, severity: 'MEDIUM', view: 'contracts-reajuste',
+        title: `Contrato ${c.number} com reajuste vencido`,
+        description: `${c.reajuste_index} · venceu ${new Date(c.reajuste_proximo).toLocaleDateString('pt-BR')} · valor atual ${fBRL(c.current_value)}`,
+        amount: c.current_value,
+    })));
     if (algumChegou) {
         const nomes: [keyof FontesDeAlerta, string][] = [
             ['financial', 'alertas financeiros'], ['divergences', 'divergências de conciliação'],
             ['bottlenecks', 'gargalos de processo'], ['reajustes', 'reajustes de contrato'],
         ];
-        const faltou = nomes.filter(([k]) => f[k]?.status === 'rejected').map(([, nome]) => nome);
+        const faltou = nomes.filter(([k]) => f[k]?.status === 'rejected' || naoMontou.has(k)).map(([, nome]) => nome);
         return { estado: 'ok', data: lista, faltou };
     }
     const pendente = !f.financial || !f.divergences || !f.bottlenecks || !f.reajustes;

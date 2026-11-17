@@ -31,7 +31,8 @@ vi.mock('../../services/centralControleService', async (importOriginal) => {
         fontesSeparadas: (...a: unknown[]) => fontesSeparadas(...a),
     } };
 });
-vi.mock('../../services/contractIndexService', () => ({ contractIndexService: { listDueForReajuste: async () => [] } }));
+const reajustes = vi.fn();
+vi.mock('../../services/contractIndexService', () => ({ contractIndexService: { listDueForReajuste: (...a: unknown[]) => reajustes(...a) } }));
 vi.mock('../../services/financialApprovalService', () => ({ financialApprovalService: { listConfig: async () => [] } }));
 const cashflow = vi.fn();
 vi.mock('../../services/financialIntelligenceService', () => ({ financialIntelligenceService: { getCashflowProjection: (...a: unknown[]) => cashflow(...a) } }));
@@ -43,6 +44,7 @@ vi.mock('../../components/FinancialApprovalModule', () => ({
 }));
 
 import CentralControle from '../../components/CentralControle';
+import { memoriaDoPlanoB, PLANO_B_PEGAJOSO_MS } from '../../utils/planoBPegajoso';
 
 const HOJE = '2026-11-11';
 
@@ -96,6 +98,8 @@ const cartao = (titulo: string) => screen.getByRole('heading', { name: titulo, l
 beforeEach(() => {
     bootstrap.mockReset();
     fontesSeparadas.mockReset();
+    memoriaDoPlanoB.esquecer();
+    reajustes.mockReset().mockResolvedValue([]);
     cashflow.mockReset().mockResolvedValue([{ data_ref: HOJE, cr_previsto: 0, db_previsto: 0, saldo_dia: 0, saldo_acum: 1000 }]);
     atualizarTarefa.mockReset().mockResolvedValue(undefined);
     estado = {
@@ -355,5 +359,115 @@ describe('CentralControle · tela "Bom dia"', () => {
         fontesSeparadas.mockImplementation(() => fontes({ financial_alerts: caiu }));
         montar();
         expect(await screen.findByText(/Parte da fila não carregou \(alertas financeiros\)\./)).toBeInTheDocument();
+    });
+
+    // ── Menores do #521 (17/11/2026): docs/planos/2026-11-17-central-menores-plano-b.md ──
+
+    it('alerta que não monta não trava a tela: os cartões carregam e o aviso cita a fonte', async () => {
+        bootstrap.mockResolvedValue(painel({ financial_alerts: { ok: true, data: null } }));
+        montar();
+        expect(await screen.findByText(/Parte da fila não carregou \(alertas financeiros\)\./)).toBeInTheDocument();
+        expect(cartao('Contas a pagar')).toHaveAttribute('aria-busy', 'false');
+    });
+
+    it('plano B: alerta que não monta não deixa o Atualizar preso em "carregando"', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes({ financial_alerts: () => Promise.resolve(null) }));
+        montar();
+        expect(await screen.findByText(/Parte da fila não carregou \(alertas financeiros\)\./)).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+    });
+
+    it('Atualizar no plano B: alerta de fonte que ainda não respondeu continua na fila', async () => {
+        const fin = [{ alert_type: 'CASHFLOW_RISK', severity: 'HIGH', title: 'Saldo negativo previsto', description: 'Conta X', amount: 100, project_id: null, project_name: null, ref_id: 'r1' }];
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas
+            .mockImplementationOnce(() => fontes({ financial_alerts: () => Promise.resolve(fin) }))
+            .mockImplementationOnce(() => fontes({ financial_alerts: nunca }));
+        montar();
+        expect(await screen.findByText('Saldo negativo previsto')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledTimes(2));
+        await new Promise(r => setTimeout(r, 50));
+        expect(screen.getByText('Saldo negativo previsto')).toBeInTheDocument();
+    });
+
+    it('Atualizar no plano B: reajuste e 1º alerta caídos não voltam a fila ao esqueleto', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas
+            .mockImplementationOnce(() => fontes())
+            .mockImplementationOnce(() => fontes({ financial_alerts: caiu, divergences: nunca, bottlenecks: nunca }));
+        montar();
+        await waitFor(() => expect(cartao('Minha fila')).toHaveAttribute('aria-busy', 'false'));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        reajustes.mockRejectedValue(TIMEOUT);
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledTimes(2));
+        await new Promise(r => setTimeout(r, 50));
+        expect(cartao('Minha fila')).toHaveAttribute('aria-busy', 'false');
+    });
+
+    it('plano B: o caixa sai junto com os blocos, sem esperar o mais lento', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes({ scorecards: nunca }));
+        montar();
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalled());
+        await waitFor(() => expect(cashflow).toHaveBeenCalledTimes(1));
+    });
+
+    it('plano B pegajoso: depois de cair, o Atualizar vai direto aos blocos', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes());
+        montar();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledTimes(2));
+        expect(bootstrap).toHaveBeenCalledTimes(1);
+    });
+
+    it('plano B pegajoso: passados 5 minutos, volta a tentar a chamada única', async () => {
+        const agora = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+        try {
+            bootstrap.mockRejectedValueOnce(TIMEOUT).mockResolvedValue(painel());
+            fontesSeparadas.mockImplementation(() => fontes());
+            montar();
+            await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+            agora.mockReturnValue(1_000_000 + PLANO_B_PEGAJOSO_MS);
+            await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+            await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+            expect(fontesSeparadas).toHaveBeenCalledTimes(1);
+        } finally {
+            agora.mockRestore();
+        }
+    });
+
+    it('plano B pegajoso é por organização: a outra org tenta a chamada única', async () => {
+        bootstrap.mockRejectedValueOnce(TIMEOUT).mockResolvedValue(painel());
+        fontesSeparadas.mockImplementation(() => fontes());
+        const { rerender } = montar();
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledWith('o1'));
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
+        expect(fontesSeparadas).toHaveBeenCalledTimes(1);
+    });
+
+    // Revisão final (17/11): sem zerar `fontesDeAlertaNaTela` na troca de org, o plano B
+    // da org nova partia das fontes da anterior — alerta de outra empresa, com atalho,
+    // debaixo do seletor do topo (REGRA #5) até o bloco financeiro da nova chegar.
+    it('plano B nas duas orgs: alerta da org anterior nunca entra na nova', async () => {
+        const fin = [{ alert_type: 'CASHFLOW_RISK', severity: 'HIGH', title: 'Alerta da o1', description: 'Conta X', amount: 100, project_id: null, project_name: null, ref_id: 'r1' }];
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas
+            .mockImplementationOnce(() => fontes({ financial_alerts: () => Promise.resolve(fin) }))
+            .mockImplementationOnce(() => fontes({ financial_alerts: nunca }));
+        const { rerender } = montar();
+        expect(await screen.findByText('Alerta da o1')).toBeInTheDocument();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledWith('o2'));
+        // As outras fontes da o2 chegam (a fila sai do esqueleto); a financeira, não.
+        await waitFor(() => expect(cartao('Minha fila')).toHaveAttribute('aria-busy', 'false'));
+        expect(screen.queryByText('Alerta da o1')).not.toBeInTheDocument();
     });
 });

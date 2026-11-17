@@ -14,6 +14,7 @@ import {
 } from '../services/centralControleService';
 import { useStore } from '../store/useStore';
 import { useModulosPermitidos } from '../utils/modulosPermitidos';
+import { memoriaDoPlanoB } from '../utils/planoBPegajoso';
 import {
     saudacaoPorHora, comoChamar, diaEmSaoPaulo, montarFila, itemEmDestaque, contagemDoDia,
     alertasDasFontes, type AlertasDoDia, type FontesDeAlerta,
@@ -62,6 +63,9 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     const [approvalConfig, setApprovalConfig] = React.useState<FinancialApprovalConfig[]>([]);
     const [approvalModal, setApprovalModal] = React.useState<{ item: ActionQueueItem; mode: 'approve' | 'reject' } | null>(null);
     const [carregando, setCarregando] = React.useState(true);
+    // A vez do caixa: só a resposta da chamada única (ok ou falha), não os blocos do
+    // plano B — esperar `carregando` segurava o caixa até o bloco mais lento (~16 s).
+    const [esperandoChamadaUnica, setEsperandoChamadaUnica] = React.useState(true);
     const [filtro, setFiltro] = React.useState<FiltroDaFila>('tudo');
     // Números sobem até o valor só na PRIMEIRA carga da tela; atualizar não anima.
     const [animar, setAnimar] = React.useState(true);
@@ -90,6 +94,12 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // esqueleto (como o caixa): no plano B, sem isso, a fila da empresa anterior
     // ficava até ~16 s — com botão Aprovar — debaixo do seletor da nova (REGRA #5).
     const orgNaTela = React.useRef<string | null | undefined>(undefined);
+    // As fontes que geraram o cartão de alertas que está na tela. No plano B, o
+    // Atualizar parte delas: cada fonte troca SÓ a própria parte quando chega. Sem
+    // isso a 1ª a chegar substituía a lista inteira (os alertas das outras sumiam) e,
+    // com reajustes e essa 1ª caídos, a Minha fila voltava ao esqueleto (17/11/2026).
+    // Zerado na troca de org: alerta de outra empresa nunca entra na nova.
+    const fontesDeAlertaNaTela = React.useRef<FontesDeAlerta>({});
 
     // `opcoes` pode chegar como o evento do clique (onTentarDeNovo={load}): só
     // `realcar === true` conta como rodada de "Atualizar".
@@ -97,8 +107,10 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         const minha = ++cargaAtual.current;
         const vale = () => cargaAtual.current === minha;
         setCarregando(true);
+        setEsperandoChamadaUnica(true);
         if (orgNaTela.current !== organizationId) {
             orgNaTela.current = organizationId;
+            fontesDeAlertaNaTela.current = {};
             setFila(CARREGANDO);
             setMeuDia(CARREGANDO);
             setAlertas(CARREGANDO);
@@ -115,12 +127,21 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         // Erro comum de um bloco fica no bloco: a função SQL embrulha cada
         // consulta no próprio `BEGIN … EXCEPTION`, e cada cartão mostra o
         // próprio "Não carregou".
+        //
+        // Plano B pegajoso (17/11/2026): se a chamada única desta org caiu há menos
+        // de 5 minutos, nem tenta — vai direto aos blocos (utils/planoBPegajoso.ts).
+        const pular = memoriaDoPlanoB.pularChamadaUnica(organizationId);
         const [bootstrapR, reajusteR, approvalConfigR] = await Promise.allSettled([
-            centralControleService.bootstrap(organizationId),
+            pular
+                ? Promise.reject(new Error('plano B pegajoso: a chamada única caiu há menos de 5 minutos'))
+                : centralControleService.bootstrap(organizationId),
             contractIndexService.listDueForReajuste(organizationId),
             financialApprovalService.listConfig(organizationId),
         ]);
+        // A queda é real mesmo que esta carga já tenha sido descartada.
+        if (!pular && bootstrapR.status === 'rejected') memoriaDoPlanoB.marcarQueCaiu(organizationId);
         if (!vale()) return;
+        setEsperandoChamadaUnica(false);
 
         // Config de alçadas — não crítica: sem ela o modal só usa rótulos padrão.
         if (approvalConfigR.status === 'fulfilled') setApprovalConfig(approvalConfigR.value);
@@ -150,7 +171,8 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             logarSeCaiu(financial, 'financial alerts');
             logarSeCaiu(divergences, 'divergences');
             logarSeCaiu(bottlenecks, 'bottlenecks');
-            setAlertas(alertasDasFontes({ financial, divergences, bottlenecks, reajustes: reajusteR }));
+            fontesDeAlertaNaTela.current = { financial, divergences, bottlenecks, reajustes: reajusteR };
+            setAlertas(alertasDasFontes(fontesDeAlertaNaTela.current));
             setFila(paraFonte(fonte<ActionQueueItem[]>('action_queue'), 'action queue'));
             setMeuDia(paraFonte(fonte<MeuDia>('meu_dia'), 'meu dia'));
             setScorecards(paraFonte(fonte<ProjectScorecard[]>('scorecards'), 'scorecards'));
@@ -160,11 +182,14 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             // pego pelo EXCEPTION dos blocos: um bloco lento leva os sete) ou rede.
             // Pede os blocos um a um, cada um com o próprio limite, e pinta cada
             // cartão quando o dele chega. Só aqui: no caminho normal, seis RPCs
-            // juntas é a rajada que o bootstrap resolveu.
-            // Plano: docs/planos/2026-11-16-central-blocos-isolados.md
-            console.error('[CentralControle] chamada única caiu; pedindo por bloco:', bootstrapR.reason);
+            // juntas é a rajada que o bootstrap resolveu — ou nos 5 minutos seguintes
+            // a uma queda (pegajoso).
+            // Planos: docs/planos/2026-11-16-central-blocos-isolados.md e
+            // docs/planos/2026-11-17-central-menores-plano-b.md
+            if (!pular) console.error('[CentralControle] chamada única caiu; pedindo por bloco:', bootstrapR.reason);
             const f = centralControleService.fontesSeparadas(organizationId);
-            const alertas: FontesDeAlerta = { reajustes: reajusteR };
+            // Parte do que está na tela (Atualizar na mesma org); org nova parte do zero.
+            const fontesAlerta: FontesDeAlerta = { ...fontesDeAlertaNaTela.current, reajustes: reajusteR };
             const assentar = <T,>(p: Promise<T>, aplicar: (r: PromiseSettledResult<T>) => void) =>
                 p.then(
                     (value): PromiseSettledResult<T> => ({ status: 'fulfilled', value }),
@@ -175,8 +200,9 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             const alerta = <K extends 'financial' | 'divergences' | 'bottlenecks'>(chave: K, nome: string) =>
                 (r: NonNullable<FontesDeAlerta[K]>) => {
                     logarSeCaiu(r, nome);
-                    alertas[chave] = r;
-                    setAlertas(alertasDasFontes({ ...alertas }));
+                    fontesAlerta[chave] = r;
+                    fontesDeAlertaNaTela.current = { ...fontesAlerta };
+                    setAlertas(alertasDasFontes(fontesDeAlertaNaTela.current));
                 };
             await Promise.all([
                 assentar(f.financial_alerts, alerta('financial', 'financial alerts')),
@@ -242,17 +268,18 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         return () => { cancelado = true; };
     }, [organizationId, periodoCaixa]);
 
-    // O caixa espera o bootstrap terminar (abrir a tela, Atualizar, trocar de org):
+    // O caixa espera o bootstrap responder (abrir a tela, Atualizar, trocar de org):
     // as duas consultas juntas disputavam o banco e o bootstrap ficava ~1 s mais lento
     // (A/B em produção, 11/11/2026: 3,2–3,6 s junto × ~2,4 s sozinho). Trocar o
-    // período não passa pelo bootstrap — busca na hora.
+    // período não passa pelo bootstrap — busca na hora. No plano B (bootstrap caído
+    // ou pulado) o caixa sai junto com os blocos, sem esperar o mais lento (17/11/2026).
     React.useEffect(() => {
         if (!podeCarregar || !verFinanceiro) return;
         // Org nova: o gráfico na tela é de outra empresa — esqueleto já, mesmo esperando a vez.
         if (caixaDaOrg.current !== undefined && caixaDaOrg.current !== organizationId) setCaixa(CARREGANDO);
-        if (carregando) return;
+        if (esperandoChamadaUnica) return;
         return carregarCaixa();
-    }, [carregarCaixa, podeCarregar, verFinanceiro, carregando, organizationId]);
+    }, [carregarCaixa, podeCarregar, verFinanceiro, esperandoChamadaUnica, organizationId]);
 
     // ── Derivados ──────────────────────────────────────────────────────────
     const dadosMeuDia = meuDia.estado === 'ok' ? meuDia.data : null;

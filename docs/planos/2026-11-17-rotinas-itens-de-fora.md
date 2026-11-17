@@ -112,22 +112,38 @@ fechamento do #530 listou em "Ficou de fora":
 
 ### Tarefa 2 — Configurações no celular
 
-- [ ] Testes RED em `__tests__/components/SettingsMenuCelular.test.tsx`:
+- [x] Testes RED em `__tests__/components/SettingsMenuCelular.test.tsx`:
       - o botão "Seção: Nomenclatura" começa fechado e controla a lista (`aria-controls`);
       - escolher uma folha fecha a lista e troca o nome do botão;
       - abrir um grupo não fecha;
       - o nome inclui o grupo ("Tributos e Impostos › INSS");
       - de `lg` para cima a lista é sempre visível (classes `lg:flex`/`lg:hidden`).
-- [ ] Implementar em `components/Settings.tsx`; §19.2 do guia atualizada. **Pronto quando:**
+      ✅ RED: 4/4 "Unable to find … role \"button\" and name `/^Seção:/`".
+- [x] Implementar em `components/Settings.tsx`; §19.2 do guia atualizada. **Pronto quando:**
       - GREEN, com `SettingsRotinasAutomaticas.test.tsx` também verde;
       - `check-ui-standard` sem achado novo;
       - `tsc` sem erros.
-- [ ] Conferir no navegador (página de teste local, fora do commit) a 390, 768, 1024 e 1440.
+      ✅ 6/6 (os 4 novos + os 2 da folha de Rotinas); `check-ui-standard` exit 0; `tsc` 0 erros.
+- [x] Conferir no navegador (página de teste local, fora do commit) a 390, 768, 1024 e 1440.
       **Pronto quando:**
       - a página não rola na horizontal;
       - abaixo de 1024 o menu fica fechado e a folha usa a largura toda;
       - abrir, escolher e fechar funciona com clique;
       - de 1024 para cima a árvore fica ao lado, como hoje.
+      ✅ Medido com Chrome (Supabase abortado; casca com menu global de 260 px a partir de `md`):
+
+      | Largura | Rola na horizontal? | Menu | Folha |
+      |---|---|---|---|
+      | 390 | não (382/382) | fechado, "Seção: Nomenclatura", 332 px | embaixo, 350 px |
+      | 768 | não (500/500) | fechado | embaixo, 452 px |
+      | 1023 | não (755/755) | fechado | embaixo, 707 px |
+      | 1024 | não | árvore ao lado, 256 px | 428 px |
+      | 1440 | não | árvore ao lado, 256 px | 844 px |
+
+      Abaixo de 1024: abrir mostra a lista; "Banco de Dados" fecha e mostra a folha; abrir
+      "Tributos e Impostos" mantém aberto; "INSS" fecha com "Seção: Tributos e Impostos › INSS".
+      0 erros de página. A página de teste pediu `QueryClientProvider` para a folha do INSS (o app
+      já tem; foi defeito só da página de teste).
 
 ### Tarefa 3 — Planos
 
@@ -146,3 +162,4 @@ fechamento do #530 listou em "Ficou de fora":
     `trg_tasks_responsavel_so_conteudo`. Renomeado para `trg_tasks_troca_de_org`, que dispara depois,
     e o responsável volta a ler "o responsável só altera …". A prova confere o nome e a ordem: RED com
     o nome antigo no banco, GREEN depois de reaplicar (a migration é idempotente e remove o nome antigo).
+- [x] **Tarefa 2** (17/11) — menu recolhível abaixo de `lg`, conferido de 390 a 1440.

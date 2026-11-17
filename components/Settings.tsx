@@ -1,7 +1,7 @@
 import React from 'react';
 import { supabase } from '../lib/supabase';
 import { MOCK_SINAPI_DB } from '../constants';
-import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, Layers, Percent, Landmark , HelpCircle, Tags, Timer } from 'lucide-react';
+import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, ChevronDown, Menu, Layers, Percent, Landmark , HelpCircle, Tags, Timer } from 'lucide-react';
 import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import NomenclaturaTable from './settings/NomenclaturaTable';
@@ -90,6 +90,11 @@ const Settings: React.FC = () => {
     const [activeLeaf, setActiveLeaf] = React.useState<SettingsLeafId>('nomenclatura');
     const [openNavNodes, setOpenNavNodes] = React.useState<Record<string, boolean>>({});
     const toggleNavNode = (id: string) => setOpenNavNodes(o => ({ ...o, [id]: !o[id] }));
+    // Abaixo de `lg` (celular e tablet) a árvore recolhe atrás de um botão com a seção atual —
+    // ao lado da folha ela tomava 256 px de 358 a 390 px de tela. Escolher folha fecha;
+    // abrir grupo não. De `lg` para cima nada muda (guia §19.2).
+    const [menuAberto, setMenuAberto] = React.useState(false);
+    const escolherFolha = (id: SettingsLeafId) => { setActiveLeaf(id); setMenuAberto(false); };
 
     const [ehSuperadmin, setEhSuperadmin] = React.useState(false);
     React.useEffect(() => {
@@ -98,6 +103,14 @@ const Settings: React.FC = () => {
         return () => { vivo = false; };
     }, []);
     const nav = React.useMemo(() => navDasConfiguracoes(ehSuperadmin), [ehSuperadmin]);
+    const secaoAtual = React.useMemo(() => {
+        for (const node of nav) {
+            if (node.leafId === activeLeaf) return node.label;
+            const folha = node.children?.find(c => c.id === activeLeaf);
+            if (folha) return `${node.label} › ${folha.label}`;
+        }
+        return '';
+    }, [nav, activeLeaf]);
 
 
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
@@ -209,8 +222,26 @@ const Settings: React.FC = () => {
                 <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie todas as configurações de sistema, categorias, integrações e banco de dados.</p>
             </div>
 
-            <div className="flex gap-6 items-start">
-                <aside className="w-64 shrink-0 bg-gray-50 border border-gray-100 rounded-[10px] p-2 flex flex-col gap-0.5">
+            <div className="flex flex-col lg:flex-row gap-6 items-stretch lg:items-start">
+                <aside className="w-full lg:w-64 shrink-0 bg-gray-50 border border-gray-100 rounded-[10px] p-2">
+                    <button
+                        type="button"
+                        onClick={() => setMenuAberto(a => !a)}
+                        aria-expanded={menuAberto}
+                        aria-controls="configuracoes-secoes"
+                        className="lg:hidden flex items-center justify-between gap-2 w-full min-h-9 px-3 py-2 rounded-[6px] text-sm font-medium text-left text-gray-700 hover:bg-white/60 transition-all"
+                    >
+                        <span className="flex items-center gap-2.5 min-w-0">
+                            <Menu className="w-4 h-4 shrink-0" />
+                            <span>Seção: <span className="text-blue-600">{secaoAtual}</span></span>
+                        </span>
+                        <ChevronDown className={`w-4 h-4 shrink-0 transition-transform duration-200 ${menuAberto ? 'rotate-180' : ''}`} />
+                    </button>
+                    <nav
+                        id="configuracoes-secoes"
+                        aria-label="Seções das configurações"
+                        className={`${menuAberto ? 'flex mt-1 pt-1 border-t border-gray-200' : 'hidden'} lg:flex lg:mt-0 lg:pt-0 lg:border-t-0 flex-col gap-0.5`}
+                    >
                     {nav.map(node => node.children ? (
                         <div key={node.id}>
                             <button
@@ -227,7 +258,7 @@ const Settings: React.FC = () => {
                                     {node.children.map(leaf => (
                                         <button
                                             key={leaf.id}
-                                            onClick={() => setActiveLeaf(leaf.id)}
+                                            onClick={() => escolherFolha(leaf.id)}
                                             className={`px-3 h-8 rounded-[6px] text-sm font-medium text-left transition-all ${
                                                 activeLeaf === leaf.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
                                             }`}
@@ -239,7 +270,7 @@ const Settings: React.FC = () => {
                     ) : (
                         <button
                             key={node.id}
-                            onClick={() => setActiveLeaf(node.leafId!)}
+                            onClick={() => escolherFolha(node.leafId!)}
                             className={`flex items-center gap-2.5 w-full px-3 h-9 rounded-[6px] text-sm font-medium transition-all ${
                                 activeLeaf === node.leafId ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
                             }`}
@@ -247,6 +278,7 @@ const Settings: React.FC = () => {
                             <node.icon className="w-4 h-4" />{node.label}
                         </button>
                     ))}
+                    </nav>
                 </aside>
 
                 <div className="flex-1 min-w-0 space-y-6">

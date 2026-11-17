@@ -2448,9 +2448,21 @@ sub-navegação de uma única tela, então o racional do §18 não se aplica.
 Referência: `Settings.tsx` (2026-07).
 
 ```tsx
-<div className="flex gap-6 items-start">
-  <aside className="w-64 shrink-0 bg-gray-50 border border-gray-100 rounded-[10px] p-2 flex flex-col gap-0.5">
-    {/* nó de raiz (folha navegável) */}
+<div className="flex flex-col lg:flex-row gap-6 items-stretch lg:items-start">
+  <aside className="w-full lg:w-64 shrink-0 bg-gray-50 border border-gray-100 rounded-[10px] p-2">
+    {/* abaixo de lg: a árvore recolhe atrás deste botão (ver a nota "Abaixo de lg") */}
+    <button type="button" onClick={() => setMenuAberto(a => !a)}
+      aria-expanded={menuAberto} aria-controls="secoes-da-tela"
+      className="lg:hidden flex items-center justify-between gap-2 w-full min-h-9 px-3 py-2 rounded-[6px] text-sm font-medium text-left text-gray-700 hover:bg-white/60 transition-all">
+      <span className="flex items-center gap-2.5 min-w-0">
+        <Menu className="w-4 h-4 shrink-0" />
+        <span>Seção: <span className="text-blue-600">{secaoAtual /* "Grupo › Folha" */}</span></span>
+      </span>
+      <ChevronDown className={`w-4 h-4 shrink-0 transition-transform duration-200 ${menuAberto ? 'rotate-180' : ''}`} />
+    </button>
+    <nav id="secoes-da-tela" aria-label="Seções de …"
+      className={`${menuAberto ? 'flex mt-1 pt-1 border-t border-gray-200' : 'hidden'} lg:flex lg:mt-0 lg:pt-0 lg:border-t-0 flex-col gap-0.5`}>
+    {/* nó de raiz (folha navegável) — onClick: ativa a folha E fecha o menu */}
     <button className={`flex items-center gap-2.5 w-full px-3 h-9 rounded-[6px] text-sm font-medium transition-all ${
       isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
     }`}>
@@ -2471,11 +2483,25 @@ Referência: `Settings.tsx` (2026-07).
         }`}>{label}</button>
       </div>
     )}
+    </nav>
   </aside>
 
   <div className="flex-1 min-w-0 space-y-6">{/* conteúdo da folha ativa */}</div>
 </div>
 ```
+
+> ✅ **Abaixo de `lg` (celular e tablet) a árvore recolhe** (17/11/2026). Ao lado da folha, ela tomava
+> 256 dos 358 px úteis de um celular de 390. Num tablet de 768, com o menu global aberto, sobravam
+> ~180 px para a folha. Por isso o ponto de quebra é `lg`, não `md`. Abaixo de `lg`:
+> - a caixa vira largura total, acima da folha;
+> - a lista fica atrás de um botão `lg:hidden` que diz a seção atual, com o grupo junto ("Seção:
+>   Tributos e Impostos › INSS"), e tem `aria-expanded`/`aria-controls`;
+> - escolher uma folha fecha a lista; abrir um grupo não fecha;
+> - o nome da seção **quebra linha** (`min-h-9 py-2`), nunca `truncate`: o que fica só no `title`
+>   some no toque.
+>
+> De `lg` para cima nada muda. Referência: `Settings.tsx`; teste
+> `__tests__/components/SettingsMenuCelular.test.tsx`.
 
 > ✅ Folha ativa sempre `bg-white text-blue-600 shadow-sm` — mesma cor de "ativo"
 > do §19.1. Nó de grupo nunca ganha `bg-white`/`shadow-sm` — só o texto vira

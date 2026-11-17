@@ -62,6 +62,9 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     const [approvalConfig, setApprovalConfig] = React.useState<FinancialApprovalConfig[]>([]);
     const [approvalModal, setApprovalModal] = React.useState<{ item: ActionQueueItem; mode: 'approve' | 'reject' } | null>(null);
     const [carregando, setCarregando] = React.useState(true);
+    // A vez do caixa: só a resposta da chamada única (ok ou falha), não os blocos do
+    // plano B — esperar `carregando` segurava o caixa até o bloco mais lento (~16 s).
+    const [esperandoChamadaUnica, setEsperandoChamadaUnica] = React.useState(true);
     const [filtro, setFiltro] = React.useState<FiltroDaFila>('tudo');
     // Números sobem até o valor só na PRIMEIRA carga da tela; atualizar não anima.
     const [animar, setAnimar] = React.useState(true);
@@ -103,6 +106,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         const minha = ++cargaAtual.current;
         const vale = () => cargaAtual.current === minha;
         setCarregando(true);
+        setEsperandoChamadaUnica(true);
         if (orgNaTela.current !== organizationId) {
             orgNaTela.current = organizationId;
             fontesDeAlertaNaTela.current = {};
@@ -128,6 +132,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             financialApprovalService.listConfig(organizationId),
         ]);
         if (!vale()) return;
+        setEsperandoChamadaUnica(false);
 
         // Config de alçadas — não crítica: sem ela o modal só usa rótulos padrão.
         if (approvalConfigR.status === 'fulfilled') setApprovalConfig(approvalConfigR.value);
@@ -252,17 +257,18 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         return () => { cancelado = true; };
     }, [organizationId, periodoCaixa]);
 
-    // O caixa espera o bootstrap terminar (abrir a tela, Atualizar, trocar de org):
+    // O caixa espera o bootstrap responder (abrir a tela, Atualizar, trocar de org):
     // as duas consultas juntas disputavam o banco e o bootstrap ficava ~1 s mais lento
     // (A/B em produção, 11/11/2026: 3,2–3,6 s junto × ~2,4 s sozinho). Trocar o
-    // período não passa pelo bootstrap — busca na hora.
+    // período não passa pelo bootstrap — busca na hora. No plano B (bootstrap caído
+    // ou pulado) o caixa sai junto com os blocos, sem esperar o mais lento (17/11/2026).
     React.useEffect(() => {
         if (!podeCarregar || !verFinanceiro) return;
         // Org nova: o gráfico na tela é de outra empresa — esqueleto já, mesmo esperando a vez.
         if (caixaDaOrg.current !== undefined && caixaDaOrg.current !== organizationId) setCaixa(CARREGANDO);
-        if (carregando) return;
+        if (esperandoChamadaUnica) return;
         return carregarCaixa();
-    }, [carregarCaixa, podeCarregar, verFinanceiro, carregando, organizationId]);
+    }, [carregarCaixa, podeCarregar, verFinanceiro, esperandoChamadaUnica, organizationId]);
 
     // ── Derivados ──────────────────────────────────────────────────────────
     const dadosMeuDia = meuDia.estado === 'ok' ? meuDia.data : null;

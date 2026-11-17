@@ -405,4 +405,12 @@ describe('CentralControle · tela "Bom dia"', () => {
         await new Promise(r => setTimeout(r, 50));
         expect(cartao('Minha fila')).toHaveAttribute('aria-busy', 'false');
     });
+
+    it('plano B: o caixa sai junto com os blocos, sem esperar o mais lento', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes({ scorecards: nunca }));
+        montar();
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalled());
+        await waitFor(() => expect(cashflow).toHaveBeenCalledTimes(1));
+    });
 });

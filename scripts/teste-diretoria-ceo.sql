@@ -184,6 +184,18 @@ BEGIN
     PERFORM pg_temp.confere(n_painel = n_fonte, format('extrato sem conciliar há mais de 7 dias na org A: painel %s, banco %s', n_painel, n_fonte));
     PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM jsonb_array_elements(j->'excecoes') e
          WHERE e->>'tipo' = 'extrato_sem_conciliar' AND (e->>'dias')::int <= 7), 'extrato: só linha com mais de 7 dias');
+    -- O histórico da conta (até payment_accounts.reconciliation_historic_until) só se classifica,
+    -- não se concilia (fn_reconciliation_progress): fica fora, como na tela de Conciliação.
+    UPDATE public.payment_accounts pa SET reconciliation_historic_until = hoje - 30
+     WHERE pa.id = (SELECT t.bank_account_id FROM public.bank_transactions t
+                     WHERE t.organization_id = org_a AND public.fn_bank_tx_pendente(t.status) AND t.transaction_date < hoje - 30
+                     GROUP BY 1 ORDER BY count(*) DESC LIMIT 1);
+    j2 := pg_temp.painel(d, org_a);
+    SELECT count(*) INTO n_fonte FROM public.bank_transactions t LEFT JOIN public.payment_accounts pa ON pa.id = t.bank_account_id
+     WHERE t.organization_id = org_a AND public.fn_bank_tx_pendente(t.status) AND t.transaction_date < hoje - 7
+       AND (pa.reconciliation_historic_until IS NULL OR t.transaction_date > pa.reconciliation_historic_until);
+    SELECT coalesce(sum((e->>'quantidade')::bigint), 0) INTO n_painel FROM jsonb_array_elements(j2->'excecoes') e WHERE e->>'tipo' = 'extrato_sem_conciliar';
+    PERFORM pg_temp.confere(n_painel = n_fonte, format('extrato: o histórico da conta fica fora (painel %s, só o corrente %s)', n_painel, n_fonte));
     PERFORM pg_temp.confere(jsonb_typeof(j->'erros') = 'object' AND j->'erros' = '{}'::jsonb,
         format('nenhum tipo caiu: %s', j->'erros'));
 

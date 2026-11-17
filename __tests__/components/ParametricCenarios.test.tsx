@@ -37,6 +37,7 @@ vi.mock('../../services/parametricService', async (original) => {
 
 import ParametricEstimator from '../../components/ParametricEstimator';
 import { ConfirmProvider } from '../../components/ui/confirm';
+import { criarCenario } from '../../utils/cenariosParametricos';
 
 const SETTINGS = { id: 'p1', name: 'Obra', area: 1000, standard: 'R8-N', location: 'MS', bdi: 25, kFactor: 1 };
 
@@ -143,5 +144,118 @@ describe('Paramétrico › cenários', () => {
         abrirAbaCenarios();
         expect(screen.queryByText('Variação VGV')).toBeNull();
         expect(screen.getByText('igual ao atual')).toBeTruthy();
+    });
+});
+
+const COMPOSICAO = { taxes: 8.5, profit: 12, risk: 2, insurance: 1, admin: 5, guarantee: 0, finance: 0 };
+const UM_CENARIO = criarCenario({
+    totalValue: 1_500_000, costPerM2: 1_500, bdi: 30, bdiComposition: { ...COMPOSICAO, profit: 20 }, kFactor: 1.2,
+    sensitivity: { materials: 5, labor: 0 }, durationMonths: 24, area: 1000, standard: 'R8-N',
+}, [], new Date('2026-11-17T10:00:00Z'));
+
+const esperarCarregar = async () => {
+    const salvar = await botaoSalvar();
+    await waitFor(() => expect((salvar as HTMLButtonElement).disabled).toBe(false));
+    return salvar;
+};
+const fatorK = (c: HTMLElement) => c.querySelector('input[type="range"]') as HTMLInputElement;
+const lucro = (c: HTMLElement) => c.querySelectorAll('input[type="number"]')[0] as HTMLInputElement;
+
+describe('Paramétrico › simulação guardada no orçamento', () => {
+    it('só abrir a tela não grava nada no projeto', async () => {
+        const onGravar = vi.fn();
+        render(<Tela inicial={SETTINGS} onGravar={onGravar} />);
+        await esperarCarregar();
+        expect(onGravar).not.toHaveBeenCalled();
+    });
+
+    it('BDI e fator K mexidos ficam no orçamento, sem tocar no BDI do projeto, e voltam depois de sair da tela', async () => {
+        const gravados: Record<string, unknown>[] = [];
+        const primeira = render(<Tela inicial={SETTINGS} onGravar={s => gravados.push(s)} />);
+        await esperarCarregar();
+        fireEvent.change(fatorK(primeira.container), { target: { value: '1.2' } });
+        fireEvent.change(lucro(primeira.container), { target: { value: '20' } });
+
+        const ultimo = gravados[gravados.length - 1];
+        expect(ultimo.parametricSimulation).toMatchObject({ kFactor: 1.2, bdiComposition: { profit: 20 } });
+        // O BDI e o K do projeto (Configurações) não mudam: a simulação é um campo à parte.
+        expect(ultimo.kFactor).toBe(1);
+        expect(ultimo.bdiComposition).toBeUndefined();
+        // Mexer na simulação não recarrega o CUB.
+        expect(consultas.total).toBe(1);
+
+        primeira.unmount();
+        const segunda = render(<Tela inicial={ultimo} onGravar={vi.fn()} />);
+        await esperarCarregar();
+        expect(fatorK(segunda.container).value).toBe('1.2');
+        expect(lucro(segunda.container).value).toBe('20');
+    });
+
+    it('aplicar um cenário também fica guardado no orçamento', async () => {
+        const gravados: Record<string, unknown>[] = [];
+        render(<Tela inicial={{ ...SETTINGS, parametricScenarios: [UM_CENARIO] }} onGravar={s => gravados.push(s)} />);
+        await esperarCarregar();
+        abrirAbaCenarios();
+        fireEvent.click(screen.getByRole('button', { name: 'Aplicar os parâmetros deste cenário' }));
+        fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Aplicar' }));
+
+        await waitFor(() => expect(gravados.length).toBeGreaterThan(0));
+        expect(gravados[gravados.length - 1].parametricSimulation).toEqual({
+            bdiComposition: { ...COMPOSICAO, profit: 20 },
+            kFactor: 1.2,
+            sensitivity: { materials: 5, labor: 0 },
+            durationMonths: 24,
+        });
+    });
+
+    it('"Voltar aos valores do projeto" pergunta e tira a simulação gravada', async () => {
+        const gravados: Record<string, unknown>[] = [];
+        const simulada = { ...SETTINGS, parametricSimulation: { bdiComposition: COMPOSICAO, kFactor: 1.3, sensitivity: { materials: 0, labor: 0 }, durationMonths: 18 } };
+        const { container } = render(<Tela inicial={simulada} onGravar={s => gravados.push(s)} />);
+        await esperarCarregar();
+        expect(fatorK(container).value).toBe('1.3');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Voltar aos valores do projeto' }));
+        const dialogo = await screen.findByRole('dialog');
+        fireEvent.click(within(dialogo).getByRole('button', { name: 'Voltar' }));
+
+        await waitFor(() => expect(fatorK(container).value).toBe('1'));
+        expect(gravados[gravados.length - 1].parametricSimulation).toBeUndefined();
+        expect(screen.queryByRole('button', { name: 'Voltar aos valores do projeto' })).toBeNull();
+    });
+
+    it('sem simulação gravada não aparece "Voltar aos valores do projeto"', async () => {
+        render(<Tela inicial={SETTINGS} onGravar={vi.fn()} />);
+        await esperarCarregar();
+        expect(screen.queryByRole('button', { name: 'Voltar aos valores do projeto' })).toBeNull();
+    });
+});
+
+describe('Paramétrico › renomear cenário', () => {
+    it('o lápis abre o nome para edição; Enter grava, Esc desiste', async () => {
+        const gravados: Record<string, unknown>[] = [];
+        render(<Tela inicial={{ ...SETTINGS, parametricScenarios: [UM_CENARIO] }} onGravar={s => gravados.push(s)} />);
+        await esperarCarregar();
+        abrirAbaCenarios();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Renomear cenário' }));
+        const campo = screen.getByRole('textbox', { name: 'Nome do cenário' }) as HTMLInputElement;
+        expect(campo.value).toBe('Cenário 1 (R8-N)');
+        fireEvent.change(campo, { target: { value: 'Otimista' } });
+        fireEvent.keyDown(campo, { key: 'Enter' });
+
+        expect((gravados[gravados.length - 1].parametricScenarios as Array<{ name: string }>)[0].name).toBe('Otimista');
+        expect(screen.getByText('Otimista')).toBeTruthy();
+
+        const antes = gravados.length;
+        fireEvent.click(screen.getByRole('button', { name: 'Renomear cenário' }));
+        const deNovo = screen.getByRole('textbox', { name: 'Nome do cenário' });
+        fireEvent.change(deNovo, { target: { value: 'Outro nome' } });
+        fireEvent.keyDown(deNovo, { key: 'Escape' });
+        expect(gravados.length).toBe(antes);
+        expect(screen.getByText('Otimista')).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Excluir' }));
+        expect(within(await screen.findByRole('dialog')).getByText('Excluir o cenário "Otimista"?')).toBeTruthy();
     });
 });

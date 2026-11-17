@@ -156,7 +156,18 @@ fechamento do #530 listou em "Ficou de fora":
 ### Tarefa 4 — Publicação
 
 - [x] Revisão independente (ver a seção abaixo).
-- [ ] PR; CI; merge; conferir produção; fechar a frente; memória.
+- [x] PR; CI; merge; conferir produção; fechar a frente; memória.
+      - **PR e merge:** PR #533, com `ci` SUCCESS no commit da frente (`451892e`), mesclado em
+        17/11 às 07:34 como `5e45cb9`.
+      - **Produção:** na 3ª tentativa, `conferir-producao.sh` mostrou que o domínio serve
+        exatamente o `main` (`5e45cb9`), com "Seções das configurações" no bundle.
+      - **CI do `main` depois do merge:** success.
+      - **Frente:** os 10 arquivos dela são idênticos aos do `main`; foi fechada com
+        `fechar-frente.sh --sem-publicar`.
+      - **Memória:** `project_tarefas_trava_create_task_org` (nova) e
+        `project_rotinas_automaticas_pg_cron_liga_desliga`.
+      - Esta marcação foi feita num PR só de documentação, depois do merge, para não repetir o
+        item 3 do pedido.
 
 ## Andamento
 

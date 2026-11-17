@@ -41,14 +41,15 @@
  * Tudo DERIVADO, nada gravado além do que o lote do traçado/dimensionamento cria.
  * Física (ar a ~20 °C): ρ = 1,2 kg/m³, ν = 1,5·10⁻⁵ m²/s, cp = 1005 J/kg·K.
  */
-import type { BlueprintModel, Command, ObjectId, Terminal, TipoDePontoHidraulico, Trecho } from './blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Point, Terminal, TipoDePontoHidraulico, Trecho } from './blueprintKernel';
 import { applyBatch, distanciaEntreEixos3D, envelopeDoTrecho } from './blueprintKernel';
 import { interiorPoint, point, pointInPolygon } from './blueprintKernel/geom';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { ACIMA_DA_COBERTURA_MM, coberturaNoPontoMm } from './blueprintVentilacao';
 import { conexoesDerivadas } from './blueprintKernel/conexoes';
 import { comprimentoMm, fazerChave, type No } from './blueprintGrafoDeRede';
-import { desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { AFASTAMENTO_DO_CONTORNO_MM, anelDoPilar, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { cantosDaPeca, volumesDasPecasDeClimatizacao } from './blueprintRede';
 import { paredeEhExterna } from './blueprintKernel/exterior';
 import { lote } from './blueprintLinhaFrigorigena';
 import { FICHA_DO_MATERIAL } from './blueprintHidraulicaPressao';
@@ -641,12 +642,51 @@ export function cotaDoDutoNoForro(model: BlueprintModel, levelId: ObjectId, hip:
   return Math.round(fundo - hip.folgaSobVigaMm - hip.alturaPadraoMm / 2);
 }
 
-/** C8: cada aresta em planta que atravessaria um pilar vira a cadeia que o contorna. */
-function comDesvioDePilar(arestas: readonly { de: { x: number; y: number }; para: { x: number; y: number } }[], pegadas: ReturnType<typeof pegadasDePilares>): { arestas: { de: { x: number; y: number }; para: { x: number; y: number } }[]; semContorno: number } {
+/**
+ * PA15 do prédio automático (17/11/2026): entre o duto e a caixa de uma peça de climatização (evaporadora, exaustor), além
+ * da meia seção, mm — na vertical (a caixa que o duto alcança) e em planta (a caixa inflada que ele contorna).
+ */
+export const FOLGA_DO_DUTO_A_PECA_MM = 50;
+
+/** PA15: as caixas em planta das peças de climatização do pavimento que o duto, na cota do forro, alcança. */
+interface CaixasNoForro {
+  reais: Point[][];
+  /** Meia largura do duto em planta + a folga: quanto a caixa é inflada para o contorno. */
+  inflarMm: number;
+  /** Meia altura do duto + a folga: a faixa vertical que ele ocupa em volta da cota. */
+  meiaAlturaMm: number;
+}
+
+/**
+ * PA15: as caixas que o lance a→b contorna — menos a que tem uma das pontas a menos de 50 mm (a ligação da própria peça,
+ * como o kernel conta) —, infladas pela meia largura do duto e a folga (menos, se a inflada engolir uma ponta).
+ */
+function caixasDoLance(caixas: CaixasNoForro, a: { x: number; y: number }, b: { x: number; y: number }): { inflados: Point[][]; reais: Point[][] } {
+  const reais = caixas.reais.filter((g) => {
+    const ligacao = anelDoPilar(g, 50) as Point[];
+    return !pointInPolygon(ligacao, a as Point) && !pointInPolygon(ligacao, b as Point);
+  });
+  const inflados = reais.map((g) => {
+    for (let f = caixas.inflarMm; f > 0; f -= 10) {
+      const anel = anelDoPilar(g, f) as Point[];
+      if (!pointInPolygon(anel, a as Point) && !pointInPolygon(anel, b as Point)) return anel;
+    }
+    return g;
+  });
+  return { inflados, reais };
+}
+
+/**
+ * C8: cada aresta em planta que atravessaria um pilar vira a cadeia que o contorna. PA15: e a caixa de evaporadora ou
+ * exaustor que o duto alcança na vertical (o duto do exaustor passava pelo exaustor do banheiro vizinho alinhado) — sem
+ * contorno com as caixas infladas, com as reais; sem contorno com elas, só o dos pilares (o de antes, nunca pior).
+ */
+function comDesvioDePilar(arestas: readonly { de: { x: number; y: number }; para: { x: number; y: number } }[], pegadas: ReturnType<typeof pegadasDePilares>, caixas?: CaixasNoForro): { arestas: { de: { x: number; y: number }; para: { x: number; y: number } }[]; semContorno: number } {
   const saida: { de: { x: number; y: number }; para: { x: number; y: number } }[] = [];
   let semContorno = 0;
   for (const a of arestas) {
-    const desvio = desvioDoPilar(a.de, a.para, pegadas);
+    const eq = caixas?.reais.length ? caixasDoLance(caixas, a.de, a.para) : null;
+    const desvio = (eq?.reais.length ? (desvioDoPilar(a.de, a.para, [...pegadas, ...eq.inflados]) ?? desvioDoPilar(a.de, a.para, [...pegadas, ...eq.reais])) : null) ?? desvioDoPilar(a.de, a.para, pegadas);
     if (desvio == null) semContorno++;
     const pts = [a.de, ...(desvio ?? []).map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })), a.para];
     for (let i = 1; i < pts.length; i++) saida.push({ de: pts[i - 1], para: pts[i] });
@@ -658,9 +698,16 @@ function comDesvioDePilar(arestas: readonly { de: { x: number; y: number }; para
  * C7: a descarga do exaustor na fachada — o ponto da parede EXTERNA mais perto
  * (projeção no eixo, longe 100 mm das pontas), levado à face de fora. `null` sem
  * parede externa no pavimento.
+ *
+ * PA15 do prédio automático (17/11/2026): com `evitar`, o trecho da parede diante de uma peça encostada nela (a
+ * evaporadora pendurada na fachada, na cota do duto) não serve — a descarga corre pela parede até sair dela, com a folga
+ * (o duto chegava à fachada por dentro da evaporadora: R8 1, R12 7, RL 1 por andar). E o trecho da parede por onde corre
+ * ou atravessa um tubo na altura do duto (o dreno da evaporadora, a ~2,11 m dentro da parede, e a saída dele; o eletroduto
+ * que desce à tomada do ar) — a descarga deslocada caía bem ali. Deslocada, ela devolve também `frente`: o ponto do lado de
+ * dentro, diante dela, por onde o duto passa para chegar de frente à parede (em diagonal, cruzava o que corre rente a ela).
  */
-export function descargaNaFachada(model: BlueprintModel, levelId: ObjectId, de: { x: number; y: number }): { at: { x: number; y: number }; noEixo: { x: number; y: number }; paredeId: ObjectId } | null {
-  let melhor: { at: { x: number; y: number }; noEixo: { x: number; y: number }; paredeId: ObjectId; d: number } | null = null;
+export function descargaNaFachada(model: BlueprintModel, levelId: ObjectId, de: { x: number; y: number }, evitar?: EvitarNaFachada): { at: { x: number; y: number }; noEixo: { x: number; y: number }; paredeId: ObjectId; frente?: { x: number; y: number } } | null {
+  let melhor: { at: { x: number; y: number }; noEixo: { x: number; y: number }; paredeId: ObjectId; d: number; frente?: { x: number; y: number } } | null = null;
   for (const w of model.walls.filter((x) => x.levelId === levelId)) {
     if (paredeEhExterna(model, w) !== true) continue;
     const dx = w.b.x - w.a.x;
@@ -669,7 +716,9 @@ export function descargaNaFachada(model: BlueprintModel, levelId: ObjectId, de: 
     if (comp < 300) continue;
     const ux = dx / comp;
     const uy = dy / comp;
-    const s = Math.max(100, Math.min(comp - 100, (de.x - w.a.x) * ux + (de.y - w.a.y) * uy));
+    const s0 = Math.max(100, Math.min(comp - 100, (de.x - w.a.x) * ux + (de.y - w.a.y) * uy));
+    const s = evitar && (evitar.pegadas.length || evitar.tubos?.length) ? livreNaParede(w, ux, uy, comp, s0, evitar) : s0;
+    if (s == null) continue;
     const q = { x: w.a.x + ux * s, y: w.a.y + uy * s };
     const d = Math.hypot(q.x - de.x, q.y - de.y);
     if (melhor && d >= melhor.d) continue;
@@ -681,9 +730,81 @@ export function descargaNaFachada(model: BlueprintModel, levelId: ObjectId, de: 
     const dentro = (p: { x: number; y: number }) => model.spaces.some((sp) => sp.levelId === levelId && pointInPolygon(sp.ring, p) && !sp.holes.some((h) => pointInPolygon(h, p)));
     const lado = !dentro({ x: q.x + nx * prova, y: q.y + ny * prova }) ? 1 : !dentro({ x: q.x - nx * prova, y: q.y - ny * prova }) ? -1 : 0;
     if (lado === 0) continue;
-    melhor = { at: { x: Math.round(q.x + lado * nx * meia), y: Math.round(q.y + lado * ny * meia) }, noEixo: { x: Math.round(q.x), y: Math.round(q.y) }, paredeId: w.id, d };
+    const recuo = meia + RENTE_A_PAREDE_MM + AFASTAMENTO_DO_CONTORNO_MM;
+    const frente = s !== s0 ? { x: Math.round(q.x - lado * nx * recuo), y: Math.round(q.y - lado * ny * recuo) } : undefined;
+    melhor = { at: { x: Math.round(q.x + lado * nx * meia), y: Math.round(q.y + lado * ny * meia) }, noEixo: { x: Math.round(q.x), y: Math.round(q.y) }, paredeId: w.id, d, ...(frente ? { frente } : {}) };
   }
-  return melhor ? { at: melhor.at, noEixo: melhor.noEixo, paredeId: melhor.paredeId } : null;
+  return melhor ? { at: melhor.at, noEixo: melhor.noEixo, paredeId: melhor.paredeId, ...(melhor.frente ? { frente: melhor.frente } : {}) } : null;
+}
+
+/** PA15: de uma peça a até isto da face da parede, ela está "encostada" nela (a evaporadora pendurada tem 22 cm), mm. */
+const ENCOSTADA_NA_PAREDE_MM = 400;
+/** PA15: o tubo a até isto da face da parede corre "nela" (dentro dela ou rente à face), mm. */
+const RENTE_A_PAREDE_MM = 150;
+
+/** PA15: o que a descarga do exaustor não pode ter na frente, na parede da fachada. */
+export interface EvitarNaFachada {
+  /** As pegadas em planta das peças (a caixa da evaporadora) e a folga ao longo da parede, mm. */
+  pegadas: readonly (readonly Point[])[];
+  folgaMm: number;
+  /** Os tubos na altura do duto (em planta, com o raio) e a folga ao longo da parede, além do raio, mm. */
+  tubos?: readonly { a: { x: number; y: number }; b: { x: number; y: number }; raioMm: number }[];
+  folgaDoTuboMm?: number;
+}
+
+/**
+ * PA15: a posição ao longo da parede (0 = `a`) mais perto de `s0` que não fica diante de peça encostada nela nem de tubo
+ * que corre nela — o intervalo de cada peça é o dos cantos projetados, alargado pela folga; o de cada tubo, o pedaço dele
+ * na faixa da parede, alargado pelo raio e a folga. `null` se não sobra lugar entre 100 mm das pontas.
+ */
+function livreNaParede(w: { a: { x: number; y: number }; thicknessMm: number }, ux: number, uy: number, comp: number, s0: number, evitar: EvitarNaFachada): number | null {
+  const meia = w.thicknessMm / 2;
+  const tomados: [number, number][] = [];
+  for (const g of evitar.pegadas) {
+    const ss = g.map((p) => (p.x - w.a.x) * ux + (p.y - w.a.y) * uy);
+    const ns = g.map((p) => Math.abs(-(p.x - w.a.x) * uy + (p.y - w.a.y) * ux));
+    if (Math.min(...ns) > meia + ENCOSTADA_NA_PAREDE_MM) continue;
+    const lo = Math.min(...ss) - evitar.folgaMm;
+    const hi = Math.max(...ss) + evitar.folgaMm;
+    if (hi < 0 || lo > comp) continue;
+    tomados.push([lo, hi]);
+  }
+  // O pedaço de cada tubo que corre na faixa da parede (o eixo ± meia parede + rente), projetado nela.
+  const faixa = meia + RENTE_A_PAREDE_MM;
+  for (const t of evitar.tubos ?? []) {
+    const sA = (t.a.x - w.a.x) * ux + (t.a.y - w.a.y) * uy;
+    const sB = (t.b.x - w.a.x) * ux + (t.b.y - w.a.y) * uy;
+    const nA = -(t.a.x - w.a.x) * uy + (t.a.y - w.a.y) * ux;
+    const nB = -(t.b.x - w.a.x) * uy + (t.b.y - w.a.y) * ux;
+    let t0 = 0;
+    let t1 = 1;
+    if (Math.abs(nB - nA) < 1e-9) {
+      if (Math.abs(nA) > faixa + t.raioMm) continue;
+    } else {
+      const u1 = (-(faixa + t.raioMm) - nA) / (nB - nA);
+      const u2 = (faixa + t.raioMm - nA) / (nB - nA);
+      t0 = Math.max(0, Math.min(u1, u2));
+      t1 = Math.min(1, Math.max(u1, u2));
+      if (t0 > t1) continue;
+    }
+    const f = (evitar.folgaDoTuboMm ?? 0) + t.raioMm;
+    const lo = Math.min(sA + (sB - sA) * t0, sA + (sB - sA) * t1) - f;
+    const hi = Math.max(sA + (sB - sA) * t0, sA + (sB - sA) * t1) + f;
+    if (hi < 0 || lo > comp) continue;
+    tomados.push([lo, hi]);
+  }
+  tomados.sort((x, y) => x[0] - y[0]);
+  const juntos: [number, number][] = [];
+  for (const t of tomados) {
+    const ult = juntos[juntos.length - 1];
+    if (ult && t[0] <= ult[1]) ult[1] = Math.max(ult[1], t[1]);
+    else juntos.push([t[0], t[1]]);
+  }
+  const dentro = juntos.find(([lo, hi]) => s0 > lo && s0 < hi);
+  if (!dentro) return s0;
+  const candidatos = [Math.floor(dentro[0]), Math.ceil(dentro[1])].filter((s) => s >= 100 && s <= comp - 100 && !juntos.some(([lo, hi]) => s > lo && s < hi));
+  if (!candidatos.length) return null;
+  return candidatos.reduce((m, s) => (Math.abs(s - s0) < Math.abs(m - s0) ? s : m));
 }
 
 export function planejarRedeDeAr(model: BlueprintModel, levelId: ObjectId, vazoes: Map<ObjectId, VazaoDoTerminal>, hip: HipotesesDoAr): PlanoDaRedeDeAr {
@@ -722,6 +843,24 @@ export function planejarRedeDeAr(model: BlueprintModel, levelId: ObjectId, vazoe
   }
   const cota = cotaDoDutoNoForro(base, levelId, hip);
   const pegadas = pegadasDePilares(base, levelId);
+  // PA15: as caixas de climatização do pavimento, com a faixa vertical de cada uma.
+  const caixasDoNivel = volumesDasPecasDeClimatizacao(base)
+    .filter((v) => v.levelId === levelId)
+    .map((v) => ({ anel: cantosDaPeca(v.at, v, v.rotacaoGraus) as Point[], zLo: v.cotaMm - v.alturaMm / 2, zHi: v.cotaMm + v.alturaMm / 2 }));
+  /** PA15: as caixas que o duto desta seção, no forro, alcança na vertical. */
+  const caixasDoDuto = (s2: Secao): CaixasNoForro => {
+    const meiaAltura = (s2.alturaDutoMm ?? s2.bitolaMm) / 2 + FOLGA_DO_DUTO_A_PECA_MM;
+    return { reais: caixasDoNivel.filter((c) => cota + meiaAltura > c.zLo && cota - meiaAltura < c.zHi).map((c) => c.anel), inflarMm: s2.bitolaMm / 2 + FOLGA_DO_DUTO_A_PECA_MM, meiaAlturaMm: meiaAltura };
+  };
+  // PA15: os tubos do pavimento (o que não é deste planejador) com a faixa vertical de cada um.
+  const tubosDoNivel = (base.trechos ?? [])
+    .filter((t) => t.levelId === levelId)
+    .map((t) => {
+      const r = envelopeDoTrecho(t).raioVerticalMm;
+      return { a: t.a, b: t.b, raioMm: envelopeDoTrecho(t).raioPlantaMm, zLo: Math.min(t.cotaAMm, t.cotaBMm) - r, zHi: Math.max(t.cotaAMm, t.cotaBMm) + r };
+    });
+  /** PA15: os tubos que o duto, no forro, alcança na vertical. */
+  const tubosDoDuto = (meiaAltura: number) => tubosDoNivel.filter((t) => cota + meiaAltura > t.zLo && cota - meiaAltura < t.zHi);
   const l = lote(base);
   const pecas: Command[] = [];
   const semLugar: { nome: string; motivo: string }[] = [];
@@ -767,8 +906,9 @@ export function planejarRedeDeAr(model: BlueprintModel, levelId: ObjectId, vazoe
         }
       }
     }
-    // C8: o lance que atravessaria pilar contorna pelo canto.
-    const desviado = comDesvioDePilar(arestas, pegadas);
+    // C8: o lance que atravessaria pilar contorna pelo canto. PA15: e a caixa de evaporadora ou exaustor na cota do tronco.
+    const qTronco = ts.reduce((acc, t) => acc + (vazoes.get(t.id)?.vazaoM3h ?? 0), 0);
+    const desviado = comDesvioDePilar(arestas, pegadas, caixasDoDuto(secaoProposta(qTronco, ts.length > 1, hip)));
     arestas = desviado.arestas;
     if (desviado.semContorno) avisos.push(`${desviado.semContorno} lance(s) sem contorno do pilar — conferir o conflito`);
     // A vazão a jusante de cada ponto (pós-ordem da árvore orientada) e quantos terminais.
@@ -832,7 +972,11 @@ export function planejarRedeDeAr(model: BlueprintModel, levelId: ObjectId, vazoe
   }
   // C7: cada exaustor sem duto — sobe ao forro e corre até a fachada, com a veneziana na face de fora.
   for (const ex of exaustoresSoltos) {
-    const descarga = descargaNaFachada(base, levelId, ex.at);
+    const caixasEx = caixasDoDuto(secaoProposta(vazoes.get(ex.id)?.vazaoM3h ?? 0, false, hip));
+    // PA15: a descarga fora da frente da peça encostada na fachada — com a folga do contorno, para o último lance chegar
+    // de frente na parede. Sem lugar livre, a de antes.
+    const naoAPropria = caixasEx.reais.filter((g) => !pointInPolygon(anelDoPilar(g, 50) as Point[], ex.at as Point));
+    const descarga = descargaNaFachada(base, levelId, ex.at, { pegadas: naoAPropria, folgaMm: caixasEx.inflarMm + AFASTAMENTO_DO_CONTORNO_MM, tubos: tubosDoDuto(caixasEx.meiaAlturaMm), folgaDoTuboMm: caixasEx.inflarMm }) ?? descargaNaFachada(base, levelId, ex.at);
     if (!descarga) {
       semLugar.push({ nome: ex.tipo, motivo: 'nenhuma parede externa no pavimento para a descarga do exaustor' });
       continue;
@@ -843,7 +987,8 @@ export function planejarRedeDeAr(model: BlueprintModel, levelId: ObjectId, vazoe
     const s2 = secaoProposta(q, false, hip);
     const baseEx = { levelId, disciplina: 'MECANICA' as const, bitolaMm: s2.bitolaMm, ...(s2.alturaDutoMm != null ? { alturaDutoMm: s2.alturaDutoMm } : {}), rotulo: ROTULO_DA_REDE_DE_AR, sugerido: true };
     l.add(baseEx, ex.at, ex.cotaMm, ex.at, cota);
-    const desviado = comDesvioDePilar([{ de: ex.at, para: descarga.at }], pegadas);
+    const lances = descarga.frente ? [{ de: ex.at, para: descarga.frente }, { de: descarga.frente, para: descarga.at }] : [{ de: ex.at, para: descarga.at }];
+    const desviado = comDesvioDePilar(lances, pegadas, caixasEx);
     if (desviado.semContorno) avisos.push('o duto atravessa pilar sem contorno — conferir o conflito');
     for (const a of desviado.arestas) l.add(baseEx, a.de, cota, a.para, cota);
     pecas.push({ type: 'AddTerminal', levelId, disciplina: 'MECANICA', tipo: 'Veneziana de descarga', tipoHidraulico: 'VENEZIANA_AR', at: descarga.at, cotaMm: cota, sugerida: true } as Command);

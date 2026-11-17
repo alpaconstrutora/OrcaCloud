@@ -23,9 +23,13 @@ vi.mock('../../store/useStore', () => ({
 }));
 
 const bootstrap = vi.fn();
+const fontesSeparadas = vi.fn();
 vi.mock('../../services/centralControleService', async (importOriginal) => {
     const mod = await importOriginal<typeof import('../../services/centralControleService')>();
-    return { ...mod, centralControleService: { bootstrap: (...a: unknown[]) => bootstrap(...a) } };
+    return { ...mod, centralControleService: {
+        bootstrap: (...a: unknown[]) => bootstrap(...a),
+        fontesSeparadas: (...a: unknown[]) => fontesSeparadas(...a),
+    } };
 });
 vi.mock('../../services/contractIndexService', () => ({ contractIndexService: { listDueForReajuste: async () => [] } }));
 vi.mock('../../services/financialApprovalService', () => ({ financialApprovalService: { listConfig: async () => [] } }));
@@ -72,6 +76,18 @@ function aprovacao(id: string, p: Record<string, unknown> = {}) {
     return { entity: 'transaction', id, title: `Boleto ${id}`, amount: 500, approval_status: 'PENDENTE', approval_chain: [], approval_required_levels: 1, pode_aprovar: true, vez_de: [], ...p };
 }
 
+/** Plano B: as 6 fontes que a tela usa, uma promessa cada. Cada uma nasce na hora da
+ *  chamada (fábrica), para uma rejeição não ficar sem dono antes de a tela pedir. */
+const FONTES_DA_TELA = ['financial_alerts', 'divergences', 'bottlenecks', 'action_queue', 'scorecards', 'meu_dia'] as const;
+type FonteDaTela = typeof FONTES_DA_TELA[number];
+function fontes(p: Partial<Record<FonteDaTela, () => Promise<unknown>>> = {}) {
+    const base = painel() as Record<string, { data: unknown }>;
+    return Object.fromEntries(FONTES_DA_TELA.map(k => [k, p[k] ? p[k]!() : Promise.resolve(base[k].data)]));
+}
+const TIMEOUT = { code: '57014', message: 'canceling statement due to statement timeout' };
+const caiu = () => Promise.reject(TIMEOUT);
+const nunca = () => new Promise<never>(() => { /* nunca responde */ });
+
 const montar = () => render(<CentralControle organizationId="o1" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
 
 /** O <section> do cartão a partir do título. */
@@ -79,6 +95,7 @@ const cartao = (titulo: string) => screen.getByRole('heading', { name: titulo, l
 
 beforeEach(() => {
     bootstrap.mockReset();
+    fontesSeparadas.mockReset();
     cashflow.mockReset().mockResolvedValue([{ data_ref: HOJE, cr_previsto: 0, db_previsto: 0, saldo_dia: 0, saldo_acum: 1000 }]);
     atualizarTarefa.mockReset().mockResolvedValue(undefined);
     estado = {
@@ -256,5 +273,87 @@ describe('CentralControle · tela "Bom dia"', () => {
         expect(c).toHaveAttribute('aria-busy', 'false');
         expect(within(c).getByLabelText('R$ 1.000').closest('[aria-busy="true"]')).not.toBeNull();
         raf.mockRestore();
+    });
+    // ── Plano B (docs/planos/2026-11-16-central-blocos-isolados.md, Tarefa 3) ──
+    it('bootstrap respondendo: o plano B não é chamado', async () => {
+        bootstrap.mockResolvedValue(painel());
+        montar();
+        expect(await screen.findByText('Nada esperando por você hoje.', { selector: 'p[aria-live] > span' })).toBeInTheDocument();
+        expect(fontesSeparadas).not.toHaveBeenCalled();
+    });
+
+    it('chamada única cai: os cartões vêm pelas consultas separadas e só o bloco que caiu diz "Não carregou."', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes({ scorecards: caiu }));
+        montar();
+        await waitFor(() => expect(within(cartao('Obras')).getByText('Não carregou.')).toBeInTheDocument());
+        expect(fontesSeparadas).toHaveBeenCalledWith('o1');
+        expect(within(cartao('Obras')).getByRole('button', { name: /Tentar de novo/ })).toBeInTheDocument();
+        await waitFor(() => expect(cartao('Contas a pagar')).toHaveAttribute('aria-busy', 'false'));
+        expect(within(cartao('Contas a pagar')).queryByText('Não carregou.')).not.toBeInTheDocument();
+        expect(within(cartao('Minha fila')).queryByText('Não carregou.')).not.toBeInTheDocument();
+    });
+
+    it('alerta lento não segura a Minha fila', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes({
+            financial_alerts: nunca,
+            action_queue: () => Promise.resolve([aprovacao('a1')]),
+        }));
+        montar();
+        const fila = cartao('Minha fila');
+        await waitFor(() => expect(within(fila).getByText('Boleto a1')).toBeInTheDocument());
+        expect(fila).toHaveAttribute('aria-busy', 'false');
+    });
+
+    it('tudo cai: cada cartão diz "Não carregou." e o caixa é buscado', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes(Object.fromEntries(FONTES_DA_TELA.map(k => [k, caiu]))));
+        montar();
+        for (const t of ['Contas a pagar', 'Obras', 'Extrato conciliado']) {
+            await waitFor(() => expect(within(cartao(t)).getByText('Não carregou.')).toBeInTheDocument());
+        }
+        // O `carregando` termina mesmo com tudo caído: o caixa não fica esperando a vez para sempre.
+        await waitFor(() => expect(cashflow).toHaveBeenCalledTimes(1));
+    });
+
+    it('resposta atrasada da org anterior não pinta a tela da org nova', async () => {
+        let responderFilaO1!: (v: unknown) => void;
+        bootstrap.mockRejectedValueOnce(TIMEOUT).mockResolvedValueOnce(painel());
+        fontesSeparadas.mockImplementation(() => fontes({
+            action_queue: () => new Promise(r => { responderFilaO1 = r; }),
+        }));
+        const { rerender } = montar();
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledWith('o1'));
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+        expect(await screen.findByText('Nada esperando por você hoje.', { selector: 'p[aria-live] > span' })).toBeInTheDocument();
+        responderFilaO1([aprovacao('velha')]);
+        await new Promise(r => setTimeout(r, 50));
+        expect(screen.queryByText('Boleto velha')).not.toBeInTheDocument();
+    });
+
+    // Revisão final (16/11): a trava acima barra a resposta ATRASADA; o que a org
+    // anterior já pintou também não pode ficar — no plano B seriam até ~16 s com
+    // botão Aprovar de outra empresa debaixo do seletor do topo (REGRA #5).
+    it('trocar de org volta os cartões ao esqueleto: nada da org anterior fica na tela', async () => {
+        bootstrap
+            .mockResolvedValueOnce(painel({ action_queue: { ok: true, data: [aprovacao('da-o1')] } }))
+            .mockRejectedValueOnce(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes({ action_queue: nunca, meu_dia: nunca }));
+        const { rerender } = montar();
+        expect(await within(cartao('Minha fila')).findByText('Boleto da-o1')).toBeInTheDocument();
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledWith('o2'));
+        expect(screen.queryByText('Boleto da-o1')).not.toBeInTheDocument();
+        expect(cartao('Minha fila')).toHaveAttribute('aria-busy', 'true');
+        expect(cartao('Contas a pagar')).toHaveAttribute('aria-busy', 'true');
+    });
+
+    it('alerta financeiro que cai aparece no aviso da fila, mesmo com os outros alertas chegando', async () => {
+        bootstrap.mockRejectedValue(TIMEOUT);
+        fontesSeparadas.mockImplementation(() => fontes({ financial_alerts: caiu }));
+        montar();
+        expect(await screen.findByText(/Parte da fila não carregou \(alertas financeiros\)\./)).toBeInTheDocument();
     });
 });

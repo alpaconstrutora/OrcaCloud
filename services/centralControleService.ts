@@ -11,9 +11,21 @@
 //
 // `fn_central_controle_bootstrap` executa as seis numa sessão só, em
 // sequência: uma conexão, um round-trip, cache aproveitado entre os blocos.
+//
+// ── Plano B (16/11/2026) ────────────────────────────────────────────────────
+// O `statement_timeout` de 8 s vale para a chamada INTEIRA, e o cancelamento
+// não é pego pelo `EXCEPTION` de cada bloco: um bloco lento derruba os sete
+// (foi o que tirou a Central do ar em 16/11, #511). `fontesSeparadas` pede os
+// blocos um a um, cada um com o próprio limite — mas SÓ depois que a chamada
+// única caiu. Não é o caminho normal: seis RPCs juntas no login é a rajada que
+// o bootstrap resolveu. Plano: docs/planos/2026-11-16-central-blocos-isolados.md
 import { supabase } from '../lib/supabase';
+import { financialIntelligenceService } from './financialIntelligenceService';
 import type { FinancialAlert, ProjectScorecard } from './financialIntelligenceService';
+import { approvalService } from './approvalService';
 import type { ApprovalPendingSummary, ActionQueueItem } from './approvalService';
+import { divergenceService } from './divergenceService';
+import { processService } from './processService';
 import type { ReconciliationDivergences, ApprovalStep } from '../types/financial';
 import type { ProcessStepBottleneck } from '../types/process';
 
@@ -71,6 +83,19 @@ export interface MeuDia {
     contas_7_dias: { atrasadas: QtdValor; vencem_em_2_dias: QtdValor; vencem_em_7_dias: QtdValor };
     /** Linhas de extrato (contas ativas): últimos 30 dias e os 30 anteriores. */
     conciliado: { conciliadas: number; pendentes: number; conciliadas_anterior: number; pendentes_anterior: number };
+}
+
+/**
+ * Plano B: as seis fontes que a tela usa, cada uma na própria RPC, já em voo.
+ * `approval_summary` fica de fora — a tela não lê esse bloco.
+ */
+export interface FontesSeparadas {
+    financial_alerts: Promise<FinancialAlert[]>;
+    divergences: Promise<ReconciliationDivergences>;
+    bottlenecks: Promise<ProcessStepBottleneck[]>;
+    action_queue: Promise<ActionQueueItem[]>;
+    scorecards: Promise<ProjectScorecard[]>;
+    meu_dia: Promise<MeuDia>;
 }
 
 /** As chaves que a função SQL devolve — usada para não deixar buraco. */
@@ -134,5 +159,28 @@ export const centralControleService = {
             saida[nome] = { ok: true, data: valor };
         }
         return saida as unknown as CentralControleBootstrap;
+    },
+
+    /**
+     * Plano B: chamar SÓ quando `bootstrap` rejeitou. As seis saem juntas (nenhum
+     * `await` entre elas) e cada promessa assenta sozinha — a tela pinta cada
+     * cartão quando o dele chega. Os parâmetros são os do `bootstrap`: trocar
+     * aqui faria o número do cartão mudar conforme o caminho que carregou.
+     */
+    fontesSeparadas(organizationId: string | null): FontesSeparadas {
+        const org = organizationId || null;
+        const meuDia = async (): Promise<MeuDia> => {
+            const { data, error } = await supabase.rpc('fn_central_meu_dia', { p_organization_id: org });
+            if (error) throw error;
+            return data as MeuDia;
+        };
+        return {
+            financial_alerts: financialIntelligenceService.getAlerts(org),
+            divergences: divergenceService.getDivergences(org, { limit: 0 }),
+            bottlenecks: processService.getBottlenecks(org),
+            action_queue: approvalService.listActionQueue(org),
+            scorecards: financialIntelligenceService.getProjectScorecards(org),
+            meu_dia: meuDia(),
+        };
     },
 };

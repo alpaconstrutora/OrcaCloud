@@ -482,7 +482,7 @@ export function prumadasQueCruzam(model: BlueprintModel, levelId: ObjectId, cota
 }
 
 /** Os eletrodutos que sobem do quadro (o tronco chega a DN 75). */
-const RAIO_DA_SUBIDA_DO_QUADRO_MM = 37.5;
+export const RAIO_DA_SUBIDA_DO_QUADRO_MM = 37.5;
 
 /**
  * A SUBIDA dos eletrodutos de cada quadro do pavimento abaixo de `cotaMm` (até a rede, no teto) — um quadrado com o raio

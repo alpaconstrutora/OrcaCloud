@@ -562,4 +562,21 @@ describe('CentralControle · tela "Bom dia"', () => {
         expect(within(cartao('Caixa projetado')).queryByText('Não carregou.')).not.toBeInTheDocument();
         expect(cartao('Caixa projetado')).toHaveAttribute('aria-busy', 'true');
     });
+
+    // ── Menores da revisão do #546 (17/11/2026): docs/planos/2026-11-17-central-caixa-menores.md ──
+
+    it('carga descartada por troca de org: a queda da anterior conta (voltar a ela vai direto aos blocos)', async () => {
+        let rejeitarO1!: (e: unknown) => void;
+        bootstrap.mockReturnValueOnce(new Promise((_, rej) => { rejeitarO1 = rej; })).mockResolvedValue(painel());
+        fontesSeparadas.mockImplementation(() => fontes());
+        const { rerender } = montar();
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o1'));
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        rejeitarO1(TIMEOUT);                                   // a chamada única da o1 cai depois da troca
+        await new Promise(r => setTimeout(r, 20));
+        rerender(<CentralControle organizationId="o1" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledWith('o1'));
+        expect(bootstrap.mock.calls.map(c => c[0])).toEqual(['o1', 'o2']);
+    });
 });

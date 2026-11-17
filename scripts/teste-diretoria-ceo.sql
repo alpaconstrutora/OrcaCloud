@@ -196,6 +196,29 @@ BEGIN
        AND (pa.reconciliation_historic_until IS NULL OR t.transaction_date > pa.reconciliation_historic_until);
     SELECT coalesce(sum((e->>'quantidade')::bigint), 0) INTO n_painel FROM jsonb_array_elements(j2->'excecoes') e WHERE e->>'tipo' = 'extrato_sem_conciliar';
     PERFORM pg_temp.confere(n_painel = n_fonte, format('extrato: o histórico da conta fica fora (painel %s, só o corrente %s)', n_painel, n_fonte));
+    UPDATE public.payment_accounts SET reconciliation_historic_until = NULL WHERE organization_id = org_a;
+    -- Revisão (…980300): duas contas com o MESMO nome são grupos diferentes (chave pelo id da conta).
+    DECLARE
+        conta_x UUID; nome_x TEXT; conta_y UUID;
+    BEGIN
+        SELECT t.bank_account_id INTO conta_x FROM public.bank_transactions t
+         WHERE t.organization_id = org_a AND public.fn_bank_tx_pendente(t.status) AND t.transaction_date < hoje - 30
+         GROUP BY 1 ORDER BY count(*) DESC LIMIT 1;
+        SELECT name INTO nome_x FROM public.payment_accounts WHERE id = conta_x;
+        INSERT INTO public.payment_accounts (organization_id, name) VALUES (org_a, nome_x) RETURNING id INTO conta_y;
+        INSERT INTO public.bank_transactions (organization_id, bank_account_id, transaction_date, amount, direction, description_raw, status, fingerprint, external_id)
+        VALUES (org_a, conta_y, hoje - 400, 10, 'DEBIT', 'TDIR linha da conta homônima', 'IMPORTED', 'tdir-' || gen_random_uuid(), 'tdir-' || gen_random_uuid());
+        j2 := pg_temp.painel(d, org_a);
+        PERFORM pg_temp.confere((SELECT count(DISTINCT e->>'chave') FROM jsonb_array_elements(j2->'excecoes') e
+             WHERE e->>'tipo' = 'extrato_sem_conciliar' AND e->>'grupo' = nome_x AND e->>'severidade' = 'critico') = 2,
+            format('duas contas chamadas "%s": dois grupos', nome_x));
+    END;
+    -- Revisão (…980300): "aprovação parada" é só o que foi ENVIADO (PENDENTE), não o rascunho a submeter.
+    PERFORM pg_temp.confere(NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements(j->'excecoes') e, jsonb_array_elements(e->'itens') i
+          JOIN public.internal_transactions it ON i->>'id' = 'transaction:' || it.id::text
+         WHERE e->>'tipo' = 'aprovacao_parada' AND it.approval_status IS DISTINCT FROM 'PENDENTE'),
+        'aprovação parada: nenhum título em rascunho');
     PERFORM pg_temp.confere(jsonb_typeof(j->'erros') = 'object' AND j->'erros' = '{}'::jsonb,
         format('nenhum tipo caiu: %s', j->'erros'));
 
@@ -253,6 +276,12 @@ BEGIN
     j := pg_temp.painel(d, org_a);
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM jsonb_array_elements(j->'cobrancas') c
          WHERE c->>'excecao_chave' = 'tdir-chave' AND (c->>'responsavel_user_id')::uuid = r), 'o painel devolve a cobrança');
+    -- Revisão (…980300): responsável que não é mais membro não derruba a cobrança dos outros.
+    v := pg_temp.au(d, format('SELECT public.fn_diretoria_cobrar(%L, %L, %L, %L, %L, %L)::text',
+        org_a, 'tdir-chave-2', 'aprovacao_parada', 'TDIR cobrança 2', ARRAY[r, x], 'financial-approval'));
+    PERFORM pg_temp.da(v, 'ok:%', 'd cobra r e x (x fora da org A)');
+    PERFORM pg_temp.confere((substr(v, 4)::jsonb->>'criadas')::int = 1 AND (substr(v, 4)::jsonb->>'ignorados')::int = 1,
+        format('quem saiu da org é ignorado e os outros são cobrados: %s', v));
 
     -- ── 6. determinação ─────────────────────────────────────────────────────
     PERFORM pg_temp.da(pg_temp.au(m, format('SELECT public.fn_diretoria_determinar(%L, %L, %L, %L, %L, NULL)::text',
@@ -285,6 +314,8 @@ BEGIN
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM jsonb_array_elements(j->'determinacoes') e
          WHERE (e->>'id')::uuid = det AND e->>'status' = 'andamento' AND e->'atualizacoes'->0->>'texto' = 'TDIR andou'),
         'o painel devolve a determinação com a atualização');
+    -- Revisão (…980300): o responsável adiou a tarefa; concluir a determinação fecha mesmo assim.
+    UPDATE public.tasks SET status = 'snoozed', snoozed_until = now() + interval '1 day' WHERE id = t;
     PERFORM pg_temp.da(pg_temp.au(d, format('SELECT public.fn_diretoria_concluir(%L)::text', det)), 'ok:%', 'd conclui');
     PERFORM pg_temp.confere((SELECT status FROM public.diretoria_determinacoes WHERE id = det) = 'concluida'
         AND (SELECT status FROM public.tasks WHERE id = t) = 'done', 'concluir fecha a determinação e a tarefa');
@@ -304,6 +335,12 @@ BEGIN
     PERFORM pg_temp.confere((SELECT count(*) FROM jsonb_array_elements(j->'hierarquia') h WHERE (h->>'organization_id')::uuid = org_a) = 1
         AND EXISTS (SELECT 1 FROM jsonb_array_elements(j->'hierarquia') h WHERE (h->>'user_id')::uuid = r AND (h->>'chefe_user_id')::uuid = d),
         'o painel devolve a hierarquia (r responde a d)');
+    -- Revisão (…980300): quem saiu da org ainda pode ser tirado da hierarquia.
+    DELETE FROM public.organization_members WHERE organization_id = org_a AND user_id = r;
+    PERFORM pg_temp.da(pg_temp.au(d, format('SELECT public.fn_diretoria_definir_chefe(%L, %L, NULL)::text', org_a, r)),
+        'ok:%', 'tirar da hierarquia quem saiu da org A');
+    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.diretoria_hierarquia WHERE organization_id = org_a AND user_id = r),
+        'quem saiu não fica preso na hierarquia');
 
     -- ── 8. tabelas só por RPC, preferências, privilégios ────────────────────
     PERFORM pg_temp.da(pg_temp.au(d, format('INSERT INTO public.diretoria_determinacoes (organization_id, titulo, responsavel_user_id, prazo) VALUES (%L, %L, %L, %L) RETURNING 1::text',

@@ -153,7 +153,7 @@ BEGIN
     -- ── 5. job do pg_cron ───────────────────────────────────────────────────
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'diretoria-resumo-semanal' AND schedule = '0 10 * * 1' AND active
         AND command LIKE '%fn_diretoria_registrar_semana()%' AND command LIKE '%functions/v1/diretoria-resumo-semanal%'
-        AND command LIKE '%fn_cron_secret()%'), 'job semanal: segunda 10:00 GMT, registra a semana e chama a function com o CRON_SECRET');
+        AND command LIKE '%fn_cron_secret()%' AND command LIKE '%timeout_milliseconds%'), 'job semanal: segunda 10:00 GMT, registra a semana e chama a function com o CRON_SECRET e prazo longo');
 
     RAISE NOTICE 'TUDO OK';
 END $$;

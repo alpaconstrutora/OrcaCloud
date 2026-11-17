@@ -87,6 +87,8 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // velho é de outra empresa.
     const [caixaTrocando, setCaixaTrocando] = React.useState(false);
     const caixaDaOrg = React.useRef<string | null | undefined>(undefined);
+    // De que período é o gráfico na tela (gravado quando a busca dá certo).
+    const caixaDoPeriodo = React.useRef<PeriodoCaixa | undefined>(undefined);
     // Cada "Atualizar" concluído é uma rodada; o <Realce> dos cartões marca o número
     // que mudou de uma rodada para a outra.
     const [rodada, setRodada] = React.useState(0);
@@ -284,6 +286,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             .then(pontos => {
                 if (!vale()) return;
                 caixaDaOrg.current = organizationId;
+                caixaDoPeriodo.current = periodoCaixa;
                 setCaixa({ estado: 'ok', data: pontos });
                 setCaixaTrocando(false);
             })
@@ -302,7 +305,8 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // O caixa espera o bootstrap responder (abrir a tela, Atualizar, trocar de org):
     // as duas consultas juntas disputavam o banco e o bootstrap ficava ~1 s mais lento
     // (A/B em produção, 11/11/2026: 3,2–3,6 s junto × ~2,4 s sozinho). Trocar o
-    // período não passa pelo bootstrap — busca na hora. No plano B (bootstrap caído
+    // período não passa pelo bootstrap — busca na hora (com a chamada única em voo,
+    // esmaece o gráfico e espera a vez). No plano B (bootstrap caído
     // ou pulado) o caixa sai junto com os blocos, sem esperar o mais lento (17/11/2026).
     // Trocar de org só passou a esperar de fato com o ref síncrono (revisão do #538):
     // antes o caixa da org nova saía junto com a chamada única dela.
@@ -314,7 +318,13 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         if (ultima && (ultima.org !== organizationId || ultima.periodo !== periodoCaixa)) caixaAtual.current++;
         // Org nova: o gráfico na tela é de outra empresa — esqueleto já, mesmo esperando a vez.
         if (caixaDaOrg.current !== undefined && caixaDaOrg.current !== organizationId) setCaixa(CARREGANDO);
-        if (esperandoChamadaUnicaRef.current) return;
+        if (esperandoChamadaUnicaRef.current) {
+            // Período trocado com a chamada única em voo: o gráfico na tela é do período
+            // anterior — esmaece até o novo chegar, como na troca de período normal. Não
+            // busca já: disputaria o banco com a chamada única (revisão do #546).
+            if (caixaDaOrg.current === organizationId && caixaDoPeriodo.current !== periodoCaixa) setCaixaTrocando(true);
+            return;
+        }
         carregarCaixa();
     }, [carregarCaixa, podeCarregar, verFinanceiro, esperandoChamadaUnica, organizationId, periodoCaixa]);
 

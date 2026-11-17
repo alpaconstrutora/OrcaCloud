@@ -596,4 +596,23 @@ describe('CentralControle · tela "Bom dia"', () => {
         await waitFor(() => expect(within(c).getByLabelText('R$ 1.234')).toBeInTheDocument());
         expect(c).toHaveAttribute('aria-busy', 'false');
     });
+
+    it('trocar o período com o Atualizar em voo: o gráfico anterior esmaece até o novo chegar', async () => {
+        const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 0);
+        try {
+            let responder!: (v: unknown) => void;
+            bootstrap.mockResolvedValueOnce(painel()).mockReturnValueOnce(new Promise(r => { responder = r; }));
+            montar();
+            const c = await waitFor(() => { const el = cartao('Caixa projetado'); expect(within(el).getByLabelText('R$ 1.000')).toBeInTheDocument(); return el; });
+            await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));   // chamada única pendente
+            await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+            await userEvent.click(within(c).getByRole('button', { name: '30 dias' }));
+            expect(within(c).getByLabelText('R$ 1.000').closest('[aria-busy="true"]')).not.toBeNull();
+            expect(cashflow).not.toHaveBeenCalledWith('o1', 30);                       // não disputa com a chamada única
+            responder(painel());
+            await waitFor(() => expect(cashflow).toHaveBeenCalledWith('o1', 30));
+        } finally {
+            raf.mockRestore();
+        }
+    });
 });

@@ -94,4 +94,5 @@ Referência: a lista "Pendências menores" do fechamento do PR #513
   - Registro `#<jobid>` × job com nome literal "#<n>": aceito no banco (nenhum nome começa com
     "#"), com comentário na migration.
   - Suíte das rotinas e travas 84/84; `tsc` 0 erros; `check-ui-standard` exit 0.
-- [ ] **5 Publicação**
+- [x] **5 Publicação** — PR #522, CI `ci` SUCCESS, mesclado em 16/11 às 20:53 (`025bc0d`); frente
+  fechada. Conferido de fora em 17/11 (`conferir-producao.sh`): o domínio serve o `main` (`6b055c1`), que contém o commit, e o bundle tem "Rotinas automáticas". Marcado pela frente de 17/11 (`docs/planos/2026-11-17-rotinas-itens-de-fora.md`).

@@ -147,7 +147,9 @@ fechamento do #530 listou em "Ficou de fora":
 
 ### Tarefa 3 — Planos
 
-- [ ] Marcar a Publicação nos três planos de 16/11, com PR, commit e conferência de produção.
+- [x] Marcar a Publicação nos três planos de 16/11, com PR, commit e conferência de produção.
+      ✅ #513 `3913ba0`, #522 `025bc0d`, #530 `197e4af`: os três com `ci` SUCCESS e ancestrais do
+      `main`; `conferir-producao.sh` (17/11) — o domínio serve `6b055c1` e tem "Rotinas automáticas".
 
 ### Tarefa 4 — Publicação
 
@@ -163,3 +165,4 @@ fechamento do #530 listou em "Ficou de fora":
     e o responsável volta a ler "o responsável só altera …". A prova confere o nome e a ordem: RED com
     o nome antigo no banco, GREEN depois de reaplicar (a migration é idempotente e remove o nome antigo).
 - [x] **Tarefa 2** (17/11) — menu recolhível abaixo de `lg`, conferido de 390 a 1440.
+- [x] **Tarefa 3** (17/11) — Publicação marcada nos três planos de 16/11.

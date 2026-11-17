@@ -297,7 +297,8 @@ tabela de registro só-acréscimo; no front, catálogo puro → service → tela
   conteúdo de TODAS as folhas (já era assim antes desta frente).
 - [x] 6.2 Coberto pela prova SQL (membro comum e anon → 42501 nas duas funções) e pelo teste
   da folha (só aparece para superadmin); sem conferência com a conta de leitura.
-- [ ] 6.3 Publicação
+- [x] 6.3 Publicação — PR #513, CI `ci` SUCCESS, mesclado em 16/11 às 19:31 (`3913ba0`); frente
+  `rotinas-automaticas` fechada. Conferido de fora em 17/11 (`conferir-producao.sh`): o domínio serve o `main` (`6b055c1`), que contém o commit, e o bundle tem "Rotinas automáticas". Marcado pela frente de 17/11 (`docs/planos/2026-11-17-rotinas-itens-de-fora.md`).
 
 ## Verificação
 

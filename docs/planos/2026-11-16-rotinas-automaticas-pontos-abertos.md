@@ -127,7 +127,10 @@ Referência: os três pontos do fechamento do PR #522
 
 ### Tarefa 4 — Publicação
 
-- [ ] Revisão independente; PR; CI; merge; conferir produção; fechar a frente.
+- [x] Revisão independente; PR; CI; merge; conferir produção; fechar a frente. — Revisão acima;
+      PR #530, CI `ci` SUCCESS, mesclado em 16/11 às 23:48 (`197e4af`); `conferir-producao.sh` OK na
+      hora (4ª tentativa, com "Limpeza do histórico das rotinas"); frente `rotinas-pontos-abertos`
+      fechada. Conferido de fora em 17/11 (`conferir-producao.sh`): o domínio serve o `main` (`6b055c1`), que contém o commit, e o bundle tem "Rotinas automáticas". Marcado pela frente de 17/11 (`docs/planos/2026-11-17-rotinas-itens-de-fora.md`).
 
 ## Revisão independente (16/11) — 0 crítico, 3 importantes, 10 menores
 

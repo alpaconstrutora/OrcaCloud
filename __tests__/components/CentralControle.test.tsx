@@ -562,4 +562,57 @@ describe('CentralControle · tela "Bom dia"', () => {
         expect(within(cartao('Caixa projetado')).queryByText('Não carregou.')).not.toBeInTheDocument();
         expect(cartao('Caixa projetado')).toHaveAttribute('aria-busy', 'true');
     });
+
+    // ── Menores da revisão do #546 (17/11/2026): docs/planos/2026-11-17-central-caixa-menores.md ──
+
+    it('carga descartada por troca de org: a queda da anterior conta (voltar a ela vai direto aos blocos)', async () => {
+        let rejeitarO1!: (e: unknown) => void;
+        bootstrap.mockReturnValueOnce(new Promise((_, rej) => { rejeitarO1 = rej; })).mockResolvedValue(painel());
+        fontesSeparadas.mockImplementation(() => fontes());
+        const { rerender } = montar();
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o1'));
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        rejeitarO1(TIMEOUT);                                   // a chamada única da o1 cai depois da troca
+        await new Promise(r => setTimeout(r, 20));
+        rerender(<CentralControle organizationId="o1" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(fontesSeparadas).toHaveBeenCalledWith('o1'));
+        expect(bootstrap.mock.calls.map(c => c[0])).toEqual(['o1', 'o2']);
+    });
+
+    it('"Tentar de novo" do caixa e Atualizar na mesma org: a resposta pinta', async () => {
+        let responder!: (v: unknown) => void;
+        bootstrap.mockResolvedValueOnce(painel()).mockReturnValue(nunca());
+        cashflow.mockReset()
+            .mockRejectedValueOnce(TIMEOUT)
+            .mockReturnValueOnce(new Promise(r => { responder = r; }));
+        montar();
+        await waitFor(() => expect(within(cartao('Caixa projetado')).getByText('Não carregou.')).toBeInTheDocument());
+        await userEvent.click(within(cartao('Caixa projetado')).getByRole('button', { name: /Tentar de novo/ }));
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));  // chamada única pendente
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+        responder([{ data_ref: HOJE, cr_previsto: 0, db_previsto: 0, saldo_dia: 0, saldo_acum: 1234 }]);
+        const c = cartao('Caixa projetado');
+        await waitFor(() => expect(within(c).getByLabelText('R$ 1.234')).toBeInTheDocument());
+        expect(c).toHaveAttribute('aria-busy', 'false');
+    });
+
+    it('trocar o período com o Atualizar em voo: o gráfico anterior esmaece até o novo chegar', async () => {
+        const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 0);
+        try {
+            let responder!: (v: unknown) => void;
+            bootstrap.mockResolvedValueOnce(painel()).mockReturnValueOnce(new Promise(r => { responder = r; }));
+            montar();
+            const c = await waitFor(() => { const el = cartao('Caixa projetado'); expect(within(el).getByLabelText('R$ 1.000')).toBeInTheDocument(); return el; });
+            await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));   // chamada única pendente
+            await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+            await userEvent.click(within(c).getByRole('button', { name: '30 dias' }));
+            expect(within(c).getByLabelText('R$ 1.000').closest('[aria-busy="true"]')).not.toBeNull();
+            expect(cashflow).not.toHaveBeenCalledWith('o1', 30);                       // não disputa com a chamada única
+            responder(painel());
+            await waitFor(() => expect(cashflow).toHaveBeenCalledWith('o1', 30));
+        } finally {
+            raf.mockRestore();
+        }
+    });
 });

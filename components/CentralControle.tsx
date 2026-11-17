@@ -65,16 +65,19 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     const [carregando, setCarregando] = React.useState(true);
     // A vez do caixa: só a resposta da chamada única (ok ou falha), não os blocos do
     // plano B — esperar `carregando` segurava o caixa até o bloco mais lento (~16 s).
-    const [esperandoChamadaUnica, setEsperandoChamadaUnica] = React.useState(true);
-    // O mesmo, lido de forma SÍNCRONA pelo efeito do caixa: na troca de org o `load` da
-    // nova liga a espera no mesmo commit em que o efeito do caixa roda, e o estado ainda
-    // dizia `false` (render anterior) — o caixa da org nova saía junto com a chamada
-    // única dela, disputando o banco (revisão do #538). O estado segue nas dependências
-    // do efeito só para dispará-lo de novo quando a espera acaba.
+    // Lida de forma SÍNCRONA (ref) pelo efeito do caixa: na troca de org o `load` da nova
+    // liga a espera no mesmo commit em que o efeito do caixa roda, e um estado ainda
+    // diria `false` (render anterior) — o caixa da org nova saía junto com a chamada
+    // única dela (revisão do #538).
     const esperandoChamadaUnicaRef = React.useRef(true);
+    // O que redispara o efeito quando a espera ACABA é um CONTADOR, não um booleano:
+    // com as respostas chegando antes de o React renderizar a espera ligada (serviço
+    // com cache), `true → false` no mesmo lote se anulava e o caixa da org nova ficava
+    // em esqueleto para sempre (revisão do #546; __tests__/components/CentralControleForaDoAct).
+    const [vezDoCaixa, setVezDoCaixa] = React.useState(0);
     const esperarChamadaUnica = React.useCallback((sim: boolean) => {
         esperandoChamadaUnicaRef.current = sim;
-        setEsperandoChamadaUnica(sim);
+        if (!sim) setVezDoCaixa(v => v + 1);
     }, []);
     const [filtro, setFiltro] = React.useState<FiltroDaFila>('tudo');
     // Números sobem até o valor só na PRIMEIRA carga da tela; atualizar não anima.
@@ -87,6 +90,8 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // velho é de outra empresa.
     const [caixaTrocando, setCaixaTrocando] = React.useState(false);
     const caixaDaOrg = React.useRef<string | null | undefined>(undefined);
+    // De que período é o gráfico na tela (gravado quando a busca dá certo).
+    const caixaDoPeriodo = React.useRef<PeriodoCaixa | undefined>(undefined);
     // Cada "Atualizar" concluído é uma rodada; o <Realce> dos cartões marca o número
     // que mudou de uma rodada para a outra.
     const [rodada, setRodada] = React.useState(0);
@@ -265,15 +270,20 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // Caixa projetado: única fonte com parâmetro de período, por isso fora do
     // bootstrap. Espera o mesmo portão no primeiro carregamento.
     //
-    // Geração das buscas do caixa: só a mais nova pinta. Cada busca e cada rodada do
-    // efeito abaixo (org, período, Atualizar) descartam as pendentes — inclusive a do
-    // "Tentar de novo" do cartão, que chama `carregarCaixa` fora do efeito e perdia o
-    // cancelamento: com troca de org no meio, o saldo da empresa anterior pintava o
-    // cartão debaixo do seletor da nova (REGRA #5; revisão do #538, 17/11/2026).
+    // Geração das buscas do caixa: só a mais nova pinta (busca nova invalida as anteriores).
+    // O efeito abaixo descarta também a pendente de OUTRA org ou OUTRO período — inclusive
+    // a do "Tentar de novo" do cartão, que chama `carregarCaixa` fora do efeito: com troca
+    // de org no meio, o saldo da empresa anterior pintava o cartão debaixo do seletor da
+    // nova (REGRA #5; revisão do #538, 17/11/2026). A da MESMA org e período continua
+    // valendo. (O que impede o Atualizar de jogar fora a resposta certa do "Tentar de
+    // novo" é, sobretudo, o efeito não rodar de novo quando a espera LIGA — só o contador
+    // `vezDoCaixa`, quando ela acaba; a busca que sai depois vence pela geração.)
     const caixaAtual = React.useRef(0);
+    const ultimaBuscaCaixa = React.useRef<{ org: string | null; periodo: PeriodoCaixa } | null>(null);
     const carregarCaixa = React.useCallback(() => {
         const minha = ++caixaAtual.current;
         const vale = () => caixaAtual.current === minha;
+        ultimaBuscaCaixa.current = { org: organizationId, periodo: periodoCaixa };
         const mesmaOrg = caixaDaOrg.current === organizationId;
         setCaixa(c => (mesmaOrg && c.estado === 'ok' ? c : CARREGANDO));
         setCaixaTrocando(mesmaOrg);
@@ -281,6 +291,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             .then(pontos => {
                 if (!vale()) return;
                 caixaDaOrg.current = organizationId;
+                caixaDoPeriodo.current = periodoCaixa;
                 setCaixa({ estado: 'ok', data: pontos });
                 setCaixaTrocando(false);
             })
@@ -294,25 +305,33 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                 setCaixa({ estado: 'erro' });
                 setCaixaTrocando(false);
             });
-        return () => { if (vale()) caixaAtual.current++; };
     }, [organizationId, periodoCaixa]);
 
     // O caixa espera o bootstrap responder (abrir a tela, Atualizar, trocar de org):
     // as duas consultas juntas disputavam o banco e o bootstrap ficava ~1 s mais lento
     // (A/B em produção, 11/11/2026: 3,2–3,6 s junto × ~2,4 s sozinho). Trocar o
-    // período não passa pelo bootstrap — busca na hora. No plano B (bootstrap caído
+    // período não passa pelo bootstrap — busca na hora (com a chamada única em voo,
+    // esmaece o gráfico e espera a vez). No plano B (bootstrap caído
     // ou pulado) o caixa sai junto com os blocos, sem esperar o mais lento (17/11/2026).
     // Trocar de org só passou a esperar de fato com o ref síncrono (revisão do #538):
     // antes o caixa da org nova saía junto com a chamada única dela.
     React.useEffect(() => {
         if (!podeCarregar || !verFinanceiro) return;
-        // Descarta busca pendente que não nasceu desta rodada (o "Tentar de novo").
-        caixaAtual.current++;
+        // Busca pendente de outra org ou de outro período não vale mais (inclusive a do
+        // "Tentar de novo"); a da mesma org e período segue valendo.
+        const ultima = ultimaBuscaCaixa.current;
+        if (ultima && (ultima.org !== organizationId || ultima.periodo !== periodoCaixa)) caixaAtual.current++;
         // Org nova: o gráfico na tela é de outra empresa — esqueleto já, mesmo esperando a vez.
         if (caixaDaOrg.current !== undefined && caixaDaOrg.current !== organizationId) setCaixa(CARREGANDO);
-        if (esperandoChamadaUnicaRef.current) return;
-        return carregarCaixa();
-    }, [carregarCaixa, podeCarregar, verFinanceiro, esperandoChamadaUnica, organizationId]);
+        if (esperandoChamadaUnicaRef.current) {
+            // Período trocado com a chamada única em voo: o gráfico na tela é do período
+            // anterior — esmaece até o novo chegar, como na troca de período normal. Não
+            // busca já: disputaria o banco com a chamada única (revisão do #546).
+            if (caixaDaOrg.current === organizationId && caixaDoPeriodo.current !== periodoCaixa) setCaixaTrocando(true);
+            return;
+        }
+        carregarCaixa();
+    }, [carregarCaixa, podeCarregar, verFinanceiro, vezDoCaixa, organizationId, periodoCaixa]);
 
     // ── Derivados ──────────────────────────────────────────────────────────
     const dadosMeuDia = meuDia.estado === 'ok' ? meuDia.data : null;

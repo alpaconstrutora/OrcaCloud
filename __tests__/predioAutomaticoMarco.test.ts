@@ -187,6 +187,12 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // era o duto do exaustor (R8 7, R12 88, RL 21): a descarga diante da evaporadora pendurada na fachada e o duto pelo
         // exaustor do banheiro vizinho alinhado.
         expect(agora.compatibilizacao?.conflitos.EQUIPAMENTO).toBe(0);
+        // PA16: o contorno do eletroduto junto da laje conferido contra todos os obstáculos (saía da vizinhança da reta e
+        // passava pela descida da louça de cima que não via; no prédio, os pilares só os da vizinhança — o teto do grafo
+        // estourava e a reta saía pela descida). Eletroduto × esgoto (era R4 12, R8 32, R12 104, RL 91). Sobram: R4 a luz da
+        // área de serviço 13 mm abaixo do ralo seco de cima (a ponta dentro); R8 e RL a vizinhança densa (o teto do grafo);
+        // R12 a descida do eletroduto na parede pelo ramal de cima (PA18).
+        expect(agora.eletrodutoXEsgoto).toBe(({ R4: 10, R8: 7, R12: 10, RL: 12 } as Record<string, number>)[nome]);
         // PA7a, "pronto quando": o diâmetro do tubo de queda pela Tabela 6 da NBR 8160 — UHC do grupo × os andares, a
         // UHC de um andar, e nunca abaixo de 100 com bacia. No R12 (11 andares com unidades), todos DN 100.
         const n = agora.andaresComUnidade;

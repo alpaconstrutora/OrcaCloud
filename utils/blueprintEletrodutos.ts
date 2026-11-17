@@ -160,7 +160,7 @@ import type {
 import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, caixaDaLuzNaRede, composicaoDaRede, pointInPolygon, type Point } from './blueprintKernel';
 import { desdobrarDerivacoes } from './blueprintEletrodutoSemDerivacao';
 import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, ramaisDaLajeDeCima, saidaDoRebaixoPelaParede, type FaixaDoForro } from './blueprintRotaPeloForro';
-import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, caixaDaPegada, desvioDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
 import { cantosDaPeca, volumesDasPecasDeClimatizacao } from './blueprintRede';
 import { comodoDoPonto, encaminhamentoPorAmbiente } from './blueprintEncaminhamentoPorAmbiente';
@@ -273,6 +273,12 @@ export const FOLGA_VERTICAL_DO_EQUIPAMENTO_MM = 50;
 
 /** PA13: a vizinhança da reta em que os obstáculos da faixa do forro contam para o contorno, mm. */
 export const PERTO_DA_RETA_MM = 500;
+
+/**
+ * PA16 do prédio automático (17/11/2026): quantas vezes o contorno é refeito com os obstáculos da faixa que ele cruzou
+ * FORA da vizinhança da reta (o desvio sai dela: a 1ª volta com 50 cm em volta da reta não os via).
+ */
+export const VOLTAS_DO_CONTORNO_NA_FAIXA = 3;
 
 /** PA13: o teto de nós do grafo do contorno no forro do PRÉDIO (`noForro.grafoAteNos`) — RL de 5–8 min a ~100 s. */
 export const GRAFO_DO_FORRO_DO_PREDIO_ATE_NOS = 120;
@@ -533,8 +539,6 @@ export function planejarEletrodutos(
    * `pilaresInflados`); `ARVORE_NO_TETO` segue com a pegada real, como sempre.
    */
   const pelaLuzDoAmbiente = (hip.encaminhamento ?? 'PELA_LUZ_DO_AMBIENTE') === 'PELA_LUZ_DO_AMBIENTE';
-  const pilaresDaReta = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }) =>
-    pelaLuzDoAmbiente ? pilaresInflados(pegadas(levelId), a, b, hip.bitolaMm / 2 + FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM) : pegadas(levelId);
   /**
    * F14b: no forro, a reta desvia também das prumadas das outras redes (a coluna da fria cruzando a faixa).
    * F27 item 5: e dos ramais que correm na laje do pavimento de cima, colados na faixa pela cota real.
@@ -593,16 +597,70 @@ export function planejarEletrodutos(
   const ligarNaRede = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }, cota: number): void => {
     // PA13: o obstáculo da faixa que CONTÉM uma das pontas (o quadro logo abaixo da descida da louça de cima) não entra — com
     // a ponta dentro, `desvioDoPilar` desistia e a reta saía direta, cruzando também os outros.
-    const outras = pertoDaReta(outrasNaFaixa(levelId, cota), a, b).filter((g) => !pointInPolygon(g, a as Point) && !pointInPolygon(g, b as Point));
-    // Task 3, correção 2: sem contorno com os pilares inflados, a pegada real (o de antes, nunca pior).
-    // PA13: com obstáculos da faixa do forro e `noForro.grafoAteNos` (o prédio), o grafo de visibilidade tem teto; acima
-    // dele, o contorno só dos pilares e das peças (a faixa fica de fora, como antes do forro).
-    const op = outras.length && hip.noForro?.grafoAteNos != null ? { grafoAteNos: hip.noForro.grafoAteNos } : {};
-    const tentar = (eq: { inflados: Point[][]; reais: Point[][] } | null, faixa: readonly Point[][] = outras) =>
-      desvioDoPilar(a, b, [...pilaresDaReta(levelId, a, b), ...faixa, ...(eq?.inflados ?? [])], op) ?? (pelaLuzDoAmbiente ? desvioDoPilar(a, b, [...pegadas(levelId), ...faixa, ...(eq?.reais ?? [])], op) : null);
+    const daFaixa = outrasNaFaixa(levelId, cota).filter((g) => !pointInPolygon(g, a as Point) && !pointInPolygon(g, b as Point));
     // PA11: com as caixas de climatização; sem contorno com elas, o de antes (nunca pior).
     const eq = equipamentosNaReta(levelId, a, b, cota);
-    const desvio = (eq.reais.length ? tentar(eq) : null) ?? tentar(null) ?? (outras.length ? ((eq.reais.length ? tentar(eq, []) : null) ?? tentar(null, [])) : null);
+    const pegTodas = pegadas(levelId);
+    // Task 3, correção 1: no modo pela luz, o pilar INFLADO (ver acima). PA16: inflado só quando entra no contorno (cada
+    // pilar é inflado sozinho em `pilaresInflados` — o mesmo resultado de inflar todos).
+    const inflados = new Map<number, Point[]>();
+    const pilarDaReta = (k: number): Point[] => {
+      let g = inflados.get(k);
+      if (!g) inflados.set(k, (g = pelaLuzDoAmbiente ? pilaresInflados([pegTodas[k]], a, b, hip.bitolaMm / 2 + FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM)[0] : pegTodas[k]));
+      return g;
+    };
+    // PA16 do prédio automático (17/11/2026): no prédio (o teto do grafo), também os PILARES só os da vizinhança da reta — os
+    // cantos de todos os pilares do andar (RL: mais de cem) estouravam o teto, o contorno desistia e a reta saía pela
+    // descida da louça de cima. O caminho é conferido contra todos (abaixo). Na casa, todos, como sempre.
+    const noPredio = hip.noForro?.grafoAteNos != null;
+    let pilares = noPredio ? pegTodas.map((_, k) => k).filter((k) => pertoDaReta([pegTodas[k]], a, b).length > 0) : pegTodas.map((_, k) => k);
+    const contornar = (outras: readonly Point[][]): { x: number; y: number }[] | null => {
+      const pil = pilares.map(pilarDaReta);
+      const peg = pilares.map((k) => pegTodas[k]);
+      // Task 3, correção 2: sem contorno com os pilares inflados, a pegada real (o de antes, nunca pior).
+      // PA13: com obstáculos da faixa do forro e `noForro.grafoAteNos` (o prédio), o grafo de visibilidade tem teto; acima
+      // dele, o contorno só dos pilares e das peças (a faixa fica de fora, como antes do forro).
+      const op = outras.length && hip.noForro?.grafoAteNos != null ? { grafoAteNos: hip.noForro.grafoAteNos } : {};
+      const tentar = (eq: { inflados: Point[][]; reais: Point[][] } | null, faixa: readonly Point[][] = outras) =>
+        desvioDoPilar(a, b, [...pil, ...faixa, ...(eq?.inflados ?? [])], op) ?? (pelaLuzDoAmbiente ? desvioDoPilar(a, b, [...peg, ...faixa, ...(eq?.reais ?? [])], op) : null);
+      return (eq.reais.length ? tentar(eq) : null) ?? tentar(null) ?? (outras.length ? ((eq.reais.length ? tentar(eq, []) : null) ?? tentar(null, [])) : null);
+    };
+    let outras = pertoDaReta(daFaixa, a, b);
+    let desvio = contornar(outras);
+    // PA16: o contorno pode sair da vizinhança da reta e passar por um obstáculo que ela não via (a descida da louça de
+    // cima, a coluna de ventilação — R8 5 por andar; no prédio, também um pilar). O caminho é conferido contra TODOS; os que
+    // ele cruza entram e o contorno é refeito; fica o caminho que cruza menos (pilar pesa dez) — o de antes, nunca pior.
+    if (desvio?.length && (outras.length < daFaixa.length || pilares.length < pegTodas.length)) {
+      const cruzados = (d: readonly { x: number; y: number }[]): { faixa: Point[][]; pilares: number[]; nota: number } => {
+        const c = [a, ...d, b];
+        const xs = c.map((p) => p.x);
+        const ys = c.map((p) => p.y);
+        const [x0, x1, y0, y1] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)];
+        const cruza = (g: Point[]) => {
+          const [gx0, gx1, gy0, gy1] = caixaDaPegada(g);
+          if (gx1 < x0 || gx0 > x1 || gy1 < y0 || gy0 > y1) return false;
+          for (let i = 1; i < c.length; i++) if (fracaoDentro(c[i - 1], c[i], [g]) > 0) return true;
+          return false;
+        };
+        const faixa = daFaixa.filter(cruza);
+        const pil = noPredio ? pegTodas.map((_, k) => k).filter((k) => cruza(pegTodas[k])) : [];
+        return { faixa, pilares: pil, nota: faixa.length + 10 * pil.length };
+      };
+      let atual = cruzados(desvio);
+      let melhor = { desvio, nota: atual.nota };
+      for (let volta = 0; volta < VOLTAS_DO_CONTORNO_NA_FAIXA && melhor.nota > 0; volta++) {
+        const novos = atual.faixa.filter((g) => !outras.includes(g));
+        const novosPilares = atual.pilares.filter((k) => !pilares.includes(k));
+        if (!novos.length && !novosPilares.length) break;
+        outras = [...outras, ...novos];
+        pilares = [...pilares, ...novosPilares];
+        const d = contornar(outras);
+        if (!d) break;
+        atual = cruzados(d);
+        if (atual.nota < melhor.nota) melhor = { desvio: d, nota: atual.nota };
+      }
+      desvio = melhor.desvio;
+    }
     if (desvio == null) {
       semContorno++;
       addTrecho(levelId, a, cota, b, cota);

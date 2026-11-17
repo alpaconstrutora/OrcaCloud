@@ -38,13 +38,15 @@ export function pegadasDePilares(model: BlueprintModel, levelId: ObjectId): Poin
 
 const dentroDeAlguma = (pegadas: readonly Point[][], p: P2) => pegadas.some((g) => pointInPolygon(g, p as Point));
 
-/** A fração (0–1) do segmento que corre DENTRO de alguma pegada (amostragem a cada ~50 mm). */
-export function fracaoDentro(a: P2, b: P2, pegadas: readonly Point[][]): number {
-  if (pegadas.length === 0) return 0;
-  // Só as pegadas cuja caixa envolvente encosta na do segmento — o resultado é o mesmo, sem amostrar contra
-  // todos os pilares do pavimento (na casa automática, ~30 pilares × centenas de arestas por traçado).
-  const [sx0, sx1, sy0, sy1] = [Math.min(a.x, b.x), Math.max(a.x, b.x), Math.min(a.y, b.y), Math.max(a.y, b.y)];
-  pegadas = pegadas.filter((g) => {
+/**
+ * PA16 do prédio automático (17/11/2026): a caixa envolvente de cada pegada, guardada pela própria pegada — o grafo de
+ * visibilidade de `desvioDoPilar` chama `fracaoDentro` milhares de vezes com as MESMAS pegadas, e a caixa era refeita a cada
+ * chamada. As pegadas não mudam depois de criadas (ninguém as altera — são lidas).
+ */
+const caixasDasPegadas = new WeakMap<readonly Point[], readonly [number, number, number, number]>();
+export function caixaDaPegada(g: readonly Point[]): readonly [number, number, number, number] {
+  let c = caixasDasPegadas.get(g);
+  if (!c) {
     let gx0 = Infinity, gx1 = -Infinity, gy0 = Infinity, gy1 = -Infinity;
     for (const p of g) {
       if (p.x < gx0) gx0 = p.x;
@@ -52,6 +54,20 @@ export function fracaoDentro(a: P2, b: P2, pegadas: readonly Point[][]): number 
       if (p.y < gy0) gy0 = p.y;
       if (p.y > gy1) gy1 = p.y;
     }
+    c = [gx0, gx1, gy0, gy1];
+    caixasDasPegadas.set(g, c);
+  }
+  return c;
+}
+
+/** A fração (0–1) do segmento que corre DENTRO de alguma pegada (amostragem a cada ~50 mm). */
+export function fracaoDentro(a: P2, b: P2, pegadas: readonly Point[][]): number {
+  if (pegadas.length === 0) return 0;
+  // Só as pegadas cuja caixa envolvente encosta na do segmento — o resultado é o mesmo, sem amostrar contra
+  // todos os pilares do pavimento (na casa automática, ~30 pilares × centenas de arestas por traçado).
+  const [sx0, sx1, sy0, sy1] = [Math.min(a.x, b.x), Math.max(a.x, b.x), Math.min(a.y, b.y), Math.max(a.y, b.y)];
+  pegadas = pegadas.filter((g) => {
+    const [gx0, gx1, gy0, gy1] = caixaDaPegada(g);
     return gx0 <= sx1 && gx1 >= sx0 && gy0 <= sy1 && gy1 >= sy0;
   });
   if (pegadas.length === 0) return 0;

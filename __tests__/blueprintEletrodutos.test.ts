@@ -38,7 +38,7 @@ import { POLITICA_PADRAO, computeQuantities, conflitosDoModelo, type Point } fro
 import { cantosDaPeca, medidasDoTerminal, volumesDasPecasDeClimatizacao } from '../utils/blueprintRede';
 import { itensDaLegendaEletrica } from '../utils/blueprintPranchaEletrica';
 import { materiaisEletricos } from '../utils/blueprintListaDeMateriaisEletrica';
-import { paredesDoForro } from '../utils/blueprintRotaPeloForro';
+import { paredesDoForro, ramaisDaLajeDeCima } from '../utils/blueprintRotaPeloForro';
 import { furosPrevistos } from '../utils/blueprintFurosPrevistos';
 
 /** Sala 6 × 4; QDC a 1.600; C1 = luz de teto (a 2.800 = teto) + interruptor; C2 (FFF) = duas TUG; um ponto solto. */
@@ -1069,6 +1069,26 @@ describe('24/10/2026 (Task 3) — pela luz do ambiente NO FORRO', () => {
     const lados = tocam(plano.comandos, qB);
     expect(lados.length).toBeGreaterThan(0);
     for (const c of lados) expect(c.a.x === 5875 && c.b.x === 5875).toBe(true);
+  });
+
+  it('PA16 do prédio automático — o contorno que sai da vizinhança da reta não passa pela descida da louça de cima que ela não via', () => {
+    // Um pilar largo (1,2 m) entre a luz e a tomada: o contorno pelos cantos dele passa a ~70 cm da reta, fora dos 50 cm em
+    // que os obstáculos da faixa contam (PA13). Ali, a descida do vaso do andar de cima pela laje (0 → −15 cm, DN 100).
+    const { m: m0, t } = comForro([{ ...LUZ, tipo: 'ILUMINACAO_TETO' }, { ...TA, tipo: 'TUG' }], EIXOS_DO_FORRO);
+    let m = applyCommand(m0, { type: 'AddStructural', levelId: t, kind: 'PILAR', pontos: [{ x: 1450, y: 1060 }], larguraMm: 1200, profundidadeMm: 1200, alturaMm: 2800 } as unknown as Command).model;
+    m = applyCommand(m, { type: 'AddLevel', name: 'Cima', elevationMm: 2800, defaultHeightMm: 2800 }).model;
+    const cima = m.levels.find((l) => l.name === 'Cima')!.id;
+    m = applyCommand(m, { type: 'AddTrecho', levelId: cima, disciplina: 'ESGOTO', a: point(2260, 1060), b: point(2260, 1060), cotaAMm: 0, cotaBMm: -150, bitolaMm: 100 } as Command).model;
+    const descida = ramaisDaLajeDeCima(m, t, FAIXA, 'ELETRICA', 12.5);
+    expect(descida).toHaveLength(1);
+    const plano = planejarEletrodutos(m, quadroDe(m), FORRO);
+    expect(plano.motivo).toBeNull();
+    const faixa = naFaixa(plano.comandos);
+    // Antes: o contorno pelo lado mais curto (x ≈ 2.212) atravessava a descida.
+    for (const c of faixa) expect(fracaoDentro(c.a, c.b, descida)).toBe(0);
+    // E segue fora do pilar, chegando da luz à tomada.
+    for (const c of faixa) expect(fracaoDentro(c.a, c.b, pegadasDePilares(m, t))).toBe(0);
+    expect(chegaEm(plano.comandos, TA, 300)).toBe(true);
   });
 
   it('ARVORE_NO_TETO com forro: o caminho de antes, inteiro — a tomada pelo anel, a luz pendurada no nó mais perto', () => {

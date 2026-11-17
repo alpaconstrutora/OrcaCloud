@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { cotaDaFaixa, descidaDoForro, fundoDaVigaSobre, paredesDoForro, ramaisDaLajeDeCima, saidaDoRebaixoPelaParede, semDedosEstreitos } from '../utils/blueprintRotaPeloForro';
-import { pointInPolygon, type Point } from '../utils/blueprintKernel';
+import { conflitosDoModelo, pointInPolygon, type Point } from '../utils/blueprintKernel';
+import { volumesDasPecasDeClimatizacao } from '../utils/blueprintRede';
 import { arvorePelasParedes } from '../utils/blueprintRotaPelasParedes';
 import { HIPOTESES_ELETRODUTO_PADRAO, planejarEletrodutos } from '../utils/blueprintEletrodutos';
 import { distanciaAoApoioDaViga } from '../utils/blueprintFurosPrevistos';
@@ -132,6 +133,24 @@ describe('rede pelo forro (F14b) — a descida até o ponto', () => {
       [3000, 1000, 2334, 3000, 1000, 300],
       [3000, 1000, 300, 2925, 1000, 300],
     ]);
+  });
+
+  it('PA13 do prédio — a tomada logo abaixo da evaporadora: a descida desce ao lado da peça (como sob a janela) e corre por baixo até ela', () => {
+    const { m: m0, L } = casinha();
+    // A evaporadora (900 × 220 × 300, centro a 2,20 m) pendurada na face da parede do meio (x = 2925), largura ao longo dela.
+    const m = applyCommand(m0, { type: 'AddTerminal', levelId: L, disciplina: 'FRIGORIGENA', tipo: 'EV', tipoHidraulico: 'EVAPORADORA_HI_WALL', at: point(2815, 1000), cotaMm: 2200, rotacaoGraus: 90, larguraMm: 900, profundidadeMm: 220, alturaMm: 300 } as Command).model;
+    const o = { q: { x: 2825, y: 1000 }, cotaDaFaixaMm: 2700, alvo: { x: 2925, y: 1000 }, cotaDoAlvoMm: 300, naParede: { x: 2925, y: 1000 }, raioMm: 16, folgaSobAVigaMm: 50 };
+    const caixa = volumesDasPecasDeClimatizacao(m);
+    const naPeca = (mm: BlueprintModel, d: ReturnType<typeof descidaDoForro>) => {
+      const comTrechos = applyBatch(mm, d.map((s) => ({ type: 'AddTrecho', levelId: L, disciplina: 'ELETRICA', a: s.a, b: s.b, cotaAMm: s.cotaAMm, cotaBMm: s.cotaBMm, bitolaMm: 32 }) as Command)).model;
+      return conflitosDoModelo(comTrechos, { pecas: caixa }).filter((c) => c.classe === 'EQUIPAMENTO');
+    };
+    // Sem a peça como vão, a vertical desceria na face, por dentro da caixa (era assim antes da PA13).
+    const d = descidaDoForro(m, L, o);
+    expect(naPeca(m, d)).toEqual([]);
+    // Desce ao lado da caixa (fora de y 550–1450) e chega à tomada.
+    expect(d.some((s) => s.a.x === s.b.x && s.a.y === s.b.y && Math.min(s.cotaAMm, s.cotaBMm) <= 300 && (s.a.y < 550 || s.a.y > 1450))).toBe(true);
+    expect(d[d.length - 1].b).toEqual({ x: 2925, y: 1000 });
   });
 
   it('a descida que cairia no vão da janela corre na parede acima dele até o batente e desce ao lado', () => {

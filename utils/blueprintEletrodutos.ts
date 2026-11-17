@@ -216,7 +216,17 @@ export interface HipotesesDeEletroduto {
    * descida junto da viga até a caixa; a luz de teto (na face do forro) sobe reta. Ausente = como antes (teto ou
    * 10 cm sob a viga mais baixa).
    */
-  noForro?: { faixa: FaixaDoForro; folgaSobAVigaMm: number } | null;
+  noForro?: {
+    faixa: FaixaDoForro;
+    folgaSobAVigaMm: number;
+    /**
+     * PA13 do prédio automático (16/11/2026): o teto de nós do grafo de visibilidade do contorno quando a reta tem
+     * obstáculos da faixa (`desvioDoPilar`, quadrático nos cantos); acima dele, o contorno só dos pilares e das peças.
+     * Ausente = sem teto (a casa). O prédio, com dezenas de descidas das louças de cima pela laje, usa
+     * `GRAFO_DO_FORRO_DO_PREDIO_ATE_NOS`.
+     */
+    grafoAteNos?: number;
+  } | null;
   /**
    * 24/10/2026: o encaminhamento dos pontos de parede — ver o cabeçalho. Ausente (hipótese gravada antes) vale como
    * `PELA_LUZ_DO_AMBIENTE`. Vale também com `noForro` (Task 3, 24/10/2026).
@@ -260,6 +270,12 @@ export const FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM = 50;
  * o aumenta (até 85 mm).
  */
 export const FOLGA_VERTICAL_DO_EQUIPAMENTO_MM = 50;
+
+/** PA13: a vizinhança da reta em que os obstáculos da faixa do forro contam para o contorno, mm. */
+export const PERTO_DA_RETA_MM = 500;
+
+/** PA13: o teto de nós do grafo do contorno no forro do PRÉDIO (`noForro.grafoAteNos`) — RL de 5–8 min a ~100 s. */
+export const GRAFO_DO_FORRO_DO_PREDIO_ATE_NOS = 120;
 
 /**
  * Task 3, correção 2: a maior folga com que o anel EM ESQUADRO de `g` (`anelDoPilar`, lados afastados em paralelo e
@@ -523,8 +539,27 @@ export function planejarEletrodutos(
    * F14b: no forro, a reta desvia também das prumadas das outras redes (a coluna da fria cruzando a faixa).
    * F27 item 5: e dos ramais que correm na laje do pavimento de cima, colados na faixa pela cota real.
    */
-  const outrasNaFaixa = (levelId: ObjectId, cota: number): Point[][] =>
-    hip.noForro ? [...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)] : [];
+  // PA13 do prédio automático (16/11/2026): guardadas por pavimento e cota — o plano só acrescenta eletroduto, que elas não
+  // contam. No prédio, com as águas e o esgoto já lançados, são centenas; recalculadas a cada reta, o R4 levava 60 s.
+  const outrasGuardadas = new Map<string, Point[][]>();
+  const outrasNaFaixa = (levelId: ObjectId, cota: number): Point[][] => {
+    if (!hip.noForro) return [];
+    const k = `${levelId}|${cota}`;
+    let v = outrasGuardadas.get(k);
+    if (!v) outrasGuardadas.set(k, (v = [...prumadasQueCruzam(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2, 10, false), ...ramaisDaLajeDeCima(model, levelId, cota, 'ELETRICA', hip.bitolaMm / 2)]));
+    return v;
+  };
+  /**
+   * PA13: só os obstáculos da faixa que alcançam a vizinhança da reta (a caixa dela crescida de `PERTO_DA_RETA_MM`) — o
+   * contorno nunca vai tão longe, e `desvioDoPilar` monta o grafo de visibilidade com os cantos de TODOS os que recebe.
+   */
+  const pertoDaReta = (gs: readonly Point[][], a: { x: number; y: number }, b: { x: number; y: number }): Point[][] => {
+    const x0 = Math.min(a.x, b.x) - PERTO_DA_RETA_MM;
+    const x1 = Math.max(a.x, b.x) + PERTO_DA_RETA_MM;
+    const y0 = Math.min(a.y, b.y) - PERTO_DA_RETA_MM;
+    const y1 = Math.max(a.y, b.y) + PERTO_DA_RETA_MM;
+    return gs.filter((g) => g.some((p) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1) || (Math.min(...g.map((p) => p.x)) <= x1 && Math.max(...g.map((p) => p.x)) >= x0 && Math.min(...g.map((p) => p.y)) <= y1 && Math.max(...g.map((p) => p.y)) >= y0));
+  };
   /**
    * PA11 do prédio automático (16/11/2026): a reta na cota da rede desvia também da CAIXA das peças de climatização
    * (evaporadora, exaustor) — o eletroduto, lançado depois da climatização, cruzava a parede bem onde a evaporadora está
@@ -536,10 +571,16 @@ export function planejarEletrodutos(
   const equipamentosNaReta = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }, cota: number): { inflados: Point[][]; reais: Point[][] } => {
     if (!caixasDeClimatizacao) {
       caixasDeClimatizacao = new Map();
+      // PA13: também as do pavimento de CIMA, na cota delas medida daqui — o eletroduto junto da laje passava pelo ponto de
+      // dreno no piso do andar de cima.
+      const niveis = [...model.levels].sort((x, y) => x.elevationMm - y.elevationMm);
+      const deCima = new Map(niveis.slice(0, -1).map((l, i) => [niveis[i + 1].id, { id: l.id, dz: niveis[i + 1].elevationMm - l.elevationMm }]));
+      const por = (levelId: ObjectId, c: { anel: Point[]; zLo: number; zHi: number }) => caixasDeClimatizacao!.set(levelId, [...(caixasDeClimatizacao!.get(levelId) ?? []), c]);
       for (const v of volumesDasPecasDeClimatizacao(model)) {
-        const lista = caixasDeClimatizacao.get(v.levelId) ?? [];
-        lista.push({ anel: cantosDaPeca(v.at, v, v.rotacaoGraus) as Point[], zLo: v.cotaMm - v.alturaMm / 2, zHi: v.cotaMm + v.alturaMm / 2 });
-        caixasDeClimatizacao.set(v.levelId, lista);
+        const c = { anel: cantosDaPeca(v.at, v, v.rotacaoGraus) as Point[], zLo: v.cotaMm - v.alturaMm / 2, zHi: v.cotaMm + v.alturaMm / 2 };
+        por(v.levelId, c);
+        const abaixo = deCima.get(v.levelId);
+        if (abaixo) por(abaixo.id, { anel: c.anel, zLo: c.zLo + abaixo.dz, zHi: c.zHi + abaixo.dz });
       }
     }
     const rv = hip.bitolaMm / 2 + FOLGA_VERTICAL_DO_EQUIPAMENTO_MM;
@@ -550,13 +591,18 @@ export function planejarEletrodutos(
     return { inflados: reais.length ? pilaresInflados(reais, a, b, hip.bitolaMm / 2 + FOLGA_DA_AMOSTRAGEM_NO_PILAR_MM) : [], reais };
   };
   const ligarNaRede = (levelId: ObjectId, a: { x: number; y: number }, b: { x: number; y: number }, cota: number): void => {
-    const outras = outrasNaFaixa(levelId, cota);
+    // PA13: o obstáculo da faixa que CONTÉM uma das pontas (o quadro logo abaixo da descida da louça de cima) não entra — com
+    // a ponta dentro, `desvioDoPilar` desistia e a reta saía direta, cruzando também os outros.
+    const outras = pertoDaReta(outrasNaFaixa(levelId, cota), a, b).filter((g) => !pointInPolygon(g, a as Point) && !pointInPolygon(g, b as Point));
     // Task 3, correção 2: sem contorno com os pilares inflados, a pegada real (o de antes, nunca pior).
-    const tentar = (eq: { inflados: Point[][]; reais: Point[][] } | null) =>
-      desvioDoPilar(a, b, [...pilaresDaReta(levelId, a, b), ...outras, ...(eq?.inflados ?? [])]) ?? (pelaLuzDoAmbiente ? desvioDoPilar(a, b, [...pegadas(levelId), ...outras, ...(eq?.reais ?? [])]) : null);
+    // PA13: com obstáculos da faixa do forro e `noForro.grafoAteNos` (o prédio), o grafo de visibilidade tem teto; acima
+    // dele, o contorno só dos pilares e das peças (a faixa fica de fora, como antes do forro).
+    const op = outras.length && hip.noForro?.grafoAteNos != null ? { grafoAteNos: hip.noForro.grafoAteNos } : {};
+    const tentar = (eq: { inflados: Point[][]; reais: Point[][] } | null, faixa: readonly Point[][] = outras) =>
+      desvioDoPilar(a, b, [...pilaresDaReta(levelId, a, b), ...faixa, ...(eq?.inflados ?? [])], op) ?? (pelaLuzDoAmbiente ? desvioDoPilar(a, b, [...pegadas(levelId), ...faixa, ...(eq?.reais ?? [])], op) : null);
     // PA11: com as caixas de climatização; sem contorno com elas, o de antes (nunca pior).
     const eq = equipamentosNaReta(levelId, a, b, cota);
-    const desvio = (eq.reais.length ? tentar(eq) : null) ?? tentar(null);
+    const desvio = (eq.reais.length ? tentar(eq) : null) ?? tentar(null) ?? (outras.length ? ((eq.reais.length ? tentar(eq, []) : null) ?? tentar(null, [])) : null);
     if (desvio == null) {
       semContorno++;
       addTrecho(levelId, a, cota, b, cota);

@@ -13,13 +13,15 @@
  * Roda antes da marca `copiaInstalacoes` do tipo, como a elétrica (PA5a).
  */
 import { pointInPolygon } from '../blueprintKernel';
-import type { Command, ObjectId, Point } from '../blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Point } from '../blueprintKernel';
 import type { HipotesesClimatizacao } from '../blueprintClimatizacao';
 import type { ContextoDaCarga } from '../blueprintCargaTermica';
 import type { ModeloDoCatalogo } from '../blueprintSelecaoClimatizacao';
 import { HIPOTESES_CIRCUITOS_PADRAO } from '../blueprintCircuitosAutomaticos';
 import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO } from '../blueprintEletricaDimensionamento';
-import { HIPOTESES_ELETRODUTO_PADRAO, comandosDeBitolaPelaOcupacao, planejarEletrodutos } from '../blueprintEletrodutos';
+import { GRAFO_DO_FORRO_DO_PREDIO_ATE_NOS, HIPOTESES_ELETRODUTO_PADRAO, comandosDeBitolaPelaOcupacao, planejarEletrodutos, type HipotesesDeEletroduto } from '../blueprintEletrodutos';
+import { forroDaEletrica } from '../casaAutomatica/forroEPressao';
+import { HIPOTESES_DO_FORRO_DA_CASA_PADRAO } from '../casaAutomatica/hipoteses';
 import { escolhasDoEletroduto } from '../blueprintEscolhasDoEletroduto';
 import { comandoDeRegistro } from '../blueprintRegistroDeLancamento';
 import { gerarClimatizacao } from '../blueprintGeradorClimatizacao';
@@ -85,6 +87,32 @@ export interface RedeEletricaLancada {
   avisos: string[];
 }
 
+/**
+ * PA13: o pavimento de cima do tipo é a 1ª cópia dele, ainda SEM as instalações (a cópia viva entra no fim do plano). O
+ * eletroduto junto da laje desvia dos ramais de esgoto do andar de cima e das descidas das louças pela laje
+ * (`ramaisDaLajeDeCima`, a descida do forro) — então o planejador lê, no pavimento de cima, o que o tipo tem sob o piso:
+ * exatamente o que a cópia vai ter. Só para planejar; os comandos valem no modelo de verdade.
+ */
+export function comOAndarDeCima(m: BlueprintModel, tipoLevelId: ObjectId): BlueprintModel {
+  const niveis = [...m.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+  const i = niveis.findIndex((l) => l.id === tipoLevelId);
+  const acima = i >= 0 ? niveis[i + 1] : undefined;
+  // Com a cópia viva das instalações já ligada, a cópia tem os próprios trechos — nada a espelhar.
+  if (!acima || acima.tipoDeId !== tipoLevelId || niveis[i].copiaInstalacoes) return m;
+  const sobOPiso = (m.trechos ?? []).filter((t) => t.levelId === tipoLevelId && t.disciplina !== 'ELETRICA' && Math.min(t.cotaAMm, t.cotaBMm) < 0);
+  // E as peças de climatização no piso (o ponto de dreno): o eletroduto junto da laje passava por elas.
+  const noPiso = (m.terminais ?? []).filter((t) => t.levelId === tipoLevelId && t.disciplina !== 'ELETRICA' && !!t.tipoHidraulico && t.cotaMm < 200);
+  if (!sobOPiso.length && !noPiso.length) return m;
+  return {
+    ...m,
+    trechos: [...(m.trechos ?? []), ...sobOPiso.map((t, k) => ({ ...t, id: `${t.id}__de_cima_${k}`, uid: `${t.uid}__de_cima`, levelId: acima.id }))],
+    terminais: [...(m.terminais ?? []), ...noPiso.map((t, k) => ({ ...t, id: `${t.id}__de_cima_${k}`, uid: `${t.uid}__de_cima`, levelId: acima.id }))],
+  };
+}
+
+/** PA13: o eletroduto do prédio — o padrão, na faixa da elétrica do forro da casa (junto da laje). */
+export const HIPOTESES_ELETRODUTO_DO_PREDIO: HipotesesDeEletroduto = { ...HIPOTESES_ELETRODUTO_PADRAO, noForro: { ...forroDaEletrica(HIPOTESES_DO_FORRO_DA_CASA_PADRAO), grafoAteNos: GRAFO_DO_FORRO_DO_PREDIO_ATE_NOS } };
+
 export function lancarEletrodutosEPrumada(ctx: ContextoDoPredio, base: BaseDoPredio, terreoLevelId: ObjectId | null): RedeEletricaLancada {
   const { tipoLevelId: tipo } = base;
   const avisos: string[] = [];
@@ -96,11 +124,15 @@ export function lancarEletrodutosEPrumada(ctx: ContextoDoPredio, base: BaseDoPre
   const alimentaOutroPavimento = (qId: ObjectId) => (ctx.m.circuitos ?? []).some((c) => c.quadroId === qId && foraDoTipo.has(c.id));
   const quadros = (ctx.m.quadros ?? []).filter((q) => q.levelId === tipo && !alimentaOutroPavimento(q.id));
   if ((ctx.m.quadros ?? []).some((q) => (q.levelId === tipo || q.levelId === terreoLevelId) && q.tipo !== 'QGBT' && !quadros.includes(q))) avisos.push('Os eletrodutos do quadro de serviço (térreo, cobertura e elevador) ficam para o projetista — os circuitos da cobertura sobem pela prumada no shaft.');
-  const escolhas = escolhasDoEletroduto(HIPOTESES_ELETRODUTO_PADRAO, HIPOTESES_ELETRICAS_PADRAO);
+  // PA13 (decisão do usuário, "eletroduto junto da laje"): a rede na faixa da elétrica do forro da casa (4,5 cm abaixo do
+  // teto) — acima da linha frigorígena e do duto de ar (que correm a 2,35 m, sob a viga, onde a rede corria antes), da
+  // água e do esgoto do andar de cima; a viga é atravessada pelas travessias previstas, como na casa.
+  const hip = HIPOTESES_ELETRODUTO_DO_PREDIO;
+  const escolhas = escolhasDoEletroduto(hip, HIPOTESES_ELETRICAS_PADRAO);
   let eletrodutos = 0;
   for (const q0 of quadros) {
     const q = (ctx.m.quadros ?? []).find((x) => x.id === q0.id)!;
-    const p = planejarEletrodutos(ctx.m, q, HIPOTESES_ELETRODUTO_PADRAO, HIPOTESES_ELETRICAS_PADRAO);
+    const p = planejarEletrodutos(comOAndarDeCima(ctx.m, tipo), q, hip, HIPOTESES_ELETRICAS_PADRAO);
     for (const a of p.avisos) avisos.push(`${q.nome}: ${a}`);
     if (!p.comandos.length) continue;
     eletrodutos += p.comandos.filter((c) => c.type === 'AddTrecho').length;

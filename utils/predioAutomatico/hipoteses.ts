@@ -9,7 +9,7 @@ import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 import type { CompatibilizacaoDoPredio } from './compatibilizacao';
 
-export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'SUBSOLOS' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'DRENAGEM_DA_GARAGEM' | 'EQUIPAMENTOS_DE_INCENDIO' | 'HIDRANTES' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'INCENDIO' | 'CONFERENCIA';
+export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'SUBSOLOS' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'ELETRODUTOS' | 'DRENAGEM_DA_GARAGEM' | 'EQUIPAMENTOS_DE_INCENDIO' | 'HIDRANTES' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'INCENDIO' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
@@ -23,11 +23,11 @@ export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
   RESERVATORIOS: 'Reservatórios inferior (casa de bombas) e superior (sobre o núcleo)',
   ELETRICA: 'Elétrica coletiva (pontos, QD por unidade, QGBT e medidores, quadro de serviço, DR)',
   CLIMATIZACAO: 'Climatização no tipo (splits, linhas e drenos; o circuito no QD da unidade)',
-  ELETRODUTOS: 'Eletrodutos por quadro e a prumada dos alimentadores no shaft',
   LOUCAS: 'Louças e pontos de água no tipo (o kit de cada ambiente e os pontos de cada louça)',
   AGUA_FRIA: 'Água fria (alimentador, recalque, barrilete, coluna no shaft, hidrômetro por unidade no hall, rede das unidades)',
   ESGOTO: 'Esgoto e ventilação (ramais, tubo de queda por grupo molhado, ventilação, desvio no térreo, coletor)',
   PLUVIAL: 'Pluvial da cobertura (ralos, condutores na fachada, caixas de areia, saída na frente)',
+  ELETRODUTOS: 'Eletrodutos por quadro junto da laje (depois das águas e do esgoto, desviando deles) e a prumada dos alimentadores no shaft',
   DRENAGEM_DA_GARAGEM: 'Drenagem da garagem (ralos, canaletas, caixa separadora, poço e bombas de recalque)',
   EQUIPAMENTOS_DE_INCENDIO: 'Equipamentos de incêndio de cada andar (extintores, sinalização, iluminação de emergência, alarme)',
   HIDRANTES: 'Hidrantes, coluna de incêndio, bomba na cobertura e registro de recalque',

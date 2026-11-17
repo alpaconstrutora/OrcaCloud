@@ -260,15 +260,6 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     splits = c.equipamentos;
     etapa('CLIMATIZACAO', c.comandos ? 'LANCOU' : 'NAO_RODOU', c.comandos, c.comandos ? `${c.equipamentos} split(s) no tipo — cada andar repete` : c.motivo);
   }
-  // ── Eletrodutos e a prumada no shaft (PA5b).
-  let rede: ReturnType<typeof lancarEletrodutosEPrumada> | null = null;
-  if (!eletrica) etapa('ELETRODUTOS', 'NAO_EXIGIDA', 0, 'Sem a elétrica.');
-  else {
-    rede = lancarEletrodutosEPrumada(ctx, base, terreo?.levelId ?? null);
-    for (const a of new Set(rede.avisos)) pendencias.push({ grupo: 'CONFERIR', texto: `Eletrodutos: ${a}` });
-    etapa('ELETRODUTOS', 'LANCOU', rede.comandos, `${rede.eletrodutos} trecho(s) de eletroduto${rede.bitolasAumentadas ? ` (${rede.bitolasAumentadas} com o diâmetro aumentado pela ocupação)` : ''} · prumada em ${rede.prumadas} pavimento(s)`);
-  }
-
   // ── Água fria (PA6): as louças e os pontos no tipo, e a rede da rua à torneira — também antes da marca.
   let agua: ReturnType<typeof lancarAguaFria> | null = null;
   let pontosDaAgua = 0;
@@ -334,6 +325,16 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     pluvial = lancarPluvial(ctx, base, terreo ? { levelId: terreo.levelId } : null, { levelId: cobertura.levelId }, entrada.pluvial ?? null);
     pendencias.push(...pluvial.pendencias);
     etapa('PLUVIAL', 'LANCOU', pluvial.comandos, `${pluvial.condutores.length} condutor(es) DN ${pluvial.condutores[0]?.dnMm ?? '—'} · ${Math.round(pluvial.vazaoLMin).toLocaleString('pt-BR')} L/min de ${Math.round(pluvial.areaM2).toLocaleString('pt-BR')} m² a ${pluvial.intensidadeMmH} mm/h`);
+  }
+
+  // ── Eletrodutos e a prumada no shaft (PA5b). PA13: DEPOIS da água, do esgoto e do pluvial — junto da laje, a rede
+  // desvia das prumadas, dos ramais do andar de cima e das descidas das louças, que precisam existir para ela ver.
+  let rede: ReturnType<typeof lancarEletrodutosEPrumada> | null = null;
+  if (!eletrica) etapa('ELETRODUTOS', 'NAO_EXIGIDA', 0, 'Sem a elétrica.');
+  else {
+    rede = lancarEletrodutosEPrumada(ctx, base, terreo?.levelId ?? null);
+    for (const a of new Set(rede.avisos)) pendencias.push({ grupo: 'CONFERIR', texto: `Eletrodutos: ${a}` });
+    etapa('ELETRODUTOS', 'LANCOU', rede.comandos, `${rede.eletrodutos} trecho(s) de eletroduto${rede.bitolasAumentadas ? ` (${rede.bitolasAumentadas} com o diâmetro aumentado pela ocupação)` : ''} · prumada em ${rede.prumadas} pavimento(s)`);
   }
 
   // ── A drenagem da garagem (PA8c): depois do esgoto (o recalque chega à caixa de inspeção dele) e da elétrica (as bombas

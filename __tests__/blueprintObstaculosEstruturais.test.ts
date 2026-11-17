@@ -221,6 +221,17 @@ describe('desvioDoPilar — mais de um pilar no caminho (F24 da casa automática
     for (let i = 1; i < pts.length; i++) expect(fracaoDentro(pts[i - 1], pts[i], pilares)).toBe(0);
   });
 
+  it('PA13 do prédio — com `grafoAteNos` abaixo do tamanho do grafo, desiste (null) em vez de montá-lo; sem o teto, como antes', () => {
+    const pilares = [quadrado(2000, 1000), quadrado(8000, 4000)];
+    const a = { x: 0, y: 0 };
+    const b = { x: 10000, y: 5000 };
+    // 2 pontas + 4 cantos × 2 pilares = 10 nós.
+    expect(desvioDoPilar(a, b, pilares, { grafoAteNos: 9 })).toBeNull();
+    expect(desvioDoPilar(a, b, pilares, { grafoAteNos: 10 })).toEqual(desvioDoPilar(a, b, pilares));
+    // O teto só vale para o grafo: um canto que resolve continua resolvendo.
+    expect(desvioDoPilar({ x: 0, y: 0 }, { x: 4000, y: 0 }, [quadrado(2000, 0)], { grafoAteNos: 1 })).toHaveLength(1);
+  });
+
   it('um pilar só: como antes, um canto basta', () => {
     const desvio = desvioDoPilar({ x: 0, y: 0 }, { x: 4000, y: 0 }, [quadrado(2000, 0)]);
     expect(desvio).toHaveLength(1);

@@ -891,11 +891,17 @@ export const laborService = {
     },
 
     async removeEmployee(id: string): Promise<void> {
-        const { error } = await supabase
+        // A RLS (employees_delete) só deixa apagar membro da org DONA; para os outros o DELETE
+        // apaga 0 linhas sem erro — pedir de volta o que saiu e tratar 0 como falha.
+        const { data, error } = await supabase
             .from('employees')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
         if (error) throw error;
+        if (!data || data.length === 0) {
+            throw new Error('Colaborador não excluído: só quem é membro da organização dona do colaborador pode excluí-lo.');
+        }
     },
 
     // ── ALLOCATIONS ────────────────────────────────────────

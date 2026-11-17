@@ -2116,10 +2116,20 @@ import ActionIconButton from './ui/ActionIconButton';
 
 {/* override pontual — só quando a semântica diverge do default do kind */}
 <ActionIconButton kind="edit" title="Configurar" icon={<Settings className="w-4 h-4" />} onClick={() => onConfig(item.id)} />
+
+{/* desligado: o MOTIVO vai num invólucro (motivo = null → ligado, sem title) */}
+<span className="inline-flex" title={motivo ?? undefined}>
+  <ActionIconButton kind="delete" disabled={!!motivo} onClick={() => onDelete(item.id)} />
+</span>
 ```
 
 > ✅ Use `kind` sempre que existir um dos 11 tipos prontos — resolve ícone,
 > `title` e tom de hover.
+> ⚠️ **Desligado sempre diz o motivo, no invólucro.** A base do componente tem
+> `disabled:pointer-events-none`: o botão desligado não recebe o mouse e o `title`
+> dele nunca aparece. Modelos: Contas a Pagar (Editar do avulso) e Colaboradores
+> (colaborador disponibilizado por outra organização: "Disponibilizado por X: só
+> quem é membro de X altera este colaborador").
 > ℹ️ `gap-1.5` (não `gap-2`/`gap-3`) entre os botões da coluna de ações.
 > ℹ️ Esta seção define só o **estilo/componente**. A **estrutura** continua a da
 > §9 (texto azul para a ação dominante, 1-2 ícones secundários, `InlineDisclosureMenu`

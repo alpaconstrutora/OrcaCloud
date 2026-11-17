@@ -94,7 +94,7 @@ COMMENT ON FUNCTION public.generate_payment_tasks IS
     'dias (mesmo filtro de fn_notif_pagamento_proximo). Uma por pessoa e conta: concluída não '
     'volta. Job daily-payment-tasks.';
 
--- 6. Só o job (postgres) roda. `authenticated` tinha EXECUTE: qualquer usuário logado podia
+-- 6. EXECUTE fica só com postgres (o job) e service_role. `authenticated` tinha EXECUTE: qualquer usuário logado podia
 --    disparar a geração para TODAS as organizações. Ninguém no app nem nas Edge Functions
 --    chama esta função (conferido em 16/11).
 REVOKE ALL ON FUNCTION public.generate_payment_tasks(INTEGER) FROM PUBLIC, anon, authenticated;

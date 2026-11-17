@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, CheckCircle, ChevronDown, Timer } from 'lucide-react';
+import { AlertCircle, CheckCircle, ChevronRight, Timer } from 'lucide-react';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import TableSwitch from '../ui/TableSwitch';
 import { useConfirm } from '../ui/confirm';
@@ -72,7 +72,9 @@ const RotinasAutomaticasSettings: React.FC = () => {
     const [gravando, setGravando] = React.useState<Set<string>>(() => new Set());
     const [aviso, setAviso] = React.useState<Aviso | null>(null);
     // Linha com os detalhes abertos (uma por vez). O title some para quem usa teclado ou toque:
-    // tudo o que ele diz aparece por escrito ali.
+    // tudo o que ele diz aparece por escrito ali. O botão mora na coluna Rotina, a primeira e
+    // sempre à vista: na última coluna, com a tabela rolada (390 px, notebook), o detalhe abria
+    // fora da vista (revisão de 16/11).
     const [aberta, setAberta] = React.useState<string | null>(null);
     const timerDoAviso = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -136,15 +138,33 @@ const RotinasAutomaticasSettings: React.FC = () => {
     const renderCell = (key: string, r: RotinaAutomatica): React.ReactNode => {
         const meta = metaDa(r);
         switch (key) {
-            case 'rotina':
+            case 'rotina': {
+                const chave = chaveDa(r);
+                const aberto = aberta === chave;
+                // Nome fixo: quem diz aberto/fechado é o aria-expanded.
+                const rotulo = `Detalhes de ${meta.nome}`;
                 return (
-                    <div className="min-w-0">
-                        <span className="block truncate text-sm font-normal text-gray-700" title={r.jobname ?? `jobid ${r.jobid}`}>{meta.nome}</span>
-                        {meta.oQueFaz && (
-                            <span className="block text-[13px] text-gray-500 line-clamp-2" title={meta.oQueFaz}>{meta.oQueFaz}</span>
-                        )}
+                    <div className="flex min-w-0 items-start gap-1.5">
+                        <button
+                            type="button"
+                            aria-expanded={aberto}
+                            aria-controls={aberto ? idDetalhes(r) : undefined}
+                            aria-label={rotulo}
+                            title={rotulo}
+                            onClick={() => setAberta(aberto ? null : chave)}
+                            className="-ml-1 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-[6px] text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                        >
+                            <ChevronRight aria-hidden="true" className={`h-4 w-4 transition-transform ${aberto ? 'rotate-90' : ''}`} />
+                        </button>
+                        <div className="min-w-0">
+                            <span className="block truncate text-sm font-normal text-gray-700" title={r.jobname ?? `jobid ${r.jobid}`}>{meta.nome}</span>
+                            {meta.oQueFaz && (
+                                <span className="block text-[13px] text-gray-500 line-clamp-2" title={meta.oQueFaz}>{meta.oQueFaz}</span>
+                            )}
+                        </div>
                     </div>
                 );
+            }
             case 'quando': {
                 const texto = quandoRoda(r.schedule);
                 return <span className="block text-sm font-normal text-gray-600" title={`Expressão (horário de Brasília = GMT−3): ${r.schedule}`}>{texto}</span>;
@@ -161,40 +181,24 @@ const RotinasAutomaticasSettings: React.FC = () => {
                     </span>
                 );
             case 'falhas': {
-                let conteudo: React.ReactNode;
                 if (r.execucoes7d === 0 && r.falhas7d === 0) {
-                    conteudo = <span className="text-sm font-normal text-gray-600" title="Nenhuma execução nos últimos 7 dias">Sem execução</span>;
-                } else if (r.falhas7d === 0) {
-                    conteudo = (
+                    return <span className="text-sm font-normal text-gray-600" title="Nenhuma execução nos últimos 7 dias">Sem execução</span>;
+                }
+                if (r.falhas7d === 0) {
+                    return (
                         <span className="text-sm font-normal text-gray-600" title={`${execucoes(r.execucoes7d)} nos últimos 7 dias, nenhuma falhou`}>
                             Nenhuma
                         </span>
                     );
-                } else {
-                    // O erro vem da última execução que FALHOU — não da última execução, que pode ter
-                    // passado ou estar rodando agora.
-                    const titulo = fraseDaSemana(r)
-                        + (r.ultimoErro ? '\n' + `Último erro (${dataHora(r.ultimoErro.em)}): ${r.ultimoErro.mensagem}` : '');
-                    conteudo = (
-                        <span className="text-sm font-normal text-red-600" title={titulo}>
-                            {r.falhas7d} {r.falhas7d === 1 ? 'falha' : 'falhas'}
-                        </span>
-                    );
                 }
-                const chave = chaveDa(r);
-                const aberto = aberta === chave;
+                // O erro vem da última execução que FALHOU — não da última execução, que pode ter
+                // passado ou estar rodando agora.
+                const titulo = fraseDaSemana(r)
+                    + (r.ultimoErro ? '\n' + `Último erro (${dataHora(r.ultimoErro.em)}): ${r.ultimoErro.mensagem}` : '');
                 return (
-                    <button
-                        type="button"
-                        aria-expanded={aberto}
-                        aria-controls={aberto ? idDetalhes(r) : undefined}
-                        onClick={() => setAberta(aberto ? null : chave)}
-                        className="-mx-1 inline-flex items-center gap-1 rounded-[6px] px-1 py-0.5 text-left transition-colors hover:bg-gray-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
-                    >
-                        {conteudo}
-                        <ChevronDown aria-hidden="true" className={`h-3.5 w-3.5 shrink-0 text-gray-500 transition-transform ${aberto ? 'rotate-180' : ''}`} />
-                        <span className="sr-only">{aberto ? ' — ocultar detalhes' : ' — ver detalhes'}</span>
-                    </button>
+                    <span className="text-sm font-normal text-red-600" title={titulo}>
+                        {r.falhas7d} {r.falhas7d === 1 ? 'falha' : 'falhas'}
+                    </span>
                 );
             }
             case 'ativa': {
@@ -241,37 +245,40 @@ const RotinasAutomaticasSettings: React.FC = () => {
         return (
             <tr className="bg-gray-50/60">
                 <td colSpan={visibleCount} className="px-3 py-3">
-                    <dl
+                    {/* §6.13: o bloco acompanha a rolagem horizontal e cabe na tela. */}
+                    <div
                         id={idDetalhes(r)}
                         role="region"
                         aria-label={`Detalhes de ${meta.nome}`}
-                        className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-[max-content_minmax(0,1fr)]"
+                        className="sticky left-3 max-w-[min(48rem,calc(100vw-2rem))]"
                     >
-                        {meta.oQueFaz && (<>
-                            <dt className={rotulo}>O que faz</dt>
-                            <dd className={valor}>{meta.oQueFaz}</dd>
-                        </>)}
-                        <dt className={rotulo}>Nome técnico</dt>
-                        <dd className={valor}>{r.jobname ?? `sem nome (jobid ${r.jobid})`}</dd>
-                        <dt className={rotulo}>Quando roda</dt>
-                        <dd className={valor}>{quandoRoda(r.schedule)} · expressão do pg_cron {r.schedule} (GMT; Brasília = GMT−3)</dd>
-                        <dt className={rotulo}>Última execução</dt>
-                        <dd className={`${valor} tabular-nums`}>
-                            {r.ultima ? `${dataHora(r.ultima.inicio)} · ${statusDaExecucao(r.ultima.status)}` : 'Nenhuma nos últimos 40 dias'}
-                        </dd>
-                        <dt className={rotulo}>Últimos 7 dias</dt>
-                        <dd className={valor}>{fraseDaSemana(r)}</dd>
-                        {r.ultimoErro && (<>
-                            <dt className={rotulo}>Último erro ({dataHora(r.ultimoErro.em)})</dt>
-                            <dd>
-                                <pre className="whitespace-pre-wrap rounded-[6px] border border-gray-200 bg-white px-2 py-1.5 font-mono text-[12px] text-gray-700 [overflow-wrap:anywhere]">{r.ultimoErro.mensagem}</pre>
+                        <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-[max-content_minmax(0,1fr)]">
+                            {meta.oQueFaz && (<>
+                                <dt className={rotulo}>O que faz</dt>
+                                <dd className={valor}>{meta.oQueFaz}</dd>
+                            </>)}
+                            <dt className={rotulo}>Nome técnico</dt>
+                            <dd className={valor}>{r.jobname ?? `sem nome (jobid ${r.jobid})`}</dd>
+                            <dt className={rotulo}>Quando roda</dt>
+                            <dd className={valor}>{quandoRoda(r.schedule)} · expressão do pg_cron {r.schedule} (GMT; Brasília = GMT−3)</dd>
+                            <dt className={rotulo}>Última execução</dt>
+                            <dd className={`${valor} tabular-nums`}>
+                                {r.ultima ? `${dataHora(r.ultima.inicio)} · ${statusDaExecucao(r.ultima.status)}` : 'Nenhuma nos últimos 40 dias'}
                             </dd>
-                        </>)}
-                        {religada && (<>
-                            <dt className="text-amber-700">Religada fora desta tela</dt>
-                            <dd className={valor}>{EXPLICA_RELIGADA}</dd>
-                        </>)}
-                    </dl>
+                            <dt className={rotulo}>Últimos 7 dias</dt>
+                            <dd className={valor}>{fraseDaSemana(r)}</dd>
+                            {r.ultimoErro && (<>
+                                <dt className={rotulo}>Último erro ({dataHora(r.ultimoErro.em)})</dt>
+                                <dd>
+                                    <p className="whitespace-pre-wrap rounded-[6px] border border-gray-200 bg-white px-2 py-1.5 text-[13px] text-gray-700 [overflow-wrap:anywhere]">{r.ultimoErro.mensagem}</p>
+                                </dd>
+                            </>)}
+                            {religada && (<>
+                                <dt className="text-amber-700">Religada fora desta tela</dt>
+                                <dd className={valor}>{EXPLICA_RELIGADA}</dd>
+                            </>)}
+                        </dl>
+                    </div>
                 </td>
             </tr>
         );

@@ -16,7 +16,8 @@
 --      `runid < corte`: leva junto as órfãs de reinício, que não têm data.
 --    - Recusa menos de 40 dias (22023): a tela Configurações › Rotinas automáticas mostra a
 --      última execução dos últimos 40 dias — a rotina mensal precisa caber.
---    - SECURITY INVOKER: quem roda é o job, como postgres (pode apagar do cron).
+--    - SECURITY INVOKER: quem roda é o job, como postgres (pode apagar do cron). EXECUTE fica
+--      só com postgres e service_role (sem PUBLIC, anon nem authenticated).
 -- 2. Job `limpar-historico-rotinas`, todo dia às 06:30 GMT (03:30 de Brasília), 60 dias.
 --    Aparece na tela no grupo "Técnicas" (utils/rotinasAutomaticas.ts). Só cria se não existir:
 --    reaplicar não religa um job desligado na tela.

@@ -221,12 +221,16 @@ describe('RotinasAutomaticasSettings', () => {
 
     // ── Sem mouse (docs/planos/2026-11-16-rotinas-automaticas-pontos-abertos.md, Tarefa 3) ──
     // O title só aparece ao passar o mouse: teclado e toque precisam ver o mesmo como TEXTO.
+    // O botão mora na coluna Rotina (a primeira, sempre à vista — revisão de 16/11: na última
+    // coluna, com a tabela rolada, o detalhe abria fora da vista).
     const detalhes = (job: string) => screen.getByRole('region', { name: `Detalhes de ${nome(job)}` });
+    const botaoDetalhes = (job: string) => screen.findByRole('button', { name: `Detalhes de ${nome(job)}` });
 
-    it('teclado: "3 falhas" é um botão que abre os detalhes com a contagem e o último erro por escrito', async () => {
+    it('teclado: o botão "Detalhes de …" na coluna Rotina abre a contagem e o último erro por escrito', async () => {
         const user = userEvent.setup();
         montar();
-        const botao = await screen.findByRole('button', { name: /3 falhas/ });
+        const botao = await botaoDetalhes('daily-payment-tasks');
+        expect(botao.closest('tr')?.querySelector('td')).toBe(botao.closest('td'));   // 1ª célula da linha
         expect(botao.getAttribute('aria-expanded')).toBe('false');
         expect(screen.queryByRole('region', { name: `Detalhes de ${nome('daily-payment-tasks')}` })).toBeNull();
 
@@ -234,11 +238,13 @@ describe('RotinasAutomaticasSettings', () => {
         await user.keyboard('{Enter}');
 
         expect(botao.getAttribute('aria-expanded')).toBe('true');
+        // o nome não muda com o estado — quem diz aberto/fechado é o aria-expanded
+        expect(screen.getByRole('button', { name: `Detalhes de ${nome('daily-payment-tasks')}` })).toBe(botao);
         const painel = detalhes('daily-payment-tasks');
         expect(botao.getAttribute('aria-controls')).toBe(painel.id);
         expect(within(painel).getByText('3 de 168 execuções nos últimos 7 dias falharam.')).toBeTruthy();
         expect(within(painel).getByText('Último erro (16/11 04:00)')).toBeTruthy();
-        expect(within(painel).getByText('ERROR: function public.create_task(…) does not exist')).toBeTruthy();
+        expect(within(painel).getByText('ERROR: function public.create_task(…) does not exist').className).not.toContain('font-mono');
         expect(within(painel).getByText('16/11 04:00 · falhou')).toBeTruthy();
 
         await user.keyboard('{Enter}');
@@ -246,26 +252,40 @@ describe('RotinasAutomaticasSettings', () => {
         expect(screen.queryByRole('region', { name: `Detalhes de ${nome('daily-payment-tasks')}` })).toBeNull();
     });
 
-    it('toque: "Nenhuma" e "Sem execução" também abrem; sem execução em 40 dias diz isso por escrito', async () => {
+    it('a região de detalhes é um bloco fixo à esquerda (§6.13) com a lista <dl> dentro, sem role na <dl>', async () => {
+        const user = userEvent.setup();
+        montar();
+        await user.click(await botaoDetalhes('daily-payment-tasks'));
+        const painel = detalhes('daily-payment-tasks');
+        expect(painel.tagName).not.toBe('DL');
+        expect(painel.className).toContain('sticky');
+        expect(painel.className).toMatch(/max-w-\[min\(/);
+        const lista = painel.querySelector('dl');
+        expect(lista).toBeTruthy();
+        expect(lista!.getAttribute('role')).toBeNull();
+    });
+
+    it('toque: abre também sem falha; sem execução em 40 dias diz isso por escrito; uma linha aberta por vez', async () => {
         const user = userEvent.setup();
         listar.mockResolvedValue([
             rotina('process-sla-sweep', { execucoes7d: 0, falhas7d: 0, ultima: null }),
             rotina('asaas-status-sync', { execucoes7d: 672, falhas7d: 0 }),
         ]);
         montar();
-        await user.click(await screen.findByRole('button', { name: /Sem execução/ }));
+        await user.click(await botaoDetalhes('process-sla-sweep'));
         const semExecucao = detalhes('process-sla-sweep');
         expect(within(semExecucao).getByText('Nenhuma nos últimos 40 dias')).toBeTruthy();
         expect(within(semExecucao).getByText('Nenhuma execução nos últimos 7 dias.')).toBeTruthy();
 
-        await user.click(screen.getByRole('button', { name: /Nenhuma/ }));
+        await user.click(await botaoDetalhes('asaas-status-sync'));
         expect(within(detalhes('asaas-status-sync')).getByText('672 execuções nos últimos 7 dias, nenhuma falhou.')).toBeTruthy();
+        expect(screen.queryByRole('region', { name: `Detalhes de ${nome('process-sla-sweep')}` })).toBeNull();
     });
 
     it('detalhes trazem o que faz por inteiro, o nome técnico e a expressão do horário', async () => {
         const user = userEvent.setup();
         montar();
-        await user.click(await screen.findByRole('button', { name: /3 falhas/ }));
+        await user.click(await botaoDetalhes('daily-payment-tasks'));
         const painel = detalhes('daily-payment-tasks');
         expect(within(painel).getByText(rotinaMeta('daily-payment-tasks').oQueFaz)).toBeTruthy();
         expect(within(painel).getByText('daily-payment-tasks')).toBeTruthy();
@@ -278,7 +298,7 @@ describe('RotinasAutomaticasSettings', () => {
             ativa: true, ultimaAlteracao: { em: '2026-11-16T15:00:00Z', porEmail: 'chefe@alpa.com.br', ativaDepois: false },
         })]);
         montar();
-        await user.click(await screen.findByRole('button', { name: /Nenhuma/ }));
+        await user.click(await botaoDetalhes('process-sla-sweep'));
         expect(within(detalhes('process-sla-sweep')).getByText(/voltou a ligar por fora dela/)).toBeTruthy();
     });
 

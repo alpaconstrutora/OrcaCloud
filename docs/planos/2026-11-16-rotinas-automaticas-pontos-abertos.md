@@ -79,33 +79,79 @@ Referência: os três pontos do fechamento do PR #522
 
 ### Tarefa 1 — Tarefas de pagamento
 
-- [ ] Prova SQL (`scripts/teste-tarefas-pagamento.sql`, BEGIN…ROLLBACK, conta e membros
+- [x] Prova SQL (`scripts/teste-tarefas-pagamento.sql`, BEGIN…ROLLBACK, conta e membros
       montados na transação): vermelho antes, verde depois:
   - cria 1 tarefa por membro para conta DEBIT vencendo em 2 dias, prioridade 1, link
     `/contas-a-pagar?tx=`;
   - não cria para conta com lançamento no intervalo mas vencimento fora;
   - não cria para `business_status = 'PAGO'`;
   - rodar de novo não duplica; concluir e rodar de novo não recria.
-- [ ] Migration `aplicar_20271116916400_tarefas_pagamento_corrige.sql`; ensaio; aplicar.
-- [ ] Rodar a rotina uma vez e conferir as tarefas criadas.
+- [x] Migration `aplicar_20271116916400_tarefas_pagamento_corrige.sql`; ensaio; aplicar.
+      RED: 42883 `create_task(… p_priority => integer …)`. Ensaio e banco aplicado: `TUDO OK`.
+      A revisão do plano acrescentou: `authenticated` tinha EXECUTE (qualquer logado disparava a
+      geração para todas as organizações) → REVOKE; ninguém no app chama a função.
+- [x] ~~Rodar a rotina uma vez~~ — não rodei à mão: a prova chama a função sobre os dados reais
+      (inclusive a conta do Garden que vence em 18/11) dentro da transação e passa. A primeira
+      execução de verdade é 17/11 às 04:00 (1 conta × 6 membros).
 
 ### Tarefa 2 — Limpeza do histórico
 
-- [ ] Prova SQL (`scripts/teste-rotinas-automaticas.sql`, pernas novas): recusa 39 dias;
+- [x] Prova SQL (`scripts/teste-rotinas-limpar-historico.sql` — arquivo próprio): recusa 39 dias;
       com linhas montadas na transação (runid negativo, data antiga, e uma órfã), apaga só as
       antigas; o job `limpar-historico-rotinas` existe, ligado, às 06:30.
-- [ ] Migration `aplicar_20271116916300_rotinas_limpar_historico.sql`; ensaio; aplicar.
-- [ ] Catálogo: `limpar-historico-rotinas` em "Técnicas" (teste do catálogo primeiro).
-- [ ] Rodar a limpeza uma vez; anotar linhas apagadas e o tempo.
+- [x] Migration `aplicar_20271116916300_rotinas_limpar_historico.sql`; ensaio; aplicar.
+      RED: 42883 `fn_rotinas_limpar_historico(integer) does not exist`. Ensaio e banco: `TUDO OK`;
+      `teste-rotinas-automaticas.sql` segue `TUDO OK`.
+- [x] Catálogo: `limpar-historico-rotinas` em "Técnicas" (teste do catálogo primeiro: 2 RED → 20/20).
+- [x] Rodar a limpeza uma vez: **242.865 linhas apagadas** em ~6 s (com a ida e volta do CLI).
+      Antes 475.713 linhas desde 25/02 (330 MB); depois 232.850 desde 18/09.
 
 ### Tarefa 3 — Detalhes sem mouse
 
-- [ ] Testes da tela (vermelho antes): o botão de falhas tem `aria-expanded`; clicar mostra o
+- [x] Testes da tela (vermelho antes — 4 RED "Unable to find role=button" → 26/26): o botão de falhas tem `aria-expanded`; clicar mostra o
       último erro e a frase da semana como texto; Enter também abre; "—" explica os 40 dias
       no detalhe; "Religada fora desta tela" explica no detalhe.
-- [ ] Implementar com `renderExpanded`; `check-ui-standard` e `tsc`.
+- [x] Implementar com `renderExpanded`; `check-ui-standard` exit 0; `tsc` 0 erros; 81/81 nos 6
+      arquivos (rotinas, service, tela, segurança das migrations, prefixo, orgContextGuard).
 - [ ] Conferir na tela.
 
 ### Tarefa 4 — Publicação
 
 - [ ] Revisão independente; PR; CI; merge; conferir produção; fechar a frente.
+
+## Revisão independente (16/11) — 0 crítico, 3 importantes, 10 menores
+
+Resolvidos nesta frente, cada um com teste ou prova que falhou antes:
+
+- **I1 — detalhe abria fora da vista** com a tabela rolada (botão na última coluna; medido
+  ~450 px fora a 390 px). O botão foi para a **coluna Rotina** (chevron, nome fixo "Detalhes de
+  …", `aria-expanded`) e o bloco segue o §6.13 (`sticky left-3 max-w-[min(48rem,calc(100vw-2rem))]`).
+  Resolve também M5 (botão passava da coluna de 90 px), M6 (disparador escondido na coluna
+  Falhas) e M7 (nome mudava com o estado).
+- **I2 — a tarefa não acompanhava a conta.** Migration `aplicar_20271116916500_…_acompanha_conta`
+  (aplicada): conta paga/conciliada/cancelada/renegociada/apagada fecha as tarefas abertas;
+  conta adiada muda a data delas; o vencimento entra na chave (`source_ref.due`) — concluída não
+  volta, adiada para outro vencimento gera tarefa nova. Tarefa adiada pela pessoa (`snoozed`)
+  conta como não concluída.
+- **I3 — a prova passava com filtros errados.** Contas D (CREDIT), E (vencida ontem), F
+  (`business_status` NULL), G (CONCILIATED), H (+4), I (hoje), J (+3, borda) e o ciclo de vida.
+  Sabotagens conferidas: sem `direction = 'DEBIT'` → "FALHOU: D"; janela começando 30 dias atrás
+  → "FALHOU: E".
+- **M4** `role="region"` saiu do `<dl>` para um `<div>` em volta. **M8** sem `font-mono` na célula
+  (§7) e o padrão registrado no §6.13 do guia. **M9** membro órfão (`user_id` fora de
+  `auth.users`) derrubava a rotina inteira com 23503 — agora é pulado (RED reproduzido: 23503).
+  **M11** prova da limpeza encostada na fronteira: `<=` no lugar de `<` → "FALHOU: veio 4".
+  **M12** textos de privilégio corrigidos (postgres e service_role mantêm EXECUTE). **M13**
+  `taskService.generatePaymentTasks` (lógica antiga, sem uso) apagado.
+
+Decisões (minhas; o usuário pode corrigir):
+
+- **M10 — tarefa EXCLUÍDA volta** na execução seguinte enquanto a conta estiver na janela (não
+  há registro de "já gerada"). Concluir é o jeito de dispensar. Registrado na migration.
+- Tarefa para **todos os membros** da organização (inclusive quem não vê o Financeiro) e os
+  status RETIDO/AGUARDANDO_APROVACAO incluídos — segue o aviso irmão e a decisão de 03/09.
+
+Fora desta frente (achado da revisão, anterior a ela): `create_task` é SECURITY DEFINER, tem
+EXECUTE para `authenticated` e não confere nada por dentro — qualquer usuário logado cria tarefa
+na agenda de qualquer pessoa de qualquer organização (REGRA #7). Pede frente própria: os módulos
+que criam tarefa para outra pessoa precisam ser mapeados antes de travar.

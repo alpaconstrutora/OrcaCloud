@@ -1684,6 +1684,13 @@ aparecia.
 > ✅ Tabela interna segue §6.9 (`px-3`/`px-4`, `py-2.5`, `border-r`, cabeçalho branco §6.11).
 > ℹ️ Em uso: `ContasPagarParcelas.tsx` (composição do DARF). A aba DARFs de Tributos usa o
 > `renderExpanded` do `StandardTable`, que cabe na tela e não precisou.
+> ℹ️ **Detalhe que repete o `title` por escrito** (Configurações › Rotinas automáticas,
+> `RotinasAutomaticasSettings.tsx`, 16/11/2026): informação que só morava no `title` (erro, contagem,
+> texto cortado) some para teclado e toque. O botão de abrir fica na **1ª coluna** (chevron
+> `h-6 w-6`, `aria-expanded` + `aria-controls`, nome FIXO "Detalhes de <linha>" — o estado é só o
+> `aria-expanded`), nunca numa coluna da ponta direita. O detalhe é `renderExpanded` com o bloco
+> `sticky left-3 max-w-[min(48rem,calc(100vw-2rem))]` levando `role="region"` + `aria-label`, e
+> dentro um `<dl>` simples (role no `<dl>` quebra `dt`/`dd`). Sem `font-mono` dentro da célula (§7).
 
 ---
 

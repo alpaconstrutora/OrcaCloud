@@ -809,7 +809,7 @@ quatro "a decidir" de 16/11 viraram as fases PA11–PA14 (pedido de 16/11).
 
 **Resumo (16/11/2026):** **as fases PA0 a PA10c estão no ar** — merge 6206737 (#503), produção servindo esse commit e
 a CI do main verde. Pedido de 16/11: PA11 a PA14 (os quatro "a decidir"). **PA11 no ar** (a16c71c, #518 — o eletroduto
-contorna a evaporadora e o exaustor); **PA12 no ar** (2b363ad, #520 — água × esgoto zerado no tipo dos quatro prédios); **PA13 no ar** (4d0f1e7, #525 — eletroduto junto da laje; o dreno fica como pendência); **PA14 feita, em publicação** (o Lançar do R12 51 → 37 s). O que fica de propósito
+contorna a evaporadora e o exaustor); **PA12 no ar** (2b363ad, #520 — água × esgoto zerado no tipo dos quatro prédios); **PA13 no ar** (4d0f1e7, #525 — eletroduto junto da laje; o dreno fica como pendência); **PA14 no ar** (19caa13, #527 — o Lançar do R12 51 → 37 s). O pedido de 16/11 está entregue: PA11 a PA14 no ar. O que fica de propósito
 para o projetista está em "Pendências em aberto". Kernel em `blueprint-kernel-ts-0.109.0` (a PA11 não toca o kernel).
 
 | Fase | PR | Commit no main |
@@ -836,6 +836,7 @@ para o projetista está em "Pendências em aberto". Kernel em `blueprint-kernel-
 | PA11 — eletroduto contorna a evaporadora e o exaustor | #518 | a16c71c |
 | PA12 — água abaixo do ramal de cima também nos cômodos secos | #520 | 2b363ad |
 | PA13 — eletroduto junto da laje | #525 | 4d0f1e7 |
+| PA14 — o Lançar do R12 51 → 37 s | #527 | 19caa13 |
 
 | Fase | Situação |
 |---|---|
@@ -853,4 +854,4 @@ para o projetista está em "Pendências em aberto". Kernel em `blueprint-kernel-
 | PA11 | feita, no ar (#518, a16c71c; conferida no app com o R8) — o eletroduto contorna a caixa da evaporadora e do exaustor (`planejarEletrodutos`): eletroduto dentro de equipamento R4 9 → 0, R8 56 → 0, R12 242 → 0, RL 112 → 0 (o marco trava zero); de quebra, menos encontros entre redes (R8 700 → 630) e +3 caixas de passagem por andar no R8 (as curvas do contorno, regra da NBR 5410). Marco da casa idêntico |
 | PA12 | feita, no ar (#520, 2b363ad; conferida no app com o R8) — a água abaixo do ramal de cima também nos cômodos secos (2,57 m) e contornando o tubo de queda do banheiro: água × esgoto R4 4 → 0, R8 18 → 0, R12 141 → 1 (garagem), RL 244 → 0 |
 | PA13 | feita, no ar (#525, 4d0f1e7; conferida no app — R8 e o R12 de ponta a ponta) — eletroduto junto da laje (faixa da elétrica do forro, etapa depois do esgoto, o andar de cima espelhado para o desvio): encontros entre redes R8 612 → 295, RL 1.247 → 530, eletroduto × duto zerado no R8 e no R12; desempenho domado (RL 98 s); eletroduto × esgoto de cima R8 32, R12 104, RL 91 (explicado); dreno × porta/janela = pendência |
-| PA14 | feita, em publicação — o Lançar do R12 no app 51 → 37 s (a fiação da rede: arestas por circuito numa passada e a composição guardada por modelo); limite fixado em 60 s; modelo idêntico |
+| PA14 | feita, no ar (#527, 19caa13; A/B intercalado no app) — o Lançar do R12 no app 51 → 37 s (a fiação da rede: arestas por circuito numa passada e a composição guardada por modelo); limite fixado em 60 s; modelo idêntico |

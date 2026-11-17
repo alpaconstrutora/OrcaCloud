@@ -66,7 +66,17 @@ projetado de `components/CentralControle.tsx`. Só app, sem banco.
 - [x] Revisão final (revisor novo): sem crítico; 1 importante corrigido — o teste fora do `act` esperava
   tempo fixo (200/300 ms) e podia cair na CI; agora consulta até acontecer (`vi.waitFor`), vermelho com o
   mutante booleano.
-- [ ] PR · CI · merge · prova em produção.
+- [x] PR #551 · CI verde (`9b3bd81`) · merge `fa0f207` · domínio servindo `fa0f207` · CI da `main` verde (17/11).
+- [x] Prova em produção ("Todas", desvio de `fetch` só no navegador, atrasos < 20 s):
+  - Atualizar com a chamada única atrasada 8 s + "30 dias" no meio: o saldo de 90 dias ficou ESMAECIDO e
+    nenhum caixa foi pedido durante a espera; o de 30 dias (31 pontos) saiu 10 ms depois da chamada única e
+    apareceu sem esmaecer (R$ 10.491.259).
+  - Caixa caído → "Tentar de novo" atrasado 6 s → Atualizar com a chamada única atrasada 12 s: a resposta
+    do "Tentar de novo" PINTOU (R$ 10.503.886) aos 7,5 s, com o Atualizar ainda esperando; ao fim, o caixa
+    foi buscado de novo depois da chamada única.
+  - Recarregada: 1 chamada única (787 ms) e o caixa depois dela.
+  - Contador da espera (Tarefa 4) e trava do pegajoso (Tarefa 1): só nos testes (não há como forçar respostas
+    em cache na produção sem mexer no app).
 
 **Deixado para depois (menores da revisão):**
 - 90→30→90 durante a chamada única: o gráfico (já do período escolhido) fica esmaecido até a chamada única

@@ -264,7 +264,8 @@ export function lancarAguaFria(
   const tipo = base.tipoLevelId;
   const pendencias: PendenciaDoPpci[] = [];
   const pe = (id: ObjectId) => ctx.m.levels.find((l) => l.id === id)?.defaultHeightMm ?? 3000;
-  const hipA: HipotesesDeAgua = { ...HIPOTESES_AGUA_PADRAO, velocidadeMaxMs: VELOCIDADE_MAXIMA_NO_PREDIO_MS, raioDoShaftMm: 0, noForro: forroDaAguaDaCasa({}) };
+  // PA17 (17/11/2026): a descida da água até a peça na FACE da parede — no eixo correm o dreno e a linha frigorígena.
+  const hipA: HipotesesDeAgua = { ...HIPOTESES_AGUA_PADRAO, velocidadeMaxMs: VELOCIDADE_MAXIMA_NO_PREDIO_MS, raioDoShaftMm: 0, noForro: forroDaAguaDaCasa({}), descidaNaFace: true };
   let comandos = 0;
   // UM LOTE só no fim: cada aplicação custa pelo tamanho do modelo (no RL, ~0,4 s), e as redes já são planejadas em vistas
   // que não dependem umas das outras — 2 aplicações por unidade, mais as do hall, do barrilete, do recalque e da reserva,

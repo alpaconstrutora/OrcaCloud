@@ -79,4 +79,16 @@ pré-existentes que ela achou — todos em `components/CentralControle.tsx` (+ `
 
 ## Estado
 
-- [ ] Tarefas 1–5 · [ ] Tarefa 6
+- [x] Tarefas 1–5 — cada uma com o teste visto falhando antes (17/11).
+- [x] Tarefa 6 (parte local): `typecheck` exit=0; suíte inteira só com as falhas conhecidas do Windows.
+- [x] Revisão final (revisor novo): sem crítico; 1 importante corrigido — regressão da Tarefa 3: o
+  "Não carregou." do caixa da org anterior ficava na nova durante a espera (o erro não gravava `caixaDaOrg`).
+- [ ] PR · CI · merge · prova em produção.
+
+**Deixado para depois (menores da revisão):**
+- Fragilidade latente: se bootstrap/reajustes/config respondessem antes do React renderizar a espera
+  (só com cache nesses serviços — hoje passam pela rede), o caixa da org nova ficaria em esqueleto.
+  Correção sugerida: contador de "vez do caixa" nas dependências do efeito.
+- "Tentar de novo" do caixa seguido de Atualizar descarta a resposta válida (esqueleto até o caixa ser buscado de novo).
+- Falta teste do lado "carga descartada por troca de org continua marcando o pegajoso" (código certo).
+- Pré-existente: trocar o período com Atualizar em voo mostra o saldo do período anterior sem esmaecer até a chamada única voltar.

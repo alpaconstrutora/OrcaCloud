@@ -2498,7 +2498,11 @@ Referência: `Settings.tsx` (2026-07).
 >   Tributos e Impostos › INSS"), e tem `aria-expanded`/`aria-controls`;
 > - escolher uma folha fecha a lista; abrir um grupo não fecha;
 > - o nome da seção **quebra linha** (`min-h-9 py-2`), nunca `truncate`: o que fica só no `title`
->   some no toque.
+>   some no toque;
+> - pelo teclado, escolher uma folha devolve o foco ao botão, porque a lista some e levaria o foco
+>   junto;
+> - em qualquer largura, a folha ativa leva `aria-current="page"` e o nó de grupo leva
+>   `aria-expanded`. Com a lista recolhida, o leitor de tela depende disso.
 >
 > De `lg` para cima nada muda. Referência: `Settings.tsx`; teste
 > `__tests__/components/SettingsMenuCelular.test.tsx`.

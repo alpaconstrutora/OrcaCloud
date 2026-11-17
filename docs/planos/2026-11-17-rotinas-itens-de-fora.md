@@ -67,6 +67,8 @@ fechamento do #530 listou em "Ficou de fora":
      - a pessoa tem de ser ele mesmo, ou alguém da organização: membro (`organization_members`) ou
        login de colaborador da organização, próprio ou disponibilizado para ela (`employee_org_shares`).
        O último caso cobre a ordem de execução com colaborador emprestado.
+       **Revisto em 17/11 (revisão, I2):** vale o colaborador que QUEM CRIA enxerga (de uma org
+       dele, ou disponibilizado para uma delas), porque é essa a lista que a ordem de execução oferece.
    - O que não passa recebe 42501 com uma mensagem em português.
 2. **Inserção direta:** `tasks_insert` ganha `org_id IN (SELECT minhas_orgs_membro())`, a forma de
    conjunto do #382.
@@ -153,7 +155,8 @@ fechamento do #530 listou em "Ficou de fora":
 
 ### Tarefa 4 — Publicação
 
-- [ ] Revisão independente; PR; CI; merge; conferir produção; fechar a frente; memória.
+- [x] Revisão independente (ver a seção abaixo).
+- [ ] PR; CI; merge; conferir produção; fechar a frente; memória.
 
 ## Andamento
 
@@ -166,3 +169,55 @@ fechamento do #530 listou em "Ficou de fora":
     o nome antigo no banco, GREEN depois de reaplicar (a migration é idempotente e remove o nome antigo).
 - [x] **Tarefa 2** (17/11) — menu recolhível abaixo de `lg`, conferido de 390 a 1440.
 - [x] **Tarefa 3** (17/11) — Publicação marcada nos três planos de 16/11.
+- [x] **Revisão independente** (17/11): 0 crítico, 2 importantes, 5 menores; mais um achado meu (Envolvidos).
+
+## Revisão independente (17/11) — 0 crítico, 2 importantes, 5 menores
+
+Corrigidos (migration `aplicar_20271117900100_tarefas_trava_revisao.sql`, aplicada; cada caso
+novo na prova falhou antes e passou depois; as cinco provas de tarefas TUDO OK):
+
+- **I1 — ex-membro reabria a tarefa antiga para a organização de onde saiu.**
+  - **Como:** ele punha um colaborador de lá como responsável, ou trocava o espaço. A tarefa
+    aparecia para esse colaborador e para os gestores da organização.
+  - **Correção:** o gatilho `trg_tasks_troca_de_org` agora olha também responsável, espaço, pasta,
+    obra e tarefa-mãe. Numa tarefa de organização que não é do usuário, esses campos ficam como
+    estão; conteúdo e andamento seguem editáveis.
+  - **Prova:** RED `ok:1`. Sabotagem (sem a comparação do responsável) → `FALHOU: a põe
+    colaborador de B como responsável da tarefa antiga`.
+- **I2 — a ordem de execução oferece colaboradores de TODAS as organizações do usuário.**
+  - **Como:** a primeira regra só aceitava colaborador da organização da tarefa, e o
+    `.catch(() => {})` da tela engolia a recusa.
+  - **Decisão:** a regra da pessoa passou a ser a da tela. Vale o login de colaborador que quem
+    cria enxerga: de uma organização dele, ou disponibilizado para uma delas (a RLS de
+    `employees`). Quem é de fora de todas as organizações do usuário segue recusado.
+  - **Custo, se estiver errado:** uma tarefa da org A pode ir para o login de um colaborador da
+    org C, quando quem cria é membro das duas.
+  - **Prova:** caso `h`, RED → GREEN.
+- **Achado meu, ao conferir o I1 — Envolvidos (`task_collaborators`).**
+  - **Como:** quem criou a tarefa punha como envolvido um colaborador de QUALQUER organização,
+    e ele passava a ver a tarefa.
+  - **Correção:** as policies de inserir e alterar exigem que a tarefa seja de uma organização do
+    usuário e que o colaborador seja um que ele enxerga.
+  - **Prova:** três casos RED → GREEN. Sabotagem (sem o EXISTS em `employees`) → `FALHOU: a põe
+    colaborador da org B … como envolvido`.
+  - **Dados:** 2 envolvidos hoje, nenhum de fora.
+- **M4 — a checagem de ordem dos gatilhos comparava dois textos fixos.** Era sempre verdadeira.
+  Saiu; a ordem é provada por `teste-tarefas-responsavel.sql`.
+- **M6 — comentário impreciso** sobre o menu de `lg` para cima. Corrigido.
+- **M7 — leitor de tela.**
+  - **Correção:** a folha ativa ganhou `aria-current="page"` e o nó de grupo, `aria-expanded`.
+  - **Prova:** teste RED → GREEN; o guia §19.2 registra.
+
+Ficaram de fora (menores):
+
+- **M3:**
+  - quem recebe tarefa sem ser membro da organização dela (colaborador de outra org) não cria
+    subtarefa nela;
+  - colaborador desligado (`employees.status`) segue recebendo tarefa.
+
+  São decisões de produto, sem nenhum caso hoje.
+- **M5:**
+  - **Membro só por e-mail:** sem caso na prova. O gatilho `trg_org_member_fill_user_id` preenche
+    o `user_id` e não deixa montar.
+  - **Corretor:** `broker_profiles` não entra como pessoa no `create_task`, e nenhuma tela cria
+    tarefa para corretor.

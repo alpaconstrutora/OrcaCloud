@@ -93,8 +93,9 @@ const Settings: React.FC = () => {
     // Abaixo de `lg` (celular e tablet) a árvore recolhe atrás de um botão com a seção atual —
     // ao lado da folha ela tomava 256 px de 358 a 390 px de tela. Escolher folha fecha;
     // abrir grupo não. De `lg` para cima nada muda (guia §19.2).
-    // Com o menu aberto (só acontece abaixo de `lg`), a lista some ao escolher e levaria o foco
-    // do teclado junto — ele volta para o botão. De `lg` para cima o menu nunca abre: nada muda.
+    // Com o menu aberto, a lista some ao escolher e levaria o foco do teclado junto — ele volta
+    // para o botão. O botão só existe abaixo de `lg`; se a janela alargar com o menu aberto, as
+    // classes `lg:` mandam no visual e o focus() num botão escondido não faz nada.
     const [menuAberto, setMenuAberto] = React.useState(false);
     const botaoMenuRef = React.useRef<HTMLButtonElement>(null);
     const escolherFolha = (id: SettingsLeafId) => {
@@ -253,6 +254,7 @@ const Settings: React.FC = () => {
                         <div key={node.id}>
                             <button
                                 onClick={() => toggleNavNode(node.id)}
+                                aria-expanded={!!openNavNodes[node.id]}
                                 className={`flex items-center w-full px-3 h-9 rounded-[6px] text-sm font-medium justify-between transition-all ${
                                     node.children.some(c => c.id === activeLeaf) ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
                                 }`}
@@ -266,6 +268,7 @@ const Settings: React.FC = () => {
                                         <button
                                             key={leaf.id}
                                             onClick={() => escolherFolha(leaf.id)}
+                                            aria-current={activeLeaf === leaf.id ? 'page' : undefined}
                                             className={`px-3 h-8 rounded-[6px] text-sm font-medium text-left transition-all ${
                                                 activeLeaf === leaf.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'
                                             }`}
@@ -278,6 +281,7 @@ const Settings: React.FC = () => {
                         <button
                             key={node.id}
                             onClick={() => escolherFolha(node.leafId!)}
+                            aria-current={activeLeaf === node.leafId ? 'page' : undefined}
                             className={`flex items-center gap-2.5 w-full px-3 h-9 rounded-[6px] text-sm font-medium transition-all ${
                                 activeLeaf === node.leafId ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700 hover:bg-white/60'
                             }`}

@@ -81,6 +81,19 @@ describe('Settings › menu das seções no celular', () => {
         expect(document.activeElement).toBe(botaoMenu());
     });
 
+    it('leitor de tela: a seção ativa tem aria-current e o grupo diz se está aberto', async () => {
+        const user = userEvent.setup();
+        await montar();
+        expect(screen.getByRole('button', { name: 'Nomenclatura' }).getAttribute('aria-current')).toBe('page');
+        const grupo = screen.getByRole('button', { name: 'Tributos e Impostos' });
+        expect(grupo.getAttribute('aria-expanded')).toBe('false');
+        await user.click(grupo);
+        expect(grupo.getAttribute('aria-expanded')).toBe('true');
+        await user.click(screen.getByRole('button', { name: 'INSS' }));
+        expect(screen.getByRole('button', { name: 'INSS' }).getAttribute('aria-current')).toBe('page');
+        expect(screen.getByRole('button', { name: 'Nomenclatura' }).getAttribute('aria-current')).toBeNull();
+    });
+
     it('de lg para cima a árvore fica sempre à vista, ao lado da folha, e o botão some', async () => {
         await montar();
         expect(botaoMenu().className.split(/\s+/)).toContain('lg:hidden');

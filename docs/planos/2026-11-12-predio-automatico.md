@@ -732,6 +732,11 @@ justificada.
   travessias, como na casa). Novo e explicado: eletroduto × esgoto do andar de cima R8 32, R12 104, RL 91 — o eletroduto
   na laje cruzando a descida da louça de cima pela laje, onde o contorno desiste (vizinhança densa, teto do grafo) ou o
   quadro da unidade está logo abaixo dela. O dreno × porta/janela não muda (decisão: pendência).
+- **Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pa13.cjs`, o R8, estudo descartável arquivado): gerar em 35 s;
+  a aba Compatibilização com 295 encontros entre redes; a etapa "Eletrodutos por quadro junto da laje" depois do pluvial;
+  no rascunho salvo, 547 trechos de eletroduto do tipo a 2,955 m e nenhum a 2,35 m, nenhum dentro de equipamento nem ×
+  duto de ar. E o **R12 de ponta a ponta** (`conferencia-predio-pa10a.cjs`): gerar 54,5 s, Lançar 50,7 s, salvar 9,6 s —
+  dentro do tempo fixado na PA10a (90 · 90 · 30 s); Ctrl+Z volta tudo; 29.953 trechos (eram 21.671). Sem erro de console.
 
 ### PA14 — O tempo do "Lançar" no R12
 **O que muda.** O clique no "Lançar" do R12 (61 s no app na PA10a): o que sobra é o desenho da planta (21,6 mil
@@ -750,7 +755,7 @@ quatro "a decidir" de 16/11 viraram as fases PA11–PA14 (pedido de 16/11).
 | Área | Pendência | Onde fica |
 |---|---|---|
 | Desempenho | Clique no "Lançar" do R12: o que sobra depois da PA10a é o desenho da planta (21,6 mil trechos) e as marcas de verificação das redes | PA14 |
-| Desempenho | Gerar o R12 no worker: 57 s no app de desenvolvimento, dentro do tempo fixado na PA10a (90 s gerar · 90 s Lançar · 30 s salvar) — vigiar a cada fase | acompanhamento |
+| Desempenho | Gerar o R12 no worker: 54,5 s no app depois da PA13 (Lançar 50,7 s, salvar 9,6 s), dentro do tempo fixado na PA10a (90 s gerar · 90 s Lançar · 30 s salvar) — vigiar a cada fase | acompanhamento |
 | Desempenho | Marco do RL perto do limite da CI (20 min por caso; a CI inteira leva 31–39 min nos últimos PRs); o bloco "o motor (PA2)" subiu para 180 s depois de deixar a main vermelha (15/11) | acompanhamento |
 | Compatibilização | ~~Água × esgoto que sobra: o ramal do andar de cima atravessando cômodo seco a caminho do shaft (R8 18, R12 141, RL 244)~~ — resolvido: a água abaixo do ramal também nos cômodos secos; sobra 1 na garagem do R12 (redes do próprio subsolo) | feito na PA12 |
 | Compatibilização | Forro rebaixado a 2,57 m (2,50 m livres) nos cômodos secos por onde passa o ramal do andar de cima — confira com a arquitetura | projetista |

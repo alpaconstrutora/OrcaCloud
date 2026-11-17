@@ -8,8 +8,9 @@
  * direto aos blocos.
  *
  * - 5 minutos; vencido, a tela volta a tentar a chamada única (e, se cair, remarca).
- * - Por organização: "Todas" (`null`) é uma chave própria — "Todas" caindo não tira
- *   a Alpa da chamada única.
+ * - Por organização: "Todas" é uma chave própria — "Todas" caindo não tira a Alpa
+ *   da chamada única. O AppRouter entrega "Todas" como `''` (`activeOrganizationId || ''`);
+ *   `''` e `null` são a mesma chave, como no serviço (`organizationId || null`).
  * - Memória da aba (módulo): recarregar a página zera.
  *
  * Plano: docs/planos/2026-11-17-central-menores-plano-b.md
@@ -26,13 +27,13 @@ export interface MemoriaDoPlanoB {
     esquecer(): void;
 }
 
-// `null` = "Todas as organizações"; nenhum id de organização é igual a isto.
+// `null` ou `''` = "Todas as organizações"; nenhum id de organização é igual a isto.
 const TODAS = '\u0000todas';
 
 // `() => Date.now()`, não `Date.now`: lido a cada chamada (um relógio trocado depois vale).
 export function criarMemoriaDoPlanoB(agora: () => number = () => Date.now()): MemoriaDoPlanoB {
     const caiuEm = new Map<string, number>();
-    const chave = (organizationId: string | null) => organizationId ?? TODAS;
+    const chave = (organizationId: string | null) => organizationId || TODAS;
     return {
         marcarQueCaiu(organizationId) {
             caiuEm.set(chave(organizationId), agora());

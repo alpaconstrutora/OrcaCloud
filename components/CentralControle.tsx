@@ -66,6 +66,16 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // A vez do caixa: só a resposta da chamada única (ok ou falha), não os blocos do
     // plano B — esperar `carregando` segurava o caixa até o bloco mais lento (~16 s).
     const [esperandoChamadaUnica, setEsperandoChamadaUnica] = React.useState(true);
+    // O mesmo, lido de forma SÍNCRONA pelo efeito do caixa: na troca de org o `load` da
+    // nova liga a espera no mesmo commit em que o efeito do caixa roda, e o estado ainda
+    // dizia `false` (render anterior) — o caixa da org nova saía junto com a chamada
+    // única dela, disputando o banco (revisão do #538). O estado segue nas dependências
+    // do efeito só para dispará-lo de novo quando a espera acaba.
+    const esperandoChamadaUnicaRef = React.useRef(true);
+    const esperarChamadaUnica = React.useCallback((sim: boolean) => {
+        esperandoChamadaUnicaRef.current = sim;
+        setEsperandoChamadaUnica(sim);
+    }, []);
     const [filtro, setFiltro] = React.useState<FiltroDaFila>('tudo');
     // Números sobem até o valor só na PRIMEIRA carga da tela; atualizar não anima.
     const [animar, setAnimar] = React.useState(true);
@@ -107,7 +117,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         const minha = ++cargaAtual.current;
         const vale = () => cargaAtual.current === minha;
         setCarregando(true);
-        setEsperandoChamadaUnica(true);
+        esperarChamadaUnica(true);
         if (orgNaTela.current !== organizationId) {
             orgNaTela.current = organizationId;
             fontesDeAlertaNaTela.current = {};
@@ -138,10 +148,15 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             contractIndexService.listDueForReajuste(organizationId),
             financialApprovalService.listConfig(organizationId),
         ]);
-        // A queda é real mesmo que esta carga já tenha sido descartada.
-        if (!pular && bootstrapR.status === 'rejected') memoriaDoPlanoB.marcarQueCaiu(organizationId);
+        // A queda conta mesmo com esta carga descartada pela TROCA de org (a org dela
+        // continua caindo). Descartada por carga mais nova da MESMA org, quem decide é a
+        // mais nova: senão uma resposta velha ligava o pegajoso com a chamada única já de
+        // volta (Atualizar + "Tentar de novo" sobrepostos — revisão do #538).
+        if (!pular && bootstrapR.status === 'rejected' && (vale() || orgNaTela.current !== organizationId)) {
+            memoriaDoPlanoB.marcarQueCaiu(organizationId);
+        }
         if (!vale()) return;
-        setEsperandoChamadaUnica(false);
+        esperarChamadaUnica(false);
 
         // Config de alçadas — não crítica: sem ela o modal só usa rótulos padrão.
         if (approvalConfigR.status === 'fulfilled') setApprovalConfig(approvalConfigR.value);
@@ -217,7 +232,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
 
         setCarregando(false);
         if (opcoes?.realcar === true) setRodada(r => r + 1);
-    }, [organizationId]);
+    }, [organizationId, esperarChamadaUnica]);
 
     // ── C3: não competir com a casca do app ───────────────────────────────
     // As consultas deste painel são as mais pesadas da sessão e, até
@@ -249,23 +264,37 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
 
     // Caixa projetado: única fonte com parâmetro de período, por isso fora do
     // bootstrap. Espera o mesmo portão no primeiro carregamento.
+    //
+    // Geração das buscas do caixa: só a mais nova pinta. Cada busca e cada rodada do
+    // efeito abaixo (org, período, Atualizar) descartam as pendentes — inclusive a do
+    // "Tentar de novo" do cartão, que chama `carregarCaixa` fora do efeito e perdia o
+    // cancelamento: com troca de org no meio, o saldo da empresa anterior pintava o
+    // cartão debaixo do seletor da nova (REGRA #5; revisão do #538, 17/11/2026).
+    const caixaAtual = React.useRef(0);
     const carregarCaixa = React.useCallback(() => {
-        let cancelado = false;
+        const minha = ++caixaAtual.current;
+        const vale = () => caixaAtual.current === minha;
         const mesmaOrg = caixaDaOrg.current === organizationId;
         setCaixa(c => (mesmaOrg && c.estado === 'ok' ? c : CARREGANDO));
         setCaixaTrocando(mesmaOrg);
         financialIntelligenceService.getCashflowProjection(organizationId, periodoCaixa)
             .then(pontos => {
-                if (cancelado) return;
+                if (!vale()) return;
                 caixaDaOrg.current = organizationId;
                 setCaixa({ estado: 'ok', data: pontos });
                 setCaixaTrocando(false);
             })
             .catch(err => {
                 console.error('[CentralControle] cashflow:', err);
-                if (!cancelado) { setCaixa({ estado: 'erro' }); setCaixaTrocando(false); }
+                if (!vale()) return;
+                // O erro também é DESTA org: sem gravar, a troca de org não levava o cartão
+                // ao esqueleto e o "Não carregou." da anterior ficava na nova durante a
+                // espera da chamada única dela (revisão final, 17/11/2026).
+                caixaDaOrg.current = organizationId;
+                setCaixa({ estado: 'erro' });
+                setCaixaTrocando(false);
             });
-        return () => { cancelado = true; };
+        return () => { if (vale()) caixaAtual.current++; };
     }, [organizationId, periodoCaixa]);
 
     // O caixa espera o bootstrap responder (abrir a tela, Atualizar, trocar de org):
@@ -273,11 +302,15 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // (A/B em produção, 11/11/2026: 3,2–3,6 s junto × ~2,4 s sozinho). Trocar o
     // período não passa pelo bootstrap — busca na hora. No plano B (bootstrap caído
     // ou pulado) o caixa sai junto com os blocos, sem esperar o mais lento (17/11/2026).
+    // Trocar de org só passou a esperar de fato com o ref síncrono (revisão do #538):
+    // antes o caixa da org nova saía junto com a chamada única dela.
     React.useEffect(() => {
         if (!podeCarregar || !verFinanceiro) return;
+        // Descarta busca pendente que não nasceu desta rodada (o "Tentar de novo").
+        caixaAtual.current++;
         // Org nova: o gráfico na tela é de outra empresa — esqueleto já, mesmo esperando a vez.
         if (caixaDaOrg.current !== undefined && caixaDaOrg.current !== organizationId) setCaixa(CARREGANDO);
-        if (esperandoChamadaUnica) return;
+        if (esperandoChamadaUnicaRef.current) return;
         return carregarCaixa();
     }, [carregarCaixa, podeCarregar, verFinanceiro, esperandoChamadaUnica, organizationId]);
 
@@ -339,9 +372,13 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             await taskService.update(id, { status: 'done' });
         } catch (err) {
             console.error('[CentralControle] concluir tarefa:', err);
-            load();
+            // Recarrega para a tarefa voltar à fila — só se a tela ainda é da org em que
+            // ela foi concluída. Trocada a org no meio, este `load` é o da org ANTERIOR:
+            // repunha `orgNaTela` e pintava a org antiga debaixo do seletor novo (REGRA #5;
+            // revisão do #538). A tarefa não está na tela da org nova: nada a repor.
+            if (orgNaTela.current === organizationId) load();
         }
-    }, [load, tirarDaFila]);
+    }, [load, tirarDaFila, organizationId]);
 
     const aprovacaoFeita = React.useCallback((item: ActionQueueItem) => {
         setApprovalModal(null);

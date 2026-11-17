@@ -470,4 +470,96 @@ describe('CentralControle · tela "Bom dia"', () => {
         await waitFor(() => expect(cartao('Minha fila')).toHaveAttribute('aria-busy', 'false'));
         expect(screen.queryByText('Alerta da o1')).not.toBeInTheDocument();
     });
+
+    // ── Pendências da revisão do #538 (17/11/2026): docs/planos/2026-11-17-central-caixa-e-troca-de-org.md ──
+
+    it('carga descartada pela mesma org não liga o pegajoso quando a mais nova respondeu', async () => {
+        let rejeitar2!: (e: unknown) => void;
+        bootstrap
+            .mockResolvedValueOnce(painel({ scorecards: { ok: false, erro: 'timeout' } }))
+            .mockReturnValueOnce(new Promise((_, rej) => { rejeitar2 = rej; }))
+            .mockResolvedValue(painel());
+        fontesSeparadas.mockImplementation(() => fontes());
+        montar();
+        await waitFor(() => expect(within(cartao('Obras')).getByText('Não carregou.')).toBeInTheDocument());
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));      // carga 2: pendente
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+        await userEvent.click(within(cartao('Obras')).getByRole('button', { name: /Tentar de novo/ })); // carga 3: responde
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        expect(within(cartao('Obras')).queryByText('Não carregou.')).not.toBeInTheDocument();
+        rejeitar2(TIMEOUT);                                                               // a carga 2, já descartada, cai
+        await new Promise(r => setTimeout(r, 20));
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(4));
+        expect(fontesSeparadas).not.toHaveBeenCalled();
+    });
+
+    it('trocar de org: o caixa da nova espera a chamada única dela', async () => {
+        let responderO2!: (v: unknown) => void;
+        bootstrap.mockResolvedValueOnce(painel()).mockReturnValueOnce(new Promise(r => { responderO2 = r; }));
+        const { rerender } = montar();
+        await waitFor(() => expect(cashflow).toHaveBeenCalledWith('o1', 90));
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
+        await new Promise(r => setTimeout(r, 30));
+        expect(cashflow).not.toHaveBeenCalledWith('o2', 90);
+        responderO2(painel());
+        await waitFor(() => expect(cashflow).toHaveBeenCalledWith('o2', 90));
+    });
+
+    it('"Tentar de novo" do caixa e troca de org: a resposta da org anterior não pinta a nova', async () => {
+        let responderO1!: (v: unknown) => void;
+        bootstrap.mockResolvedValueOnce(painel()).mockReturnValue(nunca());
+        cashflow.mockReset()
+            .mockRejectedValueOnce(TIMEOUT)
+            .mockReturnValueOnce(new Promise(r => { responderO1 = r; }));
+        const { rerender } = montar();
+        await waitFor(() => expect(within(cartao('Caixa projetado')).getByText('Não carregou.')).toBeInTheDocument());
+        await userEvent.click(within(cartao('Caixa projetado')).getByRole('button', { name: /Tentar de novo/ }));
+        expect(cashflow).toHaveBeenCalledTimes(2);
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
+        responderO1([{ data_ref: HOJE, cr_previsto: 0, db_previsto: 0, saldo_dia: 0, saldo_acum: 1111 }]);
+        await new Promise(r => setTimeout(r, 30));
+        // O saldo é o NumeroQueSobe (anima a partir de 0): o valor final está no aria-label.
+        expect(cartao('Caixa projetado').innerHTML).not.toMatch(/1\.111/);
+        expect(cartao('Caixa projetado')).toHaveAttribute('aria-busy', 'true');
+    });
+
+    it('concluir tarefa que falha depois de trocar de org não recarrega a org anterior', async () => {
+        let rejeitarGravacao!: (e: unknown) => void;
+        atualizarTarefa.mockReset().mockReturnValueOnce(new Promise((_, rej) => { rejeitarGravacao = rej; }));
+        bootstrap
+            .mockResolvedValueOnce(painel({
+                meu_dia: { ok: true, data: meuDia({
+                    tarefas: {
+                        pendentes: [{ id: 't1', org_id: 'o1', title: 'Ligar para o fornecedor', due_date: '2026-11-11T15:00:00Z', priority: 2, source_module: 'manual', source_ref: null }],
+                        qtd_pendentes: 1, concluidas_hoje: 0,
+                    },
+                }) },
+            }))
+            .mockResolvedValue(painel());
+        const { rerender } = montar();
+        await userEvent.click(await screen.findByRole('button', { name: 'Concluir tarefa' }));
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Atualizar' })).toBeEnabled());
+        rejeitarGravacao(new Error('falhou a gravação'));
+        await new Promise(r => setTimeout(r, 30));
+        expect(bootstrap.mock.calls.map(c => c[0])).toEqual(['o1', 'o2']);
+    });
+
+    // Revisão final (17/11): com o caixa da org nova esperando de fato a chamada única
+    // dela, o "Não carregou." da org anterior ficava na tela da nova durante a espera.
+    it('trocar de org com o caixa da anterior caído: o cartão vai ao esqueleto na hora', async () => {
+        bootstrap.mockResolvedValueOnce(painel()).mockReturnValue(nunca());
+        cashflow.mockReset().mockRejectedValueOnce(TIMEOUT);
+        const { rerender } = montar();
+        await waitFor(() => expect(within(cartao('Caixa projetado')).getByText('Não carregou.')).toBeInTheDocument());
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
+        expect(within(cartao('Caixa projetado')).queryByText('Não carregou.')).not.toBeInTheDocument();
+        expect(cartao('Caixa projetado')).toHaveAttribute('aria-busy', 'true');
+    });
 });

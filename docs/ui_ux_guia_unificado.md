@@ -1689,8 +1689,11 @@ aparecia.
 > texto cortado) some para teclado e toque. O botão de abrir fica na **1ª coluna** (chevron
 > `h-6 w-6`, `aria-expanded` + `aria-controls`, nome FIXO "Detalhes de <linha>" — o estado é só o
 > `aria-expanded`), nunca numa coluna da ponta direita. O detalhe é `renderExpanded` com o bloco
-> `sticky left-3 max-w-[min(48rem,calc(100vw-2rem))]` levando `role="region"` + `aria-label`, e
-> dentro um `<dl>` simples (role no `<dl>` quebra `dt`/`dd`). Sem `font-mono` dentro da célula (§7).
+> `sticky left-3` levando `role="region"` + `aria-label`, e dentro um `<dl>` simples (role no `<dl>`
+> quebra `dt`/`dd`). Sem `font-mono` dentro da célula (§7).
+> ⚠️ **A largura máxima vem do contêiner que rola, medida** (`clientWidth` do `.overflow-auto` − 24,
+> teto 768, com `ResizeObserver`) — `calc(100vw-…)` não serve: a área da tabela é menor que a tela
+> (menu lateral + menu da página) e o texto passava ~100 px da vista num notebook de 1280.
 
 ---
 

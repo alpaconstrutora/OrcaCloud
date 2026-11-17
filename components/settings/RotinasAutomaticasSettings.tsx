@@ -64,6 +64,37 @@ function fraseDaSemana(r: RotinaAutomatica): string {
  *  reagenda o job com unschedule + schedule: o job renasce ligado. */
 const religadaFora = (r: RotinaAutomatica) => (r.ativa && r.ultimaAlteracao && !r.ultimaAlteracao.ativaDepois ? r.ultimaAlteracao : null);
 
+/** §6.13: o detalhe acompanha a rolagem horizontal (`sticky left-3`) e não passa da área VISÍVEL
+ *  da tabela. O limite vem do contêiner que rola no StandardTable (`.overflow-auto`), não da tela:
+ *  com `100vw` o texto passava ~100 px da área num notebook de 1280 (tabela de 830 px numa área
+ *  de 680 — medido no navegador, revisão de 16/11). 24 = o `left-3` + a mesma folga à direita. */
+function DetalheVisivel({ id, rotulo, children }: { id: string; rotulo: string; children: React.ReactNode }) {
+    const ref = React.useRef<HTMLDivElement>(null);
+    const [maximo, setMaximo] = React.useState<number | null>(null);
+    React.useLayoutEffect(() => {
+        const rolagem = ref.current?.closest<HTMLElement>('.overflow-auto');
+        if (!rolagem) return;
+        const medir = () => { if (rolagem.clientWidth > 0) setMaximo(Math.min(768, rolagem.clientWidth - 24)); };
+        medir();
+        if (typeof ResizeObserver === 'undefined') return;
+        const observador = new ResizeObserver(medir);
+        observador.observe(rolagem);
+        return () => observador.disconnect();
+    }, []);
+    return (
+        <div
+            ref={ref}
+            id={id}
+            role="region"
+            aria-label={rotulo}
+            className="sticky left-3 max-w-3xl"
+            style={maximo ? { maxWidth: `${maximo}px` } : undefined}
+        >
+            {children}
+        </div>
+    );
+}
+
 const RotinasAutomaticasSettings: React.FC = () => {
     const confirm = useConfirm();
     const [rotinas, setRotinas] = React.useState<RotinaAutomatica[]>([]);
@@ -245,13 +276,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
         return (
             <tr className="bg-gray-50/60">
                 <td colSpan={visibleCount} className="px-3 py-3">
-                    {/* §6.13: o bloco acompanha a rolagem horizontal e cabe na tela. */}
-                    <div
-                        id={idDetalhes(r)}
-                        role="region"
-                        aria-label={`Detalhes de ${meta.nome}`}
-                        className="sticky left-3 max-w-[min(48rem,calc(100vw-2rem))]"
-                    >
+                    <DetalheVisivel id={idDetalhes(r)} rotulo={`Detalhes de ${meta.nome}`}>
                         <dl className="grid grid-cols-1 gap-x-6 gap-y-1.5 text-[13px] sm:grid-cols-[max-content_minmax(0,1fr)]">
                             {meta.oQueFaz && (<>
                                 <dt className={rotulo}>O que faz</dt>
@@ -270,7 +295,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
                             {r.ultimoErro && (<>
                                 <dt className={rotulo}>Último erro ({dataHora(r.ultimoErro.em)})</dt>
                                 <dd>
-                                    <p className="whitespace-pre-wrap rounded-[6px] border border-gray-200 bg-white px-2 py-1.5 text-[13px] text-gray-700 [overflow-wrap:anywhere]">{r.ultimoErro.mensagem}</p>
+                                    <p className="whitespace-pre-wrap rounded-[6px] border border-gray-200 bg-white px-2 py-1.5 text-[13px] text-gray-700 [overflow-wrap:anywhere] [font-feature-settings:'calt'_0]">{r.ultimoErro.mensagem}</p>
                                 </dd>
                             </>)}
                             {religada && (<>
@@ -278,7 +303,7 @@ const RotinasAutomaticasSettings: React.FC = () => {
                                 <dd className={valor}>{EXPLICA_RELIGADA}</dd>
                             </>)}
                         </dl>
-                    </div>
+                    </DetalheVisivel>
                 </td>
             </tr>
         );

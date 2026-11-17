@@ -113,7 +113,17 @@ Referência: os três pontos do fechamento do PR #522
       no detalhe; "Religada fora desta tela" explica no detalhe.
 - [x] Implementar com `renderExpanded`; `check-ui-standard` exit 0; `tsc` 0 erros; 81/81 nos 6
       arquivos (rotinas, service, tela, segurança das migrations, prefixo, orgContextGuard).
-- [ ] Conferir na tela.
+- [x] Conferir na tela — **sem login** (a janela do Playwright esperou 2 × 15 min): página de
+      teste local, fora do commit, com a tela REAL e a RPC respondida com as 24 linhas reais
+      (lidas como superadmin, só leitura). Tabela rolada até o fim, detalhe aberto, medido:
+      - 1º desenho (`max-w-[min(48rem,calc(100vw-2rem))]`): **cortava** ~100 px numa área de 680
+        (notebook 1280) e ~14 px a 390 → o limite passou a vir do contêiner que rola, medido
+        (`clientWidth − 24`, teto 768, `ResizeObserver`); teste RED (`expected '' to be '656px'`)
+        → GREEN; medido de novo: cabe a 1440 (área 840), 1280 (680) e 390 (358);
+      - a fonte Inter desenhava `=>` como `⇒` no último erro → ligadura desligada só ali
+        (`font-feature-settings: 'calt' 0`), com teste.
+      - A 390 px a página de Configurações inteira continua quebrada (o menu da página não recolhe
+        — problema antigo, fora desta frente); a medida a 390 supõe a área toda para a tabela.
 
 ### Tarefa 4 — Publicação
 

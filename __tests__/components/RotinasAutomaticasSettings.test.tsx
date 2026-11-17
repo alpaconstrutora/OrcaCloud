@@ -245,6 +245,8 @@ describe('RotinasAutomaticasSettings', () => {
         expect(within(painel).getByText('3 de 168 execuções nos últimos 7 dias falharam.')).toBeTruthy();
         expect(within(painel).getByText('Último erro (16/11 04:00)')).toBeTruthy();
         expect(within(painel).getByText('ERROR: function public.create_task(…) does not exist').className).not.toContain('font-mono');
+        // a fonte Inter junta '=>' numa seta (⇒): a mensagem do banco tem de sair literal
+        expect(within(painel).getByText('ERROR: function public.create_task(…) does not exist').className).toContain("[font-feature-settings:'calt'_0]");
         expect(within(painel).getByText('16/11 04:00 · falhou')).toBeTruthy();
 
         await user.keyboard('{Enter}');
@@ -259,11 +261,31 @@ describe('RotinasAutomaticasSettings', () => {
         const painel = detalhes('daily-payment-tasks');
         expect(painel.tagName).not.toBe('DL');
         expect(painel.className).toContain('sticky');
-        expect(painel.className).toMatch(/max-w-\[min\(/);
         const lista = painel.querySelector('dl');
         expect(lista).toBeTruthy();
         expect(lista!.getAttribute('role')).toBeNull();
     });
+
+    // Medido no navegador (revisão, 16/11): com `max-w-[calc(100vw-…)]` o detalhe passava ~100 px
+    // da área visível num notebook de 1280 (tabela de 830 px numa área de 680). O limite vem do
+    // contêiner que rola, menos o `left-3` e a mesma folga à direita.
+    for (const [visivel, esperado] of [[680, '656px'], [1200, '768px']] as const) {
+        it(`o detalhe não passa da área visível da tabela (${visivel} px → ${esperado})`, async () => {
+            const original = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth');
+            Object.defineProperty(HTMLElement.prototype, 'clientWidth', {
+                configurable: true,
+                get(this: HTMLElement) { return this.classList.contains('overflow-auto') ? visivel : 0; },
+            });
+            try {
+                const user = userEvent.setup();
+                montar();
+                await user.click(await botaoDetalhes('daily-payment-tasks'));
+                expect(detalhes('daily-payment-tasks').style.maxWidth).toBe(esperado);
+            } finally {
+                if (original) Object.defineProperty(HTMLElement.prototype, 'clientWidth', original);
+            }
+        });
+    }
 
     it('toque: abre também sem falha; sem execução em 40 dias diz isso por escrito; uma linha aberta por vez', async () => {
         const user = userEvent.setup();

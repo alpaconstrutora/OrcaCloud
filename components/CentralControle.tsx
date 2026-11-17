@@ -66,6 +66,16 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // A vez do caixa: só a resposta da chamada única (ok ou falha), não os blocos do
     // plano B — esperar `carregando` segurava o caixa até o bloco mais lento (~16 s).
     const [esperandoChamadaUnica, setEsperandoChamadaUnica] = React.useState(true);
+    // O mesmo, lido de forma SÍNCRONA pelo efeito do caixa: na troca de org o `load` da
+    // nova liga a espera no mesmo commit em que o efeito do caixa roda, e o estado ainda
+    // dizia `false` (render anterior) — o caixa da org nova saía junto com a chamada
+    // única dela, disputando o banco (revisão do #538). O estado segue nas dependências
+    // do efeito só para dispará-lo de novo quando a espera acaba.
+    const esperandoChamadaUnicaRef = React.useRef(true);
+    const esperarChamadaUnica = React.useCallback((sim: boolean) => {
+        esperandoChamadaUnicaRef.current = sim;
+        setEsperandoChamadaUnica(sim);
+    }, []);
     const [filtro, setFiltro] = React.useState<FiltroDaFila>('tudo');
     // Números sobem até o valor só na PRIMEIRA carga da tela; atualizar não anima.
     const [animar, setAnimar] = React.useState(true);
@@ -107,7 +117,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         const minha = ++cargaAtual.current;
         const vale = () => cargaAtual.current === minha;
         setCarregando(true);
-        setEsperandoChamadaUnica(true);
+        esperarChamadaUnica(true);
         if (orgNaTela.current !== organizationId) {
             orgNaTela.current = organizationId;
             fontesDeAlertaNaTela.current = {};
@@ -146,7 +156,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
             memoriaDoPlanoB.marcarQueCaiu(organizationId);
         }
         if (!vale()) return;
-        setEsperandoChamadaUnica(false);
+        esperarChamadaUnica(false);
 
         // Config de alçadas — não crítica: sem ela o modal só usa rótulos padrão.
         if (approvalConfigR.status === 'fulfilled') setApprovalConfig(approvalConfigR.value);
@@ -222,7 +232,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
 
         setCarregando(false);
         if (opcoes?.realcar === true) setRodada(r => r + 1);
-    }, [organizationId]);
+    }, [organizationId, esperarChamadaUnica]);
 
     // ── C3: não competir com a casca do app ───────────────────────────────
     // As consultas deste painel são as mais pesadas da sessão e, até
@@ -278,11 +288,13 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // (A/B em produção, 11/11/2026: 3,2–3,6 s junto × ~2,4 s sozinho). Trocar o
     // período não passa pelo bootstrap — busca na hora. No plano B (bootstrap caído
     // ou pulado) o caixa sai junto com os blocos, sem esperar o mais lento (17/11/2026).
+    // Trocar de org só passou a esperar de fato com o ref síncrono (revisão do #538):
+    // antes o caixa da org nova saía junto com a chamada única dela.
     React.useEffect(() => {
         if (!podeCarregar || !verFinanceiro) return;
         // Org nova: o gráfico na tela é de outra empresa — esqueleto já, mesmo esperando a vez.
         if (caixaDaOrg.current !== undefined && caixaDaOrg.current !== organizationId) setCaixa(CARREGANDO);
-        if (esperandoChamadaUnica) return;
+        if (esperandoChamadaUnicaRef.current) return;
         return carregarCaixa();
     }, [carregarCaixa, podeCarregar, verFinanceiro, esperandoChamadaUnica, organizationId]);
 

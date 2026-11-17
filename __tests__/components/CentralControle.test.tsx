@@ -494,4 +494,17 @@ describe('CentralControle · tela "Bom dia"', () => {
         await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(4));
         expect(fontesSeparadas).not.toHaveBeenCalled();
     });
+
+    it('trocar de org: o caixa da nova espera a chamada única dela', async () => {
+        let responderO2!: (v: unknown) => void;
+        bootstrap.mockResolvedValueOnce(painel()).mockReturnValueOnce(new Promise(r => { responderO2 = r; }));
+        const { rerender } = montar();
+        await waitFor(() => expect(cashflow).toHaveBeenCalledWith('o1', 90));
+        rerender(<CentralControle organizationId="o2" userEmail="ana@alpa.com.br" onNavigate={vi.fn()} />);
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledWith('o2'));
+        await new Promise(r => setTimeout(r, 30));
+        expect(cashflow).not.toHaveBeenCalledWith('o2', 90);
+        responderO2(painel());
+        await waitFor(() => expect(cashflow).toHaveBeenCalledWith('o2', 90));
+    });
 });

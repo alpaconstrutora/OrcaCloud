@@ -48,7 +48,7 @@ import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import { ACIMA_DA_COBERTURA_MM, coberturaNoPontoMm } from './blueprintVentilacao';
 import { conexoesDerivadas } from './blueprintKernel/conexoes';
 import { comprimentoMm, fazerChave, type No } from './blueprintGrafoDeRede';
-import { AFASTAMENTO_DO_CONTORNO_MM, anelDoPilar, desvioDoPilar, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
+import { AFASTAMENTO_DO_CONTORNO_MM, anelDoPilar, desvioDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { cantosDaPeca, volumesDasPecasDeClimatizacao } from './blueprintRede';
 import { paredeEhExterna } from './blueprintKernel/exterior';
 import { lote } from './blueprintLinhaFrigorigena';
@@ -677,6 +677,29 @@ function caixasDoLance(caixas: CaixasNoForro, a: { x: number; y: number }, b: { 
 }
 
 /**
+ * PA19 do prédio automático (17/11/2026): além do maior meio-lado do duto, o quanto o eixo dele fica de uma descida que
+ * ainda virá (o eletroduto até a tomada, a água até o ponto), mm. O kernel mede o duto pelo maior meio-lado em toda
+ * direção (o 100 × 250 alcança 125 mm): com 75, o eixo passa a 200 mm do ponto.
+ */
+export const FOLGA_DA_DESCIDA_AO_DUTO_MM = 75;
+/** PA19: as redes cujos pontos recebem a descida do forro (ou da laje) depois do duto. */
+const DISCIPLINAS_QUE_DESCEM: readonly string[] = ['ELETRICA', 'AGUA_FRIA', 'AGUA_QUENTE'];
+/** PA19: o desvio sai da reta até isto, mm (mais que isso, fica a reta). */
+const DESVIO_MAXIMO_DO_DUTO_MM = 600;
+
+/**
+ * PA19 do prédio automático (17/11/2026): as DESCIDAS que ainda virão — os pontos abaixo do topo do duto (tomada,
+ * interruptor, ponto de água) e os quadros (a subida dos eletrodutos), a que o eletroduto e a água chegam depois dele,
+ * descendo rente à face da parede.
+ */
+function descidasFuturas(model: BlueprintModel, levelId: ObjectId, abaixoDeMm: number): { x: number; y: number }[] {
+  return [
+    ...(model.terminais ?? []).filter((t) => t.levelId === levelId && t.cotaMm < abaixoDeMm && DISCIPLINAS_QUE_DESCEM.includes(t.disciplina)).map((t) => t.at),
+    ...(model.quadros ?? []).filter((q) => q.levelId === levelId && q.cotaMm < abaixoDeMm).map((q) => q.at),
+  ];
+}
+
+/**
  * C8: cada aresta em planta que atravessaria um pilar vira a cadeia que o contorna. PA15: e a caixa de evaporadora ou
  * exaustor que o duto alcança na vertical (o duto do exaustor passava pelo exaustor do banheiro vizinho alinhado) — sem
  * contorno com as caixas infladas, com as reais; sem contorno com elas, só o dos pilares (o de antes, nunca pior).
@@ -692,6 +715,110 @@ function comDesvioDePilar(arestas: readonly { de: { x: number; y: number }; para
     for (let i = 1; i < pts.length; i++) saida.push({ de: pts[i - 1], para: pts[i] });
   }
   return { arestas: saida, semContorno };
+}
+
+/**
+ * PA19: os vãos (porta, janela) das paredes do pavimento na faixa vertical do duto, em planta — o trecho do vão ao longo
+ * da parede, alargado pela meia largura do duto, na espessura dela: o desvio das descidas não sai por eles.
+ */
+function vaosNaFaixaDoDuto(model: BlueprintModel, levelId: ObjectId, zLo: number, zHi: number, meiaLarguraMm: number): Point[][] {
+  const paredes = new Map(model.walls.filter((w) => w.levelId === levelId).map((w) => [w.id, w]));
+  const saida: Point[][] = [];
+  for (const o of model.openings) {
+    const w = paredes.get(o.wallId);
+    if (!w || o.sillMm >= zHi || o.sillMm + o.heightMm <= zLo) continue;
+    const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+    if (L < 1) continue;
+    const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+    const n = { x: -u.y, y: u.x };
+    const h = w.thicknessMm / 2 + 1;
+    const c = (s: number, sn: number) => ({ x: Math.round(w.a.x + u.x * s + n.x * sn * h), y: Math.round(w.a.y + u.y * s + n.y * sn * h) }) as Point;
+    const [s0, s1] = [o.offsetMm - meiaLarguraMm, o.offsetMm + o.widthMm + meiaLarguraMm];
+    saida.push([c(s0, -1), c(s1, -1), c(s1, 1), c(s0, 1)]);
+  }
+  return saida;
+}
+
+/** PA19: a distância em planta de `p` ao segmento a→b. */
+function distanciaAoSegmento(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }): number {
+  const L2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+  const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / L2));
+  return Math.hypot(p.x - (a.x + (b.x - a.x) * t), p.y - (a.y + (b.y - a.y) * t));
+}
+
+/**
+ * PA19 do prédio automático (17/11/2026): o DESVIO do lance reto a→b em volta das descidas que ainda virão que ele
+ * cortaria (a menos de `afastamentoMm` delas). O duto do exaustor corria rente à face da parede da tomada (a 6–8 cm, por
+ * 3 a 5 m) ou a atravessava a 6 cm dela (R4 1, RL 5 por andar), e escorregar a descida na parede não sai de um duto que a
+ * acompanha. Ortogonal e local: um degrau antes da primeira (a `afastamentoMm` dela, ao longo do lance), o trecho
+ * paralelo ao lado — o deslocamento de menor módulo, até `DESVIO_MAXIMO_DO_DUTO_MM`, a `afastamentoMm` de toda descida
+ * do trecho, sem passar para o outro lado de parede paralela nem encostar nela — e a volta à reta depois da última, a
+ * `fimLivreMm` do fim (a parede da descarga: o duto segue chegando de frente, pelo mesmo ponto). Devolve os vértices, ou
+ * `null` — nada no caminho, ou sem desvio longe de toda descida e de porta e janela (`vaos`) que a reta não cruzava:
+ * fica a reta, nunca pior. (O contorno pelos cantos, a 1ª versão, passava em diagonal por onde a água ainda ia descer e
+ * chegava de frente rente ao dreno na fachada: R12 +33 encontros.)
+ */
+export function desvioDasDescidas(
+  model: BlueprintModel,
+  levelId: ObjectId,
+  a: { x: number; y: number },
+  b: { x: number; y: number },
+  o: { pontos: readonly { x: number; y: number }[]; afastamentoMm: number; meiaLarguraMm: number; fimLivreMm: number; vaos: readonly Point[][] },
+): { x: number; y: number }[] | null {
+  const L = Math.hypot(b.x - a.x, b.y - a.y);
+  if (L < 1) return null;
+  const u = { x: (b.x - a.x) / L, y: (b.y - a.y) / L };
+  const n = { x: -u.y, y: u.x };
+  const A = o.afastamentoMm;
+  const rel = o.pontos.map((p) => ({ p, s: (p.x - a.x) * u.x + (p.y - a.y) * u.y, c: (p.x - a.x) * n.x + (p.y - a.y) * n.y }));
+  const gatilhos = rel.filter((r) => r.s > 0 && r.s < L && Math.abs(r.c) < A);
+  if (!gatilhos.length) return null;
+  const si = Math.max(0, Math.min(...gatilhos.map((r) => r.s)) - A);
+  const sj = Math.max(...gatilhos.map((r) => r.s)) + A;
+  if (sj > L - o.fimLivreMm) return null;
+  // As descidas do trecho (e da folga dele) proíbem uma faixa do deslocamento cada; as paredes paralelas, o outro lado.
+  const proibidos = rel.filter((r) => r.s > si - A && r.s < sj + A).map((r): [number, number] => [r.c - A, r.c + A]);
+  let piso = -Infinity;
+  let teto = Infinity;
+  for (const w of model.walls) {
+    if (w.levelId !== levelId) continue;
+    const wl = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+    if (wl < 1 || Math.abs((u.x * (w.b.y - w.a.y) - u.y * (w.b.x - w.a.x)) / wl) > 0.035) continue;
+    const sa = (w.a.x - a.x) * u.x + (w.a.y - a.y) * u.y;
+    const sb = (w.b.x - a.x) * u.x + (w.b.y - a.y) * u.y;
+    if (Math.min(Math.max(sa, sb), sj) - Math.max(Math.min(sa, sb), si) <= 0) continue;
+    const c = ((w.a.x - a.x) * n.x + (w.a.y - a.y) * n.y + (w.b.x - a.x) * n.x + (w.b.y - a.y) * n.y) / 2;
+    const h = w.thicknessMm / 2 + o.meiaLarguraMm;
+    if (c > 0) teto = Math.min(teto, c - h);
+    else piso = Math.max(piso, c + h);
+  }
+  const candidatos = proibidos
+    .flat()
+    .filter((t) => Math.abs(t) > 0 && Math.abs(t) <= DESVIO_MAXIMO_DO_DUTO_MM && t > piso && t < teto && !proibidos.some(([lo, hi]) => t > lo + 1e-6 && t < hi - 1e-6))
+    .sort((x, y) => Math.abs(x) - Math.abs(y) || x - y);
+  // A conferência: longe de toda descida (menos a que a reta já encostava junto de uma ponta, fora do trecho) e sem
+  // porta nem janela que a reta não cruzava.
+  const jaNaReta = new Set(rel.filter((r) => !gatilhos.includes(r) && distanciaAoSegmento(r.p, a, b) < A).map((r) => r.p));
+  const alcance = DESVIO_MAXIMO_DO_DUTO_MM + A;
+  const vaos = o.vaos.filter((g) => g.some((p) => distanciaAoSegmento(p, a, b) < alcance + 2000) && fracaoDentro(a, b, [g]) === 0);
+  for (const t of candidatos) {
+    const em = (s: number, k: number) => ({ x: Math.round(a.x + u.x * s + n.x * k), y: Math.round(a.y + u.y * s + n.y * k) });
+    const vs = [...(si > 0 ? [em(si, 0)] : []), em(si, t), em(sj, t), em(sj, 0)].filter((p, i, xs) => (i === 0 ? p.x !== a.x || p.y !== a.y : p.x !== xs[i - 1].x || p.y !== xs[i - 1].y) && (p.x !== b.x || p.y !== b.y));
+    const pts = [a, ...vs, b];
+    let ok = true;
+    for (let i = 1; i < pts.length && ok; i++) {
+      for (const r of rel) {
+        if (jaNaReta.has(r.p) || Math.abs(r.c) > alcance + A) continue;
+        if (distanciaAoSegmento(r.p, pts[i - 1], pts[i]) < A - 1) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok && fracaoDentro(pts[i - 1], pts[i], vaos) > 0) ok = false;
+    }
+    if (ok) return vs;
+  }
+  return null;
 }
 
 /**
@@ -987,7 +1114,21 @@ export function planejarRedeDeAr(model: BlueprintModel, levelId: ObjectId, vazoe
     const s2 = secaoProposta(q, false, hip);
     const baseEx = { levelId, disciplina: 'MECANICA' as const, bitolaMm: s2.bitolaMm, ...(s2.alturaDutoMm != null ? { alturaDutoMm: s2.alturaDutoMm } : {}), rotulo: ROTULO_DA_REDE_DE_AR, sugerido: true };
     l.add(baseEx, ex.at, ex.cotaMm, ex.at, cota);
-    const lances = descarga.frente ? [{ de: ex.at, para: descarga.frente }, { de: descarga.frente, para: descarga.at }] : [{ de: ex.at, para: descarga.at }];
+    const retos = descarga.frente ? [{ de: ex.at, para: descarga.frente }, { de: descarga.frente, para: descarga.at }] : [{ de: ex.at, para: descarga.at }];
+    // PA19: o lance reto que cortaria uma descida que ainda virá abaixo do topo do duto (o eletroduto até a tomada, a
+    // água até o ponto) desvia dela ao lado, com o eixo a meio-lado + folga do ponto, e volta à reta antes da fachada.
+    const meiaAltura = (s2.alturaDutoMm ?? s2.bitolaMm) / 2;
+    const pontos = descidasFuturas(base, levelId, cota + meiaAltura);
+    const espessuraDaFachada = base.walls.find((w) => w.id === descarga.paredeId)?.thicknessMm ?? 0;
+    const vaos = pontos.length ? vaosNaFaixaDoDuto(base, levelId, cota - meiaAltura, cota + meiaAltura, s2.bitolaMm / 2) : [];
+    const lances = retos.flatMap((x) => {
+      const vs = pontos.length
+        ? desvioDasDescidas(base, levelId, x.de, x.para, { pontos, afastamentoMm: Math.max(s2.bitolaMm, s2.alturaDutoMm ?? s2.bitolaMm) / 2 + FOLGA_DA_DESCIDA_AO_DUTO_MM, meiaLarguraMm: s2.bitolaMm / 2, fimLivreMm: x.para === descarga.at ? espessuraDaFachada + s2.bitolaMm / 2 : 0, vaos })
+        : null;
+      if (!vs) return [x];
+      const pts = [x.de, ...vs, x.para];
+      return pts.slice(1).map((p, i) => ({ de: pts[i], para: p }));
+    });
     const desviado = comDesvioDePilar(lances, pegadas, caixasEx);
     if (desviado.semContorno) avisos.push('o duto atravessa pilar sem contorno — conferir o conflito');
     for (const a of desviado.arestas) l.add(baseEx, a.de, cota, a.para, cota);

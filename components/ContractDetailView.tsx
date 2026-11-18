@@ -52,7 +52,7 @@ import ContractInterfaceModal from './ContractInterfaceModal';
 import { useConfirm } from './ui/confirm';
 import MoverContratoOrganizacaoModal from './MoverContratoOrganizacaoModal';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import { sanitizeHtml } from '../utils/sanitizeHtml';
+import { preencherComHtmlSanitizado } from './ui/HtmlSanitizado';
 
 // Aba Itens do contrato — planilha de itens contratados (ui_ux_guia_unificado.md §2).
 // "(C)" = contratado, "(O)" = orçado (WBS) — siglas ficam maiúsculas mesmo em
@@ -1074,7 +1074,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             // `is_org_member(...)` — qualquer membro da organização. `innerHTML` não
             // executa <script>, mas executa <img onerror> e <svg onload>, e este
             // container fica fora da tela (left:-9999px): a vítima não veria nada.
-            container.innerHTML = sanitizeHtml(rendered);
+            // E o `style`/`class` que a sanitização mantém também valem aqui: sem
+            // contenção, um `position:fixed;inset:0` do modelo cobriria a tela de
+            // quem gera o PDF enquanto o html2canvas fotografa (achado F70). A
+            // contenção é aplicada DEPOIS do `cssText` acima — não troque a ordem.
+            preencherComHtmlSanitizado(container, rendered);
             window.document.body.appendChild(container);
             try {
                 const { default: html2canvas } = await import('html2canvas');

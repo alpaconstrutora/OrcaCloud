@@ -11,7 +11,7 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader } fro
 import Button from './ui/Button';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { useConfirm } from './ui/confirm';
-import { sanitizeHtml } from '../utils/sanitizeHtml';
+import { HtmlSanitizado } from './ui/HtmlSanitizado';
 
 const CONTRACT_TEMPLATE_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Nome', sortable: true },
@@ -247,9 +247,9 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId, open, onClos
                                 </label>
                             </div>
                             {previewMode ? (
-                                <div
-                                    className="min-h-[480px] p-5 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 overflow-auto prose prose-sm max-w-none"
-                                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewContent) }}
+                                <HtmlSanitizado
+                                    className="min-h-[480px] p-5 bg-white border border-gray-200 rounded-xl text-sm text-gray-800 prose prose-sm max-w-none"
+                                    html={previewContent}
                                 />
                             ) : (
                                 <textarea

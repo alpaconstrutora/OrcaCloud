@@ -407,6 +407,23 @@ A PE5 abaixo descreve a parte da garagem; a PE4 fica com o andar próprio.
    - **A massa e os marcos:** `pisosAcimaDoSolo` não muda para eles.
 2. **PE6b — o esgoto abaixo da rede.** O desvio no forro do −3 termina na caixa coletora com 2 bombas (a peça do poço da PA8c), e o recalque sobe à caixa de inspeção na cota da rua. As bombas ficam no quadro de serviço.
 3. **PE6c — a rota de fuga até o 0.** A descarga é o andar 0 (cópia), e a escada do núcleo sobe do −2. Como a porta para a rua no 0 não cabe na cópia, ela vira pendência; a rota conta até a chegada da escada no 0.
+**Execução da PE6a e da PE6b (18/11/2026).** As duas ficam atrás da guarda: a opção `permitirTorreAbaixoDaRua`, que só os testes usam, vale até a PE6d.
+- **PE6a, a torre do −2** (`pisosDoBloco` e `OpcoesDaMontagem.pisos`; a divisão com o ordinal 1):
+  - **Andares:** o tipo no −2 e as cópias no −1, 0, 1, 2 e 3; a garagem é o 3º e o 4º subsolo.
+  - **Unidades:** 24 apartamentos, 24 atendidos e medidos, 25 medidores.
+  - **Técnico:** o QGBT na sala técnica do 3º subsolo.
+  - **Garagem:** lê o tipo e não escreve nele (`terreoSoLeitura`). A saída da escada de emergência dela vira pendência.
+  - **Pendências:** a da entrada pela rua no 0 e a dos andares enterrados.
+- **PE6b, o esgoto abaixo da rede:**
+  - **Caixa coletora:** a saída do desvio no −3 é a caixa coletora, com 2 bombas de 1,5 kW no QDG do −3 (`bombas.ts`, o mesmo helper da drenagem).
+  - **Recalque:** DN 75 até a caixa de inspeção na cota da rua, no lote; dali o coletor vai por gravidade.
+  - **Drenagem:** recalca na caixa coletora.
+  - **`fazerChave`:** a cota abaixo do piso desce quantos pavimentos ela pedir. Isso só acrescenta ligações, e os marcos ficaram idênticos.
+  - **Prova:** toda louça chega à ligação, e a caixa coletora está no caminho. 24 arquivos e 223 testes passam.
+- **Achados:**
+  - **Garagem:** só 7 vagas, e o −3 sem nenhuma. A rampa do −3 sobe para o tipo, porque o acesso de veículos da Torre B é pela garagem da Torre A (coladas). Isso fica para a PE7.
+  - **Pluvial:** o da Torre B não chega ao chão.
+
 4. **PE6d — liberar a Torre B.** Tirar a guarda (motor e passo TORRE na Casa automática), nomear os andares e as unidades pela ficha (SS205…, TR05…) e conferir no app.
 
 ### PE7 — As duas torres no mesmo estudo
@@ -456,7 +473,7 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 | PE3 — o botão na Casa automática | feita, no ar (#577, 6fd6816); conferida no app pelo caminho do usuário; a Torre B fica bloqueada (com o motivo) até a PE4–PE6 |
 | PE4 — o térreo da Torre A com os apartamentos | PE4a (#582) e PE4b feitas, conferidas no app: o andar 0 com 002/004 como unidades do kernel (QD, hidrômetro, medidor), o hall, a porta e o pluvial no chão |
 | PE5 — condomínio e desvio sem térreo livre | PE5a feita com a PE4a (a sala técnica na garagem, o desvio no forro dela); a Torre B (o andar 0 cópia, sem desvínculo) vem com a PE6 |
-| PE6 — abaixo da rede pública | a fazer |
+| PE6 — abaixo da rede pública | PE6a (a torre do −2) e PE6b (esgoto por bombas) feitas, atrás da guarda; PE6c (a rota até o 0) espera a decisão da porta no 0; PE6d a fazer |
 | PE7 — as duas torres no mesmo estudo | a fazer |
 
 ## Verificação

@@ -4,7 +4,6 @@ import { notificationService } from './notificationService';
 import { supplierService, getSupplierDisplayName } from './supplierService';
 import { financialService } from './financialService';
 import { sanitizeFileName } from '../utils/storageUtils';
-import { projectService } from './projectService';
 import { receiptService, CreateReceiptItemInput } from './receiptService';
 import { discrepancyService } from './discrepancyService';
 import { notificationLogService } from './notificationLogService';
@@ -473,29 +472,16 @@ export const orderService = {
                 }
             }
 
-            // 3. WhatsApp automático quando status muda para Enviado
-            if (updates.status === 'Enviado' && whatsappService.isConfigured()) {
+            // 3. WhatsApp automático quando status muda para Enviado.
+            // Desde 18/11/2026 (achado F75) o token é da ORGANIZAÇÃO, no servidor:
+            // vale de qualquer navegador dela. A Edge Function `whatsapp-cloud`
+            // monta a mensagem a partir do pedido e registra o envio no
+            // notification_log. Fornecedor sem telefone volta como erro e cai aqui,
+            // calado, como antes — o envio automático nunca derruba o pedido.
+            if (updates.status === 'Enviado') {
                 try {
-                    const supplierForWa = data.supplier_id
-                        ? await supplierService.getById(data.supplier_id) : undefined;
-                    if (supplierForWa?.phone) {
-                        const projectForWa = data.project_id
-                            ? await projectService.loadProject(data.project_id) : undefined;
-                        const orderTotal = (data.items as PurchaseOrderItem[] || []).reduce(
-                            (s: number, i: PurchaseOrderItem) => s + valorEfetivoDoItem(i), 0
-                        );
-                        const shareToken = await whatsappService.generateShareToken(data.id);
-                        await whatsappService.sendOrderTemplate({
-                            phone:        supplierForWa.phone,
-                            orderId:      data.id,
-                            supplierName: supplierForWa.name,
-                            orderNumber:  data.number || id,
-                            projectName:  projectForWa?.name || 'Obra',
-                            itemCount:    (data.items || []).length,
-                            total:        orderTotal,
-                            deliveryDate: data.delivery_date,
-                            shareToken,
-                        });
+                    if (await whatsappService.apiAtivaNaOrg(data.organization_id)) {
+                        await whatsappService.enviarPedido(data.id);
                     }
                 } catch (waError: unknown) {
                     console.error('[WhatsApp] Auto-send failed:', waError);

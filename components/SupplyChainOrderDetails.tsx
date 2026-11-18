@@ -11,6 +11,7 @@ import { orderService } from '../services/orderService';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
 import { receiptService, PurchaseReceipt } from '../services/receiptService';
 import { whatsappService } from '../services/whatsappService';
+import { avisoDeTokenLegado } from '../lib/whatsappLegado';
 import { discrepancyService, PurchaseDiscrepancy, DiscrepancyStatus } from '../services/discrepancyService';
 import { notificationLogService, NotificationLogEntry } from '../services/notificationLogService';
 import { supplierService } from '../services/supplierService';
@@ -342,6 +343,15 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [respostasFornecedor, setRespostasFornecedor] = React.useState<Record<string, string>>({});
     const [resolvingId, setResolvingId] = React.useState<string | null>(null);
     const [isSendingWhatsApp, setIsSendingWhatsApp] = React.useState(false);
+    // WhatsApp pela API oficial: o token é da ORGANIZAÇÃO do pedido, no servidor
+    // (achado F75, 18/11/2026). Só o comprador consulta — o botão é só dele.
+    const [waApiAtiva, setWaApiAtiva] = React.useState(false);
+    React.useEffect(() => {
+        if (!ehComprador || !orderId) { setWaApiAtiva(false); return; }
+        let vivo = true;
+        whatsappService.apiAtivaNoPedido(orderId).then(sim => { if (vivo) setWaApiAtiva(sim); });
+        return () => { vivo = false; };
+    }, [orderId, ehComprador]);
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     // "Regerar número" — Configurações do Sistema › Nomenclatura aplicada a um
     // pedido já existente. Trava: qualquer status ≠ 'Rascunho'.
@@ -437,6 +447,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 await orderService.updateAsSupplier(orderId, { status: newStatus }, order?.version);
             } else {
                 await orderService.updateOrder(orderId, { status: newStatus }, order?.version);
+                // O WhatsApp automático saía daqui com o token deste navegador. Ele foi
+                // apagado (F75) e a organização ainda não cadastrou o dela no servidor:
+                // sem este aviso, o fornecedor deixaria de receber em silêncio.
+                if (newStatus === 'Enviado' && !waApiAtiva && avisoDeTokenLegado()) {
+                    notify('Pedido marcado como Enviado, mas o WhatsApp automático não saiu: o token agora fica no servidor, por organização, e esta organização ainda não o cadastrou. Um proprietário ou administrador cadastra em Configurações › WhatsApp & Integrações.', 'info');
+                }
             }
             await loadOrderData();
         } catch (err: unknown) {
@@ -928,28 +944,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const handleWhatsAppShare = async () => {
         if (!order) return;
 
-        // WhatsApp Cloud API (oficial) — envia template com link público do pedido
-        if (whatsappService.isConfigured()) {
+        // WhatsApp Cloud API (oficial) — o servidor envia o template com link público
+        // do pedido, com o token da organização (achado F75: nada de token no navegador).
+        if (waApiAtiva) {
             try {
                 setIsSendingWhatsApp(true);
-                const supplier = await supplierService.getById(order.supplierId);
-                if (!supplier?.phone) {
-                    notify('Fornecedor sem telefone cadastrado. Adicione o telefone na ficha do fornecedor.', 'error');
-                    return;
-                }
-                const shareToken = await whatsappService.generateShareToken(order.id);
-                const total = totalEfetivoDoPedido(order.items);
-                await whatsappService.sendOrderTemplate({
-                    phone:        supplier.phone,
-                    orderId:      order.id,
-                    supplierName: supplier.name,
-                    orderNumber:  order.number || order.id,
-                    projectName,
-                    itemCount:    order.items.length,
-                    total,
-                    deliveryDate: order.deliveryDate,
-                    shareToken,
-                });
+                await whatsappService.enviarPedido(order.id);
                 await loadOrderData();
                 notify('WhatsApp enviado com sucesso!');
                 return;
@@ -1231,7 +1231,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                 onClick={handleWhatsAppShare}
                                 disabled={isSendingWhatsApp}
                                 className="h-9 w-9 flex items-center justify-center bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 rounded-[6px] transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                                title={whatsappService.isConfigured() ? 'Enviar WhatsApp (API Oficial)' : 'Compartilhar via WhatsApp'}
+                                title={waApiAtiva ? 'Enviar WhatsApp (API Oficial)' : 'Compartilhar via WhatsApp'}
                             >
                                 {isSendingWhatsApp
                                     ? <Loader2 className="w-4 h-4 animate-spin" />

@@ -1179,11 +1179,12 @@ escolha.
 
 ## Estado
 
-**Resumo (17/11/2026):** **todas as fases estão no ar** — PA0 a PA10c (o plano de 12/11), PA11 a PA14 (o pedido de
-16/11), PA15 a PA18 (o pedido de 17/11: quatro das cinco "a decidir", uma fase cada, na ordem recomendada) e PA19 a PA22
+**Resumo (18/11/2026):** **todas as fases estão no ar** — PA0 a PA10c (o plano de 12/11), PA11 a PA14 (o pedido de
+16/11), PA15 a PA18 (o pedido de 17/11: quatro das cinco "a decidir", uma fase cada, na ordem recomendada), PA19 a PA22
 (o 2º pedido de 17/11, decisões do usuário 1a–4a: o duto do exaustor desvia das descidas que ainda virão, a luz de teto
 longe da descida de cima, o ramal de cima contorna a subida do QD, as redes em linha reta contornam pilar; a 5a deixa o
-tempo do Lançar como está). Último merge de código: ed16f8a (#560, PA22); a produção serve o main. Nada em andamento.
+tempo do Lançar como está) e a PA23 (o pedido de 18/11, "Resolva a pendência": uma saída de esgoto por asa — o desvio do
+RL 1,87 → 2,14 m). Último merge de código: 8fabdb0 (#566, PA23); a produção serve o main. Nada em andamento.
 Efeito do 2º pedido de 17/11: eletroduto × climatização e × esgoto zerados nos quatro prédios (eram R4 3 e 12, RL 35 e
 12), conflito com pilar zerado (R4 2, R8 4, R12 2, RL 31); encontros entre redes R4 41 → 23, RL 156 → 108. O efeito
 somado do 1º pedido no R8: encontros entre redes 295 → 56, conflito com equipamento 7 → 0, porta ou janela 245 → 224.
@@ -1222,7 +1223,7 @@ Kernel em `blueprint-kernel-ts-0.109.0` (PA11–PA22 não mudam a versão).
 | PA20 — a luz de teto longe da descida da laje de cima | #558 | 93e2e09 |
 | PA21 — o ramal de esgoto de cima desvia da subida do QD | #559 | b15339c |
 | PA22 — as redes em linha reta contornam pilar | #560 | ed16f8a |
-| PA23 — uma saída de esgoto por asa | — | a publicar |
+| PA23 — uma saída de esgoto por asa | #566 | 8fabdb0 |
 
 | Fase | Situação |
 |---|---|
@@ -1249,4 +1250,4 @@ Kernel em `blueprint-kernel-ts-0.109.0` (PA11–PA22 não mudam a versão).
 | PA20 | feita, no ar (#558, 93e2e09; conferida no app com o R4) — a luz de teto anda no cômodo para 15 cm da descida da laje de cima (`luzesLongeDasDescidasDeCima`): eletroduto × esgoto R4 12 → 0 (o marco trava); encontros entre redes R4 35 → 23; marco da casa idêntico |
 | PA21 | feita, no ar (#559, b15339c; conferida no app com o RL) — o ramal de esgoto do tipo contorna a subida do QD de baixo: eletroduto × esgoto RL 12 → 0 (o marco trava zero nos quatro); encontros entre redes RL 121 → 109; R4, R8 e R12 idênticos; marco da casa idêntico |
 | PA22 | feita, no ar (#560, ed16f8a; conferida no app com o RL) — as redes em linha reta contornam pilar (o desvio do térreo pelos corredores, o pluvial e os enterrados, a drenagem, a água e a luz do tipo): conflito com pilar R4 2, R8 4, R12 2, RL 31 → 0 (o marco trava); o desvio sem diagonal; marco da casa idêntico |
-| PA23 | feita, a publicar (conferida no app com o RL) — uma saída de esgoto por asa e o subcoletor enterrado por fora do prédio: o desvio do RL 1,87 → 2,14 m (o marco trava acima de 2,10 m nos quatro); o recalque por cima do desvio; conflitos iguais; R4, R8, R12 e a casa idênticos |
+| PA23 | feita, no ar (#566, 8fabdb0; conferida no app com o RL) — uma saída de esgoto por asa e o subcoletor enterrado por fora do prédio: o desvio do RL 1,87 → 2,14 m (o marco trava acima de 2,10 m nos quatro); o recalque por cima do desvio; conflitos iguais; R4, R8, R12 e a casa idênticos |

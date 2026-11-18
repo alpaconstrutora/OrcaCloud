@@ -352,15 +352,39 @@ A PE5 abaixo descreve a parte da garagem; a PE4 fica com o andar próprio.
 - **Compatibilização:** nenhum conflito entre peças de torres diferentes.
 - **Relatório:** um só para o lote.
 
+## Mapa de implementação da PE4–PE6 (18/11/2026, lido no código depois do merge do #577)
+
+O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três travas do orquestrador
+(`utils/predioAutomatico/orquestrador.ts`). Cada uma tem de ser resolvida antes do resto.
+
+1. **A garagem depende do térreo e mexe nele.** `lancarSubsolos(ctx, base, g, terreoLevelId, hip)` (`garagem.ts`):
+   - recebe o térreo;
+   - cria nele a caixa e a porta da escada de emergência (`lados(terreoLevelId, true)`, `porta(terreoLevelId, …)`);
+   - lê os pilares e o hall dele.
+
+   Se o andar 0 for cópia viva do tipo durante o motor, o kernel recusa essas edições. Saída: no modo "térreo de apartamentos", a garagem recebe o andar 0 só para ler. A escada de emergência que chega ao andar 0 fica para depois do desvínculo (Torre A) ou vira pendência (Torre B, o 0 é cópia).
+2. **As instalações do condomínio vão no nível do térreo.**
+   - Hoje elétrica, reservatórios, água, esgoto, pluvial, eletrodutos e drenagem recebem `terreo = { levelId, salas }`, e `montarTerreo` nomeia as salas "Centro de medição" e "Casa de bombas".
+   - Saída: um "térreo técnico" na garagem mais alta. Os pontos de medição e bombas ficam numa área técnica reservada antes das vagas, como a separadora da PA8c. O `levelId` dela vai a essas etapas, e o desvio do esgoto corre no forro dela.
+3. **O andar próprio vira unidade só se o kernel souber.** Depois do desvínculo, os rótulos dos 2 apartamentos que ficam precisam pertencer a uma `Unidade` do kernel. Senão medição, QDs, quantitativos e envio não os contam.
+   - O spike mostrou os rótulos copiados; falta conferir se a `Unidade` derivada vira própria.
+   - Se não virar: criar a `Unidade` 002 e 004 com as etiquetas dela.
+
+**Ordem proposta** (cada passo com teste antes e o Garden de prova):
+1. **PE5a:** o térreo técnico na garagem, para Torre A e B. As etapas recebem o nível técnico; a medição e as bombas ficam na área técnica da garagem; o desvio corre no forro da garagem.
+2. **PE4a:** o andar 0 como cópia do tipo. Na Torre A, desvinculado no fim e sem os apartamentos que não tem; o espaço livre vira hall e área comum, com a porta para a rua; as unidades 002 e 004 ficam no kernel.
+3. **PE6:** a torre que começa abaixo da rua (o tipo no −2, o esgoto por bombas, a rota de fuga subindo), e só então a Torre B sai do bloqueio.
+4. **PE7:** as duas torres no mesmo estudo.
+
 ## Estado
 
 | Fase | Situação |
 |---|---|
-| PE0 — marco do Garden | feita, a publicar (com a PE1) |
-| PE1 — os andares e a massa | feita, a publicar |
-| PE2 — o tipo com as unidades do Empreendimento | PE2a feita, no PR #577; PE2b: a Torre A já casa pelo nome (teste de caracterização); a Torre B fica para a PE6 |
-| PE3 — o botão na Casa automática | feita, a publicar (com a PE2a); conferida no app pelo caminho do usuário |
-| PE4 — o térreo da Torre A com os apartamentos | a fazer |
+| PE0 — marco do Garden | feita, no ar (#573, 947df0e) |
+| PE1 — os andares e a massa | feita, no ar (#573, 947df0e) |
+| PE2 — o tipo com as unidades do Empreendimento | PE2a no ar (#577, 6fd6816); PE2b: a Torre A já casa pelo nome (teste de caracterização, no ar); a Torre B fica para a PE6 |
+| PE3 — o botão na Casa automática | feita, no ar (#577, 6fd6816); conferida no app pelo caminho do usuário; a Torre B fica bloqueada (com o motivo) até a PE4–PE6 |
+| PE4 — o térreo da Torre A com os apartamentos | a fazer — spike feito (a cópia desvinculada mantém tudo); mapa de implementação abaixo |
 | PE5 — condomínio e desvio sem térreo livre | a fazer |
 | PE6 — abaixo da rede pública | a fazer |
 | PE7 — as duas torres no mesmo estudo | a fazer |

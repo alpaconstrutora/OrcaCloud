@@ -82,6 +82,23 @@ Encontrado e **não** mexido (registrar, decidir depois): `aiService.analyzePort
 patrimônio de 0 … está 15% acima do CUB do período", número inventado. `rankOpportunities` (nota aleatória
 80–100) não tem chamador.
 
+## Pedido posterior (18/11) — o card do Resumo
+
+Perguntado "Quer que eu tire esse também?" (o card "Dica de Diversificação" / "Análise de Saúde"):
+
+> sim
+
+- [x] Sai o card do Resumo no portal (`PortalOverview`, faixa com ✦) e no gestor (`InvestorSummaryDashboard`,
+  `AIInsightCard`), com o estado/efeito do `InvestorDashboard` que chamava `analyzePortfolio` ao abrir o
+  Resumo. `services/aiService.ts` apagado: o que sobrava (`rankOpportunities`, nota aleatória) não tinha
+  chamador. `AIInsightCard` fica — é usado pelos portais do cliente e do fornecedor, com serviços próprios.
+  **Pronto quando:** `__tests__/components/InvestorResumoSemInsightSimulado.test.tsx` verde (era vermelho:
+  com 2 participações, o texto da "análise" aparecia no Resumo depois dos 2 s do simulador).
+- [ ] Produção: Resumo do link do Tiago sem o card. **Pronto quando:** conferido pelo link real.
+
+Fora deste pedido, registrado: `services/clientAiService.ts` (Portal do Cliente) e
+`services/supplierAiService.ts` (Portal do Fornecedor) alimentam o mesmo `AIInsightCard` — não conferidos.
+
 ## Fora deste plano
 
 - Cadastrar a participação do Tiago no Garden (percentual e valor comprometido) e o valor do

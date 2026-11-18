@@ -1,8 +1,6 @@
 import React from 'react';
 import { TrendingUp, Wallet, Building2, ArrowRight } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
-import { AIInsight } from '../../services/aiService';
-import AIInsightCard from '../AIInsightCard';
 import { HoldingItem, HistoricalPoint } from './types';
 import { totalDaCarteira } from '../../utils/investidorCarteira';
 
@@ -16,8 +14,6 @@ interface Props {
     historicalData: HistoricalPoint[];
     holdings: HoldingItem[];
     isAdmin: boolean;
-    loadingAI: boolean;
-    aiInsight: AIInsight | null;
     onNavigateToHoldings: () => void;
 }
 
@@ -27,7 +23,7 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
     equity, activeWorks,
     monthlyYieldPct, totalContributed, totalDividends,
     historicalData, holdings, isAdmin,
-    loadingAI, aiInsight, onNavigateToHoldings,
+    onNavigateToHoldings,
 }) => {
     const stats = [
         {
@@ -66,16 +62,6 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            {(loadingAI || aiInsight) && (
-                <AIInsightCard
-                    loading={loadingAI}
-                    title={aiInsight?.title || 'IA Advisor'}
-                    content={aiInsight?.content || ''}
-                    type={aiInsight?.type || 'info'}
-                    onAction={() => {}}
-                />
-            )}
-
             {/* KPI cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                 {stats.map((s) => (

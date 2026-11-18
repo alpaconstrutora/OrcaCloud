@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -64,6 +65,15 @@ serve(async (req: Request) => {
 
     if (tokError || !tok || !tok.is_active || new Date(tok.expires_at) < new Date()) {
         return json({ error: 'Link inválido ou expirado' }, 403);
+    }
+
+    // O vínculo abaixo é por IGUALDADE com o caminho gravado (invoices.file_path,
+    // purchase_order_documents.file_path, purchase_receipts.photo_path) — e esses
+    // caminhos são gravados por quem usa o app. Com `..`/`%2e%2e` (também `\`,
+    // `%2f`) o parser de URL do fetch tiraria a assinatura da service_role da
+    // pasta e do bucket. Recusa antes de assinar (F53).
+    if (!caminhoSemTravessia(storagePath)) {
+        return json({ error: 'Caminho de arquivo inválido' }, 400);
     }
 
     if (bucketAlvo === 'invoices') {

@@ -8,6 +8,7 @@ import Anthropic from "npm:@anthropic-ai/sdk"
 import { encode as base64 } from "https://deno.land/std@0.168.0/encoding/base64.ts"
 import { exigirMembro, respostaDeErro } from "../_shared/auth.ts"
 import { truncar } from "../_shared/html.ts"
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
 
 /**
  * doc-gen-ia — assistente de redação dos ofícios (F7 — "IA para redação e
@@ -115,6 +116,10 @@ serve(async (req: Request) => {
         const { data: versao } = await admin.from('opura_document_versions').select('storage_path').eq('id', ged.active_version_id).maybeSingle();
         const path = String(versao?.storage_path ?? '');
         if (!path.toLowerCase().endsWith('.pdf')) return json({ error: 'O documento recebido não é PDF — descreva-o na instrução.' }, 422);
+        // `storage_path` é gravado por quem usa o GED; com `..`/`%2e%2e` o
+        // download da service_role sairia da pasta e do bucket — e o conteúdo
+        // iria para a IA, que o devolve no texto (F53).
+        if (!caminhoSemTravessia(path)) return json({ error: 'Falha ao ler o PDF do GED.' }, 422);
         const { data: blob } = await admin.storage.from('opura-docs').download(path);
         if (!blob) return json({ error: 'Falha ao ler o PDF do GED.' }, 422);
         const bytes = new Uint8Array(await blob.arrayBuffer());

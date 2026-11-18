@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { resolverOrigens } from "../_shared/origemDoLancamento.ts"
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -118,6 +119,14 @@ serve(async (req: Request) => {
     for (const d of despesas ?? []) {
         const documento = d.transaction_id ? origens.get(d.transaction_id)?.documento : null;
         if (!documento) continue;
+        // F54/F53: o caminho vem de linha gravada por síndico ou membro da
+        // organização; com `..`/`%2e%2e` a assinatura da service_role sairia da
+        // pasta e do bucket. Recusado cai no mesmo lugar de "não assinou".
+        if (!caminhoSemTravessia(documento.path)) {
+            console.error('[client-portal-rateio-comprovantes] caminho com travessia recusado na despesa', d.id);
+            comprovantes.push({ despesaId: d.id, url: '', nome: documento.nome });
+            continue;
+        }
         const { data: assinado, error: erroAssinatura } = await admin.storage
             .from(documento.bucket)
             .createSignedUrl(documento.path, 60 * 15);

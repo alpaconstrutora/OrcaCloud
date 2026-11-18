@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -61,6 +62,13 @@ serve(async (req: Request) => {
     const allowed = (shared || []).some((row: any) => row.document?.active_version?.storage_path === storagePath);
     if (!allowed) {
         return json({ error: 'Documento não compartilhado com este cliente' }, 403);
+    }
+
+    // O vínculo acima é por IGUALDADE com `opura_document_versions.storage_path`,
+    // que é gravado por quem usa o GED. Com `..`/`%2e%2e` a assinatura da
+    // service_role sairia da pasta e do bucket (F53).
+    if (!caminhoSemTravessia(storagePath)) {
+        return json({ error: 'Caminho de arquivo inválido' }, 400);
     }
 
     const { data: signed, error: signError } = await admin.storage

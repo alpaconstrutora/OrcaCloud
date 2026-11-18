@@ -5,6 +5,7 @@ import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { CACHE_NAVEGACAO, chaveDoCacheDeNavegacao, respostaSemUrl } from './lib/cacheDeNavegacao';
 
 /**
  * Serve e emite o `.wasm` do `web-ifc` num caminho FIXO (`/wasm/web-ifc.wasm`).
@@ -143,9 +144,16 @@ export default defineConfig(({ mode }) => {
               urlPattern: ({ request }: { request: Request }) => request.mode === 'navigate',
               handler: 'NetworkFirst',
               options: {
-                cacheName: 'navigation-cache',
+                // Chave SEM a query e sem UUID no caminho, resposta regravada sem
+                // `url`: o cache antigo ('navigation-cache', apagado no boot em
+                // index.tsx) guardava `?token=` de portal. Ver lib/cacheDeNavegacao.ts.
+                cacheName: CACHE_NAVEGACAO,
                 networkTimeoutSeconds: 4,
                 cacheableResponse: { statuses: [0, 200] },
+                plugins: [{
+                  cacheKeyWillBeUsed: chaveDoCacheDeNavegacao,
+                  cacheWillUpdate: respostaSemUrl,
+                }],
               },
             },
             {

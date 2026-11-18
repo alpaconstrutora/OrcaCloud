@@ -1,9 +1,13 @@
-// O caminho que a Edge Function `partner-portal-download` assina com a
-// service_role não pode ter segmento `.`/`..` (nem `%2e`): o parser de URL do
-// `fetch` resolve esses segmentos e a URL assinada sai da pasta do workspace.
+// O caminho que uma Edge Function assina (ou baixa) com a service_role não pode
+// ter segmento `.`/`..` (nem `%2e`): o parser de URL do `fetch` resolve esses
+// segmentos e a URL assinada sai da pasta — e do bucket — conferidos.
 // Código: supabase/functions/_shared/caminhoSemTravessia.ts
-// Espelho no banco: public.partner_portal_create_request
-//   (supabase/migrations/aplicar_20271116905700_partner_anexo_sem_travessia.sql)
+// Espelhos no banco (mesma regra, conferida contra este helper em 200 mil
+// entradas num PostgreSQL local, 18/11/2026, zero divergência):
+//   public.partner_portal_create_request
+//     (supabase/migrations/aplicar_20271116905700_partner_anexo_sem_travessia.sql)
+//   public.fn_caminho_sem_travessia — usada pelas RPCs do síndico
+//     (supabase/migrations/aplicar_20271118912000_caminho_sem_travessia_sindico.sql)
 import { describe, expect, it } from 'vitest';
 import { caminhoSemTravessia } from '../supabase/functions/_shared/caminhoSemTravessia';
 
@@ -65,5 +69,64 @@ describe('caminhoSemTravessia', () => {
         // e o exploit do achado sai, de fato — é ele que a trava recusa
         expect(new URL(base + RECUSADOS[0]).pathname)
             .toBe(`/storage/v1/object/sign/opura-docs/${ORG}/${DOC}/v_contrato.pdf`);
+    });
+});
+
+// F54 (18/11/2026): o síndico grava `internal_transactions.documento_path` pelas
+// RPCs `sindico_portal_lancar_pagar`/`_editar_titulo`, que só conferiam
+// `LIKE '<org>/sindico/%'` e `NOT LIKE '%..%'`. `%2e%2e` passava nas duas, e a
+// `sindico-portal-financeiro` (abrir) e a `client-portal-rateio-comprovantes`
+// (PDF do rateio) assinavam o caminho com a service_role.
+describe('caminhoSemTravessia · anexo do síndico (F54)', () => {
+    const SINDICO = `${ORG}/sindico`;
+    const GRUPO = '0b6f0c0e-1111-4000-8000-000000000000';
+    const base = 'https://x.supabase.co/storage/v1/object/sign/financeiro-anexos/';
+
+    it('aceita o caminho que a Edge grava no upload do síndico e nomes com `?`/`#`', () => {
+        // `<org>/sindico/<uuid>/<epoch>-<nomeSeguro>` (sindico-portal-financeiro, upload)
+        for (const p of [
+            `${SINDICO}/${GRUPO}/1731900000000-Nota-Fiscal-0042.pdf`,
+            `${SINDICO}/${GRUPO}/1731900000000-boleto.v2.pdf`,
+            // nome legítimo com `?`/`#` (o modo autenticado grava o nome cru em outros buckets)
+            `${SINDICO}/${GRUPO}/NF #12?.pdf`, `${SINDICO}/${GRUPO}/a?b#c.pdf`,
+        ]) expect(caminhoSemTravessia(p), p).toBe(true);
+    });
+
+    it('recusa o exploit do achado e as grafias vizinhas', () => {
+        for (const p of [
+            `${SINDICO}/%2e%2e/%2e%2e/%2e%2e/boletos/${ORG}/x.pdf`,
+            `${SINDICO}/%2E./x`, `${SINDICO}/.%2E/x`, `${SINDICO}/%2E%2E/x`,
+            `${SINDICO}/..%2fboletos%2fx`, `${SINDICO}/..%2Fx`, `${SINDICO}/..%5cx`,
+            `${SINDICO}/x/.\t./y`, `${SINDICO}/x/.\n./y`, `${SINDICO}/x/.\r./y`,
+            `${SINDICO}/x/..\t`, `${SINDICO}/x/.. `, `${SINDICO}/x/..\u0001\u0002 `,
+            `${SINDICO}/x?/../y`, `${SINDICO}/x#/../y`, `${SINDICO}/x/..?q`, `${SINDICO}/x/..#f`,
+        ]) expect(caminhoSemTravessia(p), JSON.stringify(p)).toBe(false);
+    });
+
+    it('o exploit do achado sai mesmo do bucket pelo parser WHATWG — é o que a trava recusa', () => {
+        const exploit = `${SINDICO}/%2e%2e/%2e%2e/%2e%2e/boletos/${ORG}/x.pdf`;
+        expect(new URL(base + exploit).pathname).toBe(`/storage/v1/object/sign/boletos/${ORG}/x.pdf`);
+        expect(caminhoSemTravessia(exploit)).toBe(false);
+    });
+
+    // A 2ª tentativa de correção do F54 foi recusada por um único detalhe: o corte
+    // do fim era `/[\x00-\x20]+$/`, quadrático no V8 quando há um bloco longo de
+    // espaços. Um caminho assim, plantado pelo síndico, esgotava a CPU da Edge e
+    // derrubava o PDF do rateio inteiro. Aqui, ~100 mil espaços/controles em
+    // várias posições têm de terminar rápido — e com a resposta certa.
+    it('~100 mil espaços/controles em qualquer posição: resposta certa, em tempo linear', () => {
+        const ESPACOS = ' '.repeat(100_000);
+        const casos: [string, boolean][] = [
+            [`${SINDICO}/x${ESPACOS}`, true],                       // só no fim
+            [`${SINDICO}/..${ESPACOS}`, false],                     // `..` + fim cortado
+            [`${SINDICO}/x${ESPACOS}a`, true],                      // no meio (o caso quadrático)
+            [`${SINDICO}/x${'\t '.repeat(50_000)}/..`, false],      // tab/espaço no meio, `..` no fim
+            [`${SINDICO}/x${'\u0001'.repeat(100_000)}a/..${ESPACOS}`, false],
+            [`${SINDICO}/${'%2e'.repeat(30_000)}/${'.'.repeat(100_000)}`, true],
+            [`${ESPACOS}${SINDICO}/x`, true],                       // no começo
+        ];
+        const inicio = Date.now();
+        for (const [p, esperado] of casos) expect(caminhoSemTravessia(p), `${p.slice(0, 60)}… (${p.length})`).toBe(esperado);
+        expect(Date.now() - inicio).toBeLessThan(500);
     });
 });

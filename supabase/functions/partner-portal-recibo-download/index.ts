@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -98,6 +99,13 @@ serve(async (req: Request) => {
     }
     if (!recibo.file_path) {
         return json({ error: 'O recibo foi emitido, mas o arquivo ainda não está disponível. Tente mais tarde.' }, 409);
+    }
+    // `financial_receipts.file_path` só tem o prefixo `{org}/` conferido na
+    // gravação; com `..`/`%2e%2e` a assinatura da service_role sairia da pasta e
+    // do bucket (F53). Recusado responde como falha de assinatura.
+    if (!caminhoSemTravessia(recibo.file_path)) {
+        console.error('[partner-portal-recibo-download] caminho com travessia recusado no recibo do título', transactionId);
+        return json({ error: 'Erro ao gerar link de acesso' }, 500);
     }
 
     const nome = `Recibo_Pagamento_${String(recibo.receipt_number).padStart(6, '0')}.pdf`;

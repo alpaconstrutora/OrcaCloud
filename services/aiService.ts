@@ -42,14 +42,8 @@ export const aiService = {
         };
     },
 
-    /**
-     * Generates a technical opinion on a specific asset.
-     */
-    async analyzeAsset(asset: { name?: string; yoc?: number; progress?: number }): Promise<string> {
-        await new Promise(resolve => setTimeout(resolve, 1500));
-
-        return `O empreendimento **${asset.name}** apresenta um **Yield on Cost de ${(asset.yoc ?? 0) * 100 || '12.5'}%**, o que é excelente para o setor. O progresso de ${(asset.progress ?? 0) * 100}% está alinhado com o cronograma. Ponto de atenção: A valorização futura depende da entrega da infraestrutura municipal prevista para o próximo semestre.`;
-    },
+    // `analyzeAsset` (o "Parecer da Inteligência Artificial" do detalhe do empreendimento) saiu em
+    // 18/11/2026: era texto fixo com números inventados mostrado ao investidor, não IA.
 
     /**
      * Ranks investment opportunities.

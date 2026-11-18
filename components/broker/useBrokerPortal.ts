@@ -375,7 +375,11 @@ export function useBrokerPortal({ profile, activeTab = 'analytics', organization
         });
         if (!ok) return;
         try {
-            await commercialService.saveProperty({ id: unit.id, status: PropertyStatus.RESERVED });
+            // Pelo portal (link ou login do corretor) a reserva é a RPC que só muda
+            // o status — o UPDATE direto dependia de o corretor contar como membro
+            // da organização (F5/F6/F7). Dentro do app (gestor) segue o de sempre.
+            if (portalToken) await brokerPortalService.reservarUnidade(unit.id);
+            else await commercialService.saveProperty({ id: unit.id, status: PropertyStatus.RESERVED });
             setUnits(prev => prev.map(u => u.id === unit.id ? { ...u, status: PropertyStatus.RESERVED } : u));
             toast(`Unidade ${unit.number || unit.name} reservada por 48h.`);
         } catch (err) {

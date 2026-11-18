@@ -1,6 +1,68 @@
 import { supabase } from '../lib/supabase';
 import type { BrokerHealthKPI } from '../types';
 
+/**
+ * Aba Saúde do Portal do Corretor.
+ *
+ * ⚠️ Os dados vêm de duas RPCs SECURITY DEFINER — `fn_broker_portal_saude_empreendimentos`
+ * e `fn_broker_portal_saude` — e NÃO de SELECT direto em commercial_properties /
+ * commercial_deals / projects (achados F5/F6/F7 da varredura de segurança de
+ * 15/11/2026). O corretor externo só lia essas tabelas porque contava como MEMBRO
+ * da organização (o ramo `broker_profiles` de is_org_member/minhas_orgs_membro), e
+ * esse mesmo ramo entregava a ele a organização inteira: folha, salário, banco.
+ *
+ * As RPCs repetem, consulta a consulta, a RLS que valia antes (inclusive a regra
+ * do corretor ativo pelo e-mail), recebem a organização deste painel — nunca a do
+ * token, para um link vencido no meio da sessão não zerar o painel de quem é da
+ * casa — e devolvem só as colunas que as contas abaixo usam, uma linha por unidade
+ * e uma por negócio, na ordem em que a tabela as entrega (como o SELECT de antes).
+ *
+ * As CONTAS continuam aqui, com o mesmo código de antes: canal dominante e mix por
+ * tipologia desempatam pela ordem em que aparecem, como sempre desempataram.
+ * Migration: supabase/migrations/aplicar_20271118913000_corretor_caminho_proprio.sql
+ */
+
+/** Uma unidade, como `fn_broker_portal_saude` devolve (as colunas que o painel usa). */
+interface UnidadeDaSaude {
+    id: string;
+    initial_price: number | null;
+    price: number | null;
+    status: string | null;
+    purpose: string | null;
+    typology: string | null;
+}
+
+/**
+ * Um negócio, como `fn_broker_portal_saude` devolve. `com_corretor` substitui o
+ * `broker_name`: o painel só pergunta SE há corretor (para o canal "Corretor"),
+ * nunca QUAL — então o nome de outro corretor não sai do banco.
+ */
+interface NegocioDaSaude {
+    id: string;
+    value: number | null;
+    status: string | null;
+    type: string | null;
+    date: string | null;
+    com_corretor: boolean;
+    payment_method: string | null;
+    property_id: string | null;
+}
+
+interface DadosDaSaude {
+    unidades: UnidadeDaSaude[];
+    negocios: NegocioDaSaude[];
+    /** Nome do empreendimento escolhido; null sem escolha ou se a RLS antiga não o mostrava. */
+    projeto_nome: string | null;
+}
+
+/** Linha de `fn_broker_portal_saude_empreendimentos`. */
+interface EmpreendimentoDaSaude {
+    project_id: string | null;
+    status: string | null;
+    purpose: string | null;
+    project_name: string | null;
+}
+
 export const brokerHealthService = {
     /**
      * Empreendimentos (project_id de commercial_properties) com estoque de venda
@@ -10,19 +72,17 @@ export const brokerHealthService = {
      */
     async listProjectsWithSales(organizationId: string): Promise<{ id: string; name: string }[]> {
         try {
-            const { data, error } = await supabase
-                .from('commercial_properties')
-                .select('project_id, status, purpose, project:projects(name)')
-                .eq('organization_id', organizationId)
-                .not('project_id', 'is', null);
+            const { data, error } = await supabase.rpc('fn_broker_portal_saude_empreendimentos', {
+                p_org: organizationId,
+            });
             if (error) throw error;
 
             const seen = new Map<string, string>();
-            (data || []).forEach((p: any) => {
+            ((data || []) as EmpreendimentoDaSaude[]).forEach(p => {
                 const purpose = String(p.purpose || 'SALE').toUpperCase();
                 const status = String(p.status).toUpperCase();
                 if ((purpose !== 'SALE' && purpose !== 'BOTH') || status === 'EXCHANGED' || status === 'PERMUTADO') return;
-                const name = p.project?.name;
+                const name = p.project_name;
                 if (p.project_id && name && !seen.has(p.project_id)) seen.set(p.project_id, name);
             });
             return Array.from(seen.entries())
@@ -37,14 +97,17 @@ export const brokerHealthService = {
     /** `projectId` ausente/null = consolidado de todos os empreendimentos da organização. */
     async getHealthData(organizationId: string, projectId?: string | null): Promise<BrokerHealthKPI | null> {
       try {
-        // 1. Units por status
-        let propsQuery = supabase
-            .from('commercial_properties')
-            .select('id, initial_price, price, status, purpose, typology')
-            .eq('organization_id', organizationId);
-        if (projectId) propsQuery = propsQuery.eq('project_id', projectId);
-        const { data: props, error: propsErr } = await propsQuery;
-        if (propsErr) throw propsErr;
+        // 1 + 2. Unidades e negócios da organização numa chamada só. O recorte por
+        // empreendimento das UNIDADES é feito no banco (como o `.eq('project_id')`
+        // de antes); o dos NEGÓCIOS continua aqui embaixo, pela unidade principal.
+        const { data, error } = await supabase.rpc('fn_broker_portal_saude', {
+            p_org: organizationId,
+            p_project: projectId || null,
+        });
+        if (error) throw error;
+        const saude = (data ?? {}) as Partial<DadosDaSaude>;
+        const props = saude.unidades ?? [];
+        const deals = saude.negocios ?? [];
 
         const salesProps = (props || []).filter(p => {
             const s = String(p.status).toUpperCase();
@@ -59,13 +122,6 @@ export const brokerHealthService = {
 
         const vgvTotal = salesProps.reduce((s, p) => s + (Number(p.initial_price) || Number(p.price) || 0), 0);
 
-        // 2. Deals para VGV vendido, canal dominante e curva de absorção
-        const { data: deals, error: dealsErr } = await supabase
-            .from('commercial_deals')
-            .select('id, value, status, type, date, broker_name, payment_method, property_id')
-            .eq('organization_id', organizationId);
-        if (dealsErr) throw dealsErr;
-
         // Com empreendimento selecionado, um negócio só conta se a unidade
         // principal (property_id) pertence a ele — mesmo critério que
         // commercialService usa para achar negócios de um imóvel (cesta reúne
@@ -77,10 +133,11 @@ export const brokerHealthService = {
         const closedDeals = scopedDeals.filter(d => CLOSED_STATUSES.includes(String(d.status).toUpperCase()));
         const vgvSold = closedDeals.reduce((s, d) => s + (Number(d.value) || 0), 0);
 
-        // Canal dominante (usa type: SALE/RENTAL/SERVICE, ou payment_method como proxy)
+        // Canal dominante (usa type: SALE/RENTAL/SERVICE, ou payment_method como proxy).
+        // `com_corretor` = havia `broker_name` preenchido (mesma regra de antes).
         const channelCounts: Record<string, number> = {};
         closedDeals.forEach(d => {
-            const ch = d.broker_name ? 'Corretor' : d.payment_method || d.type || 'Direto';
+            const ch = d.com_corretor ? 'Corretor' : d.payment_method || d.type || 'Direto';
             channelCounts[ch] = (channelCounts[ch] || 0) + 1;
         });
         const topChannel = Object.entries(channelCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || '–';
@@ -139,11 +196,11 @@ export const brokerHealthService = {
                 pct: t > 0 ? Math.round((s / t) * 100) : 0,
             }));
 
+        // O nome vem na mesma chamada (antes era um SELECT em projects). Sem
+        // empreendimento escolhido, ou se a RLS de antes não mostrava o projeto,
+        // fica o rótulo do consolidado — como antes.
         let projectName = 'Consolidado — todos os empreendimentos';
-        if (projectId) {
-            const { data: proj } = await supabase.from('projects').select('name').eq('id', projectId).maybeSingle();
-            if (proj?.name) projectName = proj.name;
-        }
+        if (projectId && saude.projeto_nome) projectName = saude.projeto_nome;
 
         return {
             id: projectId || organizationId,

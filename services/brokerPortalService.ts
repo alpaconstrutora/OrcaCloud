@@ -58,6 +58,23 @@ export const brokerPortalService = {
         return `${window.location.origin}/portal-corretor?token=${token}`;
     },
 
+    /**
+     * "Reservar" do portal (link/login do corretor): só troca o status da unidade
+     * para RESERVED, pela RPC `fn_broker_portal_reservar_unidade`.
+     *
+     * ⚠️ Não use `commercialService.saveProperty` daqui. O UPDATE direto em
+     * commercial_properties só passava para o corretor porque ele contava como
+     * MEMBRO da organização (ramo broker_profiles de minhas_orgs_membro, achados
+     * F5/F6/F7) — e esse ramo deixava o corretor regravar QUALQUER coluna de
+     * qualquer unidade e o resto da organização. A RPC autoriza com a mesma regra
+     * de antes (membro da casa ou corretor ativo da organização da unidade), mas
+     * só muda o status. Sem login (link anônimo) continua recusando, como antes.
+     */
+    async reservarUnidade(propertyId: string): Promise<void> {
+        const { error } = await supabase.rpc('fn_broker_portal_reservar_unidade', { p_property_id: propertyId });
+        if (error) throw error;
+    },
+
     // ── RPCs de dados via token (anon) ────────────────────────────────────────
 
     async getUnitsByToken(token: string): Promise<any[]> {

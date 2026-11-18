@@ -1,0 +1,19 @@
+-- scripts/alcada-titulos-aprovados-abaixo-da-faixa.sql — SÓ LEITURA.
+--
+-- Títulos a pagar EM ABERTO e APROVADOS cuja cadeia de aprovação não cobre os níveis que a faixa
+-- de alçada do valor ATUAL exige (ex.: aprovado com 1 nível, mas o valor hoje cai na faixa de 2;
+-- ou aprovado sem passo nenhum — a virada de 26/10 liberou os vencidos sem cadeia).
+-- Decisão do usuário (18/11/2026): só LISTAR para revisão; nada é alterado neles.
+-- Plano: docs/planos/2026-11-18-seguranca-alcada-no-servidor.md (PR G, F14/F59).
+--
+-- Critério (o mesmo da contagem do relatório, 46 títulos em 18/11):
+--   direction DEBIT · status PENDING · approval_status APROVADO · fora de DARF (darf_id nulo) ·
+--   fora de condomínio (fn_org_e_condominio) · o valor cai numa faixa ativa
+--   (fn_resolve_approval_levels) · níveis aprovados na rodada atual (depois da última
+--   rejeição) < níveis da faixa.
+-- Colunas: organização, id, descrição, favorecido, valor, vencimento, origem, níveis aprovados,
+--   níveis exigidos pela faixa atual, níveis gravados no título, data da última aprovação.
+--
+-- Rodar (a consulta é a ÚLTIMA linha deste arquivo, numa linha só):
+--   npx supabase db query --linked -o csv "$(tail -n 1 scripts/alcada-titulos-aprovados-abaixo-da-faixa.sql)" > titulos.csv
+WITH t AS (SELECT t.*, r.required_levels AS niveis_faixa, (SELECT count(DISTINCT x.e->>'level') FROM jsonb_array_elements(COALESCE(t.approval_chain, '[]'::jsonb)) WITH ORDINALITY AS x(e, i) WHERE x.e->>'action' = 'APROVADO' AND x.i > COALESCE((SELECT max(y.j) FROM jsonb_array_elements(COALESCE(t.approval_chain, '[]'::jsonb)) WITH ORDINALITY AS y(f, j) WHERE y.f->>'action' = 'REJEITADO'), 0)) AS niveis_aprovados, (SELECT max(x.e->>'approved_at') FROM jsonb_array_elements(COALESCE(t.approval_chain, '[]'::jsonb)) AS x(e) WHERE x.e->>'action' = 'APROVADO') AS ultima_aprovacao FROM public.internal_transactions t LEFT JOIN LATERAL public.fn_resolve_approval_levels(t.organization_id, t.amount) r ON true WHERE t.direction = 'DEBIT' AND t.status = 'PENDING' AND t.approval_status = 'APROVADO' AND t.darf_id IS NULL AND NOT public.fn_org_e_condominio(t.organization_id)) SELECT o.name AS organizacao, t.id, t.description AS descricao, COALESCE(NULLIF(btrim(t.party_name), ''), t.entity_name) AS favorecido, t.amount AS valor, t.due_date AS vencimento, t.source_system AS origem, t.niveis_aprovados, t.niveis_faixa AS niveis_exigidos_pela_faixa, t.approval_required_levels AS niveis_gravados, left(t.ultima_aprovacao, 19) AS ultima_aprovacao FROM t JOIN public.organizations o ON o.id = t.organization_id WHERE t.niveis_faixa IS NOT NULL AND t.niveis_aprovados < t.niveis_faixa ORDER BY o.name, t.due_date, t.amount DESC;

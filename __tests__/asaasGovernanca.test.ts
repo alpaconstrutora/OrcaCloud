@@ -7,7 +7,7 @@ import {
 const ok: FatosDoDisparo = {
     temConta: true, ehGestor: true,
     status: 'PENDING', businessStatus: 'APROVADO', approvalStatus: 'APROVADO',
-    valorTemFaixaDeAlcada: false,
+    orgDeCondominio: false, agrupadoEmDarf: false,
     valor: 300,
     tetos: { porPagamento: 500, porDia: 2000, avulso: 200 },
     somaDoDia: 0, avulso: false, piloto: true,
@@ -32,12 +32,36 @@ describe('bloqueiosDoDisparo', () => {
         expect(bloqueiosDoDisparo({ ...ok, businessStatus: 'CANCELADO' })[0]).toMatch(/cancelado/);
     });
 
-    it('alçada: pendente, rejeitado e rascunho com faixa bloqueiam; rascunho sem faixa passa', () => {
+    it('alçada: pendente e rejeitado bloqueiam; aprovado passa', () => {
         expect(bloqueiosDoDisparo({ ...ok, approvalStatus: 'PENDENTE' })[0]).toMatch(/aguardando a alçada/);
         expect(bloqueiosDoDisparo({ ...ok, approvalStatus: 'REJEITADO' })[0]).toMatch(/rejeitado/);
-        expect(bloqueiosDoDisparo({ ...ok, approvalStatus: 'RASCUNHO', valorTemFaixaDeAlcada: true })[0]).toMatch(/não foi submetido/);
-        expect(bloqueiosDoDisparo({ ...ok, approvalStatus: 'RASCUNHO', valorTemFaixaDeAlcada: false })).toEqual([]);
-        expect(bloqueiosDoDisparo({ ...ok, approvalStatus: null, valorTemFaixaDeAlcada: false })).toEqual([]);
+        expect(bloqueiosDoDisparo({ ...ok, approvalStatus: 'APROVADO' })).toEqual([]);
+    });
+
+    // F59 (18/11/2026): antes RASCUNHO abaixo do piso da alçada passava — e um membro tirava o
+    // título da fila marcando-o "isento" (RETIDO, ASAAS_FEE, CONTRA, origem DARF: campos que ele
+    // mesmo edita). Agora RASCUNHO só passa em condomínio de verdade, que o servidor recalcula.
+    it('rascunho fora de condomínio bloqueia, de qualquer valor', () => {
+        expect(bloqueiosDoDisparo({ ...ok, approvalStatus: 'RASCUNHO', valor: 10 })[0]).toMatch(/não passou pela alçada/);
+        expect(bloqueiosDoDisparo({ ...ok, approvalStatus: null, valor: 10 })[0]).toMatch(/não passou pela alçada/);
+    });
+
+    it('membro marca o título como RETIDO (isento da fila) — continua bloqueado', () => {
+        const b = bloqueiosDoDisparo({ ...ok, approvalStatus: 'RASCUNHO', businessStatus: 'RETIDO', valor: 10 });
+        expect(b).toHaveLength(1);
+        expect(b[0]).toMatch(/não passou pela alçada/);
+    });
+
+    it('rascunho em condomínio de verdade passa (lá não há alçada)', () => {
+        expect(bloqueiosDoDisparo({ ...ok, approvalStatus: 'RASCUNHO', orgDeCondominio: true })).toEqual([]);
+        expect(bloqueiosDoDisparo({ ...ok, approvalStatus: null, orgDeCondominio: true })).toEqual([]);
+        // condomínio não fura pendente/rejeitado
+        expect(bloqueiosDoDisparo({ ...ok, approvalStatus: 'PENDENTE', orgDeCondominio: true })[0]).toMatch(/aguardando a alçada/);
+    });
+
+    it('tributo de DARF não aprovado: aponta o DARF', () => {
+        expect(bloqueiosDoDisparo({ ...ok, approvalStatus: 'RASCUNHO', agrupadoEmDarf: true })[0]).toMatch(/DARF que não foi aprovado/);
+        expect(bloqueiosDoDisparo({ ...ok, approvalStatus: 'APROVADO', agrupadoEmDarf: true })).toEqual([]);
     });
 
     it('tetos: por pagamento, avulso e diário (com quanto resta)', () => {

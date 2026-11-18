@@ -26,6 +26,8 @@ let seq = 0;
 /** Faixa que o `fn_resolve_approval_levels` devolve no teste (null = valor fora de todas). */
 let faixa: { required_levels: number; level1_label: string; level2_label: string } | null = null;
 const rpcs: Array<{ fn: string; args: Record<string, unknown> }> = [];
+/** Quem está logado (o e-mail do JWT): é em nome dele que a RPC grava o passo. */
+let logado = 'gestor@x';
 
 function query(tabela: string) {
     const filtros: Array<(r: Linha) => boolean> = [];
@@ -65,12 +67,16 @@ vi.mock('../lib/supabase', () => ({
         from: (t: string) => query(t),
         rpc: async (fn: string, args: Record<string, unknown>) => {
             rpcs.push({ fn, args });
+            // Enviar/aprovar/rejeitar decidem no servidor (18/11/2026, F14) — imitação em memória.
+            const alcada = rpcAlcadaFake(db, fn, args, { faixa: () => faixa, logado: () => logado });
+            if (alcada) return alcada;
             return { data: faixa ? [faixa] : [], error: null };
         },
     },
 }));
 
 import { processService, problemaDoModelo } from '../services/processService';
+import { rpcAlcadaFake } from './fixtures/alcadaRpcFake';
 
 const ORG = 'org-do-processo';
 const TEMPLATE = { id: 'tpl', organization_id: ORG, version: 3, criticality: 'MEDIA', department_id: null, trigger_type: 'MANUAL', owner_user_id: null };
@@ -88,6 +94,7 @@ beforeEach(() => {
     for (const k of Object.keys(db)) delete db[k];
     seq = 0;
     faixa = null;
+    logado = 'gestor@x';
     rpcs.length = 0;
     db.process_templates = [{ ...TEMPLATE }];
     db.process_instances = [];
@@ -186,7 +193,9 @@ describe('aprovação com alçada por valor', () => {
         const etapa = etapasDaInstancia()[1];
         expect(etapa).toMatchObject({ amount: 10_000, approval_status: 'PENDENTE', approval_required_levels: 2 });
         expect(instancia().status).toBe('AGUARDANDO_APROVACAO');
-        expect(rpcs.find(r => r.fn === 'fn_resolve_approval_levels')?.args).toEqual({ p_organization_id: ORG, p_amount: 10_000 });
+        // Valor (gravado na etapa) e organização são lidos pelo SERVIDOR (18/11/2026, F14); a
+        // tela só diz se a etapa libera abaixo do piso (tem valor → 'liberar').
+        expect(rpcs.find(r => r.fn === 'fn_alcada_enviar')?.args).toMatchObject({ p_entity: 'process_step', p_id: stepId, p_sem_faixa: 'liberar' });
     });
 
     it('nível 1 por uma pessoa, a mesma é recusada no nível 2, outra conclui e o processo avança', async () => {
@@ -200,6 +209,7 @@ describe('aprovação com alçada por valor', () => {
 
         await expect(processService.approveStep(stepId, instId, 'gestor@x')).rejects.toThrow(/outra pessoa/);
 
+        logado = 'diretor@x';
         await processService.approveStep(stepId, instId, 'diretor@x');
         const etapa = etapasDaInstancia()[1];
         expect(etapa).toMatchObject({ approval_status: 'APROVADO', status: 'CONCLUIDO' });

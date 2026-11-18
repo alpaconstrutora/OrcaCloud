@@ -2271,7 +2271,12 @@ export const contractService = {
                 created_at: undefined,
                 title: `${original.title} (Cópia)`,
                 status: 'Rascunho',
-                number: `${original.number}-COPY`
+                number: `${original.number}-COPY`,
+                // A cópia é um contrato novo: a aprovação do original não vale para ela. E o banco
+                // recusa item que nasce aprovado ou com passos de aprovação (trg_alcada_guarda, F14).
+                approval_status: 'RASCUNHO',
+                approval_chain: [],
+                approval_required_levels: 1,
             })
             .select()
             .single();

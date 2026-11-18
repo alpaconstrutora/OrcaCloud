@@ -124,6 +124,15 @@ function desviosEmDiagonal(m: BlueprintModel): number {
   }).length;
 }
 
+/**
+ * PA23: o ponto mais baixo do desvio SUSPENSO no forro do térreo — a menor cota dos lances em planta acima do piso (a
+ * descida na saída e o enterrado ficam de fora), mm.
+ */
+function desvioMaisBaixoMm(m: BlueprintModel): number | null {
+  const cotas = (m.trechos ?? []).filter((t) => t.rotulo === ROTULO_DO_DESVIO && (t.a.x !== t.b.x || t.a.y !== t.b.y) && Math.min(t.cotaAMm, t.cotaBMm) > 0).map((t) => Math.min(t.cotaAMm, t.cotaBMm));
+  return cotas.length ? Math.min(...cotas) : null;
+}
+
 /** O que o marco guarda de um prédio. */
 function marcoDoPredio(c: Caso) {
   const p = predio(c);
@@ -174,6 +183,9 @@ function marcoDoPredio(c: Caso) {
     // PA22 (decisão do usuário 4a): os lances do desvio do tubo de queda no térreo em DIAGONAL — mais de 2 m e mais de 10°
     // fora dos eixos do bloco (o contorno de um pilar desvia pouco). Antes, no RL, cada tubo corria reto até a saída.
     desviosEmDiagonal: desviosEmDiagonal(m),
+    // PA23 (pedido "Resolva a pendência", 18/11): o ponto mais baixo do desvio suspenso no forro do térreo. No RL, com a
+    // saída única, o desvio pelos corredores tinha ~52 m a 1 % e chegava a 1,87 m; com uma saída por asa, 2,14 m.
+    desvioMaisBaixoMm: desvioMaisBaixoMm(m),
   };
 }
 
@@ -223,6 +235,8 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // parede e a luz de um resíduo de geometria dentro do pilar) — e o desvio do térreo sem diagonal longa.
         expect(agora.compatibilizacao?.conflitos.PILAR).toBe(0);
         expect(agora.desviosEmDiagonal).toBe(0);
+        // PA23: o desvio do térreo acima da verga das portas (2,10 m) nos quatro prédios — no RL, com a saída única, 1,87 m.
+        expect(agora.desvioMaisBaixoMm).toBeGreaterThan(2100);
         // PA17, "pronto quando": a descida da água na FACE da parede não cruza o dreno do ar nem a linha frigorígena, que
         // correm no eixo (era: no tipo do R8, 13 × dreno e 12 × linha — e cada andar copiado repetia).
         expect(agora.aguaXClimatizacao).toBe(0);

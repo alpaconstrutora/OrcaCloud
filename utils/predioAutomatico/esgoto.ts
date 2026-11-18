@@ -6,7 +6,8 @@
  *
  *   louças da unidade ─ RAMAIS (sob o piso, com caimento) ─ TUBO DE QUEDA do grupo molhado (rente à parede, do lado da
  *   unidade) ─ um trecho por andar, que a cópia viva empilha ─ DESVIO no forro do térreo ─ a fachada da rua ─ CAIXA DE
- *   INSPEÇÃO fora do prédio ─ COLETOR ─ ligação na rede pública.
+ *   INSPEÇÃO fora do prédio ─ COLETOR ─ ligação na rede pública. Em asas (PA23), cada asa sai pela fachada dela para a
+ *   caixa dela, e um SUBCOLETOR ENTERRADO por fora do prédio a leva à caixa da rua.
  *
  *   VENTILAÇÃO: o tubo de queda sobe pela cobertura até `TERMINAL_DE_VENTILACAO_MM` acima dela (terraço — ventilação
  *   primária) e uma COLUNA DE VENTILAÇÃO corre ao lado dele, ligada embaixo (abaixo do ramal mais baixo) e em cima.
@@ -23,6 +24,11 @@
  * coluna de ventilação pela tabela da NBR 8160 (`dnDaColunaDeVentilacao`); o desvio e o coletor pela Tabela 7.
  */
 import { pointInPolygon } from '../blueprintKernel';
+import { asasEJuncoesDoContorno } from '../blueprintPavimentoOrtogonal';
+import type { RetLocal } from '../blueprintPavimentoTipoDaMassa';
+import { DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM } from '../blueprintColetorPredial';
+import { medirTerreno } from '../blueprintTerreno';
+import { pedacosComCota } from './contornoDePilar';
 import type { BlueprintModel, Command, ObjectId, Point, Terminal, Trecho, Wall } from '../blueprintKernel';
 import { fontesDeEsgoto, HIPOTESES_ESGOTO_PADRAO, planejarEsgoto } from '../blueprintEsgotoAutomatico';
 import { dnDoSubcoletor, dnDoTuboDeQueda } from '../blueprintNbr8160';
@@ -39,6 +45,8 @@ export const ROTULO_DO_TUBO_DE_QUEDA = 'Tubo de queda';
 export const ROTULO_DA_COLUNA_DE_VENTILACAO = 'Coluna de ventilação';
 export const ROTULO_DO_DESVIO = 'Desvio do tubo de queda';
 export const ROTULO_DO_COLETOR_DO_PREDIO = 'Coletor predial';
+/** PA23: o subcoletor enterrado por fora do prédio, da caixa de cada asa à da rua. */
+export const ROTULO_DO_SUBCOLETOR_DO_PREDIO = 'Subcoletor enterrado';
 /** Terraço utilizável: o terminal da ventilação a 2 m acima da cobertura (NBR 8160). */
 export const TERMINAL_DE_VENTILACAO_MM = 2000;
 /** Os pontos de esgoto a até isto uns dos outros formam um GRUPO MOLHADO — um tubo de queda cada. */
@@ -67,6 +75,8 @@ const COTA_ENTERRADA_MM = -600;
 const DECLIVIDADE_MAXIMA_DO_COLETOR_PCT = 5;
 /** A caixa de inspeção fica a isto da fachada, para fora, mm. */
 const CI_FORA_DA_FACHADA_MM = 1000;
+/** A descida do desvio na saída fica a isto da fachada, para dentro, mm. */
+const SAIDA_DENTRO_DA_FACHADA_MM = 300;
 
 const inteiro = (p: { x: number; y: number }): Point => ({ x: Math.round(p.x), y: Math.round(p.y) }) as Point;
 const dist = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
@@ -273,15 +283,23 @@ export function lancarEsgoto(
       lote.push(trecho(T, t.ventilacao, peT + t.juncaoMm, t.ventilacao, ponta(t), t.dnVentilacaoMm, ROTULO_DA_COLUNA_DE_VENTILACAO));
       lote.push(trecho(T, t.ventilacao, ponta(t), t.at, ponta(t), t.dnVentilacaoMm, ROTULO_DA_COLUNA_DE_VENTILACAO));
     }
-    const desvio = desvioNoTerreo(ctx.m, base, resultado.tubos.map((t) => ({ at: t.at, cotaMm: ponta(t), uhc: t.uhcPorAndar * andares })), saida.dentro, T);
+    const desvio = desvioNoTerreo(ctx.m, base, resultado.tubos.map((t) => ({ at: t.at, cotaMm: ponta(t), uhc: t.uhcPorAndar * andares })), saida, T);
     lote.push(...desvio.trechos);
-    // Na fachada, desce até sob o piso; sai para a caixa de inspeção.
+    // Em cada saída (a da rua e, em asas, a de cada asa — PA23), na fachada desce até sob o piso e sai para a caixa dela.
     const dnSaida = dnDoSubcoletor(uhcTotal, CAIMENTO_PCT);
-    lote.push(trecho(T, saida.dentro, desvio.cotaNaSaidaMm, saida.dentro, COTA_ENTERRADA_MM, dnSaida, ROTULO_DO_DESVIO));
+    const chegadas = desvio.saidas.map((x) => {
+      const dn = dnDoSubcoletor(x.uhc, CAIMENTO_PCT);
+      const cota = COTA_ENTERRADA_MM - Math.round((dist(x.dentro, x.fora) * CAIMENTO_PCT) / 100);
+      if (x.uhc > 0) lote.push(trecho(T, x.dentro, x.cotaMm, x.dentro, COTA_ENTERRADA_MM, dn, ROTULO_DO_DESVIO), trecho(T, x.dentro, COTA_ENTERRADA_MM, x.fora, cota, dn, ROTULO_DO_DESVIO));
+      return { at: x.fora, cotaMm: cota, uhc: x.uhc };
+    });
+    // PA23: a caixa de cada asa vai à da rua pelo subcoletor enterrado, por fora do prédio.
+    const sub = subcoletorEnterrado(ctx.m, base, chegadas, T);
+    lote.push(...sub.trechos);
     const ci = saida.fora;
-    const cotaCi = COTA_ENTERRADA_MM - Math.round((dist(saida.dentro, ci) * CAIMENTO_PCT) / 100);
-    lote.push(trecho(T, saida.dentro, COTA_ENTERRADA_MM, ci, cotaCi, dnSaida, ROTULO_DO_DESVIO));
-    fila.push(...lote, { type: 'AddTerminal', levelId: T, disciplina: 'ESGOTO', tipo: FICHA_DO_PONTO_HIDRAULICO.CAIXA_INSPECAO.rotulo, at: ci, cotaMm: cotaCi, tipoHidraulico: 'CAIXA_INSPECAO', sugerida: true } as Command);
+    const cotaCi = sub.fundoDaRuaMm;
+    const caixa = (at: Point, cotaMm: number) => ({ type: 'AddTerminal', levelId: T, disciplina: 'ESGOTO', tipo: FICHA_DO_PONTO_HIDRAULICO.CAIXA_INSPECAO.rotulo, at, cotaMm, tipoHidraulico: 'CAIXA_INSPECAO', sugerida: true }) as Command;
+    fila.push(...lote, caixa(ci, cotaCi), ...sub.caixas.map((c) => caixa(c.at, c.cotaMm)));
     // O coletor até a rede pública, na frente do lote.
     const frente = pontoNaFrente(ctx.m, ci);
     if (!frente) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Esgoto: marque a divisa da frente do lote — o coletor vai até a rede pública nela.' });
@@ -304,7 +322,17 @@ export function lancarEsgoto(
           : `Coletor predial: ${f1(declividadePct)} % até a rede pública presumida a ${f1(-cotaRede / 1000)} m — abaixo de ${CAIMENTO_PCT} %: aprofunde a caixa ou preveja estação elevatória.`,
       });
     }
-    pendencias.push({ grupo: 'CONFERIR', texto: `Esgoto: o desvio dos ${resultado.tubos.length} tubo(s) de queda corre suspenso no forro do térreo até a fachada da rua (DN ${dnSaida} na saída, ${desvio.comprimentoM.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} m) — confira com a estrutura e o pé-direito do térreo.` });
+    const m0 = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+    const m2 = (mm: number) => (mm / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+    pendencias.push({
+      grupo: 'CONFERIR',
+      texto:
+        desvio.saidas.length > 1
+          ? `Esgoto: o desvio dos ${resultado.tubos.length} tubo(s) de queda corre suspenso no forro do térreo até a fachada, em ${desvio.saidas.length} saídas — a da rua e uma por asa (${m0(desvio.comprimentoM)} m no total; o ponto mais baixo a ${m2(desvio.maisBaixoMm)} m do piso) — confira com a estrutura e o pé-direito do térreo.`
+          : `Esgoto: o desvio dos ${resultado.tubos.length} tubo(s) de queda corre suspenso no forro do térreo até a fachada da rua (DN ${dnSaida} na saída, ${m0(desvio.comprimentoM)} m; o ponto mais baixo a ${m2(desvio.maisBaixoMm)} m do piso) — confira com a estrutura e o pé-direito do térreo.`,
+    });
+    if (sub.comprimentoM > 0) pendencias.push({ grupo: 'CONFERIR', texto: `Esgoto: a caixa de inspeção de cada asa vai à da rua por um subcoletor enterrado por fora do prédio, a ${f1(CI_FORA_DA_FACHADA_MM / 1000)} m da fachada (DN ${sub.dnMm}, ${m0(sub.comprimentoM)} m a ${CAIMENTO_PCT} %; ${sub.caixas.length} caixa(s) de inspeção — a de cada asa, os cantos e a cada ${m0(DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM / 1000)} m, NBR 8160) — confira com as outras redes enterradas e o paisagismo.` });
+    if (desvio.asasSemSaida > 0) pendencias.push({ grupo: 'CONFERIR', texto: `Esgoto: ${desvio.asasSemSaida} asa(s) sem lugar para a saída própria na fachada (porta, janela, pilar ou fora do lote em todo o trecho) — o desvio dela(s) vai pela saída da rua.` });
   }
   resultado.comandos = ctx.aplicar(fila);
   return resultado;
@@ -376,7 +404,7 @@ function saidaNaFachada(base: BaseDoPredio): { dentro: Point; fora: Point } {
     if (!melhor || nota > melhor.nota) melhor = { mid: mid as Point, n, nota };
   }
   const m = melhor!;
-  return { dentro: inteiro({ x: m.mid.x - m.n.x * 300, y: m.mid.y - m.n.y * 300 }), fora: inteiro({ x: m.mid.x + m.n.x * CI_FORA_DA_FACHADA_MM, y: m.mid.y + m.n.y * CI_FORA_DA_FACHADA_MM }) };
+  return { dentro: inteiro({ x: m.mid.x - m.n.x * SAIDA_DENTRO_DA_FACHADA_MM, y: m.mid.y - m.n.y * SAIDA_DENTRO_DA_FACHADA_MM }), fora: inteiro({ x: m.mid.x + m.n.x * CI_FORA_DA_FACHADA_MM, y: m.mid.y + m.n.y * CI_FORA_DA_FACHADA_MM }) };
 }
 
 /**
@@ -389,14 +417,19 @@ function saidaNaFachada(base: BaseDoPredio): { dentro: Point; fora: Point } {
  * maior desvio e a folga), com a queda pelo comprimento do contorno — a derivação do R12 passava por dentro do pilar da
  * fachada do corredor (2); e em asas cada tubo corria em linha reta até a saída, em diagonal pelo forro do térreo (no RL,
  * de 22 a 42 m, por três pilares).
+ *
+ * PA23 (18/11/2026, pedido "Resolva a pendência"): em asas, uma saída por asa (`saidasDasAsas`) — cada tubo vai à mais
+ * perto pelos corredores. O desvio do RL pelos corredores até a saída única tinha ~52 m a 1 % e chegava a 1,87 m do piso.
+ * `saidas` começa pela da rua (sempre); as outras só com tubo. `maisBaixoMm` é a chegada mais baixa (a de alguma saída).
  */
 function desvioNoTerreo(
   model: BlueprintModel,
   base: BaseDoPredio,
   tubos: readonly { at: Point; cotaMm: number; uhc: number }[],
-  saida: Point,
+  saida: { dentro: Point; fora: Point },
   T: ObjectId,
-): { trechos: Extract<Command, { type: 'AddTrecho' }>[]; cotaNaSaidaMm: number; comprimentoM: number } {
+): { trechos: Extract<Command, { type: 'AddTrecho' }>[]; saidas: SaidaDoDesvio[]; comprimentoM: number; maisBaixoMm: number; asasSemSaida: number } {
+  const total = tubos.reduce((s, t) => s + t.uhc, 0);
   const raioMaior = dnDoSubcoletor(tubos.reduce((s, t) => s + t.uhc, 0), CAIMENTO_PCT) / 2;
   const pegadas = pegadasDePilares(model, T).map((g) => anelDoPilar(g, raioMaior + FOLGA_DO_DESVIO_AO_PILAR_MM) as Point[]);
   const caminhos = new Map<string, Point[]>();
@@ -434,22 +467,25 @@ function desvioNoTerreo(
     const subidas = (model.trechos ?? []).filter((t) => t.levelId === T && t.disciplina !== 'ESGOTO' && t.a.x === t.b.x && t.a.y === t.b.y && Math.max(t.cotaAMm, t.cotaBMm) > FAIXA_DO_DESVIO_MM[0] && Math.min(t.cotaAMm, t.cotaBMm) < FAIXA_DO_DESVIO_MM[1]);
     const chegadaLivre = (pts: Point[]) =>
       pts.slice(1).every((q, i) => fracaoDentro(pts[i], q, vaos) === 0 && subidas.every((t) => distanciaAoSegmento(t.a, pts[i], q) > raioMaior + t.bitolaMm / 2 + FOLGA_DO_DESVIO_AO_PILAR_MM));
-    const pelosCorredores = desvioPelosCorredores(base, tubos, saida, (a, b) => comprimentoDe(caminho(a, b)), chegadaLivre);
+    // PA23: uma saída por asa.
+    const asas = saidasDasAsas(model, base, T, tubos, saida, chegadaLivre, pegadas);
+    const pelosCorredores = desvioPelosCorredores(base, tubos, [saida.dentro, ...asas.saidas.map((x) => x.dentro)], (a, b) => comprimentoDe(caminho(a, b)), chegadaLivre);
     if (pelosCorredores) {
       for (const x of pelosCorredores.lances) add(x.de, x.cotaDeMm, x.para, x.cotaParaMm, x.uhc);
-      return { trechos, cotaNaSaidaMm: pelosCorredores.cotaNaSaidaMm, comprimentoM: comprimento / 1000 };
+      const saidas = [saida, ...asas.saidas].map((x, k) => ({ ...x, ...pelosCorredores.saidas[k] })).filter((x, k) => k === 0 || x.uhc > 0);
+      return { trechos, saidas, comprimentoM: comprimento / 1000, maisBaixoMm: Math.min(...saidas.filter((x) => x.uhc > 0).map((x) => x.cotaMm)), asasSemSaida: asas.semSaida };
     }
     // Sem corredor que ligue os tubos à saída: em linha reta até ela; as chegadas na saída se encontram na mais baixa.
-    const chegadas = tubos.map((t) => ({ t, cota: t.cotaMm - queda(t.at, saida) }));
+    const chegadas = tubos.map((t) => ({ t, cota: t.cotaMm - queda(t.at, saida.dentro) }));
     const fundo = Math.min(...chegadas.map((c) => c.cota));
-    for (const c of chegadas) add(c.t.at, c.t.cotaMm, saida, fundo, c.t.uhc);
-    return { trechos, cotaNaSaidaMm: fundo, comprimentoM: comprimento / 1000 };
+    for (const c of chegadas) add(c.t.at, c.t.cotaMm, saida.dentro, fundo, c.t.uhc);
+    return { trechos, saidas: [{ ...saida, cotaMm: fundo, uhc: total }], comprimentoM: comprimento / 1000, maisBaixoMm: fundo, asasSemSaida: asas.semSaida };
   }
   const { o, u, v } = dv.quadro;
   const local = (p: Point) => (p.x - o.x) * u.x + (p.y - o.y) * u.y;
   const bm = (dv.corredor.b0 + dv.corredor.b1) / 2;
   const noEixo = (a: number) => inteiro({ x: o.x + u.x * a + v.x * bm, y: o.y + u.y * a + v.y * bm });
-  const aSaida = local(saida);
+  const aSaida = local(saida.dentro);
   const A = noEixo(aSaida);
   // Cada tubo chega ao eixo; no eixo, de cada lado da saída, as cotas descem em direção a ela.
   const nos = tubos.map((t) => {
@@ -477,10 +513,17 @@ function desvioNoTerreo(
   }
   // Os tubos que caem exatamente no eixo da saída.
   for (const x of nos.filter((y) => y.a === aSaida)) fundo = Math.min(fundo, x.cota);
-  const total = tubos.reduce((s, t) => s + t.uhc, 0);
-  const naFachada = fundo - queda(A, saida);
-  add(A, fundo, saida, naFachada, total);
-  return { trechos: costurado(trechos), cotaNaSaidaMm: naFachada, comprimentoM: comprimento / 1000 };
+  const naFachada = fundo - queda(A, saida.dentro);
+  add(A, fundo, saida.dentro, naFachada, total);
+  return { trechos: costurado(trechos), saidas: [{ ...saida, cotaMm: naFachada, uhc: total }], comprimentoM: comprimento / 1000, maisBaixoMm: naFachada, asasSemSaida: 0 };
+}
+
+/** Uma saída do desvio: a descida por dentro da fachada, a caixa de fora, a cota em que o desvio chega e as UHC dela. */
+interface SaidaDoDesvio {
+  dentro: Point;
+  fora: Point;
+  cotaMm: number;
+  uhc: number;
 }
 
 /** PA22a: a folga do desvio (e do condutor enterrado) à pegada do pilar, além do raio, mm. */
@@ -519,14 +562,17 @@ function distanciaAoSegmento(p: { x: number; y: number }, a: { x: number; y: num
  * comprimento é o do contorno dos pilares); os caminhos formam uma árvore, e as cotas descem das pontas para a saída (a
  * de um nó é a menor das chegadas, com `CAIMENTO_PCT`). Antes, em linha reta até a saída: no RL, diagonais de 22 a 42 m
  * pelo forro do térreo, atravessando três pilares. `null` sem corredor que ligue algum tubo à saída.
+ *
+ * PA23: várias saídas (a da rua primeiro; as das asas já chegam livres e não deslizam) — o caminho mais curto de cada
+ * tubo vai à saída mais perto; cada saída devolve a cota de chegada e as UHC que recebe (sem tubo: `Infinity` e 0).
  */
 function desvioPelosCorredores(
   base: BaseDoPredio,
   tubos: readonly { at: Point; cotaMm: number; uhc: number }[],
-  saida: Point,
+  saidas: readonly Point[],
   comprimentoMm: (a: Point, b: Point) => number,
   chegadaLivre: (pts: Point[]) => boolean = () => true,
-): { lances: { de: Point; cotaDeMm: number; para: Point; cotaParaMm: number; uhc: number }[]; cotaNaSaidaMm: number } | null {
+): { lances: { de: Point; cotaDeMm: number; para: Point; cotaParaMm: number; uhc: number }[]; saidas: { cotaMm: number; uhc: number }[] } | null {
   const dv = base.divisao;
   const corredores = dv.ortogonal?.corredores ?? [];
   if (!corredores.length || !tubos.length) return null;
@@ -621,16 +667,20 @@ function desvioPelosCorredores(
   };
   const doTubo = tubos.map((t) => aoPe(t.at));
   const deslizes = [0, ...Array.from({ length: 8 }, (_, i) => [(i + 1) * 250, -(i + 1) * 250]).flat()];
-  const naSaida = aoPe(saida, deslizes, chegadaLivre);
+  const naSaida = saidas.map((x, k) => (k === 0 ? aoPe(x, deslizes, chegadaLivre) : aoPe(x)));
   for (const lista of noEixo) {
     lista.sort((x, y) => x.s - y.s);
     for (let k = 1; k < lista.length; k++) ligar(lista[k - 1].i, lista[k].i);
   }
-  // O caminho mais curto de cada nó até a saída (Dijkstra a partir dela).
+  // O caminho mais curto de cada nó até a saída mais perto (Dijkstra a partir delas).
   const distancia = nos.map(() => Infinity);
   const pai = nos.map(() => -1);
+  const daSaida = nos.map(() => -1);
   const feito = nos.map(() => false);
-  distancia[naSaida] = 0;
+  naSaida.forEach((i, k) => {
+    distancia[i] = 0;
+    daSaida[i] = k;
+  });
   for (;;) {
     let x = -1;
     for (let i = 0; i < nos.length; i++) if (!feito[i] && distancia[i] < Infinity && (x < 0 || distancia[i] < distancia[x])) x = i;
@@ -640,6 +690,7 @@ function desvioPelosCorredores(
       if (distancia[x] + L < distancia[para] - 1e-9) {
         distancia[para] = distancia[x] + L;
         pai[para] = x;
+        daSaida[para] = daSaida[x];
       }
     }
   }
@@ -656,7 +707,251 @@ function desvioPelosCorredores(
     const L = distancia[i] - distancia[pai[i]];
     cota[pai[i]] = Math.min(cota[pai[i]], cota[i] - Math.round((L * CAIMENTO_PCT) / 100));
   }
-  return { lances: usados.map((i) => ({ de: nos[i], cotaDeMm: cota[i], para: nos[pai[i]], cotaParaMm: cota[pai[i]], uhc: uhc.get(i)! })), cotaNaSaidaMm: cota[naSaida] };
+  const recebe = naSaida.map(() => 0);
+  tubos.forEach((t, k) => (recebe[daSaida[doTubo[k]]] += t.uhc));
+  return { lances: usados.map((i) => ({ de: nos[i], cotaDeMm: cota[i], para: nos[pai[i]], cotaParaMm: cota[pai[i]], uhc: uhc.get(i)! })), saidas: naSaida.map((i, k) => ({ cotaMm: cota[i], uhc: recebe[k] })) };
+}
+
+/** PA23: a saída de uma asa fica longe das pontas dela (o nó, o fim), mm. */
+const MARGEM_DA_SAIDA_NA_ASA_MM = 1000;
+/** PA23: a descida da saída da asa longe de porta ou janela da fachada (a distância ao vão), mm. */
+const DESCIDA_LONGE_DO_VAO_MM = 450;
+/** PA23: a saída da asa desliza ao longo da fachada de tanto em tanto, até tanto, procurando lugar livre, mm. */
+const PASSO_DA_SAIDA_NA_ASA_MM = 250;
+const DESLIZE_MAXIMO_DA_SAIDA_NA_ASA_MM = 4000;
+
+/**
+ * PA23 do prédio automático (18/11/2026, pedido "Resolva a pendência"): uma SAÍDA POR ASA. Em asas, cada asa sem a saída
+ * da rua e com tubo de queda ganha a sua numa das fachadas compridas: no meio dos tubos dela (o mais longe chega mais
+ * alto), do lado cujo caminho por fora do prédio até a caixa da rua é o mais curto. Desliza ao longo da fachada até a
+ * chegada pelo corredor não cruzar porta, janela nem a subida de outra rede (`livre`), a descida não ficar diante de um
+ * vão nem num pilar e a caixa de fora cair dentro do lote. Sem lugar, a asa fica com a saída da rua (`semSaida`).
+ */
+function saidasDasAsas(
+  model: BlueprintModel,
+  base: BaseDoPredio,
+  T: ObjectId,
+  tubos: readonly { at: Point }[],
+  principal: { dentro: Point; fora: Point },
+  livre: (pts: Point[]) => boolean,
+  pilares: readonly Point[][],
+): { saidas: { dentro: Point; fora: Point }[]; semSaida: number } {
+  const dv = base.divisao;
+  const orto = dv.ortogonal;
+  if (!orto) return { saidas: [], semSaida: 0 };
+  const regioes = asasEJuncoesDoContorno(orto.poligono, dv.nomeDoBloco);
+  if (!regioes.ok || regioes.asas.length < 2) return { saidas: [], semSaida: 0 };
+  const { o, u, v } = dv.quadro;
+  const loc = (p: { x: number; y: number }) => ({ a: (p.x - o.x) * u.x + (p.y - o.y) * u.y, b: (p.x - o.x) * v.x + (p.y - o.y) * v.y });
+  const mundo = (a: number, b: number) => inteiro({ x: o.x + u.x * a + v.x * b, y: o.y + u.y * a + v.y * b });
+  const naAsa = (r: RetLocal, p: Point) => {
+    const l = loc(p);
+    return l.a >= r.a0 && l.a <= r.a1 && l.b >= r.b0 && l.b <= r.b1;
+  };
+  const lote = loteDoModelo(model);
+  const bloco = base.bloco.pontos as Point[];
+  const vaos = vaosEmPlanta(model, T);
+  const saidas: { dentro: Point; fora: Point }[] = [];
+  let semSaida = 0;
+  for (const w of regioes.asas) {
+    if (naAsa(w.ret, principal.dentro)) continue;
+    const ao = (p: Point) => (w.eixo === 'a' ? loc(p).a : loc(p).b);
+    const ss = tubos.filter((t) => naAsa(w.ret, t.at)).map((t) => ao(t.at));
+    if (!ss.length) continue;
+    const meio = Math.round((Math.min(...ss) + Math.max(...ss)) / 2);
+    const [lo, hi] = w.eixo === 'a' ? [w.ret.a0, w.ret.a1] : [w.ret.b0, w.ret.b1];
+    // O corredor da asa (no sentido dela, dentro dela) e o eixo dele, por onde a saída chega.
+    const corredor = orto.corredores.find((r) => (w.eixo === 'a' ? r.a1 - r.a0 >= r.b1 - r.b0 : r.b1 - r.b0 > r.a1 - r.a0) && r.a0 >= w.ret.a0 - 1 && r.a1 <= w.ret.a1 + 1 && r.b0 >= w.ret.b0 - 1 && r.b1 <= w.ret.b1 + 1);
+    if (!corredor) {
+      semSaida++;
+      continue;
+    }
+    const eixo = w.eixo === 'a' ? (corredor.b0 + corredor.b1) / 2 : (corredor.a0 + corredor.a1) / 2;
+    const ponto = (s: number, t: number) => (w.eixo === 'a' ? mundo(s, t) : mundo(t, s));
+    const faces: [number, number][] = w.eixo === 'a' ? [[w.ret.b0, -1], [w.ret.b1, 1]] : [[w.ret.a0, -1], [w.ret.a1, 1]];
+    let melhor: { dentro: Point; fora: Point; mm: number } | null = null;
+    for (const [face, sinal] of faces) {
+      for (let k = 0; k <= (2 * DESLIZE_MAXIMO_DA_SAIDA_NA_ASA_MM) / PASSO_DA_SAIDA_NA_ASA_MM; k++) {
+        const s = meio + Math.ceil(k / 2) * PASSO_DA_SAIDA_NA_ASA_MM * (k % 2 ? 1 : -1);
+        if (s < lo + MARGEM_DA_SAIDA_NA_ASA_MM || s > hi - MARGEM_DA_SAIDA_NA_ASA_MM) continue;
+        const dentro = ponto(s, face - sinal * SAIDA_DENTRO_DA_FACHADA_MM);
+        const fora = ponto(s, face + sinal * CI_FORA_DA_FACHADA_MM);
+        // A fachada de verdade (fora do bloco), a caixa no lote; a chegada livre, a descida fora de pilar e longe de vão.
+        if (pointInPolygon(bloco, fora) || (lote && !pointInPolygon(lote, fora))) continue;
+        if (!livre([dentro, ponto(s, eixo)]) || pilares.some((g) => pointInPolygon(g, dentro)) || vaos.some(([a, b]) => distanciaAoSegmento(dentro, a, b) < DESCIDA_LONGE_DO_VAO_MM)) continue;
+        const rota = rotaPorFora(bloco, fora, principal.fora, lote);
+        if (rota && (!melhor || rota.mm < melhor.mm)) melhor = { dentro, fora, mm: rota.mm };
+        break;
+      }
+    }
+    if (melhor) saidas.push({ dentro: melhor.dentro, fora: melhor.fora });
+    else semSaida++;
+  }
+  return { saidas, semSaida };
+}
+
+/** PA23: o anel fechado das divisas do lote (null sem ele). */
+function loteDoModelo(model: BlueprintModel): Point[] | null {
+  const terreno = medirTerreno(model.boundaries ?? []);
+  return terreno?.fechado ? terreno.anel : null;
+}
+
+/** PA23: os vãos (porta, janela) das paredes do pavimento, em planta: o trecho do vão no eixo da parede. */
+function vaosEmPlanta(model: BlueprintModel, levelId: ObjectId): [Point, Point][] {
+  const paredes = new Map(model.walls.filter((w) => w.levelId === levelId).map((w) => [w.id, w]));
+  const saida: [Point, Point][] = [];
+  for (const o of model.openings) {
+    const w = paredes.get(o.wallId);
+    if (!w) continue;
+    const L = dist(w.a, w.b);
+    if (L < 1) continue;
+    const em = (s: number) => inteiro({ x: w.a.x + ((w.b.x - w.a.x) * s) / L, y: w.a.y + ((w.b.y - w.a.y) * s) / L });
+    saida.push([em(o.offsetMm), em(o.offsetMm + o.widthMm)]);
+  }
+  return saida;
+}
+
+/** PA23: o contorno do bloco afastado `d` para fora (cada lado paralelo ao dele; nos cantos, a soma das normais). */
+function contornoAfastado(pontos: readonly Point[], d: number): Point[] {
+  const pts = pontos.filter((p, i) => dist(p, pontos[(i + 1) % pontos.length]) >= 1);
+  const n = pts.length;
+  const normal = (a: Point, b: Point) => {
+    const L = dist(a, b);
+    const nr = { x: (b.y - a.y) / L, y: -(b.x - a.x) / L };
+    return pointInPolygon(pts, inteiro({ x: (a.x + b.x) / 2 + nr.x * 10, y: (a.y + b.y) / 2 + nr.y * 10 })) ? { x: -nr.x, y: -nr.y } : nr;
+  };
+  return pts.map((p, i) => {
+    const n1 = normal(pts[(i - 1 + n) % n], p);
+    const n2 = normal(p, pts[(i + 1) % n]);
+    const k = Math.abs(n1.x * n2.x + n1.y * n2.y) > 0.5 ? n1 : { x: n1.x + n2.x, y: n1.y + n2.y };
+    return inteiro({ x: p.x + k.x * d, y: p.y + k.y * d });
+  });
+}
+
+/**
+ * PA23: o caminho ENTERRADO de `a` a `b` por fora do prédio — pelo contorno do bloco afastado da fachada o mesmo tanto
+ * que as caixas (as duas pontas estão nele), no sentido mais curto que fica dentro do lote. `null` se uma ponta não está
+ * no contorno ou nenhum sentido cabe no lote.
+ */
+function rotaPorFora(bloco: readonly Point[], a: Point, b: Point, lote: Point[] | null): { pts: Point[]; mm: number } | null {
+  const anel = contornoAfastado(bloco, CI_FORA_DA_FACHADA_MM);
+  const n = anel.length;
+  if (n < 3) return null;
+  const naBorda = (x: Point) => {
+    let melhor = { i: 0, s: 0, d: Infinity };
+    for (let i = 0; i < n; i++) {
+      const p = anel[i];
+      const q = anel[(i + 1) % n];
+      const L = dist(p, q);
+      const s = Math.max(0, Math.min(L, ((x.x - p.x) * (q.x - p.x) + (x.y - p.y) * (q.y - p.y)) / L));
+      const d = dist(x, { x: p.x + ((q.x - p.x) * s) / L, y: p.y + ((q.y - p.y) * s) / L });
+      if (d < melhor.d) melhor = { i, s, d };
+    }
+    return melhor;
+  };
+  const pa = naBorda(a);
+  const pb = naBorda(b);
+  if (pa.d > 5 || pb.d > 5) return null;
+  const ida: Point[] = [a];
+  if (!(pa.i === pb.i && pb.s >= pa.s)) {
+    let i = pa.i;
+    do {
+      i = (i + 1) % n;
+      ida.push(anel[i]);
+    } while (i !== pb.i);
+  }
+  ida.push(b);
+  const volta: Point[] = [a];
+  if (!(pa.i === pb.i && pb.s <= pa.s)) {
+    for (let i = pa.i; ; i = (i - 1 + n) % n) {
+      volta.push(anel[i]);
+      if (i === (pb.i + 1) % n) break;
+    }
+  }
+  volta.push(b);
+  const opcoes = [ida, volta]
+    .map((pts) => pts.filter((q, i) => i === 0 || q.x !== pts[i - 1].x || q.y !== pts[i - 1].y))
+    .filter((pts) => !lote || pts.every((q) => pointInPolygon(lote, q)))
+    .map((pts) => ({ pts, mm: pts.slice(1).reduce((s, q, i) => s + dist(pts[i], q), 0) }))
+    .sort((x, y) => x.mm - y.mm);
+  return opcoes[0] ?? null;
+}
+
+/**
+ * PA23: o SUBCOLETOR ENTERRADO que leva a caixa de inspeção de cada asa à da rua (`chegadas[0]`), por fora do prédio
+ * (`rotaPorFora`) com `CAIMENTO_PCT`: cada caixa, da mais perto da rua para a mais longe, liga-se à já ligada mais perto
+ * pelo contorno; as cotas e as UHC descem das pontas para a rua (o fundo de uma caixa é a chegada mais baixa nela). Caixa
+ * de inspeção em cada canto do caminho e a cada `DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM` no máximo (NBR 8160); onde chegam
+ * tubos em cotas diferentes, uma vertical na caixa as liga. `caixas` são as das asas e as do caminho (a da rua, não).
+ */
+function subcoletorEnterrado(
+  model: BlueprintModel,
+  base: BaseDoPredio,
+  chegadas: readonly { at: Point; cotaMm: number; uhc: number }[],
+  T: ObjectId,
+): { trechos: Extract<Command, { type: 'AddTrecho' }>[]; caixas: { at: Point; cotaMm: number }[]; fundoDaRuaMm: number; comprimentoM: number; dnMm: number } {
+  if (chegadas.length < 2) return { trechos: [], caixas: [], fundoDaRuaMm: chegadas[0].cotaMm, comprimentoM: 0, dnMm: 0 };
+  const lote = loteDoModelo(model);
+  const bloco = base.bloco.pontos as Point[];
+  const ligadas = [0];
+  const pai = new Map<number, { k: number; pts: Point[]; mm: number }>();
+  const ordem = chegadas
+    .slice(1)
+    .map((c, i) => ({ k: i + 1, r: rotaPorFora(bloco, c.at, chegadas[0].at, lote) }))
+    .filter((x) => x.r)
+    .sort((x, y) => x.r!.mm - y.r!.mm || x.k - y.k);
+  for (const { k } of ordem) {
+    let melhor: { k: number; pts: Point[]; mm: number } | null = null;
+    for (const j of ligadas) {
+      const r = rotaPorFora(bloco, chegadas[k].at, chegadas[j].at, lote);
+      if (r && (!melhor || r.mm < melhor.mm)) melhor = { k: j, ...r };
+    }
+    pai.set(k, melhor!);
+    ligadas.push(k);
+  }
+  // As cotas e as UHC, das pontas para a rua (quem se liga depois é ponta de quem já estava).
+  const fundo = chegadas.map((c) => c.cotaMm);
+  const uhc = chegadas.map((c) => c.uhc);
+  const naCaixa = chegadas.map((c) => (c.uhc > 0 ? [c.cotaMm] : []));
+  const chega = new Map<number, number>();
+  for (const k of [...ligadas].reverse()) {
+    if (k === 0) continue;
+    const p = pai.get(k)!;
+    const z = fundo[k] - Math.round((p.mm * CAIMENTO_PCT) / 100);
+    chega.set(k, z);
+    fundo[p.k] = Math.min(fundo[p.k], z);
+    uhc[p.k] += uhc[k];
+    naCaixa[p.k].push(z);
+  }
+  const trechos: Extract<Command, { type: 'AddTrecho' }>[] = [];
+  const caixas: { at: Point; cotaMm: number }[] = [];
+  let comprimento = 0;
+  let dnMaior = 0;
+  for (const k of ligadas.slice(1)) {
+    const p = pai.get(k)!;
+    const dn = dnDoSubcoletor(uhc[k], CAIMENTO_PCT);
+    dnMaior = Math.max(dnMaior, dn);
+    // As estações: os cantos e, nos lados longos, a cada 25 m no máximo.
+    const est: Point[] = [p.pts[0]];
+    for (let i = 1; i < p.pts.length; i++) {
+      const a = p.pts[i - 1];
+      const b = p.pts[i];
+      const partes = Math.max(1, Math.ceil(dist(a, b) / DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM));
+      for (let j = 1; j <= partes; j++) est.push(j === partes ? b : inteiro({ x: a.x + ((b.x - a.x) * j) / partes, y: a.y + ((b.y - a.y) * j) / partes }));
+    }
+    const pedacos = pedacosComCota(est, fundo[k], chega.get(k)!);
+    for (const x of pedacos) trechos.push({ ...trecho(T, x.a, x.cotaAMm, x.b, x.cotaBMm, dn, ROTULO_DO_SUBCOLETOR_DO_PREDIO) });
+    for (const x of pedacos.slice(0, -1)) caixas.push({ at: x.b, cotaMm: x.cotaBMm });
+    caixas.push({ at: chegadas[k].at, cotaMm: fundo[k] });
+    comprimento += p.mm;
+  }
+  // Em cada caixa das pontas e na da rua, uma vertical entre as cotas que chegam e o fundo dela.
+  for (const k of ligadas) {
+    const zs = [...new Set([...naCaixa[k], fundo[k]])].sort((a, b) => b - a);
+    const dn = dnDoSubcoletor(uhc[k], CAIMENTO_PCT);
+    for (let i = 1; i < zs.length; i++) trechos.push(trecho(T, chegadas[k].at, zs[i - 1], chegadas[k].at, zs[i], dn, ROTULO_DO_SUBCOLETOR_DO_PREDIO));
+  }
+  return { trechos, caixas, fundoDaRuaMm: fundo[0], comprimentoM: comprimento / 1000, dnMm: dnMaior };
 }
 
 /**

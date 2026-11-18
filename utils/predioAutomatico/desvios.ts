@@ -21,7 +21,7 @@
  * de cima" é o do próprio tipo, sob o piso (cota negativa): o andar de cima é cópia dele.
  */
 import { pointInPolygon } from '../blueprintKernel';
-import type { Command, ObjectId, Point, Space, Trecho } from '../blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Point, Space, Trecho } from '../blueprintKernel';
 import { desvioDoPilar } from '../blueprintObstaculosEstruturais';
 import { usoDoNome } from '../blueprintPrograma';
 import type { ContextoDoPredio } from './terreoECobertura';
@@ -206,6 +206,82 @@ export function rebaixarAguaNoForro(ctx: ContextoDoPredio, tipoLevelId: ObjectId
   }
   resultado.comandos = ctx.aplicar(lote);
   return resultado;
+}
+
+/** PA23: a folga entre a rede sob pressão que passa por cima do desvio do esgoto e ele, além dos dois raios, mm. */
+export const FOLGA_POR_CIMA_DO_DESVIO_MM = 50;
+/** PA23: as redes sob pressão que cedem ao desvio do esgoto (por gravidade, ele não sobe). */
+const REDES_QUE_PULAM_O_DESVIO: readonly string[] = ['AGUA_FRIA', 'AGUA_QUENTE', 'INCENDIO'];
+
+/**
+ * PA23 do prédio automático (18/11/2026): as redes sob pressão do pavimento (água fria e quente, incêndio) que cruzam um
+ * lance do desvio do esgoto (`rotulo`) na mesma altura — os tubos se tocam — passam POR CIMA dele no cruzamento — sobem antes, correm acima do
+ * tubo com a folga e descem depois; o resto do trecho fica. O esgoto, por gravidade, manda (como na PA12: a água cede).
+ * Com uma saída por asa o desvio do RL corre mais alto e encontrava o recalque da água, que vai da casa de bombas ao
+ * shaft a 2,40 m. Sem lugar sob o teto (`tetoMm`), o trecho fica como está.
+ */
+export function redesPorCimaDoDesvio(m: BlueprintModel, levelId: ObjectId, rotulo: string): { comandos: Command[]; trechos: number } {
+  const tetoMm = m.levels.find((l) => l.id === levelId)?.defaultHeightMm ?? 3000;
+  const plano = (t: Trecho) => t.a.x !== t.b.x || t.a.y !== t.b.y;
+  const desvio = (m.trechos ?? []).filter((t) => t.levelId === levelId && t.disciplina === 'ESGOTO' && t.rotulo === rotulo && plano(t));
+  const comandos: Command[] = [];
+  let trechos = 0;
+  if (!desvio.length) return { comandos, trechos };
+  for (const t of m.trechos ?? []) {
+    if (t.levelId !== levelId || !REDES_QUE_PULAM_O_DESVIO.includes(t.disciplina) || !plano(t)) continue;
+    const L = Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y);
+    const rw = t.bitolaMm / 2;
+    const cotaEm = (s: number) => t.cotaAMm + (t.cotaBMm - t.cotaAMm) * s;
+    // Os cruzamentos em planta com o desvio na mesma altura: o pulo (de s0 a s1, ao longo de t) e a cota por cima.
+    const pulos: { s0: number; s1: number; z: number }[] = [];
+    for (const d of desvio) {
+      const e = { x: d.b.x - d.a.x, y: d.b.y - d.a.y };
+      const f = { x: t.b.x - t.a.x, y: t.b.y - t.a.y };
+      const den = f.x * e.y - f.y * e.x;
+      const seno = Math.abs(den) / (L * Math.hypot(e.x, e.y));
+      if (seno < 0.2) continue;
+      const s = ((d.a.x - t.a.x) * e.y - (d.a.y - t.a.y) * e.x) / den;
+      const u = ((d.a.x - t.a.x) * f.y - (d.a.y - t.a.y) * f.x) / den;
+      if (s <= 0 || s >= 1 || u < 0 || u > 1) continue;
+      const rd = d.bitolaMm / 2;
+      const zd = d.cotaAMm + (d.cotaBMm - d.cotaAMm) * u;
+      // Só onde os tubos se tocam (o critério da compatibilização); folga pequena sem choque fica.
+      if (Math.abs(cotaEm(s) - zd) >= rw + rd) continue;
+      const meia = (rw + rd + FOLGA_POR_CIMA_DO_DESVIO_MM) / seno / L;
+      pulos.push({ s0: s - meia, s1: s + meia, z: Math.ceil(zd + rd + rw + FOLGA_POR_CIMA_DO_DESVIO_MM) });
+    }
+    if (!pulos.length) continue;
+    // Pulos que se tocam viram um; um pulo que passa da ponta do trecho ou do teto não cabe — o trecho fica.
+    pulos.sort((x, y) => x.s0 - y.s0);
+    const juntos: { s0: number; s1: number; z: number }[] = [];
+    for (const x of pulos) {
+      const ultimo = juntos[juntos.length - 1];
+      if (ultimo && x.s0 <= ultimo.s1) Object.assign(ultimo, { s1: Math.max(ultimo.s1, x.s1), z: Math.max(ultimo.z, x.z) });
+      else juntos.push({ ...x });
+    }
+    if (juntos[0].s0 <= 0 || juntos[juntos.length - 1].s1 >= 1 || juntos.some((x) => x.z + rw > tetoMm)) continue;
+    const em = (s: number): Point => ({ x: Math.round(t.a.x + (t.b.x - t.a.x) * s), y: Math.round(t.a.y + (t.b.y - t.a.y) * s) }) as Point;
+    const como = trechoComo(t);
+    const add = (a: Point, za: number, b: Point, zb: number) => comandos.push({ ...como, a, b, cotaAMm: za, cotaBMm: zb });
+    comandos.push({ type: 'DeleteTrecho', trechoId: t.id });
+    let ponto = { x: t.a.x, y: t.a.y } as Point;
+    let cota = t.cotaAMm;
+    for (const x of juntos) {
+      const p0 = em(x.s0);
+      const p1 = em(x.s1);
+      const z0 = Math.round(cotaEm(x.s0));
+      const z1 = Math.round(cotaEm(x.s1));
+      add(ponto, cota, p0, z0);
+      add(p0, z0, p0, x.z);
+      add(p0, x.z, p1, x.z);
+      add(p1, x.z, p1, z1);
+      ponto = p1;
+      cota = z1;
+    }
+    add(ponto, cota, { x: t.b.x, y: t.b.y } as Point, t.cotaBMm);
+    trechos++;
+  }
+  return { comandos, trechos };
 }
 
 /** O AddTrecho com as propriedades do trecho trocado (sem as pontas). */

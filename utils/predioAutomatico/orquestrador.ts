@@ -32,8 +32,8 @@ import { lancarEstrutura, lancarFundacao, pendenciaDaFundacao } from './estrutur
 import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
 import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedido } from './climatizacaoERede';
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
-import { lancarEsgoto } from './esgoto';
-import { rebaixarAguaNoForro, type RebaixoDaAgua } from './desvios';
+import { lancarEsgoto, ROTULO_DO_DESVIO } from './esgoto';
+import { rebaixarAguaNoForro, redesPorCimaDoDesvio, type RebaixoDaAgua } from './desvios';
 import { compatibilizarPredio } from './compatibilizacao';
 import { contornarPilaresDasRedesSobPressao } from './contornoDePilar';
 import { lancarSubsolos, POTENCIA_DO_EXAUSTOR_W, subsoloDaTorre } from './garagem';
@@ -295,6 +295,14 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   else {
     esgoto = lancarEsgoto(ctx, base, terreo ? { levelId: terreo.levelId } : null, cobertura ? { levelId: cobertura.levelId } : null, 1 + mont.copias);
     pendencias.push(...esgoto.pendencias);
+    // PA23: a água (e o incêndio) do térreo que cruza o desvio do esgoto na mesma altura passa por cima dele.
+    if (terreo) {
+      const porCima = redesPorCimaDoDesvio(m, terreo.levelId, ROTULO_DO_DESVIO);
+      if (porCima.comandos.length) {
+        esgoto.comandos += aplicar(porCima.comandos);
+        pendencias.push({ grupo: 'CONFERIR', texto: `Térreo: ${porCima.trechos} trecho(s) de água ou incêndio cruzam o desvio do esgoto na mesma altura — passam por cima dele no cruzamento (sobem antes e descem depois); confira o ponto alto (ar na tubulação) com o projetista.` });
+      }
+    }
     // PA10b: nos banheiros, lavabos e área de serviço a água corre no forro REBAIXADO, abaixo dos ramais de esgoto do
     // andar de cima (no forro comum as duas redes se cruzavam); PA12: e nos cômodos secos por onde passa ramal do andar de
     // cima, logo abaixo dele. Cada andar repete pela cópia viva.

@@ -218,18 +218,13 @@ interface Asa {
   faixas: Ret[];
 }
 
-export function dividirPavimentoOrtogonal(e: EntradaDaDivisao, hipParcial: Partial<HipotesesDoPavimentoTipo> = {}): ResultadoDaDivisao {
-  const hip = { ...HIPOTESES_DO_PAVIMENTO_TIPO_PADRAO, ...hipParcial };
-  const nome = e.bloco.nome;
-  const fo = quadroOrtogonal(e.bloco.pontos);
-  if (!fo) return { ok: false, motivo: `"${nome}" não é retângulo nem tem os lados em dois eixos perpendiculares (L, U, T, H): a divisão automática do pavimento não trabalha nessa forma.` };
-  const { q, poligono: P } = fo;
-  const lista: { t: EntradaDaDivisao['produto']['tipologias'][number] }[] = [];
-  for (const t of e.produto.tipologias) for (let k = 0; k < (e.porTipologia[t.id] ?? 0); k++) lista.push({ t });
-  if (lista.length === 0) return { ok: false, motivo: `"${nome}" não recebe unidade no pavimento tipo (sem produto do uso do bloco, ou o pavimento é pequeno para o mix).` };
-  const decisoes: string[] = [];
-  const avisos: string[] = [];
-
+/**
+ * As JUNÇÕES (nós) e as ASAS do contorno ortogonal `P` (no quadro do bloco): na grade dos vértices, as células com
+ * vizinhas nos dois eixos são nó (cada grupo, um retângulo cheio); as outras, corridas num eixo só, são as asas. Forma
+ * fora disso (escada, junção que não é retângulo, sem junção) dá o motivo. PA23 do prédio automático (18/11/2026): o
+ * esgoto usa as asas para dar uma saída a cada uma.
+ */
+export function asasEJuncoesDoContorno(P: Point[], nome: string): { ok: true; nos: Ret[]; asas: { ret: Ret; eixo: 'a' | 'b' }[] } | { ok: false; motivo: string } {
   // Grade dos vértices.
   const xs = [...new Set(P.map((p) => p.x))].sort((a, b) => a - b);
   const ys = [...new Set(P.map((p) => p.y))].sort((a, b) => a - b);
@@ -269,7 +264,7 @@ export function dividirPavimentoOrtogonal(e: EntradaDaDivisao, hipParcial: Parti
   if (nos.length === 0) return { ok: false, motivo: `"${nome}": contorno sem junção de asas.` };
 
   // Asas: células que não são nó, corridas num eixo só.
-  const asas: Asa[] = [];
+  const asas: { ret: Ret; eixo: 'a' | 'b' }[] = [];
   const usada = new Set<string>();
   for (let i = 0; i < nx; i++)
     for (let j = 0; j < ny; j++) {
@@ -296,8 +291,27 @@ export function dividirPavimentoOrtogonal(e: EntradaDaDivisao, hipParcial: Parti
           k++;
         }
       }
-      asas.push({ ret: r, eixo: hor ? 'a' : 'b', corredor: r, centro: 0, faixas: [] });
+      asas.push({ ret: r, eixo: hor ? 'a' : 'b' });
     }
+  return { ok: true, nos, asas };
+}
+
+export function dividirPavimentoOrtogonal(e: EntradaDaDivisao, hipParcial: Partial<HipotesesDoPavimentoTipo> = {}): ResultadoDaDivisao {
+  const hip = { ...HIPOTESES_DO_PAVIMENTO_TIPO_PADRAO, ...hipParcial };
+  const nome = e.bloco.nome;
+  const fo = quadroOrtogonal(e.bloco.pontos);
+  if (!fo) return { ok: false, motivo: `"${nome}" não é retângulo nem tem os lados em dois eixos perpendiculares (L, U, T, H): a divisão automática do pavimento não trabalha nessa forma.` };
+  const { q, poligono: P } = fo;
+  const lista: { t: EntradaDaDivisao['produto']['tipologias'][number] }[] = [];
+  for (const t of e.produto.tipologias) for (let k = 0; k < (e.porTipologia[t.id] ?? 0); k++) lista.push({ t });
+  if (lista.length === 0) return { ok: false, motivo: `"${nome}" não recebe unidade no pavimento tipo (sem produto do uso do bloco, ou o pavimento é pequeno para o mix).` };
+  const decisoes: string[] = [];
+  const avisos: string[] = [];
+
+  const regioes = asasEJuncoesDoContorno(P, nome);
+  if (!regioes.ok) return regioes;
+  const nos = regioes.nos;
+  const asas: Asa[] = regioes.asas.map((w) => ({ ret: w.ret, eixo: w.eixo, corredor: w.ret, centro: 0, faixas: [] }));
 
   // Corredor de cada asa: central se cabem duas unidades + corredor; senão lateral, do lado de dentro do bloco.
   const cx = P.reduce((s, p) => s + p.x, 0) / P.length;

@@ -43,6 +43,8 @@ const f0 = (v: number) => Math.round(v).toLocaleString('pt-BR');
 export interface CondutorDoPredio {
   ralo: Point;
   at: Point;
+  /** Para fora do bloco, no lado do condutor — a caixa de areia fica nessa direção. */
+  normal: { x: number; y: number };
   dnMm: number;
   vazaoLMin: number;
 }
@@ -101,6 +103,8 @@ export function lancarPluvial(
   terreo: { levelId: ObjectId } | null,
   cobertura: { levelId: ObjectId },
   hipParcial: Partial<HipotesesPluviais> | null,
+  /** PE4b: o chão vem depois (`lancarPluvialNoChao` no andar 0 de apartamentos) — sem a pendência de "sem o térreo". */
+  opcoes: { chaoDepois?: boolean } = {},
 ): PluvialDoPredio {
   const hip: HipotesesPluviais = { ...HIPOTESES_PLUVIAIS_PADRAO, ...(hipParcial ?? {}) };
   const pendencias: PendenciaDoPpci[] = [];
@@ -121,7 +125,7 @@ export function lancarPluvial(
   const condutores: CondutorDoPredio[] = [];
   for (const l of lugares) {
     const dn = dnDoVertical(qCada);
-    condutores.push({ ralo: l.ralo, at: l.at, dnMm: dn, vazaoLMin: qCada });
+    condutores.push({ ralo: l.ralo, at: l.at, normal: l.normal, dnMm: dn, vazaoLMin: qCada });
     // O ralo na cobertura, por dentro da platibanda; a passagem até a face externa, sob a laje.
     fila.push(
       { type: 'AddTerminal', levelId: cobertura.levelId, disciplina: 'PLUVIAL', tipo: FICHA_DO_PONTO_HIDRAULICO.RALO_PLUVIAL.rotulo, at: l.ralo, cotaMm: 0, tipoHidraulico: 'RALO_PLUVIAL', sugerida: true } as Command,
@@ -131,9 +135,41 @@ export function lancarPluvial(
       trecho(tipo, l.at, JUNCAO_MM, l.at, pe(tipo) + JUNCAO_MM, dn, ROTULO_DO_CONDUTOR_VERTICAL),
     );
   }
+  const comandos = ctx.aplicar(fila);
   let dnHorizontalMm: number | null = null;
-  if (!terreo) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Pluvial: sem o térreo do prédio, a descida dos condutores até o terreno e a saída ficam para o projetista.' });
-  else {
+  let doChao = 0;
+  if (terreo) {
+    const chao = lancarPluvialNoChao(ctx, terreo, condutores, vazaoLMin, hip);
+    doChao = chao.comandos;
+    dnHorizontalMm = chao.dnHorizontalMm;
+    pendencias.push(...chao.pendencias);
+  } else if (!opcoes.chaoDepois) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Pluvial: sem o térreo do prédio, a descida dos condutores até o terreno e a saída ficam para o projetista.' });
+  pendencias.push({ grupo: 'PREMISSA', texto: `Pluvial: a laje da cobertura impermeabilizada com caimento de pelo menos 1 % para os ${lugares.length} ralo(s); ${lugares.length} condutor(es) DN ${condutores[0]?.dnMm ?? '—'} aparentes na fachada (${f0(vazaoLMin)} L/min para ${f0(areaM2)} m² a ${intensidadeMmH} mm/h) — confira no ábaco da NBR 10844 e com a arquitetura da fachada.` });
+  return { comandos: comandos + doChao, areaM2, intensidadeMmH, vazaoLMin, condutores, dnHorizontalMm, pendencias };
+}
+
+/**
+ * O CHÃO do pluvial: de cada condutor, a descida no pavimento do térreo até a cota enterrada, a caixa de areia fora da
+ * fachada e o coletor por fora dos pilares até a saída na frente do lote. A descida parte do topo do pavimento — ou da
+ * junção, com `verticalCopiado`, quando o pavimento já traz o vertical do tipo (o andar 0 de apartamentos, cópia
+ * desvinculada do tipo — PE4b).
+ */
+export function lancarPluvialNoChao(
+  ctx: ContextoDoPredio,
+  terreo: { levelId: ObjectId },
+  condutores: readonly CondutorDoPredio[],
+  vazaoLMin: number,
+  hipParcial: Partial<HipotesesPluviais> | null,
+  opcoes: { verticalCopiado?: boolean } = {},
+): { comandos: number; dnHorizontalMm: number | null; pendencias: PendenciaDoPpci[] } {
+  const hip: HipotesesPluviais = { ...HIPOTESES_PLUVIAIS_PADRAO, ...(hipParcial ?? {}) };
+  const pendencias: PendenciaDoPpci[] = [];
+  const pe = (id: ObjectId) => ctx.m.levels.find((l) => l.id === id)?.defaultHeightMm ?? 3000;
+  const fila: Command[] = [];
+  const lugares = condutores;
+  const qCada = vazaoLMin / Math.max(1, condutores.length);
+  let dnHorizontalMm: number | null = null;
+  {
     const T = terreo.levelId;
     const enterrado = -hip.profundidadeDoCondutorMm;
     const caixas = lugares.map((l) => ({ l, caixa: inteiro({ x: l.at.x + l.normal.x * CAIXA_FORA_MM, y: l.at.y + l.normal.y * CAIXA_FORA_MM }) }));
@@ -141,7 +177,7 @@ export function lancarPluvial(
     const decl = Math.max(0.5, hip.declividadeDoCondutorPct);
     for (const { l, caixa } of caixas) {
       fila.push(
-        trecho(T, l.at, pe(T) + JUNCAO_MM, l.at, enterrado, condutores[0].dnMm, ROTULO_DO_CONDUTOR_VERTICAL),
+        trecho(T, l.at, opcoes.verticalCopiado ? JUNCAO_MM : pe(T) + JUNCAO_MM, l.at, enterrado, condutores[0].dnMm, ROTULO_DO_CONDUTOR_VERTICAL),
         trecho(T, l.at, enterrado, caixa, enterrado - Math.round((CAIXA_FORA_MM * decl) / 100), dnDoHorizontal(qCada, MANNING_PVC, decl, condutores[0].dnMm), ROTULO_DO_CONDUTOR_HORIZONTAL),
         { type: 'AddTerminal', levelId: T, disciplina: 'PLUVIAL', tipo: FICHA_DO_PONTO_HIDRAULICO.CAIXA_AREIA.rotulo, at: caixa, cotaMm: enterrado - Math.round((CAIXA_FORA_MM * decl) / 100), tipoHidraulico: 'CAIXA_AREIA', sugerida: true } as Command,
       );
@@ -163,6 +199,5 @@ export function lancarPluvial(
       pendencias.push({ grupo: 'CONFERIR', texto: `Pluvial: a saída na frente do lote a ${(-cotaNaSaida / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m de profundidade — confira a cota da sarjeta (ou da galeria) e a ligação com a prefeitura.` });
     }
   }
-  pendencias.push({ grupo: 'PREMISSA', texto: `Pluvial: a laje da cobertura impermeabilizada com caimento de pelo menos 1 % para os ${lugares.length} ralo(s); ${lugares.length} condutor(es) DN ${condutores[0]?.dnMm ?? '—'} aparentes na fachada (${f0(vazaoLMin)} L/min para ${f0(areaM2)} m² a ${intensidadeMmH} mm/h) — confira no ábaco da NBR 10844 e com a arquitetura da fachada.` });
-  return { comandos: ctx.aplicar(fila), areaM2, intensidadeMmH, vazaoLMin, condutores, dnHorizontalMm, pendencias };
+  return { comandos: ctx.aplicar(fila), dnHorizontalMm, pendencias };
 }

@@ -46,6 +46,9 @@ export interface TerreoDeApartamentos {
   tirados: string[];
   acesso: boolean;
   avisos: string[];
+  /** PE4b: os números das unidades do kernel criadas no andar 0 (os da ficha) e os medidores acrescentados para elas. */
+  unidades: string[];
+  medidores: number;
 }
 
 /**
@@ -190,5 +193,47 @@ export function concluirTerreoDeApartamentos(
     n += ctx.aplicar(doTipo.map((e): Command => ({ type: 'AddEscada', levelId: zeroLevelId, pontos: e.pontos.map((p) => ({ ...p })), tipo: e.tipo, larguraMm: e.larguraMm, alvoEspelhoMm: e.alvoEspelhoMm, rotulo: e.rotulo ?? null })));
   }
   if (!tiradas.length) avisos.push('Andar 0: a ficha tem nele os mesmos apartamentos do tipo — não sobra espaço para o hall de entrada; desenhe o acesso.');
-  return { comandos: n, mantidos, tirados: tiradas.map((f) => f.numero), acesso, avisos };
+
+  // 5. (PE4b) Os apartamentos que ficaram viram UNIDADES do kernel, com os números da ficha (002, 004): as etiquetas do
+  // andar 0 dentro da fatia; o QD e o hidrômetro copiados do tipo passam a ser deles (apontavam o 102/104 do tipo, que
+  // contariam duas vezes); e um medidor para cada um na medição, ao lado dos outros.
+  const novas: { id: ObjectId; numero: string }[] = [];
+  for (const f of fatias) {
+    const daFicha = casadas.get(f.numero);
+    if (!daFicha) continue;
+    const doTipo = (ctx.m.unidades ?? []).find((u) => u.numero === f.numero);
+    const numero = daFicha.nome.trim();
+    if (!numero || (ctx.m.unidades ?? []).some((u) => u.numero === numero)) {
+      avisos.push(`Andar 0: o apartamento "${daFicha.nome}" da ficha não virou unidade (número vazio ou repetido) — crie-a à mão.`);
+      continue;
+    }
+    const labelIds = (ctx.m.labels ?? []).filter((l) => l.levelId === zeroLevelId && dentro(f.anel, l.at)).map((l) => l.id);
+    n += ctx.aplicar([{ type: 'AddUnidade', numero, tipologia: doTipo?.tipologia ?? daFicha.tipologia ?? null, pcd: doTipo?.pcd ?? false, labelIds }]);
+    const nova = (ctx.m.unidades ?? []).find((u) => u.numero === numero)!;
+    novas.push({ id: nova.id, numero });
+    if (!doTipo) continue;
+    const religar: Command[] = [
+      ...(ctx.m.quadros ?? []).filter((q) => q.levelId === zeroLevelId && q.unidadeId === doTipo.id).map((q): Command => ({ type: 'SetQuadroProps', quadroId: q.id, unidadeId: nova.id })),
+      ...(ctx.m.terminais ?? [])
+        .filter((t) => t.levelId === zeroLevelId && t.unidadeId === doTipo.id)
+        .map((t): Command => ({ type: 'SetTerminalProps', terminalId: t.id, unidadeId: nova.id, ...(t.tipoHidraulico === 'HIDROMETRO' ? { rotulo: `Hidrômetro ${numero}` } : {}) })),
+    ];
+    n += ctx.aplicar(religar);
+  }
+  const medidores = (ctx.m.terminais ?? []).filter((t) => t.tipoEletrico === 'MEDIDOR');
+  let medidoresNovos = 0;
+  if (novas.length && medidores.length) {
+    // Uma linha nova abaixo das outras (os medidores crescem para −y a partir do condomínio).
+    const x0 = Math.min(...medidores.map((t) => t.at.x));
+    const y0 = Math.min(...medidores.map((t) => t.at.y)) - 300;
+    const ref = medidores[0];
+    n += ctx.aplicar(
+      novas.map((u, i): Command => ({
+        type: 'AddTerminal', levelId: ref.levelId, disciplina: 'ELETRICA', tipo: 'Medidor', at: { x: x0 + 300 * i, y: y0 }, cotaMm: ref.cotaMm, tipoEletrico: 'MEDIDOR',
+        ...(ref.quadroId ? { quadroId: ref.quadroId } : {}), unidadeId: u.id, sugerida: true,
+      }) as Command),
+    );
+    medidoresNovos = novas.length;
+  } else if (novas.length) avisos.push(`Andar 0: sem a medição no modelo — os medidores de ${novas.map((u) => u.numero).join(', ')} ficam para o projetista.`);
+  return { comandos: n, mantidos, tirados: tiradas.map((f) => f.numero), acesso, avisos, unidades: novas.map((u) => u.numero), medidores: medidoresNovos };
 }

@@ -41,7 +41,7 @@ import { compatibilizarPredio } from './compatibilizacao';
 import { contornarPilaresDasRedesSobPressao } from './contornoDePilar';
 import { lancarSubsolos, POTENCIA_DO_EXAUSTOR_W, subsoloDaTorre } from './garagem';
 import { lancarDrenagemDaGaragem } from './drenagem';
-import { lancarPluvial } from './pluvial';
+import { lancarPluvial, lancarPluvialNoChao } from './pluvial';
 import { conferirIncendioDoPredio, lancarEquipamentosDeIncendio, lancarHidrantesDoPredio } from './ppci';
 import type { HipotesesIncendio } from '../blueprintIncendioClassificacao';
 import type { HipotesesPluviais } from '../blueprintPluvial';
@@ -388,7 +388,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   if (!hip.pluvial) etapa('PLUVIAL', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
   else if (!cobertura) etapa('PLUVIAL', 'NAO_EXIGIDA', 0, 'Sem a cobertura, o pluvial fica para o projetista.');
   else {
-    pluvial = lancarPluvial(ctx, base, terreo && !andarZeroLevelId ? { levelId: terreo.levelId } : null, { levelId: cobertura.levelId }, entrada.pluvial ?? null);
+    pluvial = lancarPluvial(ctx, base, terreo && !andarZeroLevelId ? { levelId: terreo.levelId } : null, { levelId: cobertura.levelId }, entrada.pluvial ?? null, { chaoDepois: !!andarZeroLevelId });
     pendencias.push(...pluvial.pendencias);
     etapa('PLUVIAL', 'LANCOU', pluvial.comandos, `${pluvial.condutores.length} condutor(es) DN ${pluvial.condutores[0]?.dnMm ?? '—'} · ${Math.round(pluvial.vazaoLMin).toLocaleString('pt-BR')} L/min de ${Math.round(pluvial.areaM2).toLocaleString('pt-BR')} m² a ${pluvial.intensidadeMmH} mm/h`);
   }
@@ -471,7 +471,13 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     decisoes.push(`Andar 0 de apartamentos (a ficha): mantém ${za.mantidos.join(', ')} do tipo; ${za.tirados.length ? `${za.tirados.join(', ')} viram o hall de entrada e a área comum` : 'nenhum apartamento sai'}${za.acesso ? ', com a porta para a rua' : ''}.`);
     avisosDoPredio.push(...za.avisos);
     andarZeroConcluido = za;
-    pendencias.push({ grupo: 'CONFERIR', texto: `Andar 0: os apartamentos ${andarZero.unidades.map((u) => u.nome).join(', ')} da ficha ocupam as posições dos do tipo (${za.mantidos.join(', ')}) — mesma planta e instalações; o pluvial no chão (caixas de areia e o condutor enterrado) e os medidores deles ficam para o projetista.` });
+    // PE4b: o chão do pluvial no andar 0 — agora que ele é a cópia desvinculada (com o vertical do tipo até a junção).
+    if (pluvial) {
+      const chao = lancarPluvialNoChao(ctx, { levelId: andarZeroLevelId }, pluvial.condutores, pluvial.vazaoLMin, entrada.pluvial ?? null, { verticalCopiado: true });
+      pendencias.push(...chao.pendencias);
+      pluvial = { ...pluvial, comandos: pluvial.comandos + chao.comandos, dnHorizontalMm: chao.dnHorizontalMm };
+    }
+    pendencias.push({ grupo: 'CONFERIR', texto: `Andar 0: os apartamentos ${andarZero.unidades.map((u) => u.nome).join(', ')} da ficha ocupam as posições dos do tipo (${za.mantidos.join(', ')}) — mesma planta e instalações${za.unidades.length ? `; viraram as unidades ${za.unidades.join(', ')} do kernel, com o QD, o hidrômetro e o medidor de cada uma` : ''}.` });
   }
 
   // ── A pressão da água fria (PA6): só agora a rede do superior chega a todos os andares.
@@ -529,7 +535,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       quadros: eletrica.quadros,
       circuitos: eletrica.circuitos,
       servico: eletrica.servico.circuitos,
-      medidores: eletrica.medidores,
+      medidores: eletrica.medidores + (andarZeroConcluido?.medidores ?? 0),
       drs: eletrica.drs,
       demandaKva: entrada ? Math.round(entrada.demandaKva * 10) / 10 : null,
       categoria: entrada?.categoria?.id ?? null,
@@ -546,7 +552,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     ? {
         pontos: pontosDaAgua,
         hidrometros: agua.hidrometros,
-        unidadesMedidas: agua.hidrometros * (1 + mont.copias),
+        unidadesMedidas: agua.hidrometros * (1 + mont.copias) + (andarZeroConcluido?.unidades.length ?? 0),
         colunaDnMm: agua.colunaDnMm,
         recalque: agua.recalque ? { dnMm: agua.recalque.dnMm, motorCv: agua.recalque.motorCv, alturaManometricaM: Math.round(agua.recalque.alturaManometricaM * 10) / 10 } : null,
         alimentadorDnMm: agua.alimentador?.dnMm ?? null,

@@ -20,14 +20,21 @@
 --   e-mail de quem alterou — era lido por QUALQUER usuário logado de qualquer cliente, e
 --   qualquer um gravava linha 'SYSTEM' (histórico forjado, com o e-mail que quisesse).
 --   Dados em 18/11: 55 linhas; 45 'SYSTEM' (29 de rubrica de org, 2 de rubrica global, 14 de
---   rubrica já excluída); 10 de evento, por org.
+--   rubrica já excluída — 'VALE REFEIÇÃO', 'ADIANTAMENTO*', 'TESTE_CODE_TRAJETORIA', ''); 10 de
+--   evento, por org. Depois do UPDATE: 16 'SYSTEM' (2 globais, 14 de excluída — só superadmin).
 --
 -- O QUE MUDA
+--   Dados (uma vez, idempotente): as linhas 'SYSTEM' de rubrica que hoje tem dona vão para a org
+--     dona (UPDATE … FROM rubrics). 'SYSTEM' fica só para rubrica global e para rubrica já
+--     excluída (dona desconhecida — o JSON antigo não guarda a org).
 --   Ler (SELECT):
 --     · linha de uma org minha (minhas_orgs_membro(), por conjunto — antes era só o e-mail);
---     · histórico de RUBRICA que eu enxergo: a linha 'SYSTEM' ou a da org dona de uma rubrica
---       visível para mim pela RLS de rubrics (global, da minha org ou compartilhada comigo por
---       rubric_org_shares) — quem pode ver e editar a rubrica vê o histórico dela;
+--     · histórico de RUBRICA que eu enxergo, na org DONA atual dela: rubrica visível para mim
+--       pela RLS de rubrics (da minha org ou compartilhada comigo por rubric_org_shares) com
+--       organization_id = org_id da linha — quem pode ver e editar a rubrica vê o histórico dela;
+--     · 'SYSTEM' só de rubrica GLOBAL (dona NULL). Não basta "existe rubrica com esse código":
+--       a PK de rubrics é o código, e quem recriasse 'VALE REFEIÇÃO' na própria org passaria a
+--       ler o histórico da rubrica excluída de outra org (revisão de 18/11);
 --     · superadmin vê tudo (inclusive o de rubrica já excluída).
 --   Gravar (INSERT):
 --     · user_email tem de ser o e-mail do JWT (o front já manda esse — auth.getUser());
@@ -46,9 +53,12 @@
 --   npx supabase db query --linked -o table "SELECT policyname, cmd, roles::text, qual, with_check FROM pg_policies WHERE tablename='payroll_audit_logs'"
 --   → só payroll_audit_logs_select e payroll_audit_logs_insert, TO authenticated, sem a perna
 --     "org_id = 'SYSTEM' OR" solta.
+--   npx supabase db query --linked -o table "SELECT count(*) FROM payroll_audit_logs l JOIN rubrics r ON r.code = l.entity_id WHERE l.org_id = 'SYSTEM' AND l.entity_type = 'RUBRIC' AND r.organization_id IS NOT NULL"
+--   → 0 (nenhum histórico 'SYSTEM' de rubrica que tem dona).
 --   E a prova inteira: npx supabase db query --linked -f scripts/teste-compartilhamentos-e-auditoria-folha.sql
 --
--- ROLLBACK (volta às duas policies de 18/11)
+-- ROLLBACK (volta às duas policies de 18/11; o UPDATE de dados não precisa voltar — com as
+-- policies antigas, linha na org dona continua legível pelos membros dela)
 --   DROP POLICY payroll_audit_logs_select ON public.payroll_audit_logs;
 --   DROP POLICY payroll_audit_logs_insert ON public.payroll_audit_logs;
 --   CREATE POLICY payroll_audit_logs_select ON public.payroll_audit_logs FOR SELECT TO authenticated
@@ -63,6 +73,15 @@
 BEGIN;
 SET LOCAL lock_timeout = '5s';
 
+-- Histórico 'SYSTEM' de rubrica que tem dona vai para a org dona (idempotente: 2ª vez, 0 linhas).
+UPDATE public.payroll_audit_logs l
+   SET org_id = r.organization_id::text
+  FROM public.rubrics r
+ WHERE l.org_id = 'SYSTEM'
+   AND l.entity_type = 'RUBRIC'
+   AND r.code = l.entity_id
+   AND r.organization_id IS NOT NULL;
+
 DROP POLICY IF EXISTS payroll_audit_logs_select ON public.payroll_audit_logs;
 DROP POLICY IF EXISTS payroll_audit_logs_insert ON public.payroll_audit_logs;
 -- Nomes do repositório (20260326190001 / 20260327183000), caso algum ambiente ainda os tenha.
@@ -74,11 +93,12 @@ CREATE POLICY payroll_audit_logs_select ON public.payroll_audit_logs
     USING (
         COALESCE(org_id IN (SELECT public.minhas_orgs_membro()::text), false)
         OR (entity_type = 'RUBRIC' AND EXISTS (
-                -- sujeita à RLS de rubrics: só rubrica que quem lê enxerga
+                -- sujeita à RLS de rubrics: só rubrica que quem lê enxerga, e só o histórico
+                -- da dona ATUAL dela ('SYSTEM' só se ela é global)
                 SELECT 1
                   FROM public.rubrics r
                  WHERE r.code = payroll_audit_logs.entity_id
-                   AND (payroll_audit_logs.org_id = 'SYSTEM'
+                   AND ((payroll_audit_logs.org_id = 'SYSTEM' AND r.organization_id IS NULL)
                         OR r.organization_id::text = payroll_audit_logs.org_id)))
         OR public.is_superadmin()
     );

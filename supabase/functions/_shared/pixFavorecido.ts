@@ -67,9 +67,14 @@ export type TituloDoPix = TituloParaPix & { organization_id: string };
  * dele no `pix_quote`.
  *
  * Disponibilizado = linha em `<tabela de compartilhamento>` com `target_org_id` = org do
- * título. Só vale porque essas linhas só podem ser escritas por quem é membro da org DONA
+ * título. Pela API, essas linhas só são escritas por quem é membro da org DONA e do destino
  * (policies de `employee_org_shares` e `supplier_org_shares`, migration
- * aplicar_20271118911000). Erro de leitura = não pertence (falha fechada).
+ * aplicar_20271118911000). Fornecedor ainda ganha compartilhamento por três funções do banco
+ * que não exigem a dona (fn_incluir_org_nos_catalogos repassa o que uma org sua recebeu;
+ * sindico_portal_salvar_fornecedor acha o fornecedor pelo CNPJ em todo o SaaS;
+ * mover_contrato_organizacao leva os fornecedores dos títulos para o destino) — então, para
+ * fornecedor, isto vale como "o cadastro é visível para a org do título", e não como "é da
+ * org". Erro de leitura = não pertence (falha fechada).
  */
 async function daOrgDoTitulo(
     admin: Admin,
@@ -85,6 +90,18 @@ async function daOrgDoTitulo(
         .eq(coluna, id).eq('target_org_id', orgDoTitulo).limit(1);
     return !error && Array.isArray(data) && data.length > 0;
 }
+
+/**
+ * Organizações cujas contas bancárias do favorecido valem: a dona dele e a do título.
+ *
+ * A linha da conta tem organização própria (supplier_bank_accounts.organization_id,
+ * employee_bank_accounts.org_id), e a RLS dessas tabelas deixa um gestor gravar conta para
+ * favorecido que só enxerga (fornecedor de outra org pelo id; colaborador disponibilizado),
+ * com a org dele na linha. Sem este filtro a chave dele aparecia como "Cadastro do …" no PIX
+ * da org dona (revisão de 18/11). Dados de 18/11: todas as 7 contas na org do dono.
+ */
+const orgsDasContas = (orgDoFavorecido: string | null | undefined, orgDoTitulo: string): string[] =>
+    [...new Set([orgDoFavorecido, orgDoTitulo].filter((o): o is string => !!o))];
 
 /** A empresa (companies) é da organização do título? Sócio e conta do sócio (F72). */
 async function empresaDaOrg(admin: Admin, companyId: string | null | undefined, orgDoTitulo: string): Promise<boolean> {
@@ -108,7 +125,8 @@ export async function destinoDoTitulo(admin: Admin, titulo: TituloDoPix): Promis
         }
         const { data: contas } = await admin.from('supplier_bank_accounts')
             .select('id,bank_name,pix_key,pix_key_type,beneficiary_name,beneficiary_document,is_pix_primary,titular_diferente_autorizado')
-            .eq('supplier_id', favorecido.id).eq('status', 'ativo').not('pix_key', 'is', null);
+            .eq('supplier_id', favorecido.id).eq('status', 'ativo').not('pix_key', 'is', null)
+            .in('organization_id', orgsDasContas(s.organization_id, orgDoTitulo));
         return {
             favorecido, nome: s?.name ?? null, documento: s?.document ?? null,
             opcoes: (contas ?? []).map((c: Record<string, unknown>) => opcao(
@@ -127,7 +145,8 @@ export async function destinoDoTitulo(admin: Admin, titulo: TituloDoPix): Promis
         }
         const { data: contas } = await admin.from('employee_bank_accounts')
             .select('id,bank_name,pix_key,pix_key_type,holder_name,is_primary,titular_diferente_autorizado')
-            .eq('employee_id', favorecido.id).not('pix_key', 'is', null);
+            .eq('employee_id', favorecido.id).not('pix_key', 'is', null)
+            .in('org_id', orgsDasContas(e.org_id, orgDoTitulo));
         return {
             favorecido, nome: e?.name ?? null, documento: e?.cpf ?? null,
             opcoes: (contas ?? []).map((c: Record<string, unknown>) => opcao(

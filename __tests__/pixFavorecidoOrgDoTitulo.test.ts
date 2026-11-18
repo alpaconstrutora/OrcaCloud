@@ -20,7 +20,7 @@ const ITEM_B = '44444444-4444-4444-8444-44444444444b';
 
 type Linha = Record<string, unknown>;
 
-/** Cliente falso: só os filtros que o destinoDoTitulo usa (eq, not is null, limit). */
+/** Cliente falso: só os filtros que o destinoDoTitulo usa (eq, in, not is null, limit). */
 function bancoFalso(tabelas: Record<string, Linha[]>) {
     const lidas: string[] = [];
     const admin = {
@@ -30,6 +30,7 @@ function bancoFalso(tabelas: Record<string, Linha[]>) {
             const q: any = {
                 select: () => q,
                 eq: (col: string, val: unknown) => { linhas = linhas.filter(l => l[col] === val); return q; },
+                in: (col: string, vals: unknown[]) => { linhas = linhas.filter(l => vals.includes(l[col])); return q; },
                 not: (col: string, op: string, val: unknown) => {
                     if (op === 'is' && val === null) linhas = linhas.filter(l => l[col] != null);
                     return q;
@@ -50,16 +51,16 @@ const tabelas = (extra: Record<string, Linha[]> = {}): Record<string, Linha[]> =
         { id: COLAB_B, org_id: ORG_B, name: 'Bruno da B', cpf: '11144477735' },
     ],
     employee_bank_accounts: [
-        { id: 'eba-a', employee_id: COLAB_A, pix_key: '52998224725', pix_key_type: 'CPF', holder_name: 'Ana da A', is_primary: true },
-        { id: 'eba-b', employee_id: COLAB_B, pix_key: '11144477735', pix_key_type: 'CPF', holder_name: 'Bruno da B', is_primary: true },
+        { id: 'eba-a', employee_id: COLAB_A, org_id: ORG_A, pix_key: '52998224725', pix_key_type: 'CPF', holder_name: 'Ana da A', is_primary: true },
+        { id: 'eba-b', employee_id: COLAB_B, org_id: ORG_B, pix_key: '11144477735', pix_key_type: 'CPF', holder_name: 'Bruno da B', is_primary: true },
     ],
     suppliers: [
         { id: FORN_A, organization_id: ORG_A, name: 'Fornecedor A', document: '11222333000181' },
         { id: FORN_B, organization_id: ORG_B, name: 'Fornecedor B', document: '11444777000161' },
     ],
     supplier_bank_accounts: [
-        { id: 'sba-a', supplier_id: FORN_A, status: 'ativo', pix_key: '11222333000181', pix_key_type: 'CNPJ', is_pix_primary: true },
-        { id: 'sba-b', supplier_id: FORN_B, status: 'ativo', pix_key: '11444777000161', pix_key_type: 'CNPJ', is_pix_primary: true },
+        { id: 'sba-a', supplier_id: FORN_A, organization_id: ORG_A, status: 'ativo', pix_key: '11222333000181', pix_key_type: 'CNPJ', is_pix_primary: true },
+        { id: 'sba-b', supplier_id: FORN_B, organization_id: ORG_B, status: 'ativo', pix_key: '11444777000161', pix_key_type: 'CNPJ', is_pix_primary: true },
     ],
     prolabore_payroll_items: [
         { id: ITEM_A, payroll_id: 'folha-a', partner_id: 'socio-a' },
@@ -146,6 +147,35 @@ describe('destinoDoTitulo · favorecido só da organização do título (F72)', 
         const d = await destinoDoTitulo(admin, { organization_id: ORG_A, source_system: 'CONTRACT', supplier_id: FORN_B });
         expect(d.nome).toBe('Fornecedor B');
         expect(d.opcoes.map(o => o.ref)).toEqual(['fornecedor:sba-b']);
+    });
+
+    it('conta do fornecedor gravada por OUTRA org (org da linha ≠ dona e ≠ título): não é oferecida', async () => {
+        const t = tabelas();
+        t.supplier_bank_accounts.push({ id: 'sba-injetada', supplier_id: FORN_A, organization_id: 'org-c', status: 'ativo',
+            pix_key: 'ladrao@exemplo.com', pix_key_type: 'EMAIL', is_pix_primary: true, titular_diferente_autorizado: true });
+        const { admin } = bancoFalso(t);
+        const d = await destinoDoTitulo(admin, { organization_id: ORG_A, source_system: 'CONTRACT', supplier_id: FORN_A });
+        expect(d.opcoes.map(o => o.ref)).toEqual(['fornecedor:sba-a']);
+    });
+
+    it('fornecedor compartilhado: valem as contas da dona e as da org do título', async () => {
+        const t = tabelas({ supplier_org_shares: [{ id: 'ss', supplier_id: FORN_B, target_org_id: ORG_A }] });
+        t.supplier_bank_accounts.push({ id: 'sba-b-pela-a', supplier_id: FORN_B, organization_id: ORG_A, status: 'ativo',
+            pix_key: 'fornecedor-b@exemplo.com', pix_key_type: 'EMAIL' });
+        t.supplier_bank_accounts.push({ id: 'sba-b-pela-c', supplier_id: FORN_B, organization_id: 'org-c', status: 'ativo',
+            pix_key: 'outro@exemplo.com', pix_key_type: 'EMAIL' });
+        const { admin } = bancoFalso(t);
+        const d = await destinoDoTitulo(admin, { organization_id: ORG_A, source_system: 'CONTRACT', supplier_id: FORN_B });
+        expect(d.opcoes.map(o => o.ref)).toEqual(['fornecedor:sba-b', 'fornecedor:sba-b-pela-a']);
+    });
+
+    it('conta do colaborador com a org trocada para outra org (quem recebeu o colaborador): não é oferecida', async () => {
+        const t = tabelas();
+        t.employee_bank_accounts = t.employee_bank_accounts.map(c => (c.id === 'eba-a' ? { ...c, org_id: 'org-c', pix_key: 'ladrao@exemplo.com', pix_key_type: 'EMAIL' } : c));
+        const { admin } = bancoFalso(t);
+        const d = await destinoDoTitulo(admin, tituloFolha(COLAB_A));
+        expect(d.nome).toBe('Ana da A');
+        expect(d.opcoes).toEqual([]);
     });
 
     it('fornecedor que não existe: a mesma resposta vazia de sempre (não vira avulso)', async () => {

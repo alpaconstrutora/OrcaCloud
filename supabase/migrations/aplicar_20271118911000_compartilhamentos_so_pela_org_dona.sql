@@ -1,7 +1,8 @@
 -- ==========================================================================
 -- Compartilhamento entre organizações (fornecedor, cliente, rubrica, base personalizada e
 -- colaborador): só quem é membro da organização DONA do registro compartilha, e só para uma
--- organização de que também é membro (ou gestor, onde já se exigia)
+-- organização de que também é membro (ou gestor, onde já se exigia); e a dona de rubrica e de
+-- base personalizada não muda pela mão de quem só recebeu
 -- Date: 2026-11-18
 -- Prova: scripts/teste-compartilhamentos-e-auditoria-folha.sql
 -- Base:  policies vigentes no banco em 18/11 (lidas de pg_policies; o repositório tem drift).
@@ -34,6 +35,15 @@
 --      colaborador para QUALQUER organização, inclusive de outro cliente do SaaS: ele aparecia no
 --      RH e na lista de Credor dela, e o pix_quote dela devolvia as chaves dele. É o defeito que o
 --      #537 fechou em employees (o compartilhamento como porta para uma org alheia).
+--   6. rubrics e custom_databases · a DONA mudava pela mão de quem só recebeu: rubrics_update e
+--      custom_databases_update não têm WITH CHECK próprio e o USING aceita o ramo do
+--      compartilhamento. Qualquer membro da org destino fazia UPDATE … SET organization_id = <a
+--      dele> (ou NULL: a rubrica virava global para todo o SaaS) e, dono, recompartilhava para
+--      onde quisesse — anulando os itens 3 e 4. Policy não enxerga o valor antigo; por isso um
+--      gatilho (fn_trava_troca_de_dona): mudar a organização exige ser membro da antiga E da nova
+--      (nenhuma nula), salvo superadmin ou chamada sem usuário (service_role/postgres). Ninguém
+--      muda essa coluna hoje: a tela de rubricas e a de bases não editam a organização, e nenhuma
+--      função do banco faz UPDATE nessas tabelas.
 --
 -- O QUE MUDA
 --   WITH CHECK (vale para INSERT e para a linha nova de UPDATE) passa a exigir as DUAS pontas:
@@ -52,6 +62,14 @@
 --     mover_contrato_organizacao, sindico_portal_salvar_fornecedor — SECURITY DEFINER de postgres
 --     (BYPASSRLS), não passam por estas policies; fn_condominio_migrar (INVOKER) só é executável
 --     por postgres/service_role.
+--     ⚠️ Três delas compartilham sem exigir a org dona, e ficam como estão (decisão de produto,
+--     fora desta migration): fn_incluir_org_nos_catalogos (gestor de p_org) repassa para p_org o
+--     que uma org sua só RECEBEU; sindico_portal_salvar_fornecedor acha o fornecedor pelo CNPJ em
+--     todo o SaaS e o compartilha com a org do condomínio; mover_contrato_organizacao leva para o
+--     destino os fornecedores dos títulos, inclusive os recebidos. Nenhuma grava em
+--     employee_org_shares. Ou seja: depois desta migration, compartilhamento de COLABORADOR só
+--     nasce pela org dona; o de fornecedor/cliente/rubrica/base, pela API, também — mas ainda
+--     pode chegar por essas três funções.
 --   · Dados em 18/11: 743 compartilhamentos de fornecedor, 85 de cliente, 124 de rubrica, 4 de
 --     base personalizada e 15 de colaborador — TODOS entre orgs com pelo menos um membro em comum.
 --     Nada existente fica de fora (e policy não revalida linha existente; vale para a próxima
@@ -76,6 +94,8 @@
 -- COMO CONFERIR
 --   npx supabase db query --linked -o table "SELECT tablename, policyname, roles::text, with_check FROM pg_policies WHERE policyname IN ('sos_manage','cos_manage','ros_manage','cdos_manage','employee_shares_insert_delete')"
 --   → cada WITH CHECK com a função da org dona (ou employees.org_id) E target_org_id.
+--   npx supabase db query --linked -o table "SELECT tgname, tgrelid::regclass FROM pg_trigger WHERE tgname LIKE '%trava_troca_de_dona'"
+--   → os dois gatilhos (rubrics, custom_databases).
 --   E a prova inteira: npx supabase db query --linked -f scripts/teste-compartilhamentos-e-auditoria-folha.sql
 --
 -- ROLLBACK (volta às policies de 18/11)
@@ -99,7 +119,10 @@
 --            IN (SELECT minhas_orgs_membro())), false));
 --   DROP FUNCTION public.fn_fornecedor_da_minha_org(uuid), public.fn_cliente_da_minha_org(uuid),
 --                 public.fn_rubrica_da_minha_org(text), public.fn_base_personalizada_da_minha_org(uuid);
---   GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES, TRIGGER ON public.supplier_org_shares,
+--   DROP TRIGGER trg_rubrics_trava_troca_de_dona ON public.rubrics;
+--   DROP TRIGGER trg_custom_databases_trava_troca_de_dona ON public.custom_databases;
+--   DROP FUNCTION public.fn_trava_troca_de_dona();
+--   GRANT SELECT, INSERT, UPDATE, DELETE, REFERENCES, TRIGGER, MAINTAIN ON public.supplier_org_shares,
 --     public.client_org_shares, public.rubric_org_shares, public.custom_database_org_shares TO anon;
 -- ==========================================================================
 
@@ -243,5 +266,42 @@ CREATE POLICY employee_shares_insert_delete ON public.employee_org_shares
                  IN (SELECT public.minhas_orgs_membro()), false)
         AND COALESCE(target_org_id IN (SELECT public.minhas_orgs_membro()), false)
     );
+
+-- ── 6. a DONA de rubrica e de base personalizada não muda pela mão de quem só recebeu ──
+CREATE OR REPLACE FUNCTION public.fn_trava_troca_de_dona()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF NEW.organization_id IS NOT DISTINCT FROM OLD.organization_id THEN
+        RETURN NEW;
+    END IF;
+    -- Sem usuário na requisição = chamada interna (service_role, postgres).
+    IF auth.uid() IS NULL OR public.is_superadmin() THEN
+        RETURN NEW;
+    END IF;
+    IF OLD.organization_id IS NULL OR NEW.organization_id IS NULL
+       OR NOT (OLD.organization_id IN (SELECT public.minhas_orgs_membro()))
+       OR NOT (NEW.organization_id IN (SELECT public.minhas_orgs_membro())) THEN
+        RAISE EXCEPTION USING ERRCODE = '42501',
+            MESSAGE = format('sem acesso: só quem é membro da organização dona e da nova muda a organização de %s', TG_TABLE_NAME);
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+-- Função de gatilho não é chamável como RPC; o REVOKE fica pela regra (REGRA #7).
+REVOKE ALL ON FUNCTION public.fn_trava_troca_de_dona() FROM PUBLIC, anon;
+
+DROP TRIGGER IF EXISTS trg_rubrics_trava_troca_de_dona ON public.rubrics;
+CREATE TRIGGER trg_rubrics_trava_troca_de_dona
+    BEFORE UPDATE OF organization_id ON public.rubrics
+    FOR EACH ROW EXECUTE FUNCTION public.fn_trava_troca_de_dona();
+
+DROP TRIGGER IF EXISTS trg_custom_databases_trava_troca_de_dona ON public.custom_databases;
+CREATE TRIGGER trg_custom_databases_trava_troca_de_dona
+    BEFORE UPDATE OF organization_id ON public.custom_databases
+    FOR EACH ROW EXECUTE FUNCTION public.fn_trava_troca_de_dona();
 
 COMMIT;

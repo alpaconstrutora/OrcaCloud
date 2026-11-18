@@ -109,7 +109,12 @@ function RuleModal({
 
     return (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            {/* max-w-3xl (768px) e não 2xl (672px): o e-mail de cobrança tem layout de
+                600px, e a prévia (HtmlSanitizado, que rola o que for mais largo) só tinha
+                672 − 40 (p-5) − 2 (borda) − 32 (p-4) = 598px — barra de rolagem de 2px.
+                Com 768px sobram 694px, e ainda 677px quando o corpo do modal ganha a
+                barra vertical (~17px no Windows) com um e-mail comprido. */}
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col">
                 <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
                     <h2 className="text-sm font-bold text-gray-900">{rule ? 'Editar regra' : 'Nova regra'}</h2>
                     <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg">

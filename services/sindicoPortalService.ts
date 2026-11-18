@@ -357,7 +357,7 @@ export const sindicoPortalService = {
         }, 'Não foi possível dar baixa.');
     },
 
-    /** `existente` = CPF/CNPJ já cadastrado (passa a valer neste condomínio, sem duplicar). */
+    /** `existente` = CPF/CNPJ já cadastrado para a org do condomínio (dela ou disponibilizado a ela): reaproveita, sem duplicar. */
     async salvarFornecedor(id: IdentidadeDoSindico, condominioId: string, dados: FornecedorNovo): Promise<{ id: string; nome: string; existente: boolean }> {
         const r = await escrever('sindico_portal_salvar_fornecedor', {
             ...params(id), p_empreendimento_id: condominioId, p_dados: dados,

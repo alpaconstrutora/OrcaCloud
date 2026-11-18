@@ -135,7 +135,85 @@ describe('sanitizeHtml · neutraliza o que chega das tabelas org-scoped', () => 
     });
 });
 
+/**
+ * Resto do F70 (varredura de 15/11/2026): `style` passa no DOMPurify sem que
+ * ele leia o CSS, e `background-image:url(https://…)` faz o navegador de quem
+ * ABRE a aula/o modelo/a ajuda buscar o endereço — o autor fica sabendo quem
+ * abriu, quando e de que IP. O helper tira a DECLARAÇÃO que busca recurso e
+ * mantém as outras.
+ */
+describe('sanitizeHtml · style não busca recurso externo (rastreio por url())', () => {
+    /** `style` do primeiro elemento que casa com o seletor — `null` se não houver. */
+    const styleDe = (html: string, seletor = '[data-alvo], p, div, span, td, li, a'): string | null => {
+        const div = document.createElement('div');
+        div.innerHTML = sanitizeHtml(html);
+        return div.querySelector(seletor)?.getAttribute('style') ?? null;
+    };
+
+    it('tira background-image:url(https://…) e mantém o texto', () => {
+        const limpo = sanitizeHtml('<div style="background-image:url(https://rastreio.test/p.gif)">Aula 1</div>');
+        expect(limpo).not.toContain('rastreio.test');
+        expect(limpo).toContain('Aula 1');
+    });
+
+    it('tira só a declaração com url(); as outras ficam', () => {
+        const style = styleDe('<p style="color:red; background:url(\'https://rastreio.test/a\') no-repeat; font-weight:bold">x</p>');
+        expect(style).not.toBeNull();
+        expect(style).not.toContain('rastreio.test');
+        expect(style).toContain('color:red');
+        expect(style).toContain('font-weight:bold');
+    });
+
+    it('style que só tinha url() sai sem o atributo', () => {
+        expect(styleDe('<span style="background:url(https://rastreio.test/x)">x</span>')).toBeNull();
+    });
+
+    it.each([
+        ['image-set', 'background-image:image-set("https://rastreio.test/a.png" 1x)'],
+        ['-webkit-image-set', 'background-image:-webkit-image-set(url(https://rastreio.test/a.png) 1x)'],
+        ['cursor', 'cursor:url(https://rastreio.test/c.cur), auto'],
+        ['list-style-image', 'list-style-image:url(https://rastreio.test/b.png)'],
+        ['list-style (atalho)', 'list-style:square url(https://rastreio.test/b.png)'],
+        ['border-image', 'border-image:url(https://rastreio.test/b.png) 30 round'],
+        ['content', 'content:url(https://rastreio.test/c.png)'],
+        ['mask', 'mask-image:url(https://rastreio.test/m.svg)'],
+        ['@import', '@import url(https://rastreio.test/x.css)'],
+        ['caixa alta', 'BACKGROUND:URL(https://rastreio.test/x)'],
+        ['espaço antes do parêntese', 'background:url (https://rastreio.test/x)'],
+        ['escape hexadecimal', 'background:\\75 rl(https://rastreio.test/x)'],
+        ['escape de letra', 'background:u\\rl(https://rastreio.test/x)'],
+        ['comentário no meio', 'background:ur/**/l(https://rastreio.test/x)'],
+        ['propriedade customizada', '--fundo:url(https://rastreio.test/x)'],
+        ['protocolo relativo', 'background:url(//rastreio.test/x)'],
+        ['data: (hoje sem uso nos modelos)', 'background:url(data:image/png;base64,iVBORw0KGgo=)'],
+    ])('tira %s', (_nome, declaracao) => {
+        const html = `<div data-alvo style="color:blue; ${declaracao.replace(/"/g, '&quot;')}">x</div>`;
+        const limpo = sanitizeHtml(html);
+        expect(limpo).not.toContain('rastreio.test');
+        expect(limpo).not.toContain('base64');
+        expect(styleDe(html, '[data-alvo], div')).toBe('color:blue');
+    });
+
+    it('";" dentro de aspas não esconde a declaração com url()', () => {
+        const style = styleDe('<p style=\'font-family:"a;b"; background:url(https://rastreio.test/x)\'>x</p>');
+        expect(style).toBe('font-family:"a;b"');
+    });
+
+    it('aspas sem fechar engolem o resto — e o resto com url() sai junto', () => {
+        const limpo = sanitizeHtml('<p style=\'color:red; font-family:"a; background:url(https://rastreio.test/x)\'>x</p>');
+        expect(limpo).not.toContain('rastreio.test');
+        expect(styleDe('<p style=\'color:red; font-family:"a; background:url(https://rastreio.test/x)\'>x</p>')).toBe('color:red');
+    });
+});
+
 describe('sanitizeHtml · preserva o conteúdo legítimo', () => {
+    it('style sem url() sai idêntico, byte a byte', () => {
+        const div = document.createElement('div');
+        const style = 'width:50%;  text-align: center ;font-family: "Times New Roman", serif; border:1px solid #000;';
+        div.innerHTML = sanitizeHtml(`<table><tr><td style='${style}'>Cláusula</td></tr></table>`);
+        expect(div.querySelector('td')?.getAttribute('style')).toBe(style);
+    });
+
     it('mantém formatação de texto de aula', () => {
         const original = '<p><strong>Importante</strong>: leia o <em>manual</em>.</p><ul><li>um</li><li>dois</li></ul>';
         const limpo = sanitizeHtml(original);

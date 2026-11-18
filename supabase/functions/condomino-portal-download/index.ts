@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -98,6 +99,12 @@ serve(async (req: Request) => {
     if (!doc.storage_path) {
         if (!doc.url) return json({ error: 'Documento sem arquivo nem link' }, 404);
         return json({ url: doc.url });
+    }
+    // `condominio_documentos.storage_path` é gravado por quem usa o app; com
+    // `..`/`%2e%2e` a assinatura da service_role sairia da pasta e do bucket (F53).
+    if (!caminhoSemTravessia(doc.storage_path)) {
+        console.error('[condomino-portal-download] caminho com travessia recusado no documento', documentoId);
+        return json({ error: 'Erro ao gerar link de acesso' }, 500);
     }
 
     const { data: assinado, error: erroAssinatura } = await admin.storage

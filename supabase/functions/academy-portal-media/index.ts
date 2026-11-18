@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -82,6 +83,13 @@ serve(async (req: Request) => {
             const msg = rpcError?.message || 'Recurso não encontrado';
             const status = rpcError?.code === '42501' ? 403 : rpcError?.code === 'P0002' ? 404 : 401;
             return json({ error: msg }, status);
+        }
+        // `storage_path` de aula/material/certificado é gravado por quem usa o
+        // app; com `..`/`%2e%2e` a assinatura da service_role sairia da pasta e
+        // do bucket (F53).
+        if (!caminhoSemTravessia(resolvido.storage_path)) {
+            console.error('[academy-portal-media] caminho com travessia recusado (treinando)');
+            return json({ error: 'Erro ao gerar link de acesso' }, 500);
         }
         const { data: signedUser, error: signUserError } = await admin.storage
             .from('academy-media')
@@ -178,6 +186,11 @@ serve(async (req: Request) => {
     }
 
     if (!storagePath) return json({ error: 'Recurso não encontrado' }, 404);
+    // Idem: caminho gravado por quem usa o app, sem `..`/`%2e%2e` (F53).
+    if (!caminhoSemTravessia(storagePath)) {
+        console.error('[academy-portal-media] caminho com travessia recusado (token)');
+        return json({ error: 'Erro ao gerar link de acesso' }, 500);
+    }
 
     // ── 3. Assina ───────────────────────────────────────────────────────
     const { data: signed, error: signError } = await admin.storage

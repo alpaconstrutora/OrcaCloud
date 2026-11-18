@@ -437,6 +437,13 @@ verify_jwt = false
 [functions.email-capture-accounts]
 verify_jwt = false
 
+# Processador de NF-e: chamado pelo banco/cron com o CRON_SECRET (não é JWT); o
+# gate é `chamadaDeCron` no código (REGRA #7 pergunta 3). Já estava publicado
+# com verify_jwt = false sem esta entrada — sem ela, um `functions deploy` sem a
+# flag religaria o gateway e o cron passaria a tomar 401 (18/11/2026).
+[functions.fiscal-nfe-processor]
+verify_jwt = false
+
 # Asaas (docs/planos/2026-10-16-asaas-pendencias-e-pix.md). Nenhuma das duas
 # recebe JWT: o webhook autentica pelo header `asaas-access-token`
 # (ASAAS_WEBHOOK_TOKEN, comparação em tempo constante) e o status-sync pelo

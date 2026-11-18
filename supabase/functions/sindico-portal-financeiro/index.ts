@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { resolverOrigens } from "../_shared/origemDoLancamento.ts"
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -157,6 +158,14 @@ serve(async (req: Request) => {
 
     const doc = origens.get(autorizados[0])?.documento;
     if (!doc) return json({ error: 'Este título não tem documento anexado' }, 404);
+    // F54: o anexo do síndico é gravado por ele (sindico_portal_lancar_pagar /
+    // _editar_titulo). Um `%2e%2e` no caminho, lido pelo parser de URL do fetch,
+    // tirava a assinatura da service_role da pasta e do bucket. A RPC recusa na
+    // gravação desde aplicar_20271118912000; aqui recusa o que já estava gravado.
+    if (!caminhoSemTravessia(doc.path)) {
+        console.error('[sindico-portal-financeiro] caminho com travessia recusado no título', autorizados[0]);
+        return json({ error: 'Erro ao gerar o link do documento' }, 500);
+    }
     const { data: assinado, error: erroAss } = await admin.storage.from(doc.bucket).createSignedUrl(doc.path, 60 * 15);
     if (erroAss || !assinado) {
         console.error('[sindico-portal-financeiro] assinar:', erroAss);

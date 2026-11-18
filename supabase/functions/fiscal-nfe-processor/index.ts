@@ -13,6 +13,7 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { XMLParser } from "https://esm.sh/fast-xml-parser@4";
 import { chamadaDeCron } from "../_shared/auth.ts";
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts";
 
 const PARSER_VERSION = "1.0.0";
 const CONTRACT_VERSION = "1.0.0";
@@ -323,6 +324,10 @@ async function processJob(
     }
 
     // 2. Download do XML no Storage
+    // `raw_documents.file_path` é gravado por quem envia a nota pelo app; com
+    // `..`/`%2e%2e` o download da service_role sairia da pasta e do bucket (F53).
+    // `DATA_` vai direto para dead_letter: tentar de novo não muda o caminho.
+    if (!caminhoSemTravessia(rawDoc.file_path)) throw new Error("DATA_INVALID_PATH: caminho do XML com segmento . ou ..");
     const { data: xmlData, error: storageErr } = await supabase.storage
       .from("fiscal-documents")
       .download(rawDoc.file_path);

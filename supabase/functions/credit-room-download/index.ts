@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 // @ts-ignore
 import { PDFDocument, StandardFonts, degrees, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { exigirUsuario } from '../_shared/auth.ts';
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -183,6 +184,13 @@ serve(async (req: Request) => {
         && row.document?.organization_id === room.organization_id,
     );
     if (!alvo) return json({ error: 'Documento não compartilhado com este Credit Room' }, 403);
+
+    // O vínculo acima é por IGUALDADE com `opura_document_versions.storage_path`,
+    // que é gravado por quem usa o GED. Com `..`/`%2e%2e` o download e a
+    // assinatura da service_role sairiam da pasta e do bucket (F53).
+    if (!caminhoSemTravessia(storagePath)) {
+        return json({ error: 'Caminho de arquivo inválido' }, 400);
+    }
 
     // ── 4. Marca d'água (§84) quando for PDF; senão, link assinado.
     const ehPdf = storagePath.toLowerCase().endsWith('.pdf');

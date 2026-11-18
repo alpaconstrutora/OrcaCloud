@@ -12,10 +12,35 @@
 //
 // Só TRAVESSIA — a pasta/prefixo continua sendo conferida por quem chama.
 //
-// A MESMA regra mora no banco, em `partner_portal_create_request`
-// (aplicar_20271116905700_partner_anexo_sem_travessia.sql), que grava os
-// caminhos dos anexos de solicitação do Portal do Parceiro. Mudar uma é mudar
-// as duas.
+// Vale igual para `download(caminho)` (GET `/object/<bucket>/<caminho>`, também
+// montado como URL). `createSignedUrls` (plural) e `remove` mandam o caminho no
+// CORPO JSON, que não passa pelo parser de URL — não precisam.
+//
+// Quem chama antes de entregar o caminho à service_role (o teste
+// `__tests__/assinadoresSemTravessia.test.ts` trava a lista): os downloads de
+// portal (parceiro, fornecedor, cliente, colaborador, condômino, síndico,
+// Credit Room, Treinamentos), os três `*-portal-recibo-download`, o PDF do
+// rateio, o ofício (`doc-gen-*`), a releitura de boleto (`email-capture-sync`)
+// e o XML da NF-e (`fiscal-nfe-processor`).
+//
+// A MESMA regra mora no banco, em dois lugares:
+//  • `partner_portal_create_request`
+//    (aplicar_20271116905700_partner_anexo_sem_travessia.sql), que grava os
+//    caminhos dos anexos de solicitação do Portal do Parceiro;
+//  • `fn_caminho_sem_travessia(text)`
+//    (aplicar_20271118912000_caminho_sem_travessia_sindico.sql), chamada por
+//    `sindico_portal_lancar_pagar` e `sindico_portal_editar_titulo`, que gravam
+//    o anexo do síndico em `internal_transactions.documento_path`.
+// Mudar uma é mudar as três. `__tests__/caminhoSemTravessia.test.ts` lista os
+// casos de borda em que as três precisam concordar.
+//
+// Tempo LINEAR no tamanho do caminho, de propósito: o caminho é gravado por
+// quem está do outro lado (síndico, membro de organização), e um regex com
+// retrocesso (ex.: `/[\x00-\x20]+$/`, quadrático no V8 quando há um bloco
+// longo de espaços NO MEIO) deixaria um caminho plantado esgotar a CPU da Edge
+// Function — e derrubar o PDF do rateio inteiro, não só o arquivo dele. Por
+// isso o corte do fim é um laço, e os demais regex são de um caractere ou de
+// texto fixo (sem quantificador).
 //
 // Sem import nenhum, para valer na Edge Function (Deno) e no Vitest.
 

@@ -29,6 +29,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { chamadaDeCron, exigirMembro, respostaDeErro } from "../_shared/auth.ts";
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts";
 import { novoClienteImap, falhaDeAutenticacao, mensagemDeErroImap, lerTudo, type ClienteImap } from "../_shared/imapCaptura.ts";
 // ⚠️ MESMOS arquivos que o navegador carrega — não são cópias. Leitura do
 // boleto e regras de destino têm uma verdade só.
@@ -758,6 +759,10 @@ async function reprocessarParados(
         if (!b || !['revisao', 'rascunho'].includes(b.status) || (b.linha_digitavel && b.vencimento)) continue;
 
         orcamento.anexos--;
+        // `boletos.documento_path` é gravado por quem usa o app (Boletos, Edição
+        // em Lote); com `..`/`%2e%2e` o download da service_role sairia da pasta
+        // e do bucket (F53).
+        if (!caminhoSemTravessia(b.documento_path)) continue;
         const { data: blob, error: dlErr } = await admin.storage.from(BUCKET).download(b.documento_path);
         if (dlErr || !blob) continue;
         const bytes = new Uint8Array(await blob.arrayBuffer());

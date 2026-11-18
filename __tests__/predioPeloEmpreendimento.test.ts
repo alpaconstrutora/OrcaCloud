@@ -317,3 +317,22 @@ describe('PE3 — a Casa automática reconhece o prédio e os passos do "Constru
     expect(p.parada).toBeNull();
   });
 });
+
+describe('PE3 — a torre que começa abaixo da rua ainda não se constrói (até a fase dela)', () => {
+  it('o motor recusa a Torre B (apartamentos no −2 e no −1) com o motivo — gerava térreo + 3 andares, errado', () => {
+    const b = daTorre('Torre B');
+    const entrada = { blocoId: 'x', produto: produtoVazio(), doBloco: null, rotacaoNorteDeg: null, doEmpreendimento: { torreId: b.torreId, andares: papelDosAndares(b).andares } };
+    const m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }]).model;
+    const m2 = applyBatch(m, [{ type: 'AddBloco', levelId: m.levels[0].id, nome: 'Torre B', pontos: [point(0, 0), point(18000, 0), point(18000, 30000), point(0, 30000)], pavimentos: 6, cotaBaseMm: -6000 } as Command]).model;
+    expect(motivoParaNaoGerarPredio(m2, { ...entrada, blocoId: m2.blocos![0].id })).toMatch(/abaixo da rua/);
+  });
+
+  it('o passo TORRE com a torre que não se constrói falta, e o botão diz por quê', () => {
+    const base: EntradaDosPassos = { temPavimento: true, pavimentoComParedes: false, temLote: true, loteDaFicha: null, motivoSemLoteNaFicha: null, temGeorreferencia: false, coordenadasDaFicha: null, zonaAplicada: null, zonasDoEmpreendimento: 0, unidades: [], unidadeId: null, motivoParaNaoGerar: null };
+    const torres = [{ id: 'tA', nome: 'Torre A', resumo: '…' }, { id: 'tB', nome: 'Torre B', resumo: '…', motivo: 'começa abaixo da rua' }];
+    const p = passosDoPredioPeloEmpreendimento(base, torres, 'tB');
+    expect(p.passos.find((x) => x.passo === 'TORRE')).toMatchObject({ estado: 'FALTA' });
+    expect(p.motivoDoBotao).toMatch(/abaixo da rua/);
+    expect(passosDoPredioPeloEmpreendimento(base, torres, 'tA').motivoDoBotao).toBeNull();
+  });
+});

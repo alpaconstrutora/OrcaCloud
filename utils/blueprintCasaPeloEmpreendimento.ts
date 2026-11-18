@@ -184,6 +184,8 @@ export interface TorreParaOsPassos {
   nome: string;
   /** "3 andares × 4 + térreo com 2". */
   resumo: string;
+  /** Por que esta torre ainda não se constrói (a que começa abaixo da rua); ausente = constrói. */
+  motivo?: string | null;
 }
 
 /**
@@ -197,6 +199,7 @@ export function passosDoPredioPeloEmpreendimento(e: EntradaDosPassos, torres: re
     .map((p) => (p.passo === 'ZONA' ? { ...p, texto: p.texto.replace('a casa sai sem os recuos', 'o prédio sai sem os recuos') } : p));
   const escolhida = torres.find((t) => t.id === torreId) ?? (torres.length === 1 ? torres[0] : null);
   if (torres.length === 0) passos.push({ passo: 'TORRE', rotulo: 'Torre', estado: 'FALTA', texto: 'O Empreendimento não tem torre com apartamentos em Torres & Unidades.' });
+  else if (escolhida?.motivo) passos.push({ passo: 'TORRE', rotulo: 'Torre', estado: 'FALTA', texto: `${escolhida.nome}: ${escolhida.motivo}` });
   else if (escolhida) passos.push({ passo: 'TORRE', rotulo: 'Torre', estado: 'FEITO', texto: `${escolhida.nome}: ${escolhida.resumo}.` });
   else passos.push({ passo: 'TORRE', rotulo: 'Torre', estado: 'PERGUNTAR', texto: `O Empreendimento tem ${torres.length} torres — escolha qual construir (uma por vez).` });
   passos.push(

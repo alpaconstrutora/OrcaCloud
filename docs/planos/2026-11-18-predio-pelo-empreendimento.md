@@ -269,6 +269,11 @@ Marcos de laboratório (prédio e casa) idênticos; suítes do prédio, da divis
 
 Sem erro de console. Testes: `predioPeloEmpreendimento` 21, `TelaCasaAutomatica` 36, `TelaPredioAutomatico` 7; `check-ui-standard` limpo nas duas telas.
 
+**Guarda da Torre B (18/11, achado depois da conferência).** Escolher a Torre B gerava um prédio **errado**, sem erro:
+- **O que saía:** o motor fazia o térreo de condomínio no 0 e 3 andares acima (12 apartamentos em vez de 24), ignorava o −2 e o −1 e deixava a garagem descolada, com um vão de 6 m.
+- **Agora:** até a fase da torre abaixo da rua, `motivoParaNaoGerarPredio` recusa e diz o motivo; no passo TORRE, a torre fica em FALTA e o botão desliga com "começa abaixo da rua (Pavimento −2, Pavimento −1)…".
+- **Testes:** 2 novos.
+
 ### PE4 — O andar próprio: o térreo da Torre A com os 2 apartamentos
 **O que muda.**
 - **Primeiro, uma conferência curta (spike):** a cópia viva do tipo, desvinculada (`SetLevelProps tipoDeId: null`), fica com as paredes, as plantas e as instalações como próprias? Se não ficar, a fase ganha uma mudança no kernel (versão nova) antes do resto, e o plano registra isso.

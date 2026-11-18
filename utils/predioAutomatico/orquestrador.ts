@@ -76,6 +76,10 @@ export function motivoParaNaoGerarPredio(model: BlueprintModel, entrada: Entrada
   if (ja) return `Pavimento tipo já montado: "${ja.name}". Para refazer, remova esse pavimento (as cópias se desvinculam) e gere de novo.`;
   if (entrada.doEmpreendimento) {
     if (!entrada.doEmpreendimento.andares.some((a) => a.papel === 'TIPO' && a.unidades.length > 0)) return 'A torre do Empreendimento não tem andar com apartamentos (Torres & Unidades).';
+    // PE3 (18/11/2026): a torre que começa abaixo da rua (a Torre B do Garden, do −2) ainda não se monta — o motor faz o
+    // térreo de condomínio no 0 e os andares acima dele; gerava a torre errada (sem o −2 e o −1, a garagem descolada).
+    const abaixo = entrada.doEmpreendimento.andares.filter((a) => a.papel !== 'GARAGEM' && a.numero < 0 && a.unidades.length > 0);
+    if (abaixo.length) return `A torre tem apartamentos abaixo da rua (${abaixo.map((a) => a.nome).join(', ')}) — o Prédio automático ainda não monta torre que começa abaixo do térreo; ela fica para a próxima entrega.`;
   } else if (!entrada.doBloco || entrada.doBloco.unidades === 0) return 'Defina o produto (Terreno › Massa › Produto): sem tipologias não há unidade para dividir o pavimento.';
   return null;
 }

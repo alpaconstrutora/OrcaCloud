@@ -1,10 +1,9 @@
 import React from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { Building2, ChevronDown, ExternalLink, FileDown, Sparkles, Wallet } from 'lucide-react';
+import { Building2, ChevronDown, ExternalLink, FileDown, Wallet } from 'lucide-react';
 import { HoldingItem } from '../types';
 import { InvestorContribution } from '../../../services/investorContributionsService';
 import { totalDaCarteira } from '../../../utils/investidorCarteira';
-import { AIInsight } from '../../../services/aiService';
 import {
     CardHeader, DetailField, fmtBRL, fmtBRLCents, fmtDate, fmtMonthShort, KpiStrip, PortalCard,
     PortalEmpty, PortalTabs, PrimaryButton, SoftButton, StatusPill, Td, Th, TagChip, PillTone,
@@ -18,8 +17,6 @@ interface Props {
     totalDividends: number;
     holdings: HoldingItem[];
     contributions: InvestorContribution[];
-    aiInsight: AIInsight | null;
-    loadingAI: boolean;
     onSelectAsset: (h: HoldingItem) => void;
     onNavigateToHoldings: () => void;
 }
@@ -49,7 +46,7 @@ const holdingTone = (status: string): PillTone => {
 
 const PortalOverview: React.FC<Props> = ({
     equity, activeWorks, monthlyYieldPct, totalContributed, totalDividends,
-    holdings, contributions, aiInsight, loadingAI, onSelectAsset, onNavigateToHoldings,
+    holdings, contributions, onSelectAsset, onNavigateToHoldings,
 }) => {
     const [hiddenSeries, setHiddenSeries] = React.useState<SeriesId[]>([]);
     const [activeLabel, setActiveLabel] = React.useState<string | null>(null);
@@ -226,19 +223,6 @@ const PortalOverview: React.FC<Props> = ({
 
     return (
         <div className="space-y-3">
-            {/* Insight de IA — faixa fina, sem competir com os KPIs */}
-            {(loadingAI || aiInsight) && (
-                <PortalCard className="px-5 py-3.5 flex items-start gap-3">
-                    <Sparkles className="w-4 h-4 text-[#E1553C] shrink-0 mt-0.5" />
-                    <div className="min-w-0">
-                        <p className="text-[13px] font-semibold text-[#1F2430]">{aiInsight?.title || 'Analisando sua carteira...'}</p>
-                        {loadingAI
-                            ? <div className="h-3 w-64 max-w-full bg-gray-100 rounded animate-pulse mt-1.5" />
-                            : <p className="text-[13px] text-[#8A8F9A] mt-0.5 leading-relaxed">{aiInsight?.content}</p>}
-                    </div>
-                </PortalCard>
-            )}
-
             <KpiStrip items={kpis} />
 
             {/* Evolução */}

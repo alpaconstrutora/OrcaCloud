@@ -16,7 +16,6 @@ import SpeManager from './investor/SpeManager';
 import MonthlyReportTrigger from './investor/MonthlyReportTrigger';
 import { investorContributionsService, InvestorFinancialSummary } from '../services/investorContributionsService';
 import { marketDataService } from '../services/marketDataService';
-import { aiService, AIInsight } from '../services/aiService';
 import { storageService } from '../services/storageService';
 import InvestmentSimulator from './InvestmentSimulator';
 import AssetDetailModal from './AssetDetailModal';
@@ -127,8 +126,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const [investorParticipations, setInvestorParticipations] = React.useState<import('../services/investorContributionsService').InvestorParticipation[]>([]);
     const [investorContributions, setInvestorContributions] = React.useState<import('../services/investorContributionsService').InvestorContribution[]>([]);
     const [selectedAsset, setSelectedAsset] = React.useState<HoldingItem | null>(null);
-    const [aiInsight, setAiInsight] = React.useState<AIInsight | null>(null);
-    const [loadingAI, setLoadingAI] = React.useState(false);
     const [showSelic, setShowSelic] = React.useState(false);
     const [showIpca, setShowIpca] = React.useState(false);
     const [showIgpm, setShowIgpm] = React.useState(false);
@@ -522,16 +519,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         return () => { cancelled = true; };
     }, [orgId, orgDaLista, investorProfile?.id, portalToken]);
 
-    React.useEffect(() => {
-        if (activeTab === 'dashboard' && !aiInsight) {
-            setLoadingAI(true);
-            aiService.analyzePortfolio({ summary: { equity: 0 }, holdings: stats.holdings } as any)
-                .then(setAiInsight)
-                .catch(e => console.error('AI Error', e))
-                .finally(() => setLoadingAI(false));
-        }
-    }, [activeTab]);
-
     // ── Handlers ──────────────────────────────────────────────────────────────
 
     const handleUploadReport = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -912,8 +899,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             totalDividends={stats.totalDividends}
                             holdings={stats.holdings}
                             contributions={investorContributions}
-                            aiInsight={aiInsight}
-                            loadingAI={loadingAI}
                             onSelectAsset={setSelectedAsset}
                             onNavigateToHoldings={() => setActiveTab('holdings')}
                         />
@@ -927,8 +912,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             historicalData={historicalData}
                             holdings={stats.holdings}
                             isAdmin={isAdmin}
-                            loadingAI={loadingAI}
-                            aiInsight={aiInsight}
                             onNavigateToHoldings={() => setActiveTab('holdings')}
                         />
                     )

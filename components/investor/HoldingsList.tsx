@@ -80,7 +80,7 @@ const HoldingsList: React.FC<Props> = ({
                                     <p className="text-sm font-black text-gray-900">
                                         {typeof proj.equity === 'number'
                                             ? proj.equity.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                                            : proj.equity}
+                                            : '—'}
                                     </p>
                                 </div>
                                 <div className="text-right">
@@ -137,7 +137,7 @@ const HoldingsList: React.FC<Props> = ({
                                 <td className="px-6 py-4 text-right text-sm font-medium text-gray-800">
                                     {typeof proj.equity === 'number'
                                         ? proj.equity.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                                        : proj.equity}
+                                        : '—'}
                                 </td>
                             </tr>
                         ))}
@@ -175,7 +175,7 @@ const HoldingsList: React.FC<Props> = ({
                                 <div className="text-lg font-black text-blue-600">
                                     {typeof proj.equity === 'number'
                                         ? proj.equity.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-                                        : proj.equity}
+                                        : '—'}
                                 </div>
                             </div>
                             <div>

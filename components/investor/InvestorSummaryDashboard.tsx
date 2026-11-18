@@ -4,6 +4,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { AIInsight } from '../../services/aiService';
 import AIInsightCard from '../AIInsightCard';
 import { HoldingItem, HistoricalPoint } from './types';
+import { totalDaCarteira } from '../../utils/investidorCarteira';
 
 interface Props {
     equity: string;
@@ -34,7 +35,9 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
             icon: <Wallet className="w-5 h-5" />,
             color: 'blue',
             val: equity || 'R$ 0,00',
-            sub: totalContributed > 0 ? `${fmt(totalContributed)} aportados` : undefined,
+            // "—" = nenhuma participação com patrimônio conhecido: o sub diz o que falta registrar.
+            sub: equity === '—' ? totalDaCarteira(holdings).motivo
+                : totalContributed > 0 ? `${fmt(totalContributed)} aportados` : undefined,
         },
         {
             label: 'Rendimento Mensal Médio',
@@ -58,8 +61,8 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
     const perProjectData = holdings.map(h => ({
         name: h.name.length > 20 ? h.name.slice(0, 18) + '…' : h.name,
         Aportado: h.invested ?? 0,
-        Patrimônio: Number(h.equity) || 0,
-    })).filter(d => d.Aportado > 0 || d.Patrimônio > 0);
+        Patrimônio: h.equity, // null = sem barra (não é zero)
+    })).filter(d => d.Aportado > 0 || (d.Patrimônio ?? 0) > 0);
 
     return (
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-300">

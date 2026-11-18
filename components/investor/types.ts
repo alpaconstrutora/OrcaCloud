@@ -3,7 +3,10 @@ export interface HoldingItem {
     name: string;
     cota: string;
     invested?: number;
-    equity: string | number;
+    /** null = sem participação registrada ou sem valor do empreendimento (`utils/investidorCarteira`). */
+    equity: number | null;
+    /** Por que `equity` é null — mostrado no lugar do valor. */
+    semPatrimonio?: string;
     currentValue?: number;
     status: string;
     yield?: string;

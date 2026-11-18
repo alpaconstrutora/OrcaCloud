@@ -78,6 +78,11 @@ export const VAZAO_DO_EXAUSTOR_M3H = 10000;
 export const POTENCIA_DO_EXAUSTOR_W = 1100;
 /** PA8c: a área técnica da drenagem no subsolo mais fundo (a caixa separadora e o poço de recalque, lado a lado), mm. */
 const AREA_DA_DRENAGEM_MM = { comprimento: 3200, fundo: 2000 };
+/**
+ * PE5a do prédio pelo Empreendimento (18/11/2026, decisão "Técnico na garagem"): a sala técnica do condomínio no subsolo
+ * mais alto — centro de medição, casa de bombas e reservatório inferior — quando o térreo é de apartamentos, mm.
+ */
+const SALA_TECNICA_DO_CONDOMINIO_MM = { comprimento: 5000, fundo: 4000 };
 
 interface Local {
   u: number;
@@ -197,6 +202,8 @@ export interface SubsolosLancados {
    * das vagas e dos pilares estendidos), e o pé de cada rampa (a canaleta) no pavimento onde ela chega embaixo.
    */
   drenagem: { levelId: ObjectId; anel: Point[]; separadora: Point; poco: Point } | null;
+  /** PE5a: a sala técnica do condomínio (medição, bombas, reservatório inferior) no subsolo mais alto; null sem ela. */
+  salaTecnica: { levelId: ObjectId; anel: Point[]; medicao: Point; bombas: Point } | null;
   pesDasRampas: { levelId: ObjectId; at: Point; larguraMm: number }[];
   pilaresDaTorre: number;
   pilaresDaGaragem: number;
@@ -207,7 +214,14 @@ export interface SubsolosLancados {
  * Lança os subsolos do bloco de garagem `g` sob a torre: pavimentos, contenção, núcleo, malha, rampas, lajes e vagas.
  * Roda DEPOIS da estrutura (a malha do térreo desce) e ANTES da fundação (ela assenta no subsolo mais fundo).
  */
-export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Bloco, terreoLevelId: ObjectId, hip: HipotesesDoPredio): SubsolosLancados {
+export function lancarSubsolos(
+  ctx: ContextoDoPredio,
+  base: BaseDoPredio,
+  g: Bloco,
+  terreoLevelId: ObjectId,
+  hip: HipotesesDoPredio,
+  opcoes: { salaTecnicaDoCondominio?: boolean } = {},
+): SubsolosLancados {
   const pendencias: PendenciaDoPpci[] = [];
   if (garagemLancada(ctx.m, g).length) throw new Error(`as vagas de "${g.nome}" já estão lançadas — remova esses pavimentos para o prédio lançar o subsolo`);
   const elevRef = ctx.m.levels.find((l) => l.id === g.levelId)?.elevationMm ?? 0;
@@ -552,6 +566,36 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
       };
     } else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Garagem: a área técnica da drenagem (caixa separadora e poço) não coube junto ao contorno do subsolo mais fundo — reserve-a à mão.' });
   }
+  // ── PE5a: a sala técnica do condomínio no subsolo mais alto (o térreo é de apartamentos): encostada no contorno, o mais
+  // perto do hall do núcleo — livre de pilar, hall, escadas, rampas e da drenagem. Reservada agora, como a drenagem.
+  let salaTecnica: SubsolosLancados['salaTecnica'] = null;
+  if (opcoes.salaTecnicaDoCondominio && ehRetangulo(contorno)) {
+    const doTopo = pisos[0].levelId;
+    const alvo = anelDoHall ? centro(anelDoHall) : centro(contorno);
+    const { comprimento: C, fundo: F } = SALA_TECNICA_DO_CONDOMINIO_MM;
+    // Pilar dentro da sala técnica é normal (a drenagem foge deles por causa da caixa e do poço; a sala, não).
+    const evitar = [
+      ...(anelDoHall ? [engordar(anelDoHall, FOLGA_DA_RAMPA_MM)] : []),
+      ...aneisDasSaidas.map((x) => engordar(x, FOLGA_DA_RAMPA_MM)),
+      ...rampas.flatMap((r) => ocupadoPelaRampa(r, doTopo)).map((o) => engordar(o, FOLGA_DA_RAMPA_MM)),
+      ...(drenagem && drenagem.levelId === doTopo ? [engordar(drenagem.anel, FOLGA_DA_RAMPA_MM)] : []),
+    ];
+    let melhor: { nota: number; qb: QuadroDaFrente; u0: number } | null = null;
+    for (let i = 0; i < contorno.length; i++) {
+      const qb = quadroDaBorda(contorno, i);
+      for (let u0 = PAREDE_DE_CONTENCAO_MM / 2; u0 + C <= qb.largura - PAREDE_DE_CONTENCAO_MM / 2 + 1e-6; u0 += 500) {
+        const anel = retangulo(qb, u0, u0 + C, 0, F);
+        if (evitar.some((o) => sobrepoe(anel, o))) continue;
+        const nota = dist(centro(anel), alvo);
+        if (!melhor || nota < melhor.nota - 1e-6) melhor = { nota, qb, u0 };
+      }
+    }
+    if (melhor) {
+      const { qb, u0 } = melhor;
+      salaTecnica = { levelId: doTopo, anel: retangulo(qb, u0, u0 + C, 0, F), medicao: paraMundo(qb, { u: u0 + C * 0.2, v: F * 0.25 }), bombas: paraMundo(qb, { u: u0 + C * 0.65, v: F / 2 }) };
+      pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: o térreo é de apartamentos — o centro de medição, a casa de bombas e o reservatório inferior ficam na sala técnica do 1º subsolo (${(C / 1000).toLocaleString('pt-BR')} × ${(F / 1000).toLocaleString('pt-BR')} m, junto ao contorno, perto do hall); feche-a com paredes e porta e confira o acesso da concessionária à medição.` });
+    } else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Garagem: a sala técnica do condomínio (medição, bombas e reservatório inferior) não coube junto ao contorno do 1º subsolo — reserve-a à mão.' });
+  }
   const pesDasRampas = rampas.map((r) => ({ levelId: r.doLevelId, at: r.cmd.pontos[0], larguraMm: r.u1 - r.u0 }));
 
   // ── Fora da projeção da torre: os eixos dela estendidos ao contorno, com vão de até `vaoDaGaragemMm`.
@@ -582,6 +626,7 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
         if (noHall && pointInPolygon(noHall, p)) continue;
         if (aneisDasSaidas.some((x) => pointInPolygon(engordar(x, FOLGA_DA_RAMPA_MM), p))) continue;
         if (drenagem && pointInPolygon(engordar(drenagem.anel, FOLGA_DA_RAMPA_MM), p)) continue;
+        if (salaTecnica && pointInPolygon(engordar(salaTecnica.anel, FOLGA_DA_RAMPA_MM), p)) continue;
         if (rampas.some((r) => pisos.some((x) => ocupadoPelaRampa(r, x.levelId).some((o) => pointInPolygon(engordar(o, FOLGA_DA_RAMPA_MM), p))))) {
           tiradosDaRampa++;
           continue;
@@ -658,6 +703,13 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
         return { type: 'AddEscada', levelId: p.levelId, pontos: [paraMundo(q, { u: um, v: v0 }), paraMundo(q, { u: um, v: v1 })], tipo: 'RAMPA', larguraMm: r.u1 - r.u0, alvoEspelhoMm: 175 };
       }),
     );
+    // PE5a: a sala técnica do condomínio, no subsolo mais alto (as vagas fogem dela pela mesma "rampa falsa").
+    if (salaTecnica && salaTecnica.levelId === p.levelId) {
+      const l = salaTecnica.anel;
+      const meioA = { x: (l[0].x + l[3].x) / 2, y: (l[0].y + l[3].y) / 2 };
+      const meioB = { x: (l[1].x + l[2].x) / 2, y: (l[1].y + l[2].y) / 2 };
+      falsas.push({ type: 'AddEscada', levelId: p.levelId, pontos: [inteiro(meioA), inteiro(meioB)], tipo: 'RAMPA', larguraMm: Math.round(dist(l[0], l[3])), alvoEspelhoMm: 175 });
+    }
     // A área técnica da drenagem (PA8c), no subsolo mais fundo, também.
     if (drenagem && drenagem.levelId === p.levelId) {
       const l = drenagem.anel;
@@ -724,6 +776,7 @@ export function lancarSubsolos(ctx: ContextoDoPredio, base: BaseDoPredio, g: Blo
     escadasDeEmergencia: aneisDasSaidas.length,
     eletrica: ondeVaiAEletrica(),
     drenagem,
+    salaTecnica,
     pesDasRampas,
     pilaresDaTorre: pilaresDoTerreo.length,
     pilaresDaGaragem: extensao.length,

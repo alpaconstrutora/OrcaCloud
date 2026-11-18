@@ -109,7 +109,7 @@ export interface TerreoMontado {
 }
 
 /** O térreo: o pavimento, o esqueleto do tipo, o núcleo desde ele, os nomes das salas e a porta de entrada. */
-export function montarTerreo(ctx: ContextoDoPredio, base: BaseDoPredio, hip: HipotesesDoPredio): TerreoMontado {
+export function montarTerreo(ctx: ContextoDoPredio, base: BaseDoPredio, hip: HipotesesDoPredio, opcoes: { soEsqueleto?: boolean } = {}): TerreoMontado {
   const { bloco: b, divisao: dv, tipoLevelId: tipo } = base;
   const avisos: string[] = [];
   let n = 0;
@@ -138,6 +138,21 @@ export function montarTerreo(ctx: ContextoDoPredio, base: BaseDoPredio, hip: Hip
   const escadas = ctx.m.stairs.filter((e) => e.levelId === tipo);
   n += ctx.aplicar(escadas.map((e): Command => ({ type: 'AddEscada', levelId: terreo, pontos: e.pontos.map((p) => ({ ...p })), tipo: e.tipo, larguraMm: e.larguraMm, alvoEspelhoMm: e.alvoEspelhoMm, rotulo: e.rotulo ?? null })));
 
+  // PE4a (18/11/2026, "térreo de apartamentos"): só o esqueleto, o núcleo e a escada — os apartamentos e o hall entram no
+  // fim (`concluirTerreoDeApartamentos`); o técnico do condomínio vai para a garagem.
+  if (opcoes.soEsqueleto) return { levelId: terreo, comandos: n, salas: [], acesso: false, avisos };
+  const nomeado = nomearTerreo(ctx, base, hip, terreo);
+  return { levelId: terreo, comandos: n + nomeado.comandos, salas: nomeado.salas, acesso: nomeado.acesso, avisos: [...avisos, ...nomeado.avisos] };
+}
+
+/**
+ * Os nomes do térreo (circulação e núcleo como no tipo; cada fatia de unidade, uma sala do condomínio) e a porta de
+ * entrada no hall. PE4a: separado do esqueleto — o térreo de apartamentos que não acha a sala técnica na garagem volta a ele.
+ */
+export function nomearTerreo(ctx: ContextoDoPredio, base: BaseDoPredio, hip: HipotesesDoPredio, terreo: ObjectId): { comandos: number; salas: TerreoMontado['salas']; acesso: boolean; avisos: string[] } {
+  const { bloco: b, divisao: dv, tipoLevelId: tipo } = base;
+  const avisos: string[] = [];
+  let n = 0;
   // Os nomes: circulação e núcleo repetem os do tipo; cada fatia de unidade vira sala do condomínio.
   const daUnidade = new Set((ctx.m.unidades ?? []).flatMap((u) => u.etiquetaUids));
   const espacoEm = (p: Point) => ctx.m.spaces.find((s) => s.levelId === terreo && pointInPolygon(s.ring, p)) ?? null;
@@ -177,28 +192,39 @@ export function montarTerreo(ctx: ContextoDoPredio, base: BaseDoPredio, hip: Hip
   let acesso = false;
   const espacoDoHall = hall ? espacoEm(hall.c) : null;
   if (espacoDoHall) {
-    const cHall = centro(espacoDoHall.ring);
-    const candidatas = ctx.m.walls
-      .filter((w) => w.levelId === terreo && naFachada(w, b.pontos))
-      .flatMap((w) => {
-        const t = trechoNaParede(w, espacoDoHall.ring);
-        if (!t || t.fim - t.ini < hip.larguraDoAcessoMm + 300) return [];
-        const L = comprimento(w);
-        const meioDoTrecho = (t.ini + t.fim) / 2;
-        const p = { x: w.a.x + ((w.b.x - w.a.x) * meioDoTrecho) / L, y: w.a.y + ((w.b.y - w.a.y) * meioDoTrecho) / L };
-        const v = { x: p.x - cHall.x, y: p.y - cHall.y };
-        const l = Math.hypot(v.x, v.y) || 1;
-        return [{ w, meioDoTrecho, nota: rua ? (v.x * rua.x + v.y * rua.y) / l : t.fim - t.ini }];
-      })
-      .sort((a, c) => c.nota - a.nota);
-    const alvo = candidatas[0];
-    if (alvo) {
-      n += ctx.aplicar([{ type: 'AddOpening', wallId: alvo.w.id, kind: 'door', offsetMm: Math.round(alvo.meioDoTrecho - hip.larguraDoAcessoMm / 2), widthMm: hip.larguraDoAcessoMm, heightMm: 2100, sillMm: 0 }]);
-      acesso = true;
-    } else avisos.push(`Térreo: nenhuma parede de fachada do hall comporta a porta de entrada de ${hip.larguraDoAcessoMm} mm — desenhe o acesso.`);
+    const r = abrirPortaDeEntrada(ctx, base, hip, terreo, espacoDoHall.ring);
+    n += r.comandos;
+    acesso = r.acesso;
+    if (!acesso) avisos.push(`Térreo: nenhuma parede de fachada do hall comporta a porta de entrada de ${hip.larguraDoAcessoMm} mm — desenhe o acesso.`);
   }
   if (ordem.length < 3) avisos.push(`Térreo: ${ordem.length} fatia(s) — ${ordem.length === 2 ? 'centro de medição e casa de bombas dividem a mesma sala' : 'sem sala para o centro de medição e a casa de bombas'}; confira com o projetista.`);
-  return { levelId: terreo, comandos: n, salas, acesso, avisos };
+  return { comandos: n, salas, acesso, avisos };
+}
+
+/**
+ * A porta de entrada no TRECHO de fachada do hall mais voltado para a rua (sem frente marcada, o mais longo) — a parede
+ * de fachada pode correr o lado inteiro do bloco; o que conta é o trecho dela que faz divisa com o hall. PE4a: também o
+ * hall do andar de apartamentos (`concluirTerreoDeApartamentos`).
+ */
+export function abrirPortaDeEntrada(ctx: ContextoDoPredio, base: BaseDoPredio, hip: HipotesesDoPredio, levelId: ObjectId, anelDoHall: readonly Point[]): { comandos: number; acesso: boolean } {
+  const cHall = centro(anelDoHall);
+  const rua = base.rua;
+  const candidatas = ctx.m.walls
+    .filter((w) => w.levelId === levelId && naFachada(w, base.bloco.pontos))
+    .flatMap((w) => {
+      const t = trechoNaParede(w, anelDoHall);
+      if (!t || t.fim - t.ini < hip.larguraDoAcessoMm + 300) return [];
+      const L = comprimento(w);
+      const meioDoTrecho = (t.ini + t.fim) / 2;
+      const p = { x: w.a.x + ((w.b.x - w.a.x) * meioDoTrecho) / L, y: w.a.y + ((w.b.y - w.a.y) * meioDoTrecho) / L };
+      const v = { x: p.x - cHall.x, y: p.y - cHall.y };
+      const l = Math.hypot(v.x, v.y) || 1;
+      return [{ w, meioDoTrecho, nota: rua ? (v.x * rua.x + v.y * rua.y) / l : t.fim - t.ini }];
+    })
+    .sort((a, c) => c.nota - a.nota);
+  const alvo = candidatas[0];
+  if (!alvo) return { comandos: 0, acesso: false };
+  return { comandos: ctx.aplicar([{ type: 'AddOpening', wallId: alvo.w.id, kind: 'door', offsetMm: Math.round(alvo.meioDoTrecho - hip.larguraDoAcessoMm / 2), widthMm: hip.larguraDoAcessoMm, heightMm: 2100, sillMm: 0 }]), acesso: true };
 }
 
 export interface CoberturaMontada {

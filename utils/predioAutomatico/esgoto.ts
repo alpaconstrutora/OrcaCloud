@@ -272,6 +272,9 @@ export function lancarEsgoto(
     pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Esgoto: sem o térreo do prédio, o desvio dos tubos de queda e o coletor ficam para o projetista.' });
   } else {
     const T = terreo.levelId;
+    /** PE5a: a elevação do pavimento do desvio (0 no térreo; a garagem fica abaixo) — as cotas do chão e da rede são do mundo. */
+    const zT = ctx.m.levels.find((l) => l.id === T)?.elevationMm ?? 0;
+    const enterradaNoT = COTA_ENTERRADA_MM - zT;
     const peT = pe(T);
     const uhcTotal = resultado.uhcPorAndar * andares;
     const saida = saidaNaFachada(base);
@@ -289,8 +292,14 @@ export function lancarEsgoto(
     const dnSaida = dnDoSubcoletor(uhcTotal, CAIMENTO_PCT);
     const chegadas = desvio.saidas.map((x) => {
       const dn = dnDoSubcoletor(x.uhc, CAIMENTO_PCT);
-      const cota = COTA_ENTERRADA_MM - Math.round((dist(x.dentro, x.fora) * CAIMENTO_PCT) / 100);
-      if (x.uhc > 0) lote.push(trecho(T, x.dentro, x.cotaMm, x.dentro, COTA_ENTERRADA_MM, dn, ROTULO_DO_DESVIO), trecho(T, x.dentro, COTA_ENTERRADA_MM, x.fora, cota, dn, ROTULO_DO_DESVIO));
+      // PE5a: a cota enterrada é a do chão da rua — o pavimento do desvio pode ser a garagem (o térreo de apartamentos),
+      // abaixo dela; a saída não desce abaixo de onde o desvio já chega.
+      const enterrada = Math.min(x.cotaMm, enterradaNoT);
+      const cota = enterrada - Math.round((dist(x.dentro, x.fora) * CAIMENTO_PCT) / 100);
+      if (x.uhc > 0) {
+        if (enterrada < x.cotaMm) lote.push(trecho(T, x.dentro, x.cotaMm, x.dentro, enterrada, dn, ROTULO_DO_DESVIO));
+        lote.push(trecho(T, x.dentro, enterrada, x.fora, cota, dn, ROTULO_DO_DESVIO));
+      }
       return { at: x.fora, cotaMm: cota, uhc: x.uhc };
     });
     // PA23: a caixa de cada asa vai à da rua pelo subcoletor enterrado, por fora do prédio.
@@ -305,7 +314,7 @@ export function lancarEsgoto(
     if (!frente) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Esgoto: marque a divisa da frente do lote — o coletor vai até a rede pública nela.' });
     else {
       const L = dist(ci, frente.ponto);
-      const cotaRede = -(HIPOTESES_ESGOTO_PADRAO.profundidadeDaRedeMm ?? 1500);
+      const cotaRede = -(HIPOTESES_ESGOTO_PADRAO.profundidadeDaRedeMm ?? 1500) - zT;
       const declividadePct = L > 0 ? ((cotaCi - cotaRede) / L) * 100 : 0;
       const dnColetor = dnDoSubcoletor(uhcTotal, declividadePct);
       const porGravidade = declividadePct + 1e-9 >= CAIMENTO_PCT;
@@ -318,8 +327,8 @@ export function lancarEsgoto(
       pendencias.push({
         grupo: porGravidade ? 'CONFERIR' : 'VERIFICACAO',
         texto: porGravidade
-          ? `Coletor predial: DN ${dnColetor} a ${f1(declividadePct)} % até a rede pública, presumida a ${f1(-cotaRede / 1000)} m de profundidade na frente — confirme a cota com a concessionária.`
-          : `Coletor predial: ${f1(declividadePct)} % até a rede pública presumida a ${f1(-cotaRede / 1000)} m — abaixo de ${CAIMENTO_PCT} %: aprofunde a caixa ou preveja estação elevatória.`,
+          ? `Coletor predial: DN ${dnColetor} a ${f1(declividadePct)} % até a rede pública, presumida a ${f1((-cotaRede - zT) / 1000)} m de profundidade na frente — confirme a cota com a concessionária.`
+          : `Coletor predial: ${f1(declividadePct)} % até a rede pública presumida a ${f1((-cotaRede - zT) / 1000)} m — abaixo de ${CAIMENTO_PCT} %: aprofunde a caixa ou preveja estação elevatória.`,
       });
     }
     const m0 = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });

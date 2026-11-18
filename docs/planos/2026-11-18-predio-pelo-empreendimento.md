@@ -311,6 +311,41 @@ A PE5 abaixo descreve a parte da garagem; a PE4 fica com o andar próprio.
 - **Compatibilização:** sem conflito novo em relação à PE3.
 - **Marcos de laboratório:** idênticos.
 
+**Execução da PE4a + PE5a (18/11/2026, Torre A do Garden).** O modo "térreo de apartamentos" liga quando a ficha põe apartamento no andar 0 e a torre tem garagem (`terreoDeApartamentosPedido` no orquestrador):
+- **Durante as etapas:** o andar 0 é só o esqueleto (`montarTerreo(…, { soEsqueleto: true })`), que a garagem lê e edita como antes.
+- **A garagem:** reserva a **sala técnica do condomínio** (5 × 4 m no 1º subsolo, junto ao contorno e perto do hall; as vagas fogem dela como da drenagem; pilar dentro pode). Ela vira o "térreo técnico": QGBT e medição, casa de bombas, reservatório inferior; o desvio do esgoto corre no forro dela.
+- **O esgoto:** a cota enterrada e a da rede são do mundo (a da rua), não do pavimento do desvio.
+- **O fim** (`concluirTerreoDeApartamentos`, depois da marca das instalações), na ordem:
+  1. tira os pontos que as etapas de incêndio puseram no andar 0, porque o kernel não liga ao tipo um andar com instalação própria e a cópia traz os do tipo;
+  2. liga o andar 0 ao tipo e o desvincula;
+  3. casa os apartamentos da ficha com as fatias do tipo: a mesma tipologia, depois a posição, depois a área (002 Tipo 4 → 102, 004 Tipo 1 → 104);
+  4. tira dos outros (101 e 103) as paredes internas, os pontos, os quadros com os circuitos e os trechos, mas deixa tubos de queda, colunas e barrilete;
+  5. poda as pontas soltas;
+  6. nomeia o hall de entrada (o da frente) e a área comum, tira a janela do trecho da porta e abre a porta para a rua;
+  7. põe o lance da escada do andar 0 ao tipo.
+
+**Correção no grafo da rede** (`utils/blueprintKernel/grafoDeRede.ts`, `fazerChave`):
+- **O que era:** o "pavimento de baixo" era o anterior na ordem por elevação. O lote e o andar 0, na mesma cota, viravam um em cima do outro, e o pé do tubo de queda do andar 0 não encontrava o da garagem.
+- **O que ficou:** agora é o mais perto **estritamente** abaixo.
+- **Alcance:** conta derivada, sem comando nem versão do kernel.
+- **Prova:** os marcos de laboratório (prédio R4/R8/R12/RL e casa) ficaram **idênticos**, e os 5 arquivos que usam a chave passam (67 testes).
+
+**Resultado** (`__tests__/predioTerreoDeApartamentos.test.ts`, 3 testes):
+- **Andar 0:** desvinculado, com 2 salas de estar (o tipo tem 4), o hall, a porta para a rua e nenhuma sala de medição ou bombas.
+- **Garagem:** o QGBT e todo o desvio do esgoto no 1º subsolo.
+- **Esgoto:** toda louça de todo andar chega à ligação, as do andar 0 também.
+- **Resumo:** 14 unidades (12 + 2) e o andar 0 com o hall e a porta.
+
+**Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pe4.cjs`, pelo caminho do usuário, estudo descartável na SPE com a Teste 01): 15 portões ok, a prévia em 10,7 s.
+- **Relatório:** "Andar 0: os apartamentos 002, 004 da ficha ocupam as posições dos do tipo (102, 104)" e "sala técnica do 1º subsolo"; a pendência "apartamentos do térreo fora" sumiu.
+- **Planta do andar 0 na prévia:** o apartamento com os cômodos e a área comum livre.
+- **Empreendimento:** intocado. Sem erro de console.
+
+**Ficam como pendência no relatório:**
+- **Pluvial no chão do andar 0:** as caixas de areia e o condutor enterrado. Enterrar a partir da garagem daria −3,3 m.
+- **Medidores e `Unidade` do kernel do 002 e do 004:** o desvinculado traz os rótulos, não a unidade. O resumo conta 14, a medição conta 12, e o envio ainda não leva os 2.
+- **Fechamento da sala técnica:** paredes e porta.
+
 ### PE5 — O condomínio e o desvio quando o térreo é de apartamentos
 **O que muda.**
 - **Térreo sem área livre** (Torre B: o 0 é cópia do tipo): centro de medição, casa de bombas, reservatório inferior e salas vão para a garagem mais alta (−3).
@@ -384,8 +419,8 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 | PE1 — os andares e a massa | feita, no ar (#573, 947df0e) |
 | PE2 — o tipo com as unidades do Empreendimento | PE2a no ar (#577, 6fd6816); PE2b: a Torre A já casa pelo nome (teste de caracterização, no ar); a Torre B fica para a PE6 |
 | PE3 — o botão na Casa automática | feita, no ar (#577, 6fd6816); conferida no app pelo caminho do usuário; a Torre B fica bloqueada (com o motivo) até a PE4–PE6 |
-| PE4 — o térreo da Torre A com os apartamentos | a fazer — spike feito (a cópia desvinculada mantém tudo); mapa de implementação abaixo |
-| PE5 — condomínio e desvio sem térreo livre | a fazer |
+| PE4 — o térreo da Torre A com os apartamentos | PE4a feita, a publicar (conferida no app): o andar 0 com 002/004, o hall e a porta; ficam os medidores/`Unidade` do 002/004 e o pluvial do chão |
+| PE5 — condomínio e desvio sem térreo livre | PE5a feita com a PE4a (a sala técnica na garagem, o desvio no forro dela); a Torre B (o andar 0 cópia, sem desvínculo) vem com a PE6 |
 | PE6 — abaixo da rede pública | a fazer |
 | PE7 — as duas torres no mesmo estudo | a fazer |
 

@@ -21,7 +21,7 @@ import {
 } from '../../utils/diretoria';
 import { MOTIVO_SEM_EDICAO_DIRETORIA } from '../../utils/permissaoDiretoria';
 import { useDiretoria } from './DiretoriaContexto';
-import { COR_SEVERIDADE, LINK_ACAO, MOTIVO_SEM_RESPONSAVEL, dataCurta, plural, quandoEmDias } from './diretoriaUi';
+import { COR_SEVERIDADE, LINK_ACAO, MOTIVO_SEM_RESPONSAVEL, dataCurta, plural, quandoDoItem } from './diretoriaUi';
 
 /** Bolinha + nome da gravidade para leitor de tela (a cor nunca é o único sinal). */
 export const BolinhaGravidade: React.FC<{ severidade: Grupo['severidade']; className?: string }> = ({ severidade, className = '' }) => (
@@ -43,7 +43,7 @@ export const GrupoExcecaoLinha: React.FC<{ g: Grupo }> = ({ g }) => {
     const titulo = tituloDoGrupo(g);
     const detalhe = detalheDoGrupo(g);
     const podeEditar = d.podeEditarOrg(g.org_id);
-    const cobranca = ultimaCobranca(g.chave, d.painel.cobrancas);
+    const cobranca = ultimaCobranca(g.familia, d.painel.cobrancas);
     const nomes = g.responsaveis.map(r => nomeDe(r, d.painel.pessoas)).join(', ');
     const motivoCobrar = !podeEditar ? MOTIVO_SEM_EDICAO_DIRETORIA : g.responsaveis.length === 0 ? MOTIVO_SEM_RESPONSAVEL : null;
     const motivoDeterminar = !podeEditar ? MOTIVO_SEM_EDICAO_DIRETORIA : null;
@@ -124,7 +124,7 @@ export const GrupoExcecaoLinha: React.FC<{ g: Grupo }> = ({ g }) => {
                                 <span className="flex items-baseline gap-3 shrink-0">
                                     {i.valor != null && <span className="font-medium text-gray-800 tabular-nums">{brl(i.valor)}</span>}
                                     {i.dias != null && (
-                                        <span className="text-gray-600 whitespace-nowrap" title={i.data ? dataBr(i.data) : undefined}>{quandoEmDias(i.dias)}</span>
+                                        <span className="text-gray-600 whitespace-nowrap" title={i.data ? dataBr(i.data) : undefined}>{quandoDoItem(g.tipo, i.dias)}</span>
                                     )}
                                 </span>
                             </li>

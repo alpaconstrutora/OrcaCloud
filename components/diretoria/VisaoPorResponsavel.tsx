@@ -74,7 +74,7 @@ export const VisaoPorResponsavel: React.FC = () => {
     [painel.determinacoes, ids]);
     const tamanhoEquipe = sel && !ehSem ? equipe(sel, chefes).length - 1 : 0;
 
-    const aCobrar = grupos.filter(g => !ultimaCobranca(g.chave, painel.cobrancas) && g.responsaveis.length > 0 && d.podeEditarOrg(g.org_id));
+    const aCobrar = grupos.filter(g => !ultimaCobranca(g.familia, painel.cobrancas) && g.responsaveis.length > 0 && d.podeEditarOrg(g.org_id));
     const motivoCobrarTudo = aCobrar.length
         ? null
         : grupos.length === 0

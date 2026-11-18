@@ -17,11 +17,12 @@
  * de gravar desligam com o motivo (§9.2). "É barulho" é preferência pessoal: não depende disso.
  */
 import React from 'react';
-import { AlertTriangle, CalendarX2, Gavel, ListChecks, Lock, Plus, UserX, Users } from 'lucide-react';
+import { AlertTriangle, CalendarX2, Gavel, Info, ListChecks, Lock, Plus, UserX, Users } from 'lucide-react';
 import { KpiCard } from '../ui/KpiCard';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import { Sheet, SheetDescription, SheetHeader, SheetPanel, SheetTitle } from '../ui/sheet';
 import { useToast } from '../../hooks/useToast';
+import { useStore } from '../../store/useStore';
 import { forEachTargetOrg, targetOrgIds, useOrgContext, useOrgWriteTarget, type WriteTarget } from '../../hooks/useOrgContext';
 import { diretoriaService, type VisaoDiretoria } from '../../services/diretoriaService';
 import {
@@ -60,6 +61,12 @@ interface ErroDeCarga { code?: string; message: string }
 
 const DiretoriaModule: React.FC<Props> = ({ onNavigate }) => {
     const { orgId } = useOrgContext();
+    // Empresa e obra do topo: o painel NÃO recorta por elas (decisão de 18/11) — só avisa. A org
+    // continua vindo só de useOrgContext (REGRA #5); aqui é apenas o nome para o aviso.
+    const activeEmpresaId = useStore(s => s.activeEmpresaId);
+    const companies = useStore(s => s.companies);
+    const projectId = useStore(s => s.projectId);
+    const projects = useStore(s => s.projects);
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const { showToast, localToast } = useToast();
 
@@ -176,7 +183,7 @@ const DiretoriaModule: React.FC<Props> = ({ onNavigate }) => {
     const cobrar = async (g: GrupoExcecao) => {
         try {
             const r = await diretoriaService.cobrar({
-                orgId: g.org_id, chave: g.chave, tipo: g.tipo, titulo: tituloDoGrupo(g),
+                orgId: g.org_id, chave: g.familia, tipo: g.tipo, titulo: tituloDoGrupo(g),
                 responsaveis: g.responsaveis, tela: TIPOS[g.tipo].tela,
             });
             showToast(avisoDaCobranca(r?.criadas ?? 0, r?.ja_abertas ?? 0, r?.ignorados ?? 0), (r?.criadas ?? 0) + (r?.ja_abertas ?? 0) > 0 ? 'success' : 'error');
@@ -192,7 +199,7 @@ const DiretoriaModule: React.FC<Props> = ({ onNavigate }) => {
         for (const g of gs) {
             try {
                 const r = await diretoriaService.cobrar({
-                    orgId: g.org_id, chave: g.chave, tipo: g.tipo, titulo: tituloDoGrupo(g),
+                    orgId: g.org_id, chave: g.familia, tipo: g.tipo, titulo: tituloDoGrupo(g),
                     responsaveis: g.responsaveis, tela: TIPOS[g.tipo].tela,
                 });
                 criadas += r?.criadas ?? 0;
@@ -295,7 +302,7 @@ const DiretoriaModule: React.FC<Props> = ({ onNavigate }) => {
         cobrar, cobrarTodos,
         virarDeterminacao: g => setFormulario({
             orgId: g.org_id, n: Date.now(),
-            inicial: { titulo: tituloDoGrupo(g), responsavelId: g.responsaveis[0] ?? null, origem: TIPOS[g.tipo].nome, excecaoChave: g.chave },
+            inicial: { titulo: tituloDoGrupo(g), responsavelId: g.responsaveis[0] ?? null, origem: TIPOS[g.tipo].nome, excecaoChave: g.familia },
         }),
         silenciar,
         abrirCadastro: () => setCadastroAberto(true),
@@ -308,6 +315,10 @@ const DiretoriaModule: React.FC<Props> = ({ onNavigate }) => {
     const abertas = painel ? painel.determinacoes.filter(x => x.status !== 'concluida').length : 0;
     const errosDeLeitura = painel ? Object.keys(painel.erros) : [];
     const pronto = !!painel && !!ctx && !semPermissao && visao !== null;
+    const empresaDoTopo = activeEmpresaId ? companies.find(c => c.id === activeEmpresaId) : undefined;
+    const obraDoTopo = projectId ? projects.find(p => p.id === projectId) : undefined;
+    const recorteDoTopo = empresaDoTopo ? `a empresa ${empresaDoTopo.nome_fantasia || empresaDoTopo.razao_social}`
+        : obraDoTopo ? `a obra ${obraDoTopo.name}` : null;
 
     return (
         <div className="space-y-6 pb-20">
@@ -318,6 +329,14 @@ const DiretoriaModule: React.FC<Props> = ({ onNavigate }) => {
                 {pronto && !podeEditarAlguma && (
                     <p className="flex items-start gap-1.5 text-sm text-gray-700 mt-2">
                         <Lock className="w-4 h-4 mt-0.5 text-gray-500 shrink-0" aria-hidden="true" /> {MOTIVO_SEM_EDICAO_DIRETORIA}
+                    </p>
+                )}
+                {pronto && recorteDoTopo && (
+                    <p className="flex items-start gap-1.5 text-sm text-gray-700 mt-2">
+                        <Info className="w-4 h-4 mt-0.5 text-gray-500 shrink-0" aria-hidden="true" />
+                        <span>
+                            {orgId ? 'Mostrando a organização inteira' : 'Mostrando as organizações inteiras'}: a Diretoria não recorta por empresa nem por obra (no topo está {recorteDoTopo}).
+                        </span>
                     </p>
                 )}
                 {pronto && errosDeLeitura.length > 0 && (

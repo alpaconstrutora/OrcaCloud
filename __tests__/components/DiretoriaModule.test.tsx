@@ -64,7 +64,7 @@ import { MOTIVO_SEM_EDICAO_DIRETORIA } from '../../utils/permissaoDiretoria';
 const HOJE = '2026-11-17';
 
 const grupo = (p: Partial<GrupoExcecao>): GrupoExcecao => ({
-    chave: 'k', tipo: 'conta_vencida', org_id: 'org-a', grupo: null, severidade: 'atencao', origem_responsavel: 'area',
+    chave: 'k', familia: `fam-${p.chave ?? 'k'}`, grupo_id: null, tipo: 'conta_vencida', org_id: 'org-a', grupo: null, severidade: 'atencao', origem_responsavel: 'area',
     responsaveis: [], quantidade: 1, valor: null, dias: 10, data_ref: '2026-11-07', itens: [], ...p,
 });
 const det = (p: Partial<Determinacao>): Determinacao => ({
@@ -233,13 +233,15 @@ describe('Diretoria — tela', () => {
         expect(screen.getByRole('button', { name: 'Silenciados (1)' })).toBeTruthy();
     });
 
-    it('"Cobrar" chama o serviço com a organização, a chave e os responsáveis do grupo', async () => {
+    // Ajustes (18/11, pergunta 6): a cobrança é registrada na FAMÍLIA do grupo (tipo · org · conta),
+    // que não muda quando o grupo muda de faixa ou de responsável.
+    it('"Cobrar" chama o serviço com a organização, a família e os responsáveis do grupo', async () => {
         const user = userEvent.setup();
         montar();
         const linha = await linhaDoGrupo('694 contas a pagar vencidas');
         await user.click(within(linha).getByRole('button', { name: /^Cobrar/ }));
         await waitFor(() => expect(cobrar).toHaveBeenCalledWith({
-            orgId: 'org-a', chave: 'k-conta', tipo: 'conta_vencida', titulo: '694 contas a pagar vencidas',
+            orgId: 'org-a', chave: 'fam-k-conta', tipo: 'conta_vencida', titulo: '694 contas a pagar vencidas',
             responsaveis: ['u-lia'], tela: 'contas-a-pagar',
         }));
         // Depois de gravar, o painel é lido de novo.
@@ -269,13 +271,48 @@ describe('Diretoria — tela', () => {
 
     it('grupo já cobrado mostra "cobrado em dd/mm" no lugar do botão', async () => {
         painel.mockResolvedValue(painelBase({
-            cobrancas: [{ organization_id: 'org-a', excecao_chave: 'k-conta', tipo: 'conta_vencida', titulo: '694 contas',
+            cobrancas: [{ organization_id: 'org-a', excecao_chave: 'fam-k-conta', tipo: 'conta_vencida', titulo: '694 contas',
                 responsavel_user_id: 'u-lia', cobrado_por: 'u-ceo', cobrado_em: '2026-11-16T15:00:00Z' }],
         }));
         montar();
         const linha = await linhaDoGrupo('694 contas a pagar vencidas');
         expect(within(linha).getByText(/cobrado em 16\/11/i)).toBeTruthy();
         expect(within(linha).queryByRole('button', { name: /^Cobrar/ })).toBeNull();
+    });
+
+    it('o grupo que mudou de faixa ou de responsável mantém o "cobrado em" (mesma família)', async () => {
+        painel.mockResolvedValue(painelBase({
+            excecoes: [
+                // cobrado quando estava em "atenção" com a Lia; hoje é "crítico" e responde o Júlio
+                grupo({ chave: 'k-conta-nova', familia: 'fam-contas', tipo: 'conta_vencida', severidade: 'critico',
+                    origem_responsavel: 'area', responsaveis: ['u-julio'], quantidade: 3, dias: 40, data_ref: '2026-10-08' }),
+            ],
+            cobrancas: [{ organization_id: 'org-a', excecao_chave: 'fam-contas', tipo: 'conta_vencida', titulo: '3 contas',
+                responsavel_user_id: 'u-lia', cobrado_por: 'u-ceo', cobrado_em: '2026-11-16T15:00:00Z' }],
+        }));
+        montar();
+        const linha = await linhaDoGrupo('3 contas a pagar vencidas');
+        expect(within(linha).getByText(/cobrado em 16\/11/i)).toBeTruthy();
+        expect(within(linha).queryByRole('button', { name: /^Cobrar/ })).toBeNull();
+    });
+
+    // Ajustes (18/11, pergunta 2): a conta vencida que espera aprovação conta só em "aprovação parada",
+    // com a marca "já venceu".
+    it('item de aprovação parada já vencido diz "já venceu há N dias"', async () => {
+        painel.mockResolvedValue(painelBase({
+            excecoes: [
+                grupo({ chave: 'k-aprov', tipo: 'aprovacao_parada', severidade: 'critico', origem_responsavel: 'dado',
+                    responsaveis: ['u-marina'], quantidade: 2, valor: 9000, dias: 5, data_ref: '2026-11-12',
+                    itens: [
+                        { id: 'transaction:1', titulo: 'Cimento Forte — NF 10', valor: 5000, dias: 5, data: '2026-11-12' },
+                        { id: 'transaction:2', titulo: 'Aço Norte — NF 11', valor: 4000, dias: -2, data: '2026-11-19' },
+                    ] }),
+            ],
+        }));
+        montar();
+        const linha = await linhaDoGrupo('2 aprovações paradas na alçada');
+        expect(within(linha).getByText('já venceu há 5 dias')).toBeTruthy();
+        expect(within(linha).getByText('em 2 dias')).toBeTruthy();   // o que ainda não venceu não ganha a marca
     });
 
     it('"Virar determinação" abre o formulário com o título e a organização do grupo, sem perguntar — mesmo em "Todas"', async () => {
@@ -307,7 +344,7 @@ describe('Diretoria — tela', () => {
         await user.click(within(gaveta).getByRole('button', { name: 'Determinar' }));
         await waitFor(() => expect(determinar).toHaveBeenCalledWith({
             orgId: 'org-b', titulo: '3 entregas de fornecedor atrasadas', responsavelId: 'u-julio', prazo: '2026-11-24',
-            origem: 'Entrega de fornecedor atrasada', excecaoChave: 'k-b',
+            origem: 'Entrega de fornecedor atrasada', excecaoChave: 'fam-k-b',
         }));
         // Não perguntou a organização: o modal do topo não abriu.
         expect(screen.queryByRole('heading', { name: 'Selecionar organização' })).toBeNull();
@@ -461,5 +498,35 @@ describe('troca da organização do topo (revisão #13)', () => {
         await waitFor(() => expect(painel).toHaveBeenLastCalledWith('org-b'));
         expect(await linhaDoGrupo('694 contas a pagar vencidas')).toBeTruthy();   // painel novo já na tela
         expect(screen.queryByRole('dialog', { name: 'Nova determinação' })).toBeNull();
+    });
+});
+
+// Ajustes (18/11, pergunta 5): o painel não recorta por empresa nem por obra — avisa quando há uma escolhida.
+describe('empresa ou obra escolhida no topo', () => {
+    it('sem empresa nem obra, não há aviso', async () => {
+        useStore.setState({ activeEmpresaId: null, projectId: null });
+        montar();
+        await linhaDoGrupo('694 contas a pagar vencidas');
+        expect(screen.queryByText(/Mostrando a organização inteira/)).toBeNull();
+    });
+
+    it('com empresa escolhida, avisa que mostra a organização inteira e nomeia a empresa', async () => {
+        useStore.setState({
+            activeEmpresaId: 'emp-1', projectId: null,
+            companies: [{ id: 'emp-1', org_id: 'org-a', razao_social: 'Alpa Engenharia Ltda', nome_fantasia: 'Alpa Engenharia' }] as never,
+        });
+        montar();
+        const aviso = await screen.findByText(/Mostrando a organização inteira/);
+        expect(aviso.textContent).toMatch(/empresa Alpa Engenharia/);
+    });
+
+    it('com obra aberta, avisa que mostra a organização inteira e nomeia a obra', async () => {
+        useStore.setState({
+            activeEmpresaId: null, projectId: 'p-1',
+            projects: [{ id: 'p-1', name: 'Coronel Lambert 345' }] as never,
+        });
+        montar();
+        const aviso = await screen.findByText(/Mostrando a organização inteira/);
+        expect(aviso.textContent).toMatch(/obra Coronel Lambert 345/);
     });
 });

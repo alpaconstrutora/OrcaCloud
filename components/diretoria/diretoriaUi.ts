@@ -54,6 +54,14 @@ export function quandoEmDias(dias: number): string {
     return dias > 0 ? `há ${n} ${n === 1 ? 'dia' : 'dias'}` : `em ${n} ${n === 1 ? 'dia' : 'dias'}`;
 }
 
+/**
+ * Os dias de um item da fila. Aprovação parada já vencida ganha a marca "já venceu": desde 18/11 a
+ * conta vencida que espera aprovação conta só ali, não em "Conta a pagar vencida".
+ */
+export function quandoDoItem(tipo: string, dias: number): string {
+    return tipo === 'aprovacao_parada' && dias > 0 ? `já venceu ${quandoEmDias(dias)}` : quandoEmDias(dias);
+}
+
 export function plural(n: number, um: string, varios: string): string {
     return `${n} ${n === 1 ? um : varios}`;
 }

@@ -32,6 +32,21 @@
         ],
         "createdAt": "2026-11-10T21:21:43.565Z",
         "reason": "Claude: harness de teste da F9; o arquivo só usa bg-gray-50 e o /index.css do app, sem roxo/ciano nem gradiente (conferido por grep)"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "supabase/functions/send-bi-report/relatorio.ts"
+        ],
+        "createdAt": "2026-11-18T14:53:29.200Z",
+        "reason": "Agent: molde do e-mail do relatório de BI movido sem mudança de services/biReportService.ts (F11, PR #571); redesenho fora do escopo de segurança"
+      },
+      {
+        "rule": "overused-font",
+        "value": "arial",
+        "createdAt": "2026-11-18T14:53:29.702Z",
+        "reason": "Agent: fonte segura para e-mail HTML (clientes de e-mail não carregam webfont); molde do relatório de BI herdado sem mudança"
       }
     ]
   }

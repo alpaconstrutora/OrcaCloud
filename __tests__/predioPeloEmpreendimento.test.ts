@@ -9,7 +9,9 @@ import type { EmpreendimentoFloor } from '../types/empreendimento';
 import { applyBatch, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { comandosDoAjuste } from '../utils/blueprintAjusteAoEmpreendimento';
 import { estruturasDoEmpreendimento, type TorreParaEstrutura } from '../utils/blueprintEstruturaDaTorre';
-import { blocosDasTorresNoLote, papelDosAndares, pegadaDaTorre } from '../utils/predioAutomatico/andaresDoEmpreendimento';
+import { blocosDasTorresNoLote, dividirPeloEmpreendimento, papelDosAndares, pegadaDaTorre, produtoDoAndarTipo } from '../utils/predioAutomatico/andaresDoEmpreendimento';
+import { produtoVazio } from '../utils/blueprintProduto';
+import { assinaturaDoPedidoDoPredio, motivoParaNaoGerarPredio, planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
 import { HIPOTESES_DO_PRODUTO_PADRAO } from '../utils/blueprintProduto';
 import type { Boundary } from '../utils/blueprintKernel';
 
@@ -172,5 +174,91 @@ describe('PE1 — a pegada da torre e as torres no lote da "Teste 01"', () => {
     const r = blocosDasTorresNoLote(raso, estruturas(), distancias, null, HIPOTESES_DO_PRODUTO_PADRAO);
     expect(r.blocos).toHaveLength(2);
     expect(r.avisos.some((x) => /passa(m)? do fundo/.test(x))).toBe(true);
+  });
+});
+
+describe('PE2a — o pavimento tipo dividido nas unidades do Empreendimento (Garden, lote da Teste 01)', () => {
+  const tipoDe = (nome: string) => papelDosAndares(daTorre(nome)).andares.find((a) => a.papel === 'TIPO')!;
+  const distancias = GARDEN.empreendimento.distanciasEntreTorres.map((d) => ({ torreA: d.torre_a, torreB: d.torre_b, mm: Math.round(d.distancia_m * 1000) }));
+  /** O lote da Teste 01 com o bloco de cada torre como o PE1 o põe. */
+  function noLote() {
+    let m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }]).model;
+    const t = m.levels[0].id;
+    const { blocos } = blocosDasTorresNoLote(GARDEN.teste01.divisas, estruturas(), distancias, null, HIPOTESES_DO_PRODUTO_PADRAO);
+    m = applyBatch(m, [
+      ...GARDEN.teste01.divisas.map((d): Command => ({ type: 'AddBoundary', levelId: t, a: d.a, b: d.b, kind: 'TERRENO', papel: d.papel }) as Command),
+      ...blocos.map((b): Command => ({ type: 'AddBloco', levelId: t, nome: b.nome, pontos: b.pontos, pavimentos: b.pavimentos }) as Command),
+    ]).model;
+    return m;
+  }
+
+  it('o produto do andar tipo: uma tipologia por apartamento da ficha, com a área e os dormitórios dele', () => {
+    const { produto, porTipologia } = produtoDoAndarTipo(tipoDe('Torre A'), produtoVazio());
+    expect(produto.tipologias.map((t) => [t.areaPrivativaM2, t.dormitorios])).toEqual(tipoDe('Torre A').unidades.map((u) => [u.areaPrivativaM2, u.dormitorios]));
+    expect(Object.values(porTipologia)).toEqual([1, 1, 1, 1]);
+  });
+
+  it('Torre A: 4 apartamentos na proporção das áreas da ficha (±5 %), os dois de 127 m² na frente, com os números da ficha', () => {
+    const m = noLote();
+    const b = (m.blocos ?? []).find((x) => x.nome === 'Torre A')!;
+    const r = dividirPeloEmpreendimento(m, b, tipoDe('Torre A'), produtoVazio(), null);
+    if (!r.ok) throw new Error(r.motivo);
+    const us = r.divisao.unidades;
+    expect(us).toHaveLength(4);
+    const total = us.reduce((s, u) => s + u.areaM2, 0);
+    const alvo = us.reduce((s, u) => s + u.alvoM2, 0);
+    for (const u of us) expect(Math.abs(u.areaM2 / total - u.alvoM2 / alvo)).toBeLessThan(0.05);
+    const ficha = (u: (typeof us)[number]) => r.unidadeDaFicha.get(u.posicao)!;
+    // A rua fica em y = 0 (a FRENTE da Teste 01): os de 127 m² encostam na fachada da frente; os de 81 m², não.
+    const daRua = (u: (typeof us)[number]) => Math.min(...u.anel.map((p) => p.y));
+    expect(us.filter((u) => ficha(u).areaPrivativaM2 === 127).every((u) => daRua(u) < 500)).toBe(true);
+    expect(us.filter((u) => ficha(u).areaPrivativaM2 === 81).every((u) => daRua(u) > 500)).toBe(true);
+    expect(r.avisos).toEqual([]);
+    expect(us.map((u) => u.numero).sort()).toEqual(['101', '102', '103', '104']);
+    for (const u of us) expect(u.numero).toBe(ficha(u).nome);
+  });
+
+  it('Torre B: 4 apartamentos na proporção 104 : 108 : 113 : 111', () => {
+    const m = noLote();
+    const b = (m.blocos ?? []).find((x) => x.nome === 'Torre B')!;
+    const r = dividirPeloEmpreendimento(m, b, tipoDe('Torre B'), produtoVazio(), null);
+    if (!r.ok) throw new Error(r.motivo);
+    const us = r.divisao.unidades;
+    expect(us.map((u) => r.unidadeDaFicha.get(u.posicao)!.areaPrivativaM2).sort()).toEqual([104, 108, 111, 113]);
+    const total = us.reduce((s, u) => s + u.areaM2, 0);
+    for (const u of us) expect(Math.abs(u.areaM2 / total - r.unidadeDaFicha.get(u.posicao)!.areaPrivativaM2! / 436)).toBeLessThan(0.05);
+  });
+});
+
+describe('PE2a — o Prédio automático com as unidades do Empreendimento (Torre A no lote da Teste 01)', { timeout: 120_000 }, () => {
+  const distancias = GARDEN.empreendimento.distanciasEntreTorres.map((d) => ({ torreA: d.torre_a, torreB: d.torre_b, mm: Math.round(d.distancia_m * 1000) }));
+  function pedido() {
+    let m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }]).model;
+    const t = m.levels[0].id;
+    const { blocos } = blocosDasTorresNoLote(GARDEN.teste01.divisas, estruturas(), distancias, null, HIPOTESES_DO_PRODUTO_PADRAO);
+    const a = blocos.find((b) => b.nome === 'Torre A')!;
+    m = applyBatch(m, [
+      ...GARDEN.teste01.divisas.map((d): Command => ({ type: 'AddBoundary', levelId: t, a: d.a, b: d.b, kind: 'TERRENO', papel: d.papel }) as Command),
+      { type: 'AddBloco', levelId: t, nome: a.nome, pontos: a.pontos, pavimentos: a.pavimentos } as Command,
+    ]).model;
+    const torre = daTorre('Torre A');
+    const SO_A_ARQUITETURA = { estrutura: false, eletrica: false, climatizacao: false, agua: false, esgoto: false, pluvial: false, incendio: false, garagem: false, cobertura: false };
+    return { original: m, entrada: { blocoId: m.blocos![0].id, produto: produtoVazio(), doBloco: null, rotacaoNorteDeg: null, doEmpreendimento: { torreId: torre.torreId, andares: papelDosAndares(torre).andares } }, hip: SO_A_ARQUITETURA };
+  }
+
+  it('gera sem produto: o tipo com os 4 apartamentos da ficha (101–104), cada um com a planta da tipologia dele', () => {
+    const p = pedido();
+    expect(motivoParaNaoGerarPredio(p.original, p.entrada)).toBeNull();
+    const plano = planejarPredioDoPedido(p);
+    expect(plano.resumo.unidadesPorAndar).toBe(4);
+    const nomes = (plano.resultado.unidades ?? []).map((u) => u.numero).sort();
+    expect(nomes).toEqual(['101', '102', '103', '104']);
+    expect(plano.resumo.plantas?.unidades).toBe(4);
+  });
+
+  it('a assinatura do pedido muda com as unidades do Empreendimento (a prévia velha é detectada)', () => {
+    const p = pedido();
+    const outra = { ...p, entrada: { ...p.entrada, doEmpreendimento: { ...p.entrada.doEmpreendimento, andares: p.entrada.doEmpreendimento.andares.map((a) => (a.papel === 'TIPO' ? { ...a, unidades: a.unidades.slice(1) } : a)) } } };
+    expect(assinaturaDoPedidoDoPredio(outra)).not.toBe(assinaturaDoPedidoDoPredio(p));
   });
 });

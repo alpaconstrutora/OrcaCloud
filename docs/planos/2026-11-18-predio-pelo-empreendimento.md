@@ -188,6 +188,31 @@ Resultado no Garden (`__tests__/predioPeloEmpreendimento.test.ts`, 12 testes):
 - **Marcos de laboratório:** idênticos.
 - **Foco da revisão:** item 2.
 
+**Execução da PE2a (18/11/2026).** A PE2 foi dividida em duas partes:
+- **PE2a:** o motor com as unidades da ficha, feita.
+- **PE2b:** o envio ao Empreendimento casando com as unidades que já existem, a fazer.
+
+Feito na PE2a:
+- **`produtoDoAndarTipo`:** uma tipologia por apartamento, com a área e os dormitórios da ficha; sem dormitórios, pela área.
+- **`dividirPeloEmpreendimento`:**
+  - divide e encaixa cada apartamento pela posição e refaz a divisão nessa ordem;
+  - **"Frente" é a fatia que encosta na fachada da rua.** No bloco do Garden (18 × 28 m) o corredor corre da frente ao fundo e a divisão marca toda fatia como LATERAL; os de 127 m² são os que pegam a frente;
+  - "lateral" serve em qualquer fatia que não seja a da frente;
+  - cada unidade leva o nome da ficha.
+- **`EntradaDoPredio.doEmpreendimento`:** quando presente, divide o tipo e faz as plantas pelo produto do andar; `motivoParaNaoGerarPredio` deixa de pedir o produto.
+
+**Os nomes nos andares.**
+- **Torre A:** o tipo leva 101–104 da ficha, e as cópias derivam 201… e 301…, que batem com a ficha.
+- **Torre B:** o kernel deriva o número da cópia pelo andar ("T05"…), e não SS205 ou TR05. Fica pendência; a PE2b casa pelo andar e pela posição.
+
+**Resultado** (`__tests__/predioPeloEmpreendimento.test.ts`, 17 testes):
+- **Torre A:** 4 apartamentos na proporção da ficha (±5 %), os de 127 m² na fachada da rua, os de 81 m² não, 101–104 e nenhum aviso.
+- **Torre B:** proporção 104 : 108 : 113 : 111.
+- **Prédio automático da Torre A** no lote da Teste 01, sem produto: 4 unidades por andar, 101–104, 4 plantas.
+- **Prévia velha:** a assinatura do pedido muda com as unidades.
+
+Marcos de laboratório (prédio e casa) idênticos; suítes do prédio, da divisão e do ajuste verdes (6 arquivos, 129 testes); `tsc` limpo.
+
 ### PE3 — O botão: "Construir o prédio pelo Empreendimento"
 **O que muda.**
 - **`blueprintCasaPeloEmpreendimento.ts`:**
@@ -285,7 +310,7 @@ Resultado no Garden (`__tests__/predioPeloEmpreendimento.test.ts`, 12 testes):
 |---|---|
 | PE0 — marco do Garden | feita, a publicar (com a PE1) |
 | PE1 — os andares e a massa | feita, a publicar |
-| PE2 — o tipo com as unidades do Empreendimento | a fazer |
+| PE2 — o tipo com as unidades do Empreendimento | PE2a feita (o motor), a publicar; PE2b (o envio casa com as unidades existentes) a fazer |
 | PE3 — o botão na Casa automática | a fazer |
 | PE4 — o térreo da Torre A com os apartamentos | a fazer |
 | PE5 — condomínio e desvio sem térreo livre | a fazer |

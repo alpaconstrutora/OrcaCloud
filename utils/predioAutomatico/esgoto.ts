@@ -40,10 +40,16 @@ import { RAIO_DA_SUBIDA_DO_QUADRO_MM } from '../blueprintRotaPeloForro';
 import type { PendenciaDoPpci } from '../blueprintGeradorPpci';
 import type { BaseDoPredio, ContextoDoPredio } from './terreoECobertura';
 import { comodosDoTipo } from './agua';
+import { ligarBombasNoQuadroDaGaragem } from './bombas';
 
 export const ROTULO_DO_TUBO_DE_QUEDA = 'Tubo de queda';
 export const ROTULO_DA_COLUNA_DE_VENTILACAO = 'Coluna de ventilação';
 export const ROTULO_DO_DESVIO = 'Desvio do tubo de queda';
+/** PE6b: a caixa coletora do esgoto abaixo da rede (a torre que começa abaixo da rua) e o recalque dela até a rua. */
+export const ROTULO_DA_CAIXA_COLETORA_DE_ESGOTO = 'Caixa coletora de esgoto — 2 bombas (uma reserva)';
+export const ROTULO_DO_RECALQUE_DO_ESGOTO = 'Recalque do esgoto';
+const DN_DO_RECALQUE_DO_ESGOTO_MM = 75;
+const POTENCIA_DA_BOMBA_DE_ESGOTO_W = 1500;
 export const ROTULO_DO_COLETOR_DO_PREDIO = 'Coletor predial';
 /** PA23: o subcoletor enterrado por fora do prédio, da caixa de cada asa à da rua. */
 export const ROTULO_DO_SUBCOLETOR_DO_PREDIO = 'Subcoletor enterrado';
@@ -107,6 +113,8 @@ export interface EsgotoDoPredio {
   /** UHC de um andar (todos os grupos). */
   uhcPorAndar: number;
   coletor: { dnMm: number; declividadePct: number; porGravidade: boolean } | null;
+  /** PE6b: a caixa coletora com 2 bombas quando o desvio chega abaixo da rede pública; null = tudo por gravidade. */
+  elevatoria: { levelId: ObjectId; at: Point; alturaM: number } | null;
   pendencias: PendenciaDoPpci[];
 }
 
@@ -140,7 +148,8 @@ export function lancarEsgoto(
   const pendencias: PendenciaDoPpci[] = [];
   const pe = (id: ObjectId) => ctx.m.levels.find((l) => l.id === id)?.defaultHeightMm ?? 3000;
   const fila: Command[] = [];
-  const resultado: EsgotoDoPredio = { comandos: 0, tubos: [], pontos: 0, uhcPorAndar: 0, coletor: null, pendencias };
+  const resultado: EsgotoDoPredio = { comandos: 0, tubos: [], pontos: 0, uhcPorAndar: 0, coletor: null, elevatoria: null, pendencias };
+  let elevatoriaPendente = false;
   const { espacos, daUnidade, menor } = comodosDoTipo(ctx.m, base);
   const paredes = ctx.m.walls.filter((w) => w.levelId === tipo);
   const pilares = pegadasDePilares(ctx.m, tipo).map((g) => anelDoPilar(g, 100) as Point[]);
@@ -307,28 +316,51 @@ export function lancarEsgoto(
     lote.push(...sub.trechos);
     const ci = saida.fora;
     const cotaCi = sub.fundoDaRuaMm;
-    const caixa = (at: Point, cotaMm: number) => ({ type: 'AddTerminal', levelId: T, disciplina: 'ESGOTO', tipo: FICHA_DO_PONTO_HIDRAULICO.CAIXA_INSPECAO.rotulo, at, cotaMm, tipoHidraulico: 'CAIXA_INSPECAO', sugerida: true }) as Command;
-    fila.push(...lote, caixa(ci, cotaCi), ...sub.caixas.map((c) => caixa(c.at, c.cotaMm)));
+    const caixa = (at: Point, cotaMm: number, levelId: ObjectId = T) => ({ type: 'AddTerminal', levelId, disciplina: 'ESGOTO', tipo: FICHA_DO_PONTO_HIDRAULICO.CAIXA_INSPECAO.rotulo, at, cotaMm, tipoHidraulico: 'CAIXA_INSPECAO', sugerida: true }) as Command;
+    // PE6b (18/11/2026): a caixa da saída abaixo da rede pública (a torre que começa abaixo da rua — o desvio corre no forro
+    // do −3) não vai por gravidade: ela é a CAIXA COLETORA com 2 bombas, e o recalque sobe até uma caixa de inspeção na
+    // cota da rua, no lote — de onde o coletor segue por gravidade. Entre a garagem e a rua o recalque atravessa os andares
+    // de apartamento sem desenho neles (o tipo e as cópias): a chave da rede desce os pavimentos pela cota.
+    const profundidadeDaRede = HIPOTESES_ESGOTO_PADRAO.profundidadeDaRedeMm ?? 1500;
+    const elevatoria = zT + cotaCi < -profundidadeDaRede;
+    let doColetor = { levelId: T, at: ci, cotaMm: cotaCi, z: zT };
+    if (!elevatoria) fila.push(...lote, caixa(ci, cotaCi), ...sub.caixas.map((c) => caixa(c.at, c.cotaMm)));
+    else {
+      const L0 = base.bloco.levelId;
+      const z0 = ctx.m.levels.find((l) => l.id === L0)?.elevationMm ?? 0;
+      const naRua = COTA_ENTERRADA_MM - z0;
+      fila.push(
+        ...lote,
+        ...sub.caixas.map((c) => caixa(c.at, c.cotaMm)),
+        { type: 'AddTerminal', levelId: T, disciplina: 'ESGOTO', tipo: FICHA_DO_PONTO_HIDRAULICO.POCO_DE_RECALQUE.rotulo, at: ci, cotaMm: cotaCi, tipoHidraulico: 'POCO_DE_RECALQUE', rotulo: ROTULO_DA_CAIXA_COLETORA_DE_ESGOTO, sugerida: true } as Command,
+        trecho(T, ci, cotaCi, ci, peT, DN_DO_RECALQUE_DO_ESGOTO_MM, ROTULO_DO_RECALQUE_DO_ESGOTO),
+        trecho(L0, ci, zT + peT - z0, ci, naRua, DN_DO_RECALQUE_DO_ESGOTO_MM, ROTULO_DO_RECALQUE_DO_ESGOTO),
+        caixa(ci, naRua, L0),
+      );
+      doColetor = { levelId: L0, at: ci, cotaMm: naRua, z: z0 };
+      resultado.elevatoria = { levelId: T, at: ci, alturaM: Math.round((COTA_ENTERRADA_MM - (zT + cotaCi)) / 100) / 10 };
+      pendencias.push({ grupo: 'CONFERIR', texto: `Esgoto: o desvio chega abaixo da rede pública (presumida a ${f1(profundidadeDaRede / 1000)} m) — a caixa coletora no ${ctx.m.levels.find((l) => l.id === T)?.name.split('·').pop()?.trim() ?? 'subsolo'} com 2 bombas submersíveis de ${f1(POTENCIA_DA_BOMBA_DE_ESGOTO_W / 1000)} kW (uma reserva) e o recalque DN ${DN_DO_RECALQUE_DO_ESGOTO_MM} sobem ${f1(resultado.elevatoria.alturaM)} m até a caixa de inspeção na cota da rua — confira a vazão (pelas UHC), a altura manométrica e o volume da caixa no catálogo (NBR 8160); o recalque passa pelos andares abaixo da rua junto à contenção.` });
+    }
     // O coletor até a rede pública, na frente do lote.
-    const frente = pontoNaFrente(ctx.m, ci);
+    const frente = pontoNaFrente(ctx.m, doColetor.at);
     if (!frente) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Esgoto: marque a divisa da frente do lote — o coletor vai até a rede pública nela.' });
     else {
-      const L = dist(ci, frente.ponto);
-      const cotaRede = -(HIPOTESES_ESGOTO_PADRAO.profundidadeDaRedeMm ?? 1500) - zT;
-      const declividadePct = L > 0 ? ((cotaCi - cotaRede) / L) * 100 : 0;
+      const L = dist(doColetor.at, frente.ponto);
+      const cotaRede = -profundidadeDaRede - doColetor.z;
+      const declividadePct = L > 0 ? ((doColetor.cotaMm - cotaRede) / L) * 100 : 0;
       const dnColetor = dnDoSubcoletor(uhcTotal, declividadePct);
       const porGravidade = declividadePct + 1e-9 >= CAIMENTO_PCT;
       fila.push(
-        trecho(T, ci, cotaCi, inteiro(frente.ponto), cotaRede, dnColetor, ROTULO_DO_COLETOR_DO_PREDIO),
-        { type: 'AddTerminal', levelId: T, disciplina: 'ESGOTO', tipo: FICHA_DO_PONTO_HIDRAULICO.LIGACAO_ESGOTO.rotulo, at: inteiro(frente.ponto), cotaMm: cotaRede, tipoHidraulico: 'LIGACAO_ESGOTO', sugerida: true } as Command,
+        trecho(doColetor.levelId, doColetor.at, doColetor.cotaMm, inteiro(frente.ponto), cotaRede, dnColetor, ROTULO_DO_COLETOR_DO_PREDIO),
+        { type: 'AddTerminal', levelId: doColetor.levelId, disciplina: 'ESGOTO', tipo: FICHA_DO_PONTO_HIDRAULICO.LIGACAO_ESGOTO.rotulo, at: inteiro(frente.ponto), cotaMm: cotaRede, tipoHidraulico: 'LIGACAO_ESGOTO', sugerida: true } as Command,
       );
       resultado.coletor = { dnMm: dnColetor, declividadePct: Math.round(declividadePct * 100) / 100, porGravidade };
       if (declividadePct > DECLIVIDADE_MAXIMA_DO_COLETOR_PCT) pendencias.push({ grupo: 'CONFERIR', texto: `Coletor predial: ${f1(declividadePct)} % — acima de ${DECLIVIDADE_MAXIMA_DO_COLETOR_PCT} %; preveja um degrau (queda) numa caixa e o trecho com a declividade usual.` });
       pendencias.push({
         grupo: porGravidade ? 'CONFERIR' : 'VERIFICACAO',
         texto: porGravidade
-          ? `Coletor predial: DN ${dnColetor} a ${f1(declividadePct)} % até a rede pública, presumida a ${f1((-cotaRede - zT) / 1000)} m de profundidade na frente — confirme a cota com a concessionária.`
-          : `Coletor predial: ${f1(declividadePct)} % até a rede pública presumida a ${f1((-cotaRede - zT) / 1000)} m — abaixo de ${CAIMENTO_PCT} %: aprofunde a caixa ou preveja estação elevatória.`,
+          ? `Coletor predial: DN ${dnColetor} a ${f1(declividadePct)} % até a rede pública, presumida a ${f1((-cotaRede - doColetor.z) / 1000)} m de profundidade na frente — confirme a cota com a concessionária.`
+          : `Coletor predial: ${f1(declividadePct)} % até a rede pública presumida a ${f1((-cotaRede - doColetor.z) / 1000)} m — abaixo de ${CAIMENTO_PCT} %: aprofunde a caixa ou preveja estação elevatória.`,
       });
     }
     const m0 = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
@@ -341,9 +373,15 @@ export function lancarEsgoto(
           : `Esgoto: o desvio dos ${resultado.tubos.length} tubo(s) de queda corre suspenso no forro do térreo até a fachada da rua (DN ${dnSaida} na saída, ${m0(desvio.comprimentoM)} m; o ponto mais baixo a ${m2(desvio.maisBaixoMm)} m do piso) — confira com a estrutura e o pé-direito do térreo.`,
     });
     if (sub.comprimentoM > 0) pendencias.push({ grupo: 'CONFERIR', texto: `Esgoto: a caixa de inspeção de cada asa vai à da rua por um subcoletor enterrado por fora do prédio, a ${f1(CI_FORA_DA_FACHADA_MM / 1000)} m da fachada (DN ${sub.dnMm}, ${m0(sub.comprimentoM)} m a ${CAIMENTO_PCT} %; ${sub.caixas.length} caixa(s) de inspeção — a de cada asa, os cantos e a cada ${m0(DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM / 1000)} m, NBR 8160) — confira com as outras redes enterradas e o paisagismo.` });
+    if (elevatoria) elevatoriaPendente = true;
     if (desvio.asasSemSaida > 0) pendencias.push({ grupo: 'CONFERIR', texto: `Esgoto: ${desvio.asasSemSaida} asa(s) sem lugar para a saída própria na fachada (porta, janela, pilar ou fora do lote em todo o trecho) — o desvio dela(s) vai pela saída da rua.` });
   }
   resultado.comandos = ctx.aplicar(fila);
+  if (elevatoriaPendente && resultado.elevatoria) {
+    const n = ligarBombasNoQuadroDaGaragem(ctx, resultado.elevatoria.levelId, resultado.elevatoria.at, POTENCIA_DA_BOMBA_DE_ESGOTO_W, ['Bomba de esgoto', 'Bomba de esgoto (reserva)']);
+    if (n === null) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Esgoto: sem o quadro da garagem, as bombas da caixa coletora ficam sem ponto de força — lance-as no quadro de serviço.' });
+    else resultado.comandos += n;
+  }
   return resultado;
 }
 

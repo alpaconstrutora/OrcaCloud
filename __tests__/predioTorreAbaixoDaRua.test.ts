@@ -13,6 +13,7 @@ import { estruturasDoEmpreendimento, type TorreParaEstrutura } from '../utils/bl
 import { blocosDasTorresNoLote, papelDosAndares } from '../utils/predioAutomatico/andaresDoEmpreendimento';
 import { HIPOTESES_DO_PRODUTO_PADRAO, produtoVazio } from '../utils/blueprintProduto';
 import { planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
+import { fazerChave } from '../utils/blueprintGrafoDeRede';
 import type { Boundary } from '../utils/blueprintKernel';
 
 const GARDEN = JSON.parse(readFileSync(new URL('./fixtures/empreendimentoGarden.json', import.meta.url), 'utf8')) as {
@@ -73,4 +74,46 @@ describe('PE6a — a torre que começa abaixo da rua (Garden, Torre B)', { timeo
     expect(p.pendencias.some((x) => /sala técnica do 3º subsolo/.test(x.texto))).toBe(true);
     expect(p.pendencias.some((x) => /^Andar 0: os apartamentos/.test(x.texto))).toBe(false);
   });
+
+  // ── PE6b: o esgoto abaixo da rede pública ──────────────────────────────────────────────────────────────────────────
+  it('PE6b: o esgoto chega à rede pela caixa coletora com 2 bombas no −3 e o recalque até a caixa na cota da rua', () => {
+    const p = plano();
+    const m = p.resultado;
+    const elev = (id: string) => m.levels.find((l) => l.id === id)?.elevationMm;
+    const pocos = m.terminais.filter((t) => t.disciplina === 'ESGOTO' && t.tipoHidraulico === 'POCO_DE_RECALQUE' && /esgoto/i.test(t.rotulo ?? ''));
+    expect(pocos).toHaveLength(1);
+    expect(elev(pocos[0].levelId)).toBe(-9000);
+    const lig = m.terminais.find((t) => t.tipoHidraulico === 'LIGACAO_ESGOTO')!;
+    expect(elev(lig.levelId)).toBe(0);
+    const chave = fazerChave(m.levels);
+    const pai = new Map<string, string>();
+    const raiz = (a: string): string => (pai.get(a) === a ? a : raiz(pai.get(a)!));
+    const une = (a: string, b: string) => {
+      for (const x of [a, b]) if (!pai.has(x)) pai.set(x, x);
+      pai.set(raiz(a), raiz(b));
+    };
+    for (const t of m.trechos.filter((t) => t.disciplina === 'ESGOTO')) une(chave(t.levelId, t.a.x, t.a.y, t.cotaAMm), chave(t.levelId, t.b.x, t.b.y, t.cotaBMm));
+    const kLig = raiz(chave(lig.levelId, lig.at.x, lig.at.y, lig.cotaMm));
+    const kPoco = chave(pocos[0].levelId, pocos[0].at.x, pocos[0].at.y, pocos[0].cotaMm);
+    expect(pai.has(kPoco) && raiz(kPoco) === kLig).toBe(true);
+    const fontes = m.terminais.filter((t) => t.disciplina === 'ESGOTO' && !['CAIXA_INSPECAO', 'LIGACAO_ESGOTO', 'POCO_DE_RECALQUE', 'CAIXA_SEPARADORA', 'RALO_SECO', 'RALO_LINEAR'].includes(t.tipoHidraulico ?? '') && !/Garagem/.test(m.levels.find((l) => l.id === t.levelId)?.name ?? ''));
+    expect(fontes.length).toBeGreaterThan(0);
+    const fora = fontes.filter((f) => {
+      const k = chave(f.levelId, f.at.x, f.at.y, f.cotaMm);
+      return !pai.has(k) || raiz(k) !== kLig;
+    });
+    expect(fora.map((f) => `${f.tipoHidraulico}@${m.levels.find((l) => l.id === f.levelId)!.name}`)).toEqual([]);
+    // As 2 bombas num circuito do quadro da garagem do −3 (o de serviço).
+    const bombas = m.terminais.filter((t) => t.tipoEletrico === 'MOTOR_BOMBA' && /esgoto/i.test(t.rotulo ?? ''));
+    expect(bombas).toHaveLength(2);
+    for (const b of bombas) {
+      const c = (m.circuitos ?? []).find((x) => x.id === b.circuitoId);
+      expect(c).toBeDefined();
+      expect(elev((m.quadros ?? []).find((q) => q.id === c!.quadroId)!.levelId)).toBe(-9000);
+    }
+    expect(p.resumo.esgoto?.coletor?.porGravidade).toBe(true);
+    expect(p.pendencias.some((x) => /estação elevatória/.test(x.texto))).toBe(false);
+    expect(p.pendencias.some((x) => /caixa coletora/.test(x.texto))).toBe(true);
+  });
 });
+

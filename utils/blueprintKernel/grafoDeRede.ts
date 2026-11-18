@@ -48,11 +48,16 @@ export function fazerChave(niveis: readonly Level[]) {
     // pavimento de baixo: 0 é o teto dele, e −150 (o esgoto sob o piso) é o
     // teto dele menos 150. Sem isto o ramal do andar de cima e o tubo de
     // queda que o recebe no térreo seriam dois nós que ninguém liga.
-    if (cota <= 0) {
-      const abaixo = abaixoDe.get(levelId);
-      if (abaixo) return `${abaixo.id}|${x},${y}|${abaixo.defaultHeightMm + cota}`;
+    // E continua descendo enquanto a cota não cabe no de baixo (PE6b, 18/11/2026): o recalque que sobe da garagem do −3
+    // até a caixa na cota da rua atravessa andares onde nada se desenha (o tipo e as cópias) — o trecho do lote a −6000
+    // é o teto da garagem, três pavimentos abaixo.
+    let nivelId = levelId;
+    let c = cota;
+    for (let abaixo = abaixoDe.get(nivelId); c <= 0 && abaixo; abaixo = abaixoDe.get(nivelId)) {
+      c += abaixo.defaultHeightMm;
+      nivelId = abaixo.id;
     }
-    return `${levelId}|${x},${y}|${cota}`;
+    return `${nivelId}|${x},${y}|${c}`;
   };
 }
 

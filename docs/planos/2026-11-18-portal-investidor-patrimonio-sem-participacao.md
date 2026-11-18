@@ -72,7 +72,10 @@ falso no ar; a revisão é tirar o card.
   a coluna da direita, ao lado da linha do tempo. `aiService.analyzeAsset` removida (sem outro chamador).
   **Pronto quando:** `__tests__/components/AssetDetailSemParecerSimulado.test.tsx` verde (era vermelho
   achando o título do parecer).
-- [ ] Produção: "Ver empreendimento" pelo link do Tiago sem o card. **Pronto quando:** conferido pelo link real.
+- [x] Produção: "Ver empreendimento" pelo link do Tiago sem o card. **Pronto quando:** conferido pelo link real.
+  — **Publicado no PR #579** (squash `d32eb5052`, servido pelo domínio; "Parecer da Intelig" ausente do bundle).
+  Conferido 18/11 em produção, 1920 px: sem parecer nem "Gerar Análise IA", galeria "Evolução Visual" na
+  coluna da direita, "Valor Atual — Participação não registrada", 0 erros de console.
 
 Encontrado e **não** mexido (registrar, decidir depois): `aiService.analyzePortfolio` gera o card do Resumo
 — com menos de 2 participações é uma dica genérica ("Dica de Diversificação"); com 2 ou mais diz "Seu

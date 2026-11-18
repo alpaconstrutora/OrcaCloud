@@ -20,6 +20,7 @@ import { ROTULO_DO_ESQUEMA } from '../../utils/blueprintPavimentoTipoDaMassa';
 import type { Produto, ProdutoDoBloco } from '../../utils/blueprintProduto';
 import type { HipotesesDoPredio, PlanoDoPredio } from '../../utils/blueprintPredioAutomatico';
 import type { EstadoDoPredioAutomatico } from '../../hooks/usePredioAutomatico';
+import type { AndarDoEmpreendimento, PapelDoAndar } from '../../utils/predioAutomatico/andaresDoEmpreendimento';
 
 const COR_DA_SITUACAO: Record<SituacaoDaEtapa, string> = {
   LANCOU: 'text-emerald-700',
@@ -32,6 +33,9 @@ const ROTULO_DA_SITUACAO: Record<SituacaoDaEtapa, string> = { LANCOU: 'lança', 
 const ORDEM: GrupoDaPendencia[] = ['VERIFICACAO', 'PREMISSA', 'SEM_SOLUCAO', 'CONFLITO', 'NAO_DECIDIDO', 'CONFERIR'];
 
 export const MOTIVO_GERANDO_PREDIO = 'Aguarde: o prédio está sendo gerado.';
+/** PE3: o papel do andar da ficha, em texto. */
+const PAPEL_DO_ANDAR: Record<PapelDoAndar, string> = { GARAGEM: 'garagem', TIPO: 'pavimento tipo', COPIA: 'cópia do tipo', PROPRIO: 'andar próprio' };
+
 export const MOTIVO_PREVIA_VELHA_PREDIO = 'O produto ou as hipóteses mudaram depois da prévia — gere de novo.';
 
 interface Props {
@@ -42,6 +46,11 @@ interface Props {
   /** A distribuição do produto neste bloco (`null` = produto sem tipologia). */
   doBloco: ProdutoDoBloco | null;
   onEditarProduto: () => void;
+  /**
+   * PE3 (18/11/2026): o prédio sai das unidades do Empreendimento (a torre e os andares da ficha) — o Programa mostra a
+   * torre e os apartamentos do andar tipo, e o produto do estudo não é pedido.
+   */
+  doEmpreendimento?: { torre: string; empreendimento: string; andares: AndarDoEmpreendimento[] } | null;
   hipoteses: HipotesesDoPredio;
   onHipoteses: (h: HipotesesDoPredio) => void;
   motivoParaNaoGerar: string | null;
@@ -260,7 +269,40 @@ export default function TelaPredioAutomatico(props: Props) {
       </div>
 
       {/* ── Programa: o que o motor lê — o bloco e o produto distribuído nele ── */}
-      {abaEfetiva === 'programa' && (
+      {abaEfetiva === 'programa' && props.doEmpreendimento && (
+        <div role="tabpanel" aria-label="Programa" className={`space-y-6 ${cardCls}`} data-testid="programa-do-predio">
+          <SecaoTitulo
+            icon={Building2}
+            titulo={`${props.doEmpreendimento.torre} — pelo Empreendimento "${props.doEmpreendimento.empreendimento}"`}
+            resumo="os andares e os apartamentos saem de Torres & Unidades (o produto do estudo não entra)"
+          />
+          <section className="space-y-2">
+            <h4 className={rotuloCls}>Andares da torre</h4>
+            <ul className="space-y-1 text-sm text-gray-700" data-testid="andares-da-torre">
+              {[...props.doEmpreendimento.andares].reverse().map((a) => (
+                <li key={a.numero}>
+                  <span className="font-medium text-gray-900">{a.nome}</span> · {PAPEL_DO_ANDAR[a.papel]}
+                  {a.unidades.length > 0 ? ` · ${a.unidades.length} apartamento(s)` : ''}
+                  {a.comuns.length > 0 ? ` · ${a.comuns.map((c) => c.nome).join(', ')}` : ''}
+                </li>
+              ))}
+            </ul>
+          </section>
+          <section className="space-y-2">
+            <h4 className={rotuloCls}>Apartamentos do andar tipo</h4>
+            <ul className="space-y-1 text-sm text-gray-700" data-testid="apartamentos-do-tipo">
+              {(props.doEmpreendimento.andares.find((a) => a.papel === 'TIPO')?.unidades ?? []).map((u) => (
+                <li key={u.id ?? u.nome}>
+                  {u.nome}
+                  {u.tipologia ? ` · ${u.tipologia}` : ''} · {f2(u.areaPrivativaM2 ?? 0)} m²{u.dormitorios ? ` · ${u.dormitorios} dorm.` : ''}
+                  {u.posicao ? ` · ${u.posicao.toLowerCase()}` : ''}
+                </li>
+              ))}
+            </ul>
+          </section>
+        </div>
+      )}
+      {abaEfetiva === 'programa' && !props.doEmpreendimento && (
         <div role="tabpanel" aria-label="Programa" className={`space-y-6 ${cardCls}`} data-testid="programa-do-predio">
           <SecaoTitulo
             icon={Building2}

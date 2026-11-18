@@ -13,8 +13,10 @@
 import type { DadosDoEmpreendimentoParaPlanta } from './blueprintDadosDoEmpreendimento';
 import { fecharLote, loteRetangular, type LoteFechado } from './blueprintLoteDigitado';
 import { pontoCardeal, ROTULO_DO_PONTO_CARDEAL } from './blueprintGrafoEspacial';
+import type { EstruturaDaTorre } from './blueprintEstruturaDaTorre';
+import { papelDosAndares } from './predioAutomatico/andaresDoEmpreendimento';
 
-export type PassoDaCasa = 'LOTE' | 'LOCAL' | 'ZONA' | 'UNIDADE' | 'GERAR';
+export type PassoDaCasa = 'LOTE' | 'LOCAL' | 'ZONA' | 'UNIDADE' | 'TORRE' | 'GERAR';
 export type EstadoDoPasso = 'FEITO' | 'FAZER' | 'PERGUNTAR' | 'FALTA' | 'AVISO';
 
 export interface SituacaoDoPasso {
@@ -154,6 +156,57 @@ export function passosDaCasaPeloEmpreendimento(e: EntradaDosPassos): PassosDaCas
       : { passo: 'GERAR', rotulo: 'Gerar', estado: 'FAZER', texto: 'Gera a prévia da casa. Lançar no desenho continua sendo o seu clique.' },
   );
 
+  const falta = passos.find((p) => p.estado === 'FALTA');
+  const carregando = !e.zonaAplicada && e.zonasDoEmpreendimento === null;
+  return {
+    passos,
+    motivoDoBotao: falta ? falta.texto : carregando ? 'Aguarde: carregando as zonas do Empreendimento.' : null,
+    parada: passos.find((p) => p.estado === 'PERGUNTAR')?.passo ?? null,
+  };
+}
+
+/**
+ * PE3 do prédio pelo Empreendimento (18/11/2026, pedido "acabei de gerar a Casa automática do empreendimento garden e
+ * continua gerado somente uma unidade"): o Empreendimento é PRÉDIO quando alguma torre (fora do loteamento — as torres
+ * de quadra já ficam fora de `estruturasDoEmpreendimento`) tem um andar com 2 ou mais apartamentos, ou 2 ou mais andares
+ * com apartamento. Senão, CASA — o caminho de antes.
+ */
+export function tipoDoEmpreendimento(estruturas: readonly EstruturaDaTorre[]): 'CASA' | 'PREDIO' {
+  for (const e of estruturas) {
+    const comApartamento = papelDosAndares(e).andares.filter((a) => a.papel !== 'GARAGEM' && a.unidades.length > 0);
+    if (comApartamento.length >= 2 || comApartamento.some((a) => a.unidades.length >= 2)) return 'PREDIO';
+  }
+  return 'CASA';
+}
+
+export interface TorreParaOsPassos {
+  id: string;
+  nome: string;
+  /** "3 andares × 4 + térreo com 2". */
+  resumo: string;
+  /** Por que esta torre ainda não se constrói (a que começa abaixo da rua); ausente = constrói. */
+  motivo?: string | null;
+}
+
+/**
+ * PE3: os passos do "Construir o prédio pelo Empreendimento" — o lote, o local e a zona da casa (os mesmos) e a TORRE
+ * (uma por vez; com mais de uma, pergunta qual), depois GERAR a prévia do Prédio automático. Lançar continua manual.
+ */
+export function passosDoPredioPeloEmpreendimento(e: EntradaDosPassos, torres: readonly TorreParaOsPassos[], torreId: string | null): PassosDaCasa {
+  const daCasa = passosDaCasaPeloEmpreendimento({ ...e, unidades: [], unidadeId: null, motivoParaNaoGerar: null });
+  const passos: SituacaoDoPasso[] = daCasa.passos
+    .filter((p) => p.passo === 'LOTE' || p.passo === 'LOCAL' || p.passo === 'ZONA')
+    .map((p) => (p.passo === 'ZONA' ? { ...p, texto: p.texto.replace('a casa sai sem os recuos', 'o prédio sai sem os recuos') } : p));
+  const escolhida = torres.find((t) => t.id === torreId) ?? (torres.length === 1 ? torres[0] : null);
+  if (torres.length === 0) passos.push({ passo: 'TORRE', rotulo: 'Torre', estado: 'FALTA', texto: 'O Empreendimento não tem torre com apartamentos em Torres & Unidades.' });
+  else if (escolhida?.motivo) passos.push({ passo: 'TORRE', rotulo: 'Torre', estado: 'FALTA', texto: `${escolhida.nome}: ${escolhida.motivo}` });
+  else if (escolhida) passos.push({ passo: 'TORRE', rotulo: 'Torre', estado: 'FEITO', texto: `${escolhida.nome}: ${escolhida.resumo}.` });
+  else passos.push({ passo: 'TORRE', rotulo: 'Torre', estado: 'PERGUNTAR', texto: `O Empreendimento tem ${torres.length} torres — escolha qual construir (uma por vez).` });
+  passos.push(
+    !e.temPavimento
+      ? { passo: 'GERAR', rotulo: 'Gerar', estado: 'FALTA', texto: 'Abra um pavimento para gerar o prédio.' }
+      : { passo: 'GERAR', rotulo: 'Gerar', estado: 'FAZER', texto: `Gera a prévia do prédio${escolhida ? ` da ${escolhida.nome}` : ''} com as unidades do Empreendimento. Lançar no desenho continua sendo o seu clique.` },
+  );
   const falta = passos.find((p) => p.estado === 'FALTA');
   const carregando = !e.zonaAplicada && e.zonasDoEmpreendimento === null;
   return {

@@ -14,8 +14,12 @@
  */
 import { pointInPolygon, type Boundary, type Point } from '../blueprintKernel';
 import type { EstruturaDaTorre, PisoDaTorre, UnidadeDoPiso } from '../blueprintEstruturaDaTorre';
-import { elevadoresSugeridos, type HipotesesDoProduto } from '../blueprintProduto';
+import { elevadoresSugeridos, type HipotesesDoProduto, type Produto, type TipologiaDoProduto } from '../blueprintProduto';
 import { medirTerreno } from '../blueprintTerreno';
+import { chaveDaUnidade } from '../blueprintEstruturaDaTorre';
+import type { Bloco, BlueprintModel } from '../blueprintKernel';
+import { direcaoDaRua, ordinalDoTipo, type DivisaoDoPavimento } from '../blueprintPavimentoTipoDaMassa';
+import { dividirPavimentoDoBloco } from '../blueprintPavimentoOrtogonal';
 
 export type PapelDoAndar = 'GARAGEM' | 'TIPO' | 'COPIA' | 'PROPRIO';
 
@@ -200,4 +204,107 @@ export function blocosDasTorresNoLote(
   const limite = fundoDoLote - r.fundosMm;
   if (b0 > limite + 1) avisos.push(`As torres passam do fundo do lote em ${(Math.round((b0 - limite) / 10) / 100).toLocaleString('pt-BR')} m (com o recuo de fundos) — a área que o andar tipo pede não cabe; ajuste os blocos ou as áreas do Empreendimento.`);
   return { blocos, avisos };
+}
+
+/** Dormitórios pela área quando a ficha não diz (a régua do produto: até 45 m² studio/1, 70 m² 2, depois 3). */
+const dormitoriosPelaArea = (m2: number) => (m2 <= 45 ? 1 : m2 <= 70 ? 2 : 3);
+
+/**
+ * PE2a: o PRODUTO do andar tipo pelo Empreendimento — uma tipologia por apartamento da ficha (a área e os dormitórios
+ * dele; o resto, o padrão do produto do estudo), uma unidade de cada. A divisão do pavimento e as plantas leem dele.
+ */
+export function produtoDoAndarTipo(tipo: AndarDoEmpreendimento, base: Produto): { produto: Produto; porTipologia: Record<string, number> } {
+  const tipologias: TipologiaDoProduto[] = tipo.unidades.map((u) => {
+    const area = u.areaPrivativaM2 ?? 0;
+    return {
+      id: `emp:${chaveDaUnidade(u)}`,
+      nome: (u.tipologia?.trim() || u.nome).slice(0, 40),
+      uso: 'RESIDENCIAL',
+      dormitorios: u.dormitorios != null && u.dormitorios > 0 ? u.dormitorios : dormitoriosPelaArea(area),
+      areaPrivativaM2: area,
+      vagasPorUnidade: u.vagas ?? 0,
+      proporcaoPct: 100 / Math.max(1, tipo.unidades.length),
+      precoM2: 0,
+    };
+  });
+  return { produto: { ...base, tipologias, metaUnidades: tipologias.length }, porTipologia: Object.fromEntries(tipologias.map((t) => [t.id, 1])) };
+}
+
+/**
+ * PE2a: o PAVIMENTO TIPO dividido nos apartamentos do andar tipo do Empreendimento (decisão de 18/11: "Unidades do
+ * Empreendimento"). Uma fatia por apartamento, na proporção das áreas da ficha; o núcleo pela hipótese do produto. A
+ * posição da ficha (FRENTE/LATERAL/FUNDOS) manda: a 1ª divisão diz a posição de cada fatia, os apartamentos são
+ * encaixados nelas (a mesma posição, depois a área mais perto) e a divisão é refeita nessa ordem. Cada unidade leva o
+ * nome da ficha; `unidadeDaFicha` liga a posição da divisão ao apartamento do Empreendimento.
+ */
+export function dividirPeloEmpreendimento(
+  model: BlueprintModel,
+  bloco: Bloco,
+  tipo: AndarDoEmpreendimento,
+  produtoBase: Produto,
+  rotacaoNorteDeg: number | null,
+): { ok: true; divisao: DivisaoDoPavimento; produto: Produto; unidadeDaFicha: Map<number, UnidadeDoPiso>; avisos: string[] } | { ok: false; motivo: string } {
+  if (tipo.unidades.length === 0) return { ok: false, motivo: 'O andar tipo do Empreendimento não tem apartamento.' };
+  const h = produtoBase.hipoteses;
+  const elevadores = elevadoresSugeridos(bloco.pavimentos, h);
+  const nucleoM2 = bloco.pavimentos <= 1 ? 0 : h.nucleoBaseM2 + elevadores * h.elevadorM2;
+  const ord = ordinalDoTipo(model, bloco);
+  const rua = direcaoDaRua(model);
+  const dividir = (ordem: UnidadeDoPiso[]) => {
+    const { produto, porTipologia } = produtoDoAndarTipo({ ...tipo, unidades: ordem }, produtoBase);
+    return { produto, r: dividirPavimentoDoBloco({ bloco, produto, porTipologia, nucleoM2, elevadores, ordinalDoTipo: ord, rotacaoNorteDeg, direcaoDaRua: rua }) };
+  };
+  let ordem = [...tipo.unidades];
+  let { produto, r } = dividir(ordem);
+  if (!r.ok) return r;
+  /**
+   * A posição da fatia NO LOTE para o encaixe: FRENTE quando ela encosta na fachada da rua do bloco (no Garden o
+   * corredor corre da frente ao fundo e toda fatia olha para a lateral — a de 127 m² da ficha é a que pega a frente);
+   * FUNDOS quando encosta na fachada oposta; senão a posição da divisão. Sem rua, a da divisão.
+   */
+  const fachadas = (f: DivisaoDoPavimento['unidades'][number]): { frente: boolean; fundos: boolean } => {
+    if (!rua) return { frente: f.posicaoNoLote === 'FRENTE', fundos: f.posicaoNoLote === 'FUNDOS' };
+    const proj = (p: Point) => p.x * rua.x + p.y * rua.y;
+    const tol = 500;
+    return {
+      frente: Math.max(...f.anel.map(proj)) >= Math.max(...bloco.pontos.map(proj)) - tol,
+      fundos: Math.min(...f.anel.map(proj)) <= Math.min(...bloco.pontos.map(proj)) + tol,
+    };
+  };
+  /** O apartamento cabe na fatia pela posição da ficha? Frente e fundos pedem a fachada; lateral, não ser a da frente. */
+  const serve = (u: UnidadeDoPiso, f: DivisaoDoPavimento['unidades'][number]) => {
+    const p = (u.posicao ?? '').toUpperCase();
+    const x = fachadas(f);
+    return p === 'FRENTE' ? x.frente : p === 'FUNDOS' ? x.fundos : p === 'LATERAL' ? !x.frente : true;
+  };
+  // O encaixe pela posição da ficha: cada fatia (na ordem da divisão) recebe o apartamento da mesma posição, o de área
+  // mais perto da dela; sem posição igual, o de área mais perto. Duas voltas bastam (a área muda pouco a fatia).
+  for (let volta = 0; volta < 2; volta++) {
+    const fatias = [...r.divisao.unidades].sort((a, b) => a.posicao - b.posicao);
+    const livres = [...ordem];
+    const nova: UnidadeDoPiso[] = [];
+    for (const f of fatias) {
+      const mesma = livres.filter((u) => serve(u, f));
+      const pool = mesma.length ? mesma : livres;
+      const u = pool.reduce((m, x) => (Math.abs((x.areaPrivativaM2 ?? 0) - f.areaM2) < Math.abs((m.areaPrivativaM2 ?? 0) - f.areaM2) ? x : m));
+      nova.push(u);
+      livres.splice(livres.indexOf(u), 1);
+    }
+    if (nova.every((u, i) => u === ordem[i])) break;
+    ordem = nova;
+    const d = dividir(ordem);
+    if (!d.r.ok) return d.r;
+    produto = d.produto;
+    r = d.r;
+  }
+  const avisos: string[] = [];
+  const unidadeDaFicha = new Map<number, UnidadeDoPiso>();
+  const peloId = new Map(ordem.map((u) => [`emp:${chaveDaUnidade(u)}`, u]));
+  const unidades = r.divisao.unidades.map((f) => {
+    const u = peloId.get(f.tipologiaId)!;
+    unidadeDaFicha.set(f.posicao, u);
+    if (u.posicao && !serve(u, f)) avisos.push(`O apartamento "${u.nome}" é ${u.posicao.toLowerCase()} na ficha e não ficou nessa posição no pavimento tipo — confira.`);
+    return { ...f, numero: u.nome };
+  });
+  return { ok: true, divisao: { ...r.divisao, unidades }, produto, unidadeDaFicha, avisos };
 }

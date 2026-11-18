@@ -113,6 +113,11 @@ interface Props {
     onResolver: (passo: PassoDaCasa) => void;
     /** O que o último "Construir" fez (ou por que parou). */
     mensagem?: { texto: string; erro: boolean } | null;
+    /**
+     * PE3 (18/11/2026): o Empreendimento é PRÉDIO — as torres dele, a escolhida e a troca. Presente, o botão é "Construir
+     * o prédio pelo Empreendimento" (abre o Prédio automático da torre, com as unidades da ficha).
+     */
+    predio?: { torres: { id: string; nome: string; resumo: string }[]; torreId: string | null; onTorre: (id: string) => void } | null;
   } | null;
 }
 
@@ -124,7 +129,7 @@ const DO_ESTADO: Record<EstadoDoPasso, { rotulo: string; cor: string; Icone: typ
   FALTA: { rotulo: 'falta', cor: 'text-red-700', Icone: AlertCircle },
   AVISO: { rotulo: 'aviso', cor: 'text-slate-600', Icone: Info },
 };
-const ONDE_RESPONDER: Partial<Record<PassoDaCasa, string>> = { LOTE: 'Abrir o lote digitado', ZONA: 'Abrir Dados do lote', UNIDADE: 'Escolher a unidade' };
+const ONDE_RESPONDER: Partial<Record<PassoDaCasa, string>> = { LOTE: 'Abrir o lote digitado', ZONA: 'Abrir Dados do lote', UNIDADE: 'Escolher a unidade', TORRE: 'Escolher a torre' };
 
 export const MOTIVO_PREVIA_VELHA = 'As premissas mudaram desde a prévia — gere de novo.';
 export const MOTIVO_GERANDO = 'Aguarde: a casa está sendo gerada.';
@@ -384,20 +389,58 @@ export default function TelaCasaAutomatica(props: Props) {
             <section className="space-y-4" data-testid="casa-pelo-empreendimento">
               <SecaoTitulo
                 icon={Building2}
-                titulo={`Dados do Empreendimento "${props.peloEmpreendimento.nome}"`}
-                resumo="lote, zona e programa saem da ficha, do Mapa Regulatório e de Torres & Unidades"
+                titulo={`Dados do Empreendimento "${props.peloEmpreendimento.nome}"${props.peloEmpreendimento.predio ? ' — é prédio' : ''}`}
+                resumo={
+                  props.peloEmpreendimento.predio
+                    ? 'lote e zona saem da ficha e do Mapa Regulatório; os andares e os apartamentos de cada torre, de Torres & Unidades — o Prédio automático gera a torre escolhida'
+                    : 'lote, zona e programa saem da ficha, do Mapa Regulatório e de Torres & Unidades'
+                }
                 acoes={
-                  <Button
-                    variant="secondary"
-                    onClick={() => props.peloEmpreendimento?.onConstruir()}
-                    disabled={!!props.peloEmpreendimento.passos.motivoDoBotao || props.peloEmpreendimento.construindo || casa.rodando}
-                    title={props.peloEmpreendimento.passos.motivoDoBotao ?? (casa.rodando ? 'Aguarde: a casa está sendo gerada' : undefined)}
-                    data-testid="construir-pelo-empreendimento"
-                  >
-                    <Wand2 className="h-4 w-4" /> {props.peloEmpreendimento.construindo ? 'Construindo…' : 'Construir pelo Empreendimento'}
-                  </Button>
+                  props.peloEmpreendimento.predio ? (
+                    <Button
+                      variant="secondary"
+                      onClick={() => props.peloEmpreendimento?.onConstruir()}
+                      disabled={!!props.peloEmpreendimento.passos.motivoDoBotao || props.peloEmpreendimento.construindo}
+                      title={props.peloEmpreendimento.passos.motivoDoBotao ?? undefined}
+                      data-testid="construir-predio-pelo-empreendimento"
+                    >
+                      <Wand2 className="h-4 w-4" /> {props.peloEmpreendimento.construindo ? 'Construindo…' : 'Construir o prédio pelo Empreendimento'}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="secondary"
+                      onClick={() => props.peloEmpreendimento?.onConstruir()}
+                      disabled={!!props.peloEmpreendimento.passos.motivoDoBotao || props.peloEmpreendimento.construindo || casa.rodando}
+                      title={props.peloEmpreendimento.passos.motivoDoBotao ?? (casa.rodando ? 'Aguarde: a casa está sendo gerada' : undefined)}
+                      data-testid="construir-pelo-empreendimento"
+                    >
+                      <Wand2 className="h-4 w-4" /> {props.peloEmpreendimento.construindo ? 'Construindo…' : 'Construir pelo Empreendimento'}
+                    </Button>
+                  )
                 }
               />
+              {props.peloEmpreendimento.predio && props.peloEmpreendimento.predio.torres.length > 0 && (
+                <div className="grid grid-cols-2 gap-x-6 md:grid-cols-4">
+                  <div className="col-span-2">
+                    <Campo rotulo="Torre do prédio">
+                      <select
+                        aria-label="Torre do prédio"
+                        data-testid="torre-do-predio"
+                        className={campoCls}
+                        value={props.peloEmpreendimento.predio.torreId ?? ''}
+                        onChange={(e) => e.target.value && props.peloEmpreendimento?.predio?.onTorre(e.target.value)}
+                      >
+                        {!props.peloEmpreendimento.predio.torreId && <option value="">Escolha a torre</option>}
+                        {props.peloEmpreendimento.predio.torres.map((t) => (
+                          <option key={t.id} value={t.id}>
+                            {t.nome} — {t.resumo}
+                          </option>
+                        ))}
+                      </select>
+                    </Campo>
+                  </div>
+                </div>
+              )}
               <ul className="space-y-2">
                 {props.peloEmpreendimento.passos.passos.map((x) => {
                   const { rotulo, cor, Icone } = DO_ESTADO[x.estado];

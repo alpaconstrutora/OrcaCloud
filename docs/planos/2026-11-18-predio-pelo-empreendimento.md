@@ -33,6 +33,13 @@ As PA11–PA23 poliram a compatibilização desses prédios de laboratório. A m
 | 18/11/2026 | A área das unidades não cabe no contorno gravado da torre (13,5 × 26 m, de uma massa estimada) — manter o bloco e dividir na proporção? | **"Use a planta Teste 01 como referencia."** A "Teste 01" (`5c97c3e1…`, org da SPE) é o lote real do Garden pela ficha — trapézio de 18 m de frente, 21 m de fundos e 63,03 m de lateral, sem bloco. Leitura: o contorno estimado deixa de ser a referência; as torres nascem **nesse lote**, dimensionadas pelas unidades do andar tipo (PE1), e a conferência no app parte de uma cópia descartável dela. |
 | 18/11/2026 | O plano captura o que você quer? | **"sim"** |
 | 18/11/2026 | Como executar? | **"Nativo"** — eu implemento fase a fase nesta sessão, com um revisor independente no fim de cada fase. |
+| 18/11/2026 | O térreo da Torre A (2 apartamentos + área comum): o kernel só copia o andar inteiro do tipo, e o Prédio automático põe medição, bombas, reservatório e o desvio no nível do térreo | **"Técnico na garagem"**:
+- o térreo nasce como cópia do tipo, desvinculada, sem os apartamentos que ele não tem;
+- o espaço deles vira hall de entrada e área comum;
+- medição, bombas e reservatório vão para a garagem mais alta (−1), o mesmo mecanismo da Torre B;
+- sem mudar o kernel.
+
+Desvia da decisão "condomínio no que sobra" só na parte técnica. |
 
 ## O caso real (banco, 18/11/2026, só leitura)
 
@@ -188,6 +195,37 @@ Resultado no Garden (`__tests__/predioPeloEmpreendimento.test.ts`, 12 testes):
 - **Marcos de laboratório:** idênticos.
 - **Foco da revisão:** item 2.
 
+**Execução da PE2a (18/11/2026).** A PE2 foi dividida em duas partes:
+- **PE2a:** o motor com as unidades da ficha, feita.
+- **PE2b:** o envio ao Empreendimento casando com as unidades que já existem, a fazer.
+
+Feito na PE2a:
+- **`produtoDoAndarTipo`:** uma tipologia por apartamento, com a área e os dormitórios da ficha; sem dormitórios, pela área.
+- **`dividirPeloEmpreendimento`:**
+  - divide e encaixa cada apartamento pela posição e refaz a divisão nessa ordem;
+  - **"Frente" é a fatia que encosta na fachada da rua.** No bloco do Garden (18 × 28 m) o corredor corre da frente ao fundo e a divisão marca toda fatia como LATERAL; os de 127 m² são os que pegam a frente;
+  - "lateral" serve em qualquer fatia que não seja a da frente;
+  - cada unidade leva o nome da ficha.
+- **`EntradaDoPredio.doEmpreendimento`:** quando presente, divide o tipo e faz as plantas pelo produto do andar; `motivoParaNaoGerarPredio` deixa de pedir o produto.
+
+**Os nomes nos andares.**
+- **Torre A:** o tipo leva 101–104 da ficha, e as cópias derivam 201… e 301…, que batem com a ficha.
+- **Torre B:** o kernel deriva o número da cópia pelo andar ("T05"…), e não SS205 ou TR05. Fica pendência; a PE2b casa pelo andar e pela posição.
+
+**Resultado** (`__tests__/predioPeloEmpreendimento.test.ts`, 17 testes):
+- **Torre A:** 4 apartamentos na proporção da ficha (±5 %), os de 127 m² na fachada da rua, os de 81 m² não, 101–104 e nenhum aviso.
+- **Torre B:** proporção 104 : 108 : 113 : 111.
+- **Prédio automático da Torre A** no lote da Teste 01, sem produto: 4 unidades por andar, 101–104, 4 plantas.
+- **Prévia velha:** a assinatura do pedido muda com as unidades.
+
+Marcos de laboratório (prédio e casa) idênticos; suítes do prédio, da divisão e do ajuste verdes (6 arquivos, 129 testes); `tsc` limpo.
+
+**Execução da PE2b (18/11/2026).** O planejador do sync (`services/sync/planner.ts`) já **adota** a torre e as unidades existentes pelo nome quando elas não têm vínculo; o envio da Torre A manda "Torre A" e 101–304. Teste novo, de caracterização (passou sem mudar código):
+- **O que ele faz:** gera o prédio da Torre A pela ficha, envia (`ladoDaMassa` com o produto que o editor preenche pelas unidades) e planeja contra as 43 unidades reais do Garden.
+- **Resultado:** 0 torres novas, 0 unidades novas; a Torre A e os 12 apartamentos (101–304) adotados.
+- **Torre B:** as cópias dela teriam números derivados ("T05"…), que não batem com a ficha (SS205, TR05…); o envio criaria unidades novas. Fica para a PE6, quando a Torre B for gerada: adotar por andar e posição, ou nomear a cópia pela ficha.
+- **Térreo da Torre A:** 002 e 004 entram com a PE4.
+
 ### PE3 — O botão: "Construir o prédio pelo Empreendimento"
 **O que muda.**
 - **`blueprintCasaPeloEmpreendimento.ts`:**
@@ -219,6 +257,41 @@ Resultado no Garden (`__tests__/predioPeloEmpreendimento.test.ts`, 12 testes):
   4. aparecem o aviso da pegada e a pendência do térreo;
   5. o Empreendimento não é tocado (conferido no banco: `updated_at` igual).
 - **Foco da revisão:** itens 4 e 5.
+
+**Execução da PE3 (18/11/2026, junto com a PE2a no mesmo PR).** Feito:
+- **`tipoDoEmpreendimento(estruturas)` e `passosDoPredioPeloEmpreendimento`:** o lote, o local e a zona vêm da casa; o passo TORRE pergunta com mais de uma e já vem escolhido com uma; GERAR.
+- **Tela da casa:** no modo prédio, o título "— é prédio", o seletor "Torre do prédio" e o botão "Construir o prédio pelo Empreendimento". O "Gerar" da casa fica desligado com o motivo.
+- **Programa do Prédio automático:** com o Empreendimento, mostra a torre, os andares (papel) e os apartamentos do andar tipo, e não pede o produto.
+- **Editor, em etapas, uma por render:**
+  1. lote, local e zona;
+  2. os blocos das torres que faltam, no lote (`blocosDasTorresNoLote`);
+  3. o ajuste da massa;
+  4. abrir o Prédio automático da torre;
+  5. gerar a prévia quando a entrada já traz os andares da ficha.
+
+  O `doEmpreendimento` do bloco do prédio vem da torre de mesmo nome; também abre pelo painel do bloco.
+- **Pendência nova:** o andar PRÓPRIO com apartamento diz quais ficaram fora (no Garden, o térreo da Torre A com 002 e 004), até a PE4.
+- **Aviso da pegada:** não aparece na Teste 01, porque as torres nascem do tamanho que o andar tipo pede. Aparece no bloco desenhado menor (PE1).
+
+**Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pe3.cjs`). Estudo descartável na SPE, com as divisas da Teste 01 e a obra do Garden; arquivado no fim. Pelo caminho do usuário:
+1. **Casa automática:** diz "Dados do Empreendimento '011 - Garden Cambuhy' — é prédio", e o seletor mostra "Torre A — 3 andar(es) × 4 apartamentos + pavimento térreo com 2 · 2 de garagem" e "Torre B — 6 andar(es) × 4 apartamentos · 2 de garagem".
+2. **Construir com a Torre A:** a prévia sai em 9,7 s com 12 apartamentos (4 por andar × 3), 101–104 da ficha, os de 127 m² na frente.
+3. **Massa:** Torre A 4@0, Torre A · Garagem 2@−6,0, Torre B 6@−6,0, Torre B · Garagem 2@−12,0.
+4. **Relatório:** traz a pendência do térreo (002, 004).
+5. **Empreendimento:** intocado (`updated_at` e as 43 unidades iguais).
+
+Sem erro de console. Testes: `predioPeloEmpreendimento` 21, `TelaCasaAutomatica` 36, `TelaPredioAutomatico` 7; `check-ui-standard` limpo nas duas telas.
+
+**Guarda da Torre B (18/11, achado depois da conferência).** Escolher a Torre B gerava um prédio **errado**, sem erro:
+- **O que saía:** o motor fazia o térreo de condomínio no 0 e 3 andares acima (12 apartamentos em vez de 24), ignorava o −2 e o −1 e deixava a garagem descolada, com um vão de 6 m.
+- **Agora:** até a fase da torre abaixo da rua, `motivoParaNaoGerarPredio` recusa e diz o motivo; no passo TORRE, a torre fica em FALTA e o botão desliga com "começa abaixo da rua (Pavimento −2, Pavimento −1)…".
+- **Testes:** 2 novos.
+
+**Redesenho de 18/11 (decisão "Técnico na garagem").** A PE4 e a PE5 passam a ser um mecanismo só, **o térreo de apartamentos**. Quando o Empreendimento põe apartamento no andar 0:
+- **Condomínio técnico na garagem:** o Prédio automático não monta o térreo só de condomínio. O "pavimento do condomínio" (entrada de energia e medição, casa de bombas, reservatório inferior) é a garagem mais alta, e o desvio do esgoto corre no forro dela.
+- **O andar 0 sai do tipo:** é cópia viva do tipo quando é igual a ele (Torre B). Quando é PRÓPRIO (Torre A), é a cópia **desvinculada no fim**, sem os apartamentos que ele não tem; o espaço deles vira hall de entrada (com a porta para a rua) e área comum.
+
+A PE5 abaixo descreve a parte da garagem; a PE4 fica com o andar próprio.
 
 ### PE4 — O andar próprio: o térreo da Torre A com os 2 apartamentos
 **O que muda.**
@@ -285,8 +358,8 @@ Resultado no Garden (`__tests__/predioPeloEmpreendimento.test.ts`, 12 testes):
 |---|---|
 | PE0 — marco do Garden | feita, a publicar (com a PE1) |
 | PE1 — os andares e a massa | feita, a publicar |
-| PE2 — o tipo com as unidades do Empreendimento | a fazer |
-| PE3 — o botão na Casa automática | a fazer |
+| PE2 — o tipo com as unidades do Empreendimento | PE2a feita, no PR #577; PE2b: a Torre A já casa pelo nome (teste de caracterização); a Torre B fica para a PE6 |
+| PE3 — o botão na Casa automática | feita, a publicar (com a PE2a); conferida no app pelo caminho do usuário |
 | PE4 — o térreo da Torre A com os apartamentos | a fazer |
 | PE5 — condomínio e desvio sem térreo livre | a fazer |
 | PE6 — abaixo da rede pública | a fazer |

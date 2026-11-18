@@ -15,6 +15,8 @@ import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import { direcaoDaRua, ordinalDoTipo, pavimentoTipoMontado, pisosAcimaDoSolo } from '../blueprintPavimentoTipoDaMassa';
 import { dividirPavimentoDoBloco, montarPavimentoTipoDoBloco } from '../blueprintPavimentoOrtogonal';
+import { dividirPeloEmpreendimento, type AndarDoEmpreendimento } from './andaresDoEmpreendimento';
+import type { DivisaoDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 import { plantasDasUnidades } from '../blueprintPlantaDaUnidade';
 import type { Produto, ProdutoDoBloco } from '../blueprintProduto';
 import {
@@ -57,6 +59,12 @@ export interface EntradaDoPredio {
   pluvial?: Partial<HipotesesPluviais> | null;
   /** PA9a: as premissas de incêndio do estudo (o preset, a ocupação, as saídas); ausente = as padrão, com A-2. */
   incendio?: Partial<HipotesesIncendio> | null;
+  /**
+   * PE2 do prédio pelo Empreendimento (18/11/2026, decisão "Unidades do Empreendimento"): os andares da torre pela ficha
+   * (`papelDosAndares`). Presente, o pavimento tipo é dividido nos apartamentos do andar TIPO — o produto do estudo não
+   * entra (`doBloco` pode ser null). Ausente = o produto, como antes.
+   */
+  doEmpreendimento?: { torreId: string; andares: AndarDoEmpreendimento[] } | null;
 }
 
 /** Por que não dá para gerar o prédio deste bloco; `null` = dá. Os mesmos motivos do painel do bloco. */
@@ -66,7 +74,13 @@ export function motivoParaNaoGerarPredio(model: BlueprintModel, entrada: Entrada
   if (b.uso === 'GARAGEM' || b.uso === 'TECNICO' || b.uso === 'LAZER') return 'Bloco sem unidade (garagem, técnico ou lazer): não tem pavimento tipo.';
   const ja = pavimentoTipoMontado(model, b);
   if (ja) return `Pavimento tipo já montado: "${ja.name}". Para refazer, remova esse pavimento (as cópias se desvinculam) e gere de novo.`;
-  if (!entrada.doBloco || entrada.doBloco.unidades === 0) return 'Defina o produto (Terreno › Massa › Produto): sem tipologias não há unidade para dividir o pavimento.';
+  if (entrada.doEmpreendimento) {
+    if (!entrada.doEmpreendimento.andares.some((a) => a.papel === 'TIPO' && a.unidades.length > 0)) return 'A torre do Empreendimento não tem andar com apartamentos (Torres & Unidades).';
+    // PE3 (18/11/2026): a torre que começa abaixo da rua (a Torre B do Garden, do −2) ainda não se monta — o motor faz o
+    // térreo de condomínio no 0 e os andares acima dele; gerava a torre errada (sem o −2 e o −1, a garagem descolada).
+    const abaixo = entrada.doEmpreendimento.andares.filter((a) => a.papel !== 'GARAGEM' && a.numero < 0 && a.unidades.length > 0);
+    if (abaixo.length) return `A torre tem apartamentos abaixo da rua (${abaixo.map((a) => a.nome).join(', ')}) — o Prédio automático ainda não monta torre que começa abaixo do térreo; ela fica para a próxima entrega.`;
+  } else if (!entrada.doBloco || entrada.doBloco.unidades === 0) return 'Defina o produto (Terreno › Massa › Produto): sem tipologias não há unidade para dividir o pavimento.';
   return null;
 }
 
@@ -75,7 +89,6 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   if (motivo) throw new Error(motivo);
   const hip: HipotesesDoPredio = { ...HIPOTESES_DO_PREDIO_PADRAO, ...hipParcial };
   const b = (original.blocos ?? []).find((x) => x.id === entrada.blocoId)!;
-  const pb = entrada.doBloco!;
 
   const etapas: EtapaDoPredio[] = [];
   const pendencias: PendenciaDoPpci[] = [];
@@ -100,17 +113,37 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   };
 
   // ── Pavimento tipo: a divisão pelo produto distribuído no andar tipo do bloco, e a montagem com as cópias vivas.
-  const ord = ordinalDoTipo(original, b);
-  const piso = pb.pisos.find((p) => p.ordinal === ord) ?? pb.pisos.find((p) => p.unidades === pb.unidadesPorPavimento);
-  if (!piso) throw new Error('O bloco não tem pavimento acima do solo.');
-  const r = dividirPavimentoDoBloco({ bloco: b, produto: entrada.produto, porTipologia: piso.porTipologia, nucleoM2: pb.nucleo.m2, elevadores: pb.nucleo.elevadores, ordinalDoTipo: ord, rotacaoNorteDeg: entrada.rotacaoNorteDeg, direcaoDaRua: direcaoDaRua(original) });
-  if (!r.ok) throw new Error(r.motivo);
-  const dv = r.divisao;
+  // PE2: pelo Empreendimento, nos apartamentos do andar TIPO da ficha (o produto do estudo não entra).
+  let produtoDoPredio = entrada.produto;
+  const avisosDaFicha: string[] = [];
+  let dv: DivisaoDoPavimento;
+  const tipoDaFicha = entrada.doEmpreendimento?.andares.find((a) => a.papel === 'TIPO');
+  if (tipoDaFicha) {
+    const d = dividirPeloEmpreendimento(original, b, tipoDaFicha, entrada.produto, entrada.rotacaoNorteDeg);
+    if (!d.ok) throw new Error(d.motivo);
+    dv = d.divisao;
+    produtoDoPredio = d.produto;
+    avisosDaFicha.push(...d.avisos);
+  } else {
+    const pb = entrada.doBloco!;
+    const ord = ordinalDoTipo(original, b);
+    const piso = pb.pisos.find((p) => p.ordinal === ord) ?? pb.pisos.find((p) => p.unidades === pb.unidadesPorPavimento);
+    if (!piso) throw new Error('O bloco não tem pavimento acima do solo.');
+    const r = dividirPavimentoDoBloco({ bloco: b, produto: entrada.produto, porTipologia: piso.porTipologia, nucleoM2: pb.nucleo.m2, elevadores: pb.nucleo.elevadores, ordinalDoTipo: ord, rotacaoNorteDeg: entrada.rotacaoNorteDeg, direcaoDaRua: direcaoDaRua(original) });
+    if (!r.ok) throw new Error(r.motivo);
+    dv = r.divisao;
+  }
   const mont = montarPavimentoTipoDoBloco(original, b, dv);
   decisoes.push(...dv.decisoes);
   etapa('PAVIMENTO_TIPO', 'LANCOU', aplicar(mont.comandos), `${dv.unidades.length} unidade(s) por andar · ${mont.copias} cópia(s) do tipo${dv.elevadores ? ` · núcleo com ${dv.elevadores} elevador(es)` : ''}`);
   // Com o térreo do prédio, o aviso de que o 1º pavimento "ficou para o projetista" deixa de valer.
-  const avisosDoTipo = [...dv.avisos, ...mont.avisos.filter((a) => !(hip.terreo && /ficou para o projetista: portaria/.test(a)))];
+  const avisosDoTipo = [...avisosDaFicha, ...dv.avisos, ...mont.avisos.filter((a) => !(hip.terreo && /ficou para o projetista: portaria/.test(a)))];
+  // PE3: os andares PRÓPRIOS da ficha com apartamento (o térreo da Torre A do Garden) ainda saem como o térreo de hoje,
+  // só condomínio — a pendência diz quais apartamentos ficaram fora (entram com o andar próprio, PE4 do plano).
+  for (const a of entrada.doEmpreendimento?.andares ?? []) {
+    if (a.papel !== 'PROPRIO' || a.unidades.length === 0) continue;
+    pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `${a.nome}: a ficha tem ${a.unidades.length} apartamento(s) neste andar (${a.unidades.map((u) => u.nome).join(', ')}) — o prédio automático ainda faz este andar só com o condomínio (hall, portaria, medição, bombas); os apartamentos dele ficam para o projetista por enquanto.` });
+  }
   const ctx: ContextoDoPredio = {
     get m() {
       return m;
@@ -197,7 +230,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   const semFachada: { numero: string; comodos: string[] }[] = [];
   let avisosDasPlantas: string[] = [];
   if (hip.plantas) {
-    const pl = plantasDasUnidades(m, (m.blocos ?? []).find((x) => x.id === b.id) ?? b, entrada.produto);
+    const pl = plantasDasUnidades(m, (m.blocos ?? []).find((x) => x.id === b.id) ?? b, produtoDoPredio);
     const n = aplicar(pl.comandos);
     const comodos = pl.unidades.reduce((s, u) => s + u.ambientes.length, 0);
     for (const u of pl.unidades) if (u.semFachada.length) semFachada.push({ numero: u.numero, comodos: u.semFachada });

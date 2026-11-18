@@ -164,3 +164,27 @@ describe('TelaPredioAutomatico (PA2)', () => {
     expect(screen.getAllByTestId('marca-da-previa').length).toBeGreaterThan(0);
   });
 });
+
+describe('TelaPredioAutomatico › pelo Empreendimento (PE3, 18/11/2026)', () => {
+  const un = (nome: string, area: number, dorm: number, tipologia: string | null = null) => ({ id: nome, nome, tipologia, areaPrivativaM2: area, dormitorios: dorm, vagas: 1, orientacao: null, posicao: null, status: null });
+  const andares = [
+    { numero: -1, nome: 'Estacionamento 1', elevacaoMm: -3300, papel: 'GARAGEM' as const, unidades: [], comuns: [] },
+    { numero: 0, nome: 'Pavimento Térreo', elevacaoMm: -300, papel: 'PROPRIO' as const, unidades: [un('002', 127, 3, 'Tipo 4'), un('004', 81, 2, 'Tipo 1')], comuns: [] },
+    { numero: 1, nome: 'Pavimento 1', elevacaoMm: 2700, papel: 'TIPO' as const, unidades: [un('101', 127, 3, 'Tipo 3'), un('102', 127, 3, 'Tipo 4'), un('103', 81, 2, 'Tipo 2'), un('104', 81, 2, 'Tipo 1')], comuns: [] },
+    { numero: 2, nome: 'Pavimento 2', elevacaoMm: 5700, papel: 'COPIA' as const, unidades: [], comuns: [] },
+  ];
+
+  it('o Programa mostra a torre e os apartamentos do andar tipo da ficha, não o produto — e o produto não é pedido', () => {
+    tela({ doBloco: null, doEmpreendimento: { torre: 'Torre A', empreendimento: 'Garden', andares } });
+    const prog = screen.getByTestId('programa-do-predio');
+    expect(prog.textContent).toMatch(/Torre A/);
+    expect(prog.textContent).toMatch(/Garden/);
+    const tipo = screen.getByTestId('apartamentos-do-tipo');
+    expect(tipo.textContent).toMatch(/101/);
+    expect(tipo.textContent).toMatch(/127/);
+    expect(screen.getByTestId('andares-da-torre').textContent).toMatch(/Pavimento Térreo/);
+    expect(prog.textContent).not.toMatch(/defina as tipologias do produto/);
+    expect(screen.queryByTestId('editar-produto-do-predio')).toBeNull();
+    cleanup();
+  });
+});

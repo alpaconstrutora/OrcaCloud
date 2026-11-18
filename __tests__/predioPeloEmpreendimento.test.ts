@@ -9,7 +9,14 @@ import type { EmpreendimentoFloor } from '../types/empreendimento';
 import { applyBatch, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { comandosDoAjuste } from '../utils/blueprintAjusteAoEmpreendimento';
 import { estruturasDoEmpreendimento, type TorreParaEstrutura } from '../utils/blueprintEstruturaDaTorre';
-import { blocosDasTorresNoLote, papelDosAndares, pegadaDaTorre } from '../utils/predioAutomatico/andaresDoEmpreendimento';
+import { blocosDasTorresNoLote, dividirPeloEmpreendimento, papelDosAndares, pegadaDaTorre, produtoDoAndarTipo } from '../utils/predioAutomatico/andaresDoEmpreendimento';
+import { produtoVazio } from '../utils/blueprintProduto';
+import { produtoDoEmpreendimento } from '../utils/blueprintProdutoDoEmpreendimento';
+import { ladoDaMassa } from '../services/sync/massaAdapter';
+import { buildPlan } from '../services/sync/planner';
+import type { Empreendimento, EmpreendimentoTower, EmpreendimentoUnit } from '../types/empreendimento';
+import { passosDoPredioPeloEmpreendimento, tipoDoEmpreendimento, type EntradaDosPassos } from '../utils/blueprintCasaPeloEmpreendimento';
+import { assinaturaDoPedidoDoPredio, motivoParaNaoGerarPredio, planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
 import { HIPOTESES_DO_PRODUTO_PADRAO } from '../utils/blueprintProduto';
 import type { Boundary } from '../utils/blueprintKernel';
 
@@ -172,5 +179,195 @@ describe('PE1 — a pegada da torre e as torres no lote da "Teste 01"', () => {
     const r = blocosDasTorresNoLote(raso, estruturas(), distancias, null, HIPOTESES_DO_PRODUTO_PADRAO);
     expect(r.blocos).toHaveLength(2);
     expect(r.avisos.some((x) => /passa(m)? do fundo/.test(x))).toBe(true);
+  });
+});
+
+describe('PE2a — o pavimento tipo dividido nas unidades do Empreendimento (Garden, lote da Teste 01)', () => {
+  const tipoDe = (nome: string) => papelDosAndares(daTorre(nome)).andares.find((a) => a.papel === 'TIPO')!;
+  const distancias = GARDEN.empreendimento.distanciasEntreTorres.map((d) => ({ torreA: d.torre_a, torreB: d.torre_b, mm: Math.round(d.distancia_m * 1000) }));
+  /** O lote da Teste 01 com o bloco de cada torre como o PE1 o põe. */
+  function noLote() {
+    let m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }]).model;
+    const t = m.levels[0].id;
+    const { blocos } = blocosDasTorresNoLote(GARDEN.teste01.divisas, estruturas(), distancias, null, HIPOTESES_DO_PRODUTO_PADRAO);
+    m = applyBatch(m, [
+      ...GARDEN.teste01.divisas.map((d): Command => ({ type: 'AddBoundary', levelId: t, a: d.a, b: d.b, kind: 'TERRENO', papel: d.papel }) as Command),
+      ...blocos.map((b): Command => ({ type: 'AddBloco', levelId: t, nome: b.nome, pontos: b.pontos, pavimentos: b.pavimentos }) as Command),
+    ]).model;
+    return m;
+  }
+
+  it('o produto do andar tipo: uma tipologia por apartamento da ficha, com a área e os dormitórios dele', () => {
+    const { produto, porTipologia } = produtoDoAndarTipo(tipoDe('Torre A'), produtoVazio());
+    expect(produto.tipologias.map((t) => [t.areaPrivativaM2, t.dormitorios])).toEqual(tipoDe('Torre A').unidades.map((u) => [u.areaPrivativaM2, u.dormitorios]));
+    expect(Object.values(porTipologia)).toEqual([1, 1, 1, 1]);
+  });
+
+  it('Torre A: 4 apartamentos na proporção das áreas da ficha (±5 %), os dois de 127 m² na frente, com os números da ficha', () => {
+    const m = noLote();
+    const b = (m.blocos ?? []).find((x) => x.nome === 'Torre A')!;
+    const r = dividirPeloEmpreendimento(m, b, tipoDe('Torre A'), produtoVazio(), null);
+    if (!r.ok) throw new Error(r.motivo);
+    const us = r.divisao.unidades;
+    expect(us).toHaveLength(4);
+    const total = us.reduce((s, u) => s + u.areaM2, 0);
+    const alvo = us.reduce((s, u) => s + u.alvoM2, 0);
+    for (const u of us) expect(Math.abs(u.areaM2 / total - u.alvoM2 / alvo)).toBeLessThan(0.05);
+    const ficha = (u: (typeof us)[number]) => r.unidadeDaFicha.get(u.posicao)!;
+    // A rua fica em y = 0 (a FRENTE da Teste 01): os de 127 m² encostam na fachada da frente; os de 81 m², não.
+    const daRua = (u: (typeof us)[number]) => Math.min(...u.anel.map((p) => p.y));
+    expect(us.filter((u) => ficha(u).areaPrivativaM2 === 127).every((u) => daRua(u) < 500)).toBe(true);
+    expect(us.filter((u) => ficha(u).areaPrivativaM2 === 81).every((u) => daRua(u) > 500)).toBe(true);
+    expect(r.avisos).toEqual([]);
+    expect(us.map((u) => u.numero).sort()).toEqual(['101', '102', '103', '104']);
+    for (const u of us) expect(u.numero).toBe(ficha(u).nome);
+  });
+
+  it('Torre B: 4 apartamentos na proporção 104 : 108 : 113 : 111', () => {
+    const m = noLote();
+    const b = (m.blocos ?? []).find((x) => x.nome === 'Torre B')!;
+    const r = dividirPeloEmpreendimento(m, b, tipoDe('Torre B'), produtoVazio(), null);
+    if (!r.ok) throw new Error(r.motivo);
+    const us = r.divisao.unidades;
+    expect(us.map((u) => r.unidadeDaFicha.get(u.posicao)!.areaPrivativaM2).sort()).toEqual([104, 108, 111, 113]);
+    const total = us.reduce((s, u) => s + u.areaM2, 0);
+    for (const u of us) expect(Math.abs(u.areaM2 / total - r.unidadeDaFicha.get(u.posicao)!.areaPrivativaM2! / 436)).toBeLessThan(0.05);
+  });
+});
+
+describe('PE2a — o Prédio automático com as unidades do Empreendimento (Torre A no lote da Teste 01)', { timeout: 120_000 }, () => {
+  const distancias = GARDEN.empreendimento.distanciasEntreTorres.map((d) => ({ torreA: d.torre_a, torreB: d.torre_b, mm: Math.round(d.distancia_m * 1000) }));
+  function pedido() {
+    let m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }]).model;
+    const t = m.levels[0].id;
+    const { blocos } = blocosDasTorresNoLote(GARDEN.teste01.divisas, estruturas(), distancias, null, HIPOTESES_DO_PRODUTO_PADRAO);
+    const a = blocos.find((b) => b.nome === 'Torre A')!;
+    m = applyBatch(m, [
+      ...GARDEN.teste01.divisas.map((d): Command => ({ type: 'AddBoundary', levelId: t, a: d.a, b: d.b, kind: 'TERRENO', papel: d.papel }) as Command),
+      { type: 'AddBloco', levelId: t, nome: a.nome, pontos: a.pontos, pavimentos: a.pavimentos } as Command,
+    ]).model;
+    const torre = daTorre('Torre A');
+    const SO_A_ARQUITETURA = { estrutura: false, eletrica: false, climatizacao: false, agua: false, esgoto: false, pluvial: false, incendio: false, garagem: false, cobertura: false };
+    return { original: m, entrada: { blocoId: m.blocos![0].id, produto: produtoVazio(), doBloco: null, rotacaoNorteDeg: null, doEmpreendimento: { torreId: torre.torreId, andares: papelDosAndares(torre).andares } }, hip: SO_A_ARQUITETURA };
+  }
+
+  it('gera sem produto: o tipo com os 4 apartamentos da ficha (101–104), cada um com a planta da tipologia dele', () => {
+    const p = pedido();
+    expect(motivoParaNaoGerarPredio(p.original, p.entrada)).toBeNull();
+    const plano = planejarPredioDoPedido(p);
+    expect(plano.resumo.unidadesPorAndar).toBe(4);
+    const nomes = (plano.resultado.unidades ?? []).map((u) => u.numero).sort();
+    expect(nomes).toEqual(['101', '102', '103', '104']);
+    expect(plano.resumo.plantas?.unidades).toBe(4);
+    // Os 2 apartamentos do térreo da ficha ainda não entram (PE4): a pendência diz quais.
+    expect(plano.pendencias.some((x) => /Pavimento Térreo/.test(x.texto) && /002/.test(x.texto) && /004/.test(x.texto))).toBe(true);
+  });
+
+  it('a assinatura do pedido muda com as unidades do Empreendimento (a prévia velha é detectada)', () => {
+    const p = pedido();
+    const outra = { ...p, entrada: { ...p.entrada, doEmpreendimento: { ...p.entrada.doEmpreendimento, andares: p.entrada.doEmpreendimento.andares.map((a) => (a.papel === 'TIPO' ? { ...a, unidades: a.unidades.slice(1) } : a)) } } };
+    expect(assinaturaDoPedidoDoPredio(outra)).not.toBe(assinaturaDoPedidoDoPredio(p));
+  });
+});
+
+describe('PE3 — a Casa automática reconhece o prédio e os passos do "Construir o prédio pelo Empreendimento"', () => {
+  it('o Garden é PRÉDIO; uma casa (1 unidade no térreo) e um loteamento (torre da quadra) continuam CASA', () => {
+    expect(tipoDoEmpreendimento(estruturas())).toBe('PREDIO');
+    const casa: TorreParaEstrutura = { id: 'c', name: 'Casa', units: [{ floor: 0, floor_tipo: 'TERREO', name: 'Casa 07', private_area: 150, bedrooms: 3 }] };
+    expect(tipoDoEmpreendimento(estruturasDoEmpreendimento([casa], new Map()))).toBe('CASA');
+    const quadra: TorreParaEstrutura = { id: 'q', name: 'Quadra 1', blueprint_quadra_uid: 'qd1', units: [1, 2, 3].map((n) => ({ floor: 0, floor_tipo: 'TERREO' as const, name: `Lote ${n}`, private_area: 300, bedrooms: 3 })) };
+    expect(tipoDoEmpreendimento(estruturasDoEmpreendimento([quadra], new Map()))).toBe('CASA');
+    expect(tipoDoEmpreendimento([])).toBe('CASA');
+  });
+
+  const base: EntradaDosPassos = {
+    temPavimento: true,
+    pavimentoComParedes: false,
+    temLote: true,
+    loteDaFicha: null,
+    motivoSemLoteNaFicha: null,
+    temGeorreferencia: false,
+    coordenadasDaFicha: null,
+    zonaAplicada: null,
+    zonasDoEmpreendimento: 0,
+    unidades: [],
+    unidadeId: null,
+    motivoParaNaoGerar: null,
+  };
+  const torres = [
+    { id: 'tA', nome: 'Torre A', resumo: '3 andares × 4 + térreo com 2' },
+    { id: 'tB', nome: 'Torre B', resumo: '6 andares × 4' },
+  ];
+
+  it('com duas torres e nenhuma escolhida, o botão para no passo TORRE (pergunta qual)', () => {
+    const p = passosDoPredioPeloEmpreendimento(base, torres, null);
+    expect(p.passos.map((x) => x.passo)).toEqual(['LOTE', 'LOCAL', 'ZONA', 'TORRE', 'GERAR']);
+    expect(p.parada).toBe('TORRE');
+    expect(p.passos.find((x) => x.passo === 'ZONA')!.texto).toMatch(/o prédio sai sem os recuos/);
+  });
+
+  it('com a torre escolhida, TORRE feito e GERAR gera a prévia do prédio dela; sem pavimento, falta', () => {
+    const p = passosDoPredioPeloEmpreendimento(base, torres, 'tA');
+    expect(p.parada).toBeNull();
+    expect(p.passos.find((x) => x.passo === 'TORRE')).toMatchObject({ estado: 'FEITO' });
+    expect(p.passos.find((x) => x.passo === 'GERAR')!.texto).toMatch(/Torre A/);
+    expect(p.motivoDoBotao).toBeNull();
+    expect(passosDoPredioPeloEmpreendimento({ ...base, temPavimento: false }, torres, 'tA').motivoDoBotao).toMatch(/pavimento/);
+  });
+
+  it('uma torre só já vem escolhida', () => {
+    const p = passosDoPredioPeloEmpreendimento(base, torres.slice(0, 1), null);
+    expect(p.passos.find((x) => x.passo === 'TORRE')).toMatchObject({ estado: 'FEITO' });
+    expect(p.parada).toBeNull();
+  });
+});
+
+describe('PE3 — a torre que começa abaixo da rua ainda não se constrói (até a fase dela)', () => {
+  it('o motor recusa a Torre B (apartamentos no −2 e no −1) com o motivo — gerava térreo + 3 andares, errado', () => {
+    const b = daTorre('Torre B');
+    const entrada = { blocoId: 'x', produto: produtoVazio(), doBloco: null, rotacaoNorteDeg: null, doEmpreendimento: { torreId: b.torreId, andares: papelDosAndares(b).andares } };
+    const m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }]).model;
+    const m2 = applyBatch(m, [{ type: 'AddBloco', levelId: m.levels[0].id, nome: 'Torre B', pontos: [point(0, 0), point(18000, 0), point(18000, 30000), point(0, 30000)], pavimentos: 6, cotaBaseMm: -6000 } as Command]).model;
+    expect(motivoParaNaoGerarPredio(m2, { ...entrada, blocoId: m2.blocos![0].id })).toMatch(/abaixo da rua/);
+  });
+
+  it('o passo TORRE com a torre que não se constrói falta, e o botão diz por quê', () => {
+    const base: EntradaDosPassos = { temPavimento: true, pavimentoComParedes: false, temLote: true, loteDaFicha: null, motivoSemLoteNaFicha: null, temGeorreferencia: false, coordenadasDaFicha: null, zonaAplicada: null, zonasDoEmpreendimento: 0, unidades: [], unidadeId: null, motivoParaNaoGerar: null };
+    const torres = [{ id: 'tA', nome: 'Torre A', resumo: '…' }, { id: 'tB', nome: 'Torre B', resumo: '…', motivo: 'começa abaixo da rua' }];
+    const p = passosDoPredioPeloEmpreendimento(base, torres, 'tB');
+    expect(p.passos.find((x) => x.passo === 'TORRE')).toMatchObject({ estado: 'FALTA' });
+    expect(p.motivoDoBotao).toMatch(/abaixo da rua/);
+    expect(passosDoPredioPeloEmpreendimento(base, torres, 'tA').motivoDoBotao).toBeNull();
+  });
+});
+
+describe('PE2b — o envio ao Empreendimento casa com as unidades que já existem (Torre A)', { timeout: 180_000 }, () => {
+  it('o prédio da Torre A, lançado e enviado, adota a torre e os 12 apartamentos da ficha pelo nome: nenhuma torre nem unidade nova', () => {
+    const distancias = GARDEN.empreendimento.distanciasEntreTorres.map((d) => ({ torreA: d.torre_a, torreB: d.torre_b, mm: Math.round(d.distancia_m * 1000) }));
+    let m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }]).model;
+    const t = m.levels[0].id;
+    const a = blocosDasTorresNoLote(GARDEN.teste01.divisas, estruturas(), distancias, null, HIPOTESES_DO_PRODUTO_PADRAO).blocos.find((b) => b.nome === 'Torre A')!;
+    m = applyBatch(m, [
+      ...GARDEN.teste01.divisas.map((d): Command => ({ type: 'AddBoundary', levelId: t, a: d.a, b: d.b, kind: 'TERRENO', papel: d.papel }) as Command),
+      { type: 'AddBloco', levelId: t, nome: a.nome, pontos: a.pontos, pavimentos: a.pavimentos } as Command,
+    ]).model;
+    const torre = daTorre('Torre A');
+    const SO_A_ARQUITETURA = { estrutura: false, eletrica: false, climatizacao: false, agua: false, esgoto: false, pluvial: false, incendio: false, garagem: false, cobertura: false };
+    const lancado = planejarPredioDoPedido({ original: m, entrada: { blocoId: m.blocos![0].id, produto: produtoVazio(), doBloco: null, rotacaoNorteDeg: null, doEmpreendimento: { torreId: torre.torreId, andares: papelDosAndares(torre).andares } }, hip: SO_A_ARQUITETURA }).resultado;
+    // O produto que o editor preenche sozinho no estudo vinculado (o "Produto pelas unidades", 25/10).
+    const produto = produtoDoEmpreendimento(GARDEN.torres as never, produtoVazio()).produto!;
+    const EMP = { id: 'f3c21233', organization_id: 'spe', name: '011 - Garden Cambuhy', blueprint_study_id: 'estudo' } as unknown as Empreendimento;
+    const lado = ladoDaMassa(EMP, lancado, produto, null);
+    const alvo = {
+      towers: GARDEN.torres.map((x) => ({ id: x.id, name: x.name, empreendimento_id: 'f3c21233', blueprint_bloco_uid: null }) as unknown as EmpreendimentoTower),
+      units: GARDEN.torres.flatMap((x) => (x.units ?? []).map((u) => ({ ...u, tower_id: x.id, blueprint_unidade_chave: null, blueprint_massa_chave: null }) as unknown as EmpreendimentoUnit)),
+      commonAreas: [],
+    };
+    const plano = buildPlan(lado, alvo);
+    expect(plano.towerCreates).toEqual([]);
+    expect(plano.unitCreates).toEqual([]);
+    const adotadas = plano.adoptions.filter((x) => x.entity === 'unit').map((x) => alvo.units.find((u) => u.id === x.existingId)!.name).sort();
+    expect(adotadas).toEqual(['101', '102', '103', '104', '201', '202', '203', '204', '301', '302', '303', '304']);
+    expect(plano.adoptions.some((x) => x.entity === 'tower' && x.existingId === torre.torreId)).toBe(true);
   });
 });

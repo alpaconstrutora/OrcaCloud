@@ -630,6 +630,7 @@ import { SUBIDA_DO_ALIMENTADOR_DA_CASA, assinaturaDoPedidoDaCasa, conferirPlanoD
 import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
 import { PROGRAMA_CURTO_PADRAO, programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
 import { produtoDoEmpreendimento } from '../../utils/blueprintProdutoDoEmpreendimento';
+import { blocosDasTorresNoLote, papelDosAndares, type AndarDoEmpreendimento } from '../../utils/predioAutomatico/andaresDoEmpreendimento';
 import { massaDoEmpreendimento } from '../../utils/blueprintMassaDoEmpreendimento';
 import { estruturasDoEmpreendimento } from '../../utils/blueprintEstruturaDaTorre';
 import { comandosDoAjuste, vestirBlocosPropostos } from '../../utils/blueprintAjusteAoEmpreendimento';
@@ -639,7 +640,7 @@ import { chaveDaUnidade } from '../../utils/blueprintEstruturaDaTorre';
 import { gravacoesDoArrasto, type AlcanceDoArrasto } from '../../utils/blueprintArrastoDasUnidades';
 import type { FatiaDoPiso } from '../../utils/blueprintMassaNaVista';
 import type { PapelDoBloco } from '../../utils/blueprintAjusteAoEmpreendimento';
-import { loteDaFichaParaLancar, passosDaCasaPeloEmpreendimento, type PassoDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
+import { loteDaFichaParaLancar, passosDaCasaPeloEmpreendimento, passosDoPredioPeloEmpreendimento, tipoDoEmpreendimento, type PassoDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
 import { useUnidadesDoEmpreendimento } from '../../hooks/useUnidadesDoEmpreendimento';
 import type { EmpreendimentoUnit } from '../../types/empreendimento';
 import type { Empreendimento } from '../../types/empreendimento';
@@ -9245,6 +9246,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const [blocoDoPredioId, setBlocoDoPredioId] = useState<string | null>(null);
   const [hipotesesDoPredio, setHipotesesDoPredio] = useState<HipotesesDoPredio>(HIPOTESES_DO_PREDIO_PADRAO);
   const [lancadoPredio, setLancadoPredio] = useState<string | null>(null);
+  /**
+   * PE2/PE3 do prédio pelo Empreendimento (18/11/2026): quando o bloco do prédio é uma torre do Empreendimento, os andares
+   * da ficha (`papelDosAndares`) — o tipo sai dos apartamentos dela, não do produto. Calculado por efeito lá embaixo,
+   * depois das torres do Empreendimento (que são lidas depois desta parte).
+   */
+  const [doEmpreendimentoDoPredio, setDoEmpreendimentoDoPredio] = useState<{ torreId: string; torre: string; andares: AndarDoEmpreendimento[] } | null>(null);
   const blocoDoPredio = (editor.model.blocos ?? []).find((b) => b.id === blocoDoPredioId) ?? null;
   const entradaDoPredio = useMemo<EntradaDoPredio | null>(
     () =>
@@ -9260,9 +9267,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             pluvial: hidroDoEstudo.hipoteses.pluvial,
             // PA9a: as premissas de incêndio do estudo (o preset, a ocupação, as saídas).
             incendio: incendioDoEstudo.hipoteses,
+            ...(doEmpreendimentoDoPredio ? { doEmpreendimento: { torreId: doEmpreendimentoDoPredio.torreId, andares: doEmpreendimentoDoPredio.andares } } : {}),
           }
         : null,
-    [blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, zona.cidade?.name, hidroDoEstudo.hipoteses.pluvial, incendioDoEstudo.hipoteses],
+    [doEmpreendimentoDoPredio, blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, zona.cidade?.name, hidroDoEstudo.hipoteses.pluvial, incendioDoEstudo.hipoteses],
   );
   /**
    * PA10a (15/11/2026): o que a entrada do prédio lê chega aos poucos (o catálogo de evaporadoras, os materiais, as
@@ -9352,6 +9360,32 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     () => (distanciasDaCasa ?? []).map((d) => ({ torreA: d.torre_a, torreB: d.torre_b, mm: Math.round(d.distancia_m * 1000) })),
     [distanciasDaCasa],
   );
+  // PE2/PE3: a torre do Empreendimento que o bloco do prédio é (pelo nome) — os andares da ficha entram na entrada.
+  useEffect(() => {
+    const e = blocoDoPredio && blocoDoPredio.uso !== 'GARAGEM' ? estruturasDaCasa?.find((x) => x.nome.trim().toLocaleLowerCase('pt-BR') === blocoDoPredio.nome.trim().toLocaleLowerCase('pt-BR')) : null;
+    const andares = e ? papelDosAndares(e).andares : null;
+    const novo = e && andares && andares.some((a) => a.papel === 'TIPO') ? { torreId: e.torreId, torre: e.nome, andares } : null;
+    setDoEmpreendimentoDoPredio((v) => (JSON.stringify(v) === JSON.stringify(novo) ? v : novo));
+  }, [blocoDoPredio, estruturasDaCasa]);
+  // PE3: o Empreendimento é prédio? As torres com apartamento (o resumo dos andares) para o seletor da Casa automática.
+  const tipoDoEmpreendimentoDaCasa = useMemo(() => (estruturasDaCasa ? tipoDoEmpreendimento(estruturasDaCasa) : 'CASA'), [estruturasDaCasa]);
+  const torresDoPredioDaCasa = useMemo(
+    () =>
+      (estruturasDaCasa ?? []).flatMap((e) => {
+        const andares = papelDosAndares(e).andares;
+        const tipo = andares.find((a) => a.papel === 'TIPO');
+        if (!tipo) return [];
+        const iguais = andares.filter((a) => a.papel === 'TIPO' || a.papel === 'COPIA').length;
+        const proprios = andares.filter((a) => a.papel === 'PROPRIO' && a.unidades.length > 0).map((a) => `${a.nome.toLocaleLowerCase('pt-BR')} com ${a.unidades.length}`);
+        const garagens = andares.filter((a) => a.papel === 'GARAGEM').length;
+        const resumo = `${iguais} andar(es) × ${tipo.unidades.length} apartamentos${proprios.length ? ` + ${proprios.join(', ')}` : ''}${garagens ? ` · ${garagens} de garagem` : ''}`;
+        const abaixo = andares.filter((a) => a.papel !== 'GARAGEM' && a.numero < 0 && a.unidades.length > 0);
+        const motivo = abaixo.length ? `começa abaixo da rua (${abaixo.map((a) => a.nome).join(', ')}) — o Prédio automático ainda não monta esta torre; fica para a próxima entrega.` : null;
+        return [{ id: e.torreId, nome: e.nome, resumo, motivo }];
+      }),
+    [estruturasDaCasa],
+  );
+  const [torreDoPredioDaCasa, setTorreDoPredioDaCasa] = useState<string | null>(null);
   const ajusteAoEmpreendimento = useMemo(
     () => (estruturasDaCasa && estruturasDaCasa.length > 0 ? comandosDoAjuste(editor.model, estruturasDaCasa, exigenciasEntreTorres, produtoDoEstudo.produto.hipoteses) : null),
     [estruturasDaCasa, editor.model, exigenciasEntreTorres, produtoDoEstudo.produto.hipoteses],
@@ -9743,6 +9777,110 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       motivoParaNaoGerar: motivoParaNaoGerarCasa,
     });
   }, [levelId, editor.model, dadosDaFicha.lote, dadosDaFicha.coordenadas, fichaNoPainel, zona.zonaAplicadaId, zona.zonaRotuloSalvo, zona.zonas, zona.origemDaZona, zona.empreendimentoId, zona.carregandoZonas, torresDoEmpreendimento, unidadesDaCasa, casaDoEstudo.premissas.unidadeId, motivoParaNaoGerarCasa]);
+  const passosDoPredio = useMemo(() => {
+    const divisas = levelId ? (editor.model.boundaries ?? []).filter((b) => b.levelId === levelId && b.kind === 'TERRENO') : [];
+    return passosDoPredioPeloEmpreendimento(
+      {
+        temPavimento: !!levelId,
+        pavimentoComParedes: false,
+        temLote: divisas.length > 0,
+        loteDaFicha: dadosDaFicha.lote,
+        motivoSemLoteNaFicha: fichaNoPainel?.criarLote?.motivo ?? null,
+        temGeorreferencia: !!editor.model.georreferencia,
+        coordenadasDaFicha: dadosDaFicha.coordenadas,
+        zonaAplicada: zona.zonaAplicadaId ? (zona.zonaRotuloSalvo ?? zona.zonas.find((z) => z.id === zona.zonaAplicadaId)?.zona ?? 'aplicada') : null,
+        zonasDoEmpreendimento: zona.origemDaZona === 'EMPREENDIMENTO' && zona.empreendimentoId ? (zona.carregandoZonas ? null : zona.zonas.length) : 0,
+        unidades: [],
+        unidadeId: null,
+        motivoParaNaoGerar: null,
+      },
+      torresDoPredioDaCasa,
+      torreDoPredioDaCasa,
+    );
+  }, [levelId, editor.model, dadosDaFicha.lote, dadosDaFicha.coordenadas, fichaNoPainel, zona.zonaAplicadaId, zona.zonaRotuloSalvo, zona.zonas, zona.origemDaZona, zona.empreendimentoId, zona.carregandoZonas, torresDoPredioDaCasa, torreDoPredioDaCasa]);
+  /**
+   * PE3: CONSTRUIR O PRÉDIO PELO EMPREENDIMENTO — o lote, o local e a zona (como a casa), depois em etapas, cada uma no
+   * render seguinte (o desenho acabou de mudar): os blocos das torres que faltam, no lote (`blocosDasTorresNoLote`), o
+   * ajuste da massa às torres (as garagens, as alturas), e o Prédio automático da torre escolhida, gerando a prévia.
+   */
+  const [etapaDoPredioDaCasa, setEtapaDoPredioDaCasa] = useState<'BLOCOS' | 'AJUSTE' | 'ABRIR' | null>(null);
+  const [gerarPredioPendente, setGerarPredioPendente] = useState(false);
+  const torreEscolhidaDaCasa = torresDoPredioDaCasa.find((t) => t.id === torreDoPredioDaCasa) ?? (torresDoPredioDaCasa.length === 1 ? torresDoPredioDaCasa[0] : null);
+  const construirPredioPeloEmpreendimento = () => {
+    setMensagemDoConstruir(null);
+    const feitos: string[] = [];
+    for (const x of passosDoPredio.passos) {
+      if (x.passo === passosDoPredio.parada || x.passo === 'TORRE') break;
+      if (x.estado !== 'FAZER') continue;
+      if (x.passo === 'LOTE' && levelId && dadosDaFicha.lote) {
+        const lote = loteDaFichaParaLancar(dadosDaFicha.lote, rotacaoDoNorte(editor.model));
+        try {
+          if (lote.problema) throw new Error(lote.problema);
+          editor.runBatch(comandosDoLote(editor.model, levelId, lote, { medidasDaEscritura: true }));
+        } catch (e) {
+          setMensagemDoConstruir({ texto: `O lote da ficha não entrou: ${e instanceof Error ? e.message : String(e)}`, erro: true });
+          return;
+        }
+        feitos.push(`lote de ${(lote.areaMm2 / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m² lançado`);
+      } else if (x.passo === 'LOCAL' && dadosDaFicha.coordenadas && !editor.model.georreferencia) {
+        const { latitude, longitude } = dadosDaFicha.coordenadas;
+        editor.run({ type: 'SetGeorreferencia', georreferencia: { latitude, longitude } });
+        feitos.push('desenho georreferenciado pela ficha');
+      } else if (x.passo === 'ZONA' && zona.zonas.length === 1) {
+        zona.aplicarZona(zona.zonas[0].id);
+        feitos.push(`zona ${zona.zonas[0].zona ?? ''} aplicada`.replace('  ', ' '));
+      }
+    }
+    if (passosDoPredio.parada) {
+      const passo = passosDoPredio.passos.find((x) => x.passo === passosDoPredio.parada);
+      setMensagemDoConstruir({ texto: `${feitos.length > 0 ? `Feito: ${feitos.join('; ')}. ` : ''}Falta a sua escolha — ${passo?.texto ?? ''}`, erro: false });
+      resolverPassoDaCasa(passosDoPredio.parada);
+      return;
+    }
+    setMensagemDoConstruir({ texto: `${feitos.length > 0 ? `Feito: ${feitos.join('; ')}. ` : ''}Montando as torres na massa…`, erro: false });
+    setEtapaDoPredioDaCasa('BLOCOS');
+  };
+  useEffect(() => {
+    if (!etapaDoPredioDaCasa) return;
+    const nome = (x: string) => x.trim().toLocaleLowerCase('pt-BR');
+    const blocoDaTorre = (n: string) => (editor.model.blocos ?? []).find((b) => b.uso !== 'GARAGEM' && nome(b.nome) === nome(n));
+    if (etapaDoPredioDaCasa === 'BLOCOS') {
+      const faltam = torresDoPredioDaCasa.filter((t) => !blocoDaTorre(t.nome));
+      if (faltam.length && levelId && estruturasDaCasa) {
+        const divisas = (editor.model.boundaries ?? []).filter((b) => b.levelId === levelId && b.kind === 'TERRENO');
+        const r = blocosDasTorresNoLote(divisas, estruturasDaCasa, exigenciasEntreTorres, null, produtoDoEstudo.produto.hipoteses);
+        const novos = r.blocos.filter((b) => faltam.some((t) => t.id === b.torreId));
+        if (novos.length) editor.runBatch(novos.map((b): Command => ({ type: 'AddBloco', levelId, nome: b.nome, pontos: b.pontos, pavimentos: b.pavimentos })));
+        if (r.avisos.length) setMensagemDoConstruir({ texto: `Torres na massa: ${r.avisos.join(' ')}`, erro: false });
+      }
+      setEtapaDoPredioDaCasa('AJUSTE');
+    } else if (etapaDoPredioDaCasa === 'AJUSTE') {
+      if (ajusteAoEmpreendimento && ajusteAoEmpreendimento.comandos.length) editor.runBatch(ajusteAoEmpreendimento.comandos);
+      setEtapaDoPredioDaCasa('ABRIR');
+    } else {
+      const b = torreEscolhidaDaCasa ? blocoDaTorre(torreEscolhidaDaCasa.nome) : undefined;
+      setEtapaDoPredioDaCasa(null);
+      if (!b) {
+        setMensagemDoConstruir({ texto: 'A torre escolhida não ficou com bloco na massa — confira o lote e o painel do bloco.', erro: true });
+        return;
+      }
+      abrirPredioAutomatico(b.id);
+      setGerarPredioPendente(true);
+    }
+  }, [etapaDoPredioDaCasa]); // eslint-disable-line react-hooks/exhaustive-deps
+  // A prévia do prédio: quando a tela abriu e a entrada já traz os andares da ficha (o efeito acima a calcula) e o que ela
+  // lê carregou. Motivo que não é carga para e diz por quê.
+  useEffect(() => {
+    if (!gerarPredioPendente || telaAberta !== 'predio' || !entradaDoPredio) return;
+    if (!entradaDoPredio.doEmpreendimento || carregandoAEntradaDoPredio) return;
+    setGerarPredioPendente(false);
+    if (motivoParaNaoGerarOPredio) {
+      setMensagemDoConstruir({ texto: motivoParaNaoGerarOPredio, erro: true });
+      return;
+    }
+    setLancadoPredio(null);
+    predio.gerar({ original: editor.model, entrada: entradaDoPredio, hip: hipotesesDoPredio });
+  }, [gerarPredioPendente, telaAberta, entradaDoPredio, carregandoAEntradaDoPredio, motivoParaNaoGerarOPredio]); // eslint-disable-line react-hooks/exhaustive-deps
   const [construindoCasa, setConstruindoCasa] = useState(false);
   const [mensagemDoConstruir, setMensagemDoConstruir] = useState<{ texto: string; erro: boolean } | null>(null);
   const resolverPassoDaCasa = useCallback((passo: PassoDaCasa) => {
@@ -9751,6 +9889,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       setDrawerRecolhido(false);
       setTarefa('terreno');
     } else if (passo === 'UNIDADE') window.setTimeout(() => document.querySelector<HTMLSelectElement>('[data-testid="unidade-da-casa"]')?.focus(), 0);
+    else if (passo === 'TORRE') window.setTimeout(() => document.querySelector<HTMLSelectElement>('[data-testid="torre-do-predio"]')?.focus(), 0);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const construirCasaPeloEmpreendimento = () => {
     setMensagemDoConstruir(null);
@@ -12800,7 +12939,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             chuva={hipotesesHidro.pluvial}
             onChuva={(pluvial) => hidroDoEstudo.setHipoteses({ ...hidroDoEstudo.hipoteses, pluvial })}
             persistenciaIndisponivel={casaDoEstudo.persistenciaIndisponivel}
-            motivoParaNaoGerar={motivoParaNaoGerarCasa}
+            motivoParaNaoGerar={
+              tipoDoEmpreendimentoDaCasa === 'PREDIO' && nomeDoEmpreendimentoDaCasa
+                ? `O Empreendimento "${nomeDoEmpreendimentoDaCasa}" é prédio — use "Construir o prédio pelo Empreendimento" (a casa automática gera uma casa só).`
+                : motivoParaNaoGerarCasa
+            }
             onGerar={gerarCasa}
             prova={provaDaCasa}
             desatualizada={previaDaCasaVelha}
@@ -12854,14 +12997,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             }}
             peloEmpreendimento={
               empreendimentoDaCasa && nomeDoEmpreendimentoDaCasa
-                ? {
-                    nome: nomeDoEmpreendimentoDaCasa,
-                    passos: passosDaCasa,
-                    construindo: construindoCasa,
-                    onConstruir: construirCasaPeloEmpreendimento,
-                    onResolver: resolverPassoDaCasa,
-                    mensagem: mensagemDoConstruir ?? (avisoDaUnidadeAutomatica ? { texto: avisoDaUnidadeAutomatica, erro: false } : null),
-                  }
+                ? tipoDoEmpreendimentoDaCasa === 'PREDIO'
+                  ? {
+                      nome: nomeDoEmpreendimentoDaCasa,
+                      passos: passosDoPredio,
+                      construindo: etapaDoPredioDaCasa !== null || gerarPredioPendente,
+                      onConstruir: construirPredioPeloEmpreendimento,
+                      onResolver: resolverPassoDaCasa,
+                      mensagem: mensagemDoConstruir,
+                      predio: { torres: torresDoPredioDaCasa, torreId: torreEscolhidaDaCasa?.id ?? null, onTorre: setTorreDoPredioDaCasa },
+                    }
+                  : {
+                      nome: nomeDoEmpreendimentoDaCasa,
+                      passos: passosDaCasa,
+                      construindo: construindoCasa,
+                      onConstruir: construirCasaPeloEmpreendimento,
+                      onResolver: resolverPassoDaCasa,
+                      mensagem: mensagemDoConstruir ?? (avisoDaUnidadeAutomatica ? { texto: avisoDaUnidadeAutomatica, erro: false } : null),
+                    }
                 : null
             }
           />
@@ -12880,6 +13033,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             bloco={{ nome: blocoDoPredio.nome, pavimentos: blocoDoPredio.pavimentos }}
             produto={produtoDoEstudo.produto}
             doBloco={entradaDoPredio.doBloco}
+            doEmpreendimento={doEmpreendimentoDoPredio ? { torre: doEmpreendimentoDoPredio.torre, empreendimento: nomeDoEmpreendimentoDaCasa ?? 'Empreendimento', andares: doEmpreendimentoDoPredio.andares } : null}
             onEditarProduto={() => setTelaAberta('produto')}
             hipoteses={hipotesesDoPredio}
             onHipoteses={setHipotesesDoPredio}

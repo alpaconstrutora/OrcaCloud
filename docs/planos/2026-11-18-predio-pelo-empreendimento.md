@@ -346,6 +346,25 @@ A PE5 abaixo descreve a parte da garagem; a PE4 fica com o andar próprio.
 - **Medidores e `Unidade` do kernel do 002 e do 004:** o desvinculado traz os rótulos, não a unidade. O resumo conta 14, a medição conta 12, e o envio ainda não leva os 2.
 - **Fechamento da sala técnica:** paredes e porta.
 
+**Execução da PE4b (18/11/2026).** No fim de `concluirTerreoDeApartamentos`, os apartamentos que ficaram viram **unidades do kernel** com os números da ficha (`AddUnidade` 002 e 004, com as etiquetas do andar 0 dentro da fatia):
+- **Vínculos religados:** o QD e o hidrômetro que a cópia trouxe apontavam para o 102 e o 104 do tipo e contariam duas vezes; agora apontam para o 002 e o 004.
+- **Medidores:** um medidor para cada um na medição da sala técnica.
+- **O pluvial no chão:** `lancarPluvial` foi dividido, e a parte do chão virou `lancarPluvialNoChao`. No térreo de apartamentos ela roda depois do andar 0, porque a cópia já traz o vertical do tipo até a junção: daí descem a caixa de areia e o coletor até a saída na frente.
+
+**Resultado** (`__tests__/predioTerreoDeApartamentos.test.ts`, agora 5 testes):
+- **Elétrica:** 14 unidades atendidas e 14 medidas, 15 medidores.
+- **Água:** 14 hidrômetros.
+- **Unidades:** `unidadesDoPredio` lista 14.
+- **Pluvial:** cada ralo da cobertura chega à ligação pluvial no andar 0, e a pendência "sem o térreo" sumiu.
+- **Marcos de laboratório** (prédio e casa): idênticos; 12 arquivos e 118 testes passam.
+
+**Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pe4b.cjs`): 16 portões ok.
+- **Card da elétrica:** "15 medidor(es) · 14 de 14 unidade(s) medidas".
+- **Relatório:** "viraram as unidades 002, 004 do kernel" e "Pluvial: a saída na frente do lote".
+- **Card das unidades:** agora diz "+ 2 no térreo".
+
+**Fica:** o fechamento da sala técnica (paredes e porta), como pendência.
+
 ### PE5 — O condomínio e o desvio quando o térreo é de apartamentos
 **O que muda.**
 - **Térreo sem área livre** (Torre B: o 0 é cópia do tipo): centro de medição, casa de bombas, reservatório inferior e salas vão para a garagem mais alta (−3).
@@ -419,7 +438,7 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 | PE1 — os andares e a massa | feita, no ar (#573, 947df0e) |
 | PE2 — o tipo com as unidades do Empreendimento | PE2a no ar (#577, 6fd6816); PE2b: a Torre A já casa pelo nome (teste de caracterização, no ar); a Torre B fica para a PE6 |
 | PE3 — o botão na Casa automática | feita, no ar (#577, 6fd6816); conferida no app pelo caminho do usuário; a Torre B fica bloqueada (com o motivo) até a PE4–PE6 |
-| PE4 — o térreo da Torre A com os apartamentos | PE4a feita, a publicar (conferida no app): o andar 0 com 002/004, o hall e a porta; ficam os medidores/`Unidade` do 002/004 e o pluvial do chão |
+| PE4 — o térreo da Torre A com os apartamentos | PE4a (#582) e PE4b feitas, conferidas no app: o andar 0 com 002/004 como unidades do kernel (QD, hidrômetro, medidor), o hall, a porta e o pluvial no chão |
 | PE5 — condomínio e desvio sem térreo livre | PE5a feita com a PE4a (a sala técnica na garagem, o desvio no forro dela); a Torre B (o andar 0 cópia, sem desvínculo) vem com a PE6 |
 | PE6 — abaixo da rede pública | a fazer |
 | PE7 — as duas torres no mesmo estudo | a fazer |

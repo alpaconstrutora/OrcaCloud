@@ -18,6 +18,7 @@ import { fazerChave } from '../utils/blueprintGrafoDeRede';
 import { ROTULO_DO_DESVIO } from '../utils/predioAutomatico/esgoto';
 import { SALA_HALL, SALA_MEDICAO, SALA_MEDICAO_E_BOMBAS } from '../utils/predioAutomatico/terreoECobertura';
 import type { Boundary } from '../utils/blueprintKernel';
+import { unidadesDoPredio } from '../utils/blueprintUnidadesDoPredio';
 
 const GARDEN = JSON.parse(readFileSync(new URL('./fixtures/empreendimentoGarden.json', import.meta.url), 'utf8')) as {
   torres: TorreParaEstrutura[];
@@ -69,6 +70,58 @@ describe('PE4a + PE5a — o térreo de apartamentos (Garden, Torre A)', { timeou
     expect(plano().resumo.unidades).toBe(14);
     expect(plano().resumo.terreo?.acesso).toBe(true);
     expect(plano().resumo.terreo?.salas).toContain(SALA_HALL);
+  });
+
+  it('PE4b: o 002 e o 004 são unidades do kernel — com o QD, o hidrômetro e o medidor deles; a elétrica e a água medem 14', () => {
+    const p = plano();
+    const m = p.resultado;
+    const zero = nivel(m, /1º pav \(térreo\)/);
+    const novas = ['002', '004'].map((n) => (m.unidades ?? []).find((u) => u.numero === n));
+    expect(novas.every(Boolean)).toBe(true);
+    for (const u of novas as NonNullable<(typeof novas)[number]>[]) {
+      expect(u.etiquetaUids.length).toBeGreaterThan(0);
+      expect(m.labels.filter((l) => u.etiquetaUids.includes(l.uid)).every((l) => l.levelId === zero.id)).toBe(true);
+      expect((m.quadros ?? []).filter((q) => q.levelId === zero.id && q.unidadeId === u.id)).toHaveLength(1);
+      expect(m.terminais.filter((t) => t.tipoHidraulico === 'HIDROMETRO' && t.unidadeId === u.id)).toHaveLength(1);
+      expect(m.terminais.filter((t) => t.tipoEletrico === 'MEDIDOR' && t.unidadeId === u.id)).toHaveLength(1);
+    }
+    // Nada do andar 0 aponta mais para uma unidade do tipo (o 102 da cópia contaria duas vezes).
+    const doTipo = new Set((m.unidades ?? []).filter((u) => !['002', '004'].includes(u.numero)).map((u) => u.id));
+    expect((m.quadros ?? []).filter((q) => q.levelId === zero.id && q.unidadeId && doTipo.has(q.unidadeId))).toEqual([]);
+    expect(m.terminais.filter((t) => t.levelId === zero.id && t.unidadeId && doTipo.has(t.unidadeId))).toEqual([]);
+    expect(p.resumo.eletrica?.unidadesAtendidas).toBe(14);
+    expect(p.resumo.eletrica?.unidadesMedidas).toBe(14);
+    expect(p.resumo.eletrica?.medidores).toBe(15);
+    expect(p.resumo.agua?.unidadesMedidas).toBe(14);
+    const numeros = unidadesDoPredio(m).unidades.map((u) => u.numero);
+    expect(numeros.filter((n) => ['002', '004'].includes(n))).toHaveLength(2);
+    expect(numeros).toHaveLength(14);
+  });
+
+  it('PE4b: o pluvial desce ao chão do andar 0 — cada ralo da cobertura chega à ligação na frente, pelas caixas de areia', () => {
+    const p = plano();
+    const m = p.resultado;
+    const zero = nivel(m, /1º pav \(térreo\)/);
+    expect(p.pendencias.some((x) => /sem o térreo do prédio/.test(x.texto))).toBe(false);
+    expect(m.terminais.filter((t) => t.levelId === zero.id && t.tipoHidraulico === 'CAIXA_AREIA')).toHaveLength(p.resumo.pluvial!.condutores);
+    const lig = m.terminais.find((t) => t.tipoHidraulico === 'LIGACAO_PLUVIAL');
+    expect(lig?.levelId).toBe(zero.id);
+    const chave = fazerChave(m.levels);
+    const pai = new Map<string, string>();
+    const raiz = (a: string): string => (pai.get(a) === a ? a : raiz(pai.get(a)!));
+    const une = (a: string, b: string) => {
+      for (const x of [a, b]) if (!pai.has(x)) pai.set(x, x);
+      pai.set(raiz(a), raiz(b));
+    };
+    for (const t of m.trechos.filter((t) => t.disciplina === 'PLUVIAL')) une(chave(t.levelId, t.a.x, t.a.y, t.cotaAMm), chave(t.levelId, t.b.x, t.b.y, t.cotaBMm));
+    const kLig = raiz(chave(lig!.levelId, lig!.at.x, lig!.at.y, lig!.cotaMm));
+    const ralos = m.terminais.filter((t) => t.tipoHidraulico === 'RALO_PLUVIAL');
+    expect(ralos.length).toBe(p.resumo.pluvial!.condutores);
+    const fora = ralos.filter((r) => {
+      const k = chave(r.levelId, r.at.x, r.at.y, r.cotaMm);
+      return !pai.has(k) || raiz(k) !== kLig;
+    });
+    expect(fora.map((r) => `${r.at.x},${r.at.y}`)).toEqual([]);
   });
 
   it('a medição (o QGBT), a casa de bombas e o desvio do esgoto ficam na garagem mais alta', () => {

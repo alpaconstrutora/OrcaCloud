@@ -257,9 +257,4 @@ export interface PlanoDoPredio {
 
 export interface OpcoesDoPlanoDoPredio {
   aoConcluirEtapa?: (e: EtapaDoPredio, indice: number, total: number) => void;
-  /**
-   * PE6a–PE6c (18/11/2026): monta a torre que começa abaixo da rua (a Torre B do Garden) apesar da guarda — só os testes
-   * da fase usam, enquanto o esgoto por bombas e a rota de fuga até o 0 não estão prontos. A PE6d tira a guarda e isto.
-   */
-  permitirTorreAbaixoDaRua?: boolean;
 }

@@ -40,9 +40,8 @@ import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../../utils/blueprintMassa';
 import { distribuirProduto, produtoDaColuna, type Produto } from '../../utils/blueprintProduto';
 import { financeiroDaMassa } from '../../utils/blueprintFinanceiroMassa';
 import { modeloDoPayloadPublicado } from './modeloPublicado';
-import { direcaoDaRua, nomeDaUnidadeDaMassa as nomeDaUnidade, ordinalDoTipo, pavimentoTipoMontado, type UnidadeDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
-import { unidadesDoPredio, type UnidadeDoPredio } from '../../utils/blueprintUnidadesDoPredio';
-import { ordinalDoPavimento } from '../../utils/blueprintZonaUrbanistica';
+import { direcaoDaRua, nomeDaUnidadeDaMassa as nomeDaUnidade, ordinalDoTipo, pavimentoTipoMontado, pavimentosDoPredioDoBloco, type UnidadeDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
+import { andarDoPavimento, prefixoPeloAndar, unidadesDoPredio, type UnidadeDoPredio } from '../../utils/blueprintUnidadesDoPredio';
 import { garagemLancada } from '../../utils/blueprintGaragemDaMassa';
 import { dividirPavimentoDoBloco } from '../../utils/blueprintPavimentoOrtogonal';
 import { CanonicalSide, CanonicalTower, CanonicalUnit } from './types';
@@ -183,8 +182,9 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
 function unidadesDoBlocoLancado(model: BlueprintModel, b: { uid: string }, todas: () => ReturnType<typeof unidadesDoPredio>): UnidadeDoPredio[] {
   const tipo = pavimentoTipoMontado(model, b);
   if (!tipo || !(model.unidades ?? []).some((u) => u.etiquetaUids.length)) return [];
-  const doBloco = new Set([tipo.id, ...model.levels.filter((l) => l.tipoDeId === tipo.id).map((l) => l.id)]);
-  return todas().unidades.filter((u) => (u.levelId ? doBloco.has(u.levelId) : u.medida.levelIds.includes(tipo.id)));
+  // PE6d: também as do andar 0 desvinculado (o 002/004 da Torre A, o TR05… da Torre B do Garden).
+  const doBloco = pavimentosDoPredioDoBloco(model, b);
+  return todas().unidades.filter((u) => (u.levelId ? doBloco.has(u.levelId) : u.medida.levelIds.some((id) => doBloco.has(id))));
 }
 
 /**
@@ -205,8 +205,10 @@ function torreDoPredio(
   const porNome = new Map(produto.tipologias.map((t) => [t.nome, t]));
   const linhas = unidades.map((u) => {
     const levelId = u.levelId ?? u.medida.levelIds[0] ?? null;
-    const ordinal = ordinalDoPavimento(model.levels, levelId);
-    const prefixo = ordinal - 1 <= 0 ? 'T' : String(ordinal - 1);
+    // PE6d: o andar abaixo do solo é −1, −2… (a Torre B do Garden: "SS205" no −2); acima, o ordinal − 1, como sempre.
+    const andar = andarDoPavimento(model.levels, levelId);
+    const ordinal = andar + 1;
+    const prefixo = andar < 0 ? prefixoPeloAndar(andar) : ordinal - 1 <= 0 ? 'T' : String(ordinal - 1);
     const resto = u.numero.startsWith(prefixo) ? u.numero.slice(prefixo.length) : '';
     const pos = /^\d{2,}$/.test(resto) ? Number(resto) : null;
     return { u, ordinal, pos, t: u.tipologia ? (porNome.get(u.tipologia) ?? null) : null, privativa: r2(u.medida.areaPrivativaMm2 / 1e6) };

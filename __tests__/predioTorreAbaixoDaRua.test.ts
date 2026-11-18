@@ -14,6 +14,12 @@ import { blocosDasTorresNoLote, papelDosAndares } from '../utils/predioAutomatic
 import { HIPOTESES_DO_PRODUTO_PADRAO, produtoVazio } from '../utils/blueprintProduto';
 import { planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
 import { fazerChave } from '../utils/blueprintGrafoDeRede';
+import { SALA_HALL } from '../utils/predioAutomatico/terreoECobertura';
+import { unidadesDoPredio } from '../utils/blueprintUnidadesDoPredio';
+import { produtoDoEmpreendimento } from '../utils/blueprintProdutoDoEmpreendimento';
+import { ladoDaMassa } from '../services/sync/massaAdapter';
+import { buildPlan } from '../services/sync/planner';
+import type { Empreendimento, EmpreendimentoTower, EmpreendimentoUnit } from '../types/empreendimento';
 import type { Boundary } from '../utils/blueprintKernel';
 
 const GARDEN = JSON.parse(readFileSync(new URL('./fixtures/empreendimentoGarden.json', import.meta.url), 'utf8')) as {
@@ -41,7 +47,7 @@ function torreB() {
     original: m,
     entrada: { blocoId: b.id, produto: produtoVazio(), doBloco: null, rotacaoNorteDeg: null, doEmpreendimento: { torreId: torre.torreId, andares: papelDosAndares(torre).andares } },
     hip: { climatizacao: false },
-  }, { permitirTorreAbaixoDaRua: true });
+  });
 }
 
 
@@ -49,14 +55,14 @@ describe('PE6a — a torre que começa abaixo da rua (Garden, Torre B)', { timeo
   let cache: ReturnType<typeof torreB> | null = null;
   const plano = () => (cache ??= torreB());
 
-  it('o −2 é o pavimento tipo; o −1, o 0, o 1, o 2 e o 3 são cópias dele; a garagem no −3 e no −4', () => {
+  it('o −2 é o pavimento tipo; o −1, o 1, o 2 e o 3 são cópias dele (o 0 nasce cópia e é desvinculado — PE6c); a garagem no −3 e no −4', () => {
     const m = plano().resultado;
     const tipo = m.levels.find((l) => l.id === plano().tipoLevelId)!;
     expect(tipo.elevationMm).toBe(-6000);
     const copias = m.levels.filter((l) => l.tipoDeId === tipo.id).map((l) => l.elevationMm).sort((a, b) => a - b);
-    expect(copias).toEqual([-3000, 0, 3000, 6000, 9000]);
-    // Nenhum pavimento próprio da torre no 0 (o "térreo" de condomínio): só o lote e a cópia.
-    expect(m.levels.filter((l) => /Torre B/.test(l.name) && l.elevationMm === 0 && l.tipoDeId === undefined)).toEqual([]);
+    // PE6c (decisão de 18/11 "Desvincular o 0"): o 0 nasce cópia e é desvinculado no fim, para a porta da rua.
+    expect(copias).toEqual([-3000, 3000, 6000, 9000]);
+    expect(m.levels.filter((l) => /Torre B/.test(l.name) && l.elevationMm === 0)).toHaveLength(1);
     const garagens = m.levels.filter((l) => /Garagem/.test(l.name)).sort((a, b) => b.elevationMm - a.elevationMm);
     expect(garagens.map((l) => l.elevationMm)).toEqual([-9000, -12000]);
     expect(garagens[0].name).toMatch(/3º subsolo/);
@@ -114,6 +120,54 @@ describe('PE6a — a torre que começa abaixo da rua (Garden, Torre B)', { timeo
     expect(p.resumo.esgoto?.coletor?.porGravidade).toBe(true);
     expect(p.pendencias.some((x) => /estação elevatória/.test(x.texto))).toBe(false);
     expect(p.pendencias.some((x) => /caixa coletora/.test(x.texto))).toBe(true);
+  });
+
+  // ── PE6c: o 0 desvinculado, com a porta para a rua, e a rota de fuga do −2 e do −1 até ela ────────────────────────────
+  it('PE6c: o 0 desvinculado tem os 4 apartamentos da ficha (unidades do kernel), o hall com a porta para a rua — e todo andar tem rota até a saída', () => {
+    const p = plano();
+    const m = p.resultado;
+    const zero = m.levels.find((l) => /Torre B/.test(l.name) && l.elevationMm === 0)!;
+    expect(zero.tipoDeId).toBeUndefined();
+    expect(m.labels.filter((l) => l.levelId === zero.id && /Sala de estar/i.test(l.name))).toHaveLength(4);
+    const novas = ['TR05', 'TR06', 'TR07', 'TR08'].map((n) => (m.unidades ?? []).find((u) => u.numero === n));
+    expect(novas.every(Boolean)).toBe(true);
+    const doTipo = new Set((m.unidades ?? []).filter((u) => !/^TR0[5-8]$/.test(u.numero)).map((u) => u.id));
+    expect((m.quadros ?? []).filter((q) => q.levelId === zero.id && q.unidadeId && doTipo.has(q.unidadeId))).toEqual([]);
+    expect(m.terminais.filter((t) => (t.levelId === zero.id || t.unidadeLevelId === zero.id) && t.unidadeId && doTipo.has(t.unidadeId))).toEqual([]);
+    expect(p.resumo.unidades).toBe(24);
+    expect(p.resumo.eletrica?.unidadesMedidas).toBe(24);
+    expect(p.resumo.eletrica?.medidores).toBe(25);
+    expect(p.resumo.agua?.unidadesMedidas).toBe(24);
+    expect(m.spaces.filter((s) => s.levelId === zero.id).map((s) => s.name)).toContain(SALA_HALL);
+    expect(m.openings.filter((o) => o.kind === 'door' && o.widthMm >= 1200 && m.walls.find((w) => w.id === o.wallId)?.levelId === zero.id).length).toBeGreaterThanOrEqual(1);
+    expect(p.resumo.terreo?.acesso).toBe(true);
+    expect(p.pendencias.some((x) => /sem caminho até a saída/.test(x.texto))).toBe(false);
+    expect(p.pendencias.some((x) => x.grupo === 'CONFERIR' && /desvinculada para a entrada/.test(x.texto) && /não chega mais ao 0/.test(x.texto))).toBe(true);
+    expect(p.pendencias.some((x) => /a entrada pela rua \(o hall e a porta\) fica para o projetista/.test(x.texto))).toBe(false);
+  });
+
+  // ── PE6d: os nomes da ficha e o envio ao Empreendimento ────────────────────────────────────────────────────────────
+  it('PE6d: os 24 apartamentos saem com os nomes da ficha (SS205… no −2, SS105… no −1, TR05… no 0, 105…305) e o envio adota todos — nenhuma unidade nova', () => {
+    const m = plano().resultado;
+    type TorreDaFicha = { id: string; name: string; units?: { name: string; floor: number }[] };
+    const torres = GARDEN.torres as unknown as TorreDaFicha[];
+    const torreB = torres.find((t) => t.name === 'Torre B')!;
+    const daFicha = (torreB.units ?? []).filter((u) => u.floor >= -2).map((u) => u.name).sort();
+    expect(daFicha).toHaveLength(24);
+    expect(unidadesDoPredio(m).unidades.map((u) => u.numero).sort()).toEqual(daFicha);
+    const produto = produtoDoEmpreendimento(GARDEN.torres as never, produtoVazio()).produto!;
+    const EMP = { id: 'f3c21233', organization_id: 'spe', name: '011 - Garden Cambuhy', blueprint_study_id: 'estudo' } as unknown as Empreendimento;
+    const lado = ladoDaMassa(EMP, m, produto, null);
+    const alvo = {
+      towers: torres.map((x) => ({ id: x.id, name: x.name, empreendimento_id: 'f3c21233', blueprint_bloco_uid: null }) as unknown as EmpreendimentoTower),
+      units: torres.flatMap((x) => (x.units ?? []).map((u) => ({ ...u, tower_id: x.id, blueprint_unidade_chave: null, blueprint_massa_chave: null }) as unknown as EmpreendimentoUnit)),
+      commonAreas: [],
+    };
+    const envio = buildPlan(lado, alvo);
+    expect(envio.towerCreates).toEqual([]);
+    expect(envio.unitCreates).toEqual([]);
+    const adotadas = envio.adoptions.filter((x) => x.entity === 'unit').map((x) => alvo.units.find((u) => u.id === x.existingId)!.name).sort();
+    expect(adotadas).toEqual(daFicha);
   });
 });
 

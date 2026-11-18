@@ -9,7 +9,7 @@
  */
 import { pointInPolygon, signedArea, uidDeterministico } from '../blueprintKernel';
 import type { BlueprintModel, Bloco, Command, ObjectId, Point, Wall } from '../blueprintKernel';
-import type { DivisaoDoPavimento } from '../blueprintPavimentoTipoDaMassa';
+import { uidDoTerreoDoBloco, type DivisaoDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 import { dimensionarReservacao, HIPOTESES_RESERVATORIO_PADRAO } from '../blueprintReservacao';
 import type { HipotesesDoPredio } from './hipoteses';
 
@@ -88,7 +88,7 @@ export function centroDoNucleo(m: BlueprintModel, base: BaseDoPredio): Point {
 }
 const pavimentoDoNucleoEhDoBloco = (m: BlueprintModel, levelId: ObjectId, base: BaseDoPredio) => m.levels.find((l) => l.id === levelId)?.uid === uidDoTerreo(base.bloco);
 
-export const uidDoTerreo = (b: Pick<Bloco, 'uid'>) => uidDeterministico(`massa:pavimento-terreo:${b.uid}`);
+export const uidDoTerreo = uidDoTerreoDoBloco;
 export const uidDaCobertura = (b: Pick<Bloco, 'uid'>) => uidDeterministico(`massa:cobertura:${b.uid}`);
 
 /** As funções das fatias do térreo, na ordem em que as fatias são escolhidas (a 1ª é o hall). */

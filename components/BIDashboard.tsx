@@ -12,6 +12,7 @@ import { useToast } from '../hooks/useToast';
 import type { BIExecutiveSummary, KPIvsTarget } from '../types/bi';
 import BINarrativeCard from './BINarrativeCard';
 import BIReportScheduler from './BIReportScheduler';
+import type { NarrativaGerada } from '../services/biReportService';
 import Button from './ui/Button';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
@@ -129,7 +130,7 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
     const [error, setError]         = React.useState<string | null>(null);
     const [activeTab, setActiveTab] = React.useState<'visao_geral' | 'tendencia' | 'metas' | 'ia_relatorios'>('visao_geral');
     const [orgName, setOrgName]     = React.useState('');
-    const [narrative, setNarrative] = React.useState<string | null>(null);
+    const [narrative, setNarrative] = React.useState<NarrativaGerada | null>(null);
 
     const load = React.useCallback(async () => {
         setLoading(true);

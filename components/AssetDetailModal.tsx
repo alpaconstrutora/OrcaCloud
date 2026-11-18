@@ -13,8 +13,7 @@ import {
     Camera
 } from 'lucide-react';
 import { formatCurrency, formatPercent } from '../utils/financialMath';
-import { aiService } from '../services/aiService';
-import { Sparkles, BrainCircuit, Wallet, ShieldCheck, ExternalLink } from 'lucide-react';
+import { Wallet, ShieldCheck, ExternalLink } from 'lucide-react';
 import ProjectGallery from './ProjectGallery';
 import ObraTimeline from './investor/ObraTimeline';
 
@@ -41,21 +40,6 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
     const status = project.status || 'Em Execução';
     const progress = project.progress || 0; // já em escala 0-100
     const yoc = project.yoc ? (project.yoc * 100).toFixed(1) + '%' : '—';
-
-    const [aiOpinion, setAiOpinion] = React.useState<string | null>(null);
-    const [loadingAI, setLoadingAI] = React.useState(false);
-
-    const handleAIAnalysis = async () => {
-        setLoadingAI(true);
-        try {
-            const opinion = await aiService.analyzeAsset(project);
-            setAiOpinion(opinion);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setLoadingAI(false);
-        }
-    };
 
     return (
         <div className="absolute inset-0 z-50 flex items-center justify-center p-12 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
@@ -142,47 +126,6 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
                                     organizationId={organizationId}
                                     isAdmin={isAdmin}
                                 />
-                            </div>
-
-                            {/* AI Perspective Section */}
-                            <div className="bg-gradient-to-br from-indigo-900 to-blue-900 rounded-[2rem] p-8 text-white relative overflow-hidden group/ai">
-                                <div className="absolute top-0 right-0 p-8 opacity-10 group-hover/ai:scale-110 transition-transform">
-                                    <BrainCircuit size={100} />
-                                </div>
-                                <div className="relative z-10">
-                                    <div className="flex items-center gap-3 mb-6">
-                                        <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
-                                            <Sparkles className="w-5 h-5 text-blue-200" />
-                                        </div>
-                                        <h4 className="font-black text-xs text-blue-200">Parecer da Inteligência Artificial</h4>
-                                    </div>
-
-                                    {loadingAI ? (
-                                        <div className="space-y-3 animate-pulse">
-                                            <div className="h-3 bg-white/10 rounded-full w-full"></div>
-                                            <div className="h-3 bg-white/10 rounded-full w-5/6"></div>
-                                            <div className="h-3 bg-white/10 rounded-full w-4/6"></div>
-                                        </div>
-                                    ) : aiOpinion ? (
-                                        <div className="prose prose-invert prose-sm max-w-none">
-                                            <p className="text-blue-50 leading-relaxed font-medium">
-                                                {aiOpinion}
-                                            </p>
-                                        </div>
-                                    ) : (
-                                        <div>
-                                            <p className="text-blue-100 text-sm mb-6 opacity-80">
-                                                Deseja uma análise técnica preditiva sobre este empreendimento baseada em macroeconomia e dados de mercado?
-                                            </p>
-                                            <button
-                                                onClick={handleAIAnalysis}
-                                                className="px-6 py-3 bg-white text-blue-900 rounded-xl text-button font-black uppercase tracking-widest hover:bg-blue-50 transition-colors"
-                                            >
-                                                Gerar Análise IA
-                                            </button>
-                                        </div>
-                                    )}
-                                </div>
                             </div>
 
                             {/* Visual Evolution (New Gallery Section) */}

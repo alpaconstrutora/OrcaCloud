@@ -1,6 +1,5 @@
 import { supabase } from '../lib/supabase';
 import type { ApprovalStep, ApprovalStatus } from '../types/financial';
-import { niveisAprovadosNaRodada } from '../utils/situacaoAprovacaoTitulo';
 import { mensagemDaAlcada } from '../utils/alcada';
 
 /**
@@ -54,6 +53,13 @@ export interface ActionQueueItem {
 //
 // Fonte única de "quantos níveis": financial_approval_config via RPC
 // fn_resolve_approval_levels(org, amount).
+//
+// DECIDIR É NO SERVIDOR (18/11/2026, F14/F59 — plano
+// docs/planos/2026-11-18-seguranca-alcada-no-servidor.md): enviar, aprovar e
+// rejeitar são as RPCs fn_alcada_enviar/aprovar/rejeitar. O banco recusa
+// gravação direta de approval_status/approval_chain/approval_required_levels que
+// aprove (gatilho trg_alcada_guarda) — não volte a gravar esses campos daqui.
+// ENTITY_META abaixo espelha fn_alcada_tabela (a lista que vale é a do banco).
 // ============================================================
 
 /** Entidades que participam do fluxo unificado de aprovação. */
@@ -178,12 +184,14 @@ export const approvalService = {
     },
 
     /**
-     * Coloca a entidade no fluxo: resolve os níveis pelo valor e marca PENDENTE.
-     * `extra` injeta campos específicos da entidade (ex.: business_status).
-     * `opts` permite informar organização/valor explicitamente — necessário para
-     * entidades cujo escopo/valor não estão em colunas simples (ex.: purchase_orders,
-     * escopada por empresa_id e com valor derivado de items[].total).
-     * Retorna a linha atualizada.
+     * Coloca a entidade no fluxo — pela RPC `fn_alcada_enviar` (18/11/2026, F14). O SERVIDOR
+     * lê o valor do item, resolve a faixa e marca PENDENTE com os níveis dela (ou libera abaixo
+     * do piso). `extra` injeta campos específicos da entidade (ex.: business_status), num UPDATE
+     * comum depois da decisão. Retorna a linha atualizada.
+     *
+     * `opts.organizationId`/`opts.amount` não decidem mais nada: valor e organização são os do
+     * banco (a RPC usa a mesma conta da trava — pedido pelo total dos itens, etapa pela coluna
+     * `amount`). Ficam na assinatura para não mexer nos chamadores.
      *
      * ── `semFaixa`: o que fazer quando NENHUMA faixa cobre o valor ───────────
      *
@@ -203,8 +211,9 @@ export const approvalService = {
      *    faixa" não quer dizer "barato" — quer dizer que a pergunta sobre valor
      *    não se aplica. Essa mantém `'exigir1'`: alguém modelou o processo
      *    dizendo que ali precisa de aprovação, e liberar sozinho faria o portão
-     *    se autoaprovar.
+     *    se autoaprovar. (O servidor repete a regra: etapa sem valor nunca libera.)
      *
+     * O servidor só libera item em RASCUNHO: item REJEITADO vai para a fila.
      * O default é `'exigir1'` de propósito: preserva o comportamento histórico
      * para qualquer chamador que não tenha sido revisado.
      */
@@ -214,71 +223,49 @@ export const approvalService = {
         extra: Record<string, unknown> = {},
         opts: { organizationId?: string; amount?: number; semFaixa?: 'liberar' | 'exigir1' } = {},
     ): Promise<any> {
-        const meta = ENTITY_META[entity];
-
-        // Só busca no banco o que não foi informado em opts.
-        const cols = ['approval_status'];
-        if (opts.amount === undefined)         cols.push(meta.valueField);
-        if (opts.organizationId === undefined) cols.push('organization_id');
-
-        const { data: row, error: fErr } = await supabase
-            .from(meta.table)
-            .select(cols.join(', '))
-            .eq('id', id)
-            .single();
-        if (fErr) {
-            console.error('[approvalService] submit (fetch):', fErr);
-            throw new Error(`Erro ao carregar item para aprovação: ${fErr.message}`);
-        }
-        if ((row as any).approval_status === 'PENDENTE') return row; // já submetido
-
-        const organizationId = opts.organizationId ?? (row as any).organization_id;
-        const amount = opts.amount ?? (Number((row as any)[meta.valueField]) || 0);
-
-        const cfg = await this.resolveRequiredLevels(organizationId, amount);
-
-        // Fora de todas as faixas + chamador que trata isso como "abaixo da
-        // alçada": libera sem passar pela fila. `extra` NÃO é aplicado — ele
-        // carrega o estado de espera (ex.: business_status='AGUARDANDO_APROVACAO'),
-        // que seria mentira num item que nunca entrou na fila.
-        if (!cfg && opts.semFaixa === 'liberar') {
-            const { data, error } = await supabase
-                .from(meta.table)
-                .update({ approval_status: 'APROVADO' as ApprovalStatus })
-                .eq('id', id)
-                .select()
-                .single();
-            if (error) {
-                console.error('[approvalService] submit (liberar sem faixa):', error);
-                throw new Error(`Erro ao liberar item fora da alçada: ${error.message}`);
-            }
-            return data;
-        }
-
-        const levels = cfg?.required_levels ?? 1;
-
-        const { data, error } = await supabase
-            .from(meta.table)
-            .update({
-                approval_status:          'PENDENTE' as ApprovalStatus,
-                approval_required_levels: levels,
-                approval_chain:           [],
-                ...extra,
-            })
-            .eq('id', id)
-            .select()
-            .single();
+        const { data, error } = await supabase.rpc('fn_alcada_enviar', {
+            p_entity:    entity,
+            p_id:        id,
+            p_sem_faixa: opts.semFaixa ?? 'exigir1',
+            p_extra:     extra,
+        });
         if (error) {
-            console.error('[approvalService] submit (update):', error);
-            throw new Error(`Erro ao enviar para aprovação: ${error.message}`);
+            console.error('[approvalService] submit:', error);
+            throw new Error(mensagemDaAlcada(error.message) ?? `Erro ao enviar para aprovação: ${error.message}`);
         }
         return data;
     },
 
     /**
-     * Registra a aprovação de um nível. Quando todos os níveis exigidos foram
-     * aprovados, aplica `extraOnApproved` no mesmo update (efeito específico da
-     * entidade). Retorna a linha atualizada.
+     * Reenvia um item REJEITADO (o histórico da cadeia fica; a aprovação conta só a rodada
+     * depois da rejeição). Mesma RPC, `p_reenvio`. Recusa item que não está rejeitado.
+     */
+    async resubmit(
+        entity: ApprovalEntity,
+        id: string,
+        extra: Record<string, unknown> = {},
+    ): Promise<any> {
+        const { data, error } = await supabase.rpc('fn_alcada_enviar', {
+            p_entity:    entity,
+            p_id:        id,
+            p_sem_faixa: 'exigir1',
+            p_extra:     extra,
+            p_reenvio:   true,
+        });
+        if (error) {
+            console.error('[approvalService] resubmit:', error);
+            throw new Error(mensagemDaAlcada(error.message) ?? `Erro ao reenviar para aprovação: ${error.message}`);
+        }
+        return data;
+    },
+
+    /**
+     * Aprova o nível da vez — pela RPC `fn_alcada_aprovar` (18/11/2026, F14). O SERVIDOR
+     * confere que o item está pendente, que `level` é o nível da vez, que quem está logado
+     * está na alçada desse nível, grava o passo em nome do e-mail do login e decide se a
+     * alçada fechou. Quando fecha, aplica `extraOnApproved` (efeito específico da entidade).
+     * `approvedBy` não é mais gravado (o passo leva o e-mail do JWT, que é o mesmo); fica na
+     * assinatura para não mexer nos chamadores. Retorna a linha atualizada.
      */
     async approve(
         entity: ApprovalEntity,
@@ -289,59 +276,25 @@ export const approvalService = {
         notes?: string,
         extraOnApproved: Record<string, unknown> = {},
     ): Promise<any> {
-        const meta = ENTITY_META[entity];
-
-        const { data: row, error: fErr } = await supabase
-            .from(meta.table)
-            .select('approval_chain, approval_required_levels, approval_status')
-            .eq('id', id)
-            .single();
-        if (fErr) {
-            console.error('[approvalService] approve (fetch):', fErr);
-            throw new Error(`Erro ao carregar item: ${fErr.message}`);
-        }
-        if ((row as any).approval_status !== 'PENDENTE') {
-            throw new Error('Item não está pendente de aprovação.');
-        }
-
-        const chain: ApprovalStep[] = ((row as any).approval_chain as ApprovalStep[]) ?? [];
-        chain.push({
-            level,
-            role:        level === 1 ? labels.level1_label : (labels.level2_label ?? 'Financeiro / Diretoria'),
-            action:      'APROVADO',
-            approved_by: approvedBy,
-            approved_at: new Date().toISOString(),
-            ...(notes ? { notes } : {}),
+        const { data, error } = await supabase.rpc('fn_alcada_aprovar', {
+            p_entity:  entity,
+            p_id:      id,
+            p_nivel:   level,
+            p_obs:     notes ?? null,
+            p_rotulos: { level1_label: labels.level1_label, level2_label: labels.level2_label ?? null },
+            p_extra:   extraOnApproved,
         });
-
-        const required = (row as any).approval_required_levels ?? 1;
-        // Só a rodada atual: um reenvio depois de rejeição preserva a cadeia, e a
-        // aprovação anterior à rejeição não vale para o reenvio (26/10/2026).
-        const approvedLevels = niveisAprovadosNaRodada(chain);
-        const fullyApproved = required === 1
-            ? approvedLevels.includes(1)
-            : approvedLevels.includes(1) && approvedLevels.includes(2);
-
-        const { data, error } = await supabase
-            .from(meta.table)
-            .update({
-                approval_chain:  chain,
-                approval_status: (fullyApproved ? 'APROVADO' : 'PENDENTE') as ApprovalStatus,
-                ...(fullyApproved ? extraOnApproved : {}),
-            })
-            .eq('id', id)
-            .select()
-            .single();
         if (error) {
-            console.error('[approvalService] approve (update):', error);
-            // Gatilho da alçada (ALCADA_NAO_PERMITE) já traz a frase para o usuário.
+            console.error('[approvalService] approve:', error);
+            // ALCADA_NAO_PERMITE já traz a frase para o usuário.
             throw new Error(mensagemDaAlcada(error.message) ?? `Erro ao aprovar: ${error.message}`);
         }
         return data;
     },
 
     /**
-     * Rejeita a entidade, registrando o passo de rejeição na cadeia.
+     * Rejeita — pela RPC `fn_alcada_rejeitar` (18/11/2026, F14): quem rejeita é quem
+     * poderia aprovar o nível da vez; o passo vai em nome do e-mail do login.
      * `extra` injeta campos específicos (ex.: business_status, status).
      * Retorna a linha atualizada.
      */
@@ -352,40 +305,14 @@ export const approvalService = {
         reason: string,
         extra: Record<string, unknown> = {},
     ): Promise<any> {
-        const meta = ENTITY_META[entity];
-
-        const { data: row, error: fErr } = await supabase
-            .from(meta.table)
-            .select('approval_chain')
-            .eq('id', id)
-            .single();
-        if (fErr) {
-            console.error('[approvalService] reject (fetch):', fErr);
-            throw new Error(`Erro ao carregar item: ${fErr.message}`);
-        }
-
-        const chain: ApprovalStep[] = ((row as any).approval_chain as ApprovalStep[]) ?? [];
-        chain.push({
-            level:       1,
-            role:        'Rejeição',
-            action:      'REJEITADO',
-            approved_by: rejectedBy,
-            approved_at: new Date().toISOString(),
-            notes:       reason,
+        const { data, error } = await supabase.rpc('fn_alcada_rejeitar', {
+            p_entity: entity,
+            p_id:     id,
+            p_motivo: reason,
+            p_extra:  extra,
         });
-
-        const { data, error } = await supabase
-            .from(meta.table)
-            .update({
-                approval_chain:  chain,
-                approval_status: 'REJEITADO' as ApprovalStatus,
-                ...extra,
-            })
-            .eq('id', id)
-            .select()
-            .single();
         if (error) {
-            console.error('[approvalService] reject (update):', error);
+            console.error('[approvalService] reject:', error);
             throw new Error(mensagemDaAlcada(error.message) ?? `Erro ao rejeitar: ${error.message}`);
         }
         return data;

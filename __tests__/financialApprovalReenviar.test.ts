@@ -1,50 +1,40 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
+// 18/11/2026 (F14): o reenvio é a RPC fn_alcada_enviar com p_reenvio — o SERVIDOR confere que o
+// título está REJEITADO, mantém a cadeia e calcula os níveis da faixa. Aqui fica o contrato do
+// lado da tela: chama o reenvio do approvalService e tira o título de BLOQUEADO.
 const m = vi.hoisted(() => ({
-    linha: { approval_status: 'REJEITADO', amount: 6000, organization_id: 'org-1' } as Record<string, unknown>,
-    updates: [] as Record<string, unknown>[],
-    filtros: [] as [string, unknown][],
+    chamadas: [] as { entity: string; id: string; extra: Record<string, unknown> }[],
+    erro: null as Error | null,
 }));
 
-vi.mock('../lib/supabase', () => {
-    const consulta = (modo: 'select' | 'update') => {
-        const q: Record<string, unknown> = {};
-        q.select = () => q;
-        q.eq = (col: string, val: unknown) => { if (modo === 'update') m.filtros.push([col, val]); return q; };
-        q.single = async () => ({ data: m.linha, error: null });
-        q.then = (ok: (v: unknown) => void) => ok({ error: null });
-        return q;
-    };
-    return {
-        supabase: {
-            from: () => ({
-                select: () => consulta('select'),
-                update: (patch: Record<string, unknown>) => { m.updates.push(patch); return consulta('update'); },
-            }),
-        },
-    };
-});
+vi.mock('../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../services/approvalService', () => ({
-    approvalService: { resolveRequiredLevels: vi.fn(async () => ({ required_levels: 2, level1_label: 'Gestor', level2_label: 'Diretoria' })) },
+    approvalService: {
+        resubmit: vi.fn(async (entity: string, id: string, extra: Record<string, unknown>) => {
+            m.chamadas.push({ entity, id, extra });
+            if (m.erro) throw m.erro;
+            return { id, approval_status: 'PENDENTE' };
+        }),
+    },
 }));
 vi.mock('../services/processService', () => ({ processService: {} }));
 
 import { financialApprovalService } from '../services/financialApprovalService';
 
 describe('financialApprovalService.reenviar', () => {
-    beforeEach(() => { m.updates = []; m.filtros = []; m.linha = { approval_status: 'REJEITADO', amount: 6000, organization_id: 'org-1' }; });
+    beforeEach(() => { m.chamadas = []; m.erro = null; });
 
-    it('rejeitado volta PENDENTE com os níveis da faixa e sai de BLOQUEADO, sem apagar a cadeia', async () => {
+    it('reenvia pelo servidor e tira o título de BLOQUEADO (sem gravar campo de aprovação daqui)', async () => {
         await financialApprovalService.reenviar('t1');
-        expect(m.updates).toHaveLength(1);
-        expect(m.updates[0]).toMatchObject({ approval_status: 'PENDENTE', approval_required_levels: 2, business_status: null });
-        expect(m.updates[0]).not.toHaveProperty('approval_chain');
-        expect(m.filtros).toContainEqual(['approval_status', 'REJEITADO']);
+        expect(m.chamadas).toHaveLength(1);
+        expect(m.chamadas[0]).toMatchObject({ entity: 'transaction', id: 't1' });
+        expect(m.chamadas[0].extra).toMatchObject({ business_status: null });
+        expect(Object.keys(m.chamadas[0].extra).filter(k => k.startsWith('approval'))).toEqual([]);
     });
 
-    it('recusa título que não está rejeitado', async () => {
-        m.linha = { approval_status: 'APROVADO', amount: 10, organization_id: 'org-1' };
+    it('recusa do servidor (título que não está rejeitado) chega à tela', async () => {
+        m.erro = new Error('Só item rejeitado é reenviado para aprovação.');
         await expect(financialApprovalService.reenviar('t1')).rejects.toThrow(/rejeitado/i);
-        expect(m.updates).toHaveLength(0);
     });
 });

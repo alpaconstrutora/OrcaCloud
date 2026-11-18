@@ -30,6 +30,8 @@ const db: Record<string, Linha[]> = {};
 const inserts: { tabela: string; linha: Linha }[] = [];
 const rpcs: { fn: string; args: unknown }[] = [];
 let faixaDaAlcada: unknown[] = [];
+/** Quem está logado (o e-mail do JWT): é em nome dele que a RPC da alçada grava o passo. */
+let logado = 'gestor@x';
 
 function query(tabela: string) {
     const filtros: [string, unknown][] = [];
@@ -71,6 +73,12 @@ vi.mock('../lib/supabase', () => ({
         rpc: async (fn: string, args: unknown) => {
             rpcs.push({ fn, args });
             if (fn === 'fn_resolve_approval_levels') return { data: faixaDaAlcada, error: null };
+            // Enviar/aprovar/rejeitar decidem no servidor (18/11/2026, F14) — imitação em memória.
+            const alcada = rpcAlcadaFake(db, fn, args as Record<string, unknown>, {
+                faixa: () => (faixaDaAlcada[0] as FaixaFake) ?? null,
+                logado: () => logado,
+            });
+            if (alcada) return alcada;
             return { data: { match_id: 'm1', payment_date: '2026-10-16', adjustment_id: null }, error: null };
         },
         storage: { from: () => ({ upload: async () => ({ data: { path: 'p' }, error: null }), remove: async () => ({}) }) },
@@ -90,6 +98,7 @@ import { receivableService } from '../services/receivableService';
 import { financialApprovalService } from '../services/financialApprovalService';
 import { bankReconciliationService } from '../services/bankReconciliationService';
 import { boletoService } from '../services/boletoService';
+import { rpcAlcadaFake, type FaixaFake } from './fixtures/alcadaRpcFake';
 
 const TITULO_PAGAR = { id: 't-pagar', direction: 'DEBIT', organization_id: 'org-do-titulo', project_id: 'obra1', supplier_id: 'sup1', description: 'Aluguel do galpão', purchase_order_id: null, amount: 100 };
 const TITULO_RECEBER = { id: 't-receber', direction: 'CREDIT', organization_id: 'org-do-titulo', project_id: null, supplier_id: null, description: 'Parcela 3/12 — Apto 101', purchase_order_id: null, amount: 100 };
@@ -102,6 +111,7 @@ function zerar() {
     inserts.length = 0;
     rpcs.length = 0;
     faixaDaAlcada = [];
+    logado = 'gestor@x';
     disparos = [];
     motorFalha = false;
     vi.restoreAllMocks();
@@ -184,6 +194,7 @@ describe('alçada → payable.approved', () => {
         const labels = { level1_label: 'Gestor', level2_label: 'Diretoria' };
         await financialApprovalService.approve('t-pagar', 1, 'gestor@x', labels);
         expect(disparos).toHaveLength(0);
+        logado = 'diretor@x';
         await financialApprovalService.approve('t-pagar', 2, 'diretor@x', labels);
         expect(disparos.map(d => d.eventKey)).toEqual(['payable.approved']);
     });

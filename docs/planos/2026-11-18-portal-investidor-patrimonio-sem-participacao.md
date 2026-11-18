@@ -48,9 +48,12 @@ mostra "—" com o motivo ("Participação não registrada" / "Valor do empreend
   com "R$ 0" na linha e no KPI).
 - [x] Gestor: `HoldingsList` ("—"), `InvestorSummaryDashboard` (KPI com o motivo; gráfico sem barra
   em vez de zero) e `AssetDetailModal` ("Valor atual" "—" com o motivo, sem "valorização" negativa).
-- [ ] Produção: o link do Tiago mostra "Patrimônio —" e "Participação não registrada" no Resumo, "—" na
+- [x] Produção: o link do Tiago mostra "Patrimônio —" e "Participação não registrada" no Resumo, "—" na
   coluna Cota/Patrimônio, sem "R$ 230.000" em lugar nenhum. **Pronto quando:** conferido pelo link
-  real, no computador e no celular.
+  real, no computador e no celular. — **Publicado no PR #570** (squash `ea740975c`; o domínio serviu
+  `6fd6816`, que o contém). Conferido 18/11 em produção, 1920 px e 390 px: KPI "Patrimônio — Participação
+  não registrada", linha "Garden Cambuhy — —", detalhe "Patrimônio estimado: Participação não registrada",
+  nenhum "230.000" nem "1x", 0 erros de console.
 
 ## Pedido posterior (18/11) — o card "Parecer da Inteligência Artificial"
 

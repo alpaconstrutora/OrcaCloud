@@ -355,6 +355,20 @@ function paredeNoPonto(paredes: readonly Wall[], p: Point): { w: Wall; off: numb
   return null;
 }
 
+/**
+ * PE6a (18/11/2026): as cotas dos pavimentos que a montagem do tipo usa, quando não são as de cima do solo — a torre do
+ * Empreendimento que começa abaixo da rua (a Torre B do Garden, do −2) passa TODOS os pisos do bloco (`pisosDoBloco`).
+ */
+export interface OpcoesDaMontagem {
+  pisos?: number[];
+}
+
+/** As cotas de TODOS os pavimentos do bloco (absolutas), de baixo para cima — os abaixo do solo também. */
+export function pisosDoBloco(model: BlueprintModel, b: Bloco): number[] {
+  const elev = model.levels.find((l) => l.id === b.levelId)?.elevationMm ?? 0;
+  return Array.from({ length: b.pavimentos }, (_, i) => elev + b.cotaBaseMm + i * b.peDireitoMm);
+}
+
 /** As cotas dos pavimentos ACIMA DO SOLO do bloco (absolutas). */
 export function pisosAcimaDoSolo(model: BlueprintModel, b: Bloco): number[] {
   const elev = model.levels.find((l) => l.id === b.levelId)?.elevationMm ?? 0;
@@ -374,6 +388,23 @@ export function uidDoPavimentoTipo(b: Pick<Bloco, 'uid'>): string {
   return uidDeterministico(`massa:pavimento-tipo:${b.uid}`);
 }
 
+/** A identidade da cópia `i` (o ordinal do piso) do tipo do bloco — continua a mesma se a cópia for desvinculada. */
+export const uidDaCopiaDoTipo = (b: Pick<Bloco, 'uid'>, i: number): string => uidDeterministico(`massa:pavimento-tipo:${b.uid}:copia:${i}`);
+
+/** A identidade do térreo do prédio do bloco (o do Prédio automático). */
+export const uidDoTerreoDoBloco = (b: Pick<Bloco, 'uid'>): string => uidDeterministico(`massa:pavimento-terreo:${b.uid}`);
+
+/**
+ * PE6d (18/11/2026): os pavimentos do prédio do bloco — o tipo, as cópias (as desvinculadas também: o andar 0 de
+ * apartamentos da Torre A e o da Torre B do Garden) e o térreo. É por eles que o envio acha as unidades do bloco.
+ */
+export function pavimentosDoPredioDoBloco(model: BlueprintModel, b: Pick<Bloco, 'uid'>): Set<string> {
+  const tipo = pavimentoTipoMontado(model, b);
+  if (!tipo) return new Set();
+  const daTorre = new Set([uidDoTerreoDoBloco(b), ...Array.from({ length: model.levels.length + 1 }, (_, i) => uidDaCopiaDoTipo(b, i + 1))]);
+  return new Set([tipo.id, ...model.levels.filter((l) => l.tipoDeId === tipo.id || daTorre.has(l.uid)).map((l) => l.id)]);
+}
+
 /** O pavimento tipo já montado deste bloco, ou null. */
 export function pavimentoTipoMontado(model: BlueprintModel, b: Pick<Bloco, 'uid'>): Level | null {
   const uid = uidDoPavimentoTipo(b);
@@ -385,13 +416,13 @@ export function ordinalDoTipo(model: BlueprintModel, b: Bloco): number {
   return pisosAcimaDoSolo(model, b).length >= 2 ? 2 : 1;
 }
 
-export function montarPavimentoTipo(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hipParcial: Partial<HipotesesDoPavimentoTipo> = {}): PavimentoTipoMontado {
+export function montarPavimentoTipo(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hipParcial: Partial<HipotesesDoPavimentoTipo> = {}, opcoes: OpcoesDaMontagem = {}): PavimentoTipoMontado {
   const hip = { ...HIPOTESES_DO_PAVIMENTO_TIPO_PADRAO, ...hipParcial };
   const avisos: string[] = [];
   const ja = pavimentoTipoMontado(model, b);
   if (ja) throw new Error(`O pavimento tipo de "${b.nome}" já está montado ("${ja.name}"). Para refazer, remova esse pavimento (as cópias se desvinculam) e monte de novo.`);
   const q = d.quadro;
-  const pisos = pisosAcimaDoSolo(model, b);
+  const pisos = opcoes.pisos ?? pisosAcimaDoSolo(model, b);
   const iTipo = Math.min(pisos.length, d.ordinalDoTipo) - 1;
   const comandos: Command[] = [];
   let m = model;
@@ -520,7 +551,7 @@ export function montarPavimentoTipo(model: BlueprintModel, b: Bloco, d: DivisaoD
 
   // 6. Os demais pavimentos como cópias vivas do tipo.
   const copias: Command[] = [];
-  for (let i = iTipo + 1; i < pisos.length; i++) copias.push({ type: 'AddLevel', name: `${b.nome} · ${i + 1}º pav`.slice(0, 60), elevationMm: pisos[i], defaultHeightMm: b.peDireitoMm, tipoDeId: tipo, uid: uidDeterministico(`massa:pavimento-tipo:${b.uid}:copia:${i + 1}`) });
+  for (let i = iTipo + 1; i < pisos.length; i++) copias.push({ type: 'AddLevel', name: `${b.nome} · ${i + 1}º pav`.slice(0, 60), elevationMm: pisos[i], defaultHeightMm: b.peDireitoMm, tipoDeId: tipo, uid: uidDaCopiaDoTipo(b, i + 1) });
   aplicar(copias);
   // A escada do tipo sobe até o último andar (PA9 do prédio automático, 14/11/2026): sem `ateLevelId` ela vai só ao
   // pavimento de cima — do 4º andar em diante não havia escada, e a rota de fuga dali não chegava à saída.

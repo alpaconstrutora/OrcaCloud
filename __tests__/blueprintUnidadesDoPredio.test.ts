@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
-import { numeroNoAndar, unidadesDoPredio } from '../utils/blueprintUnidadesDoPredio';
+import { andarDoPavimento, numeroNoAndar, numeroPeloAndar, unidadesDoPredio } from '../utils/blueprintUnidadesDoPredio';
 
 /** Térreo (cota 0) + pavimento tipo "1º" (cota 3000) com 4 apartamentos de 6 × 6 m sobre um hall de 24 × 2 m. */
 function predio(numeros = ['101', '102', '103', '104']) {
@@ -46,6 +46,25 @@ describe('numeração por andar', () => {
     expect(numeroNoAndar('T02', 1, 3)).toBe('202');
     expect(numeroNoAndar('Apto A', 2, 3)).toBeNull();
     expect(numeroNoAndar('11', 2, 3)).toBeNull(); // "1" + "1": posição precisa de 2 dígitos
+  });
+
+  // PE6d (18/11/2026): a torre que começa abaixo da rua (a Torre B do Garden) — o tipo no −2 ("SS205") e as cópias do −1
+  // ao 3 com os nomes da ficha: SS105, TR05/T05, 105, 205, 305.
+  it('abaixo da rua: "SS" + o subsolo + a posição; o térreo "T" (ou "TR", como a origem); acima, o andar', () => {
+    expect(numeroPeloAndar('SS205', -2, -1)).toBe('SS105');
+    expect(numeroPeloAndar('SS205', -2, 1)).toBe('105');
+    expect(numeroPeloAndar('SS205', -2, 3)).toBe('305');
+    expect(numeroPeloAndar('SS205', -2, 0)).toBe('T05');
+    expect(numeroPeloAndar('TR05', 0, 2)).toBe('205');
+    expect(numeroPeloAndar('105', 1, -1)).toBe('SS105');
+    expect(numeroPeloAndar('101', 1, 4)).toBe('401');
+    expect(numeroPeloAndar('SS205', -1, 1)).toBeNull(); // o prefixo não é o do andar da origem
+  });
+
+  it('o andar do pavimento: o ordinal − 1 acima do solo; abaixo, −1, −2… pelas cotas distintas', () => {
+    const lv = (id: string, elevationMm: number) => ({ id, elevationMm });
+    const levels = [lv('lote', 0), lv('zero', 0), lv('m1', -3000), lv('m2', -6000), lv('g3', -9000), lv('p1', 3000)];
+    expect(['lote', 'zero', 'm1', 'm2', 'g3', 'p1'].map((id) => andarDoPavimento(levels, id))).toEqual([0, 0, -1, -2, -3, 1]);
   });
 });
 

@@ -19,6 +19,10 @@ import { ROTULO_DO_DESVIO } from '../utils/predioAutomatico/esgoto';
 import { SALA_HALL, SALA_MEDICAO, SALA_MEDICAO_E_BOMBAS } from '../utils/predioAutomatico/terreoECobertura';
 import type { Boundary } from '../utils/blueprintKernel';
 import { unidadesDoPredio } from '../utils/blueprintUnidadesDoPredio';
+import { produtoDoEmpreendimento } from '../utils/blueprintProdutoDoEmpreendimento';
+import { ladoDaMassa } from '../services/sync/massaAdapter';
+import { buildPlan } from '../services/sync/planner';
+import type { Empreendimento, EmpreendimentoTower, EmpreendimentoUnit } from '../types/empreendimento';
 
 const GARDEN = JSON.parse(readFileSync(new URL('./fixtures/empreendimentoGarden.json', import.meta.url), 'utf8')) as {
   torres: TorreParaEstrutura[];
@@ -155,4 +159,26 @@ describe('PE4a + PE5a — o térreo de apartamentos (Garden, Torre A)', { timeou
     });
     expect(fora.map((f) => `${f.tipoHidraulico}@${m.levels.find((l) => l.id === f.levelId)!.name}`)).toEqual([]);
   });
+
+  it('PE6d: o envio ao Empreendimento leva também o 002 e o 004 do andar 0 — adota os 14 da ficha, nenhuma unidade nova', () => {
+    const m = plano().resultado;
+    type TorreDaFicha = { id: string; name: string; units?: { name: string; floor: number }[] };
+    const torres = GARDEN.torres as unknown as TorreDaFicha[];
+    const produto = produtoDoEmpreendimento(GARDEN.torres as never, produtoVazio()).produto!;
+    const EMP = { id: 'f3c21233', organization_id: 'spe', name: '011 - Garden Cambuhy', blueprint_study_id: 'estudo' } as unknown as Empreendimento;
+    const alvo = {
+      towers: torres.map((x) => ({ id: x.id, name: x.name, empreendimento_id: 'f3c21233', blueprint_bloco_uid: null }) as unknown as EmpreendimentoTower),
+      units: torres.flatMap((x) => (x.units ?? []).map((u) => ({ ...u, tower_id: x.id, blueprint_unidade_chave: null, blueprint_massa_chave: null }) as unknown as EmpreendimentoUnit)),
+      commonAreas: [],
+    };
+    const lado = ladoDaMassa(EMP, m, produto, null);
+    const doZero = lado.towers.flatMap((t) => t.units).filter((u) => ['002', '004'].includes(String(u.fields.name)));
+    expect(doZero).toHaveLength(2);
+    expect(doZero.every((u) => !/:unidade:/.test(u.sourceId))).toBe(true);
+    const envio = buildPlan(lado, alvo);
+    expect(envio.unitCreates).toEqual([]);
+    const adotadas = envio.adoptions.filter((x) => x.entity === 'unit').map((x) => alvo.units.find((u) => u.id === x.existingId)!.name).sort();
+    expect(adotadas).toEqual(['002', '004', '101', '102', '103', '104', '201', '202', '203', '204', '301', '302', '303', '304']);
+  });
 });
+

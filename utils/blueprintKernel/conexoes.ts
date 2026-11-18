@@ -36,6 +36,7 @@
 import type { BlueprintModel, DisciplinaDeRede, Level, ObjectId, Terminal, Trecho } from './model';
 import { DISCIPLINAS_DO_PONTO_HIDRAULICO, TIPOS_DE_CLIMATIZACAO, TIPOS_DE_EVAPORADORA } from './model';
 import type { Point } from './geom';
+import { descerPelaCota } from './grafoDeRede';
 
 /**
  * F2 (climatização, 10/10/2026, quant-1.26.0): no DUTO, a TRANSIÇÃO (redondo ↔
@@ -176,18 +177,12 @@ type Chave = string;
 
 /** A chave do nó, com a laje como encontro entre pavimentos. */
 function fazerChave(niveis: readonly Level[]) {
-  const ordenados = [...niveis].sort((a, b) => a.elevationMm - b.elevationMm);
-  const abaixoDe = new Map<ObjectId, Level | null>();
-  ordenados.forEach((l, i) => abaixoDe.set(l.id, i > 0 ? ordenados[i - 1] : null));
+  // Cota ≤ 0 com pavimento embaixo é o mesmo lugar visto de baixo (o esgoto sob o piso do andar corre no teto do térreo)
+  // — a MESMA regra da chave da rede (`descerPelaCota`, grafoDeRede.ts).
+  const descer = descerPelaCota(niveis);
   return (levelId: ObjectId, disciplina: DisciplinaDeRede, x: number, y: number, cota: number): { chave: Chave; levelId: ObjectId; cotaMm: number } => {
-    // Cota ≤ 0 com pavimento embaixo é o mesmo lugar visto de baixo (o esgoto
-    // sob o piso do andar corre no teto do térreo) — mesma regra de
-    // `blueprintGrafoDeRede.fazerChave`.
-    if (cota <= 0) {
-      const abaixo = abaixoDe.get(levelId);
-      if (abaixo) return { chave: `${disciplina}|${abaixo.id}|${x},${y}|${abaixo.defaultHeightMm + cota}`, levelId: abaixo.id, cotaMm: abaixo.defaultHeightMm + cota };
-    }
-    return { chave: `${disciplina}|${levelId}|${x},${y}|${cota}`, levelId, cotaMm: cota };
+    const d = descer(levelId, cota);
+    return { chave: `${disciplina}|${d.levelId}|${x},${y}|${d.cotaMm}`, levelId: d.levelId, cotaMm: d.cotaMm };
   };
 }
 

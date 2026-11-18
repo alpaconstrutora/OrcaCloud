@@ -9379,9 +9379,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         const proprios = andares.filter((a) => a.papel === 'PROPRIO' && a.unidades.length > 0).map((a) => `${a.nome.toLocaleLowerCase('pt-BR')} com ${a.unidades.length}`);
         const garagens = andares.filter((a) => a.papel === 'GARAGEM').length;
         const resumo = `${iguais} andar(es) × ${tipo.unidades.length} apartamentos${proprios.length ? ` + ${proprios.join(', ')}` : ''}${garagens ? ` · ${garagens} de garagem` : ''}`;
-        const abaixo = andares.filter((a) => a.papel !== 'GARAGEM' && a.numero < 0 && a.unidades.length > 0);
-        const motivo = abaixo.length ? `começa abaixo da rua (${abaixo.map((a) => a.nome).join(', ')}) — o Prédio automático ainda não monta esta torre; fica para a próxima entrega.` : null;
-        return [{ id: e.torreId, nome: e.nome, resumo, motivo }];
+        // PE6d (18/11/2026): a torre que começa abaixo da rua (a Torre B do Garden) se constrói — sem motivo para travar.
+        return [{ id: e.torreId, nome: e.nome, resumo, motivo: null }];
       }),
     [estruturasDaCasa],
   );

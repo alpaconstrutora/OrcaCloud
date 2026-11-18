@@ -40,9 +40,8 @@ import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../../utils/blueprintMassa';
 import { distribuirProduto, produtoDaColuna, type Produto } from '../../utils/blueprintProduto';
 import { financeiroDaMassa } from '../../utils/blueprintFinanceiroMassa';
 import { modeloDoPayloadPublicado } from './modeloPublicado';
-import { direcaoDaRua, nomeDaUnidadeDaMassa as nomeDaUnidade, ordinalDoTipo, pavimentoTipoMontado, type UnidadeDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
-import { unidadesDoPredio, type UnidadeDoPredio } from '../../utils/blueprintUnidadesDoPredio';
-import { ordinalDoPavimento } from '../../utils/blueprintZonaUrbanistica';
+import { direcaoDaRua, nomeDaUnidadeDaMassa as nomeDaUnidade, ordinalDoTipo, pavimentoTipoMontado, pavimentosDoPredioDoBloco, type UnidadeDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
+import { andarDoPavimento, prefixoPeloAndar, unidadesDoPredio, type UnidadeDoPredio } from '../../utils/blueprintUnidadesDoPredio';
 import { garagemLancada } from '../../utils/blueprintGaragemDaMassa';
 import { dividirPavimentoDoBloco } from '../../utils/blueprintPavimentoOrtogonal';
 import { CanonicalSide, CanonicalTower, CanonicalUnit } from './types';
@@ -80,7 +79,12 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
     if (!b || pb.unidades === 0) continue;
     liveTowerSourceIds.add(b.uid);
     const medida = massa.blocos.find((m) => m.blocoId === b.id)!;
-    const construidaAcima = medida.projecaoM2 * pb.pisos.length;
+    // PA10c: o bloco com o tipo montado e unidades desenhadas manda as unidades da planta.
+    const doPredio = unidadesDoBlocoLancado(model, b, () => (predio ??= unidadesDoPredio(model)));
+    // Revisão do PR #584 (achado 1): a torre que começa abaixo da rua (a Torre B do Garden, do −2) tem mais pavimentos de
+    // apartamento que os acima do solo — conta os pavimentos do prédio do bloco (o tipo, as cópias, o 0 desvinculado).
+    const pisosDaTorre = doPredio.length ? Math.max(pb.pisos.length, pavimentosDoPredioDoBloco(model, b).size) : pb.pisos.length;
+    const construidaAcima = medida.projecaoM2 * pisosDaTorre;
     const comumDoBloco = Math.max(0, construidaAcima - pb.privativaM2);
     // M6a: a divisão do pavimento tipo dá a POSIÇÃO e a ORIENTAÇÃO de cada unidade
     // (a de canto, a que olha para a rua, o sol da fachada). Vai como SEMENTE
@@ -95,10 +99,8 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
       const u = divisao.divisao.unidades.find((x) => x.posicao === posicao);
       return u && u.tipologiaId === tipologiaId ? u : null;
     };
-    // PA10c: o bloco com o tipo montado e unidades desenhadas manda as unidades da planta.
-    const doPredio = unidadesDoBlocoLancado(model, b, () => (predio ??= unidadesDoPredio(model)));
     if (doPredio.length) {
-      const torre = torreDoPredio(b, pb.pisos.length, construidaAcima, doPredio, produto, model, naPosicao, fin.custoM2Base);
+      const torre = torreDoPredio(b, pisosDaTorre, construidaAcima, doPredio, produto, model, naPosicao, fin.custoM2Base);
       for (const u of torre.units) liveUnitSourceIds.add(u.sourceId);
       towers.push(torre);
       const estimadas = pb.pisos.reduce((s, p) => s + p.unidades, 0);
@@ -183,8 +185,9 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
 function unidadesDoBlocoLancado(model: BlueprintModel, b: { uid: string }, todas: () => ReturnType<typeof unidadesDoPredio>): UnidadeDoPredio[] {
   const tipo = pavimentoTipoMontado(model, b);
   if (!tipo || !(model.unidades ?? []).some((u) => u.etiquetaUids.length)) return [];
-  const doBloco = new Set([tipo.id, ...model.levels.filter((l) => l.tipoDeId === tipo.id).map((l) => l.id)]);
-  return todas().unidades.filter((u) => (u.levelId ? doBloco.has(u.levelId) : u.medida.levelIds.includes(tipo.id)));
+  // PE6d: também as do andar 0 desvinculado (o 002/004 da Torre A, o TR05… da Torre B do Garden).
+  const doBloco = pavimentosDoPredioDoBloco(model, b);
+  return todas().unidades.filter((u) => (u.levelId ? doBloco.has(u.levelId) : u.medida.levelIds.some((id) => doBloco.has(id))));
 }
 
 /**
@@ -203,21 +206,28 @@ function torreDoPredio(
   custoM2Base: number | null,
 ): CanonicalTower {
   const porNome = new Map(produto.tipologias.map((t) => [t.nome, t]));
+  const tipoId = pavimentoTipoMontado(model, b)?.id ?? null;
   const linhas = unidades.map((u) => {
     const levelId = u.levelId ?? u.medida.levelIds[0] ?? null;
-    const ordinal = ordinalDoPavimento(model.levels, levelId);
-    const prefixo = ordinal - 1 <= 0 ? 'T' : String(ordinal - 1);
+    // PE6d: o andar abaixo do solo é −1, −2… (a Torre B do Garden: "SS205" no −2); acima, o ordinal − 1, como sempre.
+    const andar = andarDoPavimento(model.levels, levelId);
+    const ordinal = andar + 1;
+    const prefixo = andar < 0 ? prefixoPeloAndar(andar) : ordinal - 1 <= 0 ? 'T' : String(ordinal - 1);
     const resto = u.numero.startsWith(prefixo) ? u.numero.slice(prefixo.length) : '';
     const pos = /^\d{2,}$/.test(resto) ? Number(resto) : null;
-    return { u, ordinal, pos, t: u.tipologia ? (porNome.get(u.tipologia) ?? null) : null, privativa: r2(u.medida.areaPrivativaMm2 / 1e6) };
+    // Revisão do PR #584 (achado 2): a unidade do kernel num pavimento do prédio que não é o tipo (o 002/004 da Torre A e o
+    // TR05… da Torre B, no 0 desvinculado) tem uid aleatório — refazer o prédio mudaria a chave e duplicaria no
+    // Empreendimento. A chave dela é pelo andar e pelo NOME (o da ficha). Só elas: entram no envio desde a PE6d.
+    const doProprioAndar = !u.derivada && pos == null && !!levelId && levelId !== tipoId;
+    return { u, ordinal, pos, doProprioAndar, t: u.tipologia ? (porNome.get(u.tipologia) ?? null) : null, privativa: r2(u.medida.areaPrivativaMm2 / 1e6) };
   });
   const privativaTotal = linhas.reduce((s, l) => s + l.privativa, 0);
   const comumDoBloco = Math.max(0, construidaAcimaM2 - privativaTotal);
   const vgv = linhas.reduce((s, l) => s + l.privativa * (l.t?.precoM2 ?? 0), 0);
   const ordinais = [...new Set(linhas.map((l) => l.ordinal))];
   const porAndar = Math.max(0, ...ordinais.map((o) => linhas.filter((l) => l.ordinal === o).length));
-  const units: CanonicalUnit[] = linhas.map(({ u, ordinal, pos, t, privativa }) => {
-    const sourceId = pos != null ? `${b.uid}:${ordinal}:${pos}` : `${b.uid}:unidade:${u.chave}`;
+  const units: CanonicalUnit[] = linhas.map(({ u, ordinal, pos, doProprioAndar, t, privativa }) => {
+    const sourceId = pos != null ? `${b.uid}:${ordinal}:${pos}` : doProprioAndar ? `${b.uid}:${ordinal}:ficha:${u.numero.trim().toUpperCase()}` : `${b.uid}:unidade:${u.chave}`;
     const comum = privativaTotal > 0 ? r2((comumDoBloco * privativa) / privativaTotal) : 0;
     const lugar = pos != null && t ? naPosicao(pos, t.id) : null;
     return {

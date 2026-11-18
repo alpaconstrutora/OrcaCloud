@@ -81,6 +81,35 @@ export function numeroNoAndar(numeroDaOrigem: string, ordinalDaOrigem: number, o
 }
 
 /**
+ * O ANDAR do pavimento (PE6d, 18/11/2026): acima do solo, o ordinal − 1 (o térreo é o 0); abaixo, −1, −2… pelas cotas
+ * distintas abaixo do 0 — a Torre B do Garden tem apartamentos no −1 e no −2, que o ordinal (0 para tudo abaixo do solo)
+ * não separava.
+ */
+export function andarDoPavimento(levels: readonly { id: string; elevationMm: number }[], levelId: string | null): number {
+  const l = levelId ? levels.find((x) => x.id === levelId) : undefined;
+  if (!l) return 0;
+  if (l.elevationMm >= 0) return ordinalDoPavimento(levels, l.id) - 1;
+  return -new Set(levels.filter((x) => x.elevationMm < 0 && x.elevationMm >= l.elevationMm).map((x) => x.elevationMm)).size;
+}
+
+/** O prefixo do andar: "SS2" no −2, "T" (ou "TR") no térreo, "5" no 5º. */
+export const prefixoPeloAndar = (andar: number, terreo: 'T' | 'TR' = 'T') => (andar < 0 ? `SS${-andar}` : andar === 0 ? terreo : String(andar));
+
+/**
+ * O número da unidade da cópia pelo ANDAR (PE6d): "andar + posição", com a convenção dos subsolos de apartamento —
+ * "SS205" no −2 vira "SS105" no −1, "T05" no térreo (ou "TR05", quando a origem é do térreo e usa "TR"), "305" no 3º.
+ * `null` quando o número da origem não segue o padrão do andar dela.
+ */
+export function numeroPeloAndar(numeroDaOrigem: string, andarDaOrigem: number, andarDaCopia: number): string | null {
+  const estilo: 'T' | 'TR' = andarDaOrigem === 0 && numeroDaOrigem.startsWith('TR') ? 'TR' : 'T';
+  const p = prefixoPeloAndar(andarDaOrigem, estilo);
+  if (!numeroDaOrigem.startsWith(p)) return null;
+  const posicao = numeroDaOrigem.slice(p.length);
+  if (!/^\d{2,}$/.test(posicao)) return null;
+  return `${prefixoPeloAndar(andarDaCopia, estilo)}${posicao}`;
+}
+
+/**
  * A UNIDADE NO PAVIMENTO (0.106.0, prédio automático PA1): o quadro (ou ponto) de uma unidade num andar COPIADO guarda o
  * `unidadeId` da origem (a unidade do tipo — as dos andares copiados são derivadas, não existem no kernel). Aqui sai a
  * chave e o número DO ANDAR: "101" no tipo, "501" na cópia do 5º — leve (sem medir área), para a demanda e a entrada de
@@ -91,7 +120,7 @@ export function unidadeNoPavimento(model: BlueprintModel, unidadeId: ObjectId, l
   if (!u) return null;
   const nivel = levelId ? model.levels.find((l) => l.id === levelId) : undefined;
   if (!nivel || nivel.tipoDeId === undefined || !pavimentosDaUnidade(model, u).has(nivel.tipoDeId)) return { chave: u.uid, numero: u.numero };
-  const numero = numeroNoAndar(u.numero, ordinalDoPavimento(model.levels, nivel.tipoDeId), ordinalDoPavimento(model.levels, nivel.id)) ?? `${nivel.name} · ${u.numero}`;
+  const numero = numeroPeloAndar(u.numero, andarDoPavimento(model.levels, nivel.tipoDeId), andarDoPavimento(model.levels, nivel.id)) ?? `${nivel.name} · ${u.numero}`;
   return { chave: `${u.uid}:${nivel.uid}`, numero };
 }
 
@@ -152,7 +181,7 @@ export function unidadesDoPredio(model: BlueprintModel, hip: HipotesesDeNumeraca
       const faltando = etiquetaUids.filter((uid) => !etiquetaPorUid.has(uid)).length;
       if (faltando) avisos.push(`${copia.name}: ${faltando} ambiente(s) da unidade ${origem.numero} não têm cópia — o andar está fora de sincronia com o tipo.`);
       let numero = hip.regra === 'ANDAR_E_POSICAO'
-        ? numeroNoAndar(origem.numero, ordinalDoPavimento(model.levels, tipo.id), ordinalDoPavimento(model.levels, copia.id))
+        ? numeroPeloAndar(origem.numero, andarDoPavimento(model.levels, tipo.id), andarDoPavimento(model.levels, copia.id))
         : null;
       if (numero === null) {
         if (hip.regra === 'ANDAR_E_POSICAO') avisos.push(`Unidade ${origem.numero}: o número não segue "andar + posição" (como 101, T01); no ${copia.name} ela foi numerada pelo pavimento.`);

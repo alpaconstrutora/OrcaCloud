@@ -17,9 +17,8 @@ import { pointInPolygon, contornoDaVaga, pegadaEmPlanta } from '../blueprintKern
 import type { Command, ObjectId, Point } from '../blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from '../blueprintHidraulica';
 import { HIPOTESES_ESGOTO_PADRAO } from '../blueprintEsgotoAutomatico';
-import { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos } from '../blueprintCircuitosAutomaticos';
-import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO, preDimensionarCircuito } from '../blueprintEletricaDimensionamento';
-import { comandosDasSugestoesDeDR, sugerirDRs } from '../blueprintNbr5410';
+import { ligarBombasNoQuadroDaGaragem } from './bombas';
+import { ROTULO_DA_CAIXA_COLETORA_DE_ESGOTO } from './esgoto';
 import type { PendenciaDoPpci } from '../blueprintGeradorPpci';
 import type { ContextoDoPredio } from './terreoECobertura';
 import { NOME_DA_GARAGEM, type SubsolosLancados } from './garagem';
@@ -198,7 +197,10 @@ export function lancarDrenagemDaGaragem(ctx: ContextoDoPredio, subsolos: Subsolo
     // O recalque: sobe do poço por cada subsolo (empilhado: −150 → pé-direito − 150) e, no térreo, vai à caixa de inspeção.
     const J = -150;
     for (const L of [...niveis].reverse()) fila.push(trecho(L, d.poco, L === d.levelId ? COTA_DA_CHEGADA_NO_POCO_MM : J, d.poco, nivel(L).defaultHeightMm + J, DN_DO_RECALQUE_MM, ROTULO_DO_RECALQUE_DA_DRENAGEM));
-    const ci = (ctx.m.terminais ?? []).filter((t) => t.levelId === terreoLevelId && t.disciplina === 'ESGOTO' && t.tipoHidraulico === 'CAIXA_INSPECAO').sort((a, b) => dist(a.at, d.poco) - dist(b.at, d.poco))[0];
+    // PE6b: na torre abaixo da rua o pavimento técnico não tem caixa de inspeção — o recalque cai na caixa coletora do
+    // esgoto, que recalca até a caixa na cota da rua.
+    const destinos = (ctx.m.terminais ?? []).filter((t) => t.levelId === terreoLevelId && t.disciplina === 'ESGOTO');
+    const ci = [...destinos.filter((t) => t.tipoHidraulico === 'CAIXA_INSPECAO'), ...destinos.filter((t) => t.tipoHidraulico === 'POCO_DE_RECALQUE' && t.rotulo === ROTULO_DA_CAIXA_COLETORA_DE_ESGOTO)].sort((a, b) => dist(a.at, d.poco) - dist(b.at, d.poco))[0];
     if (ci) {
       // Em L: primeiro até a linha da caixa, depois ao longo dela — reto, cortaria por baixo da torre.
       const cotaNaCaixa = (ci.cotaMm ?? -600) + 300;
@@ -212,20 +214,9 @@ export function lancarDrenagemDaGaragem(ctx: ContextoDoPredio, subsolos: Subsolo
 
   // ── As bombas no quadro da garagem do subsolo mais fundo (o circuito delas, o DR e a seção pela queda).
   if (resultado.bombas) {
-    const qdg = ctx.m.quadros.find((q) => q.levelId === d.levelId && /^QDG/.test(q.nome));
-    if (!qdg) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Garagem: sem a elétrica, as bombas de drenagem ficam sem ponto de força — lance-as no quadro de serviço.' });
-    else {
-      const motores: Command[] = [-450, 450].map((dx, i): Command => ({ type: 'AddTerminal', levelId: d.levelId, disciplina: 'ELETRICA', tipo: 'Bomba', at: inteiro({ x: d.poco.x + dx, y: d.poco.y }), cotaMm: 300, tipoEletrico: 'MOTOR_BOMBA', potenciaW: POTENCIA_DA_BOMBA_DE_DRENAGEM_W, rotulo: i === 0 ? 'Bomba de drenagem' : 'Bomba de drenagem (reserva)', sugerida: true }));
-      resultado.comandos += ctx.aplicar(motores);
-      const antes = new Set(ctx.m.circuitos.map((c) => c.id));
-      const plano = planejarCircuitos(ctx.m, d.levelId, qdg.id, HIPOTESES_CIRCUITOS_PADRAO, HIPOTESES_ELETRICAS_PADRAO);
-      resultado.comandos += ctx.aplicar(plano.comandos);
-      const novos = ctx.m.circuitos.filter((c) => !antes.has(c.id));
-      resultado.comandos += ctx.aplicar([
-        ...novos.map((c) => ({ c, s: preDimensionarCircuito(ctx.m, c, HIPOTESES_ELETRICAS_PADRAO).secaoParaQuedaMm2 })).filter((x) => x.s != null).map((x): Command => ({ type: 'SetCircuitoProps', circuitoId: x.c.id, secaoMm2: x.s! })),
-      ]);
-      resultado.comandos += ctx.aplicar(comandosDasSugestoesDeDR(sugerirDRs(ctx.m, qdg.id, HIPOTESES_ELETRICAS_PADRAO)));
-    }
+    const n = ligarBombasNoQuadroDaGaragem(ctx, d.levelId, d.poco, POTENCIA_DA_BOMBA_DE_DRENAGEM_W, ['Bomba de drenagem', 'Bomba de drenagem (reserva)']);
+    if (n === null) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Garagem: sem a elétrica, as bombas de drenagem ficam sem ponto de força — lance-as no quadro de serviço.' });
+    else resultado.comandos += n;
   }
   return resultado;
 }

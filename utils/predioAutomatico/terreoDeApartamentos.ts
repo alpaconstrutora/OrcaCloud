@@ -49,6 +49,8 @@ export interface TerreoDeApartamentos {
   /** PE4b: os números das unidades do kernel criadas no andar 0 (os da ficha) e os medidores acrescentados para elas. */
   unidades: string[];
   medidores: number;
+  /** PE6c: o andar 0 já era cópia do tipo (contado nos andares do tipo) — o resumo não soma os apartamentos dele de novo. */
+  jaEraCopia: boolean;
 }
 
 /**
@@ -85,15 +87,23 @@ export function concluirTerreoDeApartamentos(
   zeroLevelId: ObjectId,
   tipo: AndarDoEmpreendimento,
   andarZero: AndarDoEmpreendimento,
+  /**
+   * PE6c (decisão de 18/11 "Desvincular o 0"): o andar 0 JÁ É cópia do tipo (a torre que começa abaixo da rua, Torre B do
+   * Garden) — não há o que ligar: só desvincular. Os medidores dele já existem (a elétrica o mediu como cópia) e são
+   * religados às unidades novas; sem fatia livre, o hall é o corredor junto do núcleo voltado para a rua.
+   */
+  opcoes: { jaECopia?: boolean } = {},
 ): TerreoDeApartamentos {
   const avisos: string[] = [];
   let n = 0;
   // 1. A cópia do tipo, desvinculada: o andar 0 fica com tudo o que o tipo tem.
   // Os pontos que as etapas de incêndio puseram no andar 0 (extintor, placa, detector, hidrante…) saem: a cópia traz os do
   // tipo, um por andar — e o kernel não liga ao tipo um andar com instalação própria.
-  const proprios = (ctx.m.terminais ?? []).filter((t) => t.levelId === zeroLevelId);
-  if (proprios.length) n += ctx.aplicar(proprios.map((t): Command => ({ type: 'DeleteTerminal', terminalId: t.id })));
-  n += ctx.aplicar([{ type: 'SetLevelProps', levelId: zeroLevelId, tipoDeId: base.tipoLevelId } as Command]);
+  if (!opcoes.jaECopia) {
+    const proprios = (ctx.m.terminais ?? []).filter((t) => t.levelId === zeroLevelId);
+    if (proprios.length) n += ctx.aplicar(proprios.map((t): Command => ({ type: 'DeleteTerminal', terminalId: t.id })));
+    n += ctx.aplicar([{ type: 'SetLevelProps', levelId: zeroLevelId, tipoDeId: base.tipoLevelId } as Command]);
+  }
   n += ctx.aplicar([{ type: 'SetLevelProps', levelId: zeroLevelId, tipoDeId: null } as Command]);
 
   // 2. As fatias do tipo e o apartamento da ficha do andar 0 que cada uma recebe.
@@ -169,7 +179,14 @@ export function concluirTerreoDeApartamentos(
     if (e) n += ctx.aplicar([{ type: 'NameSpace', spaceId: e.id, name: i === 0 ? SALA_HALL : SALA_COMUM }]);
   });
   n += ctx.aplicar(nomes);
-  const hall = ordem[0] ? ctx.m.spaces.find((x) => x.levelId === zeroLevelId && pointInPolygon(x.ring, centro(ordem[0].anel))) : null;
+  // Sem fatia livre (o 0 com os mesmos apartamentos do tipo): o hall é o espaço comum fora dos apartamentos mais voltado
+  // para a rua — o corredor junto do núcleo.
+  const projRua = (pts: readonly Point[]) => (rua ? Math.max(...pts.map((p) => p.x * rua.x + p.y * rua.y)) : 0);
+  const corredor = ordem[0]
+    ? null
+    : [...ctx.m.spaces.filter((x) => x.levelId === zeroLevelId && !fatias.some((f) => dentro(f.anel, centro(x.ring))) && !/escada|elevador|shaft/i.test(x.name ?? ''))].sort((a, b) => projRua(b.ring) - projRua(a.ring))[0] ?? null;
+  if (corredor) n += ctx.aplicar([{ type: 'NameSpace', spaceId: corredor.id, name: SALA_HALL }]);
+  const hall = ordem[0] ? ctx.m.spaces.find((x) => x.levelId === zeroLevelId && pointInPolygon(x.ring, centro(ordem[0].anel))) : corredor ? ctx.m.spaces.find((x) => x.id === corredor.id) ?? null : null;
   if (hall) {
     // As janelas do apartamento tirado na fachada do hall saem — a porta de entrada vai nesse trecho.
     const janelas = ctx.m.openings.filter((o) => {
@@ -179,7 +196,7 @@ export function concluirTerreoDeApartamentos(
       const L = dist(w.a, w.b) || 1;
       const s = o.offsetMm + o.widthMm / 2;
       const p = { x: w.a.x + ((w.b.x - w.a.x) * s) / L, y: w.a.y + ((w.b.y - w.a.y) * s) / L };
-      return dentro(ordem[0].anel, p) || pointInPolygon(hall.ring, p as Point) || hall.ring.some((q, i) => distanciaAoSegmento(p, q, hall.ring[(i + 1) % hall.ring.length]) < w.thicknessMm);
+      return (ordem[0] ? dentro(ordem[0].anel, p) : false) || pointInPolygon(hall.ring, p as Point) || hall.ring.some((q, i) => distanciaAoSegmento(p, q, hall.ring[(i + 1) % hall.ring.length]) < w.thicknessMm);
     });
     if (janelas.length) n += ctx.aplicar(janelas.map((o): Command => ({ type: 'DeleteOpening', openingId: o.id })));
     const r = abrirPortaDeEntrada(ctx, base, hip, zeroLevelId, hall.ring);
@@ -192,12 +209,13 @@ export function concluirTerreoDeApartamentos(
     const doTipo = ctx.m.stairs.filter((e) => e.levelId === base.tipoLevelId);
     n += ctx.aplicar(doTipo.map((e): Command => ({ type: 'AddEscada', levelId: zeroLevelId, pontos: e.pontos.map((p) => ({ ...p })), tipo: e.tipo, larguraMm: e.larguraMm, alvoEspelhoMm: e.alvoEspelhoMm, rotulo: e.rotulo ?? null })));
   }
-  if (!tiradas.length) avisos.push('Andar 0: a ficha tem nele os mesmos apartamentos do tipo — não sobra espaço para o hall de entrada; desenhe o acesso.');
+  if (!tiradas.length && !corredor) avisos.push('Andar 0: a ficha tem nele os mesmos apartamentos do tipo — não sobra espaço para o hall de entrada; desenhe o acesso.');
 
   // 5. (PE4b) Os apartamentos que ficaram viram UNIDADES do kernel, com os números da ficha (002, 004): as etiquetas do
   // andar 0 dentro da fatia; o QD e o hidrômetro copiados do tipo passam a ser deles (apontavam o 102/104 do tipo, que
   // contariam duas vezes); e um medidor para cada um na medição, ao lado dos outros.
   const novas: { id: ObjectId; numero: string }[] = [];
+  const medidos = new Set<ObjectId>();
   for (const f of fatias) {
     const daFicha = casadas.get(f.numero);
     if (!daFicha) continue;
@@ -212,7 +230,12 @@ export function concluirTerreoDeApartamentos(
     const nova = (ctx.m.unidades ?? []).find((u) => u.numero === numero)!;
     novas.push({ id: nova.id, numero });
     if (!doTipo) continue;
+    // O medidor que a elétrica pôs para o andar 0 quando ele ainda era cópia (a unidade do tipo no pavimento 0) passa a
+    // medir a unidade nova.
+    const medidorDaCopia = (ctx.m.terminais ?? []).filter((t) => t.tipoEletrico === 'MEDIDOR' && t.unidadeId === doTipo.id && t.unidadeLevelId === zeroLevelId);
+    if (medidorDaCopia.length) medidos.add(nova.id);
     const religar: Command[] = [
+      ...medidorDaCopia.map((t): Command => ({ type: 'SetTerminalProps', terminalId: t.id, unidadeId: nova.id, unidadeLevelId: null })),
       ...(ctx.m.quadros ?? []).filter((q) => q.levelId === zeroLevelId && q.unidadeId === doTipo.id).map((q): Command => ({ type: 'SetQuadroProps', quadroId: q.id, unidadeId: nova.id })),
       ...(ctx.m.terminais ?? [])
         .filter((t) => t.levelId === zeroLevelId && t.unidadeId === doTipo.id)
@@ -222,18 +245,19 @@ export function concluirTerreoDeApartamentos(
   }
   const medidores = (ctx.m.terminais ?? []).filter((t) => t.tipoEletrico === 'MEDIDOR');
   let medidoresNovos = 0;
-  if (novas.length && medidores.length) {
+  const semMedidor = novas.filter((u) => !medidos.has(u.id));
+  if (semMedidor.length && medidores.length) {
     // Uma linha nova abaixo das outras (os medidores crescem para −y a partir do condomínio).
     const x0 = Math.min(...medidores.map((t) => t.at.x));
     const y0 = Math.min(...medidores.map((t) => t.at.y)) - 300;
     const ref = medidores[0];
     n += ctx.aplicar(
-      novas.map((u, i): Command => ({
+      semMedidor.map((u, i): Command => ({
         type: 'AddTerminal', levelId: ref.levelId, disciplina: 'ELETRICA', tipo: 'Medidor', at: { x: x0 + 300 * i, y: y0 }, cotaMm: ref.cotaMm, tipoEletrico: 'MEDIDOR',
         ...(ref.quadroId ? { quadroId: ref.quadroId } : {}), unidadeId: u.id, sugerida: true,
       }) as Command),
     );
-    medidoresNovos = novas.length;
-  } else if (novas.length) avisos.push(`Andar 0: sem a medição no modelo — os medidores de ${novas.map((u) => u.numero).join(', ')} ficam para o projetista.`);
-  return { comandos: n, mantidos, tirados: tiradas.map((f) => f.numero), acesso, avisos, unidades: novas.map((u) => u.numero), medidores: medidoresNovos };
+    medidoresNovos = semMedidor.length;
+  } else if (semMedidor.length) avisos.push(`Andar 0: sem a medição no modelo — os medidores de ${semMedidor.map((u) => u.numero).join(', ')} ficam para o projetista.`);
+  return { comandos: n, mantidos, tirados: tiradas.map((f) => f.numero), acesso, avisos, unidades: novas.map((u) => u.numero), medidores: medidoresNovos, jaEraCopia: !!opcoes.jaECopia };
 }

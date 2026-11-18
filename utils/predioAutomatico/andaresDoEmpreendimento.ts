@@ -243,12 +243,14 @@ export function dividirPeloEmpreendimento(
   tipo: AndarDoEmpreendimento,
   produtoBase: Produto,
   rotacaoNorteDeg: number | null,
+  /** PE6a: a torre que começa abaixo da rua tem o tipo no 1º piso do bloco (o −2), não no 2º acima do solo. */
+  opcoes: { ordinalDoTipo?: number } = {},
 ): { ok: true; divisao: DivisaoDoPavimento; produto: Produto; unidadeDaFicha: Map<number, UnidadeDoPiso>; avisos: string[] } | { ok: false; motivo: string } {
   if (tipo.unidades.length === 0) return { ok: false, motivo: 'O andar tipo do Empreendimento não tem apartamento.' };
   const h = produtoBase.hipoteses;
   const elevadores = elevadoresSugeridos(bloco.pavimentos, h);
   const nucleoM2 = bloco.pavimentos <= 1 ? 0 : h.nucleoBaseM2 + elevadores * h.elevadorM2;
-  const ord = ordinalDoTipo(model, bloco);
+  const ord = opcoes.ordinalDoTipo ?? ordinalDoTipo(model, bloco);
   const rua = direcaoDaRua(model);
   const dividir = (ordem: UnidadeDoPiso[]) => {
     const { produto, porTipologia } = produtoDoAndarTipo({ ...tipo, unidades: ordem }, produtoBase);

@@ -22,7 +22,7 @@
  * do bloco, o envio ao Empreendimento e a montagem leem o mesmo objeto. `dividirPavimentoDoBloco` e
  * `montarPavimentoTipoDoBloco` escolhem o caminho pelo contorno.
  */
-import { applyBatch, pointInPolygon, signedArea, uidDeterministico, type BlueprintModel, type Bloco, type Command, type ObjectId, type Point, type Wall } from './blueprintKernel';
+import { applyBatch, pointInPolygon, signedArea, type BlueprintModel, type Bloco, type Command, type ObjectId, type Point, type Wall } from './blueprintKernel';
 import { azimuteDaDirecao, pontoCardeal } from './blueprintGrafoEspacial';
 import { FICHA_DO_ELEVADOR } from './blueprintNucleoVertical';
 import {
@@ -33,6 +33,8 @@ import {
   nomeDaUnidadeDaMassa,
   pavimentoTipoMontado,
   pisosAcimaDoSolo,
+  type OpcoesDaMontagem,
+  uidDaCopiaDoTipo,
   quadroDoBloco,
   uidDoPavimentoTipo,
   type DivisaoDoPavimento,
@@ -760,7 +762,7 @@ function paredeNoPonto(paredes: readonly Wall[], p: Point): { w: Wall; off: numb
   return null;
 }
 
-export function montarPavimentoTipoOrtogonal(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hipParcial: Partial<HipotesesDoPavimentoTipo> = {}): PavimentoTipoMontado {
+export function montarPavimentoTipoOrtogonal(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hipParcial: Partial<HipotesesDoPavimentoTipo> = {}, opcoes: OpcoesDaMontagem = {}): PavimentoTipoMontado {
   const hip = { ...HIPOTESES_DO_PAVIMENTO_TIPO_PADRAO, ...hipParcial };
   const plano = d.ortogonal;
   if (!plano) throw new Error('Divisão sem o plano ortogonal.');
@@ -769,7 +771,7 @@ export function montarPavimentoTipoOrtogonal(model: BlueprintModel, b: Bloco, d:
   if (ja) throw new Error(`O pavimento tipo de "${b.nome}" já está montado ("${ja.name}"). Para refazer, remova esse pavimento (as cópias se desvinculam) e monte de novo.`);
   const q = d.quadro;
   const P = plano.poligono;
-  const pisos = pisosAcimaDoSolo(model, b);
+  const pisos = opcoes.pisos ?? pisosAcimaDoSolo(model, b);
   const iTipo = Math.min(pisos.length, d.ordinalDoTipo) - 1;
   const comandos: Command[] = [];
   let m = model;
@@ -981,7 +983,7 @@ export function montarPavimentoTipoOrtogonal(model: BlueprintModel, b: Bloco, d:
 
   // 7. Os demais pavimentos como cópias vivas do tipo.
   const copias: Command[] = [];
-  for (let i = iTipo + 1; i < pisos.length; i++) copias.push({ type: 'AddLevel', name: `${b.nome} · ${i + 1}º pav`.slice(0, 60), elevationMm: pisos[i], defaultHeightMm: b.peDireitoMm, tipoDeId: tipo, uid: uidDeterministico(`massa:pavimento-tipo:${b.uid}:copia:${i + 1}`) });
+  for (let i = iTipo + 1; i < pisos.length; i++) copias.push({ type: 'AddLevel', name: `${b.nome} · ${i + 1}º pav`.slice(0, 60), elevationMm: pisos[i], defaultHeightMm: b.peDireitoMm, tipoDeId: tipo, uid: uidDaCopiaDoTipo(b, i + 1) });
   aplicar(copias);
   if (iTipo > 0) avisos.push(`O ${iTipo === 1 ? '1º pavimento (térreo)' : 'pavimento abaixo do tipo'} ficou para o projetista: portaria, lazer, pilotis.`);
 
@@ -1003,6 +1005,6 @@ export function dividirPavimentoDoBloco(e: EntradaDaDivisao, hip: Partial<Hipote
 }
 
 /** A montagem pela divisão que veio. */
-export function montarPavimentoTipoDoBloco(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hip: Partial<HipotesesDoPavimentoTipo> = {}): PavimentoTipoMontado {
-  return d.ortogonal ? montarPavimentoTipoOrtogonal(model, b, d, hip) : montarPavimentoTipo(model, b, d, hip);
+export function montarPavimentoTipoDoBloco(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hip: Partial<HipotesesDoPavimentoTipo> = {}, opcoes: OpcoesDaMontagem = {}): PavimentoTipoMontado {
+  return d.ortogonal ? montarPavimentoTipoOrtogonal(model, b, d, hip, opcoes) : montarPavimentoTipo(model, b, d, hip, opcoes);
 }

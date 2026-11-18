@@ -220,7 +220,11 @@ export function lancarSubsolos(
   g: Bloco,
   terreoLevelId: ObjectId,
   hip: HipotesesDoPredio,
-  opcoes: { salaTecnicaDoCondominio?: boolean } = {},
+  /**
+   * `terreoSoLeitura` (PE6a): o pavimento de cima é o TIPO (a torre que começa abaixo da rua) — a garagem lê dele o hall,
+   * as escadas e os pilares, mas não escreve nele (a caixa e a porta da escada de emergência iriam a todo andar).
+   */
+  opcoes: { salaTecnicaDoCondominio?: boolean; terreoSoLeitura?: boolean } = {},
 ): SubsolosLancados {
   const pendencias: PendenciaDoPpci[] = [];
   if (garagemLancada(ctx.m, g).length) throw new Error(`as vagas de "${g.nome}" já estão lançadas — remova esses pavimentos para o prédio lançar o subsolo`);
@@ -500,7 +504,7 @@ export function lancarSubsolos(
       // As paredes da caixa: as três que não são a contenção em cada subsolo; as quatro no térreo (no jardim não há contenção).
       const lados = (levelId: ObjectId, comContencao: boolean): Command[] =>
         [...(comContencao ? [[a, b]] : []), [b, c], [c, d], [d, a]].map(([x, y]): Command => ({ type: 'AddWall', levelId, a: x, b: y, thicknessMm: 150, heightMm: ctx.m.levels.find((l) => l.id === levelId)?.defaultHeightMm ?? g.peDireitoMm }));
-      comandos += ctx.aplicar([...pisos.flatMap((p) => lados(p.levelId, false)), ...lados(terreoLevelId, true)]);
+      comandos += ctx.aplicar([...pisos.flatMap((p) => lados(p.levelId, false)), ...(opcoes.terreoSoLeitura ? [] : lados(terreoLevelId, true))]);
       // As portas, na parede de dentro (c → d): no patamar de baixo em cada subsolo; no de cima, no térreo (para o jardim).
       const porta = (levelId: ObjectId, uMeio: number): Command | null => {
         const w = ctx.m.walls.find((x) => x.levelId === levelId && dist(x.a, c) < 1 && dist(x.b, d) < 1);
@@ -512,7 +516,7 @@ export function lancarSubsolos(
         const x = porta(p.levelId, u0 + PATAMAR_DA_ESCADA_MM / 2);
         if (x) lote.push(x);
       }
-      const x = porta(terreoLevelId, u0 + comp - PATAMAR_DA_ESCADA_MM / 2);
+      const x = opcoes.terreoSoLeitura ? null : porta(terreoLevelId, u0 + comp - PATAMAR_DA_ESCADA_MM / 2);
       if (x) lote.push(x);
       for (const p of pisos)
         lote.push({
@@ -593,8 +597,8 @@ export function lancarSubsolos(
     if (melhor) {
       const { qb, u0 } = melhor;
       salaTecnica = { levelId: doTopo, anel: retangulo(qb, u0, u0 + C, 0, F), medicao: paraMundo(qb, { u: u0 + C * 0.2, v: F * 0.25 }), bombas: paraMundo(qb, { u: u0 + C * 0.65, v: F / 2 }) };
-      pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: o térreo é de apartamentos — o centro de medição, a casa de bombas e o reservatório inferior ficam na sala técnica do 1º subsolo (${(C / 1000).toLocaleString('pt-BR')} × ${(F / 1000).toLocaleString('pt-BR')} m, junto ao contorno, perto do hall); feche-a com paredes e porta e confira o acesso da concessionária à medição.` });
-    } else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Garagem: a sala técnica do condomínio (medição, bombas e reservatório inferior) não coube junto ao contorno do 1º subsolo — reserve-a à mão.' });
+      pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: o térreo é de apartamentos — o centro de medição, a casa de bombas e o reservatório inferior ficam na sala técnica do ${pisos[0].nome.split('·').pop()!.trim()} (${(C / 1000).toLocaleString('pt-BR')} × ${(F / 1000).toLocaleString('pt-BR')} m, junto ao contorno, perto do hall); feche-a com paredes e porta e confira o acesso da concessionária à medição.` });
+    } else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Garagem: a sala técnica do condomínio (medição, bombas e reservatório inferior) não coube junto ao contorno do ${pisos[0].nome.split('·').pop()!.trim()} — reserve-a à mão.` });
   }
   const pesDasRampas = rampas.map((r) => ({ levelId: r.doLevelId, at: r.cmd.pontos[0], larguraMm: r.u1 - r.u0 }));
 
@@ -682,7 +686,8 @@ export function lancarSubsolos(
       garagens.set(p.levelId, gar.id);
     }
   }
-  for (const x of aneisDasSaidas) {
+  if (opcoes.terreoSoLeitura && aneisDasSaidas.length) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Garagem: a torre começa logo acima da garagem — ${aneisDasSaidas.length === 1 ? 'a escada de emergência da garagem chega' : `as ${aneisDasSaidas.length} escadas de emergência da garagem chegam`} ao teto do subsolo mais alto, sob os apartamentos; a saída até a rua fica para o projetista.` });
+  for (const x of opcoes.terreoSoLeitura ? [] : aneisDasSaidas) {
     const e2 = ctx.m.spaces.find((s) => s.levelId === terreoLevelId && noAmbiente(s, inteiro(centro(x))));
     if (e2) nomes.push({ type: 'NameSpace', spaceId: e2.id, name: NOME_DA_ESCADA_DE_EMERGENCIA });
   }

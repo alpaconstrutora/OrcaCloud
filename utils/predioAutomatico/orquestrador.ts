@@ -13,7 +13,7 @@ import { localDoElemento } from '../blueprintLocalDaPendencia';
 import type { LocalDaPendencia } from '../blueprintGeradorPpci';
 import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
-import { direcaoDaRua, ordinalDoTipo, pavimentoTipoMontado, pisosAcimaDoSolo } from '../blueprintPavimentoTipoDaMassa';
+import { direcaoDaRua, ordinalDoTipo, pavimentoTipoMontado, pisosAcimaDoSolo, pisosDoBloco } from '../blueprintPavimentoTipoDaMassa';
 import { dividirPavimentoDoBloco, montarPavimentoTipoDoBloco } from '../blueprintPavimentoOrtogonal';
 import { dividirPeloEmpreendimento, type AndarDoEmpreendimento } from './andaresDoEmpreendimento';
 import { concluirTerreoDeApartamentos } from './terreoDeApartamentos';
@@ -69,6 +69,11 @@ export interface EntradaDoPredio {
 }
 
 /** Por que não dá para gerar o prédio deste bloco; `null` = dá. Os mesmos motivos do painel do bloco. */
+/** Os andares de apartamento da ficha abaixo da rua (a Torre B do Garden: o −2 e o −1); vazio = a torre começa no 0. */
+export function andaresAbaixoDaRua(entrada: EntradaDoPredio): AndarDoEmpreendimento[] {
+  return (entrada.doEmpreendimento?.andares ?? []).filter((a) => a.papel !== 'GARAGEM' && a.numero < 0 && a.unidades.length > 0);
+}
+
 export function motivoParaNaoGerarPredio(model: BlueprintModel, entrada: EntradaDoPredio): string | null {
   const b = (model.blocos ?? []).find((x) => x.id === entrada.blocoId);
   if (!b) return 'O bloco não está mais no desenho.';
@@ -77,10 +82,8 @@ export function motivoParaNaoGerarPredio(model: BlueprintModel, entrada: Entrada
   if (ja) return `Pavimento tipo já montado: "${ja.name}". Para refazer, remova esse pavimento (as cópias se desvinculam) e gere de novo.`;
   if (entrada.doEmpreendimento) {
     if (!entrada.doEmpreendimento.andares.some((a) => a.papel === 'TIPO' && a.unidades.length > 0)) return 'A torre do Empreendimento não tem andar com apartamentos (Torres & Unidades).';
-    // PE3 (18/11/2026): a torre que começa abaixo da rua (a Torre B do Garden, do −2) ainda não se monta — o motor faz o
-    // térreo de condomínio no 0 e os andares acima dele; gerava a torre errada (sem o −2 e o −1, a garagem descolada).
-    const abaixo = entrada.doEmpreendimento.andares.filter((a) => a.papel !== 'GARAGEM' && a.numero < 0 && a.unidades.length > 0);
-    if (abaixo.length) return `A torre tem apartamentos abaixo da rua (${abaixo.map((a) => a.nome).join(', ')}) — o Prédio automático ainda não monta torre que começa abaixo do térreo; ela fica para a próxima entrega.`;
+    // A torre que começa abaixo da rua (a Torre B do Garden, do −2) se monta desde a PE6 (18/11/2026): o tipo no −2, o
+    // técnico na garagem, o esgoto por bombas e o 0 desvinculado com a porta para a rua.
   } else if (!entrada.doBloco || entrada.doBloco.unidades === 0) return 'Defina o produto (Terreno › Massa › Produto): sem tipologias não há unidade para dividir o pavimento.';
   return null;
 }
@@ -88,6 +91,9 @@ export function motivoParaNaoGerarPredio(model: BlueprintModel, entrada: Entrada
 export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredio, hipParcial: Partial<HipotesesDoPredio> = {}, opcoes: OpcoesDoPlanoDoPredio = {}): PlanoDoPredio {
   const motivo = motivoParaNaoGerarPredio(original, entrada);
   if (motivo) throw new Error(motivo);
+  // PE6a (decisão de 18/11 "A torre começa no −2"): a torre com apartamento abaixo da rua tem TODOS os pisos do bloco — o
+  // tipo no 1º (o −2), as cópias até o topo (o 0 também); sem térreo de condomínio; o técnico na garagem mais alta.
+  const abaixoDaRua = andaresAbaixoDaRua(entrada).length > 0;
   const hip: HipotesesDoPredio = { ...HIPOTESES_DO_PREDIO_PADRAO, ...hipParcial };
   const b = (original.blocos ?? []).find((x) => x.id === entrada.blocoId)!;
 
@@ -120,7 +126,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   let dv: DivisaoDoPavimento;
   const tipoDaFicha = entrada.doEmpreendimento?.andares.find((a) => a.papel === 'TIPO');
   if (tipoDaFicha) {
-    const d = dividirPeloEmpreendimento(original, b, tipoDaFicha, entrada.produto, entrada.rotacaoNorteDeg);
+    const d = dividirPeloEmpreendimento(original, b, tipoDaFicha, entrada.produto, entrada.rotacaoNorteDeg, abaixoDaRua ? { ordinalDoTipo: 1 } : {});
     if (!d.ok) throw new Error(d.motivo);
     dv = d.divisao;
     produtoDoPredio = d.produto;
@@ -134,7 +140,8 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     if (!r.ok) throw new Error(r.motivo);
     dv = r.divisao;
   }
-  const mont = montarPavimentoTipoDoBloco(original, b, dv);
+  const pisosDaTorre = abaixoDaRua ? pisosDoBloco(original, b) : null;
+  const mont = montarPavimentoTipoDoBloco(original, b, dv, {}, pisosDaTorre ? { pisos: pisosDaTorre } : {});
   decisoes.push(...dv.decisoes);
   etapa('PAVIMENTO_TIPO', 'LANCOU', aplicar(mont.comandos), `${dv.unidades.length} unidade(s) por andar · ${mont.copias} cópia(s) do tipo${dv.elevadores ? ` · núcleo com ${dv.elevadores} elevador(es)` : ''}`);
   // Com o térreo do prédio, o aviso de que o 1º pavimento "ficou para o projetista" deixa de valer.
@@ -158,7 +165,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     },
     aplicar,
   };
-  const pisos = pisosAcimaDoSolo(original, b);
+  const pisos = pisosDaTorre ?? pisosAcimaDoSolo(original, b);
   const copias = m.levels.filter((l) => l.tipoDeId === mont.tipoLevelId).sort((x, y) => x.elevationMm - y.elevationMm);
   const base: BaseDoPredio = { bloco: b, divisao: dv, tipoLevelId: mont.tipoLevelId, ultimoLevelId: copias.length ? copias[copias.length - 1].id : mont.tipoLevelId, pisos, rua: direcaoDaRua(original) };
   const avisosDoPredio: string[] = [];
@@ -166,6 +173,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   // ── Térreo: só quando o tipo é o 2º pavimento (há um piso abaixo dele). Roda antes das plantas — leva o esqueleto.
   let terreo: ReturnType<typeof montarTerreo> | null = null;
   if (!hip.terreo) etapa('TERREO', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses: o térreo fica para o projetista.');
+  else if (abaixoDaRua) etapa('TERREO', 'NAO_EXIGIDA', 0, 'A torre começa abaixo da rua: o andar 0 é cópia do tipo; o técnico do condomínio vai para a garagem mais alta.');
   else if (dv.ordinalDoTipo < 2 || pisos.length < 2) etapa('TERREO', 'NAO_EXIGIDA', 0, 'O bloco tem um pavimento só: o tipo é o térreo.');
   else if (terreoDeApartamentosPedido) {
     terreo = montarTerreo(ctx, base, hip, { soEsqueleto: true });
@@ -199,18 +207,24 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   const blocoDoSubsolo = subsoloDaTorre(original, b);
   if (!hip.garagem) etapa('SUBSOLOS', 'NAO_EXIGIDA', 0, 'Desligada nas hipóteses.');
   else if (!blocoDoSubsolo) etapa('SUBSOLOS', 'NAO_EXIGIDA', 0, 'O estudo não tem bloco de garagem abaixo do solo sob a torre.');
-  else if (!terreo) {
+  else if (!terreo && !abaixoDaRua) {
     pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Garagem: sem o térreo do prédio, o subsolo "${blocoDoSubsolo.nome}" fica para o projetista (lance as vagas pelo painel do bloco).` });
     etapa('SUBSOLOS', 'NAO_EXIGIDA', 0, 'Sem o térreo, o subsolo fica para o projetista.');
   } else {
     try {
-      subsolos = lancarSubsolos(ctx, base, blocoDoSubsolo, terreo.levelId, hip, { salaTecnicaDoCondominio: terreoDeApartamentosPedido });
+      subsolos = lancarSubsolos(ctx, base, blocoDoSubsolo, terreo?.levelId ?? mont.tipoLevelId, hip, { salaTecnicaDoCondominio: terreoDeApartamentosPedido || abaixoDaRua, terreoSoLeitura: abaixoDaRua });
       pendencias.push(...subsolos.pendencias);
-      if (terreoDeApartamentosPedido && subsolos.salaTecnica) {
+      if (abaixoDaRua && subsolos.salaTecnica) {
+        const st = subsolos.salaTecnica;
+        terreo = { levelId: st.levelId, comandos: 0, acesso: false, avisos: [], salas: [{ nome: SALA_MEDICAO, numeroDaFatia: '', ponto: st.medicao }, { nome: SALA_BOMBAS, numeroDaFatia: '', ponto: st.bombas }] };
+        pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Andares abaixo da rua (${andaresAbaixoDaRua(entrada).map((a) => a.nome).join(', ')}): a contenção e a impermeabilização das paredes enterradas, a ventilação e a luz dos apartamentos deles ficam para o projetista.` });
+      } else if (abaixoDaRua) {
+        pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Garagem: sem lugar para a sala técnica do condomínio no subsolo mais alto, a medição, a casa de bombas e o reservatório inferior ficam para o projetista.' });
+      } else if (terreoDeApartamentosPedido && subsolos.salaTecnica && terreo) {
         const st = subsolos.salaTecnica;
         andarZeroLevelId = terreo.levelId;
         terreo = { levelId: st.levelId, comandos: 0, acesso: false, avisos: [], salas: [{ nome: SALA_MEDICAO, numeroDaFatia: '', ponto: st.medicao }, { nome: SALA_BOMBAS, numeroDaFatia: '', ponto: st.bombas }] };
-      } else if (terreoDeApartamentosPedido) {
+      } else if (terreoDeApartamentosPedido && terreo) {
         // Sem a sala técnica na garagem: o térreo de sempre (o condomínio nas fatias, a porta), e os apartamentos do andar 0
         // ficam como pendência.
         const comoAntes = nomearTerreo(ctx, base, hip, terreo.levelId);
@@ -388,7 +402,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   if (!hip.pluvial) etapa('PLUVIAL', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
   else if (!cobertura) etapa('PLUVIAL', 'NAO_EXIGIDA', 0, 'Sem a cobertura, o pluvial fica para o projetista.');
   else {
-    pluvial = lancarPluvial(ctx, base, terreo && !andarZeroLevelId ? { levelId: terreo.levelId } : null, { levelId: cobertura.levelId }, entrada.pluvial ?? null, { chaoDepois: !!andarZeroLevelId });
+    pluvial = lancarPluvial(ctx, base, terreo && !andarZeroLevelId && !abaixoDaRua ? { levelId: terreo.levelId } : null, { levelId: cobertura.levelId }, entrada.pluvial ?? null, { chaoDepois: !!andarZeroLevelId });
     pendencias.push(...pluvial.pendencias);
     etapa('PLUVIAL', 'LANCOU', pluvial.comandos, `${pluvial.condutores.length} condutor(es) DN ${pluvial.condutores[0]?.dnMm ?? '—'} · ${Math.round(pluvial.vazaoLMin).toLocaleString('pt-BR')} L/min de ${Math.round(pluvial.areaM2).toLocaleString('pt-BR')} m² a ${pluvial.intensidadeMmH} mm/h`);
   }
@@ -466,6 +480,18 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   etapa('INSTALACOES_NO_TIPO', 'LANCOU', aplicar([{ type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }]), 'Pontos, trechos, quadros e circuitos desenhados no tipo vão às cópias.');
   // PE4a: o andar 0 de apartamentos — a cópia do tipo, desvinculada, sem os apartamentos que a ficha não tem nele.
   let andarZeroConcluido: ReturnType<typeof concluirTerreoDeApartamentos> | null = null;
+  // PE6c (decisão de 18/11 "Desvincular o 0"): na torre que começa abaixo da rua o 0 é cópia do tipo — desvinculado aqui,
+  // com os apartamentos da ficha como unidades e o corredor junto do núcleo como hall, com a porta para a rua.
+  const zeroDaTorreAbaixo = abaixoDaRua && andarZero && tipoDaFicha ? m.levels.find((l) => l.tipoDeId === mont.tipoLevelId && l.elevationMm === 0)?.id ?? null : null;
+  if (zeroDaTorreAbaixo && andarZero && tipoDaFicha) {
+    const za = concluirTerreoDeApartamentos(ctx, base, hip, zeroDaTorreAbaixo, tipoDaFicha, andarZero, { jaECopia: true });
+    decisoes.push(`Andar 0 (a torre começa abaixo da rua): a cópia do tipo desvinculada para a entrada — ${za.unidades.length ? `as unidades ${za.unidades.join(', ')} da ficha nas posições do tipo` : 'os apartamentos do tipo'}${za.acesso ? ', o corredor junto do núcleo como hall, com a porta para a rua' : ''}.`);
+    avisosDoPredio.push(...za.avisos);
+    andarZeroConcluido = za;
+    pendencias.push({ grupo: 'CONFERIR', texto: `Andar 0 (a torre começa abaixo da rua): a cópia do tipo desvinculada para a entrada — ${za.unidades.length ? `${za.unidades.join(', ')} da ficha nas posições do tipo, ` : ''}${za.acesso ? 'o corredor junto do núcleo como hall, com a porta para a rua' : 'sem a porta para a rua'}; o que mudar no tipo daqui em diante não chega mais ao 0.` });
+    if (!za.acesso) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Andar 0: a porta para a rua não coube no hall (o corredor junto do núcleo) — desenhe a entrada da torre.' });
+  }
+  else if (abaixoDaRua) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Andar 0: a torre começa abaixo da rua e não tem andar de apartamentos na cota da rua (ou a ficha não põe apartamento nele) — a entrada pela rua e a saída da rota de fuga ficam para o projetista.' });
   if (andarZeroLevelId && andarZero && tipoDaFicha) {
     const za = concluirTerreoDeApartamentos(ctx, base, hip, andarZeroLevelId, tipoDaFicha, andarZero);
     decisoes.push(`Andar 0 de apartamentos (a ficha): mantém ${za.mantidos.join(', ')} do tipo; ${za.tirados.length ? `${za.tirados.join(', ')} viram o hall de entrada e a área comum` : 'nenhum apartamento sai'}${za.acesso ? ', com a porta para a rua' : ''}.`);
@@ -499,7 +525,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   let incendio: ReturnType<typeof conferirIncendioDoPredio> | null = null;
   if (!hip.incendio) etapa('INCENDIO', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
   else {
-    incendio = conferirIncendioDoPredio(m, andarZeroLevelId ?? terreo?.levelId ?? mont.tipoLevelId, base.ultimoLevelId, entrada.incendio ?? null);
+    incendio = conferirIncendioDoPredio(m, andarZeroLevelId ?? zeroDaTorreAbaixo ?? terreo?.levelId ?? mont.tipoLevelId, base.ultimoLevelId, entrada.incendio ?? null);
     pendencias.push(...incendio.pendencias);
     const semRota = incendio.rota.andares.reduce((s, a) => s + a.semRota, 0);
     etapa(
@@ -552,7 +578,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     ? {
         pontos: pontosDaAgua,
         hidrometros: agua.hidrometros,
-        unidadesMedidas: agua.hidrometros * (1 + mont.copias) + (andarZeroConcluido?.unidades.length ?? 0),
+        unidadesMedidas: agua.hidrometros * (1 + mont.copias) + (andarZeroConcluido && !andarZeroConcluido.jaEraCopia ? andarZeroConcluido.unidades.length : 0),
         colunaDnMm: agua.colunaDnMm,
         recalque: agua.recalque ? { dnMm: agua.recalque.dnMm, motorCv: agua.recalque.motorCv, alturaManometricaM: Math.round(agua.recalque.alturaManometricaM * 10) / 10 } : null,
         alimentadorDnMm: agua.alimentador?.dnMm ?? null,
@@ -581,7 +607,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   etapa('CONFERENCIA', 'CALCULOU', 0, pendencias.length ? `${pendencias.length} pendência(s)` : 'Nada pendente.');
 
   const pavimentos = 1 + mont.copias;
-  const pavimentosLancados = pavimentos + (terreo ? 1 : 0) + (cobertura ? 1 : 0) + (subsolos?.pisos.length ?? 0);
+  const pavimentosLancados = pavimentos + (terreo && !abaixoDaRua ? 1 : 0) + (cobertura ? 1 : 0) + (subsolos?.pisos.length ?? 0);
   return {
     blocoId: b.id,
     comandos,
@@ -599,7 +625,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       pavimentosLancados,
       copias: mont.copias,
       unidadesPorAndar: dv.unidades.length,
-      unidades: dv.unidades.length * pavimentos + (andarZeroConcluido?.mantidos.length ?? 0),
+      unidades: dv.unidades.length * pavimentos + (andarZeroConcluido && !andarZeroConcluido.jaEraCopia ? andarZeroConcluido.mantidos.length : 0),
       elevadores: dv.elevadores,
       eficienciaDesenhadaPct: mont.eficienciaDesenhadaPct,
       plantas,

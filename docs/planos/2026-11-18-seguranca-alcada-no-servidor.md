@@ -17,6 +17,34 @@ aprovado cujo valor sobe para faixa de alçada maior volta para aprovação?"*:
 Brief da frente (18/11): "quando o valor de um título JÁ APROVADO sobe para uma faixa de alçada
 maior (inclusive por sincronização ou ajuste de conciliação), ele volta para aprovação."
 
+Respostas do usuário às dúvidas do relatório (18/11/2026, repassadas pelo coordenador; trecho
+literal da mensagem):
+
+> 1. Trocar o favorecido de título a pagar JÁ APROVADO (supplier_id, employee_id, party_id ou
+> party_name — o que for "favorecido" no modelo) → volta para aprovação (PENDENTE, cadeia
+> zerada, níveis da faixa do valor), mesmo sem mudar o valor. Vale para qualquer escritor que
+> não seja caminho de servidor autorizado; avalie com cuidado correções legítimas de cadastro
+> (ex.: preencher supplier_id num título que só tinha party_name do mesmo fornecedor — se der
+> para distinguir com segurança "mesmo favorecido", não reabra; se não der, reabra).
+> 2. mover_contrato_organizacao: os títulos aprovados que vão junto voltam para aprovação na org
+> de destino (hoje a função é DEFINER e passa pela trava — ajuste a função ou a trava; parta da
+> definição atual de produção).
+> 3. Portão do Asaas (asaas-payment: bloqueiosDoDisparo/avaliarDisparo): bloquear título a
+> pagar em RASCUNHO que não esteja nas exceções reais (as mesmas de fn_titulo_nasce_na_alcada:
+> DARF, RETIDO, ASAAS_FEE, CONTRA, condomínio) — inclusive quando o membro marcou
+> business_status para torná-lo isento: confira se "isento" pode ser forjado pelo membro e
+> feche no portão (ex.: o portão recalcula a isenção pelo que não é editável, ou exige que a
+> marca venha de caminho de servidor). Testes unitários do portão.
+> 4. Os 46 títulos: decisão = SÓ LISTAR para revisão (eu gero a lista; não mude nada neles).
+>
+> Complemento ao item 4: deixe a consulta de LEITURA exata que os encontra em
+> scripts/alcada-titulos-aprovados-abaixo-da-faixa.sql (comentada, numa linha executável por
+> `db query`), rode-a só como leitura e grave o resultado em _rascunho/titulos-46.csv (fora do
+> git).
+
+Contrato/pedido que sobe de faixa e o valor da etapa de processo não entraram nas respostas:
+ficam como estão (ver "Fora deste PR").
+
 ## O problema
 
 `approval_status` só era decidido no navegador. `approvalService.approve` calculava sozinho se a
@@ -66,6 +94,36 @@ E o portão do Asaas (`bloqueiosDoDisparo`, F59) confia em `approval_status`.
 6. **Processo não troca de organização com aprovação dada.** `trg_alcada_guarda_processo` em
    `process_instances` recusa mudar a organização (pela API) quando alguma etapa está aprovada
    ou com passo; a etapa também não troca de processo nesse estado.
+7. **Favorecido trocado → volta para aprovação** (resposta 1). Título a pagar aprovado (ou com
+   passo), em aberto, quando quem escreve pela API muda `supplier_id`, `employee_id` ou
+   `party_id`; sem nenhum desses ids, quando muda `party_name` (ignorando maiúsculas/espaços).
+   Com o id igual, mudar só o nome mantém (é renomear o mesmo cadastro — a propagação de nome
+   de cliente/fornecedor faz isso). **Preencher o id num título que só tinha o nome REABRE**:
+   não dá para provar que é o mesmo favorecido — o título não guarda CPF/CNPJ, nomes não são
+   únicos (qualquer membro cria um fornecedor com o mesmo nome e outra chave PIX) e o cadastro
+   escolhido é de onde o PIX tira a chave. Caminho do servidor não reabre.
+8. **Mudou de organização → volta para aprovação, qualquer escritor** (resposta 2). Fica na
+   trava, sem reescrever `mover_contrato_organizacao`: o `UPDATE … organization_id` dela passa
+   pelo gatilho e os títulos aprovados EM ABERTO chegam PENDENTES na organização de destino,
+   com os níveis da faixa de lá. Título já pago mantém (não sai mais pela alçada). Título a
+   pagar não entra em organização de condomínio pela API (lá não há alçada).
+9. **Portão do Asaas** (resposta 3). Conferido: RETIDO, ASAAS_FEE, CONTRA e origem DARF são
+   campos que o membro edita (RLS de membro em `internal_transactions`) — marcar o título como
+   "retido" tirava-o da fila e o portão pagava abaixo do piso. `darf_id` não (só as RPCs do
+   DARF). E o condomínio também era forjável: `fn_org_e_condominio` só olhava
+   `empreendimentos.condominio_org_id`, que qualquer membro da organização dona do
+   empreendimento edita — apontando para a própria empresa, ela inteira saía da alçada. Fechado
+   assim:
+   - `fn_org_e_condominio` exige organização do tipo `CONDOMINIO` (o usuário não muda o tipo
+     depois de criada — `trg_org_preserva_tipo`) ligada a empreendimento de OUTRA organização.
+     Os 2 condomínios de produção cumprem.
+   - O portão só deixa sair título `APROVADO`, ou `RASCUNHO` em condomínio de verdade,
+     recalculado no servidor (`fn_org_e_condominio`, service_role; erro = fecha). As isenções
+     da fila (RETIDO, ASAAS_FEE, CONTRA, DARF) **não liberam pagamento**: título retido, tarifa e
+     contrapartida não se pagam pela Asaas; tributo agrupado sai quando o DARF é aprovado. Em
+     18/11 todo pagamento tentado pela Asaas foi de título APROVADO (14 de 14 registros).
+10. **Os 46 títulos** (resposta 4): só a lista, nada muda neles.
+    `scripts/alcada-titulos-aprovados-abaixo-da-faixa.sql` (só leitura).
 
 ## Plano
 
@@ -89,6 +147,17 @@ Um item por arquivo. **O que muda** · **como sei que terminou**.
    (PATCH, INSERT aprovado, passo forjado, nível rebaixado, ida e volta de valor e de
    organização, memória com outro favorecido) e os caminhos legítimos. **Pronto quando**: roda
    num PostgreSQL local com o esquema copiado de produção e termina em `TUDO OK`.
+7. Respostas 1–3 na migration 2 (`fn_alcada_guarda`, `fn_org_e_condominio`) + prova SQL.
+   **Pronto quando**: a prova cobre favorecido (nome, id preenchido, id trocado, renomear o
+   mesmo cadastro, servidor), mover pelo servidor (aberto e pago), condomínio forjado e título
+   levado para condomínio, e dá `TUDO OK`; com o `fn_org_e_condominio` antigo, falha.
+8. `utils/asaasGovernanca.ts` + `supabase/functions/_shared/asaasDisparo.ts` (resposta 3).
+   **Muda**: RASCUNHO só passa em condomínio de verdade, recalculado no servidor.
+   **Pronto quando**: `__tests__/asaasGovernanca.test.ts` e `__tests__/asaasDisparoAlcada.test.ts`
+   verdes; **publicado** com `npx supabase functions deploy asaas-payment` (pelo usuário).
+9. `scripts/alcada-titulos-aprovados-abaixo-da-faixa.sql` (resposta 4). **Muda**: consulta de
+   leitura dos títulos aprovados abaixo da faixa atual. **Pronto quando**: roda com `db query`
+   (resultado de 18/11: 46 linhas, gravado fora do git).
 
 ## Estado
 
@@ -104,24 +173,28 @@ Um item por arquivo. **O que muda** · **como sei que terminou**.
   de produção em 18/11): sem as migrations falha no 1º caso (RED); com elas, `TUDO OK`; aplicar
   as duas migrations duas vezes e rodar a prova depois também dá `TUDO OK` (idempotentes).
   **Falta rodar em produção** (ensaio com `montar-ensaio.sh`, pelo usuário).
+- [x] 7 respostas 1–3 no banco — prova local `TUDO OK` (RED sem migrations; mutação com o
+  `fn_org_e_condominio` antigo falha em "nem por isso a empresa vira condomínio").
+- [x] 8 portão do Asaas — testes verdes; **falta publicar** a `asaas-payment`.
+- [x] 9 lista dos 46 — `scripts/alcada-titulos-aprovados-abaixo-da-faixa.sql`, 46 linhas em
+  18/11 (Alpa Construtora 45 / R$ 996.600,91; Garden 1 / R$ 105.000,00).
 
 Os testes que rodam o `approvalService` real sobre banco falso
 (`processServiceModeloAlcada`, `processosEventosFinanceiro`) passaram a usar
 `__tests__/fixtures/alcadaRpcFake.ts`, que imita as três RPCs.
 
-### Fora deste PR (descrito no relatório)
+### Fora deste PR
 
-- `mover_contrato_organizacao` (SECURITY DEFINER) leva os títulos aprovados para a outra
-  organização mantendo a aprovação — é caminho do servidor; decidir se volta para aprovação.
-- Trocar o favorecido (fornecedor) de um título aprovado sem mudar o valor mantém a aprovação.
 - Contrato e pedido: valor que sobe de faixa depois de aprovado mantém a aprovação (a decisão
   do usuário foi sobre título; contrato/pedido não liberam pagamento — o título que nasce deles
   passa pela alçada).
 - Etapa de processo: o valor da etapa é digitado/gravado pela tela; abaixo do piso libera.
-- Portão do Asaas aceita `RASCUNHO` abaixo do piso (títulos isentos: RETIDO, condomínio…).
-- 46 títulos abertos aprovados cuja cadeia não cobre a faixa do valor ATUAL (37 sem passo
-  nenhum, da virada de 26/10; 9 com 1 nível onde a faixa hoje pede 2) — a trava vale daqui
-  para frente, não reabre aprovação antiga.
+- A prévia de "Mover contrato de organização" não avisa que os títulos aprovados voltam para
+  aprovação no destino (a trava faz; a tela não conta antes).
+- 561 dos 733 títulos abertos aprovados não têm `supplier_id`/`employee_id`/`party_id` (só o
+  nome). Vincular o cadastro a um deles agora o reabre (decisão 1: não dá para provar que é o
+  mesmo favorecido).
+- Os 46 títulos abaixo da faixa atual: só a lista (decisão 4).
 
 ## Verificação
 

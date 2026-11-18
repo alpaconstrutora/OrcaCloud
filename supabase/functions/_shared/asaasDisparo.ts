@@ -29,9 +29,11 @@ export interface TituloAPagar {
     employee_id: string | null;
     reference_id: string | null;
     description: string | null;
+    /** DARF em que o tributo está agrupado (só as RPCs do DARF gravam). */
+    darf_id: string | null;
 }
 
-const COLS = 'id,organization_id,amount,direction,status,business_status,approval_status,due_date,transaction_date,source_system,party_type,party_name,supplier_id,employee_id,reference_id,description';
+const COLS = 'id,organization_id,amount,direction,status,business_status,approval_status,due_date,transaction_date,source_system,party_type,party_name,supplier_id,employee_id,reference_id,description,darf_id';
 
 /** Título a pagar da organização (já conferida pelo gate). null = não existe nela ou não é DEBIT. */
 export async function lerTitulo(admin: Admin, tituloId: string, orgId: string): Promise<TituloAPagar | null> {
@@ -51,14 +53,17 @@ export async function avaliarDisparo(admin: Admin, p: {
 }): Promise<{ fatos: FatosDoDisparo; bloqueios: string[] }> {
     const { titulo, conta } = p;
 
-    // Alçada: RASCUNHO só passa se o valor não cair em faixa nenhuma (mesma
-    // semântica do approvalService com semFaixa: 'liberar').
-    let valorTemFaixaDeAlcada = false;
+    // Alçada (18/11/2026, F59): RASCUNHO só passa em condomínio de verdade. A isenção é
+    // recalculada AQUI pelo que o membro não edita (fn_org_e_condominio: organização do tipo
+    // CONDOMINIO ligada a empreendimento de outra organização) — não pelos campos do título
+    // (business_status RETIDO, origem, entry_type), que qualquer membro muda. Erro na consulta
+    // = não é condomínio (fecha).
+    let orgDeCondominio = false;
     if ((titulo.approval_status ?? 'RASCUNHO') === 'RASCUNHO') {
-        const { data: niveis } = await admin.rpc('fn_resolve_approval_levels', {
-            p_organization_id: titulo.organization_id, p_amount: titulo.amount,
+        const { data: condominio, error } = await admin.rpc('fn_org_e_condominio', {
+            p_organization_id: titulo.organization_id,
         });
-        valorTemFaixaDeAlcada = Array.isArray(niveis) && niveis.some((n: { required_levels?: number }) => Number(n.required_levels) > 0);
+        orgDeCondominio = !error && condominio === true;
     }
 
     // Soma do dia na conta (BRT), sem este título.
@@ -97,7 +102,8 @@ export async function avaliarDisparo(admin: Admin, p: {
         status: titulo.status,
         businessStatus: titulo.business_status,
         approvalStatus: titulo.approval_status,
-        valorTemFaixaDeAlcada,
+        orgDeCondominio,
+        agrupadoEmDarf: !!titulo.darf_id,
         valor: titulo.amount,
         tetos: conta?.tetos ?? null,
         somaDoDia,

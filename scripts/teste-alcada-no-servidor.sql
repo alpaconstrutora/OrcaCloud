@@ -99,6 +99,7 @@ DECLARE
     org_b UUID; a UUID; b UUID; email_a TEXT; email_b TEXT;
     f_baixa UUID; f_alta UUID; tpl UUID; inst UUID; inst2 UUID; etapa UUID; etapa2 UUID; contrato UUID;
     t_alto UUID; t UUID; t2 UUID; darf UUID; m1 UUID; m2 UUID; v TEXT;
+    s1 UUID; s2 UUID; org_condo UUID; emp UUID;
     upd CONSTANT TEXT := 'WITH u AS (UPDATE public.internal_transactions SET %s WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u';
     aprova CONSTANT TEXT := 'SELECT public.fn_alcada_aprovar(''transaction'', %L, %s, NULL, ''{"level1_label":"Gestor","level2_label":"Diretoria"}''::jsonb, ''{"business_status":"APROVADO"}''::jsonb) ->> ''approval_status''';
     rejeita CONSTANT TEXT := 'SELECT public.fn_alcada_rejeitar(''transaction'', %L, ''teste'', ''{"business_status":"BLOQUEADO"}''::jsonb) ->> ''approval_status''';
@@ -211,6 +212,40 @@ BEGIN
     PERFORM pg_temp.da(pg_temp.au(a, format(upd, format('organization_id = %L', org_a), t)), 'ok:1', 'a traz o título aprovado de volta à org A');
     PERFORM pg_temp.confere(pg_temp.st(t) = 'PENDENTE/2/0', 'de volta à org A: volta para aprovação, com os níveis da org A');
 
+    -- mover pelo SERVIDOR (mover_contrato_organizacao é SECURITY DEFINER e faz este UPDATE)
+    t := pg_temp.titulo(org_a, 1000, 'movido pelo servidor');
+    PERFORM pg_temp.da(pg_temp.au(a, format(aprova, t, 'NULL')), 'ok:APROVADO', 'a aprova título que o servidor vai mover');
+    UPDATE public.internal_transactions SET organization_id = org_b WHERE id = t;
+    PERFORM pg_temp.confere(pg_temp.st(t) = 'PENDENTE/1/0', 'movido pelo servidor: volta para aprovação na org de destino');
+    t := pg_temp.titulo(org_a, 1000, 'pago movido pelo servidor');
+    PERFORM pg_temp.da(pg_temp.au(a, format(aprova, t, 'NULL')), 'ok:APROVADO', 'a aprova título que será pago e movido');
+    UPDATE public.internal_transactions SET status = 'CONCILIATED', payment_date = current_date WHERE id = t;
+    UPDATE public.internal_transactions SET organization_id = org_b WHERE id = t;
+    PERFORM pg_temp.confere(pg_temp.st(t) = 'APROVADO/1/1', 'título já pago movido mantém a aprovação (não sai mais pela alçada)');
+
+    -- ── 5b. trocar o favorecido de título aprovado ──────────────────────────
+    SELECT s.id INTO s1 FROM public.suppliers s WHERE s.organization_id = org_a ORDER BY s.id LIMIT 1;
+    SELECT s.id INTO s2 FROM public.suppliers s WHERE s.organization_id = org_a AND s.id <> s1 ORDER BY s.id LIMIT 1;
+    PERFORM pg_temp.confere(s1 IS NOT NULL AND s2 IS NOT NULL, 'fixture: dois fornecedores da org A');
+    t := pg_temp.titulo(org_a, 1000, 'favorecido por nome');
+    UPDATE public.internal_transactions SET party_name = 'Fornecedor A' WHERE id = t;
+    PERFORM pg_temp.da(pg_temp.au(a, format(aprova, t, 'NULL')), 'ok:APROVADO', 'a aprova título de "Fornecedor A" (sem cadastro)');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'party_name = ''  fornecedor   A ''', t)), 'ok:1', 'a muda só maiúsculas/espaços do nome');
+    PERFORM pg_temp.confere(pg_temp.st(t) = 'APROVADO/1/1', 'mesmo nome (maiúsculas/espaços): mantém');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'party_name = ''Fornecedor B''', t)), 'ok:1', 'a troca o nome do favorecido');
+    PERFORM pg_temp.confere(pg_temp.st(t) = 'PENDENTE/1/0', 'outro favorecido (por nome): volta para aprovação');
+    PERFORM pg_temp.da(pg_temp.au(a, format(aprova, t, 'NULL')), 'ok:APROVADO', 'a aprova de novo');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, format('supplier_id = %L', s1), t)), 'ok:1', 'a preenche o fornecedor cadastrado');
+    PERFORM pg_temp.confere(pg_temp.st(t) = 'PENDENTE/1/0', 'preencher o cadastro onde só havia o nome: reabre (não dá para provar que é o mesmo)');
+    PERFORM pg_temp.da(pg_temp.au(a, format(aprova, t, 'NULL')), 'ok:APROVADO', 'a aprova com o cadastro');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, 'party_name = ''Fornecedor B Ltda (renomeado)''', t)), 'ok:1', 'a renomeia (mesmo fornecedor cadastrado)');
+    PERFORM pg_temp.confere(pg_temp.st(t) = 'APROVADO/1/1', 'mesmo cadastro, outro nome: mantém (propagação de nome)');
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, format('supplier_id = %L', s2), t)), 'ok:1', 'a troca o fornecedor cadastrado');
+    PERFORM pg_temp.confere(pg_temp.st(t) = 'PENDENTE/1/0', 'outro fornecedor: volta para aprovação');
+    PERFORM pg_temp.da(pg_temp.au(a, format(aprova, t, 'NULL')), 'ok:APROVADO', 'a aprova com o fornecedor 2');
+    UPDATE public.internal_transactions SET supplier_id = s1 WHERE id = t;
+    PERFORM pg_temp.confere(pg_temp.st(t) = 'APROVADO/1/1', 'troca feita pelo servidor (função do sistema) não reabre');
+
     -- ── 6. caminhos legítimos ───────────────────────────────────────────────
     t := pg_temp.titulo(org_a, 8000, 'rejeita fora da alçada');
     PERFORM pg_temp.da(pg_temp.au(a, format(rejeita, t)), 'P0001:ALCADA_NAO_PERMITE: o nível 1 deste item é aprovado por %',
@@ -312,6 +347,26 @@ BEGIN
         nega, 'a leva contrato aprovado para a org B');
     PERFORM pg_temp.da(pg_temp.au(a, format('INSERT INTO public.contracts (organization_id, number, title, start_date, approval_status) VALUES (%L, %L, ''x'', current_date, ''APROVADO'') RETURNING 1::text', org_a, 'TESTE-ALCADA-' || left(gen_random_uuid()::text, 8))),
         nega, 'a insere contrato já aprovado (duplicar sem limpar a aprovação)');
+
+    -- ── 9b. condomínio (fora da alçada) só de verdade ───────────────────────
+    PERFORM pg_temp.confere(COALESCE((SELECT bool_and(public.fn_org_e_condominio(e.condominio_org_id))
+                                         FROM public.empreendimentos e JOIN public.organizations o ON o.id = e.condominio_org_id
+                                        WHERE o.settings ->> 'tipo' = 'CONDOMINIO' AND e.organization_id <> e.condominio_org_id), true),
+        'os condomínios de verdade continuam condomínio');
+    INSERT INTO public.empreendimentos (organization_id, name) VALUES (org_a, 'TESTE ALCADA empreendimento') RETURNING id INTO emp;
+    PERFORM pg_temp.da(pg_temp.au(a, format('WITH u AS (UPDATE public.empreendimentos SET condominio_org_id = %L WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u', org_a, emp)),
+        'ok:1', 'a aponta o condomínio do empreendimento para a própria empresa (a RLS deixa)');
+    PERFORM pg_temp.confere(NOT public.fn_org_e_condominio(org_a), 'nem por isso a empresa vira condomínio');
+    t := pg_temp.titulo(org_a, 100, 'empresa não é condomínio');
+    PERFORM pg_temp.confere(pg_temp.st(t) = 'PENDENTE/1/0', 'título novo da empresa continua nascendo na alçada');
+    SELECT e.condominio_org_id INTO org_condo FROM public.empreendimentos e
+     WHERE e.condominio_org_id IS NOT NULL AND public.fn_org_e_condominio(e.condominio_org_id) ORDER BY e.condominio_org_id LIMIT 1;
+    PERFORM pg_temp.confere(org_condo IS NOT NULL, 'fixture: um condomínio de verdade');
+    INSERT INTO public.organization_members (organization_id, user_id, email, role)
+    VALUES (org_condo, a, email_a, 'member') ON CONFLICT DO NOTHING;
+    UPDATE public.organization_members SET user_id = a WHERE organization_id = org_condo AND lower(email) = lower(email_a);
+    PERFORM pg_temp.da(pg_temp.au(a, format(upd, format('organization_id = %L', org_condo), t)), nega,
+        'a leva título a pagar da empresa para o condomínio (onde não há alçada)');
 
     -- ── 10. ninguém de fora executa ─────────────────────────────────────────
     PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace

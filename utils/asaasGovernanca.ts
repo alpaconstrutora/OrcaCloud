@@ -17,8 +17,13 @@ export interface FatosDoDisparo {
     status: string | null;
     businessStatus: string | null;
     approvalStatus: string | null;
-    /** Para RASCUNHO: o valor cai em alguma faixa de alçada configurada? */
-    valorTemFaixaDeAlcada: boolean;
+    /**
+     * A organização do título é um condomínio de verdade (`fn_org_e_condominio`, lida no
+     * servidor)? É a ÚNICA isenção de alçada que libera pagamento de título em RASCUNHO.
+     */
+    orgDeCondominio: boolean;
+    /** Título agrupado num DARF (`darf_id`, que só as RPCs do DARF gravam). */
+    agrupadoEmDarf: boolean;
     valor: number;
     tetos: { porPagamento: number; porDia: number; avulso: number } | null;
     /** Soma do que já saiu (ou está saindo) HOJE pela conta, sem este. */
@@ -47,10 +52,19 @@ export function bloqueiosDoDisparo(f: FatosDoDisparo): string[] {
     if (f.pagamentoEmCurso === 'DONE') b.push('Este título já foi pago pela Asaas.');
     else if (f.pagamentoEmCurso) b.push(`Já existe um pagamento deste título em andamento (${f.pagamentoEmCurso}). Cancele-o antes de tentar de novo.`);
 
+    // Alçada (18/11/2026, F59): só sai título APROVADO — `approval_status` agora só muda pela
+    // aprovação (trava no banco). RASCUNHO passa SÓ em condomínio de verdade (lá não há alçada).
+    // As outras isenções da fila (RETIDO, ASAAS_FEE, CONTRA, origem DARF) NÃO liberam
+    // pagamento: são campos que qualquer membro edita — marcar o título como "retido" era o
+    // jeito de tirá-lo da fila e pagá-lo abaixo do piso. Título retido, tarifa e contrapartida
+    // não se pagam por aqui; tributo agrupado sai depois que o DARF for aprovado. (Antes,
+    // RASCUNHO abaixo do piso da alçada passava.)
     if (f.approvalStatus === 'PENDENTE') b.push('O título está aguardando a alçada (Financeiro › Aprovações).');
     else if (f.approvalStatus === 'REJEITADO') b.push('O título foi rejeitado na alçada.');
-    else if ((f.approvalStatus ?? 'RASCUNHO') === 'RASCUNHO' && f.valorTemFaixaDeAlcada) {
-        b.push('O valor exige alçada e o título não foi submetido (Financeiro › Aprovações).');
+    else if ((f.approvalStatus ?? 'RASCUNHO') === 'RASCUNHO' && !f.orgDeCondominio) {
+        b.push(f.agrupadoEmDarf
+            ? 'O tributo está agrupado num DARF que não foi aprovado (Financeiro › Tributos a Pagar › DARFs).'
+            : 'O título não passou pela alçada (Financeiro › Aprovações).');
     }
 
     if (!(f.valor > 0)) b.push('O título não tem valor a pagar.');

@@ -4,9 +4,9 @@
 -- Plano: docs/planos/2026-11-18-seguranca-alcada-no-servidor.md
 -- Prova: scripts/teste-alcada-no-servidor.sql
 -- Achados: F14 e F59 da varredura Claude Security de 15/11 (PR G da fase 2)
--- Base:  definições vigentes no banco em 18/11 de fn_titulo_nasce_na_alcada e
---        fn_titulo_aprovacao_memoriza (= aplicar_20271026400000) e as 8 tabelas com
---        approval_chain (as 7 de aplicar_20271111150000 + project_risks)
+-- Base:  definições vigentes no banco em 18/11 de fn_titulo_nasce_na_alcada,
+--        fn_titulo_aprovacao_memoriza (= aplicar_20271026400000) e fn_org_e_condominio, e as 8
+--        tabelas com approval_chain (as 7 de aplicar_20271111150000 + project_risks)
 -- ==========================================================================
 -- O QUE FECHA
 --   F14: qualquer membro aprovava sem estar na alçada — PATCH {approval_status:'APROVADO'}
@@ -14,10 +14,12 @@
 --        APROVADO, dois passos numa gravação (só o último era conferido), nível exigido
 --        rebaixado, e a ida e volta: baixar o valor, aprovar na faixa menor, devolver o valor.
 --   F59: o portão do Asaas (bloqueiosDoDisparo) confia em approval_status — com o campo só
---        gravável pela aprovação, o portão passa a estar certo como está.
+--        gravável pela aprovação, o portão confia em algo certo. (O portão também deixa de
+--        aceitar RASCUNHO fora de condomínio — utils/asaasGovernanca.ts, mesmo PR.)
 --   Também: aprovação dada numa organização e usada noutra (mudar a organização do título,
---   ou do processo, e voltar), e a memória de aprovação devolvendo APROVADO a título recriado
---   com OUTRO favorecido.
+--   ou do processo, e voltar); aprovação que seguia depois de trocar o FAVORECIDO; a memória
+--   de aprovação devolvendo APROVADO a título recriado com outro favorecido; e um membro
+--   transformando a própria empresa em "condomínio" (fora da alçada) por um empreendimento.
 --
 -- O QUE MUDA
 --   1. trg_alcada_guarda (BEFORE INSERT OR UPDATE, primeiro da fila — nome 'trg_alcada_…' vem
@@ -28,18 +30,27 @@
 --        • UPDATE: approval_chain só fica igual ou zerada (zerada = nova rodada, fora de
 --          APROVADO); nada vira APROVADO; nível exigido não diminui no meio da aprovação;
 --          PENDENTE fica com ao menos os níveis da faixa.
---        • Mudar a organização de item aprovado ou com passo: no título, volta para aprovação
---          (abaixo); nos outros, recusado. Etapa de processo aprovada não troca de processo.
+--        • Mudar a organização de item aprovado ou com passo: recusado (o título tem regra
+--          própria, abaixo). Etapa de processo aprovada não troca de processo. Título a pagar
+--          não vai para organização de condomínio.
 --      Continua livre o que só tira aprovação: voltar a RASCUNHO, PENDENTE→REJEITADO sem passo
 --      (cancelar boleto), retirar ofício da aprovação, editar título (payableService).
 --      Recusa = 42501 com "ALCADA_NAO_PERMITE: …" (utils/alcada.mensagemDaAlcada mostra a frase).
---   2. Título a pagar cujo valor sobe para faixa de PISO maior — QUALQUER escritor: tela,
---      sincronização, ajuste de conciliação (decisão do usuário, 18/11) — e que estava
---      APROVADO (ou PENDENTE com passo): volta a PENDENTE, cadeia zerada, níveis da faixa nova;
---      business_status APROVADO → PREVISTO (como payableService.updateAvulso); se já está
---      conciliado, fica marcado pago_sem_alcada_em. PENDENTE sem passo só ganha os níveis da
---      faixa nova. Desce ou fica na faixa = mantém. Mesmas exceções de fn_titulo_nasce_na_alcada
---      (DARF, RETIDO, ASAAS_FEE, CONTRA, cancelado, organização de condomínio).
+--   2. Título a pagar APROVADO (ou PENDENTE com passo) volta a PENDENTE, cadeia zerada, níveis
+--      da faixa do valor (decisões do usuário, 18/11), quando:
+--        • o valor sobe para faixa de PISO maior — QUALQUER escritor (tela, sincronização,
+--          ajuste de conciliação); se já está conciliado, fica marcado pago_sem_alcada_em.
+--          Desce ou fica na faixa = mantém;
+--        • muda de organização, em aberto — QUALQUER escritor, inclusive
+--          mover_contrato_organizacao (os aprovados vão para a fila da organização de destino);
+--        • muda o favorecido, em aberto — quem escreve pela API: supplier_id, employee_id ou
+--          party_id diferente; sem nenhum desses ids, party_name diferente (ignorando
+--          maiúsculas/espaços). Com o id igual, mudar só o nome mantém (renomear o mesmo
+--          cadastro). Preencher o id onde só havia o nome REABRE: o título não guarda CPF/CNPJ
+--          e nomes não são únicos — não há como provar que é o mesmo favorecido.
+--      business_status APROVADO → PREVISTO (como payableService.updateAvulso). PENDENTE sem passo
+--      só ganha os níveis da faixa. Mesmas exceções de fn_titulo_nasce_na_alcada (DARF, RETIDO,
+--      ASAAS_FEE, CONTRA, cancelado, organização de condomínio).
 --   3. trg_alcada_guarda_processo: process_instances não muda de organização (pela API) com
 --      etapa aprovada ou com passo — a aprovação vale na organização em que foi dada.
 --   4. Caminhos do servidor que gravam aprovação: função SECURITY DEFINER (o dono escreve) e
@@ -60,6 +71,10 @@
 --   5. titulo_aprovacao_memoria guarda o favorecido (supplier_id, employee_id, party_id,
 --      party_name); fn_titulo_nasce_na_alcada só devolve APROVADO ao título recriado se o
 --      favorecido for o mesmo.
+--   6. fn_org_e_condominio só reconhece condomínio de verdade: organização do tipo CONDOMINIO
+--      (tipo que o usuário não muda depois de criada) ligada a empreendimento de OUTRA
+--      organização. Antes, um membro apontava condominio_org_id de um empreendimento para a
+--      própria empresa, e os títulos novos dela nasciam fora da alçada.
 --   fn_alcada_trava_passo (11/11) fica como está: confere de novo o passo que a RPC grava.
 --
 -- REGRA #7 (CLAUDE.md)
@@ -68,8 +83,10 @@
 --       SECURITY INVOKER de propósito — current_user é quem escreve. fn_alcada_org_condominio é
 --       SECURITY DEFINER (fn_org_e_condominio não é executável por authenticated) e só responde
 --       a membro da organização, superadmin ou chamada sem usuário. REVOKE de PUBLIC e anon em
---       todas; fn_titulo_nasce_na_alcada e fn_titulo_aprovacao_memoriza mantêm o ACL (REPLACE).
---   P3: sem Edge Function.
+--       todas; fn_titulo_nasce_na_alcada, fn_titulo_aprovacao_memoriza e fn_org_e_condominio
+--       mantêm o ACL (REPLACE) — fn_org_e_condominio segue só de service_role (o portão).
+--   P3: a Edge Function asaas-payment muda no mesmo PR (portão), sem mudar autenticação
+--       (verify_jwt continua true; exigirMembro continua conferindo a organização).
 --
 -- ORDEM: aplicar DEPOIS que o front do PR estiver no ar (o front antigo grava a aprovação com
 -- UPDATE direto, que esta migration recusa). Pré-requisito: aplicar_20271118915000_alcada_rpcs.
@@ -81,6 +98,8 @@
 --   SELECT proname, proconfig FROM pg_proc
 --    WHERE proname IN ('fn_darf_criar','fn_darf_editar','fn_darf_enviar_aprovacao','fn_darf_aprovar',
 --                      'fn_darf_rejeitar','fn_reconcile_group');  -- todas com orcacloud.alcada_servidor=on
+--   SELECT condominio_org_id, fn_org_e_condominio(condominio_org_id) FROM empreendimentos
+--    WHERE condominio_org_id IS NOT NULL;                           -- os 2 condomínios: true
 --   npx supabase db query --linked -f scripts/teste-alcada-no-servidor.sql   -- última linha: TUDO OK
 --
 -- ROLLBACK
@@ -91,11 +110,40 @@
 --   ALTER FUNCTION <cada uma das 6> RESET orcacloud.alcada_servidor;
 --   fn_titulo_nasce_na_alcada / fn_titulo_aprovacao_memoriza: o corpo de
 --   aplicar_20271026400000 (sem as 4 colunas do favorecido); as colunas novas da memória podem
---   ficar.
+--   ficar. fn_org_e_condominio: SELECT EXISTS (SELECT 1 FROM public.empreendimentos e
+--   WHERE e.condominio_org_id = p_organization_id).
 -- ==========================================================================
 
 BEGIN;
 SET LOCAL lock_timeout = '5s';
+
+-- ── Organização de condomínio: só a de verdade ────────────────────────────────
+-- Condomínio não tem alçada (fn_titulo_nasce_na_alcada não põe na fila, e o portão do Asaas
+-- deixa pagar RASCUNHO dele). Antes bastava um empreendimento apontar condominio_org_id para a
+-- organização — e qualquer membro da organização dona edita o empreendimento (RLS
+-- org_access_empreendimentos): apontando para a PRÓPRIA organização, a empresa inteira virava
+-- "condomínio" e os títulos novos nasciam fora da alçada. Agora exige também:
+--   • a organização é do tipo condomínio (organizations.settings.tipo = 'CONDOMINIO' — usuário
+--     não muda o tipo depois de criada: trg_org_preserva_tipo), e
+--   • o empreendimento é de OUTRA organização (a que operava o condomínio antes da instalação).
+-- Em 18/11 os 2 condomínios de produção (Bella Vista, Galeria Altavista) cumprem as duas.
+CREATE OR REPLACE FUNCTION public.fn_org_e_condominio(p_organization_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $function$
+    SELECT EXISTS (
+        SELECT 1
+          FROM public.empreendimentos e
+          JOIN public.organizations o ON o.id = e.condominio_org_id
+         WHERE e.condominio_org_id = p_organization_id
+           AND e.organization_id IS DISTINCT FROM p_organization_id
+           AND o.settings ->> 'tipo' = 'CONDOMINIO');
+$function$;
+
+REVOKE EXECUTE ON FUNCTION public.fn_org_e_condominio(uuid) FROM PUBLIC, anon;
 
 -- ── Organização de condomínio, para quem escreve (fn_org_e_condominio não é de authenticated) ──
 CREATE OR REPLACE FUNCTION public.fn_alcada_org_condominio(p_org uuid)
@@ -132,6 +180,7 @@ DECLARE
     v_em_curso  boolean;
     v_ctx       record;
     v_org_mudou boolean := false;
+    v_favorecido_mudou boolean := false;
     v_piso_ant  numeric;
     v_piso      numeric;
     v_niveis    integer;
@@ -185,46 +234,82 @@ BEGIN
                 RAISE EXCEPTION 'ALCADA_NAO_PERMITE: etapa aprovada (ou com aprovação em curso) não troca de processo.'
                     USING ERRCODE = '42501';
             END IF;
-        ELSIF v_em_curso AND (to_jsonb(NEW) ->> 'organization_id') IS DISTINCT FROM (to_jsonb(OLD) ->> 'organization_id') THEN
-            IF TG_TABLE_NAME = 'internal_transactions' THEN
-                v_org_mudou := true;   -- volta para aprovação, abaixo
-            ELSE
-                RAISE EXCEPTION 'ALCADA_NAO_PERMITE: item aprovado (ou com aprovação em curso) não muda de organização — a aprovação vale na organização em que foi dada.'
-                    USING ERRCODE = '42501';
+        ELSIF TG_TABLE_NAME <> 'internal_transactions' AND v_em_curso
+              AND (to_jsonb(NEW) ->> 'organization_id') IS DISTINCT FROM (to_jsonb(OLD) ->> 'organization_id') THEN
+            RAISE EXCEPTION 'ALCADA_NAO_PERMITE: item aprovado (ou com aprovação em curso) não muda de organização — a aprovação vale na organização em que foi dada.'
+                USING ERRCODE = '42501';
+        END IF;
+
+        -- Título a pagar não entra em organização de condomínio (lá não há alçada): seria o
+        -- jeito de tirar um título da fila. Mover entre organizações é do servidor
+        -- (mover_contrato_organizacao); o boleto só muda de organização antes de virar título.
+        IF TG_TABLE_NAME = 'internal_transactions' THEN
+            IF NEW.direction = 'DEBIT' AND NEW.organization_id IS DISTINCT FROM OLD.organization_id THEN
+                IF public.fn_alcada_org_condominio(NEW.organization_id)
+                   AND NOT public.fn_alcada_org_condominio(OLD.organization_id) THEN
+                    RAISE EXCEPTION 'ALCADA_NAO_PERMITE: título a pagar não é levado para a organização de um condomínio.'
+                        USING ERRCODE = '42501';
+                END IF;
             END IF;
         END IF;
     END IF;
 
-    -- Título a pagar: valor subiu de faixa (qualquer escritor) ou organização trocada pela API.
+    -- Título a pagar com aprovação dada (ou em curso) volta para aprovação quando:
+    --   • muda de ORGANIZAÇÃO — qualquer escritor, inclusive mover_contrato_organizacao: a
+    --     aprovação vale na organização em que foi dada (decisão do usuário, 18/11). Só título em
+    --     aberto: o que já foi pago não sai mais pela alçada;
+    --   • muda o FAVORECIDO — quem escreve pela API, título em aberto (decisão do usuário, 18/11):
+    --     fornecedor, colaborador ou cliente (supplier_id/employee_id/party_id) diferente; ou, sem
+    --     nenhum desses ids, o nome (party_name) diferente. Com o id igual, trocar só o nome é
+    --     renomear o mesmo cadastro (propagação de nome) e mantém. Preencher o id num título que
+    --     só tinha o nome REABRE: o título não guarda CPF/CNPJ, nomes não são únicos e o cadastro
+    --     escolhido é o que o PIX vai usar — não há como provar que é o mesmo favorecido;
+    --   • o VALOR sobe para faixa de piso maior — qualquer escritor (sync, conciliação…).
     -- IF aninhado: as colunas abaixo só existem em internal_transactions, e o PL/pgSQL não
     -- garante parar no primeiro AND falso.
     IF TG_TABLE_NAME = 'internal_transactions' THEN
-        IF (v_org_mudou OR NEW.amount IS DISTINCT FROM OLD.amount)
-           AND NEW.direction = 'DEBIT'
+        IF NEW.direction = 'DEBIT'
            AND NEW.darf_id IS NULL
            AND COALESCE(NEW.approval_status, 'RASCUNHO') IN ('APROVADO', 'PENDENTE')
            AND COALESCE(NEW.status, 'PENDING') <> 'CANCELLED'
            AND COALESCE(NEW.business_status, '') NOT IN ('RETIDO', 'CANCELADO')
            AND COALESCE(NEW.source_system, '') NOT IN ('ASAAS_FEE', 'DARF')
            AND COALESCE(NEW.entry_type, 'PRINCIPAL') <> 'CONTRA' THEN
-            SELECT f.faixa_min, f.niveis INTO v_piso, v_niveis FROM public.fn_alcada_faixa(NEW.organization_id, NEW.amount) f;
-            IF NOT v_org_mudou THEN
-                SELECT f.faixa_min INTO v_piso_ant FROM public.fn_alcada_faixa(NEW.organization_id, OLD.amount) f;
-            END IF;
-            IF (v_org_mudou OR (v_piso IS NOT NULL AND (v_piso_ant IS NULL OR v_piso > v_piso_ant)))
-               AND NOT public.fn_alcada_org_condominio(NEW.organization_id) THEN
-                IF NEW.approval_status = 'APROVADO'
-                   OR jsonb_array_length(CASE WHEN jsonb_typeof(NEW.approval_chain) = 'array' THEN NEW.approval_chain ELSE '[]'::jsonb END) > 0 THEN
-                    NEW.approval_status := 'PENDENTE';
-                    NEW.approval_chain  := '[]'::jsonb;
-                    IF NEW.business_status = 'APROVADO' AND COALESCE(NEW.status, 'PENDING') = 'PENDING' THEN
-                        NEW.business_status := 'PREVISTO';
-                    END IF;
-                    IF NEW.status = 'CONCILIATED' AND NEW.pago_sem_alcada_em IS NULL THEN
-                        NEW.pago_sem_alcada_em := now();
-                    END IF;
+            IF v_em_curso AND COALESCE(NEW.status, 'PENDING') = 'PENDING' THEN
+                IF NEW.organization_id IS DISTINCT FROM OLD.organization_id THEN
+                    v_org_mudou := true;
+                ELSIF v_cliente AND (
+                       NEW.supplier_id IS DISTINCT FROM OLD.supplier_id
+                    OR NEW.employee_id IS DISTINCT FROM OLD.employee_id
+                    OR NEW.party_id    IS DISTINCT FROM OLD.party_id
+                    OR (COALESCE(NEW.supplier_id, NEW.employee_id, NEW.party_id) IS NULL
+                        AND lower(regexp_replace(btrim(COALESCE(NEW.party_name, '')), '\s+', ' ', 'g'))
+                         <> lower(regexp_replace(btrim(COALESCE(OLD.party_name, '')), '\s+', ' ', 'g')))) THEN
+                    v_favorecido_mudou := true;
                 END IF;
-                NEW.approval_required_levels := COALESCE(v_niveis, 1);
+            END IF;
+            IF v_org_mudou OR v_favorecido_mudou OR NEW.amount IS DISTINCT FROM OLD.amount THEN
+                SELECT f.faixa_min, f.niveis INTO v_piso, v_niveis FROM public.fn_alcada_faixa(NEW.organization_id, NEW.amount) f;
+                IF NOT v_org_mudou THEN
+                    SELECT f.faixa_min INTO v_piso_ant FROM public.fn_alcada_faixa(NEW.organization_id, OLD.amount) f;
+                END IF;
+            END IF;
+            IF v_org_mudou OR v_favorecido_mudou
+               OR (NEW.amount IS DISTINCT FROM OLD.amount AND v_piso IS NOT NULL AND (v_piso_ant IS NULL OR v_piso > v_piso_ant)) THEN
+                IF NOT public.fn_alcada_org_condominio(NEW.organization_id) THEN
+                    IF NEW.approval_status = 'APROVADO'
+                       OR jsonb_array_length(CASE WHEN jsonb_typeof(NEW.approval_chain) = 'array' THEN NEW.approval_chain ELSE '[]'::jsonb END) > 0 THEN
+                        NEW.approval_status := 'PENDENTE';
+                        NEW.approval_chain  := '[]'::jsonb;
+                        IF NEW.business_status = 'APROVADO' AND COALESCE(NEW.status, 'PENDING') = 'PENDING' THEN
+                            NEW.business_status := 'PREVISTO';
+                        END IF;
+                        IF NEW.status = 'CONCILIATED' AND NEW.pago_sem_alcada_em IS NULL THEN
+                            NEW.pago_sem_alcada_em := now();
+                        END IF;
+                    END IF;
+                    NEW.approval_required_levels := COALESCE(v_niveis, 1);
+                END IF;
             END IF;
         END IF;
     END IF;

@@ -15,7 +15,15 @@ export type { TipoExcecao, Area, Severidade, FotoDaSemana, LinhaComparacao };
 export interface ItemExcecao { id: string; titulo: string; valor: number | null; dias: number | null; data: string | null }
 
 export interface GrupoExcecao {
+    /** Única por grupo (tipo · org · conta · responsáveis · gravidade): a `key` da lista. */
     chave: string;
+    /**
+     * Tipo · org · conta, sem faixa e sem responsável: não muda quando o grupo piora ou troca de
+     * responsável. Cobrança ("cobrado em") e determinação se ligam a ela (ajustes de 18/11).
+     */
+    familia: string;
+    /** Id da conta (extrato), quando o grupo é por conta. */
+    grupo_id?: string | null;
     tipo: TipoExcecao;
     org_id: string;
     grupo: string | null;
@@ -165,9 +173,10 @@ export function kpisDoPainel(excecoes: GrupoExcecao[], determinacoes: Determinac
     };
 }
 
-export function ultimaCobranca(chave: string, cobrancas: Cobranca[]): Cobranca | null {
+/** A cobrança mais recente da FAMÍLIA do grupo (`GrupoExcecao.familia`). */
+export function ultimaCobranca(familia: string, cobrancas: Cobranca[]): Cobranca | null {
     let ultima: Cobranca | null = null;
-    for (const c of cobrancas) if (c.excecao_chave === chave && (!ultima || c.cobrado_em > ultima.cobrado_em)) ultima = c;
+    for (const c of cobrancas) if (c.excecao_chave === familia && (!ultima || c.cobrado_em > ultima.cobrado_em)) ultima = c;
     return ultima;
 }
 

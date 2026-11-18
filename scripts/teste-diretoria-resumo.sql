@@ -127,8 +127,12 @@ BEGIN
     PERFORM pg_temp.da(v, 'ok:%', 'service_role registra a semana');
     PERFORM pg_temp.confere((SELECT count(*) FROM public.diretoria_semana_numeros s WHERE s.organization_id = org_a AND s.semana = v_semana) = 1,
         'uma foto da org A nesta semana');
-    SELECT count(*) INTO n FROM public.vw_payables WHERE organization_id = org_a AND effective_status = 'VENCIDO';
-    PERFORM pg_temp.confere((SELECT (s.numeros->'por_tipo'->'conta_vencida'->>'quantidade')::bigint FROM public.diretoria_semana_numeros s
+    -- "Como o painel": desde os ajustes (…20271118980000) a conta vencida que espera aprovação conta
+    -- em aprovação parada, então a referência é o próprio painel, não Contas a pagar cru.
+    SELECT coalesce(sum((e->>'quantidade')::bigint), 0) INTO n
+      FROM jsonb_array_elements(public._diretoria_excecoes(ARRAY[org_a], (now() AT TIME ZONE 'America/Sao_Paulo')::date)->'grupos') e
+     WHERE e->>'tipo' = 'conta_vencida';
+    PERFORM pg_temp.confere(n > 0 AND (SELECT (s.numeros->'por_tipo'->'conta_vencida'->>'quantidade')::bigint FROM public.diretoria_semana_numeros s
                               WHERE s.organization_id = org_a AND s.semana = v_semana) = n, 'a foto conta as contas vencidas como o painel');
     PERFORM pg_temp.da(pg_temp.como(NULL, 'service_role', 'SELECT public.fn_diretoria_registrar_semana()::text'), 'ok:%', 'registrar de novo');
     PERFORM pg_temp.confere((SELECT count(*) FROM public.diretoria_semana_numeros s WHERE s.organization_id = org_a AND s.semana = v_semana) = 1,

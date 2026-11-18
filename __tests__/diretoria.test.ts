@@ -9,7 +9,7 @@ import {
 // Plano: docs/planos/2026-11-17-opura-ceo.md (Tarefa 5).
 const HOJE = '2026-11-17';
 const grupo = (p: Partial<GrupoExcecao>): GrupoExcecao => ({
-    chave: p.chave ?? Math.random().toString(36), tipo: 'conta_vencida', org_id: 'a', grupo: null,
+    chave: p.chave ?? Math.random().toString(36), familia: p.familia ?? 'fam', tipo: 'conta_vencida', org_id: 'a', grupo: null,
     severidade: 'atencao', origem_responsavel: 'area', responsaveis: [], quantidade: 1, valor: null,
     dias: 10, data_ref: '2026-11-07', itens: [], ...p,
 });

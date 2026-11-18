@@ -33,7 +33,7 @@ export const TIPOS: Record<TipoExcecao, DefinicaoTipo> = {
     conta_vencida: {
         nome: 'Conta a pagar vencida', contagem: ['conta a pagar vencida', 'contas a pagar vencidas'],
         quando: ['a mais antiga venceu em', 'a primeira vence em', 'a primeira vence hoje'],
-        regra: 'Vencimento passou e não foi paga (o "Vencido" de Contas a pagar). Mais de 30 dias pede decisão; 8 a 30, atenção.',
+        regra: 'Vencimento passou e não foi paga (o "Vencido" de Contas a pagar). Mais de 30 dias pede decisão; 8 a 30, atenção. A que ainda espera aprovação conta em "Aprovação parada na alçada".',
         area: 'financeiro', tela: 'contas-a-pagar', telaNome: 'Financeiro › Contas a pagar',
     },
     parcela_cliente: {
@@ -51,7 +51,7 @@ export const TIPOS: Record<TipoExcecao, DefinicaoTipo> = {
     aprovacao_parada: {
         nome: 'Aprovação parada na alçada', contagem: ['aprovação parada na alçada', 'aprovações paradas na alçada'],
         quando: ['o primeiro venceu em', 'o primeiro vence em', 'o primeiro vence hoje'],
-        regra: 'Esperando aprovação e vence em até 3 dias. Já vencido pede decisão. Responde quem aprova o próximo nível.',
+        regra: 'Esperando aprovação e vence em até 3 dias. Já vencida pede decisão e conta só aqui, não em "Conta a pagar vencida". Responde quem aprova o próximo nível.',
         area: 'financeiro', tela: 'financial-approval', telaNome: 'Financeiro › Aprovações',
     },
     contrato_vencendo: {

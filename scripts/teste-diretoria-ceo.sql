@@ -94,7 +94,7 @@ SELECT x.user_id,
 DO $$
 DECLARE
     org_a UUID; org_b UUID; d UUID; m UUID; r UUID; x UUID; emp UUID; v TEXT; j JSONB; j2 JSONB;
-    hoje DATE; n_fonte BIGINT; n_painel BIGINT; det UUID; t UUID; f RECORD;
+    hoje DATE; n_fonte BIGINT; n_painel BIGINT; det UUID; t UUID; f RECORD; antes JSONB; t_comum UUID;
     sem_perm CONSTANT TEXT := '42501:sem acesso:%';
 BEGIN
     -- ── fixtures ─────────────────────────────────────────────────────────────
@@ -152,11 +152,33 @@ BEGIN
     PERFORM pg_temp.confere((SELECT count(*) FROM pg_temp.fila_antes) = 3, 'fixture: 3 usuários na comparação da fila');
 
     -- ── 3. contas a pagar vencidas: a regra da tela, faixas e responsável ───
-    SELECT count(*) INTO n_fonte FROM public.vw_payables WHERE organization_id = org_a AND effective_status = 'VENCIDO';
+    -- Ajustes (…20271118980000): a conta vencida que ainda espera aprovação conta UMA vez, em
+    -- "aprovação parada" (a causa); sai de "conta vencida".
+    SELECT count(*) INTO n_fonte FROM public.vw_payables v
+     WHERE v.organization_id = org_a AND v.effective_status = 'VENCIDO'
+       AND NOT EXISTS (SELECT 1 FROM public._fila_aprovacao_itens(ARRAY[org_a]) q
+                        WHERE q.q_entity = 'transaction' AND q.q_id::text = v.id::text
+                          AND q.q_approval_status = 'PENDENTE' AND q.q_due_date IS NOT NULL
+                          AND q.q_due_date <= hoje + 3);
     SELECT coalesce(sum((e->>'quantidade')::bigint), 0) INTO n_painel
       FROM jsonb_array_elements(j->'excecoes') e WHERE e->>'tipo' = 'conta_vencida';
     PERFORM pg_temp.confere(n_fonte > 0 AND n_painel = n_fonte,
-        format('contas vencidas da org A: painel %s, Contas a pagar %s', n_painel, n_fonte));
+        format('contas vencidas da org A, fora as que esperam aprovação: painel %s, Contas a pagar %s', n_painel, n_fonte));
+    -- a mesma conta não aparece nos dois tipos (itens listados)
+    PERFORM pg_temp.confere(NOT EXISTS (
+        SELECT 1 FROM jsonb_array_elements(j->'excecoes') a, jsonb_array_elements(a->'itens') ia,
+                      jsonb_array_elements(j->'excecoes') c, jsonb_array_elements(c->'itens') ic
+         WHERE a->>'tipo' = 'aprovacao_parada' AND c->>'tipo' = 'conta_vencida'
+           AND ia->>'id' = 'transaction:' || (ic->>'id')),
+        'conta que espera aprovação não aparece também em conta vencida');
+    -- família: a mesma para as faixas de um tipo/org/conta; nunca vazia
+    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM jsonb_array_elements(j->'excecoes') e
+         WHERE coalesce(e->>'familia', '') = ''
+            OR e->>'familia' <> md5((e->>'tipo') || '|' || (e->>'org_id') || '|' || coalesce(e->>'grupo_id', '') || '|' || coalesce(e->>'grupo', ''))),
+        'cada grupo traz a família = tipo · org · conta (sem faixa nem responsável)');
+    PERFORM pg_temp.confere((SELECT count(DISTINCT e->>'familia') FROM jsonb_array_elements(j->'excecoes') e WHERE e->>'tipo' = 'conta_vencida') = 1
+        AND (SELECT count(DISTINCT e->>'severidade') FROM jsonb_array_elements(j->'excecoes') e WHERE e->>'tipo' = 'conta_vencida') > 1,
+        'as faixas de conta vencida da org A são grupos diferentes da MESMA família');
     PERFORM pg_temp.confere(NOT EXISTS (
         SELECT 1 FROM jsonb_array_elements(j->'excecoes') e
          WHERE e->>'tipo' IN ('conta_vencida', 'parcela_cliente', 'documento_vencido', 'tarefa_vencida', 'entrega_atrasada')
@@ -223,6 +245,7 @@ BEGIN
         format('nenhum tipo caiu: %s', j->'erros'));
 
     -- responsável da área: d cadastra r no Financeiro
+    antes := pg_temp.painel(d, org_a);   -- lido agora: o caso do extrato acima criou contas
     PERFORM pg_temp.da(pg_temp.au(m, format('SELECT public.fn_diretoria_definir_area(%L, %L, %L)::text', org_a, 'financeiro', r)),
         sem_perm, 'm cadastra responsável da área');
     PERFORM pg_temp.da(pg_temp.au(d, format('SELECT public.fn_diretoria_definir_area(%L, %L, %L)::text', org_a, 'financeiro', x)),
@@ -237,6 +260,16 @@ BEGIN
          WHERE e->>'tipo' IN ('conta_vencida', 'extrato_sem_conciliar')
            AND (e->>'origem_responsavel' <> 'area' OR e->'responsaveis' <> jsonb_build_array(r))),
         'conta vencida e extrato caem no responsável do Financeiro');
+    -- Ajustes (…20271118980000): trocar o responsável muda a chave do grupo, mas não a família
+    -- (o histórico de cobrança segue junto).
+    PERFORM pg_temp.confere(
+        (SELECT array_agg(DISTINCT e->>'familia' ORDER BY e->>'familia') FROM jsonb_array_elements(antes->'excecoes') e
+          WHERE e->>'tipo' IN ('conta_vencida', 'extrato_sem_conciliar'))
+        = (SELECT array_agg(DISTINCT e->>'familia' ORDER BY e->>'familia') FROM jsonb_array_elements(j->'excecoes') e
+          WHERE e->>'tipo' IN ('conta_vencida', 'extrato_sem_conciliar'))
+        AND NOT EXISTS (SELECT 1 FROM jsonb_array_elements(antes->'excecoes') a, jsonb_array_elements(j->'excecoes') b
+                         WHERE a->>'tipo' = 'conta_vencida' AND a->>'chave' = b->>'chave'),
+        'trocar o responsável da área muda a chave do grupo e mantém a família');
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM jsonb_array_elements(j->'areas') a
          WHERE a->>'area' = 'financeiro' AND (a->>'user_id')::uuid = r), 'o painel devolve a área cadastrada');
 
@@ -335,8 +368,26 @@ BEGIN
     PERFORM pg_temp.confere((SELECT count(*) FROM jsonb_array_elements(j->'hierarquia') h WHERE (h->>'organization_id')::uuid = org_a) = 1
         AND EXISTS (SELECT 1 FROM jsonb_array_elements(j->'hierarquia') h WHERE (h->>'user_id')::uuid = r AND (h->>'chefe_user_id')::uuid = d),
         'o painel devolve a hierarquia (r responde a d)');
+    -- Ajustes (…20271118980000): antes de sair, r lê a determinação, a atualização e a tarefa dela.
+    INSERT INTO public.tasks (user_id, org_id, title, due_date, status, source_module)
+    VALUES (r, org_a, 'TDIR tarefa comum', now() + interval '3 days', 'open', 'manual') RETURNING id INTO t_comum;
+    PERFORM pg_temp.da(pg_temp.au(r, format('SELECT count(*)::text FROM public.tasks WHERE id IN (%L, %L)', t, t_comum)),
+        'ok:2', 'r (ainda membro) lê a tarefa da determinação e a tarefa comum');
     -- Revisão (…980300): quem saiu da org ainda pode ser tirado da hierarquia.
     DELETE FROM public.organization_members WHERE organization_id = org_a AND user_id = r;
+    -- Ajustes (…20271118980000): quem sai não continua lendo decisões da diretoria.
+    PERFORM pg_temp.da(pg_temp.au(r, format('SELECT count(*)::text FROM public.diretoria_determinacoes WHERE id = %L', det)),
+        'ok:0', 'r saiu da org A e não lê mais a determinação');
+    PERFORM pg_temp.da(pg_temp.au(r, format('SELECT count(*)::text FROM public.diretoria_determinacao_atualizacoes WHERE determinacao_id = %L', det)),
+        'ok:0', 'r saiu da org A e não lê mais as atualizações');
+    PERFORM pg_temp.da(pg_temp.au(r, format('SELECT count(*)::text FROM public.tasks WHERE id = %L', t)),
+        'ok:0', 'r saiu da org A e não lê mais a tarefa que veio da diretoria');
+    PERFORM pg_temp.da(pg_temp.au(r, format('SELECT count(*)::text FROM public.tasks WHERE source_module = %L AND org_id = %L', 'diretoria', org_a)),
+        'ok:0', 'r saiu da org A e não lê nenhuma tarefa de cobrança da diretoria');
+    PERFORM pg_temp.da(pg_temp.au(r, format('SELECT count(*)::text FROM public.tasks WHERE id = %L', t_comum)),
+        'ok:1', 'a tarefa comum de quem saiu não muda (só a da diretoria fica fechada)');
+    PERFORM pg_temp.da(pg_temp.au(d, format('SELECT count(*)::text FROM public.diretoria_determinacoes WHERE id = %L', det)),
+        'ok:1', 'd (com a permissão) continua vendo a determinação de quem saiu');
     PERFORM pg_temp.da(pg_temp.au(d, format('SELECT public.fn_diretoria_definir_chefe(%L, %L, NULL)::text', org_a, r)),
         'ok:%', 'tirar da hierarquia quem saiu da org A');
     PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.diretoria_hierarquia WHERE organization_id = org_a AND user_id = r),

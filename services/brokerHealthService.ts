@@ -63,6 +63,17 @@ interface EmpreendimentoDaSaude {
     project_name: string | null;
 }
 
+/**
+ * Há usuário logado? O link anônimo do portal do corretor não tem sessão: para ele
+ * as duas RPCs da Saúde devolveriam tudo vazio — e anon nem as executa (são
+ * SECURITY DEFINER; REVOKE de anon em aplicar_20271118913100). Sem sessão o painel
+ * segue zerado como sempre foi, sem ir ao banco.
+ */
+async function temSessao(): Promise<boolean> {
+    const { data } = await supabase.auth.getSession();
+    return !!data.session;
+}
+
 export const brokerHealthService = {
     /**
      * Empreendimentos (project_id de commercial_properties) com estoque de venda
@@ -72,6 +83,7 @@ export const brokerHealthService = {
      */
     async listProjectsWithSales(organizationId: string): Promise<{ id: string; name: string }[]> {
         try {
+            if (!(await temSessao())) return [];
             const { data, error } = await supabase.rpc('fn_broker_portal_saude_empreendimentos', {
                 p_org: organizationId,
             });
@@ -100,12 +112,15 @@ export const brokerHealthService = {
         // 1 + 2. Unidades e negócios da organização numa chamada só. O recorte por
         // empreendimento das UNIDADES é feito no banco (como o `.eq('project_id')`
         // de antes); o dos NEGÓCIOS continua aqui embaixo, pela unidade principal.
-        const { data, error } = await supabase.rpc('fn_broker_portal_saude', {
-            p_org: organizationId,
-            p_project: projectId || null,
-        });
-        if (error) throw error;
-        const saude = (data ?? {}) as Partial<DadosDaSaude>;
+        let saude: Partial<DadosDaSaude> = {};
+        if (await temSessao()) {
+            const { data, error } = await supabase.rpc('fn_broker_portal_saude', {
+                p_org: organizationId,
+                p_project: projectId || null,
+            });
+            if (error) throw error;
+            saude = (data ?? {}) as Partial<DadosDaSaude>;
+        }
         const props = saude.unidades ?? [];
         const deals = saude.negocios ?? [];
 

@@ -211,3 +211,16 @@ $function$;
 
 REVOKE ALL ON FUNCTION public.rh_kpis(uuid, date) FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.rh_kpis(uuid, date) TO authenticated, service_role;
+
+
+-- ─── RPCs da aba Saúde: anon fora ────────────────────────────────────────────
+-- A 1ª migration (913000, já aplicada em 18/11) deu EXECUTE a anon nas duas, para
+-- o painel do link anônimo seguir zerado. Para anon elas devolvem vazio, mas são
+-- SECURITY DEFINER — e scripts/check-rls-postura.sh (verificação 3) não aceita
+-- DEFINER executável por anon fora da allowlist. O front deste PR já não as chama
+-- sem sessão (services/brokerHealthService.ts, temSessao): o painel anônimo sai
+-- zerado sem ir ao banco. Por isso este REVOKE vem aqui, DEPOIS do front no ar.
+REVOKE EXECUTE ON FUNCTION public.fn_broker_portal_saude(uuid, uuid) FROM PUBLIC, anon;
+REVOKE EXECUTE ON FUNCTION public.fn_broker_portal_saude_empreendimentos(uuid) FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.fn_broker_portal_saude(uuid, uuid) TO authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.fn_broker_portal_saude_empreendimentos(uuid) TO authenticated, service_role;

@@ -19,7 +19,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const rpc = vi.fn();
 const from = vi.fn();
-vi.mock('../lib/supabase', () => ({ supabase: { rpc: (...a: unknown[]) => rpc(...a), from: (...a: unknown[]) => from(...a) } }));
+const getSession = vi.fn();
+vi.mock('../lib/supabase', () => ({ supabase: {
+    rpc: (...a: unknown[]) => rpc(...a),
+    from: (...a: unknown[]) => from(...a),
+    auth: { getSession: () => getSession() },
+} }));
 
 import { brokerHealthService } from '../services/brokerHealthService';
 
@@ -42,7 +47,20 @@ function responde(unidades: Unidade[], negocios: Negocio[], projeto_nome: string
 beforeEach(() => {
     rpc.mockReset();
     from.mockReset();
+    getSession.mockReset();
+    getSession.mockResolvedValue({ data: { session: { access_token: 'x' } } });
     vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+describe('sem sessão (link anônimo do portal)', () => {
+    it('não chama as RPCs (anon não executa) e mantém o painel ZERO e a lista vazia', async () => {
+        getSession.mockResolvedValue({ data: { session: null } });
+        const k = await brokerHealthService.getHealthData(ORG, null);
+        expect(k).toMatchObject({ total_units: 0, sold_units: 0, vgv_total: 0, mix_sales: [] });
+        expect(await brokerHealthService.listProjectsWithSales(ORG)).toEqual([]);
+        expect(rpc).not.toHaveBeenCalled();
+        expect(from).not.toHaveBeenCalled();
+    });
 });
 
 describe('getHealthData — fonte', () => {

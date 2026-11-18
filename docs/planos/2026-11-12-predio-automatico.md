@@ -92,6 +92,16 @@ Decisões do usuário (17/11/2026):
 
 Viraram as fases PA19 (1), PA20 (2), PA21 (3) e PA22 (4); o 5 sai das pendências "a decidir" (acompanhamento).
 
+### Pedido de 18/11/2026 — PA23
+
+Com PA0–PA22 no ar, a resposta final do 2º pedido de 17/11 deixou uma pendência nova para o projetista: o desvio do RL
+pelos corredores é longo (~52 m a 1 %) e chega à saída a 1,87 m do piso do térreo — "uma saída (e caixa de inspeção) por
+asa encurtaria". Então:
+
+> Resolva a pendência
+
+Virou a fase PA23 — a saída por asa, que a própria pendência propunha.
+
 ## Contexto lido no código (origin/main, 12/11/2026)
 
 - **Arquitetura do prédio já existe:** `dividirPavimentoDoBloco`/`montarPavimentoTipoDoBloco`
@@ -1059,14 +1069,65 @@ nenhum em pilar); no rascunho salvo depois do Lançar, nenhuma rede dentro de pi
 diagonal, nenhum eletroduto × esgoto, × linha ou duto, nenhuma água × dreno ou linha, nenhuma rede dentro de equipamento.
 Sem erro de console.
 
+### PA23 — Uma saída de esgoto por asa (pedido de 18/11)
+**O que muda.** No bloco em asas, cada asa sem a saída da rua ganha a sua na fachada dela, com a caixa de inspeção fora; um
+subcoletor enterrado por fora do prédio leva essa caixa à da rua. O desvio suspenso no térreo encurta e sobe.
+**Pronto quando.** O desvio do RL acima da verga das portas (2,10 m; era 1,87 m), toda louça chegando à ligação, nenhum
+conflito novo (encontros entre redes, porta ou janela, pilar); R4, R8, R12 e o marco da casa idênticos.
+
+**Execução da PA23 (18/11/2026).** Antes, o RL (13 tubos de queda) descia todos pelos corredores até a saída única no
+meio da fachada da rua: a asa de cima (7 tubos) corria o corredor inteiro, o caminho mais longo tinha ~60 m e a chegada
+ficava a 1,87 m. Feito:
+- **As asas** (`asasEJuncoesDoContorno`, extraída de `utils/blueprintPavimentoOrtogonal.ts` sem mudar a divisão): os nós e
+  as asas do contorno, no quadro do bloco.
+- **A saída da asa** (`saidasDasAsas` em `utils/predioAutomatico/esgoto.ts`): cada asa sem a saída da rua e com tubo de
+  queda ganha a sua numa das fachadas compridas, no meio dos tubos dela (o mais longe chega mais alto), do lado cujo
+  caminho por fora até a caixa da rua é o mais curto (no RL, a fachada oeste — o leste daria a volta pela asa da rua). A
+  saída desliza ao longo da fachada até a chegada pelo corredor não cruzar porta, janela nem a subida de outra rede, a
+  descida não ficar num pilar nem diante de um vão e a caixa cair dentro do lote; sem lugar, a asa fica com a saída da
+  rua (o relatório avisa).
+- **O desvio** (`desvioPelosCorredores`): o Dijkstra parte de todas as saídas — cada tubo vai à mais perto pelos
+  corredores; os tubos do nó do L continuam na da rua. Uma terceira saída, no nó, não compensa pela conta (não rodada):
+  subiria o ponto mais baixo só ~6 cm (cada asa tem ~23 m inevitáveis a 1 %).
+- **O subcoletor enterrado** (`subcoletorEnterrado`, `rotaPorFora`): pelo contorno do bloco afastado 1 m da fachada (onde
+  já ficam as caixas), no sentido mais curto dentro do lote, a 1 %; caixa de inspeção em cada canto e a cada 25 m no
+  máximo (NBR 8160, `DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM`); onde chegam tubos em cotas diferentes, uma vertical na caixa as
+  liga, e a caixa da rua fica com o fundo da chegada mais baixa (o coletor parte dele).
+- **A água por cima do desvio** (`redesPorCimaDoDesvio` em `utils/predioAutomatico/desvios.ts`, logo depois do esgoto, no
+  térreo): mais alto, o desvio encontrava o recalque da água fria, que vai da casa de bombas ao shaft a 2,40 m; a rede sob
+  pressão (água, incêndio) que toca o desvio sobe por cima dele no cruzamento, com 5 cm de folga além dos raios, e volta.
+  Só onde os tubos se tocam (o critério da compatibilização) — a 1ª versão pulava com folga menor que 5 cm e mexia na água
+  do R4 e do R12 sem conflito nenhum.
+
+Resultado (o marco grava `desvioMaisBaixoMm` e trava acima de 2,10 m nos quatro): no RL o desvio suspenso mais baixo
+1,87 → 2,14 m (o caminho mais longo ~60 → ~31 m; a asa de cima chega à saída dela a 2,23 m); 2 saídas, subcoletor de ~53
+m com 3 caixas (a da asa, o canto e uma intermediária); encontros entre redes 108, porta ou janela 441, em outra peça 1,
+nenhum em pilar, encostos 42 — iguais; o recalque passa por cima do desvio (água × esgoto 0). Furos para o calculista: em
+viga 22 → 25 (o desvio mais alto atravessa o pé de vigas do térreo, fundo a 2,40 m, onde antes passava por baixo delas),
+em baldrame 15 → 14. R4 (2,25 m), R8 (2,16 m) e R12 (2,12 m) idênticos — só ganharam o campo; marco da casa idêntico.
+Testes em `__tests__/predioSaidaPorAsa.test.ts` (um L de 4 pavimentos: a asa de cima desce na fachada dela e a da rua no
+meio do lado da rua; o subcoletor por fora, nos eixos, a 1 %, caixa em cada ponta, nenhum lance acima de 25 m; toda louça
+chega à ligação; e o pulo da água, isolado: por cima com a folga, as pontas iguais, nada muda sem choque, colado na ponta
+do trecho ou com outro rótulo).
+
+**Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pa23.cjs`, o RL, estudo descartável arquivado): gerar em 82,6
+s; a aba Compatibilização igual à da PA22 (441 em porta ou janela · 108 encontros entre redes · 1 em outra peça, nenhum
+em pilar; 42 encostos); o relatório com as duas pendências novas ("em 2 saídas — a da rua e uma por asa (139 m no
+total; o ponto mais baixo a 2,14 m do piso)" e o subcoletor "DN 200, 53 m a 1 %; 3 caixa(s)") e a do recalque por cima
+do desvio; no rascunho salvo depois do Lançar, as duas descidas do desvio (a da rua e a da asa de cima, na fachada
+oeste), o desvio suspenso mais baixo a 2.136 mm, o subcoletor com 3 lances e nenhum sob o prédio (4 caixas no térreo),
+nenhuma água × esgoto, nenhuma rede em pilar ou equipamento, nenhum eletroduto × esgoto, × linha ou duto. Sem erro de
+console. (A 1ª rodada não abriu o grupo "CONFERIR NA NORMA/IT" do relatório — o roteiro procurava "Conferir" com
+maiúscula só na inicial.)
+
 PA1 e PA2 podem correr em frentes paralelas.
 
-## Pendências em aberto (17/11/2026, depois da PA22)
+## Pendências em aberto (18/11/2026, depois da PA23)
 
 O que o prédio automático ainda não faz, ou faz e deixa para conferir. "Projetista" = fica de propósito como pendência na
 tela (o motor não decide); "acompanhamento" = vigiar a cada mudança; "a decidir" = trabalho possível, sem fase. Os
-quatro "a decidir" de 16/11 viraram as fases PA11–PA14, quatro dos cinco de 17/11 as PA15–PA18, e os cinco do 2º pedido
-de 17/11 as PA19–PA22 (o tempo do Lançar fica, decisão 5a): as
+quatro "a decidir" de 16/11 viraram as fases PA11–PA14, quatro dos cinco de 17/11 as PA15–PA18, os cinco do 2º pedido
+de 17/11 as PA19–PA22 (o tempo do Lançar fica, decisão 5a) e a do desvio longo do RL a PA23 (18/11): as
 linhas riscadas são o que elas resolveram, e o que deixaram entrou como linha nova. Os números são do marco no main
 (`__tests__/fixtures/predioAutomaticoMarco.json`); "decisão do usuário" só onde a escolha veio da pergunta de múltipla
 escolha.
@@ -1084,7 +1145,9 @@ escolha.
 | Compatibilização | ~~O duto de ar (a exaustão do banheiro) atravessando a caixa de uma evaporadora ou de um exaustor (R8 7, R12 88, RL 21)~~ — resolvido: a descarga sai da frente da evaporadora e o duto contorna o exaustor vizinho; zero nos quatro prédios | feito na PA15 |
 | Compatibilização | ~~As descidas da água cruzando o dreno e a linha frigorígena (no tipo do R8: 13 × dreno, 12 × linha)~~ — resolvido: no prédio a água desce na face da parede (o dreno e a linha correm no eixo); zero nos quatro prédios | feito na PA17 |
 | Compatibilização | ~~Conflitos com pilar (R4 2, R8 4, R12 2, RL 31): redes traçadas em linha reta~~ — resolvido: o desvio do térreo pelos corredores e por fora dos pilares, o pluvial e os enterrados, a drenagem, a água e a luz do tipo (zero nos quatro prédios) | feito na PA22 (decisão 4a) |
-| Compatibilização | O desvio do RL pelos corredores é longo (~52 m a 1 %) e chega à saída a 1,87 m do piso do térreo — baixo para o forro dele (nenhuma porta é cruzada: a chegada à saída desliza para fora da porta do hall) — uma saída (e caixa de inspeção) por asa encurtaria | projetista |
+| Compatibilização | ~~O desvio do RL pelos corredores é longo (~52 m a 1 %) e chega à saída a 1,87 m do piso do térreo~~ — resolvido: uma saída por asa, com o subcoletor enterrado por fora do prédio (o ponto mais baixo a 2,14 m) | feito na PA23 (pedido de 18/11) |
+| Compatibilização | O desvio do RL, mais alto, atravessa o pé de vigas do térreo (fundo a 2,40 m): furos em viga 22 → 25 na lista do calculista | projetista |
+| Água e esgoto | O subcoletor enterrado por fora do prédio (RL: ~53 m a 1 %, a 1 m da fachada, 3 caixas de inspeção) — confira com o paisagismo e as outras redes enterradas; o recalque da água sobe por cima do desvio no cruzamento (ponto alto: ar na tubulação) | projetista |
 | Compatibilização | O dreno do ar, por gravidade a ~2,10 m no eixo da parede, passando sobre porta ou pelo alto de janela (27 no tipo do R8, 38 no do RL) — no relatório | projetista (decisão do usuário, 16/11) |
 | Compatibilização | O eletroduto junto da laje cruzando a descida da louça do andar de cima pela laje (eram R8 32, R12 104, RL 91) — resolvido em boa parte na PA16 (o contorno conferido contra todos os obstáculos) e na PA17 (a água na face): R4 12, R8 0, R12 0, RL 12; sobravam a luz da área de serviço 13 mm abaixo do ralo seco de cima (R4 — resolvido na PA20: a luz anda para 15 cm dele) e, no RL, a subida do QD sob o ramal de esgoto de cima (o diagnóstico de 17/11 desmentiu a "vizinhança densa" — resolvido na PA21: o ramal a contorna) | feito na PA16/PA17 (as sobras: PA20, decisão 2a; PA21, decisão 3a) |
 | Compatibilização | Furos em viga do eletroduto junto da laje (+4 a +8 por prédio, nas travessias fora do apoio) — confira com o calculista | projetista |
@@ -1159,6 +1222,7 @@ Kernel em `blueprint-kernel-ts-0.109.0` (PA11–PA22 não mudam a versão).
 | PA20 — a luz de teto longe da descida da laje de cima | #558 | 93e2e09 |
 | PA21 — o ramal de esgoto de cima desvia da subida do QD | #559 | b15339c |
 | PA22 — as redes em linha reta contornam pilar | #560 | ed16f8a |
+| PA23 — uma saída de esgoto por asa | — | a publicar |
 
 | Fase | Situação |
 |---|---|
@@ -1185,3 +1249,4 @@ Kernel em `blueprint-kernel-ts-0.109.0` (PA11–PA22 não mudam a versão).
 | PA20 | feita, no ar (#558, 93e2e09; conferida no app com o R4) — a luz de teto anda no cômodo para 15 cm da descida da laje de cima (`luzesLongeDasDescidasDeCima`): eletroduto × esgoto R4 12 → 0 (o marco trava); encontros entre redes R4 35 → 23; marco da casa idêntico |
 | PA21 | feita, no ar (#559, b15339c; conferida no app com o RL) — o ramal de esgoto do tipo contorna a subida do QD de baixo: eletroduto × esgoto RL 12 → 0 (o marco trava zero nos quatro); encontros entre redes RL 121 → 109; R4, R8 e R12 idênticos; marco da casa idêntico |
 | PA22 | feita, no ar (#560, ed16f8a; conferida no app com o RL) — as redes em linha reta contornam pilar (o desvio do térreo pelos corredores, o pluvial e os enterrados, a drenagem, a água e a luz do tipo): conflito com pilar R4 2, R8 4, R12 2, RL 31 → 0 (o marco trava); o desvio sem diagonal; marco da casa idêntico |
+| PA23 | feita, a publicar (conferida no app com o RL) — uma saída de esgoto por asa e o subcoletor enterrado por fora do prédio: o desvio do RL 1,87 → 2,14 m (o marco trava acima de 2,10 m nos quatro); o recalque por cima do desvio; conflitos iguais; R4, R8, R12 e a casa idênticos |

@@ -33,6 +33,7 @@ import {
   nomeDaUnidadeDaMassa,
   pavimentoTipoMontado,
   pisosAcimaDoSolo,
+  type OpcoesDaMontagem,
   quadroDoBloco,
   uidDoPavimentoTipo,
   type DivisaoDoPavimento,
@@ -760,7 +761,7 @@ function paredeNoPonto(paredes: readonly Wall[], p: Point): { w: Wall; off: numb
   return null;
 }
 
-export function montarPavimentoTipoOrtogonal(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hipParcial: Partial<HipotesesDoPavimentoTipo> = {}): PavimentoTipoMontado {
+export function montarPavimentoTipoOrtogonal(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hipParcial: Partial<HipotesesDoPavimentoTipo> = {}, opcoes: OpcoesDaMontagem = {}): PavimentoTipoMontado {
   const hip = { ...HIPOTESES_DO_PAVIMENTO_TIPO_PADRAO, ...hipParcial };
   const plano = d.ortogonal;
   if (!plano) throw new Error('Divisão sem o plano ortogonal.');
@@ -769,7 +770,7 @@ export function montarPavimentoTipoOrtogonal(model: BlueprintModel, b: Bloco, d:
   if (ja) throw new Error(`O pavimento tipo de "${b.nome}" já está montado ("${ja.name}"). Para refazer, remova esse pavimento (as cópias se desvinculam) e monte de novo.`);
   const q = d.quadro;
   const P = plano.poligono;
-  const pisos = pisosAcimaDoSolo(model, b);
+  const pisos = opcoes.pisos ?? pisosAcimaDoSolo(model, b);
   const iTipo = Math.min(pisos.length, d.ordinalDoTipo) - 1;
   const comandos: Command[] = [];
   let m = model;
@@ -1003,6 +1004,6 @@ export function dividirPavimentoDoBloco(e: EntradaDaDivisao, hip: Partial<Hipote
 }
 
 /** A montagem pela divisão que veio. */
-export function montarPavimentoTipoDoBloco(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hip: Partial<HipotesesDoPavimentoTipo> = {}): PavimentoTipoMontado {
-  return d.ortogonal ? montarPavimentoTipoOrtogonal(model, b, d, hip) : montarPavimentoTipo(model, b, d, hip);
+export function montarPavimentoTipoDoBloco(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hip: Partial<HipotesesDoPavimentoTipo> = {}, opcoes: OpcoesDaMontagem = {}): PavimentoTipoMontado {
+  return d.ortogonal ? montarPavimentoTipoOrtogonal(model, b, d, hip, opcoes) : montarPavimentoTipo(model, b, d, hip, opcoes);
 }

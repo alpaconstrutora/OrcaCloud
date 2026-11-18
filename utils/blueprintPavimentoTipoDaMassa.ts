@@ -355,6 +355,20 @@ function paredeNoPonto(paredes: readonly Wall[], p: Point): { w: Wall; off: numb
   return null;
 }
 
+/**
+ * PE6a (18/11/2026): as cotas dos pavimentos que a montagem do tipo usa, quando não são as de cima do solo — a torre do
+ * Empreendimento que começa abaixo da rua (a Torre B do Garden, do −2) passa TODOS os pisos do bloco (`pisosDoBloco`).
+ */
+export interface OpcoesDaMontagem {
+  pisos?: number[];
+}
+
+/** As cotas de TODOS os pavimentos do bloco (absolutas), de baixo para cima — os abaixo do solo também. */
+export function pisosDoBloco(model: BlueprintModel, b: Bloco): number[] {
+  const elev = model.levels.find((l) => l.id === b.levelId)?.elevationMm ?? 0;
+  return Array.from({ length: b.pavimentos }, (_, i) => elev + b.cotaBaseMm + i * b.peDireitoMm);
+}
+
 /** As cotas dos pavimentos ACIMA DO SOLO do bloco (absolutas). */
 export function pisosAcimaDoSolo(model: BlueprintModel, b: Bloco): number[] {
   const elev = model.levels.find((l) => l.id === b.levelId)?.elevationMm ?? 0;
@@ -385,13 +399,13 @@ export function ordinalDoTipo(model: BlueprintModel, b: Bloco): number {
   return pisosAcimaDoSolo(model, b).length >= 2 ? 2 : 1;
 }
 
-export function montarPavimentoTipo(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hipParcial: Partial<HipotesesDoPavimentoTipo> = {}): PavimentoTipoMontado {
+export function montarPavimentoTipo(model: BlueprintModel, b: Bloco, d: DivisaoDoPavimento, hipParcial: Partial<HipotesesDoPavimentoTipo> = {}, opcoes: OpcoesDaMontagem = {}): PavimentoTipoMontado {
   const hip = { ...HIPOTESES_DO_PAVIMENTO_TIPO_PADRAO, ...hipParcial };
   const avisos: string[] = [];
   const ja = pavimentoTipoMontado(model, b);
   if (ja) throw new Error(`O pavimento tipo de "${b.nome}" já está montado ("${ja.name}"). Para refazer, remova esse pavimento (as cópias se desvinculam) e monte de novo.`);
   const q = d.quadro;
-  const pisos = pisosAcimaDoSolo(model, b);
+  const pisos = opcoes.pisos ?? pisosAcimaDoSolo(model, b);
   const iTipo = Math.min(pisos.length, d.ordinalDoTipo) - 1;
   const comandos: Command[] = [];
   let m = model;

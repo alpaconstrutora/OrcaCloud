@@ -393,6 +393,22 @@ A PE5 abaixo descreve a parte da garagem; a PE4 fica com o andar próprio.
 - **Rota de fuga:** −2 e −1 têm rota até a saída.
 - **Relatório:** as pendências aparecem.
 
+**Spike da Torre B (18/11/2026, descartado).** Tirei a guarda e incluí os pisos abaixo da rua (`pisosAcimaDoSolo` com os negativos). A geração passou, mas com quatro erros:
+- **24 unidades, 24 atendidas e 24 medidas** (25 medidores). A elétrica e a água já fecham.
+- **O tipo foi parar no −1:** o motor ainda conta "o 2º piso é o tipo" (`ordinalDoTipo`). O −2 virou "térreo", e os apartamentos do 0 da ficha (TR05…) foram aplicados no −2.
+- **O esgoto ficou abaixo da rede:** o coletor a −20 % ("preveja estação elevatória").
+- **A rota de fuga não fechou:** 281 ambientes sem caminho até a saída, e o andar 0 (cópia) não tem porta para a rua.
+- **Garagem:** nenhuma vaga coube no −3. A nomeação dos subsolos ("3º/4º subsolo") também está errada.
+
+**Mapa da PE6** (cada passo com teste antes, na Torre B do Garden):
+1. **PE6a — a torre do −2.** Quando a ficha tem apartamento abaixo da rua, o orquestrador passa à montagem do tipo os pisos do bloco a partir da base dele, e não só os de cota ≥ 0. O tipo fica no 1º piso (o −2), as cópias no −1 a 3, e o térreo não é montado (o 0 é cópia).
+   - **O técnico:** a sala técnica fica no subsolo mais alto (−3), como na PE5a.
+   - **A garagem:** lê a torre pelo tipo e não escreve nele (a escada de emergência dela não pode ir para todo andar).
+   - **A massa e os marcos:** `pisosAcimaDoSolo` não muda para eles.
+2. **PE6b — o esgoto abaixo da rede.** O desvio no forro do −3 termina na caixa coletora com 2 bombas (a peça do poço da PA8c), e o recalque sobe à caixa de inspeção na cota da rua. As bombas ficam no quadro de serviço.
+3. **PE6c — a rota de fuga até o 0.** A descarga é o andar 0 (cópia), e a escada do núcleo sobe do −2. Como a porta para a rua no 0 não cabe na cópia, ela vira pendência; a rota conta até a chegada da escada no 0.
+4. **PE6d — liberar a Torre B.** Tirar a guarda (motor e passo TORRE na Casa automática), nomear os andares e as unidades pela ficha (SS205…, TR05…) e conferir no app.
+
 ### PE7 — As duas torres no mesmo estudo
 **O que muda.** A Torre B é gerada depois da Torre A, no mesmo estudo. O Garden as tem coladas (distância 0).
 - **Uma entrada por rede pública:** uma ligação de esgoto e uma de água, e uma entrada de energia. As redes da segunda torre se ligam às da primeira.

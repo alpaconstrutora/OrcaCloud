@@ -162,9 +162,13 @@ BEGIN
         RAISE EXCEPTION 'not_authenticated' USING ERRCODE = '42501';
     END IF;
 
+    -- Só reserva o que está à venda: unidade vendida/alugada/permutada não volta
+    -- para RESERVED por esta porta (o botão só aparece em disponível, mas a regra
+    -- é do servidor). RESERVED → RESERVED é aceito: clique duplo não vira erro.
     UPDATE public.commercial_properties cp
        SET status = 'RESERVED'
      WHERE cp.id = p_property_id
+       AND cp.status IN ('AVAILABLE', 'RESERVED')
        AND cp.organization_id IN (
                SELECT o FROM public.minhas_orgs_membro() o
                UNION
@@ -174,6 +178,16 @@ BEGIN
     -- Antes, o UPDATE que não achava a linha (RLS) voltava 0 linhas e o `.single()`
     -- do front dava erro. Aqui o erro é explícito; a tela mostra o mesmo aviso.
     IF v_status IS NULL THEN
+        IF EXISTS (
+            SELECT 1 FROM public.commercial_properties cp
+             WHERE cp.id = p_property_id
+               AND cp.organization_id IN (
+                       SELECT o FROM public.minhas_orgs_membro() o
+                       UNION
+                       SELECT o FROM public.minhas_orgs_corretor() o)
+        ) THEN
+            RAISE EXCEPTION 'unidade_indisponivel' USING ERRCODE = 'P0001';
+        END IF;
         RAISE EXCEPTION 'unidade_sem_acesso' USING ERRCODE = '42501';
     END IF;
 

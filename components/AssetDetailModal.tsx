@@ -33,9 +33,11 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
     // --- Derived Data from Project ---
     const purchaseDate = project.purchaseDate || null;
     const purchasePrice = project.invested ?? 0;
-    const currentValue = project.currentValue ?? project.equity ?? 0;
-    const totalAppreciation = currentValue - purchasePrice;
-    const appreciationPercent = purchasePrice > 0 ? (totalAppreciation / purchasePrice) * 100 : 0;
+    // null = sem participação registrada ou sem valor do empreendimento (utils/investidorCarteira):
+    // "—", nunca R$ 0 com "valorização" negativa.
+    const currentValue: number | null = project.currentValue ?? project.equity ?? null;
+    const totalAppreciation = currentValue != null ? currentValue - purchasePrice : null;
+    const appreciationPercent = totalAppreciation != null && purchasePrice > 0 ? (totalAppreciation / purchasePrice) * 100 : 0;
     const status = project.status || 'Em Execução';
     const progress = project.progress || 0; // já em escala 0-100
     const yoc = project.yoc ? (project.yoc * 100).toFixed(1) + '%' : '—';
@@ -99,14 +101,14 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
                             </div>
                             <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100">
                                 <p className="text-xs font-bold text-blue-400 mb-1">Valor Atual</p>
-                                <p className="text-xl font-black text-blue-700">{formatCurrency(currentValue)}</p>
-                                <p className="text-xs text-blue-400 mt-1">Atualizado hoje</p>
+                                <p className="text-xl font-black text-blue-700">{currentValue != null ? formatCurrency(currentValue) : '—'}</p>
+                                <p className="text-xs text-blue-400 mt-1">{currentValue != null ? 'Atualizado hoje' : (project.semPatrimonio ?? 'Não calculado')}</p>
                             </div>
                             <div className="bg-emerald-50 p-5 rounded-2xl border border-emerald-100">
                                 <p className="text-xs font-bold text-emerald-500 mb-1">Valorização Total</p>
                                 <div className="flex items-baseline gap-2">
-                                    <p className="text-xl font-black text-emerald-700">{formatCurrency(totalAppreciation)}</p>
-                                    <span className="text-sm font-bold text-emerald-600">({appreciationPercent.toFixed(1)}%)</span>
+                                    <p className="text-xl font-black text-emerald-700">{totalAppreciation != null ? formatCurrency(totalAppreciation) : '—'}</p>
+                                    {totalAppreciation != null && <span className="text-sm font-bold text-emerald-600">({appreciationPercent.toFixed(1)}%)</span>}
                                 </div>
                                 <p className="text-xs text-emerald-500 mt-1 flex items-center gap-1">
                                     <TrendingUp className="w-3 h-3" /> Desde o início

@@ -38,6 +38,7 @@ import PortalFiscal from './investor/portal/PortalFiscal';
 import PortalAnnouncements from './investor/portal/PortalAnnouncements';
 import PortalSpes, { PortalSpe } from './investor/portal/PortalSpes';
 import PortalEspelho from './investor/portal/PortalEspelho';
+import { itemDaCarteira, totalDaCarteira } from '../utils/investidorCarteira';
 import { useRealceDaAbaAtiva } from '../hooks/useRealceDaAbaAtiva';
 
 interface InvestorDashboardProps {
@@ -264,34 +265,10 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     );
 
     const stats = React.useMemo(() => {
-        let totalEquity = 0;
-        const holdings: HoldingItem[] = activeProjects.map(p => {
-            const financialValue = p.settings?.financialInfo?.totalValue;
-            const calculatedValue = (p.settings?.area || 0) * (p.settings?.cubRate || 0);
-            const projectValue = financialValue || calculatedValue || 0;
-
-            const summary = p.id ? summaries[p.id] : undefined;
-            const ownershipPct = summary?.ownershipPct ?? 0;
-            // Patrimônio = participação do investidor no valor do empreendimento (ou valor total se sem participação registrada)
-            const investorValue = ownershipPct > 0 ? projectValue * (ownershipPct / 100) : projectValue;
-            const invested = summary?.totalContributed ?? 0;
-            const roi = summary ? summary.roiRealized(investorValue) : undefined;
-
-            totalEquity += investorValue;
-            return {
-                id: p.id,
-                name: p.name,
-                location: p.settings?.location || 'Localização não informada',
-                cota: ownershipPct > 0 ? `${ownershipPct.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%` : '1x',
-                equity: investorValue,
-                currentValue: investorValue,
-                invested: invested || undefined,
-                yoc: roi !== undefined ? roi / 100 : undefined,
-                yield: roi !== undefined ? `${roi.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : undefined,
-                status: p.settings?.obraStatus || 'Em Andamento',
-                progress: p.settings?.obraProgress || 0,
-            };
-        });
+        // Patrimônio = valor do empreendimento × participação registrada; sem uma das duas é null
+        // com o motivo — nunca 100% do empreendimento nem área × CUB (utils/investidorCarteira).
+        const holdings: HoldingItem[] = activeProjects.map(p => itemDaCarteira(p, p.id ? summaries[p.id] : undefined));
+        const totalEquity = totalDaCarteira(holdings).total;
         // Rendimento Mensal real: média mensal de dividendos/distribuições liquidados
         const totalDividends = Object.values(summaries).reduce((s, sm) => s + sm.totalDividends, 0);
         const totalContributed = Object.values(summaries).reduce((s, sm) => s + sm.totalContributed, 0);
@@ -308,7 +285,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             : null;
 
         return {
-            equity: totalEquity.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }),
+            equity: totalEquity != null ? totalEquity.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—',
             activeWorks: activeProjects.length,
             holdings,
             monthlyYieldPct,

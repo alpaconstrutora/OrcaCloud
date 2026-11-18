@@ -3,6 +3,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { Building2, ChevronDown, ExternalLink, FileDown, Sparkles, Wallet } from 'lucide-react';
 import { HoldingItem } from '../types';
 import { InvestorContribution } from '../../../services/investorContributionsService';
+import { totalDaCarteira } from '../../../utils/investidorCarteira';
 import { AIInsight } from '../../../services/aiService';
 import {
     CardHeader, DetailField, fmtBRL, fmtBRLCents, fmtDate, fmtMonthShort, KpiStrip, PortalCard,
@@ -108,14 +109,19 @@ const PortalOverview: React.FC<Props> = ({
     const dividendoDelta = deltaPct(last?.dividendos, prev?.dividendos);
 
     // O `equity` chega formatado com centavos e estoura a coluna no mobile.
-    // Como as participações trazem o valor numérico, reformata sem centavos.
-    const equityValue = holdings.reduce((s, h) => s + (Number(h.equity) || 0), 0);
+    // Como as participações trazem o valor numérico, reformata sem centavos — somando só o que se
+    // sabe: participação sem patrimônio conhecido é "—" com o motivo, nunca R$ 0 (18/11/2026).
+    const carteira = totalDaCarteira(holdings);
+    const obras = activeWorks ? `${activeWorks} empreendimento${activeWorks > 1 ? 's' : ''}` : undefined;
 
     const kpis = [
         {
             label: 'Patrimônio',
-            value: holdings.length > 0 ? fmtBRL(equityValue) : (equity || 'R$ 0,00'),
-            hint: activeWorks ? `${activeWorks} empreendimento${activeWorks > 1 ? 's' : ''}` : undefined,
+            value: holdings.length === 0 ? (equity || 'R$ 0,00') : carteira.total == null ? '—' : fmtBRL(carteira.total),
+            hint: carteira.total == null ? carteira.motivo
+                : carteira.semPatrimonio > 0
+                    ? [obras, `${carteira.semPatrimonio} sem patrimônio calculado`].filter(Boolean).join(' · ')
+                    : obras,
         },
         {
             label: 'Rendimento médio',
@@ -443,8 +449,8 @@ const PortalOverview: React.FC<Props> = ({
                                                         {h.name}
                                                     </span>
                                                 </Td>
-                                                <Td><TagChip>{h.cota}</TagChip></Td>
-                                                <Td className="text-[#1F2430] font-medium tabular-nums">{fmtBRL(Number(h.equity) || 0)}</Td>
+                                                <Td>{h.cota === '—' ? '—' : <TagChip>{h.cota}</TagChip>}</Td>
+                                                <Td className="text-[#1F2430] font-medium tabular-nums">{h.equity != null ? fmtBRL(h.equity) : '—'}</Td>
                                                 <Td><StatusPill tone={holdingTone(h.status)}>{h.status}</StatusPill></Td>
                                                 <Td>
                                                     <div className="flex items-center gap-2 min-w-[120px]">

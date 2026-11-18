@@ -1,6 +1,7 @@
 import React from 'react';
 import { Building2, ChevronDown, ExternalLink, MapPin } from 'lucide-react';
 import { HoldingItem } from '../types';
+import { totalDaCarteira } from '../../../utils/investidorCarteira';
 import {
     CardHeader, DetailField, fmtBRL, fmtBRLCents, PortalCard, PortalEmpty,
     PrimaryButton, StatusPill, TagChip, Td, Th, PillTone,
@@ -26,7 +27,8 @@ const tone = (status: string): PillTone => {
 const PortalHoldings: React.FC<Props> = ({ holdings, filterStatus, onFilterChange, onSelectAsset }) => {
     const [expanded, setExpanded] = React.useState<string | null>(null);
 
-    const totalEquity = holdings.reduce((s, h) => s + (Number(h.equity) || 0), 0);
+    // Só o patrimônio conhecido entra na soma; participação sem ele é "—" (18/11/2026).
+    const totalEquity = totalDaCarteira(holdings).total;
     const totalInvested = holdings.reduce((s, h) => s + (h.invested ?? 0), 0);
 
     return (
@@ -34,7 +36,7 @@ const PortalHoldings: React.FC<Props> = ({ holdings, filterStatus, onFilterChang
             <PortalCard className="overflow-hidden">
                 <CardHeader
                     title="Minha carteira"
-                    subtitle={`${holdings.length} participa${holdings.length === 1 ? 'ção' : 'ções'} · ${fmtBRL(totalEquity)} em patrimônio`}
+                    subtitle={`${holdings.length} participa${holdings.length === 1 ? 'ção' : 'ções'}${totalEquity != null ? ` · ${fmtBRL(totalEquity)} em patrimônio` : ''}`}
                     right={
                         <div className="hidden md:flex items-center gap-1 bg-[#F6F6F8] p-1 rounded-[8px]">
                             {STATUS_FILTERS.map(s => (
@@ -116,9 +118,9 @@ const PortalHoldings: React.FC<Props> = ({ holdings, filterStatus, onFilterChang
                                                     </span>
                                                 </span>
                                             </Td>
-                                            <Td><TagChip>{h.cota}</TagChip></Td>
+                                            <Td>{h.cota === '—' ? '—' : <TagChip>{h.cota}</TagChip>}</Td>
                                             <Td className="tabular-nums">{h.invested ? fmtBRL(h.invested) : '—'}</Td>
-                                            <Td className="text-[#1F2430] font-medium tabular-nums">{fmtBRL(Number(h.equity) || 0)}</Td>
+                                            <Td className="text-[#1F2430] font-medium tabular-nums">{h.equity != null ? fmtBRL(h.equity) : '—'}</Td>
                                             <Td className={`tabular-nums ${(h.yoc ?? 0) > 0 ? 'text-emerald-600' : 'text-[#8A8F9A]'}`}>{h.yield ?? '—'}</Td>
                                             <Td><StatusPill tone={tone(h.status)}>{h.status}</StatusPill></Td>
                                             <Td>
@@ -137,7 +139,7 @@ const PortalHoldings: React.FC<Props> = ({ holdings, filterStatus, onFilterChang
                                                         <DetailField label="Localização">{h.location || '—'}</DetailField>
                                                         <DetailField label="Participação">{h.cota}</DetailField>
                                                         <DetailField label="Capital aportado">{h.invested ? fmtBRLCents(h.invested) : '—'}</DetailField>
-                                                        <DetailField label="Patrimônio estimado">{fmtBRLCents(Number(h.equity) || 0)}</DetailField>
+                                                        <DetailField label="Patrimônio estimado">{h.equity != null ? fmtBRLCents(h.equity) : (h.semPatrimonio ?? '—')}</DetailField>
                                                         <DetailField label="Retorno realizado">{h.yield ?? '—'}</DetailField>
                                                         <DetailField label="Andamento da obra">{`${h.progress ?? 0}%`}</DetailField>
                                                     </div>
@@ -160,7 +162,7 @@ const PortalHoldings: React.FC<Props> = ({ holdings, filterStatus, onFilterChang
                                     <Td className="text-[#8A8F9A]">Total</Td>
                                     <Td />
                                     <Td className="font-semibold text-[#1F2430] tabular-nums">{fmtBRL(totalInvested)}</Td>
-                                    <Td className="font-semibold text-[#1F2430] tabular-nums">{fmtBRL(totalEquity)}</Td>
+                                    <Td className="font-semibold text-[#1F2430] tabular-nums">{totalEquity != null ? fmtBRL(totalEquity) : '—'}</Td>
                                     <Td colSpan={3} />
                                 </tr>
                             </tfoot>
@@ -188,10 +190,12 @@ const PortalHoldings: React.FC<Props> = ({ holdings, filterStatus, onFilterChang
                                         </p>
                                     )}
                                 </div>
-                                <TagChip>{h.cota}</TagChip>
+                                {h.cota !== '—' && <TagChip>{h.cota}</TagChip>}
                             </div>
                             <div className="flex items-center justify-between gap-3 mt-3">
-                                <span className="text-sm font-semibold text-[#1F2430] tabular-nums">{fmtBRL(Number(h.equity) || 0)}</span>
+                                {h.equity != null
+                                    ? <span className="text-sm font-semibold text-[#1F2430] tabular-nums">{fmtBRL(h.equity)}</span>
+                                    : <span className="text-[13px] text-[#1F2430]">{h.semPatrimonio ?? '—'}</span>}
                                 <StatusPill tone={tone(h.status)}>{h.status}</StatusPill>
                             </div>
                             <div className="flex items-center gap-2 mt-2.5">

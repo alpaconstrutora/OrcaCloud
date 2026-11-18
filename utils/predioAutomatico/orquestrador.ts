@@ -491,6 +491,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     pendencias.push({ grupo: 'CONFERIR', texto: `Andar 0 (a torre começa abaixo da rua): a cópia do tipo desvinculada para a entrada — ${za.unidades.length ? `${za.unidades.join(', ')} da ficha nas posições do tipo, ` : ''}${za.acesso ? 'o corredor junto do núcleo como hall, com a porta para a rua' : 'sem a porta para a rua'}; o que mudar no tipo daqui em diante não chega mais ao 0.` });
     if (!za.acesso) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Andar 0: a porta para a rua não coube no hall (o corredor junto do núcleo) — desenhe a entrada da torre.' });
   }
+  else if (abaixoDaRua) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Andar 0: a torre começa abaixo da rua e não tem andar de apartamentos na cota da rua (ou a ficha não põe apartamento nele) — a entrada pela rua e a saída da rota de fuga ficam para o projetista.' });
   if (andarZeroLevelId && andarZero && tipoDaFicha) {
     const za = concluirTerreoDeApartamentos(ctx, base, hip, andarZeroLevelId, tipoDaFicha, andarZero);
     decisoes.push(`Andar 0 de apartamentos (a ficha): mantém ${za.mantidos.join(', ')} do tipo; ${za.tirados.length ? `${za.tirados.join(', ')} viram o hall de entrada e a área comum` : 'nenhum apartamento sai'}${za.acesso ? ', com a porta para a rua' : ''}.`);

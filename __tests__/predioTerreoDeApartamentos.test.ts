@@ -171,7 +171,11 @@ describe('PE4a + PE5a — o térreo de apartamentos (Garden, Torre A)', { timeou
       units: torres.flatMap((x) => (x.units ?? []).map((u) => ({ ...u, tower_id: x.id, blueprint_unidade_chave: null, blueprint_massa_chave: null }) as unknown as EmpreendimentoUnit)),
       commonAreas: [],
     };
-    const envio = buildPlan(ladoDaMassa(EMP, m, produto, null), alvo);
+    const lado = ladoDaMassa(EMP, m, produto, null);
+    const doZero = lado.towers.flatMap((t) => t.units).filter((u) => ['002', '004'].includes(String(u.fields.name)));
+    expect(doZero).toHaveLength(2);
+    expect(doZero.every((u) => !/:unidade:/.test(u.sourceId))).toBe(true);
+    const envio = buildPlan(lado, alvo);
     expect(envio.unitCreates).toEqual([]);
     const adotadas = envio.adoptions.filter((x) => x.entity === 'unit').map((x) => alvo.units.find((u) => u.id === x.existingId)!.name).sort();
     expect(adotadas).toEqual(['002', '004', '101', '102', '103', '104', '201', '202', '203', '204', '301', '302', '303', '304']);

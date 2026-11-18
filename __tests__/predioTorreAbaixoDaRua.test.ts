@@ -168,6 +168,14 @@ describe('PE6a — a torre que começa abaixo da rua (Garden, Torre B)', { timeo
     expect(envio.unitCreates).toEqual([]);
     const adotadas = envio.adoptions.filter((x) => x.entity === 'unit').map((x) => alvo.units.find((u) => u.id === x.existingId)!.name).sort();
     expect(adotadas).toEqual(daFicha);
+    // A revisão (achado 1): a torre tem 6 pavimentos de apartamento (não os 4 acima do solo) e a área comum é rateada.
+    const tB = lado.towers.find((t) => t.matchName === 'Torre B')!;
+    expect(tB.fields.floors_count).toBe(6);
+    expect(tB.units.every((u) => Number(u.fields.common_area) > 0)).toBe(true);
+    // (achado 2): os do 0 desvinculado (unidades do kernel, uid aleatório) com a chave ESTÁVEL — pelo andar e pelo nome.
+    const doZero = tB.units.filter((u) => /^TR0[5-8]$/.test(String(u.fields.name)));
+    expect(doZero).toHaveLength(4);
+    expect(doZero.every((u) => !/:unidade:/.test(u.sourceId))).toBe(true);
   });
 });
 

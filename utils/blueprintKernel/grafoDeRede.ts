@@ -32,32 +32,35 @@ export interface Ponto2 {
  * sem isto, a prumada que sobe pela laje terminaria num nó que ninguém
  * alcança.
  */
-export function fazerChave(niveis: readonly Level[]) {
+/**
+ * O lugar de (pavimento, cota) visto de baixo: cota ≤ 0 num pavimento com outro ESTRITAMENTE abaixo é o teto dele (e
+ * continua descendo enquanto não couber). A chave da rede (`fazerChave`) e as conexões derivadas (`conexoes.ts`) usam a
+ * mesma regra — a revisão do PR #584 achou a cópia das conexões ainda com a regra antiga.
+ */
+export function descerPelaCota(niveis: readonly Level[]): (levelId: ObjectId, cota: number) => { levelId: ObjectId; cotaMm: number } {
   const ordenados = [...niveis].sort((a, b) => a.elevationMm - b.elevationMm);
   const abaixoDe = new Map<ObjectId, Level | null>();
-  // O de baixo é o pavimento mais perto ESTRITAMENTE abaixo: dois na mesma cota (o lote e o térreo do bloco) são vizinhos,
-  // não um em cima do outro (18/11/2026, PE4a do prédio pelo Empreendimento: o andar 0 de apartamentos ia para o lote, e o
-  // tubo de queda dele não encontrava o da garagem embaixo).
   ordenados.forEach((l) => {
     let abaixo: Level | null = null;
     for (const x of ordenados) if (x.elevationMm < l.elevationMm) abaixo = x;
     abaixoDe.set(l.id, abaixo);
   });
-  return (levelId: ObjectId, x: number, y: number, cota: number): No => {
-    // Cota ≤ 0 num pavimento que tem outro embaixo é o MESMO lugar visto do
-    // pavimento de baixo: 0 é o teto dele, e −150 (o esgoto sob o piso) é o
-    // teto dele menos 150. Sem isto o ramal do andar de cima e o tubo de
-    // queda que o recebe no térreo seriam dois nós que ninguém liga.
-    // E continua descendo enquanto a cota não cabe no de baixo (PE6b, 18/11/2026): o recalque que sobe da garagem do −3
-    // até a caixa na cota da rua atravessa andares onde nada se desenha (o tipo e as cópias) — o trecho do lote a −6000
-    // é o teto da garagem, três pavimentos abaixo.
+  return (levelId, cota) => {
     let nivelId = levelId;
     let c = cota;
     for (let abaixo = abaixoDe.get(nivelId); c <= 0 && abaixo; abaixo = abaixoDe.get(nivelId)) {
       c += abaixo.defaultHeightMm;
       nivelId = abaixo.id;
     }
-    return `${nivelId}|${x},${y}|${c}`;
+    return { levelId: nivelId, cotaMm: c };
+  };
+}
+
+export function fazerChave(niveis: readonly Level[]) {
+  const descer = descerPelaCota(niveis);
+  return (levelId: ObjectId, x: number, y: number, cota: number): No => {
+    const d = descer(levelId, cota);
+    return `${d.levelId}|${x},${y}|${d.cotaMm}`;
   };
 }
 

@@ -30,7 +30,9 @@ As PA11–PA23 poliram a compatibilização desses prédios de laboratório. A m
 | 18/11/2026 | Para dividir cada andar em apartamentos, o que vale? | **Unidades do Empreendimento**: as unidades por andar e a área de Torres & Unidades; as tipologias da ficha quando houver. |
 | 18/11/2026 | Andares de apartamento abaixo da rua (Torre B: −1 e −2) | **A torre começa no −2.** Os 6 andares de apartamento (−2 a 3) são o pavimento tipo e suas cópias, e a garagem fica abaixo (−3, −4). O desnível vira pendência para o projetista: contenção, fachadas enterradas, ventilação e luz dos apartamentos de baixo. |
 | 18/11/2026 | O térreo com apartamentos (Torre A: 2 e área comum; Torre B: 4) | **Apartamentos + condomínio.** O térreo recebe os apartamentos da ficha e o condomínio no que sobra, com o hall junto do núcleo. Térreo cheio de apartamentos, como o da Torre B, manda medição, bombas e reservatório para a garagem, com pendência. |
-| a confirmar | A área das unidades não cabe no contorno da torre (ver "O caso real") | Proposta: manter o bloco desenhado e dividir o andar na **proporção** das áreas da ficha, com o aviso dos dois números. O projetista ajusta o bloco ou a ficha. |
+| 18/11/2026 | A área das unidades não cabe no contorno gravado da torre (13,5 × 26 m, de uma massa estimada) — manter o bloco e dividir na proporção? | **"Use a planta Teste 01 como referencia."** A "Teste 01" (`5c97c3e1…`, org da SPE) é o lote real do Garden pela ficha — trapézio de 18 m de frente, 21 m de fundos e 63,03 m de lateral, sem bloco. Leitura: o contorno estimado deixa de ser a referência; as torres nascem **nesse lote**, dimensionadas pelas unidades do andar tipo (PE1), e a conferência no app parte de uma cópia descartável dela. |
+| 18/11/2026 | O plano captura o que você quer? | **"sim"** |
+| 18/11/2026 | Como executar? | **"Nativo"** — eu implemento fase a fase nesta sessão, com um revisor independente no fim de cada fase. |
 
 ## O caso real (banco, 18/11/2026, só leitura)
 
@@ -76,7 +78,11 @@ As PA11–PA23 poliram a compatibilização desses prédios de laboratório. A m
 - **Português** em código, textos e PR.
 - **O pronto de cada fase é o Garden.** Quando a fase toca o caminho do usuário, a conferência é pela Casa automática (lição de 18/11). Os marcos de laboratório só protegem o que já existe.
 - **Marcos de laboratório idênticos.** O marco dos prédios (`__tests__/predioAutomaticoMarco.test.ts`, R4/R8/R12/RL) e o da casa (`__tests__/casaAutomaticaMarco.test.ts`) ficam iguais: eles não usam o Empreendimento. Toda regravação é justificada no PR.
-- **O Empreendimento nunca é gravado** nas conferências: sem "Enviar ao Empreendimento" e sem editar a ficha. A conferência no app usa um **estudo descartável** na org da SPE, com `project_id` = a obra do Garden (o Empreendimento é sugerido pela obra, sem mexer em `blueprint_study_id`). O estudo é arquivado no fim.
+- **O Empreendimento nunca é gravado** nas conferências: sem "Enviar ao Empreendimento" e sem editar a ficha. A conferência no app usa um **estudo descartável** na org da SPE:
+  - com as divisas da "Teste 01" (copiadas; a "Teste 01" não é tocada);
+  - com `project_id` = a obra do Garden, para o Empreendimento ser sugerido pela obra sem mexer em `blueprint_study_id`.
+
+  O estudo é arquivado no fim. Para usar o botão na própria "Teste 01", ela precisa estar ligada ao Garden: hoje não está (`project_id` nulo, e o Empreendimento aponta para o estudo "Garden").
 - **"Lançar" continua manual.** Construir gera a prévia.
 - **Regras do projeto valem:**
   - REGRA #5: a organização é a do estudo, nunca uma prop;
@@ -108,7 +114,8 @@ Ordem pensada para o caminho do usuário aparecer cedo:
 ### PE0 — Marco do Garden (o caso real como teste)
 **O que muda.** Entra a fixture `__tests__/fixtures/empreendimentoGarden.json`, um retrato só leitura do banco em 18/11:
 - as duas torres (cadastro de pavimentos, unidades, contorno);
-- a ficha do lote e a distância entre as torres.
+- a ficha do lote e a distância entre as torres;
+- as divisas da planta "Teste 01" (o lote de referência).
 
 Entra também `__tests__/predioPeloEmpreendimento.test.ts`, com o teste do sintoma: "o Garden é PRÉDIO pelo Empreendimento". Hoje ele fica **vermelho**, porque os passos da casa tratam o Garden como casa.
 
@@ -120,6 +127,12 @@ Entra também `__tests__/predioPeloEmpreendimento.test.ts`, com o teste do sinto
   - os andares da torre começam no **andar de apartamento mais baixo**: `tipo` ≠ GARAGEM, com unidade, contíguo até o 0. `acima` passa a significar "os andares da torre" (doc atualizada); `garagens` fica com o resto de baixo;
   - novo campo `abaixoDaRua: number` (quantos andares da torre ficam abaixo do 0).
 - **`utils/blueprintAjusteAoEmpreendimento.ts`:** o bloco da torre nasce na elevação do andar mais baixo dela, e o da garagem logo abaixo.
+- **As torres no lote, sem bloco desenhado** (decisão "Teste 01"): `blocosDasTorresNoLote(lote: Point[], frente, estruturas, distancias, recuos): { blocos: AddBloco[]; avisos: string[] }`:
+  - hoje o ajuste só avisa "desenhe o bloco ou gere a massa", e o "Gerar massa" dimensiona pelo lote, não pelas unidades;
+  - cada torre ganha um retângulo com a largura útil do lote (a frente menos os recuos da zona aplicada; sem zona, recuo zero e aviso) e a profundidade = a área necessária do andar tipo ÷ a largura;
+  - a área necessária é a de `pegadaDaTorre`: os privativos mais núcleo e circulação;
+  - as torres ficam na ordem da ficha a partir da frente, com a distância entre elas (0 no Garden: coladas);
+  - o que passa do fundo do lote vira aviso com os números, e a torre não é encolhida.
 - **`utils/predioAutomatico/andaresDoEmpreendimento.ts` (novo, puro):**
   - `papelDosAndares(estrutura: EstruturaDaTorre): AndarDoEmpreendimento[]`, com `{ numero, nome, elevacaoMm, papel: 'GARAGEM' | 'TIPO' | 'COPIA' | 'PROPRIO', unidades: UnidadeDoPiso[], comuns: UnidadeDoPiso[] }`;
   - a **assinatura** do andar é o número de apartamentos, as áreas em ordem e as tipologias;
@@ -132,7 +145,10 @@ Entra também `__tests__/predioPeloEmpreendimento.test.ts`, com o teste do sinto
 - **Papéis da Torre A:** −2 e −1 GARAGEM · 0 PROPRIO (2 apartamentos, 1 comum) · 1 TIPO · 2 e 3 COPIA.
 - **Papéis da Torre B:** −4 e −3 GARAGEM · −2 TIPO · −1, 0, 1, 2 e 3 COPIA.
 - **Ajuste da Torre B:** bloco "Torre B" com 6 pavimentos a −6.300 mm e "Torre B · Garagem" com 2 pavimentos a −12.300 mm.
-- **Pegada:** a da Torre A não cabe (416 m² privativos + circulação × 351 m²) e o aviso traz os números.
+- **Pegada:** no contorno estimado de 13,5 × 26 m, a da Torre A não cabe (416 m² privativos + circulação × 351 m²) e o aviso traz os números.
+- **No lote da Teste 01:**
+  - as duas torres nascem com área ≥ a necessária, coladas, a Torre A na frente;
+  - os retângulos ficam dentro do lote, ou sai o aviso de quanto passam do fundo.
 - **Regressão:** os testes do ajuste, do 3D e do espelho que já existem passam, e os marcos de laboratório ficam idênticos.
 - **Foco da revisão:** itens 1, 2 e 3.
 

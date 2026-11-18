@@ -33,6 +33,13 @@ As PA11–PA23 poliram a compatibilização desses prédios de laboratório. A m
 | 18/11/2026 | A área das unidades não cabe no contorno gravado da torre (13,5 × 26 m, de uma massa estimada) — manter o bloco e dividir na proporção? | **"Use a planta Teste 01 como referencia."** A "Teste 01" (`5c97c3e1…`, org da SPE) é o lote real do Garden pela ficha — trapézio de 18 m de frente, 21 m de fundos e 63,03 m de lateral, sem bloco. Leitura: o contorno estimado deixa de ser a referência; as torres nascem **nesse lote**, dimensionadas pelas unidades do andar tipo (PE1), e a conferência no app parte de uma cópia descartável dela. |
 | 18/11/2026 | O plano captura o que você quer? | **"sim"** |
 | 18/11/2026 | Como executar? | **"Nativo"** — eu implemento fase a fase nesta sessão, com um revisor independente no fim de cada fase. |
+| 18/11/2026 | O térreo da Torre A (2 apartamentos + área comum): o kernel só copia o andar inteiro do tipo, e o Prédio automático põe medição, bombas, reservatório e o desvio no nível do térreo | **"Técnico na garagem"**:
+- o térreo nasce como cópia do tipo, desvinculada, sem os apartamentos que ele não tem;
+- o espaço deles vira hall de entrada e área comum;
+- medição, bombas e reservatório vão para a garagem mais alta (−1), o mesmo mecanismo da Torre B;
+- sem mudar o kernel.
+
+Desvia da decisão "condomínio no que sobra" só na parte técnica. |
 
 ## O caso real (banco, 18/11/2026, só leitura)
 
@@ -279,6 +286,12 @@ Sem erro de console. Testes: `predioPeloEmpreendimento` 21, `TelaCasaAutomatica`
 - **O que saía:** o motor fazia o térreo de condomínio no 0 e 3 andares acima (12 apartamentos em vez de 24), ignorava o −2 e o −1 e deixava a garagem descolada, com um vão de 6 m.
 - **Agora:** até a fase da torre abaixo da rua, `motivoParaNaoGerarPredio` recusa e diz o motivo; no passo TORRE, a torre fica em FALTA e o botão desliga com "começa abaixo da rua (Pavimento −2, Pavimento −1)…".
 - **Testes:** 2 novos.
+
+**Redesenho de 18/11 (decisão "Técnico na garagem").** A PE4 e a PE5 passam a ser um mecanismo só, **o térreo de apartamentos**. Quando o Empreendimento põe apartamento no andar 0:
+- **Condomínio técnico na garagem:** o Prédio automático não monta o térreo só de condomínio. O "pavimento do condomínio" (entrada de energia e medição, casa de bombas, reservatório inferior) é a garagem mais alta, e o desvio do esgoto corre no forro dela.
+- **O andar 0 sai do tipo:** é cópia viva do tipo quando é igual a ele (Torre B). Quando é PRÓPRIO (Torre A), é a cópia **desvinculada no fim**, sem os apartamentos que ele não tem; o espaço deles vira hall de entrada (com a porta para a rua) e área comum.
+
+A PE5 abaixo descreve a parte da garagem; a PE4 fica com o andar próprio.
 
 ### PE4 — O andar próprio: o térreo da Torre A com os 2 apartamentos
 **O que muda.**

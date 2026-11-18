@@ -11,6 +11,7 @@ import { comandosDoAjuste } from '../utils/blueprintAjusteAoEmpreendimento';
 import { estruturasDoEmpreendimento, type TorreParaEstrutura } from '../utils/blueprintEstruturaDaTorre';
 import { blocosDasTorresNoLote, dividirPeloEmpreendimento, papelDosAndares, pegadaDaTorre, produtoDoAndarTipo } from '../utils/predioAutomatico/andaresDoEmpreendimento';
 import { produtoVazio } from '../utils/blueprintProduto';
+import { passosDoPredioPeloEmpreendimento, tipoDoEmpreendimento, type EntradaDosPassos } from '../utils/blueprintCasaPeloEmpreendimento';
 import { assinaturaDoPedidoDoPredio, motivoParaNaoGerarPredio, planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
 import { HIPOTESES_DO_PRODUTO_PADRAO } from '../utils/blueprintProduto';
 import type { Boundary } from '../utils/blueprintKernel';
@@ -254,11 +255,65 @@ describe('PE2a — o Prédio automático com as unidades do Empreendimento (Torr
     const nomes = (plano.resultado.unidades ?? []).map((u) => u.numero).sort();
     expect(nomes).toEqual(['101', '102', '103', '104']);
     expect(plano.resumo.plantas?.unidades).toBe(4);
+    // Os 2 apartamentos do térreo da ficha ainda não entram (PE4): a pendência diz quais.
+    expect(plano.pendencias.some((x) => /Pavimento Térreo/.test(x.texto) && /002/.test(x.texto) && /004/.test(x.texto))).toBe(true);
   });
 
   it('a assinatura do pedido muda com as unidades do Empreendimento (a prévia velha é detectada)', () => {
     const p = pedido();
     const outra = { ...p, entrada: { ...p.entrada, doEmpreendimento: { ...p.entrada.doEmpreendimento, andares: p.entrada.doEmpreendimento.andares.map((a) => (a.papel === 'TIPO' ? { ...a, unidades: a.unidades.slice(1) } : a)) } } };
     expect(assinaturaDoPedidoDoPredio(outra)).not.toBe(assinaturaDoPedidoDoPredio(p));
+  });
+});
+
+describe('PE3 — a Casa automática reconhece o prédio e os passos do "Construir o prédio pelo Empreendimento"', () => {
+  it('o Garden é PRÉDIO; uma casa (1 unidade no térreo) e um loteamento (torre da quadra) continuam CASA', () => {
+    expect(tipoDoEmpreendimento(estruturas())).toBe('PREDIO');
+    const casa: TorreParaEstrutura = { id: 'c', name: 'Casa', units: [{ floor: 0, floor_tipo: 'TERREO', name: 'Casa 07', private_area: 150, bedrooms: 3 }] };
+    expect(tipoDoEmpreendimento(estruturasDoEmpreendimento([casa], new Map()))).toBe('CASA');
+    const quadra: TorreParaEstrutura = { id: 'q', name: 'Quadra 1', blueprint_quadra_uid: 'qd1', units: [1, 2, 3].map((n) => ({ floor: 0, floor_tipo: 'TERREO' as const, name: `Lote ${n}`, private_area: 300, bedrooms: 3 })) };
+    expect(tipoDoEmpreendimento(estruturasDoEmpreendimento([quadra], new Map()))).toBe('CASA');
+    expect(tipoDoEmpreendimento([])).toBe('CASA');
+  });
+
+  const base: EntradaDosPassos = {
+    temPavimento: true,
+    pavimentoComParedes: false,
+    temLote: true,
+    loteDaFicha: null,
+    motivoSemLoteNaFicha: null,
+    temGeorreferencia: false,
+    coordenadasDaFicha: null,
+    zonaAplicada: null,
+    zonasDoEmpreendimento: 0,
+    unidades: [],
+    unidadeId: null,
+    motivoParaNaoGerar: null,
+  };
+  const torres = [
+    { id: 'tA', nome: 'Torre A', resumo: '3 andares × 4 + térreo com 2' },
+    { id: 'tB', nome: 'Torre B', resumo: '6 andares × 4' },
+  ];
+
+  it('com duas torres e nenhuma escolhida, o botão para no passo TORRE (pergunta qual)', () => {
+    const p = passosDoPredioPeloEmpreendimento(base, torres, null);
+    expect(p.passos.map((x) => x.passo)).toEqual(['LOTE', 'LOCAL', 'ZONA', 'TORRE', 'GERAR']);
+    expect(p.parada).toBe('TORRE');
+    expect(p.passos.find((x) => x.passo === 'ZONA')!.texto).toMatch(/o prédio sai sem os recuos/);
+  });
+
+  it('com a torre escolhida, TORRE feito e GERAR gera a prévia do prédio dela; sem pavimento, falta', () => {
+    const p = passosDoPredioPeloEmpreendimento(base, torres, 'tA');
+    expect(p.parada).toBeNull();
+    expect(p.passos.find((x) => x.passo === 'TORRE')).toMatchObject({ estado: 'FEITO' });
+    expect(p.passos.find((x) => x.passo === 'GERAR')!.texto).toMatch(/Torre A/);
+    expect(p.motivoDoBotao).toBeNull();
+    expect(passosDoPredioPeloEmpreendimento({ ...base, temPavimento: false }, torres, 'tA').motivoDoBotao).toMatch(/pavimento/);
+  });
+
+  it('uma torre só já vem escolhida', () => {
+    const p = passosDoPredioPeloEmpreendimento(base, torres.slice(0, 1), null);
+    expect(p.passos.find((x) => x.passo === 'TORRE')).toMatchObject({ estado: 'FEITO' });
+    expect(p.parada).toBeNull();
   });
 });

@@ -134,6 +134,12 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   etapa('PAVIMENTO_TIPO', 'LANCOU', aplicar(mont.comandos), `${dv.unidades.length} unidade(s) por andar · ${mont.copias} cópia(s) do tipo${dv.elevadores ? ` · núcleo com ${dv.elevadores} elevador(es)` : ''}`);
   // Com o térreo do prédio, o aviso de que o 1º pavimento "ficou para o projetista" deixa de valer.
   const avisosDoTipo = [...avisosDaFicha, ...dv.avisos, ...mont.avisos.filter((a) => !(hip.terreo && /ficou para o projetista: portaria/.test(a)))];
+  // PE3: os andares PRÓPRIOS da ficha com apartamento (o térreo da Torre A do Garden) ainda saem como o térreo de hoje,
+  // só condomínio — a pendência diz quais apartamentos ficaram fora (entram com o andar próprio, PE4 do plano).
+  for (const a of entrada.doEmpreendimento?.andares ?? []) {
+    if (a.papel !== 'PROPRIO' || a.unidades.length === 0) continue;
+    pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `${a.nome}: a ficha tem ${a.unidades.length} apartamento(s) neste andar (${a.unidades.map((u) => u.nome).join(', ')}) — o prédio automático ainda faz este andar só com o condomínio (hall, portaria, medição, bombas); os apartamentos dele ficam para o projetista por enquanto.` });
+  }
   const ctx: ContextoDoPredio = {
     get m() {
       return m;

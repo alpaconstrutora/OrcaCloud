@@ -245,6 +245,30 @@ Marcos de laboratório (prédio e casa) idênticos; suítes do prédio, da divis
   5. o Empreendimento não é tocado (conferido no banco: `updated_at` igual).
 - **Foco da revisão:** itens 4 e 5.
 
+**Execução da PE3 (18/11/2026, junto com a PE2a no mesmo PR).** Feito:
+- **`tipoDoEmpreendimento(estruturas)` e `passosDoPredioPeloEmpreendimento`:** o lote, o local e a zona vêm da casa; o passo TORRE pergunta com mais de uma e já vem escolhido com uma; GERAR.
+- **Tela da casa:** no modo prédio, o título "— é prédio", o seletor "Torre do prédio" e o botão "Construir o prédio pelo Empreendimento". O "Gerar" da casa fica desligado com o motivo.
+- **Programa do Prédio automático:** com o Empreendimento, mostra a torre, os andares (papel) e os apartamentos do andar tipo, e não pede o produto.
+- **Editor, em etapas, uma por render:**
+  1. lote, local e zona;
+  2. os blocos das torres que faltam, no lote (`blocosDasTorresNoLote`);
+  3. o ajuste da massa;
+  4. abrir o Prédio automático da torre;
+  5. gerar a prévia quando a entrada já traz os andares da ficha.
+
+  O `doEmpreendimento` do bloco do prédio vem da torre de mesmo nome; também abre pelo painel do bloco.
+- **Pendência nova:** o andar PRÓPRIO com apartamento diz quais ficaram fora (no Garden, o térreo da Torre A com 002 e 004), até a PE4.
+- **Aviso da pegada:** não aparece na Teste 01, porque as torres nascem do tamanho que o andar tipo pede. Aparece no bloco desenhado menor (PE1).
+
+**Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pe3.cjs`). Estudo descartável na SPE, com as divisas da Teste 01 e a obra do Garden; arquivado no fim. Pelo caminho do usuário:
+1. **Casa automática:** diz "Dados do Empreendimento '011 - Garden Cambuhy' — é prédio", e o seletor mostra "Torre A — 3 andar(es) × 4 apartamentos + pavimento térreo com 2 · 2 de garagem" e "Torre B — 6 andar(es) × 4 apartamentos · 2 de garagem".
+2. **Construir com a Torre A:** a prévia sai em 9,7 s com 12 apartamentos (4 por andar × 3), 101–104 da ficha, os de 127 m² na frente.
+3. **Massa:** Torre A 4@0, Torre A · Garagem 2@−6,0, Torre B 6@−6,0, Torre B · Garagem 2@−12,0.
+4. **Relatório:** traz a pendência do térreo (002, 004).
+5. **Empreendimento:** intocado (`updated_at` e as 43 unidades iguais).
+
+Sem erro de console. Testes: `predioPeloEmpreendimento` 21, `TelaCasaAutomatica` 36, `TelaPredioAutomatico` 7; `check-ui-standard` limpo nas duas telas.
+
 ### PE4 — O andar próprio: o térreo da Torre A com os 2 apartamentos
 **O que muda.**
 - **Primeiro, uma conferência curta (spike):** a cópia viva do tipo, desvinculada (`SetLevelProps tipoDeId: null`), fica com as paredes, as plantas e as instalações como próprias? Se não ficar, a fase ganha uma mudança no kernel (versão nova) antes do resto, e o plano registra isso.
@@ -311,7 +335,7 @@ Marcos de laboratório (prédio e casa) idênticos; suítes do prédio, da divis
 | PE0 — marco do Garden | feita, a publicar (com a PE1) |
 | PE1 — os andares e a massa | feita, a publicar |
 | PE2 — o tipo com as unidades do Empreendimento | PE2a feita (o motor), a publicar; PE2b (o envio casa com as unidades existentes) a fazer |
-| PE3 — o botão na Casa automática | a fazer |
+| PE3 — o botão na Casa automática | feita, a publicar (com a PE2a); conferida no app pelo caminho do usuário |
 | PE4 — o térreo da Torre A com os apartamentos | a fazer |
 | PE5 — condomínio e desvio sem térreo livre | a fazer |
 | PE6 — abaixo da rede pública | a fazer |

@@ -571,3 +571,43 @@ describe('TelaCasaAutomatica › Construir pelo Empreendimento (25/10/2026)', ()
     cleanup();
   });
 });
+
+describe('TelaCasaAutomatica › Construir o PRÉDIO pelo Empreendimento (PE3, 18/11/2026)', () => {
+  const passosDoPredio = (parada: 'TORRE' | null) => ({
+    passos: [
+      { passo: 'LOTE' as const, rotulo: 'Lote', estado: 'FEITO' as const, texto: 'O lote já está desenhado neste pavimento.' },
+      { passo: 'TORRE' as const, rotulo: 'Torre', estado: (parada ? 'PERGUNTAR' : 'FEITO') as 'PERGUNTAR' | 'FEITO', texto: parada ? 'O Empreendimento tem 2 torres — escolha qual construir (uma por vez).' : 'Torre A: 3 andares × 4.' },
+      { passo: 'GERAR' as const, rotulo: 'Gerar', estado: 'FAZER' as const, texto: 'Gera a prévia do prédio da Torre A.' },
+    ],
+    motivoDoBotao: null,
+    parada,
+  });
+  const torres = [
+    { id: 'tA', nome: 'Torre A', resumo: 'térreo com 2 + 3 andares × 4' },
+    { id: 'tB', nome: 'Torre B', resumo: '6 andares × 4' },
+  ];
+
+  it('o Empreendimento é prédio: escolhe a torre e o botão "Construir o prédio pelo Empreendimento" constrói', () => {
+    const onConstruir = vi.fn();
+    const onTorre = vi.fn();
+    tela({ peloEmpreendimento: { nome: 'Garden', passos: passosDoPredio(null), construindo: false, onConstruir, onResolver: vi.fn(), predio: { torres, torreId: 'tA', onTorre } } });
+    const bloco = screen.getByTestId('casa-pelo-empreendimento');
+    expect(bloco.textContent).toMatch(/é prédio/);
+    const sel = screen.getByLabelText('Torre do prédio') as HTMLSelectElement;
+    expect(sel.value).toBe('tA');
+    fireEvent.change(sel, { target: { value: 'tB' } });
+    expect(onTorre).toHaveBeenCalledWith('tB');
+    expect(screen.queryByTestId('construir-pelo-empreendimento')).toBeNull();
+    fireEvent.click(screen.getByTestId('construir-predio-pelo-empreendimento'));
+    expect(onConstruir).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it('sem torre escolhida, o passo TORRE pergunta e leva ao seletor', () => {
+    const onResolver = vi.fn();
+    tela({ peloEmpreendimento: { nome: 'Garden', passos: passosDoPredio('TORRE'), construindo: false, onConstruir: vi.fn(), onResolver, predio: { torres, torreId: null, onTorre: vi.fn() } } });
+    fireEvent.click(within(screen.getByTestId('passo-TORRE')).getByRole('button', { name: 'Escolher a torre' }));
+    expect(onResolver).toHaveBeenCalledWith('TORRE');
+    cleanup();
+  });
+});

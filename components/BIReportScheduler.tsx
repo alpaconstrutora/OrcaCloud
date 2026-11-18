@@ -5,7 +5,8 @@ import {
 } from 'lucide-react';
 import Button from './ui/Button';
 import ActionIconButton from './ui/ActionIconButton';
-import { biReportService, BIReportSchedule, NewSchedule, ReportFrequency } from '../services/biReportService';
+import { useConfirm } from './ui/confirm';
+import { biReportService, BIReportSchedule, NewSchedule, ReportFrequency, type NarrativaGerada } from '../services/biReportService';
 import type { BIExecutiveSummary } from '../types/bi';
 
 interface Props {
@@ -14,7 +15,8 @@ interface Props {
     summary: BIExecutiveSummary | null;
     dateFrom: string;
     dateTo: string;
-    narrative?: string | null;
+    /** Resumo de IA gerado na tela; vai no e-mail pelo id, se for deste período. */
+    narrative?: NarrativaGerada | null;
 }
 
 const FREQ_LABEL: Record<ReportFrequency, string> = {
@@ -48,6 +50,17 @@ const BIReportScheduler: React.FC<Props> = ({
     const [busy, setBusy]             = useState<string | null>(null);
     const [msg, setMsg]               = useState<{ text: string; ok: boolean } | null>(null);
     const [emailInput, setEmailInput] = useState('');
+    const [erroEmail, setErroEmail]   = useState<string | null>(null);
+    // E-mails dos membros, só para avisar na tela; null = não carregou (o servidor decide).
+    const [membros, setMembros]       = useState<string[] | null>(null);
+    const confirm = useConfirm();
+
+    // O resumo só vai no e-mail (e no HTML baixado) se foi gerado para esta
+    // organização e para o período na tela.
+    const narrativaDoPeriodo = narrative && narrative.organizationId === orgId
+        && narrative.dateFrom === dateFrom && narrative.dateTo === dateTo
+        ? narrative : null;
+    const naoMembro = (email: string) => membros !== null && !membros.includes(email.trim().toLowerCase());
 
     const notify = (text: string, ok: boolean) => {
         setMsg({ text, ok });
@@ -59,6 +72,14 @@ const BIReportScheduler: React.FC<Props> = ({
         try { setSchedules(await biReportService.listSchedules(orgId)); }
         catch { /* ignore */ }
         finally { setLoading(false); }
+    }, [orgId]);
+
+    useEffect(() => {
+        let vivo = true;
+        biReportService.listMemberEmails(orgId)
+            .then(lista => { if (vivo) setMembros(lista); })
+            .catch(() => { if (vivo) setMembros(null); });
+        return () => { vivo = false; };
     }, [orgId]);
 
     useEffect(() => { load(); }, [load]);
@@ -84,7 +105,13 @@ const BIReportScheduler: React.FC<Props> = ({
     };
 
     const handleDelete = async (id: string) => {
-        if (!confirm('Excluir este agendamento?')) return;
+        const ok = await confirm({
+            title: 'Excluir agendamento?',
+            message: 'Essa ação não pode ser desfeita.',
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
         setBusy(id);
         try { await biReportService.deleteSchedule(id); load(); notify('Agendamento excluído.', true); }
         catch (e) { notify((e as Error).message, false); }
@@ -98,15 +125,21 @@ const BIReportScheduler: React.FC<Props> = ({
         const id = s?.id ?? 'manual';
         setBusy(id);
         try {
-            const htmlBody = biReportService.generateReportHtml(summary, dateFrom, dateTo, organizationName, narrative ?? undefined);
-            await biReportService.sendNow({
-                recipients,
-                subject: `Relatório Executivo — ${organizationName} — ${new Date().toLocaleDateString('pt-BR')}`,
-                htmlBody,
-                scheduleId: s?.id ?? null,
+            // Assunto e HTML são montados no servidor; aqui vai só QUAL relatório.
+            const r = await biReportService.sendNow({
                 organizationId: orgId,
+                recipients,
+                dateFrom,
+                dateTo,
+                narrativeId: narrativaDoPeriodo?.id ?? null,
+                scheduleId: s?.id ?? null,
             });
-            notify(`Relatório enviado para ${recipients.length} destinatário(s).`, true);
+            const semResumo = narrative && !r.incluiuResumo
+                ? (narrativaDoPeriodo
+                    ? ' O resumo de IA não foi junto: não deu para guardá-lo — gere de novo.'
+                    : ' O resumo de IA não foi junto: ele foi gerado para outro período ou outra organização.')
+                : '';
+            notify(`Relatório enviado para ${r.recipients.length} destinatário(s).${semResumo}`, true);
             load();
         } catch (e) { notify((e as Error).message, false); }
         finally { setBusy(null); }
@@ -114,7 +147,7 @@ const BIReportScheduler: React.FC<Props> = ({
 
     const handleDownload = () => {
         if (!summary) return;
-        const html = biReportService.generateReportHtml(summary, dateFrom, dateTo, organizationName, narrative ?? undefined);
+        const html = biReportService.generateReportHtml(summary, dateFrom, dateTo, organizationName, narrativaDoPeriodo?.texto);
         const blob = new Blob([html], { type: 'text/html' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -129,6 +162,11 @@ const BIReportScheduler: React.FC<Props> = ({
         const email = emailInput.trim().toLowerCase();
         if (!email || !email.includes('@')) return;
         if (editing.recipients.includes(email)) return;
+        if (naoMembro(email)) {
+            setErroEmail(`${email} não é membro desta organização — só membros recebem o relatório.`);
+            return;
+        }
+        setErroEmail(null);
         setEditing({ ...editing, recipients: [...editing.recipients, email] });
         setEmailInput('');
     };
@@ -282,15 +320,26 @@ const BIReportScheduler: React.FC<Props> = ({
                             <label className={labelCls}>Destinatários</label>
                             <div className="flex gap-2">
                                 <input className={inputCls} type="email" placeholder="email@empresa.com"
-                                    value={emailInput} onChange={e => setEmailInput(e.target.value)}
+                                    list="bi-report-membros"
+                                    value={emailInput} onChange={e => { setEmailInput(e.target.value); setErroEmail(null); }}
                                     onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addEmail(); } }} />
+                                <datalist id="bi-report-membros">
+                                    {(membros ?? []).map(m => <option key={m} value={m} />)}
+                                </datalist>
                                 <Button onClick={addEmail} size="sm" className="shrink-0">
                                     <Plus size={14} />
                                 </Button>
                             </div>
+                            {erroEmail
+                                ? <p className="text-xs text-red-600 mt-1">{erroEmail}</p>
+                                : <p className="text-xs text-gray-400 mt-1">Só membros da organização recebem o relatório.</p>}
                             <div className="flex flex-wrap gap-1.5 mt-2">
                                 {editing.recipients.map(r => (
-                                    <span key={r} className="flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-medium">
+                                    <span key={r}
+                                        title={naoMembro(r) ? 'Não é membro desta organização — o envio será recusado até removê-lo.' : undefined}
+                                        className={naoMembro(r)
+                                            ? 'flex items-center gap-1 px-2 py-1 bg-red-50 text-red-700 rounded-lg text-xs font-medium'
+                                            : 'flex items-center gap-1 px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 rounded-lg text-xs font-medium'}>
                                         {r}
                                         <button onClick={() => setEditing({ ...editing, recipients: editing.recipients.filter(x => x !== r) })}
                                             className="text-blue-400 hover:text-red-500 ml-0.5">

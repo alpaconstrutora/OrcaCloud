@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Sparkles, RefreshCw, AlertCircle, ChevronDown, ChevronUp } from 'lucide-react';
-import { biReportService } from '../services/biReportService';
+import { biReportService, type NarrativaGerada } from '../services/biReportService';
 import type { BIExecutiveSummary } from '../types/bi';
 
 interface Props {
@@ -8,7 +8,8 @@ interface Props {
     dateFrom: string;
     dateTo: string;
     organizationId?: string | null;
-    onNarrativeChange?: (text: string | null) => void;
+    /** O resumo gerado, com o id do texto guardado — é ele que vai no e-mail. */
+    onNarrativeChange?: (narrativa: NarrativaGerada | null) => void;
 }
 
 const BINarrativeCard: React.FC<Props> = ({ summary, dateFrom, dateTo, organizationId, onNarrativeChange }) => {
@@ -21,11 +22,11 @@ const BINarrativeCard: React.FC<Props> = ({ summary, dateFrom, dateTo, organizat
         setLoading(true);
         setError(null);
         try {
-            const text = await biReportService.generateNarrative(
+            const gerada = await biReportService.generateNarrative(
                 summary.kpis, dateFrom, dateTo, organizationId,
             );
-            setNarrative(text);
-            onNarrativeChange?.(text);
+            setNarrative(gerada.texto);
+            onNarrativeChange?.(gerada);
             setExpanded(true);
         } catch (e) {
             setError((e as Error).message);

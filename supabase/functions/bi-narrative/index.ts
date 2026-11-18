@@ -161,7 +161,9 @@ serve(async (req: Request) => {
         return json({ error: 'Falha ao conferir o limite de uso. Tente de novo.' }, 500);
     }
 
-    const kpiText = kpisToText(corpo.kpis, dataDoPeriodo(corpo.dateFrom), dataDoPeriodo(corpo.dateTo));
+    const dateFrom = dataDoPeriodo(corpo.dateFrom);
+    const dateTo   = dataDoPeriodo(corpo.dateTo);
+    const kpiText = kpisToText(corpo.kpis, dateFrom, dateTo);
 
     const systemPrompt = `Você é um analista financeiro sênior especializado em construtoras e incorporadoras brasileiras.
 Sua tarefa é gerar um resumo executivo conciso e perspicaz em português (pt-BR) com base nos dados reais fornecidos.
@@ -204,7 +206,36 @@ Gere o resumo executivo:`;
         const data = await res.json() as { content: Array<{ text: string }> };
         const narrative = data.content?.[0]?.text ?? '';
 
-        return json({ narrative });
+        // Guarda o texto para o e-mail (F11/F55): a `send-bi-report` não aceita
+        // mais narrativa vinda do cliente — recebe este id e usa o texto
+        // guardado, literalmente, sem regenerar. Falha ao guardar não tira o
+        // resumo da tela: só faz o e-mail sair sem ele (narrativeId null).
+        let narrativeId: string | null = null;
+        if (narrative) {
+            const { data: guardada, error: errGuardar } = await admin
+                .from('bi_narrativas')
+                .insert({
+                    organization_id: organizationId,
+                    user_id: userId,
+                    date_from: dateFrom || null,
+                    date_to: dateTo || null,
+                    texto: narrative,
+                })
+                .select('id')
+                .single();
+            if (errGuardar) console.error('[bi-narrative] guardar:', errGuardar);
+            else narrativeId = (guardada as { id: string }).id;
+
+            // Faxina barata: as deste usuário com mais de 30 dias (índice por user_id).
+            const { error: errFaxina } = await admin
+                .from('bi_narrativas')
+                .delete()
+                .eq('user_id', userId)
+                .lt('created_at', new Date(Date.now() - 30 * 86_400_000).toISOString());
+            if (errFaxina) console.error('[bi-narrative] faxina:', errFaxina);
+        }
+
+        return json({ narrative, narrativeId });
     } catch (err) {
         return json({ error: String(err) }, 500);
     }

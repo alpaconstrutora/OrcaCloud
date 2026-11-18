@@ -24,10 +24,11 @@ const MAX_SIZE = 50 * 1024 * 1024; // mesmo limite do bucket opura-docs
 // que uma sessão anon/token nunca tem. Aqui a validação do token substitui essa checagem.
 //
 // target='invoice' (opcional): NF de uma medição do Portal Financeiro. Diferente do anexo
-// padrão (bucket privado opura-docs), a NF vai para o bucket público 'documents', no mesmo
-// caminho/formato que ContractMeasurementModal.tsx grava no admin
-// (invoices/{contract_id}/{ts}_{nome} + URL pública) — senão o link salvo em
-// contract_measurements.invoice_url ficaria morto quando aberto pela tela interna.
+// padrão (bucket opura-docs), a NF vai para o bucket 'documents' (privado desde a
+// aplicar_20271118914100), no mesmo caminho que ContractMeasurementModal.tsx grava no admin
+// (invoices/{contract_id}/{ts}_{nome}) — e devolve o CAMINHO, que vai para
+// contract_measurements.invoice_url. Quem abre assina: membro com a própria sessão, portal
+// pela portal-documentos-download (que só assina NF na pasta do contrato da medição).
 // Aceita também Authorization: Bearer <jwt> no lugar do token, para o modo autenticado
 // (login de partner_users) reusar a mesma função em vez de duplicar a lógica de upload.
 serve(async (req: Request) => {
@@ -139,8 +140,10 @@ serve(async (req: Request) => {
             console.error('[partner-portal-upload] erro ao enviar NF:', uploadError);
             return json({ error: 'Erro ao enviar nota fiscal' }, 500);
         }
-        const { data: pub } = admin.storage.from('documents').getPublicUrl(path);
-        return json({ publicUrl: pub.publicUrl });
+        // Bucket privado: devolve o CAMINHO — é ele que vai para
+        // contract_measurements.invoice_url, e quem abre assina
+        // (portal-documentos-download; no app, a sessão do membro).
+        return json({ path });
     }
 
     const path = `partner-uploads/${workspaceId}/${Date.now()}_${safeName}`;

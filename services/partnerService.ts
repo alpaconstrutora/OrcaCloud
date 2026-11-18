@@ -845,8 +845,9 @@ export const partnerService = {
     const path = `invoices/${contractId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g, '_')}`;
     const { error } = await supabase.storage.from('documents').upload(path, file, { upsert: false });
     if (error) throw error;
-    const { data } = supabase.storage.from('documents').getPublicUrl(path);
-    return data.publicUrl;
+    // Bucket privado: devolve o CAMINHO (vai para contract_measurements.invoice_url).
+    // Quem abre assina — no portal, pela Edge Function portal-documentos-download.
+    return path;
   },
 
   // --- Anexos de Solicitações (Onda 5: fluxo reverso — parceiro envia arquivo) ---

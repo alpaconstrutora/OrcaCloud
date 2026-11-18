@@ -16,7 +16,7 @@ import {
 } from '../services/laborService';
 import { orgGovernanceService } from '../services/orgGovernanceService';
 import { OrgRole } from '../types';
-import { supabase } from '../lib/supabase';
+import { abrirArquivoAssinado, BUCKET_ARQUIVOS_DA_ORGANIZACAO } from '../lib/storageAssinado';
 import LaborSalaryRecordSheet, { SALARY_CHANGE_LABELS, SalaryRecordSubmit } from './LaborSalaryRecordSheet';
 
 const SALARY_COLUMNS: ColumnConfig[] = [
@@ -208,10 +208,11 @@ const LaborEmployeeSalaryHistory: React.FC<LaborEmployeeSalaryHistoryProps> = ({
         }
     };
 
+    // Bucket privado: URL assinada na hora, aba aberta já no clique (lib/storageAssinado.ts).
     const handleDownload = (record: EmployeeSalaryRecord) => {
         if (!record.file_url) return;
-        const { data } = supabase.storage.from('organization-assets').getPublicUrl(record.file_url);
-        window.open(data.publicUrl, '_blank');
+        abrirArquivoAssinado(BUCKET_ARQUIVOS_DA_ORGANIZACAO, record.file_url)
+            .catch(err => setError(err instanceof Error ? err.message : 'Não foi possível abrir o anexo.'));
     };
 
     const openNew = () => { setEditing(null); setSheetOpen(true); };

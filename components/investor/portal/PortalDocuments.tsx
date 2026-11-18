@@ -2,6 +2,7 @@ import React from 'react';
 import { Download, FileText } from 'lucide-react';
 import { InvestorReport, REPORT_CATEGORY_LABELS, ReportCategory } from '../../../services/investorPortalService';
 import { CardHeader, fmtDate, PortalCard, PortalEmpty, TagChip, Td, Th } from '../../portal/PortalKit';
+import { abrirDocumentoDoPortal } from '../../../lib/storageAssinado';
 
 interface Props {
     reports: InvestorReport[];
@@ -12,6 +13,13 @@ interface Props {
     onlyCategory?: ReportCategory;
     emptyTitle?: string;
     emptySubtitle?: string;
+    /**
+     * Token do portal (link ou login do investidor). O arquivo mora no bucket
+     * `documents` (privado): com token, quem assina é a Edge Function
+     * portal-documentos-download, que confere o relatório na mesma RPC do portal;
+     * sem token (pré-visualização do gestor), a sessão dele.
+     */
+    portalToken?: string | null;
 }
 
 const fmtReportDate = (value?: string) => {
@@ -25,6 +33,7 @@ const PortalDocuments: React.FC<Props> = ({
     reports, title = 'Documentos', subtitle, onlyCategory,
     emptyTitle = 'Nenhum documento disponível',
     emptySubtitle = 'Relatórios, contratos e prestações de contas aparecem aqui.',
+    portalToken,
 }) => {
     const linhas = onlyCategory ? reports.filter(r => r.category === onlyCategory) : reports;
 
@@ -62,7 +71,10 @@ const PortalDocuments: React.FC<Props> = ({
                                     {r.url ? (
                                         <button
                                             type="button"
-                                            onClick={() => window.open(r.url, '_blank', 'noopener')}
+                                            onClick={() => {
+                                                abrirDocumentoDoPortal({ portal: 'investidor', token: portalToken, referencia: r.url })
+                                                    .catch(err => console.error('[PortalDocuments] abrir documento:', err));
+                                            }}
                                             className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#C24428] hover:text-[#E1553C] transition-colors"
                                         >
                                             <Download className="w-3.5 h-3.5" />

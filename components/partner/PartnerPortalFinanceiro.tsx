@@ -99,6 +99,11 @@ interface Props {
     /** Pré-visualização do gestor: anexar NF só existe no acesso real do parceiro. */
     isPreview: boolean;
     onUploadInvoice: (measurementId: string, contractId: string, file: File) => void;
+    /**
+     * "Ver nota": a NF mora no bucket `documents` (privado) — quem abre é o
+     * portal, pela Edge Function que assina (PartnerPortal → abrirDocumentoDoPortal).
+     */
+    onAbrirNota: (m: MedicaoParceiro) => void;
 }
 
 /**
@@ -111,7 +116,7 @@ interface Props {
  */
 const PartnerPortalFinanceiro: React.FC<Props> = ({
     financials, loading, invoiceUploadError, erroRecibo, baixandoRecibo, onBaixarRecibo,
-    uploadingInvoiceFor, isPreview, onUploadInvoice,
+    uploadingInvoiceFor, isPreview, onUploadInvoice, onAbrirNota,
 }) => {
     const [filtro, setFiltro] = React.useState<FiltroId>('todas');
 
@@ -272,7 +277,7 @@ const PartnerPortalFinanceiro: React.FC<Props> = ({
                                     <Td className="text-[#1F2430] font-medium tabular-nums whitespace-nowrap">{fmtBRLCents(Number(m.net_value))}</Td>
                                     <Td className="whitespace-nowrap">
                                         {m.invoice_url ? (
-                                            <a href={m.invoice_url} target="_blank" rel="noreferrer" className="font-medium text-[#C24428] hover:text-[#E1553C] transition-colors">Ver nota</a>
+                                            <button type="button" onClick={() => onAbrirNota(m)} className="font-medium text-[#C24428] hover:text-[#E1553C] transition-colors">Ver nota</button>
                                         ) : isPreview ? (
                                             <span className="text-[#8A8F9A]" title="Anexar NF só existe no acesso real do parceiro">—</span>
                                         ) : (

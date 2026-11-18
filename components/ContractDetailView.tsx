@@ -1,4 +1,6 @@
 import React from 'react';
+import { abrirArquivoAssinado, baixarArquivoAssinado, BUCKET_DOCUMENTOS } from '../lib/storageAssinado';
+import { ImagemAssinada, VideoAssinado } from './ui/ImagemAssinada';
 import { moverEntreAbas } from './ui/abasPeloTeclado';
 import ActionIconButton from './ui/ActionIconButton';
 import {
@@ -371,6 +373,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     // Um timer só: cada aviso novo reinicia a contagem — antes o timer de um
     // aviso anterior derrubava o novo antes da hora.
     const notificationTimer = React.useRef<number | undefined>(undefined);
+    // Bucket `documents` é privado: abrir = URL assinada, aba aberta no clique.
+    const abrirDocumento = (valor?: string | null) => {
+        abrirArquivoAssinado(BUCKET_DOCUMENTOS, valor)
+            .catch(err => notify(err instanceof Error ? err.message : 'Não foi possível abrir o arquivo.', 'error'));
+    };
+
     const notify = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
         setNotification({ message, type });
         window.clearTimeout(notificationTimer.current);
@@ -2402,8 +2410,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         return;
                                     }
                                     notify('Enviando para ZapSign…', 'info');
-                                    const pdfResp = await fetch(alvo.url);
-                                    const blob = await pdfResp.blob();
+                                    // Bucket privado: baixa por URL assinada (storage_path, ou o caminho
+                                    // extraído da URL pública antiga gravada em `url`).
+                                    const blob = await baixarArquivoAssinado(BUCKET_DOCUMENTOS, alvo.storage_path || alvo.url);
                                     const base64 = await new Promise<string>((res, rej) => {
                                         const fr = new FileReader();
                                         fr.onload = () => res((fr.result as string).split(',')[1]);
@@ -3025,15 +3034,14 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                     </>
                                                 )}
                                                 {m.invoice_url && (
-                                                    <a
-                                                        href={m.invoice_url}
-                                                        target="_blank"
-                                                        rel="noopener noreferrer"
+                                                    <button
+                                                        type="button"
+                                                        onClick={e => { e.stopPropagation(); abrirDocumento(m.invoice_url); }}
                                                         className="w-8 h-8 rounded-lg flex items-center justify-center bg-gray-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-sm border border-emerald-100/50"
                                                         title="Ver Nota Fiscal (NF)"
                                                     >
                                                         <FileText className="w-3.5 h-3.5" />
-                                                    </a>
+                                                    </button>
                                                 )}
                                                 {m.status === 'Pendente' && (
                                                     <button
@@ -4022,8 +4030,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                         <div key={idx} className="flex items-center gap-2 bg-gray-50 p-2 rounded-[10px] border border-gray-100 group/item">
                                                             {url.match(/\.(mp4|webm|ogg)$/i) ? (
                                                                 <div className="relative group/vid">
-                                                                    <video
-                                                                        src={url}
+                                                                    <VideoAssinado
+                                                                        bucket={BUCKET_DOCUMENTOS}
+                                                                        valor={url}
                                                                         className="w-16 h-12 object-cover rounded-lg border border-gray-100"
                                                                     />
                                                                     <div className="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 group-hover/vid:opacity-100 transition-opacity rounded-lg">
@@ -4031,23 +4040,23 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                                     </div>
                                                                 </div>
                                                             ) : (
-                                                                <img
-                                                                    src={url}
+                                                                <ImagemAssinada
+                                                                    bucket={BUCKET_DOCUMENTOS}
+                                                                    valor={url}
                                                                     className="w-16 h-12 object-cover rounded-lg border border-gray-100 hover:scale-110 transition-transform cursor-pointer"
-                                                                    onClick={() => window.open(url, '_blank')}
+                                                                    onClick={() => abrirDocumento(url)}
                                                                     alt="Medição"
                                                                 />
                                                             )}
 
-                                                            <a
-                                                                href={url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => abrirDocumento(url)}
                                                                 className="flex items-center gap-2 px-3 py-2 bg-blue-50 text-blue-700 rounded-[6px] text-xs font-medium hover:bg-blue-600 hover:text-white transition-all shadow-sm"
                                                             >
                                                                 {url.match(/\.(mp4|webm|ogg)$/i) ? <Video className="w-3 h-3" /> : <ImageIcon className="w-3 h-3" />}
                                                                 Ver
-                                                            </a>
+                                                            </button>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -4680,11 +4689,14 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
     // signed_contract_url = PDF assinado devolvido pelo ZapSign (webhook do
     // sign-contract). Contratos antigos podem tê-lo do upload "GED" que saiu
     // da tela — continua aberto aqui, só para leitura.
+    // Pode ser URL do ZapSign (externa, abre como está) ou arquivo do bucket
+    // `documents`, agora privado (assina na hora) — abrirArquivoAssinado decide.
     const pdfAssinado = contract.signed_contract_url ? (
-        <a href={contract.signed_contract_url} target="_blank" rel="noopener noreferrer"
+        <button type="button"
+            onClick={() => { abrirArquivoAssinado(BUCKET_DOCUMENTOS, contract.signed_contract_url).catch(err => console.error('[SignaturePanel] abrir PDF assinado:', err)); }}
             className="inline-flex items-center gap-1.5 text-sm font-medium text-blue-600 hover:text-blue-800">
             <ExternalLink className="w-4 h-4" /> Abrir contrato assinado (PDF)
-        </a>
+        </button>
     ) : null;
 
     if (isSigned) return (

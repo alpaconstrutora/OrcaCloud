@@ -43,6 +43,7 @@ import { situacaoDaParcela } from '../../utils/situacaoParcelaParceiro';
 import { enabledPartnerPortalTabs, PARTNER_PORTAL_TAB_LABELS, type PartnerPortalTabId, enabledPartnerContractTabs, type PartnerContractTabId } from '../../utils/partnerPortalTabs';
 import Button from '../ui/Button';
 import { urlDoPdfDoContrato } from '../../utils/contractFileUrl';
+import { abrirDocumentoDoPortal } from '../../lib/storageAssinado';
 import ActionIconButton from '../ui/ActionIconButton';
 import { TabsBar } from '../ui/TabsBar';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
@@ -343,6 +344,21 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
   // "Ver PDF": uma regra só para as duas visões — utils/contractFileUrl.ts.
   const getContractFileUrl = urlDoPdfDoContrato;
+
+  // PDF do contrato, versões emitidas e NF da medição moram no bucket
+  // `documents` (privado). O parceiro não é membro da org — quem assina é a Edge
+  // Function portal-documentos-download, que chama a MESMA RPC do portal (por
+  // token no link; pelo workspace com a sessão no login e na pré-visualização) e
+  // só assina o que aparece nela. URL do ZapSign abre como está.
+  const abrirDocumento = (referencia?: string | null, contratoId?: string | null) => {
+    abrirDocumentoDoPortal({
+      portal: 'parceiro',
+      token: isTokenMode ? portalToken : null,
+      workspaceId: isTokenMode ? null : workspace?.id,
+      contratoId,
+      referencia,
+    }).catch(err => console.error('[PartnerPortal] abrir documento:', err));
+  };
 
   // Abrir o detalhe de um contrato (itens/aditivos/medições) — mesmos dados que a
   // tela interna de Suprimentos > Contratos mostra, só que somente leitura.
@@ -1979,13 +1995,13 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                             </div>
                             <div className="flex items-center gap-3 shrink-0">
                               {doc.signed_file_url && (
-                                <a href={doc.signed_file_url} target="_blank" rel="noreferrer" className="text-sm text-orange-500 hover:text-orange-600 font-semibold">
+                                <button type="button" onClick={() => abrirDocumento(doc.signed_file_url, detailContract?.id)} className="text-sm text-orange-500 hover:text-orange-600 font-semibold">
                                   Assinado
-                                </a>
+                                </button>
                               )}
-                              <a href={doc.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-sm text-orange-500 hover:text-orange-600 font-semibold">
+                              <button type="button" onClick={() => abrirDocumento(doc.url, detailContract?.id)} className="flex items-center gap-1 text-sm text-orange-500 hover:text-orange-600 font-semibold">
                                 <ExternalLink className="w-3.5 h-3.5" /> Abrir
-                              </a>
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -2015,7 +2031,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                             <span>Retenção: R$ {Number(m.retention_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             <span>Líquido: R$ {Number(m.net_value).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                             {m.invoice_url && (
-                              <a href={m.invoice_url} target="_blank" rel="noreferrer" className="text-orange-500 hover:text-orange-600 font-semibold">Ver Nota</a>
+                              <button type="button" onClick={() => abrirDocumento(m.invoice_url, m.contract_id || detailContract?.id)} className="text-orange-500 hover:text-orange-600 font-semibold">Ver Nota</button>
                             )}
                           </div>
                         </div>
@@ -2068,15 +2084,14 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         Ver Detalhes
                       </button>
                       {getContractFileUrl(contract) && (
-                        <a
-                          href={getContractFileUrl(contract)!}
-                          target="_blank"
-                          rel="noreferrer"
+                        <button
+                          type="button"
+                          onClick={() => abrirDocumento(getContractFileUrl(contract), contract.id)}
                           className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl text-sm text-gray-700 hover:bg-gray-100 active:scale-95 transition-all font-semibold"
                         >
                           <ExternalLink className="w-3.5 h-3.5 text-orange-500" />
                           Ver PDF
-                        </a>
+                        </button>
                       )}
                     </div>
                   </div>
@@ -2102,6 +2117,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               uploadingInvoiceFor={uploadingInvoiceFor}
               isPreview={isPreview}
               onUploadInvoice={handleUploadInvoice}
+              onAbrirNota={m => abrirDocumento(m.invoice_url, m.contract_id)}
             />
           )}
 

@@ -175,7 +175,10 @@ export default defineConfig(({ mode }) => {
               // arquivo privado sem passar pela RLS do Storage. Nome novo de
               // propósito: o antigo ('supabase-storage-cache') tinha arquivo privado
               // e é apagado no boot e ao sair (lib/cacheDoStorage.ts).
-              urlPattern: /^https:\/\/[^/]+\.supabase\.co\/storage\/v1\/(?:object|render\/image)\/public\//i,
+              // `documents` e `organization-assets` ficam de fora: viraram privados
+              // (lib/storageAssinado.ts) e a URL pública antiga deles não é arquivo
+              // público — as entradas que sobraram são apagadas no boot.
+              urlPattern: /^https:\/\/[^/]+\.supabase\.co\/storage\/v1\/(?:object|render\/image)\/public\/(?!documents\/|organization-assets\/)/i,
               handler: 'CacheFirst',
               options: {
                 cacheName: 'supabase-storage-public-cache',

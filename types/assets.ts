@@ -49,7 +49,7 @@ export interface OpuraAsset {
   responsible_worker_id?: string;
   current_project_id?: string;
   tracking_code?: string;
-  /** Caminho da foto no bucket `organization-assets` — não é URL (ver assetService.imagePublicUrl). */
+  /** Caminho da foto no bucket PRIVADO `organization-assets` (`asset-photos/<org>/<ativo>/…`) — não é URL; exibir com useUrlAssinada. */
   image_url?: string | null;
   /** Onde o equipamento está instalado (texto livre, usado pelo Condomínio). */
   location?: string | null;

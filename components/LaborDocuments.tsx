@@ -8,7 +8,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import {
     laborService, Employee, EmployeeDocument, DocumentCategory
 } from '../services/laborService';
-import { supabase } from '../lib/supabase';
+import { abrirArquivoAssinado, BUCKET_ARQUIVOS_DA_ORGANIZACAO } from '../lib/storageAssinado';
 import LaborDocumentModal from './LaborDocumentModal';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
@@ -83,11 +83,12 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
         }
     };
 
+    // Bucket privado: URL assinada na hora, com a aba aberta já no clique
+    // (lib/storageAssinado.ts). Quem não é da org do colaborador é recusado
+    // pela policy do bucket — a aba mostra o motivo.
     const handleDownload = (doc: EmployeeDocument) => {
-        const { data } = supabase.storage
-            .from('organization-assets')
-            .getPublicUrl(doc.file_url);
-        window.open(data.publicUrl, '_blank');
+        abrirArquivoAssinado(BUCKET_ARQUIVOS_DA_ORGANIZACAO, doc.file_url)
+            .catch(err => console.error('[LaborDocuments] download:', err));
     };
 
     const handleEdit = (doc: EmployeeDocument) => {

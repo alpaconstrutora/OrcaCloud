@@ -152,8 +152,10 @@ export const partnerPortalTokenService = {
     if (!(data as any)?.valid) throw new Error((data as any)?.error || 'Não foi possível anexar a nota fiscal.');
   },
 
-  // Upload da NF de uma medição — vai para o bucket público 'documents' (mesmo caminho que
+  // Upload da NF de uma medição — vai para o bucket 'documents' (privado; mesmo caminho que
   // ContractMeasurementModal.tsx usa no admin), diferente do uploadAttachment acima (opura-docs).
+  // Devolve o CAMINHO no bucket. `publicUrl` é a resposta da versão anterior da function
+  // (URL pública inteira) — continua aceita: o leitor extrai o caminho das duas.
   async uploadInvoice(token: string, contractId: string, file: File): Promise<string> {
     const formData = new FormData();
     formData.append('token', token);
@@ -162,8 +164,9 @@ export const partnerPortalTokenService = {
     formData.append('file', file);
     const { data, error } = await supabase.functions.invoke('partner-portal-upload', { body: formData });
     if (error) throw error;
-    if (!data?.publicUrl) throw new Error(data?.error || 'Erro ao enviar nota fiscal.');
-    return data.publicUrl;
+    const referencia = data?.path || data?.publicUrl;
+    if (!referencia) throw new Error(data?.error || 'Erro ao enviar nota fiscal.');
+    return referencia;
   },
 
   async getRequests(token: string): Promise<any[]> {

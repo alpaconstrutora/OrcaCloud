@@ -36,6 +36,13 @@ import {
 } from 'lucide-react';
 import Button from '../ui/Button';
 import { urlDoPdfDoContrato } from '../../utils/contractFileUrl';
+import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
+
+// Visão do gestor (membro da org): bucket `documents` privado — assina com a
+// própria sessão, aba aberta no clique.
+const abrirDocumento = (valor?: string | null) => {
+  abrirArquivoAssinado(BUCKET_DOCUMENTOS, valor).catch(err => console.error('[PartnerWorkspaceManager] abrir documento:', err));
+};
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { supabase } from '../../lib/supabase';
 import { partnerService } from '../../services/partnerService';
@@ -1937,15 +1944,14 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                           Abrir contrato
                         </button>
                         {getContractFileUrl(contract) && (
-                          <a
-                            href={getContractFileUrl(contract)!}
-                            target="_blank"
-                            rel="noreferrer"
+                          <button
+                            type="button"
+                            onClick={() => abrirDocumento(getContractFileUrl(contract))}
                             className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3.5 py-2 rounded-xl text-xs text-gray-700 hover:bg-gray-100 active:scale-95 transition-all font-semibold"
                           >
                             <ExternalLink className="w-3.5 h-3.5 text-orange-500" />
                             Ver PDF
-                          </a>
+                          </button>
                         )}
                       </div>
                     </div>
@@ -2072,7 +2078,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                                 {measurementColumns.visibleColumns.includes('nf') && (
                                   <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal">
                                     {m.invoice_url ? (
-                                      <a href={m.invoice_url} target="_blank" rel="noreferrer" className="text-blue-600 hover:text-blue-800">Ver nota</a>
+                                      <button type="button" onClick={() => abrirDocumento(m.invoice_url)} className="text-blue-600 hover:text-blue-800">Ver nota</button>
                                     ) : (
                                       <span className="text-gray-400">Não anexada</span>
                                     )}

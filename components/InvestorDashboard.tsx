@@ -541,7 +541,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             // A org no caminho é o que a policy do bucket confere (aplicar_20271116900800).
             const path = `reports/${orgId}/${Date.now()}_${file.name}`;
             await storageService.uploadFile('documents', path, file);
-            const url = storageService.getPublicUrl('documents', path);
+            // Bucket privado: `url` guarda o CAMINHO; quem abre assina (ReportsTab,
+            // PortalDocuments → abrirDocumentoDoPortal).
+            const url = path;
             const saved = await investorPortalService.addReport({
                 organization_id: orgId,
                 investor_id: investorProfile?.id ?? null,
@@ -1009,7 +1011,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     )
                 )}
                 {activeTab === 'reports' && isPublicExperience && (
-                    <PortalDocuments reports={reports} />
+                    <PortalDocuments reports={reports} portalToken={portalToken} />
                 )}
                 {activeTab === 'reports' && !isPublicExperience && (
                     <div className="space-y-6">
@@ -1070,6 +1072,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         // o gatilho de geração é do gestor.
                         <PortalDocuments
                             reports={reports}
+                            portalToken={portalToken}
                             onlyCategory="relatorio"
                             title="Relatórios mensais"
                             subtitle="Evolução física, financeira e previsto × realizado"

@@ -1249,24 +1249,25 @@ export const laborService = {
 
     // FOTO 3x4 DO COLABORADOR
     //
-    // Mesmo bucket dos documentos (`organization-assets`) e mesmo contrato da
-    // foto de ativo (assetService): `employees.avatar_url` guarda o CAMINHO, não
-    // a URL — a URL pública é resolvida na hora de exibir. Valor que já seja URL
-    // absoluta (dado antigo) passa como está.
-    employeePhotoUrl(path?: string | null): string | null {
-        if (!path) return null;
-        if (/^https?:\/\//i.test(path)) return path;
-        return supabase.storage.from('organization-assets').getPublicUrl(path).data.publicUrl;
-    },
+    // Mesmo bucket dos documentos (`organization-assets`, PRIVADO) e mesmo
+    // contrato da foto de ativo (assetService): `employees.avatar_url` guarda o
+    // CAMINHO, nunca a URL. Exibir: `useUrlAssinada(BUCKET_ARQUIVOS_DA_ORGANIZACAO,
+    // avatar_url)` — URL assinada, resolvida na hora.
+    //
+    // Caminho `labor-photos/<org>/<colaborador>/<arquivo>`: a policy do bucket
+    // (aplicar_20271118914000) libera pelo COLABORADOR do caminho, sob a RLS de
+    // `employees` — por isso a foto só sobe quando o colaborador já existe (o
+    // formulário guarda o arquivo e envia no Salvar). A org é só organização da
+    // pasta: colaborador que muda de org continua com a foto.
 
-    /** Sobe a foto e devolve o CAMINHO no bucket (é isso que vai para `avatar_url`).
-     *  A org entra no caminho porque, na criação, o colaborador ainda não tem id. */
-    async uploadEmployeePhoto(orgId: string | null | undefined, file: File): Promise<string> {
+    /** Sobe a foto e devolve o CAMINHO no bucket (é isso que vai para `avatar_url`). */
+    async uploadEmployeePhoto(employee: { id: string; org_id?: string | null }, file: File): Promise<string> {
         const validation = validateImageFile(file);
         if (!validation.valid) throw new Error(validation.error);
+        if (!employee.id) throw new Error('Salve o colaborador antes de enviar a foto.');
 
         const ext = file.name.toLowerCase().split('.').pop();
-        const path = `labor-photos/${orgId || 'sem-organizacao'}/${crypto.randomUUID()}.${ext}`;
+        const path = `labor-photos/${employee.org_id || 'sem-organizacao'}/${employee.id}/${crypto.randomUUID()}.${ext}`;
         const { error } = await supabase.storage
             .from('organization-assets')
             .upload(path, file, { upsert: false, contentType: file.type });

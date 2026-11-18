@@ -17,7 +17,7 @@ import { queryClient } from './lib/queryClient';
 import { ConfirmProvider } from './components/ui/confirm';
 import { ToastProvider } from './components/ui/toast';
 import { reloadOnceForChunkError } from './utils/chunkLoadError';
-import { CACHE_STORAGE_LEGADO } from './lib/cacheDoStorage';
+import { CACHE_STORAGE_LEGADO, limparDoCachePublicoOsBucketsPrivados } from './lib/cacheDoStorage';
 import { CACHE_NAVEGACAO_LEGADO } from './lib/cacheDeNavegacao';
 
 // Chunk de um deploy anterior sumiu do servidor (aba aberta durante a publicação):
@@ -94,6 +94,9 @@ if ('serviceWorker' in navigator) {
     // `?token=` dos links de portal (ver lib/cacheDeNavegacao.ts). O SW novo grava
     // em outro cache, sem query.
     caches.delete(CACHE_NAVEGACAO_LEGADO).catch(() => {});
+    // Arquivo de `documents`/`organization-assets` guardado quando os buckets
+    // eram públicos (lib/cacheDoStorage.ts).
+    void limparDoCachePublicoOsBucketsPrivados();
   }
   // Tabs abertas por muito tempo: checa atualização do SW periodicamente (e ao voltar o foco).
   navigator.serviceWorker.ready.then((reg) => {

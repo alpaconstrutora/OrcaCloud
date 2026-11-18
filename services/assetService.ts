@@ -215,26 +215,24 @@ export const assetService = {
 
   // FOTO DO ATIVO
   //
-  // Bucket `organization-assets` (público) — o mesmo de foto/documento de
-  // colaborador. A coluna `image_url` guarda o CAMINHO, nunca a URL: bucket
-  // público resolve a URL na hora de renderizar, e caminho sobrevive a troca de
-  // domínio do projeto Supabase.
-  imagePublicUrl(path?: string | null): string | null {
-    if (!path) return null;
-    // Já veio URL absoluta (dado antigo ou colado à mão) — devolve como está.
-    if (/^https?:\/\//i.test(path)) return path;
-    return supabase.storage.from(ASSET_IMAGE_BUCKET).getPublicUrl(path).data.publicUrl;
-  },
+  // Bucket `organization-assets` (PRIVADO) — o mesmo de foto/documento de
+  // colaborador. A coluna `image_url` guarda o CAMINHO, nunca a URL. Exibir:
+  // `useUrlAssinada`/`useUrlsAssinadas(BUCKET_ARQUIVOS_DA_ORGANIZACAO, …)`.
+  //
+  // Caminho `asset-photos/<org>/<ativo>/<arquivo>`: a policy do bucket
+  // (aplicar_20271118914000) libera pelo ATIVO do caminho, sob a RLS de
+  // `opura_assets` — a foto só sobe quando o ativo já existe (o drawer guarda o
+  // arquivo e envia no Salvar). A org é só organização da pasta: ativo que muda
+  // de org continua com a foto.
 
   /** Sobe a imagem e devolve o CAMINHO no bucket (é isso que vai para `image_url`). */
-  async uploadImage(organizationId: string, file: File): Promise<string> {
+  async uploadImage(asset: { id: string; organization_id?: string | null }, file: File): Promise<string> {
     const validation = validateImageFile(file);
     if (!validation.valid) throw new Error(validation.error);
+    if (!asset.id) throw new Error('Salve o ativo antes de enviar a imagem.');
 
     const ext = file.name.toLowerCase().split('.').pop();
-    // `organizationId` no caminho mantém a foto no recorte da organização dona
-    // mesmo antes de o ativo existir (o drawer sobe a imagem antes de salvar).
-    const path = `asset-photos/${organizationId || 'sem-organizacao'}/${crypto.randomUUID()}.${ext}`;
+    const path = `asset-photos/${asset.organization_id || 'sem-organizacao'}/${asset.id}/${crypto.randomUUID()}.${ext}`;
 
     const { error } = await supabase.storage
       .from(ASSET_IMAGE_BUCKET)
@@ -247,6 +245,19 @@ export const assetService = {
       }
       throw new Error(`Falha ao enviar a imagem: ${error.message}`);
     }
+    return path;
+  },
+
+  /**
+   * Duplicar ativo: a foto do original ganha CÓPIA na pasta do ativo novo.
+   * Apontar para o mesmo arquivo deixaria a duplicata sem foto no dia em que o
+   * original fosse excluído (a policy libera pelo ativo do caminho).
+   */
+  async copyImage(origem: string, destino: { id: string; organization_id?: string | null }): Promise<string> {
+    const ext = (origem.split('.').pop() || 'jpg').toLowerCase();
+    const path = `asset-photos/${destino.organization_id || 'sem-organizacao'}/${destino.id}/${crypto.randomUUID()}.${ext}`;
+    const { error } = await supabase.storage.from(ASSET_IMAGE_BUCKET).copy(origem, path);
+    if (error) throw new Error(`Falha ao copiar a imagem: ${error.message}`);
     return path;
   },
 

@@ -51,6 +51,9 @@ import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
 import ImageDropzone from './ui/ImageDropzone';
+import { useUrlAssinada, useUrlsAssinadas } from '../hooks/useUrlAssinada';
+import { BUCKET_ARQUIVOS_DA_ORGANIZACAO } from '../lib/storageAssinado';
+import { validateImageFile } from '../lib/mimeValidation';
 import {
   OpuraAsset,
   AssetCategory,
@@ -380,11 +383,13 @@ function renderAssetCell(
     lastMovements: Record<string, OpuraAssetMovement>;
     docsByAsset: Record<string, OpuraAssetDocument[]>;
     warehouseName: (id?: string | null) => string | undefined;
+    /** URL assinada da foto (bucket privado) — `useUrlsAssinadas` no módulo. */
+    fotoUrl: (caminho?: string | null) => string | null;
   },
 ): React.ReactNode {
   switch (key) {
     case 'image': {
-      const url = assetService.imagePublicUrl(asset.image_url);
+      const url = ctx.fotoUrl(asset.image_url);
       const Icon = ctx.categoryIcons[asset.category] || Package;
       // Sem foto a célula mostra o ícone da categoria em cinza — não um vazio,
       // que faria a coluna parecer quebrada em quem ainda não subiu imagem.
@@ -553,11 +558,25 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   
   const [isNewDocModalOpen, setIsNewDocModalOpen] = React.useState(false);
 
-  // Upload da foto do bem. `imagensOrfas` guarda o que foi subido NESTE drawer e
-  // ainda não pertence a ativo nenhum: se o usuário trocar a imagem três vezes e
-  // sair sem salvar, os três arquivos ficariam no bucket para sempre.
+  // Foto do bem: o arquivo escolhido fica no NAVEGADOR (prévia local) e só sobe
+  // no Salvar, já na pasta do ativo (`asset-photos/<org>/<ativo>/…`). É pelo
+  // ativo do caminho que a policy do bucket privado libera, e no cadastro novo
+  // o id só existe depois do insert. Quem troca a imagem três vezes e sai sem
+  // salvar não deixa arquivo nenhum no bucket.
   const [assetImageUploading, setAssetImageUploading] = React.useState(false);
-  const imagensOrfas = React.useRef<string[]>([]);
+  const [imagemPendente, setImagemPendente] = React.useState<{ arquivo: File; previa: string } | null>(null);
+  const previaDaImagem = React.useRef<string | null>(null);
+  const trocarImagemPendente = (arquivo: File | null) => {
+    if (previaDaImagem.current) URL.revokeObjectURL(previaDaImagem.current);
+    previaDaImagem.current = arquivo ? URL.createObjectURL(arquivo) : null;
+    setImagemPendente(arquivo && previaDaImagem.current ? { arquivo, previa: previaDaImagem.current } : null);
+  };
+  React.useEffect(() => () => {
+    if (previaDaImagem.current) URL.revokeObjectURL(previaDaImagem.current);
+  }, []);
+  // Fotos da tabela: uma assinatura em lote para a lista inteira (bucket privado).
+  const caminhosDasFotos = React.useMemo(() => assets.map(a => a.image_url), [assets]);
+  const fotosDosAtivos = useUrlsAssinadas(BUCKET_ARQUIVOS_DA_ORGANIZACAO, caminhosDasFotos);
 
   // Colaboradores (Fase 7). As marcas saíram daqui em 13/10/2026: o catálogo é
   // Configurações › Marcas e Modelos, e o campo do formulário (BrandModelPicker)
@@ -575,7 +594,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // `setAssetForm` direto), então o §25 do guia manda usar diff por snapshot em
   // vez de instrumentar cada `onChange`.
   const [assetFormSnapshot, setAssetFormSnapshot] = React.useState('');
-  const assetFormDirty = isNewAssetModalOpen && JSON.stringify(assetForm) !== assetFormSnapshot;
+  const assetFormDirty = isNewAssetModalOpen && (JSON.stringify(assetForm) !== assetFormSnapshot || !!imagemPendente);
+  const imagemSalvaAssinada = useUrlAssinada(BUCKET_ARQUIVOS_DA_ORGANIZACAO, assetForm.image_url);
   // Marca/modelo moram no catálogo da organização DO ATIVO (REGRA #5): na
   // edição, a do próprio ativo; no cadastro, a do topo ou a escolhida no campo
   // "Organização Proprietária". null = ainda não escolhida (campo desligado).
@@ -793,6 +813,8 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
       return;
     }
     setActionLoading(true);
+    // Imagem enviada nesta gravação — sai do bucket se o update falhar.
+    let imagemEnviada: string | null = null;
     try {
       // Marca/modelo digitados e não cadastrados viram cadastro aqui, na org DO
       // ATIVO (nunca bloqueia o salvar). O banco espelha o texto a partir do id.
@@ -802,6 +824,19 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         itemTypeDaCategoria(assetForm.category),
       );
       if (editingAssetId) {
+        // Imagem nova sobe ANTES do update, já na pasta do ativo.
+        if (imagemPendente) {
+          const ativoAtual = assets.find(a => a.id === editingAssetId);
+          setAssetImageUploading(true);
+          try {
+            imagemEnviada = await assetService.uploadImage(
+              { id: editingAssetId, organization_id: ativoAtual?.organization_id ?? targetOrgId },
+              imagemPendente.arquivo,
+            );
+          } finally {
+            setAssetImageUploading(false);
+          }
+        }
         const updated = await assetService.update(editingAssetId, {
           name: assetForm.name,
           code: assetForm.code || undefined,
@@ -816,16 +851,18 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           residual_value: Number(assetForm.residual_value) || 0,
           // `null` e não `undefined`: remover a foto tem de APAGAR a coluna, e
           // `undefined` é campo ausente no PATCH — o valor antigo ficaria.
-          image_url: assetForm.image_url || null,
+          image_url: imagemEnviada ?? (assetForm.image_url || null),
           notes: assetForm.notes || undefined
         });
+        imagemEnviada = null; // gravada na coluna: agora é do ativo
         alert('Ativo patrimonial updated com sucesso!');
         if (selectedAsset && selectedAsset.id === editingAssetId) {
           setSelectedAsset(updated);
         }
       } else {
         // Código em branco: o banco numera na série da organização (OPR-PAT-000001…).
-        await assetService.create({
+        // A imagem entra DEPOIS: a pasta dela leva o id do ativo novo.
+        const criado = await assetService.create({
           organization_id: targetOrgId,
           code: assetForm.code.trim() || null,
           name: assetForm.name,
@@ -838,18 +875,43 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
           useful_life_months: Number(assetForm.useful_life_months) || undefined,
           residual_value: Number(assetForm.residual_value) || 0,
           status: 'disponivel',
-          image_url: assetForm.image_url || undefined,
           notes: assetForm.notes || undefined
         });
-        alert(isDuplicate ? 'Ativo duplicado com sucesso!' : 'Ativo patrimonial cadastrado com sucesso!');
+        let avisoDaImagem = '';
+        try {
+          if (imagemPendente) {
+            setAssetImageUploading(true);
+            imagemEnviada = await assetService.uploadImage(criado, imagemPendente.arquivo);
+          } else if (isDuplicate && assetForm.image_url) {
+            // Duplicata: cópia própria da foto do original, na pasta do ativo novo.
+            try {
+              imagemEnviada = await assetService.copyImage(assetForm.image_url, criado);
+            } catch (errCopia) {
+              // Sem cópia, a duplicata aponta para o arquivo do original (o
+              // comportamento de antes) — continua visível enquanto o original existir.
+              console.warn('[OpuraAssetsModule] cópia da imagem da duplicata falhou:', errCopia);
+              await assetService.update(criado.id, { image_url: assetForm.image_url });
+            }
+          }
+          if (imagemEnviada) await assetService.update(criado.id, { image_url: imagemEnviada });
+        } catch (errImagem: any) {
+          if (imagemEnviada) void assetService.removeImage(imagemEnviada);
+          imagemEnviada = null;
+          avisoDaImagem = ` A imagem não foi salva (${errImagem?.message || 'erro desconhecido'}): abra o ativo e envie de novo.`;
+        } finally {
+          setAssetImageUploading(false);
+        }
+        alert((isDuplicate ? 'Ativo duplicado com sucesso!' : 'Ativo patrimonial cadastrado com sucesso!') + avisoDaImagem);
       }
-      
-      // O que foi salvo pertence ao ativo — não é mais órfão para descartar.
-      imagensOrfas.current = [];
+
+      // A imagem gravada pertence ao ativo — não é mais pendente para descartar.
+      imagemEnviada = null;
       // Fecha sem pedir confirmação: acabou de salvar, não há pendência a descartar.
       fecharFormularioAtivo();
       loadData();
     } catch (err: any) {
+      // Subiu a imagem e o update não gravou: o arquivo não tem dono.
+      if (imagemEnviada) void assetService.removeImage(imagemEnviada);
       alert(`Erro ao salvar ativo: ${err.message}`);
     } finally {
       setActionLoading(false);
@@ -1293,36 +1355,22 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   // Eram os seis botões do painel de detalhe da direita. Cada uma marca o ativo
   // alvo (`selectedAsset`, de onde os modais leem) e abre o modal correspondente.
 
-  const descartarImagensOrfas = () => {
-    const pendentes = imagensOrfas.current;
-    imagensOrfas.current = [];
-    // Sem `await`: limpeza de bucket não pode segurar o fechamento do drawer.
-    pendentes.forEach(path => { void assetService.removeImage(path); });
-  };
+  // A imagem escolhida e não salva só existe no navegador: descartar é soltar a prévia.
+  const descartarImagemPendente = () => trocarImagemPendente(null);
 
-  const handleAssetImageSelect = async (file: File) => {
-    const targetOrgId = activeOrganizationId || assetForm.organization_id;
-    setAssetImageUploading(true);
-    try {
-      const path = await assetService.uploadImage(targetOrgId || '', file);
-      imagensOrfas.current.push(path);
-      setAssetForm(prev => ({ ...prev, image_url: path }));
-    } catch (err: any) {
-      alert(err.message);
-    } finally {
-      setAssetImageUploading(false);
+  const handleAssetImageSelect = (file: File) => {
+    const validacao = validateImageFile(file);
+    if (!validacao.valid) {
+      alert(validacao.error || 'Imagem não aceita.');
+      return;
     }
+    trocarImagemPendente(file);
   };
 
-  // Só apaga do bucket o arquivo que ainda não foi salvo em ativo nenhum. A foto
-  // já persistida some da coluna ao salvar — o arquivo fica, porque a duplicata
-  // do ativo aponta para o MESMO caminho e perderia a imagem junto.
+  // A foto já persistida some da coluna ao salvar — o arquivo fica, porque uma
+  // duplicata antiga do ativo pode apontar para o MESMO caminho.
   const handleAssetImageRemove = () => {
-    const atual = assetForm.image_url;
-    if (atual && imagensOrfas.current.includes(atual)) {
-      imagensOrfas.current = imagensOrfas.current.filter(p => p !== atual);
-      void assetService.removeImage(atual);
-    }
+    descartarImagemPendente();
     setAssetForm(prev => ({ ...prev, image_url: '' }));
   };
 
@@ -1334,7 +1382,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
     form: ReturnType<typeof formularioAtivoVazio>,
     modo: { editandoId?: string | null; duplicando?: boolean; somenteLeitura?: boolean; ativo?: OpuraAsset } = {},
   ) => {
-    imagensOrfas.current = [];
+    descartarImagemPendente();
     // Ativo novo: Categoria/Vida útil são valores de fábrica (o modelo pode trocar).
     // Editar/duplicar: o que veio do banco é da pessoa — só vida útil NULA aceita o modelo.
     setOrigemCampos(modo.ativo
@@ -1350,7 +1398,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
   };
 
   const fecharFormularioAtivo = () => {
-    descartarImagensOrfas();
+    descartarImagemPendente();
     setIsNewAssetModalOpen(false);
     setEditingAssetId(null);
     setIsDuplicate(false);
@@ -2024,7 +2072,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                                   >
                                     {orderedVisibleKeys.map(key => (
                                       <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                        {renderAssetCell(key, asset, { categoryIcons, calculateDepreciation, projects, lastMovements, docsByAsset, warehouseName })}
+                                        {renderAssetCell(key, asset, { categoryIcons, calculateDepreciation, projects, lastMovements, docsByAsset, warehouseName, fotoUrl: caminho => (caminho ? fotosDosAtivos[caminho] ?? null : null) })}
                                       </td>
                                     ))}
                                     <td aria-hidden="true"></td>
@@ -2880,7 +2928,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 {/* Fora do que `<fieldset disabled>` alcança: arraste não é evento de
                     controle de formulário, então o modo leitura entra pela prop. */}
                 <ImageDropzone
-                  value={assetService.imagePublicUrl(assetForm.image_url)}
+                  value={imagemPendente?.previa ?? imagemSalvaAssinada}
                   onSelect={handleAssetImageSelect}
                   onRemove={handleAssetImageRemove}
                   uploading={assetImageUploading}

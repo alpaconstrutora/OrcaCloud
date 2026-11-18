@@ -9,6 +9,8 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { KpiCard } from './ui/KpiCard';
 import { useConfirm } from './ui/confirm';
 import { storageService } from '../services/storageService';
+import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../lib/storageAssinado';
+import { ImagemAssinada } from './ui/ImagemAssinada';
 import {
     Contract, ContractItem, ContractAddendum, ContractMeasurement,
     ContractMeasurementItem, MeasurementMode
@@ -166,14 +168,20 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
 
     // ── Upload helpers ──────────────────────────────────────────────────────────
 
+    // Bucket `documents` é privado: abrir = URL assinada, aba aberta no clique.
+    const abrirArquivo = (valor: string) => {
+        abrirArquivoAssinado(BUCKET_DOCUMENTOS, valor)
+            .catch(err => setModalError(err instanceof Error ? err.message : 'Não foi possível abrir o arquivo.'));
+    };
+
     const handleFileUpload = async (itemId: string, file: File) => {
         try {
             setUploadingItems(prev => ({ ...prev, [itemId]: true }));
             const sanitizedName = sanitizeFileName(file.name);
             const path = `measurements/${contract.id}/${Date.now()}_${sanitizedName}`;
-            await storageService.uploadFile('documents', path, file);
-            const publicUrl = storageService.getPublicUrl('documents', path);
-            setAttachments(prev => ({ ...prev, [itemId]: [...(prev[itemId] || []), publicUrl] }));
+            await storageService.uploadFile(BUCKET_DOCUMENTOS, path, file);
+            // Bucket privado: grava o CAMINHO; quem exibe assina (ImagemAssinada / abrirArquivoAssinado).
+            setAttachments(prev => ({ ...prev, [itemId]: [...(prev[itemId] || []), path] }));
         } catch (error: any) {
             setModalError(`Erro ao fazer upload do arquivo: ${error.message || 'Erro desconhecido'}`);
         } finally {
@@ -188,9 +196,8 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
             setIsUploadingInvoice(true);
             const sanitizedName = sanitizeFileName(file.name);
             const path = `invoices/${contract.id}/${Date.now()}_${sanitizedName}`;
-            await storageService.uploadFile('documents', path, file);
-            const publicUrl = storageService.getPublicUrl('documents', path);
-            setInvoiceUrl(publicUrl);
+            await storageService.uploadFile(BUCKET_DOCUMENTOS, path, file);
+            setInvoiceUrl(path);
         } catch (error: any) {
             setModalError(`Erro no upload da NF: ${error.message}`);
         } finally {
@@ -370,10 +377,10 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                 </span>
                             ) : invoiceUrl ? (
                                 <div className="flex items-center gap-2">
-                                    <a href={invoiceUrl} target="_blank" rel="noopener noreferrer"
+                                    <button type="button" onClick={() => abrirArquivo(invoiceUrl)}
                                         className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px]">
                                         <ExternalLink className="w-[15px] h-[15px]" /> Ver arquivo
-                                    </a>
+                                    </button>
                                     <button type="button" onClick={() => { setInvoiceUrl(''); marcarAlterado(); }}
                                         className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-red-600 rounded-[6px] hover:bg-red-50 transition-all font-medium text-[13px]">
                                         <Trash2 className="w-[15px] h-[15px]" /> Remover
@@ -541,14 +548,14 @@ const ContractMeasurementModal: React.FC<ContractMeasurementModalProps> = ({
                                                                             type="button"
                                                                             title="Abrir evidência"
                                                                             className="w-8 h-8 rounded-[6px] border border-gray-200 overflow-hidden hover:border-blue-500 transition-all block"
-                                                                            onClick={() => window.open(url, '_blank')}
+                                                                            onClick={() => abrirArquivo(url)}
                                                                         >
                                                                             {url.match(/\.(mp4|webm|ogg)$/i) ? (
                                                                                 <span className="w-full h-full bg-gray-100 flex items-center justify-center">
                                                                                     <Video className="w-4 h-4 text-gray-500" />
                                                                                 </span>
                                                                             ) : (
-                                                                                <img src={url} className="w-full h-full object-cover" alt="Evidência" />
+                                                                                <ImagemAssinada bucket={BUCKET_DOCUMENTOS} valor={url} className="w-full h-full object-cover" alt="Evidência" />
                                                                             )}
                                                                         </button>
                                                                         <button

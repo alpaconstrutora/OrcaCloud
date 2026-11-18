@@ -5,6 +5,7 @@ import { useConfirm } from '../ui/confirm';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { contractDocumentVersionService } from '../../services/contractDocumentVersionService';
+import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
 import { ContractDocumentVersion, DocumentKind, DocumentOwnerType, DocumentSource } from '../../types';
 
 interface Props {
@@ -265,7 +266,11 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                                     kind="view"
                                     title="Abrir documento"
                                     icon={<ExternalLink className="w-4 h-4" />}
-                                    onClick={() => window.open(v.url, '_blank', 'noopener,noreferrer')}
+                                    onClick={() => {
+                                        // Bucket privado: URL assinada na hora (storage_path, ou a URL antiga em `url`).
+                                        abrirArquivoAssinado(BUCKET_DOCUMENTOS, v.storage_path || v.url)
+                                            .catch(e => notifyRef.current(e instanceof Error ? e.message : 'Não foi possível abrir o documento.', 'error'));
+                                    }}
                                 />
                                 <ActionIconButton kind="edit" title="Editar versão" onClick={() => abrirEdicao(v)} />
                                 {/* Desabilitado diz o motivo: o botão desabilitado não

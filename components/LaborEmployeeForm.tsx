@@ -19,6 +19,9 @@ import CityStateSelect from './CityStateSelect';
 import LaborEmployeeSalaryHistory from './LaborEmployeeSalaryHistory';
 import { supabase } from '../lib/supabase';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useUrlAssinada } from '../hooks/useUrlAssinada';
+import { BUCKET_ARQUIVOS_DA_ORGANIZACAO } from '../lib/storageAssinado';
+import { validateImageFile } from '../lib/mimeValidation';
 import { useStore } from '../store/useStore';
 import { temAcessoTotal } from '../lib/acessoTotal';
 import { motivoVinculoUsuarioBloqueado } from '../lib/vinculoColaboradorUsuario';
@@ -390,48 +393,55 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     };
 
     // ── Foto 3x4 ────────────────────────────────────────────────────────────
-    // O arquivo sobe na hora da escolha (para a prévia), mas `avatar_url` só é
-    // gravado no "Salvar", como o resto do formulário. Por isso dois registros:
-    //  - `fotosNaoSalvas`: enviadas nesta sessão e ainda não gravadas em
-    //    colaborador nenhum — apagadas ao trocar de novo, ao remover e ao sair
-    //    sem salvar (senão o bucket acumula órfãs, como no OpuraAssetsModule);
+    // A foto escolhida fica no NAVEGADOR (prévia local) e só sobe no "Salvar",
+    // como o resto do formulário. O caminho no bucket leva o id do colaborador
+    // (`labor-photos/<org>/<colaborador>/…`) e é por ele que a policy do bucket
+    // privado libera — no cadastro novo o id só existe depois do insert. De
+    // quebra, quem desiste do cadastro não deixa arquivo órfão no bucket.
+    //  - `fotoPendente`: arquivo escolhido e ainda não enviado;
     //  - `fotoGravada`: a que está no banco — só sai do bucket DEPOIS que o save
     //    trocou a coluna (antes disso, sair sem salvar a deixaria apontando
     //    para um arquivo apagado).
     const [photoUploading, setPhotoUploading] = useState(false);
-    const fotosNaoSalvas = useRef<string[]>([]);
+    const [fotoPendente, setFotoPendente] = useState<{ arquivo: File; previa: string } | null>(null);
+    const previaDaFoto = useRef<string | null>(null);
     const fotoGravada = useRef<string | null>(employee?.avatar_url || null);
+    const fotoSalvaAssinada = useUrlAssinada(BUCKET_ARQUIVOS_DA_ORGANIZACAO, form.avatar_url);
 
-    const descartarFotoNaoSalva = (path?: string | null) => {
-        if (!path || !fotosNaoSalvas.current.includes(path)) return;
-        fotosNaoSalvas.current = fotosNaoSalvas.current.filter(p => p !== path);
-        void laborService.removeEmployeePhoto(path);
+    const trocarFotoPendente = (arquivo: File | null) => {
+        if (previaDaFoto.current) URL.revokeObjectURL(previaDaFoto.current);
+        previaDaFoto.current = arquivo ? URL.createObjectURL(arquivo) : null;
+        setFotoPendente(arquivo && previaDaFoto.current ? { arquivo, previa: previaDaFoto.current } : null);
+    };
+    useEffect(() => () => {
+        if (previaDaFoto.current) URL.revokeObjectURL(previaDaFoto.current);
+    }, []);
+
+    const handlePhotoSelect = (file: File) => {
+        const validacao = validateImageFile(file);
+        if (!validacao.valid) {
+            notify(validacao.error || 'Imagem não aceita.');
+            return;
+        }
+        trocarFotoPendente(file);
+        markDirty();
     };
 
-    const handlePhotoSelect = async (file: File) => {
+    const handlePhotoRemove = () => {
+        trocarFotoPendente(null);
+        setField('avatar_url', '');
+    };
+
+    /** Envia a foto pendente para a pasta DO colaborador; devolve o caminho. */
+    const enviarFotoPendente = async (colaborador: { id: string; org_id?: string | null }): Promise<string | null> => {
+        if (!fotoPendente) return null;
         setPhotoUploading(true);
         try {
-            const path = await laborService.uploadEmployeePhoto(form.org_id || orgId, file);
-            fotosNaoSalvas.current.push(path);
-            descartarFotoNaoSalva(form.avatar_url);
-            setField('avatar_url', path);
-        } catch (err: any) {
-            notify(err?.message || 'Não foi possível enviar a foto.');
+            return await laborService.uploadEmployeePhoto(colaborador, fotoPendente.arquivo);
         } finally {
             setPhotoUploading(false);
         }
     };
-
-    const handlePhotoRemove = () => {
-        descartarFotoNaoSalva(form.avatar_url);
-        setField('avatar_url', '');
-    };
-
-    // Saiu sem salvar (Voltar/Cancelar confirmados): o que subiu e não foi
-    // gravado não tem dono — limpa o bucket.
-    useEffect(() => () => {
-        fotosNaoSalvas.current.forEach(path => { void laborService.removeEmployeePhoto(path); });
-    }, []);
     
     // Máscaras de Input (CPF e Telefone)
     const formatCPF = (value: string) => {
@@ -495,12 +505,34 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
             delete cleanedForm[k];
         }
 
+        // Foto enviada nesta gravação — sai do bucket se o update falhar.
+        let fotoEnviada: string | null = null;
+        // Cadastro gravado, foto não: avisa depois de fechar (o form some).
+        let avisoDaFoto: string | null = null;
         try {
             let savedEmployee: Employee;
             if (isEditing && employee?.id) {
+                // Foto nova sobe ANTES do update: o caminho vai junto na mesma gravação.
+                fotoEnviada = await enviarFotoPendente({ id: employee.id, org_id: employee.org_id ?? cleanedForm.org_id });
+                if (fotoEnviada) (cleanedForm as any).avatar_url = fotoEnviada;
                 savedEmployee = await laborService.updateEmployee(employee.id, cleanedForm);
+                fotoEnviada = null; // gravada na coluna: agora é do colaborador
             } else {
+                // Cadastro: a pasta da foto leva o id, que só existe depois do
+                // insert — grava sem a foto e completa a coluna em seguida.
+                if (fotoPendente) (cleanedForm as any).avatar_url = null;
                 savedEmployee = await laborService.createEmployee({ ...cleanedForm, org_id: cleanedForm.org_id || orgId } as any);
+                if (fotoPendente && savedEmployee?.id) {
+                    try {
+                        fotoEnviada = await enviarFotoPendente(savedEmployee);
+                        if (fotoEnviada) savedEmployee = await laborService.updateEmployee(savedEmployee.id, { avatar_url: fotoEnviada });
+                        fotoEnviada = null;
+                    } catch (errFoto: any) {
+                        if (fotoEnviada) void laborService.removeEmployeePhoto(fotoEnviada);
+                        fotoEnviada = null;
+                        avisoDaFoto = `Colaborador cadastrado, mas a foto não foi enviada (${errFoto?.message || 'erro desconhecido'}). Abra o cadastro e envie a foto de novo.`;
+                    }
+                }
             }
 
             // Salvar vínculos de rubricas recorrentes
@@ -516,16 +548,17 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                 setBankAccounts(contasGravadas.map(toDraft));
             }
 
-            // Foto: a gravada agora deixa de ser "não salva"; a que estava no
-            // banco antes, se foi trocada ou removida, sai do bucket.
+            // Foto: a pendente foi gravada; a que estava no banco antes, se foi
+            // trocada ou removida, sai do bucket.
             const fotoAtual = savedEmployee.avatar_url || null;
-            fotosNaoSalvas.current = fotosNaoSalvas.current.filter(p => p !== fotoAtual);
             if (fotoGravada.current && fotoGravada.current !== fotoAtual) {
                 void laborService.removeEmployeePhoto(fotoGravada.current);
             }
             fotoGravada.current = fotoAtual;
+            trocarFotoPendente(null);
 
             onSaved(savedEmployee);
+            if (avisoDaFoto) window.alert(avisoDaFoto);
 
             // Salvar não fecha mais a edição (§25 do guia) — o usuário costuma
             // ter várias abas por conferir e não quer reabrir o colaborador a
@@ -540,6 +573,8 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
             }
         } catch (err: any) {
             console.error(err);
+            // Subiu a foto e o update não gravou: o arquivo não tem dono.
+            if (fotoEnviada) void laborService.removeEmployeePhoto(fotoEnviada);
             notify('Erro ao salvar colaborador: ' + (err.message || 'Tente novamente.'));
         } finally {
             setSaving(false);
@@ -625,7 +660,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                         {/* Foto 3x4 no canto superior esquerdo, campos ao lado */}
                         <div className="flex flex-col sm:flex-row gap-6">
                         <LaborEmployeePhoto
-                            src={laborService.employeePhotoUrl(form.avatar_url)}
+                            src={fotoPendente?.previa ?? fotoSalvaAssinada}
                             uploading={photoUploading}
                             name={form.name}
                             onSelect={handlePhotoSelect}

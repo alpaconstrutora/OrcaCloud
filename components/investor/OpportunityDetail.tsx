@@ -34,6 +34,8 @@ import type { VersaoPublicada } from '../../utils/imovibVersoes';
 import ImovibPainelDoInvestidor from './portal/ImovibPainelDoInvestidor';
 import { InvestmentSimulator } from './InvestmentSimulator';
 import Button from '../ui/Button';
+import { BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
+import { ImagemAssinada } from '../ui/ImagemAssinada';
 import {
     ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line,
     XAxis, YAxis, CartesianGrid, Tooltip, Legend, BarChart, Bar
@@ -494,7 +496,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                                                     {op.gallery_urls.map((url, idx) => (
                                                         <div key={idx} className="relative h-48 rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-all group">
-                                                            <img src={url} alt={`Render ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
+                                                            <ImagemAssinada bucket={BUCKET_DOCUMENTOS} valor={url} alt={`Render ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
                                                             <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-4">
                                                                 <span className="text-xs font-bold text-white uppercase tracking-wider">Apresentação {idx + 1}</span>
                                                             </div>

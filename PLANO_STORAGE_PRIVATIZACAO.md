@@ -59,7 +59,7 @@ Por isso, por bucket:
 | Bucket | Objetos | Justificativa |
 |---|---|---|
 | `opportunity-photos` | 1 | Fotos do marketplace público (PublicMarketplaceView) — por design |
-| `organization-assets` | 6 | Logo/papel timbrado da org usado em PDFs/gerados — **confirmar que não há doc sensível misturado** |
+| ~~`organization-assets`~~ | 6 | ⚠️ Auditado em 18/11/2026: NÃO era logo — eram documentos, anexos salariais e fotos de RH e fotos de ativo. Vira privado, por registro: `docs/planos/2026-11-18-seguranca-storage-privado.md` |
 
 ### Já privados (OK — referência do padrão correto)
 `opura-docs` (signed URL 15min), `opportunity-dataroom`, `company-documents`,
@@ -117,10 +117,11 @@ Por isso, por bucket:
     qualquer empresa). Dívida separada (camada autenticada, não storage) — anotada,
     não corrigida aqui. Por isso o escopo de org de receipts usa JOIN explícito.
   - Restantes Fase 1: `fiscal-documents`, `boletos`, `invoices` (pendentes).
-- **Fase 2 — Documentos:** `documents` (contrato/cliente), `credit-analysis`
+- **Fase 2 — Documentos:** `documents` (contrato/cliente) — privado em 18/11/2026
+  (`docs/planos/2026-11-18-seguranca-storage-privado.md`), `credit-analysis`
   (confirmar existência do bucket antes).
 - **Fase 3 — Decisões de produto:** `broker-materials` (corretor escreve anon),
-  `organization-assets` (auditar conteúdo).
+  ~~`organization-assets` (auditar conteúdo)~~ — feito em 18/11/2026 (mesmo plano).
 
 ## Riscos / armadilhas
 

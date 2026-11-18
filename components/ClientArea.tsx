@@ -1,6 +1,7 @@
 import { moverEntreAbas } from './ui/abasPeloTeclado';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import React from 'react';
+import { abrirDocumentoDoPortal } from '../lib/storageAssinado';
 import ActionIconButton from './ui/ActionIconButton';
 import {
     LayoutDashboard,
@@ -254,6 +255,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // configurado (usa preset/legado do projeto).
     const [clientPortalTabs, setClientPortalTabs] = React.useState<string[] | undefined>(clientProfile?.portalTabs);
     const [isAccountMenuOpen, setIsAccountMenuOpen] = React.useState(false);
+    // Minuta e contrato assinado moram no bucket `documents` (privado). Com token
+    // (link ou login do cliente) quem assina é a Edge Function
+    // portal-documentos-download, que confere o contrato na mesma RPC do portal;
+    // na pré-visualização do gestor, a sessão dele. URL do ZapSign abre como está.
+    const abrirDocumentoDoContrato = (contratoId: string, referencia?: string | null) => {
+        abrirDocumentoDoPortal({ portal: 'cliente', token: portalToken, contratoId, referencia })
+            .catch(err => console.error('[ClientArea] abrir documento do contrato:', err));
+    };
     const accountMenuRef = React.useRef<HTMLDivElement>(null);
     // Central de ajuda + tour + "Primeiros passos" (components/portal/PortalHelp),
     // as mesmas peças dos portais do Parceiro, Fornecedor e Corretor.
@@ -1392,12 +1401,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 const emitted = c.minuta_versions!.filter(v => v.emitted !== false);
                                                 const latestV = Math.max(...emitted.map(x => x.v));
                                                 return [...emitted].sort((a, b) => b.v - a.v).map(ver => (
-                                                <a
+                                                <button
+                                                    type="button"
                                                     key={ver.v}
-                                                    href={ver.url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
-                                                    className="flex items-center gap-4 p-4 bg-purple-50 border border-purple-100 rounded-[10px] hover:bg-purple-100 transition-all group"
+                                                    onClick={() => abrirDocumentoDoContrato(c.id, ver.url)}
+                                                    className="w-full text-left flex items-center gap-4 p-4 bg-purple-50 border border-purple-100 rounded-[10px] hover:bg-purple-100 transition-all group"
                                                 >
                                                     <div className="w-9 h-9 bg-purple-600 rounded-[10px] flex items-center justify-center shrink-0 text-white font-bold text-xs">
                                                         v{ver.v}
@@ -1415,7 +1423,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                         </p>
                                                     </div>
                                                     <Download className="w-4 h-4 text-purple-400 group-hover:text-purple-700 transition-colors" />
-                                                </a>
+                                                </button>
                                                 ));
                                             })()}
                                         </div>
@@ -1424,11 +1432,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                 {!isMinuta && (docUrl ? (
                                     <div className="space-y-3">
                                         <p className="text-xs text-gray-400">Documento do Contrato</p>
-                                        <a
-                                            href={docUrl}
-                                            target="_blank"
-                                            rel="noopener noreferrer"
-                                            className="flex items-center gap-4 p-5 bg-indigo-50 border border-indigo-100 rounded-[10px] hover:bg-indigo-100 transition-all group"
+                                        <button
+                                            type="button"
+                                            onClick={() => abrirDocumentoDoContrato(c.id, docUrl)}
+                                            className="w-full text-left flex items-center gap-4 p-5 bg-indigo-50 border border-indigo-100 rounded-[10px] hover:bg-indigo-100 transition-all group"
                                         >
                                             <div className="w-10 h-10 bg-indigo-600 rounded-[10px] flex items-center justify-center shrink-0">
                                                 <Download className="w-5 h-5 text-white" />
@@ -1438,7 +1445,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                 <p className="text-xs text-indigo-400 mt-0.5">Clique para abrir o documento</p>
                                             </div>
                                             <ChevronRight className="w-4 h-4 text-indigo-400 ml-auto group-hover:translate-x-1 transition-transform" />
-                                        </a>
+                                        </button>
                                     </div>
                                 ) : (
                                     <div className="flex items-center gap-3 p-5 bg-gray-50 border border-dashed border-gray-200 rounded-[10px]">

@@ -216,5 +216,6 @@ export async function generateMonthlyReportPdf(organizationId: string): Promise<
     const path = `reports/${organizationId}/${Date.now()}_relatorio-mensal-${safeName}.pdf`;
     const pdfFile = new File([doc.output('blob')], `relatorio-mensal-${safeName}.pdf`, { type: 'application/pdf' });
     await storageService.uploadFile('documents', path, pdfFile);
-    return storageService.getPublicUrl('documents', path);
+    // Bucket privado: devolve o CAMINHO (vai para investor_reports.url); quem abre assina.
+    return path;
 }

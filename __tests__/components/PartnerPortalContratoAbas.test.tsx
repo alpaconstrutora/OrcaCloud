@@ -57,6 +57,15 @@ const DETALHE = {
     ],
 };
 
+// Bucket `documents` privado (docs/planos/2026-11-18-seguranca-storage-privado.md):
+// "Abrir" deixou de ser <a href> com a URL pública — o portal pede a URL
+// assinada pela Edge Function. Aqui só importa O QUE o botão pede.
+const abrirDocumentoDoPortal = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('../../lib/storageAssinado', async (original) => ({
+    ...(await original<typeof import('../../lib/storageAssinado')>()),
+    abrirDocumentoDoPortal,
+}));
+
 vi.mock('../../services/partnerService', () => ({
     partnerService: {
         getPartnerUserByEmail: vi.fn(async () => ({ id: 'pu1', partner_workspace_id: 'ws1', email: 'eu@parceiro.com', name: 'Afonso', role: 'ADMINISTRADOR', is_active: true })),
@@ -186,8 +195,15 @@ describe('PartnerPortal › detalhe do contrato — abas novas', () => {
         expect(screen.getByText('Termo aditivo 01')).toBeInTheDocument();
         expect(screen.getByText('Aditivo AD-001 · v1')).toBeInTheDocument();
         expect(screen.getByText('Contrato · v2')).toBeInTheDocument();
-        const links = screen.getAllByRole('link', { name: /Abrir/ }).map(a => a.getAttribute('href'));
-        expect(links).toEqual(['https://x/aditivo.pdf', 'https://x/minuta-v2.pdf']);
+        const abrir = screen.getAllByRole('button', { name: /^Abrir$/ });
+        expect(abrir).toHaveLength(2);
+        await user.click(abrir[0]);
+        await user.click(abrir[1]);
+        // Pela function do portal, com o token do link e o contrato aberto.
+        expect(abrirDocumentoDoPortal.mock.calls.map(c => (c as unknown[])[0])).toEqual([
+            { portal: 'parceiro', token: 'tok123', workspaceId: null, contratoId: 'ct1', referencia: 'https://x/aditivo.pdf' },
+            { portal: 'parceiro', token: 'tok123', workspaceId: null, contratoId: 'ct1', referencia: 'https://x/minuta-v2.pdf' },
+        ]);
     });
 
     it('6c. Documentos sem nenhuma versão emitida: estado vazio próprio', async () => {

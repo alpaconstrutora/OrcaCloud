@@ -10,6 +10,8 @@ import { imovibService } from '../../services/imovibService';
 import { ImovibStudy } from '../../types';
 import type { ImovibStudyVersion } from '../../utils/imovibVersoes';
 import { storageService } from '../../services/storageService';
+import { BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
+import { ImagemAssinada } from '../ui/ImagemAssinada';
 import Button from '../ui/Button';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 
@@ -149,8 +151,8 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                 // A org no caminho é o que a policy do bucket confere (aplicar_20271116900800).
                 const path = `gallery/${organizationId}/${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
                 await storageService.uploadFile('documents', path, file);
-                const url = storageService.getPublicUrl('documents', path);
-                urls.push(url);
+                // Bucket privado: guarda o CAMINHO; a galeria exibe com ImagemAssinada.
+                urls.push(path);
             }
             setForm(prev => ({ ...prev, gallery_urls: [...(prev.gallery_urls || []), ...urls] }));
         } catch (err) {
@@ -474,7 +476,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 <div className="grid grid-cols-3 gap-3 mt-2">
                                     {form.gallery_urls.map((url, idx) => (
                                         <div key={idx} className="relative rounded-xl overflow-hidden border border-gray-150 aspect-video group bg-gray-50">
-                                            <img src={url} alt={`Render ${idx + 1}`} className="w-full h-full object-cover" />
+                                            <ImagemAssinada bucket={BUCKET_DOCUMENTOS} valor={url} alt={`Render ${idx + 1}`} className="w-full h-full object-cover" />
                                             <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                                                 <Button
                                                     variant="danger"

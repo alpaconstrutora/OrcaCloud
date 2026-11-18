@@ -63,7 +63,9 @@ const ContractLaborQuestionnaireModal: React.FC<ContractLaborQuestionnaireModalP
             const cleanName = sanitizeFileName(file.name);
             const path = `${contract.organization_id}/contracts/${contract.id}/parecer_juridico_${Date.now()}_${cleanName}`;
             await storageService.uploadFile('documents', path, file);
-            setLegalOpinionUrl(storageService.getPublicUrl('documents', path));
+            // Bucket privado: grava o CAMINHO (a coluna só é testada como "tem parecer";
+            // quem um dia abrir o arquivo assina — lib/storageAssinado.ts).
+            setLegalOpinionUrl(path);
         } catch (err: unknown) {
             setError(err instanceof Error ? err.message : 'Erro ao enviar parecer jurídico.');
         } finally {

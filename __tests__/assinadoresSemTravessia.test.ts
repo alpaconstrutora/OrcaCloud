@@ -103,8 +103,9 @@ describe('Edge Functions · caminho entregue à service_role passa por caminhoSe
             'client-portal-condominio-download/index.ts', 'condomino-portal-download/index.ts',
             'academy-portal-media/index.ts', 'doc-gen-enviar/index.ts', 'doc-gen-ia/index.ts',
             'email-capture-sync/index.ts', 'fiscal-nfe-processor/index.ts',
+            'portal-documentos-download/index.ts',
         ]) expect(arquivos, a).toContain(a);
-        expect(chamadas.length).toBeGreaterThanOrEqual(19);
+        expect(chamadas.length).toBeGreaterThanOrEqual(20);
     });
 
     it('NENHUMA assinatura/download de caminho sem a guarda antes', () => {

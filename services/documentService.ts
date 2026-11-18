@@ -18,6 +18,7 @@ import {
 } from '../types';
 import { notificationService } from './notificationService';
 import { storageService } from './storageService';
+import { caminhoNoBucket, BUCKET_DOCUMENTOS, BUCKETS_PRIVADOS } from '../lib/storageAssinado';
 
 /** SHA-256 (hex) de um arquivo, no navegador. Falha → null (o envio não depende do hash). */
 async function sha256DoArquivo(file: Blob): Promise<string | null> {
@@ -273,7 +274,11 @@ export const documentService = {
               ? c.minuta_versions[c.minuta_versions.length - 1]
               : null;
 
-            const fileUrl = c.signed_contract_url || activeMinuta?.url || '';
+            const urlGravada = c.signed_contract_url || activeMinuta?.url || '';
+            // Arquivo do bucket `documents` (privado) vira `documents:<caminho>`, que
+            // generateDownloadUrl assina; URL externa (ZapSign) segue como está.
+            const caminhoNoBucketDocumentos = caminhoNoBucket(urlGravada, BUCKET_DOCUMENTOS);
+            const fileUrl = caminhoNoBucketDocumentos ? `${BUCKET_DOCUMENTOS}:${caminhoNoBucketDocumentos}` : urlGravada;
 
             return {
               id: c.id,
@@ -1260,6 +1265,15 @@ export const documentService = {
       throw new Error('Caminho de armazenamento do arquivo é nulo ou indefinido');
     }
     if (storagePath.startsWith('http://') || storagePath.startsWith('https://')) {
+      // URL pública antiga de bucket que virou privado: assina pelo caminho.
+      for (const bucketPrivado of BUCKETS_PRIVADOS) {
+        const caminho = caminhoNoBucket(storagePath, bucketPrivado);
+        if (caminho) {
+          const { data, error } = await supabase.storage.from(bucketPrivado).createSignedUrl(caminho, 60 * 15);
+          if (error || !data?.signedUrl) throw new Error(`Erro ao gerar link de download: ${error?.message ?? 'arquivo indisponível'}`);
+          return data.signedUrl;
+        }
+      }
       return storagePath;
     }
 

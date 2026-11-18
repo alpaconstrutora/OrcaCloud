@@ -1374,7 +1374,12 @@ export const exportService = {
                 }
 
                 try {
-                    const base64 = await this.urlToBase64(photo.url);
+                    // Evidência mora no bucket `documents` (privado): a imagem só
+                    // carrega por URL assinada. URL externa volta como está.
+                    // Import dinâmico: este módulo não arrasta o cliente do Supabase.
+                    const { urlAssinada, BUCKET_DOCUMENTOS } = await import('../lib/storageAssinado');
+                    const src = (await urlAssinada(BUCKET_DOCUMENTOS, photo.url)) ?? photo.url;
+                    const base64 = await this.urlToBase64(src);
                     doc.addImage(base64, 'JPEG', xPos, photoY, photoWidth, photoHeight);
 
                     // Legend

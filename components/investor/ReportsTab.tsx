@@ -2,6 +2,13 @@ import React from 'react';
 import { FileText, ArrowUpRight, Plus, X, LayoutDashboard, Table2 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { InvestorReport, ReportCategory, REPORT_CATEGORY_LABELS } from '../../services/investorPortalService';
+import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
+
+// Bucket `documents` privado: o gestor assina com a própria sessão (URL externa abre como está).
+const abrirRelatorio = (url?: string | null) => {
+    if (!url) return;
+    abrirArquivoAssinado(BUCKET_DOCUMENTOS, url).catch(err => console.error('[ReportsTab] abrir documento:', err));
+};
 
 const CATEGORIES = Object.entries(REPORT_CATEGORY_LABELS) as [ReportCategory, string][];
 
@@ -125,7 +132,7 @@ const ReportsTab: React.FC<Props> = ({
                                 )}
                                 <button
                                     className="p-2 text-gray-400 hover:text-blue-600 transition-colors"
-                                    onClick={(e) => { e.stopPropagation(); if (doc.url) window.open(doc.url, '_blank'); }}
+                                    onClick={(e) => { e.stopPropagation(); abrirRelatorio(doc.url); }}
                                 >
                                     <ArrowUpRight className="w-5 h-5" />
                                 </button>
@@ -160,7 +167,7 @@ const ReportsTab: React.FC<Props> = ({
                                 )}
                                 <span className="text-xs text-gray-400 font-bold uppercase tracking-widest block mt-1">{doc.report_date}</span>
                             </div>
-                            <ActionIconButton kind="download" className="mt-4" onClick={() => doc.url && window.open(doc.url, '_blank')} />
+                            <ActionIconButton kind="download" className="mt-4" onClick={() => abrirRelatorio(doc.url)} />
                         </div>
                     ))}
                 </div>

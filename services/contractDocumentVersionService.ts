@@ -25,7 +25,14 @@ const COLS =
 
 const BUCKET = 'documents';
 
-/** Caminho no bucket. Mantém o prefixo antigo do contrato — URLs já emitidas continuam válidas. */
+/**
+ * Bucket PRIVADO: `url` passa a guardar o CAMINHO (igual a `storage_path`).
+ * Linhas antigas guardam a URL pública inteira — todo leitor resolve as duas
+ * formas com URL assinada (lib/storageAssinado.ts: `abrirArquivoAssinado`,
+ * `caminhoNoBucket`; nos portais, a Edge Function `portal-documentos-download`).
+ */
+
+/** Caminho no bucket. Mantém o prefixo do contrato — é dele que a policy do bucket tira a organização. */
 const storagePathFor = (ownerType: DocumentOwnerType, ownerId: string, fileName: string) =>
     ownerType === 'ADDENDUM'
         ? `contract-addendums/${ownerId}/${Date.now()}-${fileName.replace(/\s+/g, '_')}`
@@ -87,11 +94,10 @@ export const contractDocumentVersionService = {
         const path = storagePathFor(input.ownerType, input.ownerId, input.file.name);
         const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, input.file, { upsert: true });
         if (upErr) throw upErr;
-        const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
 
         return contractDocumentVersionService._insert({
             ...input,
-            url: urlData.publicUrl,
+            url: path,
             storagePath: path,
             mimeType: input.file.type,
             sizeBytes: input.file.size,
@@ -117,11 +123,10 @@ export const contractDocumentVersionService = {
         const path = storagePathFor(input.ownerType, input.ownerId, input.fileName);
         const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, input.blob, { upsert: true });
         if (upErr) throw upErr;
-        const { data: urlData } = supabase.storage.from(BUCKET).getPublicUrl(path);
 
         return contractDocumentVersionService._insert({
             ...input,
-            url: urlData.publicUrl,
+            url: path,
             storagePath: path,
             mimeType: input.blob.type,
             sizeBytes: input.blob.size,

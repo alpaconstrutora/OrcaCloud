@@ -3,6 +3,7 @@ import { FileText, RefreshCw, CheckCircle2, Calendar, Download, Loader2 } from '
 import { supabase } from '../../lib/supabase';
 import { investorPortalService, InvestorReport } from '../../services/investorPortalService';
 import { generateMonthlyReportPdf } from '../../services/pdfReportService';
+import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
 import Button from '../ui/Button';
 
 interface Props {
@@ -177,15 +178,14 @@ const MonthlyReportTrigger: React.FC<Props> = ({ organizationId }) => {
                                     </div>
                                 </div>
                                 {r.url ? (
-                                    <a
-                                        href={r.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
+                                    <button
+                                        type="button"
+                                        onClick={() => { abrirArquivoAssinado(BUCKET_DOCUMENTOS, r.url).catch(err => console.error('[MonthlyReportTrigger] abrir relatório:', err)); }}
                                         className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700"
                                     >
                                         <Download className="w-3.5 h-3.5" />
                                         Baixar PDF
-                                    </a>
+                                    </button>
                                 ) : (
                                     <span className="text-xs text-gray-300">Sem arquivo</span>
                                 )}

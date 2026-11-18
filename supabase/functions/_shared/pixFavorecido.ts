@@ -54,12 +54,58 @@ function opcao(ref: string, rotulo: string, tipoGuardado: string | null, chaveBr
     };
 }
 
-export async function destinoDoTitulo(admin: Admin, titulo: TituloParaPix): Promise<DestinoPix> {
+/** Título com a organização dele — é contra ela que o favorecido é conferido (F72). */
+export type TituloDoPix = TituloParaPix & { organization_id: string };
+
+/**
+ * O favorecido é da organização do título, ou foi disponibilizado para ela?
+ *
+ * Achado F72 (varredura de 15/11/2026): o id do favorecido vem de campo que o membro edita
+ * (`supplier_id`, `employee_id`, `reference_id` da folha/pró-labore), e as leituras abaixo
+ * usam a chave de serviço. Sem esta conferência, um título da org A apontando para um
+ * colaborador/fornecedor/sócio da org B devolvia nome, CPF/CNPJ, titular e chave mascarada
+ * dele no `pix_quote`.
+ *
+ * Disponibilizado = linha em `<tabela de compartilhamento>` com `target_org_id` = org do
+ * título. Só vale porque essas linhas só podem ser escritas por quem é membro da org DONA
+ * (policies de `employee_org_shares` e `supplier_org_shares`, migration
+ * aplicar_20271118911000). Erro de leitura = não pertence (falha fechada).
+ */
+async function daOrgDoTitulo(
+    admin: Admin,
+    compartilhamento: 'supplier_org_shares' | 'employee_org_shares',
+    coluna: 'supplier_id' | 'employee_id',
+    id: string,
+    orgDoFavorecido: string | null | undefined,
+    orgDoTitulo: string,
+): Promise<boolean> {
+    if (!orgDoTitulo) return false;
+    if (orgDoFavorecido && orgDoFavorecido === orgDoTitulo) return true;
+    const { data, error } = await admin.from(compartilhamento).select('id')
+        .eq(coluna, id).eq('target_org_id', orgDoTitulo).limit(1);
+    return !error && Array.isArray(data) && data.length > 0;
+}
+
+/** A empresa (companies) é da organização do título? Sócio e conta do sócio (F72). */
+async function empresaDaOrg(admin: Admin, companyId: string | null | undefined, orgDoTitulo: string): Promise<boolean> {
+    if (!companyId || !orgDoTitulo) return false;
+    const { data, error } = await admin.from('companies').select('org_id').eq('id', companyId).maybeSingle();
+    return !error && !!data?.org_id && data.org_id === orgDoTitulo;
+}
+
+export async function destinoDoTitulo(admin: Admin, titulo: TituloDoPix): Promise<DestinoPix> {
     const favorecido = favorecidoDoTitulo(titulo);
     const vazio: DestinoPix = { favorecido, nome: null, documento: null, opcoes: [] };
+    const orgDoTitulo = titulo.organization_id;
+
+    // Favorecido de fora da organização do título = como se a linha dele não existisse:
+    // a mesma resposta vazia de antes (não vira 'avulso'), sem dizer que o id existe noutra org.
 
     if (favorecido.origem === 'fornecedor') {
-        const { data: s } = await admin.from('suppliers').select('name,nickname,document').eq('id', favorecido.id).maybeSingle();
+        const { data: s } = await admin.from('suppliers').select('organization_id,name,nickname,document').eq('id', favorecido.id).maybeSingle();
+        if (!s || !(await daOrgDoTitulo(admin, 'supplier_org_shares', 'supplier_id', favorecido.id!, s.organization_id, orgDoTitulo))) {
+            return vazio;
+        }
         const { data: contas } = await admin.from('supplier_bank_accounts')
             .select('id,bank_name,pix_key,pix_key_type,beneficiary_name,beneficiary_document,is_pix_primary,titular_diferente_autorizado')
             .eq('supplier_id', favorecido.id).eq('status', 'ativo').not('pix_key', 'is', null);
@@ -75,7 +121,10 @@ export async function destinoDoTitulo(admin: Admin, titulo: TituloParaPix): Prom
     }
 
     if (favorecido.origem === 'colaborador') {
-        const { data: e } = await admin.from('employees').select('name,cpf').eq('id', favorecido.id).maybeSingle();
+        const { data: e } = await admin.from('employees').select('org_id,name,cpf').eq('id', favorecido.id).maybeSingle();
+        if (!e || !(await daOrgDoTitulo(admin, 'employee_org_shares', 'employee_id', favorecido.id!, e.org_id, orgDoTitulo))) {
+            return vazio;
+        }
         const { data: contas } = await admin.from('employee_bank_accounts')
             .select('id,bank_name,pix_key,pix_key_type,holder_name,is_primary,titular_diferente_autorizado')
             .eq('employee_id', favorecido.id).not('pix_key', 'is', null);
@@ -90,20 +139,29 @@ export async function destinoDoTitulo(admin: Admin, titulo: TituloParaPix): Prom
     }
 
     if (favorecido.origem === 'socio') {
-        const { data: item } = await admin.from('prolabore_payroll_items').select('partner_id').eq('id', favorecido.id).maybeSingle();
-        if (!item?.partner_id) {
+        const { data: item } = await admin.from('prolabore_payroll_items').select('partner_id,payroll_id').eq('id', favorecido.id).maybeSingle();
+        // O item do pró-labore vale só se a folha societária dele é da org do título; de outra
+        // org responde como item inexistente (a mesma resposta de antes para id que não existe).
+        const { data: folha } = item?.payroll_id
+            ? await admin.from('prolabore_payrolls').select('organization_id').eq('id', item.payroll_id).maybeSingle()
+            : { data: null };
+        if (!item?.partner_id || !folha?.organization_id || folha.organization_id !== orgDoTitulo) {
             return { ...vazio, favorecido: { origem: 'avulso', id: null, motivo: 'Item do pró-labore não encontrado — digite a chave PIX.' } };
         }
-        const { data: p } = await admin.from('company_partners')
-            .select('id,nome,documento,pix_chave,pix_tipo,bank_account_id').eq('id', item.partner_id).maybeSingle();
+        // O sócio (partner_id do item) e a conta dele (bank_account_id do sócio) também vêm de
+        // campos editáveis: valem só se a empresa deles é da org do título. Sócio de fora =
+        // a mesma resposta de antes para sócio que não existe.
+        const { data: socioLido } = await admin.from('company_partners')
+            .select('id,company_id,nome,documento,pix_chave,pix_tipo,bank_account_id').eq('id', item.partner_id).maybeSingle();
+        const p = socioLido && (await empresaDaOrg(admin, socioLido.company_id, orgDoTitulo)) ? socioLido : null;
         const opcoes: OpcaoChave[] = [];
         if (p?.pix_chave) {
             opcoes.push(opcao(`socio:${p.id}`, 'Cadastro do sócio', p.pix_tipo, p.pix_chave, p.nome, p.documento, true));
         }
         if (p?.bank_account_id) {
             const { data: cba } = await admin.from('company_bank_accounts')
-                .select('id,banco_nome,pix_chave,pix_tipo,favorecido').eq('id', p.bank_account_id).maybeSingle();
-            if (cba?.pix_chave) {
+                .select('id,company_id,banco_nome,pix_chave,pix_tipo,favorecido').eq('id', p.bank_account_id).maybeSingle();
+            if (cba?.pix_chave && (await empresaDaOrg(admin, cba.company_id, orgDoTitulo))) {
                 opcoes.push(opcao(`socio-conta:${cba.id}`, `Conta do sócio${cba.banco_nome ? ` · ${cba.banco_nome}` : ''}`,
                     cba.pix_tipo, cba.pix_chave, texto(cba.favorecido) ?? texto(p?.nome), texto(p?.documento), !p?.pix_chave));
             }

@@ -17,6 +17,7 @@ import { FICHA_DO_PONTO_HIDRAULICO } from '../blueprintHidraulica';
 import { pontoNaFrente } from '../blueprintAncorasHidro';
 import type { PendenciaDoPpci } from '../blueprintGeradorPpci';
 import type { BaseDoPredio, ContextoDoPredio } from './terreoECobertura';
+import { caminhoPorFora, pedacosComCota, pilaresNaFaixa } from './contornoDePilar';
 
 /** O DN de referência para contar os condutores, mm. */
 export const DN_DE_REFERENCIA_DO_CONDUTOR_MM = 100;
@@ -150,9 +151,14 @@ export function lancarPluvial(
       const saida = inteiro(frente.ponto);
       // Todos chegam à saída na mesma cota — a do mais longo, com a declividade da premissa (os outros, com mais).
       const cotaDaCaixa = enterrado - Math.round((CAIXA_FORA_MM * decl) / 100);
-      const cotaNaSaida = Math.min(...caixas.map(({ caixa }) => cotaDaCaixa - Math.round((dist(caixa, saida) * decl) / 100)));
       dnHorizontalMm = dnDoHorizontal(vazaoLMin, MANNING_PVC, decl, condutores[0].dnMm);
-      for (const { caixa } of caixas) fila.push(trecho(T, caixa, cotaDaCaixa, saida, cotaNaSaida, dnDoHorizontal(qCada, MANNING_PVC, decl, condutores[0].dnMm), ROTULO_DO_CONDUTOR_HORIZONTAL));
+      // PA22a (decisão do usuário 4a): por fora dos pilares que descem até a cota dele (no RL, o condutor da asa de trás
+      // corria 51 m em linha reta sob o prédio e atravessava o pilar do canto do L), com a queda pelo comprimento.
+      const elevT = ctx.m.levels.find((l) => l.id === T)?.elevationMm ?? 0;
+      const pegadas = pilaresNaFaixa(ctx.m, elevT + enterrado - 2000, elevT + enterrado + dnHorizontalMm / 2, dnHorizontalMm / 2);
+      const caminhos = caixas.map(({ caixa }) => caminhoPorFora(caixa, saida, pegadas));
+      const cotaNaSaida = Math.min(...caminhos.map((c) => cotaDaCaixa - Math.round((c.mm * decl) / 100)));
+      for (const c of caminhos) for (const x of pedacosComCota(c.pts, cotaDaCaixa, cotaNaSaida)) fila.push(trecho(T, x.a, x.cotaAMm, x.b, x.cotaBMm, dnDoHorizontal(qCada, MANNING_PVC, decl, condutores[0].dnMm), ROTULO_DO_CONDUTOR_HORIZONTAL));
       fila.push({ type: 'AddTerminal', levelId: T, disciplina: 'PLUVIAL', tipo: FICHA_DO_PONTO_HIDRAULICO.LIGACAO_PLUVIAL.rotulo, at: saida, cotaMm: cotaNaSaida, tipoHidraulico: 'LIGACAO_PLUVIAL', sugerida: true } as Command);
       pendencias.push({ grupo: 'CONFERIR', texto: `Pluvial: a saída na frente do lote a ${(-cotaNaSaida / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m de profundidade — confira a cota da sarjeta (ou da galeria) e a ligação com a prefeitura.` });
     }

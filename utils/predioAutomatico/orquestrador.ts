@@ -35,6 +35,7 @@ import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './ag
 import { lancarEsgoto } from './esgoto';
 import { rebaixarAguaNoForro, type RebaixoDaAgua } from './desvios';
 import { compatibilizarPredio } from './compatibilizacao';
+import { contornarPilaresDasRedesSobPressao } from './contornoDePilar';
 import { lancarSubsolos, POTENCIA_DO_EXAUSTOR_W, subsoloDaTorre } from './garagem';
 import { lancarDrenagemDaGaragem } from './drenagem';
 import { lancarPluvial } from './pluvial';
@@ -298,6 +299,9 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     // andar de cima (no forro comum as duas redes se cruzavam); PA12: e nos cômodos secos por onde passa ramal do andar de
     // cima, logo abaixo dele. Cada andar repete pela cópia viva.
     rebaixoDaAgua = rebaixarAguaNoForro(ctx, mont.tipoLevelId);
+    // PA22c (decisão do usuário 4a): a água do tipo por fora dos pilares (no RL, a 2,47 m pelo pilar da parede) — antes
+    // dos eletrodutos, que veem o caminho novo.
+    aplicar(contornarPilaresDasRedesSobPressao(m, [mont.tipoLevelId]).comandos);
     if (rebaixoDaAgua.trechos) {
       const m = (mm: number) => (mm / 1000).toLocaleString('pt-BR');
       const r = rebaixoDaAgua;
@@ -391,6 +395,10 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       etapa('HIDRANTES', 'NAO_RODOU', 0, motivo);
     }
   }
+
+  // ── PA22b (decisão do usuário 4a): os tubos sob pressão do lote, do térreo, da cobertura e dos subsolos por fora dos
+  // pilares — o alimentador e a rede de incêndio enterrados a −0,30 m passavam pelo pé do pilar do térreo (R4).
+  aplicar(contornarPilaresDasRedesSobPressao(m, m.levels.filter((l) => l.id !== mont.tipoLevelId && !l.tipoDeId).map((l) => l.id)).comandos);
 
   // ── O tipo leva as instalações aos andares (PA1): as fases seguintes desenham no tipo e os andares acompanham.
   etapa('INSTALACOES_NO_TIPO', 'LANCOU', aplicar([{ type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }]), 'Pontos, trechos, quadros e circuitos desenhados no tipo vão às cópias.');

@@ -1022,6 +1022,43 @@ contornam pilar.
 **Pronto quando.** O conflito com pilar (R4 2, R8 4, R12 2, RL 31) cai, cada sobra explicada; nenhuma diagonal longa no
 desvio do térreo; marco da casa idêntico.
 
+**Execução da PA22 (17/11/2026).** Diagnóstico (os quatro prédios, só o que passa por DENTRO do pilar — o "dentro = 0" é
+encosto): R4 o alimentador e a rede de incêndio enterrados a −0,30 m pelo pé do pilar do térreo (que desce até −0,50 m);
+R8 a drenagem da garagem — a coluna de ralos na fila dos pilares; R12 as derivações do desvio do tubo de queda; RL o
+desvio em diagonal de 22 a 42 m (3), o condutor pluvial enterrado em diagonal de 51 m (1), a água do tipo a 2,47 m pelo
+pilar da parede (1 por andar) e uma luz de teto num RESÍDUO de geometria (um triângulo de 6 mm entre paredes, junto do
+pilar) com o nó dentro do pilar — os eletrodutos que chegam nela o atravessavam (≈3 por andar). Feito, numa fase só (em
+três partes):
+- **O térreo** (`utils/predioAutomatico/esgoto.ts`): cada lance do desvio contorna os pilares do térreo (`desvioDoPilar`,
+  a pegada crescida pelo raio do maior desvio + 5 cm), com a queda pelo comprimento do contorno; em ASAS, o desvio pelos
+  eixos dos corredores (`desvioPelosCorredores`): cada tubo ao pé dele no eixo mais perto (em L se a projeção cai além da
+  ponta), os eixos ligados onde se cruzam e onde se emendam na mesma linha (o RL tem dois corredores em cada asa), a
+  saída ao pé dela — que desliza ao longo do eixo até a chegada não cruzar porta nem a subida de outra rede (o caminho
+  pelos corredores, mais longo que a reta, chega a 1,94 m: pela porta do hall e pela subida do hidrante, na linha da
+  saída) —, e as cotas descem das pontas para a saída pela árvore dos caminhos mais curtos. O condutor pluvial enterrado
+  (`pluvial.ts`) por fora dos pilares, com a cota da saída pelo comprimento (`utils/predioAutomatico/contornoDePilar.ts`).
+- **Os enterrados e a garagem**: as redes sob pressão (água, incêndio) do lote, do térreo, da cobertura e dos subsolos
+  refeitas por fora dos pilares que alcançam a cota delas (`contornarPilaresDasRedesSobPressao`, depois dos hidrantes; os
+  motores gerais — o alimentador, o PPCI da planta — não mudam); a drenagem em pente (`drenagem.ts`) com cada aresta por
+  fora dos pilares do subsolo e a cota pelo comprimento (a declividade de 1 % se mantém).
+- **O tipo do RL**: a água do tipo por fora dos pilares (o mesmo passe, logo depois da água rebaixada e antes dos
+  eletrodutos); a luz de teto a menos de 15 cm da pegada de um pilar anda no cômodo (a busca da PA20), e a luz de um
+  resíduo de geometria (cômodo de menos de 0,1 m², o critério da rota de fuga da PA10c) sai — o cômodo de verdade tem a
+  sua; o relatório avisa.
+
+Resultado (o marco trava `PILAR = 0` e `desviosEmDiagonal = 0` — os lances do desvio com mais de 2 m e mais de 10° fora
+dos eixos): conflito com pilar R4 2 → 0, R8 4 → 0, R12 2 → 0, RL 31 → 0; no RL, encontros entre redes 109 → 108, em
+outra peça 2 → 1, encostos 45 → 42, porta ou janela igual; R12 encostos 45 → 44; o resumo do esgoto (tubos, DN,
+coletor) idêntico nos quatro; marco da casa idêntico. Testes em `__tests__/predioContornoDePilar.test.ts` (o alimentador
+enterrado por fora do pé do pilar, as pontas iguais; o pilar que não alcança a cota não muda nada; a luz dentro do pilar
+anda; a luz num resíduo sai). O desvio, o pluvial e a drenagem têm a prova no marco.
+
+**Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pa22.cjs`, o RL, estudo descartável arquivado): gerar em 81,1
+s; a aba Compatibilização com 550 conflitos (441 em porta ou janela · 108 encontros entre redes · 1 em outra peça —
+nenhum em pilar); no rascunho salvo depois do Lançar, nenhuma rede dentro de pilar (eram 31), nenhum lance do desvio em
+diagonal, nenhum eletroduto × esgoto, × linha ou duto, nenhuma água × dreno ou linha, nenhuma rede dentro de equipamento.
+Sem erro de console.
+
 PA1 e PA2 podem correr em frentes paralelas.
 
 ## Pendências em aberto (17/11/2026, depois da PA19)
@@ -1046,7 +1083,8 @@ escolha.
 | Compatibilização | ~~A descida do eletroduto até a tomada passando pelo duto do exaustor que corre junto da parede (R4 1, RL 5 por andar)~~ — resolvido: o duto desvia ao lado das descidas que ainda virão (zero nos quatro prédios) | feito na PA19 (decisão 1a) |
 | Compatibilização | ~~O duto de ar (a exaustão do banheiro) atravessando a caixa de uma evaporadora ou de um exaustor (R8 7, R12 88, RL 21)~~ — resolvido: a descarga sai da frente da evaporadora e o duto contorna o exaustor vizinho; zero nos quatro prédios | feito na PA15 |
 | Compatibilização | ~~As descidas da água cruzando o dreno e a linha frigorígena (no tipo do R8: 13 × dreno, 12 × linha)~~ — resolvido: no prédio a água desce na face da parede (o dreno e a linha correm no eixo); zero nos quatro prédios | feito na PA17 |
-| Compatibilização | Conflitos com pilar (R4 2, R8 4, R12 2, RL 31): redes traçadas em linha reta — o desvio suspenso do tubo de queda no térreo (R12 2, RL 3; no RL em diagonal de 40 m), a drenagem da garagem (R8 4), os enterrados no lote (R4 2, RL 1), o eletroduto e a água do tipo do RL (3 + 1 por andar) | PA22 (decisão 4a) |
+| Compatibilização | ~~Conflitos com pilar (R4 2, R8 4, R12 2, RL 31): redes traçadas em linha reta~~ — resolvido: o desvio do térreo pelos corredores e por fora dos pilares, o pluvial e os enterrados, a drenagem, a água e a luz do tipo (zero nos quatro prédios) | feito na PA22 (decisão 4a) |
+| Compatibilização | O desvio do RL pelos corredores é longo (~52 m a 1 %) e chega à saída a 1,87 m do piso do térreo — baixo para o forro dele (nenhuma porta é cruzada: a chegada à saída desliza para fora da porta do hall) — uma saída (e caixa de inspeção) por asa encurtaria | projetista |
 | Compatibilização | O dreno do ar, por gravidade a ~2,10 m no eixo da parede, passando sobre porta ou pelo alto de janela (27 no tipo do R8, 38 no do RL) — no relatório | projetista (decisão do usuário, 16/11) |
 | Compatibilização | O eletroduto junto da laje cruzando a descida da louça do andar de cima pela laje (eram R8 32, R12 104, RL 91) — resolvido em boa parte na PA16 (o contorno conferido contra todos os obstáculos) e na PA17 (a água na face): R4 12, R8 0, R12 0, RL 12; sobravam a luz da área de serviço 13 mm abaixo do ralo seco de cima (R4 — resolvido na PA20: a luz anda para 15 cm dele) e, no RL, a subida do QD sob o ramal de esgoto de cima (o diagnóstico de 17/11 desmentiu a "vizinhança densa" — resolvido na PA21: o ramal a contorna) | feito na PA16/PA17 (as sobras: PA20, decisão 2a; PA21, decisão 3a) |
 | Compatibilização | Furos em viga do eletroduto junto da laje (+4 a +8 por prédio, nas travessias fora do apoio) — confira com o calculista | projetista |
@@ -1078,11 +1116,11 @@ escolha.
 
 ## Estado
 
-**Resumo (17/11/2026):** **PA19 e PA20 no ar; PA21 feita, a publicar; PA22 a fazer** (o 2º pedido de 17/11, decisões 1a–4a; a 5a
+**Resumo (17/11/2026):** **PA19, PA20 e PA21 no ar; PA22 feita, a publicar** (o 2º pedido de 17/11, decisões 1a–4a; a 5a
 deixa o tempo do Lançar como está). No ar: PA0 a PA10c (o plano de 12/11), PA11 a PA14 (o pedido de
 16/11) e PA15 a PA18 (o pedido de 17/11: quatro das cinco "a decidir", uma fase cada, na ordem recomendada — o duto do
 exaustor, o contorno do eletroduto, a água na face da parede, a linha contornando a subida do quadro). Último merge de
-código: 93e2e09 (#558, PA20); a produção serve o main. Em andamento: a PA21 (a publicar), depois a PA22. Efeito somado do 1º pedido de 17/11 no R8: encontros entre redes 295 → 56, conflito com equipamento 7 → 0,
+código: b15339c (#559, PA21); a produção serve o main. Em andamento: a PA22 (a publicar). Efeito somado do 1º pedido de 17/11 no R8: encontros entre redes 295 → 56, conflito com equipamento 7 → 0,
 porta ou janela 245 → 224; R12 621 → 154, RL 530 → 156. Kernel em `blueprint-kernel-ts-0.109.0` (PA11–PA19 não mudam a
 versão).
 
@@ -1117,7 +1155,8 @@ versão).
 | PA18 — a linha frigorígena contorna a subida do quadro | #544 | 44529a5 |
 | PA19 — o duto do exaustor desvia das descidas que ainda virão | #557 | 8c55034 |
 | PA20 — a luz de teto longe da descida da laje de cima | #558 | 93e2e09 |
-| PA21 — o ramal de esgoto de cima desvia da subida do QD | — | a publicar |
+| PA21 — o ramal de esgoto de cima desvia da subida do QD | #559 | b15339c |
+| PA22 — as redes em linha reta contornam pilar | — | a publicar |
 
 | Fase | Situação |
 |---|---|
@@ -1142,5 +1181,5 @@ versão).
 | PA18 | feita, no ar (#544, 44529a5; conferida no app com o R8) — a linha frigorígena fora do forro contorna a subida do QD (`subidasDosQuadros`): eletroduto × climatização R4 9 → 3, R8 14 → 0, R12 44 → 0, RL 63 → 35 (o marco trava); encontros entre redes R8 77 → 56, R12 198 → 154, RL 184 → 156; marco da casa idêntico |
 | PA19 | feita, no ar (#557, 8c55034; conferida no app com o R4) — o duto do exaustor desvia ao lado das descidas que ainda virão (`desvioDasDescidas`): eletroduto × climatização R4 3 → 0, RL 35 → 0 (o marco trava zero); encontros entre redes R4 41 → 35, RL 156 → 121; R8 idêntico; marco da casa idêntico |
 | PA20 | feita, no ar (#558, 93e2e09; conferida no app com o R4) — a luz de teto anda no cômodo para 15 cm da descida da laje de cima (`luzesLongeDasDescidasDeCima`): eletroduto × esgoto R4 12 → 0 (o marco trava); encontros entre redes R4 35 → 23; marco da casa idêntico |
-| PA21 | feita, a publicar (conferida no app com o RL) — o ramal de esgoto do tipo contorna a subida do QD de baixo: eletroduto × esgoto RL 12 → 0 (o marco trava zero nos quatro); encontros entre redes RL 121 → 109; R4, R8 e R12 idênticos; marco da casa idêntico |
-| PA22 | a fazer (decisão 4a) — as redes em linha reta contornam pilar |
+| PA21 | feita, no ar (#559, b15339c; conferida no app com o RL) — o ramal de esgoto do tipo contorna a subida do QD de baixo: eletroduto × esgoto RL 12 → 0 (o marco trava zero nos quatro); encontros entre redes RL 121 → 109; R4, R8 e R12 idênticos; marco da casa idêntico |
+| PA22 | feita, a publicar (conferida no app com o RL) — as redes em linha reta contornam pilar (o desvio do térreo pelos corredores, o pluvial e os enterrados, a drenagem, a água e a luz do tipo): conflito com pilar R4 2, R8 4, R12 2, RL 31 → 0 (o marco trava); o desvio sem diagonal; marco da casa idêntico |

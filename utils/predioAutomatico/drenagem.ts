@@ -23,6 +23,7 @@ import { comandosDasSugestoesDeDR, sugerirDRs } from '../blueprintNbr5410';
 import type { PendenciaDoPpci } from '../blueprintGeradorPpci';
 import type { ContextoDoPredio } from './terreoECobertura';
 import { NOME_DA_GARAGEM, type SubsolosLancados } from './garagem';
+import { caminhoPorFora, pedacosComCota, pilaresNaFaixa } from './contornoDePilar';
 
 /** Um ralo a cada tantos m² de garagem (hipótese de projeto, PA8c). */
 export const AREA_POR_RALO_DA_GARAGEM_M2 = 400;
@@ -57,8 +58,12 @@ const ponto = (levelId: ObjectId, tipo: 'RALO_SECO' | 'RALO_LINEAR' | 'CAIXA_SEP
  * A rede de um subsolo em PENTE: um coletor na linha da chegada (o y do destino) e, de cada ralo, um ramal reto até ele
  * (os ralos da mesma coluna em fila, o mais longe primeiro). A cota cai 1 % no sentido do destino (sob o piso, nunca
  * acima de −5 cm); cada ralo desce do piso à cota do seu nó. Sem diagonais cruzando a garagem.
+ *
+ * PA22b (decisão do usuário 4a, 17/11/2026): cada aresta por fora dos pilares (`pegadas`, crescidas pelo raio e a folga)
+ * — a coluna de ralos do R8 corria na linha dos pilares da garagem e atravessava quatro —, com a cota pelo comprimento do
+ * contorno (a declividade de 1 % se mantém; os ralos de montante ficam um pouco mais fundos).
  */
-function redeEmPente(levelId: ObjectId, ralos: Point[], destino: Point, cotaDoDestino: number): Command[] {
+function redeEmPente(levelId: ObjectId, ralos: Point[], destino: Point, cotaDoDestino: number, pegadas: readonly Point[][] = []): Command[] {
   if (!ralos.length) return [];
   const yD = destino.y;
   const arestas: [Point, Point][] = [];
@@ -80,6 +85,13 @@ function redeEmPente(levelId: ObjectId, ralos: Point[], destino: Point, cotaDoDe
   }
   // O caminho de cada nó até o destino (a rede é árvore: soma as arestas a jusante).
   const chave = (p: Point) => `${p.x},${p.y}`;
+  const caminhos = new Map<string, ReturnType<typeof caminhoPorFora>>();
+  const caminho = (a: Point, b: Point) => {
+    const k = `${chave(a)}|${chave(b)}`;
+    let c = caminhos.get(k);
+    if (!c) caminhos.set(k, (c = caminhoPorFora(a, b, pegadas)));
+    return c;
+  };
   const jusante = new Map(arestas.map(([a, b]) => [chave(a), b]));
   const ateODestino = (p: Point): number => {
     let L = 0;
@@ -87,7 +99,7 @@ function redeEmPente(levelId: ObjectId, ralos: Point[], destino: Point, cotaDoDe
     for (let g = 0; g < 1000 && chave(q) !== chave(destino); g++) {
       const b = jusante.get(chave(q));
       if (!b) break;
-      L += dist(q, b);
+      L += caminho(q, b).mm;
       q = b;
     }
     return L;
@@ -97,7 +109,7 @@ function redeEmPente(levelId: ObjectId, ralos: Point[], destino: Point, cotaDoDe
   return [
     // Cada ralo desce do piso à cota do nó dele (o ramal que chega de cima e o que sai para baixo se encontram ali).
     ...ralos.map((r) => trecho(levelId, r, 0, r, cotaDe(r), DN_DA_DRENAGEM_MM, ROTULO_DA_DRENAGEM)),
-    ...arestas.filter(([a, b]) => dist(a, b) > 1).map(([a, b]) => trecho(levelId, a, cotaDe(a), b, cotaDe(b), DN_DA_DRENAGEM_MM, ROTULO_DA_DRENAGEM)),
+    ...arestas.filter(([a, b]) => dist(a, b) > 1).flatMap(([a, b]) => pedacosComCota(caminho(a, b).pts, cotaDe(a), cotaDe(b)).map((x) => trecho(levelId, x.a, x.cotaAMm, x.b, x.cotaBMm, DN_DA_DRENAGEM_MM, ROTULO_DA_DRENAGEM))),
   ];
 }
 
@@ -161,7 +173,8 @@ export function lancarDrenagemDaGaragem(ctx: ContextoDoPredio, subsolos: Subsolo
     const cotaDoDestino = levelId === d.levelId ? COTA_DA_SEPARADORA_MM : COTA_SOB_O_PISO_MM;
     for (const r of ralos) fila.push(ponto(levelId, 'RALO_SECO', r, 0, 'Ralo da garagem'));
     for (const c of canaletas) fila.push(ponto(levelId, 'RALO_LINEAR', c, 0, 'Canaleta ao pé da rampa'));
-    fila.push(...redeEmPente(levelId, [...ralos, ...canaletas], destino, cotaDoDestino));
+    const elev = nivel(levelId).elevationMm;
+    fila.push(...redeEmPente(levelId, [...ralos, ...canaletas], destino, cotaDoDestino, pilaresNaFaixa(ctx.m, elev - 1000, elev, DN_DA_DRENAGEM_MM / 2)));
     resultado.ralos += ralos.length;
     resultado.canaletas += canaletas.length;
   }

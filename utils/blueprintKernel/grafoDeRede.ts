@@ -35,7 +35,14 @@ export interface Ponto2 {
 export function fazerChave(niveis: readonly Level[]) {
   const ordenados = [...niveis].sort((a, b) => a.elevationMm - b.elevationMm);
   const abaixoDe = new Map<ObjectId, Level | null>();
-  ordenados.forEach((l, i) => abaixoDe.set(l.id, i > 0 ? ordenados[i - 1] : null));
+  // O de baixo é o pavimento mais perto ESTRITAMENTE abaixo: dois na mesma cota (o lote e o térreo do bloco) são vizinhos,
+  // não um em cima do outro (18/11/2026, PE4a do prédio pelo Empreendimento: o andar 0 de apartamentos ia para o lote, e o
+  // tubo de queda dele não encontrava o da garagem embaixo).
+  ordenados.forEach((l) => {
+    let abaixo: Level | null = null;
+    for (const x of ordenados) if (x.elevationMm < l.elevationMm) abaixo = x;
+    abaixoDe.set(l.id, abaixo);
+  });
   return (levelId: ObjectId, x: number, y: number, cota: number): No => {
     // Cota ≤ 0 num pavimento que tem outro embaixo é o MESMO lugar visto do
     // pavimento de baixo: 0 é o teto dele, e −150 (o esgoto sob o piso) é o

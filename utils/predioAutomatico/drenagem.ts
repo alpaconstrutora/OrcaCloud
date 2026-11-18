@@ -188,7 +188,8 @@ export function lancarDrenagemDaGaragem(ctx: ContextoDoPredio, subsolos: Subsolo
 
   // ── Abaixo da rede? O fundo do poço contra a rede pública (a profundidade presumida do esgoto, a partir do térreo).
   const fundoDoPoco = nivel(d.levelId).elevationMm - CAIXAS_FUNDO_DO_POCO_MM;
-  const cotaDaRede = nivel(terreoLevelId).elevationMm - (HIPOTESES_ESGOTO_PADRAO.profundidadeDaRedeMm ?? 1500);
+  // PE5a: a rede é a da rua — o pavimento da caixa pode ser a garagem (o térreo de apartamentos), abaixo dela.
+  const cotaDaRede = Math.max(0, nivel(terreoLevelId).elevationMm) - (HIPOTESES_ESGOTO_PADRAO.profundidadeDaRedeMm ?? 1500);
   if (nivel(d.levelId).elevationMm + COTA_DA_SEPARADORA_MM > cotaDaRede) {
     pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Garagem: o piso do subsolo fica acima da rede pública (presumida a ${((HIPOTESES_ESGOTO_PADRAO.profundidadeDaRedeMm ?? 1500) / 1000).toLocaleString('pt-BR')} m): a separadora vai por gravidade — ligue-a ao coletor do térreo à mão, conferindo a cota.` });
   } else {

@@ -9353,8 +9353,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     [distanciasDaCasa],
   );
   const ajusteAoEmpreendimento = useMemo(
-    () => (estruturasDaCasa && estruturasDaCasa.length > 0 ? comandosDoAjuste(editor.model, estruturasDaCasa, exigenciasEntreTorres) : null),
-    [estruturasDaCasa, editor.model, exigenciasEntreTorres],
+    () => (estruturasDaCasa && estruturasDaCasa.length > 0 ? comandosDoAjuste(editor.model, estruturasDaCasa, exigenciasEntreTorres, produtoDoEstudo.produto.hipoteses) : null),
+    [estruturasDaCasa, editor.model, exigenciasEntreTorres, produtoDoEstudo.produto.hipoteses],
   );
   /**
    * AS UNIDADES DE CADA PAVIMENTO NO 3D (27/10/2026): *"… também de cada unidade em cada pavimento"*. O piso de um

@@ -24,7 +24,7 @@ import type { EmpreendimentoFloor, EmpreendimentoTower, EmpreendimentoUnit, Floo
 export type TorreParaEstrutura = Pick<EmpreendimentoTower, 'id' | 'name'> &
   Partial<Pick<EmpreendimentoTower, 'floors_count' | 'blueprint_quadra_uid' | 'sort_order' | 'pe_direito_padrao_m' | 'elevacao_terreo_m' | 'ordem_das_unidades_na_planta'>> & {
     units?: (Pick<EmpreendimentoUnit, 'floor' | 'floor_tipo'> &
-      Partial<Pick<EmpreendimentoUnit, 'id' | 'name' | 'typology' | 'private_area' | 'bedrooms' | 'parking_spaces' | 'sun_orientation' | 'position_type' | 'status' | 'sort_order' | 'vaga_na_planta'>>)[];
+      Partial<Pick<EmpreendimentoUnit, 'id' | 'name' | 'typology' | 'private_area' | 'bedrooms' | 'parking_spaces' | 'sun_orientation' | 'position_type' | 'status' | 'sort_order' | 'vaga_na_planta' | 'blueprint_massa_chave' | 'blueprint_lote_uid'>>)[];
   };
 
 export interface PisoDaTorre {
@@ -60,6 +60,11 @@ export interface UnidadeDoPiso {
   status: string | null;
   /** A vaga arrastada na planta (28/10/2026); null = sem vaga. */
   vaga?: number | null;
+  /**
+   * 18/11/2026: a unidade nasceu fora do Empreendimento — da própria massa (`blueprint_massa_chave`, o sync) ou é lote do
+   * loteamento (`blueprint_lote_uid`). O prédio pelo Empreendimento não a conta como apartamento (seria laço). Ausente = não.
+   */
+  origemExterna?: 'MASSA' | 'LOTE';
 }
 
 type PisoSemUnidades = Omit<PisoDaTorre, 'unidades' | 'elevacaoMm' | 'elevacaoDigitada' | 'alturaMm'> & { elevacaoDigitadaMm: number | null };
@@ -74,10 +79,16 @@ export type FonteDaEstrutura = 'CADASTRO' | 'UNIDADES' | 'FLOORS_COUNT' | 'NENHU
 export interface EstruturaDaTorre {
   torreId: string;
   nome: string;
-  /** Térreo para cima, de baixo para cima. */
+  /**
+   * Os andares DA TORRE, de baixo para cima: do térreo para cima e, desde 18/11/2026, também os andares de apartamento
+   * abaixo da rua contíguos ao térreo (a Torre B do Garden começa no −2 — decisão do usuário, plano
+   * docs/planos/2026-11-18-predio-pelo-empreendimento.md). O nome ficou "acima" por compatibilidade.
+   */
   acima: PisoDaTorre[];
-  /** Abaixo do solo, da mais funda para a mais rasa — a ordem dos pisos de um bloco de subsolo. */
+  /** Abaixo da torre (garagem, subsolo), da mais funda para a mais rasa — a ordem dos pisos de um bloco de subsolo. */
   garagens: PisoDaTorre[];
+  /** Quantos andares da torre (`acima`) ficam abaixo da rua (andar < 0); ausente = 0. */
+  abaixoDaRua?: number;
   fonte: FonteDaEstrutura;
   avisos: string[];
   /** Como a Planta arruma as unidades desta torre, pelo Empreendimento (28/10/2026). Ausente = POSICAO. */
@@ -178,6 +189,7 @@ function unidadesDoAndar(t: TorreParaEstrutura, andar: number): UnidadeDoPiso[] 
       posicao: u.position_type ?? null,
       status: u.status ?? null,
       vaga: typeof u.vaga_na_planta === 'number' ? u.vaga_na_planta : null,
+      ...(u.blueprint_massa_chave ? { origemExterna: 'MASSA' as const } : u.blueprint_lote_uid ? { origemExterna: 'LOTE' as const } : {}),
     }));
 }
 
@@ -278,13 +290,22 @@ export function estruturaDaTorre(t: TorreParaEstrutura, pavimentos: Empreendimen
     ...p,
     unidades: unidadesDoAndar(t, p.numero),
   }));
-  const acima = pisos.filter((p) => p.numero >= 0);
-  const garagens = pisos.filter((p) => p.numero < 0);
+  // A torre começa no andar de apartamento mais baixo contíguo ao térreo: abaixo do 0, andar que não é garagem nem
+  // subsolo e tem unidade é da torre (18/11/2026); o primeiro que não é encerra — dali para baixo, garagem.
+  let base = 0;
+  for (let n = -1; ; n--) {
+    const p = pisos.find((x) => x.numero === n);
+    if (!p || p.tipo === 'GARAGEM' || p.tipo === 'SUBSOLO' || p.unidades.length === 0) break;
+    base = n;
+  }
+  const acima = pisos.filter((p) => p.numero >= base);
+  const garagens = pisos.filter((p) => p.numero < base);
+  const abaixoDaRua = Math.abs(base);
 
   if (fonte === 'NENHUMA') avisos.push(`Torre "${t.name}": sem pavimentos — cadastre os pavimentos ou as unidades em Torres e Unidades.`);
   const pelo = fonte === 'CADASTRO' ? 'pelo cadastro de pavimentos' : 'pelas unidades';
   const dizem = fonte === 'CADASTRO' ? 'o cadastro de pavimentos diz' : 'as unidades dizem';
-  const resumo = `${acima.length} acima do solo${garagens.length ? ` + ${garagens.length} abaixo` : ''}`;
+  const resumo = abaixoDaRua > 0 ? `${acima.length} da torre (${abaixoDaRua} abaixo da rua)${garagens.length ? ` + ${garagens.length} de garagem` : ''}` : `${acima.length} acima do solo${garagens.length ? ` + ${garagens.length} abaixo` : ''}`;
   if (fonte === 'CADASTRO' || fonte === 'UNIDADES') {
     if (t.floors_count == null) avisos.push(`Torre "${t.name}": sem número de pavimentos no cadastro da torre — contados ${pelo} (${resumo}).`);
     else if (t.floors_count !== acima.length && t.floors_count !== pisos.length) {
@@ -320,7 +341,7 @@ export function estruturaDaTorre(t: TorreParaEstrutura, pavimentos: Empreendimen
       break;
     }
   }
-  return { torreId: t.id, nome: t.name, acima, garagens, fonte, avisos, ordemDasUnidades: ORDENS_DA_TORRE.includes(t.ordem_das_unidades_na_planta as OrdemDasUnidadesNaPlanta) ? (t.ordem_das_unidades_na_planta as OrdemDasUnidadesNaPlanta) : 'POSICAO' };
+  return { torreId: t.id, nome: t.name, acima, garagens, abaixoDaRua, fonte, avisos, ordemDasUnidades: ORDENS_DA_TORRE.includes(t.ordem_das_unidades_na_planta as OrdemDasUnidadesNaPlanta) ? (t.ordem_das_unidades_na_planta as OrdemDasUnidadesNaPlanta) : 'POSICAO' };
 }
 
 /**

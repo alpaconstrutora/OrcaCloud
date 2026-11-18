@@ -102,6 +102,17 @@ asa encurtaria". Então:
 
 Virou a fase PA23 — a saída por asa, que a própria pendência propunha.
 
+### Pedido de 18/11/2026 (2) — o Garden pela Casa automática: mudança de rumo
+
+> acabei de gerar a Casa automática do empreendimento garden e continua gerado somente uma unidade e nao o pavimento / predio
+
+> antes de continuar, quero perguntar. o predio automatica foi o pedido que fiz e gerou o ultimo plano de implementacao que por algum motivo se desvirtuou completamente. o que aconteceu?
+
+Este plano nasceu da pergunta sobre o Garden Cambuhy, mas entregou o prédio só pelo bloco da massa, com o produto do
+estudo, validado em prédios de laboratório — nunca pelo Empreendimento nem pela Casa automática. A entrada pelo
+Empreendimento (as torres e as unidades da ficha, o térreo com apartamentos, a torre abaixo da rua, as duas torres) é
+o plano `docs/planos/2026-11-18-predio-pelo-empreendimento.md` (PE0–PE7), com o Garden como critério de pronto.
+
 ## Contexto lido no código (origin/main, 12/11/2026)
 
 - **Arquitetura do prédio já existe:** `dividirPavimentoDoBloco`/`montarPavimentoTipoDoBloco`

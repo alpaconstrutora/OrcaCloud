@@ -152,6 +152,25 @@ Entra também `__tests__/predioPeloEmpreendimento.test.ts`, com o teste do sinto
 - **Regressão:** os testes do ajuste, do 3D e do espelho que já existem passam, e os marcos de laboratório ficam idênticos.
 - **Foco da revisão:** itens 1, 2 e 3.
 
+**Execução da PE0 + PE1 (18/11/2026, um PR só).** Um teste vermelho de propósito não passa na CI. Por isso a PE0 foi vista vermelha aqui e sai junto com a PE1, que a deixa verde:
+- **Vermelho:** a Torre B saía com os andares 0 a 3, e o −1 e o −2 iam para a garagem.
+
+Desvios do texto da fase:
+- **Cotas relativas ao térreo:** o ajuste põe o andar 0 na cota 0, então o bloco da Torre B fica a −6,00 m (não −6,30), e a garagem a −12,00 m. O cadastro diz −6,30 para o −2 e −0,30 para o 0, a mesma diferença.
+- **`papelDosAndares` devolve `{ andares, avisos }`.**
+- **`pegadaDaTorre(tipo, pavimentos, hipótesesDoProduto, contorno | null)`:** a área bruta é a conta do Produto ao contrário, bruta = (privativos ÷ (1 − circulação) + núcleo) ÷ (1 − paredes). Na Torre A dá ~507 m².
+- **Origem externa da unidade:** `UnidadeDoPiso.origemExterna` ('MASSA' | 'LOTE') marca a unidade que nasceu da massa e o lote do loteamento, que ficam fora.
+- **Ids das divisas na fixture:** a fixture ganhou os ids das divisas da "Teste 01". O banco os guarda à parte (`identity`), e o contorno do lote anda pelo id.
+- **O aviso da pegada sai do `comandosDoAjuste`:** ele já alimenta o painel do bloco, e o editor passa as hipóteses do produto do estudo.
+
+Resultado no Garden (`__tests__/predioPeloEmpreendimento.test.ts`, 12 testes):
+- **Torre A:** −2 e −1 garagem · 0 próprio (2 apartamentos + área comum) · 1 tipo · 2 e 3 cópias.
+- **Torre B:** −4 e −3 garagem · −2 tipo · −1 a 3 cópias.
+- **Ajuste:** bloco "Torre B" com 6 pavimentos a −6,00 m e garagem com 2 a −12,00 m; ajustar de novo não muda nada.
+- **Pegada:** a Torre A não cabe no contorno estimado (~507 × 351 m², avisado).
+- **No lote da Teste 01:** as torres nascem coladas na largura de 18 m, a A na frente (~28,2 m) e a B atrás (~29,7 m), dentro dos 63 m; o lote raso avisa quanto passa do fundo.
+- **Regressão:** as suítes do ajuste, da estrutura, da massa, do painel do bloco e do espelho 3D seguem verdes (14 arquivos, 201 testes); `tsc` limpo.
+
 ### PE2 — O tipo com as unidades do Empreendimento
 **O que muda.**
 - **`EntradaDoPredio`** ganha `doEmpreendimento?: { torreId: string; andares: AndarDoEmpreendimento[] } | null`. Presente, ela manda:
@@ -264,8 +283,8 @@ Entra também `__tests__/predioPeloEmpreendimento.test.ts`, com o teste do sinto
 
 | Fase | Situação |
 |---|---|
-| PE0 — marco do Garden | a fazer |
-| PE1 — os andares e a massa | a fazer |
+| PE0 — marco do Garden | feita, a publicar (com a PE1) |
+| PE1 — os andares e a massa | feita, a publicar |
 | PE2 — o tipo com as unidades do Empreendimento | a fazer |
 | PE3 — o botão na Casa automática | a fazer |
 | PE4 — o térreo da Torre A com os apartamentos | a fazer |

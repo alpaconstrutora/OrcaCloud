@@ -19,6 +19,8 @@
 // torre de trás (a segunda na ordem da aba) com a pilha dela inteira — decisão do usuário. O motor da massa remede
 // depois: torre que sair do envelope fica vermelha lá.
 
+import { papelDosAndares, pegadaDaTorre } from './predioAutomatico/andaresDoEmpreendimento';
+import { HIPOTESES_DO_PRODUTO_PADRAO, type HipotesesDoProduto } from './blueprintProduto';
 import type { BlueprintModel, Command, ObjectId, Point, UsoDoBloco } from './blueprintKernel';
 import { nomeDaGaragem, type EstruturaDaTorre, type PisoDaTorre } from './blueprintEstruturaDaTorre';
 import type { BlocoProposto } from './blueprintGeradorDeMassa';
@@ -132,7 +134,12 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
     const topo = b.cotaBaseMm + b.pavimentos * b.peDireitoMm;
     return blocos.some((o, j) => j !== i && Math.abs(o.cotaBaseMm - topo) < 1 && sobrepoe(o.pontos, b.pontos));
   };
-  const candidatos = blocos.map((_, i) => i).filter((i) => blocos[i].uso !== 'GARAGEM' && blocos[i].cotaBaseMm >= 0 && !temOutroEmCima(i));
+  // 18/11/2026: a torre que começa abaixo da rua (Torre B do Garden, do −2) tem o bloco abaixo do 0 — continua torre
+  // quando leva o nome de uma torre do Empreendimento.
+  const nomesDasTorres = new Set(estruturas.map((e) => norm(e.nome)));
+  const candidatos = blocos
+    .map((_, i) => i)
+    .filter((i) => blocos[i].uso !== 'GARAGEM' && (blocos[i].cotaBaseMm >= 0 || nomesDasTorres.has(norm(blocos[i].nome))) && !temOutroEmCima(i));
   // Os blocos que o ajuste cria levam "<torre> · <pavimento>": o térreo empilhado, as garagens.
   const nomesDaPilha = (torre: string, e: EstruturaDaTorre) => new Set([...e.acima, ...e.garagens].map((p) => norm(`${torre} · ${p.nome}`)));
   const daPilha = new Set<string>();
@@ -212,7 +219,9 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
     }
     // A torre (o bloco casado) é o trecho de CIMA; os de baixo viram "<torre> · <1º pavimento do trecho>".
     const ts = trechos(pisosDaPilha, b.peDireitoMm);
-    let cota = baseDaPilha;
+    // Os andares da torre abaixo da rua (18/11/2026): a pilha desce a altura deles a partir do térreo.
+    const abaixoDaRuaMm = ts.reduce((soma, t) => soma + t.pisos.filter((p) => p.numero < 0).length * t.pd, 0);
+    let cota = baseDaPilha - abaixoDaRuaMm;
     ts.forEach((t, k) => {
       const ehTopo = k === ts.length - 1;
       const nome = ehTopo ? e.nome : `${e.nome} · ${t.pisos[0].nome}`;
@@ -227,7 +236,7 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
     // As garagens, da mais funda para a mais rasa: o trecho de cima é "<torre> · Garagem"; os de baixo,
     // "<torre> · <1º pavimento do trecho>". O subsolo desce a partir do 0.
     const tg = trechos(e.garagens, b.peDireitoMm);
-    let cotaG = -tg.reduce((soma, t) => soma + t.pisos.length * t.pd, 0);
+    let cotaG = -abaixoDaRuaMm - tg.reduce((soma, t) => soma + t.pisos.length * t.pd, 0);
     tg.forEach((t, k) => {
       const ehTopo = k === tg.length - 1;
       const nome = ehTopo ? nomeDaGaragem(e.nome) : `${e.nome} · ${t.pisos[0].nome}`;
@@ -257,8 +266,8 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
       ...base,
       alturaAcimaM,
       blocoNome: b.nome,
-      pavimentosNaPlanta: embaixo + naPilha.filter((o) => o.cotaBaseMm >= 0).reduce((n, o) => n + o.pavimentos, 0),
-      garagensNaPlanta: naPilha.filter((o) => o.cotaBaseMm < 0).reduce((n, o) => n + o.pavimentos, 0),
+      pavimentosNaPlanta: embaixo + naPilha.filter((o) => o.uso !== 'GARAGEM').reduce((n, o) => n + o.pavimentos, 0),
+      garagensNaPlanta: naPilha.filter((o) => o.uso === 'GARAGEM').reduce((n, o) => n + o.pavimentos, 0),
       estado: mudou ? 'AJUSTAR' : 'OK',
     });
   }
@@ -329,10 +338,20 @@ export function comandosDoAjuste(
   model: BlueprintModel,
   estruturas: readonly EstruturaDaTorre[],
   exigencias: readonly ExigenciaEntreTorres[] = [],
+  h: HipotesesDoProduto = HIPOTESES_DO_PRODUTO_PADRAO,
 ): { linhas: LinhaDoAjuste[]; comandos: Command[]; papeis: Map<ObjectId, PapelDoBloco>; avisos: string[]; distancias: ConferenciaDaDistancia[] } {
   const blocos = model.blocos ?? [];
   const p = planejar(blocos, estruturas, exigencias);
   const avisos = [...p.avisos];
+  // PE1 do prédio pelo Empreendimento (18/11/2026): o andar tipo cabe no bloco desenhado? Os dois números no painel.
+  for (const e of estruturas) {
+    const tipo = papelDosAndares(e).andares.find((a) => a.papel === 'TIPO');
+    const b = blocos.find((x) => x.uso !== 'GARAGEM' && norm(x.nome) === norm(e.nome));
+    if (!tipo || !b) continue;
+    const pg = pegadaDaTorre(tipo, e.acima.length, h, b.pontos);
+    const m2 = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 0 });
+    if (pg.cabe === false) avisos.push(`Torre "${e.nome}": o andar tipo do Empreendimento pede ~${m2(pg.necessariaM2)} m² (${m2(pg.privativosM2)} m² privativos, mais paredes, circulação e núcleo) e o bloco "${b.nome}" tem ${m2(pg.disponivelM2!)} m² — as unidades saem menores; aumente o bloco ou confira as áreas.`);
+  }
   if (p.subsolosAvulsos.length > 0 && estruturas.some((e) => e.garagens.length > 0)) {
     for (const i of p.subsolosAvulsos) avisos.push(`O bloco "${blocos[i].nome}" não é de nenhuma torre (as garagens do Empreendimento ficam sob cada torre) — fica como está; apague se não for usar.`);
   }

@@ -94,7 +94,9 @@ Perguntado "Quer que eu tire esse também?" (o card "Dica de Diversificação" /
   chamador. `AIInsightCard` fica — é usado pelos portais do cliente e do fornecedor, com serviços próprios.
   **Pronto quando:** `__tests__/components/InvestorResumoSemInsightSimulado.test.tsx` verde (era vermelho:
   com 2 participações, o texto da "análise" aparecia no Resumo depois dos 2 s do simulador).
-- [ ] Produção: Resumo do link do Tiago sem o card. **Pronto quando:** conferido pelo link real.
+- [x] Produção: Resumo do link do Tiago sem o card. **Pronto quando:** conferido pelo link real.
+  — **Publicado no PR #585** (squash `db7886475`, servido pelo domínio; "Dica de Diversifica" ausente do
+  bundle). Conferido 18/11 em produção, 1920 px e 390 px: Resumo começa nos KPIs, sem o card; 0 erros de console.
 
 Fora deste pedido, registrado: `services/clientAiService.ts` (Portal do Cliente) e
 `services/supplierAiService.ts` (Portal do Fornecedor) alimentam o mesmo `AIInsightCard` — não conferidos.

@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertTriangle, FileText, Loader2 } from 'lucide-react';
 import type { AcademyPlayerLesson } from '../../types/academy';
 import type { AcademyChannel } from './academyChannel';
-import { sanitizeHtml } from '../../utils/sanitizeHtml';
+import { HtmlSanitizado } from '../ui/HtmlSanitizado';
 
 /**
  * Renderiza uma aula conforme o tipo. Responsável por:
@@ -178,9 +178,9 @@ const AcademyLessonPlayer: React.FC<Props> = ({
 
         case 'TEXTO':
             return (
-                <div
+                <HtmlSanitizado
                     className="prose prose-sm max-w-none bg-white rounded-[10px] border border-gray-100 p-6 text-sm text-gray-700"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(lesson.conteudo_html) }}
+                    html={lesson.conteudo_html}
                 />
             );
 

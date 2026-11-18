@@ -8,7 +8,7 @@ import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 import { useOrgContext, useOrgWriteTarget, useWritableOrganizations, forEachTargetOrg, errorMessage, partialFailureNote } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
-import { sanitizeHtml } from '../utils/sanitizeHtml';
+import { HtmlSanitizado } from './ui/HtmlSanitizado';
 import { portalHelpService, type PortalHelpRecord, type PortalTourStat } from '../services/portalHelpService';
 import { partnerService } from '../services/partnerService';
 import { supplierService } from '../services/supplierService';
@@ -766,9 +766,9 @@ const PortalHelpSettings: React.FC = () => {
                     )}
                   </div>
                   {preview ? (
-                    <div
+                    <HtmlSanitizado
                       className="min-h-[240px] p-4 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-700 [&_ul]:list-disc [&_ul]:pl-5 [&_p]:mb-3"
-                      dangerouslySetInnerHTML={{ __html: sanitizeHtml(form.body) }}
+                      html={form.body}
                     />
                   ) : (
                     <textarea

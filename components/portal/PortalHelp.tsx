@@ -9,7 +9,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '..
 import { usePersistedState } from '../ui/TableUtils';
 import { usePortalHelp } from '../../hooks/usePortalHelp';
 import { portalHelpService } from '../../services/portalHelpService';
-import { sanitizeHtml } from '../../utils/sanitizeHtml';
+import { HtmlSanitizado } from '../ui/HtmlSanitizado';
 import {
   htmlToText, sectionLabel, PORTAL_SECTIONS, PORTAL_LABELS,
   type HelpItem, type MergedTourStep, type Portal, type TourId,
@@ -23,7 +23,8 @@ const SEM_PASSOS: readonly MergedTourStep[] = [];
  *
  * Mesmo componente nos três portais e nos modos link / e-mail / prévia; o que
  * muda é como o conteúdo é obtido (hooks/usePortalHelp.ts). Corpo dos artigos é
- * HTML da construtora: passa por `sanitizeHtml` na mesma linha do sink.
+ * HTML da construtora: entra no DOM só por `<HtmlSanitizado>` (sanitiza e
+ * contém — uma camada `position:fixed` do conteúdo não cobre a tela; achado F70).
  */
 export interface PortalHelpProps {
   open: boolean;
@@ -273,9 +274,9 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
         <div className="text-xs font-semibold text-gray-500">{sectionLabel(portal, item.section)}</div>
         <h3 className="text-base font-bold text-gray-900 mt-0.5">{item.title}</h3>
       </div>
-      <div
+      <HtmlSanitizado
         className="prose prose-sm max-w-none text-sm text-gray-700 leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_p]:mb-3 [&_li]:mb-1"
-        dangerouslySetInnerHTML={{ __html: sanitizeHtml(item.body_html) }}
+        html={item.body_html}
       />
     </div>
   );
@@ -404,9 +405,9 @@ export const PortalHelp: React.FC<PortalHelpProps> = ({
                               <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 mt-0.5 transition-transform ${aberta ? 'rotate-180' : ''}`} />
                             </button>
                             {aberta && (
-                              <div
+                              <HtmlSanitizado
                                 className="px-3 pb-3 text-sm text-gray-600 leading-relaxed [&_ul]:list-disc [&_ul]:pl-5 [&_p]:mb-2"
-                                dangerouslySetInnerHTML={{ __html: sanitizeHtml(f.body_html) }}
+                                html={f.body_html}
                               />
                             )}
                           </div>

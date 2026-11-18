@@ -3,9 +3,15 @@ import ReactDOM from 'react-dom/client';
 import { QueryClientProvider } from '@tanstack/react-query';
 import './index.css';
 import { ligarBarraDeRolagemProxima } from './utils/barraDeRolagemProxima';
+import { limparTokenWhatsappLegado } from './lib/whatsappLegado';
 
 // Barra de rolagem alarga quando o cursor se aproxima (utils/barraDeRolagemProxima.ts).
 ligarBarraDeRolagemProxima();
+
+// Token do WhatsApp que ficava em texto puro no localStorage (achado F75, 18/11/2026):
+// apagado ANTES de qualquer tela montar, sem ir a lugar nenhum. Hoje ele mora no
+// servidor, por organização (lib/whatsappLegado.ts).
+limparTokenWhatsappLegado();
 import App from './App';
 import { queryClient } from './lib/queryClient';
 import { ConfirmProvider } from './components/ui/confirm';

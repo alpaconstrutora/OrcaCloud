@@ -1,8 +1,8 @@
 import React from 'react';
 import { supabase } from '../lib/supabase';
 import { MOCK_SINAPI_DB } from '../constants';
-import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Eye, EyeOff, Trash2, Hash, Mail, RotateCcw, ChevronRight, ChevronDown, Menu, Layers, Percent, Landmark , HelpCircle, Tags, Timer } from 'lucide-react';
-import { whatsappService, WhatsAppConfig } from '../services/whatsappService';
+import { Database, AlertTriangle, CheckCircle, Loader2, MessageCircle, Hash, Mail, RotateCcw, ChevronRight, ChevronDown, Menu, Layers, Percent, Landmark , HelpCircle, Tags, Timer } from 'lucide-react';
+import WhatsappCloudSettings from './settings/WhatsappCloudSettings';
 import { appSettingsService, AppSettings, APP_SETTINGS_DEFAULTS, TEMPLATE_VARS } from '../services/appSettingsService';
 import NomenclaturaTable from './settings/NomenclaturaTable';
 import { useConfirm } from './ui/confirm';
@@ -122,24 +122,6 @@ const Settings: React.FC = () => {
 
     const [status, setStatus] = React.useState<'IDLE' | 'MIGRATING' | 'SUCCESS' | 'ERROR'>('IDLE');
     const [message, setMessage] = React.useState('');
-
-    // WhatsApp Business (Cloud API oficial)
-    const [waForm, setWaForm] = React.useState<WhatsAppConfig>(() => whatsappService.getConfig());
-    const [showToken, setShowToken] = React.useState(false);
-    const [waSaved, setWaSaved] = React.useState(false);
-    const isWaActive = whatsappService.isConfigured();
-
-    const handleWaSave = () => {
-        whatsappService.saveConfig(waForm);
-        setWaSaved(true);
-        setTimeout(() => setWaSaved(false), 3000);
-    };
-
-    const handleWaClear = async () => {
-        if (!await confirm({ title: 'Remover credenciais WhatsApp?', message: 'As credenciais salvas serão apagadas.', variant: 'danger', confirmLabel: 'Remover' })) return;
-        whatsappService.clearConfig();
-        setWaForm({ phoneNumberId: '', accessToken: '' });
-    };
 
     // App settings state
     const [appSettings, setAppSettings] = React.useState<AppSettings>(() => appSettingsService.get());
@@ -389,77 +371,8 @@ const Settings: React.FC = () => {
 
             {activeLeaf === 'whatsapp' && (
                 <div className="space-y-6">
-            <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
-                <div className="flex items-start gap-4">
-                    <div className="p-3 bg-green-50 rounded-[10px]">
-                        <MessageCircle className="w-6 h-6 text-green-600" />
-                    </div>
-                    <div className="flex-1">
-                        <div className="flex items-center gap-3">
-                            <h2 className="text-lg font-semibold text-gray-800">WhatsApp Business (API Oficial)</h2>
-                            <span className={`text-sm font-normal ${isWaActive ? 'text-green-700' : 'text-gray-500'}`}>
-                                {isWaActive ? 'Configurado' : 'Não configurado'}
-                            </span>
-                        </div>
-                        <p className="text-sm text-gray-500 mt-1">
-                            Envio automático via <strong>Meta Cloud API</strong> ao marcar pedidos como "Enviado". Configure em{' '}
-                            <a href="https://developers.facebook.com/apps" target="_blank" rel="noopener noreferrer" className="text-green-600 hover:underline">developers.facebook.com</a>.
-                        </p>
-                    </div>
-                </div>
-
-                <div className="mt-6 border-t border-gray-100 pt-6 space-y-4">
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Phone Number ID</label>
-                        <input
-                            type="text"
-                            value={waForm.phoneNumberId}
-                            onChange={e => setWaForm(f => ({ ...f, phoneNumberId: e.target.value }))}
-                            placeholder="ex: 123456789012345"
-                            className="w-full px-4 h-9 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
-                        />
-                        <p className="text-xs text-gray-400 mt-1">Encontrado em Meta for Developers → seu app → WhatsApp → API Setup.</p>
-                    </div>
-                    <div>
-                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Access Token</label>
-                        <div className="relative">
-                            <input
-                                type={showToken ? 'text' : 'password'}
-                                value={waForm.accessToken}
-                                onChange={e => setWaForm(f => ({ ...f, accessToken: e.target.value }))}
-                                placeholder="••••••••••••••••"
-                                className="w-full px-4 h-9 pr-12 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-mono focus:ring-2 focus:ring-green-500/20 focus:border-green-500 outline-none transition-all"
-                            />
-                            <button
-                                type="button"
-                                onClick={() => setShowToken(v => !v)}
-                                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1"
-                            >
-                                {showToken ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                            </button>
-                        </div>
-                        <p className="text-xs text-gray-400 mt-1">Use um token permanente de System User para produção.</p>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2">
-                        <button
-                            onClick={handleWaClear}
-                            className="flex items-center gap-2 text-button font-bold text-gray-400 hover:text-red-600 transition-colors"
-                        >
-                            <Trash2 className="w-3.5 h-3.5" />
-                            Limpar credenciais
-                        </button>
-                        <button
-                            onClick={handleWaSave}
-                            disabled={!waForm.phoneNumberId || !waForm.accessToken}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-green-600 text-white rounded-[6px] hover:bg-green-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed"
-                        >
-                            {waSaved ? <CheckCircle className="w-[15px] h-[15px]" /> : <MessageCircle className="w-[15px] h-[15px]" />}
-                            {waSaved ? 'Salvo!' : 'Salvar'}
-                        </button>
-                    </div>
-                </div>
-            </div>
+            {/* Token da Cloud API: por organização, no servidor (achado F75, 18/11/2026). */}
+            <WhatsappCloudSettings />
             {/* Templates WhatsApp */}
             <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6">
                 <div className="flex items-start justify-between gap-4">

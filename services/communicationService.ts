@@ -209,6 +209,11 @@ export const communicationService = {
         const { error } = await supabase
             .from('whatsapp_config')
             .upsert({ ...config, updated_at: new Date().toISOString() }, { onConflict: 'org_id' });
+        // Desde 18/11/2026 (aplicar_20271118917000) só proprietário/administrador grava
+        // a integração: a URL da API e o webhook decidem para onde vão as mensagens.
+        if (error?.code === '42501') {
+            throw new Error('Só proprietário ou administrador da organização altera a integração de WhatsApp.');
+        }
         if (error) throw error;
     },
 

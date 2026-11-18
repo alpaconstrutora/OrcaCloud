@@ -485,3 +485,11 @@ verify_jwt = false
 # permissão conferida pelo banco). REGRA #7, pergunta 3: depois de publicar, provar o 401 sem header.
 [functions.diretoria-resumo-semanal]
 verify_jwt = false
+
+# WhatsApp Cloud API (achado F75, 18/11/2026 — docs/planos/2026-11-18-seguranca-fase2-achados-restantes.md,
+# PR I): o token da Meta fica no Vault, por organização, e só esta function o lê. Só chamada pelo app,
+# com o JWT do usuário — por isso o gateway TAMBÉM confere o JWT. Isso não é a autorização (REGRA #7,
+# pergunta 3): o gate é o código (exigirUsuario + exigirGestor para salvar/remover, exigirMembro da org
+# DO PEDIDO para enviar). Registrado explícito para nenhum deploy desligar a checagem do gateway.
+[functions.whatsapp-cloud]
+verify_jwt = true

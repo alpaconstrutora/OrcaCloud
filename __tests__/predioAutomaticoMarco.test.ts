@@ -200,8 +200,9 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // área de serviço 13 mm abaixo do ralo seco de cima (a ponta dentro); R8 e RL a vizinhança densa (o teto do grafo);
         // R12 a descida do eletroduto na parede pelo ramal de cima (PA18). PA17 (a água desce na face): o R8 e o R12 zeram; no
         // R4, um eletroduto a mais chega à mesma luz sob o ralo (12). PA20 (decisão do usuário 2a): a luz de teto anda no
-        // cômodo para 15 cm da descida da laje de cima — o R4 zera. Sobra o RL: a subida do QD sob o ramal de cima (PA21).
-        expect(agora.eletrodutoXEsgoto).toBe(({ R4: 0, R8: 0, R12: 0, RL: 12 } as Record<string, number>)[nome]);
+        // cômodo para 15 cm da descida da laje de cima — o R4 zera. PA21 (decisão 3a): o ramal de esgoto de cima contorna a
+        // subida do QD do andar de baixo (no RL, o DN 75 passava a 36 mm dela) — zero nos quatro prédios.
+        expect(agora.eletrodutoXEsgoto).toBe(0);
         // PA17, "pronto quando": a descida da água na FACE da parede não cruza o dreno do ar nem a linha frigorígena, que
         // correm no eixo (era: no tipo do R8, 13 × dreno e 12 × linha — e cada andar copiado repetia).
         expect(agora.aguaXClimatizacao).toBe(0);

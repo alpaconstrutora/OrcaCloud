@@ -706,7 +706,7 @@
     "aguaXClimatizacao": 0
   },
   "RL": {
-    "modelo": "810442797b3bbf0502b4304eba6b9ff35e0d1df3ceaa2bf5dbd3a931b52db9d4",
+    "modelo": "73693316e115cfd614b4b097395b922f9a99c158bc55f708e6c72f445be171d0",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -738,7 +738,7 @@
       "excessivas": 0,
       "naoAvaliados": 0
     },
-    "trechosDeEsgoto": 2375,
+    "trechosDeEsgoto": 2389,
     "esgoto": {
       "tubosDeQueda": 13,
       "pontos": 121,
@@ -936,7 +936,7 @@
       "conflitos": {
         "ABERTURA": 441,
         "PILAR": 31,
-        "REDE": 121,
+        "REDE": 109,
         "EQUIPAMENTO": 0,
         "OUTRO": 2
       },
@@ -951,7 +951,7 @@
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
     "eletrodutoXClimatizacao": 0,
-    "eletrodutoXEsgoto": 12,
+    "eletrodutoXEsgoto": 0,
     "aguaXClimatizacao": 0
   }
 }

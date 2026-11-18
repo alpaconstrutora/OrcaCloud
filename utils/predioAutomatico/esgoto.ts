@@ -23,13 +23,14 @@
  * coluna de ventilação pela tabela da NBR 8160 (`dnDaColunaDeVentilacao`); o desvio e o coletor pela Tabela 7.
  */
 import { pointInPolygon } from '../blueprintKernel';
-import type { BlueprintModel, Command, ObjectId, Point, Terminal, Wall } from '../blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Point, Terminal, Trecho, Wall } from '../blueprintKernel';
 import { fontesDeEsgoto, HIPOTESES_ESGOTO_PADRAO, planejarEsgoto } from '../blueprintEsgotoAutomatico';
 import { dnDoSubcoletor, dnDoTuboDeQueda } from '../blueprintNbr8160';
 import { dnDaColunaDeVentilacao } from '../blueprintVentilacao';
 import { FICHA_DO_PONTO_HIDRAULICO } from '../blueprintHidraulica';
 import { anelDoPilar, pegadasDePilares } from '../blueprintObstaculosEstruturais';
 import { pontoNaFrente } from '../blueprintAncorasHidro';
+import { RAIO_DA_SUBIDA_DO_QUADRO_MM } from '../blueprintRotaPeloForro';
 import type { PendenciaDoPpci } from '../blueprintGeradorPpci';
 import type { BaseDoPredio, ContextoDoPredio } from './terreoECobertura';
 import { comodosDoTipo } from './agua';
@@ -138,6 +139,15 @@ export function lancarEsgoto(
   const verticais: Point[] = (ctx.m.trechos ?? []).filter((t) => t.levelId === tipo && t.a.x === t.b.x && t.a.y === t.b.y).map((t) => t.a as Point);
   const fontes = fontesDeEsgoto(ctx.m).filter((t) => t.levelId === tipo);
   const avisosDoMotor = new Set<string>();
+  // PA21 (decisão do usuário 3a, 17/11/2026): a SUBIDA dos eletrodutos do QD do andar de baixo — pela cópia viva, o QD do
+  // próprio tipo, na mesma posição — vai de 1,60 m até a laje e atravessa a faixa do ramal do tipo, que corre sob o piso
+  // (no RL, o ramal DN 75 da área de serviço passava a 36 mm da subida do QD de baixo: 2 por andar). Entra na vista como
+  // uma coluna que atravessa o piso, e o motor da casa a contorna como contorna as colunas de água (`obstaculosDoRamal`).
+  const subidasDeBaixo = andares > 1
+    ? (ctx.m.quadros ?? [])
+        .filter((q) => q.levelId === tipo)
+        .map((q, k) => ({ id: `__subida-do-qd-${k}`, uid: `__subida-do-qd-${k}`, levelId: tipo, disciplina: 'ELETRICA', a: { ...q.at }, b: { ...q.at }, cotaAMm: COTA_DA_CAIXA_FALSA_MM - 100, cotaBMm: 1, bitolaMm: 2 * RAIO_DA_SUBIDA_DO_QUADRO_MM }) as unknown as Trecho)
+    : [];
 
   for (const u of base.divisao.unidades) {
     const meus = espacos.filter((s) => daUnidade.get(s.id) === u.numero);
@@ -178,7 +188,7 @@ export function lancarEsgoto(
       openings: ctx.m.openings.filter((o) => paredesDaVista.has(o.wallId)),
       structures: (ctx.m.structures ?? []).filter((x) => x.levelId === tipo),
       terminais: [...pts, ...falsas],
-      trechos: (ctx.m.trechos ?? []).filter((t) => t.levelId === tipo && t.disciplina !== 'ESGOTO'),
+      trechos: [...(ctx.m.trechos ?? []).filter((t) => t.levelId === tipo && t.disciplina !== 'ESGOTO'), ...subidasDeBaixo],
       spaces: meus,
       nucleos: [],
     };

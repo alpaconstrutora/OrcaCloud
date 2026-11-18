@@ -112,6 +112,17 @@ export interface PayrollItem {
     origin?: string;
 }
 
+/**
+ * Organização do registro de auditoria de uma rubrica: a DONA da rubrica.
+ *
+ * Até 18/11/2026 toda alteração de rubrica ia para `org_id = 'SYSTEM'`, e a policy de
+ * `payroll_audit_logs` deixava qualquer usuário logado ler as linhas 'SYSTEM' — o histórico
+ * das rubricas de uma organização aparecia para todas. Desde 2026-09-02 a rubrica tem dona
+ * (`rubrics.organization_id`); 'SYSTEM' fica só para as globais (seed da CLT, dona NULL).
+ * Migration: aplicar_20271118911100_payroll_audit_logs_por_org.
+ */
+export const orgDoLogDaRubrica = (organizationId: string | null | undefined): string => organizationId || 'SYSTEM';
+
 export interface PayrollAuditLog {
     id?: string;
     org_id: string;
@@ -697,7 +708,7 @@ export const payrollService = {
         if (error) throw error;
 
         await this.logAction({
-            org_id: 'SYSTEM',
+            org_id: orgDoLogDaRubrica(organizationId),
             action: 'CREATE',
             entity_type: 'RUBRIC',
             entity_id: rubric.code,
@@ -720,7 +731,7 @@ export const payrollService = {
         if (error) throw error;
 
         await this.logAction({
-            org_id: 'SYSTEM',
+            org_id: orgDoLogDaRubrica(oldData?.organization_id),
             action: 'UPDATE',
             entity_type: 'RUBRIC',
             entity_id: code,
@@ -777,7 +788,7 @@ export const payrollService = {
         if (error) throw error;
 
         await this.logAction({
-            org_id: 'SYSTEM',
+            org_id: orgDoLogDaRubrica(oldData?.organization_id),
             action: 'DELETE',
             entity_type: 'RUBRIC',
             entity_id: code,

@@ -2429,24 +2429,47 @@ export const laborService = {
         }));
     },
 
+    /**
+     * Grava a disponibilização como DIFERENÇA: apaga só os destinos que saíram e insere só os
+     * que entraram — o que não mudou não é tocado.
+     *
+     * Antes apagava tudo e reinseria a lista. Desde a migration
+     * aplicar_20271118911000_compartilhamentos_so_pela_org_dona, o destino tem de ser org de
+     * quem grava. A tela só mostra caixas das orgs do usuário, mas a lista que ela devolve traz
+     * também os destinos que OUTRA pessoa criou para orgs de que ele não é membro (18/11: 7
+     * compartilhamentos, 4 pessoas). Reinseridos, seriam recusados — e, como o DELETE já tinha
+     * rodado, o colaborador perderia todas as disponibilizações.
+     */
     async setEmployeeShares(employeeId: string, targetOrgIds: string[], grantedBy?: string): Promise<void> {
-        // Remove todos os shares existentes e recria
-        const { error: delErr } = await supabase
+        const { data: atuais, error: lerErr } = await supabase
             .from('employee_org_shares')
-            .delete()
+            .select('target_org_id')
             .eq('employee_id', employeeId);
-        if (delErr) throw delErr;
+        if (lerErr) throw lerErr;
 
-        if (targetOrgIds.length === 0) return;
+        const antes = new Set(((atuais || []) as { target_org_id: string }[]).map(s => s.target_org_id));
+        const depois = new Set(targetOrgIds);
+        const remover = [...antes].filter(id => !depois.has(id));
+        const incluir = [...depois].filter(id => !antes.has(id));
 
-        const rows = targetOrgIds.map(orgId => ({
-            employee_id: employeeId,
-            target_org_id: orgId,
-            granted_by: grantedBy || null,
-        }));
-        const { error: insErr } = await supabase
-            .from('employee_org_shares')
-            .insert(rows);
-        if (insErr) throw insErr;
+        if (remover.length > 0) {
+            const { error: delErr } = await supabase
+                .from('employee_org_shares')
+                .delete()
+                .eq('employee_id', employeeId)
+                .in('target_org_id', remover);
+            if (delErr) throw delErr;
+        }
+
+        if (incluir.length > 0) {
+            const { error: insErr } = await supabase
+                .from('employee_org_shares')
+                .insert(incluir.map(orgId => ({
+                    employee_id: employeeId,
+                    target_org_id: orgId,
+                    granted_by: grantedBy || null,
+                })));
+            if (insErr) throw insErr;
+        }
     },
 };

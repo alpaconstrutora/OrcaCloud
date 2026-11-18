@@ -260,7 +260,10 @@ const LaborRubrics: React.FC = () => {
     const loadHistory = async (code: string) => {
         setLoadingHistory(true);
         try {
-            const logs = await payrollService.listAuditLogs('SYSTEM', 'RUBRIC', code);
+            // Sem filtro de org: o histórico antigo está em 'SYSTEM' e o novo na org dona da
+            // rubrica (orgDoLogDaRubrica); a RLS de payroll_audit_logs mostra só o que é de
+            // rubrica que o usuário enxerga.
+            const logs = await payrollService.listAuditLogs(null, 'RUBRIC', code);
             setHistory(logs);
         } catch (err: any) {
             console.error(err);

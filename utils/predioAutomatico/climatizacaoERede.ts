@@ -12,7 +12,7 @@
  *
  * Roda antes da marca `copiaInstalacoes` do tipo, como a elétrica (PA5a).
  */
-import { pointInPolygon } from '../blueprintKernel';
+import { point, pointInPolygon } from '../blueprintKernel';
 import type { BlueprintModel, Command, ObjectId, Point } from '../blueprintKernel';
 import type { HipotesesClimatizacao } from '../blueprintClimatizacao';
 import type { ContextoDaCarga } from '../blueprintCargaTermica';
@@ -110,6 +110,75 @@ export function comOAndarDeCima(m: BlueprintModel, tipoLevelId: ObjectId): Bluep
   };
 }
 
+/** PA20 do prédio automático: a luz de teto fica a pelo menos isto da superfície de uma descida da laje de cima, mm. */
+export const LUZ_LONGE_DA_DESCIDA_MM = 150;
+/** PA20: até onde a luz anda no cômodo para ficar longe da descida, e o passo da busca, mm. */
+const LUZ_ANDA_ATE_MM = 800;
+const PASSO_DA_LUZ_MM = 25;
+/** PA20: a luz não fica mais perto do que isto da parede do cômodo nem de outra peça do teto — ou do que já estava, mm. */
+const LUZ_LONGE_DA_PAREDE_MM = 300;
+
+const distanciaAoSegmento = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) => {
+  const L2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+  const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / L2));
+  return Math.hypot(p.x - (a.x + (b.x - a.x) * t), p.y - (a.y + (b.y - a.y) * t));
+};
+
+/**
+ * PA20 do prédio automático (17/11/2026, decisão do usuário 2a): a luz de teto do tipo a menos de `LUZ_LONGE_DA_DESCIDA_MM`
+ * da superfície de uma DESCIDA da laje de cima — o pé de um tubo do andar de cima que desce na laje (o ralo seco); pela
+ * cópia viva, o do próprio tipo, na mesma posição — anda no mesmo cômodo até o ponto mais perto longe dela (e de todas):
+ * no R4, a luz da área de serviço ficava 13 mm sob o ralo seco de cima, e os seis eletrodutos que chegam nela encostavam
+ * no tubo (contornar não resolve: é o ponto). O novo lugar não fica sobre ramal de cima, nem mais perto da parede ou de
+ * outra peça do teto (exaustor, outra luz) do que `LUZ_LONGE_DA_PAREDE_MM` — ou do que já estava. Sem andar de cima
+ * copiado do tipo, ou sem lugar, a luz fica. Devolve os comandos e quantas luzes andaram.
+ */
+export function luzesLongeDasDescidasDeCima(m: BlueprintModel, tipoLevelId: ObjectId): { comandos: Command[]; luzes: number } {
+  const niveis = [...m.levels].sort((a, b) => a.elevationMm - b.elevationMm);
+  const i = niveis.findIndex((l) => l.id === tipoLevelId);
+  const acima = i >= 0 ? niveis[i + 1] : undefined;
+  if (!acima || acima.tipoDeId !== tipoLevelId) return { comandos: [], luzes: 0 };
+  const deCima = (m.trechos ?? []).filter((t) => t.levelId === tipoLevelId && t.disciplina !== 'ELETRICA' && Math.min(t.cotaAMm, t.cotaBMm) < 0);
+  const descidas = deCima.filter((t) => t.a.x === t.b.x && t.a.y === t.b.y);
+  if (!descidas.length) return { comandos: [], luzes: 0 };
+  const raio = (t: (typeof deCima)[number]) => t.bitolaMm / 2;
+  const longeDasDescidas = (p: { x: number; y: number }) => descidas.every((t) => Math.hypot(p.x - t.a.x, p.y - t.a.y) >= raio(t) + LUZ_LONGE_DA_DESCIDA_MM);
+  // Fora de cima de ramal: o eletroduto que sobe da luz (no forro rebaixado) o cortaria.
+  const foraDosRamais = (p: { x: number; y: number }) => deCima.every((t) => (t.a.x === t.b.x && t.a.y === t.b.y) || distanciaAoSegmento(p, t.a, t.b) >= raio(t) + 12.5 + 10);
+  const doTeto = (m.terminais ?? []).filter((t) => t.levelId === tipoLevelId && t.cotaMm >= (niveis[i].defaultHeightMm ?? 3000) - 400);
+  const comandos: Command[] = [];
+  for (const luz of (m.terminais ?? []).filter((t) => t.levelId === tipoLevelId && t.tipoEletrico === 'ILUMINACAO_TETO')) {
+    if (longeDasDescidas(luz.at)) continue;
+    const comodo = m.spaces.filter((s) => s.levelId === tipoLevelId && pointInPolygon(s.ring as Point[], luz.at as Point)).sort((a, b) => Math.abs(areaDoAnel(a.ring)) - Math.abs(areaDoAnel(b.ring)))[0];
+    if (!comodo) continue;
+    const aParede = (p: { x: number; y: number }) => Math.min(...comodo.ring.map((q, k) => distanciaAoSegmento(p, q, comodo.ring[(k + 1) % comodo.ring.length])));
+    const outras = doTeto.filter((t) => t.id !== luz.id);
+    const aOutra = (p: { x: number; y: number }) => Math.min(Infinity, ...outras.map((t) => Math.hypot(p.x - t.at.x, p.y - t.at.y)));
+    const minParede = Math.min(LUZ_LONGE_DA_PAREDE_MM, aParede(luz.at));
+    const minOutra = Math.min(LUZ_LONGE_DA_PAREDE_MM, aOutra(luz.at));
+    let melhor: { x: number; y: number; d: number } | null = null;
+    for (let dx = -LUZ_ANDA_ATE_MM; dx <= LUZ_ANDA_ATE_MM; dx += PASSO_DA_LUZ_MM) {
+      for (let dy = -LUZ_ANDA_ATE_MM; dy <= LUZ_ANDA_ATE_MM; dy += PASSO_DA_LUZ_MM) {
+        const d = Math.hypot(dx, dy);
+        if (d > LUZ_ANDA_ATE_MM || (melhor && d >= melhor.d)) continue;
+        const p = { x: luz.at.x + dx, y: luz.at.y + dy };
+        if (!pointInPolygon(comodo.ring as Point[], p as Point) || comodo.holes.some((h) => pointInPolygon(h as Point[], p as Point))) continue;
+        if (!longeDasDescidas(p) || !foraDosRamais(p) || aParede(p) < minParede || aOutra(p) < minOutra) continue;
+        melhor = { ...p, d };
+      }
+    }
+    if (!melhor) continue;
+    comandos.push({ type: 'TranslateEntities', wallIds: [], boundaryIds: [], structuralIds: [], terminalIds: [luz.id], delta: point(melhor.x - luz.at.x, melhor.y - luz.at.y), manterJuncoes: false });
+  }
+  return { comandos, luzes: comandos.length };
+}
+
+function areaDoAnel(r: readonly { x: number; y: number }[]): number {
+  let a = 0;
+  for (let k = 0; k < r.length; k++) a += r[k].x * r[(k + 1) % r.length].y - r[(k + 1) % r.length].x * r[k].y;
+  return a / 2;
+}
+
 /** PA13: o eletroduto do prédio — o padrão, na faixa da elétrica do forro da casa (junto da laje). */
 export const HIPOTESES_ELETRODUTO_DO_PREDIO: HipotesesDeEletroduto = { ...HIPOTESES_ELETRODUTO_PADRAO, noForro: { ...forroDaEletrica(HIPOTESES_DO_FORRO_DA_CASA_PADRAO), grafoAteNos: GRAFO_DO_FORRO_DO_PREDIO_ATE_NOS } };
 
@@ -129,6 +198,12 @@ export function lancarEletrodutosEPrumada(ctx: ContextoDoPredio, base: BaseDoPre
   // água e do esgoto do andar de cima; a viga é atravessada pelas travessias previstas, como na casa.
   const hip = HIPOTESES_ELETRODUTO_DO_PREDIO;
   const escolhas = escolhasDoEletroduto(hip, HIPOTESES_ELETRICAS_PADRAO);
+  // PA20 (decisão do usuário 2a): antes, a luz de teto sai de baixo da descida da laje de cima.
+  const luzes = luzesLongeDasDescidasDeCima(ctx.m, tipo);
+  if (luzes.luzes) {
+    comandos += ctx.aplicar(luzes.comandos);
+    avisos.push(`${luzes.luzes} luz(es) de teto andaram no cômodo para ficar a ${LUZ_LONGE_DA_DESCIDA_MM / 10} cm da descida da laje de cima (o ralo, a louça do andar de cima) — confira a posição.`);
+  }
   let eletrodutos = 0;
   for (const q0 of quadros) {
     const q = (ctx.m.quadros ?? []).find((x) => x.id === q0.id)!;

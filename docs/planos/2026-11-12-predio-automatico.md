@@ -973,6 +973,26 @@ laje de cima (pela cópia viva, a do próprio tipo) anda no mesmo cômodo até f
 **Pronto quando.** `eletrodutoXEsgoto` do R4 12 → 0 (a luz da área de serviço sob o ralo seco de cima); nada mais piora;
 marco da casa idêntico.
 
+**Execução da PA20 (17/11/2026).** Diagnóstico (o R4): a luz de teto da área de serviço, a 3,00 m, ficava 13 mm do pé do
+ralo seco de cima (DN 40, de 0 a −150 mm), e os seis eletrodutos que saem do nó dela encostavam no tubo — nos dois
+andares que têm cópia em cima (12). Os ramais de cima correm abaixo da faixa do eletroduto e não pesam ali. Feito:
+`luzesLongeDasDescidasDeCima` (`utils/predioAutomatico/climatizacaoERede.ts`), no tipo, logo antes dos eletrodutos — a
+luz de teto a menos de 15 cm da superfície de um pé que desce da laje de cima (pela cópia viva, o do próprio tipo) anda
+no mesmo cômodo até o ponto mais perto longe de todos (busca de 25 em 25 mm até 80 cm), sem parar sobre ramal de cima
+nem chegar mais perto da parede ou de outra peça do teto (exaustor, outra luz) do que 30 cm — ou do que já estava; sem
+andar de cima copiado do tipo, nada anda. A pendência "Eletrodutos: N luz(es) de teto andaram… — confira a posição" vai
+ao relatório. Resultado (o marco trava `eletrodutoXEsgoto` R4 0, R8 0, R12 0, RL 12 — o do RL é da PA21): R4 12 → 0,
+encontros entre redes R4 35 → 23; no R4 andaram duas luzes (a da área de serviço, 17 cm; a do lavabo, 10 cm, a 117 mm do
+pé DN 100 de cima); no R8 e no R12, uma por andar, e a rota nova do eletroduto pede uma caixa de passagem a mais (R4 +3,
+R8 +7, R12 +11 pontos — o A/B do R8 mostrou só isso); nenhuma outra contagem mudou. Testes em
+`__tests__/predioLuzLongeDaDescida.test.ts` (anda até 15 cm e no mesmo cômodo; sem cópia em cima, nada; não para sobre
+o ramal). Marco da casa idêntico.
+
+**Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pa20.cjs`, o R4, estudo descartável arquivado): gerar em 5,0
+s; a aba Compatibilização com 52 conflitos (27 em porta ou janela · 2 em pilar · 23 encontros entre redes); no rascunho
+salvo depois do Lançar, nenhum eletroduto × esgoto (eram 12), nenhum eletroduto × linha ou duto, nenhuma água × dreno ou
+linha, nenhuma rede dentro de equipamento. Sem erro de console.
+
 ### PA21 — O ramal de esgoto de cima desvia da subida do quadro (decisão 3a)
 **O que muda.** `lancarEsgoto` (`utils/predioAutomatico/esgoto.ts`): o ramal do tipo (que corre sob a laje, no forro do
 andar de baixo) contorna a subida dos eletrodutos do QD do andar de baixo — pela cópia viva, o QD do próprio tipo —, como
@@ -1012,7 +1032,7 @@ escolha.
 | Compatibilização | ~~As descidas da água cruzando o dreno e a linha frigorígena (no tipo do R8: 13 × dreno, 12 × linha)~~ — resolvido: no prédio a água desce na face da parede (o dreno e a linha correm no eixo); zero nos quatro prédios | feito na PA17 |
 | Compatibilização | Conflitos com pilar (R4 2, R8 4, R12 2, RL 31): redes traçadas em linha reta — o desvio suspenso do tubo de queda no térreo (R12 2, RL 3; no RL em diagonal de 40 m), a drenagem da garagem (R8 4), os enterrados no lote (R4 2, RL 1), o eletroduto e a água do tipo do RL (3 + 1 por andar) | PA22 (decisão 4a) |
 | Compatibilização | O dreno do ar, por gravidade a ~2,10 m no eixo da parede, passando sobre porta ou pelo alto de janela (27 no tipo do R8, 38 no do RL) — no relatório | projetista (decisão do usuário, 16/11) |
-| Compatibilização | O eletroduto junto da laje cruzando a descida da louça do andar de cima pela laje (eram R8 32, R12 104, RL 91) — resolvido em boa parte na PA16 (o contorno conferido contra todos os obstáculos) e na PA17 (a água na face): R4 12, R8 0, R12 0, RL 12; sobram a luz da área de serviço 13 mm abaixo do ralo seco de cima (R4) e, no RL, a subida do QD da área de serviço sob o ramal de esgoto de cima (o diagnóstico de 17/11 desmentiu a "vizinhança densa") | feito na PA16/PA17 (as sobras: PA20, decisão 2a; PA21, decisão 3a) |
+| Compatibilização | O eletroduto junto da laje cruzando a descida da louça do andar de cima pela laje (eram R8 32, R12 104, RL 91) — resolvido em boa parte na PA16 (o contorno conferido contra todos os obstáculos) e na PA17 (a água na face): R4 12, R8 0, R12 0, RL 12; sobravam a luz da área de serviço 13 mm abaixo do ralo seco de cima (R4 — resolvido na PA20: a luz anda para 15 cm dele) e, no RL, a subida do QD da área de serviço sob o ramal de esgoto de cima (o diagnóstico de 17/11 desmentiu a "vizinhança densa") | feito na PA16/PA17 (as sobras: PA20, decisão 2a; PA21, decisão 3a) |
 | Compatibilização | Furos em viga do eletroduto junto da laje (+4 a +8 por prédio, nas travessias fora do apoio) — confira com o calculista | projetista |
 | Compatibilização | ~~Eletroduto lançado depois da climatização atravessando a caixa da evaporadora (R8: 56)~~ — resolvido: o eletroduto contorna a evaporadora e o exaustor (zero nos quatro prédios) | feito na PA11 |
 | Compatibilização | Forro rebaixado a 2,30 m nos banheiros, lavabos e área de serviço (a água abaixo dos ramais de cima) — confira com a arquitetura | projetista |
@@ -1042,12 +1062,12 @@ escolha.
 
 ## Estado
 
-**Resumo (17/11/2026):** **PA19 feita, a publicar; PA20 a PA22 a fazer** (o 2º pedido de 17/11, decisões 1a–4a; a 5a
+**Resumo (17/11/2026):** **PA19 no ar; PA20 feita, a publicar; PA21 e PA22 a fazer** (o 2º pedido de 17/11, decisões 1a–4a; a 5a
 deixa o tempo do Lançar como está). No ar: PA0 a PA10c (o plano de 12/11), PA11 a PA14 (o pedido de
 16/11) e PA15 a PA18 (o pedido de 17/11: quatro das cinco "a decidir", uma fase cada, na ordem recomendada — o duto do
 exaustor, o contorno do eletroduto, a água na face da parede, a linha contornando a subida do quadro). Último merge de
-código: 44529a5 (#544, PA18); a produção serve o main. Em andamento: a PA19 (a publicar), depois PA20, PA21 e PA22,
-uma fase cada. Efeito somado do 1º pedido de 17/11 no R8: encontros entre redes 295 → 56, conflito com equipamento 7 → 0,
+código: 8c55034 (#557, PA19); a produção serve o main. Em andamento: a PA20 (a publicar), depois PA21 e PA22, uma
+fase cada. Efeito somado do 1º pedido de 17/11 no R8: encontros entre redes 295 → 56, conflito com equipamento 7 → 0,
 porta ou janela 245 → 224; R12 621 → 154, RL 530 → 156. Kernel em `blueprint-kernel-ts-0.109.0` (PA11–PA19 não mudam a
 versão).
 
@@ -1080,7 +1100,8 @@ versão).
 | PA16 — o contorno do eletroduto conferido contra todos os obstáculos | #540 | da5be56 |
 | PA17 — a água do prédio desce na face da parede | #542 | eecd946 |
 | PA18 — a linha frigorígena contorna a subida do quadro | #544 | 44529a5 |
-| PA19 — o duto do exaustor desvia das descidas que ainda virão | — | a publicar |
+| PA19 — o duto do exaustor desvia das descidas que ainda virão | #557 | 8c55034 |
+| PA20 — a luz de teto longe da descida da laje de cima | — | a publicar |
 
 | Fase | Situação |
 |---|---|
@@ -1103,7 +1124,7 @@ versão).
 | PA16 | feita, no ar (#540, da5be56; conferida no app — o R8 e o R12 de ponta a ponta) — o contorno do eletroduto junto da laje conferido contra todos os obstáculos da faixa e, no prédio, os pilares da vizinhança: eletroduto × esgoto R4 12 → 10, R8 32 → 7, R12 104 → 10, RL 91 → 12 (o marco trava); encontros entre redes R8 288 → 266, R12 610 → 516, RL 474 → 395; marco da casa idêntico |
 | PA17 | feita, no ar (#542, eecd946; conferida no app com o R8) — a descida da água do prédio na face da parede (`descidaNaFace`): água × dreno e × linha zerados (o marco trava `aguaXClimatizacao = 0`); encontros entre redes R8 266 → 77, R12 516 → 198, RL 395 → 184; marco da casa idêntico |
 | PA18 | feita, no ar (#544, 44529a5; conferida no app com o R8) — a linha frigorígena fora do forro contorna a subida do QD (`subidasDosQuadros`): eletroduto × climatização R4 9 → 3, R8 14 → 0, R12 44 → 0, RL 63 → 35 (o marco trava); encontros entre redes R8 77 → 56, R12 198 → 154, RL 184 → 156; marco da casa idêntico |
-| PA19 | feita, a publicar (conferida no app com o R4) — o duto do exaustor desvia ao lado das descidas que ainda virão (`desvioDasDescidas`): eletroduto × climatização R4 3 → 0, RL 35 → 0 (o marco trava zero); encontros entre redes R4 41 → 35, RL 156 → 121; R8 idêntico; marco da casa idêntico |
-| PA20 | a fazer (decisão 2a) — a luz de teto longe da descida da laje de cima |
+| PA19 | feita, no ar (#557, 8c55034; conferida no app com o R4) — o duto do exaustor desvia ao lado das descidas que ainda virão (`desvioDasDescidas`): eletroduto × climatização R4 3 → 0, RL 35 → 0 (o marco trava zero); encontros entre redes R4 41 → 35, RL 156 → 121; R8 idêntico; marco da casa idêntico |
+| PA20 | feita, a publicar (conferida no app com o R4) — a luz de teto anda no cômodo para 15 cm da descida da laje de cima (`luzesLongeDasDescidasDeCima`): eletroduto × esgoto R4 12 → 0 (o marco trava); encontros entre redes R4 35 → 23; marco da casa idêntico |
 | PA21 | a fazer (decisão 3a) — o ramal de esgoto de cima desvia da subida do QD |
 | PA22 | a fazer (decisão 4a) — as redes em linha reta contornam pilar |

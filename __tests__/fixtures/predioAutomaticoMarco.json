@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "9ac52286d6d6717cf4c6615f1ea1f8bd426459c62f87d217274343569e97dd76",
+    "modelo": "b092b1631ff588a41175fe5eba7c231a96e38207637f66f29f8b98a087a8f4bf",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -10,7 +10,7 @@
     "nucleos": 1,
     "estruturas": 201,
     "quadros": 11,
-    "terminais": 795,
+    "terminais": 798,
     "trechosDeAgua": 454,
     "agua": {
       "pontos": 36,
@@ -143,7 +143,7 @@
       "conflitos": {
         "ABERTURA": 27,
         "PILAR": 2,
-        "REDE": 35,
+        "REDE": 23,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
@@ -158,11 +158,11 @@
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
     "eletrodutoXClimatizacao": 0,
-    "eletrodutoXEsgoto": 12,
+    "eletrodutoXEsgoto": 0,
     "aguaXClimatizacao": 0
   },
   "R8": {
-    "modelo": "c0c77bc7758309ac2af8973730b9a7b18a9bca0e6207cd769fe7b81e3047dcce",
+    "modelo": "913917a40754978fff36a5e5e39302f3d4ef63485286ff22f7f4ca968c2c1ea3",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 11,
     "copias": 6,
@@ -172,7 +172,7 @@
     "nucleos": 2,
     "estruturas": 766,
     "quadros": 45,
-    "terminais": 4069,
+    "terminais": 4076,
     "trechosDeAgua": 2488,
     "agua": {
       "pontos": 85,
@@ -401,7 +401,7 @@
     "aguaXClimatizacao": 0
   },
   "R12": {
-    "modelo": "17d09d33a082a784413bf4e25a18c374fb926a6b575812215016c2d5359a0f16",
+    "modelo": "5b3bbddbe879136afd9afd0538cd978c0a49308ee9133438480df67097f8d5a0",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
@@ -411,7 +411,7 @@
     "nucleos": 3,
     "estruturas": 1424,
     "quadros": 103,
-    "terminais": 10468,
+    "terminais": 10479,
     "trechosDeAgua": 6112,
     "agua": {
       "pontos": 144,
@@ -706,7 +706,7 @@
     "aguaXClimatizacao": 0
   },
   "RL": {
-    "modelo": "40fd9c1c4a4058bcd67abecea131817ad337e65dd0e33d84daecc2db250302ad",
+    "modelo": "810442797b3bbf0502b4304eba6b9ff35e0d1df3ceaa2bf5dbd3a931b52db9d4",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,

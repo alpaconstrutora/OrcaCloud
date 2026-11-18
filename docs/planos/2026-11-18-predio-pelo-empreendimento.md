@@ -213,6 +213,12 @@ Feito na PE2a:
 
 Marcos de laboratório (prédio e casa) idênticos; suítes do prédio, da divisão e do ajuste verdes (6 arquivos, 129 testes); `tsc` limpo.
 
+**Execução da PE2b (18/11/2026).** O planejador do sync (`services/sync/planner.ts`) já **adota** a torre e as unidades existentes pelo nome quando elas não têm vínculo; o envio da Torre A manda "Torre A" e 101–304. Teste novo, de caracterização (passou sem mudar código):
+- **O que ele faz:** gera o prédio da Torre A pela ficha, envia (`ladoDaMassa` com o produto que o editor preenche pelas unidades) e planeja contra as 43 unidades reais do Garden.
+- **Resultado:** 0 torres novas, 0 unidades novas; a Torre A e os 12 apartamentos (101–304) adotados.
+- **Torre B:** as cópias dela teriam números derivados ("T05"…), que não batem com a ficha (SS205, TR05…); o envio criaria unidades novas. Fica para a PE6, quando a Torre B for gerada: adotar por andar e posição, ou nomear a cópia pela ficha.
+- **Térreo da Torre A:** 002 e 004 entram com a PE4.
+
 ### PE3 — O botão: "Construir o prédio pelo Empreendimento"
 **O que muda.**
 - **`blueprintCasaPeloEmpreendimento.ts`:**
@@ -339,7 +345,7 @@ Sem erro de console. Testes: `predioPeloEmpreendimento` 21, `TelaCasaAutomatica`
 |---|---|
 | PE0 — marco do Garden | feita, a publicar (com a PE1) |
 | PE1 — os andares e a massa | feita, a publicar |
-| PE2 — o tipo com as unidades do Empreendimento | PE2a feita (o motor), a publicar; PE2b (o envio casa com as unidades existentes) a fazer |
+| PE2 — o tipo com as unidades do Empreendimento | PE2a feita, no PR #577; PE2b: a Torre A já casa pelo nome (teste de caracterização); a Torre B fica para a PE6 |
 | PE3 — o botão na Casa automática | feita, a publicar (com a PE2a); conferida no app pelo caminho do usuário |
 | PE4 — o térreo da Torre A com os apartamentos | a fazer |
 | PE5 — condomínio e desvio sem térreo livre | a fazer |

@@ -11,6 +11,10 @@ import { comandosDoAjuste } from '../utils/blueprintAjusteAoEmpreendimento';
 import { estruturasDoEmpreendimento, type TorreParaEstrutura } from '../utils/blueprintEstruturaDaTorre';
 import { blocosDasTorresNoLote, dividirPeloEmpreendimento, papelDosAndares, pegadaDaTorre, produtoDoAndarTipo } from '../utils/predioAutomatico/andaresDoEmpreendimento';
 import { produtoVazio } from '../utils/blueprintProduto';
+import { produtoDoEmpreendimento } from '../utils/blueprintProdutoDoEmpreendimento';
+import { ladoDaMassa } from '../services/sync/massaAdapter';
+import { buildPlan } from '../services/sync/planner';
+import type { Empreendimento, EmpreendimentoTower, EmpreendimentoUnit } from '../types/empreendimento';
 import { passosDoPredioPeloEmpreendimento, tipoDoEmpreendimento, type EntradaDosPassos } from '../utils/blueprintCasaPeloEmpreendimento';
 import { assinaturaDoPedidoDoPredio, motivoParaNaoGerarPredio, planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
 import { HIPOTESES_DO_PRODUTO_PADRAO } from '../utils/blueprintProduto';
@@ -334,5 +338,36 @@ describe('PE3 — a torre que começa abaixo da rua ainda não se constrói (at�
     expect(p.passos.find((x) => x.passo === 'TORRE')).toMatchObject({ estado: 'FALTA' });
     expect(p.motivoDoBotao).toMatch(/abaixo da rua/);
     expect(passosDoPredioPeloEmpreendimento(base, torres, 'tA').motivoDoBotao).toBeNull();
+  });
+});
+
+describe('PE2b — o envio ao Empreendimento casa com as unidades que já existem (Torre A)', { timeout: 180_000 }, () => {
+  it('o prédio da Torre A, lançado e enviado, adota a torre e os 12 apartamentos da ficha pelo nome: nenhuma torre nem unidade nova', () => {
+    const distancias = GARDEN.empreendimento.distanciasEntreTorres.map((d) => ({ torreA: d.torre_a, torreB: d.torre_b, mm: Math.round(d.distancia_m * 1000) }));
+    let m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }]).model;
+    const t = m.levels[0].id;
+    const a = blocosDasTorresNoLote(GARDEN.teste01.divisas, estruturas(), distancias, null, HIPOTESES_DO_PRODUTO_PADRAO).blocos.find((b) => b.nome === 'Torre A')!;
+    m = applyBatch(m, [
+      ...GARDEN.teste01.divisas.map((d): Command => ({ type: 'AddBoundary', levelId: t, a: d.a, b: d.b, kind: 'TERRENO', papel: d.papel }) as Command),
+      { type: 'AddBloco', levelId: t, nome: a.nome, pontos: a.pontos, pavimentos: a.pavimentos } as Command,
+    ]).model;
+    const torre = daTorre('Torre A');
+    const SO_A_ARQUITETURA = { estrutura: false, eletrica: false, climatizacao: false, agua: false, esgoto: false, pluvial: false, incendio: false, garagem: false, cobertura: false };
+    const lancado = planejarPredioDoPedido({ original: m, entrada: { blocoId: m.blocos![0].id, produto: produtoVazio(), doBloco: null, rotacaoNorteDeg: null, doEmpreendimento: { torreId: torre.torreId, andares: papelDosAndares(torre).andares } }, hip: SO_A_ARQUITETURA }).resultado;
+    // O produto que o editor preenche sozinho no estudo vinculado (o "Produto pelas unidades", 25/10).
+    const produto = produtoDoEmpreendimento(GARDEN.torres as never, produtoVazio()).produto!;
+    const EMP = { id: 'f3c21233', organization_id: 'spe', name: '011 - Garden Cambuhy', blueprint_study_id: 'estudo' } as unknown as Empreendimento;
+    const lado = ladoDaMassa(EMP, lancado, produto, null);
+    const alvo = {
+      towers: GARDEN.torres.map((x) => ({ id: x.id, name: x.name, empreendimento_id: 'f3c21233', blueprint_bloco_uid: null }) as unknown as EmpreendimentoTower),
+      units: GARDEN.torres.flatMap((x) => (x.units ?? []).map((u) => ({ ...u, tower_id: x.id, blueprint_unidade_chave: null, blueprint_massa_chave: null }) as unknown as EmpreendimentoUnit)),
+      commonAreas: [],
+    };
+    const plano = buildPlan(lado, alvo);
+    expect(plano.towerCreates).toEqual([]);
+    expect(plano.unitCreates).toEqual([]);
+    const adotadas = plano.adoptions.filter((x) => x.entity === 'unit').map((x) => alvo.units.find((u) => u.id === x.existingId)!.name).sort();
+    expect(adotadas).toEqual(['101', '102', '103', '104', '201', '202', '203', '204', '301', '302', '303', '304']);
+    expect(plano.adoptions.some((x) => x.entity === 'tower' && x.existingId === torre.torreId)).toBe(true);
   });
 });

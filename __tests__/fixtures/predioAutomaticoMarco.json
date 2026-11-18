@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "b092b1631ff588a41175fe5eba7c231a96e38207637f66f29f8b98a087a8f4bf",
+    "modelo": "5a9e27a6c12b7fe6ff61131a406c4bdb9e90860c7aa4e0b422bc9fb529b91af7",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -11,7 +11,7 @@
     "estruturas": 201,
     "quadros": 11,
     "terminais": 798,
-    "trechosDeAgua": 454,
+    "trechosDeAgua": 455,
     "agua": {
       "pontos": 36,
       "hidrometros": 2,
@@ -32,7 +32,7 @@
       "excessivas": 0,
       "naoAvaliados": 0
     },
-    "trechosDeEsgoto": 170,
+    "trechosDeEsgoto": 171,
     "esgoto": {
       "tubosDeQueda": 2,
       "pontos": 19,
@@ -142,7 +142,7 @@
     "compatibilizacao": {
       "conflitos": {
         "ABERTURA": 27,
-        "PILAR": 2,
+        "PILAR": 0,
         "REDE": 23,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
@@ -159,10 +159,11 @@
     "eletrodutoNoEquipamento": 0,
     "eletrodutoXClimatizacao": 0,
     "eletrodutoXEsgoto": 0,
-    "aguaXClimatizacao": 0
+    "aguaXClimatizacao": 0,
+    "desviosEmDiagonal": 0
   },
   "R8": {
-    "modelo": "913917a40754978fff36a5e5e39302f3d4ef63485286ff22f7f4ca968c2c1ea3",
+    "modelo": "f4c5066aa9cd2317227f371b76235969a5c8557a1a6ff14dd9d81720ff356101",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 11,
     "copias": 6,
@@ -194,7 +195,7 @@
       "excessivas": 0,
       "naoAvaliados": 0
     },
-    "trechosDeEsgoto": 928,
+    "trechosDeEsgoto": 931,
     "esgoto": {
       "tubosDeQueda": 5,
       "pontos": 45,
@@ -235,7 +236,7 @@
       }
     },
     "andaresComUnidade": 7,
-    "trechosPluviais": 24,
+    "trechosPluviais": 25,
     "pluvial": {
       "areaM2": 480,
       "intensidadeMmH": 150,
@@ -381,7 +382,7 @@
     "compatibilizacao": {
       "conflitos": {
         "ABERTURA": 224,
-        "PILAR": 4,
+        "PILAR": 0,
         "REDE": 56,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
@@ -398,10 +399,11 @@
     "eletrodutoNoEquipamento": 0,
     "eletrodutoXClimatizacao": 0,
     "eletrodutoXEsgoto": 0,
-    "aguaXClimatizacao": 0
+    "aguaXClimatizacao": 0,
+    "desviosEmDiagonal": 0
   },
   "R12": {
-    "modelo": "5b3bbddbe879136afd9afd0538cd978c0a49308ee9133438480df67097f8d5a0",
+    "modelo": "d2a3abdae7bf1de0aab99127c69a300a7ff43575a59a4aca2d61efea0a7966c2",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
@@ -433,7 +435,7 @@
       "excessivas": 0,
       "naoAvaliados": 0
     },
-    "trechosDeEsgoto": 2383,
+    "trechosDeEsgoto": 2385,
     "esgoto": {
       "tubosDeQueda": 8,
       "pontos": 76,
@@ -489,7 +491,7 @@
       }
     },
     "andaresComUnidade": 11,
-    "trechosPluviais": 48,
+    "trechosPluviais": 50,
     "pluvial": {
       "areaM2": 720,
       "intensidadeMmH": 150,
@@ -686,12 +688,12 @@
     "compatibilizacao": {
       "conflitos": {
         "ABERTURA": 308,
-        "PILAR": 2,
+        "PILAR": 0,
         "REDE": 154,
         "EQUIPAMENTO": 0,
         "OUTRO": 0
       },
-      "encostos": 45,
+      "encostos": 44,
       "passagens": {
         "furos": 744,
         "noNucleo": 71,
@@ -703,10 +705,11 @@
     "eletrodutoNoEquipamento": 0,
     "eletrodutoXClimatizacao": 0,
     "eletrodutoXEsgoto": 0,
-    "aguaXClimatizacao": 0
+    "aguaXClimatizacao": 0,
+    "desviosEmDiagonal": 0
   },
   "RL": {
-    "modelo": "73693316e115cfd614b4b097395b922f9a99c158bc55f708e6c72f445be171d0",
+    "modelo": "f2807a76091f2cf21b46c03a3fa3d178d2c386a2f29036357cea47806b5aa5f7",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -716,8 +719,8 @@
     "nucleos": 2,
     "estruturas": 1179,
     "quadros": 100,
-    "terminais": 10167,
-    "trechosDeAgua": 6582,
+    "terminais": 10160,
+    "trechosDeAgua": 6596,
     "agua": {
       "pontos": 229,
       "hidrometros": 13,
@@ -738,7 +741,7 @@
       "excessivas": 0,
       "naoAvaliados": 0
     },
-    "trechosDeEsgoto": 2389,
+    "trechosDeEsgoto": 2412,
     "esgoto": {
       "tubosDeQueda": 13,
       "pontos": 121,
@@ -819,7 +822,7 @@
       }
     },
     "andaresComUnidade": 7,
-    "trechosPluviais": 60,
+    "trechosPluviais": 63,
     "pluvial": {
       "areaM2": 1104,
       "intensidadeMmH": 150,
@@ -935,23 +938,24 @@
     "compatibilizacao": {
       "conflitos": {
         "ABERTURA": 441,
-        "PILAR": 31,
-        "REDE": 109,
+        "PILAR": 0,
+        "REDE": 108,
         "EQUIPAMENTO": 0,
-        "OUTRO": 2
+        "OUTRO": 1
       },
-      "encostos": 45,
+      "encostos": 42,
       "passagens": {
         "furos": 783,
         "noNucleo": 46,
-        "embutidas": 1292
+        "embutidas": 1278
       },
-      "furos": 254
+      "furos": 253
     },
     "aguaXEsgoto": 0,
     "eletrodutoNoEquipamento": 0,
     "eletrodutoXClimatizacao": 0,
     "eletrodutoXEsgoto": 0,
-    "aguaXClimatizacao": 0
+    "aguaXClimatizacao": 0,
+    "desviosEmDiagonal": 0
   }
 }

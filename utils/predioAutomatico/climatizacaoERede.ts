@@ -28,6 +28,7 @@ import { gerarClimatizacao } from '../blueprintGeradorClimatizacao';
 import { lugarNoShaft } from '../blueprintNucleoVertical';
 import type { PendenciaDoPpci } from '../blueprintGeradorPpci';
 import type { BaseDoPredio, ContextoDoPredio } from './terreoECobertura';
+import { anelDoPilar, pegadasDePilares } from '../blueprintObstaculosEstruturais';
 
 /** O que a climatização lê fora do desenho — o mesmo que a casa recebe do editor. */
 export interface ClimatizacaoDoPedido {
@@ -115,6 +116,10 @@ export const LUZ_LONGE_DA_DESCIDA_MM = 150;
 /** PA20: até onde a luz anda no cômodo para ficar longe da descida, e o passo da busca, mm. */
 const LUZ_ANDA_ATE_MM = 800;
 const PASSO_DA_LUZ_MM = 25;
+/** PA22c: o "cômodo" de menos disto é resíduo de geometria (o critério da rota de fuga, PA10c), mm². */
+const AREA_DO_RESIDUO_MM2 = 100_000;
+/** PA22c: a luz de teto fica a pelo menos isto da pegada de um pilar, mm. */
+export const LUZ_LONGE_DO_PILAR_MM = 150;
 /** PA20: a luz não fica mais perto do que isto da parede do cômodo nem de outra peça do teto — ou do que já estava, mm. */
 const LUZ_LONGE_DA_PAREDE_MM = 300;
 
@@ -132,24 +137,38 @@ const distanciaAoSegmento = (p: { x: number; y: number }, a: { x: number; y: num
  * no tubo (contornar não resolve: é o ponto). O novo lugar não fica sobre ramal de cima, nem mais perto da parede ou de
  * outra peça do teto (exaustor, outra luz) do que `LUZ_LONGE_DA_PAREDE_MM` — ou do que já estava. Sem andar de cima
  * copiado do tipo, ou sem lugar, a luz fica. Devolve os comandos e quantas luzes andaram.
+ *
+ * PA22c (decisão do usuário 4a): e a luz de teto a menos de `LUZ_LONGE_DO_PILAR_MM` da pegada de um pilar do tipo (no RL,
+ * a luz do cômodo do canto do L caía dentro do pilar, e os eletrodutos que chegam nela o atravessavam: 3 por andar) —
+ * com ou sem andar de cima. E a luz cujo cômodo é RESÍDUO de geometria (menos de 0,1 m², como na rota de fuga da PA10c:
+ * no RL, um triângulo de 6 mm entre as paredes junto do pilar ganhou luz no centro dele, dentro do pilar) sai — o cômodo
+ * de verdade tem a sua. `removidas` conta essas.
  */
-export function luzesLongeDasDescidasDeCima(m: BlueprintModel, tipoLevelId: ObjectId): { comandos: Command[]; luzes: number } {
+export function luzesLongeDasDescidasDeCima(m: BlueprintModel, tipoLevelId: ObjectId): { comandos: Command[]; luzes: number; removidas: number } {
   const niveis = [...m.levels].sort((a, b) => a.elevationMm - b.elevationMm);
   const i = niveis.findIndex((l) => l.id === tipoLevelId);
   const acima = i >= 0 ? niveis[i + 1] : undefined;
-  if (!acima || acima.tipoDeId !== tipoLevelId) return { comandos: [], luzes: 0 };
-  const deCima = (m.trechos ?? []).filter((t) => t.levelId === tipoLevelId && t.disciplina !== 'ELETRICA' && Math.min(t.cotaAMm, t.cotaBMm) < 0);
+  const comCopiaEmCima = !!acima && acima.tipoDeId === tipoLevelId;
+  const deCima = comCopiaEmCima ? (m.trechos ?? []).filter((t) => t.levelId === tipoLevelId && t.disciplina !== 'ELETRICA' && Math.min(t.cotaAMm, t.cotaBMm) < 0) : [];
   const descidas = deCima.filter((t) => t.a.x === t.b.x && t.a.y === t.b.y);
-  if (!descidas.length) return { comandos: [], luzes: 0 };
+  const pilares = pegadasDePilares(m, tipoLevelId).map((g) => anelDoPilar(g, LUZ_LONGE_DO_PILAR_MM) as Point[]);
+  if (!descidas.length && !pilares.length) return { comandos: [], luzes: 0, removidas: 0 };
+  const foraDosPilares = (p: { x: number; y: number }) => !pilares.some((g) => pointInPolygon(g, p as Point));
   const raio = (t: (typeof deCima)[number]) => t.bitolaMm / 2;
   const longeDasDescidas = (p: { x: number; y: number }) => descidas.every((t) => Math.hypot(p.x - t.a.x, p.y - t.a.y) >= raio(t) + LUZ_LONGE_DA_DESCIDA_MM);
   // Fora de cima de ramal: o eletroduto que sobe da luz (no forro rebaixado) o cortaria.
   const foraDosRamais = (p: { x: number; y: number }) => deCima.every((t) => (t.a.x === t.b.x && t.a.y === t.b.y) || distanciaAoSegmento(p, t.a, t.b) >= raio(t) + 12.5 + 10);
   const doTeto = (m.terminais ?? []).filter((t) => t.levelId === tipoLevelId && t.cotaMm >= (niveis[i].defaultHeightMm ?? 3000) - 400);
   const comandos: Command[] = [];
+  let removidas = 0;
   for (const luz of (m.terminais ?? []).filter((t) => t.levelId === tipoLevelId && t.tipoEletrico === 'ILUMINACAO_TETO')) {
-    if (longeDasDescidas(luz.at)) continue;
     const comodo = m.spaces.filter((s) => s.levelId === tipoLevelId && pointInPolygon(s.ring as Point[], luz.at as Point)).sort((a, b) => Math.abs(areaDoAnel(a.ring)) - Math.abs(areaDoAnel(b.ring)))[0];
+    if (comodo && Math.abs(areaDoAnel(comodo.ring)) < AREA_DO_RESIDUO_MM2) {
+      comandos.push({ type: 'DeleteTerminal', terminalId: luz.id });
+      removidas++;
+      continue;
+    }
+    if (longeDasDescidas(luz.at) && foraDosPilares(luz.at)) continue;
     if (!comodo) continue;
     const aParede = (p: { x: number; y: number }) => Math.min(...comodo.ring.map((q, k) => distanciaAoSegmento(p, q, comodo.ring[(k + 1) % comodo.ring.length])));
     const outras = doTeto.filter((t) => t.id !== luz.id);
@@ -163,14 +182,14 @@ export function luzesLongeDasDescidasDeCima(m: BlueprintModel, tipoLevelId: Obje
         if (d > LUZ_ANDA_ATE_MM || (melhor && d >= melhor.d)) continue;
         const p = { x: luz.at.x + dx, y: luz.at.y + dy };
         if (!pointInPolygon(comodo.ring as Point[], p as Point) || comodo.holes.some((h) => pointInPolygon(h as Point[], p as Point))) continue;
-        if (!longeDasDescidas(p) || !foraDosRamais(p) || aParede(p) < minParede || aOutra(p) < minOutra) continue;
+        if (!longeDasDescidas(p) || !foraDosPilares(p) || !foraDosRamais(p) || aParede(p) < minParede || aOutra(p) < minOutra) continue;
         melhor = { ...p, d };
       }
     }
     if (!melhor) continue;
     comandos.push({ type: 'TranslateEntities', wallIds: [], boundaryIds: [], structuralIds: [], terminalIds: [luz.id], delta: point(melhor.x - luz.at.x, melhor.y - luz.at.y), manterJuncoes: false });
   }
-  return { comandos, luzes: comandos.length };
+  return { comandos, luzes: comandos.length - removidas, removidas };
 }
 
 function areaDoAnel(r: readonly { x: number; y: number }[]): number {
@@ -200,9 +219,10 @@ export function lancarEletrodutosEPrumada(ctx: ContextoDoPredio, base: BaseDoPre
   const escolhas = escolhasDoEletroduto(hip, HIPOTESES_ELETRICAS_PADRAO);
   // PA20 (decisão do usuário 2a): antes, a luz de teto sai de baixo da descida da laje de cima.
   const luzes = luzesLongeDasDescidasDeCima(ctx.m, tipo);
+  if (luzes.removidas) avisos.push(`${luzes.removidas} luz(es) de teto em resíduo de geometria (cômodo de menos de 0,1 m² entre paredes) saíram — o cômodo de verdade tem a sua.`);
+  if (luzes.comandos.length) comandos += ctx.aplicar(luzes.comandos);
   if (luzes.luzes) {
-    comandos += ctx.aplicar(luzes.comandos);
-    avisos.push(`${luzes.luzes} luz(es) de teto andaram no cômodo para ficar a ${LUZ_LONGE_DA_DESCIDA_MM / 10} cm da descida da laje de cima (o ralo, a louça do andar de cima) — confira a posição.`);
+    avisos.push(`${luzes.luzes} luz(es) de teto andaram no cômodo para ficar a ${LUZ_LONGE_DA_DESCIDA_MM / 10} cm da descida da laje de cima (o ralo, a louça do andar de cima) ou do pilar — confira a posição.`);
   }
   let eletrodutos = 0;
   for (const q0 of quadros) {

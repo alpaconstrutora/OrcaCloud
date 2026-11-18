@@ -28,7 +28,7 @@ import { fontesDeEsgoto, HIPOTESES_ESGOTO_PADRAO, planejarEsgoto } from '../blue
 import { dnDoSubcoletor, dnDoTuboDeQueda } from '../blueprintNbr8160';
 import { dnDaColunaDeVentilacao } from '../blueprintVentilacao';
 import { FICHA_DO_PONTO_HIDRAULICO } from '../blueprintHidraulica';
-import { anelDoPilar, pegadasDePilares } from '../blueprintObstaculosEstruturais';
+import { anelDoPilar, desvioDoPilar, fracaoDentro, pegadasDePilares } from '../blueprintObstaculosEstruturais';
 import { pontoNaFrente } from '../blueprintAncorasHidro';
 import { RAIO_DA_SUBIDA_DO_QUADRO_MM } from '../blueprintRotaPeloForro';
 import type { PendenciaDoPpci } from '../blueprintGeradorPpci';
@@ -273,7 +273,7 @@ export function lancarEsgoto(
       lote.push(trecho(T, t.ventilacao, peT + t.juncaoMm, t.ventilacao, ponta(t), t.dnVentilacaoMm, ROTULO_DA_COLUNA_DE_VENTILACAO));
       lote.push(trecho(T, t.ventilacao, ponta(t), t.at, ponta(t), t.dnVentilacaoMm, ROTULO_DA_COLUNA_DE_VENTILACAO));
     }
-    const desvio = desvioNoTerreo(base, resultado.tubos.map((t) => ({ at: t.at, cotaMm: ponta(t), uhc: t.uhcPorAndar * andares })), saida.dentro, T);
+    const desvio = desvioNoTerreo(ctx.m, base, resultado.tubos.map((t) => ({ at: t.at, cotaMm: ponta(t), uhc: t.uhcPorAndar * andares })), saida.dentro, T);
     lote.push(...desvio.trechos);
     // Na fachada, desce até sob o piso; sai para a caixa de inspeção.
     const dnSaida = dnDoSubcoletor(uhcTotal, CAIMENTO_PCT);
@@ -381,26 +381,65 @@ function saidaNaFachada(base: BaseDoPredio): { dentro: Point; fora: Point } {
 
 /**
  * O desvio no forro do térreo, da base de cada tubo de queda à saída, descendo `CAIMENTO_PCT`. No bloco retangular, um
- * coletor suspenso pelo EIXO do corredor (o mesmo esqueleto do tipo), com uma derivação a cada tubo; em asas, cada tubo
- * em linha reta até a saída. As cotas descem das pontas para a saída: a de um nó é a menor das chegadas.
+ * coletor suspenso pelo EIXO do corredor (o mesmo esqueleto do tipo), com uma derivação a cada tubo; em asas, pelos
+ * eixos dos corredores (`desvioPelosCorredores`). As cotas descem das pontas para a saída: a de um nó é a menor das
+ * chegadas.
+ *
+ * PA22a (decisão do usuário 4a, 17/11/2026): cada lance contorna os pilares do térreo (a pegada crescida pelo raio do
+ * maior desvio e a folga), com a queda pelo comprimento do contorno — a derivação do R12 passava por dentro do pilar da
+ * fachada do corredor (2); e em asas cada tubo corria em linha reta até a saída, em diagonal pelo forro do térreo (no RL,
+ * de 22 a 42 m, por três pilares).
  */
 function desvioNoTerreo(
+  model: BlueprintModel,
   base: BaseDoPredio,
   tubos: readonly { at: Point; cotaMm: number; uhc: number }[],
   saida: Point,
   T: ObjectId,
 ): { trechos: Extract<Command, { type: 'AddTrecho' }>[]; cotaNaSaidaMm: number; comprimentoM: number } {
-  const queda = (a: Point, b: Point) => Math.round((dist(a, b) * CAIMENTO_PCT) / 100);
+  const raioMaior = dnDoSubcoletor(tubos.reduce((s, t) => s + t.uhc, 0), CAIMENTO_PCT) / 2;
+  const pegadas = pegadasDePilares(model, T).map((g) => anelDoPilar(g, raioMaior + FOLGA_DO_DESVIO_AO_PILAR_MM) as Point[]);
+  const caminhos = new Map<string, Point[]>();
+  /** PA22a: a→b contornando os pilares (sem contorno, a reta). */
+  const caminho = (a: Point, b: Point): Point[] => {
+    const k = `${a.x},${a.y}|${b.x},${b.y}`;
+    let c = caminhos.get(k);
+    if (!c) caminhos.set(k, (c = a.x === b.x && a.y === b.y ? [a, b] : [a, ...(desvioDoPilar(a, b, pegadas) ?? []).map(inteiro), b]));
+    return c;
+  };
+  const comprimentoDe = (pts: readonly Point[]) => pts.slice(1).reduce((s, p, i) => s + dist(pts[i], p), 0);
+  const queda = (a: Point, b: Point) => Math.round((comprimentoDe(caminho(a, b)) * CAIMENTO_PCT) / 100);
   const trechos: Extract<Command, { type: 'AddTrecho' }>[] = [];
   const dv = base.divisao;
   let comprimento = 0;
   const add = (a: Point, ca: number, b: Point, cb: number, uhc: number) => {
     if (a.x === b.x && a.y === b.y && ca === cb) return;
-    trechos.push(trecho(T, a, ca, b, cb, dnDoSubcoletor(uhc, CAIMENTO_PCT), ROTULO_DO_DESVIO));
-    comprimento += dist(a, b);
+    const pts = caminho(a, b);
+    const L = comprimentoDe(pts);
+    const dn = dnDoSubcoletor(uhc, CAIMENTO_PCT);
+    // A cota de cada vértice do contorno pelo comprimento até ele: a mesma declividade em todos os pedaços.
+    let feito = 0;
+    let cotaAnterior = ca;
+    for (let i = 1; i < pts.length; i++) {
+      feito += dist(pts[i - 1], pts[i]);
+      const cota = i === pts.length - 1 || L === 0 ? cb : Math.round(ca - ((ca - cb) * feito) / L);
+      trechos.push(trecho(T, pts[i - 1], cotaAnterior, pts[i], cota, dn, ROTULO_DO_DESVIO));
+      cotaAnterior = cota;
+    }
+    comprimento += L;
   };
   if (dv.esquema === 'ASAS' || dv.ortogonal) {
-    // Em linha reta até a saída; as chegadas na saída se encontram na mais baixa.
+    // A chegada à saída sem porta nem janela na faixa do desvio e longe da subida de outra rede no térreo.
+    const vaos = vaosDoTerreo(model, T, FAIXA_DO_DESVIO_MM[0], FAIXA_DO_DESVIO_MM[1], raioMaior);
+    const subidas = (model.trechos ?? []).filter((t) => t.levelId === T && t.disciplina !== 'ESGOTO' && t.a.x === t.b.x && t.a.y === t.b.y && Math.max(t.cotaAMm, t.cotaBMm) > FAIXA_DO_DESVIO_MM[0] && Math.min(t.cotaAMm, t.cotaBMm) < FAIXA_DO_DESVIO_MM[1]);
+    const chegadaLivre = (pts: Point[]) =>
+      pts.slice(1).every((q, i) => fracaoDentro(pts[i], q, vaos) === 0 && subidas.every((t) => distanciaAoSegmento(t.a, pts[i], q) > raioMaior + t.bitolaMm / 2 + FOLGA_DO_DESVIO_AO_PILAR_MM));
+    const pelosCorredores = desvioPelosCorredores(base, tubos, saida, (a, b) => comprimentoDe(caminho(a, b)), chegadaLivre);
+    if (pelosCorredores) {
+      for (const x of pelosCorredores.lances) add(x.de, x.cotaDeMm, x.para, x.cotaParaMm, x.uhc);
+      return { trechos, cotaNaSaidaMm: pelosCorredores.cotaNaSaidaMm, comprimentoM: comprimento / 1000 };
+    }
+    // Sem corredor que ligue os tubos à saída: em linha reta até ela; as chegadas na saída se encontram na mais baixa.
     const chegadas = tubos.map((t) => ({ t, cota: t.cotaMm - queda(t.at, saida) }));
     const fundo = Math.min(...chegadas.map((c) => c.cota));
     for (const c of chegadas) add(c.t.at, c.t.cotaMm, saida, fundo, c.t.uhc);
@@ -442,6 +481,182 @@ function desvioNoTerreo(
   const naFachada = fundo - queda(A, saida);
   add(A, fundo, saida, naFachada, total);
   return { trechos: costurado(trechos), cotaNaSaidaMm: naFachada, comprimentoM: comprimento / 1000 };
+}
+
+/** PA22a: a folga do desvio (e do condutor enterrado) à pegada do pilar, além do raio, mm. */
+const FOLGA_DO_DESVIO_AO_PILAR_MM = 50;
+/** PA22a: a faixa de cotas em que o desvio suspenso corre no forro do térreo (a chegada à saída confere vãos e subidas nela), mm. */
+const FAIXA_DO_DESVIO_MM: readonly [number, number] = [1500, 2700];
+
+/** PA22a: os vãos (porta, janela) das paredes do térreo na faixa de cotas, em planta — o trecho do vão alargado pelo raio, na espessura da parede. */
+function vaosDoTerreo(model: BlueprintModel, levelId: ObjectId, zLo: number, zHi: number, raioMm: number): Point[][] {
+  const paredes = new Map(model.walls.filter((w) => w.levelId === levelId).map((w) => [w.id, w]));
+  const saida: Point[][] = [];
+  for (const o of model.openings) {
+    const w = paredes.get(o.wallId);
+    if (!w || o.sillMm >= zHi || o.sillMm + o.heightMm <= zLo) continue;
+    const L = dist(w.a, w.b);
+    if (L < 1) continue;
+    const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
+    const h = w.thicknessMm / 2 + 1;
+    const c = (s: number, k: number) => inteiro({ x: w.a.x + u.x * s - u.y * k * h, y: w.a.y + u.y * s + u.x * k * h });
+    saida.push([c(o.offsetMm - raioMm, -1), c(o.offsetMm + o.widthMm + raioMm, -1), c(o.offsetMm + o.widthMm + raioMm, 1), c(o.offsetMm - raioMm, 1)]);
+  }
+  return saida;
+}
+
+/** PA22a: a distância em planta de `p` ao segmento a→b. */
+function distanciaAoSegmento(p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }): number {
+  const L2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+  const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / L2));
+  return Math.hypot(p.x - (a.x + (b.x - a.x) * t), p.y - (a.y + (b.y - a.y) * t));
+}
+
+/**
+ * PA22a do prédio automático (17/11/2026, decisão do usuário 4a): o desvio em ASAS pelos eixos dos corredores — cada tubo
+ * ao pé dele no eixo mais perto (a perpendicular), os eixos ligados onde se cruzam (no canto do L, com a tolerância da
+ * meia largura do outro) e a saída ao pé dela no eixo mais perto. Cada tubo pelo caminho mais curto até a saída (o
+ * comprimento é o do contorno dos pilares); os caminhos formam uma árvore, e as cotas descem das pontas para a saída (a
+ * de um nó é a menor das chegadas, com `CAIMENTO_PCT`). Antes, em linha reta até a saída: no RL, diagonais de 22 a 42 m
+ * pelo forro do térreo, atravessando três pilares. `null` sem corredor que ligue algum tubo à saída.
+ */
+function desvioPelosCorredores(
+  base: BaseDoPredio,
+  tubos: readonly { at: Point; cotaMm: number; uhc: number }[],
+  saida: Point,
+  comprimentoMm: (a: Point, b: Point) => number,
+  chegadaLivre: (pts: Point[]) => boolean = () => true,
+): { lances: { de: Point; cotaDeMm: number; para: Point; cotaParaMm: number; uhc: number }[]; cotaNaSaidaMm: number } | null {
+  const dv = base.divisao;
+  const corredores = dv.ortogonal?.corredores ?? [];
+  if (!corredores.length || !tubos.length) return null;
+  const { o, u, v } = dv.quadro;
+  const loc = (p: { x: number; y: number }) => ({ a: (p.x - o.x) * u.x + (p.y - o.y) * u.y, b: (p.x - o.x) * v.x + (p.y - o.y) * v.y });
+  const mundo = (a: number, b: number) => inteiro({ x: o.x + u.x * a + v.x * b, y: o.y + u.y * a + v.y * b });
+  // O eixo de cada corredor: no sentido do lado maior, pelo meio do outro.
+  const eixos = corredores.map((r) => (r.a1 - r.a0 >= r.b1 - r.b0 ? { emA: true, fixo: (r.b0 + r.b1) / 2, lo: r.a0, hi: r.a1, meia: (r.b1 - r.b0) / 2 } : { emA: false, fixo: (r.a0 + r.a1) / 2, lo: r.b0, hi: r.b1, meia: (r.a1 - r.a0) / 2 }));
+  const noEixoDe = (k: number, s: number) => (eixos[k].emA ? mundo(s, eixos[k].fixo) : mundo(eixos[k].fixo, s));
+  const nos: Point[] = [];
+  const indice = new Map<string, number>();
+  const no = (p: Point) => {
+    const k = `${p.x},${p.y}`;
+    let i = indice.get(k);
+    if (i == null) {
+      i = nos.length;
+      nos.push(p);
+      indice.set(k, i);
+    }
+    return i;
+  };
+  const noEixo: { s: number; i: number }[][] = eixos.map(() => []);
+  for (let i = 0; i < eixos.length; i++) {
+    for (let j = 0; j < eixos.length; j++) {
+      const A = eixos[i];
+      const B = eixos[j];
+      if (!A.emA || B.emA) continue;
+      if (B.fixo < A.lo - B.meia || B.fixo > A.hi + B.meia || A.fixo < B.lo - A.meia || A.fixo > B.hi + A.meia) continue;
+      const k = no(mundo(B.fixo, A.fixo));
+      noEixo[i].push({ s: B.fixo, i: k });
+      noEixo[j].push({ s: A.fixo, i: k });
+    }
+  }
+  const arestas = new Map<number, { para: number; L: number }[]>();
+  const ligar = (x: number, y: number) => {
+    if (x === y) return;
+    const L = comprimentoMm(nos[x], nos[y]);
+    arestas.set(x, [...(arestas.get(x) ?? []), { para: y, L }]);
+    arestas.set(y, [...(arestas.get(y) ?? []), { para: x, L }]);
+  };
+  // Os corredores na MESMA linha que se encostam ou se sobrepõem (o RL tem dois em cada asa, emendados na ponta): ligados
+  // no meio da emenda — um degrau curto se os eixos não coincidem.
+  for (let i = 0; i < eixos.length; i++) {
+    for (let j = i + 1; j < eixos.length; j++) {
+      const A = eixos[i];
+      const B = eixos[j];
+      const tol = Math.max(A.meia, B.meia);
+      if (A.emA !== B.emA || Math.abs(A.fixo - B.fixo) > tol || A.lo > B.hi + tol || B.lo > A.hi + tol) continue;
+      const s = (Math.max(A.lo, B.lo) + Math.min(A.hi, B.hi)) / 2;
+      const sA = Math.max(A.lo, Math.min(A.hi, s));
+      const sB = Math.max(B.lo, Math.min(B.hi, s));
+      const ka = no(noEixoDe(i, sA));
+      const kb = no(noEixoDe(j, sB));
+      noEixo[i].push({ s: sA, i: ka });
+      noEixo[j].push({ s: sB, i: kb });
+      ligar(ka, kb);
+    }
+  }
+  /**
+   * O ponto ao pé dele no eixo mais perto (pela distância em L): a perpendicular — e, se a projeção cai além da ponta do
+   * eixo, o canto (anda no sentido do eixo, depois na perpendicular), sem diagonal. Na SAÍDA, o pé desliza ao longo do
+   * eixo (`deslizes`) até a chegada não cruzar porta nem janela nem a subida de outra rede (`livre`): o caminho pelos
+   * corredores é mais longo que a reta e chega mais baixo (no RL, a 1,94 m — abaixo da verga — pela porta do hall e pela
+   * subida do hidrante, na linha da saída).
+   */
+  const aoPe = (p: Point, deslizes: readonly number[] = [0], livre?: (pts: Point[]) => boolean): number => {
+    const l = loc(p);
+    let melhor: { k: number; s: number; d: number } | null = null;
+    eixos.forEach((e, k) => {
+      const s = Math.max(e.lo, Math.min(e.hi, e.emA ? l.a : l.b));
+      const d = e.emA ? Math.abs(l.a - s) + Math.abs(l.b - e.fixo) : Math.abs(l.a - e.fixo) + Math.abs(l.b - s);
+      if (!melhor || d < melhor.d) melhor = { k, s, d };
+    });
+    const m = melhor!;
+    const e = eixos[m.k];
+    const caminhoAte = (s: number): Point[] => {
+      const canto = e.emA ? mundo(s, l.b) : mundo(l.a, s);
+      const pts = [inteiro(p), canto, noEixoDe(m.k, s)];
+      return pts.filter((q, i) => i === 0 || q.x !== pts[i - 1].x || q.y !== pts[i - 1].y);
+    };
+    const s = deslizes.map((d) => Math.max(e.lo, Math.min(e.hi, m.s + d))).find((x) => !livre || livre(caminhoAte(x))) ?? m.s;
+    const pts = caminhoAte(s);
+    const n = no(pts[0]);
+    let anterior = n;
+    for (let i = 1; i < pts.length; i++) {
+      const k = no(pts[i]);
+      ligar(anterior, k);
+      anterior = k;
+    }
+    noEixo[m.k].push({ s, i: anterior });
+    return n;
+  };
+  const doTubo = tubos.map((t) => aoPe(t.at));
+  const deslizes = [0, ...Array.from({ length: 8 }, (_, i) => [(i + 1) * 250, -(i + 1) * 250]).flat()];
+  const naSaida = aoPe(saida, deslizes, chegadaLivre);
+  for (const lista of noEixo) {
+    lista.sort((x, y) => x.s - y.s);
+    for (let k = 1; k < lista.length; k++) ligar(lista[k - 1].i, lista[k].i);
+  }
+  // O caminho mais curto de cada nó até a saída (Dijkstra a partir dela).
+  const distancia = nos.map(() => Infinity);
+  const pai = nos.map(() => -1);
+  const feito = nos.map(() => false);
+  distancia[naSaida] = 0;
+  for (;;) {
+    let x = -1;
+    for (let i = 0; i < nos.length; i++) if (!feito[i] && distancia[i] < Infinity && (x < 0 || distancia[i] < distancia[x])) x = i;
+    if (x < 0) break;
+    feito[x] = true;
+    for (const { para, L } of arestas.get(x) ?? []) {
+      if (distancia[x] + L < distancia[para] - 1e-9) {
+        distancia[para] = distancia[x] + L;
+        pai[para] = x;
+      }
+    }
+  }
+  if (doTubo.some((i) => distancia[i] === Infinity)) return null;
+  // A árvore dos caminhos: as UHC de cada lance e as cotas, das pontas para a saída.
+  const uhc = new Map<number, number>();
+  const cota = nos.map(() => Infinity);
+  tubos.forEach((t, k) => {
+    cota[doTubo[k]] = Math.min(cota[doTubo[k]], t.cotaMm);
+    for (let i = doTubo[k]; pai[i] >= 0; i = pai[i]) uhc.set(i, (uhc.get(i) ?? 0) + t.uhc);
+  });
+  const usados = [...uhc.keys()].sort((x, y) => distancia[y] - distancia[x]);
+  for (const i of usados) {
+    const L = distancia[i] - distancia[pai[i]];
+    cota[pai[i]] = Math.min(cota[pai[i]], cota[i] - Math.round((L * CAIMENTO_PCT) / 100));
+  }
+  return { lances: usados.map((i) => ({ de: nos[i], cotaDeMm: cota[i], para: nos[pai[i]], cotaParaMm: cota[pai[i]], uhc: uhc.get(i)! })), cotaNaSaidaMm: cota[naSaida] };
 }
 
 /**

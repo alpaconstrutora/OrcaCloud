@@ -22,6 +22,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { applyBatch, conflitosDoModelo, contornoDaEscada, contornoDaVaga, emptyModel, pegadaEmPlanta, point, polygonArea, recorteComum, sha256, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
 import { planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
+import { ROTULO_DO_DESVIO } from '../utils/predioAutomatico/esgoto';
 import { modelosDoCatalogo } from '../utils/blueprintSelecaoClimatizacao';
 import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
 import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
@@ -113,6 +114,16 @@ function eletrodutoX(m: BlueprintModel, outras: readonly string[]): number {
   }).length;
 }
 
+/** PA22: os lances do desvio do tubo de queda com mais de 2 m e mais de 10° fora dos eixos (os blocos de referência são ortogonais). */
+function desviosEmDiagonal(m: BlueprintModel): number {
+  return (m.trechos ?? []).filter((t) => {
+    if (t.rotulo !== ROTULO_DO_DESVIO) return false;
+    const dx = Math.abs(t.b.x - t.a.x);
+    const dy = Math.abs(t.b.y - t.a.y);
+    return Math.hypot(dx, dy) > 2000 && (Math.atan2(Math.min(dx, dy), Math.max(dx, dy)) * 180) / Math.PI > 10;
+  }).length;
+}
+
 /** O que o marco guarda de um prédio. */
 function marcoDoPredio(c: Caso) {
   const p = predio(c);
@@ -160,6 +171,9 @@ function marcoDoPredio(c: Caso) {
     eletrodutoXClimatizacao: eletrodutoX(m, ['FRIGORIGENA', 'MECANICA']),
     eletrodutoXEsgoto: eletrodutoX(m, ['ESGOTO']),
     aguaXClimatizacao: aguaXClimatizacao(m),
+    // PA22 (decisão do usuário 4a): os lances do desvio do tubo de queda no térreo em DIAGONAL — mais de 2 m e mais de 10°
+    // fora dos eixos do bloco (o contorno de um pilar desvia pouco). Antes, no RL, cada tubo corria reto até a saída.
+    desviosEmDiagonal: desviosEmDiagonal(m),
   };
 }
 
@@ -203,6 +217,12 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // cômodo para 15 cm da descida da laje de cima — o R4 zera. PA21 (decisão 3a): o ramal de esgoto de cima contorna a
         // subida do QD do andar de baixo (no RL, o DN 75 passava a 36 mm dela) — zero nos quatro prédios.
         expect(agora.eletrodutoXEsgoto).toBe(0);
+        // PA22 (decisão do usuário 4a): nenhuma rede atravessa pilar — eram R4 2 (o alimentador e a rede de incêndio
+        // enterrados, pelo pé do pilar do térreo), R8 4 (a drenagem da garagem na fila de pilares), R12 2 (a derivação do
+        // desvio do tubo de queda), RL 31 (o desvio em diagonal, o condutor pluvial enterrado, a água do tipo pelo pilar da
+        // parede e a luz de um resíduo de geometria dentro do pilar) — e o desvio do térreo sem diagonal longa.
+        expect(agora.compatibilizacao?.conflitos.PILAR).toBe(0);
+        expect(agora.desviosEmDiagonal).toBe(0);
         // PA17, "pronto quando": a descida da água na FACE da parede não cruza o dreno do ar nem a linha frigorígena, que
         // correm no eixo (era: no tipo do R8, 13 × dreno e 12 × linha — e cada andar copiado repetia).
         expect(agora.aguaXClimatizacao).toBe(0);

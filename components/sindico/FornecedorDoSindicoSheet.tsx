@@ -8,10 +8,13 @@ import { sindicoPortalService, type FornecedorNovo, type IdentidadeDoSindico } f
  * Portal do Síndico › Financeiro — cadastrar fornecedor do condomínio.
  * Plano: docs/planos/2026-10-24-portal-sindico-financeiro.md
  *
- * Nasce na organização do condomínio. CPF/CNPJ que já existe em qualquer
- * organização NÃO duplica: o banco (`sindico_portal_salvar_fornecedor`) passa o
- * cadastro existente a valer também no condomínio e devolve o nome dele — a
- * tela diz isso em vez de fingir que criou um novo.
+ * Nasce na organização do condomínio. CPF/CNPJ que essa organização já
+ * enxerga (cadastro dela, ou disponibilizado para ela) NÃO duplica: o banco
+ * (`sindico_portal_salvar_fornecedor`) devolve o cadastro existente e o nome
+ * dele — a tela diz isso em vez de fingir que criou um novo. O mesmo documento
+ * cadastrado por OUTRA empresa do SaaS não é procurado nem compartilhado: vira
+ * cadastro novo (decisão de 18/11/2026; antes a busca era no SaaS inteiro e
+ * puxava o fornecedor alheio para o condomínio).
  *
  * Abre por cima do lançamento (zIndex 60 sobre o 50 do Sheet; o confirm é 200).
  */
@@ -38,7 +41,7 @@ interface Props {
     identidade: IdentidadeDoSindico;
     condominioId: string;
     onClose: () => void;
-    /** `existente` = o documento já tinha cadastro, que passou a valer no condomínio. */
+    /** `existente` = o documento já tinha cadastro visível para a org do condomínio (reaproveitado). */
     onSalvo: (f: { id: string; nome: string; document?: string; existente: boolean }) => void;
 }
 

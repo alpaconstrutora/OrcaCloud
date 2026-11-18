@@ -483,7 +483,7 @@ const LancarContaSheet: React.FC<Props> = ({ open, identidade, condominios, titu
                         setFornecedoresNovos(prev => [...prev, { id: f.id, name: f.nome, nickname: null, document: f.document ?? null, category: null }]);
                         set('supplierId', f.id);
                         setAvisoFornecedor(f.existente
-                            ? `Este documento já estava cadastrado como "${f.nome}": o cadastro passou a valer neste condomínio, sem duplicar.`
+                            ? `Este documento já estava cadastrado como "${f.nome}": usamos esse cadastro, sem duplicar.`
                             : `Fornecedor "${f.nome}" cadastrado.`);
                         setCadastrandoFornecedor(false);
                     }}

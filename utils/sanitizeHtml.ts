@@ -21,6 +21,105 @@ const TAGS_COM_TARGET = new Set(['A', 'AREA', 'FORM']);
 /** Targets que ficam na própria aba — não expõem `window.opener`. */
 const TARGETS_MESMA_ABA = new Set(['', '_self', '_top', '_parent']);
 
+/**
+ * Funções de CSS que fazem o navegador BUSCAR um recurso: `url()` (vale para
+ * `background`, `cursor`, `list-style`, `border-image`, `content`, `mask`,
+ * propriedade customizada…), `image-set()`/`-webkit-image-set()`, `image()`,
+ * `cross-fade()`, `element()`, `src()` — mais `@import` e o `expression()`
+ * do IE antigo. Lido sobre a declaração já normalizada (`cssNormalizado`).
+ *
+ * Errar para o lado de tirar é barato: o `\s*` antes do parêntese pega também
+ * `url (…)`, que o navegador nem lê como função. Não há uso legítimo de nada
+ * disso nos textos que passam por aqui — contado no banco em 18/11/2026:
+ * nenhuma ocorrência de `url(`, `image-set` ou `@import` em
+ * contract_templates, academy_lessons, portal_help_items e dunning_rules.
+ * Por isso `url(data:…)` também sai: não busca nada pela rede, mas não tem quem
+ * use, e abrir exceção é mais um caminho para errar.
+ */
+const CSS_QUE_BUSCA_RECURSO = /(?:url|image-set|image|cross-fade|element|src|expression)\s*\(|@import/;
+
+/**
+ * Lê a declaração como o navegador lê o NOME de uma função: sem comentários e
+ * com os escapes resolvidos (`\75 rl(` e `u\rl(` são `url(`), em minúsculas.
+ * Tirar o comentário junta `ur/**\/l(` em `url(` — que o navegador NÃO lê como
+ * função; a leitura aqui é mais desconfiada que a dele, de propósito.
+ */
+function cssNormalizado(declaracao: string): string {
+    return declaracao
+        .replace(/\/\*[\s\S]*?(?:\*\/|$)/g, '')
+        .replace(/\\([0-9a-fA-F]{1,6})[ \t\n\r\f]?/g, (_m, hex: string) => {
+            const cp = parseInt(hex, 16);
+            return cp > 0 && cp <= 0x10ffff ? String.fromCodePoint(cp) : String.fromCharCode(0xfffd);
+        })
+        .replace(/\\([\s\S])/g, '$1')
+        .toLowerCase();
+}
+
+/**
+ * Parte o `style` nas declarações, no `;` de fora de aspas, parênteses e
+ * comentários — `font-family:"a;b"` é UMA declaração. Aspas ou comentário sem
+ * fechar engolem o resto do texto numa declaração só (e, se o resto tiver
+ * `url(`, ele sai inteiro).
+ */
+function declaracoesDoStyle(style: string): string[] {
+    const partes: string[] = [];
+    let atual = '';
+    let aspas: string | null = null;
+    let profundidade = 0;
+    for (let i = 0; i < style.length; i++) {
+        const c = style[i];
+        if (c === '\\') {
+            atual += c + (style[i + 1] ?? '');
+            i++;
+            continue;
+        }
+        if (aspas) {
+            atual += c;
+            if (c === aspas) aspas = null;
+            continue;
+        }
+        if (c === '/' && style[i + 1] === '*') {
+            const fim = style.indexOf('*/', i + 2);
+            const ate = fim < 0 ? style.length : fim + 2;
+            atual += style.slice(i, ate);
+            i = ate - 1;
+            continue;
+        }
+        if (c === '"' || c === "'") aspas = c;
+        else if (c === '(') profundidade++;
+        else if (c === ')' && profundidade > 0) profundidade--;
+        else if (c === ';' && profundidade === 0) {
+            partes.push(atual);
+            atual = '';
+            continue;
+        }
+        atual += c;
+    }
+    partes.push(atual);
+    return partes;
+}
+
+/**
+ * O `style` sem as declarações que buscam recurso pela rede.
+ *
+ * Por que importa (resto do F70, varredura de 15/11/2026): o DOMPurify NÃO lê
+ * o conteúdo do `style`. `<div style="background-image:url(https://…)">` numa
+ * aula, num modelo de contrato ou na ajuda do portal faz o navegador de quem
+ * ABRE buscar o endereço — o autor (um membro de papel baixo, ou quem escreve a
+ * ajuda) fica sabendo quem abriu, quando e de que IP. O `HtmlSanitizado` contém
+ * a camada de tela inteira, mas não impede a requisição.
+ *
+ * Devolve o texto ORIGINAL, idêntico, quando não há o que tirar (modelos
+ * legítimos não mudam nem de espaço); `null` quando não sobra declaração.
+ */
+export function styleSemRecursoExterno(style: string): string | null {
+    const partes = declaracoesDoStyle(style);
+    const mantidas = partes.filter((p) => !CSS_QUE_BUSCA_RECURSO.test(cssNormalizado(p)));
+    if (mantidas.length === partes.length) return style;
+    const texto = mantidas.map((p) => p.trim()).filter(Boolean).join('; ');
+    return texto || null;
+}
+
 function resolverDOMPurify(): Purify {
     if (instancia) return instancia;
 
@@ -45,6 +144,25 @@ function resolverDOMPurify(): Purify {
         throw new Error('sanitizeHtml: nenhuma variante do dompurify expôs .sanitize()');
     }
 
+    // Os dois ganchos abaixo são proteção, não enfeite: sem `addHook`, o HTML
+    // sairia com `url()` no style e `target` sem noopener. Todas as builds do
+    // DOMPurify 3 expõem `addHook`; se um dia faltar, falha alto aqui em vez de
+    // sanitizar pela metade em silêncio.
+    if (typeof candidato.addHook !== 'function') {
+        throw new Error('sanitizeHtml: a variante do dompurify não expôs .addHook()');
+    }
+
+    // `style` que busca recurso pela rede (resto do F70, rastreio de quem abre):
+    // sai a declaração, ficam as outras. Ver `styleSemRecursoExterno`.
+    candidato.addHook('afterSanitizeAttributes', (node: Element) => {
+        if (typeof node.getAttribute !== 'function') return;
+        const style = node.getAttribute('style');
+        if (style === null) return;
+        const limpo = styleSemRecursoExterno(style);
+        if (limpo === null) node.removeAttribute('style');
+        else if (limpo !== style) node.setAttribute('style', limpo);
+    });
+
     // `target="_blank"` sem `rel="noopener"` deixa a página aberta manipular a
     // origem por `window.opener`. DOMPurify não faz isso sozinho.
     //
@@ -56,27 +174,25 @@ function resolverDOMPurify(): Purify {
     // aparado: o DOMPurify apara o atributo e regrava antes deste hook, então o
     // que se compara aqui é exatamente o target que vai para o navegador (que
     // não apara — por isso não se apara de novo aqui).
-    if (typeof candidato.addHook === 'function') {
-        candidato.addHook('afterSanitizeAttributes', (node: Element) => {
-            if (!TAGS_COM_TARGET.has(node.tagName)) return;
-            const target = node.getAttribute('target');
-            if (target === null) return;
-            if (target === '_blank') {
-                // Caso histórico: saída mantida idêntica.
-                node.setAttribute('rel', 'noopener noreferrer');
-                return;
-            }
-            if (TARGETS_MESMA_ABA.has(target.toLowerCase())) return;
-            // Acrescenta sem apagar os tokens que o autor já pôs (`nofollow`...).
-            // `noopener`/`noreferrer` prevalecem sobre `opener` pela spec.
-            const tokens = (node.getAttribute('rel') ?? '').split(/\s+/).filter(Boolean);
-            const presentes = new Set(tokens.map((t) => t.toLowerCase()));
-            for (const obrigatorio of ['noopener', 'noreferrer']) {
-                if (!presentes.has(obrigatorio)) tokens.push(obrigatorio);
-            }
-            node.setAttribute('rel', tokens.join(' '));
-        });
-    }
+    candidato.addHook('afterSanitizeAttributes', (node: Element) => {
+        if (!TAGS_COM_TARGET.has(node.tagName)) return;
+        const target = node.getAttribute('target');
+        if (target === null) return;
+        if (target === '_blank') {
+            // Caso histórico: saída mantida idêntica.
+            node.setAttribute('rel', 'noopener noreferrer');
+            return;
+        }
+        if (TARGETS_MESMA_ABA.has(target.toLowerCase())) return;
+        // Acrescenta sem apagar os tokens que o autor já pôs (`nofollow`...).
+        // `noopener`/`noreferrer` prevalecem sobre `opener` pela spec.
+        const tokens = (node.getAttribute('rel') ?? '').split(/\s+/).filter(Boolean);
+        const presentes = new Set(tokens.map((t) => t.toLowerCase()));
+        for (const obrigatorio of ['noopener', 'noreferrer']) {
+            if (!presentes.has(obrigatorio)) tokens.push(obrigatorio);
+        }
+        node.setAttribute('rel', tokens.join(' '));
+    });
 
     instancia = candidato as Purify;
     return instancia;
@@ -115,9 +231,12 @@ function resolverDOMPurify(): Purify {
  *
  * ─── A regra ─────────────────────────────────────────────────────────────────
  *
- * Todo HTML que vier do banco passa por aqui antes de virar
- * `dangerouslySetInnerHTML` ou `.innerHTML`. `scripts/check-xss-sinks.sh` falha
- * o build se aparecer sink novo sem esta função.
+ * Todo HTML que vier do banco entra no DOM por `components/ui/HtmlSanitizado.tsx`
+ * (`<HtmlSanitizado>` ou `preencherComHtmlSanitizado`), que chama esta função E
+ * contém o resultado (`contain: paint` + `overflow: auto`, achado F70).
+ * `scripts/check-xss-sinks.sh` (CI e build do Vercel) recusa qualquer
+ * `dangerouslySetInnerHTML` / `.innerHTML =` fora daquele arquivo — chamar
+ * `sanitizeHtml()` direto num sink deixou de bastar.
  */
 
 /**
@@ -138,9 +257,13 @@ const TAGS_PERMITIDAS = [
 
 /**
  * Atributos permitidos. `style` entra porque template de contrato e aula usam
- * formatação inline de verdade; DOMPurify já filtra o conteúdo do style contra
- * `expression()` e afins. Nenhum `on*` está aqui — e a config abaixo os proíbe
- * explicitamente, para o caso de alguém acrescentar um por engano.
+ * formatação inline de verdade. O DOMPurify NÃO lê o conteúdo do `style` — passa
+ * o texto como veio. Por isso duas defesas de fora dele: o gancho
+ * `styleSemRecursoExterno` (acima) tira a declaração que busca recurso pela
+ * rede (`url()`, `image-set()`, `@import`…), e o `HtmlSanitizado` contém o que
+ * sobra (camada `position:fixed` de tela inteira fica presa no quadro). Nenhum
+ * `on*` está aqui — e a config abaixo os proíbe explicitamente, para o caso de
+ * alguém acrescentar um por engano.
  */
 const ATRIBUTOS_PERMITIDOS = [
     'href', 'src', 'alt', 'title', 'width', 'height',
@@ -160,9 +283,10 @@ const CONFIG: Record<string, unknown> = {
     // ou seja, todo template de contrato com tabela perderia a formatação, em
     // silêncio. Descoberto pelos testes de preservação, não pelos de ataque.
     //
-    // O default do DOMPurify já bloqueia `javascript:`, `data:` e `vbscript:`
-    // (os testes deste helper cobrem os três) e é muito mais testado que
-    // qualquer regex escrito aqui.
+    // O default do DOMPurify já bloqueia `javascript:` e `vbscript:`, e `data:`
+    // fora das tags de mídia (`<a href="data:…">` sai; `<img src="data:…">`
+    // fica, e é seguro — os testes deste helper cobrem os casos) e é muito mais
+    // testado que qualquer regex escrito aqui.
     FORBID_TAGS: ['script', 'style', 'iframe', 'object', 'embed', 'form', 'input', 'link', 'base'],
     FORBID_ATTR: ['onerror', 'onload', 'onclick', 'onmouseover', 'onfocus', 'onanimationstart', 'formaction'],
     // Sem `srcdoc`, sem elementos customizados.

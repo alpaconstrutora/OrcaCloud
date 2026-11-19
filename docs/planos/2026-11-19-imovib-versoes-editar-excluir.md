@@ -244,6 +244,25 @@ Conferido no banco: 3 colunas, policies de UPDATE/DELETE, 3 RPCs, 11 gatilhos de
 - [x] F3.4 Aviso "Estudo em edição da versão «X»" em `SyncCenterTab` (empreendimento) e
   `ImovibAcompanhamentoTab`. `check-ui-standard.sh` nos `.tsx` tocados; §21/§32 (rótulo, valor escuro).
 
+### Revisão final do branch (19/11)
+
+Revisor independente (subagente): 1 crítico, 4 importantes, 6 menores. Corrigidos com a migration
+`aplicar_20271119930000_imovib_versoes_correcoes_revisao.sql` (prova em transação desfeita: PROVA OK; a mesma
+prova sem ela falha em I4b) — aplicada com OK do usuário (*"ok"*) — e `updateStudy` sem `edicao_versao`:
+
+- **C1** aba antiga salvando Premissas apagava a cópia de segurança (ou ressuscitava uma edição) → o banco
+  preserva `edicao_versao` fora das RPCs; o app não envia a coluna.
+- **I1** restauração podia alterar unidades de outro estudo → só unidades de blocos do próprio estudo.
+- **I2** versão excluída durante a edição fazia o salvar "dar certo" perdendo tudo → excluir em edição recusado;
+  salvar sem versão recusa e mantém a edição aberta.
+- **I3** bloco/tipologia criado ou excluído na edição (o espelho cai junto) → recusado durante a edição.
+- **I4** UPDATE da versão em todas as colunas → cliente só altera `label` e `notes`.
+
+Menores, registrados e **não** feitos: corrida iniciar × publicar no mesmo instante; cópia de segurança montada
+no cliente; Descartar aparece para grupo DESENVOLVEDOR não-superadmin (banco recusa); aba antiga recebe "Sem
+permissão…" em vez de "«X» está editando"; Central de Sincronização só avisa (o "Enviar ao estudo" de outra
+pessoa falha no meio); renomear durante a edição — o cálculo do salvar usa o nome antigo.
+
 ### Fase 4 — Conferência real e publicação
 
 - [ ] F4.1 Navegador (Playwright; escritas reais **só** numa versão descartável criada e apagada no fim, com

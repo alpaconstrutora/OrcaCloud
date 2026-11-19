@@ -7,7 +7,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-const svc = vi.hoisted(() => ({ listarVersoes: vi.fn(), snapshotDaVersao: vi.fn(), congelarVersao: vi.fn(), organizacaoDoEstudo: vi.fn() }));
+const svc = vi.hoisted(() => ({ listarVersoes: vi.fn(), snapshotDaVersao: vi.fn(), congelarVersao: vi.fn(), organizacaoDoEstudo: vi.fn(), iniciarEdicaoDaVersao: vi.fn(), excluirVersao: vi.fn(), renomearVersao: vi.fn() }));
 vi.mock('../../services/imovibService', () => ({ imovibService: svc }));
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
 const oportunidades = vi.hoisted(() => ({ lista: [] as unknown[] }));
@@ -66,13 +66,85 @@ describe('10.2 — aba Versões', () => {
         expect(svc.snapshotDaVersao).toHaveBeenCalledWith('v1');
     });
 
-    it('não oferece editar nem apagar versão', async () => {
+});
+
+// Plano docs/planos/2026-11-19-imovib-versoes-editar-excluir.md (F3.1): versão publicada = só leitura;
+// as demais se editam (pelo estudo), se renomeiam na linha e se excluem. Substitui o teste da D5
+// ("não oferece editar nem apagar"), que a decisão de 19/11 derrubou.
+describe('editar e excluir versão', () => {
+    beforeEach(() => { oportunidades.lista = []; svc.snapshotDaVersao.mockResolvedValue(estudo()); });
+
+    it('não publicada: Editar e Excluir ligados', async () => {
         const v = versao('v1', 'Comitê de outubro');
         svc.listarVersoes.mockResolvedValue([v.linha]);
-        svc.snapshotDaVersao.mockResolvedValue(v.snapshot);
         render(comEdicao(<ImovibVersoesTab study={estudo() as never} />));
         await screen.findAllByText('Comitê de outubro');
-        expect(screen.queryByRole('button', { name: /excluir|apagar|editar/i })).toBeNull();
+        expect((screen.getByRole('button', { name: 'Editar a versão' }) as HTMLButtonElement).disabled).toBe(false);
+        expect((screen.getByRole('button', { name: 'Excluir a versão' }) as HTMLButtonElement).disabled).toBe(false);
+    });
+
+    it('publicada: Editar, Excluir e Renomear desligados, com o motivo no hover', async () => {
+        const v = versao('v1', 'Comitê de outubro');
+        oportunidades.lista = [{ id: 'o1', title: 'Garden Cambuhy', is_published: true, imovib_version_id: 'v1' }];
+        svc.listarVersoes.mockResolvedValue([v.linha]);
+        render(comEdicao(<ImovibVersoesTab study={estudo() as never} />));
+        const editar = await screen.findByRole('button', { name: 'Editar a versão' }) as HTMLButtonElement;
+        await vi.waitFor(() => expect(editar.disabled).toBe(true));
+        expect(editar.parentElement!.getAttribute('title')).toBe('Publicada em «Garden Cambuhy» — só leitura.');
+        expect((screen.getByRole('button', { name: 'Excluir a versão' }) as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByRole('button', { name: 'Renomear a versão' }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('Editar: confirma dizendo o que a versão não guardou e abre a edição no estudo', async () => {
+        const user = userEvent.setup();
+        const v = versao('v1', 'Comitê de outubro');
+        const aoMudar = vi.fn();
+        svc.listarVersoes.mockResolvedValue([v.linha]);
+        svc.snapshotDaVersao.mockResolvedValue({ ...v.snapshot, cenarios: [], capex_items: [], funding_sources: [] });
+        svc.iniciarEdicaoDaVersao.mockResolvedValue(undefined);
+        const e = estudo();
+        render(comEdicao(<ImovibVersoesTab study={e as never} onEstudoMudou={aoMudar} />));
+        await user.click(await screen.findByRole('button', { name: 'Editar a versão' }));
+        expect(await screen.findByText(/não guardou comparáveis, riscos, due diligence e sócios/)).toBeTruthy();
+        await user.click(screen.getByRole('button', { name: 'Editar versão' }));
+        await vi.waitFor(() => expect(svc.iniciarEdicaoDaVersao).toHaveBeenCalledWith(e, 'v1'));
+        expect(aoMudar).toHaveBeenCalled();
+    });
+
+    it('Excluir: confirma nomeando o rascunho que a escolhia e tira a versão da lista', async () => {
+        const user = userEvent.setup();
+        const v = versao('v1', 'Comitê de outubro');
+        oportunidades.lista = [{ id: 'o2', title: 'Garden rascunho', is_published: false, imovib_version_id: 'v1' }];
+        svc.listarVersoes.mockResolvedValue([v.linha]);
+        svc.excluirVersao.mockResolvedValue(undefined);
+        render(comEdicao(<ImovibVersoesTab study={estudo() as never} />));
+        await user.click(await screen.findByRole('button', { name: 'Excluir a versão' }));
+        expect(await screen.findByText(/escolhida no rascunho «Garden rascunho»/)).toBeTruthy();
+        await user.click(screen.getByRole('button', { name: 'Excluir' }));
+        await vi.waitFor(() => expect(svc.excluirVersao).toHaveBeenCalledWith('v1'));
+        await vi.waitFor(() => expect(screen.queryByText('Comitê de outubro')).toBeNull());
+    });
+
+    it('Renomear: nome e observações na linha, gravados ao confirmar', async () => {
+        const user = userEvent.setup();
+        const v = versao('v1', 'Comitê de outubro');
+        svc.listarVersoes.mockResolvedValue([v.linha]);
+        svc.renomearVersao.mockResolvedValue(undefined);
+        render(comEdicao(<ImovibVersoesTab study={estudo() as never} />));
+        await user.click(await screen.findByRole('button', { name: 'Renomear a versão' }));
+        const nome = screen.getByRole('textbox', { name: 'Nome da versão' });
+        await user.clear(nome); await user.type(nome, 'Cenário banco');
+        await user.type(screen.getByRole('textbox', { name: 'Observações da versão' }), 'com financiamento');
+        await user.click(screen.getByRole('button', { name: 'Salvar nome e observações' }));
+        await vi.waitFor(() => expect(svc.renomearVersao).toHaveBeenCalledWith('v1', 'Cenário banco', 'com financiamento'));
+        expect((await screen.findAllByText('Cenário banco')).length).toBeGreaterThan(0);
+    });
+
+    it('versão editada mostra quando', async () => {
+        const v = versao('v1', 'Comitê de outubro');
+        svc.listarVersoes.mockResolvedValue([{ ...v.linha, updated_at: '2026-11-19T17:05:00Z' }]);
+        render(comEdicao(<ImovibVersoesTab study={estudo() as never} />));
+        expect(await screen.findByText(/editada em/)).toBeTruthy();
     });
 });
 

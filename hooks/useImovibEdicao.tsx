@@ -56,6 +56,26 @@ export function avaliarEdicaoImovib(args: {
 }
 
 /**
+ * Edição de versão aberta por OUTRA pessoa (plano docs/planos/2026-11-19-imovib-versoes-editar-excluir.md):
+ * o estudo fica só leitura — inclusive para o desenvolvedor, porque o banco recusa do mesmo jeito
+ * (gatilho fn_imovib_trava_edicao_de_outro). Aberta por mim, vale a permissão de sempre.
+ */
+export function travaDaEdicaoDeVersao(
+    base: ImovibEdicao,
+    edicaoAberta: { version_label: string; started_by: string; started_by_name: string | null; started_at: string } | null | undefined,
+    meuUserId: string | null | undefined,
+): ImovibEdicao {
+    if (!edicaoAberta || edicaoAberta.started_by === meuUserId) return base;
+    const quando = new Date(edicaoAberta.started_at).toLocaleString('pt-BR', {
+        timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
+    }).replace(',', '');
+    return {
+        pode: false,
+        motivo: `«${edicaoAberta.started_by_name || 'Outra pessoa'}» está editando a versão «${edicaoAberta.version_label}» desde ${quando} — o estudo está só para leitura.`,
+    };
+}
+
+/**
  * Devolve uma função org → permissão. Para listas (uma linha por estudo, cada
  * uma da sua org), onde chamar o hook por linha violaria as regras dos Hooks.
  */
@@ -73,6 +93,23 @@ export function useImovibPermissaoPorOrg(): (orgDoEstudo: string | null | undefi
             return avaliarEdicaoImovib({ desenvolvedor, orgCarregada: !!org?.members, membro: membro as MembroLido | null });
         };
     }, [group, email, organizations]);
+}
+
+/**
+ * Administrador da organização do estudo (admin/owner) ou acesso total — quem pode descartar uma edição de
+ * versão esquecida por outra pessoa (o banco confere igual em imovib_versao_descartar_edicao).
+ */
+export function useImovibEhAdminDaOrg(orgDoEstudo: string | null | undefined): boolean {
+    const group = useStore(s => s.currentProfile.group);
+    const email = useStore(s => s.session?.user?.email);
+    const organizations = useStore(s => s.organizations);
+    return useMemo(() => {
+        const emailLower = (email || '').toLowerCase();
+        if (String(group) === 'DESENVOLVEDOR' || temAcessoTotal(emailLower)) return true;
+        const org = orgDoEstudo ? organizations.find(o => o.id === orgDoEstudo) : undefined;
+        const membro = org?.members?.find(m => (m.email || '').toLowerCase() === emailLower);
+        return membro?.role === 'admin' || membro?.role === 'owner';
+    }, [group, email, organizations, orgDoEstudo]);
 }
 
 /** Avalia a permissão de edição para o estudo da organização `orgDoEstudo`. */

@@ -25,6 +25,7 @@ import { blueprintEmpreendimentoSync } from '../../services/blueprintEmpreendime
 import { massaEmpreendimentoSync } from '../../services/massaEmpreendimentoSync';
 import { terrenoEmpreendimentoSync, type TerrenoSyncReport } from '../../services/terrenoEmpreendimentoSync';
 import { previewWriteBackImovib, applyWriteBackImovib, WriteBackItem, WriteBackResult } from '../../services/sync/writeBackImovib';
+import { imovibService } from '../../services/imovibService';
 import { empreendimentoAuditService } from '../../services/empreendimentoAuditService';
 import { Empreendimento, ArquiteturaSyncReport } from '../../types';
 import { useConfirm } from '../ui/confirm';
@@ -75,6 +76,7 @@ function resumoDoEnvioAoEstudo(r: WriteBackResult): string {
 export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged }) => {
   const confirm = useConfirm();
   const [loading, setLoading] = React.useState(true);
+  const [edicaoDoEstudo, setEdicaoDoEstudo] = React.useState<{ version_label: string; started_by_name: string | null } | null>(null);
   const [writeBackItems, setWriteBackItems] = React.useState<WriteBackItem[] | null>(null);
   const [writeBackError, setWriteBackError] = React.useState<string | null>(null);
   const [writingBack, setWritingBack] = React.useState(false);
@@ -118,6 +120,13 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
     setLoteamentoError(null);
     setMassaError(null);
     const tasks: Promise<void>[] = [];
+
+    // Estudo em edição de versão (plano 2026-11-19): o card da Viabilidade avisa.
+    if (e.imovib_study_id) {
+      tasks.push(imovibService.edicaoDeVersaoAberta(e.imovib_study_id).then(setEdicaoDoEstudo).catch(() => setEdicaoDoEstudo(null)));
+    } else {
+      setEdicaoDoEstudo(null);
+    }
 
     // Viabilidade — só o espelho (empreendimento → estudo). A estrutura o estudo LÊ
     // daqui desde 19/10/2026 (utils/imovibEstrutura.ts): não há mais o que puxar dele.
@@ -445,7 +454,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
             error={writeBackError}
             divergences={wbTotal}
             naCuradoria={0}
-            footer={null}
+            footer={edicaoDoEstudo ? `Estudo em edição da versão «${edicaoDoEstudo.version_label}» por «${edicaoDoEstudo.started_by_name || 'outra pessoa'}» — os números do estudo são os dessa versão até a edição terminar.` : null}
             lastSent={e.imovib_study_id ? (fmtDate(ultimoEnvioViabilidade) ? `Último envio ao estudo: ${fmtDate(ultimoEnvioViabilidade)}` : 'Nada enviado ao estudo ainda') : null}
           />
 

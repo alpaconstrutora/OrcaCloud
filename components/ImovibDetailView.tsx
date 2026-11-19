@@ -15,9 +15,12 @@ import ImovibForm from './ImovibForm';
 import ImovibVersoesTab from './ImovibVersoesTab';
 import ImovibAcompanhamentoTab from './ImovibAcompanhamentoTab';
 import ImovibCongelarVersao from './ImovibCongelarVersao';
+import ImovibFaixaEdicaoDeVersao from './ImovibFaixaEdicaoDeVersao';
+import { useConfirm } from './ui/confirm';
+import { useStore } from '../store/useStore';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useToast } from '../hooks/useToast';
-import { useImovibPodeEditar, ImovibEdicaoProvider } from '../hooks/useImovibEdicao';
+import { useImovibPodeEditar, ImovibEdicaoProvider, travaDaEdicaoDeVersao, useImovibEhAdminDaOrg } from '../hooks/useImovibEdicao';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 import type { ImovibSubAbaDePremissas } from '../hooks/useImovibMath';
 import { TabsBar, TabsBarItem } from './ui/TabsBar';
@@ -39,7 +42,7 @@ const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'risk_scenarios', label: 'Sensibilidade e Risco', icon: <AlertCircle className="w-4 h-4" /> },
     { id: 'viability_static', label: 'Estática', icon: <Calculator className="w-4 h-4" /> },
     { id: 'viability_dynamic', label: 'Dinâmica', icon: <LineChart className="w-4 h-4" /> },
-    // Item 10.2 do plano 2026-11-11 (D5: versão não se edita nem se apaga).
+    // Item 10.2 do plano 2026-11-11; desde 19/11 (plano 2026-11-19) a versão não publicada se edita e se exclui.
     { id: 'versoes', label: 'Versões', icon: <History className="w-4 h-4" /> },
     // Item 10.4: só para estudo vinculado a empreendimento (o realizado vem dele).
     { id: 'acompanhamento', label: 'Acompanhamento', icon: <Activity className="w-4 h-4" /> },
@@ -54,7 +57,15 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
     const [activeTab, setActiveTab] = useState<AbaDoEstudo>('executive_summary');
     // canEditImovib (plano 2026-10-12, item 4.6): sem a permissão na org DONA do
     // estudo, ele abre só para leitura. Antes dos returns antecipados (regra dos Hooks).
-    const edicao = useImovibPodeEditar(study?.organization_id);
+    const permissao = useImovibPodeEditar(study?.organization_id);
+    // Versão em edição por OUTRA pessoa: estudo só leitura (plano 2026-11-19; o banco recusa igual).
+    const meuUserId = useStore(s => s.session?.user?.id);
+    const edicaoAberta = study?.edicao_versao ?? null;
+    const edicao = travaDaEdicaoDeVersao(permissao, edicaoAberta, meuUserId);
+    const souEuEditando = !!edicaoAberta && edicaoAberta.started_by === meuUserId;
+    const ehAdmin = useImovibEhAdminDaOrg(study?.organization_id);
+    const [salvandoVersao, setSalvandoVersao] = useState(false);
+    const confirm = useConfirm();
     // Editar nome/versão/classificação (item 5.1) — o mesmo drawer da criação.
     const [editando, setEditando] = useState(false);
     // Congelar versão (item 10.2): a aba Versões remonta depois para listar a nova.
@@ -99,6 +110,40 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
     // Edição não salva em Premissas não entra na versão: pergunta antes, como as outras saídas.
     const abrirCongelar = async () => {
         if (await podeSair()) setCongelando(true);
+    };
+    // Edição de versão pelo estudo (plano 2026-11-19): salvar regrava a versão e devolve o estudo.
+    const salvarNaVersao = async () => {
+        if (!study || !(await podeSair())) return;
+        setSalvandoVersao(true);
+        try {
+            await imovibService.salvarEdicaoDaVersao(study);
+            showToast(`Versão «${study.edicao_versao?.version_label ?? ''}» atualizada. O estudo voltou ao que era antes da edição.`, 'success');
+        } catch (err: any) {
+            showToast(`Não foi possível salvar na versão: ${err?.message ?? err}`, 'error');
+        } finally {
+            setSalvandoVersao(false);
+            setVersoesKey(k => k + 1);
+            await loadStudyDetails(false);
+        }
+    };
+    const descartarEdicao = async () => {
+        if (!study) return;
+        const ok = await confirm({
+            title: `Descartar a edição da versão «${study.edicao_versao?.version_label ?? ''}»?`,
+            message: 'O estudo volta ao que era antes da edição; a versão não muda.',
+            variant: 'danger', confirmLabel: 'Descartar',
+        });
+        if (!ok) return;
+        try {
+            await imovibService.descartarEdicaoDaVersao(study.id);
+        } catch (err: any) {
+            showToast(`Não foi possível descartar a edição: ${err?.message ?? err}`, 'error');
+        } finally {
+            premissas.markSaved();
+            setPremissasKey(k => k + 1);
+            setVersoesKey(k => k + 1);
+            await loadStudyDetails(false);
+        }
     };
 
     useEffect(() => {
@@ -181,8 +226,10 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     <button
                         type="button"
                         onClick={abrirCongelar}
-                        disabled={!edicao.pode}
-                        title={!edicao.pode ? edicao.motivo : 'Guardar o estudo como está, com os indicadores de agora (não se edita nem se apaga depois)'}
+                        disabled={!edicao.pode || !!edicaoAberta}
+                        title={!edicao.pode ? edicao.motivo
+                            : edicaoAberta ? `Termine a edição da versão «${edicaoAberta.version_label}» antes de congelar outra.`
+                            : 'Guardar o estudo como está, com os indicadores de agora (enquanto não for publicada, a versão pode ser editada e excluída na aba Versões)'}
                         className={`${botaoSecundario} text-slate-700 bg-white border-gray-200 hover:bg-gray-50`}
                     >
                         <Lock className="w-[15px] h-[15px]" />
@@ -190,6 +237,17 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     </button>
                 </div>
             </div>
+
+            {edicaoAberta && (souEuEditando || ehAdmin) && (
+                <ImovibFaixaEdicaoDeVersao
+                    edicao={edicaoAberta}
+                    souEu={souEuEditando}
+                    podeDescartar={souEuEditando || ehAdmin}
+                    salvando={salvandoVersao}
+                    onSalvar={() => void salvarNaVersao()}
+                    onDescartar={() => void descartarEdicao()}
+                />
+            )}
 
             {!edicao.pode && (
                 <div role="status" className="p-3 bg-amber-50 border border-amber-200 rounded-[10px] text-sm text-amber-800">
@@ -243,7 +301,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     )}
                     {activeTab === 'versoes' && (
                         <ErrorBoundary>
-                            <ImovibVersoesTab key={versoesKey} study={study} />
+                            <ImovibVersoesTab key={versoesKey} study={study} onEstudoMudou={() => { setVersoesKey(k => k + 1); void loadStudyDetails(false); }} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'acompanhamento' && study.estrutura?.origem === 'empreendimento' && (

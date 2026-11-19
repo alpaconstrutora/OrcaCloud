@@ -47,6 +47,9 @@ vi.mock('../../lib/supabase', () => {
   return { supabase: { from: () => q } };
 });
 
+const edicaoAberta = vi.hoisted(() => ({ valor: null as null | { version_label: string; started_by_name: string | null } }));
+vi.mock('../../services/imovibService', () => ({ imovibService: { edicaoDeVersaoAberta: async () => edicaoAberta.valor } }));
+
 import { SyncCenterTab } from '../../components/empreendimento/SyncCenterTab';
 import { ConfirmProvider } from '../../components/ui/confirm';
 
@@ -55,6 +58,15 @@ const onChanged = vi.fn();
 const montar = (e = EMP) => render(<ConfirmProvider><SyncCenterTab empreendimento={e} onChanged={onChanged} /></ConfirmProvider>);
 
 describe('Central de Sincronização — a arquitetura é a Planta Inteligente', () => {
+  // Plano 2026-11-19-imovib-versoes-editar-excluir, F3.4: o card da Viabilidade avisa quando o estudo
+  // vinculado está em edição de uma versão (os números dele são os da versão até a edição terminar).
+  it('estudo vinculado em edição de versão: o card da Viabilidade avisa', async () => {
+    edicaoAberta.valor = { version_label: 'Cenário banco', started_by_name: 'Ana' };
+    montar({ ...(EMP as object), imovib_study_id: 'imv_1' } as never);
+    expect(await screen.findByText(/Estudo em edição da versão «Cenário banco» por «Ana»/)).toBeTruthy();
+    edicaoAberta.valor = null;
+  });
+
   beforeEach(() => {
     previewMassa.mockClear();
     syncMassa.mockClear();

@@ -86,6 +86,9 @@ export interface ImovibStudyVersion {
     results: ResultadosDaVersao;
     created_at: string;
     created_by: string | null;
+    /** Última edição (plano 2026-11-19); null = nunca editada. */
+    updated_at?: string | null;
+    updated_by?: string | null;
 }
 
 export interface LadoDaComparacao {
@@ -258,4 +261,69 @@ export function diferencaEntreVersoes(a: LadoDaComparacao, b: LadoDaComparacao):
         return { ...i, a: (a.results[i.chave] as number | null | undefined) ?? null, b: (b.results[i.chave] as number | null | undefined) ?? null };
     });
     return { premissas, indicadores };
+}
+
+// ── Editar e excluir versões (plano docs/planos/2026-11-19-imovib-versoes-editar-excluir.md) ──
+
+/** Edição de versão em aberto no estudo (`imovib_studies.edicao_versao`, sem a cópia de segurança). */
+export interface EdicaoDaVersao {
+    version_id: string;
+    version_label: string;
+    started_by: string;
+    started_by_name: string | null;
+    started_at: string;
+}
+
+export interface AcaoDaVersao {
+    pode: boolean;
+    motivo?: string;
+}
+
+/**
+ * Versão publicada = só leitura; as demais: editar tudo, renomear e excluir. Uma edição por estudo: com
+ * outra versão em edição, editar e excluir esperam (renomear não mexe no estudo).
+ */
+export function acoesDaVersao(args: {
+    versaoId: string;
+    publicadaEm: string | null;
+    edicaoAberta: EdicaoDaVersao | null;
+    pode: AcaoDaVersao;
+}): { editar: AcaoDaVersao; excluir: AcaoDaVersao; renomear: AcaoDaVersao } {
+    const tres = (a: AcaoDaVersao) => ({ editar: a, excluir: a, renomear: a });
+    if (!args.pode.pode) return tres({ pode: false, motivo: args.pode.motivo });
+    if (args.publicadaEm != null) return tres({ pode: false, motivo: `Publicada em «${args.publicadaEm}» — só leitura.` });
+    const ed = args.edicaoAberta;
+    if (ed && ed.version_id === args.versaoId) {
+        return {
+            editar: { pode: false, motivo: 'Esta versão já está em edição no estudo.' },
+            excluir: { pode: false, motivo: 'Salve ou descarte a edição desta versão antes de excluir.' },
+            renomear: { pode: true },
+        };
+    }
+    if (ed) {
+        return {
+            editar: { pode: false, motivo: `Termine a edição da versão «${ed.version_label}» antes de editar outra.` },
+            excluir: { pode: false, motivo: `Termine a edição da versão «${ed.version_label}» antes de excluir outra.` },
+            renomear: { pode: true },
+        };
+    }
+    return tres({ pode: true });
+}
+
+/**
+ * Partes do estudo que a cópia da versão não guardou (versões de antes de 15/11). Ao editar, essas
+ * partes ficam com o conteúdo de hoje do estudo — a confirmação diz quais.
+ */
+export function partesAusentesDaVersao(snapshot: Record<string, unknown>): string[] {
+    const rel = (snapshot.relatorio ?? null) as Record<string, unknown> | null;
+    const partes: [boolean, string][] = [
+        [!('cenarios' in snapshot), 'cenários'],
+        [!rel || !('comparaveis' in rel), 'comparáveis'],
+        [!rel || !('riscos' in rel), 'riscos'],
+        [!rel || !('dueDiligence' in rel), 'due diligence'],
+        [!rel || !('socios' in rel), 'sócios'],
+        [!('capex_items' in snapshot), 'CAPEX'],
+        [!('funding_sources' in snapshot), 'outras fontes de capital'],
+    ];
+    return partes.filter(([falta]) => falta).map(([, nome]) => nome);
 }

@@ -549,6 +549,8 @@ export interface ImovibStudy {
     id: string;
     organization_id: string;
     name: string;
+    /** Edição de versão em aberto (plano 2026-11-19-imovib-versoes-editar-excluir). Só as RPCs imovib_versao_* gravam. */
+    edicao_versao?: { version_id: string; version_label: string; started_by: string; started_by_name: string | null; started_at: string } | null;
     cnpj?: string;
     developer?: string;
     manager?: string;

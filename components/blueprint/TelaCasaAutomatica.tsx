@@ -117,7 +117,14 @@ interface Props {
      * PE3 (18/11/2026): o Empreendimento é PRÉDIO — as torres dele, a escolhida e a troca. Presente, o botão é "Construir
      * o prédio pelo Empreendimento" (abre o Prédio automático da torre, com as unidades da ficha).
      */
-    predio?: { torres: { id: string; nome: string; resumo: string }[]; torreId: string | null; onTorre: (id: string) => void } | null;
+    predio?: {
+      torres: { id: string; nome: string; resumo: string }[];
+      torreId: string | null;
+      onTorre: (id: string) => void;
+      /** PE8d: quantas torres já estão lançadas no estudo, e a abertura do relatório do lote. */
+      torresLancadas?: number;
+      onRelatorioDoLote?: () => void;
+    } | null;
   } | null;
 }
 
@@ -397,15 +404,28 @@ export default function TelaCasaAutomatica(props: Props) {
                 }
                 acoes={
                   props.peloEmpreendimento.predio ? (
-                    <Button
-                      variant="secondary"
-                      onClick={() => props.peloEmpreendimento?.onConstruir()}
-                      disabled={!!props.peloEmpreendimento.passos.motivoDoBotao || props.peloEmpreendimento.construindo}
-                      title={props.peloEmpreendimento.passos.motivoDoBotao ?? undefined}
-                      data-testid="construir-predio-pelo-empreendimento"
-                    >
-                      <Wand2 className="h-4 w-4" /> {props.peloEmpreendimento.construindo ? 'Construindo…' : 'Construir o prédio pelo Empreendimento'}
-                    </Button>
+                    <div className="flex flex-wrap items-center gap-2">
+                      {props.peloEmpreendimento.predio.onRelatorioDoLote && (
+                        <Button
+                          variant="secondary"
+                          onClick={() => props.peloEmpreendimento?.predio?.onRelatorioDoLote?.()}
+                          disabled={!props.peloEmpreendimento.predio.torresLancadas}
+                          title={props.peloEmpreendimento.predio.torresLancadas ? 'As torres lançadas e as entradas do lote' : 'Lance ao menos uma torre pelo Prédio automático para ver o relatório do lote'}
+                          data-testid="relatorio-do-lote-abrir"
+                        >
+                          <ClipboardList className="h-4 w-4" /> Relatório do lote
+                        </Button>
+                      )}
+                      <Button
+                        variant="secondary"
+                        onClick={() => props.peloEmpreendimento?.onConstruir()}
+                        disabled={!!props.peloEmpreendimento.passos.motivoDoBotao || props.peloEmpreendimento.construindo}
+                        title={props.peloEmpreendimento.passos.motivoDoBotao ?? undefined}
+                        data-testid="construir-predio-pelo-empreendimento"
+                      >
+                        <Wand2 className="h-4 w-4" /> {props.peloEmpreendimento.construindo ? 'Construindo…' : 'Construir o prédio pelo Empreendimento'}
+                      </Button>
+                    </div>
                   ) : (
                     <Button
                       variant="secondary"

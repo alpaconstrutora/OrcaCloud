@@ -37,28 +37,69 @@ export interface Ponto2 {
  * continua descendo enquanto não couber). A chave da rede (`fazerChave`) e as conexões derivadas (`conexoes.ts`) usam a
  * mesma regra — a revisão do PR #584 achou a cópia das conexões ainda com a regra antiga.
  */
-export function descerPelaCota(niveis: readonly Level[]): (levelId: ObjectId, cota: number) => { levelId: ObjectId; cotaMm: number } {
+/** A pegada de cada pavimento em planta (o retângulo das paredes dele) — para escolher a torre do ponto (PE8a). */
+export type PegadasDosPavimentos = ReadonlyMap<ObjectId, { x0: number; y0: number; x1: number; y1: number }>;
+
+/** As pegadas dos pavimentos do desenho: o retângulo envolvente das paredes de cada um (sem parede, sem pegada). */
+export function pegadasDosPavimentos(model: { walls: readonly { levelId: ObjectId; a: Ponto2; b: Ponto2 }[] }): PegadasDosPavimentos {
+  const p = new Map<ObjectId, { x0: number; y0: number; x1: number; y1: number }>();
+  for (const w of model.walls) {
+    const r = p.get(w.levelId) ?? { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    p.set(w.levelId, { x0: Math.min(r.x0, w.a.x, w.b.x), y0: Math.min(r.y0, w.a.y, w.b.y), x1: Math.max(r.x1, w.a.x, w.b.x), y1: Math.max(r.y1, w.a.y, w.b.y) });
+  }
+  return p;
+}
+
+const TOLERANCIA_DA_PEGADA_MM = 100;
+
+export function descerPelaCota(niveis: readonly Level[], pegadas?: PegadasDosPavimentos): (levelId: ObjectId, cota: number, x?: number, y?: number) => { levelId: ObjectId; cotaMm: number } {
   const ordenados = [...niveis].sort((a, b) => a.elevationMm - b.elevationMm);
   const abaixoDe = new Map<ObjectId, Level | null>();
   const acimaDe = new Map<ObjectId, Level | null>();
   const porId = new Map(ordenados.map((l) => [l.id, l]));
+  // PE8a (19/11/2026): os VIZINHOS de cada pavimento — os de baixo que chegam até a laje dele (o teto deles é o piso
+  // deste) e os de cima que começam no teto dele. Duas torres no mesmo estudo com pé-direito diferente (a garagem da A a
+  // −2700, o −1 da B a −2880) têm vizinhos diferentes do mesmo 0: a pegada (x, y) desempata — nunca pula para um mais
+  // fundo (ou mais alto), que é o que um ponto fora da fachada sobre a garagem faria.
+  const vizinhosDeBaixo = new Map<ObjectId, Level[]>();
+  const vizinhosDeCima = new Map<ObjectId, Level[]>();
   ordenados.forEach((l) => {
     let abaixo: Level | null = null;
     for (const x of ordenados) if (x.elevationMm < l.elevationMm) abaixo = x;
     abaixoDe.set(l.id, abaixo);
     acimaDe.set(l.id, ordenados.find((x) => x.elevationMm > l.elevationMm) ?? null);
+    vizinhosDeBaixo.set(l.id, ordenados.filter((x) => x.elevationMm < l.elevationMm && x.elevationMm + x.defaultHeightMm >= l.elevationMm));
+    vizinhosDeCima.set(l.id, ordenados.filter((x) => x.elevationMm > l.elevationMm && x.elevationMm <= l.elevationMm + l.defaultHeightMm));
   });
-  return (levelId, cota) => {
+  const contem = (id: ObjectId, x: number, y: number) => {
+    const r = pegadas?.get(id);
+    return !!r && x >= r.x0 - TOLERANCIA_DA_PEGADA_MM && x <= r.x1 + TOLERANCIA_DA_PEGADA_MM && y >= r.y0 - TOLERANCIA_DA_PEGADA_MM && y <= r.y1 + TOLERANCIA_DA_PEGADA_MM;
+  };
+  const deBaixo = (id: ObjectId, x?: number, y?: number): Level | null => {
+    if (pegadas && x !== undefined && y !== undefined) {
+      const daTorre = (vizinhosDeBaixo.get(id) ?? []).filter((v) => contem(v.id, x, y));
+      if (daTorre.length) return daTorre[daTorre.length - 1];
+    }
+    return abaixoDe.get(id) ?? null;
+  };
+  const deCima = (id: ObjectId, x?: number, y?: number): Level | null => {
+    if (pegadas && x !== undefined && y !== undefined) {
+      const daTorre = (vizinhosDeCima.get(id) ?? []).filter((v) => contem(v.id, x, y));
+      if (daTorre.length) return daTorre[0];
+    }
+    return acimaDe.get(id) ?? null;
+  };
+  return (levelId, cota, x, y) => {
     let nivelId = levelId;
     let c = cota;
-    for (let abaixo = abaixoDe.get(nivelId); c <= 0 && abaixo; abaixo = abaixoDe.get(nivelId)) {
+    for (let abaixo = deBaixo(nivelId, x, y); c <= 0 && abaixo; abaixo = deBaixo(nivelId, x, y)) {
       c += abaixo.defaultHeightMm;
       nivelId = abaixo.id;
     }
     // E SOBE (PE7, 18/11/2026): a cota acima do pé-direito é o pavimento de cima — o cavalete no pavimento mais baixo com a
     // cota da rua (o −2 da Torre A a 6600, o −4 da Torre B a 12600: o mesmo ponto, 600 acima do 0). No teto (= pé-direito)
     // fica neste: o encontro na laje é o teto do de baixo, como sempre.
-    for (let acima = acimaDe.get(nivelId); acima && c > (porId.get(nivelId)?.defaultHeightMm ?? Infinity); acima = acimaDe.get(nivelId)) {
+    for (let acima = deCima(nivelId, x, y); acima && c > (porId.get(nivelId)?.defaultHeightMm ?? Infinity); acima = deCima(nivelId, x, y)) {
       c -= porId.get(nivelId)!.defaultHeightMm;
       nivelId = acima.id;
     }
@@ -76,11 +117,11 @@ export function chaveDoLugar(niveis: readonly Level[]): (levelId: ObjectId, x: n
   return (levelId, x, y, cotaMm) => `${cota.get(levelId) ?? levelId}|${x},${y}|${cotaMm}`;
 }
 
-export function fazerChave(niveis: readonly Level[]) {
-  const descer = descerPelaCota(niveis);
+export function fazerChave(niveis: readonly Level[], pegadas?: PegadasDosPavimentos) {
+  const descer = descerPelaCota(niveis, pegadas);
   const lugar = chaveDoLugar(niveis);
   return (levelId: ObjectId, x: number, y: number, cota: number): No => {
-    const d = descer(levelId, cota);
+    const d = descer(levelId, cota, x, y);
     return lugar(d.levelId, x, y, d.cotaMm);
   };
 }

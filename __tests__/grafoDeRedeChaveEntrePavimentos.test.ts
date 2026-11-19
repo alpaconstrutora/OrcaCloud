@@ -48,5 +48,22 @@ describe('fazerChave — a cota abaixo do piso desce quantos pavimentos ela pedi
     // No pavimento mais alto, a cota acima do pé-direito fica nele (não há para onde subir).
     expect(ch('lote', 1, 2, 4000)).toBe('0|1,2|4000');
   });
+
+  // PE8a (19/11/2026): duas torres com pé-direito DIFERENTE — a garagem da A no −2700 (2700) e o −1 da B no −2880
+  // (2880). Do 0 (o lote, os térreos) a descida tem de ir ao pavimento da torre em que o ponto está: a pegada desempata
+  // entre os vizinhos de baixo (os que chegam até esta laje), sem pular para um mais fundo.
+  it('pé-direito diferente entre torres: a pegada escolhe o pavimento de baixo da torre do ponto', () => {
+    const niveis4 = [nivel('lote', 0), { ...nivel('garA', -2700), defaultHeightMm: 2700 }, { ...nivel('m1B', -2880), defaultHeightMm: 2880 }, nivel('fundo', -6000)];
+    const pegadas = new Map([
+      ['garA', { x0: 0, y0: 0, x1: 10000, y1: 10000 }],
+      ['m1B', { x0: 20000, y0: 0, x1: 30000, y1: 10000 }],
+      ['fundo', { x0: 0, y0: 0, x1: 30000, y1: 10000 }],
+    ]);
+    const ch = fazerChave(niveis4, pegadas);
+    expect(ch('lote', 25000, 5, -150)).toBe(ch('m1B', 25000, 5, 2730));
+    expect(ch('lote', 5000, 5, -150)).toBe(ch('garA', 5000, 5, 2550));
+    // Fora de toda pegada: o de sempre (o mais perto abaixo) — e nunca o mais fundo, mesmo contendo o ponto.
+    expect(ch('lote', 15000, 5, -150)).toBe(ch('garA', 15000, 5, 2550));
+  });
 });
 

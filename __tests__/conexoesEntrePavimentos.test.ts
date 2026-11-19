@@ -25,4 +25,28 @@ describe('conexões — a descida pela cota atravessa pavimentos', () => {
     expect(abertas.filter((x) => (x as { levelId: string; cotaMm?: number }).levelId === g3 && (x as { cotaMm?: number }).cotaMm === 3000)).toEqual([]);
     expect(abertas).toHaveLength(2); // só as duas pontas de fora: o pé no −3 (300) e o topo no lote (−600)
   });
+
+  // PE8a (19/11/2026): torres com pé-direito diferente — o 0 desce à torre do ponto (as pegadas das paredes).
+  it('pé-direito diferente: a prumada da Torre B (−2880) encontra o trecho do lote, sem ponta aberta na laje', () => {
+    let m = applyBatch(emptyModel(), [
+      { type: 'AddLevel', name: 'Lote', elevationMm: 0, defaultHeightMm: 3000 },
+      { type: 'AddLevel', name: 'Garagem A', elevationMm: -2700, defaultHeightMm: 2700 },
+      { type: 'AddLevel', name: '−1 B', elevationMm: -2880, defaultHeightMm: 2880 },
+    ] as Command[]).model;
+    const [lote, gA, b1] = m.levels.map((l) => l.id);
+    const caixa = (levelId: string, x0: number): Command[] => [
+      [x0, 0, x0 + 10000, 0], [x0 + 10000, 0, x0 + 10000, 10000], [x0 + 10000, 10000, x0, 10000], [x0, 10000, x0, 0],
+    ].map(([ax, ay, bx, by]) => ({ type: 'AddWall', levelId, a: { x: ax, y: ay }, b: { x: bx, y: by }, thicknessMm: 150, heightMm: 2700 }) as Command);
+    const P = { x: 25000, y: 5000 };
+    m = applyBatch(m, [
+      ...caixa(gA, 0),
+      ...caixa(b1, 20000),
+      { type: 'AddTrecho', levelId: b1, disciplina: 'ESGOTO', a: P, b: P, cotaAMm: 300, cotaBMm: 2730, bitolaMm: 100 },
+      { type: 'AddTrecho', levelId: lote, disciplina: 'ESGOTO', a: P, b: P, cotaAMm: -150, cotaBMm: 500, bitolaMm: 100 },
+    ] as Command[]).model;
+    const abertas = conexoesDerivadas(m).pontasAbertas as { levelId: string; cotaMm?: number }[];
+    // Só as duas pontas de fora (o pé no −1 da B e o alto no lote) — nada na laje entre eles.
+    expect(abertas).toHaveLength(2);
+  });
 });
+

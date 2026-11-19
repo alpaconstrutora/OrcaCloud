@@ -7,13 +7,14 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { EmpreendimentoFloor } from '../types/empreendimento';
-import { aplicarLote, applyBatch, contornoDaVaga, emptyModel, snapshotHash, type Command } from '../utils/blueprintKernel';
+import { aplicarLote, applyBatch, contornoDaVaga, emptyModel, pegadaEmPlanta, snapshotHash, type Command } from '../utils/blueprintKernel';
 import { comandosDoAjuste } from '../utils/blueprintAjusteAoEmpreendimento';
 import { estruturasDoEmpreendimento, type TorreParaEstrutura } from '../utils/blueprintEstruturaDaTorre';
 import { blocosDasTorresNoLote, papelDosAndares } from '../utils/predioAutomatico/andaresDoEmpreendimento';
 import { HIPOTESES_DO_PRODUTO_PADRAO, produtoVazio } from '../utils/blueprintProduto';
 import { planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
 import { fazerChave } from '../utils/blueprintGrafoDeRede';
+import { relatorioDoLote } from '../utils/predioAutomatico/relatorioDoLote';
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { uidDaCobertura } from '../utils/predioAutomatico/terreoECobertura';
 import { SALA_HALL } from '../utils/predioAutomatico/terreoECobertura';
@@ -112,6 +113,20 @@ describe('PE7 — as duas torres no mesmo estudo (Garden)', { timeout: 600_000 }
     });
     expect(fora.length).toBe(0);
     expect(b.pendencias.some((x) => /^Esgoto: o coletor desta torre vai à ligação da Torre A/.test(x.texto))).toBe(true);
+    // PE8c: sob a Torre A, o coletor da B corre SUSPENSO no forro do 1º subsolo dela (desenhado nesse pavimento, por fora
+    // dos pilares) — e não no lote, atravessando a garagem.
+    const subsolo1A = m.levels.find((l) => /^Torre A · Garagem · 1º subsolo/.test(l.name))!;
+    const coletorB = m.trechos.filter((t) => t.disciplina === 'ESGOTO' && t.levelId === subsolo1A.id && b.criados.includes(t.id));
+    expect(coletorB.length).toBeGreaterThan(0);
+    const pilares = m.structures.filter((x) => x.kind === 'PILAR' && x.levelId === subsolo1A.id);
+    const dentro = (p: { x: number; y: number }, P: readonly { x: number; y: number }[]) => {
+      let c = false;
+      for (let i = 0, j = P.length - 1; i < P.length; j = i++) if ((P[i].y > p.y) !== (P[j].y > p.y) && p.x < ((P[j].x - P[i].x) * (p.y - P[i].y)) / (P[j].y - P[i].y) + P[i].x) c = !c;
+      return c;
+    };
+    const meio = (t: (typeof coletorB)[number]) => ({ x: (t.a.x + t.b.x) / 2, y: (t.a.y + t.b.y) / 2 });
+    expect(coletorB.filter((t) => pilares.some((pl) => dentro(meio(t), pegadaEmPlanta(pl)))).length).toBe(0);
+    expect(b.pendencias.some((x) => /^Esgoto: o coletor desta torre .*suspenso no forro do 1º subsolo da Torre A/.test(x.texto))).toBe(true);
   });
 
   it('PE7b (água): uma entrada de água no lote — um cavalete só (o da Torre A), e o alimentador da Torre B parte dele', () => {
@@ -160,6 +175,9 @@ describe('PE7 — as duas torres no mesmo estudo (Garden)', { timeout: 600_000 }
     };
     expect((m.vagas ?? []).filter((v) => v.levelId === doisA.id && contornoDaVaga(v).some((c) => naRampa(c))).length).toBe(0);
     expect(nivel(pelaA[0].ateLevelId)?.name).toMatch(/Torre A · Garagem/);
+    // PE8b: o vão na contenção do −3 da B, onde a rampa cruza a parede comum — da largura da rampa.
+    const cruza = m.walls.filter((w) => w.levelId === tresB.id && m.openings.some((o) => o.wallId === w.id && o.widthMm >= pelaA[0].larguraMm));
+    expect(cruza.length).toBeGreaterThanOrEqual(1);
     expect(b.pendencias.some((x) => /pela garagem da Torre A/.test(x.texto))).toBe(true);
   });
 
@@ -211,6 +229,25 @@ describe('PE7 — as duas torres no mesmo estudo (Garden)', { timeout: 600_000 }
     expect(p.resultado.levels.some((l) => l.name === 'Vizinho')).toBe(true);
     expect(p.resultado.walls.some((w) => w.levelId === m.levels.find((l) => l.name === 'Vizinho')!.id)).toBe(true);
     expect(p.hashDoResultado).toBe(snapshotHash(aplicarLote(m, p.comandos).model));
+  });
+
+  // ── PE8d (decisão do usuário de 19/11: "Relatório do lote — numa tela do lote"): calculado do DESENHO (vale depois do
+  // Lançar, quando a prévia já se foi), uma seção por torre e as entradas do lote.
+  it('PE8d: o relatório do lote — as duas torres (unidades, quadro geral, conflitos) e uma entrada de cada rede no lote', () => {
+    const { b } = plano();
+    const t0 = performance.now();
+    const r = relatorioDoLote(b.resultado);
+    const ms = performance.now() - t0;
+    expect(r.torres.map((t) => t.nome)).toEqual(['Torre A', 'Torre B']);
+    expect(r.torres.map((t) => t.unidades)).toEqual([14, 24]);
+    expect(r.torres.find((t) => t.nome === 'Torre B')!.quadroGeral?.alimentadoDe).toBe('Torre A');
+    expect(r.torres.find((t) => t.nome === 'Torre B')!.quadroGeral?.demandaKva).toBeGreaterThan(50);
+    expect(r.torres.find((t) => t.nome === 'Torre A')!.quadroGeral?.alimentadoDe).toBeNull();
+    expect(r.entradas).toEqual({ esgoto: 1, pluvial: 1, agua: 1, energia: 1 });
+    expect(r.demandaDoLoteKva).toBeGreaterThan(300);
+    expect(r.janelasNaParedeComum).toBe(0);
+    expect(r.avisos).toEqual([]);
+    expect(ms).toBeLessThan(30000);
   });
 });
 

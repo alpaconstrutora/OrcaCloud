@@ -557,7 +557,8 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 | PE6 — abaixo da rede pública (Torre B) | no ar (#584, bfbfcdc); a Torre B liberada na tela |
 | PE7 — as duas torres no mesmo estudo | no ar (#587, f042101) |
 | PE8 — o que ficou da PE7 | no ar (#588, d936a7d): pé-direito diferente entre torres, o vão na contenção, os coletores suspensos sob a outra torre e o relatório do lote |
-| PE9 — as pendências de código | a publicar: as ligações, a rampa, as vagas, o envio da Torre B, a sala técnica fechada, as pendências do gerador no relatório do lote e o teste do Espelho do Investidor no Windows |
+| PE9 — as pendências de código | no ar (#590, a5b6288): as ligações, a rampa, as vagas, o envio da Torre B, a sala técnica fechada, as pendências do gerador no relatório do lote e o teste do Espelho do Investidor no Windows |
+| PE10 — o que dava para automatizar do projeto | a publicar: a altura livre sob os coletores suspensos, a cabine primária reservada no 1º subsolo da A, o pluvial da B só acima do 0; a saída de emergência da garagem da B conferida (não precisa) |
 
 **Decisões do usuário ao longo do plano:**
 - **Caminho e estrutura das torres:** "Prédio pelo Empreendimento" e "Unidades do Empreendimento"; "A torre começa no −2".
@@ -567,32 +568,42 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 - **As duas torres:** "Rampa pela garagem da A"; "Entrada na A, quadro geral na B".
 - **Relatório:** "numa tela do lote".
 
-## Pendências (19/11/2026, depois da PE9)
+## Pendências (19/11/2026, depois da PE10)
 
-**PE9 (pedido "Faça todos", 19/11/2026)** resolveu as pendências de código e, das de projeto, a que dava para automatizar.
-- **Ligações:** a de lá é qualquer uma que esta torre não criou, também no pavimento do lote; o mesmo vale para o cavalete e o QGBT.
-- **Coletores:** todos os trechos desta torre que chegam à ligação são religados, em qualquer sentido (no pluvial do Garden eram 3).
-- **Ligação que desce:** leva junto, pela chave da rede, tudo o que está no nó dela (trechos de qualquer pavimento e a caixa).
-- **Vagas:** sai a vaga cuja planta cruza a faixa da rampa, por interseção.
-- **Rampa da B:** a garagem da B não desenha a rampa que subia para os apartamentos (`saidaPelaOutraTorre`), as vagas do −3 saem sem ela, e a junção desenha a rampa do outro lado da parede comum.
-- **Torre abaixo da rua sem andar na cota da rua:** o pluvial passa a avisar.
-- **Junção que não fecha:** ela registra a decisão com o motivo.
-- **Envio:** `floor_tipo` TIPO abaixo da rua (só o 0 é TERREO); sem o aviso falso da estimativa; a posição e o sol pelo tipo no 1º piso.
-- **Sala técnica:** fechada com paredes e porta.
-- **Relatório do lote:** traz as pendências do gerador da prévia lançada, guardadas no navegador no Lançar.
-- **`espelhoDoInvestidor`:** o teste falhava só no Windows. O leitor das migrations não normalizava o CRLF do checkout (`core.autocrlf`), e o recorte do SQL não achava "\n". Corrigido no teste; nenhuma migration nem banco foi tocado.
+**PE10 (pedido "Resolva o que ainda falta é só de projeto", 19/11/2026).** Das pendências de projeto, o usuário escolheu as
+quatro que dava para automatizar:
+- **Pé-direito livre sob os coletores suspensos:** a junção mede, em cada trecho suspenso na garagem da outra torre, a
+  altura livre (a cota de baixo do tubo) contra 2,30 m (presumida para veículos). Abaixo disso vira VERIFICACAO, com os
+  trechos marcados na planta; acima, CONFERIR. No Garden: esgoto da B com 1,43 m em 1 trecho e pluvial com 2,05 m em
+  3 trechos, no 1º subsolo da A.
+- **Cabine de média tensão:** quando a demanda passa do padrão de baixa tensão (a A sozinha), a cabine primária fica
+  reservada no 1º subsolo, junto do lado voltado para a rua (5 × 4 m, `cabine.ts`). Ela foge das escadas, das rampas, dos
+  núcleos, da sala técnica e das paredes internas. Fica fechada, com paredes e porta de 1,20 m, e as vagas que ela toma
+  saem. A pendência "não decidido" da média tensão vira CONFERIR.
+  - **Decisão:** a cabine é uma SALA, não um quadro acima do QGBT. O motor elétrico calcula a entrada (demanda,
+    categoria, medidores por unidade) no quadro sem pai (`entradaDoQuadro`). Um pai acima do QGBT tiraria essa conta da
+    elétrica, do memorial, da prancha e do relatório do lote; o teste do relatório (420 kVA do lote) acusou na hora. O
+    QGBT segue sendo a entrada, e o texto diz que a alimentação dele sai da cabine.
+- **Pluvial da B só acima do 0:** com a torre abaixo da rua e o andar 0 no desenho, os condutores descem da cobertura
+  ao chão do 0 num trecho só (`verticalDaCoberturaAteMm`). Nada passa pelo tipo nem pelo −2 e o −1. Todo ralo da
+  cobertura chega à ligação da A pela chave da rede.
+- **Saída de emergência da garagem da B pela A:** conferido no caso real, não há o que desenhar. Desde a PE9 (a rampa
+  saiu do meio da garagem), a garagem da B não precisa de escada de emergência própria: o −3 e o −4 chegam à escada do
+  núcleo da torre, que sobe ao 0 na rua, dentro dos 35 m. A pendência "a escada chega ao teto, sob os apartamentos" já
+  não sai. Um teste trava isso: nenhuma escada sem saída, a do núcleo nos dois subsolos, a rota sem acusar a garagem. O
+  mecanismo "escada pela A" não foi construído, porque o caso real não o usa.
 - **Provas:**
-  - **Suíte inteira:** 1.528 arquivos sem nenhuma falha, e o `tsc` limpo.
-  - **App** (`conferencia-predio-pe9.cjs`): 27 portões ok; o relatório do lote traz as pendências do gerador das 2 torres.
+  - **Suíte:** 1.528 de 1.533 arquivos passaram na primeira rodada; os 5 restantes passaram na segunda (350 de 350): 4 de componentes por tempo esgotado sob carga, e o marco do prédio, regravado porque o R8 e o R12 ganharam a cabine (+3 paredes; no R12, 2 vagas cederam o espaço); o `tsc` limpo.
+  - **App** (`conferencia-predio-pe10.cjs`): 33 portões ok, sem erro de página/console/HTTP; a 1ª rodada achou o roteiro lendo só o último grupo da sanfona de pendências (corrigido no roteiro, não no app).
 
 ### Do projeto (o relatório avisa; não é decisão do motor)
-- **Entrada de energia:** média tensão (420 kVA conjuntos), a projetar com a concessionária.
+- **Entrada de energia:** o projeto da cabine primária (transformador, proteção, ventilação, acesso da concessionária),
+  com a concessionária.
 - **Estrutura e fundações:** pré-dimensionadas; pedem cálculo com a sondagem.
 - **Andares enterrados da Torre B:** contenção, impermeabilização, ventilação e luz.
-- **Escada de emergência da garagem da Torre B:** a saída até a rua.
 - **Escavação sob a laje do −2 da A:** para a rampa da B.
-- **Coletores suspensos no 1º subsolo da A:** conferir o pé-direito livre e a estrutura.
-- **Pluvial da Torre B:** o trecho dos condutores abaixo do 0 fica sem uso (eles repetem o tipo); cortar no projeto.
+- **Coletores suspensos no 1º subsolo da A:** abaixo dos 2,30 m no Garden. Correr junto da contenção, baixar a ligação
+  ou rebaixar a laje, mais a estrutura que os sustenta.
 - **Parede comum:** a ventilação dos cômodos que perderam janela nesse lado.
 - **Planta das unidades:** cômodos sem fachada e peças de mobiliário que não couberam.
 

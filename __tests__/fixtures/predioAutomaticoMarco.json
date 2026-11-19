@@ -164,13 +164,13 @@
     "desvioMaisBaixoMm": 2251
   },
   "R8": {
-    "modelo": "f4c5066aa9cd2317227f371b76235969a5c8557a1a6ff14dd9d81720ff356101",
+    "modelo": "fedb734da2caf9d9b48f530a2160886636a81cd3f5f0d22904fae7019ed61ec0",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 11,
     "copias": 6,
     "unidadesPorAndar": 5,
     "plantas": 5,
-    "paredes": 386,
+    "paredes": 389,
     "nucleos": 2,
     "estruturas": 766,
     "quadros": 45,
@@ -405,13 +405,13 @@
     "desvioMaisBaixoMm": 2159
   },
   "R12": {
-    "modelo": "d2a3abdae7bf1de0aab99127c69a300a7ff43575a59a4aca2d61efea0a7966c2",
+    "modelo": "bf80e0cf842449c621a05a8bd301c92e92ddbf67dd8d1c73315e8053608dc652",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 16,
     "copias": 10,
     "unidadesPorAndar": 8,
     "plantas": 8,
-    "paredes": 944,
+    "paredes": 947,
     "nucleos": 3,
     "estruturas": 1424,
     "quadros": 103,
@@ -686,7 +686,7 @@
       "pilaresDaGaragem": 62
     },
     "pilaresSobreVagaOuRampa": 0,
-    "vagas": 174,
+    "vagas": 172,
     "compatibilizacao": {
       "conflitos": {
         "ABERTURA": 308,

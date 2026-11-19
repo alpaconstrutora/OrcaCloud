@@ -104,7 +104,15 @@ export function lancarPluvial(
   cobertura: { levelId: ObjectId },
   hipParcial: Partial<HipotesesPluviais> | null,
   /** PE4b: o chão vem depois (`lancarPluvialNoChao` no andar 0 de apartamentos) — sem a pendência de "sem o térreo". */
-  opcoes: { chaoDepois?: boolean } = {},
+  opcoes: {
+    chaoDepois?: boolean;
+    /**
+     * PE10 (19/11/2026, decisão "Pluvial da B só acima do 0"): a cota (do mundo) do andar em que os condutores chegam ao
+     * chão — eles descem da cobertura até lá num trecho só, sem passar pelo tipo (a torre que começa abaixo da rua não
+     * leva condutor ao −2 e ao −1). O condutor deixa de aparecer na planta de cada andar.
+     */
+    verticalDaCoberturaAteMm?: number;
+  } = {},
 ): PluvialDoPredio {
   const hip: HipotesesPluviais = { ...HIPOTESES_PLUVIAIS_PADRAO, ...(hipParcial ?? {}) };
   const pendencias: PendenciaDoPpci[] = [];
@@ -132,7 +140,9 @@ export function lancarPluvial(
       trecho(cobertura.levelId, l.ralo, 0, l.ralo, JUNCAO_MM, dn, ROTULO_DO_CONDUTOR_VERTICAL),
       trecho(cobertura.levelId, l.ralo, JUNCAO_MM, l.at, JUNCAO_MM, dn, ROTULO_DO_CONDUTOR_HORIZONTAL),
       // O vertical no tipo: da passagem deste andar à do de cima — a cópia viva empilha.
-      trecho(tipo, l.at, JUNCAO_MM, l.at, pe(tipo) + JUNCAO_MM, dn, ROTULO_DO_CONDUTOR_VERTICAL),
+      opcoes.verticalDaCoberturaAteMm !== undefined
+        ? trecho(cobertura.levelId, l.at, JUNCAO_MM, l.at, opcoes.verticalDaCoberturaAteMm - (ctx.m.levels.find((x) => x.id === cobertura.levelId)?.elevationMm ?? 0) + JUNCAO_MM, dn, ROTULO_DO_CONDUTOR_VERTICAL)
+        : trecho(tipo, l.at, JUNCAO_MM, l.at, pe(tipo) + JUNCAO_MM, dn, ROTULO_DO_CONDUTOR_VERTICAL),
     );
   }
   const comandos = ctx.aplicar(fila);

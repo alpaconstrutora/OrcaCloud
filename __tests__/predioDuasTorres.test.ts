@@ -127,6 +127,14 @@ describe('PE7 — as duas torres no mesmo estudo (Garden)', { timeout: 600_000 }
     const meio = (t: (typeof coletorB)[number]) => ({ x: (t.a.x + t.b.x) / 2, y: (t.a.y + t.b.y) / 2 });
     expect(coletorB.filter((t) => pilares.some((pl) => dentro(meio(t), pegadaEmPlanta(pl)))).length).toBe(0);
     expect(b.pendencias.some((x) => /^Esgoto: o coletor desta torre .*suspenso no forro do 1º subsolo da Torre A/.test(x.texto))).toBe(true);
+    // PE10 (decisão "Conferir o pé-direito livre"): a altura livre sob o coletor suspenso, conferida contra 2,30 m (presumido).
+    const livre = b.pendencias.find((x) => /^Garagem da Torre A: altura livre sob o coletor de esgoto desta torre/.test(x.texto));
+    expect(livre).toBeDefined();
+    const menor = Math.min(...coletorB.map((t) => Math.min(t.cotaAMm, t.cotaBMm) - t.bitolaMm / 2));
+    if (menor < 2300) {
+      expect(livre!.grupo).toBe('VERIFICACAO');
+      expect((livre!.locais ?? []).length).toBeGreaterThan(0);
+    } else expect(livre!.grupo).toBe('CONFERIR');
   });
 
   it('PE7b (água): uma entrada de água no lote — um cavalete só (o da Torre A), e o alimentador da Torre B parte dele', () => {
@@ -184,6 +192,19 @@ describe('PE7 — as duas torres no mesmo estudo (Garden)', { timeout: 600_000 }
     expect(b.pendencias.some((x) => /pela garagem da Torre A/.test(x.texto))).toBe(true);
   });
 
+  it('PE10 (decisão "Saída de emergência da garagem B pela A"): a garagem da B não tem escada sem saída — a rota do −3 e do −4 chega à escada do núcleo (que sobe ao 0, na rua) dentro do limite', () => {
+    const { b } = plano();
+    const m = b.resultado;
+    const daB = new Set(m.levels.filter((l) => /Torre B · Garagem/.test(l.name)).map((l) => l.id));
+    expect(daB.size).toBe(2);
+    // Nenhuma escada de emergência que pare sob os apartamentos (a pendência da PE6) — a garagem não precisou de nenhuma.
+    expect(m.stairs.filter((e) => daB.has(e.levelId) && !e.veicular && /emergência/i.test(e.rotulo ?? ''))).toEqual([]);
+    expect(b.pendencias.some((x) => /ao teto do subsolo mais alto/.test(x.texto))).toBe(false);
+    // A escada do núcleo desce aos dois subsolos da B e a rota de fuga deles não passa do limite.
+    expect(m.stairs.filter((e) => daB.has(e.levelId) && !e.veicular && !/emergência/i.test(e.rotulo ?? '')).length).toBe(2);
+    expect(b.pendencias.some((x) => x.grupo === 'VERIFICACAO' && /^Rota de fuga/.test(x.texto) && /Garagem/.test(x.texto))).toBe(false);
+  });
+
   it('PE7b (pluvial): o pluvial da Torre B chega ao chão do 0 dela e vai à ligação pluvial da A — uma no lote', () => {
     const { b } = plano();
     const m = b.resultado;
@@ -195,6 +216,30 @@ describe('PE7 — as duas torres no mesmo estudo (Garden)', { timeout: 600_000 }
     expect(b.pendencias.some((x) => /^Pluvial: a saída na frente do lote/.test(x.texto))).toBe(false);
     const zeroB = m.levels.find((l) => l.name.startsWith('Torre B ·') && l.elevationMm === 0)!;
     expect(m.terminais.filter((t) => t.levelId === zeroB.id && t.tipoHidraulico === 'CAIXA_AREIA').length).toBeGreaterThan(0);
+  });
+
+  it('PE10 (decisão "Pluvial da B só acima do 0"): os condutores da B descem da cobertura ao 0 sem passar pelo tipo — nada no −2 e no −1 — e todo ralo chega à ligação', () => {
+    const { b } = plano();
+    const m = b.resultado;
+    const abaixo = new Set(m.levels.filter((l) => l.name.startsWith('Torre B ·') && !/Garagem/.test(l.name) && l.elevationMm < 0).map((l) => l.id));
+    expect(abaixo.size).toBe(2);
+    const tipoB = m.levels.find((l) => l.id === b.tipoLevelId)!;
+    expect(m.trechos.filter((t) => t.disciplina === 'PLUVIAL' && (abaixo.has(t.levelId) || t.levelId === tipoB.id))).toEqual([]);
+    expect(b.pendencias.some((x) => /trecho deles nos andares de baixo/.test(x.texto))).toBe(false);
+    const chave = fazerChave(m.levels);
+    const pai = new Map<string, string>();
+    const raiz = (x: string): string => (pai.get(x) === x ? x : raiz(pai.get(x)!));
+    const une = (x: string, y: string) => {
+      for (const k of [x, y]) if (!pai.has(k)) pai.set(k, k);
+      pai.set(raiz(x), raiz(y));
+    };
+    for (const t of m.trechos.filter((t) => t.disciplina === 'PLUVIAL')) une(chave(t.levelId, t.a.x, t.a.y, t.cotaAMm), chave(t.levelId, t.b.x, t.b.y, t.cotaBMm));
+    const lig = m.terminais.find((t) => t.tipoHidraulico === 'LIGACAO_PLUVIAL')!;
+    const kLig = raiz(chave(lig.levelId, lig.at.x, lig.at.y, lig.cotaMm));
+    const cobB = m.levels.find((l) => /^Torre B · cobertura/.test(l.name))!;
+    const ralos = m.terminais.filter((t) => t.tipoHidraulico === 'RALO_PLUVIAL' && t.levelId === cobB.id);
+    expect(ralos.length).toBeGreaterThan(0);
+    expect(ralos.filter((r) => { const k = chave(r.levelId, r.at.x, r.at.y, r.cotaMm); return !pai.has(k) || raiz(k) !== kLig; }).length).toBe(0);
   });
 
   it('PE7b (energia, decisão "Entrada na A, quadro geral na B"): uma entrada de serviço no lote — a da Torre A; o QGBT da B é alimentado do QGBT da A', () => {

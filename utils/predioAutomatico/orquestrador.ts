@@ -19,6 +19,7 @@ import { dividirPavimentoDoBloco, montarPavimentoTipoDoBloco } from '../blueprin
 import { dividirPeloEmpreendimento, type AndarDoEmpreendimento } from './andaresDoEmpreendimento';
 import { concluirTerreoDeApartamentos } from './terreoDeApartamentos';
 import { juntarComOsPavimentos, semOsPavimentos } from './vistaDaTorre';
+import { CABINE_PRIMARIA_MM, NOME_DA_CABINE_PRIMARIA, poligonosSeCruzam, reservarCabinePrimaria } from './cabine';
 import { fazerChave, pegadasDosPavimentos } from '../blueprintGrafoDeRede';
 import { caminhoPorFora, pedacosComCota, pilaresNaFaixa } from './contornoDePilar';
 import type { DivisaoDoPavimento } from '../blueprintPavimentoTipoDaMassa';
@@ -99,15 +100,8 @@ function pavimentosDasOutrasTorres(desenho: BlueprintModel, b: Bloco): ReadonlyS
   return ids;
 }
 
-/** Dois polígonos convexos (ou não) se cruzam: um vértice de um dentro do outro, ou dois lados que se cortam. */
-function poligonosSeCruzam(A: readonly { x: number; y: number }[], B: readonly { x: number; y: number }[]): boolean {
-  if (A.some((p) => pointInPolygon(B as Point[], p as Point)) || B.some((p) => pointInPolygon(A as Point[], p as Point))) return true;
-  const corta = (p: { x: number; y: number }, q: { x: number; y: number }, r: { x: number; y: number }, s2: { x: number; y: number }) => {
-    const d = (a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
-    return d(p, q, r) * d(p, q, s2) < 0 && d(r, s2, p) * d(r, s2, q) < 0;
-  };
-  return A.some((p, i) => B.some((r, j) => corta(p, A[(i + 1) % A.length], r, B[(j + 1) % B.length])));
-}
+/** PE10: a altura livre mínima presumida para os veículos na garagem (o código de obras da cidade decide: 2,20–2,40 m). */
+const ALTURA_LIVRE_DA_GARAGEM_MM = 2300;
 
 /** PE7d: a faixa além do alto da rampa que chega à garagem da outra torre (a chegada, sem vaga). */
 const CHEGADA_DA_RAMPA_DA_OUTRA_MM = 5500;
@@ -503,7 +497,7 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
   if (!hip.pluvial) etapa('PLUVIAL', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
   else if (!cobertura) etapa('PLUVIAL', 'NAO_EXIGIDA', 0, 'Sem a cobertura, o pluvial fica para o projetista.');
   else {
-    pluvial = lancarPluvial(ctx, base, terreo && !andarZeroLevelId && !abaixoDaRua ? { levelId: terreo.levelId } : null, { levelId: cobertura.levelId }, entrada.pluvial ?? null, { chaoDepois: !!andarZeroLevelId || (abaixoDaRua && !!andarZero) });
+    pluvial = lancarPluvial(ctx, base, terreo && !andarZeroLevelId && !abaixoDaRua ? { levelId: terreo.levelId } : null, { levelId: cobertura.levelId }, entrada.pluvial ?? null, { chaoDepois: !!andarZeroLevelId || (abaixoDaRua && !!andarZero), ...(abaixoDaRua && andarZero ? { verticalDaCoberturaAteMm: 0 } : {}) });
     pendencias.push(...pluvial.pendencias);
     etapa('PLUVIAL', 'LANCOU', pluvial.comandos, `${pluvial.condutores.length} condutor(es) DN ${pluvial.condutores[0]?.dnMm ?? '—'} · ${Math.round(pluvial.vazaoLMin).toLocaleString('pt-BR')} L/min de ${Math.round(pluvial.areaM2).toLocaleString('pt-BR')} m² a ${pluvial.intensidadeMmH} mm/h`);
   }
@@ -595,7 +589,7 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
     if (pluvial) {
       const chao = lancarPluvialNoChao(ctx, { levelId: zeroDaTorreAbaixo }, pluvial.condutores, pluvial.vazaoLMin, entrada.pluvial ?? null, { verticalCopiado: true });
       pendencias.push(...chao.pendencias);
-      pendencias.push({ grupo: 'CONFERIR', texto: 'Pluvial: os condutores descem ao chão do andar 0 (a cota da rua); o trecho deles nos andares de baixo (que repetem o tipo) fica sem uso — corte-o no projeto.' });
+      pendencias.push({ grupo: 'CONFERIR', texto: 'Pluvial: os condutores descem da cobertura ao chão do andar 0 (a cota da rua) num trecho só, por fora da fachada — não passam pelos andares abaixo da rua; eles não aparecem na planta de cada andar (só na cobertura).' });
       pluvial = { ...pluvial, comandos: pluvial.comandos + chao.comandos, dnHorizontalMm: chao.dnHorizontalMm };
     }
   }
@@ -660,6 +654,18 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
     // A demanda acima da maior categoria do padrão de BAIXA tensão não é defeito do desenho: o prédio pede entrada em média
     // tensão — a decisão é do projeto com a concessionária.
     if (entrada && !entrada.categoria) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Entrada de energia: ${entrada.demandaKva.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kVA de demanda passam do padrão de baixa tensão — um prédio deste porte pede entrada em MÉDIA tensão (cabine/subestação): projeto com a concessionária.` });
+    // PE10 (decisão do usuário "Reservar a cabine de média tensão"): a cabine primária no 1º subsolo, junto da frente — a
+    // entrada é desta torre (com outra torre no estudo, a energia desta vem de lá: sem cabine aqui).
+    if (entrada && !entrada.categoria && !pavimentosDeFora.size && subsolos?.pisos.length && blocoDoSubsolo && !m.spaces.some((x) => x.name === NOME_DA_CABINE_PRIMARIA)) {
+      const piso = subsolos.pisos[0];
+      const cab = reservarCabinePrimaria(ctx, piso.levelId, blocoDoSubsolo.pontos as Point[], base.rua, subsolos.salaTecnica ? [subsolos.salaTecnica.anel] : []);
+      const k = pendencias.findIndex((x) => x.grupo === 'NAO_DECIDIDO' && /pede entrada em MÉDIA tensão/.test(x.texto));
+      if (cab && k >= 0) {
+        const onde = piso.nome.split('·').pop()?.trim() ?? 'subsolo';
+        pendencias[k] = { grupo: 'CONFERIR', texto: `Entrada de energia: ${entrada.demandaKva.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kVA de demanda, acima do padrão de baixa tensão — a cabine primária reservada no ${onde} (${(CABINE_PRIMARIA_MM.comprimento / 1000).toLocaleString('pt-BR')} × ${(CABINE_PRIMARIA_MM.fundo / 1000).toLocaleString('pt-BR')} m, junto da frente, fechada${cab.vagasCedidas ? `; ${cab.vagasCedidas} vaga(s) cederam o espaço` : ''}), de onde sai a alimentação do QGBT; o projeto da cabine (transformador, proteção, ventilação e o acesso da concessionária) é com a concessionária.` };
+        decisoes.push(`Energia: entrada em média tensão — a cabine primária no ${onde}, junto da frente.`);
+      } else if (!cab && k >= 0) pendencias[k] = { ...pendencias[k], texto: `${pendencias[k].texto} A cabine primária não coube junto da frente no 1º subsolo — reserve-a à mão.` };
+    }
     for (const r of nbr.regras) {
       for (const nivel of ['FALTA', 'AVISO'] as const) {
         const lista = r.achados.filter((a) => a.nivel === nivel);
@@ -775,6 +781,8 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
         if (chave(x.levelId, x.at.x, x.at.y, x.cotaMm ?? 0) === kDeLa) descerALigacao.push({ type: 'SetTerminalProps', terminalId: x.id, cotaMm: absDaLigacao - elev(x.levelId) } as Command);
     }
     const naRota: Command[] = [];
+    /** PE10: os trechos da rota suspensos numa garagem de lá (o índice em `naRota`) — a altura livre sob eles é conferida. */
+    const suspensos: { indice: number; garagem: string; alturaMm: number }[] = [];
     const garagens: string[] = [];
     let maiorL = 0;
     let menorDeclividade = Infinity;
@@ -796,8 +804,10 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
         const raio = Math.ceil(c.t.bitolaMm / 2) + 50;
         const pilares = pilaresNaFaixa(noDesenho, Math.min(absInicio, absDaLigacao) - raio, Math.max(absInicio, absDaLigacao) + raio, raio);
         const caminho = caminhoPorFora(c.de as Point, { x: destino.at.x, y: destino.at.y } as Point, pilares);
-        for (const x of pedacosComCota(caminho.pts, absInicio - z0, absDaLigacao - z0))
+        for (const x of pedacosComCota(caminho.pts, absInicio - z0, absDaLigacao - z0)) {
+          suspensos.push({ indice: naRota.length, garagem: garagemSob.name, alturaMm: Math.min(x.cotaAMm, x.cotaBMm) - c.t.bitolaMm / 2 });
           naRota.push({ type: 'AddTrecho', levelId: garagemSob.id, disciplina, a: x.a, b: x.b, cotaAMm: x.cotaAMm, cotaBMm: x.cotaBMm, bitolaMm: c.t.bitolaMm, sugerido: true, rotulo: c.t.rotulo ?? null } as Command);
+        }
       } else naRota.push({ type: 'AddTrecho', levelId: c.t.levelId, disciplina, a: { ...c.de }, b: { x: destino.at.x, y: destino.at.y }, cotaAMm: c.cotaDe, cotaBMm: absDaLigacao - elev(c.t.levelId), bitolaMm: c.t.bitolaMm, sugerido: true, rotulo: c.t.rotulo ?? null } as Command);
     }
     const ligar: Command[] = [
@@ -812,6 +822,20 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
     criados.push(...r.diff.created);
     apagados.add(minhaLigacao.id);
     for (const c of chegadas) apagados.add(c.t.id);
+    // PE10 (decisão do usuário "Conferir o pé-direito livre"): a altura livre sob o coletor suspenso na garagem de lá, contra
+    // a dos veículos (presumida — o código de obras da cidade decide). Os ids criados seguem a ordem de `naRota`.
+    if (suspensos.length) {
+      const idsDaRota = r.diff.created;
+      const baixos = suspensos.filter((x) => x.alturaMm < ALTURA_LIVRE_DA_GARAGEM_MM);
+      const menor = Math.min(...suspensos.map((x) => x.alturaMm));
+      const m2 = (mm: number) => (mm / 1000).toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+      const lugar = suspensos[0].garagem;
+      const torreDeLa = lugar.split('·')[0].trim();
+      if (baixos.length) {
+        const locais = baixos.map((x) => localDoElemento(noDesenho, [idsDaRota[x.indice]])).filter((l): l is LocalDaPendencia => !!l);
+        pendencias.push({ grupo: 'VERIFICACAO', texto: `Garagem da ${torreDeLa}: altura livre sob o coletor de ${rede.toLocaleLowerCase('pt-BR')} desta torre de ${m2(menor)} m em ${baixos.length} trecho(s) — abaixo de ${m2(ALTURA_LIVRE_DA_GARAGEM_MM)} m (presumida para veículos; confira o código de obras): o coletor não sobe (a queda até a ligação); corra-o junto da contenção, sobre o fundo das vagas, ou sob a laje do piso.`, ...(locais.length ? { locais } : {}) });
+      } else pendencias.push({ grupo: 'CONFERIR', texto: `Garagem da ${torreDeLa}: altura livre sob o coletor de ${rede.toLocaleLowerCase('pt-BR')} desta torre de pelo menos ${m2(menor)} m (mínimo presumido de ${m2(ALTURA_LIVRE_DA_GARAGEM_MM)} m para veículos) — confira com o código de obras.` });
+    }
     semAPendencia(disciplina === 'ESGOTO' ? /^Coletor predial:/ : /^Pluvial: a saída na frente do lote/);
     decisoes.push(`${rede}: uma ligação no lote — o coletor desta torre vai à ligação da ${daOutra}.`);
     const garagem = [...new Set(garagens)][0];

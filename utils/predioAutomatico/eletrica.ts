@@ -233,6 +233,14 @@ export function lancarEletrica(
   return { comandos, pontos, quadros, circuitos, servico: { circuitos: servico, motores: motores.length }, garagem, medidores, drs, qgbtId: qgbt, avisos };
 }
 
+/** PE7b: a demanda na entrada do QGBT que passa a alimentar também a outra torre do estudo (a entrada única do lote). */
+export function entradaConjunta(m: BlueprintModel, qgbtId: ObjectId): { demandaKva: number; categoria: string | null } | null {
+  return comPreDimensionamentoGuardado(() => {
+    const e = entradaDoQuadro(m, qgbtId, HIPOTESES_ELETRICAS_PADRAO);
+    return e ? { demandaKva: e.demandaKva, categoria: e.categoria?.id ?? null } : null;
+  });
+}
+
 /** Depois da cópia viva: a entrada do QGBT (demanda pela diversidade, categoria, unidades atendidas × medidas) e a NBR 5410. */
 export function conferirEletricaDoPredio(m: BlueprintModel, qgbtId: ObjectId) {
   // PA10a: a entrada e a NBR pré-dimensionam os mesmos quadros — uma vez, guardado.

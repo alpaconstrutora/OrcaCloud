@@ -9251,11 +9251,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * da ficha (`papelDosAndares`) — o tipo sai dos apartamentos dela, não do produto. Calculado por efeito lá embaixo,
    * depois das torres do Empreendimento (que são lidas depois desta parte).
    */
-  const [doEmpreendimentoDoPredio, setDoEmpreendimentoDoPredio] = useState<{ torreId: string; torre: string; andares: AndarDoEmpreendimento[] } | null>(null);
+  const [fichaDoPredio, setFichaDoPredio] = useState<{ paraBloco: string | null; valor: { torreId: string; torre: string; andares: AndarDoEmpreendimento[] } | null }>({ paraBloco: null, valor: null });
+  // PE7 (18/11/2026, achado na conferência das duas torres): a ficha é a do bloco ABERTO — calculada por efeito, ela
+  // chegava um render depois; aberto o 2º prédio, a entrada saía com o bloco da Torre B e a ficha da Torre A (gerava os
+  // apartamentos da A na B). Até a ficha deste bloco ser calculada, a entrada espera (nula).
+  const fichaEmDia = fichaDoPredio.paraBloco === blocoDoPredioId;
+  const doEmpreendimentoDoPredio = fichaEmDia ? fichaDoPredio.valor : null;
   const blocoDoPredio = (editor.model.blocos ?? []).find((b) => b.id === blocoDoPredioId) ?? null;
   const entradaDoPredio = useMemo<EntradaDoPredio | null>(
     () =>
-      blocoDoPredioId
+      blocoDoPredioId && fichaEmDia
         ? {
             blocoId: blocoDoPredioId,
             produto: produtoDoEstudo.produto,
@@ -9270,7 +9275,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             ...(doEmpreendimentoDoPredio ? { doEmpreendimento: { torreId: doEmpreendimentoDoPredio.torreId, andares: doEmpreendimentoDoPredio.andares } } : {}),
           }
         : null,
-    [doEmpreendimentoDoPredio, blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, zona.cidade?.name, hidroDoEstudo.hipoteses.pluvial, incendioDoEstudo.hipoteses],
+    [doEmpreendimentoDoPredio, fichaEmDia, blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, zona.cidade?.name, hidroDoEstudo.hipoteses.pluvial, incendioDoEstudo.hipoteses],
   );
   /**
    * PA10a (15/11/2026): o que a entrada do prédio lê chega aos poucos (o catálogo de evaporadoras, os materiais, as
@@ -9365,7 +9370,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const e = blocoDoPredio && blocoDoPredio.uso !== 'GARAGEM' ? estruturasDaCasa?.find((x) => x.nome.trim().toLocaleLowerCase('pt-BR') === blocoDoPredio.nome.trim().toLocaleLowerCase('pt-BR')) : null;
     const andares = e ? papelDosAndares(e).andares : null;
     const novo = e && andares && andares.some((a) => a.papel === 'TIPO') ? { torreId: e.torreId, torre: e.nome, andares } : null;
-    setDoEmpreendimentoDoPredio((v) => (JSON.stringify(v) === JSON.stringify(novo) ? v : novo));
+    const paraBloco = blocoDoPredio?.id ?? null;
+    setFichaDoPredio((v) => (v.paraBloco === paraBloco && JSON.stringify(v.valor) === JSON.stringify(novo) ? v : { paraBloco, valor: novo }));
   }, [blocoDoPredio, estruturasDaCasa]);
   // PE3: o Empreendimento é prédio? As torres com apartamento (o resumo dos andares) para o seletor da Casa automática.
   const tipoDoEmpreendimentoDaCasa = useMemo(() => (estruturasDaCasa ? tipoDoEmpreendimento(estruturasDaCasa) : 'CASA'), [estruturasDaCasa]);

@@ -458,6 +458,52 @@ A PE5 abaixo descreve a parte da garagem; a PE4 fica com o andar próprio.
 - **Compatibilização:** nenhum conflito entre peças de torres diferentes.
 - **Relatório:** um só para o lote.
 
+**Decisões do usuário (18/11/2026, início da PE7):**
+- **"Rampa pela garagem da A":** a rampa desce do −2 da Torre A, junto da parede comum, até o −3 da Torre B. A garagem da A cede o espaço, a B fica sem rampa própria, e a rampa entre o −3 e o −4 da B continua.
+- **"Entrada na A, quadro geral na B":** uma entrada de serviço, na A. A B mantém o quadro geral e os medidores na sala técnica dela, alimentados a partir do QGBT da A, e a demanda da entrada soma as duas torres.
+
+**Spike (18/11):** a Torre A gerada e lançada, e depois a Torre B por cima.
+- **Unidades:** 24 na B, com os nomes de cada torre sem colisão (38 no total).
+- **Conferências que misturavam as torres:**
+  - os equipamentos de incêndio da B falhavam ao propor num andar cópia da A;
+  - a pressão pegava o reservatório superior da A (384 pontos "fora da rede");
+  - a rota acusava 148 ambientes da A.
+- **Entradas duplicadas:** 2 ligações de esgoto, 2 entradas de energia e 2 QGBTs.
+- **Janelas na parede comum:** 16 na A e 24 na B.
+- **Desempenho:** a B sobre a A levava 150 s, porque o kernel confere as invariantes do desenho inteiro a cada comando.
+
+**Execução, parte 1:**
+- **PE7a, cada torre se confere sozinha.** O motor roda sobre a VISTA do desenho sem os pavimentos que já estavam nele, menos o do lote (`utils/predioAutomatico/vistaDaTorre.ts`, `semOsPavimentos`). O resultado no desenho inteiro é a vista mais o que ficou de fora (`juntarComOsPavimentos`), sem reaplicar os comandos, e é conferido pelas invariantes do kernel uma vez; se não fechar, cai no caminho lento de reaplicar.
+  - **Prova:** o hash da junção é igual ao de reaplicar os comandos, num desenho com um pavimento "vizinho".
+  - **Tempo:** a aplicação final caiu de 114 s para 1,4 s.
+  - **Resultado:** a B confere só os pavimentos dela, e os equipamentos de incêndio lançam.
+- **PE7b, energia:** a B perde a entrada de serviço e o QGBT dela vira filho do QGBT da A. Uma pendência CONFERIR traz a demanda conjunta.
+- **PE7c, parede comum cega:** depois das plantas, as janelas no lado do contorno que encosta em outro bloco de torre saem do tipo, e as cópias acompanham. Uma pendência diz quantas saíram.
+- **Pequenos da PE6:**
+  - **Card do tipo:** passou a "1 + 4 cópia(s) · + 1 desvinculada (o andar 0)" (`copiasDesvinculadas`).
+  - **Prévia de 42 s:** era o servidor de desenvolvimento recompilando o worker depois das edições (medido: 9,3 s com o worker quente). Não era o motor.
+
+**Execução, parte 2 (18/11/2026):**
+- **A chave da rede pela COTA do pavimento** (`chaveDoLugar` em `grafoDeRede.ts`, usada pela chave da rede, pelas conexões e pela pressão). Dois pavimentos na mesma cota, de torres diferentes, dão o mesmo nó; a descida pela laje continua igual.
+- **PE7b, esgoto e pluvial:** a ligação da B sai e o coletor dela vai à ligação da A. A ligação única fica na cota mais baixa das duas chegadas, com 1 % de queda no trecho da B; descendo a da A, desce com ela o trecho que chega nela. O pluvial da B desce ao chão do 0 desvinculado.
+- **PE7b, água:** um hidrômetro no ponto do cavalete da A entra na vista da B e sai na junção, de modo que o alimentador da B parte do cavalete da A e o lote fica com um cavalete só.
+- **PE7d, rampa** (decisão "Rampa pela garagem da A"): a rampa da B que subia ao tipo passa para o outro lado da parede comum. Ela parte do alto da antiga, sobe do −3 da B ao −2 da A (`ateLevelId`, com a chegada declarada), e as vagas da A na faixa saem; a pendência pede o vão na contenção e a escavação.
+- **A tela** (achado na conferência no app): ao abrir o 2º prédio, a entrada saía com o bloco da B e a ficha da A, porque a ficha era calculada por efeito, um render depois, e a B gerava os apartamentos da A. Agora a entrada espera a ficha calculada para o bloco aberto (`fichaDoPredio.paraBloco`).
+- **Prova:** `__tests__/predioDuasTorres.test.ts`, com 8 testes:
+  - **Entradas:** uma ligação de esgoto, com toda louça da B chegando nela; uma pluvial, com queda de pelo menos 1 %; um cavalete; uma entrada de energia.
+  - **Garagem:** a rampa da B chega ao −2 da A, sem vaga na faixa.
+  - **Parede comum:** cega.
+  - **Junção:** dá o mesmo hash que reaplicar os comandos.
+  - **Chave:** a do mesmo ponto em dois pavimentos na mesma cota é a mesma.
+- **Conferência no app** (`c:/tmp/pwtest/conferencia-predio-pe7.cjs`, a Torre A lançada e depois a Torre B pelo caminho do usuário): 17 portões ok.
+  - **Tempos:** a prévia da A em 10,7 s, a da B sobre a A em 12,2 s.
+  - **Relatório da B:** uma ligação de esgoto (3,4 %), uma pluvial (1 %), uma entrada de água e uma de energia (420 kVA conjuntos, média tensão), a rampa pela A, a parede cega, nenhuma rota faltando, a pressão sem acusar a A.
+  - **Empreendimento:** intocado; o estudo foi arquivado.
+- **Fica:**
+  - **Relatório:** um único para o lote, em vez de um por torre, em que o da 2ª traz as pendências entre as torres.
+  - **Contenção:** o vão entre as garagens e a escavação sob o −2 da A, como pendência.
+  - **Caminhos enterrados:** os do coletor e do pluvial da B passam pela projeção da garagem da A, como pendência.
+
 ## Mapa de implementação da PE4–PE6 (18/11/2026, lido no código depois do merge do #577)
 
 O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três travas do orquestrador
@@ -493,7 +539,7 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 | PE4 — o térreo da Torre A com os apartamentos | PE4a (#582) e PE4b feitas, conferidas no app: o andar 0 com 002/004 como unidades do kernel (QD, hidrômetro, medidor), o hall, a porta e o pluvial no chão |
 | PE5 — condomínio e desvio sem térreo livre | PE5a feita com a PE4a (a sala técnica na garagem, o desvio no forro dela); a Torre B (o andar 0 cópia, sem desvínculo) vem com a PE6 |
 | PE6 — abaixo da rede pública | PE6a–PE6d feitas e conferidas no app: a Torre B do −2, o esgoto por bombas, o 0 desvinculado com a porta (decisão do usuário), os nomes da ficha e o envio; a Torre B liberada |
-| PE7 — as duas torres no mesmo estudo | a fazer |
+| PE7 — as duas torres no mesmo estudo | feita, a publicar (#587), conferida no app com as duas torres: cada uma se confere sozinha, uma entrada de cada rede, a rampa pela A, a parede comum cega; fica o relatório único do lote |
 
 ## Verificação
 

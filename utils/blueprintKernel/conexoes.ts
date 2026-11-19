@@ -36,7 +36,7 @@
 import type { BlueprintModel, DisciplinaDeRede, Level, ObjectId, Terminal, Trecho } from './model';
 import { DISCIPLINAS_DO_PONTO_HIDRAULICO, TIPOS_DE_CLIMATIZACAO, TIPOS_DE_EVAPORADORA } from './model';
 import type { Point } from './geom';
-import { descerPelaCota } from './grafoDeRede';
+import { chaveDoLugar, descerPelaCota } from './grafoDeRede';
 
 /**
  * F2 (climatização, 10/10/2026, quant-1.26.0): no DUTO, a TRANSIÇÃO (redondo ↔
@@ -180,9 +180,10 @@ function fazerChave(niveis: readonly Level[]) {
   // Cota ≤ 0 com pavimento embaixo é o mesmo lugar visto de baixo (o esgoto sob o piso do andar corre no teto do térreo)
   // — a MESMA regra da chave da rede (`descerPelaCota`, grafoDeRede.ts).
   const descer = descerPelaCota(niveis);
+  const lugar = chaveDoLugar(niveis);
   return (levelId: ObjectId, disciplina: DisciplinaDeRede, x: number, y: number, cota: number): { chave: Chave; levelId: ObjectId; cotaMm: number } => {
     const d = descer(levelId, cota);
-    return { chave: `${disciplina}|${d.levelId}|${x},${y}|${d.cotaMm}`, levelId: d.levelId, cotaMm: d.cotaMm };
+    return { chave: `${disciplina}|${lugar(d.levelId, x, y, d.cotaMm)}`, levelId: d.levelId, cotaMm: d.cotaMm };
   };
 }
 

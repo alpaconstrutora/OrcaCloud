@@ -25,6 +25,28 @@ describe('fazerChave — a cota abaixo do piso desce quantos pavimentos ela pedi
   });
 
   it('no pavimento mais baixo, a cota negativa fica nele (não há para onde descer)', () => {
-    expect(chave('g3', 10, 20, -600)).toBe('g3|10,20|-600');
+    expect(chave('g3', 10, 20, -600)).toBe('-9000|10,20|-600');
+  });
+
+  // PE7 (18/11/2026): duas torres no mesmo estudo têm pavimentos na MESMA cota (a garagem −1 da Torre A e o −1 da Torre
+  // B, a −3 m). O mesmo ponto físico visto de um ou de outro é o mesmo nó — senão o coletor da B, que desce do lote até a
+  // ligação da A, ficava solto conforme o pavimento que a descida escolhesse.
+  it('dois pavimentos na mesma cota: o mesmo ponto (x, y, cota) é o mesmo nó, e a descida do lote cai nele', () => {
+    const niveis2 = [nivel('lote', 0), nivel('garagemA', -3000), nivel('copiaB', -3000)];
+    const ch = fazerChave(niveis2);
+    expect(ch('garagemA', 10, 20, 1500)).toBe(ch('copiaB', 10, 20, 1500));
+    expect(ch('lote', 10, 20, -1500)).toBe(ch('garagemA', 10, 20, 1500));
+  });
+
+  // PE7 (revisão): o cavalete fica no pavimento MAIS BAIXO, com a cota da rua acima dele (600 mm acima do 0) — na Torre A
+  // o −2 a 6600, na Torre B o −4 a 12600. O mesmo ponto físico: a cota acima do pé-direito SOBE de pavimento.
+  it('cota acima do pé-direito sobe ao pavimento de cima: 12600 no −4 é 600 no 0, como 6600 no −2', () => {
+    const niveis3 = [nivel('lote', 0), nivel('m1', -3000), nivel('m2', -6000), nivel('m3', -9000), nivel('m4', -12000)];
+    const ch = fazerChave(niveis3);
+    expect(ch('m4', 1, 2, 12600)).toBe(ch('lote', 1, 2, 600));
+    expect(ch('m2', 1, 2, 6600)).toBe(ch('lote', 1, 2, 600));
+    // No pavimento mais alto, a cota acima do pé-direito fica nele (não há para onde subir).
+    expect(ch('lote', 1, 2, 4000)).toBe('0|1,2|4000');
   });
 });
+

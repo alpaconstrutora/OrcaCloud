@@ -38,7 +38,7 @@
  */
 import type { BlueprintModel, Command, Level, ObjectId, Terminal, Trecho } from './blueprintKernel';
 import { TIPOS_DE_DIVISAO_DO_VRF, TIPOS_DE_EVAPORADORA, applyBatch } from './blueprintKernel';
-import { comprimentoMm, fazerChave, type No } from './blueprintGrafoDeRede';
+import { comprimentoMm, descerPelaCota, fazerChave, type No } from './blueprintGrafoDeRede';
 import { arvorePelasParedes, chaveP, encaixarNaParede, type P2 } from './blueprintRotaPelasParedes';
 import { desvioDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { HIPOTESES_DO_VRF_PADRAO, type HipotesesDaLinha, type HipotesesDoVrf } from './blueprintClimatizacao';
@@ -216,15 +216,23 @@ export interface AnaliseDoVrf {
   desnivelEntreEvapM: number;
 }
 
-function parseNo(no: No): { levelId: ObjectId; at: P2; cotaMm: number } {
-  const [levelId, xy, cota] = no.split('|');
-  const [x, y] = xy.split(',').map(Number);
-  return { levelId, at: { x, y }, cotaMm: Number(cota) };
-}
 
 /** A árvore do sistema na rede FRIGORIGENA existente, a partir do nó da condensadora. */
 export function analisarVrf(model: BlueprintModel, sistema: SistemaVrf, hip: HipotesesDoVrf = HIPOTESES_DO_VRF_PADRAO): AnaliseDoVrf {
-  const chave = fazerChave(model.levels);
+  // O LUGAR de cada nó (o pavimento e a cota já descidos), guardado ao fazer a chave — a chave da rede é pela cota do
+  // pavimento desde a PE7 do prédio pelo Empreendimento (18/11/2026), e não se desmonta para achar o pavimento.
+  const chaveDaRede = fazerChave(model.levels);
+  const descer = descerPelaCota(model.levels);
+  const lugarDoNo = new Map<No, { levelId: ObjectId; at: P2; cotaMm: number }>();
+  const chave = (levelId: ObjectId, x: number, y: number, cota: number): No => {
+    const k = chaveDaRede(levelId, x, y, cota);
+    if (!lugarDoNo.has(k)) {
+      const d = descer(levelId, cota);
+      lugarDoNo.set(k, { levelId: d.levelId, at: { x, y }, cotaMm: d.cotaMm });
+    }
+    return k;
+  };
+  const parseNo = (no: No) => lugarDoNo.get(no)!;
   const noDe = (t: Terminal) => chave(t.levelId, t.at.x, t.at.y, t.cotaMm);
   const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
   const absoluta = (t: Terminal) => (elevacao.get(t.levelId) ?? 0) + t.cotaMm;

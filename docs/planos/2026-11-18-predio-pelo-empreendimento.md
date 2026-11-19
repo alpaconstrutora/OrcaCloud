@@ -542,19 +542,62 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 3. **PE6:** a torre que começa abaixo da rua (o tipo no −2, o esgoto por bombas, a rota de fuga subindo), e só então a Torre B sai do bloqueio.
 4. **PE7:** as duas torres no mesmo estudo.
 
-## Estado
+## Estado (19/11/2026)
+
+**O plano está concluído e no ar.** O Garden Cambuhy é gerado pelo caminho do usuário: Casa automática › "Construir o prédio pelo Empreendimento", uma torre de cada vez, no mesmo estudo. Saem as duas torres com as unidades da ficha (14 na A, 24 na B), uma entrada de cada rede no lote e o relatório do lote. A última conferência no app (`c:/tmp/pwtest/conferencia-predio-pe8.cjs`) passou nos 25 portões.
 
 | Fase | Situação |
 |---|---|
-| PE0 — marco do Garden | feita, no ar (#573, 947df0e) |
-| PE1 — os andares e a massa | feita, no ar (#573, 947df0e) |
-| PE2 — o tipo com as unidades do Empreendimento | PE2a no ar (#577, 6fd6816); PE2b: a Torre A já casa pelo nome (teste de caracterização, no ar); a Torre B fica para a PE6 |
-| PE3 — o botão na Casa automática | feita, no ar (#577, 6fd6816); conferida no app pelo caminho do usuário; a Torre B fica bloqueada (com o motivo) até a PE4–PE6 |
-| PE4 — o térreo da Torre A com os apartamentos | PE4a (#582) e PE4b feitas, conferidas no app: o andar 0 com 002/004 como unidades do kernel (QD, hidrômetro, medidor), o hall, a porta e o pluvial no chão |
-| PE5 — condomínio e desvio sem térreo livre | PE5a feita com a PE4a (a sala técnica na garagem, o desvio no forro dela); a Torre B (o andar 0 cópia, sem desvínculo) vem com a PE6 |
-| PE6 — abaixo da rede pública | PE6a–PE6d feitas e conferidas no app: a Torre B do −2, o esgoto por bombas, o 0 desvinculado com a porta (decisão do usuário), os nomes da ficha e o envio; a Torre B liberada |
-| PE7 — as duas torres no mesmo estudo | feita, no ar (#587, f042101) |
-| PE8 — o que ficou da PE7 | feita, a publicar: pé-direito diferente entre torres, o vão na contenção, os coletores suspensos sob a outra torre e o relatório do lote (tela da Casa automática) |
+| PE0 — marco do Garden | no ar (#573, 947df0e) |
+| PE1 — os andares e a massa | no ar (#573, 947df0e) |
+| PE2 — o tipo com as unidades do Empreendimento | no ar (#577, 6fd6816); os nomes da Torre B e o envio dela vieram com a PE6 (#584) |
+| PE3 — o botão na Casa automática | no ar (#577, 6fd6816) |
+| PE4 — o térreo da Torre A com os apartamentos | no ar: PE4a (#582, 89d0f8e), PE4b (#583, 5676b0d) |
+| PE5 — condomínio e desvio sem térreo livre | no ar: PE5a com a PE4a (#582); a Torre B com a PE6 (#584) |
+| PE6 — abaixo da rede pública (Torre B) | no ar (#584, bfbfcdc); a Torre B liberada na tela |
+| PE7 — as duas torres no mesmo estudo | no ar (#587, f042101) |
+| PE8 — o que ficou da PE7 | no ar (#588, d936a7d): pé-direito diferente entre torres, o vão na contenção, os coletores suspensos sob a outra torre e o relatório do lote |
+| PE9 — as pendências de código | a publicar: as ligações, a rampa, as vagas, o envio da Torre B, a sala técnica fechada, as pendências do gerador no relatório do lote e o teste do Espelho do Investidor no Windows |
+
+**Decisões do usuário ao longo do plano:**
+- **Caminho e estrutura das torres:** "Prédio pelo Empreendimento" e "Unidades do Empreendimento"; "A torre começa no −2".
+- **Térreo:** "Apartamentos + condomínio"; "Técnico na garagem".
+- **Referência e motor:** a planta Teste 01 como referência; o motor nativo.
+- **Torre B:** "Desvincular o 0" (a porta para a rua).
+- **As duas torres:** "Rampa pela garagem da A"; "Entrada na A, quadro geral na B".
+- **Relatório:** "numa tela do lote".
+
+## Pendências (19/11/2026, depois da PE9)
+
+**PE9 (pedido "Faça todos", 19/11/2026)** resolveu as pendências de código e, das de projeto, a que dava para automatizar.
+- **Ligações:** a de lá é qualquer uma que esta torre não criou, também no pavimento do lote; o mesmo vale para o cavalete e o QGBT.
+- **Coletores:** todos os trechos desta torre que chegam à ligação são religados, em qualquer sentido (no pluvial do Garden eram 3).
+- **Ligação que desce:** leva junto, pela chave da rede, tudo o que está no nó dela (trechos de qualquer pavimento e a caixa).
+- **Vagas:** sai a vaga cuja planta cruza a faixa da rampa, por interseção.
+- **Rampa da B:** a garagem da B não desenha a rampa que subia para os apartamentos (`saidaPelaOutraTorre`), as vagas do −3 saem sem ela, e a junção desenha a rampa do outro lado da parede comum.
+- **Torre abaixo da rua sem andar na cota da rua:** o pluvial passa a avisar.
+- **Junção que não fecha:** ela registra a decisão com o motivo.
+- **Envio:** `floor_tipo` TIPO abaixo da rua (só o 0 é TERREO); sem o aviso falso da estimativa; a posição e o sol pelo tipo no 1º piso.
+- **Sala técnica:** fechada com paredes e porta.
+- **Relatório do lote:** traz as pendências do gerador da prévia lançada, guardadas no navegador no Lançar.
+- **`espelhoDoInvestidor`:** o teste falhava só no Windows. O leitor das migrations não normalizava o CRLF do checkout (`core.autocrlf`), e o recorte do SQL não achava "\n". Corrigido no teste; nenhuma migration nem banco foi tocado.
+- **Provas:**
+  - **Suíte inteira:** 1.528 arquivos sem nenhuma falha, e o `tsc` limpo.
+  - **App** (`conferencia-predio-pe9.cjs`): 27 portões ok; o relatório do lote traz as pendências do gerador das 2 torres.
+
+### Do projeto (o relatório avisa; não é decisão do motor)
+- **Entrada de energia:** média tensão (420 kVA conjuntos), a projetar com a concessionária.
+- **Estrutura e fundações:** pré-dimensionadas; pedem cálculo com a sondagem.
+- **Andares enterrados da Torre B:** contenção, impermeabilização, ventilação e luz.
+- **Escada de emergência da garagem da Torre B:** a saída até a rua.
+- **Escavação sob a laje do −2 da A:** para a rampa da B.
+- **Coletores suspensos no 1º subsolo da A:** conferir o pé-direito livre e a estrutura.
+- **Pluvial da Torre B:** o trecho dos condutores abaixo do 0 fica sem uso (eles repetem o tipo); cortar no projeto.
+- **Parede comum:** a ventilação dos cômodos que perderam janela nesse lado.
+- **Planta das unidades:** cômodos sem fachada e peças de mobiliário que não couberam.
+
+### Do código
+Nenhuma pendência aberta.
 
 ## Verificação
 

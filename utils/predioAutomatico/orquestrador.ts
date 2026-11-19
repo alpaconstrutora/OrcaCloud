@@ -19,6 +19,7 @@ import { dividirPavimentoDoBloco, montarPavimentoTipoDoBloco } from '../blueprin
 import { dividirPeloEmpreendimento, type AndarDoEmpreendimento } from './andaresDoEmpreendimento';
 import { concluirTerreoDeApartamentos } from './terreoDeApartamentos';
 import { juntarComOsPavimentos, semOsPavimentos } from './vistaDaTorre';
+import { fazerChave, pegadasDosPavimentos } from '../blueprintGrafoDeRede';
 import { caminhoPorFora, pedacosComCota, pilaresNaFaixa } from './contornoDePilar';
 import type { DivisaoDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 import { plantasDasUnidades } from '../blueprintPlantaDaUnidade';
@@ -96,6 +97,16 @@ function pavimentosDasOutrasTorres(desenho: BlueprintModel, b: Bloco): ReadonlyS
   }
   ids.delete(b.levelId);
   return ids;
+}
+
+/** Dois polígonos convexos (ou não) se cruzam: um vértice de um dentro do outro, ou dois lados que se cortam. */
+function poligonosSeCruzam(A: readonly { x: number; y: number }[], B: readonly { x: number; y: number }[]): boolean {
+  if (A.some((p) => pointInPolygon(B as Point[], p as Point)) || B.some((p) => pointInPolygon(A as Point[], p as Point))) return true;
+  const corta = (p: { x: number; y: number }, q: { x: number; y: number }, r: { x: number; y: number }, s2: { x: number; y: number }) => {
+    const d = (a: { x: number; y: number }, b: { x: number; y: number }, c: { x: number; y: number }) => (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    return d(p, q, r) * d(p, q, s2) < 0 && d(r, s2, p) * d(r, s2, q) < 0;
+  };
+  return A.some((p, i) => B.some((r, j) => corta(p, A[(i + 1) % A.length], r, B[(j + 1) % B.length])));
 }
 
 /** PE7d: a faixa além do alto da rampa que chega à garagem da outra torre (a chegada, sem vaga). */
@@ -246,7 +257,9 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
     etapa('SUBSOLOS', 'NAO_EXIGIDA', 0, 'Sem o térreo, o subsolo fica para o projetista.');
   } else {
     try {
-      subsolos = lancarSubsolos(ctx, base, blocoDoSubsolo, terreo?.levelId ?? mont.tipoLevelId, hip, { salaTecnicaDoCondominio: terreoDeApartamentosPedido || abaixoDaRua, terreoSoLeitura: abaixoDaRua });
+      // PE9: a garagem desta torre sob a de outra torre do estudo (a Torre B do Garden) — a saída de veículos é por lá.
+      const saidaPelaOutraTorre = abaixoDaRua && (desenho.blocos ?? []).some((o) => o.uso === 'GARAGEM' && o.id !== blocoDoSubsolo.id && garagemLancada(desenho, o).length > 0);
+      subsolos = lancarSubsolos(ctx, base, blocoDoSubsolo, terreo?.levelId ?? mont.tipoLevelId, hip, { salaTecnicaDoCondominio: terreoDeApartamentosPedido || abaixoDaRua, terreoSoLeitura: abaixoDaRua, saidaPelaOutraTorre });
       pendencias.push(...subsolos.pendencias);
       if (abaixoDaRua && subsolos.salaTecnica) {
         const st = subsolos.salaTecnica;
@@ -424,7 +437,7 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
     // PE7b: UMA entrada de água no lote — com outra torre já no estudo, o alimentador desta parte do cavalete de lá: um
     // hidrômetro no MESMO ponto da rua entra na vista (o planejador toma o primeiro hidrômetro pela entrada) e sai na
     // junção, onde o cavalete da outra torre já está.
-    const cavaleteDeFora = desenho.terminais.find((t) => t.tipoHidraulico === 'HIDROMETRO' && t.disciplina === 'AGUA_FRIA' && !t.unidadeId && pavimentosDeFora.has(t.levelId));
+    const cavaleteDeFora = pavimentosDeFora.size ? desenho.terminais.find((t) => t.tipoHidraulico === 'HIDROMETRO' && t.disciplina === 'AGUA_FRIA' && !t.unidadeId) : undefined;
     if (cavaleteDeFora && !m.terminais.some((t) => t.tipoHidraulico === 'HIDROMETRO' && t.disciplina === 'AGUA_FRIA')) {
       const maisBaixo = [...m.levels].sort((x, y) => x.elevationMm - y.elevationMm)[0];
       const cotaAbs = (desenho.levels.find((l) => l.id === cavaleteDeFora.levelId)?.elevationMm ?? 0) + cavaleteDeFora.cotaMm;
@@ -586,7 +599,11 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
       pluvial = { ...pluvial, comandos: pluvial.comandos + chao.comandos, dnHorizontalMm: chao.dnHorizontalMm };
     }
   }
-  else if (abaixoDaRua) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Andar 0: a torre começa abaixo da rua e não tem andar de apartamentos na cota da rua (ou a ficha não põe apartamento nele) — a entrada pela rua e a saída da rota de fuga ficam para o projetista.' });
+  else if (abaixoDaRua) {
+    pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Andar 0: a torre começa abaixo da rua e não tem andar de apartamentos na cota da rua (ou a ficha não põe apartamento nele) — a entrada pela rua e a saída da rota de fuga ficam para o projetista.' });
+    // PE9: o chão do pluvial esperava o 0 desvinculado — sem ele, os condutores ficavam sem chão e sem aviso.
+    if (pluvial) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Pluvial: sem andar na cota da rua, a descida dos condutores ao terreno (caixas de areia e a saída) fica para o projetista.' });
+  }
   if (andarZeroLevelId && andarZero && tipoDaFicha) {
     const za = concluirTerreoDeApartamentos(ctx, base, hip, andarZeroLevelId, tipoDaFicha, andarZero);
     decisoes.push(`Andar 0 de apartamentos (a ficha): mantém ${za.mantidos.join(', ')} do tipo; ${za.tirados.length ? `${za.tirados.join(', ')} viram o hall de entrada e a área comum` : 'nenhum apartamento sai'}${za.acesso ? ', com a porta para a rua' : ''}.`);
@@ -710,9 +727,10 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
   if (pavimentosDeFora.size) {
     try {
       assertModelInvariants(noDesenho);
-    } catch {
+    } catch (e) {
       // A junção não fecha (algo da vista tocou o que ficou de fora): o caminho lento e certo — os comandos no desenho.
       noDesenho = aplicarLote(desenho, comandos).model;
+      decisoes.push(`Junção com a outra torre: refeita aplicando os comandos no desenho inteiro (${e instanceof Error ? e.message : String(e)}).`);
     }
   }
   // PE7b: UMA ligação de esgoto e UMA pluvial no lote — com outra torre já no estudo, a ligação desta sai e o coletor dela
@@ -723,55 +741,69 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
   const semAPendencia = (re: RegExp) => {
     for (let i = pendencias.length - 1; i >= 0; i--) if (re.test(pendencias[i].texto)) pendencias.splice(i, 1);
   };
+  const elev = (id: ObjectId) => noDesenho.levels.find((l) => l.id === id)?.elevationMm ?? 0;
   for (const [disciplina, tipoDaLigacao, rede] of [['ESGOTO', 'LIGACAO_ESGOTO', 'Esgoto'], ['PLUVIAL', 'LIGACAO_PLUVIAL', 'Pluvial']] as const) {
-    const ligacoesDeFora = noDesenho.terminais.filter((t) => t.tipoHidraulico === tipoDaLigacao && pavimentosDeFora.has(t.levelId));
+    // PE9 (19/11/2026): a ligação de lá é qualquer uma que esta torre não criou — também no pavimento do lote (a torre sem
+    // subsolo), que a vista não tira. Só com outra torre no estudo.
+    const ligacoesDeFora = pavimentosDeFora.size ? noDesenho.terminais.filter((t) => t.tipoHidraulico === tipoDaLigacao && !criadosAqui.has(t.id)) : [];
     const minhaLigacao = noDesenho.terminais.find((t) => t.tipoHidraulico === tipoDaLigacao && criadosAqui.has(t.id));
     if (ligacoesDeFora.length !== 1 || !minhaLigacao) continue;
     const destino = ligacoesDeFora[0];
-    const meuColetor = noDesenho.trechos.find((t) => criadosAqui.has(t.id) && t.disciplina === disciplina && t.levelId === minhaLigacao.levelId && t.b.x === minhaLigacao.at.x && t.b.y === minhaLigacao.at.y);
-    if (!meuColetor) continue;
-    const elev = (id: ObjectId) => noDesenho.levels.find((l) => l.id === id)?.elevationMm ?? 0;
-    const L = Math.hypot(destino.at.x - meuColetor.a.x, destino.at.y - meuColetor.a.y);
-    // A ligação única fica na cota mais baixa das duas chegadas: a de lá, ou a desta com 1 % de queda até lá (a desta
-    // pode chegar mais funda — o pluvial da Torre B do Garden). Descendo a de lá, desce com ela o trecho que chega nela.
+    // Todos os trechos desta torre que chegam à ligação (em qualquer sentido): cada um é religado a partir da outra ponta.
+    const naLigacao = (p: { x: number; y: number }) => p.x === minhaLigacao.at.x && p.y === minhaLigacao.at.y;
+    const chegadas = noDesenho.trechos
+      .filter((t) => criadosAqui.has(t.id) && t.disciplina === disciplina && t.levelId === minhaLigacao.levelId && (naLigacao(t.a) || naLigacao(t.b)))
+      .map((t) => (naLigacao(t.b) ? { t, de: t.a, cotaDe: t.cotaAMm } : { t, de: t.b, cotaDe: t.cotaBMm }));
+    if (!chegadas.length) continue;
+    const dist2 = (de: { x: number; y: number }) => Math.hypot(destino.at.x - de.x, destino.at.y - de.y);
+    // A ligação única fica na cota mais baixa das chegadas: a de lá, ou a de cada uma desta com 1 % de queda até lá (a
+    // desta pode chegar mais funda — o pluvial da Torre B do Garden). Descendo a de lá, desce com ela tudo o que está no
+    // nó dela — os trechos de qualquer pavimento e a caixa no ponto (pela chave da rede).
     const absDeLa = elev(destino.levelId) + (destino.cotaMm ?? 0);
-    const absDaqui = elev(meuColetor.levelId) + meuColetor.cotaAMm - Math.ceil(L / 100);
-    const absDaLigacao = Math.min(absDeLa, absDaqui);
-    const cotaNoMeu = absDaLigacao - elev(meuColetor.levelId);
-    const declividade = L > 0 ? ((meuColetor.cotaAMm - cotaNoMeu) / L) * 100 : 0;
+    const absDaLigacao = Math.min(absDeLa, ...chegadas.map((c) => elev(c.t.levelId) + c.cotaDe - Math.ceil(dist2(c.de) / 100)));
     const daOutra = noDesenho.levels.find((l) => l.id === destino.levelId)?.name.split('·')[0].trim() || 'outra torre';
     const descerALigacao: Command[] = [];
     if (absDaLigacao < absDeLa) {
-      const novaCota = absDaLigacao - elev(destino.levelId);
-      descerALigacao.push({ type: 'SetTerminalProps', terminalId: destino.id, cotaMm: novaCota } as Command);
-      for (const t of noDesenho.trechos.filter((x) => x.disciplina === disciplina && x.levelId === destino.levelId && !criadosAqui.has(x.id))) {
-        if (t.b.x === destino.at.x && t.b.y === destino.at.y && t.cotaBMm === destino.cotaMm) descerALigacao.push({ type: 'SetTrechoProps', trechoId: t.id, cotaBMm: novaCota } as Command);
-        else if (t.a.x === destino.at.x && t.a.y === destino.at.y && t.cotaAMm === destino.cotaMm) descerALigacao.push({ type: 'SetTrechoProps', trechoId: t.id, cotaAMm: novaCota } as Command);
+      const chave = fazerChave(noDesenho.levels, pegadasDosPavimentos(noDesenho));
+      const kDeLa = chave(destino.levelId, destino.at.x, destino.at.y, destino.cotaMm ?? 0);
+      for (const t of noDesenho.trechos.filter((x) => x.disciplina === disciplina && !criadosAqui.has(x.id))) {
+        const nova = absDaLigacao - elev(t.levelId);
+        if (chave(t.levelId, t.b.x, t.b.y, t.cotaBMm) === kDeLa) descerALigacao.push({ type: 'SetTrechoProps', trechoId: t.id, cotaBMm: nova } as Command);
+        else if (chave(t.levelId, t.a.x, t.a.y, t.cotaAMm) === kDeLa) descerALigacao.push({ type: 'SetTrechoProps', trechoId: t.id, cotaAMm: nova } as Command);
       }
+      for (const x of noDesenho.terminais.filter((y) => y.disciplina === disciplina && !criadosAqui.has(y.id)))
+        if (chave(x.levelId, x.at.x, x.at.y, x.cotaMm ?? 0) === kDeLa) descerALigacao.push({ type: 'SetTerminalProps', terminalId: x.id, cotaMm: absDaLigacao - elev(x.levelId) } as Command);
     }
-    // PE8c (19/11/2026): a rota passa SOB a outra torre (no Garden a Torre A ocupa a frente do lote de lado a lado — não há
-    // "por fora" dela): ela corre suspensa no forro da garagem de lá que contém a altura dela, desenhada nesse pavimento e
-    // por fora dos pilares dele, com a mesma queda. Sem garagem de lá no caminho, no pavimento de sempre, em linha reta.
-    const absInicio = elev(meuColetor.levelId) + meuColetor.cotaAMm;
-    const zMedio = (absInicio + absDaLigacao) / 2;
-    const meioDaRota = { x: (meuColetor.a.x + destino.at.x) / 2, y: (meuColetor.a.y + destino.at.y) / 2 };
-    const garagemSob = (desenho.blocos ?? [])
-      .filter((o) => o.uso === 'GARAGEM' && o.id !== subsoloDaTorre(desenho, b)?.id && pointInPolygon(o.pontos as Point[], meioDaRota as Point))
-      .flatMap((o) => garagemLancada(noDesenho, o))
-      .find((l) => l.elevationMm <= zMedio && zMedio <= l.elevationMm + l.defaultHeightMm);
     const naRota: Command[] = [];
-    if (garagemSob) {
-      const z0 = garagemSob.elevationMm;
-      const raio = Math.ceil(meuColetor.bitolaMm / 2) + 50;
-      const pilares = pilaresNaFaixa(noDesenho, Math.min(absInicio, absDaLigacao) - raio, Math.max(absInicio, absDaLigacao) + raio, raio);
-      const caminho = caminhoPorFora(meuColetor.a as Point, { x: destino.at.x, y: destino.at.y } as Point, pilares);
-      for (const x of pedacosComCota(caminho.pts, absInicio - z0, absDaLigacao - z0))
-        naRota.push({ type: 'AddTrecho', levelId: garagemSob.id, disciplina, a: x.a, b: x.b, cotaAMm: x.cotaAMm, cotaBMm: x.cotaBMm, bitolaMm: meuColetor.bitolaMm, sugerido: true, rotulo: meuColetor.rotulo ?? null } as Command);
-    } else naRota.push({ type: 'AddTrecho', levelId: meuColetor.levelId, disciplina, a: { ...meuColetor.a }, b: { x: destino.at.x, y: destino.at.y }, cotaAMm: meuColetor.cotaAMm, cotaBMm: cotaNoMeu, bitolaMm: meuColetor.bitolaMm, sugerido: true, rotulo: meuColetor.rotulo ?? null } as Command);
+    const garagens: string[] = [];
+    let maiorL = 0;
+    let menorDeclividade = Infinity;
+    for (const c of chegadas) {
+      const L = dist2(c.de);
+      const absInicio = elev(c.t.levelId) + c.cotaDe;
+      maiorL = Math.max(maiorL, L);
+      menorDeclividade = Math.min(menorDeclividade, L > 0 ? ((absInicio - absDaLigacao) / L) * 100 : 0);
+      // PE8c: sob a outra torre, suspensa no forro da garagem de lá que contém a altura dela, por fora dos pilares.
+      const zMedio = (absInicio + absDaLigacao) / 2;
+      const meioDaRota = { x: (c.de.x + destino.at.x) / 2, y: (c.de.y + destino.at.y) / 2 };
+      const garagemSob = (desenho.blocos ?? [])
+        .filter((o) => o.uso === 'GARAGEM' && o.id !== subsoloDaTorre(desenho, b)?.id && pointInPolygon(o.pontos as Point[], meioDaRota as Point))
+        .flatMap((o) => garagemLancada(noDesenho, o))
+        .find((l) => l.elevationMm <= zMedio && zMedio <= l.elevationMm + l.defaultHeightMm);
+      if (garagemSob) {
+        garagens.push(garagemSob.name.split('·').pop()?.trim() ?? garagemSob.name);
+        const z0 = garagemSob.elevationMm;
+        const raio = Math.ceil(c.t.bitolaMm / 2) + 50;
+        const pilares = pilaresNaFaixa(noDesenho, Math.min(absInicio, absDaLigacao) - raio, Math.max(absInicio, absDaLigacao) + raio, raio);
+        const caminho = caminhoPorFora(c.de as Point, { x: destino.at.x, y: destino.at.y } as Point, pilares);
+        for (const x of pedacosComCota(caminho.pts, absInicio - z0, absDaLigacao - z0))
+          naRota.push({ type: 'AddTrecho', levelId: garagemSob.id, disciplina, a: x.a, b: x.b, cotaAMm: x.cotaAMm, cotaBMm: x.cotaBMm, bitolaMm: c.t.bitolaMm, sugerido: true, rotulo: c.t.rotulo ?? null } as Command);
+      } else naRota.push({ type: 'AddTrecho', levelId: c.t.levelId, disciplina, a: { ...c.de }, b: { x: destino.at.x, y: destino.at.y }, cotaAMm: c.cotaDe, cotaBMm: absDaLigacao - elev(c.t.levelId), bitolaMm: c.t.bitolaMm, sugerido: true, rotulo: c.t.rotulo ?? null } as Command);
+    }
     const ligar: Command[] = [
       ...descerALigacao,
       { type: 'DeleteTerminal', terminalId: minhaLigacao.id },
-      { type: 'DeleteTrecho', trechoId: meuColetor.id },
+      ...chegadas.map((c): Command => ({ type: 'DeleteTrecho', trechoId: c.t.id })),
       ...naRota,
     ];
     const r = aplicarLote(noDesenho, ligar);
@@ -779,12 +811,13 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
     comandos.push(...ligar);
     criados.push(...r.diff.created);
     apagados.add(minhaLigacao.id);
-    apagados.add(meuColetor.id);
+    for (const c of chegadas) apagados.add(c.t.id);
     semAPendencia(disciplina === 'ESGOTO' ? /^Coletor predial:/ : /^Pluvial: a saída na frente do lote/);
     decisoes.push(`${rede}: uma ligação no lote — o coletor desta torre vai à ligação da ${daOutra}.`);
+    const garagem = [...new Set(garagens)][0];
     pendencias.push({
-      grupo: declividade >= 1 ? 'CONFERIR' : 'VERIFICACAO',
-      texto: `${rede}: o coletor desta torre vai à ligação da ${daOutra} (uma ligação no lote) — ${Math.round(L / 100) / 10} m a ${declividade.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %${declividade >= 1 ? '' : ', abaixo de 1 %: aprofunde a caixa desta torre'}${garagemSob ? `; corre suspenso no forro do ${garagemSob.name.split('·').pop()?.trim()} da ${daOutra}, por fora dos pilares — confira com a estrutura e o pé-direito livre da garagem` : ''}; confira a caixa de junção antes da ligação.`,
+      grupo: menorDeclividade >= 1 ? 'CONFERIR' : 'VERIFICACAO',
+      texto: `${rede}: o coletor desta torre vai à ligação da ${daOutra} (uma ligação no lote) — ${Math.round(maiorL / 100) / 10} m a ${menorDeclividade.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %${menorDeclividade >= 1 ? '' : ', abaixo de 1 %: aprofunde a caixa desta torre'}${chegadas.length > 1 ? ` (${chegadas.length} trechos chegavam à ligação desta torre)` : ''}${garagem ? `; corre suspenso no forro do ${garagem} da ${daOutra}, por fora dos pilares — confira com a estrutura e o pé-direito livre da garagem` : ''}; confira a caixa de junção antes da ligação.`,
     });
   }
   if (tirarCavalete.length) {
@@ -798,7 +831,9 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
   // Torre B sob o −2 da A, coladas) e a rampa que subia ao piso desta torre (os apartamentos) sai. A rampa passa para o
   // outro lado da parede comum: parte do alto da antiga, segue na mesma direção para dentro da outra torre e chega à
   // garagem de lá; as vagas de lá nessa faixa cedem o espaço.
-  const minhaRampa = noDesenho.stairs.find((e) => criadosAqui.has(e.id) && e.veicular && e.desdeCotaMm !== undefined);
+  // PE9: a garagem não desenha a rampa de saída (ela subiria para os apartamentos) — devolve a geometria dela, e as vagas
+  // do subsolo já saem sem ela.
+  const minhaRampa = subsolos?.rampaPelaOutraTorre ?? null;
   let abriuVao = false;
   if (minhaRampa) {
     const deOutraTorre = (desenho.blocos ?? []).filter((o) => o.uso === 'GARAGEM' && o.id !== subsoloDaTorre(desenho, b)?.id);
@@ -806,21 +841,25 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
     const candidatos = deOutraTorre.flatMap((o) => garagemLancada(noDesenho, o).map((l) => ({ o, l }))).filter((x) => x.l.elevationMm > partida.elevationMm).sort((x, y) => x.l.elevationMm - y.l.elevationMm);
     const alvo = candidatos[0];
     if (alvo) {
-      const [baixo, alto] = [minhaRampa.pontos[0], minhaRampa.pontos[minhaRampa.pontos.length - 1]];
-      const L = Math.hypot(alto.x - baixo.x, alto.y - baixo.y) || 1;
-      const u = { x: (alto.x - baixo.x) / L, y: (alto.y - baixo.y) / L };
+      const alto = minhaRampa.alto;
+      const L = minhaRampa.comprimentoMm;
+      const u = minhaRampa.direcao;
       const novoAlto = { x: Math.round(alto.x + u.x * L), y: Math.round(alto.y + u.y * L) };
       const daOutra = alvo.l.name.split('·')[0].trim() || alvo.o.nome;
       if (pointInPolygon(alvo.o.pontos as Point[], novoAlto as Point)) {
         const W = minhaRampa.larguraMm;
-        const naFaixa = (c: { x: number; y: number }) => {
-          const sAo = (c.x - alto.x) * u.x + (c.y - alto.y) * u.y;
-          const t = Math.abs((c.x - alto.x) * -u.y + (c.y - alto.y) * u.x);
-          return sAo > -500 && sAo < L + CHEGADA_DA_RAMPA_DA_OUTRA_MM && t < W / 2 + 200;
-        };
-        const vagas = (noDesenho.vagas ?? []).filter((v) => v.levelId === alvo.l.id && contornoDaVaga(v).some((c) => naFaixa(c)));
+        // A faixa da rampa e da chegada dela na garagem de lá; sai a vaga cuja planta a cruza (PE9: pela interseção, não
+        // pelos cantos — a vaga atravessada sem canto dentro ficava).
+        const n = { x: -u.y, y: u.x };
+        const ext = W / 2 + 200;
+        const P0 = { x: alto.x - u.x * 500, y: alto.y - u.y * 500 };
+        const P1 = { x: alto.x + u.x * (L + CHEGADA_DA_RAMPA_DA_OUTRA_MM), y: alto.y + u.y * (L + CHEGADA_DA_RAMPA_DA_OUTRA_MM) };
+        const faixa = [
+          { x: P0.x + n.x * ext, y: P0.y + n.y * ext }, { x: P1.x + n.x * ext, y: P1.y + n.y * ext },
+          { x: P1.x - n.x * ext, y: P1.y - n.y * ext }, { x: P0.x - n.x * ext, y: P0.y - n.y * ext },
+        ];
+        const vagas = (noDesenho.vagas ?? []).filter((v) => v.levelId === alvo.l.id && poligonosSeCruzam(contornoDaVaga(v), faixa));
         const ligar: Command[] = [
-          { type: 'DeleteEscada', escadaId: minhaRampa.id } as Command,
           { type: 'AddEscada', levelId: minhaRampa.levelId, pontos: [{ ...alto }, novoAlto], tipo: 'RAMPA', veicular: true, larguraMm: W, alvoEspelhoMm: minhaRampa.alvoEspelhoMm, rotulo: `Rampa da garagem (pela ${daOutra})` } as Command,
           ...vagas.map((v): Command => ({ type: 'DeleteVaga', vagaId: v.id }) as Command),
         ];
@@ -857,16 +896,15 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
         }
         abriuVao = vaos.length > 0;
         criados.push(...r1.diff.created);
-        apagados.add(minhaRampa.id);
         decisoes.push(`Garagem: o acesso de veículos é pela garagem da ${daOutra} — a rampa sobe do ${partida.name.split('·').pop()?.trim()} ao ${alvo.l.name.split('·').pop()?.trim()} de lá.`);
         pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: o acesso de veículos a esta torre é pela garagem da ${daOutra} — a rampa sobe do ${partida.name} ao ${alvo.l.name}, junto da parede comum; ${vagas.length} vaga(s) de lá cederam o espaço. ${abriuVao ? `O vão de ${(W / 1000).toLocaleString('pt-BR')} m na contenção entre as garagens foi aberto; confira` : 'Abra o vão na contenção entre as garagens e confira'} a escavação e a laje sob o ${alvo.l.name}.` });
       } else pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Garagem: a rampa desta torre não chega à garagem da ${daOutra} pela parede comum — o acesso de veículos fica para o projetista.` });
-    }
+    } else pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Garagem: a outra torre não tem garagem acima desta — o acesso de veículos fica para o projetista.' });
   }
   // PE7b (decisão do usuário de 18/11 "Entrada na A, quadro geral na B"): com outra torre já no estudo, a entrada de
   // energia do lote é a dela — esta torre perde a entrada de serviço, e o QGBT dela passa a ser alimentado do QGBT de lá
   // (os medidores ficam na sala técnica desta torre). A demanda da entrada única soma as duas.
-  const qgbtsDeFora = (desenho.quadros ?? []).filter((q) => q.tipo === 'QGBT' && pavimentosDeFora.has(q.levelId));
+  const qgbtsDeFora = pavimentosDeFora.size ? (desenho.quadros ?? []).filter((q) => q.tipo === 'QGBT') : [];
   if (eletrica?.qgbtId && qgbtsDeFora.length === 1) {
     const primeiro = qgbtsDeFora[0];
     const daOutra = desenho.levels.find((l) => l.id === primeiro.levelId)?.name.split('·')[0].trim() || 'outra torre';

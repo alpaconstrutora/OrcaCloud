@@ -6,7 +6,8 @@
 import React from 'react';
 import { AlertCircle, Building2, Check, Plug } from 'lucide-react';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
-import type { RelatorioDoLote } from '../../utils/predioAutomatico/relatorioDoLote';
+import type { PendenciasLancadas, RelatorioDoLote } from '../../utils/predioAutomatico/relatorioDoLote';
+import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia } from '../../utils/blueprintGeradorPpci';
 
 const cardCls = 'rounded-[10px] border border-gray-100 bg-white p-6 shadow-sm';
 const rotuloCls = 'text-xs font-semibold text-slate-500';
@@ -37,7 +38,32 @@ function Entrada({ rotulo, n }: { rotulo: string; n: number }) {
   );
 }
 
-export default function TelaRelatorioDoLote({ relatorio }: { relatorio: RelatorioDoLote | null }) {
+/** PE9: as pendências do gerador da prévia lançada da torre (guardadas no navegador no Lançar), por grupo. */
+function DoGerador({ dados }: { dados: PendenciasLancadas }) {
+  const grupos = [...new Set(dados.pendencias.map((p) => p.grupo))];
+  const quando = new Date(dados.quando);
+  return (
+    <details className="rounded-[8px] border border-gray-100 bg-gray-50 px-4 py-3" data-testid="pendencias-do-gerador">
+      <summary className="cursor-pointer text-sm font-medium text-gray-800">
+        {dados.pendencias.length} pendência(s) do gerador — da prévia lançada em {Number.isNaN(quando.getTime()) ? '—' : quando.toLocaleString('pt-BR')} (neste navegador)
+      </summary>
+      <div className="mt-3 space-y-3">
+        {grupos.map((g) => (
+          <div key={g} className="space-y-1">
+            <p className="text-xs font-semibold text-slate-600">{ROTULO_DA_PENDENCIA[g as GrupoDaPendencia] ?? g}</p>
+            <ul className="space-y-1">
+              {dados.pendencias.filter((p) => p.grupo === g).map((p, i) => (
+                <li key={i} className="text-sm text-gray-700">{p.texto}</li>
+              ))}
+            </ul>
+          </div>
+        ))}
+      </div>
+    </details>
+  );
+}
+
+export default function TelaRelatorioDoLote({ relatorio, doGerador = {} }: { relatorio: RelatorioDoLote | null; doGerador?: Record<string, PendenciasLancadas> }) {
   if (!relatorio) return <div className={`${cardCls} text-sm text-slate-500`}>Calculando o relatório do lote…</div>;
   if (!relatorio.torres.length)
     return <div className={`${cardCls} text-sm text-slate-600`} data-testid="relatorio-do-lote">Nenhuma torre lançada no estudo ainda — gere e lance uma torre pelo Prédio automático para ver o relatório do lote.</div>;
@@ -75,6 +101,11 @@ export default function TelaRelatorioDoLote({ relatorio }: { relatorio: Relatori
             <Dado rotulo="Quadro geral" valor={t.quadroGeral ? kva(t.quadroGeral.demandaKva) : '—'} nota={t.quadroGeral ? (t.quadroGeral.alimentadoDe ? `alimentado do QGBT da ${t.quadroGeral.alimentadoDe}` : 'na entrada de serviço') : 'sem quadro geral'} />
             <Dado rotulo="Conflitos entre redes" valor={t.conflitos} nota={`${t.encostos} encosto(s)`} />
           </dl>
+          {doGerador[t.nome] ? (
+            <DoGerador dados={doGerador[t.nome]} />
+          ) : (
+            <p className="text-xs text-slate-500">As pendências do gerador desta torre aparecem aqui quando ela é lançada neste navegador.</p>
+          )}
         </section>
       ))}
     </div>

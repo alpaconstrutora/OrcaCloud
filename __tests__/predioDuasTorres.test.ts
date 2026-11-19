@@ -175,6 +175,9 @@ describe('PE7 — as duas torres no mesmo estudo (Garden)', { timeout: 600_000 }
     };
     expect((m.vagas ?? []).filter((v) => v.levelId === doisA.id && contornoDaVaga(v).some((c) => naRampa(c))).length).toBe(0);
     expect(nivel(pelaA[0].ateLevelId)?.name).toMatch(/Torre A · Garagem/);
+    // PE9: a garagem da B não lança a rampa que subia para os apartamentos — as vagas do −3 saem sem ela (eram 0 no −3, 7 no
+    // todo, com a rampa antiga no meio).
+    expect((m.vagas ?? []).filter((v) => v.levelId === tresB.id).length).toBeGreaterThan(0);
     // PE8b: o vão na contenção do −3 da B, onde a rampa cruza a parede comum — da largura da rampa.
     const cruza = m.walls.filter((w) => w.levelId === tresB.id && m.openings.some((o) => o.wallId === w.id && o.widthMm >= pelaA[0].larguraMm));
     expect(cruza.length).toBeGreaterThanOrEqual(1);

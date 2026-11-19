@@ -137,7 +137,8 @@ describe('montarEspelhoDoInvestidor', () => {
  * migration (como `segurancaMigrations.test.ts`); a postura real foi conferida no banco ao aplicar.
  */
 /** A migration sem os comentários de linha. */
-const lerMigration = (arquivo: string) => fs.readFileSync(path.join(process.cwd(), 'supabase', 'migrations', arquivo), 'utf-8').replace(/^\s*--.*$/gm, ' ');
+// As quebras de linha normalizadas: no Windows (core.autocrlf) o checkout traz CRLF, e os recortes abaixo procuram "\n".
+const lerMigration = (arquivo: string) => fs.readFileSync(path.join(process.cwd(), 'supabase', 'migrations', arquivo), 'utf-8').replace(/\r\n/g, '\n').replace(/^\s*--.*$/gm, ' ');
 
 describe('fn_investor_portal_get_espelho — o que sai do banco', () => {
   const sql = lerMigration('aplicar_20271110100000_investor_portal_espelho.sql');

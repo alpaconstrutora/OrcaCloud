@@ -28,6 +28,17 @@ export interface TorreDoRelatorio {
   encostos: number;
 }
 
+/**
+ * PE9: as pendências do GERADOR da prévia lançada de cada torre (as premissas, o que o gerador não decide…) — o desenho
+ * não as guarda; ficam no navegador, por estudo e torre, no Lançar (`chaveDasPendenciasLancadas`).
+ */
+export interface PendenciasLancadas {
+  quando: string;
+  pendencias: { grupo: string; texto: string }[];
+}
+
+export const chaveDasPendenciasLancadas = (branchId: string, blocoUid: string) => `predio:pendencias-lancadas:${branchId}:${blocoUid}`;
+
 export interface RelatorioDoLote {
   torres: TorreDoRelatorio[];
   entradas: { esgoto: number; pluvial: number; agua: number; energia: number };

@@ -204,6 +204,8 @@ export interface SubsolosLancados {
   drenagem: { levelId: ObjectId; anel: Point[]; separadora: Point; poco: Point } | null;
   /** PE5a: a sala técnica do condomínio (medição, bombas, reservatório inferior) no subsolo mais alto; null sem ela. */
   salaTecnica: { levelId: ObjectId; anel: Point[]; medicao: Point; bombas: Point } | null;
+  /** PE9: a rampa de saída que a junção desenha na garagem da outra torre (`saidaPelaOutraTorre`); null sem ela. */
+  rampaPelaOutraTorre: { levelId: ObjectId; alto: Point; direcao: { x: number; y: number }; larguraMm: number; comprimentoMm: number; alvoEspelhoMm: number } | null;
   pesDasRampas: { levelId: ObjectId; at: Point; larguraMm: number }[];
   pilaresDaTorre: number;
   pilaresDaGaragem: number;
@@ -224,7 +226,13 @@ export function lancarSubsolos(
    * `terreoSoLeitura` (PE6a): o pavimento de cima é o TIPO (a torre que começa abaixo da rua) — a garagem lê dele o hall,
    * as escadas e os pilares, mas não escreve nele (a caixa e a porta da escada de emergência iriam a todo andar).
    */
-  opcoes: { salaTecnicaDoCondominio?: boolean; terreoSoLeitura?: boolean } = {},
+  /**
+   * `saidaPelaOutraTorre` (PE9, 19/11/2026; decisão "Rampa pela garagem da A"): a garagem desta torre fica sob a de
+   * outra torre do estudo e o carro chega por lá — a rampa de saída do subsolo mais alto NÃO é desenhada (ela subiria
+   * para dentro dos apartamentos); só a chegada dela, junto da parede, fica livre de vaga. A geometria dela volta em
+   * `rampaPelaOutraTorre`, para a junção desenhá-la do outro lado da parede comum.
+   */
+  opcoes: { salaTecnicaDoCondominio?: boolean; terreoSoLeitura?: boolean; saidaPelaOutraTorre?: boolean } = {},
 ): SubsolosLancados {
   const pendencias: PendenciaDoPpci[] = [];
   if (garagemLancada(ctx.m, g).length) throw new Error(`as vagas de "${g.nome}" já estão lançadas — remova esses pavimentos para o prédio lançar o subsolo`);
@@ -353,6 +361,7 @@ export function lancarSubsolos(
   // piso fica a área de chegada (`CHEGADA_DA_RAMPA_MM`), sem vaga nem pilar.
   const q = quadroDaFrente(contorno, base.rua);
   const rampas: Rampa[] = [];
+  let rampaPelaOutraTorre: SubsolosLancados['rampaPelaOutraTorre'] = null;
   const meia = PAREDE_DE_CONTENCAO_MM / 2;
   const obstaculosDaRampa = [
     ...pilaresDoTerreo.map((s) => engordar(pegadaEmPlanta(s), FOLGA_DA_RAMPA_MM)),
@@ -427,6 +436,18 @@ export function lancarSubsolos(
           const fimDaChegada = Math.max(meia, Math.min(q.profundidade - meia, v + para * CHEGADA_DA_RAMPA_MM));
           return [Math.min(v, fimDaChegada), Math.max(v, fimDaChegada)];
         };
+        if (k === 0 && opcoes.saidaPelaOutraTorre) {
+          // A rampa vai para o outro lado da parede: aqui só a chegada dela (do alto para dentro) e o trecho até a parede.
+          const vParede = sentido > 0 ? 0 : q.profundidade;
+          const [c0, c1] = chegada(vAlto, sentido);
+          const v0 = Math.min(vParede, vAlto, c0);
+          const v1 = Math.max(vParede, vAlto, c1);
+          const alto = pontos[1];
+          const Lr = Math.hypot(pontos[1].x - pontos[0].x, pontos[1].y - pontos[0].y) || 1;
+          rampaPelaOutraTorre = { levelId: p.levelId, alto, direcao: { x: (pontos[1].x - pontos[0].x) / Lr, y: (pontos[1].y - pontos[0].y) / Lr }, larguraMm: W, comprimentoMm: Math.round(Lr), alvoEspelhoMm: 175 };
+          rampas.push({ u0, u1, v0, v1, anel: retangulo(q, u0, u1, v0, v1), doLevelId: p.levelId, paraLevelId: null, chegadaEmBaixo: [c0, c1], chegadaEmCima: null, cmd: { ...cmd, pontos: [alto, alto] } });
+          return;
+        }
         rampas.push({
           u0,
           u1,
@@ -597,7 +618,13 @@ export function lancarSubsolos(
     if (melhor) {
       const { qb, u0 } = melhor;
       salaTecnica = { levelId: doTopo, anel: retangulo(qb, u0, u0 + C, 0, F), medicao: paraMundo(qb, { u: u0 + C * 0.2, v: F * 0.25 }), bombas: paraMundo(qb, { u: u0 + C * 0.65, v: F / 2 }) };
-      pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: o térreo é de apartamentos — o centro de medição, a casa de bombas e o reservatório inferior ficam na sala técnica do ${pisos[0].nome.split('·').pop()!.trim()} (${(C / 1000).toLocaleString('pt-BR')} × ${(F / 1000).toLocaleString('pt-BR')} m, junto ao contorno, perto do hall); feche-a com paredes e porta e confira o acesso da concessionária à medição.` });
+      // PE9 (19/11/2026): a sala FECHADA — as três paredes que a contenção não dá e a porta para a garagem, no meio da de dentro.
+      const [sA, sB, sC, sD] = [paraMundo(qb, { u: u0, v: 0 }), paraMundo(qb, { u: u0 + C, v: 0 }), paraMundo(qb, { u: u0 + C, v: F }), paraMundo(qb, { u: u0, v: F })].map(inteiro);
+      const alturaDaSala = ctx.m.levels.find((l) => l.id === doTopo)?.defaultHeightMm ?? g.peDireitoMm;
+      comandos += ctx.aplicar([[sB, sC], [sC, sD], [sD, sA]].map(([x, y]): Command => ({ type: 'AddWall', levelId: doTopo, a: x, b: y, thicknessMm: 150, heightMm: alturaDaSala })));
+      const deDentro = ctx.m.walls.find((x) => x.levelId === doTopo && dist(x.a, sC) < 1 && dist(x.b, sD) < 1);
+      if (deDentro) comandos += ctx.aplicar([{ type: 'AddOpening', wallId: deDentro.id, kind: 'door', offsetMm: Math.round(dist(sC, sD) / 2 - 450), widthMm: 900, heightMm: 2100, sillMm: 0 } as Command]);
+      pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: o térreo é de apartamentos — o centro de medição, a casa de bombas e o reservatório inferior ficam na sala técnica do ${pisos[0].nome.split('·').pop()!.trim()} (${(C / 1000).toLocaleString('pt-BR')} × ${(F / 1000).toLocaleString('pt-BR')} m, junto ao contorno, perto do hall); fechada com paredes e a porta para a garagem; confira o acesso da concessionária à medição.` });
     } else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Garagem: a sala técnica do condomínio (medição, bombas e reservatório inferior) não coube junto ao contorno do ${pisos[0].nome.split('·').pop()!.trim()} — reserve-a à mão.` });
   }
   const pesDasRampas = rampas.map((r) => ({ levelId: r.doLevelId, at: r.cmd.pontos[0], larguraMm: r.u1 - r.u0 }));
@@ -782,6 +809,7 @@ export function lancarSubsolos(
     eletrica: ondeVaiAEletrica(),
     drenagem,
     salaTecnica,
+    rampaPelaOutraTorre,
     pesDasRampas,
     pilaresDaTorre: pilaresDoTerreo.length,
     pilaresDaGaragem: extensao.length,

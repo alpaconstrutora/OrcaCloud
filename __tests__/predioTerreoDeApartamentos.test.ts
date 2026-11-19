@@ -136,6 +136,9 @@ describe('PE4a + PE5a — o térreo de apartamentos (Garden, Torre A)', { timeou
     expect((m.quadros ?? []).find((q) => q.tipo === 'QGBT')?.levelId).toBe(topo.id);
     expect(m.trechos.filter((t) => t.rotulo === ROTULO_DO_DESVIO).every((t) => t.levelId === topo.id)).toBe(true);
     expect(m.trechos.some((t) => t.rotulo === ROTULO_DO_DESVIO)).toBe(true);
+    // PE9: a sala técnica fechada — paredes e a porta de 90 cm para a garagem (o relatório não pede mais para fechar).
+    expect(m.openings.some((o) => o.kind === 'door' && o.widthMm === 900 && m.walls.find((w) => w.id === o.wallId)?.levelId === topo.id)).toBe(true);
+    expect(plano().pendencias.some((x) => /sala técnica[^.]*fechada com paredes e a porta para a garagem/.test(x.texto))).toBe(true);
   });
 
   it('toda louça de todo andar — as do andar 0 também — chega à ligação na rede pública', () => {

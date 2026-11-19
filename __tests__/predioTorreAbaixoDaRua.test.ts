@@ -166,6 +166,11 @@ describe('PE6a — a torre que começa abaixo da rua (Garden, Torre B)', { timeo
       units: torres.flatMap((x) => (x.units ?? []).map((u) => ({ ...u, tower_id: x.id, blueprint_unidade_chave: null, blueprint_massa_chave: null }) as unknown as EmpreendimentoUnit)),
       commonAreas: [],
     };
+    // PE9 (revisão do #584): o andar dos apartamentos abaixo da rua vai como TIPO (a convenção da ficha), só o 0 é TERREO;
+    // e o aviso da estimativa não compara com os pisos acima do solo.
+    const tB0 = lado.towers.find((t) => t.matchName === 'Torre B')!;
+    expect(tB0.units.every((u) => (u.createOnly as { floor_tipo?: string }).floor_tipo === (u.fields.floor === 0 ? 'TERREO' : 'TIPO'))).toBe(true);
+    expect(lado.warnings.filter((w) => /^"Torre B": vão as/.test(w))).toEqual([]);
     const envio = buildPlan(lado, alvo);
     expect(envio.towerCreates).toEqual([]);
     expect(envio.unitCreates).toEqual([]);

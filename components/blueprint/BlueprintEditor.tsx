@@ -618,7 +618,7 @@ import { contornosDasTorres, mesmoContorno } from '../../utils/espelhoContornoDa
 import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
 import TelaPredioAutomatico from './TelaPredioAutomatico';
 import TelaRelatorioDoLote from './TelaRelatorioDoLote';
-import { relatorioDoLote, type RelatorioDoLote } from '../../utils/predioAutomatico/relatorioDoLote';
+import { chaveDasPendenciasLancadas, relatorioDoLote, type PendenciasLancadas, type RelatorioDoLote } from '../../utils/predioAutomatico/relatorioDoLote';
 import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
 import { planejarCasaNoWorker, useCasaAutomatica } from '../../hooks/useCasaAutomatica';
 import { usePredioAutomatico } from '../../hooks/usePredioAutomatico';
@@ -9379,12 +9379,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // abrir a tela (fora do render: a compatibilização de cada torre leva alguns segundos num lote com duas).
   const torresLancadasNoLote = useMemo(() => (editor.model.blocos ?? []).filter((b) => b.uso !== 'GARAGEM' && pavimentoTipoMontado(editor.model, b)).length, [editor.model]);
   const [relatorioDoLoteAberto, setRelatorioDoLoteAberto] = useState<RelatorioDoLote | null>(null);
+  // PE9: as pendências do gerador das prévias lançadas (guardadas no navegador no Lançar), por torre.
+  const [pendenciasDoGerador, setPendenciasDoGerador] = useState<Record<string, PendenciasLancadas>>({});
   useEffect(() => {
     if (telaAberta !== 'relatorio-lote') return;
     setRelatorioDoLoteAberto(null);
+    const porTorre: Record<string, PendenciasLancadas> = {};
+    for (const b of editor.model.blocos ?? []) {
+      try {
+        const v = localStorage.getItem(chaveDasPendenciasLancadas(branchId, b.uid));
+        if (v) porTorre[b.nome] = JSON.parse(v) as PendenciasLancadas;
+      } catch {
+        // sem armazenamento no navegador: o relatório sai sem as pendências do gerador
+      }
+    }
+    setPendenciasDoGerador(porTorre);
     const id = setTimeout(() => setRelatorioDoLoteAberto(relatorioDoLote(editor.model)), 30);
     return () => clearTimeout(id);
-  }, [telaAberta, editor.model]);
+  }, [telaAberta, editor.model, branchId]);
   // PE3: o Empreendimento é prédio? As torres com apartamento (o resumo dos andares) para o seletor da Casa automática.
   const tipoDoEmpreendimentoDaCasa = useMemo(() => (estruturasDaCasa ? tipoDoEmpreendimento(estruturasDaCasa) : 'CASA'), [estruturasDaCasa]);
   const torresDoPredioDaCasa = useMemo(
@@ -13046,7 +13058,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             'Terreno',
             { rotulo: 'Casa automática', onClick: () => setTelaAberta('casa') },
           )}
-          <TelaRelatorioDoLote relatorio={relatorioDoLoteAberto} />
+          <TelaRelatorioDoLote relatorio={relatorioDoLoteAberto} doGerador={pendenciasDoGerador} />
         </div>
       )}
       {telaAberta === 'predio' && blocoDoPredio && entradaDoPredio && (
@@ -13082,6 +13094,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               // PA5: o lote já aplicado no worker entra como UM passo, sem reaplicar (o R8 passa de mil comandos).
               const criados = editor.runBatchPrevisto(plano.comandos, plano.hashDoOriginal, { model: plano.resultado, diff: { created: plano.criados }, hash: plano.hashDoResultado });
               if (criados.length === 0 && plano.criados.length > 0) throw new Error('O editor recusou o lote — nada foi lançado (veja o aviso no editor).');
+              // PE9: as pendências do gerador desta prévia, para o relatório do lote (o desenho não as guarda).
+              try {
+                localStorage.setItem(chaveDasPendenciasLancadas(branchId, blocoDoPredio.uid), JSON.stringify({ quando: new Date().toISOString(), pendencias: plano.pendencias.map((x) => ({ grupo: x.grupo, texto: x.texto })) } satisfies PendenciasLancadas));
+              } catch {
+                // sem armazenamento no navegador: o relatório do lote sai sem elas
+              }
               setLancadoPredio(`${criados.length} elemento(s) lançados num lote só: o pavimento tipo e ${plano.resumo.copias} cópia(s), ${plano.resumo.unidades} unidade(s) no prédio — Ctrl+Z desfaz tudo. Volte ao editor para ver o prédio.`);
             }}
             onCriarAlternativa={async () => {

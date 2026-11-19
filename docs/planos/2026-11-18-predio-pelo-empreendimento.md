@@ -557,6 +557,7 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 | PE6 — abaixo da rede pública (Torre B) | no ar (#584, bfbfcdc); a Torre B liberada na tela |
 | PE7 — as duas torres no mesmo estudo | no ar (#587, f042101) |
 | PE8 — o que ficou da PE7 | no ar (#588, d936a7d): pé-direito diferente entre torres, o vão na contenção, os coletores suspensos sob a outra torre e o relatório do lote |
+| PE9 — as pendências de código | a publicar: as ligações, a rampa, as vagas, o envio da Torre B, a sala técnica fechada, as pendências do gerador no relatório do lote e o teste do Espelho do Investidor no Windows |
 
 **Decisões do usuário ao longo do plano:**
 - **Caminho e estrutura das torres:** "Prédio pelo Empreendimento" e "Unidades do Empreendimento"; "A torre começa no −2".
@@ -566,37 +567,37 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 - **As duas torres:** "Rampa pela garagem da A"; "Entrada na A, quadro geral na B".
 - **Relatório:** "numa tela do lote".
 
-## Pendências (19/11/2026)
+## Pendências (19/11/2026, depois da PE9)
 
-### Do projeto, que o relatório já avisa (o motor não resolve por natureza)
-- **Entrada de energia em média tensão:** 420 kVA conjuntos acima do padrão de baixa tensão, a projetar com a concessionária.
+**PE9 (pedido "Faça todos", 19/11/2026)** resolveu as pendências de código e, das de projeto, a que dava para automatizar.
+- **Ligações:** a de lá é qualquer uma que esta torre não criou, também no pavimento do lote; o mesmo vale para o cavalete e o QGBT.
+- **Coletores:** todos os trechos desta torre que chegam à ligação são religados, em qualquer sentido (no pluvial do Garden eram 3).
+- **Ligação que desce:** leva junto, pela chave da rede, tudo o que está no nó dela (trechos de qualquer pavimento e a caixa).
+- **Vagas:** sai a vaga cuja planta cruza a faixa da rampa, por interseção.
+- **Rampa da B:** a garagem da B não desenha a rampa que subia para os apartamentos (`saidaPelaOutraTorre`), as vagas do −3 saem sem ela, e a junção desenha a rampa do outro lado da parede comum.
+- **Torre abaixo da rua sem andar na cota da rua:** o pluvial passa a avisar.
+- **Junção que não fecha:** ela registra a decisão com o motivo.
+- **Envio:** `floor_tipo` TIPO abaixo da rua (só o 0 é TERREO); sem o aviso falso da estimativa; a posição e o sol pelo tipo no 1º piso.
+- **Sala técnica:** fechada com paredes e porta.
+- **Relatório do lote:** traz as pendências do gerador da prévia lançada, guardadas no navegador no Lançar.
+- **`espelhoDoInvestidor`:** o teste falhava só no Windows. O leitor das migrations não normalizava o CRLF do checkout (`core.autocrlf`), e o recorte do SQL não achava "\n". Corrigido no teste; nenhuma migration nem banco foi tocado.
+- **Provas:**
+  - **Suíte inteira:** 1.528 arquivos sem nenhuma falha, e o `tsc` limpo.
+  - **App** (`conferencia-predio-pe9.cjs`): 27 portões ok; o relatório do lote traz as pendências do gerador das 2 torres.
+
+### Do projeto (o relatório avisa; não é decisão do motor)
+- **Entrada de energia:** média tensão (420 kVA conjuntos), a projetar com a concessionária.
 - **Estrutura e fundações:** pré-dimensionadas; pedem cálculo com a sondagem.
-- **Andares enterrados da Torre B (−2 e −1):** contenção, impermeabilização, ventilação e luz.
-- **Sala técnica do condomínio (no −1 da A e no −3 da B):** reservada, falta fechar com paredes e porta.
-- **Garagem da Torre B:**
-  - a escada de emergência termina no teto do −3, e a saída dela até a rua fica para o projetista;
-  - o acesso pela A pede a escavação sob a laje do −2 da A.
-- **Coletores da Torre B:** passam suspensos no forro do 1º subsolo da A; conferir com a estrutura e o pé-direito livre.
-- **Pluvial da Torre B:** o trecho dos condutores abaixo do 0 (no −1 e no −2, que repetem o tipo) fica sem uso; cortar no projeto.
-- **Parede comum:** as janelas do tipo saíram, e os cômodos que dependiam delas ficam sem janela nesse lado; conferir a ventilação.
-- **Planta das unidades:** cômodos sem fachada e peças de mobiliário que não couberam (as listas estão no relatório da prévia).
+- **Andares enterrados da Torre B:** contenção, impermeabilização, ventilação e luz.
+- **Escada de emergência da garagem da Torre B:** a saída até a rua.
+- **Escavação sob a laje do −2 da A:** para a rampa da B.
+- **Coletores suspensos no 1º subsolo da A:** conferir o pé-direito livre e a estrutura.
+- **Pluvial da Torre B:** o trecho dos condutores abaixo do 0 fica sem uso (eles repetem o tipo); cortar no projeto.
+- **Parede comum:** a ventilação dos cômodos que perderam janela nesse lado.
+- **Planta das unidades:** cômodos sem fachada e peças de mobiliário que não couberam.
 
-### Do código, casos fora do Garden (revisões dos PRs #584 e #587; ficam como decisões registradas)
-- **Ligação no pavimento do lote:** se a ligação da outra torre estiver nesse pavimento (torre sem subsolo), a junção não a vê e ficam duas ligações; o relatório do lote acusa.
-- **Coletor ao contrário:** um coletor desenhado ao contrário (a ponta `a` na ligação) ou dois chegando à ligação fazem o ajuste pular ou religar só um.
-- **Descida da ligação da outra torre:** leva os trechos dela no mesmo pavimento e com a mesma cota, mas não uma caixa no ponto nem trechos de outro pavimento.
-- **Vagas atravessadas pela rampa:** as que não têm nenhum canto na faixa da rampa ficam.
-- **Torre abaixo da rua sem pavimento na cota 0:** o chão do pluvial não é lançado, e o aviso diz só que a entrada fica para o projetista.
-- **Junção que não fecha:** ela cai no caminho lento sem registrar decisão.
-- **Envio da Torre B ao Empreendimento:**
-  - `floor_tipo` vai como TERREO para os andares abaixo da rua (só na criação de unidade nova; as do Garden são adotadas);
-  - o aviso "a estimativa daria N" compara com os pisos acima do solo;
-  - a posição e o sol das unidades vêm da divisão com o ordinal 2.
-- **Vagas da Torre B:** são lançadas antes de a rampa passar para a A (7 vagas; o −3 sem nenhuma). Lançar as vagas de novo depois da rampa liberaria o espaço dela.
-- **Relatório do lote:** traz as conferências do desenho, não as pendências do gerador da prévia (premissas e hipóteses).
-
-### Fora deste plano
-- **`__tests__/espelhoDoInvestidor.test.ts` falha no main:** lê migrations do banco que este plano não tocou ("a unidade do investidor segue com as mesmas 16 chaves" — vieram `price` e `status`). É para o dono do Espelho do Investidor.
+### Do código
+Nenhuma pendência aberta.
 
 ## Verificação
 

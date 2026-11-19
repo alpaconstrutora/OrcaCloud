@@ -89,7 +89,9 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
     // M6a: a divisão do pavimento tipo dá a POSIÇÃO e a ORIENTAÇÃO de cada unidade
     // (a de canto, a que olha para a rua, o sol da fachada). Vai como SEMENTE
     // (createOnly): o cadastro do Empreendimento pode corrigir depois.
-    const ordTipo = ordinalDoTipo(model, b);
+    // PE9: o tipo abaixo da rua (a Torre B do Garden, no −2) é o 1º piso do bloco — a divisão da posição e do sol também.
+    const tipoMontado = pavimentoTipoMontado(model, b);
+    const ordTipo = tipoMontado && tipoMontado.elevationMm < 0 ? 1 : ordinalDoTipo(model, b);
     const pisoTipo = pb.pisos.find((p) => (p.ordinal ?? p.indice) === ordTipo) ?? pb.pisos.find((p) => p.unidades === pb.unidadesPorPavimento);
     const divisao = pisoTipo
       ? dividirPavimentoDoBloco({ bloco: b, produto, porTipologia: pisoTipo.porTipologia, nucleoM2: pb.nucleo.m2, elevadores: pb.nucleo.elevadores, ordinalDoTipo: ordTipo, rotacaoNorteDeg: model.georreferencia?.rotacaoNorteDeg ?? null, direcaoDaRua: direcaoDaRua(model) })
@@ -104,7 +106,8 @@ export function ladoDaMassa(empreendimento: Empreendimento, model: BlueprintMode
       for (const u of torre.units) liveUnitSourceIds.add(u.sourceId);
       towers.push(torre);
       const estimadas = pb.pisos.reduce((s, p) => s + p.unidades, 0);
-      if (estimadas !== doPredio.length) warnings.push(`"${b.nome}": vão as ${doPredio.length} unidade(s) desenhadas no prédio (a estimativa da massa daria ${estimadas}).`);
+      // PE9: a estimativa é dos pisos acima do solo — a torre que começa abaixo da rua (a Torre B do Garden) tem mais.
+      if (estimadas !== doPredio.length && pisosDaTorre === pb.pisos.length) warnings.push(`"${b.nome}": vão as ${doPredio.length} unidade(s) desenhadas no prédio (a estimativa da massa daria ${estimadas}).`);
       continue;
     }
 
@@ -243,7 +246,8 @@ function torreDoPredio(
       },
       createOnly: {
         blueprint_massa_chave: sourceId,
-        floor_tipo: (ordinal <= 1 ? 'TERREO' : 'TIPO') as FloorTipo,
+        // PE9: abaixo da rua o andar de apartamentos é TIPO (a convenção da ficha do Garden); só o 0 é TERREO.
+        floor_tipo: (ordinal === 1 ? 'TERREO' : 'TIPO') as FloorTipo,
         is_vendavel: true,
         status: 'DISPONIVEL' as UnitStatus,
         ...(t && t.precoM2 > 0 ? { price: r2(privativa * t.precoM2) } : {}),

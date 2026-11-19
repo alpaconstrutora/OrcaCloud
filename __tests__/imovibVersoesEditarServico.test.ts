@@ -13,8 +13,9 @@ vi.mock('../lib/supabase', () => {
     q.update = (v: unknown) => { chamadas.ops.push(['update', v]); return q; };
     q.delete = () => { chamadas.ops.push(['delete']); return q; };
     q.eq = (c: string, v: unknown) => { chamadas.ops.push(['eq', c, v]); return q; };
-    q.select = () => resposta();
+    q.select = () => q;
     q.then = (ok: (r: unknown) => unknown) => resposta().then(ok);
+    q.single = () => Promise.resolve({ data: { id: 's1' }, error: null });
     q.rpc = (nome: string, args: Record<string, unknown>) => {
         chamadas.rpc.push([nome, args]);
         return Promise.resolve({ data: null, error: chamadas.erro ? { message: chamadas.erro } : null });
@@ -76,5 +77,16 @@ describe('renomear e excluir', () => {
         expect(chamadas.ops).toEqual([['from', 'imovib_study_versions'], ['delete'], ['eq', 'id', 'v1']]);
         chamadas.erro = 'Versão publicada na oportunidade «Garden» — só leitura.';
         await expect(imovibService.excluirVersao('v1')).rejects.toThrow('só leitura');
+    });
+});
+
+// Revisão final (C1): salvar Premissas numa aba carregada antes/depois da edição não pode regravar a
+// marca da edição (e a cópia de segurança dentro dela).
+describe('updateStudy nunca leva a edição de versão', () => {
+    it('tira edicao_versao do que vai ao banco', async () => {
+        await imovibService.updateStudy('s1', { name: 'Garden', edicao_versao: null } as never);
+        const upd = chamadas.ops.find(o => o[0] === 'update')![1] as Record<string, unknown>;
+        expect(upd.name).toBe('Garden');
+        expect('edicao_versao' in upd).toBe(false);
     });
 });

@@ -400,8 +400,10 @@ export const imovibService = {
     async updateStudy(id: string, updates: ImovibStudyUpdate): Promise<ImovibStudy> {
         // Montados em memória pelo getStudyById, não são colunas: quem grava o
         // estudo inteiro (Premissas) não pode levá-los ao banco (PGRST204).
-        const { blocks, capex_items, unit_instances, estrutura, funding_sources, ...colunas } =
-            updates as ImovibStudyUpdate & Pick<ImovibStudy, 'blocks' | 'estrutura' | 'funding_sources'>;
+        // `edicao_versao` também: só as RPCs imovib_versao_* gravam (plano 2026-11-19) — uma aba antiga
+        // salvando Premissas apagaria a cópia de segurança da edição.
+        const { blocks, capex_items, unit_instances, estrutura, funding_sources, edicao_versao: _edicao, ...colunas } =
+            updates as ImovibStudyUpdate & Pick<ImovibStudy, 'blocks' | 'estrutura' | 'funding_sources' | 'edicao_versao'>;
         const { data, error } = await supabase
             .from('imovib_studies')
             .update(colunas)

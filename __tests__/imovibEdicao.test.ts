@@ -38,3 +38,26 @@ describe('avaliarEdicaoImovib — permissão canEditImovib na org do estudo', ()
         expect(avaliarEdicaoImovib({ ...base, membro: { role: 'viewer', permissions: {} } }).pode).toBe(false);
     });
 });
+
+// Plano docs/planos/2026-11-19-imovib-versoes-editar-excluir.md, F3.2: edição de versão aberta por outra
+// pessoa deixa o estudo só para leitura — inclusive para o desenvolvedor (o banco recusa do mesmo jeito).
+import { travaDaEdicaoDeVersao } from '../hooks/useImovibEdicao';
+
+describe('travaDaEdicaoDeVersao — só quem abriu a edição grava', () => {
+    const aberta = { version_id: 'v1', version_label: 'Cenário banco', started_by: 'u-ana', started_by_name: 'Ana', started_at: '2026-11-19T17:05:00Z' };
+
+    it('aberta por outra pessoa: só leitura, com quem, qual versão e desde quando', () => {
+        expect(travaDaEdicaoDeVersao({ pode: true }, aberta, 'u-bruno')).toEqual({
+            pode: false, motivo: '«Ana» está editando a versão «Cenário banco» desde 19/11 14:05 — o estudo está só para leitura.',
+        });
+    });
+
+    it('aberta por mim: segue a permissão de sempre', () => {
+        expect(travaDaEdicaoDeVersao({ pode: true }, aberta, 'u-ana')).toEqual({ pode: true });
+        expect(travaDaEdicaoDeVersao({ pode: false, motivo: 'x' }, aberta, 'u-ana')).toEqual({ pode: false, motivo: 'x' });
+    });
+
+    it('sem edição aberta: não muda nada', () => {
+        expect(travaDaEdicaoDeVersao({ pode: true }, null, 'u-bruno')).toEqual({ pode: true });
+    });
+});

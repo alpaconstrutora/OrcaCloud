@@ -35,7 +35,7 @@ const INSTANCIA_VGV_COLS = 'id, study_id, block_id, unit_id, name, floor, privat
 /** Erro de permissão do banco (RLS/privilégio): a tela diz em português, não o texto do Postgres. */
 const semPermissao = (e: { code?: string; message?: string }) => e.code === '42501' || /row-level security|permission denied/i.test(e.message ?? '');
 
-const VERSAO_COLS = 'id, study_id, label, notes, results, created_at, created_by';
+const VERSAO_COLS = 'id, study_id, label, notes, results, created_at, created_by, updated_at, updated_by';
 const SOCIO_COLS = 'id, study_id, name, share_percent, capital_percent, notes, company_partner_id, sort_order, created_at';
 const FONTE_COLS = 'id, study_id, name, kind, amount, entry_month, remuneration, rate_annual, profit_share_percent, amortization, term_months, grace_months, sort_order, created_at';
 
@@ -979,6 +979,21 @@ export const imovibService = {
         const { snapshot, results } = await this.montarCopiaDoEstudo(study, label);
         const { error } = await supabase.rpc('imovib_versao_salvar_edicao', { p_study_id: study.id, p_snapshot: snapshot, p_results: results });
         if (error) throw new Error(error.message);
+    },
+
+    /**
+     * Só quem e qual versão (sem a cópia de segurança, que é pesada) — para as telas que leem o estudo
+     * de fora (Central de Sincronização do empreendimento). Falha de leitura = sem aviso.
+     */
+    async edicaoDeVersaoAberta(studyId: string): Promise<{ version_label: string; started_by_name: string | null } | null> {
+        const { data, error } = await supabase
+            .from('imovib_studies')
+            .select('version_label:edicao_versao->>version_label, started_by_name:edicao_versao->>started_by_name')
+            .eq('id', studyId)
+            .maybeSingle();
+        if (error || !data) return null;
+        const d = data as { version_label: string | null; started_by_name: string | null };
+        return d.version_label ? { version_label: d.version_label, started_by_name: d.started_by_name } : null;
     },
 
     /** Devolve o estudo ao que era antes da edição; a versão não muda. */

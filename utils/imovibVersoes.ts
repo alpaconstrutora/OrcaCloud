@@ -86,6 +86,9 @@ export interface ImovibStudyVersion {
     results: ResultadosDaVersao;
     created_at: string;
     created_by: string | null;
+    /** Última edição (plano 2026-11-19); null = nunca editada. */
+    updated_at?: string | null;
+    updated_by?: string | null;
 }
 
 export interface LadoDaComparacao {

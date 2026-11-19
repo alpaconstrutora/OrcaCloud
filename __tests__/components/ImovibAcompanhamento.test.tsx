@@ -28,6 +28,14 @@ beforeEach(() => {
 });
 
 describe('10.4 — aba Acompanhamento', () => {
+    // Plano 2026-11-19-imovib-versoes-editar-excluir, F3.4: com versão em edição, o "previsto" do estudo
+    // é o da versão até a edição terminar — a aba avisa.
+    it('estudo em edição de versão: avisa que o previsto é o da versão', async () => {
+        realizado.doEstudo.mockResolvedValue({ obras: [], obrasDeOutraOrganizacao: [], financeiro: [], aConciliar: { entradas: 0, saidas: 0 }, vendas: [], vendidasSemNegociacao: 0 });
+        tela({ base_date: '2026-01', edicao_versao: { version_id: 'v1', version_label: 'Cenário banco', started_by: 'u1', started_by_name: 'Ana', started_at: '2026-11-19T17:05:00Z' } });
+        expect(await screen.findByText(/Estudo em edição da versão «Cenário banco» por «Ana»/)).toBeTruthy();
+    });
+
     it('sem data-base: pede a data-base em vez de alinhar por conta própria', async () => {
         tela({ base_date: null });
         expect(await screen.findByText(/informe a data-base/i)).toBeTruthy();

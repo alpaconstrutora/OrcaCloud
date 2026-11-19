@@ -1,15 +1,19 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { History, AlertCircle, Loader2 } from 'lucide-react';
+import { History, AlertCircle, Loader2, Type, Check, X } from 'lucide-react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { investorPortalService } from '../services/investorPortalService';
-import { resultadosDoEstudo, diferencaEntreVersoes, dadosDoRelatorioDaVersao, congeladoDaVersao, type ImovibStudyVersion, type LadoDaComparacao, type SnapshotDaVersao } from '../utils/imovibVersoes';
+import { resultadosDoEstudo, diferencaEntreVersoes, dadosDoRelatorioDaVersao, congeladoDaVersao, acoesDaVersao, partesAusentesDaVersao, type AcaoDaVersao, type ImovibStudyVersion, type LadoDaComparacao, type SnapshotDaVersao } from '../utils/imovibVersoes';
 import { nomeDeArquivo } from '../utils/nomeDeArquivo';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ActionIconButton from './ui/ActionIconButton';
+import { useConfirm } from './ui/confirm';
+import { useImovibEdicao } from '../hooks/useImovibEdicao';
 
 interface Props {
     study: ImovibStudy;
+    /** Edição de versão aberta pelo estudo: quem monta a aba recarrega o estudo (faixa, números). */
+    onEstudoMudou?: () => void;
 }
 
 const ATUAL = 'atual';
@@ -22,6 +26,7 @@ const fmt = (v: number | string | null, unidade: string): string => {
     const n = v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
     return unidade.startsWith('%') ? `${n}${unidade}` : `${n} ${unidade}`.trim();
 };
+const juntar = (l: string[]) => (l.length < 2 ? l.join('') : `${l.slice(0, -1).join(', ')} e ${l[l.length - 1]}`);
 const dataHora = (iso: string) => new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' });
 
 const COLUNAS: StandardTableColumn[] = [
@@ -34,11 +39,15 @@ const COLUNAS: StandardTableColumn[] = [
 ];
 
 /**
- * Versões congeladas (item 10.2 do plano 2026-11-11, decisão D5): lista e
- * comparação de duas versões (ou de uma versão com o estudo atual). Versão não se
- * edita nem se apaga — a tela não oferece nenhuma das duas.
+ * Versões congeladas (item 10.2 do plano 2026-11-11): lista e comparação de duas versões (ou de uma
+ * versão com o estudo atual). Desde 19/11 (plano 2026-11-19-imovib-versoes-editar-excluir): versão
+ * PUBLICADA é só leitura; as demais se editam pelo estudo, se renomeiam na linha e se excluem.
  */
-const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
+const ImovibVersoesTab: React.FC<Props> = ({ study, onEstudoMudou }) => {
+    const pode = useImovibEdicao();
+    const confirm = useConfirm();
+    const [renomeando, setRenomeando] = useState<{ id: string; label: string; notes: string } | null>(null);
+    const [ocupado, setOcupado] = useState(false);
     const [versoes, setVersoes] = useState<ImovibStudyVersion[]>([]);
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
@@ -65,6 +74,75 @@ const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
             .catch(e => console.error('Erro ao ler as oportunidades das versões', e));
         return () => { vivo = false; };
     }, [study.id]);
+    const publicadaEm = (v: ImovibStudyVersion) => oportunidades.find(o => o.imovib_version_id === v.id && o.is_published)?.title ?? null;
+    const rascunhosDe = (v: ImovibStudyVersion) => oportunidades.filter(o => o.imovib_version_id === v.id && !o.is_published).map(o => o.title);
+    const acoes = (v: ImovibStudyVersion) => acoesDaVersao({ versaoId: v.id, publicadaEm: publicadaEm(v), edicaoAberta: study.edicao_versao ?? null, pode });
+
+    const editarVersao = async (v: ImovibStudyVersion) => {
+        try {
+            const snap = (snapshots[v.id] ?? await imovibService.snapshotDaVersao(v.id)) as unknown as Record<string, unknown>;
+            const faltam = partesAusentesDaVersao(snap);
+            const ok = await confirm({
+                title: `Editar a versão «${v.label}»?`,
+                message: `O estudo passa a mostrar a versão até você salvar na versão ou descartar. O estudo de agora fica guardado e volta ao final.`
+                    + (faltam.length ? `\n\nEsta versão não guardou ${juntar(faltam)} — essas partes ficam com o conteúdo de hoje do estudo e, ao salvar, passam a ser guardadas na versão.` : ''),
+                confirmLabel: 'Editar versão',
+            });
+            if (!ok) return;
+            setOcupado(true);
+            await imovibService.iniciarEdicaoDaVersao(study, v.id);
+            onEstudoMudou?.();
+        } catch (e) {
+            setErro(`Não foi possível abrir a edição da versão: ${(e as Error).message}`);
+        } finally {
+            setOcupado(false);
+        }
+    };
+
+    const excluirVersao = async (v: ImovibStudyVersion) => {
+        const rasc = rascunhosDe(v);
+        const ok = await confirm({
+            title: `Excluir a versão «${v.label}»?`,
+            message: rasc.length
+                ? `Ela está escolhida no rascunho «${rasc.join('», «')}» — a escolha sai do rascunho. Não dá para desfazer.`
+                : 'Não dá para desfazer.',
+            variant: 'danger', confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
+        try {
+            setOcupado(true);
+            await imovibService.excluirVersao(v.id);
+            // §22: tira da lista local em vez de recarregar.
+            setVersoes(l => l.filter(x => x.id !== v.id));
+            setOportunidades(l => l.map(o => (o.imovib_version_id === v.id ? { ...o, imovib_version_id: null } : o)));
+            setLadoA(a => (a === v.id ? '' : a));
+            setLadoB(b => (b === v.id ? ATUAL : b));
+        } catch (e) {
+            setErro(`Não foi possível excluir a versão: ${(e as Error).message}`);
+        } finally {
+            setOcupado(false);
+        }
+    };
+
+    const salvarNome = async () => {
+        if (!renomeando || !renomeando.label.trim()) return;
+        const { id, label, notes } = renomeando;
+        try {
+            setOcupado(true);
+            await imovibService.renomearVersao(id, label.trim(), notes.trim() || null);
+            setVersoes(l => l.map(x => (x.id === id ? { ...x, label: label.trim(), notes: notes.trim() || null } : x)));
+            setRenomeando(null);
+        } catch (e) {
+            setErro(`Não foi possível renomear a versão: ${(e as Error).message}`);
+        } finally {
+            setOcupado(false);
+        }
+    };
+
+    // Botão-ícone desligado não recebe hover (pointer-events-none): o motivo vai num <span> em volta.
+    const botao = (acao: AcaoDaVersao, el: React.ReactElement) =>
+        <span className="inline-flex" title={acao.pode ? undefined : acao.motivo}>{el}</span>;
+
     const paraOInvestidor = (v: ImovibStudyVersion) => oportunidades
         .filter(o => o.imovib_version_id === v.id)
         .map(o => (o.is_published ? `Publicada em ${o.title}` : `Escolhida em ${o.title} (rascunho)`));
@@ -123,7 +201,7 @@ const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
                         <History className="w-5 h-5 text-indigo-500" />
                         Versões congeladas
                     </h2>
-                    <p className="text-slate-500 text-sm mt-1">Cada versão guarda o estudo inteiro e os indicadores do momento em que foi congelada. Não se edita nem se apaga.</p>
+                    <p className="text-slate-500 text-sm mt-1">Cada versão guarda o estudo inteiro e os indicadores do momento em que foi congelada. Enquanto não for publicada para o investidor, pode ser editada e excluída; publicada, fica só para leitura.</p>
                 </div>
                 {erro && (
                     <div className="flex items-start gap-2 rounded-[10px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
@@ -139,27 +217,56 @@ const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
                     dense
                     bare
                     actions={{
-                        width: 90,
-                        render: v => (
-                            <ActionIconButton
-                                kind="download"
-                                title={gerando === v.id ? 'Gerando o relatório…' : 'Relatório da versão (PDF)'}
-                                aria-label="Relatório da versão (PDF)"
-                                onClick={() => void baixarRelatorio(v)}
-                            />
-                        ),
+                        width: 170,
+                        render: v => {
+                            if (renomeando?.id === v.id) {
+                                return (
+                                    <div className="flex items-center gap-1.5">
+                                        <ActionIconButton kind="edit" icon={<Check className="w-4 h-4" />} title="Salvar nome e observações" aria-label="Salvar nome e observações"
+                                            disabled={ocupado || !renomeando.label.trim()} onClick={() => void salvarNome()} />
+                                        <ActionIconButton kind="edit" icon={<X className="w-4 h-4" />} title="Cancelar" aria-label="Cancelar a renomeação" onClick={() => setRenomeando(null)} />
+                                    </div>
+                                );
+                            }
+                            const a = acoes(v);
+                            return (
+                                <div className="flex items-center gap-1.5">
+                                    <ActionIconButton
+                                        kind="download"
+                                        title={gerando === v.id ? 'Gerando o relatório…' : 'Relatório da versão (PDF)'}
+                                        aria-label="Relatório da versão (PDF)"
+                                        onClick={() => void baixarRelatorio(v)}
+                                    />
+                                    {botao(a.editar, <ActionIconButton kind="edit" title="Editar a versão (premissas, cenários e tudo o mais, pelo estudo)" aria-label="Editar a versão"
+                                        disabled={!a.editar.pode || ocupado} onClick={() => void editarVersao(v)} />)}
+                                    {botao(a.renomear, <ActionIconButton kind="edit" icon={<Type className="w-4 h-4" />} title="Renomear e editar as observações" aria-label="Renomear a versão"
+                                        disabled={!a.renomear.pode || ocupado} onClick={() => setRenomeando({ id: v.id, label: v.label, notes: v.notes ?? '' })} />)}
+                                    {botao(a.excluir, <ActionIconButton kind="delete" title="Excluir a versão" aria-label="Excluir a versão"
+                                        disabled={!a.excluir.pode || ocupado} onClick={() => void excluirVersao(v)} />)}
+                                </div>
+                            );
+                        },
                     }}
                     renderCell={(k, v) => {
                         switch (k) {
-                            case 'label': return <span className="text-sm text-gray-800">{v.label}</span>;
-                            case 'created_at': return <span className="text-sm text-gray-700">{dataHora(v.created_at)}</span>;
+                            case 'label': return renomeando?.id === v.id
+                                ? <input aria-label="Nome da versão" className={`${CAMPO} w-full`} value={renomeando.label} onChange={e => setRenomeando(r => r && { ...r, label: e.target.value })} />
+                                : <span className="text-sm text-gray-800">{v.label}</span>;
+                            case 'created_at': return (
+                                <span className="text-sm text-gray-700">
+                                    {dataHora(v.created_at)}
+                                    {v.updated_at && <span className="block text-xs text-gray-500">editada em {dataHora(v.updated_at)}</span>}
+                                </span>
+                            );
                             case 'vpl': return <span className="text-sm text-gray-700">{fmt(v.results.vpl, 'R$')}</span>;
                             case 'tir': return <span className="text-sm text-gray-700">{fmt(v.results.tirAnual, '% a.a.')}</span>;
                             case 'publicada': {
                                 const l = paraOInvestidor(v);
                                 return l.length ? <span className="text-sm text-gray-700">{l.map(t => <span key={t} className="block">{t}</span>)}</span> : <span className="text-sm text-gray-500">—</span>;
                             }
-                            case 'notes': return <span className="text-sm text-gray-600">{v.notes ?? '—'}</span>;
+                            case 'notes': return renomeando?.id === v.id
+                                ? <input aria-label="Observações da versão" className={`${CAMPO} w-full`} value={renomeando.notes} onChange={e => setRenomeando(r => r && { ...r, notes: e.target.value })} />
+                                : <span className="text-sm text-gray-600">{v.notes ?? '—'}</span>;
                             default: return null;
                         }
                     }}

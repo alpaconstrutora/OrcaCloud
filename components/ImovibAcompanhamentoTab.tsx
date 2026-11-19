@@ -12,6 +12,7 @@ import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import {
     ChartCard, Legend, GRID, TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR, INITIAL_DIMENSION, compactAxis, moneyBRL,
 } from './analysis/chartKit';
+import { AvisoEstudoEmEdicao } from './ImovibFaixaEdicaoDeVersao';
 
 interface Props {
     study: ImovibStudy;
@@ -125,6 +126,7 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
 
     return (
         <div className="space-y-6">
+            {study.edicao_versao && <AvisoEstudoEmEdicao versionLabel={study.edicao_versao.version_label} startedByName={study.edicao_versao.started_by_name} />}
             <section className="bg-white rounded-[10px] p-6 border border-gray-200 space-y-3" aria-labelledby="imovib-acomp-titulo">
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="mr-auto">

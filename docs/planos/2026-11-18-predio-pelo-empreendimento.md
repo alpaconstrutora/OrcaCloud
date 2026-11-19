@@ -504,6 +504,20 @@ A PE5 abaixo descreve a parte da garagem; a PE4 fica com o andar próprio.
   - **Contenção:** o vão entre as garagens e a escavação sob o −2 da A, como pendência.
   - **Caminhos enterrados:** os do coletor e do pluvial da B passam pela projeção da garagem da A, como pendência.
 
+### PE8 — O que ficou da PE7 (pedido de 19/11/2026: "Resolva todos"; o relatório "numa tela do lote")
+
+- **PE8a, torres com pé-direito diferente.** A descida e a subida pela cota (`descerPelaCota`) podem receber as PEGADAS dos pavimentos (`pegadasDosPavimentos`, o retângulo das paredes). Entre os VIZINHOS de baixo, os que chegam até a laje deste, ou os de cima, vale o que contém o ponto (x, y); nunca um mais fundo, como faria um ponto fora da fachada sobre a garagem. Sem pegada, é o de sempre. Usam as pegadas as análises do desenho inteiro: as conexões (verificação e quantitativo), a pressão e a VRF.
+- **PE8b, o vão na contenção.** Onde a rampa da segunda torre cruza a parede do subsolo dela, abre-se um vão da largura da rampa.
+- **PE8c, os coletores sob a outra torre.** No Garden a Torre A ocupa a frente do lote de lado a lado, então não há "por fora" dela. O coletor de esgoto e o pluvial da B correm suspensos no forro do 1º subsolo da A: desenhados nesse pavimento, por fora dos pilares (`caminhoPorFora`), com a mesma queda. Sem garagem de lá no caminho, ficam no pavimento de sempre.
+- **PE8d, o relatório do lote** (`utils/predioAutomatico/relatorioDoLote.ts` e `components/blueprint/TelaRelatorioDoLote.tsx`). O botão "Relatório do lote" fica na Casa automática, ao lado de "Construir o prédio"; desligado, ele diz o motivo. O relatório é calculado do desenho e vale depois do Lançar:
+  - **Do lote:** as entradas de cada rede, que devem ser uma (esgoto, pluvial, cavalete, energia), a demanda da entrada, as janelas em parede comum e as pontas abertas.
+  - **Por torre:** os pavimentos, as unidades, o quadro geral (a demanda e de onde ele é alimentado) e os conflitos.
+- **Provas:**
+  - **Chave:** pé-direito diferente e a pegada escolhem a torre.
+  - **Conexões:** a prumada da B a −2880 sem ponta aberta na laje.
+  - **`predioDuasTorres` (9 testes):** o coletor no 1º subsolo da A, por fora dos pilares; o vão na contenção; o relatório (14 e 24 unidades, 4 entradas únicas, a B alimentada da A, nenhum aviso).
+  - **Conferência no app** (`conferencia-predio-pe8.cjs`): as duas torres lançadas e o relatório do lote aberto pela Casa automática em 6,9 s. Os 25 portões passam.
+
 ## Mapa de implementação da PE4–PE6 (18/11/2026, lido no código depois do merge do #577)
 
 O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três travas do orquestrador
@@ -539,7 +553,8 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 | PE4 — o térreo da Torre A com os apartamentos | PE4a (#582) e PE4b feitas, conferidas no app: o andar 0 com 002/004 como unidades do kernel (QD, hidrômetro, medidor), o hall, a porta e o pluvial no chão |
 | PE5 — condomínio e desvio sem térreo livre | PE5a feita com a PE4a (a sala técnica na garagem, o desvio no forro dela); a Torre B (o andar 0 cópia, sem desvínculo) vem com a PE6 |
 | PE6 — abaixo da rede pública | PE6a–PE6d feitas e conferidas no app: a Torre B do −2, o esgoto por bombas, o 0 desvinculado com a porta (decisão do usuário), os nomes da ficha e o envio; a Torre B liberada |
-| PE7 — as duas torres no mesmo estudo | feita, a publicar (#587), conferida no app com as duas torres: cada uma se confere sozinha, uma entrada de cada rede, a rampa pela A, a parede comum cega; fica o relatório único do lote |
+| PE7 — as duas torres no mesmo estudo | feita, no ar (#587, f042101) |
+| PE8 — o que ficou da PE7 | feita, a publicar: pé-direito diferente entre torres, o vão na contenção, os coletores suspensos sob a outra torre e o relatório do lote (tela da Casa automática) |
 
 ## Verificação
 

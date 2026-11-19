@@ -19,6 +19,7 @@ import { dividirPavimentoDoBloco, montarPavimentoTipoDoBloco } from '../blueprin
 import { dividirPeloEmpreendimento, type AndarDoEmpreendimento } from './andaresDoEmpreendimento';
 import { concluirTerreoDeApartamentos } from './terreoDeApartamentos';
 import { juntarComOsPavimentos, semOsPavimentos } from './vistaDaTorre';
+import { caminhoPorFora, pedacosComCota, pilaresNaFaixa } from './contornoDePilar';
 import type { DivisaoDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 import { plantasDasUnidades } from '../blueprintPlantaDaUnidade';
 import type { Produto, ProdutoDoBloco } from '../blueprintProduto';
@@ -748,11 +749,30 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
         else if (t.a.x === destino.at.x && t.a.y === destino.at.y && t.cotaAMm === destino.cotaMm) descerALigacao.push({ type: 'SetTrechoProps', trechoId: t.id, cotaAMm: novaCota } as Command);
       }
     }
+    // PE8c (19/11/2026): a rota passa SOB a outra torre (no Garden a Torre A ocupa a frente do lote de lado a lado — não há
+    // "por fora" dela): ela corre suspensa no forro da garagem de lá que contém a altura dela, desenhada nesse pavimento e
+    // por fora dos pilares dele, com a mesma queda. Sem garagem de lá no caminho, no pavimento de sempre, em linha reta.
+    const absInicio = elev(meuColetor.levelId) + meuColetor.cotaAMm;
+    const zMedio = (absInicio + absDaLigacao) / 2;
+    const meioDaRota = { x: (meuColetor.a.x + destino.at.x) / 2, y: (meuColetor.a.y + destino.at.y) / 2 };
+    const garagemSob = (desenho.blocos ?? [])
+      .filter((o) => o.uso === 'GARAGEM' && o.id !== subsoloDaTorre(desenho, b)?.id && pointInPolygon(o.pontos as Point[], meioDaRota as Point))
+      .flatMap((o) => garagemLancada(noDesenho, o))
+      .find((l) => l.elevationMm <= zMedio && zMedio <= l.elevationMm + l.defaultHeightMm);
+    const naRota: Command[] = [];
+    if (garagemSob) {
+      const z0 = garagemSob.elevationMm;
+      const raio = Math.ceil(meuColetor.bitolaMm / 2) + 50;
+      const pilares = pilaresNaFaixa(noDesenho, Math.min(absInicio, absDaLigacao) - raio, Math.max(absInicio, absDaLigacao) + raio, raio);
+      const caminho = caminhoPorFora(meuColetor.a as Point, { x: destino.at.x, y: destino.at.y } as Point, pilares);
+      for (const x of pedacosComCota(caminho.pts, absInicio - z0, absDaLigacao - z0))
+        naRota.push({ type: 'AddTrecho', levelId: garagemSob.id, disciplina, a: x.a, b: x.b, cotaAMm: x.cotaAMm, cotaBMm: x.cotaBMm, bitolaMm: meuColetor.bitolaMm, sugerido: true, rotulo: meuColetor.rotulo ?? null } as Command);
+    } else naRota.push({ type: 'AddTrecho', levelId: meuColetor.levelId, disciplina, a: { ...meuColetor.a }, b: { x: destino.at.x, y: destino.at.y }, cotaAMm: meuColetor.cotaAMm, cotaBMm: cotaNoMeu, bitolaMm: meuColetor.bitolaMm, sugerido: true, rotulo: meuColetor.rotulo ?? null } as Command);
     const ligar: Command[] = [
       ...descerALigacao,
       { type: 'DeleteTerminal', terminalId: minhaLigacao.id },
       { type: 'DeleteTrecho', trechoId: meuColetor.id },
-      { type: 'AddTrecho', levelId: meuColetor.levelId, disciplina, a: { ...meuColetor.a }, b: { x: destino.at.x, y: destino.at.y }, cotaAMm: meuColetor.cotaAMm, cotaBMm: cotaNoMeu, bitolaMm: meuColetor.bitolaMm, sugerido: true, rotulo: meuColetor.rotulo ?? null } as Command,
+      ...naRota,
     ];
     const r = aplicarLote(noDesenho, ligar);
     noDesenho = r.model;
@@ -764,7 +784,7 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
     decisoes.push(`${rede}: uma ligação no lote — o coletor desta torre vai à ligação da ${daOutra}.`);
     pendencias.push({
       grupo: declividade >= 1 ? 'CONFERIR' : 'VERIFICACAO',
-      texto: `${rede}: o coletor desta torre vai à ligação da ${daOutra} (uma ligação no lote) — ${Math.round(L / 100) / 10} m a ${declividade.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %${declividade >= 1 ? '' : ', abaixo de 1 %: aprofunde a caixa desta torre'}; confira o caminho por fora da garagem da ${daOutra} e a caixa de junção antes da ligação.`,
+      texto: `${rede}: o coletor desta torre vai à ligação da ${daOutra} (uma ligação no lote) — ${Math.round(L / 100) / 10} m a ${declividade.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} %${declividade >= 1 ? '' : ', abaixo de 1 %: aprofunde a caixa desta torre'}${garagemSob ? `; corre suspenso no forro do ${garagemSob.name.split('·').pop()?.trim()} da ${daOutra}, por fora dos pilares — confira com a estrutura e o pé-direito livre da garagem` : ''}; confira a caixa de junção antes da ligação.`,
     });
   }
   if (tirarCavalete.length) {
@@ -779,6 +799,7 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
   // outro lado da parede comum: parte do alto da antiga, segue na mesma direção para dentro da outra torre e chega à
   // garagem de lá; as vagas de lá nessa faixa cedem o espaço.
   const minhaRampa = noDesenho.stairs.find((e) => criadosAqui.has(e.id) && e.veicular && e.desdeCotaMm !== undefined);
+  let abriuVao = false;
   if (minhaRampa) {
     const deOutraTorre = (desenho.blocos ?? []).filter((o) => o.uso === 'GARAGEM' && o.id !== subsoloDaTorre(desenho, b)?.id);
     const partida = noDesenho.levels.find((l) => l.id === minhaRampa.levelId)!;
@@ -809,10 +830,36 @@ export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio
         const chegada: Command[] = [{ type: 'SetEscadaProps', escadaId: r1.diff.created[0], ateLevelId: alvo.l.id } as Command];
         noDesenho = aplicarLote(r1.model, chegada).model;
         comandos.push(...ligar, ...chegada);
+        // PE8b (19/11/2026): o VÃO na contenção do subsolo desta torre, onde a rampa cruza a parede (a parede comum com a
+        // garagem de lá) — da largura da rampa, centrado no cruzamento.
+        const cruzamento = (w: { a: Point; b: Point }) => {
+          const d = { x: novoAlto.x - alto.x, y: novoAlto.y - alto.y };
+          const e = { x: w.b.x - w.a.x, y: w.b.y - w.a.y };
+          const den = d.x * e.y - d.y * e.x;
+          if (Math.abs(den) < 1e-9) return null;
+          const t = ((w.a.x - alto.x) * e.y - (w.a.y - alto.y) * e.x) / den;
+          const s2 = ((w.a.x - alto.x) * d.y - (w.a.y - alto.y) * d.x) / den;
+          return t >= 0 && t <= 1 && s2 >= 0 && s2 <= 1 ? s2 * Math.hypot(e.x, e.y) : null;
+        };
+        const vaos: Command[] = [];
+        for (const w of noDesenho.walls.filter((x) => x.levelId === minhaRampa.levelId)) {
+          const ao = cruzamento(w);
+          const comp = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y);
+          if (ao === null || comp < W) continue;
+          const offsetMm = Math.round(Math.max(0, Math.min(comp - W, ao - W / 2)));
+          vaos.push({ type: 'AddOpening', wallId: w.id, kind: 'door', offsetMm, widthMm: W, heightMm: Math.min(2400, w.heightMm), sillMm: 0 } as Command);
+        }
+        if (vaos.length) {
+          const rv = aplicarLote(noDesenho, vaos);
+          noDesenho = rv.model;
+          comandos.push(...vaos);
+          criados.push(...rv.diff.created);
+        }
+        abriuVao = vaos.length > 0;
         criados.push(...r1.diff.created);
         apagados.add(minhaRampa.id);
         decisoes.push(`Garagem: o acesso de veículos é pela garagem da ${daOutra} — a rampa sobe do ${partida.name.split('·').pop()?.trim()} ao ${alvo.l.name.split('·').pop()?.trim()} de lá.`);
-        pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: o acesso de veículos a esta torre é pela garagem da ${daOutra} — a rampa sobe do ${partida.name} ao ${alvo.l.name}, junto da parede comum; ${vagas.length} vaga(s) de lá cederam o espaço. Abra o vão na contenção entre as garagens e confira a escavação e a laje sob o ${alvo.l.name}.` });
+        pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: o acesso de veículos a esta torre é pela garagem da ${daOutra} — a rampa sobe do ${partida.name} ao ${alvo.l.name}, junto da parede comum; ${vagas.length} vaga(s) de lá cederam o espaço. ${abriuVao ? `O vão de ${(W / 1000).toLocaleString('pt-BR')} m na contenção entre as garagens foi aberto; confira` : 'Abra o vão na contenção entre as garagens e confira'} a escavação e a laje sob o ${alvo.l.name}.` });
       } else pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Garagem: a rampa desta torre não chega à garagem da ${daOutra} pela parede comum — o acesso de veículos fica para o projetista.` });
     }
   }

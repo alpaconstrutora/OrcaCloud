@@ -38,7 +38,7 @@
  */
 import type { BlueprintModel, Command, Level, ObjectId, Terminal, Trecho } from './blueprintKernel';
 import { TIPOS_DE_DIVISAO_DO_VRF, TIPOS_DE_EVAPORADORA, applyBatch } from './blueprintKernel';
-import { comprimentoMm, descerPelaCota, fazerChave, type No } from './blueprintGrafoDeRede';
+import { comprimentoMm, descerPelaCota, fazerChave, pegadasDosPavimentos, type No } from './blueprintGrafoDeRede';
 import { arvorePelasParedes, chaveP, encaixarNaParede, type P2 } from './blueprintRotaPelasParedes';
 import { desvioDoPilar, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { HIPOTESES_DO_VRF_PADRAO, type HipotesesDaLinha, type HipotesesDoVrf } from './blueprintClimatizacao';
@@ -221,13 +221,14 @@ export interface AnaliseDoVrf {
 export function analisarVrf(model: BlueprintModel, sistema: SistemaVrf, hip: HipotesesDoVrf = HIPOTESES_DO_VRF_PADRAO): AnaliseDoVrf {
   // O LUGAR de cada nó (o pavimento e a cota já descidos), guardado ao fazer a chave — a chave da rede é pela cota do
   // pavimento desde a PE7 do prédio pelo Empreendimento (18/11/2026), e não se desmonta para achar o pavimento.
-  const chaveDaRede = fazerChave(model.levels);
-  const descer = descerPelaCota(model.levels);
+  const pegadas = pegadasDosPavimentos(model);
+  const chaveDaRede = fazerChave(model.levels, pegadas);
+  const descer = descerPelaCota(model.levels, pegadas);
   const lugarDoNo = new Map<No, { levelId: ObjectId; at: P2; cotaMm: number }>();
   const chave = (levelId: ObjectId, x: number, y: number, cota: number): No => {
     const k = chaveDaRede(levelId, x, y, cota);
     if (!lugarDoNo.has(k)) {
-      const d = descer(levelId, cota);
+      const d = descer(levelId, cota, x, y);
       lugarDoNo.set(k, { levelId: d.levelId, at: { x, y }, cotaMm: d.cotaMm });
     }
     return k;

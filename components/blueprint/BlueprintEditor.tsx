@@ -617,6 +617,8 @@ import { espelhoDeVendasService, type ContornoGravado } from '../../services/esp
 import { contornosDasTorres, mesmoContorno } from '../../utils/espelhoContornoDaTorre';
 import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
 import TelaPredioAutomatico from './TelaPredioAutomatico';
+import TelaRelatorioDoLote from './TelaRelatorioDoLote';
+import { relatorioDoLote, type RelatorioDoLote } from '../../utils/predioAutomatico/relatorioDoLote';
 import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
 import { planejarCasaNoWorker, useCasaAutomatica } from '../../hooks/useCasaAutomatica';
 import { usePredioAutomatico } from '../../hooks/usePredioAutomatico';
@@ -2240,7 +2242,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas' | 'areas-nbr12721' | 'dimensionamento-agua' | 'casa' | 'casas-lotes' | 'predio';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas' | 'areas-nbr12721' | 'dimensionamento-agua' | 'casa' | 'casas-lotes' | 'predio' | 'relatorio-lote';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -9373,6 +9375,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const paraBloco = blocoDoPredio?.id ?? null;
     setFichaDoPredio((v) => (v.paraBloco === paraBloco && JSON.stringify(v.valor) === JSON.stringify(novo) ? v : { paraBloco, valor: novo }));
   }, [blocoDoPredio, estruturasDaCasa]);
+  // PE8d (19/11/2026): o RELATÓRIO DO LOTE — as torres lançadas no estudo e as entradas do lote, calculado do desenho ao
+  // abrir a tela (fora do render: a compatibilização de cada torre leva alguns segundos num lote com duas).
+  const torresLancadasNoLote = useMemo(() => (editor.model.blocos ?? []).filter((b) => b.uso !== 'GARAGEM' && pavimentoTipoMontado(editor.model, b)).length, [editor.model]);
+  const [relatorioDoLoteAberto, setRelatorioDoLoteAberto] = useState<RelatorioDoLote | null>(null);
+  useEffect(() => {
+    if (telaAberta !== 'relatorio-lote') return;
+    setRelatorioDoLoteAberto(null);
+    const id = setTimeout(() => setRelatorioDoLoteAberto(relatorioDoLote(editor.model)), 30);
+    return () => clearTimeout(id);
+  }, [telaAberta, editor.model]);
   // PE3: o Empreendimento é prédio? As torres com apartamento (o resumo dos andares) para o seletor da Casa automática.
   const tipoDoEmpreendimentoDaCasa = useMemo(() => (estruturasDaCasa ? tipoDoEmpreendimento(estruturasDaCasa) : 'CASA'), [estruturasDaCasa]);
   const torresDoPredioDaCasa = useMemo(
@@ -13010,7 +13022,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       onConstruir: construirPredioPeloEmpreendimento,
                       onResolver: resolverPassoDaCasa,
                       mensagem: mensagemDoConstruir,
-                      predio: { torres: torresDoPredioDaCasa, torreId: torreEscolhidaDaCasa?.id ?? null, onTorre: setTorreDoPredioDaCasa },
+                      predio: { torres: torresDoPredioDaCasa, torreId: torreEscolhidaDaCasa?.id ?? null, onTorre: setTorreDoPredioDaCasa, torresLancadas: torresLancadasNoLote, onRelatorioDoLote: () => setTelaAberta('relatorio-lote') },
                     }
                   : {
                       nome: nomeDoEmpreendimentoDaCasa,
@@ -13023,6 +13035,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 : null
             }
           />
+        </div>
+      )}
+      {telaAberta === 'relatorio-lote' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="relatorio-lote">
+          {cabecalhoDaTela(
+            'Relatório do lote',
+            'As torres lançadas no estudo e as entradas do lote (esgoto, pluvial, água, energia) — calculado do desenho, vale depois do Lançar.',
+            ClipboardList,
+            'Terreno',
+            { rotulo: 'Casa automática', onClick: () => setTelaAberta('casa') },
+          )}
+          <TelaRelatorioDoLote relatorio={relatorioDoLoteAberto} />
         </div>
       )}
       {telaAberta === 'predio' && blocoDoPredio && entradaDoPredio && (

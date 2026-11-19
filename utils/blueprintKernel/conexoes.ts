@@ -36,7 +36,7 @@
 import type { BlueprintModel, DisciplinaDeRede, Level, ObjectId, Terminal, Trecho } from './model';
 import { DISCIPLINAS_DO_PONTO_HIDRAULICO, TIPOS_DE_CLIMATIZACAO, TIPOS_DE_EVAPORADORA } from './model';
 import type { Point } from './geom';
-import { chaveDoLugar, descerPelaCota } from './grafoDeRede';
+import { chaveDoLugar, descerPelaCota, pegadasDosPavimentos, type PegadasDosPavimentos } from './grafoDeRede';
 
 /**
  * F2 (climatização, 10/10/2026, quant-1.26.0): no DUTO, a TRANSIÇÃO (redondo ↔
@@ -176,13 +176,13 @@ const POR_GRAVIDADE: readonly DisciplinaDeRede[] = ['ESGOTO', 'PLUVIAL'];
 type Chave = string;
 
 /** A chave do nó, com a laje como encontro entre pavimentos. */
-function fazerChave(niveis: readonly Level[]) {
+function fazerChave(niveis: readonly Level[], pegadas?: PegadasDosPavimentos) {
   // Cota ≤ 0 com pavimento embaixo é o mesmo lugar visto de baixo (o esgoto sob o piso do andar corre no teto do térreo)
   // — a MESMA regra da chave da rede (`descerPelaCota`, grafoDeRede.ts).
-  const descer = descerPelaCota(niveis);
+  const descer = descerPelaCota(niveis, pegadas);
   const lugar = chaveDoLugar(niveis);
   return (levelId: ObjectId, disciplina: DisciplinaDeRede, x: number, y: number, cota: number): { chave: Chave; levelId: ObjectId; cotaMm: number } => {
-    const d = descer(levelId, cota);
+    const d = descer(levelId, cota, x, y);
     return { chave: `${disciplina}|${lugar(d.levelId, x, y, d.cotaMm)}`, levelId: d.levelId, cotaMm: d.cotaMm };
   };
 }
@@ -208,7 +208,8 @@ function anguloGraus(a: [number, number, number], b: [number, number, number]): 
 }
 
 export function conexoesDerivadas(model: BlueprintModel): ConexoesDoModelo {
-  const chave = fazerChave(model.levels);
+  // PE8a: as pegadas dos pavimentos — a laje entre torres de pé-direito diferente desce à torre do ponto.
+  const chave = fazerChave(model.levels, pegadasDosPavimentos(model));
   const nos = new Map<Chave, { levelId: ObjectId; no: Point; cotaMm: number; disciplina: DisciplinaDeRede; incidencias: Incidencia[] }>();
 
   const trechos = [...(model.trechos ?? [])]

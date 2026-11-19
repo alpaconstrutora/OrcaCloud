@@ -78,6 +78,10 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
     // Trocar a key remonta Premissas: é assim que "Sair e descartar" volta o
     // formulário ao que está gravado quando ele continua na tela (ex.: Editar).
     const [premissasKey, setPremissasKey] = useState(0);
+    // Iniciar/salvar/descartar a edição de versão troca os números do estudo inteiro: os formulários das
+    // abas guardam o valor do monte, então o conteúdo remonta DEPOIS da recarga (conferência de 19/11:
+    // a Dinâmica seguiu mostrando a TMA da versão, e sair do campo a regravaria no estudo vivo).
+    const [conteudoKey, setConteudoKey] = useState(0);
     const podeSair = async (): Promise<boolean> => {
         if (!premissas.dirty) return true;
         if (!(await premissas.confirmDiscard())) return false;
@@ -124,6 +128,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
             setSalvandoVersao(false);
             setVersoesKey(k => k + 1);
             await loadStudyDetails(false);
+            setConteudoKey(k => k + 1);
         }
     };
     const descartarEdicao = async () => {
@@ -143,6 +148,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
             setPremissasKey(k => k + 1);
             setVersoesKey(k => k + 1);
             await loadStudyDetails(false);
+            setConteudoKey(k => k + 1);
         }
     };
 
@@ -260,7 +266,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                 caixa h-[calc(100vh-14rem)] com rolagem própria dentro da página). */}
             <TabsBar<AbaDoEstudo> tabs={study.estrutura?.origem === 'empreendimento' ? ABAS_DO_ESTUDO : ABAS_DO_ESTUDO.filter(a => a.id !== 'acompanhamento')} value={activeTab} onChange={irPara} />
 
-            <div>
+            <div key={conteudoKey}>
                   <ImovibEdicaoProvider value={edicao}>
                     {activeTab === 'executive_summary' && (
                         <ErrorBoundary>
@@ -301,7 +307,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     )}
                     {activeTab === 'versoes' && (
                         <ErrorBoundary>
-                            <ImovibVersoesTab key={versoesKey} study={study} onEstudoMudou={() => { setVersoesKey(k => k + 1); void loadStudyDetails(false); }} />
+                            <ImovibVersoesTab key={versoesKey} study={study} onEstudoMudou={() => { void loadStudyDetails(false).then(() => setConteudoKey(k => k + 1)); }} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'acompanhamento' && study.estrutura?.origem === 'empreendimento' && (

@@ -16,7 +16,7 @@ import { areaEquivalenteDaVersao, type AreaEquivalenteDaPlanta, type LinhaDoQuad
 import { versaoDoMemorial } from '../utils/nbr12721/documento';
 import { planoDeImportacao, type ImovibPartner, type SocioDaEmpresa } from '../utils/imovibSocios';
 import { diaDeBrasilia } from '../utils/dataDeBrasilia';
-import { resultadosDoEstudo, versaoPublicadaDoSnapshot, type ImovibStudyVersion, type SnapshotDaVersao, type VersaoPublicada } from '../utils/imovibVersoes';
+import { resultadosDoEstudo, versaoPublicadaDoSnapshot, type ImovibStudyVersion, type ResultadosDaVersao, type SnapshotDaVersao, type VersaoPublicada } from '../utils/imovibVersoes';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
@@ -924,6 +924,24 @@ export const imovibService = {
      * diligence e sócios —, para o PDF da versão sair igual no app e no Portal do Investidor.
      */
     async congelarVersao(study: ImovibStudy, label: string, notes: string | null): Promise<ImovibStudyVersion> {
+        const { snapshot, results } = await this.montarCopiaDoEstudo(study, label);
+        const { data, error } = await supabase
+            .from('imovib_study_versions')
+            .insert({ study_id: study.id, label, notes, snapshot, results })
+            .select(VERSAO_COLS);
+        if (error) throw new Error(`Falha ao congelar a versão: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para congelar versões deste estudo.');
+        return data[0] as unknown as ImovibStudyVersion;
+    },
+
+    /**
+     * A cópia completa do estudo como está carregado — o que o congelar grava e o que a edição de
+     * versão usa (cópia de segurança e regravação). `label` presente = inclui o cálculo congelado
+     * (Fase 6 do plano 2026-11-15: os números da versão não mudam com correção futura do motor);
+     * ausente = só os dados (a cópia de segurança não precisa do cálculo).
+     * A edição em aberto (`edicao_versao`) nunca entra na cópia.
+     */
+    async montarCopiaDoEstudo(study: ImovibStudy, label?: string): Promise<{ snapshot: Record<string, unknown>; results: ResultadosDaVersao }> {
         const [cenarios, comparaveis, riscos, dueDiligence, socios] = await Promise.all([
             this.listarCenarios(study.id),
             this.listarComparaveis(study.id),
@@ -931,23 +949,52 @@ export const imovibService = {
             this.listarDueDiligence(study.id),
             this.listarSocios(study.id),
         ]);
-        // Fase 6 (plano 2026-11-15): congela também o RESULTADO (indicadores, gráficos, capa e seções),
-        // para os números da versão nunca mudarem com uma correção futura do motor.
-        const agora = new Date().toISOString();
-        // import(): o cálculo traz o gerador do relatório, que o resto do app não precisa carregar.
-        const { calculoDaVersao } = await import('../utils/imovibCalculoDaVersao');
-        const calculo = calculoDaVersao(
-            { study, comparaveis, riscos, cenarios, dueDiligence, socios, hoje: diaDeBrasilia(agora) },
-            { label, created_at: agora },
-        );
-        const snapshot = JSON.parse(JSON.stringify({ ...study, cenarios, relatorio: { comparaveis, riscos, dueDiligence, socios }, calculo }));
-        const { data, error } = await supabase
-            .from('imovib_study_versions')
-            .insert({ study_id: study.id, label, notes, snapshot, results: resultadosDoEstudo(study) })
-            .select(VERSAO_COLS);
-        if (error) throw new Error(`Falha ao congelar a versão: ${error.message}`);
-        if (!data?.length) throw new Error('Sem permissão para congelar versões deste estudo.');
-        return data[0] as unknown as ImovibStudyVersion;
+        let calculo: unknown;
+        if (label !== undefined) {
+            const agora = new Date().toISOString();
+            // import(): o cálculo traz o gerador do relatório, que o resto do app não precisa carregar.
+            const { calculoDaVersao } = await import('../utils/imovibCalculoDaVersao');
+            calculo = calculoDaVersao(
+                { study, comparaveis, riscos, cenarios, dueDiligence, socios, hoje: diaDeBrasilia(agora) },
+                { label, created_at: agora },
+            );
+        }
+        const { edicao_versao: _semEdicao, ...semEdicao } = study as ImovibStudy & { edicao_versao?: unknown };
+        const snapshot = JSON.parse(JSON.stringify({
+            ...semEdicao, cenarios, relatorio: { comparaveis, riscos, dueDiligence, socios }, ...(calculo !== undefined ? { calculo } : {}),
+        }));
+        return { snapshot, results: resultadosDoEstudo(study) };
+    },
+
+    /** Edição de versão pelo estudo (plano 2026-11-19): guarda o estudo e carrega a versão nele. */
+    async iniciarEdicaoDaVersao(study: ImovibStudy, versionId: string): Promise<void> {
+        const { snapshot: backup } = await this.montarCopiaDoEstudo(study);
+        const { error } = await supabase.rpc('imovib_versao_iniciar_edicao', { p_version_id: versionId, p_backup: backup });
+        if (error) throw new Error(error.message);
+    },
+
+    /** Regrava a versão em edição com o estudo de agora e devolve o estudo ao que era antes. */
+    async salvarEdicaoDaVersao(study: ImovibStudy): Promise<void> {
+        const label = (study as ImovibStudy & { edicao_versao?: { version_label?: string } | null }).edicao_versao?.version_label ?? '';
+        const { snapshot, results } = await this.montarCopiaDoEstudo(study, label);
+        const { error } = await supabase.rpc('imovib_versao_salvar_edicao', { p_study_id: study.id, p_snapshot: snapshot, p_results: results });
+        if (error) throw new Error(error.message);
+    },
+
+    /** Devolve o estudo ao que era antes da edição; a versão não muda. */
+    async descartarEdicaoDaVersao(studyId: string): Promise<void> {
+        const { error } = await supabase.rpc('imovib_versao_descartar_edicao', { p_study_id: studyId });
+        if (error) throw new Error(error.message);
+    },
+
+    async renomearVersao(id: string, label: string, notes: string | null): Promise<void> {
+        const { error } = await supabase.from('imovib_study_versions').update({ label, notes }).eq('id', id);
+        if (error) throw new Error(error.message);
+    },
+
+    async excluirVersao(id: string): Promise<void> {
+        const { error } = await supabase.from('imovib_study_versions').delete().eq('id', id);
+        if (error) throw new Error(error.message);
     },
 
     async listarVersoes(studyId: string): Promise<ImovibStudyVersion[]> {

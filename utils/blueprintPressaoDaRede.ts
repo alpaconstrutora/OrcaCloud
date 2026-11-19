@@ -26,7 +26,7 @@
  */
 import type { BlueprintModel, Command, DisciplinaDeRede, ObjectId, Terminal, Trecho } from './blueprintKernel';
 import { applyBatch, conexoesDerivadas, materialDoTrecho } from './blueprintKernel';
-import { fazerChave, comprimentoMm } from './blueprintGrafoDeRede';
+import { chaveDoLugar, fazerChave, comprimentoMm } from './blueprintGrafoDeRede';
 import { DIAMETROS, origensDeAgua, pesoDoPonto, pontosDeAgua, redeDaOrigem, vazaoDeProjetoLs, type PlanoDeAgua } from './blueprintAguaAutomatica';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import {
@@ -170,6 +170,7 @@ export function pressoesDaOrigem(
   const disciplina: DisciplinaDeRede = origem.tipoHidraulico === 'AQUECEDOR' ? 'AGUA_QUENTE' : 'AGUA_FRIA';
   const viscosidade = disciplina === 'AGUA_QUENTE' ? VISCOSIDADE_60C : VISCOSIDADE_20C;
   const chave = fazerChave(model.levels);
+  const lugarDaConexao = chaveDoLugar(model.levels);
   const elev = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
   const rede = redeDaOrigem(model, origem, disciplina);
   const pontos = pontosDeAgua(model, origem, disciplina);
@@ -235,7 +236,7 @@ export function pressoesDaOrigem(
 
   // ── Conexões por nó e peças sobre cada trecho ────────────────────────────
   const conexaoNoNo = new Map(
-    conexoesDerivadas(model).conexoes.filter((c) => c.disciplina === disciplina).map((c) => [`${c.levelId}|${c.no.x},${c.no.y}|${c.cotaMm}`, c]),
+    conexoesDerivadas(model).conexoes.filter((c) => c.disciplina === disciplina).map((c) => [lugarDaConexao(c.levelId, c.no.x, c.no.y, c.cotaMm), c]),
   );
   const pecasDe = (t: Trecho) => (model.terminais ?? []).filter((x) => x.disciplina === disciplina && x.tipoHidraulico && sobreOTrecho(x, t));
 

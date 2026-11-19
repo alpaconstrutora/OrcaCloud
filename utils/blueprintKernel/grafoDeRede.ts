@@ -40,10 +40,13 @@ export interface Ponto2 {
 export function descerPelaCota(niveis: readonly Level[]): (levelId: ObjectId, cota: number) => { levelId: ObjectId; cotaMm: number } {
   const ordenados = [...niveis].sort((a, b) => a.elevationMm - b.elevationMm);
   const abaixoDe = new Map<ObjectId, Level | null>();
+  const acimaDe = new Map<ObjectId, Level | null>();
+  const porId = new Map(ordenados.map((l) => [l.id, l]));
   ordenados.forEach((l) => {
     let abaixo: Level | null = null;
     for (const x of ordenados) if (x.elevationMm < l.elevationMm) abaixo = x;
     abaixoDe.set(l.id, abaixo);
+    acimaDe.set(l.id, ordenados.find((x) => x.elevationMm > l.elevationMm) ?? null);
   });
   return (levelId, cota) => {
     let nivelId = levelId;
@@ -52,15 +55,33 @@ export function descerPelaCota(niveis: readonly Level[]): (levelId: ObjectId, co
       c += abaixo.defaultHeightMm;
       nivelId = abaixo.id;
     }
+    // E SOBE (PE7, 18/11/2026): a cota acima do pé-direito é o pavimento de cima — o cavalete no pavimento mais baixo com a
+    // cota da rua (o −2 da Torre A a 6600, o −4 da Torre B a 12600: o mesmo ponto, 600 acima do 0). No teto (= pé-direito)
+    // fica neste: o encontro na laje é o teto do de baixo, como sempre.
+    for (let acima = acimaDe.get(nivelId); acima && c > (porId.get(nivelId)?.defaultHeightMm ?? Infinity); acima = acimaDe.get(nivelId)) {
+      c -= porId.get(nivelId)!.defaultHeightMm;
+      nivelId = acima.id;
+    }
     return { levelId: nivelId, cotaMm: c };
   };
 }
 
+/**
+ * A chave de um lugar JÁ DESCIDO (o pavimento e a cota que `descerPelaCota` devolve): pela COTA do pavimento, não pelo id
+ * dele (PE7, 18/11/2026) — duas torres no mesmo estudo têm pavimentos na mesma cota (a garagem −1 da Torre A e o −1 da
+ * Torre B, a −3 m), e o mesmo ponto físico visto de um ou de outro é o mesmo nó.
+ */
+export function chaveDoLugar(niveis: readonly Level[]): (levelId: ObjectId, x: number, y: number, cotaMm: number) => No {
+  const cota = new Map(niveis.map((l) => [l.id, l.elevationMm]));
+  return (levelId, x, y, cotaMm) => `${cota.get(levelId) ?? levelId}|${x},${y}|${cotaMm}`;
+}
+
 export function fazerChave(niveis: readonly Level[]) {
   const descer = descerPelaCota(niveis);
+  const lugar = chaveDoLugar(niveis);
   return (levelId: ObjectId, x: number, y: number, cota: number): No => {
     const d = descer(levelId, cota);
-    return `${d.levelId}|${x},${y}|${d.cotaMm}`;
+    return lugar(d.levelId, x, y, d.cotaMm);
   };
 }
 

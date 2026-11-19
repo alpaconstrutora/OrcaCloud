@@ -449,7 +449,7 @@ export default function TelaPredioAutomatico(props: Props) {
           <SecaoTitulo icon={Wand2} titulo="Resultado" resumo={`${plano.comandos.length} comando(s) num lote só`} />
           <dl className="grid grid-cols-2 gap-x-6 gap-y-4 md:grid-cols-4" data-testid="resumo-do-predio">
             <Dado rotulo="Unidades no prédio" valor={plano.resumo.unidades} nota={`${plano.resumo.unidadesPorAndar} por andar × ${plano.resumo.pavimentos} pavimento(s)${plano.resumo.unidades > plano.resumo.unidadesPorAndar * plano.resumo.pavimentos ? ` + ${plano.resumo.unidades - plano.resumo.unidadesPorAndar * plano.resumo.pavimentos} no térreo` : ''}`} />
-            <Dado rotulo="Pavimento tipo" valor={`1 + ${plano.resumo.copias} cópia(s)`} nota={ROTULO_DO_ESQUEMA[plano.resumo.esquema]} />
+            <Dado rotulo="Pavimento tipo" valor={`1 + ${plano.resumo.copias} cópia(s)`} nota={`${ROTULO_DO_ESQUEMA[plano.resumo.esquema]}${plano.resumo.copiasDesvinculadas ? ` · + ${plano.resumo.copiasDesvinculadas} desvinculada(s) (o andar 0)` : ''}`} />
             <Dado rotulo="Eficiência desenhada" valor={plano.resumo.eficienciaDesenhadaPct != null ? `${f2(plano.resumo.eficienciaDesenhadaPct)} %` : '—'} nota={plano.resumo.elevadores ? `${plano.resumo.elevadores} elevador(es)` : 'sem elevador'} />
             <Dado
               rotulo="Plantas das unidades"

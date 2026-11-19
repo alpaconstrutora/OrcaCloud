@@ -8,15 +8,17 @@
  * PA3 (14/11/2026): o térreo (salas do condomínio, acesso e o núcleo desde ele), a cobertura e os reservatórios — ver
  * `terreoECobertura.ts`.
  */
-import { aplicarLote, snapshotHash } from '../blueprintKernel';
+import { aplicarLote, assertModelInvariants, snapshotHash } from '../blueprintKernel';
 import { localDoElemento } from '../blueprintLocalDaPendencia';
 import type { LocalDaPendencia } from '../blueprintGeradorPpci';
-import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
+import type { Bloco, BlueprintModel, Command, ObjectId, Point } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
-import { direcaoDaRua, ordinalDoTipo, pavimentoTipoMontado, pisosAcimaDoSolo, pisosDoBloco } from '../blueprintPavimentoTipoDaMassa';
+import { direcaoDaRua, ordinalDoTipo, pavimentoTipoMontado, pavimentosDoPredioDoBloco, pisosAcimaDoSolo, pisosDoBloco } from '../blueprintPavimentoTipoDaMassa';
+import { garagemLancada } from '../blueprintGaragemDaMassa';
 import { dividirPavimentoDoBloco, montarPavimentoTipoDoBloco } from '../blueprintPavimentoOrtogonal';
 import { dividirPeloEmpreendimento, type AndarDoEmpreendimento } from './andaresDoEmpreendimento';
 import { concluirTerreoDeApartamentos } from './terreoDeApartamentos';
+import { juntarComOsPavimentos, semOsPavimentos } from './vistaDaTorre';
 import type { DivisaoDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 import { plantasDasUnidades } from '../blueprintPlantaDaUnidade';
 import type { Produto, ProdutoDoBloco } from '../blueprintProduto';
@@ -30,9 +32,9 @@ import {
   type OpcoesDoPlanoDoPredio,
   type PlanoDoPredio,
 } from './hipoteses';
-import { lancarReservatorios, montarCobertura, montarTerreo, nomearTerreo, SALA_BOMBAS, SALA_COMUM, SALA_HALL, SALA_MEDICAO, SALA_MEDICAO_E_BOMBAS, type BaseDoPredio, type ContextoDoPredio } from './terreoECobertura';
+import { lancarReservatorios, montarCobertura, montarTerreo, nomearTerreo, SALA_BOMBAS, SALA_COMUM, SALA_HALL, SALA_MEDICAO, SALA_MEDICAO_E_BOMBAS, uidDaCobertura, type BaseDoPredio, type ContextoDoPredio } from './terreoECobertura';
 import { lancarEstrutura, lancarFundacao, pendenciaDaFundacao } from './estrutura';
-import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
+import { conferirEletricaDoPredio, entradaConjunta, lancarEletrica } from './eletrica';
 import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedido } from './climatizacaoERede';
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
 import { lancarEsgoto, ROTULO_DO_DESVIO } from './esgoto';
@@ -74,6 +76,27 @@ export function andaresAbaixoDaRua(entrada: EntradaDoPredio): AndarDoEmpreendime
   return (entrada.doEmpreendimento?.andares ?? []).filter((a) => a.papel !== 'GARAGEM' && a.numero < 0 && a.unidades.length > 0);
 }
 
+/**
+ * PE7a: os pavimentos do prédio de OUTRA torre do estudo — o tipo, as cópias (as desvinculadas também), o térreo e a
+ * cobertura dos outros blocos, e a garagem lançada dos blocos de garagem deles. O que não é de outra torre (a garagem
+ * desta, lançada pelo painel; um pavimento desenhado à mão) continua na vista, como antes.
+ */
+function pavimentosDasOutrasTorres(desenho: BlueprintModel, b: Bloco): ReadonlySet<ObjectId> {
+  const minhaGaragem = subsoloDaTorre(desenho, b);
+  const ids = new Set<ObjectId>();
+  for (const o of desenho.blocos ?? []) {
+    if (o.id === b.id || o.id === minhaGaragem?.id) continue;
+    if (o.uso === 'GARAGEM') for (const l of garagemLancada(desenho, o)) ids.add(l.id);
+    else {
+      for (const id of pavimentosDoPredioDoBloco(desenho, o)) ids.add(id);
+      const cob = desenho.levels.find((l) => l.uid === uidDaCobertura(o));
+      if (cob) ids.add(cob.id);
+    }
+  }
+  ids.delete(b.levelId);
+  return ids;
+}
+
 export function motivoParaNaoGerarPredio(model: BlueprintModel, entrada: EntradaDoPredio): string | null {
   const b = (model.blocos ?? []).find((x) => x.id === entrada.blocoId);
   if (!b) return 'O bloco não está mais no desenho.';
@@ -88,14 +111,20 @@ export function motivoParaNaoGerarPredio(model: BlueprintModel, entrada: Entrada
   return null;
 }
 
-export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredio, hipParcial: Partial<HipotesesDoPredio> = {}, opcoes: OpcoesDoPlanoDoPredio = {}): PlanoDoPredio {
-  const motivo = motivoParaNaoGerarPredio(original, entrada);
+export function planejarPredio(desenho: BlueprintModel, entrada: EntradaDoPredio, hipParcial: Partial<HipotesesDoPredio> = {}, opcoes: OpcoesDoPlanoDoPredio = {}): PlanoDoPredio {
+  const motivo = motivoParaNaoGerarPredio(desenho, entrada);
   if (motivo) throw new Error(motivo);
   // PE6a (decisão de 18/11 "A torre começa no −2"): a torre com apartamento abaixo da rua tem TODOS os pisos do bloco — o
   // tipo no 1º (o −2), as cópias até o topo (o 0 também); sem térreo de condomínio; o técnico na garagem mais alta.
   const abaixoDaRua = andaresAbaixoDaRua(entrada).length > 0;
   const hip: HipotesesDoPredio = { ...HIPOTESES_DO_PREDIO_PADRAO, ...hipParcial };
-  const b = (original.blocos ?? []).find((x) => x.id === entrada.blocoId)!;
+  const b = (desenho.blocos ?? []).find((x) => x.id === entrada.blocoId)!;
+  // PE7a (18/11/2026): o motor roda sobre o desenho SEM os pavimentos que já estavam nele — a outra torre do estudo (a
+  // Torre A do Garden, quando esta é a B) —, menos o do lote. Cada torre se confere sozinha (a rota, a pressão, o PPCI, a
+  // compatibilização não acusam a vizinha), e o kernel aplica cada lote no desenho de uma torre só (sobre a Torre A, a B
+  // levava 150 s). Os contadores de id ficam: os comandos valem no desenho inteiro, aplicados uma vez no fim.
+  const pavimentosDeFora = pavimentosDasOutrasTorres(desenho, b);
+  const original = semOsPavimentos(desenho, pavimentosDeFora);
 
   const etapas: EtapaDoPredio[] = [];
   const pendencias: PendenciaDoPpci[] = [];
@@ -274,6 +303,30 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     for (const g of pl.grupos) decisoes.push(`Unidades iguais: ${g.origem} → ${g.iguais.map((i) => `${i.numero} ${i.repeticao}`).join(', ')} (edite a planta da origem e a mudança vai para as iguais).`);
     etapa('PLANTAS', 'LANCOU', n, n ? `${plantas.unidades} unidade(s), ${comodos} cômodo(s), ${pl.geracoes} tentativa(s) do gerador` : pl.avisos.join(' ') || null);
   } else etapa('PLANTAS', 'NAO_EXIGIDA', 0, 'Desligada nas hipóteses: as unidades saem só com o perímetro.');
+  // PE7c (18/11/2026): a PAREDE COMUM com outra torre do estudo (o Garden tem as duas coladas) é cega — as janelas que o
+  // gerador pôs no lado do contorno que encosta no bloco da outra torre saem do tipo (as cópias acompanham).
+  const outrasTorres = (original.blocos ?? []).filter((x) => x.id !== b.id && x.uso !== 'GARAGEM');
+  if (outrasTorres.length) {
+    const dSeg = (p: { x: number; y: number }, q: { x: number; y: number }, r: { x: number; y: number }) => {
+      const L2 = (r.x - q.x) ** 2 + (r.y - q.y) ** 2;
+      const t = L2 ? Math.max(0, Math.min(1, ((p.x - q.x) * (r.x - q.x) + (p.y - q.y) * (r.y - q.y)) / L2)) : 0;
+      return Math.hypot(p.x - (q.x + (r.x - q.x) * t), p.y - (q.y + (r.y - q.y) * t));
+    };
+    const encostaEm = (w: { a: Point; b: Point }) => outrasTorres.find((o) => o.pontos.some((q, i) => dSeg({ x: (w.a.x + w.b.x) / 2, y: (w.a.y + w.b.y) / 2 }, q, o.pontos[(i + 1) % o.pontos.length]) < 400));
+    const proprios = new Set(m.levels.filter((l) => l.tipoDeId === undefined && l.id !== b.levelId).map((l) => l.id));
+    const tirar: { id: ObjectId; torre: string }[] = [];
+    for (const o of m.openings) {
+      if (o.kind === 'door') continue;
+      const w = m.walls.find((x) => x.id === o.wallId);
+      const outra = w && proprios.has(w.levelId) ? encostaEm(w) : undefined;
+      if (outra) tirar.push({ id: o.id, torre: outra.nome });
+    }
+    if (tirar.length) {
+      aplicar(tirar.map((x): Command => ({ type: 'DeleteOpening', openingId: x.id })));
+      const torres = [...new Set(tirar.map((x) => x.torre))].join(', ');
+      pendencias.push({ grupo: 'CONFERIR', texto: `Parede comum com a ${torres}: ${tirar.length} janela(s) do tipo saíram (a fachada encosta na outra torre e é cega) — os cômodos que dependiam delas ficam sem janela nesse lado; confira a ventilação e a luz.` });
+    }
+  }
 
   // ── Cobertura: sobre o último andar. Sem o térreo, o elevador do tipo passa a parar no último andar com unidades (a
   // casa de máquinas assenta na laje da cobertura); com ele, o núcleo do térreo já para lá.
@@ -608,22 +661,50 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
 
   const pavimentos = 1 + mont.copias;
   const pavimentosLancados = pavimentos + (terreo && !abaixoDaRua ? 1 : 0) + (cobertura ? 1 : 0) + (subsolos?.pisos.length ?? 0);
+  // PE7a: o prédio no desenho inteiro (com a outra torre) — os mesmos comandos, uma vez; sem outra torre, é o próprio m.
+  let noDesenho = juntarComOsPavimentos(m, desenho, pavimentosDeFora);
+  if (pavimentosDeFora.size) {
+    try {
+      assertModelInvariants(noDesenho);
+    } catch {
+      // A junção não fecha (algo da vista tocou o que ficou de fora): o caminho lento e certo — os comandos no desenho.
+      noDesenho = aplicarLote(desenho, comandos).model;
+    }
+  }
+  // PE7b (decisão do usuário de 18/11 "Entrada na A, quadro geral na B"): com outra torre já no estudo, a entrada de
+  // energia do lote é a dela — esta torre perde a entrada de serviço, e o QGBT dela passa a ser alimentado do QGBT de lá
+  // (os medidores ficam na sala técnica desta torre). A demanda da entrada única soma as duas.
+  const qgbtsDeFora = (desenho.quadros ?? []).filter((q) => q.tipo === 'QGBT' && pavimentosDeFora.has(q.levelId));
+  if (eletrica?.qgbtId && qgbtsDeFora.length === 1) {
+    const primeiro = qgbtsDeFora[0];
+    const daOutra = desenho.levels.find((l) => l.id === primeiro.levelId)?.name.split('·')[0].trim() || 'outra torre';
+    const ligar: Command[] = [
+      ...noDesenho.terminais.filter((t) => t.tipoEletrico === 'ENTRADA_SERVICO' && t.quadroId === eletrica!.qgbtId).map((t): Command => ({ type: 'DeleteTerminal', terminalId: t.id })),
+      { type: 'SetQuadroProps', quadroId: eletrica.qgbtId, quadroPaiId: primeiro.id } as Command,
+    ];
+    noDesenho = aplicarLote(noDesenho, ligar).model;
+    comandos.push(...ligar);
+    const conjunta = entradaConjunta(noDesenho, primeiro.id);
+    decisoes.push(`Energia: a entrada de serviço é a da ${daOutra} — o QGBT desta torre é alimentado do QGBT de lá; os medidores desta torre ficam na sala técnica dela.`);
+    pendencias.push({ grupo: 'CONFERIR', texto: `Entrada de energia: a entrada de energia da ${daOutra} alimenta também esta torre (o QGBT dela é filho do de lá)${conjunta ? ` — demanda conjunta de ${conjunta.demandaKva.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kVA${conjunta.categoria ? ` (categoria ${conjunta.categoria})` : ', acima do padrão de baixa tensão: entrada em média tensão com a concessionária'}` : ''}; confira o alimentador entre os dois quadros.` });
+  }
   return {
     blocoId: b.id,
     comandos,
     criados,
     etapas,
     pendencias,
-    resultado: m,
+    resultado: noDesenho,
     tipoLevelId: mont.tipoLevelId,
-    hashDoOriginal: snapshotHash(original),
-    hashDoResultado: snapshotHash(m),
+    hashDoOriginal: snapshotHash(desenho),
+    hashDoResultado: snapshotHash(noDesenho),
     decisoes,
     resumo: {
       esquema: dv.esquema,
       pavimentos,
       pavimentosLancados,
-      copias: mont.copias,
+      copias: mont.copias - (andarZeroConcluido?.jaEraCopia ? 1 : 0),
+      copiasDesvinculadas: andarZeroConcluido?.jaEraCopia ? 1 : 0,
       unidadesPorAndar: dv.unidades.length,
       unidades: dv.unidades.length * pavimentos + (andarZeroConcluido && !andarZeroConcluido.jaEraCopia ? andarZeroConcluido.mantidos.length : 0),
       elevadores: dv.elevadores,

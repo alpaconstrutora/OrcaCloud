@@ -135,6 +135,9 @@ describe('PE6a — a torre que começa abaixo da rua (Garden, Torre B)', { timeo
     expect((m.quadros ?? []).filter((q) => q.levelId === zero.id && q.unidadeId && doTipo.has(q.unidadeId))).toEqual([]);
     expect(m.terminais.filter((t) => (t.levelId === zero.id || t.unidadeLevelId === zero.id) && t.unidadeId && doTipo.has(t.unidadeId))).toEqual([]);
     expect(p.resumo.unidades).toBe(24);
+    // O card do tipo (pequeno da PE6): 4 cópias vivas e o 0 desvinculado à parte.
+    expect(p.resumo.copias).toBe(4);
+    expect(p.resumo.copiasDesvinculadas).toBe(1);
     expect(p.resumo.eletrica?.unidadesMedidas).toBe(24);
     expect(p.resumo.eletrica?.medidores).toBe(25);
     expect(p.resumo.agua?.unidadesMedidas).toBe(24);

@@ -137,6 +137,8 @@ export interface PlanoDoPredio {
     /** Pavimentos que o lote cria: os subsolos, o térreo, o tipo, as cópias e a cobertura. */
     pavimentosLancados: number;
     copias: number;
+    /** As cópias do tipo desvinculadas no fim (o andar 0 de apartamentos da Torre B do Garden); 0 = nenhuma. */
+    copiasDesvinculadas: number;
     unidadesPorAndar: number;
     /** No prédio inteiro: unidades por andar × pavimentos. */
     unidades: number;

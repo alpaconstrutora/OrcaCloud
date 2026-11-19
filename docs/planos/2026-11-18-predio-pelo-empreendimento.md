@@ -458,6 +458,37 @@ A PE5 abaixo descreve a parte da garagem; a PE4 fica com o andar próprio.
 - **Compatibilização:** nenhum conflito entre peças de torres diferentes.
 - **Relatório:** um só para o lote.
 
+**Decisões do usuário (18/11/2026, início da PE7):**
+- **"Rampa pela garagem da A":** a rampa desce do −2 da Torre A, junto da parede comum, até o −3 da Torre B. A garagem da A cede o espaço, a B fica sem rampa própria, e a rampa entre o −3 e o −4 da B continua.
+- **"Entrada na A, quadro geral na B":** uma entrada de serviço, na A. A B mantém o quadro geral e os medidores na sala técnica dela, alimentados a partir do QGBT da A, e a demanda da entrada soma as duas torres.
+
+**Spike (18/11):** a Torre A gerada e lançada, e depois a Torre B por cima.
+- **Unidades:** 24 na B, com os nomes de cada torre sem colisão (38 no total).
+- **Conferências que misturavam as torres:**
+  - os equipamentos de incêndio da B falhavam ao propor num andar cópia da A;
+  - a pressão pegava o reservatório superior da A (384 pontos "fora da rede");
+  - a rota acusava 148 ambientes da A.
+- **Entradas duplicadas:** 2 ligações de esgoto, 2 entradas de energia e 2 QGBTs.
+- **Janelas na parede comum:** 16 na A e 24 na B.
+- **Desempenho:** a B sobre a A levava 150 s, porque o kernel confere as invariantes do desenho inteiro a cada comando.
+
+**Execução, parte 1:**
+- **PE7a, cada torre se confere sozinha.** O motor roda sobre a VISTA do desenho sem os pavimentos que já estavam nele, menos o do lote (`utils/predioAutomatico/vistaDaTorre.ts`, `semOsPavimentos`). O resultado no desenho inteiro é a vista mais o que ficou de fora (`juntarComOsPavimentos`), sem reaplicar os comandos, e é conferido pelas invariantes do kernel uma vez; se não fechar, cai no caminho lento de reaplicar.
+  - **Prova:** o hash da junção é igual ao de reaplicar os comandos, num desenho com um pavimento "vizinho".
+  - **Tempo:** a aplicação final caiu de 114 s para 1,4 s.
+  - **Resultado:** a B confere só os pavimentos dela, e os equipamentos de incêndio lançam.
+- **PE7b, energia:** a B perde a entrada de serviço e o QGBT dela vira filho do QGBT da A. Uma pendência CONFERIR traz a demanda conjunta.
+- **PE7c, parede comum cega:** depois das plantas, as janelas no lado do contorno que encosta em outro bloco de torre saem do tipo, e as cópias acompanham. Uma pendência diz quantas saíram.
+- **Pequenos da PE6:**
+  - **Card do tipo:** passou a "1 + 4 cópia(s) · + 1 desvinculada (o andar 0)" (`copiasDesvinculadas`).
+  - **Prévia de 42 s:** era o servidor de desenvolvimento recompilando o worker depois das edições (medido: 9,3 s com o worker quente). Não era o motor.
+
+**Falta na PE7:**
+- **Esgoto e água:** uma ligação de cada. As duas torres têm pavimentos na MESMA cota (a garagem −1 da A e o −1 da B, a −3 m), e a chave da rede, que desce pela cota, escolhe um deles sem critério, então a ligação entre as torres precisa de cuidado.
+- **Garagem:** a rampa pela garagem da A.
+- **Pluvial da B.**
+- **Relatório:** um só para o lote.
+
 ## Mapa de implementação da PE4–PE6 (18/11/2026, lido no código depois do merge do #577)
 
 O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três travas do orquestrador

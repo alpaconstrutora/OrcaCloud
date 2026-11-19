@@ -174,22 +174,22 @@ A trava "só quem abriu grava" entra no `useImovibEdicao` que as ~30 telas do es
 
 ### Fase 1 — Banco (migration; aplicar só com OK)
 
-- [ ] F1.1 `imovib_study_versions`: `updated_at timestamptz`, `updated_by uuid`; policies `…_update` e
+- [x] F1.1 `imovib_study_versions`: `updated_at timestamptz`, `updated_by uuid`; policies `…_update` e
   `…_delete` com `imovib_unit_instance_org_check(study_id)` (USING e WITH CHECK), iguais às do SELECT/INSERT.
-- [ ] F1.2 `imovib_studies.edicao_versao jsonb` (`{version_id, version_label, started_by, started_by_name,
+- [x] F1.2 `imovib_studies.edicao_versao jsonb` (`{version_id, version_label, started_by, started_by_name,
   started_at, backup}`).
-- [ ] F1.3 Gatilho `fn_imovib_versao_trava_publicada` BEFORE UPDATE OR DELETE em `imovib_study_versions`:
+- [x] F1.3 Gatilho `fn_imovib_versao_trava_publicada` BEFORE UPDATE OR DELETE em `imovib_study_versions`:
   publicada → `RAISE` "Versão publicada na oportunidade «<título>» — só leitura"; no DELETE, antes, zera
   `imovib_version_id` dos rascunhos que a escolhem.
-- [ ] F1.4 Gatilho BEFORE INSERT OR UPDATE em `investor_opportunities`: `is_published` e a versão está em
+- [x] F1.4 Gatilho BEFORE INSERT OR UPDATE em `investor_opportunities`: `is_published` e a versão está em
   edição no estudo → `RAISE` "A versão «X» está em edição no estudo — salve ou descarte antes de publicar".
-- [ ] F1.5 Gatilho `fn_imovib_trava_edicao_de_outro` BEFORE INSERT/UPDATE/DELETE em `imovib_studies` e nas
+- [x] F1.5 Gatilho `fn_imovib_trava_edicao_de_outro` BEFORE INSERT/UPDATE/DELETE em `imovib_studies` e nas
   tabelas dele (`imovib_blocks`, `imovib_units` via bloco, `imovib_capex_items`, `imovib_funding_sources`,
   `imovib_scenarios`, `imovib_risks`, `imovib_market_comparables`, `imovib_land_checklist`, `imovib_partners`,
   `imovib_regulatory_zones`): edição aberta e `started_by <> auth.uid()` → `RAISE` "«Nome» está editando a
   versão «X» — o estudo está só para leitura". Liberado dentro das RPCs (variável de sessão
   `app.imovib_aplicando = on`).
-- [ ] F1.6 `fn_imovib_aplicar_retrato(p_study_id uuid, p_retrato jsonb)` (interna): atualiza `imovib_studies`
+- [x] F1.6 `fn_imovib_aplicar_retrato(p_study_id uuid, p_retrato jsonb)` (interna): atualiza `imovib_studies`
   por `jsonb_populate_record` sem os campos da restrição; substitui por inteiro (DELETE + INSERT mantendo ids)
   `cenarios`→scenarios, `relatorio.comparaveis`, `relatorio.riscos`, `relatorio.dueDiligence`→land_checklist,
   `relatorio.socios`→partners, `capex_items`, `funding_sources`; `blocks[]`/`units[]`: UPDATE só onde o id
@@ -199,23 +199,30 @@ A trava "só quem abriu grava" entra no `useImovibEdicao` que as ~30 telas do es
   p_snapshot jsonb, p_results jsonb)` (só `started_by`; regrava a versão com `updated_at/by`; aplica o
   `backup`; limpa) · `imovib_versao_descartar_edicao(p_study_id uuid)` (`started_by`, admin/owner da org do
   estudo, ou `is_superadmin()`; aplica o `backup`; limpa).
-- [ ] F1.7 **Pronto quando**, em transação desfeita (`BEGIN … RAISE EXCEPTION 'PROVA' … ROLLBACK`) sobre um
+- [x] F1.7 **Pronto quando**, em transação desfeita (`BEGIN … RAISE EXCEPTION 'PROVA' … ROLLBACK`) sobre um
   estudo de teste: UPDATE/DELETE de versão não publicada passam; publicada recusa com a mensagem; DELETE zera
   o rascunho; outra org não altera; iniciar → tabelas iguais à cópia, espelho intacto, bloco `torre:…`
   ignorado; outro usuário recusado em `imovib_scenarios`; publicar em edição recusado; salvar → versão nova e
   estudo igual ao backup; erro no meio do salvar não deixa nada pela metade; descartar idem sem mudar a
   versão. `__tests__/segurancaMigrations.test.ts` verde.
 
+**Estado da Fase 1 (19/11):** prova em transação desfeita passou inteira ("PROVA OK"), conferido depois
+que nada ficou gravado; migration aplicada com `db query -f` (OK do usuário: *"Sim"*). A prova achou dois
+defeitos reais, corrigidos antes de aplicar: (1) a tabela de versões não tinha privilégio UPDATE/DELETE para
+`authenticated` (nasceu imutável) — `GRANT` acrescentado; (2) linha da cópia que não existe mais no estudo era
+recriada com nulos nas colunas de padrão (`kind` do cenário) — agora só as colunas que a cópia trouxe.
+Conferido no banco: 3 colunas, policies de UPDATE/DELETE, 3 RPCs, 11 gatilhos de trava, nenhuma RPC para `anon`.
+
 ### Fase 2 — Regra pura e serviço
 
-- [ ] F2.1 `utils/imovibVersoes.ts`: `acoesDaVersao(args: { publicadaEm: string | null; edicaoAberta:
+- [x] F2.1 `utils/imovibVersoes.ts`: `acoesDaVersao(args: { publicadaEm: string | null; edicaoAberta:
   EdicaoDaVersao | null; versaoId: string; pode: ImovibEdicao }): { editar: Acao; excluir: Acao; renomear:
   Acao }`, com `Acao = { pode: boolean; motivo?: string }`. Teste `__tests__/imovibVersoesAcoes.test.ts`:
   publicada → os três desligados com "Publicada em «…»"; edição aberta de outra versão → editar e excluir
   desligados ("Termine a edição da versão «X» …"), renomear livre; sem `pode` → motivo da permissão.
-- [ ] F2.2 `partesAusentesDaVersao(snapshot): string[]` (nomes em português das partes sem chave). Teste:
+- [x] F2.2 `partesAusentesDaVersao(snapshot): string[]` (nomes em português das partes sem chave). Teste:
   snapshot sem `relatorio` → `['comparáveis', 'riscos', 'due diligence', 'sócios']`; completo → `[]`.
-- [ ] F2.3 `services/imovibService.ts`: extrair `montarCopiaDoEstudo(study): Promise<{ snapshot; results }>`
+- [x] F2.3 `services/imovibService.ts`: extrair `montarCopiaDoEstudo(study): Promise<{ snapshot; results }>`
   de `congelarVersao` (que passa a usá-la); `iniciarEdicaoDaVersao(study, versionId)`,
   `salvarEdicaoDaVersao(study)`, `descartarEdicaoDaVersao(studyId)`, `renomearVersao(id, label, notes)`,
   `excluirVersao(id)` — chamam as RPCs / UPDATE / DELETE e repassam a mensagem do banco. `types.ts`:
@@ -224,17 +231,17 @@ A trava "só quem abriu grava" entra no `useImovibEdicao` que as ~30 telas do es
 
 ### Fase 3 — Telas
 
-- [ ] F3.1 `ImovibVersoesTab`: Editar (`ActionIconButton`, confirmação com `partesAusentesDaVersao`) e
+- [x] F3.1 `ImovibVersoesTab`: Editar (`ActionIconButton`, confirmação com `partesAusentesDaVersao`) e
   Excluir (`useConfirm`, nomeia o rascunho afetado) na coluna de ações, desligados com o motivo de
   `acoesDaVersao`; nome e observações editáveis na linha; "Congelada em" ganha "editada em … por …" quando
   houver `updated_at`. Teste de componente: 3 estados da coluna e a linha "editada em".
-- [ ] F3.2 `hooks/useImovibEdicao.tsx`: `avaliarEdicaoImovib` recebe `edicaoAberta` e `meuUserId`; aberta
+- [x] F3.2 `hooks/useImovibEdicao.tsx`: `avaliarEdicaoImovib` recebe `edicaoAberta` e `meuUserId`; aberta
   por outro → `{ pode: false, motivo: '«Nome» está editando a versão «X» desde 14h' }`. Teste em
   `__tests__/imovibEdicao.test.ts`.
-- [ ] F3.3 `ImovibDetailView`: faixa "Editando a versão «X» — Salvar na versão · Descartar" (quem abriu;
+- [x] F3.3 `ImovibDetailView`: faixa "Editando a versão «X» — Salvar na versão · Descartar" (quem abriu;
   Descartar também para admin); "Congelar versão" desligado com o motivo; recarrega o estudo depois de
   iniciar/salvar/descartar. Teste: faixa aparece com `edicao_versao`; Congelar desligado.
-- [ ] F3.4 Aviso "Estudo em edição da versão «X»" em `SyncCenterTab` (empreendimento) e
+- [x] F3.4 Aviso "Estudo em edição da versão «X»" em `SyncCenterTab` (empreendimento) e
   `ImovibAcompanhamentoTab`. `check-ui-standard.sh` nos `.tsx` tocados; §21/§32 (rótulo, valor escuro).
 
 ### Fase 4 — Conferência real e publicação

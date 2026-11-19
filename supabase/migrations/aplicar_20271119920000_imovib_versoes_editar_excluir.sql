@@ -32,6 +32,9 @@ COMMENT ON COLUMN public.imovib_studies.edicao_versao IS
     'Edição de versão em aberto: {version_id, version_label, started_by, started_by_name, started_at, backup}. Só as RPCs imovib_versao_* gravam.';
 
 -- ── 2. Policies de UPDATE/DELETE da versão (por conjunto, REGRA #7 + memória "RLS por conjunto") ──
+-- A versão nasceu imutável também no privilégio da tabela (sem UPDATE/DELETE para authenticated):
+-- a policy sozinha não basta — a prova de 19/11 recusou com "permission denied for table".
+GRANT UPDATE, DELETE ON public.imovib_study_versions TO authenticated;
 DROP POLICY IF EXISTS imovib_study_versions_update ON public.imovib_study_versions;
 CREATE POLICY imovib_study_versions_update ON public.imovib_study_versions
     FOR UPDATE TO authenticated
@@ -158,7 +161,9 @@ END $$;
 
 -- ── 6. Aplicar uma cópia ao estudo (interna) ──────────────────────────────────
 -- Tabela "folha" (nada aponta para ela): substituída por inteiro, mantendo os ids. Cada linha da cópia
--- é completada com a linha atual de mesmo id (colunas que a leitura do app não traz, como created_by).
+-- é completada com a linha atual de mesmo id (colunas que a leitura do app não traz, como created_by);
+-- linha que não existe mais no estudo é recriada só com as colunas que a cópia trouxe — as demais ficam
+-- com o padrão da tabela (a prova de 19/11 recusou o "kind" nulo de um cenário recriado).
 CREATE OR REPLACE FUNCTION public.fn_imovib_substituir_filhos(p_tabela text, p_study uuid, p_linhas jsonb)
  RETURNS void
  LANGUAGE plpgsql
@@ -167,18 +172,26 @@ CREATE OR REPLACE FUNCTION public.fn_imovib_substituir_filhos(p_tabela text, p_s
 AS $function$
 DECLARE
     v_linhas jsonb;
+    v_e      jsonb;
+    v_cols   text;
 BEGIN
     IF p_linhas IS NULL OR jsonb_typeof(p_linhas) <> 'array' THEN
         RETURN; -- parte ausente da cópia: tabela intocada
     END IF;
     EXECUTE format(
-        'SELECT COALESCE(jsonb_agg(to_jsonb(jsonb_populate_record(a, e || jsonb_build_object(''study_id'', $1)))), ''[]''::jsonb)
+        'SELECT COALESCE(jsonb_agg(COALESCE(to_jsonb(a), ''{}''::jsonb) || e || jsonb_build_object(''study_id'', $1)), ''[]''::jsonb)
            FROM jsonb_array_elements($2) e
            LEFT JOIN public.%1$I a ON a.id = (e->>''id'')::uuid AND a.study_id = $1', p_tabela)
         INTO v_linhas USING p_study, p_linhas;
     EXECUTE format('DELETE FROM public.%1$I WHERE study_id = $1', p_tabela) USING p_study;
-    EXECUTE format('INSERT INTO public.%1$I SELECT * FROM jsonb_populate_recordset(NULL::public.%1$I, $1)', p_tabela)
-        USING v_linhas;
+    FOR v_e IN SELECT * FROM jsonb_array_elements(v_linhas) LOOP
+        SELECT string_agg(quote_ident(a.attname), ', ') INTO v_cols
+        FROM pg_attribute a
+        WHERE a.attrelid = format('public.%I', p_tabela)::regclass AND a.attnum > 0 AND NOT a.attisdropped
+          AND v_e ? a.attname;
+        EXECUTE format('INSERT INTO public.%1$I (%2$s) SELECT %2$s FROM jsonb_populate_record(NULL::public.%1$I, $1)', p_tabela, v_cols)
+            USING v_e;
+    END LOOP;
 END;
 $function$;
 REVOKE EXECUTE ON FUNCTION public.fn_imovib_substituir_filhos(text, uuid, jsonb) FROM PUBLIC, anon, authenticated;

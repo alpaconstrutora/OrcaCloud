@@ -8,7 +8,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import type { EmpreendimentoFloor } from '../types/empreendimento';
-import { applyBatch, emptyModel, type BlueprintModel, type Command } from '../utils/blueprintKernel';
+import { applyBatch, contornoDaVaga, emptyModel, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { comandosDoAjuste } from '../utils/blueprintAjusteAoEmpreendimento';
 import { estruturasDoEmpreendimento, type TorreParaEstrutura } from '../utils/blueprintEstruturaDaTorre';
 import { blocosDasTorresNoLote, papelDosAndares } from '../utils/predioAutomatico/andaresDoEmpreendimento';
@@ -16,6 +16,7 @@ import { HIPOTESES_DO_PRODUTO_PADRAO, produtoVazio } from '../utils/blueprintPro
 import { planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
 import { fazerChave } from '../utils/blueprintGrafoDeRede';
 import { ROTULO_DO_DESVIO } from '../utils/predioAutomatico/esgoto';
+import { entradaConjunta } from '../utils/predioAutomatico/eletrica';
 import { SALA_HALL, SALA_MEDICAO, SALA_MEDICAO_E_BOMBAS } from '../utils/predioAutomatico/terreoECobertura';
 import type { Boundary } from '../utils/blueprintKernel';
 import { unidadesDoPredio } from '../utils/blueprintUnidadesDoPredio';
@@ -182,6 +183,27 @@ describe('PE4a + PE5a — o térreo de apartamentos (Garden, Torre A)', { timeou
     expect(envio.unitCreates).toEqual([]);
     const adotadas = envio.adoptions.filter((x) => x.entity === 'unit').map((x) => alvo.units.find((u) => u.id === x.existingId)!.name).sort();
     expect(adotadas).toEqual(['002', '004', '101', '102', '103', '104', '201', '202', '203', '204', '301', '302', '303', '304']);
+  });
+
+  // PE10 (decisão "Reservar a cabine de média tensão"): a demanda passa do padrão de baixa tensão — a cabine primária no 1º
+  // subsolo, junto da frente, fechada, com o quadro dela alimentando o QGBT; as vagas que ela toma saem.
+  it('PE10: a cabine primária reservada no 1º subsolo, junto da frente, fechada — sem vaga dentro, e o QGBT segue sendo a entrada', () => {
+    const m = plano().resultado;
+    const topo = m.levels.filter((l) => /Garagem/.test(l.name)).sort((x, y) => y.elevationMm - x.elevationMm)[0];
+    // A entrada (demanda, categoria, medidores por unidade) é calculada no quadro SEM pai: a cabine não entra acima do QGBT.
+    const qgbt = (m.quadros ?? []).find((q) => q.tipo === 'QGBT')!;
+    expect(qgbt.quadroPaiId ?? null).toBeNull();
+    expect(entradaConjunta(m, qgbt.id)?.demandaKva).toBeGreaterThan(75);
+    const sala = m.spaces.find((x) => x.levelId === topo.id && x.name === 'Cabine primária');
+    expect(sala).toBeDefined();
+    expect(m.openings.some((o) => o.kind === 'door' && m.walls.find((w) => w.id === o.wallId)?.levelId === topo.id && o.widthMm >= 900)).toBe(true);
+    const dentro = (p: { x: number; y: number }, P: readonly { x: number; y: number }[]) => {
+      let c = false;
+      for (let i = 0, j = P.length - 1; i < P.length; j = i++) if ((P[i].y > p.y) !== (P[j].y > p.y) && p.x < ((P[j].x - P[i].x) * (p.y - P[i].y)) / (P[j].y - P[i].y) + P[i].x) c = !c;
+      return c;
+    };
+    expect((m.vagas ?? []).filter((v) => v.levelId === topo.id && contornoDaVaga(v).some((c) => dentro(c, sala!.ring))).length).toBe(0);
+    expect(plano().pendencias.some((x) => /cabine primária reservada/.test(x.texto))).toBe(true);
   });
 });
 

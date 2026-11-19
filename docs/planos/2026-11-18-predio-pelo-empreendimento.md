@@ -544,7 +544,7 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 
 ## Estado (19/11/2026)
 
-**O plano está concluído e no ar.** O Garden Cambuhy é gerado pelo caminho do usuário: Casa automática › "Construir o prédio pelo Empreendimento", uma torre de cada vez, no mesmo estudo. Saem as duas torres com as unidades da ficha (14 na A, 24 na B), uma entrada de cada rede no lote e o relatório do lote. A última conferência no app (`c:/tmp/pwtest/conferencia-predio-pe8.cjs`) passou nos 25 portões.
+**O plano está concluído e no ar.** O Garden Cambuhy é gerado pelo caminho do usuário: Casa automática › "Construir o prédio pelo Empreendimento", uma torre de cada vez, no mesmo estudo. Saem as duas torres com as unidades da ficha (14 na A, 24 na B), uma entrada de cada rede no lote e o relatório do lote. A última conferência no app (`c:/tmp/pwtest/conferencia-predio-pe10.cjs`, 19/11) passou nos 33 portões. Não há pendência de código; o que resta é de projeto, fora do alcance do motor (abaixo).
 
 | Fase | Situação |
 |---|---|
@@ -558,7 +558,7 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 | PE7 — as duas torres no mesmo estudo | no ar (#587, f042101) |
 | PE8 — o que ficou da PE7 | no ar (#588, d936a7d): pé-direito diferente entre torres, o vão na contenção, os coletores suspensos sob a outra torre e o relatório do lote |
 | PE9 — as pendências de código | no ar (#590, a5b6288): as ligações, a rampa, as vagas, o envio da Torre B, a sala técnica fechada, as pendências do gerador no relatório do lote e o teste do Espelho do Investidor no Windows |
-| PE10 — o que dava para automatizar do projeto | a publicar: a altura livre sob os coletores suspensos, a cabine primária reservada no 1º subsolo da A, o pluvial da B só acima do 0; a saída de emergência da garagem da B conferida (não precisa) |
+| PE10 — o que dava para automatizar do projeto | no ar (#591, 5374d7d): a altura livre sob os coletores suspensos, a cabine primária reservada no 1º subsolo da A, o pluvial da B só acima do 0; a saída de emergência da garagem da B conferida (não precisa) |
 
 **Decisões do usuário ao longo do plano:**
 - **Caminho e estrutura das torres:** "Prédio pelo Empreendimento" e "Unidades do Empreendimento"; "A torre começa no −2".
@@ -567,6 +567,7 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 - **Torre B:** "Desvincular o 0" (a porta para a rua).
 - **As duas torres:** "Rampa pela garagem da A"; "Entrada na A, quadro geral na B".
 - **Relatório:** "numa tela do lote".
+- **O que dava para automatizar do projeto (PE10):** "Conferir o pé-direito livre", "Reservar a cabine de média tensão", "Saída de emergência da garagem B pela A" e "Pluvial da B só acima do 0".
 
 ## Pendências (19/11/2026, depois da PE10)
 

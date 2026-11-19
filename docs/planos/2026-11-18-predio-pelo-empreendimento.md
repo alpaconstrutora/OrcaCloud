@@ -542,19 +542,61 @@ O "térreo de apartamentos" (decisão "Técnico na garagem") esbarra em três tr
 3. **PE6:** a torre que começa abaixo da rua (o tipo no −2, o esgoto por bombas, a rota de fuga subindo), e só então a Torre B sai do bloqueio.
 4. **PE7:** as duas torres no mesmo estudo.
 
-## Estado
+## Estado (19/11/2026)
+
+**O plano está concluído e no ar.** O Garden Cambuhy é gerado pelo caminho do usuário: Casa automática › "Construir o prédio pelo Empreendimento", uma torre de cada vez, no mesmo estudo. Saem as duas torres com as unidades da ficha (14 na A, 24 na B), uma entrada de cada rede no lote e o relatório do lote. A última conferência no app (`c:/tmp/pwtest/conferencia-predio-pe8.cjs`) passou nos 25 portões.
 
 | Fase | Situação |
 |---|---|
-| PE0 — marco do Garden | feita, no ar (#573, 947df0e) |
-| PE1 — os andares e a massa | feita, no ar (#573, 947df0e) |
-| PE2 — o tipo com as unidades do Empreendimento | PE2a no ar (#577, 6fd6816); PE2b: a Torre A já casa pelo nome (teste de caracterização, no ar); a Torre B fica para a PE6 |
-| PE3 — o botão na Casa automática | feita, no ar (#577, 6fd6816); conferida no app pelo caminho do usuário; a Torre B fica bloqueada (com o motivo) até a PE4–PE6 |
-| PE4 — o térreo da Torre A com os apartamentos | PE4a (#582) e PE4b feitas, conferidas no app: o andar 0 com 002/004 como unidades do kernel (QD, hidrômetro, medidor), o hall, a porta e o pluvial no chão |
-| PE5 — condomínio e desvio sem térreo livre | PE5a feita com a PE4a (a sala técnica na garagem, o desvio no forro dela); a Torre B (o andar 0 cópia, sem desvínculo) vem com a PE6 |
-| PE6 — abaixo da rede pública | PE6a–PE6d feitas e conferidas no app: a Torre B do −2, o esgoto por bombas, o 0 desvinculado com a porta (decisão do usuário), os nomes da ficha e o envio; a Torre B liberada |
-| PE7 — as duas torres no mesmo estudo | feita, no ar (#587, f042101) |
-| PE8 — o que ficou da PE7 | feita, a publicar: pé-direito diferente entre torres, o vão na contenção, os coletores suspensos sob a outra torre e o relatório do lote (tela da Casa automática) |
+| PE0 — marco do Garden | no ar (#573, 947df0e) |
+| PE1 — os andares e a massa | no ar (#573, 947df0e) |
+| PE2 — o tipo com as unidades do Empreendimento | no ar (#577, 6fd6816); os nomes da Torre B e o envio dela vieram com a PE6 (#584) |
+| PE3 — o botão na Casa automática | no ar (#577, 6fd6816) |
+| PE4 — o térreo da Torre A com os apartamentos | no ar: PE4a (#582, 89d0f8e), PE4b (#583, 5676b0d) |
+| PE5 — condomínio e desvio sem térreo livre | no ar: PE5a com a PE4a (#582); a Torre B com a PE6 (#584) |
+| PE6 — abaixo da rede pública (Torre B) | no ar (#584, bfbfcdc); a Torre B liberada na tela |
+| PE7 — as duas torres no mesmo estudo | no ar (#587, f042101) |
+| PE8 — o que ficou da PE7 | no ar (#588, d936a7d): pé-direito diferente entre torres, o vão na contenção, os coletores suspensos sob a outra torre e o relatório do lote |
+
+**Decisões do usuário ao longo do plano:**
+- **Caminho e estrutura das torres:** "Prédio pelo Empreendimento" e "Unidades do Empreendimento"; "A torre começa no −2".
+- **Térreo:** "Apartamentos + condomínio"; "Técnico na garagem".
+- **Referência e motor:** a planta Teste 01 como referência; o motor nativo.
+- **Torre B:** "Desvincular o 0" (a porta para a rua).
+- **As duas torres:** "Rampa pela garagem da A"; "Entrada na A, quadro geral na B".
+- **Relatório:** "numa tela do lote".
+
+## Pendências (19/11/2026)
+
+### Do projeto, que o relatório já avisa (o motor não resolve por natureza)
+- **Entrada de energia em média tensão:** 420 kVA conjuntos acima do padrão de baixa tensão, a projetar com a concessionária.
+- **Estrutura e fundações:** pré-dimensionadas; pedem cálculo com a sondagem.
+- **Andares enterrados da Torre B (−2 e −1):** contenção, impermeabilização, ventilação e luz.
+- **Sala técnica do condomínio (no −1 da A e no −3 da B):** reservada, falta fechar com paredes e porta.
+- **Garagem da Torre B:**
+  - a escada de emergência termina no teto do −3, e a saída dela até a rua fica para o projetista;
+  - o acesso pela A pede a escavação sob a laje do −2 da A.
+- **Coletores da Torre B:** passam suspensos no forro do 1º subsolo da A; conferir com a estrutura e o pé-direito livre.
+- **Pluvial da Torre B:** o trecho dos condutores abaixo do 0 (no −1 e no −2, que repetem o tipo) fica sem uso; cortar no projeto.
+- **Parede comum:** as janelas do tipo saíram, e os cômodos que dependiam delas ficam sem janela nesse lado; conferir a ventilação.
+- **Planta das unidades:** cômodos sem fachada e peças de mobiliário que não couberam (as listas estão no relatório da prévia).
+
+### Do código, casos fora do Garden (revisões dos PRs #584 e #587; ficam como decisões registradas)
+- **Ligação no pavimento do lote:** se a ligação da outra torre estiver nesse pavimento (torre sem subsolo), a junção não a vê e ficam duas ligações; o relatório do lote acusa.
+- **Coletor ao contrário:** um coletor desenhado ao contrário (a ponta `a` na ligação) ou dois chegando à ligação fazem o ajuste pular ou religar só um.
+- **Descida da ligação da outra torre:** leva os trechos dela no mesmo pavimento e com a mesma cota, mas não uma caixa no ponto nem trechos de outro pavimento.
+- **Vagas atravessadas pela rampa:** as que não têm nenhum canto na faixa da rampa ficam.
+- **Torre abaixo da rua sem pavimento na cota 0:** o chão do pluvial não é lançado, e o aviso diz só que a entrada fica para o projetista.
+- **Junção que não fecha:** ela cai no caminho lento sem registrar decisão.
+- **Envio da Torre B ao Empreendimento:**
+  - `floor_tipo` vai como TERREO para os andares abaixo da rua (só na criação de unidade nova; as do Garden são adotadas);
+  - o aviso "a estimativa daria N" compara com os pisos acima do solo;
+  - a posição e o sol das unidades vêm da divisão com o ordinal 2.
+- **Vagas da Torre B:** são lançadas antes de a rampa passar para a A (7 vagas; o −3 sem nenhuma). Lançar as vagas de novo depois da rampa liberaria o espaço dela.
+- **Relatório do lote:** traz as conferências do desenho, não as pendências do gerador da prévia (premissas e hipóteses).
+
+### Fora deste plano
+- **`__tests__/espelhoDoInvestidor.test.ts` falha no main:** lê migrations do banco que este plano não tocou ("a unidade do investidor segue com as mesmas 16 chaves" — vieram `price` e `status`). É para o dono do Espelho do Investidor.
 
 ## Verificação
 

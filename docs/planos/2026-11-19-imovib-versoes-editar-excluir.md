@@ -265,8 +265,24 @@ pessoa falha no meio); renomear durante a edição — o cálculo do salvar usa 
 
 ### Fase 4 — Conferência real e publicação
 
-- [ ] F4.1 Navegador (Playwright; escritas reais **só** numa versão descartável criada e apagada no fim, com
+- [x] F4.1 Navegador (Playwright; escritas reais **só** numa versão descartável criada e apagada no fim, com
   OK): editar um número → salvar → PDF da versão com o número novo; estudo vivo igual ao de antes; versão
   publicada do Garden com Editar/Excluir desligados e o motivo; segundo usuário vê só leitura.
-- [ ] F4.2 Um PR por fase (F1 só depois da migration aplicada), CI verde, merge `--match-head-commit`,
+- [x] F4.2 Um PR por fase (F1 só depois da migration aplicada), CI verde, merge `--match-head-commit`,
   `conferir-producao.sh`, este plano atualizado com "Publicado no PR #".
+
+### Conferência em produção (19/11, depois do #593)
+
+**Publicado no PR #593** (squash `dcba77f8f`, servido pelo domínio). Pelo navegador (usuário entrou com a conta
+de teste; escritas só numa versão descartável, criada e apagada — OK do usuário *"sim"*):
+
+- congelada "TESTE conferência — apagar"; Editar → confirmação certa → faixa "Editando a versão…";
+  "Congelar versão" desligado com o motivo;
+- TMA 12 → 15,5 na versão; salvar → a versão mostra "editada em" e VPL de R$ 706.968 → R$ 333.838;
+- banco depois: Garden com TMA **12**, sem edição aberta, nenhuma versão de teste sobrando.
+- **Achado:** a tela da Dinâmica, aberta durante o salvar, seguiu mostrando 15,5 (o banco tinha 12) — sair do
+  campo regravaria o valor da versão no estudo vivo. Corrigido: o conteúdo das abas remonta depois de
+  iniciar/salvar/descartar (teste "salvar na versão remonta as abas" RED→GREEN).
+- Não conferido nesta rodada: a versão publicada com Editar/Excluir desligados — o Garden Cambuhy não tem
+  versão publicada em oportunidade hoje (o banco não mostra oportunidade apontando versões dele); coberto pelos
+  testes e pela prova no banco.

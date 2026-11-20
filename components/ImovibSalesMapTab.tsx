@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { RefreshCw, BrainCircuit, BarChart3, Home, TrendingUp, AlertCircle } from 'lucide-react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { RefreshCw, BrainCircuit, BarChart3, Home, TrendingUp, AlertCircle, AlertTriangle } from 'lucide-react';
 import { ImovibStudy, ImovibUnitInstance, ImovibUnitInstanceInsert, HedonicPricingConfig, Property, PropertyStatus } from '../types';
 import { imovibService } from '../services/imovibService';
 import { pricingService } from '../services/pricingService';
@@ -12,11 +12,32 @@ import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import { useImovibPreferencias } from '../hooks/useImovibPreferencias';
 import { KpiCard } from './ui/KpiCard';
+import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
+import ActionIconButton from './ui/ActionIconButton';
+import ImovibEspelhoForaDoVgvSheet from './ImovibEspelhoForaDoVgvSheet';
+import { OPCOES_AGRUPAR_ESPELHO, chaveDoEspelho, ordemDoEspelho, SEM_ROTULO_ESPELHO, valorNoVgv, type CampoAgruparEspelho, type LinhaDoEspelho } from '../utils/imovibEspelhoGrupos';
 
 interface ImovibSalesMapTabProps {
     study: ImovibStudy;
     onDataChanged: () => void;
+    /** Abre as Preferências do estudo (painel do triângulo "Unidades fora do VGV"). */
+    onAbrirPreferencias?: () => void;
 }
+
+// Tabela padrão (§6.10): ordenação, Agrupar (§6.12), redimensionar e auto-ajuste (§6.1.2) vêm do StandardTable.
+const COLUNAS_ESPELHO: StandardTableColumn[] = [
+    { key: 'name', label: 'Unidade', width: 210 },
+    { key: 'torre', label: 'Torre', width: 120 },
+    { key: 'floor', label: 'Andar', width: 90, align: 'center' },
+    { key: 'area', label: 'Á. priv.', width: 110, align: 'right' },
+    { key: 'price', label: 'Preço', width: 140, align: 'right' },
+    { key: 'm2', label: 'Vlr/m²', width: 120, align: 'right' },
+    { key: 'peso_pos', label: 'Peso pos.', width: 120, align: 'center' },
+    { key: 'peso_sol', label: 'Peso sol', width: 110, align: 'center' },
+    { key: 'position_type', label: 'Posição', width: 130, align: 'center' },
+    { key: 'sun_orientation', label: 'Sol', width: 120, align: 'center' },
+    { key: 'status', label: 'Status', width: 140, align: 'center' },
+];
 
 // §8 do guia: status é texto colorido — sem pílula/fundo.
 const STATUS_COLORS: Record<string, string> = {
@@ -33,7 +54,7 @@ const STATUS_OPTIONS = ['DISPONÍVEL', 'RESERVADO', 'PERMUTADO', 'VENDIDO'] as c
 const formatBRL = (value: number): string =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChanged }) => {
+const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChanged, onAbrirPreferencias }) => {
     const [instances, setInstances] = useState<ImovibUnitInstance[]>([]);
     const [loading, setLoading] = useState(true);
     // Falha ao ler o espelho ≠ espelho vazio: com erro, a tela mostra o erro e
@@ -51,7 +72,9 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
     // no empreendimento fica fora da lista por padrão; "sem unidade" sempre aparece (pede ação).
     const { exibirNaoVendaveis } = useImovibPreferencias();
 
-    const blockMap = Object.fromEntries(blocks.map(b => [b.id, b.name]));
+    const blockMap = useMemo(() => Object.fromEntries(blocks.map(b => [b.id, b.name])) as Record<string, string>, [blocks]);
+    const precoM2Da = useMemo(() => Object.fromEntries(blocks.map(b => [b.id, b.sales_price_sqm || 0])) as Record<string, number>, [blocks]);
+    const [foraDoVgvAberto, setForaDoVgvAberto] = useState(false);
 
     const loadInstances = useCallback(async () => {
         setLoading(true);
@@ -246,7 +269,22 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
 
     // Plano 2026-11-19-espelho-vendavel-vgv: com empreendimento vinculado, unidade não vendável nele ou sem
     // unidade nele fica fora do VGV. A marca vem do estudo carregado (derivada na leitura).
-    const marcaDe = new Map((study.unit_instances || []).filter(i => i.fora_do_vgv).map(i => [i.id, i.fora_do_vgv!]));
+    const marcaDe = useMemo(() => new Map((study.unit_instances || []).filter(i => i.fora_do_vgv).map(i => [i.id, i.fora_do_vgv!])), [study.unit_instances]);
+    // Agrupar (§6.12): Torre, Andar, Status e No VGV; total do grupo = o que soma no VGV (utils/imovibEspelhoGrupos).
+    const linhaDe = useCallback((i: ImovibUnitInstance): LinhaDoEspelho => ({
+        torre: blockMap[i.block_id], andar: i.floor, status: i.status, marca: marcaDe.get(i.id),
+        preco: i.price, area: i.private_area, precoM2: precoM2Da[i.block_id],
+    }), [blockMap, marcaDe, precoM2Da]);
+    const agrupamento = useMemo(() => ({
+        opcoes: OPCOES_AGRUPAR_ESPELHO,
+        chave: (campo: string, i: ImovibUnitInstance) => chaveDoEspelho(campo, linhaDe(i)),
+        semRotulo: (campo: string) => SEM_ROTULO_ESPELHO[campo as CampoAgruparEspelho] ?? 'Sem grupo',
+        ordem: ordemDoEspelho,
+        valor: (i: ImovibUnitInstance) => valorNoVgv(linhaDe(i)),
+        title: 'Agrupar as unidades',
+        tituloTotal: 'Soma no VGV (preço, ou área × preço/m² da torre)',
+        padrao: 'torre',
+    }), [linhaDe]);
     const naoVendaveis = instances.filter(i => marcaDe.get(i.id) === 'nao_vendavel');
     const semUnidade = instances.filter(i => marcaDe.get(i.id) === 'sem_unidade');
     // Revisão (I1): a marca vem do estudo carregado e pode estar velha — confere o vínculo no banco na hora;
@@ -295,6 +333,11 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
     // VGV do motor — o mesmo do Resumo, da Estática e da listagem (unidade sem
     // preço vale área × preço/m² do bloco; permutada fica fora).
     const vgvTotal = math.vgvTotal;
+    const foraDoVgv = naoVendaveis.length + semUnidade.length;
+    const mensagemForaDoVgv = `${foraDoVgv} unidade(s) do espelho fora do VGV`
+        + (naoVendaveis.length > 0 ? ` · ${naoVendaveis.length} não vendável no empreendimento${!exibirNaoVendaveis ? ` (${naoVendaveis.length === 1 ? 'oculta' : 'ocultas'} na lista — Preferências)` : ''}` : '')
+        + (semUnidade.length > 0 ? ` · ${semUnidade.length} sem unidade no empreendimento (${formatBRL(semUnidade.reduce((t, x) => t + (x.price || 0), 0))} em preço)` : '')
+        + '. Para mudar o que é vendável, use a coluna "Vendável" em Empreendimento › Espelho de vendas.';
 
     if (loading) {
         return (
@@ -365,25 +408,6 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                 </div>
             )}
 
-            {/* Fora do VGV (plano 2026-11-19-espelho-vendavel-vgv) */}
-            {!loadError && (naoVendaveis.length + semUnidade.length) > 0 && (
-                <div role="status" aria-label="Unidades fora do VGV" className="mx-4 mt-4 flex flex-col md:flex-row md:items-center gap-3 rounded-[10px] bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
-                    <AlertCircle className="w-4 h-4 shrink-0 hidden md:block" />
-                    <p className="flex-1 min-w-0">
-                        {naoVendaveis.length + semUnidade.length} unidade(s) do espelho fora do VGV
-                        {naoVendaveis.length > 0 && <> · {naoVendaveis.length} não vendável no empreendimento{!exibirNaoVendaveis && ` (${naoVendaveis.length === 1 ? 'oculta' : 'ocultas'} na lista — Preferências)`}</>}
-                        {semUnidade.length > 0 && <> · {semUnidade.length} sem unidade no empreendimento ({formatBRL(semUnidade.reduce((t, x) => t + (x.price || 0), 0))} em preço)</>}.
-                        {' '}Para mudar o que é vendável, use a coluna "Vendável" em Empreendimento › Espelho de vendas.
-                    </p>
-                    {semUnidade.length > 0 && (
-                        <button type="button" onClick={() => void removerSemUnidade()} disabled={!pode} title={!pode ? motivo : undefined}
-                            className="h-9 px-3.5 shrink-0 bg-white border border-amber-300 text-amber-900 rounded-[6px] text-[13px] font-medium hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed">
-                            {`Remover as sem unidade no empreendimento (${semUnidade.length})`}
-                        </button>
-                    )}
-                </div>
-            )}
-
             {/* Body */}
             {loadError ? (
                 <div className="p-12 flex flex-col items-center justify-center gap-4 text-center">
@@ -443,145 +467,115 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                     )}
                 </div>
             ) : (
-                <div className="overflow-x-auto">
-                  {/* Posição, Sol e Status gravam na hora (handleInlineUpdate). */}
-                  <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0">
-                    <table className="w-full text-sm">
-                        <thead>
-                            <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                <th className="text-left px-6 py-2 border-r border-gray-100 last:border-r-0">Unidade</th>
-                                <th className="text-left px-6 py-2 border-r border-gray-100 last:border-r-0">Bloco</th>
-                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Andar</th>
-                                <th className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Á. Priv.</th>
-                                <th className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Preço</th>
-                                <th className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Vlr/m²</th>
-                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Peso Pos.</th>
-                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Peso Sol</th>
-                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Posição</th>
-                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Sol</th>
-                                <th className="text-center px-6 py-2 border-r border-gray-100 last:border-r-0">Status</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                            {instances.filter(i => exibirNaoVendaveis || marcaDe.get(i.id) !== 'nao_vendavel').map((inst) => {
-                                const pricePerSqm =
-                                    inst.price > 0 && inst.private_area > 0
-                                        ? Math.round(inst.price / inst.private_area)
-                                        : null;
-                                return (
-                                    <tr
-                                        key={inst.id}
-                                        className="hover:bg-blue-50/50 transition-colors"
-                                    >
-                                        {/* Unidade */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                            {inst.name}
-                                            {marcaDe.get(inst.id) && (
-                                                <span className="block text-xs text-amber-800">
-                                                    {marcaDe.get(inst.id) === 'nao_vendavel' ? 'Não vendável no empreendimento' : 'Sem unidade no empreendimento'}
-                                                </span>
-                                            )}
-                                        </td>
-
-                                        {/* Bloco */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
-                                            {blockMap[inst.block_id] || '—'}
-                                        </td>
-
-                                        {/* Andar */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal text-gray-600">{inst.floor}</td>
-
-                                        {/* Área Privativa */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-normal text-gray-600">
-                                            {inst.private_area > 0 ? `${inst.private_area} m²` : '—'}
-                                        </td>
-
-                                        {/* Preço */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
-                                            {marcaDe.get(inst.id) ? <span className="text-xs font-normal text-amber-800">fora do VGV</span> : inst.price > 0 ? formatBRL(inst.price) : '—'}
-                                        </td>
-
-                                        {/* VLR/m² */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
-                                            {pricePerSqm ? formatBRL(pricePerSqm) : '—'}
-                                        </td>
-
-                                        {/* Peso Pos. */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal">
-                                            <div className="flex flex-col items-center">
-                                                <span className="text-gray-700 leading-none mb-0.5">
-                                                    {inst.position_type === 'FRENTE' ? '1.03x' : inst.position_type === 'FUNDOS' ? '0.97x' : '1.00x'}
-                                                </span>
-                                                <span className="text-gray-500 text-xs">
-                                                    {inst.position_type === 'FRENTE' ? 'Frente' : inst.position_type === 'FUNDOS' ? 'Fundos' : 'Lateral / Base'}
-                                                </span>
-                                            </div>
-                                        </td>
-
-                                        {/* Peso Sol */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center text-sm font-normal">
-                                            <div className="flex flex-col items-center">
-                                                <span className="text-gray-700 leading-none mb-0.5">
-                                                    {inst.sun_orientation === 'NORTE' ? '1.02x' : inst.sun_orientation === 'LESTE' ? '1.01x' : inst.sun_orientation === 'OESTE' ? '0.99x' : '0.98x'}
-                                                </span>
-                                                <span className="text-gray-500 text-xs">
-                                                    {inst.sun_orientation === 'NORTE' ? 'Norte' : inst.sun_orientation === 'LESTE' ? 'Leste' : inst.sun_orientation === 'OESTE' ? 'Oeste' : 'Sul'}
-                                                </span>
-                                            </div>
-                                        </td>
-
-                                        {/* Posição */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                            <select
-                                                value={inst.position_type}
-                                                onChange={e =>
-                                                    handleInlineUpdate(inst.id, 'position_type', e.target.value)
-                                                }
-                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded-[6px] px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed"
-                                            >
-                                                {POSITION_OPTIONS.map(o => (
-                                                    <option key={o} value={o}>{o}</option>
-                                                ))}
-                                            </select>
-                                        </td>
-
-                                        {/* Sol */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                            <select
-                                                value={inst.sun_orientation}
-                                                onChange={e =>
-                                                    handleInlineUpdate(inst.id, 'sun_orientation', e.target.value)
-                                                }
-                                                className="text-sm font-normal bg-gray-50 border border-gray-100 rounded-[6px] px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed"
-                                            >
-                                                {SUN_OPTIONS.map(o => (
-                                                    <option key={o} value={o}>{o}</option>
-                                                ))}
-                                            </select>
-                                        </td>
-
-                                        {/* Status */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-center">
-                                            <select
-                                                value={inst.status}
-                                                onChange={e =>
-                                                    handleInlineUpdate(inst.id, 'status', e.target.value)
-                                                }
-                                                className={`text-sm font-normal bg-gray-50 border border-gray-100 rounded-[6px] px-2 py-1 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed ${STATUS_COLORS[inst.status] || 'text-gray-700'}`}
-                                            >
-                                                {STATUS_OPTIONS.map(o => (
-                                                    <option key={o} value={o}>{o}</option>
-                                                ))}
-                                            </select>
-                                        </td>
-                                    </tr>
-                                );
-                            })}
-                        </tbody>
-                    </table>
-                  </fieldset>
-                </div>
+                // Posição, Sol e Status gravam na hora (handleInlineUpdate); sem permissão, os selects ficam
+                // desligados com o motivo — o resto da toolbar (busca, Grupo, colunas) segue livre.
+                <StandardTable<ImovibUnitInstance>
+                    storageKey="imovib:espelho"
+                    columns={COLUNAS_ESPELHO}
+                    rows={instances.filter(i => exibirNaoVendaveis || marcaDe.get(i.id) !== 'nao_vendavel')}
+                    rowKey={i => i.id}
+                    dense
+                    bare
+                    searchText={i => `${i.name} ${blockMap[i.block_id] ?? ''}`}
+                    searchPlaceholder="Buscar unidade ou torre…"
+                    agrupamento={agrupamento}
+                    sortValue={(k, i) => {
+                        switch (k) {
+                            case 'name': return i.name;
+                            case 'torre': return blockMap[i.block_id] ?? '';
+                            case 'floor': return i.floor;
+                            case 'area': return i.private_area;
+                            case 'price': return marcaDe.get(i.id) ? -1 : i.price;
+                            case 'm2': return i.price > 0 && i.private_area > 0 ? i.price / i.private_area : 0;
+                            case 'peso_pos': case 'position_type': return i.position_type;
+                            case 'peso_sol': case 'sun_orientation': return i.sun_orientation;
+                            case 'status': return i.status;
+                            default: return null;
+                        }
+                    }}
+                    toolbarRight={foraDoVgv > 0 ? (
+                        <span className="relative inline-flex shrink-0">
+                            <ActionIconButton
+                                kind="view"
+                                tone="attention"
+                                icon={<AlertTriangle className="w-4 h-4" />}
+                                title={mensagemForaDoVgv}
+                                aria-label={`Unidades fora do VGV (${foraDoVgv})`}
+                                className="flex h-9 w-9 items-center justify-center"
+                                onClick={() => setForaDoVgvAberto(true)}
+                            />
+                            <span className="pointer-events-none absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-600 px-1 text-[10px] font-bold text-white">{foraDoVgv}</span>
+                        </span>
+                    ) : undefined}
+                    renderCell={(k, inst) => {
+                        const marca = marcaDe.get(inst.id);
+                        switch (k) {
+                            case 'name': return (
+                                <span className="text-sm font-normal text-gray-700">
+                                    {inst.name}
+                                    {marca && <span className="block text-xs text-amber-800">{marca === 'nao_vendavel' ? 'Não vendável no empreendimento' : 'Sem unidade no empreendimento'}</span>}
+                                </span>
+                            );
+                            case 'torre': return <span className="text-sm font-normal text-gray-700">{blockMap[inst.block_id] || '—'}</span>;
+                            case 'floor': return <span className="text-sm font-normal text-gray-600">{inst.floor}</span>;
+                            case 'area': return <span className="text-sm font-normal text-gray-600">{inst.private_area > 0 ? `${inst.private_area} m²` : '—'}</span>;
+                            case 'price': return marca
+                                ? <span className="text-xs font-normal text-amber-800">fora do VGV</span>
+                                : <span className="text-sm font-medium text-gray-800">{inst.price > 0 ? formatBRL(inst.price) : '—'}</span>;
+                            case 'm2': {
+                                const m2 = inst.price > 0 && inst.private_area > 0 ? Math.round(inst.price / inst.private_area) : null;
+                                return <span className="text-sm font-medium text-gray-800">{m2 ? formatBRL(m2) : '—'}</span>;
+                            }
+                            case 'peso_pos': return (
+                                <span className="flex flex-col items-center text-sm font-normal">
+                                    <span className="text-gray-700 leading-none mb-0.5">{inst.position_type === 'FRENTE' ? '1.03x' : inst.position_type === 'FUNDOS' ? '0.97x' : '1.00x'}</span>
+                                    <span className="text-gray-500 text-xs">{inst.position_type === 'FRENTE' ? 'Frente' : inst.position_type === 'FUNDOS' ? 'Fundos' : 'Lateral / Base'}</span>
+                                </span>
+                            );
+                            case 'peso_sol': return (
+                                <span className="flex flex-col items-center text-sm font-normal">
+                                    <span className="text-gray-700 leading-none mb-0.5">{inst.sun_orientation === 'NORTE' ? '1.02x' : inst.sun_orientation === 'LESTE' ? '1.01x' : inst.sun_orientation === 'OESTE' ? '0.99x' : '0.98x'}</span>
+                                    <span className="text-gray-500 text-xs">{inst.sun_orientation === 'NORTE' ? 'Norte' : inst.sun_orientation === 'LESTE' ? 'Leste' : inst.sun_orientation === 'OESTE' ? 'Oeste' : 'Sul'}</span>
+                                </span>
+                            );
+                            case 'position_type': return (
+                                <select aria-label={`Posição — ${inst.name}`} value={inst.position_type} disabled={!pode} title={!pode ? motivo : undefined}
+                                    onChange={e => handleInlineUpdate(inst.id, 'position_type', e.target.value)}
+                                    className="text-sm font-normal bg-gray-50 border border-gray-100 rounded-[6px] px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed">
+                                    {POSITION_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                            );
+                            case 'sun_orientation': return (
+                                <select aria-label={`Sol — ${inst.name}`} value={inst.sun_orientation} disabled={!pode} title={!pode ? motivo : undefined}
+                                    onChange={e => handleInlineUpdate(inst.id, 'sun_orientation', e.target.value)}
+                                    className="text-sm font-normal bg-gray-50 border border-gray-100 rounded-[6px] px-2 py-1 text-gray-900 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed">
+                                    {SUN_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                            );
+                            case 'status': return (
+                                <select aria-label={`Status — ${inst.name}`} value={inst.status} disabled={!pode} title={!pode ? motivo : undefined}
+                                    onChange={e => handleInlineUpdate(inst.id, 'status', e.target.value)}
+                                    className={`text-sm font-normal bg-gray-50 border border-gray-100 rounded-[6px] px-2 py-1 focus:outline-none focus:border-blue-400 cursor-pointer disabled:cursor-not-allowed ${STATUS_COLORS[inst.status] || 'text-gray-700'}`}>
+                                    {STATUS_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
+                                </select>
+                            );
+                            default: return null;
+                        }
+                    }}
+                />
             )}
+
+            <ImovibEspelhoForaDoVgvSheet
+                open={foraDoVgvAberto}
+                onClose={() => setForaDoVgvAberto(false)}
+                mensagem={mensagemForaDoVgv}
+                naoVendaveis={naoVendaveis.length}
+                semUnidade={semUnidade.length}
+                onAbrirPreferencias={onAbrirPreferencias ? () => { setForaDoVgvAberto(false); onAbrirPreferencias(); } : undefined}
+                onRemoverSemUnidade={() => { setForaDoVgvAberto(false); void removerSemUnidade(); }}
+                podeRemover={pode}
+                motivo={motivo}
+            />
 
             <PricingIntelligenceModal
                 isOpen={pricingModalOpen}

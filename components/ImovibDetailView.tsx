@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart, TrendingUp, History, Lock, Activity, SlidersHorizontal } from 'lucide-react';
+import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart, TrendingUp, History, Lock, Activity, SlidersHorizontal, LayoutGrid } from 'lucide-react';
 import ImovibPremisesForm from './ImovibPremisesForm';
 import ImovibStaticViability from './ImovibStaticViability';
 import ImovibDynamicForm from './ImovibDynamicForm';
@@ -9,6 +9,7 @@ import ImovibCashFlow from './ImovibCashFlow';
 import ImovibExecutiveSummary from './ImovibExecutiveSummary';
 import ImovibCapexForm from './ImovibCapexForm';
 import ImovibReceitasForm from './ImovibReceitasForm';
+import ImovibSalesMapTab from './ImovibSalesMapTab';
 import ImovibCapitalForm from './ImovibCapitalForm';
 import ImovibSensitivityForm from './ImovibSensitivityForm';
 import ImovibForm from './ImovibForm';
@@ -31,13 +32,16 @@ interface ImovibDetailViewProps {
     onBack: () => void;
 }
 
-type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'receitas' | 'capital' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic' | 'versoes' | 'acompanhamento';
+type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'espelho' | 'receitas' | 'capital' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic' | 'versoes' | 'acompanhamento';
 
 const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'executive_summary', label: 'Resumo Executivo', icon: <FileBarChart className="w-4 h-4" /> },
     { id: 'premises', label: 'Premissas', icon: <Building2 className="w-4 h-4" /> },
     { id: 'capex', label: 'Orçamento (CAPEX)', icon: <Calculator className="w-4 h-4" /> },
     // "Receitas e Capital" virou duas abas (decisão D7 do plano 2026-11-11).
+    // Espelho de vendas ganhou aba própria (plano 2026-11-20-imovib-espelho-aba-tabela-padrao): com 38+ unidades
+    // a tabela empurrava Curva de vendas, Perfil de recebimento e Distrato para fora da vista.
+    { id: 'espelho', label: 'Espelho de vendas', icon: <LayoutGrid className="w-4 h-4" /> },
     { id: 'receitas', label: 'Receitas', icon: <TrendingUp className="w-4 h-4" /> },
     { id: 'capital', label: 'Capital', icon: <Landmark className="w-4 h-4" /> },
     { id: 'risk_scenarios', label: 'Sensibilidade e Risco', icon: <AlertCircle className="w-4 h-4" /> },
@@ -299,9 +303,14 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                             <ImovibCapexForm study={study} onDataChanged={() => loadStudyDetails(false)} />
                         </ErrorBoundary>
                     )}
+                    {activeTab === 'espelho' && (
+                        <ErrorBoundary>
+                            <ImovibSalesMapTab study={study} onDataChanged={() => loadStudyDetails(false)} onAbrirPreferencias={() => setPreferenciasAberto(true)} />
+                        </ErrorBoundary>
+                    )}
                     {activeTab === 'receitas' && (
                         <ErrorBoundary>
-                            <ImovibReceitasForm study={study} onDataChanged={() => loadStudyDetails(false)} />
+                            <ImovibReceitasForm study={study} onDataChanged={() => loadStudyDetails(false)} onIrParaEspelho={() => void irPara('espelho')} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'capital' && (

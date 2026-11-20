@@ -13,6 +13,7 @@ import type { ImovibAba, ImovibAviso, ImovibSubAbaDePremissas } from '../hooks/u
 const ROTULO_ABA: Record<ImovibAba, string> = {
     premises: 'Premissas',
     capex: 'Orçamento (CAPEX)',
+    espelho: 'Espelho de vendas',
     receitas: 'Receitas',
     capital: 'Capital',
     viability_dynamic: 'Dinâmica',

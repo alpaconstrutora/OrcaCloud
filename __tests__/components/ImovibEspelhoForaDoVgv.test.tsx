@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 /**
  * Espelho do estudo vinculado: unidade fora do VGV aparece marcada (plano
- * docs/planos/2026-11-19-espelho-vendavel-vgv.md, F2.1) — "Não vendável no empreendimento" / "Sem unidade no
- * empreendimento", aviso com quantas e quanto, e remover as sem unidade com confirmação.
+ * docs/planos/2026-11-19-espelho-vendavel-vgv.md, F2.1) e, desde 20/11 (plano
+ * docs/planos/2026-11-20-imovib-espelho-aba-tabela-padrao.md), o aviso é um triângulo com contador que abre um
+ * painel com as ações; a tabela é o StandardTable, agrupada por Torre.
  */
 import React from 'react';
 import { render, screen, within } from '@testing-library/react';
@@ -31,7 +32,13 @@ const estudo = baseStudy({
     unit_instances: marcadas,
     estrutura: { origem: 'empreendimento', empreendimento_id: 'emp-1', empreendimento_nome: 'Garden', torres: 1, unidades: 2, blocos_fora_do_calculo: [] },
 });
-const montar = (aoMudar = vi.fn()) => render(<ConfirmProvider><ImovibSalesMapTab study={estudo} onDataChanged={aoMudar} /></ConfirmProvider>);
+const montar = (aoMudar = vi.fn(), aoAbrirPreferencias = vi.fn()) =>
+    render(<ConfirmProvider><ImovibSalesMapTab study={estudo} onDataChanged={aoMudar} onAbrirPreferencias={aoAbrirPreferencias} /></ConfirmProvider>);
+const triangulo = () => screen.findByRole('button', { name: /Unidades fora do VGV/ });
+const abrirPainel = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await triangulo());
+    return screen.findByRole('dialog');
+};
 
 beforeEach(() => {
     // A tela lê o espelho cru do banco; a marca vem do estudo carregado.
@@ -39,6 +46,7 @@ beforeEach(() => {
     svc.deleteUnitInstancesByIds.mockReset().mockResolvedValue(undefined);
     svc.instanciasLigadasAoEmpreendimento.mockReset().mockResolvedValue(new Set());
     pref.exibir = true;
+    try { window.localStorage.clear(); } catch { /* sem storage */ }
 });
 
 describe('espelho do estudo — unidades fora do VGV', () => {
@@ -53,19 +61,35 @@ describe('espelho do estudo — unidades fora do VGV', () => {
         expect(within(ok).queryByText('fora do VGV')).toBeNull();
     });
 
-    it('aviso no topo com quantas e quanto ficou fora', async () => {
+    it('triângulo com o número de unidades fora do VGV e a mensagem inteira no hover', async () => {
         montar();
-        const aviso = await screen.findByRole('status', { name: 'Unidades fora do VGV' });
-        expect(aviso.textContent).toMatch(/2 unidade\(s\) do espelho fora do VGV/);
-        expect(aviso.textContent).toMatch(/1 não vendável no empreendimento/);
-        expect(aviso.textContent).toMatch(/1 sem unidade no empreendimento/);
+        const t = await triangulo();
+        expect(t.closest('span')!.textContent).toMatch(/2/);
+        const msg = t.getAttribute('title') ?? '';
+        expect(msg).toMatch(/2 unidade\(s\) do espelho fora do VGV/);
+        expect(msg).toMatch(/1 não vendável no empreendimento/);
+        expect(msg).toMatch(/1 sem unidade no empreendimento/);
+        expect(msg).toMatch(/use a coluna "Vendável" em Empreendimento › Espelho de vendas/);
+        // O banner âmbar saiu.
+        expect(screen.queryByRole('status', { name: 'Unidades fora do VGV' })).toBeNull();
     });
 
-    it('remover as sem unidade: confirma com os nomes e apaga só elas', async () => {
+    it('painel: mensagem, "Abrir Preferências" e remover as sem unidade', async () => {
+        const user = userEvent.setup();
+        const aoAbrir = vi.fn();
+        montar(vi.fn(), aoAbrir);
+        const painel = await abrirPainel(user);
+        expect(within(painel).getByText(/2 unidade\(s\) do espelho fora do VGV/)).toBeTruthy();
+        await user.click(within(painel).getByRole('button', { name: 'Abrir Preferências' }));
+        expect(aoAbrir).toHaveBeenCalled();
+    });
+
+    it('remover as sem unidade (pelo painel): confirma com os nomes e apaga só elas', async () => {
         const user = userEvent.setup();
         const aoMudar = vi.fn();
         montar(aoMudar);
-        await user.click(await screen.findByRole('button', { name: 'Remover as sem unidade no empreendimento (1)' }));
+        const painel = await abrirPainel(user);
+        await user.click(within(painel).getByRole('button', { name: 'Remover as sem unidade no empreendimento (1)' }));
         expect(await screen.findByText(/999/, { selector: 'div' })).toBeTruthy();
         await user.click(screen.getByRole('button', { name: 'Remover' }));
         await vi.waitFor(() => expect(svc.deleteUnitInstancesByIds).toHaveBeenCalledWith(['i3']));
@@ -81,7 +105,8 @@ describe('espelho do estudo — unidades fora do VGV', () => {
         svc.getUnitInstances.mockResolvedValue(lista.map(({ fora_do_vgv: _f, ...r }) => r));
         svc.instanciasLigadasAoEmpreendimento.mockResolvedValue(new Set(['i5']));
         render(<ConfirmProvider><ImovibSalesMapTab study={{ ...estudo, unit_instances: lista }} onDataChanged={vi.fn()} /></ConfirmProvider>);
-        await user.click(await screen.findByRole('button', { name: /Remover as sem unidade no empreendimento/ }));
+        const painel = await abrirPainel(user);
+        await user.click(within(painel).getByRole('button', { name: /Remover as sem unidade no empreendimento/ }));
         expect(await screen.findByText(/998 \(vendida ou reservada\)/)).toBeTruthy();
         await user.click(screen.getByRole('button', { name: 'Remover' }));
         await vi.waitFor(() => expect(svc.deleteUnitInstancesByIds).toHaveBeenCalledWith(['i3']));
@@ -95,7 +120,16 @@ describe('espelho do estudo — unidades fora do VGV', () => {
         await screen.findByText('101');
         expect(screen.queryByText('G1')).toBeNull();
         expect(screen.getByText('999')).toBeTruthy();
-        const aviso = screen.getByRole('status', { name: 'Unidades fora do VGV' });
-        expect(aviso.textContent).toMatch(/1 não vendável no empreendimento \(oculta na lista — Preferências\)/);
+        expect((await triangulo()).getAttribute('title')).toMatch(/1 não vendável no empreendimento \(oculta na lista — Preferências\)/);
+    });
+});
+
+describe('espelho do estudo — tabela padrão (§6.10/§6.12)', () => {
+    it('abre agrupado por Torre, com Grupo, expandir/recolher e ajuste de largura', async () => {
+        montar();
+        await screen.findByText('101');
+        expect(screen.getByRole('combobox', { name: /Agrupar/ })).toBeTruthy();
+        expect(screen.getByRole('button', { name: /Ajustar largura das colunas/ })).toBeTruthy();
+        expect(screen.getAllByText('Torre A').length).toBeGreaterThan(0);
     });
 });

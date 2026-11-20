@@ -349,18 +349,9 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
 
     return (
         <div className="bg-white rounded-[10px] border border-gray-200 overflow-hidden">
-            {/* Header */}
-            <div className="p-6 border-b border-slate-100 flex items-center justify-between gap-4 flex-wrap">
-                <div className="flex items-center gap-3">
-                    <div className="p-2 bg-emerald-50 text-emerald-600 rounded-[6px]">
-                        <Home className="w-5 h-5" />
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-semibold text-gray-900">Vendas de Ativos</h2>
-                        <p className="text-slate-500 text-sm mt-0.5">Unidades individualizadas do empreendimento</p>
-                    </div>
-                </div>
-                {/* Regenerar e Precificação gravam no espelho. */}
+            {/* Ações (sem título: o nome da aba já diz o que é). Regenerar e Precificação gravam no espelho. */}
+            {!loadError && instances.length > 0 && (
+            <div className="p-6 border-b border-slate-100 flex items-center justify-end gap-4 flex-wrap">
                 <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-3 flex-wrap">
                     {!loadError && instances.length > 0 && (
                         <>
@@ -383,6 +374,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                     )}
                 </fieldset>
             </div>
+            )}
 
             {/* KPIs — §4: KpiCard */}
             {!loadError && instances.length > 0 && (

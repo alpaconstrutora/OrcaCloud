@@ -115,6 +115,19 @@ a marca nova.
 
 ### Fase 3 — Conferência e publicação
 
-- [ ] F3.1 Leitura no banco antes/depois: VGV do Garden pela tela do estudo = soma das 43 ligadas; versão congelada
+- [x] F3.1 Leitura no banco antes/depois: VGV do Garden pela tela do estudo = soma das 43 ligadas; versão congelada
   inalterada. Navegador (conta de teste; escrita real só ligar/desligar "Vendável" numa unidade e voltar — com OK).
-- [ ] F3.2 PR, CI, merge, `conferir-producao.sh`, este plano com "Publicado no PR #".
+- [x] F3.2 PR, CI, merge, `conferir-producao.sh`, este plano com "Publicado no PR #".
+
+### Conferência em produção (19/11)
+
+**Publicado no PR #595** (squash `112ed87bc`, servido pelo domínio). Navegador com a conta de teste (OK do usuário):
+
+- Imovib › listagem e Receitas do Garden: **VGV R$ 18.941.173** (antes R$ 25,0 mi) — igual ao calculado no banco;
+  aviso "12 unidade(s) do espelho fora do VGV · 12 sem unidade no empreendimento (R$ 6.058.828 em preço)";
+  12 linhas marcadas; 0 erros de console.
+- Empreendimento › Espelho de Vendas: "Vendável" de "Estacionamento 2" desligado → "Publicar" da linha desligado
+  com "Não vendável: ligue "Vendável" para publicar…"; religado → banco de volta a `is_vendavel = true`.
+- **Achado de dado (não mexido):** o Garden tem 4 unidades "Estacionamento 1/2" e "Garagem 1/2" marcadas como
+  vendáveis e ligadas ao espelho do estudo. Somam R$ 0 ao VGV (sem preço nem área), mas entram na contagem de
+  unidades à venda. Desligar "Vendável" nelas é decisão do usuário, pela coluna nova.

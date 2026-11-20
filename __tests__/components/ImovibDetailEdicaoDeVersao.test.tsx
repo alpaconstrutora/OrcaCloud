@@ -26,6 +26,7 @@ vi.mock('../../components/ImovibVersoesTab', nada);
 vi.mock('../../components/ImovibAcompanhamentoTab', nada);
 vi.mock('../../components/ImovibCongelarVersao', nada);
 vi.mock('../../hooks/useToast', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
+vi.mock('../../components/ImovibPreferenciasSheet', () => ({ default: ({ open }: { open: boolean }) => (open ? <div>painel de preferências</div> : null) }));
 
 const svc = vi.hoisted(() => ({ estudo: null as null | Record<string, unknown>, depois: null as null | Record<string, unknown>, salvar: vi.fn(), descartar: vi.fn(), carregou: 0 }));
 vi.mock('../../services/imovibService', () => ({
@@ -85,5 +86,17 @@ describe('ImovibDetailView com versão em edição', () => {
         await userEvent.click(screen.getByRole('button', { name: 'Salvar na versão' }));
         await waitFor(() => expect(svc.carregou).toBe(2));
         await waitFor(() => expect((screen.getByLabelText('TMA simulada') as HTMLInputElement).value).toBe('12'));
+    });
+
+    // Plano 2026-11-20-imovib-preferencias-estudo: botão "Preferências" no topo direito, ao lado de "Editar".
+    it('"Preferências" fica ao lado de "Editar" e abre o painel — também em só leitura', async () => {
+        useStore.setState({ session: { user: { id: 'u-bruno', email: 'bruno@exemplo.com.br' } } as never });
+        montar();
+        const botao = await screen.findByRole('button', { name: /Preferências/ });
+        expect((botao as HTMLButtonElement).disabled).toBe(false);
+        expect(botao.nextElementSibling?.textContent).toMatch(/Editar/);
+        expect(screen.queryByText('painel de preferências')).toBeNull();
+        await userEvent.click(botao);
+        expect(screen.getByText('painel de preferências')).toBeTruthy();
     });
 });

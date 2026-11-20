@@ -55,4 +55,15 @@ describe('motor — instância fora do VGV', () => {
         expect(m.vgvPorBloco.b1.fonte).toBe('preco_m2');
         expect(m.avisos.map(a => a.mensagem).join(' ')).not.toMatch(/Garagens/);
     });
+
+    // Revisão (C1): espelho que nunca foi alinhado ao empreendimento (nenhuma unidade ligada) zeraria o VGV
+    // em silêncio — a torre ganha aviso próprio dizendo o que fazer.
+    it('torre com espelho todo sem unidade no empreendimento: aviso próprio, com a torre e o caminho', () => {
+        const sobras = Array.from({ length: 4 }, (_, k) => inst(`s${k}`, 'b1', 500_000, { fora_do_vgv: 'sem_unidade' }));
+        const m = computeImovibMath(baseStudy({ unit_instances: sobras }));
+        expect(m.vgvPorBloco.b1.vgv).toBe(0);
+        const aviso = m.avisos.find(a => a.codigo === 'espelho_sem_vinculo');
+        expect(aviso?.mensagem).toMatch(/Torre A/);
+        expect(aviso?.mensagem).toMatch(/Alinhar/);
+    });
 });

@@ -67,4 +67,28 @@ describe('coluna Vendável', () => {
         await vi.waitFor(async () => expect((within(await linha('101')).getByRole('checkbox', { name: 'Vendável — 101' }) as HTMLInputElement).checked).toBe(true));
         expect(await screen.findByText(/sem permissão/)).toBeTruthy();
     });
+
+    // Revisão (I2): em lote, falha no meio deixava tela e banco diferentes — agora recarrega do banco.
+    it('"Vendável — todas" com falha no meio: recarrega do banco em vez de adivinhar', async () => {
+        const user = userEvent.setup();
+        svc.updateUnit.mockImplementation(async (id: string) => { if (id === 'u3') throw new Error('timeout'); });
+        montar();
+        await screen.findByText('101');
+        await user.click(screen.getByRole('checkbox', { name: 'Vendável — todas' }));
+        await vi.waitFor(() => expect(svc.listAllUnitsForEmpreendimento).toHaveBeenCalledTimes(2));
+        expect(await screen.findByText(/timeout/)).toBeTruthy();
+    });
+
+    // Revisão (I3): com uma não vendável, "Publicar — todas" nunca ficava ligado e cada clique religava.
+    it('"Publicar — todas" com não vendável: liga as vendáveis e o segundo clique desliga', async () => {
+        const user = userEvent.setup();
+        montar();
+        await screen.findByText('101');
+        const todas = () => screen.getAllByRole('checkbox').find(c => c.closest('th')?.textContent?.includes('Publicar')) as HTMLInputElement;
+        await user.click(todas());
+        expect(todas().checked).toBe(true);
+        await user.click(todas());
+        expect(todas().checked).toBe(false);
+        expect((within(await linha('101')).getByRole('checkbox', { name: 'Publicar — 101' }) as HTMLInputElement).checked).toBe(false);
+    });
 });

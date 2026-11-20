@@ -358,7 +358,8 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
   const toPublish = units.filter(u => desiredIds.has(u.id) && !isVisible(u));
   const toHide = units.filter(u => !desiredIds.has(u.id) && isVisible(u));
   const pendingCount = toPublish.length + toHide.length;
-  const allDesired = units.length > 0 && units.every(u => desiredIds.has(u.id));
+  // Não vendável não conta para "todas" (revisão I3: com uma garagem, o cabeçalho nunca ligava).
+  const allDesired = units.some(u => ehVendavel(u)) && units.every(u => desiredIds.has(u.id) || !ehVendavel(u));
   const toggleDesired = (id: string) => setDesiredIds(prev => {
     const next = new Set(prev);
     if (next.has(id)) next.delete(id); else next.add(id);
@@ -377,10 +378,18 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
     setUnits(prev => prev.map(u => (ids.has(u.id) ? { ...u, is_vendavel: valor } : u)));
     if (!valor) setDesiredIds(prev => { const n = new Set(prev); alvo.forEach(u => { if (!isVisible(u)) n.delete(u.id); }); return n; });
     try {
-      await Promise.all(alvo.map(u => empreendimentoService.updateUnit(u.id, { is_vendavel: valor })));
+      // Unidade a unidade (updateUnit grava o histórico de auditoria), em lotes de 10.
+      for (let k = 0; k < alvo.length; k += 10) {
+        await Promise.all(alvo.slice(k, k + 10).map(u => empreendimentoService.updateUnit(u.id, { is_vendavel: valor })));
+      }
     } catch (err) {
-      setUnits(prev => prev.map(u => (ids.has(u.id) ? { ...u, is_vendavel: antes.get(u.id) as UnitWithTower['is_vendavel'] } : u)));
       notify(`Não foi possível gravar "Vendável": ${(err as Error).message}`, 'error');
+      if (alvo.length === 1) {
+        setUnits(prev => prev.map(u => (ids.has(u.id) ? { ...u, is_vendavel: antes.get(u.id) as UnitWithTower['is_vendavel'] } : u)));
+      } else {
+        // Revisão I2: em lote, parte pode ter gravado — a tela volta ao que está no banco.
+        await load();
+      }
     }
   };
   const alternarTodasVendavel = async () => {

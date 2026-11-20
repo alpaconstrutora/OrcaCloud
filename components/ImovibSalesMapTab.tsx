@@ -245,16 +245,39 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
     const marcaDe = new Map((study.unit_instances || []).filter(i => i.fora_do_vgv).map(i => [i.id, i.fora_do_vgv!]));
     const naoVendaveis = instances.filter(i => marcaDe.get(i.id) === 'nao_vendavel');
     const semUnidade = instances.filter(i => marcaDe.get(i.id) === 'sem_unidade');
+    // Revisão (I1): a marca vem do estudo carregado e pode estar velha — confere o vínculo no banco na hora;
+    // vendida/reservada nunca sai por aqui.
     const removerSemUnidade = async () => {
-        const nomes = semUnidade.map(i => i.name);
+        const vendidas = semUnidade.filter(i => i.status !== 'DISPONÍVEL');
+        const candidatas = semUnidade.filter(i => i.status === 'DISPONÍVEL');
+        let ligadasAgora = new Set<string>();
+        try {
+            ligadasAgora = candidatas.length ? await imovibService.instanciasLigadasAoEmpreendimento(candidatas.map(i => i.id)) : new Set();
+        } catch (err) {
+            showToast(`Não foi possível conferir o vínculo com o empreendimento: ${(err as Error).message}`, 'error');
+            return;
+        }
+        const alvo = candidatas.filter(i => !ligadasAgora.has(i.id));
+        const ficam = [
+            ...vendidas.map(i => `${i.name} (vendida ou reservada)`),
+            ...candidatas.filter(i => ligadasAgora.has(i.id)).map(i => `${i.name} (já ligada ao empreendimento)`),
+        ];
+        if (!alvo.length) {
+            showToast(`Nada a remover${ficam.length ? `: ${ficam.join(', ')}` : ''}.`, 'success');
+            onDataChanged();
+            return;
+        }
+        const nomes = alvo.map(i => i.name);
         const ok = await confirm({
-            title: `Remover ${semUnidade.length} unidade(s) do espelho sem unidade no empreendimento?`,
-            message: `${nomes.slice(0, 12).join(', ')}${nomes.length > 12 ? '…' : ''}. Elas já estão fora do VGV; remover só limpa o espelho. Não dá para desfazer.`,
+            title: `Remover ${alvo.length} unidade(s) do espelho sem unidade no empreendimento?`,
+            message: `${nomes.slice(0, 12).join(', ')}${nomes.length > 12 ? '…' : ''}. Elas já estão fora do VGV; remover só limpa o espelho. Não dá para desfazer.`
+                + (ficam.length ? `\n\nFicam no espelho: ${ficam.join(', ')}.` : '')
+                + `\n\nSe elas existem no empreendimento com outro vínculo, use "Alinhar" antes — ele liga em vez de duplicar.`,
             confirmLabel: 'Remover', variant: 'danger',
         });
         if (!ok) return;
         try {
-            await imovibService.deleteUnitInstancesByIds(semUnidade.map(i => i.id));
+            await imovibService.deleteUnitInstancesByIds(alvo.map(i => i.id));
             await loadInstances();
             onDataChanged();
         } catch (err) {

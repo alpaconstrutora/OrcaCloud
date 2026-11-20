@@ -652,6 +652,18 @@ export const imovibService = {
 
     // ── Unit Instances (Vendas de Ativos da Viabilidade) ─────────────────────
 
+    /**
+     * Quais destas instâncias do espelho do estudo estão ligadas, AGORA, a uma unidade de empreendimento
+     * (`empreendimento_units.imovib_instance_id`). Antes de remover as "sem unidade" (plano
+     * 2026-11-19-espelho-vendavel-vgv, revisão I1): a marca da tela pode estar velha.
+     */
+    async instanciasLigadasAoEmpreendimento(ids: string[]): Promise<Set<string>> {
+        if (ids.length === 0) return new Set();
+        const { data, error } = await supabase.from('empreendimento_units').select('imovib_instance_id').in('imovib_instance_id', ids);
+        if (error) throw new Error(error.message);
+        return new Set(((data || []) as { imovib_instance_id: string | null }[]).map(r => r.imovib_instance_id).filter((x): x is string => !!x));
+    },
+
     async getUnitInstances(studyId: string): Promise<import('../types').ImovibUnitInstance[]> {
         const { data, error } = await supabase
             .from('imovib_unit_instances')

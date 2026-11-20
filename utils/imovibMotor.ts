@@ -105,7 +105,7 @@ export type ImovibSubAbaDePremissas = 'identificacao' | 'mercado' | 'cronograma'
  * (com o padrão, ou com o valor como veio) e AVISA — nunca troca em silêncio.
  */
 export interface ImovibAviso {
-    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital'
+    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'espelho_sem_vinculo' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital'
         | 'lancamento_antes_do_registro' | 'obra_antes_da_aprovacao' | 'terreno_nao_soma_100' | 'curva_de_desembolso_nao_soma_100'
         | 'impostos_pelo_regime' | 'ret_sem_afetacao' | 'premissa_ajustada' | 'premissa_ajustada_capital' | 'distrato_sem_revenda' | 'custo_de_obra_negativo' | 'pre_obra_sem_meses';
     mensagem: string;
@@ -540,6 +540,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     let unidadesSemArea = 0;
     let unidadesSemEspelho = 0;
     const blocosSemPreco: string[] = [];
+    /** Torres cujo espelho inteiro está "sem unidade no empreendimento" (nunca alinhado) — revisão C1. */
+    const blocosEspelhoSemVinculo: string[] = [];
 
     study.blocks?.forEach(block => {
         let blockPrivateArea = 0;
@@ -588,6 +590,10 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             areaPrivativaVendavel += blockVendavelArea;
         }
 
+        const espelhoSemVinculo = blocoTemEspelho && doBloco.length === 0
+            && todasAsInstancias.filter(i => i.block_id === block.id).every(i => i.fora_do_vgv === 'sem_unidade');
+        if (espelhoSemVinculo) blocosEspelhoSemVinculo.push(block.name);
+        // Espelho todo fora do VGV (não vendável / sem vínculo) não é "falta de preço".
         if (blockVendavelArea > 0 && blockVgv <= 0 && !(blocoTemEspelho && doBloco.length === 0)) blocosSemPreco.push(block.name);
         baseVgvTotal += blockVgv;
         baseConstCostTotal += (blockPrivateArea + blockCommonArea) * (block.construction_cost_sqm || 0);
@@ -596,6 +602,14 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         totalCommonArea += blockCommonArea;
         areaPrivativaDasTipologiasVendaveis += blockVendavelArea;
     });
+
+    if (blocosEspelhoSemVinculo.length > 0) {
+        avisos.push({
+            codigo: 'espelho_sem_vinculo',
+            mensagem: `Espelho de vendas sem unidade ligada ao empreendimento, fora do VGV: ${blocosEspelhoSemVinculo.join(', ')}. Use "Alinhar" no espelho de vendas (Receitas).`,
+            aba: 'receitas',
+        });
+    }
 
     // A estrutura vem do empreendimento vinculado (Planta Inteligente) ou, sem
     // vínculo, das tabelas antigas do estudo — ver utils/imovibEstrutura.ts.
@@ -609,7 +623,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             aba: 'premises',
             subAba: 'identificacao',
         });
-    } else if (baseVgvTotal <= 0) {
+    } else if (baseVgvTotal <= 0 && blocosEspelhoSemVinculo.length === 0) {
         avisos.push({
             codigo: 'sem_preco',
             mensagem: 'Nenhum bloco tem preço de venda por m²: o VGV fica zerado. Informe em Orçamento › Por torre.',

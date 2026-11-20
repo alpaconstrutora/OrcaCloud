@@ -74,26 +74,44 @@ só a respeita — sem migration. **Pilha:** React + TypeScript, Supabase (leitu
 
 ### Fase 1 — Regra pura e leitura
 
-- [ ] F1.1 `utils/imovibEstrutura.ts`: `marcarEspelhoDoEmpreendimento(instancias: ImovibUnitInstance[],
+- [x] F1.1 `utils/imovibEstrutura.ts`: `marcarEspelhoDoEmpreendimento(instancias: ImovibUnitInstance[],
   unidades: { id: string; imovib_instance_id: string | null; is_vendavel: boolean | null }[]): ImovibUnitInstance[]`
   — devolve as instâncias com `fora_do_vgv?: 'nao_vendavel' | 'sem_unidade'`. Teste
   `__tests__/imovibEspelhoVendavel.test.ts`: ligada a vendável → sem marca; ligada a não vendável →
   `'nao_vendavel'`; sem unidade → `'sem_unidade'`; instância apontada por duas unidades (uma vendável) → sem marca.
-- [ ] F1.2 `types/imovib.ts`: `ImovibUnitInstance.fora_do_vgv?` (derivado, não é coluna).
+- [x] F1.2 `types/imovib.ts`: `ImovibUnitInstance.fora_do_vgv?` (derivado, não é coluna).
   `services/imovibService.ts`: `carregarVinculos` passa a ler `imovib_instance_id` das unidades; `getStudyById` e
   `getStudiesWithMetrics` aplicam a marca depois de ler as instâncias (estudo sem vínculo: sem marca).
-- [ ] F1.3 `utils/imovibMotor.ts` (`computeImovibMath`): instância com `fora_do_vgv` sai de VGV, permuta, unidades
+- [x] F1.3 `utils/imovibMotor.ts` (`computeImovibMath`): instância com `fora_do_vgv` sai de VGV, permuta, unidades
   à venda e área vendável. Teste no motor: Garden-like (17 + 26 ligadas, 12 sem unidade) → VGV = soma das 43;
   torre só de garagens → VGV 0 e não entra em `blocosSemPreco`.
 
 ### Fase 2 — Telas
 
-- [ ] F2.1 `components/ImovibSalesMapTab.tsx`: linha marcada "Não vendável no empreendimento" / "Sem unidade no
+- [x] F2.1 `components/ImovibSalesMapTab.tsx`: linha marcada "Não vendável no empreendimento" / "Sem unidade no
   empreendimento" (texto, não pílula, §8), sem campo de preço editável nela; aviso no topo com quantas e o valor que
   ficou fora; "Remover as sem unidade" com `useConfirm` (lista os nomes). Teste de componente.
-- [ ] F2.2 `components/empreendimento/EspelhoVendasTab.tsx`: coluna "Vendável" (interruptor por linha + "todas"),
+- [x] F2.2 `components/empreendimento/EspelhoVendasTab.tsx`: coluna "Vendável" (interruptor por linha + "todas"),
   grava `is_vendavel` na hora (§22: atualiza a linha local); "Publicar" desligado com motivo quando não vendável.
   Teste de componente.
+
+### Revisão final do branch (19/11)
+
+Revisor independente: 1 crítico, 3 importantes, 4 menores. Medido no banco antes de corrigir: só o Garden tem
+estudo vinculado com espelho (55 instâncias, 12 sem unidade, nenhuma vendida/reservada).
+
+- **C1** espelho nunca alinhado ao empreendimento zerava o VGV sem aviso → aviso próprio `espelho_sem_vinculo`
+  por torre ("use Alinhar"), e o aviso geral "nenhum bloco tem preço" não aparece nesse caso.
+- **I1** "Remover as sem unidade" → confere o vínculo no banco na hora, nunca apaga vendida/reservada, diz o que
+  fica e sugere "Alinhar" antes.
+- **I2** "Vendável — todas" → unidade a unidade (mantém o histórico de auditoria), em lotes de 10; falha no meio
+  recarrega do banco.
+- **I3** "Publicar — todas" travava com unidade não vendável → conta só as vendáveis.
+
+Menores, registrados e não feitos: unidade publicada que vira não vendável continua publicada (fica a cargo de
+desligar o Publicar); KPIs "Total" e "Vendidas" do espelho do estudo contam as marcadas; a comparação de versões
+acusa "Espelho de vendas" alterado entre versão antiga e nova só pela marca; editar uma versão antiga recalcula com
+a marca nova.
 
 ### Fase 3 — Conferência e publicação
 

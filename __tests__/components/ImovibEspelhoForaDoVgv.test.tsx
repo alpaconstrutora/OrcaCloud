@@ -9,7 +9,7 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-const svc = vi.hoisted(() => ({ getUnitInstances: vi.fn(), deleteUnitInstancesByIds: vi.fn() }));
+const svc = vi.hoisted(() => ({ getUnitInstances: vi.fn(), deleteUnitInstancesByIds: vi.fn(), instanciasLigadasAoEmpreendimento: vi.fn() }));
 vi.mock('../../services/imovibService', () => ({ imovibService: svc }));
 vi.mock('../../services/sync/writeBackImovib', () => ({ previewWriteBackImovib: vi.fn(), applyWriteBackImovib: vi.fn() }));
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
@@ -34,6 +34,7 @@ beforeEach(() => {
     // A tela lê o espelho cru do banco; a marca vem do estudo carregado.
     svc.getUnitInstances.mockReset().mockResolvedValue(marcadas.map(({ fora_do_vgv: _f, ...r }) => r));
     svc.deleteUnitInstancesByIds.mockReset().mockResolvedValue(undefined);
+    svc.instanciasLigadasAoEmpreendimento.mockReset().mockResolvedValue(new Set());
 });
 
 describe('espelho do estudo — unidades fora do VGV', () => {
@@ -65,5 +66,21 @@ describe('espelho do estudo — unidades fora do VGV', () => {
         await user.click(screen.getByRole('button', { name: 'Remover' }));
         await vi.waitFor(() => expect(svc.deleteUnitInstancesByIds).toHaveBeenCalledWith(['i3']));
         expect(aoMudar).toHaveBeenCalled();
+    });
+
+    // Revisão (I1): a marca pode estar velha (alguém alinhou entretanto) e "sem unidade" pode estar vendida.
+    it('remover confere o vínculo no banco na hora e não apaga vendida/reservada', async () => {
+        const user = userEvent.setup();
+        const vendida = { ...inst('i4', '998', 400_000, 'sem_unidade'), status: 'VENDIDO' };
+        const ligadaAgora = inst('i5', '997', 400_000, 'sem_unidade');
+        const lista = [...marcadas, vendida, ligadaAgora];
+        svc.getUnitInstances.mockResolvedValue(lista.map(({ fora_do_vgv: _f, ...r }) => r));
+        svc.instanciasLigadasAoEmpreendimento.mockResolvedValue(new Set(['i5']));
+        render(<ConfirmProvider><ImovibSalesMapTab study={{ ...estudo, unit_instances: lista }} onDataChanged={vi.fn()} /></ConfirmProvider>);
+        await user.click(await screen.findByRole('button', { name: /Remover as sem unidade no empreendimento/ }));
+        expect(await screen.findByText(/998 \(vendida ou reservada\)/)).toBeTruthy();
+        await user.click(screen.getByRole('button', { name: 'Remover' }));
+        await vi.waitFor(() => expect(svc.deleteUnitInstancesByIds).toHaveBeenCalledWith(['i3']));
+        expect(svc.instanciasLigadasAoEmpreendimento).toHaveBeenCalledWith(['i3', 'i5']);
     });
 });

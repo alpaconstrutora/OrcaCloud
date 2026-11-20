@@ -134,16 +134,19 @@ describe('ImovibReceitasForm — gráfico da curva sem vendas (item 2.6)', () =>
     });
 });
 
-// Plano 2026-11-20-imovib-espelho-aba-tabela-padrao: a tabela do espelho foi para a aba "Espelho de vendas";
-// Receitas mostra só o VGV dele, com o caminho.
-describe('ImovibReceitasForm — sem a tabela do espelho', () => {
-    it('não monta o espelho e mostra o VGV com o link para a aba', async () => {
+// Correção 20/11: Receitas tem duas sub-abas; o link do VGV leva à do espelho.
+describe('ImovibReceitasForm — sub-abas', () => {
+    it('mostra as duas sub-abas: Espelho de vendas e Curva, perfil e distrato', () => {
+        render(<ImovibReceitasForm study={estudo} onDataChanged={vi.fn()} subAba="espelho" onSubAbaChange={vi.fn()} />);
+        expect(screen.getByRole('tab', { name: 'Espelho de vendas' })).toBeTruthy();
+        expect(screen.getByRole('tab', { name: 'Curva, perfil e distrato' })).toBeTruthy();
+    });
+    it('sub-aba Curva: sem a tabela do espelho; o link do VGV pede a sub-aba do espelho', async () => {
         const user = userEvent.setup();
-        const irPara = vi.fn();
-        render(<ImovibReceitasForm study={estudo} onDataChanged={vi.fn()} onIrParaEspelho={irPara} />);
-        const link = screen.getByRole('button', { name: /Espelho de vendas/ });
-        expect(link.closest('p')!.textContent).toMatch(/VGV/);
-        await user.click(link);
-        expect(irPara).toHaveBeenCalled();
+        const mudar = vi.fn();
+        render(<ImovibReceitasForm study={estudo} onDataChanged={vi.fn()} subAba="curva" onSubAbaChange={mudar} />);
+        expect(screen.queryByRole('combobox', { name: /Agrupar/ })).toBeNull();
+        await user.click(screen.getByRole('button', { name: 'Espelho de vendas' }));
+        expect(mudar).toHaveBeenCalledWith('espelho');
     });
 });

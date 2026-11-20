@@ -100,13 +100,13 @@ describe('ImovibDetailView com versão em edição', () => {
         expect(screen.getByText('painel de preferências')).toBeTruthy();
     });
 
-    // Plano 2026-11-20-imovib-espelho-aba-tabela-padrao: o espelho ganhou aba própria, antes de Receitas.
-    it('aba "Espelho de vendas" vem logo antes de "Receitas"', async () => {
+    // Correção 20/11: Receitas é UMA aba principal; o espelho e as premissas são sub-abas dentro dela.
+    it('Receitas é aba principal única (as sub-abas ficam dentro dela — ver ImovibReceitasFormFoco)', async () => {
         useStore.setState({ session: { user: { id: 'u-ana', email: 'ana@exemplo.com.br' } } as never });
         montar();
-        const abas = (await screen.findAllByRole('tab')).map(t => t.textContent?.trim());
-        const i = abas.indexOf('Espelho de vendas');
-        expect(i).toBeGreaterThan(-1);
-        expect(abas[i + 1]).toBe('Receitas');
+        const principais = (await screen.findAllByRole('tab')).map(t => t.textContent?.trim());
+        expect(principais).toContain('Receitas');
+        expect(principais).not.toContain('Espelho de vendas');
+        await userEvent.click(screen.getByRole('tab', { name: /Receitas/ }));
     });
 });

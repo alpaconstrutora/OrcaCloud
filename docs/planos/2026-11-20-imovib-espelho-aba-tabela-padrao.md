@@ -73,3 +73,14 @@ mensagem inteira; no `toolbarRight` do `StandardTable`. Só aparece com unidade 
    (2 grupos, 14/24 un., totais = R$ 9,20 mi / R$ 15,80 mi), recolher/expandir, ordenar por Preço, ajuste de largura,
    triângulo "5", painel; aba Receitas com a linha do VGV e as 3 seções no topo. 1600 px e 390 px.
 4. PR, CI, merge, `conferir-producao.sh "Unidades fora do VGV"`, plano atualizado.
+
+## Estado (20/11/2026)
+
+- [x] Código, testes vistos falhando antes, 137 arquivos / 1224 testes, `tsc` limpo, `check-ui-standard.sh` limpo nos 5 `.tsx`.
+- [x] **Publicado no PR #599** (squash `fce2fccd7`, servido pelo domínio). Conferido em produção (só leitura, 0 gravações,
+  0 erros): abas "… | Orçamento (CAPEX) | Espelho de vendas | Receitas | …"; espelho agrupado por Torre (Torre A 14 un.
+  R$ 9.203.167 · Torre B 24 un. R$ 15.796.835); recolher/expandir, ordenar por Preço e ajustar largura funcionando;
+  triângulo "5" com a mensagem no hover; painel com mensagem, contagem e "Abrir Preferências"; Receitas com
+  "VGV R$ 25.000.002, do Espelho de vendas" e as 3 seções; 390 px sem rolagem horizontal da página.
+- Observado, não mexido: o KPI "Total Unidades" do espelho conta 43 (inclui as 5 não vendáveis), enquanto os grupos
+  somam 38 — é o menor já registrado no plano 2026-11-19-espelho-vendavel-vgv ("KPIs contam as marcadas").

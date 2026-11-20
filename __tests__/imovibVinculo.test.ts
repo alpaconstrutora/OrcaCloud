@@ -173,3 +173,42 @@ describe('getStudyById com empreendimento vinculado', () => {
         expect(s!.blocks!.map(b => b.id)).toEqual(['bloco-existente']);
     });
 });
+
+// Plano docs/planos/2026-11-19-espelho-vendavel-vgv.md (F1.2): o espelho do estudo vinculado chega marcado —
+// na tela do estudo E na listagem (senão a lista mostraria outro VGV).
+describe('espelho marcado pelo "Vendável" do empreendimento', () => {
+    const semear = () => {
+        db.estado.tabelas.imovib_studies = [{ id: 'estudo-1', organization_id: 'org', name: 'Garden', created_at: '2026-01-01' }];
+        db.estado.tabelas.empreendimento_towers = [{ id: 't-a', empreendimento_id: 'emp-a', name: 'Torre A', imovib_block_id: null }];
+        db.estado.tabelas.empreendimento_units = [
+            { id: 'eu-1', tower_id: 't-a', typology: 'Tipo 1', private_area: 70, is_vendavel: true, imovib_instance_id: 'i-1' },
+            { id: 'eu-2', tower_id: 't-a', typology: 'Garagem', private_area: 12, is_vendavel: false, imovib_instance_id: 'i-2' },
+        ];
+        db.estado.tabelas.imovib_unit_instances = [
+            { id: 'i-1', study_id: 'estudo-1', block_id: 'torre:t-a', name: '101', private_area: 70, price: 700_000, status: 'DISPONÍVEL' },
+            { id: 'i-2', study_id: 'estudo-1', block_id: 'torre:t-a', name: 'G1', private_area: 12, price: 30_000, status: 'DISPONÍVEL' },
+            { id: 'i-3', study_id: 'estudo-1', block_id: 'torre:t-a', name: '999', private_area: 70, price: 500_000, status: 'DISPONÍVEL' },
+        ];
+    };
+    const marcas = (s: { unit_instances?: { id: string; fora_do_vgv?: string }[] } | null) =>
+        Object.fromEntries((s?.unit_instances ?? []).map(i => [i.id, i.fora_do_vgv ?? 'conta']));
+
+    it('tela do estudo: vendável conta, garagem e sobra ficam fora', async () => {
+        semear();
+        const s = await imovibService.getStudyById('estudo-1', true);
+        expect(marcas(s)).toEqual({ 'i-1': 'conta', 'i-2': 'nao_vendavel', 'i-3': 'sem_unidade' });
+    });
+
+    it('listagem: a mesma marca', async () => {
+        semear();
+        const [s] = await imovibService.getStudiesWithMetrics('org');
+        expect(marcas(s)).toEqual({ 'i-1': 'conta', 'i-2': 'nao_vendavel', 'i-3': 'sem_unidade' });
+    });
+
+    it('estudo sem empreendimento: nada marcado', async () => {
+        semear();
+        db.estado.tabelas.empreendimentos = [];
+        const s = await imovibService.getStudyById('estudo-1', true);
+        expect(marcas(s)).toEqual({ 'i-1': 'conta', 'i-2': 'conta', 'i-3': 'conta' });
+    });
+});

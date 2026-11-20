@@ -37,6 +37,9 @@ export interface UnidadeDaEstrutura {
     common_area?: number | null;
     price?: number | null;
     is_vendavel?: boolean | null;
+    /** Instância do espelho do estudo ligada a esta unidade (marca o que fica fora do VGV). */
+    id?: string;
+    imovib_instance_id?: string | null;
 }
 
 export interface EstruturaDerivada {
@@ -126,4 +129,27 @@ export function derivarEstruturaDoEmpreendimento(
         blocosForaDoCalculo: blocosDoEstudo.filter(b => !reivindicados.has(b.id)),
         unidades: unidades.filter(u => torres.some(t => t.id === u.tower_id)).length,
     };
+}
+
+/**
+ * Espelho de vendas do estudo × unidades do empreendimento vinculado (plano
+ * docs/planos/2026-11-19-espelho-vendavel-vgv.md). Só conta no VGV a instância ligada a uma unidade
+ * VENDÁVEL do empreendimento (`empreendimento_units.imovib_instance_id` → instância); ligada só a não
+ * vendável (garagem, área comum) = `nao_vendavel`; sem unidade nenhuma = `sem_unidade`. `is_vendavel`
+ * nulo vale como vendável (padrão do banco). Derivado na leitura — não é coluna.
+ */
+export function marcarEspelhoDoEmpreendimento<T extends { id: string; fora_do_vgv?: 'nao_vendavel' | 'sem_unidade' }>(
+    instancias: T[],
+    unidades: { imovib_instance_id?: string | null; is_vendavel?: boolean | null }[],
+): T[] {
+    const vendavel = new Map<string, boolean>();
+    for (const u of unidades) {
+        if (!u.imovib_instance_id) continue;
+        vendavel.set(u.imovib_instance_id, (vendavel.get(u.imovib_instance_id) ?? false) || u.is_vendavel !== false);
+    }
+    return instancias.map(i => {
+        const { fora_do_vgv: _antiga, ...resto } = i;
+        if (!vendavel.has(i.id)) return { ...resto, fora_do_vgv: 'sem_unidade' } as T;
+        return vendavel.get(i.id) ? (resto as T) : ({ ...resto, fora_do_vgv: 'nao_vendavel' } as T);
+    });
 }

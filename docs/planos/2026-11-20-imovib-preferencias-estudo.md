@@ -64,3 +64,12 @@ O que existe para reusar:
 4. PR, CI, merge, `conferir-producao.sh "Exibir unidades não vendáveis"`. Navegador (com OK): abrir Preferências no
    Garden, ligar/desligar e ver a lista mudar (hoje o Garden tem 0 não vendáveis — desligar "Vendável" de uma garagem
    para ver, e religar; ou o usuário desliga as 4 garagens antes).
+
+## Estado (20/11/2026)
+
+- [x] Código: hook `useImovibPreferencias`, `ImovibPreferenciasSheet`, botão no cabeçalho, filtro no espelho do estudo —
+  testes vistos falhando antes (hook, painel, botão, espelho); suíte `imovib Imovib preferencias Preferencias Espelho
+  Guard guard segurancaMigrations` → 119 arquivos / 1105 testes; `tsc` limpo; `check-ui-standard.sh` limpo nos 3 `.tsx`.
+- [x] Migration `aplicar_20271120910000_preferencias_imovib.sql`: prova em transação desfeita (`imovib.*` passa,
+  `xyz.*` recusada) → PROVA OK; aplicada com OK do usuário (*"Sim"*); CHECK conferido no banco.
+- [ ] Publicação e conferência no navegador.

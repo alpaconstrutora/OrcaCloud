@@ -9,7 +9,6 @@ import ImovibCashFlow from './ImovibCashFlow';
 import ImovibExecutiveSummary from './ImovibExecutiveSummary';
 import ImovibCapexForm from './ImovibCapexForm';
 import ImovibReceitasForm from './ImovibReceitasForm';
-import ImovibSalesMapTab from './ImovibSalesMapTab';
 import ImovibCapitalForm from './ImovibCapitalForm';
 import ImovibSensitivityForm from './ImovibSensitivityForm';
 import ImovibForm from './ImovibForm';
@@ -32,7 +31,7 @@ interface ImovibDetailViewProps {
     onBack: () => void;
 }
 
-type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'espelho' | 'receitas' | 'capital' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic' | 'versoes' | 'acompanhamento';
+type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'receitas' | 'capital' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic' | 'versoes' | 'acompanhamento';
 
 const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'executive_summary', label: 'Resumo Executivo', icon: <FileBarChart className="w-4 h-4" /> },
@@ -41,7 +40,6 @@ const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     // "Receitas e Capital" virou duas abas (decisão D7 do plano 2026-11-11).
     // Espelho de vendas ganhou aba própria (plano 2026-11-20-imovib-espelho-aba-tabela-padrao): com 38+ unidades
     // a tabela empurrava Curva de vendas, Perfil de recebimento e Distrato para fora da vista.
-    { id: 'espelho', label: 'Espelho de vendas', icon: <LayoutGrid className="w-4 h-4" /> },
     { id: 'receitas', label: 'Receitas', icon: <TrendingUp className="w-4 h-4" /> },
     { id: 'capital', label: 'Capital', icon: <Landmark className="w-4 h-4" /> },
     { id: 'risk_scenarios', label: 'Sensibilidade e Risco', icon: <AlertCircle className="w-4 h-4" /> },
@@ -103,7 +101,15 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
     // ao comportamento normal (Identificação), sem reabrir um pedido antigo.
     const pedirSubAba = (subAba?: ImovibSubAbaDePremissas) =>
         setPremissasSubAba(p => (subAba ? { sub: subAba, n: (p?.n ?? 0) + 1 } : null));
-    const irPara = async (aba: AbaDoEstudo, subAba?: ImovibSubAbaDePremissas) => {
+    // Sub-aba de Receitas: espelho de vendas ou curva/perfil/distrato. O aviso que aponta o "espelho" cai em Receitas.
+    const [subAbaReceitas, setSubAbaReceitas] = useState<'espelho' | 'curva'>('espelho');
+    const irPara = async (aba: AbaDoEstudo | 'espelho', subAba?: ImovibSubAbaDePremissas) => {
+        if (aba === 'espelho') {
+            if (!(await podeSair())) return;
+            setSubAbaReceitas('espelho');
+            setActiveTab('receitas');
+            return;
+        }
         if (aba === activeTab) {
             if (aba === 'premises' && subAba) pedirSubAba(subAba);
             return;
@@ -303,14 +309,9 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                             <ImovibCapexForm study={study} onDataChanged={() => loadStudyDetails(false)} />
                         </ErrorBoundary>
                     )}
-                    {activeTab === 'espelho' && (
-                        <ErrorBoundary>
-                            <ImovibSalesMapTab study={study} onDataChanged={() => loadStudyDetails(false)} onAbrirPreferencias={() => setPreferenciasAberto(true)} />
-                        </ErrorBoundary>
-                    )}
                     {activeTab === 'receitas' && (
                         <ErrorBoundary>
-                            <ImovibReceitasForm study={study} onDataChanged={() => loadStudyDetails(false)} onIrParaEspelho={() => void irPara('espelho')} />
+                            <ImovibReceitasForm study={study} onDataChanged={() => loadStudyDetails(false)} subAba={subAbaReceitas} onSubAbaChange={setSubAbaReceitas} onAbrirPreferencias={() => setPreferenciasAberto(true)} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'capital' && (

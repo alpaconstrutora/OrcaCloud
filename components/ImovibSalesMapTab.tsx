@@ -203,7 +203,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                 PERMUTADO: PropertyStatus.EXCHANGED,
             };
 
-            const adaptedUnits: Property[] = instances.map(inst => ({
+            const adaptedUnits: Property[] = instances.filter(inst => !marcaDe.get(inst.id)).map(inst => ({
                 id: inst.id,
                 name: inst.name,
                 type: 'APARTMENT',
@@ -237,6 +237,28 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
             showToast(`Erro ao aplicar a precificação: ${(err as Error).message}`, 'error');
         } finally {
             setPricingModalOpen(false);
+        }
+    };
+
+    // Plano 2026-11-19-espelho-vendavel-vgv: com empreendimento vinculado, unidade não vendável nele ou sem
+    // unidade nele fica fora do VGV. A marca vem do estudo carregado (derivada na leitura).
+    const marcaDe = new Map((study.unit_instances || []).filter(i => i.fora_do_vgv).map(i => [i.id, i.fora_do_vgv!]));
+    const naoVendaveis = instances.filter(i => marcaDe.get(i.id) === 'nao_vendavel');
+    const semUnidade = instances.filter(i => marcaDe.get(i.id) === 'sem_unidade');
+    const removerSemUnidade = async () => {
+        const nomes = semUnidade.map(i => i.name);
+        const ok = await confirm({
+            title: `Remover ${semUnidade.length} unidade(s) do espelho sem unidade no empreendimento?`,
+            message: `${nomes.slice(0, 12).join(', ')}${nomes.length > 12 ? '…' : ''}. Elas já estão fora do VGV; remover só limpa o espelho. Não dá para desfazer.`,
+            confirmLabel: 'Remover', variant: 'danger',
+        });
+        if (!ok) return;
+        try {
+            await imovibService.deleteUnitInstancesByIds(semUnidade.map(i => i.id));
+            await loadInstances();
+            onDataChanged();
+        } catch (err) {
+            showToast(`Erro ao remover as unidades sem correspondência: ${(err as Error).message}`, 'error');
         }
     };
 
@@ -313,6 +335,25 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                         icon={<TrendingUp className="w-4 h-4" />}
                         color="amber"
                     />
+                </div>
+            )}
+
+            {/* Fora do VGV (plano 2026-11-19-espelho-vendavel-vgv) */}
+            {!loadError && (naoVendaveis.length + semUnidade.length) > 0 && (
+                <div role="status" aria-label="Unidades fora do VGV" className="mx-4 mt-4 flex flex-col md:flex-row md:items-center gap-3 rounded-[10px] bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-900">
+                    <AlertCircle className="w-4 h-4 shrink-0 hidden md:block" />
+                    <p className="flex-1 min-w-0">
+                        {naoVendaveis.length + semUnidade.length} unidade(s) do espelho fora do VGV
+                        {naoVendaveis.length > 0 && <> · {naoVendaveis.length} não vendável no empreendimento</>}
+                        {semUnidade.length > 0 && <> · {semUnidade.length} sem unidade no empreendimento ({formatBRL(semUnidade.reduce((t, x) => t + (x.price || 0), 0))} em preço)</>}.
+                        {' '}Para mudar o que é vendável, use a coluna "Vendável" em Empreendimento › Espelho de vendas.
+                    </p>
+                    {semUnidade.length > 0 && (
+                        <button type="button" onClick={() => void removerSemUnidade()} disabled={!pode} title={!pode ? motivo : undefined}
+                            className="h-9 px-3.5 shrink-0 bg-white border border-amber-300 text-amber-900 rounded-[6px] text-[13px] font-medium hover:bg-amber-100 disabled:opacity-50 disabled:cursor-not-allowed">
+                            {`Remover as sem unidade no empreendimento (${semUnidade.length})`}
+                        </button>
+                    )}
                 </div>
             )}
 
@@ -406,7 +447,14 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                                         className="hover:bg-blue-50/50 transition-colors"
                                     >
                                         {/* Unidade */}
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{inst.name}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                            {inst.name}
+                                            {marcaDe.get(inst.id) && (
+                                                <span className="block text-xs text-amber-800">
+                                                    {marcaDe.get(inst.id) === 'nao_vendavel' ? 'Não vendável no empreendimento' : 'Sem unidade no empreendimento'}
+                                                </span>
+                                            )}
+                                        </td>
 
                                         {/* Bloco */}
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
@@ -423,7 +471,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
 
                                         {/* Preço */}
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
-                                            {inst.price > 0 ? formatBRL(inst.price) : '—'}
+                                            {marcaDe.get(inst.id) ? <span className="text-xs font-normal text-amber-800">fora do VGV</span> : inst.price > 0 ? formatBRL(inst.price) : '—'}
                                         </td>
 
                                         {/* VLR/m² */}

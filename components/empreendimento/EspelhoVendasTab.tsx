@@ -33,6 +33,9 @@ interface Props {
 
 type UnitWithTower = EmpreendimentoUnit & { _tower_name: string; _tower_project_id?: string | null };
 
+/** `is_vendavel` vazio vale como vendável (padrão do banco). */
+const ehVendavel = (u: Pick<EmpreendimentoUnit, 'is_vendavel'>) => u.is_vendavel !== false;
+
 interface CommercialSnap {
   id: string;
   status: string;
@@ -361,7 +364,33 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
     if (next.has(id)) next.delete(id); else next.add(id);
     return next;
   });
-  const toggleAllDesired = () => setDesiredIds(allDesired ? new Set() : new Set(units.map(u => u.id)));
+  // Não vendável não se publica (plano 2026-11-19-espelho-vendavel-vgv): "todas" liga só as vendáveis.
+  const toggleAllDesired = () => setDesiredIds(allDesired ? new Set() : new Set(units.filter(ehVendavel).map(u => u.id)));
+
+  // ── Coluna "Vendável" (plano 2026-11-19-espelho-vendavel-vgv) ──────────────
+  // Grava empreendimento_units.is_vendavel na hora. Desligado = garagem, área comum, estacionamento…:
+  // fica fora do VGV do estudo de viabilidade e não se publica. Vazio no banco vale como vendável.
+  const allVendavel = units.length > 0 && units.every(ehVendavel);
+  const gravarVendavel = async (alvo: UnitWithTower[], valor: boolean) => {
+    const ids = new Set(alvo.map(u => u.id));
+    const antes = new Map(alvo.map(u => [u.id, u.is_vendavel]));
+    setUnits(prev => prev.map(u => (ids.has(u.id) ? { ...u, is_vendavel: valor } : u)));
+    if (!valor) setDesiredIds(prev => { const n = new Set(prev); alvo.forEach(u => { if (!isVisible(u)) n.delete(u.id); }); return n; });
+    try {
+      await Promise.all(alvo.map(u => empreendimentoService.updateUnit(u.id, { is_vendavel: valor })));
+    } catch (err) {
+      setUnits(prev => prev.map(u => (ids.has(u.id) ? { ...u, is_vendavel: antes.get(u.id) as UnitWithTower['is_vendavel'] } : u)));
+      notify(`Não foi possível gravar "Vendável": ${(err as Error).message}`, 'error');
+    }
+  };
+  const alternarTodasVendavel = async () => {
+    if (allVendavel && !(await confirm({
+      title: `Desligar "Vendável" de todas as ${units.length} unidades?`,
+      message: 'Todas saem do VGV do estudo de viabilidade e deixam de poder ser publicadas.',
+      confirmLabel: 'Desligar', variant: 'danger',
+    }))) return;
+    await gravarVendavel(units, !allVendavel);
+  };
 
   if (loading) return (
     <div className="text-center py-12">
@@ -479,6 +508,20 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
                     Publicar
                   </label>
                 </th>
+                <th className="py-2 px-4 w-32">
+                  <label className="flex items-center gap-2 cursor-pointer"
+                    title="Desligue para garagem, área comum, estacionamento e o que mais não é vendido — fica fora do VGV do estudo de viabilidade e não se publica">
+                    <input
+                      type="checkbox"
+                      aria-label="Vendável — todas"
+                      className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40"
+                      checked={allVendavel}
+                      disabled={units.length === 0}
+                      onChange={() => void alternarTodasVendavel()}
+                    />
+                    Vendável
+                  </label>
+                </th>
                 <th className="py-2 px-4">Unidade</th>
                 {ehLote ? (
                   <>
@@ -518,7 +561,9 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
                           Anel âmbar marca a linha com alteração ainda não aplicada. */}
                       <label
                         className="relative inline-flex items-center cursor-pointer"
-                        title={desiredIds.has(u.id)
+                        title={!ehVendavel(u) && !desiredIds.has(u.id)
+                          ? `Não vendável: ligue "Vendável" para publicar "${u.name}"`
+                          : desiredIds.has(u.id)
                           ? (visible
                               ? `"${u.name}" está publicada e visível na Venda de Ativos`
                               : `"${u.name}" será ${published ? 'reexibida (property sobrescrita, sem duplicar)' : 'publicada'} ao aplicar`)
@@ -528,13 +573,28 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
                       >
                         <input
                           type="checkbox"
+                          aria-label={`Publicar — ${u.name}`}
                           className="sr-only peer"
                           checked={desiredIds.has(u.id)}
+                          disabled={!ehVendavel(u) && !desiredIds.has(u.id)}
                           onChange={() => toggleDesired(u.id)}
                         />
                         <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 ${
                           desiredIds.has(u.id) !== visible ? 'ring-2 ring-amber-400 ring-offset-1' : ''
                         }`}></div>
+                      </label>
+                    </td>
+                    <td className="py-2.5 px-4">
+                      <label className="relative inline-flex items-center cursor-pointer"
+                        title={ehVendavel(u) ? `"${u.name}" entra no VGV do estudo de viabilidade` : `"${u.name}" fica fora do VGV (garagem, área comum…) e não se publica`}>
+                        <input
+                          type="checkbox"
+                          aria-label={`Vendável — ${u.name}`}
+                          className="sr-only peer"
+                          checked={ehVendavel(u)}
+                          onChange={() => void gravarVendavel([u], !ehVendavel(u))}
+                        />
+                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
                       </label>
                     </td>
                     <td className="py-2.5 px-4 text-sm font-normal text-gray-700">{u.name}</td>

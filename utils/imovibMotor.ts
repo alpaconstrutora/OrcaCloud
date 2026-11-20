@@ -96,7 +96,7 @@ export interface ImovibMathOptions {
 }
 
 /** Aba do detalhe do estudo onde a premissa de um aviso é corrigida. */
-export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viability_dynamic';
+export type ImovibAba = 'premises' | 'capex' | 'espelho' | 'receitas' | 'capital' | 'viability_dynamic';
 /** Sub-aba de Premissas (ImovibPremisesForm). */
 export type ImovibSubAbaDePremissas = 'identificacao' | 'mercado' | 'cronograma' | 'terreno' | 'memorial';
 
@@ -606,8 +606,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     if (blocosEspelhoSemVinculo.length > 0) {
         avisos.push({
             codigo: 'espelho_sem_vinculo',
-            mensagem: `Espelho de vendas sem unidade ligada ao empreendimento, fora do VGV: ${blocosEspelhoSemVinculo.join(', ')}. Use "Alinhar" no espelho de vendas (Receitas).`,
-            aba: 'receitas',
+            mensagem: `Espelho de vendas sem unidade ligada ao empreendimento, fora do VGV: ${blocosEspelhoSemVinculo.join(', ')}. Use "Alinhar" na aba Espelho de vendas.`,
+            aba: 'espelho',
         });
     }
 

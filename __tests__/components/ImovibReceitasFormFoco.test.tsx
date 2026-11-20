@@ -133,3 +133,17 @@ describe('ImovibReceitasForm — gráfico da curva sem vendas (item 2.6)', () =>
         expect(screen.getByText(/com VSO de 0%, o estoque inteiro fica sem vender/)).toBeInTheDocument();
     });
 });
+
+// Plano 2026-11-20-imovib-espelho-aba-tabela-padrao: a tabela do espelho foi para a aba "Espelho de vendas";
+// Receitas mostra só o VGV dele, com o caminho.
+describe('ImovibReceitasForm — sem a tabela do espelho', () => {
+    it('não monta o espelho e mostra o VGV com o link para a aba', async () => {
+        const user = userEvent.setup();
+        const irPara = vi.fn();
+        render(<ImovibReceitasForm study={estudo} onDataChanged={vi.fn()} onIrParaEspelho={irPara} />);
+        const link = screen.getByRole('button', { name: /Espelho de vendas/ });
+        expect(link.closest('p')!.textContent).toMatch(/VGV/);
+        await user.click(link);
+        expect(irPara).toHaveBeenCalled();
+    });
+});

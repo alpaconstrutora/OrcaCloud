@@ -10,6 +10,7 @@ import { planejarRegeneracao } from '../utils/imovibEspelho';
 import { previewWriteBackImovib, applyWriteBackImovib } from '../services/sync/writeBackImovib';
 import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
+import { useImovibPreferencias } from '../hooks/useImovibPreferencias';
 import { KpiCard } from './ui/KpiCard';
 
 interface ImovibSalesMapTabProps {
@@ -46,6 +47,9 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
     const confirm = useConfirm();
     const { showToast } = useToast();
     const { pode, motivo } = useImovibEdicao();
+    // Preferência do usuário (Preferências do estudo, plano 2026-11-20-imovib-preferencias-estudo): não vendável
+    // no empreendimento fica fora da lista por padrão; "sem unidade" sempre aparece (pede ação).
+    const { exibirNaoVendaveis } = useImovibPreferencias();
 
     const blockMap = Object.fromEntries(blocks.map(b => [b.id, b.name]));
 
@@ -367,7 +371,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                     <AlertCircle className="w-4 h-4 shrink-0 hidden md:block" />
                     <p className="flex-1 min-w-0">
                         {naoVendaveis.length + semUnidade.length} unidade(s) do espelho fora do VGV
-                        {naoVendaveis.length > 0 && <> · {naoVendaveis.length} não vendável no empreendimento</>}
+                        {naoVendaveis.length > 0 && <> · {naoVendaveis.length} não vendável no empreendimento{!exibirNaoVendaveis && ` (${naoVendaveis.length === 1 ? 'oculta' : 'ocultas'} na lista — Preferências)`}</>}
                         {semUnidade.length > 0 && <> · {semUnidade.length} sem unidade no empreendimento ({formatBRL(semUnidade.reduce((t, x) => t + (x.price || 0), 0))} em preço)</>}.
                         {' '}Para mudar o que é vendável, use a coluna "Vendável" em Empreendimento › Espelho de vendas.
                     </p>
@@ -459,7 +463,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {instances.map((inst) => {
+                            {instances.filter(i => exibirNaoVendaveis || marcaDe.get(i.id) !== 'nao_vendavel').map((inst) => {
                                 const pricePerSqm =
                                     inst.price > 0 && inst.private_area > 0
                                         ? Math.round(inst.price / inst.private_area)

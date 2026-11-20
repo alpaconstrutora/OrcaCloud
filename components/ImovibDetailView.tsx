@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart, TrendingUp, History, Lock, Activity } from 'lucide-react';
+import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart, TrendingUp, History, Lock, Activity, SlidersHorizontal } from 'lucide-react';
 import ImovibPremisesForm from './ImovibPremisesForm';
 import ImovibStaticViability from './ImovibStaticViability';
 import ImovibDynamicForm from './ImovibDynamicForm';
@@ -16,6 +16,7 @@ import ImovibVersoesTab from './ImovibVersoesTab';
 import ImovibAcompanhamentoTab from './ImovibAcompanhamentoTab';
 import ImovibCongelarVersao from './ImovibCongelarVersao';
 import ImovibFaixaEdicaoDeVersao from './ImovibFaixaEdicaoDeVersao';
+import ImovibPreferenciasSheet from './ImovibPreferenciasSheet';
 import { useConfirm } from './ui/confirm';
 import { useStore } from '../store/useStore';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -70,6 +71,8 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
     const [editando, setEditando] = useState(false);
     // Congelar versão (item 10.2): a aba Versões remonta depois para listar a nova.
     const [congelando, setCongelando] = useState(false);
+    // Preferências do usuário (plano 2026-11-20-imovib-preferencias-estudo): não dependem de permissão no estudo.
+    const [preferenciasAberto, setPreferenciasAberto] = useState(false);
     const [versoesKey, setVersoesKey] = useState(0);
     // Premissas › Identificação/Mercado guardam o formulário em estado local
     // (item 5.4, §25). O filho avisa aqui quando há edição pendente; toda saída
@@ -221,6 +224,15 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                 <div className="flex items-center gap-2 flex-wrap shrink-0">
                     <button
                         type="button"
+                        onClick={() => setPreferenciasAberto(true)}
+                        title="Preferências do estudo de viabilidade (valem para você, em todos os estudos)"
+                        className={`${botaoSecundario} text-slate-700 bg-white border-gray-200 hover:bg-gray-50`}
+                    >
+                        <SlidersHorizontal className="w-[15px] h-[15px]" />
+                        Preferências
+                    </button>
+                    <button
+                        type="button"
                         onClick={abrirEdicao}
                         disabled={!edicao.pode}
                         title={!edicao.pode ? edicao.motivo : 'Editar nome, versão e classificação do estudo'}
@@ -323,6 +335,8 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     )}
                   </ImovibEdicaoProvider>
             </div>
+
+            {preferenciasAberto && <ImovibPreferenciasSheet open onClose={() => setPreferenciasAberto(false)} />}
 
             <ImovibEdicaoProvider value={edicao}>
                 <ImovibCongelarVersao

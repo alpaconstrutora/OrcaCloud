@@ -14,6 +14,9 @@ vi.mock('../../services/imovibService', () => ({ imovibService: svc }));
 vi.mock('../../services/sync/writeBackImovib', () => ({ previewWriteBackImovib: vi.fn(), applyWriteBackImovib: vi.fn() }));
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
 vi.mock('../../hooks/useToast', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
+// Preferência do usuário (plano 2026-11-20-imovib-preferencias-estudo): os testes antigos rodam com "exibir".
+const pref = vi.hoisted(() => ({ exibir: true }));
+vi.mock('../../hooks/useImovibPreferencias', () => ({ useImovibPreferencias: () => ({ exibirNaoVendaveis: pref.exibir, setExibirNaoVendaveis: vi.fn(), carregando: false }) }));
 
 import ImovibSalesMapTab from '../../components/ImovibSalesMapTab';
 import { ConfirmProvider } from '../../components/ui/confirm';
@@ -35,6 +38,7 @@ beforeEach(() => {
     svc.getUnitInstances.mockReset().mockResolvedValue(marcadas.map(({ fora_do_vgv: _f, ...r }) => r));
     svc.deleteUnitInstancesByIds.mockReset().mockResolvedValue(undefined);
     svc.instanciasLigadasAoEmpreendimento.mockReset().mockResolvedValue(new Set());
+    pref.exibir = true;
 });
 
 describe('espelho do estudo — unidades fora do VGV', () => {
@@ -82,5 +86,16 @@ describe('espelho do estudo — unidades fora do VGV', () => {
         await user.click(screen.getByRole('button', { name: 'Remover' }));
         await vi.waitFor(() => expect(svc.deleteUnitInstancesByIds).toHaveBeenCalledWith(['i3']));
         expect(svc.instanciasLigadasAoEmpreendimento).toHaveBeenCalledWith(['i3', 'i5']);
+    });
+
+    // Plano 2026-11-20-imovib-preferencias-estudo: preferência "Exibir unidades não vendáveis" desligada (padrão).
+    it('preferência desligada: não vendável sai da lista; sem unidade continua; o aviso diz que há ocultas', async () => {
+        pref.exibir = false;
+        montar();
+        await screen.findByText('101');
+        expect(screen.queryByText('G1')).toBeNull();
+        expect(screen.getByText('999')).toBeTruthy();
+        const aviso = screen.getByRole('status', { name: 'Unidades fora do VGV' });
+        expect(aviso.textContent).toMatch(/1 não vendável no empreendimento \(oculta na lista — Preferências\)/);
     });
 });

@@ -72,4 +72,8 @@ O que existe para reusar:
   Guard guard segurancaMigrations` → 119 arquivos / 1105 testes; `tsc` limpo; `check-ui-standard.sh` limpo nos 3 `.tsx`.
 - [x] Migration `aplicar_20271120910000_preferencias_imovib.sql`: prova em transação desfeita (`imovib.*` passa,
   `xyz.*` recusada) → PROVA OK; aplicada com OK do usuário (*"Sim"*); CHECK conferido no banco.
-- [ ] Publicação e conferência no navegador.
+- [x] Publicação e conferência no navegador. **Publicado no PR #597** (squash `490bf46a9`, servido pelo domínio).
+  Conta de teste, 20/11: Receitas do Garden com a preferência no padrão → as 5 não vendáveis (Área Comum Horizontal,
+  Estacionamento 1/2, Garagem 1/2 — desligadas pelo usuário às 11h04–11h05, antes do teste) fora da lista, aviso
+  "(ocultas na lista — Preferências)"; ligar → "Garagem 1 — Não vendável no empreendimento — fora do VGV" aparece;
+  desligar → padrão (0 linhas `imovib.*` no banco). Nada do empreendimento foi alterado pelo teste. 0 erros de console.

@@ -124,6 +124,16 @@ describe('espelho do estudo — unidades fora do VGV', () => {
     });
 });
 
+describe('espelho do estudo — cabeçalho sem título repetido', () => {
+    it('sem o nome da aba no topo; os botões de ação continuam', async () => {
+        montar();
+        await screen.findByText('101');
+        expect(screen.queryByText('Vendas de Ativos')).toBeNull();
+        expect(screen.queryByText('Unidades individualizadas do empreendimento')).toBeNull();
+        expect(screen.getByRole('button', { name: /Inteligência de Precificação/ })).toBeTruthy();
+    });
+});
+
 describe('espelho do estudo — tabela padrão (§6.10/§6.12)', () => {
     it('abre agrupado por Torre, com Grupo, expandir/recolher e ajuste de largura', async () => {
         montar();

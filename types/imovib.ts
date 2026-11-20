@@ -774,6 +774,8 @@ export interface ImovibUnitInstance {
     status: 'DISPONÍVEL' | 'RESERVADO' | 'PERMUTADO' | 'VENDIDO';
     created_at: string;
     updated_at: string;
+    /** Derivado na leitura (estudo vinculado a empreendimento): fora do VGV — não é coluna. Plano 2026-11-19-espelho-vendavel-vgv. */
+    fora_do_vgv?: 'nao_vendavel' | 'sem_unidade';
 }
 
-export type ImovibUnitInstanceInsert = Omit<ImovibUnitInstance, 'id' | 'created_at' | 'updated_at'>;
+export type ImovibUnitInstanceInsert = Omit<ImovibUnitInstance, 'id' | 'created_at' | 'updated_at' | 'fora_do_vgv'>;

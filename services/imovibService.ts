@@ -9,6 +9,7 @@ import {
 import { fetchAllPages } from '../lib/supabasePaginate';
 import {
     derivarEstruturaDoEmpreendimento, blocoSemLinha, TorreDaEstrutura, UnidadeDaEstrutura,
+    marcarEspelhoDoEmpreendimento,
 } from '../utils/imovibEstrutura';
 import { CAMPOS_DO_MOTOR } from '../utils/imovibMotor';
 import type { ImovibComparable } from '../utils/imovibMercado';
@@ -107,7 +108,7 @@ async function carregarVinculos(studies: { id: string; organization_id?: string 
         const r = await fetchAllPages<UnidadeDaEstrutura>(() =>
             supabase
                 .from('empreendimento_units')
-                .select('id, tower_id, typology, private_area, common_area, price, is_vendavel')
+                .select('id, tower_id, typology, private_area, common_area, price, is_vendavel, imovib_instance_id')
                 .in('tower_id', torreIds)
                 .order('id', { ascending: true }) as any);
         if (r.error) throw new Error(`Failed to fetch empreendimento units: ${(r.error as Error).message}`);
@@ -295,6 +296,9 @@ export const imovibService = {
                 funding_sources: fontesByStudy.get(s.id) || [],
             } as ImovibStudy;
             aplicarEstrutura(study, blocksByStudy.get(s.id) || [], vinculos.get(s.id));
+            // Plano 2026-11-19-espelho-vendavel-vgv: mesma marca da tela do estudo (senão a lista mostra outro VGV).
+            const v = vinculos.get(s.id);
+            if (v) study.unit_instances = marcarEspelhoDoEmpreendimento(study.unit_instances || [], v.unidades);
             return study;
         });
     },
@@ -375,6 +379,9 @@ export const imovibService = {
                 .eq('study_id', id);
             if (instError) throw new Error(`Failed to fetch unit instances: ${instError.message}`);
             study.unit_instances = (instancias || []) as ImovibUnitInstance[];
+            // Vinculado: só conta no VGV o que é vendável no empreendimento (plano 2026-11-19-espelho-vendavel-vgv).
+            const vinculoDoEstudo = vinculos.get(study.id);
+            if (vinculoDoEstudo) study.unit_instances = marcarEspelhoDoEmpreendimento(study.unit_instances, vinculoDoEstudo.unidades);
 
             study.funding_sources = await this.listarFontes(id);
         }

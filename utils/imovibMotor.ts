@@ -526,7 +526,10 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     let totalPrivateArea = 0;
     let totalCommonArea = 0;
     const vgvPorBloco: ImovibMathResult['vgvPorBloco'] = {};
-    const instancias = study.unit_instances || [];
+    // Fora do VGV por não ser vendável no empreendimento, ou sem unidade nele (plano 2026-11-19-espelho-vendavel-vgv):
+    // sai do VGV, da permuta e das unidades à venda — mas o bloco continua "com espelho" (não cai para preço/m²).
+    const todasAsInstancias = study.unit_instances || [];
+    const instancias = todasAsInstancias.filter(i => !i.fora_do_vgv);
     let espelhoTemPermutada = false;
     let permutaDoEspelho = 0;
     /** Unidades à venda (item 5.6): do espelho quando o bloco tem, senão das tipologias vendáveis. */
@@ -560,8 +563,9 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         // senão área privativa vendável × preço/m².
         const precoM2 = block.sales_price_sqm || 0;
         const doBloco = instancias.filter(i => i.block_id === block.id);
+        const blocoTemEspelho = todasAsInstancias.some(i => i.block_id === block.id);
         let blockVgv: number;
-        if (doBloco.length > 0) {
+        if (blocoTemEspelho) {
             if (doBloco.some(i => i.status === 'PERMUTADO')) espelhoTemPermutada = true;
             const precoDa = (i: typeof doBloco[number]) => ((i.price || 0) > 0 ? i.price : (i.private_area || 0) * precoM2);
             blockVgv = doBloco
@@ -584,7 +588,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             areaPrivativaVendavel += blockVendavelArea;
         }
 
-        if (blockVendavelArea > 0 && blockVgv <= 0) blocosSemPreco.push(block.name);
+        if (blockVendavelArea > 0 && blockVgv <= 0 && !(blocoTemEspelho && doBloco.length === 0)) blocosSemPreco.push(block.name);
         baseVgvTotal += blockVgv;
         baseConstCostTotal += (blockPrivateArea + blockCommonArea) * (block.construction_cost_sqm || 0);
         totalBlockArea += blockPrivateArea + blockCommonArea;

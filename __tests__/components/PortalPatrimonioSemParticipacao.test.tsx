@@ -21,7 +21,7 @@ const garden: HoldingItem = {
 
 const resumo = (holdings: HoldingItem[]) => render(
     <PortalOverview
-        equity="—" activeWorks={holdings.length} monthlyYieldPct={null} totalContributed={0} totalDividends={0}
+        equity="—" activeWorks={holdings.length} monthlyYieldPct={null} totalContributed={0} totalRecebido={0} retornoTotal={null} retornoEmCaixa={null}
         holdings={holdings} contributions={[]}
         onSelectAsset={vi.fn()} onNavigateToHoldings={vi.fn()}
     />,

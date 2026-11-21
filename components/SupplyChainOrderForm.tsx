@@ -1188,31 +1188,21 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     };
 
     if (loading) {
-        // §11 — na tela de edição o spinner é conteúdo de página; na criação
-        // (sobreposição) ele preenche o card.
-        return embedded ? (
+        // §11 — embutido no detalhe ou como tela "Novo pedido", o spinner é
+        // conteúdo de página.
+        return (
             <div className="text-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
                 <p className="mt-2 text-gray-500">Carregando...</p>
-            </div>
-        ) : (
-            <div className="flex items-center justify-center h-full">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
         );
     }
 
     return (
-        <div className={
-            embedded
-                ? ''
-                : 'absolute inset-0 z-[110] flex items-center justify-center p-2 md:p-8 lg:p-12 bg-black/60 backdrop-blur-xl animate-in fade-in duration-300'
-        }>
-            <div className={
-                embedded
-                    ? 'space-y-6'
-                    : 'relative bg-white rounded-2xl md:rounded-[3rem] shadow-2xl w-full h-full flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden border border-white/20'
-            }>
+        // "Novo pedido" é TELA da aba Suprimentos › Pedidos, no lugar da lista
+        // (pedido de 21/11/2026) — não sobreposição. Raiz §20.2: `space-y-6 pb-20`.
+        <div className={embedded ? '' : 'pb-20'}>
+            <div className="space-y-6">
 
                 {/* Embutido: o cabeçalho é do detalhe; aqui fica só a ação de gravar —
                     desenhada no cabeçalho, ao lado de "Negociar", quando o detalhe
@@ -1224,26 +1214,20 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                         </div>
                     )
                 ) : (
-                    <div className="bg-gray-50/50 border-b border-gray-100 flex items-center justify-between shrink-0 px-4 py-5 md:px-8 md:py-7 lg:px-12 lg:py-10">
-                        <div className="flex items-center gap-6">
-                            <button
-                                onClick={onBack}
-                                className="p-4 bg-white text-gray-400 hover:text-blue-600 border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-all group"
-                            >
-                                <ArrowLeft className="w-5 h-5 group-hover:-translate-x-1 transition-transform" />
-                            </button>
-                            <div className="p-4 bg-blue-50 text-blue-600 rounded-2xl shadow-sm shadow-blue-100/50 hidden md:block">
-                                <Package className="w-8 h-8" />
+                    // §20 título + §23.1 seta de 1 salto + §17 botão primário compacto.
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <div className="flex items-center gap-3">
+                                <button
+                                    onClick={onBack}
+                                    title="Voltar aos pedidos"
+                                    className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+                                >
+                                    <ArrowLeft className="w-5 h-5" />
+                                </button>
+                                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Novo pedido de compra</h1>
                             </div>
-                            <div>
-                                <h1 className="text-xl md:text-3xl font-black text-gray-900 tracking-tight">
-                                    Novo Pedido de Compra
-                                </h1>
-                                <p className="text-gray-400 text-xs font-black uppercase tracking-[0.3em] mt-1.5 flex items-center gap-2">
-                                    <span className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></span>
-                                    Gestão de Suprimentos • Criação de Pedido
-                                </p>
-                            </div>
+                            <p className="text-gray-500 text-sm mt-1.5 font-medium ml-12">Preencha os dados gerais e os itens — nada é gravado antes de salvar.</p>
                         </div>
                         <div className="flex items-center gap-3">
                             {motivoSalvar && (
@@ -1253,18 +1237,17 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                 onClick={handleSaveOrder}
                                 disabled={!!motivoSalvar}
                                 title={motivoSalvar ?? undefined}
-                                size="lg"
-                                className="gap-2 shadow-xl shadow-blue-900/20"
+                                className="shrink-0"
                             >
-                                <Save className="w-4 h-4" />
-                                <span>Salvar Pedido</span>
+                                <Save className="w-[15px] h-[15px]" />
+                                <span>Salvar pedido</span>
                             </Button>
                         </div>
                     </div>
                 )}
 
                 {formError && (
-                    <div className={`bg-red-50 border-red-100 flex items-center gap-3 text-red-600 shrink-0 animate-in slide-in-from-top-2 duration-200 ${embedded ? 'px-4 py-3 border rounded-[10px]' : 'px-4 md:px-12 py-3 border-b'}`}>
+                    <div className="bg-red-50 border-red-100 flex items-center gap-3 text-red-600 shrink-0 animate-in slide-in-from-top-2 duration-200 px-4 py-3 border rounded-[10px]">
                         <AlertCircle className="w-4 h-4 shrink-0" />
                         <p className="text-xs font-medium flex-1">{formError}</p>
                         <button onClick={() => setFormError(null)} className="text-red-400 hover:text-red-600 transition-colors">
@@ -1273,7 +1256,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     </div>
                 )}
 
-                <div className={embedded ? '' : 'flex-1 overflow-y-auto custom-scrollbar p-4 md:p-8 lg:p-12'}>
+                <div>
                     {/* Embutido, o detalhe já tem o resumo do pedido: sem a coluna lateral. */}
                     <div className={embedded ? 'space-y-6' : 'grid grid-cols-1 lg:grid-cols-3 gap-8'}>
                         <div className={embedded ? 'space-y-6' : 'lg:col-span-2 space-y-6'}>
@@ -1843,7 +1826,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
                         {!embedded && (
                         <div className="space-y-6">
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 sticky top-6">
+                            <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 sticky top-6">
                                 <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <CheckCircle2 className="w-4 h-4 text-green-500" />
                                     Resumo do Pedido

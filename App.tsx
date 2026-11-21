@@ -392,7 +392,6 @@ const SupplierPortalTokenGate: React.FC<{ token: string; onLogout?: () => void }
   );
 };
 import { ContractModal } from './components/ContractModal';
-import SupplyChainOrderForm from './components/SupplyChainOrderForm';
 import { INITIAL_PROJECT_SETTINGS } from './constants';
 import { BudgetEntry, ProjectSettings, Organization, Contract, Client, ProfileGroup } from './types';
 import { useStore, sairPorAvisoDeOutraAba } from './store/useStore';
@@ -474,8 +473,13 @@ const App: React.FC = () => {
 
   const { localToast, showToast } = useToast();
 
+  // "Novo pedido" é tela da aba Suprimentos › Pedidos (AppRouter), no lugar da
+  // lista. Sair da aba cancela a criação — senão voltar a ela reabriria o
+  // formulário vazio no lugar da lista.
   const [isCreatingOrder, setIsCreatingOrder] = React.useState(false);
-  const [ordersVersion, setOrdersVersion] = React.useState(0);
+  React.useEffect(() => {
+    if (activeView !== 'supplies-orders') setIsCreatingOrder(false);
+  }, [activeView]);
   const [selectedOrderId, setSelectedOrderId] = React.useState<string | null>(
     localStorage.getItem('app_selected_order_id')
   );
@@ -1147,7 +1151,6 @@ const App: React.FC = () => {
         setEditingContract={setEditingContract}
         isCreatingOrder={isCreatingOrder}
         setIsCreatingOrder={setIsCreatingOrder}
-        ordersVersion={ordersVersion}
         isCreatingQuotation={isCreatingQuotation}
         setIsCreatingQuotation={setIsCreatingQuotation}
         isCreatingContract={isCreatingContract}
@@ -1211,15 +1214,6 @@ const App: React.FC = () => {
           organizations={organizations.map(o => ({ id: o.id, name: o.name }))}
         />
       </React.Suspense>
-
-      {/* Só CRIAÇÃO abre em sobreposição. A edição é tela in-flow, renderizada
-          pelo AppRouter dentro da aba Suprimentos › Pedidos. */}
-      {isCreatingOrder && (
-        <SupplyChainOrderForm
-          onBack={() => setIsCreatingOrder(false)}
-          onSave={() => { setIsCreatingOrder(false); setOrdersVersion(v => v + 1); }}
-        />
-      )}
 
       <ContractModal
         isOpen={isCreatingContract}

@@ -38,6 +38,7 @@ const ReportViewer          = React.lazy(() => import('./ReportViewer'));
 const ProjectSettingsView   = React.lazy(() => import('./ProjectSettingsView'));
 const SupplyChainOrderList  = React.lazy(() => import('./SupplyChainOrderList'));
 const SupplyChainOrderDetails = React.lazy(() => import('./SupplyChainOrderDetails'));
+const SupplyChainOrderForm = React.lazy(() => import('./SupplyChainOrderForm'));
 const SupplyChainQuotationList = React.lazy(() => import('./SupplyChainQuotationList'));
 const SolicitacoesCompraList = React.lazy(() => import('./suprimentos/SolicitacoesCompraList'));
 const SupplyChainQuotationForm = React.lazy(() => import('./SupplyChainQuotationForm'));
@@ -180,7 +181,6 @@ export interface AppRouterProps {
   setEditingContract: (contract: Contract | null) => void;
   isCreatingOrder: boolean;
   setIsCreatingOrder: (val: boolean) => void;
-  ordersVersion: number;
   isCreatingQuotation: boolean;
   setIsCreatingQuotation: (val: boolean) => void;
   isCreatingContract: boolean;
@@ -225,7 +225,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     pendingSupplierOrderViewMode, setPendingSupplierOrderViewMode,
     selectedQuotationId, setSelectedQuotationId, editingQuotationId, setEditingQuotationId,
     selectedContractId, setSelectedContractId, editingContract, setEditingContract,
-    isCreatingOrder, setIsCreatingOrder, ordersVersion, isCreatingQuotation, setIsCreatingQuotation,
+    isCreatingOrder, setIsCreatingOrder, isCreatingQuotation, setIsCreatingQuotation,
     isCreatingContract, setIsCreatingContract,
     isCreatingImovibStudy, setIsCreatingImovibStudy,
     editingImovibStudyId, setEditingImovibStudyId,
@@ -921,6 +921,16 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           />
         );
       }
+      // Novo pedido é tela da aba, no lugar da lista (pedido de 21/11/2026) —
+      // não sobreposição. Voltar/salvar remonta a lista, que relê os pedidos.
+      if (isCreatingOrder) {
+        return (
+          <SupplyChainOrderForm
+            onBack={() => setIsCreatingOrder(false)}
+            onSave={() => setIsCreatingOrder(false)}
+          />
+        );
+      }
       return (
         <SupplyChainOrderList
           onCreateNew={() => setIsCreatingOrder(true)}
@@ -928,7 +938,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onViewLogistics={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('logistics'); }}
           // O lápis leva para o detalhe: é lá que se edita, na aba Dados Gerais.
           onEdit={(id) => { setSelectedOrderId(id); setPendingSupplierOrderViewMode('details'); }}
-          version={ordersVersion}
         />
       );
 

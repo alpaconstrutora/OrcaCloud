@@ -2,8 +2,7 @@
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import { BudgetEntry, ProjectSettings, SinapiItem, WBSPhase, SinapiType, BudgetVersion, WBSGroup, CustomDatabase, CompositionComponent } from '../types';
 import { sinapiService, SinapiReference, resolveReferenceDate } from '../services/sinapiService'; // Importação do Serviço
-import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList, Wallet, Percent, Banknote, AlertCircle, MoveHorizontal, ArrowUpDown } from 'lucide-react';
-import { KpiCard } from './ui/KpiCard';
+import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Maximize2, Pencil, Copy, AlertTriangle, Star, StarOff, ClipboardList, AlertCircle, MoveHorizontal, ArrowUpDown } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { customDatabaseService } from '../services/customDatabaseService';
@@ -18,6 +17,8 @@ import { useConfirm } from './ui/confirm';
 import { usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { reconstruirWbsAPartirDoOrcamento, caminhoDoItem, caminhosDaWbs } from '../utils/wbsFromBudget';
 import Button from './ui/Button';
+import BudgetRibbon from './BudgetRibbon';
+import { useTelaCheia } from '../hooks/useTelaCheia';
 import * as XLSX from 'xlsx';
 
 interface BudgetEditorProps {
@@ -29,6 +30,8 @@ interface BudgetEditorProps {
   onUpdateSettings: (newSettings: ProjectSettings) => void;
   onSaveProject?: (budget: BudgetEntry[], settings: ProjectSettings) => Promise<void>;
   onOpenDashboard?: () => void;
+  /** Volta para a lista de Orçamentos — o ← do ribbon. Sem ela o botão não aparece. */
+  onBack?: () => void;
   projectId?: string;
   organizationId?: string;
 }
@@ -171,12 +174,16 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   onUpdateSettings,
   onSaveProject,
   onOpenDashboard,
+  onBack,
   favorites,
   onToggleFavorite,
   projectId,
   organizationId,
 }) => {
   const confirm = useConfirm();
+  // Tela cheia (21/11/2026), a mesma mecânica da Planta e do Planejamento — o botão mora no
+  // acesso rápido do ribbon; a raiz vira `fixed inset-0 z-40` enquanto vale.
+  const { telaCheia, alternarTelaCheia } = useTelaCheia();
   // Redimensionamento por arraste + autofit sob comando (§6.1/§6.1.2).
   const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'budgetEditorColWidths');
   const [generatingContract, setGeneratingContract] = React.useState(false);
@@ -192,36 +199,6 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
   const [isImportModalOpen, setIsImportModalOpen] = React.useState(false);
   const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
-  const [manageEapMenuOpen, setManageEapMenuOpen] = React.useState(false);
-  const [toolsMenuOpen, setToolsMenuOpen] = React.useState(false);
-  // Toolbar mais calma (crítica 2026-11-14, passo 6): "Exibir" (CPU Inline/Janela +
-  // detalhamento M.O/Mat/Equip) e "Versões" (histórico + salvar) viraram menus.
-  const [exibirMenuOpen, setExibirMenuOpen] = React.useState(false);
-  const [versoesMenuOpen, setVersoesMenuOpen] = React.useState(false);
-  // Menus da barra pelo teclado (2ª crítica, 2026-11-14): ao abrir, o foco vai ao 1º item; ↑/↓,
-  // Home/End navegam; ao fechar (Esc, escolha, clique fora) o foco volta ao botão que abriu.
-  const menuRefs = {
-    ferramentas: React.useRef<HTMLDivElement>(null), eap: React.useRef<HTMLDivElement>(null),
-    exibir: React.useRef<HTMLDivElement>(null), versoes: React.useRef<HTMLDivElement>(null),
-  };
-  const gatilhoRefs = {
-    ferramentas: React.useRef<HTMLButtonElement>(null), eap: React.useRef<HTMLButtonElement>(null),
-    exibir: React.useRef<HTMLButtonElement>(null), versoes: React.useRef<HTMLButtonElement>(null),
-  };
-  const menuAbertoAntesRef = React.useRef<keyof typeof menuRefs | null>(null);
-  const navegarMenu = (e: React.KeyboardEvent<HTMLDivElement>) => {
-    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
-    const itens = [...e.currentTarget.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([disabled])')];
-    if (itens.length === 0) return;
-    e.preventDefault();
-    const atual = itens.indexOf(document.activeElement as HTMLElement);
-    const proximo = e.key === 'Home' ? 0
-      : e.key === 'End' ? itens.length - 1
-      : e.key === 'ArrowDown' ? (atual + 1) % itens.length
-      : (atual - 1 + itens.length) % itens.length;
-    itens[proximo].focus();
-  };
-
   const [expandedGroups, setExpandedGroups] = React.useState<string[]>([]);
   const [expandedPhases, setExpandedPhases] = React.useState<string[]>([]);
   const [expandedSubPhases, setExpandedSubPhases] = React.useState<string[]>([]);
@@ -376,19 +353,6 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   // entra (1º campo, ou o fechar); o Tab fica preso dentro; ao fechar, volta para quem abriu.
   const janelaCpuRef = React.useRef<HTMLDivElement>(null);
   const quemAbriuCpuRef = React.useRef<HTMLElement | null>(null);
-  React.useEffect(() => {
-    const aberto: keyof typeof menuRefs | null =
-      toolsMenuOpen ? 'ferramentas' : manageEapMenuOpen ? 'eap' : exibirMenuOpen ? 'exibir' : versoesMenuOpen ? 'versoes' : null;
-    if (aberto) {
-      menuRefs[aberto].current?.querySelector<HTMLElement>('[role^="menuitem"]:not([disabled])')?.focus();
-    } else if (menuAbertoAntesRef.current) {
-      // Fechou: devolve o foco ao botão — salvo se o usuário já foi para outro lugar (clique).
-      const ativo = document.activeElement;
-      if (!ativo || ativo === document.body) gatilhoRefs[menuAbertoAntesRef.current].current?.focus();
-    }
-    menuAbertoAntesRef.current = aberto;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toolsMenuOpen, manageEapMenuOpen, exibirMenuOpen, versoesMenuOpen]);
   const cpuAberta = !!selectedCPUItem;
   React.useEffect(() => {
     if (cpuAberta) {
@@ -455,10 +419,6 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   React.useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || confirmandoDescarteRef.current) return;
-      if (exibirMenuOpen) { setExibirMenuOpen(false); return; }
-      if (versoesMenuOpen) { setVersoesMenuOpen(false); return; }
-      if (toolsMenuOpen) { setToolsMenuOpen(false); return; }
-      if (manageEapMenuOpen) { setManageEapMenuOpen(false); return; }
       if (selectedCPUItem) { void fecharCPU(); return; }
       if (isTechnicalDashboardOpen) { setIsTechnicalDashboardOpen(false); return; }
     };
@@ -2250,7 +2210,50 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     // lg:h-full: no desktop a tabela ocupa o que sobra da tela (rola dentro). No celular o
     // cabeçalho + barras tomavam a altura toda e a tabela ficava com 15 px (2ª crítica): ali a
     // página rola e a tabela ganha altura mínima própria.
-    <div className="lg:h-full flex flex-col space-y-4 relative">
+    <div
+      // `relative` só fora da tela cheia: junto com `fixed`, o `relative` vence na ordem do CSS
+      // do Tailwind e a raiz ficava presa no conteúdo da página (conferido na tela, 21/11/2026).
+      className={`lg:h-full flex flex-col space-y-4 ${telaCheia ? 'fixed inset-0 z-40 overflow-y-auto bg-gray-50 p-4 md:p-6' : 'relative'}`}
+      data-tela-cheia={telaCheia ? '' : undefined}
+    >
+      {/* RIBBON (§19.5, 21/11/2026) — o mesmo da Planta Inteligente e do Planejamento:
+          voltar, abas de comandos, acesso rápido, KPIs e ação primária. Substituiu a
+          linha de título com KPIs (§20.4) e a barra de menus (§5.3). */}
+      <BudgetRibbon
+        nome={settings.name}
+        rotuloBasePreco={rotuloBasePreco}
+        onBack={onBack}
+        isLocked={isLocked}
+        versaoAtiva={settings.versions?.find(v => v.id === settings.activeVersionId) ?? null}
+        totalComBdi={totalWithBDI}
+        custoDireto={totalDirectCost}
+        bdi={settings.bdi}
+        bdiZerado={bdiZerado}
+        pendencias={{ itens: itemsComPendenciaTecnica, semMemoria: itemsWithoutCalculationMemory, semClasse: itemsWithoutPrecisionClass }}
+        onAbrirPendencias={() => { setTechnicalDashboardFilter('ALL'); setIsTechnicalDashboardOpen(true); }}
+        onNovoGrupo={handleAddGroup}
+        onExpandirTudo={handleExpandAll}
+        onRecolherTudo={handleCollapseAll}
+        onModelosEap={() => setIsTemplateModalOpen(true)}
+        onImportarEap={() => setIsImportModalOpen(true)}
+        onExportarEap={handleExportWBS}
+        onLimparEap={handleClearWBS}
+        onBdi={(bdi) => onUpdateSettings({ ...settings, bdi })}
+        nVersoes={settings.versions?.length || 0}
+        historicoVisivel={showHistory}
+        onAlternarHistorico={() => setShowHistory(!showHistory)}
+        onSalvarVersao={() => setIsVersionModalOpen(true)}
+        contrato={canGenerateContract ? { gerando: generatingContract, onGerar: handleGenerateContract } : undefined}
+        onParametrico={() => handleOpenParametric()}
+        onCurvaAbc={onOpenDashboard}
+        onOrcadoRealizado={handleOpenBudgetControl}
+        cpuViewMode={cpuViewMode}
+        onCpuViewMode={setCpuViewMode}
+        mostrarNaturezas={showNatureBreakdown}
+        onAlternarNaturezas={() => setShowNatureBreakdown(!showNatureBreakdown)}
+        telaCheia={telaCheia}
+        onAlternarTelaCheia={alternarTelaCheia}
+      />
       {orphanedItems.length > 0 && (
         <div className="mx-0 p-4 bg-amber-50 border border-amber-200 rounded-[10px] animate-in slide-in-from-top-2">
           <div className="flex items-center justify-between">
@@ -2312,334 +2315,6 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           </div>
         </div>
       )}
-      {/* Título (§20) com os KPIs à direita, na MESMA linha (pedido de 2026-11-13:
-          os cards saíram da faixa própria abaixo da toolbar). Exceção documentada
-          em docs/ui_ux_guia_unificado.md §20.4. O indicador de pendências técnicas
-          (ícone com contador → Painel de pendências técnicas, pedido de 2026-09-21)
-          fecha a fila, depois dos cards. Sem espaço, o grupo da direita quebra para
-          baixo do título, alinhado à direita. Preço Final é o total do qual os
-          outros dois são a decomposição (Custo Direto + BDI = Preço Final) —
-          quebra de simetria (§4.2). */}
-      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
-        <div>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight">Orçamento Analítico</h1>
-          {/* Qual orçamento e com que base de preço (2ª crítica): o título genérico não dizia
-              nem o nome — "Garden" só aparecia truncado no seletor de contexto. */}
-          <p className="text-gray-500 text-sm mt-1.5 font-medium">
-            {settings.name && <span className="text-gray-900">{settings.name}</span>}
-            {settings.name && <span aria-hidden="true"> · </span>}
-            <span title="Base de preço do orçamento: competência, UF e encargos usados na busca de itens e na atualização de competência SINAPI">{rotuloBasePreco}</span>
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center justify-end gap-3 ml-auto">
-          <KpiCard size="lg" className="shrink-0" label="Preço Final" value={`R$ ${totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Banknote className="w-4 h-4" />} color="emerald" />
-          <KpiCard size="sm" className="shrink-0" label="Custo Direto" value={`R$ ${totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Wallet className="w-4 h-4" />} color="gray" />
-          <KpiCard
-            size="sm"
-            className="shrink-0"
-            label={`BDI (${settings.bdi}%)`}
-            value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-            sub={bdiZerado ? 'BDI zerado: Preço Final = Custo Direto' : undefined}
-            title={bdiZerado ? 'O BDI global está em 0%. Itens sem BDI próprio entram sem lucro, impostos e despesas indiretas. Confira se é intencional.' : undefined}
-            icon={bdiZerado ? <AlertTriangle className="w-4 h-4" /> : <Percent className="w-4 h-4" />}
-            color={bdiZerado ? 'amber' : 'blue'}
-          />
-          {(itemsWithoutCalculationMemory > 0 || itemsWithoutPrecisionClass > 0) && (
-            <div className="relative shrink-0">
-              <ActionIconButton
-                kind="view"
-                icon={<ClipboardList className="w-4 h-4" />}
-                title={`Memória técnica pendente: ${itemsWithoutCalculationMemory} item(s) sem memória de cálculo e ${itemsWithoutPrecisionClass} item(s) sem classe de precisão. Clique para abrir o painel de pendências técnicas.`}
-                aria-label="Abrir painel de pendências técnicas"
-                onClick={() => { setTechnicalDashboardFilter('ALL'); setIsTechnicalDashboardOpen(true); }}
-              />
-              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">
-                {itemsComPendenciaTecnica}
-              </span>
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* Toolbar de botões (§5.3): controles de escopo/visualização + ação
-          primária. Barra PRÓPRIA, acima da toolbar acoplada — muda o que a tela
-          mostra, não o recorte das linhas. O BDI (%) daqui é o que
-          define o Preço Final e o BDI dos cards, que moram na linha do título
-          (acima desta barra). */}
-      <div className="flex flex-col lg:flex-row gap-2 items-stretch lg:items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        {/* Esquerda: o que é DADO do orçamento (BDI global) e os dois menus de exibição/versões.
-            Eram 3 caixas aninhadas (card dentro de card) com 6 controles; no celular a barra
-            cortava à esquerda (BDI em x = −52). flex-wrap: quebra em vez de cortar. */}
-        <div className="flex flex-wrap items-center gap-2">
-          {isLocked && (
-            <div className="flex items-center gap-2 h-9 px-3 bg-amber-50 text-amber-700 rounded-[6px] border border-amber-200 text-sm font-medium" title="Orçamento fechado: só consulta">
-              <AlertTriangle className="w-4 h-4" />
-              Fechado
-            </div>
-          )}
-
-          <label
-            className={`flex items-center gap-2 h-9 pl-3 pr-1 rounded-[6px] border bg-white ${bdiZerado ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}`}
-            title={bdiZerado ? 'BDI global em 0%: o Preço Final sai igual ao Custo Direto. Confira se é intencional.' : 'BDI global: vale para todo item sem BDI próprio e define o Preço Final'}
-          >
-            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">BDI global (%)</span>
-            <input
-              type="number"
-              value={settings.bdi}
-              disabled={isLocked}
-              onChange={(e) => onUpdateSettings({ ...settings, bdi: Number(e.target.value) })}
-              className="w-16 h-7 rounded-[4px] border border-gray-200 bg-white text-center text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-50 disabled:cursor-not-allowed"
-            />
-          </label>
-
-          <div className="relative">
-            <button
-              type="button"
-              ref={gatilhoRefs.exibir}
-              onClick={() => setExibirMenuOpen(!exibirMenuOpen)}
-              aria-haspopup="menu"
-              aria-expanded={exibirMenuOpen}
-              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] text-button font-bold border whitespace-nowrap transition-all ${exibirMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-              title="Como mostrar a composição e as colunas de custo"
-            >
-              <Monitor className="w-3.5 h-3.5" />
-              Exibir
-              {showNatureBreakdown && (
-                <>
-                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600" aria-hidden="true" />
-                  <span className="sr-only">(colunas de mão de obra, material e equipamento visíveis)</span>
-                </>
-              )}
-              <ChevronDown className={`w-3 h-3 transition-transform ${exibirMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {exibirMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setExibirMenuOpen(false)}></div>
-                <div ref={menuRefs.exibir} role="menu" aria-label="Exibir" onKeyDown={navegarMenu} className="absolute left-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <p className="px-4 pt-1 pb-1.5 text-xs font-semibold text-slate-500">Composição de preço (CPU)</p>
-                  {([['inline', 'Abaixo do item', Layers], ['modal', 'Em janela', Monitor]] as const).map(([modo, rotulo, Icone]) => (
-                    <button
-                      key={modo}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={cpuViewMode === modo}
-                      onClick={() => { setCpuViewMode(modo); setExibirMenuOpen(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
-                    >
-                      <Icone className="w-4 h-4 text-gray-500" />
-                      <span className="flex-1">{rotulo}</span>
-                      {cpuViewMode === modo && <CheckCircle className="w-4 h-4 text-blue-600" />}
-                    </button>
-                  ))}
-                  <div className="border-t border-gray-100 my-1"></div>
-                  <button
-                    type="button"
-                    role="menuitemcheckbox"
-                    aria-checked={showNatureBreakdown}
-                    onClick={() => { setShowNatureBreakdown(!showNatureBreakdown); setExibirMenuOpen(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
-                    title="Colunas de mão de obra, material e equipamento"
-                  >
-                    <Layers className="w-4 h-4 text-gray-500" />
-                    <span className="flex-1">Mão de obra, material e equipamento</span>
-                    {showNatureBreakdown && <CheckCircle className="w-4 h-4 text-blue-600" />}
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="relative">
-            <button
-              type="button"
-              ref={gatilhoRefs.versoes}
-              onClick={() => setVersoesMenuOpen(!versoesMenuOpen)}
-              aria-haspopup="menu"
-              aria-expanded={versoesMenuOpen}
-              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] text-button font-bold border whitespace-nowrap transition-all ${versoesMenuOpen || showHistory ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-              title="Histórico e versões salvas do orçamento"
-            >
-              <History className="w-3.5 h-3.5" />
-              Versões ({settings.versions?.length || 0})
-              <ChevronDown className={`w-3 h-3 transition-transform ${versoesMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
-            {versoesMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setVersoesMenuOpen(false)}></div>
-                <div ref={menuRefs.versoes} role="menu" aria-label="Versões" onKeyDown={navegarMenu} className="absolute left-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => { setShowHistory(!showHistory); setVersoesMenuOpen(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
-                  >
-                    <History className="w-4 h-4 text-gray-500" />
-                    {showHistory ? 'Ocultar histórico' : `Ver histórico (${settings.versions?.length || 0})`}
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => { setIsVersionModalOpen(true); setVersoesMenuOpen(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
-                    title="Salvar uma nova versão (snapshot) deste orçamento"
-                  >
-                    <Save className="w-4 h-4 text-gray-500" />
-                    Salvar nova versão…
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-          {(() => {
-            const activeVersion = settings.versions?.find(v => v.id === settings.activeVersionId);
-            if (!activeVersion) return null;
-            return (
-              <div className="flex items-center gap-1.5 h-9 px-2.5 bg-amber-50 border border-amber-200 rounded-[6px]" title={`Versão ativa: ${activeVersion.description}`}>
-                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-                <span className="text-sm font-medium text-amber-800 max-w-[140px] truncate">v{activeVersion.item} · {activeVersion.description}</span>
-              </div>
-            );
-          })()}
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {/* Grupo 3: Menu de Ferramentas (análise + import/export + contrato) */}
-          <div className="relative">
-            <button
-              ref={gatilhoRefs.ferramentas}
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={toolsMenuOpen}
-              onClick={() => setToolsMenuOpen(!toolsMenuOpen)}
-              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] text-button font-bold border whitespace-nowrap transition-all ${toolsMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-              title="Ferramentas de análise, importação e exportação"
-            >
-              <Wrench className="w-3.5 h-3.5" />
-              Ferramentas
-              <ChevronDown className={`w-3 h-3 transition-transform ${toolsMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {toolsMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setToolsMenuOpen(false)}></div>
-                <div ref={menuRefs.ferramentas} role="menu" aria-label="Ferramentas" onKeyDown={navegarMenu} className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <p className="px-4 pt-1 pb-1.5 text-xs font-semibold text-slate-500">Análise</p>
-                  <button
-                    role="menuitem"
-                    onClick={() => { handleOpenParametric(); setToolsMenuOpen(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2 transition-colors"
-                  >
-                    <Box className="w-4 h-4 text-indigo-500" /> Paramétrico
-                  </button>
-                  {onOpenDashboard && (
-                    <button
-                    role="menuitem"
-                      onClick={() => { onOpenDashboard(); setToolsMenuOpen(false); }}
-                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
-                    >
-                      <LayoutDashboard className="w-4 h-4 text-blue-500" /> Curva ABC
-                    </button>
-                  )}
-                  <button
-                    role="menuitem"
-                    onClick={() => { handleOpenBudgetControl(); setToolsMenuOpen(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2 transition-colors"
-                  >
-                    <AlertTriangle className="w-4 h-4 text-amber-500" /> Controle orçado x realizado
-                  </button>
-                  <button
-                    role="menuitem"
-                    onClick={() => { setIsTechnicalDashboardOpen(true); setToolsMenuOpen(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-2 transition-colors"
-                  >
-                    <ClipboardList className="w-4 h-4 text-rose-500" /> Painel de pendências técnicas
-                  </button>
-
-                  <div className="border-t border-gray-100 my-1"></div>
-                  <p className="px-4 pt-1 pb-1.5 text-xs font-semibold text-slate-500">Importar / Exportar</p>
-                  <button
-                    role="menuitem"
-                    onClick={() => { setIsImportModalOpen(true); setToolsMenuOpen(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
-                  >
-                    <FileDown className="w-4 h-4 text-gray-500" /> Importar EAP
-                  </button>
-                  <button
-                    role="menuitem"
-                    onClick={() => { handleExportWBS(); setToolsMenuOpen(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
-                  >
-                    <FileText className="w-4 h-4 text-gray-500" /> Exportar EAP
-                  </button>
-
-                  {canGenerateContract && (
-                    <>
-                      <div className="border-t border-gray-100 my-1"></div>
-                      <button
-                    role="menuitem"
-                        disabled={generatingContract}
-                        onClick={() => { handleGenerateContract(); setToolsMenuOpen(false); }}
-                        className="w-full text-left px-4 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 transition-colors disabled:opacity-50"
-                      >
-                        <FileText className="w-4 h-4 text-emerald-500" /> {generatingContract ? 'Gerando contrato...' : 'Gerar Contrato'}
-                      </button>
-                    </>
-                  )}
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Grupo 4: Gestão da EAP */}
-          <div className="relative">
-            <button
-              ref={gatilhoRefs.eap}
-              type="button"
-              aria-haspopup="menu"
-              aria-expanded={manageEapMenuOpen}
-              onClick={() => setManageEapMenuOpen(!manageEapMenuOpen)}
-              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] transition-all text-button font-bold border whitespace-nowrap ${manageEapMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
-              title="Gerenciar estrutura da EAP"
-            >
-              <Layers className="w-3.5 h-3.5" />
-              Gerenciar EAP
-              <ChevronDown className={`w-3 h-3 transition-transform ${manageEapMenuOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {manageEapMenuOpen && (
-              <>
-                <div className="fixed inset-0 z-40" onClick={() => setManageEapMenuOpen(false)}></div>
-                <div ref={menuRefs.eap} role="menu" aria-label="Gerenciar EAP" onKeyDown={navegarMenu} className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
-                  <button
-                    role="menuitem"
-                    onClick={() => { setIsTemplateModalOpen(true); setManageEapMenuOpen(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
-                  >
-                    <Save className="w-4 h-4 text-blue-500" /> Modelos de EAP
-                  </button>
-                  <div className="border-t border-gray-100 my-1"></div>
-                  <button
-                    role="menuitem"
-                    onClick={() => { handleClearWBS(); setManageEapMenuOpen(false); }}
-                    className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
-                  >
-                    <Trash2 className="w-4 h-4" /> Limpar Toda EAP
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-
-          {/* Ação primária (§17) — mora aqui, na toolbar de botões */}
-          <Button
-            onClick={handleAddGroup}
-            className="gap-2 text-button whitespace-nowrap"
-          >
-            <Plus className="w-4 h-4 stroke-[3]" />
-            Novo Grupo
-          </Button>
-        </div>
-      </div>
 
       {/* Banner de nova competência SINAPI + rebase */}
       <SinapiRebaseModal
@@ -2662,7 +2337,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           border/rounded/shadow/overflow só neste pai, régua sem moldura própria,
           separada do conteúdo pelo border-b. Aqui ficam só os controles do
           RECORTE das linhas (busca) e da apresentação das colunas (autofit) —
-          o resto é escopo e mora na toolbar de botões acima (§5.3). */}
+          o resto é comando e mora no ribbon acima (§19.5). */}
       <div className="flex-1 bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-[60vh] lg:min-h-0">
         <div className="p-3 border-b border-gray-100 flex flex-col md:flex-row gap-2.5 items-center">
           <div className="flex-1 relative w-full">
@@ -2726,16 +2401,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             </select>
           </div>
 
-          <button
-            onClick={expandedGroups.length > 0 ? handleCollapseAll : handleExpandAll}
-            title={expandedGroups.length > 0 ? 'Recolher tudo' : 'Expandir tudo'}
-            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-button font-bold border border-gray-200 text-gray-600 hover:border-gray-300 hover:bg-gray-50 bg-white transition-all shrink-0"
-          >
-            {expandedGroups.length > 0 ? <ChevronsDownUp className="w-3.5 h-3.5" /> : <ChevronsUpDown className="w-3.5 h-3.5" />}
-            {expandedGroups.length > 0 ? 'Recolher' : 'Expandir'}
-          </button>
-
-          {/* Auto-ajuste de largura ao conteúdo (§6.1.2) — sob comando explícito,
+          {/* Expandir/Recolher saiu daqui em 21/11/2026: mora no ribbon (aba Estrutura e
+              acesso rápido). Auto-ajuste de largura ao conteúdo (§6.1.2) — sob comando explícito,
               nunca automático: recalcular a cada tecla faria as colunas dançarem
               enquanto o usuário digita. Neutro: não é toggle, não fica azul. */}
           <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">

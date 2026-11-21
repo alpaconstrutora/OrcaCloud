@@ -238,9 +238,9 @@ describe('Correção 3 — loadAuxiliaryItems: notificação de falha visível a
         renderEditor([entryWithComposition]);
 
         // Ativar Nature Breakdown via botão (se existir no render)
-        // Desde 2026-11-14 o detalhamento mora no menu "Exibir" (toolbar mais calma).
-        fireEvent.click(screen.getByRole('button', { name: /Exibir/ }));
-        const breakdownBtn = screen.queryByRole('menuitemcheckbox', { name: /Mão de obra, material e equipamento/ });
+        // Desde 2026-11-21 o detalhamento mora na aba Vista do ribbon.
+        fireEvent.click(screen.getByRole('tab', { name: 'Vista' }));
+        const breakdownBtn = screen.queryByRole('button', { name: /Mão de obra, material e equipamento/ });
 
         if (breakdownBtn) {
             await act(async () => {
@@ -367,35 +367,38 @@ describe('Correção 4 — loadAuxiliaryItems: cancelled flag evita setState ap�
     });
 });
 
-// ─── Cromo da tela (pedido de 2026-09-21) ─────────────────────────────────────
-// 1. O aviso "Memória técnica pendente" deixou de ser um banner acima do <h1>
-//    (título + banner + KPIs + toolbar tomavam metade da tela). Virou um ícone
-//    com contador na linha do título, à direita, que abre o Painel de
-//    pendências técnicas.
-// 2. (pedido de 2026-11-13) Os KPI cards (Preço Final, Custo Direto, BDI) saíram
-//    da faixa própria abaixo da toolbar e foram para a linha do título, à
-//    direita. "Preço Venda" passou a se chamar "Preço Final".
+// ─── Cromo da tela ────────────────────────────────────────────────────────────
+// 1. (2026-09-21) O aviso "Memória técnica pendente" deixou de ser um banner;
+//    virou um ícone com contador que abre o Painel de pendências técnicas.
+// 2. (2026-11-13) "Preço Venda" passou a se chamar "Preço Final".
+// 3. (2026-11-21) RIBBON, o mesmo da Planta Inteligente e do Planejamento — *"engenharia
+//    > orçamentos: implemente menu e botões como foi implementado em incorporação >
+//    planta inteligente"*. O título virou `sr-only`; KPIs, pendências e "Novo grupo"
+//    moram no lado direito da fileira das abas; os menus Exibir/Versões/Ferramentas/
+//    Gerenciar EAP viraram as abas Estrutura · Orçamento · Análise · Vista.
 
-describe('Cromo — aviso de memória técnica no título e toolbar antes dos KPIs', () => {
-    it('não renderiza mais o banner; mostra o ícone com o contador na linha do título', async () => {
+const limparPreferenciasDoRibbon = () => {
+    for (const chave of ['orcamento:abaDoRibbon', 'orcamento:ribbonRecolhido', 'orcamento:ordemDoAcessoRapido']) {
+        window.localStorage.removeItem(chave);
+    }
+};
+
+describe('Cromo — ribbon: KPIs, pendências e ação primária na faixa', () => {
+    beforeEach(limparPreferenciasDoRibbon);
+
+    it('não renderiza o banner; mostra o ícone com o contador dentro da faixa de ferramentas', async () => {
         // makeEntry não tem calculationMemory nem precisionClass → 1 + 1 pendências
         renderEditor([makeEntry('e1')]);
         await act(async () => { await new Promise(r => setTimeout(r, 50)); });
 
         expect(screen.queryByText('Memória técnica pendente')).toBeNull();
-        expect(screen.queryByText('Clique no ícone de prancheta em cada item')).toBeNull();
 
         const icone = screen.getByRole('button', { name: 'Abrir painel de pendências técnicas' });
         expect(icone.getAttribute('title')).toContain('1 item(s) sem memória de cálculo');
         expect(icone.getAttribute('title')).toContain('1 item(s) sem classe de precisão');
         // 1 item com as duas pendências = contador 1 (itens, não pendências — bate com o painel)
         expect(icone.parentElement?.textContent).toBe('1');
-
-        // Ícone na MESMA linha do título (a que também guarda os KPIs, à direita).
-        const h1 = screen.getByRole('heading', { level: 1, name: 'Orçamento Analítico' });
-        const linhaDoTitulo = h1.parentElement?.parentElement;
-        expect(linhaDoTitulo?.contains(icone)).toBe(true);
-        expect(linhaDoTitulo?.className).toContain('justify-between');
+        expect(screen.getByRole('toolbar', { name: 'Ferramentas do orçamento' }).contains(icone)).toBe(true);
 
         fireEvent.click(icone);
         expect(await screen.findByText('Painel de pendências técnicas')).toBeTruthy();
@@ -407,27 +410,129 @@ describe('Cromo — aviso de memória técnica no título e toolbar antes dos KP
         expect(screen.queryByRole('button', { name: 'Abrir painel de pendências técnicas' })).toBeNull();
     });
 
-    it('KPI cards ficam na linha do título, à direita, antes da toolbar de botões', async () => {
+    it('o título fica só para leitor de tela; KPIs e "Novo grupo" moram na faixa', async () => {
         renderEditor([makeEntry('e1')]);
         await act(async () => { await new Promise(r => setTimeout(r, 50)); });
 
-        const h1 = screen.getByRole('heading', { level: 1, name: 'Orçamento Analítico' });
-        const linhaDoTitulo = h1.parentElement?.parentElement as HTMLElement;
-        const novoGrupo = screen.getByRole('button', { name: /Novo Grupo/ });
+        const h1 = screen.getByRole('heading', { level: 1, name: 'Orçamento Analítico — Projeto Teste' });
+        expect(h1.className).toContain('sr-only');
 
-        // Renomeado: "Preço Venda" não existe mais.
+        const faixa = screen.getByRole('toolbar', { name: 'Ferramentas do orçamento' });
         expect(screen.queryByText('Preço Venda')).toBeNull();
         for (const rotulo of ['Preço Final', 'Custo Direto', 'BDI (25%)']) {
-            const kpi = screen.getByText(rotulo);
-            expect(linhaDoTitulo.contains(kpi)).toBe(true);
-            // à direita do bloco h1+p, não antes dele
-            expect(h1.compareDocumentPosition(kpi) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-            // e acima da toolbar de botões
-            expect(kpi.compareDocumentPosition(novoGrupo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+            expect(faixa.contains(screen.getByText(rotulo))).toBe(true);
         }
         // Item de 100 + 25% de BDI: Preço Final 125, Custo Direto 100, BDI +25.
-        expect(linhaDoTitulo.textContent).toContain('125,00');
-        expect(linhaDoTitulo.textContent).toContain('100,00');
+        expect(faixa.textContent).toContain('125,00');
+        expect(faixa.textContent).toContain('100,00');
+        expect(faixa.textContent).toContain('+ R$ 25,00');
+        expect(faixa.contains(screen.getByRole('button', { name: /Novo grupo/ }))).toBe(true);
+    });
+});
+
+describe('Cromo — ribbon: abas, acesso rápido, recolher, voltar e tela cheia', () => {
+    beforeEach(limparPreferenciasDoRibbon);
+
+    const abrir = async (extra: { onBack?: () => void; settings?: Partial<ProjectSettings> } = {}) => {
+        const onUpdateSettings = vi.fn();
+        render(
+            <ConfirmProvider>
+                <BudgetEditor
+                    budget={[makeEntry('e1')]}
+                    settings={makeSettings(extra.settings)}
+                    favorites={[]}
+                    onToggleFavorite={vi.fn()}
+                    onUpdateBudget={vi.fn()}
+                    onUpdateSettings={onUpdateSettings}
+                    onOpenDashboard={vi.fn()}
+                    onBack={extra.onBack}
+                />
+            </ConfirmProvider>,
+        );
+        await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+        return { onUpdateSettings };
+    };
+
+    it('quatro abas, Estrutura aberta por padrão; a escolhida fica gravada', async () => {
+        await abrir();
+        const abas = screen.getAllByRole('tab').map(t => t.textContent);
+        expect(abas).toEqual(['Estrutura', 'Orçamento', 'Análise', 'Vista']);
+        expect(screen.getByRole('tab', { name: 'Estrutura' }).getAttribute('aria-selected')).toBe('true');
+        expect(screen.getByRole('button', { name: /Modelos de EAP/ })).toBeTruthy();
+
+        fireEvent.click(screen.getByRole('tab', { name: 'Análise' }));
+        const analise = screen.getByRole('group', { name: 'Análise' });
+        for (const nome of [/Paramétrico/, /Curva ABC/, /Orçado × realizado/, /Pendências técnicas/]) {
+            expect(within(analise).getByRole('button', { name: nome })).toBeTruthy();
+        }
+        expect(window.localStorage.getItem('orcamento:abaDoRibbon')).toContain('analise');
+    });
+
+    it('aba Orçamento: BDI global edita o orçamento; fechado, o campo trava', async () => {
+        const { onUpdateSettings } = await abrir();
+        fireEvent.click(screen.getByRole('tab', { name: 'Orçamento' }));
+        const bdi = screen.getByRole('spinbutton') as HTMLInputElement;
+        fireEvent.change(bdi, { target: { value: '30' } });
+        expect(onUpdateSettings).toHaveBeenCalledWith(expect.objectContaining({ bdi: 30 }));
+        expect(within(screen.getByRole('group', { name: 'Versões' })).getByRole('button', { name: /Histórico/ })).toBeTruthy();
+    });
+
+    it('orçamento fechado: chip "Fechado" à vista e BDI desligado', async () => {
+        await abrir({ settings: { budgetStatus: 'Fechado' } });
+        expect(screen.getByTitle('Orçamento fechado: só consulta')).toBeTruthy();
+        fireEvent.click(screen.getByRole('tab', { name: 'Orçamento' }));
+        expect((screen.getByRole('spinbutton') as HTMLInputElement).disabled).toBe(true);
+    });
+
+    it('acesso rápido: grupos na ordem padrão, dentro da faixa', async () => {
+        await abrir();
+        const faixa = screen.getByRole('toolbar', { name: 'Ferramentas do orçamento' });
+        const nomes = ['Expandir e recolher', 'Análises', 'Arquivo'];
+        const grupos = nomes.map(n => within(faixa).getByRole('group', { name: n }));
+        for (let i = 1; i < grupos.length; i++) {
+            expect(grupos[i - 1].compareDocumentPosition(grupos[i]) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        }
+        expect(within(grupos[2]).getByRole('button', { name: 'Importar EAP' })).toBeTruthy();
+        expect(within(grupos[2]).getByRole('button', { name: 'Exportar EAP (Excel)' })).toBeTruthy();
+    });
+
+    it('recolher a faixa esconde o painel e o acesso rápido; clicar numa aba devolve', async () => {
+        await abrir();
+        fireEvent.click(screen.getByRole('button', { name: 'Recolher a faixa de comandos' }));
+        expect(screen.queryByRole('button', { name: /Modelos de EAP/ })).toBeNull();
+        expect(screen.queryByRole('group', { name: 'Arquivo' })).toBeNull();
+        expect(window.localStorage.getItem('orcamento:ribbonRecolhido')).toBe('true');
+        // KPIs e ação primária continuam: moram na fileira das abas.
+        expect(screen.getByText('Preço Final')).toBeTruthy();
+        fireEvent.click(screen.getByRole('tab', { name: 'Estrutura' }));
+        expect(screen.getByRole('button', { name: /Modelos de EAP/ })).toBeTruthy();
+    });
+
+    it('← chama onBack; sem onBack o botão não aparece', async () => {
+        const onBack = vi.fn();
+        await abrir({ onBack });
+        fireEvent.click(screen.getByRole('button', { name: 'Voltar para Orçamentos — Projeto Teste' }));
+        expect(onBack).toHaveBeenCalledTimes(1);
+    });
+
+    it('sem onBack, não há ←', async () => {
+        await abrir();
+        expect(screen.queryByRole('button', { name: /Voltar para Orçamentos/ })).toBeNull();
+    });
+
+    it('tela cheia: o botão acende e a raiz vira fixed', async () => {
+        await abrir();
+        const botao = screen.getByRole('button', { name: 'Tela cheia' });
+        expect(botao.getAttribute('aria-pressed')).toBe('false');
+        fireEvent.click(botao);
+        const sair = screen.getByRole('button', { name: 'Sair da tela cheia' });
+        expect(sair.getAttribute('aria-pressed')).toBe('true');
+        const raiz = document.querySelector('[data-tela-cheia]') as HTMLElement;
+        expect(raiz.className).toContain('fixed inset-0');
+        // `relative` junto com `fixed` vence na ordem do CSS e prende a raiz na página.
+        expect(raiz.className.split(/\s+/)).not.toContain('relative');
+        fireEvent.click(sair);
+        expect(document.querySelector('[data-tela-cheia]')).toBeNull();
     });
 });
 
@@ -606,8 +711,8 @@ describe('Analítico — excluir e salvar seguros', () => {
     it('Inline/Janela é preferência de quem usa: não grava no orçamento', async () => {
         const r = montar([makeEntry('a')]);
         await esperar();
-        fireEvent.click(screen.getByRole('button', { name: /Exibir/ }));
-        fireEvent.click(screen.getByRole('menuitemradio', { name: /Abaixo do item/ }));
+        fireEvent.click(screen.getByRole('tab', { name: 'Vista' }));
+        fireEvent.click(screen.getByRole('button', { name: /Abaixo do item/ }));
         expect(r.onUpdateSettings).not.toHaveBeenCalled();
         expect(window.localStorage.getItem('budgetEditor:cpuViewMode')).toContain('inline');
     });
@@ -653,8 +758,9 @@ describe('Analítico — a EAP abre mostrando os itens', () => {
 
     it('"Expandir tudo" abre só o que tem itens', async () => {
         await abrir();
+        // Os dois moram no acesso rápido do ribbon desde 2026-11-21.
         fireEvent.click(screen.getByTitle('Recolher tudo'));
-        fireEvent.click(screen.getByTitle('Expandir tudo'));
+        fireEvent.click(screen.getByTitle('Expandir tudo (só o que tem itens)'));
         expect(screen.getByTestId('budget-row-x')).toBeTruthy();
         expect(screen.queryByText('Etapa vazia')).toBeNull();
     });
@@ -733,32 +839,24 @@ describe('Analítico — base de preço à vista e BDI zerado', () => {
     });
 });
 
-// ─── Teclado nos menus e na confirmação (2ª crítica, passo 4) ─────────────────
+// ─── Teclado nas abas e na confirmação (2ª crítica, passo 4; ribbon desde 2026-11-21) ─
 
-describe('Analítico — menus e confirmação pelo teclado', () => {
-    it('Ferramentas: foco no 1º item ao abrir, ↓ avança, Esc fecha e devolve o foco ao botão', async () => {
+describe('Analítico — abas do ribbon e confirmação pelo teclado', () => {
+    beforeEach(limparPreferenciasDoRibbon);
+
+    it('abas pelo teclado: → leva à próxima aba', async () => {
         renderEditor([makeEntry('e1')]);
         await act(async () => { await new Promise(r => setTimeout(r, 30)); });
-        const gatilho = screen.getByRole('button', { name: /Ferramentas/ });
-        expect(gatilho.getAttribute('aria-haspopup')).toBe('menu');
-        fireEvent.click(gatilho);
-        expect(gatilho.getAttribute('aria-expanded')).toBe('true');
-        const menu = screen.getByRole('menu', { name: 'Ferramentas' });
-        const itens = within(menu).getAllByRole('menuitem');
-        expect(document.activeElement).toBe(itens[0]);
-        fireEvent.keyDown(menu, { key: 'ArrowDown' });
-        expect(document.activeElement).toBe(itens[1]);
-        fireEvent.keyDown(document, { key: 'Escape' });
-        await act(async () => { await new Promise(r => setTimeout(r, 0)); });
-        expect(screen.queryByRole('menu', { name: 'Ferramentas' })).toBeNull();
-        expect(document.activeElement).toBe(gatilho);
+        const estrutura = screen.getByRole('tab', { name: 'Estrutura' });
+        estrutura.focus();
+        fireEvent.keyDown(estrutura, { key: 'ArrowRight' });
+        expect(document.activeElement).toBe(screen.getByRole('tab', { name: 'Orçamento' }));
     });
 
     it('a pergunta de confirmação recebe o foco no botão seguro', async () => {
         renderEditor([makeEntry('e1')]);
         await act(async () => { await new Promise(r => setTimeout(r, 30)); });
-        fireEvent.click(screen.getByRole('button', { name: /Gerenciar EAP/ }));
-        fireEvent.click(screen.getByRole('menuitem', { name: /Limpar Toda EAP/ }));
+        fireEvent.click(screen.getByRole('button', { name: /Limpar toda EAP/ }));
         const cancelar = await screen.findByRole('button', { name: 'Cancelar' });
         expect(document.activeElement).toBe(cancelar);
         fireEvent.click(cancelar);

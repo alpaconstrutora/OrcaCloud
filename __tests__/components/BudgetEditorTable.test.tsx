@@ -245,29 +245,25 @@ describe('Estrutura da tabela da WBS', () => {
         expect(rulerOfSearch?.contains(autofit)).toBe(true);
     });
 
-    it('Recolher/Expandir tudo fica NA toolbar acoplada, junto de busca e autofit', () => {
+    it('Expandir/Recolher tudo saiu da régua acoplada: mora no ribbon (21/11/2026)', () => {
         const { container } = renderEditor([makeEntry('1')]);
         const table = getWbsTable(container);
         const card = table.closest('.rounded-\\[10px\\].border.shadow-sm') as HTMLElement;
 
-        const toggle = within(card).getByTitle(/expandir tudo|recolher tudo/i);
-        expect(toggle).toBeDefined();
-
-        // Mesma régua da busca/autofit — não voltou para a toolbar de botões.
-        const search = within(card).getByPlaceholderText(/buscar item/i);
-        const rulerOfSearch = search.closest('.border-b');
-        expect(rulerOfSearch?.contains(toggle)).toBe(true);
+        expect(within(card).queryByTitle(/expandir tudo|recolher tudo/i)).toBeNull();
+        const faixa = within(container).getByRole('toolbar', { name: 'Ferramentas do orçamento' });
+        expect(within(faixa).getByTitle('Recolher tudo')).toBeDefined();
+        expect(within(faixa).getByTitle(/expandir tudo/i)).toBeDefined();
     });
 
-    it('os controles de escopo ficam FORA do card acoplado, na toolbar de botões (§5.3)', () => {
+    it('os comandos ficam FORA do card acoplado, no ribbon (§19.5)', () => {
         const { container } = renderEditor([makeEntry('1')]);
         const table = getWbsTable(container);
         const card = table.closest('.rounded-\\[10px\\].border.shadow-sm') as HTMLElement;
 
-        // A régua acoplada carrega só busca + autofit; escopo e ação primária
-        // moram na barra própria acima.
-        // "Salvar versão" mora no menu "Versões" desde 2026-11-14 (toolbar mais calma).
-        for (const label of [/novo grupo/i, /ferramentas/i, /gerenciar eap/i, /versões/i]) {
+        // A régua acoplada carrega só busca, filtro/ordem de grupos e autofit; comandos e
+        // ação primária moram no ribbon acima (aba Estrutura aberta por padrão).
+        for (const label of [/novo grupo/i, /modelos de eap/i, /limpar toda eap/i]) {
             const found = within(card).queryByText(label);
             expect(found, `"${label}" não pode estar dentro do card acoplado`).toBeNull();
             // ...mas tem que existir em algum lugar da tela.

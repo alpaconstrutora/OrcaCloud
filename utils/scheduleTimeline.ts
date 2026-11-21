@@ -43,6 +43,13 @@ function getWeekNumber(d: Date): number {
     return Math.ceil((((date.getTime() - yearStart.getTime()) / DAY_MS) + 1) / 7);
 }
 
+/**
+ * Só a inicial maiúscula ("abr." → "Abr.", "sáb." → "Sáb."). Cabeçalho do app é sentence case
+ * (guia §6.2); antes a linha do tempo saía toda em caixa alta ("ABR.", "SÁB.", "SEM 12") —
+ * pedido de 21/11/2026: *"os cabecalhos da tabela e gantt estão em maisculos, diferente do padrao do app"*.
+ */
+const inicialMaiuscula = (t: string): string => t.charAt(0).toLocaleUpperCase('pt-BR') + t.slice(1);
+
 const labelFormats: Record<TimelineScale, (d: Date) => string> = {
     day: (d) => d.getDate().toString(),
     week: (d) => `Sem ${getWeekNumber(d)} `,
@@ -51,8 +58,8 @@ const labelFormats: Record<TimelineScale, (d: Date) => string> = {
 };
 
 const subLabelFormats: Record<TimelineScale, (d: Date) => string> = {
-    day: (d) => new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(d).toUpperCase(),
-    week: (d) => new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(d).toUpperCase(),
+    day: (d) => inicialMaiuscula(new Intl.DateTimeFormat('pt-BR', { weekday: 'short' }).format(d)),
+    week: (d) => inicialMaiuscula(new Intl.DateTimeFormat('pt-BR', { month: 'short' }).format(d)),
     month: (d) => d.getFullYear().toString(),
     year: () => '',
 };
@@ -101,7 +108,7 @@ export function buildTimelineColumns(
                 id: current.toISOString().split('T')[0],
                 date: new Date(current),
                 name: labelFormats.week(current),
-                label: labelFormats.week(current).toUpperCase(),
+                label: labelFormats.week(current),
                 subLabel: subLabelFormats.week(current),
                 width: pxPerDay * 7,
                 isToday: today >= current && today < nextWeek,
@@ -118,7 +125,7 @@ export function buildTimelineColumns(
                 id: current.toISOString().split('T')[0],
                 date: new Date(current),
                 name: labelFormats.month(current),
-                label: labelFormats.month(current).split(' ')[0].toUpperCase(),
+                label: inicialMaiuscula(labelFormats.month(current).split(' ')[0]),
                 subLabel: subLabelFormats.month(current),
                 width: pxPerDay * daysInMonth,
                 isToday: today >= current && today < nextMonth,

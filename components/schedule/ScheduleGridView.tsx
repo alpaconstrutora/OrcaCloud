@@ -194,10 +194,10 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                     ))}
                     <col data-col="totalPct" style={{ width: getColWidth('totalPct') }} />
                 </colgroup>
-                <thead className="sticky top-0 z-20 bg-white text-gray-700 font-medium border-b border-gray-200 uppercase tracking-widest">
+                <thead className="sticky top-0 z-20 bg-white text-gray-700 font-semibold border-b border-gray-200">
                     <tr>
                         <th className="px-1 py-3 text-center relative">ID<ResizeHandle colKey="uid" /></th>
-                        <th className="px-1 py-3 text-center relative">ITEM<ResizeHandle colKey="wbs" /></th>
+                        <th className="px-1 py-3 text-center relative">Item<ResizeHandle colKey="wbs" /></th>
                         <th className="px-4 py-3 text-left relative">
                             <span>Item / Etapa</span>
                             <ResizeHandle colKey="item" />
@@ -214,7 +214,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         <th className="px-4 py-3 text-right relative">Plan. (C)<ResizeHandle colKey="planned" /></th>
                         <th className="px-4 py-3 text-right relative">Real<ResizeHandle colKey="realized" /></th>
                         <th className="px-4 py-3 text-right relative" title="Valor Planejado atual menos o valor planejado quando a baseline ativa foi salva">Var.<ResizeHandle colKey="variation" /></th>
-                        <th className="px-4 py-3 text-left relative text-table-header text-gray-700 uppercase tracking-widest font-medium">Recursos</th>
+                        <th className="px-4 py-3 text-left relative">Recursos</th>
                         <th className="px-4 py-3 text-center border-l border-gray-200 relative">% Físico<ResizeHandle colKey="realPct" /></th>
                         <th className="px-4 py-3 text-center relative">% Financeiro<ResizeHandle colKey="finPct" /></th>
                         <th
@@ -237,7 +237,7 @@ const ScheduleGridView: React.FC<ScheduleGridViewProps> = ({
                         </th>
                         {timelineColumns.map(column => (
                             <th key={column.id} className="px-2 py-3 text-center border-l border-gray-100 relative">
-                                <div className="text-xs font-medium text-gray-700">{column.name}</div>
+                                <div className="text-xs font-semibold text-gray-700">{column.name}</div>
                                 {timeScale !== 'day' && (
                                     <div className="text-xs font-normal text-gray-500">
                                         {new Intl.DateTimeFormat('pt-BR', { month: 'short', year: '2-digit' }).format(column.date)}

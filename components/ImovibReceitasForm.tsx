@@ -48,12 +48,18 @@ const ImovibReceitasForm: React.FC<ImovibReceitasFormProps> = ({ study, onDataCh
         }
     };
 
+    // A barra das sub-abas leva, à direita, as ações do espelho (Regenerar, Inteligência de Precificação) — elas e o
+    // estado delas moram no ImovibSalesMapTab, que chama `barra(acoes)`.
+    const barra = (acoes?: React.ReactNode) => (
+        <TabsBar<SubAbaReceitas> tabs={SUB_ABAS} value={subAba} onChange={onSubAbaChange}>{acoes}</TabsBar>
+    );
+
     return (
         <div className="space-y-6">
-            <TabsBar<SubAbaReceitas> tabs={SUB_ABAS} value={subAba} onChange={onSubAbaChange} />
             {subAba === 'espelho' ? (
-                <ImovibSalesMapTab study={study} onDataChanged={onDataChanged} onAbrirPreferencias={onAbrirPreferencias} />
+                <ImovibSalesMapTab study={study} onDataChanged={onDataChanged} onAbrirPreferencias={onAbrirPreferencias} barraDeAbas={barra} />
             ) : (<>
+            {barra()}
             <p className="text-sm text-gray-700">
                 VGV <span className="font-semibold text-gray-900 tabular-nums">{math.vgvTotal > 0 ? formatBRL(math.vgvTotal) : '—'}</span>, do{' '}
                 <button type="button" onClick={() => onSubAbaChange('espelho')} className="text-blue-600 hover:underline font-medium">Espelho de vendas</button>

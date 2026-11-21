@@ -243,7 +243,7 @@ export const documentService = {
     const isSpecificFolder = (filters && 'folderId' in filters && filters.folderId !== undefined && filters.folderId !== 'undefined' && filters.folderId !== null && filters.folderId !== 'null') || (filters?.folderIds && filters.folderIds.length > 0);
 
     // PERF: a query principal de opura_documents e as integrações (contracts,
-    // invoices, risk, accidents, proposals, opportunity_documents) são
+    // invoices, risk, accidents, proposals) são
     // independentes entre si — só dependem de targetProjectIds/organizationId, já
     // resolvidos acima. Disparamos as integrações numa IIFE (que começa a rodar
     // imediatamente) e, logo em seguida, a query principal, aguardando ambas com
@@ -582,71 +582,8 @@ export const documentService = {
         console.error('[DocumentService] Erro ao integrar propostas no Docs:', err);
       }
 
-      try {
-        // 2. Documentos de oportunidade
-        const oppDocsQuery = scopeOrg(
-          supabase
-            .from('opportunity_documents')
-            .select(`
-            id,
-            name,
-            description,
-            file_path,
-            mime_type,
-            created_at,
-            uploaded_by,
-            investor_opportunities!inner (
-              organization_id,
-              project_id
-            )
-          `),
-          'investor_opportunities.organization_id'
-        );
-
-        const { data: oppDocsData, error: oppDocsError } = await oppDocsQuery;
-
-        if (!oppDocsError && oppDocsData) {
-          let filteredOppDocs = oppDocsData;
-          if (targetProjectIds.length > 0) {
-            filteredOppDocs = oppDocsData.filter((od: any) => {
-              const opp = od.investor_opportunities;
-              return opp && targetProjectIds.includes(opp.project_id);
-            });
-          }
-
-          const mappedOppDocs: OpuraDocument[] = filteredOppDocs.map((od: any) => ({
-            id: od.id,
-            organization_id: organizationId || '',
-            nome: od.name || `Documento Comercial ${od.id}`,
-            descricao: od.description || `Documento de Oportunidade Comercial`,
-            categoria: 'comercial',
-            tipo_documento: 'Documento Comercial',
-            status: 'ativo',
-            data_emissao: od.created_at || undefined,
-            alerta_dias_antecedencia: 30,
-            tags: ['Comercial', 'Oportunidade'].filter(Boolean),
-            criado_por: od.uploaded_by || 'sistema',
-            created_at: od.created_at || new Date().toISOString(),
-            updated_at: od.created_at || new Date().toISOString(),
-            project_id: od.investor_opportunities?.project_id || undefined,
-            is_integrated: true,
-            active_version: od.file_path ? {
-              id: `ver-${od.id}`,
-              document_id: od.id,
-              version_number: 1,
-              storage_path: `opportunity-dataroom:${od.file_path}`,
-              tamanho: 0,
-              mime_type: od.mime_type || 'application/pdf',
-              criado_por: od.uploaded_by || 'sistema',
-              created_at: od.created_at || new Date().toISOString(),
-            } : undefined,
-          }));
-
-          integrated.push(...mappedOppDocs);
-        }
-      } catch (err) {
-        console.error('[DocumentService] Erro ao integrar documentos de oportunidade no Docs:', err);
-      }
+      // 2. Documentos de oportunidade: saíram (plano 2026-11-21-imovib-oportunidades-consolidacao, Fases 2–3).
+      //    O Data Room da oportunidade passa a COMPARTILHAR documentos do GED; nada a integrar.
     }
     }
     })(); // fim da IIFE de integrações

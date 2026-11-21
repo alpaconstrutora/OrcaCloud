@@ -42,7 +42,7 @@ describe('E8.2 — lançamentos por peça', () => {
     const r = gerarLancamentosDeInstalacoes(quant(), new Map([['89707', item('89707', 'M')], ['89714', item('89714', 'M')]]), CTX);
     expect(r.entries.map((e) => e.sinapiItem.code)).toEqual(['89714']);
     expect(r.divergencias.map((d) => d.motivo)).toEqual([
-      'A peça "Caixa sifonada" produz UN, mas o item 89707 é cotado em "M". Nenhuma linha foi gerada.',
+      'A peça "Caixa sifonada" produz UN, mas o item 89707 é cotado em "M". Nenhuma linha foi gerada. Se o item puder ser medido nesta grandeza, cadastre a equivalência em Engenharia › Composições.',
       'Item CALHA150 não encontrado no catálogo (SINAPI nem base própria).',
     ]);
   });

@@ -103,3 +103,39 @@ export function unidadeInformadaValida(
     if (!base || informada.unidadeBase !== base || informada.unidade === base) return null;
     return informada;
 }
+
+/**
+ * Compras (Fase 2): a linha da solicitação/pedido não guarda a unidade do CATÁLOGO, só a
+ * unidade em que está agora. A base é a do cadastro em que essa unidade aparece (como base
+ * ou como alternativa). Duas bases possíveis = ambíguo = `null` (sem conversão).
+ */
+export function baseDaUnidade(
+    code: string,
+    unidadeAtual: string | null | undefined,
+    eqs: EquivalenciasPorItem,
+): string | null {
+    const u = identidadeDaUnidade(unidadeAtual);
+    if (!u) return null;
+    const bases = new Set(
+        (eqs.get(code) ?? []).filter(e => e.fator > 0 && (e.unidadeBase === u || e.unidade === u)).map(e => e.unidadeBase),
+    );
+    return bases.size === 1 ? [...bases][0] : null;
+}
+
+/** Troca de unidade numa linha de compra: quantidade e preço convertidos juntos (q × p igual). */
+export function trocarUnidadeDaLinha(
+    code: string,
+    linha: { unit: string; quantity: number; price: number },
+    novaUnidade: string,
+    eqs: EquivalenciasPorItem,
+): { unit: string; quantity: number; price: number } | null {
+    const base = baseDaUnidade(code, linha.unit, eqs);
+    if (!base) return null;
+    const f = fatorEntre(code, base, linha.unit, novaUnidade, eqs);
+    if (f == null) return null;
+    return {
+        unit: identidadeDaUnidade(novaUnidade)!,
+        quantity: converterQuantidade(linha.quantity, f),
+        price: converterPreco(linha.price, f),
+    };
+}

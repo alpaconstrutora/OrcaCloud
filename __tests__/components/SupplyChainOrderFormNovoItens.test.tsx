@@ -61,6 +61,9 @@ vi.mock('../../services/orderNumberRegenService', () => ({
     getOrderNumberLockReason: vi.fn(async () => null),
     regenerateOrderNumber: vi.fn(async () => 'X'),
 }));
+// Equivalência de unidades (21/11/2026): 1 T de brita = 0,5 M3 (só no teste).
+const EQUIVALENCIAS = vi.hoisted(() => ({ atual: new Map() as Map<string, { itemCode: string; unidadeBase: string; unidade: string; fator: number }[]> }));
+vi.mock('../../hooks/useEquivalencias', () => ({ useEquivalencias: () => ({ equivalencias: EQUIVALENCIAS.atual, recarregar: () => undefined }) }));
 vi.mock('../../hooks/useOrgContext', () => ({ useOrgContext: () => ({ orgId: 'org-1' }) }));
 // Seletor de fornecedor com drawer próprio: aqui, um botão que escolhe o único.
 vi.mock('../../components/SupplierSelect', () => ({
@@ -162,5 +165,48 @@ describe('Novo pedido › Itens do pedido', () => {
         expect(pedido.items).toEqual([expect.objectContaining({ code: 'ORC-2', quantity: 8, unitPrice: 30 })]);
         // Criado → a tela recebe o id para abrir o detalhe do pedido novo, não a lista (21/11/2026).
         await waitFor(() => expect(onSave).toHaveBeenCalledWith('novo'));
+    });
+});
+
+describe('Pedido › unidade equivalente (21/11/2026)', () => {
+    beforeEach(() => {
+        vi.clearAllMocks();
+        EQUIVALENCIAS.atual = new Map([['ORC-2', [{ itemCode: 'ORC-2', unidadeBase: 'M3', unidade: 'T', fator: 0.5 }]]]);
+    });
+
+    it('item do orçamento trocado de M3 para T: quantidade e preço convertem juntos e o pedido grava em T', async () => {
+        const onSave = vi.fn();
+        fireEvent.click(await abrirComObra(onSave));
+        fireEvent.click(within((await screen.findByText('Brita 1')).closest('tr')!).getByRole('checkbox'));
+        fireEvent.click(screen.getByRole('button', { name: /Adicionar 1 item/ }));
+        await waitFor(() => expect(screen.queryByText('Itens do orçamento da obra')).toBeNull());
+
+        fireEvent.click(within(linhaDaLista('Brita 1')).getAllByRole('button')[0]);
+        const unidade = screen.getByLabelText('Unidade') as HTMLSelectElement;
+        expect(Array.from(unidade.options).map(o => o.value)).toEqual(['M3', 'T']);
+        fireEvent.change(unidade, { target: { value: 'T' } });
+        fireEvent.click(screen.getByRole('button', { name: /Salvar Alterações/ }));
+        await waitFor(() => expect(within(linhaDaLista('Brita 1')).getByText('16')).toBeTruthy());
+
+        fireEvent.click(screen.getByText('escolher fornecedor'));
+        fireEvent.change(campo('Data de Entrega'), { target: { value: '2026-12-01' } });
+        fireEvent.click(screen.getByRole('button', { name: /Salvar pedido/ }));
+        await waitFor(() => expect(orderService.createOrder).toHaveBeenCalled());
+        const pedido = vi.mocked(orderService.createOrder).mock.calls[0][0] as { items: { code: string; unit: string; quantity: number; unitPrice: number; total: number }[] };
+        expect(pedido.items).toEqual([expect.objectContaining({ code: 'ORC-2', unit: 'T', quantity: 16, unitPrice: 15, total: 240 })]);
+    });
+    it('reabrir pedido gravado em T mostra T (antes voltava para a unidade do orçamento com a quantidade de T)', async () => {
+        vi.mocked(orderService.listOrders).mockResolvedValue([{
+            id: 'p1', number: 'PC-1', supplierId: 's1', projectId: 'obra-1', status: 'Rascunho', version: 1,
+            items: [{ code: 'ORC-2', description: 'Brita 1', unit: 'T', quantity: 16, unitPrice: 15, total: 240 }],
+        }] as never);
+        render(
+            <ConfirmProvider>
+                <SupplyChainOrderForm onBack={() => {}} onSave={() => {}} editingOrderId="p1" />
+            </ConfirmProvider>
+        );
+        const linha = await waitFor(() => linhaDaLista('Brita 1'));
+        expect(within(linha).getByText('T')).toBeTruthy();
+        expect(within(linha).getByText('16')).toBeTruthy();
     });
 });

@@ -1,4 +1,5 @@
 import { SinapiCategory, SinapiType, type BudgetEntry, type CompositionComponent } from '../types/budget';
+import { baseDaUnidade, fatorEntre, type EquivalenciasPorItem } from '../utils/equivalenciaUnidades';
 
 /**
  * Linhas do orçamento da obra para os seletores de Suprimentos.
@@ -85,6 +86,34 @@ export interface LinhaDoOrcamentoNoPedido extends LinhaDoOrcamento {
     aComprar: number;
     titulo: boolean;
     jaNoPedido: boolean;
+    /** Houve compra numa unidade que não converte para a desta linha — ficou FORA de `comprada`. */
+    compradaSemConversao?: string[];
+}
+
+/** O que já foi pedido de um código, por unidade em que foi pedido (21/11/2026). */
+export type ComprasPorCodigo = Map<string, { unidade: string; quantidade: number }[]>;
+
+/**
+ * Quanto já se comprou NA UNIDADE DA LINHA. Até 21/11/2026 somava `quantity` cru,
+ * fosse qual fosse a unidade (100 KG + 10 BR = 110). Agora: mesma unidade (grafias
+ * diferentes contam juntas) soma direto; outra unidade converte pela equivalência;
+ * o que não converte fica de fora e é avisado.
+ */
+export function compradaNaUnidade(
+    code: string,
+    unidadeDaLinha: string,
+    compras: { unidade: string; quantidade: number }[] | undefined,
+    eqs: EquivalenciasPorItem = new Map(),
+): { comprada: number; semConversao: string[] } {
+    let comprada = 0;
+    const semConversao: string[] = [];
+    const base = baseDaUnidade(code, unidadeDaLinha, eqs) ?? unidadeDaLinha;
+    for (const c of compras ?? []) {
+        const f = fatorEntre(code, base, c.unidade, unidadeDaLinha, eqs);
+        if (f == null) { if (!semConversao.includes(c.unidade)) semConversao.push(c.unidade); continue; }
+        comprada += c.quantidade * f;
+    }
+    return { comprada: quatroCasas(comprada), semConversao };
 }
 
 /**
@@ -177,9 +206,10 @@ export function composicoesInternasAResolver(budget: BudgetEntry[], sub: SubComp
 export function linhasDoOrcamentoParaPedido(
     budget: BudgetEntry[],
     preco: Map<string, number>,
-    compradas: Map<string, number>,
+    compradas: ComprasPorCodigo,
     noPedido: Set<string>,
     sub: SubComposicoes = new Map(),
+    equivalencias: EquivalenciasPorItem = new Map(),
 ): LinhaDoOrcamentoNoPedido[] {
     const linhas: LinhaDoOrcamento[] = [];
     for (const e of budget) {
@@ -217,10 +247,13 @@ export function linhasDoOrcamentoParaPedido(
     }
     return linhas.map(l => {
         const titulo = !l.compositionCode && l.type === SinapiType.COMPOSITION;
-        const comprada = titulo ? 0 : (compradas.get(l.code) ?? 0);
+        const { comprada, semConversao } = titulo
+            ? { comprada: 0, semConversao: [] as string[] }
+            : compradaNaUnidade(l.code, l.unit, compradas.get(l.code), equivalencias);
         return {
             ...l,
             comprada,
+            ...(semConversao.length > 0 ? { compradaSemConversao: semConversao } : {}),
             aComprar: titulo ? 0 : Math.max(quatroCasas(l.quantity - comprada), 0),
             titulo,
             jaNoPedido: !titulo && noPedido.has(l.code),

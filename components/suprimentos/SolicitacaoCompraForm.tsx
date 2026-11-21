@@ -7,6 +7,9 @@ import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { formatMoney } from '../ui/Format';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
+import { useEquivalencias } from '../../hooks/useEquivalencias';
+import { baseDaUnidade, trocarUnidadeDaLinha, unidadesDoItem } from '../../utils/equivalenciaUnidades';
+import { identidadeDaUnidade } from '../../lib/unidadeDeMedida';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { useStore } from '../../store/useStore';
 import CostCenterSelect from '../CostCenterSelect';
@@ -144,6 +147,22 @@ const SolicitacaoCompraForm: React.FC<Props> = ({ editingId, initialDraft, orige
     const set = <K extends keyof PurchaseRequestDraft>(k: K, v: PurchaseRequestDraft[K]) => {
         setDraft(d => ({ ...d, [k]: v }));
         markDirty();
+    };
+    // EQUIVALÊNCIA DE UNIDADES (21/11/2026): item com equivalência cadastrada troca de unidade
+    // convertendo quantidade e preço juntos (o total não muda). Plano 2026-11-21-equivalencia-unidades.
+    const codigosDosItens = React.useMemo(
+        () => draft.items.map(i => i.inputCode).filter((c): c is string => !!c),
+        [draft.items],
+    );
+    const { equivalencias } = useEquivalencias(codigosDosItens);
+    const unidadesDaLinha = (i: PurchaseRequestItem): string[] | null => {
+        if (!i.inputCode) return null;
+        const base = baseDaUnidade(i.inputCode, i.unit, equivalencias);
+        return base ? unidadesDoItem(i.inputCode, base, equivalencias) : null;
+    };
+    const trocarUnidade = (i: PurchaseRequestItem, unidade: string) => {
+        const nova = trocarUnidadeDaLinha(i.inputCode!, { unit: i.unit, quantity: i.quantity, price: i.estimatedUnitPrice }, unidade, equivalencias);
+        if (nova) setItem(i.id!, { unit: nova.unit, quantity: nova.quantity, estimatedUnitPrice: nova.price });
     };
     const setItem = (id: string, patch: Partial<PurchaseRequestItem>) => {
         setDraft(d => ({ ...d, items: d.items.map(i => (i.id === id ? { ...i, ...patch } : i)) }));
@@ -370,8 +389,20 @@ const SolicitacaoCompraForm: React.FC<Props> = ({ editingId, initialDraft, orige
                         case 'description':
                             return <input className={CELL_INPUT} value={i.description} disabled={ro} placeholder="Descreva o item" title={i.description}
                                 onChange={e => setItem(id, { description: e.target.value })} />;
-                        case 'unit':
+                        case 'unit': {
+                            const unidades = unidadesDaLinha(i);
+                            if (unidades && !ro) {
+                                const atual = identidadeDaUnidade(i.unit) ?? i.unit;
+                                return (
+                                    <select className={CELL_INPUT} value={atual} aria-label={`Unidade de ${i.description || 'item'}`}
+                                        title="Trocar a unidade converte a quantidade e o preço (equivalência cadastrada em Composições)"
+                                        onChange={e => trocarUnidade(i, e.target.value)}>
+                                        {unidades.map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                );
+                            }
                             return <input className={CELL_INPUT} value={i.unit} disabled={ro} onChange={e => setItem(id, { unit: e.target.value })} />;
+                        }
                         case 'quantity':
                             return <input type="number" min={0} step="any" className={`${CELL_INPUT} text-right`} value={i.quantity} disabled={ro}
                                 onChange={e => setItem(id, { quantity: Number(e.target.value) })} />;

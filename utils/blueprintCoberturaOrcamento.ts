@@ -24,7 +24,8 @@
 // que ficou fora. Com isso a pessoa prioriza: 1.240 m² sem item importa mais que
 // 3 un sem item, e a lista mostra os dois com a quantidade ao lado.
 
-import { MEDIDA_POR_ID, dimensaoDaUnidade, type Dimensao, type MapeamentoOrcamento } from './blueprintBudget';
+import { MEDIDA_POR_ID, resolverUnidadeDaMedida, type Dimensao, type MapeamentoOrcamento } from './blueprintBudget';
+import type { EquivalenciasPorItem } from './equivalenciaUnidades';
 
 export type EstadoDaMedida =
   /** Tem mapeamento ativo, item no catálogo e unidade compatível: vira linha. */
@@ -80,6 +81,8 @@ export function coberturaDoOrcamento(
   medidos: readonly { medidaId: string; quantidade: number }[],
   mapeamentos: readonly MapeamentoOrcamento[],
   itens: ReadonlyMap<string, ItemDoCatalogo>,
+  /** Equivalência de unidades (21/11/2026): com ela, a medida converte em vez de ficar incompatível. */
+  equivalencias: EquivalenciasPorItem = new Map(),
 ): Cobertura {
   const linhas: LinhaDeCobertura[] = [];
 
@@ -93,13 +96,15 @@ export function coberturaDoOrcamento(
     const item = mapeamento ? itens.get(mapeamento.item_code) ?? null : null;
 
     let estado: EstadoDaMedida;
+    const conv = item && mapeamento ? resolverUnidadeDaMedida({ code: mapeamento.item_code, unit: item.unit }, [def.dimensao], equivalencias) : null;
     if (!mapeamento) estado = 'SEM_MAPEAMENTO';
     else if (!mapeamento.active) estado = 'DESLIGADO';
     else if (!item) estado = 'ITEM_AUSENTE';
-    else if (dimensaoDaUnidade(item.unit) !== def.dimensao) estado = 'UNIDADE_INCOMPATIVEL';
+    else if (!conv) estado = 'UNIDADE_INCOMPATIVEL';
     else estado = 'COM_PRECO';
 
-    const precoUnitario = item?.price ?? null;
+    // Preço por unidade MEDIDA: com equivalência, preço do item × fator (1 M de aço = 0,245 KG).
+    const precoUnitario = item?.price == null ? null : item.price * (conv?.fator ?? 1);
     linhas.push({
       medidaId: m.medidaId,
       rotulo: def.rotulo,

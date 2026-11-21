@@ -30,6 +30,7 @@
  */
 
 import type { BudgetEntry, SinapiItem } from '../types/budget';
+import { equivalenciasValidas, type EquivalenciasPorItem, type UnidadeInformada } from './equivalenciaUnidades';
 import type { DisciplinaDeRede, Quantitativos, StructuralKind, TipoDePontoEletrico, TipoDePontoHidraulico } from './blueprintKernel';
 import { nomeDaCalha } from './blueprintCalhas';
 import { ROTULO_DA_CONEXAO, ROTULO_DO_CONDUTOR, TIPOS_DE_CLIMATIZACAO, TIPOS_DE_TERMINAL_DE_AR, materialPadraoDaDisciplina, medidaDaBitola, type MaterialDeTubo, type QuantidadePorBitola } from './blueprintKernel';
@@ -726,6 +727,43 @@ export function dimensaoDaUnidade(unidade: string | undefined | null): Dimensao 
   return null;
 }
 
+/**
+ * EQUIVALÊNCIA DE UNIDADES (21/11/2026): a medida sai numa grandeza e o item é cotado
+ * noutra (ex.: medida em M, aço em KG). Com equivalência cadastrada (1 M = 0,245 KG), a
+ * linha é gerada na unidade do item: quantidade = valor medido × fator. Sem equivalência,
+ * `null` — e a TRAVA continua recusando, como sempre. Plano 2026-11-21-equivalencia-unidades.
+ */
+export interface UnidadeResolvida {
+  dimensao: Dimensao;
+  /** Quanto da unidade do item vale 1 unidade medida (1 = a própria unidade do item). */
+  fator: number;
+  unidadeInformada?: UnidadeInformada;
+}
+
+export function resolverUnidadeDaMedida(
+  item: { code: string; unit?: string | null },
+  aceitas: readonly Dimensao[],
+  equivalencias: EquivalenciasPorItem = new Map(),
+): UnidadeResolvida | null {
+  const propria = dimensaoDaUnidade(item.unit);
+  if (propria && aceitas.includes(propria)) return { dimensao: propria, fator: 1 };
+  for (const e of equivalenciasValidas(item.code, item.unit, equivalencias)) {
+    const d = dimensaoDaUnidade(e.unidade);
+    if (d && aceitas.includes(d)) {
+      return { dimensao: d, fator: e.fator, unidadeInformada: { unidade: e.unidade, unidadeBase: e.unidadeBase, fator: e.fator } };
+    }
+  }
+  return null;
+}
+
+/** Os campos que a conversão acrescenta à linha (só a quantidade, sem conversão). */
+const comFator = (res: UnidadeResolvida | null | undefined, valor: number) =>
+  res && res.unidadeInformada
+    ? { quantity: valor * res.fator, unidadeInformada: res.unidadeInformada }
+    : { quantity: valor };
+
+const DICA_EQUIVALENCIA = ' Se o item puder ser medido nesta grandeza, cadastre a equivalência em Engenharia › Composições.';
+
 interface ValorMedido {
   /**
    * Identificador ESTÁVEL do elemento — entra no id da linha.
@@ -757,6 +795,8 @@ export interface ExtrasDaGeracao {
   armadura?: ArmaduraQuantificada;
   /** SUB-REGIÕES DO TERRENO (P2.19): `medirSubRegioes(model)`. */
   subRegioes?: { uid: string; nome: string; rotuloDoMaterial: string; material: string; permeavel: boolean; areaM2: number }[];
+  /** Equivalência de unidades (21/11/2026): a medida converte para a unidade do item. */
+  equivalencias?: EquivalenciasPorItem;
   /** F25: a terraplenagem do estudo, recalculada da topografia do snapshot (`terraplenagemDoOrcamento`). */
   terraplenagem?: TerraplenagemDoOrcamento | null;
   /** F27-D5: as lajes descobertas (o terraço e a laje sem telhado do último pavimento) — `lajesDescobertas(model)`. */
@@ -1450,7 +1490,8 @@ export function gerarLancamentos(
 
     // A TRAVA. Recusa, não avisa.
     const dimItem = dimensaoDaUnidade(item.unit);
-    if (dimItem !== def.dimensao) {
+    const conv = resolverUnidadeDaMedida(item, [def.dimensao], extras.equivalencias);
+    if (!conv) {
       divergencias.push({
         mapeamentoId: m.id,
         medida: m.medida,
@@ -1458,7 +1499,7 @@ export function gerarLancamentos(
         motivo:
           `"${def.rotulo}" produz ${def.dimensao}, mas o item ${m.item_code} é cotado ` +
           `em "${item.unit}"${dimItem ? ` (${dimItem})` : ' (unidade não reconhecida)'}. ` +
-          `Nenhuma linha foi gerada — o número sairia plausível e errado.`,
+          `Nenhuma linha foi gerada — o número sairia plausível e errado.` + DICA_EQUIVALENCIA,
       });
       continue;
     }
@@ -1478,16 +1519,17 @@ export function gerarLancamentos(
       entries.push({
         ...base,
         id: `bp:${ctx.studyId}:${m.id}:total`,
-        quantity: total,
+        ...comFator(conv, total),
         notes: procedencia,
         calculationMemory: {
-          formula: medidos[0].formula,
+          formula: conv.unidadeInformada ? `(${medidos[0].formula}) × fator` : medidos[0].formula,
           variables: {
             medida: def.rotulo,
             elementos: medidos.length,
             snapshot: ctx.snapshotId,
+            ...(conv.unidadeInformada ? { fator: conv.fator, equivalencia: `1 ${conv.unidadeInformada.unidade} = ${conv.fator} ${conv.unidadeInformada.unidadeBase}` } : {}),
           },
-          result: total,
+          result: comFator(conv, total).quantity,
           justification: procedencia,
         },
       });
@@ -1496,13 +1538,16 @@ export function gerarLancamentos(
         entries.push({
           ...base,
           id: `bp:${ctx.studyId}:${m.id}:${v.ref}`,
-          quantity: v.valor,
+          ...comFator(conv, v.valor),
           location: { room: v.rotulo },
           notes: procedencia,
           calculationMemory: {
-            formula: v.formula,
-            variables: { ...v.variaveis, medida: def.rotulo, snapshot: ctx.snapshotId },
-            result: v.valor,
+            formula: conv.unidadeInformada ? `(${v.formula}) × fator` : v.formula,
+            variables: {
+              ...v.variaveis, medida: def.rotulo, snapshot: ctx.snapshotId,
+              ...(conv.unidadeInformada ? { fator: conv.fator, equivalencia: `1 ${conv.unidadeInformada.unidade} = ${conv.fator} ${conv.unidadeInformada.unidadeBase}` } : {}),
+            },
+            result: comFator(conv, v.valor).quantity,
             justification: procedencia,
           },
         });
@@ -1603,6 +1648,8 @@ export function gerarLancamentosDeCamadas(
   quant: Quantitativos,
   itensPorCodigo: Map<string, SinapiItem>,
   ctx: ContextoGeracao,
+  /** Equivalência de unidades (21/11/2026). */
+  equivalencias: EquivalenciasPorItem = new Map(),
 ): ResultadoGeracao {
   const entries: BudgetEntry[] = [];
   const divergencias: Divergencia[] = [];
@@ -1639,7 +1686,8 @@ export function gerarLancamentosDeCamadas(
       continue;
     }
 
-    const dim = dimensaoDaUnidade(item.unit);
+    const conv = resolverUnidadeDaMedida(item, ['M3', 'M2'], equivalencias);
+    const dim = conv?.dimensao ?? dimensaoDaUnidade(item.unit);
     if (dim !== 'M3' && dim !== 'M2') {
       divergencias.push({
         mapeamentoId: `camada:${m.itemCode}`,
@@ -1664,7 +1712,7 @@ export function gerarLancamentosDeCamadas(
       // uma sumir.
       id: `bp:${ctx.studyId}:camada:${m.itemCode}:${m.funcao}`,
       sinapiItem: item,
-      quantity: valor,
+      ...comFator(conv, valor),
       phase: '',
       group: 'Camadas de parede',
       discipline: 'Planta Inteligente',
@@ -1708,6 +1756,8 @@ export function gerarLancamentosDeAcabamentos(
   quant: Quantitativos,
   itensPorCodigo: Map<string, SinapiItem>,
   ctx: ContextoGeracao,
+  /** Equivalência de unidades (21/11/2026). */
+  equivalencias: EquivalenciasPorItem = new Map(),
 ): ResultadoGeracao {
   const entries: BudgetEntry[] = [];
   const divergencias: Divergencia[] = [];
@@ -1734,8 +1784,9 @@ export function gerarLancamentosDeAcabamentos(
       divergencias.push({ mapeamentoId: `acabamento:${m.escopo}:${m.itemCode}`, medida: 'ACABAMENTO', itemCode: m.itemCode, motivo: `Item ${m.itemCode} não encontrado no catálogo (SINAPI nem base própria).` });
       continue;
     }
-    const dim = dimensaoDaUnidade(item.unit);
     const aceitas: Dimensao[] = m.escopo === 'RODAPE' ? ['M', 'M2'] : ['M3', 'M2'];
+    const conv = resolverUnidadeDaMedida(item, aceitas, equivalencias);
+    const dim = conv?.dimensao ?? dimensaoDaUnidade(item.unit);
     if (!dim || !aceitas.includes(dim)) {
       divergencias.push({
         mapeamentoId: `acabamento:${m.escopo}:${m.itemCode}`,
@@ -1750,7 +1801,7 @@ export function gerarLancamentosDeAcabamentos(
     entries.push({
       id: `bp:${ctx.studyId}:acabamento:${m.escopo}:${m.itemCode}:${m.funcao ?? ''}`,
       sinapiItem: item,
-      quantity: valor,
+      ...comFator(conv, valor),
       phase: '',
       group: `Acabamentos — ${rotulo.toLowerCase()}`,
       discipline: 'Planta Inteligente',
@@ -1780,6 +1831,8 @@ export function gerarLancamentosDeGuardaCorpos(
   quant: Quantitativos,
   itensPorCodigo: Map<string, SinapiItem>,
   ctx: ContextoGeracao,
+  /** Equivalência de unidades (21/11/2026). */
+  equivalencias: EquivalenciasPorItem = new Map(),
 ): ResultadoGeracao {
   const entries: BudgetEntry[] = [];
   const divergencias: Divergencia[] = [];
@@ -1794,7 +1847,8 @@ export function gerarLancamentosDeGuardaCorpos(
       divergencias.push({ mapeamentoId: `guarda-corpo:${m.tipo}:${m.itemCode}`, medida: 'GUARDA_CORPO', itemCode: m.itemCode, motivo: `Item ${m.itemCode} não encontrado no catálogo (SINAPI nem base própria).` });
       continue;
     }
-    const dim = dimensaoDaUnidade(item.unit);
+    const conv = resolverUnidadeDaMedida(item, ['M', 'M2'], equivalencias);
+    const dim = conv?.dimensao ?? dimensaoDaUnidade(item.unit);
     if (dim !== 'M' && dim !== 'M2') {
       divergencias.push({ mapeamentoId: `guarda-corpo:${m.tipo}:${m.itemCode}`, medida: 'GUARDA_CORPO', itemCode: m.itemCode, motivo: `O ${rotulo.toLowerCase()} produz M ou M2, mas o item ${m.itemCode} é cotado em "${item.unit}". Nenhuma linha foi gerada.` });
       continue;
@@ -1804,7 +1858,7 @@ export function gerarLancamentosDeGuardaCorpos(
     entries.push({
       id: `bp:${ctx.studyId}:guarda-corpo:${m.tipo}:${m.material}:${m.itemCode}`,
       sinapiItem: item,
-      quantity: valor,
+      ...comFator(conv, valor),
       phase: '',
       group: `Guarda-corpos — ${rotulo.toLowerCase()}`,
       discipline: 'Planta Inteligente',
@@ -1923,6 +1977,8 @@ export function gerarLancamentosDeInstalacoes(
   ctx: ContextoGeracao,
   /** E9.2: as composições da organização — expandem a peça SEM código próprio. */
   composicoes: readonly ComposicaoDePeca[] = [],
+  /** Equivalência de unidades (21/11/2026). */
+  equivalencias: EquivalenciasPorItem = new Map(),
 ): ResultadoGeracao {
   const entries: BudgetEntry[] = [];
   const divergencias: Divergencia[] = [];
@@ -1930,16 +1986,20 @@ export function gerarLancamentosDeInstalacoes(
     `Gerado das peças de instalação (hidrossanitárias, elétricas, de incêndio e de climatização) com código da planta "${ctx.studyName}", versão ${ctx.revision} ` +
     `(hash ${ctx.snapshotHash.slice(0, 12)}). Política ${quant.policy.version}, kernel ${quant.kernelVersion || '—'}.`;
   const nomeDaRede = (d: string) => ROTULO_DA_DISCIPLINA[d as DisciplinaDeRede] ?? d;
+  // A conversão de cada item aceito, para a linha sair na unidade do item (21/11/2026).
+  const conversoes = new Map<string, UnidadeResolvida>();
   const conferir = (chave: string, itemCode: string, aceita: Dimensao, oQue: string): SinapiItem | null => {
     const item = itensPorCodigo.get(itemCode);
     if (!item) {
       divergencias.push({ mapeamentoId: chave, medida: 'INSTALACAO', itemCode, motivo: `Item ${itemCode} não encontrado no catálogo (SINAPI nem base própria).` });
       return null;
     }
-    if (dimensaoDaUnidade(item.unit) !== aceita) {
-      divergencias.push({ mapeamentoId: chave, medida: 'INSTALACAO', itemCode, motivo: `${oQue} produz ${aceita}, mas o item ${itemCode} é cotado em "${item.unit}". Nenhuma linha foi gerada.` });
+    const conv = resolverUnidadeDaMedida(item, [aceita], equivalencias);
+    if (!conv) {
+      divergencias.push({ mapeamentoId: chave, medida: 'INSTALACAO', itemCode, motivo: `${oQue} produz ${aceita}, mas o item ${itemCode} é cotado em "${item.unit}". Nenhuma linha foi gerada.` + DICA_EQUIVALENCIA });
       return null;
     }
+    conversoes.set(chave, conv);
     return item;
   };
   for (const t of quant.totais.porTerminal ?? []) {
@@ -1991,7 +2051,7 @@ export function gerarLancamentosDeInstalacoes(
     entries.push({
       id: `bp:${ctx.studyId}:${chave}`,
       sinapiItem: item,
-      quantity: t.quantidade,
+      ...comFator(conversoes.get(chave), t.quantidade),
       phase: '',
       group: `Instalações ${grupoDaRede(t.disciplina)} — peças · ${nomeDaRede(t.disciplina)}`,
       discipline: 'Planta Inteligente',
@@ -2014,7 +2074,7 @@ export function gerarLancamentosDeInstalacoes(
     entries.push({
       id: `bp:${ctx.studyId}:${chave}`,
       sinapiItem: item,
-      quantity: b.comprimentoM,
+      ...comFator(conversoes.get(chave), b.comprimentoM),
       phase: '',
       group: b.disciplina === 'ELETRICA' ? 'Instalações elétricas — eletrodutos' : `Instalações ${grupoDaRede(b.disciplina)} — ${b.secaoCalha ? 'calhas' : b.disciplina === 'MECANICA' ? 'dutos' : 'tubos'} · ${nomeDaRede(b.disciplina)}`,
       discipline: 'Planta Inteligente',
@@ -2053,6 +2113,8 @@ export function gerarLancamentosDeEsquadrias(
   quant: Quantitativos,
   itensPorCodigo: Map<string, SinapiItem>,
   ctx: ContextoGeracao,
+  /** Equivalência de unidades (21/11/2026). */
+  equivalencias: EquivalenciasPorItem = new Map(),
 ): ResultadoGeracao {
   const entries: BudgetEntry[] = [];
   const divergencias: Divergencia[] = [];
@@ -2092,7 +2154,8 @@ export function gerarLancamentosDeEsquadrias(
       continue;
     }
 
-    const dim = dimensaoDaUnidade(item.unit);
+    const conv = resolverUnidadeDaMedida(item, ['UN', 'M2'], equivalencias);
+    const dim = conv?.dimensao ?? dimensaoDaUnidade(item.unit);
     if (dim !== 'UN' && dim !== 'M2') {
       divergencias.push({
         mapeamentoId: `esquadria:${e.itemCode}`,
@@ -2115,7 +2178,7 @@ export function gerarLancamentosDeEsquadrias(
       // tipos com o mesmo item e medidas diferentes são duas linhas.
       id: `bp:${ctx.studyId}:esquadria:${e.assinatura}`,
       sinapiItem: item,
-      quantity: valor,
+      ...comFator(conv, valor),
       phase: '',
       group: 'Esquadrias',
       discipline: 'Planta Inteligente',

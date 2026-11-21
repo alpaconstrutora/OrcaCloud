@@ -20,6 +20,8 @@ import { medirTerreno } from '../utils/blueprintTerreno';
 import type { BlueprintModel } from '../utils/blueprintKernel';
 import type { TerraplenagemDoOrcamento } from '../utils/blueprintBudget';
 import { supabase } from '../lib/supabase';
+import { equivalenciaUnidadesService } from './equivalenciaUnidadesService';
+import type { EquivalenciasPorItem } from '../utils/equivalenciaUnidades';
 import { sinapiService } from './sinapiService';
 import { getSnapshot, getStudy, recordAudit } from './blueprintService';
 import { blueprintArmaduraService } from './blueprintArmaduraService';
@@ -266,6 +268,15 @@ export async function preverLancamentos(
     ...codigosDoQuantitativo(quant, composicoes),
   ], snapshot.organization_id);
 
+  // Equivalência de unidades (21/11/2026): medida numa grandeza, item cotado noutra, converte pelo
+  // cadastro global. Falha de leitura = sem conversão (a trava recusa como sempre).
+  let equivalencias: EquivalenciasPorItem = new Map();
+  try {
+    equivalencias = await equivalenciaUnidadesService.listarPorCodigos([...itens.keys()]);
+  } catch (e) {
+    console.warn('[blueprintBudget] equivalências de unidade indisponíveis — sem conversão', e);
+  }
+
   const resolvidos: MapeamentoResolvido[] = mapeamentos.map((m) => ({
     mapeamento: m,
     item: itens.get(m.item_code.trim()) ?? null,
@@ -294,13 +305,13 @@ export async function preverLancamentos(
   // a topografia ou o anel, o orçamento segue sem ela — dito no console.
   const terraplenagem = await terraplenagemDoSnapshot(snapshotId, snapshot.study_id, model);
 
-  const doDePara = gerarLancamentos(quant, resolvidos, contexto, { armadura, subRegioes: medirSubRegioes(model), terraplenagem, lajesDescobertas: lajesDescobertas(model) });
-  const dasCamadas = gerarLancamentosDeCamadas(quant, itens, contexto);
-  const dosAcabamentos = gerarLancamentosDeAcabamentos(quant, itens, contexto);
-  const dosGuardaCorpos = gerarLancamentosDeGuardaCorpos(quant, itens, contexto);
-  const dasEsquadrias = gerarLancamentosDeEsquadrias(quant, itens, contexto);
+  const doDePara = gerarLancamentos(quant, resolvidos, contexto, { armadura, subRegioes: medirSubRegioes(model), terraplenagem, lajesDescobertas: lajesDescobertas(model), equivalencias });
+  const dasCamadas = gerarLancamentosDeCamadas(quant, itens, contexto, equivalencias);
+  const dosAcabamentos = gerarLancamentosDeAcabamentos(quant, itens, contexto, equivalencias);
+  const dosGuardaCorpos = gerarLancamentosDeGuardaCorpos(quant, itens, contexto, equivalencias);
+  const dasEsquadrias = gerarLancamentosDeEsquadrias(quant, itens, contexto, equivalencias);
   // E8.2: as peças hidrossanitárias com código viram linha direto (sem de-para).
-  const dasInstalacoes = gerarLancamentosDeInstalacoes(quant, itens, contexto, composicoes);
+  const dasInstalacoes = gerarLancamentosDeInstalacoes(quant, itens, contexto, composicoes, equivalencias);
 
   // Os dois conjuntos são somados, e não escolhidos: eles medem coisas
   // diferentes. O de-para cobre o que a composição não descreve (área de piso,
@@ -332,6 +343,7 @@ export async function preverLancamentos(
     resumoDasMedidas(quant, { armadura, subRegioes: medirSubRegioes(model), terraplenagem, lajesDescobertas: lajesDescobertas(model) }),
     mapeamentos,
     itens,
+    equivalencias,
   );
 
   return { ...resultado, contexto, totalEstimado, cobertura };

@@ -926,3 +926,35 @@ describe('medidas da terraplenagem (F25)', () => {
     expect(MEDIDAS.filter((m) => ['VOLUME_CORTE', 'VOLUME_ATERRO', 'AREA_MURO_ARRIMO'].includes(m.id)).every((m) => m.escopo === 'TERRENO')).toBe(true);
   });
 });
+
+describe('de-para · equivalência de unidades (21/11/2026)', () => {
+  // Piso cotado por CAIXA, com equivalência cadastrada: 1 M2 = 0,5 CX (caixa de 2 m²).
+  const EQS = new Map([['87251', [{ itemCode: '87251', unidadeBase: 'CX', unidade: 'M2', fator: 0.5 }]]]);
+
+  it('sem equivalência a trava recusa, como sempre, e diz onde cadastrar', () => {
+    const r = gerarLancamentos(quantSala(), resolvido(mapa(), item('87251', 'CX')), CTX);
+    expect(r.entries).toHaveLength(0);
+    expect(r.divergencias[0].motivo).toContain('plausível e errado');
+    expect(r.divergencias[0].motivo).toContain('cadastre a equivalência');
+  });
+
+  it('com equivalência, a área vira caixas: 10,9725 M2 × 0,5 = 5,48625 CX, e a linha diz a conta', () => {
+    const r = gerarLancamentos(quantSala(), resolvido(mapa(), item('87251', 'CX')), CTX, { equivalencias: EQS });
+    expect(r.divergencias).toHaveLength(0);
+    expect(r.entries[0].quantity).toBeCloseTo(10.9725 * 0.5, 4);
+    expect(r.entries[0].unidadeInformada).toEqual({ unidade: 'M2', unidadeBase: 'CX', fator: 0.5 });
+    expect(r.entries[0].calculationMemory?.variables).toMatchObject({ fator: 0.5 });
+  });
+
+  it('a equivalência gravada para outra unidade-base não vale: item hoje em UN continua recusado', () => {
+    const r = gerarLancamentos(quantSala(), resolvido(mapa(), item('87251', 'PCT')), CTX, { equivalencias: EQS });
+    expect(r.entries).toHaveLength(0);
+    expect(r.divergencias).toHaveLength(1);
+  });
+
+  it('item já na dimensão da medida não usa o fator', () => {
+    const r = gerarLancamentos(quantSala(), resolvido(mapa(), item('87251', 'M2')), CTX, { equivalencias: EQS });
+    expect(r.entries[0].quantity).toBeCloseTo(10.9725, 3);
+    expect(r.entries[0].unidadeInformada).toBeUndefined();
+  });
+});

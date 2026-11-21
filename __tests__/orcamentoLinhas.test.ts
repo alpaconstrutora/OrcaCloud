@@ -4,7 +4,7 @@
  * Plano: docs/planos/2026-11-10-pedido-item-do-orcamento-painel.md
  */
 import { describe, it, expect } from 'vitest';
-import { montarLinhas, linhasDoOrcamentoParaPedido, materiaisDaComposicao, composicoesInternasAResolver, type SubComposicoes } from '../lib/orcamentoLinhas';
+import { montarLinhas, linhasDoOrcamentoParaPedido, compradaNaUnidade, materiaisDaComposicao, composicoesInternasAResolver, type SubComposicoes } from '../lib/orcamentoLinhas';
 import type { CompositionComponent } from '../types/budget';
 import { SinapiType, type BudgetEntry } from '../types/budget';
 
@@ -45,7 +45,7 @@ describe('montarLinhas (base comum)', () => {
 });
 
 describe('linhasDoOrcamentoParaPedido', () => {
-    const linhas = linhasDoOrcamentoParaPedido(ORCAMENTO, new Map(), new Map([['CIM', 4], ['TACO', 10]]), new Set(['COLA']));
+    const linhas = linhasDoOrcamentoParaPedido(ORCAMENTO, new Map(), new Map([['CIM', [{ unidade: 'sc', quantidade: 4 }]], ['TACO', [{ unidade: 'm2', quantidade: 10 }]]]), new Set(['COLA']));
     const por = (code: string) => linhas.find(l => l.code === code)!;
 
     it('serviço de topo fica de fora — pedido de compra não compra serviço', () => {
@@ -140,5 +140,30 @@ describe('composição dentro de composição: desce até o material', () => {
         expect(composicoesInternasAResolver(ALVENARIA, sub)).toEqual([]);
         const comNeta: SubComposicoes = new Map([...sub, ['87298', [c('94974', 'M3', SinapiType.COMPOSITION, 1)]]]);
         expect(composicoesInternasAResolver(ALVENARIA, comNeta)).toEqual(['94974']);
+    });
+});
+
+describe('Qtd comprada por unidade (equivalência de unidades, 21/11/2026)', () => {
+    const EQS = new Map([['32', [
+        { itemCode: '32', unidadeBase: 'KG', unidade: 'M', fator: 0.245 },
+        { itemCode: '32', unidadeBase: 'KG', unidade: 'BR', fator: 2.94 },
+    ]]]);
+    it('grafias diferentes da mesma unidade somam juntas (antes já somava cru; continua)', () => {
+        expect(compradaNaUnidade('CIM', 'sc', [{ unidade: 'SC', quantidade: 3 }, { unidade: 'sc', quantidade: 1 }]))
+            .toEqual({ comprada: 4, semConversao: [] });
+    });
+    it('compra em BR entra convertida na linha em KG: 100 KG + 10 BR = 129,4 KG', () => {
+        expect(compradaNaUnidade('32', 'KG', [{ unidade: 'KG', quantidade: 100 }, { unidade: 'BR', quantidade: 10 }], EQS))
+            .toEqual({ comprada: 129.4, semConversao: [] });
+    });
+    it('compra que não converte fica fora da soma e é marcada (antes somava 100 + 10 = 110)', () => {
+        expect(compradaNaUnidade('CIM', 'sc', [{ unidade: 'sc', quantidade: 100 }, { unidade: 'KG', quantidade: 10 }]))
+            .toEqual({ comprada: 100, semConversao: ['KG'] });
+    });
+    it('a linha do pedido leva a marca', () => {
+        const [cim] = linhasDoOrcamentoParaPedido(ORCAMENTO, new Map(), new Map([['CIM', [{ unidade: 'sc', quantidade: 4 }, { unidade: 'KG', quantidade: 50 }]]]), new Set());
+        expect(cim.code).toBe('CIM');
+        expect(cim.comprada).toBe(4);
+        expect(cim.compradaSemConversao).toEqual(['KG']);
     });
 });

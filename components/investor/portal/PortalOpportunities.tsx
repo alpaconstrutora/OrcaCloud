@@ -174,6 +174,19 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                                                         </div>
                                                     )}
 
+                                                    {/* Captação (Fase 4 do plano 2026-11-21): meta da versão, integralizado da SPE. */}
+                                                    {o.captacaoReal.meta != null && o.captacaoReal.comSpe && (
+                                                        <div className="mb-4 max-w-md">
+                                                            <div className="flex items-center justify-between text-[12px] text-[#5F6573] mb-1.5">
+                                                                <span>Captação</span>
+                                                                <span className="tabular-nums">{fmtBRL(o.captacaoReal.integralizado)} de {fmtBRL(o.captacaoReal.meta)}</span>
+                                                            </div>
+                                                            <div className="h-1.5 bg-white rounded-full overflow-hidden border border-[#F3D9D1]">
+                                                                <div className="h-full bg-[#E1553C] rounded-full" style={{ width: `${o.captacaoReal.pctIntegralizado ?? 0}%` }} />
+                                                            </div>
+                                                        </div>
+                                                    )}
+
                                                     <div className="flex flex-wrap items-center gap-2">
                                                         {portalToken && o.id && (
                                                             sent.includes(o.id) ? (

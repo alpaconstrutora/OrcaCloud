@@ -27,7 +27,7 @@ beforeEach(() => { q.st.insert = null; q.st.update = null; q.st.resposta = linha
 describe('investorPortalService › indicadores da versão', () => {
     it('o select traz a versão publicada pelo imovib_version_id', async () => {
         await investorPortalService.listOpportunities(null);
-        expect(q.st.select).toContain('versao_publicada:imovib_study_versions!imovib_version_id(indicadores:snapshot->calculo->investidor->indicadores, results)');
+        expect(q.st.select).toContain('versao_publicada:imovib_study_versions!imovib_version_id(indicadores:snapshot->calculo->investidor->indicadores, results, fontes:snapshot->funding_sources)');
         // Fase 2 do plano 2026-11-21: nenhum número digitado no select.
         for (const c of ['vgv', 'roi_pct', 'tir_pct', 'cost_estimate', 'duration_months', 'location_city', 'risks_json', 'target_funding_value']) {
             expect(q.st.select.split(', ')).not.toContain(c);

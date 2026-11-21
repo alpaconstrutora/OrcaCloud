@@ -3,6 +3,7 @@ import { History, AlertCircle, Loader2, Type, Check, X } from 'lucide-react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { investorPortalService } from '../services/investorPortalService';
+import { diferencasDaVersaoPublicada, textoDasDiferencas } from '../utils/imovibVersaoDesatualizada';
 import { resultadosDoEstudo, diferencaEntreVersoes, dadosDoRelatorioDaVersao, congeladoDaVersao, acoesDaVersao, partesAusentesDaVersao, type AcaoDaVersao, type ImovibStudyVersion, type LadoDaComparacao, type SnapshotDaVersao } from '../utils/imovibVersoes';
 import { nomeDeArquivo } from '../utils/nomeDeArquivo';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
@@ -182,6 +183,10 @@ const ImovibVersoesTab: React.FC<Props> = ({ study, onEstudoMudou }) => {
     };
 
     const atual = useMemo<LadoDaComparacao>(() => ({ snapshot: study, results: resultadosDoEstudo(study) }), [study]);
+    // Item 5.1 do plano 2026-11-21: versão PUBLICADA cujos números o estudo de hoje já não bate.
+    const desatualizadas = useMemo(() => versoes
+        .map(v => ({ v, onde: publicadaEm(v), dif: diferencasDaVersaoPublicada(v.results, atual.results) }))
+        .filter(x => x.onde && x.dif.length > 0), [versoes, atual, oportunidades]);
     const lado = (id: string): LadoDaComparacao | null => {
         if (id === ATUAL) return atual;
         const v = versoes.find(x => x.id === id);
@@ -208,6 +213,12 @@ const ImovibVersoesTab: React.FC<Props> = ({ study, onEstudoMudou }) => {
                         <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" /> {erro}
                     </div>
                 )}
+                {desatualizadas.map(({ v, onde, dif }) => (
+                    <div key={v.id} role="status" className="flex items-start gap-2 rounded-[10px] bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+                        <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                        <span>O investidor de "{onde}" vê a versão "{v.label}", e o estudo mudou depois: {textoDasDiferencas(dif)}. Congele uma versão nova e escolha-a na oportunidade para atualizar a vitrine.</span>
+                    </div>
+                ))}
                 <StandardTable<ImovibStudyVersion>
                     storageKey="imovib:versoes"
                     columns={COLUNAS}

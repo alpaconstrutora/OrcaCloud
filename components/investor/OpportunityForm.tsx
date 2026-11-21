@@ -7,6 +7,7 @@ import {
 } from '../../services/investorPortalService';
 import { ROTULO_DO_PARECER } from '../../utils/imovibParecer';
 import { imovibService } from '../../services/imovibService';
+import { speService, type SpeEntity } from '../../services/speService';
 import { ImovibStudy } from '../../types';
 import type { ImovibStudyVersion } from '../../utils/imovibVersoes';
 import Button from '../ui/Button';
@@ -26,6 +27,12 @@ const TYPES: OpportunityType[] = ['incorporacao', 'loteamento', 'obra_privada', 
 const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onClose }) => {
     const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
 
+    // Fase 4: a SPE que recebe o dinheiro (chamado e integralizado vêm dos sócios dela).
+    const [spes, setSpes] = React.useState<SpeEntity[]>([]);
+    React.useEffect(() => {
+        speService.list(organizationId).then(setSpes).catch(err => console.error('Erro ao carregar as SPEs', err));
+    }, [organizationId]);
+
     React.useEffect(() => {
         imovibService.getStudies(organizationId)
             .then(setStudies)
@@ -43,6 +50,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
         opportunity_type: initial?.opportunity_type,
         thumbnail_url: initial?.thumbnail_url ?? '',
         ticket_min: initial?.ticket_min ?? null,
+        spe_entity_id: initial?.spe_entity_id ?? null,
         is_published: initial?.is_published ?? false,
         imovib_study_id: initial?.imovib_study_id ?? null,
         imovib_version_id: initial?.imovib_version_id ?? null,
@@ -411,8 +419,22 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                     </section>
 
 
-                    {/* ── Captação: ticket mínimo (regra comercial; não existe no estudo) ── */}
-                    <section className="max-w-xs">
+                    {/* ── Captação: ticket mínimo (regra comercial) e a SPE que recebe o dinheiro (Fase 4) ── */}
+                    <section className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                            <label htmlFor="oportunidade-spe" className="block text-xs font-semibold text-slate-500 mb-1.5">SPE da captação</label>
+                            <select
+                                id="oportunidade-spe"
+                                value={form.spe_entity_id ?? ''}
+                                onChange={e => set('spe_entity_id', e.target.value || null)}
+                                className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                            >
+                                <option value="">{spes.length ? 'Sem SPE (captação não acompanhada)' : 'Nenhuma SPE nesta organização'}</option>
+                                {spes.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                            </select>
+                            <p className="text-xs text-slate-500 mt-1">A meta vem do estudo; o captado, dos sócios desta SPE (Investidor › SPEs).</p>
+                        </div>
+                        <div>
                         <label htmlFor="oportunidade-ticket" className="block text-xs font-semibold text-slate-500 mb-1.5">Ticket mínimo (R$)</label>
                         <MoneyCentsInput
                             id="oportunidade-ticket"
@@ -421,6 +443,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             placeholder="0,00"
                             className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                         />
+                        </div>
                     </section>
                     {/* ── Publicação ───────────────────────────────────── */}
                     <section className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">

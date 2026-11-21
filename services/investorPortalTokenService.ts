@@ -50,6 +50,8 @@ export interface SubmitInvestorPortalInterestPayload {
     phone?: string;
     role?: InterestRole;
     message?: string;
+    /** Quanto pretende aportar (Fase 4 do plano 2026-11-21) — vai ao interesse junto com o investidor do link. */
+    valor?: number | null;
 }
 
 export const investorPortalTokenService = {
@@ -220,6 +222,7 @@ export const investorPortalTokenService = {
             p_phone: payload.phone ?? null,
             p_role: payload.role ?? 'investidor',
             p_message: payload.message ?? null,
+            p_valor: payload.valor ?? null,
         });
         if (error) throw error;
         if (!data || !(data as any).valid) {

@@ -24,7 +24,9 @@ export const podeSimular = (n: NumerosDaVitrine) =>
 export function simular(aporte: number, n: NumerosDaVitrine) {
     const exposicao = n.exposicao_maxima ?? 0;
     const lucro = n.lucro_liquido ?? 0;
-    const participacaoPct = exposicao > 0 ? (aporte / exposicao) * 100 : 0;
+    // Fase 4: a participação é sobre a META da captação (fontes de investidor do estudo, senão a exposição).
+    const base = n.captacaoReal?.meta ?? exposicao;
+    const participacaoPct = base > 0 ? (aporte / base) * 100 : 0;
     const retorno = exposicao > 0 ? aporte * (lucro / exposicao) : 0;
     const meses = n.prazo_meses ?? 0;
     const naTma = n.tma != null && meses > 0 ? aporte * (Math.pow(1 + n.tma / 100, meses / 12) - 1) : null;
@@ -51,7 +53,7 @@ export const InvestmentSimulator: React.FC<{ numeros: NumerosDaVitrine; ticketMi
             </div>
             <dl className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
                 <div className="rounded-[10px] bg-slate-50 border border-slate-100 p-4">
-                    <dt className="text-xs text-slate-500">Participação no capital do projeto</dt>
+                    <dt className="text-xs text-slate-500">Participação na captação</dt>
                     <dd className="text-lg font-semibold text-slate-900 mt-1">{fmtPct(r.participacaoPct)}</dd>
                 </div>
                 <div className="rounded-[10px] bg-slate-50 border border-slate-100 p-4">

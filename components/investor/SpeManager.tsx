@@ -1,4 +1,5 @@
 import React from 'react';
+import { opportunityProjectService } from '../../services/opportunityProjectService';
 import { Building2, Plus, Users, ChevronDown, ChevronUp, DollarSign, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '../../utils/financialMath';
 import { speService, SpeEntity, SpePartner } from '../../services/speService';
@@ -45,6 +46,12 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
     const [partners, setPartners] = React.useState<Record<string, SpePartner[]>>({});
     const [showNewEntity, setShowNewEntity] = React.useState(false);
     const [entityForm, setEntityForm] = React.useState(emptyEntity(organizationId));
+    // Fase 4 do plano 2026-11-21-imovib-oportunidades-consolidacao: a SPE grava a obra dela (o portal
+    // mostra o nome da obra da SPE; antes o campo existia no banco e a tela nunca o preenchia).
+    const [obras, setObras] = React.useState<{ id: string; name: string }[]>([]);
+    React.useEffect(() => {
+        opportunityProjectService.listForOrg(organizationId).then(setObras).catch(err => console.error('Erro ao carregar as obras', err));
+    }, [organizationId]);
     const [savingEntity, setSavingEntity] = React.useState(false);
     // partner add form per SPE
     const [partnerForm, setPartnerForm] = React.useState<Record<string, { investor_id: string; ownership_pct: number; capital_calls_total: number }>>({});
@@ -186,8 +193,8 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
             {/* New SPE form */}
             {isAdmin && showNewEntity && (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 space-y-4 animate-in fade-in slide-in-from-top-2 duration-200">
-                    <div className="grid grid-cols-3 gap-4">
-                        <label className="flex flex-col gap-1 col-span-3 md:col-span-1">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <label className="flex flex-col gap-1 col-span-2 md:col-span-1">
                             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nome da SPE</span>
                             <input type="text" value={entityForm.name}
                                 onChange={e => setEntityForm(f => ({ ...f, name: e.target.value }))}
@@ -200,6 +207,15 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                 onChange={e => setEntityForm(f => ({ ...f, cnpj: e.target.value }))}
                                 className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="00.000.000/0001-00" />
+                        </label>
+                        <label className="flex flex-col gap-1">
+                            <span className="text-xs font-semibold text-slate-500">Obra</span>
+                            <select value={entityForm.project_id ?? ''}
+                                onChange={e => setEntityForm(f => ({ ...f, project_id: e.target.value || null }))}
+                                className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                                <option value="">Sem obra</option>
+                                {obras.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                            </select>
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Capital Social (R$)</span>

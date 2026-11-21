@@ -160,3 +160,32 @@ describe('Data Room pelo GED (plano 2026-11-21, Fase 3)', () => {
         expect(ultima('get_public_marketplace')).not.toMatch(/opportunity_documents/);
     });
 });
+
+describe('captação pela SPE (plano 2026-11-21, Fase 4)', () => {
+    const pasta = resolve(__dirname, '../supabase/migrations');
+    const ultima = (funcao: string) => readFileSync(`${pasta}/${readdirSync(pasta)
+        .filter(f => f.endsWith('.sql') && new RegExp(String.raw`CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.${funcao}\(`, 'i').test(readFileSync(`${pasta}/${f}`, 'utf-8')))
+        .sort((a, b) => (a.match(/\d{14}/)?.[0] ?? '').localeCompare(b.match(/\d{14}/)?.[0] ?? ''))
+        .pop()!}`, 'utf-8').replace(/--.*$/gm, '')
+        .split(new RegExp(String.raw`CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.${funcao}\(`, 'i'))[1].split(/\nREVOKE /)[0];
+
+    it('a vitrine leva a captação com as chaves que captacaoDaVitrine lê', () => {
+        const sql = ultima('fn_oportunidade_na_vitrine');
+        for (const k of ['captacao', 'fontes_de_investidor', 'exposicao_maxima', 'chamado', 'integralizado', 'com_spe']) {
+            expect(sql, k).toContain(`'${k}'`);
+        }
+        expect(sql).toMatch(/IN \('investidor', 'scp'\)/);
+        expect(sql).toMatch(/spe_partners/);
+    });
+
+    it('o marketplace anônimo não recebe captação nem SPE', () => {
+        expect(ultima('get_public_marketplace')).toMatch(/'captacao', 'spe_entity_id'/);
+    });
+
+    it('o interesse pelo link grava o investidor do token e o valor', () => {
+        const sql = ultima('fn_investor_portal_submit_interest');
+        expect(sql).toMatch(/p_valor numeric/);
+        expect(sql).toMatch(/v_tok\.investor_id/);
+        expect(sql).toMatch(/valor_pretendido/);
+    });
+});

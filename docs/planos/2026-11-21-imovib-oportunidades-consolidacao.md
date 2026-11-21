@@ -126,7 +126,24 @@ Edge Function `investor-portal-dataroom-download`.
 - Prova: tsc exit 0; 543 arquivos / 1.489 testes (1.484 + 4 pendentes + 1 instável que passa isolado —
   `ImovibVersoes`, PDF sob carga).
 
-**Fases 4 e 5.1:** não começadas (5.2 já entrou na Fase 2).
+**Fase 4: 3 de 3 itens + 5.1 feitos na frente `imovib-oport-f4`** — falta aplicar 980000 (depois da 970000).
+- 4.1 ✅ `investor_opportunities.spe_entity_id` (gatilho confere a org) em `aplicar_20271121980000_captacao_pela_spe.sql`;
+  formulário escolhe a SPE; `SpeManager` grava a obra da SPE (campo que existia no banco e a tela nunca preenchia).
+- 4.2 ✅ captação na vitrine: meta = Σ fontes `investidor`/`scp` da versão, senão a exposição máxima; chamado e
+  integralizado = Σ dos sócios da SPE (`capital_paid` soma chamadas pagas e lançamentos). Regra única em
+  `utils/oportunidadeCaptacao.ts` (espelho do SQL). Barra no cabeçalho da ficha e na linha do portal; o marketplace
+  anônimo não recebe captação. Simulador: participação = aporte ÷ meta.
+- 4.3 ✅ `opportunity_interests.investor_id` + `valor_pretendido`; a RPC do link grava o investidor do token e o valor
+  (assinatura nova, a antiga sai); "Tornar sócio" no painel de interesses (`TornarSocioSheet`): investidor do link,
+  senão o do mesmo e-mail, senão um novo cadastro; vira `spe_partners` com a participação informada.
+- 5.1 ✅ aviso "versão publicada desatualizada" (`utils/imovibVersaoDesatualizada.ts`): aba Versões e ficha do gestor
+  (VGV, VPL, TIR, capital máximo; tolerância R$ 1 / 0,01 p.p.).
+- Fora do escopo, registrado: pagar uma chamada de capital ainda não gera aporte em `investor_contributions`
+  (Fase 6, dois controles de dinheiro).
+- Prova: tsc exit 0; 583 arquivos / 1.576 testes (áreas + travas + migrations) verdes, menos 1 instável
+  (`ImovibVersoes`, PDF sob carga, passa isolado) e 4 pendentes.
+
+**Fase 5:** 5.1 entrou na Fase 4; 5.2 na Fase 2. **Fase 6:** achados aguardando decisão do usuário.
 
 ---
 

@@ -5,6 +5,9 @@ import {
     INTEREST_STAGE_LABELS, INTEREST_STAGE_COLORS, INTEREST_ROLE_LABELS,
     investorPortalService,
 } from '../../services/investorPortalService';
+import TornarSocioSheet, { motivoParaNaoTornarSocio } from './TornarSocioSheet';
+
+const fmtBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 
 interface Props {
     /** Ausente quando o usuário está em "Todas as organizações" — lista os interesses de todas. */
@@ -19,6 +22,8 @@ const InterestsPanel: React.FC<Props> = ({ organizationId, opportunities }) => {
     const [loading, setLoading] = React.useState(true);
     const [filterOpp, setFilterOpp] = React.useState<string>('all');
     const [updating, setUpdating] = React.useState<string | null>(null);
+    // Fase 4 do plano 2026-11-21: interesse "Fechado" vira sócio da SPE da oportunidade.
+    const [tornandoSocio, setTornandoSocio] = React.useState<OpportunityInterest | null>(null);
 
     React.useEffect(() => {
         setLoading(true);
@@ -61,6 +66,15 @@ const InterestsPanel: React.FC<Props> = ({ organizationId, opportunities }) => {
 
     return (
         <div className="space-y-6">
+            <TornarSocioSheet
+                interesse={tornandoSocio}
+                oportunidade={tornandoSocio ? opportunities.find(o => o.id === tornandoSocio.opportunity_id) : undefined}
+                onClose={() => setTornandoSocio(null)}
+                onFeito={(i, investorId) => {
+                    setInterests(prev => prev.map(x => (x.id === i.id ? { ...x, investor_id: investorId } : x)));
+                    setTornandoSocio(null);
+                }}
+            />
             {/* Cabeçalho + filtro */}
             <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
@@ -141,6 +155,10 @@ const InterestsPanel: React.FC<Props> = ({ organizationId, opportunities }) => {
                                             )}
                                         </div>
 
+                                        {item.valor_pretendido != null && (
+                                            <p className="text-xs text-gray-700">Pretende aportar <span className="font-medium">{fmtBRL(item.valor_pretendido)}</span></p>
+                                        )}
+
                                         {item.message && (
                                             <p className="text-xs text-gray-500 italic border-l-2 border-gray-200 pl-2 leading-relaxed">
                                                 "{item.message}"
@@ -161,6 +179,19 @@ const InterestsPanel: React.FC<Props> = ({ organizationId, opportunities }) => {
                                             </select>
                                             <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3 h-3 text-gray-400 pointer-events-none" />
                                         </div>
+
+                                        {(item.stage ?? 'lead') === 'fechado' && (
+                                            <span title={motivoParaNaoTornarSocio(item, opportunities.find(o => o.id === item.opportunity_id))}>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setTornandoSocio(item)}
+                                                    disabled={!!motivoParaNaoTornarSocio(item, opportunities.find(o => o.id === item.opportunity_id))}
+                                                    className="w-full h-9 px-3 border border-blue-200 text-blue-700 rounded-[6px] text-xs font-medium hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                >
+                                                    {item.investor_id ? 'Tornar sócio (investidor do link)' : 'Tornar sócio'}
+                                                </button>
+                                            </span>
+                                        )}
                                     </div>
                                 ))}
                             </div>

@@ -10,6 +10,9 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect } from 'vitest';
 
+// InterestsPanel → TornarSocioSheet → investorService (importa o SINAPI, que lê o banco ao carregar).
+vi.mock('../../services/investorService', () => ({ investorService: {} }));
+vi.mock('../../services/speService', () => ({ speService: { list: () => Promise.resolve([]) } }));
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
 vi.mock('../../hooks/useOrgContext', () => ({ useOrgWriteTarget: () => ({ resolveWriteOrg: vi.fn(), orgTargetModal: null }) }));
 vi.mock('../../hooks/useToast', () => ({ useToast: () => ({ showToast: vi.fn() }) }));

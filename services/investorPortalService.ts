@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { IndicadoresDoPainel } from '../utils/imovibCalculoDaVersao';
 import type { ResultadosDaVersao } from '../utils/imovibVersoes';
+import type { CaptacaoBruta } from '../utils/oportunidadeCaptacao';
 
 export type ReportCategory =
     | 'relatorio' | 'contrato' | 'spe' | 'matricula' | 'licenca'
@@ -91,6 +92,8 @@ export interface InvestorOpportunity {
     imovib_study_id?: string | null;
     /** Versão congelada do estudo que o investidor vê (obrigatória para publicar — Fase 2). */
     imovib_version_id?: string | null;
+    /** SPE que recebe o dinheiro da captação (Fase 4): chamado e integralizado vêm dos sócios dela. */
+    spe_entity_id?: string | null;
     distances_json?: any[] | null;
     team_json?: any[] | null;
     created_at?: string;
@@ -103,6 +106,8 @@ export interface InvestorOpportunity {
     local?: LocalDaOportunidade | null;
     /** Imagens do empreendimento (decorado, plantas, vistas) — Fase 3: a galeria própria saiu. */
     fotos?: FotoDaVitrine[] | null;
+    /** Meta (da versão) e dinheiro real da SPE — Fase 4 (utils/oportunidadeCaptacao.ts). */
+    captacao?: CaptacaoBruta | null;
 }
 
 export interface FotoDaVitrine { url: string; legenda: string | null }
@@ -156,6 +161,9 @@ export interface OpportunityInterest {
     role: InterestRole;
     message?: string;
     stage?: InterestStage;
+    /** Investidor do link (portal) ou o escolhido ao tornar sócio — Fase 4. */
+    investor_id?: string | null;
+    valor_pretendido?: number | null;
     created_at?: string;
 }
 
@@ -164,28 +172,39 @@ const REPORT_COLS = 'id, organization_id, investor_id, project_id, name, type, c
 const OPP_COLS = [
     'id', 'organization_id', 'title', 'subtitle', 'open_date', 'link',
     'status', 'opportunity_type', 'thumbnail_url', 'ticket_min', 'is_published',
-    'imovib_study_id', 'imovib_version_id', 'distances_json', 'team_json',
+    'imovib_study_id', 'imovib_version_id', 'spe_entity_id', 'distances_json', 'team_json',
     'created_at',
     // Só leitura: números da versão escolhida (indicadores congelados + resultados do momento).
-    'versao_publicada:imovib_study_versions!imovib_version_id(indicadores:snapshot->calculo->investidor->indicadores, results)',
+    'versao_publicada:imovib_study_versions!imovib_version_id(indicadores:snapshot->calculo->investidor->indicadores, results, fontes:snapshot->funding_sources)',
 ].join(', ');
 
-type LinhaDaOportunidade = Omit<InvestorOpportunity, 'indicadores_da_versao' | 'resultados_da_versao' | 'local'> & {
-    versao_publicada?: { indicadores?: Partial<IndicadoresDoPainel> | null; results?: Partial<ResultadosDaVersao> | null } | null;
+type LinhaDaOportunidade = Omit<InvestorOpportunity, 'indicadores_da_versao' | 'resultados_da_versao' | 'local' | 'captacao'> & {
+    versao_publicada?: {
+        indicadores?: Partial<IndicadoresDoPainel> | null;
+        results?: Partial<ResultadosDaVersao> | null;
+        fontes?: { kind?: string; amount?: number }[] | null;
+    } | null;
 };
 /** Linha do select → oportunidade, com o embed da versão achatado. */
 const daLinha = (row: LinhaDaOportunidade): InvestorOpportunity => {
     const { versao_publicada, ...o } = row;
     const r = versao_publicada?.results;
+    // Meta da captação: a mesma regra de fn_oportunidade_na_vitrine (fontes 'investidor'/'scp' da versão).
+    const fontes = (versao_publicada?.fontes ?? []).filter(f => f?.kind === 'investidor' || f?.kind === 'scp');
     return {
         ...o,
         indicadores_da_versao: versao_publicada?.indicadores ?? null,
         resultados_da_versao: r ? { duracao: r.duracao, custoObra: r.custoObra, terreno: r.terreno } : null,
+        captacao: {
+            fontes_de_investidor: fontes.length ? fontes.reduce((a, f) => a + (Number(f.amount) || 0), 0) : null,
+            exposicao_maxima: versao_publicada?.indicadores?.exposicaoMaxima ?? null,
+            com_spe: !!o.spe_entity_id,
+        },
     };
 };
 /** Campos só de leitura nunca vão num insert/update (não são colunas). */
-const semCamposDeLeitura = <T extends Partial<InvestorOpportunity>>(o: T): Omit<T, 'indicadores_da_versao' | 'resultados_da_versao' | 'local' | 'fotos'> => {
-    const { indicadores_da_versao: _i, resultados_da_versao: _r, local: _l, fotos: _f, ...resto } = o;
+const semCamposDeLeitura = <T extends Partial<InvestorOpportunity>>(o: T): Omit<T, 'indicadores_da_versao' | 'resultados_da_versao' | 'local' | 'fotos' | 'captacao'> => {
+    const { indicadores_da_versao: _i, resultados_da_versao: _r, local: _l, fotos: _f, captacao: _c, ...resto } = o;
     return resto;
 };
 
@@ -214,6 +233,22 @@ async function fotosDosEmpreendimentos(ids: string[]): Promise<Map<string, FotoD
     return out;
 }
 
+/** Chamado e integralizado de cada SPE (Σ dos sócios) — Fase 4; o banco faz o mesmo na vitrine. */
+async function comDinheiroDaSpe(ops: InvestorOpportunity[]): Promise<InvestorOpportunity[]> {
+    const spes = [...new Set(ops.map(o => o.spe_entity_id).filter((x): x is string => !!x))];
+    if (spes.length === 0) return ops;
+    const { data, error } = await supabase.from('spe_partners').select('spe_entity_id, capital_calls_total, capital_paid').in('spe_entity_id', spes);
+    if (error) throw error;
+    const soma = new Map<string, { chamado: number; integralizado: number }>();
+    for (const p of (data ?? []) as { spe_entity_id: string; capital_calls_total: number; capital_paid: number }[]) {
+        const t = soma.get(p.spe_entity_id) ?? { chamado: 0, integralizado: 0 };
+        t.chamado += Number(p.capital_calls_total) || 0;
+        t.integralizado += Number(p.capital_paid) || 0;
+        soma.set(p.spe_entity_id, t);
+    }
+    return ops.map(o => (o.spe_entity_id ? { ...o, captacao: { ...(o.captacao ?? {}), ...(soma.get(o.spe_entity_id) ?? { chamado: 0, integralizado: 0 }), com_spe: true } } : o));
+}
+
 async function comLocal(ops: InvestorOpportunity[]): Promise<InvestorOpportunity[]> {
     const estudos = [...new Set(ops.map(o => o.imovib_study_id).filter((x): x is string => !!x))];
     if (estudos.length === 0) return ops.map(o => ({ ...o, local: null, fotos: [] }));
@@ -236,7 +271,7 @@ async function comLocal(ops: InvestorOpportunity[]): Promise<InvestorOpportunity
     });
 }
 
-const INTEREST_COLS = 'id, organization_id, opportunity_id, contact_name, contact_email, contact_phone, role, message, stage, created_at';
+const INTEREST_COLS = 'id, organization_id, opportunity_id, investor_id, valor_pretendido, contact_name, contact_email, contact_phone, role, message, stage, created_at';
 
 
 export const investorPortalService = {
@@ -291,7 +326,7 @@ export const investorPortalService = {
 
         const { data, error } = await query;
         if (error) throw error;
-        return comLocal(((data ?? []) as unknown as LinhaDaOportunidade[]).map(daLinha));
+        return comDinheiroDaSpe(await comLocal(((data ?? []) as unknown as LinhaDaOportunidade[]).map(daLinha)));
     },
 
     async addOpportunity(opp: Omit<InvestorOpportunity, 'id' | 'created_at'>): Promise<InvestorOpportunity> {
@@ -301,7 +336,7 @@ export const investorPortalService = {
             .select(OPP_COLS)
             .single();
         if (error) throw error;
-        return (await comLocal([daLinha(data as unknown as LinhaDaOportunidade)]))[0];
+        return (await comDinheiroDaSpe(await comLocal([daLinha(data as unknown as LinhaDaOportunidade)])))[0];
     },
 
     async updateOpportunity(id: string, patch: Partial<Omit<InvestorOpportunity, 'id' | 'organization_id' | 'created_at'>>): Promise<InvestorOpportunity> {
@@ -312,7 +347,7 @@ export const investorPortalService = {
             .select(OPP_COLS)
             .single();
         if (error) throw error;
-        return (await comLocal([daLinha(data as unknown as LinhaDaOportunidade)]))[0];
+        return (await comDinheiroDaSpe(await comLocal([daLinha(data as unknown as LinhaDaOportunidade)])))[0];
     },
 
     /**
@@ -395,6 +430,13 @@ export const investorPortalService = {
         const { data, error } = await query;
         if (error) throw error;
         return (data ?? []) as OpportunityInterest[];
+    },
+
+    /** "Tornar sócio" (Fase 4): o interesse passa a apontar para o investidor que virou sócio da SPE. */
+    async vincularInvestorAoInteresse(id: string, investorId: string): Promise<void> {
+        const { data, error } = await supabase.from('opportunity_interests').update({ investor_id: investorId }).eq('id', id).select('id');
+        if (error) throw error;
+        if (!data?.length) throw new Error('Sem permissão para atualizar este interesse.');
     },
 
     async updateInterestStage(id: string, stage: InterestStage): Promise<void> {

@@ -16,11 +16,13 @@ import { naVitrine } from '../../utils/oportunidadeNumerosDaVersao';
 import { fmtBRL, fmtPct } from '../../utils/format';
 import { imovibService } from '../../services/imovibService';
 import { ImovibStudy, ImovibScenario } from '../../types';
-import type { VersaoPublicada } from '../../utils/imovibVersoes';
+import { resultadosDoEstudo, type VersaoPublicada } from '../../utils/imovibVersoes';
+import { diferencasDaVersaoPublicada, textoDasDiferencas, type DiferencaDaVersao } from '../../utils/imovibVersaoDesatualizada';
 import ImovibPainelDoInvestidor from './portal/ImovibPainelDoInvestidor';
 import ListasDaVersao from './portal/ListasDaVersao';
 import { InvestmentSimulator } from './InvestmentSimulator';
 import Button from '../ui/Button';
+import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
     opportunity: InvestorOpportunity;
@@ -55,6 +57,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
         contact_phone: investorProfile?.phone ?? '',
         role: 'investidor' as InterestRole,
         message: '',
+        valor_pretendido: null as number | null,
     });
 
     const [study, setStudy] = React.useState<ImovibStudy | null>(null);
@@ -85,6 +88,19 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
         return () => { vivo = false; };
     }, [op.imovib_study_id, op.imovib_version_id, portalToken]);
 
+    // Item 5.1 do plano 2026-11-21: o gestor vê se o estudo de hoje já não bate com a versão publicada.
+    // Só no app (gestor): o investidor nunca recebe o estudo vivo.
+    const [diferencas, setDiferencas] = React.useState<DiferencaDaVersao[]>([]);
+    React.useEffect(() => {
+        const ind = versaoPublicada?.calculo?.indicadores;
+        if (portalToken || !isAdmin || !ind || !op.imovib_study_id) { setDiferencas([]); return; }
+        let vivo = true;
+        imovibService.getStudyById(op.imovib_study_id, true)
+            .then(atual => { if (vivo && atual) setDiferencas(diferencasDaVersaoPublicada({ vgv: ind.vgv, vpl: ind.vpl, tirAnual: ind.tirAnual, exposicaoMaxima: ind.exposicaoMaxima }, resultadosDoEstudo(atual))); })
+            .catch(err => console.error('Erro ao comparar a versão com o estudo atual', err));
+        return () => { vivo = false; };
+    }, [versaoPublicada, portalToken, isAdmin, op.imovib_study_id]);
+
     // Ficha técnica: a seção Produto CONGELADA na versão (nada se recalcula aqui).
     const produto = versaoPublicada?.calculo?.secoes?.find(x => x.id === 'produto') ?? null;
 
@@ -114,6 +130,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                     phone: interest.contact_phone,
                     role: interest.role,
                     message: interest.message,
+                    valor: interest.valor_pretendido,
                 });
             } else {
                 await investorPortalService.addInterest({
@@ -238,8 +255,24 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                             </div>
                         </div>
 
-                        {/* Destaque: ticket, prazo e TIR da versão (a meta de captação real vem na Fase 4). */}
+                        {/* Destaque: captação (meta da versão, dinheiro da SPE — Fase 4), ticket, prazo e TIR. */}
                         <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 border border-white/10 space-y-3">
+                            {op.captacaoReal.meta != null && (
+                                <div className="space-y-1.5" aria-label="Captação">
+                                    <span className="text-xs text-white/60 block">Meta de captação</span>
+                                    <span className="text-2xl font-semibold block">{fmtBRL(op.captacaoReal.meta)}</span>
+                                    {op.captacaoReal.comSpe && (
+                                        <>
+                                            <div className="h-2 bg-white/10 rounded-full overflow-hidden">
+                                                <div className="h-full bg-emerald-400 rounded-full" style={{ width: `${op.captacaoReal.pctIntegralizado ?? 0}%` }} />
+                                            </div>
+                                            <span className="text-xs text-white/70 block">
+                                                {fmtBRL(op.captacaoReal.integralizado)} integralizado ({(op.captacaoReal.pctIntegralizado ?? 0).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%)
+                                            </span>
+                                        </>
+                                    )}
+                                </div>
+                            )}
                             <div>
                                 <span className="text-xs text-white/60 block">Ticket mínimo</span>
                                 <span className="text-2xl font-semibold">{op.ticket_min != null ? fmtBRL(op.ticket_min) : 'Consultar'}</span>
@@ -474,6 +507,11 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                 {/* ── ABA: Cenários ── */}
                                 {pitchTab === 'cenarios' && (
                                     <div className="space-y-8">
+                                        {diferencas.length > 0 && (
+                                            <p role="status" className="rounded-[10px] bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
+                                                O estudo mudou depois da versão que o investidor vê: {textoDasDiferencas(diferencas)}. Congele uma versão nova e escolha-a em Editar para atualizar a vitrine.
+                                            </p>
+                                        )}
                                         {/* Plano 2026-11-15, Fase 4: com estudo do Imovib, o painel de viabilidade
                                             (versão publicada; prévia do estudo atual para o gestor sem versão). */}
                                         {study ? (
@@ -671,6 +709,19 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                         </button>
                                     ))}
                                 </div>
+                            </div>
+                            <div>
+                                <label htmlFor="interesse-valor" className="block text-xs font-semibold text-slate-500 mb-1.5">Quanto pretende aportar (R$, opcional)</label>
+                                <MoneyCentsInput
+                                    id="interesse-valor"
+                                    value={interest.valor_pretendido}
+                                    onChange={v => setInterest(p => ({ ...p, valor_pretendido: v === '' ? null : Number(v) }))}
+                                    placeholder="0,00"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                />
+                                {op.ticket_min != null && interest.valor_pretendido != null && interest.valor_pretendido < op.ticket_min && (
+                                    <p className="text-xs text-amber-700 mt-1">Abaixo do ticket mínimo de {fmtBRL(op.ticket_min)}.</p>
+                                )}
                             </div>
                             <div>
                                 <label className="block text-xs font-semibold text-slate-500 text-button mb-1.5">Mensagem (opcional)</label>

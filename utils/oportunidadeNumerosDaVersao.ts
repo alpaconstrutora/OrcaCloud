@@ -15,6 +15,7 @@
  * Testes: __tests__/oportunidadeNumerosDaVersao.test.ts.
  */
 import type { InvestorOpportunity } from '../services/investorPortalService';
+import { captacaoDaVitrine, type Captacao } from './oportunidadeCaptacao';
 
 export interface NumerosDaVitrine {
     vgv: number | null;
@@ -38,13 +39,15 @@ export interface NumerosDaVitrine {
     comVersao: boolean;
     /** Capa: a escolhida (thumbnail_url) ou a primeira foto do empreendimento. */
     capa: string | null;
+    /** Meta da versão e dinheiro real da SPE (Fase 4). */
+    captacaoReal: Captacao;
 }
 
 export type OportunidadeNaVitrine = InvestorOpportunity & NumerosDaVitrine;
 
 const finito = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
-export function numerosDaVitrine(o: Pick<InvestorOpportunity, 'indicadores_da_versao' | 'resultados_da_versao' | 'local'> & Partial<Pick<InvestorOpportunity, 'thumbnail_url' | 'fotos'>>): NumerosDaVitrine {
+export function numerosDaVitrine(o: Pick<InvestorOpportunity, 'indicadores_da_versao' | 'resultados_da_versao' | 'local'> & Partial<Pick<InvestorOpportunity, 'thumbnail_url' | 'fotos' | 'captacao'>>): NumerosDaVitrine {
     const ind = o.indicadores_da_versao ?? null;
     const res = o.resultados_da_versao ?? null;
     const lucro = finito(ind?.lucroLiquido);
@@ -68,6 +71,7 @@ export function numerosDaVitrine(o: Pick<InvestorOpportunity, 'indicadores_da_ve
         obra_id: o.local?.obra_id || null,
         comVersao: !!ind,
         capa: o.thumbnail_url?.trim() || o.fotos?.[0]?.url || null,
+        captacaoReal: captacaoDaVitrine(o.captacao ?? (ind ? { exposicao_maxima: finito(ind.exposicaoMaxima) } : null)),
     };
 }
 

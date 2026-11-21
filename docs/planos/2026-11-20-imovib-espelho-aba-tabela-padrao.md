@@ -73,3 +73,28 @@ mensagem inteira; no `toolbarRight` do `StandardTable`. Só aparece com unidade 
    (2 grupos, 14/24 un., totais = R$ 9,20 mi / R$ 15,80 mi), recolher/expandir, ordenar por Preço, ajuste de largura,
    triângulo "5", painel; aba Receitas com a linha do VGV e as 3 seções no topo. 1600 px e 390 px.
 4. PR, CI, merge, `conferir-producao.sh "Unidades fora do VGV"`, plano atualizado.
+
+## Estado (20/11/2026)
+
+- [x] Código, testes vistos falhando antes, 137 arquivos / 1224 testes, `tsc` limpo, `check-ui-standard.sh` limpo nos 5 `.tsx`.
+- [x] **Publicado no PR #599** (squash `fce2fccd7`, servido pelo domínio). Conferido em produção (só leitura, 0 gravações,
+  0 erros): abas "… | Orçamento (CAPEX) | Espelho de vendas | Receitas | …"; espelho agrupado por Torre (Torre A 14 un.
+  R$ 9.203.167 · Torre B 24 un. R$ 15.796.835); recolher/expandir, ordenar por Preço e ajustar largura funcionando;
+  triângulo "5" com a mensagem no hover; painel com mensagem, contagem e "Abrir Preferências"; Receitas com
+  "VGV R$ 25.000.002, do Espelho de vendas" e as 3 seções; 390 px sem rolagem horizontal da página.
+- Observado, não mexido: o KPI "Total Unidades" do espelho conta 43 (inclui as 5 não vendáveis), enquanto os grupos
+  somam 38 — é o menor já registrado no plano 2026-11-19-espelho-vendavel-vgv ("KPIs contam as marcadas").
+
+## Correção (20/11/2026) — sub-abas dentro de Receitas, não aba principal
+
+> nao era para ser apenas a aba original receita e dentro dela dividir em duas abas: espelho de vendas e outra com Curva de vendas, Perfil de recebimento e Distrato e inadimplência?
+
+> Por favor nao erre mais desta maneira. Isso leva desperdiço de tokens e tempo.
+> corrigja
+
+Erro meu: o pedido era dividir **dentro** de Receitas; o #599 criou "Espelho de vendas" como aba principal (o desenho
+mostrado na pergunta já estava no mesmo nível, e eu não deixei isso claro). **Corrigido no PR #602** (squash
+`d8f4c3fda`): Receitas é aba principal única, com as sub-abas **Espelho de vendas** e **Curva, perfil e distrato**; o
+aviso que aponta o espelho e o link do VGV levam à sub-aba. Também **PR #601**: sai o título "Vendas de Ativos /
+Unidades individualizadas do empreendimento" do topo do espelho (pedido de 20/11: *"Remova titulo … nao tem necessidade
+nenhuma"*).

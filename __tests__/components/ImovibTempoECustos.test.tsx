@@ -16,6 +16,7 @@ const svc = vi.hoisted(() => ({
     updateCapexItem: vi.fn(),
     adicionarRubricasPosObra: vi.fn(),
     listarDueDiligence: vi.fn(),
+    listarModelosDeAquisicao: vi.fn(),
     criarDueDiligence: vi.fn(),
     salvarItemDaDueDiligence: vi.fn(),
     listarEmpreendimentosParaVincular: vi.fn(),
@@ -53,6 +54,7 @@ beforeEach(() => {
     for (const f of Object.values(svc)) f.mockReset();
     svc.updateStudy.mockResolvedValue({});
     svc.listarDueDiligence.mockResolvedValue([]);
+    svc.listarModelosDeAquisicao.mockResolvedValue([]);
     svc.listarEmpreendimentosParaVincular.mockResolvedValue([]);
 });
 

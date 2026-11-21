@@ -4,7 +4,8 @@
  * Plano: docs/planos/2026-11-13-modulo-riscos.md.
  *
  * ⚠️ Nomes próprios (`Risk*`) de propósito: `RiskCategory`/`RiskStatus` de
- * `services/opportunityRiskService.ts` são da Oportunidade (Investidor) e
+ * `services/opportunityRiskService.ts` eram da Oportunidade (Investidor; saíram em 21/11/2026, o risco
+ * do negócio é `imovib_risks` — constants/imovibRiscos.ts) e
  * `RiskLevel` de `types/organizationGovernance.ts` é da Governança — outros domínios.
  */
 

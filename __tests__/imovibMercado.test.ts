@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resumoDosComparaveis, posicaoDoPreco, ImovibComparable } from '../utils/imovibMercado';
+import { resumoDosComparaveis, posicaoDoPreco, vsoDoComparavel, ImovibComparable } from '../utils/imovibMercado';
 import { computeImovibMath } from '../utils/imovibMotor';
 import { baseStudy, instancia } from './fixtures/imovibEstudos';
 
@@ -83,5 +83,19 @@ describe('7.1 — área privativa vendável no motor (posição do preço)', () 
         const r = computeImovibMath(s);
         expect(r.areaPrivativaVendavel).toBe(32 * 70);
         expect(r.vgvBase / r.areaPrivativaVendavel).toBe(10_000);
+    });
+});
+
+describe('1.3 (plano 2026-11-21) — VSO de cada comparável, a coluna que substitui a "velocidade de vendas" dos concorrentes', () => {
+    it('a mesma conta da média: 40 de 100 em 10 meses', () => {
+        const v = vsoDoComparavel(comp({ total_units: 100, sold_units: 40, launch_date: '2026-03-15' }), HOJE);
+        expect(v).toBeCloseTo((1 - Math.pow(0.6, 1 / 10)) * 100, 10);
+        expect(resumoDosComparaveis([comp({ total_units: 100, sold_units: 40, launch_date: '2026-03-15' })], HOJE).vsoMediaMensal).toBe(v);
+    });
+
+    it('a lançar, esgotado e sem dado ficam fora', () => {
+        expect(vsoDoComparavel(comp({ total_units: 100, sold_units: 0, launch_date: '2027-05-01' }), HOJE)).toBe('futuro');
+        expect(vsoDoComparavel(comp({ total_units: 100, sold_units: 100, launch_date: '2026-01-01' }), HOJE)).toBe('esgotado');
+        expect(vsoDoComparavel(comp({ total_units: 100, launch_date: '2026-01-01' }), HOJE)).toBeNull();
     });
 });

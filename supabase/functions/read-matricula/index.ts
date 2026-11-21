@@ -38,6 +38,9 @@ const OUTPUT_SCHEMA = {
                 additionalProperties: false,
                 properties: {
                     category: { type: 'string', enum: ['imovel', 'proprietario', 'tecnica', 'ambiental'] },
+                    // Item do checklist do estudo (constants/imovibDueDiligence.ts) a que o achado pertence —
+                    // plano docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md, item 1.2.
+                    item_key: { type: 'string', enum: ['matricula', 'cadeia_dominial', 'onus_gravames', 'faixas_servidoes', 'restricao_ambiental', 'tombamento', 'certidoes_vendedores'] },
                     title: { type: 'string' },
                     description: { type: 'string' },
                     criticidade: { type: 'string', enum: ['baixa', 'media', 'alta', 'critica'] },
@@ -47,7 +50,7 @@ const OUTPUT_SCHEMA = {
                     source_excerpt: { type: 'string', description: 'Trecho LITERAL da matrícula que originou o achado' },
                     confidence: { type: 'number', description: 'Confiança 0..1 na extração deste item' },
                 },
-                required: ['category', 'title', 'description', 'criticidade', 'suggested_status', 'impacto', 'source_excerpt', 'confidence'],
+                required: ['category', 'item_key', 'title', 'description', 'criticidade', 'suggested_status', 'impacto', 'source_excerpt', 'confidence'],
             },
         },
     },
@@ -67,7 +70,8 @@ REGRAS CRÍTICAS:
 - confidence baixo (<0.5) quando o texto estiver ilegível, ambíguo ou você não tiver certeza.
 - NUNCA classifique nada como "conforme" — isso é decisão do advogado. Use apenas pendente/em_analise/inconforme.
 - Se a imagem/PDF estiver ilegível ou não for uma matrícula, retorne findings vazio e um item em_analise explicando.
-- Não invente dados que não estão no documento.`;
+- Não invente dados que não estão no documento.
+- Em cada achado, item_key diz o item do checklist: matricula (dados do registro, área, confrontações, divergências), cadeia_dominial (encadeamento de proprietários, lacunas), onus_gravames (hipoteca, penhora, arresto, alienação fiduciária, usufruto, cláusulas restritivas, ações reais, promessas), faixas_servidoes (servidão, faixa non aedificandi averbada), restricao_ambiental (APP, reserva legal, restrição ambiental averbada), tombamento (tombamento averbado), certidoes_vendedores (indisponibilidade de bens ou ação contra o proprietário).`;
 
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });

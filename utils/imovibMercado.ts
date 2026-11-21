@@ -19,6 +19,8 @@ export interface ImovibComparable {
     typical_area?: number | null;
     price_sqm?: number | null;
     ticket?: number | null;
+    /** % ao ano de valorização do preço (aplicar_20271121952000; pode ser negativa). */
+    appreciation_pct?: number | null;
     source?: string | null;
     collected_at?: string | null;
     notes?: string | null;
@@ -51,6 +53,20 @@ const mesesDesde = (lancamento: string, hoje: string): number | null => {
     return (Number(h[1]) * 12 + Number(h[2])) - (Number(l[1]) * 12 + Number(l[2]));
 };
 
+/**
+ * VSO de UM comparável, % ao mês sobre o estoque (a mesma conta da média do resumo).
+ * 'futuro' = lança depois de hoje; 'esgotado' = vendeu tudo; null = falta total, vendidas ou lançamento.
+ */
+export function vsoDoComparavel(c: ImovibComparable, hoje: string): number | 'futuro' | 'esgotado' | null {
+    const total = Number(c.total_units) || 0;
+    const vendidas = c.sold_units == null ? null : Number(c.sold_units);
+    const meses = c.launch_date ? mesesDesde(c.launch_date, hoje) : null;
+    if (!(total > 0) || vendidas == null || meses == null) return null;
+    if (meses < 0) return 'futuro';
+    if (vendidas >= total) return 'esgotado';
+    return (1 - Math.pow(1 - Math.max(0, vendidas) / total, 1 / Math.max(1, meses))) * 100;
+}
+
 export function resumoDosComparaveis(lista: ImovibComparable[], hoje: string): ResumoDosComparaveis {
     const comPreco = lista.filter(c => (Number(c.price_sqm) || 0) > 0);
     const todosComTotal = comPreco.every(c => (Number(c.total_units) || 0) > 0);
@@ -71,12 +87,11 @@ export function resumoDosComparaveis(lista: ImovibComparable[], hoje: string): R
         const total = Number(c.total_units) || 0;
         const vendidas = c.sold_units == null ? null : Number(c.sold_units);
         if (total > 0 && vendidas != null) estoque += Math.max(0, total - vendidas);
-        const meses = c.launch_date ? mesesDesde(c.launch_date, hoje) : null;
-        if (!(total > 0) || vendidas == null || meses == null) continue;
-        if (meses < 0) { foraDaVso.lancamentoFuturo++; continue; }
+        const vso = vsoDoComparavel(c, hoje);
+        if (vso === 'futuro') foraDaVso.lancamentoFuturo++;
         // Esgotado: a VSO sobre o estoque não é definida (vendeu tudo em algum mês antes de hoje).
-        if (vendidas >= total) { foraDaVso.esgotado++; continue; }
-        vsos.push((1 - Math.pow(1 - Math.max(0, vendidas) / total, 1 / Math.max(1, meses))) * 100);
+        else if (vso === 'esgotado') foraDaVso.esgotado++;
+        else if (vso != null) vsos.push(vso);
     }
 
     return {

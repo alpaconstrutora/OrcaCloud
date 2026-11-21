@@ -153,7 +153,7 @@ describe('relatório da versão', () => {
     it('baixa o relatório completo da versão, com os dados e a data da versão', async () => {
         const user = userEvent.setup();
         const v = versao('v1', 'Comitê de outubro');
-        const risco = { id: 'r1', study_id: 'estudo-teste', category: 'legal', description: 'Matrícula com ônus', probability: 3, impact: 4, status: 'aberto', sort_order: 0 };
+        const risco = { id: 'r1', study_id: 'estudo-teste', category: 'juridico', description: 'Matrícula com ônus', probability: 3, impact: 4, status: 'aberto', sort_order: 0 };
         svc.listarVersoes.mockResolvedValue([v.linha]);
         svc.snapshotDaVersao.mockResolvedValue({ ...v.snapshot, cenarios: [], relatorio: { riscos: [risco] } });
         pdf.save.mockReset();

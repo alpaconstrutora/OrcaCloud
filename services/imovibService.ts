@@ -17,6 +17,9 @@ import { areaEquivalenteDaVersao, type AreaEquivalenteDaPlanta, type LinhaDoQuad
 import { versaoDoMemorial } from '../utils/nbr12721/documento';
 import { planoDeImportacao, type ImovibPartner, type SocioDaEmpresa } from '../utils/imovibSocios';
 import { diaDeBrasilia } from '../utils/dataDeBrasilia';
+import { atualizacoesDaMatricula, type AchadoDaMatricula } from '../utils/imovibDueDiligenceMatricula';
+import type { ModeloDeAquisicao } from '../utils/imovibModelosDeAquisicao';
+import type { DecisaoDoGate } from '../utils/imovibComite';
 import { resultadosDoEstudo, versaoPublicadaDoSnapshot, type ImovibStudyVersion, type ResultadosDaVersao, type SnapshotDaVersao, type VersaoPublicada } from '../utils/imovibVersoes';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
@@ -41,10 +44,23 @@ const SOCIO_COLS = 'id, study_id, name, share_percent, capital_percent, notes, c
 const FONTE_COLS = 'id, study_id, name, kind, amount, entry_month, remuneration, rate_annual, profit_share_percent, amortization, term_months, grace_months, sort_order, created_at';
 
 // Comparáveis de mercado (aplicar_20271112300000).
-const COMPARAVEL_COLS = 'id, study_id, name, developer, address, distance_km, launch_date, total_units, sold_units, typical_area, price_sqm, ticket, source, collected_at, notes, sort_order, created_at';
+const COMPARAVEL_COLS = 'id, study_id, name, developer, address, distance_km, launch_date, total_units, sold_units, typical_area, price_sqm, ticket, appreciation_pct, source, collected_at, notes, sort_order, created_at';
+
+// Riscos do estudo (aplicar_20271111910000 + aplicar_20271121950000: causa, consequência, tendência, contingência, prazo).
+const COLUNAS_DO_RISCO = 'id, study_id, category, description, causa, consequencia, probability, impact, tendencia, mitigation, contingencia, owner, prazo, status, sort_order, created_at';
+
+// Comitê & Gates (aplicar_20271121954000).
+const COLUNAS_DO_COMITE = 'id, study_id, version_id, gate, decision, condicionantes, parecer, decided_by, decided_by_nome, decided_at, created_at, updated_at';
+
+// Modelos de aquisição do terreno (aplicar_20271121953000).
+const COLUNAS_DO_MODELO = 'id, study_id, name, deal_type, premises_json, notes, sort_order, created_at';
+export type ModeloDeAquisicaoGravado = ModeloDeAquisicao & { study_id: string; notes?: string | null; sort_order: number; created_at?: string };
 
 // Due diligence do terreno (aplicar_20271112120000).
-const CHECKLIST_COLS = 'id, study_id, item_key, label, status, notes, sort_order, checked_at, checked_by';
+// + aplicar_20271121951000: criticidade, responsável, prazo e a origem da leitura por IA.
+const CHECKLIST_COLS = 'id, study_id, item_key, label, status, notes, sort_order, checked_at, checked_by, criticidade, responsavel, prazo, ai_extracted, ai_confidence, ai_source_excerpt, ai_extracted_at';
+
+type CamposDoItemDaDueDiligence = Partial<Pick<ImovibLandChecklistItem, 'status' | 'notes' | 'criticidade' | 'responsavel' | 'prazo' | 'ai_extracted' | 'ai_confidence' | 'ai_source_excerpt' | 'ai_extracted_at'>>;
 
 // ── Estrutura lida do Empreendimento (plano 2026-10-19-imovib-premissas-planta-inteligente.md)
 
@@ -765,7 +781,7 @@ export const imovibService = {
     async listarRiscos(studyId: string): Promise<ImovibRisk[]> {
         const { data, error } = await supabase
             .from('imovib_risks')
-            .select('id, study_id, category, description, probability, impact, mitigation, owner, status, sort_order, created_at')
+            .select(COLUNAS_DO_RISCO)
             .eq('study_id', studyId)
             .order('sort_order', { ascending: true })
             .order('created_at', { ascending: true });
@@ -775,7 +791,7 @@ export const imovibService = {
 
     async salvarRisco(r: Omit<ImovibRisk, 'id' | 'created_at'> & { id?: string }): Promise<ImovibRisk> {
         const { id, ...campos } = r;
-        const cols = 'id, study_id, category, description, probability, impact, mitigation, owner, status, sort_order, created_at';
+        const cols = COLUNAS_DO_RISCO;
         const q = id
             ? supabase.from('imovib_risks').update(campos).eq('id', id).select(cols)
             : supabase.from('imovib_risks').insert(campos).select(cols);
@@ -783,6 +799,60 @@ export const imovibService = {
         if (error) throw new Error(semPermissao(error) ? 'Sem permissão para salvar riscos deste estudo.' : `Falha ao salvar o risco: ${error.message}`);
         if (!data?.length) throw new Error('Sem permissão para salvar riscos deste estudo.');
         return data[0] as ImovibRisk;
+    },
+
+    // ── Comitê & Gates (item 1.5 do plano 2026-11-21-imovib-oportunidades-consolidacao) ──
+    // Quem decidiu e quando: o gatilho fn_imovib_comite_preparar grava; a tela não manda.
+
+    async listarDecisoesDoComite(studyId: string): Promise<DecisaoDoGate[]> {
+        const { data, error } = await supabase
+            .from('imovib_committee_decisions')
+            .select(COLUNAS_DO_COMITE)
+            .eq('study_id', studyId)
+            .order('gate', { ascending: true });
+        if (error) throw new Error(`Falha ao ler as decisões do comitê: ${error.message}`);
+        return (data || []) as DecisaoDoGate[];
+    },
+
+    async salvarDecisaoDoComite(d: Pick<DecisaoDoGate, 'study_id' | 'gate' | 'decision' | 'version_id' | 'condicionantes' | 'parecer'>): Promise<DecisaoDoGate> {
+        const { data, error } = await supabase
+            .from('imovib_committee_decisions')
+            .upsert(d, { onConflict: 'study_id,gate' })
+            .select(COLUNAS_DO_COMITE);
+        if (error) throw new Error(semPermissao(error) ? 'Só owner ou admin da organização decide gates do comitê.' : `Falha ao registrar a decisão: ${error.message}`);
+        if (!data?.length) throw new Error('Só owner ou admin da organização decide gates do comitê.');
+        return data[0] as DecisaoDoGate;
+    },
+
+    // ── Modelos de aquisição do terreno (item 1.4 do plano 2026-11-21-imovib-oportunidades-consolidacao)
+    // Só as premissas ficam no banco; VPL/TIR saem do motor na tela (utils/imovibModelosDeAquisicao.ts).
+
+    async listarModelosDeAquisicao(studyId: string): Promise<ModeloDeAquisicaoGravado[]> {
+        const { data, error } = await supabase
+            .from('imovib_land_deals')
+            .select(COLUNAS_DO_MODELO)
+            .eq('study_id', studyId)
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: true });
+        if (error) throw new Error(`Falha ao ler os modelos de aquisição: ${error.message}`);
+        return (data || []) as ModeloDeAquisicaoGravado[];
+    },
+
+    async salvarModeloDeAquisicao(m: Omit<ModeloDeAquisicaoGravado, 'id' | 'created_at'> & { id?: string }): Promise<ModeloDeAquisicaoGravado> {
+        const { id, ...campos } = m;
+        const q = id
+            ? supabase.from('imovib_land_deals').update(campos).eq('id', id).select(COLUNAS_DO_MODELO)
+            : supabase.from('imovib_land_deals').insert(campos).select(COLUNAS_DO_MODELO);
+        const { data, error } = await q;
+        if (error) throw new Error(semPermissao(error) ? 'Sem permissão para salvar modelos deste estudo.' : `Falha ao salvar o modelo: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para salvar modelos deste estudo.');
+        return data[0] as ModeloDeAquisicaoGravado;
+    },
+
+    async excluirModeloDeAquisicao(id: string): Promise<void> {
+        const { data, error } = await supabase.from('imovib_land_deals').delete().eq('id', id).select('id');
+        if (error) throw new Error(semPermissao(error) ? 'Sem permissão para excluir modelos deste estudo.' : `Falha ao excluir o modelo: ${error.message}`);
+        if (!data?.length) throw new Error('O modelo não foi excluído: sem permissão neste estudo, ou ele já tinha sido excluído. Recarregue a aba.');
     },
 
     async excluirRisco(id: string): Promise<void> {
@@ -1154,7 +1224,7 @@ export const imovibService = {
      * da conferência e ninguém era registrado (pendência da Fase 5 do plano 2026-11-11).
      * Voltar a "pendente" limpa os dois.
      */
-    async salvarItemDaDueDiligence(id: string, campos: Partial<Pick<ImovibLandChecklistItem, 'status' | 'notes'>>): Promise<ImovibLandChecklistItem> {
+    async salvarItemDaDueDiligence(id: string, campos: CamposDoItemDaDueDiligence): Promise<ImovibLandChecklistItem> {
         const update: Record<string, unknown> = { ...campos };
         if (campos.status !== undefined) {
             const conferido = campos.status !== 'pendente';
@@ -1170,6 +1240,30 @@ export const imovibService = {
         if (error) throw new Error(`Falha ao salvar o item da due diligence: ${error.message}`);
         if (!data?.length) throw new Error('Sem permissão para editar a due diligence deste estudo.');
         return data[0] as ImovibLandChecklistItem;
+    },
+
+    /**
+     * Lê a matrícula (PDF ou imagem) pela Edge Function read-matricula e PRÉ-PREENCHE os itens
+     * do checklist pela chave (utils/imovibDueDiligenceMatricula.ts). A IA nunca marca "ok".
+     * Item 1.2 do plano docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md.
+     */
+    async lerMatricula(study: Pick<ImovibStudy, 'id' | 'organization_id'>, arquivo: File, itens: ImovibLandChecklistItem[]): Promise<{ itens: ImovibLandChecklistItem[]; achados: number; atualizados: number }> {
+        const fileBase64 = await new Promise<string>((resolve, reject) => {
+            const leitor = new FileReader();
+            leitor.onload = () => resolve(String(leitor.result).split(',')[1] ?? '');
+            leitor.onerror = () => reject(new Error('Falha ao ler o arquivo da matrícula.'));
+            leitor.readAsDataURL(arquivo);
+        });
+        const { data, error } = await supabase.functions.invoke('read-matricula', {
+            body: { fileBase64, mediaType: arquivo.type, organization_id: study.organization_id },
+        });
+        if (error) throw new Error(error.message ?? 'Falha ao ler a matrícula.');
+        if (data?.error) throw new Error(String(data.error));
+        const achados = ((data?.result?.findings ?? []) as AchadoDaMatricula[]);
+        const atualizacoes = atualizacoesDaMatricula(achados, itens, new Date().toISOString());
+        const salvos = new Map<string, ImovibLandChecklistItem>();
+        for (const a of atualizacoes) salvos.set(a.id, await this.salvarItemDaDueDiligence(a.id, a.campos));
+        return { itens: itens.map(i => salvos.get(i.id) ?? i), achados: achados.length, atualizados: atualizacoes.length };
     },
 
 };

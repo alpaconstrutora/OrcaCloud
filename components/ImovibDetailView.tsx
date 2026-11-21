@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart, TrendingUp, History, Lock, Activity, SlidersHorizontal, LayoutGrid } from 'lucide-react';
+import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart, TrendingUp, History, Lock, Activity, SlidersHorizontal, LayoutGrid, Gavel } from 'lucide-react';
 import ImovibPremisesForm from './ImovibPremisesForm';
 import ImovibStaticViability from './ImovibStaticViability';
 import ImovibDynamicForm from './ImovibDynamicForm';
@@ -14,6 +14,7 @@ import ImovibSensitivityForm from './ImovibSensitivityForm';
 import ImovibForm from './ImovibForm';
 import ImovibVersoesTab from './ImovibVersoesTab';
 import ImovibAcompanhamentoTab from './ImovibAcompanhamentoTab';
+import ImovibComiteTab from './ImovibComiteTab';
 import ImovibCongelarVersao from './ImovibCongelarVersao';
 import ImovibFaixaEdicaoDeVersao from './ImovibFaixaEdicaoDeVersao';
 import ImovibPreferenciasSheet from './ImovibPreferenciasSheet';
@@ -31,7 +32,7 @@ interface ImovibDetailViewProps {
     onBack: () => void;
 }
 
-type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'receitas' | 'capital' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic' | 'versoes' | 'acompanhamento';
+type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'receitas' | 'capital' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic' | 'versoes' | 'comite' | 'acompanhamento';
 
 const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'executive_summary', label: 'Resumo Executivo', icon: <FileBarChart className="w-4 h-4" /> },
@@ -47,6 +48,8 @@ const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'viability_dynamic', label: 'Dinâmica', icon: <LineChart className="w-4 h-4" /> },
     // Item 10.2 do plano 2026-11-11; desde 19/11 (plano 2026-11-19) a versão não publicada se edita e se exclui.
     { id: 'versoes', label: 'Versões', icon: <History className="w-4 h-4" /> },
+    // Plano 2026-11-21-imovib-oportunidades-consolidacao, item 1.5: o comitê saiu da Oportunidade.
+    { id: 'comite', label: 'Comitê', icon: <Gavel className="w-4 h-4" /> },
     // Item 10.4: só para estudo vinculado a empreendimento (o realizado vem dele).
     { id: 'acompanhamento', label: 'Acompanhamento', icon: <Activity className="w-4 h-4" /> },
 ];
@@ -330,6 +333,11 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     {activeTab === 'versoes' && (
                         <ErrorBoundary>
                             <ImovibVersoesTab key={versoesKey} study={study} onEstudoMudou={() => { void loadStudyDetails(false).then(() => setConteudoKey(k => k + 1)); }} />
+                        </ErrorBoundary>
+                    )}
+                    {activeTab === 'comite' && (
+                        <ErrorBoundary>
+                            <ImovibComiteTab study={study} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'acompanhamento' && study.estrutura?.origem === 'empreendimento' && (

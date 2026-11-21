@@ -174,7 +174,7 @@ export const CHAVES_INTERNAS_DO_ESTUDO = [
  *  quem conferiu) é interno. Os mesmos que fn_investor_portal_get_versao monta no banco. */
 export const CAMPOS_PARA_O_INVESTIDOR = {
     cenarios: ['id', 'name', 'kind', 'choques', 'sort_order'],
-    comparaveis: ['id', 'name', 'distance_km', 'launch_date', 'total_units', 'sold_units', 'price_sqm'],
+    comparaveis: ['id', 'name', 'distance_km', 'launch_date', 'total_units', 'sold_units', 'price_sqm', 'appreciation_pct'],
     riscos: ['id', 'category', 'description', 'probability', 'impact', 'mitigation', 'status', 'sort_order'],
     dueDiligence: ['id', 'item_key', 'label', 'status', 'notes', 'sort_order'],
     socios: ['id', 'name', 'share_percent', 'capital_percent', 'sort_order'],

@@ -480,6 +480,16 @@ export interface ImovibLandChecklistItem {
     checked_at?: string | null;
     /** Usuário (auth) que mudou a situação por último. */
     checked_by?: string | null;
+    /** aplicar_20271121951000: alta/crítica sem "ok" trava gate do comitê. */
+    criticidade?: 'baixa' | 'media' | 'alta' | 'critica';
+    responsavel?: string | null;
+    /** AAAA-MM-DD. */
+    prazo?: string | null;
+    /** Pré-preenchido pela leitura da matrícula (IA) — o jurídico valida. */
+    ai_extracted?: boolean;
+    ai_confidence?: number | null;
+    ai_source_excerpt?: string | null;
+    ai_extracted_at?: string | null;
 }
 
 /** Parcela do terreno (item 5.2): mês do estudo e % do custo do terreno. */
@@ -496,19 +506,26 @@ export interface ImovibScenario {
     created_at?: string;
 }
 
-/** Risco da matriz do estudo (migration aplicar_20271111910000). */
+/** Risco da matriz do estudo (migrations aplicar_20271111910000 e aplicar_20271121950000). */
 export interface ImovibRisk {
     id: string;
     study_id: string;
-    category: 'legal' | 'mercado' | 'construcao' | 'financeiro' | 'ambiental' | 'outro';
+    category: 'fundiario' | 'juridico' | 'ambiental' | 'urbanistico' | 'tecnico' | 'mercado' | 'financeiro'
+        | 'tributario' | 'societario' | 'reputacional' | 'prazo' | 'vendas' | 'construcao' | 'outro';
     description: string;
+    causa?: string | null;
+    consequencia?: string | null;
     /** 1 a 5. */
     probability: number;
     /** 1 a 5. */
     impact: number;
+    tendencia?: 'subindo' | 'estavel' | 'descendo' | null;
     mitigation?: string | null;
+    contingencia?: string | null;
     owner?: string | null;
-    status: 'aberto' | 'mitigado' | 'aceito' | 'encerrado';
+    /** Data (AAAA-MM-DD) para a resposta ao risco. */
+    prazo?: string | null;
+    status: 'aberto' | 'em_mitigacao' | 'mitigado' | 'aceito' | 'materializado' | 'encerrado';
     sort_order: number;
     created_at?: string;
 }

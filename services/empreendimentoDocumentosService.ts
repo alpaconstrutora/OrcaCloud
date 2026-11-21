@@ -219,6 +219,39 @@ export const empreendimentoDocumentosService = {
   },
 
   /**
+   * A matrícula lida pela due diligence do estudo (Imovib) vai para o item MATRICULA do
+   * checklist legal do empreendimento — o arquivo mora só no GED. Sem o item, cria-o com
+   * os padrões da lista. Item 1.2 do plano docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md.
+   */
+  async guardarMatricula(
+    e: Pick<Empreendimento, 'id' | 'project_id' | 'organization_id'>,
+    arquivo: File,
+  ): Promise<DocumentoLegal> {
+    const legais = await this.listarLegais(e.id);
+    const item = legais.find(d => d.tipo === 'MATRICULA') ?? await this.criarLegal({
+      organization_id: e.organization_id,
+      empreendimento_id: e.id,
+      tipo: 'MATRICULA',
+      titulo: infoDoTipo('MATRICULA').rotulo,
+      numero: null,
+      orgao_emissor: infoDoTipo('MATRICULA').orgao ?? null,
+      protocolo: null,
+      data_protocolo: null,
+      data_emissao: null,
+      data_validade: null,
+      alerta_dias_antecedencia: 30,
+      situacao: 'PENDENTE',
+      obrigatorio: true,
+      responsavel: null,
+      observacoes: null,
+      document_id: null,
+      storage_path: null,
+      sort_order: 0,
+    });
+    return this.anexarArquivo(e, item, arquivo);
+  },
+
+  /**
    * Liga o item a um documento que JÁ está no GED. Se o documento ainda não
    * pertence a nenhum empreendimento, passa a pertencer a este — assim ele
    * aparece no filtro "Empreendimento" do GED.

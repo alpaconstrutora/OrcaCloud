@@ -6,6 +6,7 @@
  * Testes: __tests__/imovibRelatorio.test.ts.
  */
 import type { ImovibStudy, ImovibRisk, ImovibScenario, ImovibLandChecklistItem } from '../types';
+import { rotuloDaCategoria, rotuloDaSituacao } from '../constants/imovibRiscos';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { computeImovibMath } from './imovibMotor';
 import { calcularIndicadores, textoDoPayback } from './imovibIndicadores';
@@ -105,8 +106,6 @@ export function capaDoRelatorio(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorio =
     };
 }
 
-const ROTULO_DO_RISCO: Record<ImovibRisk['category'], string> = { legal: 'Legal', mercado: 'Mercado', construcao: 'Construção', financeiro: 'Financeiro', ambiental: 'Ambiental', outro: 'Outro' };
-const STATUS_DO_RISCO: Record<ImovibRisk['status'], string> = { aberto: 'Aberto', mitigado: 'Mitigado', aceito: 'Aceito', encerrado: 'Encerrado' };
 const STATUS_DA_DD: Record<ImovibLandChecklistItem['status'], string> = { pendente: 'Pendente', ok: 'Ok', problema: 'Com problema', nao_se_aplica: 'Não se aplica' };
 
 export function secoesDoRelatorio(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorio = {}): SecaoDoRelatorio[] {
@@ -253,7 +252,7 @@ export function secoesDoRelatorio(d: DadosDoRelatorio, opcoes: OpcoesDoRelatorio
     const riscos = d.riscos.length === 0
         ? secao('riscos', 'Riscos', { vazio: 'Sem riscos cadastrados na matriz (aba Sensibilidade e Risco).' })
         : secao('riscos', 'Riscos', {
-            tabelas: [{ colunas: ['Categoria', 'Risco', 'Prob.', 'Impacto', 'Mitigação', 'Situação'], linhas: d.riscos.map(x => [ROTULO_DO_RISCO[x.category], x.description, String(x.probability), String(x.impact), x.mitigation ?? '—', STATUS_DO_RISCO[x.status]]) }],
+            tabelas: [{ colunas: ['Categoria', 'Risco', 'Prob.', 'Impacto', 'Mitigação', 'Situação'], linhas: d.riscos.map(x => [rotuloDaCategoria(x.category), x.description, String(x.probability), String(x.impact), x.mitigation ?? '—', rotuloDaSituacao(x.status)]) }],
         });
 
     // 10. Due diligence

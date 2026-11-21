@@ -929,7 +929,11 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         return (
           <SupplyChainOrderForm
             onBack={() => setIsCreatingOrder(false)}
-            onSave={() => setIsCreatingOrder(false)}
+            // Criado → abre o detalhe do pedido novo (pedido de 21/11/2026), não a lista.
+            onSave={(pedidoCriadoId) => {
+              setIsCreatingOrder(false);
+              if (pedidoCriadoId) { setSelectedOrderId(pedidoCriadoId); setPendingSupplierOrderViewMode('details'); }
+            }}
           />
         );
       }

@@ -149,6 +149,17 @@ describe('espelho do estudo — cabeçalho sem título repetido', () => {
     });
 });
 
+describe('espelho do estudo — KPI Total Unidades', () => {
+    // 21/11: contava as 43 do espelho, inclusive as 5 não vendáveis; os grupos da tabela somavam 38.
+    it('conta só as unidades que entram no VGV e diz quantas ficaram fora', async () => {
+        montar();
+        await screen.findByText('101');
+        const card = screen.getByText('Total Unidades').parentElement!;
+        expect(within(card).getByText('1')).toBeTruthy();
+        expect(within(card).getByText('2 fora do VGV')).toBeTruthy();
+    });
+});
+
 describe('espelho do estudo — tabela padrão (§6.10/§6.12)', () => {
     it('abre agrupado por Torre, com Grupo, expandir/recolher e ajuste de largura', async () => {
         montar();

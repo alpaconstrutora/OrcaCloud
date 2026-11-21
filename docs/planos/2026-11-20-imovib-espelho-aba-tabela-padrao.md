@@ -110,3 +110,9 @@ triângulo). Pedido literal do usuário, com print: *"mover os botões inteligen
 para a barra de abas do espelho de vendas e curva, perfil e distrato"* → os dois vão para a direita da barra das
 SUB-ABAS de Receitas (slot `children` do `TabsBar`). O estado deles continua no `ImovibSalesMapTab`, que recebe
 `barraDeAbas(acoes)` do `ImovibReceitasForm`; aparecem com a sub-aba Espelho de vendas aberta (agem sobre o espelho).
+
+#604 conferido em produção (21/11, só leitura, 0 erros): botões na barra das sub-abas, 1× cada; 390 px sem rolagem.
+
+KPI "Total Unidades" (21/11, *"sim"* à oferta de contar só as unidades à venda): contava as 43 do espelho, inclusive as
+5 não vendáveis, enquanto os grupos da tabela somavam 38. Agora conta só as que entram no VGV (sem marca
+`fora_do_vgv`) e, havendo unidades fora, a linha de baixo do card diz "N fora do VGV".

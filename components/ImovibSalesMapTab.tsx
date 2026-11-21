@@ -331,7 +331,9 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
     };
 
     // KPI calculations
-    const totalUnits = instances.length;
+    // Só as que entram no VGV (21/11): não vendável no empreendimento e sem unidade ficam fora, como na soma
+    // dos grupos da tabela; quantas ficaram fora vai na linha de baixo do card.
+    const totalUnits = instances.filter(i => !marcaDe.get(i.id)).length;
     const soldUnits = instances.filter(i => i.status === 'VENDIDO').length;
     // VGV do motor — o mesmo do Resumo, da Estática e da listagem (unidade sem
     // preço vale área × preço/m² do bloco; permutada fica fora).
@@ -401,6 +403,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                     <KpiCard
                         label="Total Unidades"
                         value={totalUnits}
+                        sub={foraDoVgv > 0 ? `${foraDoVgv} fora do VGV` : undefined}
                         icon={<Home className="w-4 h-4" />}
                         color="emerald"
                     />

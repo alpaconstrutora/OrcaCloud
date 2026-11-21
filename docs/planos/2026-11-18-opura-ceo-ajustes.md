@@ -89,3 +89,8 @@ Os pontos 1 e 4 ficam como estão, sem mudança.
   - `check-ui-standard` com 0 nos 3 `.tsx`;
   - travas que varrem migrations: 24 de 25 passam. A que cai é `espelhoDoInvestidor`, a falha conhecida de CRLF no Windows.
   - Navegador não conferido. O aviso usa o mesmo estilo da linha de permissão logo acima, e a marca "já venceu" é só texto; os dois estão cobertos por teste.
+- 18/11 — **No ar (tarefa 4 ✅).** PR #575, com merge `8a240c3`.
+  - CI do PR e CI do `main` em `8a240c3`: `completed/success`.
+  - `conferir-producao` OK: o domínio serve `8a240c3`, com "Mostrando a organização inteira" e "já venceu" no bundle.
+  - A function `diretoria-resumo-semanal` não precisou ser publicada de novo: ela não usa os textos alterados, e as contagens vêm do banco.
+  - Frente `opura-ceo-ajustes` fechada.

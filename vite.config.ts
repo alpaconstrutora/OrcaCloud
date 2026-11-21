@@ -37,6 +37,42 @@ function webIfcWasm() {
   };
 }
 
+/**
+ * Os testes PESADOS — os que geram a casa e o prédio inteiros do zero (planta automática, marcos dos prédios de
+ * referência, o editor montando o estudo). Viram o projeto `pesados` do Vitest; todo o resto é o projeto `leves`.
+ *
+ * ─── POR QUE EXISTE ─────────────────────────────────────────────────────────
+ *
+ * 20/11/2026: a CI levava 40–45 min em QUALQUER PR — até num PR só de `.md` (#598). Medido: 1.543 arquivos de teste,
+ * e estes 12 somavam ~80 min dos ~91 min de CPU da suíte (só o marco dos prédios, 4 testes, 24,6 min). Um PR do Imovib
+ * esperava 40 min por testes de código que ele nem importava.
+ *
+ * Agora (`.github/workflows/ci.yml`): `leves` roda inteiro em todo PR; `pesados` roda no PR SÓ se o PR mexe em algo que
+ * eles importam (`vitest --changed`, pelo grafo de imports — sem lista de pastas a manter) e roda INTEIRO a cada push
+ * em `main`. `npx vitest run` local continua rodando os dois.
+ *
+ * Teste novo que gera casa/prédio inteiro entra AQUI. Se não entrar, a CI avisa: `scripts/check-tempo-dos-testes.mjs`
+ * reprova arquivo de `leves` que passe do teto de tempo, e diz para mover para esta lista.
+ */
+const TESTES_PESADOS = [
+  // O marco dos prédios, um arquivo por prédio (era um só: 4 em fila, 24,6 min — ver `predioAutomaticoMarcoComum.ts`).
+  '__tests__/predioAutomaticoMarcoR4.test.ts',
+  '__tests__/predioAutomaticoMarcoR8.test.ts',
+  '__tests__/predioAutomaticoMarcoR12.test.ts',
+  '__tests__/predioAutomaticoMarcoRL.test.ts',
+  '__tests__/blueprintCasaAutomatica.test.ts',
+  '__tests__/predioAutomatico.test.ts',
+  '__tests__/components/BlueprintEditor.test.tsx',
+  '__tests__/casaAutomaticaMarco.test.ts',
+  '__tests__/predioDuasTorres.test.ts',
+  '__tests__/predioEnvioAoEmpreendimento.test.ts',
+  '__tests__/predioTerreoDeApartamentos.test.ts',
+  '__tests__/predioTorreAbaixoDaRua.test.ts',
+  '__tests__/predioSaidaPorAsa.test.ts',
+  '__tests__/blueprintCasaLocaisDasPendencias.test.ts',
+  '__tests__/blueprintCasaSaidas.test.ts',
+];
+
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
 
@@ -211,13 +247,37 @@ export default defineConfig(({ mode }) => {
     test: {
       globals: true,
       environment: 'node',
-      include: ['__tests__/**/*.test.ts', '__tests__/**/*.test.tsx'],
       // Teste que precisa de DOM declara `// @vitest-environment jsdom` no
       // topo do próprio arquivo. Aqui havia um `environmentMatchGlobs` apontando
       // `__tests__/components/**` para jsdom — opção REMOVIDA no Vitest 4, que é
       // a versão em uso: ela não fazia nada e descrevia um mecanismo que não
       // existe mais. Config que mente custa mais caro que config ausente.
       setupFiles: ['__tests__/components/setup.ts'],
+      // `--changed` (o filtro dos `pesados` no PR) roda TUDO quando o PR toca um destes: config e dependências (o
+      // lockfile muda dependência sem mudar `package.json`), a própria CI, e as fixtures — lidas por `readFileSync`
+      // (os marcos), invisíveis ao grafo de imports. Os setupFiles o Vitest acrescenta sozinho.
+      // ⚠️ SEM `/**` no fim de padrão de ARQUIVO: o padrão do Vitest, `**/{vitest,vite}.config.*/**`, NÃO casa com
+      // `vite.config.ts` (picomatch) — o PR #603 mudou o config e o `--changed` não rodou pesado nenhum, verde.
+      forceRerunTriggers: [
+        '**/package.json',
+        '**/package-lock.json',
+        '**/{vitest,vite}.config.*',
+        '**/.github/workflows/**',
+        '**/__tests__/fixtures/**',
+      ],
+      // `include`/`exclude` só dentro de cada projeto: com `extends: true` o Vitest CONCATENA listas, e um `include` aqui
+      // em cima somaria todos os testes aos `pesados`.
+      projects: [
+        {
+          extends: true,
+          test: {
+            name: 'leves',
+            include: ['__tests__/**/*.test.ts', '__tests__/**/*.test.tsx'],
+            exclude: ['**/node_modules/**', '**/.git/**', ...TESTES_PESADOS],
+          },
+        },
+        { extends: true, test: { name: 'pesados', include: TESTES_PESADOS } },
+      ],
     }
   };
 });

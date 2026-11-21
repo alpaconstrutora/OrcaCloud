@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     converterPreco, converterQuantidade, equivalenciasValidas, fatorEntre,
-    unidadeInformadaValida, unidadesDoItem, type EquivalenciaDeUnidade,
+    unidadeInformadaValida, unidadesDoItem, baseDaUnidade, trocarUnidadeDaLinha, type EquivalenciaDeUnidade,
 } from '../utils/equivalenciaUnidades';
 import { identidadeDaUnidade, normalizarUnidade } from '../lib/unidadeDeMedida';
 
@@ -82,5 +82,27 @@ describe('unidadeInformadaValida', () => {
         expect(unidadeInformadaValida('T', inf)).toBeNull();
         expect(unidadeInformadaValida('KG', { ...inf, fator: 0 })).toBeNull();
         expect(unidadeInformadaValida('KG', undefined)).toBeNull();
+    });
+});
+
+describe('compras: base pela unidade atual da linha', () => {
+    it('acha a base estando em KG, M ou BR', () => {
+        expect(baseDaUnidade('32', 'kg', EQS)).toBe('KG');
+        expect(baseDaUnidade('32', 'M', EQS)).toBe('KG');
+        expect(baseDaUnidade('32', 'barra', EQS)).toBe('KG');
+        expect(baseDaUnidade('32', 'SC', EQS)).toBeNull();
+        expect(baseDaUnidade('33', 'KG', EQS)).toBeNull();
+    });
+    it('100 KG a R$ 8 → BR: 34,0136 BR a R$ 23,52 (total igual); e de volta', () => {
+        const br = trocarUnidadeDaLinha('32', { unit: 'KG', quantity: 100, price: 8 }, 'BR', EQS)!;
+        expect(br.unit).toBe('BR');
+        expect(br.quantity).toBeCloseTo(34.013605, 5);
+        expect(br.price).toBeCloseTo(23.52, 4);
+        expect(br.quantity * br.price).toBeCloseTo(800, 1);
+        const m = trocarUnidadeDaLinha('32', br, 'M', EQS)!;
+        expect(m.quantity).toBeCloseTo(408.163265, 4);
+    });
+    it('sem caminho = null', () => {
+        expect(trocarUnidadeDaLinha('32', { unit: 'KG', quantity: 1, price: 1 }, 'SC', EQS)).toBeNull();
     });
 });

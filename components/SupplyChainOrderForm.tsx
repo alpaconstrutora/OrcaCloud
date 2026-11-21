@@ -19,6 +19,10 @@ import { useOrgContext } from '../hooks/useOrgContext';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { costCenterService } from '../services/costCenterService';
 import PedidoOrcamentoTela, { type ItemDoOrcamentoEscolhido } from './suprimentos/PedidoOrcamentoTela';
+import type { ComprasPorCodigo } from '../lib/orcamentoLinhas';
+import { useEquivalencias } from '../hooks/useEquivalencias';
+import { baseDaUnidade, converterPreco, converterQuantidade, fatorEntre, unidadesDoItem } from '../utils/equivalenciaUnidades';
+import { identidadeDaUnidade } from '../lib/unidadeDeMedida';
 import DatabasePickerModal from './DatabasePickerModal';
 import { Supplier, BudgetEntry, SinapiItem, PaymentAccount, CostCenter } from '../types';
 import { CostCenterV2 } from '../types/financial';
@@ -112,17 +116,24 @@ const AVULSO_ALIGN: Record<string, string> = {
 };
 /** Quanto já foi pedido na obra, por código — pedidos não cancelados (inclui o
  *  próprio pedido em edição). Alimenta "Qtd comprada"/"A comprar" do painel. */
-async function quantidadesCompradasNaObra(projectId: string): Promise<Map<string, number>> {
+async function quantidadesCompradasNaObra(projectId: string): Promise<ComprasPorCodigo> {
     const orders = await orderService.listOrders(projectId);
-    const quantities = new Map<string, number>();
+    // Por UNIDADE em que foi pedido (21/11/2026): somar cru misturava KG com BR.
+    // A conversão para a unidade da linha do orçamento é de `linhasDoOrcamentoParaPedido`.
+    const compras: ComprasPorCodigo = new Map();
     orders.forEach(order => {
         if (order.status !== 'Cancelado') {
             order.items.forEach(item => {
-                quantities.set(item.code, (quantities.get(item.code) || 0) + item.quantity);
+                const lista = compras.get(item.code) ?? [];
+                const unidade = item.unit || '';
+                const ja = lista.find(c => c.unidade === unidade);
+                if (ja) ja.quantidade += Number(item.quantity) || 0;
+                else lista.push({ unidade, quantidade: Number(item.quantity) || 0 });
+                compras.set(item.code, lista);
             });
         }
     });
-    return quantities;
+    return compras;
 }
 
 // Ordena preservando o índice/linha original — a lista de avulsos é endereçada
@@ -257,6 +268,9 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const [selectedItems, setSelectedItems] = React.useState<Set<string>>(new Set());
     const [customQuantities, setCustomQuantities] = React.useState<Map<string, number>>(new Map());
     const [customPrices, setCustomPrices] = React.useState<Map<string, number>>(new Map());
+    // Unidade escolhida por item do orçamento (equivalência de unidades, 21/11/2026). Ausente =
+    // a unidade do item no orçamento. Restaurada do pedido gravado em `aplicarItensGravados`.
+    const [customUnits, setCustomUnits] = React.useState<Map<string, string>>(new Map());
     // Valor COTADO por código, para os itens do orçamento/insumos. Separado de
     // `customPrices` de propósito: `fetchBudgetPrices` e a seleção de insumo só
     // escrevem em `customPrices`, então o SINAPI nunca sobrescreve o cotado.
@@ -410,12 +424,16 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         const quantities = new Map<string, number>();
         const prices = new Map<string, number>();
         const quoted = new Map<string, number | null>();
+        const unidades = new Map<string, string>();
         items.forEach((i) => {
+            // Sem isto, um pedido gravado em BR reabria em KG com a quantidade de BR.
+            if (i.unit) unidades.set(i.code, i.unit);
             if (i.quantity !== undefined) quantities.set(i.code, i.quantity);
             if (i.unitPrice !== undefined) prices.set(i.code, i.unitPrice);
             if (i.quotedUnitPrice !== undefined) quoted.set(i.code, i.quotedUnitPrice);
         });
         setCustomQuantities(prev => new Map([...prev, ...quantities]));
+        setCustomUnits(prev => new Map([...prev, ...unidades]));
         setQuotedPrices(prev => new Map([...prev, ...quoted]));
         setCustomPrices(prev => {
             const next = new Map(prev);
@@ -566,7 +584,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         }
     };
 
-    const [purchasedQuantities, setPurchasedQuantities] = React.useState<Map<string, number>>(new Map());
+    const [purchasedQuantities, setPurchasedQuantities] = React.useState<ComprasPorCodigo>(new Map());
 
     // Helper to fetch and update prices for a budget
     const fetchBudgetPrices = React.useCallback(async (budget: BudgetEntry[], settings: { state?: string; socialChargesMode?: string } | null | undefined) => {
@@ -790,7 +808,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             return {
                 code: code,
                 description: item.sinapiItem!.description,
-                unit: item.sinapiItem!.unit,
+                unit: customUnits.get(code) ?? item.sinapiItem!.unit,
                 quantity: qty,
                 unitPrice: price,
                 // Dinheiro em duas casas: `qty * price` cru gravava coisas como
@@ -812,7 +830,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 return {
                     code: code,
                     description: insumo.description,
-                    unit: insumo.unit,
+                    unit: customUnits.get(code) ?? insumo.unit,
                     quantity: qty,
                     unitPrice: price,
                     total: round2(qty * price),
@@ -837,7 +855,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         }));
 
         return [...budgetItems, ...compositionItems, ...avulsoOrderItems];
-    }, [projectData, selectedItems, customQuantities, selectedMaterialsData, customPrices, avulsoItems]);
+    }, [projectData, selectedItems, customQuantities, selectedMaterialsData, customPrices, avulsoItems, customUnits, quotedPrices]);
 
     const totalOrderValue = React.useMemo(() => {
         // Cotado quando houver, senão referência — utils/pedidoItemValor.
@@ -884,12 +902,15 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         setCustomQuantities(prev => new Map(prev).set(code, Math.max(0, item.quantity)));
         setCustomPrices(prev => new Map(prev).set(code, Math.max(0, item.unitPrice)));
         setQuotedPrices(prev => new Map(prev).set(code, item.quotedUnitPrice == null ? null : Math.max(0, item.quotedUnitPrice)));
+        // A unidade só muda pelo modal quando há equivalência (o modal converte quantidade e preços juntos).
+        if (item.unit) setCustomUnits(prev => new Map(prev).set(code, item.unit));
     };
 
     const removerDoOrcamento = (code: string) => {
         setSelectedItems(prev => { const next = new Set(prev); next.delete(code); return next; });
         setCustomQuantities(prev => { const next = new Map(prev); next.delete(code); return next; });
         setQuotedPrices(prev => { const next = new Map(prev); next.delete(code); return next; });
+        setCustomUnits(prev => { const next = new Map(prev); next.delete(code); return next; });
     };
 
     const handleSaveOrder = async () => {
@@ -2053,6 +2074,24 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
     const [pickerOpen, setPickerOpen] = React.useState(false);
     const [formError, setFormError] = React.useState<string | null>(null);
 
+    // EQUIVALÊNCIA DE UNIDADES (21/11/2026): item com código e equivalência cadastrada troca de
+    // unidade convertendo quantidade, preço de referência e cotado juntos — vale também para o
+    // item do orçamento (que fora disso não troca de unidade).
+    const codigoDoForm = React.useMemo(() => (form.code ? [form.code] : []), [form.code]);
+    const { equivalencias } = useEquivalencias(codigoDoForm);
+    const baseDoForm = form.code ? baseDaUnidade(form.code, form.unit, equivalencias) : null;
+    const unidadesEquivalentes = baseDoForm ? unidadesDoItem(form.code, baseDoForm, equivalencias) : null;
+    const trocarUnidadeEquivalente = (unidade: string) => {
+        if (!baseDoForm) return;
+        const f = fatorEntre(form.code, baseDoForm, form.unit, unidade, equivalencias);
+        if (f == null) return;
+        const unitPrice = converterPreco(form.unitPrice, f);
+        const quotedUnitPrice = form.quotedUnitPrice == null ? null : converterPreco(form.quotedUnitPrice, f);
+        setForm(fm => ({ ...fm, unit: identidadeDaUnidade(unidade) ?? unidade, quantity: converterQuantidade(fm.quantity, f), unitPrice, quotedUnitPrice }));
+        setPriceDigits(toCurrencyDigits(unitPrice));
+        setQuotedDigits(quotedUnitPrice == null ? '' : toCurrencyDigits(quotedUnitPrice));
+    };
+
     const handlePickerSelect = (item: SinapiItem) => {
         const price = item.price || 0;
         setForm(f => ({ code: item.code, description: item.description, unit: item.unit, quantity: 1, unitPrice: price, quotedUnitPrice: f.quotedUnitPrice ?? null }));
@@ -2121,6 +2160,17 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                         <div className="space-y-1.5">
                             <label className={ROTULO}>Unidade *</label>
                             <div className="flex gap-2">
+                                {unidadesEquivalentes ? (
+                                    <select
+                                        value={identidadeDaUnidade(form.unit) ?? form.unit}
+                                        onChange={e => trocarUnidadeEquivalente(e.target.value)}
+                                        aria-label="Unidade"
+                                        title="Trocar a unidade converte a quantidade e os preços (equivalência cadastrada em Composições)"
+                                        className={`${CAMPO} flex-1 min-w-0 cursor-pointer`}
+                                    >
+                                        {unidadesEquivalentes.map(u => <option key={u} value={u}>{u}</option>)}
+                                    </select>
+                                ) : (
                                 <select
                                     value={units.includes(form.unit) ? form.unit : form.unit ? '__custom__' : ''}
                                     onChange={e => {
@@ -2135,6 +2185,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                         <option value="__custom__">{form.unit}</option>
                                     )}
                                 </select>
+                                )}
                                 {!doOrcamento && <button
                                     type="button"
                                     onClick={() => setShowUnitManager(true)}

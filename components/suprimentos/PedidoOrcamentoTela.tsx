@@ -2,7 +2,8 @@ import React from 'react';
 import { ArrowLeft, Calculator, AlertCircle, Loader2, Plus } from 'lucide-react';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import { formatMoney } from '../ui/Format';
-import { composicoesInternasAResolver, linhasDoOrcamentoParaPedido, type LinhaDoOrcamentoNoPedido, type SubComposicoes } from '../../lib/orcamentoLinhas';
+import { composicoesInternasAResolver, linhasDoOrcamentoParaPedido, type ComprasPorCodigo, type LinhaDoOrcamentoNoPedido, type SubComposicoes } from '../../lib/orcamentoLinhas';
+import { useEquivalencias } from '../../hooks/useEquivalencias';
 import { sinapiService } from '../../services/sinapiService';
 import type { BudgetEntry } from '../../types/budget';
 
@@ -58,7 +59,8 @@ interface Props {
     /** Preço de referência por código (SINAPI atual da UF da obra). */
     precos: Map<string, number>;
     /** Quanto já foi pedido na obra, por código (pedidos não cancelados). */
-    compradas: Map<string, number>;
+    /** Já pedido na obra, por código e unidade em que foi pedido. */
+    compradas: ComprasPorCodigo;
     /** Códigos que já estão neste pedido. */
     noPedido: Set<string>;
     /** Grava/aplica. Devolve a mensagem de erro — a tela continua e a mostra. */
@@ -121,6 +123,9 @@ const PedidoOrcamentoTela: React.FC<Props> = ({ onVoltar, budget, precos, compra
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [budget, uf, desoneracao]);
 
+    // Equivalência de unidades (21/11/2026): compra em BR conta como KG na linha em KG.
+    const codigosComprados = React.useMemo(() => [...compradas.keys()], [compradas]);
+    const { equivalencias } = useEquivalencias(codigosComprados);
     const precosTodos = React.useMemo(() => {
         const m = new Map(precosDasInternas);
         precos.forEach((v, k) => m.set(k, v));
@@ -128,8 +133,8 @@ const PedidoOrcamentoTela: React.FC<Props> = ({ onVoltar, budget, precos, compra
     }, [precos, precosDasInternas]);
 
     const linhas = React.useMemo(
-        () => linhasDoOrcamentoParaPedido(budget, precosTodos, compradas, noPedido, sub),
-        [budget, precosTodos, compradas, noPedido, sub],
+        () => linhasDoOrcamentoParaPedido(budget, precosTodos, compradas, noPedido, sub, equivalencias),
+        [budget, precosTodos, compradas, noPedido, sub, equivalencias],
     );
     const orcamentoVazio = budget.length === 0;
 
@@ -223,6 +228,14 @@ const PedidoOrcamentoTela: React.FC<Props> = ({ onVoltar, budget, precos, compra
                 selection={{ selected, onChange: setSelected, canSelect: l => !l.titulo && !l.jaNoPedido }}
                 sortValue={(k, l) => (l as unknown as Record<string, string | number>)[k]}
                 renderCell={(k, l) => {
+                    if (k === 'comprada' && l.compradaSemConversao) {
+                        return (
+                            <span className="inline-flex items-center gap-1 text-sm font-normal text-amber-700"
+                                title={`Também há compra em ${l.compradaSemConversao.join(', ')}, que não converte para ${l.unit}: ficou fora desta soma. Cadastre a equivalência em Engenharia › Composições.`}>
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />{qtd(l.comprada)}
+                            </span>
+                        );
+                    }
                     if (k === 'quantity' || k === 'comprada') {
                         return <span className="text-sm font-normal text-gray-600">{l.titulo && k === 'comprada' ? '—' : qtd(l[k])}</span>;
                     }

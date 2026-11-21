@@ -2,6 +2,7 @@
 import { round2 } from '../utils/financialMath.ts';
 import { FORMA_ENTREGA_FOB } from '../utils/formaEntrega.ts';
 import { validateCpfCnpj } from './validators.ts';
+import { normalizarUnidade } from './unidadeDeMedida.ts';
 
 /**
  * Pedido Fast — a regra de montar o pedido a partir da foto da nota/recibo.
@@ -164,24 +165,9 @@ export function normalizarLeitura(bruto: unknown): LeituraFast {
     };
 }
 
-const UNIDADES: Record<string, string> = {
-    U: 'UN', UN: 'UN', UND: 'UN', UNID: 'UN', UNIDADE: 'UN', UNIDADES: 'UN',
-    PC: 'PC', 'PÇ': 'PC', PCS: 'PC', 'PÇS': 'PC', PCA: 'PC', PECA: 'PC', 'PEÇA': 'PC',
-    KG: 'KG', KGS: 'KG', QUILO: 'KG', G: 'G', GR: 'G',
-    M: 'M', MT: 'M', MTS: 'M', METRO: 'M', ML: 'ML',
-    M2: 'M2', 'M²': 'M2', M3: 'M3', 'M³': 'M3',
-    L: 'L', LT: 'L', LTS: 'L', LITRO: 'L',
-    SC: 'SC', SACO: 'SC', CX: 'CX', CAIXA: 'CX', RL: 'RL', ROLO: 'RL',
-    BD: 'BD', BALDE: 'BD', GL: 'GL', GALAO: 'GL', 'GALÃO': 'GL', LATA: 'LT', TB: 'TB', BR: 'BR', BARRA: 'BR',
-    JG: 'JG', JOGO: 'JG', KIT: 'KIT', PAR: 'PAR', CJ: 'CJ', MIL: 'MIL', MILHEIRO: 'MIL',
-};
-
-/** Unidade como o pedido grava: maiúscula, sem ponto; vazia vira UN. */
-export function normalizarUnidade(unidade: string | null | undefined): string {
-    const limpa = (unidade ?? '').toUpperCase().replace(/[.\s]/g, '');
-    if (!limpa) return 'UN';
-    return UNIDADES[limpa] ?? limpa.slice(0, 10);
-}
+// A identidade da unidade mora em lib/unidadeDeMedida.ts (21/11/2026) — a
+// equivalência de unidades usa o mesmo mapa.
+export { normalizarUnidade };
 
 /** Item do pedido (formato de `purchase_orders.items`). */
 export interface ItemDoPedidoFast {

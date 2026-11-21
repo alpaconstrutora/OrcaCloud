@@ -42,6 +42,7 @@ import { TabsBar } from './ui/TabsBar';
 import { FilterPopover } from './ui/FilterPopover';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
+import EquivalenciasDoItem from './database/EquivalenciasDoItem';
 
 // As duas abas (§19.1) são as duas bases que a tela consulta. O id persiste na
 // mesma chave do antigo <select> "Base de Dados", então quem já tinha a base
@@ -1189,6 +1190,9 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
 
                             {/* Conteúdo Modal */}
                             <div className="flex-1 overflow-y-auto p-6 bg-white">
+                                {selectedItem.code && selectedItem.code !== 'NOVO' && (
+                                    <EquivalenciasDoItem code={selectedItem.code} unidadeDoItem={selectedItem.unit} podeEditar={podeImportarSinapi} notify={notify} />
+                                )}
                                 {selectedItem.type === SinapiType.COMPOSITION || (selectedItem.composition && selectedItem.composition.length > 0) ? (
                                     <div className="space-y-6">
                                         <div className="flex items-center justify-between">

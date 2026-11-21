@@ -27,11 +27,17 @@ beforeEach(() => {
     svc.snapshotDaVersao.mockReset();
 });
 
+// Fase 7.4 (plano 2026-11-21-imovib-oportunidades-consolidacao): o realizado traz o VGV do espelho.
+const ESPELHO = {
+    vendido: { count: 2, value: 1_400_000 }, vendidasSemNegociacao: 0, reservado: { count: 1, value: 600_000 },
+    disponivel: { count: 3, value: 1_800_000 }, permutado: { count: 1, value: 500_000 }, naoVendaveis: 4, vgvTotal: 3_800_000,
+};
+
 describe('10.4 — aba Acompanhamento', () => {
     // Plano 2026-11-19-imovib-versoes-editar-excluir, F3.4: com versão em edição, o "previsto" do estudo
     // é o da versão até a edição terminar — a aba avisa.
     it('estudo em edição de versão: avisa que o previsto é o da versão', async () => {
-        realizado.doEstudo.mockResolvedValue({ obras: [], obrasDeOutraOrganizacao: [], financeiro: [], aConciliar: { entradas: 0, saidas: 0 }, vendas: [], vendidasSemNegociacao: 0 });
+        realizado.doEstudo.mockResolvedValue({ obras: [], obrasDeOutraOrganizacao: [], financeiro: [], aConciliar: { entradas: 0, saidas: 0 }, vendas: [], vendidasSemNegociacao: 0, espelho: ESPELHO });
         tela({ base_date: '2026-01', edicao_versao: { version_id: 'v1', version_label: 'Cenário banco', started_by: 'u1', started_by_name: 'Ana', started_at: '2026-11-19T17:05:00Z' } });
         expect(await screen.findByText(/Estudo em edição da versão «Cenário banco» por «Ana»/)).toBeTruthy();
     });
@@ -49,7 +55,7 @@ describe('10.4 — aba Acompanhamento', () => {
             financeiro: [{ mes: '2026-02', entradas: 0, saidas: 120_000 }],
             aConciliar: { entradas: 0, saidas: 0 },
             vendas: [{ mes: '2026-01', unidades: 2, valor: 1_400_000 }],
-            vendidasSemNegociacao: 0,
+            vendidasSemNegociacao: 0, espelho: ESPELHO,
         });
         tela({ base_date: '2026-01' });
         const tabela = await screen.findByRole('region', { name: 'Mês a mês' });
@@ -60,6 +66,17 @@ describe('10.4 — aba Acompanhamento', () => {
         expect(screen.getByText('Vendas acumuladas')).toBeTruthy();
     });
 
+    it('VGV: estudo × espelho × vendido, com o espelho pela regra única (Fase 7.4)', async () => {
+        realizado.doEstudo.mockResolvedValue({ obras: [], obrasDeOutraOrganizacao: [], financeiro: [], aConciliar: { entradas: 0, saidas: 0 }, vendas: [], vendidasSemNegociacao: 0, espelho: ESPELHO });
+        tela({ base_date: '2026-01' });
+        const quadro = await screen.findByRole('region', { name: 'VGV do estudo, do espelho e vendido' });
+        expect(quadro.textContent).toContain('VGV do espelho');
+        expect(quadro.textContent).toMatch(/3\.800\.000/);
+        expect(quadro.textContent).toMatch(/1\.400\.000/);
+        expect(quadro.textContent).toMatch(/2\.400\.000/);
+        expect(quadro.textContent).toContain('1 permutada(s) fora do VGV');
+    });
+
     it('diz que o realizado é só o conciliado, mostra o lançado a conciliar, a obra de outra organização e as vendas sem data', async () => {
         realizado.doEstudo.mockResolvedValue({
             obras: [{ id: 'o1', nome: 'Obra Garden' }],
@@ -67,7 +84,7 @@ describe('10.4 — aba Acompanhamento', () => {
             financeiro: [{ mes: '2026-02', entradas: 0, saidas: 62 }],
             aConciliar: { entradas: 0, saidas: 198_756 },
             vendas: [],
-            vendidasSemNegociacao: 4,
+            vendidasSemNegociacao: 4, espelho: ESPELHO,
         });
         tela({ base_date: '2026-01' });
         expect(await screen.findByText(/só lançamentos conciliados/i)).toBeTruthy();
@@ -80,14 +97,14 @@ describe('10.4 — aba Acompanhamento', () => {
         realizado.doEstudo.mockResolvedValue({
             obras: [{ id: 'o1', nome: 'Obra Garden' }], obrasDeOutraOrganizacao: [],
             financeiro: [{ mes: '2025-11', entradas: 0, saidas: 50_000 }], aConciliar: { entradas: 0, saidas: 0 },
-            vendas: [], vendidasSemNegociacao: 0,
+            vendas: [], vendidasSemNegociacao: 0, espelho: ESPELHO,
         });
         tela({ base_date: '2026-01' });
         expect(await screen.findByText(/realizado de antes da data-base/i)).toBeTruthy();
     });
 
     it('sem obra vinculada: mostra só as vendas e diz por quê', async () => {
-        realizado.doEstudo.mockResolvedValue({ obras: [], obrasDeOutraOrganizacao: [], financeiro: [], aConciliar: { entradas: 0, saidas: 0 }, vendas: [{ mes: '2026-01', unidades: 1, valor: 700_000 }], vendidasSemNegociacao: 0 });
+        realizado.doEstudo.mockResolvedValue({ obras: [], obrasDeOutraOrganizacao: [], financeiro: [], aConciliar: { entradas: 0, saidas: 0 }, vendas: [{ mes: '2026-01', unidades: 1, valor: 700_000 }], vendidasSemNegociacao: 0, espelho: ESPELHO });
         tela({ base_date: '2026-01' });
         expect(await screen.findByText(/não tem obra vinculada/i)).toBeTruthy();
         expect(screen.queryByText('Receita e custo acumulados')).toBeNull();
@@ -107,7 +124,7 @@ describe('previsto de versão com outra data-base', () => {
         const user = userEvent.setup();
         realizado.doEstudo.mockResolvedValue({
             obras: [{ id: 'o1', nome: 'Obra Garden' }], obrasDeOutraOrganizacao: [],
-            financeiro: [], aConciliar: { entradas: 0, saidas: 0 }, vendas: [], vendidasSemNegociacao: 0,
+            financeiro: [], aConciliar: { entradas: 0, saidas: 0 }, vendas: [], vendidasSemNegociacao: 0, espelho: ESPELHO,
         });
         svc.listarVersoes.mockResolvedValue([{ id: 'v1', study_id: 'estudo-teste', label: 'Comitê de março', notes: null, results: {}, created_at: '2025-03-01', created_by: null }]);
         svc.snapshotDaVersao.mockResolvedValue({ ...baseStudy(), base_date: '2025-03' });

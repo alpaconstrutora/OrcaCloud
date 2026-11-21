@@ -162,8 +162,10 @@ describe('relatório da versão', () => {
         vi.spyOn(HTMLCanvasElement.prototype, 'toDataURL').mockReturnValue('data:image/jpeg;base64,AAAA');
         render(comEdicao(<ImovibVersoesTab study={estudo({ discount_rate: 15 }) as never} />));
         await user.click(await screen.findByRole('button', { name: 'Relatório da versão (PDF)' }));
-        // Gera o relatório inteiro (motor, tornado, gráficos fora da tela): ~0,7 s sozinho, 1,6 s com a suíte.
-        await vi.waitFor(() => expect(pdf.save).toHaveBeenCalledWith('Relatorio_Estudo_teste_Comitê_de_outubro.pdf'), { timeout: 10_000 });
+        // Gera o relatório inteiro (motor, tornado, gráficos fora da tela): ~0,7 s sozinho, 1,6 s com a suíte e
+        // mais de 5 s com ~580 arquivos no Windows. O `waitFor` fica ABAIXO do tempo-limite do teste (20 s, no fim do
+        // `it`): com o padrão de 5 s o teste morria antes do waitFor ("STACK_TRACE_ERROR" em `task`, 21/11/2026).
+        await vi.waitFor(() => expect(pdf.save).toHaveBeenCalledWith('Relatorio_Estudo_teste_Comitê_de_outubro.pdf'), { timeout: 15_000 });
         const secoes = pdf.secoes as { id: string; paragrafos: string[]; tabelas: { linhas: string[][] }[] }[];
         expect(secoes.find(x => x.id === 'capa')!.paragrafos.join(' ')).toContain('10/11/2026');
         expect(JSON.stringify(secoes.find(x => x.id === 'riscos')!.tabelas)).toContain('Matrícula com ônus');
@@ -171,7 +173,7 @@ describe('relatório da versão', () => {
         const extras = pdf.extras as { capa: { subtitulo: string }; imagens: Record<string, unknown> };
         expect(extras.capa.subtitulo).toBe('Versão Comitê de outubro · congelada em 10/11/2026');
         expect(Object.keys(extras.imagens)).toEqual(expect.arrayContaining(['curva_s', 'fluxo_anual', 'tornado', 'marcos']));
-    });
+    }, 20_000);
 });
 
 describe('versão publicada para o investidor (plano 2026-11-15, Fase 2)', () => {

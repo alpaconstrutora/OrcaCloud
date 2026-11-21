@@ -8,7 +8,7 @@
  * usa para filtrar quando o usuário clica no cartão. Não existe uma segunda conta
  * que possa divergir.
  */
-import type { ProjectRisk, RiskAction, RiskEvent, RiskMatrixConfig, RiskNivel, RiskSinal } from '../types/risk';
+import type { ProjectRisk, ProjectRiskInput, RiskAction, RiskEvent, RiskMatrixConfig, RiskNivel, RiskSinal } from '../types/risk';
 import { RISK_MATRIZ_PADRAO, nivelDoRisco, pontuacaoVigente, riscoAtivo } from './riskScoring';
 import { situacaoDaAprovacao } from './riskFase2';
 import { niveisAprovadosNaRodada } from './situacaoAprovacaoTitulo';
@@ -207,4 +207,20 @@ export function nivelPendenteDaAlcada(r: Pick<ProjectRisk, 'approval_chain' | 'a
     const de = r.approval_required_levels === 2 ? 2 : 1;
     const aprovados = niveisAprovadosNaRodada((r.approval_chain ?? []) as Parameters<typeof niveisAprovadosNaRodada>[0]);
     return { nivel: de === 2 && aprovados.includes(1) ? 2 : 1, de };
+}
+
+/** Ficha de risco novo em branco (Módulo Riscos e "Levar ao Módulo Riscos" do Imovib). */
+export function fichaVazia(base: Pick<ProjectRiskInput, 'owner_user_id' | 'owner_nome'>): ProjectRiskInput {
+    return {
+        catalog_id: null, catalog_codigo: null, catalog_versao: null, category_id: null, tipo: 'ameaca',
+        titulo: '', causa: '', evento: '', consequencia: '', tags: [], dimensoes: [],
+        escopo: 'obra', empreendimento_id: null, project_id: null, contract_id: null,
+        frente: null, localizacao: null, fase: null, partes_afetadas: null,
+        avaliador_user_id: null, aprovador_user_id: null,
+        data_identificacao: hojeLocalISO(), proxima_revisao: '',
+        controles_existentes: null, estrategia: null, plano_resposta: null, contingencia: null, justificativa_aceite: null,
+        status: 'identificado', encerramento_motivo: null, gatilho_critico: false, gatilho_motivo: null,
+        sst_document_tipo: null, sst_document_id: null,
+        ...base,
+    };
 }

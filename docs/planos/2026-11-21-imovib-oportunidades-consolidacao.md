@@ -109,7 +109,24 @@ versão → quem/quando gravados; voltar a pendente limpa. Edge Function `read-m
 - §7/§8 pré-existentes corrigidos nos arquivos tocados (status vira texto colorido: `OPPORTUNITY_STATUS_TEXT`).
 - Prova: tsc exit 0; 506 arquivos / 1.372 testes (áreas tocadas + varredura de migrations) verdes.
 
-**Fases 3 a 5:** não começadas (5.2 já entrou na Fase 2).
+**Fase 3: 3 de 3 itens feitos na frente `imovib-oport-f3`** — falta aplicar 970000 (depois da 961000) e publicar a
+Edge Function `investor-portal-dataroom-download`.
+- 3.1 ✅ audiência `investidor` em `opura_document_portal_shares` (+ `opportunity_id`, FK CASCADE, índice único não
+  parcial) em `aplicar_20271121970000_dataroom_pelo_ged.sql`; GED oferece "Oportunidade (investidor)" no modal de
+  compartilhar; `documentService` (`AlvoDoPortal`) trata a audiência nova em todos os ternários.
+- 3.2 ✅ `fn_investor_portal_get_dataroom` lê compartilhamentos + versão ativa (só doc da org da oportunidade); Edge
+  Function assina em `opura-docs` com `caminhoSemTravessia`; `DataRoomPanel` reescrito (gestor: compartilhados,
+  "Adicionar do empreendimento", "Tirar do Data Room"; upload fica no GED/aba Documentos).
+- 3.3 ✅ sai `opportunity_documents` e `gallery_urls` (guardas); fotos e capa = imagens do empreendimento (decorado,
+  plantas, vistas) na vitrine (SQL e app, `fotosDosEmpreendimentos`); capa escolhida entre elas no formulário.
+  Os buckets `opportunity-dataroom`/`opportunity-photos` FICAM: 4 objetos sem linha (sobras de 16/11) — apagar só
+  depois de o usuário ver o que são.
+- Antecipado na Fase 2 (PR #623): a integração antiga de `opportunity_documents` no GED saiu (lia
+  `investor_opportunities.project_id`, apagada pela 961000).
+- Prova: tsc exit 0; 543 arquivos / 1.489 testes (1.484 + 4 pendentes + 1 instável que passa isolado —
+  `ImovibVersoes`, PDF sob carga).
+
+**Fases 4 e 5.1:** não começadas (5.2 já entrou na Fase 2).
 
 ---
 

@@ -45,7 +45,7 @@ const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, organizatio
 
     // Números só da versão do Imovib (publicMarketplaceService já entrega a vitrine).
     const hasFinancials = op.comVersao;
-    const photos        = publicMarketplaceService.resolvePhotoUrls(op.photos ?? []);
+    const photos        = publicMarketplaceService.fotosParaGaleria(op);
 
     const TABS: { id: Tab; label: string }[] = [
         { id: 'pitch', label: 'Detalhes' },
@@ -89,10 +89,10 @@ const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, organizatio
             </nav>
 
             {/* ── Hero ── */}
-            {op.thumbnail_url && (
+            {op.capa && (
                 <div className="w-full h-72 sm:h-96 overflow-hidden relative">
                     <img
-                        src={op.thumbnail_url}
+                        src={op.capa}
                         alt={op.title}
                         className="w-full h-full object-cover"
                     />

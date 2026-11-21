@@ -123,6 +123,9 @@ function normalizeProjectName(name: string): string {
     .trim();
 }
 
+/** Destinatário de um compartilhamento de portal (um id, conforme a audiência). */
+export type AlvoDoPortal = { audience: OpuraDocumentPortalAudience; clientId?: string; employeeId?: string; creditRoomId?: string; opportunityId?: string };
+
 export const documentService = {
   // ─── LISTAGEM DE DOCUMENTOS ─────────────────────────────────
   async listDocuments(
@@ -987,7 +990,7 @@ export const documentService = {
   async listPortalSharingsForDocument(documentId: string): Promise<OpuraDocumentPortalShare[]> {
     const { data, error } = await supabase
       .from('opura_document_portal_shares')
-      .select('*, client:clients(name), employee:employees(name), credit_room:credit_rooms(name, code)')
+      .select('*, client:clients(name), employee:employees(name), credit_room:credit_rooms(name, code), opportunity:investor_opportunities(title)')
       .eq('document_id', documentId);
 
     if (error) {
@@ -1006,7 +1009,7 @@ export const documentService = {
     if (documentIds.length === 0) return [];
     const { data, error } = await supabase
       .from('opura_document_portal_shares')
-      .select('audience, client_id, employee_id, credit_room_id, client:clients(name), employee:employees(name), credit_room:credit_rooms(name, code)')
+      .select('audience, client_id, employee_id, credit_room_id, opportunity_id, client:clients(name), employee:employees(name), credit_room:credit_rooms(name, code), opportunity:investor_opportunities(title)')
       .in('document_id', documentIds);
 
     if (error) {
@@ -1019,6 +1022,7 @@ export const documentService = {
       const audience = row.audience as OpuraDocumentPortalAudience;
       const recipientId = audience === 'cliente' ? row.client_id
         : audience === 'credor' ? row.credit_room_id
+        : audience === 'investidor' ? row.opportunity_id
         : row.employee_id;
       if (!recipientId) continue;
       const key = `${audience}:${recipientId}`;
@@ -1029,6 +1033,7 @@ export const documentService = {
         recipient_id: recipientId,
         name: (audience === 'cliente' ? row.client?.name
           : audience === 'credor' ? (row.credit_room ? `${row.credit_room.code} · ${row.credit_room.name}` : undefined)
+          : audience === 'investidor' ? row.opportunity?.title
           : row.employee?.name) || '—',
         doc_count: 1,
       });
@@ -1036,9 +1041,9 @@ export const documentService = {
     return Array.from(map.values());
   },
 
-  // Revoga o acesso de um destinatário (cliente/colaborador/credit room) a um conjunto de documentos.
+  // Revoga o acesso de um destinatário (cliente/colaborador/credit room/oportunidade) a um conjunto de documentos.
   async unsharePortalDocumentsBatch(
-    target: { audience: OpuraDocumentPortalAudience; clientId?: string; employeeId?: string; creditRoomId?: string },
+    target: AlvoDoPortal,
     documentIds: string[]
   ): Promise<void> {
     if (documentIds.length === 0) return;
@@ -1051,7 +1056,9 @@ export const documentService = {
       ? query.eq('client_id', target.clientId!)
       : target.audience === 'credor'
         ? query.eq('credit_room_id', target.creditRoomId!)
-        : query.eq('employee_id', target.employeeId!);
+        : target.audience === 'investidor'
+          ? query.eq('opportunity_id', target.opportunityId!)
+          : query.eq('employee_id', target.employeeId!);
 
     const { error } = await query;
     if (error) {
@@ -1062,13 +1069,14 @@ export const documentService = {
 
   async sharePortalDocumentsBatch(
     documentIds: string[],
-    target: { audience: OpuraDocumentPortalAudience; clientId?: string; employeeId?: string; creditRoomId?: string },
+    target: AlvoDoPortal,
     sharedBy: string
   ): Promise<void> {
     if (documentIds.length === 0) return;
     if (target.audience === 'cliente' && !target.clientId) throw new Error('Selecione um cliente.');
     if (target.audience === 'colaborador' && !target.employeeId) throw new Error('Selecione um colaborador.');
     if (target.audience === 'credor' && !target.creditRoomId) throw new Error('Selecione um Credit Room.');
+    if (target.audience === 'investidor' && !target.opportunityId) throw new Error('Selecione uma oportunidade.');
 
     const payloads = documentIds.map((docId) => ({
       document_id: docId,
@@ -1076,11 +1084,13 @@ export const documentService = {
       client_id: target.audience === 'cliente' ? target.clientId : null,
       employee_id: target.audience === 'colaborador' ? target.employeeId : null,
       credit_room_id: target.audience === 'credor' ? target.creditRoomId : null,
+      opportunity_id: target.audience === 'investidor' ? target.opportunityId : null,
       shared_by: sharedBy,
     }));
 
     const onConflict = target.audience === 'cliente' ? 'document_id,client_id'
       : target.audience === 'credor' ? 'document_id,credit_room_id'
+      : target.audience === 'investidor' ? 'document_id,opportunity_id'
       : 'document_id,employee_id';
     const { error } = await supabase
       .from('opura_document_portal_shares')
@@ -1101,7 +1111,9 @@ export const documentService = {
           'compartilhado_portal',
           target.audience === 'credor'
             ? 'Documento compartilhado com o Credit Room (Portal de Crédito)'
-            : `Documento compartilhado com o Portal do ${target.audience === 'cliente' ? 'Cliente' : 'Colaborador'}`
+            : target.audience === 'investidor'
+              ? 'Documento compartilhado com o Data Room de uma oportunidade (Portal do Investidor)'
+              : `Documento compartilhado com o Portal do ${target.audience === 'cliente' ? 'Cliente' : 'Colaborador'}`
         ).catch((err) => console.error('[DocumentService] Erro ao registrar auditoria de compartilhamento com portal:', err));
       }
     }

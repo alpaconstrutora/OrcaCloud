@@ -264,9 +264,9 @@ const OpportunitiesTab: React.FC<Props> = ({
                                     onClick={() => setDetail(op)}
                                 >
                                     {/* Thumbnail ou gradiente */}
-                                    {op.thumbnail_url ? (
+                                    {op.capa ? (
                                         <div className="h-40 overflow-hidden relative">
-                                            <img src={op.thumbnail_url} alt={op.title} className="w-full h-full object-cover opacity-60" />
+                                            <img src={op.capa} alt={op.title} className="w-full h-full object-cover opacity-60" />
                                             <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0B1727]" />
                                         </div>
                                     ) : (

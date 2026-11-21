@@ -1,135 +1,107 @@
+/**
+ * Data Room da oportunidade PELO GED (plano docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md,
+ * Fase 3; decisão D1: o arquivo mora só no GED, do empreendimento).
+ *
+ * Antes: tabela opportunity_documents + bucket opportunity-dataroom (um segundo lugar para a matrícula,
+ * o memorial...). Agora a oportunidade só COMPARTILHA documentos do GED (opura_document_portal_shares,
+ * audiência 'investidor'); o investidor vê a versão ATIVA.
+ *
+ * - Gestor: lê pela RLS (herdada de opura_documents) e assina com a própria sessão (documentService).
+ * - Investidor pelo link: lista pela RPC do token (fn_investor_portal_get_dataroom) e baixa pela Edge
+ *   Function investor-portal-dataroom-download, que só assina o que a RPC listou (bucket opura-docs).
+ */
 import { supabase } from '../lib/supabase';
+import { documentService } from './documentService';
+import { empreendimentoDocumentosService } from './empreendimentoDocumentosService';
+import type { OpuraDocument } from '../types/documents';
 
-const BUCKET = 'opportunity-dataroom';
-const PHOTO_BUCKET = 'opportunity-photos';
-
-export type DocumentCategory =
-    | 'evte' | 'sondagem' | 'planta' | 'matricula'
-    | 'financeiro' | 'licenca' | 'memorial' | 'outro' | 'foto';
-
-export const DOCUMENT_CATEGORY_LABELS: Record<DocumentCategory, string> = {
-    evte:       'EVTE',
-    sondagem:   'Sondagem',
-    planta:     'Planta',
-    matricula:  'Matrícula',
+/** Rótulos das categorias do GED (as do Data Room desde a Fase 3). */
+export const CATEGORIA_DO_GED: Record<string, string> = {
+    juridico: 'Jurídico',
+    engenharia: 'Engenharia',
+    compliance: 'Compliance',
     financeiro: 'Financeiro',
-    licenca:    'Licença / Alvará',
-    memorial:   'Memorial Descritivo',
-    outro:      'Outro',
-    foto:       'Fotos',
+    comercial: 'Comercial',
+    normas: 'Normas',
 };
 
-export const DOCUMENT_CATEGORY_ICONS: Record<DocumentCategory, string> = {
-    evte:       '📊',
-    sondagem:   '🔩',
-    planta:     '📐',
-    matricula:  '📋',
-    financeiro: '💰',
-    licenca:    '✅',
-    memorial:   '📄',
-    outro:      '📎',
-    foto:       '🖼️',
-};
-
-export interface OpportunityDocument {
-    id?: string;
-    organization_id: string;
-    opportunity_id: string;
+/** Um documento do Data Room — as mesmas chaves para o gestor e para o link (RPC). */
+export interface DocumentoDoDataRoom {
+    /** id do documento no GED. */
+    id: string;
     name: string;
-    description?: string;
-    file_path: string;
-    file_size?: number;
-    mime_type?: string;
-    category: DocumentCategory;
-    uploaded_by?: string;
+    description?: string | null;
+    /** Caminho da versão ATIVA no bucket opura-docs. */
+    file_path: string | null;
+    file_size?: number | null;
+    mime_type?: string | null;
+    category: string;
     created_at?: string;
 }
 
-const DOC_COLS = 'id, organization_id, opportunity_id, name, description, file_path, file_size, mime_type, category, uploaded_by, created_at';
-
-function buildPath(orgId: string, oppId: string, fileName: string): string {
-    const ext = fileName.includes('.') ? '.' + fileName.split('.').pop() : '';
-    const uuid = crypto.randomUUID();
-    const safe = fileName.replace(/[^a-zA-Z0-9._-]/g, '_').slice(0, 60);
-    return `${orgId}/${oppId}/${uuid}-${safe}${ext.startsWith('.') ? '' : ext}`;
-}
-
-function fmtFileSize(bytes: number): string {
+export function fmtFileSize(bytes: number): string {
     if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
     if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
     return `${bytes} B`;
 }
 
-export { fmtFileSize };
+type LinhaDoCompartilhamento = {
+    shared_at: string;
+    document: (Pick<OpuraDocument, 'id' | 'nome' | 'descricao' | 'categoria'> & {
+        active_version?: { storage_path: string | null; tamanho: number | null; mime_type: string | null } | null;
+    }) | null;
+};
 
 export const opportunityDocumentsService = {
-
-    getPublicPhotoUrl(filePath: string): string {
-        const { data } = supabase.storage.from(PHOTO_BUCKET).getPublicUrl(filePath);
-        return data.publicUrl;
-    },
-
-    async list(opportunityId: string): Promise<OpportunityDocument[]> {
+    /** Gestor: o que está compartilhado com esta oportunidade. */
+    async listar(opportunityId: string): Promise<DocumentoDoDataRoom[]> {
         const { data, error } = await supabase
-            .from('opportunity_documents')
-            .select(DOC_COLS)
+            .from('opura_document_portal_shares')
+            .select('shared_at, document:opura_documents(id, nome, descricao, categoria, active_version:opura_document_versions!fk_active_version(storage_path, tamanho, mime_type))')
+            .eq('audience', 'investidor')
             .eq('opportunity_id', opportunityId)
-            .order('created_at', { ascending: false });
-        if (error) throw error;
-        return (data ?? []) as OpportunityDocument[];
+            .order('shared_at', { ascending: false });
+        if (error) throw new Error(`Falha ao ler o Data Room: ${error.message}`);
+        return ((data ?? []) as unknown as LinhaDoCompartilhamento[])
+            .filter(l => l.document)
+            .map(l => ({
+                id: l.document!.id,
+                name: l.document!.nome,
+                description: l.document!.descricao ?? null,
+                file_path: l.document!.active_version?.storage_path ?? null,
+                file_size: l.document!.active_version?.tamanho ?? null,
+                mime_type: l.document!.active_version?.mime_type ?? null,
+                category: l.document!.categoria,
+                created_at: l.shared_at,
+            }));
     },
 
-    async upload(
-        orgId: string,
-        oppId: string,
-        file: File,
-        meta: { category: DocumentCategory; description?: string; uploadedBy?: string },
-        onProgress?: (pct: number) => void,
-    ): Promise<OpportunityDocument> {
-        const path = buildPath(orgId, oppId, file.name);
-        const bucket = meta.category === 'foto' ? PHOTO_BUCKET : BUCKET;
+    /** Gestor: documentos do GED do empreendimento ainda não compartilhados (integrados não se compartilham). */
+    async candidatos(empreendimentoId: string, jaNoDataRoom: string[]): Promise<OpuraDocument[]> {
+        const docs = await empreendimentoDocumentosService.listarDoGed(empreendimentoId);
+        const ja = new Set(jaNoDataRoom);
+        return docs.filter(d => !ja.has(d.id) && !d.is_integrated && !!d.active_version_id);
+    },
 
-        const { error: upErr } = await supabase.storage
-            .from(bucket)
-            .upload(path, file, { cacheControl: '3600', upsert: false });
+    async compartilhar(documentIds: string[], opportunityId: string, email: string): Promise<void> {
+        await documentService.sharePortalDocumentsBatch(documentIds, { audience: 'investidor', opportunityId }, email);
+    },
 
-        if (upErr) throw upErr;
-        onProgress?.(100);
+    async descompartilhar(documentIds: string[], opportunityId: string): Promise<void> {
+        await documentService.unsharePortalDocumentsBatch({ audience: 'investidor', opportunityId }, documentIds);
+    },
 
-        // Registra na tabela
-        const { data, error: dbErr } = await supabase
-            .from('opportunity_documents')
-            .insert({
-                organization_id: orgId,
-                opportunity_id:  oppId,
-                name:            file.name,
-                description:     meta.description ?? null,
-                file_path:       path,
-                file_size:       file.size,
-                mime_type:       file.type || null,
-                category:        meta.category,
-                uploaded_by:     meta.uploadedBy ?? null,
-            })
-            .select(DOC_COLS)
-            .single();
-
-        if (dbErr) {
-            await supabase.storage.from(bucket).remove([path]).catch(() => {});
-            throw dbErr;
-        }
-
-        return data as unknown as OpportunityDocument;
+    /** Gestor: URL assinada pela própria sessão (a policy de opura-docs libera membro da org). */
+    async getSignedUrl(filePath: string): Promise<string> {
+        return documentService.generateDownloadUrl(filePath);
     },
 
     // ── Pelo link do Portal do Investidor (sessão anônima) ──────────────────────
-    // Plano docs/planos/2026-11-15-imovib-investidor-relatorio-e-dashboard.md, Fase 7: a tabela e o
-    // bucket só liberam membro da organização; pelo link, a lista vem da RPC do token e o arquivo
-    // da Edge Function que assina só o que a RPC listou.
 
-    async listByToken(token: string, opportunityId: string): Promise<OpportunityDocument[]> {
+    async listByToken(token: string, opportunityId: string): Promise<DocumentoDoDataRoom[]> {
         const { data, error } = await supabase.rpc('fn_investor_portal_get_dataroom', { p_token: token, p_opportunity_id: opportunityId });
         if (error) throw new Error(error.message);
-        const r = data as { valid?: boolean; error?: string; documents?: OpportunityDocument[] } | null;
+        const r = data as { valid?: boolean; error?: string; documents?: DocumentoDoDataRoom[] } | null;
         if (!r?.valid) {
             throw new Error(r?.error === 'unauthorized'
                 ? 'O link do portal venceu ou foi desativado.'
@@ -146,23 +118,5 @@ export const opportunityDocumentsService = {
         const url = (data as { urls?: Record<string, string> } | null)?.urls?.[filePath];
         if (!url) throw new Error('Arquivo não disponível para este acesso.');
         return url;
-    },
-
-    async getSignedUrl(filePath: string, expiresInSeconds = 3600): Promise<string> {
-        const { data, error } = await supabase.storage
-            .from(BUCKET)
-            .createSignedUrl(filePath, expiresInSeconds);
-        if (error) throw error;
-        return data.signedUrl;
-    },
-
-    async remove(id: string, filePath: string, category?: DocumentCategory): Promise<void> {
-        const bucket = category === 'foto' ? PHOTO_BUCKET : BUCKET;
-        await supabase.storage.from(bucket).remove([filePath]).catch(() => {});
-        const { error } = await supabase
-            .from('opportunity_documents')
-            .delete()
-            .eq('id', id);
-        if (error) throw error;
     },
 };

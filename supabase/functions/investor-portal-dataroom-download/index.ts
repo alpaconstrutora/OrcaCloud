@@ -2,6 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
+import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -16,7 +17,9 @@ const json = (body: unknown, status = 200) =>
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
 
-const BUCKET = 'opportunity-dataroom';
+// Desde 21/11/2026 (plano docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md, Fase 3) o Data Room
+// são documentos do GED compartilhados com a oportunidade: a versão ATIVA, no bucket do GED.
+const BUCKET = 'opura-docs';
 const TTL_SEGUNDOS = 60 * 15;
 const MAX_PATHS = 50;
 
@@ -79,6 +82,11 @@ serve(async (req: Request) => {
     );
     if (pedidos.some(p => !permitidos.has(p))) {
         return json({ error: 'Arquivo não disponível para este acesso' }, 403);
+    }
+    // O caminho vem do GED (gravado por quem usa o app): com `..`/`%2e%2e` a assinatura da service_role
+    // sairia da pasta (o mesmo cuidado de portal-ged-download, F53).
+    if (pedidos.some(p => !caminhoSemTravessia(p))) {
+        return json({ error: 'Caminho de arquivo inválido' }, 400);
     }
 
     const admin = createClient(supabaseUrl, serviceRoleKey);

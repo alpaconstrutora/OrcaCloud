@@ -222,11 +222,11 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
             </PortalCard>
 
             {/* Galeria — só quando há capa cadastrada, para não deixar bloco vazio */}
-            {opportunities.some(o => o.thumbnail_url) && (
+            {opportunities.some(o => o.capa) && (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {opportunities.filter(o => o.thumbnail_url).map((o, i) => (
+                    {opportunities.filter(o => o.capa).map((o, i) => (
                         <PortalCard key={o.id ?? `thumb-${i}`} className="overflow-hidden">
-                            <img src={o.thumbnail_url!} alt={o.title} className="w-full h-36 object-cover" />
+                            <img src={o.capa!} alt={o.title} className="w-full h-36 object-cover" />
                             <div className="px-4 py-3">
                                 <p className="text-sm font-semibold text-[#1F2430] truncate">{o.title}</p>
                                 {o.cidade && (

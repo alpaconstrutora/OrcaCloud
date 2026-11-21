@@ -151,8 +151,9 @@ export interface OpuraDocumentAuditLog {
 }
 
 // 'credor' = Credit Room (Portal de Crédito) — migration aplicar_20270920000002.
+// 'investidor' = Data Room de uma oportunidade (Portal do Investidor) — aplicar_20271121970000.
 // O documento continua sendo UM só no GED; o que muda é quem o enxerga.
-export type OpuraDocumentPortalAudience = 'cliente' | 'colaborador' | 'credor';
+export type OpuraDocumentPortalAudience = 'cliente' | 'colaborador' | 'credor' | 'investidor';
 
 export interface OpuraDocumentPortalShare {
   id: string;
@@ -162,6 +163,8 @@ export interface OpuraDocumentPortalShare {
   employee_id?: string | null;
   credit_room_id?: string | null;
   credit_room?: { name: string; code: string }; // Carregado via join (listPortalSharingsForDocument)
+  opportunity_id?: string | null;
+  opportunity?: { title: string }; // Carregado via join (listPortalSharingsForDocument)
   shared_by: string;
   shared_at: string;
   document?: OpuraDocument; // Carregado via join

@@ -14,7 +14,11 @@ interface Props {
     activeWorks: number;
     monthlyYieldPct: number | null;
     totalContributed: number;
-    totalDividends: number;
+    /** Recebido: dividendo + distribuição liquidados (Fase B4). */
+    totalRecebido: number;
+    /** Retorno total e em caixa, em fração (utils/investidorCarteira, Fase B3). */
+    retornoTotal: number | null;
+    retornoEmCaixa: number | null;
     holdings: HoldingItem[];
     contributions: InvestorContribution[];
     onSelectAsset: (h: HoldingItem) => void;
@@ -25,7 +29,7 @@ type SeriesId = 'aportado' | 'dividendos' | 'retorno';
 
 const SERIES: { id: SeriesId; label: string; color: string; axis: 'left' | 'right'; money: boolean }[] = [
     { id: 'aportado', label: 'Aportado', color: '#E1553C', axis: 'left', money: true },
-    { id: 'dividendos', label: 'Dividendos', color: '#6D9BD1', axis: 'left', money: true },
+    { id: 'dividendos', label: 'Recebido', color: '#6D9BD1', axis: 'left', money: true },
     { id: 'retorno', label: 'Retorno', color: '#C6CAD1', axis: 'right', money: false },
 ];
 
@@ -45,7 +49,7 @@ const holdingTone = (status: string): PillTone => {
 };
 
 const PortalOverview: React.FC<Props> = ({
-    equity, activeWorks, monthlyYieldPct, totalContributed, totalDividends,
+    equity, activeWorks, monthlyYieldPct, totalContributed, totalRecebido, retornoTotal, retornoEmCaixa,
     holdings, contributions, onSelectAsset, onNavigateToHoldings,
 }) => {
     const [hiddenSeries, setHiddenSeries] = React.useState<SeriesId[]>([]);
@@ -126,10 +130,11 @@ const PortalOverview: React.FC<Props> = ({
             hint: monthlyYieldPct == null ? 'Sem distribuições' : undefined,
         },
         { label: 'Aportado', value: fmtBRL(totalContributed), ...(aporteDelta ?? {}) },
-        { label: 'Dividendos', value: fmtBRL(totalDividends), ...(dividendoDelta ?? {}) },
+        { label: 'Recebido', value: fmtBRL(totalRecebido), ...(dividendoDelta ?? {}) },
         {
-            label: 'Retorno acumulado',
-            value: totalContributed > 0 ? `${((totalDividends / totalContributed) * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—',
+            label: 'Retorno total',
+            value: retornoTotal != null ? `${(retornoTotal * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—',
+            hint: retornoEmCaixa != null ? `Em caixa: ${(retornoEmCaixa * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : undefined,
         },
     ];
 
@@ -151,7 +156,7 @@ const PortalOverview: React.FC<Props> = ({
     const tabs = [
         { id: 'participacoes', label: 'Participações', count: holdings.length },
         { id: 'aportes', label: 'Aportes', count: aportes.length },
-        { id: 'dividendos', label: 'Dividendos', count: dividendos.length },
+        { id: 'dividendos', label: 'Recebimentos', count: dividendos.length },
     ];
 
     const renderContribRows = (rows: InvestorContribution[], emptyLabel: string) => {

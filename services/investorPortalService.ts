@@ -375,6 +375,16 @@ export const investorPortalService = {
     },
 
     /** Oportunidades que escolheram uma versão deste estudo (aba Versões do Imovib — plano 2026-11-15, Fase 2). */
+    /**
+     * As SPEs de que o investidor é sócio, nas organizações de quem pergunta, com o resultado da versão publicada
+     * (fn_investidor_socios → fn_socios_do_investidor — a mesma leitura da aba SPE do link). Fase B1.
+     */
+    async sociosDoInvestidor(investorId: string): Promise<Record<string, unknown>[]> {
+        const { data, error } = await supabase.rpc('fn_investidor_socios', { p_investor_id: investorId });
+        if (error) throw new Error(`Falha ao ler as SPEs do investidor: ${error.message}`);
+        return (data ?? []) as Record<string, unknown>[];
+    },
+
     async oportunidadesComVersaoDoEstudo(studyId: string): Promise<Pick<InvestorOpportunity, 'id' | 'title' | 'is_published' | 'imovib_version_id'>[]> {
         const { data, error } = await supabase
             .from('investor_opportunities')

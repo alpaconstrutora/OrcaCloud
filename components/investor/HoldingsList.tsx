@@ -166,8 +166,8 @@ const HoldingsList: React.FC<Props> = ({
                                     <p className="font-bold text-gray-900 text-lg">{proj.cota}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">Rendimento</p>
-                                    <p className="font-bold text-emerald-600 text-lg">{proj.yield || '—'}</p>
+                                    <p className="text-xs font-semibold text-gray-500 mb-1">Retorno total</p>
+                                    <p className="font-bold text-emerald-600 text-lg" title={proj.retornoEmCaixa ? `Em caixa: ${proj.retornoEmCaixa}` : undefined}>{proj.yield || '—'}</p>
                                 </div>
                             </div>
                             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl mb-4">

@@ -247,3 +247,24 @@ describe('captação pela SPE (plano 2026-11-21, Fase 4)', () => {
         expect(sql).toMatch(/valor_pretendido/);
     });
 });
+
+// Fase B do plano docs/planos/2026-11-21-portal-do-investidor-consolidacao.md.
+describe('carteira e espelho do investidor (Fase B)', () => {
+    it('B1: a aba SPE do link e a carteira do gestor leem a MESMA função', () => {
+        expect(corpo('fn_investor_portal_get_spes')).toMatch(/fn_socios_do_investidor\(v_tok\.investor_id/);
+        expect(corpo('fn_investidor_socios')).toMatch(/fn_socios_do_investidor\(p_investor_id, v_orgs\)/);
+        // o gestor só vê as orgs em que ele é membro E o investidor está
+        expect(corpo('fn_investidor_socios')).toMatch(/minhas_orgs_membro\(\)/);
+    });
+    it('B2: o resultado vem da versão congelada da oportunidade da SPE', () => {
+        expect(corpo('fn_socios_do_investidor')).toMatch(/'calculo' -> 'investidor' -> 'indicadores' ->> 'lucroLiquido'/);
+        expect(corpo('fn_socios_do_investidor')).toMatch(/o\.spe_entity_id = se\.id/);
+    });
+    it('B6: vendido = parte de cada unidade vendável (regra de parteDaUnidadeNaNegociacao)', () => {
+        const sql = corpo('fn_espelho_de_vendas_das_obras');
+        expect(sql).toMatch(/WHEN z\.valor_da_unidade > 0 THEN z\.valor_da_unidade/);
+        expect(sql).toMatch(/WHEN z\.soma_tabela > 0 THEN z\.valor_total \* z\.tabela \/ z\.soma_tabela/);
+        expect(sql).toMatch(/u\.is_vendavel IS DISTINCT FROM false/);
+        expect(sql).not.toMatch(/SELECT DISTINCT n\.id, n\.value/);
+    });
+});

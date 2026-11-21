@@ -7,12 +7,16 @@ export interface PortalSpe {
     name: string;
     cnpj?: string | null;
     capital_social?: number | null;
+    project_id?: string | null;
     project_name?: string | null;
     quota_count?: number | null;
     ownership_pct?: number | null;
     capital_calls_total?: number | null;
     capital_paid?: number | null;
     partners_count?: number | null;
+    /** Lucro líquido da versão congelada da oportunidade desta SPE (fn_socios_do_investidor, Fase B2). */
+    lucro_da_versao?: number | null;
+    versao_label?: string | null;
 }
 
 interface Props {

@@ -30,18 +30,6 @@ export interface InvestorParticipation {
     created_at?: string;
 }
 
-export interface InvestorFinancialSummary {
-    totalContributed: number;   // aportes liquidados
-    totalWithdrawn: number;     // retiradas + distribuições liquidadas
-    totalDividends: number;     // dividendos liquidados
-    pendingAmount: number;      // aportes pendentes/atrasados
-    nextDue?: InvestorContribution;
-    ownershipPct: number;
-    committedAmount: number;
-    /** ROI realizado = (dividendos + valorização) / aporte total. valorização passada pelo caller. */
-    roiRealized: (currentValue: number) => number;
-}
-
 const CONTRIB_COLS = 'id, organization_id, project_id, investor_id, type, amount, due_date, paid_date, status, description, payment_method, receipt_url, created_at';
 const PART_COLS = 'id, organization_id, project_id, investor_id, ownership_pct, committed_amount, quota_count, created_at';
 
@@ -156,43 +144,4 @@ export const investorContributionsService = {
     },
 
     // ─── Aggregated summary + ROI ──────────────────────────────────────────────
-
-    async getInvestorSummary(projectId: string, investorId: string): Promise<InvestorFinancialSummary> {
-        const [contributions, participation] = await Promise.all([
-            this.listContributions(projectId, investorId),
-            this.getParticipation(projectId, investorId),
-        ]);
-
-        const sumBy = (type: ContributionType, status?: ContributionStatus) =>
-            contributions
-                .filter(c => c.type === type && (status ? c.status === status : true))
-                .reduce((acc, c) => acc + Number(c.amount), 0);
-
-        const totalContributed = sumBy('aporte', 'liquidado');
-        const totalDividends = sumBy('dividendo', 'liquidado');
-        const totalWithdrawn = sumBy('retirada', 'liquidado') + sumBy('distribuicao', 'liquidado');
-
-        const pendingAmount = contributions
-            .filter(c => c.type === 'aporte' && (c.status === 'pendente' || c.status === 'atrasado'))
-            .reduce((acc, c) => acc + Number(c.amount), 0);
-
-        const nextDue = contributions
-            .filter(c => c.status === 'pendente' && c.due_date)
-            .sort((a, b) => (a.due_date! < b.due_date! ? -1 : 1))[0];
-
-        return {
-            totalContributed,
-            totalWithdrawn,
-            totalDividends,
-            pendingAmount,
-            nextDue,
-            ownershipPct: participation?.ownership_pct ?? 0,
-            committedAmount: participation?.committed_amount ?? 0,
-            roiRealized: (currentValue: number) => {
-                if (totalContributed <= 0) return 0;
-                const appreciation = currentValue - totalContributed;
-                return ((totalDividends + appreciation) / totalContributed) * 100;
-            },
-        };
-    },
 };

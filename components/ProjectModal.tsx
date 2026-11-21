@@ -1887,8 +1887,8 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                           location: stateCode ?? '',
                           city: cityName ?? '',
                         })}
-                        labelCls="block text-sm font-medium text-gray-700 mb-1"
-                        inputCls="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                        labelCls="block text-xs font-semibold text-slate-500 mb-1"
+                        inputCls="w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                       />
                     </div>
                   </div>

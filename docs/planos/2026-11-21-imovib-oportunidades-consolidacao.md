@@ -54,6 +54,55 @@ Escolhas padrão que tomo no plano (podem ser trocadas na aprovação):
 
 ## Estado (atualizar a cada fase)
 
+### Resumo em 21/11/2026 — Fases 1 a 5 NO AR; Fase 6 aguarda decisão
+
+| Fase | Itens | PR (squash) | Banco | Edge Function | Produção |
+|---|---|---|---|---|---|
+| 1 — Imovib recebe a análise | 5/5 ✅ | #621 (97951b4) | 950000–954000 aplicadas | `read-matricula` publicada | ✅ conferido |
+| 2 — Oportunidade vira vitrine | 7/7 ✅ | #623 (1660bc1) | 960000 (antes) + 961000 (depois do deploy) aplicadas | — | ✅ conferido |
+| 3 — Documentos pelo GED | 3/3 ✅ | #626 (eaedc27) | 970000 aplicada | `investor-portal-dataroom-download` publicada | ✅ conferido |
+| 4 — Captação pela SPE | 3/3 ✅ | #627 (4d7e7dd) | 980000 aplicada | — | ✅ conferido |
+| 5 — O que deveria existir | 2/2 ✅ | 5.2 no #623 · 5.1 no #627 | (no gatilho da 960000) | — | ✅ conferido |
+| 6 — Achados das análises | análise feita | — | — | — | ⏳ aguarda decisão |
+
+"Conferido" = `scripts/conferir-producao.sh` com um texto novo de cada fase: o domínio serve exatamente o
+`origin/main` do merge. Todas as frentes `imovib-oport-f1…f4` foram fechadas.
+
+**Provado no banco (transação desfeita no fim):** comitê sem versão recusado; publicar sem estudo/versão recusado e
+parecer "reprovar" recusa; vitrine sem campo interno; Data Room pelo link lista o compartilhado e recusa oportunidade
+despublicada; interesse grava investidor do token e valor.
+
+**Não provado (sem dado para provar):**
+- SPE de outra organização recusada pelo gatilho (não existe SPE em outra org).
+- Marketplace público (a org não tem slug configurado).
+- Roteiro de tela ponta a ponta do §Verificação (Playwright no Garden: congelar → publicar → link do investidor →
+  baixar documento → interesse → "Tornar sócio") **não foi rodado**; as telas foram cobertas por testes de
+  componente.
+
+### Pendências
+
+| # | Pendência | Quem | Situação |
+|---|---|---|---|
+| P1 | Apagar os buckets antigos `opportunity-dataroom`, `opportunity-photos` (público) e `due-diligence-findings` | usuário, pelo painel do Supabase › Storage | Os 3 com **0 objetos** (conferido 21/11). SQL bloqueia (`storage.protect_delete`) e a CLI não autentica na API de storage com a chave nova |
+| P2 | Rodar o roteiro de tela ponta a ponta do §Verificação no Garden | eu, quando houver versão congelada para publicar | Não rodado |
+| P3 | Provar a recusa de SPE de outra org e o marketplace | eu, quando houver SPE em 2ª org / slug na org | Sem dado |
+| P4 | Teste instável `ImovibVersoes` (PDF sob carga; passa isolado) | — | Pré-existente, fora desta mudança |
+| P5 | Achados da Fase 6 (abaixo) | usuário decide | Nenhum implementado |
+
+Achados da Fase 6 que viram trabalho, se aprovados (detalhe em §Fase 6):
+1. Pagar chamada de capital → gerar aporte em `investor_contributions` (hoje são dois controles de dinheiro).
+2. VGV: espelho soma permutadas e deixa reservadas fora; distrato some do mês original; comparar estudo × espelho ×
+   vendido.
+3. Segurança do GED no portal: `fn_portal_get_ged_documents` sem `search_path`/REVOKE; `portal-ged-download` não
+   confere a org.
+4. Botão "promover ao Módulo Riscos" quando o empreendimento vira obra.
+5. Market: concorrentes monitorados sem tela; importar lançamentos do Market para comparáveis.
+6. Comentário errado sobre a FK `empreendimento_towers.project_id`.
+7. Compartilhamento do GED aponta para o documento (versão nova aparece na hora para o investidor) — decidir se é o
+   desejado.
+
+### Histórico por fase
+
 **Fase 1: 5 de 5 itens feitos na frente `imovib-oport-f1`.** Migrations 950000–954000 APLICADAS em 21/11 (OK do
 usuário), conferidas no banco (colunas, tabelas novas, antigas apagadas, gatilho, grants; função do gatilho sem
 EXECUTE para anon/authenticated). Prova SQL do comitê (transação desfeita): aprovar sem versão → recusado; com
@@ -87,8 +136,7 @@ versão → quem/quando gravados; voltar a pendente limpa. Edge Function `read-m
 
 **Fase 1 NO AR** (PR #621, squash 97951b4; `conferir-producao.sh` com "Usar no estudo" e "Comitê de investimentos" ✅).
 
-**Fase 2: 7 de 7 itens feitos na frente `imovib-oport-f2`** — falta aplicar 960000 (antes do deploy) e 961000
-(DEPOIS do deploy), com OK.
+**Fase 2: 7 de 7 itens — NO AR** (PR #623, squash 1660bc1). 960000 aplicada antes do deploy e 961000 depois, com OK.
 - 2.1 ✅ gatilho em `aplicar_20271121960000_oportunidade_vitrine.sql`: publicar exige estudo + versão com cálculo;
   **5.2 antecipado** no mesmo gatilho (parecer "reprovar" recusa; sem parecer/renegociar = aviso no formulário).
 - 2.2 ✅ formulário: saem obra, captação digitada, riscos, concorrentes, localização, dados técnicos, financeiro
@@ -105,12 +153,12 @@ versão → quem/quando gravados; voltar a pendente limpa. Edge Function `read-m
   `get_public_marketplace` (+ REVOKE PUBLIC). Contrato em `__tests__/investorPortalEstudo.test.ts`.
 - 2.7 ✅ `aplicar_20271121961000_oportunidade_sem_campos_digitados.sql` (23 colunas + 4 tabelas; guardas param se
   houver dado). `target/current_funding_value` saem aqui (a captação real é a Fase 4). Bucket
-  `due-diligence-findings` fica (apagar pela API de storage depois de conferir 0 objetos).
+  `due-diligence-findings` fica, vazio (pendência P1).
 - §7/§8 pré-existentes corrigidos nos arquivos tocados (status vira texto colorido: `OPPORTUNITY_STATUS_TEXT`).
 - Prova: tsc exit 0; 506 arquivos / 1.372 testes (áreas tocadas + varredura de migrations) verdes.
 
-**Fase 3: 3 de 3 itens feitos na frente `imovib-oport-f3`** — falta aplicar 970000 (depois da 961000) e publicar a
-Edge Function `investor-portal-dataroom-download`.
+**Fase 3: 3 de 3 itens — NO AR** (PR #626, squash eaedc27). 970000 aplicada; Edge Function
+`investor-portal-dataroom-download` publicada (sem token / token falso → recusado).
 - 3.1 ✅ audiência `investidor` em `opura_document_portal_shares` (+ `opportunity_id`, FK CASCADE, índice único não
   parcial) em `aplicar_20271121970000_dataroom_pelo_ged.sql`; GED oferece "Oportunidade (investidor)" no modal de
   compartilhar; `documentService` (`AlvoDoPortal`) trata a audiência nova em todos os ternários.
@@ -119,14 +167,13 @@ Edge Function `investor-portal-dataroom-download`.
   "Adicionar do empreendimento", "Tirar do Data Room"; upload fica no GED/aba Documentos).
 - 3.3 ✅ sai `opportunity_documents` e `gallery_urls` (guardas); fotos e capa = imagens do empreendimento (decorado,
   plantas, vistas) na vitrine (SQL e app, `fotosDosEmpreendimentos`); capa escolhida entre elas no formulário.
-  Os buckets `opportunity-dataroom`/`opportunity-photos` FICAM: 4 objetos sem linha (sobras de 16/11) — apagar só
-  depois de o usuário ver o que são.
+  Os 4 objetos sem linha (sobras de 16/11) foram apagados com OK do usuário; os buckets vazios ficam (pendência P1).
 - Antecipado na Fase 2 (PR #623): a integração antiga de `opportunity_documents` no GED saiu (lia
   `investor_opportunities.project_id`, apagada pela 961000).
 - Prova: tsc exit 0; 543 arquivos / 1.489 testes (1.484 + 4 pendentes + 1 instável que passa isolado —
   `ImovibVersoes`, PDF sob carga).
 
-**Fase 4: 3 de 3 itens + 5.1 feitos na frente `imovib-oport-f4`** — falta aplicar 980000 (depois da 970000).
+**Fase 4: 3 de 3 itens + 5.1 — NO AR** (PR #627, squash 4d7e7dd). 980000 aplicada.
 - 4.1 ✅ `investor_opportunities.spe_entity_id` (gatilho confere a org) em `aplicar_20271121980000_captacao_pela_spe.sql`;
   formulário escolhe a SPE; `SpeManager` grava a obra da SPE (campo que existia no banco e a tela nunca preenchia).
 - 4.2 ✅ captação na vitrine: meta = Σ fontes `investidor`/`scp` da versão, senão a exposição máxima; chamado e
@@ -143,7 +190,8 @@ Edge Function `investor-portal-dataroom-download`.
 - Prova: tsc exit 0; 583 arquivos / 1.576 testes (áreas + travas + migrations) verdes, menos 1 instável
   (`ImovibVersoes`, PDF sob carga, passa isolado) e 4 pendentes.
 
-**Fase 5:** 5.1 entrou na Fase 4; 5.2 na Fase 2. **Fase 6:** achados aguardando decisão do usuário.
+**Fase 5: NO AR** — 5.1 entrou na Fase 4 (#627); 5.2 na Fase 2 (#623). **Fase 6:** achados aguardando decisão do
+usuário (ver §Pendências).
 
 ---
 

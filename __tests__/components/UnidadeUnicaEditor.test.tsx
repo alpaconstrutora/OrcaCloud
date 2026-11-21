@@ -66,6 +66,27 @@ describe('UnidadeUnicaEditor', () => {
     expect(svc.salvarUnidadeUnica.mock.calls[0][2]).toEqual({ private_area: 150, total_area: 150, common_area: null, testada_m: 8 });
   });
 
+  it('terreno: digitar logo que o campo aparece não é apagado pelo realinhamento da montagem (CI #5069)', async () => {
+    const { container } = montar('LOTE');
+    // Máquina lenta: o campo aparece e a digitação chega ANTES de o React rodar os efeitos da
+    // montagem. Antes, o efeito que realinhava o formulário ao salvo devolvia o 134 e o
+    // "Salvar terreno" desligava.
+    await new Promise<void>(resolve => {
+      const obs = new MutationObserver(() => {
+        const campo = container.querySelector('#terreno-terreno_area');
+        if (!campo) return;
+        obs.disconnect();
+        fireEvent.change(campo, { target: { value: '150' } });
+        resolve();
+      });
+      obs.observe(container, { childList: true, subtree: true });
+    });
+    expect((screen.getByLabelText('Área total (m²)') as HTMLInputElement).value).toBe('150');
+    fireEvent.click(screen.getByRole('button', { name: /Salvar terreno/ }));
+    await waitFor(() => expect(svc.salvarUnidadeUnica).toHaveBeenCalledTimes(1));
+    expect(svc.update).toHaveBeenCalledWith('emp-1', expect.objectContaining({ terreno_area: 150 }));
+  });
+
   it('IMÓVEL ÚNICO: campos de unidade sem pavimento nem posição; salvar grava a casa', async () => {
     montar('IMOVEL_UNICO');
     expect(await screen.findByLabelText('Dormitórios')).toBeInTheDocument();

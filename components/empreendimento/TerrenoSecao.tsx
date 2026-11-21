@@ -103,7 +103,14 @@ export const TerrenoSecao: React.FC<Props> = ({ empreendimentoId, empreendimento
     empreendimento?.terreno_frente_azimute, empreendimento?.terreno_latitude, empreendimento?.terreno_longitude,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
   const [terrenoForm, setTerrenoForm] = React.useState<TerrenoForm>(terrenoSalvo);
-  React.useEffect(() => { setTerrenoForm(terrenoSalvo); }, [terrenoSalvo]);
+  // Realinha NO MESMO render em que o salvo muda, não num useEffect: o efeito também rodava na
+  // montagem e, se a pessoa digitasse antes dele rodar, apagava o que foi digitado (o campo
+  // voltava ao salvo e "Salvar terreno" desligava — CI #5069, 21/11/2026).
+  const [salvoDoForm, setSalvoDoForm] = React.useState(terrenoSalvo);
+  if (salvoDoForm !== terrenoSalvo) {
+    setSalvoDoForm(terrenoSalvo);
+    setTerrenoForm(terrenoSalvo);
+  }
   const terrenoDirty = (Object.keys(terrenoSalvo) as (keyof TerrenoForm)[]).some(k => terrenoForm[k] !== terrenoSalvo[k]);
 
   // ── Terreno × Planta vinculada (21/10/2026) ─────────────────────────────────

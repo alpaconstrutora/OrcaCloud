@@ -84,8 +84,16 @@ describe('Paramétrico › cenários', () => {
         expect(consultas.total).toBe(1);
 
         primeira.unmount();
+        // Na volta o CUB DEMORA (100 ms), como numa máquina de CI lenta: o teste tem de esperar o
+        // carregamento, não correr contra ele.
+        consultas.liberar = () => {};
+        setTimeout(() => consultas.liberar?.(), 100);
         render(<Tela inicial={gravados[0]} onGravar={vi.fn()} />);
-        await botaoSalvar();
+        // Esperar o CUB carregar, não só o botão existir: "Inteligência de Mercado" só aparece
+        // depois do carregamento. Sem isto o clique corria contra a consulta e falhava em
+        // máquina lenta (CI #5057, 21/11/2026).
+        const salvarDeNovo = await botaoSalvar();
+        await waitFor(() => expect((salvarDeNovo as HTMLButtonElement).disabled).toBe(false));
         abrirAbaCenarios();
         expect(await screen.findByText('Cenário 1 (R8-N)')).toBeTruthy();
     });

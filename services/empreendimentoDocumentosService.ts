@@ -20,9 +20,9 @@ import type { Empreendimento } from '../types/empreendimento';
 import type { OpuraDocument, OpuraDocumentCategoria } from '../types/documents';
 import {
   infoDoTipo,
-  type DocumentoLegal, type DocumentoLegalInsert, type DocumentoLegalUpdate,
+  type DocumentoLegal, type DocumentoLegalInsert, type DocumentoLegalUpdate, type ListaPadraoId,
 } from '../types/empreendimentoDocumentos';
-import { faltantesDaListaPadrao } from '../utils/empreendimentoDocumentos';
+import { faltantesDaLista } from '../utils/empreendimentoDocumentos';
 
 const TABELA = 'empreendimento_documentos_legais';
 
@@ -105,13 +105,15 @@ export const empreendimentoDocumentosService = {
   },
 
   /**
-   * Insere só os tipos da lista padrão que ainda faltam. Relê o banco antes
-   * (outra pessoa pode ter carregado no meio-tempo) e o índice único parcial
-   * (empreendimento_id, tipo) segura a corrida que sobrar.
+   * Insere só os tipos da lista que ainda faltam. Relê o banco antes (outra
+   * pessoa pode ter carregado no meio-tempo). Desde 21/11/2026 o mesmo tipo pode
+   * repetir (duas escrituras), então não há índice único segurando a corrida:
+   * duas cargas no mesmo segundo podem duplicar — risco aceito no plano
+   * 2026-11-21-empreendimento-documentos-lista-incorporacao.
    */
-  async carregarListaPadrao(e: Pick<Empreendimento, 'id' | 'organization_id'>): Promise<DocumentoLegal[]> {
+  async carregarLista(e: Pick<Empreendimento, 'id' | 'organization_id'>, listaId: ListaPadraoId): Promise<DocumentoLegal[]> {
     const existentes = await this.listarLegais(e.id);
-    const novos = faltantesDaListaPadrao(existentes, { organization_id: e.organization_id, empreendimento_id: e.id });
+    const novos = faltantesDaLista(listaId, existentes, { organization_id: e.organization_id, empreendimento_id: e.id });
     if (novos.length === 0) return [];
     const { data, error } = await supabase.from(TABELA).insert(novos).select('*');
     if (error) throw new Error(`Erro ao carregar a lista padrão: ${error.message}`);
@@ -120,19 +122,13 @@ export const empreendimentoDocumentosService = {
 
   async criarLegal(payload: DocumentoLegalInsert): Promise<DocumentoLegal> {
     const { data, error } = await supabase.from(TABELA).insert(payload).select('*').single();
-    if (error) {
-      if (error.code === '23505') throw new Error('Este documento já está no checklist. Edite o item existente.');
-      throw new Error(`Erro ao criar o documento: ${error.message}`);
-    }
+    if (error) throw new Error(`Erro ao criar o documento: ${error.message}`);
     return data as DocumentoLegal;
   },
 
   async atualizarLegal(item: DocumentoLegal, updates: DocumentoLegalUpdate): Promise<ResultadoDoItem> {
     const { data, error } = await supabase.from(TABELA).update(updates).eq('id', item.id).select('*').single();
-    if (error) {
-      if (error.code === '23505') throw new Error('Já existe um item deste tipo no checklist.');
-      throw new Error(`Erro ao salvar o documento: ${error.message}`);
-    }
+    if (error) throw new Error(`Erro ao salvar o documento: ${error.message}`);
     const salvo = data as DocumentoLegal;
 
     const mudouData = CAMPOS_DE_DATA.some(c => c in updates && updates[c] !== item[c]);
@@ -282,7 +278,7 @@ export const empreendimentoDocumentosService = {
   async enviarOutro(
     e: Pick<Empreendimento, 'id' | 'organization_id' | 'project_id'>,
     arquivo: File,
-    meta: { nome: string; categoria: OpuraDocumentCategoria; tipo_documento: string; data_validade?: string | null },
+    meta: { nome: string; categoria: OpuraDocumentCategoria; tipo_documento: string; data_emissao?: string | null; data_validade?: string | null },
   ): Promise<OpuraDocument> {
     validarArquivo(arquivo);
     const email = await emailDoUsuario();
@@ -295,6 +291,7 @@ export const empreendimentoDocumentosService = {
         categoria: meta.categoria,
         tipo_documento: meta.tipo_documento,
         status: 'ativo',
+        data_emissao: meta.data_emissao || undefined,
         data_validade: meta.data_validade || undefined,
         alerta_dias_antecedencia: 30,
         tags: ['empreendimento'],
@@ -316,7 +313,7 @@ export const empreendimentoDocumentosService = {
    */
   async atualizarOutro(
     doc: OpuraDocument,
-    meta: { nome: string; categoria: OpuraDocumentCategoria; tipo_documento: string; data_validade?: string | null },
+    meta: { nome: string; categoria: OpuraDocumentCategoria; tipo_documento: string; data_emissao?: string | null; data_validade?: string | null },
     arquivo?: File | null,
   ): Promise<OpuraDocument> {
     if (arquivo) {
@@ -327,6 +324,7 @@ export const empreendimentoDocumentosService = {
       nome: meta.nome,
       categoria: meta.categoria,
       tipo_documento: meta.tipo_documento,
+      data_emissao: meta.data_emissao || null, // vazio limpa a emissão
       data_validade: meta.data_validade || null, // vazio limpa a validade
     });
   },

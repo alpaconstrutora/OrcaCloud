@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
-  diasEntre, faltantesDaListaPadrao, hojeISO, resumoDoChecklist, situacaoExibida,
+  diasEntre, faltantesDaLista, hojeISO, resumoDoChecklist, situacaoExibida,
 } from '../utils/empreendimentoDocumentos';
-import { TIPOS_DOCUMENTO_LEGAL, infoDoTipo, type DocumentoLegal } from '../types/empreendimentoDocumentos';
+import { LISTAS_PADRAO, TIPOS_DOCUMENTO_LEGAL, infoDoTipo, listaPadrao, type DocumentoLegal } from '../types/empreendimentoDocumentos';
+
+const GERAL = listaPadrao('GERAL');
 
 /**
  * Aba Documentos do empreendimento (12/11/2026).
@@ -69,31 +71,92 @@ describe('situacaoExibida', () => {
   });
 });
 
-describe('faltantesDaListaPadrao', () => {
+describe('faltantesDaLista — lista Geral', () => {
   const base = { organization_id: 'o', empreendimento_id: 'e' };
 
   it('checklist vazio recebe a lista padrão inteira, na ordem do ciclo, tudo Pendente', () => {
-    const novos = faltantesDaListaPadrao([], base);
-    expect(novos.map(n => n.tipo)).toEqual(TIPOS_DOCUMENTO_LEGAL.map(t => t.tipo));
+    const novos = faltantesDaLista('GERAL', [], base);
+    expect(novos).toHaveLength(18);
+    expect(novos.map(n => n.tipo)).toEqual(GERAL.itens.map(t => t.tipo));
+    expect(novos[0].sort_order).toBe(10);
+    expect(novos[17].sort_order).toBe(180);
     expect(novos.every(n => n.situacao === 'PENDENTE' && n.organization_id === 'o' && n.empreendimento_id === 'e')).toBe(true);
     expect(novos.map(n => n.sort_order)).toEqual([...novos.map(n => n.sort_order)].sort((a, b) => a - b));
     expect(novos.some(n => n.tipo === 'OUTRO')).toBe(false);
   });
 
   it('é idempotente: rodar de novo depois de aplicar não acrescenta nada', () => {
-    const primeira = faltantesDaListaPadrao([], base);
-    expect(faltantesDaListaPadrao(primeira, base)).toEqual([]);
+    const primeira = faltantesDaLista('GERAL', [], base);
+    expect(faltantesDaLista('GERAL', primeira, base)).toEqual([]);
   });
 
   it('só traz o que falta; item OUTRO não conta como tipo padrão', () => {
-    const novos = faltantesDaListaPadrao([{ tipo: 'HABITE_SE' }, { tipo: 'OUTRO' }], base);
-    expect(novos).toHaveLength(TIPOS_DOCUMENTO_LEGAL.length - 1);
+    const novos = faltantesDaLista('GERAL', [{ tipo: 'HABITE_SE' }, { tipo: 'OUTRO' }], base);
+    expect(novos).toHaveLength(GERAL.itens.length - 1);
     expect(novos.some(n => n.tipo === 'HABITE_SE')).toBe(false);
   });
 
   it('preenche o órgão sugerido do tipo', () => {
-    const habite = faltantesDaListaPadrao([], base).find(n => n.tipo === 'HABITE_SE')!;
+    const habite = faltantesDaLista('GERAL', [], base).find(n => n.tipo === 'HABITE_SE')!;
     expect(habite.orgao_emissor).toBe('Prefeitura');
+  });
+
+  it('duas escrituras no checklist (mais de uma por tipo, 21/11) não atrapalham a carga', () => {
+    const novos = faltantesDaLista('GERAL', [{ tipo: 'ESCRITURA' }, { tipo: 'ESCRITURA' }], base);
+    expect(novos).toHaveLength(17);
+    expect(novos.some(n => n.tipo === 'ESCRITURA')).toBe(false);
+  });
+});
+
+describe('faltantesDaLista — lista Incorporação (Lei 4.591/64, 21/11/2026)', () => {
+  const base = { organization_id: 'o', empreendimento_id: 'e' };
+
+  it('checklist vazio recebe os 15 documentos, na ordem e com os títulos do pedido', () => {
+    const novos = faltantesDaLista('INCORPORACAO', [], base);
+    expect(novos.map(n => n.titulo)).toEqual([
+      'Memorial de incorporação',
+      'Título de propriedade do terreno',
+      'Certidões negativas de tributos federais, estaduais e municipais',
+      'Certidões das justiças federal e estadual',
+      'Certidões de protesto de títulos',
+      'Certidões do imóvel',
+      'Histórico dos títulos de propriedade do imóvel (últimos 20 anos)',
+      'Quadros da NBR 12.721:2006, com ART/RRT',
+      'Projeto arquitetônico de construção',
+      'Alvará de construção',
+      'Atestado de idoneidade financeira',
+      'Contrato-padrão',
+      'Declaração em que se defina a parcela do preço (art. 39, II, Lei 4.591/64)',
+      'Certidão de instrumento público de mandato',
+      'Declaração do prazo de carência',
+    ]);
+    expect(novos.every(n => n.situacao === 'PENDENTE' && n.obrigatorio)).toBe(true);
+    // bloco próprio de ordem: fica depois da lista Geral, em qualquer ordem de carga
+    expect(novos[0].sort_order).toBe(1010);
+    expect(novos[14].sort_order).toBe(1150);
+  });
+
+  it('depois da Geral traz 11: escritura, certidões do imóvel, projeto e alvará não se repetem', () => {
+    const geral = faltantesDaLista('GERAL', [], base);
+    const novos = faltantesDaLista('INCORPORACAO', geral, base);
+    expect(novos).toHaveLength(11);
+    for (const t of ['ESCRITURA', 'CERTIDOES_IMOVEL', 'APROVACAO_PROJETO', 'ALVARA_CONSTRUCAO'] as const) {
+      expect(novos.some(n => n.tipo === t)).toBe(false);
+    }
+    // e a Geral depois da Incorporação traz 14
+    expect(faltantesDaLista('GERAL', faltantesDaLista('INCORPORACAO', [], base), base)).toHaveLength(14);
+  });
+
+  it('é idempotente', () => {
+    const primeira = faltantesDaLista('INCORPORACAO', [], base);
+    expect(faltantesDaLista('INCORPORACAO', primeira, base)).toEqual([]);
+  });
+
+  it('o mesmo tipo aparece uma vez em cada lista', () => {
+    for (const l of LISTAS_PADRAO) {
+      const tipos = l.itens.map(i => i.tipo);
+      expect(new Set(tipos).size).toBe(tipos.length);
+    }
   });
 });
 
@@ -101,6 +164,12 @@ describe('tipo → categoria do GED', () => {
   it('cada tipo da lista cai numa categoria que o GED tem', () => {
     const categorias = new Set(['juridico', 'engenharia', 'compliance', 'financeiro', 'comercial']);
     for (const t of TIPOS_DOCUMENTO_LEGAL) expect(categorias.has(t.categoria)).toBe(true);
+  });
+
+  it('todo tipo das listas padrão está no catálogo (e não cai no "Outro" por engano)', () => {
+    for (const l of LISTAS_PADRAO) {
+      for (const i of l.itens) expect(TIPOS_DOCUMENTO_LEGAL.some(t => t.tipo === i.tipo)).toBe(true);
+    }
   });
 
   it('alvarás e habite-se em Licenças & Alvarás; escritura e registro em Contratos; ART em Projetos', () => {
@@ -114,7 +183,8 @@ describe('tipo → categoria do GED', () => {
 
   it('os tipos da lista batem com o CHECK da migration', async () => {
     const { readFileSync } = await import('node:fs');
-    const sql = readFileSync('supabase/migrations/aplicar_20271112995000_empreendimento_documentos.sql', 'utf8');
+    // o CHECK vigente é o da migration de 21/11/2026 (lista Incorporação)
+    const sql = readFileSync('supabase/migrations/aplicar_20271121910000_empreendimento_documentos_varios_por_tipo.sql', 'utf8');
     for (const t of [...TIPOS_DOCUMENTO_LEGAL.map(x => x.tipo), 'OUTRO']) expect(sql).toContain(`'${t}'`);
   });
 });

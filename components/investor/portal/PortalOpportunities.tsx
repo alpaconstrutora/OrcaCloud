@@ -1,7 +1,7 @@
 import React from 'react';
 import { Building2, CheckCircle2, ChevronDown, ExternalLink, FolderOpen, LineChart, MapPin, Send } from 'lucide-react';
 import PortalOportunidadeDetalhe, { type AbaDoDetalhe } from './PortalOportunidadeDetalhe';
-import { comNumerosDaVersao } from '../../../utils/oportunidadeNumerosDaVersao';
+import { naVitrine, type OportunidadeNaVitrine } from '../../../utils/oportunidadeNumerosDaVersao';
 import {
     InvestorOpportunity, OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_TYPE_LABELS, OpportunityStatus,
 } from '../../../services/investorPortalService';
@@ -30,28 +30,23 @@ const pct = (v?: number | null) =>
     v == null ? '—' : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 
 /**
- * Linha expandida: só o que tem valor (pedido de 16/11/2026 — 7 de 8 campos eram "—"). A localização
- * já aparece sob o nome na própria linha; "Rentabilidade projetada" só quando digitada (antes caía no
- * ROI, que a linha já mostra).
+ * Linha expandida: só o que tem valor, e só o que vem da VERSÃO do Imovib (plano
+ * docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md, Fase 2). Antes: áreas, pavimentos,
+ * custo, prazo, rentabilidade e início digitados no formulário.
  */
-function camposDaLinha(o: InvestorOpportunity): { rotulo: string; valor: string }[] {
+function camposDaLinha(o: OportunidadeNaVitrine): { rotulo: string; valor: string }[] {
     const campos: [string, string | null][] = [
-        ['Área do terreno', o.land_area_m2 ? `${o.land_area_m2.toLocaleString('pt-BR')} m²` : null],
-        ['Área construída', o.built_area_m2 ? `${o.built_area_m2.toLocaleString('pt-BR')} m²` : null],
-        ['Pavimentos', o.floors != null ? String(o.floors) : null],
-        ['Custo estimado', o.cost_estimate ? fmtBRL(o.cost_estimate) : null],
-        ['Prazo', o.duration_months ? `${o.duration_months} meses` : null],
-        ['Rentabilidade projetada', o.projected_yield?.trim() || null],
-        ['Início previsto', o.expected_start
-            ? new Date(`${o.expected_start}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-            : null],
+        ['Custo (obra e terreno)', o.custo_total ? fmtBRL(o.custo_total) : null],
+        ['Prazo', o.prazo_meses ? `${o.prazo_meses} meses` : null],
+        ['Lucro líquido projetado', o.lucro_liquido != null ? fmtBRL(o.lucro_liquido) : null],
+        ['Capital máximo exigido', o.exposicao_maxima ? fmtBRL(o.exposicao_maxima) : null],
     ];
     return campos.filter((c): c is [string, string] => c[1] != null).map(([rotulo, valor]) => ({ rotulo, valor }));
 }
 
 const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, investorProfile, portalToken }) => {
-    // VGV/ROI/TIR: os da versão publicada do Imovib, quando houver (utils/oportunidadeNumerosDaVersao.ts).
-    const opportunities = React.useMemo(() => recebidas.map(comNumerosDaVersao), [recebidas]);
+    // Todos os números: os da versão do Imovib (utils/oportunidadeNumerosDaVersao.ts, naVitrine).
+    const opportunities = React.useMemo(() => recebidas.map(naVitrine), [recebidas]);
     const [expanded, setExpanded] = React.useState<string | null>(null);
     const [sending, setSending] = React.useState<string | null>(null);
     const [sent, setSent] = React.useState<string[]>([]);
@@ -143,9 +138,6 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                                 const key = o.id ?? `opp-${i}`;
                                 const isOpen = expanded === key;
                                 const status = (o.status ?? 'estudo') as OpportunityStatus;
-                                const funding = o.target_funding_value && o.current_funding_value != null
-                                    ? Math.min(100, (o.current_funding_value / o.target_funding_value) * 100)
-                                    : null;
                                 const campos = isOpen ? camposDaLinha(o) : [];
                                 return (
                                     <React.Fragment key={key}>
@@ -158,11 +150,9 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                                                     <ChevronDown className={`w-3.5 h-3.5 text-gray-300 transition-transform ${isOpen ? 'rotate-180' : '-rotate-90'}`} />
                                                     <span className="min-w-0">
                                                         <span className="block truncate">{o.title}</span>
-                                                        {(o.location_city || o.subtitle) && (
+                                                        {(o.cidade || o.subtitle) && (
                                                             <span className="block text-[12px] text-[#A0A4AD] font-normal truncate">
-                                                                {o.location_city
-                                                                    ? `${o.location_city}${o.location_state ? `/${o.location_state}` : ''}`
-                                                                    : o.subtitle}
+                                                                {o.cidade ? `${o.cidade}${o.uf ? `/${o.uf}` : ''}` : o.subtitle}
                                                             </span>
                                                         )}
                                                     </span>
@@ -181,20 +171,6 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                                                     {campos.length > 0 && (
                                                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-1 max-w-3xl mb-4">
                                                             {campos.map(c => <DetailField key={c.rotulo} label={c.rotulo}>{c.valor}</DetailField>)}
-                                                        </div>
-                                                    )}
-
-                                                    {funding != null && (
-                                                        <div className="mb-4 max-w-md">
-                                                            <div className="flex items-center justify-between text-[12px] text-[#8A8F9A] mb-1.5">
-                                                                <span>Captação</span>
-                                                                <span className="tabular-nums">
-                                                                    {fmtBRL(o.current_funding_value ?? 0)} de {fmtBRL(o.target_funding_value ?? 0)}
-                                                                </span>
-                                                            </div>
-                                                            <div className="h-1.5 bg-white rounded-full overflow-hidden border border-[#F3D9D1]">
-                                                                <div className="h-full bg-[#E1553C] rounded-full" style={{ width: `${funding}%` }} />
-                                                            </div>
                                                         </div>
                                                     )}
 
@@ -253,10 +229,10 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                             <img src={o.thumbnail_url!} alt={o.title} className="w-full h-36 object-cover" />
                             <div className="px-4 py-3">
                                 <p className="text-sm font-semibold text-[#1F2430] truncate">{o.title}</p>
-                                {o.location_city && (
+                                {o.cidade && (
                                     <p className="flex items-center gap-1 text-[12px] text-[#A0A4AD] mt-0.5">
                                         <MapPin className="w-3 h-3" />
-                                        {o.location_city}{o.location_state ? `/${o.location_state}` : ''}
+                                        {o.cidade}{o.uf ? `/${o.uf}` : ''}
                                     </p>
                                 )}
                             </div>

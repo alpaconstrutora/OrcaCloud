@@ -111,7 +111,6 @@ export function camposSemAltura(texto: string): number[] {
 const BASELINE: Record<string, number> = {
     'components/LaborEncargos.tsx': 1,                  // DESTAQUE  salário bruto da calculadora de encargos
     'components/PricingIntelligenceModal.tsx': 1,       // DESTAQUE  preço-alvo da inteligência de preços
-    'components/investor/InvestmentSimulator.tsx': 1,   // DESTAQUE  valor do aporte no simulador
     'components/Auth.tsx': 2,                           // PUBLICO   login
     'components/ResetPassword.tsx': 3,                  // PUBLICO   redefinição de senha
     'components/public/PublicOpportunityDetail.tsx': 3, // PUBLICO   página pública de oportunidade

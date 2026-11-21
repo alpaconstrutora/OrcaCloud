@@ -78,22 +78,25 @@ describe('oportunidade aberta: tela própria', () => {
     });
 });
 
-describe('linha expandida: só o que tem valor', () => {
-    it('campos vazios somem; "Rentabilidade projetada" só se digitada', async () => {
+describe('linha expandida: só o que tem valor, e só da versão (plano 2026-11-21, Fase 2)', () => {
+    it('com resultados da versão: custo e prazo; campos digitados antigos (área etc.) nunca aparecem', async () => {
         const user = userEvent.setup();
-        render(<PortalOpportunities opportunities={[garden]} portalToken="tok" />);
+        const comResultados = { ...(garden as object), indicadores_da_versao: { vgv: 1, lucroLiquido: 10, exposicaoMaxima: 100 }, resultados_da_versao: { duracao: 36, custoObra: 900, terreno: 100 } } as never;
+        render(<PortalOpportunities opportunities={[comResultados]} portalToken="tok" />);
         await user.click(screen.getByText('Garden Cambuhy'));
-        expect(screen.getByText('Área do terreno')).toBeTruthy();
-        for (const vazio of ['Localização', 'Área construída', 'Pavimentos', 'Custo estimado', 'Prazo', 'Início previsto', 'Rentabilidade projetada']) {
-            expect(screen.queryByText(vazio)).toBeNull();
+        expect(screen.getByText('Custo (obra e terreno)')).toBeTruthy();
+        expect(screen.getByText('36 meses')).toBeTruthy();
+        for (const fora of ['Área do terreno', 'Área construída', 'Pavimentos', 'Início previsto', 'Rentabilidade projetada']) {
+            expect(screen.queryByText(fora)).toBeNull();
         }
     });
 
-    it('rentabilidade digitada aparece', async () => {
+    it('sem versão: nenhum campo na linha aberta', async () => {
         const user = userEvent.setup();
         render(<PortalOpportunities opportunities={[{ ...(garden as object), projected_yield: '1,8% a.m.' } as never]} portalToken="tok" />);
         await user.click(screen.getByText('Garden Cambuhy'));
-        expect(screen.getByText('Rentabilidade projetada')).toBeTruthy();
-        expect(screen.getByText('1,8% a.m.')).toBeTruthy();
+        expect(screen.queryByText('1,8% a.m.')).toBeNull();
+        expect(screen.queryByText('Prazo')).toBeNull();
     });
 });
+

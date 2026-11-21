@@ -27,7 +27,18 @@ beforeEach(() => { q.st.insert = null; q.st.update = null; q.st.resposta = linha
 describe('investorPortalService › indicadores da versão', () => {
     it('o select traz a versão publicada pelo imovib_version_id', async () => {
         await investorPortalService.listOpportunities(null);
-        expect(q.st.select).toContain('versao_publicada:imovib_study_versions!imovib_version_id(indicadores:snapshot->calculo->investidor->indicadores)');
+        expect(q.st.select).toContain('versao_publicada:imovib_study_versions!imovib_version_id(indicadores:snapshot->calculo->investidor->indicadores, results)');
+        // Fase 2 do plano 2026-11-21: nenhum número digitado no select.
+        for (const c of ['vgv', 'roi_pct', 'tir_pct', 'cost_estimate', 'duration_months', 'location_city', 'risks_json', 'target_funding_value']) {
+            expect(q.st.select.split(', ')).not.toContain(c);
+        }
+    });
+
+    it('resultados da versão vêm achatados só com prazo e custos; sem estudo, local null', async () => {
+        q.st.resposta = { ...linha, versao_publicada: { indicadores: IND, results: { duracao: 48, custoObra: 7, terreno: 1, vpl: 99 } } };
+        const [o] = await investorPortalService.listOpportunities('spe');
+        expect(o.resultados_da_versao).toEqual({ duracao: 48, custoObra: 7, terreno: 1 });
+        expect(o.local).toBeNull();
     });
 
     it('listar, criar e salvar devolvem indicadores_da_versao achatado (sem versao_publicada)', async () => {
@@ -51,6 +62,8 @@ describe('investorPortalService › indicadores da versão', () => {
         await investorPortalService.updateOpportunity('op1', { title: 'G', indicadores_da_versao: IND });
         expect(q.st.insert).not.toHaveProperty('indicadores_da_versao');
         expect(q.st.update).not.toHaveProperty('indicadores_da_versao');
+        expect(q.st.update).toEqual({ title: 'G' });
+        await investorPortalService.updateOpportunity('op1', { title: 'G', resultados_da_versao: { duracao: 1 }, local: { cidade: 'X', uf: null, obra_id: null } });
         expect(q.st.update).toEqual({ title: 'G' });
     });
 });

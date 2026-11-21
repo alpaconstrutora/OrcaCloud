@@ -85,7 +85,31 @@ versão → quem/quando gravados; voltar a pendente limpa. Edge Function `read-m
   (font-bold em `<td>`) e §8 (pílula) — também no `main`; os trechos saem na 2.3.
 - Prova: tsc exit 0; 336 arquivos / 865 testes das áreas tocadas e 98 testes de migrations, todos verdes.
 
-**Fases 2 a 5:** não começadas.
+**Fase 1 NO AR** (PR #621, squash 97951b4; `conferir-producao.sh` com "Usar no estudo" e "Comitê de investimentos" ✅).
+
+**Fase 2: 7 de 7 itens feitos na frente `imovib-oport-f2`** — falta aplicar 960000 (antes do deploy) e 961000
+(DEPOIS do deploy), com OK.
+- 2.1 ✅ gatilho em `aplicar_20271121960000_oportunidade_vitrine.sql`: publicar exige estudo + versão com cálculo;
+  **5.2 antecipado** no mesmo gatilho (parecer "reprovar" recusa; sem parecer/renegociar = aviso no formulário).
+- 2.2 ✅ formulário: saem obra, captação digitada, riscos, concorrentes, localização, dados técnicos, financeiro
+  (fica ticket mínimo) e cenários; entra "Do estudo e do empreendimento" (só leitura,
+  `investorPortalService.lidoDoEstudo`). **Galeria e capa ficam até a 3.3** (sem elas a vitrine ficaria sem foto).
+- 2.3 ✅ ficha: saem o painel morto, os controles deslizantes, o recálculo ao vivo (`useImovibMath`), o gráfico de
+  concorrentes e a tabela `risks_json`; ficha técnica = seção Produto congelada; riscos/comparáveis/DD da versão
+  na tela (`components/investor/portal/ListasDaVersao.tsx`, também no detalhe do portal).
+- 2.4 ✅ `components/investor/InvestmentSimulator.tsx` reescrito (participação sobre a exposição, TMA como régua,
+  some sem versão). Fora do escopo: `components/InvestmentSimulator.tsx` (aba "Simulador" do painel do investidor) é
+  calculadora genérica em que o próprio investidor digita os valores — não apresenta número de oportunidade.
+- 2.5 ✅ `utils/oportunidadeNumerosDaVersao.ts` → `naVitrine` (um ROI; sem reserva digitada; prazo, custo, local).
+- 2.6 ✅ `fn_oportunidade_na_vitrine` (lista explícita) usada por `fn_investor_portal_get_opportunities` e
+  `get_public_marketplace` (+ REVOKE PUBLIC). Contrato em `__tests__/investorPortalEstudo.test.ts`.
+- 2.7 ✅ `aplicar_20271121961000_oportunidade_sem_campos_digitados.sql` (23 colunas + 4 tabelas; guardas param se
+  houver dado). `target/current_funding_value` saem aqui (a captação real é a Fase 4). Bucket
+  `due-diligence-findings` fica (apagar pela API de storage depois de conferir 0 objetos).
+- §7/§8 pré-existentes corrigidos nos arquivos tocados (status vira texto colorido: `OPPORTUNITY_STATUS_TEXT`).
+- Prova: tsc exit 0; 506 arquivos / 1.372 testes (áreas tocadas + varredura de migrations) verdes.
+
+**Fases 3 a 5:** não começadas (5.2 já entrou na Fase 2).
 
 ---
 

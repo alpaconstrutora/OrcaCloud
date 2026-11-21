@@ -1,41 +1,28 @@
 import React from 'react';
 import {
-    X, MapPin, TrendingUp, BarChart3, Ruler, Calendar,
-    Building2, CheckCircle2, ChevronRight, Handshake, Users, Clock, Shield, Award, Landmark, AlertTriangle, SlidersHorizontal
+    X, MapPin, TrendingUp, Ruler, Building2, CheckCircle2, ChevronRight, Handshake, Users, Clock
 } from 'lucide-react';
 import {
     InvestorOpportunity, InterestRole, OpportunityInterest,
-    OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_COLORS,
+    OPPORTUNITY_STATUS_LABELS,
     OPPORTUNITY_TYPE_LABELS, INTEREST_ROLE_LABELS, INTEREST_STAGE_LABELS,
-    OpportunityCompetitor,
     investorPortalService,
 } from '../../services/investorPortalService';
 import { Investor } from '../../services/investorService';
 import { investorPortalTokenService } from '../../services/investorPortalTokenService';
-import ScenarioComparison from './ScenarioComparison';
 import LinkedProjectPanel from './LinkedProjectPanel';
 import DataRoomPanel from './DataRoomPanel';
-import { comNumerosDaVersao } from '../../utils/oportunidadeNumerosDaVersao';
-import OpportunityPhotosPanel from './OpportunityPhotosPanel';
-import { fmtBRL, fmtPct, fmtM2 } from '../../utils/format';
+import { naVitrine } from '../../utils/oportunidadeNumerosDaVersao';
+import { fmtBRL, fmtPct } from '../../utils/format';
 import { imovibService } from '../../services/imovibService';
-import { useImovibMath } from '../../hooks/useImovibMath';
-import { estudoComPrazoDoPortal } from '../../utils/imovibVariacoes';
-import { calcularIndicadores, textoDoPayback } from '../../utils/imovibIndicadores';
-import { IMOVIB_DEFAULTS } from '../../constants/imovibDefaults';
-import { composicaoDoCapital, ROTULO_DO_CAPITAL, COR_DO_CAPITAL } from '../../utils/imovibFinanciamento';
-import { TITULO_VGV_LIQUIDO, vgvLiquidoPassaDoBruto, notaDoVgvLiquido } from '../../constants/imovibClassificacao';
 import { ImovibStudy, ImovibScenario } from '../../types';
 import type { VersaoPublicada } from '../../utils/imovibVersoes';
 import ImovibPainelDoInvestidor from './portal/ImovibPainelDoInvestidor';
+import ListasDaVersao from './portal/ListasDaVersao';
 import { InvestmentSimulator } from './InvestmentSimulator';
 import Button from '../ui/Button';
 import { BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
 import { ImagemAssinada } from '../ui/ImagemAssinada';
-import {
-    ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line,
-    XAxis, YAxis, CartesianGrid, Tooltip, Legend, BarChart, Bar
-} from 'recharts';
 
 interface Props {
     opportunity: InvestorOpportunity;
@@ -56,8 +43,9 @@ type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'documentos' | 'interesses';
 type FormStep = 'view' | 'form' | 'success';
 
 const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdmin = false, uploadedBy, investorProfile, portalToken, onClose }) => {
-    // VGV/ROI/TIR: os da versão publicada do Imovib, quando houver (utils/oportunidadeNumerosDaVersao.ts).
-    const op = React.useMemo(() => comNumerosDaVersao(opportunity), [opportunity]);
+    // Todos os números são os da versão do Imovib; local e obra, do empreendimento (plano
+    // docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md, Fase 2 — utils/oportunidadeNumerosDaVersao.ts).
+    const op = React.useMemo(() => naVitrine(opportunity), [opportunity]);
     const [formStep, setFormStep] = React.useState<FormStep>('view');
     const [pitchTab, setPitchTab] = React.useState<PitchTab>('pitch');
     const [saving, setSaving] = React.useState(false);
@@ -99,46 +87,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
         return () => { vivo = false; };
     }, [op.imovib_study_id, op.imovib_version_id, portalToken]);
 
-    const [sliderCostPct, setSliderCostPct] = React.useState(0);
-    const [sliderVgvPct, setSliderVgvPct] = React.useState(0);
-    const [sliderDurationDelta, setSliderDurationDelta] = React.useState(0);
-
-    // Item 10.6: o prazo varia pela mesma regra do app (vale com a duração vazia).
-    const modifiedStudy = React.useMemo(() => (study ? estudoComPrazoDoPortal(study, sliderDurationDelta) : null), [study, sliderDurationDelta]);
-
-    const studyMath = useImovibMath(modifiedStudy, { vgvDelta: sliderVgvPct, costDelta: sliderCostPct });
-    const indicadores = React.useMemo(
-        () => (study ? calcularIndicadores(studyMath, study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate) : null),
-        [studyMath, study],
-    );
-
-    const [competitors, setCompetitors] = React.useState<OpportunityCompetitor[]>([]);
-
-    React.useEffect(() => {
-        if (op.id) {
-            investorPortalService.listCompetitors(op.id)
-                .then(setCompetitors)
-                .catch(err => console.error('Erro ao carregar concorrentes no detalhe', err));
-        }
-    }, [op.id]);
-
-    const comparisonData = React.useMemo(() => {
-        if (competitors.length === 0) return [];
-        return [
-            {
-                name: op.title,
-                'Preço/m²': op.cost_per_m2 || 0,
-                'Vendas Mensais %': 5,
-                'Valorização Anual %': 12,
-            },
-            ...competitors.map(c => ({
-                name: c.name,
-                'Preço/m²': Number(c.price_per_m2),
-                'Vendas Mensais %': c.sales_velocity_pct || 0,
-                'Valorização Anual %': c.appreciation_pct || 0,
-            }))
-        ];
-    }, [competitors, op]);
+    // Ficha técnica: a seção Produto CONGELADA na versão (nada se recalcula aqui).
+    const produto = versaoPublicada?.calculo?.secoes?.find(x => x.id === 'produto') ?? null;
 
     const loadInterests = React.useCallback(() => {
         if (!op.id) return;
@@ -183,8 +133,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
         }
     };
 
-    const hasFinancials = op.vgv || op.roi_pct != null || op.tir_pct != null || op.cost_estimate;
-    const hasScenarios = (op.vgv && op.cost_estimate) || op.imovib_study_id;
+    const hasFinancials = op.comVersao;
 
     // ── Analytics de interesses ──────────────────────────────────
     const interestsByRole = ROLES.reduce<Record<string, number>>((acc, r) => {
@@ -197,16 +146,16 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
             return acc;
         }, {});
 
-    const hasLinkedProject = !!op.project_id;
+    const hasLinkedProject = !!op.obra_id;
 
-    const locationLabel = [op.location_city, op.location_state].filter(Boolean).join(', ');
+    const locationLabel = [op.cidade, op.uf].filter(Boolean).join(', ');
     const opportunityPresentation = [
         `${op.title} está em fase de ${op.status ? OPPORTUNITY_STATUS_LABELS[op.status].toLowerCase() : 'avaliação'}${op.opportunity_type ? ` no formato ${OPPORTUNITY_TYPE_LABELS[op.opportunity_type].toLowerCase()}` : ''}.`,
         locationLabel ? `Localização: ${locationLabel}.` : null,
         op.vgv != null ? `VGV estimado de ${fmtBRL(op.vgv)}.` : null,
-        op.cost_estimate != null ? `Custo estimado de ${fmtBRL(op.cost_estimate)}.` : null,
+        op.custo_total != null ? `Custo estimado (obra e terreno) de ${fmtBRL(op.custo_total)}.` : null,
         op.ticket_min != null ? `Ticket mínimo de ${fmtBRL(op.ticket_min)}.` : null,
-        (op.duration_months || studyMath?.duration) ? `Prazo previsto de ${op.duration_months || studyMath?.duration} meses.` : null,
+        op.prazo_meses ? `Prazo previsto de ${op.prazo_meses} meses.` : null,
         op.roi_pct != null || op.tir_pct != null
             ? `Indicadores projetados: ${op.roi_pct != null ? `ROI de ${fmtPct(op.roi_pct)}` : ''}${op.roi_pct != null && op.tir_pct != null ? ' e ' : ''}${op.tir_pct != null ? `TIR de ${fmtPct(op.tir_pct)}` : ''}.`
             : null,
@@ -263,12 +212,12 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                         <div className="md:col-span-2 space-y-4">
                             <div className="flex flex-wrap items-start gap-3">
                                 {op.status && (
-                                    <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
+                                    <span className="text-sm font-medium text-white/80">
                                         {OPPORTUNITY_STATUS_LABELS[op.status]}
                                     </span>
                                 )}
                                 {op.opportunity_type && (
-                                    <span className="px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-widest bg-white/10 text-white/70">
+                                    <span className="text-sm text-white/60">
                                         {OPPORTUNITY_TYPE_LABELS[op.opportunity_type]}
                                     </span>
                                 )}
@@ -276,65 +225,35 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                             <h1 className="text-3xl sm:text-5xl font-black leading-tight tracking-tight">{op.title}</h1>
                             {op.subtitle && <p className="text-white/70 text-lg font-medium leading-relaxed">{op.subtitle}</p>}
                             <div className="flex flex-wrap gap-5 text-sm text-white/50 pt-2">
-                                {(op.location_city || op.location_state) && (
+                                {locationLabel && (
                                     <span className="flex items-center gap-1.5 font-semibold">
                                         <MapPin className="w-4 h-4 text-blue-500" />
-                                        {[op.location_city, op.location_state].filter(Boolean).join(', ')}
+                                        {locationLabel}
                                     </span>
                                 )}
-                                {op.expected_start && (
-                                    <span className="flex items-center gap-1.5 font-semibold">
-                                        <Calendar className="w-4 h-4 text-amber-500" />
-                                        Início: {new Date(op.expected_start + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                                    </span>
-                                )}
-                                {((op.duration_months || 0) > 0 || (studyMath?.duration || 0) > 0) && (
+                                {op.prazo_meses && (
                                     <span className="flex items-center gap-1.5 font-semibold">
                                         <Clock className="w-4 h-4 text-emerald-500" />
-                                        {op.duration_months || studyMath?.duration} meses
+                                        {op.prazo_meses} meses
                                     </span>
                                 )}
                             </div>
                         </div>
 
-                        {/* Card Destaque de Captação */}
-                        <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 border border-white/10 space-y-4">
-                            <span className="text-[10px] font-black text-blue-300 uppercase tracking-widest block">
-                                Destaque de Captação
-                            </span>
+                        {/* Destaque: ticket, prazo e TIR da versão (a meta de captação real vem na Fase 4). */}
+                        <div className="bg-white/10 backdrop-blur-md rounded-3xl p-6 border border-white/10 space-y-3">
                             <div>
-                                <span className="text-xs text-white/60 block">Meta Pretendida</span>
-                                <span className="text-2xl font-black font-mono">
-                                    {op.target_funding_value ? fmtBRL(Number(op.target_funding_value)) : '—'}
-                                </span>
+                                <span className="text-xs text-white/60 block">Ticket mínimo</span>
+                                <span className="text-2xl font-semibold">{op.ticket_min != null ? fmtBRL(op.ticket_min) : 'Consultar'}</span>
                             </div>
-                            
-                            {/* Barra de progresso */}
-                            {op.target_funding_value && (
-                                <div className="space-y-1.5">
-                                    <div className="flex justify-between text-xs font-bold text-white/80">
-                                        <span>Meta alcançada:</span>
-                                        <span className="font-mono">{((Number(op.current_funding_value) || 0) / Number(op.target_funding_value) * 100).toFixed(1)}%</span>
-                                    </div>
-                                    <div className="h-2 bg-white/10 rounded-full overflow-hidden">
-                                        <div
-                                            className="h-full bg-gradient-to-r from-blue-500 to-indigo-500 rounded-full"
-                                            style={{ width: `${Math.min(100, ((Number(op.current_funding_value) || 0) / Number(op.target_funding_value) * 100))}%` }}
-                                        />
-                                    </div>
-                                </div>
-                            )}
-
                             <div className="grid grid-cols-2 gap-2 pt-2 border-t border-white/10 text-xs">
                                 <div>
                                     <span className="text-white/50 block">Prazo</span>
-                                    <span className="font-bold text-white">{(op.duration_months || studyMath?.duration) ? `${op.duration_months || studyMath?.duration} meses` : '—'}</span>
+                                    <span className="font-semibold text-white">{op.prazo_meses ? `${op.prazo_meses} meses` : '—'}</span>
                                 </div>
                                 <div>
-                                    <span className="text-white/50 block">TIR Projetada</span>
-                                    <span className="font-bold text-emerald-400 font-mono">
-                                        {studyMath?.annualIrr ? fmtPct(studyMath.annualIrr) : op.tir_pct != null ? fmtPct(op.tir_pct) : '—'}
-                                    </span>
+                                    <span className="text-white/50 block">TIR projetada</span>
+                                    <span className="font-semibold text-emerald-400">{op.tir_pct != null ? fmtPct(op.tir_pct) : '—'}</span>
                                 </div>
                             </div>
                         </div>
@@ -357,7 +276,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                             </div>
                             <div>
                                 <p className="text-xs font-black text-gray-400 uppercase tracking-widest">TIR</p>
-                                <p className="font-black text-emerald-600">{studyMath?.annualIrr ? fmtPct(studyMath.annualIrr) : op.tir_pct != null ? fmtPct(op.tir_pct) : '—'}</p>
+                                <p className="font-black text-emerald-600">{op.tir_pct != null ? fmtPct(op.tir_pct) : '—'}</p>
                             </div>
                             <Button
                                 variant="primary"
@@ -395,16 +314,10 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                         <p className="text-lg font-black text-indigo-700 leading-none">{fmtPct(op.tir_pct)}</p>
                                     </div>
                                 )}
-                                {op.cost_estimate != null && (
+                                {op.custo_total != null && (
                                     <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                                         <p className="text-[9px] font-black text-amber-600 uppercase tracking-wider mb-1">Custo</p>
-                                        <p className="text-lg font-black text-amber-800 leading-none">{fmtBRL(op.cost_estimate)}</p>
-                                    </div>
-                                )}
-                                {op.cost_per_m2 != null && (
-                                    <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
-                                        <p className="text-[9px] font-black text-gray-400 uppercase tracking-wider mb-1">Custo/m²</p>
-                                        <p className="text-lg font-black text-gray-700 leading-none">{fmtBRL(op.cost_per_m2)}</p>
+                                        <p className="text-lg font-black text-amber-800 leading-none">{fmtBRL(op.custo_total)}</p>
                                     </div>
                                 )}
                                 {op.ticket_min != null && (
@@ -452,39 +365,29 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                             <p className="text-sm text-gray-600 leading-relaxed font-medium">{opportunityPresentation}</p>
                                         </div>
 
-                                        {/* Ficha Técnica & Dados Técnicos */}
+                                        {/* Ficha técnica: a seção Produto congelada na versão + prazo (Fase 2 do plano 2026-11-21). */}
+                                        {(produto?.tabelas?.[0] || op.prazo_meses) && (
                                         <div>
                                             <div className="flex items-center gap-2 mb-4">
                                                 <Ruler className="w-4 h-4 text-blue-600" />
-                                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Ficha Técnica</span>
+                                                <span className="text-sm font-semibold text-gray-700">Ficha técnica</span>
                                             </div>
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                                {op.land_area_m2 && (
+                                            <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                                                {(produto?.tabelas?.[0]?.linhas ?? []).map(([rotulo, valor]) => (
+                                                    <div key={rotulo} className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
+                                                        <dt className="text-xs text-gray-500 mb-1">{rotulo}</dt>
+                                                        <dd className="text-base font-semibold text-gray-800">{valor}</dd>
+                                                    </div>
+                                                ))}
+                                                {op.prazo_meses && (
                                                     <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
-                                                        <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Terreno</span>
-                                                        <span className="text-base font-black text-gray-800 font-mono">{fmtM2(op.land_area_m2)}</span>
+                                                        <dt className="text-xs text-gray-500 mb-1">Prazo do projeto</dt>
+                                                        <dd className="text-base font-semibold text-gray-800">{op.prazo_meses} meses</dd>
                                                     </div>
                                                 )}
-                                                {op.built_area_m2 && (
-                                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
-                                                        <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Área Construída</span>
-                                                        <span className="text-base font-black text-gray-800 font-mono">{fmtM2(op.built_area_m2)}</span>
-                                                    </div>
-                                                )}
-                                                {op.floors && (
-                                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
-                                                        <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Pavimentos</span>
-                                                        <span className="text-base font-black text-gray-800 font-mono">{op.floors}</span>
-                                                    </div>
-                                                )}
-                                                {((op.duration_months || 0) > 0 || (studyMath?.duration || 0) > 0) && (
-                                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
-                                                        <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Prazo de Execução</span>
-                                                        <span className="text-base font-black text-gray-800 font-mono">{op.duration_months || studyMath?.duration} meses</span>
-                                                    </div>
-                                                )}
-                                            </div>
+                                            </dl>
                                         </div>
+                                        )}
 
                                         {/* Galeria Premium */}
                                         {op.gallery_urls && op.gallery_urls.length > 0 && (
@@ -554,50 +457,6 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                             </div>
                                         )}
 
-                                        {/* Comparativo de Mercado */}
-                                        {comparisonData.length > 0 && (
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <BarChart3 className="w-4 h-4 text-blue-600" />
-                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Comparativo de Mercado</span>
-                                                </div>
-                                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-white rounded-3xl border border-gray-100 p-6 shadow-sm">
-                                                    <div>
-                                                        <span className="text-[11px] font-black text-gray-400 uppercase tracking-wider block mb-4">
-                                                            Benchmark de Preço Médio por m² (R$)
-                                                        </span>
-                                                        <div className="h-56">
-                                                            <ResponsiveContainer width="100%" height="100%">
-                                                                <BarChart data={comparisonData}>
-                                                                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                                                                    <XAxis dataKey="name" stroke="#9ca3af" fontSize={10} tickLine={false} />
-                                                                    <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} />
-                                                                    <Tooltip formatter={(v: any) => `R$ ${v.toLocaleString('pt-BR')}`} />
-                                                                    <Bar dataKey="Preço/m²" fill="#2563eb" radius={[4, 4, 0, 0]} />
-                                                                </BarChart>
-                                                            </ResponsiveContainer>
-                                                        </div>
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-[11px] font-black text-gray-400 uppercase tracking-wider block mb-4">
-                                                            Valorização Anual Esperada (%)
-                                                        </span>
-                                                        <div className="h-56">
-                                                            <ResponsiveContainer width="100%" height="100%">
-                                                                <BarChart data={comparisonData}>
-                                                                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                                                                    <XAxis dataKey="name" stroke="#9ca3af" fontSize={10} tickLine={false} />
-                                                                    <YAxis stroke="#9ca3af" fontSize={10} tickLine={false} />
-                                                                    <Tooltip formatter={(v: any) => `${v}%`} />
-                                                                    <Bar dataKey="Valorização Anual %" fill="#10b981" radius={[4, 4, 0, 0]} />
-                                                                </BarChart>
-                                                            </ResponsiveContainer>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-
                                         {/* CTA Manifestar Interesse */}
                                         <div className="pt-4">
                                             <Button
@@ -632,278 +491,18 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                                 ) : undefined}
                                             />
                                         ) : (
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-4">
-                                                <BarChart3 className="w-4 h-4 text-blue-600" />
-                                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Dashboard de Viabilidade</span>
-                                            </div>
-
-                                            {erroDoEstudo && (
-                                                <p role="alert" className="mb-4 rounded-[10px] bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">{erroDoEstudo}</p>
-                                            )}
-
-                                            {/* Painel do Simulador Interativo */}
-                                            {study ? (
-                                                <div className="bg-gradient-to-r from-blue-50/50 to-indigo-50/50 border border-blue-100 rounded-3xl p-6 mb-6 space-y-4">
-                                                    <div className="flex items-between justify-between">
-                                                        <div className="flex items-center gap-2">
-                                                            <SlidersHorizontal className="w-5 h-5 text-blue-650" />
-                                                            <h4 className="text-sm font-black text-blue-900">Simulador de Cenários Interativo</h4>
-                                                        </div>
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="sm"
-                                                            onClick={() => {
-                                                                setSliderCostPct(0);
-                                                                setSliderVgvPct(0);
-                                                                setSliderDurationDelta(0);
-                                                            }}
-                                                            className="text-xs text-blue-650 hover:text-blue-750 hover:bg-transparent font-bold"
-                                                        >
-                                                            Resetar Valores
-                                                        </Button>
-                                                    </div>
-                                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                                        {/* Slider 1: Custo de Obra */}
-                                                        <div className="space-y-2">
-                                                            <div className="flex justify-between text-xs font-bold">
-                                                                <span className="text-gray-600">Custo de Obra</span>
-                                                                <span className={`font-mono ${sliderCostPct > 0 ? 'text-red-650 font-bold' : sliderCostPct < 0 ? 'text-emerald-650 font-bold' : 'text-gray-500'}`}>
-                                                                    {sliderCostPct > 0 ? `+${sliderCostPct}%` : `${sliderCostPct}%`}
-                                                                </span>
-                                                            </div>
-                                                            <input 
-                                                                type="range" 
-                                                                min="-20" 
-                                                                max="20" 
-                                                                step="1"
-                                                                value={sliderCostPct} 
-                                                                onChange={e => setSliderCostPct(Number(e.target.value))}
-                                                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                                                            />
-                                                            <div className="flex justify-between text-[10px] text-gray-400 font-bold">
-                                                                <span>-20% (Otimista)</span>
-                                                                <span>+20% (Pessimista)</span>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Slider 2: VGV (Receitas) */}
-                                                        <div className="space-y-2">
-                                                            <div className="flex justify-between text-xs font-bold">
-                                                                <span className="text-gray-600">VGV (Receita)</span>
-                                                                <span className={`font-mono ${sliderVgvPct > 0 ? 'text-emerald-650 font-bold' : sliderVgvPct < 0 ? 'text-red-650 font-bold' : 'text-gray-500'}`}>
-                                                                    {sliderVgvPct > 0 ? `+${sliderVgvPct}%` : `${sliderVgvPct}%`}
-                                                                </span>
-                                                            </div>
-                                                            <input 
-                                                                type="range" 
-                                                                min="-20" 
-                                                                max="20" 
-                                                                step="1"
-                                                                value={sliderVgvPct} 
-                                                                onChange={e => setSliderVgvPct(Number(e.target.value))}
-                                                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                                                            />
-                                                            <div className="flex justify-between text-[10px] text-gray-400 font-bold">
-                                                                <span>-20% (Pessimista)</span>
-                                                                <span>+20% (Otimista)</span>
-                                                            </div>
-                                                        </div>
-
-                                                        {/* Slider 3: Prazo de Obra */}
-                                                        <div className="space-y-2">
-                                                            <div className="flex justify-between text-xs font-bold">
-                                                                <span className="text-gray-600">Prazo de Obra</span>
-                                                                <span className={`font-mono ${sliderDurationDelta > 0 ? 'text-red-650 font-bold' : sliderDurationDelta < 0 ? 'text-emerald-650 font-bold' : 'text-gray-500'}`}>
-                                                                    {sliderDurationDelta > 0 ? `+${sliderDurationDelta} meses` : `${sliderDurationDelta} meses`}
-                                                                </span>
-                                                            </div>
-                                                            <input 
-                                                                type="range" 
-                                                                min="-12" 
-                                                                max="12" 
-                                                                step="1"
-                                                                value={sliderDurationDelta} 
-                                                                onChange={e => setSliderDurationDelta(Number(e.target.value))}
-                                                                className="w-full h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-blue-600"
-                                                            />
-                                                            <div className="flex justify-between text-[10px] text-gray-400 font-bold">
-                                                                <span>Acelerar (-12m)</span>
-                                                                <span>Atrasar (+12m)</span>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            ) : (
-                                                <div className="bg-gray-50 border border-gray-150 rounded-3xl p-5 mb-6 text-center text-xs text-gray-400 font-medium">
-                                                    Vincule um estudo do IMOVIB para habilitar os sliders do Simulador de Cenários Interativo do Empreendimento.
-                                                </div>
-                                            )}
-
-                                            {/* KPIs Financeiros Detalhados */}
-                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4" title={studyMath ? TITULO_VGV_LIQUIDO : undefined}>
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">VGV Líquido</span>
-                                                    <span className="text-lg font-black text-blue-900 font-mono">
-                                                        {studyMath ? fmtBRL(studyMath.netVgvTotal) : op.vgv ? fmtBRL(op.vgv) : '—'}
-                                                    </span>
-                                                    {studyMath && vgvLiquidoPassaDoBruto(studyMath) && <span className="block text-xs text-gray-500 mt-1">{notaDoVgvLiquido(study ?? {})}</span>}
-                                                </div>
-                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Custo Estimado</span>
-                                                    <span className="text-lg font-black text-amber-800 font-mono">
-                                                        {studyMath ? fmtBRL(studyMath.constCostTotal + studyMath.landCost) : op.cost_estimate ? fmtBRL(op.cost_estimate) : '—'}
-                                                    </span>
-                                                </div>
-                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">TIR Projetada (a.a.)</span>
-                                                    <span className="text-lg font-black text-indigo-700 font-mono">
-                                                        {studyMath ? fmtPct(studyMath.annualIrr) : op.tir_pct ? fmtPct(op.tir_pct) : '—'}
-                                                    </span>
-                                                </div>
-                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Retorno Esperado (ROI)</span>
-                                                    <span className="text-lg font-black text-emerald-700 font-mono">
-                                                        {studyMath && studyMath.constCostTotal > 0 
-                                                            ? fmtPct(((studyMath.netVgvTotal - (studyMath.constCostTotal + studyMath.landCost)) / (studyMath.constCostTotal + studyMath.landCost)) * 100)
-                                                            : op.roi_pct ? fmtPct(op.roi_pct) : '—'}
-                                                    </span>
-                                                </div>
-                                                {/* Item 10.6: os mesmos indicadores do Resumo do app. */}
-                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4" title="Mês em que o caixa acumulado volta a ficar positivo e assim fica">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Payback</span>
-                                                    <span className="text-lg font-black text-slate-800 font-mono">
-                                                        {indicadores ? textoDoPayback(indicadores) : '—'}
-                                                    </span>
-                                                </div>
-                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4" title="Entradas ÷ saídas de caixa">
-                                                    <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Múltiplo do capital</span>
-                                                    <span className="text-lg font-black text-slate-800 font-mono">
-                                                        {indicadores?.multiploDoCapital != null ? `${indicadores.multiploDoCapital.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}x` : '—'}
-                                                    </span>
-                                                </div>
-                                            </div>
-
-                                            {/* Gráficos Recharts */}
-                                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                                {/* Gráfico 1: Fluxo de Caixa Acumulado (Curva S) */}
-                                                <div className="bg-white rounded-3xl border border-gray-100 p-5 shadow-sm space-y-4">
-                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest block">
-                                                        Fluxo de Caixa Acumulado (Curva S)
-                                                    </span>
-                                                    <div className="h-64">
-                                                        {studyMath && studyMath.monthlyFlows?.length > 0 ? (
-                                                            <ResponsiveContainer width="100%" height="100%">
-                                                                <LineChart data={studyMath.monthlyFlows}>
-                                                                    <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" />
-                                                                    <XAxis dataKey="name" stroke="#9ca3af" fontSize={10} />
-                                                                    <YAxis stroke="#9ca3af" fontSize={10} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}M`} />
-                                                                    <Tooltip formatter={(v: any) => fmtBRL(Number(v))} />
-                                                                    <Line type="monotone" dataKey="acc" stroke="#4f46e5" strokeWidth={3} dot={false} />
-                                                                </LineChart>
-                                                            </ResponsiveContainer>
-                                                        ) : (
-                                                            <div className="h-full flex items-center justify-center text-xs text-gray-400 font-medium bg-gray-50 rounded-2xl">
-                                                                Fluxo de caixa acumulado disponível vinculando estudos do IMOVIB.
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                {/* Gráfico 2: Fontes de Financiamento */}
-                                                <div className="bg-white rounded-3xl border border-gray-100 p-5 shadow-sm space-y-4">
-                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest block">
-                                                        Estrutura de Capital (Fontes de Recursos)
-                                                    </span>
-                                                    <div className="h-64 flex flex-col justify-center items-center">
-                                                        {study ? (
-                                                            <ResponsiveContainer width="100%" height="90%">
-                                                                <PieChart>
-                                                                    {/* Fase 4 (D2): fatias calculadas pelo motor, não o "% equity" digitado. */}
-                                                                    <Pie
-                                                                        data={composicaoDoCapital(studyMath.capital)
-                                                                            .filter(c => c.pct > 0)
-                                                                            .map(c => ({ name: ROTULO_DO_CAPITAL[c.chave], value: c.pct, chave: c.chave }))}
-                                                                        cx="50%"
-                                                                        cy="50%"
-                                                                        innerRadius={60}
-                                                                        outerRadius={80}
-                                                                        paddingAngle={5}
-                                                                        dataKey="value"
-                                                                    >
-                                                                        {composicaoDoCapital(studyMath.capital).filter(c => c.pct > 0).map(c => (
-                                                                            <Cell key={c.chave} fill={COR_DO_CAPITAL[c.chave]} />
-                                                                        ))}
-                                                                    </Pie>
-                                                                    <Tooltip formatter={(v: any) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`} />
-                                                                    <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: 11 }} />
-                                                                </PieChart>
-                                                            </ResponsiveContainer>
-                                                        ) : (
-                                                            <div className="h-full w-full flex items-center justify-center text-xs text-gray-400 font-medium bg-gray-50 rounded-2xl">
-                                                                Detalhamento de fontes de capital disponível vinculando estudos do IMOVIB.
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </div>
+                                            <p className="rounded-[10px] bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-600">
+                                                {erroDoEstudo
+                                                    ? `Não foi possível ler o estudo: ${erroDoEstudo}`
+                                                    : loadingStudy ? 'Lendo o estudo de viabilidade…'
+                                                        : 'Esta oportunidade ainda não tem estudo de viabilidade vinculado: os números aparecem quando a versão do estudo for publicada.'}
+                                            </p>
                                         )}
 
-                                        {/* Simulador de Investimento */}
-                                        <InvestmentSimulator
-                                            baseVgv={studyMath?.vgvTotal || op.vgv || 0}
-                                            baseTir={studyMath?.annualIrr || op.tir_pct || 0}
-                                            baseRoi={studyMath && studyMath.constCostTotal > 0 ? ((studyMath.netVgvTotal - (studyMath.constCostTotal + studyMath.landCost)) / (studyMath.constCostTotal + studyMath.landCost)) * 100 : op.roi_pct || 0}
-                                            baseCost={studyMath ? (studyMath.constCostTotal + studyMath.landCost) : op.cost_estimate || 0}
-                                            durationMonths={op.duration_months || studyMath?.duration || 36}
-                                            scenarioTirCons={op.scenario_cost_cons_pct ? (op.tir_pct || 0) * (1 - op.scenario_cost_cons_pct / 100) : undefined}
-                                            scenarioTirOpt={op.scenario_cost_opt_pct ? (op.tir_pct || 0) * (1 + op.scenario_cost_opt_pct / 100) : undefined}
-                                        />
+                                        {versaoPublicada && <ListasDaVersao versaoPublicada={versaoPublicada} />}
 
-                                        {/* Matriz de Riscos */}
-                                        {op.risks_json && op.risks_json.length > 0 && (
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <SlidersHorizontal className="w-4 h-4 text-blue-600" />
-                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Matriz de Riscos e Mitigações</span>
-                                                </div>
-                                                <div className="border border-gray-100 rounded-3xl overflow-x-auto bg-white shadow-sm">
-                                                    <table className="min-w-[640px] w-full text-left text-xs sm:text-sm">
-                                                        <thead className="bg-white text-gray-700 font-black uppercase tracking-wider border-b border-gray-100">
-                                                            <tr>
-                                                                <th className="p-4">Risco Identificado</th>
-                                                                <th className="p-4">Probabilidade / Impacto</th>
-                                                                <th className="p-4">Mitigação & Segurança</th>
-                                                            </tr>
-                                                        </thead>
-                                                        <tbody className="divide-y divide-gray-100 font-semibold">
-                                                            {op.risks_json.map((r: any, idx: number) => (
-                                                                <tr key={idx} className="hover:bg-gray-50/30">
-                                                                    <td className="p-4 font-bold text-gray-800">{r.title}</td>
-                                                                    <td className="p-4">
-                                                                        <span className="px-2.5 py-1 rounded-lg bg-gray-100 text-gray-600 font-bold mr-1.5 text-xs">{r.probability}</span>
-                                                                        <span className={`px-2.5 py-1 rounded-lg font-bold text-xs ${r.impact === 'Alto' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>{r.impact}</span>
-                                                                    </td>
-                                                                    <td className="p-4 text-gray-600 font-medium">{r.mitigation}</td>
-                                                                </tr>
-                                                            ))}
-                                                        </tbody>
-                                                    </table>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Sensibilidade Fallback — com estudo, o painel já traz cenários e tornado. */}
-                                        {!study && (
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-4">
-                                                <TrendingUp className="w-4 h-4 text-blue-600" />
-                                                <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Análise de Sensibilidade de Cenários</span>
-                                            </div>
-                                            <ScenarioComparison opportunity={op} />
-                                        </div>
-                                        )}
+                                        {/* Simulador: só com a versão (números congelados), item 2.4 do plano 2026-11-21. */}
+                                        <InvestmentSimulator numeros={op} ticketMinimo={op.ticket_min} versao={versaoPublicada?.versao.label ?? null} />
 
                                         {/* CTA Manifestar Interesse */}
                                         <div className="pt-4">
@@ -925,9 +524,9 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                 {pitchTab === 'obra' && hasLinkedProject && (
                                     <div className="space-y-6">
                                         <LinkedProjectPanel
-                                            projectId={op.project_id!}
+                                            projectId={op.obra_id!}
                                             organizationId={organizationId}
-                                            costEstimate={op.cost_estimate}
+                                            costEstimate={op.custo_total}
                                         />
                                         <Button
                                             variant="primary"
@@ -1113,7 +712,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                     <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                             <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Ticket mín.</p>
-                            <p className="font-black text-gray-900 truncate">{op.ticket_min != null ? fmtBRL(op.ticket_min) : op.target_funding_value ? fmtBRL(Number(op.target_funding_value)) : 'Consultar'}</p>
+                            <p className="font-black text-gray-900 truncate">{op.ticket_min != null ? fmtBRL(op.ticket_min) : 'Consultar'}</p>
                         </div>
                         <button
                             onClick={() => setFormStep('form')}

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { IndicadoresDoPainel } from '../utils/imovibCalculoDaVersao';
+import type { ResultadosDaVersao } from '../utils/imovibVersoes';
 
 export type ReportCategory =
     | 'relatorio' | 'contrato' | 'spe' | 'matricula' | 'licenca'
@@ -51,6 +52,15 @@ export const OPPORTUNITY_TYPE_LABELS: Record<OpportunityType, string> = {
     obra_publica: 'Obra Pública',
 };
 
+/** Cor do TEXTO do status (§8 do guia: sem pílula, sem caixa alta) — fundo claro. */
+export const OPPORTUNITY_STATUS_TEXT: Record<OpportunityStatus, string> = {
+    estudo: 'text-gray-600',
+    viabilidade: 'text-amber-700',
+    lancamento: 'text-blue-700',
+    captacao: 'text-emerald-700',
+    encerrada: 'text-red-600',
+};
+
 export const OPPORTUNITY_STATUS_COLORS: Record<OpportunityStatus, string> = {
     estudo: 'bg-gray-100 text-gray-600',
     viabilidade: 'bg-amber-100 text-amber-700',
@@ -59,69 +69,46 @@ export const OPPORTUNITY_STATUS_COLORS: Record<OpportunityStatus, string> = {
     encerrada: 'bg-red-100 text-red-600',
 };
 
+/**
+ * Oportunidade = VITRINE + CAPTAÇÃO (plano docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md, Fase 2).
+ * Os números (VGV, TIR, ROI, prazo, custo, lucro, exposição) vêm SÓ da versão congelada do Imovib e o local
+ * e a obra, do empreendimento do estudo — nenhum é digitado aqui. Exibir pela vitrine
+ * (utils/oportunidadeNumerosDaVersao.ts, `naVitrine`).
+ */
 export interface InvestorOpportunity {
     id?: string;
     organization_id: string;
     title: string;
     subtitle?: string;
-    // mantido como text para retrocompatibilidade; usar roi_pct/tir_pct para cálculos
-    projected_yield?: string;
     open_date?: string;
     link?: string;
-    // campos MVP
     status?: OpportunityStatus;
     opportunity_type?: OpportunityType;
-    location_city?: string;
-    location_state?: string;
     thumbnail_url?: string;
-    land_area_m2?: number | null;
-    built_area_m2?: number | null;
-    floors?: number | null;
-    vgv?: number | null;
-    roi_pct?: number | null;
-    tir_pct?: number | null;
-    cost_estimate?: number | null;
-    cost_per_m2?: number | null;
+    /** Ticket mínimo: regra comercial da captação, não existe no estudo. */
     ticket_min?: number | null;
-    expected_start?: string | null;
-    project_id?: string | null;
     is_published?: boolean;
-    // campos Fase 2 — cenários de viabilidade
-    duration_months?: number | null;
-    scenario_cost_cons_pct?: number | null;
-    scenario_vgv_cons_pct?: number | null;
-    scenario_cost_opt_pct?: number | null;
-    scenario_vgv_opt_pct?: number | null;
-    scenario_notes?: string | null;
-    // novos campos de marketing, RI e vínculo ao IMOVIB
     imovib_study_id?: string | null;
-    /** Versão congelada do estudo que o investidor vê (obrigatória para publicar com estudo — plano 2026-11-15, Fase 2). */
+    /** Versão congelada do estudo que o investidor vê (obrigatória para publicar — Fase 2). */
     imovib_version_id?: string | null;
-    /**
-     * Só leitura: `snapshot.calculo.investidor.indicadores` da versão publicada (null sem versão).
-     * Exibir VGV/ROI/TIR por utils/oportunidadeNumerosDaVersao.ts. Nunca vai num insert/update.
-     */
-    indicadores_da_versao?: Partial<IndicadoresDoPainel> | null;
-    target_funding_value?: number | null;
-    current_funding_value?: number | null;
     gallery_urls?: string[] | null;
     distances_json?: any[] | null;
-    risks_json?: any[] | null;
     team_json?: any[] | null;
-    simulation_params_json?: any | null;
     created_at?: string;
+    // ── Só leitura (nunca vão num insert/update) ──
+    /** `snapshot.calculo.investidor.indicadores` da versão escolhida (null sem versão). */
+    indicadores_da_versao?: Partial<IndicadoresDoPainel> | null;
+    /** `results` da versão escolhida: prazo e custos do momento do congelamento. */
+    resultados_da_versao?: Partial<Pick<ResultadosDaVersao, 'duracao' | 'custoObra' | 'terreno'>> | null;
+    /** Do empreendimento ligado ao estudo (o mais antigo da mesma organização). */
+    local?: LocalDaOportunidade | null;
 }
 
-export interface OpportunityCompetitor {
-    id?: string;
-    organization_id: string;
-    opportunity_id: string;
-    name: string;
-    price_per_m2: number;
-    sales_velocity_pct?: number | null;
-    appreciation_pct?: number | null;
-    distance_km?: number | null;
-    created_at?: string;
+export interface LocalDaOportunidade {
+    cidade: string | null;
+    uf: string | null;
+    /** Obra principal do empreendimento (aba "Obra ao vivo"). */
+    obra_id: string | null;
 }
 
 export type InterestRole = 'investidor' | 'arquiteto' | 'engenheiro' | 'projetista' | 'consultor' | 'outro';
@@ -170,37 +157,56 @@ export interface OpportunityInterest {
 const REPORT_COLS = 'id, organization_id, investor_id, project_id, name, type, category, url, report_date, created_at';
 
 const OPP_COLS = [
-    'id', 'organization_id', 'title', 'subtitle', 'projected_yield', 'open_date', 'link',
-    'status', 'opportunity_type', 'location_city', 'location_state', 'thumbnail_url',
-    'land_area_m2', 'built_area_m2', 'floors',
-    'vgv', 'roi_pct', 'tir_pct', 'cost_estimate', 'cost_per_m2', 'ticket_min',
-    'expected_start', 'project_id', 'is_published',
-    'duration_months', 'scenario_cost_cons_pct', 'scenario_vgv_cons_pct',
-    'scenario_cost_opt_pct', 'scenario_vgv_opt_pct', 'scenario_notes',
-    'imovib_study_id', 'imovib_version_id', 'target_funding_value', 'current_funding_value',
-    'gallery_urls', 'distances_json', 'risks_json', 'team_json', 'simulation_params_json',
+    'id', 'organization_id', 'title', 'subtitle', 'open_date', 'link',
+    'status', 'opportunity_type', 'thumbnail_url', 'ticket_min', 'is_published',
+    'imovib_study_id', 'imovib_version_id', 'gallery_urls', 'distances_json', 'team_json',
     'created_at',
-    // Só leitura: os indicadores da versão publicada (VGV/ROI/TIR da lista — utils/oportunidadeNumerosDaVersao.ts).
-    'versao_publicada:imovib_study_versions!imovib_version_id(indicadores:snapshot->calculo->investidor->indicadores)',
+    // Só leitura: números da versão escolhida (indicadores congelados + resultados do momento).
+    'versao_publicada:imovib_study_versions!imovib_version_id(indicadores:snapshot->calculo->investidor->indicadores, results)',
 ].join(', ');
 
-type LinhaDaOportunidade = Omit<InvestorOpportunity, 'indicadores_da_versao'> & {
-    versao_publicada?: { indicadores?: Partial<IndicadoresDoPainel> | null } | null;
+type LinhaDaOportunidade = Omit<InvestorOpportunity, 'indicadores_da_versao' | 'resultados_da_versao' | 'local'> & {
+    versao_publicada?: { indicadores?: Partial<IndicadoresDoPainel> | null; results?: Partial<ResultadosDaVersao> | null } | null;
 };
-/** Linha do select → oportunidade, com o embed da versão achatado em `indicadores_da_versao`. */
+/** Linha do select → oportunidade, com o embed da versão achatado. */
 const daLinha = (row: LinhaDaOportunidade): InvestorOpportunity => {
     const { versao_publicada, ...o } = row;
-    return { ...o, indicadores_da_versao: versao_publicada?.indicadores ?? null };
+    const r = versao_publicada?.results;
+    return {
+        ...o,
+        indicadores_da_versao: versao_publicada?.indicadores ?? null,
+        resultados_da_versao: r ? { duracao: r.duracao, custoObra: r.custoObra, terreno: r.terreno } : null,
+    };
 };
-/** `indicadores_da_versao` é só leitura: nunca vai num insert/update (não é coluna). */
-const semCamposDeLeitura = <T extends Partial<InvestorOpportunity>>(o: T): Omit<T, 'indicadores_da_versao'> => {
-    const { indicadores_da_versao: _leitura, ...resto } = o;
+/** Campos só de leitura nunca vão num insert/update (não são colunas). */
+const semCamposDeLeitura = <T extends Partial<InvestorOpportunity>>(o: T): Omit<T, 'indicadores_da_versao' | 'resultados_da_versao' | 'local'> => {
+    const { indicadores_da_versao: _i, resultados_da_versao: _r, local: _l, ...resto } = o;
     return resto;
 };
 
+/**
+ * Local e obra de cada oportunidade, do empreendimento ligado ao estudo (`empreendimentos.imovib_study_id`).
+ * Sem UNIQUE na coluna: vale o mais antigo; empreendimento de OUTRA organização não vale (a mesma regra de
+ * imovibService.carregarVinculos). A RPC do portal faz a mesma escolha em SQL.
+ */
+async function comLocal(ops: InvestorOpportunity[]): Promise<InvestorOpportunity[]> {
+    const estudos = [...new Set(ops.map(o => o.imovib_study_id).filter((x): x is string => !!x))];
+    if (estudos.length === 0) return ops.map(o => ({ ...o, local: null }));
+    const { data, error } = await supabase
+        .from('empreendimentos')
+        .select('organization_id, imovib_study_id, endereco_city, endereco_state, project_id, created_at')
+        .in('imovib_study_id', estudos)
+        .order('created_at', { ascending: true });
+    if (error) throw error;
+    const linhas = (data ?? []) as { organization_id: string; imovib_study_id: string; endereco_city: string | null; endereco_state: string | null; project_id: string | null }[];
+    return ops.map(o => {
+        const e = linhas.find(x => x.imovib_study_id === o.imovib_study_id && x.organization_id === o.organization_id);
+        return { ...o, local: e ? { cidade: e.endereco_city ?? null, uf: e.endereco_state ?? null, obra_id: e.project_id ?? null } : null };
+    });
+}
+
 const INTEREST_COLS = 'id, organization_id, opportunity_id, contact_name, contact_email, contact_phone, role, message, stage, created_at';
 
-const COMPETITOR_COLS = 'id, organization_id, opportunity_id, name, price_per_m2, sales_velocity_pct, appreciation_pct, distance_km, created_at';
 
 export const investorPortalService = {
     // ─── Reports ─────────────────────────────────────────────────────────────
@@ -254,7 +260,7 @@ export const investorPortalService = {
 
         const { data, error } = await query;
         if (error) throw error;
-        return ((data ?? []) as unknown as LinhaDaOportunidade[]).map(daLinha);
+        return comLocal(((data ?? []) as unknown as LinhaDaOportunidade[]).map(daLinha));
     },
 
     async addOpportunity(opp: Omit<InvestorOpportunity, 'id' | 'created_at'>): Promise<InvestorOpportunity> {
@@ -264,7 +270,7 @@ export const investorPortalService = {
             .select(OPP_COLS)
             .single();
         if (error) throw error;
-        return daLinha(data as unknown as LinhaDaOportunidade);
+        return (await comLocal([daLinha(data as unknown as LinhaDaOportunidade)]))[0];
     },
 
     async updateOpportunity(id: string, patch: Partial<Omit<InvestorOpportunity, 'id' | 'organization_id' | 'created_at'>>): Promise<InvestorOpportunity> {
@@ -275,7 +281,27 @@ export const investorPortalService = {
             .select(OPP_COLS)
             .single();
         if (error) throw error;
-        return daLinha(data as unknown as LinhaDaOportunidade);
+        return (await comLocal([daLinha(data as unknown as LinhaDaOportunidade)]))[0];
+    },
+
+    /**
+     * O que a vitrine LÊ do estudo escolhido no formulário: local e obra do empreendimento e o parecer
+     * (parecer "reprovar" trava a publicação — item 5.2 do plano 2026-11-21-imovib-oportunidades-consolidacao).
+     */
+    async lidoDoEstudo(studyId: string, organizationId: string): Promise<{ local: LocalDaOportunidade | null; parecer: string | null; empreendimento: string | null }> {
+        const [{ data: est, error: e1 }, { data: emps, error: e2 }] = await Promise.all([
+            supabase.from('imovib_studies').select('recommendation').eq('id', studyId).maybeSingle(),
+            supabase.from('empreendimentos').select('name, organization_id, endereco_city, endereco_state, project_id, created_at')
+                .eq('imovib_study_id', studyId).eq('organization_id', organizationId).order('created_at', { ascending: true }).limit(1),
+        ]);
+        if (e1) throw e1;
+        if (e2) throw e2;
+        const e = (emps ?? [])[0] as { name: string; endereco_city: string | null; endereco_state: string | null; project_id: string | null } | undefined;
+        return {
+            parecer: (est as { recommendation?: string | null } | null)?.recommendation ?? null,
+            empreendimento: e?.name ?? null,
+            local: e ? { cidade: e.endereco_city ?? null, uf: e.endereco_state ?? null, obra_id: e.project_id ?? null } : null,
+        };
     },
 
     /** Oportunidades que escolheram uma versão deste estudo (aba Versões do Imovib — plano 2026-11-15, Fase 2). */
@@ -342,47 +368,6 @@ export const investorPortalService = {
         const { error } = await supabase
             .from('opportunity_interests')
             .update({ stage })
-            .eq('id', id);
-        if (error) throw error;
-    },
-
-    // ─── Competitors ──────────────────────────────────────────────────────────
-
-    async listCompetitors(opportunityId: string): Promise<OpportunityCompetitor[]> {
-        const { data, error } = await supabase
-            .from('investor_opportunity_competitors')
-            .select(COMPETITOR_COLS)
-            .eq('opportunity_id', opportunityId)
-            .order('created_at', { ascending: true });
-        if (error) throw error;
-        return (data ?? []) as OpportunityCompetitor[];
-    },
-
-    async saveCompetitor(competitor: Omit<OpportunityCompetitor, 'id' | 'created_at'> & { id?: string }): Promise<OpportunityCompetitor> {
-        if (competitor.id) {
-            const { data, error } = await supabase
-                .from('investor_opportunity_competitors')
-                .update(competitor)
-                .eq('id', competitor.id)
-                .select(COMPETITOR_COLS)
-                .single();
-            if (error) throw error;
-            return data as OpportunityCompetitor;
-        } else {
-            const { data, error } = await supabase
-                .from('investor_opportunity_competitors')
-                .insert(competitor)
-                .select(COMPETITOR_COLS)
-                .single();
-            if (error) throw error;
-            return data as OpportunityCompetitor;
-        }
-    },
-
-    async deleteCompetitor(id: string): Promise<void> {
-        const { error } = await supabase
-            .from('investor_opportunity_competitors')
-            .delete()
             .eq('id', id);
         if (error) throw error;
     },

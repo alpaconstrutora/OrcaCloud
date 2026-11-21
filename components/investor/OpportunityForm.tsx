@@ -1,11 +1,11 @@
 import React from 'react';
-import { X, Building2, MapPin, BarChart3, Ruler, Eye, EyeOff, TrendingDown, TrendingUp, SlidersHorizontal, Link2, Unlink, Plus, Trash2, Users, Upload } from 'lucide-react';
+import { X, Building2, MapPin, Eye, EyeOff, Unlink, Plus, Trash2, Users, Upload } from 'lucide-react';
 import {
     InvestorOpportunity, OpportunityStatus, OpportunityType,
     OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_TYPE_LABELS,
-    OpportunityCompetitor, investorPortalService
+    investorPortalService, type LocalDaOportunidade,
 } from '../../services/investorPortalService';
-import { opportunityProjectService } from '../../services/opportunityProjectService';
+import { ROTULO_DO_PARECER } from '../../utils/imovibParecer';
 import { imovibService } from '../../services/imovibService';
 import { ImovibStudy } from '../../types';
 import type { ImovibStudyVersion } from '../../utils/imovibVersoes';
@@ -18,55 +18,26 @@ import MoneyCentsInput from '../ui/MoneyCentsInput';
 interface Props {
     initial?: Partial<InvestorOpportunity>;
     organizationId: string;
-    onSave: (
-        data: Omit<InvestorOpportunity, 'id' | 'created_at'>,
-        competitors: Omit<OpportunityCompetitor, 'id' | 'created_at' | 'opportunity_id'>[]
-    ) => void;
+    onSave: (data: Omit<InvestorOpportunity, 'id' | 'created_at'>) => void;
     onClose: () => void;
 }
 
 const STATUSES: OpportunityStatus[] = ['estudo', 'viabilidade', 'lancamento', 'captacao', 'encerrada'];
 const TYPES: OpportunityType[] = ['incorporacao', 'loteamento', 'obra_privada', 'obra_publica'];
 
-const fmtNum = (v: number | null | undefined) => (v != null ? String(v) : '');
-const parseNum = (s: string) => (s.trim() === '' ? null : Number(s.replace(',', '.')));
 
 const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onClose }) => {
-    const [projects, setProjects] = React.useState<{ id: string; name: string }[]>([]);
     const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
 
     React.useEffect(() => {
-        opportunityProjectService.listForOrg(organizationId)
-            .then(setProjects)
-            .catch(() => {/* silencioso — seletor fica vazio */});
-            
         imovibService.getStudies(organizationId)
             .then(setStudies)
             .catch(err => console.error('Erro ao carregar estudos do IMOVIB', err));
     }, [organizationId]);
 
-    // Concorrentes de Mercado
-    const [competitors, setCompetitors] = React.useState<Omit<OpportunityCompetitor, 'id' | 'created_at' | 'opportunity_id'>[]>([]);
-    const [newCompetitor, setNewCompetitor] = React.useState({
-        name: '',
-        price_per_m2: '',
-        sales_velocity_pct: '',
-        appreciation_pct: '',
-        distance_km: '',
-    });
-
-    React.useEffect(() => {
-        if (initial?.id) {
-            investorPortalService.listCompetitors(initial.id)
-                .then(setCompetitors)
-                .catch(err => console.error('Erro ao carregar concorrentes', err));
-        }
-    }, [initial?.id]);
-
     // Sub-estados para gerenciamento de listas dinâmicas no formulário
     const [newUrl, setNewUrl] = React.useState('');
     const [newDistance, setNewDistance] = React.useState({ place: '', distance: '' });
-    const [newRisk, setNewRisk] = React.useState({ title: '', probability: 'Média', impact: 'Médio', mitigation: '' });
     const [newMember, setNewMember] = React.useState({ name: '', role: '', experience: '' });
     const [form, setForm] = React.useState<Omit<InvestorOpportunity, 'id' | 'created_at'>>({
         organization_id: organizationId,
@@ -74,37 +45,14 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
         subtitle: initial?.subtitle ?? '',
         status: initial?.status ?? 'estudo',
         opportunity_type: initial?.opportunity_type,
-        location_city: initial?.location_city ?? '',
-        location_state: initial?.location_state ?? '',
         thumbnail_url: initial?.thumbnail_url ?? '',
-        land_area_m2: initial?.land_area_m2 ?? null,
-        built_area_m2: initial?.built_area_m2 ?? null,
-        floors: initial?.floors ?? null,
-        vgv: initial?.vgv ?? null,
-        roi_pct: initial?.roi_pct ?? null,
-        tir_pct: initial?.tir_pct ?? null,
-        cost_estimate: initial?.cost_estimate ?? null,
-        cost_per_m2: initial?.cost_per_m2 ?? null,
         ticket_min: initial?.ticket_min ?? null,
-        expected_start: initial?.expected_start ?? null,
-        projected_yield: initial?.projected_yield ?? '',
         is_published: initial?.is_published ?? false,
-        project_id: initial?.project_id ?? null,
-        duration_months: initial?.duration_months ?? null,
-        scenario_cost_cons_pct: initial?.scenario_cost_cons_pct ?? null,
-        scenario_vgv_cons_pct: initial?.scenario_vgv_cons_pct ?? null,
-        scenario_cost_opt_pct: initial?.scenario_cost_opt_pct ?? null,
-        scenario_vgv_opt_pct: initial?.scenario_vgv_opt_pct ?? null,
-        scenario_notes: initial?.scenario_notes ?? '',
         imovib_study_id: initial?.imovib_study_id ?? null,
         imovib_version_id: initial?.imovib_version_id ?? null,
-        target_funding_value: initial?.target_funding_value ?? null,
-        current_funding_value: initial?.current_funding_value ?? null,
         gallery_urls: initial?.gallery_urls ?? [],
         distances_json: initial?.distances_json ?? [],
-        risks_json: initial?.risks_json ?? [],
         team_json: initial?.team_json ?? [],
-        simulation_params_json: initial?.simulation_params_json ?? {},
     });
 
     const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) =>
@@ -132,8 +80,28 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
         setVoltouParaRascunho(voltou);
         setForm(prev => ({ ...prev, imovib_study_id: id, imovib_version_id: null, is_published: voltou ? false : prev.is_published }));
     };
-    const motivoSemVersao = form.imovib_study_id && !form.imovib_version_id
-        ? 'Escolha a versão congelada do estudo que o investidor vai ver.'
+    // Fase 2: o que a vitrine LÊ do estudo (local, obra, parecer).
+    const [lido, setLido] = React.useState<{ local: LocalDaOportunidade | null; parecer: string | null; empreendimento: string | null } | null>(null);
+    React.useEffect(() => {
+        if (!form.imovib_study_id) { setLido(null); return; }
+        let vivo = true;
+        setLido(null);
+        investorPortalService.lidoDoEstudo(form.imovib_study_id, organizationId)
+            .then(l => { if (vivo) setLido(l); })
+            .catch(err => { if (vivo) { console.error('Erro ao ler o estudo da oportunidade', err); setLido({ local: null, parecer: null, empreendimento: null }); } });
+        return () => { vivo = false; };
+    }, [form.imovib_study_id, organizationId]);
+    // Publicar: estudo + versão congelada (decisão D4) e parecer que não seja "reprovar" (item 5.2).
+    // O banco confere o mesmo (fn_investor_opportunity_versao_valida).
+    const motivoSemVersao = !form.imovib_study_id
+        ? 'Vincule o estudo do Imovib: o investidor só vê números da versão congelada.'
+        : !form.imovib_version_id
+            ? 'Escolha a versão congelada do estudo que o investidor vai ver.'
+            : lido?.parecer === 'reprovar'
+                ? 'O parecer do estudo é "Reprovar": não se publica.'
+                : null;
+    const avisoDoParecer = lido && lido.parecer !== 'reprovar' && (!lido.parecer || lido.parecer === 'renegociar')
+        ? (lido.parecer ? 'O parecer do estudo é "Renegociar".' : 'O estudo ainda não tem parecer do analista.')
         : null;
 
     // Estados para upload da Galeria
@@ -177,35 +145,12 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.title.trim()) return;
-
         const finalForm = { ...form };
-        const finalCompetitors = [...competitors];
-
-        // Auto-adicionar itens pendentes nos inputs se o usuário esqueceu de clicar no botão "+"
-        if (newUrl.trim()) {
-            finalForm.gallery_urls = [...(finalForm.gallery_urls || []), newUrl.trim()];
-        }
-        if (newDistance.place.trim() && newDistance.distance.trim()) {
-            finalForm.distances_json = [...(finalForm.distances_json || []), { ...newDistance }];
-        }
-        if (newRisk.title.trim()) {
-            finalForm.risks_json = [...(finalForm.risks_json || []), { ...newRisk }];
-        }
-        if (newMember.name.trim() && newMember.role.trim()) {
-            finalForm.team_json = [...(finalForm.team_json || []), { ...newMember }];
-        }
-        if (newCompetitor.name.trim() && newCompetitor.price_per_m2.trim()) {
-            finalCompetitors.push({
-                name: newCompetitor.name.trim(),
-                price_per_m2: Number(newCompetitor.price_per_m2.replace(',', '.')),
-                sales_velocity_pct: newCompetitor.sales_velocity_pct ? Number(newCompetitor.sales_velocity_pct.replace(',', '.')) : null,
-                appreciation_pct: newCompetitor.appreciation_pct ? Number(newCompetitor.appreciation_pct.replace(',', '.')) : null,
-                distance_km: newCompetitor.distance_km ? Number(newCompetitor.distance_km.replace(',', '.')) : null,
-                organization_id: organizationId,
-            });
-        }
-
-        onSave(finalForm, finalCompetitors);
+        // Itens digitados e não adicionados com "+" entram também.
+        if (newUrl.trim()) finalForm.gallery_urls = [...(finalForm.gallery_urls || []), newUrl.trim()];
+        if (newDistance.place.trim() && newDistance.distance.trim()) finalForm.distances_json = [...(finalForm.distances_json || []), { ...newDistance }];
+        if (newMember.name.trim() && newMember.role.trim()) finalForm.team_json = [...(finalForm.team_json || []), { ...newMember }];
+        onSave(finalForm);
     };
 
     return (
@@ -297,49 +242,6 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         </div>
                     </section>
 
-                    {/* ── Obra Vinculada ───────────────────────────────── */}
-                    <section className="p-4 bg-indigo-50 border border-indigo-100 rounded-2xl">
-                        <div className="flex items-center gap-2 mb-3">
-                            <Link2 className="w-4 h-4 text-indigo-600" />
-                            <span className="text-xs font-black text-indigo-600 uppercase tracking-widest">Obra vinculada</span>
-                            <span className="text-xs text-indigo-400 ml-1">(opcional)</span>
-                        </div>
-                        <p className="text-xs text-indigo-500 mb-3 leading-relaxed">
-                            Vincule a uma obra real do ORÇACLOUD para exibir dados ao vivo: progresso físico,
-                            custo realizado, timeline e galeria de fotos.
-                        </p>
-                        <div className="flex items-center gap-2">
-                            <select
-                                value={form.project_id ?? ''}
-                                onChange={e => set('project_id', e.target.value || null)}
-                                className="flex-1 px-4 h-9 border border-indigo-200 rounded-[6px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
-                            >
-                                <option value="">Sem vínculo</option>
-                                {projects.map(p => (
-                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                ))}
-                            </select>
-                            {form.project_id && (
-                                <Button
-                                    variant="secondary"
-                                    size="icon"
-                                    type="button"
-                                    onClick={() => set('project_id', null)}
-                                    title="Desvincular"
-                                    className="text-indigo-400 hover:text-red-500 hover:bg-red-50 border-indigo-200"
-                                >
-                                    <Unlink className="w-4 h-4" />
-                                </Button>
-                            )}
-                        </div>
-                        {form.project_id && (
-                            <p className="text-xs text-indigo-500 mt-2 flex items-center gap-1">
-                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 inline-block" />
-                                Dados ao vivo serão exibidos na aba "Obra" do pitch
-                            </p>
-                        )}
-                    </section>
-
                     {/* ── Viabilidade Vinculada (IMOVIB) ───────────────────────────────── */}
                     <section className="p-4 bg-blue-50 border border-blue-100 rounded-2xl">
                         <div className="flex items-center gap-2 mb-3">
@@ -348,8 +250,8 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             <span className="text-xs text-blue-400 ml-1">(opcional)</span>
                         </div>
                         <p className="text-xs text-blue-500 mb-3 leading-relaxed">
-                            Vincule a um estudo de viabilidade do IMOVIB para preencher e calcular dinamicamente dados financeiros:
-                            TIR, VPL, ROI, Payback, Fluxo de Caixa e cenários de sensibilidade.
+                            O investidor vê os números da versão congelada do estudo — VGV, TIR, ROI, prazo, custo,
+                            fluxo de caixa, cenários e ficha técnica. Nada disso se digita aqui.
                         </p>
                         <div className="flex items-center gap-2">
                             <select
@@ -405,34 +307,23 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         )}
                     </section>
 
-                    {/* ── Captação de Recursos ─────────────────────────── */}
-                    <section>
-                        <div className="flex items-center gap-2 mb-4">
-                            <BarChart3 className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Captação de Recursos</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Meta de Captação (R$)</label>
-                                <MoneyCentsInput
-                                    value={form.target_funding_value}
-                                    onChange={v => set('target_funding_value', parseNum(v))}
-                                    placeholder="Ex: 42500000"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Valor Já Captado (R$)</label>
-                                <MoneyCentsInput
-                                    value={form.current_funding_value}
-                                    onChange={v => set('current_funding_value', parseNum(v))}
-                                    placeholder="Ex: 30600000"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                        </div>
+                    {/* ── Lido do estudo (plano 2026-11-21-imovib-oportunidades-consolidacao, Fase 2) ── */}
+                    <section className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-2">
+                        <p className="text-sm font-semibold text-slate-800">Do estudo e do empreendimento (não se digita aqui)</p>
+                        {!form.imovib_study_id ? (
+                            <p className="text-xs text-slate-500">Sem estudo vinculado: a oportunidade fica como rascunho, sem números. Para publicar, vincule o estudo e escolha a versão.</p>
+                        ) : lido == null ? (
+                            <p className="text-xs text-slate-500">Lendo o estudo…</p>
+                        ) : (
+                            <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+                                <dt className="text-slate-500">Empreendimento</dt><dd className="text-slate-900">{lido.empreendimento ?? 'Nenhum ligado a este estudo'}</dd>
+                                <dt className="text-slate-500">Local</dt><dd className="text-slate-900">{[lido.local?.cidade, lido.local?.uf].filter(Boolean).join(', ') || '—'}</dd>
+                                <dt className="text-slate-500">Obra ao vivo</dt><dd className="text-slate-900">{lido.local?.obra_id ? 'Obra principal do empreendimento' : 'Empreendimento sem obra'}</dd>
+                                <dt className="text-slate-500">Parecer do analista</dt><dd className="text-slate-900">{lido.parecer ? (ROTULO_DO_PARECER as Record<string, string>)[lido.parecer] ?? lido.parecer : 'Não registrado'}</dd>
+                            </dl>
+                        )}
+                        <p className="text-xs text-slate-500">VGV, TIR, ROI, prazo, custo e ficha técnica vêm da versão escolhida acima.</p>
                     </section>
-
                     {/* ── Galeria Premium ───────────────────────────────── */}
                     <section>
                         <div className="flex items-center gap-2 mb-4">
@@ -552,102 +443,6 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         </div>
                     </section>
 
-                    {/* ── Matriz de Riscos ────────────────────────────────── */}
-                    <section>
-                        <div className="flex items-center gap-2 mb-4">
-                            <SlidersHorizontal className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Matriz de Riscos</span>
-                        </div>
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-2">
-                                <input
-                                    type="text"
-                                    value={newRisk.title}
-                                    onChange={e => setNewRisk(prev => ({ ...prev, title: e.target.value }))}
-                                    placeholder="Risco (Ex: Licenciamento, Custo de Aço)"
-                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                                />
-                                <input
-                                    type="text"
-                                    value={newRisk.mitigation}
-                                    onChange={e => setNewRisk(prev => ({ ...prev, mitigation: e.target.value }))}
-                                    placeholder="Mitigação (Ex: Projeto aprovado, Contrato fechado)"
-                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                                />
-                            </div>
-                            <div className="flex gap-2 items-center">
-                                <div className="flex-1 flex gap-2">
-                                    <select
-                                        value={newRisk.probability}
-                                        onChange={e => setNewRisk(prev => ({ ...prev, probability: e.target.value }))}
-                                        className="flex-1 px-4 h-9 border border-gray-200 rounded-[6px] text-sm bg-white focus:outline-none"
-                                    >
-                                        <option value="Baixa">Probabilidade: Baixa</option>
-                                        <option value="Média">Probabilidade: Média</option>
-                                        <option value="Alta">Probabilidade: Alta</option>
-                                    </select>
-                                    <select
-                                        value={newRisk.impact}
-                                        onChange={e => setNewRisk(prev => ({ ...prev, impact: e.target.value }))}
-                                        className="flex-1 px-4 h-9 border border-gray-200 rounded-[6px] text-sm bg-white focus:outline-none"
-                                    >
-                                        <option value="Baixo">Impacto: Baixo</option>
-                                        <option value="Médio">Impacto: Médio</option>
-                                        <option value="Alto">Impacto: Alto</option>
-                                    </select>
-                                </div>
-                                <Button
-                                    size="icon"
-                                    type="button"
-                                    onClick={() => {
-                                        if (newRisk.title.trim()) {
-                                            set('risks_json', [...(form.risks_json || []), { ...newRisk }]);
-                                            setNewRisk({ title: '', probability: 'Média', impact: 'Médio', mitigation: '' });
-                                        }
-                                    }}
-                                    className="rounded-xl transition-all"
-                                >
-                                    <Plus className="w-5 h-5" />
-                                </Button>
-                            </div>
-                            {form.risks_json && form.risks_json.length > 0 && (
-                                <div className="border border-gray-150 rounded-2xl overflow-hidden mt-2">
-                                    <table className="w-full text-left text-xs">
-                                        <thead className="bg-white text-gray-700 font-bold uppercase tracking-wider">
-                                            <tr>
-                                                <th className="p-3">Risco</th>
-                                                <th className="p-3">Prob. / Impacto</th>
-                                                <th className="p-3">Mitigação</th>
-                                                <th className="p-3"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100 font-medium">
-                                            {form.risks_json.map((r, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50/50">
-                                                    <td className="p-3 font-bold text-gray-800">{r.title}</td>
-                                                    <td className="p-3">
-                                                        <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-600 font-bold mr-1">{r.probability}</span>
-                                                        <span className={`px-2 py-0.5 rounded-md font-bold ${r.impact === 'Alto' ? 'bg-red-50 text-red-600' : 'bg-amber-50 text-amber-600'}`}>{r.impact}</span>
-                                                    </td>
-                                                    <td className="p-3 text-gray-600">{r.mitigation}</td>
-                                                    <td className="p-3 text-right">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => set('risks_json', (form.risks_json || []).filter((_, i) => i !== idx))}
-                                                            className="p-1 text-red-500 hover:bg-red-50 rounded"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </td>
-                                                 </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
-                    </section>
-
                     {/* ── Equipe ─────────────────────────────────────────── */}
                     <section>
                         <div className="flex items-center gap-2 mb-4">
@@ -716,381 +511,23 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                     </section>
 
 
-                    {/* ── Comparativo de Mercado (Concorrentes) ─────────── */}
-                    <section>
-                        <div className="flex items-center gap-2 mb-4">
-                            <Building2 className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Comparativo de Mercado (Concorrentes Locais)</span>
-                        </div>
-                        <div className="space-y-3">
-                            <div className="grid grid-cols-2 gap-2">
-                                <input
-                                    type="text"
-                                    value={newCompetitor.name}
-                                    onChange={e => setNewCompetitor(prev => ({ ...prev, name: e.target.value }))}
-                                    placeholder="Nome do Concorrente (Ex: Alfa Cambuí)"
-                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                                />
-                                <input
-                                    type="text"
-                                    value={newCompetitor.price_per_m2}
-                                    onChange={e => setNewCompetitor(prev => ({ ...prev, price_per_m2: e.target.value }))}
-                                    placeholder="Preço médio/m² (Ex: 12500)"
-                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                                />
-                            </div>
-                            <div className="grid grid-cols-3 gap-2">
-                                <input
-                                    type="text"
-                                    value={newCompetitor.sales_velocity_pct}
-                                    onChange={e => setNewCompetitor(prev => ({ ...prev, sales_velocity_pct: e.target.value }))}
-                                    placeholder="Venda mensal % (Ex: 4.5)"
-                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                                />
-                                <input
-                                    type="text"
-                                    value={newCompetitor.appreciation_pct}
-                                    onChange={e => setNewCompetitor(prev => ({ ...prev, appreciation_pct: e.target.value }))}
-                                    placeholder="Valorização anual % (Ex: 12.0)"
-                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                                />
-                                <input
-                                    type="text"
-                                    value={newCompetitor.distance_km}
-                                    onChange={e => setNewCompetitor(prev => ({ ...prev, distance_km: e.target.value }))}
-                                    placeholder="Distância km (Ex: 1.2)"
-                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
-                                />
-                            </div>
-                            <div className="flex justify-end">
-                                <Button
-                                    size="sm"
-                                    type="button"
-                                    onClick={() => {
-                                        if (newCompetitor.name.trim() && newCompetitor.price_per_m2.trim()) {
-                                            setCompetitors(prev => [
-                                                ...prev,
-                                                {
-                                                    name: newCompetitor.name.trim(),
-                                                    price_per_m2: Number(newCompetitor.price_per_m2.replace(',', '.')),
-                                                    sales_velocity_pct: newCompetitor.sales_velocity_pct ? Number(newCompetitor.sales_velocity_pct.replace(',', '.')) : null,
-                                                    appreciation_pct: newCompetitor.appreciation_pct ? Number(newCompetitor.appreciation_pct.replace(',', '.')) : null,
-                                                    distance_km: newCompetitor.distance_km ? Number(newCompetitor.distance_km.replace(',', '.')) : null,
-                                                    organization_id: organizationId,
-                                                }
-                                            ]);
-                                            setNewCompetitor({ name: '', price_per_m2: '', sales_velocity_pct: '', appreciation_pct: '', distance_km: '' });
-                                        }
-                                    }}
-                                    className="rounded-xl transition-all flex items-center gap-1"
-                                >
-                                    <Plus className="w-4 h-4" />
-                                    Adicionar Concorrente
-                                </Button>
-                            </div>
-
-                            {competitors && competitors.length > 0 && (
-                                <div className="border border-gray-150 rounded-2xl overflow-hidden mt-2">
-                                    <table className="w-full text-left text-xs">
-                                        <thead className="bg-white text-gray-700 font-bold uppercase tracking-wider">
-                                            <tr>
-                                                <th className="p-3">Concorrente</th>
-                                                <th className="p-3">Preço/m²</th>
-                                                <th className="p-3">Vendas/mês</th>
-                                                <th className="p-3">Valoriz. Anual</th>
-                                                <th className="p-3">Distância</th>
-                                                <th className="p-3"></th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-gray-100 font-medium">
-                                            {competitors.map((c, idx) => (
-                                                <tr key={idx} className="hover:bg-gray-50/50">
-                                                    <td className="p-3 font-bold text-gray-800">{c.name}</td>
-                                                    <td className="p-3 font-mono text-gray-700">R$ {c.price_per_m2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                                                    <td className="p-3 text-gray-600">{c.sales_velocity_pct != null ? `${c.sales_velocity_pct}%` : '-'}</td>
-                                                    <td className="p-3 text-gray-600">{c.appreciation_pct != null ? `${c.appreciation_pct}%` : '-'}</td>
-                                                    <td className="p-3 text-gray-600">{c.distance_km != null ? `${c.distance_km} km` : '-'}</td>
-                                                    <td className="p-3 text-right">
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setCompetitors(prev => prev.filter((_, i) => i !== idx))}
-                                                            className="p-1 text-red-500 hover:bg-red-50 rounded"
-                                                        >
-                                                            <Trash2 className="w-4 h-4" />
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            )}
-                        </div>
+                    {/* ── Captação: ticket mínimo (regra comercial; não existe no estudo) ── */}
+                    <section className="max-w-xs">
+                        <label htmlFor="oportunidade-ticket" className="block text-xs font-semibold text-slate-500 mb-1.5">Ticket mínimo (R$)</label>
+                        <MoneyCentsInput
+                            id="oportunidade-ticket"
+                            value={form.ticket_min}
+                            onChange={v => set('ticket_min', v === '' ? null : Number(v))}
+                            placeholder="0,00"
+                            className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                        />
                     </section>
-
-
-                    {/* ── Localização ───────────────────────────────────── */}
-                    <section>
-                        <div className="flex items-center gap-2 mb-4">
-                            <MapPin className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Localização</span>
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Cidade</label>
-                                <input
-                                    type="text"
-                                    value={form.location_city ?? ''}
-                                    onChange={e => set('location_city', e.target.value)}
-                                    placeholder="Ex: São Paulo"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Estado</label>
-                                <input
-                                    type="text"
-                                    value={form.location_state ?? ''}
-                                    onChange={e => set('location_state', e.target.value)}
-                                    placeholder="Ex: SP"
-                                    maxLength={2}
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 uppercase"
-                                />
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* ── Dados Técnicos ────────────────────────────────── */}
-                    <section>
-                        <div className="flex items-center gap-2 mb-4">
-                            <Ruler className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Dados Técnicos</span>
-                        </div>
-                        <div className="grid grid-cols-3 gap-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Área do terreno (m²)</label>
-                                <input
-                                    type="number"
-                                    value={fmtNum(form.land_area_m2)}
-                                    onChange={e => set('land_area_m2', parseNum(e.target.value))}
-                                    placeholder="0"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Área construída (m²)</label>
-                                <input
-                                    type="number"
-                                    value={fmtNum(form.built_area_m2)}
-                                    onChange={e => set('built_area_m2', parseNum(e.target.value))}
-                                    placeholder="0"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Pavimentos</label>
-                                <input
-                                    type="number"
-                                    value={fmtNum(form.floors)}
-                                    onChange={e => set('floors', parseNum(e.target.value) != null ? Math.round(parseNum(e.target.value)!) : null)}
-                                    placeholder="0"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Previsão de início</label>
-                                <input
-                                    type="date"
-                                    value={form.expected_start ?? ''}
-                                    onChange={e => set('expected_start', e.target.value || null)}
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* ── Financeiro ────────────────────────────────────── */}
-                    <section>
-                        <div className="flex items-center gap-2 mb-4">
-                            <BarChart3 className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Dados Financeiros</span>
-                        </div>
-                        {form.imovib_version_id && (
-                            <p className="-mt-2 mb-4 text-xs text-blue-600">
-                                Com a versão do Imovib escolhida, o investidor vê VGV, ROI e TIR da versão. Os campos abaixo valem só sem estudo vinculado.
-                            </p>
-                        )}
-                        <div className="grid grid-cols-2 gap-4">
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">VGV (R$)</label>
-                                <MoneyCentsInput
-                                    value={form.vgv}
-                                    onChange={v => set('vgv', parseNum(v))}
-                                    placeholder="0,00"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Custo estimado (R$)</label>
-                                <MoneyCentsInput
-                                    value={form.cost_estimate}
-                                    onChange={v => set('cost_estimate', parseNum(v))}
-                                    placeholder="0,00"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Custo/m² (R$)</label>
-                                <MoneyCentsInput
-                                    value={form.cost_per_m2}
-                                    onChange={v => set('cost_per_m2', parseNum(v))}
-                                    placeholder="0,00"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Ticket mínimo (R$)</label>
-                                <MoneyCentsInput
-                                    value={form.ticket_min}
-                                    onChange={v => set('ticket_min', parseNum(v))}
-                                    placeholder="0,00"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">ROI estimado (%)</label>
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    value={fmtNum(form.roi_pct)}
-                                    onChange={e => set('roi_pct', parseNum(e.target.value))}
-                                    placeholder="0,0"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">TIR estimada (%)</label>
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    value={fmtNum(form.tir_pct)}
-                                    onChange={e => set('tir_pct', parseNum(e.target.value))}
-                                    placeholder="0,0"
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
-                            </div>
-                        </div>
-                    </section>
-
-                    {/* ── Cenários de Viabilidade ──────────────────────── */}
-                    <section>
-                        <div className="flex items-center gap-2 mb-2">
-                            <SlidersHorizontal className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Cenários de Viabilidade</span>
-                        </div>
-                        <p className="text-xs text-gray-400 mb-4">
-                            Defina as variações para os cenários conservador e otimista em relação aos dados base.
-                            Percentuais positivos = aumento; negativos = redução.
-                        </p>
-
-                        <div className="grid grid-cols-1 gap-3">
-                            {/* Duração */}
-                            <div className="grid grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Duração prevista (meses)</label>
-                                    <input
-                                        type="number"
-                                        value={fmtNum(form.duration_months)}
-                                        onChange={e => set('duration_months', parseNum(e.target.value) != null ? Math.round(parseNum(e.target.value)!) : null)}
-                                        placeholder="Ex: 24"
-                                        className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                    />
-                                </div>
-                            </div>
-
-                            {/* Conservador */}
-                            <div className="p-4 bg-red-50 border border-red-100 rounded-2xl space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <TrendingDown className="w-3.5 h-3.5 text-red-500" />
-                                    <span className="text-xs font-black text-red-600 uppercase tracking-wider">Cenário Conservador</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Custo sobe (%) <span className="font-normal text-gray-400">ex: 15</span></label>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            value={fmtNum(form.scenario_cost_cons_pct)}
-                                            onChange={e => set('scenario_cost_cons_pct', parseNum(e.target.value))}
-                                            placeholder="15"
-                                            className="w-full px-3 h-9 border border-red-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-red-400/30 bg-white"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">VGV cai (%) <span className="font-normal text-gray-400">ex: 10</span></label>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            value={fmtNum(form.scenario_vgv_cons_pct)}
-                                            onChange={e => set('scenario_vgv_cons_pct', parseNum(e.target.value))}
-                                            placeholder="10"
-                                            className="w-full px-3 h-9 border border-red-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-red-400/30 bg-white"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Otimista */}
-                            <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-2xl space-y-3">
-                                <div className="flex items-center gap-2">
-                                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
-                                    <span className="text-xs font-black text-emerald-700 uppercase tracking-wider">Cenário Otimista</span>
-                                </div>
-                                <div className="grid grid-cols-2 gap-3">
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Custo cai (%) <span className="font-normal text-gray-400">ex: 5</span></label>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            value={fmtNum(form.scenario_cost_opt_pct)}
-                                            onChange={e => set('scenario_cost_opt_pct', parseNum(e.target.value))}
-                                            placeholder="5"
-                                            className="w-full px-3 h-9 border border-emerald-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/30 bg-white"
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">VGV sobe (%) <span className="font-normal text-gray-400">ex: 8</span></label>
-                                        <input
-                                            type="number"
-                                            step="0.1"
-                                            value={fmtNum(form.scenario_vgv_opt_pct)}
-                                            onChange={e => set('scenario_vgv_opt_pct', parseNum(e.target.value))}
-                                            placeholder="8"
-                                            className="w-full px-3 h-9 border border-emerald-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/30 bg-white"
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* Notas/premissas */}
-                            <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Premissas e observações</label>
-                                <textarea
-                                    rows={2}
-                                    value={form.scenario_notes ?? ''}
-                                    onChange={e => set('scenario_notes', e.target.value)}
-                                    placeholder="Ex: Custo inclui terreno. VGV baseado em pesquisa de mercado jun/2026."
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 resize-none"
-                                />
-                            </div>
-                        </div>
-                    </section>
-
                     {/* ── Publicação ───────────────────────────────────── */}
                     <section className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
                         <div>
                             <p className="text-sm font-bold text-gray-900">Visível para investidores</p>
                             <p className="text-xs text-gray-500 mt-0.5">Rascunhos não aparecem no portal</p>
+                            {avisoDoParecer && <p className="text-xs text-amber-700 mt-1">{avisoDoParecer}</p>}
                         </div>
                         {/* Desligado, o botão não mostra o title: o motivo fica no invólucro. */}
                         <span title={!form.is_published && motivoSemVersao ? motivoSemVersao : undefined}>

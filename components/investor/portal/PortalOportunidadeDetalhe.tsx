@@ -10,6 +10,7 @@
  *
  * - Viabilidade: a versão publicada (fn_investor_portal_get_versao, pela oportunidade) no
  *   ImovibPainelDoInvestidor. Lida uma vez ao abrir: o cabeçalho a mostra nas duas abas.
+ *   Abaixo do painel, riscos, comparáveis e due diligence da versão (ListasDaVersao, plano 2026-11-21).
  * - Documentos: o Data Room pelo token (DataRoomPanel em modo portal).
  */
 import React from 'react';
@@ -20,6 +21,7 @@ import type { VersaoPublicada } from '../../../utils/imovibVersoes';
 import { linhaDaVersao } from '../../../utils/imovibRelatorio';
 import ImovibPainelDoInvestidor, { BotaoDoRelatorio } from './ImovibPainelDoInvestidor';
 import DataRoomPanel from '../DataRoomPanel';
+import ListasDaVersao from './ListasDaVersao';
 import { PortalCard, PortalTabs, PortalLoading, GhostButton } from '../../portal/PortalKit';
 
 export type AbaDoDetalhe = 'viabilidade' | 'documentos';
@@ -78,7 +80,13 @@ const PortalOportunidadeDetalhe: React.FC<Props> = ({ opportunity, portalToken, 
                     {aba === 'viabilidade' && comEstudo && (
                         carregando ? <PortalLoading label="Carregando a viabilidade..." />
                             : erro ? <p role="alert" className="text-sm text-[#5F6573]">{erro}</p>
-                                : vp ? <ImovibPainelDoInvestidor versaoPublicada={vp} study={vp.study} cenarios={vp.cenarios} accent="portal" semTitulo />
+                                : vp ? (
+                                    <div className="space-y-8">
+                                        <ImovibPainelDoInvestidor versaoPublicada={vp} study={vp.study} cenarios={vp.cenarios} accent="portal" semTitulo />
+                                        {/* Plano 2026-11-21, item 2.3: as listas da versão também na tela, não só no PDF. */}
+                                        <ListasDaVersao versaoPublicada={vp} />
+                                    </div>
+                                )
                                     : null
                     )}
                     {aba === 'documentos' && opportunity.id && (

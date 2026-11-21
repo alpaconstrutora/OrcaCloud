@@ -103,7 +103,7 @@ serve(async (req: Request) => {
     if (!fileBase64 || !mediaType) return json({ error: 'Arquivo (fileBase64) e mediaType são obrigatórios.' }, 400);
 
     // Autorização: membro da organização que recebe os itens de due diligence —
-    // a mesma que a RLS de due_diligence_items exige para gravá-los.
+    // (os itens gravados são os do checklist do estudo, imovib_land_checklist — plano 2026-11-21).
     const vinculo = await exigirMembro(req, organization_id);
     if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
 

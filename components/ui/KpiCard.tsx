@@ -77,8 +77,9 @@ interface KpiCardProps {
     title?: string;
     /** Mantido por compatibilidade — o desenho atual não tem sombra. */
     shadow?: boolean;
-    /** Mantido por compatibilidade — `lg` deixa o valor um degrau maior (text-base); `sm`/`md` são iguais. */
-    size?: 'sm' | 'md' | 'lg';
+    /** `lg` deixa o valor um degrau maior (text-base); `sm`/`md` são iguais; `xs` é a linha
+     *  única h-9 para faixa de ferramentas (ribbon, guia §4.6). */
+    size?: 'xs' | 'sm' | 'md' | 'lg';
     /** Pulsa a bolha do ícone — para chamar atenção a um estado pendente/aguardando ação. Default false. */
     pulse?: boolean;
     /**
@@ -291,6 +292,31 @@ export function KpiCard({
     // teclado não chegava nele (o "Cálculo bloqueado" das Áreas NBR 12721 levava às
     // pendências só pelo mouse). Sem `onClick`, segue `<div>`.
     const Casca = (isClickable ? 'button' : 'div') as 'div';
+
+    // `xs` (21/11/2026): o KPI numa FAIXA de ferramentas (slot `direita` do ribbon, §4.6) —
+    // uma linha só, h-9, para caber ao lado das abas sem crescer a fileira. Mesma paleta;
+    // a bolha vira só o ícone colorido. O `sub` não cabe na linha: vai para leitor de tela,
+    // e quem precisa do aviso à vista põe o motivo no `title` e a cor no `color`.
+    if (size === 'xs') {
+        return (
+            <Casca
+                {...(isClickable ? { type: 'button' } : {})}
+                onClick={onClick}
+                title={title}
+                className={[
+                    'bg-white rounded-[6px] border border-gray-200 h-9 px-2.5 inline-flex items-center gap-1.5 whitespace-nowrap',
+                    isClickable ? 'text-left cursor-pointer outline-none focus-visible:ring-2 focus-visible:ring-blue-500' : '',
+                    className,
+                ].join(' ')}
+            >
+                {icon && <span className={`${c.icon} shrink-0`}>{iconeNormalizado(icon)}</span>}
+                <span className="text-xs text-gray-500 font-medium">{label}</span>
+                <span className={`text-sm font-bold tabular-nums ${c.value}`}>{value}</span>
+                {sub && <span className="sr-only">{sub}</span>}
+            </Casca>
+        );
+    }
+
     return (
         <Casca
             {...(isClickable ? { type: 'button' } : {})}

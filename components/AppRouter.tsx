@@ -745,6 +745,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           onUpdateSettings={handleUpdateSettings}
           onSaveProject={handleSaveProject}
           onOpenDashboard={() => handleLoadProject(settingsWithId.id || '', 'dashboard')}
+          // O ← do ribbon (21/11/2026), como o do Planejamento (`planning-view`).
+          onBack={() => setActiveView('eng-orcamentos')}
           favorites={favorites}
           onToggleFavorite={toggleFavorite}
           projectId={settingsWithId.id}

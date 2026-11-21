@@ -612,6 +612,24 @@ leitor não tem como saber quais números mudaram ao trocar o mês.
 - Subtítulo da tela em `text-gray-500`, não o `text-gray-400` do snippet do §20: 2,6:1 fica
   abaixo do AA que o PRODUCT.md exige (a mesma troca já feita no `KpiCard` e no §28.5).
 
+### 4.6 KPI numa faixa de ferramentas — `size="xs"` (21/11/2026)
+
+**Onde:** Engenharia › Orçamento Analítico, slot `direita` do ribbon (§19.5). Pedido
+*"engenharia > orçamentos: implemente menu e botões como foi implementado em incorporação >
+planta inteligente"*; o usuário escolheu os KPIs **no ribbon** em vez da linha do título
+(§20.4), para devolver a altura à tabela.
+
+```tsx
+<KpiCard size="xs" label="Preço Final" value="R$ 125,00" icon={<Banknote />} color="emerald" />
+```
+
+- Uma linha só, `h-9` (a altura dos botões da fileira das abas): borda `rounded-[6px]`,
+  ícone colorido **sem bolha**, rótulo `text-xs text-gray-500`, valor `text-sm font-bold` na
+  cor do KPI. Continua sendo o `KpiCard` — não reimplementar à mão.
+- O `sub` não cabe na linha: vai para `sr-only`. Aviso que precisa ser visto (BDI zerado)
+  usa `color="amber"` + ícone de alerta, com o motivo no `title`.
+- ❌ Não é para grade de KPIs de tela de lista — lá vale o §4/§20.
+
 ---
 
 ## 5. TOOLBAR (Barra de Pesquisa e Controles)
@@ -2677,7 +2695,13 @@ deixam de servir. O componente canônico é **`components/blueprint/Ribbon.tsx`*
 importável de qualquer tela, apesar da pasta. Em uso: Planta Inteligente
 (13/09) e Engenharia › Planejamento (`schedule/ScheduleHeader.tsx`, 21/09 —
 *"se inspire na implementacao de ícones e organizacao de menu bar utilizado em
-incoporação < planta inteligente e aplique em Gestão de Planejamento"*):
+incoporação < planta inteligente e aplique em Gestão de Planejamento"*) e
+Engenharia › Orçamento Analítico (`BudgetRibbon.tsx`, 21/11/2026 — *"engenharia >
+orçamentos: implemente menu e botões como foi implementado em incorporação >
+planta inteligente"*; sem seletor de vista: abas Estrutura · Orçamento · Análise ·
+Vista, acesso rápido com Expandir/Recolher, Análises e Arquivo com tela cheia; nome e
+base de preço na `cauda` do acesso rápido; KPIs `size="xs"` (§4.6), pendências e
+"Novo grupo" no slot `direita`):
 
 - **linha 1** — trilho de abas do §19.1 (`role="tab"`, ativa `bg-white
   text-blue-600 shadow-sm`), com um slot `esquerda` para o que se usa o tempo
@@ -2695,11 +2719,12 @@ incoporação < planta inteligente e aplique em Gestão de Planejamento"*):
   `aria-label` = rótulo, `aria-pressed` só em modo; desligado com
   `cursor-not-allowed`, **sem** `pointer-events-none`, para o `title` com o
   motivo aparecer). Grupo que a vista não admite não é passado. A tela cheia
-  mora no acesso rápido nos dois editores: à vista em qualquer aba;
+  mora no acesso rápido nos três editores: à vista em qualquer aba;
 - **recolher a faixa** — `recolhido`/`onRecolher` no `Ribbon`: a setinha ao
   lado das abas, ou duplo clique numa aba, deixa só a fileira das abas (o
   clique numa aba devolve tudo). Estado persistido por editor
-  (`blueprint:ribbonRecolhido`, `schedule:ribbonRecolhido`). A barra de opções
+  (`blueprint:ribbonRecolhido`, `schedule:ribbonRecolhido`,
+  `orcamento:ribbonRecolhido`). A barra de opções
   (linha 3) fica fora do `Ribbon` e continua à vista recolhida;
 - **linha 2** — o painel da aba ativa: `GrupoDoRibbon`s com o rótulo em caixa
   alta `text-[10px] text-slate-400` **embaixo** dos controles, divisória à
@@ -2985,6 +3010,11 @@ abre com "Bom dia, {nome}" em vez do par `h1 font-black` + subtítulo:
 > painel analítico seguem o §20.
 
 ### 20.4 Exceção — KPIs na linha do título, à direita (13/11/2026)
+
+> ⚠️ **Superada em 21/11/2026 no próprio Orçamento Analítico:** a tela ganhou o ribbon
+> (§19.5); o título virou `sr-only` e os KPIs foram para o slot `direita` em
+> `KpiCard size="xs"` (§4.6). O formato abaixo fica registrado para outra tela que peça
+> KPIs na linha do título.
 
 **Onde:** Engenharia › Orçamento Analítico (`BudgetEditor.tsx`), por pedido
 explícito do usuário. Os três cards (Preço Final, Custo Direto, BDI) deixaram a

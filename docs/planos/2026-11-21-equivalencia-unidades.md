@@ -124,4 +124,11 @@ Tudo foi lido de `origin/main`. O trabalho é feito numa frente nova (`bash scri
 - [x] `lib/unidadeDeMedida.ts` (mapa saído do pedidoFast; `pedidoFast.test.ts` sem alteração e verde).
 - [x] `utils/equivalenciaUnidades.ts` + `__tests__/equivalenciaUnidades.test.ts`.
 - [x] Serviço + hook; seção "Equivalência de unidades" no Ver detalhes (só superadmin edita).
+- [x] Publicada (PR #619).
 - [ ] Conferida na tela em produção (item 32).
+
+### Fase 1 — 21/11/2026
+- [x] `BudgetEntry.unidadeInformada` (fator gravado no lançamento); `quantity` segue na unidade do item.
+- [x] `BudgetRow`: unidade vira escolha quando há equivalência; quantidade e preço mostrados na unidade escolhida.
+- [x] `BudgetEditorTable.test.tsx`: trocar KG→M não muda quantidade/total; 240 M grava 58,8 KG; voltar para KG apaga; base divergente cai para KG; sem equivalência = texto.
+- [ ] Conferida na tela em produção.

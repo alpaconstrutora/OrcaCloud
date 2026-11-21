@@ -44,6 +44,12 @@ vi.mock('../../services/parametricService', () => ({
     parametricService: { estimate: vi.fn().mockResolvedValue({ totalValue: 0, itemsCount: 0 }) },
 }));
 
+// Equivalência de unidades (21/11/2026): o cadastro global vem do banco; aqui, fixo.
+const EQUIVALENCIAS = vi.hoisted(() => ({ atual: new Map() as Map<string, { itemCode: string; unidadeBase: string; unidade: string; fator: number }[]> }));
+vi.mock('../../hooks/useEquivalencias', () => ({
+    useEquivalencias: () => ({ equivalencias: EQUIVALENCIAS.atual, recarregar: () => undefined }),
+}));
+
 vi.mock('../../components/WBSImportModal', () => ({ WBSImportModal: () => null }));
 vi.mock('../../components/WBSTemplateModal', () => ({ WBSTemplateModal: () => null }));
 vi.mock('xlsx', () => ({
@@ -383,5 +389,70 @@ describe('Campos do item com nome (2ª crítica, passo 4)', () => {
         expect(within(container).getByLabelText('Quantidade do item 01.01.01.01')).toBeTruthy();
         expect(within(container).getByLabelText('Custo unitário do item 01.01.01.01')).toBeTruthy();
         expect(within(container).getByLabelText(/BDI do item 01.01.01.01/)).toBeTruthy();
+    });
+});
+
+describe('Equivalência de unidades (21/11/2026): lançar o aço em M ou BR', () => {
+    const aco = (extra: Partial<BudgetEntry> = {}): BudgetEntry => ({
+        ...makeEntry('1'),
+        sinapiItem: { code: '32', description: 'ACO CA-50, 6,3 MM, VERGALHAO', unit: 'KG', price: 8, type: SinapiType.INPUT, category: 'Material' },
+        quantity: 29.4,
+        ...extra,
+    });
+    const renderCom = (budget: BudgetEntry[]) => {
+        const onUpdateBudget = vi.fn();
+        const r = render(
+            <ConfirmProvider>
+                <BudgetEditor budget={budget} settings={makeSettings()} favorites={[]} onToggleFavorite={vi.fn()}
+                    onUpdateBudget={onUpdateBudget} onUpdateSettings={vi.fn()} />
+            </ConfirmProvider>,
+        );
+        return { ...r, onUpdateBudget };
+    };
+
+    beforeEach(() => {
+        EQUIVALENCIAS.atual = new Map([['32', [
+            { itemCode: '32', unidadeBase: 'KG', unidade: 'M', fator: 0.245 },
+            { itemCode: '32', unidadeBase: 'KG', unidade: 'BR', fator: 2.94 },
+        ]]]);
+    });
+
+    it('com equivalência, a unidade vira escolha; trocar para M grava só a unidade (quantidade e total iguais)', () => {
+        const { container, onUpdateBudget } = renderCom([aco()]);
+        const sel = within(container).getByLabelText('Unidade do item 01.01.01.01') as HTMLSelectElement;
+        expect(Array.from(sel.options).map(o => o.value)).toEqual(['KG', 'M', 'BR']);
+        fireEvent.change(sel, { target: { value: 'M' } });
+        const gravado: BudgetEntry = onUpdateBudget.mock.calls.at(-1)![0][0];
+        expect(gravado.quantity).toBe(29.4);
+        expect(gravado.unidadeInformada).toEqual({ unidade: 'M', unidadeBase: 'KG', fator: 0.245 });
+    });
+
+    it('lançado em M: mostra 120 M a R$ 1,96 e digitar 240 grava 58,8 KG', () => {
+        const { container, onUpdateBudget } = renderCom([aco({ unidadeInformada: { unidade: 'M', unidadeBase: 'KG', fator: 0.245 } })]);
+        const qtd = within(container).getByLabelText('Quantidade do item 01.01.01.01') as HTMLInputElement;
+        expect(Number(qtd.value)).toBe(120);
+        expect((within(container).getByLabelText('Custo unitário do item 01.01.01.01') as HTMLInputElement).value).toContain('1,96');
+        fireEvent.change(qtd, { target: { value: '240' } });
+        const gravado: BudgetEntry = onUpdateBudget.mock.calls.at(-1)![0][0];
+        expect(gravado.quantity).toBeCloseTo(58.8, 6);
+    });
+
+    it('voltar para KG apaga a unidade informada', () => {
+        const { container, onUpdateBudget } = renderCom([aco({ unidadeInformada: { unidade: 'M', unidadeBase: 'KG', fator: 0.245 } })]);
+        fireEvent.change(within(container).getByLabelText('Unidade do item 01.01.01.01'), { target: { value: 'KG' } });
+        const gravado: BudgetEntry = onUpdateBudget.mock.calls.at(-1)![0][0];
+        expect(gravado.unidadeInformada).toBeUndefined();
+        expect(gravado.quantity).toBe(29.4);
+    });
+
+    it('unidade informada com base que não é mais a do item: volta a mostrar na unidade do item', () => {
+        const { container } = renderCom([aco({ sinapiItem: { ...aco().sinapiItem, unit: 'T' }, unidadeInformada: { unidade: 'M', unidadeBase: 'KG', fator: 0.245 } })]);
+        expect(Number((within(container).getByLabelText('Quantidade do item 01.01.01.01') as HTMLInputElement).value)).toBe(29.4);
+    });
+
+    it('sem equivalência, a unidade continua só texto', () => {
+        EQUIVALENCIAS.atual = new Map();
+        const { container } = renderCom([aco()]);
+        expect(within(container).queryByLabelText('Unidade do item 01.01.01.01')).toBeNull();
     });
 });

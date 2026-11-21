@@ -8,6 +8,9 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
 import { BudgetRow } from './BudgetRow';
+import { useEquivalencias } from '../hooks/useEquivalencias';
+import { fatorEntre, unidadesDoItem } from '../utils/equivalenciaUnidades';
+import { identidadeDaUnidade } from '../lib/unidadeDeMedida';
 import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors } from '@dnd-kit/core';
 import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import SinapiRebaseModal from './SinapiRebaseModal';
@@ -1807,6 +1810,29 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     onUpdateBudget(updated);
   };
 
+  // EQUIVALÊNCIA DE UNIDADES (21/11/2026): troca só a unidade em que o item é MOSTRADO. A quantidade
+  // gravada segue na unidade do item, então o total não muda. O fator vai junto no lançamento.
+  const codigosDoOrcamento = React.useMemo(
+    () => budget.map(i => i.sinapiItem?.code).filter((c): c is string => !!c),
+    [budget],
+  );
+  const { equivalencias } = useEquivalencias(codigosDoOrcamento);
+  const handleUpdateUnidade = (id: string, unidade: string | null) => {
+    const updated = budget.map(item => {
+      if (item.id !== id) return item;
+      const s = item.sinapiItem;
+      const base = identidadeDaUnidade(s?.unit);
+      const fator = unidade && s && base ? fatorEntre(s.code, s.unit, unidade, base, equivalencias) : null;
+      if (!unidade || !base || fator == null || unidade === base) {
+        const semUnidade = { ...item };
+        delete semUnidade.unidadeInformada;
+        return semUnidade;
+      }
+      return { ...item, unidadeInformada: { unidade, unidadeBase: base, fator } };
+    });
+    onUpdateBudget(updated);
+  };
+
   const handleUpdateItemPrice = (id: string, price: number) => {
     const updated = budget.map(item => {
       if (item.id === id) {
@@ -3076,6 +3102,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                       isLocked={isLocked}
                                       esquerdaFixa={telaLarga ? esquerdaFixa : undefined}
                                       precoTotalFixo={precoTotalFixo}
+                                      unidadesPossiveis={item.sinapiItem ? unidadesDoItem(item.sinapiItem.code, item.sinapiItem.unit, equivalencias) : null}
+                                      onUpdateUnidade={handleUpdateUnidade}
                                     />
                                   ))}
                                 </SortableContext>

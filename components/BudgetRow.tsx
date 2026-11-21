@@ -8,6 +8,7 @@ import { BudgetEntry, SinapiItem, SinapiType, CompositionComponent } from '../ty
 import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { useConfirm } from './ui/confirm';
+import { converterQuantidade, unidadeInformadaValida } from '../utils/equivalenciaUnidades';
 import { Copy } from 'lucide-react';
 
 /** Posição das colunas fixas à esquerda (BudgetEditor calcula pelas larguras atuais). */
@@ -45,6 +46,11 @@ interface BudgetRowProps {
     esquerdaFixa?: EsquerdaFixa;
     /** Preço total fixo à direita (BudgetEditor decide: tela larga e sem M.O/Mat/Equip). */
     precoTotalFixo?: boolean;
+    /** Equivalência de unidades (21/11/2026): unidades em que o item pode ser lançado — a dele
+     *  primeiro. Ausente = sem equivalência (a unidade fica só-texto, como sempre). */
+    unidadesPossiveis?: string[] | null;
+    /** Troca a unidade em que o item é MOSTRADO; `null` volta para a unidade do item. */
+    onUpdateUnidade?: (id: string, unidade: string | null) => void;
 }
 
 /** Classe base de toda célula de dado — separador vertical + altura de linha (§6.6/§7.2).
@@ -113,6 +119,8 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     isLocked,
     esquerdaFixa,
     precoTotalFixo,
+    unidadesPossiveis,
+    onUpdateUnidade,
 }) => {
     const {
         attributes,
@@ -131,6 +139,13 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     const [isExpanded, setIsExpanded] = React.useState(false);
     const [isSavingCustom, setIsSavingCustom] = React.useState(false);
     const hasComposition = item.sinapiItem?.composition && item.sinapiItem.composition.length > 0;
+    // EQUIVALÊNCIA DE UNIDADES (21/11/2026): `item.quantity` e o preço gravados seguem na unidade do
+    // item; a tela mostra na unidade informada. 1 unidade informada = `fator` × unidade do item.
+    const informada = unidadeInformadaValida(item.sinapiItem?.unit, item.unidadeInformada);
+    const fator = informada?.fator ?? 1;
+    const unidadeNaTela = informada?.unidade ?? (item.sinapiItem?.unit || '---');
+    const quantidadeNaTela = informada ? Number((item.quantity / fator).toFixed(4)) : item.quantity;
+    const precoNaTela = (item.sinapiItem?.price || 0) * fator;
     const canOpenCPU = item.sinapiItem?.type === SinapiType.COMPOSITION || hasComposition;
     const hasCalculationMemory = !!(item.calculationMemory?.formula?.trim() || item.calculationMemory?.justification?.trim() || item.calculationMemory?.result !== undefined);
     // Colunas da tabela (BudgetEditor.tsx monta o mesmo <colgroup>): drag + 10
@@ -263,22 +278,36 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 <td className={TD}>
                     <input
                         type="number"
-                        value={item.quantity}
-                        onChange={(e) => onUpdateQuantity(item.id, Number(e.target.value))}
+                        value={quantidadeNaTela}
+                        onChange={(e) => onUpdateQuantity(item.id, informada ? converterQuantidade(Number(e.target.value), fator) : Number(e.target.value))}
                         aria-label={`Quantidade do item ${codigoDoItem}`}
                         disabled={isLocked}
                         className={`w-full text-center text-sm border rounded-[6px] py-0.5 focus:ring-2 focus:ring-blue-500 outline-none ${isLocked ? 'bg-gray-50 text-gray-900 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
                     />
                 </td>
 
-                <td className={`${TD} text-center text-sm text-gray-500`}>{item.sinapiItem?.unit || '---'}</td>
+                <td className={`${TD} text-center text-sm text-gray-500`}>
+                    {unidadesPossiveis && unidadesPossiveis.length > 1 && onUpdateUnidade && !isLocked ? (
+                        <select
+                            aria-label={`Unidade do item ${codigoDoItem}`}
+                            title={informada ? `1 ${informada.unidade} = ${fator.toLocaleString('pt-BR', { maximumFractionDigits: 6 })} ${informada.unidadeBase} — o orçamento grava em ${informada.unidadeBase}` : 'Lançar em outra unidade (equivalência cadastrada em Composições)'}
+                            value={informada?.unidade ?? unidadesPossiveis[0]}
+                            onChange={(e) => onUpdateUnidade(item.id, e.target.value === unidadesPossiveis[0] ? null : e.target.value)}
+                            className="text-sm font-normal text-gray-900 bg-gray-50 border border-gray-100 rounded px-1 py-0.5 cursor-pointer outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                            {unidadesPossiveis.map(u => <option key={u} value={u}>{u}</option>)}
+                        </select>
+                    ) : (
+                        <span title={informada ? `1 ${informada.unidade} = ${fator.toLocaleString('pt-BR', { maximumFractionDigits: 6 })} ${informada.unidadeBase}` : undefined}>{unidadeNaTela}</span>
+                    )}
+                </td>
 
                 <td className={TD}>
                     <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : 'border-gray-200'} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
                         <span className="text-xs text-gray-500 shrink-0">R$</span>
                         <MoneyCentsInput
-                            value={Number(item.sinapiItem?.price || 0).toFixed(2)}
-                            onChange={(v) => onUpdatePrice(item.id, v === '' ? 0 : Number(v))}
+                            value={precoNaTela.toFixed(2)}
+                            onChange={(v) => onUpdatePrice(item.id, v === '' ? 0 : Number(v) / fator)}
                             aria-label={`Custo unitário do item ${codigoDoItem}`}
                             disabled={isLocked}
                             className={`w-full text-center text-sm outline-none bg-transparent py-0.5 ${isLocked ? 'cursor-not-allowed' : ''} ${item.sinapiItem?.isOverride ? 'text-amber-700' : 'text-gray-900'}`}
@@ -315,7 +344,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 </td>
 
                 <td className={`${TD} text-right text-sm font-medium text-blue-600 whitespace-nowrap`}>
-                    R$ {((item.sinapiItem?.price || 0) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    R$ {(precoNaTela * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
 
                 {/* Espaçador (§6.1.1) — casa com o <col /> sem largura do colgroup */}

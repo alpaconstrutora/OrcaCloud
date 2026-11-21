@@ -50,10 +50,21 @@ export interface CustomDatabase {
     updated_at?: string;
 }
 
+/** Unidade em que o lancamento e MOSTRADO/digitado (equivalencia de unidades,
+ *  21/11/2026). `BudgetEntry.quantity` segue SEMPRE na unidade do item. */
+export interface UnidadeInformada {
+    unidade: string;
+    unidadeBase: string;
+    /** 1 `unidade` = `fator` x `unidadeBase`: gravado no lancamento, nao relido do cadastro. */
+    fator: number;
+}
+
 export interface BudgetEntry {
     id: string;
     sinapiItem: SinapiItem;
     quantity: number;
+    /** Quando presente e valida, a tela mostra quantidade e preco nesta unidade. */
+    unidadeInformada?: UnidadeInformada;
     phase: string;
     subPhase?: string;
     group: string;

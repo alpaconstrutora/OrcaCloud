@@ -132,6 +132,19 @@ describe('espelho do estudo — cabeçalho sem título repetido', () => {
         expect(screen.queryByText('Unidades individualizadas do empreendimento')).toBeNull();
         expect(screen.getByRole('button', { name: /Inteligência de Precificação/ })).toBeTruthy();
     });
+
+    // 20/11: sem o título, sobrava uma faixa só com os botões. Eles vão para a barra da tabela (depois dos KPIs).
+    it('Regenerar e Inteligência de Precificação ficam na barra da tabela, depois dos KPIs', async () => {
+        montar();
+        await screen.findByText('101');
+        const kpi = screen.getByText('VGV Total');
+        const busca = screen.getByPlaceholderText('Buscar unidade ou torre…');
+        for (const nome of [/Inteligência de Precificação/, /Regenerar espelho/]) {
+            const b = screen.getByRole('button', { name: nome });
+            expect(kpi.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+            expect(busca.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        }
+    });
 });
 
 describe('espelho do estudo — tabela padrão (§6.10/§6.12)', () => {

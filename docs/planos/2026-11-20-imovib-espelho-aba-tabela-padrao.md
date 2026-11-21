@@ -98,3 +98,9 @@ mostrado na pergunta já estava no mesmo nível, e eu não deixei isso claro). *
 aviso que aponta o espelho e o link do VGV levam à sub-aba. Também **PR #601**: sai o título "Vendas de Ativos /
 Unidades individualizadas do empreendimento" do topo do espelho (pedido de 20/11: *"Remova titulo … nao tem necessidade
 nenhuma"*).
+
+Conferido em produção (20/11, só leitura, 0 erros): #602 e #601 no ar — abas principais sem "Espelho de vendas";
+dentro de Receitas, "Espelho de vendas" e "Curva, perfil e distrato"; sem o título "Vendas de Ativos".
+Efeito do #601: sobrou uma faixa só com Regenerar e Inteligência de Precificação. Pedido de 20/11 (*"continue"*, em
+resposta a "proponho levar esses dois botões para a barra da tabela") → os dois vão para a barra da tabela, ao lado do
+triângulo, e a faixa sai.

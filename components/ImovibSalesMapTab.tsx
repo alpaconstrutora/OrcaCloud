@@ -349,33 +349,6 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
 
     return (
         <div className="bg-white rounded-[10px] border border-gray-200 overflow-hidden">
-            {/* Ações (sem título: o nome da aba já diz o que é). Regenerar e Precificação gravam no espelho. */}
-            {!loadError && instances.length > 0 && (
-            <div className="p-6 border-b border-slate-100 flex items-center justify-end gap-4 flex-wrap">
-                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-3 flex-wrap">
-                    {!loadError && instances.length > 0 && (
-                        <>
-                            <button
-                                onClick={handleRegenerate}
-                                disabled={generating}
-                                title={!pode ? motivo : 'Regenerar espelho'}
-                                className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-slate-600 rounded-[6px] hover:bg-slate-50 transition-colors disabled:opacity-50"
-                            >
-                                <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
-                            </button>
-                            <button
-                                onClick={() => setPricingModalOpen(true)}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-                            >
-                                <BrainCircuit className="w-[15px] h-[15px]" />
-                                Inteligência de Precificação
-                            </button>
-                        </>
-                    )}
-                </fieldset>
-            </div>
-            )}
-
             {/* KPIs — §4: KpiCard */}
             {!loadError && instances.length > 0 && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3 p-4 border-b border-gray-100">
@@ -485,7 +458,9 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                             default: return null;
                         }
                     }}
-                    toolbarRight={foraDoVgv > 0 ? (
+                    toolbarRight={(
+                        <div className="flex items-center gap-2 shrink-0">
+                        {foraDoVgv > 0 && (
                         <span className="relative inline-flex shrink-0">
                             <ActionIconButton
                                 kind="view"
@@ -498,7 +473,33 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                             />
                             <span className="pointer-events-none absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-600 px-1 text-[10px] font-bold text-white">{foraDoVgv}</span>
                         </span>
-                    ) : undefined}
+                        )}
+                        {/* Regenerar e Precificação gravam no espelho: sem permissão, desligados com o motivo. */}
+                        <span className="inline-flex" title={!pode ? motivo : undefined}>
+                            <button
+                                type="button"
+                                onClick={handleRegenerate}
+                                disabled={generating || !pode}
+                                title={pode ? 'Regenerar espelho' : undefined}
+                                aria-label="Regenerar espelho"
+                                className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-slate-600 rounded-[6px] hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+                            </button>
+                        </span>
+                        <span className="inline-flex" title={!pode ? motivo : undefined}>
+                            <button
+                                type="button"
+                                onClick={() => setPricingModalOpen(true)}
+                                disabled={!pode}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <BrainCircuit className="w-[15px] h-[15px]" />
+                                Inteligência de Precificação
+                            </button>
+                        </span>
+                        </div>
+                    )}
                     renderCell={(k, inst) => {
                         const marca = marcaDe.get(inst.id);
                         switch (k) {

@@ -2832,13 +2832,17 @@ Referência: `SupplierList.tsx`, `ClientList.tsx`, `InvestorList.tsx`.
 > junto (um `Record<Aba, {titulo, subtitulo}>` no topo do arquivo).
 > ❌ **Não é a mesma coisa que os cabeçalhos "hero"** (fundo escuro/gradiente,
 > `h1` branco `text-4xl`, ex: `RentalsModule.tsx`, `SalesModule.tsx`,
-> `ProjectOverview.tsx`) nem os cabeçalhos em card com breadcrumb
-> (`EmpreendimentoModule.tsx`) — são linguagens visuais deliberadamente
+> `ProjectOverview.tsx`) — são linguagens visuais deliberadamente
 > diferentes, não inconsistência a corrigir aqui. Não migre sem decisão
 > explícita (seria redesign). Já migrados por decisão explícita:
 > `LaborModule.tsx`; `OpuraAssetsModule.tsx` (2026-09-20 — card + breadcrumb
 > "Corporativo / Gestão de Bens" viraram `h1` + `p`; os botões ficaram à
-> direita do título no tamanho compacto do §17).
+> direita do título no tamanho compacto do §17); `EmpreendimentoModule.tsx`
+> (a lista já é `h1` + `p`); `empreendimento/EmpreendimentoDetail.tsx`
+> (2026-11-21, pedido do usuário: *"o título da tela esta em padrão diferente do
+> restante do app. Parece que esta dentro de um card"* — saíram o card branco, o
+> ícone-bolha e o `h1 text-2xl`; ficou seta §23.1 + `h1 text-3xl` + subtítulo
+> `ml-12`, status/tipo na linha do título, ações à direita).
 
 ### 20.1 Ritmo de espaçamento do cromo — 24px até as abas, 12px depois
 
@@ -3262,8 +3266,9 @@ exceção local.
 > com o título, não com a seta — só quando o botão é condicional
 > (`onVoltarParaPlanta`, `onBack` opcional de portal) o `ml-12` também fica
 > condicional, senão o subtítulo desalinha nas renderizações sem botão.
-> ✅ **Cabeçalho em card com elemento à esquerda do título** (ícone-bolha como
-> `empreendimento/EmpreendimentoDetail.tsx`, badge de status) — a seta entra
+> ✅ **Cabeçalho em card com elemento à esquerda do título** (ícone-bolha, badge
+> de status; o exemplo era `empreendimento/EmpreendimentoDetail.tsx`, que virou
+> cabeçalho solto do §20 em 2026-11-21) — a seta entra
 > ANTES desse elemento, na mesma linha `flex items-center gap-3`, sem alterar
 > o resto do desenho do card. Não é a mesma coisa que migrar um cabeçalho hero/
 > card para o padrão plano do §20 (isso continua exigindo decisão explícita) —

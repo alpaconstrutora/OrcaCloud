@@ -1,7 +1,7 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import React from 'react';
-import { ArrowLeft, Building2, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks, Scale, FolderOpen } from 'lucide-react';
+import { ArrowLeft, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks, Scale, FolderOpen } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, EmpreendimentoUnitCharacteristic } from '../../types';
 import TowerEditor from './TowerEditor';
 import UnidadeUnicaEditor from './UnidadeUnicaEditor';
@@ -230,9 +230,12 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Header — título SOLTO (§20 + seta §23.1), como as demais telas de detalhe. Até
+          21/11/2026 era um card branco com ícone-bolha e h1 text-2xl; o usuário pediu o
+          padrão do resto do app. Ações à direita do título, no tamanho compacto (§17), só a
+          partir de xl: abaixo disso dividir a linha espremia nome e subtítulo (medido em 768). */}
+      <div className="flex flex-col xl:flex-row xl:items-start justify-between gap-4">
+        <div className="min-w-0">
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -242,66 +245,61 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             >
               <ArrowLeft className="w-5 h-5" />
             </button>
-            <div className="p-3 bg-blue-50 text-blue-600 rounded-[10px]">
-              <Building2 className="w-6 h-6" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                <h1 className="text-2xl font-black text-gray-900 tracking-tight">{e.name}</h1>
-                <span className={`whitespace-nowrap text-sm font-normal ${STATUS_TEXT_COLOR[e.status]}`}>
-                  {STATUS_LABELS[e.status]}
+            <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 min-w-0">
+              <h1 className="text-3xl font-black text-gray-900 tracking-tight">{e.name}</h1>
+              <span className={`whitespace-nowrap text-sm font-normal ${STATUS_TEXT_COLOR[e.status]}`}>
+                {STATUS_LABELS[e.status]}
+              </span>
+              {tipoLabel && (
+                <span className="whitespace-nowrap text-sm font-normal text-gray-500">
+                  · {tipoLabel}
                 </span>
-                {tipoLabel && (
-                  <span className="whitespace-nowrap text-sm font-normal text-gray-500">
-                    · {tipoLabel}
-                  </span>
-                )}
-              </div>
-              <p className="text-xs text-gray-500 font-medium mt-0.5">
-                {e.code ? `${e.code} · ` : ''}{e.spe_razao_social || e.developer_name || 'Sem SPE definida'}
-              </p>
+              )}
             </div>
           </div>
-          <div className="flex flex-wrap lg:flex-nowrap items-center gap-2 md:justify-end shrink-0">
-            {/* "Sincronizar do Estudo" NÃO mora aqui: a mesma ação já existe na aba Centro de
-                Sincronização, onde ela tem contexto (divergências, última sync) e desabilita
-                sozinha quando não há o que sincronizar. Ter as duas era o mesmo controle em
-                dois lugares com estados diferentes — o do header ficava sempre aceso, mesmo
-                sem divergência nenhuma (ui_ux_guia_unificado.md §6.4/§18). */}
-            {e.imovib_study_id && onGoToStudy && (
-              <button
-                onClick={onGoToStudy}
-                className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
-              >
-                <BarChart3 className="w-[15px] h-[15px]" /> Ver Estudo
-              </button>
-            )}
-            {e.blueprint_study_id ? (
-              <button
-                onClick={() => abrirAreasNaPlanta(e.blueprint_study_id!)}
-                title="Abre o estudo vinculado da Planta na tela Áreas NBR 12721 (Quadros I, II e IV-B e frações)"
-                className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
-              >
-                <Scale className="w-4 h-4" /> Áreas NBR 12721
-              </button>
-            ) : (
-              <button
-                onClick={() => void criarEstudoDeAreas()}
-                disabled={criandoAreas}
-                title="Sem estudo da Planta vinculado: cria um estudo de áreas (sem desenho) a partir deste empreendimento"
-                className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
-              >
-                <Scale className="w-4 h-4" /> {criandoAreas ? 'Criando…' : 'Criar estudo de áreas'}
-              </button>
-            )}
+          <p className="text-gray-500 text-sm mt-1.5 font-medium ml-12">
+            {e.code ? `${e.code} · ` : ''}{e.spe_razao_social || e.developer_name || 'Sem SPE definida'}
+          </p>
+        </div>
+        <div className="flex flex-wrap xl:flex-nowrap items-center gap-2 xl:justify-end shrink-0">
+          {/* "Sincronizar do Estudo" NÃO mora aqui: a mesma ação já existe na aba Centro de
+              Sincronização, onde ela tem contexto (divergências, última sync) e desabilita
+              sozinha quando não há o que sincronizar. Ter as duas era o mesmo controle em
+              dois lugares com estados diferentes — o do header ficava sempre aceso, mesmo
+              sem divergência nenhuma (ui_ux_guia_unificado.md §6.4/§18). */}
+          {e.imovib_study_id && onGoToStudy && (
             <button
-              onClick={handleGenerateMemorial}
-              disabled={generatingMemorial}
+              onClick={onGoToStudy}
+              className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 bg-violet-50 hover:bg-violet-100 text-violet-700 rounded-[6px] font-medium text-[13px] transition-all active:scale-95"
+            >
+              <BarChart3 className="w-[15px] h-[15px]" /> Ver Estudo
+            </button>
+          )}
+          {e.blueprint_study_id ? (
+            <button
+              onClick={() => abrirAreasNaPlanta(e.blueprint_study_id!)}
+              title="Abre o estudo vinculado da Planta na tela Áreas NBR 12721 (Quadros I, II e IV-B e frações)"
+              className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
+            >
+              <Scale className="w-4 h-4" /> Áreas NBR 12721
+            </button>
+          ) : (
+            <button
+              onClick={() => void criarEstudoDeAreas()}
+              disabled={criandoAreas}
+              title="Sem estudo da Planta vinculado: cria um estudo de áreas (sem desenho) a partir deste empreendimento"
               className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
             >
-              <ScrollText className="w-4 h-4" /> {generatingMemorial ? 'Gerando...' : 'Minuta do Memorial'}
+              <Scale className="w-4 h-4" /> {criandoAreas ? 'Criando…' : 'Criar estudo de áreas'}
             </button>
-          </div>
+          )}
+          <button
+            onClick={handleGenerateMemorial}
+            disabled={generatingMemorial}
+            className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95 disabled:opacity-50"
+          >
+            <ScrollText className="w-4 h-4" /> {generatingMemorial ? 'Gerando...' : 'Minuta do Memorial'}
+          </button>
         </div>
       </div>
 

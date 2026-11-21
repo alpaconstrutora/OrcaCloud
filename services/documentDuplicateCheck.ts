@@ -20,8 +20,8 @@ const LABEL_BY_KIND: Record<DuplicateDocumentEntityKind, string> = {
 };
 
 interface DuplicateDocumentMatch {
-    id: string;
-    name: string;
+    id: string | null;
+    name: string | null;
     code: string | null;
     organization_id: string | null;
     organization_name: string | null;
@@ -58,9 +58,10 @@ export async function assertDocumentNotDuplicated(
             ? 'em outra organização'
             : 'em "Todas as Organizações"';
 
+    // De outra organização a RPC não diz nome nem código (Fase A8, plano 2026-11-21-portal-do-investidor-consolidacao).
+    const quem = match.name ? `para o ${label} "${match.name}"${match.code ? ` (código ${match.code})` : ''}` : `como ${label}`;
     throw new Error(
-        `Este CNPJ/CPF já está cadastrado para o ${label} "${match.name}"` +
-        `${match.code ? ` (código ${match.code})` : ''} ${orgText}. ` +
+        `Este CNPJ/CPF já está cadastrado ${quem} ${orgText}. ` +
         `Não é permitido cadastrar o mesmo CNPJ/CPF duas vezes. Se este ${label} precisa existir em mais de uma organização, ` +
         `edite o cadastro existente em vez de criar um novo.`
     );

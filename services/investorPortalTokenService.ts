@@ -75,11 +75,12 @@ export const investorPortalTokenService = {
         return data as InvestorPortalToken | null;
     },
 
+    /**
+     * Revoga pela RPC (Fase A1 do plano 2026-11-21-portal-do-investidor-consolidacao): a tabela não aceita
+     * mais escrita direta — a RPC confere que quem pede é gestor da org DO INVESTIDOR.
+     */
     async revokeToken(investorId: string): Promise<void> {
-        const { error } = await supabase
-            .from('investor_portal_tokens')
-            .update({ is_active: false })
-            .eq('investor_id', investorId);
+        const { error } = await supabase.rpc('investor_portal_revoke_token', { p_investor_id: investorId });
         if (error) throw error;
     },
 

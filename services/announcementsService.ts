@@ -217,14 +217,27 @@ export const announcementsService = {
         });
     },
 
-    async acknowledge(announcementId: string, investorId: string, voteOption?: string): Promise<void> {
-        const { error } = await supabase
-            .from('investor_acknowledgments')
-            .upsert(
-                { announcement_id: announcementId, investor_id: investorId, vote_option: voteOption ?? null },
-                { onConflict: 'announcement_id,investor_id' }
-            );
+    /**
+     * Ciência/voto do investidor LOGADO (Fase A7 do plano 2026-11-21-portal-do-investidor-consolidacao): a
+     * tabela não aceita mais gravação direta — antes qualquer membro da org respondia em nome de qualquer
+     * investidor. Vai pela mesma RPC do link, com o token do próprio investidor (`portal_token_para_mim`).
+     * `_investorId` fica na assinatura só por compatibilidade: quem responde é sempre o dono do token.
+     */
+    async acknowledge(announcementId: string, _investorId: string, voteOption?: string): Promise<void> {
+        const { data: acesso, error: erroAcesso } = await supabase.rpc('portal_token_para_mim', { p_portal: 'investidor' });
+        if (erroAcesso) throw erroAcesso;
+        const token = (acesso as { situacao?: string; token?: string } | null)?.token;
+        if (!token) throw new Error('Seu acesso de investidor não está ativo: peça um novo link à construtora.');
+        const { data, error } = await supabase.rpc('fn_investor_portal_acknowledge', {
+            p_token: token,
+            p_announcement_id: announcementId,
+            p_vote_option: voteOption ?? null,
+        });
         if (error) throw error;
+        const r = data as { valid?: boolean; error?: string } | null;
+        if (!r?.valid) {
+            throw new Error(r?.error === 'vote_required' ? 'Escolha uma opção para votar.' : 'Não foi possível registrar a resposta.');
+        }
     },
 
     async listAcknowledgments(announcementId: string): Promise<InvestorAcknowledgment[]> {

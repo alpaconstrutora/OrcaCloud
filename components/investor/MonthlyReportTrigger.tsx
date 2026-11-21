@@ -3,6 +3,7 @@ import { FileText, RefreshCw, CheckCircle2, Calendar, Download, Loader2 } from '
 import { supabase } from '../../lib/supabase';
 import { investorPortalService, InvestorReport } from '../../services/investorPortalService';
 import { generateMonthlyReportPdf } from '../../services/pdfReportService';
+import { investorService } from '../../services/investorService';
 import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
 import Button from '../ui/Button';
 
@@ -57,56 +58,51 @@ const MonthlyReportTrigger: React.FC<Props> = ({ organizationId }) => {
         const monthLabel = ref.toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
         const reportName = `Relatório Mensal — ${monthLabel}`;
 
-        let reportId: string | null = null;
-
+        // Fase A2 do plano 2026-11-21-portal-do-investidor-consolidacao: um PDF POR INVESTIDOR, só com os números
+        // dele, gravado com o destinatário. Antes era um PDF da org inteira, sem destinatário, que ia a todos.
+        // O registro só nasce com o arquivo pronto, e o comunicado só sai se algum relatório saiu.
         try {
-            // 1. Inserir o registro
-            setStep('inserting');
-            const { data: inserted, error: insErr } = await supabase
-                .from('investor_reports')
-                .insert({
+            setStep('generating');
+            const investidores = await investorService.listInvestors(organizationId);
+            let gerados = 0;
+            for (const inv of investidores as { id: string; name: string }[]) {
+                setStep('uploading');
+                const caminho = await generateMonthlyReportPdf(organizationId, { id: inv.id, name: inv.name });
+                if (!caminho) continue;   // investidor sem obra nem lançamento nesta org
+                setStep('inserting');
+                const { error: insErr } = await supabase.from('investor_reports').insert({
                     organization_id: organizationId,
+                    investor_id: inv.id,
                     name: reportName,
                     type: 'PDF',
                     category: 'relatorio',
                     report_date: now.toLocaleDateString('pt-BR'),
-                })
-                .select('id, name, report_date, url, created_at')
-                .single();
-            if (insErr) throw insErr;
-            reportId = inserted.id;
+                    url: caminho,
+                });
+                if (insErr) throw insErr;
+                gerados++;
+            }
 
-            // Comunicado automático
-            await supabase.from('investor_announcements').insert({
-                organization_id: organizationId,
-                title: `${reportName} disponível`,
-                body: `O relatório de evolução física, financeira e comparativo previsto × realizado referente a ${monthLabel} está disponível na seção Documentos do seu portal.`,
-                type: 'comunicado',
-                published_at: now.toISOString(),
-                requires_acknowledgment: false,
-            });
-
-            // 2. Gerar PDF
-            setStep('generating');
-            const pdfUrl = await (async () => {
-                setStep('uploading');
-                return generateMonthlyReportPdf(organizationId);
-            })();
-
-            // 3. Atualizar registro com a URL
-            await supabase
-                .from('investor_reports')
-                .update({ url: pdfUrl })
-                .eq('id', reportId);
+            if (gerados > 0) {
+                await supabase.from('investor_announcements').insert({
+                    organization_id: organizationId,
+                    title: `${reportName} disponível`,
+                    body: `O seu relatório de evolução física e financeira referente a ${monthLabel} está disponível na seção Documentos do seu portal.`,
+                    type: 'comunicado',
+                    published_at: now.toISOString(),
+                    requires_acknowledgment: false,
+                });
+            }
 
             setStep('done');
-            setLastMsg(`Relatório gerado em ${now.toLocaleString('pt-BR')}`);
+            setLastMsg(gerados > 0
+                ? `${gerados} relatório(s) gerado(s) em ${now.toLocaleString('pt-BR')}, um por investidor.`
+                : 'Nenhum investidor com obra ou lançamento nesta organização: nenhum relatório gerado.');
             loadRecent();
         } catch (err: any) {
             console.error('Error generating report', err);
             setLastError(err?.message || 'Falha na geração do relatório.');
             setStep('error');
-            // Se o registro foi criado mas o PDF falhou, mantém o registro sem URL
         }
     };
 

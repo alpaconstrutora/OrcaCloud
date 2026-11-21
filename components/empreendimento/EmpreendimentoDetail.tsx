@@ -199,7 +199,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   const setTab = async (t: Tab) => { if (t !== tabAtiva && await podeSair()) setTabBruto(t); };
   const voltar = async () => { if (await podeSair()) onBack(); };
   // O espelho para onde a aba Lote/Unidade leva: o de Vendas, ou o de Locações se o objetivo é Locação.
-  const abaDoEspelho: Tab = espelhos.vendas ? 'comercial' : 'locacoes';
+  // Serviço não tem espelho: sem destino, a unidade única não oferece o link.
+  const abaDoEspelho: Tab | null = espelhos.vendas ? 'comercial' : espelhos.locacoes ? 'locacoes' : null;
 
   const tabs: { id: Tab; label: string; icon: any; badge?: number }[] = [
     { id: 'visao', label: 'Visão Geral', icon: FileText },
@@ -363,7 +364,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
               estrutura={estrutura}
               nomeDoTipo={tipoLabel}
               onTerrenoSaved={onSynced}
-              onAbrirEspelho={() => void setTab(abaDoEspelho)}
+              onAbrirEspelho={abaDoEspelho ? () => void setTab(abaDoEspelho) : undefined}
             />
           ) : (
             <TowerEditor

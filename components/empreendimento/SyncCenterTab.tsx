@@ -619,6 +619,10 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
           {(() => {
             // Só os espelhos que o Objetivo mostra (21/11/2026) — citar aba escondida mandaria a lugar nenhum.
             const { vendas, locacoes } = espelhosDoObjetivo(e.objetivo);
+            // Serviço (sem espelho): não há ponte com Vendas nem Locações para indicar.
+            if (!vendas && !locacoes) {
+              return <>Com o objetivo <strong className="text-gray-700">Serviço</strong> a ficha não tem espelho: as pontes com <strong className="text-gray-700">Venda de Ativos</strong> e <strong className="text-gray-700">Locações</strong> não se aplicam. Este centro cuida só do sync com os estudos.</>;
+            }
             const ponte = vendas && locacoes
               ? <>As pontes com <strong className="text-gray-700">Venda de Ativos</strong> e <strong className="text-gray-700">Locações</strong> (publicar unidades e trazer status) ficam nas abas <strong className="text-gray-700">Espelho de Vendas</strong> e <strong className="text-gray-700">Espelho de Locações</strong></>
               : vendas

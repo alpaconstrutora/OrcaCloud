@@ -11,6 +11,10 @@ describe('espelhosDoObjetivo', () => {
   it('Misto mostra os dois', () => {
     expect(espelhosDoObjetivo('MISTO')).toEqual({ vendas: true, locacoes: true });
   });
+  it('Serviço (obra/prestação para terceiro) não mostra nenhum espelho', () => {
+    expect(objetivoDe('SERVICO')).toBe('SERVICO');
+    expect(espelhosDoObjetivo('SERVICO')).toEqual({ vendas: false, locacoes: false });
+  });
   it('nulo ou desconhecido conta como Misto (nenhuma aba some)', () => {
     expect(espelhosDoObjetivo(null)).toEqual({ vendas: true, locacoes: true });
     expect(espelhosDoObjetivo(undefined)).toEqual({ vendas: true, locacoes: true });

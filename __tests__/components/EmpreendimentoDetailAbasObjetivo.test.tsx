@@ -68,6 +68,13 @@ describe('Empreendimento › abas', () => {
     expect(screen.getByRole('tab', { name: /Espelho de Locações/ })).toBeInTheDocument();
   });
 
+  it('Serviço não mostra nenhum espelho (docs/planos/2026-11-21-empreendimentos-objetivo-servico-agrupar.md)', () => {
+    montar('SERVICO');
+    expect(screen.queryByRole('tab', { name: /Espelho de Vendas/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /Espelho de Locações/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: /Documentos/ })).toBeInTheDocument();
+  });
+
   it('a Visão Geral é a ficha editável e o topo não tem mais o botão Editar', () => {
     montar('MISTO');
     expect(screen.getByTestId('ficha-editavel')).toBeInTheDocument();

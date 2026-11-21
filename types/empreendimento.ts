@@ -14,8 +14,9 @@ export type EmpreendimentoStatus =
 export type EmpreendimentoTipo = string;
 
 // Objetivo (21/11/2026): decide quais espelhos a ficha mostra — Vendas esconde o de
-// Locações, Locação esconde o de Vendas, Misto mostra os dois. Ver utils/empreendimentoObjetivo.ts.
-export type EmpreendimentoObjetivo = 'VENDAS' | 'LOCACAO' | 'MISTO';
+// Locações, Locação esconde o de Vendas, Misto mostra os dois, Serviço (obra/prestação para
+// terceiro, desde 21/11/2026) não mostra nenhum. Ver utils/empreendimentoObjetivo.ts.
+export type EmpreendimentoObjetivo = 'VENDAS' | 'LOCACAO' | 'MISTO' | 'SERVICO';
 
 export type FloorTipo =
     | 'SUBSOLO' | 'TERREO' | 'MEZANINO' | 'TIPO' | 'COBERTURA' | 'TECNICO' | 'GARAGEM' | 'OUTRO';

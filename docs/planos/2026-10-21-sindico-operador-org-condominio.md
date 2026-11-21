@@ -149,7 +149,7 @@ ensaio em bloco desfeito primeiro; anexos pelo script.
 
 ## Estado
 
-- [ ] F1 — fundação + migração do 010 (4 de 6, em 21/10/2026)
+- [ ] F1 — fundação + migração do 010 (5 de 6; conferido no banco em 21/11/2026)
   - [x] `aplicar_20271021500000` APLICADA e conferida (tipo `condominio` no CHECK, coluna
     `condominio_org_id`, 3 políticas de leitura, 2 gatilhos; anon sem acesso à Ficha; o Asaas da
     Alpa segue atendendo as mesmas 4 orgs — nenhuma de condomínio ainda).
@@ -165,14 +165,28 @@ ensaio em bloco desfeito primeiro; anexos pelo script.
     o condomínio; reverter = 0 divergências e contagens idênticas; nada ficou no banco.
   - [x] `aplicar_20271021500200` APLICADA (RPCs do síndico pela org do condomínio; sem efeito
     até existir o vínculo).
-  - [x] Código (não publicado): `utils/orgDoCondominio` + catraca `orgDoCondominioGuard`, telas do
-    condomínio pela org da operação, `listParaCondominios`, Ficha pela RPC (campos do síndico
-    travados para quem não é da org dona, com o motivo), nota do boleto na org do boleto.
-    Tipos 0 erros (227 arquivos), 144 testes verdes, UI limpa.
+  - [x] Código publicado (a77ea57, em `main`): `utils/orgDoCondominio` + catraca
+    `orgDoCondominioGuard`, telas do condomínio pela org da operação, `listParaCondominios`, Ficha
+    pela RPC (campos do síndico travados para quem não é da org dona, com o motivo), nota do
+    boleto na org do boleto. Tipos 0 erros (227 arquivos), 144 testes verdes, UI limpa.
   - [x] `aplicar_20271021500300_condominio_010_executa.sql` — bloqueada pelo classificador em
-    21/10; executada depois (lote `CONDO-010`, 599 registros; org "Condomínio Galeria Altavista",
-    código 005 — conferido no banco em 24/10). Equipe decidida: owners altair.rosa@ e desenvolvedor@; membros bruna.pereira@
-    e agente-leitura@.
+    21/10; executada pelo usuário no mesmo dia (lote `CONDO-010`, 599 linhas de registro; org
+    **Condomínio Galeria Altavista**, código 005, id `672fa190-9113-4064-9166-cb3d1231abbf`,
+    matriz `condominio` — conferido no banco em 24/10 e de novo em 21/11). Equipe: owners
+    altair.rosa@ e desenvolvedor@; membros bruna.pereira@ e agente-leitura@.
+    Na execução foram **94 títulos = R$ 49.261,18**, todos vindos da Alpa, 0 do 010 sobrando na
+    Alpa; 34 boletos, 1 contrato, 3 rateios, 21 ocupações, 2 CCs. A diferença para o ensaio
+    (86 → 89 → 94) são lançamentos de energia de 30/09 que receberam o CC 010 entre os ensaios e
+    a execução — são do condomínio e foram juntos.
+    **Conferência de 21/11/2026:** na org do condomínio estão **92 títulos = R$ 48.940,50**. Os
+    outros 2 títulos do lote (`58d1f0fa-0324-47e1-a927-848a83b64e11` e
+    `5ebc0265-7a5f-4112-a45b-d87a8c17f6af`, ambos vindos da obra Galeria da Alpa) foram
+    **apagados** depois da migração, sem rastro de quem nem quando: o id não aparece em nenhuma
+    tabela além de `condominio_migracao_registro`, nem em `titulo_aprovacao_memoria`. Pela
+    diferença dos totais somariam ~R$ 320,68 (estimativa: o registro não guarda valores).
+    **Reversão:** `fn_condominio_migracao_reverter('CONDO-010')` e depois apagar a org. Para
+    linha que já não existe o `UPDATE` não afeta nada e não dá erro — os 2 títulos apagados
+    simplesmente não voltam.
   - [ ] Anexos (script de mover arquivos dos buckets).
 - [ ] ~~F2 — síndico operador + menu~~ **DESCARTADA em 24/10/2026** pelo usuário: *"o sindico nao
   faz parte da construtora, e nao vai entrar no app. ele vai ter acesso ao que ele precisa para

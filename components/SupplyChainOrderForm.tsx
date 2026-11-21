@@ -145,7 +145,8 @@ function ordenarLinhas<T>(
 
 interface SupplyChainOrderFormProps {
     onBack: () => void;
-    onSave: () => void;
+    /** Na criação recebe o id do pedido gravado — a tela "Novo pedido" abre o detalhe dele. */
+    onSave: (pedidoCriadoId?: string) => void;
     editingOrderId?: string | null;
     /** Embutido na tela de detalhe do pedido: sem cabeçalho, sem abas próprias e
      *  sem o card de resumo — o detalhe é dono do cromo e das abas. */
@@ -976,7 +977,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     }
                 }
             } else {
-                await orderService.createOrder({
+                const criado = await orderService.createOrder({
                     projectId: selectedProjectId,
                     supplierId: selectedSupplierId,
                     deliveryDate: deliveryDate,
@@ -997,6 +998,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     items: itensParaSalvar,
                     projectName: projectData?.name
                 });
+                onSave(criado?.id);
+                return;
             }
             onSave();
         } catch (err: unknown) {

@@ -80,10 +80,10 @@ function campo(rotulo: string): HTMLSelectElement {
     return label.parentElement!.querySelector('select, input') as HTMLSelectElement;
 }
 
-async function abrirComObra() {
+async function abrirComObra(onSave: (id?: string) => void = () => {}) {
     render(
         <ConfirmProvider>
-            <SupplyChainOrderForm onBack={() => {}} onSave={() => {}} />
+            <SupplyChainOrderForm onBack={() => {}} onSave={onSave} />
         </ConfirmProvider>
     );
     await waitFor(() => expect(campo('Obra').querySelector('option[value="obra-1"]')).toBeTruthy());
@@ -147,7 +147,8 @@ describe('Novo pedido › Itens do pedido', () => {
     });
 
     it('criar o pedido leva o item escolhido no painel', async () => {
-        fireEvent.click(await abrirComObra());
+        const onSave = vi.fn();
+        fireEvent.click(await abrirComObra(onSave));
         fireEvent.click(within((await screen.findByText('Brita 1')).closest('tr')!).getByRole('checkbox'));
         fireEvent.click(screen.getByRole('button', { name: /Adicionar 1 item/ }));
         await waitFor(() => expect(screen.queryByText('Itens do orçamento da obra')).toBeNull());
@@ -159,5 +160,7 @@ describe('Novo pedido › Itens do pedido', () => {
         await waitFor(() => expect(orderService.createOrder).toHaveBeenCalled());
         const pedido = vi.mocked(orderService.createOrder).mock.calls[0][0] as { items: { code: string; quantity: number; unitPrice: number }[] };
         expect(pedido.items).toEqual([expect.objectContaining({ code: 'ORC-2', quantity: 8, unitPrice: 30 })]);
+        // Criado → a tela recebe o id para abrir o detalhe do pedido novo, não a lista (21/11/2026).
+        await waitFor(() => expect(onSave).toHaveBeenCalledWith('novo'));
     });
 });

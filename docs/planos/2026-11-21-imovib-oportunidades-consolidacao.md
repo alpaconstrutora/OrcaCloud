@@ -64,7 +64,7 @@ Escolhas padrão que tomo no plano (podem ser trocadas na aprovação):
 | 4 — Captação pela SPE | 3/3 ✅ | #627 (4d7e7dd) | 980000 aplicada | — | ✅ conferido |
 | 5 — O que deveria existir | 2/2 ✅ | 5.2 no #623 · 5.1 no #627 | (no gatilho da 960000) | — | ✅ conferido |
 | 6 — Achados das análises | análise feita | — | — | — | ✅ viraram a Fase 7 |
-| 7 — Pendências e achados ("implemente todos") | 11/11 ✅ | (PR da frente `imovib-oport-f6`) | 990000–995000 aplicadas | `portal-ged-download` v7 publicada | ⏳ falta o merge |
+| 7 — Pendências e achados ("implemente todos") | 11/11 ✅ | #631 (87c3d41) | 990000–995000 aplicadas | `portal-ged-download` v7 publicada | ✅ conferido |
 
 "Conferido" = `scripts/conferir-producao.sh` com um texto novo de cada fase: o domínio serve exatamente o
 `origin/main` do merge. Todas as frentes `imovib-oport-f1…f4` foram fechadas.
@@ -209,7 +209,7 @@ Decisões do usuário (mesma hora):
 
 ## Fase 7 — Pendências e achados da Fase 6 (pedido "implemente todos")
 
-**Estado (21/11, 19h): 11 de 11 itens feitos na frente `imovib-oport-f6`; falta o PR e o merge.** Migrations
+**Estado (21/11): 11 de 11 — NO AR** (PR #631, squash 87c3d41; `conferir-producao.sh` com "Levar ao Módulo Riscos" e "Importar do Market" ✅). CI: leves, pesados importados, tsc/travas/build verdes. Achado novo, fora do escopo: `__tests__/components/PainelVersoes.test.tsx` (Planta) falha sob carga pela mesma causa do 7.11 (tempo-limite padrão de 5 s). Migrations
 990000–995000 APLICADAS (D9), cada uma provada em transação desfeita. Prova: tsc exit 0.
 
 - 7.1 ✅ `aplicar_20271121990000` + `capitalCallService.registerPayment` pela RPC; painel sem `alert()`, avisa SPE sem

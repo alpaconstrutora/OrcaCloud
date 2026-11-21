@@ -15,7 +15,8 @@
 
 ## Itens
 
-### 1. Migration `aplicar_20271121996000_empreendimento_objetivo_servico.sql`
+### 1. Migration `aplicar_20271121997500_empreendimento_objetivo_servico.sql`
+Nasceu `…996000…`, mas outra frente publicou `aplicar_20271121996000_unidade_de_medida_nova.sql` antes. Como cheguei depois, eu é que mudei o número. A migration é idempotente, e o banco já a tinha recebido sob o número antigo.
 Troca o CHECK `empreendimentos_objetivo_check` para `VENDAS | LOCACAO | MISTO | SERVICO`. É idempotente e não cria policy nem função, então a REGRA #7 não se aplica. É aplicada com `db query --linked -f` antes do push.
 **Pronto quando:** `pg_get_constraintdef` lista os 4 valores.
 

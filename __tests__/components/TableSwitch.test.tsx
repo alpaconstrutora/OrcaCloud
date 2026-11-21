@@ -26,4 +26,13 @@ describe('TableSwitch', () => {
         expect(input.parentElement?.tagName).toBe('LABEL');
         expect(input.parentElement).toHaveClass('relative');
     });
+
+    it('36×20, e o anel âmbar só com `destaque` (alteração pendente no Espelho de Vendas)', () => {
+        const { rerender } = render(<TableSwitch checked onChange={() => {}} ariaLabel="Publicar" />);
+        const trilho = () => screen.getByRole('checkbox', { name: 'Publicar' }).nextElementSibling as HTMLElement;
+        expect(trilho()).toHaveClass('w-9', 'h-5');
+        expect(trilho()).not.toHaveClass('ring-amber-400');
+        rerender(<TableSwitch checked onChange={() => {}} ariaLabel="Publicar" destaque />);
+        expect(trilho()).toHaveClass('ring-2', 'ring-amber-400');
+    });
 });

@@ -13,6 +13,10 @@ export type EmpreendimentoStatus =
 // sistema usam esses mesmos slugs, então dados antigos continuam válidos sem migração.
 export type EmpreendimentoTipo = string;
 
+// Objetivo (21/11/2026): decide quais espelhos a ficha mostra — Vendas esconde o de
+// Locações, Locação esconde o de Vendas, Misto mostra os dois. Ver utils/empreendimentoObjetivo.ts.
+export type EmpreendimentoObjetivo = 'VENDAS' | 'LOCACAO' | 'MISTO';
+
 export type FloorTipo =
     | 'SUBSOLO' | 'TERREO' | 'MEZANINO' | 'TIPO' | 'COBERTURA' | 'TECNICO' | 'GARAGEM' | 'OUTRO';
 
@@ -36,6 +40,8 @@ export interface Empreendimento {
     code?: string;
     status: EmpreendimentoStatus;
     tipo?: EmpreendimentoTipo | null;
+    /** Vendas, Locação ou Misto. A coluna nasce MISTO; nulo (registro antigo em cache) conta como Misto. */
+    objetivo?: EmpreendimentoObjetivo | null;
 
     // Vínculo vivo com o estudo Imovib
     imovib_study_id?: string | null;

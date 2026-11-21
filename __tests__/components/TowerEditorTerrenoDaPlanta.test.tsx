@@ -54,9 +54,10 @@ describe('Torres & Unidades › Terreno × Planta vinculada', () => {
   it('mostra "Planta: …" por campo, marca a diferença e preenche no formulário só o que a ficha tem vazio — sem gravar', async () => {
     montar();
     await waitFor(() => expect(screen.getByTestId('terreno-da-planta')).toHaveTextContent('Planta vinculada: Garden'));
-    expect(screen.getByTestId('planta-terreno_area')).toHaveTextContent('Planta: 1.229,00 m²');
+    // Igual à Planta: a dica diz de onde vem o número (21/11/2026, trava por origem).
+    expect(screen.getByTestId('planta-terreno_area')).toHaveTextContent('Vem da Planta Inteligente');
     // Tipo deduzido do desenho (22/10/2026): igual ao da ficha.
-    expect(screen.getByTestId('planta-terreno_tipo')).toHaveTextContent('Planta: Irregular (Geometria complexa)');
+    expect(screen.getByTestId('planta-terreno_tipo')).toHaveTextContent('Vem da Planta Inteligente');
     expect(screen.getByTestId('planta-terreno_fundos')).toHaveTextContent('Planta: 12,00 m · diferente');
     // Fundos tem valor na ficha: não é trocado sozinho.
     expect(campo('Fundos (m)').value).toBe('11');
@@ -67,6 +68,29 @@ describe('Torres & Unidades › Terreno × Planta vinculada', () => {
     expect(screen.getByTestId('planta-terreno_profundidade')).toHaveTextContent('Da Planta — confira e salve');
     expect(svc.update).not.toHaveBeenCalled();
     expect(screen.getByRole('button', { name: /Salvar terreno/ })).not.toBeDisabled();
+  });
+
+  it('trava por origem: o campo que a Planta mede não se digita; o que ela não mede continua livre', async () => {
+    svc.daPlanta.current = { ...PLANTA_OK, medidas: { ...PLANTA_OK.medidas, fundosM: null } } as TerrenoDaPlanta;
+    montar();
+    await waitFor(() => expect(screen.getByTestId('terreno-da-planta')).toHaveTextContent('Os campos com cadeado vêm dela'));
+    expect(campo('Área total (m²)')).toHaveAttribute('readonly');
+    expect(campo('Área total (m²)').title).toMatch(/Vem da Planta Inteligente/);
+    expect(campo('Testada / frente (m)')).toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Tipo de terreno')).toBeDisabled();
+    // A Planta não mede fundos aqui: o campo segue editável, sem cadeado.
+    expect(campo('Fundos (m)')).not.toHaveAttribute('readonly');
+    expect(screen.queryByTestId('planta-terreno_fundos')).toBeNull();
+    // O nome da Planta leva a ela.
+    expect(screen.getByRole('link', { name: 'Garden' })).toHaveAttribute('href', '#/blueprint?studyId=planta-1');
+  });
+
+  it('sem Planta vinculada, nada trava', async () => {
+    svc.daPlanta.current = { ok: false, motivo: 'Sem planta vinculada.' };
+    montar({ ...GARDEN, blueprint_study_id: null } as never);
+    await waitFor(() => expect(screen.getByTestId('terreno-da-planta')).toHaveTextContent('Sem planta vinculada.'));
+    expect(campo('Área total (m²)')).not.toHaveAttribute('readonly');
+    expect(screen.getByLabelText('Tipo de terreno')).not.toBeDisabled();
   });
 
   it('"Usar valores da Planta" copia os quatro para o formulário; salvar grava', async () => {

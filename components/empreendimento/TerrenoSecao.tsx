@@ -6,7 +6,7 @@
 // unidade é o próprio terreno, então quem monta recebe `onSalvo` para a unidade acompanhar.
 // Planta vinculada: docs/planos/2026-10-21-terreno-ficha-planta.md.
 import React from 'react';
-import { Loader2, Check, MapPin } from 'lucide-react';
+import { Loader2, Check, MapPin, Lock } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { terrenoDaPlantaVinculada, type TerrenoDaPlanta } from '../../services/blueprintTerrenoDaPlanta';
 import { compararComFicha, type SituacaoDoCampo } from '../../utils/blueprintTerrenoDaFicha';
@@ -81,7 +81,11 @@ const COR_DA_SITUACAO: Record<SituacaoDoCampo, string> = {
 };
 const metros = (v: number | string) => (typeof v === 'string' ? v : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
-const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all';
+// Campo travado pela Planta: valor escuro (§32), fundo cinza e cursor dizem que não se digita.
+const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 read-only:bg-gray-50 read-only:cursor-not-allowed disabled:bg-gray-50 disabled:cursor-not-allowed transition-all';
+// `<select>` casa com :read-only sempre (não é campo de digitação) — leva só o estado disabled.
+const selectCls = inputCls.replace(' read-only:bg-gray-50 read-only:cursor-not-allowed', '');
+const MOTIVO_DA_TRAVA = 'Vem da Planta Inteligente — altere no desenho da Planta.';
 const rotuloCls = 'text-xs font-semibold text-slate-500';
 const blocoCls = 'rounded-[10px] border border-gray-200 bg-white p-5 space-y-4';
 
@@ -145,17 +149,28 @@ export const TerrenoSecao: React.FC<Props> = ({ empreendimentoId, empreendimento
       return next;
     });
   };
-  /** A linha sob o campo: "Planta: …" (âmbar se difere) ou, se veio dela, "Da Planta — confira e salve". */
+  /**
+   * Trava por origem (21/11/2026, docs/planos/2026-11-21-empreendimento-visao-geral-objetivo.md):
+   * o campo que a Planta vinculada mede não se digita aqui — o dono do número é o desenho. O que a
+   * Planta não mede continua livre. Para alinhar a ficha a ela: "Usar valores da Planta" + salvar.
+   */
+  const travadoPelaPlanta = (key: CampoDoTerreno) => !travado && valorDaPlanta(key) !== null;
+  const algumTravado = (comparacao ?? []).some(l => l.planta !== null) && !travado;
+  /** A linha sob o campo: de onde vem o número, e se a ficha difere dele. */
   const dicaDaPlanta = (key: CampoDoTerreno) => {
     const linha = comparacao?.find(l => l.campo === key) ?? null;
     if (!linha || linha.planta === null) return null;
     const unidade = key === 'terreno_tipo' ? '' : key === 'terreno_area' ? ' m²' : ' m';
     const daPlantaNoCampo = veioDaPlanta.has(key) && terrenoForm[key] === String(linha.planta);
+    const diferente = terrenoForm[key] !== String(linha.planta);
     return (
-      <p className={`text-xs ${daPlantaNoCampo ? 'text-blue-700' : COR_DA_SITUACAO[linha.situacao]}`} data-testid={`planta-${key}`}>
+      <p className={`flex items-center gap-1 text-xs ${daPlantaNoCampo ? 'text-blue-700' : diferente ? 'text-amber-700' : COR_DA_SITUACAO[linha.situacao]}`} data-testid={`planta-${key}`}>
+        {travadoPelaPlanta(key) && <Lock className="w-3 h-3 shrink-0" aria-hidden="true" />}
         {daPlantaNoCampo
           ? 'Da Planta — confira e salve'
-          : `Planta: ${metros(linha.planta)}${unidade}${linha.situacao === 'DIFERENTE' ? ' · diferente' : ''}`}
+          : diferente
+            ? `Planta: ${metros(linha.planta)}${unidade} · diferente`
+            : 'Vem da Planta Inteligente'}
       </p>
     );
   };
@@ -210,7 +225,8 @@ export const TerrenoSecao: React.FC<Props> = ({ empreendimentoId, empreendimento
             <form onSubmit={handleSaveTerreno} className="grid grid-cols-2 md:grid-cols-6 gap-x-6 gap-y-4 items-start">
               <div className="space-y-1.5">
                 <label htmlFor="terreno-tipo" className={rotuloCls}>Tipo de terreno</label>
-                <select id="terreno-tipo" className={inputCls} value={terrenoForm.terreno_tipo}
+                <select id="terreno-tipo" className={selectCls} value={terrenoForm.terreno_tipo}
+                  disabled={travadoPelaPlanta('terreno_tipo')} title={travadoPelaPlanta('terreno_tipo') ? MOTIVO_DA_TRAVA : undefined}
                   onChange={e => setTerrenoForm(p => ({ ...p, terreno_tipo: e.target.value }))}>
                   <option value="">—</option>
                   {TERRENO_TIPO_OPTIONS.map(o => <option key={o} value={o}>{o}</option>)}
@@ -222,6 +238,7 @@ export const TerrenoSecao: React.FC<Props> = ({ empreendimentoId, empreendimento
                   <div key={key} className="space-y-1.5">
                     <label htmlFor={`terreno-${key}`} className={rotuloCls}>{label}</label>
                     <input id={`terreno-${key}`} className={inputCls} type="number" step="0.01" min="0" value={terrenoForm[key]}
+                      readOnly={travadoPelaPlanta(key)} title={travadoPelaPlanta(key) ? MOTIVO_DA_TRAVA : undefined}
                       onChange={e => setTerrenoForm(p => ({ ...p, [key]: e.target.value }))} />
                     {dicaDaPlanta(key)}
                   </div>
@@ -260,7 +277,12 @@ export const TerrenoSecao: React.FC<Props> = ({ empreendimentoId, empreendimento
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3" data-testid="terreno-da-planta">
               <p className="text-xs text-gray-500">
                 {daPlanta.ok
-                  ? `Planta vinculada: ${daPlanta.plantaNome} — medidas do desenho; profundidade é a média das laterais.`
+                  ? <>
+                      Planta vinculada: {empreendimento?.blueprint_study_id
+                        ? <a href={`#/blueprint?studyId=${empreendimento.blueprint_study_id}`} className="text-blue-600 hover:underline">{daPlanta.plantaNome}</a>
+                        : daPlanta.plantaNome} — medidas do desenho; profundidade é a média das laterais.
+                      {algumTravado && ' Os campos com cadeado vêm dela: altere no desenho.'}
+                    </>
                   : daPlanta.motivo}
               </p>
               {daPlanta.ok && !travado && (

@@ -4,11 +4,14 @@
 // Só leitura: a tabela é imutável por RLS (só SELECT/INSERT, nenhuma policy de
 // UPDATE/DELETE). UI segue docs/ui_ux_guia_unificado.md §5.2/§6/§7/§8/§11/§12.
 import React from 'react';
-import { History, Search, RefreshCw } from 'lucide-react';
+import { History, Search, RefreshCw, MoveHorizontal } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import {
-  ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState,
+  ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns,
 } from '../ui/TableUtils';
+import { AgruparControles, LinhaDeGrupo } from '../ui/Agrupamento';
+import { useAgrupamento } from '../../hooks/useAgrupamento';
+import { agruparHistorico, OPCOES_AGRUPAR_HISTORICO, type CampoAgruparHistorico } from '../../utils/historicoGrupos';
 import { empreendimentoAuditService } from '../../services/empreendimentoAuditService';
 import {
   EmpreendimentoAuditLog, EmpreendimentoAuditEntity,
@@ -32,6 +35,17 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'change', label: 'De → Para', sortable: false },
   { key: 'source', label: 'Origem', sortable: true },
 ];
+
+// Larguras iniciais (§6.1) — arrastar a borda ajusta; o botão de largura encaixa no conteúdo.
+const DEFAULT_COL_WIDTHS: Record<string, number> = {
+  created_at: 160,
+  user: 220,
+  entity: 240,
+  action: 130,
+  field: 180,
+  change: 300,
+  source: 200,
+};
 
 const ENTITY_LABELS: Record<EmpreendimentoAuditEntity, string> = {
   empreendimento: 'Empreendimento',
@@ -97,6 +111,7 @@ const FIELD_LABELS: Record<string, string> = {
   code: 'Código',
   status: 'Situação',
   tipo: 'Tipo',
+  objetivo: 'Objetivo',
   vgv_total: 'VGV total',
   matricula: 'Matrícula',
   construtora: 'Construtora',
@@ -161,13 +176,13 @@ const truncate = (s: string, max = 42): string => (s.length > max ? `${s.slice(0
 // Reordenar colunas por arraste (estilo ClickUp) — mesmos label/sortable/className que
 // estavam hardcoded no <SortableHeader> original de cada coluna.
 const HISTORICO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
-  created_at: { label: 'Data/hora', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
-  user: { label: 'Usuário', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
-  entity: { label: 'Entidade', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
-  action: { label: 'Ação', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
-  field: { label: 'Campo', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
-  change: { label: 'De → Para', sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
-  source: { label: 'Origem', sortable: true, className: 'px-6 py-2' },
+  created_at: { label: 'Data/hora', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden whitespace-nowrap' },
+  user: { label: 'Usuário', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden whitespace-nowrap' },
+  entity: { label: 'Entidade', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden whitespace-nowrap' },
+  action: { label: 'Ação', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden whitespace-nowrap' },
+  field: { label: 'Campo', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden whitespace-nowrap' },
+  change: { label: 'De → Para', sortable: false, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden whitespace-nowrap' },
+  source: { label: 'Origem', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden whitespace-nowrap' },
 };
 
 function renderHistoricoCell(key: string, log: EmpreendimentoAuditLog): React.ReactNode {
@@ -232,6 +247,12 @@ export const HistoricoTab: React.FC<Props> = ({ empreendimentoId }) => {
   const [actionFilter, setActionFilter] = usePersistedState<string>('empreendimentoHistorico:action', '');
   const [sourceFilter, setSourceFilter] = usePersistedState<string>('empreendimentoHistorico:source', '');
   const tableColumns = useTableColumns(COLUMNS, 'empreendimentoHistoricoColumns');
+  const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'empreendimentoHistoricoColWidths');
+  // table-layout:fixed + largura total explícita (§6.1): sem isso o navegador redistribui a
+  // sobra entre as colunas ao arrastar uma borda. A sobra vai para o <col /> espaçador.
+  const tableTotalWidth = tableColumns.orderedVisibleColumns.reduce((soma, k) => soma + cols.getWidth(k), 0);
+  // Agrupar (§6.12): campo e ordem dos grupos persistem; recolhidos só em memória.
+  const agrupamento = useAgrupamento<CampoAgruparHistorico>('empreendimentoHistorico:groupBy');
 
   const filters = React.useMemo(() => ({
     search: search || undefined,
@@ -291,6 +312,36 @@ export const HistoricoTab: React.FC<Props> = ({ empreendimentoId }) => {
     return [...logs].sort((a, b) => key(a).localeCompare(key(b), 'pt-BR') * dir);
   }, [logs, tableColumns.sortColumn, tableColumns.sortDirection]);
 
+  // Grupos sobre a lista já ordenada: dentro do grupo vale a coluna clicada. O rótulo é o
+  // mesmo texto da célula.
+  const grupos = React.useMemo(() => (
+    agrupamento.agrupando
+      ? agruparHistorico(sorted, agrupamento.campo as CampoAgruparHistorico, agrupamento.direcao, {
+          data: l => l.created_at,
+          entidade: l => auditEntityLabel(l.entity_type),
+          acao: l => auditActionLabel(l.action),
+          origem: l => auditSourceLabel(l.source),
+          usuario: l => l.user_email || 'Sistema',
+        })
+      : []
+  ), [sorted, agrupamento.agrupando, agrupamento.campo, agrupamento.direcao]);
+  // Colunas de dados + o espaçador.
+  const colSpan = tableColumns.orderedVisibleColumns.length + 1;
+  const linhaDoEvento = (log: EmpreendimentoAuditLog) => (
+    <tr
+      key={log.id}
+      onClick={() => setSelected(log)}
+      className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+    >
+      {tableColumns.orderedVisibleColumns.map(key => (
+        <td key={key} className="px-6 py-2.5 border-r border-gray-100 overflow-hidden whitespace-nowrap text-ellipsis">
+          {renderHistoricoCell(key, log)}
+        </td>
+      ))}
+      <td aria-hidden="true" />
+    </tr>
+  );
+
   return (
     <div className="space-y-6">
       {/* Banner de erro fica FORA do card acoplado — dentro quebraria a costura (§5.2). */}
@@ -303,8 +354,10 @@ export const HistoricoTab: React.FC<Props> = ({ empreendimentoId }) => {
       {/* Toolbar acoplada à tabela — §5.2 */}
       <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-2 border-b border-gray-100 bg-white">
-          <div className="flex flex-col md:flex-row gap-2.5 items-center">
-            <div className="flex-1 relative w-full">
+          {/* flex-wrap + largura mínima da busca: com 3 filtros, Agrupar e Ordem, a busca não pode
+              ser espremida até sumir (em 1600px virava "Bu"). */}
+          <div className="flex flex-col md:flex-row md:flex-wrap gap-2.5 items-center">
+            <div className="flex-1 relative w-full md:min-w-[260px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
@@ -348,6 +401,18 @@ export const HistoricoTab: React.FC<Props> = ({ empreendimentoId }) => {
               ))}
             </select>
 
+            <AgruparControles
+              opcoes={OPCOES_AGRUPAR_HISTORICO}
+              campo={agrupamento.campo}
+              onCampo={agrupamento.setCampo}
+              direcao={agrupamento.direcao}
+              onDirecao={agrupamento.setDirecao}
+              chavesDosGrupos={grupos.map(g => g.key)}
+              algumRecolhido={agrupamento.recolhidos.size > 0}
+              onAlternarTodos={agrupamento.alternarTodos}
+              title="Agrupar os eventos"
+            />
+
             <button
               onClick={load}
               className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95"
@@ -367,6 +432,15 @@ export const HistoricoTab: React.FC<Props> = ({ empreendimentoId }) => {
                 onToggleColumn={tableColumns.toggleColumn}
                 onReset={tableColumns.resetColumns}
               />
+              {/* Autofit sob comando explícito — nunca automático (§6.1.2) */}
+              <button
+                type="button"
+                onClick={() => cols.autoFit()}
+                className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                title="Ajustar largura das colunas ao conteúdo"
+              >
+                <MoveHorizontal className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
@@ -389,7 +463,14 @@ export const HistoricoTab: React.FC<Props> = ({ empreendimentoId }) => {
         ) : (
           <>
             <div className="overflow-auto max-h-[70vh]">
-              <table className="w-full text-left border-collapse">
+              <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                <colgroup>
+                  {tableColumns.orderedVisibleColumns.map(key => (
+                    <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
+                  ))}
+                  {/* espaçador sem largura fixa — absorve a sobra quando a tabela é mais estreita que o card */}
+                  <col />
+                </colgroup>
                 <thead>
                   <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                     {tableColumns.orderedVisibleColumns.map(key => {
@@ -407,31 +488,33 @@ export const HistoricoTab: React.FC<Props> = ({ empreendimentoId }) => {
                           onSort={tableColumns.handleColumnSort}
                           onMoveColumn={tableColumns.moveColumn}
                           className={def.className}
-                        />
+                        >
+                          <cols.ResizeHandle colKey={key} />
+                        </SortableHeader>
                       );
                     })}
+                    <th aria-hidden="true" />
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200">
-                  {sorted.map(log => (
-                    <tr
-                      key={log.id}
-                      onClick={() => setSelected(log)}
-                      className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
-                    >
-                      {tableColumns.orderedVisibleColumns.map(key => (
-                        <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                          {renderHistoricoCell(key, log)}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
+                  {agrupamento.agrupando
+                    ? grupos.map(g => (
+                        <React.Fragment key={g.key}>
+                          <LinhaDeGrupo grupo={g} recolhido={agrupamento.recolhidos.has(g.key)} colSpan={colSpan} onAlternar={agrupamento.alternar} semTotal />
+                          {!agrupamento.recolhidos.has(g.key) && g.itens.map(linhaDoEvento)}
+                        </React.Fragment>
+                      ))
+                    : sorted.map(linhaDoEvento)}
                 </tbody>
               </table>
             </div>
 
             {hasMore && (
-              <div className="p-4 border-t border-gray-100 text-center">
+              <div className="p-4 border-t border-gray-100 text-center space-y-1">
+                {/* O grupo é recorte do que está na tela (§6.12): diz que há mais a carregar. */}
+                {agrupamento.agrupando && (
+                  <p className="text-xs text-gray-500">Os grupos contam os {logs.length} eventos carregados — carregue mais para incluir os anteriores.</p>
+                )}
                 <button
                   onClick={loadMore}
                   disabled={loadingMore}

@@ -30,6 +30,7 @@ import { empreendimentoAuditService } from '../../services/empreendimentoAuditSe
 import { Empreendimento, ArquiteturaSyncReport } from '../../types';
 import { useConfirm } from '../ui/confirm';
 import WriteBackPreviewSheet from './WriteBackPreviewSheet';
+import { espelhosDoObjetivo } from '../../utils/empreendimentoObjetivo';
 
 interface Props {
   empreendimento: Empreendimento;
@@ -615,9 +616,16 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
       <div className="bg-blue-50/40 border border-dashed border-blue-200 rounded-[10px] p-4 flex items-start gap-2.5">
         <ArrowLeftRight className="w-4 h-4 text-blue-500 shrink-0 mt-0.5" />
         <p className="text-xs text-gray-600 font-medium leading-relaxed">
-          As pontes com <strong className="text-gray-700">Venda de Ativos</strong> e <strong className="text-gray-700">Locações</strong> (publicar unidades e trazer status)
-          ficam nas abas <strong className="text-gray-700">Espelho de Vendas</strong> e <strong className="text-gray-700">Espelho de Locações</strong>, onde você
-          resolve unidade a unidade, limpa vínculos órfãos e acompanha os KPIs. Este centro cuida só do sync com os estudos.
+          {(() => {
+            // Só os espelhos que o Objetivo mostra (21/11/2026) — citar aba escondida mandaria a lugar nenhum.
+            const { vendas, locacoes } = espelhosDoObjetivo(e.objetivo);
+            const ponte = vendas && locacoes
+              ? <>As pontes com <strong className="text-gray-700">Venda de Ativos</strong> e <strong className="text-gray-700">Locações</strong> (publicar unidades e trazer status) ficam nas abas <strong className="text-gray-700">Espelho de Vendas</strong> e <strong className="text-gray-700">Espelho de Locações</strong></>
+              : vendas
+                ? <>A ponte com <strong className="text-gray-700">Venda de Ativos</strong> (publicar unidades e trazer status) fica na aba <strong className="text-gray-700">Espelho de Vendas</strong></>
+                : <>A ponte com <strong className="text-gray-700">Locações</strong> (publicar unidades e trazer status) fica na aba <strong className="text-gray-700">Espelho de Locações</strong></>;
+            return <>{ponte}, onde você resolve unidade a unidade, limpa vínculos órfãos e acompanha os KPIs. Este centro cuida só do sync com os estudos.</>;
+          })()}
         </p>
       </div>
 

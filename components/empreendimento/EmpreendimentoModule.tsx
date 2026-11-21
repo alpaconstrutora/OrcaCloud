@@ -13,6 +13,7 @@ import { Empreendimento, EmpreendimentoStatus } from '../../types';
 import EmpreendimentoForm from './EmpreendimentoForm';
 import EmpreendimentoDetail from './EmpreendimentoDetail';
 import CriarObraDoEmpreendimento from './CriarObraDoEmpreendimento';
+import { ROTULO_DO_OBJETIVO, OBJETIVOS, objetivoDe } from '../../utils/empreendimentoObjetivo';
 
 interface Props {
   activeOrganizationId: string | null;
@@ -42,11 +43,12 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
 
 // Agrupamento da lista (filtro "Agrupar" da toolbar, §5.4). Só dimensões que já são
 // colunas da tabela — agrupar por algo que o usuário não vê não ajuda a ler.
-type GroupByField = '' | 'tipo' | 'status' | 'organization';
+type GroupByField = '' | 'tipo' | 'objetivo' | 'status' | 'organization';
 
 const GROUP_BY_OPTIONS: { value: GroupByField; label: string }[] = [
   { value: '', label: 'Sem agrupamento' },
   { value: 'tipo', label: 'Tipo' },
+  { value: 'objetivo', label: 'Objetivo' },
   { value: 'status', label: 'Status' },
   { value: 'organization', label: 'Organização' },
 ];
@@ -55,6 +57,7 @@ const COLUMNS: ColumnConfig[] = [
   { key: 'code', label: 'Código', sortable: true },
   { key: 'name', label: 'Empreendimento', sortable: true },
   { key: 'tipo', label: 'Tipo', sortable: true },
+  { key: 'objetivo', label: 'Objetivo', sortable: true },
   { key: 'organization', label: 'Organização', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'vgv', label: 'VGV Total', sortable: true },
@@ -69,6 +72,7 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
   code: 120,
   name: 320,
   tipo: 160,
+  objetivo: 200,
   organization: 200,
   status: 140,
   vgv: 160,
@@ -81,6 +85,7 @@ const EMPREENDIMENTO_COLUMN_HEADERS: Record<string, { label: string; sortable?: 
   code: { label: 'Código', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   name: { label: 'Empreendimento', sortable: true, className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
   tipo: { label: 'Tipo', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+  objetivo: { label: 'Objetivo', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   organization: { label: 'Organização', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   status: { label: 'Status', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
   vgv: { label: 'VGV total', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
@@ -107,6 +112,8 @@ function renderEmpreendimentoCell(
       );
     case 'tipo':
       return <div className="text-sm font-normal text-gray-600 whitespace-nowrap truncate">{ctx.tipoLabel(item.tipo)}</div>;
+    case 'objetivo':
+      return <div className="text-sm font-normal text-gray-700 whitespace-nowrap truncate">{ROTULO_DO_OBJETIVO[objetivoDe(item.objetivo)]}</div>;
     case 'organization':
       return <div className="text-sm font-normal text-gray-700 whitespace-nowrap truncate">{ctx.orgName(item.organization_id)}</div>;
     case 'status':
@@ -172,8 +179,8 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
     0,
   ) + cols.getWidth('actions');
   const [selected, setSelected] = React.useState<Empreendimento | null>(null);
+  // O painel lateral é só Novo e Duplicar: editar é a aba Visão Geral da ficha (21/11/2026).
   const [isFormOpen, setIsFormOpen] = React.useState(false);
-  const [editing, setEditing] = React.useState<Empreendimento | null>(null);
   // Duplicação: o formulário abre em modo CRIAR, pré-preenchido a partir deste
   // empreendimento; a estrutura (torres/pavimentos/unidades/áreas) só é copiada
   // quando o usuário salva.
@@ -251,32 +258,26 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
     return () => { active = false; };
   }, [orgIdParam, items]);
 
-  const handleSaved = async (saved: Empreendimento) => {
-    // §25 do guia — editar um empreendimento existente não fecha mais o painel
-    // (só criar/duplicar, que terminam a tarefa ao gravar). Ver
-    // docs/planos/2026-08-27-salvar-sem-fechar-formularios-multiaba.md.
-    const wasEditing = !!editing;
-    if (!wasEditing) {
-      setIsFormOpen(false);
-      setEditing(null);
-    } else {
-      setEditing(saved);
-    }
+  // Criar/duplicar terminou a tarefa: fecha o painel e a linha nova entra na lista (§22).
+  const handleCreated = (saved: Empreendimento) => {
+    setIsFormOpen(false);
     setDuplicating(null);
-    await load();
-    // Se estávamos no detalhe, refletir a edição
-    if (selected && selected.id === saved.id) setSelected(saved);
+    setItems(prev => [saved, ...prev.filter(i => i.id !== saved.id)]);
+  };
+
+  // A Visão Geral gravou: a ficha aberta e a linha da lista passam a ser o registro salvo (§22).
+  const handleSavedInline = (saved: Empreendimento) => {
+    setSelected(saved);
+    setItems(prev => prev.map(i => (i.id === saved.id ? saved : i)));
   };
 
   const handleDuplicate = (item: Empreendimento) => {
-    setEditing(null);
     setDuplicating(item);
     setIsFormOpen(true);
   };
 
   const closeForm = () => {
     setIsFormOpen(false);
-    setEditing(null);
     setDuplicating(null);
   };
 
@@ -321,6 +322,11 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
             return tableColumns.sortDirection === 'asc'
               ? tipoLabel(a.tipo).localeCompare(tipoLabel(b.tipo))
               : tipoLabel(b.tipo).localeCompare(tipoLabel(a.tipo));
+          case 'objetivo': {
+            // Na ordem do seletor (Vendas → Locação → Misto), não alfabética.
+            const d = OBJETIVOS.indexOf(objetivoDe(a.objetivo)) - OBJETIVOS.indexOf(objetivoDe(b.objetivo));
+            return tableColumns.sortDirection === 'asc' ? d : -d;
+          }
           case 'organization':
             return tableColumns.sortDirection === 'asc'
               ? orgName(a.organization_id).localeCompare(orgName(b.organization_id))
@@ -348,9 +354,9 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   const groups = React.useMemo(() => {
     if (!groupBy) return [{ key: '__all__', label: '', items: filtered }];
     const keyOf = (i: Empreendimento) =>
-      groupBy === 'tipo' ? (i.tipo || '') : groupBy === 'status' ? i.status : (i.organization_id || '');
+      groupBy === 'tipo' ? (i.tipo || '') : groupBy === 'objetivo' ? objetivoDe(i.objetivo) : groupBy === 'status' ? i.status : (i.organization_id || '');
     const labelOf = (i: Empreendimento) =>
-      groupBy === 'tipo' ? tipoLabel(i.tipo) : groupBy === 'status' ? STATUS_LABELS[i.status] : orgName(i.organization_id);
+      groupBy === 'tipo' ? tipoLabel(i.tipo) : groupBy === 'objetivo' ? ROTULO_DO_OBJETIVO[objetivoDe(i.objetivo)] : groupBy === 'status' ? STATUS_LABELS[i.status] : orgName(i.organization_id);
     const map = new Map<string, { key: string; label: string; items: Empreendimento[] }>();
     for (const i of filtered) {
       const key = keyOf(i) || '__none__';
@@ -365,6 +371,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
       if (a.key === '__none__') return 1;
       if (b.key === '__none__') return -1;
       if (groupBy === 'status') return dir * (statusOrder.indexOf(a.key) - statusOrder.indexOf(b.key));
+      if (groupBy === 'objetivo') return dir * (OBJETIVOS.indexOf(a.key as never) - OBJETIVOS.indexOf(b.key as never));
       return dir * a.label.localeCompare(b.label);
     });
   }, [filtered, groupBy, groupSortDir, tipoLabel, orgName]);
@@ -378,7 +385,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
           // Com "Todas as organizações" a org vem da própria entidade aberta.
           organizationId={selected.organization_id || orgIdParam || ''}
           onBack={() => setSelected(null)}
-          onEdit={() => { setEditing(selected); setIsFormOpen(true); }}
+          onSaved={handleSavedInline}
           onGoToStudy={selected.imovib_study_id ? () => onChangeView('imovib') : undefined}
           onOpenProject={onLoadProject}
           onChangeView={onChangeView}
@@ -389,15 +396,6 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
             } catch { /* noop */ }
           }}
         />
-        {isFormOpen && (
-          <EmpreendimentoForm
-            organizationId={editing?.organization_id || duplicating?.organization_id || selected.organization_id || orgIdParam || ''}
-            editing={editing}
-            duplicateFrom={duplicating}
-            onClose={closeForm}
-            onSaved={handleSaved}
-          />
-        )}
       </>
     );
   }
@@ -516,7 +514,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
             {/* Botão primário (§8) — ação de cadastro pouco frequente, mora aqui porque a
                 tela não tem barra de escopo (§4) própria para hospedá-lo. */}
             <button
-              onClick={() => { setEditing(null); setIsFormOpen(true); }}
+              onClick={() => { setDuplicating(null); setIsFormOpen(true); }}
               title="Novo empreendimento"
               className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
             >
@@ -621,7 +619,8 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                             visíveis (as frequentes); as raras vão para a bandeja (§9/§9.2: 3+
                             ações secundárias não ficam soltas na fileira). */}
                         <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                          <ActionIconButton kind="edit" onClick={() => { setDuplicating(null); setEditing(item); setIsFormOpen(true); }} />
+                          {/* Editar = abrir a ficha na Visão Geral, onde os campos são editáveis. */}
+                          <ActionIconButton kind="edit" title="Editar na Visão Geral" onClick={() => setSelected(item)} />
                           <ActionIconButton kind="duplicate" onClick={() => handleDuplicate(item)} />
                           <ActionIconButton
                             kind="move"
@@ -647,11 +646,10 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
 
       {isFormOpen && (
         <EmpreendimentoForm
-          organizationId={editing?.organization_id || duplicating?.organization_id || orgIdParam || ''}
-          editing={editing}
+          organizationId={duplicating?.organization_id || orgIdParam || ''}
           duplicateFrom={duplicating}
           onClose={closeForm}
-          onSaved={handleSaved}
+          onSaved={handleCreated}
         />
       )}
 

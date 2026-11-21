@@ -9,7 +9,7 @@
 import React from 'react';
 import {
   Building2, Calculator, CalendarRange, Ruler, LayoutGrid,
-  FileSignature, Wallet, AlertCircle, RefreshCw, Plus, Search, HardHat, Coins,
+  FileSignature, Wallet, AlertCircle, RefreshCw, Plus, Search, HardHat, Coins, ChevronRight,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
@@ -114,33 +114,65 @@ const LinkRow: React.FC<{
   </div>
 );
 
+/**
+ * Accordion das seções (21/11/2026, pedido "implementar accordion em cada sessão"): cada seção
+ * recolhe pelo cabeçalho. Guarda-se o que está RECOLHIDO (por título), então seção nova nasce
+ * aberta e o estado sobrevive ao F5.
+ */
+const SecoesRecolhidas = React.createContext<{ recolhida: (titulo: string) => boolean; alternar: (titulo: string) => void }>({
+  recolhida: () => false,
+  alternar: () => {},
+});
+
 /** Seção-card por tipo de vínculo, com contador em texto colorido (§8). */
 const LinkSection: React.FC<{
   title: string;
   icon: React.ReactNode;
   count: number;
-  emptyIcon: React.ReactNode;
-  emptyTitle: string;
-  emptyHint: string;
+  /** Cor do contador quando > 0 (padrão azul; "Torres sem obra própria" é um alerta, âmbar). */
+  countClassName?: string;
+  emptyIcon?: React.ReactNode;
+  emptyTitle?: string;
+  emptyHint?: string;
   action?: React.ReactNode;
   children?: React.ReactNode;
-}> = ({ title, icon, count, emptyIcon, emptyTitle, emptyHint, action, children }) => (
-  <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
-      <span className="text-gray-400">{icon}</span>
-      <h3 className="text-xs font-semibold text-gray-500 flex-1">{title}</h3>
-      <span className={`text-sm font-normal ${count > 0 ? 'text-blue-600' : 'text-gray-400'}`}>{count}</span>
-      {action}
-    </div>
-    {count === 0 ? (
-      <div className="text-center py-12">
-        <span className="inline-block text-gray-300 mb-4">{emptyIcon}</span>
-        <h3 className="text-lg font-bold text-gray-900 mb-2">{emptyTitle}</h3>
-        <p className="text-sm text-gray-500">{emptyHint}</p>
+}> = ({ title, icon, count, countClassName = 'text-blue-600', emptyIcon, emptyTitle, emptyHint, action, children }) => {
+  const { recolhida, alternar } = React.useContext(SecoesRecolhidas);
+  const fechada = recolhida(title);
+  const corpoId = React.useId();
+  return (
+    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+      <div className={`flex items-center gap-2 px-4 py-3 ${fechada ? '' : 'border-b border-gray-100'}`}>
+        {/* O cabeçalho inteiro abre/fecha; os botões de ação ficam FORA dele (botão dentro de botão não vale). */}
+        <button
+          type="button"
+          onClick={() => alternar(title)}
+          aria-expanded={!fechada}
+          aria-controls={corpoId}
+          title={fechada ? `Mostrar ${title}` : `Recolher ${title}`}
+          className="flex items-center gap-2 flex-1 min-w-0 text-left rounded-[6px] outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+        >
+          <ChevronRight className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${fechada ? '' : 'rotate-90'}`} aria-hidden="true" />
+          <span className="text-gray-400">{icon}</span>
+          <h3 className="text-xs font-semibold text-gray-500 flex-1 truncate">{title}</h3>
+          <span className={`text-sm font-normal ${count > 0 ? countClassName : 'text-gray-400'}`}>{count}</span>
+        </button>
+        {action}
       </div>
-    ) : children}
-  </div>
-);
+      {!fechada && (
+        <div id={corpoId}>
+          {count === 0 ? (
+            <div className="text-center py-12">
+              <span className="inline-block text-gray-300 mb-4">{emptyIcon}</span>
+              <h3 className="text-lg font-bold text-gray-900 mb-2">{emptyTitle}</h3>
+              <p className="text-sm text-gray-500">{emptyHint}</p>
+            </div>
+          ) : children}
+        </div>
+      )}
+    </div>
+  );
+};
 
 export const VinculacoesTab: React.FC<Props> = ({
   empreendimento: emp, organizationId, onOpenProject, onChangeView, onLinksChanged,
@@ -155,6 +187,12 @@ export const VinculacoesTab: React.FC<Props> = ({
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [busyId, setBusyId] = React.useState<string | null>(null);
+  // Seções recolhidas (accordion) — por título, persistido (§3): todas nascem abertas.
+  const [recolhidas, setRecolhidas] = usePersistedState<string[]>('empreendimento:vinculacoes:recolhidas', []);
+  const secoesRecolhidas = React.useMemo(() => ({
+    recolhida: (titulo: string) => recolhidas.includes(titulo),
+    alternar: (titulo: string) => setRecolhidas(prev => (prev.includes(titulo) ? prev.filter(t => t !== titulo) : [...prev, titulo])),
+  }), [recolhidas, setRecolhidas]);
   const [linkSheetOpen, setLinkSheetOpen] = React.useState(false);
   const [linkTarget, setLinkTarget] = React.useState<{ towerId: string | null; towerName: string | null }>({ towerId: null, towerName: null });
   // Criar obra a partir daqui — abre o ProjectModal pré-preenchido pelo empreendimento.
@@ -510,6 +548,7 @@ export const VinculacoesTab: React.FC<Props> = ({
   const towersSemObra = towers.filter(t => !t.project_id);
 
   return (
+    <SecoesRecolhidas.Provider value={secoesRecolhidas}>
     <div className="space-y-6">
       {/* Obras */}
       <LinkSection
@@ -552,12 +591,12 @@ export const VinculacoesTab: React.FC<Props> = ({
 
       {/* Torres sem obra — só faz sentido em empreendimento multi-torre. */}
       {towersSemObra.length > 0 && towers.length > 1 && (
-        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
-            <span className="text-gray-400"><LayoutGrid className="w-4 h-4" /></span>
-            <h3 className="text-xs font-semibold text-gray-500 flex-1">Torres sem obra própria</h3>
-            <span className="text-sm font-normal text-amber-600">{towersSemObra.length}</span>
-          </div>
+        <LinkSection
+          title="Torres sem obra própria"
+          icon={<LayoutGrid className="w-4 h-4" />}
+          count={towersSemObra.length}
+          countClassName="text-amber-600"
+        >
           {towersSemObra.map(t => (
             <div key={t.id} className="flex items-center gap-3 px-4 py-2.5 border-b border-gray-100 last:border-b-0 hover:bg-blue-50/50 transition-colors">
               <p className="text-sm font-normal text-gray-700 flex-1 truncate">Torre {t.name}</p>
@@ -575,7 +614,7 @@ export const VinculacoesTab: React.FC<Props> = ({
               </button>
             </div>
           ))}
-        </div>
+        </LinkSection>
       )}
 
       {/* Orçamento */}
@@ -1081,6 +1120,7 @@ export const VinculacoesTab: React.FC<Props> = ({
         </div>
       )}
     </div>
+    </SecoesRecolhidas.Provider>
   );
 };
 

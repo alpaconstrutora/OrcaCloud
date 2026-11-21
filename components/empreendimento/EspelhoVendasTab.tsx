@@ -3,6 +3,7 @@
 // Permite publicar unidades no módulo Comercial, desvincular, e sincronizar status
 // em ambas as direções. Roll-up de VGV e status por empreendimento.
 import React from 'react';
+import TableSwitch from '../ui/TableSwitch';
 import {
   Loader2, Unlink, RefreshCw, Upload, TrendingUp,
   AlertCircle, ArrowRightLeft, Building2,
@@ -567,9 +568,14 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
                   <tr key={u.id} className={`border-b border-gray-50 hover:bg-gray-50/30 ${isOrphan ? 'bg-rose-50/40' : ''}`}>
                     <td className="py-2.5 px-4">
                       {/* Switch sempre editável: é o estado desejado, não uma seleção.
-                          Anel âmbar marca a linha com alteração ainda não aplicada. */}
-                      <label
-                        className="relative inline-flex items-center cursor-pointer"
+                          Anel âmbar marca a linha com alteração ainda não aplicada. 36×20 (TableSwitch)
+                          desde 21/11/2026 — o 44×24 feito à mão crescia mais que o texto da linha. */}
+                      <TableSwitch
+                        ariaLabel={`Publicar — ${u.name}`}
+                        checked={desiredIds.has(u.id)}
+                        disabled={!ehVendavel(u) && !desiredIds.has(u.id)}
+                        onChange={() => toggleDesired(u.id)}
+                        destaque={desiredIds.has(u.id) !== visible}
                         title={!ehVendavel(u) && !desiredIds.has(u.id)
                           ? `Não vendável: ligue "Vendável" para publicar "${u.name}"`
                           : desiredIds.has(u.id)
@@ -579,32 +585,16 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
                           : (visible
                               ? `"${u.name}" será ocultada da Venda de Ativos e do Portal ao aplicar — sem excluir nem desvincular`
                               : `"${u.name}" não aparece nas telas de oferta`)}
-                      >
-                        <input
-                          type="checkbox"
-                          aria-label={`Publicar — ${u.name}`}
-                          className="sr-only peer"
-                          checked={desiredIds.has(u.id)}
-                          disabled={!ehVendavel(u) && !desiredIds.has(u.id)}
-                          onChange={() => toggleDesired(u.id)}
-                        />
-                        <div className={`w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600 ${
-                          desiredIds.has(u.id) !== visible ? 'ring-2 ring-amber-400 ring-offset-1' : ''
-                        }`}></div>
-                      </label>
+                      />
                     </td>
                     <td className="py-2.5 px-4">
-                      <label className="relative inline-flex items-center cursor-pointer"
-                        title={ehVendavel(u) ? `"${u.name}" entra no VGV do estudo de viabilidade` : `"${u.name}" fica fora do VGV (garagem, área comum…) e não se publica`}>
-                        <input
-                          type="checkbox"
-                          aria-label={`Vendável — ${u.name}`}
-                          className="sr-only peer"
-                          checked={ehVendavel(u)}
-                          onChange={() => void gravarVendavel([u], !ehVendavel(u))}
-                        />
-                        <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                      </label>
+                      <TableSwitch
+                        ariaLabel={`Vendável — ${u.name}`}
+                        checked={ehVendavel(u)}
+                        onChange={() => void gravarVendavel([u], !ehVendavel(u))}
+                        onColor="peer-checked:bg-emerald-600"
+                        title={ehVendavel(u) ? `"${u.name}" entra no VGV do estudo de viabilidade` : `"${u.name}" fica fora do VGV (garagem, área comum…) e não se publica`}
+                      />
                     </td>
                     <td className="py-2.5 px-4 text-sm font-normal text-gray-700">{u.name}</td>
                     {ehLote ? (

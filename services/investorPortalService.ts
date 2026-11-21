@@ -89,6 +89,8 @@ export interface InvestorOpportunity {
     /** Ticket mínimo: regra comercial da captação, não existe no estudo. */
     ticket_min?: number | null;
     is_published?: boolean;
+    /** Também no marketplace público, sem login (Fase A6 do plano 2026-11-21-portal-do-investidor-consolidacao). */
+    no_marketplace?: boolean;
     imovib_study_id?: string | null;
     /** Versão congelada do estudo que o investidor vê (obrigatória para publicar — Fase 2). */
     imovib_version_id?: string | null;
@@ -171,7 +173,7 @@ const REPORT_COLS = 'id, organization_id, investor_id, project_id, name, type, c
 
 const OPP_COLS = [
     'id', 'organization_id', 'title', 'subtitle', 'open_date', 'link',
-    'status', 'opportunity_type', 'thumbnail_url', 'ticket_min', 'is_published',
+    'status', 'opportunity_type', 'thumbnail_url', 'ticket_min', 'is_published', 'no_marketplace',
     'imovib_study_id', 'imovib_version_id', 'spe_entity_id', 'distances_json', 'team_json',
     'created_at',
     // Só leitura: números da versão escolhida (indicadores congelados + resultados do momento).

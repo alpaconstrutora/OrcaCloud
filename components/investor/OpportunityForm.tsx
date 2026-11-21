@@ -12,6 +12,7 @@ import { ImovibStudy } from '../../types';
 import type { ImovibStudyVersion } from '../../utils/imovibVersoes';
 import Button from '../ui/Button';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
+import TableSwitch from '../ui/TableSwitch';
 
 interface Props {
     initial?: Partial<InvestorOpportunity>;
@@ -52,6 +53,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
         ticket_min: initial?.ticket_min ?? null,
         spe_entity_id: initial?.spe_entity_id ?? null,
         is_published: initial?.is_published ?? false,
+        no_marketplace: initial?.no_marketplace ?? false,
         imovib_study_id: initial?.imovib_study_id ?? null,
         imovib_version_id: initial?.imovib_version_id ?? null,
         distances_json: initial?.distances_json ?? [],
@@ -466,6 +468,22 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             {form.is_published ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
                             {form.is_published ? 'Publicado' : 'Rascunho'}
                         </button>
+                        </span>
+                    </section>
+                    {/* Fase A6 (plano 2026-11-21-portal-do-investidor-consolidacao): publicar para os investidores não põe mais
+                        a oportunidade na vitrine aberta — o marketplace público é uma escolha própria. */}
+                    <section className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-[10px]">
+                        <div>
+                            <p className="text-sm font-semibold text-gray-900">Também no marketplace público</p>
+                            <p className="text-xs text-gray-500 mt-0.5">Página aberta, sem login: só título, local, fotos, tipo, ticket mínimo, VGV, TIR e prazo.</p>
+                        </div>
+                        <span title={!form.is_published ? 'Publique para os investidores antes de pôr no marketplace.' : undefined}>
+                            <TableSwitch
+                                checked={!!form.no_marketplace && !!form.is_published}
+                                disabled={!form.is_published}
+                                onChange={() => set('no_marketplace', !form.no_marketplace)}
+                                ariaLabel="Também no marketplace público"
+                            />
                         </span>
                     </section>
 

@@ -17,6 +17,20 @@ import { baseStudy } from './fixtures/imovibEstudos';
  * remontado no portal (`montarEstudoDoPortal` saiu).
  */
 
+/** Só o corpo da ÚLTIMA definição da função nas migrations (uma migration pode definir várias), sem comentários. */
+const corpo = (funcao: string): string => {
+    const pasta = resolve(__dirname, '../supabase/migrations');
+    const cria = new RegExp(String.raw`CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.${funcao}\(`, 'i');
+    const arq = readdirSync(pasta)
+        .filter(f => f.endsWith('.sql') && cria.test(readFileSync(`${pasta}/${f}`, 'utf-8')))
+        .sort((a, b) => (a.match(/\d{14}/)?.[0] ?? '').localeCompare(b.match(/\d{14}/)?.[0] ?? ''))
+        .pop()!;
+    const sql = readFileSync(`${pasta}/${arq}`, 'utf-8').replace(/--.*$/gm, '');
+    const resto = sql.slice(sql.search(cria));
+    const fim = resto.search(/\$(function)?\$;/);
+    return fim > 0 ? resto.slice(0, fim) : resto;
+};
+
 describe('10.6 — o portal calcula o mesmo número do app', () => {
     it('sem mexer no prazo: VGV líquido, TIR e prazo iguais aos do Resumo (mesmo com as durações vazias)', () => {
         const estudo = baseStudy({ construction_duration_months: null, sales_duration_months: null });
@@ -179,7 +193,51 @@ describe('captação pela SPE (plano 2026-11-21, Fase 4)', () => {
     });
 
     it('o marketplace anônimo não recebe captação nem SPE', () => {
-        expect(ultima('get_public_marketplace')).toMatch(/'captacao', 'spe_entity_id'/);
+        // Desde a Fase A6 (plano 2026-11-21-portal-do-investidor-consolidacao): lista explícita do que sai.
+        const sql = corpo('get_public_marketplace');
+        expect(sql).not.toMatch(/'captacao'/);
+        expect(sql).not.toMatch(/'spe_entity_id'/);
+    });
+
+    it('marketplace (A6): só a vitrine pública marcada, e só VGV, TIR e prazo do estudo', () => {
+        const sql = corpo('get_public_marketplace');
+        expect(sql).toMatch(/o\.no_marketplace = true/);
+        expect(sql).toMatch(/'vgv'/);
+        expect(sql).toMatch(/'tirAnual'/);
+        expect(sql).toMatch(/'duracao'/);
+        for (const interno of ['custoObra', 'terreno', 'lucroLiquido', 'exposicaoMaxima', 'team_json', 'distances_json', 'imovib_study_id']) {
+            expect(sql).not.toContain(`'${interno}'`);
+        }
+    });
+
+    it('resumo pelo link (A3): settings da obra só com as chaves que a tela lê', () => {
+        const sql = corpo('fn_investor_portal_get_summary');
+        expect(sql).not.toMatch(/'settings',\s+pr\.settings/);
+        expect(sql).not.toMatch(/row_to_json\(ic\)/);
+        for (const interno of ['bdi', 'wbs', 'client', 'versions', 'documents']) expect(sql).not.toContain(`'${interno}'`);
+    });
+
+    it('relatórios pelo link (A2): relatório mensal sem destinatário não sai', () => {
+        const sql = corpo('fn_investor_portal_get_reports');
+        expect(sql).toMatch(/r\.investor_id IS NULL AND r\.category IS DISTINCT FROM 'relatorio'/);
+        expect(sql).not.toMatch(/row_to_json\(r\)/);
+    });
+
+    it('cadastro pelo link (A4): sem CPF/CNPJ e sem a linha inteira', () => {
+        const sql = corpo('investor_portal_get_data');
+        expect(sql).not.toMatch(/row_to_json\(v_inv\)/);
+        expect(sql).not.toMatch(/'document'/);
+    });
+
+    it('Data Room (A5): só versão na pasta da org do documento', () => {
+        expect(corpo('fn_investor_portal_get_dataroom')).toMatch(/split_part\(ver\.storage_path, '\/', 1\) = doc\.organization_id::text/);
+    });
+
+    it('interesse (A9): um por investidor por oportunidade e tamanho limitado', () => {
+        const sql = corpo('fn_investor_portal_submit_interest');
+        expect(sql).toMatch(/ON CONFLICT \(opportunity_id, investor_id\) WHERE investor_id IS NOT NULL DO UPDATE/);
+        expect(sql).toMatch(/texto_longo/);
+        expect(corpo('submit_public_interest')).toMatch(/no_marketplace = true/);
     });
 
     it('o interesse pelo link grava o investidor do token e o valor', () => {

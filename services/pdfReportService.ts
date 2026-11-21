@@ -30,24 +30,67 @@ function sectionHeader(doc: jsPDF, title: string, y: number, W: number): number 
     return y + 12;
 }
 
-export async function generateMonthlyReportPdf(organizationId: string): Promise<string> {
+/** Linha do resumo financeiro de uma obra no relatório do investidor. */
+export interface LinhaFinanceiraDoRelatorio { name: string; aportes: number; dividendos: number; pendentes: number }
+
+/**
+ * Resumo financeiro do relatório mensal de UM investidor (Fase A2 do plano
+ * docs/planos/2026-11-21-portal-do-investidor-consolidacao.md). Antes o relatório somava os aportes de TODOS os
+ * investidores da organização e ia para todos. Só lançamentos do investidor; recebido (dividendo + distribuição)
+ * e aporte só quando liquidados.
+ */
+export function resumoFinanceiroDoInvestidor(
+    projetos: { id: string; name: string }[],
+    lancamentos: { project_id: string; investor_id: string; type: string; amount: number; status: string }[],
+    investorId: string,
+): LinhaFinanceiraDoRelatorio[] {
+    const meus = lancamentos.filter(c => c.investor_id === investorId);
+    const soma = (l: typeof meus) => l.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+    return projetos
+        .map(p => {
+            const pc = meus.filter(c => c.project_id === p.id);
+            return {
+                name: p.name,
+                aportes: soma(pc.filter(c => c.type === 'aporte' && c.status === 'liquidado')),
+                dividendos: soma(pc.filter(c => (c.type === 'dividendo' || c.type === 'distribuicao') && c.status === 'liquidado')),
+                pendentes: soma(pc.filter(c => c.status === 'pendente' || c.status === 'atrasado')),
+            };
+        })
+        .filter(r => r.aportes > 0 || r.dividendos > 0 || r.pendentes > 0);
+}
+
+/** Relatório mensal de UM investidor: as obras dele (aporte, participação ou SPE) e só os lançamentos dele. */
+export async function generateMonthlyReportPdf(organizationId: string, investidor: { id: string; name: string }): Promise<string | null> {
     const now = new Date();
     const ref = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const monthLabel  = ref.toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' });
     const generatedAt = now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' });
 
-    // ── Fetch data ────────────────────────────────────────────────────────────
-    const [projectsRes, contribsRes] = await Promise.all([
-        supabase.from('projects').select('id, name, settings'),
-        supabase.from('investor_contributions').select('project_id, type, amount, status').eq('organization_id', organizationId),
+    const [contribsRes, partsRes, sociosRes] = await Promise.all([
+        supabase.from('investor_contributions').select('project_id, investor_id, type, amount, status')
+            .eq('organization_id', organizationId).eq('investor_id', investidor.id),
+        supabase.from('investor_participations').select('project_id')
+            .eq('organization_id', organizationId).eq('investor_id', investidor.id),
+        supabase.from('spe_partners').select('spe:spe_entities!inner(project_id, organization_id)')
+            .eq('investor_id', investidor.id).eq('spe.organization_id', organizationId),
     ]);
-
-    // Filtra em memória: projetos da org (via settings.organizationId) com classificação OBRA
-    const orgProjects = ((projectsRes.data ?? []) as any[]).filter(p =>
-        p.settings?.organizationId === organizationId &&
-        isObra(p),
-    );
+    for (const r of [contribsRes, partsRes, sociosRes]) if (r.error) throw r.error;
     const contribs = (contribsRes.data ?? []) as any[];
+    const idsDasObras = new Set<string>([
+        ...contribs.map(c => c.project_id),
+        ...((partsRes.data ?? []) as any[]).map(p => p.project_id),
+        ...((sociosRes.data ?? []) as any[]).map(s => s.spe?.project_id),
+    ].filter(Boolean));
+    const projectsRes = idsDasObras.size
+        ? await supabase.from('projects').select('id, name, settings, organization_id').in('id', [...idsDasObras])
+        : { data: [], error: null };
+    if (projectsRes.error) throw projectsRes.error;
+    const orgProjects = ((projectsRes.data ?? []) as any[]).filter(p =>
+        (p.organization_id ?? p.settings?.organizationId) === organizationId && isObra(p),
+    );
+
+    // Sem obra nem lançamento do investidor nesta org: não há relatório a gerar.
+    if (!orgProjects.length && !contribs.length) return null;
 
     let milestones: any[] = [];
     if (orgProjects.length) {
@@ -79,6 +122,7 @@ export async function generateMonthlyReportPdf(organizationId: string): Promise<
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.text(`Gerado em ${generatedAt}`, W - 14, 21, { align: 'right' });
+    doc.text(investidor.name, W - 14, 27, { align: 'right' });
 
     let y = 44;
 
@@ -113,15 +157,7 @@ export async function generateMonthlyReportPdf(organizationId: string): Promise<
     }
 
     // ── Resumo Financeiro ─────────────────────────────────────────────────────
-    const financialRows = orgProjects
-        .map((p: any) => {
-            const pc = contribs.filter((c: any) => c.project_id === p.id);
-            const aportes    = pc.filter((c: any) => c.type === 'aporte'       && c.status === 'liquidado').reduce((s: number, c: any) => s + c.amount, 0);
-            const dividendos = pc.filter((c: any) => c.type === 'dividendo'    || c.type === 'distribuicao').reduce((s: number, c: any) => s + c.amount, 0);
-            const pendentes  = pc.filter((c: any) => c.status === 'pendente'   || c.status === 'atrasado').reduce((s: number, c: any) => s + c.amount, 0);
-            return { name: p.name, aportes, dividendos, pendentes };
-        })
-        .filter((r: any) => r.aportes > 0 || r.dividendos > 0);
+    const financialRows = resumoFinanceiroDoInvestidor(orgProjects, contribs, investidor.id);
 
     if (financialRows.length) {
         y = sectionHeader(doc, 'RESUMO FINANCEIRO', y, W);
@@ -213,7 +249,7 @@ export async function generateMonthlyReportPdf(organizationId: string): Promise<
 
     // ── Upload ────────────────────────────────────────────────────────────────
     const safeName = monthLabel.replace('/', '-');
-    const path = `reports/${organizationId}/${Date.now()}_relatorio-mensal-${safeName}.pdf`;
+    const path = `reports/${organizationId}/${investidor.id}/${Date.now()}_relatorio-mensal-${safeName}.pdf`;
     const pdfFile = new File([doc.output('blob')], `relatorio-mensal-${safeName}.pdf`, { type: 'application/pdf' });
     await storageService.uploadFile('documents', path, pdfFile);
     // Bucket privado: devolve o CAMINHO (vai para investor_reports.url); quem abre assina.

@@ -19,6 +19,7 @@ vi.mock('../../services/investorPortalService', async (orig) => ({
     investorPortalService: { lidoDoEstudo: svc.lidoDoEstudo },
 }));
 vi.mock('../../services/storageService', () => ({ storageService: {} }));
+vi.mock('../../services/speService', () => ({ speService: { list: () => Promise.resolve([]) } }));
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
 
 import OpportunityForm from '../../components/investor/OpportunityForm';

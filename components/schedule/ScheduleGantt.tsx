@@ -4,6 +4,7 @@ import ReactDOM from 'react-dom';
 import { ChevronDown, ChevronRight, Camera, ArrowRightToLine } from 'lucide-react';
 
 import { HierarchyNode, ProjectSchedule, BudgetEntry, ResourceAllocation, SinapiType } from '../../types';
+import CampoDataDaGrade from './CampoDataDaGrade';
 import { OutlineRowMenu, OutlineActions } from './OutlineRowMenu';
 import { TASK_NATURE_META } from '../../utils/taskNature';
 import { TaskDetailModal } from './TaskDetailModal';
@@ -489,7 +490,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         <div data-gantt-col="gPred" className="shrink-0 border-r border-gray-100 flex items-center gap-0.5 px-0.5 relative group/pred" style={getGanttColStyle('gPred')}>
                             <input
                                 type="text"
-                                className="w-full bg-transparent border-none rounded text-center text-form-input p-0.5 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
+                                className="w-full bg-transparent border-none rounded text-center text-xs p-0.5 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
                                 value={itemSchedule?.predecessors?.[0] ? idToUid[itemSchedule.predecessors[0].id] || '' : ''}
                                 onChange={(e) => handleUpdatePredecessorField(item.id, 'uid', e.target.value)}
                                 placeholder="-"
@@ -518,7 +519,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                             min="0"
                                             disabled={isSimulationMode}
                                             title={isSimulationMode ? 'Arraste a barra no Gantt para alterar a duração' : 'Duração em dias'}
-                                            className={`w-14 bg-white border border-gray-200 rounded text-center text-form-input p-0.5 font-medium text-gray-700 ${isSimulationMode ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                            className={`w-14 bg-white border border-gray-200 rounded text-center text-xs p-0.5 font-medium text-gray-700 ${isSimulationMode ? 'opacity-50 cursor-not-allowed' : ''}`}
                                             value={itemSchedule?.duration ?? ''}
                                             onChange={(e) => handleUpdateItemSchedule(item.id, 'duration', parseInt(e.target.value, 10) || 0)}
                                         />
@@ -719,7 +720,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.realizedTotal || 0)}
                         </div>
 
-                        <div data-gantt-col="gVariation" className={`shrink-0 flex items-center justify-end px-2 text-form-label font-medium border-r border-gray-100 ${(node.variation ?? 0) > 0 ? 'text-red-500' : (node.variation ?? 0) < 0 ? 'text-emerald-500' : 'text-gray-400'}`} style={getGanttColStyle('gVariation')}>
+                        <div data-gantt-col="gVariation" className={`shrink-0 flex items-center justify-end px-2 text-xs font-medium border-r border-gray-100 ${(node.variation ?? 0) > 0 ? 'text-red-500' : (node.variation ?? 0) < 0 ? 'text-emerald-500' : 'text-gray-400'}`} style={getGanttColStyle('gVariation')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.variation || 0)}
                         </div>
 
@@ -743,7 +744,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     type="number"
                                     min="0"
                                     max="100"
-                                    className={`w-9 bg-transparent border-none p-0 text-form-input font-medium text-right focus:ring-0 ${itemSchedule?.manualRealPct !== undefined ? 'text-orange-500' : 'text-blue-600'}`}
+                                    className={`w-8 bg-transparent border-none p-0 text-xs font-medium text-right focus:ring-0 ${itemSchedule?.manualRealPct !== undefined ? 'text-orange-500' : 'text-blue-600'}`}
                                     value={itemSchedule?.manualRealPct !== undefined ? itemSchedule.manualRealPct : (node.total > 0 ? (node.realizedPhysicalTotal / node.total * 100) : 0).toFixed(0)}
                                     onChange={(e) => handleUpdateRealPct(item.id, e.target.value)}
                                 />
@@ -986,7 +987,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 return (
                                     <input
                                         type="text"
-                                        className="w-full bg-transparent border-none rounded text-center text-form-input p-0.5 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
+                                        className="w-full bg-transparent border-none rounded text-center text-xs p-0.5 focus:ring-1 focus:ring-blue-300 font-medium text-blue-600"
                                         value={ns?.predecessors?.map(p => idToUid[p.id] || '').filter(Boolean).join(', ') || ''}
                                         onChange={(e) => handleUpdatePredecessorField(node.id, 'uid', e.target.value)}
                                         onClick={(e) => e.stopPropagation()}
@@ -1008,12 +1009,13 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 // divergir dos filhos. A edição manual ainda funciona: o onChange cascateia
                                 // o deslocamento para os filhos e o novo rollup passa a ser o valor editado.
                                 const effectiveDate = node.earlyStart || '';
+                                // Texto no tamanho/formato das outras datas da grade; o calendário abre no clique.
                                 return (
-                                    <input
-                                        type="date"
+                                    <CampoDataDaGrade
+                                        className="px-0.5"
                                         value={effectiveDate}
-                                        onChange={(e) => handleUpdateItemSchedule(node.id, 'startDate', e.target.value)}
-                                        className="w-full bg-transparent border-none text-center text-form-input font-medium text-gray-600 outline-none focus:bg-white focus:ring-1 focus:ring-blue-300 rounded px-1"
+                                        texto={effectiveDate ? fmtLocalDate(effectiveDate) : ''}
+                                        onChange={(v) => handleUpdateItemSchedule(node.id, 'startDate', v)}
                                     />
                                 );
                             })()}
@@ -1044,7 +1046,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         <div data-gantt-col="gRealized" className="shrink-0 flex items-center justify-end px-2 text-xs font-medium text-emerald-600 border-r border-gray-100" style={getGanttColStyle('gRealized')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.realizedTotal || 0)}
                         </div>
-                        <div data-gantt-col="gVariation" className={`shrink-0 flex items-center justify-end px-2 text-form-input font-medium border-r border-gray-100 ${(node.variation ?? 0) > 0 ? 'text-red-500' : (node.variation ?? 0) < 0 ? 'text-emerald-500' : 'text-gray-400'}`} style={getGanttColStyle('gVariation')}>
+                        <div data-gantt-col="gVariation" className={`shrink-0 flex items-center justify-end px-2 text-xs font-medium border-r border-gray-100 ${(node.variation ?? 0) > 0 ? 'text-red-500' : (node.variation ?? 0) < 0 ? 'text-emerald-500' : 'text-gray-400'}`} style={getGanttColStyle('gVariation')}>
                             {new Intl.NumberFormat('pt-BR', { style: 'decimal', minimumFractionDigits: 2 }).format(node.variation || 0)}
                         </div>
                         <div data-gantt-col="gResources" className="shrink-0 flex items-center px-2 border-r border-gray-200 overflow-hidden" style={getGanttColStyle('gResources')}>

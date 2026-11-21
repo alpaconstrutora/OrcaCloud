@@ -107,7 +107,7 @@ com o Imovib nem com a SPE. Estado do banco em 21/11: 1 investidor, 1 token ativ
 
 ## Estado (atualizar a cada fase)
 
-**Fase A: 9 de 9 itens feitos** (PR #637, frente `portal-investidor-fa`). Migration
+**Fase A: 9 de 9 — NO AR** (PR #637, squash ff6e617; migration 998000 APLICADA em 21/11 com OK do usuário; ACLs sem PUBLIC conferidas). Migration
 `aplicar_20271121998000_portal_investidor_seguranca.sql` (o prefixo 996000 já era de outra frente — a CI pegou a
 colisão). Ensaio no banco (migration + prova numa transação desfeita):
 - A1: UPDATE direto do admin em tokens → 42501; revogar pela RPC funciona.

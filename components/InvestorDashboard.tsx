@@ -444,7 +444,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     setInvestorContributions(contribs);
 
                     // A carteira lê o sócio da SPE (Fase B1, plano 2026-11-21-portal-do-investidor-consolidacao).
-                    setPortalSpes(await investorPortalService.sociosDoInvestidor(investorId) as PortalSpe[]);
+                    setPortalSpes(await investorPortalService.sociosDoInvestidor(investorId) as unknown as PortalSpe[]);
                 }
 
                 if (isAdmin || orgId) {

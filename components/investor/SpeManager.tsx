@@ -397,6 +397,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                                 partners={pts}
                                                 isAdmin={isAdmin}
                                                 userEmail={userEmail}
+                                                semObra={!entity.project_id}
                                             />
                                         )}
                                     </div>

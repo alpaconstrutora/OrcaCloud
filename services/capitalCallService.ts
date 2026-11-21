@@ -52,18 +52,6 @@ export interface CapitalCallItem {
 const CALL_COLS = 'id, organization_id, spe_entity_id, title, description, total_amount, issue_date, due_date, status, created_by_email, created_at, updated_at';
 const ITEM_COLS = 'id, organization_id, capital_call_id, spe_partner_id, amount_due, amount_paid, status, paid_at, payment_reference, created_at, updated_at';
 
-async function refreshCallStatus(capitalCallId: string): Promise<void> {
-    const { data: items, error } = await supabase
-        .from('capital_call_items')
-        .select('status')
-        .eq('capital_call_id', capitalCallId);
-    if (error) throw error;
-    const allPaid = (items ?? []).every(i => i.status === 'pago');
-    const anyPaid = (items ?? []).some(i => i.status === 'pago' || i.status === 'parcial');
-    const status: CapitalCallStatus = allPaid ? 'paga' : anyPaid ? 'parcialmente_paga' : 'aberta';
-    await supabase.from('capital_calls').update({ status, updated_at: new Date().toISOString() }).eq('id', capitalCallId);
-}
-
 export const capitalCallService = {
     async listCalls(speEntityId: string): Promise<CapitalCall[]> {
         const { data, error } = await supabase
@@ -124,25 +112,21 @@ export const capitalCallService = {
         if (error) throw error;
     },
 
-    /** Registra pagamento (total ou parcial) de um item da chamada e atualiza o status agregado. */
-    async registerPayment(item: CapitalCallItem, amountPaid: number, paymentReference?: string): Promise<void> {
-        if (!item.id) return;
-        const newAmountPaid = item.amount_paid + amountPaid;
-        const status: CapitalCallItemStatus = newAmountPaid >= item.amount_due ? 'pago' : 'parcial';
-        const { error } = await supabase
-            .from('capital_call_items')
-            .update({
-                amount_paid: newAmountPaid,
-                status,
-                paid_at: status === 'pago' ? new Date().toISOString() : item.paid_at,
-                payment_reference: paymentReference ?? item.payment_reference,
-                updated_at: new Date().toISOString(),
-            })
-            .eq('id', item.id);
+    /**
+     * Registra pagamento (total ou parcial) de um item da chamada. Uma transação no banco
+     * (`fn_chamada_de_capital_registrar_pagamento`): item, `capital_paid` do sócio, status da
+     * chamada e o aporte 'liquidado' do investidor na obra da SPE (`investor_contributions`).
+     * `semObra` = a SPE não tem obra, então o pagamento não entrou no extrato do investidor.
+     */
+    async registerPayment(item: CapitalCallItem, amountPaid: number, paymentReference?: string): Promise<{ semObra: boolean }> {
+        if (!item.id) return { semObra: false };
+        const { data, error } = await supabase.rpc('fn_chamada_de_capital_registrar_pagamento', {
+            p_item_id: item.id,
+            p_valor: amountPaid,
+            p_referencia: paymentReference ?? null,
+        });
         if (error) throw error;
-
-        await speService.addCapitalPayment(item.spe_partner_id, amountPaid);
-        await refreshCallStatus(item.capital_call_id);
+        return { semObra: Boolean((data as { sem_obra?: boolean } | null)?.sem_obra) };
     },
 
     async markOverdueItems(capitalCallId: string): Promise<void> {

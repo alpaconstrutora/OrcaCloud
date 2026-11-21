@@ -189,6 +189,24 @@ export const useTableColumns = (
   const [columnOrder, setColumnOrder] = React.useState<string[]>(initial.columnOrder);
   const [showColumnConfig, setShowColumnConfig] = React.useState(false);
 
+  // A MESMA instância pode trocar de tela (Engenharia › Orçamentos e › Planejamento são a mesma
+  // ProjectList; o AppRouter troca só as props). Chave nova = preferência da tela nova, recarregada
+  // NO MESMO render — num efeito, o efeito de gravar abaixo já teria escrito as colunas da tela
+  // anterior na chave nova (as colunas do Planejamento apareciam nos Orçamentos, fora do
+  // "Colunas visíveis"; docs/planos/2026-11-21-orcamentos-colunas.md).
+  const [chaveCarregada, setChaveCarregada] = React.useState(storageKey);
+  if (chaveCarregada !== storageKey) {
+    const p = loadPersistedTableState(storageKey, defaultVisibleColumns, allColumns);
+    const padrao = p.sortColumn == null && !!defaultSort;
+    setChaveCarregada(storageKey);
+    setVisibleColumns(p.visibleColumns);
+    setSortColumn(padrao ? defaultSort!.column : p.sortColumn);
+    setSortDirection(padrao ? defaultSort!.direction : p.sortDirection);
+    setKnownColumns(p.knownColumns);
+    setColumnOrder(p.columnOrder);
+    setShowColumnConfig(false);
+  }
+
   // Persistir colunas + ordenação + conhecidas + ordem juntas (F2: sobrevive a navegação/reload).
   React.useEffect(() => {
     try {

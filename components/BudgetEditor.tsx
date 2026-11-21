@@ -23,6 +23,7 @@ import Button from './ui/Button';
 import BudgetRibbon from './BudgetRibbon';
 import { useTelaCheia } from '../hooks/useTelaCheia';
 import * as XLSX from 'xlsx';
+import { precoFinalDoOrcamento } from '../utils/totaisDoOrcamento';
 
 interface BudgetEditorProps {
   budget: BudgetEntry[];
@@ -2020,7 +2021,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   // BDI global zerado: o Preço Final sai igual ao Custo Direto. Pode ser intencional, mas
   // não pode passar calado (2ª crítica).
   const bdiZerado = !settings.bdi && budget.length > 0;
-  const totalWithBDI = budget.reduce((acc, item) => acc + (item.quantity * (item.sinapiItem?.price || 0) * (1 + (item.bdi ?? settings.bdi) / 100)), 0);
+  // Mesma função da coluna "Valor total" de Engenharia › Orçamentos: os dois números não divergem.
+  const totalWithBDI = precoFinalDoOrcamento(budget, settings.bdi);
 
   const calculateSubPhaseTotal = (groupName: string, phaseName: string, subPhaseName: string) => {
     return budget

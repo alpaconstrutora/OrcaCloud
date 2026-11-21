@@ -140,3 +140,11 @@ Tudo foi lido de `origin/main`. O trabalho é feito numa frente nova (`bash scri
 - [x] "Qtd comprada": compras agrupadas por unidade e convertidas para a unidade da linha; o que não converte fica fora da soma e a célula avisa (âmbar, tooltip). **Mudança de comportamento:** antes somava `quantity` cru de qualquer unidade.
 - [x] `orcamentoLinhas.test.ts` atualizado (formato novo) + 4 casos.
 - [ ] Conferida na tela em produção.
+
+### Fase 3 — 21/11/2026
+- [x] `resolverUnidadeDaMedida` em `utils/blueprintBudget.ts`: a dimensão do próprio item (fator 1) ou uma equivalência válida.
+- [x] Aplicado nos 6 geradores (de-para, camadas, acabamentos, guarda-corpos, esquadrias, instalações). Com equivalência: quantidade × fator + `unidadeInformada` (+ fator na memória de cálculo do de-para). Sem: recusa igual, com a dica de onde cadastrar.
+- [x] Cobertura: `UNIDADE_INCOMPATIVEL` vira `COM_PRECO` quando há equivalência; valor = quantidade × fator × preço.
+- [x] Serviço carrega as equivalências dos itens resolvidos (falha = sem conversão).
+- [x] Testes: 4 no de-para + 1 na cobertura; 30 arquivos da planta verdes (541 + 25 pulados).
+- [ ] Conferida na tela em produção.

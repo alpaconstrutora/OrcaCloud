@@ -61,6 +61,14 @@ describe('cobertura do orçamento', () => {
     expect(c.linhas[0].valor).toBeNull();
   });
 
+  it('com equivalência (21/11/2026), a medida converte: 100 m² de piso em item por UN com 1 M2 = 4 UN', () => {
+    const eqs = new Map([['00UN', [{ itemCode: '00UN', unidadeBase: 'UN', unidade: 'M2', fator: 4 }]]]);
+    const c = coberturaDoOrcamento([{ medidaId: 'AREA_PISO', quantidade: 100 }], [mapa('AREA_PISO', '00UN')], CATALOGO, eqs);
+    expect(c.linhas[0].estado).toBe('COM_PRECO');
+    const precoDoItem = CATALOGO.get('00UN')!.price;
+    expect(c.linhas[0].valor).toBeCloseTo(100 * 4 * precoDoItem, 6);
+  });
+
   it('item fora do catálogo e de-para desligado são estados distintos', () => {
     const c = coberturaDoOrcamento(
       [

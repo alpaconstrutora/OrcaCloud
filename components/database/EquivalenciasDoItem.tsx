@@ -98,7 +98,7 @@ export const EquivalenciasDoItem: React.FC<Props> = ({ code, unidadeDoItem, pode
                             <li key={e.id} className="flex items-center justify-between gap-4 py-2">
                                 <div className="text-sm text-gray-900">
                                     <span className="font-medium">{rotulo}</span>
-                                    <span className="text-gray-500"> · 1 {e.unidadeBase} = {fmtFator(1 / e.fator)} {e.unidade}</span>
+                                    <span className="text-gray-500"> · 1 {e.unidadeBase} = {(1 / e.fator).toLocaleString('pt-BR', { maximumFractionDigits: 3 })} {e.unidade}</span>
                                     {e.observacao && <span className="text-gray-500"> · {e.observacao}</span>}
                                 </div>
                                 {podeEditar && e.id && (
@@ -119,7 +119,7 @@ export const EquivalenciasDoItem: React.FC<Props> = ({ code, unidadeDoItem, pode
             {podeEditar && base && (
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-500" htmlFor="eq-unidade">1 unidade</label>
+                        <label className="block text-xs font-semibold text-slate-500" htmlFor="eq-unidade">1 unidade</label>
                         <select
                             id="eq-unidade"
                             value={unidade}
@@ -131,7 +131,7 @@ export const EquivalenciasDoItem: React.FC<Props> = ({ code, unidadeDoItem, pode
                         </select>
                     </div>
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-slate-500" htmlFor="eq-fator">= quantos {base}</label>
+                        <label className="block text-xs font-semibold text-slate-500" htmlFor="eq-fator">= quantos {base}</label>
                         <input
                             id="eq-fator"
                             inputMode="decimal"
@@ -142,7 +142,7 @@ export const EquivalenciasDoItem: React.FC<Props> = ({ code, unidadeDoItem, pode
                         />
                     </div>
                     <div className="space-y-1.5 flex-1 min-w-[200px]">
-                        <label className="text-xs font-semibold text-slate-500" htmlFor="eq-obs">Observação</label>
+                        <label className="block text-xs font-semibold text-slate-500" htmlFor="eq-obs">Observação</label>
                         <input
                             id="eq-obs"
                             value={observacao}

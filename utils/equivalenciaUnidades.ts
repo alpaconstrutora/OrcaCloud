@@ -1,4 +1,7 @@
 import { identidadeDaUnidade } from '../lib/unidadeDeMedida';
+import type { UnidadeInformada } from '../types/budget';
+
+export type { UnidadeInformada };
 
 /**
  * EQUIVALÊNCIA DE UNIDADES (21/11/2026) — a conta, num lugar só.
@@ -86,14 +89,6 @@ export const converterQuantidade = (quantidade: number, fator: number) => arred(
 
 /** Preço por unidade de destino: o total (q × p) se conserva. 4 casas. */
 export const converterPreco = (preco: number, fator: number) => arred(preco / fator, 4);
-
-/** Unidade em que o lançamento é MOSTRADO; a quantidade gravada segue na unidade do item. */
-export interface UnidadeInformada {
-    unidade: string;
-    unidadeBase: string;
-    /** 1 `unidade` = `fator` × `unidadeBase` — gravado no lançamento, não relido do cadastro. */
-    fator: number;
-}
 
 /**
  * A unidade informada de um lançamento só vale se a base gravada for a unidade

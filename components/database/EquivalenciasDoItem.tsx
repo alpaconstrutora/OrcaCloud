@@ -2,7 +2,10 @@ import React from 'react';
 import { ArrowRightLeft, Plus } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
-import { identidadeDaUnidade, UNIDADES_DE_EQUIVALENCIA } from '../../lib/unidadeDeMedida';
+import { catalogoDeUnidades, identidadeDaUnidade } from '../../lib/unidadeDeMedida';
+import { CreatableCombobox } from '../ui/CreatableCombobox';
+import { masterDataService, MasterUnit } from '../../services/masterDataService';
+import NovaUnidadeForm from './NovaUnidadeForm';
 import { equivalenciaUnidadesService } from '../../services/equivalenciaUnidadesService';
 import { useEquivalencias } from '../../hooks/useEquivalencias';
 import { equivalenciasValidas } from '../../utils/equivalenciaUnidades';
@@ -14,6 +17,10 @@ import { equivalenciasValidas } from '../../utils/equivalenciaUnidades';
  * Cadastro GLOBAL: todos veem; só o superadministrador edita (a RLS confere — o
  * `podeEditar` aqui só evita oferecer um botão que responderia 403).
  * Plano: docs/planos/2026-11-21-equivalencia-unidades.md.
+ *
+ * A unidade é escolhida do cadastro mestre (lista fixa + Dados Mestres › Unidades) num
+ * combobox criável (guia §7.1.2): digitar uma que não existe oferece "Cadastrar", que abre
+ * o formulário de unidade nova (21/11/2026, docs/planos/2026-11-21-unidade-de-medida-nova.md).
  */
 interface Props {
     code: string;
@@ -33,25 +40,44 @@ export const EquivalenciasDoItem: React.FC<Props> = ({ code, unidadeDoItem, pode
     // Linhas gravadas para OUTRA unidade-base (o item mudou de unidade): ficam sem efeito.
     const semEfeito = (equivalencias.get(code) ?? []).filter(e => e.unidadeBase !== base);
 
-    const [unidade, setUnidade] = React.useState('');
+    const [cadastradas, setCadastradas] = React.useState<MasterUnit[]>([]);
+    const [unidade, setUnidade] = React.useState<string | null>(null);
+    const [unidadeTexto, setUnidadeTexto] = React.useState('');
+    /** Símbolo da unidade nova em cadastro (null = formulário fechado). */
+    const [novaUnidade, setNovaUnidade] = React.useState<string | null>(null);
     const [fator, setFator] = React.useState('');
     const [observacao, setObservacao] = React.useState('');
     const [salvando, setSalvando] = React.useState(false);
 
-    const opcoes = UNIDADES_DE_EQUIVALENCIA.filter(u => u !== base);
+    React.useEffect(() => {
+        if (!podeEditar) return;
+        masterDataService.listUnits().then(setCadastradas).catch(() => setCadastradas([]));
+    }, [podeEditar]);
+    const catalogo = React.useMemo(() => catalogoDeUnidades(cadastradas), [cadastradas]);
+    const opcoes = React.useMemo(
+        () => catalogo.filter(u => u.codigo !== base).map(u => ({ id: u.codigo, name: u.codigo, nome: u.nome })),
+        [catalogo, base],
+    );
+    // Texto digitado que é apelido de uma unidade da lista ("barra" = BR) já vale — nunca bloqueia (§7.1.2).
+    const digitada = identidadeDaUnidade(unidadeTexto);
+    const unidadeEscolhida = unidade ?? (digitada && opcoes.some(o => o.id === digitada) ? digitada : null);
     const fatorNum = Number(fator.replace(/\./g, '').replace(',', '.'));
     const motivoSemSalvar =
         !base ? 'O item não tem unidade reconhecida.'
-        : !unidade ? 'Escolha a unidade equivalente.'
+        : !unidadeEscolhida ? (
+            !unidadeTexto.trim() ? 'Escolha a unidade equivalente.'
+            : digitada === base ? `${base} já é a unidade do item.`
+            : `A unidade "${unidadeTexto.trim()}" não existe: cadastre-a pela lista.`
+        )
         : !(fatorNum > 0) ? 'Informe um fator maior que zero.'
         : null;
 
     const salvar = async () => {
-        if (motivoSemSalvar || !base) return;
+        if (motivoSemSalvar || !base || !unidadeEscolhida) return;
         setSalvando(true);
         try {
-            await equivalenciaUnidadesService.salvar({ itemCode: code, unidadeBase: base, unidade, fator: fatorNum, observacao });
-            setUnidade(''); setFator(''); setObservacao('');
+            await equivalenciaUnidadesService.salvar({ itemCode: code, unidadeBase: base, unidade: unidadeEscolhida, fator: fatorNum, observacao });
+            setUnidade(null); setUnidadeTexto(''); setFator(''); setObservacao('');
             recarregar();
             notify('Equivalência salva.', 'success');
         } catch (e) {
@@ -59,6 +85,19 @@ export const EquivalenciasDoItem: React.FC<Props> = ({ code, unidadeDoItem, pode
         } finally {
             setSalvando(false);
         }
+    };
+
+    const escolher = (codigo: string) => { setUnidade(codigo); setUnidadeTexto(codigo); };
+    const cadastrar = (texto: string) => {
+        const id = identidadeDaUnidade(texto);
+        if (id && opcoes.some(o => o.id === id)) escolher(id);
+        else setNovaUnidade(texto.trim());
+    };
+    const unidadeCriada = (u: MasterUnit) => {
+        setCadastradas(prev => [...prev, u]);
+        setNovaUnidade(null);
+        const id = identidadeDaUnidade(u.symbol);
+        if (id) escolher(id);
     };
 
     const excluir = async (id: string, rotulo: string) => {
@@ -120,15 +159,21 @@ export const EquivalenciasDoItem: React.FC<Props> = ({ code, unidadeDoItem, pode
                 <div className="flex flex-wrap items-end gap-3">
                     <div className="space-y-1.5">
                         <label className="block text-xs font-semibold text-slate-500" htmlFor="eq-unidade">1 unidade</label>
-                        <select
-                            id="eq-unidade"
-                            value={unidade}
-                            onChange={e => setUnidade(e.target.value)}
-                            className="h-9 w-28 px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
-                        >
-                            <option value="">Escolha</option>
-                            {opcoes.map(u => <option key={u} value={u}>{u}</option>)}
-                        </select>
+                        <div className="w-40">
+                            <CreatableCombobox<{ id: string; name: string; nome?: string }>
+                                id="eq-unidade"
+                                value={unidadeTexto}
+                                selectedId={unidade}
+                                options={opcoes}
+                                onSelect={o => escolher(o.id)}
+                                onTextChange={t => { setUnidadeTexto(t); setUnidade(null); }}
+                                onCreate={cadastrar}
+                                getHint={o => o.nome}
+                                placeholder="Escolha ou digite"
+                                avisoNovo="Unidade nova — use Cadastrar na lista."
+                                inputClassName="w-full h-9 pl-3 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                            />
+                        </div>
                     </div>
                     <div className="space-y-1.5">
                         <label className="block text-xs font-semibold text-slate-500" htmlFor="eq-fator">= quantos {base}</label>
@@ -163,6 +208,17 @@ export const EquivalenciasDoItem: React.FC<Props> = ({ code, unidadeDoItem, pode
                         </button>
                     </span>
                 </div>
+            )}
+
+            {podeEditar && base && novaUnidade !== null && (
+                <NovaUnidadeForm
+                    key={novaUnidade}
+                    existentes={catalogo.map(u => u.codigo)}
+                    simboloInicial={novaUnidade}
+                    onCriada={unidadeCriada}
+                    onCancelar={() => setNovaUnidade(null)}
+                    notify={notify}
+                />
             )}
         </div>
     );

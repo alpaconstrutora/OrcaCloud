@@ -153,6 +153,26 @@ export const masterDataService = {
     return category ? cache.units.filter(u => u.category === category) : cache.units;
   },
 
+  /**
+   * Unidade nova no cadastro global (21/11/2026). Só o superadministrador grava — a
+   * RLS confere (aplicar_20271121996000); a tela valida antes com
+   * `motivoNovaUnidadeInvalida` (lib/unidadeDeMedida).
+   */
+  async addUnit(input: { symbol: string; name: string; category: string }): Promise<MasterUnit> {
+    const { data, error } = await supabase
+      .from('master_units_of_measure')
+      .insert({ symbol: input.symbol, name: input.name.trim(), category: input.category, system_default: false })
+      .select('id, symbol, name, category, base_factor, base_symbol, is_active')
+      .single();
+    if (error) {
+      if (error.code === '23505') throw new Error(`Já existe uma unidade com o símbolo "${input.symbol}".`);
+      if (error.code === '42501') throw new Error('Só o superadministrador cadastra unidade de medida.');
+      throw error;
+    }
+    cache.units = null;
+    return data as MasterUnit;
+  },
+
   // Admin adiciona uma cidade manualmente (RPC SECURITY DEFINER valida permissão)
   async addCity(input: {
     state_id: string;

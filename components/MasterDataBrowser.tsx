@@ -8,6 +8,11 @@ import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import TabsBar from './ui/TabsBar';
 import { FilterPopover } from './ui/FilterPopover';
 import { usePersistedState } from './ui/TableUtils';
+import { useStore } from '../store/useStore';
+import { temAcessoTotal } from '../lib/acessoTotal';
+import { useToast } from '../hooks/useToast';
+import { catalogoDeUnidades } from '../lib/unidadeDeMedida';
+import NovaUnidadeForm from './database/NovaUnidadeForm';
 
 type Tab = 'geo' | 'banks' | 'units';
 
@@ -15,7 +20,7 @@ type Tab = 'geo' | 'banks' | 'units';
 const VIEW_HEADERS: Record<Tab, { title: string; subtitle: string }> = {
   geo:   { title: 'Dados Mestres · Geografia', subtitle: 'Países, estados e municípios reutilizados em todo o sistema (somente leitura nesta fase).' },
   banks: { title: 'Dados Mestres · Bancos',    subtitle: 'Bancos do cadastro BACEN, com código COMPE e ISPB do PIX (somente leitura nesta fase).' },
-  units: { title: 'Dados Mestres · Unidades',  subtitle: 'Unidades de medida e fatores de conversão para a unidade base (somente leitura nesta fase).' },
+  units: { title: 'Dados Mestres · Unidades',  subtitle: 'Unidades de medida e fatores de conversão para a unidade base. Unidade nova: só o superadministrador cadastra.' },
 };
 
 const TABS = [
@@ -430,6 +435,11 @@ const UnitsPanel: React.FC = () => {
   const [units, setUnits] = useState<MasterUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = usePersistedState<string>('masterData:units:category', '');
+  // Unidade nova (21/11/2026): só o superadministrador — a RLS confere; aqui só não oferece o botão.
+  const podeCadastrar = temAcessoTotal(useStore(s => s.session)?.user?.email);
+  const [cadastrando, setCadastrando] = useState(false);
+  const { showToast } = useToast();
+  const notify = (m: string, t?: 'success' | 'error' | 'info') => showToast(m, t === 'error' ? 'error' : 'success');
 
   useEffect(() => {
     masterDataService.listUnits().then(setUnits).finally(() => setLoading(false));
@@ -453,6 +463,26 @@ const UnitsPanel: React.FC = () => {
       searchText={u => `${u.symbol} ${u.name} ${u.category}`}
       sortValue={(key, u) => key === 'base' ? u.base_factor : key === 'symbol' ? u.symbol : key === 'category' ? u.category : u.name}
       filters={<FilterPopover<string> label="Categoria" value={category} onChange={setCategory} options={categoryOptions} />}
+      toolbarRight={podeCadastrar && !cadastrando ? (
+        <button
+          type="button"
+          onClick={() => setCadastrando(true)}
+          className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+        >
+          <Plus className="w-[15px] h-[15px]" />
+          Nova unidade
+        </button>
+      ) : undefined}
+      filtersPanel={cadastrando ? (
+        <div className="px-6 pb-4">
+          <NovaUnidadeForm
+            existentes={catalogoDeUnidades(units).map(u => u.codigo)}
+            onCriada={u => { setUnits(prev => [...prev, u]); setCadastrando(false); }}
+            onCancelar={() => setCadastrando(false)}
+            notify={notify}
+          />
+        </div>
+      ) : undefined}
       renderCell={(key, u) => {
         switch (key) {
           case 'symbol': return <span className={TXT}>{u.symbol}</span>;

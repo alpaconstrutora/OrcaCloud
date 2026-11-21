@@ -17,7 +17,7 @@ const UNIDADES: Record<string, string> = {
     L: 'L', LT: 'L', LTS: 'L', LITRO: 'L',
     SC: 'SC', SACO: 'SC', CX: 'CX', CAIXA: 'CX', RL: 'RL', ROLO: 'RL',
     BD: 'BD', BALDE: 'BD', GL: 'GL', GALAO: 'GL', 'GALÃO': 'GL', LATA: 'LT', TB: 'TB', BR: 'BR', BARRA: 'BR',
-    JG: 'JG', JOGO: 'JG', KIT: 'KIT', PAR: 'PAR', CJ: 'CJ', MIL: 'MIL', MILHEIRO: 'MIL',
+    JG: 'JG', JOGO: 'JG', KIT: 'KIT', PAR: 'PAR', CJ: 'CJ', MIL: 'MIL', MILHEIRO: 'MIL', MLH: 'MIL',
 };
 
 /** Unidade como o pedido grava: maiúscula, sem ponto; vazia vira UN. */
@@ -44,3 +44,75 @@ export function identidadeDaUnidade(unidade: string | null | undefined): string 
 export const UNIDADES_DE_EQUIVALENCIA: readonly string[] = [
     'M', 'M2', 'M3', 'KG', 'T', 'UN', 'BR', 'PC', 'SC', 'CX', 'RL', 'L', 'CJ', 'PAR', 'JG', 'GL', 'MIL',
 ];
+
+/**
+ * Grandezas do cadastro mestre (`master_units_of_measure.category`). Só agrupa e
+ * descreve — nenhuma conta usa; quem converte é a equivalência por item.
+ */
+export const CATEGORIAS_DE_UNIDADE: readonly { valor: string; rotulo: string }[] = [
+    { valor: 'comprimento', rotulo: 'Comprimento' },
+    { valor: 'area', rotulo: 'Área' },
+    { valor: 'volume', rotulo: 'Volume' },
+    { valor: 'massa', rotulo: 'Massa' },
+    { valor: 'contagem', rotulo: 'Contagem' },
+    { valor: 'embalagem', rotulo: 'Embalagem' },
+    { valor: 'tempo', rotulo: 'Tempo' },
+    { valor: 'energia', rotulo: 'Energia' },
+    { valor: 'outro', rotulo: 'Outro' },
+];
+
+export interface UnidadeDoCatalogo {
+    /** Identidade (KG, M2, TB…) — o que a equivalência grava. */
+    codigo: string;
+    /** Nome do cadastro mestre, quando houver. */
+    nome?: string;
+}
+
+/**
+ * Unidades que se pode escolher (UNIDADE NOVA, 21/11/2026): a lista fixa mais as do
+ * cadastro mestre, por IDENTIDADE (m² e M2 são uma só). Quando dois símbolos dão a
+ * mesma identidade, o nome vem do símbolo exato (L = Litro, não "lt" = Lata). Ficam de
+ * fora o que não vira código (mês, cm²) e o ML ambíguo.
+ */
+export function catalogoDeUnidades(
+    cadastradas: readonly { symbol: string; name: string }[],
+): UnidadeDoCatalogo[] {
+    const nomes = new Map<string, string>();
+    for (const exato of [true, false]) {
+        for (const u of cadastradas) {
+            const codigo = identidadeDaUnidade(u.symbol);
+            if (!codigo || codigo === 'ML' || nomes.has(codigo)) continue;
+            if (exato !== (u.symbol.toUpperCase() === codigo)) continue;
+            nomes.set(codigo, u.name);
+        }
+    }
+    const extras = [...nomes.keys()].filter(c => !UNIDADES_DE_EQUIVALENCIA.includes(c)).sort();
+    return [...UNIDADES_DE_EQUIVALENCIA, ...extras].map(codigo => ({ codigo, nome: nomes.get(codigo) }));
+}
+
+/** Símbolo como a unidade nova é gravada: sem espaço e sem ponto. */
+export const simboloLimpo = (simbolo: string) => simbolo.trim().replace(/[.\s]/g, '');
+
+/**
+ * Por que a unidade nova não pode ser criada (null = pode). `existentes` são os
+ * códigos de `catalogoDeUnidades` — o apelido conta: "Barra" é o BR que já existe.
+ */
+export function motivoNovaUnidadeInvalida(
+    nova: { simbolo: string; nome: string; categoria: string },
+    existentes: readonly string[],
+): string | null {
+    const limpo = simboloLimpo(nova.simbolo);
+    if (!limpo) return 'Informe o símbolo.';
+    if (limpo.length > 10) return 'O símbolo tem no máximo 10 caracteres.';
+    const codigo = identidadeDaUnidade(limpo);
+    if (!codigo) return 'Use só letras e números no símbolo.';
+    if (codigo === 'ML') return 'ML é ambíguo (metro linear ou mililitro): use M ou L.';
+    if (existentes.includes(codigo)) {
+        return codigo === limpo.toUpperCase()
+            ? `A unidade ${codigo} já existe.`
+            : `"${limpo}" é a unidade ${codigo}, que já existe.`;
+    }
+    if (!nova.nome.trim()) return 'Informe o nome.';
+    if (!nova.categoria) return 'Escolha a grandeza.';
+    return null;
+}

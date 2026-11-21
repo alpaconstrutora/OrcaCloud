@@ -55,6 +55,9 @@ import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
 import { agruparOrcamentos, OPCOES_AGRUPAR_ORCAMENTO, type CampoAgruparOrcamento } from '../utils/orcamentoGrupos';
 import { diasEntre, hojeLocalISO, type IndicadoresDePrazo } from '../utils/planejamentoIndicadores';
 import { useIndicadoresDosPlanejamentos } from '../hooks/useIndicadoresDosPlanejamentos';
+import { useOrcamentosDaLista } from '../hooks/useOrcamentosDaLista';
+import { precoFinalDoOrcamento } from '../utils/totaisDoOrcamento';
+import { COLUNAS_DO_ORCAMENTO, COLUNAS_NUMERICAS_DO_ORCAMENTO, ehColunaDoOrcamento, valorDaColunaDoOrcamento, compararValores } from '../utils/colunasDoOrcamento';
 import { situacaoDePrazo, ordemDoPrazo, diasPorExtenso, agruparPlanejamentos, OPCOES_AGRUPAR_PLANEJAMENTO, type CampoAgruparPlanejamento, type ChaveSituacaoPrazo } from '../utils/planejamentoGrupos';
 
 interface ProjectSettings {
@@ -108,6 +111,9 @@ interface ProjectListProps {
 const COLUMNS: ColumnConfig[] = [
     { key: 'code',          label: 'Código',      sortable: true },
     { key: 'name',          label: 'Nome',        sortable: true },
+    // Só no contexto Orçamento (utils/colunasDoOrcamento.ts; fora dele ficam em columnsWithoutData).
+    // Logo depois do nome: é o número que se procura, e no fim só aparecia rolando a tabela.
+    { key: 'valor-total',   label: 'Valor total', sortable: true },
     { key: 'tipo-obra',     label: 'Tipo de Obra', sortable: true },
     { key: 'organization',  label: 'Organização', sortable: true },
     // Empreendimento (Incorporação) ao qual a obra está vinculada — via
@@ -122,6 +128,15 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'status-budget', label: 'Status',      sortable: true },
     { key: 'status-obra',   label: 'Status Obra', sortable: true },
     { key: 'lock',          label: 'Pedidos',     sortable: true },
+    // Cadastro do orçamento, também só no contexto Orçamento: entra escondido e se liga no
+    // "Colunas visíveis" (Valor total, acima, entra visível).
+    { key: 'base-preco',      label: 'Base de preço',  sortable: true, defaultHidden: true },
+    { key: 'bdi',              label: 'BDI',            sortable: true, defaultHidden: true },
+    { key: 'area',             label: 'Área',           sortable: true, defaultHidden: true },
+    { key: 'padrao',           label: 'Padrão',         sortable: true, defaultHidden: true },
+    { key: 'local',            label: 'Local',          sortable: true, defaultHidden: true },
+    { key: 'previsto-inicio',  label: 'Início previsto', sortable: true, defaultHidden: true },
+    { key: 'previsto-termino', label: 'Término previsto', sortable: true, defaultHidden: true },
     { key: 'actions',       label: 'Ações',       sortable: false }
 ];
 
@@ -138,7 +153,10 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
 // leva só lápis + duplicar + ⋮ (3 × ~30px, gap-1.5, px-6). Só o PADRÃO muda; largura que o
 // usuário arrastou continua valendo (useResizableColumns grava só as redimensionadas).
 // Status: "Em andamento" + px-6 não cabia em 130px e quebrava em duas linhas (crítica 2026-11-14).
-const DEFAULT_COL_WIDTHS_ORCAMENTO: Record<string, number> = { ...DEFAULT_COL_WIDTHS, actions: 152, 'status-budget': 150 };
+const DEFAULT_COL_WIDTHS_ORCAMENTO: Record<string, number> = {
+    ...DEFAULT_COL_WIDTHS, actions: 152, 'status-budget': 150,
+    'valor-total': 170, 'base-preco': 160, bdi: 100, area: 120, padrao: 120, local: 160, 'previsto-inicio': 150, 'previsto-termino': 160,
+};
 
 /** Colunas de Planejamento (crítica 2026-11-14, item 3 de docs/planos/2026-11-14-planejamento-
  *  lista-critica.md): forma de CRONOGRAMA, não de orçamento. Saem Status (budgetStatus), Status
@@ -359,6 +377,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
         const id = (p as { organization_id?: string | null }).organization_id || p.settings?.organizationId;
         return organizacoesDoStore.find(o => o.id === id)?.name ?? null;
     };
+    /** Coluna Organização: o store (todas as orgs do usuário) e, de reserva, a prop `organizations`. */
+    const organizacaoDaLinha = (p: ProjectSummary) =>
+        nomeDaOrganizacao(p) ?? organizations.find(o => o.id === p.settings?.organizationId)?.name ?? null;
     const recarregarProjetosDoStore = useStore(s => s.fetchProjects);
     const [viewMode, setViewMode] = usePersistedState<'list' | 'grid'>('projectListFilters:viewMode', 'list');
     const [activeTab, setActiveTab] = React.useState<'budgets' | 'templates'>(
@@ -399,12 +420,16 @@ const ProjectList: React.FC<ProjectListProps> = ({
     //   volta sozinha, sem precisar mexer aqui.
     // - empreendimento: o mapa de empreendimentoService é indexado pelo project_id da OBRA,
     //   nunca bate com o id de um Orçamento/Planejamento.
+    // - organization: no Orçamento o nome vem do store (organizacaoDaLinha); nos outros
+    //   contextos segue dependendo da prop, como antes.
+    // - colunas do Orçamento (Valor total, Base de preço, BDI…): só existem lá.
     const columnsWithoutData = React.useMemo(() => {
         const hidden = new Set<string>();
-        if (organizations.length === 0) hidden.add('organization');
+        if (organizations.length === 0 && !isOrcamentoContext) hidden.add('organization');
         if (!isObraContext && !isDiarioContext) hidden.add('empreendimento');
+        if (!isOrcamentoContext) for (const k of COLUNAS_DO_ORCAMENTO) hidden.add(k);
         return hidden;
-    }, [organizations.length, isObraContext, isDiarioContext]);
+    }, [organizations.length, isObraContext, isDiarioContext, isOrcamentoContext]);
 
     const colunasDoContexto = isPlanejamentoContext ? COLUMNS_PLANEJAMENTO : COLUMNS;
     const contextColumns = colunasDoContexto.filter(c => !columnsWithoutData.has(c.key));
@@ -434,6 +459,20 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // Indicadores de prazo de cada planejamento (cards, colunas e ordenação de Planejamento) —
     // busca leve do orçamento + conta da Central de Comando. Inativo nos outros contextos.
     const indicadoresPlan = useIndicadoresDosPlanejamentos(tabProjects, isPlanejamentoContext);
+    // Valor total dos orçamentos: mesma conta do KPI "Preço Final" do Analítico. Busca os itens
+    // só com a coluna visível (a lista não traz `projects.budget`).
+    const valorTotalAtivo = isOrcamentoContext && tableColumns.visibleColumns.includes('valor-total');
+    const idsDaAba = React.useMemo(() => tabProjects.map(p => p.id), [tabProjects]);
+    const itensDosOrcamentos = useOrcamentosDaLista(idsDaAba, valorTotalAtivo);
+    const valorTotalPorProjeto = React.useMemo(() => {
+        const mapa: Record<string, number> = {};
+        if (itensDosOrcamentos.estado !== 'pronto') return mapa;
+        for (const p of tabProjects) {
+            const itens = itensDosOrcamentos.orcamentos[p.id];
+            if (itens) mapa[p.id] = precoFinalDoOrcamento(itens as Parameters<typeof precoFinalDoOrcamento>[0], p.settings?.bdi);
+        }
+        return mapa;
+    }, [tabProjects, itensDosOrcamentos.orcamentos, itensDosOrcamentos.estado]);
     // Opções do Cliente dependem das linhas carregadas → campos em useMemo (§5.5).
     const advancedFields = React.useMemo(
         () => buildAdvancedFilterFields(distinctOptions(tabProjects, p => getClientCellValue(p, projects, activeTab)), !!isDiaryContext),
@@ -460,7 +499,11 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // colgroup/thead/tbody. As 2 colunas extras do contexto Diário (obra-vinculada,
     // planejamento-vinculada) não fazem parte de COLUMNS (não são configuráveis/arrastáveis)
     // — entram sempre logo após 'linked', igual à posição fixa que já tinham antes.
-    const orderedVisible = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions' && !columnsWithoutData.has(key));
+    // Só colunas que ESTA tela define: a preferência gravada pode trazer chave de outra (até
+    // 21/11/2026 as do Planejamento vazavam para a chave dos Orçamentos) — coluna que o
+    // "Colunas visíveis" não lista não pode aparecer, senão não há como desligá-la.
+    const chavesDaTela = new Set(colunasDoContexto.map(c => c.key));
+    const orderedVisible = tableColumns.orderedVisibleColumns.filter(key => key !== 'actions' && chavesDaTela.has(key) && !columnsWithoutData.has(key));
     const displayColumns = isDiaryContext
         ? (() => {
             const idx = orderedVisible.indexOf('linked');
@@ -536,12 +579,33 @@ const ProjectList: React.FC<ProjectListProps> = ({
         prazo: { label: 'Prazo', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
         termino: { label: 'Término', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
         inicio: { label: 'Início', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+        ...Object.fromEntries(COLUNAS_DO_ORCAMENTO.map(k => [k, {
+            label: COLUMNS.find(c => c.key === k)?.label ?? k,
+            className: `px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden${COLUNAS_NUMERICAS_DO_ORCAMENTO.has(k) ? ' text-right [&>button]:justify-end' : ''}`,
+        }])),
     };
 
     // Conteúdo de cada <td> por coluna — extraído para função pura (fecha sobre helpers e
     // estado do componente) para que o <tbody> possa mapear `displayColumns` (ordem
     // arrastável) em vez de repetir um bloco condicional fixo por coluna.
     const renderProjectCell = (key: string, project: ProjectSummary): React.ReactNode => {
+        if (ehColunaDoOrcamento(key)) {
+            const alinhamento = COLUNAS_NUMERICAS_DO_ORCAMENTO.has(key) ? 'text-right tabular-nums' : '';
+            if (key === 'valor-total' && valorTotalPorProjeto[project.id] === undefined) {
+                // Enquanto os itens carregam, ou se a busca falhou, a célula diz isso — nunca um R$ 0 inventado (§28.5).
+                const falhou = itensDosOrcamentos.estado === 'erro';
+                return (
+                    <span className={`block text-sm font-normal text-gray-500 ${alinhamento}`}
+                        title={falhou ? 'Não foi possível carregar os itens deste orçamento' : 'Calculando pelos itens do orçamento'}>
+                        {falhou ? '—' : '…'}
+                    </span>
+                );
+            }
+            const { texto } = valorDaColunaDoOrcamento(key, project.settings, valorTotalPorProjeto[project.id]);
+            return texto === null
+                ? <span className={`block text-sm font-normal text-gray-500 ${alinhamento}`}>—</span>
+                : <span className={`block truncate whitespace-nowrap text-sm font-normal text-gray-700 ${alinhamento}`} title={texto}>{texto}</span>;
+        }
         switch (key) {
             case 'code':
                 return <div className="text-center text-sm font-normal text-gray-700">{project.code || project.settings?.code || '—'}</div>;
@@ -565,9 +629,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <span className="text-sm text-gray-500 font-normal italic">-</span>
                 );
             case 'organization': {
-                const orgId = project.settings?.organizationId;
-                const org = organizations.find(o => o.id === orgId);
-                return <span className="text-sm font-normal text-gray-700">{org ? org.name : <span className="text-gray-500 italic">—</span>}</span>;
+                const nomeDaOrg = organizacaoDaLinha(project);
+                return nomeDaOrg
+                    ? <span className="block truncate text-sm font-normal text-gray-700" title={nomeDaOrg}>{nomeDaOrg}</span>
+                    : <span className="text-sm font-normal text-gray-500 italic">—</span>;
             }
             case 'empreendimento': {
                 const emp = empreendimentoByProject[project.id];
@@ -990,10 +1055,24 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             return sortDirection === 'asc' ? tipoA.localeCompare(tipoB) : tipoB.localeCompare(tipoA);
                         }
                         case 'organization': {
-                            const orgA = organizations.find(o => o.id === a.settings?.organizationId)?.name || '';
-                            const orgB = organizations.find(o => o.id === b.settings?.organizationId)?.name || '';
+                            const orgA = organizacaoDaLinha(a) || '';
+                            const orgB = organizacaoDaLinha(b) || '';
                             return sortDirection === 'asc' ? orgA.localeCompare(orgB) : orgB.localeCompare(orgA);
                         }
+                        case 'valor-total':
+                        case 'base-preco':
+                        case 'bdi':
+                        case 'area':
+                        case 'padrao':
+                        case 'local':
+                        case 'previsto-inicio':
+                        case 'previsto-termino':
+                            // Pelo mesmo valor que a célula mostra; sem dado vai para o fim.
+                            return compararValores(
+                                valorDaColunaDoOrcamento(sortColumn, a.settings, valorTotalPorProjeto[a.id]).ordem,
+                                valorDaColunaDoOrcamento(sortColumn, b.settings, valorTotalPorProjeto[b.id]).ordem,
+                                sortDirection,
+                            );
                         case 'empreendimento': {
                             const empA = empreendimentoByProject[a.id]?.name || '';
                             const empB = empreendimentoByProject[b.id]?.name || '';
@@ -1045,7 +1124,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }
                 return new Date(b.updated_at || b.created_at || 0).getTime() - new Date(a.updated_at || a.created_at || 0).getTime();
             });
-    }, [tabProjects, projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, advancedFields, isDiaryContext, organizations, orderCounts, empreendimentoByProject, indicadoresPlan.porProjeto]);
+    }, [tabProjects, projects, searchTerm, tipoFilter, activeTab, classificationFilter, sortColumn, sortDirection, advancedFilters.rules, advancedFields, isDiaryContext, organizations, organizacoesDoStore, orderCounts, empreendimentoByProject, indicadoresPlan.porProjeto, valorTotalPorProjeto]);
 
     const stats = React.useMemo(() => {
         const total = filteredProjects.length;

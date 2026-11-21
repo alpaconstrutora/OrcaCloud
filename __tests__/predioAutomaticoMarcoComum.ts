@@ -1,4 +1,10 @@
 /**
+ * DIVIDIDO POR PRÉDIO (20/11/2026): este módulo tem os casos e a conta; cada prédio é um arquivo de teste próprio
+ * (`predioAutomaticoMarcoR4.test.ts` … `RL`), com o marco gravado em `fixtures/predioAutomaticoMarco/<prédio>.json`. Num
+ * arquivo só, os 4 rodavam em fila — 24,6 min na CI, o caminho crítico de todo PR (ver
+ * `docs/planos/2026-11-20-ci-testes-pesados-so-quando-preciso.md`). Um JSON por prédio porque os 4 arquivos regravam em
+ * paralelo com `GRAVAR_MARCO_PREDIO=1`: num JSON único, um sobrescreveria o outro.
+ *
  * O MARCO DOS PRÉDIOS DE REFERÊNCIA (PA0 do plano docs/planos/2026-11-12-predio-automatico.md, 12/11/2026). O prédio
  * automático cresce fase a fase sobre o que a massa já faz; este marco grava, por prédio, o hash do que é gerado e as
  * contagens, para cada fase dizer EXATAMENTE o que mudou (toda regravação é justificada no PR — `GRAVAR_MARCO_PREDIO=1`).
@@ -31,7 +37,6 @@ import { divisasDoLote, medirTerreno, RECUOS_ZERO } from '../utils/blueprintTerr
 import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../utils/blueprintMassa';
 import { distribuirProduto, produtoSemente } from '../utils/blueprintProduto';
 
-const FIXTURE = new URL('./fixtures/predioAutomaticoMarco.json', import.meta.url);
 const GRAVAR = process.env.GRAVAR_MARCO_PREDIO === '1';
 const MEDIO = produtoSemente('RESIDENCIAL_MEDIO');
 /** PA5b: o catálogo semente e o clima do marco da casa — a climatização das unidades entra no marco. */
@@ -189,20 +194,24 @@ function marcoDoPredio(c: Caso) {
   };
 }
 
-describe('marco dos prédios de referência (prédio automático)', () => {
-  const gravado: Record<string, ReturnType<typeof marcoDoPredio>> = existsSync(FIXTURE) ? JSON.parse(readFileSync(FIXTURE, 'utf8')) : {};
-  for (const [nome, caso] of Object.entries(CASOS)) {
+/**
+ * Define o teste do marco de UM prédio de referência. Chamado por `predioAutomaticoMarco<prédio>.test.ts` — um arquivo
+ * por prédio, para a CI rodá-los em paralelo.
+ */
+export function testarMarcoDoPredio(nome: string): void {
+  const caso = CASOS[nome];
+  const fixture = new URL(`./fixtures/predioAutomaticoMarco/${nome}.json`, import.meta.url);
+  describe('marco dos prédios de referência (prédio automático)', () => {
     it(
       nome,
       () => {
         const agora = marcoDoPredio(caso);
         if (GRAVAR) {
-          const atual = existsSync(FIXTURE) ? JSON.parse(readFileSync(FIXTURE, 'utf8')) : {};
-          writeFileSync(FIXTURE, JSON.stringify({ ...atual, [nome]: agora }, null, 2) + '\n');
+          writeFileSync(fixture, JSON.stringify(agora, null, 2) + '\n');
           return;
         }
-        expect(gravado[nome], `sem marco gravado para ${nome} — grave com GRAVAR_MARCO_PREDIO=1`).toBeDefined();
-        expect(agora).toEqual(gravado[nome]);
+        expect(existsSync(fixture), `sem marco gravado para ${nome} — grave com GRAVAR_MARCO_PREDIO=1`).toBe(true);
+        expect(agora).toEqual(JSON.parse(readFileSync(fixture, 'utf8')));
         // PA6, "pronto quando": o R12 pede VRP (a estática passa de 400 kPa embaixo); em nenhum prédio fica ponto sem pressão.
         expect(agora.agua?.vrp).toBe(nome === 'R12');
         expect(agora.agua?.insuficientes).toBe(0);
@@ -280,5 +289,5 @@ describe('marco dos prédios de referência (prédio automático)', () => {
       },
       1_200_000,
     );
-  }
-});
+  });
+}

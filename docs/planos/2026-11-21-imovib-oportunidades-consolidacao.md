@@ -54,8 +54,10 @@ Escolhas padrão que tomo no plano (podem ser trocadas na aprovação):
 
 ## Estado (atualizar a cada fase)
 
-**Fase 1: 5 de 5 itens feitos na frente `imovib-oport-f1`** — código e testes prontos; falta aplicar as
-migrations (com OK) e publicar a Edge Function `read-matricula` antes do merge.
+**Fase 1: 5 de 5 itens feitos na frente `imovib-oport-f1`.** Migrations 950000–954000 APLICADAS em 21/11 (OK do
+usuário), conferidas no banco (colunas, tabelas novas, antigas apagadas, gatilho, grants; função do gatilho sem
+EXECUTE para anon/authenticated). Prova SQL do comitê (transação desfeita): aprovar sem versão → recusado; com
+versão → quem/quando gravados; voltar a pendente limpa. Edge Function `read-matricula` PUBLICADA (sem login → 401).
 
 - 1.1 ✅ `aplicar_20271121950000_imovib_riscos_completos.sql`; rótulos e faixa única em `constants/imovibRiscos.ts`
   (faixa = a do módulo Riscos, `utils/riskScoring.ts`). O recorte do investidor para riscos NÃO mudou (os campos

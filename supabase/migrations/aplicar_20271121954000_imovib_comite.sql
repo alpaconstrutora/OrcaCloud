@@ -108,7 +108,8 @@ BEGIN
 END;
 $function$;
 
-REVOKE EXECUTE ON FUNCTION public.fn_imovib_comite_preparar() FROM PUBLIC;
+-- Os default privileges do banco dão EXECUTE explícito a anon e authenticated: o FROM PUBLIC não tira.
+REVOKE EXECUTE ON FUNCTION public.fn_imovib_comite_preparar() FROM PUBLIC, anon, authenticated;
 
 DROP TRIGGER IF EXISTS trg_imovib_comite_preparar ON public.imovib_committee_decisions;
 CREATE TRIGGER trg_imovib_comite_preparar

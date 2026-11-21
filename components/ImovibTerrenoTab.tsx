@@ -7,6 +7,7 @@ import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { nomeDoMes } from '../utils/imovibCronograma';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import ImovibDueDiligenceCard from './ImovibDueDiligenceCard';
+import ImovibModelosDeAquisicaoCard from './ImovibModelosDeAquisicaoCard';
 
 interface ImovibTerrenoTabProps {
     study: ImovibStudy;
@@ -21,7 +22,8 @@ const CAMPO = 'h-9 w-full px-3 bg-white border border-gray-200 rounded-[6px] tex
 /**
  * Sub-aba Terreno de Premissas (itens 5.2 e 5.9 do plano
  * docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md): custo do terreno
- * (saiu do CAPEX), parcelas de pagamento e due diligence.
+ * (saiu do CAPEX), parcelas de pagamento, modelos de aquisição (plano 2026-11-21, item 1.4)
+ * e due diligence.
  */
 const ImovibTerrenoTab: React.FC<ImovibTerrenoTabProps> = ({ study, formData, setCampo }) => {
     const { pode, motivo } = useImovibEdicao();
@@ -107,6 +109,8 @@ const ImovibTerrenoTab: React.FC<ImovibTerrenoTabProps> = ({ study, formData, se
                     </div>
                 </fieldset>
             </div>
+
+            <ImovibModelosDeAquisicaoCard study={study} estudo={estudo} setCampo={setCampo} />
 
             <ImovibDueDiligenceCard study={study} />
         </div>

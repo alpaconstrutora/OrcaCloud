@@ -17,10 +17,6 @@ import LinkedProjectPanel from './LinkedProjectPanel';
 import DataRoomPanel from './DataRoomPanel';
 import { comNumerosDaVersao } from '../../utils/oportunidadeNumerosDaVersao';
 import OpportunityPhotosPanel from './OpportunityPhotosPanel';
-import DueDiligencePanel from './DueDiligencePanel';
-import RiskMatrixPanel from './RiskMatrixPanel';
-import LandDealComparatorPanel from './LandDealComparatorPanel';
-import CommitteeGatePanel from './CommitteeGatePanel';
 import { fmtBRL, fmtPct, fmtM2 } from '../../utils/format';
 import { imovibService } from '../../services/imovibService';
 import { useImovibMath } from '../../hooks/useImovibMath';
@@ -54,7 +50,9 @@ interface Props {
 
 const ROLES: InterestRole[] = ['investidor', 'arquiteto', 'engenheiro', 'projetista', 'consultor', 'outro'];
 
-type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'documentos' | 'interesses' | 'due-diligence' | 'riscos' | 'aquisicao' | 'comite';
+// Due diligence, riscos, modelos de aquisição e comitê saíram para o estudo do Imovib
+// (plano docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md, Fase 1).
+type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'documentos' | 'interesses';
 type FormStep = 'view' | 'form' | 'success';
 
 const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdmin = false, uploadedBy, investorProfile, portalToken, onClose }) => {
@@ -219,10 +217,6 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
         ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra' }] : []),
         { id: 'documentos', label: 'Data Room' },
         { id: 'interesses', label: interests.length > 0 ? `Interesses (${interests.length})` : 'Interesses' },
-        { id: 'due-diligence', label: 'Due Diligence' },
-        { id: 'riscos', label: 'Riscos' },
-        { id: 'aquisicao', label: 'Modelos de Aquisição' },
-        { id: 'comite', label: 'Comitê & Gates' },
     ];
     const PUBLIC_TABS: { id: PitchTab; label: string }[] = [
         { id: 'pitch', label: 'Detalhes' },
@@ -446,6 +440,12 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                 {/* ── ABA: Detalhes ── */}
                                 {pitchTab === 'pitch' && (
                                     <div className="space-y-8">
+                                        {isAdmin && !portalToken && (
+                                            <p className="rounded-[10px] bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-600">
+                                                Due diligence, riscos, modelos de aquisição e comitê ficam no estudo de viabilidade
+                                                {study ? <> (<span className="font-medium text-slate-800">{study.name}</span>: abas Premissas › Terreno, Sensibilidade e Risco e Comitê)</> : ': vincule um estudo em Editar'}.
+                                            </p>
+                                        )}
                                         {/* Resumo Executivo / Descrição */}
                                         <div className="bg-gray-50/50 rounded-3xl p-6 border border-gray-100 space-y-3">
                                             <h4 className="text-sm font-black text-gray-900">Apresentação do Empreendimento</h4>
@@ -1015,31 +1015,6 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                     </div>
                                 )}
 
-                                {/* ── ABA: Due Diligence (admin) ── */}
-                                {pitchTab === 'due-diligence' && isAdmin && op.id && (
-                                    <DueDiligencePanel opportunityId={op.id} organizationId={organizationId} userEmail={uploadedBy} />
-                                )}
-
-                                {/* ── ABA: Riscos (admin) ── */}
-                                {pitchTab === 'riscos' && isAdmin && op.id && (
-                                    <RiskMatrixPanel opportunityId={op.id} organizationId={organizationId} />
-                                )}
-
-                                {/* ── ABA: Modelos de Aquisição (admin) ── */}
-                                {pitchTab === 'aquisicao' && isAdmin && op.id && (
-                                    <LandDealComparatorPanel
-                                        opportunityId={op.id}
-                                        organizationId={organizationId}
-                                        vgv={studyMath?.vgvTotal ?? op.vgv}
-                                        baseLandCost={studyMath?.landCost}
-                                        baseMonthlyFlows={studyMath?.monthlyFlows?.map(f => f.net)}
-                                    />
-                                )}
-
-                                {/* ── ABA: Comitê & Gates (admin) ── */}
-                                {pitchTab === 'comite' && isAdmin && op.id && (
-                                    <CommitteeGatePanel opportunity={op} opportunityId={op.id} organizationId={organizationId} userEmail={uploadedBy} />
-                                )}
                             </div>
                         </div>
                     </>

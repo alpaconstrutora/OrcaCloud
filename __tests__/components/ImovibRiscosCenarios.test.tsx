@@ -72,7 +72,7 @@ describe('riscos', () => {
     });
 
     it('quem só lê vê "Ver o risco", não "Editar o risco"', async () => {
-        svc.listarRiscos.mockResolvedValue([{ id: 'r1', study_id: 'estudo-teste', category: 'legal', description: 'Matrícula', probability: 3, impact: 4, status: 'aberto', sort_order: 0 }]);
+        svc.listarRiscos.mockResolvedValue([{ id: 'r1', study_id: 'estudo-teste', category: 'juridico', description: 'Matrícula', probability: 3, impact: 4, status: 'aberto', sort_order: 0 }]);
         render(comEdicao(<ImovibRiscosCard study={estudo} />, false));
         await screen.findByText('Matrícula');
         expect(screen.queryByTitle('Editar o risco')).toBeNull();

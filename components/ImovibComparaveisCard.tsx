@@ -5,7 +5,7 @@ import { imovibService } from '../services/imovibService';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import { useImovibMath } from '../hooks/useImovibMath';
 import { useToast } from '../hooks/useToast';
-import { ImovibComparable, resumoDosComparaveis, posicaoDoPreco } from '../utils/imovibMercado';
+import { ImovibComparable, resumoDosComparaveis, posicaoDoPreco, vsoDoComparavel } from '../utils/imovibMercado';
 import { KpiCard } from './ui/KpiCard';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ActionIconButton from './ui/ActionIconButton';
@@ -37,6 +37,8 @@ const COLUNAS: StandardTableColumn[] = [
     { key: 'unidades', label: 'Vendidas / total', width: 140, align: 'right' },
     { key: 'launch_date', label: 'Lançamento', sortable: true, width: 120 },
     { key: 'distance_km', label: 'Distância', sortable: true, width: 110, align: 'right' },
+    { key: 'vso', label: 'VSO ao mês', width: 110, align: 'right' },
+    { key: 'appreciation_pct', label: 'Valorização ao ano', sortable: true, width: 140, align: 'right' },
 ];
 
 /**
@@ -146,7 +148,7 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
                 loading={carregando}
                 dense
                 bare
-                sortValue={(k, c) => (k === 'price_sqm' ? Number(c.price_sqm) || 0 : k === 'distance_km' ? Number(c.distance_km) || 0 : k === 'launch_date' ? c.launch_date ?? '' : c.name)}
+                sortValue={(k, c) => (k === 'price_sqm' ? Number(c.price_sqm) || 0 : k === 'distance_km' ? Number(c.distance_km) || 0 : k === 'appreciation_pct' ? Number(c.appreciation_pct) || 0 : k === 'launch_date' ? c.launch_date ?? '' : c.name)}
                 onRowClick={c => setEditando(c)}
                 renderCell={(k, c) => {
                     switch (k) {
@@ -155,6 +157,13 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
                         case 'unidades': return <span className="text-sm text-gray-700">{c.sold_units ?? '—'} / {c.total_units ?? '—'}</span>;
                         case 'launch_date': return <span className="text-sm text-gray-700">{c.launch_date ? c.launch_date.slice(0, 7).split('-').reverse().join('/') : '—'}</span>;
                         case 'distance_km': return <span className="text-sm text-gray-700">{c.distance_km != null ? `${Number(c.distance_km).toLocaleString('pt-BR')} km` : '—'}</span>;
+                        case 'vso': {
+                            const v = vsoDoComparavel(c, hojeLocal());
+                            return <span className="text-sm text-gray-700" title={v === 'futuro' ? 'Lança depois de hoje' : v === 'esgotado' ? 'Vendeu todas as unidades' : v == null ? 'Falta total, vendidas ou lançamento' : undefined}>
+                                {typeof v === 'number' ? fmtPct(v) : v === 'esgotado' ? 'esgotado' : v === 'futuro' ? 'a lançar' : '—'}
+                            </span>;
+                        }
+                        case 'appreciation_pct': return <span className="text-sm text-gray-700">{c.appreciation_pct != null ? fmtPct(Number(c.appreciation_pct)) : '—'}</span>;
                         default: return null;
                     }
                 }}
@@ -190,8 +199,8 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
 };
 
 const CAMPO = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500';
-type Formulario = Record<'name' | 'developer' | 'address' | 'distance_km' | 'launch_date' | 'total_units' | 'sold_units' | 'typical_area' | 'price_sqm' | 'ticket' | 'source' | 'collected_at' | 'notes', string>;
-const VAZIO: Formulario = { name: '', developer: '', address: '', distance_km: '', launch_date: '', total_units: '', sold_units: '', typical_area: '', price_sqm: '', ticket: '', source: '', collected_at: '', notes: '' };
+type Formulario = Record<'name' | 'developer' | 'address' | 'distance_km' | 'launch_date' | 'total_units' | 'sold_units' | 'typical_area' | 'price_sqm' | 'ticket' | 'appreciation_pct' | 'source' | 'collected_at' | 'notes', string>;
+const VAZIO: Formulario = { name: '', developer: '', address: '', distance_km: '', launch_date: '', total_units: '', sold_units: '', typical_area: '', price_sqm: '', ticket: '', appreciation_pct: '', source: '', collected_at: '', notes: '' };
 const doRegistro = (c: ImovibComparable): Formulario => Object.fromEntries(
     (Object.keys(VAZIO) as (keyof Formulario)[]).map(k => [k, c[k] == null ? '' : String(c[k])]),
 ) as Formulario;
@@ -223,9 +232,11 @@ function ComparavelSheet({ comparavel, study, proximaOrdem, onClose, onSalvo }: 
     const vendidas = num(form.sold_units);
     const invalido = (Object.entries({ distance_km: form.distance_km, total_units: form.total_units, sold_units: form.sold_units, typical_area: form.typical_area, price_sqm: form.price_sqm, ticket: form.ticket }) as [string, string][])
         .some(([, v]) => v.trim() !== '' && !(Number(v) >= 0));
+    const valorizacaoInvalida = form.appreciation_pct.trim() !== '' && !Number.isFinite(Number(form.appreciation_pct));
     const motivo = !pode ? motivoRo
         : !form.name.trim() ? 'Dê o nome do empreendimento.'
             : invalido ? 'Números não podem ser negativos.'
+            : valorizacaoInvalida ? 'Valorização precisa ser um número (pode ser negativa).'
                 : (total != null && !Number.isInteger(total)) || (vendidas != null && !Number.isInteger(vendidas)) ? 'Unidades são números inteiros.'
                 : total != null && vendidas != null && vendidas > total ? 'Vendidas não pode passar do total.'
                     : !mudou ? 'Nada foi alterado.' : undefined;
@@ -245,6 +256,7 @@ function ComparavelSheet({ comparavel, study, proximaOrdem, onClose, onSalvo }: 
                 launch_date: texto(form.launch_date), collected_at: texto(form.collected_at),
                 distance_km: num(form.distance_km), total_units: total, sold_units: vendidas,
                 typical_area: num(form.typical_area), price_sqm: num(form.price_sqm), ticket: num(form.ticket),
+                appreciation_pct: num(form.appreciation_pct),
                 sort_order: novo ? proximaOrdem : comparavel.sort_order ?? 0,
             });
             setMudou(false);
@@ -282,6 +294,7 @@ function ComparavelSheet({ comparavel, study, proximaOrdem, onClose, onSalvo }: 
                         {campo('Distância (km)', 'distance_km', { type: 'number', min: 0, step: 0.1 })}
                         {campo('Preço/m² (R$)', 'price_sqm', { type: 'number', min: 0, step: 1 })}
                         {campo('Tíquete médio (R$)', 'ticket', { type: 'number', min: 0, step: 1000 })}
+                        {campo('Valorização ao ano (%)', 'appreciation_pct', { type: 'number', step: 0.1 })}
                         {campo('Unidades totais', 'total_units', { type: 'number', min: 0, step: 1 })}
                         {campo('Unidades vendidas', 'sold_units', { type: 'number', min: 0, step: 1 })}
                         {campo('Área típica (m²)', 'typical_area', { type: 'number', min: 0, step: 1 })}

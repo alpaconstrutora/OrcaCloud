@@ -23,7 +23,7 @@ const snapshot = () => ({
     relatorio: {
         socios: [{ id: 's1', study_id: 'e', name: 'Sócio A', share_percent: 60, capital_percent: 60, sort_order: 0, notes: 'nota interna', company_partner_id: 'cp1' }],
         comparaveis: [{ id: 'm1', study_id: 'e', name: 'Vizinho', price_sqm: 9500, sold_units: 10, total_units: 40, launch_date: '2026-01-01', distance_km: 1.2, notes: 'corretor disse', source: 'WhatsApp' }],
-        riscos: [{ id: 'r1', study_id: 'e', category: 'legal', description: 'Ônus', probability: 3, impact: 4, mitigation: 'Baixa', status: 'aberto', sort_order: 0, owner: 'Fulano' }],
+        riscos: [{ id: 'r1', study_id: 'e', category: 'juridico', description: 'Ônus', probability: 3, impact: 4, mitigation: 'Baixa', status: 'aberto', sort_order: 0, owner: 'Fulano' }],
         dueDiligence: [{ id: 'd1', study_id: 'e', item_key: 'matricula', label: 'Matrícula', status: 'ok', notes: 'Conferida', sort_order: 0, checked_by: 'u1', checked_at: '2026-11-10' }],
     },
 }) as never;

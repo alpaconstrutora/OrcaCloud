@@ -9,21 +9,12 @@ import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import { MatrizCalor } from './riscos/MatrizCalor';
+import { ROTULO_DA_CATEGORIA, ROTULO_DA_SITUACAO, ROTULO_DA_TENDENCIA, rotuloDaCategoria, rotuloDaSituacao, severidade, corDaSeveridade } from '../constants/imovibRiscos';
 
 interface ImovibRiscosCardProps {
     study: ImovibStudy;
 }
 
-export const ROTULO_DA_CATEGORIA: Record<ImovibRisk['category'], string> = {
-    legal: 'Legal', mercado: 'Mercado', construcao: 'Construção', financeiro: 'Financeiro', ambiental: 'Ambiental', outro: 'Outro',
-};
-export const ROTULO_DA_SITUACAO: Record<ImovibRisk['status'], string> = {
-    aberto: 'Aberto', mitigado: 'Mitigado', aceito: 'Aceito', encerrado: 'Encerrado',
-};
-
-/** Severidade = probabilidade × impacto (1 a 25). */
-export const severidade = (r: Pick<ImovibRisk, 'probability' | 'impact'>) => r.probability * r.impact;
-const corDaSeveridade = (s: number) => (s >= 15 ? 'bg-red-100 text-red-800' : s >= 8 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-50 text-emerald-800');
 
 const COLUNAS: StandardTableColumn[] = [
     { key: 'category', label: 'Categoria', sortable: true, width: 130 },
@@ -103,18 +94,18 @@ const ImovibRiscosCard: React.FC<ImovibRiscosCardProps> = ({ study }) => {
                     rowKey={r => r.id}
                     loading={carregando}
                     dense
-                    searchText={r => `${r.description} ${r.owner ?? ''} ${ROTULO_DA_CATEGORIA[r.category]}`}
+                    searchText={r => `${r.description} ${r.owner ?? ''} ${rotuloDaCategoria(r.category)}`}
                     searchPlaceholder="Buscar risco..."
                     defaultSort={{ column: 'severity', direction: 'desc' }}
                     bare
-                    sortValue={(k, r) => (k === 'severity' ? severidade(r) : k === 'category' ? ROTULO_DA_CATEGORIA[r.category] : k === 'status' ? ROTULO_DA_SITUACAO[r.status] : k === 'owner' ? r.owner ?? '' : r.description)}
+                    sortValue={(k, r) => (k === 'severity' ? severidade(r) : k === 'category' ? rotuloDaCategoria(r.category) : k === 'status' ? rotuloDaSituacao(r.status) : k === 'owner' ? r.owner ?? '' : r.description)}
                     onRowClick={r => setEditando(r)}
                     renderCell={(k, r) => {
                         switch (k) {
-                            case 'category': return <span className="text-sm text-gray-700">{ROTULO_DA_CATEGORIA[r.category]}</span>;
+                            case 'category': return <span className="text-sm text-gray-700">{rotuloDaCategoria(r.category)}</span>;
                             case 'description': return <span className="block text-sm text-gray-700 whitespace-normal">{r.description}</span>;
                             case 'severity': return <span className={`inline-block text-xs font-semibold rounded-[6px] px-2 py-0.5 ${corDaSeveridade(severidade(r))}`} title={`Probabilidade ${r.probability} × impacto ${r.impact}`}>{severidade(r)}</span>;
-                            case 'status': return <span className="text-sm text-gray-700">{ROTULO_DA_SITUACAO[r.status]}</span>;
+                            case 'status': return <span className="text-sm text-gray-700">{rotuloDaSituacao(r.status)}</span>;
                             case 'owner': return <span className="text-sm text-gray-600">{r.owner || '—'}</span>;
                             default: return null;
                         }
@@ -166,6 +157,13 @@ const ImovibRiscosCard: React.FC<ImovibRiscosCardProps> = ({ study }) => {
     );
 };
 
+type FormDoRisco = Omit<ImovibRisk, 'id' | 'study_id' | 'sort_order' | 'created_at'>;
+const FORM_VAZIO: FormDoRisco = {
+    category: 'outro', description: '', causa: '', consequencia: '', probability: 3, impact: 3, tendencia: null,
+    mitigation: '', contingencia: '', owner: '', prazo: '', status: 'aberto',
+};
+const AREA = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none';
+
 const CAMPO = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500';
 
 function RiscoSheet({ risco, study, proximaOrdem, onClose, onSalvo }: {
@@ -176,9 +174,7 @@ function RiscoSheet({ risco, study, proximaOrdem, onClose, onSalvo }: {
     onSalvo: (r: ImovibRisk, criado: boolean) => void;
 }) {
     const { pode, motivo: motivoRo } = useImovibEdicao();
-    const [form, setForm] = useState<Omit<ImovibRisk, 'id' | 'study_id' | 'sort_order' | 'created_at'>>({
-        category: 'outro', description: '', probability: 3, impact: 3, mitigation: '', owner: '', status: 'aberto',
-    });
+    const [form, setForm] = useState<FormDoRisco>(FORM_VAZIO);
     const [salvando, setSalvando] = useState(false);
     const [erro, setErro] = useState<string | null>(null);
     const [mudou, setMudou] = useState(false);
@@ -186,8 +182,13 @@ function RiscoSheet({ risco, study, proximaOrdem, onClose, onSalvo }: {
     useEffect(() => {
         if (!risco) return;
         setForm(risco === 'novo'
-            ? { category: 'outro', description: '', probability: 3, impact: 3, mitigation: '', owner: '', status: 'aberto' }
-            : { category: risco.category, description: risco.description, probability: risco.probability, impact: risco.impact, mitigation: risco.mitigation ?? '', owner: risco.owner ?? '', status: risco.status });
+            ? FORM_VAZIO
+            : {
+                category: risco.category, description: risco.description, causa: risco.causa ?? '', consequencia: risco.consequencia ?? '',
+                probability: risco.probability, impact: risco.impact, tendencia: risco.tendencia ?? null,
+                mitigation: risco.mitigation ?? '', contingencia: risco.contingencia ?? '', owner: risco.owner ?? '', prazo: risco.prazo ?? '',
+                status: risco.status,
+            });
         setErro(null);
         setMudou(false);
     }, [risco]);
@@ -207,8 +208,12 @@ function RiscoSheet({ risco, study, proximaOrdem, onClose, onSalvo }: {
                 study_id: study.id,
                 ...form,
                 description: form.description.trim(),
+                causa: form.causa?.trim() || null,
+                consequencia: form.consequencia?.trim() || null,
                 mitigation: form.mitigation?.trim() || null,
+                contingencia: form.contingencia?.trim() || null,
                 owner: form.owner?.trim() || null,
+                prazo: form.prazo || null,
                 sort_order: novo ? proximaOrdem : risco.sort_order,
             });
             setMudou(false);
@@ -236,7 +241,17 @@ function RiscoSheet({ risco, study, proximaOrdem, onClose, onSalvo }: {
                     <div className="space-y-1.5">
                         <label htmlFor="imovib-risco-descricao" className="text-xs font-semibold text-slate-500">Risco</label>
                         <textarea id="imovib-risco-descricao" rows={3} value={form.description} onChange={e => mudar('description', e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none" />
+                            className={AREA} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                        <div className="space-y-1.5">
+                            <label htmlFor="imovib-risco-causa" className="text-xs font-semibold text-slate-500">Causa</label>
+                            <textarea id="imovib-risco-causa" rows={2} value={form.causa ?? ''} onChange={e => mudar('causa', e.target.value)} className={AREA} />
+                        </div>
+                        <div className="space-y-1.5">
+                            <label htmlFor="imovib-risco-consequencia" className="text-xs font-semibold text-slate-500">Consequência</label>
+                            <textarea id="imovib-risco-consequencia" rows={2} value={form.consequencia ?? ''} onChange={e => mudar('consequencia', e.target.value)} className={AREA} />
+                        </div>
                     </div>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                         <div className="space-y-1.5">
@@ -263,11 +278,25 @@ function RiscoSheet({ risco, study, proximaOrdem, onClose, onSalvo }: {
                                 {[1, 2, 3, 4, 5].map(n => <option key={n} value={n}>{n}</option>)}
                             </select>
                         </div>
+                        <div className="space-y-1.5">
+                            <label htmlFor="imovib-risco-tendencia" className="text-xs font-semibold text-slate-500">Tendência</label>
+                            <select id="imovib-risco-tendencia" value={form.tendencia ?? ''} onChange={e => mudar('tendencia', (e.target.value || null) as ImovibRisk['tendencia'])} className={`${CAMPO} cursor-pointer`}>
+                                <option value="">Não informada</option>
+                                {(Object.keys(ROTULO_DA_TENDENCIA) as NonNullable<ImovibRisk['tendencia']>[]).map(t => <option key={t} value={t}>{ROTULO_DA_TENDENCIA[t]}</option>)}
+                            </select>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label htmlFor="imovib-risco-prazo" className="text-xs font-semibold text-slate-500">Prazo da resposta</label>
+                            <input id="imovib-risco-prazo" type="date" value={form.prazo ?? ''} onChange={e => mudar('prazo', e.target.value)} className={CAMPO} />
+                        </div>
                     </div>
                     <div className="space-y-1.5">
                         <label htmlFor="imovib-risco-mitigacao" className="text-xs font-semibold text-slate-500">Mitigação</label>
-                        <textarea id="imovib-risco-mitigacao" rows={3} value={form.mitigation ?? ''} onChange={e => mudar('mitigation', e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 resize-none" />
+                        <textarea id="imovib-risco-mitigacao" rows={3} value={form.mitigation ?? ''} onChange={e => mudar('mitigation', e.target.value)} className={AREA} />
+                    </div>
+                    <div className="space-y-1.5">
+                        <label htmlFor="imovib-risco-contingencia" className="text-xs font-semibold text-slate-500">Contingência (se acontecer)</label>
+                        <textarea id="imovib-risco-contingencia" rows={2} value={form.contingencia ?? ''} onChange={e => mudar('contingencia', e.target.value)} className={AREA} />
                     </div>
                     <div className="space-y-1.5">
                         <label htmlFor="imovib-risco-responsavel" className="text-xs font-semibold text-slate-500">Responsável</label>

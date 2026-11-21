@@ -20,7 +20,7 @@ import { dadosDoRelatorioDaVersao } from '../utils/imovibVersoes';
 import { secoesDoRelatorio } from '../utils/imovibRelatorio';
 import { baseStudy } from './fixtures/imovibEstudos';
 
-const riscos = [{ id: 'r1', study_id: 'estudo-teste', category: 'legal', description: 'Matrícula com ônus', probability: 3, impact: 4, mitigation: 'Baixa do ônus', owner: 'Jurídico', status: 'aberto', sort_order: 0 }];
+const riscos = [{ id: 'r1', study_id: 'estudo-teste', category: 'juridico', description: 'Matrícula com ônus', probability: 3, impact: 4, mitigation: 'Baixa do ônus', owner: 'Jurídico', status: 'aberto', sort_order: 0 }];
 const cenarios = [{ id: 'c1', study_id: 'estudo-teste', name: 'Pessimista', kind: 'pessimista', choques: { preco: -10 }, sort_order: 0 }];
 const dueDiligence = [{ id: 'd1', study_id: 'estudo-teste', item_key: 'matricula', label: 'Matrícula atualizada', status: 'ok', notes: 'Conferida', sort_order: 0 }];
 const comparaveis = [{ id: 'm1', study_id: 'estudo-teste', name: 'Edifício Vizinho', price_sqm: 9_500, private_area: 80, sale_date: '2026-09-01', source: 'Corretor', sort_order: 0 }];

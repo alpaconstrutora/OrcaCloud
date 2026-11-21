@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { ClipboardCheck, Loader2, AlertCircle } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { ClipboardCheck, Loader2, AlertCircle, ScanText } from 'lucide-react';
 import { ImovibStudy, ImovibLandChecklistItem } from '../types';
 import { imovibService } from '../services/imovibService';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import { useToast } from '../hooks/useToast';
 import { IMOVIB_DUE_DILIGENCE } from '../constants/imovibDueDiligence';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
+import { empreendimentoService } from '../services/empreendimentoService';
+import { empreendimentoDocumentosService } from '../services/empreendimentoDocumentosService';
 
 export const ROTULO_DA_SITUACAO_DD: Record<ImovibLandChecklistItem['status'], string> = {
     pendente: 'Pendente', ok: 'Ok', problema: 'Com problema', nao_se_aplica: 'Não se aplica',
@@ -18,11 +20,20 @@ export const resumoDaDueDiligence = (itens: Pick<ImovibLandChecklistItem, 'statu
     problema: itens.filter(i => i.status === 'problema').length,
 });
 
+export const ROTULO_DA_CRITICIDADE: Record<NonNullable<ImovibLandChecklistItem['criticidade']>, string> = {
+    baixa: 'Baixa', media: 'Média', alta: 'Alta', critica: 'Crítica',
+};
+
 const COLUNAS: StandardTableColumn[] = [
-    { key: 'label', label: 'Item', width: 280 },
-    { key: 'status', label: 'Situação', width: 180 },
-    { key: 'notes', label: 'Observação', width: 380 },
+    { key: 'label', label: 'Item', width: 240 },
+    { key: 'status', label: 'Situação', width: 160 },
+    { key: 'criticidade', label: 'Criticidade', width: 130 },
+    { key: 'responsavel', label: 'Responsável', width: 170 },
+    { key: 'prazo', label: 'Prazo', width: 150 },
+    { key: 'notes', label: 'Observação', width: 340 },
 ];
+
+type CampoEditavel = Partial<Pick<ImovibLandChecklistItem, 'status' | 'notes' | 'criticidade' | 'responsavel' | 'prazo'>>;
 
 const CAMPO = 'h-9 w-full px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20';
 
@@ -63,11 +74,13 @@ const ImovibDueDiligenceCard: React.FC<{ study: ImovibStudy }> = ({ study }) => 
     // Erro ao gravar: a observação (campo não controlado) remonta com o valor gravado —
     // sem isso, o texto digitado ficava no campo como se tivesse gravado (pendência da Fase 5).
     const [revisao, setRevisao] = useState<Record<string, number>>({});
-    const salvar = async (item: ImovibLandChecklistItem, campos: Partial<Pick<ImovibLandChecklistItem, 'status' | 'notes'>>) => {
+    const salvar = async (item: ImovibLandChecklistItem, campos: CampoEditavel) => {
         const antes = item;
-        // Só o campo que mudou: a observação não mexe em quem conferiu nem quando.
-        const gravar: Partial<Pick<ImovibLandChecklistItem, 'status' | 'notes'>> = 'notes' in campos
-            ? { notes: campos.notes?.trim() || null }
+        // Só o campo que mudou: texto vazio vira null; só a situação mexe em quem conferiu e quando.
+        const gravar: CampoEditavel = 'notes' in campos ? { notes: campos.notes?.trim() || null }
+            : 'responsavel' in campos ? { responsavel: campos.responsavel?.trim() || null }
+            : 'prazo' in campos ? { prazo: campos.prazo || null }
+            : 'criticidade' in campos ? { criticidade: campos.criticidade }
             : { status: campos.status ?? item.status };
         setItens(prev => prev.map(x => (x.id === item.id ? { ...item, ...gravar } : x)));
         try {
@@ -80,9 +93,40 @@ const ImovibDueDiligenceCard: React.FC<{ study: ImovibStudy }> = ({ study }) => 
         }
     };
 
+    // Leitura da matrícula por IA (item 1.2 do plano 2026-11-21-imovib-oportunidades-consolidacao):
+    // atualiza os itens pela chave e guarda o PDF no checklist legal do empreendimento (GED).
+    const arquivoRef = useRef<HTMLInputElement>(null);
+    const [lendo, setLendo] = useState(false);
+    const empreendimentoId = study.estrutura?.origem === 'empreendimento' ? study.estrutura.empreendimento_id : undefined;
+    const lerMatricula = async (arquivo: File) => {
+        setLendo(true);
+        try {
+            const lido = await imovibService.lerMatricula(study, arquivo, itens);
+            setItens(lido.itens);
+            let ged = '';
+            if (empreendimentoId) {
+                try {
+                    const e = await empreendimentoService.camposDoEmpreendimento(empreendimentoId, ['id', 'project_id', 'organization_id'] as const);
+                    if (e) { await empreendimentoDocumentosService.guardarMatricula(e, arquivo); ged = ' O arquivo foi guardado na Matrícula do empreendimento (aba Documentos).'; }
+                } catch (e) {
+                    ged = ` O arquivo NÃO foi guardado no empreendimento: ${(e as Error).message}`;
+                }
+            } else {
+                ged = ' Estudo sem empreendimento vinculado: o arquivo não foi guardado.';
+            }
+            showToast(`${lido.achados} achado(s) em ${lido.atualizados} item(ns). Revise cada um: a IA não valida juridicamente.${ged}`, 'success');
+        } catch (e) {
+            showToast((e as Error).message, 'error');
+        } finally {
+            setLendo(false);
+            if (arquivoRef.current) arquivoRef.current.value = '';
+        }
+    };
+
     const r = resumoDaDueDiligence(itens);
     const faltam = IMOVIB_DUE_DILIGENCE.length - itens.length;
     const motivoCriar = !pode ? motivo : carregando ? 'Carregando…' : faltam <= 0 ? 'O checklist já tem todos os itens.' : undefined;
+    const motivoLer = !pode ? motivo : carregando ? 'Carregando…' : itens.length === 0 ? 'Crie o checklist antes de ler a matrícula.' : lendo ? 'Lendo a matrícula…' : undefined;
 
     return (
         <section className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm space-y-4" aria-labelledby="imovib-dd-titulo">
@@ -98,6 +142,19 @@ const ImovibDueDiligenceCard: React.FC<{ study: ImovibStudy }> = ({ study }) => 
                             : 'Documentos e verificações antes de comprar o terreno.'}
                     </p>
                 </div>
+                <div className="flex flex-wrap items-center gap-2">
+                <input ref={arquivoRef} type="file" accept="application/pdf,image/*" className="hidden" aria-label="Arquivo da matrícula"
+                    onChange={e => { const f = e.target.files?.[0]; if (f) void lerMatricula(f); }} />
+                <button
+                    type="button"
+                    onClick={() => arquivoRef.current?.click()}
+                    disabled={!!motivoLer}
+                    title={motivoLer ?? 'Lê a matrícula (PDF ou imagem) e pré-preenche os itens; a IA nunca marca "ok".'}
+                    className="flex items-center gap-1.5 h-9 px-3.5 border border-gray-200 bg-white text-slate-700 rounded-[6px] hover:bg-slate-50 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    {lendo ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <ScanText className="w-[15px] h-[15px]" />}
+                    Ler matrícula (IA)
+                </button>
                 {faltam > 0 && (
                     <button
                         type="button"
@@ -110,6 +167,7 @@ const ImovibDueDiligenceCard: React.FC<{ study: ImovibStudy }> = ({ study }) => 
                         {itens.length ? `Completar checklist (${faltam})` : 'Criar checklist'}
                     </button>
                 )}
+                </div>
             </div>
 
             {erro && (
@@ -129,7 +187,46 @@ const ImovibDueDiligenceCard: React.FC<{ study: ImovibStudy }> = ({ study }) => 
                     bare
                     renderCell={(k, i) => {
                         switch (k) {
-                            case 'label': return <span className={`text-sm ${i.status === 'problema' ? 'text-rose-700 font-medium' : 'text-gray-700'}`}>{i.label}</span>;
+                            case 'label': return (
+                                <span className={`text-sm ${i.status === 'problema' ? 'text-rose-700 font-medium' : 'text-gray-700'}`}>
+                                    {i.label}
+                                    {i.ai_extracted && (
+                                        <span className="ml-1.5 text-xs font-medium text-indigo-600"
+                                            title={`Pré-preenchido pela IA${i.ai_confidence != null ? ` (confiança ${Math.round(i.ai_confidence * 100)}%)` : ''}${i.ai_source_excerpt ? `. Trecho: ${i.ai_source_excerpt}` : ''}`}>
+                                            IA
+                                        </span>
+                                    )}
+                                </span>
+                            );
+                            case 'criticidade': return (
+                                <select
+                                    aria-label={`Criticidade de ${i.label}`}
+                                    value={i.criticidade ?? 'media'}
+                                    onChange={e => void salvar(i, { criticidade: e.target.value as NonNullable<ImovibLandChecklistItem['criticidade']> })}
+                                    className={`${CAMPO} cursor-pointer`}
+                                >
+                                    {(Object.keys(ROTULO_DA_CRITICIDADE) as NonNullable<ImovibLandChecklistItem['criticidade']>[]).map(c => <option key={c} value={c}>{ROTULO_DA_CRITICIDADE[c]}</option>)}
+                                </select>
+                            );
+                            case 'responsavel': return (
+                                <input
+                                    key={`${i.id}-r-${revisao[i.id] ?? 0}`}
+                                    aria-label={`Responsável por ${i.label}`}
+                                    defaultValue={i.responsavel ?? ''}
+                                    onBlur={e => { if ((e.target.value.trim() || null) !== (i.responsavel ?? null)) void salvar(i, { responsavel: e.target.value }); }}
+                                    className={CAMPO}
+                                />
+                            );
+                            case 'prazo': return (
+                                <input
+                                    key={`${i.id}-p-${revisao[i.id] ?? 0}`}
+                                    type="date"
+                                    aria-label={`Prazo de ${i.label}`}
+                                    defaultValue={i.prazo ?? ''}
+                                    onBlur={e => { if ((e.target.value || null) !== (i.prazo ?? null)) void salvar(i, { prazo: e.target.value }); }}
+                                    className={CAMPO}
+                                />
+                            );
                             case 'status': return (
                                 <select
                                     aria-label={`Situação de ${i.label}`}

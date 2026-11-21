@@ -38,7 +38,7 @@ describe('riscos e cenários — exclusão confere a RLS', () => {
 describe('riscos e cenários — erro de permissão em português', () => {
     it('salvar risco barrado pela RLS (42501) diz que não tem permissão, sem o texto em inglês', async () => {
         resposta.error = { code: '42501', message: 'new row violates row-level security policy for table "imovib_risks"' };
-        const erro = await imovibService.salvarRisco({ study_id: 'e1', category: 'legal', description: 'x', probability: 1, impact: 1, status: 'aberto', sort_order: 0 } as never).catch(e => e as Error);
+        const erro = await imovibService.salvarRisco({ study_id: 'e1', category: 'juridico', description: 'x', probability: 1, impact: 1, status: 'aberto', sort_order: 0 } as never).catch(e => e as Error);
         expect((erro as Error).message).toBe('Sem permissão para salvar riscos deste estudo.');
     });
 

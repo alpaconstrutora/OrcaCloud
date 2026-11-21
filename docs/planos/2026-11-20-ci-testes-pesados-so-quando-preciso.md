@@ -69,7 +69,7 @@ Sessão: a3f0dd77-d1d3-4a91-9602-d2e35e3b7cf5 · 20/11/2026.
 - [x] 4 — marco dividido, conferido local.
 - [x] 5 — matriz verde na CI do PR. 2ª CI: leves 9,1 min, tsc/travas/build 4,8 min, matriz **pulada por engano** (0 escolhidos, ver item 5).
 - **3ª CI do #603 (run 44856085242, commit 42862a084), a que valeu: 15,5 min no total, contra 44 antes.** `pesados-quais` escolheu os 15 (o PR toca `vite.config.ts` e `ci.yml`), e a matriz rodou 15 jobs com testes de verdade (casa automática 137 testes, cada marco 1). Tempos: casa automática 15 min (o caminho crítico agora), leves 10,2 min (teto: nenhum arquivo acima de 60 s), `predioAutomatico` 7,3, marco RL 6,9 (era 12 dividindo CPU; limite de 20), R12 5,5, BlueprintEditor 4,5, tsc/travas/build 3,2; os demais de 0,7 a 2,3 min. Mesclado como 981f5ac07.
-- [ ] Prova real: o primeiro PR fora da planta depois do merge, com o job de pesados escolhendo 0 arquivos e o tempo total registrado aqui. É o PR desta anotação (só `docs/`).
+- [x] Prova real: o primeiro PR fora da planta depois do merge, com o job de pesados escolhendo 0 arquivos e o tempo total registrado aqui. É o PR desta anotação (#605, só `docs/`), run 44858193493: **9,2 min no total** (antes, 45 min no #598, também só `.md`). O `git diff` listou o `.md` mudado, `pesados-quais` escolheu "0 arquivo(s)" e a matriz foi pulada. Leves 9,1 min, tsc/travas/build 3 min, seleção 0,7 min.
 
 ## O que NÃO muda (limites)
 

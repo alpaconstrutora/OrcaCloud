@@ -65,15 +65,16 @@ Sessão: a3f0dd77-d1d3-4a91-9602-d2e35e3b7cf5 · 20/11/2026.
 
 - [x] 1 — seleção conferida local: nada mudou → 0 pesados; `utils/imovibMotor.ts` → 0; `utils/predioAutomatico/esgoto.ts` → os 8 que o importam; uma fixture → os 12; um teste pesado → só ele.
 - [x] 3 — trava conferida local (os dois caminhos).
-- [ ] 2 — CI do PR com os três jobs verdes, com o tempo de cada um registrado aqui. 1ª CI: leves 10,5 min, tsc/travas/build 4,8 min, pesados 0,5 min **sem rodar nada** (defeito do item 2, corrigido).
+- [x] 2 — CI do PR com os três jobs verdes, com o tempo de cada um registrado aqui. 1ª CI: leves 10,5 min, tsc/travas/build 4,8 min, pesados 0,5 min **sem rodar nada** (defeito do item 2, corrigido).
 - [x] 4 — marco dividido, conferido local.
-- [ ] 5 — matriz verde na CI do PR. 2ª CI: leves 9,1 min, tsc/travas/build 4,8 min, matriz **pulada por engano** (0 escolhidos, ver item 5).
-- [ ] Prova real: o primeiro PR fora da planta depois do merge, com o job de pesados escolhendo 0 arquivos e o tempo total registrado aqui.
+- [x] 5 — matriz verde na CI do PR. 2ª CI: leves 9,1 min, tsc/travas/build 4,8 min, matriz **pulada por engano** (0 escolhidos, ver item 5).
+- **3ª CI do #603 (run 44856085242, commit 42862a084), a que valeu: 15,5 min no total, contra 44 antes.** `pesados-quais` escolheu os 15 (o PR toca `vite.config.ts` e `ci.yml`), e a matriz rodou 15 jobs com testes de verdade (casa automática 137 testes, cada marco 1). Tempos: casa automática 15 min (o caminho crítico agora), leves 10,2 min (teto: nenhum arquivo acima de 60 s), `predioAutomatico` 7,3, marco RL 6,9 (era 12 dividindo CPU; limite de 20), R12 5,5, BlueprintEditor 4,5, tsc/travas/build 3,2; os demais de 0,7 a 2,3 min. Mesclado como 981f5ac07.
+- [ ] Prova real: o primeiro PR fora da planta depois do merge, com o job de pesados escolhendo 0 arquivos e o tempo total registrado aqui. É o PR desta anotação (só `docs/`).
 
 ## O que NÃO muda (limites)
 
 - ~~PR que mexe na planta continua lento~~ → itens 4 e 5 (20/11). Quanto cai, só a CI diz. O mais lento passa a ser `blueprintCasaAutomatica.test.ts` (137 testes num arquivo; 20 min dividindo CPU com os outros). Dividi-lo é outro item, não pedido.
-- **Limite de 20 min por prédio (`1_200_000`):** o RL levava 12 min disputando CPU. Sozinho num runner, deve ficar bem abaixo; o tempo real dele entra aqui depois da CI. O limite continua o mesmo.
+- **Limite de 20 min por prédio (`1_200_000`):** o RL levava 12 min disputando CPU; sozinho num runner, 6,9 min (job inteiro, com `npm ci`). O limite continua o mesmo.
 - `npx vitest run` local continua rodando tudo, e `publicar-producao.sh` também.
 
 ## Verificação

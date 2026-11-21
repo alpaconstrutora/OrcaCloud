@@ -223,9 +223,14 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, modo = 'pa
   }, [editing?.id, escondeAlgum]); // eslint-disable-line react-hooks/exhaustive-deps
   const avisoDoObjetivo = (() => {
     if (!publicadas) return null;
-    if (!espelhos.locacoes && publicadas.locacoes > 0) return `${publicadas.locacoes} unidade(s) seguem publicadas em Locações; a aba Espelho de Locações fica oculta.`;
-    if (!espelhos.vendas && publicadas.vendas > 0) return `${publicadas.vendas} unidade(s) seguem publicadas em Vendas; a aba Espelho de Vendas fica oculta.`;
-    return null;
+    // Serviço esconde os dois espelhos: o aviso junta as duas contagens numa frase só.
+    const partes = [
+      !espelhos.vendas && publicadas.vendas > 0 ? { n: publicadas.vendas, onde: 'Vendas' } : null,
+      !espelhos.locacoes && publicadas.locacoes > 0 ? { n: publicadas.locacoes, onde: 'Locações' } : null,
+    ].filter((p): p is { n: number; onde: string } => !!p);
+    if (partes.length === 0) return null;
+    if (partes.length === 1) return `${partes[0].n} unidade(s) seguem publicadas em ${partes[0].onde}; a aba Espelho de ${partes[0].onde} fica oculta.`;
+    return `${partes[0].n} unidade(s) seguem publicadas em Vendas e ${partes[1].n} em Locações; as abas Espelho de Vendas e Espelho de Locações ficam ocultas.`;
   })();
 
   const salvar = async () => {
@@ -347,7 +352,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, modo = 'pa
             htmlFor="emp-objetivo"
             ajuda={avisoDoObjetivo
               ? <span className="text-amber-700" data-testid="aviso-objetivo">{avisoDoObjetivo}</span>
-              : 'Decide quais espelhos a ficha mostra: Vendas, Locações ou os dois.'}
+              : 'Decide quais espelhos a ficha mostra: Vendas, Locações, os dois ou nenhum (Serviço).'}
           >
             <select id="emp-objetivo" className={inputCls} value={form.objetivo} onChange={e => set('objetivo', e.target.value)}>
               {OBJETIVOS.map(o => <option key={o} value={o}>{ROTULO_DO_OBJETIVO[o]}</option>)}

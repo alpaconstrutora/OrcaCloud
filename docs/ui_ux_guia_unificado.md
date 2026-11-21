@@ -1586,6 +1586,8 @@ Em 14/11/2026 para Comercial › Venda de Ativos › **Unidades do edifício** (
 
 Em 14/11/2026 para Comercial › **Condomínios** (`components/condominio/CondominiosModule.tsx`, tabela feita à mão; `docs/planos/2026-11-14-condominios-organizacao-agrupar.md`). Junto veio a coluna **Organização** = quem OPERA o condomínio (`orgDoCondominio`), visível também com uma org no topo (a lista traz os que ela opera e os que ela construiu). Opções: Organização (chave = id), Cidade e Centro de custo (combinação, `chavePorCombinacao`). Só contagem (`semTotal`). O controle vai logo depois da busca (a tela não tem Filtro avançado). Função pura em `utils/condominioGrupos.ts`.
 
+Em 21/11/2026 para Comercial › **Empreendimentos** (`components/empreendimento/EmpreendimentoModule.tsx`, tabela feita à mão; pedido "implementar botão expandir/recolher"; `docs/planos/2026-11-21-empreendimentos-objetivo-servico-agrupar.md`). A tela tinha um Agrupar próprio (`FilterPopover` + botão de ordem A→Z) sem o recolher/expandir todos; passou às peças comuns. Opções: Tipo, Objetivo (na ordem do seletor, Serviço por último), Status (ciclo de vida) e Organização (chave = id). Total do grupo = soma do VGV, só com a coluna VGV visível (`semTotal` quando oculta). O controle vai logo depois da busca. Função pura em `utils/empreendimentoGrupos.ts`; a escolha mora numa chave nova (`empreendimentoList:agrupar`), porque a antiga guardava `""` como sem grupo.
+
 **Total do grupo só onde há dinheiro.** Tela de cadastro/documento (fornecedores,
 clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGrupo` com
 `semTotal`; no `StandardTable`, basta não passar `agrupamento.valor`. "R$ 0,00" num

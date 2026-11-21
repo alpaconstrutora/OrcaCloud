@@ -1,9 +1,11 @@
 // components/empreendimento/EmpreendimentoModule.tsx
 import React from 'react';
-import { Plus, Building2, Search, RefreshCw, AlertCircle, MoveHorizontal, HardHat, Layers, ChevronDown, ChevronRight, ArrowDownAZ, ArrowUpZA } from 'lucide-react';
+import { Plus, Building2, Search, RefreshCw, AlertCircle, MoveHorizontal, HardHat } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
-import { FilterPopover } from '../ui/FilterPopover';
 import { InlineActionTray } from '../ui/InlineActionTray';
+import { AgruparControles, LinhaDeGrupo } from '../ui/Agrupamento';
+import { useAgrupamento } from '../../hooks/useAgrupamento';
+import { agruparEmpreendimentos, OPCOES_AGRUPAR_EMPREENDIMENTO, type CampoAgruparEmpreendimento } from '../../utils/empreendimentoGrupos';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
 import { useStore } from '../../store/useStore';
@@ -40,18 +42,6 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   EM_OPERACAO: 'text-teal-600',
   ENCERRADO: 'text-slate-500',
 };
-
-// Agrupamento da lista (filtro "Agrupar" da toolbar, §5.4). Só dimensões que já são
-// colunas da tabela — agrupar por algo que o usuário não vê não ajuda a ler.
-type GroupByField = '' | 'tipo' | 'objetivo' | 'status' | 'organization';
-
-const GROUP_BY_OPTIONS: { value: GroupByField; label: string }[] = [
-  { value: '', label: 'Sem agrupamento' },
-  { value: 'tipo', label: 'Tipo' },
-  { value: 'objetivo', label: 'Objetivo' },
-  { value: 'status', label: 'Status' },
-  { value: 'organization', label: 'Organização' },
-];
 
 const COLUMNS: ColumnConfig[] = [
   { key: 'code', label: 'Código', sortable: true },
@@ -157,18 +147,10 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   const [items, setItems] = React.useState<Empreendimento[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = usePersistedState<string>('empreendimentoList:search', '');
-  const [groupBy, setGroupBy] = usePersistedState<GroupByField>('empreendimentoList:groupBy', '');
-  // Direção de exibição dos grupos (não da linha dentro do grupo, que segue a coluna
-  // clicada no cabeçalho) — só faz sentido com agrupamento ativo.
-  const [groupSortDir, setGroupSortDir] = usePersistedState<'asc' | 'desc'>('empreendimentoList:groupSortDir', 'asc');
-  // Grupos recolhidos — transitório de propósito: ao reabrir a tela todos voltam abertos.
-  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
-  const toggleGroup = (key: string) =>
-    setCollapsedGroups(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key); else next.add(key);
-      return next;
-    });
+  // "Agrupar" com as peças comuns (guia §6.12, 21/11/2026): campo e ordem dos grupos persistem,
+  // grupos recolhidos só em memória. Chave NOVA de propósito: a antiga
+  // (`empreendimentoList:groupBy`) guardava '' como "sem grupo", que aqui leria como agrupando.
+  const agrupamento = useAgrupamento<CampoAgruparEmpreendimento>('empreendimentoList:agrupar');
   const tableColumns = useTableColumns(COLUMNS, 'empreendimentoListColumns');
   const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'empreendimentoListColWidths');
   // table-layout:fixed + largura total explícita — mesma razão do padrão em SupplierList
@@ -323,7 +305,7 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
               ? tipoLabel(a.tipo).localeCompare(tipoLabel(b.tipo))
               : tipoLabel(b.tipo).localeCompare(tipoLabel(a.tipo));
           case 'objetivo': {
-            // Na ordem do seletor (Vendas → Locação → Misto), não alfabética.
+            // Na ordem do seletor (Vendas → Locação → Misto → Serviço), não alfabética.
             const d = OBJETIVOS.indexOf(objetivoDe(a.objetivo)) - OBJETIVOS.indexOf(objetivoDe(b.objetivo));
             return tableColumns.sortDirection === 'asc' ? d : -d;
           }
@@ -348,33 +330,18 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
     });
   }, [items, search, tableColumns.sortColumn, tableColumns.sortDirection, tipoLabel, orgName]);
 
-  // Divide a lista já filtrada/ordenada em grupos. A ordem dentro de cada grupo é a da
-  // coluna clicada; a ordem dos grupos é fixa (status = ciclo de vida; resto = A-Z, e o
-  // "sem valor" por último).
-  const groups = React.useMemo(() => {
-    if (!groupBy) return [{ key: '__all__', label: '', items: filtered }];
-    const keyOf = (i: Empreendimento) =>
-      groupBy === 'tipo' ? (i.tipo || '') : groupBy === 'objetivo' ? objetivoDe(i.objetivo) : groupBy === 'status' ? i.status : (i.organization_id || '');
-    const labelOf = (i: Empreendimento) =>
-      groupBy === 'tipo' ? tipoLabel(i.tipo) : groupBy === 'objetivo' ? ROTULO_DO_OBJETIVO[objetivoDe(i.objetivo)] : groupBy === 'status' ? STATUS_LABELS[i.status] : orgName(i.organization_id);
-    const map = new Map<string, { key: string; label: string; items: Empreendimento[] }>();
-    for (const i of filtered) {
-      const key = keyOf(i) || '__none__';
-      const g = map.get(key) ?? { key, label: key === '__none__' ? 'Sem informação' : labelOf(i), items: [] };
-      g.items.push(i);
-      map.set(key, g);
-    }
-    const list = [...map.values()];
-    const statusOrder = Object.keys(STATUS_LABELS);
-    const dir = groupSortDir === 'asc' ? 1 : -1;
-    return list.sort((a, b) => {
-      if (a.key === '__none__') return 1;
-      if (b.key === '__none__') return -1;
-      if (groupBy === 'status') return dir * (statusOrder.indexOf(a.key) - statusOrder.indexOf(b.key));
-      if (groupBy === 'objetivo') return dir * (OBJETIVOS.indexOf(a.key as never) - OBJETIVOS.indexOf(b.key as never));
-      return dir * a.label.localeCompare(b.label);
-    });
-  }, [filtered, groupBy, groupSortDir, tipoLabel, orgName]);
+  // Divide a lista já filtrada/ordenada em grupos (utils/empreendimentoGrupos.ts). A ordem
+  // dentro de cada grupo é a da coluna clicada; a dos grupos, a do campo (status = ciclo de
+  // vida, objetivo = ordem do seletor, resto A→Z) com Crescente/Decrescente.
+  const grupos = React.useMemo(() => (
+    agrupamento.agrupando
+      ? agruparEmpreendimentos(filtered, agrupamento.campo as CampoAgruparEmpreendimento, agrupamento.direcao, {
+        tipo: id => tipoLabel(id),
+        organizacao: id => orgName(id),
+        rotulosDeStatus: STATUS_LABELS,
+      })
+      : null
+  ), [filtered, agrupamento.agrupando, agrupamento.campo, agrupamento.direcao, tipoLabel, orgName]);
 
   // ── Detalhe ────────────────────────────────────────────────────────────────
   if (selected) {
@@ -455,31 +422,22 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
               />
             </div>
 
-            {/* Filtro rápido de escolha única (§5.4) — entre a busca e o agrupador de colunas */}
-            <FilterPopover<GroupByField>
-              label="Agrupar"
-              icon={<Layers className="w-3.5 h-3.5" />}
-              value={groupBy}
-              onChange={v => { setGroupBy(v); setCollapsedGroups(new Set()); }}
-              options={GROUP_BY_OPTIONS}
-            />
-
-            {/* Ordem dos grupos — só faz sentido com agrupamento ativo; a ordem dentro de
-                cada grupo continua sendo a da coluna clicada no cabeçalho (§6.8). */}
-            <button
-              onClick={() => setGroupSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
-              disabled={!groupBy}
-              title={
-                groupBy
-                  ? `Ordem dos grupos: ${groupSortDir === 'asc' ? 'crescente' : 'decrescente'} — clique para inverter`
-                  : 'Escolha um agrupamento para ordenar os grupos'
-              }
-              className={`h-9 w-9 flex items-center justify-center rounded-[6px] transition-all active:scale-95 shrink-0 ${
-                groupBy ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'
-              }`}
-            >
-              {groupSortDir === 'asc' ? <ArrowDownAZ className="w-4 h-4" /> : <ArrowUpZA className="w-4 h-4" />}
-            </button>
+            {/* Agrupar + ordem dos grupos + recolher/expandir todos (§6.12) — logo depois da
+                busca (a tela não tem Filtro avançado). Sempre visíveis; sem agrupamento os dois
+                últimos ficam desligados e dizem o motivo. */}
+            <div className="flex items-center gap-2 shrink-0">
+              <AgruparControles
+                opcoes={OPCOES_AGRUPAR_EMPREENDIMENTO}
+                campo={agrupamento.campo}
+                onCampo={agrupamento.setCampo}
+                direcao={agrupamento.direcao}
+                onDirecao={agrupamento.setDirecao}
+                chavesDosGrupos={(grupos ?? []).map(g => g.key)}
+                algumRecolhido={agrupamento.recolhidos.size > 0}
+                onAlternarTodos={agrupamento.alternarTodos}
+                title="Agrupar os empreendimentos"
+              />
+            </div>
 
             <button
               onClick={load}
@@ -575,33 +533,21 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200">
-                {groups.map(group => (
-                  <React.Fragment key={group.key}>
-                    {/* Cabeçalho do grupo — só com agrupamento ativo. Clique recolhe/abre. */}
-                    {groupBy && (
-                      <tr
-                        onClick={() => toggleGroup(group.key)}
-                        className="bg-gray-50 hover:bg-gray-100 cursor-pointer transition-colors"
-                      >
-                        <td colSpan={tableColumns.visibleColumns.filter(k => k !== 'actions').length + 1 + (tableColumns.visibleColumns.includes('actions') ? 1 : 0)} className="px-6 py-2">
-                          <div className="flex items-center gap-2 text-sm text-gray-700">
-                            {collapsedGroups.has(group.key)
-                              ? <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
-                              : <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />}
-                            <span className="font-semibold">{group.label}</span>
-                            <span className="text-gray-400">
-                              {group.items.length} empreendimento{group.items.length !== 1 ? 's' : ''}
-                            </span>
-                            {tableColumns.visibleColumns.includes('vgv') && (
-                              <span className="text-gray-400">
-                                · VGV R$ {group.items.reduce((s, i) => s + (i.vgv_total || 0), 0).toLocaleString('pt-BR', { maximumFractionDigits: 0 })}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      </tr>
+                {(grupos ?? [{ key: '__todos__', label: '', itens: filtered, total: 0 }]).map(grupo => (
+                  <React.Fragment key={grupo.key}>
+                    {/* Cabeçalho do grupo (§6.12) — só agrupando. Clique/Enter recolhe e abre;
+                        o total é o VGV do grupo, só com a coluna VGV visível. */}
+                    {grupos && (
+                      <LinhaDeGrupo
+                        grupo={grupo}
+                        recolhido={agrupamento.recolhidos.has(grupo.key)}
+                        colSpan={tableColumns.visibleColumns.filter(k => k !== 'actions').length + 1 + (tableColumns.visibleColumns.includes('actions') ? 1 : 0)}
+                        onAlternar={agrupamento.alternar}
+                        semTotal={!tableColumns.visibleColumns.includes('vgv')}
+                        tituloTotal="Soma do VGV total dos empreendimentos do grupo"
+                      />
                     )}
-                    {!collapsedGroups.has(group.key) && group.items.map(item => (
+                    {!agrupamento.recolhidos.has(grupo.key) && grupo.itens.map(item => (
                   <tr
                     key={item.id}
                     onClick={() => setSelected(item)}

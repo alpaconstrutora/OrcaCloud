@@ -193,6 +193,38 @@ versão → quem/quando gravados; voltar a pendente limpa. Edge Function `read-m
 **Fase 5: NO AR** — 5.1 entrou na Fase 4 (#627); 5.2 na Fase 2 (#623). **Fase 6:** achados aguardando decisão do
 usuário (ver §Pendências).
 
+### Pedido de 21/11/2026, 18h (sessão e7b82365), depois do relatório de pendências
+
+> implemente todos
+
+Decisões do usuário (mesma hora):
+- **D6 VGV:** vale a regra da Análise de Vendas em todas as telas: VGV = vendido (valor negociado) + estoque a
+  vender (disponível + reservado, preço de tabela); permutadas e não vendáveis ficam fora do VGV, mostradas à parte.
+- **D7 Distrato:** a venda fica no mês original (bruto) e o distrato entra negativo no mês do cancelamento;
+  líquido = bruto − distratos.
+- **D8 Versão no portal:** só o Data Room do investidor fixa a versão compartilhada (o gestor vê que há versão nova
+  e atualiza); cliente, colaborador e credor continuam vendo a mais nova.
+- **D9:** migrations desta fase e a publicação de `portal-ged-download` autorizadas.
+
+## Fase 7 — Pendências e achados da Fase 6 (pedido "implemente todos")
+
+| # | Item | O que muda | Pronto quando |
+|---|---|---|---|
+| 7.1 | Chamada de capital vira aporte | RPC `fn_chamada_de_capital_registrar_pagamento` (uma transação: item, `capital_paid`, status da chamada e `investor_contributions` 'aporte' liquidado na obra da SPE, com `capital_call_item_id`). `capitalCallService.registerPayment` passa a chamá-la. SPE sem obra: paga, sem aporte, e a tela diz por quê. | Prova SQL em transação desfeita: 1 pagamento → item, sócio, chamada e 1 aporte; teste do serviço |
+| 7.2 | VGV com uma regra (D6) | Espelho de Vendas do empreendimento usa a classificação de `lib/salesAnalysis.ts`: Vendido (valor negociado), Reservado, Disponível, Permutado e não vendáveis à parte, VGV total. | Teste: permutada e garagem fora do VGV; reservada no estoque; vendido = valor da negociação |
+| 7.3 | Distrato estorna (D7) | `salesByMonth`/`vendasPorMesDoEmpreendimento` mantêm a venda distratada no mês original e lançam o distrato negativo no mês de `cancellation_date`; Vendas mostra bruto, distratos e líquido; Acompanhamento usa o líquido. | Teste: venda de março distratada em maio → março +V, maio −V |
+| 7.4 | Estudo × espelho × vendido | Acompanhamento do estudo ganha o quadro VGV do estudo × VGV do espelho (tabela) × vendido (negociado). | Teste do cálculo; a tela mostra as três colunas |
+| 7.5 | GED do portal do cliente | `fn_portal_get_ged_documents` com `search_path` e REVOKE PUBLIC; `portal-ged-download` confere a org do token. | ACL sem `=X`; function publicada recusa sem token e documento de outra org |
+| 7.6 | Risco do estudo → Módulo Riscos | Botão "Levar ao Módulo Riscos" no cartão de Riscos quando o empreendimento tem obra (escopo obra; senão empreendimento); `imovib_risks.project_risk_id` impede levar duas vezes. | Teste do mapeamento; botão desligado diz por quê |
+| 7.7 | Concorrentes do Market | Aba "Concorrentes" no Market (estudo de terreno: anúncio, lançamento ou nome/preço próprio); policy confere que o estudo é da org; comparáveis do Imovib ganham "Importar do Market" (concorrentes do estudo de terreno ligado + lançamentos da cidade). | Teste do mapeamento concorrente → comparável; policy provada |
+| 7.8 | Comentário da FK | Comentários de `empreendimento_towers.project_id` dizem a verdade (a torre tem FK; `empreendimentos.project_id` não). | `git grep` sem o texto falso |
+| 7.9 | Versão fixa no Data Room (D8) | `opura_document_portal_shares.version_id` (só audiência investidor); a RPC e a Edge Function do Data Room usam a versão fixada; gestor vê "versão nova" e "Atualizar". | Prova SQL: versão nova no GED não muda o que o investidor vê até atualizar |
+| 7.10 | Provas sem dado (P3) | SPE de outra org e marketplace provados em transação desfeita com dado de teste. | Saída das provas no plano |
+| 7.11 | Teste instável (P4) | `ImovibVersoes` › relatório: causa achada e corrigida. | 5 rodadas da suíte do arquivo junto com as vizinhas sem falha |
+
+Fora desta fase, depende do usuário: P1 (apagar buckets pelo painel) e P2 (roteiro de tela no Garden: login pelo
+usuário).
+
 ---
 
 ## Fase 1 — O Imovib recebe o que a Oportunidade tinha

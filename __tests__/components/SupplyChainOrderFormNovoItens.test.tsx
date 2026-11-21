@@ -154,7 +154,7 @@ describe('Novo pedido › Itens do pedido', () => {
 
         fireEvent.click(screen.getByText('escolher fornecedor'));
         fireEvent.change(campo('Data de Entrega'), { target: { value: '2026-12-01' } });
-        fireEvent.click(screen.getByRole('button', { name: /Salvar Pedido/ }));
+        fireEvent.click(screen.getByRole('button', { name: /Salvar pedido/ }));
 
         await waitFor(() => expect(orderService.createOrder).toHaveBeenCalled());
         const pedido = vi.mocked(orderService.createOrder).mock.calls[0][0] as { items: { code: string; quantity: number; unitPrice: number }[] };

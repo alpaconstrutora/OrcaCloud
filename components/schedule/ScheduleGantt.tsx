@@ -34,6 +34,24 @@ function stripWbsPrefix(name: string, wbsCode?: string): string {
     return rest || name;
 }
 
+/**
+ * DESENHO DAS BARRAS (21/11/2026 — *"Para visualizacao gantt implemente o mesmo formato
+ * de barras e cores do print"*). Cada grupo raiz tem a sua cor (`finalizeHierarchy`,
+ * FinancialSchedule.tsx: azul, verde, roxo, laranja…) e tudo abaixo dele a herda — barra de
+ * resumo, barra de tarefa e marco. A parte FEITA é a cor sólida; o que falta é um tom
+ * claro da mesma cor (`tomClaro`), com borda na cor sólida. O nome e a duração ficam FORA
+ * da barra, à direita ("Fundação (8 d)"), para não serem cortados em barra curta.
+ */
+function tomClaro(cor: string, branco = 0.55): string {
+    const m = /^#?([0-9a-f]{6})$/i.exec(cor);
+    if (!m) return cor;
+    const n = parseInt(m[1], 16);
+    const mistura = (c: number) => Math.round(c + (255 - c) * branco);
+    return `rgb(${mistura((n >> 16) & 255)}, ${mistura((n >> 8) & 255)}, ${mistura(n & 255)})`;
+}
+const COR_SEM_FASE = '#3b82f6';
+const COR_CRITICA = '#dc2626';
+
 /** Cor da linha de dependência — e da SETA, que acompanha a linha. */
 const COR_DEPENDENCIA = '#94a3b8';
 const COR_DEPENDENCIA_CRITICA = '#ef4444';
@@ -753,7 +771,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                 : (itemSchedule.duration || 0);
                             const width = Math.max(pxPerDay / 2, spanDays * pxPerDay);
                             const left = startOffset * pxPerDay;
-                            const baseColor = node.color || '#3b82f6';
+                            const baseColor = node.color || COR_SEM_FASE;
                             // Gaps (pausas) a sobrepor na barra dividida, em px relativos ao início da barra.
                             const splitGaps: Array<{ leftPx: number; widthPx: number }> = [];
                             if (isSplit) {
@@ -784,25 +802,35 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         className="absolute top-1.5 flex items-center justify-center z-10 cursor-pointer"
                                         style={{ left: `${left}px`, width: `${pxPerDay}px`, height: '24px', transform: 'translateX(-50%)' }}
                                     >
+                                        {/* Losango na cor da fase: cheio quando concluído, claro com borda
+                                            enquanto não (como no print de referência). Crítico = vermelho. */}
                                         <div
-                                            className={`w-3.5 h-3.5 rotate-45 border border-white shadow-md ${itemSchedule.isCritical ? 'bg-red-600 ring-2 ring-red-100' : ''}`}
-                                            style={!itemSchedule.isCritical ? { backgroundColor: baseColor } : {}}
+                                            className="w-3.5 h-3.5 rotate-45 border-[1.5px] shadow-sm"
+                                            style={{
+                                                borderColor: itemSchedule.isCritical ? COR_CRITICA : baseColor,
+                                                backgroundColor: itemSchedule.isCritical
+                                                    ? COR_CRITICA
+                                                    : progress >= 100 ? baseColor : tomClaro(baseColor),
+                                            }}
                                         />
                                         <div className="opacity-0 hover:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none">
                                             Marco: {fmtLocalDate(itemSchedule.startDate)} {itemSchedule.isCritical ? '(CRÍTICO)' : ''}
                                         </div>
-                                        {/* External Label for Milestones */}
-                                        <div className="absolute left-[calc(100%+8px)] whitespace-nowrap text-xs font-medium text-gray-500 pointer-events-none">
-                                            {node.name}
+                                        {/* Nome do marco fora, à direita — o mesmo rótulo das barras. */}
+                                        <div className="absolute left-[calc(100%+6px)] whitespace-nowrap text-xs text-gray-600 pointer-events-none">
+                                            {stripWbsPrefix(node.name, node.wbsCode)}
                                         </div>
                                     </div>
                                 );
                             }
 
                             const projectEndDate = schedule.endDate || '';
+                            const pctFeito = Math.min(100, Math.max(0, progress));
+                            const larguraFeita = width * pctFeito / 100;
+                            const larguraDaFolga = showFloat && (itemSchedule.totalFloat ?? 0) > 0 ? (itemSchedule.totalFloat ?? 0) * pxPerDay : 0;
                             return (
                                 <div
-                                    className="group/task-container absolute top-1.5 flex items-center overflow-visible"
+                                    className="group/task-container absolute top-2 flex items-center overflow-visible"
                                     style={{
                                         left: `${left}px`,
                                         width: `${width}px`,
@@ -816,8 +844,8 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         crítica) a expressão valia 0 e o React escrevia "0" ao lado da barra. */}
                                     {showFloat && (itemSchedule.totalFloat ?? 0) > 0 && (
                                         <div
-                                            className="absolute top-0 h-6 bg-amber-100/60 border border-dashed border-amber-300 rounded-r z-[1]"
-                                            style={{ left: `${width}px`, width: `${(itemSchedule.totalFloat ?? 0) * pxPerDay}px` }}
+                                            className="absolute top-0 h-5 bg-amber-100/60 border border-dashed border-amber-300 rounded-r z-[1]"
+                                            style={{ left: `${width}px`, width: `${larguraDaFolga}px` }}
                                             title={`Folga total: ${itemSchedule.totalFloat} dia(s)`}
                                         />
                                     )}
@@ -839,15 +867,16 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                     </div>
 
                                     <div
-                                        className={`relative shrink-0 h-6 rounded shadow-sm border group/bar transition-all z-[2] flex overflow-hidden ${itemSchedule?.isCritical ? 'border-red-600' : 'border-black/10'} cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-400 hover:z-[10] ${isSimulationMode ? 'hover:ring-purple-400' : ''} ${isDraggingTask === item.id ? 'opacity-80 scale-105 z-[20] shadow-xl ring-2 ring-blue-600 ring-offset-1' : ''}`}
-                                        style={{ width: `${width}px`, backgroundColor: `${baseColor}55` }} // translucent base
+                                        className={`relative shrink-0 h-5 rounded-[5px] border group/bar transition-all z-[2] flex overflow-hidden cursor-grab active:cursor-grabbing hover:ring-2 hover:ring-blue-400 hover:z-[10] ${isSimulationMode ? 'hover:ring-purple-400' : ''} ${isDraggingTask === item.id ? 'opacity-80 scale-105 z-[20] shadow-xl ring-2 ring-blue-600 ring-offset-1' : ''}`}
+                                        // Tom claro = o que falta; borda na cor sólida (vermelha se crítica).
+                                        style={{ width: `${width}px`, backgroundColor: tomClaro(baseColor), borderColor: itemSchedule?.isCritical ? COR_CRITICA : baseColor }}
                                         onMouseDown={(e) => handleGanttBarMouseDown(e, item.id, itemSchedule.startDate as string)}
                                         onClick={(e) => e.stopPropagation()}
                                     >
-                                        {/* Progress Bar (darker portion) */}
+                                        {/* Parte feita: a cor sólida da fase. */}
                                         <div
                                             className="h-full transition-all duration-500"
-                                            style={{ width: `${Math.min(100, progress)}%`, backgroundColor: baseColor }}
+                                            style={{ width: `${pctFeito}%`, backgroundColor: baseColor }}
                                         />
 
                                         {/* Split gaps (pausas) — recortes brancos hachurados sobre a janela da tarefa dividida */}
@@ -860,24 +889,13 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                             />
                                         ))}
 
-                                        {/* Progress Text overlay */}
-                                        {width > 40 && (
+                                        {/* % dentro da parte feita, centrado — só quando cabe. */}
+                                        {larguraFeita >= 30 && (
                                             <div
-                                                className="absolute inset-y-0 left-0 flex items-center justify-end pr-2 text-xs font-medium text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] pointer-events-none z-10"
-                                                style={{ width: `${Math.min(100, progress)}%` }}
+                                                className="absolute inset-y-0 left-0 flex items-center justify-center text-[11px] font-medium text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.35)] pointer-events-none z-10"
+                                                style={{ width: `${larguraFeita}px` }}
                                             >
-                                                {progress > 8 ? `${progress.toFixed(0)}%` : ''}
-                                            </div>
-                                        )}
-
-                                        {/* Task name label — inside bar, clipped */}
-                                        {width > 30 && (
-                                            <div
-                                                className="absolute inset-y-0 left-0 right-0 flex items-center px-2 pointer-events-none z-[5] overflow-hidden"
-                                            >
-                                                <span className="text-xs font-semibold text-gray-700 truncate">
-                                                    {node.name}
-                                                </span>
+                                                {`${pctFeito.toFixed(0)}%`}
                                             </div>
                                         )}
 
@@ -887,7 +905,15 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         </div>
                                     </div>
 
-                                    {/* Extend to project end button */}
+                                    {/* Rótulo FORA da barra, à direita (depois da folga, se houver):
+                                        "Nome (N d)". O "estender até o fim" vem logo depois dele. */}
+                                    <div
+                                        className="absolute top-1/2 -translate-y-1/2 flex items-center gap-1 whitespace-nowrap pointer-events-none"
+                                        style={{ left: `${width + larguraDaFolga + 6}px` }}
+                                    >
+                                        <span className="text-xs text-gray-600">
+                                            {stripWbsPrefix(node.name, node.wbsCode)} ({itemSchedule.duration} d)
+                                        </span>
                                     {projectEndDate && itemSchedule.endDate && terminoParaExibir(itemSchedule.startDate, itemSchedule.endDate, cal) < projectEndDate.slice(0, 10) && (
                                         <button
                                             title={`Estender até o fim do planejamento (${new Date(projectEndDate).toLocaleDateString('pt-BR')})`}
@@ -897,15 +923,16 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                                 // útil seguinte — gravar o término direto deixava a tarefa um dia antes.
                                                 handleUpdateItemSchedule(item.id, 'endDate', fimDoMotorParaTrabalharAte(projectEndDate.slice(0, 10), cal));
                                             }}
-                                            // `absolute left-full`, fora do fluxo: dentro do flex de largura fixa
-                                            // ele ocupava 32px e a BARRA encolhia para caber — toda barra saía 32px
-                                            // mais curta que a duração e o traço da dependência ficava solto dela
-                                            // (medido em produção, 11/10/2026).
-                                            className="absolute left-full top-1/2 -translate-y-1/2 opacity-0 group-hover/task-container:opacity-100 transition-opacity ml-1.5 flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-xs font-bold text-blue-400 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 shrink-0"
+                                            // Fica no rótulo (absolute), FORA do flex de largura fixa da barra:
+                                            // dentro dele ocupava 32px e a BARRA encolhia para caber — toda barra
+                                            // saía 32px mais curta que a duração e o traço da dependência ficava
+                                            // solto dela (medido em produção, 11/10/2026).
+                                            className="pointer-events-auto opacity-0 group-hover/task-container:opacity-100 transition-opacity flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-xs font-bold text-blue-400 hover:text-blue-600 hover:bg-blue-50 border border-transparent hover:border-blue-200 shrink-0"
                                         >
                                             <ArrowRightToLine className="w-3 h-3" />
                                         </button>
                                     )}
+                                    </div>
                                 </div>
                             );
                         })() : null}
@@ -933,6 +960,10 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                         >
                             {node.children && node.children.length > 0 && (
                                 isExpanded ? <ChevronDown className="w-3.5 h-3.5 text-gray-400" /> : <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
+                            )}
+                            {/* Grupo raiz: quadradinho na cor da fase, que liga o nome às barras. */}
+                            {node.level === 0 && node.color && (
+                                <span aria-hidden className="w-2.5 h-2.5 shrink-0 rounded-[2px]" style={{ backgroundColor: node.color }} />
                             )}
                             <span className="truncate">{stripWbsPrefix(node.name, node.wbsCode)}</span>
                             {taskInsights?.[node.id]?.hasAlert && (
@@ -1051,15 +1082,13 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                             const durationDays = Math.max(1, (finish - start) / (1000 * 60 * 60 * 24) + 1);
                             const width = durationDays * pxPerDay;
                             const left = startOffset * pxPerDay;
-                            // Barra de resumo (grupo/etapa/subetapa) é SEMPRE cinza — não usa `node.color`.
-                            // `finalizeHierarchy` (FinancialSchedule.tsx) pinta todo nó com a GANTT_PALETTE,
-                            // inclusive os pais, então um fallback `node.color || cinza` nunca chegaria a
-                            // valer. A paleta continua identificando as tarefas-folha; o pai fica neutro.
-                            const baseColor = '#6b7280';
+                            // Barra de resumo na COR DA FASE (21/11/2026, print de referência) — até
+                            // então era sempre cinza. Fina, com os ganchos descendo nas pontas.
+                            const baseColor = node.color || COR_SEM_FASE;
 
                             const progress = node.total > 0 ? (node.realizedTotal / node.total) * 100 : 0;
-                            // Fundo da barra = cinza a 35%; o progresso pinta por cima o cinza sólido.
-                            const fundoDaBarra = `${baseColor}59`;
+                            // Fundo = tom claro da cor; o progresso pinta por cima a cor sólida.
+                            const fundoDaBarra = tomClaro(baseColor);
                             // Cada gancho tem a cor da PONTA da barra ao lado (12/10/2026: "as cores devem
                             // ser as mesmas" — eram o cinza sólido sob uma barra clara). A esquerda fica
                             // sólida quando o progresso já começou; a direita, só ao chegar a 100%.
@@ -1068,29 +1097,18 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
 
                             return (
                                 <div
-                                    className="absolute top-[8px] h-4 z-20 overflow-visible flex items-center group/summary-bar"
+                                    className="absolute top-[11px] h-2.5 z-20 overflow-visible flex items-center group/summary-bar"
                                     style={{ left: `${left}px`, width: `${width}px` }}
                                 >
-                                    {/* Barra do grupo: retângulo cinza sólido (sem os ganchos em losango) */}
+                                    {/* Barra do grupo: faixa fina na cor da fase; o % fica no title. */}
                                     <div
-                                        className="absolute inset-0 overflow-hidden rounded-sm shadow-sm border border-black/10 flex items-center"
+                                        className="absolute inset-0 overflow-hidden flex items-center"
                                         style={{ backgroundColor: fundoDaBarra }}
                                     >
-                                        {/* Progress Fill */}
                                         <div
                                             className="h-full transition-all duration-500"
                                             style={{ width: `${Math.min(100, progress)}%`, backgroundColor: baseColor }}
                                         />
-
-                                        {/* Progress Text overlay */}
-                                        {width > 30 && (
-                                            <div
-                                                className="absolute inset-y-0 left-0 flex items-center justify-end pr-1.5 text-xs font-medium text-white drop-shadow-[0_1px_1px_rgba(0,0,0,0.5)] pointer-events-none z-10"
-                                                style={{ width: `${Math.min(100, progress)}%` }}
-                                            >
-                                                {progress > 5 ? `${progress.toFixed(0)}%` : ''}
-                                            </div>
-                                        )}
                                     </div>
 
                                     {/* Ganchos (end caps) das pontas, estilo MS Project: triângulos que descem
@@ -1098,15 +1116,20 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         progresso (aquela tem overflow-hidden), senão seriam cortados. */}
                                     <div
                                         className="absolute left-0 top-full w-0 h-0 pointer-events-none"
-                                        style={{ borderTop: `8px solid ${corGanchoEsquerdo}`, borderRight: '7px solid transparent' }}
+                                        style={{ borderTop: `6px solid ${corGanchoEsquerdo}`, borderRight: '6px solid transparent' }}
                                     />
                                     <div
                                         className="absolute right-0 top-full w-0 h-0 pointer-events-none"
-                                        style={{ borderTop: `8px solid ${corGanchoDireito}`, borderLeft: '7px solid transparent' }}
+                                        style={{ borderTop: `6px solid ${corGanchoDireito}`, borderLeft: '6px solid transparent' }}
                                     />
 
+                                    {/* Rótulo fora, à direita: "Fundação (16 d)". */}
+                                    <div className="absolute left-[calc(100%+6px)] top-1/2 -translate-y-1/2 whitespace-nowrap text-xs text-gray-600 pointer-events-none">
+                                        {stripWbsPrefix(node.name, node.wbsCode)} ({durationDays.toFixed(0)} d)
+                                    </div>
+
                                     <div className="opacity-0 group-hover/summary-bar:opacity-100 absolute -top-8 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs px-2 py-1 rounded shadow-lg whitespace-nowrap z-50 pointer-events-none font-medium">
-                                        {node.name}: {fmtLocalDate(node.earlyStart)} - {fmtLocalDate(terminoParaExibir(node.earlyStart, node.earlyFinish, cal))} ({durationDays.toFixed(0)}d)
+                                        {node.name}: {fmtLocalDate(node.earlyStart)} - {fmtLocalDate(terminoParaExibir(node.earlyStart, node.earlyFinish, cal))} ({durationDays.toFixed(0)}d) · {progress.toFixed(0)}% realizado
                                     </div>
                                 </div>
                             );

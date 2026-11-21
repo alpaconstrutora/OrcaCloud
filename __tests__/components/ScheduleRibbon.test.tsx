@@ -6,7 +6,7 @@
  *
  * O que interessa provar: o cromo abaixo do título é o `Ribbon` da Planta
  * (seletor de vista à esquerda, abas de comandos, acesso rápido à direita,
- * barra de opções embaixo), as abas somem fora de Tabela/Gantt e a salva cai
+ * — a barra de opções foi para o card da grade em 21/11/2026), as abas somem fora de Tabela/Gantt e a salva cai
  * em Cronograma, a aba persiste, e cada comando chama o handler certo da
  * vista ativa.
  *
@@ -20,7 +20,7 @@ import React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import ScheduleHeader from '../../components/schedule/ScheduleHeader';
+import ScheduleHeader, { BarraDeOpcoesDaGrade } from '../../components/schedule/ScheduleHeader';
 import type { ProjectSchedule, ProjectSettings } from '../../types';
 
 type Props = React.ComponentProps<typeof ScheduleHeader>;
@@ -32,8 +32,6 @@ function props(extra: Partial<Props> = {}): Props {
     projects: [],
     viewMode: 'gantt',
     setViewMode: nada,
-    timeScale: 'week',
-    setTimeScale: nada,
     schedule: { startDate: '2026-01-05', endDate: '2026-06-30', distributions: [] } as unknown as ProjectSchedule,
     setIsBaselineModalOpen: nada,
     isSimulationMode: false,
@@ -45,7 +43,6 @@ function props(extra: Partial<Props> = {}): Props {
     setIsConfigModalOpen: nada,
     handleLevelResources: nada,
     handleRecalculate: nada,
-    onUpdateSettings: nada,
     handleExpandAll: nada,
     handleCollapseAll: nada,
     allExpanded: false,
@@ -97,16 +94,32 @@ describe('ScheduleHeader — ribbon no estilo da Planta Inteligente', () => {
     expect(within(toolbar).getByRole('button', { name: /^tela cheia$/i })).toBeInTheDocument();
   });
 
-  it('em Tabela/Gantt existem as 4 abas e a barra de opções começa pelo nome da vista', () => {
-    const { unmount } = render(<ScheduleHeader {...props({ viewMode: 'gantt' })} />);
+  it('em Tabela/Gantt existem as 4 abas, e a barra de opções NÃO fica no card do ribbon', () => {
+    // 21/11/2026: a barra (Gantt; Dia; Sem; Mês; Ano; Início; Término) saiu do
+    // menu e foi para o topo do card da Tabela/Gantt — `BarraDeOpcoesDaGrade`.
+    render(<ScheduleHeader {...props({ viewMode: 'gantt' })} />);
     expect(nomesDasAbas()).toEqual(['Estrutura', 'Cronograma', 'Orçamento', 'Vista']);
+    expect(screen.queryByRole('region', { name: 'Opções da ferramenta' })).toBeNull();
+  });
+
+  it('BarraDeOpcoesDaGrade começa pelo nome da vista e traz escala e período', () => {
+    const base = {
+      timeScale: 'week' as const,
+      setTimeScale: () => undefined,
+      schedule: props().schedule,
+      settings: props().settings,
+      handleRecalculate: () => undefined,
+      onUpdateSettings: () => undefined,
+    };
+    const { unmount } = render(<BarraDeOpcoesDaGrade viewMode="gantt" {...base} />);
     const barra = screen.getByRole('region', { name: 'Opções da ferramenta' });
     expect(barra.textContent).toMatch(/^Gantt/);
     expect(within(barra).getByRole('group', { name: 'Escala de tempo' })).toBeInTheDocument();
     expect(within(barra).getByLabelText('Início')).toHaveValue('2026-01-05');
+    expect(within(barra).getByLabelText('Término')).toHaveValue('2026-06-30');
     unmount();
 
-    render(<ScheduleHeader {...props({ viewMode: 'table' })} />);
+    render(<BarraDeOpcoesDaGrade viewMode="table" {...base} />);
     expect(screen.getByRole('region', { name: 'Opções da ferramenta' }).textContent).toMatch(/^Tabela/);
   });
 
@@ -216,8 +229,18 @@ describe('ScheduleHeader — ribbon no estilo da Planta Inteligente', () => {
   it('barra de opções: escala e datas chamam os handlers', async () => {
     const user = userEvent.setup();
     const setTimeScale = vi.fn();
-    const handleRecalculate = vi.fn();
-    render(<ScheduleHeader {...props({ setTimeScale, handleRecalculate })} />);
+    const p = props();
+    render(
+      <BarraDeOpcoesDaGrade
+        viewMode="gantt"
+        timeScale="week"
+        setTimeScale={setTimeScale}
+        schedule={p.schedule}
+        settings={p.settings}
+        handleRecalculate={() => undefined}
+        onUpdateSettings={() => undefined}
+      />,
+    );
     await user.click(screen.getByRole('button', { name: 'Mês' }));
     expect(setTimeScale).toHaveBeenCalledWith('month');
     expect(screen.getByRole('button', { name: 'Sem' })).toHaveAttribute('aria-pressed', 'true');
@@ -297,7 +320,7 @@ describe('ScheduleHeader — ribbon no estilo da Planta Inteligente', () => {
   });
 
   describe('recolher a faixa (como na Planta)', () => {
-    it('recolhida: somem acesso rápido e painel; abas e barra de opções ficam; persiste', async () => {
+    it('recolhida: somem acesso rápido e painel; abas ficam; persiste', async () => {
       const user = userEvent.setup();
       localStorage.setItem('schedule:abaDoRibbon', JSON.stringify('estrutura'));
       const { unmount } = render(<ScheduleHeader {...props({ viewMode: 'gantt' })} />);
@@ -307,7 +330,6 @@ describe('ScheduleHeader — ribbon no estilo da Planta Inteligente', () => {
       expect(screen.queryByTestId('acesso-rapido')).toBeNull();
       expect(screen.queryByRole('button', { name: 'Novo grupo' })).toBeNull();
       expect(nomesDasAbas()).toEqual(['Estrutura', 'Cronograma', 'Orçamento', 'Vista']);
-      expect(screen.getByRole('region', { name: 'Opções da ferramenta' })).toBeInTheDocument();
       expect(JSON.parse(localStorage.getItem('schedule:ribbonRecolhido') ?? 'null')).toBe(true);
       unmount();
 

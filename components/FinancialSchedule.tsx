@@ -62,7 +62,7 @@ import NetworkDiagramView from './schedule/NetworkDiagramView';
 import { orderService } from '../services/orderService';
 import { projectService } from '../services/projectService';
 import { contractService } from '../services/contractService';
-import ScheduleHeader from './schedule/ScheduleHeader';
+import ScheduleHeader, { BarraDeOpcoesDaGrade } from './schedule/ScheduleHeader';
 import { CrewClassificationModal } from './schedule/CrewClassificationModal';
 import { OutlineNodeModal } from './schedule/OutlineNodeModal';
 import type { OutlineActions } from './schedule/OutlineRowMenu';
@@ -3957,8 +3957,6 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 projects={projects}
                 viewMode={viewMode}
                 setViewMode={setViewMode}
-                timeScale={timeScale}
-                setTimeScale={setTimeScale}
                 schedule={schedule}
                 setIsBaselineModalOpen={setIsBaselineModalOpen}
                 isSimulationMode={isSimulationMode}
@@ -3970,7 +3968,6 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                 setIsConfigModalOpen={setIsConfigModalOpen}
                 handleLevelResources={handleLevelResources}
                 handleRecalculate={handleRecalculate}
-                onUpdateSettings={onUpdateSettings}
                 handleExpandAll={handleExpandAll}
                 handleCollapseAll={handleCollapseAll}
                 allExpanded={(() => {
@@ -4459,6 +4456,17 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                     which was forcing a full rebuild of the grid/Gantt DOM tree every time the user alternated tabs. */}
                 {(viewMode === 'table' || viewMode === 'gantt') && (
                     <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                        {/* A barra da vista (escala, Início/Término) é o topo do card da
+                            grade — colada na timeline que ela comanda (21/11/2026). */}
+                        <BarraDeOpcoesDaGrade
+                            viewMode={viewMode}
+                            timeScale={timeScale}
+                            setTimeScale={setTimeScale}
+                            schedule={schedule}
+                            settings={settings}
+                            handleRecalculate={handleRecalculate}
+                            onUpdateSettings={onUpdateSettings}
+                        />
                         <div style={{ display: viewMode === 'table' ? undefined : 'none' }}>
                             <ScheduleGridView
                                 hierarchy={hierarchy}

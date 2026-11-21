@@ -27,6 +27,9 @@ vi.mock('../../components/empreendimento/CaracteristicasAdicionaisTab', () => ({
 vi.mock('../../components/empreendimento/VinculacoesTab', () => ({ default: () => null }));
 vi.mock('../../components/empreendimento/HistoricoTab', () => ({ default: () => null }));
 vi.mock('../../components/MapaRegulatorioEditor', () => ({ default: () => null }));
+// A Visão Geral é a ficha editável (21/11/2026) — fora do assunto deste teste.
+vi.mock('../../components/empreendimento/EmpreendimentoForm', () => ({ default: () => null }));
+vi.mock('../../components/empreendimento/TerrenoSecao', () => ({ default: () => null }));
 vi.mock('../../services/empreendimentoTypeService', () => ({ empreendimentoTypeService: { list: vi.fn(async () => []) } }));
 vi.mock('../../services/organizationService', () => ({ organizationService: { listOrganizations: vi.fn(async () => []) } }));
 vi.mock('../../services/companyService', () => ({ companyService: { list: vi.fn(async () => []) } }));
@@ -40,7 +43,7 @@ vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => vi.fn(async ()
 import { EmpreendimentoDetail } from '../../components/empreendimento/EmpreendimentoDetail';
 
 const GARDEN = { id: 'e1', organization_id: 'o1', name: '011 - Garden Cambuhy', status: 'PLANEJAMENTO', tipo: 'VERTICAL' };
-const montar = () => render(<EmpreendimentoDetail empreendimento={GARDEN as never} organizationId="o1" onBack={vi.fn()} onEdit={vi.fn()} />);
+const montar = () => render(<EmpreendimentoDetail empreendimento={GARDEN as never} organizationId="o1" onBack={vi.fn()} onSaved={vi.fn()} />);
 const abaSincronizacao = () => screen.getByRole('tab', { name: /Sincronização/ });
 
 describe('Empreendimento › Curadoria dentro da Sincronização', () => {

@@ -30,7 +30,9 @@ const TableSwitch: React.FC<{
     ariaLabel?: string;
     /** `id` do texto que explica o estado (ex.: o motivo de estar travado). */
     ariaDescribedBy?: string;
-}> = ({ checked, onChange, onLabel, offLabel, onColor = 'peer-checked:bg-blue-600', title, disabled, ariaLabel, ariaDescribedBy }) => (
+    /** Anel âmbar: a linha tem alteração ainda não aplicada (Espelho de Vendas › Publicar). */
+    destaque?: boolean;
+}> = ({ checked, onChange, onLabel, offLabel, onColor = 'peer-checked:bg-blue-600', title, disabled, ariaLabel, ariaDescribedBy, destaque }) => (
     <label
         className={`relative inline-flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
         title={title}
@@ -45,7 +47,7 @@ const TableSwitch: React.FC<{
             aria-label={ariaLabel}
             aria-describedby={ariaDescribedBy}
         />
-        <div className={`w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all relative ${onColor}`}></div>
+        <div className={`w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all relative ${onColor} ${destaque ? 'ring-2 ring-amber-400 ring-offset-1' : ''}`}></div>
         {(onLabel || offLabel) && (
             <span className={`text-sm font-normal ${checked ? 'text-gray-700' : 'text-gray-400'}`}>
                 {checked ? onLabel : offLabel}

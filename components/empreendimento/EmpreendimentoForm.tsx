@@ -1,29 +1,44 @@
 // components/empreendimento/EmpreendimentoForm.tsx
+//
+// A ficha do empreendimento, em duas cascas:
+//   • `modo="painel"` (padrão) — painel lateral para NOVO e DUPLICAR;
+//   • `modo="embutido"` — a aba Visão Geral da ficha aberta, que desde 21/11/2026 é o ÚNICO lugar
+//     de edição (o botão "Editar" do topo saiu). Estilo de RH › Colaboradores › Editar Colaborador:
+//     seções com título, rótulo em cima, campo h-9, um Salvar que não fecha a tela (§25) e Ctrl+S.
+//     Plano: docs/planos/2026-11-21-empreendimento-visao-geral-objetivo.md.
+// Os campos são os mesmos nas duas: um formulário só, para não haver duas portas para o mesmo dado.
+// O terreno da Visão Geral é a `TerrenoSecao` (a mesma da aba Torres), montada pela ficha — é ela
+// que trava o campo que vem da Planta Inteligente.
 import React from 'react';
-import { Loader2, Building2, HardHat, Link2, AlertCircle } from 'lucide-react';
+import { Loader2, Building2, AlertCircle, FileText, Landmark, MapPin, BarChart3, Link2 } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import CityStateSelect from '../CityStateSelect';
+import SecaoTitulo from '../ui/SecaoTitulo';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService, EmpreendimentoTypeRecord } from '../../services/empreendimentoTypeService';
 import { tiposUnicosPorSlug } from '../../utils/empreendimentoTipos';
 import { imovibService } from '../../services/imovibService';
-import { organizationService } from '../../services/organizationService';
 import { companyService } from '../../services/companyService';
-import { supabase } from '../../lib/supabase';
 import { listStudies as listBlueprintStudies } from '../../services/blueprintService';
 import { useStore } from '../../store/useStore';
+import { useWritableOrganizations } from '../../hooks/useOrgContext';
 import { useConfirm } from '../ui/confirm';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { useToast } from '../../hooks/useToast';
 import SaveStatus from '../ui/SaveStatus';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
+import { fichaDe, payloadDaFicha, mudancasDaFicha, semVazios, type FichaDoEmpreendimento } from '../../utils/empreendimentoFicha';
+import { OBJETIVOS, ROTULO_DO_OBJETIVO, espelhosDoObjetivo } from '../../utils/empreendimentoObjetivo';
 import {
-  Empreendimento, EmpreendimentoStatus, EmpreendimentoTipo, EmpreendimentoInsert, EmpreendimentoTower, ImovibStudy, Organization,
+  Empreendimento, EmpreendimentoStatus, EmpreendimentoTipo, EmpreendimentoInsert, ImovibStudy,
 } from '../../types';
 
 interface Props {
-  /** Vazio quando o usuário está com "Todas as organizações" — o painel pede a org num seletor. */
+  /** Vazio quando o usuário está com "Todas as organizações" — o formulário pede a org num seletor. */
   organizationId: string;
+  /** Painel lateral (Novo/Duplicar) ou embutido na aba Visão Geral (editar). */
+  modo?: 'painel' | 'embutido';
+  /** O registro aberto — só no modo embutido. */
   editing?: Empreendimento | null;
   /**
    * Duplicação: abre em modo CRIAR com os campos pré-preenchidos a partir deste
@@ -31,8 +46,10 @@ interface Props {
    * copiada ao salvar — ver `empreendimentoService.copyStructure`.
    */
   duplicateFrom?: Empreendimento | null;
-  onClose: () => void;
+  onClose?: () => void;
   onSaved: (e: Empreendimento) => void;
+  /** Embutido: a seção Terreno (TerrenoSecao), montada pela ficha logo abaixo do Endereço. */
+  terreno?: React.ReactNode;
 }
 
 const STATUS_OPTIONS: { value: EmpreendimentoStatus; label: string }[] = [
@@ -40,6 +57,7 @@ const STATUS_OPTIONS: { value: EmpreendimentoStatus; label: string }[] = [
   { value: 'LANCAMENTO', label: 'Lançamento' },
   { value: 'EM_OBRAS', label: 'Em Obras' },
   { value: 'ENTREGUE', label: 'Entregue' },
+  { value: 'EM_OPERACAO', label: 'Em Operação' },
   { value: 'ENCERRADO', label: 'Encerrado' },
 ];
 
@@ -53,18 +71,38 @@ const FALLBACK_TIPO_OPTIONS: { value: EmpreendimentoTipo; label: string }[] = [
   { value: 'COND_INDUSTRIAL', label: 'Condomínio Industrial' },
 ];
 
-export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, duplicateFrom, onClose, onSaved }) => {
-  // Editar preenche a partir do próprio registro; duplicar preenche a partir do
-  // ORIGEM, mas continua sendo um cadastro novo (`editing` segue null).
+const REGIME_LABEL: Record<string, string> = {
+  lucro_real: 'Lucro Real', lucro_presumido: 'Lucro Presumido', simples: 'Simples', mei: 'MEI',
+};
+
+// Malha do formulário (§30): rótulo→campo 6px, campos gap-x-6/gap-y-4, seção space-y-4, card space-y-8.
+const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 disabled:bg-gray-50 disabled:cursor-not-allowed transition-all';
+const labelCls = 'block text-xs font-semibold text-slate-500';
+const ajudaCls = 'text-xs text-gray-500';
+const gradeCls = 'grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4';
+
+const Campo: React.FC<{ rotulo: string; htmlFor?: string; className?: string; ajuda?: React.ReactNode; children: React.ReactNode }> = ({ rotulo, htmlFor, className = '', ajuda, children }) => (
+  <div className={`space-y-1.5 ${className}`}>
+    <label htmlFor={htmlFor} className={labelCls}>{rotulo}</label>
+    {children}
+    {ajuda && <p className={ajudaCls}>{ajuda}</p>}
+  </div>
+);
+
+export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, modo = 'painel', editing: editingProp, duplicateFrom, onClose, onSaved, terreno }) => {
+  const embutido = modo === 'embutido';
+  // Editar só existe embutido (Visão Geral). O painel é Novo ou Duplicar.
+  const editing = embutido ? (editingProp ?? null) : null;
   const base = editing ?? duplicateFrom ?? null;
   // `projects` do store já vem só com obras reais (sem projeto de sistema, sem
   // orçamento/planejamento/diário) — ver CLAUDE.md regras #2 e #3.
   const { projects } = useStore();
+  const allOrganizations = useStore(s => s.organizations);
+  const writableOrgs = useWritableOrganizations();
   const confirm = useConfirm();
-  // §25 do guia — editar não fecha mais o painel ao salvar (ver handleSaved em
-  // EmpreendimentoModule.tsx). dirty também arma a guarda de saída do próprio
-  // Sheet (ESC/backdrop) e do botão Cancelar explícito abaixo.
-  const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
+  // §25 — editar não fecha ao salvar. Embutido, a pendência também guarda a navegação (menu,
+  // voltar do navegador, troca de aba da ficha): o formulário desmonta ao sair da Visão Geral.
+  const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges({ guardarNavegacao: embutido });
   const [savedAt, setSavedAt] = React.useState<number | null>(null);
   const [saving, setSaving] = React.useState(false);
   const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
@@ -72,59 +110,33 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
   /** Planta → nome do OUTRO empreendimento que já a tem. */
   const [plantaOcupadaPor, setPlantaOcupadaPor] = React.useState<Map<string, string>>(new Map());
   const [empreendimentoTypes, setEmpreendimentoTypes] = React.useState<EmpreendimentoTypeRecord[]>([]);
-  // Torres do empreendimento — só existem depois de criado. O vínculo de obra por torre
-  // (multi-torre) mora aqui no painel, junto do vínculo de obra principal (project_id).
-  const [towers, setTowers] = React.useState<EmpreendimentoTower[]>([]);
-  const [towerLinkBusyId, setTowerLinkBusyId] = React.useState<string | null>(null);
-  // Org efetiva do registro. Vem da prop quando há uma org ativa específica;
-  // com "Todas as organizações" a prop chega vazia e o usuário escolhe aqui. Ao editar, o
-  // campo continua visível (e editável) — antes só aparecia ao criar sem org de contexto,
-  // então não tinha como ver nem corrigir a organização de um empreendimento já existente.
+  // Org efetiva do registro. Vem da prop quando há uma org ativa específica; com "Todas as
+  // organizações" a prop chega vazia e o usuário escolhe aqui. Ao editar, o campo continua
+  // visível e editável, para ver e corrigir a organização de um empreendimento já existente.
   const [orgId, setOrgId] = React.useState<string>(base?.organization_id || organizationId || '');
-  const [organizations, setOrganizations] = React.useState<Organization[]>([]);
   const [companies, setCompanies] = React.useState<{ id: string; razao_social: string; nome_fantasia?: string | null; regime_tributario?: string | null }[]>([]);
   // Aviso pelo ToastProvider da raiz: dentro do Sheet (painel com translate) um
   // `fixed` local ficaria preso ao canto do painel, por cima do rodapé.
   const { localToast, showToast: notify } = useToast();
-  const [form, setForm] = React.useState({
-    // Duplicando: nome ganha sufixo, e código/matrícula/CNPJ ficam vazios — são
-    // identificadores únicos do registro de origem, não características dele.
-    name: duplicateFrom ? `${duplicateFrom.name} (cópia)` : (base?.name ?? ''),
-    company_id: base?.company_id ?? '',
-    code: duplicateFrom ? '' : (base?.code ?? ''),
-    // A cópia volta para o começo do ciclo, mesmo que a origem já esteja em obras.
-    status: (duplicateFrom ? 'PLANEJAMENTO' : (base?.status ?? 'PLANEJAMENTO')) as EmpreendimentoStatus,
-    tipo: (base?.tipo ?? '') as EmpreendimentoTipo | '',
-    // Vínculos vivos não se duplicam: dois empreendimentos apontando para o mesmo
-    // estudo/obra fariam o sync de um sobrescrever o outro.
-    imovib_study_id: duplicateFrom ? '' : (base?.imovib_study_id ?? ''),
-    blueprint_study_id: duplicateFrom ? '' : (base?.blueprint_study_id ?? ''),
-    project_id: duplicateFrom ? '' : (base?.project_id ?? ''),
-    matricula: duplicateFrom ? '' : (base?.matricula ?? ''),
-    construtora: base?.construtora ?? '',
-    responsavel_tecnico: base?.responsavel_tecnico ?? '',
-    crea_cau: base?.crea_cau ?? '',
-    numero_processo: duplicateFrom ? '' : (base?.numero_processo ?? ''),
-    endereco_street: base?.endereco_street ?? '',
-    endereco_number: base?.endereco_number ?? '',
-    endereco_neighborhood: base?.endereco_neighborhood ?? '',
-    endereco_city: base?.endereco_city ?? '',
-    endereco_state: base?.endereco_state ?? '',
-    endereco_zip_code: base?.endereco_zip_code ?? '',
-    spe_razao_social: base?.spe_razao_social ?? '',
-    spe_cnpj: duplicateFrom ? '' : (base?.spe_cnpj ?? ''),
-    spe_nome_fantasia: base?.spe_nome_fantasia ?? '',
-    developer_name: base?.developer_name ?? '',
-    manager: base?.manager ?? '',
-    launch_date: duplicateFrom ? '' : (base?.launch_date ?? ''),
-    expected_delivery_date: duplicateFrom ? '' : (base?.expected_delivery_date ?? ''),
-    terreno_area: base?.terreno_area?.toString() ?? '',
-    vgv_total: base?.vgv_total?.toString() ?? '',
-  });
+  const [form, setForm] = React.useState<FichaDoEmpreendimento>(() => fichaDe(base, { duplicar: !!duplicateFrom && !editing }));
 
+  // Embutido: o registro muda por fora (Vinculações, Terreno, Sincronização recarregam a ficha).
+  // Sem pendência, o formulário acompanha; com pendência, fica o que a pessoa está digitando —
+  // e salvar manda só o que ela mudou (`mudancasDaFicha`), sem reescrever o resto.
+  const salvoRef = React.useRef(payloadDaFicha(fichaDe(editing), editing?.organization_id || ''));
   React.useEffect(() => {
-    organizationService.listOrganizations().then(setOrganizations).catch(() => setOrganizations([]));
-  }, []);
+    if (!editing) return;
+    salvoRef.current = payloadDaFicha(fichaDe(editing), editing.organization_id);
+    if (!dirty) { setForm(fichaDe(editing)); setOrgId(editing.organization_id); }
+  }, [editing]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Só as organizações em que a pessoa grava (gravar fora delas = 42501) — mais a do próprio
+  // registro, para o campo não aparecer vazio quando ela abre um empreendimento de outra org.
+  const organizations = React.useMemo(() => {
+    if (!orgId || writableOrgs.some(o => o.id === orgId)) return writableOrgs;
+    const atual = allOrganizations.find(o => o.id === orgId);
+    return atual ? [atual, ...writableOrgs] : writableOrgs;
+  }, [writableOrgs, allOrganizations, orgId]);
 
   // Empresas da organização selecionada — fonte do regime tributário usado na
   // geração de Tributos a Pagar das Locações dos imóveis deste empreendimento.
@@ -171,11 +183,6 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
   }, [orgId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   React.useEffect(() => {
-    if (!editing) { setTowers([]); return; }
-    empreendimentoService.listTowers(editing.id).then(setTowers).catch(() => setTowers([]));
-  }, [editing]);
-
-  React.useEffect(() => {
     let vigente = true;
     empreendimentoTypeService.list(orgId || undefined)
       .then(tipos => { if (vigente) setEmpreendimentoTypes(tiposUnicosPorSlug(tipos, orgId)); })
@@ -186,8 +193,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
   // Obras da org escolhida. Sem org (ainda escolhendo), não há o que oferecer.
   // organization_id (coluna nativa) tem precedência sobre settings.organizationId: obra
   // vinculada a uma empresa/grupo só carrega a org ali (sincronizada por trigger a partir
-  // de empresa_id) — settings.organizationId nunca é preenchido nesse caso, e o filtro
-  // ficava cego para essas obras (reportado em Empreendimento > Obra Vinculada).
+  // de empresa_id) — settings.organizationId nunca é preenchido nesse caso.
   const orgProjects = React.useMemo(
     () => projects.filter(p => !orgId || (p.organization_id ?? (p.settings as any)?.organizationId) === orgId),
     [projects, orgId],
@@ -199,89 +205,51 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
     ? form.project_id
     : '';
 
-  const set = (k: keyof typeof form, v: string) => { setForm(prev => ({ ...prev, [k]: v })); markDirty(); };
+  const set = (k: keyof FichaDoEmpreendimento, v: string) => { setForm(prev => ({ ...prev, [k]: v })); markDirty(); };
 
-  const handleLinkTowerObra = async (tower: EmpreendimentoTower, projectId: string) => {
-    if (!projectId) return;
-    if (towers.some(t => t.id !== tower.id && t.project_id === projectId)) {
-      const ok = await confirm({
-        title: 'Obra já vinculada',
-        message: 'Esta obra já está vinculada a outra torre. Deseja vincular mesmo assim?',
-        confirmLabel: 'Vincular',
-        variant: 'warning',
-      });
-      if (!ok) return;
-    }
-    setTowerLinkBusyId(tower.id);
-    try {
-      await empreendimentoService.linkTowerToObra(tower.id, projectId);
-      setTowers(prev => prev.map(t => t.id === tower.id ? { ...t, project_id: projectId } : t));
-    } catch (err: any) {
-      notify(`Erro ao vincular obra: ${err.message}`, 'error');
-    } finally {
-      setTowerLinkBusyId(null);
-    }
-  };
+  // ── Objetivo: aviso quando a escolha esconde um espelho que tem unidade publicada ──
+  // Decisão do usuário (21/11/2026): a troca é permitida; as publicações continuam no Comercial,
+  // só a aba some da ficha. O aviso diz quantas são, para a escolha ser consciente.
+  const [publicadas, setPublicadas] = React.useState<{ vendas: number; locacoes: number } | null>(null);
+  const espelhos = espelhosDoObjetivo(form.objetivo);
+  const escondeAlgum = !espelhos.vendas || !espelhos.locacoes;
+  React.useEffect(() => {
+    if (!editing || !escondeAlgum || publicadas) return;
+    let vivo = true;
+    empreendimentoService.listAllUnitsForEmpreendimento(editing.id)
+      .then(us => { if (vivo) setPublicadas({ vendas: us.filter(u => u.commercial_property_id).length, locacoes: us.filter(u => u.rental_property_id).length }); })
+      .catch(() => { if (vivo) setPublicadas(null); });
+    return () => { vivo = false; };
+  }, [editing?.id, escondeAlgum]); // eslint-disable-line react-hooks/exhaustive-deps
+  const avisoDoObjetivo = (() => {
+    if (!publicadas) return null;
+    if (!espelhos.locacoes && publicadas.locacoes > 0) return `${publicadas.locacoes} unidade(s) seguem publicadas em Locações; a aba Espelho de Locações fica oculta.`;
+    if (!espelhos.vendas && publicadas.vendas > 0) return `${publicadas.vendas} unidade(s) seguem publicadas em Vendas; a aba Espelho de Vendas fica oculta.`;
+    return null;
+  })();
 
-  const handleCreateTowerObra = async (tower: EmpreendimentoTower) => {
-    if (!orgId) { notify('Selecione uma organização específica para criar a obra.', 'error'); return; }
-    const ok = await confirm({
-      title: 'Criar obra?',
-      message: `Uma nova obra será criada e vinculada à torre "${tower.name}".`,
-      confirmLabel: 'Criar',
-      variant: 'default',
-    });
-    if (!ok) return;
-    setTowerLinkBusyId(tower.id);
-    try {
-      const projectId = await empreendimentoService.createObraForTower(tower.id, orgId, tower.name);
-      setTowers(prev => prev.map(t => t.id === tower.id ? { ...t, project_id: projectId } : t));
-    } catch (err: any) {
-      notify(`Erro ao criar obra: ${err.message}`, 'error');
-    } finally {
-      setTowerLinkBusyId(null);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const salvar = async () => {
     if (!form.name.trim()) { notify('Informe o nome do empreendimento.', 'error'); return; }
     if (!orgId) { notify('Selecione a organização do empreendimento.', 'error'); return; }
     setSaving(true);
     try {
-      const payload: Partial<EmpreendimentoInsert> = {
-        organization_id: orgId,
-        company_id: form.company_id || null,
-        name: form.name.trim(),
-        code: form.code || undefined,
-        status: form.status,
-        tipo: form.tipo || null,
-        imovib_study_id: form.imovib_study_id || null,
-        blueprint_study_id: form.blueprint_study_id || null,
-        project_id: form.project_id || null,
-        matricula: form.matricula || undefined,
-        construtora: form.construtora || undefined,
-        responsavel_tecnico: form.responsavel_tecnico || undefined,
-        crea_cau: form.crea_cau || undefined,
-        numero_processo: form.numero_processo || undefined,
-        endereco_street: form.endereco_street || undefined,
-        endereco_number: form.endereco_number || undefined,
-        endereco_neighborhood: form.endereco_neighborhood || undefined,
-        endereco_city: form.endereco_city || undefined,
-        endereco_state: form.endereco_state || undefined,
-        endereco_zip_code: form.endereco_zip_code || undefined,
-        spe_razao_social: form.spe_razao_social || undefined,
-        spe_cnpj: form.spe_cnpj || undefined,
-        spe_nome_fantasia: form.spe_nome_fantasia || undefined,
-        developer_name: form.developer_name || undefined,
-        manager: form.manager || undefined,
-        launch_date: form.launch_date || undefined,
-        expected_delivery_date: form.expected_delivery_date || undefined,
-        terreno_area: form.terreno_area ? Number(form.terreno_area) : undefined,
-        vgv_total: form.vgv_total ? Number(form.vgv_total) : undefined,
-        // Duplicando: os campos do terreno que este painel não edita (o endereço do
-        // terreno foi removido da UI, ver bloco "Terreno") viriam vazios e a cópia
-        // perderia dado em silêncio. Copiamos explicitamente.
+      const payload = payloadDaFicha(form, orgId);
+
+      if (editing) {
+        const mudou = mudancasDaFicha(salvoRef.current, payload);
+        const saved = Object.keys(mudou).length > 0 ? await empreendimentoService.update(editing.id, mudou) : editing;
+        salvoRef.current = payloadDaFicha(fichaDe(saved), saved.organization_id);
+        markSaved();
+        setSavedAt(Date.now());
+        onSaved(saved);
+        notify('Empreendimento atualizado.');
+        return;
+      }
+
+      const novo: Partial<EmpreendimentoInsert> = {
+        ...semVazios(payload),
+        // Duplicando: o que este formulário não edita (endereço do terreno, medidas, orientação,
+        // complemento, metadata) viria vazio e a cópia perderia dado em silêncio. Copiado à parte.
         ...(duplicateFrom ? {
           terreno_street: duplicateFrom.terreno_street,
           terreno_number: duplicateFrom.terreno_number,
@@ -303,31 +271,22 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
           metadata: duplicateFrom.metadata,
         } : {}),
       };
-
-      const saved = editing
-        ? await empreendimentoService.update(editing.id, payload)
-        : await empreendimentoService.create(payload as EmpreendimentoInsert);
+      const saved = await empreendimentoService.create(novo as EmpreendimentoInsert);
 
       // Estrutura só depois do cadastro existir. Se a cópia falhar, o empreendimento
       // já foi criado — avisa e mantém o painel aberto, em vez de fingir sucesso.
-      if (duplicateFrom && !editing) {
+      if (duplicateFrom) {
         try {
           await empreendimentoService.copyStructure(duplicateFrom.id, saved.id);
         } catch (err: any) {
           notify(`Empreendimento criado, mas a cópia da estrutura falhou: ${err.message}`, 'error');
-          setSaving(false);
           return;
         }
       }
-
-      onSaved(saved);
-      // §25 do guia — quem decide fechar é o pai (EmpreendimentoModule.handleSaved):
-      // editar permanece aberto, criar/duplicar fecha. Aqui só sinaliza a gravação.
       markSaved();
-      setSavedAt(Date.now());
-      notify(editing
-        ? 'Empreendimento atualizado com sucesso.'
-        : duplicateFrom ? 'Empreendimento duplicado com sucesso.' : 'Empreendimento criado com sucesso.');
+      notify(duplicateFrom ? 'Empreendimento duplicado com sucesso.' : 'Empreendimento criado com sucesso.');
+      // Criar termina a tarefa: o pai fecha o painel (§25).
+      onSaved(saved);
     } catch (err: any) {
       notify(`Erro ao salvar empreendimento: ${err.message}`, 'error');
     } finally {
@@ -335,106 +294,222 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
     }
   };
 
+  const handleSubmit = (e: React.FormEvent) => { e.preventDefault(); void salvar(); };
+
+  // Ctrl+S salva a Visão Geral (como em Editar Colaborador).
+  const salvarRef = React.useRef(salvar);
+  salvarRef.current = salvar;
+  React.useEffect(() => {
+    if (!embutido) return;
+    const aoTeclar = (ev: KeyboardEvent) => {
+      if ((ev.ctrlKey || ev.metaKey) && ev.key.toLowerCase() === 's') {
+        ev.preventDefault();
+        if (dirty && !saving) void salvarRef.current();
+      }
+    };
+    window.addEventListener('keydown', aoTeclar);
+    return () => window.removeEventListener('keydown', aoTeclar);
+  }, [embutido, dirty, saving]);
+
   const handleCancel = async () => {
-    if (await confirmDiscard()) onClose();
+    if (await confirmDiscard()) onClose?.();
   };
 
-  const inputCls = 'w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-400 transition-all';
-  const labelCls = 'text-xs font-semibold text-slate-500 mb-1 block';
-  const sectionCls = 'text-xs font-semibold text-gray-500 mb-3';
+  const tiposOpcoes = empreendimentoTypes.length > 0
+    ? empreendimentoTypes.map(t => ({ value: t.slug, label: t.name }))
+    : FALLBACK_TIPO_OPTIONS;
 
-  return (
-    // Painel lateral (UI_PATTERNS.md): editar/criar item de lista sem perder o
-    // contexto da tela por trás. Era um modal central — trocado a pedido.
-    <Sheet open onClose={onClose} size="2xl" dirty={dirty}>
-      <SheetHeader onClose={handleCancel}>
-        <SheetTitle className="flex items-center gap-2">
-          <Building2 className="w-5 h-5 text-blue-600" />
-          {editing ? 'Editar Empreendimento' : duplicateFrom ? 'Duplicar Empreendimento' : 'Novo Empreendimento'}
-        </SheetTitle>
-        <SheetDescription>
-          {editing
-            ? editing.name
-            : duplicateFrom
-              ? `Cópia de "${duplicateFrom.name}". Torres, pavimentos, unidades e áreas comuns são copiados ao salvar; vínculos com obra, estudos e Comercial não.`
-              : 'Cadastre a incorporação e seus vínculos.'}
-        </SheetDescription>
-      </SheetHeader>
+  const secoes = (
+    <>
+      {/* Identificação */}
+      <div className="space-y-4">
+        <SecaoTitulo icon={Building2} titulo="Identificação" />
+        <div className={gradeCls}>
+          <Campo rotulo="Nome *" htmlFor="emp-nome" className="md:col-span-2">
+            <input id="emp-nome" className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} />
+          </Campo>
+          <Campo rotulo="Código" htmlFor="emp-codigo">
+            <input id="emp-codigo" className={inputCls} value={form.code} onChange={e => set('code', e.target.value)} />
+          </Campo>
+          <Campo rotulo="Status" htmlFor="emp-status">
+            <select id="emp-status" className={inputCls} value={form.status} onChange={e => set('status', e.target.value)}>
+              {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </Campo>
+          <Campo rotulo="Tipo" htmlFor="emp-tipo">
+            <select id="emp-tipo" className={inputCls} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
+              <option value="">— Selecione —</option>
+              {tiposOpcoes.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
+          </Campo>
+          <Campo
+            rotulo="Objetivo"
+            htmlFor="emp-objetivo"
+            ajuda={avisoDoObjetivo
+              ? <span className="text-amber-700" data-testid="aviso-objetivo">{avisoDoObjetivo}</span>
+              : 'Decide quais espelhos a ficha mostra: Vendas, Locações ou os dois.'}
+          >
+            <select id="emp-objetivo" className={inputCls} value={form.objetivo} onChange={e => set('objetivo', e.target.value)}>
+              {OBJETIVOS.map(o => <option key={o} value={o}>{ROTULO_DO_OBJETIVO[o]}</option>)}
+            </select>
+          </Campo>
+          <Campo
+            rotulo="Organização *"
+            htmlFor="emp-org"
+            ajuda={editing ? 'Obra, estudos e torres vinculados usam essa organização para aparecer nos seletores.' : undefined}
+          >
+            <select id="emp-org" className={inputCls} value={orgId} onChange={e => void handleOrgChange(e.target.value)}>
+              <option value="">— Selecione —</option>
+              {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+          </Campo>
+          <Campo
+            rotulo="Empresa (regime tributário)"
+            htmlFor="emp-empresa"
+            className="md:col-span-2"
+            ajuda="Define o regime usado para calcular PIS/COFINS/INSS das Locações dos imóveis deste empreendimento."
+          >
+            <select
+              id="emp-empresa"
+              className={inputCls}
+              value={form.company_id}
+              onChange={e => set('company_id', e.target.value)}
+              disabled={!orgId}
+              title={!orgId ? 'Selecione a organização primeiro.' : undefined}
+            >
+              <option value="">— Sem empresa —</option>
+              {companies.map(c => (
+                <option key={c.id} value={c.id}>
+                  {c.nome_fantasia || c.razao_social}{c.regime_tributario ? ` · ${REGIME_LABEL[c.regime_tributario] ?? c.regime_tributario}` : ''}
+                </option>
+              ))}
+            </select>
+          </Campo>
+        </div>
+      </div>
 
-      <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
-        <SheetPanel className="p-6 space-y-6">
-          {/* Identificação */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className={labelCls}>Organização *</label>
-              <select
-                className={inputCls}
-                value={orgId}
-                onChange={e => handleOrgChange(e.target.value)}
-              >
-                <option value="">— Selecione —</option>
-                {organizations.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
-              </select>
-              {editing && (
-                <p className="text-[10px] text-gray-400 font-medium mt-1">
-                  Obra, estudos e torres vinculados usam essa organização para aparecer nos seletores.
-                </p>
-              )}
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelCls}>Nome *</label>
-              <input className={inputCls} value={form.name} onChange={e => set('name', e.target.value)} />
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelCls}>Empresa (regime tributário)</label>
-              <select
-                className={inputCls}
-                value={form.company_id}
-                onChange={e => set('company_id', e.target.value)}
-                disabled={!orgId}
-                title={!orgId ? 'Selecione a organização primeiro.' : undefined}
-              >
-                <option value="">— Sem empresa —</option>
-                {companies.map(c => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome_fantasia || c.razao_social}{c.regime_tributario ? ` · ${c.regime_tributario === 'lucro_real' ? 'Lucro Real' : c.regime_tributario === 'lucro_presumido' ? 'Lucro Presumido' : c.regime_tributario === 'simples' ? 'Simples' : c.regime_tributario === 'mei' ? 'MEI' : c.regime_tributario}` : ''}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[10px] text-gray-400 font-medium mt-1">
-                Define o regime usado para calcular PIS/COFINS/INSS das Locações dos imóveis deste empreendimento.
-              </p>
-            </div>
-            <div>
-              <label className={labelCls}>Código</label>
-              <input className={inputCls} value={form.code} onChange={e => set('code', e.target.value)} />
-            </div>
-            <div>
-              <label className={labelCls}>Status</label>
-              <select className={inputCls} value={form.status} onChange={e => set('status', e.target.value)}>
-                {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className={labelCls}>Tipo</label>
-              <select className={inputCls} value={form.tipo} onChange={e => set('tipo', e.target.value)}>
-                <option value="">— Selecione —</option>
-                {empreendimentoTypes.length > 0
-                  ? empreendimentoTypes.map(t => <option key={t.slug} value={t.slug}>{t.name}</option>)
-                  : FALLBACK_TIPO_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)
-                }
-              </select>
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelCls}>Estudo de Viabilidade (Imovib)</label>
-              <select className={inputCls} value={form.imovib_study_id} onChange={e => set('imovib_study_id', e.target.value)}>
+      {/* Dados Gerais / Regularização */}
+      <div className="space-y-4">
+        <SecaoTitulo icon={FileText} titulo="Dados gerais" />
+        <div className={gradeCls}>
+          <Campo rotulo="Matrícula" htmlFor="emp-matricula">
+            <input id="emp-matricula" className={inputCls} value={form.matricula} onChange={e => set('matricula', e.target.value)} />
+          </Campo>
+          <Campo rotulo="Nº do processo" htmlFor="emp-processo">
+            <input id="emp-processo" className={inputCls} value={form.numero_processo} onChange={e => set('numero_processo', e.target.value)} />
+          </Campo>
+          <Campo rotulo="Construtora" htmlFor="emp-construtora">
+            <input id="emp-construtora" className={inputCls} value={form.construtora} onChange={e => set('construtora', e.target.value)} />
+          </Campo>
+          <Campo rotulo="Responsável técnico" htmlFor="emp-rt" className="md:col-span-2">
+            <input id="emp-rt" className={inputCls} value={form.responsavel_tecnico} onChange={e => set('responsavel_tecnico', e.target.value)} />
+          </Campo>
+          <Campo rotulo="CREA/CAU" htmlFor="emp-crea">
+            <input id="emp-crea" className={inputCls} value={form.crea_cau} onChange={e => set('crea_cau', e.target.value)} />
+          </Campo>
+        </div>
+      </div>
+
+      {/* SPE */}
+      <div className="space-y-4">
+        <SecaoTitulo icon={Landmark} titulo="SPE" />
+        <div className={gradeCls}>
+          <Campo rotulo="Razão social" htmlFor="emp-spe-razao" className="md:col-span-2">
+            <input id="emp-spe-razao" className={inputCls} value={form.spe_razao_social} onChange={e => set('spe_razao_social', e.target.value)} />
+          </Campo>
+          <Campo rotulo="CNPJ" htmlFor="emp-spe-cnpj">
+            <input id="emp-spe-cnpj" className={inputCls} value={form.spe_cnpj} onChange={e => set('spe_cnpj', e.target.value)} />
+          </Campo>
+          <Campo rotulo="Nome fantasia" htmlFor="emp-spe-fantasia">
+            <input id="emp-spe-fantasia" className={inputCls} value={form.spe_nome_fantasia} onChange={e => set('spe_nome_fantasia', e.target.value)} />
+          </Campo>
+          <Campo rotulo="Incorporadora" htmlFor="emp-incorporadora">
+            <input id="emp-incorporadora" className={inputCls} value={form.developer_name} onChange={e => set('developer_name', e.target.value)} />
+          </Campo>
+          <Campo rotulo="Gestor" htmlFor="emp-gestor">
+            <input id="emp-gestor" className={inputCls} value={form.manager} onChange={e => set('manager', e.target.value)} />
+          </Campo>
+        </div>
+      </div>
+
+      {/* Endereço de divulgação / oficial */}
+      <div className="space-y-4">
+        <SecaoTitulo icon={MapPin} titulo="Endereço do empreendimento" />
+        <div className={gradeCls}>
+          <Campo rotulo="Logradouro" htmlFor="emp-logradouro" className="md:col-span-2">
+            <input id="emp-logradouro" className={inputCls} value={form.endereco_street} onChange={e => set('endereco_street', e.target.value)} />
+          </Campo>
+          <Campo rotulo="Número" htmlFor="emp-numero">
+            <input id="emp-numero" className={inputCls} value={form.endereco_number} onChange={e => set('endereco_number', e.target.value)} />
+          </Campo>
+          <Campo rotulo="Bairro" htmlFor="emp-bairro">
+            <input id="emp-bairro" className={inputCls} value={form.endereco_neighborhood} onChange={e => set('endereco_neighborhood', e.target.value)} />
+          </Campo>
+          <div className="md:col-span-2">
+            <CityStateSelect
+              cep={form.endereco_zip_code || undefined}
+              stateCode={form.endereco_state || undefined}
+              cityName={form.endereco_city || undefined}
+              onChange={({ cep, stateCode, cityName }) => {
+                setForm(prev => ({
+                  ...prev,
+                  endereco_zip_code: cep ?? '',
+                  endereco_state: stateCode ?? '',
+                  endereco_city: cityName ?? '',
+                }));
+                markDirty();
+              }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Terreno — no painel (criar), só a área; na Visão Geral é a TerrenoSecao, fora deste formulário. */}
+      {!embutido && (
+        <div className="space-y-4">
+          <SecaoTitulo icon={MapPin} titulo="Terreno" />
+          <div className={gradeCls}>
+            <Campo rotulo="Área do terreno (m²)" htmlFor="emp-terreno-area">
+              <input id="emp-terreno-area" type="number" step="0.01" className={inputCls} value={form.terreno_area} onChange={e => set('terreno_area', e.target.value)} />
+            </Campo>
+          </div>
+        </div>
+      )}
+
+      {/* Comercial / datas */}
+      <div className="space-y-4">
+        <SecaoTitulo icon={BarChart3} titulo="Comercial" />
+        <div className={gradeCls}>
+          <Campo rotulo="VGV total (R$)">
+            <MoneyCentsInput className={inputCls} value={form.vgv_total} onChange={v => set('vgv_total', v)} />
+          </Campo>
+          <Campo rotulo="Lançamento" htmlFor="emp-lancamento">
+            <input id="emp-lancamento" type="date" className={inputCls} value={form.launch_date} onChange={e => set('launch_date', e.target.value)} />
+          </Campo>
+          <Campo rotulo="Previsão de entrega" htmlFor="emp-entrega">
+            <input id="emp-entrega" type="date" className={inputCls} value={form.expected_delivery_date} onChange={e => set('expected_delivery_date', e.target.value)} />
+          </Campo>
+        </div>
+      </div>
+
+      {/* Vínculos — duplicando não se copiam (vínculo vivo duplicado = dois syncs no mesmo estudo). */}
+      {!duplicateFrom && (
+        <div className="space-y-4">
+          <SecaoTitulo icon={Link2} titulo="Vínculos" />
+          <div className={gradeCls}>
+            <Campo rotulo="Estudo de viabilidade (Imovib)" htmlFor="emp-imovib">
+              <select id="emp-imovib" className={inputCls} value={form.imovib_study_id} onChange={e => set('imovib_study_id', e.target.value)}>
                 <option value="">— Sem vínculo —</option>
+                {form.imovib_study_id && !studies.some(s => s.id === form.imovib_study_id) && <option value={form.imovib_study_id}>Estudo não encontrado nesta organização</option>}
                 {studies.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelCls}>Estudo de Arquitetura (Planta Inteligente)</label>
-              <select className={inputCls} value={form.blueprint_study_id} onChange={e => set('blueprint_study_id', e.target.value)} aria-label="Estudo da Planta Inteligente">
+            </Campo>
+            <Campo
+              rotulo="Estudo de arquitetura (Planta Inteligente)"
+              htmlFor="emp-planta"
+              ajuda="A massa, o loteamento e o terreno da Planta chegam pela aba Sincronização."
+            >
+              <select id="emp-planta" className={inputCls} value={form.blueprint_study_id} onChange={e => set('blueprint_study_id', e.target.value)} aria-label="Estudo da Planta Inteligente">
                 <option value="">— Sem vínculo —</option>
                 {form.blueprint_study_id && !blueprintStudies.some(s => s.id === form.blueprint_study_id) && <option value={form.blueprint_study_id}>Estudo não encontrado nesta organização</option>}
                 {blueprintStudies.map(s => {
@@ -446,220 +521,100 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, editing, d
                   );
                 })}
               </select>
-              <p className="text-[10px] text-gray-400 font-medium mt-1">
-                O estudo de massa e o loteamento da Planta Inteligente trazem torres e unidades (Central de Sincronização). Também vincula ao enviar desde a própria planta.
-              </p>
-            </div>
-            <div className="md:col-span-2">
-              <label className={labelCls}>Obra Vinculada</label>
-              <select className={inputCls} value={form.project_id} onChange={e => set('project_id', e.target.value)}>
+            </Campo>
+            <Campo
+              rotulo="Obra vinculada"
+              htmlFor="emp-obra"
+              ajuda={editing ? 'Obra principal. A obra de cada torre, o orçamento e o centro de custo ficam na aba Vinculações.' : undefined}
+            >
+              <select id="emp-obra" className={inputCls} value={form.project_id} onChange={e => set('project_id', e.target.value)}>
                 <option value="">— Sem vínculo —</option>
                 {orphanProjectId && <option value={orphanProjectId}>Obra não encontrada (vínculo antigo)</option>}
                 {orgProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
-              <p className="text-[10px] text-gray-400 font-medium mt-1">
-                {towers.length > 1
-                  ? 'Obra principal do empreendimento. Cada torre pode ter a sua própria obra — vincule abaixo.'
-                  : 'Obra do empreendimento.'}
-              </p>
+            </Campo>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const aviso = localToast && (
+    <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+      localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+    }`}>
+      <AlertCircle className="w-4 h-4 shrink-0" />
+      {localToast.message}
+    </div>
+  );
+
+  if (embutido) {
+    return (
+      <div className="space-y-6" data-testid="visao-geral-ficha">
+        <form id="ficha-empreendimento" onSubmit={handleSubmit} className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-8">
+          <div className="flex flex-wrap items-center justify-end gap-3">
+            <div className="flex items-center gap-3 shrink-0">
+              <SaveStatus dirty={dirty} savedAt={savedAt} />
+              <span title={!dirty ? 'Altere algum campo para salvar.' : undefined}>
+                <button
+                  type="submit"
+                  title="Salvar alterações (Ctrl+S)"
+                  disabled={saving || !dirty}
+                  className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                  Salvar alterações
+                </button>
+              </span>
             </div>
           </div>
+          {secoes}
+        </form>
+        {terreno}
+        {aviso}
+      </div>
+    );
+  }
 
-          {/* Torres & Obras — só existe depois do empreendimento criado, e só faz sentido
-              mostrar por torre quando há mais de uma (torre única já usa "Obra Vinculada" acima). */}
-          {editing && towers.length > 1 && (
-            <div>
-              <h3 className={sectionCls}>Obra por Torre</h3>
-              <div className="space-y-2">
-                {towers.map(tower => {
-                  const linkedObra = orgProjects.find(p => p.id === tower.project_id);
-                  const busy = towerLinkBusyId === tower.id;
-                  return (
-                    <div key={tower.id} className="flex items-center gap-2.5 flex-wrap px-3 py-2 border border-gray-100 rounded-[10px]">
-                      <span className="text-sm font-semibold text-gray-700 min-w-[8rem]">{tower.name}</span>
-                      {linkedObra ? (
-                        <span className="text-xs font-semibold px-2.5 h-9 inline-flex items-center rounded-[6px] bg-emerald-50 text-emerald-600 gap-1.5">
-                          <HardHat className="w-3.5 h-3.5" /> {linkedObra.name}
-                        </span>
-                      ) : (
-                        <>
-                          <select
-                            defaultValue=""
-                            disabled={busy}
-                            onChange={e => handleLinkTowerObra(tower, e.target.value)}
-                            className="h-9 px-2.5 border border-gray-200 rounded-[6px] text-sm font-normal text-gray-600 bg-white outline-none"
-                          >
-                            <option value="">Vincular obra…</option>
-                            {orgProjects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                          </select>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => handleCreateTowerObra(tower)}
-                            className="h-9 px-2.5 rounded-[6px] bg-blue-50 hover:bg-blue-100 text-blue-600 text-sm font-medium flex items-center gap-1.5 disabled:opacity-50"
-                          >
-                            {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />} Criar obra
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
+  return (
+    // Painel lateral (UI_PATTERNS.md): criar/duplicar sem perder o contexto da tela por trás.
+    <Sheet open onClose={onClose ?? (() => {})} size="2xl" dirty={dirty}>
+      <SheetHeader onClose={handleCancel}>
+        <SheetTitle className="flex items-center gap-2">
+          <Building2 className="w-5 h-5 text-blue-600" />
+          {duplicateFrom ? 'Duplicar empreendimento' : 'Novo empreendimento'}
+        </SheetTitle>
+        <SheetDescription>
+          {duplicateFrom
+            ? `Cópia de "${duplicateFrom.name}". Torres, pavimentos, unidades e áreas comuns são copiados ao salvar; vínculos com obra, estudos e Comercial não.`
+            : 'Cadastre a incorporação e seus vínculos.'}
+        </SheetDescription>
+      </SheetHeader>
 
-          {/* Dados Gerais / Regularização */}
-          <div>
-            <h3 className={sectionCls}>Dados Gerais</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className={labelCls}>Matrícula</label>
-                <input className={inputCls} value={form.matricula} onChange={e => set('matricula', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>Nº do Processo</label>
-                <input className={inputCls} value={form.numero_processo} onChange={e => set('numero_processo', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>Construtora</label>
-                <input className={inputCls} value={form.construtora} onChange={e => set('construtora', e.target.value)} />
-              </div>
-              <div className="md:col-span-2">
-                <label className={labelCls}>Responsável Técnico</label>
-                <input className={inputCls} value={form.responsavel_tecnico} onChange={e => set('responsavel_tecnico', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>CREA/CAU</label>
-                <input className={inputCls} value={form.crea_cau} onChange={e => set('crea_cau', e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          {/* SPE */}
-          <div>
-            <h3 className={sectionCls}>SPE</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className={labelCls}>Razão Social</label>
-                <input className={inputCls} value={form.spe_razao_social} onChange={e => set('spe_razao_social', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>CNPJ</label>
-                <input className={inputCls} value={form.spe_cnpj} onChange={e => set('spe_cnpj', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>Nome Fantasia</label>
-                <input className={inputCls} value={form.spe_nome_fantasia} onChange={e => set('spe_nome_fantasia', e.target.value)} />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className={labelCls}>Incorporadora</label>
-                  <input className={inputCls} value={form.developer_name} onChange={e => set('developer_name', e.target.value)} />
-                </div>
-                <div>
-                  <label className={labelCls}>Gestor</label>
-                  <input className={inputCls} value={form.manager} onChange={e => set('manager', e.target.value)} />
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Endereço de divulgação / oficial */}
-          <div>
-            <h3 className={sectionCls}>Endereço do Empreendimento</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="md:col-span-2">
-                <label className={labelCls}>Logradouro</label>
-                <input className={inputCls} value={form.endereco_street} onChange={e => set('endereco_street', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>Número</label>
-                <input className={inputCls} value={form.endereco_number} onChange={e => set('endereco_number', e.target.value)} />
-              </div>
-              <div>
-                <label className={labelCls}>Bairro</label>
-                <input className={inputCls} value={form.endereco_neighborhood} onChange={e => set('endereco_neighborhood', e.target.value)} />
-              </div>
-              <div className="md:col-span-2">
-                <CityStateSelect
-                  cep={form.endereco_zip_code || undefined}
-                  stateCode={form.endereco_state || undefined}
-                  cityName={form.endereco_city || undefined}
-                  onChange={({ cep, stateCode, cityName }) => {
-                    setForm(prev => ({
-                      ...prev,
-                      endereco_zip_code: cep ?? '',
-                      endereco_state: stateCode ?? '',
-                      endereco_city: cityName ?? '',
-                    }));
-                    markDirty();
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Terreno — só a área (endereço do terreno foi removido por duplicar o
-              bloco "Endereço do Empreendimento" acima; os campos terreno_* de
-              endereço continuam existindo no banco para não perder dado histórico,
-              só não são mais editados aqui). */}
-          <div>
-            <h3 className={sectionCls}>Terreno</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className={labelCls}>Área do Terreno (m²)</label>
-                <input type="number" step="0.01" className={inputCls} value={form.terreno_area} onChange={e => set('terreno_area', e.target.value)} />
-              </div>
-            </div>
-          </div>
-
-          {/* Comercial / datas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className={labelCls}>VGV Total (R$)</label>
-              <MoneyCentsInput className={inputCls} value={form.vgv_total} onChange={v => set('vgv_total', v)} />
-            </div>
-            <div>
-              <label className={labelCls}>Lançamento</label>
-              <input type="date" className={inputCls} value={form.launch_date} onChange={e => set('launch_date', e.target.value)} />
-            </div>
-            <div>
-              <label className={labelCls}>Previsão de Entrega</label>
-              <input type="date" className={inputCls} value={form.expected_delivery_date} onChange={e => set('expected_delivery_date', e.target.value)} />
-            </div>
-          </div>
-
+      <form onSubmit={handleSubmit} className="flex-1 flex flex-col min-h-0">
+        <SheetPanel className="p-6 space-y-8">
+          {secoes}
         </SheetPanel>
 
         <SheetFooter>
-          {editing && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />}
           <button
             type="button"
             onClick={handleCancel}
             className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all active:scale-95"
           >
-            {editing ? 'Voltar' : 'Cancelar'}
+            Cancelar
           </button>
           <button
             type="submit"
-            disabled={saving || (!!editing && !dirty)}
+            disabled={saving}
             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
           >
             {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-            {editing ? 'Salvar' : duplicateFrom ? 'Criar cópia' : 'Criar'}
+            {duplicateFrom ? 'Criar cópia' : 'Criar'}
           </button>
         </SheetFooter>
       </form>
-
-      {localToast && (
-        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-          localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-        }`}>
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {localToast.message}
-        </div>
-      )}
+      {aviso}
     </Sheet>
   );
 };

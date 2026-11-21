@@ -1,7 +1,7 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks, Scale, FolderOpen } from 'lucide-react';
+import { ArrowLeft, Building2, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks, Scale, FolderOpen } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, EmpreendimentoUnitCharacteristic } from '../../types';
 import TowerEditor from './TowerEditor';
 import UnidadeUnicaEditor from './UnidadeUnicaEditor';
@@ -18,6 +18,10 @@ import MapaRegulatorioEditor from '../MapaRegulatorioEditor';
 import VinculacoesTab from './VinculacoesTab';
 import HistoricoTab from './HistoricoTab';
 import DocumentosEmpreendimentoTab from './DocumentosEmpreendimentoTab';
+import EmpreendimentoForm from './EmpreendimentoForm';
+import TerrenoSecao from './TerrenoSecao';
+import { espelhosDoObjetivo } from '../../utils/empreendimentoObjetivo';
+import { haPendenciaDeSaida, CONFIRMAR_SAIDA } from '../../lib/guardaDeSaida';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService } from '../../services/empreendimentoTypeService';
 import { empreendimentoUnitCharacteristicService } from '../../services/empreendimentoUnitCharacteristicService';
@@ -25,17 +29,13 @@ import { blueprintEstudoDoEmpreendimento } from '../../services/blueprintEstudoD
 import { useConfirm } from '../ui/confirm';
 import { generateIncorporationMemorialDraftPdf } from '../../services/incorporationMemorialService';
 import { nbr12721ExportService } from '../../services/nbr12721ExportService';
-import { organizationService } from '../../services/organizationService';
-import { companyService } from '../../services/companyService';
-import { imovibService } from '../../services/imovibService';
-import { supabase } from '../../lib/supabase';
-import { useStore } from '../../store/useStore';
 
 interface Props {
   empreendimento: Empreendimento;
   organizationId: string;
   onBack: () => void;
-  onEdit: () => void;
+  /** A Visão Geral gravou a ficha — o pai troca o registro aberto e a linha da lista (§22). */
+  onSaved: (e: Empreendimento) => void;
   onGoToStudy?: () => void;
   onSynced?: () => void;
   /** `handleLoadProject` — abre obra/orçamento/planejamento carregados (aba Vinculações). */
@@ -74,9 +74,8 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
 
 type Tab = 'visao' | 'sync' | 'torres' | 'caracteristicas' | 'regulatorio' | 'comercial' | 'locacoes' | 'documentos' | 'vinculos' | 'historico';
 
-export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced, onOpenProject, onChangeView }) => {
-  const { projects } = useStore(); // já vem só OBRA e sem projeto de sistema (CLAUDE.md regras #2/#3)
-  const [tab, setTab] = React.useState<Tab>('visao');
+export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onSaved, onGoToStudy, onSynced, onOpenProject, onChangeView }) => {
+  const [tab, setTabBruto] = React.useState<Tab>('visao');
   const [refreshKey, setRefreshKey] = React.useState(0);
   const [generatingMemorial, setGeneratingMemorial] = React.useState(false);
   // ÁREAS NBR 12721 NA PLANTA (14/10/2026, Fase 6b): o quadro de áreas mora no estudo da
@@ -92,9 +91,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   // Quantas propostas o empreendimento já teve: sem nenhuma, o bloco Curadoria nem aparece na Sincronização.
   const [totalCuradoria, setTotalCuradoria] = React.useState(0);
   const [tipoNameMap, setTipoNameMap] = React.useState<Record<string, string>>({});
-  const [orgName, setOrgName] = React.useState<string | undefined>(undefined);
-  const [companyLabel, setCompanyLabel] = React.useState<string | undefined>(undefined);
-  const [imovibStudyName, setImovibStudyName] = React.useState<string | undefined>(undefined);
   const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
   const notify = (message: string, type: 'success' | 'error' = 'success') => {
     setNotification({ message, type });
@@ -134,47 +130,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
   // aberta, não do topo (CLAUDE.md regra #5).
   const effectiveOrgId = e.organization_id || organizationId || undefined;
 
-  React.useEffect(() => {
-    organizationService.listOrganizations()
-      .then(orgs => setOrgName(orgs.find(o => o.id === e.organization_id)?.name))
-      .catch(() => setOrgName(undefined));
-  }, [e.organization_id]);
-
-  React.useEffect(() => {
-    if (!e.company_id || !effectiveOrgId) { setCompanyLabel(undefined); return; }
-    companyService.list(effectiveOrgId)
-      .then(cs => {
-        const c = cs.find(c => c.id === e.company_id);
-        if (!c) { setCompanyLabel(undefined); return; }
-        const regimeLabel = c.regime_tributario === 'lucro_real' ? 'Lucro Real'
-          : c.regime_tributario === 'lucro_presumido' ? 'Lucro Presumido'
-          : c.regime_tributario === 'simples' ? 'Simples'
-          : c.regime_tributario === 'mei' ? 'MEI'
-          : c.regime_tributario;
-        setCompanyLabel(`${c.nome_fantasia || c.razao_social}${regimeLabel ? ` · ${regimeLabel}` : ''}`);
-      })
-      .catch(() => setCompanyLabel(undefined));
-  }, [e.company_id, effectiveOrgId]);
-
-  React.useEffect(() => {
-    if (!e.imovib_study_id || !effectiveOrgId) { setImovibStudyName(undefined); return; }
-    imovibService.getStudies(effectiveOrgId)
-      .then(studies => setImovibStudyName(studies.find(s => s.id === e.imovib_study_id)?.name))
-      .catch(() => setImovibStudyName(undefined));
-  }, [e.imovib_study_id, effectiveOrgId]);
-
-  // A arquitetura do empreendimento é a Planta Inteligente (02/10/2026).
-  const [blueprintStudyName, setBlueprintStudyName] = React.useState<string | undefined>(undefined);
-  React.useEffect(() => {
-    if (!e.blueprint_study_id) { setBlueprintStudyName(undefined); return; }
-    supabase
-      .from('blueprint_studies')
-      .select('id, name')
-      .eq('id', e.blueprint_study_id)
-      .maybeSingle()
-      .then(({ data }) => setBlueprintStudyName((data as any)?.name));
-  }, [e.blueprint_study_id]);
-
   // Aba "Características Adicionais" (só existe quando há ao menos 1 característica
   // do catálogo aplicável ao tipo deste empreendimento — ver services/empreendimentoUnitCharacteristicService.ts).
   const [caracteristicas, setCaracteristicas] = React.useState<EmpreendimentoUnitCharacteristic[]>([]);
@@ -185,12 +140,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       .catch(() => setCaracteristicas([]));
   }, [effectiveOrgId, e.tipo]);
 
-  const obraVinculada = e.project_id ? projects.find(p => p.id === e.project_id) : undefined;
-
   const tipoLabel = e.tipo ? (tipoNameMap[e.tipo] || FALLBACK_TIPO_LABELS[e.tipo] || e.tipo) : undefined;
-
-  const enderecoCidade = [e.endereco_city, e.endereco_state].filter(Boolean).join(' - ');
-  const enderecoLinha = [e.endereco_street, e.endereco_number].filter(Boolean).join(', ');
 
   const criarEstudoDeAreas = async () => {
     const ok = await confirmar({
@@ -240,18 +190,28 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     }
   };
 
+  const espelhos = espelhosDoObjetivo(e.objetivo);
+  // Aba do espelho que o Objetivo escondeu (trocado agora na Visão Geral): volta para a Visão Geral.
+  const tabAtiva: Tab = (tab === 'comercial' && !espelhos.vendas) || (tab === 'locacoes' && !espelhos.locacoes) ? 'visao' : tab;
+  // Trocar de aba ou voltar com a Visão Geral alterada e não salva pergunta antes (o formulário
+  // desmonta ao sair dela). A pendência vem do registro global de `useUnsavedChanges`.
+  const podeSair = async () => !haPendenciaDeSaida() || confirmar(CONFIRMAR_SAIDA);
+  const setTab = async (t: Tab) => { if (t !== tabAtiva && await podeSair()) setTabBruto(t); };
+  const voltar = async () => { if (await podeSair()) onBack(); };
+  // O espelho para onde a aba Lote/Unidade leva: o de Vendas, ou o de Locações se o objetivo é Locação.
+  const abaDoEspelho: Tab = espelhos.vendas ? 'comercial' : 'locacoes';
+
   const tabs: { id: Tab; label: string; icon: any; badge?: number }[] = [
     { id: 'visao', label: 'Visão Geral', icon: FileText },
-    // A Curadoria (conflitos da sincronização) mora DENTRO desta aba desde 28/10/2026: o contador vem junto.
-    { id: 'sync', label: 'Sincronização', icon: ArrowLeftRight, badge: pendingCuradoria },
     // Unidade única: a mesma aba (mesmo id), com o nome do que ela é.
     { id: 'torres', label: estrutura === 'LOTE' ? 'Lote' : ehUnidadeUnica(estrutura) ? 'Unidade' : 'Torres & Unidades', icon: Layers },
     // Só existe quando o catálogo (Configurações do Sistema → Características de
     // Unidade) tem ao menos 1 característica aplicável ao tipo deste empreendimento.
     ...(caracteristicas.length > 0 ? [{ id: 'caracteristicas' as Tab, label: 'Características Adicionais', icon: ListChecks }] : []),
-    { id: 'regulatorio', label: 'Mapa Regulatorio', icon: Map },
-    { id: 'comercial', label: 'Espelho de Vendas', icon: ShoppingBag },
-    { id: 'locacoes', label: 'Espelho de Locações', icon: KeyRound },
+    { id: 'regulatorio', label: 'Mapa Regulatório', icon: Map },
+    // O Objetivo decide os espelhos (21/11/2026): Vendas esconde Locações, Locação esconde Vendas.
+    ...(espelhos.vendas ? [{ id: 'comercial' as Tab, label: 'Espelho de Vendas', icon: ShoppingBag }] : []),
+    ...(espelhos.locacoes ? [{ id: 'locacoes' as Tab, label: 'Espelho de Locações', icon: KeyRound }] : []),
     // Documentos legais (checklist) + arquivos do empreendimento. O arquivo mora
     // no GED (opura_documents.empreendimento_id); esta aba é uma vista dele.
     { id: 'documentos', label: 'Documentos', icon: FolderOpen },
@@ -259,9 +219,12 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     // do condomínio e da manutenção predial. O mesmo controle em dois caminhos
     // de navegação foi o que já aconteceu com "Sincronizar do Estudo" (ver o
     // comentário no header) — duas portas para o mesmo dado, dois estados.
-    // As duas últimas são transversais (o que está pendurado / o que aconteceu),
-    // não etapas do fluxo de dados — por isso ficam no fim do trilho.
+    // As últimas são transversais (o que está pendurado / o que entra de fora / o que
+    // aconteceu), não etapas do fluxo de dados — por isso ficam no fim do trilho. A
+    // Sincronização vem logo depois de Vinculações desde 21/11/2026 (pedido do usuário).
     { id: 'vinculos', label: 'Vinculações', icon: Link2 },
+    // A Curadoria (conflitos da sincronização) mora DENTRO desta aba desde 28/10/2026: o contador vem junto.
+    { id: 'sync', label: 'Sincronização', icon: ArrowLeftRight, badge: pendingCuradoria },
     { id: 'historico', label: 'Histórico', icon: History },
   ];
 
@@ -273,7 +236,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={onBack}
+              onClick={() => void voltar()}
               title="Voltar"
               className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
             >
@@ -338,12 +301,6 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             >
               <ScrollText className="w-4 h-4" /> {generatingMemorial ? 'Gerando...' : 'Minuta do Memorial'}
             </button>
-            <button
-              onClick={onEdit}
-              className="flex items-center gap-1.5 h-9 px-3.5 whitespace-nowrap shrink-0 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-            >
-              <Edit className="w-[15px] h-[15px]" /> Editar
-            </button>
           </div>
         </div>
       </div>
@@ -352,11 +309,11 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
           {tabs.map(t => (
-            <button type="button" role="tab" aria-selected={tab === t.id} tabIndex={tab === t.id ? 0 : -1}
+            <button type="button" role="tab" aria-selected={tabAtiva === t.id} tabIndex={tabAtiva === t.id ? 0 : -1}
               key={t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => void setTab(t.id)}
               className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
-                tab === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                tabAtiva === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
               }`}
             >
               <t.icon className="w-3.5 h-3.5" /> {t.label}
@@ -371,88 +328,33 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
       </div>
 
       {/* Conteúdo */}
-      {tab === 'visao' && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-            <h3 className="text-xs font-semibold text-gray-500 mb-4">Dados Gerais</h3>
-            <dl className="space-y-3 text-sm">
-              <Row label="Organização" value={orgName} />
-              <Row label="Empresa" value={companyLabel} />
-              <Row label="Tipo" value={tipoLabel} />
-              <Row label="Matrícula" value={e.matricula} />
-              <Row label="Nº do Processo" value={e.numero_processo} />
-              <Row label="Construtora" value={e.construtora} />
-              <Row label="Responsável Técnico" value={e.responsavel_tecnico} />
-              <Row label="CREA/CAU" value={e.crea_cau} />
-            </dl>
-          </div>
-
-          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-            <h3 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-gray-400" /> Endereço
-            </h3>
-            <dl className="space-y-3 text-sm">
-              <Row label="Logradouro" value={enderecoLinha} />
-              <Row label="Bairro" value={e.endereco_neighborhood} />
-              <Row label="Cidade/UF" value={enderecoCidade} />
-              <Row label="CEP" value={e.endereco_zip_code} />
-            </dl>
-          </div>
-
-          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-            <h3 className="text-xs font-semibold text-gray-500 mb-4">SPE</h3>
-            <dl className="space-y-3 text-sm">
-              <Row label="Razão Social" value={e.spe_razao_social} />
-              <Row label="CNPJ" value={e.spe_cnpj} />
-              <Row label="Nome Fantasia" value={e.spe_nome_fantasia} />
-              <Row label="Incorporadora" value={e.developer_name} />
-              <Row label="Gestor" value={e.manager} />
-            </dl>
-          </div>
-
-          {/* Apartamento/sala (UNIDADE_AUTONOMA, 13/11/2026): o terreno é do prédio, não do
-              empreendimento — o card some, como a seção Terreno da aba Unidade. */}
-          {(!ehUnidadeUnica(estrutura) || temTerrenoProprio(estrutura)) && (
-          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm" data-testid="card-terreno">
-            <h3 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">
-              <MapPin className="w-4 h-4 text-gray-400" /> Terreno
-            </h3>
-            <dl className="space-y-3 text-sm">
-              <Row label="Tipo de Terreno" value={e.terreno_tipo} />
-              <Row label="Área Total" value={e.terreno_area != null ? `${e.terreno_area} m²` : undefined} />
-              <Row label="Testada (Frente)" value={e.terreno_frente != null ? `${e.terreno_frente} m` : undefined} />
-              <Row label="Fundos" value={e.terreno_fundos != null ? `${e.terreno_fundos} m` : undefined} />
-              <Row label="Profundidade" value={e.terreno_profundidade != null ? `${e.terreno_profundidade} m` : undefined} />
-            </dl>
-          </div>
-          )}
-
-          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-            <h3 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">
-              <Link2 className="w-4 h-4 text-gray-400" /> Vínculos
-            </h3>
-            <dl className="space-y-3 text-sm">
-              <Row label="Estudo de Viabilidade" value={e.imovib_study_id ? (imovibStudyName || 'Estudo não encontrado') : undefined} />
-              <Row label="Estudo de Arquitetura" value={e.blueprint_study_id ? (blueprintStudyName || 'Estudo não encontrado') : undefined} />
-              <Row label="Obra Vinculada" value={e.project_id ? (obraVinculada?.name || 'Obra não encontrada') : undefined} />
-            </dl>
-            <p className="text-xs text-gray-500 font-medium mt-4">
-              Gerencie estes vínculos (e os demais: orçamento, planejamento, contratos) na aba Vinculações.
-            </p>
-          </div>
-
-          <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm lg:col-span-2">
-            <h3 className="text-xs font-semibold text-gray-500 mb-4">Comercial</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Metric label="VGV Total" value={e.vgv_total != null ? `R$ ${e.vgv_total.toLocaleString('pt-BR')}` : '—'} />
-              <Metric label="Lançamento" value={e.launch_date ? formatDate(e.launch_date) : '—'} />
-              <Metric label="Previsão de Entrega" value={e.expected_delivery_date ? formatDate(e.expected_delivery_date) : '—'} />
-            </div>
-          </div>
-        </div>
+      {tabAtiva === 'visao' && (
+        // Visão Geral = a ficha editável (21/11/2026) — o único lugar de edição do empreendimento.
+        <EmpreendimentoForm
+          modo="embutido"
+          editing={e}
+          organizationId={effectiveOrgId ?? organizationId}
+          onSaved={onSaved}
+          terreno={
+            // Apartamento/sala (UNIDADE_AUTONOMA): o terreno é do prédio, não do empreendimento.
+            !ehUnidadeUnica(estrutura) || temTerrenoProprio(estrutura)
+              ? estrutura === 'LOTE'
+                // No Lote o terreno É a unidade: salvar leva área e testada a ela, e isso mora na aba Lote.
+                ? (
+                  <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm flex flex-wrap items-center justify-between gap-3" data-testid="card-terreno">
+                    <p className="text-sm text-gray-700">O terreno deste lote é editado na aba Lote, junto da unidade.</p>
+                    <button type="button" onClick={() => void setTab('torres')} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-blue-600 hover:bg-blue-50 transition-all">
+                      Abrir a aba Lote
+                    </button>
+                  </div>
+                )
+                : <TerrenoSecao empreendimentoId={e.id} empreendimento={e} onTerrenoSaved={onSynced} />
+              : null
+          }
+        />
       )}
 
-      {tab === 'torres' && (
+      {tabAtiva === 'torres' && (
         <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
           {ehUnidadeUnica(estrutura) ? (
             <UnidadeUnicaEditor
@@ -463,7 +365,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
               estrutura={estrutura}
               nomeDoTipo={tipoLabel}
               onTerrenoSaved={onSynced}
-              onAbrirEspelho={() => setTab('comercial')}
+              onAbrirEspelho={() => void setTab(abaDoEspelho)}
             />
           ) : (
             <TowerEditor
@@ -477,7 +379,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         </div>
       )}
 
-      {tab === 'caracteristicas' && (
+      {tabAtiva === 'caracteristicas' && (
         <CaracteristicasAdicionaisTab
           empreendimento={e}
           organizationId={effectiveOrgId ?? organizationId}
@@ -486,16 +388,16 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           unidadeUnica={ehUnidadeUnica(estrutura)}
         />
       )}
-      {tab === 'regulatorio' && (
+      {tabAtiva === 'regulatorio' && (
         <MapaRegulatorioEditor empreendimentoId={e.id} organizationId={e.organization_id} />
       )}
-      {tab === 'comercial' && (
+      {tabAtiva === 'comercial' && (
         <EspelhoVendasTab empreendimento={e} estrutura={estrutura} />
       )}
-      {tab === 'locacoes' && (
+      {tabAtiva === 'locacoes' && (
         <EspelhoLocacoesTab empreendimento={e} estrutura={estrutura} />
       )}
-      {tab === 'sync' && (
+      {tabAtiva === 'sync' && (
         <div className="space-y-6">
           <SyncCenterTab
             key={refreshKey}
@@ -520,10 +422,10 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           )}
         </div>
       )}
-      {tab === 'documentos' && (
+      {tabAtiva === 'documentos' && (
         <DocumentosEmpreendimentoTab empreendimento={e} />
       )}
-      {tab === 'vinculos' && (
+      {tabAtiva === 'vinculos' && (
         <VinculacoesTab
           key={refreshKey}
           empreendimento={e}
@@ -533,7 +435,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           onLinksChanged={() => { setRefreshKey(k => k + 1); onSynced?.(); }}
         />
       )}
-      {tab === 'historico' && (
+      {tabAtiva === 'historico' && (
         <HistoricoTab key={refreshKey} empreendimentoId={e.id} organizationId={organizationId} />
       )}
 
@@ -548,25 +450,5 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     </div>
   );
 };
-
-// Datas em formato local sem bug de fuso (split de string, não new Date)
-const formatDate = (iso: string): string => {
-  const [y, m, d] = iso.split('T')[0].split('-');
-  return d && m && y ? `${d}/${m}/${y}` : iso;
-};
-
-const Row: React.FC<{ label: string; value?: string }> = ({ label, value }) => (
-  <div className="flex justify-between gap-4">
-    <dt className="text-gray-500 font-semibold">{label}</dt>
-    <dd className="text-gray-800 font-bold text-right">{value || '—'}</dd>
-  </div>
-);
-
-const Metric: React.FC<{ label: string; value: string }> = ({ label, value }) => (
-  <div className="bg-gray-50/60 border border-gray-100 rounded-[10px] p-4">
-    <span className="text-xs font-semibold text-gray-500 block mb-1">{label}</span>
-    <span className="text-lg font-bold text-gray-800">{value}</span>
-  </div>
-);
 
 export default EmpreendimentoDetail;

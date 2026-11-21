@@ -10,6 +10,9 @@ import { Plus, Loader2, Map, Search, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { agruparZonas, OPCOES_AGRUPAR_ZONA, type CampoAgruparZona } from '../utils/zonaRegulatoriaGrupos';
 
 export type ZoneField =
     | 'macroarea' | 'zona' | 'ca_minimo' | 'ca_basico' | 'ca_maximo'
@@ -165,6 +168,8 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
     const [search, setSearch] = usePersistedState<string>(`${tableId}:search`, '');
     const tableColumns = useTableColumns(COLUMNS_FOR_CONFIG, `${tableId}Columns`);
     const cols = useResizableColumns(ZONE_COL_WIDTHS, `${tableId}ColWidths`);
+    // Agrupar (§6.12, 21/11/2026): campo e ordem dos grupos persistem por tabela; recolhidos só em memória.
+    const agrupamento = useAgrupamento<CampoAgruparZona>(`${tableId}:groupBy`);
 
     const handleDelete = async (id: string) => {
         const ok = await confirm({
@@ -199,6 +204,59 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
     const visibleColumnDefs = tableColumns.orderedVisibleColumns
         .map(key => zoneColumnsByKey[key as ZoneField])
         .filter((c): c is ColDef => !!c);
+
+    // Grupos sobre a lista já ordenada: sem coluna clicada, dentro do grupo segue o sort_order.
+    const grupos = React.useMemo(() => (
+        agrupamento.agrupando
+            ? agruparZonas(visibleZones, agrupamento.campo as CampoAgruparZona, agrupamento.direcao, ZONE_SELECT_OPTIONS.nivel_confianca ?? [])
+            : []
+    ), [visibleZones, agrupamento.agrupando, agrupamento.campo, agrupamento.direcao]);
+    // Aplicável (se houver) + colunas de dados + espaçador + Ações.
+    const colSpan = (aplicavel ? 1 : 0) + visibleColumnDefs.length + 2;
+
+    const linhaDaZona = (zone: T) => (
+        <tr key={zone.id} className={`hover:bg-blue-50/50 transition-colors ${aplicavel?.zonaId === zone.id ? 'bg-blue-50/60' : ''} ${savingId === zone.id ? 'opacity-60' : ''}`}>
+            {aplicavel && (
+                <td className="px-4 py-2.5 border-r border-gray-100 text-center">
+                    <input
+                        type="radio"
+                        name={`${tableId}-aplicavel`}
+                        checked={aplicavel.zonaId === zone.id}
+                        onChange={() => aplicavel.onMarcar(zone.id)}
+                        disabled={travado}
+                        title={somenteLeitura ?? `Marcar ${rotuloDaLinha(zone)} como a zona que vale para o terreno`}
+                        aria-label={`Zona aplicável: ${rotuloDaLinha(zone)}`}
+                        className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                    />
+                </td>
+            )}
+            {visibleColumnDefs.map(col => (
+                <td key={col.key} title={somenteLeitura} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                    {col.type === 'select' ? (
+                        <SelectCell
+                            value={zone[col.key] as string | undefined}
+                            options={ZONE_SELECT_OPTIONS[col.key] ?? []}
+                            onChange={(v) => onUpdate(zone.id, col.key, v)}
+                            saving={savingId === zone.id || travado}
+                        />
+                    ) : (
+                        <TextCell
+                            value={zone[col.key] as string | undefined}
+                            onCommit={(v) => onUpdate(zone.id, col.key, v)}
+                            saving={savingId === zone.id || travado}
+                            placeholder={col.placeholder}
+                        />
+                    )}
+                </td>
+            ))}
+            <td aria-hidden="true"></td>
+            <td className="px-6 py-2.5 text-right">
+                <fieldset disabled={travado} title={somenteLeitura} onClick={(e) => e.stopPropagation()} className="imovib-ro min-w-0 border-0 p-0 m-0 inline-block">
+                    <ActionIconButton kind="delete" title="Excluir zona" onClick={() => handleDelete(zone.id)} />
+                </fieldset>
+            </td>
+        </tr>
+    );
 
     if (loading) {
         return (
@@ -264,6 +322,18 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                         className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
+                <AgruparControles
+                    opcoes={OPCOES_AGRUPAR_ZONA}
+                    campo={agrupamento.campo}
+                    onCampo={agrupamento.setCampo}
+                    direcao={agrupamento.direcao}
+                    onDirecao={agrupamento.setDirecao}
+                    chavesDosGrupos={grupos.map(g => g.key)}
+                    algumRecolhido={agrupamento.recolhidos.size > 0}
+                    onAlternarTodos={agrupamento.alternarTodos}
+                    title="Agrupar as zonas"
+                />
+                <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                     <ColumnConfigButton
                         columns={COLUMNS_FOR_CONFIG}
@@ -343,49 +413,14 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {visibleZones.map(zone => (
-                                <tr key={zone.id} className={`hover:bg-blue-50/50 transition-colors ${aplicavel?.zonaId === zone.id ? 'bg-blue-50/60' : ''} ${savingId === zone.id ? 'opacity-60' : ''}`}>
-                                    {aplicavel && (
-                                        <td className="px-4 py-2.5 border-r border-gray-100 text-center">
-                                            <input
-                                                type="radio"
-                                                name={`${tableId}-aplicavel`}
-                                                checked={aplicavel.zonaId === zone.id}
-                                                onChange={() => aplicavel.onMarcar(zone.id)}
-                                                disabled={travado}
-                                                title={somenteLeitura ?? `Marcar ${rotuloDaLinha(zone)} como a zona que vale para o terreno`}
-                                                aria-label={`Zona aplicável: ${rotuloDaLinha(zone)}`}
-                                                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
-                                            />
-                                        </td>
-                                    )}
-                                    {visibleColumnDefs.map(col => (
-                                        <td key={col.key} title={somenteLeitura} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                            {col.type === 'select' ? (
-                                                <SelectCell
-                                                    value={zone[col.key] as string | undefined}
-                                                    options={ZONE_SELECT_OPTIONS[col.key] ?? []}
-                                                    onChange={(v) => onUpdate(zone.id, col.key, v)}
-                                                    saving={savingId === zone.id || travado}
-                                                />
-                                            ) : (
-                                                <TextCell
-                                                    value={zone[col.key] as string | undefined}
-                                                    onCommit={(v) => onUpdate(zone.id, col.key, v)}
-                                                    saving={savingId === zone.id || travado}
-                                                    placeholder={col.placeholder}
-                                                />
-                                            )}
-                                        </td>
-                                    ))}
-                                    <td aria-hidden="true"></td>
-                                    <td className="px-6 py-2.5 text-right">
-                                        <fieldset disabled={travado} title={somenteLeitura} onClick={(e) => e.stopPropagation()} className="imovib-ro min-w-0 border-0 p-0 m-0 inline-block">
-                                            <ActionIconButton kind="delete" title="Excluir zona" onClick={() => handleDelete(zone.id)} />
-                                        </fieldset>
-                                    </td>
-                                </tr>
-                            ))}
+                            {agrupamento.agrupando
+                                ? grupos.map(g => (
+                                    <React.Fragment key={g.key}>
+                                        <LinhaDeGrupo grupo={g} recolhido={agrupamento.recolhidos.has(g.key)} colSpan={colSpan} onAlternar={agrupamento.alternar} semTotal />
+                                        {!agrupamento.recolhidos.has(g.key) && g.itens.map(linhaDaZona)}
+                                    </React.Fragment>
+                                ))
+                                : visibleZones.map(linhaDaZona)}
                         </tbody>
                     </table>
                 </div>

@@ -60,8 +60,6 @@ interface ScheduleHeaderProps {
     projects: any[];
     viewMode: ScheduleViewMode;
     setViewMode: (mode: ScheduleViewMode) => void;
-    timeScale: ScheduleTimeScale;
-    setTimeScale: (scale: ScheduleTimeScale) => void;
     schedule: ProjectSchedule;
     setIsBaselineModalOpen: (open: boolean) => void;
     isSimulationMode: boolean;
@@ -73,7 +71,6 @@ interface ScheduleHeaderProps {
     setIsConfigModalOpen: (open: boolean) => void;
     handleLevelResources: () => void;
     handleRecalculate: (currentSchedules?: ItemScheduleDetails[], newStartDate?: string) => void;
-    onUpdateSettings: (settings: ProjectSettings) => void;
     handleExpandAll: () => void;
     handleCollapseAll: () => void;
     allExpanded: boolean;
@@ -209,8 +206,6 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     projects,
     viewMode,
     setViewMode,
-    timeScale,
-    setTimeScale,
     schedule,
     setIsBaselineModalOpen,
     isSimulationMode,
@@ -222,7 +217,6 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
     setIsConfigModalOpen,
     handleLevelResources,
     handleRecalculate,
-    onUpdateSettings,
     handleExpandAll,
     handleCollapseAll,
     allExpanded,
@@ -394,12 +388,12 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
             de cromo da tela (§19.1): seletor de vista à esquerda, abas de
             comandos, o aviso e a ação primária à direita; embaixo das abas o
             ACESSO RÁPIDO (linha de ícones em grupos que se arrastam) e o painel
-            da aba; em Tabela/Gantt, a barra de opções da vista. A faixa se
-            recolhe (setinha ou duplo clique na aba), como na Planta. Sem
-            `overflow-hidden` no card: os menus (vista, colunas, níveis) são
-            `absolute` e seriam cortados. O `border-b` do ribbon só fica quando
-            há barra de opções abaixo dele. */}
-        <div className={`rounded-[10px] border border-gray-100 bg-white shadow-sm ${emGrade ? '' : '[&>[role=toolbar]]:border-b-0'}`}>
+            da aba. A faixa se recolhe (setinha ou duplo clique na aba), como na
+            Planta. Sem `overflow-hidden` no card: os menus (vista, colunas,
+            níveis) são `absolute` e seriam cortados. O `border-b` do ribbon sai:
+            nada fica abaixo dele no card — a barra de opções da vista mora no
+            card da tabela/Gantt (`BarraDeOpcoesDaGrade`, 21/11/2026). */}
+        <div className="rounded-[10px] border border-gray-100 bg-white shadow-sm [&>[role=toolbar]]:border-b-0">
             <Ribbon
                 abas={abasDoRibbon}
                 ativa={aba}
@@ -588,54 +582,78 @@ const ScheduleHeader: React.FC<ScheduleHeaderProps> = ({
                     </GrupoDoRibbon>
                 )}
             </Ribbon>
-
-            {/* Barra de opções (§19.5, linha 3): só o que a VISTA ativa pergunta —
-                escala de tempo e período do planejamento. Só em Tabela/Gantt. */}
-            {emGrade && (
-                <div className="overflow-hidden rounded-b-[10px] [&>[role=region]]:border-b-0">
-                    <BarraDeOpcoes rotulo={ROTULO_DA_VISTA[viewMode]}>
-                        <div role="group" aria-label="Escala de tempo" className="flex items-center gap-0.5 rounded-[8px] border border-gray-200 bg-white p-0.5">
-                            {ESCALAS.map((escala) => (
-                                <button
-                                    key={escala.id}
-                                    type="button"
-                                    aria-pressed={timeScale === escala.id}
-                                    onClick={() => setTimeScale(escala.id)}
-                                    className={`h-6 rounded-[6px] px-2 text-xs font-medium transition-all ${
-                                        timeScale === escala.id ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
-                                    }`}
-                                >
-                                    {escala.rotulo}
-                                </button>
-                            ))}
-                        </div>
-                        <label className="flex items-center gap-1.5 text-xs text-slate-500">
-                            Início
-                            <input
-                                type="date"
-                                value={schedule.startDate ? schedule.startDate.split('T')[0] : ''}
-                                onChange={(e) => handleRecalculate(undefined, e.target.value)}
-                                className="h-7 rounded-[6px] border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                            />
-                        </label>
-                        <label className="flex items-center gap-1.5 text-xs text-slate-500">
-                            Término
-                            <input
-                                type="date"
-                                value={schedule.endDate ? schedule.endDate.split('T')[0] : ''}
-                                onChange={(e) => {
-                                    const next = { ...schedule, endDate: e.target.value };
-                                    onUpdateSettings({ ...settings, schedule: next, endDate: e.target.value });
-                                }}
-                                className="h-7 rounded-[6px] border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
-                            />
-                        </label>
-                    </BarraDeOpcoes>
-                </div>
-            )}
         </div>
         </>
     );
 };
+
+/**
+ * A barra de opções da vista Tabela/Gantt — nome da vista, escala de tempo
+ * (Dia/Sem/Mês/Ano) e período do planejamento (Início/Término).
+ *
+ * 21/11/2026 — *"A barra (Gantt; Dia; Sem; Mês; Ano; Início; Término) inves de
+ * estar acoplada ao menu deve estar acoplada a tabela no timeline"*. Morava no
+ * card do ribbon (`ScheduleHeader`), como linha 3 do §19.5; agora é a faixa de
+ * topo do card da Tabela/Gantt (`FinancialSchedule`), colada na grade que ela
+ * comanda. Mesmo `BarraDeOpcoes` da Planta, mesmos controles.
+ */
+export function BarraDeOpcoesDaGrade({
+    viewMode,
+    timeScale,
+    setTimeScale,
+    schedule,
+    settings,
+    handleRecalculate,
+    onUpdateSettings,
+}: {
+    viewMode: ScheduleViewMode;
+    timeScale: ScheduleTimeScale;
+    setTimeScale: (scale: ScheduleTimeScale) => void;
+    schedule: ProjectSchedule;
+    settings: ProjectSettings;
+    handleRecalculate: (currentSchedules?: ItemScheduleDetails[], newStartDate?: string) => void;
+    onUpdateSettings: (settings: ProjectSettings) => void;
+}) {
+    return (
+        <BarraDeOpcoes rotulo={ROTULO_DA_VISTA[viewMode]}>
+            <div role="group" aria-label="Escala de tempo" className="flex items-center gap-0.5 rounded-[8px] border border-gray-200 bg-white p-0.5">
+                {ESCALAS.map((escala) => (
+                    <button
+                        key={escala.id}
+                        type="button"
+                        aria-pressed={timeScale === escala.id}
+                        onClick={() => setTimeScale(escala.id)}
+                        className={`h-6 rounded-[6px] px-2 text-xs font-medium transition-all ${
+                            timeScale === escala.id ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-100'
+                        }`}
+                    >
+                        {escala.rotulo}
+                    </button>
+                ))}
+            </div>
+            <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                Início
+                <input
+                    type="date"
+                    value={schedule.startDate ? schedule.startDate.split('T')[0] : ''}
+                    onChange={(e) => handleRecalculate(undefined, e.target.value)}
+                    className="h-7 rounded-[6px] border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-slate-500">
+                Término
+                <input
+                    type="date"
+                    value={schedule.endDate ? schedule.endDate.split('T')[0] : ''}
+                    onChange={(e) => {
+                        const next = { ...schedule, endDate: e.target.value };
+                        onUpdateSettings({ ...settings, schedule: next, endDate: e.target.value });
+                    }}
+                    className="h-7 rounded-[6px] border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                />
+            </label>
+        </BarraDeOpcoes>
+    );
+}
 
 export default ScheduleHeader;

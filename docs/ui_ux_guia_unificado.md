@@ -2710,6 +2710,11 @@ incoporação < planta inteligente e aplique em Gestão de Planejamento"*):
   ribbon está noutra aba). Sempre presente enquanto se desenha, para o canvas
   não pular de altura. No Planejamento a "ferramenta" é a vista: em Tabela e
   Gantt a barra traz a escala de tempo e o período; nas demais não existe.
+  ⚠️ No Planejamento ela **não fica no card do ribbon**: é a faixa de topo do
+  card da Tabela/Gantt (`BarraDeOpcoesDaGrade`, 21/11/2026 — *"A barra (Gantt;
+  Dia; Sem; Mês; Ano; Início; Término) inves de estar acoplada ao menu deve
+  estar acoplada a tabela no timeline"*). Escala e período comandam a grade,
+  então moram colados nela; o card do ribbon termina nas abas/painel.
 
 Companheiros genéricos, em `components/ui/`:
 

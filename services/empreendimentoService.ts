@@ -253,8 +253,9 @@ export const empreendimentoService = {
      * principal) e `empreendimento_towers.project_id` (obra por torre, multi-torre).
      * Uma obra só aparece uma vez — o vínculo principal tem precedência.
      *
-     * Nenhuma das colunas tem FK (DDL deadlocka no módulo), então a obra apontada pode
-     * nem existir mais; quem consome deve tratar o id ausente, não confiar no mapa.
+     * `empreendimentos.project_id` não tem FK (DDL deadlocka no módulo — ver 20270719000000),
+     * então a obra principal apontada pode nem existir mais; quem consome deve tratar o id
+     * ausente. A da torre tem FK (`ON DELETE SET NULL`, 20261228000000).
      */
     async mapObrasToEmpreendimentos(
         organizationId?: string | null,
@@ -799,7 +800,7 @@ export const empreendimentoService = {
         }
     },
 
-    /** `projectId` nulo desfaz o vínculo (a coluna não tem FK — ver 20270719000000). */
+    /** `projectId` nulo desfaz o vínculo. A coluna da torre tem FK para `projects` (`ON DELETE SET NULL`). */
     async linkTowerToObra(towerId: string, projectId: string | null): Promise<void> {
         const ctx = await towerContext(towerId);
 

@@ -38,7 +38,7 @@ serve(async (req: Request) => {
 
     const { data: tok, error: tokError } = await admin
         .from('client_portal_tokens')
-        .select('client_id, is_active, expires_at')
+        .select('client_id, org_id, is_active, expires_at')
         .eq('token', token)
         .maybeSingle();
 
@@ -47,12 +47,14 @@ serve(async (req: Request) => {
     }
 
     // Confirma que o arquivo pedido é de fato a versão ativa de um documento
-    // atualmente compartilhado com este cliente (não deixa passar path arbitrário).
+    // atualmente compartilhado com este cliente (não deixa passar path arbitrário)
+    // e que o documento é da org do token — a mesma regra de fn_portal_get_ged_documents.
     const { data: shared, error: sharedError } = await admin
         .from('opura_document_portal_shares')
-        .select('document:opura_documents!inner(active_version:opura_document_versions!fk_active_version(storage_path))')
+        .select('document:opura_documents!inner(organization_id, active_version:opura_document_versions!fk_active_version(storage_path))')
         .eq('audience', 'cliente')
-        .eq('client_id', tok.client_id);
+        .eq('client_id', tok.client_id)
+        .eq('document.organization_id', tok.org_id);
 
     if (sharedError) {
         console.error('[portal-ged-download] erro ao validar vínculo:', sharedError);

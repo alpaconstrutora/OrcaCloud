@@ -104,3 +104,9 @@ dentro de Receitas, "Espelho de vendas" e "Curva, perfil e distrato"; sem o tít
 Efeito do #601: sobrou uma faixa só com Regenerar e Inteligência de Precificação. Pedido de 20/11 (*"continue"*, em
 resposta a "proponho levar esses dois botões para a barra da tabela") → os dois vão para a barra da tabela, ao lado do
 triângulo, e a faixa sai.
+
+Correção de direção (20/11, antes do merge do #604): a 1ª versão pôs os botões na barra da TABELA (ao lado do
+triângulo). Pedido literal do usuário, com print: *"mover os botões inteligencia de precificacao e regenerar espelho
+para a barra de abas do espelho de vendas e curva, perfil e distrato"* → os dois vão para a direita da barra das
+SUB-ABAS de Receitas (slot `children` do `TabsBar`). O estado deles continua no `ImovibSalesMapTab`, que recebe
+`barraDeAbas(acoes)` do `ImovibReceitasForm`; aparecem com a sub-aba Espelho de vendas aberta (agem sobre o espelho).

@@ -22,6 +22,9 @@ interface ImovibSalesMapTabProps {
     onDataChanged: () => void;
     /** Abre as Preferências do estudo (painel do triângulo "Unidades fora do VGV"). */
     onAbrirPreferencias?: () => void;
+    /** Desenha a barra das sub-abas de Receitas com as ações do espelho (Regenerar, Inteligência de Precificação)
+     *  à direita. Sem ela, as ações ficam numa linha própria acima do espelho. */
+    barraDeAbas?: (acoes: React.ReactNode) => React.ReactNode;
 }
 
 // Tabela padrão (§6.10): ordenação, Agrupar (§6.12), redimensionar e auto-ajuste (§6.1.2) vêm do StandardTable.
@@ -54,7 +57,7 @@ const STATUS_OPTIONS = ['DISPONÍVEL', 'RESERVADO', 'PERMUTADO', 'VENDIDO'] as c
 const formatBRL = (value: number): string =>
     value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChanged, onAbrirPreferencias }) => {
+const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChanged, onAbrirPreferencias, barraDeAbas }) => {
     const [instances, setInstances] = useState<ImovibUnitInstance[]>([]);
     const [loading, setLoading] = useState(true);
     // Falha ao ler o espelho ≠ espelho vazio: com erro, a tela mostra o erro e
@@ -339,15 +342,52 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
         + (semUnidade.length > 0 ? ` · ${semUnidade.length} sem unidade no empreendimento (${formatBRL(semUnidade.reduce((t, x) => t + (x.price || 0), 0))} em preço)` : '')
         + '. Para mudar o que é vendável, use a coluna "Vendável" em Empreendimento › Espelho de vendas.';
 
+    // Regenerar e Precificação gravam no espelho: sem permissão, desligados com o motivo. Moram na barra das sub-abas
+    // de Receitas (pedido de 20/11, plano 2026-11-20-imovib-espelho-aba-tabela-padrao) — quem desenha a barra é o
+    // ImovibReceitasForm, por `barraDeAbas`; sozinho (sem a barra), o espelho os põe numa linha à direita.
+    const acoes = (
+        <>
+            <span className="inline-flex" title={!pode ? motivo : undefined}>
+                <button
+                    type="button"
+                    onClick={handleRegenerate}
+                    disabled={generating || !pode}
+                    title={pode ? 'Regenerar espelho' : undefined}
+                    aria-label="Regenerar espelho"
+                    className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-slate-600 rounded-[6px] hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
+                </button>
+            </span>
+            <span className="inline-flex" title={!pode ? motivo : undefined}>
+                <button
+                    type="button"
+                    onClick={() => setPricingModalOpen(true)}
+                    disabled={!pode}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                    <BrainCircuit className="w-[15px] h-[15px]" />
+                    Inteligência de Precificação
+                </button>
+            </span>
+        </>
+    );
+    const barra = barraDeAbas ? barraDeAbas(acoes) : <div className="flex justify-end gap-2">{acoes}</div>;
+
     if (loading) {
         return (
+            <>
+            {barra}
             <div className="bg-white rounded-[10px] p-6 border border-gray-200 flex items-center justify-center h-40">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
             </div>
+            </>
         );
     }
 
     return (
+        <>
+        {barra}
         <div className="bg-white rounded-[10px] border border-gray-200 overflow-hidden">
             {/* KPIs — §4: KpiCard */}
             {!loadError && instances.length > 0 && (
@@ -474,30 +514,6 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                             <span className="pointer-events-none absolute -right-1.5 -top-1.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-amber-600 px-1 text-[10px] font-bold text-white">{foraDoVgv}</span>
                         </span>
                         )}
-                        {/* Regenerar e Precificação gravam no espelho: sem permissão, desligados com o motivo. */}
-                        <span className="inline-flex" title={!pode ? motivo : undefined}>
-                            <button
-                                type="button"
-                                onClick={handleRegenerate}
-                                disabled={generating || !pode}
-                                title={pode ? 'Regenerar espelho' : undefined}
-                                aria-label="Regenerar espelho"
-                                className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-slate-600 rounded-[6px] hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <RefreshCw className={`w-4 h-4 ${generating ? 'animate-spin' : ''}`} />
-                            </button>
-                        </span>
-                        <span className="inline-flex" title={!pode ? motivo : undefined}>
-                            <button
-                                type="button"
-                                onClick={() => setPricingModalOpen(true)}
-                                disabled={!pode}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <BrainCircuit className="w-[15px] h-[15px]" />
-                                Inteligência de Precificação
-                            </button>
-                        </span>
                         </div>
                     )}
                     renderCell={(k, inst) => {
@@ -577,6 +593,7 @@ const ImovibSalesMapTab: React.FC<ImovibSalesMapTabProps> = ({ study, onDataChan
                 buildingName={study.name}
             />
         </div>
+        </>
     );
 };
 

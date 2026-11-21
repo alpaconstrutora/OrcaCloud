@@ -20,6 +20,7 @@ const pref = vi.hoisted(() => ({ exibir: true }));
 vi.mock('../../hooks/useImovibPreferencias', () => ({ useImovibPreferencias: () => ({ exibirNaoVendaveis: pref.exibir, setExibirNaoVendaveis: vi.fn(), carregando: false }) }));
 
 import ImovibSalesMapTab from '../../components/ImovibSalesMapTab';
+import ImovibReceitasForm from '../../components/ImovibReceitasForm';
 import { ConfirmProvider } from '../../components/ui/confirm';
 import { baseStudy } from '../fixtures/imovibEstudos';
 
@@ -133,17 +134,18 @@ describe('espelho do estudo — cabeçalho sem título repetido', () => {
         expect(screen.getByRole('button', { name: /Inteligência de Precificação/ })).toBeTruthy();
     });
 
-    // 20/11: sem o título, sobrava uma faixa só com os botões. Eles vão para a barra da tabela (depois dos KPIs).
-    it('Regenerar e Inteligência de Precificação ficam na barra da tabela, depois dos KPIs', async () => {
-        montar();
+    // 20/11: sem o título, sobrava uma faixa só com os botões. Pedido: "mover os botões inteligencia de precificacao e
+    // regenerar espelho para a barra de abas do espelho de vendas e curva, perfil e distrato".
+    it('Regenerar e Inteligência de Precificação ficam na barra das sub-abas de Receitas, sem faixa própria', async () => {
+        render(<ConfirmProvider><ImovibReceitasForm study={estudo} onDataChanged={vi.fn()} subAba="espelho" onSubAbaChange={vi.fn()} /></ConfirmProvider>);
         await screen.findByText('101');
-        const kpi = screen.getByText('VGV Total');
-        const busca = screen.getByPlaceholderText('Buscar unidade ou torre…');
-        for (const nome of [/Inteligência de Precificação/, /Regenerar espelho/]) {
-            const b = screen.getByRole('button', { name: nome });
-            expect(kpi.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-            expect(busca.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-        }
+        const barra = screen.getByRole('tablist').parentElement!;
+        expect(within(barra).getByRole('tab', { name: 'Espelho de vendas' })).toBeTruthy();
+        expect(within(barra).getByRole('button', { name: /Inteligência de Precificação/ })).toBeTruthy();
+        expect(within(barra).getByRole('button', { name: /Regenerar espelho/ })).toBeTruthy();
+        // Uma vez só na tela (não ficou cópia na barra da tabela).
+        expect(screen.getAllByRole('button', { name: /Regenerar espelho/ })).toHaveLength(1);
+        expect(screen.getAllByRole('button', { name: /Inteligência de Precificação/ })).toHaveLength(1);
     });
 });
 

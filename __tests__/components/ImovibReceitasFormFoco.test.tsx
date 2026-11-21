@@ -16,7 +16,8 @@ const updateStudy = vi.fn().mockResolvedValue(undefined);
 vi.mock('../../services/imovibService', () => ({
     imovibService: { updateStudy: (...a: unknown[]) => updateStudy(...a) },
 }));
-vi.mock('../../components/ImovibSalesMapTab', () => ({ default: () => null }));
+// O espelho desenha a barra das sub-abas (com as ações dele à direita) por `barraDeAbas`.
+vi.mock('../../components/ImovibSalesMapTab', () => ({ default: ({ barraDeAbas }: { barraDeAbas?: (a: unknown) => unknown }) => barraDeAbas?.(null) ?? null }));
 vi.mock('../../lib/supabase', () => ({
     supabase: { from: vi.fn(), rpc: vi.fn(), functions: { invoke: vi.fn() } },
 }));

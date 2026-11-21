@@ -11,14 +11,12 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 const svc = vi.hoisted(() => ({
     getStudies: vi.fn(),
     listarVersoes: vi.fn(),
-    listCompetitors: vi.fn(),
-    listForOrg: vi.fn(),
+    lidoDoEstudo: vi.fn(),
 }));
 vi.mock('../../services/imovibService', () => ({ imovibService: { getStudies: svc.getStudies, listarVersoes: svc.listarVersoes } }));
-vi.mock('../../services/opportunityProjectService', () => ({ opportunityProjectService: { listForOrg: svc.listForOrg } }));
 vi.mock('../../services/investorPortalService', async (orig) => ({
     ...(await orig<typeof import('../../services/investorPortalService')>()),
-    investorPortalService: { listCompetitors: svc.listCompetitors },
+    investorPortalService: { lidoDoEstudo: svc.lidoDoEstudo },
 }));
 vi.mock('../../services/storageService', () => ({ storageService: {} }));
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() } }));
@@ -30,8 +28,7 @@ const versao = (id: string, label: string, created_at: string) => ({ id, study_i
 beforeEach(() => {
     svc.getStudies.mockResolvedValue([{ id: 'e1', name: 'Garden', version: '1.0' }, { id: 'e2', name: 'Outro', version: '1.0' }]);
     svc.listarVersoes.mockImplementation(async (id: string) => (id === 'e1' ? [versao('v2', 'Comitê de novembro', '2026-11-15T13:00:00Z'), versao('v1', 'Comitê de outubro', '2026-10-20T13:00:00Z')] : []));
-    svc.listCompetitors.mockResolvedValue([]);
-    svc.listForOrg.mockResolvedValue([]);
+    svc.lidoDoEstudo.mockResolvedValue({ local: null, parecer: 'aprovar', empreendimento: null });
 });
 
 const publicar = () => screen.getByRole('button', { name: /Rascunho|Publicado/ });
@@ -50,7 +47,7 @@ describe('oportunidade com estudo do Imovib publica uma versão', () => {
         expect((publicar() as HTMLButtonElement).disabled).toBe(false);
         await user.click(publicar());
         await user.click(screen.getByRole('button', { name: 'Criar oportunidade' }));
-        expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ imovib_study_id: 'e1', imovib_version_id: 'v2', is_published: true }), []);
+        expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ imovib_study_id: 'e1', imovib_version_id: 'v2', is_published: true }));
     });
 
     it('trocar o estudo limpa a versão escolhida', async () => {
@@ -71,7 +68,26 @@ describe('oportunidade com estudo do Imovib publica uma versão', () => {
         expect(screen.getByText('Voltou para rascunho: escolha a versão do novo estudo para publicar de novo.')).toBeTruthy();
         expect(publicar().textContent).toContain('Rascunho');
         await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
-        expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ imovib_study_id: 'e2', imovib_version_id: null, is_published: false }), []);
+        expect(onSave).toHaveBeenCalledWith(expect.objectContaining({ imovib_study_id: 'e2', imovib_version_id: null, is_published: false }));
+    });
+
+    it('sem estudo, publicar fica desligado: o investidor só vê números da versão (Fase 2 do plano 2026-11-21)', async () => {
+        render(<OpportunityForm initial={{ title: 'Garden' }} organizationId="org" onSave={vi.fn()} onClose={vi.fn()} />);
+        await screen.findByLabelText('Estudo do Imovib');
+        expect((publicar() as HTMLButtonElement).disabled).toBe(true);
+        expect(publicar().closest('[title]')!.getAttribute('title')).toMatch(/Vincule o estudo do Imovib/);
+    });
+
+    it('parecer "Reprovar" trava a publicação; sem parecer, só avisa (item 5.2)', async () => {
+        svc.lidoDoEstudo.mockResolvedValue({ local: null, parecer: 'reprovar', empreendimento: null });
+        const { unmount } = render(<OpportunityForm initial={{ title: 'Garden', imovib_study_id: 'e1', imovib_version_id: 'v2' }} organizationId="org" onSave={vi.fn()} onClose={vi.fn()} />);
+        await waitFor(() => expect(publicar().closest('[title]')?.getAttribute('title')).toMatch(/Reprovar/));
+        expect((publicar() as HTMLButtonElement).disabled).toBe(true);
+        unmount();
+        svc.lidoDoEstudo.mockResolvedValue({ local: null, parecer: null, empreendimento: null });
+        render(<OpportunityForm initial={{ title: 'Garden', imovib_study_id: 'e1', imovib_version_id: 'v2' }} organizationId="org" onSave={vi.fn()} onClose={vi.fn()} />);
+        expect(await screen.findByText('O estudo ainda não tem parecer do analista.')).toBeTruthy();
+        expect((publicar() as HTMLButtonElement).disabled).toBe(false);
     });
 
     it('falha ao ler as versões: diz que não leu, não que não há versão', async () => {

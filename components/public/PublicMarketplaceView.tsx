@@ -4,8 +4,7 @@ import {
     ExternalLink, Globe,
 } from 'lucide-react';
 import {
-    OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_COLORS,
-    OPPORTUNITY_TYPE_LABELS,
+    OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_TYPE_LABELS,
 } from '../../services/investorPortalService';
 import {
     type PublicMarketplace,
@@ -151,7 +150,7 @@ const PublicMarketplaceView: React.FC<Props> = ({ slug }) => {
                                         )}
                                         <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent" />
                                         {opp.status && (
-                                            <span className={`absolute top-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[opp.status]}`}>
+                                            <span className="absolute top-3 left-3 text-xs font-medium text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.6)]">
                                                 {OPPORTUNITY_STATUS_LABELS[opp.status]}
                                             </span>
                                         )}
@@ -172,10 +171,10 @@ const PublicMarketplaceView: React.FC<Props> = ({ slug }) => {
                                         )}
 
                                         <div className="flex flex-wrap gap-2 text-[10px] text-gray-400 mb-4">
-                                            {(opp.location_city || opp.location_state) && (
+                                            {(opp.cidade || opp.uf) && (
                                                 <span className="flex items-center gap-1">
                                                     <MapPin className="w-3 h-3" />
-                                                    {[opp.location_city, opp.location_state].filter(Boolean).join(', ')}
+                                                    {[opp.cidade, opp.uf].filter(Boolean).join(', ')}
                                                 </span>
                                             )}
                                             {opp.opportunity_type && (

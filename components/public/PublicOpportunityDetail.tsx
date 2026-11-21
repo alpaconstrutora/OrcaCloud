@@ -1,10 +1,9 @@
 import React from 'react';
 import {
-    ArrowLeft, MapPin, TrendingUp, BarChart3, Ruler, Calendar,
-    Building2, CheckCircle2, ChevronRight, Handshake, Clock, Image,
+    ArrowLeft, MapPin, TrendingUp, BarChart3, Building2, CheckCircle2, ChevronRight, Handshake, Clock, Image,
 } from 'lucide-react';
 import {
-    OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_COLORS,
+    OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_TEXT,
     OPPORTUNITY_TYPE_LABELS, INTEREST_ROLE_LABELS,
     type InterestRole,
 } from '../../services/investorPortalService';
@@ -14,10 +13,9 @@ import {
     type PublicOrganization,
     publicMarketplaceService,
 } from '../../services/publicMarketplaceService';
-import ScenarioComparison from '../investor/ScenarioComparison';
 import PhotoGallery from '../investor/PhotoGallery';
 import Button from '../ui/Button';
-import { fmtBRL, fmtPct, fmtM2 } from '../../utils/format';
+import { fmtBRL, fmtPct } from '../../utils/format';
 
 interface Props {
     opportunity: PublicOpportunity;
@@ -25,7 +23,7 @@ interface Props {
     onBack: () => void;
 }
 
-type Tab = 'pitch' | 'cenarios' | 'fotos';
+type Tab = 'pitch' | 'fotos';
 type Step = 'view' | 'form' | 'success';
 
 const ROLES: InterestRole[] = ['investidor', 'arquiteto', 'engenheiro', 'projetista', 'consultor', 'outro'];
@@ -45,13 +43,12 @@ const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, organizatio
 
     React.useEffect(() => { window.scrollTo(0, 0); }, []);
 
-    const hasFinancials = op.vgv || op.roi_pct != null || op.tir_pct != null || op.cost_estimate;
-    const hasScenarios  = !!(op.vgv && op.cost_estimate);
+    // Números só da versão do Imovib (publicMarketplaceService já entrega a vitrine).
+    const hasFinancials = op.comVersao;
     const photos        = publicMarketplaceService.resolvePhotoUrls(op.photos ?? []);
 
     const TABS: { id: Tab; label: string }[] = [
         { id: 'pitch', label: 'Detalhes' },
-        ...(hasScenarios      ? [{ id: 'cenarios' as Tab, label: 'Viabilidade' }] : []),
         ...(photos.length > 0 ? [{ id: 'fotos'    as Tab, label: `Fotos (${photos.length})` }] : []),
     ];
 
@@ -84,7 +81,7 @@ const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, organizatio
                         {org.name}
                     </Button>
                     {op.status && (
-                        <span className={`ml-auto px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
+                        <span className={`ml-auto text-xs font-medium ${OPPORTUNITY_STATUS_TEXT[op.status]}`}>
                             {OPPORTUNITY_STATUS_LABELS[op.status]}
                         </span>
                     )}
@@ -113,10 +110,10 @@ const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, organizatio
                                 <p className="text-gray-500 mt-2 text-base leading-relaxed">{op.subtitle}</p>
                             )}
                             <div className="flex flex-wrap gap-5 mt-4 text-sm text-gray-400">
-                                {(op.location_city || op.location_state) && (
+                                {(op.cidade || op.uf) && (
                                     <span className="flex items-center gap-1.5">
                                         <MapPin className="w-4 h-4" />
-                                        {[op.location_city, op.location_state].filter(Boolean).join(', ')}
+                                        {[op.cidade, op.uf].filter(Boolean).join(', ')}
                                     </span>
                                 )}
                                 {op.opportunity_type && (
@@ -125,16 +122,10 @@ const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, organizatio
                                         {OPPORTUNITY_TYPE_LABELS[op.opportunity_type]}
                                     </span>
                                 )}
-                                {op.expected_start && (
-                                    <span className="flex items-center gap-1.5">
-                                        <Calendar className="w-4 h-4" />
-                                        Início: {new Date(op.expected_start + 'T00:00:00').toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
-                                    </span>
-                                )}
-                                {op.duration_months && (
+                                {op.prazo_meses && (
                                     <span className="flex items-center gap-1.5">
                                         <Clock className="w-4 h-4" />
-                                        {op.duration_months} meses
+                                        {op.prazo_meses} meses
                                     </span>
                                 )}
                             </div>
@@ -190,16 +181,10 @@ const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, organizatio
                                                     <p className="text-2xl font-black text-indigo-900">{fmtPct(op.tir_pct)}</p>
                                                 </div>
                                             )}
-                                            {op.cost_estimate != null && (
+                                            {op.custo_total != null && (
                                                 <div className="bg-amber-50 rounded-2xl p-5">
-                                                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-wider mb-1">Custo estimado</p>
-                                                    <p className="text-2xl font-black text-amber-900">{fmtBRL(op.cost_estimate)}</p>
-                                                </div>
-                                            )}
-                                            {op.cost_per_m2 != null && (
-                                                <div className="bg-gray-50 rounded-2xl p-5">
-                                                    <p className="text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1">Custo / m²</p>
-                                                    <p className="text-2xl font-black text-gray-800">{fmtBRL(op.cost_per_m2)}</p>
+                                                    <p className="text-[10px] font-black text-amber-700 uppercase tracking-wider mb-1">Custo (obra e terreno)</p>
+                                                    <p className="text-2xl font-black text-amber-900">{fmtBRL(op.custo_total)}</p>
                                                 </div>
                                             )}
                                             {op.ticket_min != null && (
@@ -212,50 +197,6 @@ const PublicOpportunityDetail: React.FC<Props> = ({ opportunity: op, organizatio
                                     </div>
                                 )}
 
-                                {(op.land_area_m2 || op.built_area_m2 || op.floors) && (
-                                    <div>
-                                        <div className="flex items-center gap-2 mb-4">
-                                            <Ruler className="w-4 h-4 text-blue-600" />
-                                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Dados técnicos</span>
-                                        </div>
-                                        <div className="flex flex-wrap gap-8">
-                                            {op.land_area_m2 && (
-                                                <div>
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Terreno</p>
-                                                    <p className="text-lg font-bold text-gray-800 mt-0.5">{fmtM2(op.land_area_m2)}</p>
-                                                </div>
-                                            )}
-                                            {op.built_area_m2 && (
-                                                <div>
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Área construída</p>
-                                                    <p className="text-lg font-bold text-gray-800 mt-0.5">{fmtM2(op.built_area_m2)}</p>
-                                                </div>
-                                            )}
-                                            {op.floors && (
-                                                <div>
-                                                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Pavimentos</p>
-                                                    <p className="text-lg font-bold text-gray-800 mt-0.5">{op.floors}</p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                )}
-
-                                <button
-                                    onClick={() => setStep('form')}
-                                    className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl text-base"
-                                >
-                                    <Handshake className="w-5 h-5" />
-                                    Manifestar Interesse
-                                    <ChevronRight className="w-5 h-5" />
-                                </button>
-                            </div>
-                        )}
-
-                        {/* ── ABA: Viabilidade ── */}
-                        {tab === 'cenarios' && hasScenarios && (
-                            <div className="space-y-8">
-                                <ScenarioComparison opportunity={op} />
                                 <button
                                     onClick={() => setStep('form')}
                                     className="w-full sm:w-auto flex items-center justify-center gap-2 px-8 py-4 bg-[#0B1727] hover:bg-blue-900 text-white font-bold rounded-2xl transition-all shadow-xl text-base"

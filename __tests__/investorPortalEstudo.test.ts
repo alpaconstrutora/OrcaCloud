@@ -96,3 +96,41 @@ describe('contrato com a função publicada (versão publicada pela oportunidade
         expect(sql).not.toMatch(/'interno'/);
     });
 });
+
+describe('vitrine pelo link (plano 2026-11-21, Fase 2): só números da versão, nenhum campo digitado', () => {
+    const pasta = resolve(__dirname, '../supabase/migrations');
+    const ultima = (funcao: string) => readFileSync(`${pasta}/${readdirSync(pasta)
+        .filter(f => f.endsWith('.sql') && new RegExp(String.raw`CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.${funcao}\(`, 'i').test(readFileSync(`${pasta}/${f}`, 'utf-8')))
+        .sort((a, b) => (a.match(/\d{14}/)?.[0] ?? '').localeCompare(b.match(/\d{14}/)?.[0] ?? ''))
+        .pop()!}`, 'utf-8').replace(/--.*$/gm, '');
+
+    it('a lista do portal não manda a linha inteira (to_jsonb(o)) e usa a vitrine', () => {
+        const sql = ultima('fn_investor_portal_get_opportunities');
+        expect(sql).not.toMatch(/to_jsonb\(o\)/);
+        expect(sql).toMatch(/fn_oportunidade_na_vitrine\(o\)/);
+    });
+
+    it('a vitrine tem as chaves que naVitrine lê e nenhuma coluna digitada', () => {
+        const sql = ultima('fn_oportunidade_na_vitrine');
+        for (const k of ['indicadores_da_versao', 'resultados_da_versao', 'local', 'ticket_min', 'imovib_version_id', 'cidade', 'uf', 'obra_id', 'duracao', 'custoObra', 'terreno']) {
+            expect(sql, k).toContain(`'${k}'`);
+        }
+        for (const digitado of ['risks_json', 'simulation_params_json', 'cost_estimate', 'roi_pct', 'tir_pct', 'duration_months', 'location_city', 'target_funding_value', 'scenario_']) {
+            expect(sql, digitado).not.toContain(digitado);
+        }
+    });
+
+    it('o marketplace anônimo usa a vitrine e perde o EXECUTE de PUBLIC', () => {
+        const sql = ultima('get_public_marketplace');
+        expect(sql).toMatch(/fn_oportunidade_na_vitrine\(o\)/);
+        expect(sql).toMatch(/REVOKE EXECUTE ON FUNCTION public\.get_public_marketplace\(text\) FROM PUBLIC/);
+        expect(sql).not.toMatch(/'cost_estimate'|'vgv',\s+o\.vgv/);
+    });
+
+    it('publicar exige estudo, versão com cálculo e parecer diferente de "reprovar"', () => {
+        const sql = ultima('fn_investor_opportunity_versao_valida');
+        expect(sql).toMatch(/vincule o estudo do Imovib/);
+        expect(sql).toMatch(/snapshot \? 'calculo'/);
+        expect(sql).toMatch(/v_parecer = 'reprovar'/);
+    });
+});

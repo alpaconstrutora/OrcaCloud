@@ -2,15 +2,14 @@ import React from 'react';
 import { Plus, LayoutDashboard, Table2, Pencil, Trash2, Eye, EyeOff, MapPin, Building2, TrendingUp, Users, BarChart3 } from 'lucide-react';
 import {
     InvestorOpportunity, OpportunityStatus,
-    OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_COLORS,
+    OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_COLORS, OPPORTUNITY_STATUS_TEXT,
     OPPORTUNITY_TYPE_LABELS,
-    OpportunityCompetitor,
     investorPortalService,
 } from '../../services/investorPortalService';
 import { Investor } from '../../services/investorService';
 import OpportunityForm from './OpportunityForm';
 import OpportunityDetail from './OpportunityDetail';
-import { comNumerosDaVersao } from '../../utils/oportunidadeNumerosDaVersao';
+import { naVitrine } from '../../utils/oportunidadeNumerosDaVersao';
 import InterestsPanel from './InterestsPanel';
 import Button from '../ui/Button';
 import { useOrgWriteTarget } from '../../hooks/useOrgContext';
@@ -64,57 +63,36 @@ const OpportunitiesTab: React.FC<Props> = ({
         setEditing('new');
     };
 
-    const handleSave = async (
-        data: Omit<InvestorOpportunity, 'id' | 'created_at'>,
-        competitors: Omit<OpportunityCompetitor, 'id' | 'created_at' | 'opportunity_id'>[]
-    ) => {
+    const handleSave = async (data: Omit<InvestorOpportunity, 'id' | 'created_at'>) => {
         if (!editingOrganizationId) return;
         setSaving(true);
         try {
-            let saved: InvestorOpportunity;
             if (editing === 'new') {
-                saved = await investorPortalService.addOpportunity(data);
-                onUpdate(saved);
+                onUpdate(await investorPortalService.addOpportunity(data));
             } else if (editing && editing.id) {
-                saved = await investorPortalService.updateOpportunity(editing.id, data);
+                const saved = await investorPortalService.updateOpportunity(editing.id, data);
                 onUpdate(saved);
-                if (detail && detail.id === editing.id) {
-                    setDetail(saved);
-                }
-            }
-
-            // Salvar concorrentes
-            if (saved! && saved.id) {
-                // Remove concorrentes existentes para evitar duplicados ou conflitos
-                const existing = await investorPortalService.listCompetitors(saved.id);
-                for (const item of existing) {
-                    if (item.id) await investorPortalService.deleteCompetitor(item.id);
-                }
-                // Insere a nova lista de concorrentes
-                for (const item of competitors) {
-                    await investorPortalService.saveCompetitor({
-                        ...item,
-                        opportunity_id: saved.id,
-                        organization_id: editingOrganizationId,
-                    });
-                }
+                if (detail && detail.id === editing.id) setDetail(saved);
             }
 
             setEditing(null);
             setCreateOrgId(undefined);
         } catch (err) {
             console.error('Erro ao salvar oportunidade', err);
-            alert('Erro ao salvar. Tente novamente.');
+            // O banco explica por que recusou (publicar sem estudo/versão, parecer "Reprovar"...).
+            showToast(`Não foi possível salvar: ${(err as { message?: string })?.message ?? 'tente novamente'}`, 'error');
         } finally {
             setSaving(false);
         }
     };
 
     // Plano 2026-11-15, Fase 2: com estudo do Imovib, publicar exige a versão que o investidor vê.
+    // Fase 2 do plano 2026-11-21: publicar exige estudo + versão (o banco confere o mesmo e também o parecer).
     const motivoParaNaoPublicar = (op: InvestorOpportunity) =>
-        !op.is_published && op.imovib_study_id && !op.imovib_version_id
-            ? 'Escolha antes, em Editar, a versão do estudo que o investidor vai ver.'
-            : null;
+        op.is_published ? null
+            : !op.imovib_study_id ? 'Vincule antes, em Editar, o estudo do Imovib: o investidor só vê números da versão congelada.'
+                : !op.imovib_version_id ? 'Escolha antes, em Editar, a versão do estudo que o investidor vai ver.'
+                    : null;
     const tituloDoPublicar = (op: InvestorOpportunity) =>
         motivoParaNaoPublicar(op) ?? (op.is_published ? 'Despublicar' : 'Publicar');
 
@@ -139,14 +117,14 @@ const OpportunitiesTab: React.FC<Props> = ({
     };
 
     const visibleOpportunities = isAdmin ? opportunities : opportunities.filter(o => o.is_published);
-    // VGV/ROI/TIR exibidos: os da versão publicada do Imovib, quando houver (utils/oportunidadeNumerosDaVersao.ts).
+    // Números exibidos: só os da versão do Imovib (utils/oportunidadeNumerosDaVersao.ts, naVitrine).
     // Editar abre a ORIGINAL: o formulário mostra e grava só os campos digitados à mão.
-    const exibidas = visibleOpportunities.map(comNumerosDaVersao);
+    const exibidas = visibleOpportunities.map(naVitrine);
     const editar = (op: InvestorOpportunity) => setEditing(opportunities.find(o => o.id === op.id) ?? op);
 
     // ── Pipeline executivo ────────────────────────────────────────────────────
     const activeOpps = opportunities.filter(o => o.status !== 'encerrada' && o.is_published);
-    const totalVgv = activeOpps.reduce((sum, o) => sum + (comNumerosDaVersao(o).vgv ?? 0), 0);
+    const totalVgv = activeOpps.reduce((sum, o) => sum + (naVitrine(o).vgv ?? 0), 0);
     const statusCounts = (['estudo','viabilidade','lancamento','captacao'] as OpportunityStatus[])
         .map(s => ({ status: s, count: opportunities.filter(o => o.status === s).length }))
         .filter(x => x.count > 0);
@@ -299,7 +277,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                         {/* Badges */}
                                         <div className="flex flex-wrap gap-2 mb-3">
                                             {op.status && (
-                                                <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
+                                                <span className={`text-xs font-medium ${OPPORTUNITY_STATUS_TEXT[op.status]}`}>
                                                     {OPPORTUNITY_STATUS_LABELS[op.status]}
                                                 </span>
                                             )}
@@ -340,12 +318,12 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                     <p className="text-blue-300 font-black">{op.tir_pct.toFixed(1)}%</p>
                                                 </div>
                                             )}
-                                            {(op.location_city || op.location_state) && (
+                                            {(op.cidade || op.uf) && (
                                                 <div>
                                                     <p className="text-white/30 font-bold uppercase tracking-wider text-[9px]">Local</p>
                                                     <p className="text-white/70 font-bold flex items-center gap-1">
                                                         <MapPin className="w-3 h-3" />
-                                                        {[op.location_city, op.location_state].filter(Boolean).join(', ')}
+                                                        {[op.cidade, op.uf].filter(Boolean).join(', ')}
                                                     </p>
                                                 </div>
                                             )}
@@ -403,7 +381,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                 )}
                                             </div>
                                             {op.status && (
-                                                <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-widest whitespace-nowrap ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
+                                                <span className={`text-xs font-medium whitespace-nowrap ${OPPORTUNITY_STATUS_TEXT[op.status]}`}>
                                                     {OPPORTUNITY_STATUS_LABELS[op.status]}
                                                 </span>
                                             )}
@@ -425,7 +403,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                         </div>
                                         <div className="flex items-center justify-between gap-3 pt-3 border-t border-gray-50">
                                             <span className="text-xs font-bold text-gray-400 truncate">
-                                                {[op.location_city, op.location_state].filter(Boolean).join(', ') || 'Local não informado'}
+                                                {[op.cidade, op.uf].filter(Boolean).join(', ') || 'Local não informado'}
                                             </span>
                                             <div className="flex items-center gap-1 flex-shrink-0">
                                                 <Button
@@ -468,35 +446,35 @@ const OpportunitiesTab: React.FC<Props> = ({
                                         <tr key={op.id} className="hover:bg-blue-50/30 transition-colors group">
                                             <td className="px-6 py-4">
                                                 <div className="flex flex-col">
-                                                    <span className="font-bold text-gray-900">{op.title}</span>
+                                                    <span className="text-gray-900">{op.title}</span>
                                                     {op.subtitle && <span className="text-xs text-gray-500 line-clamp-1">{op.subtitle}</span>}
                                                     {isAdmin && !op.is_published && (
-                                                        <span className="text-xs text-yellow-600 font-bold mt-0.5">Rascunho</span>
+                                                        <span className="text-xs text-yellow-700 mt-0.5">Rascunho</span>
                                                     )}
                                                 </div>
                                             </td>
                                             <td className="px-6 py-4">
                                                 {op.status && (
-                                                    <span className={`px-2.5 py-1 rounded-full text-xs font-black uppercase tracking-widest ${OPPORTUNITY_STATUS_COLORS[op.status]}`}>
+                                                    <span className={`text-xs font-medium ${OPPORTUNITY_STATUS_TEXT[op.status]}`}>
                                                         {OPPORTUNITY_STATUS_LABELS[op.status]}
                                                     </span>
                                                 )}
                                             </td>
-                                            <td className="px-6 py-4 font-bold text-gray-800 text-sm">
+                                            <td className="px-6 py-4 font-medium text-gray-800 text-sm">
                                                 {fmtBRL(op.vgv) ?? '—'}
                                             </td>
                                             <td className="px-6 py-4 text-sm">
                                                 {op.roi_pct != null && (
-                                                    <span className="text-emerald-600 font-bold">{op.roi_pct.toFixed(1)}%</span>
+                                                    <span className="text-emerald-700 font-medium">{op.roi_pct.toFixed(1)}%</span>
                                                 )}
                                                 {op.roi_pct != null && op.tir_pct != null && <span className="text-gray-300 mx-1">/</span>}
                                                 {op.tir_pct != null && (
-                                                    <span className="text-blue-600 font-bold">{op.tir_pct.toFixed(1)}%</span>
+                                                    <span className="text-blue-700 font-medium">{op.tir_pct.toFixed(1)}%</span>
                                                 )}
                                                 {op.roi_pct == null && op.tir_pct == null && <span className="text-gray-400">—</span>}
                                             </td>
                                             <td className="px-6 py-4 text-sm text-gray-500">
-                                                {[op.location_city, op.location_state].filter(Boolean).join(', ') || '—'}
+                                                {[op.cidade, op.uf].filter(Boolean).join(', ') || '—'}
                                             </td>
                                             <td className="px-6 py-4 text-right">
                                                 <div className="flex justify-end gap-1">

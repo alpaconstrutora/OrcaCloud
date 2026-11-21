@@ -4,6 +4,7 @@ import {
     InterestRole,
 } from './investorPortalService';
 import { opportunityDocumentsService } from './opportunityDocumentsService';
+import { naVitrine, type OportunidadeNaVitrine } from '../utils/oportunidadeNumerosDaVersao';
 import { PhotoItem } from '../components/investor/PhotoGallery';
 
 export interface PublicOrganization {
@@ -19,9 +20,8 @@ export interface PublicPhoto {
     description?: string | null;
 }
 
-export interface PublicOpportunity extends InvestorOpportunity {
-    photos: PublicPhoto[];
-}
+/** Vitrine pública: números só da versão do Imovib (plano 2026-11-21-imovib-oportunidades-consolidacao, item 2.6). */
+export type PublicOpportunity = OportunidadeNaVitrine & { photos: PublicPhoto[] };
 
 export interface PublicMarketplace {
     organization: PublicOrganization;
@@ -53,8 +53,8 @@ export const publicMarketplaceService = {
         if (!data || (data as any).error) {
             throw new Error((data as any)?.error ?? 'Marketplace não encontrado');
         }
-        const result = data as { organization: PublicOrganization; opportunities: PublicOpportunity[] };
-        return result;
+        const result = data as { organization: PublicOrganization; opportunities: (InvestorOpportunity & { photos: PublicPhoto[] })[] };
+        return { organization: result.organization, opportunities: (result.opportunities ?? []).map(o => naVitrine(o)) };
     },
 
     resolvePhotoUrls: resolvePhotos,

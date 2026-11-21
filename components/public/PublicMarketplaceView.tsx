@@ -124,10 +124,7 @@ const PublicMarketplaceView: React.FC<Props> = ({ slug }) => {
                 ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
                         {opportunities.map(opp => {
-                            const coverPhoto = opp.photos?.[0]
-                                ? publicMarketplaceService.resolvePhotoUrls([opp.photos[0]])[0]?.url
-                                : null;
-                            const heroSrc = opp.thumbnail_url || coverPhoto;
+                            const heroSrc = opp.capa;
 
                             return (
                                 <button
@@ -154,9 +151,9 @@ const PublicMarketplaceView: React.FC<Props> = ({ slug }) => {
                                                 {OPPORTUNITY_STATUS_LABELS[opp.status]}
                                             </span>
                                         )}
-                                        {opp.photos && opp.photos.length > 0 && (
+                                        {(opp.fotos?.length ?? 0) > 0 && (
                                             <span className="absolute bottom-2 right-3 text-[10px] text-white/70 font-bold">
-                                                📷 {opp.photos.length}
+                                                📷 {opp.fotos!.length}
                                             </span>
                                         )}
                                     </div>

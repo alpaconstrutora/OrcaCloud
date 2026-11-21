@@ -61,3 +61,12 @@ describe('naVitrine', () => {
         expect(prazoZero.prazo_meses).toBeNull();
     });
 });
+
+describe('capa da vitrine (Fase 3: fotos do empreendimento)', () => {
+    it('a escolhida, senão a primeira foto do empreendimento, senão nenhuma', () => {
+        const fotos = [{ url: 'https://midia/planta.png', legenda: 'Planta — 2Q' }, { url: 'https://midia/vista.png', legenda: null }];
+        expect(naVitrine({ ...base, fotos }).capa).toBe('https://midia/planta.png');
+        expect(naVitrine({ ...base, fotos, thumbnail_url: 'https://midia/vista.png' }).capa).toBe('https://midia/vista.png');
+        expect(naVitrine({ ...base, fotos: [] }).capa).toBeNull();
+    });
+});

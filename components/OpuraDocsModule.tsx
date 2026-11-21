@@ -88,6 +88,7 @@ import {
 } from '../types';
 import { useStore } from '../store/useStore';
 import { creditRoomService } from '../services/creditRoomService';
+import { investorPortalService } from '../services/investorPortalService';
 import { useOrgWriteTarget, forEachTargetOrg, targetOrgIds, partialFailureNote } from '../hooks/useOrgContext';
 import { isObra } from '../utils/projectClassification';
 import { temAcessoTotal } from '../lib/acessoTotal';
@@ -425,7 +426,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
   // Estados locais — Compartilhamento com Portal do Cliente / Portal do Colaborador
   // (GED vira a fonte única desses portais — ver migration 20270821000008)
-  const [shareAudience, setShareAudience] = React.useState<'parceiro' | 'cliente' | 'colaborador' | 'credor'>('parceiro');
+  const [shareAudience, setShareAudience] = React.useState<'parceiro' | 'cliente' | 'colaborador' | 'credor' | 'investidor'>('parceiro');
+  // 'investidor' = Data Room de uma oportunidade (plano 2026-11-21-imovib-oportunidades-consolidacao, Fase 3).
+  const [portalShareOportunidades, setPortalShareOportunidades] = React.useState<{ id: string; name: string }[]>([]);
+  const [selectedShareOportunidadeId, setSelectedShareOportunidadeId] = React.useState('');
   const [portalShareClients, setPortalShareClients] = React.useState<ClientOption[]>([]);
   // 'credor' = Credit Room (Portal de Crédito): o Data Room do banco é o GED compartilhado.
   const [portalShareCreditRooms, setPortalShareCreditRooms] = React.useState<{ id: string; name: string }[]>([]);
@@ -1440,6 +1444,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         ))
         .catch((err) => console.error('[OpuraDocsModule] Erro ao carregar Credit Rooms:', err));
     }
+    if (portalShareOportunidades.length === 0) {
+      investorPortalService.listOpportunities(activeOrganizationId ?? null)
+        .then((ops) => setPortalShareOportunidades(ops.filter((o) => !!o.id).map((o) => ({ id: o.id!, name: o.title }))))
+        .catch((err) => console.error('[OpuraDocsModule] Erro ao carregar oportunidades:', err));
+    }
     await loadShareRecipients(docIds, folder || null);
   };
 
@@ -1510,7 +1519,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     const ok = await confirm({
       title: 'Revogar compartilhamento?',
       message: `${recipient.name} deixará de ver ${shareDocIds.length > 1 ? `estes ${shareDocIds.length} documentos` : 'este documento'} ${
-        recipient.audience === 'credor' ? 'no Portal de Crédito' : `no Portal do ${recipient.audience === 'cliente' ? 'Cliente' : 'Colaborador'}`
+        recipient.audience === 'credor' ? 'no Portal de Crédito'
+          : recipient.audience === 'investidor' ? 'no Data Room da oportunidade (Portal do Investidor)'
+            : `no Portal do ${recipient.audience === 'cliente' ? 'Cliente' : 'Colaborador'}`
       }.`,
       variant: 'danger',
       confirmLabel: 'Revogar',
@@ -1524,6 +1535,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
           clientId: recipient.audience === 'cliente' ? recipient.recipient_id : undefined,
           employeeId: recipient.audience === 'colaborador' ? recipient.recipient_id : undefined,
           creditRoomId: recipient.audience === 'credor' ? recipient.recipient_id : undefined,
+          opportunityId: recipient.audience === 'investidor' ? recipient.recipient_id : undefined,
         },
         shareDocIds
       );
@@ -1586,16 +1598,18 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     if (shareAudience === 'cliente' && !selectedShareClientId) return;
     if (shareAudience === 'colaborador' && !selectedShareEmployeeId) return;
     if (shareAudience === 'credor' && !selectedShareCreditRoomId) return;
+    if (shareAudience === 'investidor' && !selectedShareOportunidadeId) return;
 
     setSharingSubmitting(true);
     try {
       await documentService.sharePortalDocumentsBatch(
         shareDocIds,
         {
-          audience: shareAudience as 'cliente' | 'colaborador' | 'credor',
+          audience: shareAudience as 'cliente' | 'colaborador' | 'credor' | 'investidor',
           clientId: selectedShareClientId || undefined,
           employeeId: selectedShareEmployeeId || undefined,
           creditRoomId: selectedShareCreditRoomId || undefined,
+          opportunityId: shareAudience === 'investidor' ? selectedShareOportunidadeId || undefined : undefined,
         },
         currentProfile?.email || 'sistema'
       );
@@ -1606,7 +1620,9 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
         ? portalShareClients.find((c) => c.id === selectedShareClientId)?.name
         : shareAudience === 'credor'
           ? portalShareCreditRooms.find((r) => r.id === selectedShareCreditRoomId)?.name
-          : portalShareEmployees.find((e) => e.id === selectedShareEmployeeId)?.name;
+          : shareAudience === 'investidor'
+            ? portalShareOportunidades.find((o) => o.id === selectedShareOportunidadeId)?.name
+            : portalShareEmployees.find((e) => e.id === selectedShareEmployeeId)?.name;
       notify(`${shareDocIds.length} documento(s) compartilhado(s) com ${targetName || 'o portal'} com sucesso.`);
     } catch (err: any) {
       notify(err.message || 'Erro ao compartilhar documento com o portal.', 'error');
@@ -4348,6 +4364,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 { id: 'cliente', label: 'Portal do Cliente' },
                 { id: 'colaborador', label: 'Portal do Colaborador' },
                 { id: 'credor', label: 'Credit Room' },
+                { id: 'investidor', label: 'Oportunidade (investidor)' },
               ] as const).map((tab) => (
                 <button
                   key={tab.id}
@@ -4453,7 +4470,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </form>
             )}
 
-            {(shareAudience === 'cliente' || shareAudience === 'colaborador' || shareAudience === 'credor') && (
+            {(shareAudience === 'cliente' || shareAudience === 'colaborador' || shareAudience === 'credor' || shareAudience === 'investidor') && (
               <form onSubmit={handleShareWithPortal} className="p-6 space-y-4">
                 {docAlreadySharedWithPortal.filter((s) => s.audience === shareAudience).length > 0 && (
                   <div className="bg-slate-50 border border-slate-100 rounded-[8px] p-2.5">
@@ -4526,6 +4543,32 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         : 'O banco vê a versão ATIVA do documento; versões novas chegam sozinhas — sem recompartilhar.'}
                     </p>
                   </div>
+                ) : shareAudience === 'investidor' ? (
+                  <div className="space-y-1.5">
+                    <label htmlFor="ged-compartilhar-oportunidade" className="text-xs font-semibold text-slate-500">Oportunidade</label>
+                    <select
+                      id="ged-compartilhar-oportunidade"
+                      required
+                      value={selectedShareOportunidadeId}
+                      onChange={(e) => setSelectedShareOportunidadeId(e.target.value)}
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    >
+                      <option value="">Selecione uma oportunidade...</option>
+                      {portalShareOportunidades.map((o) => {
+                        const alreadyShared = docAlreadySharedWithPortal.some((s) => s.audience === 'investidor' && s.recipient_id === o.id && s.doc_count >= shareDocIds.length);
+                        return (
+                          <option key={o.id} value={o.id} disabled={alreadyShared}>
+                            {o.name}{alreadyShared ? ' (já compartilhado)' : ''}
+                          </option>
+                        );
+                      })}
+                    </select>
+                    <p className="text-xs text-slate-400 pt-1">
+                      {portalShareOportunidades.length === 0
+                        ? 'Nenhuma oportunidade nesta organização (Investidor → Oportunidades).'
+                        : 'Entra no Data Room da oportunidade; o investidor vê a versão ATIVA, só com a oportunidade publicada.'}
+                    </p>
+                  </div>
                 ) : (
                   <div className="space-y-1.5">
                     <label className="text-xs font-semibold text-slate-500">Colaborador</label>
@@ -4568,6 +4611,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     disabled={sharingSubmitting || (
                       shareAudience === 'cliente' ? !selectedShareClientId
                         : shareAudience === 'credor' ? !selectedShareCreditRoomId
+                          : shareAudience === 'investidor' ? !selectedShareOportunidadeId
                           : !selectedShareEmployeeId
                     )}
                     className="h-9 px-3.5 bg-orange-500 text-white font-medium text-[13px] rounded-[6px] hover:bg-orange-600 transition-all active:scale-95 disabled:opacity-50"

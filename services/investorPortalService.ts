@@ -91,7 +91,6 @@ export interface InvestorOpportunity {
     imovib_study_id?: string | null;
     /** Versão congelada do estudo que o investidor vê (obrigatória para publicar — Fase 2). */
     imovib_version_id?: string | null;
-    gallery_urls?: string[] | null;
     distances_json?: any[] | null;
     team_json?: any[] | null;
     created_at?: string;
@@ -102,13 +101,19 @@ export interface InvestorOpportunity {
     resultados_da_versao?: Partial<Pick<ResultadosDaVersao, 'duracao' | 'custoObra' | 'terreno'>> | null;
     /** Do empreendimento ligado ao estudo (o mais antigo da mesma organização). */
     local?: LocalDaOportunidade | null;
+    /** Imagens do empreendimento (decorado, plantas, vistas) — Fase 3: a galeria própria saiu. */
+    fotos?: FotoDaVitrine[] | null;
 }
+
+export interface FotoDaVitrine { url: string; legenda: string | null }
 
 export interface LocalDaOportunidade {
     cidade: string | null;
     uf: string | null;
     /** Obra principal do empreendimento (aba "Obra ao vivo"). */
     obra_id: string | null;
+    /** Só no app (gestor): de onde o Data Room compartilha documentos. */
+    empreendimento_id?: string | null;
 }
 
 export type InterestRole = 'investidor' | 'arquiteto' | 'engenheiro' | 'projetista' | 'consultor' | 'outro';
@@ -159,7 +164,7 @@ const REPORT_COLS = 'id, organization_id, investor_id, project_id, name, type, c
 const OPP_COLS = [
     'id', 'organization_id', 'title', 'subtitle', 'open_date', 'link',
     'status', 'opportunity_type', 'thumbnail_url', 'ticket_min', 'is_published',
-    'imovib_study_id', 'imovib_version_id', 'gallery_urls', 'distances_json', 'team_json',
+    'imovib_study_id', 'imovib_version_id', 'distances_json', 'team_json',
     'created_at',
     // Só leitura: números da versão escolhida (indicadores congelados + resultados do momento).
     'versao_publicada:imovib_study_versions!imovib_version_id(indicadores:snapshot->calculo->investidor->indicadores, results)',
@@ -179,8 +184,8 @@ const daLinha = (row: LinhaDaOportunidade): InvestorOpportunity => {
     };
 };
 /** Campos só de leitura nunca vão num insert/update (não são colunas). */
-const semCamposDeLeitura = <T extends Partial<InvestorOpportunity>>(o: T): Omit<T, 'indicadores_da_versao' | 'resultados_da_versao' | 'local'> => {
-    const { indicadores_da_versao: _i, resultados_da_versao: _r, local: _l, ...resto } = o;
+const semCamposDeLeitura = <T extends Partial<InvestorOpportunity>>(o: T): Omit<T, 'indicadores_da_versao' | 'resultados_da_versao' | 'local' | 'fotos'> => {
+    const { indicadores_da_versao: _i, resultados_da_versao: _r, local: _l, fotos: _f, ...resto } = o;
     return resto;
 };
 
@@ -189,19 +194,45 @@ const semCamposDeLeitura = <T extends Partial<InvestorOpportunity>>(o: T): Omit<
  * Sem UNIQUE na coluna: vale o mais antigo; empreendimento de OUTRA organização não vale (a mesma regra de
  * imovibService.carregarVinculos). A RPC do portal faz a mesma escolha em SQL.
  */
+/**
+ * Fotos da vitrine = imagens do empreendimento (bucket público empreendimento-midia): decorado, plantas por
+ * tipologia e vistas das torres — a mesma ordem de fn_oportunidade_na_vitrine no banco (Fase 3).
+ */
+async function fotosDosEmpreendimentos(ids: string[]): Promise<Map<string, FotoDaVitrine[]>> {
+    const out = new Map<string, FotoDaVitrine[]>();
+    if (ids.length === 0) return out;
+    const [dec, plantas, vistas] = await Promise.all([
+        supabase.from('empreendimento_tipologia_decorado').select('empreendimento_id, imagem_url, legenda, tipologia, ordem').in('empreendimento_id', ids).order('ordem', { ascending: true }),
+        supabase.from('empreendimento_tipologia_plantas').select('empreendimento_id, imagem_url, tipologia').in('empreendimento_id', ids),
+        supabase.from('empreendimento_tower_vistas').select('imagem_url, legenda, andar_de, torre:empreendimento_towers!inner(empreendimento_id, name)').in('torre.empreendimento_id', ids).order('andar_de', { ascending: true }),
+    ]);
+    for (const r of [dec, plantas, vistas]) if (r.error) throw r.error;
+    const por = (id: string) => { if (!out.has(id)) out.set(id, []); return out.get(id)!; };
+    for (const d of (dec.data ?? []) as { empreendimento_id: string; imagem_url: string; legenda: string | null; tipologia: string }[]) por(d.empreendimento_id).push({ url: d.imagem_url, legenda: d.legenda ?? d.tipologia });
+    for (const p of (plantas.data ?? []) as { empreendimento_id: string; imagem_url: string; tipologia: string }[]) por(p.empreendimento_id).push({ url: p.imagem_url, legenda: `Planta — ${p.tipologia}` });
+    for (const v of (vistas.data ?? []) as unknown as { imagem_url: string; legenda: string | null; torre: { empreendimento_id: string; name: string } }[]) por(v.torre.empreendimento_id).push({ url: v.imagem_url, legenda: v.legenda ?? `Vista — ${v.torre.name}` });
+    return out;
+}
+
 async function comLocal(ops: InvestorOpportunity[]): Promise<InvestorOpportunity[]> {
     const estudos = [...new Set(ops.map(o => o.imovib_study_id).filter((x): x is string => !!x))];
-    if (estudos.length === 0) return ops.map(o => ({ ...o, local: null }));
+    if (estudos.length === 0) return ops.map(o => ({ ...o, local: null, fotos: [] }));
     const { data, error } = await supabase
         .from('empreendimentos')
-        .select('organization_id, imovib_study_id, endereco_city, endereco_state, project_id, created_at')
+        .select('id, organization_id, imovib_study_id, endereco_city, endereco_state, project_id, created_at')
         .in('imovib_study_id', estudos)
         .order('created_at', { ascending: true });
     if (error) throw error;
-    const linhas = (data ?? []) as { organization_id: string; imovib_study_id: string; endereco_city: string | null; endereco_state: string | null; project_id: string | null }[];
+    const linhas = (data ?? []) as { id: string; organization_id: string; imovib_study_id: string; endereco_city: string | null; endereco_state: string | null; project_id: string | null }[];
+    const escolhido = (o: InvestorOpportunity) => linhas.find(x => x.imovib_study_id === o.imovib_study_id && x.organization_id === o.organization_id);
+    const fotos = await fotosDosEmpreendimentos([...new Set(ops.map(escolhido).filter(Boolean).map(e => e!.id))]);
     return ops.map(o => {
-        const e = linhas.find(x => x.imovib_study_id === o.imovib_study_id && x.organization_id === o.organization_id);
-        return { ...o, local: e ? { cidade: e.endereco_city ?? null, uf: e.endereco_state ?? null, obra_id: e.project_id ?? null } : null };
+        const e = escolhido(o);
+        return {
+            ...o,
+            local: e ? { cidade: e.endereco_city ?? null, uf: e.endereco_state ?? null, obra_id: e.project_id ?? null, empreendimento_id: e.id } : null,
+            fotos: e ? fotos.get(e.id) ?? [] : [],
+        };
     });
 }
 
@@ -288,19 +319,21 @@ export const investorPortalService = {
      * O que a vitrine LÊ do estudo escolhido no formulário: local e obra do empreendimento e o parecer
      * (parecer "reprovar" trava a publicação — item 5.2 do plano 2026-11-21-imovib-oportunidades-consolidacao).
      */
-    async lidoDoEstudo(studyId: string, organizationId: string): Promise<{ local: LocalDaOportunidade | null; parecer: string | null; empreendimento: string | null }> {
+    async lidoDoEstudo(studyId: string, organizationId: string): Promise<{ local: LocalDaOportunidade | null; parecer: string | null; empreendimento: string | null; fotos: FotoDaVitrine[] }> {
         const [{ data: est, error: e1 }, { data: emps, error: e2 }] = await Promise.all([
             supabase.from('imovib_studies').select('recommendation').eq('id', studyId).maybeSingle(),
-            supabase.from('empreendimentos').select('name, organization_id, endereco_city, endereco_state, project_id, created_at')
+            supabase.from('empreendimentos').select('id, name, organization_id, endereco_city, endereco_state, project_id, created_at')
                 .eq('imovib_study_id', studyId).eq('organization_id', organizationId).order('created_at', { ascending: true }).limit(1),
         ]);
         if (e1) throw e1;
         if (e2) throw e2;
-        const e = (emps ?? [])[0] as { name: string; endereco_city: string | null; endereco_state: string | null; project_id: string | null } | undefined;
+        const e = (emps ?? [])[0] as { id: string; name: string; endereco_city: string | null; endereco_state: string | null; project_id: string | null } | undefined;
+        const fotos = e ? (await fotosDosEmpreendimentos([e.id])).get(e.id) ?? [] : [];
         return {
+            fotos,
             parecer: (est as { recommendation?: string | null } | null)?.recommendation ?? null,
             empreendimento: e?.name ?? null,
-            local: e ? { cidade: e.endereco_city ?? null, uf: e.endereco_state ?? null, obra_id: e.project_id ?? null } : null,
+            local: e ? { cidade: e.endereco_city ?? null, uf: e.endereco_state ?? null, obra_id: e.project_id ?? null, empreendimento_id: e.id } : null,
         };
     },
 

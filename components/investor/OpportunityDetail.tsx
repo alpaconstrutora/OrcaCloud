@@ -21,8 +21,6 @@ import ImovibPainelDoInvestidor from './portal/ImovibPainelDoInvestidor';
 import ListasDaVersao from './portal/ListasDaVersao';
 import { InvestmentSimulator } from './InvestmentSimulator';
 import Button from '../ui/Button';
-import { BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
-import { ImagemAssinada } from '../ui/ImagemAssinada';
 
 interface Props {
     opportunity: InvestorOpportunity;
@@ -198,9 +196,9 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                 </div>
 
                 {/* hero image (se existir) */}
-                {op.thumbnail_url && (
+                {op.capa && (
                     <div className="relative h-56 sm:h-72 overflow-hidden">
-                        <img src={op.thumbnail_url} alt={op.title} className="w-full h-full object-cover opacity-40" />
+                        <img src={op.capa} alt={op.title} className="w-full h-full object-cover opacity-40" />
                         <div className="absolute inset-0 bg-gradient-to-t from-[#0B1727] via-[#0B1727]/60 to-transparent" />
                     </div>
                 )}
@@ -389,21 +387,21 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                         </div>
                                         )}
 
-                                        {/* Galeria Premium */}
-                                        {op.gallery_urls && op.gallery_urls.length > 0 && (
+                                        {/* Fotos: imagens do empreendimento (Fase 3 do plano 2026-11-21; a galeria própria saiu). */}
+                                        {(op.fotos?.length ?? 0) > 0 && (
                                             <div>
                                                 <div className="flex items-center gap-2 mb-4">
                                                     <Building2 className="w-4 h-4 text-blue-600" />
-                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Galeria de Renders & Fotos</span>
+                                                    <span className="text-sm font-semibold text-gray-700">Imagens do empreendimento</span>
                                                 </div>
                                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                    {op.gallery_urls.map((url, idx) => (
-                                                        <div key={idx} className="relative h-48 rounded-2xl overflow-hidden shadow-sm border border-gray-100 hover:shadow-md transition-all group">
-                                                            <ImagemAssinada bucket={BUCKET_DOCUMENTOS} valor={url} alt={`Render ${idx + 1}`} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" />
-                                                            <div className="absolute inset-0 bg-gradient-to-t from-black/50 to-transparent flex items-end p-4">
-                                                                <span className="text-xs font-bold text-white uppercase tracking-wider">Apresentação {idx + 1}</span>
-                                                            </div>
-                                                        </div>
+                                                    {op.fotos!.map((f, idx) => (
+                                                        <figure key={`${f.url}-${idx}`} className="relative h-48 rounded-2xl overflow-hidden border border-gray-100">
+                                                            <img src={f.url} alt={f.legenda ?? `Imagem ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                                                            {f.legenda && (
+                                                                <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-3 text-sm text-white">{f.legenda}</figcaption>
+                                                            )}
+                                                        </figure>
                                                     ))}
                                                 </div>
                                             </div>
@@ -544,6 +542,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                 {/* ── ABA: Documentos ── */}
                                 {pitchTab === 'documentos' && (
                                     <DataRoomPanel
+                                        empreendimentoId={op.local?.empreendimento_id ?? null}
                                         opportunityId={op.id!}
                                         organizationId={organizationId}
                                         isAdmin={isAdmin}

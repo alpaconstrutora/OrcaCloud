@@ -1,17 +1,14 @@
 import React from 'react';
-import { X, Building2, MapPin, Eye, EyeOff, Unlink, Plus, Trash2, Users, Upload } from 'lucide-react';
+import { X, Building2, MapPin, Eye, EyeOff, Unlink, Plus, Trash2, Users } from 'lucide-react';
 import {
     InvestorOpportunity, OpportunityStatus, OpportunityType,
     OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_TYPE_LABELS,
-    investorPortalService, type LocalDaOportunidade,
+    investorPortalService, type LocalDaOportunidade, type FotoDaVitrine,
 } from '../../services/investorPortalService';
 import { ROTULO_DO_PARECER } from '../../utils/imovibParecer';
 import { imovibService } from '../../services/imovibService';
 import { ImovibStudy } from '../../types';
 import type { ImovibStudyVersion } from '../../utils/imovibVersoes';
-import { storageService } from '../../services/storageService';
-import { BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
-import { ImagemAssinada } from '../ui/ImagemAssinada';
 import Button from '../ui/Button';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 
@@ -36,7 +33,6 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
     }, [organizationId]);
 
     // Sub-estados para gerenciamento de listas dinâmicas no formulário
-    const [newUrl, setNewUrl] = React.useState('');
     const [newDistance, setNewDistance] = React.useState({ place: '', distance: '' });
     const [newMember, setNewMember] = React.useState({ name: '', role: '', experience: '' });
     const [form, setForm] = React.useState<Omit<InvestorOpportunity, 'id' | 'created_at'>>({
@@ -50,7 +46,6 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
         is_published: initial?.is_published ?? false,
         imovib_study_id: initial?.imovib_study_id ?? null,
         imovib_version_id: initial?.imovib_version_id ?? null,
-        gallery_urls: initial?.gallery_urls ?? [],
         distances_json: initial?.distances_json ?? [],
         team_json: initial?.team_json ?? [],
     });
@@ -81,14 +76,14 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
         setForm(prev => ({ ...prev, imovib_study_id: id, imovib_version_id: null, is_published: voltou ? false : prev.is_published }));
     };
     // Fase 2: o que a vitrine LÊ do estudo (local, obra, parecer).
-    const [lido, setLido] = React.useState<{ local: LocalDaOportunidade | null; parecer: string | null; empreendimento: string | null } | null>(null);
+    const [lido, setLido] = React.useState<{ local: LocalDaOportunidade | null; parecer: string | null; empreendimento: string | null; fotos: FotoDaVitrine[] } | null>(null);
     React.useEffect(() => {
         if (!form.imovib_study_id) { setLido(null); return; }
         let vivo = true;
         setLido(null);
         investorPortalService.lidoDoEstudo(form.imovib_study_id, organizationId)
             .then(l => { if (vivo) setLido(l); })
-            .catch(err => { if (vivo) { console.error('Erro ao ler o estudo da oportunidade', err); setLido({ local: null, parecer: null, empreendimento: null }); } });
+            .catch(err => { if (vivo) { console.error('Erro ao ler o estudo da oportunidade', err); setLido({ local: null, parecer: null, empreendimento: null, fotos: [] }); } });
         return () => { vivo = false; };
     }, [form.imovib_study_id, organizationId]);
     // Publicar: estudo + versão congelada (decisão D4) e parecer que não seja "reprovar" (item 5.2).
@@ -104,50 +99,11 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
         ? (lido.parecer ? 'O parecer do estudo é "Renegociar".' : 'O estudo ainda não tem parecer do analista.')
         : null;
 
-    // Estados para upload da Galeria
-    const [dragOver, setDragOver] = React.useState(false);
-    const [uploadingGallery, setUploadingGallery] = React.useState(false);
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
-
-    const uploadFiles = async (files: FileList | null) => {
-        if (!files || files.length === 0) return;
-        setUploadingGallery(true);
-        try {
-            const urls: string[] = [];
-            for (let i = 0; i < files.length; i++) {
-                const file = files[i];
-                // A org no caminho é o que a policy do bucket confere (aplicar_20271116900800).
-                const path = `gallery/${organizationId}/${Date.now()}_${file.name.replace(/\s+/g, '_')}`;
-                await storageService.uploadFile('documents', path, file);
-                // Bucket privado: guarda o CAMINHO; a galeria exibe com ImagemAssinada.
-                urls.push(path);
-            }
-            setForm(prev => ({ ...prev, gallery_urls: [...(prev.gallery_urls || []), ...urls] }));
-        } catch (err) {
-            console.error('Erro ao fazer upload dos arquivos da galeria:', err);
-            alert('Erro ao enviar imagens.');
-        } finally {
-            setUploadingGallery(false);
-        }
-    };
-
-    const handleDropGallery = (e: React.DragEvent) => {
-        e.preventDefault();
-        setDragOver(false);
-        uploadFiles(e.dataTransfer.files);
-    };
-
-    const handleFileInputGallery = (e: React.ChangeEvent<HTMLInputElement>) => {
-        uploadFiles(e.target.files);
-        e.target.value = '';
-    };
-
     const handleSubmit = (e: React.FormEvent) => {
         e.preventDefault();
         if (!form.title.trim()) return;
         const finalForm = { ...form };
         // Itens digitados e não adicionados com "+" entram também.
-        if (newUrl.trim()) finalForm.gallery_urls = [...(finalForm.gallery_urls || []), newUrl.trim()];
         if (newDistance.place.trim() && newDistance.distance.trim()) finalForm.distances_json = [...(finalForm.distances_json || []), { ...newDistance }];
         if (newMember.name.trim() && newMember.role.trim()) finalForm.team_json = [...(finalForm.team_json || []), { ...newMember }];
         onSave(finalForm);
@@ -230,14 +186,21 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">URL da imagem / thumbnail</label>
-                                <input
-                                    type="url"
+                                <label htmlFor="oportunidade-capa" className="block text-xs font-semibold text-slate-500 mb-1.5">Capa</label>
+                                <select
+                                    id="oportunidade-capa"
                                     value={form.thumbnail_url ?? ''}
                                     onChange={e => set('thumbnail_url', e.target.value)}
-                                    placeholder="https://..."
-                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
-                                />
+                                    disabled={!lido?.fotos?.length && !form.thumbnail_url}
+                                    title={!lido?.fotos?.length ? 'As imagens vêm do empreendimento do estudo (decorado, plantas, vistas).' : undefined}
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 disabled:bg-slate-50"
+                                >
+                                    <option value="">Primeira imagem do empreendimento</option>
+                                    {form.thumbnail_url && !lido?.fotos?.some(f => f.url === form.thumbnail_url) && (
+                                        <option value={form.thumbnail_url}>Imagem atual (fora do empreendimento)</option>
+                                    )}
+                                    {(lido?.fotos ?? []).map((f, i) => <option key={`${f.url}-${i}`} value={f.url}>{f.legenda ?? `Imagem ${i + 1}`}</option>)}
+                                </select>
                             </div>
                         </div>
                     </section>
@@ -324,69 +287,6 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         )}
                         <p className="text-xs text-slate-500">VGV, TIR, ROI, prazo, custo e ficha técnica vêm da versão escolhida acima.</p>
                     </section>
-                    {/* ── Galeria Premium ───────────────────────────────── */}
-                    <section>
-                        <div className="flex items-center gap-2 mb-4">
-                            <Upload className="w-4 h-4 text-blue-600" />
-                            <span className="text-xs font-black text-gray-500 uppercase tracking-widest">Galeria Premium (Fotos e Renders)</span>
-                        </div>
-                        <div className="space-y-3">
-                            <div 
-                                onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                                onDragLeave={() => setDragOver(false)}
-                                onDrop={handleDropGallery}
-                                onClick={() => fileInputRef.current?.click()}
-                                className={`border-2 border-dashed rounded-2xl p-6 text-center cursor-pointer transition-all ${dragOver
-                                    ? 'border-blue-400 bg-blue-50/50'
-                                    : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50/50'
-                                }`}
-                            >
-                                <Upload className="w-6 h-6 mx-auto mb-2 text-gray-400" />
-                                <p className="text-xs font-bold text-gray-600">
-                                    {uploadingGallery ? 'Enviando arquivos...' : (dragOver ? 'Solte as imagens aqui' : 'Arraste imagens ou clique para selecionar')}
-                                </p>
-                                <p className="text-[10px] text-gray-400 mt-1">Imagens de renders, plantas e fotos (PNG, JPG, WEBP) - até 20MB</p>
-                                <input 
-                                    ref={fileInputRef} 
-                                    type="file" 
-                                    multiple 
-                                    accept="image/*" 
-                                    className="hidden" 
-                                    onChange={handleFileInputGallery} 
-                                />
-                            </div>
-                            
-                            {uploadingGallery && (
-                                <div className="space-y-1 bg-blue-50/50 rounded-xl p-3 border border-blue-100 flex items-center justify-center gap-2 text-xs text-blue-600 font-bold">
-                                    <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-                                    <span>Fazendo upload das imagens para o Storage...</span>
-                                </div>
-                            )}
-
-                            {form.gallery_urls && form.gallery_urls.length > 0 && (
-                                <div className="grid grid-cols-3 gap-3 mt-2">
-                                    {form.gallery_urls.map((url, idx) => (
-                                        <div key={idx} className="relative rounded-xl overflow-hidden border border-gray-150 aspect-video group bg-gray-50">
-                                            <ImagemAssinada bucket={BUCKET_DOCUMENTOS} valor={url} alt={`Render ${idx + 1}`} className="w-full h-full object-cover" />
-                                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                                <Button
-                                                    variant="danger"
-                                                    size="icon"
-                                                    type="button"
-                                                    onClick={() => set('gallery_urls', (form.gallery_urls || []).filter((_, i) => i !== idx))}
-                                                    className="rounded-lg shadow-lg"
-                                                    title="Excluir imagem"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
-                    </section>
-
                     {/* ── Distâncias de Pontos de Interesse ──────────────── */}
                     <section>
                         <div className="flex items-center gap-2 mb-4">

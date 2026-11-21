@@ -134,3 +134,29 @@ describe('vitrine pelo link (plano 2026-11-21, Fase 2): só números da versão,
         expect(sql).toMatch(/v_parecer = 'reprovar'/);
     });
 });
+
+describe('Data Room pelo GED (plano 2026-11-21, Fase 3)', () => {
+    const pasta = resolve(__dirname, '../supabase/migrations');
+    const ultima = (funcao: string) => readFileSync(`${pasta}/${readdirSync(pasta)
+        .filter(f => f.endsWith('.sql') && new RegExp(String.raw`CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.${funcao}\(`, 'i').test(readFileSync(`${pasta}/${f}`, 'utf-8')))
+        .sort((a, b) => (a.match(/\d{14}/)?.[0] ?? '').localeCompare(b.match(/\d{14}/)?.[0] ?? ''))
+        .pop()!}`, 'utf-8').replace(/--.*$/gm, '')
+        // Só o corpo da função (a migration também tem guardas e DROPs que citam o que saiu).
+        .split(new RegExp(String.raw`CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.${funcao}\(`, 'i'))[1].split(/\nREVOKE /)[0];
+
+    it('o Data Room pelo link lê os compartilhamentos do GED, só da org da oportunidade', () => {
+        const sql = ultima('fn_investor_portal_get_dataroom');
+        expect(sql).toMatch(/opura_document_portal_shares/);
+        expect(sql).toMatch(/audience = 'investidor'/);
+        expect(sql).toMatch(/doc\.organization_id = v_opp\.organization_id/);
+        expect(sql).toMatch(/is_published = TRUE/);
+        expect(sql).not.toMatch(/opportunity_documents/);
+    });
+
+    it('a vitrine leva as fotos do empreendimento e não a galeria própria; o marketplace não lê opportunity_documents', () => {
+        const vitrine = ultima('fn_oportunidade_na_vitrine');
+        expect(vitrine).toContain(`'fotos'`);
+        expect(vitrine).not.toContain('gallery_urls');
+        expect(ultima('get_public_marketplace')).not.toMatch(/opportunity_documents/);
+    });
+});

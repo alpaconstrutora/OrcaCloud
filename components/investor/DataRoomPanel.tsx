@@ -1,28 +1,21 @@
 import React from 'react';
-import {
-    Upload, FolderOpen, Loader2,
-    AlertCircle, FileText, X, CheckCircle2,
-} from 'lucide-react';
+import { FolderOpen, Loader2, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import {
-    opportunityDocumentsService,
-    OpportunityDocument, DocumentCategory,
-    DOCUMENT_CATEGORY_LABELS, DOCUMENT_CATEGORY_ICONS,
-    fmtFileSize,
+    opportunityDocumentsService, CATEGORIA_DO_GED, fmtFileSize, type DocumentoDoDataRoom,
 } from '../../services/opportunityDocumentsService';
+import type { OpuraDocument } from '../../types/documents';
 
 interface Props {
     opportunityId: string;
     organizationId: string;
     isAdmin: boolean;
     uploadedBy?: string;
-    /** Portal do Investidor por link (sessão anônima): lista e baixa pelo token (Fase 7, 16/11/2026). */
+    /** Empreendimento do estudo da oportunidade: de onde vêm os documentos que se compartilham. */
+    empreendimentoId?: string | null;
+    /** Portal do Investidor por link (sessão anônima): lista e baixa pelo token. */
     portalToken?: string;
 }
-
-const CATEGORIES: DocumentCategory[] = [
-    'evte', 'sondagem', 'planta', 'matricula', 'financeiro', 'licenca', 'memorial', 'outro',
-];
 
 const MIME_LABELS: Record<string, string> = {
     'application/pdf': 'PDF',
@@ -35,342 +28,217 @@ const MIME_LABELS: Record<string, string> = {
     'application/x-zip-compressed': 'ZIP',
     'application/dwg': 'DWG',
 };
+const rotuloDoTipo = (mime?: string | null) => (!mime ? 'ARQ' : MIME_LABELS[mime] ?? mime.split('/').pop()?.toUpperCase() ?? 'ARQ');
 
-function getMimeLabel(mime?: string): string {
-    if (!mime) return 'ARQ';
-    return MIME_LABELS[mime] ?? mime.split('/').pop()?.toUpperCase() ?? 'ARQ';
-}
-
-function getMimeColor(mime?: string): string {
-    if (!mime) return 'bg-gray-100 text-gray-600';
-    if (mime === 'application/pdf') return 'bg-red-100 text-red-700';
-    if (mime.startsWith('image/')) return 'bg-blue-100 text-blue-700';
-    if (mime.includes('sheet') || mime.includes('excel')) return 'bg-emerald-100 text-emerald-700';
-    if (mime.includes('word')) return 'bg-indigo-100 text-indigo-700';
-    if (mime.includes('zip')) return 'bg-amber-100 text-amber-700';
-    return 'bg-gray-100 text-gray-600';
-}
-
-const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin, uploadedBy, portalToken }) => {
-    const [docs, setDocs] = React.useState<OpportunityDocument[]>([]);
+/**
+ * Data Room da oportunidade = documentos do GED COMPARTILHADOS com ela (plano
+ * docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md, Fase 3). O arquivo mora só no GED, do
+ * empreendimento; o investidor vê a versão ativa. Upload: aba Documentos do empreendimento (ou o GED).
+ */
+const DataRoomPanel: React.FC<Props> = ({ opportunityId, isAdmin, uploadedBy, empreendimentoId, portalToken }) => {
+    const [docs, setDocs] = React.useState<DocumentoDoDataRoom[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [error, setError] = React.useState<string | null>(null);
-    const [erroDoDownload, setErroDoDownload] = React.useState<string | null>(null);
-
-    // Upload state
-    const [dragOver, setDragOver] = React.useState(false);
-    const [uploading, setUploading] = React.useState(false);
-    const [uploadPct, setUploadPct] = React.useState(0);
-    const [uploadError, setUploadError] = React.useState<string | null>(null);
-    const [showUploadForm, setShowUploadForm] = React.useState(false);
-    const [pendingFile, setPendingFile] = React.useState<File | null>(null);
-    const [uploadCategory, setUploadCategory] = React.useState<DocumentCategory>('outro');
-    const [uploadDescription, setUploadDescription] = React.useState('');
-
-    // Download state
+    const [aviso, setAviso] = React.useState<string | null>(null);
     const [downloading, setDownloading] = React.useState<string | null>(null);
-    const [deleting, setDeleting] = React.useState<string | null>(null);
-
-    const fileInputRef = React.useRef<HTMLInputElement>(null);
+    const [tirando, setTirando] = React.useState<string | null>(null);
+    const [candidatos, setCandidatos] = React.useState<OpuraDocument[] | null>(null);
+    const [escolhidos, setEscolhidos] = React.useState<string[]>([]);
+    const [adicionando, setAdicionando] = React.useState(false);
+    const gestor = isAdmin && !portalToken;
 
     const load = React.useCallback(() => {
         setLoading(true);
         setError(null);
-        (portalToken ? opportunityDocumentsService.listByToken(portalToken, opportunityId) : opportunityDocumentsService.list(opportunityId))
+        (portalToken ? opportunityDocumentsService.listByToken(portalToken, opportunityId) : opportunityDocumentsService.listar(opportunityId))
             .then(setDocs)
             .catch(e => setError((e as Error).message || 'Erro ao carregar.'))
             .finally(() => setLoading(false));
     }, [opportunityId, portalToken]);
-
     React.useEffect(() => { load(); }, [load]);
 
-    const openFile = (file: File) => {
-        setPendingFile(file);
-        setUploadCategory('outro');
-        setUploadDescription('');
-        setUploadError(null);
-        setShowUploadForm(true);
-    };
-
-    const handleDrop = (e: React.DragEvent) => {
-        e.preventDefault();
-        setDragOver(false);
-        const file = e.dataTransfer.files[0];
-        if (file) openFile(file);
-    };
-
-    const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (file) openFile(file);
-        e.target.value = '';
-    };
-
-    const handleUpload = async () => {
-        if (!pendingFile) return;
-        setUploading(true);
-        setUploadPct(0);
-        setUploadError(null);
+    const abrirCandidatos = async () => {
+        if (!empreendimentoId) return;
+        setAviso(null);
         try {
-            const saved = await opportunityDocumentsService.upload(
-                organizationId,
-                opportunityId,
-                pendingFile,
-                { category: uploadCategory, description: uploadDescription, uploadedBy },
-                setUploadPct,
-            );
-            setDocs(prev => [saved, ...prev]);
-            setShowUploadForm(false);
-            setPendingFile(null);
-        } catch (err: any) {
-            setUploadError(err?.message ?? 'Erro ao fazer upload.');
-        } finally {
-            setUploading(false);
+            setCandidatos(await opportunityDocumentsService.candidatos(empreendimentoId, docs.map(d => d.id)));
+            setEscolhidos([]);
+        } catch (e) {
+            setAviso((e as Error).message);
         }
     };
 
-    const handleDownload = async (doc: OpportunityDocument) => {
-        setDownloading(doc.id!);
-        setErroDoDownload(null);
+    const adicionar = async () => {
+        if (escolhidos.length === 0) return;
+        setAdicionando(true);
+        setAviso(null);
+        try {
+            await opportunityDocumentsService.compartilhar(escolhidos, opportunityId, uploadedBy || 'sistema');
+            setCandidatos(null);
+            load();
+        } catch (e) {
+            setAviso(`Não foi possível adicionar: ${(e as Error).message}`);
+        } finally {
+            setAdicionando(false);
+        }
+    };
+
+    const tirar = async (d: DocumentoDoDataRoom) => {
+        setTirando(d.id);
+        setAviso(null);
+        try {
+            await opportunityDocumentsService.descompartilhar([d.id], opportunityId);
+            setDocs(prev => prev.filter(x => x.id !== d.id));
+        } catch (e) {
+            setAviso(`Não foi possível tirar "${d.name}": ${(e as Error).message}`);
+        } finally {
+            setTirando(null);
+        }
+    };
+
+    const baixar = async (d: DocumentoDoDataRoom) => {
+        if (!d.file_path) return;
+        setDownloading(d.id);
+        setAviso(null);
         try {
             const url = portalToken
-                ? await opportunityDocumentsService.getSignedUrlByToken(portalToken, opportunityId, doc.file_path)
-                : await opportunityDocumentsService.getSignedUrl(doc.file_path);
+                ? await opportunityDocumentsService.getSignedUrlByToken(portalToken, opportunityId, d.file_path)
+                : await opportunityDocumentsService.getSignedUrl(d.file_path);
             window.open(url, '_blank', 'noopener,noreferrer');
         } catch (e) {
-            setErroDoDownload(`Não foi possível baixar "${doc.name}": ${(e as Error).message}`);
+            setAviso(`Não foi possível baixar "${d.name}": ${(e as Error).message}`);
         } finally {
             setDownloading(null);
         }
     };
 
-    const handleDelete = async (doc: OpportunityDocument) => {
-        if (!window.confirm(`Remover "${doc.name}"?`)) return;
-        setDeleting(doc.id!);
-        try {
-            await opportunityDocumentsService.remove(doc.id!, doc.file_path);
-            setDocs(prev => prev.filter(d => d.id !== doc.id));
-        } catch {
-            alert('Erro ao remover documento.');
-        } finally {
-            setDeleting(null);
-        }
-    };
-
-    // Agrupar por categoria
-    const byCategory = CATEGORIES.reduce<Record<DocumentCategory, OpportunityDocument[]>>(
-        (acc, cat) => ({ ...acc, [cat]: docs.filter(d => d.category === cat) }),
-        {} as Record<DocumentCategory, OpportunityDocument[]>,
-    );
-    const usedCategories = CATEGORIES.filter(c => byCategory[c].length > 0);
+    const categorias = [...new Set(docs.map(d => d.category))];
+    const motivoAdicionar = !empreendimentoId ? 'O estudo da oportunidade não tem empreendimento: os documentos moram no empreendimento.' : undefined;
 
     if (loading) {
         return (
-            <div className="flex items-center justify-center py-16 gap-3 text-gray-400">
+            <div className="flex items-center justify-center py-16 gap-3 text-gray-500">
                 <Loader2 className="w-4 h-4 animate-spin" />
                 <span className="text-sm">Carregando documentos...</span>
             </div>
         );
     }
-
     if (error) {
         return (
-            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-600">
+            <div className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                <span>{error} <button onClick={load} className="underline font-bold">Tentar novamente</button></span>
+                <span>{error} <button onClick={load} className="underline font-medium">Tentar novamente</button></span>
             </div>
         );
     }
 
     return (
         <div className="space-y-6">
-            {/* ── Zona de upload (admin) ────────────────────────────── */}
-            {isAdmin && !showUploadForm && (
-                <div
-                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={handleDrop}
-                    onClick={() => fileInputRef.current?.click()}
-                    className={`border-2 border-dashed rounded-2xl p-8 text-center cursor-pointer transition-all ${dragOver
-                        ? 'border-blue-400 bg-blue-50'
-                        : 'border-gray-200 hover:border-blue-300 hover:bg-gray-50'
-                    }`}
-                >
-                    <Upload className={`w-8 h-8 mx-auto mb-3 ${dragOver ? 'text-blue-500' : 'text-gray-300'}`} />
-                    <p className="text-sm font-bold text-gray-500">
-                        {dragOver ? 'Solte o arquivo aqui' : 'Arraste um arquivo ou clique para selecionar'}
+            {gestor && (
+                <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] bg-slate-50 border border-slate-200 px-4 py-3">
+                    <p className="text-sm text-slate-600">
+                        Os arquivos moram no GED do empreendimento (aba Documentos). Aqui se escolhe o que o investidor vê.
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">PDF, DWG, XLSX, DOCX, ZIP, imagens — até 50 MB</p>
-                    <input ref={fileInputRef} type="file" className="hidden" onChange={handleFileInput} />
+                    <span title={motivoAdicionar}>
+                        <button type="button" onClick={() => void abrirCandidatos()} disabled={!!motivoAdicionar}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed">
+                            <Plus className="w-[15px] h-[15px]" /> Adicionar do empreendimento
+                        </button>
+                    </span>
                 </div>
             )}
 
-            {/* ── Formulário de upload ──────────────────────────────── */}
-            {isAdmin && showUploadForm && pendingFile && (
-                <div className="border border-blue-200 bg-blue-50 rounded-2xl p-5 space-y-4">
-                    <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <div className={`px-2.5 py-1 rounded-lg text-xs font-black ${getMimeColor(pendingFile.type)}`}>
-                                {getMimeLabel(pendingFile.type)}
-                            </div>
-                            <div>
-                                <p className="text-sm font-bold text-gray-900 truncate max-w-xs">{pendingFile.name}</p>
-                                <p className="text-xs text-gray-500">{fmtFileSize(pendingFile.size)}</p>
-                            </div>
-                        </div>
-                        <button onClick={() => { setShowUploadForm(false); setPendingFile(null); }} className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-white transition-colors">
-                            <X className="w-4 h-4" />
-                        </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Categoria</label>
-                            <select
-                                value={uploadCategory}
-                                onChange={e => setUploadCategory(e.target.value as DocumentCategory)}
-                                className="w-full px-3 h-9 border border-blue-200 rounded-[6px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30"
-                            >
-                                {CATEGORIES.map(c => (
-                                    <option key={c} value={c}>
-                                        {DOCUMENT_CATEGORY_ICONS[c]} {DOCUMENT_CATEGORY_LABELS[c]}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Descrição (opcional)</label>
-                            <input
-                                type="text"
-                                value={uploadDescription}
-                                onChange={e => setUploadDescription(e.target.value)}
-                                placeholder="Ex: Sondagem SPT — mai/2026"
-                                className="w-full px-3 h-9 border border-blue-200 rounded-[6px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30"
-                            />
-                        </div>
-                    </div>
-
-                    {uploadError && (
-                        <div className="flex items-center gap-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-xl px-3 py-2">
-                            <AlertCircle className="w-3.5 h-3.5 flex-shrink-0" />
-                            {uploadError}
-                        </div>
+            {gestor && candidatos && (
+                <div className="border border-blue-200 bg-blue-50/40 rounded-[10px] p-4 space-y-3">
+                    {candidatos.length === 0 ? (
+                        <p className="text-sm text-slate-600">Todos os documentos do empreendimento já estão no Data Room (ou ainda não há documento com arquivo).</p>
+                    ) : (
+                        <ul className="space-y-1.5">
+                            {candidatos.map(c => (
+                                <li key={c.id}>
+                                    <label className="flex items-center gap-3 text-sm text-slate-800 cursor-pointer">
+                                        <input type="checkbox" checked={escolhidos.includes(c.id)}
+                                            onChange={e => setEscolhidos(prev => (e.target.checked ? [...prev, c.id] : prev.filter(x => x !== c.id)))} />
+                                        <span>{c.nome}</span>
+                                        <span className="text-xs text-slate-500">{CATEGORIA_DO_GED[c.categoria] ?? c.categoria}</span>
+                                    </label>
+                                </li>
+                            ))}
+                        </ul>
                     )}
-
-                    {uploading && (
-                        <div className="space-y-1">
-                            <div className="h-1.5 bg-blue-100 rounded-full overflow-hidden">
-                                <div className="h-full bg-blue-500 rounded-full transition-all" style={{ width: `${uploadPct}%` }} />
-                            </div>
-                            <p className="text-xs text-blue-500 text-right">Enviando...</p>
-                        </div>
-                    )}
-
-                    <div className="flex gap-3">
-                        <button
-                            onClick={handleUpload}
-                            disabled={uploading}
-                            className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white text-sm font-bold rounded-xl transition-colors"
-                        >
-                            {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                            {uploading ? 'Enviando...' : 'Fazer upload'}
-                        </button>
-                        <button
-                            onClick={() => { setShowUploadForm(false); setPendingFile(null); }}
-                            disabled={uploading}
-                            className="px-4 py-2.5 text-gray-500 hover:text-gray-700 text-sm font-bold rounded-xl hover:bg-white transition-colors"
-                        >
-                            Cancelar
+                    <div className="flex justify-end gap-2">
+                        <button type="button" onClick={() => setCandidatos(null)} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">Cancelar</button>
+                        <button type="button" onClick={() => void adicionar()} disabled={adicionando || escolhidos.length === 0}
+                            title={escolhidos.length === 0 ? 'Marque ao menos um documento.' : undefined}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed">
+                            {adicionando && <Loader2 className="w-[15px] h-[15px] animate-spin" />}
+                            Adicionar ao Data Room
                         </button>
                     </div>
                 </div>
             )}
 
-            {erroDoDownload && (
-                <div role="alert" className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-600">
+            {aviso && (
+                <div role="alert" className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                    <span>{erroDoDownload}</span>
+                    <span>{aviso}</span>
                 </div>
             )}
 
-            {/* ── Lista de documentos ───────────────────────────────── */}
             {docs.length === 0 ? (
-                <div className="text-center py-12 bg-gray-50 rounded-2xl border border-gray-100">
+                <div className="text-center py-12 bg-gray-50 rounded-[10px] border border-gray-100">
                     <FolderOpen className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm font-bold text-gray-400">Nenhum documento no data room</p>
-                    {isAdmin && <p className="text-xs text-gray-300 mt-1">Use a área acima para adicionar documentos</p>}
+                    <p className="text-sm font-medium text-gray-500">Nenhum documento no data room</p>
                 </div>
             ) : (
                 <div className="space-y-6">
-                    {usedCategories.map(cat => (
-                        <div key={cat}>
-                            <div className="flex items-center gap-2 mb-3">
-                                <span className="text-base">{DOCUMENT_CATEGORY_ICONS[cat]}</span>
-                                <span className="text-xs font-black text-gray-500 uppercase tracking-widest">
-                                    {DOCUMENT_CATEGORY_LABELS[cat]}
-                                </span>
-                                <span className="text-xs text-gray-400 font-bold">({byCategory[cat].length})</span>
-                            </div>
+                    {categorias.map(cat => (
+                        <section key={cat} aria-label={CATEGORIA_DO_GED[cat] ?? cat}>
+                            <h4 className="text-sm font-semibold text-gray-700 mb-3">
+                                {CATEGORIA_DO_GED[cat] ?? cat} <span className="text-gray-500 font-normal">({docs.filter(d => d.category === cat).length})</span>
+                            </h4>
                             <div className="space-y-2">
-                                {byCategory[cat].map(doc => (
-                                    <div
-                                        key={doc.id}
-                                        className="flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-2xl hover:border-blue-200 hover:bg-blue-50/30 transition-all group"
-                                    >
-                                        {/* Tipo */}
-                                        <div className={`px-2.5 py-1.5 rounded-xl text-xs font-black flex-shrink-0 ${getMimeColor(doc.mime_type)}`}>
-                                            {getMimeLabel(doc.mime_type)}
-                                        </div>
-
-                                        {/* Info */}
+                                {docs.filter(d => d.category === cat).map(doc => (
+                                    <div key={doc.id} className="flex items-center gap-4 p-4 bg-white border border-gray-100 rounded-[10px]">
+                                        <span className="text-xs font-medium text-slate-600 w-10 flex-shrink-0">{rotuloDoTipo(doc.mime_type)}</span>
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold text-gray-900 truncate">{doc.name}</p>
-                                            <div className="flex items-center gap-3 mt-0.5">
-                                                {doc.description && (
-                                                    <span className="text-xs text-gray-500 truncate">{doc.description}</span>
-                                                )}
-                                                {doc.file_size && (
-                                                    <span className="text-xs text-gray-400 flex-shrink-0">{fmtFileSize(doc.file_size)}</span>
-                                                )}
-                                                {doc.created_at && (
-                                                    <span className="text-xs text-gray-400 flex-shrink-0">
-                                                        {new Date(doc.created_at).toLocaleDateString('pt-BR')}
-                                                    </span>
-                                                )}
+                                            <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
+                                            <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
+                                                {doc.description && <span className="truncate">{doc.description}</span>}
+                                                {doc.file_size ? <span className="flex-shrink-0">{fmtFileSize(doc.file_size)}</span> : null}
+                                                {doc.created_at && <span className="flex-shrink-0">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</span>}
                                             </div>
                                         </div>
-
-                                        {/* Ações */}
                                         <div className="flex items-center gap-1.5 flex-shrink-0">
                                             <ActionIconButton
                                                 kind="download"
-                                                disabled={downloading === doc.id}
+                                                disabled={downloading === doc.id || !doc.file_path}
+                                                title={!doc.file_path ? 'Documento sem arquivo no GED' : undefined}
                                                 icon={downloading === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
-                                                onClick={() => handleDownload(doc)}
+                                                onClick={() => void baixar(doc)}
                                             />
-                                            {isAdmin && (
+                                            {gestor && (
                                                 <ActionIconButton
                                                     kind="delete"
-                                                    title="Remover"
-                                                    disabled={deleting === doc.id}
-                                                    className="opacity-0 group-hover:opacity-100"
-                                                    icon={deleting === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
-                                                    onClick={() => handleDelete(doc)}
+                                                    title="Tirar do Data Room (o documento continua no GED)"
+                                                    disabled={tirando === doc.id}
+                                                    icon={tirando === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
+                                                    onClick={() => void tirar(doc)}
                                                 />
                                             )}
                                         </div>
                                     </div>
                                 ))}
                             </div>
-                        </div>
+                        </section>
                     ))}
                 </div>
             )}
 
-            {/* Resumo */}
             {docs.length > 0 && (
-                <div className="flex items-center gap-2 text-xs text-gray-400 pt-2 border-t border-gray-100">
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-                    <span>{docs.length} documento{docs.length !== 1 ? 's' : ''} · acesso via link temporário (1h)</span>
+                <div className="flex items-center gap-2 text-xs text-gray-500 pt-2 border-t border-gray-100">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>{docs.length} documento{docs.length !== 1 ? 's' : ''} · versão ativa do GED · link de download válido por 15 minutos</span>
                 </div>
             )}
         </div>

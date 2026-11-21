@@ -11,6 +11,7 @@ import {
 import { supabase } from '../../lib/supabase';
 import { empreendimentoService, buildCommercialAddressFields } from '../../services/empreendimentoService';
 import { commercialService } from '../../services/commercialService';
+import { vgvDoEspelho, type SaleDeal, type SaleProperty } from '../../lib/salesAnalysis';
 import { Empreendimento, EmpreendimentoUnit, UnitStatus } from '../../types';
 import type { EstruturaDoTipo } from '../../utils/empreendimentoTipos';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -59,6 +60,8 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
   const confirm = useConfirm();
   const [units, setUnits] = React.useState<UnitWithTower[]>([]);
   const [commSnaps, setCommSnaps] = React.useState<Record<string, CommercialSnap>>({});
+  // Negociações de venda da org: o VGV do espelho segue a regra da Análise de Vendas (Fase 7.2, D6).
+  const [vendas, setVendas] = React.useState<SaleDeal[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [busyId, setBusyId] = React.useState<string | null>(null);
   const [syncingAll, setSyncingAll] = React.useState(false);
@@ -85,6 +88,13 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
 
       const ids = all.map(u => u.commercial_property_id).filter(Boolean) as string[];
       const map: Record<string, CommercialSnap> = {};
+      if (ids.length) {
+        commercialService.listDeals(undefined, organizationId)
+          .then(ds => setVendas((ds as unknown as SaleDeal[]).filter(d => d.type === 'SALE')))
+          .catch(err => console.error('[EspelhoVendas] negociações não lidas: VGV vendido pela tabela do cadastro', err));
+      } else {
+        setVendas([]);
+      }
       if (ids.length) {
         const { data } = await supabase
           .from('commercial_properties')
@@ -335,17 +345,16 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
   };
 
   // ── Roll-up ───────────────────────────────────────────────────────────────
-  const totalUnits = units.length;
+  // Regra única do VGV (Fase 7.2, decisão D6 — a da Análise de Vendas): vendido pelo valor negociado,
+  // reservado e disponível pela tabela; permutadas e não vendáveis fora do VGV, à parte.
+  const vgv = vgvDoEspelho(units, vendas, Object.values(commSnaps) as unknown as SaleProperty[]);
   const byStatus = {
-    DISPONIVEL: units.filter(u => u.status === 'DISPONIVEL').length,
-    RESERVADO:  units.filter(u => u.status === 'RESERVADO').length,
-    VENDIDO:    units.filter(u => u.status === 'VENDIDO').length,
-    PERMUTADO:  units.filter(u => u.status === 'PERMUTADO').length,
+    DISPONIVEL: vgv.disponivel.count,
+    RESERVADO:  vgv.reservado.count,
+    VENDIDO:    vgv.vendido.count + vgv.vendidasSemNegociacao,
+    PERMUTADO:  vgv.permutado.count,
   };
-  const vgvVendido = units.filter(u => u.status === 'VENDIDO' || u.status === 'PERMUTADO')
-    .reduce((s, u) => s + (u.price ?? 0), 0);
-  const vgvDisponivel = units.filter(u => u.status === 'DISPONIVEL')
-    .reduce((s, u) => s + (u.price ?? 0), 0);
+  const totalUnits = units.length - vgv.naoVendaveis;
   const linkedCount = units.filter(u => !!u.commercial_property_id).length;
 
   // ── Coluna "Publicar": diferença entre desejado (switch) e real (banco) ────
@@ -493,9 +502,15 @@ export const EspelhoVendasTab: React.FC<Props> = ({ empreendimento: e, estrutura
             {byStatus.PERMUTADO > 0  && <div style={{ width: `${(byStatus.PERMUTADO  / totalUnits) * 100}%` }} className="bg-violet-500" />}
           </div>
         )}
-        <div className="mt-2 flex justify-between text-xs text-gray-400 font-semibold">
-          <span>VGV Disponível: {vgvDisponivel > 0 ? fmt(vgvDisponivel) : '—'}</span>
-          <span>VGV Vendido+Permutado: {vgvVendido > 0 ? fmt(vgvVendido) : '—'}</span>
+        <div className="mt-2 flex flex-wrap justify-between gap-x-4 gap-y-1 text-xs text-gray-500">
+          <span>VGV: <span className="font-semibold text-gray-700">{vgv.vgvTotal > 0 ? fmt(vgv.vgvTotal) : '—'}</span></span>
+          <span>Vendido (negociado): {vgv.vendido.value > 0 ? fmt(vgv.vendido.value) : '—'}</span>
+          <span>A vender (tabela): {vgv.reservado.value + vgv.disponivel.value > 0 ? fmt(vgv.reservado.value + vgv.disponivel.value) : '—'}</span>
+          <span title="Fora do VGV: permutadas, unidades não vendáveis (garagem, área comum) e vendidas sem negociação registrada.">
+            Fora do VGV: {vgv.permutado.count} permutada{vgv.permutado.count === 1 ? '' : 's'}
+            {vgv.naoVendaveis > 0 && ` · ${vgv.naoVendaveis} não vendáve${vgv.naoVendaveis === 1 ? 'l' : 'is'}`}
+            {vgv.vendidasSemNegociacao > 0 && ` · ${vgv.vendidasSemNegociacao} vendida${vgv.vendidasSemNegociacao === 1 ? '' : 's'} sem negociação`}
+          </span>
         </div>
       </div>
 

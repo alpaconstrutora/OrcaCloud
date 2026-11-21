@@ -1,8 +1,9 @@
 import React from 'react';
 import { FolderOpen, Loader2, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
+import Button from '../ui/Button';
 import {
-    opportunityDocumentsService, CATEGORIA_DO_GED, fmtFileSize, type DocumentoDoDataRoom,
+    opportunityDocumentsService, CATEGORIA_DO_GED, fmtFileSize, temVersaoNova, type DocumentoDoDataRoom,
 } from '../../services/opportunityDocumentsService';
 import type { OpuraDocument } from '../../types/documents';
 
@@ -42,6 +43,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, isAdmin, uploadedBy, em
     const [aviso, setAviso] = React.useState<string | null>(null);
     const [downloading, setDownloading] = React.useState<string | null>(null);
     const [tirando, setTirando] = React.useState<string | null>(null);
+    const [atualizando, setAtualizando] = React.useState<string | null>(null);
     const [candidatos, setCandidatos] = React.useState<OpuraDocument[] | null>(null);
     const [escolhidos, setEscolhidos] = React.useState<string[]>([]);
     const [adicionando, setAdicionando] = React.useState(false);
@@ -93,6 +95,20 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, isAdmin, uploadedBy, em
             setAviso(`Não foi possível tirar "${d.name}": ${(e as Error).message}`);
         } finally {
             setTirando(null);
+        }
+    };
+
+    const atualizar = async (d: DocumentoDoDataRoom) => {
+        if (!d.versao_atual_id) return;
+        setAtualizando(d.id);
+        setAviso(null);
+        try {
+            await opportunityDocumentsService.atualizarVersao(d.id, opportunityId, d.versao_atual_id);
+            setDocs(await opportunityDocumentsService.listar(opportunityId));
+        } catch (e) {
+            setAviso(`Não foi possível atualizar "${d.name}": ${(e as Error).message}`);
+        } finally {
+            setAtualizando(null);
         }
     };
 
@@ -205,6 +221,10 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, isAdmin, uploadedBy, em
                                             <p className="text-sm font-medium text-gray-900 truncate">{doc.name}</p>
                                             <div className="flex items-center gap-3 mt-0.5 text-xs text-gray-500">
                                                 {doc.description && <span className="truncate">{doc.description}</span>}
+                                                {doc.version_number != null && <span className="flex-shrink-0">Versão {doc.version_number}</span>}
+                                                {gestor && temVersaoNova(doc) && (
+                                                    <span className="flex-shrink-0 text-amber-700">Há a versão {doc.versao_atual} no GED; o investidor ainda vê a {doc.version_number}</span>
+                                                )}
                                                 {doc.file_size ? <span className="flex-shrink-0">{fmtFileSize(doc.file_size)}</span> : null}
                                                 {doc.created_at && <span className="flex-shrink-0">{new Date(doc.created_at).toLocaleDateString('pt-BR')}</span>}
                                             </div>
@@ -217,6 +237,16 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, isAdmin, uploadedBy, em
                                                 icon={downloading === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
                                                 onClick={() => void baixar(doc)}
                                             />
+                                            {gestor && temVersaoNova(doc) && (
+                                                <Button
+                                                    size="sm"
+                                                    variant="secondary"
+                                                    disabled={atualizando === doc.id}
+                                                    onClick={() => void atualizar(doc)}
+                                                >
+                                                    {atualizando === doc.id ? 'Atualizando…' : 'Atualizar para a versão atual'}
+                                                </Button>
+                                            )}
                                             {gestor && (
                                                 <ActionIconButton
                                                     kind="delete"

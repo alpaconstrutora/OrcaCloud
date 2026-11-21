@@ -1,5 +1,6 @@
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabase';
 import type { DinamicaDoBairro } from '../utils/opuraMarketIndicadores';
+import { caixaDoRaio, noRaio, type ConcorrenteMonitorado, type Ponto } from '../utils/marketConcorrentes';
 import type { AnuncioDaPagina } from '../supabase/functions/opura-market-import/logica';
 import {
   OpuraMarketCity,
@@ -225,6 +226,45 @@ async function invocarImportacao<T>(body: Record<string, unknown>): Promise<T> {
   return corpo as T;
 }
 
+/** Linha de opura_market_listings → OpuraMarketListing (listListings e anunciosNoRaio). */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function mapearAnuncio(l: any): OpuraMarketListing {
+  return {
+    id: l.id,
+    cityId: l.city_id,
+    neighborhoodId: l.neighborhood_id,
+    // Sem este campo a tela tratava todo anúncio como "Global": o selo
+    // "Privado (Importado)" e o botão de excluir nunca apareciam.
+    organizationId: l.organization_id ?? null,
+    source: l.source,
+    sourceUrl: l.source_url,
+    propertyType: l.property_type,
+    address: l.address,
+    zipCode: l.zip_code,
+    areaPrivate: l.area_private ? Number(l.area_private) : null,
+    areaTotal: l.area_total ? Number(l.area_total) : null,
+    bedrooms: l.bedrooms || 0,
+    suites: l.suites || 0,
+    bathrooms: l.bathrooms || 0,
+    parkingSpaces: l.parking_spaces || 0,
+    price: Number(l.price),
+    pricePerM2: l.price_per_m2 ? Number(l.price_per_m2) : null,
+    condoFee: l.condo_fee ? Number(l.condo_fee) : null,
+    iptu: l.iptu ? Number(l.iptu) : null,
+    latitude: l.latitude ? Number(l.latitude) : null,
+    longitude: l.longitude ? Number(l.longitude) : null,
+    description: l.description,
+    constructionStandard: l.construction_standard,
+    listingStatus: l.listing_status,
+    capturedAt: l.captured_at,
+    lastSeenAt: l.last_seen_at,
+    parentListingId: l.parent_listing_id,
+    neighborhoodNameRaw: l.neighborhood_name_raw ?? null,
+    geoPrecision: l.geo_precision ?? null,
+    createdAt: l.created_at
+  };
+}
+
 export const opuraMarketService = {
   // Cidades
   async listCities(): Promise<OpuraMarketCity[]> {
@@ -402,40 +442,105 @@ export const opuraMarketService = {
       throw new Error(`Failed to fetch listings: ${error.message}`);
     }
 
-    return (data || []).map(l => ({
-      id: l.id,
-      cityId: l.city_id,
-      neighborhoodId: l.neighborhood_id,
-      // Sem este campo a tela tratava todo anúncio como "Global": o selo
-      // "Privado (Importado)" e o botão de excluir nunca apareciam.
-      organizationId: l.organization_id ?? null,
-      source: l.source,
-      sourceUrl: l.source_url,
-      propertyType: l.property_type,
-      address: l.address,
-      zipCode: l.zip_code,
-      areaPrivate: l.area_private ? Number(l.area_private) : null,
-      areaTotal: l.area_total ? Number(l.area_total) : null,
-      bedrooms: l.bedrooms || 0,
-      suites: l.suites || 0,
-      bathrooms: l.bathrooms || 0,
-      parkingSpaces: l.parking_spaces || 0,
-      price: Number(l.price),
-      pricePerM2: l.price_per_m2 ? Number(l.price_per_m2) : null,
-      condoFee: l.condo_fee ? Number(l.condo_fee) : null,
-      iptu: l.iptu ? Number(l.iptu) : null,
-      latitude: l.latitude ? Number(l.latitude) : null,
-      longitude: l.longitude ? Number(l.longitude) : null,
-      description: l.description,
-      constructionStandard: l.construction_standard,
-      listingStatus: l.listing_status,
-      capturedAt: l.captured_at,
-      lastSeenAt: l.last_seen_at,
-      parentListingId: l.parent_listing_id,
-      neighborhoodNameRaw: l.neighborhood_name_raw ?? null,
-      geoPrecision: l.geo_precision ?? null,
-      createdAt: l.created_at
-    }));
+    return (data || []).map(mapearAnuncio);
+  },
+
+  // ── Concorrentes monitorados (Fase 7.7 do plano 2026-11-21-imovib-oportunidades-consolidacao) ──
+
+  /** Centro e raio do estudo de terreno (onde procurar concorrentes). */
+  async centroDoEstudoDeTerreno(id: string): Promise<{ latitude: number; longitude: number; raioM: number; organizationId: string } | null> {
+    const { data, error } = await supabase
+      .from('opura_market_terrain_studies')
+      .select('latitude, longitude, analysis_radius_meters, organization_id')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(`Falha ao ler o estudo de terreno: ${error.message}`);
+    if (!data || data.latitude == null || data.longitude == null) return null;
+    return { latitude: Number(data.latitude), longitude: Number(data.longitude), raioM: Number(data.analysis_radius_meters) || 1000, organizationId: data.organization_id };
+  },
+
+  /** Anúncios ativos com posição dentro do raio, do mais perto ao mais longe. */
+  async anunciosNoRaio(centro: Ponto, raioM: number): Promise<(OpuraMarketListing & { distanciaKm: number })[]> {
+    const c = caixaDoRaio(centro, raioM);
+    const { data, error } = await supabase
+      .from('opura_market_listings')
+      .select('*')
+      .eq('listing_status', 'active')
+      .is('parent_listing_id', null)
+      .gte('latitude', c.latMin).lte('latitude', c.latMax)
+      .gte('longitude', c.lngMin).lte('longitude', c.lngMax)
+      .limit(500);
+    if (error) throw new Error(`Falha ao ler os anúncios do raio: ${error.message}`);
+    return noRaio((data || []).map(mapearAnuncio), centro, raioM);
+  },
+
+  async listarConcorrentes(studyId: string): Promise<ConcorrenteMonitorado[]> {
+    const { data, error } = await supabase
+      .from('opura_market_monitored_competitors')
+      .select('id, study_id, custom_name, custom_price, listing_id, development_id, '
+        + 'listing:opura_market_listings(id, address, property_type, bedrooms, price, price_per_m2, area_private, latitude, longitude), '
+        + 'development:opura_market_developments(id, name, developer, address, units_total, area_average, ticket_average, price_per_m2_average, launch_date)')
+      .eq('study_id', studyId)
+      .eq('is_active', true)
+      .order('created_at', { ascending: true });
+    if (error) throw new Error(`Falha ao ler os concorrentes: ${error.message}`);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return (data || []).map((r: any): ConcorrenteMonitorado => {
+      const l = r.listing;
+      const d = r.development;
+      const num = (v: unknown) => (v == null || v === '' ? null : Number(v));
+      if (l) {
+        return {
+          id: r.id, studyId: r.study_id, origem: 'anuncio',
+          nome: r.custom_name || [l.property_type, l.bedrooms ? `${l.bedrooms} quarto(s)` : null].filter(Boolean).join(' · ') || 'Anúncio',
+          endereco: l.address ?? null, preco: num(r.custom_price) ?? num(l.price), area: num(l.area_private), precoM2: num(l.price_per_m2),
+          totalDeUnidades: null, incorporadora: null, lancamento: null,
+          posicao: l.latitude != null && l.longitude != null ? { latitude: Number(l.latitude), longitude: Number(l.longitude) } : null,
+          listingId: r.listing_id, developmentId: null,
+        };
+      }
+      if (d) {
+        return {
+          id: r.id, studyId: r.study_id, origem: 'lancamento',
+          nome: r.custom_name || d.name, endereco: d.address ?? null, preco: num(r.custom_price) ?? num(d.ticket_average),
+          area: num(d.area_average), precoM2: num(d.price_per_m2_average), totalDeUnidades: num(d.units_total),
+          incorporadora: d.developer ?? null, lancamento: d.launch_date ?? null, posicao: null,
+          listingId: null, developmentId: r.development_id,
+        };
+      }
+      return {
+        id: r.id, studyId: r.study_id, origem: 'proprio', nome: r.custom_name || 'Concorrente', endereco: null,
+        preco: num(r.custom_price), area: null, precoM2: null, totalDeUnidades: null, incorporadora: null, lancamento: null,
+        posicao: null, listingId: null, developmentId: null,
+      };
+    });
+  },
+
+  /** Monitora anúncios do raio e/ou um concorrente com nome e preço próprios. */
+  async adicionarConcorrentes(
+    organizationId: string,
+    studyId: string,
+    itens: ({ listingId: string } | { customName: string; customPrice: number | null })[],
+  ): Promise<void> {
+    if (!itens.length) return;
+    const { data, error } = await supabase
+      .from('opura_market_monitored_competitors')
+      .insert(itens.map(i => ({
+        organization_id: organizationId,
+        study_id: studyId,
+        listing_id: 'listingId' in i ? i.listingId : null,
+        custom_name: 'customName' in i ? i.customName.trim() : null,
+        custom_price: 'customName' in i ? i.customPrice : null,
+      })))
+      .select('id');
+    if (error) throw new Error(`Falha ao adicionar concorrentes: ${error.message}`);
+    if ((data?.length ?? 0) < itens.length) throw new Error('Sem permissão para monitorar concorrentes neste estudo.');
+  },
+
+  async removerConcorrente(id: string): Promise<void> {
+    const { data, error } = await supabase.from('opura_market_monitored_competitors').delete().eq('id', id).select('id');
+    if (error) throw new Error(`Falha ao tirar o concorrente: ${error.message}`);
+    if (!data?.length) throw new Error('Sem permissão para tirar este concorrente.');
   },
 
   // Empreendimentos (Developments)

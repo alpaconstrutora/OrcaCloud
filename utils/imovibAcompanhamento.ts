@@ -81,3 +81,30 @@ export function compararComRealizado(
         };
     });
 }
+
+/**
+ * VGV do estudo × do espelho × vendido (Fase 7.4 do plano 2026-11-21-imovib-oportunidades-consolidacao).
+ * O espelho já vem pela regra única (D6, `vgvDoEspelho`): vendido pelo valor negociado, estoque pela tabela.
+ */
+export interface ComparativoDoVgv {
+    estudo: number;
+    espelho: number;
+    vendido: number;
+    aVender: number;
+    /** Espelho − estudo: positivo = o espelho vale mais que o previsto. */
+    diferenca: number;
+    /** Vendido ÷ VGV do estudo; `null` sem VGV no estudo. */
+    vendidoDoEstudo: number | null;
+}
+
+export function comparativoDoVgv(vgvDoEstudo: number, espelho: { vgvTotal: number; vendido: { value: number }; reservado: { value: number }; disponivel: { value: number } }): ComparativoDoVgv {
+    const estudo = Number(vgvDoEstudo) || 0;
+    return {
+        estudo,
+        espelho: espelho.vgvTotal,
+        vendido: espelho.vendido.value,
+        aVender: espelho.reservado.value + espelho.disponivel.value,
+        diferenca: espelho.vgvTotal - estudo,
+        vendidoDoEstudo: estudo > 0 ? espelho.vendido.value / estudo : null,
+    };
+}

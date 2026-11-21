@@ -12,6 +12,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
+import ImovibImportarDoMarketSheet from './ImovibImportarDoMarketSheet';
 
 const D = IMOVIB_DEFAULTS;
 
@@ -54,6 +55,7 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
     const [editando, setEditando] = useState<ImovibComparable | 'novo' | null>(null);
+    const [importando, setImportando] = useState(false);
 
     useEffect(() => {
         let vivo = true;
@@ -77,6 +79,11 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
     const posicao = posicaoDoPreco(precoDoEstudo, resumo);
     const motivoVso = !pode ? motivo : resumo.vsoMediaMensal == null ? 'Sem VSO: cadastre comparáveis com total, vendidas e data de lançamento.' : undefined;
 
+    // Fase 7.7 (plano 2026-11-21-imovib-oportunidades-consolidacao): concorrentes do Market viram comparáveis.
+    const motivoImportar = !pode ? motivo
+        : !study.opura_terrain_study_id ? 'Este estudo não nasceu de um estudo de terreno do Market (Market › Estudos & Análise › Criar viabilidade).'
+            : undefined;
+
     const excluir = async (c: ImovibComparable) => {
         try {
             await imovibService.excluirComparavel(c.id);
@@ -96,6 +103,17 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
                     </h2>
                     <p className="text-slate-500 text-sm mt-1">Empreendimentos concorrentes: o preço médio ponderado pelas unidades e a VSO de cada um (vendidas ÷ total ÷ meses desde o lançamento).</p>
                 </div>
+                <div className="flex items-center gap-2">
+                <span className="inline-flex" title={motivoImportar ?? 'Concorrentes monitorados no estudo de terreno do Market de onde este estudo nasceu.'}>
+                    <button
+                        type="button"
+                        disabled={!!motivoImportar}
+                        onClick={() => setImportando(true)}
+                        className="h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                        Importar do Market
+                    </button>
+                </span>
                 <button
                     type="button"
                     disabled={!pode}
@@ -105,6 +123,7 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
                 >
                     <Plus className="w-[15px] h-[15px]" /> Novo comparável
                 </button>
+                </div>
             </div>
 
             {erro && (
@@ -182,6 +201,17 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
                     subtitle: 'Cadastre os lançamentos concorrentes no raio do terreno: preço/m², unidades, vendidas e data de lançamento.',
                 }}
             />
+
+            {importando && study.opura_terrain_study_id && (
+                <ImovibImportarDoMarketSheet
+                    studyId={study.id}
+                    terrainStudyId={study.opura_terrain_study_id}
+                    existentes={lista}
+                    hoje={hojeLocal()}
+                    onClose={() => setImportando(false)}
+                    onImportados={novos => { setLista(prev => [...prev, ...novos]); setImportando(false); }}
+                />
+            )}
 
             <ComparavelSheet
                 comparavel={editando}

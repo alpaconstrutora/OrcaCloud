@@ -63,7 +63,8 @@ Escolhas padrão que tomo no plano (podem ser trocadas na aprovação):
 | 3 — Documentos pelo GED | 3/3 ✅ | #626 (eaedc27) | 970000 aplicada | `investor-portal-dataroom-download` publicada | ✅ conferido |
 | 4 — Captação pela SPE | 3/3 ✅ | #627 (4d7e7dd) | 980000 aplicada | — | ✅ conferido |
 | 5 — O que deveria existir | 2/2 ✅ | 5.2 no #623 · 5.1 no #627 | (no gatilho da 960000) | — | ✅ conferido |
-| 6 — Achados das análises | análise feita | — | — | — | ⏳ aguarda decisão |
+| 6 — Achados das análises | análise feita | — | — | — | ✅ viraram a Fase 7 |
+| 7 — Pendências e achados ("implemente todos") | 11/11 ✅ | (PR da frente `imovib-oport-f6`) | 990000–995000 aplicadas | `portal-ged-download` v7 publicada | ⏳ falta o merge |
 
 "Conferido" = `scripts/conferir-producao.sh` com um texto novo de cada fase: o domínio serve exatamente o
 `origin/main` do merge. Todas as frentes `imovib-oport-f1…f4` foram fechadas.
@@ -85,9 +86,9 @@ despublicada; interesse grava investidor do token e valor.
 |---|---|---|---|
 | P1 | Apagar os buckets antigos `opportunity-dataroom`, `opportunity-photos` (público) e `due-diligence-findings` | usuário, pelo painel do Supabase › Storage | Os 3 com **0 objetos** (conferido 21/11). SQL bloqueia (`storage.protect_delete`) e a CLI não autentica na API de storage com a chave nova |
 | P2 | Rodar o roteiro de tela ponta a ponta do §Verificação no Garden | eu, quando houver versão congelada para publicar | Não rodado |
-| P3 | Provar a recusa de SPE de outra org e o marketplace | eu, quando houver SPE em 2ª org / slug na org | Sem dado |
-| P4 | Teste instável `ImovibVersoes` (PDF sob carga; passa isolado) | — | Pré-existente, fora desta mudança |
-| P5 | Achados da Fase 6 (abaixo) | usuário decide | Nenhum implementado |
+| P3 | Provar a recusa de SPE de outra org e o marketplace | — | ✅ 7.10 (21/11, transação desfeita) |
+| P4 | Teste instável `ImovibVersoes` | — | ✅ 7.11: causa = tempo-limite padrão de 5 s menor que o `waitFor` de 10 s |
+| P5 | Achados da Fase 6 (abaixo) | — | ✅ todos implementados na Fase 7 (pedido "implemente todos") |
 
 Achados da Fase 6 que viram trabalho, se aprovados (detalhe em §Fase 6):
 1. Pagar chamada de capital → gerar aporte em `investor_contributions` (hoje são dois controles de dinheiro).
@@ -192,6 +193,72 @@ versão → quem/quando gravados; voltar a pendente limpa. Edge Function `read-m
 
 **Fase 5: NO AR** — 5.1 entrou na Fase 4 (#627); 5.2 na Fase 2 (#623). **Fase 6:** achados aguardando decisão do
 usuário (ver §Pendências).
+
+### Pedido de 21/11/2026, 18h (sessão e7b82365), depois do relatório de pendências
+
+> implemente todos
+
+Decisões do usuário (mesma hora):
+- **D6 VGV:** vale a regra da Análise de Vendas em todas as telas: VGV = vendido (valor negociado) + estoque a
+  vender (disponível + reservado, preço de tabela); permutadas e não vendáveis ficam fora do VGV, mostradas à parte.
+- **D7 Distrato:** a venda fica no mês original (bruto) e o distrato entra negativo no mês do cancelamento;
+  líquido = bruto − distratos.
+- **D8 Versão no portal:** só o Data Room do investidor fixa a versão compartilhada (o gestor vê que há versão nova
+  e atualiza); cliente, colaborador e credor continuam vendo a mais nova.
+- **D9:** migrations desta fase e a publicação de `portal-ged-download` autorizadas.
+
+## Fase 7 — Pendências e achados da Fase 6 (pedido "implemente todos")
+
+**Estado (21/11, 19h): 11 de 11 itens feitos na frente `imovib-oport-f6`; falta o PR e o merge.** Migrations
+990000–995000 APLICADAS (D9), cada uma provada em transação desfeita. Prova: tsc exit 0.
+
+- 7.1 ✅ `aplicar_20271121990000` + `capitalCallService.registerPayment` pela RPC; painel sem `alert()`, avisa SPE sem
+  obra. Prova: 400 + 600 → item pago, `capital_paid` 1000, chamada paga, 2 aportes 'liquidado' na obra ligados ao
+  item; 3º pagamento recusado; SPE sem obra paga sem aporte.
+- 7.2 ✅ `vgvDoEspelho` (lib/salesAnalysis.ts) no Espelho de Vendas: vendido negociado, estoque pela tabela,
+  permutadas/não vendáveis/vendidas sem negociação à parte. Teste em `__tests__/salesAnalysis.test.ts`.
+- 7.3 ✅ `aplicar_20271121994000` (gatilho guarda `cancelled_from_status` e garante `cancellation_date`);
+  `foiDistrato`; Vendas por mês com barra negativa e "Líquido"; KPI Distratos = vendas desfeitas; velocidade líquida;
+  `vendasPorMesDoEmpreendimento` com o estorno (o Acompanhamento acumula o líquido). Prova SQL: cancelada de CONTRATO
+  guarda a etapa e a data; reaberta limpa.
+- 7.4 ✅ `comparativoDoVgv` + quadro "VGV: estudo × espelho × vendido" no Acompanhamento (o realizado traz
+  `espelho`).
+- 7.5 ✅ `aplicar_20271121991000` (search_path + REVOKE PUBLIC; ACL sem `=X`); `portal-ged-download` v7 confere
+  `document.organization_id = org do token`. Sonda: sem header 401, token falso 403. (Documento de outra org pelo link
+  real não foi exercido: exigiria gravar token e compartilhamento de verdade.)
+- 7.6 ✅ `aplicar_20271121993000` (`imovib_risks.project_risk_id`); `utils/imovibRiscoParaModuloRiscos.ts` +
+  `imovibService.levarRiscoAoModulo`; botão no cartão de Riscos (desligado diz por quê). `fichaVazia` mudou para
+  `utils/riskPainel.ts`. Prova SQL: a ficha gerada passa nas CHECKs de `project_risks` (RSC-0001, inerente 4×3=12).
+- 7.7 ✅ `aplicar_20271121995000` (policy confere org do estudo de terreno e do anúncio); Market › Estudos salvos ›
+  "Concorrentes" (`MarketConcorrentesSheet`: anúncios do raio ou nome/preço); comparáveis do Imovib ›
+  "Importar do Market" (`ImovibImportarDoMarketSheet`, `utils/marketConcorrentes.ts`). Prova: como usuário
+  autenticado, estudo da própria org grava; estudo de outra org → 42501. Lançamentos (`opura_market_developments`)
+  entram se existirem, mas a tabela está vazia e ninguém grava nela (sem policy de escrita) — fica registrado.
+- 7.8 ✅ comentários de `empreendimentoService` corrigidos (a torre tem FK; `empreendimentos.project_id` não).
+- 7.9 ✅ `aplicar_20271121992000` (`version_id` só para investidor, gatilho fixa a ativa ao compartilhar, RPC lê a
+  fixada); Data Room do gestor mostra "Há a versão N no GED" + "Atualizar para a versão atual". Prova: v2 no GED, o
+  investidor segue na v1 até atualizar; versão de outro documento e versão fixa para cliente recusadas.
+- 7.10 ✅ SPE de outra org → 23514 "A SPE escolhida é de outra organização."; marketplace como anon (slug de teste)
+  devolve a oportunidade sem `captacao`, `spe_entity_id` e estudo.
+- 7.11 ✅ o `it` do relatório tem 20 s próprios e o `waitFor` 15 s; reproduzido com `--testTimeout=400` (mesmo
+  `STACK_TRACE_ERROR`), que passa depois da correção.
+
+| # | Item | O que muda | Pronto quando |
+|---|---|---|---|
+| 7.1 | Chamada de capital vira aporte | RPC `fn_chamada_de_capital_registrar_pagamento` (uma transação: item, `capital_paid`, status da chamada e `investor_contributions` 'aporte' liquidado na obra da SPE, com `capital_call_item_id`). `capitalCallService.registerPayment` passa a chamá-la. SPE sem obra: paga, sem aporte, e a tela diz por quê. | Prova SQL em transação desfeita: 1 pagamento → item, sócio, chamada e 1 aporte; teste do serviço |
+| 7.2 | VGV com uma regra (D6) | Espelho de Vendas do empreendimento usa a classificação de `lib/salesAnalysis.ts`: Vendido (valor negociado), Reservado, Disponível, Permutado e não vendáveis à parte, VGV total. | Teste: permutada e garagem fora do VGV; reservada no estoque; vendido = valor da negociação |
+| 7.3 | Distrato estorna (D7) | `salesByMonth`/`vendasPorMesDoEmpreendimento` mantêm a venda distratada no mês original e lançam o distrato negativo no mês de `cancellation_date`; Vendas mostra bruto, distratos e líquido; Acompanhamento usa o líquido. | Teste: venda de março distratada em maio → março +V, maio −V |
+| 7.4 | Estudo × espelho × vendido | Acompanhamento do estudo ganha o quadro VGV do estudo × VGV do espelho (tabela) × vendido (negociado). | Teste do cálculo; a tela mostra as três colunas |
+| 7.5 | GED do portal do cliente | `fn_portal_get_ged_documents` com `search_path` e REVOKE PUBLIC; `portal-ged-download` confere a org do token. | ACL sem `=X`; function publicada recusa sem token e documento de outra org |
+| 7.6 | Risco do estudo → Módulo Riscos | Botão "Levar ao Módulo Riscos" no cartão de Riscos quando o empreendimento tem obra (escopo obra; senão empreendimento); `imovib_risks.project_risk_id` impede levar duas vezes. | Teste do mapeamento; botão desligado diz por quê |
+| 7.7 | Concorrentes do Market | Aba "Concorrentes" no Market (estudo de terreno: anúncio, lançamento ou nome/preço próprio); policy confere que o estudo é da org; comparáveis do Imovib ganham "Importar do Market" (concorrentes do estudo de terreno ligado + lançamentos da cidade). | Teste do mapeamento concorrente → comparável; policy provada |
+| 7.8 | Comentário da FK | Comentários de `empreendimento_towers.project_id` dizem a verdade (a torre tem FK; `empreendimentos.project_id` não). | `git grep` sem o texto falso |
+| 7.9 | Versão fixa no Data Room (D8) | `opura_document_portal_shares.version_id` (só audiência investidor); a RPC e a Edge Function do Data Room usam a versão fixada; gestor vê "versão nova" e "Atualizar". | Prova SQL: versão nova no GED não muda o que o investidor vê até atualizar |
+| 7.10 | Provas sem dado (P3) | SPE de outra org e marketplace provados em transação desfeita com dado de teste. | Saída das provas no plano |
+| 7.11 | Teste instável (P4) | `ImovibVersoes` › relatório: causa achada e corrigida. | 5 rodadas da suíte do arquivo junto com as vizinhas sem falha |
+
+Fora desta fase, depende do usuário: P1 (apagar buckets pelo painel) e P2 (roteiro de tela no Garden: login pelo
+usuário).
 
 ---
 

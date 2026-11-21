@@ -16,7 +16,9 @@ import { TabsBar } from '../ui/TabsBar';
 import SaveStatus from '../ui/SaveStatus';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
 import { formatDateBR } from '../ui/Format';
-import { faixasDe, hojeLocalISO, nivelNaOrg } from '../../utils/riskPainel';
+import { faixasDe, fichaVazia, hojeLocalISO, nivelNaOrg } from '../../utils/riskPainel';
+
+export { fichaVazia };
 import { RiscoAvaliacoes } from './RiscoAvaliacoes';
 import { RiscoAcoes } from './RiscoAcoes';
 import { RiscoHistorico } from './RiscoHistorico';
@@ -74,21 +76,6 @@ interface Props {
 }
 
 /** Ficha nova "do zero" (o catálogo usa `fichaDoCatalogo`, com o mesmo `base`). */
-export function fichaVazia(base: Pick<ProjectRiskInput, 'owner_user_id' | 'owner_nome'>): ProjectRiskInput {
-    return {
-        catalog_id: null, catalog_codigo: null, catalog_versao: null, category_id: null, tipo: 'ameaca',
-        titulo: '', causa: '', evento: '', consequencia: '', tags: [], dimensoes: [],
-        escopo: 'obra', empreendimento_id: null, project_id: null, contract_id: null,
-        frente: null, localizacao: null, fase: null, partes_afetadas: null,
-        avaliador_user_id: null, aprovador_user_id: null,
-        data_identificacao: hojeLocalISO(), proxima_revisao: '',
-        controles_existentes: null, estrategia: null, plano_resposta: null, contingencia: null, justificativa_aceite: null,
-        status: 'identificado', encerramento_motivo: null, gatilho_critico: false, gatilho_motivo: null,
-        sst_document_tipo: null, sst_document_id: null,
-        ...base,
-    };
-}
-
 const inputDoRisco = (r: ProjectRisk): ProjectRiskInput => ({
     catalog_id: r.catalog_id, catalog_codigo: r.catalog_codigo, catalog_versao: r.catalog_versao, category_id: r.category_id,
     tipo: r.tipo, titulo: r.titulo, causa: r.causa, evento: r.evento, consequencia: r.consequencia, tags: [...r.tags],

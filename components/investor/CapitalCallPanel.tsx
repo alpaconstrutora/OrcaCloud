@@ -5,6 +5,8 @@ import { Modal, ModalHeader, ModalBody, ModalFooter } from '../ui/modal';
 import Button from '../ui/Button';
 import { useConfirm } from '../ui/confirm';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
+import { useToast } from '../../hooks/useToast';
+import { errorMessage } from '../../hooks/useOrgContext';
 import { SpePartner } from '../../services/speService';
 import {
     capitalCallService, CapitalCall, CapitalCallItem,
@@ -17,6 +19,8 @@ interface Props {
     partners: SpePartner[];
     isAdmin?: boolean;
     userEmail?: string;
+    /** A SPE não tem obra: o pagamento não tem onde entrar no extrato do investidor. */
+    semObra?: boolean;
 }
 
 const emptyCallForm = (organizationId: string, speEntityId: string) => ({
@@ -29,7 +33,8 @@ const emptyCallForm = (organizationId: string, speEntityId: string) => ({
     due_date: '',
 });
 
-const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partners, isAdmin, userEmail }) => {
+const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partners, isAdmin, userEmail, semObra }) => {
+    const { showToast } = useToast();
     const confirm = useConfirm();
     const [calls, setCalls] = React.useState<CapitalCall[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -71,12 +76,12 @@ const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partne
 
     const handleSaveCall = async () => {
         if (!callForm.title.trim() || !callForm.due_date || callForm.total_amount <= 0) {
-            alert('Preencha título, prazo e valor total.');
+            showToast('Preencha título, prazo e valor total.', 'error');
             return;
         }
         const rateioSum = Object.values(rateio).reduce((a, b) => a + b, 0);
         if (Math.abs(rateioSum - callForm.total_amount) > 0.05) {
-            alert(`O rateio (${formatCurrency(rateioSum)}) deve somar o valor total da chamada (${formatCurrency(callForm.total_amount)}).`);
+            showToast(`O rateio (${formatCurrency(rateioSum)}) deve somar o valor total da chamada (${formatCurrency(callForm.total_amount)}).`, 'error');
             return;
         }
         setSaving(true);
@@ -91,7 +96,7 @@ const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partne
             load();
         } catch (err) {
             console.error('Erro ao emitir chamada de capital', err);
-            alert('Erro ao emitir chamada. Tente novamente.');
+            showToast('Erro ao emitir chamada. Tente novamente.', 'error');
         } finally {
             setSaving(false);
         }
@@ -107,15 +112,18 @@ const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partne
 
     const handleRegisterPayment = async (item: CapitalCallItem, callId: string) => {
         const amount = paymentInput[item.id!];
-        if (!amount || amount <= 0) { alert('Informe um valor.'); return; }
+        if (!amount || amount <= 0) { showToast('Informe um valor.', 'error'); return; }
         try {
-            await capitalCallService.registerPayment(item, amount);
+            const { semObra: foraDoExtrato } = await capitalCallService.registerPayment(item, amount);
+            showToast(foraDoExtrato
+                ? 'Pagamento registrado. A SPE não tem obra, então o aporte não entrou no extrato do investidor.'
+                : 'Pagamento registrado e lançado como aporte no extrato do investidor.', 'success');
             await loadItems(callId);
             load();
             setPaymentInput(prev => ({ ...prev, [item.id!]: 0 }));
         } catch (err) {
             console.error('Erro ao registrar pagamento', err);
-            alert('Erro ao registrar pagamento.');
+            showToast(errorMessage(err, 'Erro ao registrar pagamento.'), 'error');
         }
     };
 
@@ -124,7 +132,12 @@ const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partne
     return (
         <div className="pt-4 border-t border-gray-50 space-y-3">
             <div className="flex items-center justify-between">
-                <p className="text-xs font-black text-gray-400 uppercase tracking-widest">Chamadas de Capital</p>
+                <div>
+                    <p className="text-sm font-semibold text-gray-700">Chamadas de capital</p>
+                    {semObra && isAdmin && (
+                        <p className="text-xs text-amber-700">A SPE não tem obra: pagamento registrado aqui não entra no extrato do investidor. Vincule a obra na SPE.</p>
+                    )}
+                </div>
                 {isAdmin && (
                     <Button size="sm" onClick={() => { setShowNewCall(true); applyProportionalRateio(callForm.total_amount); }} className="flex items-center gap-1 rounded-lg text-button">
                         <Plus className="w-4 h-4" /> Nova Chamada

@@ -20,6 +20,8 @@ import { diaDeBrasilia } from '../utils/dataDeBrasilia';
 import { atualizacoesDaMatricula, type AchadoDaMatricula } from '../utils/imovibDueDiligenceMatricula';
 import type { ModeloDeAquisicao } from '../utils/imovibModelosDeAquisicao';
 import type { DecisaoDoGate } from '../utils/imovibComite';
+import { motivoParaNaoLevar, riscoParaOModulo } from '../utils/imovibRiscoParaModuloRiscos';
+import { riskService } from './riskService';
 import { resultadosDoEstudo, versaoPublicadaDoSnapshot, type ImovibStudyVersion, type ResultadosDaVersao, type SnapshotDaVersao, type VersaoPublicada } from '../utils/imovibVersoes';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
@@ -47,7 +49,7 @@ const FONTE_COLS = 'id, study_id, name, kind, amount, entry_month, remuneration,
 const COMPARAVEL_COLS = 'id, study_id, name, developer, address, distance_km, launch_date, total_units, sold_units, typical_area, price_sqm, ticket, appreciation_pct, source, collected_at, notes, sort_order, created_at';
 
 // Riscos do estudo (aplicar_20271111910000 + aplicar_20271121950000: causa, consequência, tendência, contingência, prazo).
-const COLUNAS_DO_RISCO = 'id, study_id, category, description, causa, consequencia, probability, impact, tendencia, mitigation, contingencia, owner, prazo, status, sort_order, created_at';
+const COLUNAS_DO_RISCO = 'id, study_id, category, description, causa, consequencia, probability, impact, tendencia, mitigation, contingencia, owner, prazo, status, sort_order, created_at, project_risk_id';
 
 // Comitê & Gates (aplicar_20271121954000).
 const COLUNAS_DO_COMITE = 'id, study_id, version_id, gate, decision, condicionantes, parecer, decided_by, decided_by_nome, decided_at, created_at, updated_at';
@@ -799,6 +801,42 @@ export const imovibService = {
         if (error) throw new Error(semPermissao(error) ? 'Sem permissão para salvar riscos deste estudo.' : `Falha ao salvar o risco: ${error.message}`);
         if (!data?.length) throw new Error('Sem permissão para salvar riscos deste estudo.');
         return data[0] as ImovibRisk;
+    },
+
+    /**
+     * "Levar ao Módulo Riscos" (Fase 7.6 do plano 2026-11-21-imovib-oportunidades-consolidacao): cria o risco
+     * no módulo (escopo obra se o empreendimento tem obra, senão empreendimento), grava a avaliação inerente
+     * com a mesma probabilidade × impacto e liga o risco do estudo a ele (`project_risk_id`: não vai duas vezes).
+     */
+    async levarRiscoAoModulo(r: ImovibRisk, study: Pick<ImovibStudy, 'organization_id' | 'name'> & { estrutura?: { empreendimento_id?: string } | null }): Promise<{ codigo: string; projectRiskId: string }> {
+        const empreendimentoId = study.estrutura?.empreendimento_id ?? null;
+        const motivo = motivoParaNaoLevar(r, empreendimentoId);
+        if (motivo) throw new Error(motivo);
+        const [{ data: emp, error: erroEmp }, { data: auth }, categorias] = await Promise.all([
+            supabase.from('empreendimentos').select('project_id').eq('id', empreendimentoId!).maybeSingle(),
+            supabase.auth.getUser(),
+            riskService.listarCategorias(),
+        ]);
+        if (erroEmp) throw new Error(`Falha ao ler o empreendimento: ${erroEmp.message}`);
+        const user = auth?.user;
+        if (!user) throw new Error('Sessão expirada: entre de novo para levar o risco.');
+        const meta = (user.user_metadata ?? {}) as { full_name?: string; name?: string };
+        const { ficha, avaliacao } = riscoParaOModulo(r, {
+            organizationId: study.organization_id,
+            empreendimentoId,
+            obraId: (emp as { project_id?: string | null } | null)?.project_id ?? null,
+            ownerUserId: user.id,
+            ownerNome: meta.full_name ?? meta.name ?? user.email ?? null,
+            categoriaPorCodigo: Object.fromEntries(categorias.map(c => [c.codigo, c.id])),
+            nomeDoEstudo: study.name,
+        });
+        const criado = await riskService.criarRisco(study.organization_id, ficha);
+        await riskService.avaliar(criado, avaliacao);
+        const { data, error } = await supabase.from('imovib_risks').update({ project_risk_id: criado.id }).eq('id', r.id).select('id');
+        if (error || !data?.length) {
+            throw new Error(`O risco ${criado.codigo} foi criado no Módulo Riscos, mas o estudo não guardou o vínculo${error ? `: ${error.message}` : ' (sem permissão)'}.`);
+        }
+        return { codigo: criado.codigo, projectRiskId: criado.id };
     },
 
     // ── Comitê & Gates (item 1.5 do plano 2026-11-21-imovib-oportunidades-consolidacao) ──

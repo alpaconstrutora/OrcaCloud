@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ShieldAlert, Loader2, AlertCircle, Plus } from 'lucide-react';
+import { ShieldAlert, ShieldCheck, Loader2, AlertCircle, Plus } from 'lucide-react';
 import { ImovibStudy, ImovibRisk } from '../types';
 import { imovibService } from '../services/imovibService';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
@@ -9,6 +9,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 import { MatrizCalor } from './riscos/MatrizCalor';
+import { motivoParaNaoLevar } from '../utils/imovibRiscoParaModuloRiscos';
 import { ROTULO_DA_CATEGORIA, ROTULO_DA_SITUACAO, ROTULO_DA_TENDENCIA, rotuloDaCategoria, rotuloDaSituacao, severidade, corDaSeveridade } from '../constants/imovibRiscos';
 
 interface ImovibRiscosCardProps {
@@ -36,6 +37,8 @@ const ImovibRiscosCard: React.FC<ImovibRiscosCardProps> = ({ study }) => {
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
     const [editando, setEditando] = useState<ImovibRisk | 'novo' | null>(null);
+    const [levando, setLevando] = useState<string | null>(null);
+    const empreendimentoId = study.estrutura?.empreendimento_id ?? null;
 
     useEffect(() => {
         let vivo = true;
@@ -55,6 +58,21 @@ const ImovibRiscosCard: React.FC<ImovibRiscosCardProps> = ({ study }) => {
             showToast((e as Error).message, 'error');
         }
     };
+
+    // Fase 7.6 (plano 2026-11-21-imovib-oportunidades-consolidacao): o risco passa a ser gerido no Módulo Riscos.
+    const levar = async (r: ImovibRisk) => {
+        setLevando(r.id);
+        try {
+            const { codigo, projectRiskId } = await imovibService.levarRiscoAoModulo(r, study);
+            setRiscos(prev => prev.map(x => (x.id === r.id ? { ...x, project_risk_id: projectRiskId } : x)));
+            showToast(`Risco ${codigo} criado no Módulo Riscos, com a avaliação inerente do estudo.`, 'success');
+        } catch (e) {
+            showToast((e as Error).message, 'error');
+        } finally {
+            setLevando(null);
+        }
+    };
+    const motivoDeNaoLevar = (r: ImovibRisk): string | null => (!pode ? (motivo || 'Sem permissão para editar este estudo.') : motivoParaNaoLevar(r, empreendimentoId));
 
     // Mapa 5 × 5: impacto nas linhas (5 em cima), probabilidade nas colunas.
     const contagem = (p: number, i: number) => riscos.filter(r => r.probability === p && r.impact === i && r.status !== 'encerrado').length;
@@ -105,15 +123,31 @@ const ImovibRiscosCard: React.FC<ImovibRiscosCardProps> = ({ study }) => {
                             case 'category': return <span className="text-sm text-gray-700">{rotuloDaCategoria(r.category)}</span>;
                             case 'description': return <span className="block text-sm text-gray-700 whitespace-normal">{r.description}</span>;
                             case 'severity': return <span className={`inline-block text-xs font-semibold rounded-[6px] px-2 py-0.5 ${corDaSeveridade(severidade(r))}`} title={`Probabilidade ${r.probability} × impacto ${r.impact}`}>{severidade(r)}</span>;
-                            case 'status': return <span className="text-sm text-gray-700">{rotuloDaSituacao(r.status)}</span>;
+                            case 'status': return (
+                                <span className="block text-sm text-gray-700">
+                                    {rotuloDaSituacao(r.status)}
+                                    {r.project_risk_id && <span className="block text-xs text-emerald-700">No Módulo Riscos</span>}
+                                </span>
+                            );
                             case 'owner': return <span className="text-sm text-gray-600">{r.owner || '—'}</span>;
                             default: return null;
                         }
                     }}
                     actions={{
-                        width: 100,
+                        width: 136,
                         render: r => (
                             <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
+                                {/* Desligado, o ActionIconButton não mostra o title: o motivo vai no span. */}
+                                <span className="inline-flex" title={motivoDeNaoLevar(r) ?? 'Levar ao Módulo Riscos (vira risco da obra ou do empreendimento)'}>
+                                    <ActionIconButton
+                                        kind="move"
+                                        title="Levar ao Módulo Riscos"
+                                        aria-label="Levar ao Módulo Riscos"
+                                        icon={levando === r.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShieldCheck className="w-4 h-4" />}
+                                        disabled={!!motivoDeNaoLevar(r) || levando === r.id}
+                                        onClick={() => void levar(r)}
+                                    />
+                                </span>
                                 <ActionIconButton kind="edit" title={pode ? 'Editar o risco' : 'Ver o risco'} onClick={() => setEditando(r)} />
                                 {pode && <InlineDisclosureMenu showDelete onDelete={() => void excluir(r)} />}
                             </div>

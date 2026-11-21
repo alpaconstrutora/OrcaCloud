@@ -4,7 +4,8 @@
  *
  * Antes: tabela opportunity_documents + bucket opportunity-dataroom (um segundo lugar para a matrícula,
  * o memorial...). Agora a oportunidade só COMPARTILHA documentos do GED (opura_document_portal_shares,
- * audiência 'investidor'); o investidor vê a versão ATIVA.
+ * audiência 'investidor'). O investidor vê a versão FIXADA no compartilhamento (Fase 7.9, D8): versão nova no
+ * GED não aparece para ele até o gestor "Atualizar" — o gestor vê `versao_atual` > `version_number`.
  *
  * - Gestor: lê pela RLS (herdada de opura_documents) e assina com a própria sessão (documentService).
  * - Investidor pelo link: lista pela RPC do token (fn_investor_portal_get_dataroom) e baixa pela Edge
@@ -31,8 +32,13 @@ export interface DocumentoDoDataRoom {
     id: string;
     name: string;
     description?: string | null;
-    /** Caminho da versão ATIVA no bucket opura-docs. */
+    /** Caminho, no bucket opura-docs, da versão que o investidor vê (a fixada). */
     file_path: string | null;
+    /** Número da versão que o investidor vê. */
+    version_number?: number | null;
+    /** Só o gestor: versão ativa do documento no GED, e o id dela (para "Atualizar"). */
+    versao_atual?: number | null;
+    versao_atual_id?: string | null;
     file_size?: number | null;
     mime_type?: string | null;
     category: string;
@@ -45,35 +51,63 @@ export function fmtFileSize(bytes: number): string {
     return `${bytes} B`;
 }
 
-type LinhaDoCompartilhamento = {
+type VersaoLida = { id: string; version_number: number | null; storage_path: string | null; tamanho: number | null; mime_type: string | null };
+export type LinhaDoCompartilhamento = {
     shared_at: string;
-    document: (Pick<OpuraDocument, 'id' | 'nome' | 'descricao' | 'categoria'> & {
-        active_version?: { storage_path: string | null; tamanho: number | null; mime_type: string | null } | null;
-    }) | null;
+    versao: VersaoLida | null;
+    document: (Pick<OpuraDocument, 'id' | 'nome' | 'descricao' | 'categoria'> & { active_version?: VersaoLida | null }) | null;
 };
+
+/** O investidor vê a versão fixada; sem ela (apagada, ou compartilhamento antigo), a ativa — igual à RPC. */
+export function documentoDoCompartilhamento(l: LinhaDoCompartilhamento): DocumentoDoDataRoom | null {
+    if (!l.document) return null;
+    const ativa = l.document.active_version ?? null;
+    const vista = l.versao ?? ativa;
+    return {
+        id: l.document.id,
+        name: l.document.nome,
+        description: l.document.descricao ?? null,
+        file_path: vista?.storage_path ?? null,
+        file_size: vista?.tamanho ?? null,
+        mime_type: vista?.mime_type ?? null,
+        version_number: vista?.version_number ?? null,
+        versao_atual: ativa?.version_number ?? null,
+        versao_atual_id: ativa?.id ?? null,
+        category: l.document.categoria,
+        created_at: l.shared_at,
+    };
+}
+
+/** Há versão mais nova no GED do que a que o investidor vê. */
+export const temVersaoNova = (d: DocumentoDoDataRoom): boolean =>
+    d.versao_atual != null && d.version_number != null && d.versao_atual > d.version_number;
 
 export const opportunityDocumentsService = {
     /** Gestor: o que está compartilhado com esta oportunidade. */
     async listar(opportunityId: string): Promise<DocumentoDoDataRoom[]> {
         const { data, error } = await supabase
             .from('opura_document_portal_shares')
-            .select('shared_at, document:opura_documents(id, nome, descricao, categoria, active_version:opura_document_versions!fk_active_version(storage_path, tamanho, mime_type))')
+            .select('shared_at, versao:opura_document_versions!version_id(id, version_number, storage_path, tamanho, mime_type), document:opura_documents(id, nome, descricao, categoria, active_version:opura_document_versions!fk_active_version(id, version_number, storage_path, tamanho, mime_type))')
             .eq('audience', 'investidor')
             .eq('opportunity_id', opportunityId)
             .order('shared_at', { ascending: false });
         if (error) throw new Error(`Falha ao ler o Data Room: ${error.message}`);
         return ((data ?? []) as unknown as LinhaDoCompartilhamento[])
-            .filter(l => l.document)
-            .map(l => ({
-                id: l.document!.id,
-                name: l.document!.nome,
-                description: l.document!.descricao ?? null,
-                file_path: l.document!.active_version?.storage_path ?? null,
-                file_size: l.document!.active_version?.tamanho ?? null,
-                mime_type: l.document!.active_version?.mime_type ?? null,
-                category: l.document!.categoria,
-                created_at: l.shared_at,
-            }));
+            .map(documentoDoCompartilhamento)
+            .filter((d): d is DocumentoDoDataRoom => d !== null);
+    },
+
+    /** Gestor: o investidor passa a ver a versão ativa de hoje. */
+    async atualizarVersao(documentId: string, opportunityId: string, versionId: string): Promise<void> {
+        const { data, error } = await supabase
+            .from('opura_document_portal_shares')
+            .update({ version_id: versionId })
+            .eq('audience', 'investidor')
+            .eq('opportunity_id', opportunityId)
+            .eq('document_id', documentId)
+            .select('document_id');
+        if (error) throw new Error(error.message);
+        if (!data?.length) throw new Error('Sem permissão para alterar este compartilhamento.');
     },
 
     /** Gestor: documentos do GED do empreendimento ainda não compartilhados (integrados não se compartilham). */

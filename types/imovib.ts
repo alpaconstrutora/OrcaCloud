@@ -528,6 +528,8 @@ export interface ImovibRisk {
     status: 'aberto' | 'em_mitigacao' | 'mitigado' | 'aceito' | 'materializado' | 'encerrado';
     sort_order: number;
     created_at?: string;
+    /** Risco do Módulo Riscos para onde este foi levado (Fase 7.6); preenchido só por levarRiscoAoModulo. */
+    project_risk_id?: string | null;
 }
 
 /**

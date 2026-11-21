@@ -439,7 +439,7 @@ export function StandardTable<T>({
                                             {t.rotulo}
                                         </th>
                                     ))}
-                                    <th aria-hidden="true" className="border-r border-b border-gray-100" />
+                                    <th aria-hidden="true" className="border-b border-gray-100" />
                                     {showActions && <th aria-hidden="true" className="border-b border-gray-100" />}
                                 </tr>
                             )}
@@ -461,8 +461,9 @@ export function StandardTable<T>({
                                         <cols.ResizeHandle colKey={key} />
                                     </SortableHeader>
                                 ))}
-                                {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
-                                <th aria-hidden="true" className={`border-r border-gray-100${bordaTh}`} />
+                                {/* espaçador — casa com o <col /> sem largura, na mesma ordem. SEM border-r:
+                                    com a linha a folga parecia uma coluna vazia antes de "Ações" (Composições, 21/11). */}
+                                <th aria-hidden="true" className={bordaTh.trim() || undefined} />
                                 {showActions && (
                                     <th className={`${px} py-2 text-right relative overflow-hidden text-sm font-semibold text-gray-700${bordaTh}`}>
                                         {actions!.label ?? 'Ações'}
@@ -513,7 +514,7 @@ export function StandardTable<T>({
                                         </td>
                                     ))}
                                     {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
-                                    <td aria-hidden="true" className={`border-r border-gray-100${bordaTd} ${foco(showActions ? 'meio' : 'ultima')}`}></td>
+                                    <td aria-hidden="true" className={`${bordaTd.trim()} ${foco(showActions ? 'meio' : 'ultima')}`}></td>
                                     {showActions && (
                                         <td className={`${px} py-2.5 text-right${bordaTd} ${foco('ultima')}`} onClick={e => e.stopPropagation()}>
                                             <div className="flex items-center justify-end gap-1.5">{actions!.render(row)}</div>
@@ -534,7 +535,7 @@ export function StandardTable<T>({
                                             {totaisPorColuna(key, filtered)}
                                         </td>
                                     ))}
-                                    <td aria-hidden="true" className={`border-r border-gray-100 ${colunaFixa ? 'border-t-2 border-t-gray-200' : ''}`}></td>
+                                    <td aria-hidden="true" className={`${colunaFixa ? 'border-t-2 border-t-gray-200' : ''}`}></td>
                                     {showActions && <td className={colunaFixa ? 'border-t-2 border-t-gray-200' : undefined}></td>}
                                 </tr>
                             )}

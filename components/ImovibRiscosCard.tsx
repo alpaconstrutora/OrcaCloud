@@ -72,7 +72,7 @@ const ImovibRiscosCard: React.FC<ImovibRiscosCardProps> = ({ study }) => {
             setLevando(null);
         }
     };
-    const motivoDeNaoLevar = (r: ImovibRisk): string | null => (!pode ? motivo : motivoParaNaoLevar(r, empreendimentoId));
+    const motivoDeNaoLevar = (r: ImovibRisk): string | null => (!pode ? (motivo || 'Sem permissão para editar este estudo.') : motivoParaNaoLevar(r, empreendimentoId));
 
     // Mapa 5 × 5: impacto nas linhas (5 em cima), probabilidade nas colunas.
     const contagem = (p: number, i: number) => riscos.filter(r => r.probability === p && r.impact === i && r.status !== 'encerrado').length;

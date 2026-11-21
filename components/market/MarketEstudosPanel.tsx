@@ -1,5 +1,5 @@
 import React from 'react';
-import { FlaskConical, FolderOpen, PencilRuler, Rocket, Save, FileDown, Building2 } from 'lucide-react';
+import { FlaskConical, FolderOpen, PencilRuler, Rocket, Save, FileDown, Building2, Users } from 'lucide-react';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
@@ -9,6 +9,7 @@ import type { MarketVocacao } from '../../hooks/useMarketVocacao';
 import { DESCRICAO_HIPOTESES, HIPOTESES_PADRAO } from '../../utils/opuraMarketVocacao';
 import { TIPOS_DE_IMOVEL, TIPOS_PADRAO, descricaoDosTipos, resumoDosTipos, tiposDoEstudo, type TipoDeImovel } from '../../utils/opuraMarketTipos';
 import { FilterPopover } from '../ui/FilterPopover';
+import MarketConcorrentesSheet from './MarketConcorrentesSheet';
 
 const OPCOES_DE_TIPO = TIPOS_DE_IMOVEL.map((t) => ({ value: t, label: t }));
 
@@ -180,6 +181,7 @@ function Resultado({ v, motivoSemOrg, onSalvar, onExportarPdf, onCriarViabilidad
 
 export default function MarketEstudosPanel(props: Props) {
   const { v, onDesenharLote, onAbrirEstudo } = props;
+  const [concorrentesDe, setConcorrentesDe] = React.useState<OpuraMarketTerrainStudy | null>(null);
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
       <div className={`lg:col-span-1 h-fit space-y-8 ${CARTAO}`}>
@@ -311,6 +313,9 @@ export default function MarketEstudosPanel(props: Props) {
                     >
                       <FolderOpen className="w-3.5 h-3.5" /> Abrir estudo
                     </Button>
+                    <Button variant="secondary" size="sm" onClick={() => setConcorrentesDe(study)} title="Concorrentes monitorados deste terreno (viram comparáveis no estudo de viabilidade).">
+                      <Users className="w-3.5 h-3.5" /> Concorrentes
+                    </Button>
                     <ActionIconButton kind="delete" title="Excluir estudo" onClick={() => v.excluirEstudo(study)} />
                   </div>
                 </div>
@@ -325,6 +330,7 @@ export default function MarketEstudosPanel(props: Props) {
           </div>
         )}
       </div>
+      {concorrentesDe && <MarketConcorrentesSheet estudo={concorrentesDe} onClose={() => setConcorrentesDe(null)} />}
     </div>
   );
 }

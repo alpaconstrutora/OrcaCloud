@@ -2,8 +2,8 @@
 // Regras puras do checklist de documentos legais do empreendimento.
 // Testes: __tests__/empreendimentoDocumentos.test.ts
 import {
-  TIPOS_DOCUMENTO_LEGAL, SITUACAO_ROTULO,
-  type DocumentoLegal, type DocumentoLegalInsert, type TipoDocumentoLegal,
+  SITUACAO_ROTULO, infoDoTipo, listaPadrao,
+  type DocumentoLegal, type DocumentoLegalInsert, type ListaPadraoId, type TipoDocumentoLegal,
 } from '../types/empreendimentoDocumentos';
 
 /** Data local de hoje em `YYYY-MM-DD` — nunca `toISOString()`, que é UTC e vira o dia à noite. */
@@ -75,37 +75,46 @@ export const COR_DO_TOM: Record<TomSituacao, string> = {
 };
 
 /**
- * Itens da lista padrão que ainda faltam neste empreendimento. Idempotente:
- * rodar de novo com o resultado aplicado devolve []. OUTRO nunca entra.
+ * Itens da lista `listaId` que ainda faltam neste empreendimento. Entra só o
+ * tipo que o checklist NÃO tem, venha de onde vier — por isso:
+ *  - rodar de novo com o resultado aplicado devolve [] (idempotente);
+ *  - o tipo comum às duas listas (escritura, alvará…) entra uma vez só;
+ *  - uma 2ª escritura acrescentada à mão não atrapalha.
+ * O título é o da lista (ou o rótulo do catálogo); `sort_order` = base da lista + 10, 20…
  */
-export function faltantesDaListaPadrao(
+export function faltantesDaLista(
+  listaId: ListaPadraoId,
   existentes: Pick<DocumentoLegal, 'tipo'>[],
   base: { organization_id: string; empreendimento_id: string },
 ): DocumentoLegalInsert[] {
+  const lista = listaPadrao(listaId);
   const tem = new Set<TipoDocumentoLegal>(existentes.map(d => d.tipo));
-  return TIPOS_DOCUMENTO_LEGAL
-    .map((t, i) => ({ t, i }))
-    .filter(({ t }) => !tem.has(t.tipo))
-    .map(({ t, i }) => ({
-      organization_id: base.organization_id,
-      empreendimento_id: base.empreendimento_id,
-      tipo: t.tipo,
-      titulo: t.rotulo,
-      numero: null,
-      orgao_emissor: t.orgao ?? null,
-      protocolo: null,
-      data_protocolo: null,
-      data_emissao: null,
-      data_validade: null,
-      alerta_dias_antecedencia: 30,
-      situacao: 'PENDENTE',
-      obrigatorio: true,
-      responsavel: null,
-      observacoes: null,
-      document_id: null,
-      storage_path: null,
-      sort_order: (i + 1) * 10,
-    }));
+  return lista.itens
+    .map((item, i) => ({ item, i }))
+    .filter(({ item }) => item.tipo !== 'OUTRO' && !tem.has(item.tipo))
+    .map(({ item, i }) => {
+      const info = infoDoTipo(item.tipo);
+      return {
+        organization_id: base.organization_id,
+        empreendimento_id: base.empreendimento_id,
+        tipo: item.tipo,
+        titulo: item.titulo ?? info.rotulo,
+        numero: null,
+        orgao_emissor: info.orgao ?? null,
+        protocolo: null,
+        data_protocolo: null,
+        data_emissao: null,
+        data_validade: null,
+        alerta_dias_antecedencia: 30,
+        situacao: 'PENDENTE' as const,
+        obrigatorio: true,
+        responsavel: null,
+        observacoes: null,
+        document_id: null,
+        storage_path: null,
+        sort_order: lista.baseOrdem + (i + 1) * 10,
+      };
+    });
 }
 
 /** Números dos KPIs da aba — da MESMA função que pinta a coluna Situação. */

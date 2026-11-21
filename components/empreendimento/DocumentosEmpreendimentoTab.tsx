@@ -30,11 +30,11 @@ import { useStore } from '../../store/useStore';
 import type { Empreendimento } from '../../types/empreendimento';
 import type { OpuraDocument, OpuraDocumentCategoria } from '../../types/documents';
 import {
-  TIPOS_DOCUMENTO_LEGAL, TIPO_OUTRO, SITUACAO_ROTULO, CATEGORIA_GED_ROTULO, infoDoTipo,
-  type DocumentoLegal, type SituacaoDocumentoLegal, type TipoDocumentoLegal,
+  LISTAS_PADRAO, TIPO_OUTRO, SITUACAO_ROTULO, CATEGORIA_GED_ROTULO, infoDoTipo, listaPadrao,
+  type DocumentoLegal, type ListaPadraoId, type SituacaoDocumentoLegal, type TipoDocumentoLegal,
 } from '../../types/empreendimentoDocumentos';
 import {
-  COR_DO_TOM, faltantesDaListaPadrao, hojeISO, resumoDoChecklist, situacaoExibida,
+  COR_DO_TOM, faltantesDaLista, hojeISO, resumoDoChecklist, situacaoExibida,
 } from '../../utils/empreendimentoDocumentos';
 import {
   empreendimentoDocumentosService as svc, EXTENSOES_ACEITAS, TAMANHO_MAXIMO_BYTES,
@@ -45,11 +45,11 @@ import {
 // Soma alvo das visíveis + Ações (190) ≈ 1270 px: cabe sem rolagem lateral numa
 // tela de 1600 px (área útil ~1290). Protocolo/Responsável nascem ocultas.
 const COLUNAS_LEGAIS: StandardTableColumn[] = [
-  { key: 'titulo', label: 'Documento', sortable: true, width: 250 },
+  { key: 'titulo', label: 'Documento', sortable: true, width: 225 },
   { key: 'numero', label: 'Número', sortable: true, width: 110 },
   { key: 'orgao', label: 'Órgão emissor', sortable: true, width: 170 },
   { key: 'protocolo', label: 'Protocolo', sortable: true, width: 140, defaultHidden: true },
-  { key: 'emissao', label: 'Emissão', sortable: true, width: 100 },
+  { key: 'emissao', label: 'Data de emissão', sortable: true, width: 125 },
   { key: 'validade', label: 'Validade', sortable: true, width: 130 },
   { key: 'situacao', label: 'Situação', sortable: true, width: 140 },
   { key: 'arquivo', label: 'Arquivo', sortable: true, width: 180 },
@@ -57,9 +57,10 @@ const COLUNAS_LEGAIS: StandardTableColumn[] = [
 ];
 
 const COLUNAS_OUTROS: StandardTableColumn[] = [
-  { key: 'nome', label: 'Documento', sortable: true, width: 300 },
-  { key: 'categoria', label: 'Categoria no GED', sortable: true, width: 190 },
+  { key: 'nome', label: 'Documento', sortable: true, width: 280 },
+  { key: 'categoria', label: 'Categoria no GED', sortable: true, width: 170 },
   { key: 'tipo', label: 'Tipo', sortable: true, width: 180 },
+  { key: 'emissao', label: 'Data de emissão', sortable: true, width: 125 },
   { key: 'validade', label: 'Validade', sortable: true, width: 110 },
   { key: 'tamanho', label: 'Tamanho', sortable: true, width: 110, align: 'right' },
   { key: 'enviado', label: 'Enviado em', sortable: true, width: 140 },
@@ -192,10 +193,13 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
 
   const hoje = hojeISO();
   const resumo = React.useMemo(() => resumoDoChecklist(legais, hoje), [legais, hoje]);
-  const faltamDaLista = React.useMemo(
-    () => faltantesDaListaPadrao(legais, { organization_id: e.organization_id, empreendimento_id: e.id }).length,
-    [legais, e.organization_id, e.id],
-  );
+  /** O que cada lista padrão ainda traria — a mesma função que o serviço usa ao gravar. */
+  const faltantesPorLista = React.useMemo(() => {
+    const base = { organization_id: e.organization_id, empreendimento_id: e.id };
+    return Object.fromEntries(LISTAS_PADRAO.map(l => [l.id, faltantesDaLista(l.id, legais, base)])) as
+      Record<ListaPadraoId, ReturnType<typeof faltantesDaLista>>;
+  }, [legais, e.organization_id, e.id]);
+  const faltamNasListas = LISTAS_PADRAO.reduce((n, l) => n + faltantesPorLista[l.id].length, 0);
 
   const trocarItem = (d: DocumentoLegal) => setLegais(prev => prev.map(x => (x.id === d.id ? d : x)));
 
@@ -215,13 +219,21 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
 
   const abrirNoGed = (documentId: string) => navigateToFocus('opura-docs', documentId, 'GED_DOCUMENTO');
 
-  // ── Lista padrão ──────────────────────────────────────────────────────────
-  const carregarListaPadrao = async () => {
+  // ── Lista padrão (Sheet com a escolha da lista) ───────────────────────────
+  const [listaAberta, setListaAberta] = React.useState(false);
+  const [listaEscolhida, setListaEscolhida] = React.useState<ListaPadraoId>('GERAL');
+  const abrirListas = () => {
+    // Abre na primeira lista que ainda tem o que trazer.
+    setListaEscolhida(LISTAS_PADRAO.find(l => faltantesPorLista[l.id].length > 0)?.id ?? 'GERAL');
+    setListaAberta(true);
+  };
+  const carregarListaPadrao = async (listaId: ListaPadraoId) => {
     setOcupado(true);
     try {
-      const novos = await svc.carregarListaPadrao(e);
+      const novos = await svc.carregarLista(e, listaId);
+      setListaAberta(false);
       if (novos.length === 0) {
-        notify('A lista padrão já está completa.');
+        notify('Esta lista já está completa no checklist.');
         return;
       }
       setLegais(prev => [...prev, ...novos].sort((a, b) => a.sort_order - b.sort_order || a.titulo.localeCompare(b.titulo, 'pt-BR')));
@@ -240,14 +252,28 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
   const [sujo, setSujo] = React.useState(false);
   const [salvando, setSalvando] = React.useState(false);
 
-  /** Tipos da lista padrão que ainda não estão no checklist, mais "Outro". */
-  const tiposDisponiveis = React.useMemo(() => {
-    const usados = new Set(legais.map(d => d.tipo));
-    return [...TIPOS_DOCUMENTO_LEGAL.filter(t => !usados.has(t.tipo)), TIPO_OUTRO];
-  }, [legais]);
+  /**
+   * Todos os tipos, agrupados pela lista em que aparecem primeiro — o mesmo tipo
+   * pode repetir no checklist (duas escrituras). Comum às duas listas = uma vez.
+   */
+  const gruposDeTipo = React.useMemo(() => {
+    const vistos = new Set<TipoDocumentoLegal>();
+    const grupos = LISTAS_PADRAO.map(l => ({
+      rotulo: l.id === 'GERAL' ? 'Lista geral' : l.rotulo,
+      tipos: l.itens
+        .map(i => i.tipo)
+        .filter(t => { if (vistos.has(t)) return false; vistos.add(t); return true; })
+        .map(infoDoTipo),
+    }));
+    return [...grupos, { rotulo: 'Outro', tipos: [TIPO_OUTRO] }];
+  }, []);
+  const quantosDoTipo = (tipo: TipoDocumentoLegal) => legais.filter(d => d.tipo === tipo).length;
 
   const abrirNovo = () => {
-    setForm(formNovo(tiposDisponiveis[0]?.tipo ?? 'OUTRO'));
+    // Abre no primeiro tipo que o checklist ainda não tem; todos seguem escolhíveis.
+    const usados = new Set(legais.map(d => d.tipo));
+    const primeiro = gruposDeTipo.flatMap(g => g.tipos).find(t => t.tipo !== 'OUTRO' && !usados.has(t.tipo));
+    setForm(formNovo(primeiro?.tipo ?? 'OUTRO'));
     setArquivoDoItem(null);
     setSujo(false);
     setItemAberto('novo');
@@ -418,8 +444,8 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
   };
 
   // ── "Outros documentos": criar / editar / excluir, direto no GED ─────────
-  type FormOutro = { nome: string; categoria: OpuraDocumentCategoria; tipo: string; validade: string };
-  const FORM_OUTRO_VAZIO: FormOutro = { nome: '', categoria: 'engenharia', tipo: '', validade: '' };
+  type FormOutro = { nome: string; categoria: OpuraDocumentCategoria; tipo: string; emissao: string; validade: string };
+  const FORM_OUTRO_VAZIO: FormOutro = { nome: '', categoria: 'engenharia', tipo: '', emissao: '', validade: '' };
   const [envioAberto, setEnvioAberto] = React.useState(false);
   /** `null` = enviando um novo; documento = editando esse. */
   const [outroEditando, setOutroEditando] = React.useState<OpuraDocument | null>(null);
@@ -439,7 +465,10 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
   };
   const abrirEdicaoOutro = (d: OpuraDocument) => {
     setOutroEditando(d);
-    setFormOutro({ nome: d.nome, categoria: d.categoria, tipo: d.tipo_documento ?? '', validade: d.data_validade ?? '' });
+    setFormOutro({
+      nome: d.nome, categoria: d.categoria, tipo: d.tipo_documento ?? '',
+      emissao: d.data_emissao?.slice(0, 10) ?? '', validade: d.data_validade?.slice(0, 10) ?? '',
+    });
     setArquivoOutro(null);
     setOutroSujo(false);
     setEnvioAberto(true);
@@ -454,10 +483,15 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
   const salvarOutro = async () => {
     if (!outroEditando && !arquivoOutro) { notify('Escolha o arquivo a enviar.', 'error'); return; }
     if (!formOutro.nome.trim()) { notify('Dê um nome ao documento.', 'error'); return; }
+    if (formOutro.emissao && formOutro.validade && formOutro.validade < formOutro.emissao) {
+      notify('A validade não pode ser anterior à emissão.', 'error');
+      return;
+    }
     const meta = {
       nome: formOutro.nome.trim(),
       categoria: formOutro.categoria,
       tipo_documento: formOutro.tipo.trim() || 'Documento do empreendimento',
+      data_emissao: formOutro.emissao || null,
       data_validade: formOutro.validade || null,
     };
     setSalvando(true);
@@ -556,6 +590,7 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
       case 'nome': return <span className={`block truncate ${TD} text-blue-600`} title={d.nome}>{d.nome}</span>;
       case 'categoria': return <span className={`${TD} text-gray-700`}>{CATEGORIA_GED_ROTULO[d.categoria] ?? d.categoria}</span>;
       case 'tipo': return <span className={`block truncate ${TD} text-gray-700`} title={d.tipo_documento ?? undefined}>{d.tipo_documento || '—'}</span>;
+      case 'emissao': return <span className={`${TD} text-gray-600 whitespace-nowrap`}>{formatarData(d.data_emissao)}</span>;
       case 'validade': return <span className={`${TD} text-gray-600`}>{d.data_validade ? formatarData(d.data_validade) : '—'}</span>;
       case 'tamanho': return <span className={`${TD} text-gray-600`}>{formatarTamanho(d.active_version?.tamanho)}</span>;
       case 'enviado': return <span className={`${TD} text-gray-600`}>{formatarData(d.created_at)}</span>;
@@ -568,6 +603,7 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
       case 'nome': return d.nome.toLowerCase();
       case 'categoria': return (CATEGORIA_GED_ROTULO[d.categoria] ?? d.categoria).toLowerCase();
       case 'tipo': return (d.tipo_documento ?? '').toLowerCase();
+      case 'emissao': return d.data_emissao ?? '';
       case 'validade': return d.data_validade ?? '9999-12-31';
       case 'tamanho': return d.active_version?.tamanho ?? -1;
       case 'enviado': return d.created_at ?? '';
@@ -575,7 +611,8 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
     }
   };
 
-  const motivoListaCompleta = 'Todos os documentos da lista padrão já estão no checklist.';
+  const motivoListaCompleta = 'Todos os documentos das listas padrão já estão no checklist.';
+  const faltamNaEscolhida = faltantesPorLista[listaEscolhida];
   const editando = itemAberto && itemAberto !== 'novo' ? itemAberto : null;
 
   return (
@@ -639,8 +676,8 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
           rowLabel={d => `${d.titulo}: ${situacaoExibida(d, hoje).rotulo}. Editar`}
           toolbarRight={
             <>
-              <span title={faltamDaLista === 0 ? motivoListaCompleta : `Adiciona ${faltamDaLista} documento(s) que ainda faltam`}>
-                <button type="button" onClick={carregarListaPadrao} disabled={ocupado || loading || faltamDaLista === 0} className={BOTAO_SECUNDARIO}>
+              <span title={faltamNasListas === 0 ? motivoListaCompleta : 'Escolha uma lista (Geral ou Incorporação) e adicione o que ainda falta'}>
+                <button type="button" onClick={abrirListas} disabled={ocupado || loading || faltamNasListas === 0} className={BOTAO_SECUNDARIO}>
                   <ListChecks className="w-[15px] h-[15px]" />
                   Carregar lista padrão
                 </button>
@@ -769,7 +806,11 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
                     <input id="doc-tipo" className={`${CAMPO} bg-gray-50`} value={infoDoTipo(form.tipo).rotulo} readOnly />
                   ) : (
                     <select id="doc-tipo" className={CAMPO} value={form.tipo} onChange={ev => trocarTipoDoNovo(ev.target.value as TipoDocumentoLegal)}>
-                      {tiposDisponiveis.map(t => <option key={t.tipo} value={t.tipo}>{t.rotulo}</option>)}
+                      {gruposDeTipo.map(g => (
+                        <optgroup key={g.rotulo} label={g.rotulo}>
+                          {g.tipos.map(t => <option key={t.tipo} value={t.tipo}>{t.rotulo}</option>)}
+                        </optgroup>
+                      ))}
                     </select>
                   )}
                 </div>
@@ -777,6 +818,11 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
                   <label className={ROTULO} htmlFor="doc-titulo">Título</label>
                   <input id="doc-titulo" className={CAMPO} value={form.titulo} onChange={ev => campo('titulo', ev.target.value)}
                     placeholder="Ex: Alvará de construção – Torre A" />
+                  {!editando && form.tipo !== 'OUTRO' && quantosDoTipo(form.tipo) > 0 && (
+                    <p className="text-xs text-amber-700">
+                      Já há {quantosDoTipo(form.tipo)} "{infoDoTipo(form.tipo).rotulo}" no checklist; use um título que diferencie (ex.: Escritura – lote 12).
+                    </p>
+                  )}
                 </div>
                 <div className="space-y-1.5">
                   <label className={ROTULO} htmlFor="doc-numero">Número</label>
@@ -817,7 +863,7 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
                   <input id="doc-data-protocolo" type="date" className={CAMPO} value={form.data_protocolo} onChange={ev => campo('data_protocolo', ev.target.value)} />
                 </div>
                 <div className="space-y-1.5">
-                  <label className={ROTULO} htmlFor="doc-emissao">Emissão</label>
+                  <label className={ROTULO} htmlFor="doc-emissao">Data de emissão</label>
                   <input id="doc-emissao" type="date" className={CAMPO} value={form.data_emissao} onChange={ev => campo('data_emissao', ev.target.value)} />
                 </div>
                 <div className="space-y-1.5">
@@ -886,6 +932,93 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
           <span title={editando && !sujo && !arquivoDoItem ? 'Nada foi alterado.' : undefined}>
             <button type="button" onClick={salvarItem} disabled={salvando || (!!editando && !sujo && !arquivoDoItem)} className={BOTAO_PRIMARIO}>
               {salvando ? 'Salvando...' : editando ? 'Salvar alterações' : 'Adicionar ao checklist'}
+            </button>
+          </span>
+        </SheetFooter>
+      </Sheet>
+
+      {/* ── Sheet: escolher a lista padrão ── */}
+      <Sheet open={listaAberta} onClose={() => setListaAberta(false)} size="md">
+        <SheetHeader onClose={() => setListaAberta(false)}>
+          <SheetTitle>Carregar lista padrão</SheetTitle>
+          <SheetDescription>{e.name}</SheetDescription>
+        </SheetHeader>
+        <SheetPanel className="p-6">
+          <div className="space-y-5">
+            <fieldset className="space-y-2">
+              <legend className={`${ROTULO} mb-1.5`}>Lista</legend>
+              {LISTAS_PADRAO.map(l => {
+                const faltam = faltantesPorLista[l.id].length;
+                const marcada = listaEscolhida === l.id;
+                return (
+                  <label
+                    key={l.id}
+                    className={`flex items-start gap-3 rounded-[10px] border px-4 py-3 cursor-pointer transition-colors ${
+                      marcada ? 'border-blue-500 bg-blue-50/50' : 'border-gray-200 hover:bg-gray-50'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="lista-padrao"
+                      value={l.id}
+                      checked={marcada}
+                      onChange={() => setListaEscolhida(l.id)}
+                      className="mt-0.5 w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-semibold text-gray-900">{l.rotulo}</span>
+                      <span className="block text-sm font-normal text-gray-600 mt-0.5">{l.descricao}</span>
+                      <span className={`block text-xs mt-1 ${faltam === 0 ? 'text-gray-500' : 'text-blue-700'}`}>
+                        {faltam === 0
+                          ? `Completa: os ${l.itens.length} documentos já estão no checklist.`
+                          : `${faltam} de ${l.itens.length} ainda não estão no checklist.`}
+                      </span>
+                    </span>
+                  </label>
+                );
+              })}
+            </fieldset>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-gray-900">
+                {faltamNaEscolhida.length === 0 ? 'Nada a adicionar' : 'Vão entrar como Pendente'}
+              </h3>
+              {faltamNaEscolhida.length === 0 ? (
+                <p className="text-sm text-gray-600">Todos os documentos desta lista já estão no checklist.</p>
+              ) : (
+                <ul className="space-y-1">
+                  {faltamNaEscolhida.map(n => (
+                    <li key={n.tipo} className="flex items-start gap-2 text-sm font-normal text-gray-700">
+                      <ListChecks className="w-4 h-4 mt-0.5 shrink-0 text-gray-400" />
+                      <span>{n.titulo}</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {listaPadrao(listaEscolhida).itens.length > faltamNaEscolhida.length && faltamNaEscolhida.length > 0 && (
+                <p className="text-xs text-gray-500">
+                  {listaPadrao(listaEscolhida).itens.length - faltamNaEscolhida.length} documento(s) desta lista já estão no checklist e não se repetem.
+                </p>
+              )}
+            </div>
+          </div>
+        </SheetPanel>
+        <SheetFooter>
+          <button type="button" onClick={() => setListaAberta(false)} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">
+            Cancelar
+          </button>
+          <span title={faltamNaEscolhida.length === 0 ? 'Todos os documentos desta lista já estão no checklist.' : undefined}>
+            <button
+              type="button"
+              onClick={() => carregarListaPadrao(listaEscolhida)}
+              disabled={ocupado || faltamNaEscolhida.length === 0}
+              className={BOTAO_PRIMARIO}
+            >
+              {ocupado
+                ? 'Adicionando...'
+                : faltamNaEscolhida.length === 0
+                  ? 'Lista completa'
+                  : `Adicionar ${faltamNaEscolhida.length} documento${faltamNaEscolhida.length === 1 ? '' : 's'}`}
             </button>
           </span>
         </SheetFooter>
@@ -964,6 +1097,11 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
               <label className={ROTULO} htmlFor="outro-tipo">Tipo</label>
               <input id="outro-tipo" className={CAMPO} value={formOutro.tipo} onChange={ev => campoOutro('tipo', ev.target.value)}
                 placeholder="Ex: Memorial, Planta, Foto" />
+            </div>
+            <div className="space-y-1.5">
+              <label className={ROTULO} htmlFor="outro-emissao">Data de emissão</label>
+              <input id="outro-emissao" type="date" className={CAMPO} value={formOutro.emissao}
+                onChange={ev => campoOutro('emissao', ev.target.value)} />
             </div>
             <div className="space-y-1.5">
               <label className={ROTULO} htmlFor="outro-validade">Validade</label>

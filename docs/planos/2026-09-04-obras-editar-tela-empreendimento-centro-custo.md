@@ -179,5 +179,38 @@ com a aba, e salvar de qualquer uma grava a obra inteira.
 - [x] Item 5 — seção de centros de custo
 - [x] Item 7 — quatro abas no formulário de OBRA (pedido de 05/09)
 - [x] Item 6 — verificação mecânica (typecheck + suíte + scripts)
-- [ ] Verificação na tela real (Playwright) — **pendente**: exige a senha do
-      usuário de leitura, que não fica gravada em lugar nenhum.
+- [x] Verificação na tela real (Playwright, conta de leitura, 05/09/2026)
+
+## O que a tela real mostrou (05/09/2026)
+
+Conferido no app rodando, viewport 1600×950, com console e rede escutados. Sem
+erro de JS nem HTTP 4xx/5xx nesta tela — só o ruído conhecido das três RPCs da
+Central de Controle (`fn_reconciliation_divergences`,
+`fn_approval_pending_summary`, `fn_approval_action_queue`), que devolvem
+500/57014 desde antes e são alheias a Obras.
+
+Provado por asserção, não por print:
+
+| Asserção | Resultado |
+|---|---|
+| `<main>` sem nenhum elemento `position: absolute` cobrindo a página | passou |
+| A lista de obras não aparece por baixo da tela de edição | passou |
+| Salvar desabilitado sem alteração | passou |
+| Trocar Empresa Executora (aba Organização) habilita Salvar | passou |
+| Voltar ao valor original desabilita Salvar de novo | passou |
+| Texto digitado numa aba sobrevive à troca de abas | passou |
+| As quatro abas trocam o conteúdo e o subtítulo | passou |
+
+As duas linhas do meio são a prova de que o `dirty` enxerga o estado que não
+mora em `formData` — sem elas o primário nasceria morto na aba Organização.
+
+**Dois defeitos que só a tela mostrou**, corrigidos na mesma leva:
+
+1. **Dados gerais**: com Organização e Empresa Executora migradas para a aba
+   própria, sobrava meia linha vazia ao lado de "Código da Obra". A grade foi a
+   12 colunas, com Nome (8) e Código (4) na mesma linha.
+2. **Endereço**: Rua (9) + Nº (3) e depois Bairro (6) deixavam meia linha vazia
+   sob o Bairro. Virou Rua (6) + Nº (2) + Bairro (4) numa linha só.
+
+É o mesmo vazio do commit `3ae35e8` (PropertyModal), e nenhum dos 2450 testes o
+enxerga — só a tela.

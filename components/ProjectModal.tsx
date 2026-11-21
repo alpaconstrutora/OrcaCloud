@@ -1076,9 +1076,11 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   )}
                 </div>
 
-                {/* Specialized Obra View - Combined Technical & Address */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2">
+                {/* Identificação. 12 colunas: com Organização e Empresa Executora
+                    na aba própria, `grid-cols-2` deixava meia linha vazia ao lado
+                    do Código — o mesmo vazio que o PropertyModal tirou em 3ae35e8. */}
+                <div className="grid grid-cols-12 gap-4">
+                  <div className="col-span-12 md:col-span-8">
                     <label className="block text-xs font-semibold text-slate-500 mb-1">
                       {initialData ? 'Nome da Obra' : 'Nova Obra'}
                     </label>
@@ -1096,7 +1098,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </div>
 
                   {/* Code field — always editable */}
-                  <div className="col-span-2 md:col-span-1">
+                  <div className="col-span-12 md:col-span-4">
                     <label className="block flex text-xs font-semibold text-slate-500 mb-1 items-center gap-1.5">
                       <Hash className="w-3.5 h-3.5 text-blue-500" />
                       Código da Obra
@@ -1118,7 +1120,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     </p>
                   </div>
 
-                  <div className="col-span-2">
+                  <div className="col-span-12">
                     <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                       <input
                         type="checkbox"
@@ -1140,7 +1142,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </div>
 
                   {!formData.obraPropria && (
-                  <div className="col-span-2 md:col-span-1">
+                  <div className="col-span-12 md:col-span-6">
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Cliente / Proprietário</label>
                     <div className="relative">
                       <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -1244,7 +1246,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                   </div>
                   )}
 
-                  <div className="col-span-2 md:col-span-1">
+                  <div className="col-span-12 md:col-span-6">
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Investidor Vinculado</label>
                     <div className="relative">
                       <TrendingUp className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -1846,7 +1848,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     Localização da Obra
                   </h3>
                   <div className="grid grid-cols-12 gap-3">
-                    <div className="col-span-9">
+                    <div className="col-span-12 md:col-span-6">
                       <label className="block text-xs font-semibold text-slate-500 mb-1">Rua / Logradouro</label>
                       <input
                         type="text"
@@ -1855,7 +1857,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         onChange={(e) => setFormData({ ...formData, street: e.target.value })}
                       />
                     </div>
-                    <div className="col-span-3">
+                    <div className="col-span-4 md:col-span-2">
                       <label className="block text-xs font-semibold text-slate-500 mb-1">Nº</label>
                       <input
                         type="text"
@@ -1864,7 +1866,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                         onChange={(e) => setFormData({ ...formData, number: e.target.value })}
                       />
                     </div>
-                    <div className="col-span-6">
+                    <div className="col-span-8 md:col-span-4">
                       <label className="block text-xs font-semibold text-slate-500 mb-1">Bairro</label>
                       <input
                         type="text"

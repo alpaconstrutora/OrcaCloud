@@ -47,6 +47,15 @@
         "value": "arial",
         "createdAt": "2026-11-18T14:53:29.702Z",
         "reason": "Agent: fonte segura para e-mail HTML (clientes de e-mail não carregam webfont); molde do relatório de BI herdado sem mudança"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "components/schedule/ScheduleGantt.tsx"
+        ],
+        "createdAt": "2026-11-21T08:15:01.206Z",
+        "reason": "Claude triage: L1119/L1123 are 0x0 CSS triangles (borderTop + transparent side) forming the Gantt summary-bar end caps, not a card side-tab border"
       }
     ]
   }

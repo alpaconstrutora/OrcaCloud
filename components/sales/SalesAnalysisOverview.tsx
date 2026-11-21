@@ -19,6 +19,9 @@ import {
     type AnalysisSourceState,
 } from '../analysis/chartKit';
 
+/** Distrato no gráfico de vendas por mês (estorno, abaixo do zero). */
+const SERIE_DISTRATO = AGING_COLORS[2];
+
 /**
  * Painel da aba Análise de Venda de Ativos — KPIs, espelho, gráficos e
  * detalhamento de UM recorte (`scope`): um empreendimento, ou a carteira
@@ -156,7 +159,7 @@ const FunnelChart: React.FC<{ scope: SalesAnalysisScope }> = ({ scope }) => {
                         </div>
                         <div className="min-w-0">
                             <p className="text-xs text-gray-500 truncate">Distratos</p>
-                            <p className="text-sm font-medium text-gray-800 truncate">{scope.cancelledCount}</p>
+                            <p className="text-sm font-medium text-gray-800 truncate">{scope.distratos.count}</p>
                         </div>
                     </div>
                 </>
@@ -174,6 +177,9 @@ const MonthTooltip: React.FC<{ active?: boolean; payload?: { payload: MonthBucke
             <p className="text-gray-500">{p.label}</p>
             <p className="font-medium text-gray-800">{moneyBRL(p.value)}</p>
             <p className="text-gray-500">{plural(p.count, um, muitos)}</p>
+            {(p.cancelledValue ?? 0) > 0 && (
+                <p className="text-gray-500">Distratos: −{moneyBRL(p.cancelledValue ?? 0)} ({p.cancelledCount})</p>
+            )}
         </div>
     );
 };
@@ -181,15 +187,20 @@ const MonthTooltip: React.FC<{ active?: boolean; payload?: { payload: MonthBucke
 /** Colunas por mês, todos os meses presentes; com 1–2 meses preenchidos vira
  *  lista (§28.5). Serve às vendas (passado) e aos recebimentos (futuro). */
 const MonthColumns: React.FC<{ months: MonthBucket[]; um: string; muitos: string; ariaPrefixo: string; vazio: string }> = ({ months, um, muitos, ariaPrefixo, vazio }) => {
-    const comValor = months.filter(m => m.count > 0);
+    const comValor = months.filter(m => m.count > 0 || (m.cancelledCount ?? 0) > 0);
     if (comValor.length === 0) return <ChartEmpty>{vazio}</ChartEmpty>;
+    // Distrato (D7, plano 2026-11-21-imovib-oportunidades-consolidacao): barra negativa no mês do cancelamento.
+    const comDistrato = months.some(m => (m.cancelledValue ?? 0) > 0);
     if (comValor.length <= POUCOS_MESES) {
         return (
             <ul className="flex flex-col divide-y divide-gray-100">
                 {comValor.map(m => (
                     <li key={m.month} className="flex items-center justify-between gap-3 py-2 text-sm">
                         <span className="text-gray-700">{m.label}</span>
-                        <span className="text-gray-500">{plural(m.count, um, muitos)}</span>
+                        <span className="text-gray-500">
+                            {plural(m.count, um, muitos)}
+                            {(m.cancelledCount ?? 0) > 0 && ` · ${m.cancelledCount} distrato${m.cancelledCount === 1 ? '' : 's'} (−${moneyBRL(m.cancelledValue ?? 0)})`}
+                        </span>
                         <span className="font-medium text-gray-800 tabular-nums">{moneyBRL(m.value)}</span>
                     </li>
                 ))}
@@ -197,29 +208,35 @@ const MonthColumns: React.FC<{ months: MonthBucket[]; um: string; muitos: string
         );
     }
     const yTicks = niceTicks(Math.max(...months.map(m => m.value)));
+    const menor = comDistrato ? -Math.max(...months.map(m => m.cancelledValue ?? 0)) : 0;
+    const dados = comDistrato ? months.map(m => ({ ...m, distrato: -(m.cancelledValue ?? 0) })) : months;
     return (
+        <>
+        {comDistrato && <Legend items={[{ label: 'Vendas', color: SERIE_PRINCIPAL }, { label: 'Distratos', color: SERIE_DISTRATO }]} />}
         <div
             style={{ height: 200 }}
             role="img"
-            aria-label={`${ariaPrefixo}: ${comValor.map(m => `${m.label}, ${plural(m.count, um, muitos)}, ${moneyBRL(m.value)}`).join('; ')}.`}
+            aria-label={`${ariaPrefixo}: ${comValor.map(m => `${m.label}, ${plural(m.count, um, muitos)}, ${moneyBRL(m.value)}${(m.cancelledValue ?? 0) > 0 ? `, distratos ${moneyBRL(m.cancelledValue ?? 0)}` : ''}`).join('; ')}.`}
         >
             <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                <BarChart accessibilityLayer={false} data={months} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                <BarChart accessibilityLayer={false} data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} stackOffset={comDistrato ? 'sign' : undefined}>
                     <CartesianGrid vertical={false} stroke={GRID} />
                     <XAxis dataKey="label" axisLine={false} tickLine={false} tick={TICK} interval={0} />
                     <YAxis axisLine={false} tickLine={false} tick={TICK} tickFormatter={compactAxis} width={48}
-                        ticks={yTicks} domain={[0, yTicks[yTicks.length - 1]]} />
+                        ticks={comDistrato ? undefined : yTicks} domain={[menor, yTicks[yTicks.length - 1]]} />
                     <RechartsTooltip cursor={TOOLTIP_CURSOR} content={<MonthTooltip um={um} muitos={muitos} />} />
-                    <Bar dataKey="value" fill={SERIE_PRINCIPAL} radius={[4, 4, 0, 0]} maxBarSize={24} />
+                    <Bar dataKey="value" stackId="mes" fill={SERIE_PRINCIPAL} radius={[4, 4, 0, 0]} maxBarSize={24} />
+                    {comDistrato && <Bar dataKey="distrato" stackId="mes" fill={SERIE_DISTRATO} radius={[0, 0, 4, 4]} maxBarSize={24} />}
                 </BarChart>
             </ResponsiveContainer>
         </div>
+        </>
     );
 };
 
 /** Vendas por mês, últimos 12 meses — a velocidade que o "% vendido" não mostra. */
 const SalesByMonthChart: React.FC<{ scope: SalesAnalysisScope }> = ({ scope }) => (
-    <ChartCard title="Vendas por mês — últimos 12 meses" subtitle="Valor das negociações com contrato, pela data da negociação.">
+    <ChartCard title="Vendas por mês — últimos 12 meses" subtitle="Valor das negociações com contrato, pela data da negociação. Distrato: a venda fica no mês dela e o estorno entra no mês do cancelamento.">
         <MonthColumns months={scope.salesByMonth} um="venda" muitos="vendas" ariaPrefixo="Vendas por mês"
             vazio="Nenhuma venda com data nos últimos 12 meses neste recorte." />
         <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-gray-100">
@@ -232,6 +249,11 @@ const SalesByMonthChart: React.FC<{ scope: SalesAnalysisScope }> = ({ scope }) =
                 <p className="text-xs text-gray-500 truncate">Em 12 meses</p>
                 <p className="text-sm font-medium text-gray-800 truncate">{plural(scope.salesByMonth.reduce((a, m) => a + m.count, 0), 'venda', 'vendas')}</p>
                 <p className="text-xs text-gray-500 truncate">{moneyBRL(scope.salesByMonth.reduce((a, m) => a + m.value, 0))}</p>
+                {scope.salesByMonth.some(m => (m.cancelledValue ?? 0) > 0) && (
+                    <p className="text-xs text-gray-500 truncate">
+                        Líquido {moneyBRL(scope.salesByMonth.reduce((a, m) => a + m.value - (m.cancelledValue ?? 0), 0))}
+                    </p>
+                )}
             </div>
             <div className="min-w-0">
                 <p className="text-xs text-gray-500 truncate">Ticket médio</p>
@@ -627,7 +649,7 @@ const SalesAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectEm
                         <KpiCard size="sm" color="gray" label="VGV a vender" value={moneyBRL(scope.vgvUnsold)} sub={`${plural(unidadesEmEstoque, 'unidade', 'unidades')} em estoque`} icon={<Target />} />
                         <KpiCard size="sm" color="gray" label="Ticket médio" value={orDash(scope.ticket, moneyBRL)} sub={scope.soldDealsCount > 0 ? plural(scope.soldDealsCount, 'venda', 'vendas') : undefined} icon={<Receipt />} />
                         <KpiCard size="sm" color="gray" label="Valor médio vendido /m²" value={orDash(scope.valuePerSqm.avg, moneyBRL)} sub={scope.valuePerSqm.count > 0 ? `em ${plural(scope.valuePerSqm.count, 'venda', 'vendas')} com área` : undefined} icon={<Ruler />} />
-                        <KpiCard size="sm" color="gray" label="Distratos" value={scope.cancelledCount} sub="negociações canceladas" icon={<XCircle />} />
+                        <KpiCard size="sm" color="gray" label="Distratos" value={scope.distratos.count} sub={scope.distratos.count > 0 ? `${moneyBRL(scope.distratos.value)} de vendas desfeitas` : 'vendas desfeitas'} icon={<XCircle />} />
                     </>
                 ) : (
                     <>

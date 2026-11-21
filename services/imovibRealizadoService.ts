@@ -12,7 +12,7 @@ import { empreendimentoLinksService } from './empreendimentoLinksService';
 import { opuraAnalyticsService } from './opuraAnalyticsService';
 import { commercialService } from './commercialService';
 import { supabase } from '../lib/supabase';
-import { vendasPorMesDoEmpreendimento, vendidasSemNegociacao, type SaleDeal, type SaleProperty } from '../lib/salesAnalysis';
+import { vendasPorMesDoEmpreendimento, vendidasSemNegociacao, vgvDoEspelho, type SaleDeal, type SaleProperty, type VgvDoEspelho } from '../lib/salesAnalysis';
 
 export interface RealizadoDoEstudo {
     /** Obras do empreendimento na organização do estudo. */
@@ -23,7 +23,10 @@ export interface RealizadoDoEstudo {
     financeiro: { mes: string; entradas: number; saidas: number }[];
     /** Lançado nas obras e ainda não conciliado (a função devolve à parte): fica fora do realizado. */
     aConciliar: { entradas: number; saidas: number };
-    vendas: { mes: string; unidades: number; valor: number }[];
+    /** Vendas LÍQUIDAS por mês (D7): a venda no mês dela; o distrato, negativo, no mês do cancelamento. */
+    vendas: { mes: string; unidades: number; valor: number; distratos: number }[];
+    /** VGV do Espelho de Vendas do empreendimento pela regra única (D6, Fase 7.4). */
+    espelho: VgvDoEspelho;
     /** Unidades vendidas sem negociação (sem data): ficam fora das vendas por mês. */
     vendidasSemNegociacao: number;
 }
@@ -34,11 +37,12 @@ export const imovibRealizadoService = {
         if (!empId) throw new Error('O estudo não está vinculado a um empreendimento.');
         const org = study.organization_id;
 
-        const [emp, propriedades, negociacoes, mapa] = await Promise.all([
+        const [emp, propriedades, negociacoes, mapa, unidades] = await Promise.all([
             empreendimentoService.getById(empId),
             commercialService.listProperties(org),
             commercialService.listDeals(undefined, org),
             empreendimentoService.mapPropertiesToEmpreendimentos(org, 'SALE'),
+            empreendimentoService.listAllUnitsForEmpreendimento(empId),
         ]);
         if (!emp) throw new Error('Empreendimento do estudo não encontrado.');
 
@@ -78,6 +82,7 @@ export const imovibRealizadoService = {
             aConciliar,
             vendas: vendasPorMesDoEmpreendimento(entrada, empId),
             vendidasSemNegociacao: vendidasSemNegociacao(entrada, empId),
+            espelho: vgvDoEspelho(unidades, entrada.deals, entrada.properties),
         };
     },
 };

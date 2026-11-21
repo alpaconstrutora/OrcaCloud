@@ -14,10 +14,15 @@ import {
     receivableSchedule,
     vendasPorMesDoEmpreendimento,
     vendidasSemNegociacao,
+    foiDistrato,
+    vgvDoEspelho,
+    projecaoDeEsgotamento,
+    type UnidadeDoEspelho,
     SEM_EMPREENDIMENTO,
     type SaleProperty,
     type SaleDeal,
 } from '../lib/salesAnalysis';
+import { comparativoDoVgv } from '../utils/imovibAcompanhamento';
 
 const AGORA = new Date(2026, 9, 27); // 27/10/2026
 
@@ -228,8 +233,8 @@ describe('vendasPorMesDoEmpreendimento — vendas reais do estudo (item 10.4 do 
             { id: 'd5', type: 'SALE', status: 'COMPLETED', property_id: '103', value: 450_000, date: '2024-03-20' },
         ];
         expect(vendasPorMesDoEmpreendimento({ ...base, deals: maisDeals }, 'e1')).toEqual([
-            { mes: '2024-03', unidades: 1, valor: 450_000 },
-            { mes: '2026-09', unidades: 1, valor: 480_000 },
+            { mes: '2024-03', unidades: 1, valor: 450_000, distratos: 0 },
+            { mes: '2026-09', unidades: 1, valor: 480_000, distratos: 0 },
         ]);
     });
 
@@ -237,13 +242,13 @@ describe('vendasPorMesDoEmpreendimento — vendas reais do estudo (item 10.4 do 
         const r = vendasPorMesDoEmpreendimento({ ...base, deals }, 'e1');
         expect(r.some(m => m.mes === '2026-08')).toBe(false); // d4 cancelada
         expect(r.some(m => m.mes === '2026-10')).toBe(false); // d2 em reserva
-        expect(vendasPorMesDoEmpreendimento({ ...base, deals }, 'e2')).toEqual([{ mes: '2025-01', unidades: 1, valor: 1_000_000 }]);
+        expect(vendasPorMesDoEmpreendimento({ ...base, deals }, 'e2')).toEqual([{ mes: '2025-01', unidades: 1, valor: 1_000_000, distratos: 0 }]);
     });
 
     it('negociação de várias unidades: conta só as do empreendimento, com a parte de cada uma no valor', () => {
         const multi: SaleDeal[] = [{ id: 'm1', type: 'SALE', status: 'CONTRATO', value: 1_500_000, date: '2026-07-05',
             units: [{ property_id: '103', value: 500_000 }, { property_id: '201', value: 1_000_000 }] }];
-        expect(vendasPorMesDoEmpreendimento({ ...base, deals: multi }, 'e1')).toEqual([{ mes: '2026-07', unidades: 1, valor: 500_000 }]);
+        expect(vendasPorMesDoEmpreendimento({ ...base, deals: multi }, 'e1')).toEqual([{ mes: '2026-07', unidades: 1, valor: 500_000, distratos: 0 }]);
     });
 
     it('negociação sem data fica fora (não há mês para pôr)', () => {
@@ -256,5 +261,73 @@ describe('vendidasSemNegociacao — o que as vendas por mês não conseguem data
     it('unidade SOLD sem negociação no empreendimento (legado) é contada', () => {
         expect(vendidasSemNegociacao({ properties, deals, empreendimentoByProperty: emp }, 'e1')).toBe(1); // 104
         expect(vendidasSemNegociacao({ properties, deals, empreendimentoByProperty: emp }, 'e2')).toBe(0);
+    });
+});
+
+// Fase 7.2–7.4 do plano docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md (decisões D6 e D7).
+describe('distrato (D7): a venda fica no mês dela e o estorno entra no mês do cancelamento', () => {
+    const base = { properties, empreendimentoByProperty: emp, now: AGORA };
+    const distrato: SaleDeal = { id: 'dx', type: 'SALE', status: 'CANCELLED', cancelled_from_status: 'CONTRATO',
+        cancellation_date: '2026-05-10T15:00:00Z', property_id: '103', value: 450_000, date: '2026-03-20' };
+
+    it('foiDistrato: só cancelamento de etapa vendida', () => {
+        expect(foiDistrato(distrato)).toBe(true);
+        expect(foiDistrato({ ...distrato, cancelled_from_status: 'RESERVA' })).toBe(false);
+        expect(foiDistrato({ ...distrato, cancelled_from_status: null })).toBe(false);
+        expect(foiDistrato({ ...distrato, status: 'CONTRATO' })).toBe(false);
+    });
+
+    it('por empreendimento: março +V, maio −V (líquido zero no acumulado)', () => {
+        const r = vendasPorMesDoEmpreendimento({ ...base, deals: [distrato] }, 'e1');
+        expect(r).toEqual([
+            { mes: '2026-03', unidades: 1, valor: 450_000, distratos: 0 },
+            { mes: '2026-05', unidades: -1, valor: -450_000, distratos: 450_000 },
+        ]);
+    });
+
+    it('proposta desistida (cancelada fora de etapa vendida) não aparece', () => {
+        const r = vendasPorMesDoEmpreendimento({ ...base, deals: [{ ...distrato, cancelled_from_status: 'PENDING' }] }, 'e1');
+        expect(r).toEqual([]);
+    });
+
+    it('Análise: bruto no mês da venda, distrato no mês do cancelamento, velocidade líquida', () => {
+        const escopo = groupSalesAnalysis({ ...base, deals: [distrato] }).byId.get('e1')!;
+        const mar = escopo.salesByMonth.find(m => m.month === '2026-03')!;
+        const mai = escopo.salesByMonth.find(m => m.month === '2026-05')!;
+        expect(mar).toMatchObject({ count: 1, value: 450_000 });
+        expect(mai).toMatchObject({ cancelledCount: 1, cancelledValue: 450_000 });
+        expect(escopo.distratos).toEqual({ count: 1, value: 450_000 });
+        expect(escopo.vgvSold).toBe(0);
+        expect(projecaoDeEsgotamento(escopo, 1, 0, AGORA).velocidadeReal).toBe(0);
+    });
+});
+
+describe('vgvDoEspelho (D6): a regra da Análise no Espelho do empreendimento', () => {
+    const unidades: UnidadeDoEspelho[] = [
+        { id: 'u101', status: 'RESERVADO', price: 500_000, commercial_property_id: '101' }, // Contrato d1 → vendida por 480 mil
+        { id: 'u102', status: 'RESERVADO', price: 400_000, commercial_property_id: '102' }, // Reserva → reservada
+        { id: 'u103', status: 'DISPONIVEL', price: 450_000, commercial_property_id: '103' },
+        { id: 'u105', status: 'PERMUTADO', price: 350_000, commercial_property_id: '105' }, // fora do VGV
+        { id: 'g1', status: 'DISPONIVEL', price: 30_000, is_vendavel: false },             // garagem: fora
+        { id: 'n1', status: 'VENDIDO', price: 200_000 },                                    // não publicada, sem negociação
+        { id: 'n2', status: 'DISPONIVEL', price: 210_000 },                                 // não publicada
+    ];
+
+    it('vendido negociado + estoque pela tabela; permutada e não vendável à parte', () => {
+        const r = vgvDoEspelho(unidades, deals, properties);
+        expect(r.vendido).toEqual({ count: 1, value: 480_000 });
+        expect(r.reservado).toEqual({ count: 1, value: 400_000 });
+        expect(r.disponivel).toEqual({ count: 2, value: 660_000 });
+        expect(r.permutado).toEqual({ count: 1, value: 350_000 });
+        expect(r.naoVendaveis).toBe(1);
+        expect(r.vendidasSemNegociacao).toBe(1);
+        expect(r.vgvTotal).toBe(480_000 + 400_000 + 660_000);
+    });
+
+    it('comparativoDoVgv: diferença sobre o estudo e % vendido', () => {
+        const r = comparativoDoVgv(2_000_000, vgvDoEspelho(unidades, deals, properties));
+        expect(r).toMatchObject({ estudo: 2_000_000, espelho: 1_540_000, vendido: 480_000, aVender: 1_060_000, diferenca: -460_000 });
+        expect(r.vendidoDoEstudo).toBeCloseTo(0.24);
+        expect(comparativoDoVgv(0, vgvDoEspelho([], [], [])).vendidoDoEstudo).toBeNull();
     });
 });

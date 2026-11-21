@@ -38,6 +38,7 @@ import {
 } from './rentalByEmpreendimento';
 import { rotuloCurtoDaUnidade } from './rentalUnitMirror';
 import { STATUS_LABELS, normalizeStatus, type DealWorkflowStatus } from './dealWorkflow';
+import { diaDeBrasilia } from '../utils/dataDeBrasilia';
 
 export { SEM_EMPREENDIMENTO };
 
@@ -60,6 +61,20 @@ export const saleDealStage = (status?: string | null): SaleDealStage => {
     const s = normalizeStatus((status || 'IN_NEGOTIATION') as DealWorkflowStatus);
     return ETAPAS_VENDIDA.includes(s) ? 'sold' : 'open';
 };
+
+/**
+ * Distrato = cancelamento de uma VENDA (a negociação estava em Contrato, Assinatura ou Concluído —
+ * `cancelled_from_status`, gravado pelo gatilho da migration 20271121994000). Proposta desistida não é
+ * distrato. Decisão D7 (plano 2026-11-21-imovib-oportunidades-consolidacao): a venda continua no mês
+ * original (bruto) e o distrato entra negativo no mês do cancelamento.
+ */
+export const foiDistrato = (d: { status?: string | null; cancelled_from_status?: string | null }): boolean =>
+    d.status === 'CANCELLED' && !!d.cancelled_from_status
+    && ETAPAS_VENDIDA.includes(normalizeStatus(d.cancelled_from_status as DealWorkflowStatus));
+
+/** Mês ('AAAA-MM', em Brasília) do cancelamento; sem data, `null`. */
+const mesDoCancelamento = (d: { cancellation_date?: string | null }): string | null =>
+    d.cancellation_date ? diaDeBrasilia(d.cancellation_date).slice(0, 7) : null;
 
 /** As cinco categorias da composição. Soma = unidades do balde. */
 export type SaleUnitStatus = 'sold' | 'reserved' | 'available' | 'exchanged' | 'other';
@@ -171,6 +186,9 @@ export interface SaleDeal {
     broker_name?: string | null;
     /** Canal de origem ("Direto", "Imobiliária / Corretor"…). */
     origin_channel?: string | null;
+    /** Cancelamento: quando, e de que etapa (distrato = de uma etapa vendida, `foiDistrato`). */
+    cancellation_date?: string | null;
+    cancelled_from_status?: string | null;
 }
 
 export interface SaleClient {
@@ -210,6 +228,9 @@ export interface MonthBucket {
     label: string;
     count: number;
     value: number;
+    /** Só vendas: distratos lançados NESTE mês (pela data do cancelamento). Líquido = value − cancelledValue. */
+    cancelledCount?: number;
+    cancelledValue?: number;
 }
 
 export interface CountValue {
@@ -292,6 +313,8 @@ export interface SalesAnalysisScope {
     /** Uma linha por etapa (Proposta → Concluído), sempre todas. */
     funnel: { status: DealWorkflowStatus; label: string; count: number; value: number }[];
     cancelledCount: number;
+    /** Distratos (cancelamentos de venda, `foiDistrato`): quantos e o valor. */
+    distratos: CountValue;
 
     /** VGV vendido ÷ negociações vendidas. `null` sem venda. */
     ticket: number | null;
@@ -301,7 +324,8 @@ export interface SalesAnalysisScope {
 
     /** Vendas com data da negociação nos últimos 90 dias. */
     sales90: CountValue;
-    /** Últimos 12 meses (o corrente por último), vendas pela data da negociação. */
+    /** Últimos 12 meses (o corrente por último): vendas BRUTAS pela data da negociação (a distratada
+     *  continua no mês dela) e os distratos pelo mês do cancelamento (`cancelledValue`). */
     salesByMonth: MonthBucket[];
     /** Vendas sem data — fora da velocidade. */
     soldWithoutDate: number;
@@ -417,7 +441,8 @@ export const projecaoDeEsgotamento = (
     now: Date = new Date(),
 ): ProjecaoDeEsgotamento => {
     const estoque = scope.unitStatus.available + scope.unitStatus.reserved + scope.unitStatus.other;
-    const vendas12 = scope.salesByMonth.reduce((a, m) => a + m.count, 0);
+    // Velocidade LÍQUIDA (D7): venda distratada não conta como unidade que saiu do estoque.
+    const vendas12 = scope.salesByMonth.reduce((a, m) => a + m.count - (m.cancelledCount ?? 0), 0);
     const vel = Math.max(0, Number(velocidade) || 0);
     const meses = estoque === 0 ? null : vel > 0 ? Math.ceil(estoque / vel) : null;
     const fim = meses == null ? null : new Date(now.getFullYear(), now.getMonth() + meses, 1);
@@ -658,6 +683,24 @@ export const groupSalesAnalysis = (input: GroupSalesAnalysisInput): {
             const i = idxMes.get(monthKey(data));
             if (i != null) somar(salesByMonth[i], valor);
         }
+        // Distrato (D7): a venda fica no mês original (bruto) e o distrato entra no mês do cancelamento.
+        const distratadas = b.deals.filter(foiDistrato);
+        const distratos = vazio();
+        for (const d of distratadas) {
+            const valor = Number(d.value) || 0;
+            somar(distratos, valor);
+            // Sem as duas datas não há como pôr a venda e o estorno nos meses certos: fica fora dos meses.
+            const mesCancel = mesDoCancelamento(d);
+            if (!d.date || !mesCancel) continue;
+            const i = idxMes.get(monthKey(parseDateBR(d.date)));
+            if (i != null) somar(salesByMonth[i], valor);
+            const j = idxMes.get(mesCancel);
+            if (j != null) {
+                const m = salesByMonth[j];
+                m.cancelledCount = (m.cancelledCount ?? 0) + 1;
+                m.cancelledValue = (m.cancelledValue ?? 0) + valor;
+            }
+        }
 
         // Células do espelho.
         const units: SaleMirrorCell[] = b.leaves.map(p => {
@@ -716,6 +759,7 @@ export const groupSalesAnalysis = (input: GroupSalesAnalysisInput): {
             openDealsValue: abertas.reduce((a, d) => a + (Number(d.value) || 0), 0),
             funnel,
             cancelledCount: b.deals.filter(d => d.status === 'CANCELLED').length,
+            distratos,
             ticket: vendidas.length > 0 ? vgvSold / vendidas.length : null,
             discount: {
                 rate: somaTabela > 0 ? somaVenda / somaTabela - 1 : null,
@@ -924,20 +968,36 @@ export const groupSalesByClientType = (input: {
 export function vendasPorMesDoEmpreendimento(
     input: Pick<GroupSalesAnalysisInput, 'properties' | 'deals' | 'empreendimentoByProperty'>,
     empreendimentoId: string,
-): { mes: string; unidades: number; valor: number }[] {
+): { mes: string; unidades: number; valor: number; distratos: number }[] {
     const byId = new Map(input.properties.map(p => [key(p.id), p]));
-    const porMes = new Map<string, { unidades: number; valor: number }>();
+    const porMes = new Map<string, { unidades: number; valor: number; distratos: number }>();
+    const doMes = (mes: string) => {
+        const m = porMes.get(mes) ?? { unidades: 0, valor: 0, distratos: 0 };
+        porMes.set(mes, m);
+        return m;
+    };
     for (const d of input.deals) {
-        if (saleDealStage(d.status) !== 'sold') continue;
+        const distrato = foiDistrato(d);
+        if (saleDealStage(d.status) !== 'sold' && !distrato) continue;
         const mes = /^\d{4}-\d{2}/.exec(d.date ?? '')?.[0];
-        if (!mes) continue;
+        const mesCancel = distrato ? mesDoCancelamento(d) : null;
+        if (distrato && (!mes || !mesCancel)) continue;
         for (const id of unitIdsOf(d)) {
             const imovel = byId.get(key(id));
             if (!imovel || empreendimentoOfProperty(imovel, byId, input.empreendimentoByProperty)?.id !== empreendimentoId) continue;
-            const m = porMes.get(mes) ?? { unidades: 0, valor: 0 };
-            m.unidades += 1;
-            m.valor += parteDaUnidadeNaNegociacao(d, id, byId);
-            porMes.set(mes, m);
+            const parte = parteDaUnidadeNaNegociacao(d, id, byId);
+            // D7: a venda no mês dela (bruto); o distrato, negativo, no mês do cancelamento.
+            if (mes) {
+                const m = doMes(mes);
+                m.unidades += 1;
+                m.valor += parte;
+            }
+            if (distrato && mesCancel) {
+                const c = doMes(mesCancel);
+                c.unidades -= 1;
+                c.valor -= parte;
+                c.distratos += parte;
+            }
         }
     }
     return [...porMes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([mes, v]) => ({ mes, ...v }));
@@ -959,4 +1019,69 @@ export function vendidasSemNegociacao(
         && !classificador.dealOf(p.id)
         && empreendimentoOfProperty(p, byId, input.empreendimentoByProperty)?.id === empreendimentoId,
     ).length;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Espelho de Vendas do empreendimento (Fase 7.2 do plano 2026-11-21-imovib-oportunidades-consolidacao)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Unidade do cadastro do empreendimento (`empreendimento_units`), o mínimo para o VGV. */
+export interface UnidadeDoEspelho {
+    id: string;
+    /** Status do cadastro: DISPONIVEL, RESERVADO, VENDIDO, PERMUTADO. */
+    status?: string | null;
+    /** Preço de tabela. */
+    price?: number | null;
+    /** `false` = garagem, área comum…: fora do VGV. */
+    is_vendavel?: boolean | null;
+    /** Imóvel publicado em Venda de Ativos: com ele, vale o status das negociações. */
+    commercial_property_id?: string | null;
+}
+
+export interface VgvDoEspelho {
+    /** Vendidas COM negociação vendida, pelo valor negociado. */
+    vendido: CountValue;
+    /** Vendidas sem negociação (legado): contam como vendidas, fora do VGV — a mesma regra da Análise. */
+    vendidasSemNegociacao: number;
+    /** Estoque a vender, pelo preço de tabela. */
+    reservado: CountValue;
+    disponivel: CountValue;
+    /** Fora do VGV, mostradas à parte (preço de tabela). */
+    permutado: CountValue;
+    naoVendaveis: number;
+    /** VGV = vendido + reservado + disponível (D6). */
+    vgvTotal: number;
+}
+
+/**
+ * VGV do Espelho de Vendas pela MESMA regra da Análise de Vendas (decisão D6): vendido pelo valor
+ * negociado; reservado e disponível pelo preço de tabela; permutadas e não vendáveis fora do VGV.
+ * Unidade publicada em Venda de Ativos segue o classificador das negociações (`saleUnitClassifier`);
+ * a não publicada, o status do próprio cadastro.
+ */
+export function vgvDoEspelho(unidades: UnidadeDoEspelho[], deals: SaleDeal[], imoveis: SaleProperty[]): VgvDoEspelho {
+    const byId = new Map(imoveis.map(p => [key(p.id), p]));
+    const classificador = saleUnitClassifier(deals);
+    const r: VgvDoEspelho = {
+        vendido: vazio(), vendidasSemNegociacao: 0, reservado: vazio(), disponivel: vazio(),
+        permutado: vazio(), naoVendaveis: 0, vgvTotal: 0,
+    };
+    for (const u of unidades) {
+        if (u.is_vendavel === false) { r.naoVendaveis++; continue; }
+        const tabela = Number(u.price) || 0;
+        const imovel = u.commercial_property_id ? byId.get(key(u.commercial_property_id)) : undefined;
+        const cadastro = statusDoCadastro(u.status);
+        const status: SaleUnitStatus = imovel
+            ? classificador.statusOf(imovel)
+            : cadastro === 'SOLD' ? 'sold' : cadastro === 'RESERVED' ? 'reserved' : cadastro === 'EXCHANGED' ? 'exchanged' : 'available';
+        if (status === 'sold') {
+            const d = imovel ? classificador.dealOf(imovel.id) : undefined;
+            if (d && saleDealStage(d.status) === 'sold') somar(r.vendido, parteDaUnidadeNaNegociacao(d as SaleDeal, imovel!.id, byId));
+            else r.vendidasSemNegociacao++;
+        } else if (status === 'exchanged') somar(r.permutado, tabela);
+        else if (status === 'reserved') somar(r.reservado, tabela);
+        else somar(r.disponivel, tabela);
+    }
+    r.vgvTotal = r.vendido.value + r.reservado.value + r.disponivel.value;
+    return r;
 }

@@ -5,7 +5,8 @@ import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { imovibRealizadoService, type RealizadoDoEstudo } from '../services/imovibRealizadoService';
 import { computeImovibMath } from '../utils/imovibMotor';
-import { compararComRealizado, type MesDoAcompanhamento } from '../utils/imovibAcompanhamento';
+import { compararComRealizado, comparativoDoVgv, type MesDoAcompanhamento } from '../utils/imovibAcompanhamento';
+import { KpiCard } from './ui/KpiCard';
 import { nomeDoMes } from '../utils/imovibCronograma';
 import type { ImovibStudyVersion } from '../utils/imovibVersoes';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
@@ -73,12 +74,14 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
     }, [fonte]);
 
     const previsto = fonte === ATUAL ? study : snapshot;
+    const resultado = useMemo(() => (previsto ? computeImovibMath(previsto) : null), [previsto]);
+    const vgv = useMemo(() => (resultado && dados ? comparativoDoVgv(resultado.vgvTotal, dados.espelho) : null), [resultado, dados]);
     const meses = useMemo<MesDoAcompanhamento[]>(() => {
-        if (!previsto || !dados || !study.base_date) return [];
-        const r = computeImovibMath(previsto);
+        if (!previsto || !resultado || !dados || !study.base_date) return [];
+        const r = resultado;
         // A data-base da versão, se ela tinha uma: é ela que diz qual mês do calendário era o mês 1.
         return compararComRealizado(r.monthlyFlows, previsto.base_date ?? study.base_date, dados.financeiro, dados.vendas, r.vendasPorMes, hojeAnoMes());
-    }, [previsto, dados, study.base_date]);
+    }, [previsto, resultado, dados, study.base_date]);
 
     // Os meses do previsto contam da data-base DELE: a versão congelada pode ter outra
     // (deixado para depois na revisão das pendências — o gráfico usava a do estudo atual).
@@ -137,7 +140,7 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
                         <p className="text-slate-500 text-sm mt-1">
                             {semObra
                                 ? 'O empreendimento não tem obra vinculada nesta organização: só as vendas reais são comparadas. Vincule a obra no cadastro do empreendimento para comparar receitas e custos.'
-                                : `Realizado das obras ${dados.obras.map(o => o.nome).join(', ')}: só lançamentos conciliados. Vendas reais: negociações com contrato, pelo mês da negociação.`}
+                                : `Realizado das obras ${dados.obras.map(o => o.nome).join(', ')}: só lançamentos conciliados. Vendas reais: negociações com contrato, pelo mês da negociação, menos os distratos no mês do cancelamento.`}
                         </p>
                         {!semObra && (
                             <p className="text-slate-500 text-xs mt-1">
@@ -168,6 +171,24 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
                     </label>
                 </div>
             </section>
+
+            {vgv && (
+                <section className="space-y-2" aria-label="VGV do estudo, do espelho e vendido">
+                    <div>
+                        <h3 className="text-sm font-semibold text-gray-700">VGV: estudo × espelho × vendido</h3>
+                        <p className="text-xs text-slate-500">Espelho = vendido pelo valor negociado + estoque (disponível e reservado) pela tabela; permutadas e não vendáveis fora, a mesma regra da Análise de Vendas.</p>
+                    </div>
+                    <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                        <KpiCard size="sm" color="blue" label={fonte === ATUAL ? 'VGV do estudo' : 'VGV da versão'} value={moneyBRL(vgv.estudo)} icon={<Activity />} />
+                        <KpiCard size="sm" color="gray" label="VGV do espelho" value={moneyBRL(vgv.espelho)}
+                            sub={vgv.estudo > 0 ? `${vgv.diferenca >= 0 ? '+' : '−'}${moneyBRL(Math.abs(vgv.diferenca))} sobre o estudo` : undefined} icon={<Activity />} />
+                        <KpiCard size="sm" color="gray" label="Vendido (negociado)" value={moneyBRL(vgv.vendido)}
+                            sub={vgv.vendidoDoEstudo != null ? `${(vgv.vendidoDoEstudo * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% do VGV do estudo` : undefined} icon={<Activity />} />
+                        <KpiCard size="sm" color="gray" label="A vender (tabela)" value={moneyBRL(vgv.aVender)}
+                            sub={dados.espelho.permutado.count > 0 ? `${dados.espelho.permutado.count} permutada(s) fora do VGV` : undefined} icon={<Activity />} />
+                    </div>
+                </section>
+            )}
 
             <div className={`grid grid-cols-1 ${semObra ? '' : 'xl:grid-cols-2'} gap-4`}>
                 {!semObra && (

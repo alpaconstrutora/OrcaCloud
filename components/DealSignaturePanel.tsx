@@ -1,7 +1,33 @@
-import React, { useState } from 'react';
-import { FileSignature, Upload, Send, CheckCircle2, Clock, XCircle, ExternalLink, RefreshCw } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { ExternalLink, FileSignature, FileDown, Loader2, RefreshCw, Send, Upload, XCircle } from 'lucide-react';
 import { signatureService, SignatureSigner } from '../services/signatureService';
-import { PropertyDeal, Client } from '../types';
+import {
+    assinaturaDaVersao, contractDocumentVersionService, motivoNaoEnviaAoPortal,
+} from '../services/contractDocumentVersionService';
+import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../lib/storageAssinado';
+import { PropertyDeal, Client, ContractDocumentVersion } from '../types';
+import { EnviarParaAssinaturaSheet } from './assinatura/EnviarParaAssinaturaSheet';
+import { AcompanharAssinaturaSheet } from './assinatura/AcompanharAssinaturaSheet';
+
+/**
+ * Negociação › Contrato › "Assinatura eletrônica": DOIS caminhos, lado a lado.
+ *   • No portal (sem custo) — assinatura interna sem certificado. Assina uma
+ *     VERSÃO do documento do contrato (a mesma da Emissão), e o "assinado" sobe
+ *     para o contrato pela regra única de _shared/assinaturaPropagar.ts.
+ *   • ZapSign — cobrado por documento, para os mais importantes. Caminho de
+ *     sempre: PDF solto, token na própria negociação.
+ * Até 22/11/2026 este bloco só oferecia o ZapSign (relato do usuário em
+ * Comercial › Locações). Plano: docs/planos/2026-11-21-assinatura-eletronica-interna.md
+ */
+
+type Notify = (msg: string, type?: 'success' | 'error' | 'info') => void;
+
+/** O contrato gerado a partir da negociação — dono das versões que o portal assina. */
+export interface ContratoDaNegociacao {
+    id: string;
+    organization_id: string;
+    number?: string | null;
+}
 
 interface DealSignaturePanelProps {
     deal: Partial<PropertyDeal>;
@@ -12,20 +38,209 @@ interface DealSignaturePanelProps {
     clients?: Client[];
     organizationId: string;
     onStatusChange?: (status: 'PENDING' | 'SIGNED') => void;
+    /** Contrato gerado (null enquanto não há) — a assinatura no portal assina uma versão dele. */
+    contrato?: ContratoDaNegociacao | null;
+    /** Abre "Gerar documento do contrato" (o DealModal sabe). */
+    onGerarDocumento?: () => void;
+    /** Muda quando uma versão nova é gravada — recarrega a lista. */
+    versoesRefreshKey?: number;
+    onNotify: Notify;
 }
+
+type Modo = 'PORTAL' | 'ZAPSIGN';
+
+const MODOS: { id: Modo; label: string }[] = [
+    { id: 'PORTAL', label: 'No portal (sem custo)' },
+    { id: 'ZAPSIGN', label: 'ZapSign' },
+];
+
+const SUBTITULO: Record<Modo, string> = {
+    PORTAL: 'Sem custo por documento: cada signatário assina pelo portal ou por link, com código por e-mail, CPF e aceite.',
+    ZAPSIGN: 'Cobrado por documento no ZapSign — para os contratos mais importantes.',
+};
+
+/** Status da assinatura ZapSign da negociação — texto colorido (§8). */
+const STATUS_ZAPSIGN = {
+    PENDING: { label: 'Aguardando assinatura', cor: 'text-amber-600' },
+    SIGNED: { label: 'Assinado', cor: 'text-emerald-600' },
+    REFUSED: { label: 'Recusado', cor: 'text-red-600' },
+} as const;
+
+const inputCls = 'w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/30';
+const btnPrimario = 'flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none';
+const btnSecundario = 'flex items-center gap-1.5 h-9 px-3 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all disabled:opacity-50';
+
+/** Versão que abre escolhida: a que está em assinatura; senão a última emitida
+ *  do tipo Contrato; senão a última emitida; senão a mais recente. */
+function versaoPadrao(vs: ContractDocumentVersion[]): ContractDocumentVersion | undefined {
+    return vs.find(v => v.assinatura_envelope_id && v.signature_status === 'SENT')
+        ?? vs.find(v => v.emitted && v.kind === 'CONTRATO')
+        ?? vs.find(v => v.emitted)
+        ?? vs[0];
+}
+
+const KIND: Record<string, string> = { MINUTA: 'minuta', CONTRATO: 'contrato', ADITIVO: 'aditivo', ANEXO: 'anexo' };
+
+// ─── No portal (sem custo) ──────────────────────────────────────────────────
+
+function AssinaturaNoPortal({ contrato, dealId, onGerarDocumento, versoesRefreshKey, onNotify }: {
+    contrato: ContratoDaNegociacao | null;
+    dealId?: string;
+    onGerarDocumento?: () => void;
+    versoesRefreshKey?: number;
+    onNotify: Notify;
+}) {
+    const [versoes, setVersoes] = useState<ContractDocumentVersion[] | null>(null);
+    const [erro, setErro] = useState<string | null>(null);
+    const [escolhida, setEscolhida] = useState('');
+    const [enviando, setEnviando] = useState(false);
+    const [acompanhando, setAcompanhando] = useState(false);
+
+    const notifyRef = useRef(onNotify);
+    notifyRef.current = onNotify;
+
+    const contratoId = contrato?.id ?? null;
+    const carregar = useCallback(async () => {
+        if (!contratoId) { setVersoes([]); return; }
+        setErro(null);
+        try {
+            const vs = await contractDocumentVersionService.listByOwner('CONTRACT', contratoId);
+            setVersoes(vs);
+            setEscolhida(atual => (vs.some(v => v.id === atual) ? atual : versaoPadrao(vs)?.id ?? ''));
+        } catch (e) {
+            setErro(`Não foi possível carregar os documentos do contrato${e instanceof Error ? `: ${e.message}` : '.'}`);
+            setVersoes([]);
+        }
+    }, [contratoId]);
+
+    useEffect(() => { void carregar(); }, [carregar, versoesRefreshKey]);
+
+    if (!contrato) {
+        return (
+            <p className="text-sm text-gray-600">
+                Gere o contrato acima: a assinatura no portal assina a versão emitida do documento do contrato.
+            </p>
+        );
+    }
+    if (versoes === null) {
+        return <p className="flex items-center gap-2 text-sm text-gray-500"><Loader2 className="w-4 h-4 animate-spin" /> Carregando documentos do contrato…</p>;
+    }
+    if (erro) return <p className="text-sm text-red-600">{erro}</p>;
+    if (versoes.length === 0) {
+        return (
+            <div className="space-y-3">
+                <p className="text-sm text-gray-600">O contrato ainda não tem documento. Gere o documento, emita a versão e envie para assinatura.</p>
+                {onGerarDocumento && (
+                    <button type="button" onClick={onGerarDocumento} className={btnSecundario}>
+                        <FileDown className="w-[15px] h-[15px]" /> Gerar documento do contrato
+                    </button>
+                )}
+            </div>
+        );
+    }
+
+    const v = versoes.find(x => x.id === escolhida) ?? versoes[0];
+    const status = assinaturaDaVersao(v);
+    const motivo = motivoNaoEnviaAoPortal(v);
+    const rotulo = `Contrato${contrato.number ? ` ${contrato.number}` : ''}`;
+    const titulo = `${rotulo} — ${v.name || 'Documento'} (v${v.v})`;
+
+    return (
+        <div className="space-y-3">
+            <div className="space-y-1.5 max-w-xl">
+                <label htmlFor="assinar-versao" className="text-xs font-semibold text-slate-500">Documento</label>
+                <select id="assinar-versao" value={v.id} onChange={e => setEscolhida(e.target.value)} className={inputCls}>
+                    {versoes.map(x => (
+                        <option key={x.id} value={x.id}>
+                            {`v${x.v} — ${x.name || 'Documento'} (${KIND[x.kind] ?? x.kind}${x.emitted ? '' : ', não emitida'})`}
+                        </option>
+                    ))}
+                </select>
+            </div>
+
+            <p className="text-sm">
+                <span className="text-gray-600">Assinatura: </span>
+                {status
+                    ? <span className={status.cor}>{status.texto}</span>
+                    : <span className="text-gray-800">não enviada</span>}
+            </p>
+            {v.kind !== 'CONTRATO' && (
+                <p className="text-sm text-gray-600">
+                    Esta versão é {KIND[v.kind] ? `uma ${KIND[v.kind]}` : v.kind}: assinada, fica registrada nela; o status do contrato
+                    só muda com a versão do tipo contrato.
+                </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-2">
+                {v.assinatura_envelope_id ? (
+                    <button type="button" onClick={() => setAcompanhando(true)} className={btnSecundario}>
+                        <FileSignature className="w-[15px] h-[15px]" /> Acompanhar assinatura
+                    </button>
+                ) : (
+                    <span title={motivo ?? undefined} className="inline-flex">
+                        <button type="button" disabled={!!motivo} onClick={() => setEnviando(true)} className={btnPrimario}>
+                            <Send className="w-[15px] h-[15px]" /> Enviar para assinatura
+                        </button>
+                    </span>
+                )}
+                <button
+                    type="button"
+                    className={btnSecundario}
+                    onClick={() => abrirArquivoAssinado(BUCKET_DOCUMENTOS, v.storage_path || v.url)
+                        .catch(e => notifyRef.current(e instanceof Error ? e.message : 'Não foi possível abrir o documento.', 'error'))}
+                >
+                    <ExternalLink className="w-[15px] h-[15px]" /> Abrir documento
+                </button>
+            </div>
+            {/* Botão desligado diz o motivo — também à vista, não só no title. */}
+            {!v.assinatura_envelope_id && motivo && <p className="text-sm text-amber-700">{motivo}.</p>}
+
+            <EnviarParaAssinaturaSheet
+                aberto={enviando}
+                onFechar={() => setEnviando(false)}
+                origem={enviando ? { tipo: 'CDV', id: v.id } : null}
+                titulo={titulo}
+                organizationId={contrato.organization_id}
+                contractId={contrato.id}
+                dealId={dealId}
+                onEnviado={async r => {
+                    const semEmail = r.signatarios.filter(s => !s.email_enviado);
+                    setEnviando(false);
+                    await carregar();
+                    onNotify(semEmail.length
+                        ? `Enviado, mas o e-mail não saiu para: ${semEmail.map(s => s.nome).join(', ')}.`
+                        : `Enviado para ${r.signatarios.length} signatário${r.signatarios.length > 1 ? 's' : ''}.`,
+                        semEmail.length ? 'error' : 'success');
+                }}
+            />
+            <AcompanharAssinaturaSheet
+                aberto={acompanhando}
+                onFechar={() => setAcompanhando(false)}
+                origem={acompanhando ? { tipo: 'CDV', id: v.id } : null}
+                titulo={titulo}
+                onAbrirAssinado={v.signed_file_url ? () => {
+                    abrirArquivoAssinado(BUCKET_DOCUMENTOS, v.signed_file_url)
+                        .catch(e => notifyRef.current(e instanceof Error ? e.message : 'Não foi possível abrir o documento.', 'error'));
+                } : undefined}
+                onMudou={() => { void carregar(); }}
+                onNotify={onNotify}
+            />
+        </div>
+    );
+}
+
+// ─── ZapSign ────────────────────────────────────────────────────────────────
 
 /** Linha editável de um signatário — nasce do cadastro do cliente. */
 interface SignerRow { name: string; email: string; phone: string; }
 
-const STATUS_CONFIG = {
-    PENDING: { label: 'Aguardando Assinatura', icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200' },
-    SIGNED:  { label: 'Assinado', icon: CheckCircle2, color: 'text-emerald-600', bg: 'bg-emerald-50', border: 'border-emerald-200' },
-    REFUSED: { label: 'Recusado', icon: XCircle, color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200' },
-} as const;
-
-const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, clients, organizationId, onStatusChange }) => {
+function AssinaturaZapSign({ deal, people, organizationId, onStatusChange }: {
+    deal: Partial<PropertyDeal>;
+    people: Client[];
+    organizationId: string;
+    onStatusChange?: (status: 'PENDING' | 'SIGNED') => void;
+}) {
     const [file, setFile] = useState<File | null>(null);
-    const people = (clients && clients.length > 0) ? clients : (client ? [client] : []);
     const [signerRows, setSignerRows] = useState<SignerRow[]>(() =>
         people.length > 0
             ? people.map(p => ({ name: p.name || 'Cliente', email: p.email || '', phone: p.phone || '' }))
@@ -85,116 +300,120 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, c
         }
     };
 
-    const statusCfg = currentStatus ? STATUS_CONFIG[currentStatus] : null;
+    const statusCfg = currentStatus ? STATUS_ZAPSIGN[currentStatus] : null;
 
-    return (
-        <div className="space-y-4 p-5 bg-purple-50 border border-purple-100 rounded-2xl">
-            <div className="flex items-center gap-3">
-                <div className="p-2 bg-purple-600 rounded-xl text-white">
-                    <FileSignature className="w-4 h-4" />
-                </div>
-                <div>
-                    <h4 className="text-sm font-black text-purple-900">Assinatura Eletrônica</h4>
-                    <p className="text-xs text-purple-600">Powered by ZapSign — validade jurídica garantida</p>
-                </div>
+    if (signatureToken) {
+        return (
+            <div className="space-y-3">
                 {statusCfg && (
-                    <div className={`ml-auto flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold border ${statusCfg.bg} ${statusCfg.color} ${statusCfg.border}`}>
-                        <statusCfg.icon className="w-3.5 h-3.5" />
-                        {statusCfg.label}
-                    </div>
+                    <p className="text-sm"><span className="text-gray-600">Assinatura: </span><span className={statusCfg.cor}>{statusCfg.label}</span></p>
                 )}
-            </div>
-
-            {/* Já foi enviado */}
-            {signatureToken ? (
-                <div className="space-y-3">
+                <div className="flex flex-wrap items-center gap-2">
                     {signUrl && (
-                        <a
-                            href={signUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="flex items-center gap-2 px-4 py-2.5 bg-purple-600 text-white text-xs font-bold rounded-xl hover:bg-purple-700 transition-all w-fit"
-                        >
-                            <ExternalLink className="w-3.5 h-3.5" />
-                            Abrir Link de Assinatura
+                        <a href={signUrl} target="_blank" rel="noopener noreferrer" className={btnSecundario}>
+                            <ExternalLink className="w-[15px] h-[15px]" /> Abrir link de assinatura
                         </a>
                     )}
                     {currentStatus !== 'SIGNED' && (
-                        <button
-                            onClick={handleCheckStatus}
-                            disabled={checking}
-                            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-purple-200 text-purple-700 text-button font-bold rounded-xl hover:bg-purple-50 transition-all"
-                        >
-                            <RefreshCw className={`w-3.5 h-3.5 ${checking ? 'animate-spin' : ''}`} />
-                            Verificar Status
+                        <button type="button" onClick={handleCheckStatus} disabled={checking} className={btnSecundario}>
+                            <RefreshCw className={`w-[15px] h-[15px] ${checking ? 'animate-spin' : ''}`} /> Verificar status
                         </button>
                     )}
                 </div>
-            ) : (
-                /* Formulário de envio */
-                <div className="space-y-3">
-                    <div>
-                        <label className="block text-xs font-semibold text-purple-700 mb-1">Contrato (PDF)</label>
-                        <label className="flex items-center gap-3 px-4 py-3 bg-white border border-purple-200 rounded-xl cursor-pointer hover:border-purple-400 transition-all">
-                            <Upload className="w-4 h-4 text-purple-500 shrink-0" />
-                            <span className="text-xs font-bold text-purple-700 truncate">
-                                {file ? file.name : 'Selecionar arquivo PDF...'}
-                            </span>
-                            <input
-                                type="file"
-                                accept=".pdf"
-                                className="hidden"
-                                onChange={(e) => setFile(e.target.files?.[0] || null)}
-                            />
-                        </label>
-                    </div>
+            </div>
+        );
+    }
 
-                    {/* Um signatário por comprador — todos assinam. */}
-                    {signerRows.map((row, i) => (
-                        <div key={i} className="space-y-1.5">
-                            {signerRows.length > 1 && (
-                                <p className="text-xs font-semibold text-purple-800">{i + 1}. {row.name}</p>
-                            )}
-                            <div className="grid grid-cols-2 gap-3">
-                                <div>
-                                    <label className="block text-xs font-semibold text-purple-700 mb-1">E-mail do signatário</label>
-                                    <input
-                                        type="email"
-                                        value={row.email}
-                                        onChange={(e) => setSigner(i, { email: e.target.value })}
-                                        placeholder="email@cliente.com"
-                                        className="w-full px-3 h-9 bg-white border border-purple-200 rounded-[6px] text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-semibold text-purple-700 mb-1">WhatsApp (opcional)</label>
-                                    <input
-                                        type="tel"
-                                        value={row.phone}
-                                        onChange={(e) => setSigner(i, { phone: e.target.value })}
-                                        placeholder="(11) 99999-9999"
-                                        className="w-full px-3 h-9 bg-white border border-purple-200 rounded-[6px] text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
-                                    />
-                                </div>
-                            </div>
+    return (
+        <div className="space-y-3">
+            <div className="space-y-1.5">
+                <span className="text-xs font-semibold text-slate-500">Contrato (PDF)</span>
+                <label className="flex items-center gap-2 px-3 h-9 bg-white border border-gray-200 rounded-[6px] cursor-pointer hover:border-blue-400 transition-all">
+                    <Upload className="w-4 h-4 text-gray-500 shrink-0" />
+                    <span className="text-sm text-gray-700 truncate">{file ? file.name : 'Selecionar arquivo PDF…'}</span>
+                    <input type="file" accept=".pdf" className="hidden" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                </label>
+            </div>
+
+            {/* Um signatário por comprador — todos assinam. */}
+            {signerRows.map((row, i) => (
+                <div key={i} className="space-y-1.5">
+                    {signerRows.length > 1 && <p className="text-sm font-medium text-gray-800">{i + 1}. {row.name}</p>}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                            <label htmlFor={`zs-email-${i}`} className="text-xs font-semibold text-slate-500">E-mail do signatário</label>
+                            <input id={`zs-email-${i}`} type="email" value={row.email} onChange={(e) => setSigner(i, { email: e.target.value })}
+                                placeholder="email@cliente.com" className={inputCls} />
                         </div>
-                    ))}
-
-                    {error && (
-                        <p className="text-xs font-bold text-red-600 flex items-center gap-1.5">
-                            <XCircle className="w-3.5 h-3.5 shrink-0" />{error}
-                        </p>
-                    )}
-
-                    <button
-                        onClick={handleSend}
-                        disabled={loading}
-                        className="flex items-center gap-2 px-5 py-2.5 bg-purple-600 text-white text-button font-black rounded-xl hover:bg-purple-700 transition-all disabled:opacity-50 uppercase tracking-wide shadow-md shadow-purple-900/10"
-                    >
-                        <Send className="w-3.5 h-3.5" />
-                        {loading ? 'Enviando...' : 'Enviar para Assinatura'}
-                    </button>
+                        <div className="space-y-1.5">
+                            <label htmlFor={`zs-fone-${i}`} className="text-xs font-semibold text-slate-500">WhatsApp (opcional)</label>
+                            <input id={`zs-fone-${i}`} type="tel" value={row.phone} onChange={(e) => setSigner(i, { phone: e.target.value })}
+                                placeholder="(11) 99999-9999" className={inputCls} />
+                        </div>
+                    </div>
                 </div>
+            ))}
+
+            {error && (
+                <p className="text-sm text-red-600 flex items-center gap-1.5"><XCircle className="w-4 h-4 shrink-0" />{error}</p>
+            )}
+
+            <button type="button" onClick={handleSend} disabled={loading} className={btnPrimario}>
+                <Send className="w-[15px] h-[15px]" /> {loading ? 'Enviando…' : 'Enviar para assinatura'}
+            </button>
+        </div>
+    );
+}
+
+// ─── Painel ─────────────────────────────────────────────────────────────────
+
+const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({
+    deal, client, clients, organizationId, onStatusChange, contrato = null, onGerarDocumento, versoesRefreshKey, onNotify,
+}) => {
+    const people = (clients && clients.length > 0) ? clients : (client ? [client] : []);
+    // Negociação que já foi ao ZapSign abre nele; o resto abre no portal (sem custo).
+    const [modo, setModo] = useState<Modo>((deal as any).signature_token ? 'ZAPSIGN' : 'PORTAL');
+
+    return (
+        <div className="space-y-4 p-5 bg-white border border-gray-200 rounded-[10px] shadow-sm">
+            <div className="flex items-start gap-3">
+                <div className="p-2 bg-blue-50 rounded-[6px] text-blue-600 shrink-0">
+                    <FileSignature className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                    <h4 className="text-sm font-bold text-gray-900">Assinatura eletrônica</h4>
+                    <p className="text-sm text-gray-600">{SUBTITULO[modo]}</p>
+                </div>
+            </div>
+
+            {/* Escolha do caminho — trilho §19.1. */}
+            <div role="tablist" aria-label="Como assinar" className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit">
+                {MODOS.map(m => (
+                    <button
+                        key={m.id}
+                        type="button"
+                        role="tab"
+                        aria-selected={modo === m.id}
+                        onClick={() => setModo(m.id)}
+                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            modo === m.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                        }`}
+                    >
+                        {m.label}
+                    </button>
+                ))}
+            </div>
+
+            {modo === 'PORTAL' ? (
+                <AssinaturaNoPortal
+                    contrato={contrato}
+                    dealId={deal.id}
+                    onGerarDocumento={onGerarDocumento}
+                    versoesRefreshKey={versoesRefreshKey}
+                    onNotify={onNotify}
+                />
+            ) : (
+                <AssinaturaZapSign deal={deal} people={people} organizationId={organizationId} onStatusChange={onStatusChange} />
             )}
         </div>
     );

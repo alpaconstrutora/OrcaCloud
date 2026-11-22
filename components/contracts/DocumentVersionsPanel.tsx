@@ -4,7 +4,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
-import { contractDocumentVersionService } from '../../services/contractDocumentVersionService';
+import { assinaturaDaVersao as assinaturaDe, contractDocumentVersionService, motivoNaoEnviaAoPortal } from '../../services/contractDocumentVersionService';
 import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
 import { ContractDocumentVersion, DocumentKind, DocumentOwnerType, DocumentSource } from '../../types';
 import { EnviarParaAssinaturaSheet } from '../assinatura/EnviarParaAssinaturaSheet';
@@ -56,28 +56,6 @@ const COLUMNS: StandardTableColumn[] = [
     // Assinatura: ZapSign (signature_token) ou no portal (assinatura interna, envelope).
     { key: 'assinatura', label: 'Assinatura', sortable: true, width: 170 },
 ];
-
-const ROTULO_ASSINATURA: Record<string, { texto: string; cor: string }> = {
-    PENDING: { texto: 'Pendente', cor: 'text-amber-600' },
-    SENT: { texto: 'Aguardando', cor: 'text-amber-600' },
-    SIGNED: { texto: 'Assinada', cor: 'text-emerald-600' },
-    EXPIRED: { texto: 'Prazo vencido', cor: 'text-red-600' },
-    CANCELLED: { texto: 'Cancelada', cor: 'text-gray-500' },
-};
-const assinaturaDe = (v: ContractDocumentVersion) => {
-    if (!v.signature_status) return null;
-    const r = ROTULO_ASSINATURA[v.signature_status] ?? { texto: v.signature_status, cor: 'text-gray-600' };
-    const onde = v.signature_provider === 'PORTAL' || v.assinatura_envelope_id ? 'portal' : 'ZapSign';
-    return { ...r, texto: `${r.texto} (${onde})` };
-};
-/** Por que a versão não pode ir para a assinatura no portal — `null` quando pode. */
-const motivoNaoEnviaAoPortal = (v: ContractDocumentVersion): string | null => {
-    if (!v.emitted) return 'Emita a versão antes de enviar para assinatura';
-    if (v.signature_status === 'SIGNED') return 'Versão já assinada';
-    if (v.signature_token && (v.signature_status === 'SENT' || v.signature_status === 'PENDING')) return 'Versão enviada ao ZapSign';
-    if (v.assinatura_envelope_id && v.signature_status === 'SENT') return 'Assinatura no portal em andamento';
-    return null;
-};
 
 const inputCls = 'w-full h-9 px-3 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all';
 

@@ -5443,6 +5443,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     client={selectedClient}
                                     clients={isMultiBuyer ? buyerClients : undefined}
                                     organizationId={formData.organization_id || organizationId || ''}
+                                    contrato={linkedContract ? { id: linkedContract.id, organization_id: linkedContract.organization_id, number: linkedContract.number } : null}
+                                    onGerarDocumento={linkedContract ? () => setEmitOpen(true) : undefined}
+                                    versoesRefreshKey={docsRefreshKey}
+                                    onNotify={(m, tipo) => (tipo === 'error' ? notifyError(m) : notifySuccess(m))}
                                     onStatusChange={(sigStatus: 'PENDING' | 'SIGNED') => {
                                         // O painel lê o status da assinatura de fora (provedor) — é fato, não edição.
                                         ajustarDoSistema(prev => ({ ...prev, signature_status: sigStatus }));

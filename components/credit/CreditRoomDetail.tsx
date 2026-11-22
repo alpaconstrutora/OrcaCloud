@@ -158,7 +158,6 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         () => versoes.find(v => v.id === room.activeVersionId) ?? versoes[0] ?? null,
         [versoes, room.activeVersionId],
     );
-
     const calcularPrevia = React.useCallback(async (dataBase?: string) => {
         const minha = ++geracaoPrevia.current;
         setPreviaEst({ status: 'carregando' });

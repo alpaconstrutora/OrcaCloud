@@ -119,3 +119,19 @@ export function montarCarteira(
         .sort((a, b) => b.valor_contrato - a.valor_contrato)
         .map((x, i) => ({ rotulo: rotuloMascarado(tipo, i + 1), ...x })));
 }
+
+// ── Situação do contrato (texto) ─────────────────────────────────────────────
+
+const SITUACAO_PT: Record<string, string> = {
+    EM_DIA: 'Em dia', EM_ATRASO: 'Em atraso', QUITADO: 'Quitado', ENCERRADO: 'Encerrado',
+};
+
+/**
+ * Texto da situação de um contrato da carteira congelada — o mesmo na tela
+ * (Empreendimentos e contratos) e no book em PDF. Locação sem títulos gerados é
+ * normal: o aluguel vem do contrato (não é alerta); venda sem parcelas é furo de cadastro.
+ */
+export function textoDaSituacao(c: Pick<SnapshotContrato, 'tipo' | 'status' | 'tem_parcelas'>): string {
+    if (!c.tem_parcelas) return c.tipo === 'LOCACAO' ? 'aluguel pelo contrato' : 'sem parcelas geradas';
+    return SITUACAO_PT[c.status] ?? (c.status ? c.status.toLowerCase().replace(/_/g, ' ') : '—');
+}

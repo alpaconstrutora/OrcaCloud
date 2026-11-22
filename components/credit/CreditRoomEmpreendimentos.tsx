@@ -12,6 +12,7 @@ import {
 import type { CreditRoomDocument, CreditRoomVersion } from '../../types/creditRoom';
 import type { SnapshotContrato, SnapshotEmpreendimentoItem } from '../../utils/creditRoomSnapshot';
 import { ROTULO_DO_OBJETIVO } from '../../utils/empreendimentoObjetivo';
+import { textoDaSituacao } from '../../utils/creditRoomCarteira';
 
 /**
  * Aba "Empreendimentos e contratos" de uma VERSÃO congelada do Credit Room.
@@ -78,24 +79,26 @@ const TIPO_PT: Record<TipoContrato, string> = { VENDA: 'Venda', LOCACAO: 'Locaç
 
 interface Situacao { texto: string; cor: string; tom: PillTone }
 type CorDaSituacao = 'bom' | 'negativo' | 'info' | 'mudo';
-const SITUACAO: Record<string, { texto: string; cor: CorDaSituacao; tom: PillTone }> = {
-    EM_DIA: { texto: 'Em dia', cor: 'bom', tom: 'good' },
-    EM_ATRASO: { texto: 'Em atraso', cor: 'negativo', tom: 'accent' },
-    QUITADO: { texto: 'Quitado', cor: 'info', tom: 'info' },
-    ENCERRADO: { texto: 'Encerrado', cor: 'mudo', tom: 'muted' },
+// O texto vem de `textoDaSituacao` (o book em PDF diz o mesmo); aqui só cor e tom.
+const SITUACAO: Record<string, { cor: CorDaSituacao; tom: PillTone }> = {
+    EM_DIA: { cor: 'bom', tom: 'good' },
+    EM_ATRASO: { cor: 'negativo', tom: 'accent' },
+    QUITADO: { cor: 'info', tom: 'info' },
+    ENCERRADO: { cor: 'mudo', tom: 'muted' },
 };
 
 function situacaoDe(c: SnapshotContrato, A: Paleta): Situacao {
+    const texto = textoDaSituacao(c);
     if (!c.tem_parcelas) {
         // Locação sem títulos gerados é normal: o aluguel vem do contrato. Texto neutro, não alerta.
         // ('muted', não 'neutral': no kit o tom `neutral` é o âmbar.)
-        if (c.tipo === 'LOCACAO') return { texto: 'aluguel pelo contrato', cor: A.texto, tom: 'muted' };
+        if (c.tipo === 'LOCACAO') return { texto, cor: A.texto, tom: 'muted' };
         // Ramo defensivo: venda sem parcelas não nasce hoje, mas se nascer é furo de cadastro (âmbar).
-        return { texto: 'sem parcelas geradas', cor: A.atencao, tom: 'neutral' };
+        return { texto, cor: A.atencao, tom: 'neutral' };
     }
     const m = SITUACAO[c.status];
-    if (m) return { texto: m.texto, cor: A[m.cor], tom: m.tom };
-    return { texto: c.status ? c.status.toLowerCase().replace(/_/g, ' ') : '—', cor: A.mudo, tom: 'muted' };
+    if (m) return { texto, cor: A[m.cor], tom: m.tom };
+    return { texto, cor: A.mudo, tom: 'muted' };
 }
 
 interface LinhaContrato extends SnapshotContrato {

@@ -28,6 +28,7 @@
  */
 
 import { round2 } from './financialMath';
+import { formatMoney } from '../components/ui/Format';
 import { buildSchedule } from './debtAmortization';
 import { wale, type LeaseContract } from '../lib/rentalExecutive';
 import { ratio, ratioPct, type CreditRoomSnapshot, type SnapshotCapacidade } from './creditRoomSnapshot';
@@ -758,6 +759,69 @@ export const ALERTA_PT: Record<TipoAlerta, { titulo: string; comoResolver: strin
         comoResolver: 'Vincule o empreendimento ao título a receber, no lançamento do financeiro; sem ele, o valor não entra no escopo da operação.',
     },
 };
+
+const vezesBR = (v: number | null | undefined): string =>
+    v == null ? '—' : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}×`;
+
+/**
+ * As frases da capacidade que a tela (F2) e o book em PDF (F3) dizem IGUAIS:
+ * rótulo do DSCR (pós-operação quando a série tem o serviço da operação
+ * pedida), "sobre a dívida atual" e a comparação do pedido com o valor máximo.
+ * Uma redação só — o banco não pode ler duas versões da mesma conta.
+ */
+export interface TextosDaCapacidade {
+    semSerie: boolean;
+    /** A série tem serviço da operação pedida: o DSCR e a folga são pós-operação. */
+    comOperacao: boolean;
+    rotuloDscr: string;
+    /** 'com a operação pedida de R$ X' — `null` sem serviço da operação. */
+    apoioOperacao: string | null;
+    /** 'pedido R$ X acima/dentro do máximo' — `null` sem pedido ou sem série. */
+    comparacaoPedido: string | null;
+    hintMaximo: string;
+    hintDscr: string | undefined;
+    hintFolga: string | undefined;
+    /** Frase inteira que explica que o valor máximo não inclui o pedido. */
+    notaMaximo: string | null;
+}
+
+export function textosDaCapacidade(c: SnapshotCapacidade, resumo: ResumoCapacidade, pedido: number): TextosDaCapacidade {
+    const money = (v: number | null | undefined) => (v == null ? '—' : formatMoney(v));
+    const semSerie = c.serie.length === 0;
+    const comOperacao = c.serie.some(m => m.servico_novo > 0);
+    const dscrExigido = c.parametros.dscr_minimo;
+    const apoioOperacao = comOperacao ? `com a operação pedida${pedido > 0 ? ` de ${money(pedido)}` : ''}` : null;
+    // A comparação com o pedido vai PRIMEIRO: a dica do KPI corta no fim (KpiStrip do portal),
+    // e é ela que desfaz a aparente contradição com o DSCR pós-operação.
+    const comparacaoPedido = !semSerie && pedido > 0
+        ? `pedido ${money(pedido)} ${pedido > c.capacidade_maxima.valor_maximo ? 'acima do máximo' : 'dentro do máximo'}`
+        : null;
+    const hintMaximo = semSerie ? 'sem meses projetados nesta versão' : [
+        comparacaoPedido,
+        'sobre a dívida atual',
+        `parcela máx. ${money(c.capacidade_maxima.parcela_maxima)}`,
+        `DSCR ≥ ${vezesBR(dscrExigido)}`,
+    ].filter(Boolean).join(' · ');
+    return {
+        semSerie, comOperacao,
+        rotuloDscr: comOperacao ? 'DSCR mínimo 12m (pós-operação)' : 'DSCR mínimo 12m',
+        apoioOperacao, comparacaoPedido, hintMaximo,
+        hintDscr: [
+            apoioOperacao,
+            resumo.dscr_minimo_12m == null ? 'sem serviço da dívida'
+                : resumo.dscr_minimo_12m < dscrExigido ? `abaixo dos ${vezesBR(dscrExigido)} exigidos` : null,
+        ].filter(Boolean).join(' · ') || undefined,
+        hintFolga: [
+            apoioOperacao ? 'com a operação pedida' : null,
+            resumo.mes_folga_minima
+                ? `${rotuloDoMes(resumo.mes_folga_minima)}${resumo.folga_minima_12m != null && resumo.folga_minima_12m < 0 ? ' · mês no vermelho' : ''}`
+                : null,
+        ].filter(Boolean).join(' · ') || undefined,
+        notaMaximo: comparacaoPedido
+            ? `valor máximo calculado sobre a dívida atual; o ${comparacaoPedido}${comOperacao ? ', e o DSCR pós-operação já o inclui' : ''}`
+            : null,
+    };
+}
 
 const MESES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 

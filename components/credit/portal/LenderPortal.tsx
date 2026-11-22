@@ -2,6 +2,8 @@ import React from 'react';
 import { Banknote, Building2, ChevronDown, ClipboardList, Download, FileText, History, LayoutDashboard, LogOut, MessageSquare, Scale, ShieldCheck, TrendingUp } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { creditRoomService } from '../../../services/creditRoomService';
+import { creditRoomBookService } from '../../../services/creditRoomBookService';
+import { formatDateTimeBR } from '../../ui/Format';
 import {
     CREDIT_ROOM_STATUS_PT,
     type CreditRoom,
@@ -9,7 +11,7 @@ import {
     type CreditRoomVersion,
     type MyCreditRoomMembership,
 } from '../../../types/creditRoom';
-import { CardHeader, fmtDate, GhostButton, PortalCard, PortalEmpty, PortalLoading, StatusPill, Td, Th, type PillTone } from '../../portal/PortalKit';
+import { CardHeader, fmtDate, GhostButton, PortalCard, PortalEmpty, PortalLoading, SoftButton, StatusPill, Td, Th, type PillTone } from '../../portal/PortalKit';
 import CreditRoomFunding from '../CreditRoomFunding';
 import CreditRoomIndicators from '../CreditRoomIndicators';
 import CreditRoomCapacity from '../CreditRoomCapacity';
@@ -196,7 +198,7 @@ const LenderPortalInner: React.FC<Props> = ({ userEmail, onLogout }) => {
                             />
                         </PortalCard>
                     ) : (
-                        <RoomView atual={atual} aba={aba} />
+                        <RoomView atual={atual} aba={aba} userEmail={userEmail} />
                     )}
                 </div>
             </div>
@@ -220,13 +222,14 @@ const LenderPortalInner: React.FC<Props> = ({ userEmail, onLogout }) => {
 
 // ── Conteúdo de um room ──────────────────────────────────────────────────────
 
-const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMembership }; aba: Aba }> = ({ atual, aba }) => {
+const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMembership }; aba: Aba; userEmail: string }> = ({ atual, aba, userEmail }) => {
     const { room, membership } = atual;
     const [versoes, setVersoes] = React.useState<CreditRoomVersion[]>([]);
     const [versaoVista, setVersaoVista] = React.useState<CreditRoomVersion | null>(null);
     const [documentos, setDocumentos] = React.useState<CreditRoomDocument[]>([]);
     const [carregando, setCarregando] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
+    const [gerandoBook, setGerandoBook] = React.useState(false);
 
     React.useEffect(() => {
         let vivo = true;
@@ -268,6 +271,24 @@ const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMe
         }
     };
 
+    // Book em PDF da versão liberada (congelada, nunca o dado vivo), com marca d'água de quem baixou.
+    const baixarBook = async () => {
+        if (!ativa || gerandoBook) return;
+        setGerandoBook(true);
+        setErro(null);
+        try {
+            await creditRoomBookService.baixar(room, ativa, {
+                marcaDagua: `${userEmail} · ${formatDateTimeBR(new Date())}`,
+                documentos: creditRoomBookService.documentosDoIndice(documentos, ativa),
+            });
+            await creditRoomService.log(room, 'DOWNLOAD', 'book', ativa.id, {}, 'CREDOR');
+        } catch (e) {
+            setErro(e instanceof Error ? e.message : 'Não foi possível gerar o book.');
+        } finally {
+            setGerandoBook(false);
+        }
+    };
+
     if (carregando) return <PortalLoading />;
 
     return (
@@ -283,14 +304,25 @@ const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMe
                         <h2 className="text-lg font-semibold text-[#1F2430] tracking-tight truncate mt-0.5">{room.name}</h2>
                         {room.purpose && <p className="text-[13px] text-[#8A8F9A] mt-0.5">{room.purpose}</p>}
                     </div>
-                    <div className="text-[13px] text-[#8A8F9A] md:text-right shrink-0">
-                        {ativa ? (
-                            <>
-                                <div>Versão <span className="font-semibold text-[#1F2430]">V{ativa.versionNo}</span>{ativa.label ? ` · ${ativa.label}` : ''}</div>
-                                <div>Posição de <span className="font-semibold text-[#1F2430]">{fmtDate(ativa.dataBase)}</span></div>
-                            </>
-                        ) : (
-                            <div>A empresa ainda não liberou uma versão.</div>
+                    <div className="flex flex-col md:items-end gap-2 shrink-0">
+                        <div className="text-[13px] text-[#8A8F9A] md:text-right">
+                            {ativa ? (
+                                <>
+                                    <div>Versão <span className="font-semibold text-[#1F2430]">V{ativa.versionNo}</span>{ativa.label ? ` · ${ativa.label}` : ''}</div>
+                                    <div>Posição de <span className="font-semibold text-[#1F2430]">{fmtDate(ativa.dataBase)}</span></div>
+                                </>
+                            ) : (
+                                <div>A empresa ainda não liberou uma versão.</div>
+                            )}
+                        </div>
+                        {membership.permissions.download && (
+                            // Desligado sempre diz o motivo: o wrapper carrega o title (botão disabled não dispara hover).
+                            <span className="inline-flex" title={!ativa ? 'A empresa ainda não liberou uma versão' : gerandoBook ? 'Gerando o book, aguarde' : 'PDF da versão liberada, com fotos'}>
+                                <SoftButton onClick={() => void baixarBook()} disabled={!ativa || gerandoBook} className="disabled:pointer-events-none">
+                                    <Download className="w-4 h-4" />
+                                    {gerandoBook ? 'Gerando book…' : 'Baixar book (PDF)'}
+                                </SoftButton>
+                            </span>
                         )}
                     </div>
                 </div>

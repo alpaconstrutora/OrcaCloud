@@ -1,6 +1,6 @@
 import React from 'react';
 import { moverEntreAbas } from '../ui/abasPeloTeclado';
-import { ArrowLeft, Camera, FileText, History, Snowflake, Sparkles, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, Camera, Download, FileText, History, Snowflake, Sparkles, UserPlus, Users } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { usePersistedState } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
@@ -8,6 +8,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { formatDateBR, formatDateTimeBR, formatMoney } from '../ui/Format';
 import { errorMessage } from '../../hooks/useOrgContext';
 import { creditRoomService, type VersaoPreparada } from '../../services/creditRoomService';
+import { creditRoomBookService } from '../../services/creditRoomBookService';
 import { ALERTA_PT, resumoDaCapacidade } from '../../utils/creditCapacity';
 import { hojeLocalISO } from '../../utils/periodoControladoria';
 import {
@@ -103,6 +104,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     const [convidarAberto, setConvidarAberto] = React.useState(false);
     const [log, setLog] = React.useState<CreditRoomAccessLog[]>([]);
     const [carregandoAba, setCarregandoAba] = React.useState(false);
+    const [gerandoBook, setGerandoBook] = React.useState(false);
 
     // Versões carregam sempre: a aba Visão precisa da ativa.
     React.useEffect(() => {
@@ -153,6 +155,22 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         for (const o of ativa?.snapshot.escopo?.organizacoes ?? []) m.set(o.id, o.nome);
         return m;
     }, [ativa]);
+
+    // Book em PDF da versão ATIVA (congelada, nunca o dado vivo). O índice do Data Room é lido na hora:
+    // a aba pode não ter sido aberta, e um índice vazio por "não carregou" diria que não há documento.
+    const baixarBook = async () => {
+        if (!ativa || gerandoBook) return;
+        setGerandoBook(true);
+        setErro(null);
+        try {
+            const docs = await creditRoomService.listDocuments(room.id);
+            await creditRoomBookService.baixar(room, ativa, { documentos: creditRoomBookService.documentosDoIndice(docs, ativa) });
+        } catch (e) {
+            setErro(errorMessage(e, 'Não foi possível gerar o book.'));
+        } finally {
+            setGerandoBook(false);
+        }
+    };
 
     const mudarStatus = async (status: CreditRoomStatus) => {
         try {
@@ -292,6 +310,20 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     <button onClick={onEdit} className="h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 rounded-[6px] transition-all">
                         Editar
                     </button>
+                    {/* Desligado sempre diz o motivo: o wrapper carrega o title (botão disabled não dispara hover). */}
+                    <span
+                        className="inline-flex shrink-0"
+                        title={!ativa ? 'Congele uma versão para baixar o book' : gerandoBook ? 'Gerando o book, aguarde' : 'PDF da versão ativa, com fotos'}
+                    >
+                        <button
+                            onClick={() => void baixarBook()}
+                            disabled={!ativa || gerandoBook}
+                            className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 rounded-[6px] transition-all disabled:opacity-50 disabled:pointer-events-none"
+                        >
+                            <Download className="w-[15px] h-[15px]" />
+                            {gerandoBook ? 'Gerando book…' : 'Baixar book (PDF)'}
+                        </button>
+                    </span>
                     <button
                         onClick={() => setCongelarAberto(true)}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"

@@ -12,7 +12,7 @@ import type { IndicadorKey } from '../../utils/creditRoomProvenance';
 import type { CreditRoomVersion } from '../../types/creditRoom';
 import type { SnapshotCapacidade } from '../../utils/creditRoomSnapshot';
 import {
-    ALERTA_PT, CENARIOS_ESTRESSE, estresseDaVersao, fluxosDaOperacao, resumoDaCapacidade, rotuloDoMes,
+    ALERTA_PT, CENARIOS_ESTRESSE, estresseDaVersao, fluxosDaOperacao, resumoDaCapacidade, rotuloDoMes, textosDaCapacidade,
     type CenarioEstresse, type FluxosElegiveis, type SerieMes,
 } from '../../utils/creditCapacity';
 
@@ -406,20 +406,10 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
     const mostrarEstressada = ativo !== 0;
     const semSerie = c.serie.length === 0;
     // O serviço da operação pedida entra no DSCR e na folga; o valor máximo NÃO o inclui (é sobre a dívida atual).
-    const comOperacao = c.serie.some(m => m.servico_novo > 0);
+    // As frases são as mesmas do book em PDF: uma redação só (utils/creditCapacity.ts).
     const pedido = s.operacao?.requested_amount ?? 0;
-    const apoioOperacao = comOperacao ? `com a operação pedida${pedido > 0 ? ` de ${money(pedido)}` : ''}` : null;
-    // A comparação com o pedido vai PRIMEIRO: a dica do KPI corta no fim (KpiStrip do portal),
-    // e é ela que desfaz a aparente contradição com o DSCR pós-operação.
-    const comparacaoPedido = !semSerie && pedido > 0
-        ? `pedido ${money(pedido)} ${pedido > c.capacidade_maxima.valor_maximo ? 'acima do máximo' : 'dentro do máximo'}`
-        : null;
-    const hintMaximo = semSerie ? 'sem meses projetados nesta versão' : [
-        comparacaoPedido,
-        'sobre a dívida atual',
-        `parcela máx. ${money(c.capacidade_maxima.parcela_maxima)}`,
-        `DSCR ≥ ${vezes(dscrExigido)}`,
-    ].filter(Boolean).join(' · ');
+    const { comOperacao, hintMaximo, rotuloDscr, hintDscr, hintFolga, notaMaximo } =
+        textosDaCapacidade(c, resumo, pedido);
     // O Base é SEMPRE o número congelado (uma só máxima para o banco ver): o cenário Base
     // não é recalculado, e a diferença dos outros cenários é contra ele.
     const congelado: ResultadoEstresse = {
@@ -440,24 +430,15 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
             hint: 'após a despesa operacional', chave: 'renda_liquida_media', color: 'indigo', icon: <TrendingUp className="w-4 h-4" />,
         },
         {
-            label: comOperacao ? 'DSCR mínimo 12m (pós-operação)' : 'DSCR mínimo 12m', value: vezes(resumo.dscr_minimo_12m),
-            hint: [
-                apoioOperacao,
-                resumo.dscr_minimo_12m == null ? 'sem serviço da dívida'
-                    : resumo.dscr_minimo_12m < dscrExigido ? `abaixo dos ${vezes(dscrExigido)} exigidos` : null,
-            ].filter(Boolean).join(' · ') || undefined,
+            label: rotuloDscr, value: vezes(resumo.dscr_minimo_12m),
+            hint: hintDscr,
             chave: 'dscr_minimo_12m',
             color: resumo.dscr_minimo_12m == null ? 'indigo' : resumo.dscr_minimo_12m < dscrExigido ? 'red' : 'emerald',
             icon: <Gauge className="w-4 h-4" />,
         },
         {
             label: 'Folga mínima 12m', value: money(resumo.folga_minima_12m),
-            hint: [
-                apoioOperacao ? 'com a operação pedida' : null,
-                resumo.mes_folga_minima
-                    ? `${rotuloDoMes(resumo.mes_folga_minima)}${resumo.folga_minima_12m != null && resumo.folga_minima_12m < 0 ? ' · mês no vermelho' : ''}`
-                    : null,
-            ].filter(Boolean).join(' · ') || undefined,
+            hint: hintFolga,
             chave: 'folga_minima', color: resumo.folga_minima_12m != null && resumo.folga_minima_12m < 0 ? 'red' : 'teal',
             icon: <Scale className="w-4 h-4" />,
         },
@@ -526,9 +507,7 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
         `data-base ${formatDateBR(s.data_base)}`,
         escopo ? `escopo ${escopo.tipo === 'GRUPO' ? 'Grupo' : 'Empresa'} (${plural(nEmpresas, 'empresa', 'empresas')})` : null,
         // A frase inteira, que não corta: o valor máximo não inclui o pedido; o DSCR pós-operação inclui.
-        comparacaoPedido
-            ? `valor máximo calculado sobre a dívida atual; o ${comparacaoPedido}${comOperacao ? ', e o DSCR pós-operação já o inclui' : ''}`
-            : null,
+        notaMaximo,
     ].filter(Boolean).join(' · ');
 
     return (

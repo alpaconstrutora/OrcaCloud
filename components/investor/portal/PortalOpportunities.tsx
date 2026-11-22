@@ -6,9 +6,10 @@ import {
     InvestorOpportunity, OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_TYPE_LABELS, OpportunityStatus,
 } from '../../../services/investorPortalService';
 import { investorPortalTokenService } from '../../../services/investorPortalTokenService';
+import MoneyCentsInput from '../../ui/MoneyCentsInput';
 import { Investor } from '../../../services/investorService';
 import {
-    CardHeader, DetailField, fmtBRL, PortalCard, PortalEmpty, PrimaryButton, SoftButton,
+    CardHeader, DetailField, fmtBRL, fmtBRLCents, PortalCard, PortalEmpty, PrimaryButton, SoftButton,
     StatusPill, TagChip, Td, Th, PillTone,
 } from '../../portal/PortalKit';
 
@@ -61,8 +62,18 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
         requestAnimationFrame(() => listaRef.current?.scrollIntoView?.({ block: 'start' }));
     };
 
+    // Fase C3 (plano 2026-11-21-portal-do-investidor-consolidacao): o interesse leva o valor pretendido (piso: o
+    // ticket mínimo). O banco já gravava `valor_pretendido` desde a Fase 4, mas o portal não mandava.
+    const [valores, setValores] = React.useState<Record<string, number | ''>>({});
+    const motivoDoValor = (opp: InvestorOpportunity): string | null => {
+        const v = valores[opp.id!];
+        if (v === '' || v == null || !(Number(v) > 0)) return 'Informe quanto você pretende investir.';
+        if (opp.ticket_min && Number(v) < Number(opp.ticket_min)) return `O ticket mínimo é ${fmtBRLCents(Number(opp.ticket_min))}.`;
+        return null;
+    };
+
     const submitInterest = async (opp: InvestorOpportunity) => {
-        if (!portalToken || !opp.id) return;
+        if (!portalToken || !opp.id || motivoDoValor(opp)) return;
         setSending(opp.id);
         setError(null);
         try {
@@ -73,6 +84,7 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                 phone: (investorProfile as any)?.phone || undefined,
                 role: 'investidor',
                 message: 'Interesse manifestado pelo Portal do Investidor.',
+                valor: Number(valores[opp.id]),
             });
             setSent(prev => [...prev, opp.id!]);
         } catch (e) {
@@ -195,14 +207,34 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                                                                     Interesse registrado
                                                                 </span>
                                                             ) : (
-                                                                <PrimaryButton
-                                                                    disabled={sending === o.id}
-                                                                    onClick={() => submitInterest(o)}
-                                                                >
-                                                                    <Send className="w-4 h-4" />
-                                                                    {sending === o.id ? 'Enviando...' : 'Tenho interesse'}
-                                                                </PrimaryButton>
+                                                                <>
+                                                                    <label className="flex items-center gap-2 text-[13px] text-[#5B6070]">
+                                                                        Quanto pretende investir
+                                                                        <MoneyCentsInput
+                                                                            aria-label="Valor pretendido"
+                                                                            value={valores[o.id] ?? ''}
+                                                                            onChange={v => setValores(prev => ({ ...prev, [o.id!]: v === '' ? '' : Number(v) }))}
+                                                                            placeholder={o.ticket_min ? `mín. ${fmtBRLCents(Number(o.ticket_min))}` : '0,00'}
+                                                                            className="w-40 h-9 px-3 border border-[#ECECEF] rounded-[6px] text-sm text-[#1F2430]"
+                                                                        />
+                                                                    </label>
+                                                                    <span className="inline-flex" title={motivoDoValor(o) ?? undefined}>
+                                                                        <PrimaryButton
+                                                                            disabled={sending === o.id || !!motivoDoValor(o)}
+                                                                            onClick={() => submitInterest(o)}
+                                                                        >
+                                                                            <Send className="w-4 h-4" />
+                                                                            {sending === o.id ? 'Enviando...' : 'Tenho interesse'}
+                                                                        </PrimaryButton>
+                                                                    </span>
+                                                                </>
                                                             )
+                                                        )}
+                                                        {portalToken && o.id && (
+                                                            <SoftButton onClick={() => setAberta({ opp: o, aba: 'apresentacao' })}>
+                                                                <Building2 className="w-4 h-4" />
+                                                                Ver apresentação
+                                                            </SoftButton>
                                                         )}
                                                         {portalToken && o.id && o.imovib_study_id && (
                                                             <SoftButton onClick={() => setAberta({ opp: o, aba: 'viabilidade' })}>

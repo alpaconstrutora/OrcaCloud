@@ -4,6 +4,7 @@ import { Building2, ChevronDown, ExternalLink, FileDown, Wallet } from 'lucide-r
 import { HoldingItem } from '../types';
 import { InvestorContribution } from '../../../services/investorContributionsService';
 import { totalDaCarteira } from '../../../utils/investidorCarteira';
+import { abrirDocumentoDoPortal } from '../../../lib/storageAssinado';
 import {
     CardHeader, DetailField, fmtBRL, fmtBRLCents, fmtDate, fmtMonthShort, KpiStrip, PortalCard,
     PortalEmpty, PortalTabs, PrimaryButton, SoftButton, StatusPill, Td, Th, TagChip, PillTone,
@@ -23,6 +24,8 @@ interface Props {
     contributions: InvestorContribution[];
     onSelectAsset: (h: HoldingItem) => void;
     onNavigateToHoldings: () => void;
+    /** Token do link: o comprovante é assinado pela portal-documentos-download (Fase C4). */
+    portalToken?: string | null;
 }
 
 type SeriesId = 'aportado' | 'dividendos' | 'retorno';
@@ -49,7 +52,7 @@ const holdingTone = (status: string): PillTone => {
 };
 
 const PortalOverview: React.FC<Props> = ({
-    equity, activeWorks, monthlyYieldPct, totalContributed, totalRecebido, retornoTotal, retornoEmCaixa,
+    equity, activeWorks, monthlyYieldPct, totalContributed, totalRecebido, retornoTotal, retornoEmCaixa, portalToken,
     holdings, contributions, onSelectAsset, onNavigateToHoldings,
 }) => {
     const [hiddenSeries, setHiddenSeries] = React.useState<SeriesId[]>([]);
@@ -201,7 +204,7 @@ const PortalOverview: React.FC<Props> = ({
                                 </div>
                                 <div className="flex flex-wrap items-center gap-2 mt-4">
                                     {c.receipt_url && (
-                                        <PrimaryButton onClick={() => window.open(c.receipt_url, '_blank', 'noopener')}>
+                                        <PrimaryButton onClick={() => void abrirDocumentoDoPortal({ portal: 'investidor', token: portalToken, referencia: c.receipt_url })}>
                                             <FileDown className="w-4 h-4" />
                                             Baixar comprovante
                                         </PrimaryButton>

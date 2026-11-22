@@ -3,6 +3,7 @@ import { CreditCard, CheckCircle2, Clock, AlertCircle, CalendarDays } from 'luci
 import ActionIconButton from './ui/ActionIconButton';
 import { formatCurrency } from '../utils/financialMath';
 import { investorContributionsService, InvestorContribution } from '../services/investorContributionsService';
+import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../lib/storageAssinado';
 
 interface PaymentsPanelProps {
     organizationId?: string;
@@ -17,15 +18,17 @@ const TYPE_LABEL: Record<string, string> = {
 };
 
 const STATUS_STYLE: Record<string, string> = {
-    liquidado: 'bg-emerald-50 text-emerald-700 border-emerald-100',
-    pendente: 'bg-blue-50 text-blue-700 border-blue-100',
-    atrasado: 'bg-red-50 text-red-700 border-red-100',
+    liquidado: 'text-emerald-700',
+    pendente: 'text-blue-700',
+    atrasado: 'text-red-700',
+    cancelado: 'text-gray-500',
 };
 
 const STATUS_LABEL: Record<string, string> = {
     liquidado: 'Liquidado',
     pendente: 'Aguardando',
     atrasado: 'Atrasado',
+    cancelado: 'Cancelado',
 };
 
 const statusIcon = (status: string) => {
@@ -133,20 +136,20 @@ const PaymentsPanel: React.FC<PaymentsPanelProps> = ({ organizationId, investorI
                             {contributions.map((item) => (
                                 <tr key={item.id} className="group hover:bg-gray-50/50 transition-colors">
                                     <td className="px-8 py-5">
-                                        <p className="font-bold text-gray-900 text-sm">{item.description || TYPE_LABEL[item.type]}</p>
+                                        <p className="font-medium text-gray-900 text-sm">{item.description || TYPE_LABEL[item.type]}</p>
                                     </td>
                                     <td className="px-8 py-5 text-sm font-medium text-gray-600">{TYPE_LABEL[item.type]}</td>
                                     <td className="px-8 py-5 text-sm font-medium text-gray-600">{formatDate(item.due_date)}</td>
-                                    <td className="px-8 py-5 text-sm font-black text-gray-900">{formatCurrency(Number(item.amount))}</td>
+                                    <td className="px-8 py-5 text-sm font-medium text-gray-900">{formatCurrency(Number(item.amount))}</td>
                                     <td className="px-8 py-5">
-                                        <div className={`flex items-center justify-center gap-1.5 px-3 py-1 rounded-full border text-xs font-black uppercase tracking-tighter mx-auto w-fit ${STATUS_STYLE[item.status]}`}>
+                                        <div className={`flex items-center justify-center gap-1.5 text-sm mx-auto w-fit ${STATUS_STYLE[item.status]}`}>
                                             {statusIcon(item.status)}
                                             {STATUS_LABEL[item.status]}
                                         </div>
                                     </td>
                                     <td className="px-8 py-5 text-right">
                                         {item.receipt_url ? (
-                                            <ActionIconButton kind="download" title="Baixar comprovante" onClick={() => window.open(item.receipt_url, '_blank')} />
+                                            <ActionIconButton kind="download" title="Baixar comprovante" onClick={() => void abrirArquivoAssinado(BUCKET_DOCUMENTOS, item.receipt_url)} />
                                         ) : (
                                             <span className="text-xs text-gray-300">—</span>
                                         )}

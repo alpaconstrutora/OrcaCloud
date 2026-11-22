@@ -1,6 +1,6 @@
 import React from 'react';
 import { opportunityProjectService } from '../../services/opportunityProjectService';
-import { Building2, Plus, Users, ChevronDown, ChevronUp, DollarSign, AlertCircle } from 'lucide-react';
+import { Building2, Plus, Users, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '../../utils/financialMath';
 import { speService, SpeEntity, SpePartner } from '../../services/speService';
 import { investorService, Investor } from '../../services/investorService';
@@ -55,7 +55,6 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
     const [savingEntity, setSavingEntity] = React.useState(false);
     // partner add form per SPE
     const [partnerForm, setPartnerForm] = React.useState<Record<string, { investor_id: string; ownership_pct: number; capital_calls_total: number }>>({});
-    const [capitalInput, setCapitalInput] = React.useState<Record<string, { amount: number; type: 'call' | 'payment' }>>({});
 
     const load = React.useCallback(() => {
         setLoading(true);
@@ -134,7 +133,9 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                 spe_entity_id: speId,
                 investor_id: f.investor_id,
                 ownership_pct: f.ownership_pct || 0,
-                capital_calls_total: f.capital_calls_total || 0,
+                // Fase C2 (plano 2026-11-21-portal-do-investidor-consolidacao): chamado e integralizado só nascem das
+                // chamadas de capital (painel abaixo) — o pagamento vira aporte no extrato do investidor.
+                capital_calls_total: 0,
                 capital_paid: 0,
                 quota_count: 1,
             });
@@ -147,27 +148,6 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
         } catch (err) {
             console.error('Error adding partner', err);
             showToast(`Erro ao adicionar sócio. ${motivoDaFalha(err, '')}`.trim(), 'error');
-        }
-    };
-
-    const handleCapitalAction = async (partnerId: string, speId: string) => {
-        const c = capitalInput[partnerId];
-        if (!c?.amount || c.amount <= 0) { showToast('Informe um valor.', 'error'); return; }
-        const rotulo = c.type === 'call' ? 'Chamada de capital' : 'Pagamento de capital';
-        try {
-            if (c.type === 'call') {
-                await speService.addCapitalCall(partnerId, c.amount);
-            } else {
-                await speService.addCapitalPayment(partnerId, c.amount);
-            }
-            // Reload partners
-            const updated = await speService.listPartners(speId);
-            setPartners(prev => ({ ...prev, [speId]: updated }));
-            setCapitalInput(prev => ({ ...prev, [partnerId]: { amount: 0, type: 'call' } }));
-            showToast(`${rotulo} registrada.`);
-        } catch (err) {
-            console.error('Error capital action', err);
-            showToast(`${rotulo} não registrada. ${motivoDaFalha(err, '')}`.trim(), 'error');
         }
     };
 
@@ -297,12 +277,10 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                                         <th className="pb-2 text-right">%</th>
                                                         <th className="pb-2 text-right">Chamado</th>
                                                         <th className="pb-2 text-right">Pago</th>
-                                                        {isAdmin && <th className="pb-2 text-right">Capital</th>}
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-50">
                                                     {pts.map(p => {
-                                                        const ci = capitalInput[p.id!] || { amount: 0, type: 'call' as const };
                                                         return (
                                                             <tr key={p.id} className="text-sm">
                                                                 <td className="py-2">
@@ -312,35 +290,6 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                                                 <td className="py-2 text-right text-sm font-normal text-gray-600">{Number(p.ownership_pct).toFixed(2)}%</td>
                                                                 <td className="py-2 text-right text-sm font-medium text-gray-800">{formatCurrency(Number(p.capital_calls_total))}</td>
                                                                 <td className="py-2 text-right text-sm font-medium text-gray-800">{formatCurrency(Number(p.capital_paid))}</td>
-                                                                {isAdmin && (
-                                                                    <td className="py-2 text-right">
-                                                                        <div className="flex items-center justify-end gap-1">
-                                                                            <select
-                                                                                value={ci.type}
-                                                                                onChange={e => setCapitalInput(c => ({ ...c, [p.id!]: { ...ci, type: e.target.value as 'call' | 'payment' } }))}
-                                                                                className="px-1 py-1 border border-gray-200 rounded text-xs"
-                                                                            >
-                                                                                <option value="call">Chamar</option>
-                                                                                <option value="payment">Pagar</option>
-                                                                            </select>
-                                                                            <MoneyCentsInput
-                                                                                value={ci.amount || ''}
-                                                                                onChange={v => setCapitalInput(c => ({ ...c, [p.id!]: { ...ci, amount: v === '' ? 0 : Number(v) } }))}
-                                                                                className="w-24 px-2 py-1 border border-gray-200 rounded text-form-input focus:outline-none"
-                                                                                placeholder="0,00"
-                                                                            />
-                                                                            <Button
-                                                                                size="icon"
-                                                                                onClick={() => handleCapitalAction(p.id!, entity.id!)}
-                                                                                title={ci.type === 'call' ? 'Registrar chamada de capital' : 'Registrar pagamento de capital'}
-                                                                                aria-label={ci.type === 'call' ? 'Registrar chamada de capital' : 'Registrar pagamento de capital'}
-                                                                                className="rounded text-button"
-                                                                            >
-                                                                                <DollarSign className="w-3 h-3" />
-                                                                            </Button>
-                                                                        </div>
-                                                                    </td>
-                                                                )}
                                                             </tr>
                                                         );
                                                     })}
@@ -369,15 +318,6 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                                         onChange={e => setPartnerForm(f => ({ ...f, [entity.id!]: { ...f[entity.id!], ownership_pct: parseFloat(e.target.value) || 0 } }))}
                                                         className="w-24 px-2 py-1.5 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                         placeholder="0"
-                                                    />
-                                                </label>
-                                                <label className="flex flex-col gap-1">
-                                                    <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Capital Chamado (R$)</span>
-                                                    <MoneyCentsInput
-                                                        value={partnerForm[entity.id!]?.capital_calls_total || ''}
-                                                        onChange={v => setPartnerForm(f => ({ ...f, [entity.id!]: { ...f[entity.id!], capital_calls_total: v === '' ? 0 : Number(v) } }))}
-                                                        className="w-32 px-2 py-1.5 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500"
-                                                        placeholder="0,00"
                                                     />
                                                 </label>
                                                 <Button

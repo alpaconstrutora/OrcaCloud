@@ -15,9 +15,8 @@ import { investorPortalTokenService } from '../services/investorPortalTokenServi
 import SpeManager from './investor/SpeManager';
 import MonthlyReportTrigger from './investor/MonthlyReportTrigger';
 import { investorContributionsService } from '../services/investorContributionsService';
-import { marketDataService } from '../services/marketDataService';
 import { storageService } from '../services/storageService';
-import InvestmentSimulator from './InvestmentSimulator';
+import SimuladorDaOportunidade, { oportunidadesSimulaveis } from './investor/SimuladorDaOportunidade';
 import AssetDetailModal from './AssetDetailModal';
 import PaymentsPanel from './PaymentsPanel';
 import TaxReport from './TaxReport';
@@ -116,20 +115,13 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const [activeTab, setActiveTab] = React.useState<TabId>(initialTab || 'dashboard');
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
     const [filterStatus, setFilterStatus] = React.useState('Todos');
-    const [cubValue, setCubValue] = React.useState(0);
     const [realProjects, setRealProjects] = React.useState<ProjectData[]>([]);
-    const [benchmarkSeries, setBenchmarkSeries] = React.useState<any[]>([]);
     const [reports, setReports] = React.useState<InvestorReport[]>([]);
     const [opportunities, setOpportunities] = React.useState<InvestorOpportunity[]>([]);
     const [uploadCategory, setUploadCategory] = React.useState<ReportCategory>('relatorio');
     const [investorParticipations, setInvestorParticipations] = React.useState<import('../services/investorContributionsService').InvestorParticipation[]>([]);
     const [investorContributions, setInvestorContributions] = React.useState<import('../services/investorContributionsService').InvestorContribution[]>([]);
     const [selectedAsset, setSelectedAsset] = React.useState<HoldingItem | null>(null);
-    const [showSelic, setShowSelic] = React.useState(false);
-    const [showIpca, setShowIpca] = React.useState(false);
-    const [showIgpm, setShowIgpm] = React.useState(false);
-    const [inputModal, setInputModal] = React.useState<{ label: string; onConfirm: (val: string) => void } | null>(null);
-    const [inputValue, setInputValue] = React.useState('');
     const [portalSpes, setPortalSpes] = React.useState<PortalSpe[]>([]);
 
     const isAdmin = !isPreview && (
@@ -188,9 +180,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     // Sem fallback: o segundo `length > 0 ? ... : dashboard` daqui reacendia a aba
     // Resumo mesmo com tudo desligado. Nenhuma aba habilitada = portal sem
     // conteudo, tratado com aviso proprio no lugar de reabrir uma aba sozinho.
+    // Fase C7: sem oportunidade publicada com versão, o investidor não vê a aba Simulador (o gestor vê, para configurar).
+    const temSimulavel = React.useMemo(() => oportunidadesSimulaveis(opportunities).length > 0, [opportunities]);
     const navTabs = React.useMemo(
-        () => (isAdmin ? [...TABS] : renderableTabs.filter(t => enabledTabIds.includes(t.id))),
-        [enabledTabIds, isAdmin, renderableTabs],
+        () => (isAdmin ? [...TABS] : renderableTabs.filter(t => enabledTabIds.includes(t.id) && (t.id !== 'simulator' || temSimulavel))),
+        [enabledTabIds, isAdmin, renderableTabs, temSimulavel],
     );
     const semAbasHabilitadas = isPublicExperience && navTabs.length === 0;
 
@@ -227,10 +221,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const confirm = useConfirm();
     const openConfirm = async (msg: string, onConfirm: () => void) => {
         if (await confirm({ title: msg, variant: 'danger', confirmLabel: 'Remover' })) onConfirm();
-    };
-    const openInput = (label: string, defaultValue: string, onConfirm: (val: string) => void) => {
-        setInputValue(defaultValue);
-        setInputModal({ label, onConfirm });
     };
 
     // ── Derived data ──────────────────────────────────────────────────────────
@@ -289,44 +279,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const historicalData = React.useMemo((): HistoricalPoint[] => {
         // Usa contributions com paid_date como fonte primária
         const paid = investorContributions.filter(c => c.paid_date);
-        if (paid.length === 0) {
-            // Fallback: diaryEntries legadas
-            if (!activeProjects.length) return [];
-            let minDate = new Date();
-            let hasDiary = false;
-            activeProjects.forEach(p => {
-                p.settings?.diaryEntries?.forEach((e: any) => {
-                    hasDiary = true;
-                    const d = new Date(e.date);
-                    if (d < minDate) minDate = d;
-                });
-            });
-            if (!hasDiary) return [];
-            const result: HistoricalPoint[] = [];
-            const now = new Date();
-            let current = new Date(minDate.getFullYear(), minDate.getMonth(), 1);
-            while (current <= now) {
-                const endOfMonth = new Date(current.getFullYear(), current.getMonth() + 1, 0);
-                const label = current.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-                let totalEquity = 0;
-                activeProjects.forEach(p => {
-                    const projectValue = p.settings?.financialInfo?.totalValue ||
-                        ((p.settings?.area || 0) * (p.settings?.cubRate || 0)) || 0;
-                    const entries = p.settings?.diaryEntries || [];
-                    const until = entries.filter((e: any) => new Date(e.date) <= endOfMonth).length;
-                    const progress = entries.length > 0 ? Math.min(100, (until / entries.length) * 100) : 0;
-                    totalEquity += projectValue * (progress / 100);
-                });
-                const monthLabel = current.toLocaleDateString('en-US', { month: 'short' }).toLowerCase();
-                const yearLabel = String(current.getFullYear());
-                const bm = benchmarkSeries.find((b: any) =>
-                    b.date.toLowerCase().includes(monthLabel) && b.date.includes(yearLabel)
-                ) || { selic: 0, ipca: 0, igpm: 0 };
-                result.push({ month: label, yield: totalEquity, percent: 0, ...bm });
-                current.setMonth(current.getMonth() + 1);
-            }
-            return result;
-        }
+        // Sem aporte liquidado com data não há série. Antes havia um recurso pelo diário de obra × valor da obra
+        // digitado — patrimônio que não vem da SPE nem da versão (D2, Fase C10).
+        if (paid.length === 0) return [];
 
         // Série real: acumulado de capital investido por mês (aportes liquidados)
         const dates = paid.map(c => new Date(c.paid_date!));
@@ -339,12 +294,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
 
         while (current <= now) {
             const endOfMonth = new Date(current.getFullYear(), current.getMonth() + 1, 0);
-            investorContributions.forEach(c => {
-                if (!c.paid_date || c.status !== 'liquidado') return;
-                const d = new Date(c.paid_date);
-                if (d > endOfMonth) return;
-                // já contabilizado nos meses anteriores via acumulado — recalcula do zero abaixo
-            });
             // Recalcula acumulados até o fim do mês corrente
             cumAporte = investorContributions
                 .filter(c => c.type === 'aporte' && c.status === 'liquidado' && c.paid_date && new Date(c.paid_date) <= endOfMonth)
@@ -354,22 +303,16 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 .reduce((s, c) => s + Number(c.amount), 0);
 
             const label = current.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' });
-            const monthLabel = current.toLocaleDateString('en-US', { month: 'short' }).toLowerCase();
-            const yearLabel = String(current.getFullYear());
-            const bm = benchmarkSeries.find((b: any) =>
-                b.date.toLowerCase().includes(monthLabel) && b.date.includes(yearLabel)
-            ) || { selic: 0, ipca: 0, igpm: 0 };
 
             result.push({
                 month: label,
                 yield: cumAporte,           // capital investido acumulado
                 percent: cumAporte > 0 ? (cumDividendo / cumAporte) * 100 : 0,
-                ...bm,
             });
             current.setMonth(current.getMonth() + 1);
         }
         return result;
-    }, [activeProjects, benchmarkSeries, investorContributions]);
+    }, [investorContributions]);
 
     const filteredHoldings = React.useMemo(() => {
         if (filterStatus === 'Todos') return stats.holdings;
@@ -422,16 +365,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             setDataLoading(true);
             setDataError(null);
             try {
-                const [cub, projectsList] = await Promise.all([
-                    investorService.calculateCUB(),
-                    // 'ALL': a participação do investidor pode apontar qualquer projeto, e o
-                    // ramo de admin logo abaixo já filtra com isObra() onde importa.
-                    projectService.listProjects({ classifications: 'ALL' }),
-                ]);
+                // 'ALL': a participação do investidor pode apontar qualquer projeto, e o
+                // ramo de admin logo abaixo já filtra com isObra() onde importa.
+                const projectsList = await projectService.listProjects({ classifications: 'ALL' });
                 if (cancelled) return;
-                setCubValue(cub);
                 setRealProjects((projectsList || []) as unknown as ProjectData[]);
-                setBenchmarkSeries(marketDataService.getBenchmarkSeries(12));
 
                 const investorId = investorProfile?.id;
                 if (investorId) {
@@ -506,16 +444,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             .catch(err => console.error('Error deleting opportunity', err));
     };
 
-    const handleUpdateSummary = (key: 'monthlyYield' | 'totalCotas', val: string | number) => {
-        if (!onUpdateSettings) return;
-        onUpdateSettings({
-            ...settings,
-            investorData: {
-                ...settings.investorData,
-                summary: { ...settings.investorData?.summary, [key]: val },
-            },
-        });
-    };
 
     // ── Render ────────────────────────────────────────────────────────────────
 
@@ -850,6 +778,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             contributions={investorContributions}
                             onSelectAsset={setSelectedAsset}
                             onNavigateToHoldings={() => setActiveTab('holdings')}
+                            portalToken={portalToken}
                         />
                     ) : (
                         <InvestorSummaryDashboard
@@ -869,8 +798,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 )}
                 {activeTab === 'simulator' && (
                     isPublicExperience
-                        ? <div className="bg-white rounded-2xl border border-[#ECECEF] shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5"><InvestmentSimulator /></div>
-                        : <InvestmentSimulator />
+                        ? <div className="bg-white rounded-2xl border border-[#ECECEF] shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5"><SimuladorDaOportunidade opportunities={opportunities} /></div>
+                        : <SimuladorDaOportunidade opportunities={opportunities} />
                 )}
                 {activeTab === 'holdings' && (
                     isPublicExperience ? (
@@ -932,7 +861,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             viewMode={viewMode}
                             organizationId={orgId}
                             investorProfile={investorProfile}
-                            portalToken={portalToken}
                             onViewModeChange={setViewMode}
                             onDelete={handleDeleteOpportunity}
                             onUpdate={(updated) => setOpportunities(prev =>
@@ -1025,32 +953,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             </div>
 
             {/* Input Modal */}
-            {inputModal && (
-                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/40 backdrop-blur-sm">
-                    <div className="bg-white rounded-2xl shadow-2xl p-8 max-w-sm w-full mx-4 animate-in zoom-in-95 duration-200">
-                        <label className="block text-sm font-bold text-gray-700 mb-3">{inputModal.label}</label>
-                        <input
-                            type="text"
-                            value={inputValue}
-                            onChange={e => setInputValue(e.target.value)}
-                            onKeyDown={e => {
-                                if (e.key === 'Enter') { inputModal.onConfirm(inputValue); setInputModal(null); }
-                                if (e.key === 'Escape') setInputModal(null);
-                            }}
-                            autoFocus
-                            className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <div className="flex gap-3 justify-end">
-                            <Button variant="ghost" onClick={() => setInputModal(null)}>Cancelar</Button>
-                            <Button
-                                onClick={() => { inputModal.onConfirm(inputValue); setInputModal(null); }}
-                            >
-                                Salvar
-                            </Button>
-                        </div>
-                    </div>
-                </div>
-            )}
 
             {selectedAsset && (() => {
                 const proj = activeProjects.find(p => p.id === selectedAsset.id);

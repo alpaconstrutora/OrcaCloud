@@ -56,6 +56,8 @@ describe('oportunidade com estudo do Imovib publica uma versão', () => {
         render(<OpportunityForm initial={{ title: 'Garden', imovib_study_id: 'e1', imovib_version_id: 'v1' }} organizationId="org" onSave={vi.fn()} onClose={vi.fn()} />);
         const seletor = await screen.findByLabelText('Versão que o investidor vê') as HTMLSelectElement;
         await waitFor(() => expect(seletor.value).toBe('v1'));
+        // A lista de estudos carrega assíncrona: sob carga (CI) a opção chegava depois do clique.
+        await screen.findByRole('option', { name: /Outro/ });
         await user.selectOptions(screen.getByLabelText('Estudo do Imovib'), 'e2');
         expect(await screen.findByText('Este estudo ainda não tem versão congelada: congele uma na aba Versões do estudo.')).toBeTruthy();
     });
@@ -65,6 +67,8 @@ describe('oportunidade com estudo do Imovib publica uma versão', () => {
         const onSave = vi.fn();
         render(<OpportunityForm initial={{ id: 'o1', title: 'Garden', imovib_study_id: 'e1', imovib_version_id: 'v1', is_published: true }} organizationId="org" onSave={onSave} onClose={vi.fn()} />);
         await screen.findByLabelText('Versão que o investidor vê');
+        // A lista de estudos carrega assíncrona: sob carga (CI) a opção chegava depois do clique.
+        await screen.findByRole('option', { name: /Outro/ });
         await user.selectOptions(screen.getByLabelText('Estudo do Imovib'), 'e2');
         expect(screen.getByText('Voltou para rascunho: escolha a versão do novo estudo para publicar de novo.')).toBeTruthy();
         expect(publicar().textContent).toContain('Rascunho');

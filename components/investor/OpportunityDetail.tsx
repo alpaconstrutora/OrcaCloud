@@ -11,6 +11,7 @@ import {
 import { Investor } from '../../services/investorService';
 import { investorPortalTokenService } from '../../services/investorPortalTokenService';
 import LinkedProjectPanel from './LinkedProjectPanel';
+import ApresentacaoDaOportunidade from './ApresentacaoDaOportunidade';
 import DataRoomPanel from './DataRoomPanel';
 import { naVitrine } from '../../utils/oportunidadeNumerosDaVersao';
 import { fmtBRL, fmtPct } from '../../utils/format';
@@ -30,7 +31,6 @@ interface Props {
     isAdmin?: boolean;
     uploadedBy?: string;
     investorProfile?: Investor | null;
-    portalToken?: string;
     onClose: () => void;
 }
 
@@ -42,7 +42,7 @@ const ROLES: InterestRole[] = ['investidor', 'arquiteto', 'engenheiro', 'projeti
 type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'documentos' | 'interesses';
 type FormStep = 'view' | 'form' | 'success';
 
-const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdmin = false, uploadedBy, investorProfile, portalToken, onClose }) => {
+const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdmin = false, uploadedBy, investorProfile, onClose }) => {
     // Todos os números são os da versão do Imovib; local e obra, do empreendimento (plano
     // docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md, Fase 2 — utils/oportunidadeNumerosDaVersao.ts).
     const op = React.useMemo(() => naVitrine(opportunity), [opportunity]);
@@ -75,9 +75,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
         let vivo = true;
         setLoadingStudy(true);
         setErroDoEstudo(null);
-        const versao = portalToken
-            ? investorPortalTokenService.getVersaoPublicadaByToken(portalToken, op.id!)
-            : op.imovib_version_id ? imovibService.versaoPublicada(op.imovib_version_id) : null;
+        // Só o gestor abre esta ficha: o investidor pelo link usa PortalOportunidadeDetalhe (Fase C10).
+        const versao = op.imovib_version_id ? imovibService.versaoPublicada(op.imovib_version_id) : null;
         const carga: Promise<void> = versao
             ? versao.then(vp => { if (vivo) { setVersaoPublicada(vp); setStudy(vp.study); } })
             : Promise.all([imovibService.getStudyById(op.imovib_study_id, true), imovibService.listarCenarios(op.imovib_study_id)])
@@ -86,20 +85,20 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
             .catch(err => { if (vivo) { setStudy(null); setVersaoPublicada(null); setErroDoEstudo((err as Error).message); } })
             .finally(() => { if (vivo) setLoadingStudy(false); });
         return () => { vivo = false; };
-    }, [op.imovib_study_id, op.imovib_version_id, portalToken]);
+    }, [op.imovib_study_id, op.imovib_version_id]);
 
     // Item 5.1 do plano 2026-11-21: o gestor vê se o estudo de hoje já não bate com a versão publicada.
     // Só no app (gestor): o investidor nunca recebe o estudo vivo.
     const [diferencas, setDiferencas] = React.useState<DiferencaDaVersao[]>([]);
     React.useEffect(() => {
         const ind = versaoPublicada?.calculo?.indicadores;
-        if (portalToken || !isAdmin || !ind || !op.imovib_study_id) { setDiferencas([]); return; }
+        if (!isAdmin || !ind || !op.imovib_study_id) { setDiferencas([]); return; }
         let vivo = true;
         imovibService.getStudyById(op.imovib_study_id, true)
             .then(atual => { if (vivo && atual) setDiferencas(diferencasDaVersaoPublicada({ vgv: ind.vgv, vpl: ind.vpl, tirAnual: ind.tirAnual, exposicaoMaxima: ind.exposicaoMaxima }, resultadosDoEstudo(atual))); })
             .catch(err => console.error('Erro ao comparar a versão com o estudo atual', err));
         return () => { vivo = false; };
-    }, [versaoPublicada, portalToken, isAdmin, op.imovib_study_id]);
+    }, [versaoPublicada, isAdmin, op.imovib_study_id]);
 
     // Ficha técnica: a seção Produto CONGELADA na versão (nada se recalcula aqui).
     const produto = versaoPublicada?.calculo?.secoes?.find(x => x.id === 'produto') ?? null;
@@ -122,23 +121,11 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
         if (!interest.contact_name.trim()) return;
         setSaving(true);
         try {
-            if (portalToken) {
-                await investorPortalTokenService.submitInterestByToken(portalToken, {
-                    opportunityId: op.id!,
-                    name: interest.contact_name,
-                    email: interest.contact_email,
-                    phone: interest.contact_phone,
-                    role: interest.role,
-                    message: interest.message,
-                    valor: interest.valor_pretendido,
-                });
-            } else {
-                await investorPortalService.addInterest({
-                    organization_id: organizationId,
-                    opportunity_id: op.id!,
-                    ...interest,
-                });
-            }
+            await investorPortalService.addInterest({
+                organization_id: organizationId,
+                opportunity_id: op.id!,
+                ...interest,
+            });
             setFormStep('success');
         } catch (err) {
             console.error('Erro ao registrar interesse', err);
@@ -164,17 +151,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
     const hasLinkedProject = !!op.obra_id;
 
     const locationLabel = [op.cidade, op.uf].filter(Boolean).join(', ');
-    const opportunityPresentation = [
-        `${op.title} está em fase de ${op.status ? OPPORTUNITY_STATUS_LABELS[op.status].toLowerCase() : 'avaliação'}${op.opportunity_type ? ` no formato ${OPPORTUNITY_TYPE_LABELS[op.opportunity_type].toLowerCase()}` : ''}.`,
-        locationLabel ? `Localização: ${locationLabel}.` : null,
-        op.vgv != null ? `VGV estimado de ${fmtBRL(op.vgv)}.` : null,
-        op.custo_total != null ? `Custo estimado (obra e terreno) de ${fmtBRL(op.custo_total)}.` : null,
-        op.ticket_min != null ? `Ticket mínimo de ${fmtBRL(op.ticket_min)}.` : null,
-        op.prazo_meses ? `Prazo previsto de ${op.prazo_meses} meses.` : null,
-        op.roi_pct != null || op.tir_pct != null
-            ? `Indicadores projetados: ${op.roi_pct != null ? `ROI de ${fmtPct(op.roi_pct)}` : ''}${op.roi_pct != null && op.tir_pct != null ? ' e ' : ''}${op.tir_pct != null ? `TIR de ${fmtPct(op.tir_pct)}` : ''}.`
-            : null,
-    ].filter(Boolean).join(' ');
+
     const ADMIN_TABS: { id: PitchTab; label: string }[] = [
         { id: 'pitch', label: 'Detalhes' },
         { id: 'cenarios', label: 'Viabilidade & Investimento' },
@@ -384,109 +361,19 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                 {/* ── ABA: Detalhes ── */}
                                 {pitchTab === 'pitch' && (
                                     <div className="space-y-8">
-                                        {isAdmin && !portalToken && (
+                                        {isAdmin && (
                                             <p className="rounded-[10px] bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-600">
                                                 Due diligence, riscos, modelos de aquisição e comitê ficam no estudo de viabilidade
                                                 {study ? <> (<span className="font-medium text-slate-800">{study.name}</span>: abas Premissas › Terreno, Sensibilidade e Risco e Comitê)</> : ': vincule um estudo em Editar'}.
                                             </p>
                                         )}
-                                        {/* Resumo Executivo / Descrição */}
-                                        <div className="bg-gray-50/50 rounded-3xl p-6 border border-gray-100 space-y-3">
-                                            <h4 className="text-sm font-black text-gray-900">Apresentação do Empreendimento</h4>
-                                            <p className="text-sm text-gray-600 leading-relaxed font-medium">{opportunityPresentation}</p>
-                                        </div>
-
-                                        {/* Ficha técnica: a seção Produto congelada na versão + prazo (Fase 2 do plano 2026-11-21). */}
-                                        {(produto?.tabelas?.[0] || op.prazo_meses) && (
-                                        <div>
-                                            <div className="flex items-center gap-2 mb-4">
-                                                <Ruler className="w-4 h-4 text-blue-600" />
-                                                <span className="text-sm font-semibold text-gray-700">Ficha técnica</span>
-                                            </div>
-                                            <dl className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                                                {(produto?.tabelas?.[0]?.linhas ?? []).map(([rotulo, valor]) => (
-                                                    <div key={rotulo} className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
-                                                        <dt className="text-xs text-gray-500 mb-1">{rotulo}</dt>
-                                                        <dd className="text-base font-semibold text-gray-800">{valor}</dd>
-                                                    </div>
-                                                ))}
-                                                {op.prazo_meses && (
-                                                    <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
-                                                        <dt className="text-xs text-gray-500 mb-1">Prazo do projeto</dt>
-                                                        <dd className="text-base font-semibold text-gray-800">{op.prazo_meses} meses</dd>
-                                                    </div>
-                                                )}
-                                            </dl>
-                                        </div>
-                                        )}
-
-                                        {/* Fotos: imagens do empreendimento (Fase 3 do plano 2026-11-21; a galeria própria saiu). */}
-                                        {(op.fotos?.length ?? 0) > 0 && (
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <Building2 className="w-4 h-4 text-blue-600" />
-                                                    <span className="text-sm font-semibold text-gray-700">Imagens do empreendimento</span>
-                                                </div>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                    {op.fotos!.map((f, idx) => (
-                                                        <figure key={`${f.url}-${idx}`} className="relative h-48 rounded-2xl overflow-hidden border border-gray-100">
-                                                            <img src={f.url} alt={f.legenda ?? `Imagem ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
-                                                            {f.legenda && (
-                                                                <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-3 text-sm text-white">{f.legenda}</figcaption>
-                                                            )}
-                                                        </figure>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Localização Inteligente e Distâncias */}
-                                        {op.distances_json && op.distances_json.length > 0 && (
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <MapPin className="w-4 h-4 text-blue-600" />
-                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Conveniências e Distâncias</span>
-                                                </div>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                                                    {op.distances_json.map((item: any, idx) => (
-                                                        <div key={idx} className="flex items-center justify-between p-3.5 bg-gray-50/50 border border-gray-100 rounded-2xl">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="w-8 h-8 rounded-full bg-blue-50 flex items-center justify-center">
-                                                                    <MapPin className="w-4 h-4 text-blue-600" />
-                                                                </div>
-                                                                <span className="text-sm font-bold text-gray-800">{item.place}</span>
-                                                            </div>
-                                                            <span className="text-xs font-black text-blue-600 bg-blue-50 px-3 py-1 rounded-xl font-mono">{item.distance}</span>
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Equipe / Parceiros */}
-                                        {op.team_json && op.team_json.length > 0 && (
-                                            <div>
-                                                <div className="flex items-center gap-2 mb-4">
-                                                    <Users className="w-4 h-4 text-blue-600" />
-                                                    <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Equipe de Desenvolvimento & RI</span>
-                                                </div>
-                                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                                    {op.team_json.map((member: any, idx) => (
-                                                        <div key={idx} className="flex items-center justify-between p-4 bg-gray-50/50 border border-gray-100 rounded-3xl">
-                                                            <div>
-                                                                <p className="text-sm font-black text-gray-800">{member.name}</p>
-                                                                <p className="text-xs font-bold text-gray-400 mt-0.5 uppercase tracking-wide">{member.role}</p>
-                                                            </div>
-                                                            {member.experience && (
-                                                                <span className="text-[10px] font-black text-emerald-600 bg-emerald-50 px-2.5 py-1 rounded-lg uppercase">
-                                                                    {member.experience}
-                                                                </span>
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                                        {/* Fase C8 (plano 2026-11-21-portal-do-investidor-consolidacao): a MESMA apresentação do
+                                            portal — captação, ficha técnica congelada, fotos, distâncias, equipe e simulador. */}
+                                        <ApresentacaoDaOportunidade
+                                            op={op}
+                                            fichaTecnica={(produto?.tabelas?.[0]?.linhas ?? null) as [string, string][] | null}
+                                            semSimulador
+                                        />
 
                                         {/* CTA Manifestar Interesse */}
                                         <div className="pt-4">
@@ -519,8 +406,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                                 versaoPublicada={versaoPublicada}
                                                 study={study}
                                                 cenarios={versaoPublicada?.cenarios ?? cenariosAoVivo}
-                                                accent={portalToken ? 'portal' : 'indigo'}
-                                                aviso={!versaoPublicada && !portalToken ? (
+                                                accent="indigo"
+                                                aviso={!versaoPublicada ? (
                                                     <p className="rounded-[10px] bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
                                                         Prévia do estudo atual. O investidor só vê uma versão congelada: escolha-a em Editar antes de publicar.
                                                     </p>
@@ -585,7 +472,6 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                         organizationId={organizationId}
                                         isAdmin={isAdmin}
                                         uploadedBy={uploadedBy}
-                                        portalToken={portalToken}
                                     />
                                 )}
 

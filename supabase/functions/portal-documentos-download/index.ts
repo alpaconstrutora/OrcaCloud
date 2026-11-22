@@ -40,7 +40,8 @@ const ehUuid = (v: unknown): v is string => typeof v === 'string' && UUID.test(v
 //    segue se o caminho pedido aparece na resposta:
 //      • cliente    → fn_portal_get_contracts(token): contrato assinado e
 //                     minutas emitidas;
-//      • investidor → fn_investor_portal_get_reports(token): `url` do relatório;
+//      • investidor → fn_investor_portal_get_reports(token): `url` do relatório; e
+//                     fn_investor_portal_get_summary(token): comprovante do aporte (`receipt_url`);
 //      • parceiro   → partner_portal_get_*(token) / partner_get_*(workspace):
 //                     PDF do contrato, versões emitidas e NF das medições.
 //
@@ -56,7 +57,7 @@ const ehUuid = (v: unknown): v is string => typeof v === 'string' && UUID.test(v
 //      • contrato → `contract-minutas|measurements|invoices/<contrato>/…`,
 //                   `contract-addendums/<aditivo DESTE contrato>/…` ou
 //                   `<org do contrato>/contracts/…` (parecer e PDF assinado antigos);
-//      • relatório → `reports/<org do relatório>/…`.
+//      • relatório e comprovante → `reports/<org do registro>/…`.
 //
 // A service_role entra DEPOIS, para conferir a pasta e assinar, e o caminho
 // ainda passa por `caminhoSemTravessia`. Devolve URL assinada de 15 minutos,
@@ -147,6 +148,16 @@ serve(async (req: Request) => {
         if (!r.data?.valid) return json({ error: 'Link inválido ou expirado' }, 403);
         for (const rel of lista(r.data.reports)) {
             if (ehUuid(rel.organization_id)) considerar(rel.url, { tipo: 'relatorio', orgId: rel.organization_id });
+        }
+        // Comprovante do aporte (Fase C4 do plano 2026-11-21-portal-do-investidor-consolidacao): o que o RESUMO do
+        // link lista para ESTE investidor (receipt_url), na pasta `reports/<org do lançamento>/comprovantes/…`.
+        if (candidatos.length === 0) {
+            const s = await chamar('fn_investor_portal_get_summary', { p_token: token });
+            if (s.erro) return json({ error: 'Erro ao validar o acesso' }, 500);
+            if (!s.data?.valid) return json({ error: 'Link inválido ou expirado' }, 403);
+            for (const c of lista(s.data.contributions)) {
+                if (ehUuid(c.organization_id)) considerar(c.receipt_url, { tipo: 'relatorio', orgId: c.organization_id });
+            }
         }
     } else {
         const porToken = !!token;

@@ -16,8 +16,10 @@ import {
     ratio,
     ratioPct,
     servicoPrimeirosMeses,
+    type SnapshotCapacidade,
     type SnapshotInputs,
 } from '../utils/creditRoomSnapshot';
+import { PARAMETROS_CAPACIDADE_PADRAO, type SerieMes } from '../utils/creditCapacity';
 
 const base: SnapshotInputs = {
     dataBase: '2026-09-07',
@@ -294,5 +296,155 @@ describe('computeIndicators', () => {
         expect(ind.dscr_atual).toBe(1.29);
         expect(ind.servico_pos_anual).toBeNull();
         expect(ind.dscr_pos).toBeNull();
+    });
+});
+
+// ── Schema 2: capacidade de pagamento pela série mensal ──────────────────────
+
+/** Indicadores que a versão 1 produzia para `base` — copiados do `computeIndicators`
+ *  ANTES de o schema 2 existir. Se este objeto mudar, versões congeladas passaram a
+ *  mostrar outro número para o banco. */
+const INDICADORES_SCHEMA1_ESPERADOS = {
+    divida_atual: 5000000,
+    divida_pos: 15000000,
+    custo_total: 40000000,
+    ltc_atual: 12.5,
+    ltc_pos: 37.5,
+    garantias_brutas: 12000000,
+    garantias_elegiveis: 7600000,
+    ltv_atual: 41.67,
+    ltv_pos: 125,
+    cobertura_atual: 1.52,
+    cobertura_pos: 0.51,
+    equity_pct: 15,
+    equity_previsto_pct: 30,
+    fluxo_elegivel_anual: 1800000,
+    servico_atual_anual: 1400000,
+    servico_pos_anual: 2900000,
+    dscr_atual: 1.29,
+    dscr_pos: 0.62,
+    pct_vendido: 46.67,
+    fontes_ausentes: [],
+};
+
+const serie12 = (over: Partial<SerieMes> = {}): SerieMes[] =>
+    Array.from({ length: 12 }, (_, i) => ({
+        mes: `2026-${String(i + 1).padStart(2, '0')}`,
+        vendas: 6_000, alugueis: 4_000, despesa_operacional: 0,
+        renda_liquida: 10_000, servico_atual: 5_000, servico_novo: 0,
+        folga: 5_000, dscr: 2,
+        ...over,
+    }));
+
+const capacidadeBase = (serie: SerieMes[] = serie12()): SnapshotCapacidade => ({
+    fonte: 'creditCapacity',
+    data_base: '2026-09-07',
+    parametros: { ...PARAMETROS_CAPACIDADE_PADRAO },
+    base: 'CONTRATADA',
+    serie,
+    recebido_12m: [],
+    vencido_na_data_base: 0,
+    a_vencer_mes_corrente: 0,
+    estoque: null,
+    capacidade_maxima: { parcela_maxima: 0, valor_maximo: 0 },
+    alertas: [],
+    por_organizacao: [],
+});
+
+describe('schema 2', () => {
+    it('buildSnapshot grava schema 2', () => {
+        expect(buildSnapshot(base).schema).toBe(2);
+    });
+
+    it('blocos novos sem fonte ficam null — não zero nem vazio', () => {
+        const s = buildSnapshot(base);
+        expect(s.escopo).toBeNull();
+        expect(s.empreendimentos).toBeNull();
+        expect(s.contratos).toBeNull();
+        expect(s.capacidade).toBeNull();
+        expect(s.qualidade).toBeNull();
+    });
+
+    it('schema 1 congelado continua com os mesmos indicadores', () => {
+        const v1 = { ...buildSnapshot(base), schema: 1 as const };
+        delete (v1 as any).capacidade;
+        expect(computeIndicators(v1)).toEqual(INDICADORES_SCHEMA1_ESPERADOS);
+    });
+
+    it('com capacidade, DSCR sai da série e não soma NOI de novo', () => {
+        const s = buildSnapshot({
+            ...base,
+            portfolio: { ...base.portfolio!, noi: 99_999 * 12, janelaMeses: 12 },   // noi_mensal 99.999 — deve ser ignorado
+            capacidade: capacidadeBase(),
+        });
+        const ind = computeIndicators(s);
+        expect(ind.fluxo_elegivel_anual).toBe(120_000);     // 12 × 10.000
+        expect(ind.servico_atual_anual).toBe(60_000);       // 12 × 5.000 (não o servico_365 da dívida)
+        expect(ind.dscr_atual).toBe(2);
+    });
+
+    it('só os 12 primeiros meses da série entram na conta', () => {
+        const serie = [...serie12(), ...serie12({ renda_liquida: 777_000, servico_atual: 555_000 })];
+        const ind = computeIndicators(buildSnapshot({ ...base, capacidade: capacidadeBase(serie) }));
+        expect(ind.fluxo_elegivel_anual).toBe(120_000);
+        expect(ind.servico_atual_anual).toBe(60_000);
+    });
+
+    it('serviço pós soma o novo da série; é null sem série de serviço novo E sem proposta', () => {
+        const comNovo = computeIndicators(buildSnapshot({
+            ...base, capacidade: capacidadeBase(serie12({ servico_novo: 2_500 })),
+        }));
+        expect(comNovo.servico_pos_anual).toBe(90_000);     // 12 × (5.000 + 2.500)
+        expect(comNovo.dscr_pos).toBe(1.33);                // 120 / 90
+
+        const semNada = computeIndicators(buildSnapshot({
+            ...base, novoServico12m: null, capacidade: capacidadeBase(),
+        }));
+        expect(semNada.servico_pos_anual).toBeNull();
+        expect(semNada.dscr_pos).toBeNull();
+
+        // Proposta com cronograma, mesmo que a série ainda não carregue o novo serviço.
+        const comProposta = computeIndicators(buildSnapshot({
+            ...base, novoServico12m: 1_500_000, capacidade: capacidadeBase(),
+        }));
+        expect(comProposta.servico_pos_anual).toBe(60_000);
+    });
+
+    it('série vazia não vira DSCR de zero — fluxo e serviço ficam null', () => {
+        const ind = computeIndicators(buildSnapshot({ ...base, capacidade: capacidadeBase([]) }));
+        expect(ind.fluxo_elegivel_anual).toBeNull();
+        expect(ind.servico_atual_anual).toBeNull();
+        expect(ind.dscr_atual).toBeNull();
+    });
+
+    it('receivables e noi marcados com capacidade não aparecem em fontes_ausentes', () => {
+        const ind = computeIndicators(buildSnapshot({
+            ...base,
+            portfolio: null,
+            operacao: { ...base.operacao, eligibleFlows: { noi: true, receivables: true, operating_cash: true } },
+            capacidade: capacidadeBase(),
+        }));
+        expect(ind.fontes_ausentes).toEqual(['operating_cash']);
+    });
+
+    it('buildSnapshot congela capacidade por valor (mutar a entrada não muda o snapshot)', () => {
+        const capacidade = capacidadeBase();
+        const s = buildSnapshot({ ...base, capacidade });
+        capacidade.serie[0].renda_liquida = 1;
+        capacidade.serie.pop();
+        capacidade.alertas.push({ tipo: 'LOCACAO_SEM_VALOR', qtd: 1, valor: 1 });
+        expect(s.capacidade!.serie).toHaveLength(12);
+        expect(s.capacidade!.serie[0].renda_liquida).toBe(10_000);
+        expect(s.capacidade!.alertas).toEqual([]);
+    });
+
+    it('buildSnapshot congela escopo, empreendimentos, contratos e qualidade por valor', () => {
+        const escopo = { fonte: 'organizations', data_base: '2026-09-07', tipo: 'GRUPO' as const, organizacoes: [{ id: 'o1', nome: 'SPE A', cnpj: null }] };
+        const qualidade = { fonte: 'creditCapacity', data_base: '2026-09-07', concentracao_top5_pct: 40, wale_anos: 2, locacoes_prazo_indeterminado: 0, pontualidade_12m_pct: 90 };
+        const s = buildSnapshot({ ...base, escopo, qualidade });
+        escopo.organizacoes[0].nome = 'mudou';
+        qualidade.wale_anos = 99;
+        expect(s.escopo!.organizacoes[0].nome).toBe('SPE A');
+        expect(s.qualidade!.wale_anos).toBe(2);
     });
 });

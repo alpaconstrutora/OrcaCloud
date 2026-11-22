@@ -20,8 +20,18 @@
 
 import { round2 } from './financialMath';
 import type { OrigemCusto } from './creditRoomEac';
+// `import type` de propósito: creditCapacity importa `ratio`/`ratioPct` DAQUI
+// como valor; um import de valor de volta fecharia um ciclo em runtime.
+import type { AlertaCarteira, ParametrosCapacidade, QualidadeRenda, SerieMes } from './creditCapacity';
 
-export const CREDIT_ROOM_SNAPSHOT_SCHEMA = 1 as const;
+/**
+ * Versão do formato gravado. 2 = traz capacidade de pagamento (série mensal),
+ * carteira e empreendimentos. Versões 1 já congeladas continuam abrindo: os
+ * blocos novos são opcionais e `computeIndicators` mantém a conta antiga
+ * quando `capacidade` não existe.
+ */
+export const CREDIT_ROOM_SNAPSHOT_SCHEMA = 2 as const;
+export type CreditRoomSnapshotSchema = 1 | 2;
 
 // ── Tipos que a operação carrega ─────────────────────────────────────────────
 
@@ -259,8 +269,70 @@ export interface SnapshotEmpreendimento extends BlocoBase {
     vgv_total: number | null;
 }
 
+/** Quem compõe a leitura: uma empresa ou um grupo de organizações. */
+export interface SnapshotEscopo extends BlocoBase {
+    tipo: 'EMPRESA' | 'GRUPO';
+    organizacoes: { id: string; nome: string; cnpj: string | null }[];
+}
+
+export interface SnapshotEmpreendimentoItem {
+    id: string;
+    nome: string;
+    organization_id: string;
+    cidade: string | null;
+    uf: string | null;
+    objetivo: string | null;
+    unidades_total: number;
+    vendidas: number;
+    alugadas: number;
+    disponiveis: number;
+    vgv_total: number;
+    vgv_vendido: number;
+    vgv_disponivel: number;
+    renda_mensal: number;
+    capa: string | null;
+    /** No máximo 8. */
+    fotos: { url: string; legenda: string | null }[];
+}
+
+/**
+ * Contrato da carteira. NUNCA leva o nome do cliente: só o `rotulo` mascarado
+ * ("Venda 03", "Locação 12") — o snapshot vai para fora da empresa.
+ */
+export interface SnapshotContrato {
+    rotulo: string;
+    tipo: 'VENDA' | 'LOCACAO';
+    contract_id: string | null;
+    organization_id: string;
+    empreendimento_id: string | null;
+    unidade: string | null;
+    valor_contrato: number;
+    parcela_mensal: number;
+    saldo_a_receber: number;
+    vencido: number;
+    primeiro_vencimento: string | null;
+    ultimo_vencimento: string | null;
+    status: string;
+    tem_parcelas: boolean;
+}
+
+/** Capacidade de pagamento (spec 2026-11-21): série mensal e limites calculados. */
+export interface SnapshotCapacidade extends BlocoBase {
+    parametros: ParametrosCapacidade;
+    base: 'CONTRATADA';
+    serie: SerieMes[];
+    recebido_12m: { mes: string; vendas: number; alugueis: number }[];
+    vencido_na_data_base: number;
+    a_vencer_mes_corrente: number;
+    /** `null` sem estoque disponível a considerar. */
+    estoque: { vgv_disponivel: number; haircut_pct: number; valor_elegivel: number } | null;
+    capacidade_maxima: { parcela_maxima: number; valor_maximo: number };
+    alertas: AlertaCarteira[];
+    por_organizacao: { organization_id: string; renda_12m: number; servico_12m: number; divida_total: number }[];
+}
+
 export interface CreditRoomSnapshot {
-    schema: typeof CREDIT_ROOM_SNAPSHOT_SCHEMA;
+    schema: CreditRoomSnapshotSchema;
     data_base: string;
     operacao: SnapshotOperacao;
     empreendimento: SnapshotEmpreendimento | null;
@@ -272,6 +344,12 @@ export interface CreditRoomSnapshot {
     eac: SnapshotEac | null;
     fontes_usos: SnapshotFontesUsos | null;
     documentos: { version_ids: string[] };
+    // Schema 2 — ausentes em versões 1 (por isso opcionais); `null` = sem fonte.
+    escopo?: SnapshotEscopo | null;
+    empreendimentos?: SnapshotEmpreendimentoItem[] | null;
+    contratos?: SnapshotContrato[] | null;
+    capacidade?: SnapshotCapacidade | null;
+    qualidade?: (QualidadeRenda & BlocoBase) | null;
 }
 
 // ── Indicadores (PRD §42, §48–50, §53) ───────────────────────────────────────
@@ -398,6 +476,12 @@ export interface SnapshotInputs {
         contratadoCabecalho: number; coberturaPct: number | null;
         origens: { id: string; name: string }[];
     } | null;
+    // Schema 2 — o service monta já na forma congelada.
+    escopo?: SnapshotEscopo | null;
+    empreendimentos?: SnapshotEmpreendimentoItem[] | null;
+    contratos?: SnapshotContrato[] | null;
+    capacidade?: SnapshotCapacidade | null;
+    qualidade?: (QualidadeRenda & BlocoBase) | null;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -674,6 +758,11 @@ export function buildSnapshot(inputs: SnapshotInputs): CreditRoomSnapshot {
         eac: eacBloco,
         fontes_usos: fontesUsos,
         documentos: { version_ids: [...inputs.documentVersionIds] },
+        escopo: inputs.escopo ? structuredClone(inputs.escopo) : null,
+        empreendimentos: inputs.empreendimentos ? structuredClone(inputs.empreendimentos) : null,
+        contratos: inputs.contratos ? structuredClone(inputs.contratos) : null,
+        capacidade: inputs.capacidade ? structuredClone(inputs.capacidade) : null,
+        qualidade: inputs.qualidade ? structuredClone(inputs.qualidade) : null,
     };
 }
 
@@ -703,18 +792,42 @@ export function computeIndicators(s: CreditRoomSnapshot): CreditRoomIndicators {
     // R8 — fluxo elegível. Só soma o que foi marcado E tem fonte no snapshot.
     const ausentes: string[] = [];
     let fluxo: number | null = null;
-    if (op.eligible_flows.noi) {
-        if (s.portfolio) fluxo = n(fluxo) + s.portfolio.noi_mensal * 12;
-        else ausentes.push('noi');
-    }
-    if (op.eligible_flows.receivables) ausentes.push('receivables');
-    if (op.eligible_flows.operating_cash) ausentes.push('operating_cash');
-    if (fluxo != null) fluxo = round2(fluxo);
+    let servicoAtual: number | null;
+    let servicoPos: number | null;
 
-    const servicoAtual = s.divida ? s.divida.servico_365 : null;
-    const servicoPos = servicoAtual == null || op.novo_servico_12m == null
-        ? null
-        : round2(servicoAtual + op.novo_servico_12m);
+    if (s.capacidade) {
+        // Schema 2: a série mensal (que já respeita os fluxos elegíveis e a
+        // carteira contratada) é a fonte única de fluxo E de serviço. Somar o
+        // `noi_mensal × 12` por cima contaria o aluguel duas vezes, e por isso
+        // `noi` e `receivables` não viram aviso: têm fonte, a própria série.
+        const doze = s.capacidade.serie.slice(0, 12);
+        const soma = (f: (m: SerieMes) => number) => round2(doze.reduce((a, m) => a + n(f(m)), 0));
+        if (doze.length) {
+            fluxo = soma(m => m.renda_liquida);
+            servicoAtual = soma(m => m.servico_atual);
+            // Sem série de serviço novo E sem proposta com cronograma = não dá
+            // para afirmar o serviço pós — `null`, não "igual ao atual".
+            const semNovo = doze.every(m => n(m.servico_novo) === 0) && op.novo_servico_12m == null;
+            servicoPos = semNovo ? null : soma(m => n(m.servico_atual) + n(m.servico_novo));
+        } else {
+            servicoAtual = null;
+            servicoPos = null;
+        }
+        if (op.eligible_flows.operating_cash) ausentes.push('operating_cash');
+    } else {
+        if (op.eligible_flows.noi) {
+            if (s.portfolio) fluxo = n(fluxo) + s.portfolio.noi_mensal * 12;
+            else ausentes.push('noi');
+        }
+        if (op.eligible_flows.receivables) ausentes.push('receivables');
+        if (op.eligible_flows.operating_cash) ausentes.push('operating_cash');
+        if (fluxo != null) fluxo = round2(fluxo);
+
+        servicoAtual = s.divida ? s.divida.servico_365 : null;
+        servicoPos = servicoAtual == null || op.novo_servico_12m == null
+            ? null
+            : round2(servicoAtual + op.novo_servico_12m);
+    }
 
     return {
         divida_atual: dividaAtual,

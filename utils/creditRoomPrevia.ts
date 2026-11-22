@@ -45,6 +45,9 @@ export function versaoDaPrevia(p: VersaoPreparada, calculadaEm: string, organiza
 
 export const ehPrevia = (v: CreditRoomVersion | null | undefined): boolean => v?.id === ID_DA_PREVIA;
 
+/** Carimbo de todo material INTERNO gerado da prévia (book): nunca sai como se fosse o que a instituição vê. */
+export const MARCA_DA_PREVIA = 'PRÉVIA — não liberada à instituição';
+
 /** 'hh:mm' (hora local) em que a prévia foi calculada. */
 export const horaDaPrevia = (calculadaEm: string): string =>
     new Date(calculadaEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });

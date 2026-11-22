@@ -15,6 +15,7 @@ import type { jsPDF } from 'jspdf';
 import { formatMoney } from '../components/ui/Format';
 import { CENARIOS_ESTRESSE, estresseDaVersao, fluxosDaOperacao, resumoDaCapacidade } from '../utils/creditCapacity';
 import { fotosDoEmpreendimento, montarBook, urlsDasFotosDoBook } from '../utils/creditRoomBook';
+import { versaoDaPrevia } from '../utils/creditRoomPrevia';
 import {
     extrasPadrao, NOME_DE_CLIENTE, VALOR_MAXIMO_CONGELADO, versaoSchema1, versaoSchema2,
 } from './fixtures/creditRoomBookFixture';
@@ -208,5 +209,43 @@ describe('montarBook - marca d\'água', () => {
     it('sem marca, nenhuma página a leva', () => {
         const t = texto(montarBook(versaoSchema2(), extrasPadrao()));
         expect(t).not.toContain('analista@banco.com');
+    });
+});
+
+describe('montarBook - book interno da prévia', () => {
+    const previaDe = () => {
+        const base = versaoSchema2();
+        return versaoDaPrevia(
+            { roomId: base.creditRoomId, dataBase: '2026-11-22', snapshot: base.snapshot, indicators: base.indicators, servicoNovoSimulado: true },
+            '2026-11-22T17:30:00.000Z', base.organizationId,
+        );
+    };
+    const MARCA = 'PRÉVIA - não liberada à instituição'; // limpo(): o travessão vira hífen
+
+    it('a marca "PRÉVIA — não liberada à instituição" sai em TODAS as páginas', () => {
+        const doc = montarBook(previaDe(), extrasPadrao());
+        const ps = paginas(doc);
+        expect(ps.length).toBeGreaterThan(3);
+        for (const p of ps) expect(p).toContain(MARCA);
+    });
+
+    it('capa, resumo e rodapé dizem "Prévia de dd/mm/aaaa", nunca "V0"', () => {
+        const doc = montarBook(previaDe(), extrasPadrao());
+        const t = texto(doc);
+        expect(t).toContain('Prévia de 22/11/2026');
+        expect(t).not.toMatch(/\bV0\b/);
+        expect(t).not.toContain('versão congelada acima');
+        const total = doc.getNumberOfPages();
+        paginas(doc).forEach((p, i) => {
+            expect(p).toContain(`CR-0007 · Prévia de 22/11/2026 · data-base 22/11/2026 · página ${i + 1}/${total}`);
+        });
+        expect(paginas(doc)[1]).toContain('prévia de hoje');
+    });
+
+    it('versão liberada: sem a marca da prévia e com "V{n}" como sempre', () => {
+        const doc = montarBook(versaoSchema2(), extrasPadrao());
+        expect(texto(doc)).not.toContain('PRÉVIA');
+        expect(texto(doc)).not.toContain('Prévia');
+        expect(paginas(doc)[0]).toContain('Versão V3');
     });
 });

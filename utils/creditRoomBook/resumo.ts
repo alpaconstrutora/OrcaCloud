@@ -2,15 +2,16 @@
 import type { CreditRoomVersion } from '../../types/creditRoom';
 import { formatDateBR } from '../../components/ui/Format';
 import { ELIGIBLE_FLOW_PT, GUARANTEE_KIND_PT } from '../creditRoomSnapshot';
+import { ehPrevia } from '../creditRoomPrevia';
 import {
-    N_D, aviso, kpis, money, pct, plural, secao, subtitulo, tabela, vezes, type Celula, type Ctx,
+    N_D, aviso, kpis, money, nomeDaVersao, pct, plural, secao, subtitulo, tabela, vezes, type Celula, type Ctx,
 } from './base';
 
 export function secaoResumo(c: Ctx, versao: CreditRoomVersion) {
     const s = versao.snapshot;
     const op = s.operacao;
     const i = versao.indicators;
-    secao(c, '1. Resumo da operação e indicadores', `Posição de ${formatDateBR(versao.dataBase)} (versão V${versao.versionNo}).`);
+    secao(c, '1. Resumo da operação e indicadores', `Posição de ${formatDateBR(versao.dataBase)} (${ehPrevia(versao) ? 'prévia de hoje' : `versão ${nomeDaVersao(versao)}`}).`);
 
     const fluxos = (Object.keys(ELIGIBLE_FLOW_PT) as (keyof typeof ELIGIBLE_FLOW_PT)[])
         .filter(k => op.eligible_flows[k]).map(k => ELIGIBLE_FLOW_PT[k]);

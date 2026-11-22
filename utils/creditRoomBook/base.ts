@@ -6,13 +6,15 @@
 import { jsPDF } from 'jspdf';
 import autoTable, { type CellDef, type RowInput } from 'jspdf-autotable';
 import { formatDateBR, formatMoney } from '../../components/ui/Format';
+import type { CreditRoomVersion } from '../../types/creditRoom';
+import { ehPrevia } from '../creditRoomPrevia';
 
 export interface ExtrasDoBook {
     room: { code: string; name: string; institutionName: string | null };
     /** url da foto → dataURL (JPEG); ausente = sem foto. */
     imagens: Record<string, string>;
     documentos: { nome: string; categoria: string; empresa: string | null }[];
-    /** "email · dd/mm/aaaa hh:mm" quando o credor baixa. */
+    /** "email · dd/mm/aaaa hh:mm" quando o credor baixa. Nunca vem junto de uma prévia (o portal só vê versão liberada). */
     marcaDagua?: string;
 }
 
@@ -49,6 +51,13 @@ export const anos = (v: number | null | undefined) =>
 export const inteiro = (v: number | null | undefined) => (v == null ? N_D : v.toLocaleString('pt-BR'));
 export const data = (v: string | null | undefined) => (v ? formatDateBR(v) : N_D);
 export const plural = (n: number, um: string, muitos: string) => `${n} ${n === 1 ? um : muitos}`;
+
+/**
+ * Como o book chama a versão: "V3" (liberada) ou "Prévia de dd/mm/aaaa" (a prévia da tela, versionNo 0 —
+ * nunca "V0"). A prévia é calculada hoje, então a data-base é a data dela.
+ */
+export const nomeDaVersao = (versao: CreditRoomVersion): string =>
+    ehPrevia(versao) ? `Prévia de ${formatDateBR(versao.dataBase)}` : `V${versao.versionNo}`;
 
 export const FRASE_SCHEMA_1 = 'versão congelada antes da capacidade de pagamento';
 

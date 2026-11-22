@@ -1,8 +1,9 @@
 /** Capa: faixa escura, código, nome, instituição, versão, data-base e a foto principal. */
 import type { CreditRoomVersion } from '../../types/creditRoom';
 import { formatDateBR } from '../../components/ui/Format';
+import { MARCA_DA_PREVIA, ehPrevia } from '../creditRoomPrevia';
 import {
-    COR, MARGEM, altura, fotoNaCaixa, larguraUtil, limpo, money, prepararFoto, type Ctx, type ExtrasDoBook,
+    COR, MARGEM, altura, fotoNaCaixa, larguraUtil, limpo, money, nomeDaVersao, prepararFoto, type Ctx, type ExtrasDoBook,
 } from './base';
 import { fotoDaCapa } from './fotos';
 
@@ -31,9 +32,17 @@ export function desenharCapa(c: Ctx, versao: CreditRoomVersion, extras: ExtrasDo
     c.y = 70 + titulo.length * 10;
     doc.setFont('helvetica', 'normal'); doc.setFontSize(11);
     doc.setTextColor(COR.texto[0], COR.texto[1], COR.texto[2]);
-    const rotulo = `Versão V${versao.versionNo}${versao.label ? ` · ${versao.label}` : ''}`;
+    const previa = ehPrevia(versao);
+    const rotulo = previa ? nomeDaVersao(versao) : `Versão ${nomeDaVersao(versao)}${versao.label ? ` · ${versao.label}` : ''}`;
     doc.text(limpo(`${rotulo} · data-base ${formatDateBR(versao.dataBase)}`), MARGEM, c.y);
     c.y += 8;
+    if (previa) {
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(10);
+        doc.setTextColor(COR.vermelho[0], COR.vermelho[1], COR.vermelho[2]);
+        doc.text(limpo(MARCA_DA_PREVIA), MARGEM, c.y);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
+        c.y += 8;
+    }
     doc.setFontSize(9.5);
     doc.setTextColor(COR.suave[0], COR.suave[1], COR.suave[2]);
     doc.text(limpo(`Valor solicitado ${money(op.requested_amount)}${op.modality ? ` · ${op.modality}` : ''}`), MARGEM, c.y);
@@ -48,8 +57,10 @@ export function desenharCapa(c: Ctx, versao: CreditRoomVersion, extras: ExtrasDo
 
     doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
     doc.setTextColor(COR.suave[0], COR.suave[1], COR.suave[2]);
-    const nota = doc.splitTextToSize(limpo(
-        'Todos os números deste book vêm da versão congelada acima, na data-base indicada: não são o dado de hoje. '
+    const nota = doc.splitTextToSize(limpo(previa
+        ? 'Book INTERNO da prévia, calculada com o cadastro de hoje e ainda não liberada à instituição: os números podem mudar até a liberação. '
+        + 'Valores contratados, sem reajuste. Clientes aparecem só por rótulo (sem nome). n/d = dado não disponível nesta versão.'
+        : 'Todos os números deste book vêm da versão congelada acima, na data-base indicada: não são o dado de hoje. '
         + 'Valores contratados, sem reajuste. Clientes aparecem só por rótulo (sem nome). n/d = dado não disponível nesta versão.',
     ), larguraUtil(doc)) as string[];
     doc.text(nota, MARGEM, altura(doc) - 28);

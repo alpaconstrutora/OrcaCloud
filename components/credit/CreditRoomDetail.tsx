@@ -160,16 +160,20 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         () => versoes.find(v => v.id === room.activeVersionId) ?? versoes[0] ?? null,
         [versoes, room.activeVersionId],
     );
-    const calcularPrevia = React.useCallback(async (dataBase?: string) => {
+    // Devolve a prévia calculada (o book baixado de uma aba que não a calcula usa o valor direto); `null` se falhou ou foi superada.
+    const calcularPrevia = React.useCallback(async (dataBase?: string): Promise<{ previa: VersaoPreparada; calculadaEm: string } | null> => {
         const minha = ++geracaoPrevia.current;
         setPreviaEst({ status: 'carregando' });
         try {
             const p = await creditRoomService.prepararVersao(room, dataBase || hojeLocalISO());
-            if (minha !== geracaoPrevia.current) return;
-            setPreviaEst({ status: 'ok', previa: p, calculadaEm: new Date().toISOString() });
+            if (minha !== geracaoPrevia.current) return null;
+            const calculadaEm = new Date().toISOString();
+            setPreviaEst({ status: 'ok', previa: p, calculadaEm });
+            return { previa: p, calculadaEm };
         } catch (e) {
-            if (minha !== geracaoPrevia.current) return;
+            if (minha !== geracaoPrevia.current) return null;
             setPreviaEst({ status: 'erro', erro: errorMessage(e, 'Não foi possível calcular a prévia.') });
+            return null;
         }
     }, [room]);
 
@@ -182,8 +186,10 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     }, [room]);
 
     const abaUsaPrevia = aba === 'visao' || aba === 'capacidade' || aba === 'empreendimentos';
+    // O Data Room também trabalha com a versão exibida ("Sugerir documentos" lê a carteira dela): tem o seletor e a prévia.
+    const abaTemVisao = abaUsaPrevia || aba === 'dataroom';
     // Com o painel "Liberar" aberto, quem calcula é ele (para a data-base do painel).
-    const precisaDaPrevia = abaUsaPrevia && visao === ID_DA_PREVIA && !liberarAberto;
+    const precisaDaPrevia = abaTemVisao && visao === ID_DA_PREVIA && !liberarAberto;
     // A aba mostra a prévia de HOJE: uma pronta para outra data (calculada ontem, ou para a data-base de um painel
     // cancelado) vale tanto quanto nenhuma — recalcula, e enquanto isso mostra o esqueleto.
     const hoje = hojeLocalISO();
@@ -200,6 +206,14 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     );
     const versaoEscolhida = visao === ID_DA_PREVIA ? null : versoes.find(v => v.id === visao) ?? null;
     const mostrandoPrevia = visao === ID_DA_PREVIA || !versaoEscolhida;
+    // A versão que está na tela (prévia pronta, ou a liberada escolhida): é dela que saem o book e as sugestões do Data Room.
+    const versaoNaTela = mostrandoPrevia ? versaoPrevia : versaoEscolhida;
+    // Por que ainda não há versão para o book / sugestões (prévia calculando ou com erro); `null` quando há.
+    const motivoSemVersao = versaoNaTela ? null
+        : previaEst.status === 'erro' ? previaEst.erro
+            : 'Calculando a prévia…';
+    // Aba que não calcula a prévia sozinha: o botão do book calcula ao clicar, então só desliga enquanto calcula ou se deu erro.
+    const bookSemVersao = !versaoNaTela && previaEst.status === 'idle' && !precisaDaPrevia ? null : motivoSemVersao;
 
     // Room de Grupo: o Data Room mostra de qual empresa é cada documento (nome vem da versão ativa).
     const grupoEscopo = room.escopo === 'GRUPO';
@@ -209,15 +223,24 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         return m;
     }, [ativa]);
 
-    // Book em PDF da versão ATIVA (congelada, nunca o dado vivo). O índice do Data Room é lido na hora:
-    // a aba pode não ter sido aberta, e um índice vazio por "não carregou" diria que não há documento.
+    // Book em PDF da versão NA TELA: a prévia de hoje (sai carimbada "PRÉVIA — não liberada à instituição") ou a
+    // liberada escolhida. Nunca leva a marca do credor nem entra no log dele. Numa aba que não calcula a prévia,
+    // o clique calcula na hora. O índice do Data Room é lido agora: a aba pode não ter sido aberta, e um índice
+    // vazio por "não carregou" diria que não há documento.
     const baixarBook = async () => {
-        if (!ativa || gerandoBook) return;
+        if (gerandoBook) return;
         setGerandoBook(true);
         setErro(null);
         try {
+            let versao = versaoNaTela;
+            if (!versao && previaEst.status === 'idle') {
+                const r = await calcularPrevia();
+                if (!r) return;
+                versao = versaoDaPrevia(r.previa, r.calculadaEm, room.organizationId);
+            }
+            if (!versao) return;
             const docs = await creditRoomService.listDocuments(room.id);
-            await creditRoomBookService.baixar(room, ativa, { documentos: creditRoomBookService.documentosDoIndice(docs, ativa) });
+            await creditRoomBookService.baixar(room, versao, { documentos: creditRoomBookService.documentosDoIndice(docs, versao) });
         } catch (e) {
             setErro(errorMessage(e, 'Não foi possível gerar o book.'));
         } finally {
@@ -367,7 +390,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                         {room.institutionName ? `· ${room.institutionName}` : ''}
                         {ativa ? ` · versão ativa V${ativa.versionNo} (${formatDateBR(ativa.dataBase)})` : ' · sem versão liberada'}
                     </span>
-                    {abaUsaPrevia && (
+                    {abaTemVisao && (
                         <>
                             <span className="text-sm text-gray-500">Mostrando</span>
                             <select
@@ -393,11 +416,14 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     {/* Desligado sempre diz o motivo: o wrapper carrega o title (botão disabled não dispara hover). */}
                     <span
                         className="inline-flex shrink-0"
-                        title={!ativa ? 'Libere uma versão para baixar o book' : gerandoBook ? 'Gerando o book, aguarde' : 'PDF da versão ativa, com fotos'}
+                        title={gerandoBook ? 'Gerando o book, aguarde'
+                            : bookSemVersao ?? (mostrandoPrevia
+                                ? 'PDF da prévia de hoje, com fotos — marcado como não liberado à instituição'
+                                : `PDF da V${versaoEscolhida!.versionNo} liberada, com fotos`)}
                     >
                         <button
                             onClick={() => void baixarBook()}
-                            disabled={!ativa || gerandoBook}
+                            disabled={gerandoBook || !!bookSemVersao}
                             className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 rounded-[6px] transition-all disabled:opacity-50 disabled:pointer-events-none"
                         >
                             <Download className="w-[15px] h-[15px]" />
@@ -551,10 +577,10 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     <p className="text-sm font-normal text-gray-500 px-1">
                         {documentos.length} documento{documentos.length === 1 ? '' : 's'} no Data Room
                     </p>
-                    <span className="inline-flex shrink-0" title={ativa ? undefined : 'Libere uma versão para sugerir os documentos da carteira'}>
+                    <span className="inline-flex shrink-0" title={motivoSemVersao ?? undefined}>
                         <button
                             onClick={() => setSugerirAberto(true)}
-                            disabled={!ativa}
+                            disabled={!versaoNaTela}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
                         >
                             <Sparkles className="w-[15px] h-[15px]" />
@@ -618,12 +644,12 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                 </div>
             )}
 
-            {ativa && (
+            {versaoNaTela && (
                 <CreditRoomSugerirDocumentos
                     open={sugerirAberto}
                     onClose={() => setSugerirAberto(false)}
                     room={room}
-                    versao={ativa}
+                    versao={versaoNaTela}
                     onShared={setDocumentos}
                 />
             )}

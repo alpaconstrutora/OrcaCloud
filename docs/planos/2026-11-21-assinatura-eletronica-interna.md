@@ -146,7 +146,12 @@ Selo PAdES com o certificado A1 da empresa. Não muda a validade jurídica e tem
   - O roteador de abas (`syncViewToUrl`) reescrevia o `#` para `#/central` antes de a página da testemunha ler o token. Agora o `App` captura o fragmento na 1ª renderização.
   - O tour de primeiro acesso abria por cima do painel de assinar. Quem chega por `?assinar=` vê o tour na próxima visita.
   - Desvio do plano: a validação pública é um componente próprio (`PublicAssinaturaChecker`), porque os campos do ofício (tipo, número, destinatário) não se aplicam. Os dois usam o mesmo `sha256DeArquivo`.
-- [ ] F4: Emissão
+- [~] F4: Emissão — código pronto; **falta** o roteiro na tela real, que precisa de login (ver Verificação)
+  - Na tabela de versões: coluna "Assinatura" com o provedor (ZapSign ou portal) e ação "Enviar para assinatura no portal", só em versão emitida; o motivo aparece quando a ação está desligada.
+  - "Acompanhar a assinatura": signatários, cancelar (`useConfirm`), finalizar de novo, "Assinar agora" para o representante e abrir a via assinada.
+  - `remove` e a lixeira recusam versão com envelope.
+  - O cartão do ZapSign recusa versão em assinatura no portal.
+  - Verificado: `tsc` sem erros, `check-ui-standard` limpo, `ContractDocumentosTabela` e `ContractEmissaoDocumentoUnico` passam, e o teste novo `assinaturaEnvioComprador` também.
 - [ ] F5: Negociação
 - [ ] F6: Portal do Corretor
 

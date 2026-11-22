@@ -2398,6 +2398,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         signed_contract_url e aparece aqui só para leitura. */}
                     <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
                         <h4 className="text-xs font-medium text-gray-400 px-2">Assinatura Eletrônica</h4>
+                        <p className="text-sm text-gray-600 px-2">
+                            Documento importante: ZapSign, abaixo. Para assinar sem custo, dentro do portal, use o
+                            ícone de assinatura na versão, na tabela acima.
+                        </p>
                         <SignaturePanel
                             contract={contract}
                             onSend={async (signers) => {
@@ -2407,6 +2411,11 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     const alvo = versoes.find(v => v.emitted);
                                     if (!alvo) {
                                         notify('Emita uma versão do documento do contrato antes de enviar para assinatura.', 'error');
+                                        return;
+                                    }
+                                    // A mesma versão não vai aos dois provedores ao mesmo tempo.
+                                    if (alvo.assinatura_envelope_id && (alvo.signature_status === 'SENT' || alvo.signature_status === 'SIGNED')) {
+                                        notify(`A versão v${alvo.v} já está ${alvo.signature_status === 'SIGNED' ? 'assinada' : 'em assinatura'} no portal.`, 'error');
                                         return;
                                     }
                                     notify('Enviando para ZapSign…', 'info');

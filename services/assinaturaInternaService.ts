@@ -178,3 +178,147 @@ export async function validarAssinaturaPublica(envelopeId: string): Promise<Vali
     if (error) throw error;
     return (data ?? { encontrado: false }) as ValidacaoDeAssinatura;
 }
+
+// ── Lado de quem ENVIA (membro da organização dona do documento) ───────────
+
+export type OrigemDaAssinatura = { tipo: 'CDV' | 'DEAL_DOC'; id: string };
+
+export type SignatarioParaEnviar =
+    | { canal: 'PORTAL_CLIENTE'; client_id: string }
+    | { canal: 'MEMBRO'; user_id: string; cpf?: string }
+    | { canal: 'PORTAL_CORRETOR'; broker_id: string }
+    | { canal: 'LINK'; nome: string; email: string; cpf: string };
+
+export interface ResultadoDoEnvio {
+    envelope_id: string;
+    signatarios: { id: string; nome: string; papel: PapelAssinatura; canal: CanalAssinatura; email_enviado: boolean; erro?: string }[];
+}
+
+export interface SignatarioDoEnvelope {
+    id: string;
+    ordem: number;
+    papel: PapelAssinatura;
+    canal: CanalAssinatura;
+    user_id: string | null;
+    nome: string;
+    representa: string | null;
+    email: string;
+    status: 'PENDENTE' | 'ASSINADO';
+    visualizou_em: string | null;
+    assinado_em: string | null;
+}
+
+export interface EnvelopeDeAssinatura {
+    id: string;
+    titulo: string;
+    status: SituacaoEnvelope;
+    expira_em: string;
+    criado_em: string;
+    concluido_em: string | null;
+    motivo: string | null;
+    assinatura_signatarios: SignatarioDoEnvelope[];
+}
+
+/** Situação que a tela mostra: ENVIADO com prazo vencido já é "vencido" (o banco marca no próximo toque). */
+export const situacaoEfetiva = (e: Pick<EnvelopeDeAssinatura, 'status' | 'expira_em'>): SituacaoEnvelope =>
+    e.status === 'ENVIADO' && new Date(e.expira_em).getTime() < Date.now() ? 'EXPIRADO' : e.status;
+
+export const envioDeAssinaturaService = {
+    criar(origem: OrigemDaAssinatura, signatarios: SignatarioParaEnviar[], titulo?: string): Promise<ResultadoDoEnvio> {
+        return chamar({ acao: 'criar', origem_tipo: origem.tipo, origem_id: origem.id, titulo: titulo || null, signatarios });
+    },
+    cancelar(envelopeId: string, motivo?: string): Promise<{ ok: boolean; status: SituacaoEnvelope }> {
+        return chamar({ acao: 'cancelar', envelope_id: envelopeId, motivo: motivo || null });
+    },
+    finalizar(envelopeId: string): Promise<{ ok: boolean }> {
+        return chamar({ acao: 'finalizar', envelope_id: envelopeId });
+    },
+    /** Envelopes de um documento, o mais recente primeiro (RLS: membro da org). */
+    async listar(origem: OrigemDaAssinatura): Promise<EnvelopeDeAssinatura[]> {
+        const { data, error } = await supabase
+            .from('assinatura_envelopes')
+            .select('id, titulo, status, expira_em, criado_em, concluido_em, motivo, assinatura_signatarios(id, ordem, papel, canal, user_id, nome, representa, email, status, visualizou_em, assinado_em)')
+            .eq('origem_tipo', origem.tipo)
+            .eq('origem_id', origem.id)
+            .order('criado_em', { ascending: false });
+        if (error) throw error;
+        return ((data ?? []) as EnvelopeDeAssinatura[]).map(e => ({
+            ...e,
+            assinatura_signatarios: [...(e.assinatura_signatarios ?? [])].sort((a, b) => a.ordem - b.ordem),
+        }));
+    },
+};
+
+// ── Quem pode assinar um documento (para a gaveta de envio) ────────────────
+
+export interface ClienteCandidato {
+    id: string;
+    name: string;
+    email: string | null;
+    document: string | null;
+    legal_rep_name: string | null;
+    legal_rep_document: string | null;
+}
+export interface MembroCandidato { user_id: string; name: string | null; email: string | null }
+export interface CorretorCandidato { id: string; name: string; email: string | null; cpf: string | null }
+
+export interface CandidatosParaAssinar {
+    compradores: ClienteCandidato[];
+    corretor: CorretorCandidato | null;
+    membros: MembroCandidato[];
+    eu: string | null;
+}
+
+/**
+ * Compradores (todos, mesmo peso — commercial_deal_buyers; sem negociação, o
+ * cliente do contrato), o corretor da negociação e os membros da organização.
+ * O servidor confere tudo de novo e lê nome/e-mail/CPF do CADASTRO.
+ */
+export async function candidatosParaAssinar(p: { organizationId: string; contractId?: string | null; dealId?: string | null }): Promise<CandidatosParaAssinar> {
+    let dealId = p.dealId ?? null;
+    let clienteDoContrato: string | null = null;
+    if (p.contractId) {
+        const { data: c } = await supabase.from('contracts').select('deal_id, client_id').eq('id', p.contractId).maybeSingle();
+        dealId = dealId ?? (c?.deal_id as string | null) ?? null;
+        clienteDoContrato = (c?.client_id as string | null) ?? null;
+    }
+    let clientIds: string[] = [];
+    let brokerId: string | null = null;
+    if (dealId) {
+        const [{ data: compradores }, { data: deal }] = await Promise.all([
+            supabase.from('commercial_deal_buyers').select('client_id, is_primary').eq('deal_id', dealId),
+            supabase.from('commercial_deals').select('client_id, broker_id').eq('id', dealId).maybeSingle(),
+        ]);
+        clientIds = (compradores ?? [])
+            .sort((a, b) => Number(b.is_primary) - Number(a.is_primary))
+            .map(b => b.client_id as string);
+        if (deal?.client_id && !clientIds.includes(deal.client_id as string)) clientIds.unshift(deal.client_id as string);
+        brokerId = (deal?.broker_id as string | null) ?? null;
+    }
+    if (clienteDoContrato && !clientIds.includes(clienteDoContrato)) clientIds.push(clienteDoContrato);
+
+    const [{ data: clientes }, corretor, { data: membros }, { data: auth }] = await Promise.all([
+        clientIds.length
+            ? supabase.from('clients').select('id, name, email, document, legal_rep_name, legal_rep_document').in('id', clientIds)
+            : Promise.resolve({ data: [] as ClienteCandidato[] }),
+        brokerId
+            ? supabase.from('broker_profiles').select('id, name, email, cpf').eq('id', brokerId).maybeSingle().then(r => r.data as CorretorCandidato | null)
+            : Promise.resolve(null),
+        supabase.from('organization_members').select('user_id, name, email').eq('organization_id', p.organizationId).not('user_id', 'is', null).order('name'),
+        supabase.auth.getUser(),
+    ]);
+    const porId = new Map(((clientes ?? []) as ClienteCandidato[]).map(c => [c.id, c]));
+    return {
+        compradores: clientIds.map(id => porId.get(id)).filter((c): c is ClienteCandidato => !!c),
+        corretor,
+        membros: (membros ?? []) as MembroCandidato[],
+        eu: auth?.user?.id ?? null,
+    };
+}
+
+/** CPF do usuário no RH (employees.user_id), se houver — o servidor usa o mesmo. */
+export async function cpfDoUsuarioNoRh(userId: string): Promise<string | null> {
+    const { data } = await supabase.from('employees').select('cpf').eq('user_id', userId).not('cpf', 'is', null).limit(1);
+    const cpf = (data?.[0]?.cpf as string | undefined)?.replace(/\D/g, '');
+    return cpf && cpf.length === 11 ? cpf : null;
+}

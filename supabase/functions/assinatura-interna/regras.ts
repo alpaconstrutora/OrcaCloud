@@ -49,9 +49,42 @@ export type SignatarioPedido =
 export type Pedido =
     | { acao: 'criar'; origem_tipo: 'CDV' | 'DEAL_DOC'; origem_id: string; titulo: string | null; signatarios: SignatarioPedido[]; expira_dias: number | null }
     | { acao: 'ver' | 'pedir_codigo'; signatario_id: string; canal: Canal; credencial: string | null }
-    | { acao: 'assinar'; signatario_id: string; canal: Canal; credencial: string | null; codigo: string; cpf: string; aceite: true; termo_versao: string }
+    | { acao: 'assinar'; signatario_id: string; canal: Canal; credencial: string | null; codigo: string; cpf: string; aceite: true; termo_versao: string; leitura: Leitura }
     | { acao: 'finalizar'; envelope_id: string }
     | { acao: 'cancelar'; envelope_id: string; motivo: string | null };
+
+/**
+ * Como o signatário leu o documento antes de assinar — vai para a trilha (evento
+ * ASSINOU). TELA = páginas desenhadas na tela de assinatura (o "Assinar" só
+ * libera no fim); PDF_EXTERNO = a tela não conseguiu desenhar o PDF e ele abriu
+ * o arquivo à parte (registra-se, honestamente, que o fim não foi medido).
+ */
+export interface Leitura {
+    modo: 'TELA' | 'PDF_EXTERNO';
+    paginas: number | null;
+    ultima_pagina: number | null;
+    chegou_ao_fim: boolean;
+    segundos: number;
+}
+
+const inteiro = (v: unknown, max: number): number | null =>
+    typeof v === 'number' && Number.isInteger(v) && v >= 0 && v <= max ? v : null;
+
+/** Valida a leitura que a tela manda. TELA exige ter chegado à última página. */
+export function validarLeitura(v: unknown): { ok: true; leitura: Leitura } | { ok: false; erro: string } {
+    const falta = { ok: false as const, erro: 'Leia o documento até a última página para assinar.' };
+    if (!v || typeof v !== 'object') return falta;
+    const b = v as Record<string, unknown>;
+    const segundos = inteiro(b.segundos, 7 * 24 * 3600) ?? 0;
+    if (b.modo === 'PDF_EXTERNO') {
+        return { ok: true, leitura: { modo: 'PDF_EXTERNO', paginas: inteiro(b.paginas, 5000), ultima_pagina: null, chegou_ao_fim: false, segundos } };
+    }
+    if (b.modo !== 'TELA') return falta;
+    const paginas = inteiro(b.paginas, 5000);
+    const ultima = inteiro(b.ultima_pagina, 5000);
+    if (!paginas || !ultima || ultima < paginas || b.chegou_ao_fim !== true) return falta;
+    return { ok: true, leitura: { modo: 'TELA', paginas, ultima_pagina: ultima, chegou_ao_fim: true, segundos } };
+}
 
 export type ResultadoValidacao = { ok: true; pedido: Pedido } | { ok: false; erro: string };
 
@@ -150,9 +183,11 @@ export function validarPedido(body: unknown): ResultadoValidacao {
             if (b.aceite !== true) return recusa('Marque a declaração de aceite para assinar.');
             const termo = texto(b.termo_versao, 40);
             if (!termo) return recusa('Versão do termo ausente.');
+            const l = validarLeitura(b.leitura);
+            if (!l.ok) return recusa(l.erro);
             return {
                 ok: true,
-                pedido: { acao: 'assinar', signatario_id: b.signatario_id, canal, credencial, codigo: b.codigo.trim(), cpf: digitosCpf(b.cpf), aceite: true, termo_versao: termo },
+                pedido: { acao: 'assinar', signatario_id: b.signatario_id, canal, credencial, codigo: b.codigo.trim(), cpf: digitosCpf(b.cpf), aceite: true, termo_versao: termo, leitura: l.leitura },
             };
         }
         case 'finalizar':

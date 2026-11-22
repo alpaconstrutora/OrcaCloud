@@ -192,8 +192,12 @@ BEGIN
              pg_temp.h(v_sig_cli || ':222222'), '111.444.777-35', false, 'v1', NULL, NULL);
     PERFORM pg_temp.confere((v_r->>'ok')::boolean = false AND v_r->>'erro' LIKE '%aceite%', '10. sem aceite não assina');
     v_r := public.assinatura_confirmar(v_sig_cli, 'PORTAL_CLIENTE', 'tok-teste-cliente', NULL,
-             pg_temp.h(v_sig_cli || ':222222'), '111.444.777-35', true, 'v1', '10.0.0.1', 'navegador');
+             pg_temp.h(v_sig_cli || ':222222'), '111.444.777-35', true, 'v1', '10.0.0.1', 'navegador',
+             '{"modo":"TELA","paginas":32,"ultima_pagina":32,"chegou_ao_fim":true,"segundos":95}'::jsonb);
     PERFORM pg_temp.confere((v_r->>'ok')::boolean AND (v_r->>'finalizar')::boolean = false AND (v_r->>'faltam')::int = 2, '10. cliente assinou: ' || v_r::text);
+    -- Tela de assinatura (22/11): a leitura vai para a trilha, no evento ASSINOU.
+    PERFORM pg_temp.confere((SELECT dados->'leitura'->>'ultima_pagina' FROM public.assinatura_eventos
+                              WHERE signatario_id = v_sig_cli AND tipo = 'ASSINOU') = '32', '10. leitura gravada no evento ASSINOU');
     v_t := pg_temp.tenta(format($q$UPDATE public.assinatura_signatarios SET ip = 'x' WHERE id = %L RETURNING 1$q$, v_sig_cli));
     PERFORM pg_temp.confere(v_t LIKE '42501:%', '10. assinatura registrada não se altera: ' || v_t);
 

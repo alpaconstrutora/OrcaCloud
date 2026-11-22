@@ -351,6 +351,7 @@ serve(async (req: Request) => {
         const { data, error } = await admin.rpc('assinatura_confirmar', {
             ...base, p_otp_hash: await sha256Hex(materialDoCodigo(p.signatario_id, p.codigo)),
             p_cpf: p.cpf, p_aceite: p.aceite, p_termo_versao: p.termo_versao, p_ip: ip, p_ua: ua,
+            p_leitura: p.leitura,
         });
         if (error) return erroDaRpc(error);
         if (!data?.ok) return json({ error: data?.erro ?? 'Não foi possível assinar.', pedir_codigo: !!data?.pedir_codigo }, 400);

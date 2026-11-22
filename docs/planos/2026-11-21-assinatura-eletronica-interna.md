@@ -202,3 +202,39 @@ No lugar onde o usuário assina o contrato, só aparecia o ZapSign, e o ZapSign 
 - O motivo de não poder enviar (`motivoNaoEnviaAoPortal`) e o rótulo do status (`assinaturaDaVersao`) mudaram de `DocumentVersionsPanel` para `contractDocumentVersionService`: é uma regra só para a Emissão e para a negociação.
 - **ZapSign:** a lógica não mudou; o visual passou ao guia (§8, §17, §21, sem caixa alta e sem roxo).
 - Teste: `__tests__/components/DealSignaturePanel.test.tsx`.
+
+## Tela de assinatura (22/11/2026)
+
+### Pedido original
+
+> "assinar contrato no portal do cliente em formato de drawer deixa a tela pequena dificultado a visualizacao pelo cliente muito ruim com UX ruim. sugiro transformar em tela. Faça sua sugestão"
+
+Sugestão aceita: "Aprovado. inclusive o opcional". O opcional é exigir a leitura até a última página e registrá-la na trilha.
+
+### O que mudou
+
+- **`FluxoDeAssinatura` virou tela.** Ocupa a tela inteira por cima de tudo (portal no `<body>`, `z-[1000]`).
+  - Computador: documento à esquerda e painel de assinar fixo à direita (400 px).
+  - Celular: documento em tela cheia com barra fixa "Assinar →" e uma etapa própria para confirmar.
+  - As 5 entradas (portais Cliente e Corretor, testemunha, representante, Acompanhar) não mudaram: a interface do componente é a mesma.
+- **`PaginasDoPdf`:** desenha as páginas com o `pdfjs-dist`, na largura do espaço, com zoom e só as páginas perto da área visível. Informa a página atual, a última vista e se chegou ao fim (`leituraDoScroll`, função pura).
+- **Leitura obrigatória:** o "Assinar" só libera depois da última página, e o motivo aparece à vista.
+  - Se o PDF não desenhar, abrir o arquivo à parte libera a assinatura, e isso fica registrado como `PDF_EXTERNO`.
+  - A Edge (`validarLeitura`) exige `modo: TELA` com `ultima_pagina >= paginas` e `chegou_ao_fim`.
+  - O banco grava a leitura em `assinatura_eventos.dados.leitura` do evento `ASSINOU` (migration `aplicar_20271122400000_assinatura_leitura.sql`, `p_leitura jsonb DEFAULT NULL`).
+- **Histórico do navegador:** a tela empilha uma entrada. "Voltar" do navegador, a seta, o Esc e "Voltar aos documentos" fecham a tela e devolvem à lista. A página da testemunha limpa o token num `useLayoutEffect`, antes desse empilhamento.
+
+### Verificado
+
+- `scripts/teste-assinatura-interna.sql` no banco remoto (ROLLBACK): TUDO OK, incluindo a prova nova de que a leitura chega ao evento `ASSINOU`.
+- Vitest:
+  - `TelaDeAssinatura`: tela, leitura, PDF externo, voltar e `leituraDoScroll`;
+  - `assinaturaInternaRegras`: `validarLeitura`;
+  - mais 16 arquivos das telas que abrem a assinatura e das travas.
+- `deno check` da Edge.
+- Chrome real (Playwright, Edge simulada, PDF fictício de 6 páginas), a 1440 px e a 390 px:
+  - o PDF desenha;
+  - o "Assinar" fica desligado até o fim;
+  - a leitura enviada foi `{modo: TELA, paginas: 6, ultima_pagina: 6, chegou_ao_fim: true}`;
+  - "voltar" fecha a tela e a URL fica sem token;
+  - nenhum erro de página.

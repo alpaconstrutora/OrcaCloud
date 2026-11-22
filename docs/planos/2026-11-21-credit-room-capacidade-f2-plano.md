@@ -167,3 +167,16 @@ Conteúdo, de cima para baixo (tudo da `version`):
 - **Estresse:** 3 cenários prontos + 3 campos livres (0–100%). Nada grava; o banco também pode mexer.
 - **Conferência reusa a versão preparada** (não lê duas vezes): o que o usuário confere é o que grava. Se demorar para congelar, a leitura é a do momento do "Conferir".
 - **Gráfico mostra só o fluxo elegível** (o que entra no DSCR); o subtítulo diz o que ficou de fora.
+
+## Estado (22/11/2026)
+Tasks 1–5 implementadas e revisadas (uma revisão por task + revisão final da branch inteira + rodada única de correções); Task 6 provada na tela; PR pendente.
+
+- **Prova na tela (Task 6):** room de teste "TESTE — capacidade F2 (não usar)" (Garden SPE) — V1 EMPRESA (renda 0, igual à F1) e V2 GRUPO SPE+Alpa congelada pela tela Conferir → Congelar: valor máximo R$ 243.000 / parcela R$ 5.706,85; mês 1 vendas 7.142,86 + aluguéis 13.156; 3 tipos de alerta; 16 contratos — idênticos à prova da F1. Estresse Severo → R$ 120.400. Galeria do Garden (8 fotos). Versão schema 1 ("Demonstração") mostra o estado vazio. Portal: visto montando as abas com `accent="portal"` sobre a versão real numa página de prova — **o portal logado como credor (MFA) não foi visto**.
+- **Room de teste:** excluir depois do merge (OK do usuário 22/11), desligando a trava de imutabilidade só na transação.
+
+## Decisões tomadas na execução (conferir)
+- **Locação sem títulos gerados = "aluguel pelo contrato"** (neutro), não "sem parcelas geradas" em âmbar: o aluguel vem do contrato por desenho. Custo se errado: o banco não vê destacada uma locação sem títulos.
+- **Rótulos da capacidade (revisão final):** o valor máximo é calculado sobre a dívida ATUAL; DSCR e folga incluem a operação pedida → KPI "DSCR mínimo 12m (pós-operação)" + "com a operação pedida de R$ X"; o valor máximo diz "sobre a dívida atual" e começa pela comparação com o pedido ("pedido R$ X acima/dentro do máximo"), repetida inteira no rodapé (a dica corta no portal). Custo se errado: só texto.
+- **Cenário Base do estresse = números congelados** (não recalculados): uma só máxima para o banco ver.
+- **Conferência descartada** quando a data-base muda, o painel reabre ou o room muda com o painel aberto.
+- **Estacionados (não mudam número nem dado):** teste de serviço para o reuso da versão preparada (a tela não produz o descasamento); repetição em `obs` da proveniência; tamanho de `CreditRoomCapacity.tsx` (~700 linhas); helpers `money/vezes/ACCENTS` repetidos em 3 arquivos (extrair `creditRoomUi` depois); chave do filtro de contratos compartilhada entre rooms; Sheet no portal com a cara do app.

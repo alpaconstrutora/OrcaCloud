@@ -132,7 +132,20 @@ Selo PAdES com o certificado A1 da empresa. Não muda a validade jurídica e tem
   - `deno check` limpo; o carimbo foi conferido em PDF real (rodapé, manifesto, QR)
   - **Não feito por curl:** os 6 pedidos de código → 429. Precisaria de um envelope real em produção, que é imutável e não se apaga. O limite está provado no SQL (item 8) e no mapa 54000 → 429 (`assinaturaInternaRegras.test.ts`)
   - Ajuste: o e-mail do comprador leva o link do portal **com o token** (`/portal-cliente?token=…&assinar=…`), o mesmo mecanismo do link do portal. Ele não precisa criar senha, e o código por e-mail é o fator extra. Por isso o `portalAcesso.ts` não gera link de convite
-- [ ] F3: Lado de quem assina
+- [x] F3: Lado de quem assina. Telas prontas:
+  - `FluxoDeAssinatura` e `DocumentosParaAssinar`;
+  - Portal do Cliente: pendências em qualquer aba, assinados só em Contratos;
+  - `/assinar` (testemunha), `?assinar=` (membro) e `/publico/validar-assinatura/<id>`.
+
+  Verificado:
+  - `tsc` sem erros; `check-ui-standard` limpo nos 5 componentes novos; travas de UI e `orgContextGuard` passam.
+  - Playwright no Vite da frente, a 390 px e a 1440 px, com a Edge e as RPCs **simuladas**: 19 checagens no fluxo da testemunha e na validação, mais 8 no cartão do portal.
+  - **O que não foi visto:** a ida e volta real com e-mail e banco. Fica para o roteiro de ponta a ponta depois da F4, quando dá para enviar pela tela.
+
+  Encontrado e corrigido na tela:
+  - O roteador de abas (`syncViewToUrl`) reescrevia o `#` para `#/central` antes de a página da testemunha ler o token. Agora o `App` captura o fragmento na 1ª renderização.
+  - O tour de primeiro acesso abria por cima do painel de assinar. Quem chega por `?assinar=` vê o tour na próxima visita.
+  - Desvio do plano: a validação pública é um componente próprio (`PublicAssinaturaChecker`), porque os campos do ofício (tipo, número, destinatário) não se aplicam. Os dois usam o mesmo `sha256DeArquivo`.
 - [ ] F4: Emissão
 - [ ] F5: Negociação
 - [ ] F6: Portal do Corretor

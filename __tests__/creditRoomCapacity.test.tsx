@@ -84,7 +84,7 @@ describe('CreditRoomCapacity', () => {
     it('série vazia: o estresse mostra "—", não R$ 0,00', () => {
         abrir(versao(capacidade([], 0)));
         expect(screen.getByText(/sem série não há o que estressar/)).toBeInTheDocument();
-        const painel = screen.getByText('Valor máximo do empréstimo', { selector: 'dt' }).closest('div') as HTMLElement;
+        const painel = screen.getByText('Valor máximo (sobre a dívida atual)', { selector: 'dt' }).closest('div') as HTMLElement;
         expect(painel).toHaveTextContent('—');
     });
 
@@ -97,6 +97,34 @@ describe('CreditRoomCapacity', () => {
         fireEvent.click(screen.getByRole('button', { name: 'Moderado' }));
         expect(screen.getByRole('button', { name: 'Moderado' })).toHaveAttribute('aria-pressed', 'true');
         expect(screen.queryByText(/Cenário personalizado/)).toBeNull();
+    });
+
+    it.each(['indigo', 'portal'] as const)('com operação pedida: DSCR é pós-operação e o valor máximo é "sobre a dívida atual", com o pedido comparado — %s', accent => {
+        // pedido R$ 5.000.000 (versao()) > máximo 123.400 → "acima do máximo"
+        abrir(versao(capacidade(serie(), 123_400)), accent);
+        expect(screen.getAllByText(/DSCR mínimo 12m \(pós-operação\)/).length).toBeGreaterThan(0);
+        expect(screen.getByText(/com a operação pedida de/)).toBeInTheDocument();
+        expect(screen.getByText(/sobre a dívida atual · parcela máx\./)).toBeInTheDocument();
+        expect(screen.getByText(/pedido .*5\.000\.000,00 — acima do máximo/)).toBeInTheDocument();
+    });
+
+    it('pedido dentro do máximo diz "dentro do máximo"', () => {
+        abrir(versao(capacidade(serie(), 9_000_000)));
+        expect(screen.getByText(/— dentro do máximo/)).toBeInTheDocument();
+    });
+
+    it('sem serviço da operação em nenhum mês: o DSCR não diz "pós-operação"', () => {
+        abrir(versao(capacidade(serie({ servico_novo: 0 }))));
+        expect(screen.queryByText(/pós-operação/)).toBeNull();
+        expect(screen.queryByText(/com a operação pedida/)).toBeNull();
+        expect(screen.getAllByText('DSCR mínimo 12m').length).toBeGreaterThan(0);
+    });
+
+    it('série vazia: o KPI do valor máximo mostra "—", não R$ 0,00', () => {
+        abrir(versao(capacidade([], 0)));
+        const kpi = screen.getByText('Valor máximo do empréstimo').closest('button') as HTMLElement;
+        expect(kpi).toHaveTextContent('—');
+        expect(kpi).not.toHaveTextContent('R$');
     });
 
     it('portal: DSCR abaixo do exigido e folga negativa dizem isso em texto', () => {

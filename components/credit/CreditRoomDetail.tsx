@@ -9,6 +9,7 @@ import { formatDateBR, formatDateTimeBR, formatMoney } from '../ui/Format';
 import { errorMessage } from '../../hooks/useOrgContext';
 import { creditRoomService, type VersaoPreparada } from '../../services/creditRoomService';
 import { ALERTA_PT, resumoDaCapacidade } from '../../utils/creditCapacity';
+import { hojeLocalISO } from '../../utils/periodoControladoria';
 import {
     CREDIT_ROOM_ACTION_PT,
     CREDIT_ROOM_STATUS_PT,
@@ -607,7 +608,7 @@ export const CongelarSheet: React.FC<{
 }> = ({ open, onClose, room, proximo, onFrozen }) => {
     const [label, setLabel] = React.useState('');
     const [notes, setNotes] = React.useState('');
-    const [dataBase, setDataBase] = React.useState(new Date().toISOString().slice(0, 10));
+    const [dataBase, setDataBase] = React.useState(hojeLocalISO());
     const [preparada, setPreparada] = React.useState<VersaoPreparada | null>(null);
     const [conferindo, setConferindo] = React.useState(false);
     const [congelando, setCongelando] = React.useState(false);
@@ -618,7 +619,7 @@ export const CongelarSheet: React.FC<{
     React.useEffect(() => {
         if (open) {
             geracao.current += 1;
-            setLabel(''); setNotes(''); setDataBase(new Date().toISOString().slice(0, 10));
+            setLabel(''); setNotes(''); setDataBase(hojeLocalISO());
             setPreparada(null); setConferindo(false); setCongelando(false); setErro(null);
         }
     }, [open]);
@@ -675,11 +676,13 @@ export const CongelarSheet: React.FC<{
     const snap = preparada?.snapshot ?? null;
     const cap = snap?.capacidade ?? null;
     const resumo = resumoDaCapacidade(cap);
+    const semSerieConf = !!cap && cap.serie.length === 0;
+    const comOperacaoConf = !!cap && cap.serie.some(m => m.servico_novo > 0);
     const semDado = snap
         ? BLOCOS_PT.filter(b => (snap as unknown as Record<string, unknown>)[b.chave] == null).map(b => b.nome)
         : [];
 
-    const motivoConferir = !dataBase ? 'Informe a data-base para conferir' : conferindo ? 'Conferindo a versão...' : undefined;
+    const motivoConferir = !dataBase ? 'Informe a data-base para conferir' : conferindo ? 'Conferindo a versão...' : congelando ? 'Congelando a versão...' : undefined;
     const motivoCongelar = congelando ? 'Congelando a versão...' : !preparada ? 'Confira a versão antes de congelar' : undefined;
 
     return (
@@ -716,11 +719,11 @@ export const CongelarSheet: React.FC<{
                         {cap ? (
                             <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
                                 <div className="space-y-1.5">
-                                    <dt className={rotulo}>Valor máximo</dt>
-                                    <dd className="text-sm font-medium text-gray-900">{formatMoney(cap.capacidade_maxima?.valor_maximo)}</dd>
+                                    <dt className={rotulo}>Valor máximo (sobre a dívida atual)</dt>
+                                    <dd className="text-sm font-medium text-gray-900">{semSerieConf ? '—' : formatMoney(cap.capacidade_maxima?.valor_maximo)}</dd>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <dt className={rotulo}>DSCR mínimo 12m</dt>
+                                    <dt className={rotulo}>{comOperacaoConf ? 'DSCR mínimo 12m (pós-operação)' : 'DSCR mínimo 12m'}</dt>
                                     <dd className="text-sm font-medium text-gray-900">{vezes(resumo?.dscr_minimo_12m)}</dd>
                                 </div>
                                 <div className="space-y-1.5">

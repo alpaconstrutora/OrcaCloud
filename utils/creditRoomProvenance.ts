@@ -240,7 +240,7 @@ export function explicarIndicador(
                     : 'debtService · primeiras 12 parcelas do contrato vinculado';
                 return {
                     titulo: pos ? 'DSCR pós-operação' : 'DSCR atual',
-                    formula: `fluxo elegível ÷ serviço da dívida ${pos ? 'atual + nova' : 'atual'} — soma dos 12 primeiros meses da série mensal`,
+                    formula: `fluxo elegível ÷ serviço da dívida ${pos ? 'atual + operação pedida' : 'atual'} — soma dos 12 primeiros meses da série mensal`,
                     significado: 'Quantas vezes o fluxo de caixa elegível paga as parcelas de dívida dos próximos 12 meses.',
                     termos: [
                         m('Fluxo elegível (12m)', i.fluxo_elegivel_anual,
@@ -332,12 +332,12 @@ function explicarCapacidade(
             const mesPior = pior ? rotuloDoMes(pior.mes) : undefined;
             return {
                 titulo: 'DSCR mínimo (12 meses)',
-                formula: 'menor valor mensal de renda líquida ÷ serviço da dívida (atual + nova), nos 12 primeiros meses',
+                formula: 'menor valor mensal de renda líquida ÷ serviço da dívida (atual + operação pedida), nos 12 primeiros meses',
                 significado: 'O pior mês do primeiro ano: quantas vezes a renda daquele mês paga as parcelas dele.',
                 termos: c ? [
                     m('Renda líquida do mês crítico', pior?.renda_liquida ?? null, FONTE_SERIE, mesPior),
                     m('Serviço da dívida do mês crítico', pior ? pior.servico_atual + pior.servico_novo : null,
-                      `${FONTE_SERIE} — parcelas da dívida atual + nova`, mesPior),
+                      `${FONTE_SERIE} — parcelas da dívida atual + operação pedida`, mesPior),
                 ] : [semCapacidade('Renda líquida do mês crítico', 'money'), semCapacidade('Serviço da dívida do mês crítico', 'money')],
                 resultado: { valor: r?.dscr_minimo_12m ?? null, formato: 'vezes' },
                 ressalvas: c
@@ -354,7 +354,7 @@ function explicarCapacidade(
         case 'folga_minima':
             return {
                 titulo: 'Folga mínima (12 meses)',
-                formula: 'menor valor mensal de renda líquida − serviço da dívida (atual + nova), nos 12 primeiros meses',
+                formula: 'menor valor mensal de renda líquida − serviço da dívida (atual + operação pedida), nos 12 primeiros meses',
                 significado: 'O mês mais apertado do primeiro ano: quanto sobra (ou falta) depois de pagar as parcelas.',
                 termos: c ? [
                     m('Folga do mês mais apertado', r?.folga_minima_12m ?? null, FONTE_SERIE,
@@ -370,9 +370,9 @@ function explicarCapacidade(
             const p = c?.parametros;
             const FONTE_PARAM = 'Parâmetros congelados na versão (capacidade.parametros)';
             return {
-                titulo: 'Capacidade máxima de nova dívida',
+                titulo: 'Valor máximo do empréstimo (sobre a dívida atual)',
                 formula: 'maior principal cuja parcela, conferida mês a mês no horizonte, mantém renda líquida ÷ (serviço atual + parcela) ≥ DSCR mínimo exigido',
-                significado: 'Quanto de dívida nova cabe na renda projetada sem passar do DSCR mínimo em nenhum mês.',
+                significado: 'Quanto de dívida nova cabe na renda projetada, em cima da dívida atual, sem passar do DSCR mínimo em nenhum mês. Não inclui a operação pedida: compare com o valor pedido.',
                 termos: c && p ? [
                     { rotulo: 'DSCR mínimo exigido', valor: p.dscr_minimo, formato: 'vezes', fonte: FONTE_PARAM },
                     { rotulo: 'Taxa mensal', valor: p.taxa_mensal_pct, formato: 'pct', fonte: FONTE_PARAM, obs: `${p.taxa_mensal_pct.toLocaleString('pt-BR')}% a.m.` },

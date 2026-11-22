@@ -271,12 +271,14 @@ const PainelEstresse: React.FC<{
     /** Campo que não muda o resultado (fluxo inelegível) → motivo escrito. */
     motivos: Partial<Record<ChaveEstresse, string>>;
     semSerie: boolean;
-}> = ({ acc, campos, onCampo, onCenario, ativo, estresse, base, dscrExigido, motivos, semSerie }) => {
+    /** A série tem serviço da operação pedida: o DSCR é pós-operação. */
+    comOperacao: boolean;
+}> = ({ acc, campos, onCampo, onCenario, ativo, estresse, base, dscrExigido, motivos, semSerie, comOperacao }) => {
     const A = ACCENTS[acc];
     const ehBase = ativo === 0;
     const difs = [
-        { rotulo: 'Valor máximo do empréstimo', valor: money(estresse.valor_maximo), d: diferenca(estresse.valor_maximo, base.valor_maximo, formatMoney, true) },
-        { rotulo: 'DSCR mínimo 12m', valor: vezes(estresse.dscr_minimo_12m), d: diferenca(estresse.dscr_minimo_12m, base.dscr_minimo_12m, vezes, true) },
+        { rotulo: 'Valor máximo (sobre a dívida atual)', valor: money(estresse.valor_maximo), d: diferenca(estresse.valor_maximo, base.valor_maximo, formatMoney, true) },
+        { rotulo: comOperacao ? 'DSCR mínimo 12m (pós-operação)' : 'DSCR mínimo 12m', valor: vezes(estresse.dscr_minimo_12m), d: diferenca(estresse.dscr_minimo_12m, base.dscr_minimo_12m, vezes, true) },
         { rotulo: 'Meses com folga negativa', valor: estresse.meses_folga_negativa == null ? '—' : String(estresse.meses_folga_negativa), d: diferenca(estresse.meses_folga_negativa, base.meses_folga_negativa, n => String(n), false) },
     ];
     const abaixo = estresse.dscr_minimo_12m != null && estresse.dscr_minimo_12m < dscrExigido;
@@ -403,6 +405,16 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
     const horizonte = c.serie;
     const mostrarEstressada = ativo !== 0;
     const semSerie = c.serie.length === 0;
+    // O serviço da operação pedida entra no DSCR e na folga; o valor máximo NÃO o inclui (é sobre a dívida atual).
+    const comOperacao = c.serie.some(m => m.servico_novo > 0);
+    const pedido = s.operacao?.requested_amount ?? 0;
+    const apoioOperacao = comOperacao ? `com a operação pedida${pedido > 0 ? ` de ${money(pedido)}` : ''}` : null;
+    const hintMaximo = semSerie ? 'sem meses projetados nesta versão' : [
+        'sobre a dívida atual',
+        `parcela máx. ${money(c.capacidade_maxima.parcela_maxima)}`,
+        `DSCR ≥ ${vezes(dscrExigido)}`,
+        ...(pedido > 0 ? [`pedido ${money(pedido)} — ${pedido > c.capacidade_maxima.valor_maximo ? 'acima do máximo' : 'dentro do máximo'}`] : []),
+    ].join(' · ');
     // O Base é SEMPRE o número congelado (uma só máxima para o banco ver): o cenário Base
     // não é recalculado, e a diferença dos outros cenários é contra ele.
     const congelado: ResultadoEstresse = {
@@ -414,8 +426,8 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
     // ── KPIs (cada um abre a proveniência) ──
     const kpis: { label: string; value: string; hint?: string; chave: IndicadorKey; color: 'blue' | 'indigo' | 'emerald' | 'red' | 'teal'; icon: React.ReactNode }[] = [
         {
-            label: 'Valor máximo do empréstimo', value: money(c.capacidade_maxima.valor_maximo),
-            hint: `parcela máxima ${money(c.capacidade_maxima.parcela_maxima)} · DSCR ≥ ${vezes(dscrExigido)}`,
+            label: 'Valor máximo do empréstimo', value: semSerie ? '—' : money(c.capacidade_maxima.valor_maximo),
+            hint: hintMaximo,
             chave: 'capacidade_maxima', color: 'blue', icon: <Wallet className="w-4 h-4" />,
         },
         {
@@ -423,18 +435,24 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
             hint: 'após a despesa operacional', chave: 'renda_liquida_media', color: 'indigo', icon: <TrendingUp className="w-4 h-4" />,
         },
         {
-            label: 'DSCR mínimo 12m', value: vezes(resumo.dscr_minimo_12m),
-            hint: resumo.dscr_minimo_12m == null ? 'sem serviço da dívida'
-                : resumo.dscr_minimo_12m < dscrExigido ? `abaixo dos ${vezes(dscrExigido)} exigidos` : undefined,
+            label: comOperacao ? 'DSCR mínimo 12m (pós-operação)' : 'DSCR mínimo 12m', value: vezes(resumo.dscr_minimo_12m),
+            hint: [
+                apoioOperacao,
+                resumo.dscr_minimo_12m == null ? 'sem serviço da dívida'
+                    : resumo.dscr_minimo_12m < dscrExigido ? `abaixo dos ${vezes(dscrExigido)} exigidos` : null,
+            ].filter(Boolean).join(' · ') || undefined,
             chave: 'dscr_minimo_12m',
-            color: resumo.dscr_minimo_12m != null && resumo.dscr_minimo_12m < dscrExigido ? 'red' : 'emerald',
+            color: resumo.dscr_minimo_12m == null ? 'indigo' : resumo.dscr_minimo_12m < dscrExigido ? 'red' : 'emerald',
             icon: <Gauge className="w-4 h-4" />,
         },
         {
             label: 'Folga mínima 12m', value: money(resumo.folga_minima_12m),
-            hint: resumo.mes_folga_minima
-                ? `${rotuloDoMes(resumo.mes_folga_minima)}${resumo.folga_minima_12m != null && resumo.folga_minima_12m < 0 ? ' · mês no vermelho' : ''}`
-                : undefined,
+            hint: [
+                apoioOperacao ? 'com a operação pedida' : null,
+                resumo.mes_folga_minima
+                    ? `${rotuloDoMes(resumo.mes_folga_minima)}${resumo.folga_minima_12m != null && resumo.folga_minima_12m < 0 ? ' · mês no vermelho' : ''}`
+                    : null,
+            ].filter(Boolean).join(' · ') || undefined,
             chave: 'folga_minima', color: resumo.folga_minima_12m != null && resumo.folga_minima_12m < 0 ? 'red' : 'teal',
             icon: <Scale className="w-4 h-4" />,
         },
@@ -458,7 +476,7 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
             fluxos.alugueis ? `aluguéis ${money(d.alugueis)}` : null,
             `serviço ${money(d.servico)}`,
         ].filter(Boolean).join(', ')}`).join('; ') + '.';
-    const subtituloMes = `Valores contratados, sem reajuste, em reais.${ficaramFora.length
+    const subtituloMes = `Valores contratados, sem reajuste, em reais. Barras antes da despesa operacional; o DSCR usa a renda líquida.${ficaramFora.length
         ? ` Fora do gráfico e do DSCR: ${ficaramFora.join(' e ')} — fluxo não marcado como elegível nesta operação.`
         : ''}`;
 
@@ -572,7 +590,7 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
                         meses_folga_negativa: estresse.meses_folga_negativa,
                     }}
                     base={semSerie ? SEM_BASE : congelado}
-                    motivos={motivos} semSerie={semSerie}
+                    motivos={motivos} semSerie={semSerie} comOperacao={comOperacao}
                 />
             </Cartao>
 

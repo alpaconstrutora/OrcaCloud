@@ -253,15 +253,15 @@ const CartaoEmpreendimento: React.FC<{ acc: Accent; e: SnapshotEmpreendimentoIte
             className={`block w-full overflow-hidden border text-left transition-colors outline-none focus-visible:ring-2 ${A.cartao}`}
         >
             <Capa A={A} e={e} />
-            <span className="block space-y-3 p-4">
+            <span className="@container block space-y-3 p-4">
                 <span className="block min-w-0">
                     <span className={`block truncate ${A.corpo} font-semibold ${A.titulo}`}>{e.nome}</span>
                     <span className={`block truncate text-xs ${A.rotulo}`}>{localizacaoDe(e)}</span>
                 </span>
-                <span className="grid grid-cols-4 gap-2">
+                <span className="grid grid-cols-2 @sm:grid-cols-4 gap-x-3 gap-y-2">
                     {unidades.map(([k, v]) => (
                         <span key={k} className="block min-w-0">
-                            <span className={`block truncate text-xs ${A.rotulo}`}>{k}</span>
+                            <span className={`block text-xs ${A.rotulo}`}>{k}</span>
                             <span className={`block ${A.corpo} font-medium tabular-nums ${A.valor}`}>{inteiro(v)}</span>
                         </span>
                     ))}

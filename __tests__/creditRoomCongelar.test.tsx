@@ -99,8 +99,8 @@ describe('CongelarSheet — Conferir → Congelar', () => {
         abrir();
         fireEvent.click(botaoConferir());
 
-        await screen.findByText('Valor máximo');
-        expect(screen.getByText('DSCR mínimo 12m')).toBeInTheDocument();
+        await screen.findByText('Valor máximo (sobre a dívida atual)');
+        expect(screen.getByText('DSCR mínimo 12m (pós-operação)')).toBeInTheDocument();
         expect(screen.getByText('Renda líquida média 12m')).toBeInTheDocument();
         expect(screen.getByText('1,58×')).toBeInTheDocument();
         expect(screen.getByText(/Vendas sem parcelas geradas/)).toBeInTheDocument();

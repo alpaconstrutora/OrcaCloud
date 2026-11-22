@@ -7,14 +7,16 @@
  *  - a carteira aparece pelo `rotulo` mascarado — nome de cliente nunca vai à tela;
  *  - o filtro Venda/Locação estreita as linhas (app: popover; portal: abas);
  *  - contrato sem parcelas geradas diz isso em texto e não afirma R$ 0,00;
- *  - cartão sem capa diz "sem foto cadastrada"; clicar no cartão abre o painel com os contratos dele.
+ *  - cartão sem capa diz "sem foto cadastrada"; clicar no cartão abre o painel com os contratos dele;
+ *  - com a prop `documentos` a carteira ganha a coluna "Documentos" (contagem por `contractId`; 0 é contagem,
+ *    "—" é contrato sem `contract_id`); sem a prop a coluna não existe.
  */
 import React from 'react';
 import { render, screen, fireEvent, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { ConfirmProvider } from '../components/ui/confirm';
 import CreditRoomEmpreendimentos from '../components/credit/CreditRoomEmpreendimentos';
-import type { CreditRoomVersion } from '../types/creditRoom';
+import type { CreditRoomDocument, CreditRoomVersion } from '../types/creditRoom';
 import {
     buildSnapshot, computeIndicators, type SnapshotContrato, type SnapshotEmpreendimentoItem,
 } from '../utils/creditRoomSnapshot';
@@ -67,8 +69,11 @@ const versao = (blocos: { empreendimentos?: SnapshotEmpreendimentoItem[] | null;
     };
 };
 
-const abrir = (v: CreditRoomVersion, accent: 'indigo' | 'portal' = 'indigo') =>
-    render(<ConfirmProvider><CreditRoomEmpreendimentos version={v} accent={accent} /></ConfirmProvider>);
+const abrir = (v: CreditRoomVersion, accent: 'indigo' | 'portal' = 'indigo', documentos?: CreditRoomDocument[]) =>
+    render(<ConfirmProvider><CreditRoomEmpreendimentos version={v} accent={accent} documentos={documentos} /></ConfirmProvider>);
+
+const docDoContrato = (shareId: string, contractId?: string) =>
+    ({ shareId, documentId: `d-${shareId}`, contractId }) as unknown as CreditRoomDocument;
 
 describe('CreditRoomEmpreendimentos', () => {
     beforeEach(() => { localStorage.clear(); });
@@ -192,5 +197,62 @@ describe('CreditRoomEmpreendimentos', () => {
         expect(screen.getByText(/Nenhum empreendimento na carteira/)).toBeInTheDocument();
         expect(screen.getByText(/Nenhum contrato na carteira/)).toBeInTheDocument();
         expect(screen.queryByText(/congele uma nova/)).toBeNull();
+    });
+});
+
+describe('CreditRoomEmpreendimentos — coluna Documentos', () => {
+    beforeEach(() => { localStorage.clear(); });
+
+    // c1 tem 2 documentos, c3 tem 1, c2 nenhum; o último não tem contrato (não entra na conta de ninguém).
+    const DOCUMENTOS = [docDoContrato('1', 'c1'), docDoContrato('2', 'c1'), docDoContrato('3', 'c3'), docDoContrato('4')];
+    const celula = (linha: HTMLElement, coluna: number) => linha.querySelectorAll('td')[coluna] as HTMLElement;
+
+    it('sem a prop a coluna não aparece (app e portal)', () => {
+        const { unmount } = abrir(versao({ empreendimentos: EMPS, contratos: CONTRATOS }));
+        expect(within(screen.getByRole('table')).queryByText('Documentos')).toBeNull();
+        unmount();
+        abrir(versao({ empreendimentos: EMPS, contratos: CONTRATOS }), 'portal');
+        expect(within(screen.getByRole('table', { name: 'Contratos da carteira' })).queryByText('Documentos')).toBeNull();
+    });
+
+    it.each(['indigo', 'portal'] as const)('com a prop, conta os documentos de cada contrato por contractId — %s', accent => {
+        abrir(versao({ empreendimentos: EMPS, contratos: CONTRATOS }), accent, DOCUMENTOS);
+        const tabela = screen.getByRole('table', { name: accent === 'portal' ? 'Contratos da carteira' : undefined });
+        const cabecalhos = within(tabela).getAllByRole('columnheader').map(h => h.textContent ?? '');
+        const col = cabecalhos.findIndex(t => /Documentos/.test(t));
+        expect(col).toBeGreaterThan(-1);
+        const valor = (rotulo: string) => celula(within(tabela).getByText(rotulo).closest('tr') as HTMLElement, col).textContent;
+        expect(valor('Venda 01')).toBe('2');
+        expect(valor('Venda 02')).toBe('0'); // 0 é contagem real
+        expect(valor('Locação 01')).toBe('1');
+    });
+
+    it('contrato sem contract_id mostra "—", não 0', () => {
+        const semId = contrato({ rotulo: 'Venda 07', contract_id: null, empreendimento_id: null });
+        abrir(versao({ empreendimentos: EMPS, contratos: [semId] }), 'indigo', DOCUMENTOS);
+        const tabela = screen.getByRole('table');
+        const col = within(tabela).getAllByRole('columnheader').findIndex(h => /Documentos/.test(h.textContent ?? ''));
+        expect(celula(within(tabela).getByText('Venda 07').closest('tr') as HTMLElement, col).textContent).toBe('—');
+    });
+
+    it('a lista chega DEPOIS da 1ª renderização (1ª visita): a coluna Documentos aparece sem recarregar a tela', () => {
+        const v = versao({ empreendimentos: EMPS, contratos: CONTRATOS });
+        const { rerender } = render(<ConfirmProvider><CreditRoomEmpreendimentos version={v} accent="indigo" /></ConfirmProvider>);
+        expect(within(screen.getByRole('table')).queryByText('Documentos')).toBeNull();
+
+        rerender(<ConfirmProvider><CreditRoomEmpreendimentos version={v} accent="indigo" documentos={DOCUMENTOS} /></ConfirmProvider>);
+        const tabela = screen.getByRole('table');
+        const col = within(tabela).getAllByRole('columnheader').findIndex(h => /Documentos/.test(h.textContent ?? ''));
+        expect(col).toBeGreaterThan(-1);
+        expect(celula(within(tabela).getByText('Venda 01').closest('tr') as HTMLElement, col).textContent).toBe('2');
+    });
+
+    it('o painel do empreendimento também traz a coluna Documentos', () => {
+        abrir(versao({ empreendimentos: EMPS, contratos: CONTRATOS }), 'indigo', DOCUMENTOS);
+        fireEvent.click(screen.getByRole('button', { name: /Residencial Aurora/ }));
+        const tabela = within(screen.getByRole('dialog')).getByRole('table', { name: 'Contratos do empreendimento' });
+        const col = within(tabela).getAllByRole('columnheader').findIndex(h => /Documentos/.test(h.textContent ?? ''));
+        expect(col).toBeGreaterThan(-1);
+        expect(celula(within(tabela).getByText('Venda 01').closest('tr') as HTMLElement, col).textContent).toBe('2');
     });
 });

@@ -1,6 +1,6 @@
 import React from 'react';
 import { moverEntreAbas } from '../ui/abasPeloTeclado';
-import { ArrowLeft, Camera, FileText, History, Snowflake, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, Camera, Download, FileText, History, Snowflake, Sparkles, UserPlus, Users } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { usePersistedState } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
@@ -8,6 +8,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { formatDateBR, formatDateTimeBR, formatMoney } from '../ui/Format';
 import { errorMessage } from '../../hooks/useOrgContext';
 import { creditRoomService, type VersaoPreparada } from '../../services/creditRoomService';
+import { creditRoomBookService } from '../../services/creditRoomBookService';
 import { ALERTA_PT, resumoDaCapacidade } from '../../utils/creditCapacity';
 import { hojeLocalISO } from '../../utils/periodoControladoria';
 import {
@@ -27,6 +28,7 @@ import {
 import CreditRoomIndicators from './CreditRoomIndicators';
 import CreditRoomCapacity from './CreditRoomCapacity';
 import CreditRoomEmpreendimentos from './CreditRoomEmpreendimentos';
+import CreditRoomSugerirDocumentos from './CreditRoomSugerirDocumentos';
 import CreditRoomRequests, { CreditRoomCommentsThread } from './CreditRoomRequests';
 import CreditRoomCovenants from './CreditRoomCovenants';
 import CreditRoomFunding from './CreditRoomFunding';
@@ -62,7 +64,7 @@ const ABA_SUBTITULO: Record<Aba, string> = {
     empreendimentos: 'Os empreendimentos e contratos que sustentam a renda da versão ativa, sem nome de cliente.',
     fontesusos: 'De onde vem o dinheiro e para onde vai. O banco checa se as duas somas fecham.',
     versoes: 'Snapshots congelados da operação. Cada um preserva a posição da data em que foi apresentado (R2).',
-    dataroom: 'Documentos do GED compartilhados com este Credit Room. Compartilhe pelo botão do próprio GED.',
+    dataroom: 'Documentos do GED compartilhados com este Credit Room. Use Sugerir documentos para trazer os da carteira, ou compartilhe pelo botão do próprio GED.',
     participantes: 'Quem acessa: analistas da instituição (login + MFA) e o time interno.',
     solicitacoes: 'Request list da due diligence — o que a instituição pediu e onde está.',
     covenants: 'Cláusulas com meta, folga e situação. O DSCR aqui é apurado sobre o fluxo elegível DESTA operação, não sobre o EBITDA da empresa.',
@@ -95,10 +97,14 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     const [congelarAberto, setCongelarAberto] = React.useState(false);
 
     const [documentos, setDocumentos] = React.useState<CreditRoomDocument[]>([]);
+    const [sugerirAberto, setSugerirAberto] = React.useState(false);
+    // A coluna "Documentos" da carteira só aparece depois que a lista chegou: antes disso "0" seria mentira.
+    const [documentosCarregados, setDocumentosCarregados] = React.useState(false);
     const [membros, setMembros] = React.useState<CreditRoomMember[]>([]);
     const [convidarAberto, setConvidarAberto] = React.useState(false);
     const [log, setLog] = React.useState<CreditRoomAccessLog[]>([]);
     const [carregandoAba, setCarregandoAba] = React.useState(false);
+    const [gerandoBook, setGerandoBook] = React.useState(false);
 
     // Versões carregam sempre: a aba Visão precisa da ativa.
     React.useEffect(() => {
@@ -109,12 +115,22 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         return () => { vivo = false; };
     }, [room.id]);
 
+    // Outra operação: a lista da anterior não pode aparecer (nem a coluna "Documentos" com contagem dela).
+    React.useEffect(() => {
+        setDocumentos([]);
+        setDocumentosCarregados(false);
+    }, [room.id]);
+
     React.useEffect(() => {
         let vivo = true;
         const carregar = async () => {
             setCarregandoAba(true);
             try {
-                if (aba === 'dataroom') setDocumentos(await creditRoomService.listDocuments(room.id));
+                // A carteira (aba Empreendimentos) conta os documentos de cada contrato: usa a mesma lista.
+                if (aba === 'dataroom' || aba === 'empreendimentos') {
+                    const docs = await creditRoomService.listDocuments(room.id);
+                    if (vivo) { setDocumentos(docs); setDocumentosCarregados(true); }
+                }
                 if (aba === 'participantes') setMembros(await creditRoomService.listMembers(room.id));
                 if (aba === 'auditoria') setLog(await creditRoomService.listAccessLog(room.id));
             } catch (e) {
@@ -131,6 +147,30 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         () => versoes.find(v => v.id === room.activeVersionId) ?? versoes[0] ?? null,
         [versoes, room.activeVersionId],
     );
+
+    // Room de Grupo: o Data Room mostra de qual empresa é cada documento (nome vem da versão ativa).
+    const grupoEscopo = room.escopo === 'GRUPO';
+    const nomeDaOrg = React.useMemo(() => {
+        const m = new Map<string, string>();
+        for (const o of ativa?.snapshot.escopo?.organizacoes ?? []) m.set(o.id, o.nome);
+        return m;
+    }, [ativa]);
+
+    // Book em PDF da versão ATIVA (congelada, nunca o dado vivo). O índice do Data Room é lido na hora:
+    // a aba pode não ter sido aberta, e um índice vazio por "não carregou" diria que não há documento.
+    const baixarBook = async () => {
+        if (!ativa || gerandoBook) return;
+        setGerandoBook(true);
+        setErro(null);
+        try {
+            const docs = await creditRoomService.listDocuments(room.id);
+            await creditRoomBookService.baixar(room, ativa, { documentos: creditRoomBookService.documentosDoIndice(docs, ativa) });
+        } catch (e) {
+            setErro(errorMessage(e, 'Não foi possível gerar o book.'));
+        } finally {
+            setGerandoBook(false);
+        }
+    };
 
     const mudarStatus = async (status: CreditRoomStatus) => {
         try {
@@ -270,6 +310,20 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     <button onClick={onEdit} className="h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 rounded-[6px] transition-all">
                         Editar
                     </button>
+                    {/* Desligado sempre diz o motivo: o wrapper carrega o title (botão disabled não dispara hover). */}
+                    <span
+                        className="inline-flex shrink-0"
+                        title={!ativa ? 'Congele uma versão para baixar o book' : gerandoBook ? 'Gerando o book, aguarde' : 'PDF da versão ativa, com fotos'}
+                    >
+                        <button
+                            onClick={() => void baixarBook()}
+                            disabled={!ativa || gerandoBook}
+                            className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 rounded-[6px] transition-all disabled:opacity-50 disabled:pointer-events-none"
+                        >
+                            <Download className="w-[15px] h-[15px]" />
+                            {gerandoBook ? 'Gerando book…' : 'Baixar book (PDF)'}
+                        </button>
+                    </span>
                     <button
                         onClick={() => setCongelarAberto(true)}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
@@ -287,7 +341,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                 ativa ? (
                     aba === 'visao' ? <CreditRoomIndicators version={ativa} accent="indigo" />
                         : aba === 'capacidade' ? <CreditRoomCapacity version={ativa} accent="indigo" />
-                            : <CreditRoomEmpreendimentos version={ativa} accent="indigo" />
+                            : <CreditRoomEmpreendimentos version={ativa} accent="indigo" documentos={documentosCarregados ? documentos : undefined} />
                 ) : (
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12">
                         <Camera className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -367,6 +421,23 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
 
             {/* ── Data Room ── */}
             {aba === 'dataroom' && (
+                <div className="space-y-3">
+                {/* §5.3 — contagem à esquerda, ação à direita */}
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm">
+                    <p className="text-sm font-normal text-gray-500 px-1">
+                        {documentos.length} documento{documentos.length === 1 ? '' : 's'} no Data Room
+                    </p>
+                    <span className="inline-flex shrink-0" title={ativa ? undefined : 'Congele uma versão para sugerir os documentos da carteira'}>
+                        <button
+                            onClick={() => setSugerirAberto(true)}
+                            disabled={!ativa}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                        >
+                            <Sparkles className="w-[15px] h-[15px]" />
+                            Sugerir documentos
+                        </button>
+                    </span>
+                </div>
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     {carregandoAba ? (
                         <div className="text-center py-12"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div><p className="mt-2 text-gray-500">Carregando...</p></div>
@@ -382,6 +453,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                                 <thead>
                                     <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                         <th className={th}>Documento</th>
+                                        {grupoEscopo && <th className={th}>Empresa</th>}
                                         <th className={th}>Categoria</th>
                                         <th className={th}>Tipo</th>
                                         <th className={`${th} text-center`}>Validade</th>
@@ -396,6 +468,10 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                                         return (
                                             <tr key={d.shareId} className="hover:bg-blue-50/50 transition-colors">
                                                 <td className={`${td} text-gray-700`}><span className="block truncate" title={d.nome}>{d.nome}</span></td>
+                                                {grupoEscopo && (() => {
+                                                    const empresa = (d.organizationId && nomeDaOrg.get(d.organizationId)) || '—';
+                                                    return <td className={`${td} text-gray-600`}><span className="block truncate" title={empresa}>{empresa}</span></td>;
+                                                })()}
                                                 <td className={`${td} text-gray-600`}>{d.categoria}</td>
                                                 <td className={`${td} text-gray-600`}><span className="block truncate" title={d.tipoDocumento}>{d.tipoDocumento}</span></td>
                                                 <td className={`${td} text-center ${vencido ? 'text-red-600' : 'text-gray-600'}`}>{d.dataValidade ? formatDateBR(d.dataValidade) : '—'}</td>
@@ -415,6 +491,17 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                         </div>
                     )}
                 </div>
+                </div>
+            )}
+
+            {ativa && (
+                <CreditRoomSugerirDocumentos
+                    open={sugerirAberto}
+                    onClose={() => setSugerirAberto(false)}
+                    room={room}
+                    versao={ativa}
+                    onShared={setDocumentos}
+                />
             )}
 
             {/* ── Participantes ── */}

@@ -6,6 +6,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { PDFDocument, StandardFonts, degrees, rgb } from "https://esm.sh/pdf-lib@1.17.1";
 import { exigirUsuario } from '../_shared/auth.ts';
 import { caminhoSemTravessia } from "../_shared/caminhoSemTravessia.ts"
+import { documentoDoEscopo } from "../_shared/documentoDoEscopo.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -134,7 +135,7 @@ serve(async (req: Request) => {
     // ── 1. O room existe? (403 e não 404: não confirmar existência a quem não tem acesso)
     const { data: room } = await admin
         .from('credit_rooms')
-        .select('id, organization_id, code, name')   // code/name entram na marca d'água (§84)
+        .select('id, organization_id, code, name, escopo, grupo_organization_ids')   // code/name entram na marca d'água (§84); escopo/grupo = quais orgs podem ter documento aqui
         .eq('id', creditRoomId)
         .maybeSingle();
     if (!room) return json({ error: 'Sem acesso a este Credit Room.' }, 403);
@@ -181,7 +182,7 @@ serve(async (req: Request) => {
 
     const alvo = (shares || []).find((row: any) =>
         row.document?.active_version?.storage_path === storagePath
-        && row.document?.organization_id === room.organization_id,
+        && documentoDoEscopo(row.document?.organization_id, room),
     );
     if (!alvo) return json({ error: 'Documento não compartilhado com este Credit Room' }, 403);
 

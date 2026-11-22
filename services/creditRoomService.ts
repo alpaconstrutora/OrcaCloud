@@ -73,6 +73,14 @@ import type { DebtPosition } from '../types/debt';
 import { calcularEac, escolherCustoTotal, type ItemContratado, type ItemOrcado } from '../utils/creditRoomEac';
 import { avaliarCovenant, type AvaliacaoCovenant } from '../utils/covenantAvaliacao';
 import { calculateProjectProgress } from '../utils/projectUtils';
+import { hojeLocalISO } from '../utils/periodoControladoria';
+import {
+    agruparSugestoes,
+    estaVencido,
+    type DocumentoSugerido,
+    type GrupoDeSugestoes,
+    type OrigemSugestao,
+} from '../utils/creditRoomSugestoes';
 import { debtCovenantService, type DebtCovenant, type DebtCovenantInput } from './debtCovenantService';
 import { debtAnalyticsService } from './debtAnalyticsService';
 import { debtService } from './debtService';
@@ -322,6 +330,10 @@ function mapDocument(r: Row): CreditRoomDocument {
         mimeType: str(r.mime_type),
         tamanho: r.tamanho == null ? undefined : num(r.tamanho),
         sharedAt: String(r.shared_at),
+        // Colunas novas da função (ausentes antes da migration → undefined).
+        organizationId: str(r.organization_id),
+        contractId: str(r.contract_id),
+        empreendimentoId: str(r.empreendimento_id),
     };
 }
 
@@ -1885,6 +1897,112 @@ export const creditRoomService = {
         const { data, error } = await supabase.rpc('fn_credit_room_documents', { p_room: creditRoomId });
         if (error) throw error;
         return ((data ?? []) as Row[]).map(mapDocument);
+    },
+
+    /**
+     * Sugere documentos do GED para o Data Room, a partir do que a versão
+     * congelada contém (contratos, empreendimentos, obra) — tela interna.
+     *
+     * Só lê documento de org do escopo da sala (`orgsDoEscopo`); a RLS ainda
+     * recorta pelo que o usuário enxerga. Documento do CLIENTE (dado pessoal)
+     * entra em grupo próprio, desmarcado. Falha de leitura LANÇA erro em
+     * português — lista parcial passaria por completa.
+     */
+    async sugerirDocumentos(room: CreditRoom, versao: CreditRoomVersion): Promise<GrupoDeSugestoes[]> {
+        const orgs = this.orgsDoEscopo(room);
+        const snap = versao.snapshot;
+
+        // Rótulo mascarado do contrato (nunca o nome do cliente) por contract_id.
+        const rotuloDoContrato = new Map<string, string>();
+        for (const c of snap.contratos ?? []) {
+            if (c.contract_id && !rotuloDoContrato.has(c.contract_id)) rotuloDoContrato.set(c.contract_id, c.rotulo);
+        }
+        const contractIds = [...rotuloDoContrato.keys()];
+
+        const nomeDoEmpreendimento = new Map<string, string>();
+        for (const e of snap.empreendimentos ?? []) if (e.id) nomeDoEmpreendimento.set(e.id, e.nome);
+        for (const id of [room.empreendimentoId, ...(room.empreendimentoIds ?? [])]) {
+            if (id && !nomeDoEmpreendimento.has(id)) nomeDoEmpreendimento.set(id, 'Empreendimento da operação');
+        }
+        const empIds = [...nomeDoEmpreendimento.keys()];
+        const projectId = room.projectId;
+
+        const COLS = 'id, organization_id, nome, categoria, tipo_documento, data_validade, contract_id, empreendimento_id, project_id, client_id';
+        type LinhaGed = {
+            id: string; organization_id: string; nome: string | null; categoria: string | null;
+            tipo_documento: string | null; data_validade: string | null;
+            contract_id: string | null; empreendimento_id: string | null; project_id: string | null; client_id: string | null;
+        };
+        const lerPor = async (
+            coluna: 'contract_id' | 'empreendimento_id' | 'project_id' | 'client_id',
+            ids: string[],
+        ): Promise<LinhaGed[]> => {
+            const out: LinhaGed[] = [];
+            for (const lote of lotes(ids)) {
+                out.push(...await todasAsPaginas<LinhaGed>((de, ate) =>
+                    supabase.from('opura_documents').select(COLS)
+                        .in('organization_id', orgs)
+                        .neq('status', 'arquivado')
+                        .not('active_version_id', 'is', null)
+                        .in(coluna, lote)
+                        .order('id')
+                        .range(de, ate)));
+            }
+            return out;
+        };
+
+        try {
+            const [compartilhados, porContrato, porEmpreendimento, porObra] = await Promise.all([
+                this.listDocuments(room.id),
+                lerPor('contract_id', contractIds),
+                lerPor('empreendimento_id', empIds),
+                projectId ? lerPor('project_id', [projectId]) : Promise.resolve([] as LinhaGed[]),
+            ]);
+            const jaNoDataRoom = new Set(compartilhados.map(d => d.documentId));
+
+            // Clientes dos contratos da versão → rótulos dos contratos de cada cliente.
+            const rotulosDoCliente = new Map<string, string[]>();
+            for (const lote of lotes(contractIds)) {
+                const cs = await todasAsPaginas<{ id: string; client_id: string | null }>((de, ate) =>
+                    supabase.from('contracts').select('id, client_id').in('id', lote).order('id').range(de, ate));
+                for (const c of cs) {
+                    if (!c.client_id) continue;
+                    const rot = rotuloDoContrato.get(c.id);
+                    if (!rot) continue;
+                    const lista = rotulosDoCliente.get(c.client_id) ?? [];
+                    if (!lista.includes(rot)) lista.push(rot);
+                    rotulosDoCliente.set(c.client_id, lista);
+                }
+            }
+            const porCliente = await lerPor('client_id', [...rotulosDoCliente.keys()]);
+
+            const hoje = hojeLocalISO();
+            const montar = (l: LinhaGed, origem: OrigemSugestao, referencia: string): DocumentoSugerido => ({
+                documentId: l.id,
+                nome: l.nome ?? '',
+                categoria: l.categoria ?? '',
+                tipoDocumento: l.tipo_documento ?? '',
+                organizationId: l.organization_id,
+                dataValidade: l.data_validade ?? null,
+                origem,
+                referencia,
+                vencido: estaVencido(l.data_validade, hoje),
+                jaCompartilhado: jaNoDataRoom.has(l.id),
+                // Ex.: contrato assinado (vínculo de contrato E de cliente): fica no grupo do contrato, mas avisa.
+                ...(l.client_id ? { temDadosDoCliente: true } : {}),
+            });
+
+            const sugeridos: DocumentoSugerido[] = [
+                ...porContrato.map(l => montar(l, 'CONTRATO', rotuloDoContrato.get(l.contract_id ?? '') ?? 'Contrato')),
+                ...porEmpreendimento.map(l => montar(l, 'EMPREENDIMENTO', nomeDoEmpreendimento.get(l.empreendimento_id ?? '') ?? 'Empreendimento')),
+                ...porObra.map(l => montar(l, 'OBRA', 'Obra da operação')),
+                ...porCliente.map(l => montar(l, 'CLIENTE', (rotulosDoCliente.get(l.client_id ?? '') ?? []).join(', ') || 'Contrato')),
+            ];
+            return agruparSugestoes(sugeridos);
+        } catch (e) {
+            console.warn('[creditRoomService] sugerirDocumentos falhou:', e);
+            throw new Error('Não foi possível ler os documentos do GED para sugerir. Tente de novo.');
+        }
     },
 
     async shareDocuments(room: CreditRoom, documentIds: string[]): Promise<void> {

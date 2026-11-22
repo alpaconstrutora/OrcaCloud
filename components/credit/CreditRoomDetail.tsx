@@ -1,6 +1,6 @@
 import React from 'react';
 import { moverEntreAbas } from '../ui/abasPeloTeclado';
-import { ArrowLeft, Camera, Download, FileText, History, Snowflake, Sparkles, UserPlus, Users } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Camera, Download, FileText, History, Snowflake, Sparkles, UserPlus, Users } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { usePersistedState } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
@@ -10,6 +10,7 @@ import { errorMessage } from '../../hooks/useOrgContext';
 import { creditRoomService, type VersaoPreparada } from '../../services/creditRoomService';
 import { creditRoomBookService } from '../../services/creditRoomBookService';
 import { ALERTA_PT, resumoDaCapacidade } from '../../utils/creditCapacity';
+import { MUDANCA_PT, mudancasDesdeAVersao } from '../../utils/creditRoomVersaoDesatualizada';
 import { hojeLocalISO } from '../../utils/periodoControladoria';
 import {
     CREDIT_ROOM_ACTION_PT,
@@ -147,6 +148,9 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         () => versoes.find(v => v.id === room.activeVersionId) ?? versoes[0] ?? null,
         [versoes, room.activeVersionId],
     );
+    // O que o cadastro mudou depois da versão ativa: as abas mostram a versão
+    // congelada, e sem este aviso a mudança parecia "não funcionar".
+    const mudancas = React.useMemo(() => mudancasDesdeAVersao(room, ativa), [room, ativa]);
 
     // Room de Grupo: o Data Room mostra de qual empresa é cada documento (nome vem da versão ativa).
     const grupoEscopo = room.escopo === 'GRUPO';
@@ -335,6 +339,25 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
             </div>
 
             {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-[10px] px-4 py-3">{erro}</div>}
+
+            {/* Cadastro mudou depois da versão ativa — só no lado interno; o credor vê a versão. */}
+            {ativa && mudancas.length > 0 && (aba === 'visao' || aba === 'capacidade' || aba === 'empreendimentos') && (
+                <div role="status" className="flex flex-col sm:flex-row sm:items-center gap-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-[10px] px-4 py-3">
+                    <AlertTriangle className="w-4 h-4 shrink-0" />
+                    <p className="flex-1">
+                        O cadastro mudou depois da V{ativa.versionNo} (congelada em {formatDateTimeBR(ativa.frozenAt)}):{' '}
+                        {mudancas.map(m => MUDANCA_PT[m]).join(', ')}. Estas abas mostram a versão congelada, que é o que a
+                        instituição vê. Congele uma nova versão para as mudanças aparecerem.
+                    </p>
+                    <button
+                        onClick={() => setCongelarAberto(true)}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-amber-800 border border-amber-300 rounded-[6px] hover:bg-amber-100 font-medium text-[13px] transition-all shrink-0"
+                    >
+                        <Snowflake className="w-[15px] h-[15px]" />
+                        Congelar nova versão
+                    </button>
+                </div>
+            )}
 
             {/* ── Visão · Capacidade · Empreendimentos (mesma versão ativa) ── */}
             {(aba === 'visao' || aba === 'capacidade' || aba === 'empreendimentos') && (

@@ -13,6 +13,8 @@ import type { ImovibStudyVersion } from '../../utils/imovibVersoes';
 import Button from '../ui/Button';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 import TableSwitch from '../ui/TableSwitch';
+import { useStore } from '../../store/useStore';
+import { urlDoMarketplace } from '../../utils/enderecoDoMarketplace';
 
 interface Props {
     initial?: Partial<InvestorOpportunity>;
@@ -27,6 +29,9 @@ const TYPES: OpportunityType[] = ['incorporacao', 'loteamento', 'obra_privada', 
 
 const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onClose }) => {
     const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
+    // A vitrine aberta é por organização (`/m/<slug>`); sem endereço, a chave do marketplace não tem efeito.
+    const slugDaOrg = useStore(s => s.organizations.find(o => o.id === organizationId)?.slug);
+    const vitrine = urlDoMarketplace(slugDaOrg, typeof window !== 'undefined' ? window.location.origin : '');
 
     // Fase 4: a SPE que recebe o dinheiro (chamado e integralizado vêm dos sócios dela).
     const [spes, setSpes] = React.useState<SpeEntity[]>([]);
@@ -476,6 +481,11 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         <div>
                             <p className="text-sm font-semibold text-gray-900">Também no marketplace público</p>
                             <p className="text-xs text-gray-500 mt-0.5">Página aberta, sem login: só título, local, fotos, tipo, ticket mínimo, VGV, TIR e prazo.</p>
+                            {vitrine ? (
+                                <p className="text-xs text-gray-500 mt-0.5">Endereço: <a href={vitrine} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">{vitrine}</a></p>
+                            ) : (
+                                <p className="text-xs text-amber-700 mt-0.5">Esta organização ainda não tem endereço do marketplace: sem ele, a vitrine não abre. Cadastre em Minha Organização › Organização › Marketplace público.</p>
+                            )}
                         </div>
                         <span title={!form.is_published ? 'Publique para os investidores antes de pôr no marketplace.' : undefined}>
                             <TableSwitch

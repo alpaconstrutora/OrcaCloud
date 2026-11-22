@@ -20,6 +20,7 @@ import {
     type CreditRoomStatus,
 } from '../../types/creditRoom';
 import SupplierSelect from '../SupplierSelect';
+import { FINANCIAL_INSTITUTION_CATEGORY, isFinancialInstitutionCategory } from '../../constants/supplierCategories';
 import {
     ELIGIBLE_FLOW_PT,
     GUARANTEE_KIND_PT,
@@ -226,6 +227,15 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
         }
     };
 
+    // Só fornecedores da categoria "Instituição Financeira" (Meus Fornecedores).
+    // O já gravado no room fica na lista mesmo fora da categoria: sem isso, um
+    // room antigo abriria com o campo em branco e o vínculo sumiria ao salvar.
+    const instituicoes = React.useMemo(
+        () => suppliers.filter(s => isFinancialInstitutionCategory(s.category) || s.id === form.institutionSupplierId),
+        [suppliers, form.institutionSupplierId],
+    );
+    const nenhumaInstituicao = suppliers.length > 0 && !suppliers.some(s => isFinancialInstitutionCategory(s.category));
+
     // Ao escolher o fornecedor, o nome livre vira redundante — e o inverso
     // também: dois campos dizendo instituições diferentes é o erro clássico.
     const onSupplier = (id: string) => {
@@ -294,7 +304,12 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div className="space-y-1.5">
                             <label className={rotulo}>Fornecedor cadastrado</label>
-                            <SupplierSelect suppliers={suppliers} value={form.institutionSupplierId ?? ''} onChange={onSupplier} placeholder="—" size="sm" />
+                            <SupplierSelect suppliers={instituicoes} value={form.institutionSupplierId ?? ''} onChange={onSupplier} placeholder="—" size="sm" />
+                            <p className="text-xs text-gray-500">
+                                {nenhumaInstituicao
+                                    ? `Nenhum fornecedor na categoria "${FINANCIAL_INSTITUTION_CATEGORY}". Cadastre o banco em Minha Organização › Meus Fornecedores com essa categoria.`
+                                    : `Fornecedores da categoria "${FINANCIAL_INSTITUTION_CATEGORY}" (Minha Organização › Meus Fornecedores).`}
+                            </p>
                         </div>
                         <div className="space-y-1.5">
                             <label className={rotulo}>Nome (se não cadastrado)</label>

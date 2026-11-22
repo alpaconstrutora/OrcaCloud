@@ -43,6 +43,10 @@ import { FilterPopover } from './ui/FilterPopover';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import EquivalenciasDoItem from './database/EquivalenciasDoItem';
+import NovaUnidadeForm from './database/NovaUnidadeForm';
+import { CreatableCombobox } from './ui/CreatableCombobox';
+import { masterDataService, MasterUnit } from '../services/masterDataService';
+import { catalogoDeUnidades, identidadeDaUnidade } from '../lib/unidadeDeMedida';
 
 // As duas abas (§19.1) são as duas bases que a tela consulta. O id persiste na
 // mesma chave do antigo <select> "Base de Dados", então quem já tinha a base
@@ -181,6 +185,26 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
     const [auxiliaryItems, setAuxiliaryItems] = React.useState<Map<string, SinapiItem>>(new Map());
     const [isLoadingAuxiliary, setIsLoadingAuxiliary] = React.useState(false);
     const [navigationHistory, setNavigationHistory] = React.useState<SinapiItem[]>([]);
+
+    // Unidade do item da base própria = escolhida do cadastro de unidades (Cadastros › Unidades),
+    // não digitada (pedido 22/11/2026). Superadmin cadastra unidade nova daqui (guia §7.1.2).
+    const editandoPropria = selectedItem?.source === 'Própria';
+    const [unidadesCadastradas, setUnidadesCadastradas] = React.useState<MasterUnit[]>([]);
+    const [novaUnidade, setNovaUnidade] = React.useState<string | null>(null);
+    React.useEffect(() => {
+        setNovaUnidade(null);
+        if (!editandoPropria) return;
+        masterDataService.listUnits().then(setUnidadesCadastradas).catch(() => setUnidadesCadastradas([]));
+    }, [editandoPropria]);
+    const catalogoUnidades = React.useMemo(() => catalogoDeUnidades(unidadesCadastradas), [unidadesCadastradas]);
+    const opcoesUnidade = React.useMemo(
+        () => catalogoUnidades.map(u => ({ id: u.codigo, name: u.codigo, nome: u.nome })),
+        [catalogoUnidades],
+    );
+    const unidadeNoCatalogo = (texto: string | undefined) => {
+        const id = identidadeDaUnidade(texto);
+        return id && opcoesUnidade.some(o => o.id === id) ? id : null;
+    };
 
     const handleSelectItem = (item: SinapiItem) => {
         setNavigationHistory([]);
@@ -1142,12 +1166,26 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
                                     <div className="text-right">
                                         <p className="text-xs text-gray-400 font-bold uppercase whitespace-nowrap">Unidade</p>
                                         {selectedItem.source === 'Própria' ? (
-                                            <input
-                                                type="text"
-                                                value={selectedItem.unit}
-                                                onChange={(e) => setSelectedItem({ ...selectedItem, unit: e.target.value })}
-                                                className="text-xl font-black text-gray-700 bg-transparent text-right outline-none border-b border-transparent hover:border-blue-200 focus:border-blue-500 transition-colors w-16 px-1"
-                                            />
+                                            <div className="w-32">
+                                                <CreatableCombobox<{ id: string; name: string; nome?: string }>
+                                                    ariaLabel="Unidade do item"
+                                                    value={selectedItem.unit ?? ''}
+                                                    selectedId={unidadeNoCatalogo(selectedItem.unit)}
+                                                    options={opcoesUnidade}
+                                                    onSelect={o => setSelectedItem({ ...selectedItem, unit: o.id })}
+                                                    onTextChange={t => setSelectedItem({ ...selectedItem, unit: t })}
+                                                    onCreate={podeImportarSinapi ? (t => {
+                                                        const id = unidadeNoCatalogo(t);
+                                                        if (id) setSelectedItem({ ...selectedItem, unit: id });
+                                                        else setNovaUnidade(t.trim());
+                                                    }) : undefined}
+                                                    getHint={o => o.nome}
+                                                    placeholder="Escolha"
+                                                    avisoNovo="Unidade nova — use Cadastrar na lista."
+                                                    avisoSemVinculo="Fora do cadastro de unidades."
+                                                    inputClassName="w-full h-9 pl-2 pr-7 bg-transparent border-b border-gray-200 hover:border-blue-200 focus:border-blue-500 text-xl font-black text-gray-700 text-right outline-none transition-colors"
+                                                />
+                                            </div>
                                         ) : (
                                             <span className="text-xl font-black text-gray-700 block px-1">{selectedItem.unit}</span>
                                         )}
@@ -1190,6 +1228,22 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
 
                             {/* Conteúdo Modal */}
                             <div className="flex-1 overflow-y-auto p-6 bg-white">
+                                {editandoPropria && podeImportarSinapi && novaUnidade !== null && (
+                                    <div className="mb-6">
+                                        <NovaUnidadeForm
+                                            key={novaUnidade}
+                                            existentes={catalogoUnidades.map(u => u.codigo)}
+                                            simboloInicial={novaUnidade}
+                                            onCriada={u => {
+                                                setUnidadesCadastradas(prev => [...prev, u]);
+                                                setNovaUnidade(null);
+                                                setSelectedItem(it => (it ? { ...it, unit: identidadeDaUnidade(u.symbol) ?? u.symbol } : it));
+                                            }}
+                                            onCancelar={() => setNovaUnidade(null)}
+                                            notify={notify}
+                                        />
+                                    </div>
+                                )}
                                 {selectedItem.code && selectedItem.code !== 'NOVO' && (
                                     <EquivalenciasDoItem code={selectedItem.code} unidadeDoItem={selectedItem.unit} podeEditar={podeImportarSinapi} notify={notify} />
                                 )}

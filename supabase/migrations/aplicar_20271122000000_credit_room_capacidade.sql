@@ -27,7 +27,7 @@
 --   chamador da DML.
 --
 -- ⚠️ APLICAR À MÃO — NUNCA `supabase db push` (ver CLAUDE.md).
--- Idempotente. Rollback: aplicar_20271122000000_credit_room_capacidade_rollback.sql
+-- Idempotente. Rollback: scripts/rollback-credit-room-capacidade.sql (fora de migrations/ — prefixo único)
 -- ==========================================================================
 
 SET lock_timeout = '5s';

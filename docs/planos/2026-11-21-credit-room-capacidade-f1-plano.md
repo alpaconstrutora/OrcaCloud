@@ -214,7 +214,7 @@ it('buildSnapshot grava schema 2', () => expect(buildSnapshot(base).schema).toBe
 ### Task 3: Migration — escopo, empreendimentos e parâmetros no room
 
 **Files:**
-- Create: `supabase/migrations/aplicar_<prefixo>_credit_room_capacidade.sql` e `supabase/migrations/aplicar_<prefixo>_credit_room_capacidade_rollback.sql` (prefixo: listar **todos** os nomes com `ls supabase/migrations | sed -E 's/^(aplicar_)?([0-9]+).*/\2/' | sort -n | tail` — hoje o maior é `20271121999000`; usar o próximo livre, ex. `20271122000000`, e reconferir no `origin/main` antes do commit)
+- Create: `supabase/migrations/aplicar_<prefixo>_credit_room_capacidade.sql` e `scripts/rollback-credit-room-capacidade.sql` (rollback fica fora de migrations/: o teste de prefixo único recusa dois arquivos com o mesmo número) (prefixo: listar **todos** os nomes com `ls supabase/migrations | sed -E 's/^(aplicar_)?([0-9]+).*/\2/' | sort -n | tail` — hoje o maior é `20271121999000`; usar o próximo livre, ex. `20271122000000`, e reconferir no `origin/main` antes do commit)
 
 Conteúdo:
 - `ALTER TABLE public.credit_rooms ADD COLUMN IF NOT EXISTS escopo text NOT NULL DEFAULT 'EMPRESA' CHECK (escopo IN ('EMPRESA','GRUPO'))`, `grupo_organization_ids uuid[] NOT NULL DEFAULT '{}'`, `empreendimento_ids uuid[] NOT NULL DEFAULT '{}'`, `parametros_capacidade jsonb NOT NULL DEFAULT '{}'`.

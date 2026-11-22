@@ -183,6 +183,14 @@ export const investorPortalTokenService = {
         return res?.valid ? (res.obras ?? []) : [];
     },
 
+    /** Realizado da obra e das vendas da oportunidade, só totais (Fase D1). `null` = sem empreendimento ligado. */
+    async getAcompanhamentoByToken(token: string, opportunityId: string): Promise<import('../utils/acompanhamentoDoInvestidor').RealizadoDoInvestidor | null> {
+        const { data, error } = await supabase.rpc('fn_investor_portal_get_acompanhamento', { p_token: token, p_opportunity_id: opportunityId });
+        if (error) throw error;
+        const r = data as { valid?: boolean; acompanhamento?: import('../utils/acompanhamentoDoInvestidor').RealizadoDoInvestidor | null } | null;
+        return r?.valid ? r.acompanhamento ?? null : null;
+    },
+
     /**
      * A obra da oportunidade (nome, fase, avanço e marcos) pelo link — Fase C8 do plano
      * 2026-11-21-portal-do-investidor-consolidacao. `null` = a oportunidade não tem obra vinculada.

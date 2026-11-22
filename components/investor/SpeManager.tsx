@@ -11,6 +11,7 @@ import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
 import { errorMessage } from '../../hooks/useOrgContext';
 import CapitalCallPanel from './CapitalCallPanel';
+import DistribuirResultadoPanel from './DistribuirResultadoPanel';
 
 interface Props {
     organizationId: string;
@@ -327,6 +328,12 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                                 >
                                                     <Plus className="w-4 h-4" /> Sócio
                                                 </Button>
+                                            </div>
+                                        )}
+
+                                        {pts.length > 0 && isAdmin && (
+                                            <div className="flex justify-end">
+                                                <DistribuirResultadoPanel speId={entity.id!} speName={entity.name} semObra={!entity.project_id} partners={pts} />
                                             </div>
                                         )}
 

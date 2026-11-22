@@ -164,3 +164,15 @@ Em código:
   - os ramos de token que nunca rodavam (OpportunityDetail/OpportunitiesTab) e o "Atualizado hoje" fixo;
   - o recurso do gráfico pelo diário × valor de obra digitado (contrariava a D2);
   - `fn_investor_portal_get_milestones`, sem chamador (DROP).
+
+**Fase D: 3 de 3 itens feitos** na frente `portal-investidor-fd`, empilhada na C. Migration
+`aplicar_20271121999800_portal_investidor_fase_d.sql`. Ensaio (migration + prova, desfeito):
+- D2: R$ 1.000 entre 33,33% e 66,67% deu 333,30 + 666,70 (soma exata); a SPE sem obra é recusada com o motivo.
+- D3: relatórios e comunicados de todas as orgs do investidor, com `organization_name`.
+- D1: Garden Cambuhy com 38 unidades vendáveis, custo realizado R$ 1.561,65 e avanço de 5,4%.
+
+Em código:
+- D2: `DistribuirResultadoPanel` no SpeManager, com a prévia do rateio pela regra do banco.
+- D3: Comunicados e Documentos mostram a org quando há mais de uma.
+- D1: aba "Acompanhamento" no detalhe da oportunidade do portal (`utils/acompanhamentoDoInvestidor.ts`).
+

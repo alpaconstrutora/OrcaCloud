@@ -22,11 +22,12 @@ import { linhaDaVersao } from '../../../utils/imovibRelatorio';
 import ImovibPainelDoInvestidor, { BotaoDoRelatorio } from './ImovibPainelDoInvestidor';
 import DataRoomPanel from '../DataRoomPanel';
 import ListasDaVersao from './ListasDaVersao';
+import PortalAcompanhamento from './PortalAcompanhamento';
 import ApresentacaoDaOportunidade, { type ObraAoVivo } from '../ApresentacaoDaOportunidade';
 import { naVitrine } from '../../../utils/oportunidadeNumerosDaVersao';
 import { PortalCard, PortalTabs, PortalLoading, GhostButton } from '../../portal/PortalKit';
 
-export type AbaDoDetalhe = 'apresentacao' | 'viabilidade' | 'documentos';
+export type AbaDoDetalhe = 'apresentacao' | 'acompanhamento' | 'viabilidade' | 'documentos';
 
 interface Props {
     opportunity: InvestorOpportunity;
@@ -74,6 +75,7 @@ const PortalOportunidadeDetalhe: React.FC<Props> = ({ opportunity, portalToken, 
 
     const abas = [
         { id: 'apresentacao', label: 'Apresentação' },
+        ...(comEstudo ? [{ id: 'acompanhamento', label: 'Acompanhamento' }] : []),
         ...(comEstudo ? [{ id: 'viabilidade', label: 'Viabilidade' }] : []),
         { id: 'documentos', label: 'Documentos' },
     ];
@@ -95,6 +97,7 @@ const PortalOportunidadeDetalhe: React.FC<Props> = ({ opportunity, portalToken, 
                 {/* key: trocar de aba entra o conteúdo novo (portal-troca, index.css). */}
                 <div key={aba} className="p-5 portal-troca">
                     {aba === 'apresentacao' && <ApresentacaoDaOportunidade op={op} fichaTecnica={fichaTecnica} obra={obra} />}
+                    {aba === 'acompanhamento' && comEstudo && <PortalAcompanhamento op={op} portalToken={portalToken} />}
                     {aba === 'viabilidade' && comEstudo && (
                         carregando ? <PortalLoading label="Carregando a viabilidade..." />
                             : erro ? <p role="alert" className="text-sm text-[#5F6573]">{erro}</p>

@@ -36,6 +36,8 @@ const PortalDocuments: React.FC<Props> = ({
     portalToken,
 }) => {
     const linhas = onlyCategory ? reports.filter(r => r.category === onlyCategory) : reports;
+    // Fase D3: investidor de várias organizações vê de quem é cada documento.
+    const variasOrgs = new Set(linhas.map(r => (r as { organization_id?: string }).organization_id).filter(Boolean)).size > 1;
 
     return (
         <PortalCard className="overflow-hidden">
@@ -64,7 +66,12 @@ const PortalDocuments: React.FC<Props> = ({
                         ) : linhas.map((r, i) => (
                             <tr key={r.id ?? `rep-${i}`} className="hover:bg-gray-50/70 transition-colors">
                                 <Td className="text-[#8A8F9A] whitespace-nowrap">{fmtReportDate(r.report_date ?? r.created_at)}</Td>
-                                <Td className="text-[#1F2430] font-medium">{r.name}</Td>
+                                <Td className="text-[#1F2430] font-medium">
+                                    {r.name}
+                                    {variasOrgs && (r as { organization_name?: string }).organization_name && (
+                                        <span className="block text-[12px] font-normal text-[#8A8F9A]">{(r as { organization_name?: string }).organization_name}</span>
+                                    )}
+                                </Td>
                                 <Td>{r.category ? <TagChip>{REPORT_CATEGORY_LABELS[r.category as ReportCategory] ?? r.category}</TagChip> : '—'}</Td>
                                 <Td className="text-[#8A8F9A]">{r.type || '—'}</Td>
                                 <Td className="text-right">

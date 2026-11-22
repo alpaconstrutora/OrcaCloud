@@ -21,7 +21,6 @@ const speService = vi.hoisted(() => ({
     savePartner: vi.fn(),
     removePartner: vi.fn(),
     addCapitalCall: vi.fn(),
-    addCapitalPayment: vi.fn(),
 }));
 const investorService = vi.hoisted(() => ({ listInvestors: vi.fn() }));
 
@@ -62,30 +61,15 @@ beforeEach(() => {
 });
 
 describe('SpeManager — erro na tela', () => {
-    it('chamada de capital recusada pela permissão mostra o motivo na tela', async () => {
-        speService.addCapitalCall.mockRejectedValue(ERRO_RLS);
+    // Fase C2 (plano 2026-11-21-portal-do-investidor-consolidacao): "Chamar/Pagar" manual saiu — mexia no
+    // chamado/integralizado sem chamada e sem aporte no extrato. O capital só se move pelas chamadas de capital.
+    it('a tabela de sócios não tem mais chamar/pagar manual', async () => {
         const { container } = montar();
         await abrirSpe();
-
-        const valor = container.querySelector('td input') as HTMLInputElement;
-        fireEvent.change(valor, { target: { value: '50000' } });
-        await act(async () => { fireEvent.click(container.querySelector('td button') as HTMLButtonElement); });
-
-        expect(speService.addCapitalCall).toHaveBeenCalledWith('p-1', 500);
-        expect(await screen.findByText(/sem permissão/i)).toBeTruthy();
-        expect(screen.getByText(/proprietário ou administrador/i)).toBeTruthy();
-    });
-
-    it('chamada de capital que dá certo avisa e recarrega os totais', async () => {
-        speService.addCapitalCall.mockResolvedValue(undefined);
-        const { container } = montar();
-        await abrirSpe();
-
-        fireEvent.change(container.querySelector('td input') as HTMLInputElement, { target: { value: '50000' } });
-        await act(async () => { fireEvent.click(container.querySelector('td button') as HTMLButtonElement); });
-
-        expect(await screen.findByText(/chamada de capital registrada/i)).toBeTruthy();
-        expect(speService.listPartners).toHaveBeenCalledTimes(2);
+        expect(container.querySelector('td input')).toBeNull();
+        expect(screen.queryByRole('option', { name: 'Pagar' })).toBeNull();
+        expect(screen.queryByLabelText(/Registrar pagamento de capital/)).toBeNull();
+        expect(speService.addCapitalCall).not.toHaveBeenCalled();
     });
 
     it('carga que falha NÃO diz "Nenhuma SPE cadastrada" e oferece tentar de novo', async () => {

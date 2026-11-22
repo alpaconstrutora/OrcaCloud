@@ -4,7 +4,8 @@
  *
  * Antes, `addCapitalCall` chamava a RPC `increment_spe_capital_call`, que nunca
  * existiu no banco, e caía num fallback "lê, soma, grava" sem conferir o erro.
- * `addCapitalPayment` fazia o mesmo lê-soma-grava direto. Dois defeitos:
+ * `addCapitalPayment` fazia o mesmo lê-soma-grava direto (saiu em 21/11: o pagamento é a RPC da chamada de
+ * capital, `fn_chamada_de_capital_registrar_pagamento`). Dois defeitos:
  *   - `capitalCallService.createCall` dispara os incrementos em paralelo
  *     (`Promise.all`): dois para o mesmo sócio leem o mesmo total e um se perde;
  *   - a RLS só deixa owner/admin gravar em `spe_partners` — para membro comum o
@@ -51,16 +52,5 @@ describe('speService — incremento atômico dos totalizadores de capital', () =
         expect(from).not.toHaveBeenCalled();
     });
 
-    it('addCapitalPayment incrementa pela RPC, sem tocar a tabela', async () => {
-        rpc.mockResolvedValue({ data: 200, error: null });
-        await speService.addCapitalPayment('p-2', 200);
-        expect(rpc).toHaveBeenCalledWith('increment_spe_capital_paid', { p_partner_id: 'p-2', p_amount: 200 });
-        expect(from).not.toHaveBeenCalled();
-    });
 
-    it('addCapitalPayment propaga o erro da RPC', async () => {
-        const erro = { message: 'sem permissão para alterar este sócio', code: '42501' };
-        rpc.mockResolvedValue({ data: null, error: erro });
-        await expect(speService.addCapitalPayment('p-2', 200)).rejects.toBe(erro);
-    });
 });

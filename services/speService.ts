@@ -123,13 +123,4 @@ export const speService = {
         });
         if (error) throw error;
     },
-
-    /** Registra pagamento de chamada — incrementa capital_paid */
-    async addCapitalPayment(partnerId: string, amount: number): Promise<void> {
-        const { error } = await supabase.rpc('increment_spe_capital_paid', {
-            p_partner_id: partnerId,
-            p_amount: amount,
-        });
-        if (error) throw error;
-    },
 };

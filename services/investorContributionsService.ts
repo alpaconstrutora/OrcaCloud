@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 
 export type ContributionType = 'aporte' | 'retirada' | 'dividendo' | 'distribuicao';
-export type ContributionStatus = 'pendente' | 'liquidado' | 'atrasado';
+export type ContributionStatus = 'pendente' | 'liquidado' | 'atrasado' | 'cancelado';
 
 export interface InvestorContribution {
     id?: string;

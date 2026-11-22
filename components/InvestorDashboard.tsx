@@ -850,6 +850,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             contributions={investorContributions}
                             onSelectAsset={setSelectedAsset}
                             onNavigateToHoldings={() => setActiveTab('holdings')}
+                            portalToken={portalToken}
                         />
                     ) : (
                         <InvestorSummaryDashboard

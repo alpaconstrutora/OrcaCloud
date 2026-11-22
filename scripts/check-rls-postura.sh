@@ -212,6 +212,26 @@ else
         done
         echo "$LINHA"
     done
+    # `assinatura-interna` (verify_jwt=false; docs/planos/2026-11-21-assinatura-eletronica-interna.md):
+    # o corpo é validado ANTES da sessão, então `{}` dá 400 — a sonda usa um `criar`
+    # bem formado, que só pode passar com JWT de usuário membro da org do documento.
+    CORPO_ASSINATURA='{"acao":"criar","origem_tipo":"CDV","origem_id":"11111111-2222-4333-8444-555555555555","signatarios":[{"canal":"PORTAL_CLIENTE","client_id":"11111111-2222-4333-8444-555555555555"}]}'
+    LINHA="   assinatura-interna (criar):"
+    for CENARIO in sem-header anon token-lixo; do
+        case "$CENARIO" in
+            sem-header) H='X-Sonda: 1' ;;
+            anon)       H="Authorization: Bearer $CHAVE_PUB" ;;
+            token-lixo) H='Authorization: Bearer lixo-invalido' ;;
+        esac
+        CODIGO=$(curl -s -o /dev/null -w '%{http_code}' -m 20 -X POST             "$URL_PROJ/functions/v1/assinatura-interna" -H "$H" -H 'Content-Type: application/json' -d "$CORPO_ASSINATURA")
+        if [ "$CODIGO" = "401" ] || [ "$CODIGO" = "403" ]; then
+            LINHA="$LINHA $CENARIO=$CODIGO"
+        else
+            LINHA="$LINHA $CENARIO=$CODIGO←ABERTA"
+            ABERTAS=$((ABERTAS+1))
+        fi
+    done
+    echo "$LINHA"
     if [ "$ABERTAS" -gt 0 ]; then
         echo "❌ $ABERTAS sonda(s) passaram — há function de cron alcançável de fora."
         FALHAS=$((FALHAS+1))

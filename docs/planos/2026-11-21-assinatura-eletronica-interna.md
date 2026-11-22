@@ -126,7 +126,12 @@ Selo PAdES com o certificado A1 da empresa. Não muda a validade jurídica e tem
 - [x] F1: Banco. Migration aplicada em 21/11/2026 via `db query -f`. A prova `scripts/teste-assinatura-interna.sql` dá TUDO OK (18 itens), e `check-rls-postura.sh` passa limpo nas 9 verificações
   - Ajuste: `profiles` está vazia, então o CPF do representante vem de `employees.user_id`; sem cadastro no RH, vale o CPF informado no envio
   - `assinatura_validar` entrou na lista de funções públicas permitidas do `check-rls-postura.sh`, com o mesmo critério do `doc_gen_validar`
-- [ ] F2: Edge Function
+- [x] F2: Edge Function. `assinatura-interna` v1, `sign-contract` v7 e `portal-invite-user` v6 publicadas em 21/11/2026, sem mudar o `verify_jwt` de nenhuma
+  - Curls na versão publicada: `criar` sem header → 401; só com a chave anon → 401; token de portal falso → 403; membro ou cancelar sem header → 401
+  - Sonda 8 do `check-rls-postura.sh` inclui a função; postura limpa nas 9 verificações
+  - `deno check` limpo; o carimbo foi conferido em PDF real (rodapé, manifesto, QR)
+  - **Não feito por curl:** os 6 pedidos de código → 429. Precisaria de um envelope real em produção, que é imutável e não se apaga. O limite está provado no SQL (item 8) e no mapa 54000 → 429 (`assinaturaInternaRegras.test.ts`)
+  - Ajuste: o e-mail do comprador leva o link do portal **com o token** (`/portal-cliente?token=…&assinar=…`), o mesmo mecanismo do link do portal. Ele não precisa criar senha, e o código por e-mail é o fator extra. Por isso o `portalAcesso.ts` não gera link de convite
 - [ ] F3: Lado de quem assina
 - [ ] F4: Emissão
 - [ ] F5: Negociação

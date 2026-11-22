@@ -55,4 +55,10 @@ oportunidade → Garden SPE no modal → "Garden Cambuhy" na lista), fechando se
 Provas: `__tests__/components/InvestidorOrgDoTopo.test.tsx` — no código antigo 4 de 5 falham (o formulário recebia
 "alpa"); no novo, 5 de 5. `tsc` 0 erros; 113 arquivos / 939 testes de investidor/oportunidade/SPE/portal/Guard verdes;
 `check-ui-standard` e `check-org-selector-guard` limpos.
-Pendente: publicar e refazer no navegador o caminho do usuário.
+**NO AR** (PR #656, squash bd1629c; `conferir-producao.sh`: o domínio serve bd1629c).
+Prova em produção (22/11, navegador do usuário, mesmo caminho do print): topo em "Todas", obra Divino Espírito Santo
+(Alpa) no contexto → "Nova Oportunidade" → Garden SPE no modal → "Estudo do Imovib" lista "Garden Cambuhy (v1.0)";
+escolhido o estudo, a versão "Conferência do portal · 16/11/2026" aparece. Fechado com Cancelar; 0 oportunidades no
+banco. (Antes da correção, no mesmo caminho, a lista vinha só com "Sem vínculo".)
+Observação: o formulário da Garden SPE mostra "Nenhuma SPE nesta organização" — não há `spe_entities` nessa org; a
+SPE de teste do roteiro tem de ser criada nela.

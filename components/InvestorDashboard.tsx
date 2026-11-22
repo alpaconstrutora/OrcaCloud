@@ -2,7 +2,7 @@ import React from 'react';
 import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { TrendingUp, PieChart as PieChartIcon, Building2, Boxes, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, XCircle, ChevronDown, HelpCircle, MoreHorizontal, LogOut } from 'lucide-react';
 import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
-import { useOrgContext } from '../hooks/useOrgContext';
+import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { Investor, investorService } from '../services/investorService';
 import { projectService, ProjectData } from '../services/projectService';
 import { investorPortalService, InvestorReport, InvestorOpportunity, ReportCategory } from '../services/investorPortalService';
@@ -109,9 +109,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     activeTab: initialTab, settings, organizationId, profile, investorProfile, onUpdateSettings,
     isPreview = false, portalToken, overrideEnabledTabIds, onLogout,
 }) => {
-    // Org canônica: prop activeOrganizationId tem precedência; settings.organizationId
-    // só existe quando um projeto está carregado, então sem ele o portal não salvava.
-    const orgId = organizationId ?? settings?.organizationId ?? investorProfile?.organization_id;
     const [activeTab, setActiveTab] = React.useState<TabId>(initialTab || 'dashboard');
     const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
     const [filterStatus, setFilterStatus] = React.useState('Todos');
@@ -129,11 +126,17 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         || profile?.role === UserProfile.DEVELOPER
         || profile?.group === 'DESENVOLVEDOR'
     );
-    // REGRA #5 (16/11/2026 — "Se no topo estava todas as organizações e não apareceu"): na visão do
-    // gestor, oportunidades e relatórios seguem o seletor do topo; "Todas" = null = sem filtro (a RLS
-    // recorta). Antes caíam na organização do INVESTOR selecionado e sumia o que era de outra org.
+    // REGRA #5: na visão do GESTOR a organização é a do seletor do topo; "Todas" = null = sem filtro na
+    // leitura (a RLS recorta) e criar pergunta a org (useOrgWriteTarget). Nunca `settings.organizationId`:
+    // é a org da OBRA carregada no contexto. Em 22/11/2026, com o topo em "Todas" e uma obra da Alpa
+    // carregada, "Nova oportunidade" ignorava a Garden SPE escolhida e o formulário listava os estudos da
+    // Alpa (nenhum) — plano docs/planos/2026-11-22-investidor-org-do-topo.md.
+    // Na visão do INVESTIDOR (link, portal logado, prévia) a org é a dele.
     const { orgId: orgDoTopo } = useOrgContext();
-    const orgDaLista = isAdmin ? orgDoTopo : orgId;
+    const orgId: string | null = isAdmin
+        ? orgDoTopo
+        : (organizationId ?? settings?.organizationId ?? investorProfile?.organization_id ?? null);
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const isPublicExperience = isPreview || !!portalToken;
 
     const [showMobilePreview, setShowMobilePreview] = React.useState(false);
@@ -376,7 +379,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     // Carrega participações e contribuições do investidor em uma única rodada
                     const [parts, contribs] = await Promise.all([
                         investorContributionsService.listParticipationsByInvestor(investorId),
-                        investorContributionsService.listByInvestor(orgId ?? '', investorId),
+                        investorContributionsService.listByInvestor(orgId, investorId),
                     ]);
                     setInvestorParticipations(parts);
                     setInvestorContributions(contribs);
@@ -387,8 +390,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
 
                 if (isAdmin || orgId) {
                     const [r, o] = await Promise.all([
-                        investorPortalService.listReports(orgDaLista, investorProfile?.id ?? undefined),
-                        investorPortalService.listOpportunities(orgDaLista, !isAdmin),
+                        investorPortalService.listReports(orgId, investorProfile?.id ?? undefined),
+                        investorPortalService.listOpportunities(orgId, !isAdmin),
                     ]);
                     setReports(r);
                     setOpportunities(o);
@@ -402,22 +405,26 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         }
         loadData();
         return () => { cancelled = true; };
-    }, [orgId, orgDaLista, investorProfile?.id, portalToken]);
+    }, [orgId, investorProfile?.id, portalToken]);
 
     // ── Handlers ──────────────────────────────────────────────────────────────
 
     const handleUploadReport = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (!e.target.files?.length || !orgId) return;
+        if (!e.target.files?.length) return;
         const file = e.target.files[0];
+        // Topo numa org: ela, sem perguntar. Em "Todas": pergunta qual (o documento é de UMA org).
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const orgDoDocumento = target.orgId;
         try {
             // A org no caminho é o que a policy do bucket confere (aplicar_20271116900800).
-            const path = `reports/${orgId}/${Date.now()}_${file.name}`;
+            const path = `reports/${orgDoDocumento}/${Date.now()}_${file.name}`;
             await storageService.uploadFile('documents', path, file);
             // Bucket privado: `url` guarda o CAMINHO; quem abre assina (ReportsTab,
             // PortalDocuments → abrirDocumentoDoPortal).
             const url = path;
             const saved = await investorPortalService.addReport({
-                organization_id: orgId,
+                organization_id: orgDoDocumento,
                 investor_id: investorProfile?.id ?? null,
                 name: file.name.replace(/\.(pdf|docx|xlsx)$/i, ''),
                 type: 'PDF',
@@ -830,7 +837,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                     <div className="w-1.5 h-6 bg-blue-600 rounded-full" />
                                     <h3 className="text-xl font-black text-gray-900 tracking-tight">Fluxo de Caixa e Aportes</h3>
                                 </div>
-                                <PaymentsPanel organizationId={orgId} investorId={investorProfile?.id} />
+                                <PaymentsPanel organizationId={orgId ?? undefined} investorId={investorProfile?.id} />
                             </section>
                         </div>
                     )
@@ -917,7 +924,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                         <PortalSpes spes={portalSpes} />
                     ) : (
                         <SpeManager
-                            organizationId={orgId ?? ''}
+                            organizationId={orgId}
                             isAdmin={isAdmin}
                         />
                     )
@@ -942,7 +949,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             emptySubtitle="Os relatórios mensais aparecem aqui assim que forem emitidos."
                         />
                     ) : (
-                        isAdmin ? <MonthlyReportTrigger organizationId={orgId ?? ''} /> : null
+                        isAdmin ? <MonthlyReportTrigger organizationId={orgId} /> : null
                     )
                 )}
             </main>
@@ -951,6 +958,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
             <div className="hidden md:block pt-12 text-center opacity-30 select-none pointer-events-none">
                 <p className="text-xs font-bold text-gray-400 uppercase tracking-[0.3em]">Gestão de Ativos Premium • Opura Platinum</p>
             </div>
+
+            {/* "Em qual organização?" do envio de documento com o topo em "Todas" (REGRA #5). */}
+            {orgTargetModal}
 
             {/* Input Modal */}
 
@@ -962,7 +972,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     <AssetDetailModal
                         project={selectedAsset}
                         projectId={selectedAsset.id}
-                        organizationId={orgId}
+                        // A org da OBRA do ativo (em "Todas" o topo não diz qual é).
+                        organizationId={proj?.settings?.organizationId ?? orgId ?? undefined}
                         isAdmin={isAdmin}
                         diaryImages={diaryImages}
                         onClose={() => setSelectedAsset(null)}

@@ -64,6 +64,12 @@ export interface Investor {
 
 type InvestorRowDb = Investor & { investor_org_shares?: { target_org_id: string }[] | null };
 
+/** O investidor pertence à org (dono) ou foi compartilhado COM ela. Regra única: a lista do topo e o sócio da SPE. */
+export const investidorVisivelNaOrg = (
+    i: Pick<Investor, 'organization_id' | 'is_shared' | '_shared_org_ids'>,
+    orgId: string,
+): boolean => i.organization_id === orgId || (!!i.is_shared && (i._shared_org_ids ?? []).includes(orgId));
+
 export const investorService = {
     async listInvestors(organizationId?: string) {
         try {
@@ -79,11 +85,7 @@ export const investorService = {
             }));
             // A RLS já recorta o que o usuário enxerga; com uma organização no topo,
             // ficam os dela e os compartilhados COM ela (não com outra do usuário).
-            return investors.filter(i =>
-                !organizationId
-                || i.organization_id === organizationId
-                || (i.is_shared && i._shared_org_ids.includes(organizationId)),
-            ) as Investor[];
+            return investors.filter(i => !organizationId || investidorVisivelNaOrg(i, organizationId)) as Investor[];
         } catch (error: unknown) {
             console.warn("Could not list investors:", error instanceof Error ? error.message : error);
             return [];

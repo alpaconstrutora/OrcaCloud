@@ -158,7 +158,10 @@ Selo PAdES com o certificado A1 da empresa. Não muda a validade jurídica e tem
   - Ações "Enviar para assinar" e "Acompanhar".
   - `propertyExportService.proposalPdfBlob` gera a mesma proposta do botão, como arquivo (teste `propostaComoArquivo`).
   - Verificado: `tsc` sem erros, `check-ui-standard` limpo, os 3 testes do `DealModal` e o `orgContextGuard` passam.
-- [ ] F6: Portal do Corretor
+- [~] F6: Portal do Corretor — código pronto; **falta** o roteiro na tela real
+  - `DocumentosParaAssinar portal="corretor"` no desktop (`BrokerPortal`) e no celular (`BrokerPortalMobile`), com pendências e assinados.
+  - O tour não abre na visita que chega por `?assinar=`.
+  - Verificado: `tsc` sem erros; `BrokerPortalMobile` e `brokerPortalTabsMobile` passam.
 
 ## Verificação
 

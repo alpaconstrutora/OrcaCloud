@@ -16,6 +16,8 @@ import BrokerEvents from './broker/BrokerEvents';
 import BrokerChat from './broker/BrokerChat';
 import BrokerHealthPanel from './broker/BrokerHealthPanel';
 import BrokerPortalMobile from './broker/BrokerPortalMobile';
+import { DocumentosParaAssinar } from './assinatura/DocumentosParaAssinar';
+import { signatarioDaUrl } from '../services/assinaturaInternaService';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
@@ -129,6 +131,8 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
     // casca própria do portal (banner + header + sidebar), espelhando o Portal do Parceiro.
     // No app autenticado a navegação já vem da sidebar do Layout — não duplicar.
     const isStandalone = !!portalToken;
+    // Lido na montagem: o cartão de assinaturas limpa o ?assinar da URL logo depois.
+    const [chegouParaAssinar] = useState(() => !!signatarioDaUrl());
     const navGroups = NAV_GROUPS
         .map(g => ({ label: g.label, items: g.tabs.map(id => TAB_BY_ID[id]).filter(t => t && navTabs.some(nt => nt.id === t.id)) }))
         .filter(g => g.items.length > 0);
@@ -277,7 +281,8 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
                 checklistSlot={isAdmin ? null : slotChecklist}
                 accent="indigo"
                 tourKey={portalToken || effectiveBrokerEmail || null}
-                autoTour={isStandalone}
+                // Quem chegou pelo e-mail de assinatura vê o tour na próxima visita.
+                autoTour={isStandalone && !chegouParaAssinar}
             />
 
             {/* Meus dados — painel lateral (UI_PATTERNS / §26), igual ao Portal do
@@ -445,6 +450,9 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
             )}
 
             {!isAdmin && currentTab === navTabs[0]?.id && <div ref={setSlotChecklist} className="empty:hidden" />}
+
+            {/* Assinatura interna: documentos que o corretor assina (plano 2026-11-21-assinatura-eletronica-interna). */}
+            {portalToken && <DocumentosParaAssinar portal="corretor" token={portalToken} mostrarAssinados className="mb-3" />}
 
             {/* KPI Cards — §4 (componente canônico KpiCard, cor semântica por KPI).
                 Visíveis SOMENTE na aba Analytics: são o resumo de desempenho do

@@ -176,3 +176,30 @@ Em código:
 - D3: Comunicados e Documentos mostram a org quando há mais de uma.
 - D1: aba "Acompanhamento" no detalhe da oportunidade do portal (`utils/acompanhamentoDoInvestidor.ts`).
 
+**Fase E: 2 de 3 análises feitas** (E2 e E3; a E1 roda depois das migrations C e D aplicadas).
+
+E2 — informe de rendimentos: o que falta para o padrão da declaração. Fontes consultadas em 21/11: perguntas e
+respostas IRPF da Receita; ficha de rendimentos isentos, código 09 para lucros e dividendos, isenção do art. 10 da
+Lei 9.249/1995. **Confirmar com o contador antes de virar regra.**
+1. **Fonte pagadora por linha:** a declaração pede o CNPJ e o nome de quem pagou (a SPE). O informe agrupa por obra;
+   deveria agrupar pela SPE, com CNPJ (`spe_entities.cnpj` já existe).
+2. **Natureza do valor:** dividendo é isento (código 09). "Distribuição" pode ser lucro (isento) ou devolução de
+   capital (não é rendimento, reduz o custo). O sistema não distingue, e o TaxReport sugere "código 26" para tudo —
+   provavelmente errado para dividendos.
+3. **Imposto retido:** não há campo de IRRF no lançamento. A Lei 15.270/2025 prevê retenção de 10% sobre dividendos
+   acima de R$ 50 mil por mês da mesma fonte, a partir de 2026 (fonte secundária; conferir na Receita).
+4. **Bens e Direitos:** a participação na SPE vai no grupo 03 (participações societárias), com CNPJ e quantidade de
+   cotas (`spe_partners.quota_count` existe) — o informe mostra só o custo por obra.
+5. **Aporte pela chamada de capital:** custo de aquisição das cotas — já entra (Fase 7.1).
+→ Itens 1, 2 e 4 cabem no sistema sem decisão fiscal nova (agrupar pela SPE, separar a natureza, mostrar CNPJ e
+cotas). O item 3 e a regra do código para "distribuição" pedem decisão do contador. **Aguardam o usuário.**
+
+E3 — confirmação de e-mail no Auth: **não conferida direto.** Ler a configuração pela API de gestão exigiria o token
+da conta do usuário (o modo automático bloqueou). Evidência indireta no banco: 13 de 23 usuários com
+`email_confirmed_at` nulo, o que não aconteceria com confirmação automática ligada.
+Achado mais amplo que o da análise: o login por e-mail de **todos** os portais (`portal_token_para_mim`: cliente,
+fornecedor, corretor, investidor) e a perna "pelo e-mail" de `fn_investor_get_espelho` confiam no e-mail da sessão.
+Isso só é seguro com "Confirm email" ligado.
+→ **Pendência do usuário:** conferir em Supabase › Authentication › Providers › Email que "Confirm email" está
+ligado (e se o cadastro aberto, "Allow new users to sign up", precisa estar).
+

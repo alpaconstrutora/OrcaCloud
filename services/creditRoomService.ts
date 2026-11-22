@@ -43,7 +43,32 @@ import {
     servicoPrimeirosMeses,
     type CreditRoomIndicators,
     type CreditRoomSnapshot,
+    type SnapshotCapacidade,
+    type SnapshotContrato,
+    type SnapshotEmpreendimentoItem,
+    type SnapshotEscopo,
 } from '../utils/creditRoomSnapshot';
+import {
+    PARAMETROS_CAPACIDADE_PADRAO,
+    alertasDaCarteira,
+    capacidadeMaxima,
+    qualidadeDaRenda,
+    recebidoPorMes,
+    rotuloMascarado,
+    serieDeRenda,
+    type CapacidadeEntrada,
+    type LocacaoVigente,
+    type Natureza,
+    type ParametrosCapacidade,
+    type TituloCarteira,
+} from '../utils/creditCapacity';
+import { buildSchedule } from '../utils/debtAmortization';
+import { round2 } from '../utils/financialMath';
+import { originIdFromRef } from '../lib/receivableRef';
+import { getDealInstallmentValue } from '../lib/rentalPortfolio';
+import { saleDealStage } from '../lib/salesAnalysis';
+import type { Receivable } from '../types/financial';
+import type { DebtPosition } from '../types/debt';
 import { calcularEac, escolherCustoTotal, type ItemContratado, type ItemOrcado } from '../utils/creditRoomEac';
 import { avaliarCovenant, type AvaliacaoCovenant } from '../utils/covenantAvaliacao';
 import { calculateProjectProgress } from '../utils/projectUtils';
@@ -54,11 +79,13 @@ import { opuraAnalyticsService } from './opuraAnalyticsService';
 import { rentalNoiService } from './rentalNoiService';
 import { empreendimentoService } from './empreendimentoService';
 import { documentService } from './documentService';
+import { receivableService } from './receivableService';
+import { fotosDosEmpreendimentos } from './empreendimentoMidiaService';
 
 // ⚠️ supabase-js exige string LITERAL em `.select()` — concatenar vira
 // `string` e o cliente devolve GenericStringError.
 const ROOM_COLS =
-    'id, organization_id, seq, code, name, company_id, empreendimento_id, project_id, debt_contract_id, institution_supplier_id, institution_name, requested_amount, purpose, modality, term_months, grace_months, eligible_flows, guarantees, funding_sources, funding_uses, equity_committed, equity_contributed, status, active_version_id, notes, created_by, created_at, updated_at';
+    'id, organization_id, seq, code, name, company_id, empreendimento_id, project_id, debt_contract_id, institution_supplier_id, institution_name, requested_amount, purpose, modality, term_months, grace_months, eligible_flows, guarantees, funding_sources, funding_uses, equity_committed, equity_contributed, escopo, grupo_organization_ids, empreendimento_ids, parametros_capacidade, status, active_version_id, notes, created_by, created_at, updated_at';
 
 const VERSION_COLS =
     'id, organization_id, credit_room_id, version_no, label, data_base, snapshot, indicators, document_version_ids, notes, frozen_by, frozen_at';
@@ -111,6 +138,13 @@ function mapRoom(r: Row): CreditRoom {
         fundingUses: Array.isArray(r.funding_uses) ? (r.funding_uses as CreditRoom['fundingUses']) : [],
         equityCommitted: num(r.equity_committed),
         equityContributed: num(r.equity_contributed),
+        escopo: r.escopo === 'GRUPO' ? 'GRUPO' : 'EMPRESA',
+        grupoOrganizationIds: Array.isArray(r.grupo_organization_ids) ? (r.grupo_organization_ids as unknown[]).map(String) : [],
+        empreendimentoIds: Array.isArray(r.empreendimento_ids) ? (r.empreendimento_ids as unknown[]).map(String) : [],
+        parametrosCapacidade: {
+            ...PARAMETROS_CAPACIDADE_PADRAO,
+            ...((r.parametros_capacidade ?? {}) as Partial<ParametrosCapacidade>),
+        },
         status: String(r.status) as CreditRoomStatus,
         activeVersionId: str(r.active_version_id),
         notes: str(r.notes),
@@ -121,7 +155,15 @@ function mapRoom(r: Row): CreditRoom {
 }
 
 function toRoomRow(input: CreditRoomInput): Row {
+    // Campos da capacidade só vão quando vieram: ausente = não mexe na coluna
+    // (um `update()` de quem ainda não os edita não pode zerá-los).
+    const capacidade: Row = {};
+    if (input.escopo !== undefined) capacidade.escopo = input.escopo;
+    if (input.grupoOrganizationIds !== undefined) capacidade.grupo_organization_ids = input.grupoOrganizationIds;
+    if (input.empreendimentoIds !== undefined) capacidade.empreendimento_ids = input.empreendimentoIds;
+    if (input.parametrosCapacidade !== undefined) capacidade.parametros_capacidade = input.parametrosCapacidade;
     return {
+        ...capacidade,
         name: input.name,
         company_id: input.companyId ?? null,
         empreendimento_id: input.empreendimentoId ?? null,
@@ -300,6 +342,285 @@ const addMonths = (iso: string, months: number): string => {
     const dt = new Date(Date.UTC(y, m - 1 + months, d));
     return dt.toISOString().slice(0, 10);
 };
+
+// ── Capacidade de pagamento — apoio da coleta (spec 2026-11-21 §5) ─────────
+
+/** PostgREST recebe o `.in()` pela URL — lotes de 200 ids ficam longe do limite. */
+const lotes = <T,>(xs: T[], n = 200): T[][] => {
+    const out: T[][] = [];
+    for (let i = 0; i < xs.length; i += n) out.push(xs.slice(i, i + n));
+    return out;
+};
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Parcela de locação faturada pela NEGOCIAÇÃO (contrato original) tem
+ * `reference_id = tx-<deal_id>-…` (ver `contractRenewalService.countPendingFrom`).
+ * `originIdFromRef` não a reconhece — o "id" que sobra não é contrato.
+ */
+const DEAL_DA_REF = /^tx-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})-/i;
+const dealIdDaRef = (ref: unknown): string | null => DEAL_DA_REF.exec(String(ref ?? ''))?.[1] ?? null;
+
+const NATUREZA_DO_DOMINIO: Record<string, Natureza> = { VENDAS: 'VENDA', LOCACAO: 'LOCACAO' };
+const NATUREZA_DO_DEAL: Record<string, Natureza> = { SALE: 'VENDA', RENTAL: 'LOCACAO' };
+
+/** 'AAAA-MM-01' do `delta`-ésimo mês depois do da data-base, sem `Date` com fuso. */
+const diaUmDoMes = (dataBase: string, delta: number): string => {
+    const [y, m] = dataBase.slice(0, 7).split('-').map(Number);
+    const idx = y * 12 + (m - 1) + delta;
+    return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}-01`;
+};
+
+/** 1º vencimento da dívida nova simulada: dia 1 do 2º mês após a data-base. */
+const primeiroVencimentoSimulado = (dataBase: string): string => diaUmDoMes(dataBase, 2);
+
+/** Prazo e carência do room vencem os dos parâmetros quando preenchidos. */
+const parametrosEfetivos = (room: CreditRoom): ParametrosCapacidade => {
+    const p = room.parametrosCapacidade ?? PARAMETROS_CAPACIDADE_PADRAO;
+    return {
+        ...p,
+        prazo_meses: room.termMonths && room.termMonths > 0 ? room.termMonths : p.prazo_meses,
+        carencia_meses: room.graceMonths ?? p.carencia_meses,
+    };
+};
+
+/** Soma mês a mês ('AAAA-MM' → valor). */
+const somarPorMes = (mapas: Record<string, number>[]): Record<string, number> => {
+    const out: Record<string, number> = {};
+    for (const m of mapas) for (const [mes, v] of Object.entries(m)) out[mes] = round2((out[mes] ?? 0) + v);
+    return out;
+};
+
+/**
+ * Posição da dívida do GRUPO: campos de valor somados; prazo, custo e os % de
+ * taxa variável/indexada ponderados pela dívida de cada org (média simples
+ * daria a mesma voz à org sem dívida e à que deve milhões).
+ * ⚠️ `nInstituicoes` soma por org — o mesmo banco em duas orgs conta duas vezes.
+ */
+const somarPosicoes = (ps: DebtPosition[]): DebtPosition => {
+    const soma = (f: (p: DebtPosition) => number) => round2(ps.reduce((a, p) => a + num(f(p)), 0));
+    const total = soma(p => p.dividaTotal);
+    const ponderado = (f: (p: DebtPosition) => number) =>
+        total > 0 ? ps.reduce((a, p) => a + num(f(p)) * num(p.dividaTotal), 0) / total : 0;
+    return {
+        nContratos: soma(p => p.nContratos),
+        nInstituicoes: soma(p => p.nInstituicoes),
+        dividaTotal: total,
+        curtoPrazo: soma(p => p.curtoPrazo),
+        longoPrazo: soma(p => p.longoPrazo),
+        encargosAPagar: soma(p => p.encargosAPagar),
+        servico30: soma(p => p.servico30),
+        servico90: soma(p => p.servico90),
+        servico365: soma(p => p.servico365),
+        vencido: soma(p => p.vencido),
+        nParcelasVencidas: soma(p => p.nParcelasVencidas),
+        custoMedioMensal: ponderado(p => p.custoMedioMensal),
+        prazoMedioMeses: ponderado(p => p.prazoMedioMeses),
+        pctTaxaVariavel: ponderado(p => p.pctTaxaVariavel),
+        pctIndexada: ponderado(p => p.pctIndexada),
+    };
+};
+
+type ContratoDaCadeia = { id: string; deal_id: string | null; parent_contract_id: string | null };
+
+/**
+ * `deal_id` de cada contrato, subindo a cadeia de renovação: o filho criado
+ * por `contractRenewalService` nasce SEM `deal_id` (o elo é
+ * filho → `parent_contract_id` → pai → `deal_id`).
+ */
+async function dealsDaCadeia(contratos: ContratoDaCadeia[]): Promise<Map<string, string>> {
+    const porId = new Map(contratos.map(c => [c.id, c]));
+    const tentados = new Set<string>();
+    for (let salto = 0; salto < 10; salto++) {
+        const faltam = [...new Set([...porId.values()]
+            .filter(c => !c.deal_id && c.parent_contract_id && !porId.has(c.parent_contract_id) && !tentados.has(c.parent_contract_id))
+            .map(c => c.parent_contract_id as string))];
+        if (!faltam.length) break;
+        faltam.forEach(id => tentados.add(id));
+        for (const ids of lotes(faltam)) {
+            const { data, error } = await supabase.from('contracts').select('id, deal_id, parent_contract_id').in('id', ids);
+            if (error) throw error;
+            for (const c of (data ?? []) as ContratoDaCadeia[]) porId.set(c.id, c);
+        }
+    }
+    const out = new Map<string, string>();
+    for (const c of contratos) {
+        let atual: ContratoDaCadeia | undefined = c;
+        const visto = new Set<string>();
+        while (atual && !atual.deal_id && atual.parent_contract_id && !visto.has(atual.id)) {
+            visto.add(atual.id);
+            atual = porId.get(atual.parent_contract_id);
+        }
+        if (atual?.deal_id) out.set(c.id, atual.deal_id);
+    }
+    return out;
+}
+
+type DealLido = {
+    id: string; type: string | null; property_id: string | null; client_id: string | null;
+    value: number | null; installment_value: number | null;
+};
+
+async function lerDeals(ids: string[]): Promise<Map<string, DealLido>> {
+    const out = new Map<string, DealLido>();
+    for (const lote of lotes([...new Set(ids)])) {
+        const { data, error } = await supabase
+            .from('commercial_deals')
+            .select('id, type, property_id, client_id, value, installment_value')
+            .in('id', lote);
+        if (error) throw error;
+        for (const d of (data ?? []) as DealLido[]) out.set(d.id, d);
+    }
+    return out;
+}
+
+/** `internal_transactions.payment_date` dos títulos recebidos (a view não traz). */
+async function datasDePagamento(ids: string[]): Promise<Map<string, string>> {
+    const out = new Map<string, string>();
+    for (const lote of lotes(ids)) {
+        const { data, error } = await supabase.from('internal_transactions').select('id, payment_date').in('id', lote);
+        if (error) throw error;
+        for (const r of (data ?? []) as { id: string; payment_date: string | null }[]) {
+            if (r.payment_date) out.set(r.id, String(r.payment_date).slice(0, 10));
+        }
+    }
+    return out;
+}
+
+/**
+ * Unidades do empreendimento com o preço resolvido — a unidade vence o
+ * espelho do Comercial (`commercial_properties.price`) quando tem preço
+ * próprio. O porquê está em `coletarUnidades`.
+ */
+async function unidadesComPreco(empreendimentoId: string): Promise<{ status: string; rental_status: string | null; price: number | null }[]> {
+    const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
+    const idsEspelho = units.map(u => u.commercial_property_id).filter((v): v is string => !!v);
+    const precoEspelho = new Map<string, number>();
+    if (idsEspelho.length) {
+        const { data } = await supabase
+            .from('commercial_properties')
+            .select('id, price')
+            .in('id', idsEspelho);
+        for (const cp of (data ?? []) as Array<{ id: string; price: number | null }>) {
+            if (cp.price != null) precoEspelho.set(cp.id, Number(cp.price));
+        }
+    }
+    return units.map(u => ({
+        status: u.status,
+        rental_status: u.rental_status ?? null,
+        price: u.price
+            ?? (u.commercial_property_id ? precoEspelho.get(u.commercial_property_id) ?? null : null),
+    }));
+}
+
+type LinhaRecebivel = {
+    id: string; organization_id: string; reference_id: string | null; due_date: string | null;
+    amount: number | null; effective_status: string | null; party_id: string | null;
+    party_name: string | null; project_id: string | null;
+};
+
+/**
+ * Títulos a receber de UMA org, já ligados ao contrato, à natureza e ao
+ * empreendimento. O contrato sai SEMPRE de `originIdFromRef` (o
+ * `reference_id` é composto — `.eq`/`.in` com o uuid cru nunca casa).
+ */
+async function titulosDaOrg(org: string): Promise<TituloCarteira[]> {
+    const { data, error } = await supabase
+        .from('vw_receivables')
+        .select('id, organization_id, reference_id, due_date, amount, effective_status, party_id, party_name, project_id')
+        .eq('organization_id', org);
+    if (error) throw error;
+    const linhas = (data ?? []) as LinhaRecebivel[];
+    if (!linhas.length) return [];
+
+    type ContratoLido = ContratoDaCadeia & { domain: string | null };
+    const contratos = new Map<string, ContratoLido>();
+    const idsContrato = [...new Set(linhas
+        .filter(l => !dealIdDaRef(l.reference_id))
+        .map(l => originIdFromRef(l.reference_id))
+        .filter(id => UUID.test(id)))];
+    for (const ids of lotes(idsContrato)) {
+        const { data: cs, error: ce } = await supabase
+            .from('contracts')
+            .select('id, domain, deal_id, parent_contract_id')
+            .in('id', ids);
+        if (ce) throw ce;
+        for (const c of (cs ?? []) as ContratoLido[]) contratos.set(c.id, c);
+    }
+
+    // Parcela `tx-<deal_id>-…`: o contrato é o ORIGINAL da negociação (sem pai).
+    const dealsTx = [...new Set(linhas.map(l => dealIdDaRef(l.reference_id)).filter((v): v is string => !!v))];
+    const contratoDoDealTx = new Map<string, string>();
+    for (const ids of lotes(dealsTx)) {
+        const { data: cs, error: ce } = await supabase
+            .from('contracts')
+            .select('id, deal_id, parent_contract_id')
+            .in('deal_id', ids);
+        if (ce) throw ce;
+        for (const c of (cs ?? []) as ContratoDaCadeia[]) {
+            if (c.deal_id && !c.parent_contract_id && !contratoDoDealTx.has(c.deal_id)) contratoDoDealTx.set(c.deal_id, c.id);
+        }
+    }
+
+    const [comEmp, pagamentos, dealDoContrato] = await Promise.all([
+        // Contrato → negócio → imóvel → empreendimento (e obra), o caminho da tela.
+        receivableService.resolveEmpreendimentos(linhas as unknown as Receivable[], org),
+        datasDePagamento(linhas.filter(l => l.effective_status === 'RECEBIDO').map(l => l.id)),
+        dealsDaCadeia([...contratos.values()]),
+    ]);
+    const empDoTitulo = new Map(comEmp.map(r => [r.id, r.empreendimento_id ?? null]));
+
+    const dealDe = (l: LinhaRecebivel): string | null => {
+        const tx = dealIdDaRef(l.reference_id);
+        if (tx) return tx;
+        return dealDoContrato.get(originIdFromRef(l.reference_id)) ?? null;
+    };
+    // Negócio só é lido quando falta algo: a natureza do `tx-…` ou o
+    // empreendimento que `resolveEmpreendimentos` não achou (ex.: contrato
+    // renovado, cujo `deal_id` mora no pai).
+    const dealsPrecisos = [...new Set(linhas
+        .filter(l => dealIdDaRef(l.reference_id) || !empDoTitulo.get(l.id))
+        .map(dealDe)
+        .filter((v): v is string => !!v))];
+    const deals = dealsPrecisos.length ? await lerDeals(dealsPrecisos) : new Map<string, DealLido>();
+    const faltaPeloImovel = linhas.some(l => !empDoTitulo.get(l.id) && !!deals.get(dealDe(l) ?? '')?.property_id);
+    const empDoImovel = faltaPeloImovel ? await empreendimentoPorImovel([org]) : new Map<string, string>();
+
+    return linhas.map(l => {
+        const tx = dealIdDaRef(l.reference_id);
+        const contrato = tx ? undefined : contratos.get(originIdFromRef(l.reference_id));
+        const deal = deals.get(dealDe(l) ?? '');
+        const natureza = contrato
+            ? NATUREZA_DO_DOMINIO[contrato.domain ?? ''] ?? null
+            : tx ? NATUREZA_DO_DEAL[deal?.type ?? ''] ?? null : null;
+        return {
+            id: l.id,
+            organizationId: l.organization_id,
+            contractId: contrato?.id ?? (tx ? contratoDoDealTx.get(tx) ?? null : null),
+            natureza,
+            empreendimentoId: empDoTitulo.get(l.id)
+                ?? (deal?.property_id ? empDoImovel.get(deal.property_id) ?? null : null),
+            // Só para agrupar, em memória — nunca entra no snapshot.
+            partyKey: l.party_id ?? l.party_name ?? null,
+            dueDate: l.due_date,
+            paymentDate: pagamentos.get(l.id) ?? null,
+            amount: round2(num(l.amount)),
+            recebido: l.effective_status === 'RECEBIDO',
+        };
+    });
+}
+
+/** Locação vigente = status Ativo/Assinado e não substituída por renovação vigente. */
+const STATUS_LOCACAO_VIGENTE = new Set(['Ativo', 'Assinado']);
+
+/** Imóvel → empreendimento das orgs (a view já resolve unidade → torre → empreendimento). */
+async function empreendimentoPorImovel(orgs: string[]): Promise<Map<string, string>> {
+    const mapas = await Promise.all(orgs.map(o => empreendimentoService.mapPropertiesToEmpreendimentos(o)));
+    const out = new Map<string, string>();
+    for (const m of mapas) for (const [prop, link] of Object.entries(m)) if (link?.id) out.set(prop, link.id);
+    return out;
+}
 
 
 /**
@@ -515,19 +836,131 @@ export const creditRoomService = {
     ): Promise<CreditRoomVersion> {
         const dataBase = opts.dataBase ?? isoDate(new Date());
         const orgId = room.organizationId;
+        // REGRA #5: as orgs vêm do ROOM, nunca de prop de tela. O que cada uma
+        // devolve continua recortado pela RLS de quem congela.
+        const orgs = this.orgsDoEscopo(room);
+        const p = parametrosEfetivos(room);
+        const horizonte = p.horizonte_meses > 0 ? p.horizonte_meses : PARAMETROS_CAPACIDADE_PADRAO.horizonte_meses;
 
-        const divida = await debtAnalyticsService.position(orgId, dataBase);
+        // Posição da dívida: o mínimo para a operação fazer sentido — propaga.
+        const posicoes = await Promise.all(orgs.map(o => debtAnalyticsService.position(o, dataBase)));
+        const divida = posicoes.length === 1 ? posicoes[0] : somarPosicoes(posicoes);
 
-        const [obra, unidades, empreendimento, portfolio, recebiveis, novoServico12m, documentos, eac] = await Promise.all([
-            this.coletarObra(orgId, room.projectId),
-            this.coletarUnidades(room.empreendimentoId),
-            this.coletarEmpreendimento(room.empreendimentoId),
-            this.coletarPortfolio(orgId, dataBase),
-            this.coletarRecebiveis(orgId),
-            this.coletarNovoServico(room.debtContractId),
-            this.listDocuments(room.id).catch(() => [] as CreditRoomDocument[]),
-            this.coletarEac(room.projectId),
+        const [
+            [obra, unidades, empreendimento, portfolio, recebiveis, novoServico12m, documentos, eac],
+            [escopo, titulos, locacoes, servicoPorOrg, portfoliosDoGrupo, servicoNovo],
+        ] = await Promise.all([
+            Promise.all([
+                this.coletarObra(orgId, room.projectId),
+                this.coletarUnidades(room.empreendimentoId),
+                this.coletarEmpreendimento(room.empreendimentoId),
+                this.coletarPortfolio(orgId, dataBase),
+                this.coletarRecebiveis(orgId),
+                this.coletarNovoServico(room.debtContractId),
+                this.listDocuments(room.id).catch(() => [] as CreditRoomDocument[]),
+                this.coletarEac(room.projectId),
+            ]),
+            Promise.all([
+                this.coletarEscopo(room, dataBase),
+                this.coletarTitulos(orgs, room.empreendimentoIds),
+                this.coletarLocacoes(orgs, room.empreendimentoIds),
+                Promise.all(orgs.map(o => this.coletarServicoAtual([o], dataBase, horizonte + 1))),
+                // A org dona já tem o NOI acima; só as demais do grupo vão buscar.
+                Promise.all(orgs.filter(o => o !== orgId).map(o => this.coletarPortfolio(o, dataBase))),
+                this.servicoNovoPorMes(room, dataBase, p),
+            ]),
         ]);
+
+        const [vendasSemTitulo, empreendimentos, unidadePorContrato] = await Promise.all([
+            titulos ? this.coletarVendasSemTitulo(orgs, titulos, room.empreendimentoIds) : Promise.resolve([]),
+            titulos && locacoes
+                ? this.coletarEmpreendimentosDoEscopo(orgs, room.empreendimentoIds, titulos, locacoes, dataBase.slice(0, 7))
+                : Promise.resolve(null),
+            titulos && locacoes
+                ? this.coletarUnidadesDosContratos([
+                    ...titulos.map(t => t.contractId).filter((v): v is string => !!v),
+                    ...locacoes.map(l => l.contractId),
+                ])
+                : Promise.resolve(new Map<string, string>()),
+        ]);
+
+        // Despesa operacional média por org (só desconta dos aluguéis). NOI que
+        // não respondeu = despesa desconhecida, e não zero: zero inflaria a renda.
+        const portfolioDe = new Map<string, typeof portfolio>([[orgId, portfolio]]);
+        orgs.filter(o => o !== orgId).forEach((o, i) => portfolioDe.set(o, portfoliosDoGrupo[i]));
+        const despesaDe = (o: string): number | null => {
+            if (!p.despesa_operacional) return 0;
+            const pf = portfolioDe.get(o);
+            return pf ? round2(num(pf.despesa) / (pf.janelaMeses > 0 ? pf.janelaMeses : 1)) : null;
+        };
+        const despesas = orgs.map(despesaDe);
+        const despesaMensal = despesas.some(d => d == null) ? null : round2(despesas.reduce<number>((a, d) => a + num(d), 0));
+
+        const servicoAtual = servicoPorOrg.some(s => s == null)
+            ? null
+            : somarPorMes(servicoPorOrg as Record<string, number>[]);
+
+        const fluxos = { vendas: room.eligibleFlows.receivables, alugueis: room.eligibleFlows.noi };
+        const entradaDe = (
+            ts: TituloCarteira[], ls: LocacaoVigente[], despesa: number, servico: Record<string, number>, novo: Record<string, number>,
+        ): CapacidadeEntrada => ({
+            dataBase, horizonte, titulos: ts, locacoes: ls, despesaMensal: despesa,
+            servicoAtualPorMes: servico, servicoNovoPorMes: novo, fluxos,
+        });
+
+        // A série precisa de todas as pernas: sem títulos, locações ou serviço
+        // atual não há DSCR honesto; sem despesa, só se o aluguel entra.
+        const despesaFalta = despesaMensal == null && fluxos.alugueis;
+        const capacidade = ((): SnapshotCapacidade | null => {
+            if (!titulos || !locacoes || !servicoAtual || despesaFalta) return null;
+            const entrada = entradaDe(titulos, locacoes, despesaMensal ?? 0, servicoAtual, servicoNovo);
+            const { serie, vencido_na_data_base, a_vencer_mes_corrente } = serieDeRenda(entrada);
+            const vgvDisponivel = empreendimentos
+                ? round2(empreendimentos.reduce((a, e) => a + num(e.vgv_disponivel), 0))
+                : 0;
+            const haircut = Math.min(100, Math.max(0, num(p.haircut_estoque_pct)));
+            const doze = <T,>(xs: T[]) => xs.slice(0, 12);
+            return {
+                fonte: 'vw_receivables + internal_transactions.payment_date + contracts LOCACAO + fn_debt_schedule_curve + rentalNoiService',
+                data_base: dataBase,
+                parametros: { ...p, horizonte_meses: horizonte },
+                base: 'CONTRATADA',
+                serie,
+                recebido_12m: recebidoPorMes(titulos, dataBase),
+                vencido_na_data_base,
+                a_vencer_mes_corrente,
+                estoque: vgvDisponivel > 0
+                    ? { vgv_disponivel: vgvDisponivel, haircut_pct: haircut, valor_elegivel: round2(vgvDisponivel * (1 - haircut / 100)) }
+                    : null,
+                capacidade_maxima: capacidadeMaxima(serie, p, primeiroVencimentoSimulado(dataBase)),
+                alertas: alertasDaCarteira({ dataBase, titulos, locacoes, vendasSemTitulo }),
+                por_organizacao: orgs.map((o, i) => {
+                    const s = serieDeRenda(entradaDe(
+                        titulos.filter(t => t.organizationId === o),
+                        locacoes.filter(l => l.organizationId === o),
+                        despesas[i] ?? 0,
+                        servicoPorOrg[i] ?? {},
+                        {},
+                    )).serie;
+                    return {
+                        organization_id: o,
+                        renda_12m: round2(doze(s).reduce((a, m) => a + m.renda_liquida, 0)),
+                        servico_12m: round2(doze(s).reduce((a, m) => a + m.servico_atual, 0)),
+                        divida_total: round2(num(posicoes[i]?.dividaTotal)),
+                    };
+                }),
+            };
+        })();
+
+        const qualidade = titulos && locacoes
+            ? {
+                fonte: 'vw_receivables + internal_transactions.payment_date + contracts LOCACAO',
+                data_base: dataBase,
+                ...qualidadeDaRenda(entradaDe(titulos, locacoes, despesaMensal ?? 0, servicoAtual ?? {}, servicoNovo)),
+            }
+            : null;
+
+        const contratos = titulos && locacoes ? this.montarCarteira(titulos, locacoes, dataBase, unidadePorContrato) : null;
 
         const snapshot = buildSnapshot({
             dataBase,
@@ -554,6 +987,11 @@ export const creditRoomService = {
             recebiveis,
             documentVersionIds: documentos.map(d => d.versionId).filter((v): v is string => !!v),
             eac,
+            escopo,
+            empreendimentos,
+            contratos,
+            capacidade,
+            qualidade,
         });
         const indicators = computeIndicators(snapshot);
 
@@ -748,28 +1186,8 @@ export const creditRoomService = {
     async coletarUnidades(empreendimentoId?: string) {
         if (!empreendimentoId) return null;
         try {
-            const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
-
-            const idsEspelho = units
-                .map(u => u.commercial_property_id)
-                .filter((v): v is string => !!v);
-
-            const precoEspelho = new Map<string, number>();
-            if (idsEspelho.length) {
-                const { data } = await supabase
-                    .from('commercial_properties')
-                    .select('id, price')
-                    .in('id', idsEspelho);
-                for (const cp of (data ?? []) as Array<{ id: string; price: number | null }>) {
-                    if (cp.price != null) precoEspelho.set(cp.id, Number(cp.price));
-                }
-            }
-
-            return units.map(u => ({
-                status: u.status,
-                price: u.price
-                    ?? (u.commercial_property_id ? precoEspelho.get(u.commercial_property_id) ?? null : null),
-            }));
+            const units = await unidadesComPreco(empreendimentoId);
+            return units.map(u => ({ status: u.status, price: u.price }));
         } catch (e) {
             console.warn('[creditRoomService] unidades indisponíveis no snapshot:', e);
             return null;
@@ -878,6 +1296,433 @@ export const creditRoomService = {
             console.warn('[creditRoomService] cronograma da proposta indisponível:', e);
             return null;
         }
+    },
+
+    // ── Capacidade de pagamento (spec 2026-11-21 §5) ──────────────────────
+    // Cada coletor: falha → `null` + console.warn (dado ausente ≠ zero).
+
+    /** EMPRESA → só a org dona; GRUPO → a dona e as do grupo, sem repetir. */
+    orgsDoEscopo(room: CreditRoom): string[] {
+        if (room.escopo !== 'GRUPO') return [room.organizationId];
+        return [...new Set([room.organizationId, ...(room.grupoOrganizationIds ?? [])])];
+    },
+
+    /** Quem compõe a leitura. CNPJ da MATRIZ (`companies.is_headquarters`), senão o da org. */
+    async coletarEscopo(room: CreditRoom, dataBase: string = isoDate(new Date())): Promise<SnapshotEscopo | null> {
+        try {
+            const orgs = this.orgsDoEscopo(room);
+            const [os, cs] = await Promise.all([
+                supabase.from('organizations').select('id, name, cnpj').in('id', orgs),
+                supabase.from('companies').select('org_id, cnpj').in('org_id', orgs).eq('is_headquarters', true),
+            ]);
+            if (os.error) throw os.error;
+            if (cs.error) throw cs.error;
+            const org = new Map(((os.data ?? []) as { id: string; name: string | null; cnpj: string | null }[]).map(o => [o.id, o]));
+            const cnpjMatriz = new Map<string, string>();
+            for (const c of (cs.data ?? []) as { org_id: string; cnpj: string | null }[]) {
+                if (c.cnpj && !cnpjMatriz.has(c.org_id)) cnpjMatriz.set(c.org_id, c.cnpj);
+            }
+            return {
+                fonte: 'organizations + companies (matriz)',
+                data_base: dataBase,
+                tipo: room.escopo === 'GRUPO' ? 'GRUPO' : 'EMPRESA',
+                organizacoes: orgs.map(id => ({
+                    id,
+                    nome: org.get(id)?.name ?? id,
+                    cnpj: cnpjMatriz.get(id) ?? org.get(id)?.cnpj ?? null,
+                })),
+            };
+        } catch (e) {
+            console.warn('[creditRoomService] escopo indisponível no snapshot:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Títulos a receber das orgs do escopo (`vw_receivables`), com data de
+     * pagamento (`internal_transactions.payment_date`), contrato, natureza e
+     * empreendimento. Com `empreendimentoIds`, descarta o título de
+     * empreendimento fora da lista; o SEM empreendimento fica (vira alerta).
+     */
+    async coletarTitulos(orgs: string[], empreendimentoIds: string[]): Promise<TituloCarteira[] | null> {
+        try {
+            const todos = (await Promise.all(orgs.map(o => titulosDaOrg(o)))).flat();
+            if (!empreendimentoIds.length) return todos;
+            const permitidos = new Set(empreendimentoIds);
+            return todos.filter(t => !t.empreendimentoId || permitidos.has(t.empreendimentoId));
+        } catch (e) {
+            console.warn('[creditRoomService] títulos da carteira indisponíveis no snapshot:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Locações vigentes: `contracts` LOCACAO Ativo/Assinado, sem renovação
+     * vigente por cima (o filho vigente substitui o pai; filho em rascunho
+     * não apaga o aluguel do pai). Aluguel = `current_value`, senão a parcela
+     * do negócio. Empreendimento direto, senão negócio → imóvel (o filho da
+     * renovação nasce sem `deal_id`: sobe a cadeia).
+     */
+    async coletarLocacoes(orgs: string[], empreendimentoIds: string[]): Promise<LocacaoVigente[] | null> {
+        try {
+            const { data, error } = await supabase
+                .from('contracts')
+                .select('id, organization_id, status, current_value, start_date, end_date, deal_id, parent_contract_id, empreendimento_id, client_id')
+                .eq('domain', 'LOCACAO')
+                .in('organization_id', orgs);
+            if (error) throw error;
+            type ContratoLocacao = ContratoDaCadeia & {
+                organization_id: string; status: string | null; current_value: number | null;
+                start_date: string | null; end_date: string | null; empreendimento_id: string | null; client_id: string | null;
+            };
+            const todos = (data ?? []) as ContratoLocacao[];
+            const candidatos = todos.filter(c => STATUS_LOCACAO_VIGENTE.has(String(c.status)));
+            const renovados = new Set(candidatos.map(c => c.parent_contract_id).filter((v): v is string => !!v));
+            const vigentes = candidatos.filter(c => !renovados.has(c.id));
+            if (!vigentes.length) return [];
+
+            const dealDoContrato = await dealsDaCadeia(todos);
+            const deals = await lerDeals(vigentes.map(c => dealDoContrato.get(c.id)).filter((v): v is string => !!v));
+            const empDoImovel = vigentes.some(c => !c.empreendimento_id)
+                ? await empreendimentoPorImovel(orgs)
+                : new Map<string, string>();
+
+            const permitidos = new Set(empreendimentoIds);
+            return vigentes
+                .map((c): LocacaoVigente => {
+                    const deal = deals.get(dealDoContrato.get(c.id) ?? '');
+                    return {
+                        contractId: c.id,
+                        organizationId: c.organization_id,
+                        empreendimentoId: c.empreendimento_id
+                            ?? (deal?.property_id ? empDoImovel.get(deal.property_id) ?? null : null),
+                        partyKey: c.client_id ?? deal?.client_id ?? null,
+                        aluguelMensal: round2(c.current_value != null
+                            ? num(c.current_value)
+                            : deal ? getDealInstallmentValue(deal) : 0),
+                        inicio: c.start_date,
+                        fim: c.end_date,
+                    };
+                })
+                .filter(l => !permitidos.size || !l.empreendimentoId || permitidos.has(l.empreendimentoId));
+        } catch (e) {
+            console.warn('[creditRoomService] locações vigentes indisponíveis no snapshot:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Negócios de VENDA já vendidos (`saleDealStage` — etapas `ETAPAS_VENDIDA`)
+     * sem nenhuma parcela gerada: nem contrato com título, nem `tx-<deal_id>-`.
+     * Vira o alerta "vendas sem parcelas" — dinheiro fora da renda.
+     *
+     * O "tem título" olha TODOS os recebíveis das orgs, não só `titulos`: com
+     * filtro de empreendimento, a venda de outro empreendimento sumiria da
+     * lista e pareceria sem parcelas. `empreendimentoIds` recorta o alerta.
+     */
+    async coletarVendasSemTitulo(
+        orgs: string[],
+        titulos: TituloCarteira[],
+        empreendimentoIds: string[] = [],
+    ): Promise<{ dealId: string; valor: number }[]> {
+        try {
+            const { data: ds, error: de } = await supabase
+                .from('commercial_deals')
+                .select('id, status, value, property_id')
+                .eq('type', 'SALE')
+                .in('organization_id', orgs);
+            if (de) throw de;
+            const vendidas = ((ds ?? []) as { id: string; status: string | null; value: number | null; property_id: string | null }[])
+                .filter(d => saleDealStage(d.status) === 'sold');
+            if (!vendidas.length) return [];
+
+            const { data: refs, error: re } = await supabase
+                .from('vw_receivables')
+                .select('reference_id')
+                .in('organization_id', orgs);
+            if (re) throw re;
+            const comTitulo = new Set<string>();
+            const idsContrato = new Set(titulos.map(t => t.contractId).filter((v): v is string => !!v));
+            for (const r of (refs ?? []) as { reference_id: string | null }[]) {
+                const tx = dealIdDaRef(r.reference_id);
+                if (tx) comTitulo.add(tx);
+                else if (UUID.test(originIdFromRef(r.reference_id))) idsContrato.add(originIdFromRef(r.reference_id));
+            }
+            for (const ids of lotes([...idsContrato])) {
+                const { data: cs, error: ce } = await supabase.from('contracts').select('id, deal_id').in('id', ids);
+                if (ce) throw ce;
+                for (const c of (cs ?? []) as { deal_id: string | null }[]) if (c.deal_id) comTitulo.add(c.deal_id);
+            }
+
+            const permitidos = new Set(empreendimentoIds);
+            const empDoImovel = permitidos.size ? await empreendimentoPorImovel(orgs) : new Map<string, string>();
+            return vendidas
+                .filter(d => !comTitulo.has(d.id))
+                .filter(d => {
+                    if (!permitidos.size) return true;
+                    const emp = d.property_id ? empDoImovel.get(d.property_id) : undefined;
+                    return !emp || permitidos.has(emp);
+                })
+                .map(d => ({ dealId: d.id, valor: round2(num(d.value)) }));
+        } catch (e) {
+            console.warn('[creditRoomService] vendas sem parcelas indisponíveis no snapshot:', e);
+            return [];
+        }
+    },
+
+    /**
+     * Serviço da dívida atual mês a mês ('AAAA-MM' → parcela), de
+     * `fn_debt_schedule_curve` por org, somado. A MESMA fonte serve à série e
+     * ao `dscr_atual` dos indicadores — os dois DSCR da tela batem.
+     */
+    async coletarServicoAtual(orgs: string[], dataBase: string, meses: number): Promise<Record<string, number> | null> {
+        try {
+            const curvas = await Promise.all(orgs.map(o => debtAnalyticsService.curve(o, { from: dataBase, months: meses })));
+            const out: Record<string, number> = {};
+            for (const curva of curvas) {
+                for (const pt of curva) {
+                    const mes = pt.mes.slice(0, 7);
+                    out[mes] = round2((out[mes] ?? 0) + num(pt.parcela));
+                }
+            }
+            return out;
+        } catch (e) {
+            console.warn('[creditRoomService] serviço da dívida atual indisponível no snapshot:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Serviço da dívida NOVA mês a mês. Com proposta vinculada, o cronograma
+     * dela (VIGENTE, senão CONTRATUAL); sem proposta (ou sem cronograma), a
+     * simulação por `buildSchedule` com o valor pedido, prazo/carência do room
+     * quando preenchidos e 1º vencimento no dia 1 do 2º mês após a data-base.
+     */
+    async servicoNovoPorMes(room: CreditRoom, dataBase: string, p: ParametrosCapacidade): Promise<Record<string, number>> {
+        const porMes = (linhas: { dueDate: string; total: number }[]) => {
+            const out: Record<string, number> = {};
+            for (const l of linhas) {
+                const mes = String(l.dueDate).slice(0, 7);
+                out[mes] = round2((out[mes] ?? 0) + num(l.total));
+            }
+            return out;
+        };
+        try {
+            if (room.debtContractId) {
+                const schedule =
+                    (await debtService.getActiveSchedule(room.debtContractId, 'VIGENTE'))
+                    ?? (await debtService.getActiveSchedule(room.debtContractId, 'CONTRATUAL'));
+                if (schedule) return porMes(await debtService.listInstallments(schedule.id));
+            }
+            const prazo = room.termMonths && room.termMonths > 0 ? room.termMonths : p.prazo_meses;
+            if (!(room.requestedAmount > 0) || !(prazo > 0)) return {};
+            return porMes(buildSchedule({
+                principal: room.requestedAmount,
+                nominalRate: p.taxa_mensal_pct,
+                ratePeriod: 'MENSAL',
+                system: p.sistema,
+                installmentCount: prazo,
+                installmentPeriod: 'MENSAL',
+                firstDueDate: primeiroVencimentoSimulado(dataBase),
+                gracePrincipalPeriods: room.graceMonths ?? p.carencia_meses,
+            }));
+        } catch (e) {
+            console.warn('[creditRoomService] serviço da dívida nova indisponível no snapshot:', e);
+            return {};
+        }
+    },
+
+    /**
+     * Empreendimentos do escopo com unidades, VGV, renda do mês e fotos.
+     *
+     * Unidades: `status` é o eixo de VENDA, `rental_status` o de LOCAÇÃO
+     * (`types/empreendimento.ts`). `alugadas` = `rental_status = 'LOCADO'`; a
+     * unidade alugada NÃO conta como disponível (nem no VGV disponível, que
+     * vira estoque): o aluguel dela já está na renda, e contá-la também como
+     * estoque a vender seria o mesmo imóvel duas vezes na frente do banco.
+     * Vendidas = VENDIDO + PERMUTADO, a mesma regra do `vgv_vendido`.
+     */
+    async coletarEmpreendimentosDoEscopo(
+        orgs: string[],
+        empreendimentoIds: string[],
+        titulos: TituloCarteira[],
+        locacoes: LocacaoVigente[],
+        mesBase: string,
+    ): Promise<SnapshotEmpreendimentoItem[] | null> {
+        try {
+            const listas = await Promise.all(orgs.map(o => empreendimentoService.list(o)));
+            const permitidos = new Set(empreendimentoIds);
+            const vistos = new Set<string>();
+            const emps = listas.flat().filter(e => {
+                if (vistos.has(e.id)) return false;
+                vistos.add(e.id);
+                return !permitidos.size || permitidos.has(e.id);
+            });
+            if (!emps.length) return [];
+
+            const [unidades, fotos] = await Promise.all([
+                Promise.all(emps.map(e => unidadesComPreco(e.id))),
+                // Foto que falha não derruba os números do empreendimento.
+                fotosDosEmpreendimentos(emps.map(e => e.id)).catch(err => {
+                    console.warn('[creditRoomService] fotos dos empreendimentos indisponíveis:', err);
+                    return new Map<string, { url: string; legenda: string | null }[]>();
+                }),
+            ]);
+
+            return emps.map((e, i): SnapshotEmpreendimentoItem => {
+                const us = unidades[i];
+                const alugada = (u: typeof us[number]) => u.rental_status === 'LOCADO';
+                const vendida = (u: typeof us[number]) => u.status === 'VENDIDO' || u.status === 'PERMUTADO';
+                const disponivel = (u: typeof us[number]) => u.status === 'DISPONIVEL' && !alugada(u);
+                const vgv = (pred: (u: typeof us[number]) => boolean) =>
+                    round2(us.filter(pred).reduce((a, u) => a + num(u.price), 0));
+                const fs = (fotos.get(e.id) ?? []).slice(0, 8);
+                const rendaVendas = titulos
+                    .filter(t => t.empreendimentoId === e.id && t.natureza === 'VENDA' && !t.recebido
+                        && (t.dueDate ?? '').slice(0, 7) === mesBase)
+                    .reduce((a, t) => a + num(t.amount), 0);
+                const rendaAlugueis = locacoes
+                    .filter(l => l.empreendimentoId === e.id)
+                    .reduce((a, l) => a + num(l.aluguelMensal), 0);
+                return {
+                    id: e.id,
+                    nome: e.name,
+                    organization_id: e.organization_id,
+                    cidade: e.endereco_city ?? null,
+                    uf: e.endereco_state ?? null,
+                    objetivo: e.objetivo ?? null,
+                    unidades_total: us.length,
+                    vendidas: us.filter(vendida).length,
+                    alugadas: us.filter(alugada).length,
+                    disponiveis: us.filter(disponivel).length,
+                    vgv_total: vgv(() => true),
+                    vgv_vendido: vgv(vendida),
+                    vgv_disponivel: vgv(disponivel),
+                    renda_mensal: round2(rendaVendas + rendaAlugueis),
+                    capa: fs[0]?.url ?? null,
+                    fotos: fs.map(f => ({ url: f.url, legenda: f.legenda ?? null })),
+                };
+            });
+        } catch (e) {
+            console.warn('[creditRoomService] empreendimentos do escopo indisponíveis no snapshot:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Unidade de cada contrato (contrato → negócio, subindo a renovação →
+     * imóvel → `commercial_properties.name`). Rótulo do imóvel, não da pessoa.
+     * Falha = mapa vazio: a coluna fica "—", a carteira não cai.
+     */
+    async coletarUnidadesDosContratos(contractIds: string[]): Promise<Map<string, string>> {
+        const out = new Map<string, string>();
+        try {
+            const ids = [...new Set(contractIds.filter(id => UUID.test(id)))];
+            const contratos: ContratoDaCadeia[] = [];
+            for (const lote of lotes(ids)) {
+                const { data, error } = await supabase.from('contracts').select('id, deal_id, parent_contract_id').in('id', lote);
+                if (error) throw error;
+                contratos.push(...((data ?? []) as ContratoDaCadeia[]));
+            }
+            const dealDoContrato = await dealsDaCadeia(contratos);
+            const deals = await lerDeals([...dealDoContrato.values()]);
+            const imoveis = [...new Set([...deals.values()].map(d => d.property_id).filter((v): v is string => !!v))];
+            const nomeDoImovel = new Map<string, string>();
+            for (const lote of lotes(imoveis)) {
+                const { data, error } = await supabase.from('commercial_properties').select('id, name').in('id', lote);
+                if (error) throw error;
+                for (const cp of (data ?? []) as { id: string; name: string | null }[]) if (cp.name) nomeDoImovel.set(cp.id, cp.name);
+            }
+            for (const [contrato, dealId] of dealDoContrato) {
+                const nome = nomeDoImovel.get(deals.get(dealId)?.property_id ?? '');
+                if (nome) out.set(contrato, nome);
+            }
+        } catch (e) {
+            console.warn('[creditRoomService] unidades dos contratos indisponíveis no snapshot:', e);
+        }
+        return out;
+    },
+
+    /**
+     * Carteira (rent roll + vendas): uma linha por contrato com título, mais
+     * uma por locação vigente ainda sem título. Ordem: vendas e depois
+     * locações, cada uma por `valor_contrato` decrescente, e só então o rótulo
+     * mascarado ("Comprador 01", "Locatário 03"). O `partyKey` NÃO sai daqui.
+     * Título sem contrato ou sem natureza (serviço, lançamento avulso) não é
+     * linha de carteira — continua na série e no vencido.
+     */
+    montarCarteira(
+        titulos: TituloCarteira[],
+        locacoes: LocacaoVigente[],
+        dataBase: string,
+        unidadePorContrato: Map<string, string> = new Map(),
+    ): SnapshotContrato[] {
+        const dia = dataBase.slice(0, 10);
+        const soma = (ts: TituloCarteira[]) => round2(ts.reduce((a, t) => a + num(t.amount), 0));
+        const vigente = new Map(locacoes.map(l => [l.contractId, l]));
+
+        const grupos = new Map<string, TituloCarteira[]>();
+        for (const t of titulos) {
+            if (!t.contractId || !t.natureza) continue;
+            const g = grupos.get(t.contractId);
+            if (g) g.push(t); else grupos.set(t.contractId, [t]);
+        }
+
+        type Linha = Omit<SnapshotContrato, 'rotulo'>;
+        const linhas: Linha[] = [];
+        for (const [contractId, ts] of grupos) {
+            const tipo = ts[0].natureza as Natureza;
+            const locacao = vigente.get(contractId);
+            const abertos = ts.filter(t => !t.recebido);
+            const saldo = soma(abertos);
+            const vencido = soma(abertos.filter(t => !!t.dueDate && t.dueDate.slice(0, 10) <= dia));
+            const datas = ts.map(t => (t.dueDate ?? '').slice(0, 10)).filter(Boolean).sort();
+            const proximo = abertos
+                .filter(t => !!t.dueDate && t.dueDate.slice(0, 10) > dia)
+                .sort((a, b) => (a.dueDate as string).localeCompare(b.dueDate as string))[0];
+            const status = saldo === 0
+                ? (tipo === 'LOCACAO' ? (locacao ? 'EM_DIA' : 'ENCERRADO') : 'QUITADO')
+                : vencido > 0 ? 'EM_ATRASO' : 'EM_DIA';
+            linhas.push({
+                tipo,
+                contract_id: contractId,
+                organization_id: ts[0].organizationId,
+                empreendimento_id: ts.find(t => t.empreendimentoId)?.empreendimentoId ?? locacao?.empreendimentoId ?? null,
+                unidade: unidadePorContrato.get(contractId) ?? null,
+                valor_contrato: soma(ts),
+                parcela_mensal: tipo === 'LOCACAO' && locacao ? locacao.aluguelMensal : round2(num(proximo?.amount)),
+                saldo_a_receber: saldo,
+                vencido,
+                primeiro_vencimento: datas[0] ?? null,
+                ultimo_vencimento: datas[datas.length - 1] ?? null,
+                status,
+                tem_parcelas: true,
+            });
+        }
+        for (const l of locacoes) {
+            if (grupos.has(l.contractId)) continue;
+            linhas.push({
+                tipo: 'LOCACAO',
+                contract_id: l.contractId,
+                organization_id: l.organizationId,
+                empreendimento_id: l.empreendimentoId,
+                unidade: unidadePorContrato.get(l.contractId) ?? null,
+                valor_contrato: 0,
+                parcela_mensal: l.aluguelMensal,
+                saldo_a_receber: 0,
+                vencido: 0,
+                primeiro_vencimento: null,
+                ultimo_vencimento: null,
+                status: 'SEM_PARCELAS',
+                tem_parcelas: false,
+            });
+        }
+
+        const ordem: Natureza[] = ['VENDA', 'LOCACAO'];
+        return ordem.flatMap(tipo => linhas
+            .filter(x => x.tipo === tipo)
+            .sort((a, b) => b.valor_contrato - a.valor_contrato)
+            .map((x, i) => ({ rotulo: rotuloMascarado(tipo, i + 1), ...x })));
     },
 
     // ── Data Room (GED) ───────────────────────────────────────────────────

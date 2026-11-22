@@ -12,8 +12,17 @@ import type {
     CreditRoomIndicators,
     CreditRoomSnapshot,
 } from '../utils/creditRoomSnapshot';
+import type { ParametrosCapacidade } from '../utils/creditCapacity';
 
 export type { CreditRoomEligibleFlows, CreditRoomGuarantee, CreditRoomIndicators, CreditRoomSnapshot };
+export type { ParametrosCapacidade };
+
+/**
+ * De quem é a renda que a capacidade de pagamento lê (spec 2026-11-21 §1):
+ * só a org dona do room, ou um grupo de orgs de que quem grava é membro
+ * (o trigger `fn_credit_room_grupo_valido` recusa as outras).
+ */
+export type CreditRoomEscopo = 'EMPRESA' | 'GRUPO';
 
 /** PRD §63. */
 export type CreditRoomStatus =
@@ -86,6 +95,15 @@ export interface CreditRoom {
     fundingSources: CreditRoomFundingEntry[];
     fundingUses: CreditRoomFundingEntry[];
 
+    /** Capacidade de pagamento (spec 2026-11-21). */
+    escopo: CreditRoomEscopo;
+    /** Orgs do grupo (inclui a dona) quando `escopo = 'GRUPO'`; vazio em EMPRESA. */
+    grupoOrganizationIds: string[];
+    /** Empreendimentos da capacidade; vazio = todos do escopo. */
+    empreendimentoIds: string[];
+    /** Já mesclado com `PARAMETROS_CAPACIDADE_PADRAO` na leitura. */
+    parametrosCapacidade: ParametrosCapacidade;
+
     status: CreditRoomStatus;
     activeVersionId?: string;
     notes?: string;
@@ -94,10 +112,16 @@ export interface CreditRoom {
     updatedAt: string;
 }
 
+/**
+ * Os quatro campos da capacidade são opcionais na ENTRADA: ausente = não mexe
+ * na coluna (o `update()` de quem ainda não os edita não pode zerá-los).
+ */
+type CamposDaCapacidade = 'escopo' | 'grupoOrganizationIds' | 'empreendimentoIds' | 'parametrosCapacidade';
+
 export type CreditRoomInput = Omit<
     CreditRoom,
-    'id' | 'organizationId' | 'seq' | 'code' | 'activeVersionId' | 'createdBy' | 'createdAt' | 'updatedAt'
->;
+    'id' | 'organizationId' | 'seq' | 'code' | 'activeVersionId' | 'createdBy' | 'createdAt' | 'updatedAt' | CamposDaCapacidade
+> & Partial<Pick<CreditRoom, CamposDaCapacidade>>;
 
 export interface CreditRoomVersion {
     id: string;

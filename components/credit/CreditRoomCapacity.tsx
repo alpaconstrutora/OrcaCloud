@@ -298,7 +298,7 @@ const PainelEstresse: React.FC<{
                 </div>
                 {CAMPOS_ESTRESSE.map(f => (
                     <div key={f.chave} className="space-y-1.5 max-w-[11rem]" title={motivos[f.chave]}>
-                        <label htmlFor={`estresse-${f.chave}`} className={`block text-xs font-semibold ${A.rotulo}`}>{f.rotulo}</label>
+                        <label htmlFor={`estresse-${f.chave}`} className="block text-xs font-semibold text-slate-500">{f.rotulo}</label>
                         <input
                             id={`estresse-${f.chave}`} type="number" inputMode="decimal" min={0} max={100} step={1}
                             value={campos[f.chave]} onChange={e => onCampo(f.chave, e.target.value)}

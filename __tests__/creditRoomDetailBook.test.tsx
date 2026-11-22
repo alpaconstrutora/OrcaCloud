@@ -5,19 +5,20 @@
  * O que estes testes protegem:
  *  - "Baixar book" gera o book SEM marca d'água (é a própria empresa) e NÃO registra DOWNLOAD
  *    na trilha do credor;
- *  - sem versão congelada o botão desliga e diz o motivo;
+ *  - sem versão liberada o botão desliga e diz o motivo;
  *  - o Data Room mostra a coluna "Empresa" só quando o room é de GRUPO.
  */
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { baixar, documentosDoIndice, listVersions, listDocuments, log } = vi.hoisted(() => ({
+const { baixar, documentosDoIndice, listVersions, listDocuments, log, prepararVersao } = vi.hoisted(() => ({
     baixar: vi.fn(),
     documentosDoIndice: vi.fn(),
     listVersions: vi.fn(),
     listDocuments: vi.fn(),
     log: vi.fn(),
+    prepararVersao: vi.fn(),
 }));
 
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
@@ -25,7 +26,7 @@ vi.mock('../services/creditRoomBookService', () => ({
     creditRoomBookService: { baixar, documentosDoIndice },
 }));
 vi.mock('../services/creditRoomService', () => ({
-    creditRoomService: { listVersions, listDocuments, log },
+    creditRoomService: { listVersions, listDocuments, log, prepararVersao },
 }));
 
 import { ConfirmProvider } from '../components/ui/confirm';
@@ -75,7 +76,9 @@ const botaoBook = () => screen.getByRole('button', { name: /Baixar book/ });
 
 beforeEach(() => {
     localStorage.clear();
-    for (const f of [baixar, documentosDoIndice, listVersions, listDocuments, log]) f.mockReset();
+    for (const f of [baixar, documentosDoIndice, listVersions, listDocuments, log, prepararVersao]) f.mockReset();
+    // A prévia da aba Visão não é o assunto aqui: nunca resolve.
+    prepararVersao.mockReturnValue(new Promise(() => undefined));
     baixar.mockResolvedValue(undefined);
     documentosDoIndice.mockReturnValue([]);
     listVersions.mockResolvedValue([versao()]);
@@ -99,12 +102,12 @@ describe('CreditRoomDetail — book e Data Room internos', () => {
         expect(log).not.toHaveBeenCalled();
     });
 
-    it('sem versão congelada o botão desliga e diz o motivo', async () => {
+    it('sem versão liberada o botão desliga e diz o motivo', async () => {
         listVersions.mockResolvedValue([]);
         abrir(sala({ activeVersionId: undefined } as Partial<CreditRoom>));
         await waitFor(() => expect(listVersions).toHaveBeenCalled());
         expect(botaoBook()).toBeDisabled();
-        expect(botaoBook().parentElement).toHaveAttribute('title', 'Congele uma versão para baixar o book');
+        expect(botaoBook().parentElement).toHaveAttribute('title', 'Libere uma versão para baixar o book');
         fireEvent.click(botaoBook());
         expect(baixar).not.toHaveBeenCalled();
     });

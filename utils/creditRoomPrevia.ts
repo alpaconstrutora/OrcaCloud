@@ -45,6 +45,10 @@ export function versaoDaPrevia(p: VersaoPreparada, calculadaEm: string, organiza
 
 export const ehPrevia = (v: CreditRoomVersion | null | undefined): boolean => v?.id === ID_DA_PREVIA;
 
+/** 'hh:mm' (hora local) em que a prévia foi calculada. */
+export const horaDaPrevia = (calculadaEm: string): string =>
+    new Date(calculadaEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
 /** Agrupa as parcelas por 'AAAA-MM' do vencimento (mesma conta de `servicoNovoPorMes` no service). */
 const parcelasPorMes = (linhas: { dueDate: string; total: number }[]): Record<string, number> => {
     const out: Record<string, number> = {};

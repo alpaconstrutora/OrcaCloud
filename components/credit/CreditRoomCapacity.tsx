@@ -321,7 +321,7 @@ const PainelEstresse: React.FC<{
                     <div key={r.rotulo} className={`rounded-[10px] border px-4 py-3 min-w-0 ${A.linha}`}>
                         <dt className={`text-xs ${A.rotulo}`}>{r.rotulo}</dt>
                         <dd className={`text-lg font-semibold tabular-nums mt-0.5 ${A.valor}`}>{r.valor}</dd>
-                        <dd className={`text-xs mt-0.5 ${ehBase || semSerie ? 'text-gray-500' : TOM_COR[r.d.tom]}`}>{semSerie ? 'sem série para calcular' : ehBase ? 'Cenário Base (valores congelados)' : r.d.texto}</dd>
+                        <dd className={`text-xs mt-0.5 ${ehBase || semSerie ? 'text-gray-500' : TOM_COR[r.d.tom]}`}>{semSerie ? 'sem série para calcular' : ehBase ? 'Cenário Base (sem alteração)' : r.d.texto}</dd>
                     </div>
                 ))}
             </dl>

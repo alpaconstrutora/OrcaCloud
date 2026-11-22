@@ -1,6 +1,6 @@
 import React from 'react';
 import { moverEntreAbas } from '../ui/abasPeloTeclado';
-import { ArrowLeft, Camera, Download, FileText, History, Snowflake, Sparkles, UserPlus, Users } from 'lucide-react';
+import { ArrowLeft, Download, FileText, History, RefreshCw, Send, Sparkles, UserPlus, Users } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { usePersistedState } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
@@ -11,6 +11,8 @@ import { creditRoomService, type VersaoPreparada } from '../../services/creditRo
 import { creditRoomBookService } from '../../services/creditRoomBookService';
 import { ALERTA_PT, resumoDaCapacidade } from '../../utils/creditCapacity';
 import { hojeLocalISO } from '../../utils/periodoControladoria';
+import { ID_DA_PREVIA, compararComLiberada, horaDaPrevia, versaoDaPrevia } from '../../utils/creditRoomPrevia';
+import { MUDANCA_PT, mudancasDesdeAVersao } from '../../utils/creditRoomVersaoDesatualizada';
 import {
     CREDIT_ROOM_ACTION_PT,
     CREDIT_ROOM_STATUS_PT,
@@ -59,18 +61,18 @@ const ABAS: { id: Aba; label: string }[] = [
 
 // §19.1: o h1 muda junto com a aba.
 const ABA_SUBTITULO: Record<Aba, string> = {
-    visao: 'Os indicadores da versão ativa — o que a instituição financeira vê.',
-    capacidade: 'Quanto a carteira consegue pagar por mês, o DSCR e o valor máximo financiável — sobre a versão ativa.',
-    empreendimentos: 'Os empreendimentos e contratos que sustentam a renda da versão ativa, sem nome de cliente.',
+    visao: 'Os indicadores de hoje (prévia) ou de uma versão já liberada. A instituição financeira vê só o que foi liberado.',
+    capacidade: 'Quanto a carteira consegue pagar por mês, o DSCR e o valor máximo financiável — prévia de hoje ou versão liberada.',
+    empreendimentos: 'Os empreendimentos e contratos que sustentam a renda (prévia de hoje ou versão liberada), sem nome de cliente.',
     fontesusos: 'De onde vem o dinheiro e para onde vai. O banco checa se as duas somas fecham.',
-    versoes: 'Snapshots congelados da operação. Cada um preserva a posição da data em que foi apresentado (R2).',
+    versoes: 'Versões liberadas à instituição. Cada uma preserva a posição da data em que foi liberada.',
     dataroom: 'Documentos do GED compartilhados com este Credit Room. Use Sugerir documentos para trazer os da carteira, ou compartilhe pelo botão do próprio GED.',
     participantes: 'Quem acessa: analistas da instituição (login + MFA) e o time interno.',
     solicitacoes: 'Request list da due diligence — o que a instituição pediu e onde está.',
     covenants: 'Cláusulas com meta, folga e situação. O DSCR aqui é apurado sobre o fluxo elegível DESTA operação, não sobre o EBITDA da empresa.',
     desembolsos: 'Liberações do contrato: solicitação, medição, aprovação e o que de fato saiu.',
     comentarios: 'Conversa da operação. Comentário interno nunca chega à instituição.',
-    auditoria: 'Quem viu, baixou, comentou, convidou e congelou — com data e hora.',
+    auditoria: 'Quem viu, baixou, comentou, convidou e liberou versão — com data e hora.',
 };
 
 const SIDE_PT: Record<CreditRoomSide, string> = { TOMADOR: 'Empresa', CREDOR: 'Instituição' };
@@ -94,7 +96,13 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
 
     const [versoes, setVersoes] = React.useState<CreditRoomVersion[]>([]);
     const [versaoVista, setVersaoVista] = React.useState<CreditRoomVersion | null>(null);
-    const [congelarAberto, setCongelarAberto] = React.useState(false);
+    const [liberarAberto, setLiberarAberto] = React.useState(false);
+
+    // Prévia de hoje: o que o sistema calcularia AGORA (prepararVersao lê tudo e não grava nada).
+    // Só "Liberar para a instituição" grava. A geração descarta cálculo em voo quando o cadastro muda ou outro cálculo começa.
+    const [previaEst, setPreviaEst] = React.useState<PreviaEstado>({ status: 'idle' });
+    const geracaoPrevia = React.useRef(0);
+    const [visao, setVisao] = React.useState<string>(ID_DA_PREVIA);
 
     const [documentos, setDocumentos] = React.useState<CreditRoomDocument[]>([]);
     const [sugerirAberto, setSugerirAberto] = React.useState(false);
@@ -147,6 +155,43 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         () => versoes.find(v => v.id === room.activeVersionId) ?? versoes[0] ?? null,
         [versoes, room.activeVersionId],
     );
+
+    const calcularPrevia = React.useCallback(async (dataBase?: string) => {
+        const minha = ++geracaoPrevia.current;
+        setPreviaEst({ status: 'carregando' });
+        try {
+            const p = await creditRoomService.prepararVersao(room, dataBase || hojeLocalISO());
+            if (minha !== geracaoPrevia.current) return;
+            setPreviaEst({ status: 'ok', previa: p, calculadaEm: new Date().toISOString() });
+        } catch (e) {
+            if (minha !== geracaoPrevia.current) return;
+            setPreviaEst({ status: 'erro', erro: errorMessage(e, 'Não foi possível calcular a prévia.') });
+        }
+    }, [room]);
+
+    // Outra operação: volta para a prévia. Cadastro salvo (room novo): a prévia velha é descartada e recalculada
+    // quando alguém precisar dela — nunca se mostra nem se libera prévia de um cadastro que já mudou.
+    React.useEffect(() => { setVisao(ID_DA_PREVIA); }, [room.id]);
+    React.useEffect(() => {
+        geracaoPrevia.current += 1;
+        setPreviaEst(prev => (prev.status === 'idle' ? prev : { status: 'idle' }));
+    }, [room]);
+
+    const abaUsaPrevia = aba === 'visao' || aba === 'capacidade' || aba === 'empreendimentos';
+    // Com o painel "Liberar" aberto, quem calcula é ele (para a data-base do painel).
+    const precisaDaPrevia = abaUsaPrevia && visao === ID_DA_PREVIA && !liberarAberto;
+    React.useEffect(() => {
+        if (precisaDaPrevia && previaEst.status === 'idle') void calcularPrevia();
+    }, [precisaDaPrevia, previaEst.status, calcularPrevia]);
+
+    const versaoPrevia = React.useMemo(
+        () => (previaEst.status === 'ok' && previaEst.previa && previaEst.calculadaEm
+            ? versaoDaPrevia(previaEst.previa, previaEst.calculadaEm, room.organizationId)
+            : null),
+        [previaEst, room.organizationId],
+    );
+    const versaoEscolhida = visao === ID_DA_PREVIA ? null : versoes.find(v => v.id === visao) ?? null;
+    const mostrandoPrevia = visao === ID_DA_PREVIA || !versaoEscolhida;
 
     // Room de Grupo: o Data Room mostra de qual empresa é cada documento (nome vem da versão ativa).
     const grupoEscopo = room.escopo === 'GRUPO';
@@ -303,8 +348,26 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     </select>
                     <span className="text-sm text-gray-400">
                         {room.institutionName ? `· ${room.institutionName}` : ''}
-                        {ativa ? ` · versão ativa V${ativa.versionNo} (${formatDateBR(ativa.dataBase)})` : ' · sem versão congelada'}
+                        {ativa ? ` · versão ativa V${ativa.versionNo} (${formatDateBR(ativa.dataBase)})` : ' · sem versão liberada'}
                     </span>
+                    {abaUsaPrevia && (
+                        <>
+                            <span className="text-sm text-gray-500">Mostrando</span>
+                            <select
+                                aria-label="Visão exibida"
+                                value={mostrandoPrevia ? ID_DA_PREVIA : visao}
+                                onChange={e => setVisao(e.target.value)}
+                                className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                            >
+                                <option value={ID_DA_PREVIA}>Prévia (hoje)</option>
+                                {versoes.map(v => (
+                                    <option key={v.id} value={v.id}>
+                                        V{v.versionNo} — liberada em {formatDateBR(new Date(v.frozenAt))}{v.id === ativa?.id ? ' · ativa' : ''}
+                                    </option>
+                                ))}
+                            </select>
+                        </>
+                    )}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                     <button onClick={onEdit} className="h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 rounded-[6px] transition-all">
@@ -313,7 +376,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     {/* Desligado sempre diz o motivo: o wrapper carrega o title (botão disabled não dispara hover). */}
                     <span
                         className="inline-flex shrink-0"
-                        title={!ativa ? 'Congele uma versão para baixar o book' : gerandoBook ? 'Gerando o book, aguarde' : 'PDF da versão ativa, com fotos'}
+                        title={!ativa ? 'Libere uma versão para baixar o book' : gerandoBook ? 'Gerando o book, aguarde' : 'PDF da versão ativa, com fotos'}
                     >
                         <button
                             onClick={() => void baixarBook()}
@@ -325,31 +388,66 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                         </button>
                     </span>
                     <button
-                        onClick={() => setCongelarAberto(true)}
+                        onClick={() => setLiberarAberto(true)}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                     >
-                        <Snowflake className="w-[15px] h-[15px]" />
-                        Congelar versão
+                        <Send className="w-[15px] h-[15px]" />
+                        Liberar para a instituição
                     </button>
                 </div>
             </div>
 
             {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-[10px] px-4 py-3">{erro}</div>}
 
-            {/* ── Visão · Capacidade · Empreendimentos (mesma versão ativa) ── */}
-            {(aba === 'visao' || aba === 'capacidade' || aba === 'empreendimentos') && (
-                ativa ? (
-                    aba === 'visao' ? <CreditRoomIndicators version={ativa} accent="indigo" />
-                        : aba === 'capacidade' ? <CreditRoomCapacity version={ativa} accent="indigo" />
-                            : <CreditRoomEmpreendimentos version={ativa} accent="indigo" documentos={documentosCarregados ? documentos : undefined} />
-                ) : (
-                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12">
-                        <Camera className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma versão congelada</h3>
-                        <p className="text-sm text-gray-500">Congele a primeira versão para gerar os indicadores e liberar a visão para a instituição.</p>
+            {/* ── Visão · Capacidade · Empreendimentos (mesma versão exibida: prévia de hoje ou uma liberada) ── */}
+            {abaUsaPrevia && (() => {
+                const exibida = mostrandoPrevia ? versaoPrevia : versaoEscolhida;
+                const abaConteudo = !exibida ? null
+                    : aba === 'visao' ? <CreditRoomIndicators version={exibida} accent="indigo" />
+                        : aba === 'capacidade' ? <CreditRoomCapacity version={exibida} accent="indigo" />
+                            : <CreditRoomEmpreendimentos version={exibida} accent="indigo" documentos={documentosCarregados ? documentos : undefined} />;
+                if (!mostrandoPrevia) {
+                    return (
+                        <div className="space-y-3">
+                            <p className="text-sm text-gray-500 px-1">
+                                V{versaoEscolhida!.versionNo} liberada em {formatDateTimeBR(versaoEscolhida!.frozenAt)} — é o que a instituição vê. Somente leitura.
+                            </p>
+                            {abaConteudo}
+                        </div>
+                    );
+                }
+                if (previaEst.status === 'erro') {
+                    return (
+                        <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-[10px] px-4 py-3 flex flex-wrap items-center justify-between gap-3" role="alert">
+                            <span>{previaEst.erro}</span>
+                            <button onClick={() => void calcularPrevia()} className="h-9 px-3.5 text-sm font-medium text-red-700 border border-red-200 hover:bg-red-100 rounded-[6px] transition-all">
+                                Tentar de novo
+                            </button>
+                        </div>
+                    );
+                }
+                if (!versaoPrevia) {
+                    return (
+                        <div role="status" aria-busy="true" aria-label="Calculando a prévia" className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-5 space-y-3 animate-pulse">
+                            <div className="h-3 bg-gray-100 rounded w-1/3" />
+                            <div className="h-3 bg-gray-100 rounded w-2/3" />
+                            <div className="h-3 bg-gray-100 rounded w-1/2" />
+                            <p className="text-sm text-gray-500">Calculando a prévia de hoje…</p>
+                        </div>
+                    );
+                }
+                return (
+                    <div className="space-y-3">
+                        <FaixaDaPrevia
+                            room={room}
+                            previa={versaoPrevia}
+                            liberada={ativa}
+                            onAtualizar={() => void calcularPrevia()}
+                        />
+                        {abaConteudo}
                     </div>
-                )
-            )}
+                );
+            })()}
 
             {/* ── Versões ── */}
             {aba === 'versoes' && (
@@ -359,7 +457,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                             <div className="text-center py-12">
                                 <History className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                                 <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma versão</h3>
-                                <p className="text-sm text-gray-500">Cada congelamento preserva a posição daquela data. Alterar o ÒPURA depois não muda o que já foi apresentado.</p>
+                                <p className="text-sm text-gray-500">Cada liberação preserva a posição daquela data. Alterar o ÒPURA depois não muda o que já foi apresentado.</p>
                             </div>
                         ) : (
                             <div className="overflow-auto max-h-[50vh]">
@@ -369,7 +467,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                                             <th className={th}>Versão</th>
                                             <th className={th}>Rótulo</th>
                                             <th className={`${th} text-center`}>Data-base</th>
-                                            <th className={th}>Congelada por</th>
+                                            <th className={th}>Liberada por</th>
                                             <th className={`${th} text-center`}>Em</th>
                                             <th className={`${th} text-center`}>Documentos</th>
                                             <th className={`${th} text-center`}>Ativa</th>
@@ -427,7 +525,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     <p className="text-sm font-normal text-gray-500 px-1">
                         {documentos.length} documento{documentos.length === 1 ? '' : 's'} no Data Room
                     </p>
-                    <span className="inline-flex shrink-0" title={ativa ? undefined : 'Congele uma versão para sugerir os documentos da carteira'}>
+                    <span className="inline-flex shrink-0" title={ativa ? undefined : 'Libere uma versão para sugerir os documentos da carteira'}>
                         <button
                             onClick={() => setSugerirAberto(true)}
                             disabled={!ativa}
@@ -644,13 +742,21 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                 </div>
             )}
 
-            <CongelarSheet
-                open={congelarAberto}
-                onClose={() => setCongelarAberto(false)}
+            <LiberarSheet
+                open={liberarAberto}
+                onClose={() => {
+                    setLiberarAberto(false);
+                    // A data-base do painel pode ter trocado a prévia da tela por outra data: volta para a de hoje.
+                    setPreviaEst(prev => (prev.status !== 'idle' && prev.previa && prev.previa.dataBase !== hojeLocalISO() ? { status: 'idle' } : prev));
+                }}
                 room={room}
-                proximo={(versoes[0]?.versionNo ?? 0) + 1}
-                onFrozen={v => {
+                proximo={Math.max(0, ...versoes.map(v => v.versionNo)) + 1}
+                liberada={ativa}
+                previaEst={previaEst}
+                onCalcular={d => void calcularPrevia(d)}
+                onLiberada={v => {
                     setVersoes(prev => [v, ...prev]);
+                    setVisao(ID_DA_PREVIA);
                     onChanged({ ...room, activeVersionId: v.id });
                     setAba('visao');
                 }}
@@ -665,7 +771,15 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     );
 }
 
-// ── Congelar versão ──────────────────────────────────────────────────────────
+// ── Prévia de hoje: comparação com a liberada e "Liberar para a instituição" ─────────────────
+
+/** A prévia no detalhe interno: calculada com `prepararVersao` (lê tudo, não grava nada). */
+export interface PreviaEstado {
+    status: 'idle' | 'carregando' | 'ok' | 'erro';
+    previa?: VersaoPreparada;
+    calculadaEm?: string;
+    erro?: string;
+}
 
 const BLOCOS_PT: { chave: string; nome: string }[] = [
     { chave: 'empreendimento', nome: 'Empreendimento' },
@@ -686,98 +800,161 @@ const BLOCOS_PT: { chave: string; nome: string }[] = [
 const vezes = (v: number | null | undefined) =>
     v == null ? '—' : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}×`;
 
-export const CongelarSheet: React.FC<{
+type CampoComparado = ReturnType<typeof compararComLiberada>[number]['campo'];
+
+const ROTULO_COMPARADO: Record<CampoComparado, string> = {
+    valor_maximo: 'valor máximo',
+    dscr_minimo_12m: 'DSCR mínimo 12m',
+    renda_liquida_media_12m: 'renda líquida média 12m',
+    n_empreendimentos: 'empreendimentos',
+    n_contratos: 'contratos',
+};
+
+const valorComparado = (campo: CampoComparado, v: number | null): string => {
+    if (v == null) return '—';
+    if (campo === 'valor_maximo' || campo === 'renda_liquida_media_12m') return formatMoney(v);
+    if (campo === 'dscr_minimo_12m') return vezes(v);
+    return v.toLocaleString('pt-BR');
+};
+
+/** O que mudou da última versão liberada para a prévia: números (da prévia) e cadastro (do room). */
+function resumoDaComparacao(room: CreditRoom, previa: CreditRoomVersion, liberada: CreditRoomVersion | null) {
+    if (!liberada) return { semLiberada: true as const };
+    return {
+        semLiberada: false as const,
+        versionNo: liberada.versionNo,
+        numeros: compararComLiberada(previa, liberada).map(d => `${ROTULO_COMPARADO[d.campo]} ${valorComparado(d.campo, d.antes)} → ${valorComparado(d.campo, d.depois)}`),
+        cadastro: mudancasDesdeAVersao(room, liberada).map(m => MUDANCA_PT[m]),
+    };
+}
+
+const ComparacaoComLiberada: React.FC<{
+    room: CreditRoom; previa: CreditRoomVersion; liberada: CreditRoomVersion | null; className?: string;
+}> = ({ room, previa, liberada, className }) => {
+    const r = React.useMemo(() => resumoDaComparacao(room, previa, liberada), [room, previa, liberada]);
+    if (r.semLiberada) {
+        return <p className={className}>Ainda não liberada à instituição — o banco ainda não vê nada desta operação.</p>;
+    }
+    if (r.numeros.length === 0 && r.cadastro.length === 0) {
+        return <p className={className}>Igual à V{r.versionNo} liberada: nada mudou nos números nem no cadastro.</p>;
+    }
+    const partes = [
+        r.numeros.length ? `Desde a V${r.versionNo} liberada: ${r.numeros.join(' · ')}` : `Números iguais aos da V${r.versionNo} liberada`,
+        r.cadastro.length ? `cadastro mudou: ${r.cadastro.join(', ')}` : null,
+    ].filter(Boolean);
+    return <p className={className}>{partes.join(' · ')}</p>;
+};
+
+/** Faixa no topo das abas quando se olha a prévia: de quando é, o que mudou desde a liberada e "Atualizar prévia". */
+const FaixaDaPrevia: React.FC<{
+    room: CreditRoom; previa: CreditRoomVersion; liberada: CreditRoomVersion | null; onAtualizar: () => void;
+}> = ({ room, previa, liberada, onAtualizar }) => {
+    const mudou = React.useMemo(() => {
+        const r = resumoDaComparacao(room, previa, liberada);
+        return r.semLiberada || r.numeros.length > 0 || r.cadastro.length > 0;
+    }, [room, previa, liberada]);
+    return (
+        <div className={`flex flex-col lg:flex-row gap-3 items-start lg:items-center justify-between rounded-[10px] border px-4 py-3 ${mudou ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100 shadow-sm'}`}>
+            <div className="space-y-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900">
+                    Prévia de hoje — calculada às {horaDaPrevia(previa.frozenAt)}, ainda não liberada à instituição.
+                </p>
+                <ComparacaoComLiberada room={room} previa={previa} liberada={liberada} className={`text-sm ${mudou ? 'text-amber-800' : 'text-gray-600'}`} />
+            </div>
+            <button
+                onClick={onAtualizar}
+                title="Recalcula a prévia com os dados de agora"
+                className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 bg-white hover:bg-slate-50 rounded-[6px] transition-all shrink-0"
+            >
+                <RefreshCw className="w-[15px] h-[15px]" />
+                Atualizar prévia
+            </button>
+        </div>
+    );
+};
+
+export const LiberarSheet: React.FC<{
     open: boolean;
     onClose: () => void;
     room: CreditRoom;
     proximo: number;
-    onFrozen: (v: CreditRoomVersion) => void;
-}> = ({ open, onClose, room, proximo, onFrozen }) => {
+    /** Última versão liberada (a ativa): base da comparação. */
+    liberada: CreditRoomVersion | null;
+    /** A prévia que está na tela — é EXATAMENTE ela que `freezeVersion` grava. */
+    previaEst: PreviaEstado;
+    /** Pede ao detalhe que (re)calcule a prévia para uma data-base. */
+    onCalcular: (dataBase: string) => void;
+    onLiberada: (v: CreditRoomVersion) => void;
+}> = ({ open, onClose, room, proximo, liberada, previaEst, onCalcular, onLiberada }) => {
     const [label, setLabel] = React.useState('');
     const [notes, setNotes] = React.useState('');
     const [dataBase, setDataBase] = React.useState(hojeLocalISO());
-    const [preparada, setPreparada] = React.useState<VersaoPreparada | null>(null);
-    const [conferindo, setConferindo] = React.useState(false);
-    const [congelando, setCongelando] = React.useState(false);
+    const [liberando, setLiberando] = React.useState(false);
     const [erro, setErro] = React.useState<string | null>(null);
-    // Conferência em voo é descartada se a data-base mudar (ou o painel reabrir) antes de ela voltar.
-    const geracao = React.useRef(0);
 
     React.useEffect(() => {
         if (open) {
-            geracao.current += 1;
             setLabel(''); setNotes(''); setDataBase(hojeLocalISO());
-            setPreparada(null); setConferindo(false); setCongelando(false); setErro(null);
+            setLiberando(false); setErro(null);
         }
     }, [open]);
 
-    // Sala alterada em outro lugar enquanto o painel está aberto: a versão preparada pode estar velha.
+    // Prévia descartada (cadastro salvo em outro lugar) com o painel aberto: recalcula para a data-base do painel.
     React.useEffect(() => {
-        if (!open) return;
-        geracao.current += 1;
-        setPreparada(null);
-        setConferindo(false);
-    }, [room, open]);
+        if (open && dataBase && previaEst.status === 'idle') onCalcular(dataBase);
+    }, [open, dataBase, previaEst.status, onCalcular]);
 
     const mudarDataBase = (v: string) => {
         setDataBase(v);
-        // A versão preparada vale só para a data-base em que foi lida: trocar a data descarta a conferência.
-        geracao.current += 1;
-        setPreparada(null);
-        setConferindo(false);
         setErro(null);
+        // A prévia vale só para a data-base em que foi lida: outra data recalcula antes de liberar.
+        if (v && previaEst.previa?.dataBase !== v) onCalcular(v);
     };
 
-    const conferir = async () => {
-        const minha = ++geracao.current;
-        setConferindo(true);
-        setPreparada(null);
-        setErro(null);
-        try {
-            const p = await creditRoomService.prepararVersao(room, dataBase);
-            if (minha !== geracao.current) return;
-            setPreparada(p);
-        } catch (e) {
-            if (minha !== geracao.current) return;
-            setErro(errorMessage(e, 'Não foi possível conferir a versão.'));
-        } finally {
-            if (minha === geracao.current) setConferindo(false);
-        }
-    };
+    const previa = previaEst.status === 'ok' && previaEst.previa && previaEst.previa.dataBase === dataBase ? previaEst.previa : null;
+    const calculando = !previa && previaEst.status !== 'erro' && !!dataBase;
 
-    const congelar = async () => {
-        if (!preparada) return;
-        setCongelando(true);
+    const liberar = async () => {
+        if (!previa) return;
+        setLiberando(true);
         setErro(null);
         try {
-            const v = await creditRoomService.freezeVersion(room, { label: label.trim() || undefined, notes: notes.trim() || undefined, dataBase }, preparada);
-            onFrozen(v);
+            // A MESMA prévia que está na tela: o serviço reaproveita o objeto (mesmo room e data-base) em vez de reler.
+            const v = await creditRoomService.freezeVersion(room, { label: label.trim() || undefined, notes: notes.trim() || undefined, dataBase }, previa);
+            onLiberada(v);
             onClose();
         } catch (e) {
-            setErro(errorMessage(e, 'Não foi possível congelar a versão.'));
+            setErro(errorMessage(e, 'Não foi possível liberar a versão.'));
         } finally {
-            setCongelando(false);
+            setLiberando(false);
         }
     };
 
-    const snap = preparada?.snapshot ?? null;
+    const snap = previa?.snapshot ?? null;
     const cap = snap?.capacidade ?? null;
     const resumo = resumoDaCapacidade(cap);
-    const semSerieConf = !!cap && cap.serie.length === 0;
-    const comOperacaoConf = !!cap && cap.serie.some(m => m.servico_novo > 0);
+    const semSerie = !!cap && cap.serie.length === 0;
+    const comOperacao = !!cap && cap.serie.some(m => m.servico_novo > 0);
     const semDado = snap
         ? BLOCOS_PT.filter(b => (snap as unknown as Record<string, unknown>)[b.chave] == null).map(b => b.nome)
         : [];
+    const versaoPrevia = React.useMemo(
+        () => (previa && previaEst.calculadaEm ? versaoDaPrevia(previa, previaEst.calculadaEm, room.organizationId) : null),
+        [previa, previaEst.calculadaEm, room.organizationId],
+    );
 
-    const motivoConferir = !dataBase ? 'Informe a data-base para conferir' : conferindo ? 'Conferindo a versão...' : congelando ? 'Congelando a versão...' : undefined;
-    const motivoCongelar = congelando ? 'Congelando a versão...' : !preparada ? 'Confira a versão antes de congelar' : undefined;
+    const motivoLiberar = liberando ? 'Liberando a versão...'
+        : !dataBase ? 'Informe a data-base para liberar'
+            : previaEst.status === 'erro' ? 'A prévia não pôde ser calculada: veja o motivo acima'
+                : !previa ? 'Calculando a prévia desta data-base...'
+                    : undefined;
 
     return (
         <Sheet open={open} onClose={onClose} size="md">
             <SheetHeader onClose={onClose}>
-                <SheetTitle>Congelar versão V{proximo}</SheetTitle>
+                <SheetTitle>Liberar V{proximo} para a instituição</SheetTitle>
                 <SheetDescription>
-                    Primeiro confira: o sistema lê a posição da dívida, os KPIs da obra, as vendas, o NOI e a capacidade de pagamento e mostra o que vai ser guardado, sem gravar nada. Depois, congele. O que mudar no ÒPURA depois disso não altera esta versão.
+                    Libera exatamente a prévia que está na tela: a posição da dívida, os KPIs da obra, as vendas, o NOI e a capacidade de pagamento daquela data-base. A instituição passa a ver esta versão; o que mudar no ÒPURA depois disso não a altera.
                 </SheetDescription>
             </SheetHeader>
             <SheetPanel className="px-6 py-5 space-y-4">
@@ -787,7 +964,7 @@ export const CongelarSheet: React.FC<{
                 </div>
                 <div className="space-y-1.5">
                     <label className={rotulo}>Data-base</label>
-                    <input type="date" value={dataBase} onChange={e => mudarDataBase(e.target.value)} disabled={congelando} title={congelando ? 'Congelando a versão: a data-base não pode mudar agora' : undefined} className={campo} />
+                    <input type="date" value={dataBase} onChange={e => mudarDataBase(e.target.value)} disabled={liberando} title={liberando ? 'Liberando a versão: a data-base não pode mudar agora' : undefined} className={campo} />
                 </div>
                 <div className="space-y-1.5">
                     <label className={rotulo}>Notas</label>
@@ -796,21 +973,42 @@ export const CongelarSheet: React.FC<{
 
                 {erro && <p className="text-sm text-red-600">{erro}</p>}
 
-                {preparada && snap && (
-                    <section aria-label="Conferência da versão" className="rounded-[10px] border border-gray-100 bg-gray-50 p-4 space-y-4">
+                {previaEst.status === 'erro' && (
+                    <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] border border-red-200 bg-red-50 px-4 py-3" role="alert">
+                        <p className="text-sm text-red-700">{previaEst.erro}</p>
+                        <button onClick={() => onCalcular(dataBase)} disabled={!dataBase} className="h-9 px-3.5 text-sm font-medium text-red-700 border border-red-200 hover:bg-red-100 rounded-[6px] transition-all disabled:opacity-50">
+                            Tentar de novo
+                        </button>
+                    </div>
+                )}
+
+                {calculando && (
+                    <div role="status" aria-busy="true" aria-label="Calculando a prévia" className="rounded-[10px] border border-gray-100 bg-gray-50 p-4 space-y-3 animate-pulse">
+                        <div className="h-3 bg-gray-100 rounded w-1/3" />
+                        <div className="h-3 bg-gray-100 rounded w-2/3" />
+                        <p className="text-sm text-gray-500">Calculando a prévia desta data-base…</p>
+                    </div>
+                )}
+
+                {previa && snap && (
+                    <section aria-label="Resumo da prévia" className="rounded-[10px] border border-gray-100 bg-gray-50 p-4 space-y-4">
                         <div>
-                            <h3 className="text-sm font-semibold text-gray-900">Conferência da data-base {formatDateBR(preparada.dataBase)}</h3>
-                            <p className="text-xs text-gray-500 mt-0.5">É isto que será guardado. Nada foi gravado ainda.</p>
+                            <h3 className="text-sm font-semibold text-gray-900">Prévia da data-base {formatDateBR(previa.dataBase)}</h3>
+                            <p className="text-xs text-gray-500 mt-0.5">É isto que será liberado. Nada foi gravado ainda.</p>
                         </div>
+
+                        {versaoPrevia && (
+                            <ComparacaoComLiberada room={room} previa={versaoPrevia} liberada={liberada} className="text-sm text-gray-700" />
+                        )}
 
                         {cap ? (
                             <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
                                 <div className="space-y-1.5">
                                     <dt className={rotulo}>Valor máximo (sobre a dívida atual)</dt>
-                                    <dd className="text-sm font-medium text-gray-900">{semSerieConf ? '—' : formatMoney(cap.capacidade_maxima?.valor_maximo)}</dd>
+                                    <dd className="text-sm font-medium text-gray-900">{semSerie ? '—' : formatMoney(cap.capacidade_maxima?.valor_maximo)}</dd>
                                 </div>
                                 <div className="space-y-1.5">
-                                    <dt className={rotulo}>{comOperacaoConf ? 'DSCR mínimo 12m (pós-operação)' : 'DSCR mínimo 12m'}</dt>
+                                    <dt className={rotulo}>{comOperacao ? 'DSCR mínimo 12m (pós-operação)' : 'DSCR mínimo 12m'}</dt>
                                     <dd className="text-sm font-medium text-gray-900">{vezes(resumo?.dscr_minimo_12m)}</dd>
                                 </div>
                                 <div className="space-y-1.5">
@@ -820,7 +1018,7 @@ export const CongelarSheet: React.FC<{
                             </dl>
                         ) : (
                             <p className="text-sm text-amber-700">
-                                A capacidade de pagamento não pôde ser calculada nesta data-base. A versão será congelada sem ela, e a aba Capacidade de pagamento ficará vazia.
+                                A capacidade de pagamento não pôde ser calculada nesta data-base. A versão será liberada sem ela, e a aba Capacidade de pagamento ficará vazia.
                             </p>
                         )}
 
@@ -858,23 +1056,17 @@ export const CongelarSheet: React.FC<{
             </SheetPanel>
             <SheetFooter>
                 <button onClick={onClose} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">Cancelar</button>
-                <button
-                    onClick={() => void conferir()}
-                    disabled={conferindo || congelando || !dataBase}
-                    title={motivoConferir}
-                    className="h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 rounded-[6px] transition-all disabled:opacity-50"
-                >
-                    {conferindo ? 'Conferindo…' : 'Conferir'}
-                </button>
-                <button
-                    onClick={() => void congelar()}
-                    disabled={!preparada || congelando || conferindo}
-                    title={motivoCongelar}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-                >
-                    <Snowflake className="w-[15px] h-[15px]" />
-                    {congelando ? 'Congelando…' : 'Congelar'}
-                </button>
+                {/* Desligado sempre diz o motivo: o wrapper carrega o title (botão disabled não dispara hover). */}
+                <span className="inline-flex shrink-0" title={motivoLiberar}>
+                    <button
+                        onClick={() => void liberar()}
+                        disabled={!previa || liberando}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                    >
+                        <Send className="w-[15px] h-[15px]" />
+                        {liberando ? 'Liberando…' : `Liberar V${proximo}`}
+                    </button>
+                </span>
             </SheetFooter>
         </Sheet>
     );

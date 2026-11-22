@@ -7,6 +7,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '..
 import { explicarIndicador, type IndicadorKey, type TermoProveniencia } from '../../utils/creditRoomProvenance';
 import type { CreditRoomVersion } from '../../types/creditRoom';
 import { ELIGIBLE_FLOW_PT, type CreditRoomEligibleFlows } from '../../utils/creditRoomSnapshot';
+import { ehPrevia, horaDaPrevia } from '../../utils/creditRoomPrevia';
 
 /**
  * Os números de uma VERSÃO congelada do Credit Room — a Home do PRD (§104).
@@ -110,9 +111,9 @@ export const PainelProveniencia: React.FC<{
                         )}
 
                         <p className="text-xs text-gray-400">
-                            Tudo aqui sai da versão V{version.versionNo}, congelada em{' '}
-                            {formatDateBR(version.dataBase)} — não do dado de hoje. É por isso que a
-                            conta fecha com o número mostrado ao lado.
+                            {ehPrevia(version)
+                                ? `Tudo aqui sai da prévia de hoje, calculada às ${horaDaPrevia(version.frozenAt)} — ainda não liberada à instituição. É por isso que a conta fecha com o número mostrado ao lado.`
+                                : `Tudo aqui sai da versão V${version.versionNo}, congelada em ${formatDateBR(version.dataBase)} — não do dado de hoje. É por isso que a conta fecha com o número mostrado ao lado.`}
                         </p>
                     </div>
                 )}

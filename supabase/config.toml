@@ -486,6 +486,14 @@ verify_jwt = false
 [functions.diretoria-resumo-semanal]
 verify_jwt = false
 
+# Assinatura eletrônica interna, sem certificado (docs/planos/2026-11-21-assinatura-eletronica-interna.md).
+# O Portal do Cliente, o do Corretor e a testemunha (link) chamam SEM sessão: o portão é o
+# código + o banco — exigirUsuario para membro/criar/cancelar/finalizar; para os portais e o
+# link, a credencial no corpo é conferida por `_assinatura_autorizar` (RPCs só da service_role).
+# REGRA #7, pergunta 3: depois de publicar, provar o 401 sem header no `criar`.
+[functions.assinatura-interna]
+verify_jwt = false
+
 # WhatsApp Cloud API (achado F75, 18/11/2026 — docs/planos/2026-11-18-seguranca-fase2-achados-restantes.md,
 # PR I): o token da Meta fica no Vault, por organização, e só esta function o lê. Só chamada pelo app,
 # com o JWT do usuário — por isso o gateway TAMBÉM confere o JWT. Isso não é a autorização (REGRA #7,

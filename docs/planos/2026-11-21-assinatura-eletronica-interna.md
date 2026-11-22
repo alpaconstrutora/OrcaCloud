@@ -42,6 +42,8 @@
 | 21/11 | Quem assina além dos compradores? | Representante da empresa, testemunhas e corretor |
 | 21/11 | Como confirmar que é o próprio comprador? | Código de 6 dígitos por e-mail, mais CPF e aceite |
 | 21/11 | E o comprador sem portal? | Convidar ao portal na hora do envio |
+| 22/11 | Texto do termo de aceite (`TERMO_DE_ACEITE`, v2026-11-21.1) | "de acordo" — aprovado como está |
+| 22/11 | Quem faz o teste de ponta a ponta com e-mail real? | "eu mesmo" — o usuário, depois de publicar F4–F6 |
 | 21/11 | O ZapSign fica? | Fica, para os documentos importantes. O caminho interno é um segundo provedor, escolhido documento a documento |
 
 ## Contexto
@@ -146,9 +148,22 @@ Selo PAdES com o certificado A1 da empresa. Não muda a validade jurídica e tem
   - O roteador de abas (`syncViewToUrl`) reescrevia o `#` para `#/central` antes de a página da testemunha ler o token. Agora o `App` captura o fragmento na 1ª renderização.
   - O tour de primeiro acesso abria por cima do painel de assinar. Quem chega por `?assinar=` vê o tour na próxima visita.
   - Desvio do plano: a validação pública é um componente próprio (`PublicAssinaturaChecker`), porque os campos do ofício (tipo, número, destinatário) não se aplicam. Os dois usam o mesmo `sha256DeArquivo`.
-- [ ] F4: Emissão
-- [ ] F5: Negociação
-- [ ] F6: Portal do Corretor
+- [~] F4: Emissão — código pronto; **falta** o roteiro na tela real, que precisa de login (ver Verificação)
+  - Na tabela de versões: coluna "Assinatura" com o provedor (ZapSign ou portal) e ação "Enviar para assinatura no portal", só em versão emitida; o motivo aparece quando a ação está desligada.
+  - "Acompanhar a assinatura": signatários, cancelar (`useConfirm`), finalizar de novo, "Assinar agora" para o representante e abrir a via assinada.
+  - `remove` e a lixeira recusam versão com envelope.
+  - O cartão do ZapSign recusa versão em assinatura no portal.
+  - Verificado: `tsc` sem erros, `check-ui-standard` limpo, `ContractDocumentosTabela` e `ContractEmissaoDocumentoUnico` passam, e o teste novo `assinaturaEnvioComprador` também.
+- [~] F5: Negociação — código pronto; **falta** o roteiro na tela real, que precisa de login
+  - Aba "Documentos" no `DealModal`, para venda e locação, só com a negociação gravada. Tabela `DocumentosDaNegociacaoPanel` com tipo, documento, versão, assinatura e data.
+  - "Novo documento" (só PDF) e "Gravar proposta", que exige a negociação salva: a proposta gravada é a prova do que foi proposto.
+  - Ações "Enviar para assinar" e "Acompanhar".
+  - `propertyExportService.proposalPdfBlob` gera a mesma proposta do botão, como arquivo (teste `propostaComoArquivo`).
+  - Verificado: `tsc` sem erros, `check-ui-standard` limpo, os 3 testes do `DealModal` e o `orgContextGuard` passam.
+- [~] F6: Portal do Corretor — código pronto; **falta** o roteiro na tela real
+  - `DocumentosParaAssinar portal="corretor"` no desktop (`BrokerPortal`) e no celular (`BrokerPortalMobile`), com pendências e assinados.
+  - O tour não abre na visita que chega por `?assinar=`.
+  - Verificado: `tsc` sem erros; `BrokerPortalMobile` e `brokerPortalTabsMobile` passam.
 
 ## Verificação
 

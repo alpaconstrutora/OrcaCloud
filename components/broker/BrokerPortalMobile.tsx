@@ -9,6 +9,8 @@ import { KpiCard } from '../ui/KpiCard';
 import ActionIconButton from '../ui/ActionIconButton';
 import PropertyUnitMap from '../common/PropertyUnitMap';
 import BrokerMyData from './BrokerMyData';
+import { DocumentosParaAssinar } from '../assinatura/DocumentosParaAssinar';
+import { signatarioDaUrl } from '../../services/assinaturaInternaService';
 import BrokerDevelopments from './BrokerDevelopments';
 import BrokerProposalSimulator from './BrokerProposalSimulator';
 import BrokerLeadManager from './BrokerLeadManager';
@@ -102,6 +104,8 @@ const primeiroNome = (nome: string) => {
 };
 
 const BrokerPortalMobile: React.FC<Props> = ({ profile, organizationId, portalToken, initialBroker, onLogout, forcarTour = null, previa = false }) => {
+    // Lido na montagem: o cartão de assinaturas limpa o ?assinar da URL logo depois.
+    const [chegouParaAssinar] = useState(() => !!signatarioDaUrl());
     // Abre na primeira aba da barra (D3) — no desktop continua Analytics.
     const abaInicial = abasDoCelular(abasHabilitadas(initialBroker?.settings)).barra[0] ?? 'empreendimentos';
     const h = useBrokerPortal({ profile, activeTab: abaInicial, organizationId, isPreview: true, portalToken, initialBroker });
@@ -216,6 +220,9 @@ const BrokerPortalMobile: React.FC<Props> = ({ profile, organizationId, portalTo
                         {h.currentTab === barra[0] && !noSimulador && (
                             <div ref={setSlotChecklist} className="empty:hidden" />
                         )}
+
+                        {/* Assinatura interna: documentos que o corretor assina. */}
+                        {portalToken && <DocumentosParaAssinar portal="corretor" token={portalToken} mostrarAssinados />}
 
                         {h.currentTab === 'empreendimentos' && (
                             <div data-tour="empreendimentos-lista">
@@ -509,7 +516,7 @@ const BrokerPortalMobile: React.FC<Props> = ({ profile, organizationId, portalTo
                 checklistCompacto
                 accent="indigo"
                 tourKey={portalToken || h.effectiveBrokerEmail || null}
-                autoTour={!previa && !!portalToken}
+                autoTour={!previa && !!portalToken && !chegouParaAssinar}
             />
 
             {/* Toast próprio, acima da cesta/barra. */}

@@ -21,6 +21,7 @@ const COLS =
     'id, organization_id, contract_id, owner_type, owner_id, v, kind, name, notes, url, ' +
     'storage_path, mime_type, size_bytes, source, template_id, emitted, emitted_at, ' +
     'signature_status, signature_token, signature_url, signature_completed_at, signed_file_url, ' +
+    'signature_provider, assinatura_envelope_id, ' +
     'created_by, created_at, updated_at';
 
 const BUCKET = 'documents';
@@ -196,12 +197,13 @@ export const contractDocumentVersionService = {
     remove: async (id: string): Promise<void> => {
         const { data: ver } = await supabase
             .from('contract_document_versions')
-            .select('id, contract_id, emitted, signature_token, storage_path')
+            .select('id, contract_id, emitted, signature_token, assinatura_envelope_id, storage_path')
             .eq('id', id)
             .maybeSingle();
         if (!ver) return;
         if (ver.emitted) throw new Error('Não é possível excluir uma versão já emitida ao cliente.');
-        if (ver.signature_token) throw new Error('Esta versão foi enviada para assinatura e não pode ser excluída.');
+        // ZapSign (signature_token) ou assinatura interna (envelope): a versão é a prova do que foi assinado.
+        if (ver.signature_token || ver.assinatura_envelope_id) throw new Error('Esta versão foi enviada para assinatura e não pode ser excluída.');
 
         const { error } = await supabase.from('contract_document_versions').delete().eq('id', id);
         if (error) throw error;

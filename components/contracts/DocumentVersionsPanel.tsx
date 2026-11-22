@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { ExternalLink, FileText, Lock, Plus, Send } from 'lucide-react';
+import { ExternalLink, FileSignature, FileText, Lock, Plus, Send } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
@@ -7,6 +7,8 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { contractDocumentVersionService } from '../../services/contractDocumentVersionService';
 import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
 import { ContractDocumentVersion, DocumentKind, DocumentOwnerType, DocumentSource } from '../../types';
+import { EnviarParaAssinaturaSheet } from '../assinatura/EnviarParaAssinaturaSheet';
+import { AcompanharAssinaturaSheet } from '../assinatura/AcompanharAssinaturaSheet';
 
 interface Props {
     ownerType: DocumentOwnerType;
@@ -51,7 +53,31 @@ const COLUMNS: StandardTableColumn[] = [
     // 170: "Arquivo enviado" + padding §6.6 quebrava em duas linhas com 150.
     { key: 'source', label: 'Origem', sortable: true, width: 170 },
     { key: 'created_at', label: 'Data', sortable: true, width: 110 },
+    // Assinatura: ZapSign (signature_token) ou no portal (assinatura interna, envelope).
+    { key: 'assinatura', label: 'Assinatura', sortable: true, width: 170 },
 ];
+
+const ROTULO_ASSINATURA: Record<string, { texto: string; cor: string }> = {
+    PENDING: { texto: 'Pendente', cor: 'text-amber-600' },
+    SENT: { texto: 'Aguardando', cor: 'text-amber-600' },
+    SIGNED: { texto: 'Assinada', cor: 'text-emerald-600' },
+    EXPIRED: { texto: 'Prazo vencido', cor: 'text-red-600' },
+    CANCELLED: { texto: 'Cancelada', cor: 'text-gray-500' },
+};
+const assinaturaDe = (v: ContractDocumentVersion) => {
+    if (!v.signature_status) return null;
+    const r = ROTULO_ASSINATURA[v.signature_status] ?? { texto: v.signature_status, cor: 'text-gray-600' };
+    const onde = v.signature_provider === 'PORTAL' || v.assinatura_envelope_id ? 'portal' : 'ZapSign';
+    return { ...r, texto: `${r.texto} (${onde})` };
+};
+/** Por que a versão não pode ir para a assinatura no portal — `null` quando pode. */
+const motivoNaoEnviaAoPortal = (v: ContractDocumentVersion): string | null => {
+    if (!v.emitted) return 'Emita a versão antes de enviar para assinatura';
+    if (v.signature_status === 'SIGNED') return 'Versão já assinada';
+    if (v.signature_token && (v.signature_status === 'SENT' || v.signature_status === 'PENDING')) return 'Versão enviada ao ZapSign';
+    if (v.assinatura_envelope_id && v.signature_status === 'SENT') return 'Assinatura no portal em andamento';
+    return null;
+};
 
 const inputCls = 'w-full h-9 px-3 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all';
 
@@ -88,6 +114,11 @@ const DocumentVersionsPanel: React.FC<Props> = ({
     const [editNome, setEditNome] = useState('');
     const [editNota, setEditNota] = useState('');
     const [salvando, setSalvando] = useState(false);
+
+    // Assinatura interna (sem certificado): enviar e acompanhar, por versão.
+    const [paraEnviar, setParaEnviar] = useState<ContractDocumentVersion | null>(null);
+    const [acompanhando, setAcompanhando] = useState<ContractDocumentVersion | null>(null);
+    const tituloDaVersao = (v: ContractDocumentVersion) => `${label} — ${v.name || 'Documento'} (v${v.v})`;
 
     // `onNotify` costuma chegar como função inline do pai: no deps do `load` ele
     // recarregaria a lista a cada render do pai. A ref mantém o carregamento
@@ -189,7 +220,7 @@ const DocumentVersionsPanel: React.FC<Props> = ({
     /** Por que a versão não pode ser excluída — `null` quando pode. */
     const motivoNaoExclui = (ver: ContractDocumentVersion): string | null => {
         if (ver.emitted) return 'Versão emitida ao cliente não pode ser excluída';
-        if (ver.signature_token) return 'Versão enviada para assinatura não pode ser excluída';
+        if (ver.signature_token || ver.assinatura_envelope_id) return 'Versão enviada para assinatura não pode ser excluída';
         return null;
     };
 
@@ -213,6 +244,7 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                         case 'notes': return v.notes ?? '';
                         case 'source': return origem(v.source);
                         case 'created_at': return v.created_at;
+                        case 'assinatura': return assinaturaDe(v)?.texto ?? '';
                         default: return null;
                     }
                 }}
@@ -241,14 +273,22 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                             return <span className="text-sm font-normal text-gray-600">{origem(v.source)}</span>;
                         case 'created_at':
                             return <span className="text-sm font-normal text-gray-600">{fmtDate(v.created_at)}</span>;
+                        case 'assinatura': {
+                            // §8 — texto colorido, sem pílula
+                            const a = assinaturaDe(v);
+                            return a
+                                ? <span className={`text-sm font-normal ${a.cor}`}>{a.texto}</span>
+                                : <span className="text-sm font-normal text-gray-400">—</span>;
+                        }
                         default:
                             return null;
                     }
                 }}
                 actions={{
-                    width: 210,
+                    width: 250,
                     render: v => {
                         const motivo = motivoNaoExclui(v);
+                        const motivoPortal = motivoNaoEnviaAoPortal(v);
                         return (
                             <div className="flex items-center justify-end gap-1.5">
                                 {/* Ação dominante em texto azul (§9): emitir o rascunho */}
@@ -272,6 +312,16 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                                             .catch(e => notifyRef.current(e instanceof Error ? e.message : 'Não foi possível abrir o documento.', 'error'));
                                     }}
                                 />
+                                {v.assinatura_envelope_id ? (
+                                    <ActionIconButton kind="view" title="Acompanhar a assinatura no portal"
+                                        icon={<FileSignature className="w-4 h-4" />} onClick={() => setAcompanhando(v)} />
+                                ) : (
+                                    <span title={motivoPortal ?? undefined} className="inline-flex">
+                                        <ActionIconButton kind="view" title={motivoPortal ?? 'Enviar para assinatura no portal (sem custo)'}
+                                            disabled={!!motivoPortal || !organizationId}
+                                            icon={<FileSignature className="w-4 h-4" />} onClick={() => setParaEnviar(v)} />
+                                    </span>
+                                )}
                                 <ActionIconButton kind="edit" title="Editar versão" onClick={() => abrirEdicao(v)} />
                                 {/* Desabilitado diz o motivo: o botão desabilitado não
                                     recebe hover (pointer-events-none), então o title
@@ -408,6 +458,40 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                     </button>
                 </SheetFooter>
             </Sheet>
+
+            {/* Assinatura interna (sem certificado) — plano 2026-11-21-assinatura-eletronica-interna */}
+            {organizationId && (
+                <EnviarParaAssinaturaSheet
+                    aberto={!!paraEnviar}
+                    onFechar={() => setParaEnviar(null)}
+                    origem={paraEnviar ? { tipo: 'CDV', id: paraEnviar.id } : null}
+                    titulo={paraEnviar ? tituloDaVersao(paraEnviar) : ''}
+                    organizationId={organizationId}
+                    contractId={contractId}
+                    onEnviado={async r => {
+                        const semEmail = r.signatarios.filter(s => !s.email_enviado);
+                        setParaEnviar(null);
+                        await load();
+                        onChanged?.();
+                        onNotify(semEmail.length
+                            ? `Enviado, mas o e-mail não saiu para: ${semEmail.map(s => s.nome).join(', ')}.`
+                            : `Enviado para ${r.signatarios.length} signatário${r.signatarios.length > 1 ? 's' : ''}.`,
+                            semEmail.length ? 'error' : 'success');
+                    }}
+                />
+            )}
+            <AcompanharAssinaturaSheet
+                aberto={!!acompanhando}
+                onFechar={() => setAcompanhando(null)}
+                origem={acompanhando ? { tipo: 'CDV', id: acompanhando.id } : null}
+                titulo={acompanhando ? tituloDaVersao(acompanhando) : ''}
+                onAbrirAssinado={acompanhando?.signed_file_url ? () => {
+                    abrirArquivoAssinado(BUCKET_DOCUMENTOS, acompanhando.signed_file_url)
+                        .catch(e => notifyRef.current(e instanceof Error ? e.message : 'Não foi possível abrir o documento.', 'error'));
+                } : undefined}
+                onMudou={() => { void load(); onChanged?.(); }}
+                onNotify={onNotify}
+            />
         </>
     );
 };

@@ -271,6 +271,9 @@ export interface ContractDocumentVersion {
     signature_url?: string;
     signature_completed_at?: string;
     signed_file_url?: string;
+    /** Quem conduz a assinatura: ZapSign (signature_token) ou a assinatura interna (envelope). */
+    signature_provider?: 'ZAPSIGN' | 'PORTAL' | null;
+    assinatura_envelope_id?: string | null;
     created_by?: string;
     created_at?: string;
     updated_at?: string;

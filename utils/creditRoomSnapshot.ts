@@ -807,8 +807,12 @@ export function computeIndicators(s: CreditRoomSnapshot): CreditRoomIndicators {
             servicoAtual = soma(m => m.servico_atual);
             // Sem série de serviço novo E sem proposta com cronograma = não dá
             // para afirmar o serviço pós — `null`, não "igual ao atual".
-            const semNovo = doze.every(m => n(m.servico_novo) === 0) && op.novo_servico_12m == null;
-            servicoPos = semNovo ? null : soma(m => n(m.servico_atual) + n(m.servico_novo));
+            // Com proposta mas série sem `servico_novo`, soma o da proposta:
+            // número que vai ao banco não pode ser otimista (DSCR pós = atual).
+            const semNovo = doze.every(m => n(m.servico_novo) === 0);
+            if (!semNovo) servicoPos = soma(m => n(m.servico_atual) + n(m.servico_novo));
+            else if (op.novo_servico_12m == null) servicoPos = null;
+            else servicoPos = round2(servicoAtual + op.novo_servico_12m);
         } else {
             servicoAtual = null;
             servicoPos = null;

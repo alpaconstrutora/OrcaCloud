@@ -403,11 +403,19 @@ describe('schema 2', () => {
         expect(semNada.servico_pos_anual).toBeNull();
         expect(semNada.dscr_pos).toBeNull();
 
-        // Proposta com cronograma, mesmo que a série ainda não carregue o novo serviço.
+        // Proposta com cronograma, mesmo que a série ainda não carregue o novo serviço:
+        // soma o da proposta — DSCR pós não pode sair igual ao atual (otimista).
         const comProposta = computeIndicators(buildSnapshot({
             ...base, novoServico12m: 1_500_000, capacidade: capacidadeBase(),
         }));
-        expect(comProposta.servico_pos_anual).toBe(60_000);
+        expect(comProposta.servico_pos_anual).toBe(60_000 + 1_500_000);
+        expect(comProposta.dscr_pos).toBe(0.08);            // 120.000 / 1.560.000
+    });
+
+    it('schema 2 com capacidade null dá os mesmos indicadores do caminho antigo (NOI × 12)', () => {
+        const s = buildSnapshot({ ...base, capacidade: null });
+        expect(s.schema).toBe(2);
+        expect(computeIndicators(s)).toEqual(INDICADORES_SCHEMA1_ESPERADOS);
     });
 
     it('série vazia não vira DSCR de zero — fluxo e serviço ficam null', () => {

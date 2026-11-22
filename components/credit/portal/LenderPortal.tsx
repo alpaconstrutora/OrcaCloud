@@ -240,6 +240,10 @@ const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMe
 
     const ativa = versoes.find(v => v.id === room.activeVersionId) ?? null;
 
+    // Room de Grupo: o Data Room mostra de qual empresa é cada documento (nome vem da versão ativa).
+    const grupoEscopo = room.escopo === 'GRUPO';
+    const nomeDaOrg = new Map((ativa?.snapshot.escopo?.organizacoes ?? []).map(o => [o.id, o.nome]));
+
     const baixar = async (d: CreditRoomDocument) => {
         if (!d.storagePath) return;
         try {
@@ -298,7 +302,7 @@ const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMe
                 ativa ? (
                     aba === 'visao' ? <CreditRoomIndicators version={ativa} accent="portal" />
                         : aba === 'capacidade' ? <CreditRoomCapacity version={ativa} accent="portal" />
-                            : <CreditRoomEmpreendimentos version={ativa} accent="portal" />
+                            : <CreditRoomEmpreendimentos version={ativa} accent="portal" documentos={documentos} />
                 ) : (
                     <PortalCard><PortalEmpty icon={<LayoutDashboard className="w-9 h-9" />} title="Sem versão liberada" subtitle="Os indicadores aparecem quando a empresa congelar a primeira versão." /></PortalCard>
                 )
@@ -316,6 +320,7 @@ const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMe
                             <thead>
                                 <tr className="border-b border-[#ECECEF]">
                                     <Th>Documento</Th>
+                                    {grupoEscopo && <Th>Empresa</Th>}
                                     <Th>Categoria</Th>
                                     <Th>Tipo</Th>
                                     <Th>Validade</Th>
@@ -325,12 +330,13 @@ const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMe
                             </thead>
                             <tbody className="divide-y divide-[#F4F4F6]">
                                 {documentos.length === 0 ? (
-                                    <tr><td colSpan={6}><PortalEmpty icon={<FileText className="w-9 h-9" />} title="Nenhum documento disponível" subtitle="A empresa ainda não compartilhou documentos com esta operação." /></td></tr>
+                                    <tr><td colSpan={grupoEscopo ? 7 : 6}><PortalEmpty icon={<FileText className="w-9 h-9" />} title="Nenhum documento disponível" subtitle="A empresa ainda não compartilhou documentos com esta operação." /></td></tr>
                                 ) : documentos.map(d => {
                                     const vencido = !!d.dataValidade && d.dataValidade < new Date().toISOString().slice(0, 10);
                                     return (
                                         <tr key={d.shareId} className="hover:bg-gray-50/70 transition-colors">
                                             <Td className="text-[#1F2430] font-medium">{d.nome}</Td>
+                                            {grupoEscopo && <Td className="text-[#8A8F9A]">{(d.organizationId && nomeDaOrg.get(d.organizationId)) || '—'}</Td>}
                                             <Td className="text-[#8A8F9A] capitalize">{d.categoria}</Td>
                                             <Td className="text-[#8A8F9A]">{d.tipoDocumento}</Td>
                                             <Td className={vencido ? 'text-red-600' : 'text-[#8A8F9A]'}>{d.dataValidade ? fmtDate(d.dataValidade) : '—'}</Td>

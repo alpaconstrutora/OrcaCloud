@@ -9,7 +9,7 @@ import PhotoGallery from '../investor/PhotoGallery';
 import {
     CardHeader, PortalCard, PortalEmpty, PortalTabs, StatusPill, Td, Th, fmtDate, type PillTone,
 } from '../portal/PortalKit';
-import type { CreditRoomVersion } from '../../types/creditRoom';
+import type { CreditRoomDocument, CreditRoomVersion } from '../../types/creditRoom';
 import type { SnapshotContrato, SnapshotEmpreendimentoItem } from '../../utils/creditRoomSnapshot';
 import { ROTULO_DO_OBJETIVO } from '../../utils/empreendimentoObjetivo';
 
@@ -101,6 +101,8 @@ function situacaoDe(c: SnapshotContrato, A: Paleta): Situacao {
 interface LinhaContrato extends SnapshotContrato {
     /** Nome do empreendimento do snapshot; `null` = contrato sem empreendimento (ou fora do snapshot). */
     empNome: string | null;
+    /** Documentos do Data Room ligados ao contrato; `null` = contrato sem `contract_id` (não há como ligar) ou coluna desligada. */
+    nDocs: number | null;
 }
 
 const COLUNAS: StandardTableColumn[] = [
@@ -117,13 +119,18 @@ const COLUNAS: StandardTableColumn[] = [
     { key: 'situacao', label: 'Situação', sortable: true, width: 170 },
 ];
 
+/** Só existe quando a tela passa `documentos`: sem a lista não há o que contar (e "0" mentiria). */
+const COLUNA_DOCUMENTOS: StandardTableColumn = { key: 'documentos', label: 'Documentos', sortable: true, width: 120, align: 'right' };
+
 const COLUNAS_MONETARIAS = new Set(['valor', 'parcela', 'saldo', 'vencido']);
+/** Alinhadas à direita: as monetárias e a contagem de documentos. */
+const COLUNAS_A_DIREITA = new Set([...COLUNAS_MONETARIAS, 'documentos']);
 /** Totais que, sem nada calculado, aparecem como "—" (a coluna de parcela, em seleção mista, fica em branco). */
 const TOTAIS_SEM_VALOR = new Set(['valor', 'saldo', 'vencido']);
 
 /** Colunas da tabela do painel de um empreendimento (o empreendimento e as datas já estão no contexto). */
-const COLUNAS_DO_PAINEL = ['rotulo', 'tipo', 'unidade', 'parcela', 'saldo', 'vencido', 'situacao'] as const;
-const ROTULO_DA_COLUNA: Record<string, string> = Object.fromEntries(COLUNAS.map(c => [c.key, c.label]));
+const COLUNAS_DO_PAINEL: readonly string[] = ['rotulo', 'tipo', 'unidade', 'parcela', 'saldo', 'vencido', 'situacao'];
+const ROTULO_DA_COLUNA: Record<string, string> = Object.fromEntries([...COLUNAS, COLUNA_DOCUMENTOS].map(c => [c.key, c.label]));
 
 const dataCelula = (acc: Accent, v: string | null) => (acc === 'portal' ? fmtDate(v) : formatDateBR(v));
 
@@ -137,6 +144,8 @@ function conteudo(key: string, c: LinhaContrato, acc: Accent, A: Paleta): React.
                 ? <span className="block max-w-[220px] truncate" title={c.empNome}>{c.empNome}</span>
                 : '—';
         case 'unidade': return c.unidade ?? '—';
+        // 0 é contagem real (nenhum documento ligado); "—" é contrato sem `contract_id`.
+        case 'documentos': return c.nDocs == null ? '—' : c.nDocs.toLocaleString('pt-BR');
         // Sem parcelas geradas a carteira grava 0: aqui é "não calculado", não zero.
         case 'valor': return c.tem_parcelas ? money(c.valor_contrato) : '—';
         // Parcela 0 = nada a vencer (venda quitada): não há parcela, não R$ 0,00.
@@ -162,6 +171,7 @@ function ordenavel(key: string, c: LinhaContrato): string | number | null {
         case 'tipo': return TIPO_PT[c.tipo] ?? c.tipo;
         case 'empreendimento': return c.empNome;
         case 'unidade': return c.unidade;
+        case 'documentos': return c.nDocs;
         case 'valor': return c.tem_parcelas ? c.valor_contrato : null;
         case 'parcela': return c.parcela_mensal > 0 ? c.parcela_mensal : null;
         case 'saldo': return c.tem_parcelas ? c.saldo_a_receber : null;
@@ -280,15 +290,15 @@ const CartaoEmpreendimento: React.FC<{ acc: Accent; e: SnapshotEmpreendimentoIte
 };
 
 /** Tabela compacta dos contratos de UM empreendimento, dentro do painel (§6.9: `px-3`, não `px-6`). */
-const TabelaDoPainel: React.FC<{ acc: Accent; linhas: LinhaContrato[] }> = ({ acc, linhas }) => {
+const TabelaDoPainel: React.FC<{ acc: Accent; linhas: LinhaContrato[]; colunas: readonly string[] }> = ({ acc, linhas, colunas }) => {
     const A = ACCENTS[acc];
     return (
         <div className={`overflow-x-auto rounded-[10px] border ${A.linha}`}>
             <table className="w-full text-left border-collapse" aria-label="Contratos do empreendimento">
                 <thead>
                     <tr className={`border-b ${A.cab}`}>
-                        {COLUNAS_DO_PAINEL.map(k => {
-                            const dir = COLUNAS_MONETARIAS.has(k) ? 'text-right' : 'text-left';
+                        {colunas.map(k => {
+                            const dir = COLUNAS_A_DIREITA.has(k) ? 'text-right' : 'text-left';
                             return acc === 'portal' ? (
                                 <Th key={k} className={dir}>{ROTULO_DA_COLUNA[k]}</Th>
                             ) : (
@@ -300,8 +310,8 @@ const TabelaDoPainel: React.FC<{ acc: Accent; linhas: LinhaContrato[] }> = ({ ac
                 <tbody className={`divide-y ${A.divide}`}>
                     {linhas.map(c => (
                         <tr key={c.rotulo}>
-                            {COLUNAS_DO_PAINEL.map(k => {
-                                const dir = COLUNAS_MONETARIAS.has(k) ? 'text-right' : '';
+                            {colunas.map(k => {
+                                const dir = COLUNAS_A_DIREITA.has(k) ? 'text-right' : '';
                                 return acc === 'portal' ? (
                                     <Td key={k} className={`tabular-nums whitespace-nowrap ${dir}`}>{conteudo(k, c, acc, A)}</Td>
                                 ) : (
@@ -321,9 +331,15 @@ const TabelaDoPainel: React.FC<{ acc: Accent; linhas: LinhaContrato[] }> = ({ ac
 interface Props {
     version: CreditRoomVersion;
     accent?: Accent;
+    /**
+     * Documentos do Data Room. Quando vem, a carteira ganha a coluna "Documentos"
+     * (quantos documentos de cada contrato já estão compartilhados); sem a prop a
+     * coluna não aparece.
+     */
+    documentos?: CreditRoomDocument[];
 }
 
-const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo' }) => {
+const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo', documentos }) => {
     const A = ACCENTS[accent];
     const s = version.snapshot;
     const empreendimentos = s.empreendimentos ?? null;
@@ -332,10 +348,22 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
     const [tipo, setTipo] = usePersistedState<FiltroTipo>('creditRoom:contratos:tipo', '');
     const [aberto, setAberto] = React.useState<string | null>(null);
 
+    const comDocumentos = documentos != null;
+    const colunas = React.useMemo(() => (comDocumentos ? [...COLUNAS, COLUNA_DOCUMENTOS] : COLUNAS), [comDocumentos]);
+    const colunasDoPainel = React.useMemo(() => (comDocumentos ? [...COLUNAS_DO_PAINEL, 'documentos'] : COLUNAS_DO_PAINEL), [comDocumentos]);
+
     const todos = React.useMemo<LinhaContrato[]>(() => {
         const porId = new Map((empreendimentos ?? []).map(e => [e.id, e.nome]));
-        return (contratos ?? []).map(c => ({ ...c, empNome: (c.empreendimento_id && porId.get(c.empreendimento_id)) || null }));
-    }, [empreendimentos, contratos]);
+        const porContrato = new Map<string, number>();
+        for (const d of documentos ?? []) {
+            if (d.contractId) porContrato.set(d.contractId, (porContrato.get(d.contractId) ?? 0) + 1);
+        }
+        return (contratos ?? []).map(c => ({
+            ...c,
+            empNome: (c.empreendimento_id && porId.get(c.empreendimento_id)) || null,
+            nDocs: comDocumentos && c.contract_id ? (porContrato.get(c.contract_id) ?? 0) : null,
+        }));
+    }, [empreendimentos, contratos, documentos, comDocumentos]);
 
     const nVendas = React.useMemo(() => todos.filter(c => c.tipo === 'VENDA').length, [todos]);
     const nLocacoes = todos.length - nVendas;
@@ -414,14 +442,14 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
                             <table className="w-full min-w-[1100px]" aria-label="Contratos da carteira">
                                 <thead>
                                     <tr className={`border-b ${A.cab}`}>
-                                        {COLUNAS.map(c => <Th key={c.key} className={COLUNAS_MONETARIAS.has(c.key) ? 'text-right' : ''}>{c.label}</Th>)}
+                                        {colunas.map(c => <Th key={c.key} className={COLUNAS_A_DIREITA.has(c.key) ? 'text-right' : ''}>{c.label}</Th>)}
                                     </tr>
                                 </thead>
                                 <tbody className={`divide-y ${A.divide}`}>
                                     {linhas.map(c => (
                                         <tr key={c.rotulo}>
-                                            {COLUNAS.map(col => (
-                                                <Td key={col.key} className={`tabular-nums whitespace-nowrap ${COLUNAS_MONETARIAS.has(col.key) ? 'text-right' : ''}`}>
+                                            {colunas.map(col => (
+                                                <Td key={col.key} className={`tabular-nums whitespace-nowrap ${COLUNAS_A_DIREITA.has(col.key) ? 'text-right' : ''}`}>
                                                     {conteudo(col.key, c, accent, A)}
                                                 </Td>
                                             ))}
@@ -430,10 +458,10 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
                                 </tbody>
                                 <tfoot>
                                     <tr className={`border-t-2 ${A.linha}`}>
-                                        {COLUNAS.map(col => {
+                                        {colunas.map(col => {
                                             const total = totalDa(col.key, linhas);
                                             return (
-                                                <Td key={col.key} className={`tabular-nums whitespace-nowrap font-medium ${A.valor} ${COLUNAS_MONETARIAS.has(col.key) ? 'text-right' : ''}`}>
+                                                <Td key={col.key} className={`tabular-nums whitespace-nowrap font-medium ${A.valor} ${COLUNAS_A_DIREITA.has(col.key) ? 'text-right' : ''}`}>
                                                     {col.key === 'rotulo' ? 'Total' : total != null ? money(total) : TOTAIS_SEM_VALOR.has(col.key) ? '—' : ''}
                                                 </Td>
                                             );
@@ -446,7 +474,7 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
                 ) : (
                     <StandardTable<LinhaContrato>
                         storageKey="creditRoom:contratos"
-                        columns={COLUNAS}
+                        columns={colunas}
                         rows={linhas}
                         rowKey={c => c.rotulo}
                         searchText={c => `${c.rotulo} ${c.unidade ?? ''} ${c.empNome ?? ''}`}
@@ -494,7 +522,7 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
                     <section aria-labelledby="emp-contratos" className="space-y-3">
                         <h3 id="emp-contratos" className={A.secao}>Contratos deste empreendimento</h3>
                         {doSelecionado.length > 0
-                            ? <TabelaDoPainel acc={accent} linhas={doSelecionado} />
+                            ? <TabelaDoPainel acc={accent} linhas={doSelecionado} colunas={colunasDoPainel} />
                             : <p className={A.nota}>Nenhum contrato desta versão está ligado a este empreendimento.</p>}
                     </section>
                 </SheetPanel>

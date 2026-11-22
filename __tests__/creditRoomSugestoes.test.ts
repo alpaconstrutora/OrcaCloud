@@ -16,6 +16,17 @@ const doc = (id: string, origem: OrigemSugestao, extra: Partial<DocumentoSugerid
 });
 
 describe('agruparSugestoes', () => {
+    it('preserva temDadosDoCliente: o contrato assinado fica no grupo CONTRATO, marcado, com a marca para a tela avisar', () => {
+        const g = agruparSugestoes([
+            doc('a', 'CONTRATO', { temDadosDoCliente: true }),
+            doc('a', 'CLIENTE', { temDadosDoCliente: true }), // mesmo documento, 2ª origem: o grupo CONTRATO vence
+            doc('b', 'CONTRATO'),
+        ]);
+        expect(g.map(x => x.origem)).toEqual(['CONTRATO']);
+        expect(g[0].marcadoPorPadrao).toBe(true);
+        expect(g[0].itens.map(i => i.temDadosDoCliente)).toEqual([true, undefined]);
+    });
+
     it('ordena os grupos CONTRATO, EMPREENDIMENTO, OBRA, CLIENTE', () => {
         const g = agruparSugestoes([
             doc('d', 'CLIENTE'), doc('c', 'OBRA'), doc('b', 'EMPREENDIMENTO'), doc('a', 'CONTRATO'),

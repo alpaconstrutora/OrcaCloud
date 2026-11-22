@@ -24,6 +24,8 @@ export interface DocumentoSugerido {
     referencia: string;
     vencido: boolean;
     jaCompartilhado: boolean;
+    /** O documento tem vínculo com um cliente (ex.: contrato assinado): a tela avisa "contém dados do cliente". */
+    temDadosDoCliente?: boolean;
 }
 
 export interface GrupoDeSugestoes {

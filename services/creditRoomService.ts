@@ -1988,6 +1988,8 @@ export const creditRoomService = {
                 referencia,
                 vencido: estaVencido(l.data_validade, hoje),
                 jaCompartilhado: jaNoDataRoom.has(l.id),
+                // Ex.: contrato assinado (vínculo de contrato E de cliente): fica no grupo do contrato, mas avisa.
+                ...(l.client_id ? { temDadosDoCliente: true } : {}),
             });
 
             const sugeridos: DocumentoSugerido[] = [

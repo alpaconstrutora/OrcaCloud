@@ -5,9 +5,10 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { usePersistedState } from '../ui/TableUtils';
 import { useConfirm } from '../ui/confirm';
 import ActionIconButton from '../ui/ActionIconButton';
-import { formatDateBR, formatDateTimeBR } from '../ui/Format';
+import { formatDateBR, formatDateTimeBR, formatMoney } from '../ui/Format';
 import { errorMessage } from '../../hooks/useOrgContext';
-import { creditRoomService } from '../../services/creditRoomService';
+import { creditRoomService, type VersaoPreparada } from '../../services/creditRoomService';
+import { ALERTA_PT, resumoDaCapacidade } from '../../utils/creditCapacity';
 import {
     CREDIT_ROOM_ACTION_PT,
     CREDIT_ROOM_STATUS_PT,
@@ -23,6 +24,8 @@ import {
     type CreditRoomVersion,
 } from '../../types/creditRoom';
 import CreditRoomIndicators from './CreditRoomIndicators';
+import CreditRoomCapacity from './CreditRoomCapacity';
+import CreditRoomEmpreendimentos from './CreditRoomEmpreendimentos';
 import CreditRoomRequests, { CreditRoomCommentsThread } from './CreditRoomRequests';
 import CreditRoomCovenants from './CreditRoomCovenants';
 import CreditRoomFunding from './CreditRoomFunding';
@@ -34,10 +37,12 @@ import { CreditRoomStatusBadge } from './CreditRoomModule';
  * Plano: docs/planos/2026-09-07-portal-credito-credit-room.md (item 6)
  */
 
-type Aba = 'visao' | 'fontesusos' | 'versoes' | 'dataroom' | 'participantes' | 'solicitacoes' | 'covenants' | 'desembolsos' | 'comentarios' | 'auditoria';
+type Aba = 'visao' | 'capacidade' | 'empreendimentos' | 'fontesusos' | 'versoes' | 'dataroom' | 'participantes' | 'solicitacoes' | 'covenants' | 'desembolsos' | 'comentarios' | 'auditoria';
 
 const ABAS: { id: Aba; label: string }[] = [
     { id: 'visao', label: 'Visão' },
+    { id: 'capacidade', label: 'Capacidade de pagamento' },
+    { id: 'empreendimentos', label: 'Empreendimentos e contratos' },
     { id: 'fontesusos', label: 'Fontes e Usos' },
     { id: 'versoes', label: 'Versões' },
     { id: 'dataroom', label: 'Data Room' },
@@ -52,6 +57,8 @@ const ABAS: { id: Aba; label: string }[] = [
 // §19.1: o h1 muda junto com a aba.
 const ABA_SUBTITULO: Record<Aba, string> = {
     visao: 'Os indicadores da versão ativa — o que a instituição financeira vê.',
+    capacidade: 'Quanto a carteira consegue pagar por mês, o DSCR e o valor máximo financiável — sobre a versão ativa.',
+    empreendimentos: 'Os empreendimentos e contratos que sustentam a renda da versão ativa, sem nome de cliente.',
     fontesusos: 'De onde vem o dinheiro e para onde vai. O banco checa se as duas somas fecham.',
     versoes: 'Snapshots congelados da operação. Cada um preserva a posição da data em que foi apresentado (R2).',
     dataroom: 'Documentos do GED compartilhados com este Credit Room. Compartilhe pelo botão do próprio GED.',
@@ -274,10 +281,12 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
 
             {erro && <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded-[10px] px-4 py-3">{erro}</div>}
 
-            {/* ── Visão ── */}
-            {aba === 'visao' && (
+            {/* ── Visão · Capacidade · Empreendimentos (mesma versão ativa) ── */}
+            {(aba === 'visao' || aba === 'capacidade' || aba === 'empreendimentos') && (
                 ativa ? (
-                    <CreditRoomIndicators version={ativa} accent="indigo" />
+                    aba === 'visao' ? <CreditRoomIndicators version={ativa} accent="indigo" />
+                        : aba === 'capacidade' ? <CreditRoomCapacity version={ativa} accent="indigo" />
+                            : <CreditRoomEmpreendimentos version={ativa} accent="indigo" />
                 ) : (
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm text-center py-12">
                         <Camera className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -570,7 +579,24 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
 
 // ── Congelar versão ──────────────────────────────────────────────────────────
 
-const CongelarSheet: React.FC<{
+const BLOCOS_PT: { chave: string; nome: string }[] = [
+    { chave: 'obra', nome: 'Obra' },
+    { chave: 'vendas', nome: 'Vendas' },
+    { chave: 'portfolio', nome: 'Carteira de imóveis' },
+    { chave: 'recebiveis', nome: 'Recebíveis' },
+    { chave: 'eac', nome: 'Estimativa ao término (EAC)' },
+    { chave: 'divida', nome: 'Dívida' },
+    { chave: 'escopo', nome: 'Escopo' },
+    { chave: 'empreendimentos', nome: 'Empreendimentos' },
+    { chave: 'contratos', nome: 'Contratos' },
+    { chave: 'capacidade', nome: 'Capacidade de pagamento' },
+    { chave: 'qualidade', nome: 'Qualidade da renda' },
+];
+
+const vezes = (v: number | null | undefined) =>
+    v == null ? '—' : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}×`;
+
+export const CongelarSheet: React.FC<{
     open: boolean;
     onClose: () => void;
     room: CreditRoom;
@@ -580,18 +606,53 @@ const CongelarSheet: React.FC<{
     const [label, setLabel] = React.useState('');
     const [notes, setNotes] = React.useState('');
     const [dataBase, setDataBase] = React.useState(new Date().toISOString().slice(0, 10));
+    const [preparada, setPreparada] = React.useState<VersaoPreparada | null>(null);
+    const [conferindo, setConferindo] = React.useState(false);
     const [congelando, setCongelando] = React.useState(false);
     const [erro, setErro] = React.useState<string | null>(null);
+    // Conferência em voo é descartada se a data-base mudar (ou o painel reabrir) antes de ela voltar.
+    const geracao = React.useRef(0);
 
     React.useEffect(() => {
-        if (open) { setLabel(''); setNotes(''); setDataBase(new Date().toISOString().slice(0, 10)); setErro(null); }
+        if (open) {
+            geracao.current += 1;
+            setLabel(''); setNotes(''); setDataBase(new Date().toISOString().slice(0, 10));
+            setPreparada(null); setConferindo(false); setCongelando(false); setErro(null);
+        }
     }, [open]);
 
+    const mudarDataBase = (v: string) => {
+        setDataBase(v);
+        // A versão preparada vale só para a data-base em que foi lida: trocar a data descarta a conferência.
+        geracao.current += 1;
+        setPreparada(null);
+        setConferindo(false);
+        setErro(null);
+    };
+
+    const conferir = async () => {
+        const minha = ++geracao.current;
+        setConferindo(true);
+        setPreparada(null);
+        setErro(null);
+        try {
+            const p = await creditRoomService.prepararVersao(room, dataBase);
+            if (minha !== geracao.current) return;
+            setPreparada(p);
+        } catch (e) {
+            if (minha !== geracao.current) return;
+            setErro(errorMessage(e, 'Não foi possível conferir a versão.'));
+        } finally {
+            if (minha === geracao.current) setConferindo(false);
+        }
+    };
+
     const congelar = async () => {
+        if (!preparada) return;
         setCongelando(true);
         setErro(null);
         try {
-            const v = await creditRoomService.freezeVersion(room, { label: label.trim() || undefined, notes: notes.trim() || undefined, dataBase });
+            const v = await creditRoomService.freezeVersion(room, { label: label.trim() || undefined, notes: notes.trim() || undefined, dataBase }, preparada);
             onFrozen(v);
             onClose();
         } catch (e) {
@@ -601,12 +662,22 @@ const CongelarSheet: React.FC<{
         }
     };
 
+    const snap = preparada?.snapshot ?? null;
+    const cap = snap?.capacidade ?? null;
+    const resumo = resumoDaCapacidade(cap);
+    const semDado = snap
+        ? BLOCOS_PT.filter(b => (snap as unknown as Record<string, unknown>)[b.chave] == null).map(b => b.nome)
+        : [];
+
+    const motivoConferir = !dataBase ? 'Informe a data-base para conferir' : conferindo ? 'Conferindo a versão...' : undefined;
+    const motivoCongelar = congelando ? 'Congelando a versão...' : !preparada ? 'Confira a versão antes de congelar' : undefined;
+
     return (
         <Sheet open={open} onClose={onClose} size="md">
             <SheetHeader onClose={onClose}>
                 <SheetTitle>Congelar versão V{proximo}</SheetTitle>
                 <SheetDescription>
-                    Lê a posição da dívida, os KPIs da obra, as vendas, o NOI e os documentos compartilhados AGORA e guarda tudo. Depois disso, o que mudar no ÒPURA não altera esta versão.
+                    Primeiro confira: o sistema lê a posição da dívida, os KPIs da obra, as vendas, o NOI e a capacidade de pagamento e mostra o que vai ser guardado, sem gravar nada. Depois, congele. O que mudar no ÒPURA depois disso não altera esta versão.
                 </SheetDescription>
             </SheetHeader>
             <SheetPanel className="px-6 py-5 space-y-4">
@@ -616,19 +687,93 @@ const CongelarSheet: React.FC<{
                 </div>
                 <div className="space-y-1.5">
                     <label className={rotulo}>Data-base</label>
-                    <input type="date" value={dataBase} onChange={e => setDataBase(e.target.value)} className={campo} />
+                    <input type="date" value={dataBase} onChange={e => mudarDataBase(e.target.value)} className={campo} />
                 </div>
                 <div className="space-y-1.5">
                     <label className={rotulo}>Notas</label>
                     <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" />
                 </div>
+
                 {erro && <p className="text-sm text-red-600">{erro}</p>}
+
+                {preparada && snap && (
+                    <section aria-label="Conferência da versão" className="rounded-[10px] border border-gray-100 bg-gray-50 p-4 space-y-4">
+                        <div>
+                            <h3 className="text-sm font-semibold text-gray-900">Conferência da data-base {formatDateBR(preparada.dataBase)}</h3>
+                            <p className="text-xs text-gray-500 mt-0.5">É isto que será guardado. Nada foi gravado ainda.</p>
+                        </div>
+
+                        {cap ? (
+                            <dl className="grid grid-cols-1 sm:grid-cols-3 gap-x-6 gap-y-4">
+                                <div className="space-y-1.5">
+                                    <dt className={rotulo}>Valor máximo</dt>
+                                    <dd className="text-sm font-medium text-gray-900">{formatMoney(cap.capacidade_maxima?.valor_maximo)}</dd>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <dt className={rotulo}>DSCR mínimo 12m</dt>
+                                    <dd className="text-sm font-medium text-gray-900">{vezes(resumo?.dscr_minimo_12m)}</dd>
+                                </div>
+                                <div className="space-y-1.5">
+                                    <dt className={rotulo}>Renda líquida média 12m</dt>
+                                    <dd className="text-sm font-medium text-gray-900">{formatMoney(resumo?.renda_liquida_media_12m)}</dd>
+                                </div>
+                            </dl>
+                        ) : (
+                            <p className="text-sm text-amber-700">
+                                A capacidade de pagamento não pôde ser calculada nesta data-base. A versão será congelada sem ela, e a aba Capacidade de pagamento ficará vazia.
+                            </p>
+                        )}
+
+                        {cap && (
+                            <div className="space-y-2">
+                                <h4 className={rotulo}>Alertas da carteira</h4>
+                                {cap.alertas.length === 0 ? (
+                                    <p className="text-sm text-gray-700">Carteira sem pendências de cadastro</p>
+                                ) : (
+                                    <ul className="space-y-3">
+                                        {cap.alertas.map(a => (
+                                            <li key={a.tipo}>
+                                                <p className="text-sm font-medium text-gray-900">
+                                                    {ALERTA_PT[a.tipo]?.titulo ?? a.tipo}
+                                                    <span className="font-normal text-gray-500"> · {a.qtd} {a.qtd === 1 ? 'item' : 'itens'} · {a.valor > 0 ? formatMoney(a.valor) : '—'}</span>
+                                                </p>
+                                                {ALERTA_PT[a.tipo] && <p className="text-xs text-gray-600 mt-0.5">{ALERTA_PT[a.tipo].comoResolver}</p>}
+                                            </li>
+                                        ))}
+                                    </ul>
+                                )}
+                            </div>
+                        )}
+
+                        <div className="space-y-1">
+                            <p className="text-sm text-gray-700">
+                                {semDado.length ? `Sem dado nesta versão: ${semDado.join(', ')}.` : 'Todos os blocos tiveram dado nesta versão.'}
+                            </p>
+                            {semDado.length > 0 && (
+                                <p className="text-xs text-gray-500">Um bloco pode estar ausente porque a operação não o usa (por exemplo, sem obra vinculada).</p>
+                            )}
+                        </div>
+                    </section>
+                )}
             </SheetPanel>
             <SheetFooter>
                 <button onClick={onClose} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">Cancelar</button>
-                <button onClick={() => void congelar()} disabled={congelando} className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
+                <button
+                    onClick={() => void conferir()}
+                    disabled={conferindo || congelando || !dataBase}
+                    title={motivoConferir}
+                    className="h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 rounded-[6px] transition-all disabled:opacity-50"
+                >
+                    {conferindo ? 'Conferindo…' : 'Conferir'}
+                </button>
+                <button
+                    onClick={() => void congelar()}
+                    disabled={!preparada || congelando || conferindo}
+                    title={motivoCongelar}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                >
                     <Snowflake className="w-[15px] h-[15px]" />
-                    {congelando ? 'Congelando...' : 'Congelar'}
+                    {congelando ? 'Congelando…' : 'Congelar'}
                 </button>
             </SheetFooter>
         </Sheet>

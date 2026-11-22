@@ -139,7 +139,7 @@ Em código:
 - `utils/informeDeRendimentos.ts` serve o PortalFiscal e o TaxReport. B5 seguiu a regra da declaração:
   rendimentos pagos no ano e custo = posição em 31/12, com a do ano anterior ao lado.
 
-**Fase C: 10 de 10 itens feitos** na frente `portal-investidor-fc`. Migration
+**Fase C: 10 de 10 — NO AR** (PR #639, squash 6295273; migration 999500 APLICADA e Edge Function `investor-monthly-reports` publicada em 21/11 com OK do usuário: 401 sem credencial; ensaio pela rotina gerou o PDF no servidor, 4,4 KB, sem gravar nada). Migration
 `aplicar_20271121999500_portal_investidor_fase_c.sql` e Edge Function nova `investor-monthly-reports`.
 - C1: rotina do dia 1º → `generate_monthly_investor_reports()` chama a Edge Function, que gera o PDF de cada
   investidor. O módulo `utils/relatorioMensalDoInvestidor.ts` é o mesmo do "Gerar Agora" e não importa nada (Deno).

@@ -12,7 +12,7 @@ import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 const svc = vi.hoisted(() => ({ versao: vi.fn(), docs: vi.fn() }));
 vi.mock('../../services/investorPortalTokenService', () => ({
-    investorPortalTokenService: { getVersaoPublicadaByToken: svc.versao, submitInterestByToken: vi.fn() },
+    investorPortalTokenService: { getVersaoPublicadaByToken: svc.versao, submitInterestByToken: vi.fn(), getObraDaOportunidadeByToken: () => Promise.resolve(null) },
 }));
 vi.mock('../../services/opportunityDocumentsService', async (orig) => ({
     ...(await orig<typeof import('../../services/opportunityDocumentsService')>()),

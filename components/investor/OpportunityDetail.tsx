@@ -31,7 +31,6 @@ interface Props {
     isAdmin?: boolean;
     uploadedBy?: string;
     investorProfile?: Investor | null;
-    portalToken?: string;
     onClose: () => void;
 }
 
@@ -43,7 +42,7 @@ const ROLES: InterestRole[] = ['investidor', 'arquiteto', 'engenheiro', 'projeti
 type PitchTab = 'pitch' | 'cenarios' | 'obra' | 'documentos' | 'interesses';
 type FormStep = 'view' | 'form' | 'success';
 
-const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdmin = false, uploadedBy, investorProfile, portalToken, onClose }) => {
+const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdmin = false, uploadedBy, investorProfile, onClose }) => {
     // Todos os números são os da versão do Imovib; local e obra, do empreendimento (plano
     // docs/planos/2026-11-21-imovib-oportunidades-consolidacao.md, Fase 2 — utils/oportunidadeNumerosDaVersao.ts).
     const op = React.useMemo(() => naVitrine(opportunity), [opportunity]);
@@ -76,9 +75,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
         let vivo = true;
         setLoadingStudy(true);
         setErroDoEstudo(null);
-        const versao = portalToken
-            ? investorPortalTokenService.getVersaoPublicadaByToken(portalToken, op.id!)
-            : op.imovib_version_id ? imovibService.versaoPublicada(op.imovib_version_id) : null;
+        // Só o gestor abre esta ficha: o investidor pelo link usa PortalOportunidadeDetalhe (Fase C10).
+        const versao = op.imovib_version_id ? imovibService.versaoPublicada(op.imovib_version_id) : null;
         const carga: Promise<void> = versao
             ? versao.then(vp => { if (vivo) { setVersaoPublicada(vp); setStudy(vp.study); } })
             : Promise.all([imovibService.getStudyById(op.imovib_study_id, true), imovibService.listarCenarios(op.imovib_study_id)])
@@ -87,20 +85,20 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
             .catch(err => { if (vivo) { setStudy(null); setVersaoPublicada(null); setErroDoEstudo((err as Error).message); } })
             .finally(() => { if (vivo) setLoadingStudy(false); });
         return () => { vivo = false; };
-    }, [op.imovib_study_id, op.imovib_version_id, portalToken]);
+    }, [op.imovib_study_id, op.imovib_version_id]);
 
     // Item 5.1 do plano 2026-11-21: o gestor vê se o estudo de hoje já não bate com a versão publicada.
     // Só no app (gestor): o investidor nunca recebe o estudo vivo.
     const [diferencas, setDiferencas] = React.useState<DiferencaDaVersao[]>([]);
     React.useEffect(() => {
         const ind = versaoPublicada?.calculo?.indicadores;
-        if (portalToken || !isAdmin || !ind || !op.imovib_study_id) { setDiferencas([]); return; }
+        if (!isAdmin || !ind || !op.imovib_study_id) { setDiferencas([]); return; }
         let vivo = true;
         imovibService.getStudyById(op.imovib_study_id, true)
             .then(atual => { if (vivo && atual) setDiferencas(diferencasDaVersaoPublicada({ vgv: ind.vgv, vpl: ind.vpl, tirAnual: ind.tirAnual, exposicaoMaxima: ind.exposicaoMaxima }, resultadosDoEstudo(atual))); })
             .catch(err => console.error('Erro ao comparar a versão com o estudo atual', err));
         return () => { vivo = false; };
-    }, [versaoPublicada, portalToken, isAdmin, op.imovib_study_id]);
+    }, [versaoPublicada, isAdmin, op.imovib_study_id]);
 
     // Ficha técnica: a seção Produto CONGELADA na versão (nada se recalcula aqui).
     const produto = versaoPublicada?.calculo?.secoes?.find(x => x.id === 'produto') ?? null;
@@ -123,23 +121,11 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
         if (!interest.contact_name.trim()) return;
         setSaving(true);
         try {
-            if (portalToken) {
-                await investorPortalTokenService.submitInterestByToken(portalToken, {
-                    opportunityId: op.id!,
-                    name: interest.contact_name,
-                    email: interest.contact_email,
-                    phone: interest.contact_phone,
-                    role: interest.role,
-                    message: interest.message,
-                    valor: interest.valor_pretendido,
-                });
-            } else {
-                await investorPortalService.addInterest({
-                    organization_id: organizationId,
-                    opportunity_id: op.id!,
-                    ...interest,
-                });
-            }
+            await investorPortalService.addInterest({
+                organization_id: organizationId,
+                opportunity_id: op.id!,
+                ...interest,
+            });
             setFormStep('success');
         } catch (err) {
             console.error('Erro ao registrar interesse', err);
@@ -375,7 +361,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                 {/* ── ABA: Detalhes ── */}
                                 {pitchTab === 'pitch' && (
                                     <div className="space-y-8">
-                                        {isAdmin && !portalToken && (
+                                        {isAdmin && (
                                             <p className="rounded-[10px] bg-slate-50 border border-slate-200 px-3 py-2 text-sm text-slate-600">
                                                 Due diligence, riscos, modelos de aquisição e comitê ficam no estudo de viabilidade
                                                 {study ? <> (<span className="font-medium text-slate-800">{study.name}</span>: abas Premissas › Terreno, Sensibilidade e Risco e Comitê)</> : ': vincule um estudo em Editar'}.
@@ -420,8 +406,8 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                                 versaoPublicada={versaoPublicada}
                                                 study={study}
                                                 cenarios={versaoPublicada?.cenarios ?? cenariosAoVivo}
-                                                accent={portalToken ? 'portal' : 'indigo'}
-                                                aviso={!versaoPublicada && !portalToken ? (
+                                                accent="indigo"
+                                                aviso={!versaoPublicada ? (
                                                     <p className="rounded-[10px] bg-amber-50 border border-amber-200 px-3 py-2 text-sm text-amber-800">
                                                         Prévia do estudo atual. O investidor só vê uma versão congelada: escolha-a em Editar antes de publicar.
                                                     </p>
@@ -486,7 +472,6 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
                                         organizationId={organizationId}
                                         isAdmin={isAdmin}
                                         uploadedBy={uploadedBy}
-                                        portalToken={portalToken}
                                     />
                                 )}
 

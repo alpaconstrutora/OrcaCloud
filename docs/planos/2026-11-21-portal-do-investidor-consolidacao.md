@@ -165,7 +165,7 @@ Em código:
   - o recurso do gráfico pelo diário × valor de obra digitado (contrariava a D2);
   - `fn_investor_portal_get_milestones`, sem chamador (DROP).
 
-**Fase D: 3 de 3 itens feitos** na frente `portal-investidor-fd`, empilhada na C. Migration
+**Fase D: 3 de 3 — NO AR** (PR #641, squash 7ed1ec4; migration 999800 APLICADA em 21/11 com OK do usuário). Migration
 `aplicar_20271121999800_portal_investidor_fase_d.sql`. Ensaio (migration + prova, desfeito):
 - D2: R$ 1.000 entre 33,33% e 66,67% deu 333,30 + 666,70 (soma exata); a SPE sem obra é recusada com o motivo.
 - D3: relatórios e comunicados de todas as orgs do investidor, com `organization_name`.
@@ -176,7 +176,22 @@ Em código:
 - D3: Comunicados e Documentos mostram a org quando há mais de uma.
 - D1: aba "Acompanhamento" no detalhe da oportunidade do portal (`utils/acompanhamentoDoInvestidor.ts`).
 
-**Fase E: 2 de 3 análises feitas** (E2 e E3; a E1 roda depois das migrations C e D aplicadas).
+**Fase E: 3 de 3 análises feitas.**
+
+E1 — ciclo de vida, no banco (transação desfeita, 21/11, com as Fases A–D aplicadas):
+- Interesse pelo link: lead, R$ 200 mil.
+- Tornar sócio: 20 cotas, 20%.
+- Chamada de R$ 200 mil, paga em 10/03/2026: vira aporte liquidado no extrato; chamado e integralizado do sócio
+  ficam em 200 mil.
+- Distribuição de R$ 50 mil em 30/09/2026 pela SPE: lançamento liquidado no extrato.
+- O resumo do link traz a obra da SPE.
+- A vitrine mostra a captação: chamado e integralizado de 200 mil, com SPE.
+
+As telas com esses dados exatos (`__tests__/cicloDoInvestidor.test.ts`, regressão do ciclo):
+- Carteira: 20%, aportado 200 mil, recebido 50 mil, patrimônio 200 mil "integralizado (sem versão)".
+- Resumo: retorno total 25% e em caixa 25%.
+- Fiscal 2026: custo 200 mil, rendimentos 50 mil; 2025 vazio.
+**Nenhuma divergência entre banco e tela.**
 
 E2 — informe de rendimentos: o que falta para o padrão da declaração. Fontes consultadas em 21/11: perguntas e
 respostas IRPF da Receita; ficha de rendimentos isentos, código 09 para lucros e dividendos, isenção do art. 10 da
@@ -202,4 +217,11 @@ fornecedor, corretor, investidor) e a perna "pelo e-mail" de `fn_investor_get_es
 Isso só é seguro com "Confirm email" ligado.
 → **Pendência do usuário:** conferir em Supabase › Authentication › Providers › Email que "Confirm email" está
 ligado (e se o cadastro aberto, "Allow new users to sign up", precisa estar).
+
+### Pendências do plano (21/11)
+| # | Pendência | Quem | Situação |
+|---|---|---|---|
+| PE1 | Conferir "Confirm email" ligado no Auth (o login por e-mail de todos os portais depende disso) | usuário, painel do Supabase | ⏳ (ver E3) |
+| PE2 | Decidir com o contador a natureza de "distribuição" (isenta × devolução de capital) e o campo de IR retido (Lei 15.270/2025) | usuário | ⏳ (ver E2; itens 1, 2 e 4 da E2 cabem sem decisão fiscal) |
+| PE3 | Roteiro de tela do portal no navegador (junto do P2 do plano Imovib × Oportunidades) | usuário faz o login; eu conduzo | ⏳ |
 

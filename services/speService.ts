@@ -32,12 +32,14 @@ const PARTNER_COLS = 'id, spe_entity_id, investor_id, quota_count, ownership_pct
 export const speService = {
     // ─── SPE Entities ─────────────────────────────────────────────────────────
 
-    async list(organizationId: string): Promise<SpeEntity[]> {
-        const { data, error } = await supabase
+    /** `null` = topo em "Todas": todas as SPEs que a RLS deixa ver (REGRA #5). */
+    async list(organizationId?: string | null): Promise<SpeEntity[]> {
+        let q = supabase
             .from('spe_entities')
             .select(SPE_COLS)
-            .eq('organization_id', organizationId)
             .order('created_at', { ascending: false });
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const { data, error } = await q;
         if (error) throw error;
         return (data ?? []) as SpeEntity[];
     },

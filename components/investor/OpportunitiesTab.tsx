@@ -19,7 +19,8 @@ interface Props {
     opportunities: InvestorOpportunity[];
     isAdmin: boolean;
     viewMode: 'grid' | 'list';
-    organizationId?: string;
+    /** A org do topo; `null` = "Todas" (REGRA #5). Só filtra leitura: criar e editar usam a org resolvida. */
+    organizationId?: string | null;
     investorProfile?: Investor | null;
     onViewModeChange: (mode: 'grid' | 'list') => void;
     onDelete: (id: string) => void;
@@ -49,10 +50,11 @@ const OpportunitiesTab: React.FC<Props> = ({
     const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
 
 
-    // Em "Todas as organizações" não há org selecionada: editar usa a org da própria
-    // oportunidade; criar do zero resolve via effectiveOrganizationId/handleNew.
+    // Criar: a org resolvida em handleNew (o topo, ou a escolhida no modal com o topo em "Todas").
+    // Editar: a org da PRÓPRIA oportunidade. Nunca a prop: em 22/11/2026 ela vinha com a org da obra
+    // carregada e passava por cima da escolhida no modal (plano 2026-11-22-investidor-org-do-topo).
     const editingOrganizationId =
-        organizationId || (editing && editing !== 'new' ? editing.organization_id : createOrgId);
+        editing === 'new' ? createOrgId : editing?.organization_id;
 
     const handleNew = async () => {
         const target = await resolveWriteOrg('single');
@@ -524,7 +526,7 @@ const OpportunitiesTab: React.FC<Props> = ({
             {detail && (
                 <OpportunityDetail
                     opportunity={detail}
-                    organizationId={organizationId || detail.organization_id}
+                    organizationId={detail.organization_id}
                     isAdmin={isAdmin}
                     investorProfile={investorProfile}
                     onClose={() => setDetail(null)}

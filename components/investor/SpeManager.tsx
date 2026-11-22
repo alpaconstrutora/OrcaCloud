@@ -3,18 +3,19 @@ import { opportunityProjectService } from '../../services/opportunityProjectServ
 import { Building2, Plus, Users, ChevronDown, ChevronUp, AlertCircle } from 'lucide-react';
 import { formatCurrency } from '../../utils/financialMath';
 import { speService, SpeEntity, SpePartner } from '../../services/speService';
-import { investorService, Investor } from '../../services/investorService';
+import { investorService, Investor, investidorVisivelNaOrg } from '../../services/investorService';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
-import { errorMessage } from '../../hooks/useOrgContext';
+import { errorMessage, useOrgWriteTarget } from '../../hooks/useOrgContext';
 import CapitalCallPanel from './CapitalCallPanel';
 import DistribuirResultadoPanel from './DistribuirResultadoPanel';
 
 interface Props {
-    organizationId: string;
+    /** A org do topo; `null` = "Todas" (lista as SPEs de todas; "Nova SPE" pergunta a org). REGRA #5. */
+    organizationId: string | null;
     isAdmin?: boolean;
     userEmail?: string;
 }
@@ -46,13 +47,17 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
     const [expanded, setExpanded] = React.useState<string | null>(null);
     const [partners, setPartners] = React.useState<Record<string, SpePartner[]>>({});
     const [showNewEntity, setShowNewEntity] = React.useState(false);
-    const [entityForm, setEntityForm] = React.useState(emptyEntity(organizationId));
+    const [entityForm, setEntityForm] = React.useState(emptyEntity(organizationId ?? ''));
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     // Fase 4 do plano 2026-11-21-imovib-oportunidades-consolidacao: a SPE grava a obra dela (o portal
     // mostra o nome da obra da SPE; antes o campo existia no banco e a tela nunca o preenchia).
+    // As obras são as da org DA SPE que está sendo criada (com o topo em "Todas", a escolhida no modal).
+    const orgDaNovaSpe = entityForm.organization_id;
     const [obras, setObras] = React.useState<{ id: string; name: string }[]>([]);
     React.useEffect(() => {
-        opportunityProjectService.listForOrg(organizationId).then(setObras).catch(err => console.error('Erro ao carregar as obras', err));
-    }, [organizationId]);
+        if (!orgDaNovaSpe) { setObras([]); return; }
+        opportunityProjectService.listForOrg(orgDaNovaSpe).then(setObras).catch(err => console.error('Erro ao carregar as obras', err));
+    }, [orgDaNovaSpe]);
     const [savingEntity, setSavingEntity] = React.useState(false);
     // partner add form per SPE
     const [partnerForm, setPartnerForm] = React.useState<Record<string, { investor_id: string; ownership_pct: number; capital_calls_total: number }>>({});
@@ -62,7 +67,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
         setLoadError(null);
         Promise.all([
             speService.list(organizationId),
-            investorService.listInvestors(organizationId),
+            investorService.listInvestors(organizationId ?? undefined),
         ]).then(([spes, invs]) => {
             setEntities(spes);
             setInvestors(invs);
@@ -97,7 +102,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
         try {
             const saved = await speService.save(entityForm as SpeEntity);
             setEntities(prev => [saved, ...prev]);
-            setEntityForm(emptyEntity(organizationId));
+            setEntityForm(emptyEntity(organizationId ?? ''));
             setShowNewEntity(false);
         } catch (err) {
             console.error('Error saving SPE', err);
@@ -159,11 +164,19 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
 
     return (
         <div className="space-y-6">
+            {orgTargetModal}
             <div className="flex items-center justify-between">
                 <h3 className="text-xl font-bold text-gray-900">Gestão de SPEs</h3>
                 {isAdmin && (
                     <Button
-                        onClick={() => setShowNewEntity(v => !v)}
+                        onClick={async () => {
+                            if (showNewEntity) { setShowNewEntity(false); return; }
+                            // Topo numa org: ela, sem perguntar. Em "Todas": pergunta (a SPE é de UMA org).
+                            const target = await resolveWriteOrg('single');
+                            if (!target || target.kind !== 'org') return;
+                            setEntityForm(emptyEntity(target.orgId));
+                            setShowNewEntity(true);
+                        }}
                         className="flex items-center gap-2 rounded-xl text-button"
                     >
                         <Plus className="w-4 h-4" /> Nova SPE
@@ -309,7 +322,8 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                                         className="px-2 py-1.5 border border-gray-200 rounded-lg text-form-input focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-40"
                                                     >
                                                         <option value="">Selecione...</option>
-                                                        {investors.map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
+                                                        {/* Sócio = investidor da org DA SPE (dono ou compartilhado com ela). */}
+                                                        {investors.filter(i => investidorVisivelNaOrg(i, entity.organization_id)).map(i => <option key={i.id} value={i.id}>{i.name}</option>)}
                                                     </select>
                                                 </label>
                                                 <label className="flex flex-col gap-1">
@@ -339,7 +353,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
 
                                         {pts.length > 0 && (
                                             <CapitalCallPanel
-                                                organizationId={organizationId}
+                                                organizationId={entity.organization_id}
                                                 speEntityId={entity.id!}
                                                 partners={pts}
                                                 isAdmin={isAdmin}

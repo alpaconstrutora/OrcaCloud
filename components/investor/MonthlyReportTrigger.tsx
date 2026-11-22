@@ -4,11 +4,13 @@ import { supabase } from '../../lib/supabase';
 import { investorPortalService, InvestorReport } from '../../services/investorPortalService';
 import { generateMonthlyReportPdf } from '../../services/pdfReportService';
 import { investorService } from '../../services/investorService';
+import { useOrgWriteTarget } from '../../hooks/useOrgContext';
 import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
 import Button from '../ui/Button';
 
 interface Props {
-    organizationId: string;
+    /** A org do topo; `null` = "Todas": lista os relatórios de todas e "Gerar" pergunta a org. REGRA #5. */
+    organizationId: string | null;
 }
 
 type GenStep = 'idle' | 'inserting' | 'generating' | 'uploading' | 'done' | 'error';
@@ -22,7 +24,8 @@ const STEP_LABELS: Record<GenStep, string> = {
     error:      '',
 };
 
-const MonthlyReportTrigger: React.FC<Props> = ({ organizationId }) => {
+const MonthlyReportTrigger: React.FC<Props> = ({ organizationId: orgDoTopo }) => {
+    const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const [recent, setRecent]       = React.useState<InvestorReport[]>([]);
     const [loading, setLoading]     = React.useState(true);
     const [step, setStep]           = React.useState<GenStep>('idle');
@@ -32,24 +35,29 @@ const MonthlyReportTrigger: React.FC<Props> = ({ organizationId }) => {
     const loadRecent = React.useCallback(() => {
         (async () => {
             try {
-                const { data } = await supabase
+                let q = supabase
                     .from('investor_reports')
                     .select('id, name, report_date, url, created_at')
-                    .eq('organization_id', organizationId)
                     .ilike('name', 'Relatório Mensal%')
                     .order('created_at', { ascending: false })
                     .limit(5);
+                if (orgDoTopo) q = q.eq('organization_id', orgDoTopo);
+                const { data } = await q;
                 setRecent((data ?? []) as InvestorReport[]);
             } catch { /* silently ignore */ } finally {
                 setLoading(false);
             }
         })();
-    }, [organizationId]);
+    }, [orgDoTopo]);
 
     React.useEffect(() => { loadRecent(); }, [loadRecent]);
 
     const handleTrigger = async () => {
         if (step !== 'idle' && step !== 'done' && step !== 'error') return;
+        // O relatório é de UMA org: o topo, ou a escolhida no modal com o topo em "Todas".
+        const target = await resolveWriteOrg('single');
+        if (!target || target.kind !== 'org') return;
+        const organizationId = target.orgId;
         setLastMsg(null);
         setLastError(null);
 
@@ -110,6 +118,7 @@ const MonthlyReportTrigger: React.FC<Props> = ({ organizationId }) => {
 
     return (
         <div className="space-y-6">
+            {orgTargetModal}
             <div className="flex items-center justify-between">
                 <div>
                     <h3 className="text-xl font-bold text-gray-900">Relatórios Mensais Automáticos</h3>

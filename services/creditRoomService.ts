@@ -825,6 +825,13 @@ export interface VersaoPreparada {
     dataBase: string;
     snapshot: CreditRoomSnapshot;
     indicators: CreditRoomIndicators;
+    /**
+     * O `servico_novo` da série foi SIMULADO com `buildSchedule` (sem proposta, ou
+     * proposta sem cronograma)? `false` quando veio do cronograma real da proposta
+     * ou quando ela já está na curva (então `servico_novo` = {}). É o que decide se
+     * `simularParametros` pode refazê-lo.
+     */
+    servicoNovoSimulado: boolean;
 }
 
 export const creditRoomService = {
@@ -966,7 +973,7 @@ export const creditRoomService = {
 
         const [
             [obra, unidades, empreendimento, portfolio, recebiveis, novoServico12mDaProposta, documentos, eac],
-            [escopo, titulos, locacoes, servicoPorOrg, portfoliosDoGrupo, servicoNovoDaProposta, despesasFiltradas, propostaNaCurva],
+            [escopo, titulos, locacoes, servicoPorOrg, portfoliosDoGrupo, servicoNovoColetado, despesasFiltradas, propostaNaCurva],
         ] = await Promise.all([
             Promise.all([
                 this.coletarObra(orgId, room.projectId),
@@ -997,7 +1004,9 @@ export const creditRoomService = {
         // Proposta já ativa: as parcelas dela já estão em `fn_debt_schedule_curve`
         // (serviço ATUAL). Contá-las de novo como serviço novo seria 2×.
         const novoServico12m = propostaNaCurva === true ? null : novoServico12mDaProposta;
-        const servicoNovo = propostaNaCurva === true ? {} : servicoNovoDaProposta;
+        const servicoNovo = propostaNaCurva === true ? {} : servicoNovoColetado.porMes;
+        // Proposta já na curva: servico_novo = {} e a parcela está em servico_atual — nada simulado.
+        const servicoNovoSimulado = propostaNaCurva === true ? false : servicoNovoColetado.simulado;
 
         // Com filtro de empreendimentos, título e locação SEM empreendimento não
         // entram na renda nem na carteira — só no alerta TITULO_SEM_EMPREENDIMENTO.
@@ -1123,7 +1132,7 @@ export const creditRoomService = {
             qualidade,
         });
         const indicators = computeIndicators(snapshot);
-        return { roomId: room.id, dataBase, snapshot, indicators };
+        return { roomId: room.id, dataBase, snapshot, indicators, servicoNovoSimulado };
     },
 
     /**
@@ -1675,12 +1684,14 @@ export const creditRoomService = {
     },
 
     /**
-     * Serviço da dívida NOVA mês a mês. Com proposta vinculada, o cronograma
+     * Serviço da dívida NOVA mês a mês (`simulado` = veio de `buildSchedule`, não do cronograma real). Com proposta vinculada, o cronograma
      * dela (VIGENTE, senão CONTRATUAL); sem proposta (ou sem cronograma), a
      * simulação por `buildSchedule` com o valor pedido, prazo/carência do room
      * quando preenchidos e 1º vencimento no dia 1 do mês seguinte ao da data-base (1º mês da série).
      */
-    async servicoNovoPorMes(room: CreditRoom, dataBase: string, p: ParametrosCapacidade): Promise<Record<string, number> | null> {
+    async servicoNovoPorMes(
+        room: CreditRoom, dataBase: string, p: ParametrosCapacidade,
+    ): Promise<{ porMes: Record<string, number> | null; simulado: boolean }> {
         const porMes = (linhas: { dueDate: string; total: number }[]) => {
             const out: Record<string, number> = {};
             for (const l of linhas) {
@@ -1694,11 +1705,11 @@ export const creditRoomService = {
                 const schedule =
                     (await debtService.getActiveSchedule(room.debtContractId, 'VIGENTE'))
                     ?? (await debtService.getActiveSchedule(room.debtContractId, 'CONTRATUAL'));
-                if (schedule) return porMes(await debtService.listInstallments(schedule.id));
+                if (schedule) return { porMes: porMes(await debtService.listInstallments(schedule.id)), simulado: false };
             }
             // `p` já são os EFETIVOS (`parametrosDoRoom`): prazo/carência da operação por cima.
-            if (!(room.requestedAmount > 0) || !(p.prazo_meses > 0)) return {};
-            return porMes(buildSchedule({
+            if (!(room.requestedAmount > 0) || !(p.prazo_meses > 0)) return { porMes: {}, simulado: true };
+            return { porMes: porMes(buildSchedule({
                 principal: room.requestedAmount,
                 nominalRate: p.taxa_mensal_pct,
                 ratePeriod: 'MENSAL',
@@ -1707,12 +1718,12 @@ export const creditRoomService = {
                 installmentPeriod: 'MENSAL',
                 firstDueDate: primeiroVencimentoSimulado(dataBase),
                 gracePrincipalPeriods: p.carencia_meses,
-            }));
+            })), simulado: true };
         } catch (e) {
             // `null`, não `{}`: sem serviço novo o DSCR pós sairia igual ao
             // atual — otimista na frente do banco. A capacidade cai.
             console.warn('[creditRoomService] serviço da dívida nova indisponível no snapshot:', e);
-            return null;
+            return { porMes: null, simulado: false };
         }
     },
 

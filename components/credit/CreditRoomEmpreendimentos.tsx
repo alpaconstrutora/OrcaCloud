@@ -13,6 +13,7 @@ import type { CreditRoomDocument, CreditRoomVersion } from '../../types/creditRo
 import type { SnapshotContrato, SnapshotEmpreendimentoItem } from '../../utils/creditRoomSnapshot';
 import { ROTULO_DO_OBJETIVO } from '../../utils/empreendimentoObjetivo';
 import { textoDaSituacao } from '../../utils/creditRoomCarteira';
+import { ehPrevia, horaDaPrevia } from '../../utils/creditRoomPrevia';
 
 /**
  * Aba "Empreendimentos e contratos" de uma VERSÃO congelada do Credit Room.
@@ -402,7 +403,7 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
             {/* 1. Empreendimentos — o clique abre fotos e contratos */}
             <Secao
                 acc={accent} titulo="Empreendimentos"
-                subtitulo={empreendimentos ? 'Posição congelada nesta versão. Clique em um empreendimento para ver as fotos e os contratos dele.' : undefined}
+                subtitulo={empreendimentos ? `${ehPrevia(version) ? `Prévia de hoje — calculada às ${horaDaPrevia(version.frozenAt)}, ainda não liberada à instituição.` : 'Posição desta versão liberada.'} Clique em um empreendimento para ver as fotos e os contratos dele.` : undefined}
             >
                 {empreendimentos == null ? (
                     <p className={`${A.corpo} ${A.rotulo}`}>Esta versão não traz os empreendimentos. {FRASE_SCHEMA_1[accent]}</p>

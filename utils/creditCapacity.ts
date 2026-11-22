@@ -186,7 +186,7 @@ const locacaoNoMes = (l: LocacaoVigente, mes: string, dataBase: string): boolean
     return diaDe(l.fim as string) >= `${mes}-01`;
 };
 
-const montarMes = (
+export const montarMes = (
     mes: string, vendas: number, alugueis: number, despesa: number,
     servicoAtual: number, servicoNovo: number, fluxos: FluxosElegiveis,
 ): SerieMes => {

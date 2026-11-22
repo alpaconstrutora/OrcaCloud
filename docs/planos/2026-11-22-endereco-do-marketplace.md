@@ -37,4 +37,6 @@ organização/oportunidade/investidor/Guard verdes; `check-ui-standard` limpo no
 Limite conhecido (anterior a este plano): `handleUpsertOrganization` engole o erro do save com um `alert`, então a
 ficha marca "salvo" mesmo quando o banco recusou (ex.: endereço repetido). O alerta diz o motivo; recarregar mostra
 o valor real.
-Pendente: publicar; o usuário cadastra o endereço da Garden SPE e testa a vitrine.
+**NO AR** (PR #659, squash 1a8a271; `conferir-producao.sh`: o domínio serve 1a8a271). Conferido em produção (22/11):
+a ficha da Garden SPE mostra a seção "Marketplace público" com o campo vazio (`https://orcacloud.vercel.app/m/`).
+Pendente (usuário): cadastrar o endereço da Garden SPE, salvar e abrir a vitrine (passo 16 do roteiro de teste).

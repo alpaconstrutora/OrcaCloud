@@ -1,5 +1,6 @@
 import React from 'react';
 import { useWritableOrganizations } from '../../hooks/useOrgContext';
+import { useStore } from '../../store/useStore';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import type { Empreendimento } from '../../types/empreendimento';
 import type { CreditRoomEscopo } from '../../types/creditRoom';
@@ -30,6 +31,17 @@ export function normalizarEmpreendimentos(ids: string[], lista: Empreendimento[]
     return validos.length === 0 || validos.length === noEscopo.size ? [] : validos;
 }
 
+/**
+ * Orgs do grupo que o usuário PODE gravar: o banco recusa (check_violation) org
+ * da qual ele não é membro. Sem lista de membros carregada não filtra nada —
+ * melhor o banco decidir do que descartar org legítima por lista vazia.
+ */
+export function orgsDoGrupoGravaveis(ids: string[], membros: { id: string }[]): string[] {
+    if (membros.length === 0) return ids;
+    const ok = new Set(membros.map(m => m.id));
+    return ids.filter(id => ok.has(id));
+}
+
 interface Props extends EscopoCapacidade {
     /** Só carrega os empreendimentos com o painel aberto (o Sheet fica montado). */
     ativo: boolean;
@@ -51,17 +63,26 @@ export default function CreditRoomFormCapacidade({
 }: Props) {
     // Organizações de que o usuário é MEMBRO (mesma lista dos formulários de cadastro).
     const orgsMembro = useWritableOrganizations();
+    const todasOrgs = useStore(st => st.organizations);
+    const uid = React.useId();
     const [lista, setLista] = React.useState<Empreendimento[] | null>(null);
     const [erroLista, setErroLista] = React.useState<string | null>(null);
 
     const grupo = escopo === 'GRUPO';
 
+    // Orgs já gravadas no grupo das quais o usuário NÃO é membro: aparecem travadas
+    // e ficam FORA do payload e do escopo da capacidade (o banco recusaria o save).
+    const orgsGravaveis = orgsDoGrupoGravaveis(grupoOrganizationIds, orgsMembro);
+    const orgsAlheias = grupoOrganizationIds.filter(id => !orgsGravaveis.includes(id));
+    const idsRef = React.useRef(empreendimentoIds);
+    idsRef.current = empreendimentoIds;
+
     // Orgs que entram na capacidade: o grupo marcado, ou só a dona.
     // Sem dona definida ("Todas" no topo) o escopo EMPRESA lê o que a RLS deixar ver.
     const orgsDoEscopo: (string | undefined)[] = grupo
-        ? grupoOrganizationIds
+        ? orgsGravaveis
         : [ownerOrgId ?? undefined];
-    const chaveEscopo = grupo ? `G:${[...grupoOrganizationIds].sort().join(',')}` : `E:${ownerOrgId ?? ''}`;
+    const chaveEscopo = grupo ? `G:${[...orgsGravaveis].sort().join(',')}` : `E:${ownerOrgId ?? ''}`;
 
     React.useEffect(() => {
         if (!ativo) return;
@@ -78,10 +99,26 @@ export default function CreditRoomFormCapacidade({
             if (!vivo) return;
             const ok = res.flatMap(r => (r.status === 'fulfilled' ? r.value : []));
             const falhas = res.filter(r => r.status === 'rejected').length;
+            if (falhas > 0) {
+                // Lista incompleta não vira checklist (marcar/desmarcar sobre ela estreitaria o escopo
+                // às cegas) e o pai não recebe lista: ao salvar, a seleção anterior é mantida.
+                setLista(null);
+                setErroLista(`Não foi possível carregar os empreendimentos de ${falhas} organização(ões).`);
+                onListaCarregada(null);
+                return;
+            }
+            // Seleção de um escopo anterior não sobrevive: interseção com o que carregou.
+            // Interseção vazia = "todos marcados" ([]), igual ao que a tela mostra.
+            const atuais = idsRef.current;
+            if (atuais.length > 0) {
+                const noEscopo = new Set(ok.map(e => e.id));
+                const manter = atuais.filter(id => noEscopo.has(id));
+                if (manter.length !== atuais.length) {
+                    onChange({ empreendimentoIds: manter.length === noEscopo.size ? [] : manter });
+                }
+            }
             setLista(ok);
-            setErroLista(falhas > 0 ? `Não foi possível carregar os empreendimentos de ${falhas} organização(ões).` : null);
-            // Lista incompleta não normaliza nada: devolve null para o pai não descartar ids por engano.
-            onListaCarregada(falhas > 0 ? null : ok);
+            onListaCarregada(ok);
         });
         return () => { vivo = false; };
         // `orgsDoEscopo` é derivado de `chaveEscopo`; `onListaCarregada` é estável no pai.
@@ -111,8 +148,10 @@ export default function CreditRoomFormCapacidade({
         });
 
     // ── Empreendimentos ──────────────────────────────────────────────────────
-    const todosMarcados = empreendimentoIds.length === 0;
-    const marcado = (id: string) => todosMarcados || empreendimentoIds.includes(id);
+    // Ids fora da lista carregada não contam; seleção sem nenhum id válido = todos marcados.
+    const idsEfetivos = lista ? empreendimentoIds.filter(id => lista.some(e => e.id === id)) : empreendimentoIds;
+    const todosMarcados = idsEfetivos.length === 0;
+    const marcado = (id: string) => todosMarcados || idsEfetivos.includes(id);
     const qtdMarcados = lista ? lista.filter(e => marcado(e.id)).length : 0;
 
     const alternarEmp = (id: string, marcar: boolean) => {
@@ -127,25 +166,27 @@ export default function CreditRoomFormCapacidade({
     const setP = <K extends keyof ParametrosCapacidade>(k: K, v: ParametrosCapacidade[K]) =>
         onChange({ parametrosCapacidade: { ...p, [k]: v } });
     const num = (v: string) => (v === '' ? 0 : Number(v));
+    const idP = (k: keyof ParametrosCapacidade) => `${uid}-${k}`;
 
     return (
         <>
             {/* Escopo da renda */}
             <section className="space-y-3">
                 <h3 className="text-sm font-semibold text-gray-800">Escopo da renda</h3>
-                <div className="flex flex-wrap gap-4">
+                <fieldset className="flex flex-wrap gap-4 border-0 p-0 m-0 min-w-0">
+                    <legend className="sr-only">Escopo da renda</legend>
                     <label className={itemCheck}>
-                        <input type="radio" name="credit-room-escopo" checked={!grupo} onChange={() => escolherEscopo('EMPRESA')} className={checkbox} />
+                        <input type="radio" name={`${uid}-escopo`} checked={!grupo} onChange={() => escolherEscopo('EMPRESA')} className={checkbox} />
                         Empresa tomadora
                     </label>
                     <label className={itemCheck}>
-                        <input type="radio" name="credit-room-escopo" checked={grupo} onChange={() => escolherEscopo('GRUPO')} className={checkbox} />
+                        <input type="radio" name={`${uid}-escopo`} checked={grupo} onChange={() => escolherEscopo('GRUPO')} className={checkbox} />
                         Grupo inteiro
                     </label>
-                </div>
+                </fieldset>
                 {grupo && (
-                    <div className="space-y-1.5">
-                        <label className={rotulo}>Organizações do grupo (só as de que você é membro)</label>
+                    <fieldset className="space-y-1.5 border-0 p-0 m-0 min-w-0">
+                        <legend className={`${rotulo} mb-1.5`}>Organizações do grupo (só as de que você é membro)</legend>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
                             {orgsMembro.map(o => {
                                 const dona = o.id === ownerOrgId;
@@ -168,15 +209,25 @@ export default function CreditRoomFormCapacidade({
                                 );
                             })}
                         </div>
+                        {orgsAlheias.map(id => {
+                            const nome = todasOrgs.find(o => o.id === id)?.name ?? id;
+                            return (
+                                <label key={id} className={itemCheck} title="Você não é membro desta organização — ela não entra no grupo ao salvar.">
+                                    <input type="checkbox" checked disabled className={`${checkbox} disabled:opacity-60`} />
+                                    {nome}
+                                    <span className="text-xs text-gray-500">(você não é membro desta organização — será removida do grupo ao salvar)</span>
+                                </label>
+                            );
+                        })}
                         {!ownerOrgId && (
                             <p className="text-xs text-gray-500">
                                 Com &quot;Todas as organizações&quot; no topo, a organização dona é escolhida ao criar — marque-a também aqui.
                             </p>
                         )}
-                        {grupoOrganizationIds.length === 0 && (
+                        {orgsGravaveis.length === 0 && (
                             <p className="text-xs text-red-600">Marque ao menos uma organização para o grupo.</p>
                         )}
-                    </div>
+                    </fieldset>
                 )}
             </section>
 
@@ -184,7 +235,10 @@ export default function CreditRoomFormCapacidade({
             <section className="space-y-3">
                 <h3 className="text-sm font-semibold text-gray-800">Empreendimentos na capacidade</h3>
                 {lista === null ? (
-                    <p className="text-sm text-gray-500">Carregando empreendimentos...</p>
+                    <p className="text-sm text-gray-500">
+                        {erroLista ?? 'Carregando empreendimentos...'}{' '}
+                        Se salvar agora, a seleção de empreendimentos não é alterada.
+                    </p>
                 ) : lista.length === 0 ? (
                     <p className="text-sm text-gray-500">Nenhum empreendimento nas organizações do escopo.</p>
                 ) : (
@@ -211,7 +265,6 @@ export default function CreditRoomFormCapacidade({
                         })}
                     </div>
                 )}
-                {erroLista && <p className="text-xs text-red-600">{erroLista}</p>}
                 <p className="text-xs text-gray-500">Todos marcados = a capacidade acompanha empreendimentos novos do escopo.</p>
             </section>
 
@@ -220,42 +273,42 @@ export default function CreditRoomFormCapacidade({
                 <h3 className="text-sm font-semibold text-gray-800">Parâmetros da capacidade</h3>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                     <div className="space-y-1.5">
-                        <label className={rotulo}>DSCR mínimo</label>
-                        <input type="number" min={0} step={0.05} value={p.dscr_minimo} onChange={e => setP('dscr_minimo', num(e.target.value))} className={campo} />
+                        <label htmlFor={idP('dscr_minimo')} className={rotulo}>DSCR mínimo</label>
+                        <input id={idP('dscr_minimo')} type="number" min={0} step={0.05} value={p.dscr_minimo} onChange={e => setP('dscr_minimo', num(e.target.value))} className={campo} />
                     </div>
                     <div className="space-y-1.5">
-                        <label className={rotulo}>Taxa mensal (%)</label>
-                        <input type="number" min={0} step={0.01} value={p.taxa_mensal_pct} onChange={e => setP('taxa_mensal_pct', num(e.target.value))} className={campo} />
+                        <label htmlFor={idP('taxa_mensal_pct')} className={rotulo}>Taxa mensal (%)</label>
+                        <input id={idP('taxa_mensal_pct')} type="number" min={0} step={0.01} value={p.taxa_mensal_pct} onChange={e => setP('taxa_mensal_pct', num(e.target.value))} className={campo} />
                     </div>
                     <div className="space-y-1.5">
-                        <label className={rotulo}>Prazo (meses)</label>
-                        <input type="number" min={1} value={p.prazo_meses} onChange={e => setP('prazo_meses', num(e.target.value))} className={campo} />
+                        <label htmlFor={idP('prazo_meses')} className={rotulo}>Prazo (meses)</label>
+                        <input id={idP('prazo_meses')} type="number" min={1} step={1} value={p.prazo_meses} onChange={e => setP('prazo_meses', num(e.target.value))} className={campo} />
                     </div>
                     <div className="space-y-1.5">
-                        <label className={rotulo}>Carência (meses)</label>
-                        <input type="number" min={0} value={p.carencia_meses} onChange={e => setP('carencia_meses', num(e.target.value))} className={campo} />
+                        <label htmlFor={idP('carencia_meses')} className={rotulo}>Carência (meses)</label>
+                        <input id={idP('carencia_meses')} type="number" min={0} step={1} value={p.carencia_meses} onChange={e => setP('carencia_meses', num(e.target.value))} className={campo} />
                     </div>
                     <div className="space-y-1.5">
-                        <label className={rotulo}>Sistema de amortização</label>
-                        <select value={p.sistema} onChange={e => setP('sistema', e.target.value as ParametrosCapacidade['sistema'])} className={campo}>
+                        <label htmlFor={idP('sistema')} className={rotulo}>Sistema de amortização</label>
+                        <select id={idP('sistema')} value={p.sistema} onChange={e => setP('sistema', e.target.value as ParametrosCapacidade['sistema'])} className={campo}>
                             <option value="PRICE">Price</option>
                             <option value="SAC">SAC</option>
                         </select>
                     </div>
                     <div className="space-y-1.5">
-                        <label className={rotulo}>Horizonte</label>
-                        <select value={p.horizonte_meses} onChange={e => setP('horizonte_meses', Number(e.target.value))} className={campo}>
+                        <label htmlFor={idP('horizonte_meses')} className={rotulo}>Horizonte</label>
+                        <select id={idP('horizonte_meses')} value={p.horizonte_meses} onChange={e => setP('horizonte_meses', Number(e.target.value))} className={campo}>
                             <option value={24}>24 meses</option>
                             <option value={36}>36 meses</option>
                         </select>
                     </div>
                     <div className="space-y-1.5">
-                        <label className={rotulo}>Haircut do estoque (%)</label>
-                        <input type="number" min={0} max={100} value={p.haircut_estoque_pct} onChange={e => setP('haircut_estoque_pct', num(e.target.value))} className={campo} />
+                        <label htmlFor={idP('haircut_estoque_pct')} className={rotulo}>Haircut do estoque (%)</label>
+                        <input id={idP('haircut_estoque_pct')} type="number" min={0} max={100} value={p.haircut_estoque_pct} onChange={e => setP('haircut_estoque_pct', num(e.target.value))} className={campo} />
                     </div>
                 </div>
                 <label className={itemCheck}>
-                    <input type="checkbox" checked={p.despesa_operacional} onChange={e => setP('despesa_operacional', e.target.checked)} className={checkbox} />
+                    <input id={idP('despesa_operacional')} type="checkbox" checked={p.despesa_operacional} onChange={e => setP('despesa_operacional', e.target.checked)} className={checkbox} />
                     Descontar despesa operacional dos aluguéis
                 </label>
             </section>

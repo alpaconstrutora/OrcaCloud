@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import SaveStatus from '../ui/SaveStatus';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
-import { useOrgContext, errorMessage } from '../../hooks/useOrgContext';
+import { useOrgContext, useWritableOrganizations, errorMessage } from '../../hooks/useOrgContext';
 import { useStore } from '../../store/useStore';
 import { companyService } from '../../services/companyService';
 import { supplierService } from '../../services/supplierService';
@@ -29,7 +29,7 @@ import {
 } from '../../utils/creditRoomSnapshot';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { PARAMETROS_CAPACIDADE_PADRAO } from '../../utils/creditCapacity';
-import CreditRoomFormCapacidade, { campo, rotulo, normalizarEmpreendimentos, type EscopoCapacidade } from './CreditRoomFormCapacidade';
+import CreditRoomFormCapacidade, { campo, rotulo, normalizarEmpreendimentos, orgsDoGrupoGravaveis, type EscopoCapacidade } from './CreditRoomFormCapacidade';
 
 interface Props {
     open: boolean;
@@ -64,6 +64,7 @@ const VAZIO: CreditRoomInput = {
  */
 export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
     const { orgId } = useOrgContext();
+    const orgsMembro = useWritableOrganizations();
     const obras = useStore(s => s.projects); // já é só OBRA e sem projeto de sistema (REGRAS #2/#3)
     const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
 
@@ -179,18 +180,23 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
         const pc = form.parametrosCapacidade ?? PARAMETROS_CAPACIDADE_PADRAO;
         if (!(pc.dscr_minimo > 0)) { setErro('O DSCR mínimo da capacidade precisa ser maior que zero.'); return; }
         if (pc.taxa_mensal_pct < 0) { setErro('A taxa mensal da capacidade não pode ser negativa.'); return; }
-        if (!(pc.prazo_meses >= 1)) { setErro('O prazo da capacidade precisa ser de ao menos 1 mês.'); return; }
+        if (!Number.isInteger(pc.prazo_meses) || pc.prazo_meses < 1) { setErro('O prazo da capacidade precisa ser um número inteiro de meses (mínimo 1).'); return; }
+        if (!Number.isInteger(pc.carencia_meses)) { setErro('A carência da capacidade precisa ser um número inteiro de meses.'); return; }
         if (pc.carencia_meses < 0 || pc.carencia_meses >= pc.prazo_meses) { setErro('A carência da capacidade fica entre 0 e o prazo.'); return; }
         if (pc.haircut_estoque_pct < 0 || pc.haircut_estoque_pct > 100) { setErro('O haircut do estoque fica entre 0 e 100%.'); return; }
         const grupo = form.escopo === 'GRUPO';
         let grupoIds = form.grupoOrganizationIds ?? [];
         if (grupo) {
             // A dona sempre faz parte do grupo (aparece marcada e travada).
+            // Org de que o usuário não é membro sai do payload (o banco recusaria); a tela avisa.
+            grupoIds = orgsDoGrupoGravaveis(grupoIds, orgsMembro);
             if (ownerOrgId && !grupoIds.includes(ownerOrgId)) grupoIds = [ownerOrgId, ...grupoIds];
             if (grupoIds.length === 0) { setErro('Marque ao menos uma organização para o grupo.'); return; }
         }
         const lista = listaEscopoRef.current;
-        const empIds = lista ? normalizarEmpreendimentos(form.empreendimentoIds ?? [], lista) : (form.empreendimentoIds ?? []);
+        // Lista ainda carregando ou com falha: não grava seleção possivelmente obsoleta —
+        // mantém o que já estava salvo (edição) ou "todos" (criação).
+        const empIds = lista ? normalizarEmpreendimentos(form.empreendimentoIds ?? [], lista) : (room?.empreendimentoIds ?? []);
         setSalvando(true);
         setErro(null);
         try {

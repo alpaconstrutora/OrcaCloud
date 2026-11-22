@@ -20,6 +20,7 @@
 import type { CreditRoomIndicators, CreditRoomSnapshot } from './creditRoomSnapshot';
 import { ELIGIBLE_FLOW_PT } from './creditRoomSnapshot';
 import { resumoDaCapacidade, rotuloDoMes } from './creditCapacity';
+import { round2 } from './financialMath';
 
 export type IndicadorKey =
     | 'ltv_atual' | 'ltv_pos'
@@ -39,6 +40,8 @@ export interface TermoProveniencia {
     /** De onde o número veio, no nível de tabela/serviço. */
     fonte: string;
     obs?: string;
+    /** Valor que não é número (ex.: 'SAC'). Quando presente, a tela mostra este texto no lugar do valor formatado. */
+    texto?: string;
 }
 
 export interface Proveniencia {
@@ -87,7 +90,7 @@ function ressalvasDoCusto(s: CreditRoomSnapshot): string[] {
     return r;
 }
 
-const SEM_CAPACIDADE = 'Indisponível: versão congelada antes da capacidade de pagamento — não há série mensal nesta versão.';
+const SEM_CAPACIDADE = 'Indisponível: versão congelada antes da capacidade de pagamento — congele uma nova.';
 
 /** Termo da capacidade que não existe numa versão antiga: o número fica "—". */
 const semCapacidade = (rotulo: string, formato: TermoProveniencia['formato']): TermoProveniencia =>
@@ -305,7 +308,7 @@ function explicarCapacidade(
 
     switch (key) {
         case 'renda_liquida_media': {
-            const soma = c ? Math.round(doze.reduce((a, x) => a + x.renda_liquida, 0) * 100) / 100 : null;
+            const soma = c ? round2(doze.reduce((a, x) => a + x.renda_liquida, 0)) : null;
             return {
                 titulo: 'Renda líquida média (12 meses)',
                 formula: 'soma da renda líquida dos 12 primeiros meses ÷ número de meses',
@@ -375,9 +378,9 @@ function explicarCapacidade(
                     { rotulo: 'Taxa mensal', valor: p.taxa_mensal_pct, formato: 'pct', fonte: FONTE_PARAM, obs: `${p.taxa_mensal_pct.toLocaleString('pt-BR')}% a.m.` },
                     { rotulo: 'Prazo', valor: p.prazo_meses, formato: 'numero', fonte: FONTE_PARAM, obs: `${p.prazo_meses} meses` },
                     { rotulo: 'Carência', valor: p.carencia_meses, formato: 'numero', fonte: FONTE_PARAM, obs: `${p.carencia_meses} meses` },
-                    { rotulo: 'Sistema de amortização', valor: null, formato: 'numero', fonte: FONTE_PARAM, obs: p.sistema },
+                    { rotulo: 'Sistema de amortização', valor: null, formato: 'numero', fonte: FONTE_PARAM, texto: p.sistema === 'SAC' ? 'SAC' : 'Price' },
                     m('Parcela máxima', c.capacidade_maxima.parcela_maxima,
-                      'Série mensal da capacidade congelada na versão (horizonte inteiro)',
+                      'capacidadeMaxima: busca sobre a série mensal congelada + parâmetros congelados (horizonte inteiro)',
                       'a menor folga mensal contra o DSCR mínimo'),
                 ] : [
                     semCapacidade('DSCR mínimo exigido', 'vezes'), semCapacidade('Taxa mensal', 'pct'),
@@ -389,7 +392,7 @@ function explicarCapacidade(
                     ? [
                         'O valor é calculado com os parâmetros congelados (taxa, prazo, carência e sistema), em passos de R$ 100.',
                         ...(c.capacidade_maxima.valor_maximo === 0
-                            ? ['Valor zero: em algum mês do horizonte a renda não cobre o DSCR mínimo nem com a dívida atual sozinha.']
+                            ? ['Valor zero: nada cabe com estes parâmetros — a renda de algum mês do horizonte não cobre o DSCR mínimo com o serviço atual, a folga é menor que o passo de R$ 100 da busca, ou a série está vazia.']
                             : []),
                     ]
                     : [SEM_CAPACIDADE],

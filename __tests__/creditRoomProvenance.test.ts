@@ -241,7 +241,9 @@ describe('explicarIndicador — indicadores da capacidade', () => {
         expect(valoresPorRotulo['Taxa mensal']).toBe(1.5);
         expect(valoresPorRotulo['Prazo']).toBe(48);
         expect(valoresPorRotulo['Carência']).toBe(6);
-        expect(p.termos.find(t => t.rotulo === 'Sistema de amortização')?.obs).toBe('SAC');
+        const sistema = p.termos.find(t => t.rotulo === 'Sistema de amortização');
+        expect(sistema?.texto).toBe('SAC');
+        expect(sistema?.valor).toBeNull();
     });
 
     it('DSCR mínimo e renda média batem com o resumo da série', () => {
@@ -265,7 +267,7 @@ describe('explicarIndicador — indicadores da capacidade', () => {
         for (const k of chaves) {
             const p = explicarIndicador(k, s1, computeIndicators(s1));
             expect(p.resultado.valor, k).toBeNull();
-            expect(p.ressalvas.join(' '), k).toMatch(/versão congelada antes da capacidade de pagamento/);
+            expect(p.ressalvas.join(' '), k).toContain('versão congelada antes da capacidade de pagamento — congele uma nova');
             expect(p.termos.length, k).toBeGreaterThan(0);
         }
     });

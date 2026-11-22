@@ -77,7 +77,7 @@ const PainelProveniencia: React.FC<{
                                                     {t.obs && <p className="text-xs text-gray-400 mt-0.5">{t.obs}</p>}
                                                 </td>
                                                 <td className="px-4 py-2.5 text-right text-sm font-medium text-gray-800 whitespace-nowrap align-top">
-                                                    {porFormato(t)}
+                                                    {t.texto ?? porFormato(t)}
                                                 </td>
                                             </tr>
                                         ))}

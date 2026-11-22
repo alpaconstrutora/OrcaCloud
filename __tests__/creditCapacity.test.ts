@@ -614,6 +614,31 @@ describe('creditCapacity', () => {
             expect(com.capacidade_maxima.valor_maximo).toBe(sem.capacidade_maxima.valor_maximo);
         });
 
+        it('controle: com vendas elegíveis, o distrato reduz o valor máximo', () => {
+            const c = capacidadeViva();
+            const sem = estresseDaVersao(c, { ...CENARIOS_ESTRESSE[0], distrato_pct: 0 }, fluxosAmbos);
+            const com = estresseDaVersao(c, { ...CENARIOS_ESTRESSE[0], distrato_pct: 50 }, fluxosAmbos);
+            expect(sem.capacidade_maxima.valor_maximo).toBeGreaterThan(0);
+            expect(com.capacidade_maxima.valor_maximo).toBeLessThan(sem.capacidade_maxima.valor_maximo);
+        });
+
+        it('inadimplência com só aluguel elegível: age pelos aluguéis e ignora a perna de vendas', () => {
+            const zeroServico = Object.fromEntries(mesesDoHorizonte(DATA_BASE, 12).map(m => [m, 0]));
+            const c = capacidadeViva({ servicoAtualPorMes: zeroServico });
+            const f = { vendas: false, alugueis: true };
+            const cenario = { ...CENARIOS_ESTRESSE[0], inadimplencia_pct: 25 };
+            const base = estresseDaVersao(c, CENARIOS_ESTRESSE[0], f);
+            const inad = estresseDaVersao(c, cenario, f);
+            // controle: o estresse mexe de verdade (aluguéis caem 25%)
+            expect(base.capacidade_maxima.valor_maximo).toBeGreaterThan(0);
+            expect(inad.capacidade_maxima.valor_maximo).toBeLessThan(base.capacidade_maxima.valor_maximo);
+            // a perna de vendas é ignorada: zerar as vendas da série dá o mesmo resultado
+            const semVendas = estresseDaVersao({ ...c, serie: c.serie.map(m => ({ ...m, vendas: 0 })) }, cenario, f);
+            expect(c.serie.some(m => m.vendas > 0)).toBe(true);
+            expect(inad.capacidade_maxima).toEqual(semVendas.capacidade_maxima);
+            expect(inad.serie.map(m => m.renda_liquida)).toEqual(semVendas.serie.map(m => m.renda_liquida));
+        });
+
         it('percentuais do cenário ficam presos em 0–100', () => {
             const c = capacidadeViva();
             const total = estresseDaVersao(c, { nome: 'x', inadimplencia_pct: 250, vacancia_pct: 0, distrato_pct: 0 }, fluxosAmbos);

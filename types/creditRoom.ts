@@ -348,4 +348,12 @@ export interface CreditRoomDocument {
     mimeType?: string;
     tamanho?: number;
     sharedAt: string;
+    /**
+     * Dono e vínculos do documento no GED. Vêm das colunas novas de
+     * `fn_credit_room_documents` (capacidade F3): ausentes enquanto a função
+     * antiga estiver no banco — a tela não pode depender deles.
+     */
+    organizationId?: string;
+    contractId?: string;
+    empreendimentoId?: string;
 }

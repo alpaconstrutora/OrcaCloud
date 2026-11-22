@@ -2,7 +2,7 @@ import React from 'react';
 import { ArrowRightLeft, Plus } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
-import { catalogoDeUnidades, identidadeDaUnidade } from '../../lib/unidadeDeMedida';
+import { catalogoDeUnidades, dicaDaUnidade, identidadeDaUnidade } from '../../lib/unidadeDeMedida';
 import { CreatableCombobox } from '../ui/CreatableCombobox';
 import { masterDataService, MasterUnit } from '../../services/masterDataService';
 import NovaUnidadeForm from './NovaUnidadeForm';
@@ -55,7 +55,7 @@ export const EquivalenciasDoItem: React.FC<Props> = ({ code, unidadeDoItem, pode
     }, [podeEditar]);
     const catalogo = React.useMemo(() => catalogoDeUnidades(cadastradas), [cadastradas]);
     const opcoes = React.useMemo(
-        () => catalogo.filter(u => u.codigo !== base).map(u => ({ id: u.codigo, name: u.codigo, nome: u.nome })),
+        () => catalogo.filter(u => u.codigo !== base).map(u => ({ id: u.codigo, name: u.codigo, nome: dicaDaUnidade(u) })),
         [catalogo, base],
     );
     // Texto digitado que é apelido de uma unidade da lista ("barra" = BR) já vale — nunca bloqueia (§7.1.2).

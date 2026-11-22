@@ -175,3 +175,30 @@ Roteiro de ponta a ponta, rodado depois da F5:
 - O QR do PDF abre a validação, e o PDF baixado confere com o hash.
 - Uma versão nova do documento cancela o envelope.
 - Um CONTRATO assinado aparece como "Assinado" no portal; uma MINUTA assinada não muda o contrato.
+
+## Ajuste de 22/11/2026: bloco "Assinatura eletrônica" da negociação
+
+### Pedido original
+
+> "em comercial > locacoes : veja print que so existe a opcao com o zapsign."
+
+O print mostra o bloco "Assinatura Eletrônica — Powered by ZapSign" em Negociação › Contrato › Dados do contrato.
+
+### Causa
+
+O bloco (`DealSignaturePanel`) ficou de fora da F4/F5. A opção sem custo existia só em dois lugares:
+- na linha da versão emitida, em Contrato › Documentos (sub-aba que só existe na locação);
+- na aba "Documentos" da negociação.
+
+No lugar onde o usuário assina o contrato, só aparecia o ZapSign, e o ZapSign continua sem `ZAPSIGN_API_TOKEN`.
+
+### Correção
+
+- O bloco agora tem duas opções: **"No portal (sem custo)"**, que é o padrão, e **"ZapSign"**. Uma negociação que já tem `signature_token` abre no ZapSign.
+- **No portal:** assina uma **versão** do documento do contrato (`origem CDV`), a mesma da Emissão, e o "assinado" sobe para o contrato pela regra única de `_shared/assinaturaPropagar.ts`.
+  - O usuário escolhe a versão. Abre escolhida a que está em assinatura; se não houver, a última emitida do tipo Contrato.
+  - Sem versão, o bloco oferece "Gerar documento do contrato".
+  - Sem contrato, o bloco diz para gerá-lo.
+- O motivo de não poder enviar (`motivoNaoEnviaAoPortal`) e o rótulo do status (`assinaturaDaVersao`) mudaram de `DocumentVersionsPanel` para `contractDocumentVersionService`: é uma regra só para a Emissão e para a negociação.
+- **ZapSign:** a lógica não mudou; o visual passou ao guia (§8, §17, §21, sem caixa alta e sem roxo).
+- Teste: `__tests__/components/DealSignaturePanel.test.tsx`.

@@ -607,3 +607,22 @@ export function montarCapacidade(e: MontarCapacidadeEntrada): SnapshotCapacidade
         }),
     };
 }
+
+// ── Escopo GRUPO: quem congela precisa ver todas as orgs ─────────────────────
+
+/**
+ * Orgs do escopo de que o usuário NÃO é membro. A RLS devolve vazio — sem erro
+ * — para a org que ele não enxerga, e vazio vira zero: a dívida de outra
+ * empresa do grupo sumiria e o DSCR consolidado sairia inflado. `minhas` vem
+ * de `minhas_orgs_membro()`, a mesma função que a RLS usa.
+ */
+export function orgsForaDoAcesso(orgs: string[], minhas: string[]): string[] {
+    const ok = new Set(minhas);
+    return orgs.filter(o => !ok.has(o));
+}
+
+/** Mensagem do bloqueio de congelamento quando faltam orgs ao usuário. */
+export function mensagemSemAcessoAoGrupo(nomes: string[]): string {
+    const lista = nomes.length === 1 ? nomes[0] : `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`;
+    return `Você não é membro de ${lista} — só quem é membro de todas as empresas do grupo pode congelar esta versão.`;
+}

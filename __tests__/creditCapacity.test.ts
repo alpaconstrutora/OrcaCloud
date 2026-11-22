@@ -16,8 +16,10 @@ import {
     alertasDaCarteira,
     aplicarEstresse,
     capacidadeMaxima,
+    mensagemSemAcessoAoGrupo,
     mesesDoHorizonte,
     montarCapacidade,
+    orgsForaDoAcesso,
     qualidadeDaRenda,
     recebidoPorMes,
     rotuloMascarado,
@@ -518,6 +520,18 @@ describe('creditCapacity', () => {
         ]);
         // meses 2 e 3 sem renda: limite 0 → nada cabe
         expect(c.capacidade_maxima).toEqual({ parcela_maxima: 0, valor_maximo: 0 });
+    });
+
+    it('GRUPO: orgsForaDoAcesso aponta as orgs do escopo de que o usuário não é membro', () => {
+        expect(orgsForaDoAcesso(['a', 'b', 'c'], ['a', 'c', 'z'])).toEqual(['b']);
+        expect(orgsForaDoAcesso(['a'], ['a'])).toEqual([]);
+        expect(orgsForaDoAcesso(['a', 'b'], [])).toEqual(['a', 'b']);
+    });
+
+    it('GRUPO: a recusa nomeia as empresas que faltam', () => {
+        expect(mensagemSemAcessoAoGrupo(['SPE Alfa'])).toBe(
+            'Você não é membro de SPE Alfa — só quem é membro de todas as empresas do grupo pode congelar esta versão.');
+        expect(mensagemSemAcessoAoGrupo(['SPE Alfa', 'SPE Beta', 'SPE Gama'])).toMatch(/^Você não é membro de SPE Alfa, SPE Beta e SPE Gama — /);
     });
 
     it('rotuloMascarado', () => {

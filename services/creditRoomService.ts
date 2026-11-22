@@ -49,7 +49,9 @@ import {
 } from '../utils/creditRoomSnapshot';
 import {
     PARAMETROS_CAPACIDADE_PADRAO,
+    mensagemSemAcessoAoGrupo,
     montarCapacidade,
+    orgsForaDoAcesso,
     qualidadeDaRenda,
     type CapacidadeEntrada,
     type LocacaoVigente,
@@ -932,6 +934,9 @@ export const creditRoomService = {
         // REGRA #5: as orgs vêm do ROOM, nunca de prop de tela. O que cada uma
         // devolve continua recortado pela RLS de quem congela.
         const orgs = this.orgsDoEscopo(room);
+        // GRUPO: org que quem congela não enxerga voltaria VAZIA pela RLS, e
+        // vazio vira zero (dívida dela some, DSCR infla). Recusa antes de ler.
+        if (room.escopo === 'GRUPO') await this.exigirMembroDeTodas(orgs);
         const p = parametrosEfetivos(room);
         const horizonte = p.horizonte_meses > 0 ? p.horizonte_meses : PARAMETROS_CAPACIDADE_PADRAO.horizonte_meses;
 
@@ -1417,6 +1422,30 @@ export const creditRoomService = {
         return [...new Set([room.organizationId, ...(room.grupoOrganizationIds ?? [])])];
     },
 
+    /**
+     * Recusa (erro com o nome das empresas) se o usuário não é membro de
+     * alguma org de `orgs`. Usa `minhas_orgs_membro()`, a função das policies:
+     * é exatamente o conjunto que a RLS deixa ler. Sem conseguir conferir,
+     * também recusa — congelar às cegas é o risco que a trava existe para tirar.
+     */
+    async exigirMembroDeTodas(orgs: string[]): Promise<void> {
+        const { data, error } = await supabase.rpc('minhas_orgs_membro');
+        if (error) {
+            throw new Error('Não foi possível conferir se você é membro de todas as empresas do grupo — a versão não foi congelada. Tente de novo.');
+        }
+        // SETOF uuid chega como lista de strings; aceita também `{ minhas_orgs_membro }`.
+        const minhas = ((data ?? []) as unknown[]).map(x =>
+            typeof x === 'string' ? x : String(Object.values((x ?? {}) as Record<string, unknown>)[0] ?? ''));
+        const faltam = orgsForaDoAcesso(orgs, minhas);
+        if (!faltam.length) return;
+        // O nome pode estar escondido pela mesma RLS: cai no id curto, nunca some.
+        const { data: os } = await supabase.from('organizations').select('id, name').in('id', faltam);
+        const nome = new Map(((os ?? []) as { id: string; name: string | null }[]).map(o => [o.id, o.name]));
+        throw new Error(mensagemSemAcessoAoGrupo(
+            faltam.map(id => nome.get(id) || `organização ${id.slice(0, 8)}`),
+        ));
+    },
+
     /** Quem compõe a leitura. CNPJ da MATRIZ (`companies.is_headquarters`), senão o da org. */
     async coletarEscopo(room: CreditRoom, dataBase: string = isoDate(new Date())): Promise<SnapshotEscopo | null> {
         try {
@@ -1438,7 +1467,10 @@ export const creditRoomService = {
                 tipo: room.escopo === 'GRUPO' ? 'GRUPO' : 'EMPRESA',
                 organizacoes: orgs.map(id => ({
                     id,
-                    nome: org.get(id)?.name ?? id,
+                    // O UUID nunca vira nome na frente do banco. Com a trava de
+                    // `exigirMembroDeTodas` isto não deveria acontecer no GRUPO;
+                    // se acontecer, diz o que é.
+                    nome: org.get(id)?.name || 'Organização sem acesso',
                     cnpj: cnpjMatriz.get(id) ?? org.get(id)?.cnpj ?? null,
                 })),
             };

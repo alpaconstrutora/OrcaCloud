@@ -22,9 +22,11 @@ import { linhaDaVersao } from '../../../utils/imovibRelatorio';
 import ImovibPainelDoInvestidor, { BotaoDoRelatorio } from './ImovibPainelDoInvestidor';
 import DataRoomPanel from '../DataRoomPanel';
 import ListasDaVersao from './ListasDaVersao';
+import ApresentacaoDaOportunidade, { type ObraAoVivo } from '../ApresentacaoDaOportunidade';
+import { naVitrine } from '../../../utils/oportunidadeNumerosDaVersao';
 import { PortalCard, PortalTabs, PortalLoading, GhostButton } from '../../portal/PortalKit';
 
-export type AbaDoDetalhe = 'viabilidade' | 'documentos';
+export type AbaDoDetalhe = 'apresentacao' | 'viabilidade' | 'documentos';
 
 interface Props {
     opportunity: InvestorOpportunity;
@@ -41,6 +43,20 @@ const PortalOportunidadeDetalhe: React.FC<Props> = ({ opportunity, portalToken, 
     const [erro, setErro] = React.useState<string | null>(null);
     const [carregando, setCarregando] = React.useState(comEstudo);
     const ref = React.useRef<HTMLElement>(null);
+    // Fase C8: a mesma apresentação que o gestor vê (captação, ficha técnica, fotos, equipe, distâncias, simulador)
+    // e a obra do empreendimento pelo link.
+    const [obra, setObra] = React.useState<ObraAoVivo | null>(null);
+    const op = React.useMemo(() => naVitrine(opportunity), [opportunity]);
+    const fichaTecnica = (vp?.calculo?.secoes?.find(x => x.id === 'produto')?.tabelas?.[0]?.linhas ?? null) as [string, string][] | null;
+
+    React.useEffect(() => {
+        if (!opportunity.id) return;
+        let vivo = true;
+        investorPortalTokenService.getObraDaOportunidadeByToken(portalToken, opportunity.id)
+            .then(o => { if (vivo) setObra(o); })
+            .catch(() => { if (vivo) setObra(null); });
+        return () => { vivo = false; };
+    }, [opportunity.id, portalToken]);
 
     React.useEffect(() => { ref.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' }); }, [opportunity.id]);
 
@@ -57,6 +73,7 @@ const PortalOportunidadeDetalhe: React.FC<Props> = ({ opportunity, portalToken, 
     }, [comEstudo, opportunity.id, portalToken]);
 
     const abas = [
+        { id: 'apresentacao', label: 'Apresentação' },
         ...(comEstudo ? [{ id: 'viabilidade', label: 'Viabilidade' }] : []),
         { id: 'documentos', label: 'Documentos' },
     ];
@@ -77,6 +94,7 @@ const PortalOportunidadeDetalhe: React.FC<Props> = ({ opportunity, portalToken, 
                 <PortalTabs tabs={abas} active={aba} onChange={id => onAba(id as AbaDoDetalhe)} />
                 {/* key: trocar de aba entra o conteúdo novo (portal-troca, index.css). */}
                 <div key={aba} className="p-5 portal-troca">
+                    {aba === 'apresentacao' && <ApresentacaoDaOportunidade op={op} fichaTecnica={fichaTecnica} obra={obra} />}
                     {aba === 'viabilidade' && comEstudo && (
                         carregando ? <PortalLoading label="Carregando a viabilidade..." />
                             : erro ? <p role="alert" className="text-sm text-[#5F6573]">{erro}</p>

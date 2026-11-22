@@ -183,10 +183,15 @@ export const investorPortalTokenService = {
         return res?.valid ? (res.obras ?? []) : [];
     },
 
-    async getMilestonesByToken(token: string): Promise<any[]> {
-        const { data, error } = await supabase.rpc('fn_investor_portal_get_milestones', { p_token: token });
+    /**
+     * A obra da oportunidade (nome, fase, avanço e marcos) pelo link — Fase C8 do plano
+     * 2026-11-21-portal-do-investidor-consolidacao. `null` = a oportunidade não tem obra vinculada.
+     */
+    async getObraDaOportunidadeByToken(token: string, opportunityId: string): Promise<import('../components/investor/ApresentacaoDaOportunidade').ObraAoVivo | null> {
+        const { data, error } = await supabase.rpc('fn_investor_portal_get_obra', { p_token: token, p_opportunity_id: opportunityId });
         if (error) throw error;
-        return (data as any)?.milestones ?? [];
+        const r = data as { valid?: boolean; obra?: import('../components/investor/ApresentacaoDaOportunidade').ObraAoVivo | null } | null;
+        return r?.valid ? r.obra ?? null : null;
     },
 
     /**

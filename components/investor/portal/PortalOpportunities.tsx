@@ -230,6 +230,12 @@ const PortalOpportunities: React.FC<Props> = ({ opportunities: recebidas, invest
                                                                 </>
                                                             )
                                                         )}
+                                                        {portalToken && o.id && (
+                                                            <SoftButton onClick={() => setAberta({ opp: o, aba: 'apresentacao' })}>
+                                                                <Building2 className="w-4 h-4" />
+                                                                Ver apresentação
+                                                            </SoftButton>
+                                                        )}
                                                         {portalToken && o.id && o.imovib_study_id && (
                                                             <SoftButton onClick={() => setAberta({ opp: o, aba: 'viabilidade' })}>
                                                                 <LineChart className="w-4 h-4" />

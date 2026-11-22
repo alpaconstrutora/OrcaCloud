@@ -73,3 +73,34 @@ REVOKE EXECUTE ON FUNCTION public.fn_investor_portal_get_obra(text, uuid) FROM P
 GRANT  EXECUTE ON FUNCTION public.fn_investor_portal_get_obra(text, uuid) TO anon, authenticated;
 
 DROP FUNCTION IF EXISTS public.fn_investor_portal_get_milestones(text);
+
+-- ═══ C1 — o relatório mensal automático gera o PDF de verdade ═══════════════════════════════════════
+-- Antes: a rotina do dia 1º (`monthly-investor-report`, pg_cron) inseria um investor_reports SEM arquivo, da
+-- organização inteira, e publicava "Relatório disponível" — o investidor via "Indisponível". Agora ela chama a
+-- Edge Function `investor-monthly-reports`, que gera o PDF de CADA investidor (utils/relatorioMensalDoInvestidor,
+-- o mesmo do botão "Gerar Agora"), grava com o destinatário e só então publica o comunicado.
+-- O agendamento (cron.job) NÃO muda: o comando continua `SELECT public.generate_monthly_investor_reports();`,
+-- então liga/desliga da tela de Rotinas automáticas segue valendo (nada de unschedule + schedule).
+--
+-- REGRA #7, pergunta 2: antes `authenticated` executava esta função (qualquer usuário disparava a rotina).
+-- Agora só postgres/service_role (o pg_cron roda como postgres).
+
+CREATE OR REPLACE FUNCTION public.generate_monthly_investor_reports()
+RETURNS void
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    PERFORM net.http_post(
+        url     := 'https://oxedkknreghxrgenyjiu.supabase.co/functions/v1/investor-monthly-reports',
+        headers := jsonb_build_object(
+            'Content-Type',  'application/json',
+            'Authorization', 'Bearer ' || public.fn_cron_secret()
+        ),
+        body    := '{}'::jsonb,
+        timeout_milliseconds := 120000
+    );
+END;
+$$;
+REVOKE EXECUTE ON FUNCTION public.generate_monthly_investor_reports() FROM PUBLIC, anon, authenticated;

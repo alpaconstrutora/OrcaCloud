@@ -1,0 +1,286 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+/**
+ * Relatório mensal de UM investidor — a leitura dos dados e o desenho do PDF, compartilhados pelo app
+ * (services/pdfReportService.ts, botão "Gerar Agora") e pela Edge Function `investor-monthly-reports` (a rotina
+ * do dia 1º). Fase A2 + C1 do plano docs/planos/2026-11-21-portal-do-investidor-consolidacao.md.
+ *
+ * SEM imports: a Edge Function (Deno) importa este arquivo direto, e quem chama injeta o cliente do Supabase, o
+ * jsPDF e o autoTable. Mudou o layout? Muda aqui e vale para os dois.
+ */
+
+const PRIMARY  = [30,  64,  175] as [number, number, number]; // blue-800
+const LIGHT    = [241, 245, 249] as [number, number, number]; // slate-100
+const DARK     = [15,  23,  42]  as [number, number, number]; // slate-900
+const GRAY     = [100, 116, 139] as [number, number, number]; // slate-500
+const HEAD_ALT = [248, 250, 252] as [number, number, number]; // slate-50
+
+const fmtBRL = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
+
+function milestoneProgress(milestones: any[], projectId: string) {
+    const ms = milestones.filter(m => m.project_id === projectId);
+    if (!ms.length) return { pct: 0, done: 0, total: 0 };
+    const done = ms.filter(m => m.status === 'completed').length;
+    return { pct: Math.round((done / ms.length) * 100), done, total: ms.length };
+}
+
+function sectionHeader(doc: any, title: string, y: number, W: number): number {
+    doc.setFillColor(...LIGHT);
+    doc.rect(14, y, W - 28, 8, 'F');
+    doc.setTextColor(...PRIMARY);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.text(title, 17, y + 5.5);
+    return y + 12;
+}
+
+/** Classificação "obra" — a mesma regra de utils/projectClassification.isObra, sem importar (Deno). */
+const ehObra = (p: { settings?: { classification?: string | null } | null }): boolean =>
+    (p?.settings?.classification || '').trim().toUpperCase() === 'OBRA';
+
+/** Linha do resumo financeiro de uma obra no relatório do investidor. */
+export interface LinhaFinanceiraDoRelatorio { name: string; aportes: number; dividendos: number; pendentes: number }
+
+/**
+ * Resumo financeiro do relatório mensal de UM investidor (Fase A2 do plano
+ * docs/planos/2026-11-21-portal-do-investidor-consolidacao.md). Antes o relatório somava os aportes de TODOS os
+ * investidores da organização e ia para todos. Só lançamentos do investidor; recebido (dividendo + distribuição)
+ * e aporte só quando liquidados.
+ */
+export function resumoFinanceiroDoInvestidor(
+    projetos: { id: string; name: string }[],
+    lancamentos: { project_id: string; investor_id: string; type: string; amount: number; status: string }[],
+    investorId: string,
+): LinhaFinanceiraDoRelatorio[] {
+    const meus = lancamentos.filter(c => c.investor_id === investorId);
+    const soma = (l: typeof meus) => l.reduce((s, c) => s + (Number(c.amount) || 0), 0);
+    return projetos
+        .map(p => {
+            const pc = meus.filter(c => c.project_id === p.id);
+            return {
+                name: p.name,
+                aportes: soma(pc.filter(c => c.type === 'aporte' && c.status === 'liquidado')),
+                dividendos: soma(pc.filter(c => (c.type === 'dividendo' || c.type === 'distribuicao') && c.status === 'liquidado')),
+                pendentes: soma(pc.filter(c => c.status === 'pendente' || c.status === 'atrasado')),
+            };
+        })
+        .filter(r => r.aportes > 0 || r.dividendos > 0 || r.pendentes > 0);
+}
+
+export interface DadosDoRelatorioMensal {
+    monthLabel: string;
+    generatedAt: string;
+    investidor: { id: string; name: string };
+    orgProjects: any[];
+    contribs: any[];
+    milestones: any[];
+}
+
+/** Rótulo do mês de referência (o mês anterior) e da geração. */
+export function mesDoRelatorio(now: Date = new Date()): { monthLabel: string; generatedAt: string } {
+    const ref = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    return {
+        monthLabel: ref.toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }),
+        generatedAt: now.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }),
+    };
+}
+
+export const nomeDoRelatorioMensal = (monthLabel: string) => `Relatório Mensal — ${monthLabel}`;
+
+/** Caminho no bucket `documents`: `reports/<org>/<investidor>/…` (o layout que portal-documentos-download confere). */
+export const caminhoDoRelatorioMensal = (organizationId: string, investorId: string, monthLabel: string, agora: number = Date.now()) =>
+    `reports/${organizationId}/${investorId}/${agora}_relatorio-mensal-${monthLabel.replace('/', '-')}.pdf`;
+
+/**
+ * As obras do investidor nesta organização (aporte, participação ou SPE), os lançamentos DELE e os marcos.
+ * `null` = sem obra nem lançamento: não há relatório a gerar. `db` = cliente do Supabase (sessão do gestor no
+ * app; service_role na Edge Function).
+ */
+export async function dadosDoRelatorioMensal(db: any, organizationId: string, investidor: { id: string; name: string }, now: Date = new Date()): Promise<DadosDoRelatorioMensal | null> {
+    const { monthLabel, generatedAt } = mesDoRelatorio(now);
+    const [contribsRes, partsRes, sociosRes] = await Promise.all([
+        db.from('investor_contributions').select('project_id, investor_id, type, amount, status')
+            .eq('organization_id', organizationId).eq('investor_id', investidor.id),
+        db.from('investor_participations').select('project_id')
+            .eq('organization_id', organizationId).eq('investor_id', investidor.id),
+        db.from('spe_partners').select('spe:spe_entities!inner(project_id, organization_id)')
+            .eq('investor_id', investidor.id).eq('spe.organization_id', organizationId),
+    ]);
+    for (const r of [contribsRes, partsRes, sociosRes]) if (r.error) throw r.error;
+    const contribs = (contribsRes.data ?? []) as any[];
+    const idsDasObras = new Set<string>([
+        ...contribs.map(c => c.project_id),
+        ...((partsRes.data ?? []) as any[]).map(p => p.project_id),
+        ...((sociosRes.data ?? []) as any[]).map(s => s.spe?.project_id),
+    ].filter(Boolean));
+    const projectsRes = idsDasObras.size
+        ? await db.from('projects').select('id, name, settings, organization_id').in('id', [...idsDasObras])
+        : { data: [], error: null };
+    if (projectsRes.error) throw projectsRes.error;
+    const orgProjects = ((projectsRes.data ?? []) as any[]).filter(p =>
+        (p.organization_id ?? p.settings?.organizationId) === organizationId && ehObra(p),
+    );
+
+    // Sem obra nem lançamento do investidor nesta org: não há relatório a gerar.
+    if (!orgProjects.length && !contribs.length) return null;
+
+    let milestones: any[] = [];
+    if (orgProjects.length) {
+        const ids = orgProjects.map((p: any) => p.id);
+        const { data } = await db
+            .from('project_milestones')
+            .select('project_id, name, status, physical_pct, completed_date')
+            .in('project_id', ids);
+        milestones = data ?? [];
+    }
+
+    return { monthLabel, generatedAt, investidor, orgProjects, contribs, milestones };
+}
+
+/** Desenha o relatório no `doc` (jsPDF A4 retrato, mm). */
+export function desenharRelatorioMensal(doc: any, autoTable: (doc: any, opcoes: any) => void, d: DadosDoRelatorioMensal): void {
+    const { monthLabel, generatedAt, investidor, orgProjects, contribs, milestones } = d;
+    const W = doc.internal.pageSize.getWidth();
+
+    // Header bar
+    doc.setFillColor(...PRIMARY);
+    doc.rect(0, 0, W, 32, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.text('ORÇACLOUD', 14, 13);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Portal do Investidor', 14, 21);
+    doc.setFontSize(13);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Relatório Mensal — ${monthLabel}`, W - 14, 13, { align: 'right' });
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Gerado em ${generatedAt}`, W - 14, 21, { align: 'right' });
+    doc.text(investidor.name, W - 14, 27, { align: 'right' });
+
+    let y = 44;
+
+    // ── Empreendimentos ───────────────────────────────────────────────────────
+    if (orgProjects.length) {
+        y = sectionHeader(doc, 'EMPREENDIMENTOS', y, W);
+
+        autoTable(doc, {
+            startY: y,
+            margin: { left: 14, right: 14 },
+            head: [['Empreendimento', 'Status', 'Progresso', 'Marcos']],
+            body: orgProjects.map((p: any) => {
+                const prog = milestoneProgress(milestones, p.id);
+                return [
+                    p.name,
+                    p.settings?.obraStatus ?? 'Em Andamento',
+                    `${prog.pct}%`,
+                    `${prog.done}/${prog.total}`,
+                ];
+            }),
+            headStyles: { fillColor: PRIMARY, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+            bodyStyles: { fontSize: 9, textColor: DARK },
+            alternateRowStyles: { fillColor: HEAD_ALT },
+            columnStyles: {
+                0: { cellWidth: 90 },
+                1: { cellWidth: 40 },
+                2: { cellWidth: 25, halign: 'center' },
+                3: { cellWidth: 25, halign: 'center' },
+            },
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    // ── Resumo Financeiro ─────────────────────────────────────────────────────
+    const financialRows = resumoFinanceiroDoInvestidor(orgProjects, contribs, investidor.id);
+
+    if (financialRows.length) {
+        y = sectionHeader(doc, 'RESUMO FINANCEIRO', y, W);
+        const totalAportes    = financialRows.reduce((s: number, r: any) => s + r.aportes, 0);
+        const totalDividendos = financialRows.reduce((s: number, r: any) => s + r.dividendos, 0);
+        const totalPendentes  = financialRows.reduce((s: number, r: any) => s + r.pendentes, 0);
+
+        autoTable(doc, {
+            startY: y,
+            margin: { left: 14, right: 14 },
+            head: [['Empreendimento', 'Aportes Liquidados', 'Dividendos / Dist.', 'Pendências']],
+            body: [
+                ...financialRows.map((r: any) => [r.name, fmtBRL(r.aportes), fmtBRL(r.dividendos), r.pendentes > 0 ? fmtBRL(r.pendentes) : '—']),
+                ['TOTAL', fmtBRL(totalAportes), fmtBRL(totalDividendos), totalPendentes > 0 ? fmtBRL(totalPendentes) : '—'],
+            ],
+            headStyles: { fillColor: PRIMARY, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+            bodyStyles: { fontSize: 9, textColor: DARK },
+            alternateRowStyles: { fillColor: HEAD_ALT },
+            // Linha de total em negrito
+            didParseCell: (data: any) => {
+                if (data.row.index === financialRows.length) {
+                    data.cell.styles.fontStyle = 'bold';
+                    data.cell.styles.fillColor = LIGHT;
+                }
+            },
+            columnStyles: {
+                0: { cellWidth: 75 },
+                1: { cellWidth: 40, halign: 'right' },
+                2: { cellWidth: 45, halign: 'right' },
+                3: { cellWidth: 30, halign: 'right' },
+            },
+        });
+        y = (doc as any).lastAutoTable.finalY + 10;
+    }
+
+    // ── Marcos concluídos ─────────────────────────────────────────────────────
+    const completedMs = milestones.filter((m: any) => m.status === 'completed').slice(0, 12);
+    if (completedMs.length) {
+        y = sectionHeader(doc, 'MARCOS CONCLUÍDOS', y, W);
+
+        autoTable(doc, {
+            startY: y,
+            margin: { left: 14, right: 14 },
+            head: [['Marco', 'Empreendimento', 'Conclusão', '% Físico']],
+            body: completedMs.map((m: any) => {
+                const proj = orgProjects.find((p: any) => p.id === m.project_id);
+                return [
+                    m.name,
+                    proj?.name ?? '—',
+                    m.completed_date ? new Date(m.completed_date).toLocaleDateString('pt-BR') : '—',
+                    `${m.physical_pct ?? 0}%`,
+                ];
+            }),
+            headStyles: { fillColor: PRIMARY, textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 9 },
+            bodyStyles: { fontSize: 9, textColor: DARK },
+            alternateRowStyles: { fillColor: HEAD_ALT },
+            columnStyles: {
+                0: { cellWidth: 75 },
+                1: { cellWidth: 65 },
+                2: { cellWidth: 30, halign: 'center' },
+                3: { cellWidth: 20, halign: 'center' },
+            },
+        });
+    }
+
+    // ── Fallback quando não há nenhum dado ────────────────────────────────────
+    if (!orgProjects.length && !financialRows.length && !completedMs.length) {
+        doc.setTextColor(...GRAY);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(10);
+        doc.text('Nenhum empreendimento ou movimentação financeira encontrado para este período.', 14, y);
+        doc.setFontSize(9);
+        doc.text('Verifique se os projetos estão vinculados à organização correta e possuem dados cadastrados.', 14, y + 7);
+    }
+
+    // ── Footer em todas as páginas ────────────────────────────────────────────
+    const totalPages = doc.getNumberOfPages();
+    for (let i = 1; i <= totalPages; i++) {
+        doc.setPage(i);
+        const H = doc.internal.pageSize.getHeight();
+        doc.setFillColor(...LIGHT);
+        doc.rect(0, H - 12, W, 12, 'F');
+        doc.setTextColor(...GRAY);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.text('OrçaCloud — Portal do Investidor · Documento gerado automaticamente · Uso interno.', 14, H - 4);
+        doc.text(`${i} / ${totalPages}`, W - 14, H - 4, { align: 'right' });
+    }
+
+}

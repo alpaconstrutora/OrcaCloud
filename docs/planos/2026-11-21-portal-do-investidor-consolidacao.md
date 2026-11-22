@@ -125,7 +125,7 @@ Mudanças em relação à tabela:
   nome da org.
 - A5 sem gatilho na escrita: as 111 versões do GED já estão na pasta da org; a trava fica na leitura do link.
 
-**Fase B: 6 de 6 itens feitos** (frente `portal-investidor-fb`, empilhada na A). Migration
+**Fase B: 6 de 6 — NO AR** (PR #638, squash d2b3d32; migration 999000 APLICADA em 21/11 com OK do usuário). Migration
 `aplicar_20271121999000_portal_investidor_numeros.sql`. Ensaio (A + B + prova, desfeito):
 - B1: sócio sem participação digitada aparece; o resumo do link traz a obra da SPE.
 - B2: sem versão só o integralizado (800 mil); com versão o lucro de 5 mi e o rótulo.
@@ -138,3 +138,29 @@ Em código:
   em parte).
 - `utils/informeDeRendimentos.ts` serve o PortalFiscal e o TaxReport. B5 seguiu a regra da declaração:
   rendimentos pagos no ano e custo = posição em 31/12, com a do ano anterior ao lado.
+
+**Fase C: 10 de 10 itens feitos** na frente `portal-investidor-fc`. Migration
+`aplicar_20271121999500_portal_investidor_fase_c.sql` e Edge Function nova `investor-monthly-reports`.
+- C1: rotina do dia 1º → `generate_monthly_investor_reports()` chama a Edge Function, que gera o PDF de cada
+  investidor. O módulo `utils/relatorioMensalDoInvestidor.ts` é o mesmo do "Gerar Agora" e não importa nada (Deno).
+  O agendamento (`cron.job`) não muda. A função deixou de ser executável por `authenticated`. Tem modo
+  `{ensaio:true}`, que gera sem gravar.
+- C2: o "Chamar/Pagar" manual saiu do SpeManager (e `speService.addCapitalPayment`, sem chamador); o sócio nasce
+  com chamado/integralizado 0.
+- C3: o "Tenho interesse" do portal pede o valor, com o ticket mínimo como piso; o botão desligado diz por quê.
+- C4: o lançamento tem forma de pagamento e comprovante; o portal baixa pela `portal-documentos-download`.
+  Mudança em relação à sugestão: o comprovante fica no bucket privado dos relatórios do investidor
+  (`reports/<org>/comprovantes/…`), não no GED. Assim o link baixa pela mesma trava dos relatórios; pelo GED seria
+  preciso uma terceira trava de download.
+- C5: o lançamento tem "Pago em" próprio (obrigatório quando liquidado).
+- C6: `cancelado` aceito no banco, com o rótulo no gestor.
+- C7: a aba Simulador simula a oportunidade escolhida (`SimuladorDaOportunidade`) e some para o investidor sem
+  oportunidade simulável; `components/InvestmentSimulator.tsx` (genérico) apagado.
+- C8: `ApresentacaoDaOportunidade` é a mesma no gestor (Detalhes) e no portal (aba nova "Apresentação"); a obra
+  vem pela RPC nova `fn_investor_portal_get_obra`.
+- C9: a carteira já era uma função só desde a Fase B.
+- C10: saíram:
+  - índices fixos (Selic/IPCA/IGPM), CUB a cada carga e o modal de texto sem uso;
+  - os ramos de token que nunca rodavam (OpportunityDetail/OpportunitiesTab) e o "Atualizado hoje" fixo;
+  - o recurso do gráfico pelo diário × valor de obra digitado (contrariava a D2);
+  - `fn_investor_portal_get_milestones`, sem chamador (DROP).

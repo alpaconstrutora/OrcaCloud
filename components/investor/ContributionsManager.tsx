@@ -99,8 +99,8 @@ const ContributionsManager: React.FC<Props> = ({ organizationId, projectId, proj
                 status: form.status as ContributionStatus,
                 due_date: form.due_date || null,
                 paid_date: form.status === 'liquidado' ? (form.paid_date || null) : null,
-                payment_method: form.payment_method || null,
-                receipt_url: receiptUrl,
+                payment_method: form.payment_method || undefined,
+                receipt_url: receiptUrl ?? undefined,
                 description: form.description,
             });
             setForm(emptyForm());

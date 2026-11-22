@@ -17,7 +17,7 @@ import MonthlyReportTrigger from './investor/MonthlyReportTrigger';
 import { investorContributionsService } from '../services/investorContributionsService';
 import { marketDataService } from '../services/marketDataService';
 import { storageService } from '../services/storageService';
-import InvestmentSimulator from './InvestmentSimulator';
+import SimuladorDaOportunidade, { oportunidadesSimulaveis } from './investor/SimuladorDaOportunidade';
 import AssetDetailModal from './AssetDetailModal';
 import PaymentsPanel from './PaymentsPanel';
 import TaxReport from './TaxReport';
@@ -188,9 +188,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     // Sem fallback: o segundo `length > 0 ? ... : dashboard` daqui reacendia a aba
     // Resumo mesmo com tudo desligado. Nenhuma aba habilitada = portal sem
     // conteudo, tratado com aviso proprio no lugar de reabrir uma aba sozinho.
+    // Fase C7: sem oportunidade publicada com versão, o investidor não vê a aba Simulador (o gestor vê, para configurar).
+    const temSimulavel = React.useMemo(() => oportunidadesSimulaveis(opportunities).length > 0, [opportunities]);
     const navTabs = React.useMemo(
-        () => (isAdmin ? [...TABS] : renderableTabs.filter(t => enabledTabIds.includes(t.id))),
-        [enabledTabIds, isAdmin, renderableTabs],
+        () => (isAdmin ? [...TABS] : renderableTabs.filter(t => enabledTabIds.includes(t.id) && (t.id !== 'simulator' || temSimulavel))),
+        [enabledTabIds, isAdmin, renderableTabs, temSimulavel],
     );
     const semAbasHabilitadas = isPublicExperience && navTabs.length === 0;
 
@@ -870,8 +872,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 )}
                 {activeTab === 'simulator' && (
                     isPublicExperience
-                        ? <div className="bg-white rounded-2xl border border-[#ECECEF] shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5"><InvestmentSimulator /></div>
-                        : <InvestmentSimulator />
+                        ? <div className="bg-white rounded-2xl border border-[#ECECEF] shadow-[0_1px_2px_rgba(16,24,40,0.04)] p-5"><SimuladorDaOportunidade opportunities={opportunities} /></div>
+                        : <SimuladorDaOportunidade opportunities={opportunities} />
                 )}
                 {activeTab === 'holdings' && (
                     isPublicExperience ? (

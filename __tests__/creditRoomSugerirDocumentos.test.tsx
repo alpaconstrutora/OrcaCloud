@@ -5,6 +5,7 @@
  * O que estes testes protegem:
  *  - os grupos saem na ordem Contratos → Empreendimentos → Obra → Clientes;
  *  - o grupo de CLIENTES nasce DESMARCADO e com o aviso de LGPD (dado pessoal não vai sem escolha);
+ *  - documento VENCIDO nasce desmarcado, a caixa do grupo nunca o marca, e ele só entra no compartilhamento marcado um a um;
  *  - documento que já está no Data Room fica desligado, sem marca e rotulado;
  *  - documento do contrato que também é do cliente segue marcado, mas avisa "contém dados do cliente";
  *  - "Compartilhar" entrega ao serviço EXATAMENTE os ids marcados e recarrega a lista;
@@ -105,13 +106,16 @@ describe('CreditRoomSugerirDocumentos', () => {
         ]);
     });
 
-    it('CLIENTES nasce desmarcado e com o aviso de LGPD; os demais grupos vêm marcados', async () => {
+    it('CLIENTES nasce desmarcado e com o aviso de LGPD; os demais grupos vêm marcados, menos o vencido', async () => {
         abrir();
         await screen.findByText('Documentos dos clientes');
         expect(screen.getByText(AVISO_LGPD_CLIENTE)).toBeInTheDocument();
         expect(caixa('Selecionar Documento k1').checked).toBe(false);
         expect(caixa('Selecionar todos: Documentos dos clientes').checked).toBe(false);
-        for (const n of ['c1', 'c3', 'e1', 'o1']) expect(caixa(`Selecionar Documento ${n}`).checked).toBe(true);
+        for (const n of ['c1', 'c3', 'o1']) expect(caixa(`Selecionar Documento ${n}`).checked).toBe(true);
+        // e1 está vencido: começa desmarcado, mas a caixa continua ligada (dá para marcar um a um).
+        expect(caixa('Selecionar Documento e1').checked).toBe(false);
+        expect(caixa('Selecionar Documento e1')).toBeEnabled();
     });
 
     it('documento já no Data Room fica desligado, sem marca e rotulado', async () => {
@@ -151,13 +155,13 @@ describe('CreditRoomSugerirDocumentos', () => {
         // Marca um do grupo CLIENTES e desmarca um dos contratos.
         fireEvent.click(caixa('Selecionar Documento k1'));
         fireEvent.click(caixa('Selecionar Documento c1'));
-        expect(botaoCompartilhar()).toHaveTextContent('Compartilhar 4 documentos');
+        expect(botaoCompartilhar()).toHaveTextContent('Compartilhar 3 documentos');
 
         fireEvent.click(botaoCompartilhar());
         await waitFor(() => expect(onClose).toHaveBeenCalled());
         const [salaChamada, ids] = shareDocuments.mock.calls[0];
         expect(salaChamada.id).toBe('r1');
-        expect([...ids].sort()).toEqual(['c3', 'e1', 'k1', 'o1']);
+        expect([...ids].sort()).toEqual(['c3', 'k1', 'o1']);
         expect(listDocuments).toHaveBeenCalledWith('r1');
         expect(onShared).toHaveBeenCalledWith(novaLista);
     });
@@ -178,6 +182,45 @@ describe('CreditRoomSugerirDocumentos', () => {
         fireEvent.click(grupo); // todos → desmarca
         expect(caixa('Selecionar Documento c1').checked).toBe(false);
         expect(caixa('Selecionar Documento c3').checked).toBe(false);
+    });
+
+    it('a caixa do grupo não marca o vencido; ele só entra no compartilhamento marcado um a um', async () => {
+        sugerirDocumentos.mockResolvedValue(agruparSugestoes([
+            doc('x1', 'EMPREENDIMENTO', { vencido: true, dataValidade: '2025-01-31' }),
+            doc('x2', 'EMPREENDIMENTO'),
+        ]));
+        abrir();
+        await screen.findByText('Documentos dos empreendimentos');
+        const grupo = caixa('Selecionar todos: Documentos dos empreendimentos');
+        expect(caixa('Selecionar Documento x1').checked).toBe(false);
+        expect(grupo.checked).toBe(true); // "todos" = os que não estão vencidos nem no Data Room
+
+        fireEvent.click(grupo); // desmarca todos
+        expect(caixa('Selecionar Documento x2').checked).toBe(false);
+        fireEvent.click(grupo); // marca todos de novo
+        expect(caixa('Selecionar Documento x2').checked).toBe(true);
+        expect(caixa('Selecionar Documento x1').checked).toBe(false); // o vencido segue desmarcado
+
+        fireEvent.click(caixa('Selecionar Documento x1'));
+        expect(botaoCompartilhar()).toHaveTextContent('Compartilhar 2 documentos');
+        fireEvent.click(botaoCompartilhar());
+        await waitFor(() => expect(shareDocuments).toHaveBeenCalled());
+        expect([...shareDocuments.mock.calls[0][1]].sort()).toEqual(['x1', 'x2']);
+    });
+
+    it('grupo em que tudo já está no Data Room diz isso, sem "0 de 0"', async () => {
+        sugerirDocumentos.mockResolvedValue(agruparSugestoes([doc('z1', 'OBRA', { jaCompartilhado: true })]));
+        abrir();
+        await screen.findByText('Documentos da obra');
+        expect(screen.getByText('todos já no Data Room', { selector: 'span' })).toBeInTheDocument();
+        expect(screen.queryByText(/0 de 0/)).toBeNull();
+    });
+
+    it('"contém dados do cliente" não repete no grupo Clientes (já tem o aviso de LGPD)', async () => {
+        sugerirDocumentos.mockResolvedValue(agruparSugestoes([doc('k9', 'CLIENTE', { temDadosDoCliente: true })]));
+        abrir();
+        await screen.findByText('Documentos dos clientes');
+        expect(screen.queryByText('contém dados do cliente')).toBeNull();
     });
 
     it('sem nada marcado o botão desliga e diz o motivo', async () => {

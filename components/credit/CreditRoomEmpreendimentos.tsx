@@ -473,6 +473,9 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
                     </>
                 ) : (
                     <StandardTable<LinhaContrato>
+                        // O conjunto de colunas é congelado no mount (useTableColumns): trocar a chave remonta a tabela
+                        // quando a lista de documentos chega depois da primeira renderização.
+                        key={comDocumentos ? 'c-docs' : 's-docs'}
                         storageKey="creditRoom:contratos"
                         columns={colunas}
                         rows={linhas}

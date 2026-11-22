@@ -235,6 +235,18 @@ describe('CreditRoomEmpreendimentos — coluna Documentos', () => {
         expect(celula(within(tabela).getByText('Venda 07').closest('tr') as HTMLElement, col).textContent).toBe('—');
     });
 
+    it('a lista chega DEPOIS da 1ª renderização (1ª visita): a coluna Documentos aparece sem recarregar a tela', () => {
+        const v = versao({ empreendimentos: EMPS, contratos: CONTRATOS });
+        const { rerender } = render(<ConfirmProvider><CreditRoomEmpreendimentos version={v} accent="indigo" /></ConfirmProvider>);
+        expect(within(screen.getByRole('table')).queryByText('Documentos')).toBeNull();
+
+        rerender(<ConfirmProvider><CreditRoomEmpreendimentos version={v} accent="indigo" documentos={DOCUMENTOS} /></ConfirmProvider>);
+        const tabela = screen.getByRole('table');
+        const col = within(tabela).getAllByRole('columnheader').findIndex(h => /Documentos/.test(h.textContent ?? ''));
+        expect(col).toBeGreaterThan(-1);
+        expect(celula(within(tabela).getByText('Venda 01').closest('tr') as HTMLElement, col).textContent).toBe('2');
+    });
+
     it('o painel do empreendimento também traz a coluna Documentos', () => {
         abrir(versao({ empreendimentos: EMPS, contratos: CONTRATOS }), 'indigo', DOCUMENTOS);
         fireEvent.click(screen.getByRole('button', { name: /Residencial Aurora/ }));

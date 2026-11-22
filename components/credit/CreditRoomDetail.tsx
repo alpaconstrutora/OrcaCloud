@@ -113,6 +113,12 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         return () => { vivo = false; };
     }, [room.id]);
 
+    // Outra operação: a lista da anterior não pode aparecer (nem a coluna "Documentos" com contagem dela).
+    React.useEffect(() => {
+        setDocumentos([]);
+        setDocumentosCarregados(false);
+    }, [room.id]);
+
     React.useEffect(() => {
         let vivo = true;
         const carregar = async () => {
@@ -389,15 +395,16 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     <p className="text-sm font-normal text-gray-500 px-1">
                         {documentos.length} documento{documentos.length === 1 ? '' : 's'} no Data Room
                     </p>
-                    <button
-                        onClick={() => setSugerirAberto(true)}
-                        disabled={!ativa}
-                        title={ativa ? undefined : 'Congele uma versão para sugerir os documentos da carteira'}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        <Sparkles className="w-[15px] h-[15px]" />
-                        Sugerir documentos
-                    </button>
+                    <span className="inline-flex shrink-0" title={ativa ? undefined : 'Congele uma versão para sugerir os documentos da carteira'}>
+                        <button
+                            onClick={() => setSugerirAberto(true)}
+                            disabled={!ativa}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
+                        >
+                            <Sparkles className="w-[15px] h-[15px]" />
+                            Sugerir documentos
+                        </button>
+                    </span>
                 </div>
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     {carregandoAba ? (

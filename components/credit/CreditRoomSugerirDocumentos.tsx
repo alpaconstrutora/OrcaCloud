@@ -35,7 +35,7 @@ interface Props {
 }
 
 /** Caixa de grupo: marcada / desmarcada / parcial (traço). */
-const CaixaDoGrupo: React.FC<{ marcados: number; total: number; titulo: string; onChange: () => void }> = ({ marcados, total, titulo, onChange }) => {
+const CaixaDoGrupo: React.FC<{ marcados: number; total: number; titulo: string; motivoDesligada: string; onChange: () => void }> = ({ marcados, total, titulo, motivoDesligada, onChange }) => {
     const ref = React.useRef<HTMLInputElement>(null);
     React.useEffect(() => {
         if (ref.current) ref.current.indeterminate = marcados > 0 && marcados < total;
@@ -47,7 +47,7 @@ const CaixaDoGrupo: React.FC<{ marcados: number; total: number; titulo: string; 
             aria-label={`Selecionar todos: ${titulo}`}
             checked={total > 0 && marcados === total}
             disabled={semNada}
-            title={semNada ? 'Todos os documentos deste grupo já estão no Data Room' : undefined}
+            title={semNada ? motivoDesligada : undefined}
             onChange={onChange}
             className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
         />
@@ -80,8 +80,9 @@ const CreditRoomSugerirDocumentos: React.FC<Props> = ({ open, onClose, room, ver
             .then(g => {
                 if (!vivo) return;
                 setGrupos(g);
-                // Pré-marcado: grupos "bons" (não CLIENTE), sem o que já está no Data Room.
-                setMarcados(new Set(g.filter(x => x.marcadoPorPadrao).flatMap(x => x.itens).filter(i => !i.jaCompartilhado).map(i => i.documentId)));
+                // Pré-marcado: grupos "bons" (não CLIENTE), sem o que já está no Data Room e sem o vencido
+                // (vencido só entra marcado um a um, de propósito).
+                setMarcados(new Set(g.filter(x => x.marcadoPorPadrao).flatMap(x => x.itens).filter(i => !i.jaCompartilhado && !i.vencido).map(i => i.documentId)));
             })
             .catch(e => { if (vivo) setErro(errorMessage(e, 'Não foi possível ler os documentos do GED.')); })
             .finally(() => { if (vivo) setCarregando(false); });
@@ -97,7 +98,8 @@ const CreditRoomSugerirDocumentos: React.FC<Props> = ({ open, onClose, room, ver
     });
 
     const alternarGrupo = (g: GrupoDeSugestoes) => {
-        const ids = g.itens.filter(i => !i.jaCompartilhado).map(i => i.documentId);
+        // "Todos" = os que não estão no Data Room e não estão vencidos; vencido só se marca um a um.
+        const ids = g.itens.filter(i => !i.jaCompartilhado && !i.vencido).map(i => i.documentId);
         setMarcados(prev => {
             const n = new Set(prev);
             const todos = ids.length > 0 && ids.every(id => n.has(id));
@@ -120,6 +122,9 @@ const CreditRoomSugerirDocumentos: React.FC<Props> = ({ open, onClose, room, ver
             setCompartilhando(false);
         }
     };
+
+    // Durante o compartilhamento o painel não fecha (nem por Esc/véu/X): o resultado ainda não voltou.
+    const fecharSeLivre = () => { if (!compartilhando) onClose(); };
 
     const total = grupos.reduce((n, g) => n + g.itens.length, 0);
     const n = marcados.size;
@@ -152,7 +157,7 @@ const CreditRoomSugerirDocumentos: React.FC<Props> = ({ open, onClose, room, ver
                             {d.vencido && <span className="text-red-600">Vencido em {formatDateBR(d.dataValidade)}</span>}
                             {!d.vencido && d.dataValidade && <span className="text-gray-500">Validade {formatDateBR(d.dataValidade)}</span>}
                             {d.jaCompartilhado && <span className="text-gray-500">já no Data Room</span>}
-                            {d.temDadosDoCliente && <span className="text-amber-700">contém dados do cliente</span>}
+                            {d.temDadosDoCliente && d.origem !== 'CLIENTE' && <span className="text-amber-700">contém dados do cliente</span>}
                         </span>
                     </span>
                 </label>
@@ -161,7 +166,7 @@ const CreditRoomSugerirDocumentos: React.FC<Props> = ({ open, onClose, room, ver
     };
 
     return (
-        <Sheet open={open} onClose={onClose} size="xl">
+        <Sheet open={open} onClose={fecharSeLivre} size="xl">
             <SheetHeader onClose={onClose}>
                 <SheetTitle>Sugerir documentos</SheetTitle>
                 <SheetDescription>
@@ -188,15 +193,22 @@ const CreditRoomSugerirDocumentos: React.FC<Props> = ({ open, onClose, room, ver
                     </div>
                 ) : (
                     grupos.map(g => {
-                        const selecionaveis = g.itens.filter(i => !i.jaCompartilhado);
-                        const naoMarcados = selecionaveis.filter(i => marcados.has(i.documentId)).length;
+                        const naoCompartilhados = g.itens.filter(i => !i.jaCompartilhado);
+                        const emLote = naoCompartilhados.filter(i => !i.vencido);
+                        const marcadosEmLote = emLote.filter(i => marcados.has(i.documentId)).length;
+                        const marcadosNoGrupo = naoCompartilhados.filter(i => marcados.has(i.documentId)).length;
+                        const motivoDesligada = naoCompartilhados.length === 0
+                            ? 'Todos os documentos deste grupo já estão no Data Room'
+                            : 'Só há documentos vencidos neste grupo: marque um a um';
                         return (
                             <section key={g.origem} aria-label={g.titulo} className="space-y-2">
                                 <div className="flex items-center gap-3 px-1">
-                                    <CaixaDoGrupo marcados={naoMarcados} total={selecionaveis.length} titulo={g.titulo} onChange={() => alternarGrupo(g)} />
+                                    <CaixaDoGrupo marcados={marcadosEmLote} total={emLote.length} titulo={g.titulo} motivoDesligada={motivoDesligada} onChange={() => alternarGrupo(g)} />
                                     <h3 className="text-sm font-semibold text-gray-900">{g.titulo}</h3>
                                     <span className={rotuloDoCampo}>
-                                        {naoMarcados} de {selecionaveis.length} marcado{selecionaveis.length === 1 ? '' : 's'}
+                                        {naoCompartilhados.length === 0
+                                            ? 'todos já no Data Room'
+                                            : `${marcadosNoGrupo} de ${naoCompartilhados.length} marcado${naoCompartilhados.length === 1 ? '' : 's'}`}
                                     </span>
                                 </div>
                                 {g.aviso && (
@@ -214,7 +226,7 @@ const CreditRoomSugerirDocumentos: React.FC<Props> = ({ open, onClose, room, ver
                 )}
             </SheetPanel>
             <SheetFooter>
-                <button onClick={onClose} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">Cancelar</button>
+                <button onClick={onClose} disabled={compartilhando} title={compartilhando ? 'Aguarde: compartilhando os documentos' : undefined} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px] disabled:opacity-50">Cancelar</button>
                 <span className="inline-flex" title={motivoDesligado}>
                     <button
                         onClick={() => void compartilhar()}

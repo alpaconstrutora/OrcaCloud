@@ -42,6 +42,8 @@
 | 21/11 | Quem assina além dos compradores? | Representante da empresa, testemunhas e corretor |
 | 21/11 | Como confirmar que é o próprio comprador? | Código de 6 dígitos por e-mail, mais CPF e aceite |
 | 21/11 | E o comprador sem portal? | Convidar ao portal na hora do envio |
+| 22/11 | Texto do termo de aceite (`TERMO_DE_ACEITE`, v2026-11-21.1) | "de acordo" — aprovado como está |
+| 22/11 | Quem faz o teste de ponta a ponta com e-mail real? | "eu mesmo" — o usuário, depois de publicar F4–F6 |
 | 21/11 | O ZapSign fica? | Fica, para os documentos importantes. O caminho interno é um segundo provedor, escolhido documento a documento |
 
 ## Contexto

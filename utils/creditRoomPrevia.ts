@@ -25,10 +25,10 @@ export const ID_DA_PREVIA = 'previa';
 
 /**
  * Embrulha a `VersaoPreparada` como `CreditRoomVersion` de tela: versionNo 0,
- * label 'Prévia', `frozenAt` = hora da conta (não há congelamento). A prévia não
- * conhece a organização do room; quem precisar passa `organizationId`.
+ * label 'Prévia', `frozenAt` = hora da conta (não há congelamento). A
+ * `VersaoPreparada` não traz a organização do room: quem chama passa a do room.
  */
-export function versaoDaPrevia(p: VersaoPreparada, calculadaEm: string, organizationId = ''): CreditRoomVersion {
+export function versaoDaPrevia(p: VersaoPreparada, calculadaEm: string, organizationId: string): CreditRoomVersion {
     return {
         id: ID_DA_PREVIA,
         organizationId,
@@ -59,30 +59,42 @@ const parcelasPorMes = (linhas: { dueDate: string; total: number }[]): Record<st
  * Recalcula a capacidade com parâmetros simulados, sem reler o banco.
  *
  * - Série: vendas, aluguéis, despesa e serviço atual ficam como estão; só o
- *   `servico_novo` muda, e SÓ sem proposta de dívida vinculada. Com proposta o
- *   cronograma real dela já é o serviço novo — simular taxa/prazo não o refaz.
- *   Sem proposta, ele é refeito com `buildSchedule` exatamente como o
- *   congelamento faz (principal = valor pedido, 1º vencimento = dia 1 do 1º mês
- *   da série); sem valor pedido ou prazo, é zero (como o service).
- * - `capacidade_maxima` reconta com os parâmetros simulados (que valem para a
- *   dívida nova hipotética, com ou sem proposta — é a pergunta "quanto cabe").
- * - `horizonte_meses` fica o da série (ela tem aquele tamanho; não há título nem
- *   locação aqui para esticá-la). `despesa_operacional` só é registrado: a
- *   despesa já está na série e não dá para ligá-la de volta sem reler.
+ *   `servico_novo` muda, e SÓ quando `ctx.servicoNovoSimulado` é true (vem de
+ *   `VersaoPreparada.servicoNovoSimulado`: o congelamento o montou com
+ *   `buildSchedule`, sem proposta ou com proposta sem cronograma). Com o
+ *   cronograma real da proposta, ou com ela já na curva da dívida atual
+ *   (`servico_novo` = {} e a parcela dentro de `servico_atual`), a série fica
+ *   intacta: refazê-lo com os parâmetros simulados trocaria o contrato real por
+ *   uma hipótese, ou contaria a proposta 2×. Quem chama NÃO deduz isso do
+ *   `debtContractId`.
+ * - Refeito, ele espelha `servicoNovoPorMes` do service: principal = valor
+ *   pedido, 1º vencimento = dia 1 do 1º mês da série; sem valor pedido ou prazo,
+ *   zero.
+ * - `capacidade_maxima` reconta com os parâmetros simulados nos dois casos (é a
+ *   pergunta "quanto cabe").
+ * - `parametros` gravados: os simulados, mas `horizonte_meses` e
+ *   `despesa_operacional` ficam os da série (ela tem aquele tamanho e aquela
+ *   despesa; o registro não afirma o que a série não reflete).
  * - `estoque` recalcula o valor elegível com o haircut simulado.
  *
- * `ctx.fluxos` é obrigatório (desvio documentado da assinatura do plano): a
- * série guarda o bruto das duas pernas e não dá para deduzir os fluxos dela.
+ * Para a identidade com o congelamento valer: `p` são os parâmetros EFETIVOS
+ * (`parametrosEfetivos` com prazo/carência da operação, depois os ajustes do
+ * usuário) e `ctx.fluxos` são os fluxos elegíveis da operação (a série guarda o
+ * bruto das duas pernas, não dá para deduzi-los dela).
  */
 export function simularParametros(
     c: SnapshotCapacidade, p: ParametrosCapacidade,
-    ctx: { requestedAmount: number; temProposta: boolean; fluxos: FluxosElegiveis },
+    ctx: { requestedAmount: number; servicoNovoSimulado: boolean; fluxos: FluxosElegiveis },
 ): SnapshotCapacidade {
-    const parametros: ParametrosCapacidade = { ...p, horizonte_meses: c.parametros.horizonte_meses };
+    const parametros: ParametrosCapacidade = {
+        ...p,
+        horizonte_meses: c.parametros.horizonte_meses,
+        despesa_operacional: c.parametros.despesa_operacional,
+    };
     const primeiroVencimento = c.serie.length ? `${c.serie[0].mes}-01` : '';
 
     let serie = c.serie;
-    if (!ctx.temProposta && c.serie.length) {
+    if (ctx.servicoNovoSimulado && c.serie.length) {
         const novo = ctx.requestedAmount > 0 && p.prazo_meses > 0
             ? parcelasPorMes(buildSchedule({
                 principal: ctx.requestedAmount,
@@ -126,6 +138,7 @@ export interface DiferencaComLiberada {
 const numerosDaVersao = (v: CreditRoomVersion): Record<CampoComparado, number | null> => {
     const cap = v.snapshot.capacidade ?? null;
     const resumo = resumoDaCapacidade(cap);
+    // DSCR também em centavos (2 casas): diferença abaixo disso não vale aviso.
     const cents = (x: number | null | undefined): number | null => (x == null || Number.isNaN(x) ? null : round2(x));
     return {
         valor_maximo: cents(cap?.capacidade_maxima.valor_maximo),

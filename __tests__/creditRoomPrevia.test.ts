@@ -62,7 +62,8 @@ const porMes = (p = P): Record<string, number> => {
     return out;
 };
 
-const semProposta = { requestedAmount: PEDIDO, temProposta: false, fluxos: FLUXOS };
+/** O congelamento montou o serviço novo com `buildSchedule` (sem proposta, ou proposta sem cronograma). */
+const simulado = { requestedAmount: PEDIDO, servicoNovoSimulado: true, fluxos: FLUXOS };
 
 const versao = (cap: SnapshotCapacidade | null, extra: { nEmp?: number | null; nCont?: number | null } = {}): CreditRoomVersion => {
     const snapshot = buildSnapshot({
@@ -86,12 +87,12 @@ const versao = (cap: SnapshotCapacidade | null, extra: { nEmp?: number | null; n
 describe('versaoDaPrevia / ehPrevia', () => {
     it('mantém snapshot e indicadores, versionNo 0, label Prévia, frozenAt = calculada em', () => {
         const v = versao(nova(porMes()));
-        const prep: VersaoPreparada = { roomId: 'r9', dataBase: DATA_BASE, snapshot: v.snapshot, indicators: v.indicators };
-        const pv = versaoDaPrevia(prep, '2026-11-22T12:00:00Z');
+        const prep: VersaoPreparada = { roomId: 'r9', dataBase: DATA_BASE, snapshot: v.snapshot, indicators: v.indicators, servicoNovoSimulado: true };
+        const pv = versaoDaPrevia(prep, '2026-11-22T12:00:00Z', 'o9');
         expect(pv.snapshot).toBe(v.snapshot);
         expect(pv.indicators).toBe(v.indicators);
         expect(pv).toMatchObject({
-            id: ID_DA_PREVIA, versionNo: 0, label: 'Prévia', creditRoomId: 'r9', dataBase: DATA_BASE,
+            id: ID_DA_PREVIA, organizationId: 'o9', versionNo: 0, label: 'Prévia', creditRoomId: 'r9', dataBase: DATA_BASE,
             frozenAt: '2026-11-22T12:00:00Z', documentVersionIds: ['d1', 'd2'],
         });
         expect(ehPrevia(pv)).toBe(true);
@@ -104,7 +105,7 @@ describe('versaoDaPrevia / ehPrevia', () => {
 describe('simularParametros', () => {
     it('mesmos parâmetros, sem proposta: mesma série e mesma capacidade máxima (identidade)', () => {
         const c = nova(porMes());
-        const s = simularParametros(c, P, semProposta);
+        const s = simularParametros(c, P, simulado);
         expect(s.serie).toEqual(c.serie);
         expect(s.capacidade_maxima).toEqual(c.capacidade_maxima);
         expect(s.parametros).toEqual(c.parametros);
@@ -114,24 +115,24 @@ describe('simularParametros', () => {
     it('taxa maior → valor máximo menor; prazo maior → maior', () => {
         const c = nova(porMes());
         const base = c.capacidade_maxima.valor_maximo;
-        expect(simularParametros(c, { ...P, taxa_mensal_pct: 2.5 }, semProposta).capacidade_maxima.valor_maximo).toBeLessThan(base);
-        expect(simularParametros(c, { ...P, prazo_meses: 48 }, semProposta).capacidade_maxima.valor_maximo).toBeGreaterThan(base);
+        expect(simularParametros(c, { ...P, taxa_mensal_pct: 2.5 }, simulado).capacidade_maxima.valor_maximo).toBeLessThan(base);
+        expect(simularParametros(c, { ...P, prazo_meses: 48 }, simulado).capacidade_maxima.valor_maximo).toBeGreaterThan(base);
     });
 
-    it('COM proposta o servico_novo de cada mês não muda (cronograma real), mas a capacidade reconta', () => {
+    it('(a) cronograma real da proposta (servicoNovoSimulado false): o servico_novo de cada mês não muda (cronograma real), mas a capacidade reconta', () => {
         const real = { '2026-12': 7_777, '2027-01': 7_777, '2027-02': 7_777 };
         const c = nova(real);
-        const s = simularParametros(c, { ...P, taxa_mensal_pct: 2.5, prazo_meses: 48 }, { ...semProposta, temProposta: true });
+        const s = simularParametros(c, { ...P, taxa_mensal_pct: 2.5, prazo_meses: 48 }, { ...simulado, servicoNovoSimulado: false });
         expect(s.serie.map(m => m.servico_novo)).toEqual(c.serie.map(m => m.servico_novo));
         expect(s.serie).toEqual(c.serie);
         expect(s.parametros.taxa_mensal_pct).toBe(2.5);
         expect(s.capacidade_maxima).not.toEqual(c.capacidade_maxima);
     });
 
-    it('SEM proposta o servico_novo muda com a taxa e o 1º vencimento é o 1º mês da série', () => {
+    it('(c) simulado (sem proposta ou proposta sem cronograma): o servico_novo muda com a taxa e o 1º vencimento é o 1º mês da série', () => {
         const c = nova(porMes());
         const p2 = { ...P, taxa_mensal_pct: 2.5 };
-        const s = simularParametros(c, p2, semProposta);
+        const s = simularParametros(c, p2, simulado);
         expect(s.serie.map(m => m.servico_novo)).not.toEqual(c.serie.map(m => m.servico_novo));
         const esperado = porMes(p2);
         expect(s.serie[0].mes).toBe('2026-12');
@@ -143,25 +144,43 @@ describe('simularParametros', () => {
         expect(s.serie[0].folga).toBe(Math.round((s.serie[0].renda_liquida - s.serie[0].servico_atual - s.serie[0].servico_novo) * 100) / 100);
     });
 
-    it('sem valor pedido, sem proposta: serviço novo zero (não inventa dívida)', () => {
-        const s = simularParametros(nova(porMes()), P, { ...semProposta, requestedAmount: 0 });
+    it('(b) proposta já na curva (servico_novo todo zero, servicoNovoSimulado false): taxa/prazo não criam serviço novo, só reconta a capacidade', () => {
+        const c = nova({});
+        expect(c.serie.every(m => m.servico_novo === 0)).toBe(true);
+        const s = simularParametros(c, { ...P, taxa_mensal_pct: 2.5, prazo_meses: 48 }, { ...simulado, servicoNovoSimulado: false });
+        expect(s.serie.every(m => m.servico_novo === 0)).toBe(true);
+        expect(s.serie).toEqual(c.serie);
+        expect(s.capacidade_maxima).not.toEqual(c.capacidade_maxima);
+        // Contraprova: com a flag errada (true) a dívida da proposta seria inventada.
+        expect(simularParametros(c, P, simulado).serie.some(m => m.servico_novo > 0)).toBe(true);
+    });
+
+    it('parâmetros gravados não afirmam o que a série não reflete: despesa_operacional e horizonte ficam os da série', () => {
+        const c = nova(porMes());
+        const s = simularParametros(c, { ...P, despesa_operacional: !P.despesa_operacional, horizonte_meses: 60 }, simulado);
+        expect(s.parametros.despesa_operacional).toBe(c.parametros.despesa_operacional);
+        expect(s.parametros.horizonte_meses).toBe(c.parametros.horizonte_meses);
+    });
+
+    it('sem valor pedido, simulado: serviço novo zero (não inventa dívida)', () => {
+        const s = simularParametros(nova(porMes()), P, { ...simulado, requestedAmount: 0 });
         expect(s.serie.every(m => m.servico_novo === 0)).toBe(true);
     });
 
     it('haircut simulado recalcula o estoque elegível; sem estoque segue null; horizonte fica o da série', () => {
         const c = nova(porMes());
-        const s = simularParametros(c, { ...P, haircut_estoque_pct: 50, horizonte_meses: 60 }, semProposta);
+        const s = simularParametros(c, { ...P, haircut_estoque_pct: 50, horizonte_meses: 60 }, simulado);
         expect(s.estoque).toEqual({ vgv_disponivel: 1_000_000, haircut_pct: 50, valor_elegivel: 500_000 });
         expect(s.parametros.horizonte_meses).toBe(24);
-        expect(simularParametros({ ...c, estoque: null }, P, semProposta).estoque).toBeNull();
+        expect(simularParametros({ ...c, estoque: null }, P, simulado).estoque).toBeNull();
     });
 
     it('não muda a entrada e aguenta série vazia', () => {
         const c = nova(porMes());
         const antes = structuredClone(c);
-        simularParametros(c, { ...P, taxa_mensal_pct: 3 }, semProposta);
+        simularParametros(c, { ...P, taxa_mensal_pct: 3 }, simulado);
         expect(c).toEqual(antes);
-        const vazia = simularParametros({ ...c, serie: [] }, P, semProposta);
+        const vazia = simularParametros({ ...c, serie: [] }, P, simulado);
         expect(vazia.capacidade_maxima).toEqual({ parcela_maxima: 0, valor_maximo: 0 });
     });
 });
@@ -183,7 +202,7 @@ describe('compararComLiberada', () => {
 
     it('só volta o que difere', () => {
         const c = nova(porMes());
-        const sim = simularParametros(c, { ...P, taxa_mensal_pct: 2.5 }, semProposta);
+        const sim = simularParametros(c, { ...P, taxa_mensal_pct: 2.5 }, simulado);
         const d = compararComLiberada(versao(sim, { nEmp: 4, nCont: 3 }), versao(c, { nEmp: 2, nCont: 3 }));
         const campos = d.map(x => x.campo);
         expect(campos).toContain('valor_maximo');

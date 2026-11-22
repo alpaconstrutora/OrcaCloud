@@ -42,6 +42,38 @@ describe('baixarImagens', () => {
         await expect(pendente).resolves.toEqual({});
     });
 
+    it('teto total de ~60 s: não começa foto nova depois dele e o book sai com o que chegou', async () => {
+        vi.useFakeTimers();
+        // Toda foto trava (10 s cada, 4 em paralelo): 30 fotos levariam 75 s sem o teto.
+        const fetchTrava = vi.fn((_url: string, init: RequestInit) => new Promise((_resolve, rejeita) => {
+            init.signal?.addEventListener('abort', () => rejeita(new DOMException('abortado', 'AbortError')));
+        }));
+        vi.stubGlobal('fetch', fetchTrava);
+        let terminou = false;
+        const pendente = baixarImagens(Array.from({ length: 30 }, (_, k) => `https://x.test/${k}.jpg`)).then(r => { terminou = true; return r; });
+        await vi.advanceTimersByTimeAsync(59_000);
+        expect(terminou).toBe(false);
+        await vi.advanceTimersByTimeAsync(1_500);
+        await expect(pendente).resolves.toEqual({});
+        // 6 levas de 4 até 60 s; as 6 fotos restantes nunca foram buscadas.
+        expect(fetchTrava.mock.calls.length).toBeLessThan(30);
+        const chamadas = fetchTrava.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(fetchTrava.mock.calls.length).toBe(chamadas);
+    });
+
+    it('o teto aborta também as fotos em andamento (não espera os 10 s de cada uma)', async () => {
+        vi.useFakeTimers();
+        const fetchTrava = vi.fn((_url: string, init: RequestInit) => new Promise((_resolve, rejeita) => {
+            init.signal?.addEventListener('abort', () => rejeita(new DOMException('abortado', 'AbortError')));
+        }));
+        vi.stubGlobal('fetch', fetchTrava);
+        const pendente = baixarImagens(Array.from({ length: 10 }, (_, k) => `https://x.test/${k}.jpg`), 5_000);
+        await vi.advanceTimersByTimeAsync(5_001);
+        await expect(pendente).resolves.toEqual({});
+        expect(fetchTrava).toHaveBeenCalledTimes(4); // só a 1ª leva; nada novo depois do teto
+    });
+
     it('sem URLs devolve vazio', async () => {
         await expect(baixarImagens([])).resolves.toEqual({});
     });

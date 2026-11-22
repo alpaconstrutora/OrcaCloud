@@ -19,12 +19,17 @@ const LADO_MAXIMO = 1600;
 const QUALIDADE_JPEG = 0.82;
 const TEMPO_POR_FOTO_MS = 10_000;
 const FOTOS_EM_PARALELO = 4;
+/** Teto de tempo para TODAS as fotos juntas: estourou, o book sai com o que chegou. */
+const ORCAMENTO_TOTAL_MS = 60_000;
 
-/** Uma foto → dataURL JPEG (≤ 1600 px). Qualquer falha devolve `null`. */
-async function baixarImagem(url: string): Promise<string | null> {
-    if (!/^https?:\/\//i.test(url)) return null;
+/** Uma foto → dataURL JPEG (≤ 1600 px). Qualquer falha devolve `null`. `geral` aborta tudo (teto total). */
+async function baixarImagem(url: string, geral: AbortSignal): Promise<string | null> {
+    if (!/^https?:\/\//i.test(url) || geral.aborted) return null;
     const controle = new AbortController();
     const relogio = setTimeout(() => controle.abort(), TEMPO_POR_FOTO_MS);
+    const abortarJunto = () => controle.abort();
+    geral.addEventListener('abort', abortarJunto);
+    let canvas: HTMLCanvasElement | null = null;
     try {
         // Sem credenciais nem referrer: é um GET público de imagem.
         const resposta = await fetch(url, { signal: controle.signal, credentials: 'omit', referrerPolicy: 'no-referrer' });
@@ -35,7 +40,7 @@ async function baixarImagem(url: string): Promise<string | null> {
             const escala = Math.min(1, LADO_MAXIMO / Math.max(bitmap.width, bitmap.height));
             const largura = Math.max(1, Math.round(bitmap.width * escala));
             const altura = Math.max(1, Math.round(bitmap.height * escala));
-            const canvas = document.createElement('canvas');
+            canvas = document.createElement('canvas');
             canvas.width = largura;
             canvas.height = altura;
             const ctx = canvas.getContext('2d');
@@ -53,20 +58,33 @@ async function baixarImagem(url: string): Promise<string | null> {
         return null;
     } finally {
         clearTimeout(relogio);
+        geral.removeEventListener('abort', abortarJunto);
+        // Solta a memória do bitmap do canvas: com dezenas de fotos de 1600 px elas se acumulam.
+        if (canvas) canvas.width = canvas.height = 0;
     }
 }
 
-/** As fotos pedidas, no máximo `FOTOS_EM_PARALELO` por vez; só entram no mapa as que carregaram. */
-export async function baixarImagens(urls: string[]): Promise<Record<string, string>> {
+/**
+ * As fotos pedidas, no máximo `FOTOS_EM_PARALELO` por vez; só entram no mapa as que carregaram.
+ * Passado `orcamentoMs` (60 s no total), não começa foto nova e aborta as em andamento.
+ */
+export async function baixarImagens(urls: string[], orcamentoMs: number = ORCAMENTO_TOTAL_MS): Promise<Record<string, string>> {
     const imagens: Record<string, string> = {};
     const fila = [...urls];
+    const geral = new AbortController();
+    const relogio = setTimeout(() => { geral.abort(); fila.length = 0; }, orcamentoMs);
     const trabalhador = async () => {
         for (let url = fila.shift(); url !== undefined; url = fila.shift()) {
-            const dataUrl = await baixarImagem(url);
-            if (dataUrl) imagens[url] = dataUrl;
+            if (geral.signal.aborted) return;
+            const dataUrl = await baixarImagem(url, geral.signal);
+            if (dataUrl && !geral.signal.aborted) imagens[url] = dataUrl;
         }
     };
-    await Promise.all(Array.from({ length: Math.min(FOTOS_EM_PARALELO, urls.length) }, trabalhador));
+    try {
+        await Promise.all(Array.from({ length: Math.min(FOTOS_EM_PARALELO, urls.length) }, trabalhador));
+    } finally {
+        clearTimeout(relogio);
+    }
     return imagens;
 }
 

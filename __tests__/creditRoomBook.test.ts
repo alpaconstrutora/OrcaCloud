@@ -47,6 +47,8 @@ describe('montarBook - versão schema 2', () => {
         expect(t).toContain('Banco Exemplo');
         expect(t).toContain('V3');
         expect(t).toContain('20/11/2026');
+        // A legenda do "n/d" está na capa (1ª página), não só na seção de estresse.
+        expect(paginas(doc)[0]).toContain('n/d = dado não disponível nesta versão');
         const total = doc.getNumberOfPages();
         paginas(doc).forEach((p, i) => {
             expect(p).toContain(`CR-0007 · V3 · data-base 20/11/2026 · página ${i + 1}/${total}`);
@@ -73,6 +75,25 @@ describe('montarBook - versão schema 2', () => {
         const resumo = resumoDaCapacidade(cap)!;
         const dscr = (resumo.dscr_minimo_12m as number).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         expect(t).toContain(`${dscr}×`);
+    });
+
+    it('estresse: a linha Base usa o valor máximo CONGELADO, não uma recomputação', () => {
+        const cap = v.snapshot.capacidade!;
+        const recalculado = estresseDaVersao(cap, CENARIOS_ESTRESSE[0], fluxosDaOperacao(v.snapshot)).capacidade_maxima.valor_maximo;
+        // O congelado é DE PROPÓSITO diferente do que a série daria: se o Base fosse recalculado, aparece o outro número.
+        const congelado = recalculado + 777_700;
+        expect(congelado).not.toBe(recalculado);
+        const adulterada = {
+            ...v, snapshot: { ...v.snapshot, capacidade: { ...cap, capacidade_maxima: { ...cap.capacidade_maxima, valor_maximo: congelado } } },
+        };
+        const pagina = paginas(montarBook(adulterada, extrasPadrao())).find(p => p.includes('Teste de estresse'));
+        expect(pagina).toBeDefined();
+        expect(pagina).toContain(dinheiro(congelado));
+        // O número recalculado do Base só pode aparecer se Moderado/Severo calcularem o mesmo valor (ex.: 0).
+        const fluxos = fluxosDaOperacao(v.snapshot);
+        const esperadas = CENARIOS_ESTRESSE.slice(1)
+            .filter(c => estresseDaVersao(cap, c, fluxos).capacidade_maxima.valor_maximo === recalculado).length;
+        expect(pagina!.split(dinheiro(recalculado)).length - 1).toBe(esperadas);
     });
 
     it('carteira: só rótulos mascarados, nunca o nome do cliente', () => {

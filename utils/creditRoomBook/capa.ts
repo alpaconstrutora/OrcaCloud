@@ -50,7 +50,7 @@ export function desenharCapa(c: Ctx, versao: CreditRoomVersion, extras: ExtrasDo
     doc.setTextColor(COR.suave[0], COR.suave[1], COR.suave[2]);
     const nota = doc.splitTextToSize(limpo(
         'Todos os números deste book vêm da versão congelada acima, na data-base indicada: não são o dado de hoje. '
-        + 'Valores contratados, sem reajuste. Clientes aparecem só por rótulo (sem nome).',
+        + 'Valores contratados, sem reajuste. Clientes aparecem só por rótulo (sem nome). n/d = dado não disponível nesta versão.',
     ), larguraUtil(doc)) as string[];
     doc.text(nota, MARGEM, altura(doc) - 28);
 }

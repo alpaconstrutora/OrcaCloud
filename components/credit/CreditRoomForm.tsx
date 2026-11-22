@@ -28,7 +28,7 @@ import {
     type CreditRoomGuaranteeKind,
 } from '../../utils/creditRoomSnapshot';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
-import { PARAMETROS_CAPACIDADE_PADRAO } from '../../utils/creditCapacity';
+import { PARAMETROS_CAPACIDADE_PADRAO, carenciaVemDaOperacao, parametrosEfetivos, prazoVemDaOperacao } from '../../utils/creditCapacity';
 import CreditRoomFormCapacidade, { campo, rotulo, normalizarEmpreendimentos, orgsDoGrupoGravaveis, type EscopoCapacidade } from './CreditRoomFormCapacidade';
 
 interface Props {
@@ -179,10 +179,19 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
         }
         const pc = form.parametrosCapacidade ?? PARAMETROS_CAPACIDADE_PADRAO;
         if (!(pc.dscr_minimo > 0)) { setErro('O DSCR mínimo da capacidade precisa ser maior que zero.'); return; }
-        if (pc.taxa_mensal_pct < 0) { setErro('A taxa mensal da capacidade não pode ser negativa.'); return; }
-        if (!Number.isInteger(pc.prazo_meses) || pc.prazo_meses < 1) { setErro('O prazo da capacidade precisa ser um número inteiro de meses (mínimo 1).'); return; }
-        if (!Number.isInteger(pc.carencia_meses)) { setErro('A carência da capacidade precisa ser um número inteiro de meses.'); return; }
-        if (pc.carencia_meses < 0 || pc.carencia_meses >= pc.prazo_meses) { setErro('A carência da capacidade fica entre 0 e o prazo.'); return; }
+        // Taxa vazia vira 0 no campo; 0% simularia a dívida nova SEM juros — serviço
+        // novo menor e DSCR pós/valor máximo otimistas na frente do banco.
+        if (!(pc.taxa_mensal_pct > 0)) { setErro('Informe a taxa mensal da capacidade (maior que zero) — sem ela a dívida nova seria simulada sem juros.'); return; }
+        // Prazo/carência que a conta usa de fato: os da operação vencem os da capacidade.
+        const ef = parametrosEfetivos(pc, form.termMonths, form.graceMonths);
+        const dePrazo = prazoVemDaOperacao(form.termMonths) ? ' da operação' : ' da capacidade';
+        const deCarencia = carenciaVemDaOperacao(form.graceMonths) ? ' da operação' : ' da capacidade';
+        if (!Number.isInteger(ef.prazo_meses) || ef.prazo_meses < 1) { setErro(`O prazo${dePrazo} precisa ser um número inteiro de meses (mínimo 1).`); return; }
+        if (!Number.isInteger(ef.carencia_meses)) { setErro(`A carência${deCarencia} precisa ser um número inteiro de meses.`); return; }
+        if (ef.carencia_meses < 0 || ef.carencia_meses >= ef.prazo_meses) {
+            setErro(`A carência${deCarencia} (${ef.carencia_meses} meses) precisa ser de 0 até menos que o prazo${dePrazo} (${ef.prazo_meses} meses).`);
+            return;
+        }
         if (pc.haircut_estoque_pct < 0 || pc.haircut_estoque_pct > 100) { setErro('O haircut do estoque fica entre 0 e 100%.'); return; }
         const grupo = form.escopo === 'GRUPO';
         let grupoIds = form.grupoOrganizationIds ?? [];
@@ -353,6 +362,8 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
 
                 <CreditRoomFormCapacidade
                     ativo={open}
+                    termMonths={form.termMonths}
+                    graceMonths={form.graceMonths}
                     ownerOrgId={ownerOrgId}
                     escopo={form.escopo ?? 'EMPRESA'}
                     grupoOrganizationIds={form.grupoOrganizationIds ?? []}

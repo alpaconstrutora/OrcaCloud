@@ -4,13 +4,23 @@ import { useStore } from '../../store/useStore';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import type { Empreendimento } from '../../types/empreendimento';
 import type { CreditRoomEscopo } from '../../types/creditRoom';
-import type { ParametrosCapacidade } from '../../utils/creditCapacity';
+import {
+    carenciaVemDaOperacao,
+    parametrosEfetivos,
+    prazoVemDaOperacao,
+    type ParametrosCapacidade,
+} from '../../utils/creditCapacity';
 
 /** Classes de campo/rótulo do formulário do Credit Room (h-9, rótulo sem caixa alta). */
 export const campo = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
 export const rotulo = 'text-xs font-semibold text-slate-500';
 
 const checkbox = 'w-4 h-4 rounded border-gray-300 text-blue-600';
+/** Campo travado: o valor segue escuro (§32); o estado se diz pelo fundo, cursor e texto de apoio. */
+const campoTravado = `${campo} text-gray-900 disabled:bg-slate-50 disabled:cursor-not-allowed`;
+
+export const MOTIVO_PRAZO_DA_OPERACAO = 'Vem do prazo da operação (Solicitação) — para mudar, altere o prazo lá ou deixe-o vazio.';
+export const MOTIVO_CARENCIA_DA_OPERACAO = 'Vem da carência da operação (Solicitação) — para mudar, altere a carência lá ou deixe-a vazia.';
 const itemCheck = 'flex items-center gap-2 text-sm text-gray-700';
 
 export interface EscopoCapacidade {
@@ -45,6 +55,10 @@ export function orgsDoGrupoGravaveis(ids: string[], membros: { id: string }[]): 
 interface Props extends EscopoCapacidade {
     /** Só carrega os empreendimentos com o painel aberto (o Sheet fica montado). */
     ativo: boolean;
+    /** Prazo da OPERAÇÃO (Solicitação). Preenchido, vence o prazo da capacidade. */
+    termMonths?: number;
+    /** Carência da OPERAÇÃO (Solicitação). Preenchida, vence a carência da capacidade. */
+    graceMonths?: number;
     /** Organização dona da operação (a da sala; a ativa no topo numa sala nova). `null` = ainda não definida ("Todas"). */
     ownerOrgId: string | null;
     onChange: (patch: Partial<EscopoCapacidade>) => void;
@@ -59,7 +73,7 @@ interface Props extends EscopoCapacidade {
  */
 export default function CreditRoomFormCapacidade({
     escopo, grupoOrganizationIds, empreendimentoIds, parametrosCapacidade: p,
-    ativo, ownerOrgId, onChange, onListaCarregada,
+    ativo, termMonths, graceMonths, ownerOrgId, onChange, onListaCarregada,
 }: Props) {
     // Organizações de que o usuário é MEMBRO (mesma lista dos formulários de cadastro).
     const orgsMembro = useWritableOrganizations();
@@ -167,6 +181,11 @@ export default function CreditRoomFormCapacidade({
         onChange({ parametrosCapacidade: { ...p, [k]: v } });
     const num = (v: string) => (v === '' ? 0 : Number(v));
     const idP = (k: keyof ParametrosCapacidade) => `${uid}-${k}`;
+    // Prazo/carência da operação vencem os daqui na conta: o campo mostra o
+    // valor que vai ser usado, travado, com o motivo.
+    const efetivos = parametrosEfetivos(p, termMonths, graceMonths);
+    const prazoTravado = prazoVemDaOperacao(termMonths);
+    const carenciaTravada = carenciaVemDaOperacao(graceMonths);
 
     return (
         <>
@@ -280,13 +299,29 @@ export default function CreditRoomFormCapacidade({
                         <label htmlFor={idP('taxa_mensal_pct')} className={rotulo}>Taxa mensal (%)</label>
                         <input id={idP('taxa_mensal_pct')} type="number" min={0} step={0.01} value={p.taxa_mensal_pct} onChange={e => setP('taxa_mensal_pct', num(e.target.value))} className={campo} />
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5" title={prazoTravado ? MOTIVO_PRAZO_DA_OPERACAO : undefined}>
                         <label htmlFor={idP('prazo_meses')} className={rotulo}>Prazo (meses)</label>
-                        <input id={idP('prazo_meses')} type="number" min={1} step={1} value={p.prazo_meses} onChange={e => setP('prazo_meses', num(e.target.value))} className={campo} />
+                        <input
+                            id={idP('prazo_meses')} type="number" min={1} step={1}
+                            value={efetivos.prazo_meses}
+                            disabled={prazoTravado}
+                            title={prazoTravado ? MOTIVO_PRAZO_DA_OPERACAO : undefined}
+                            onChange={e => setP('prazo_meses', num(e.target.value))}
+                            className={prazoTravado ? campoTravado : campo}
+                        />
+                        {prazoTravado && <p className="text-xs text-gray-500">Vem do prazo da operação.</p>}
                     </div>
-                    <div className="space-y-1.5">
+                    <div className="space-y-1.5" title={carenciaTravada ? MOTIVO_CARENCIA_DA_OPERACAO : undefined}>
                         <label htmlFor={idP('carencia_meses')} className={rotulo}>Carência (meses)</label>
-                        <input id={idP('carencia_meses')} type="number" min={0} step={1} value={p.carencia_meses} onChange={e => setP('carencia_meses', num(e.target.value))} className={campo} />
+                        <input
+                            id={idP('carencia_meses')} type="number" min={0} step={1}
+                            value={efetivos.carencia_meses}
+                            disabled={carenciaTravada}
+                            title={carenciaTravada ? MOTIVO_CARENCIA_DA_OPERACAO : undefined}
+                            onChange={e => setP('carencia_meses', num(e.target.value))}
+                            className={carenciaTravada ? campoTravado : campo}
+                        />
+                        {carenciaTravada && <p className="text-xs text-gray-500">Vem da carência da operação.</p>}
                     </div>
                     <div className="space-y-1.5">
                         <label htmlFor={idP('sistema')} className={rotulo}>Sistema de amortização</label>

@@ -20,6 +20,7 @@ import {
     mesesDoHorizonte,
     montarCapacidade,
     orgsForaDoAcesso,
+    parametrosEfetivos,
     qualidadeDaRenda,
     recebidoPorMes,
     rendaMensalDoEmpreendimento,
@@ -550,6 +551,14 @@ describe('creditCapacity', () => {
         expect(rendaMensalDoEmpreendimento('E', titulos, locacoes, DATA_BASE, { vendas: false, alugueis: true })).toBe(6_000);
         expect(rendaMensalDoEmpreendimento('E', titulos, locacoes, DATA_BASE, { vendas: true, alugueis: false })).toBe(1_000);
         expect(rendaMensalDoEmpreendimento('E', titulos, locacoes, DATA_BASE, { vendas: false, alugueis: false })).toBe(0);
+    });
+
+    it('parametrosEfetivos: prazo/carência da operação vencem os da capacidade; vazios não', () => {
+        const p = { ...PARAMETROS_CAPACIDADE_PADRAO, prazo_meses: 60, carencia_meses: 6 };
+        expect(parametrosEfetivos(p, 48, 12)).toMatchObject({ prazo_meses: 48, carencia_meses: 12 });
+        expect(parametrosEfetivos(p, 48, 0)).toMatchObject({ prazo_meses: 48, carencia_meses: 0 });
+        expect(parametrosEfetivos(p, undefined, undefined)).toMatchObject({ prazo_meses: 60, carencia_meses: 6 });
+        expect(parametrosEfetivos(p, 0, null)).toMatchObject({ prazo_meses: 60, carencia_meses: 6 });
     });
 
     it('rotuloMascarado', () => {

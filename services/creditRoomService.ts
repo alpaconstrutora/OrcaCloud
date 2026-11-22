@@ -52,6 +52,7 @@ import {
     mensagemSemAcessoAoGrupo,
     montarCapacidade,
     orgsForaDoAcesso,
+    parametrosEfetivos,
     qualidadeDaRenda,
     rendaMensalDoEmpreendimento,
     type CapacidadeEntrada,
@@ -408,15 +409,9 @@ const diaUmDoMes = (dataBase: string, delta: number): string => {
  */
 const primeiroVencimentoSimulado = (dataBase: string): string => diaUmDoMes(dataBase, 1);
 
-/** Prazo e carência do room vencem os dos parâmetros quando preenchidos. */
-const parametrosEfetivos = (room: CreditRoom): ParametrosCapacidade => {
-    const p = room.parametrosCapacidade ?? PARAMETROS_CAPACIDADE_PADRAO;
-    return {
-        ...p,
-        prazo_meses: room.termMonths && room.termMonths > 0 ? room.termMonths : p.prazo_meses,
-        carencia_meses: room.graceMonths ?? p.carencia_meses,
-    };
-};
+/** Prazo e carência do room vencem os dos parâmetros quando preenchidos (regra única em `utils/creditCapacity`). */
+const parametrosDoRoom = (room: CreditRoom): ParametrosCapacidade =>
+    parametrosEfetivos(room.parametrosCapacidade ?? PARAMETROS_CAPACIDADE_PADRAO, room.termMonths, room.graceMonths);
 
 /** Soma mês a mês ('AAAA-MM' → valor). */
 const somarPorMes = (mapas: Record<string, number>[]): Record<string, number> => {
@@ -939,7 +934,7 @@ export const creditRoomService = {
         // GRUPO: org que quem congela não enxerga voltaria VAZIA pela RLS, e
         // vazio vira zero (dívida dela some, DSCR infla). Recusa antes de ler.
         if (room.escopo === 'GRUPO') await this.exigirMembroDeTodas(orgs);
-        const p = parametrosEfetivos(room);
+        const p = parametrosDoRoom(room);
         const horizonte = p.horizonte_meses > 0 ? p.horizonte_meses : PARAMETROS_CAPACIDADE_PADRAO.horizonte_meses;
 
         // Posição da dívida: o mínimo para a operação fazer sentido — propaga.
@@ -1665,17 +1660,17 @@ export const creditRoomService = {
                     ?? (await debtService.getActiveSchedule(room.debtContractId, 'CONTRATUAL'));
                 if (schedule) return porMes(await debtService.listInstallments(schedule.id));
             }
-            const prazo = room.termMonths && room.termMonths > 0 ? room.termMonths : p.prazo_meses;
-            if (!(room.requestedAmount > 0) || !(prazo > 0)) return {};
+            // `p` já são os EFETIVOS (`parametrosDoRoom`): prazo/carência da operação por cima.
+            if (!(room.requestedAmount > 0) || !(p.prazo_meses > 0)) return {};
             return porMes(buildSchedule({
                 principal: room.requestedAmount,
                 nominalRate: p.taxa_mensal_pct,
                 ratePeriod: 'MENSAL',
                 system: p.sistema,
-                installmentCount: prazo,
+                installmentCount: p.prazo_meses,
                 installmentPeriod: 'MENSAL',
                 firstDueDate: primeiroVencimentoSimulado(dataBase),
-                gracePrincipalPeriods: room.graceMonths ?? p.carencia_meses,
+                gracePrincipalPeriods: p.carencia_meses,
             }));
         } catch (e) {
             // `null`, não `{}`: sem serviço novo o DSCR pós sairia igual ao

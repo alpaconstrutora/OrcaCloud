@@ -84,6 +84,27 @@ export const PARAMETROS_CAPACIDADE_PADRAO: ParametrosCapacidade = {
     despesa_operacional: true,
 };
 
+/**
+ * Parâmetros que a conta usa de fato: o prazo e a carência da OPERAÇÃO
+ * (Solicitação do room), quando preenchidos, vencem os dos parâmetros da
+ * capacidade. O formulário mostra estes mesmos valores nos campos travados,
+ * e valida com eles — para a tela e o congelamento dizerem o mesmo número.
+ */
+export function parametrosEfetivos(
+    p: ParametrosCapacidade, termMonths?: number | null, graceMonths?: number | null,
+): ParametrosCapacidade {
+    return {
+        ...p,
+        prazo_meses: termMonths != null && termMonths > 0 ? termMonths : p.prazo_meses,
+        carencia_meses: graceMonths ?? p.carencia_meses,
+    };
+}
+
+/** O prazo da capacidade vem da operação? (mesma regra de `parametrosEfetivos`) */
+export const prazoVemDaOperacao = (termMonths?: number | null): boolean => termMonths != null && termMonths > 0;
+/** A carência da capacidade vem da operação? (mesma regra de `parametrosEfetivos`) */
+export const carenciaVemDaOperacao = (graceMonths?: number | null): boolean => graceMonths != null;
+
 export interface SerieMes {
     /** 'AAAA-MM'. */
     mes: string;

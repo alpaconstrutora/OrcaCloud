@@ -25,6 +25,11 @@ export interface SimulacaoDaCapacidade {
     servicoNovoSimulado: boolean;
     /** Grava os parâmetros no room (o pai chama o serviço e avisa `onChanged`). Rejeita com `Error` de mensagem legível. */
     onSalvar: (p: ParametrosCapacidade) => Promise<void>;
+    /**
+     * Avisa o pai quando há (ou deixa de haver) simulação NÃO salva — para o "Liberar" dizer que ela não vai
+     * na liberação. Volta a `false` ao descartar, ao salvar, quando a prévia muda e quando a aba desmonta.
+     */
+    onPendenteChange?: (pendente: boolean) => void;
 }
 
 interface Campos {
@@ -39,7 +44,7 @@ const camposDe = (p: ParametrosCapacidade): Campos => ({
 });
 
 /** Campo vazio = `NaN` (inválido, nunca zero): a validação recusa e a aba segue com os parâmetros do room. */
-const numero = (s: string) => (s.trim() === '' ? NaN : Number(s.replace(',', '.')));
+const numero = (s: string) => (s.trim() === '' ? NaN : Number(s));
 
 const CHAVES_NUMERICAS = ['dscr_minimo', 'taxa_mensal_pct', 'prazo_meses', 'carencia_meses', 'haircut_estoque_pct'] as const;
 
@@ -102,6 +107,14 @@ export function useSimulacaoDeParametros(
         return { p, mudou, erro, capacidade, prazoTravado, carenciaTravada };
     }, [room, base, campos, cBase, version, servicoNovoSimulado]);
 
+    const pendente = !!simulacao && !!calculo?.mudou;
+    const avisarPendente = simulacao?.onPendenteChange;
+    React.useEffect(() => {
+        if (!avisarPendente) return;
+        avisarPendente(pendente);
+        return () => avisarPendente(false);
+    }, [pendente, avisarPendente]);
+
     if (!simulacao || !room || !campos || !calculo) return { capacidade: cBase, painel: null };
 
     const { p, mudou, erro, capacidade, prazoTravado, carenciaTravada } = calculo;
@@ -160,7 +173,7 @@ export const PainelSimulacao: React.FC<{ painel: PainelDaSimulacao }> = ({ paine
                         <label htmlFor={id('taxa')} className="block text-xs font-semibold text-slate-500">Taxa mensal (%)</label>
                         <input id={id('taxa')} type="number" min={0} step={0.01} value={s.campos.taxa_mensal_pct} onChange={e => s.onCampo('taxa_mensal_pct', e.target.value)} className={campo} />
                     </div>
-                    <div className="space-y-1.5" title={s.prazoTravado ? MOTIVO_PRAZO_DA_OPERACAO : undefined}>
+                    <div className="space-y-1.5">
                         <label htmlFor={id('prazo')} className="block text-xs font-semibold text-slate-500">Prazo (meses)</label>
                         <input
                             id={id('prazo')} type="number" min={1} step={1} value={s.campos.prazo_meses}
@@ -170,7 +183,7 @@ export const PainelSimulacao: React.FC<{ painel: PainelDaSimulacao }> = ({ paine
                         />
                         {s.prazoTravado && <p className="text-xs text-gray-500">Vem do prazo da operação.</p>}
                     </div>
-                    <div className="space-y-1.5" title={s.carenciaTravada ? MOTIVO_CARENCIA_DA_OPERACAO : undefined}>
+                    <div className="space-y-1.5">
                         <label htmlFor={id('carencia')} className="block text-xs font-semibold text-slate-500">Carência (meses)</label>
                         <input
                             id={id('carencia')} type="number" min={0} step={1} value={s.campos.carencia_meses}

@@ -99,6 +99,8 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     const [versoesCarregadas, setVersoesCarregadas] = React.useState(false);
     const [versaoVista, setVersaoVista] = React.useState<CreditRoomVersion | null>(null);
     const [liberarAberto, setLiberarAberto] = React.useState(false);
+    // Há simulação de parâmetros NÃO salva na aba Capacidade: o "Liberar" avisa que ela não vai na liberação.
+    const [simulacaoPendente, setSimulacaoPendente] = React.useState(false);
 
     // Prévia de hoje: o que o sistema calcularia AGORA (prepararVersao lê tudo e não grava nada).
     // Só "Liberar para a instituição" grava. A geração descarta cálculo em voo quando o cadastro muda ou outro cálculo começa.
@@ -424,7 +426,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                                 version={exibida} accent="indigo"
                                 // Só a prévia ganha o painel "Simular parâmetros"; versão liberada é somente leitura.
                                 simulacao={mostrandoPrevia && previaEst.status === 'ok' && previaEst.previa
-                                    ? { room, servicoNovoSimulado: previaEst.previa.servicoNovoSimulado, onSalvar: salvarParametros }
+                                    ? { room, servicoNovoSimulado: previaEst.previa.servicoNovoSimulado, onSalvar: salvarParametros, onPendenteChange: setSimulacaoPendente }
                                     : undefined}
                             />
                         )
@@ -776,6 +778,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     setPreviaEst(prev => (prev.status === 'ok' && prev.previa?.dataBase === hojeLocalISO() ? prev : { status: 'idle' }));
                 }}
                 room={room}
+                simulacaoPendente={simulacaoPendente}
                 proximo={versoesCarregadas ? Math.max(0, ...versoes.map(v => v.versionNo)) + 1 : null}
                 liberada={ativa}
                 versoesCarregadas={versoesCarregadas}
@@ -907,6 +910,8 @@ export const LiberarSheet: React.FC<{
     open: boolean;
     onClose: () => void;
     room: CreditRoom;
+    /** Há simulação de parâmetros não salva na aba Capacidade: avisa que ela NÃO vai nesta liberação. */
+    simulacaoPendente?: boolean;
     /** Número da próxima versão; `null` enquanto a lista de versões não chegou (não se crava "V1" no escuro). */
     proximo: number | null;
     /** Última versão liberada (a ativa): base da comparação. */
@@ -917,7 +922,7 @@ export const LiberarSheet: React.FC<{
     /** Pede ao detalhe que (re)calcule a prévia para uma data-base. */
     onCalcular: (dataBase: string) => void;
     onLiberada: (v: CreditRoomVersion) => void;
-}> = ({ open, onClose, room, proximo, liberada, versoesCarregadas, previaEst, onCalcular, onLiberada }) => {
+}> = ({ open, onClose, room, simulacaoPendente, proximo, liberada, versoesCarregadas, previaEst, onCalcular, onLiberada }) => {
     const [label, setLabel] = React.useState('');
     const [notes, setNotes] = React.useState('');
     const [dataBase, setDataBase] = React.useState(hojeLocalISO());
@@ -1089,7 +1094,12 @@ export const LiberarSheet: React.FC<{
                     </section>
                 )}
             </SheetPanel>
-            <SheetFooter>
+            <SheetFooter className="flex-wrap">
+                {simulacaoPendente && (
+                    <p role="note" className="w-full text-xs text-amber-700">
+                        Há uma simulação não salva na aba Capacidade — ela NÃO vai nesta liberação: o banco recebe os parâmetros do cadastro. Salve no room antes de liberar se quiser os simulados.
+                    </p>
+                )}
                 <button onClick={onClose} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">Cancelar</button>
                 {/* Desligado sempre diz o motivo: o wrapper carrega o title (botão disabled não dispara hover). */}
                 <span className="inline-flex shrink-0" title={motivoLiberar}>

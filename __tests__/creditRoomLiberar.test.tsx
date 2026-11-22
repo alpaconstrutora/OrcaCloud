@@ -492,6 +492,75 @@ describe('CreditRoomDetail — simular parâmetros na aba Capacidade', () => {
         expect(freezeVersion).not.toHaveBeenCalled();
     });
 
+    it('depois de "Salvar no room" a prévia é recalculada com o room novo e a marca "simulado — não salvo" some', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        const r = sala();
+        const salvo = { ...r, parametrosCapacidade: { ...PARAMETROS_CAPACIDADE_PADRAO, taxa_mensal_pct: 2.2 } } as CreditRoom;
+        salvarParametrosCapacidade.mockResolvedValue(salvo);
+        // O pai troca o room de verdade: a prévia velha é descartada e a nova nasce do cadastro salvo.
+        const onChanged = vi.fn();
+        localStorage.setItem(`creditRoom:${r.id}:aba`, JSON.stringify('capacidade'));
+        const ui = (room: CreditRoom) => (
+            <ConfirmProvider>
+                <CreditRoomDetail room={room} onBack={vi.fn()} onEdit={vi.fn()} onChanged={onChanged} />
+            </ConfirmProvider>
+        );
+        const { rerender } = render(ui(r));
+
+        await screen.findByText('Simular parâmetros');
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+        expect(screen.getByText('simulado — não salvo')).toBeInTheDocument();
+        expect(prepararVersao).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar no room' }));
+        await waitFor(() => expect(onChanged).toHaveBeenCalledWith(salvo));
+        rerender(ui(salvo));
+
+        await waitFor(() => expect(prepararVersao).toHaveBeenCalledTimes(2));
+        expect(prepararVersao).toHaveBeenLastCalledWith(salvo, expect.any(String));
+        expect(await screen.findByText('Simular parâmetros')).toBeInTheDocument();
+        expect(screen.queryByText('simulado — não salvo')).toBeNull();
+        expect((screen.getByLabelText('Taxa mensal (%)') as HTMLInputElement).value).toBe('2.2');
+    });
+
+    it('"Liberar" avisa que a simulação não salva NÃO vai na liberação (e segue habilitado); o aviso some ao voltar aos do room', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        abrirCapacidade(sala());
+        await screen.findByText('Simular parâmetros');
+        const aviso = /Há uma simulação não salva na aba Capacidade — ela NÃO vai nesta liberação/;
+
+        // Sem simulação: nada a avisar.
+        abrirPainel();
+        await screen.findByRole('button', { name: /^Liberar V\d+$/ });
+        expect(screen.queryByText(aviso)).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+        abrirPainel();
+        expect(await screen.findByText(aviso)).toBeInTheDocument();
+        expect(screen.getByText(aviso).textContent).toContain('Salve no room antes de liberar se quiser os simulados.');
+        await waitFor(() => expect(botaoLiberar()).not.toBeDisabled());
+        fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Voltar aos do room' }));
+        abrirPainel();
+        await screen.findByRole('button', { name: /^Liberar V\d+$/ });
+        expect(screen.queryByText(aviso)).toBeNull();
+    });
+
+    it('com a simulação pendente, trocar de aba (a Capacidade desmonta) apaga o aviso do "Liberar"', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        abrirCapacidade(sala());
+        await screen.findByText('Simular parâmetros');
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+
+        fireEvent.click(screen.getByRole('tab', { name: /^Versões/ }));
+        await waitFor(() => expect(screen.queryByText('Simular parâmetros')).toBeNull());
+        abrirPainel();
+        await screen.findByRole('button', { name: /^Liberar V\d+$/ });
+        expect(screen.queryByText(/Há uma simulação não salva/)).toBeNull();
+    });
+
     it('falha ao salvar mostra o motivo e não avisa onChanged', async () => {
         prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
         salvarParametrosCapacidade.mockRejectedValue(new Error('permission denied'));

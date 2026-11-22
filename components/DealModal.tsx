@@ -22,6 +22,7 @@ import {
     expandirBloco,
     subtotalDoBloco,
     saldoDoPlano,
+    alvoDasCobrancasLancadas,
     somarDias,
     somarMeses,
     agruparSeries,
@@ -4470,7 +4471,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         /* A aba lista COBRANÇAS REAIS (internal_transactions). Não há
                            mais rascunho: o que aparece aqui está em Contas a Receber. */
                         const somaBruta = contractEntries.reduce((s, e) => s + (e.original_amount ?? e.amount), 0);
-                        const bate = Math.abs(somaBruta - (formData.value || 0)) < 0.01;
+                        const alvoDaSoma = alvoDasCobrancasLancadas(formData);
+                        const bate = alvoDaSoma === null || Math.abs(somaBruta - alvoDaSoma) < 0.01;
                         // Célula editável dentro de TD: mesma tipografia do texto (§7.1).
                         const CELL = 'w-full text-sm font-normal px-2 py-1 rounded border border-gray-100 bg-gray-50 focus:bg-white focus:border-blue-400 outline-none transition-all';
                         // Mesma caixa da célula editável, em estado bloqueado: parcela paga
@@ -4856,8 +4858,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                                         <span>
                                             A soma das parcelas ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(somaBruta)})
-                                            não fecha com o valor do fechamento ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(formData.value || 0)}).
-                                            Use "Recalcular" ou ajuste as parcelas.
+                                            não fecha com o Valor Total do Contrato ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(alvoDaSoma ?? 0)}).
+                                            Ajuste as parcelas ou refaça a série em "Gerar parcelas".
                                         </span>
                                     </div>
                                 )}

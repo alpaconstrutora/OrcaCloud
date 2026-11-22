@@ -113,7 +113,7 @@ export const PainelProveniencia: React.FC<{
                         <p className="text-xs text-gray-400">
                             {ehPrevia(version)
                                 ? `Tudo aqui sai da prévia de hoje, calculada às ${horaDaPrevia(version.frozenAt)} — ainda não liberada à instituição. É por isso que a conta fecha com o número mostrado ao lado.`
-                                : `Tudo aqui sai da versão V${version.versionNo}, congelada em ${formatDateBR(version.dataBase)} — não do dado de hoje. É por isso que a conta fecha com o número mostrado ao lado.`}
+                                : `Tudo aqui sai da versão V${version.versionNo} liberada (data-base ${formatDateBR(version.dataBase)}) — não do dado de hoje. É por isso que a conta fecha com o número mostrado ao lado.`}
                         </p>
                     </div>
                 )}

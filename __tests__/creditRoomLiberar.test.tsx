@@ -153,6 +153,8 @@ describe('CreditRoomDetail — prévia de hoje por padrão', () => {
         expect(await screen.findByText(/V1 liberada em .* Somente leitura/)).toBeInTheDocument();
         expect(screen.getAllByText(dinheiro(3_000_000)).length).toBeGreaterThan(0);
         expect(screen.queryByText(/Prévia de hoje — calculada às/)).toBeNull();
+        // A versão liberada não diz mais "congelada" (o painel de proveniência traz o texto).
+        expect(screen.queryByText(/congelada/)).toBeNull();
         expect(prepararVersao).toHaveBeenCalledTimes(1);
 
         // Voltar para a prévia reaproveita o cálculo.
@@ -202,6 +204,40 @@ describe('CreditRoomDetail — prévia de hoje por padrão', () => {
         fireEvent.click(await screen.findByRole('button', { name: 'Tentar de novo' }));
         expect(await screen.findByText(/Prévia de hoje — calculada às/)).toBeInTheDocument();
         expect(freezeVersion).not.toHaveBeenCalled();
+    });
+
+    it('prévia pronta para OUTRO dia (virada do dia) vale como nenhuma: recalcula e mostra a de hoje', async () => {
+        prepararVersao.mockResolvedValueOnce(preparar(capacidade(111_100), '2020-01-01'));
+        prepararVersao.mockResolvedValueOnce(preparar(capacidade(123_400)));
+        abrir();
+
+        await waitFor(() => expect(prepararVersao).toHaveBeenCalledTimes(2));
+        expect(await screen.findByText(/Prévia de hoje — calculada às/)).toBeInTheDocument();
+        expect(prepararVersao).toHaveBeenCalledTimes(2);
+        expect(freezeVersion).not.toHaveBeenCalled();
+    });
+
+    it('a faixa só compara depois de as versões carregarem (nada de "Ainda não liberada" piscando)', async () => {
+        let resolverVersoes: (v: CreditRoomVersion[]) => void = () => undefined;
+        listVersions.mockReturnValue(new Promise(r => { resolverVersoes = r; }));
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        abrir();
+
+        expect(await screen.findByText(/Prévia de hoje — calculada às/)).toBeInTheDocument();
+        expect(screen.queryByText(/Ainda não liberada à instituição/)).toBeNull();
+        expect(screen.queryByText(/Desde a V\d+ liberada/)).toBeNull();
+        expect(screen.getByRole('button', { name: 'Atualizar prévia' })).toBeInTheDocument();
+
+        // O painel não crava "V1" no escuro: botão "Liberar" sem número, com o motivo no title.
+        abrirPainel();
+        await waitFor(() => expect(screen.getByRole('button', { name: 'Liberar' })).not.toBeDisabled());
+        expect(screen.getByRole('button', { name: 'Liberar' }).parentElement).toHaveAttribute('title', expect.stringMatching(/Carregando as versões/));
+        // Botão da barra + título do painel, ambos sem número.
+        expect(screen.getAllByText('Liberar para a instituição').length).toBeGreaterThanOrEqual(2);
+
+        await act(async () => { resolverVersoes([versaoLiberada()]); });
+        expect(await screen.findAllByText(/Desde a V1 liberada: valor máximo/)).not.toHaveLength(0);
+        expect(screen.getByRole('button', { name: 'Liberar V2' })).toBeInTheDocument();
     });
 
     it('sala sem versão liberada: a prévia funciona e a faixa diz que ainda não foi liberada', async () => {
@@ -358,6 +394,38 @@ describe('LiberarSheet — Liberar para a instituição', () => {
         await waitFor(() => expect(freezeVersion).toHaveBeenCalledTimes(1));
         expect(freezeVersion.mock.calls[0][0]).toBe(salvo);
         expect(freezeVersion.mock.calls[0][2]).toBe(nova);
+    });
+
+    it('cancelar o painel com a data-base trocada e o cálculo em voo: o resultado tardio é ignorado, a aba segue em HOJE e o painel reabre usável', async () => {
+        const hoje1 = preparar(capacidade(123_400));
+        const tardia = preparar(capacidade(150_000), '2026-08-31');
+        const hoje2 = preparar(capacidade(123_400));
+        prepararVersao.mockResolvedValueOnce(hoje1);
+        let resolverTardia: (p: ReturnType<typeof preparar>) => void = () => undefined;
+        prepararVersao.mockReturnValueOnce(new Promise(r => { resolverTardia = r; }));
+        prepararVersao.mockResolvedValue(hoje2);
+        abrir();
+        await screen.findByText(/Prévia de hoje — calculada às/);
+        abrirPainel();
+        await waitFor(() => expect(botaoLiberar()).not.toBeDisabled());
+
+        fireEvent.change(campoDataBase(), { target: { value: '2026-08-31' } });
+        await waitFor(() => expect(prepararVersao).toHaveBeenCalledTimes(2));
+        fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+        // Fechou: a aba recalcula a de hoje (3ª chamada) e o cálculo da outra data, quando voltar, não vira a prévia.
+        await waitFor(() => expect(prepararVersao).toHaveBeenCalledTimes(3));
+        expect(prepararVersao).toHaveBeenLastCalledWith(expect.anything(), hojeLocalISO());
+        await act(async () => { resolverTardia(tardia); });
+
+        expect(await screen.findByText(/Prévia de hoje — calculada às/)).toBeInTheDocument();
+        expect(screen.queryByRole('status', { name: 'Calculando a prévia' })).toBeNull();
+        expect(prepararVersao).toHaveBeenCalledTimes(3);
+
+        // Reabrir: a data-base volta para hoje e "Liberar" liga (nada de esqueleto eterno).
+        abrirPainel();
+        await waitFor(() => expect(botaoLiberar()).not.toBeDisabled());
+        expect(campoDataBase().value).toBe(hojeLocalISO());
+        expect(prepararVersao).toHaveBeenCalledTimes(3);
     });
 
     it('a data-base fica travada enquanto libera, com o motivo', async () => {

@@ -95,6 +95,8 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     const [erro, setErro] = React.useState<string | null>(null);
 
     const [versoes, setVersoes] = React.useState<CreditRoomVersion[]>([]);
+    // Sem a lista carregada não se sabe se há versão liberada: a faixa não pode dizer "ainda não liberada" nem o botão cravar "V1".
+    const [versoesCarregadas, setVersoesCarregadas] = React.useState(false);
     const [versaoVista, setVersaoVista] = React.useState<CreditRoomVersion | null>(null);
     const [liberarAberto, setLiberarAberto] = React.useState(false);
 
@@ -117,8 +119,9 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     // Versões carregam sempre: a aba Visão precisa da ativa.
     React.useEffect(() => {
         let vivo = true;
+        setVersoesCarregadas(false);
         creditRoomService.listVersions(room.id)
-            .then(v => { if (vivo) setVersoes(v); })
+            .then(v => { if (vivo) { setVersoes(v); setVersoesCarregadas(true); } })
             .catch(e => { if (vivo) setErro(errorMessage(e, 'Não foi possível carregar as versões.')); });
         return () => { vivo = false; };
     }, [room.id]);
@@ -180,15 +183,19 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     const abaUsaPrevia = aba === 'visao' || aba === 'capacidade' || aba === 'empreendimentos';
     // Com o painel "Liberar" aberto, quem calcula é ele (para a data-base do painel).
     const precisaDaPrevia = abaUsaPrevia && visao === ID_DA_PREVIA && !liberarAberto;
+    // A aba mostra a prévia de HOJE: uma pronta para outra data (calculada ontem, ou para a data-base de um painel
+    // cancelado) vale tanto quanto nenhuma — recalcula, e enquanto isso mostra o esqueleto.
+    const hoje = hojeLocalISO();
+    const previaDeOutroDia = previaEst.status === 'ok' && previaEst.previa?.dataBase !== hoje;
     React.useEffect(() => {
-        if (precisaDaPrevia && previaEst.status === 'idle') void calcularPrevia();
-    }, [precisaDaPrevia, previaEst.status, calcularPrevia]);
+        if (precisaDaPrevia && (previaEst.status === 'idle' || previaDeOutroDia)) void calcularPrevia();
+    }, [precisaDaPrevia, previaEst.status, previaDeOutroDia, calcularPrevia]);
 
     const versaoPrevia = React.useMemo(
-        () => (previaEst.status === 'ok' && previaEst.previa && previaEst.calculadaEm
+        () => (previaEst.status === 'ok' && previaEst.previa && previaEst.previa.dataBase === hoje && previaEst.calculadaEm
             ? versaoDaPrevia(previaEst.previa, previaEst.calculadaEm, room.organizationId)
             : null),
-        [previaEst, room.organizationId],
+        [previaEst, room.organizationId, hoje],
     );
     const versaoEscolhida = visao === ID_DA_PREVIA ? null : versoes.find(v => v.id === visao) ?? null;
     const mostrandoPrevia = visao === ID_DA_PREVIA || !versaoEscolhida;
@@ -442,6 +449,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                             room={room}
                             previa={versaoPrevia}
                             liberada={ativa}
+                            versoesCarregadas={versoesCarregadas}
                             onAtualizar={() => void calcularPrevia()}
                         />
                         {abaConteudo}
@@ -746,12 +754,15 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                 open={liberarAberto}
                 onClose={() => {
                     setLiberarAberto(false);
-                    // A data-base do painel pode ter trocado a prévia da tela por outra data: volta para a de hoje.
-                    setPreviaEst(prev => (prev.status !== 'idle' && prev.previa && prev.previa.dataBase !== hojeLocalISO() ? { status: 'idle' } : prev));
+                    // A data-base do painel pode ter trocado a prévia da tela por outra data, e um cálculo dela pode
+                    // ainda estar em voo: descarta o que voltar e só mantém uma prévia pronta E de hoje.
+                    geracaoPrevia.current += 1;
+                    setPreviaEst(prev => (prev.status === 'ok' && prev.previa?.dataBase === hojeLocalISO() ? prev : { status: 'idle' }));
                 }}
                 room={room}
-                proximo={Math.max(0, ...versoes.map(v => v.versionNo)) + 1}
+                proximo={versoesCarregadas ? Math.max(0, ...versoes.map(v => v.versionNo)) + 1 : null}
                 liberada={ativa}
+                versoesCarregadas={versoesCarregadas}
                 previaEst={previaEst}
                 onCalcular={d => void calcularPrevia(d)}
                 onLiberada={v => {
@@ -847,19 +858,22 @@ const ComparacaoComLiberada: React.FC<{
 
 /** Faixa no topo das abas quando se olha a prévia: de quando é, o que mudou desde a liberada e "Atualizar prévia". */
 const FaixaDaPrevia: React.FC<{
-    room: CreditRoom; previa: CreditRoomVersion; liberada: CreditRoomVersion | null; onAtualizar: () => void;
-}> = ({ room, previa, liberada, onAtualizar }) => {
+    room: CreditRoom; previa: CreditRoomVersion; liberada: CreditRoomVersion | null; versoesCarregadas: boolean; onAtualizar: () => void;
+}> = ({ room, previa, liberada, versoesCarregadas, onAtualizar }) => {
     const mudou = React.useMemo(() => {
+        if (!versoesCarregadas) return false;
         const r = resumoDaComparacao(room, previa, liberada);
         return r.semLiberada || r.numeros.length > 0 || r.cadastro.length > 0;
-    }, [room, previa, liberada]);
+    }, [room, previa, liberada, versoesCarregadas]);
     return (
         <div className={`flex flex-col lg:flex-row gap-3 items-start lg:items-center justify-between rounded-[10px] border px-4 py-3 ${mudou ? 'bg-amber-50 border-amber-200' : 'bg-white border-gray-100 shadow-sm'}`}>
             <div className="space-y-1 min-w-0">
                 <p className="text-sm font-medium text-gray-900">
                     Prévia de hoje — calculada às {horaDaPrevia(previa.frozenAt)}, ainda não liberada à instituição.
                 </p>
-                <ComparacaoComLiberada room={room} previa={previa} liberada={liberada} className={`text-sm ${mudou ? 'text-amber-800' : 'text-gray-600'}`} />
+                {versoesCarregadas && (
+                    <ComparacaoComLiberada room={room} previa={previa} liberada={liberada} className={`text-sm ${mudou ? 'text-amber-800' : 'text-gray-600'}`} />
+                )}
             </div>
             <button
                 onClick={onAtualizar}
@@ -877,32 +891,35 @@ export const LiberarSheet: React.FC<{
     open: boolean;
     onClose: () => void;
     room: CreditRoom;
-    proximo: number;
+    /** Número da próxima versão; `null` enquanto a lista de versões não chegou (não se crava "V1" no escuro). */
+    proximo: number | null;
     /** Última versão liberada (a ativa): base da comparação. */
     liberada: CreditRoomVersion | null;
+    versoesCarregadas: boolean;
     /** A prévia que está na tela — é EXATAMENTE ela que `freezeVersion` grava. */
     previaEst: PreviaEstado;
     /** Pede ao detalhe que (re)calcule a prévia para uma data-base. */
     onCalcular: (dataBase: string) => void;
     onLiberada: (v: CreditRoomVersion) => void;
-}> = ({ open, onClose, room, proximo, liberada, previaEst, onCalcular, onLiberada }) => {
+}> = ({ open, onClose, room, proximo, liberada, versoesCarregadas, previaEst, onCalcular, onLiberada }) => {
     const [label, setLabel] = React.useState('');
     const [notes, setNotes] = React.useState('');
     const [dataBase, setDataBase] = React.useState(hojeLocalISO());
     const [liberando, setLiberando] = React.useState(false);
     const [erro, setErro] = React.useState<string | null>(null);
 
+    // A data-base volta para hoje ao FECHAR (não ao abrir): no primeiro render aberto o efeito abaixo já tem de ver a data certa.
     React.useEffect(() => {
-        if (open) {
-            setLabel(''); setNotes(''); setDataBase(hojeLocalISO());
-            setLiberando(false); setErro(null);
-        }
+        if (open) { setLabel(''); setNotes(''); setErro(null); }
+        else { setDataBase(hojeLocalISO()); setLiberando(false); }
     }, [open]);
 
-    // Prévia descartada (cadastro salvo em outro lugar) com o painel aberto: recalcula para a data-base do painel.
+    // Com o painel aberto a prévia tem de ser a da data-base do painel: ausente (cadastro salvo em outro lugar) ou
+    // pronta para outra data (cálculo cancelado que voltou, virada do dia) vale como nenhuma — recalcula.
+    const previaDeOutraData = previaEst.status === 'ok' && previaEst.previa?.dataBase !== dataBase;
     React.useEffect(() => {
-        if (open && dataBase && previaEst.status === 'idle') onCalcular(dataBase);
-    }, [open, dataBase, previaEst.status, onCalcular]);
+        if (open && dataBase && (previaEst.status === 'idle' || previaDeOutraData)) onCalcular(dataBase);
+    }, [open, dataBase, previaEst.status, previaDeOutraData, onCalcular]);
 
     const mudarDataBase = (v: string) => {
         setDataBase(v);
@@ -938,21 +955,23 @@ export const LiberarSheet: React.FC<{
     const semDado = snap
         ? BLOCOS_PT.filter(b => (snap as unknown as Record<string, unknown>)[b.chave] == null).map(b => b.nome)
         : [];
+    // Painel fechado não calcula nem compara nada (ele fica montado, escondido).
     const versaoPrevia = React.useMemo(
-        () => (previa && previaEst.calculadaEm ? versaoDaPrevia(previa, previaEst.calculadaEm, room.organizationId) : null),
-        [previa, previaEst.calculadaEm, room.organizationId],
+        () => (open && previa && previaEst.calculadaEm ? versaoDaPrevia(previa, previaEst.calculadaEm, room.organizationId) : null),
+        [open, previa, previaEst.calculadaEm, room.organizationId],
     );
 
     const motivoLiberar = liberando ? 'Liberando a versão...'
         : !dataBase ? 'Informe a data-base para liberar'
             : previaEst.status === 'erro' ? 'A prévia não pôde ser calculada: veja o motivo acima'
                 : !previa ? 'Calculando a prévia desta data-base...'
-                    : undefined;
+                    : proximo == null ? 'Carregando as versões liberadas: o número da nova versão é confirmado ao liberar'
+                        : undefined;
 
     return (
         <Sheet open={open} onClose={onClose} size="md">
             <SheetHeader onClose={onClose}>
-                <SheetTitle>Liberar V{proximo} para a instituição</SheetTitle>
+                <SheetTitle>{proximo == null ? 'Liberar para a instituição' : `Liberar V${proximo} para a instituição`}</SheetTitle>
                 <SheetDescription>
                     Libera exatamente a prévia que está na tela: a posição da dívida, os KPIs da obra, as vendas, o NOI e a capacidade de pagamento daquela data-base. A instituição passa a ver esta versão; o que mudar no ÒPURA depois disso não a altera.
                 </SheetDescription>
@@ -997,7 +1016,7 @@ export const LiberarSheet: React.FC<{
                             <p className="text-xs text-gray-500 mt-0.5">É isto que será liberado. Nada foi gravado ainda.</p>
                         </div>
 
-                        {versaoPrevia && (
+                        {versaoPrevia && versoesCarregadas && (
                             <ComparacaoComLiberada room={room} previa={versaoPrevia} liberada={liberada} className="text-sm text-gray-700" />
                         )}
 
@@ -1064,7 +1083,7 @@ export const LiberarSheet: React.FC<{
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
                     >
                         <Send className="w-[15px] h-[15px]" />
-                        {liberando ? 'Liberando…' : `Liberar V${proximo}`}
+                        {liberando ? 'Liberando…' : proximo == null ? 'Liberar' : `Liberar V${proximo}`}
                     </button>
                 </span>
             </SheetFooter>

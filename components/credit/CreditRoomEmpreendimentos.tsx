@@ -403,7 +403,7 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
             {/* 1. Empreendimentos — o clique abre fotos e contratos */}
             <Secao
                 acc={accent} titulo="Empreendimentos"
-                subtitulo={empreendimentos ? `${ehPrevia(version) ? `Prévia de hoje — calculada às ${horaDaPrevia(version.frozenAt)}, ainda não liberada à instituição.` : 'Posição congelada nesta versão.'} Clique em um empreendimento para ver as fotos e os contratos dele.` : undefined}
+                subtitulo={empreendimentos ? `${ehPrevia(version) ? `Prévia de hoje — calculada às ${horaDaPrevia(version.frozenAt)}, ainda não liberada à instituição.` : 'Posição desta versão liberada.'} Clique em um empreendimento para ver as fotos e os contratos dele.` : undefined}
             >
                 {empreendimentos == null ? (
                     <p className={`${A.corpo} ${A.rotulo}`}>Esta versão não traz os empreendimentos. {FRASE_SCHEMA_1[accent]}</p>

@@ -42,8 +42,11 @@ const porFormato = (t: { valor: number | null; formato: TermoProveniencia['forma
  * O painel do §96: de onde saiu o número. Fica num Sheet e não num tooltip
  * porque a lista de termos com fonte e as ressalvas não cabem num balão — e
  * ressalva que não cabe é ressalva que não é lida.
+ *
+ * Export nomeado: a aba Capacidade de pagamento (CreditRoomCapacity) abre o
+ * mesmo painel — uma explicação só, não duas cópias que divergem.
  */
-const PainelProveniencia: React.FC<{
+export const PainelProveniencia: React.FC<{
     aberto: boolean; onClose: () => void;
     version: CreditRoomVersion; chave: IndicadorKey | null;
 }> = ({ aberto, onClose, version, chave }) => {
@@ -77,7 +80,7 @@ const PainelProveniencia: React.FC<{
                                                     {t.obs && <p className="text-xs text-gray-400 mt-0.5">{t.obs}</p>}
                                                 </td>
                                                 <td className="px-4 py-2.5 text-right text-sm font-medium text-gray-800 whitespace-nowrap align-top">
-                                                    {porFormato(t)}
+                                                    {t.texto ?? porFormato(t)}
                                                 </td>
                                             </tr>
                                         ))}

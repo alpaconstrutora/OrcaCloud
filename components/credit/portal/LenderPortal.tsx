@@ -1,5 +1,5 @@
 import React from 'react';
-import { Banknote, ChevronDown, ClipboardList, Download, FileText, History, LayoutDashboard, LogOut, MessageSquare, Scale, ShieldCheck } from 'lucide-react';
+import { Banknote, Building2, ChevronDown, ClipboardList, Download, FileText, History, LayoutDashboard, LogOut, MessageSquare, Scale, ShieldCheck, TrendingUp } from 'lucide-react';
 import { supabase } from '../../../lib/supabase';
 import { creditRoomService } from '../../../services/creditRoomService';
 import {
@@ -12,6 +12,8 @@ import {
 import { CardHeader, fmtDate, GhostButton, PortalCard, PortalEmpty, PortalLoading, StatusPill, Td, Th, type PillTone } from '../../portal/PortalKit';
 import CreditRoomFunding from '../CreditRoomFunding';
 import CreditRoomIndicators from '../CreditRoomIndicators';
+import CreditRoomCapacity from '../CreditRoomCapacity';
+import CreditRoomEmpreendimentos from '../CreditRoomEmpreendimentos';
 import CreditRoomRequests, { CreditRoomCommentsThread } from '../CreditRoomRequests';
 import CreditRoomCovenants from '../CreditRoomCovenants';
 import CreditRoomDisbursements from '../CreditRoomDisbursements';
@@ -29,10 +31,12 @@ import LenderMfaGate from './LenderMfaGate';
  * de acesso. A RLS de cada tabela é quem garante; a UI só reflete.
  */
 
-type Aba = 'visao' | 'fontesusos' | 'dataroom' | 'solicitacoes' | 'covenants' | 'desembolsos' | 'comentarios' | 'versoes';
+type Aba = 'visao' | 'capacidade' | 'empreendimentos' | 'fontesusos' | 'dataroom' | 'solicitacoes' | 'covenants' | 'desembolsos' | 'comentarios' | 'versoes';
 
 const ABAS: { id: Aba; label: string; icon: React.ReactNode }[] = [
     { id: 'visao', label: 'Visão geral', icon: <LayoutDashboard className="w-4 h-4" /> },
+    { id: 'capacidade', label: 'Capacidade de pagamento', icon: <TrendingUp className="w-4 h-4" /> },
+    { id: 'empreendimentos', label: 'Empreendimentos e contratos', icon: <Building2 className="w-4 h-4" /> },
     { id: 'fontesusos', label: 'Fontes e Usos', icon: <Scale className="w-4 h-4" /> },
     { id: 'dataroom', label: 'Data Room', icon: <FileText className="w-4 h-4" /> },
     { id: 'solicitacoes', label: 'Solicitações', icon: <ClipboardList className="w-4 h-4" /> },
@@ -198,12 +202,12 @@ const LenderPortalInner: React.FC<Props> = ({ userEmail, onLogout }) => {
             </div>
 
             {/* Barra inferior — mobile */}
-            <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-100 flex">
+            <nav className="md:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-100 flex overflow-x-auto">
                 {ABAS.map(t => (
                     <button
                         key={t.id}
                         onClick={() => setAba(t.id)}
-                        className={`flex-1 flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium ${aba === t.id ? 'text-[#C24428]' : 'text-gray-400'}`}
+                        className={`min-w-[72px] flex-none flex flex-col items-center gap-1 py-2.5 px-1 text-center text-[11px] font-medium ${aba === t.id ? 'text-[#C24428]' : 'text-gray-400'}`}
                     >
                         {t.icon}
                         {t.label}
@@ -290,8 +294,12 @@ const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMe
 
             {erro && <PortalCard className="p-4"><p className="text-sm text-red-600">{erro}</p></PortalCard>}
 
-            {aba === 'visao' && (
-                ativa ? <CreditRoomIndicators version={ativa} accent="portal" /> : (
+            {(aba === 'visao' || aba === 'capacidade' || aba === 'empreendimentos') && (
+                ativa ? (
+                    aba === 'visao' ? <CreditRoomIndicators version={ativa} accent="portal" />
+                        : aba === 'capacidade' ? <CreditRoomCapacity version={ativa} accent="portal" />
+                            : <CreditRoomEmpreendimentos version={ativa} accent="portal" />
+                ) : (
                     <PortalCard><PortalEmpty icon={<LayoutDashboard className="w-9 h-9" />} title="Sem versão liberada" subtitle="Os indicadores aparecem quando a empresa congelar a primeira versão." /></PortalCard>
                 )
             )}

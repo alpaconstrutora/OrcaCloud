@@ -11,11 +11,14 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+    ALERTA_PT,
     CENARIOS_ESTRESSE,
     PARAMETROS_CAPACIDADE_PADRAO,
     alertasDaCarteira,
     aplicarEstresse,
     capacidadeMaxima,
+    estresseDaVersao,
+    fluxosDaOperacao,
     mensagemSemAcessoAoGrupo,
     mesesDoHorizonte,
     montarCapacidade,
@@ -24,12 +27,15 @@ import {
     qualidadeDaRenda,
     recebidoPorMes,
     rendaMensalDoEmpreendimento,
+    resumoDaCapacidade,
+    rotuloDoMes,
     rotuloMascarado,
     serieDeRenda,
     type CapacidadeEntrada,
     type LocacaoVigente,
     type MontarCapacidadeEntrada,
     type SerieMes,
+    type TipoAlerta,
     type TituloCarteira,
 } from '../utils/creditCapacity';
 import { buildSchedule } from '../utils/debtAmortization';
@@ -564,6 +570,126 @@ describe('creditCapacity', () => {
     it('rotuloMascarado', () => {
         expect(rotuloMascarado('LOCACAO', 3)).toBe('Locatário 03');
         expect(rotuloMascarado('VENDA', 12)).toBe('Comprador 12');
+    });
+
+    describe('tela da capacidade', () => {
+        const fluxosAmbos = { vendas: true, alugueis: true };
+        // Renda positiva e serviço atual: a capacidade máxima sai > 0 e o estresse mexe de verdade.
+        const capacidadeViva = (p: Partial<MontarCapacidadeEntrada> = {}) => montarCapacidade(capEntrada({
+            horizonte: 12,
+            parametros: { ...PARAMETROS_CAPACIDADE_PADRAO, horizonte_meses: 12 },
+            titulosDoEscopo: mesesDoHorizonte(DATA_BASE, 12).map((mes, k) =>
+                titulo({ id: `v${k}`, amount: 60_000, dueDate: `${mes}-10` })),
+            locacoesDoEscopo: [locacao({ aluguelMensal: 20_000 })],
+            servicoAtualPorMes: Object.fromEntries(mesesDoHorizonte(DATA_BASE, 12).map(m => [m, 20_000])),
+            ...p,
+        }));
+
+        it('fluxosDaOperacao: vendas = receivables, aluguéis = noi', () => {
+            const s = { operacao: { eligible_flows: { receivables: true, noi: false, operating_cash: false } } } as unknown as Parameters<typeof fluxosDaOperacao>[0];
+            expect(fluxosDaOperacao(s)).toEqual({ vendas: true, alugueis: false });
+        });
+
+        it('estresse Base reproduz o que foi congelado (valor máximo e DSCR mínimo)', () => {
+            const c = capacidadeViva();
+            expect(c.capacidade_maxima.valor_maximo).toBeGreaterThan(0);
+            const base = estresseDaVersao(c, CENARIOS_ESTRESSE[0], fluxosAmbos);
+            expect(base.capacidade_maxima).toEqual(c.capacidade_maxima);
+            expect(base.dscr_minimo_12m).toBe(resumoDaCapacidade(c)!.dscr_minimo_12m);
+        });
+
+        it('estresse Severo reduz o valor máximo e não mexe no serviço atual', () => {
+            const c = capacidadeViva();
+            const base = estresseDaVersao(c, CENARIOS_ESTRESSE[0], fluxosAmbos);
+            const severo = estresseDaVersao(c, CENARIOS_ESTRESSE[2], fluxosAmbos);
+            expect(severo.capacidade_maxima.valor_maximo).toBeLessThan(base.capacidade_maxima.valor_maximo);
+            expect(severo.serie.map(m => m.servico_atual)).toEqual(c.serie.map(m => m.servico_atual));
+        });
+
+        it('com só aluguel elegível, o distrato não muda nada', () => {
+            const c = capacidadeViva();
+            const f = { vendas: false, alugueis: true };
+            const sem = estresseDaVersao(c, { ...CENARIOS_ESTRESSE[0], distrato_pct: 0 }, f);
+            const com = estresseDaVersao(c, { ...CENARIOS_ESTRESSE[0], distrato_pct: 50 }, f);
+            expect(com.capacidade_maxima.valor_maximo).toBe(sem.capacidade_maxima.valor_maximo);
+        });
+
+        it('controle: com vendas elegíveis, o distrato reduz o valor máximo', () => {
+            const c = capacidadeViva();
+            const sem = estresseDaVersao(c, { ...CENARIOS_ESTRESSE[0], distrato_pct: 0 }, fluxosAmbos);
+            const com = estresseDaVersao(c, { ...CENARIOS_ESTRESSE[0], distrato_pct: 50 }, fluxosAmbos);
+            expect(sem.capacidade_maxima.valor_maximo).toBeGreaterThan(0);
+            expect(com.capacidade_maxima.valor_maximo).toBeLessThan(sem.capacidade_maxima.valor_maximo);
+        });
+
+        it('inadimplência com só aluguel elegível: age pelos aluguéis e ignora a perna de vendas', () => {
+            const zeroServico = Object.fromEntries(mesesDoHorizonte(DATA_BASE, 12).map(m => [m, 0]));
+            const c = capacidadeViva({ servicoAtualPorMes: zeroServico });
+            const f = { vendas: false, alugueis: true };
+            const cenario = { ...CENARIOS_ESTRESSE[0], inadimplencia_pct: 25 };
+            const base = estresseDaVersao(c, CENARIOS_ESTRESSE[0], f);
+            const inad = estresseDaVersao(c, cenario, f);
+            // controle: o estresse mexe de verdade (aluguéis caem 25%)
+            expect(base.capacidade_maxima.valor_maximo).toBeGreaterThan(0);
+            expect(inad.capacidade_maxima.valor_maximo).toBeLessThan(base.capacidade_maxima.valor_maximo);
+            // a perna de vendas é ignorada: zerar as vendas da série dá o mesmo resultado
+            const semVendas = estresseDaVersao({ ...c, serie: c.serie.map(m => ({ ...m, vendas: 0 })) }, cenario, f);
+            expect(c.serie.some(m => m.vendas > 0)).toBe(true);
+            expect(inad.capacidade_maxima).toEqual(semVendas.capacidade_maxima);
+            expect(inad.serie.map(m => m.renda_liquida)).toEqual(semVendas.serie.map(m => m.renda_liquida));
+        });
+
+        it('percentuais do cenário ficam presos em 0–100', () => {
+            const c = capacidadeViva();
+            const total = estresseDaVersao(c, { nome: 'x', inadimplencia_pct: 250, vacancia_pct: 0, distrato_pct: 0 }, fluxosAmbos);
+            expect(total.capacidade_maxima).toEqual({ parcela_maxima: 0, valor_maximo: 0 });
+            const negativo = estresseDaVersao(c, { nome: 'y', inadimplencia_pct: -50, vacancia_pct: -50, distrato_pct: -50 }, fluxosAmbos);
+            expect(negativo.capacidade_maxima).toEqual(c.capacidade_maxima);
+        });
+
+        it('série vazia: capacidade máxima zerada, sem estourar', () => {
+            const c = { ...capacidadeViva(), serie: [] as SerieMes[] };
+            const r = estresseDaVersao(c, CENARIOS_ESTRESSE[2], fluxosAmbos);
+            expect(r.capacidade_maxima).toEqual({ parcela_maxima: 0, valor_maximo: 0 });
+            expect(r.dscr_minimo_12m).toBeNull();
+        });
+
+        it('resumoDaCapacidade: null sem capacidade; sem serviço o DSCR é null e a renda é número', () => {
+            expect(resumoDaCapacidade(null)).toBeNull();
+            expect(resumoDaCapacidade(undefined)).toBeNull();
+            const semServico = montarCapacidade(capEntrada({
+                horizonte: 12, parametros: { ...PARAMETROS_CAPACIDADE_PADRAO, horizonte_meses: 12 },
+                titulosDoEscopo: [titulo({ amount: 12_000, dueDate: '2026-12-10' })],
+            }));
+            const r = resumoDaCapacidade(semServico)!;
+            expect(r.dscr_minimo_12m).toBeNull();
+            expect(r.renda_liquida_media_12m).toBe(1_000);
+        });
+
+        it('resumoDaCapacidade: menor folga, mês dela e meses negativos no horizonte inteiro', () => {
+            const c = capacidadeViva();
+            const serie = c.serie.map((m, k) => ({ ...m, folga: k === 4 ? -500 : 1_000 }));
+            const r = resumoDaCapacidade({ ...c, serie: [...serie, ...serie.slice(0, 4).map((m, k) => ({ ...m, mes: `2028-0${k + 1}`, folga: -1 }))] })!;
+            expect(r.folga_minima_12m).toBe(-500);
+            expect(r.mes_folga_minima).toBe(c.serie[4].mes);
+            expect(r.meses_folga_negativa).toBe(1 + 4);
+        });
+
+        it('rotuloDoMes: abreviação em português + ano de 2 dígitos', () => {
+            expect(rotuloDoMes('2026-12')).toBe('dez/26');
+            expect(rotuloDoMes('2027-01')).toBe('jan/27');
+            expect(rotuloDoMes('2027-05')).toBe('mai/27');
+        });
+
+        it('ALERTA_PT cobre os 4 tipos e diz como resolver', () => {
+            const tipos: TipoAlerta[] = ['VENDA_SEM_PARCELAS', 'LOCACAO_SEM_VALOR', 'LOCACAO_PRAZO_INDETERMINADO', 'TITULO_SEM_EMPREENDIMENTO'];
+            expect(Object.keys(ALERTA_PT).sort()).toEqual([...tipos].sort());
+            for (const t of tipos) {
+                expect(ALERTA_PT[t].titulo).toBeTruthy();
+                expect(ALERTA_PT[t].comoResolver).toBeTruthy();
+            }
+            expect(ALERTA_PT.VENDA_SEM_PARCELAS.comoResolver).toContain('Gerar parcelas');
+        });
     });
 });
 

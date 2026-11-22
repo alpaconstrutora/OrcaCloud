@@ -29,7 +29,10 @@ const VERSOES = {
     ],
 } as Record<string, unknown[]>;
 
-vi.mock('../../services/contractDocumentVersionService', () => ({
+// As regras da versão (motivoNaoEnviaAoPortal, assinaturaDaVersao) ficam as reais —
+// só o acesso ao banco é falso.
+vi.mock('../../services/contractDocumentVersionService', async (importOriginal) => ({
+    ...(await importOriginal<typeof import('../../services/contractDocumentVersionService')>()),
     contractDocumentVersionService: {
         listByOwner: vi.fn((_t: string, id: string) => Promise.resolve(VERSOES[id] ?? [])),
         list: vi.fn(() => Promise.resolve([...VERSOES['c-1'], ...VERSOES['ad-1']])),

@@ -626,3 +626,34 @@ export function mensagemSemAcessoAoGrupo(nomes: string[]): string {
     const lista = nomes.length === 1 ? nomes[0] : `${nomes.slice(0, -1).join(', ')} e ${nomes[nomes.length - 1]}`;
     return `Você não é membro de ${lista} — só quem é membro de todas as empresas do grupo pode congelar esta versão.`;
 }
+
+// ── Renda do mês por empreendimento ──────────────────────────────────────────
+
+/**
+ * Renda do mês da data-base de um empreendimento (cartão "renda mensal" do
+ * snapshot): títulos de venda em aberto que vencem no mês + aluguel das
+ * locações que VIGORAM no mês. Locação que só começa depois não conta (o
+ * aluguel dela ainda não existe), e só entra o fluxo que a operação marcou
+ * como elegível — o mesmo R8 da série.
+ */
+export function rendaMensalDoEmpreendimento(
+    empreendimentoId: string,
+    titulos: TituloCarteira[],
+    locacoes: LocacaoVigente[],
+    dataBase: string,
+    fluxos: FluxosElegiveis,
+): number {
+    const mes = mesDe(dataBase);
+    const vendas = fluxos.vendas
+        ? titulos
+            .filter(t => t.empreendimentoId === empreendimentoId && t.natureza === 'VENDA' && !t.recebido
+                && !!t.dueDate && mesDe(t.dueDate) === mes)
+            .reduce((a, t) => a + n0(t.amount), 0)
+        : 0;
+    const alugueis = fluxos.alugueis
+        ? locacoes
+            .filter(l => l.empreendimentoId === empreendimentoId && locacaoNoMes(l, mes, dataBase))
+            .reduce((a, l) => a + n0(l.aluguelMensal), 0)
+        : 0;
+    return round2(vendas + alugueis);
+}

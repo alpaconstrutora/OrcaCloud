@@ -53,7 +53,9 @@ import {
     montarCapacidade,
     orgsForaDoAcesso,
     qualidadeDaRenda,
+    rendaMensalDoEmpreendimento,
     type CapacidadeEntrada,
+    type FluxosElegiveis,
     type LocacaoVigente,
     type Natureza,
     type ParametrosCapacidade,
@@ -945,6 +947,8 @@ export const creditRoomService = {
         const divida = posicoes.length === 1 ? posicoes[0] : somarPosicoes(posicoes);
 
         const filtrando = room.empreendimentoIds.length > 0;
+        // R8: os fluxos que a OPERAÇÃO marcou como elegíveis (vendas = recebíveis, aluguéis = NOI).
+        const fluxos: FluxosElegiveis = { vendas: room.eligibleFlows.receivables, alugueis: room.eligibleFlows.noi };
 
         const [
             [obra, unidades, empreendimento, portfolio, recebiveis, novoServico12mDaProposta, documentos, eac],
@@ -990,7 +994,7 @@ export const creditRoomService = {
         const [vendasSemTitulo, empreendimentos, dadosDosContratos] = await Promise.all([
             titulos ? this.coletarVendasSemTitulo(orgs, titulos, room.empreendimentoIds) : Promise.resolve(null),
             titulosDoEscopo && locacoesDoEscopo
-                ? this.coletarEmpreendimentosDoEscopo(orgs, room.empreendimentoIds, titulosDoEscopo, locacoesDoEscopo, dataBase.slice(0, 7))
+                ? this.coletarEmpreendimentosDoEscopo(orgs, room.empreendimentoIds, titulosDoEscopo, locacoesDoEscopo, dataBase, fluxos)
                 : Promise.resolve(null),
             titulosDoEscopo && locacoesDoEscopo
                 ? this.coletarDadosDosContratos([
@@ -1023,7 +1027,6 @@ export const creditRoomService = {
             ? null
             : somarPorMes(servicoPorOrg as Record<string, number>[]);
 
-        const fluxos = { vendas: room.eligibleFlows.receivables, alugueis: room.eligibleFlows.noi };
         const entradaDe = (
             ts: TituloCarteira[], ls: LocacaoVigente[], despesa: number, servico: Record<string, number>, novo: Record<string, number>,
         ): CapacidadeEntrada => ({
@@ -1757,7 +1760,8 @@ export const creditRoomService = {
         empreendimentoIds: string[],
         titulos: TituloCarteira[],
         locacoes: LocacaoVigente[],
-        mesBase: string,
+        dataBase: string,
+        fluxos: FluxosElegiveis,
     ): Promise<SnapshotEmpreendimentoItem[] | null> {
         try {
             const listas = await Promise.all(orgs.map(o => empreendimentoService.list(o)));
@@ -1787,13 +1791,6 @@ export const creditRoomService = {
                 const vgv = (pred: (u: typeof us[number]) => boolean) =>
                     round2(us.filter(pred).reduce((a, u) => a + num(u.price), 0));
                 const fs = (fotos.get(e.id) ?? []).slice(0, 8);
-                const rendaVendas = titulos
-                    .filter(t => t.empreendimentoId === e.id && t.natureza === 'VENDA' && !t.recebido
-                        && (t.dueDate ?? '').slice(0, 7) === mesBase)
-                    .reduce((a, t) => a + num(t.amount), 0);
-                const rendaAlugueis = locacoes
-                    .filter(l => l.empreendimentoId === e.id)
-                    .reduce((a, l) => a + num(l.aluguelMensal), 0);
                 return {
                     id: e.id,
                     nome: e.name,
@@ -1808,7 +1805,7 @@ export const creditRoomService = {
                     vgv_total: vgv(() => true),
                     vgv_vendido: vgv(vendida),
                     vgv_disponivel: vgv(disponivel),
-                    renda_mensal: round2(rendaVendas + rendaAlugueis),
+                    renda_mensal: rendaMensalDoEmpreendimento(e.id, titulos, locacoes, dataBase, fluxos),
                     capa: fs[0]?.url ?? null,
                     fotos: fs.map(f => ({ url: f.url, legenda: f.legenda ?? null })),
                 };

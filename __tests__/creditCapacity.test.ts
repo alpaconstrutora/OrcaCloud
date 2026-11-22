@@ -22,6 +22,7 @@ import {
     orgsForaDoAcesso,
     qualidadeDaRenda,
     recebidoPorMes,
+    rendaMensalDoEmpreendimento,
     rotuloMascarado,
     serieDeRenda,
     type CapacidadeEntrada,
@@ -532,6 +533,23 @@ describe('creditCapacity', () => {
         expect(mensagemSemAcessoAoGrupo(['SPE Alfa'])).toBe(
             'Você não é membro de SPE Alfa — só quem é membro de todas as empresas do grupo pode congelar esta versão.');
         expect(mensagemSemAcessoAoGrupo(['SPE Alfa', 'SPE Beta', 'SPE Gama'])).toMatch(/^Você não é membro de SPE Alfa, SPE Beta e SPE Gama — /);
+    });
+
+    it('renda mensal do empreendimento: só locação vigente no mês da data-base, e só fluxos elegíveis', () => {
+        const titulos = [
+            titulo({ id: 'v1', empreendimentoId: 'E', amount: 1_000, dueDate: '2026-11-30' }),    // no mês: entra
+            titulo({ id: 'v2', empreendimentoId: 'E', amount: 9_000, dueDate: '2026-12-10' }),    // mês seguinte: não
+            titulo({ id: 'v3', empreendimentoId: 'X', amount: 7_000, dueDate: '2026-11-30' }),    // outro emp.
+        ];
+        const locacoes = [
+            locacao({ contractId: 'a', empreendimentoId: 'E', aluguelMensal: 2_000, inicio: '2025-01-01' }),
+            locacao({ contractId: 'b', empreendimentoId: 'E', aluguelMensal: 5_000, inicio: '2027-03-01' }), // começa depois
+            locacao({ contractId: 'c', empreendimentoId: 'E', aluguelMensal: 4_000, inicio: '2024-01-01', fim: '2026-10-31' }), // fim vencido com o contrato ativo = prazo indeterminado: segue projetada (alerta à parte)
+        ];
+        expect(rendaMensalDoEmpreendimento('E', titulos, locacoes, DATA_BASE, { vendas: true, alugueis: true })).toBe(1_000 + 2_000 + 4_000);
+        expect(rendaMensalDoEmpreendimento('E', titulos, locacoes, DATA_BASE, { vendas: false, alugueis: true })).toBe(6_000);
+        expect(rendaMensalDoEmpreendimento('E', titulos, locacoes, DATA_BASE, { vendas: true, alugueis: false })).toBe(1_000);
+        expect(rendaMensalDoEmpreendimento('E', titulos, locacoes, DATA_BASE, { vendas: false, alugueis: false })).toBe(0);
     });
 
     it('rotuloMascarado', () => {

@@ -455,9 +455,12 @@ export interface QualidadeRenda {
  * pagadores sobre o total. Pagador sem `partyKey` entra no total mas não
  * forma grupo — não há como saber se são a mesma pessoa.
  *
- * Pontualidade: dos títulos recebidos com vencimento nos 12 meses até a
- * data-base e com data de pagamento conhecida, quantos foram pagos até o
- * vencimento.
+ * Pontualidade: dos títulos com vencimento nos 12 meses até a data-base —
+ * TODOS, pagos e em aberto —, quantos foram pagos até o vencimento. Dividir
+ * só pelos pagos (regra antiga) escondia o calote: quem nunca pagou sumia do
+ * denominador e a pontualidade subia. Pago sem data de pagamento conhecida
+ * conta no denominador e não no numerador (não dá para afirmar "em dia").
+ * Sem título vencido na janela, `null`.
  */
 export function qualidadeDaRenda(e: CapacidadeEntrada): QualidadeRenda {
     const meses = mesesDoHorizonte(e.dataBase, e.horizonte);
@@ -493,16 +496,16 @@ export function qualidadeDaRenda(e: CapacidadeEntrada): QualidadeRenda {
     const w = wale(contratos, new Date(Date.UTC(y, m - 1, d)));
 
     const inicioJanela = `${somarMeses(mesDe(e.dataBase), -11)}-01`;
-    const recebidos = e.titulos.filter(t =>
-        t.recebido && t.dueDate && t.paymentDate
-        && diaDe(t.dueDate) >= inicioJanela && diaDe(t.dueDate) <= dia);
-    const emDia = recebidos.filter(t => diaDe(t.paymentDate as string) <= diaDe(t.dueDate as string));
+    const vencidosNaJanela = e.titulos.filter(t =>
+        !!t.dueDate && diaDe(t.dueDate) >= inicioJanela && diaDe(t.dueDate) <= dia);
+    const emDia = vencidosNaJanela.filter(t =>
+        t.recebido && !!t.paymentDate && diaDe(t.paymentDate) <= diaDe(t.dueDate as string));
 
     return {
         concentracao_top5_pct: ratioPct(top5, total),
         wale_anos: w.years == null ? null : round2(w.years),
         locacoes_prazo_indeterminado: e.locacoes.filter(l => prazoIndeterminado(l, e.dataBase)).length,
-        pontualidade_12m_pct: recebidos.length ? round2((emDia.length / recebidos.length) * 100) : null,
+        pontualidade_12m_pct: vencidosNaJanela.length ? round2((emDia.length / vencidosNaJanela.length) * 100) : null,
     };
 }
 

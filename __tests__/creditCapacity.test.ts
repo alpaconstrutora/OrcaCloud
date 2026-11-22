@@ -440,6 +440,29 @@ describe('creditCapacity', () => {
         expect(q.wale_anos).toBeLessThan(2.1);
     });
 
+    it('pontualidade divide por TODOS os títulos vencidos na janela: 1 em dia, 1 atrasado, 1 em aberto = 33,33', () => {
+        const q = qualidadeDaRenda(entrada({
+            titulos: [
+                titulo({ id: 'p1', recebido: true, dueDate: '2026-05-10', paymentDate: '2026-05-09' }),
+                titulo({ id: 'p2', recebido: true, dueDate: '2026-06-10', paymentDate: '2026-06-15' }),
+                titulo({ id: 'p3', recebido: false, dueDate: '2026-07-10', paymentDate: null }),
+                // a vencer depois da data-base: fora da janela
+                titulo({ id: 'p4', recebido: false, dueDate: '2026-12-10', paymentDate: null }),
+            ],
+        }));
+        expect(q.pontualidade_12m_pct).toBe(33.33);
+    });
+
+    it('pontualidade: pago sem data de pagamento entra no denominador, não no numerador', () => {
+        const q = qualidadeDaRenda(entrada({
+            titulos: [
+                titulo({ id: 'a', recebido: true, dueDate: '2026-05-10', paymentDate: '2026-05-10' }),
+                titulo({ id: 'b', recebido: true, dueDate: '2026-06-10', paymentDate: null }),
+            ],
+        }));
+        expect(q.pontualidade_12m_pct).toBe(50);
+    });
+
     it('qualidade sem renda nem recebidos devolve tudo null (dado ausente ≠ zero)', () => {
         const q = qualidadeDaRenda(entrada());
         expect(q).toEqual({

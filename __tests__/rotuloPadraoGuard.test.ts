@@ -122,7 +122,6 @@ export function rotulosForaDoPadrao(texto: string): number[] {
 
 /** Ficou de fora DE PROPÓSITO em 11/11/2026 — só diminui. */
 const BASELINE: Record<string, number> = {
-    'components/InvestorDashboard.tsx': 1, // PORTAL  trecho isPublicExperience (§24)
     'components/SupplierDashboard.tsx': 3, // PORTAL  drillPanelLabel muda de cor no portal (§24)
 };
 

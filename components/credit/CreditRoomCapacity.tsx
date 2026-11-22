@@ -409,12 +409,17 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
     const comOperacao = c.serie.some(m => m.servico_novo > 0);
     const pedido = s.operacao?.requested_amount ?? 0;
     const apoioOperacao = comOperacao ? `com a operação pedida${pedido > 0 ? ` de ${money(pedido)}` : ''}` : null;
+    // A comparação com o pedido vai PRIMEIRO: a dica do KPI corta no fim (KpiStrip do portal),
+    // e é ela que desfaz a aparente contradição com o DSCR pós-operação.
+    const comparacaoPedido = !semSerie && pedido > 0
+        ? `pedido ${money(pedido)} ${pedido > c.capacidade_maxima.valor_maximo ? 'acima do máximo' : 'dentro do máximo'}`
+        : null;
     const hintMaximo = semSerie ? 'sem meses projetados nesta versão' : [
+        comparacaoPedido,
         'sobre a dívida atual',
         `parcela máx. ${money(c.capacidade_maxima.parcela_maxima)}`,
         `DSCR ≥ ${vezes(dscrExigido)}`,
-        ...(pedido > 0 ? [`pedido ${money(pedido)} — ${pedido > c.capacidade_maxima.valor_maximo ? 'acima do máximo' : 'dentro do máximo'}`] : []),
-    ].join(' · ');
+    ].filter(Boolean).join(' · ');
     // O Base é SEMPRE o número congelado (uma só máxima para o banco ver): o cenário Base
     // não é recalculado, e a diferença dos outros cenários é contra ele.
     const congelado: ResultadoEstresse = {
@@ -520,6 +525,10 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
         'Contratado, sem reajuste',
         `data-base ${formatDateBR(s.data_base)}`,
         escopo ? `escopo ${escopo.tipo === 'GRUPO' ? 'Grupo' : 'Empresa'} (${plural(nEmpresas, 'empresa', 'empresas')})` : null,
+        // A frase inteira, que não corta: o valor máximo não inclui o pedido; o DSCR pós-operação inclui.
+        comparacaoPedido
+            ? `valor máximo calculado sobre a dívida atual; o ${comparacaoPedido}${comOperacao ? ', e o DSCR pós-operação já o inclui' : ''}`
+            : null,
     ].filter(Boolean).join(' · ');
 
     return (

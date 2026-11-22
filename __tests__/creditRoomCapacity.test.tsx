@@ -104,13 +104,15 @@ describe('CreditRoomCapacity', () => {
         abrir(versao(capacidade(serie(), 123_400)), accent);
         expect(screen.getAllByText(/DSCR mínimo 12m \(pós-operação\)/).length).toBeGreaterThan(0);
         expect(screen.getByText(/com a operação pedida de/)).toBeInTheDocument();
-        expect(screen.getByText(/sobre a dívida atual · parcela máx\./)).toBeInTheDocument();
-        expect(screen.getByText(/pedido .*5\.000\.000,00 — acima do máximo/)).toBeInTheDocument();
+        // A comparação abre a dica (a dica corta no fim no KpiStrip do portal)…
+        expect(screen.getByText(/^pedido .*5\.000\.000,00 acima do máximo · sobre a dívida atual · parcela máx\./)).toBeInTheDocument();
+        // …e o rodapé repete a frase inteira, que não corta.
+        expect(screen.getByText(/valor máximo calculado sobre a dívida atual; o pedido .*5\.000\.000,00 acima do máximo, e o DSCR pós-operação já o inclui/)).toBeInTheDocument();
     });
 
     it('pedido dentro do máximo diz "dentro do máximo"', () => {
         abrir(versao(capacidade(serie(), 9_000_000)));
-        expect(screen.getByText(/— dentro do máximo/)).toBeInTheDocument();
+        expect(screen.getAllByText(/dentro do máximo/).length).toBe(2);
     });
 
     it('sem serviço da operação em nenhum mês: o DSCR não diz "pós-operação"', () => {

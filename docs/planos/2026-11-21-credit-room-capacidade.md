@@ -84,7 +84,7 @@ ausentes = `null` = "—", nunca zero). Blocos novos, cada um com `fonte` e `dat
   - `alertas[]`: vendas "vendidas" (regra `saleUnitClassifier`) **sem parcelas
     geradas** (qtd + VGV), locações ativas sem valor mensal, títulos sem empreendimento.
 - `qualidade`: concentração top-5 pagadores (% da renda futura), WALE dos aluguéis
-  (`lib/rentalExecutive.ts` `wale`), pontualidade 12m (% pago até o vencimento),
+  (`lib/rentalExecutive.ts` `wale`), pontualidade 12m (pagos até o vencimento ÷ TODOS os títulos vencidos na janela, pagos e em aberto),
   inadimplência (faixas do aging atual).
 
 `computeIndicators` passa a usar a `capacidade.serie` para o fluxo elegível quando
@@ -122,10 +122,15 @@ ao contrato por `lib/receivableRef.ts` (`originIdFromRef`, nunca `.eq` no uuid) 
 - **Escopo GRUPO consolida tudo:** posição da dívida (`debtAnalyticsService.position`
   por org, somada), LTV/LTC, recebíveis, carteira e série; o snapshot guarda também a
   quebra por org.
-- **Capacidade máxima:** `parcela_maxima = min_{12 primeiros meses}(renda_liquida / dscr_minimo − servico_atual)`;
-  `valor_maximo` = maior principal cuja maior parcela dos 12 primeiros meses de
-  `buildSchedule` ≤ `parcela_maxima` (busca binária).
-- **Estoque:** VGV disponível das unidades dos empreendimentos do escopo × (1 − haircut).
+- **Capacidade máxima** (decisão do usuário na revisão final, 21/11: janela = o
+  horizonte INTEIRO, mês a mês — a regra dos 12 primeiros meses inflava o valor com
+  carência ≥ 12): `limite_i = renda_liquida_i / dscr_minimo − servico_atual_i` em cada
+  mês da série coberto pelo cronograma; `parcela_maxima = max(0, min_i limite_i)`;
+  `valor_maximo` = maior principal (R$ 100) cujo `buildSchedule(...)[i].total ≤ limite_i`
+  em TODOS esses meses (busca binária). 1º vencimento simulado = dia 1 do mês seguinte
+  à data-base (1º mês da série).
+- **Estoque:** VGV disponível das unidades dos empreendimentos do escopo × (1 − haircut);
+  empreendimento de objetivo `LOCACAO` fica fora (estoque é o que está à venda).
 - Filtro por `empreendimento_ids` aplicado a tudo que tem empreendimento; títulos
   sem empreendimento entram só no escopo EMPRESA/GRUPO total e geram alerta.
 

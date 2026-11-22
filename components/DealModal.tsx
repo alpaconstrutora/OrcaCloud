@@ -1,6 +1,6 @@
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings, MoveHorizontal, Loader2 } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings, MoveHorizontal, Loader2, FileSignature } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit, DealBuyer, CostCenter } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal, dealBuyersOf } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
@@ -82,8 +82,9 @@ import { porDataDoLancamento } from '../utils/ordemDosLancamentos';
 import { clienteDocumentosService } from '../services/clienteDocumentosService';
 import type { OpuraDocument } from '../types/documents';
 import ChecklistDocumentosDaPessoa from './clientes/ChecklistDocumentosCliente';
+import { DocumentosDaNegociacaoPanel } from './assinatura/DocumentosDaNegociacaoPanel';
 
-type TabId = 'cliente' | 'unidade' | 'pagamento' | 'parcelas' | 'partes' | 'contrato' | 'garantias';
+type TabId = 'cliente' | 'unidade' | 'pagamento' | 'parcelas' | 'partes' | 'contrato' | 'garantias' | 'documentos';
 
 /** Data BR por split — `new Date(iso)` retrocede um dia em UTC-3. */
 const fmtDateBR = (iso?: string) => {
@@ -3099,6 +3100,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             icon: <PenLine className="w-4 h-4" />,
             badge: !!hasContratoContent
         },
+        // Documentos da negociação + assinatura interna (proposta, reserva, ficha,
+        // vistoria, distrato). Só com a negociação gravada — a pasta é dela.
+        ...(isEditMode ? [{
+            id: 'documentos' as TabId,
+            label: 'Documentos',
+            icon: <FileSignature className="w-4 h-4" />,
+        }] : []),
         // Só locação: garantia locatícia é regida pela Lei do Inquilinato e não
         // existe em venda de ativo nem em prestação de serviço.
         ...(formData.type === 'RENTAL' ? [{
@@ -5045,6 +5053,29 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         aba mora aqui (onde o usuário trabalha) mas exige o
                         contrato gerado — sem ele não há a que prender.
                     ══════════════════════════════════════════ */}
+                    {/* ══════════════════════════════════════════
+                        DOCUMENTOS DA NEGOCIAÇÃO + ASSINATURA INTERNA
+                        Plano: docs/planos/2026-11-21-assinatura-eletronica-interna.md (F5)
+                    ══════════════════════════════════════════ */}
+                    {activeTab === 'documentos' && formData.id && (formData.organization_id || organizationId) && (
+                        <DocumentosDaNegociacaoPanel
+                            dealId={formData.id}
+                            organizationId={(formData.organization_id || organizationId) as string}
+                            rotulo={`${formData.type === 'RENTAL' ? 'Locação' : 'Venda'}${selectedProperty?.name ? ` — ${selectedProperty.name}` : ''}`}
+                            gerarProposta={() => {
+                                if (!selectedProperty) return null;
+                                const unitProperties = dealUnits
+                                    .map(u => properties.find(p => p.id === u.property_id))
+                                    .filter(Boolean) as Property[];
+                                return propertyExportService.proposalPdfBlob(formData as PropertyDeal, selectedProperty, selectedClient, org, unitProperties, buyerClients);
+                            }}
+                            motivoSemProposta={!selectedProperty ? 'Selecione a unidade antes de gravar a proposta.'
+                                : dirty ? 'Salve a negociação antes: a proposta gravada é a prova do que foi proposto.'
+                                : null}
+                            onNotify={(m, tipo) => (tipo === 'error' ? notifyError(m) : notifySuccess(m))}
+                        />
+                    )}
+
                     {activeTab === 'garantias' && (
                         linkedContract ? (
                             <RentalGuaranteePanel

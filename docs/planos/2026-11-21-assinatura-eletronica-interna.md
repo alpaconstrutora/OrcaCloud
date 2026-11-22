@@ -152,7 +152,12 @@ Selo PAdES com o certificado A1 da empresa. Não muda a validade jurídica e tem
   - `remove` e a lixeira recusam versão com envelope.
   - O cartão do ZapSign recusa versão em assinatura no portal.
   - Verificado: `tsc` sem erros, `check-ui-standard` limpo, `ContractDocumentosTabela` e `ContractEmissaoDocumentoUnico` passam, e o teste novo `assinaturaEnvioComprador` também.
-- [ ] F5: Negociação
+- [~] F5: Negociação — código pronto; **falta** o roteiro na tela real, que precisa de login
+  - Aba "Documentos" no `DealModal`, para venda e locação, só com a negociação gravada. Tabela `DocumentosDaNegociacaoPanel` com tipo, documento, versão, assinatura e data.
+  - "Novo documento" (só PDF) e "Gravar proposta", que exige a negociação salva: a proposta gravada é a prova do que foi proposto.
+  - Ações "Enviar para assinar" e "Acompanhar".
+  - `propertyExportService.proposalPdfBlob` gera a mesma proposta do botão, como arquivo (teste `propostaComoArquivo`).
+  - Verificado: `tsc` sem erros, `check-ui-standard` limpo, os 3 testes do `DealModal` e o `orgContextGuard` passam.
 - [ ] F6: Portal do Corretor
 
 ## Verificação

@@ -80,7 +80,23 @@ export const propertyExportService = {
      * venda em casal tem dois). `client` continua aceito para quem só tem um:
      * sem `buyers`, a proposta mostra `client`.
      */
+    /** Baixa a proposta (comportamento de sempre do botão "Gerar proposta"). */
     generateProposalPDF: (deal: PropertyDeal, property: Property, client: Client | undefined, organization: Organization | null, units?: Property[], buyers?: Client[]) => {
+        const { doc, nomeArquivo } = montarProposta(deal, property, client, organization, units, buyers);
+        doc.save(nomeArquivo);
+    },
+
+    /**
+     * A MESMA proposta como arquivo, para gravar na negociação e enviar para
+     * assinatura (docs/planos/2026-11-21-assinatura-eletronica-interna.md, F5).
+     */
+    proposalPdfBlob: (deal: PropertyDeal, property: Property, client: Client | undefined, organization: Organization | null, units?: Property[], buyers?: Client[]): { blob: Blob; nomeArquivo: string } => {
+        const { doc, nomeArquivo } = montarProposta(deal, property, client, organization, units, buyers);
+        return { blob: doc.output('blob'), nomeArquivo };
+    },
+};
+
+function montarProposta(deal: PropertyDeal, property: Property, client: Client | undefined, organization: Organization | null, units?: Property[], buyers?: Client[]): { doc: jsPDF; nomeArquivo: string } {
         const doc = new jsPDF();
         const date = new Date().toLocaleDateString('pt-BR');
 
@@ -272,6 +288,5 @@ export const propertyExportService = {
         doc.setTextColor(150);
         doc.text(`Documento gerado automaticamente pela plataforma Opura.`, 105, 285, { align: 'center' });
 
-        doc.save(`Proposta_${property.name.replace(/\s+/g, '_')}_${deal.id.substring(0, 5)}.pdf`);
-    }
-};
+        return { doc, nomeArquivo: `Proposta_${property.name.replace(/\s+/g, '_')}_${(deal.id ?? '').substring(0, 5)}.pdf` };
+}

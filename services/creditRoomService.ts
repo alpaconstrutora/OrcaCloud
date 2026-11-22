@@ -807,6 +807,14 @@ async function resolverOrcamentoDaObra(projectId: string): Promise<{
     };
 }
 
+/** Resultado do primeiro passo do congelamento: nada foi gravado ainda. */
+export interface VersaoPreparada {
+    roomId: string;
+    dataBase: string;
+    snapshot: CreditRoomSnapshot;
+    indicators: CreditRoomIndicators;
+}
+
 export const creditRoomService = {
 
     // ── Credit Rooms ──────────────────────────────────────────────────────
@@ -917,16 +925,15 @@ export const creditRoomService = {
     },
 
     /**
-     * Reúne os pedaços dos módulos donos e congela. Cada fonte que falhar vira
-     * bloco `null` no snapshot (a tela mostra "sem dado"), nunca zero — exceto
-     * a posição da dívida, que é o mínimo para a operação fazer sentido e por
-     * isso propaga o erro.
+     * Reúne os pedaços dos módulos donos e monta o snapshot + indicadores, SEM
+     * gravar nada. Cada fonte que falhar vira bloco `null` no snapshot (a tela
+     * mostra "sem dado"), nunca zero — exceto a posição da dívida, que é o
+     * mínimo para a operação fazer sentido e por isso propaga o erro.
+     * É o primeiro passo do congelamento em dois passos: a tela mostra o que
+     * foi preparado ("Conferir") e o `freezeVersion` grava exatamente isso.
      */
-    async freezeVersion(
-        room: CreditRoom,
-        opts: { label?: string; notes?: string; dataBase?: string } = {},
-    ): Promise<CreditRoomVersion> {
-        const dataBase = opts.dataBase ?? isoDate(new Date());
+    async prepararVersao(room: CreditRoom, dataBaseOpt?: string): Promise<VersaoPreparada> {
+        const dataBase = dataBaseOpt ?? isoDate(new Date());
         const orgId = room.organizationId;
         // REGRA #5: as orgs vêm do ROOM, nunca de prop de tela. O que cada uma
         // devolve continua recortado pela RLS de quem congela.
@@ -1104,6 +1111,23 @@ export const creditRoomService = {
             qualidade,
         });
         const indicators = computeIndicators(snapshot);
+        return { roomId: room.id, dataBase, snapshot, indicators };
+    },
+
+    /**
+     * Congela uma versão. Se vier `preparada` (do `prepararVersao`) da mesma
+     * sala e da mesma data-base, grava exatamente ela; senão prepara agora.
+     */
+    async freezeVersion(
+        room: CreditRoom,
+        opts: { label?: string; notes?: string; dataBase?: string } = {},
+        preparada?: VersaoPreparada,
+    ): Promise<CreditRoomVersion> {
+        const dataBase = opts.dataBase ?? isoDate(new Date());
+        const orgId = room.organizationId;
+        const { snapshot, indicators } = preparada && preparada.roomId === room.id && preparada.dataBase === dataBase
+            ? preparada
+            : await this.prepararVersao(room, dataBase);
 
         const { data: last } = await supabase
             .from('credit_room_versions')

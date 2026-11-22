@@ -10,7 +10,11 @@ interface Props {
     /** % de rendimento mensal calculado de dividendos/aportes reais. null = sem dados suficientes. */
     monthlyYieldPct: number | null;
     totalContributed: number;
-    totalDividends: number;
+    /** Recebido: dividendo + distribuição liquidados (Fase B4). */
+    totalRecebido: number;
+    /** Retorno total e em caixa, em fração (utils/investidorCarteira, Fase B3). */
+    retornoTotal: number | null;
+    retornoEmCaixa: number | null;
     historicalData: HistoricalPoint[];
     holdings: HoldingItem[];
     isAdmin: boolean;
@@ -21,7 +25,7 @@ const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 
 const InvestorSummaryDashboard: React.FC<Props> = ({
     equity, activeWorks,
-    monthlyYieldPct, totalContributed, totalDividends,
+    monthlyYieldPct, totalContributed, totalRecebido, retornoTotal, retornoEmCaixa,
     historicalData, holdings, isAdmin,
     onNavigateToHoldings,
 }) => {
@@ -40,7 +44,14 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
             icon: <TrendingUp className="w-5 h-5" />,
             color: 'emerald',
             val: monthlyYieldPct != null ? `${monthlyYieldPct.toFixed(2)}% a.m.` : '—',
-            sub: totalDividends > 0 ? `${fmt(totalDividends)} distribuídos` : 'Sem distribuições registradas',
+            sub: totalRecebido > 0 ? `${fmt(totalRecebido)} recebidos` : 'Sem distribuições registradas',
+        },
+        {
+            label: 'Retorno total',
+            icon: <TrendingUp className="w-5 h-5" />,
+            color: 'blue',
+            val: retornoTotal != null ? `${(retornoTotal * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : '—',
+            sub: retornoEmCaixa != null ? `Em caixa: ${(retornoEmCaixa * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : 'Sem aporte registrado',
         },
         {
             label: 'Obras Ativas',

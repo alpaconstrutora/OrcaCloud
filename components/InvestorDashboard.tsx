@@ -14,7 +14,7 @@ import MobilePreviewFrame from './MobilePreviewFrame';
 import { investorPortalTokenService } from '../services/investorPortalTokenService';
 import SpeManager from './investor/SpeManager';
 import MonthlyReportTrigger from './investor/MonthlyReportTrigger';
-import { investorContributionsService, InvestorFinancialSummary } from '../services/investorContributionsService';
+import { investorContributionsService } from '../services/investorContributionsService';
 import { marketDataService } from '../services/marketDataService';
 import { storageService } from '../services/storageService';
 import InvestmentSimulator from './InvestmentSimulator';
@@ -37,7 +37,7 @@ import PortalFiscal from './investor/portal/PortalFiscal';
 import PortalAnnouncements from './investor/portal/PortalAnnouncements';
 import PortalSpes, { PortalSpe } from './investor/portal/PortalSpes';
 import PortalEspelho from './investor/portal/PortalEspelho';
-import { itemDaCarteira, totalDaCarteira } from '../utils/investidorCarteira';
+import { carteiraDoInvestidor, resumoDaCarteira } from '../utils/investidorCarteira';
 import { useRealceDaAbaAtiva } from '../hooks/useRealceDaAbaAtiva';
 
 interface InvestorDashboardProps {
@@ -122,7 +122,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const [reports, setReports] = React.useState<InvestorReport[]>([]);
     const [opportunities, setOpportunities] = React.useState<InvestorOpportunity[]>([]);
     const [uploadCategory, setUploadCategory] = React.useState<ReportCategory>('relatorio');
-    const [summaries, setSummaries] = React.useState<Record<string, InvestorFinancialSummary>>({});
     const [investorParticipations, setInvestorParticipations] = React.useState<import('../services/investorContributionsService').InvestorParticipation[]>([]);
     const [investorContributions, setInvestorContributions] = React.useState<import('../services/investorContributionsService').InvestorContribution[]>([]);
     const [selectedAsset, setSelectedAsset] = React.useState<HoldingItem | null>(null);
@@ -240,7 +239,10 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         if (!realProjects.length) return [];
         if (investorProfile?.id) {
             // Projetos em que o investidor tem participação registrada (fonte primária)
-            const partIds = new Set(investorParticipations.map(p => p.project_id));
+            const partIds = new Set([
+                ...investorParticipations.map(p => p.project_id),
+                ...portalSpes.map(s => s.project_id).filter((id): id is string => !!id),
+            ]);
             // Fallback: campo legacy investor_id / settings.investorId
             const legacyIds = new Set(
                 realProjects
@@ -253,7 +255,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         }
         if (isAdmin) return realProjects.filter(p => isObra(p));
         return [];
-    }, [realProjects, investorProfile, isAdmin, investorParticipations]);
+    }, [realProjects, investorProfile, isAdmin, investorParticipations, portalSpes]);
 
     // Nome do empreendimento por id — as contribuições e SPEs só trazem project_id.
     const projectNames = React.useMemo(
@@ -262,34 +264,26 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     );
 
     const stats = React.useMemo(() => {
-        // Patrimônio = valor do empreendimento × participação registrada; sem uma das duas é null
-        // com o motivo — nunca 100% do empreendimento nem área × CUB (utils/investidorCarteira).
-        const holdings: HoldingItem[] = activeProjects.map(p => itemDaCarteira(p, p.id ? summaries[p.id] : undefined));
-        const totalEquity = totalDaCarteira(holdings).total;
-        // Rendimento Mensal real: média mensal de dividendos/distribuições liquidados
-        const totalDividends = Object.values(summaries).reduce((s, sm) => s + sm.totalDividends, 0);
-        const totalContributed = Object.values(summaries).reduce((s, sm) => s + sm.totalContributed, 0);
-        // Meses desde o primeiro aporte liquidado
-        const firstPaid = investorContributions
-            .filter(c => c.type === 'aporte' && c.status === 'liquidado' && c.paid_date)
-            .map(c => new Date(c.paid_date!).getTime())
-            .sort((a, b) => a - b)[0];
-        const monthsElapsed = firstPaid
-            ? Math.max(1, Math.round((Date.now() - firstPaid) / (1000 * 60 * 60 * 24 * 30)))
-            : 0;
-        const monthlyYieldPct = monthsElapsed > 0 && totalContributed > 0
-            ? ((totalDividends / totalContributed) / monthsElapsed) * 100
-            : null;
-
+        // Uma regra para portal e gestor (Fase B, D2): o sócio da SPE é a participação; patrimônio = integralizado +
+        // resultado da versão publicada × cotas; recebido = dividendo + distribuição (utils/investidorCarteira).
+        const holdings: HoldingItem[] = carteiraDoInvestidor({
+            obras: activeProjects as never,
+            socios: portalSpes,
+            participacoes: investorParticipations,
+            lancamentos: investorContributions,
+        });
+        const r = resumoDaCarteira(holdings, investorContributions);
         return {
-            equity: totalEquity != null ? totalEquity.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—',
-            activeWorks: activeProjects.length,
+            equity: r.patrimonio != null ? r.patrimonio.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : '—',
+            activeWorks: holdings.length,
             holdings,
-            monthlyYieldPct,
-            totalContributed,
-            totalDividends,
+            monthlyYieldPct: r.rendimentoMensalPct,
+            totalContributed: r.aportado,
+            totalRecebido: r.recebido,
+            retornoTotal: r.retornoTotal,
+            retornoEmCaixa: r.retornoEmCaixa,
         };
-    }, [activeProjects, summaries, investorContributions]);
+    }, [activeProjects, portalSpes, investorParticipations, investorContributions]);
 
     // Série histórica construída a partir de aportes reais (investor_contributions)
     const historicalData = React.useMemo((): HistoricalPoint[] => {
@@ -407,30 +401,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 setRealProjects(summary.projects as unknown as ProjectData[]);
                 setInvestorParticipations(parts);
                 setInvestorContributions(contribs);
-                const projectIds = new Set([
-                    ...parts.map(p => p.project_id),
-                    ...contribs.map(c => c.project_id),
-                ]);
-                const computedSummaries: Record<string, InvestorFinancialSummary> = {};
-                projectIds.forEach(pid => {
-                    const cs = contribs.filter(c => c.project_id === pid);
-                    const part = parts.find(p => p.project_id === pid);
-                    const sum = (type: string, status?: string) =>
-                        cs.filter(c => c.type === type && (!status || c.status === status))
-                            .reduce((acc, c) => acc + Number(c.amount), 0);
-                    const totalContributed = sum('aporte', 'liquidado');
-                    const totalDividends = sum('dividendo', 'liquidado');
-                    const totalWithdrawn = sum('retirada', 'liquidado') + sum('distribuicao', 'liquidado');
-                    const pendingAmount = cs.filter(c => c.type === 'aporte' && (c.status === 'pendente' || c.status === 'atrasado')).reduce((acc, c) => acc + Number(c.amount), 0);
-                    computedSummaries[pid] = {
-                        totalContributed, totalWithdrawn, totalDividends, pendingAmount,
-                        ownershipPct: part?.ownership_pct ?? 0,
-                        committedAmount: part?.committed_amount ?? 0,
-                        roiRealized: (currentValue: number) =>
-                            totalContributed > 0 ? ((currentValue + totalDividends - totalContributed) / totalContributed) * 100 : 0,
-                    };
-                });
-                setSummaries(computedSummaries);
                 setReports(rpts);
                 setOpportunities(opps);
                 setPortalAnnouncements(anns);
@@ -473,31 +443,8 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                     setInvestorParticipations(parts);
                     setInvestorContributions(contribs);
 
-                    // Deriva summaries localmente (sem N chamadas ao banco)
-                    const projectIds = new Set([
-                        ...parts.map(p => p.project_id),
-                        ...contribs.map(c => c.project_id),
-                    ]);
-                    const computedSummaries: Record<string, InvestorFinancialSummary> = {};
-                    projectIds.forEach(pid => {
-                        const cs = contribs.filter(c => c.project_id === pid);
-                        const part = parts.find(p => p.project_id === pid);
-                        const sum = (type: string, status?: string) =>
-                            cs.filter(c => c.type === type && (!status || c.status === status))
-                              .reduce((acc, c) => acc + Number(c.amount), 0);
-                        const totalContributed = sum('aporte', 'liquidado');
-                        const totalDividends = sum('dividendo', 'liquidado');
-                        const totalWithdrawn = sum('retirada', 'liquidado') + sum('distribuicao', 'liquidado');
-                        const pendingAmount = cs.filter(c => c.type === 'aporte' && (c.status === 'pendente' || c.status === 'atrasado')).reduce((acc, c) => acc + Number(c.amount), 0);
-                        computedSummaries[pid] = {
-                            totalContributed, totalWithdrawn, totalDividends, pendingAmount,
-                            ownershipPct: part?.ownership_pct ?? 0,
-                            committedAmount: part?.committed_amount ?? 0,
-                            roiRealized: (currentValue: number) =>
-                                totalContributed > 0 ? ((currentValue + totalDividends - totalContributed) / totalContributed) * 100 : 0,
-                        };
-                    });
-                    setSummaries(computedSummaries);
+                    // A carteira lê o sócio da SPE (Fase B1, plano 2026-11-21-portal-do-investidor-consolidacao).
+                    setPortalSpes(await investorPortalService.sociosDoInvestidor(investorId) as unknown as PortalSpe[]);
                 }
 
                 if (isAdmin || orgId) {
@@ -896,7 +843,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             activeWorks={stats.activeWorks}
                             monthlyYieldPct={stats.monthlyYieldPct}
                             totalContributed={stats.totalContributed}
-                            totalDividends={stats.totalDividends}
+                            totalRecebido={stats.totalRecebido}
+                            retornoTotal={stats.retornoTotal}
+                            retornoEmCaixa={stats.retornoEmCaixa}
                             holdings={stats.holdings}
                             contributions={investorContributions}
                             onSelectAsset={setSelectedAsset}
@@ -908,7 +857,9 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             activeWorks={stats.activeWorks}
                             monthlyYieldPct={stats.monthlyYieldPct}
                             totalContributed={stats.totalContributed}
-                            totalDividends={stats.totalDividends}
+                            totalRecebido={stats.totalRecebido}
+                            retornoTotal={stats.retornoTotal}
+                            retornoEmCaixa={stats.retornoEmCaixa}
                             historicalData={historicalData}
                             holdings={stats.holdings}
                             isAdmin={isAdmin}

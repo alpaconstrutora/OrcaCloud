@@ -3,6 +3,7 @@ import { FileText, Download, Info, TrendingUp, Calculator } from 'lucide-react';
 import { formatCurrency } from '../utils/financialMath';
 import type { InvestorContribution } from '../services/investorContributionsService';
 import type { ProjectData } from '../services/projectService';
+import { anosComMovimento, informeDoAno } from '../utils/informeDeRendimentos';
 
 interface TaxReportProps {
     investorContributions: InvestorContribution[];
@@ -10,31 +11,19 @@ interface TaxReportProps {
 }
 
 const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProjects }) => {
-    const year = new Date().getFullYear() - 1; // ano-calendário anterior
-
-    const liquidado = (type: string) =>
-        investorContributions.filter(c => c.type === type && c.status === 'liquidado');
-
-    const totalInvested = liquidado('aporte').reduce((s, c) => s + Number(c.amount), 0);
-    const totalEarnings = [
-        ...liquidado('dividendo'),
-        ...liquidado('distribuicao'),
-    ].reduce((s, c) => s + Number(c.amount), 0);
-
-    // Agrupa contribuições por projeto para o detalhamento
+    // Uma conta para o gestor e o portal (utils/informeDeRendimentos, Fase B5 do plano
+    // 2026-11-21-portal-do-investidor-consolidacao): rendimentos pagos NO ano; custo = posição em 31/12.
+    const anoPadrao = new Date().getFullYear() - 1; // ano-calendário anterior
+    const anos = React.useMemo(
+        () => [...new Set([anoPadrao, ...anosComMovimento(investorContributions)])].sort((a, b) => b - a),
+        [investorContributions, anoPadrao],
+    );
+    const [year, setYear] = React.useState(anoPadrao);
     const projectMap = new Map(activeProjects.map(p => [p.id, p.name]));
-    const byProject = new Map<string, { name: string; costBasis: number; dividends: number }>();
-    investorContributions.filter(c => c.status === 'liquidado').forEach(c => {
-        const name = projectMap.get(c.project_id) ?? c.project_id.slice(0, 8);
-        if (!byProject.has(c.project_id)) {
-            byProject.set(c.project_id, { name, costBasis: 0, dividends: 0 });
-        }
-        const entry = byProject.get(c.project_id)!;
-        if (c.type === 'aporte') entry.costBasis += Number(c.amount);
-        if (c.type === 'dividendo' || c.type === 'distribuicao') entry.dividends += Number(c.amount);
-    });
-    const assets = Array.from(byProject.values()).filter(a => a.costBasis > 0 || a.dividends > 0);
-
+    const informe = informeDoAno(investorContributions, year, id => projectMap.get(id) ?? id.slice(0, 8));
+    const totalInvested = informe.custoAtual;
+    const totalEarnings = informe.rendimentos;
+    const assets = informe.linhas.map(l => ({ name: l.nome, costBasis: l.custoAtual, dividends: l.rendimentos }));
     const hasData = totalInvested > 0 || totalEarnings > 0;
 
     return (
@@ -56,7 +45,15 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
                 <div className="relative z-10 max-w-2xl">
                     <div className="flex items-center gap-2 mb-4">
                         <span className="text-sm font-medium text-indigo-200">
-                            Consultor IR {year}
+                            Consultor IR
+                            <select
+                                aria-label="Ano-calendário"
+                                value={year}
+                                onChange={e => setYear(Number(e.target.value))}
+                                className="ml-2 h-8 px-2 bg-white/10 border border-white/20 rounded-[6px] text-sm text-white"
+                            >
+                                {anos.map(a => <option key={a} value={a} className="text-gray-900">{a}</option>)}
+                            </select>
                         </span>
                     </div>
                     <h2 className="text-3xl font-black mb-4 tracking-tight">
@@ -85,11 +82,11 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
                             <Info className="w-4 h-4" /> Resumo Consolidado
                         </h4>
                         <div>
-                            <p className="text-xs font-semibold text-gray-500 mb-1">Custo de Aquisição Total</p>
+                            <p className="text-xs font-semibold text-gray-500 mb-1">Custo de aquisição em 31/12/{year}</p>
                             <p className="text-xl font-black text-gray-900">{formatCurrency(totalInvested)}</p>
                         </div>
                         <div className="pt-4 border-t border-gray-50">
-                            <p className="text-xs font-semibold text-gray-500 mb-1">Rendimentos Distribuídos</p>
+                            <p className="text-xs font-semibold text-gray-500 mb-1">Rendimentos recebidos em {year}</p>
                             <div className="flex items-center gap-2">
                                 <p className="text-xl font-black text-emerald-600">{formatCurrency(totalEarnings)}</p>
                                 {totalEarnings > 0 && <TrendingUp className="w-4 h-4 text-emerald-500" />}

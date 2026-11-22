@@ -21,6 +21,7 @@ vi.mock('../../services/investorPortalService', async (orig) => ({
         listOpportunities: (...a: unknown[]) => svc.opps(...a),
         listReports: (...a: unknown[]) => svc.reports(...a),
         listCompetitors: () => Promise.resolve([]),
+        sociosDoInvestidor: () => Promise.resolve([]),
     },
 }));
 vi.mock('../../lib/supabase', () => {

@@ -84,7 +84,7 @@ const PortalHoldings: React.FC<Props> = ({ holdings, filterStatus, onFilterChang
                                 <Th>Cota</Th>
                                 <Th>Aportado</Th>
                                 <Th>Patrimônio</Th>
-                                <Th>Retorno</Th>
+                                <Th>Retorno total</Th>
                                 <Th>Status</Th>
                                 <Th>Progresso</Th>
                             </tr>
@@ -140,7 +140,10 @@ const PortalHoldings: React.FC<Props> = ({ holdings, filterStatus, onFilterChang
                                                         <DetailField label="Participação">{h.cota}</DetailField>
                                                         <DetailField label="Capital aportado">{h.invested ? fmtBRLCents(h.invested) : '—'}</DetailField>
                                                         <DetailField label="Patrimônio estimado">{h.equity != null ? fmtBRLCents(h.equity) : (h.semPatrimonio ?? '—')}</DetailField>
-                                                        <DetailField label="Retorno realizado">{h.yield ?? '—'}</DetailField>
+                                                        <DetailField label="Origem do patrimônio">{h.origemDoPatrimonio ?? '—'}</DetailField>
+                                                        <DetailField label="Recebido">{h.received ? fmtBRLCents(h.received) : '—'}</DetailField>
+                                                        <DetailField label="Retorno total">{h.yield ?? '—'}</DetailField>
+                                                        <DetailField label="Retorno em caixa">{h.retornoEmCaixa ?? '—'}</DetailField>
                                                         <DetailField label="Andamento da obra">{`${h.progress ?? 0}%`}</DetailField>
                                                     </div>
                                                     <div className="mt-4">

@@ -107,4 +107,34 @@ com o Imovib nem com a SPE. Estado do banco em 21/11: 1 investidor, 1 token ativ
 
 ## Estado (atualizar a cada fase)
 
-Fase A: em andamento na frente `portal-investidor-fa`.
+**Fase A: 9 de 9 — NO AR** (PR #637, squash ff6e617; migration 998000 APLICADA em 21/11 com OK do usuário; ACLs sem PUBLIC conferidas). Migration
+`aplicar_20271121998000_portal_investidor_seguranca.sql` (o prefixo 996000 já era de outra frente — a CI pegou a
+colisão). Ensaio no banco (migration + prova numa transação desfeita):
+- A1: UPDATE direto do admin em tokens → 42501; revogar pela RPC funciona.
+- A2: relatório sem destinatário não sai pelo link.
+- A3: o settings da obra sai sem bdi/wbs/cliente.
+- A4: o cadastro sai sem `document`.
+- A6: só com a chave entra no marketplace, sem custo nem terreno.
+- A7: INSERT direto de ciência → 42501.
+- A8: de outra org sai `nome=NULL` + a org.
+- A9: 2 interesses viram 1 (valor atualizado); texto longo recusado.
+
+Mudanças em relação à tabela:
+- A4 não devolve o documento nem mascarado (a tela não usa).
+- A8 vale para qualquer membro de organização (quem cadastra investidor não é só o gestor); de outra org vem só o
+  nome da org.
+- A5 sem gatilho na escrita: as 111 versões do GED já estão na pasta da org; a trava fica na leitura do link.
+
+**Fase B: 6 de 6 itens feitos** (frente `portal-investidor-fb`, empilhada na A). Migration
+`aplicar_20271121999000_portal_investidor_numeros.sql`. Ensaio (A + B + prova, desfeito):
+- B1: sócio sem participação digitada aparece; o resumo do link traz a obra da SPE.
+- B2: sem versão só o integralizado (800 mil); com versão o lucro de 5 mi e o rótulo.
+- O gestor lê pela RPC autenticada; um usuário estranho vê 0.
+- B6: o espelho roda com o vendido pela parte de cada unidade.
+
+Em código:
+- `utils/investidorCarteira.ts` (`carteiraDoInvestidor`, `resumoDaCarteira`) é a única conta da carteira e dos
+  KPIs, no portal e no gestor; as duas cópias do `InvestorDashboard` e `getInvestorSummary` saíram (C9 antecipado
+  em parte).
+- `utils/informeDeRendimentos.ts` serve o PortalFiscal e o TaxReport. B5 seguiu a regra da declaração:
+  rendimentos pagos no ano e custo = posição em 31/12, com a do ano anterior ao lado.

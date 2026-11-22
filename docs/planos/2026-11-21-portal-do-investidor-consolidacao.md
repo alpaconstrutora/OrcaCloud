@@ -217,11 +217,13 @@ fornecedor, corretor, investidor) e a perna "pelo e-mail" de `fn_investor_get_es
 Isso só é seguro com "Confirm email" ligado.
 → **Pendência do usuário:** conferir em Supabase › Authentication › Providers › Email que "Confirm email" está
 ligado (e se o cadastro aberto, "Allow new users to sign up", precisa estar).
+→ **Conferido pelo usuário em 22/11: "Confirm email" está ligado.** O login por e-mail dos portais fica seguro como
+está; nada a mudar no código.
 
 ### Pendências do plano (21/11)
 | # | Pendência | Quem | Situação |
 |---|---|---|---|
-| PE1 | Conferir "Confirm email" ligado no Auth (o login por e-mail de todos os portais depende disso) | usuário, painel do Supabase | ⏳ (ver E3) |
-| PE2 | Decidir com o contador a natureza de "distribuição" (isenta × devolução de capital) e o campo de IR retido (Lei 15.270/2025) | usuário | ⏳ (ver E2; itens 1, 2 e 4 da E2 cabem sem decisão fiscal) |
+| PE1 | Conferir "Confirm email" ligado no Auth (o login por e-mail de todos os portais depende disso) | usuário, painel do Supabase | ✅ ligado (conferido pelo usuário em 22/11) |
+| PE2 | Decidir com o contador a natureza de "distribuição" (isenta × devolução de capital) e o campo de IR retido (Lei 15.270/2025) | usuário | ⏳ o usuário vai verificar com o contador e retornar (22/11). Ver E2; itens 1, 2 e 4 da E2 cabem sem decisão fiscal |
 | PE3 | Roteiro de tela do portal no navegador (junto do P2 do plano Imovib × Oportunidades) | usuário faz o login; eu conduzo | ⏳ |
 

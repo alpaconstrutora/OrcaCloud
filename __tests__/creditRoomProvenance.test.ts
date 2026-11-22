@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest';
 import { buildSnapshot, computeIndicators, type SnapshotCapacidade, type SnapshotInputs } from '../utils/creditRoomSnapshot';
-import { PARAMETROS_CAPACIDADE_PADRAO, type SerieMes } from '../utils/creditCapacity';
+import { PARAMETROS_CAPACIDADE_PADRAO, resumoDaCapacidade, type SerieMes } from '../utils/creditCapacity';
 import { explicarIndicador, type IndicadorKey } from '../utils/creditRoomProvenance';
 
 // Sem `as any`: o cast escondia nomes de campo errados no próprio fixture, e
@@ -214,5 +214,66 @@ describe('explicarIndicador — schema 2 (série mensal)', () => {
         const p = explicarIndicador('dscr_pos', base(), computeIndicators(base()));
         expect(p.termos[0].fonte).toBe('NOI do portfólio × 12 — só os fluxos marcados nesta operação (R8)');
         expect(p.termos[1].fonte).toBe('debtAnalyticsService.position · servico_365');
+    });
+});
+
+// ── Schema 2: indicadores da tela da capacidade ──────────────────────────────
+
+describe('explicarIndicador — indicadores da capacidade', () => {
+    const serie = serie12().map((m, k) => ({ ...m, renda_liquida: 10_000 + k * 1_000, folga: k === 3 ? -200 : 5_000, dscr: k === 5 ? 1.1 : 2 }));
+    const cap = { ...capacidade(serie), capacidade_maxima: { parcela_maxima: 4_321, valor_maximo: 123_400 } };
+    const s2 = base({ capacidade: cap });
+    const i2 = computeIndicators(s2);
+    const resumo = resumoDaCapacidade(cap)!;
+
+    it('capacidade máxima: resultado é o valor congelado; a fórmula é mês a mês e os termos trazem os parâmetros', () => {
+        const p = explicarIndicador('capacidade_maxima', s2, i2);
+        expect(p.resultado).toEqual({ valor: 123_400, formato: 'money' });
+        expect(p.formula).toMatch(/mês a mês/);
+        const termos = p.termos.map(t => `${t.rotulo} ${t.fonte} ${t.obs ?? ''}`).join(' | ');
+        expect(termos).toMatch(/DSCR mínimo/);
+        expect(termos).toMatch(/[Tt]axa/);
+        expect(termos).toMatch(/[Pp]razo/);
+        expect(termos).toMatch(/[Cc]arência/);
+        expect(termos).toMatch(/[Ss]istema/);
+        const valoresPorRotulo = Object.fromEntries(p.termos.map(t => [t.rotulo, t.valor]));
+        expect(valoresPorRotulo['DSCR mínimo exigido']).toBe(cap.parametros.dscr_minimo);
+        expect(valoresPorRotulo['Taxa mensal']).toBe(1.5);
+        expect(valoresPorRotulo['Prazo']).toBe(48);
+        expect(valoresPorRotulo['Carência']).toBe(6);
+        expect(p.termos.find(t => t.rotulo === 'Sistema de amortização')?.obs).toBe('SAC');
+    });
+
+    it('DSCR mínimo e renda média batem com o resumo da série', () => {
+        const d = explicarIndicador('dscr_minimo_12m', s2, i2);
+        expect(d.resultado).toEqual({ valor: resumo.dscr_minimo_12m, formato: 'vezes' });
+        expect(d.resultado.valor).toBe(1.1);
+        const r = explicarIndicador('renda_liquida_media', s2, i2);
+        expect(r.resultado).toEqual({ valor: resumo.renda_liquida_media_12m, formato: 'money' });
+        expect(r.resultado.valor).toBe(15_500);
+    });
+
+    it('folga mínima: valor e mês da menor folga', () => {
+        const p = explicarIndicador('folga_minima', s2, i2);
+        expect(p.resultado).toEqual({ valor: -200, formato: 'money' });
+        expect(p.termos.map(t => t.obs ?? '').join(' ')).toMatch(/abr\/26/);
+    });
+
+    it('versão sem capacidade (schema 1): valor null e ressalva de versão antiga nas quatro chaves', () => {
+        const s1 = base();
+        const chaves: IndicadorKey[] = ['renda_liquida_media', 'dscr_minimo_12m', 'capacidade_maxima', 'folga_minima'];
+        for (const k of chaves) {
+            const p = explicarIndicador(k, s1, computeIndicators(s1));
+            expect(p.resultado.valor, k).toBeNull();
+            expect(p.ressalvas.join(' '), k).toMatch(/versão congelada antes da capacidade de pagamento/);
+            expect(p.termos.length, k).toBeGreaterThan(0);
+        }
+    });
+
+    it('sem serviço no período, o DSCR mínimo é null (nunca zero) e diz por quê', () => {
+        const semServico = base({ capacidade: capacidade(serie12({ servico_atual: 0, dscr: null, folga: 10_000 })) });
+        const p = explicarIndicador('dscr_minimo_12m', semServico, computeIndicators(semServico));
+        expect(p.resultado.valor).toBeNull();
+        expect(p.ressalvas.join(' ')).toMatch(/sem serviço da dívida/);
     });
 });

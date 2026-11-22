@@ -30,7 +30,7 @@
 import { round2 } from './financialMath';
 import { buildSchedule } from './debtAmortization';
 import { wale, type LeaseContract } from '../lib/rentalExecutive';
-import { ratio, ratioPct, type SnapshotCapacidade } from './creditRoomSnapshot';
+import { ratio, ratioPct, type CreditRoomSnapshot, type SnapshotCapacidade } from './creditRoomSnapshot';
 
 // ── Tipos de entrada ─────────────────────────────────────────────────────────
 
@@ -677,4 +677,92 @@ export function rendaMensalDoEmpreendimento(
             .reduce((a, l) => a + n0(l.aluguelMensal), 0)
         : 0;
     return round2(vendas + alugueis);
+}
+
+// ── Contas da tela da capacidade (F2) ────────────────────────────────────────
+
+/** Fluxos elegíveis da operação (R8): vendas = recebíveis, aluguéis = NOI. */
+export function fluxosDaOperacao(s: CreditRoomSnapshot): FluxosElegiveis {
+    return { vendas: s.operacao.eligible_flows.receivables, alugueis: s.operacao.eligible_flows.noi };
+}
+
+export interface ResumoCapacidade {
+    /** Média da renda líquida dos 12 primeiros meses da série. */
+    renda_liquida_media_12m: number | null;
+    /** Menor DSCR não nulo dos 12 primeiros meses; `null` sem nenhum serviço. */
+    dscr_minimo_12m: number | null;
+    folga_minima_12m: number | null;
+    /** 'AAAA-MM' do mês da menor folga. */
+    mes_folga_minima: string | null;
+    /** No horizonte inteiro, não só nos 12 primeiros. */
+    meses_folga_negativa: number;
+}
+
+/** Os números-resumo da série congelada. `null` quando a versão não tem capacidade. */
+export function resumoDaCapacidade(c: SnapshotCapacidade | null | undefined): ResumoCapacidade | null {
+    if (!c) return null;
+    const doze = c.serie.slice(0, 12);
+    const dscrs = doze.map(m => m.dscr).filter((d): d is number => d !== null);
+    const menor = doze.reduce<SerieMes | null>((a, m) => (a === null || m.folga < a.folga ? m : a), null);
+    return {
+        renda_liquida_media_12m: doze.length
+            ? round2(doze.reduce((a, m) => a + m.renda_liquida, 0) / doze.length)
+            : null,
+        dscr_minimo_12m: dscrs.length ? Math.min(...dscrs) : null,
+        folga_minima_12m: menor ? menor.folga : null,
+        mes_folga_minima: menor ? menor.mes : null,
+        meses_folga_negativa: c.serie.filter(m => m.folga < 0).length,
+    };
+}
+
+const entre0e100 = (v: number): number => Math.min(100, Math.max(0, n0(v)));
+
+/**
+ * Reaplica um cenário de estresse à série CONGELADA e recalcula o valor máximo
+ * com os parâmetros congelados. O 1º vencimento é o dia 1 do 1º mês da série —
+ * o mesmo que `primeiroVencimentoSimulado` usou ao congelar (dia 1 do mês
+ * seguinte à data-base) — então o cenário Base reproduz `c.capacidade_maxima`.
+ */
+export function estresseDaVersao(
+    c: SnapshotCapacidade, cenario: CenarioEstresse, fluxos: FluxosElegiveis,
+): ReturnType<typeof aplicarEstresse> & { capacidade_maxima: { parcela_maxima: number; valor_maximo: number } } {
+    const preso: CenarioEstresse = {
+        ...cenario,
+        inadimplencia_pct: entre0e100(cenario.inadimplencia_pct),
+        vacancia_pct: entre0e100(cenario.vacancia_pct),
+        distrato_pct: entre0e100(cenario.distrato_pct),
+    };
+    const estressada = aplicarEstresse(c.serie, preso, fluxos);
+    const capacidade_maxima = c.serie.length
+        ? capacidadeMaxima(estressada.serie, c.parametros, `${c.serie[0].mes}-01`)
+        : { parcela_maxima: 0, valor_maximo: 0 };
+    return { ...estressada, capacidade_maxima };
+}
+
+/** Texto de tela de cada alerta de cadastro: o que é e o que o usuário corrige. */
+export const ALERTA_PT: Record<TipoAlerta, { titulo: string; comoResolver: string }> = {
+    VENDA_SEM_PARCELAS: {
+        titulo: 'Vendas sem parcelas geradas',
+        comoResolver: 'Abra o contrato da venda em Comercial › Contratos › Financeiro › Parcelas e use Gerar parcelas.',
+    },
+    LOCACAO_SEM_VALOR: {
+        titulo: 'Locações sem valor de aluguel',
+        comoResolver: 'Preencha o valor do aluguel mensal no cadastro do contrato de locação.',
+    },
+    LOCACAO_PRAZO_INDETERMINADO: {
+        titulo: 'Locações com prazo indeterminado',
+        comoResolver: 'Informe ou atualize a data de término no cadastro do contrato de locação; sem ela, o aluguel é projetado por todo o horizonte.',
+    },
+    TITULO_SEM_EMPREENDIMENTO: {
+        titulo: 'Títulos sem empreendimento',
+        comoResolver: 'Vincule o empreendimento ao título a receber, no lançamento do financeiro; sem ele, o valor não entra no escopo da operação.',
+    },
+};
+
+const MESES_PT = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+
+/** 'AAAA-MM' → 'dez/26'. Só texto: nunca passa por `Date` (fuso). */
+export function rotuloDoMes(mes: string): string {
+    const [ano, m] = mes.split('-');
+    return `${MESES_PT[Number(m) - 1] ?? m}/${(ano ?? '').slice(-2)}`;
 }

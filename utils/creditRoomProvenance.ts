@@ -19,6 +19,7 @@
 
 import type { CreditRoomIndicators, CreditRoomSnapshot } from './creditRoomSnapshot';
 import { ELIGIBLE_FLOW_PT } from './creditRoomSnapshot';
+import { resumoDaCapacidade, rotuloDoMes } from './creditCapacity';
 
 export type IndicadorKey =
     | 'ltv_atual' | 'ltv_pos'
@@ -26,7 +27,9 @@ export type IndicadorKey =
     | 'dscr_atual' | 'dscr_pos'
     | 'equity_pct'
     | 'cobertura_atual' | 'cobertura_pos'
-    | 'divida_pos';
+    | 'divida_pos'
+    // Schema 2 — tela da capacidade de pagamento.
+    | 'renda_liquida_media' | 'dscr_minimo_12m' | 'capacidade_maxima' | 'folga_minima';
 
 export interface TermoProveniencia {
     rotulo: string;
@@ -83,6 +86,14 @@ function ressalvasDoCusto(s: CreditRoomSnapshot): string[] {
     }
     return r;
 }
+
+const SEM_CAPACIDADE = 'Indisponível: versão congelada antes da capacidade de pagamento — não há série mensal nesta versão.';
+
+/** Termo da capacidade que não existe numa versão antiga: o número fica "—". */
+const semCapacidade = (rotulo: string, formato: TermoProveniencia['formato']): TermoProveniencia =>
+    ({ rotulo, valor: null, formato, fonte: 'Capacidade de pagamento (schema 2) — ausente nesta versão' });
+
+const FONTE_SERIE = 'Série mensal da capacidade congelada na versão (12 primeiros meses)';
 
 export function explicarIndicador(
     key: IndicadorKey,
@@ -268,6 +279,120 @@ export function explicarIndicador(
                         : []),
                     ...ressalvasDaDivida(s),
                 ],
+            };
+        }
+
+        case 'renda_liquida_media':
+        case 'dscr_minimo_12m':
+        case 'folga_minima':
+        case 'capacidade_maxima':
+            return explicarCapacidade(key, s);
+    }
+}
+
+/**
+ * Indicadores da tela da capacidade. Saem sempre do snapshot congelado
+ * (`s.capacidade`): versão do schema 1 não tem série, então o valor é `null`
+ * com ressalva — nunca zero.
+ */
+function explicarCapacidade(
+    key: 'renda_liquida_media' | 'dscr_minimo_12m' | 'folga_minima' | 'capacidade_maxima',
+    s: CreditRoomSnapshot,
+): Proveniencia {
+    const c = s.capacidade;
+    const r = resumoDaCapacidade(c);
+    const doze = c ? c.serie.slice(0, 12) : [];
+
+    switch (key) {
+        case 'renda_liquida_media': {
+            const soma = c ? Math.round(doze.reduce((a, x) => a + x.renda_liquida, 0) * 100) / 100 : null;
+            return {
+                titulo: 'Renda líquida média (12 meses)',
+                formula: 'soma da renda líquida dos 12 primeiros meses ÷ número de meses',
+                significado: 'Quanto de caixa elegível entra por mês, em média, depois da despesa operacional.',
+                termos: c ? [
+                    m('Renda líquida (soma dos meses)', soma,
+                      `${FONTE_SERIE} — vendas a vencer + aluguéis contratados − despesa operacional, só os fluxos elegíveis (R8)`),
+                    { rotulo: 'Meses considerados', valor: doze.length, formato: 'numero', fonte: FONTE_SERIE },
+                ] : [semCapacidade('Renda líquida (soma dos meses)', 'money')],
+                resultado: { valor: r?.renda_liquida_media_12m ?? null, formato: 'money' },
+                ressalvas: c
+                    ? ['A renda é a CONTRATADA (títulos a vencer e contratos de locação); o que já venceu e não foi pago fica fora da série.']
+                    : [SEM_CAPACIDADE],
+            };
+        }
+
+        case 'dscr_minimo_12m': {
+            const comServico = doze.filter(x => x.dscr !== null);
+            const pior = comServico.reduce<(typeof doze)[number] | null>(
+                (a, x) => (a === null || (x.dscr as number) < (a.dscr as number) ? x : a), null);
+            const mesPior = pior ? rotuloDoMes(pior.mes) : undefined;
+            return {
+                titulo: 'DSCR mínimo (12 meses)',
+                formula: 'menor valor mensal de renda líquida ÷ serviço da dívida (atual + nova), nos 12 primeiros meses',
+                significado: 'O pior mês do primeiro ano: quantas vezes a renda daquele mês paga as parcelas dele.',
+                termos: c ? [
+                    m('Renda líquida do mês crítico', pior?.renda_liquida ?? null, FONTE_SERIE, mesPior),
+                    m('Serviço da dívida do mês crítico', pior ? pior.servico_atual + pior.servico_novo : null,
+                      `${FONTE_SERIE} — parcelas da dívida atual + nova`, mesPior),
+                ] : [semCapacidade('Renda líquida do mês crítico', 'money'), semCapacidade('Serviço da dívida do mês crítico', 'money')],
+                resultado: { valor: r?.dscr_minimo_12m ?? null, formato: 'vezes' },
+                ressalvas: c
+                    ? [
+                        'Mês sem serviço da dívida não tem DSCR (aparece como "—") e não entra no mínimo.',
+                        ...(comServico.length
+                            ? []
+                            : ['Nenhum dos 12 primeiros meses tem serviço da dívida — o DSCR mínimo fica indisponível, não é "sem risco".']),
+                    ]
+                    : [SEM_CAPACIDADE],
+            };
+        }
+
+        case 'folga_minima':
+            return {
+                titulo: 'Folga mínima (12 meses)',
+                formula: 'menor valor mensal de renda líquida − serviço da dívida (atual + nova), nos 12 primeiros meses',
+                significado: 'O mês mais apertado do primeiro ano: quanto sobra (ou falta) depois de pagar as parcelas.',
+                termos: c ? [
+                    m('Folga do mês mais apertado', r?.folga_minima_12m ?? null, FONTE_SERIE,
+                      r?.mes_folga_minima ? rotuloDoMes(r.mes_folga_minima) : undefined),
+                    { rotulo: 'Meses com folga negativa (horizonte inteiro)', valor: r?.meses_folga_negativa ?? 0, formato: 'numero',
+                      fonte: 'Série mensal da capacidade congelada na versão (horizonte inteiro)' },
+                ] : [semCapacidade('Folga do mês mais apertado', 'money')],
+                resultado: { valor: r?.folga_minima_12m ?? null, formato: 'money' },
+                ressalvas: c ? [] : [SEM_CAPACIDADE],
+            };
+
+        case 'capacidade_maxima': {
+            const p = c?.parametros;
+            const FONTE_PARAM = 'Parâmetros congelados na versão (capacidade.parametros)';
+            return {
+                titulo: 'Capacidade máxima de nova dívida',
+                formula: 'maior principal cuja parcela, conferida mês a mês no horizonte, mantém renda líquida ÷ (serviço atual + parcela) ≥ DSCR mínimo exigido',
+                significado: 'Quanto de dívida nova cabe na renda projetada sem passar do DSCR mínimo em nenhum mês.',
+                termos: c && p ? [
+                    { rotulo: 'DSCR mínimo exigido', valor: p.dscr_minimo, formato: 'vezes', fonte: FONTE_PARAM },
+                    { rotulo: 'Taxa mensal', valor: p.taxa_mensal_pct, formato: 'pct', fonte: FONTE_PARAM, obs: `${p.taxa_mensal_pct.toLocaleString('pt-BR')}% a.m.` },
+                    { rotulo: 'Prazo', valor: p.prazo_meses, formato: 'numero', fonte: FONTE_PARAM, obs: `${p.prazo_meses} meses` },
+                    { rotulo: 'Carência', valor: p.carencia_meses, formato: 'numero', fonte: FONTE_PARAM, obs: `${p.carencia_meses} meses` },
+                    { rotulo: 'Sistema de amortização', valor: null, formato: 'numero', fonte: FONTE_PARAM, obs: p.sistema },
+                    m('Parcela máxima', c.capacidade_maxima.parcela_maxima,
+                      'Série mensal da capacidade congelada na versão (horizonte inteiro)',
+                      'a menor folga mensal contra o DSCR mínimo'),
+                ] : [
+                    semCapacidade('DSCR mínimo exigido', 'vezes'), semCapacidade('Taxa mensal', 'pct'),
+                    semCapacidade('Prazo', 'numero'), semCapacidade('Carência', 'numero'),
+                    semCapacidade('Sistema de amortização', 'numero'),
+                ],
+                resultado: { valor: c ? c.capacidade_maxima.valor_maximo : null, formato: 'money' },
+                ressalvas: c
+                    ? [
+                        'O valor é calculado com os parâmetros congelados (taxa, prazo, carência e sistema), em passos de R$ 100.',
+                        ...(c.capacidade_maxima.valor_maximo === 0
+                            ? ['Valor zero: em algum mês do horizonte a renda não cobre o DSCR mínimo nem com a dívida atual sozinha.']
+                            : []),
+                    ]
+                    : [SEM_CAPACIDADE],
             };
         }
     }

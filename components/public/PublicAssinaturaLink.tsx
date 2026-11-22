@@ -17,8 +17,10 @@ export function PublicAssinaturaLink({ hash }: { hash: string }) {
     });
     const [aberto, setAberto] = React.useState(!!acesso);
 
-    // O token sai da barra de endereço (o App já guardou o fragmento).
-    React.useEffect(() => {
+    // O token sai da barra de endereço (o App já guardou o fragmento). Layout
+    // effect: roda ANTES do useEffect da tela de assinatura, que empilha uma
+    // entrada no histórico — senão o "voltar" cairia de novo na URL com o token.
+    React.useLayoutEffect(() => {
         if (window.location.hash) window.history.replaceState(null, '', window.location.pathname);
     }, []);
 

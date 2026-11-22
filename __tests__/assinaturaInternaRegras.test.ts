@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
     validarPedido, cpfValido, mascararCpf, formatarCpf, respostaDoErroDaRpc, codigoDeSeisDigitos,
     materialDoCodigo, sha256Hex, ipDoPedido, pareceUmPdf, pastaDaOrigem, caminhoDoAssinado,
-    linkParaAssinar, sanitizarWinAnsi, blocosDoManifesto, quebrarLinhas, TERMO_DE_ACEITE, TERMO_VERSAO,
+    linkParaAssinar, sanitizarWinAnsi, blocosDoManifesto, quebrarLinhas, TERMO_DE_ACEITE, TERMO_VERSAO, validarLeitura,
 } from '../supabase/functions/assinatura-interna/regras';
 
 /**
@@ -63,13 +63,33 @@ describe('validarPedido', () => {
         expect(validarPedido({ acao: 'ver', signatario_id: UUID, canal: 'OUTRO', credencial: 't' }).ok).toBe(false);
     });
 
-    it('assinar exige 6 dígitos, CPF, aceite true e versão do termo', () => {
-        const base = { acao: 'assinar', signatario_id: UUID, canal: 'PORTAL_CLIENTE', credencial: 'tok', codigo: '012345', cpf: '529.982.247-25', aceite: true, termo_versao: TERMO_VERSAO };
-        expect(validarPedido(base).ok).toBe(true);
+    const LIDO = { modo: 'TELA', paginas: 32, ultima_pagina: 32, chegou_ao_fim: true, segundos: 95 };
+
+    it('assinar exige 6 dígitos, CPF, aceite true, versão do termo e a leitura', () => {
+        const base = { acao: 'assinar', signatario_id: UUID, canal: 'PORTAL_CLIENTE', credencial: 'tok', codigo: '012345', cpf: '529.982.247-25', aceite: true, termo_versao: TERMO_VERSAO, leitura: LIDO };
+        const ok = validarPedido(base);
+        expect(ok.ok).toBe(true);
+        expect(ok.ok && ok.pedido.acao === 'assinar' && ok.pedido.leitura).toEqual(LIDO);
         expect(validarPedido({ ...base, codigo: '12345' }).ok).toBe(false);
         expect(validarPedido({ ...base, aceite: 'true' }).ok).toBe(false);
         expect(validarPedido({ ...base, cpf: '' }).ok).toBe(false);
         expect(validarPedido({ ...base, termo_versao: '' }).ok).toBe(false);
+        // Tela de assinatura (22/11/2026): sem ler até a última página não assina.
+        const semLeitura = validarPedido({ ...base, leitura: undefined });
+        expect(semLeitura).toEqual({ ok: false, erro: 'Leia o documento até a última página para assinar.' });
+    });
+
+    it('leitura: TELA só com a última página vista; PDF_EXTERNO registra que o fim não foi medido', () => {
+        expect(validarLeitura(LIDO)).toEqual({ ok: true, leitura: LIDO });
+        expect(validarLeitura({ ...LIDO, ultima_pagina: 31 }).ok).toBe(false);
+        expect(validarLeitura({ ...LIDO, chegou_ao_fim: false }).ok).toBe(false);
+        expect(validarLeitura({ ...LIDO, paginas: 0, ultima_pagina: 0 }).ok).toBe(false);
+        expect(validarLeitura({ ...LIDO, modo: 'OUTRO' }).ok).toBe(false);
+        expect(validarLeitura('lido').ok).toBe(false);
+        expect(validarLeitura({ modo: 'PDF_EXTERNO', paginas: 32, ultima_pagina: 32, chegou_ao_fim: true, segundos: 40 }))
+            .toEqual({ ok: true, leitura: { modo: 'PDF_EXTERNO', paginas: 32, ultima_pagina: null, chegou_ao_fim: false, segundos: 40 } });
+        // segundos inválido não derruba: vira 0.
+        expect(validarLeitura({ ...LIDO, segundos: -5 })).toEqual({ ok: true, leitura: { ...LIDO, segundos: 0 } });
     });
 
     it('recusa corpo que não é objeto e ação desconhecida', () => {

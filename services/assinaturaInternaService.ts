@@ -1,5 +1,7 @@
 import { FunctionsHttpError } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
+import type { Leitura } from '../supabase/functions/assinatura-interna/regras';
+export type { Leitura };
 
 /**
  * Assinatura eletrônica interna, sem certificado — o lado do navegador da Edge
@@ -101,8 +103,8 @@ export const assinaturaInternaService = {
     pedirCodigo(a: AcessoDoSignatario): Promise<{ email_mascarado: string }> {
         return chamar({ acao: 'pedir_codigo', ...doAcesso(a) });
     },
-    assinar(a: AcessoDoSignatario, p: { codigo: string; cpf: string; termoVersao: string }): Promise<ResultadoDaAssinatura> {
-        return chamar({ acao: 'assinar', ...doAcesso(a), codigo: p.codigo, cpf: p.cpf, aceite: true, termo_versao: p.termoVersao });
+    assinar(a: AcessoDoSignatario, p: { codigo: string; cpf: string; termoVersao: string; leitura: Leitura }): Promise<ResultadoDaAssinatura> {
+        return chamar({ acao: 'assinar', ...doAcesso(a), codigo: p.codigo, cpf: p.cpf, aceite: true, termo_versao: p.termoVersao, leitura: p.leitura });
     },
 };
 

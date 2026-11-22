@@ -875,6 +875,26 @@ export const creditRoomService = {
     },
 
     /**
+     * Grava SÓ os parâmetros da capacidade (botão "Salvar no room" da simulação).
+     * Não reaproveita `update()` de propósito: aquele manda o room inteiro, e
+     * sobrescreveria com dado velho o que outra aba ou outro usuário tenha mudado.
+     * Não toca em versão liberada nem escreve no log do credor.
+     *
+     * ⚠️ Reescreve o objeto `parametros_capacidade` INTEIRO a partir do room em memória: se outro
+     * usuário mudou uma chave dele nesse meio-tempo, ela é sobrescrita. Aceito (decisão do revisor).
+     */
+    async salvarParametrosCapacidade(room: Pick<CreditRoom, 'id'>, parametros: ParametrosCapacidade): Promise<CreditRoom> {
+        const { data, error } = await supabase
+            .from('credit_rooms')
+            .update({ parametros_capacidade: parametros })
+            .eq('id', room.id)
+            .select(ROOM_COLS)
+            .single();
+        if (error) throw error;
+        return mapRoom(data as Row);
+    },
+
+    /**
      * Grava SÓ o quadro (PRD §47). Não reaproveita `update()` de propósito:
      * aquele manda o room inteiro, e sobrescreveria com dado velho o que outra
      * aba (status, garantias) tenha mudado enquanto o quadro estava aberto.

@@ -9,23 +9,26 @@
  *  - erro na prévia (ex.: não-membro do grupo) aparece com "Tentar de novo" e as versões liberadas seguem selecionáveis;
  *  - sala sem versão liberada: as abas funcionam e a faixa diz "Ainda não liberada à instituição";
  *  - "Liberar" entrega ao serviço o MESMO objeto da prévia da tela; trocar a data-base no painel recalcula antes;
- *  - o botão desligado diz o motivo.
+ *  - o botão desligado diz o motivo;
+ *  - Capacidade da prévia: "Salvar no room" grava SÓ os parâmetros (salvarParametrosCapacidade) e avisa onChanged;
+ *    a versão liberada não tem o painel de simulação.
  */
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prepararVersao, freezeVersion, listVersions, listDocuments } = vi.hoisted(() => ({
+const { prepararVersao, freezeVersion, listVersions, listDocuments, salvarParametrosCapacidade } = vi.hoisted(() => ({
     prepararVersao: vi.fn(),
     freezeVersion: vi.fn(),
     listVersions: vi.fn(),
     listDocuments: vi.fn(),
+    salvarParametrosCapacidade: vi.fn(),
 }));
 
 // O CreditRoomDetail importa o store inteiro; sem o cliente Supabase o módulo lança por falta de variáveis de ambiente.
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../services/creditRoomService', () => ({
-    creditRoomService: { prepararVersao, freezeVersion, listVersions, listDocuments },
+    creditRoomService: { prepararVersao, freezeVersion, listVersions, listDocuments, salvarParametrosCapacidade },
 }));
 
 import { ConfirmProvider } from '../components/ui/confirm';
@@ -101,7 +104,7 @@ const dinheiro = (v: number) => formatMoney(v).replace(/\s/g, ' ');
 
 beforeEach(() => {
     localStorage.clear();
-    for (const f of [prepararVersao, freezeVersion, listVersions, listDocuments]) f.mockReset();
+    for (const f of [prepararVersao, freezeVersion, listVersions, listDocuments, salvarParametrosCapacidade]) f.mockReset();
     listVersions.mockResolvedValue([versaoLiberada()]);
     listDocuments.mockResolvedValue([]);
 });
@@ -454,5 +457,150 @@ describe('LiberarSheet — Liberar para a instituição', () => {
         const painel = screen.getAllByRole('alert').find(a => /Tentar de novo/.test(a.textContent ?? ''))!;
         fireEvent.click(within(painel).getByRole('button', { name: 'Tentar de novo' }));
         await waitFor(() => expect(botaoLiberar()).not.toBeDisabled());
+    });
+});
+
+describe('CreditRoomDetail — simular parâmetros na aba Capacidade', () => {
+    const abrirCapacidade = (r: CreditRoom, onChanged = vi.fn()) => {
+        localStorage.setItem(`creditRoom:${r.id}:aba`, JSON.stringify('capacidade'));
+        render(
+            <ConfirmProvider>
+                <CreditRoomDetail room={r} onBack={vi.fn()} onEdit={vi.fn()} onChanged={onChanged} />
+            </ConfirmProvider>,
+        );
+        return onChanged;
+    };
+
+    it('simular não grava; "Salvar no room" chama salvarParametrosCapacidade com o cadastro editado e avisa onChanged', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        const r = sala();
+        const salvo = { ...r, parametrosCapacidade: { ...PARAMETROS_CAPACIDADE_PADRAO, taxa_mensal_pct: 2.2 } } as CreditRoom;
+        salvarParametrosCapacidade.mockResolvedValue(salvo);
+        const onChanged = abrirCapacidade(r);
+
+        await screen.findByText('Simular parâmetros');
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+        expect(screen.getByText('simulado — não salvo')).toBeInTheDocument();
+        expect(salvarParametrosCapacidade).not.toHaveBeenCalled();
+        expect(freezeVersion).not.toHaveBeenCalled();
+        expect(prepararVersao).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar no room' }));
+
+        await waitFor(() => expect(onChanged).toHaveBeenCalledWith(salvo));
+        expect(salvarParametrosCapacidade).toHaveBeenCalledWith(r, { ...PARAMETROS_CAPACIDADE_PADRAO, taxa_mensal_pct: 2.2 });
+        expect(freezeVersion).not.toHaveBeenCalled();
+    });
+
+    it('depois de "Salvar no room" a prévia é recalculada com o room novo e a marca "simulado — não salvo" some', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        const r = sala();
+        const salvo = { ...r, parametrosCapacidade: { ...PARAMETROS_CAPACIDADE_PADRAO, taxa_mensal_pct: 2.2 } } as CreditRoom;
+        salvarParametrosCapacidade.mockResolvedValue(salvo);
+        // O pai troca o room de verdade: a prévia velha é descartada e a nova nasce do cadastro salvo.
+        const onChanged = vi.fn();
+        localStorage.setItem(`creditRoom:${r.id}:aba`, JSON.stringify('capacidade'));
+        const ui = (room: CreditRoom) => (
+            <ConfirmProvider>
+                <CreditRoomDetail room={room} onBack={vi.fn()} onEdit={vi.fn()} onChanged={onChanged} />
+            </ConfirmProvider>
+        );
+        const { rerender } = render(ui(r));
+
+        await screen.findByText('Simular parâmetros');
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+        expect(screen.getByText('simulado — não salvo')).toBeInTheDocument();
+        expect(prepararVersao).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar no room' }));
+        await waitFor(() => expect(onChanged).toHaveBeenCalledWith(salvo));
+        rerender(ui(salvo));
+
+        await waitFor(() => expect(prepararVersao).toHaveBeenCalledTimes(2));
+        expect(prepararVersao).toHaveBeenLastCalledWith(salvo, expect.any(String));
+        expect(await screen.findByText('Simular parâmetros')).toBeInTheDocument();
+        expect(screen.queryByText('simulado — não salvo')).toBeNull();
+        expect((screen.getByLabelText('Taxa mensal (%)') as HTMLInputElement).value).toBe('2.2');
+    });
+
+    it('"Liberar" avisa que a simulação não salva NÃO vai na liberação (e segue habilitado); o aviso some ao voltar aos do room', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        abrirCapacidade(sala());
+        await screen.findByText('Simular parâmetros');
+        const aviso = /Há uma simulação não salva na aba Capacidade — ela NÃO vai nesta liberação/;
+
+        // Sem simulação: nada a avisar.
+        abrirPainel();
+        await screen.findByRole('button', { name: /^Liberar V\d+$/ });
+        expect(screen.queryByText(aviso)).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+        abrirPainel();
+        expect(await screen.findByText(aviso)).toBeInTheDocument();
+        expect(screen.getByText(aviso).textContent).toContain('Salve no room antes de liberar se quiser os simulados.');
+        await waitFor(() => expect(botaoLiberar()).not.toBeDisabled());
+        fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+
+        fireEvent.click(screen.getByRole('button', { name: 'Voltar aos do room' }));
+        abrirPainel();
+        await screen.findByRole('button', { name: /^Liberar V\d+$/ });
+        expect(screen.queryByText(aviso)).toBeNull();
+    });
+
+    it('"Baixar book" avisa que a simulação não salva fica FORA do book (título e nota âmbar); some ao voltar aos do room', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        abrirCapacidade(sala());
+        await screen.findByText('Simular parâmetros');
+        const botao = () => screen.getByRole('button', { name: /Baixar book/ });
+        const nota = /O book sai sem a simulação não salva/;
+        await waitFor(() => expect(botao()).toBeEnabled());
+        expect(botao().parentElement?.getAttribute('title')).toMatch(/^PDF da prévia de hoje, com fotos/);
+        expect(screen.queryByText(nota)).toBeNull();
+
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+        expect(await screen.findByText(nota)).toBeInTheDocument();
+        expect(botao().parentElement).toHaveAttribute('title', 'PDF da prévia de hoje — sem a simulação não salva; salve no room para incluí-la');
+        expect(botao()).toBeEnabled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Voltar aos do room' }));
+        await waitFor(() => expect(screen.queryByText(nota)).toBeNull());
+        expect(botao().parentElement?.getAttribute('title')).toMatch(/^PDF da prévia de hoje, com fotos/);
+    });
+
+    it('com a simulação pendente, trocar de aba (a Capacidade desmonta) apaga o aviso do "Liberar"', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        abrirCapacidade(sala());
+        await screen.findByText('Simular parâmetros');
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+
+        fireEvent.click(screen.getByRole('tab', { name: /^Versões/ }));
+        await waitFor(() => expect(screen.queryByText('Simular parâmetros')).toBeNull());
+        abrirPainel();
+        await screen.findByRole('button', { name: /^Liberar V\d+$/ });
+        expect(screen.queryByText(/Há uma simulação não salva/)).toBeNull();
+    });
+
+    it('falha ao salvar mostra o motivo e não avisa onChanged', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        salvarParametrosCapacidade.mockRejectedValue(new Error('permission denied'));
+        const onChanged = abrirCapacidade(sala());
+
+        await screen.findByText('Simular parâmetros');
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar no room' }));
+
+        expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
+        expect(onChanged).not.toHaveBeenCalled();
+    });
+
+    it('a versão liberada (somente leitura) não tem o painel', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        abrirCapacidade(sala());
+        await screen.findByText('Simular parâmetros');
+
+        fireEvent.change(seletor(), { target: { value: 'v1' } });
+        expect(await screen.findByText(/V1 liberada em .* Somente leitura/)).toBeInTheDocument();
+        expect(screen.queryByText('Simular parâmetros')).toBeNull();
     });
 });

@@ -8,6 +8,8 @@ import { ChartCard, ChartEmpty, TICK, GRID, TOOLTIP_STYLE, TOOLTIP_CURSOR, INITI
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { CardHeader, KpiStrip, PortalCard, PortalEmpty, Td, Th } from '../portal/PortalKit';
 import { PainelProveniencia } from './CreditRoomIndicators';
+import { PainelSimulacao, useSimulacaoDeParametros, type SimulacaoDaCapacidade } from './CreditRoomSimulacao';
+import { ehPrevia } from '../../utils/creditRoomPrevia';
 import type { IndicadorKey } from '../../utils/creditRoomProvenance';
 import type { CreditRoomVersion } from '../../types/creditRoom';
 import type { SnapshotCapacidade } from '../../utils/creditRoomSnapshot';
@@ -17,12 +19,18 @@ import {
 } from '../../utils/creditCapacity';
 
 /**
- * Aba "Capacidade de pagamento" de uma VERSÃO congelada do Credit Room.
+ * Aba "Capacidade de pagamento" de uma VERSÃO do Credit Room: congelada
+ * (liberada) ou a PRÉVIA de hoje do lado interno.
  *
  * Lê SÓ `version.snapshot.{capacidade,qualidade,escopo,operacao}` — nunca o
  * dado vivo: é isso que faz a empresa e o banco olharem para a mesma conta.
- * O teste de estresse reaplica um cenário à série CONGELADA, em memória:
+ * O teste de estresse reaplica um cenário à série da versão, em memória:
  * nada é gravado.
+ *
+ * Na prévia interna (`simulacao` presente) a aba ganha o painel "Simular
+ * parâmetros": os números da aba inteira passam a ser os da capacidade
+ * simulada, em memória, até "Salvar no room". Versão liberada e portal nunca
+ * recebem `simulacao`.
  *
  * Compartilhado entre o módulo interno e o portal do credor (§24: um
  * componente, prop `accent`, mapa `ACCENTS` por extenso — o JIT do Tailwind
@@ -341,12 +349,23 @@ const SEM_BASE: ResultadoEstresse = { valor_maximo: null, dscr_minimo_12m: null,
 interface Props {
     version: CreditRoomVersion;
     accent?: Accent;
+    /** Só a prévia interna: liga o painel "Simular parâmetros". Versão liberada e portal não passam. */
+    simulacao?: SimulacaoDaCapacidade;
 }
 
-const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => {
+const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo', simulacao }) => {
     const A = ACCENTS[accent];
     const s = version.snapshot;
-    const c: SnapshotCapacidade | null = s.capacidade ?? null;
+    const previa = ehPrevia(version);
+    // A simulação é só do lado interno e só da prévia (a liberada é imutável): o portal nunca a recebe.
+    const { capacidade: c, painel } = useSimulacaoDeParametros(
+        version, s.capacidade ?? null, accent === 'indigo' && previa ? simulacao : undefined,
+    );
+    // O que a proveniência (clique no KPI) explica tem de ser o que a tela mostra: a série simulada.
+    const versaoExibida = React.useMemo(
+        () => (c && c !== s.capacidade ? { ...version, snapshot: { ...s, capacidade: c } } : version),
+        [version, s, c],
+    );
     const fluxos = React.useMemo(() => fluxosDaOperacao(s), [s]);
 
     const [explicando, setExplicando] = React.useState<IndicadorKey | null>(null);
@@ -410,9 +429,10 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
     const pedido = s.operacao?.requested_amount ?? 0;
     const { comOperacao, hintMaximo, rotuloDscr, hintDscr, hintFolga, notaMaximo } =
         textosDaCapacidade(c, resumo, pedido);
-    // O Base é SEMPRE o número congelado (uma só máxima para o banco ver): o cenário Base
-    // não é recalculado, e a diferença dos outros cenários é contra ele.
-    const congelado: ResultadoEstresse = {
+    // O Base é SEMPRE o número da versão exibida (uma só máxima para o banco ver): o cenário Base
+    // não é recalculado, e a diferença dos outros cenários é contra ele. Na prévia com simulação
+    // ativa é a capacidade simulada — nada está congelado ali.
+    const base: ResultadoEstresse = {
         valor_maximo: c.capacidade_maxima.valor_maximo,
         dscr_minimo_12m: resumo.dscr_minimo_12m,
         meses_folga_negativa: resumo.meses_folga_negativa,
@@ -447,6 +467,9 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
     // ── Gráfico mês a mês: só os fluxos que entram no DSCR ──
     const ficaramFora = [!fluxos.vendas && 'recebíveis de vendas', !fluxos.alugueis && 'aluguéis (NOI)'].filter(Boolean) as string[];
     const nenhumFluxo = !fluxos.vendas && !fluxos.alugueis;
+    // Série inteira em zero (sem renda elegível E sem serviço): o eixo repetiria "R$ 0" — §28.5 pede a frase, não o gráfico zerado.
+    const tudoZero = horizonte.length > 0 && horizonte.every(m =>
+        (fluxos.vendas ? m.vendas : 0) + (fluxos.alugueis ? m.alugueis : 0) === 0 && m.servico_atual + m.servico_novo === 0);
     const dados: LinhaGrafico[] = horizonte.map((m, i) => ({
         mes: m.mes, label: rotuloDoMes(m.mes), mesCheio: m,
         vendas: fluxos.vendas ? m.vendas : undefined,
@@ -532,7 +555,10 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
                 </div>
             )}
             <p className={`text-xs ${A.dica}`}>{rodape}</p>
-            <PainelProveniencia aberto={explicando != null} onClose={() => setExplicando(null)} version={version} chave={explicando} />
+            <PainelProveniencia aberto={explicando != null} onClose={() => setExplicando(null)} version={versaoExibida} chave={explicando} />
+
+            {/* 1b. Simular parâmetros — só na prévia interna; recalcula a aba inteira em memória */}
+            {painel && <PainelSimulacao painel={painel} />}
 
             {/* 2. Mês a mês */}
             <Cartao acc={accent} titulo="Mês a mês" subtitulo={subtituloMes}>
@@ -540,6 +566,8 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
                     <ChartEmpty>Esta versão não tem meses projetados.</ChartEmpty>
                 ) : nenhumFluxo ? (
                     <ChartEmpty>Nenhum fluxo (vendas ou aluguéis) está marcado como elegível nesta operação — não há renda a comparar com o serviço da dívida.</ChartEmpty>
+                ) : tudoZero ? (
+                    <ChartEmpty>Nenhuma renda elegível nem serviço da dívida no horizonte {previa ? 'desta prévia' : 'desta versão'}.</ChartEmpty>
                 ) : (
                     <>
                         <LegendaDoGrafico itens={legendaMes} />
@@ -565,19 +593,19 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
                 )}
             </Cartao>
 
-            {/* 3. Teste de estresse — reaplica o cenário à série congelada; nada grava */}
+            {/* 3. Teste de estresse — reaplica o cenário à série da versão (ou da simulação); nada grava */}
             <Cartao acc={accent} titulo="Teste de estresse" subtitulo="Reaplica o cenário à série desta versão. É só uma simulação nesta tela: nada é gravado.">
                 <PainelEstresse
                     acc={accent} campos={campos}
                     onCampo={(k, v) => setCampos(prev => ({ ...prev, [k]: v }))}
                     onCenario={cn => setCampos(camposDoCenario(cn))}
                     ativo={ativo} dscrExigido={dscrExigido}
-                    estresse={semSerie ? SEM_BASE : ativo === 0 ? congelado : {
+                    estresse={semSerie ? SEM_BASE : ativo === 0 ? base : {
                         valor_maximo: estresse.capacidade_maxima.valor_maximo,
                         dscr_minimo_12m: estresse.dscr_minimo_12m,
                         meses_folga_negativa: estresse.meses_folga_negativa,
                     }}
-                    base={semSerie ? SEM_BASE : congelado}
+                    base={semSerie ? SEM_BASE : base}
                     motivos={motivos} semSerie={semSerie} comOperacao={comOperacao}
                 />
             </Cartao>

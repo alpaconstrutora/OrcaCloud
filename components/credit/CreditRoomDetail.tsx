@@ -9,7 +9,7 @@ import { formatDateBR, formatDateTimeBR, formatMoney } from '../ui/Format';
 import { errorMessage } from '../../hooks/useOrgContext';
 import { creditRoomService, type VersaoPreparada } from '../../services/creditRoomService';
 import { creditRoomBookService } from '../../services/creditRoomBookService';
-import { ALERTA_PT, resumoDaCapacidade } from '../../utils/creditCapacity';
+import { ALERTA_PT, resumoDaCapacidade, type ParametrosCapacidade } from '../../utils/creditCapacity';
 import { hojeLocalISO } from '../../utils/periodoControladoria';
 import { ID_DA_PREVIA, compararComLiberada, horaDaPrevia, versaoDaPrevia } from '../../utils/creditRoomPrevia';
 import { MUDANCA_PT, mudancasDesdeAVersao } from '../../utils/creditRoomVersaoDesatualizada';
@@ -99,6 +99,8 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     const [versoesCarregadas, setVersoesCarregadas] = React.useState(false);
     const [versaoVista, setVersaoVista] = React.useState<CreditRoomVersion | null>(null);
     const [liberarAberto, setLiberarAberto] = React.useState(false);
+    // Há simulação de parâmetros NÃO salva na aba Capacidade: o "Liberar" avisa que ela não vai na liberação.
+    const [simulacaoPendente, setSimulacaoPendente] = React.useState(false);
 
     // Prévia de hoje: o que o sistema calcularia AGORA (prepararVersao lê tudo e não grava nada).
     // Só "Liberar para a instituição" grava. A geração descarta cálculo em voo quando o cadastro muda ou outro cálculo começa.
@@ -158,16 +160,22 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         () => versoes.find(v => v.id === room.activeVersionId) ?? versoes[0] ?? null,
         [versoes, room.activeVersionId],
     );
-    const calcularPrevia = React.useCallback(async (dataBase?: string) => {
+    // Devolve o resultado (o book baixado de uma aba que não calcula a prévia usa o valor direto): pronta, com erro,
+    // ou superada (o cadastro mudou ou outro cálculo começou enquanto este rodava — o resultado foi descartado).
+    const calcularPrevia = React.useCallback(async (dataBase?: string): Promise<ResultadoPrevia> => {
         const minha = ++geracaoPrevia.current;
         setPreviaEst({ status: 'carregando' });
         try {
             const p = await creditRoomService.prepararVersao(room, dataBase || hojeLocalISO());
-            if (minha !== geracaoPrevia.current) return;
-            setPreviaEst({ status: 'ok', previa: p, calculadaEm: new Date().toISOString() });
+            if (minha !== geracaoPrevia.current) return { tipo: 'superada' };
+            const calculadaEm = new Date().toISOString();
+            setPreviaEst({ status: 'ok', previa: p, calculadaEm });
+            return { tipo: 'ok', previa: p, calculadaEm };
         } catch (e) {
-            if (minha !== geracaoPrevia.current) return;
-            setPreviaEst({ status: 'erro', erro: errorMessage(e, 'Não foi possível calcular a prévia.') });
+            if (minha !== geracaoPrevia.current) return { tipo: 'superada' };
+            const erro = errorMessage(e, 'Não foi possível calcular a prévia.');
+            setPreviaEst({ status: 'erro', erro });
+            return { tipo: 'erro', erro };
         }
     }, [room]);
 
@@ -180,8 +188,10 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     }, [room]);
 
     const abaUsaPrevia = aba === 'visao' || aba === 'capacidade' || aba === 'empreendimentos';
+    // O Data Room também trabalha com a versão exibida ("Sugerir documentos" lê a carteira dela): tem o seletor e a prévia.
+    const abaTemVisao = abaUsaPrevia || aba === 'dataroom';
     // Com o painel "Liberar" aberto, quem calcula é ele (para a data-base do painel).
-    const precisaDaPrevia = abaUsaPrevia && visao === ID_DA_PREVIA && !liberarAberto;
+    const precisaDaPrevia = abaTemVisao && visao === ID_DA_PREVIA && !liberarAberto;
     // A aba mostra a prévia de HOJE: uma pronta para outra data (calculada ontem, ou para a data-base de um painel
     // cancelado) vale tanto quanto nenhuma — recalcula, e enquanto isso mostra o esqueleto.
     const hoje = hojeLocalISO();
@@ -198,28 +208,66 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     );
     const versaoEscolhida = visao === ID_DA_PREVIA ? null : versoes.find(v => v.id === visao) ?? null;
     const mostrandoPrevia = visao === ID_DA_PREVIA || !versaoEscolhida;
+    // A versão que está na tela (prévia pronta, ou a liberada escolhida): é dela que saem o book e as sugestões do Data Room.
+    const versaoNaTela = mostrandoPrevia ? versaoPrevia : versaoEscolhida;
+    // Por que ainda não há versão para o book / sugestões (prévia calculando ou com erro); `null` quando há.
+    // Com erro e uma versão liberada à mão, a saída está no seletor.
+    const motivoSemVersao = versaoNaTela ? null
+        : previaEst.status === 'erro' ? `${previaEst.erro}${ativa ? ` — ou escolha a V${ativa.versionNo} no seletor (aba Visão)` : ''}`
+            : 'Calculando a prévia…';
+    // Aba que não calcula a prévia sozinha: o botão do book calcula ao clicar. Prévia que nunca foi calculada, que deu erro
+    // ou que ficou de outro dia vale "nenhuma": o clique (re)calcula. Só desliga enquanto calcula.
+    const previaPrecisaCalcular = previaEst.status === 'idle' || previaEst.status === 'erro' || previaDeOutroDia;
+    const bookSemVersao = !versaoNaTela && previaPrecisaCalcular && !precisaDaPrevia ? null : motivoSemVersao;
+    // Simulação não salva na Capacidade: o book sai da prévia do CADASTRO, sem ela.
+    const bookSemSimulacao = simulacaoPendente && mostrandoPrevia;
 
     // Room de Grupo: o Data Room mostra de qual empresa é cada documento (nome vem da versão ativa).
     const grupoEscopo = room.escopo === 'GRUPO';
     const nomeDaOrg = React.useMemo(() => {
         const m = new Map<string, string>();
-        for (const o of ativa?.snapshot.escopo?.organizacoes ?? []) m.set(o.id, o.nome);
+        for (const o of (versaoNaTela ?? ativa)?.snapshot.escopo?.organizacoes ?? []) m.set(o.id, o.nome);
         return m;
-    }, [ativa]);
+    }, [versaoNaTela, ativa]);
 
-    // Book em PDF da versão ATIVA (congelada, nunca o dado vivo). O índice do Data Room é lido na hora:
-    // a aba pode não ter sido aberta, e um índice vazio por "não carregou" diria que não há documento.
+    // Book em PDF da versão NA TELA: a prévia de hoje (sai carimbada "PRÉVIA — não liberada à instituição") ou a
+    // liberada escolhida. Nunca leva a marca do credor nem entra no log dele. Numa aba que não calcula a prévia,
+    // o clique calcula na hora. O índice do Data Room é lido agora: a aba pode não ter sido aberta, e um índice
+    // vazio por "não carregou" diria que não há documento.
     const baixarBook = async () => {
-        if (!ativa || gerandoBook) return;
+        if (gerandoBook) return;
         setGerandoBook(true);
         setErro(null);
         try {
+            let versao = versaoNaTela;
+            if (!versao && previaPrecisaCalcular) {
+                const r = await calcularPrevia();
+                if (r.tipo === 'superada') {
+                    setErro('O cadastro mudou enquanto a prévia era calculada — clique de novo.');
+                    return;
+                }
+                if (r.tipo === 'erro') {
+                    setErro(r.erro);
+                    return;
+                }
+                versao = versaoDaPrevia(r.previa, r.calculadaEm, room.organizationId);
+            }
+            if (!versao) return;
             const docs = await creditRoomService.listDocuments(room.id);
-            await creditRoomBookService.baixar(room, ativa, { documentos: creditRoomBookService.documentosDoIndice(docs, ativa) });
+            await creditRoomBookService.baixar(room, versao, { documentos: creditRoomBookService.documentosDoIndice(docs, versao) });
         } catch (e) {
             setErro(errorMessage(e, 'Não foi possível gerar o book.'));
         } finally {
             setGerandoBook(false);
+        }
+    };
+
+    // "Salvar no room" da simulação: grava SÓ os parâmetros no cadastro; o room novo invalida a prévia, que é recalculada com eles.
+    const salvarParametros = async (parametros: ParametrosCapacidade) => {
+        try {
+            onChanged(await creditRoomService.salvarParametrosCapacidade(room, parametros));
+        } catch (e) {
+            throw new Error(errorMessage(e, 'Não foi possível salvar os parâmetros no room.'));
         }
     };
 
@@ -356,7 +404,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                         {room.institutionName ? `· ${room.institutionName}` : ''}
                         {ativa ? ` · versão ativa V${ativa.versionNo} (${formatDateBR(ativa.dataBase)})` : ' · sem versão liberada'}
                     </span>
-                    {abaUsaPrevia && (
+                    {abaTemVisao && (
                         <>
                             <span className="text-sm text-gray-500">Mostrando</span>
                             <select
@@ -379,14 +427,24 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     <button onClick={onEdit} className="h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 rounded-[6px] transition-all">
                         Editar
                     </button>
+                    {bookSemSimulacao && (
+                        <span role="note" className="text-xs text-amber-700">
+                            O book sai sem a simulação não salva
+                        </span>
+                    )}
                     {/* Desligado sempre diz o motivo: o wrapper carrega o title (botão disabled não dispara hover). */}
                     <span
                         className="inline-flex shrink-0"
-                        title={!ativa ? 'Libere uma versão para baixar o book' : gerandoBook ? 'Gerando o book, aguarde' : 'PDF da versão ativa, com fotos'}
+                        title={gerandoBook ? 'Gerando o book, aguarde'
+                            : bookSemVersao ?? (bookSemSimulacao
+                                ? 'PDF da prévia de hoje — sem a simulação não salva; salve no room para incluí-la'
+                                : mostrandoPrevia
+                                    ? 'PDF da prévia de hoje, com fotos — marcado como não liberado à instituição'
+                                    : `PDF da V${versaoEscolhida!.versionNo} liberada, com fotos`)}
                     >
                         <button
                             onClick={() => void baixarBook()}
-                            disabled={!ativa || gerandoBook}
+                            disabled={gerandoBook || !!bookSemVersao}
                             className="flex items-center gap-1.5 h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 rounded-[6px] transition-all disabled:opacity-50 disabled:pointer-events-none"
                         >
                             <Download className="w-[15px] h-[15px]" />
@@ -410,7 +468,15 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                 const exibida = mostrandoPrevia ? versaoPrevia : versaoEscolhida;
                 const abaConteudo = !exibida ? null
                     : aba === 'visao' ? <CreditRoomIndicators version={exibida} accent="indigo" />
-                        : aba === 'capacidade' ? <CreditRoomCapacity version={exibida} accent="indigo" />
+                        : aba === 'capacidade' ? (
+                            <CreditRoomCapacity
+                                version={exibida} accent="indigo"
+                                // Só a prévia ganha o painel "Simular parâmetros"; versão liberada é somente leitura.
+                                simulacao={mostrandoPrevia && previaEst.status === 'ok' && previaEst.previa
+                                    ? { room, servicoNovoSimulado: previaEst.previa.servicoNovoSimulado, onSalvar: salvarParametros, onPendenteChange: setSimulacaoPendente }
+                                    : undefined}
+                            />
+                        )
                             : <CreditRoomEmpreendimentos version={exibida} accent="indigo" documentos={documentosCarregados ? documentos : undefined} />;
                 if (!mostrandoPrevia) {
                     return (
@@ -532,10 +598,10 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     <p className="text-sm font-normal text-gray-500 px-1">
                         {documentos.length} documento{documentos.length === 1 ? '' : 's'} no Data Room
                     </p>
-                    <span className="inline-flex shrink-0" title={ativa ? undefined : 'Libere uma versão para sugerir os documentos da carteira'}>
+                    <span className="inline-flex shrink-0" title={motivoSemVersao ?? undefined}>
                         <button
                             onClick={() => setSugerirAberto(true)}
-                            disabled={!ativa}
+                            disabled={!versaoNaTela}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:pointer-events-none"
                         >
                             <Sparkles className="w-[15px] h-[15px]" />
@@ -599,12 +665,12 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                 </div>
             )}
 
-            {ativa && (
+            {versaoNaTela && (
                 <CreditRoomSugerirDocumentos
                     open={sugerirAberto}
                     onClose={() => setSugerirAberto(false)}
                     room={room}
-                    versao={ativa}
+                    versao={versaoNaTela}
                     onShared={setDocumentos}
                 />
             )}
@@ -759,6 +825,7 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     setPreviaEst(prev => (prev.status === 'ok' && prev.previa?.dataBase === hojeLocalISO() ? prev : { status: 'idle' }));
                 }}
                 room={room}
+                simulacaoPendente={simulacaoPendente}
                 proximo={versoesCarregadas ? Math.max(0, ...versoes.map(v => v.versionNo)) + 1 : null}
                 liberada={ativa}
                 versoesCarregadas={versoesCarregadas}
@@ -782,6 +849,12 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
 }
 
 // ── Prévia de hoje: comparação com a liberada e "Liberar para a instituição" ─────────────────
+
+/** Resultado de um cálculo da prévia sob demanda: pronta, com erro, ou superada (descartada — o cadastro mudou ou outro cálculo começou). */
+type ResultadoPrevia =
+    | { tipo: 'ok'; previa: VersaoPreparada; calculadaEm: string }
+    | { tipo: 'erro'; erro: string }
+    | { tipo: 'superada' };
 
 /** A prévia no detalhe interno: calculada com `prepararVersao` (lê tudo, não grava nada). */
 export interface PreviaEstado {
@@ -890,6 +963,8 @@ export const LiberarSheet: React.FC<{
     open: boolean;
     onClose: () => void;
     room: CreditRoom;
+    /** Há simulação de parâmetros não salva na aba Capacidade: avisa que ela NÃO vai nesta liberação. */
+    simulacaoPendente?: boolean;
     /** Número da próxima versão; `null` enquanto a lista de versões não chegou (não se crava "V1" no escuro). */
     proximo: number | null;
     /** Última versão liberada (a ativa): base da comparação. */
@@ -900,7 +975,7 @@ export const LiberarSheet: React.FC<{
     /** Pede ao detalhe que (re)calcule a prévia para uma data-base. */
     onCalcular: (dataBase: string) => void;
     onLiberada: (v: CreditRoomVersion) => void;
-}> = ({ open, onClose, room, proximo, liberada, versoesCarregadas, previaEst, onCalcular, onLiberada }) => {
+}> = ({ open, onClose, room, simulacaoPendente, proximo, liberada, versoesCarregadas, previaEst, onCalcular, onLiberada }) => {
     const [label, setLabel] = React.useState('');
     const [notes, setNotes] = React.useState('');
     const [dataBase, setDataBase] = React.useState(hojeLocalISO());
@@ -1072,7 +1147,12 @@ export const LiberarSheet: React.FC<{
                     </section>
                 )}
             </SheetPanel>
-            <SheetFooter>
+            <SheetFooter className="flex-wrap">
+                {simulacaoPendente && (
+                    <p role="note" className="w-full text-xs text-amber-700">
+                        Há uma simulação não salva na aba Capacidade — ela NÃO vai nesta liberação: o banco recebe os parâmetros do cadastro. Salve no room antes de liberar se quiser os simulados.
+                    </p>
+                )}
                 <button onClick={onClose} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">Cancelar</button>
                 {/* Desligado sempre diz o motivo: o wrapper carrega o title (botão disabled não dispara hover). */}
                 <span className="inline-flex shrink-0" title={motivoLiberar}>

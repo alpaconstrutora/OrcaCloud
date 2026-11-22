@@ -14,6 +14,7 @@
  */
 import type { CreditRoom, CreditRoomDocument, CreditRoomVersion } from '../types/creditRoom';
 import type { ExtrasDoBook } from '../utils/creditRoomBook';
+import { ehPrevia } from '../utils/creditRoomPrevia';
 
 const LADO_MAXIMO = 1600;
 const QUALIDADE_JPEG = 0.82;
@@ -92,6 +93,10 @@ export async function baixarImagens(urls: string[], orcamentoMs: number = ORCAME
 export const nomeDoArquivoDoBook = (code: string, versionNo: number): string =>
     `book-${code.replace(/[^A-Za-z0-9._-]+/g, '_')}-V${versionNo}.pdf`;
 
+/** Book da PRÉVIA (interno): `book-{code}-previa-AAAA-MM-DD.pdf`, com a data-base (= hoje) da prévia. */
+export const nomeDoArquivoDaPrevia = (code: string, dataBase: string): string =>
+    `book-${code.replace(/[^A-Za-z0-9._-]+/g, '_')}-previa-${dataBase.slice(0, 10)}.pdf`;
+
 export const creditRoomBookService = {
     /**
      * Índice do Data Room para o book: nome, categoria e, no escopo de Grupo,
@@ -107,12 +112,16 @@ export const creditRoomBookService = {
         }));
     },
 
-    /** Gera o book da versão e dispara o download. */
+    /**
+     * Gera o book da versão (liberada ou a prévia da tela) e dispara o download. O book da prévia é interno:
+     * sai carimbado "PRÉVIA" e nunca com a marca do credor.
+     */
     async baixar(
         room: Pick<CreditRoom, 'code' | 'name' | 'institutionName'>,
         versao: CreditRoomVersion,
         opts: { marcaDagua?: string; documentos: ExtrasDoBook['documentos'] },
     ): Promise<void> {
+        if (ehPrevia(versao) && opts.marcaDagua) throw new Error('Prévia não sai para a instituição.');
         const { montarBook, urlsDasFotosDoBook } = await import('../utils/creditRoomBook');
         const imagens = await baixarImagens(urlsDasFotosDoBook(versao));
         const doc = montarBook(versao, {
@@ -121,6 +130,6 @@ export const creditRoomBookService = {
             documentos: opts.documentos,
             marcaDagua: opts.marcaDagua,
         });
-        doc.save(nomeDoArquivoDoBook(room.code, versao.versionNo));
+        doc.save(ehPrevia(versao) ? nomeDoArquivoDaPrevia(room.code, versao.dataBase) : nomeDoArquivoDoBook(room.code, versao.versionNo));
     },
 };

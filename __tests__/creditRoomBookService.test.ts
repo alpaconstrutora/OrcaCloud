@@ -5,9 +5,16 @@
  * é ignorada; o book sai sem ela, nunca falha inteiro.
  */
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+const { save, montarBook } = vi.hoisted(() => {
+    const save = vi.fn();
+    return { save, montarBook: vi.fn(() => ({ save })) };
+});
+vi.mock('../utils/creditRoomBook', () => ({ montarBook, urlsDasFotosDoBook: () => [] }));
 import type { CreditRoomDocument } from '../types/creditRoom';
-import { baixarImagens, creditRoomBookService, nomeDoArquivoDoBook } from '../services/creditRoomBookService';
+import { baixarImagens, creditRoomBookService, nomeDoArquivoDaPrevia, nomeDoArquivoDoBook } from '../services/creditRoomBookService';
 import { versaoSchema1, versaoSchema2 } from './fixtures/creditRoomBookFixture';
+import { versaoDaPrevia } from '../utils/creditRoomPrevia';
 
 afterEach(() => {
     vi.useRealTimers();
@@ -100,5 +107,40 @@ describe('creditRoomBookService', () => {
     it('nome do arquivo: book-{code}-V{n}.pdf, sem caractere perigoso', () => {
         expect(nomeDoArquivoDoBook('CR-0007', 3)).toBe('book-CR-0007-V3.pdf');
         expect(nomeDoArquivoDoBook('CR/07 x', 1)).toBe('book-CR_07_x-V1.pdf');
+    });
+
+    it('nome do arquivo da prévia: book-{code}-previa-AAAA-MM-DD.pdf', () => {
+        expect(nomeDoArquivoDaPrevia('CR-0007', '2026-11-22')).toBe('book-CR-0007-previa-2026-11-22.pdf');
+        expect(nomeDoArquivoDaPrevia('CR/07 x', '2026-11-22')).toBe('book-CR_07_x-previa-2026-11-22.pdf');
+    });
+
+    it('baixar: a prévia sai com o nome "previa"; a liberada, com o nome dela e a marca do credor', async () => {
+        const sala = { code: 'CR-0007', name: 'Operação', institutionName: null };
+        const liberada = versaoSchema2();
+        const previa = versaoDaPrevia(
+            { roomId: liberada.creditRoomId, dataBase: '2026-11-22', snapshot: liberada.snapshot, indicators: liberada.indicators, servicoNovoSimulado: true },
+            '2026-11-22T17:30:00.000Z', liberada.organizationId,
+        );
+        save.mockReset();
+        await creditRoomBookService.baixar(sala, previa, { documentos: [] });
+        expect(save).toHaveBeenLastCalledWith('book-CR-0007-previa-2026-11-22.pdf');
+
+        await creditRoomBookService.baixar(sala, liberada, { documentos: [], marcaDagua: 'analista@banco.com' });
+        expect(save).toHaveBeenLastCalledWith('book-CR-0007-V3.pdf');
+    });
+
+    it('baixar: a prévia com marca do credor é recusada (não sai para a instituição) e nada é gerado', async () => {
+        const sala = { code: 'CR-0007', name: 'Operação', institutionName: null };
+        const liberada = versaoSchema2();
+        const previa = versaoDaPrevia(
+            { roomId: liberada.creditRoomId, dataBase: '2026-11-22', snapshot: liberada.snapshot, indicators: liberada.indicators, servicoNovoSimulado: true },
+            '2026-11-22T17:30:00.000Z', liberada.organizationId,
+        );
+        save.mockReset();
+        montarBook.mockClear();
+        await expect(creditRoomBookService.baixar(sala, previa, { documentos: [], marcaDagua: 'analista@banco.com' }))
+            .rejects.toThrow('Prévia não sai para a instituição.');
+        expect(montarBook).not.toHaveBeenCalled();
+        expect(save).not.toHaveBeenCalled();
     });
 });

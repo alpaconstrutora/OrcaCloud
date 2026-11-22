@@ -99,3 +99,8 @@ export function compararComLiberada(previa: CreditRoomVersion, liberada: CreditR
 - Conferência na tela (só leitura, 0 escritas): C6 bank sem versão abre na prévia ("Ainda não liberada à instituição"); CR-00002 mostra a prévia com os 4 empreendimentos e "Desde a V1 liberada: empreendimentos 11 → 4 · contratos 16 → 9 · cadastro mudou: empreendimentos da capacidade".
 - PR #655 (aviso "o cadastro mudou depois da versão congelada") foi publicado antes, a pedido do usuário; este PR o substitui pela faixa da prévia.
 - Para o PR seguinte: gráfico com série toda zerada repete rótulos do eixo ("R$ 1", "R$ 0") — trocar por frase (§28.5).
+
+## Estado — parte 2 (22/11/2026)
+- **Tasks 3 e 4 prontas — 4 de 4.** Simulação de parâmetros na aba Capacidade (salvar = `salvarParametrosCapacidade`, só `parametros_capacidade`); "Liberar" e "Baixar book" avisam quando há simulação não salva; book interno da visão na tela (prévia → "PRÉVIA — não liberada à instituição" em todas as páginas, `book-{code}-previa-AAAA-MM-DD.pdf`; prévia com marca do credor é recusada no código); "Sugerir documentos" funciona pela prévia; gráfico com série zerada vira frase.
+- Conferência na tela (CR-00002, só leitura, 0 escritas): taxa 1,2% → 0,8% muda o valor máximo de R$ 352.300 para R$ 392.900 com o selo "simulado — não salvo"; book baixado como `book-CR-00002-previa-2026-11-22.pdf`.
+- Estacionados: Data Room calcula a prévia ao entrar (segundos); painel de sugestão pode desmontar se a prévia sumir com ele aberto; simulação some sem confirmação ao "Atualizar prévia".

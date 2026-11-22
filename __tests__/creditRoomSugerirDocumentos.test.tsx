@@ -137,6 +137,53 @@ describe('CreditRoomSugerirDocumentos', () => {
         expect(within(aviso[0].closest('li') as HTMLElement).getByText('Documento c3')).toBeInTheDocument();
     });
 
+    it('cliente fora do contrato nasce DESMARCADO e a caixa do grupo não o marca; no CONTRATO segue marcado', async () => {
+        sugerirDocumentos.mockResolvedValue(agruparSugestoes([
+            doc('p1', 'CONTRATO', { temDadosDoCliente: true }),
+            doc('q1', 'EMPREENDIMENTO', { temDadosDoCliente: true }),
+            doc('q2', 'EMPREENDIMENTO'),
+            doc('w1', 'OBRA', { temDadosDoCliente: true }),
+        ]));
+        abrir();
+        await screen.findByText('Documentos dos empreendimentos');
+        expect(caixa('Selecionar Documento p1').checked).toBe(true);
+        expect(caixa('Selecionar Documento q1').checked).toBe(false);
+        expect(caixa('Selecionar Documento q2').checked).toBe(true);
+        expect(caixa('Selecionar Documento w1').checked).toBe(false);
+        // Segue marcável um a um, com o aviso.
+        expect(caixa('Selecionar Documento q1')).toBeEnabled();
+        expect(within(screen.getByText('Documento q1').closest('li') as HTMLElement).getByText('contém dados do cliente')).toBeInTheDocument();
+
+        // Caixa do grupo: desmarca todos e marca de novo — q1 nunca entra no "todos".
+        const grupo = caixa('Selecionar todos: Documentos dos empreendimentos');
+        expect(grupo.checked).toBe(true);
+        fireEvent.click(grupo);
+        expect(caixa('Selecionar Documento q2').checked).toBe(false);
+        fireEvent.click(grupo);
+        expect(caixa('Selecionar Documento q2').checked).toBe(true);
+        expect(caixa('Selecionar Documento q1').checked).toBe(false);
+
+        fireEvent.click(caixa('Selecionar Documento q1'));
+        fireEvent.click(botaoCompartilhar());
+        await waitFor(() => expect(shareDocuments).toHaveBeenCalled());
+        expect([...shareDocuments.mock.calls[0][1]].sort()).toEqual(['p1', 'q1', 'q2']);
+    });
+
+    it('o X do painel não fecha enquanto o compartilhamento está em andamento', async () => {
+        let terminar: () => void = () => undefined;
+        shareDocuments.mockReturnValue(new Promise<void>(r => { terminar = r; }));
+        const onClose = vi.fn();
+        abrir({ onClose });
+        await screen.findByText('Documentos dos clientes');
+        fireEvent.click(botaoCompartilhar());
+        await waitFor(() => expect(shareDocuments).toHaveBeenCalled());
+        const x = screen.getByRole('button', { name: /fechar/i });
+        fireEvent.click(x);
+        expect(onClose).not.toHaveBeenCalled();
+        terminar();
+        await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    });
+
     it('vencido aparece como texto vermelho (sem pílula)', async () => {
         abrir();
         const venc = await screen.findByText(/Vencido em 31\/01\/2025/);

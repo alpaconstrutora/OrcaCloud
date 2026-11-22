@@ -222,7 +222,7 @@ const LenderPortalInner: React.FC<Props> = ({ userEmail, onLogout }) => {
 
 // ── Conteúdo de um room ──────────────────────────────────────────────────────
 
-const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMembership }; aba: Aba; userEmail: string }> = ({ atual, aba, userEmail }) => {
+export const RoomView: React.FC<{ atual: { room: CreditRoom; membership: MyCreditRoomMembership }; aba: Aba; userEmail: string }> = ({ atual, aba, userEmail }) => {
     const { room, membership } = atual;
     const [versoes, setVersoes] = React.useState<CreditRoomVersion[]>([]);
     const [versaoVista, setVersaoVista] = React.useState<CreditRoomVersion | null>(null);

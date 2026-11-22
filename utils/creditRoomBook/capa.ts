@@ -22,7 +22,7 @@ export function desenharCapa(c: Ctx, versao: CreditRoomVersion, extras: ExtrasDo
     doc.text(limpo(extras.room.code), MARGEM, 32);
     doc.setFont('helvetica', 'normal'); doc.setFontSize(9.5);
     doc.setTextColor(203, 213, 225);
-    doc.text(limpo(extras.room.institutionName ?? op.institution_name ?? 'Instituição financeira a definir'), MARGEM, 40);
+    doc.text(limpo(op.institution_name ?? extras.room.institutionName ?? 'Instituição financeira a definir'), MARGEM, 40);
 
     doc.setTextColor(COR.escuro[0], COR.escuro[1], COR.escuro[2]);
     doc.setFont('helvetica', 'bold'); doc.setFontSize(24);

@@ -19,8 +19,9 @@ import type { DocumentoSugerido, GrupoDeSugestoes } from '../../utils/creditRoom
  *    rótulo mascarado do contrato;
  *  - documento do CLIENTE é dado pessoal → grupo próprio, DESMARCADO, com o aviso
  *    de LGPD que vem do agrupador;
- *  - documento que está num grupo "bom" mas também tem vínculo com cliente (o
- *    contrato assinado) segue marcado e leva o aviso "contém dados do cliente".
+ *  - documento do CONTRATO (assinado) que também tem vínculo com cliente segue marcado e leva o
+ *    aviso "contém dados do cliente"; já o de empreendimento/obra com dado do cliente nasce
+ *    DESMARCADO (só se marca um a um, com o mesmo aviso).
  */
 
 const rotuloDoCampo = 'text-xs font-semibold text-slate-500';
@@ -33,6 +34,12 @@ interface Props {
     /** Lista do Data Room já recarregada depois de compartilhar. */
     onShared: (documentos: CreditRoomDocument[]) => void;
 }
+
+/**
+ * Entra na marcação em lote (pré-marcado e "todos do grupo"): fora o que já está no Data Room, o vencido e o
+ * documento com dado do cliente que não é o contrato assinado (CONTRATO). Esses só se marcam um a um.
+ */
+const entraEmLote = (i: DocumentoSugerido) => !i.jaCompartilhado && !i.vencido && !(i.temDadosDoCliente && i.origem !== 'CONTRATO');
 
 /** Caixa de grupo: marcada / desmarcada / parcial (traço). */
 const CaixaDoGrupo: React.FC<{ marcados: number; total: number; titulo: string; motivoDesligada: string; onChange: () => void }> = ({ marcados, total, titulo, motivoDesligada, onChange }) => {
@@ -80,9 +87,9 @@ const CreditRoomSugerirDocumentos: React.FC<Props> = ({ open, onClose, room, ver
             .then(g => {
                 if (!vivo) return;
                 setGrupos(g);
-                // Pré-marcado: grupos "bons" (não CLIENTE), sem o que já está no Data Room e sem o vencido
-                // (vencido só entra marcado um a um, de propósito).
-                setMarcados(new Set(g.filter(x => x.marcadoPorPadrao).flatMap(x => x.itens).filter(i => !i.jaCompartilhado && !i.vencido).map(i => i.documentId)));
+                // Pré-marcado: grupos "bons" (não CLIENTE), sem o que já está no Data Room, sem o vencido
+                // (vencido só entra marcado um a um, de propósito) e sem dado do cliente fora do contrato assinado.
+                setMarcados(new Set(g.filter(x => x.marcadoPorPadrao).flatMap(x => x.itens).filter(entraEmLote).map(i => i.documentId)));
             })
             .catch(e => { if (vivo) setErro(errorMessage(e, 'Não foi possível ler os documentos do GED.')); })
             .finally(() => { if (vivo) setCarregando(false); });
@@ -98,8 +105,9 @@ const CreditRoomSugerirDocumentos: React.FC<Props> = ({ open, onClose, room, ver
     });
 
     const alternarGrupo = (g: GrupoDeSugestoes) => {
-        // "Todos" = os que não estão no Data Room e não estão vencidos; vencido só se marca um a um.
-        const ids = g.itens.filter(i => !i.jaCompartilhado && !i.vencido).map(i => i.documentId);
+        // "Todos" = os que não estão no Data Room, não estão vencidos e não trazem dado do cliente fora do contrato;
+        // esses só se marcam um a um.
+        const ids = g.itens.filter(entraEmLote).map(i => i.documentId);
         setMarcados(prev => {
             const n = new Set(prev);
             const todos = ids.length > 0 && ids.every(id => n.has(id));
@@ -167,7 +175,7 @@ const CreditRoomSugerirDocumentos: React.FC<Props> = ({ open, onClose, room, ver
 
     return (
         <Sheet open={open} onClose={fecharSeLivre} size="xl">
-            <SheetHeader onClose={onClose}>
+            <SheetHeader onClose={fecharSeLivre}>
                 <SheetTitle>Sugerir documentos</SheetTitle>
                 <SheetDescription>
                     Documentos do GED ligados à carteira desta versão. Nada vai para a instituição sem o seu clique em Compartilhar.
@@ -194,7 +202,7 @@ const CreditRoomSugerirDocumentos: React.FC<Props> = ({ open, onClose, room, ver
                 ) : (
                     grupos.map(g => {
                         const naoCompartilhados = g.itens.filter(i => !i.jaCompartilhado);
-                        const emLote = naoCompartilhados.filter(i => !i.vencido);
+                        const emLote = naoCompartilhados.filter(entraEmLote);
                         const marcadosEmLote = emLote.filter(i => marcados.has(i.documentId)).length;
                         const marcadosNoGrupo = naoCompartilhados.filter(i => marcados.has(i.documentId)).length;
                         const motivoDesligada = naoCompartilhados.length === 0

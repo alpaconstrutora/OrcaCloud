@@ -55,6 +55,13 @@ describe('montarBook - versão schema 2', () => {
         });
     });
 
+    it('capa: a instituição é a CONGELADA na versão, não a que a sala mostra hoje', () => {
+        const mudou = montarBook(v, extrasPadrao({ room: { code: 'CR-0007', name: 'Operação Torre B', institutionName: 'Banco Trocado Depois' } }));
+        const capa = paginas(mudou)[0];
+        expect(capa).toContain('Banco Exemplo');
+        expect(capa).not.toContain('Banco Trocado Depois');
+    });
+
     it('capacidade: o valor máximo é o congelado, "sobre a dívida atual", e a comparação com o pedido', () => {
         expect(t).toContain('Valor máximo do empréstimo');
         expect(t).toContain('sobre a dívida atual');

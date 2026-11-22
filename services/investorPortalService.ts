@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import type { IndicadoresDoPainel } from '../utils/imovibCalculoDaVersao';
 import type { ResultadosDaVersao } from '../utils/imovibVersoes';
 import type { CaptacaoBruta } from '../utils/oportunidadeCaptacao';
+import { fotosDosEmpreendimentos, type FotoDaVitrine } from './empreendimentoMidiaService';
 
 export type ReportCategory =
     | 'relatorio' | 'contrato' | 'spe' | 'matricula' | 'licenca'
@@ -112,7 +113,8 @@ export interface InvestorOpportunity {
     captacao?: CaptacaoBruta | null;
 }
 
-export interface FotoDaVitrine { url: string; legenda: string | null }
+// Mora em empreendimentoMidiaService (o Credit Room usa as mesmas fotos); re-exportado para os importadores antigos.
+export type { FotoDaVitrine };
 
 export interface LocalDaOportunidade {
     cidade: string | null;
@@ -215,26 +217,6 @@ const semCamposDeLeitura = <T extends Partial<InvestorOpportunity>>(o: T): Omit<
  * Sem UNIQUE na coluna: vale o mais antigo; empreendimento de OUTRA organização não vale (a mesma regra de
  * imovibService.carregarVinculos). A RPC do portal faz a mesma escolha em SQL.
  */
-/**
- * Fotos da vitrine = imagens do empreendimento (bucket público empreendimento-midia): decorado, plantas por
- * tipologia e vistas das torres — a mesma ordem de fn_oportunidade_na_vitrine no banco (Fase 3).
- */
-async function fotosDosEmpreendimentos(ids: string[]): Promise<Map<string, FotoDaVitrine[]>> {
-    const out = new Map<string, FotoDaVitrine[]>();
-    if (ids.length === 0) return out;
-    const [dec, plantas, vistas] = await Promise.all([
-        supabase.from('empreendimento_tipologia_decorado').select('empreendimento_id, imagem_url, legenda, tipologia, ordem').in('empreendimento_id', ids).order('ordem', { ascending: true }),
-        supabase.from('empreendimento_tipologia_plantas').select('empreendimento_id, imagem_url, tipologia').in('empreendimento_id', ids),
-        supabase.from('empreendimento_tower_vistas').select('imagem_url, legenda, andar_de, torre:empreendimento_towers!inner(empreendimento_id, name)').in('torre.empreendimento_id', ids).order('andar_de', { ascending: true }),
-    ]);
-    for (const r of [dec, plantas, vistas]) if (r.error) throw r.error;
-    const por = (id: string) => { if (!out.has(id)) out.set(id, []); return out.get(id)!; };
-    for (const d of (dec.data ?? []) as { empreendimento_id: string; imagem_url: string; legenda: string | null; tipologia: string }[]) por(d.empreendimento_id).push({ url: d.imagem_url, legenda: d.legenda ?? d.tipologia });
-    for (const p of (plantas.data ?? []) as { empreendimento_id: string; imagem_url: string; tipologia: string }[]) por(p.empreendimento_id).push({ url: p.imagem_url, legenda: `Planta — ${p.tipologia}` });
-    for (const v of (vistas.data ?? []) as unknown as { imagem_url: string; legenda: string | null; torre: { empreendimento_id: string; name: string } }[]) por(v.torre.empreendimento_id).push({ url: v.imagem_url, legenda: v.legenda ?? `Vista — ${v.torre.name}` });
-    return out;
-}
-
 /** Chamado e integralizado de cada SPE (Σ dos sócios) — Fase 4; o banco faz o mesmo na vitrine. */
 async function comDinheiroDaSpe(ops: InvestorOpportunity[]): Promise<InvestorOpportunity[]> {
     const spes = [...new Set(ops.map(o => o.spe_entity_id).filter((x): x is string => !!x))];

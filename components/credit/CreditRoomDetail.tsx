@@ -580,12 +580,14 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
 // ── Congelar versão ──────────────────────────────────────────────────────────
 
 const BLOCOS_PT: { chave: string; nome: string }[] = [
+    { chave: 'empreendimento', nome: 'Empreendimento' },
     { chave: 'obra', nome: 'Obra' },
     { chave: 'vendas', nome: 'Vendas' },
     { chave: 'portfolio', nome: 'Carteira de imóveis' },
     { chave: 'recebiveis', nome: 'Recebíveis' },
     { chave: 'eac', nome: 'Estimativa ao término (EAC)' },
     { chave: 'divida', nome: 'Dívida' },
+    { chave: 'fontes_usos', nome: 'Fontes e usos' },
     { chave: 'escopo', nome: 'Escopo' },
     { chave: 'empreendimentos', nome: 'Empreendimentos' },
     { chave: 'contratos', nome: 'Contratos' },
@@ -620,6 +622,14 @@ export const CongelarSheet: React.FC<{
             setPreparada(null); setConferindo(false); setCongelando(false); setErro(null);
         }
     }, [open]);
+
+    // Sala alterada em outro lugar enquanto o painel está aberto: a versão preparada pode estar velha.
+    React.useEffect(() => {
+        if (!open) return;
+        geracao.current += 1;
+        setPreparada(null);
+        setConferindo(false);
+    }, [room, open]);
 
     const mudarDataBase = (v: string) => {
         setDataBase(v);
@@ -687,7 +697,7 @@ export const CongelarSheet: React.FC<{
                 </div>
                 <div className="space-y-1.5">
                     <label className={rotulo}>Data-base</label>
-                    <input type="date" value={dataBase} onChange={e => mudarDataBase(e.target.value)} className={campo} />
+                    <input type="date" value={dataBase} onChange={e => mudarDataBase(e.target.value)} disabled={congelando} title={congelando ? 'Congelando a versão: a data-base não pode mudar agora' : undefined} className={campo} />
                 </div>
                 <div className="space-y-1.5">
                     <label className={rotulo}>Notas</label>

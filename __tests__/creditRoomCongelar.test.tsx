@@ -10,7 +10,7 @@
  *  - erro do prepararVersao (ex.: não-membro do grupo) aparece no painel e não libera o "Congelar".
  */
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { prepararVersao, freezeVersion } = vi.hoisted(() => ({
@@ -145,12 +145,39 @@ describe('CongelarSheet — Conferir → Congelar', () => {
         abrir();
         fireEvent.click(botaoConferir());
         fireEvent.change(campoDataBase(), { target: { value: '2026-08-31' } });
-        resolver(preparar(capacidade, '2026-09-07'));
-        await Promise.resolve();
-        await Promise.resolve();
+        await act(async () => { resolver(preparar(capacidade, '2026-09-07')); });
+
+        expect(prepararVersao).toHaveBeenCalledTimes(1);
+        expect(botaoCongelar()).toBeDisabled();
+        expect(screen.queryByText('Valor máximo')).toBeNull();
+    });
+
+    it('sala alterada com o painel aberto descarta a versão preparada', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade));
+        const { rerender } = abrir();
+        fireEvent.click(botaoConferir());
+        await waitFor(() => expect(botaoCongelar()).not.toBeDisabled());
+
+        const salaEditada = { ...room, name: 'Operação editada' } as unknown as CreditRoom;
+        rerender(
+            <ConfirmProvider>
+                <CongelarSheet open onClose={vi.fn()} room={salaEditada} proximo={2} onFrozen={vi.fn()} />
+            </ConfirmProvider>,
+        );
 
         expect(botaoCongelar()).toBeDisabled();
         expect(screen.queryByText('Valor máximo')).toBeNull();
+    });
+
+    it('a data-base fica travada enquanto congela, com o motivo', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade));
+        freezeVersion.mockReturnValue(new Promise(() => undefined));
+        abrir();
+        fireEvent.click(botaoConferir());
+        await waitFor(() => expect(botaoCongelar()).not.toBeDisabled());
+        fireEvent.click(botaoCongelar());
+        await waitFor(() => expect(campoDataBase()).toBeDisabled());
+        expect(campoDataBase()).toHaveAttribute('title', expect.stringMatching(/Congelando/));
     });
 
     it('"Congelar" entrega ao serviço o mesmo objeto preparado no "Conferir"', async () => {

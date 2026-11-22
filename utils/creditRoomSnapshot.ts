@@ -36,9 +36,13 @@ export type CreditRoomSnapshotSchema = 1 | 2;
 // ── Tipos que a operação carrega ─────────────────────────────────────────────
 
 export interface CreditRoomEligibleFlows {
-    /** NOI do portfólio de renda (PRD §35). */
+    /** NOI do portfólio de renda (PRD §35). No schema 2, os aluguéis contratados − despesa da série mensal. */
     noi: boolean;
-    /** Recebíveis de vendas (PRD §25). Sem fonte nesta versão do MVP. */
+    /**
+     * Recebíveis de vendas (PRD §25). Schema 2: as vendas a vencer da série
+     * mensal da capacidade (`vw_receivables`). Schema 1 não tinha fonte —
+     * marcado, virava aviso em `fontes_ausentes`.
+     */
     receivables: boolean;
     /** Geração operacional de caixa (PRD §41). Sem fonte nesta versão do MVP. */
     operating_cash: boolean;
@@ -802,8 +806,11 @@ export function computeIndicators(s: CreditRoomSnapshot): CreditRoomIndicators {
         // `noi` e `receivables` não viram aviso: têm fonte, a própria série.
         const doze = s.capacidade.serie.slice(0, 12);
         const soma = (f: (m: SerieMes) => number) => round2(doze.reduce((a, m) => a + n(f(m)), 0));
+        // Nenhum fluxo marcado como elegível: a série sai com renda 0, mas isso é
+        // "nada a medir", não "renda zero" — fluxo `null`, DSCR "—".
+        const algumFluxo = op.eligible_flows.noi || op.eligible_flows.receivables;
         if (doze.length) {
-            fluxo = soma(m => m.renda_liquida);
+            fluxo = algumFluxo ? soma(m => m.renda_liquida) : null;
             servicoAtual = soma(m => m.servico_atual);
             // Sem série de serviço novo E sem proposta com cronograma = não dá
             // para afirmar o serviço pós — `null`, não "igual ao atual".

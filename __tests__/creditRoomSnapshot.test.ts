@@ -425,6 +425,19 @@ describe('schema 2', () => {
         expect(ind.dscr_atual).toBeNull();
     });
 
+    it('com capacidade e NENHUM fluxo elegível (noi e receivables desmarcados), fluxo e DSCR são null — não 0', () => {
+        const ind = computeIndicators(buildSnapshot({
+            ...base,
+            operacao: { ...base.operacao, eligibleFlows: { noi: false, receivables: false, operating_cash: false } },
+            capacidade: capacidadeBase(serie12({ renda_liquida: 0, folga: -5_000, dscr: 0 })),
+        }));
+        expect(ind.fluxo_elegivel_anual).toBeNull();
+        expect(ind.dscr_atual).toBeNull();
+        expect(ind.dscr_pos).toBeNull();
+        // o serviço continua medido: ele existe, só não há fluxo a comparar
+        expect(ind.servico_atual_anual).toBe(60_000);
+    });
+
     it('receivables e noi marcados com capacidade não aparecem em fontes_ausentes', () => {
         const ind = computeIndicators(buildSnapshot({
             ...base,

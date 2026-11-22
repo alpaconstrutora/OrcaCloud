@@ -125,3 +125,20 @@ export function montarBook(versao: CreditRoomVersion, extras: ExtrasDoBook): jsP
 - **Gráfico do book desenhado no PDF**, não capturado da tela (a aba pode estar fechada; texto fica pesquisável). Custo se errado: visual um pouco diferente do da tela.
 - **Book do credor com marca d'água** (e-mail + data/hora) e linha `DOWNLOAD/book` na auditoria; o do time interno sem marca.
 - **Escopo volta para Empresa** → documentos das outras empresas somem do Data Room na hora (a regra é lida, não gravada). Os compartilhamentos continuam no GED e voltam se o room voltar a Grupo.
+
+## Estado (22/11/2026)
+Tasks 1–5 implementadas e revisadas (uma revisão por task + revisão final da branch inteira + rodada única de correções). Task 6: banco aplicado e provado, Edge publicada pelo usuário, prova na tela feita; PR pendente.
+
+- **Banco:** `aplicar_20271122300000_credit_room_documentos_grupo` APLICADA em produção (22/11); prova `scripts/prova-credit-room-documentos-grupo.sql` em BEGIN…ROLLBACK → 22/22 (`TUDO = true`); room real intacto; anon sem EXECUTE.
+- **Edge:** `credit-room-download` publicada pelo usuário (v7, 22/11 16:58 UTC).
+- **Prova na tela** (room de TESTE em Grupo SPE + Alpa, excluído depois com OK do usuário): "Sugerir documentos" listou 3 docs de empreendimento + 65 da obra; doc da Alpa compartilhado → aparece com Empresa "Alpa", baixado pela Edge com marca d'água e linha `DOWNLOAD` na auditoria; book baixado (12 páginas, foto real do Garden na capa); room de volta a Empresa → doc da Alpa some, download recusado pela Edge e recompartilhar recusado pelo gatilho ("só entram documentos da empresa dona").
+- **Não visto:** o portal logado como credor (MFA) — o caminho do credor (marca d'água + log `DOWNLOAD/book`, botão só com permissão de baixar) está coberto por teste de tela, não por login real.
+
+## Decisões tomadas na execução (conferir)
+- **Gatilho também na gravação** (não só na leitura): documento fora do escopo e quem não é interno do room são recusados ao compartilhar.
+- **Quem é da org do documento pode retirar o compartilhamento** dele do room de outra org do grupo (RLS existente, por documento). Custo se errado: uma empresa do grupo tira o próprio documento sem a dona do room.
+- **Documento com contrato e cliente** (contrato assinado) vem marcado em "Contratos", com a nota "contém dados do cliente"; com cliente achado por empreendimento/obra vem DESMARCADO.
+- **Vencido vem desmarcado** e o "marcar todos" do grupo não o marca (só um a um).
+- **Book interno não sai se a leitura do Data Room falhar** (índice vazio diria "sem documentos", o que seria falso).
+- **"n/d" no PDF** no lugar de "—" (a fonte padrão do PDF não desenha o travessão), com legenda na capa.
+- **Estacionados:** teste unitário de `sugerirDocumentos` (depende do banco); nome da empresa no Data Room só a partir da versão ativa; contagem de documentos por contrato visível ao credor (pode ligar rótulo a nome de documento — a empresa escolheu compartilhar).

@@ -89,10 +89,14 @@ describe('CreditRoomEmpreendimentos', () => {
     });
 
     it('cartão sem capa diz "sem foto cadastrada"; com capa tem a imagem com o nome', () => {
-        abrir(versao({ empreendimentos: EMPS, contratos: CONTRATOS }));
+        const { container } = abrir(versao({ empreendimentos: EMPS, contratos: CONTRATOS }));
         expect(screen.getAllByText('sem foto cadastrada')).toHaveLength(1);
-        const img = screen.getByAltText('Residencial Aurora');
+        // alt vazio: o botão do cartão já carrega o nome, e ele seria lido duas vezes.
+        const img = container.querySelector('img[src="https://exemplo.test/aurora.jpg"]');
+        expect(img).not.toBeNull();
+        expect(img).toHaveAttribute('alt', '');
         expect(img).toHaveAttribute('loading', 'lazy');
+        expect(screen.getByRole('button', { name: /Residencial Aurora/ })).toBeInTheDocument();
     });
 
     it('app: o filtro Venda/Locação estreita as linhas', () => {
@@ -126,14 +130,44 @@ describe('CreditRoomEmpreendimentos', () => {
         expect(within(tabela).getByText('Venda 01')).toBeInTheDocument();
     });
 
-    it.each(['indigo', 'portal'] as const)('contrato sem parcelas geradas diz isso e não afirma R$ 0,00 — %s', accent => {
+    it.each(['indigo', 'portal'] as const)('locação sem títulos gerados: aluguel pelo contrato, sem alerta e sem R$ 0,00 — %s', accent => {
         abrir(versao({ empreendimentos: EMPS, contratos: CONTRATOS }), accent);
         const linha = screen.getByText('Locação 01').closest('tr') as HTMLElement;
-        expect(within(linha).getByText(/sem parcelas geradas/i)).toBeInTheDocument();
+        expect(within(linha).getByText(/aluguel pelo contrato/i)).toBeInTheDocument();
+        expect(within(linha).queryByText(/sem parcelas geradas/i)).toBeNull();
+        // No app é texto comum, não âmbar.
+        if (accent === 'indigo') expect(within(linha).getByText(/aluguel pelo contrato/i).className).not.toMatch(/amber/);
         // Valor, saldo e vencido não foram calculados: "—" (o aluguel de R$ 3.200 é dado real e aparece).
         expect(within(linha).getAllByText('—').length).toBeGreaterThanOrEqual(3);
         expect(linha.textContent).not.toMatch(/R\$\s0,00/);
         expect(linha).toHaveTextContent('3.200,00');
+    });
+
+    it.each(['indigo', 'portal'] as const)('só locações sem parcelas: o rodapé de totais mostra "—", não R$ 0,00 — %s', accent => {
+        abrir(versao({ empreendimentos: EMPS, contratos: [CONTRATOS[2]] }), accent);
+        const rodape = screen.getByText('Total').closest('tr') as HTMLElement;
+        expect(rodape.textContent).not.toMatch(/R\$\s0,00/);
+        expect(within(rodape).getAllByText('—').length).toBe(3);
+        // Tudo é locação: o total do aluguel mensal é dado real.
+        expect(rodape).toHaveTextContent('3.200,00');
+    });
+
+    it.each(['indigo', 'portal'] as const)('com contratos calculados o rodapé soma só os que têm parcelas — %s', accent => {
+        abrir(versao({ empreendimentos: EMPS, contratos: CONTRATOS }), accent);
+        const rodape = screen.getByText('Total').closest('tr') as HTMLElement;
+        expect(rodape).toHaveTextContent('1.000.000,00'); // valor: 500 mil × 2 vendas
+        expect(rodape).toHaveTextContent('1.500,00'); // vencido
+        expect(within(rodape).queryByText('—')).toBeNull();
+    });
+
+    it('ramo defensivo: venda sem parcelas geradas continua em âmbar "sem parcelas geradas"', () => {
+        const venda = contrato({
+            rotulo: 'Venda 09', contract_id: 'c9', valor_contrato: 0, parcela_mensal: 0, saldo_a_receber: 0,
+            primeiro_vencimento: null, ultimo_vencimento: null, status: 'SEM_PARCELAS', tem_parcelas: false,
+        });
+        abrir(versao({ empreendimentos: EMPS, contratos: [venda] }));
+        const el = screen.getByText(/sem parcelas geradas/i);
+        expect(el.className).toMatch(/amber/);
     });
 
     it('clicar no cartão abre o painel com as fotos e só os contratos daquele empreendimento', () => {

@@ -37,14 +37,16 @@ const ACCENTS = {
         linha: 'border-gray-100', divide: 'divide-gray-100', cab: 'bg-white border-gray-200',
         cartao: 'bg-white border-gray-100 shadow-sm rounded-[10px] hover:border-blue-200 focus-visible:ring-blue-500/40',
         capaVazia: 'bg-gray-100 text-gray-500',
-        atencao: 'text-amber-700', negativo: 'text-red-700',
+        atencao: 'text-amber-700', negativo: 'text-red-700', bom: 'text-emerald-700', info: 'text-blue-700', mudo: 'text-gray-600',
+        secao: 'text-sm font-semibold text-gray-700', nota: 'text-sm text-gray-500',
     },
     portal: {
         corpo: 'text-[13px]', valor: 'text-[#1F2430]', texto: 'text-[#4A505C]', rotulo: 'text-[#5F6573]', titulo: 'text-[#1F2430]',
         linha: 'border-[#ECECEF]', divide: 'divide-[#ECECEF]', cab: 'bg-white border-[#ECECEF]',
         cartao: 'bg-white border-[#ECECEF] rounded-xl hover:border-[#E1553C]/50 focus-visible:ring-[#E1553C]/40',
         capaVazia: 'bg-[#F2F2F4] text-[#5F6573]',
-        atencao: 'text-[#8A6A16]', negativo: 'text-red-700',
+        atencao: 'text-[#8A6A16]', negativo: 'text-red-700', bom: 'text-[#1F7A3D]', info: 'text-[#2F5F98]', mudo: 'text-[#5F6573]',
+        secao: 'text-[13px] font-semibold text-[#1F2430]', nota: 'text-[13px] text-[#5F6573]',
     },
 } as const;
 
@@ -75,17 +77,25 @@ type FiltroTipo = '' | TipoContrato;
 const TIPO_PT: Record<TipoContrato, string> = { VENDA: 'Venda', LOCACAO: 'Locação' };
 
 interface Situacao { texto: string; cor: string; tom: PillTone }
-const SITUACAO: Record<string, Situacao> = {
-    EM_DIA: { texto: 'Em dia', cor: 'text-emerald-700', tom: 'good' },
-    EM_ATRASO: { texto: 'Em atraso', cor: 'text-red-700', tom: 'accent' },
-    QUITADO: { texto: 'Quitado', cor: 'text-blue-700', tom: 'info' },
-    ENCERRADO: { texto: 'Encerrado', cor: 'text-gray-600', tom: 'muted' },
+type CorDaSituacao = 'bom' | 'negativo' | 'info' | 'mudo';
+const SITUACAO: Record<string, { texto: string; cor: CorDaSituacao; tom: PillTone }> = {
+    EM_DIA: { texto: 'Em dia', cor: 'bom', tom: 'good' },
+    EM_ATRASO: { texto: 'Em atraso', cor: 'negativo', tom: 'accent' },
+    QUITADO: { texto: 'Quitado', cor: 'info', tom: 'info' },
+    ENCERRADO: { texto: 'Encerrado', cor: 'mudo', tom: 'muted' },
 };
 
-/** Sem parcelas geradas é uma situação própria: não é "em dia", é "ainda não calculado". */
-function situacaoDe(c: SnapshotContrato): Situacao {
-    if (!c.tem_parcelas) return { texto: 'sem parcelas geradas', cor: 'text-amber-700', tom: 'neutral' };
-    return SITUACAO[c.status] ?? { texto: c.status ? c.status.toLowerCase().replace(/_/g, ' ') : '—', cor: 'text-gray-600', tom: 'muted' };
+function situacaoDe(c: SnapshotContrato, A: Paleta): Situacao {
+    if (!c.tem_parcelas) {
+        // Locação sem títulos gerados é normal: o aluguel vem do contrato. Texto neutro, não alerta.
+        // ('muted', não 'neutral': no kit o tom `neutral` é o âmbar.)
+        if (c.tipo === 'LOCACAO') return { texto: 'aluguel pelo contrato', cor: A.texto, tom: 'muted' };
+        // Ramo defensivo: venda sem parcelas não nasce hoje, mas se nascer é furo de cadastro (âmbar).
+        return { texto: 'sem parcelas geradas', cor: A.atencao, tom: 'neutral' };
+    }
+    const m = SITUACAO[c.status];
+    if (m) return { texto: m.texto, cor: A[m.cor], tom: m.tom };
+    return { texto: c.status ? c.status.toLowerCase().replace(/_/g, ' ') : '—', cor: A.mudo, tom: 'muted' };
 }
 
 interface LinhaContrato extends SnapshotContrato {
@@ -108,6 +118,8 @@ const COLUNAS: StandardTableColumn[] = [
 ];
 
 const COLUNAS_MONETARIAS = new Set(['valor', 'parcela', 'saldo', 'vencido']);
+/** Totais que, sem nada calculado, aparecem como "—" (a coluna de parcela, em seleção mista, fica em branco). */
+const TOTAIS_SEM_VALOR = new Set(['valor', 'saldo', 'vencido']);
 
 /** Colunas da tabela do painel de um empreendimento (o empreendimento e as datas já estão no contexto). */
 const COLUNAS_DO_PAINEL = ['rotulo', 'tipo', 'unidade', 'parcela', 'saldo', 'vencido', 'situacao'] as const;
@@ -136,7 +148,7 @@ function conteudo(key: string, c: LinhaContrato, acc: Accent, A: Paleta): React.
         case 'primeiro': return dataCelula(acc, c.primeiro_vencimento);
         case 'ultimo': return dataCelula(acc, c.ultimo_vencimento);
         case 'situacao': {
-            const s = situacaoDe(c);
+            const s = situacaoDe(c, A);
             // App: texto colorido, sem pílula (§8). Portal: StatusPill do kit (§24).
             return acc === 'portal' ? <StatusPill tone={s.tom}>{s.texto}</StatusPill> : <span className={s.cor}>{s.texto}</span>;
         }
@@ -156,7 +168,7 @@ function ordenavel(key: string, c: LinhaContrato): string | number | null {
         case 'vencido': return c.tem_parcelas ? c.vencido : null;
         case 'primeiro': return c.primeiro_vencimento;
         case 'ultimo': return c.ultimo_vencimento;
-        case 'situacao': return situacaoDe(c).texto;
+        case 'situacao': return situacaoDe(c, ACCENTS.indigo).texto;
         default: return null;
     }
 }
@@ -164,6 +176,8 @@ function ordenavel(key: string, c: LinhaContrato): string | number | null {
 /** Total por coluna: só soma o que foi calculado (sem parcelas não entra). `null` = sem total. */
 function totalDa(key: string, linhas: LinhaContrato[]): number | null {
     const calculados = linhas.filter(c => c.tem_parcelas);
+    // Nenhum contrato com parcelas na seleção: não há o que somar. Sem total ("—"), não R$ 0,00.
+    if (calculados.length === 0 && (key === 'valor' || key === 'saldo' || key === 'vencido')) return null;
     switch (key) {
         case 'valor': return round2(calculados.reduce((a, c) => a + c.valor_contrato, 0));
         case 'saldo': return round2(calculados.reduce((a, c) => a + c.saldo_a_receber, 0));
@@ -219,7 +233,7 @@ const Capa: React.FC<{ A: Paleta; e: SnapshotEmpreendimentoItem }> = ({ A, e }) 
     }
     return (
         <img
-            src={e.capa} alt={e.nome} loading="lazy" onError={() => setFalhou(true)}
+            src={e.capa} alt="" loading="lazy" onError={() => setFalhou(true)}
             className="block aspect-[16/9] w-full object-cover"
         />
     );
@@ -420,7 +434,7 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
                                             const total = totalDa(col.key, linhas);
                                             return (
                                                 <Td key={col.key} className={`tabular-nums whitespace-nowrap font-medium ${A.valor} ${COLUNAS_MONETARIAS.has(col.key) ? 'text-right' : ''}`}>
-                                                    {col.key === 'rotulo' ? 'Total' : total == null ? '' : money(total)}
+                                                    {col.key === 'rotulo' ? 'Total' : total != null ? money(total) : TOTAIS_SEM_VALOR.has(col.key) ? '—' : ''}
                                                 </Td>
                                             );
                                         })}
@@ -456,7 +470,8 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
                         totaisPorColuna={(key, ls) => {
                             if (key === 'rotulo') return <span className="text-xs font-semibold text-gray-500">Total</span>;
                             const t = totalDa(key, ls);
-                            return t == null ? null : <span className="block text-sm font-medium tabular-nums text-gray-800">{money(t)}</span>;
+                            if (t == null) return TOTAIS_SEM_VALOR.has(key) ? <span className="block text-sm font-medium text-gray-800">—</span> : null;
+                            return <span className="block text-sm font-medium tabular-nums text-gray-800">{money(t)}</span>;
                         }}
                         empty={{ title: 'Nenhum contrato encontrado', subtitle: 'Tente ajustar a busca ou o filtro de tipo.' }}
                     />
@@ -471,16 +486,16 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
                 </SheetHeader>
                 <SheetPanel className="px-6 py-5 space-y-6">
                     <section aria-labelledby="emp-fotos" className="space-y-3">
-                        <h3 id="emp-fotos" className="text-sm font-semibold text-gray-700">Fotos</h3>
+                        <h3 id="emp-fotos" className={A.secao}>Fotos</h3>
                         {fotos.length > 0
                             ? <PhotoGallery photos={fotos} />
-                            : <p className="text-sm text-gray-500">Este empreendimento não tem fotos cadastradas.</p>}
+                            : <p className={A.nota}>Este empreendimento não tem fotos cadastradas.</p>}
                     </section>
                     <section aria-labelledby="emp-contratos" className="space-y-3">
-                        <h3 id="emp-contratos" className="text-sm font-semibold text-gray-700">Contratos deste empreendimento</h3>
+                        <h3 id="emp-contratos" className={A.secao}>Contratos deste empreendimento</h3>
                         {doSelecionado.length > 0
                             ? <TabelaDoPainel acc={accent} linhas={doSelecionado} />
-                            : <p className="text-sm text-gray-500">Nenhum contrato desta versão está ligado a este empreendimento.</p>}
+                            : <p className={A.nota}>Nenhum contrato desta versão está ligado a este empreendimento.</p>}
                     </section>
                 </SheetPanel>
             </Sheet>

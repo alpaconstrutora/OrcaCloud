@@ -352,6 +352,26 @@ const lotes = <T,>(xs: T[], n = 200): T[][] => {
     return out;
 };
 
+/**
+ * Lê TODAS as páginas de uma consulta. O PostgREST corta em 1000 linhas por
+ * padrão e devolve o corte sem erro — carteira maior que isso sairia
+ * truncada em silêncio, com cara de número completo. A consulta precisa de
+ * `.order()` estável para as páginas não se sobreporem.
+ */
+const PAGINA = 1000;
+async function todasAsPaginas<T>(
+    consulta: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
+): Promise<T[]> {
+    const out: T[] = [];
+    for (let de = 0; ; de += PAGINA) {
+        const { data, error } = await consulta(de, de + PAGINA - 1);
+        if (error) throw error;
+        const linhas = data ?? [];
+        out.push(...linhas);
+        if (linhas.length < PAGINA) return out;
+    }
+}
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
@@ -419,6 +439,61 @@ const somarPosicoes = (ps: DebtPosition[]): DebtPosition => {
         prazoMedioMeses: ponderado(p => p.prazoMedioMeses),
         pctTaxaVariavel: ponderado(p => p.pctTaxaVariavel),
         pctIndexada: ponderado(p => p.pctIndexada),
+    };
+};
+
+/** O que `coletarPortfolio` devolve (NOI da janela de 12 meses de uma org). */
+interface PortfolioColetado {
+    janelaMeses: number;
+    receita: number;
+    despesa: number;
+    noi: number;
+    /** Fração (noi ÷ receita), como em `rentalNoiService`. */
+    margem: number | null;
+    /** Fração anual, como em `rentalNoiService`. */
+    capRate: number | null;
+}
+
+/**
+ * NOI do GRUPO. Org que não respondeu = `null` no todo (somar as outras
+ * mostraria um NOI menor com cara de completo).
+ *
+ * Margem = NOI ÷ receita da SOMA. Cap rate = Σ NOI anual ÷ Σ patrimônio, com
+ * o patrimônio de cada org reconstituído por `NOI anual ÷ cap rate` (o
+ * service não o expõe). Org sem carteira de renda (cap rate nulo, receita e
+ * NOI zero) não soma nada a nenhum dos dois lados e fica de fora; qualquer
+ * outra org sem cap rate (ou com cap rate 0, de onde o patrimônio não se
+ * recupera) torna o cap rate do grupo `null` — média simples, ou ignorar a
+ * org, daria um número que nenhum dos patrimônios sustenta.
+ */
+const somarPortfolios = (ps: (PortfolioColetado | null)[]): PortfolioColetado | null => {
+    if (!ps.length || ps.some(x => !x)) return null;
+    const xs = ps as PortfolioColetado[];
+    const soma = (f: (x: PortfolioColetado) => number) => round2(xs.reduce((a, x) => a + num(f(x)), 0));
+    const receita = soma(x => x.receita);
+    const noi = soma(x => x.noi);
+    let noiAnual = 0;
+    let patrimonio = 0;
+    let capOk = true;
+    for (const x of xs) {
+        const anual = x.janelaMeses > 0 ? (num(x.noi) / x.janelaMeses) * 12 : 0;
+        if (x.capRate == null) {
+            if (num(x.receita) === 0 && num(x.noi) === 0) continue;
+            capOk = false;
+            break;
+        }
+        if (x.capRate === 0) { capOk = false; break; }
+        noiAnual += anual;
+        patrimonio += anual / x.capRate;
+    }
+    return {
+        // Mesma janela (data-base − 12m → data-base) para todas as orgs.
+        janelaMeses: xs[0].janelaMeses,
+        receita,
+        despesa: soma(x => x.despesa),
+        noi,
+        margem: receita > 0 ? noi / receita : null,
+        capRate: capOk && patrimonio > 0 ? noiAnual / patrimonio : null,
     };
 };
 
@@ -526,12 +601,12 @@ type LinhaRecebivel = {
  * `reference_id` é composto — `.eq`/`.in` com o uuid cru nunca casa).
  */
 async function titulosDaOrg(org: string): Promise<TituloCarteira[]> {
-    const { data, error } = await supabase
+    const linhas = (await todasAsPaginas((de, ate) => supabase
         .from('vw_receivables')
         .select('id, organization_id, reference_id, due_date, amount, effective_status, party_id, party_name, project_id')
-        .eq('organization_id', org);
-    if (error) throw error;
-    const linhas = (data ?? []) as LinhaRecebivel[];
+        .eq('organization_id', org)
+        .order('id')
+        .range(de, ate))) as LinhaRecebivel[];
     if (!linhas.length) return [];
 
     type ContratoLido = ContratoDaCadeia & { domain: string | null };
@@ -855,7 +930,7 @@ export const creditRoomService = {
                 this.coletarUnidades(room.empreendimentoId),
                 this.coletarEmpreendimento(room.empreendimentoId),
                 this.coletarPortfolio(orgId, dataBase),
-                this.coletarRecebiveis(orgId),
+                this.coletarRecebiveis(orgs),
                 this.coletarNovoServico(room.debtContractId),
                 this.listDocuments(room.id).catch(() => [] as CreditRoomDocument[]),
                 this.coletarEac(room.projectId),
@@ -872,7 +947,7 @@ export const creditRoomService = {
         ]);
 
         const [vendasSemTitulo, empreendimentos, unidadePorContrato] = await Promise.all([
-            titulos ? this.coletarVendasSemTitulo(orgs, titulos, room.empreendimentoIds) : Promise.resolve([]),
+            titulos ? this.coletarVendasSemTitulo(orgs, titulos, room.empreendimentoIds) : Promise.resolve(null),
             titulos && locacoes
                 ? this.coletarEmpreendimentosDoEscopo(orgs, room.empreendimentoIds, titulos, locacoes, dataBase.slice(0, 7))
                 : Promise.resolve(null),
@@ -894,6 +969,10 @@ export const creditRoomService = {
             return pf ? round2(num(pf.despesa) / (pf.janelaMeses > 0 ? pf.janelaMeses : 1)) : null;
         };
         const despesas = orgs.map(despesaDe);
+        // GRUPO: NOI consolidado (ver `somarPortfolios`); EMPRESA, o da dona.
+        const portfolioDoEscopo = orgs.length === 1
+            ? portfolio
+            : somarPortfolios(orgs.map(o => portfolioDe.get(o) ?? null));
         const despesaMensal = despesas.some(d => d == null) ? null : round2(despesas.reduce<number>((a, d) => a + num(d), 0));
 
         const servicoAtual = servicoPorOrg.some(s => s == null)
@@ -909,10 +988,11 @@ export const creditRoomService = {
         });
 
         // A série precisa de todas as pernas: sem títulos, locações ou serviço
-        // atual não há DSCR honesto; sem despesa, só se o aluguel entra.
+        // atual não há DSCR honesto; sem despesa, só se o aluguel entra. Sem
+        // a lista de vendas sem parcelas, o alerta sumiria calado — cai tudo.
         const despesaFalta = despesaMensal == null && fluxos.alugueis;
         const capacidade = ((): SnapshotCapacidade | null => {
-            if (!titulos || !locacoes || !servicoAtual || despesaFalta) return null;
+            if (!titulos || !locacoes || !servicoAtual || despesaFalta || !vendasSemTitulo) return null;
             const entrada = entradaDe(titulos, locacoes, despesaMensal ?? 0, servicoAtual, servicoNovo);
             const { serie, vencido_na_data_base, a_vencer_mes_corrente } = serieDeRenda(entrada);
             const vgvDisponivel = empreendimentos
@@ -983,7 +1063,7 @@ export const creditRoomService = {
             divida: { ...divida, dataBase },
             obra,
             unidades,
-            portfolio,
+            portfolio: portfolioDoEscopo,
             recebiveis,
             documentVersionIds: documentos.map(d => d.versionId).filter((v): v is string => !!v),
             eac,
@@ -1237,13 +1317,16 @@ export const creditRoomService = {
      * o que não foi recebido; 'RECEBIDO' vira o total à parte (R6 do PRD:
      * receita realizada nunca se mistura com a projetada).
      */
-    async coletarRecebiveis(orgId: string) {
+    async coletarRecebiveis(orgs: string[]) {
+        // GRUPO: o aging é de todas as orgs do escopo (spec §3, "consolida
+        // tudo"). O rótulo segue ORGANIZACAO — o bloco `escopo` diz quais.
         try {
-            const { data, error } = await supabase
+            const data = await todasAsPaginas((de, ate) => supabase
                 .from('vw_receivables')
-                .select('due_date, amount, effective_status')
-                .eq('organization_id', orgId);
-            if (error) throw error;
+                .select('id, due_date, amount, effective_status')
+                .in('organization_id', orgs)
+                .order('id')
+                .range(de, ate));
             return {
                 escopo: 'ORGANIZACAO' as const,
                 parcelas: ((data ?? []) as Row[])
@@ -1263,7 +1346,7 @@ export const creditRoomService = {
     },
 
     /** NOI dos 12 meses até a data-base — `null` sem apropriação de despesa. */
-    async coletarPortfolio(orgId: string, dataBase: string) {
+    async coletarPortfolio(orgId: string, dataBase: string): Promise<PortfolioColetado | null> {
         try {
             const from = addMonths(dataBase, -12);
             const m = await rentalNoiService.getNoiMetrics(orgId, from, dataBase);
@@ -1365,12 +1448,13 @@ export const creditRoomService = {
      */
     async coletarLocacoes(orgs: string[], empreendimentoIds: string[]): Promise<LocacaoVigente[] | null> {
         try {
-            const { data, error } = await supabase
+            const data = await todasAsPaginas((de, ate) => supabase
                 .from('contracts')
                 .select('id, organization_id, status, current_value, start_date, end_date, deal_id, parent_contract_id, empreendimento_id, client_id')
                 .eq('domain', 'LOCACAO')
-                .in('organization_id', orgs);
-            if (error) throw error;
+                .in('organization_id', orgs)
+                .order('id')
+                .range(de, ate));
             type ContratoLocacao = ContratoDaCadeia & {
                 organization_id: string; status: string | null; current_value: number | null;
                 start_date: string | null; end_date: string | null; empreendimento_id: string | null; client_id: string | null;
@@ -1419,28 +1503,31 @@ export const creditRoomService = {
      * O "tem título" olha TODOS os recebíveis das orgs, não só `titulos`: com
      * filtro de empreendimento, a venda de outro empreendimento sumiria da
      * lista e pareceria sem parcelas. `empreendimentoIds` recorta o alerta.
+     * Falha = `null`, e o `freezeVersion` não monta a capacidade sem ela.
      */
     async coletarVendasSemTitulo(
         orgs: string[],
         titulos: TituloCarteira[],
         empreendimentoIds: string[] = [],
-    ): Promise<{ dealId: string; valor: number }[]> {
+    ): Promise<{ dealId: string; valor: number }[] | null> {
         try {
-            const { data: ds, error: de } = await supabase
+            const ds = await todasAsPaginas((de, ate) => supabase
                 .from('commercial_deals')
                 .select('id, status, value, property_id')
                 .eq('type', 'SALE')
-                .in('organization_id', orgs);
-            if (de) throw de;
+                .in('organization_id', orgs)
+                .order('id')
+                .range(de, ate));
             const vendidas = ((ds ?? []) as { id: string; status: string | null; value: number | null; property_id: string | null }[])
                 .filter(d => saleDealStage(d.status) === 'sold');
             if (!vendidas.length) return [];
 
-            const { data: refs, error: re } = await supabase
+            const refs = await todasAsPaginas((de, ate) => supabase
                 .from('vw_receivables')
-                .select('reference_id')
-                .in('organization_id', orgs);
-            if (re) throw re;
+                .select('id, reference_id')
+                .in('organization_id', orgs)
+                .order('id')
+                .range(de, ate));
             const comTitulo = new Set<string>();
             const idsContrato = new Set(titulos.map(t => t.contractId).filter((v): v is string => !!v));
             for (const r of (refs ?? []) as { reference_id: string | null }[]) {
@@ -1465,8 +1552,10 @@ export const creditRoomService = {
                 })
                 .map(d => ({ dealId: d.id, valor: round2(num(d.value)) }));
         } catch (e) {
+            // `null`, não `[]`: lista vazia diria "nenhuma venda sem parcelas"
+            // — um zero plausível na frente do banco. Sem ela, a capacidade cai.
             console.warn('[creditRoomService] vendas sem parcelas indisponíveis no snapshot:', e);
-            return [];
+            return null;
         }
     },
 

@@ -198,6 +198,57 @@ export function explicarIndicador(
             const ausentes = (i.fontes_ausentes ?? []).map(
                 f => ELIGIBLE_FLOW_PT[f as keyof typeof ELIGIBLE_FLOW_PT] ?? f,
             );
+            const ressalvasComuns = [
+                // O R8 é o ponto que mais confunde: o DSCR aqui NÃO é o da
+                // empresa, é o desta operação. Dizer isso sempre.
+                'O fluxo é o elegível DESTA operação — não o EBITDA da empresa (R8).',
+                ...(ausentes.length
+                    ? [`Marcado como elegível mas sem fonte de dado: ${ausentes.join(', ')}. Esse fluxo NÃO entrou na conta.`]
+                    : []),
+            ];
+            const resultado = { valor: pos ? i.dscr_pos : i.dscr_atual, formato: 'vezes' as const };
+
+            // Schema 2: fluxo e serviço saem da SÉRIE MENSAL da capacidade, não
+            // do NOI × 12 nem do servico_365 — explicar com a fonte certa.
+            if (s.capacidade) {
+                const doze = s.capacidade.serie.slice(0, 12);
+                const novoNaSerie = doze.some(mes => (mes.servico_novo ?? 0) !== 0);
+                const pc = s.capacidade.parametros;
+                const novo = i.servico_pos_anual != null && i.servico_atual_anual != null
+                    ? Math.round((i.servico_pos_anual - i.servico_atual_anual) * 100) / 100
+                    : null;
+                const fonteNovo = novoNaSerie
+                    ? (op.novo_servico_12m != null
+                        ? 'debtService · cronograma da proposta vinculada, mês a mês (12 primeiros meses da série)'
+                        : `buildSchedule · simulado com os parâmetros do room: ${op.requested_amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}, `
+                          + `taxa ${pc.taxa_mensal_pct.toLocaleString('pt-BR')}% a.m., prazo ${pc.prazo_meses} meses, `
+                          + `carência ${pc.carencia_meses} meses, ${pc.sistema === 'SAC' ? 'SAC' : 'Price'} (12 primeiros meses da série)`)
+                    : 'debtService · primeiras 12 parcelas do contrato vinculado';
+                return {
+                    titulo: pos ? 'DSCR pós-operação' : 'DSCR atual',
+                    formula: `fluxo elegível ÷ serviço da dívida ${pos ? 'atual + nova' : 'atual'} — soma dos 12 primeiros meses da série mensal`,
+                    significado: 'Quantas vezes o fluxo de caixa elegível paga as parcelas de dívida dos próximos 12 meses.',
+                    termos: [
+                        m('Fluxo elegível (12m)', i.fluxo_elegivel_anual,
+                          'Série mensal da capacidade: vendas a vencer (vw_receivables) + aluguéis contratados (contracts LOCACAO) − despesa operacional, 12 primeiros meses — só os fluxos marcados nesta operação (R8)'),
+                        m('Serviço atual (12m)', i.servico_atual_anual,
+                          'fn_debt_schedule_curve · parcelas da dívida atual nos 12 primeiros meses da série'),
+                        ...(pos ? [m('Serviço da nova dívida (12m)', novo, fonteNovo)] : []),
+                    ],
+                    resultado,
+                    ressalvas: [
+                        ...ressalvasComuns,
+                        ...(pos && i.servico_pos_anual == null
+                            ? ['Sem serviço da nova dívida (nem cronograma da proposta, nem simulação pelo valor pedido) — o DSCR pós-operação fica indisponível.']
+                            : []),
+                        ...(pos && novoNaSerie && op.novo_servico_12m == null
+                            ? ['O serviço da nova dívida é SIMULADO com os parâmetros do room — não há cronograma de proposta vinculado.']
+                            : []),
+                        ...ressalvasDaDivida(s),
+                    ],
+                };
+            }
+
             return {
                 titulo: pos ? 'DSCR pós-operação' : 'DSCR atual',
                 formula: `fluxo elegível anual ÷ serviço da dívida ${pos ? 'pós-operação' : 'atual'} (12 meses)`,
@@ -209,14 +260,9 @@ export function explicarIndicador(
                     ...(pos ? [m('Serviço da nova dívida (12m)', op.novo_servico_12m ?? null,
                                  'debtService · primeiras 12 parcelas do contrato vinculado')] : []),
                 ],
-                resultado: { valor: pos ? i.dscr_pos : i.dscr_atual, formato: 'vezes' },
+                resultado,
                 ressalvas: [
-                    // O R8 é o ponto que mais confunde: o DSCR aqui NÃO é o da
-                    // empresa, é o desta operação. Dizer isso sempre.
-                    'O fluxo é o elegível DESTA operação — não o EBITDA da empresa (R8).',
-                    ...(ausentes.length
-                        ? [`Marcado como elegível mas sem fonte de dado: ${ausentes.join(', ')}. Esse fluxo NÃO entrou na conta.`]
-                        : []),
+                    ...ressalvasComuns,
                     ...(pos && op.novo_servico_12m == null
                         ? ['Nenhum contrato de dívida vinculado à operação — sem o serviço da nova dívida, o DSCR pós-operação fica indisponível.']
                         : []),

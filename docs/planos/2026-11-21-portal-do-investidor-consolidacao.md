@@ -139,7 +139,7 @@ Em código:
 - `utils/informeDeRendimentos.ts` serve o PortalFiscal e o TaxReport. B5 seguiu a regra da declaração:
   rendimentos pagos no ano e custo = posição em 31/12, com a do ano anterior ao lado.
 
-**Fase C: 10 de 10 itens feitos** na frente `portal-investidor-fc`. Migration
+**Fase C: 10 de 10 — NO AR** (PR #639, squash 6295273; migration 999500 APLICADA e Edge Function `investor-monthly-reports` publicada em 21/11 com OK do usuário: 401 sem credencial; ensaio pela rotina gerou o PDF no servidor, 4,4 KB, sem gravar nada). Migration
 `aplicar_20271121999500_portal_investidor_fase_c.sql` e Edge Function nova `investor-monthly-reports`.
 - C1: rotina do dia 1º → `generate_monthly_investor_reports()` chama a Edge Function, que gera o PDF de cada
   investidor. O módulo `utils/relatorioMensalDoInvestidor.ts` é o mesmo do "Gerar Agora" e não importa nada (Deno).
@@ -164,3 +164,42 @@ Em código:
   - os ramos de token que nunca rodavam (OpportunityDetail/OpportunitiesTab) e o "Atualizado hoje" fixo;
   - o recurso do gráfico pelo diário × valor de obra digitado (contrariava a D2);
   - `fn_investor_portal_get_milestones`, sem chamador (DROP).
+
+**Fase D: 3 de 3 itens feitos** na frente `portal-investidor-fd`, empilhada na C. Migration
+`aplicar_20271121999800_portal_investidor_fase_d.sql`. Ensaio (migration + prova, desfeito):
+- D2: R$ 1.000 entre 33,33% e 66,67% deu 333,30 + 666,70 (soma exata); a SPE sem obra é recusada com o motivo.
+- D3: relatórios e comunicados de todas as orgs do investidor, com `organization_name`.
+- D1: Garden Cambuhy com 38 unidades vendáveis, custo realizado R$ 1.561,65 e avanço de 5,4%.
+
+Em código:
+- D2: `DistribuirResultadoPanel` no SpeManager, com a prévia do rateio pela regra do banco.
+- D3: Comunicados e Documentos mostram a org quando há mais de uma.
+- D1: aba "Acompanhamento" no detalhe da oportunidade do portal (`utils/acompanhamentoDoInvestidor.ts`).
+
+**Fase E: 2 de 3 análises feitas** (E2 e E3; a E1 roda depois das migrations C e D aplicadas).
+
+E2 — informe de rendimentos: o que falta para o padrão da declaração. Fontes consultadas em 21/11: perguntas e
+respostas IRPF da Receita; ficha de rendimentos isentos, código 09 para lucros e dividendos, isenção do art. 10 da
+Lei 9.249/1995. **Confirmar com o contador antes de virar regra.**
+1. **Fonte pagadora por linha:** a declaração pede o CNPJ e o nome de quem pagou (a SPE). O informe agrupa por obra;
+   deveria agrupar pela SPE, com CNPJ (`spe_entities.cnpj` já existe).
+2. **Natureza do valor:** dividendo é isento (código 09). "Distribuição" pode ser lucro (isento) ou devolução de
+   capital (não é rendimento, reduz o custo). O sistema não distingue, e o TaxReport sugere "código 26" para tudo —
+   provavelmente errado para dividendos.
+3. **Imposto retido:** não há campo de IRRF no lançamento. A Lei 15.270/2025 prevê retenção de 10% sobre dividendos
+   acima de R$ 50 mil por mês da mesma fonte, a partir de 2026 (fonte secundária; conferir na Receita).
+4. **Bens e Direitos:** a participação na SPE vai no grupo 03 (participações societárias), com CNPJ e quantidade de
+   cotas (`spe_partners.quota_count` existe) — o informe mostra só o custo por obra.
+5. **Aporte pela chamada de capital:** custo de aquisição das cotas — já entra (Fase 7.1).
+→ Itens 1, 2 e 4 cabem no sistema sem decisão fiscal nova (agrupar pela SPE, separar a natureza, mostrar CNPJ e
+cotas). O item 3 e a regra do código para "distribuição" pedem decisão do contador. **Aguardam o usuário.**
+
+E3 — confirmação de e-mail no Auth: **não conferida direto.** Ler a configuração pela API de gestão exigiria o token
+da conta do usuário (o modo automático bloqueou). Evidência indireta no banco: 13 de 23 usuários com
+`email_confirmed_at` nulo, o que não aconteceria com confirmação automática ligada.
+Achado mais amplo que o da análise: o login por e-mail de **todos** os portais (`portal_token_para_mim`: cliente,
+fornecedor, corretor, investidor) e a perna "pelo e-mail" de `fn_investor_get_espelho` confiam no e-mail da sessão.
+Isso só é seguro com "Confirm email" ligado.
+→ **Pendência do usuário:** conferir em Supabase › Authentication › Providers › Email que "Confirm email" está
+ligado (e se o cadastro aberto, "Allow new users to sign up", precisa estar).
+

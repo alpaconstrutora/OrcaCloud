@@ -32,6 +32,7 @@ const dataLonga = (valor?: string | null) =>
     parseDate(valor)?.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }) ?? null;
 
 const PortalAnnouncements: React.FC<Props> = ({ announcements, portalToken, onAcknowledged }) => {
+    const variasOrgs = new Set(announcements.map(a => a.organization_id).filter(Boolean)).size > 1;
     const [enviando, setEnviando] = React.useState<string | null>(null);
     const [escolha, setEscolha] = React.useState<{ id: string; voto: Voto } | null>(null);
     // Erro POR comunicado: responder um não apaga o aviso de outro (17/11, visto na conferência).
@@ -101,6 +102,10 @@ const PortalAnnouncements: React.FC<Props> = ({ announcements, portalToken, onAc
                                                 `new Date` e volta um dia no fuso -03. */}
                                             {dataLonga(a.published_at) && (
                                                 <span className="text-[12px] text-gray-400">{dataLonga(a.published_at)}</span>
+                                            )}
+                                            {/* Fase D3: investidor de várias organizações vê de quem é cada comunicado. */}
+                                            {variasOrgs && a.organization_name && (
+                                                <span className="text-[12px] text-gray-500">{a.organization_name}</span>
                                             )}
                                         </div>
                                         <p className="text-sm font-semibold text-[#1F2430]">{a.title}</p>

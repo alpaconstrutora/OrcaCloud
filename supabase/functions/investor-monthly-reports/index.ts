@@ -55,7 +55,9 @@ serve(async (req: Request) => {
         for (const inv of lista) {
             if (jaTem.has(inv.id)) { r.jaExistiam++; continue; }
             try {
-                const dados = await dadosDoRelatorioMensal(admin, org, inv);
+                // No ensaio, investidor sem obra ganha um relatório vazio: prova que o PDF sai no Deno, sem gravar nada.
+                const dados = (await dadosDoRelatorioMensal(admin, org, inv))
+                    ?? (ensaio ? { ...mesDoRelatorio(), investidor: inv, orgProjects: [], contribs: [], milestones: [] } : null);
                 if (!dados) continue;   // sem obra nem lançamento nesta organização
                 const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
                 desenharRelatorioMensal(doc, autoTable, dados);

@@ -39,7 +39,7 @@ const ACCENTS = {
         // Gráfico (§28.4): vendas azul, aluguéis âmbar; serviço = linha escura.
         vendas: '#3b82f6', alugueis: '#d97706', servico: '#1e293b', estressada: '#94a3b8',
         corpo: 'text-sm', valor: 'text-gray-800', rotulo: 'text-gray-500', dica: 'text-gray-500',
-        link: 'text-blue-600 hover:text-blue-800', linha: 'border-gray-100', divide: 'divide-gray-100',
+        link: 'text-blue-600 hover:text-blue-800', linha: 'border-gray-100', divide: 'divide-gray-100', cab: 'bg-white border-gray-200',
         trilho: 'bg-gray-50 border-gray-100',
         abaOn: 'bg-white text-blue-600 shadow-sm', abaOff: 'text-gray-700 hover:text-gray-900',
         campo: 'border-gray-200 focus:ring-blue-500/20 focus:border-blue-500',
@@ -48,7 +48,7 @@ const ACCENTS = {
     portal: {
         vendas: '#E1553C', alugueis: '#2563eb', servico: '#1e293b', estressada: '#94a3b8',
         corpo: 'text-[13px]', valor: 'text-[#1F2430]', rotulo: 'text-[#5F6573]', dica: 'text-[#5F6573]',
-        link: 'text-[#C24428] hover:text-[#E1553C]', linha: 'border-[#ECECEF]', divide: 'divide-[#ECECEF]',
+        link: 'text-[#C24428] hover:text-[#E1553C]', linha: 'border-[#ECECEF]', divide: 'divide-[#ECECEF]', cab: 'bg-white border-[#ECECEF]',
         trilho: 'bg-[#F2F2F4] border-[#ECECEF]',
         abaOn: 'bg-white text-[#C24428] shadow-sm', abaOff: 'text-[#5F6573] hover:text-[#1F2430]',
         campo: 'border-[#ECECEF] focus:ring-[#E1553C]/20 focus:border-[#E1553C]',
@@ -104,7 +104,7 @@ const Tabela: React.FC<{
     <div className={`overflow-auto rounded-[10px] border ${ACCENTS[acc].linha} ${maxH ? 'max-h-[360px]' : ''}`}>
         <table className="w-full text-left border-collapse" aria-label={descricao}>
             <thead>
-                <tr className="sticky top-0 z-10 bg-white border-b border-gray-200">
+                <tr className={`sticky top-0 z-10 border-b ${ACCENTS[acc].cab}`}>
                     {cabecalho.map((c, i) => acc === 'portal' ? (
                         <Th key={c} className={i > 0 ? 'text-right' : ''}>{c}</Th>
                     ) : (
@@ -259,21 +259,25 @@ function diferenca(atual: number | null, base: number | null, formata: (n: numbe
     };
 }
 
+/** `null` = sem base para calcular (série vazia): a tela mostra "—", nunca zero. */
 interface ResultadoEstresse {
-    valor_maximo: number; dscr_minimo_12m: number | null; meses_folga_negativa: number;
+    valor_maximo: number | null; dscr_minimo_12m: number | null; meses_folga_negativa: number | null;
 }
 
 const PainelEstresse: React.FC<{
     acc: Accent; campos: CamposEstresse; onCampo: (k: ChaveEstresse, v: string) => void;
     onCenario: (c: CenarioEstresse) => void; ativo: number;
     estresse: ResultadoEstresse; base: ResultadoEstresse; dscrExigido: number;
-}> = ({ acc, campos, onCampo, onCenario, ativo, estresse, base, dscrExigido }) => {
+    /** Campo que não muda o resultado (fluxo inelegível) → motivo escrito. */
+    motivos: Partial<Record<ChaveEstresse, string>>;
+    semSerie: boolean;
+}> = ({ acc, campos, onCampo, onCenario, ativo, estresse, base, dscrExigido, motivos, semSerie }) => {
     const A = ACCENTS[acc];
     const ehBase = ativo === 0;
     const difs = [
         { rotulo: 'Valor máximo do empréstimo', valor: money(estresse.valor_maximo), d: diferenca(estresse.valor_maximo, base.valor_maximo, formatMoney, true) },
         { rotulo: 'DSCR mínimo 12m', valor: vezes(estresse.dscr_minimo_12m), d: diferenca(estresse.dscr_minimo_12m, base.dscr_minimo_12m, vezes, true) },
-        { rotulo: 'Meses com folga negativa', valor: String(estresse.meses_folga_negativa), d: diferenca(estresse.meses_folga_negativa, base.meses_folga_negativa, n => String(n), false) },
+        { rotulo: 'Meses com folga negativa', valor: estresse.meses_folga_negativa == null ? '—' : String(estresse.meses_folga_negativa), d: diferenca(estresse.meses_folga_negativa, base.meses_folga_negativa, n => String(n), false) },
     ];
     const abaixo = estresse.dscr_minimo_12m != null && estresse.dscr_minimo_12m < dscrExigido;
     return (
@@ -291,13 +295,15 @@ const PainelEstresse: React.FC<{
                     ))}
                 </div>
                 {CAMPOS_ESTRESSE.map(f => (
-                    <div key={f.chave} className="space-y-1.5">
-                        <label htmlFor={`estresse-${f.chave}`} className={`block text-xs font-semibold ${acc === 'portal' ? 'text-[#5F6573]' : 'text-slate-500'}`}>{f.rotulo}</label>
+                    <div key={f.chave} className="space-y-1.5 max-w-[11rem]" title={motivos[f.chave]}>
+                        <label htmlFor={`estresse-${f.chave}`} className={`block text-xs font-semibold ${A.rotulo}`}>{f.rotulo}</label>
                         <input
                             id={`estresse-${f.chave}`} type="number" inputMode="decimal" min={0} max={100} step={1}
                             value={campos[f.chave]} onChange={e => onCampo(f.chave, e.target.value)}
-                            className={`w-28 h-9 px-3 bg-white border rounded-[6px] text-sm font-normal text-gray-900 outline-none focus:ring-2 transition-all ${A.campo}`}
+                            disabled={!!motivos[f.chave]} aria-describedby={motivos[f.chave] ? `estresse-${f.chave}-motivo` : undefined}
+                            className={`w-28 h-9 px-3 bg-white border rounded-[6px] text-sm font-normal text-gray-900 outline-none focus:ring-2 transition-all disabled:bg-gray-50 disabled:cursor-not-allowed ${A.campo}`}
                         />
+                        {motivos[f.chave] && <p id={`estresse-${f.chave}-motivo`} className={`text-xs ${A.dica}`}>{motivos[f.chave]}</p>}
                     </div>
                 ))}
             </div>
@@ -305,12 +311,15 @@ const PainelEstresse: React.FC<{
                 Inadimplência reduz vendas e aluguéis; vacância só os aluguéis; distrato só as vendas. A despesa e o serviço da dívida não mudam: o prédio continua custando e o banco continua cobrando.
                 {ativo < 0 && ' Cenário personalizado.'}
             </p>
+            {semSerie && (
+                <p className={`text-xs ${A.dica}`}>Esta versão não tem meses projetados: sem série não há o que estressar.</p>
+            )}
             <dl className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-live="polite">
                 {difs.map(r => (
                     <div key={r.rotulo} className={`rounded-[10px] border px-4 py-3 min-w-0 ${A.linha}`}>
                         <dt className={`text-xs ${A.rotulo}`}>{r.rotulo}</dt>
                         <dd className={`text-lg font-semibold tabular-nums mt-0.5 ${A.valor}`}>{r.valor}</dd>
-                        <dd className={`text-xs mt-0.5 ${ehBase ? 'text-gray-500' : TOM_COR[r.d.tom]}`}>{ehBase ? 'Cenário Base' : r.d.texto}</dd>
+                        <dd className={`text-xs mt-0.5 ${ehBase || semSerie ? 'text-gray-500' : TOM_COR[r.d.tom]}`}>{semSerie ? 'sem série para calcular' : ehBase ? 'Cenário Base (valores congelados)' : r.d.texto}</dd>
                     </div>
                 ))}
             </dl>
@@ -322,6 +331,8 @@ const PainelEstresse: React.FC<{
         </div>
     );
 };
+
+const SEM_BASE: ResultadoEstresse = { valor_maximo: null, dscr_minimo_12m: null, meses_folga_negativa: null };
 
 // ── A aba ────────────────────────────────────────────────────────────────────
 
@@ -346,11 +357,19 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
         vacancia_pct: numeroDoCampo(campos.vacancia_pct),
         distrato_pct: numeroDoCampo(campos.distrato_pct),
     };
+    // Campo que o fluxo inelegível torna inócuo fica desligado e NÃO conta para dizer
+    // qual cenário está ativo — senão desligá-lo viraria "personalizado".
+    const motivos: Partial<Record<ChaveEstresse, string>> = {
+        ...(!fluxos.alugueis && { vacancia_pct: 'Sem efeito: aluguéis não entram no DSCR desta operação.' }),
+        ...(!fluxos.vendas && { distrato_pct: 'Sem efeito: vendas não entram no DSCR desta operação.' }),
+        ...(!fluxos.vendas && !fluxos.alugueis && { inadimplencia_pct: 'Sem efeito: nenhum fluxo entra no DSCR desta operação.' }),
+    };
     const ativo = CENARIOS_ESTRESSE.findIndex(x =>
-        x.inadimplencia_pct === cenario.inadimplencia_pct && x.vacancia_pct === cenario.vacancia_pct && x.distrato_pct === cenario.distrato_pct);
+        (!!motivos.inadimplencia_pct || x.inadimplencia_pct === cenario.inadimplencia_pct)
+        && (!!motivos.vacancia_pct || x.vacancia_pct === cenario.vacancia_pct)
+        && (!!motivos.distrato_pct || x.distrato_pct === cenario.distrato_pct));
 
     const resumo = React.useMemo(() => resumoDaCapacidade(c), [c]);
-    const base = React.useMemo(() => (c ? estresseDaVersao(c, CENARIOS_ESTRESSE[0], fluxos) : null), [c, fluxos]);
     const estresse = React.useMemo(
         () => (c ? estresseDaVersao(c, cenario, fluxos) : null),
         // `cenario` é recalculado a cada render; as três porcentagens são o que importa.
@@ -359,7 +378,7 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
     );
 
     // ── Versão sem capacidade (schema 1): estado vazio que diz o que fazer ──
-    if (!c || !resumo || !base || !estresse) {
+    if (!c || !resumo || !estresse) {
         return accent === 'portal' ? (
             <PortalCard>
                 <PortalEmpty
@@ -383,6 +402,14 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
     const dscrExigido = c.parametros.dscr_minimo;
     const horizonte = c.serie;
     const mostrarEstressada = ativo !== 0;
+    const semSerie = c.serie.length === 0;
+    // O Base é SEMPRE o número congelado (uma só máxima para o banco ver): o cenário Base
+    // não é recalculado, e a diferença dos outros cenários é contra ele.
+    const congelado: ResultadoEstresse = {
+        valor_maximo: c.capacidade_maxima.valor_maximo,
+        dscr_minimo_12m: resumo.dscr_minimo_12m,
+        meses_folga_negativa: resumo.meses_folga_negativa,
+    };
 
     // ── KPIs (cada um abre a proveniência) ──
     const kpis: { label: string; value: string; hint?: string; chave: IndicadorKey; color: 'blue' | 'indigo' | 'emerald' | 'red' | 'teal'; icon: React.ReactNode }[] = [
@@ -397,14 +424,17 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
         },
         {
             label: 'DSCR mínimo 12m', value: vezes(resumo.dscr_minimo_12m),
-            hint: resumo.dscr_minimo_12m == null ? 'sem serviço da dívida' : undefined,
+            hint: resumo.dscr_minimo_12m == null ? 'sem serviço da dívida'
+                : resumo.dscr_minimo_12m < dscrExigido ? `abaixo dos ${vezes(dscrExigido)} exigidos` : undefined,
             chave: 'dscr_minimo_12m',
             color: resumo.dscr_minimo_12m != null && resumo.dscr_minimo_12m < dscrExigido ? 'red' : 'emerald',
             icon: <Gauge className="w-4 h-4" />,
         },
         {
             label: 'Folga mínima 12m', value: money(resumo.folga_minima_12m),
-            hint: resumo.mes_folga_minima ? rotuloDoMes(resumo.mes_folga_minima) : undefined,
+            hint: resumo.mes_folga_minima
+                ? `${rotuloDoMes(resumo.mes_folga_minima)}${resumo.folga_minima_12m != null && resumo.folga_minima_12m < 0 ? ' · mês no vermelho' : ''}`
+                : undefined,
             chave: 'folga_minima', color: resumo.folga_minima_12m != null && resumo.folga_minima_12m < 0 ? 'red' : 'teal',
             icon: <Scale className="w-4 h-4" />,
         },
@@ -536,8 +566,13 @@ const CreditRoomCapacity: React.FC<Props> = ({ version, accent = 'indigo' }) => 
                     onCampo={(k, v) => setCampos(prev => ({ ...prev, [k]: v }))}
                     onCenario={cn => setCampos(camposDoCenario(cn))}
                     ativo={ativo} dscrExigido={dscrExigido}
-                    estresse={{ valor_maximo: estresse.capacidade_maxima.valor_maximo, dscr_minimo_12m: estresse.dscr_minimo_12m, meses_folga_negativa: estresse.meses_folga_negativa }}
-                    base={{ valor_maximo: base.capacidade_maxima.valor_maximo, dscr_minimo_12m: base.dscr_minimo_12m, meses_folga_negativa: base.meses_folga_negativa }}
+                    estresse={semSerie ? SEM_BASE : ativo === 0 ? congelado : {
+                        valor_maximo: estresse.capacidade_maxima.valor_maximo,
+                        dscr_minimo_12m: estresse.dscr_minimo_12m,
+                        meses_folga_negativa: estresse.meses_folga_negativa,
+                    }}
+                    base={semSerie ? SEM_BASE : congelado}
+                    motivos={motivos} semSerie={semSerie}
                 />
             </Cartao>
 

@@ -195,6 +195,29 @@ export function saldoDoPlano(
 }
 
 /**
+ * Quanto a soma das cobranças LANÇADAS (aba Parcelas, valor bruto) deve dar —
+ * ou `null` quando a soma não tem alvo.
+ *
+ * Venda: o Valor Total do Contrato. O lançamento leva o sinal junto
+ * (`planoComoSchedule`) e as parcelas já trazem os juros, então a soma fecha
+ * com o total — não com `value`, que é a soma das unidades sem juros.
+ *
+ * Locação: sem alvo. `value` é o valor MENSAL (comparar dava "210.000 não fecha
+ * com 3.500"), e o contrato é recorrente: gerado por período, a soma parcial é
+ * legítima. Quem confere a locação é o "Plano fechado" do plano de pagamento.
+ *
+ * Sem Valor Total gravado (legado, serviço) vale `value`, como antes.
+ */
+export function alvoDasCobrancasLancadas(deal: {
+    type?: string | null;
+    value?: number | null;
+    contract_total_value?: number | null;
+}): number | null {
+    if (deal.type === 'RENTAL') return null;
+    return Number(deal.contract_total_value) || Number(deal.value) || 0;
+}
+
+/**
  * Espelho para o gerador de parcelas do contrato, que só sabe fazer UMA série
  * homogênea e lê `installment_value`/`installments` (ver `geracaoContrato` em
  * DealModal). Escolhe o maior bloco periódico do plano; sem nenhum, devolve

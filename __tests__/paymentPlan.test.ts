@@ -7,6 +7,7 @@ import {
     agruparPlano,
     subtotalDoBloco,
     saldoDoPlano,
+    alvoDasCobrancasLancadas,
     blocoParaGerador,
     montarPlanoRapido,
     serieDoPlanoGravado,
@@ -369,5 +370,19 @@ describe('agruparSeries', () => {
     it('sem série de 2+ parcelas não há principal', () => {
         const series = agruparSeries([bloco({ tipo: 'CHAVES', quantidade: 1, intervaloMeses: null })]);
         expect(indiceDaSeriePrincipal(series)).toBe(-1);
+    });
+});
+
+describe('alvoDasCobrancasLancadas', () => {
+    it('locação: sem alvo de soma — value é o MENSAL e o contrato recorrente pode estar gerado só em parte', () => {
+        // Caso real 22/11/2026: 60 × R$ 3.500 = R$ 210.000 acusava "não fecha com R$ 3.500".
+        expect(alvoDasCobrancasLancadas({ type: 'RENTAL', value: 3500, contract_total_value: 210000 })).toBeNull();
+    });
+    it('venda: o alvo é o Valor Total do Contrato (inclui sinal e juros), não a soma das unidades', () => {
+        expect(alvoDasCobrancasLancadas({ type: 'SALE', value: 500000, contract_total_value: 548000 })).toBe(548000);
+    });
+    it('sem Valor Total gravado (legado/serviço), cai no value', () => {
+        expect(alvoDasCobrancasLancadas({ type: 'SALE', value: 500000, contract_total_value: null })).toBe(500000);
+        expect(alvoDasCobrancasLancadas({ type: 'SERVICE', value: 12000 })).toBe(12000);
     });
 });

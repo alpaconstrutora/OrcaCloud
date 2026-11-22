@@ -99,6 +99,8 @@ import { KpiCard } from './ui/KpiCard';
 import { isObra } from '../utils/projectClassification';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { PortalHelp } from './portal/PortalHelp';
+import { DocumentosParaAssinar } from './assinatura/DocumentosParaAssinar';
+import { signatarioDaUrl } from '../services/assinaturaInternaService';
 import { avisarAcaoDoPortal } from '../utils/portalEventos';
 import { CLIENT_PORTAL_TAB_IDS, type ClientPortalTabId, secoesLiberadas, secaoAtual, destinoDaSecao } from '../utils/clientPortalTabs';
 
@@ -144,6 +146,8 @@ const STATUS_TEXT_COLOR: Record<string, string> = { Aberto: 'text-amber-700', 'E
 export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profile, clientProfile, organizationId, activeTab: initialTab, portalToken, onUpdateSettings, onClientSelect, isPreview = false, forcarTour = null, onLogout }) => {
     const confirm = useConfirm();
     const { showToast } = useToast();
+    // Lido na montagem: o cartão de assinaturas limpa o ?assinar da URL logo depois.
+    const [chegouParaAssinar] = React.useState(() => !!signatarioDaUrl());
     const [activeTab, setActiveTab] = React.useState<ClientAreaTabId>(initialTab || 'dashboard');
     const [orders, setOrders] = React.useState<PurchaseOrder[]>([]);
     const [aiInsight] = React.useState<ClientAIInsight | null>(null);
@@ -4579,6 +4583,12 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* Encaixe do cartão "Primeiros passos" (PortalHelp desenha dentro):
                     topo da primeira aba liberada; o gestor espiando não vê. */}
                 {!isAdmin && activeTab === tabs[0]?.id && <div ref={setSlotChecklist} className="empty:hidden mb-6" />}
+                {/* Assinatura interna (sem certificado): pendências em qualquer aba; os já
+                    assinados só em Contratos. Plano 2026-11-21-assinatura-eletronica-interna. */}
+                {portalToken && (
+                    <DocumentosParaAssinar portal="cliente" token={portalToken} somenteLeitura={isPreview}
+                        mostrarAssinados={activeTab === 'contratos'} className="mb-6" />
+                )}
                 {activeTab === 'dashboard' && ehLocacao(clientCategory) && renderDashboardLocacao()}
                 {activeTab === 'dashboard' && ehServicos(clientCategory) && renderDashboardServicos()}
                 {activeTab === 'dashboard' && !ehLocacao(clientCategory) && !ehServicos(clientCategory) && (
@@ -4938,8 +4948,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 checklistSlot={isAdmin ? null : slotChecklist}
                 accent="coral"
                 tourKey={portalToken || clientProfile?.email || null}
-                // link público e cliente logado; nunca a prévia nem o gestor espiando
-                autoTour={isStandalone || (!isPreview && !isAdmin)}
+                // link público e cliente logado; nunca a prévia nem o gestor espiando.
+                // Quem chegou pelo e-mail de assinatura (?assinar=) vê o tour na próxima
+                // visita — senão ele abre por cima do painel de assinar.
+                autoTour={!chegouParaAssinar && (isStandalone || (!isPreview && !isAdmin))}
             />
                 </div>{/* /content column */}
             </div>{/* /body wrapper */}

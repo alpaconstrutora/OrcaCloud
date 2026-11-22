@@ -409,6 +409,11 @@ const PublicMarketplaceView = React.lazy(() => import('./components/public/Publi
 const PublicPlantChecker = React.lazy(() => import('./components/public/PublicPlantChecker').then(m => ({ default: m.PublicPlantChecker })));
 const PublicCertificadoChecker = React.lazy(() => import('./components/public/PublicCertificadoChecker').then(m => ({ default: m.PublicCertificadoChecker })));
 const PublicDocumentoChecker = React.lazy(() => import('./components/public/PublicDocumentoChecker').then(m => ({ default: m.PublicDocumentoChecker })));
+// Assinatura interna sem certificado (docs/planos/2026-11-21-assinatura-eletronica-interna.md):
+// validação pública (QR do manifesto) e página da testemunha (link pessoal).
+const PublicAssinaturaChecker = React.lazy(() => import('./components/public/PublicAssinaturaChecker').then(m => ({ default: m.PublicAssinaturaChecker })));
+const PublicAssinaturaLink = React.lazy(() => import('./components/public/PublicAssinaturaLink').then(m => ({ default: m.PublicAssinaturaLink })));
+const AssinaturaDoMembroPeloLink = React.lazy(() => import('./components/assinatura/AssinaturaDoMembroPeloLink').then(m => ({ default: m.AssinaturaDoMembroPeloLink })));
 import { PWAInstallPrompt, OfflineIndicator } from './components/PWAInstallPrompt';
 import { useTabRouter } from './hooks/useTabRouter';
 import { syncViewToUrl } from './lib/tabRouter';
@@ -745,6 +750,17 @@ const App: React.FC = () => {
     const match = window.location.pathname.match(/^\/publico\/validar-documento\/([0-9a-f-]{36})$/i);
     return match ? match[1] : null;
   }, []);
+
+  // Assinatura interna: validação pública (QR do manifesto) e link da testemunha.
+  const publicAssinaturaId = React.useMemo(() => {
+    const match = window.location.pathname.match(/^\/publico\/validar-assinatura\/([0-9a-f-]{36})$/i);
+    return match ? match[1] : null;
+  }, []);
+  // O fragmento (#s=…&t=…) é lido AQUI, na 1ª renderização: o roteador de abas
+  // (syncViewToUrl, num efeito) reescreve o hash para #/central antes de a página
+  // lazy montar.
+  const linkDeAssinatura = React.useMemo(
+    () => (/^\/assinar\/?$/.test(window.location.pathname) ? window.location.hash : null), []);
   /* eslint-enable react-hooks/exhaustive-deps */
 
   const showOverlay = loadingSession || !profileSynchronized || isValidating || projectsLoading;
@@ -871,6 +887,16 @@ const App: React.FC = () => {
   if (publicDocumentoId) return (
     <React.Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
       <PublicDocumentoChecker />
+    </React.Suspense>
+  );
+  if (publicAssinaturaId) return (
+    <React.Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+      <PublicAssinaturaChecker />
+    </React.Suspense>
+  );
+  if (linkDeAssinatura !== null) return (
+    <React.Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
+      <PublicAssinaturaLink hash={linkDeAssinatura} />
     </React.Suspense>
   );
 
@@ -1224,6 +1250,11 @@ const App: React.FC = () => {
         initialData={editingContract || undefined}
         domain="SUPRIMENTOS"
       />
+
+      {/* E-mail do representante da empresa: /?assinar=<id> abre a assinatura interna. */}
+      <React.Suspense fallback={null}>
+        <AssinaturaDoMembroPeloLink />
+      </React.Suspense>
 
       {/* PWA */}
       <OfflineIndicator />

@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { exigirMembro, respostaDeErro } from "../_shared/auth.ts"
+import { propagarVersao } from "../_shared/assinaturaPropagar.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -31,58 +32,41 @@ async function processarWebhook(adminClient: any, body: any): Promise<Response> 
     const { token, status, signed_file } = body;
     if (!token) return json({ error: 'token obrigatório' }, 400);
 
-    const isSigned = status === 'finished';
+    const conclusao = { assinado: status === 'finished', arquivo: signed_file ?? null, quando: new Date().toISOString() };
+    const statusLegado = conclusao.assinado ? 'SIGNED' : 'SENT';
+    const quandoLegado = conclusao.assinado ? { signature_completed_at: conclusao.quando } : {};
 
     // O token do ZapSign é único e há índice único parcial em
     // signature_token nas quatro tabelas — o UPDATE é no-op onde não casa.
 
-    // 1) Versão de documento (contrato ou aditivo)
-    const { data: signedVersions } = await adminClient.from('contract_document_versions')
-        .update({
-            signature_status: isSigned ? 'SIGNED' : 'SENT',
-            ...(isSigned ? { signature_completed_at: new Date().toISOString() } : {}),
-            ...(isSigned && signed_file ? { signed_file_url: signed_file } : {}),
-        })
-        .eq('signature_token', token)
-        .select('id, contract_id, owner_type, owner_id, kind');
-
-    const version = signedVersions?.[0];
-
-    // 2) Aditivo — por token direto e pela versão que pertence a ele
-    await adminClient.from('contract_addendums')
-        .update({
-            signature_status: isSigned ? 'SIGNED' : 'SENT',
-            ...(isSigned ? { signature_completed_at: new Date().toISOString() } : {}),
-            ...(isSigned && signed_file ? { signed_document_url: signed_file } : {}),
-        })
+    // 1) Versão de documento (contrato ou aditivo): a regra mora em
+    //    _shared/assinaturaPropagar.ts, a MESMA da assinatura interna —
+    //    contrato só recebe quando a versão é o CONTRATO em si.
+    const { data: versoes } = await adminClient.from('contract_document_versions')
+        .select('id, owner_type, owner_id, kind')
         .eq('signature_token', token);
+    const version = versoes?.[0];
+    if (version) await propagarVersao(adminClient, version, conclusao);
 
-    // 3) Contrato. ⚠️ A versão só propaga para o contrato quando é o
-    // CONTRATO em si — minuta e aditivo assinados não podem sobrescrever
-    // o status de assinatura nem o PDF do contrato principal.
-    const versionIsContract = version && version.kind === 'CONTRATO' && version.owner_type === 'CONTRACT';
-    if (versionIsContract) {
-        await adminClient.from('contracts')
+    // 2) Fluxo legado, sem versão: token gravado direto no aditivo ou no contrato.
+    if (!version) {
+        await adminClient.from('contract_addendums')
             .update({
-                signature_status: isSigned ? 'SIGNED' : 'SENT',
-                ...(isSigned ? { signature_completed_at: new Date().toISOString() } : {}),
-                ...(isSigned && signed_file ? { signed_contract_url: signed_file } : {}),
+                signature_status: statusLegado, ...quandoLegado,
+                ...(conclusao.assinado && signed_file ? { signed_document_url: signed_file } : {}),
             })
-            .eq('id', version.owner_id);
-    } else if (!version) {
-        // Fluxo legado: token gravado direto em contracts.
+            .eq('signature_token', token);
         await adminClient.from('contracts')
             .update({
-                signature_status: isSigned ? 'SIGNED' : 'SENT',
-                ...(isSigned ? { signature_completed_at: new Date().toISOString() } : {}),
-                ...(isSigned && signed_file ? { signed_contract_url: signed_file } : {}),
+                signature_status: statusLegado, ...quandoLegado,
+                ...(conclusao.assinado && signed_file ? { signed_contract_url: signed_file } : {}),
             })
             .eq('signature_token', token);
     }
 
-    // 4) Atualizar commercial_deals (backward compat)
+    // 3) Atualizar commercial_deals (backward compat)
     await adminClient.from('commercial_deals')
-        .update({ signature_status: isSigned ? 'SIGNED' : 'PENDING' })
+        .update({ signature_status: conclusao.assinado ? 'SIGNED' : 'PENDING' })
         .eq('signature_token', token);
 
     return json({ received: true });

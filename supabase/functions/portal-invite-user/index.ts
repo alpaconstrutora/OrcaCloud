@@ -4,6 +4,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { exigirGestor, exigirMembro, exigirUsuario, respostaDeErro } from '../_shared/auth.ts';
 import { escapeHtml, urlSegura } from '../_shared/html.ts';
+import { garantirTokenDoPortal, type TabelaDeTokens } from '../_shared/portalAcesso.ts';
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -172,26 +173,11 @@ serve(async (req: Request) => {
 
     // Garante o token do portal (o login por e-mail abre a casca do link). Token
     // existente: reativa e renova; sem token: cria com a organização do convite.
-    const { data: tokenAtual } = await admin
-        .from(d.tabelaDeTokens)
-        .select('id, is_active, expires_at')
-        .eq(d.colunaDaPessoa, cad.id)
-        .maybeSingle();
-    const novoPrazo = new Date(Date.now() + 90 * 24 * 60 * 60 * 1000).toISOString();
-    if (tokenAtual) {
-        const vencido = tokenAtual.expires_at && new Date(tokenAtual.expires_at) < new Date();
-        if (tokenAtual.is_active === false || vencido) {
-            const { error: tokErr } = await admin
-                .from(d.tabelaDeTokens)
-                .update({ is_active: true, token: crypto.randomUUID(), expires_at: novoPrazo, last_used_at: null })
-                .eq('id', tokenAtual.id);
-            if (tokErr) { console.error('[portal-invite-user] token não renovado', tokErr.message); return json({ error: 'Não foi possível liberar o acesso ao portal.' }, 500); }
-        }
-    } else {
-        const { error: tokErr } = await admin
-            .from(d.tabelaDeTokens)
-            .insert({ org_id: organizationId, [d.colunaDaPessoa]: cad.id, token: crypto.randomUUID() });
-        if (tokErr) { console.error('[portal-invite-user] token não criado', tokErr.message); return json({ error: 'Não foi possível liberar o acesso ao portal.' }, 500); }
+    try {
+        await garantirTokenDoPortal(admin, d.tabelaDeTokens as TabelaDeTokens, d.colunaDaPessoa, cad.id, organizationId);
+    } catch (e) {
+        console.error('[portal-invite-user]', e instanceof Error ? e.message : e);
+        return json({ error: 'Não foi possível liberar o acesso ao portal.' }, 500);
     }
 
     // Conta nova → convite; já existe → redefinição de senha. Nenhum dos dois

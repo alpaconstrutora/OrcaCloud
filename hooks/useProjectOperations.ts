@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { ehEnderecoDoMarketplaceRepetido } from '../utils/enderecoDoMarketplace';
 import { marcarErroGravacao, marcarGravacao, marcarGravando, registrarPersistido, zerarUltimaGravacao } from '../utils/projetoPersistido';
 import { projectService } from '../services/projectService';
 import { carregarProjeto } from '../services/carregarProjeto';
@@ -348,7 +349,9 @@ export const useProjectOperations = ({
       }
     } catch (error: unknown) {
       console.error(error);
-      alert("Erro ao salvar organização.");
+      alert(ehEnderecoDoMarketplaceRepetido(error)
+        ? "Erro ao salvar organização: esse endereço do marketplace já é usado por outra organização. Escolha outro."
+        : "Erro ao salvar organização.");
     } finally {
       setIsSaving(false);
     }

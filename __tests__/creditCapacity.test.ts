@@ -17,12 +17,14 @@ import {
     aplicarEstresse,
     capacidadeMaxima,
     mesesDoHorizonte,
+    montarCapacidade,
     qualidadeDaRenda,
     recebidoPorMes,
     rotuloMascarado,
     serieDeRenda,
     type CapacidadeEntrada,
     type LocacaoVigente,
+    type MontarCapacidadeEntrada,
     type SerieMes,
     type TituloCarteira,
 } from '../utils/creditCapacity';
@@ -469,6 +471,53 @@ describe('creditCapacity', () => {
             concentracao_top5_pct: null, wale_anos: null,
             locacoes_prazo_indeterminado: 0, pontualidade_12m_pct: null,
         });
+    });
+
+    const capEntrada = (p: Partial<MontarCapacidadeEntrada> = {}): MontarCapacidadeEntrada => ({
+        fonte: 'teste', dataBase: DATA_BASE, horizonte: 3,
+        parametros: { ...PARAMETROS_CAPACIDADE_PADRAO, horizonte_meses: 3 },
+        fluxos: { vendas: true, alugueis: true }, primeiroVencimento: '2026-12-01',
+        orgs: ['o1', 'o2'], titulos: [], titulosDoEscopo: [], locacoesDoEscopo: [],
+        despesaMensal: 0, despesaPorOrg: [0, 0], servicoAtualPorMes: {}, servicoAtualPorOrg: [{}, {}],
+        servicoNovoPorMes: {}, vendasSemTitulo: [], empreendimentos: [], dividaTotalPorOrg: [0, 0], ...p,
+    });
+
+    it('montarCapacidade: estoque só de empreendimento a vender (objetivo LOCACAO fica fora) com haircut', () => {
+        const c = montarCapacidade(capEntrada({
+            empreendimentos: [
+                { vgv_disponivel: 1_000_000, objetivo: 'VENDAS' },
+                { vgv_disponivel: 500_000, objetivo: 'MISTO' },
+                { vgv_disponivel: 9_000_000, objetivo: 'LOCACAO' },
+                { vgv_disponivel: 200_000, objetivo: null },
+            ],
+        }));
+        expect(c.estoque).toEqual({ vgv_disponivel: 1_700_000, haircut_pct: 30, valor_elegivel: 1_190_000 });
+    });
+
+    it('montarCapacidade: só empreendimento de locação (ou sem resposta) = estoque null', () => {
+        expect(montarCapacidade(capEntrada({ empreendimentos: [{ vgv_disponivel: 9_000_000, objetivo: 'LOCACAO' }] })).estoque).toBeNull();
+        expect(montarCapacidade(capEntrada({ empreendimentos: null })).estoque).toBeNull();
+    });
+
+    it('montarCapacidade: série, por organização e capacidade máxima saem do que foi coletado', () => {
+        const c = montarCapacidade(capEntrada({
+            titulosDoEscopo: [
+                titulo({ id: 'a', organizationId: 'o1', amount: 26_000, dueDate: '2026-12-10' }),
+                titulo({ id: 'b', organizationId: 'o2', amount: 13_000, dueDate: '2026-12-10' }),
+            ],
+            servicoAtualPorMes: { '2026-12': 3_000 },
+            servicoAtualPorOrg: [{ '2026-12': 1_000 }, { '2026-12': 2_000 }],
+            dividaTotalPorOrg: [100_000, 50_000],
+        }));
+        expect(c.parametros.horizonte_meses).toBe(3);
+        expect(c.serie).toHaveLength(3);
+        expect(c.serie[0]).toMatchObject({ mes: '2026-12', vendas: 39_000, servico_atual: 3_000 });
+        expect(c.por_organizacao).toEqual([
+            { organization_id: 'o1', renda_12m: 26_000, servico_12m: 1_000, divida_total: 100_000 },
+            { organization_id: 'o2', renda_12m: 13_000, servico_12m: 2_000, divida_total: 50_000 },
+        ]);
+        // meses 2 e 3 sem renda: limite 0 → nada cabe
+        expect(c.capacidade_maxima).toEqual({ parcela_maxima: 0, valor_maximo: 0 });
     });
 
     it('rotuloMascarado', () => {

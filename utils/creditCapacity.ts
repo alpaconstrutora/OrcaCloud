@@ -30,7 +30,7 @@
 import { round2 } from './financialMath';
 import { buildSchedule } from './debtAmortization';
 import { wale, type LeaseContract } from '../lib/rentalExecutive';
-import { ratio, ratioPct } from './creditRoomSnapshot';
+import { ratio, ratioPct, type SnapshotCapacidade } from './creditRoomSnapshot';
 
 // ── Tipos de entrada ─────────────────────────────────────────────────────────
 
@@ -515,4 +515,95 @@ export function qualidadeDaRenda(e: CapacidadeEntrada): QualidadeRenda {
 export function rotuloMascarado(natureza: Natureza, ordem: number): string {
     const papel = natureza === 'LOCACAO' ? 'Locatário' : 'Comprador';
     return `${papel} ${String(ordem).padStart(2, '0')}`;
+}
+
+// ── Bloco `capacidade` do snapshot ───────────────────────────────────────────
+
+/** O que o service coletou para a capacidade — tudo já recortado pelo escopo. */
+export interface MontarCapacidadeEntrada {
+    fonte: string;
+    /** 'AAAA-MM-DD'. */
+    dataBase: string;
+    horizonte: number;
+    /** Os EFETIVOS: prazo/carência da operação já por cima (`parametrosEfetivos`). */
+    parametros: ParametrosCapacidade;
+    fluxos: FluxosElegiveis;
+    /** 1º vencimento da dívida nova simulada (1º mês da série). */
+    primeiroVencimento: string;
+    /** Orgs do escopo, na mesma ordem dos arrays `…PorOrg`. */
+    orgs: string[];
+    /** TODOS os títulos (inclusive sem empreendimento): só alimentam TITULO_SEM_EMPREENDIMENTO. */
+    titulos: TituloCarteira[];
+    titulosDoEscopo: TituloCarteira[];
+    locacoesDoEscopo: LocacaoVigente[];
+    /** Consolidada do escopo; 0 se desligada ou sem aluguel para descontar. */
+    despesaMensal: number;
+    despesaPorOrg: (number | null)[];
+    servicoAtualPorMes: Record<string, number>;
+    servicoAtualPorOrg: (Record<string, number> | null)[];
+    servicoNovoPorMes: Record<string, number>;
+    vendasSemTitulo: { dealId: string; valor: number }[];
+    /** `null` = empreendimentos não responderam (estoque fica `null`). */
+    empreendimentos: { vgv_disponivel: number; objetivo: string | null }[] | null;
+    dividaTotalPorOrg: (number | null | undefined)[];
+}
+
+/**
+ * Monta o bloco `capacidade` do snapshot a partir do que o service coletou.
+ *
+ * Estoque: só empreendimento A VENDER entra — o de objetivo `LOCACAO` fica de
+ * fora (o VGV dele não é estoque que vira caixa; a renda dele já é o aluguel).
+ * Unidade alugada já sai do `vgv_disponivel` na coleta.
+ */
+export function montarCapacidade(e: MontarCapacidadeEntrada): SnapshotCapacidade {
+    const entradaDe = (
+        ts: TituloCarteira[], ls: LocacaoVigente[], despesa: number,
+        servico: Record<string, number>, novo: Record<string, number>,
+    ): CapacidadeEntrada => ({
+        dataBase: e.dataBase, horizonte: e.horizonte, titulos: ts, locacoes: ls, despesaMensal: despesa,
+        servicoAtualPorMes: servico, servicoNovoPorMes: novo, fluxos: e.fluxos,
+    });
+    const { serie, vencido_na_data_base, a_vencer_mes_corrente } = serieDeRenda(entradaDe(
+        e.titulosDoEscopo, e.locacoesDoEscopo, e.despesaMensal, e.servicoAtualPorMes, e.servicoNovoPorMes,
+    ));
+    const vgvDisponivel = e.empreendimentos
+        ? round2(e.empreendimentos
+            .filter(x => x.objetivo !== 'LOCACAO')
+            .reduce((a, x) => a + n0(x.vgv_disponivel), 0))
+        : 0;
+    const haircut = Math.min(100, Math.max(0, n0(e.parametros.haircut_estoque_pct)));
+    const doze = <T,>(xs: T[]) => xs.slice(0, 12);
+    return {
+        fonte: e.fonte,
+        data_base: e.dataBase,
+        parametros: { ...e.parametros, horizonte_meses: e.horizonte },
+        base: 'CONTRATADA',
+        serie,
+        recebido_12m: recebidoPorMes(e.titulosDoEscopo, e.dataBase),
+        vencido_na_data_base,
+        a_vencer_mes_corrente,
+        estoque: vgvDisponivel > 0
+            ? { vgv_disponivel: vgvDisponivel, haircut_pct: haircut, valor_elegivel: round2(vgvDisponivel * (1 - haircut / 100)) }
+            : null,
+        capacidade_maxima: capacidadeMaxima(serie, e.parametros, e.primeiroVencimento),
+        // `titulos` inteiro (com os sem empreendimento) só aqui; as locações já recortadas.
+        alertas: alertasDaCarteira({
+            dataBase: e.dataBase, titulos: e.titulos, locacoes: e.locacoesDoEscopo, vendasSemTitulo: e.vendasSemTitulo,
+        }),
+        por_organizacao: e.orgs.map((o, i) => {
+            const s = serieDeRenda(entradaDe(
+                e.titulosDoEscopo.filter(t => t.organizationId === o),
+                e.locacoesDoEscopo.filter(l => l.organizationId === o),
+                e.despesaPorOrg[i] ?? 0,
+                e.servicoAtualPorOrg[i] ?? {},
+                {},
+            )).serie;
+            return {
+                organization_id: o,
+                renda_12m: round2(doze(s).reduce((a, m) => a + m.renda_liquida, 0)),
+                servico_12m: round2(doze(s).reduce((a, m) => a + m.servico_atual, 0)),
+                divida_total: round2(n0(e.dividaTotalPorOrg[i])),
+            };
+        }),
+    };
 }

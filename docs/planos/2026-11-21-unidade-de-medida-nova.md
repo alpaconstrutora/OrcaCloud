@@ -42,3 +42,16 @@ Composições › Ver detalhes oferecia uma lista **fixa** de 17 unidades no có
 - [x] Testes: `__tests__/unidadeDeMedidaNova.test.ts`,
   `__tests__/components/EquivalenciaUnidadeNova.test.tsx`.
 - [ ] Conferida na tela em produção.
+
+## 22/11/2026 — lista sincronizada com a aba Unidades
+
+Pedido literal: "o dropdown unidades nao esta sincronizada com Sistema › Configurações › Cadastros, aba Unidades.?"
+
+Diagnóstico: `catalogoDeUnidades` punha a lista fixa na frente e só depois as do cadastro; mês, cm² e cm³ sumiam (não viravam código) e "lt" (Lata) virava L (Litro).
+
+Feito:
+- [x] A lista = as linhas ativas do cadastro mestre, na ordem da aba (category, symbol). Lista fixa só se a leitura do cadastro falhar.
+- [x] mês → MES (como o SINAPI), cm² → CM2, cm³ → CM3.
+- [x] Dica mostra o símbolo do cadastro quando difere do código: "Metro quadrado (m²)". O que se grava continua sendo o código (M2), igual ao SINAPI.
+- [x] LATA → LATA (antes LATA → LT, e LT relido virava litro).
+- [ ] Linha "lt = Lata" do cadastro colide com L = Litro (no app inteiro LT é litro): trocar o símbolo para "lata" depende do usuário.

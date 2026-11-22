@@ -13,10 +13,10 @@ const UNIDADES: Record<string, string> = {
     PC: 'PC', 'PÇ': 'PC', PCS: 'PC', 'PÇS': 'PC', PCA: 'PC', PECA: 'PC', 'PEÇA': 'PC',
     KG: 'KG', KGS: 'KG', QUILO: 'KG', G: 'G', GR: 'G',
     M: 'M', MT: 'M', MTS: 'M', METRO: 'M', ML: 'ML',
-    M2: 'M2', 'M²': 'M2', M3: 'M3', 'M³': 'M3',
+    M2: 'M2', 'M²': 'M2', M3: 'M3', 'M³': 'M3', 'CM²': 'CM2', 'CM³': 'CM3', 'MÊS': 'MES',
     L: 'L', LT: 'L', LTS: 'L', LITRO: 'L',
     SC: 'SC', SACO: 'SC', CX: 'CX', CAIXA: 'CX', RL: 'RL', ROLO: 'RL',
-    BD: 'BD', BALDE: 'BD', GL: 'GL', GALAO: 'GL', 'GALÃO': 'GL', LATA: 'LT', TB: 'TB', BR: 'BR', BARRA: 'BR',
+    BD: 'BD', BALDE: 'BD', GL: 'GL', GALAO: 'GL', 'GALÃO': 'GL', LATA: 'LATA', TB: 'TB', BR: 'BR', BARRA: 'BR',
     JG: 'JG', JOGO: 'JG', KIT: 'KIT', PAR: 'PAR', CJ: 'CJ', MIL: 'MIL', MILHEIRO: 'MIL', MLH: 'MIL',
 };
 
@@ -62,33 +62,42 @@ export const CATEGORIAS_DE_UNIDADE: readonly { valor: string; rotulo: string }[]
 ];
 
 export interface UnidadeDoCatalogo {
-    /** Identidade (KG, M2, TB…) — o que a equivalência grava. */
+    /** Identidade (KG, M2, TB…) — o que se grava (item e equivalência). */
     codigo: string;
+    /** Símbolo como está no cadastro mestre (m², pç, kWh), quando houver. */
+    simbolo?: string;
     /** Nome do cadastro mestre, quando houver. */
     nome?: string;
 }
 
 /**
- * Unidades que se pode escolher (UNIDADE NOVA, 21/11/2026): a lista fixa mais as do
- * cadastro mestre, por IDENTIDADE (m² e M2 são uma só). Quando dois símbolos dão a
- * mesma identidade, o nome vem do símbolo exato (L = Litro, não "lt" = Lata). Ficam de
- * fora o que não vira código (mês, cm²) e o ML ambíguo.
+ * Unidades que se pode escolher = o cadastro mestre (Sistema › Configurações ›
+ * Cadastros › Unidades), na MESMA ordem e com as mesmas linhas (22/11/2026 — antes a
+ * lista fixa vinha na frente e mês/cm²/cm³ sumiam). Cada linha vira o seu código
+ * (m² → M2). Dois símbolos com o mesmo código aparecem uma vez só, com o do símbolo
+ * exato (L = Litro ganha de "lt"). ML fica de fora: é ambíguo. Cadastro vazio (a
+ * leitura falhou) cai na lista fixa, para o campo não ficar sem opção.
  */
 export function catalogoDeUnidades(
     cadastradas: readonly { symbol: string; name: string }[],
 ): UnidadeDoCatalogo[] {
-    const nomes = new Map<string, string>();
-    for (const exato of [true, false]) {
-        for (const u of cadastradas) {
-            const codigo = identidadeDaUnidade(u.symbol);
-            if (!codigo || codigo === 'ML' || nomes.has(codigo)) continue;
-            if (exato !== (u.symbol.toUpperCase() === codigo)) continue;
-            nomes.set(codigo, u.name);
-        }
+    const valida = cadastradas
+        .map(u => ({ u, codigo: identidadeDaUnidade(u.symbol) }))
+        .filter((x): x is { u: { symbol: string; name: string }; codigo: string } => !!x.codigo && x.codigo !== 'ML');
+    if (valida.length === 0) return UNIDADES_DE_EQUIVALENCIA.map(codigo => ({ codigo }));
+    const vencedora = new Map<string, { symbol: string; name: string }>();
+    for (const { u, codigo } of valida) {
+        const atual = vencedora.get(codigo);
+        if (!atual || (atual.symbol.toUpperCase() !== codigo && u.symbol.toUpperCase() === codigo)) vencedora.set(codigo, u);
     }
-    const extras = [...nomes.keys()].filter(c => !UNIDADES_DE_EQUIVALENCIA.includes(c)).sort();
-    return [...UNIDADES_DE_EQUIVALENCIA, ...extras].map(codigo => ({ codigo, nome: nomes.get(codigo) }));
+    return valida
+        .filter(({ u, codigo }) => vencedora.get(codigo) === u)
+        .map(({ u, codigo }) => ({ codigo, simbolo: u.symbol, nome: u.name }));
 }
+
+/** O que a lista mostra ao lado do código: o nome, e o símbolo do cadastro quando difere (m²). */
+export const dicaDaUnidade = (u: UnidadeDoCatalogo) =>
+    u.simbolo && u.simbolo !== u.codigo ? `${u.nome ?? ''} (${u.simbolo})`.trim() : u.nome;
 
 /** Símbolo como a unidade nova é gravada: sem espaço e sem ponto. */
 export const simboloLimpo = (simbolo: string) => simbolo.trim().replace(/[.\s]/g, '');

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { catalogoDeUnidades, motivoNovaUnidadeInvalida, normalizarUnidade } from '../lib/unidadeDeMedida';
+import { catalogoDeUnidades, dicaDaUnidade, motivoNovaUnidadeInvalida, normalizarUnidade } from '../lib/unidadeDeMedida';
 
 // Unidade de medida nova (21/11/2026) — docs/planos/2026-11-21-unidade-de-medida-nova.md
 const MESTRE = [
@@ -11,15 +11,15 @@ const MESTRE = [
     { symbol: 'cm²', name: 'Centímetro quadrado' },
     { symbol: 'mlh', name: 'Milheiro' },
     { symbol: 'tb', name: 'Tubo' },
+    { symbol: 'br', name: 'Barra' },
 ];
 
 describe('catalogoDeUnidades', () => {
     const cat = catalogoDeUnidades(MESTRE);
     const nome = (c: string) => cat.find(u => u.codigo === c)?.nome;
 
-    it('junta a lista fixa com as cadastradas, sem repetir a identidade', () => {
+    it('não repete a identidade', () => {
         const codigos = cat.map(u => u.codigo);
-        expect(codigos).toContain('KG');
         expect(codigos).toContain('TB');
         expect(new Set(codigos).size).toBe(codigos.length);
     });
@@ -36,11 +36,54 @@ describe('catalogoDeUnidades', () => {
         expect(cat.some(u => u.codigo === 'MLH')).toBe(false);
     });
 
-    it('deixa de fora o que não vira código (mês, cm²) e o ambíguo ML', () => {
-        const codigos = cat.map(u => u.codigo);
-        expect(codigos).not.toContain('ML');
-        expect(codigos.some(c => c.includes('Ê') || c.includes('²'))).toBe(false);
+    it('mês, cm² e cm³ viram código (MES como no SINAPI); ML ambíguo fica de fora', () => {
+        expect(nome('MES')).toBe('Mês');
+        expect(nome('CM2')).toBe('Centímetro quadrado');
+        expect(catalogoDeUnidades([{ symbol: 'cm³', name: 'Centímetro cúbico' }])[0].codigo).toBe('CM3');
         expect(catalogoDeUnidades([{ symbol: 'ml', name: 'Mililitro' }]).some(u => u.codigo === 'ML')).toBe(false);
+    });
+
+    it('lata não é litro', () => {
+        expect(normalizarUnidade('lata')).toBe('LATA');
+        expect(normalizarUnidade(normalizarUnidade('lata'))).toBe('LATA');
+        expect(normalizarUnidade('LT')).toBe('L');
+    });
+
+    it('cadastro vazio (leitura falhou) cai na lista fixa', () => {
+        expect(catalogoDeUnidades([]).map(u => u.codigo)).toContain('KG');
+    });
+});
+
+// O cadastro real (Sistema › Configurações › Cadastros › Unidades, 22/11/2026), na ordem
+// em que listUnits o devolve (category, symbol) — a mesma da aba.
+const CADASTRO_REAL = [
+    ['cm²', 'Centímetro quadrado'], ['ha', 'Hectare'], ['m²', 'Metro quadrado'],
+    ['br', 'Barra'], ['cm', 'Centímetro'], ['km', 'Quilômetro'], ['m', 'Metro'], ['mm', 'Milímetro'],
+    ['cj', 'Conjunto'], ['dz', 'Dúzia'], ['jg', 'Jogo'], ['par', 'Par'], ['un', 'Unidade'],
+    ['cx', 'Caixa'], ['gl', 'Galão'], ['lt', 'Lata'], ['mlh', 'Milheiro'], ['pç', 'Peça'],
+    ['pct', 'Pacote'], ['rl', 'Rolo'], ['sc', 'Saco'],
+    ['kWh', 'Quilowatt-hora'], ['g', 'Grama'], ['kg', 'Quilograma'], ['t', 'Tonelada'],
+    ['serv', 'Serviço'], ['vb', 'Verba'], ['dia', 'Dia'], ['h', 'Hora'], ['hd', 'Homem-dia'],
+    ['hh', 'Homem-hora'], ['mês', 'Mês'], ['cm³', 'Centímetro cúbico'], ['L', 'Litro'], ['m³', 'Metro cúbico'],
+].map(([symbol, name]) => ({ symbol, name }));
+
+describe('lista = aba Unidades (22/11/2026)', () => {
+    const cat = catalogoDeUnidades(CADASTRO_REAL);
+
+    it('traz todas as linhas da aba, na mesma ordem (só a Lata "lt" colide com L = Litro)', () => {
+        expect(cat.map(u => u.simbolo)).toEqual(CADASTRO_REAL.map(u => u.symbol).filter(s => s !== 'lt'));
+        expect(cat.map(u => u.nome)).not.toContain('Lata');
+    });
+
+    it('nada da lista fixa entra na frente nem por fora do cadastro', () => {
+        expect(cat[0]).toEqual({ codigo: 'CM2', simbolo: 'cm²', nome: 'Centímetro quadrado' });
+        expect(cat).toHaveLength(34);
+    });
+
+    it('a dica mostra o símbolo do cadastro quando ele difere do código', () => {
+        const m2 = cat.find(u => u.codigo === 'M2')!;
+        expect(dicaDaUnidade(m2)).toBe('Metro quadrado (m²)');
+        expect(dicaDaUnidade(cat.find(u => u.codigo === 'L')!)).toBe('Litro');
     });
 });
 

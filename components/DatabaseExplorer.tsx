@@ -46,7 +46,7 @@ import EquivalenciasDoItem from './database/EquivalenciasDoItem';
 import NovaUnidadeForm from './database/NovaUnidadeForm';
 import { CreatableCombobox } from './ui/CreatableCombobox';
 import { masterDataService, MasterUnit } from '../services/masterDataService';
-import { catalogoDeUnidades, identidadeDaUnidade } from '../lib/unidadeDeMedida';
+import { catalogoDeUnidades, dicaDaUnidade, identidadeDaUnidade } from '../lib/unidadeDeMedida';
 
 // As duas abas (§19.1) são as duas bases que a tela consulta. O id persiste na
 // mesma chave do antigo <select> "Base de Dados", então quem já tinha a base
@@ -198,7 +198,7 @@ const DatabaseExplorer: React.FC<DatabaseExplorerProps> = ({ budget, favorites, 
     }, [editandoPropria]);
     const catalogoUnidades = React.useMemo(() => catalogoDeUnidades(unidadesCadastradas), [unidadesCadastradas]);
     const opcoesUnidade = React.useMemo(
-        () => catalogoUnidades.map(u => ({ id: u.codigo, name: u.codigo, nome: u.nome })),
+        () => catalogoUnidades.map(u => ({ id: u.codigo, name: u.codigo, nome: dicaDaUnidade(u) })),
         [catalogoUnidades],
     );
     const unidadeNoCatalogo = (texto: string | undefined) => {

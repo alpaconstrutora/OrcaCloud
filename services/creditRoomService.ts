@@ -141,9 +141,13 @@ function mapRoom(r: Row): CreditRoom {
         escopo: r.escopo === 'GRUPO' ? 'GRUPO' : 'EMPRESA',
         grupoOrganizationIds: Array.isArray(r.grupo_organization_ids) ? (r.grupo_organization_ids as unknown[]).map(String) : [],
         empreendimentoIds: Array.isArray(r.empreendimento_ids) ? (r.empreendimento_ids as unknown[]).map(String) : [],
+        // `null` gravado no jsonb não pode apagar o padrão (`{ dscr_minimo: null }`
+        // viraria DSCR mínimo nulo): só as chaves com valor entram por cima.
         parametrosCapacidade: {
             ...PARAMETROS_CAPACIDADE_PADRAO,
-            ...((r.parametros_capacidade ?? {}) as Partial<ParametrosCapacidade>),
+            ...(Object.fromEntries(
+                Object.entries((r.parametros_capacidade ?? {}) as Record<string, unknown>).filter(([, v]) => v != null),
+            ) as Partial<ParametrosCapacidade>),
         },
         status: String(r.status) as CreditRoomStatus,
         activeVersionId: str(r.active_version_id),
@@ -362,13 +366,17 @@ const PAGINA = 1000;
 async function todasAsPaginas<T>(
     consulta: (de: number, ate: number) => PromiseLike<{ data: T[] | null; error: unknown }>,
 ): Promise<T[]> {
+    // Para na página VAZIA, não na curta: se o `max-rows` do servidor for
+    // menor que PAGINA, toda página vem "curta" e pararia na primeira. Pelo
+    // mesmo motivo o passo é o que veio, não PAGINA (pularia linhas).
     const out: T[] = [];
-    for (let de = 0; ; de += PAGINA) {
+    for (let de = 0; ;) {
         const { data, error } = await consulta(de, de + PAGINA - 1);
         if (error) throw error;
         const linhas = data ?? [];
+        if (!linhas.length) return out;
         out.push(...linhas);
-        if (linhas.length < PAGINA) return out;
+        de += linhas.length;
     }
 }
 
@@ -640,7 +648,13 @@ async function titulosDaOrg(org: string): Promise<TituloCarteira[]> {
 
     const [comEmp, pagamentos, dealDoContrato] = await Promise.all([
         // Contrato → negócio → imóvel → empreendimento (e obra), o caminho da tela.
-        receivableService.resolveEmpreendimentos(linhas as unknown as Receivable[], org),
+        // Só linhas cujo contrato é um UUID: uma `tx-…` (ou qualquer id que
+        // não seja UUID) vira `.in('id', …)` inválido lá dentro, e o erro
+        // apaga o empreendimento de TODAS as linhas. `tx-…` segue pelo negócio.
+        receivableService.resolveEmpreendimentos(
+            linhas.filter(l => !dealIdDaRef(l.reference_id) && UUID.test(originIdFromRef(l.reference_id))) as unknown as Receivable[],
+            org,
+        ),
         datasDePagamento(linhas.filter(l => l.effective_status === 'RECEBIDO').map(l => l.id)),
         dealsDaCadeia([...contratos.values()]),
     ]);
@@ -685,6 +699,9 @@ async function titulosDaOrg(org: string): Promise<TituloCarteira[]> {
         };
     });
 }
+
+/** Status de dívida que `vw_debt_open_installments` deixa FORA da curva. */
+const STATUS_DIVIDA_FORA_DA_CURVA = new Set(['LIQUIDADO', 'CANCELADO', 'EM_NEGOCIACAO']);
 
 /** Locação vigente = status Ativo/Assinado e não substituída por renovação vigente. */
 const STATUS_LOCACAO_VIGENTE = new Set(['Ativo', 'Assinado']);
@@ -921,9 +938,11 @@ export const creditRoomService = {
         const posicoes = await Promise.all(orgs.map(o => debtAnalyticsService.position(o, dataBase)));
         const divida = posicoes.length === 1 ? posicoes[0] : somarPosicoes(posicoes);
 
+        const filtrando = room.empreendimentoIds.length > 0;
+
         const [
-            [obra, unidades, empreendimento, portfolio, recebiveis, novoServico12m, documentos, eac],
-            [escopo, titulos, locacoes, servicoPorOrg, portfoliosDoGrupo, servicoNovo],
+            [obra, unidades, empreendimento, portfolio, recebiveis, novoServico12mDaProposta, documentos, eac],
+            [escopo, titulos, locacoes, servicoPorOrg, portfoliosDoGrupo, servicoNovoDaProposta, despesasFiltradas, propostaNaCurva],
         ] = await Promise.all([
             Promise.all([
                 this.coletarObra(orgId, room.projectId),
@@ -943,18 +962,34 @@ export const creditRoomService = {
                 // A org dona já tem o NOI acima; só as demais do grupo vão buscar.
                 Promise.all(orgs.filter(o => o !== orgId).map(o => this.coletarPortfolio(o, dataBase))),
                 this.servicoNovoPorMes(room, dataBase, p),
+                // Com filtro, a despesa é só a dos imóveis dos empreendimentos escolhidos.
+                filtrando && p.despesa_operacional
+                    ? this.coletarDespesaDosEmpreendimentos(orgs, dataBase, room.empreendimentoIds)
+                    : Promise.resolve(null),
+                this.propostaJaNaCurva(room.debtContractId),
             ]),
         ]);
 
+        // Proposta já ativa: as parcelas dela já estão em `fn_debt_schedule_curve`
+        // (serviço ATUAL). Contá-las de novo como serviço novo seria 2×.
+        const novoServico12m = propostaNaCurva === true ? null : novoServico12mDaProposta;
+        const servicoNovo = propostaNaCurva === true ? {} : servicoNovoDaProposta;
+
+        // Com filtro de empreendimentos, título e locação SEM empreendimento não
+        // entram na renda nem na carteira — só no alerta TITULO_SEM_EMPREENDIMENTO.
+        // Sem filtro, entram (não há como dizer que são de fora).
+        const titulosDoEscopo = titulos && filtrando ? titulos.filter(t => !!t.empreendimentoId) : titulos;
+        const locacoesDoEscopo = locacoes && filtrando ? locacoes.filter(l => !!l.empreendimentoId) : locacoes;
+
         const [vendasSemTitulo, empreendimentos, unidadePorContrato] = await Promise.all([
             titulos ? this.coletarVendasSemTitulo(orgs, titulos, room.empreendimentoIds) : Promise.resolve(null),
-            titulos && locacoes
-                ? this.coletarEmpreendimentosDoEscopo(orgs, room.empreendimentoIds, titulos, locacoes, dataBase.slice(0, 7))
+            titulosDoEscopo && locacoesDoEscopo
+                ? this.coletarEmpreendimentosDoEscopo(orgs, room.empreendimentoIds, titulosDoEscopo, locacoesDoEscopo, dataBase.slice(0, 7))
                 : Promise.resolve(null),
-            titulos && locacoes
+            titulosDoEscopo && locacoesDoEscopo
                 ? this.coletarUnidadesDosContratos([
-                    ...titulos.map(t => t.contractId).filter((v): v is string => !!v),
-                    ...locacoes.map(l => l.contractId),
+                    ...titulosDoEscopo.map(t => t.contractId).filter((v): v is string => !!v),
+                    ...locacoesDoEscopo.map(l => l.contractId),
                 ])
                 : Promise.resolve(new Map<string, string>()),
         ]);
@@ -963,8 +998,11 @@ export const creditRoomService = {
         // não respondeu = despesa desconhecida, e não zero: zero inflaria a renda.
         const portfolioDe = new Map<string, typeof portfolio>([[orgId, portfolio]]);
         orgs.filter(o => o !== orgId).forEach((o, i) => portfolioDe.set(o, portfoliosDoGrupo[i]));
-        const despesaDe = (o: string): number | null => {
+        const despesaDe = (o: string, i: number): number | null => {
             if (!p.despesa_operacional) return 0;
+            // Filtro de empreendimentos: a despesa da org INTEIRA descontada do
+            // aluguel de parte dela subestimaria a renda — só a dos escolhidos.
+            if (filtrando) return despesasFiltradas?.[i] ?? null;
             const pf = portfolioDe.get(o);
             return pf ? round2(num(pf.despesa) / (pf.janelaMeses > 0 ? pf.janelaMeses : 1)) : null;
         };
@@ -990,10 +1028,13 @@ export const creditRoomService = {
         // A série precisa de todas as pernas: sem títulos, locações ou serviço
         // atual não há DSCR honesto; sem despesa, só se o aluguel entra. Sem
         // a lista de vendas sem parcelas, o alerta sumiria calado — cai tudo.
-        const despesaFalta = despesaMensal == null && fluxos.alugueis;
+        // Despesa só é exigida quando há aluguel no escopo para descontá-la. Sem
+        // saber se a proposta já está na curva, não dá para não contá-la 2×.
+        const despesaFalta = despesaMensal == null && fluxos.alugueis && (locacoesDoEscopo?.length ?? 0) > 0;
         const capacidade = ((): SnapshotCapacidade | null => {
-            if (!titulos || !locacoes || !servicoAtual || despesaFalta || !vendasSemTitulo) return null;
-            const entrada = entradaDe(titulos, locacoes, despesaMensal ?? 0, servicoAtual, servicoNovo);
+            if (!titulos || !titulosDoEscopo || !locacoesDoEscopo || !servicoAtual || despesaFalta || !vendasSemTitulo) return null;
+            if (!servicoNovo || propostaNaCurva == null) return null;
+            const entrada = entradaDe(titulosDoEscopo, locacoesDoEscopo, despesaMensal ?? 0, servicoAtual, servicoNovo);
             const { serie, vencido_na_data_base, a_vencer_mes_corrente } = serieDeRenda(entrada);
             const vgvDisponivel = empreendimentos
                 ? round2(empreendimentos.reduce((a, e) => a + num(e.vgv_disponivel), 0))
@@ -1006,18 +1047,20 @@ export const creditRoomService = {
                 parametros: { ...p, horizonte_meses: horizonte },
                 base: 'CONTRATADA',
                 serie,
-                recebido_12m: recebidoPorMes(titulos, dataBase),
+                recebido_12m: recebidoPorMes(titulosDoEscopo, dataBase),
                 vencido_na_data_base,
                 a_vencer_mes_corrente,
                 estoque: vgvDisponivel > 0
                     ? { vgv_disponivel: vgvDisponivel, haircut_pct: haircut, valor_elegivel: round2(vgvDisponivel * (1 - haircut / 100)) }
                     : null,
                 capacidade_maxima: capacidadeMaxima(serie, p, primeiroVencimentoSimulado(dataBase)),
-                alertas: alertasDaCarteira({ dataBase, titulos, locacoes, vendasSemTitulo }),
+                // `titulos` inteiro (com os sem empreendimento) só aqui: é o que
+                // alimenta TITULO_SEM_EMPREENDIMENTO; as locações já recortadas.
+                alertas: alertasDaCarteira({ dataBase, titulos, locacoes: locacoesDoEscopo, vendasSemTitulo }),
                 por_organizacao: orgs.map((o, i) => {
                     const s = serieDeRenda(entradaDe(
-                        titulos.filter(t => t.organizationId === o),
-                        locacoes.filter(l => l.organizationId === o),
+                        titulosDoEscopo.filter(t => t.organizationId === o),
+                        locacoesDoEscopo.filter(l => l.organizationId === o),
                         despesas[i] ?? 0,
                         servicoPorOrg[i] ?? {},
                         {},
@@ -1032,15 +1075,17 @@ export const creditRoomService = {
             };
         })();
 
-        const qualidade = titulos && locacoes
+        const qualidade = titulosDoEscopo && locacoesDoEscopo
             ? {
                 fonte: 'vw_receivables + internal_transactions.payment_date + contracts LOCACAO',
                 data_base: dataBase,
-                ...qualidadeDaRenda(entradaDe(titulos, locacoes, despesaMensal ?? 0, servicoAtual ?? {}, servicoNovo)),
+                ...qualidadeDaRenda(entradaDe(titulosDoEscopo, locacoesDoEscopo, despesaMensal ?? 0, servicoAtual ?? {}, servicoNovo ?? {})),
             }
             : null;
 
-        const contratos = titulos && locacoes ? this.montarCarteira(titulos, locacoes, dataBase, unidadePorContrato) : null;
+        const contratos = titulosDoEscopo && locacoesDoEscopo
+            ? this.montarCarteira(titulosDoEscopo, locacoesDoEscopo, dataBase, unidadePorContrato)
+            : null;
 
         const snapshot = buildSnapshot({
             dataBase,
@@ -1587,7 +1632,7 @@ export const creditRoomService = {
      * simulação por `buildSchedule` com o valor pedido, prazo/carência do room
      * quando preenchidos e 1º vencimento no dia 1 do 2º mês após a data-base.
      */
-    async servicoNovoPorMes(room: CreditRoom, dataBase: string, p: ParametrosCapacidade): Promise<Record<string, number>> {
+    async servicoNovoPorMes(room: CreditRoom, dataBase: string, p: ParametrosCapacidade): Promise<Record<string, number> | null> {
         const porMes = (linhas: { dueDate: string; total: number }[]) => {
             const out: Record<string, number> = {};
             for (const l of linhas) {
@@ -1616,8 +1661,70 @@ export const creditRoomService = {
                 gracePrincipalPeriods: room.graceMonths ?? p.carencia_meses,
             }));
         } catch (e) {
+            // `null`, não `{}`: sem serviço novo o DSCR pós sairia igual ao
+            // atual — otimista na frente do banco. A capacidade cai.
             console.warn('[creditRoomService] serviço da dívida nova indisponível no snapshot:', e);
-            return {};
+            return null;
+        }
+    },
+
+    /**
+     * A proposta vinculada já está na curva da dívida atual? A regra é a de
+     * `vw_debt_open_installments`, que alimenta `fn_debt_schedule_curve`:
+     * cronograma VIGENTE ativo, contrato fora de LIQUIDADO/CANCELADO/
+     * EM_NEGOCIACAO e `mirror_role` diferente de CREDORA. Se está, as parcelas
+     * dela já são `servico_atual`, e somá-las de novo como serviço novo
+     * contaria a dívida duas vezes. `null` = não deu para saber.
+     */
+    async propostaJaNaCurva(debtContractId?: string): Promise<boolean | null> {
+        if (!debtContractId) return false;
+        try {
+            const [contrato, vigente] = await Promise.all([
+                debtService.getContract(debtContractId),
+                debtService.getActiveSchedule(debtContractId, 'VIGENTE'),
+            ]);
+            return !!vigente
+                && !STATUS_DIVIDA_FORA_DA_CURVA.has(String(contrato.status))
+                && contrato.mirrorRole !== 'CREDORA';
+        } catch (e) {
+            console.warn('[creditRoomService] situação da proposta vinculada indisponível:', e);
+            return null;
+        }
+    },
+
+    /**
+     * Despesa operacional mensal SÓ dos imóveis dos empreendimentos escolhidos
+     * (por org, na ordem de `orgs`): Σ `ownExpense` de `getNoiMetrics.byProperty`
+     * dos imóveis cujo empreendimento está na lista, ÷ meses da janela. O
+     * `ownExpense` (e não o `expense` com subárvore) evita somar o filho duas
+     * vezes quando o edifício-pai também está na lista. Org que falha = `null`.
+     */
+    async coletarDespesaDosEmpreendimentos(
+        orgs: string[],
+        dataBase: string,
+        empreendimentoIds: string[],
+    ): Promise<(number | null)[]> {
+        try {
+            const permitidos = new Set(empreendimentoIds);
+            const empDoImovel = await empreendimentoPorImovel(orgs);
+            return await Promise.all(orgs.map(async o => {
+                try {
+                    const m = await rentalNoiService.getNoiMetrics(o, addMonths(dataBase, -12), dataBase, undefined, { throwOnError: true });
+                    if (!m) return null;
+                    let soma = 0;
+                    for (const [imovel, r] of m.byProperty) {
+                        const emp = empDoImovel.get(imovel);
+                        if (emp && permitidos.has(emp)) soma += num(r.ownExpense);
+                    }
+                    return round2(soma / (m.monthsInWindow > 0 ? m.monthsInWindow : 1));
+                } catch (e) {
+                    console.warn('[creditRoomService] despesa dos empreendimentos indisponível:', e);
+                    return null;
+                }
+            }));
+        } catch (e) {
+            console.warn('[creditRoomService] despesa dos empreendimentos indisponível:', e);
+            return orgs.map(() => null);
         }
     },
 

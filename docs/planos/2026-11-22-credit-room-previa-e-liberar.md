@@ -93,3 +93,9 @@ export function compararComLiberada(previa: CreditRoomVersion, liberada: CreditR
 - **Prévia não é guardada no banco** (some ao sair da tela): guardar rascunhos seria uma tabela nova e o cálculo leva segundos.
 - **Covenants seguem a versão liberada** (número oficial).
 - **PR #655 fechado sem merge**: a regra de comparação dele entra aqui como parte do aviso "desde a última liberada".
+
+## Estado (22/11/2026)
+- **Tasks 1 e 2 prontas e publicadas num PR próprio** (pedido do usuário: "Publicar as Tarefas 1 e 2 agora? sim"). Tasks 3 (simulação de parâmetros) e 4 (book da prévia) ficam para o PR seguinte — **2 de 4**.
+- Conferência na tela (só leitura, 0 escritas): C6 bank sem versão abre na prévia ("Ainda não liberada à instituição"); CR-00002 mostra a prévia com os 4 empreendimentos e "Desde a V1 liberada: empreendimentos 11 → 4 · contratos 16 → 9 · cadastro mudou: empreendimentos da capacidade".
+- PR #655 (aviso "o cadastro mudou depois da versão congelada") foi publicado antes, a pedido do usuário; este PR o substitui pela faixa da prévia.
+- Para o PR seguinte: gráfico com série toda zerada repete rótulos do eixo ("R$ 1", "R$ 0") — trocar por frase (§28.5).

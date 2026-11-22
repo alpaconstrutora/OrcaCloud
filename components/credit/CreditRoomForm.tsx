@@ -3,7 +3,7 @@ import { Plus, Trash2 } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import SaveStatus from '../ui/SaveStatus';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
-import { useOrgContext, errorMessage } from '../../hooks/useOrgContext';
+import { useOrgContext, useWritableOrganizations, errorMessage } from '../../hooks/useOrgContext';
 import { useStore } from '../../store/useStore';
 import { companyService } from '../../services/companyService';
 import { supplierService } from '../../services/supplierService';
@@ -28,6 +28,8 @@ import {
     type CreditRoomGuaranteeKind,
 } from '../../utils/creditRoomSnapshot';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
+import { PARAMETROS_CAPACIDADE_PADRAO, carenciaVemDaOperacao, parametrosEfetivos, prazoVemDaOperacao } from '../../utils/creditCapacity';
+import CreditRoomFormCapacidade, { campo, rotulo, normalizarEmpreendimentos, orgsDoGrupoGravaveis, type EscopoCapacidade } from './CreditRoomFormCapacidade';
 
 interface Props {
     open: boolean;
@@ -46,11 +48,12 @@ const VAZIO: CreditRoomInput = {
     fundingUses: [],
     equityCommitted: 0,
     equityContributed: 0,
+    escopo: 'EMPRESA',
+    grupoOrganizationIds: [],
+    empreendimentoIds: [],
+    parametrosCapacidade: { ...PARAMETROS_CAPACIDADE_PADRAO },
     status: 'PREPARACAO',
 };
-
-const campo = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
-const rotulo = 'text-xs font-semibold text-slate-500';
 
 /**
  * Criar/editar a operação de crédito. É só o CADASTRO — nada aqui calcula:
@@ -61,6 +64,7 @@ const rotulo = 'text-xs font-semibold text-slate-500';
  */
 export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
     const { orgId } = useOrgContext();
+    const orgsMembro = useWritableOrganizations();
     const obras = useStore(s => s.projects); // já é só OBRA e sem projeto de sistema (REGRAS #2/#3)
     const { dirty, markDirty, markSaved, confirmDiscard } = useUnsavedChanges();
 
@@ -75,6 +79,11 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
     const [dividas, setDividas] = React.useState<DebtContract[]>([]);
 
     const editando = !!room;
+    // Organização dona: a da sala; numa sala nova, a do topo (null = "Todas" — a dona
+    // só é escolhida no modal ao criar, REGRA #5).
+    const ownerOrgId = room?.organizationId ?? orgId;
+    // Empreendimentos do escopo (vem do bloco de capacidade) — normaliza `empreendimentoIds` ao salvar.
+    const listaEscopoRef = React.useRef<Empreendimento[] | null>(null);
 
     React.useEffect(() => {
         if (!open) return;
@@ -99,6 +108,10 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
             fundingUses: structuredClone(room.fundingUses ?? []),
             equityCommitted: room.equityCommitted,
             equityContributed: room.equityContributed,
+            escopo: room.escopo,
+            grupoOrganizationIds: [...room.grupoOrganizationIds],
+            empreendimentoIds: [...room.empreendimentoIds],
+            parametrosCapacidade: { ...room.parametrosCapacidade },
             status: room.status,
             notes: room.notes,
         } : { ...VAZIO });
@@ -145,6 +158,11 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
     const removeGarantia = (idx: number) =>
         set('guarantees', form.guarantees.filter((_, i) => i !== idx));
 
+    const patchCapacidade = (patch: Partial<EscopoCapacidade>) => {
+        setForm(prev => ({ ...prev, ...patch }));
+        markDirty();
+    };
+
     const handleBack = async () => {
         if (await confirmDiscard()) onClose();
     };
@@ -159,10 +177,45 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
             setErro('Haircut fica entre 0 e 100%.');
             return;
         }
+        const pc = form.parametrosCapacidade ?? PARAMETROS_CAPACIDADE_PADRAO;
+        if (!(pc.dscr_minimo > 0)) { setErro('O DSCR mínimo da capacidade precisa ser maior que zero.'); return; }
+        // Taxa vazia vira 0 no campo; 0% simularia a dívida nova SEM juros — serviço
+        // novo menor e DSCR pós/valor máximo otimistas na frente do banco.
+        if (!(pc.taxa_mensal_pct > 0)) { setErro('Informe a taxa mensal da capacidade (maior que zero) — sem ela a dívida nova seria simulada sem juros.'); return; }
+        // Prazo/carência que a conta usa de fato: os da operação vencem os da capacidade.
+        const ef = parametrosEfetivos(pc, form.termMonths, form.graceMonths);
+        const dePrazo = prazoVemDaOperacao(form.termMonths) ? ' da operação' : ' da capacidade';
+        const deCarencia = carenciaVemDaOperacao(form.graceMonths) ? ' da operação' : ' da capacidade';
+        if (!Number.isInteger(ef.prazo_meses) || ef.prazo_meses < 1) { setErro(`O prazo${dePrazo} precisa ser um número inteiro de meses (mínimo 1).`); return; }
+        if (!Number.isInteger(ef.carencia_meses)) { setErro(`A carência${deCarencia} precisa ser um número inteiro de meses.`); return; }
+        if (ef.carencia_meses < 0 || ef.carencia_meses >= ef.prazo_meses) {
+            setErro(`A carência${deCarencia} (${ef.carencia_meses} meses) precisa ser de 0 até menos que o prazo${dePrazo} (${ef.prazo_meses} meses).`);
+            return;
+        }
+        if (pc.haircut_estoque_pct < 0 || pc.haircut_estoque_pct > 100) { setErro('O haircut do estoque fica entre 0 e 100%.'); return; }
+        const grupo = form.escopo === 'GRUPO';
+        let grupoIds = form.grupoOrganizationIds ?? [];
+        if (grupo) {
+            // A dona sempre faz parte do grupo (aparece marcada e travada).
+            // Org de que o usuário não é membro sai do payload (o banco recusaria); a tela avisa.
+            grupoIds = orgsDoGrupoGravaveis(grupoIds, orgsMembro);
+            if (ownerOrgId && !grupoIds.includes(ownerOrgId)) grupoIds = [ownerOrgId, ...grupoIds];
+            if (grupoIds.length === 0) { setErro('Marque ao menos uma organização para o grupo.'); return; }
+        }
+        const lista = listaEscopoRef.current;
+        // Lista ainda carregando ou com falha: não grava seleção possivelmente obsoleta —
+        // mantém o que já estava salvo (edição) ou "todos" (criação).
+        const empIds = lista ? normalizarEmpreendimentos(form.empreendimentoIds ?? [], lista) : (room?.empreendimentoIds ?? []);
         setSalvando(true);
         setErro(null);
         try {
-            await onSave({ ...form, name: form.name.trim(), institutionName: form.institutionName?.trim() || undefined });
+            await onSave({
+                ...form,
+                name: form.name.trim(),
+                institutionName: form.institutionName?.trim() || undefined,
+                grupoOrganizationIds: grupo ? grupoIds : [],
+                empreendimentoIds: empIds,
+            });
             markSaved();
             setSavedAt(Date.now());
             if (!editando) onClose();
@@ -300,12 +353,25 @@ export default function CreditRoomForm({ open, onClose, room, onSave }: Props) {
                                 <label key={k} className="flex items-center gap-2 text-sm text-gray-700">
                                     <input type="checkbox" checked={form.eligibleFlows[k]} onChange={e => setFlow(k, e.target.checked)} className="w-4 h-4 rounded border-gray-300 text-blue-600" />
                                     {ELIGIBLE_FLOW_PT[k]}
-                                    {k !== 'noi' && <span className="text-xs text-gray-400">(sem fonte no MVP — vira aviso)</span>}
+                                    {k === 'operating_cash' && <span className="text-xs text-gray-500">(sem fonte no MVP — vira aviso)</span>}
                                 </label>
                             ))}
                         </div>
                     </div>
                 </section>
+
+                <CreditRoomFormCapacidade
+                    ativo={open}
+                    termMonths={form.termMonths}
+                    graceMonths={form.graceMonths}
+                    ownerOrgId={ownerOrgId}
+                    escopo={form.escopo ?? 'EMPRESA'}
+                    grupoOrganizationIds={form.grupoOrganizationIds ?? []}
+                    empreendimentoIds={form.empreendimentoIds ?? []}
+                    parametrosCapacidade={form.parametrosCapacidade ?? PARAMETROS_CAPACIDADE_PADRAO}
+                    onChange={patchCapacidade}
+                    onListaCarregada={lista => { listaEscopoRef.current = lista; }}
+                />
 
                 {/* Garantias */}
                 <section className="space-y-3">

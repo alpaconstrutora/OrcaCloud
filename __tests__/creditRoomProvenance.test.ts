@@ -10,7 +10,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { buildSnapshot, computeIndicators, type SnapshotInputs } from '../utils/creditRoomSnapshot';
+import { buildSnapshot, computeIndicators, type SnapshotCapacidade, type SnapshotInputs } from '../utils/creditRoomSnapshot';
+import { PARAMETROS_CAPACIDADE_PADRAO, type SerieMes } from '../utils/creditCapacity';
 import { explicarIndicador, type IndicadorKey } from '../utils/creditRoomProvenance';
 
 // Sem `as any`: o cast escondia nomes de campo errados no próprio fixture, e
@@ -142,5 +143,76 @@ describe('explicarIndicador', () => {
         const p = explicarIndicador('equity_pct', s, i);
         expect(p.resultado.valor).toBe(10);   // 3M ÷ 30M
         expect(p.ressalvas.join(' ')).toMatch(/Faltam aportar/);
+    });
+});
+
+// ── Schema 2: DSCR pela série mensal ─────────────────────────────────────────
+
+const serie12 = (over: Partial<SerieMes> = {}): SerieMes[] =>
+    Array.from({ length: 12 }, (_, k) => ({
+        mes: `2026-${String(k + 1).padStart(2, '0')}`,
+        vendas: 6_000, alugueis: 4_000, despesa_operacional: 0,
+        renda_liquida: 10_000, servico_atual: 5_000, servico_novo: 0,
+        folga: 5_000, dscr: 2, ...over,
+    }));
+
+const capacidade = (serie: SerieMes[]): SnapshotCapacidade => ({
+    fonte: 'creditCapacity', data_base: '2026-09-07',
+    parametros: { ...PARAMETROS_CAPACIDADE_PADRAO, taxa_mensal_pct: 1.5, prazo_meses: 48, carencia_meses: 6, sistema: 'SAC' },
+    base: 'CONTRATADA', serie, recebido_12m: [], vencido_na_data_base: 0, a_vencer_mes_corrente: 0,
+    estoque: null, capacidade_maxima: { parcela_maxima: 0, valor_maximo: 0 }, alertas: [], por_organizacao: [],
+});
+
+describe('explicarIndicador — schema 2 (série mensal)', () => {
+    it('🔴 DSCR pós SIMULADO: nomeia a série, a curva e os parâmetros do room — e a conta fecha', () => {
+        const s2 = base({ novoServico12m: null, capacidade: capacidade(serie12({ servico_novo: 2_500 })) });
+        const i2 = computeIndicators(s2);
+        const p = explicarIndicador('dscr_pos', s2, i2);
+        const [fluxo, atual, novo] = valores(p);
+        expect([fluxo, atual, novo]).toEqual([120_000, 60_000, 30_000]);
+        expect(r2(fluxo! / (atual! + novo!))).toBe(p.resultado.valor);
+        expect(p.resultado.valor).toBe(i2.dscr_pos);
+        const fontes = p.termos.map(t => t.fonte).join(' | ');
+        expect(fontes).toMatch(/vendas a vencer/);
+        expect(fontes).toMatch(/aluguéis contratados/);
+        expect(fontes).toMatch(/despesa operacional/);
+        expect(fontes).toMatch(/fn_debt_schedule_curve/);
+        expect(fontes).toMatch(/simulado com os parâmetros do room/);
+        expect(fontes).toMatch(/taxa 1,5% a\.m\., prazo 48 meses, carência 6 meses, SAC/);
+        // nada do caminho antigo
+        expect(fontes).not.toMatch(/NOI do portfólio × 12|servico_365/);
+        const ressalvas = p.ressalvas.join(' ');
+        expect(ressalvas).not.toMatch(/Nenhum contrato de dívida vinculado/);
+        expect(ressalvas).toMatch(/SIMULADO/);
+    });
+
+    it('DSCR pós com proposta vinculada: o serviço novo vem do cronograma dela', () => {
+        const s2 = base({ novoServico12m: 30_000, capacidade: capacidade(serie12({ servico_novo: 2_500 })) });
+        const p = explicarIndicador('dscr_pos', s2, computeIndicators(s2));
+        expect(p.termos[2].fonte).toMatch(/cronograma da proposta vinculada/);
+        expect(p.ressalvas.join(' ')).not.toMatch(/SIMULADO/);
+    });
+
+    it('DSCR pós sem serviço novo nenhum: null e ressalva própria do schema 2', () => {
+        const s2 = base({ novoServico12m: null, capacidade: capacidade(serie12()) });
+        const p = explicarIndicador('dscr_pos', s2, computeIndicators(s2));
+        expect(p.resultado.valor).toBeNull();
+        expect(p.termos[2].valor).toBeNull();
+        expect(p.ressalvas.join(' ')).toMatch(/nem cronograma da proposta, nem simulação/);
+    });
+
+    it('DSCR atual do schema 2 não fala em NOI × 12 nem em servico_365', () => {
+        const s2 = base({ capacidade: capacidade(serie12()) });
+        const p = explicarIndicador('dscr_atual', s2, computeIndicators(s2));
+        expect(p.termos).toHaveLength(2);
+        expect(p.termos.map(t => t.fonte).join(' ')).not.toMatch(/NOI do portfólio × 12|servico_365/);
+        expect(p.resultado.valor).toBe(2);
+        expect(p.ressalvas.join(' ')).toMatch(/R8/);
+    });
+
+    it('schema 1 (sem capacidade) mantém a explicação antiga', () => {
+        const p = explicarIndicador('dscr_pos', base(), computeIndicators(base()));
+        expect(p.termos[0].fonte).toBe('NOI do portfólio × 12 — só os fluxos marcados nesta operação (R8)');
+        expect(p.termos[1].fonte).toBe('debtAnalyticsService.position · servico_365');
     });
 });

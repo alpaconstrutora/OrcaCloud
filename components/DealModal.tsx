@@ -3851,8 +3851,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         </div>
                                         {/* Venda com juros: o total = soma das unidades + juros do plano.
                                             Essa diferença é esperada e sai em linha neutra; qualquer
-                                            outra continua no aviso âmbar. */}
-                                        {unitsTotal > 0 && Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal) >= 0.01 && (
+                                            outra continua no aviso âmbar.
+                                            Só venda: em locação a composição é o valor MENSAL e o total
+                                            é mensal × nº de meses — compará-los acusava diferença em todo
+                                            aluguel (mesma razão do efeito que semeia o total). Quem confere
+                                            o total da locação é o "Plano fechado" do plano de pagamento. */}
+                                        {ehVenda && unitsTotal > 0 &&Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal) >= 0.01 && (
                                             formData.price_before_interest != null && jurosNoPlano > 0
                                                 && Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal - jurosNoPlano) < 0.01
                                                 ? (

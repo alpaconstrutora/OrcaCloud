@@ -2,6 +2,7 @@ import React from 'react';
 import { useWritableOrganizations } from '../../hooks/useOrgContext';
 import { useStore } from '../../store/useStore';
 import { empreendimentoService } from '../../services/empreendimentoService';
+import { campo, rotulo, campoTravado, MOTIVO_PRAZO_DA_OPERACAO, MOTIVO_CARENCIA_DA_OPERACAO } from './camposDoRoom';
 import type { Empreendimento } from '../../types/empreendimento';
 import type { CreditRoomEscopo } from '../../types/creditRoom';
 import {
@@ -11,16 +12,9 @@ import {
     type ParametrosCapacidade,
 } from '../../utils/creditCapacity';
 
-/** Classes de campo/rótulo do formulário do Credit Room (h-9, rótulo sem caixa alta). */
-export const campo = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
-export const rotulo = 'text-xs font-semibold text-slate-500';
+export { campo, rotulo, MOTIVO_PRAZO_DA_OPERACAO, MOTIVO_CARENCIA_DA_OPERACAO };
 
 const checkbox = 'w-4 h-4 rounded border-gray-300 text-blue-600';
-/** Campo travado: o valor segue escuro (§32); o estado se diz pelo fundo, cursor e texto de apoio. */
-const campoTravado = `${campo} text-gray-900 disabled:bg-slate-50 disabled:cursor-not-allowed`;
-
-export const MOTIVO_PRAZO_DA_OPERACAO = 'Vem do prazo da operação (Solicitação) — para mudar, altere o prazo lá ou deixe-o vazio.';
-export const MOTIVO_CARENCIA_DA_OPERACAO = 'Vem da carência da operação (Solicitação) — para mudar, altere a carência lá ou deixe-a vazia.';
 const itemCheck = 'flex items-center gap-2 text-sm text-gray-700';
 
 export interface EscopoCapacidade {

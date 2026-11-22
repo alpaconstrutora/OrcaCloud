@@ -9,23 +9,26 @@
  *  - erro na prévia (ex.: não-membro do grupo) aparece com "Tentar de novo" e as versões liberadas seguem selecionáveis;
  *  - sala sem versão liberada: as abas funcionam e a faixa diz "Ainda não liberada à instituição";
  *  - "Liberar" entrega ao serviço o MESMO objeto da prévia da tela; trocar a data-base no painel recalcula antes;
- *  - o botão desligado diz o motivo.
+ *  - o botão desligado diz o motivo;
+ *  - Capacidade da prévia: "Salvar no room" grava SÓ os parâmetros (salvarParametrosCapacidade) e avisa onChanged;
+ *    a versão liberada não tem o painel de simulação.
  */
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { prepararVersao, freezeVersion, listVersions, listDocuments } = vi.hoisted(() => ({
+const { prepararVersao, freezeVersion, listVersions, listDocuments, salvarParametrosCapacidade } = vi.hoisted(() => ({
     prepararVersao: vi.fn(),
     freezeVersion: vi.fn(),
     listVersions: vi.fn(),
     listDocuments: vi.fn(),
+    salvarParametrosCapacidade: vi.fn(),
 }));
 
 // O CreditRoomDetail importa o store inteiro; sem o cliente Supabase o módulo lança por falta de variáveis de ambiente.
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
 vi.mock('../services/creditRoomService', () => ({
-    creditRoomService: { prepararVersao, freezeVersion, listVersions, listDocuments },
+    creditRoomService: { prepararVersao, freezeVersion, listVersions, listDocuments, salvarParametrosCapacidade },
 }));
 
 import { ConfirmProvider } from '../components/ui/confirm';
@@ -101,7 +104,7 @@ const dinheiro = (v: number) => formatMoney(v).replace(/\s/g, ' ');
 
 beforeEach(() => {
     localStorage.clear();
-    for (const f of [prepararVersao, freezeVersion, listVersions, listDocuments]) f.mockReset();
+    for (const f of [prepararVersao, freezeVersion, listVersions, listDocuments, salvarParametrosCapacidade]) f.mockReset();
     listVersions.mockResolvedValue([versaoLiberada()]);
     listDocuments.mockResolvedValue([]);
 });
@@ -454,5 +457,61 @@ describe('LiberarSheet — Liberar para a instituição', () => {
         const painel = screen.getAllByRole('alert').find(a => /Tentar de novo/.test(a.textContent ?? ''))!;
         fireEvent.click(within(painel).getByRole('button', { name: 'Tentar de novo' }));
         await waitFor(() => expect(botaoLiberar()).not.toBeDisabled());
+    });
+});
+
+describe('CreditRoomDetail — simular parâmetros na aba Capacidade', () => {
+    const abrirCapacidade = (r: CreditRoom, onChanged = vi.fn()) => {
+        localStorage.setItem(`creditRoom:${r.id}:aba`, JSON.stringify('capacidade'));
+        render(
+            <ConfirmProvider>
+                <CreditRoomDetail room={r} onBack={vi.fn()} onEdit={vi.fn()} onChanged={onChanged} />
+            </ConfirmProvider>,
+        );
+        return onChanged;
+    };
+
+    it('simular não grava; "Salvar no room" chama salvarParametrosCapacidade com o cadastro editado e avisa onChanged', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        const r = sala();
+        const salvo = { ...r, parametrosCapacidade: { ...PARAMETROS_CAPACIDADE_PADRAO, taxa_mensal_pct: 2.2 } } as CreditRoom;
+        salvarParametrosCapacidade.mockResolvedValue(salvo);
+        const onChanged = abrirCapacidade(r);
+
+        await screen.findByText('Simular parâmetros');
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+        expect(screen.getByText('simulado — não salvo')).toBeInTheDocument();
+        expect(salvarParametrosCapacidade).not.toHaveBeenCalled();
+        expect(freezeVersion).not.toHaveBeenCalled();
+        expect(prepararVersao).toHaveBeenCalledTimes(1);
+
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar no room' }));
+
+        await waitFor(() => expect(onChanged).toHaveBeenCalledWith(salvo));
+        expect(salvarParametrosCapacidade).toHaveBeenCalledWith(r, { ...PARAMETROS_CAPACIDADE_PADRAO, taxa_mensal_pct: 2.2 });
+        expect(freezeVersion).not.toHaveBeenCalled();
+    });
+
+    it('falha ao salvar mostra o motivo e não avisa onChanged', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        salvarParametrosCapacidade.mockRejectedValue(new Error('permission denied'));
+        const onChanged = abrirCapacidade(sala());
+
+        await screen.findByText('Simular parâmetros');
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar no room' }));
+
+        expect(await screen.findByText(/permission denied/)).toBeInTheDocument();
+        expect(onChanged).not.toHaveBeenCalled();
+    });
+
+    it('a versão liberada (somente leitura) não tem o painel', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        abrirCapacidade(sala());
+        await screen.findByText('Simular parâmetros');
+
+        fireEvent.change(seletor(), { target: { value: 'v1' } });
+        expect(await screen.findByText(/V1 liberada em .* Somente leitura/)).toBeInTheDocument();
+        expect(screen.queryByText('Simular parâmetros')).toBeNull();
     });
 });

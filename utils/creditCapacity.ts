@@ -101,6 +101,32 @@ export function parametrosEfetivos(
     };
 }
 
+/**
+ * Regras que os parâmetros da capacidade precisam cumprir para a conta valer —
+ * as mesmas no formulário do room ("Salvar") e na simulação da aba Capacidade
+ * ("Salvar no room"). Devolve a mensagem do 1º problema, ou `null` se estiver ok.
+ * Prazo/carência são validados pelos valores EFETIVOS (os da operação vencem).
+ * `NaN` (campo vazio) nunca passa.
+ */
+export function validarParametrosCapacidade(
+    pc: ParametrosCapacidade, termMonths?: number | null, graceMonths?: number | null,
+): string | null {
+    if (!(pc.dscr_minimo > 0)) return 'O DSCR mínimo da capacidade precisa ser maior que zero.';
+    // Taxa vazia vira 0 no campo; 0% simularia a dívida nova SEM juros — serviço
+    // novo menor e DSCR pós/valor máximo otimistas na frente do banco.
+    if (!(pc.taxa_mensal_pct > 0)) return 'Informe a taxa mensal da capacidade (maior que zero) — sem ela a dívida nova seria simulada sem juros.';
+    const ef = parametrosEfetivos(pc, termMonths, graceMonths);
+    const dePrazo = prazoVemDaOperacao(termMonths) ? ' da operação' : ' da capacidade';
+    const deCarencia = carenciaVemDaOperacao(graceMonths) ? ' da operação' : ' da capacidade';
+    if (!Number.isInteger(ef.prazo_meses) || ef.prazo_meses < 1) return `O prazo${dePrazo} precisa ser um número inteiro de meses (mínimo 1).`;
+    if (!Number.isInteger(ef.carencia_meses)) return `A carência${deCarencia} precisa ser um número inteiro de meses.`;
+    if (ef.carencia_meses < 0 || ef.carencia_meses >= ef.prazo_meses) {
+        return `A carência${deCarencia} (${ef.carencia_meses} meses) precisa ser de 0 até menos que o prazo${dePrazo} (${ef.prazo_meses} meses).`;
+    }
+    if (!(pc.haircut_estoque_pct >= 0 && pc.haircut_estoque_pct <= 100)) return 'O haircut do estoque fica entre 0 e 100%.';
+    return null;
+}
+
 /** O prazo da capacidade vem da operação? (mesma regra de `parametrosEfetivos`) */
 export const prazoVemDaOperacao = (termMonths?: number | null): boolean => termMonths != null && termMonths > 0;
 /** A carência da capacidade vem da operação? (mesma regra de `parametrosEfetivos`) */

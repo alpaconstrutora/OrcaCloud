@@ -9,7 +9,7 @@ import { formatDateBR, formatDateTimeBR, formatMoney } from '../ui/Format';
 import { errorMessage } from '../../hooks/useOrgContext';
 import { creditRoomService, type VersaoPreparada } from '../../services/creditRoomService';
 import { creditRoomBookService } from '../../services/creditRoomBookService';
-import { ALERTA_PT, resumoDaCapacidade } from '../../utils/creditCapacity';
+import { ALERTA_PT, resumoDaCapacidade, type ParametrosCapacidade } from '../../utils/creditCapacity';
 import { hojeLocalISO } from '../../utils/periodoControladoria';
 import { ID_DA_PREVIA, compararComLiberada, horaDaPrevia, versaoDaPrevia } from '../../utils/creditRoomPrevia';
 import { MUDANCA_PT, mudancasDesdeAVersao } from '../../utils/creditRoomVersaoDesatualizada';
@@ -223,6 +223,15 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         }
     };
 
+    // "Salvar no room" da simulação: grava SÓ os parâmetros no cadastro; o room novo invalida a prévia, que é recalculada com eles.
+    const salvarParametros = async (parametros: ParametrosCapacidade) => {
+        try {
+            onChanged(await creditRoomService.salvarParametrosCapacidade(room, parametros));
+        } catch (e) {
+            throw new Error(errorMessage(e, 'Não foi possível salvar os parâmetros no room.'));
+        }
+    };
+
     const mudarStatus = async (status: CreditRoomStatus) => {
         try {
             onChanged(await creditRoomService.setStatus(room, status));
@@ -410,7 +419,15 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                 const exibida = mostrandoPrevia ? versaoPrevia : versaoEscolhida;
                 const abaConteudo = !exibida ? null
                     : aba === 'visao' ? <CreditRoomIndicators version={exibida} accent="indigo" />
-                        : aba === 'capacidade' ? <CreditRoomCapacity version={exibida} accent="indigo" />
+                        : aba === 'capacidade' ? (
+                            <CreditRoomCapacity
+                                version={exibida} accent="indigo"
+                                // Só a prévia ganha o painel "Simular parâmetros"; versão liberada é somente leitura.
+                                simulacao={mostrandoPrevia && previaEst.status === 'ok' && previaEst.previa
+                                    ? { room, servicoNovoSimulado: previaEst.previa.servicoNovoSimulado, onSalvar: salvarParametros }
+                                    : undefined}
+                            />
+                        )
                             : <CreditRoomEmpreendimentos version={exibida} accent="indigo" documentos={documentosCarregados ? documentos : undefined} />;
                 if (!mostrandoPrevia) {
                     return (

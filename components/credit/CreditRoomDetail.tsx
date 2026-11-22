@@ -160,20 +160,22 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         () => versoes.find(v => v.id === room.activeVersionId) ?? versoes[0] ?? null,
         [versoes, room.activeVersionId],
     );
-    // Devolve a prévia calculada (o book baixado de uma aba que não a calcula usa o valor direto); `null` se falhou ou foi superada.
-    const calcularPrevia = React.useCallback(async (dataBase?: string): Promise<{ previa: VersaoPreparada; calculadaEm: string } | null> => {
+    // Devolve o resultado (o book baixado de uma aba que não calcula a prévia usa o valor direto): pronta, com erro,
+    // ou superada (o cadastro mudou ou outro cálculo começou enquanto este rodava — o resultado foi descartado).
+    const calcularPrevia = React.useCallback(async (dataBase?: string): Promise<ResultadoPrevia> => {
         const minha = ++geracaoPrevia.current;
         setPreviaEst({ status: 'carregando' });
         try {
             const p = await creditRoomService.prepararVersao(room, dataBase || hojeLocalISO());
-            if (minha !== geracaoPrevia.current) return null;
+            if (minha !== geracaoPrevia.current) return { tipo: 'superada' };
             const calculadaEm = new Date().toISOString();
             setPreviaEst({ status: 'ok', previa: p, calculadaEm });
-            return { previa: p, calculadaEm };
+            return { tipo: 'ok', previa: p, calculadaEm };
         } catch (e) {
-            if (minha !== geracaoPrevia.current) return null;
-            setPreviaEst({ status: 'erro', erro: errorMessage(e, 'Não foi possível calcular a prévia.') });
-            return null;
+            if (minha !== geracaoPrevia.current) return { tipo: 'superada' };
+            const erro = errorMessage(e, 'Não foi possível calcular a prévia.');
+            setPreviaEst({ status: 'erro', erro });
+            return { tipo: 'erro', erro };
         }
     }, [room]);
 
@@ -209,19 +211,24 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     // A versão que está na tela (prévia pronta, ou a liberada escolhida): é dela que saem o book e as sugestões do Data Room.
     const versaoNaTela = mostrandoPrevia ? versaoPrevia : versaoEscolhida;
     // Por que ainda não há versão para o book / sugestões (prévia calculando ou com erro); `null` quando há.
+    // Com erro e uma versão liberada à mão, a saída está no seletor.
     const motivoSemVersao = versaoNaTela ? null
-        : previaEst.status === 'erro' ? previaEst.erro
+        : previaEst.status === 'erro' ? `${previaEst.erro}${ativa ? ` — ou escolha a V${ativa.versionNo} no seletor (aba Visão)` : ''}`
             : 'Calculando a prévia…';
-    // Aba que não calcula a prévia sozinha: o botão do book calcula ao clicar, então só desliga enquanto calcula ou se deu erro.
-    const bookSemVersao = !versaoNaTela && previaEst.status === 'idle' && !precisaDaPrevia ? null : motivoSemVersao;
+    // Aba que não calcula a prévia sozinha: o botão do book calcula ao clicar. Prévia que nunca foi calculada, que deu erro
+    // ou que ficou de outro dia vale "nenhuma": o clique (re)calcula. Só desliga enquanto calcula.
+    const previaPrecisaCalcular = previaEst.status === 'idle' || previaEst.status === 'erro' || previaDeOutroDia;
+    const bookSemVersao = !versaoNaTela && previaPrecisaCalcular && !precisaDaPrevia ? null : motivoSemVersao;
+    // Simulação não salva na Capacidade: o book sai da prévia do CADASTRO, sem ela.
+    const bookSemSimulacao = simulacaoPendente && mostrandoPrevia;
 
     // Room de Grupo: o Data Room mostra de qual empresa é cada documento (nome vem da versão ativa).
     const grupoEscopo = room.escopo === 'GRUPO';
     const nomeDaOrg = React.useMemo(() => {
         const m = new Map<string, string>();
-        for (const o of ativa?.snapshot.escopo?.organizacoes ?? []) m.set(o.id, o.nome);
+        for (const o of (versaoNaTela ?? ativa)?.snapshot.escopo?.organizacoes ?? []) m.set(o.id, o.nome);
         return m;
-    }, [ativa]);
+    }, [versaoNaTela, ativa]);
 
     // Book em PDF da versão NA TELA: a prévia de hoje (sai carimbada "PRÉVIA — não liberada à instituição") ou a
     // liberada escolhida. Nunca leva a marca do credor nem entra no log dele. Numa aba que não calcula a prévia,
@@ -233,9 +240,16 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
         setErro(null);
         try {
             let versao = versaoNaTela;
-            if (!versao && previaEst.status === 'idle') {
+            if (!versao && previaPrecisaCalcular) {
                 const r = await calcularPrevia();
-                if (!r) return;
+                if (r.tipo === 'superada') {
+                    setErro('O cadastro mudou enquanto a prévia era calculada — clique de novo.');
+                    return;
+                }
+                if (r.tipo === 'erro') {
+                    setErro(r.erro);
+                    return;
+                }
                 versao = versaoDaPrevia(r.previa, r.calculadaEm, room.organizationId);
             }
             if (!versao) return;
@@ -413,13 +427,20 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
                     <button onClick={onEdit} className="h-9 px-3.5 text-sm font-medium text-slate-600 border border-gray-200 hover:bg-slate-50 rounded-[6px] transition-all">
                         Editar
                     </button>
+                    {bookSemSimulacao && (
+                        <span role="note" className="text-xs text-amber-700">
+                            O book sai sem a simulação não salva
+                        </span>
+                    )}
                     {/* Desligado sempre diz o motivo: o wrapper carrega o title (botão disabled não dispara hover). */}
                     <span
                         className="inline-flex shrink-0"
                         title={gerandoBook ? 'Gerando o book, aguarde'
-                            : bookSemVersao ?? (mostrandoPrevia
-                                ? 'PDF da prévia de hoje, com fotos — marcado como não liberado à instituição'
-                                : `PDF da V${versaoEscolhida!.versionNo} liberada, com fotos`)}
+                            : bookSemVersao ?? (bookSemSimulacao
+                                ? 'PDF da prévia de hoje — sem a simulação não salva; salve no room para incluí-la'
+                                : mostrandoPrevia
+                                    ? 'PDF da prévia de hoje, com fotos — marcado como não liberado à instituição'
+                                    : `PDF da V${versaoEscolhida!.versionNo} liberada, com fotos`)}
                     >
                         <button
                             onClick={() => void baixarBook()}
@@ -828,6 +849,12 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
 }
 
 // ── Prévia de hoje: comparação com a liberada e "Liberar para a instituição" ─────────────────
+
+/** Resultado de um cálculo da prévia sob demanda: pronta, com erro, ou superada (descartada — o cadastro mudou ou outro cálculo começou). */
+type ResultadoPrevia =
+    | { tipo: 'ok'; previa: VersaoPreparada; calculadaEm: string }
+    | { tipo: 'erro'; erro: string }
+    | { tipo: 'superada' };
 
 /** A prévia no detalhe interno: calculada com `prepararVersao` (lê tudo, não grava nada). */
 export interface PreviaEstado {

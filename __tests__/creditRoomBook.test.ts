@@ -242,6 +242,20 @@ describe('montarBook - book interno da prévia', () => {
         expect(paginas(doc)[1]).toContain('prévia de hoje');
     });
 
+    it('estresse: a prévia fala "série desta prévia" / "valores desta prévia", nunca "congelad"', () => {
+        const t = texto(montarBook(previaDe(), extrasPadrao()));
+        expect(t).toContain('série desta prévia');
+        expect(t).toContain('Base = valores desta prévia');
+        expect(t).not.toContain('série congelada');
+        expect(t).not.toContain('valores congelados');
+    });
+
+    it('estresse: a versão liberada segue falando em série congelada e valores congelados', () => {
+        const t = texto(montarBook(versaoSchema2(), extrasPadrao()));
+        expect(t).toContain('série congelada desta versão');
+        expect(t).toContain('Base = valores congelados na versão');
+    });
+
     it('versão liberada: sem a marca da prévia e com "V{n}" como sempre', () => {
         const doc = montarBook(versaoSchema2(), extrasPadrao());
         expect(texto(doc)).not.toContain('PRÉVIA');

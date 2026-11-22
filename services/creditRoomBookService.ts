@@ -121,6 +121,7 @@ export const creditRoomBookService = {
         versao: CreditRoomVersion,
         opts: { marcaDagua?: string; documentos: ExtrasDoBook['documentos'] },
     ): Promise<void> {
+        if (ehPrevia(versao) && opts.marcaDagua) throw new Error('Prévia não sai para a instituição.');
         const { montarBook, urlsDasFotosDoBook } = await import('../utils/creditRoomBook');
         const imagens = await baixarImagens(urlsDasFotosDoBook(versao));
         const doc = montarBook(versao, {

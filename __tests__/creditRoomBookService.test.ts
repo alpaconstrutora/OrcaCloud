@@ -114,7 +114,7 @@ describe('creditRoomBookService', () => {
         expect(nomeDoArquivoDaPrevia('CR/07 x', '2026-11-22')).toBe('book-CR_07_x-previa-2026-11-22.pdf');
     });
 
-    it('baixar: a prévia sai com o nome "previa" e sem marca do credor; a liberada, como sempre', async () => {
+    it('baixar: a prévia sai com o nome "previa"; a liberada, com o nome dela e a marca do credor', async () => {
         const sala = { code: 'CR-0007', name: 'Operação', institutionName: null };
         const liberada = versaoSchema2();
         const previa = versaoDaPrevia(
@@ -124,9 +124,23 @@ describe('creditRoomBookService', () => {
         save.mockReset();
         await creditRoomBookService.baixar(sala, previa, { documentos: [] });
         expect(save).toHaveBeenLastCalledWith('book-CR-0007-previa-2026-11-22.pdf');
-        expect(montarBook).toHaveBeenLastCalledWith(previa, expect.objectContaining({ marcaDagua: undefined }));
 
         await creditRoomBookService.baixar(sala, liberada, { documentos: [], marcaDagua: 'analista@banco.com' });
         expect(save).toHaveBeenLastCalledWith('book-CR-0007-V3.pdf');
+    });
+
+    it('baixar: a prévia com marca do credor é recusada (não sai para a instituição) e nada é gerado', async () => {
+        const sala = { code: 'CR-0007', name: 'Operação', institutionName: null };
+        const liberada = versaoSchema2();
+        const previa = versaoDaPrevia(
+            { roomId: liberada.creditRoomId, dataBase: '2026-11-22', snapshot: liberada.snapshot, indicators: liberada.indicators, servicoNovoSimulado: true },
+            '2026-11-22T17:30:00.000Z', liberada.organizationId,
+        );
+        save.mockReset();
+        montarBook.mockClear();
+        await expect(creditRoomBookService.baixar(sala, previa, { documentos: [], marcaDagua: 'analista@banco.com' }))
+            .rejects.toThrow('Prévia não sai para a instituição.');
+        expect(montarBook).not.toHaveBeenCalled();
+        expect(save).not.toHaveBeenCalled();
     });
 });

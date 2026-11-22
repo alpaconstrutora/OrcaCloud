@@ -167,6 +167,95 @@ describe('CreditRoomDetail — book e Data Room internos', () => {
         expect(baixar).not.toHaveBeenCalled();
     });
 
+    it('prévia com erro e uma versão liberada: o motivo aponta o seletor (V{n})', async () => {
+        prepararVersao.mockRejectedValue(new Error('Falha ao calcular.'));
+        abrir(sala());
+        await waitFor(() => expect(botaoBook().parentElement).toHaveAttribute('title', 'Falha ao calcular. — ou escolha a V1 no seletor (aba Visão)'));
+        expect(botaoBook()).toBeDisabled();
+    });
+
+    it('numa aba que não calcula a prévia, o erro da prévia NÃO trava o book: o botão segue ligado e o clique tenta de novo', async () => {
+        prepararVersao.mockRejectedValueOnce(new Error('Rede caiu.'));
+        abrir(sala(), 'participantes');
+        await waitFor(() => expect(listVersions).toHaveBeenCalled());
+        expect(botaoBook()).toBeEnabled();
+        fireEvent.click(botaoBook());
+
+        expect((await screen.findAllByText('Rede caiu.'))[0]).toBeInTheDocument();
+        expect(baixar).not.toHaveBeenCalled();
+        // Com erro a prévia vale "nenhuma": o botão não desliga (nem fica preso no erro) e o novo clique recalcula.
+        expect(botaoBook()).toBeEnabled();
+        fireEvent.click(botaoBook());
+        await waitFor(() => expect(baixar).toHaveBeenCalledTimes(1));
+        expect(prepararVersao).toHaveBeenCalledTimes(2);
+        expect(baixar.mock.calls[0][1].id).toBe('previa');
+    });
+
+    it('prévia de OUTRO dia numa aba que não a calcula: o botão não fica preso em "Calculando…" — o clique recalcula para hoje', async () => {
+        vi.useFakeTimers({ toFake: ['Date'] });
+        try {
+            vi.setSystemTime(new Date('2026-11-22T12:00:00'));
+            prepararVersao.mockImplementation(async (_r: unknown, dataBase: string) => ({ ...preparada(), dataBase }));
+            abrir(sala());
+            await waitFor(() => expect(botaoBook()).toBeEnabled());
+            expect(prepararVersao).toHaveBeenCalledTimes(1);
+
+            // Virou o dia com a aba aberta; a aba "Participantes" não recalcula sozinha.
+            vi.setSystemTime(new Date('2026-11-23T12:00:00'));
+            fireEvent.click(screen.getByRole('tab', { name: /^Participantes/ }));
+            await waitFor(() => expect(listVersions).toHaveBeenCalled());
+            expect(botaoBook()).toBeEnabled();
+            expect(botaoBook().parentElement?.getAttribute('title') ?? '').not.toBe('Calculando a prévia…');
+            expect(prepararVersao).toHaveBeenCalledTimes(1);
+
+            fireEvent.click(botaoBook());
+            await waitFor(() => expect(baixar).toHaveBeenCalledTimes(1));
+            expect(prepararVersao).toHaveBeenCalledTimes(2);
+            expect(prepararVersao.mock.calls[1][1]).toBe('2026-11-23');
+            expect(baixar.mock.calls[0][1].dataBase).toBe('2026-11-23');
+        } finally {
+            vi.useRealTimers();
+        }
+    });
+
+    it('cálculo sob demanda superado (o cadastro mudou no meio): avisa em vez de não fazer nada', async () => {
+        let resolver!: (p: ReturnType<typeof preparada>) => void;
+        prepararVersao.mockReturnValueOnce(new Promise(r => { resolver = r; }));
+        const r = sala();
+        const ui = (room: CreditRoom) => (
+            <ConfirmProvider>
+                <CreditRoomDetail room={room} onBack={vi.fn()} onEdit={vi.fn()} onChanged={vi.fn()} />
+            </ConfirmProvider>
+        );
+        localStorage.setItem(`creditRoom:${r.id}:aba`, JSON.stringify('participantes'));
+        const { rerender } = render(ui(r));
+        await waitFor(() => expect(listVersions).toHaveBeenCalled());
+        fireEvent.click(botaoBook());
+        await waitFor(() => expect(prepararVersao).toHaveBeenCalledTimes(1));
+
+        // Cadastro salvo: o room novo invalida a prévia que estava sendo calculada.
+        rerender(ui({ ...r, name: 'Operação (editada)' } as CreditRoom));
+        resolver(preparada());
+
+        expect(await screen.findByText('O cadastro mudou enquanto a prévia era calculada — clique de novo.')).toBeInTheDocument();
+        expect(baixar).not.toHaveBeenCalled();
+        await waitFor(() => expect(botaoBook()).toBeEnabled());
+    });
+
+    it('Data Room: a coluna "Empresa" usa a versão NA TELA (a prévia), não a ativa', async () => {
+        // A ativa (V1) conhece só a Alfa; a prévia de hoje traz também a Beta.
+        const previaComBeta = preparada();
+        previaComBeta.snapshot = {
+            ...previaComBeta.snapshot,
+            escopo: { ...previaComBeta.snapshot.escopo!, organizacoes: [{ id: 'o1', nome: 'Alfa Construtora', cnpj: null }, { id: 'o2', nome: 'Beta Locações', cnpj: null }] },
+        };
+        prepararVersao.mockResolvedValue(previaComBeta);
+        listDocuments.mockResolvedValue([{ ...DOCUMENTO, organizationId: 'o2' }]);
+        abrir(sala({ escopo: 'GRUPO' }), 'dataroom');
+        await screen.findByText('Matrícula.pdf');
+        expect(await screen.findByText('Beta Locações')).toBeInTheDocument();
+    });
+
     it('Data Room: "Sugerir documentos" liga com a prévia pronta e entrega a PRÉVIA ao painel', async () => {
         abrir(sala(), 'dataroom');
         await screen.findByText('Matrícula.pdf');

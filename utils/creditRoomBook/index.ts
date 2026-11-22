@@ -1,5 +1,6 @@
 /**
- * Book de crédito em PDF — montado SÓ a partir da VERSÃO congelada do Credit Room.
+ * Book de crédito em PDF — montado SÓ a partir da VERSÃO do Credit Room: a congelada (liberada) ou a prévia de hoje
+ * (carimbada "PRÉVIA — não liberada à instituição", que nunca leva a marca do credor).
  *
  * Puro (como `utils/imovibRelatorioPdf.ts`): recebe a versão e as imagens já
  * baixadas (dataURL) e devolve o `jsPDF` sem salvar — dá para gerar e conferir

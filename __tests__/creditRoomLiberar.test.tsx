@@ -548,6 +548,26 @@ describe('CreditRoomDetail — simular parâmetros na aba Capacidade', () => {
         expect(screen.queryByText(aviso)).toBeNull();
     });
 
+    it('"Baixar book" avisa que a simulação não salva fica FORA do book (título e nota âmbar); some ao voltar aos do room', async () => {
+        prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
+        abrirCapacidade(sala());
+        await screen.findByText('Simular parâmetros');
+        const botao = () => screen.getByRole('button', { name: /Baixar book/ });
+        const nota = /O book sai sem a simulação não salva/;
+        await waitFor(() => expect(botao()).toBeEnabled());
+        expect(botao().parentElement?.getAttribute('title')).toMatch(/^PDF da prévia de hoje, com fotos/);
+        expect(screen.queryByText(nota)).toBeNull();
+
+        fireEvent.change(screen.getByLabelText('Taxa mensal (%)'), { target: { value: '2.2' } });
+        expect(await screen.findByText(nota)).toBeInTheDocument();
+        expect(botao().parentElement).toHaveAttribute('title', 'PDF da prévia de hoje — sem a simulação não salva; salve no room para incluí-la');
+        expect(botao()).toBeEnabled();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Voltar aos do room' }));
+        await waitFor(() => expect(screen.queryByText(nota)).toBeNull());
+        expect(botao().parentElement?.getAttribute('title')).toMatch(/^PDF da prévia de hoje, com fotos/);
+    });
+
     it('com a simulação pendente, trocar de aba (a Capacidade desmonta) apaga o aviso do "Liberar"', async () => {
         prepararVersao.mockResolvedValue(preparar(capacidade(123_400)));
         abrirCapacidade(sala());

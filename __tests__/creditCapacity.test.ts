@@ -5,7 +5,8 @@
  * data-base (vencido e "a vencer no mês" ficam FORA da série), que o aluguel
  * venha do contrato e nunca duas vezes (contrato + título), que dado ausente
  * seja `null` (DSCR sem dívida) e não Infinity, e que o valor máximo da
- * operação respeite a maior das 12 primeiras parcelas — a 1ª no SAC.
+ * operação caiba em CADA mês do horizonte (decisão do usuário, 21/11/2026) —
+ * carência não pode esconder a parcela que amortiza.
  */
 
 import { describe, expect, it } from 'vitest';
@@ -215,7 +216,7 @@ describe('creditCapacity', () => {
             .toEqual({ parcela_maxima: 0, valor_maximo: 0 });
     });
 
-    it('capacidadeMaxima: a parcela máxima é a do pior dos 12 primeiros meses', () => {
+    it('capacidadeMaxima: a parcela máxima é a do pior mês do horizonte', () => {
         const serie = serieFixa(13_000, 12, 0);
         serie[4] = mesFixo(serie[4].mes, 6_500, 0); // mês fraco
         const r = capacidadeMaxima(serie, PARAMETROS_CAPACIDADE_PADRAO, '2026-12-10');
@@ -254,11 +255,75 @@ describe('creditCapacity', () => {
         expect(r.valor_maximo).toBeLessThan(price.valor_maximo);
     });
 
-    it('capacidadeMaxima com carência financia mais que sem carência (só juros nos 12 primeiros)', () => {
-        const sem = capacidadeMaxima(serieFixa(26_000, 12, 6_000), PARAMETROS_CAPACIDADE_PADRAO, '2026-12-10');
-        const com = capacidadeMaxima(serieFixa(26_000, 12, 6_000),
-            { ...PARAMETROS_CAPACIDADE_PADRAO, carencia_meses: 12 }, '2026-12-10');
-        expect(com.valor_maximo).toBeGreaterThan(sem.valor_maximo);
+    // ── Janela = horizonte inteiro (C1). Valores ABSOLUTOS, da fórmula fechada:
+    //    PRICE: P = parcela × (1 − 1,012^−n) ÷ 0,012, arredondado para baixo a R$ 100.
+    //    1º vencimento = 1º mês da série (dia 1 do mês seguinte à data-base).
+    const PV = '2026-12-01';
+    const serie36 = (renda: (i: number) => number, servicoAtual = 0) =>
+        mesesDoHorizonte(DATA_BASE, 36).map((m, i) => mesFixo(m, renda(i), servicoAtual));
+    const cronograma = (principal: number, p: Partial<typeof PARAMETROS_CAPACIDADE_PADRAO> = {}) => {
+        const q = { ...PARAMETROS_CAPACIDADE_PADRAO, ...p };
+        return buildSchedule({
+            principal, nominalRate: q.taxa_mensal_pct, ratePeriod: 'MENSAL', system: q.sistema,
+            installmentCount: q.prazo_meses, installmentPeriod: 'MENSAL', firstDueDate: PV,
+            gracePrincipalPeriods: q.carencia_meses,
+        });
+    };
+
+    it('capacidadeMaxima âncora PRICE sem carência: 14.000 × a(60; 1,2%) = 596.350 → 596.300', () => {
+        // limite = 26.000 ÷ 1,3 − 6.000 = 14.000 em todos os 36 meses
+        const r = capacidadeMaxima(serie36(() => 26_000, 6_000), PARAMETROS_CAPACIDADE_PADRAO, PV);
+        expect(r).toEqual({ parcela_maxima: 14_000, valor_maximo: 596_300 });
+    });
+
+    it('capacidadeMaxima com carência 12 NÃO passa da capacidade pós-carência (parcela do mês 13 ≤ limite)', () => {
+        const p = { ...PARAMETROS_CAPACIDADE_PADRAO, carencia_meses: 12 };
+        const r = capacidadeMaxima(serie36(() => 26_000, 6_000), p, PV);
+        // Pós-carência: 48 parcelas PRICE de no máximo 14.000 → 14.000 × a(48; 1,2%) = 508.581 → 508.500.
+        // (A regra antiga, que só olhava os 12 primeiros meses — só juros —, devolvia o teto 840.000.)
+        expect(r).toEqual({ parcela_maxima: 14_000, valor_maximo: 508_500 });
+        expect(cronograma(r.valor_maximo, { carencia_meses: 12 })[12].total).toBeLessThanOrEqual(14_000);
+        expect(cronograma(r.valor_maximo + 100, { carencia_meses: 12 })[12].total).toBeGreaterThan(14_000);
+        // e financia MENOS que sem carência (48 parcelas amortizam em vez de 60)
+        expect(r.valor_maximo).toBeLessThan(596_300);
+    });
+
+    it('capacidadeMaxima taxa 0 + carência 12 não devolve o teto: 14.000 × 48 = 672.000', () => {
+        const p = { ...PARAMETROS_CAPACIDADE_PADRAO, carencia_meses: 12, taxa_mensal_pct: 0 };
+        const r = capacidadeMaxima(serie36(() => 26_000, 6_000), p, PV);
+        expect(r.valor_maximo).toBe(672_000);
+        expect(r.valor_maximo).not.toBe(14_000 * 60);   // o teto da busca
+    });
+
+    it('capacidadeMaxima: carência ≥ horizonte confere a 1ª parcela que amortiza contra o pior mês', () => {
+        // Série de 12 meses, carência 12: nenhuma parcela que amortiza cai no horizonte.
+        const p = { ...PARAMETROS_CAPACIDADE_PADRAO, carencia_meses: 12 };
+        const r = capacidadeMaxima(serieFixa(26_000, 12, 6_000), p, PV);
+        expect(r).toEqual({ parcela_maxima: 14_000, valor_maximo: 508_500 });
+    });
+
+    it('capacidadeMaxima: renda que cai depois (vendas acabam no mês 18) segura o valor máximo', () => {
+        // Meses 1–18: renda 26.000 → limite 20.000; meses 19–36: 13.000 → limite 10.000.
+        const queda = (i: number) => (i < 18 ? 26_000 : 13_000);
+        const price = capacidadeMaxima(serie36(queda), PARAMETROS_CAPACIDADE_PADRAO, PV);
+        // PRICE: parcela constante ≤ 10.000 → 10.000 × a(60; 1,2%) = 425.964 → 425.900
+        // (os 12 primeiros meses sozinhos deixariam o dobro).
+        expect(price).toEqual({ parcela_maxima: 10_000, valor_maximo: 425_900 });
+
+        // SAC: parcela decrescente; quem segura é o mês 19, não o 1º.
+        // parcela_19 = P/60 + P × (42/60) × 0,012 ≤ 10.000 → P = 398.936 → 398.900
+        // (o 1º mês, P/60 + P × 0,012 ≤ 20.000, deixaria 697.674).
+        const sac = capacidadeMaxima(serie36(queda), { ...PARAMETROS_CAPACIDADE_PADRAO, sistema: 'SAC' }, PV);
+        expect(sac).toEqual({ parcela_maxima: 10_000, valor_maximo: 398_900 });
+        const linhas = cronograma(sac.valor_maximo, { sistema: 'SAC' });
+        expect(linhas[18].total).toBeLessThanOrEqual(10_000);
+        expect(linhas[0].total).toBeLessThan(20_000);
+        expect(cronograma(sac.valor_maximo + 100, { sistema: 'SAC' })[18].total).toBeGreaterThan(10_000);
+    });
+
+    it('capacidadeMaxima: um mês do horizonte com limite ≤ 0 zera tudo', () => {
+        const r = capacidadeMaxima(serie36(i => (i === 30 ? 1_000 : 26_000), 6_000), PARAMETROS_CAPACIDADE_PADRAO, PV);
+        expect(r).toEqual({ parcela_maxima: 0, valor_maximo: 0 });
     });
 
     it('CENARIOS_ESTRESSE: Base 0/0/0 · Moderado 10/10/5 · Severo 25/20/15', () =>

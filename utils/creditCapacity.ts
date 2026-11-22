@@ -272,44 +272,78 @@ export function recebidoPorMes(
 const PASSO_VALOR = 100;
 
 /**
- * Quanto de dívida nova cabe.
+ * Quanto de dívida nova cabe — conferido mês a mês, no horizonte INTEIRO.
  *
- * `parcela_maxima` é a do PIOR dos 12 primeiros meses: a renda líquida dividida
- * pelo DSCR mínimo, menos o serviço que já existe. `valor_maximo` é o maior
- * principal (de R$ 100 em R$ 100) cuja MAIOR parcela nos 12 primeiros meses —
- * a 1ª, no SAC; qualquer uma, com carência — cabe nessa parcela.
+ * Decisão do usuário (21/11/2026): a janela é todo o horizonte da série, não
+ * os 12 primeiros meses. Com carência ≥ 12, os 12 primeiros meses só têm
+ * juros; medir só eles inflava o valor máximo (com taxa 0, devolvia o teto).
+ *
+ * Para cada mês `i` da série em que cai uma parcela da dívida nova (o
+ * cronograma começa em `primeiroVencimento`, que é o 1º mês da série):
+ *
+ *     limite_i = renda_liquida_i ÷ DSCR mínimo − serviço atual_i
+ *
+ * `parcela_maxima` = o menor `limite_i` (nunca negativo). `valor_maximo` = o
+ * maior principal (de R$ 100 em R$ 100) cujo cronograma cabe em TODOS os
+ * meses: `parcela_i ≤ limite_i`. Venda que acaba no mês 18 aperta o limite
+ * dali em diante, e é isso que segura o valor.
+ *
+ * Parcela que cai DEPOIS do horizonte não é conferida (não há renda projetada
+ * para comparar) — com uma exceção conservadora: se nenhuma parcela que
+ * amortiza cai dentro do horizonte (carência ≥ horizonte), a 1ª que amortiza
+ * é conferida contra `parcela_maxima`, o pior mês visto. Sem isso a carência
+ * esconderia a amortização inteira e o valor sairia ilimitado.
  */
 export function capacidadeMaxima(
     serie: SerieMes[], p: ParametrosCapacidade, primeiroVencimento: string,
 ): { parcela_maxima: number; valor_maximo: number } {
-    const janela = serie.slice(0, 12);
-    if (!janela.length || !(p.dscr_minimo > 0)) return { parcela_maxima: 0, valor_maximo: 0 };
+    const zero = { parcela_maxima: 0, valor_maximo: 0 };
+    if (!serie.length || !(p.dscr_minimo > 0) || !(p.prazo_meses > 0)) return zero;
 
-    const parcelaMaxima = round2(Math.max(
-        0,
-        Math.min(...janela.map(m => m.renda_liquida / p.dscr_minimo - m.servico_atual)),
-    ));
-    if (parcelaMaxima <= 0 || !(p.prazo_meses > 0)) return { parcela_maxima: 0, valor_maximo: 0 };
+    const cronograma = (principal: number) => buildSchedule({
+        principal,
+        nominalRate: p.taxa_mensal_pct,
+        ratePeriod: 'MENSAL',
+        system: p.sistema,
+        installmentCount: p.prazo_meses,
+        installmentPeriod: 'MENSAL',
+        firstDueDate: primeiroVencimento,
+        gracePrincipalPeriods: p.carencia_meses,
+    });
 
-    const maiorDos12 = (principal: number): number =>
-        Math.max(...buildSchedule({
-            principal,
-            nominalRate: p.taxa_mensal_pct,
-            ratePeriod: 'MENSAL',
-            system: p.sistema,
-            installmentCount: p.prazo_meses,
-            installmentPeriod: 'MENSAL',
-            firstDueDate: primeiroVencimento,
-            gracePrincipalPeriods: p.carencia_meses,
-        }).slice(0, 12).map(l => l.total));
+    // Meses da série cobertos pelo cronograma: a posição de cada parcela vem
+    // da data dela, não de supor que a parcela k cai no mês k da série.
+    const limitePorMes = new Map(serie.map(m => [m.mes, m.renda_liquida / p.dscr_minimo - m.servico_atual]));
+    const mesesDasParcelas = cronograma(PASSO_VALOR).map(l => mesDe(l.dueDate));
+    const sobrepostas = mesesDasParcelas
+        .map((mes, k) => ({ k, limite: limitePorMes.get(mes) }))
+        .filter((x): x is { k: number; limite: number } => x.limite !== undefined);
+    if (!sobrepostas.length) return zero;
 
-    // Busca binária sobre o número de passos de R$ 100. O principal nunca passa
-    // de `parcela × prazo` (com juros positivos já estourou antes disso).
+    const menorLimite = Math.min(...sobrepostas.map(x => x.limite));
+    if (!(menorLimite > 0)) return zero;
+    const parcelaMaxima = round2(menorLimite);
+
+    // A 1ª parcela que amortiza (k = carência) fora do horizonte entra contra o pior mês.
+    const carencia = Math.min(Math.max(0, p.carencia_meses), p.prazo_meses - 1);
+    const conferidas = sobrepostas.some(x => x.k >= carencia)
+        ? sobrepostas
+        : [...sobrepostas, { k: carencia, limite: menorLimite }];
+
+    const cabe = (principal: number): boolean => {
+        const linhas = cronograma(principal);
+        return conferidas.every(x => (linhas[x.k]?.total ?? 0) <= x.limite);
+    };
+
+    // Busca binária sobre o número de passos de R$ 100. Teto seguro: toda
+    // parcela que amortiza paga ao menos principal ÷ prazo, e ela cabe no
+    // maior limite — então o principal nunca passa de maiorLimite × prazo.
+    const maiorLimite = Math.max(...conferidas.map(x => x.limite));
     let baixo = 0;
-    let alto = Math.floor((parcelaMaxima * p.prazo_meses) / PASSO_VALOR);
+    let alto = Math.floor((maiorLimite * p.prazo_meses) / PASSO_VALOR);
     while (baixo < alto) {
         const meio = Math.ceil((baixo + alto) / 2);
-        if (maiorDos12(meio * PASSO_VALOR) <= parcelaMaxima) baixo = meio;
+        if (cabe(meio * PASSO_VALOR)) baixo = meio;
         else alto = meio - 1;
     }
 

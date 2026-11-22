@@ -400,8 +400,13 @@ const diaUmDoMes = (dataBase: string, delta: number): string => {
     return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, '0')}-01`;
 };
 
-/** 1º vencimento da dívida nova simulada: dia 1 do 2º mês após a data-base. */
-const primeiroVencimentoSimulado = (dataBase: string): string => diaUmDoMes(dataBase, 2);
+/**
+ * 1º vencimento da dívida nova simulada: dia 1 do mês SEGUINTE ao da
+ * data-base — o 1º mês da série de renda. Antes era o 2º mês, e o serviço
+ * novo cobria só 11 dos 12 primeiros meses (DSCR pós otimista). A mesma data
+ * alimenta `capacidadeMaxima`, para a parcela k cair no mês k da série.
+ */
+const primeiroVencimentoSimulado = (dataBase: string): string => diaUmDoMes(dataBase, 1);
 
 /** Prazo e carência do room vencem os dos parâmetros quando preenchidos. */
 const parametrosEfetivos = (room: CreditRoom): ParametrosCapacidade => {
@@ -1630,7 +1635,7 @@ export const creditRoomService = {
      * Serviço da dívida NOVA mês a mês. Com proposta vinculada, o cronograma
      * dela (VIGENTE, senão CONTRATUAL); sem proposta (ou sem cronograma), a
      * simulação por `buildSchedule` com o valor pedido, prazo/carência do room
-     * quando preenchidos e 1º vencimento no dia 1 do 2º mês após a data-base.
+     * quando preenchidos e 1º vencimento no dia 1 do mês seguinte ao da data-base (1º mês da série).
      */
     async servicoNovoPorMes(room: CreditRoom, dataBase: string, p: ParametrosCapacidade): Promise<Record<string, number> | null> {
         const porMes = (linhas: { dueDate: string; total: number }[]) => {

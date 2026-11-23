@@ -9,6 +9,8 @@ import { receiptService, CreateReceiptItemInput } from './receiptService';
 import { discrepancyService } from './discrepancyService';
 import { notificationLogService } from './notificationLogService';
 import { whatsappService } from './whatsappService';
+import { whatsappOpenwaService, ErroWhatsappOpenwa, type SituacaoOpenwa } from './whatsappOpenwaService';
+import { avisoDoEnvioAutomatico } from '../utils/canalWhatsappDoPedido';
 import { approvalService } from './approvalService';
 import { appSettingsService } from './appSettingsService';
 import { generateOrderNumber } from './orderNumberingService';
@@ -16,6 +18,12 @@ import { processService } from './processService';
 import { valorEfetivoDoItem, aplicarCotadoNosItens } from '../utils/pedidoItemValor';
 
 type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; organization_id?: string | null; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; origem?: string | null; criado_por?: string | null; leitura_ia?: PurchaseOrder['leituraIa']; };
+
+/**
+ * Resultado do envio automático pelo WhatsApp do ÒPURA ao marcar Enviado, para a
+ * tela avisar ("na fila" ou o motivo). O pedido já está salvo nos dois casos.
+ */
+export type AvisoWhatsappDoPedido = { tipo: 'info' | 'error'; mensagem: string };
 
 /**
  * Traduz a violação do índice único de `purchase_orders.number` (23505) para uma
@@ -419,6 +427,8 @@ export const orderService = {
 
         if (refetchError || !data) throw new Error('Pedido não encontrado após atualização.');
 
+        let avisoWhatsapp: AvisoWhatsappDoPedido | undefined;
+
         if (updates.status) {
             // 1, 2 e 2b — aviso ao fornecedor, parcelas a pagar e processos: o MESMO
             // código que a Edge `pedido-recebimento` roda (services/pedidoStatusEfeitos.ts),
@@ -426,23 +436,53 @@ export const orderService = {
             await efeitosDoStatusNoNavegador().aplicar(data, updates.status);
 
             // 3. WhatsApp automático quando status muda para Enviado.
-            // Desde 18/11/2026 (achado F75) o token é da ORGANIZAÇÃO, no servidor:
-            // vale de qualquer navegador dela. A Edge Function `whatsapp-cloud`
-            // monta a mensagem a partir do pedido e registra o envio no
-            // notification_log. Fornecedor sem telefone volta como erro e cai aqui,
-            // calado, como antes — o envio automático nunca derruba o pedido.
+            // 3a. WhatsApp do ÒPURA (OpenWA, piloto 23/11/2026): se a organização DO
+            //     PEDIDO usa o número do ÒPURA com o envio automático ligado, o pedido
+            //     entra na fila (a Edge Function `whatsapp-openwa` monta o texto e
+            //     grava o notification_log `pending`; quem envia é o worker da
+            //     máquina). O resultado vira `avisoWhatsapp` para a tela dizer "na
+            //     fila" ou o motivo (sem telefone…). Nunca derruba o pedido.
+            // 3b. Senão, o caminho de hoje: desde 18/11/2026 (achado F75) o token da
+            //     API oficial é da ORGANIZAÇÃO, no servidor; a Edge Function
+            //     `whatsapp-cloud` monta a mensagem e registra o envio. Fornecedor
+            //     sem telefone volta como erro e cai aqui, calado, como antes.
             if (updates.status === 'Enviado') {
+                let openwa: SituacaoOpenwa | undefined;
                 try {
-                    if (await whatsappService.apiAtivaNaOrg(data.organization_id)) {
-                        await whatsappService.enviarPedido(data.id);
+                    if (data.organization_id) {
+                        openwa = (await whatsappOpenwaService.situacao())
+                            .find(s => s.organizationId === data.organization_id);
                     }
                 } catch (waError: unknown) {
-                    console.error('[WhatsApp] Auto-send failed:', waError);
+                    // Sem a situação do OpenWA, segue pelo caminho da API oficial.
+                    console.error('[WhatsApp OpenWA] Situação indisponível:', waError);
+                }
+
+                if (openwa?.usaNaOrg && openwa.envioAutomaticoPedido) {
+                    try {
+                        await whatsappOpenwaService.enviarPedido(data.id, { automatico: true });
+                        avisoWhatsapp = { tipo: 'info', mensagem: avisoDoEnvioAutomatico({ ok: true }) };
+                    } catch (waError: unknown) {
+                        console.error('[WhatsApp OpenWA] Envio automático não entrou na fila:', waError);
+                        const codigo = waError instanceof ErroWhatsappOpenwa ? waError.codigo : null;
+                        const mensagem = waError instanceof Error ? waError.message : String(waError);
+                        avisoWhatsapp = { tipo: 'error', mensagem: avisoDoEnvioAutomatico({ ok: false, codigo, mensagem }) };
+                    }
+                } else {
+                    try {
+                        if (await whatsappService.apiAtivaNaOrg(data.organization_id)) {
+                            await whatsappService.enviarPedido(data.id);
+                        }
+                    } catch (waError: unknown) {
+                        console.error('[WhatsApp] Auto-send failed:', waError);
+                    }
                 }
             }
         }
 
-        return data;
+        // `avisoWhatsapp` só existe quando o envio automático pelo WhatsApp do
+        // ÒPURA foi tentado (status → Enviado): a tela mostra ao usuário.
+        return { ...data, avisoWhatsapp };
     },
 
     mapDbOrderToType(item: DbOrderRow, supplierMap: Record<string, { name: string; nickname?: string | null }>): PurchaseOrder {

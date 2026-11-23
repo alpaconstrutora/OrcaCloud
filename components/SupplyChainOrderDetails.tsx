@@ -11,6 +11,13 @@ import { orderService } from '../services/orderService';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
 import { receiptService, PurchaseReceipt } from '../services/receiptService';
 import { whatsappService } from '../services/whatsappService';
+import { whatsappOpenwaService, type SituacaoOpenwa } from '../services/whatsappOpenwaService';
+import { escolherCanalDoPedido, conexaoAceitaEnvio, rotuloDoLogWhatsapp } from '../utils/canalWhatsappDoPedido';
+import { podeUsarWhatsappEmpresa } from '../utils/permissaoWhatsappEmpresa';
+import { normalizarTelefoneWhatsapp } from '../utils/whatsappPedido';
+import { vinculosDoUsuario } from '../utils/modulosPermitidos';
+import { temAcessoTotal } from '../lib/acessoTotal';
+import { useStore } from '../store/useStore';
 import { avisoDeTokenLegado } from '../lib/whatsappLegado';
 import { discrepancyService, PurchaseDiscrepancy, DiscrepancyStatus } from '../services/discrepancyService';
 import { notificationLogService, NotificationLogEntry } from '../services/notificationLogService';
@@ -296,6 +303,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [order, setOrder] = React.useState<PurchaseOrder | null>(null);
     const [supplierName, setSupplierName] = React.useState('');
     const [supplierEmail, setSupplierEmail] = React.useState('');
+    // Telefone do fornecedor: só decide o botão do WhatsApp do ÒPURA (quem
+    // escolhe o destinatário de verdade é o servidor, pelo pedido gravado).
+    const [supplierPhone, setSupplierPhone] = React.useState('');
     const [projectName, setProjectName] = React.useState('');
     // A empresa compradora, para o FORNECEDOR: é contra ela que ele emite a
     // nota. Só a visão do fornecedor lê isto (o comprador é a própria empresa).
@@ -352,6 +362,36 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         whatsappService.apiAtivaNoPedido(orderId).then(sim => { if (vivo) setWaApiAtiva(sim); });
         return () => { vivo = false; };
     }, [orderId, ehComprador]);
+    // WhatsApp do ÒPURA (OpenWA, piloto 23/11/2026): a situação e a permissão que
+    // contam são as da organização DO PEDIDO — não a do seletor do topo (REGRA #5:
+    // o pedido já tem dono). Só o comprador consulta: o botão e a caixa do chat são dele.
+    const [situacaoOpenwa, setSituacaoOpenwa] = React.useState<SituacaoOpenwa | null>(null);
+    const orgDoPedido = order?.organizationId ?? null;
+    React.useEffect(() => {
+        if (!ehComprador || !orgDoPedido) { setSituacaoOpenwa(null); return; }
+        let vivo = true;
+        whatsappOpenwaService.situacao()
+            .then(lista => { if (vivo) setSituacaoOpenwa(lista.find(s => s.organizationId === orgDoPedido) ?? null); })
+            // Sem a situação, o botão fica no caminho de hoje (API oficial / plano B).
+            .catch(() => { if (vivo) setSituacaoOpenwa(null); });
+        return () => { vivo = false; };
+    }, [orgDoPedido, ehComprador]);
+    const organizations = useStore(s => s.organizations);
+    const emailDaSessao = useStore(s => s.session?.user?.email) ?? currentUser?.email ?? null;
+    const podeUsarWaEmpresa = React.useMemo(() => {
+        const vinculo = vinculosDoUsuario(organizations, emailDaSessao).find(v => v.org.id === orgDoPedido);
+        return podeUsarWhatsappEmpresa({
+            permissoes: vinculo?.member.permissions as unknown as Record<string, unknown> | undefined,
+            acessoTotal: temAcessoTotal(emailDaSessao),
+        });
+    }, [organizations, emailDaSessao, orgDoPedido]);
+    const canalWhatsapp = escolherCanalDoPedido({
+        orgUsaOpenwa: !!situacaoOpenwa?.usaNaOrg,
+        conexaoConectadaOuFora: conexaoAceitaEnvio(situacaoOpenwa, Date.now()),
+        podeUsar: podeUsarWaEmpresa,
+        apiOficialAtiva: waApiAtiva,
+        fornecedorTemTelefone: normalizarTelefoneWhatsapp(supplierPhone) !== '',
+    });
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null);
     // "Regerar número" — Configurações do Sistema › Nomenclatura aplicada a um
     // pedido já existente. Trava: qualquer status ≠ 'Rascunho'.
@@ -446,11 +486,15 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 // (aplicar_20270921000027): vai pela RPC, como no token.
                 await orderService.updateAsSupplier(orderId, { status: newStatus }, order?.version);
             } else {
-                await orderService.updateOrder(orderId, { status: newStatus }, order?.version);
+                const salvo = await orderService.updateOrder(orderId, { status: newStatus }, order?.version);
+                // WhatsApp do ÒPURA com envio automático: o orderService diz se o
+                // pedido entrou na fila ou por que não (sem telefone…).
+                if (salvo.avisoWhatsapp) {
+                    notify(salvo.avisoWhatsapp.mensagem, salvo.avisoWhatsapp.tipo);
                 // O WhatsApp automático saía daqui com o token deste navegador. Ele foi
                 // apagado (F75) e a organização ainda não cadastrou o dela no servidor:
                 // sem este aviso, o fornecedor deixaria de receber em silêncio.
-                if (newStatus === 'Enviado' && !waApiAtiva && avisoDeTokenLegado()) {
+                } else if (newStatus === 'Enviado' && !waApiAtiva && avisoDeTokenLegado()) {
                     notify('Pedido marcado como Enviado, mas o WhatsApp automático não saiu: o token agora fica no servidor, por organização, e esta organização ainda não o cadastrou. Um proprietário ou administrador cadastra em Configurações › WhatsApp & Integrações.', 'info');
                 }
             }
@@ -740,6 +784,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         if (cancelled) return;
                         setSupplierName(supplier?.name || 'Fornecedor Desconhecido');
                         setSupplierEmail(supplier?.email || '');
+                        setSupplierPhone(supplier?.phone || '');
                     }
 
                     // O nome da obra sai do PRÓPRIO pedido, que `listOrders` já
@@ -944,9 +989,40 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const handleWhatsAppShare = async () => {
         if (!order) return;
 
+        // Fornecedor sem telefone (org no WhatsApp do ÒPURA): o botão leva ao cadastro.
+        if (canalWhatsapp.tipo === 'sem_telefone') {
+            askConfirm(
+                'O fornecedor deste pedido não tem telefone cadastrado, e o WhatsApp do ÒPURA precisa dele. Abrir Minha organização › Fornecedores para adicionar o telefone?',
+                () => {
+                    useStore.getState().setManagementTab('suppliers');
+                    window.location.hash = '#/organization';
+                },
+                { titulo: 'Fornecedor sem telefone', variante: 'default', rotulo: 'Abrir fornecedores' },
+            );
+            return;
+        }
+
+        // WhatsApp do ÒPURA (OpenWA) — o servidor monta o texto e escolhe o telefone
+        // a partir do pedido gravado; a resposta é "na fila" na hora (quem envia é o
+        // worker da máquina). A entrega aparece no Histórico de Notificações.
+        if (canalWhatsapp.tipo === 'openwa') {
+            try {
+                setIsSendingWhatsApp(true);
+                await whatsappOpenwaService.enviarPedido(order.id);
+                await loadOrderData();
+                notify('Pedido na fila do WhatsApp do ÒPURA. Acompanhe a entrega na aba Comunicação.', 'info');
+            } catch (err: unknown) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                notify(`O WhatsApp não entrou na fila: ${error.message}`, 'error');
+            } finally {
+                setIsSendingWhatsApp(false);
+            }
+            return;
+        }
+
         // WhatsApp Cloud API (oficial) — o servidor envia o template com link público
         // do pedido, com o token da organização (achado F75: nada de token no navegador).
-        if (waApiAtiva) {
+        if (canalWhatsapp.tipo === 'api_oficial') {
             try {
                 setIsSendingWhatsApp(true);
                 await whatsappService.enviarPedido(order.id);
@@ -1230,8 +1306,20 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             <button
                                 onClick={handleWhatsAppShare}
                                 disabled={isSendingWhatsApp}
-                                className="h-9 w-9 flex items-center justify-center bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20 rounded-[6px] transition-all shadow-sm active:scale-95 disabled:opacity-50"
-                                title={waApiAtiva ? 'Enviar WhatsApp (API Oficial)' : 'Compartilhar via WhatsApp'}
+                                className={`h-9 w-9 flex items-center justify-center rounded-[6px] transition-all shadow-sm active:scale-95 disabled:opacity-50 ${canalWhatsapp.tipo === 'sem_telefone'
+                                    ? 'bg-amber-50 text-amber-600 hover:bg-amber-100'
+                                    : 'bg-[#25D366]/10 text-[#25D366] hover:bg-[#25D366]/20'}`}
+                                title={isSendingWhatsApp
+                                    ? 'Enviando o WhatsApp…'
+                                    : canalWhatsapp.tipo === 'openwa'
+                                        ? 'Enviar pelo WhatsApp do ÒPURA'
+                                        : canalWhatsapp.tipo === 'sem_telefone'
+                                            ? 'Fornecedor sem telefone cadastrado: clique para abrir Minha organização › Fornecedores e adicionar o telefone'
+                                            : canalWhatsapp.tipo === 'api_oficial'
+                                                ? 'Enviar WhatsApp (API Oficial)'
+                                                : canalWhatsapp.dica
+                                                    ? `Compartilhar via WhatsApp. ${canalWhatsapp.dica}`
+                                                    : 'Compartilhar via WhatsApp'}
                             >
                                 {isSendingWhatsApp
                                     ? <Loader2 className="w-4 h-4 animate-spin" />
@@ -2320,29 +2408,38 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     fornecedor são comunicação do pedido: vivem na aba Comunicação,
                     junto do chat. Fora das abas, apareciam repetidos nas quatro. */}
                 {abaDetalhe === 'comunicacao' && notifLogs.length > 0 && (
-                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                    <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
                         <h3 className="text-xs font-black text-gray-900 mb-4 flex items-center gap-3">
-                            <div className={`p-2 rounded-xl ${A.chipAlt}`}>
+                            <div className={`p-2 rounded-[6px] ${A.chipAlt}`}>
                                 <Zap className={`w-4 h-4 ${A.chipAltIcon}`} />
                             </div>
                             Histórico de Notificações
-                            <span className="ml-auto text-xs font-black text-gray-400 bg-gray-100 px-2 py-0.5 rounded-lg">{notifLogs.length}</span>
+                            <span className="ml-auto text-sm font-normal text-gray-500">{notifLogs.length}</span>
                         </h3>
                         <div className="space-y-2">
                             {notifLogs.map(log => {
                                 const channelIcon = log.channel === 'email' ? '✉' : log.channel === 'whatsapp' ? '💬' : '⚡';
                                 const channelLabel = log.channel === 'email' ? 'E-mail' : log.channel === 'whatsapp' ? 'WhatsApp' : 'Webhook';
+                                // WhatsApp: Na fila / Enviada / Entregue / Lida / Falhou /
+                                // Confirmação pendente, lido do log (utils/canalWhatsappDoPedido).
+                                const rotuloStatus = log.channel === 'whatsapp'
+                                    ? rotuloDoLogWhatsapp(log)
+                                    : log.status === 'sent' ? 'Enviado' : log.status === 'failed' ? 'Falhou' : 'Pendente';
+                                // §8 — status é texto colorido, sem pílula nem caixa alta.
+                                const corStatus = log.status === 'failed'
+                                    ? 'text-red-600'
+                                    : log.status === 'pending'
+                                        ? 'text-amber-700'
+                                        : rotuloStatus === 'Entregue' || rotuloStatus === 'Lida' || log.channel !== 'whatsapp'
+                                            ? 'text-emerald-700'
+                                            : 'text-blue-600';
                                 return (
-                                    <div key={log.id} className="flex items-start gap-3 p-3 rounded-xl bg-gray-50/50 border border-gray-100">
+                                    <div key={log.id} className="flex items-start gap-3 p-3 rounded-[6px] bg-gray-50/50 border border-gray-100">
                                         <span className="text-base leading-none mt-0.5">{channelIcon}</span>
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 flex-wrap">
-                                                <span className="text-xs font-black text-gray-500 uppercase tracking-widest">{channelLabel}</span>
-                                                <span className={`text-[9px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded-md ${
-                                                    log.status === 'sent'   ? 'bg-emerald-100 text-emerald-700' :
-                                                    log.status === 'failed' ? 'bg-red-100 text-red-600' :
-                                                                               'bg-amber-100 text-amber-700'
-                                                }`}>{log.status === 'sent' ? 'Enviado' : log.status === 'failed' ? 'Falhou' : 'Pendente'}</span>
+                                                <span className="text-xs font-semibold text-gray-500">{channelLabel}</span>
+                                                <span className={`text-sm font-normal ${corStatus}`}>{rotuloStatus}</span>
                                             </div>
                                             {log.recipient && (
                                                 <p className="text-xs text-gray-500 font-medium truncate mt-0.5">{log.recipient}</p>
@@ -2354,7 +2451,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                 <p className="text-xs text-red-500 mt-0.5 truncate" title={log.error}>{log.error}</p>
                                             )}
                                         </div>
-                                        <span className="text-[9px] text-gray-400 font-bold shrink-0">
+                                        <span className="text-xs text-gray-400 shrink-0">
                                             {new Date(log.createdAt).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' })}
                                         </span>
                                     </div>
@@ -2379,6 +2476,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         perfil={ehComprador ? 'comprador' : 'fornecedor'}
                         portalToken={portalToken}
                         accent={accent}
+                        whatsappDoOpenwa={ehComprador && canalWhatsapp.tipo === 'openwa'}
                     />
                 )}
 

@@ -1557,6 +1557,10 @@ Desde 23/11/2026 a ordem dos grupos ali é **só o ícone** (`direcaoSoIcone`): 
 Crescente/Decrescente, com o sentido no `title` e no `aria-label` ("Ordem dos grupos: Crescente"). As demais telas
 seguem com o `<select>` de texto. Na mesma data saíram da Pendentes os filtros Categoria e Cliente/credor (dos dois
 lados) — os do extrato bancário seguem só na aba Extrato, e o que estiver escolhido lá não filtra a Pendentes.
+Ainda em 23/11/2026 o seletor Linha/Compacto/Grade saiu de cima das tabelas (ficava solto, sobre o card de Lançamentos)
+para o botão **Preferências** da barra de ações (`SlidersHorizontal`, mesmo desenho do Imovib), que abre
+`reconciliation/PreferenciasPendentesSheet.tsx` — uma escolha só, gravada no navegador, valendo na hora. Sem a linha
+do seletor, barra → Extrato/Lançamentos e Extrato ↔ Lançamentos respiram 12px (`space-y-3`, `gap-3`; §20.1).
 Na aba **Extrato** (`docs/planos/2026-10-24-extrato-agrupar.md`) o controle vai na toolbar, logo depois do Filtro avançado, e há dois campos a mais (Plano de Contas e Status, este na ordem do fluxo). A paginação é a própria da aba: as páginas, o rodapé e o Shift+clique usam as linhas da tela sem os grupos recolhidos.
 
 Em 24/10/2026 para Minha Organização › Centro de custo (`CostCenterModule.tsx`, `docs/planos/2026-10-24-centro-de-custo-agrupar.md`).

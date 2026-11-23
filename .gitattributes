@@ -37,3 +37,7 @@
 
 # Modelos 3D (F10, 11/10/2026): binário — nenhuma conversão de fim de linha pode tocar o .glb.
 *.glb binary
+
+# infra/openwa é copiado para dentro do WSL e roda no Linux (.env vira "source" no shell,
+# Dockerfile/compose/scripts no Docker): LF sempre, também na árvore de trabalho do Windows.
+infra/openwa/** text eol=lf

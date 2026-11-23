@@ -515,3 +515,11 @@ verify_jwt = false
 # DO PEDIDO para enviar). Registrado explícito para nenhum deploy desligar a checagem do gateway.
 [functions.whatsapp-cloud]
 verify_jwt = true
+
+# WhatsApp pelo OpenWA (docs/planos/2026-11-23-whatsapp-openwa-piloto-pedido.md, Task 3): a tela põe na
+# fila (wa_mensagens). Só chamada pelo app, com o JWT do usuário — o gateway TAMBÉM confere o JWT. Isso
+# não é a autorização (REGRA #7, pergunta 3): o gate é o código (exigirUsuario antes de tudo; exigirMembro
+# da org DO PEDIDO + wa_pode_usar para enviar/responder; exigirSuperadmin para listar_sem_pedido/atribuir).
+# Depois de publicar, provar o 401 sem header.
+[functions.whatsapp-openwa]
+verify_jwt = true

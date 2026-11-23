@@ -39,6 +39,8 @@ import {
 import {
   empreendimentoDocumentosService as svc, EXTENSOES_ACEITAS, TAMANHO_MAXIMO_BYTES,
 } from '../../services/empreendimentoDocumentosService';
+import TranscricaoDoDocumento, { useFilaDeTranscricao } from './TranscricaoDoDocumento';
+import { podeTranscrever } from '../../utils/transcricaoDocumento';
 
 // ─── Colunas ────────────────────────────────────────────────────────────────
 
@@ -203,6 +205,17 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
 
   const trocarItem = (d: DocumentoLegal) => setLegais(prev => prev.map(x => (x.id === d.id ? d : x)));
 
+  // ── Transcrição do texto (23/11/2026) ─────────────────────────────────────
+  // Todo PDF/imagem enviado pela aba é transcrito logo depois, em segundo plano.
+  const fila = useFilaDeTranscricao();
+  const [transcricaoSuja, setTranscricaoSuja] = React.useState(false);
+  const transcreverDepoisDoEnvio = (doc: OpuraDocument | undefined, arquivo: File) => {
+    if (doc?.active_version) {
+      fila.enfileirar({ versao: doc.active_version, organizationId: doc.organization_id, arquivo, automatico: true });
+    }
+  };
+  const avisoTranscricao = (arquivo: File) => (podeTranscrever(arquivo.name, arquivo.type) ? ' O texto será transcrito em seguida.' : '');
+
   // ── Abrir arquivo ─────────────────────────────────────────────────────────
   /** A aba nasce no clique (window.open depois de await é bloqueado como pop-up). */
   const abrirArquivo = async (storagePath: string) => {
@@ -352,11 +365,16 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
       }
 
       if (arquivoDoItem) {
+        const arquivo = arquivoDoItem;
         try {
-          item = await svc.anexarArquivo(e, item, arquivoDoItem);
+          item = await svc.anexarArquivo(e, item, arquivo);
           trocarItem(item);
-          // O documento novo do GED entra no mapa (para nome/abrir) sem recarregar a aba.
-          svc.listarDoGed(e.id).then(setDoGed).catch(() => { /* a tabela continua com o que tinha */ });
+          // O documento novo do GED entra no mapa (para nome/abrir) sem recarregar a aba;
+          // com ele vem a versão nova, que é a que se transcreve.
+          const anexado = item;
+          svc.listarDoGed(e.id)
+            .then(g => { setDoGed(g); transcreverDepoisDoEnvio(g.find(d => d.id === anexado.document_id), arquivo); })
+            .catch(() => { /* a tabela continua com o que tinha */ });
         } catch (err) {
           notify(`Dados salvos, mas o arquivo não foi enviado: ${err instanceof Error ? err.message : 'erro'}`, 'error');
           fecharItem();
@@ -366,7 +384,7 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
 
       fecharItem();
       if (aviso) notify(aviso, 'error');
-      else notify(arquivoDoItem ? 'Documento salvo e arquivo enviado ao GED.' : 'Documento salvo.');
+      else notify(arquivoDoItem ? `Documento salvo e arquivo enviado ao GED.${avisoTranscricao(arquivoDoItem)}` : 'Documento salvo.');
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Erro ao salvar o documento.', 'error');
     } finally {
@@ -389,8 +407,10 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
     try {
       const atualizado = await svc.anexarArquivo(e, alvo, arquivo);
       trocarItem(atualizado);
-      svc.listarDoGed(e.id).then(setDoGed).catch(() => { /* idem */ });
-      notify(alvo.document_id ? 'Nova versão enviada ao GED.' : 'Arquivo enviado ao GED.');
+      svc.listarDoGed(e.id)
+        .then(g => { setDoGed(g); transcreverDepoisDoEnvio(g.find(d => d.id === atualizado.document_id), arquivo); })
+        .catch(() => { /* idem */ });
+      notify(`${alvo.document_id ? 'Nova versão enviada ao GED.' : 'Arquivo enviado ao GED.'}${avisoTranscricao(arquivo)}`);
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Erro ao enviar o arquivo.', 'error');
     } finally {
@@ -499,13 +519,16 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
       if (outroEditando) {
         const doc = await svc.atualizarOutro(outroEditando, meta, arquivoOutro);
         setDoGed(prev => prev.map(x => (x.id === doc.id ? doc : x)));
+        if (arquivoOutro) transcreverDepoisDoEnvio(doc, arquivoOutro);
         fecharEnvio();
-        notify(arquivoOutro ? 'Documento salvo e nova versão enviada ao GED.' : 'Documento salvo.');
+        notify(arquivoOutro ? `Documento salvo e nova versão enviada ao GED.${avisoTranscricao(arquivoOutro)}` : 'Documento salvo.');
       } else {
-        const doc = await svc.enviarOutro(e, arquivoOutro!, meta);
+        const arquivo = arquivoOutro!;
+        const doc = await svc.enviarOutro(e, arquivo, meta);
         setDoGed(prev => [doc, ...prev]);
+        transcreverDepoisDoEnvio(doc, arquivo);
         fecharEnvio();
-        notify(`Enviado ao GED, em ${CATEGORIA_GED_ROTULO[doc.categoria]}.`);
+        notify(`Enviado ao GED, em ${CATEGORIA_GED_ROTULO[doc.categoria]}.${avisoTranscricao(arquivo)}`);
       }
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Erro ao salvar o documento.', 'error');
@@ -788,7 +811,7 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
       />
 
       {/* ── Sheet: item do checklist ── */}
-      <Sheet open={!!itemAberto} onClose={fecharItem} size="lg" dirty={sujo || !!arquivoDoItem}>
+      <Sheet open={!!itemAberto} onClose={fecharItem} size="lg" dirty={sujo || !!arquivoDoItem || transcricaoSuja}>
         <SheetHeader onClose={fecharItem}>
           <SheetTitle>{editando ? editando.titulo : 'Novo documento legal'}</SheetTitle>
           <SheetDescription>{e.name}</SheetDescription>
@@ -923,6 +946,17 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
                 </p>
               </div>
             </div>
+
+            {editando?.document_id && (
+              <TranscricaoDoDocumento
+                key={editando.id}
+                versao={docGedPorId.get(editando.document_id)?.active_version}
+                organizationId={docGedPorId.get(editando.document_id)?.organization_id ?? editando.organization_id}
+                fila={fila}
+                notify={notify}
+                onSujoChange={setTranscricaoSuja}
+              />
+            )}
           </div>
         </SheetPanel>
         <SheetFooter>
@@ -1048,66 +1082,79 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
       </Sheet>
 
       {/* ── Sheet: enviar outro documento ── */}
-      <Sheet open={envioAberto} onClose={fecharEnvio} size="md" dirty={outroSujo || !!arquivoOutro}>
+      <Sheet open={envioAberto} onClose={fecharEnvio} size="md" dirty={outroSujo || !!arquivoOutro || transcricaoSuja}>
         <SheetHeader onClose={fecharEnvio}>
           <SheetTitle>{outroEditando ? outroEditando.nome : 'Enviar documento'}</SheetTitle>
           <SheetDescription>{e.name}</SheetDescription>
         </SheetHeader>
         <SheetPanel className="p-6">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-            {outroEditando?.active_version?.storage_path && (
-              <div className="sm:col-span-2 flex items-center justify-between gap-3 text-sm">
-                <button type="button" onClick={() => abrirArquivo(outroEditando.active_version!.storage_path)}
-                  className="flex items-center gap-1.5 min-w-0 text-blue-600 hover:text-blue-800">
-                  <Paperclip className="w-4 h-4 shrink-0" />
-                  <span className="truncate">{nomeDoArquivo(outroEditando.active_version.storage_path) || 'Abrir arquivo atual'}</span>
-                </button>
-                <span className="text-xs text-gray-500 shrink-0">Versão {outroEditando.active_version.version_number}</span>
+          <div className="space-y-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+              {outroEditando?.active_version?.storage_path && (
+                <div className="sm:col-span-2 flex items-center justify-between gap-3 text-sm">
+                  <button type="button" onClick={() => abrirArquivo(outroEditando.active_version!.storage_path)}
+                    className="flex items-center gap-1.5 min-w-0 text-blue-600 hover:text-blue-800">
+                    <Paperclip className="w-4 h-4 shrink-0" />
+                    <span className="truncate">{nomeDoArquivo(outroEditando.active_version.storage_path) || 'Abrir arquivo atual'}</span>
+                  </button>
+                  <span className="text-xs text-gray-500 shrink-0">Versão {outroEditando.active_version.version_number}</span>
+                </div>
+              )}
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className={ROTULO} htmlFor="outro-arquivo">{outroEditando ? 'Enviar nova versão' : 'Arquivo'}</label>
+                <input id="outro-arquivo" key={outroEditando ? `outro-${outroEditando.id}` : 'outro-novo'} type="file" accept={EXTENSOES_ACEITAS} className={ARQUIVO}
+                  onChange={ev => {
+                    const f = ev.target.files?.[0] || null;
+                    setArquivoOutro(f);
+                    if (f && !outroEditando) setFormOutro(prev => (prev.nome.trim() ? prev : { ...prev, nome: semExtensao(f.name) }));
+                  }} />
+                <p className="text-xs text-gray-500">
+                  {arquivoOutro
+                    ? `${arquivoOutro.name} · ${formatarTamanho(arquivoOutro.size)}`
+                    : outroEditando
+                      ? 'Opcional. A versão atual fica guardada no histórico do GED.'
+                      : `Até ${TAMANHO_MAXIMO_BYTES / 1048576} MB.`}
+                </p>
               </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className={ROTULO} htmlFor="outro-nome">Nome</label>
+                <input id="outro-nome" className={CAMPO} value={formOutro.nome} onChange={ev => campoOutro('nome', ev.target.value)}
+                  placeholder="Ex: Memorial descritivo – Torre A" />
+              </div>
+              <div className="space-y-1.5">
+                <label className={ROTULO} htmlFor="outro-categoria">Categoria no GED</label>
+                <select id="outro-categoria" className={CAMPO} value={formOutro.categoria}
+                  onChange={ev => campoOutro('categoria', ev.target.value as OpuraDocumentCategoria)}>
+                  {CATEGORIAS_GED.map(c => <option key={c} value={c}>{CATEGORIA_GED_ROTULO[c]}</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className={ROTULO} htmlFor="outro-tipo">Tipo</label>
+                <input id="outro-tipo" className={CAMPO} value={formOutro.tipo} onChange={ev => campoOutro('tipo', ev.target.value)}
+                  placeholder="Ex: Memorial, Planta, Foto" />
+              </div>
+              <div className="space-y-1.5">
+                <label className={ROTULO} htmlFor="outro-emissao">Data de emissão</label>
+                <input id="outro-emissao" type="date" className={CAMPO} value={formOutro.emissao}
+                  onChange={ev => campoOutro('emissao', ev.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <label className={ROTULO} htmlFor="outro-validade">Validade</label>
+                <input id="outro-validade" type="date" className={CAMPO} value={formOutro.validade}
+                  onChange={ev => campoOutro('validade', ev.target.value)} />
+              </div>
+            </div>
+  
+            {outroEditando && (
+              <TranscricaoDoDocumento
+                key={outroEditando.id}
+                versao={docGedPorId.get(outroEditando.id)?.active_version ?? outroEditando.active_version}
+                organizationId={outroEditando.organization_id}
+                fila={fila}
+                notify={notify}
+                onSujoChange={setTranscricaoSuja}
+              />
             )}
-            <div className="space-y-1.5 sm:col-span-2">
-              <label className={ROTULO} htmlFor="outro-arquivo">{outroEditando ? 'Enviar nova versão' : 'Arquivo'}</label>
-              <input id="outro-arquivo" key={outroEditando ? `outro-${outroEditando.id}` : 'outro-novo'} type="file" accept={EXTENSOES_ACEITAS} className={ARQUIVO}
-                onChange={ev => {
-                  const f = ev.target.files?.[0] || null;
-                  setArquivoOutro(f);
-                  if (f && !outroEditando) setFormOutro(prev => (prev.nome.trim() ? prev : { ...prev, nome: semExtensao(f.name) }));
-                }} />
-              <p className="text-xs text-gray-500">
-                {arquivoOutro
-                  ? `${arquivoOutro.name} · ${formatarTamanho(arquivoOutro.size)}`
-                  : outroEditando
-                    ? 'Opcional. A versão atual fica guardada no histórico do GED.'
-                    : `Até ${TAMANHO_MAXIMO_BYTES / 1048576} MB.`}
-              </p>
-            </div>
-            <div className="space-y-1.5 sm:col-span-2">
-              <label className={ROTULO} htmlFor="outro-nome">Nome</label>
-              <input id="outro-nome" className={CAMPO} value={formOutro.nome} onChange={ev => campoOutro('nome', ev.target.value)}
-                placeholder="Ex: Memorial descritivo – Torre A" />
-            </div>
-            <div className="space-y-1.5">
-              <label className={ROTULO} htmlFor="outro-categoria">Categoria no GED</label>
-              <select id="outro-categoria" className={CAMPO} value={formOutro.categoria}
-                onChange={ev => campoOutro('categoria', ev.target.value as OpuraDocumentCategoria)}>
-                {CATEGORIAS_GED.map(c => <option key={c} value={c}>{CATEGORIA_GED_ROTULO[c]}</option>)}
-              </select>
-            </div>
-            <div className="space-y-1.5">
-              <label className={ROTULO} htmlFor="outro-tipo">Tipo</label>
-              <input id="outro-tipo" className={CAMPO} value={formOutro.tipo} onChange={ev => campoOutro('tipo', ev.target.value)}
-                placeholder="Ex: Memorial, Planta, Foto" />
-            </div>
-            <div className="space-y-1.5">
-              <label className={ROTULO} htmlFor="outro-emissao">Data de emissão</label>
-              <input id="outro-emissao" type="date" className={CAMPO} value={formOutro.emissao}
-                onChange={ev => campoOutro('emissao', ev.target.value)} />
-            </div>
-            <div className="space-y-1.5">
-              <label className={ROTULO} htmlFor="outro-validade">Validade</label>
-              <input id="outro-validade" type="date" className={CAMPO} value={formOutro.validade}
-                onChange={ev => campoOutro('validade', ev.target.value)} />
-            </div>
           </div>
         </SheetPanel>
         <SheetFooter>

@@ -37,6 +37,9 @@ describe('InlineDisclosureMenu — onde o painel abre', () => {
         const p = painel();
         expect(container.contains(p)).toBe(false);
         expect(p.className).toContain('fixed');
+        // 23/11/2026: com z-[60] o painel nascia ATRÁS das telas-overlay (DealModal é
+        // z-[110]) — "Modelos de documento" na negociação ficava sem Duplicar/Excluir.
+        expect(p.className).toContain('z-[10000]');
         expect(p.style.top).toBe('140px'); // 100 + 32 + 8
         expect(p.style.right).toBe('24px'); // 1024 − 1000
     });

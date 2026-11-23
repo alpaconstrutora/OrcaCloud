@@ -332,7 +332,7 @@ export async function assinaturaConfere(corpo: Uint8Array, cabecalho: string | n
 
 /**
  * Telefone de quem mandou (`message.received`), só dígitos com DDI.
- *   · `5511…@c.us` → o próprio número;
+ *   · `5511…@c.us` ou `5511…@s.whatsapp.net` (forma do Baileys) → o próprio número;
  *   · `…@lid` (id anônimo, sem telefone) → `senderPhone`, se o OpenWA resolveu
  *     (`RESOLVE_LID_TO_PHONE=true`);
  *   · grupo, lista de transmissão, canal ou sem telefone → `''`.
@@ -341,7 +341,7 @@ export function telefoneDoRemetente(data: { from?: string; senderPhone?: string 
     const from = (data.from ?? '').trim().toLowerCase();
     if (from.endsWith('@g.us') || from.endsWith('@broadcast') || from.endsWith('@newsletter')) return '';
     const digitos = (v: string) => v.split('@')[0].replace(/\D/g, '');
-    if (from.endsWith('@c.us')) return digitos(from);
+    if (from.endsWith('@c.us') || from.endsWith('@s.whatsapp.net')) return digitos(from);
     return digitos(data.senderPhone ?? '');
 }
 
@@ -571,7 +571,9 @@ function rotuloDoTipo(mimetype: string): string {
 /** A linha do chat do pedido que conta que veio um arquivo. */
 export function linhaDaMidia(d: DecisaoDeMidia): string {
     switch (d.acao) {
-        case 'gravar': return `Fornecedor enviou um arquivo (${rotuloDoTipo(d.mimetype)})`;
+        // Ainda não há link assinado no chat para abrir o arquivo gravado: até
+        // existir, a linha manda abrir no celular, como as demais.
+        case 'gravar': return `Fornecedor enviou um arquivo (${rotuloDoTipo(d.mimetype)}); abrir no celular do número.`;
         case 'grande': return `Fornecedor enviou um arquivo (${d.mimetype}) maior que 5 MB; abrir no celular do número.`;
         case 'tipo_nao_aceito': return `Fornecedor enviou um arquivo (${d.mimetype}) de tipo não aceito; abrir no celular do número.`;
         default: return `Fornecedor enviou um arquivo (${d.mimetype}) que não chegou; abrir no celular do número.`;

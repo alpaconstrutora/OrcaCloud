@@ -156,6 +156,13 @@ describe('telefoneDoRemetente', () => {
         expect(telefoneDoRemetente({ from: '123@lid' })).toBe('');
         expect(telefoneDoRemetente({ from: '1203@g.us' })).toBe('');
     });
+    it('@s.whatsapp.net (forma do Baileys) vale como @c.us; grupo, lista e canal continuam vazios', () => {
+        expect(telefoneDoRemetente({ from: '5511999990000@s.whatsapp.net' })).toBe('5511999990000');
+        expect(telefoneDoRemetente({ from: '5511999990000@S.WHATSAPP.NET', senderPhone: '5599' })).toBe('5511999990000');
+        expect(telefoneDoRemetente({ from: 'status@broadcast' })).toBe('');
+        expect(telefoneDoRemetente({ from: '1203@newsletter' })).toBe('');
+        expect(telefoneDoRemetente({ from: '1203@g.us', senderPhone: '5511999990000' })).toBe('');
+    });
 });
 
 describe('idsDeMensagemIguais', () => {
@@ -475,9 +482,9 @@ describe('mídia do message.received', () => {
     });
     it('linhaDaMidia — o que aparece no chat do pedido', () => {
         expect(linhaDaMidia({ acao: 'gravar', mimetype: 'image/png', base64: '', bytes: 1, nome: 'a.png' }))
-            .toBe('Fornecedor enviou um arquivo (imagem)');
+            .toBe('Fornecedor enviou um arquivo (imagem); abrir no celular do número.');
         expect(linhaDaMidia({ acao: 'gravar', mimetype: 'application/pdf', base64: '', bytes: 1, nome: 'a.pdf' }))
-            .toBe('Fornecedor enviou um arquivo (PDF)');
+            .toBe('Fornecedor enviou um arquivo (PDF); abrir no celular do número.');
         expect(linhaDaMidia({ acao: 'grande', mimetype: 'video/mp4' }))
             .toBe('Fornecedor enviou um arquivo (video/mp4) maior que 5 MB; abrir no celular do número.');
         expect(linhaDaMidia({ acao: 'tipo_nao_aceito', mimetype: 'text/html' }))
@@ -527,11 +534,11 @@ describe('classificarEventoRecebido', () => {
     it('mídia: legenda vai depois da linha do arquivo; corpo que é o próprio base64 é descartado', () => {
         const media = { mimetype: 'image/jpeg', data: Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Array(26).fill(1)]).toString('base64') };
         const r = classificarEventoRecebido({ ...base, type: 'image', body: 'nota fiscal', media });
-        expect(r.tipo === 'mensagem' && r.texto).toBe('Fornecedor enviou um arquivo (imagem)\nnota fiscal');
+        expect(r.tipo === 'mensagem' && r.texto).toBe('Fornecedor enviou um arquivo (imagem); abrir no celular do número.\nnota fiscal');
         expect(r.tipo === 'mensagem' && r.midia?.acao).toBe('gravar');
         const lixo = Buffer.alloc(400, 3).toString('base64');
         const s = classificarEventoRecebido({ ...base, type: 'image', body: lixo, media });
-        expect(s.tipo === 'mensagem' && s.texto).toBe('Fornecedor enviou um arquivo (imagem)');
+        expect(s.tipo === 'mensagem' && s.texto).toBe('Fornecedor enviou um arquivo (imagem); abrir no celular do número.');
     });
 });
 

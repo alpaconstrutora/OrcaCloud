@@ -8,6 +8,7 @@ import {
     entregaDoLog,
     rotuloDoLogWhatsapp,
     conexaoAceitaEnvio,
+    maquinaFora,
     ultimaDoFornecedorPeloWhatsapp,
     avisoDoEnvioAutomatico,
     DICA_NUMERO_DESCONECTADO,
@@ -148,6 +149,22 @@ describe('conexaoAceitaEnvio', () => {
     it('sem conexão nenhuma → não aceita', () => {
         expect(conexaoAceitaEnvio({ estado: null, vistoEm: null }, agora)).toBe(false);
         expect(conexaoAceitaEnvio(null, agora)).toBe(false);
+    });
+});
+
+describe('maquinaFora', () => {
+    const agora = Date.parse('2026-11-23T12:00:00Z');
+    const haMin = (m: number) => new Date(agora - m * 60_000).toISOString();
+
+    it('estado gravado maquina_fora, ou sem sinal do worker há mais de 3 min → fora', () => {
+        expect(maquinaFora({ estado: 'maquina_fora', vistoEm: haMin(0) }, agora)).toBe(true);
+        expect(maquinaFora({ estado: 'conectado', vistoEm: haMin(5) }, agora)).toBe(true);
+        expect(maquinaFora({ estado: 'desconectado', vistoEm: null }, agora)).toBe(true);
+    });
+
+    it('worker vivo (sinal há até 3 min) → não está fora, qualquer que seja o número', () => {
+        expect(maquinaFora({ estado: 'conectado', vistoEm: haMin(1) }, agora)).toBe(false);
+        expect(maquinaFora({ estado: 'desconectado', vistoEm: haMin(2) }, agora)).toBe(false);
     });
 });
 

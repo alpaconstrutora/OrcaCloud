@@ -68,7 +68,17 @@ export function conexaoAceitaEnvio(
     agoraMs: number,
 ): boolean {
     if (!s || !s.estado) return false;
-    if (s.estado === 'conectado' || s.estado === 'maquina_fora') return true;
+    return s.estado === 'conectado' || maquinaFora(s, agoraMs);
+}
+
+/**
+ * A máquina do worker está fora? Sim quando o estado gravado já diz
+ * `maquina_fora` ou quando não há sinal do worker há mais de 3 min (ou nunca
+ * houve) — aí o estado gravado é velho, mesmo que diga "conectado". Fonte única
+ * da regra dos 3 min: o pedido (acima) e Configurações › WhatsApp leem daqui.
+ */
+export function maquinaFora(s: { estado: string | null; vistoEm: string | null }, agoraMs: number): boolean {
+    if (s.estado === 'maquina_fora') return true;
     const visto = s.vistoEm ? Date.parse(s.vistoEm) : NaN;
     if (!Number.isFinite(visto)) return true;
     return agoraMs - visto > SEM_SINAL_DO_WORKER_MS;

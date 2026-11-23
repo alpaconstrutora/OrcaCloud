@@ -15,6 +15,8 @@ const invocacoes: { nome: string; body: Record<string, unknown> }[] = [];
 const rpcs: { nome: string; args: unknown }[] = [];
 let respostaDaFunction: { data: unknown; error: unknown } = { data: { status: 'na_fila', mensagem_id: 'm-1' }, error: null };
 let respostaDaRpc: { data: unknown; error: unknown } = { data: [], error: null };
+const consultas: { tabela: string; colunas: string; filtros: [string, unknown][] }[] = [];
+let respostaDaTabela: { data: unknown; error: unknown } = { data: null, error: null };
 
 vi.mock('../lib/supabase', () => ({
     supabase: {
@@ -28,6 +30,17 @@ vi.mock('../lib/supabase', () => ({
             rpcs.push({ nome, args });
             return respostaDaRpc;
         },
+        from: (tabela: string) => ({
+            select: (colunas: string) => {
+                const consulta = { tabela, colunas, filtros: [] as [string, unknown][] };
+                consultas.push(consulta);
+                const cadeia = {
+                    eq: (col: string, valor: unknown) => { consulta.filtros.push([col, valor]); return cadeia; },
+                    maybeSingle: async () => respostaDaTabela,
+                };
+                return cadeia;
+            },
+        }),
     },
 }));
 
@@ -46,6 +59,8 @@ describe('whatsappOpenwaService', () => {
         rpcs.length = 0;
         respostaDaFunction = { data: { status: 'na_fila', mensagem_id: 'm-1' }, error: null };
         respostaDaRpc = { data: [], error: null };
+        consultas.length = 0;
+        respostaDaTabela = { data: null, error: null };
     });
 
     it('enviarPedido manda só o id do pedido e um comando_id (uuid) à function whatsapp-openwa', async () => {
@@ -143,5 +158,19 @@ describe('whatsappOpenwaService', () => {
         respostaDaFunction = { data: { ok: true }, error: null };
         await whatsappOpenwaService.atribuir('m-9', 'po-1');
         expect(invocacoes[0]).toEqual({ nome: 'whatsapp-openwa', body: { acao: 'atribuir', mensagem_id: 'm-9', order_id: 'po-1' } });
+    });
+
+    it('pedidoPeloNumero procura o pedido pelo número (aparado) e devolve id e organização', async () => {
+        respostaDaTabela = { data: { id: 'po-7', number: 'PC-0007', organization_id: 'org-b' }, error: null };
+        const p = await whatsappOpenwaService.pedidoPeloNumero('  PC-0007 ');
+        expect(consultas).toEqual([{ tabela: 'purchase_orders', colunas: 'id, number, organization_id', filtros: [['number', 'PC-0007']] }]);
+        expect(p).toEqual({ id: 'po-7', numero: 'PC-0007', organizationId: 'org-b' });
+    });
+
+    it('pedidoPeloNumero: nada encontrado → null; número vazio nem consulta', async () => {
+        expect(await whatsappOpenwaService.pedidoPeloNumero('PC-9999')).toBeNull();
+        consultas.length = 0;
+        expect(await whatsappOpenwaService.pedidoPeloNumero('   ')).toBeNull();
+        expect(consultas).toHaveLength(0);
     });
 });

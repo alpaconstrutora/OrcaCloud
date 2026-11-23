@@ -138,6 +138,24 @@ export const whatsappOpenwaService = {
         }));
     },
 
+    /**
+     * Pedido pelo número (único no sistema), para a triagem do superadmin escolher
+     * a quem atribuir uma resposta. Lê pela RLS de `purchase_orders`; quem decide
+     * a atribuição é a function. Número vazio = null, sem consulta.
+     */
+    async pedidoPeloNumero(numero: string): Promise<{ id: string; numero: string; organizationId: string | null } | null> {
+        const n = (numero ?? '').trim();
+        if (!n) return null;
+        const { data, error } = await supabase
+            .from('purchase_orders')
+            .select('id, number, organization_id')
+            .eq('number', n)
+            .maybeSingle();
+        if (error) throw new Error(error.message);
+        const p = data as { id: string; number: string; organization_id: string | null } | null;
+        return p ? { id: p.id, numero: p.number, organizationId: p.organization_id ?? null } : null;
+    },
+
     /** Só superadmin: a resposta sem organização passa a ser do pedido (e entra no chat dele). */
     async atribuir(mensagemId: string, orderId: string): Promise<void> {
         await invocar('atribuir', { mensagem_id: mensagemId, order_id: orderId });

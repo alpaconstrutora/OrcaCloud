@@ -60,4 +60,27 @@ describe('ResetPassword — conta do link', () => {
         expect(await screen.findByText(/Nada foi gravado/)).toBeInTheDocument();
         expect(updateUser).not.toHaveBeenCalled();
     });
+
+    // 23/11/2026: logout com a tela aberta. A sessão sumiu, o formulário seguiu na
+    // tela, e ao gravar a mensagem dizia "conectado como outra conta" — não havia conta.
+    it('4. logout com a tela aberta: some o formulário e diz que a sessão terminou', () => {
+        const props = { tipo: 'invite' as const, emailDoLink: 'parceiro@fornecedor.com', onComplete: vi.fn() };
+        const { rerender } = render(<ResetPassword {...props} email="parceiro@fornecedor.com" />);
+        expect(screen.getAllByPlaceholderText('******')).toHaveLength(2);
+
+        rerender(<ResetPassword {...props} email={undefined} />);
+        expect(screen.queryAllByPlaceholderText('******')).toHaveLength(0);
+        expect(screen.getByText(/Você saiu da conta/)).toBeInTheDocument();
+        expect(screen.queryByText(/outra conta/)).not.toBeInTheDocument();
+    });
+
+    it('5. sem sessão no servidor ao gravar: não grava e não fala em "outra conta"', async () => {
+        getUser.mockResolvedValue({ data: { user: null } });
+        render(<ResetPassword tipo="invite" email="parceiro@fornecedor.com" emailDoLink="parceiro@fornecedor.com" onComplete={vi.fn()} />);
+
+        await preencherESalvar();
+        expect(await screen.findByText(/não está mais conectado/)).toBeInTheDocument();
+        expect(screen.queryByText(/outra conta/)).not.toBeInTheDocument();
+        expect(updateUser).not.toHaveBeenCalled();
+    });
 });

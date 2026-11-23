@@ -14,6 +14,7 @@ import type { SnapshotContrato, SnapshotEmpreendimentoItem } from '../../utils/c
 import { ROTULO_DO_OBJETIVO } from '../../utils/empreendimentoObjetivo';
 import { textoDaSituacao } from '../../utils/creditRoomCarteira';
 import { ehPrevia, horaDaPrevia } from '../../utils/creditRoomPrevia';
+import { linhasDoCardDoEmpreendimento } from '../../utils/creditRoomEmpreendimentoCard';
 
 /**
  * Aba "Empreendimentos e contratos" de uma VERSÃO congelada do Credit Room.
@@ -258,9 +259,8 @@ const CartaoEmpreendimento: React.FC<{ acc: Accent; e: SnapshotEmpreendimentoIte
     const unidades: [string, number | null | undefined][] = [
         ['Unidades', e.unidades_total], ['Vendidas', e.vendidas], ['Alugadas', e.alugadas], ['Disponíveis', e.disponiveis],
     ];
-    const valores: [string, string][] = [
-        ['VGV vendido', money(e.vgv_vendido)], ['VGV disponível', money(e.vgv_disponivel)], ['Renda do mês', money(e.renda_mensal)],
-    ];
+    // As linhas de números dependem do objetivo (vendas, locação ou serviço): ver `linhasDoCardDoEmpreendimento`.
+    const valores = linhasDoCardDoEmpreendimento(e);
     return (
         <button
             type="button" onClick={onAbrir} aria-haspopup="dialog" title="Ver fotos e contratos"
@@ -281,10 +281,10 @@ const CartaoEmpreendimento: React.FC<{ acc: Accent; e: SnapshotEmpreendimentoIte
                     ))}
                 </span>
                 <span className="block space-y-1">
-                    {valores.map(([k, v]) => (
-                        <span key={k} className="flex items-baseline justify-between gap-3">
-                            <span className={`${A.corpo} ${A.rotulo}`}>{k}</span>
-                            <span className={`${A.corpo} font-medium tabular-nums ${A.valor}`}>{v}</span>
+                    {valores.map(l => (
+                        <span key={l.rotulo} className="flex items-baseline justify-between gap-3">
+                            <span className={`${A.corpo} ${A.rotulo}`}>{l.rotulo}</span>
+                            <span className={`${A.corpo} text-right font-medium tabular-nums ${l.tom === 'aviso' ? A.atencao : A.valor}`}>{l.valor}</span>
                         </span>
                     ))}
                 </span>
@@ -395,6 +395,7 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
         );
     }
 
+    const numerosDoSelecionado = selecionado ? linhasDoCardDoEmpreendimento(selecionado) : [];
     const fotos = (selecionado?.fotos ?? []).map((f, i) => ({ id: String(i), url: f.url, description: f.legenda }));
     const fechar = () => setAberto(null);
 
@@ -520,6 +521,17 @@ const CreditRoomEmpreendimentos: React.FC<Props> = ({ version, accent = 'indigo'
                     <SheetDescription>{selecionado ? localizacaoDe(selecionado) : ''}</SheetDescription>
                 </SheetHeader>
                 <SheetPanel className="px-6 py-5 space-y-6">
+                    <section aria-labelledby="emp-numeros" className="space-y-3">
+                        <h3 id="emp-numeros" className={A.secao}>Números</h3>
+                        <dl className="space-y-1">
+                            {numerosDoSelecionado.map(l => (
+                                <div key={l.rotulo} className="flex items-baseline justify-between gap-3">
+                                    <dt className={`${A.corpo} ${A.rotulo}`}>{l.rotulo}</dt>
+                                    <dd className={`${A.corpo} text-right font-medium tabular-nums ${l.tom === 'aviso' ? A.atencao : A.valor}`}>{l.valor}</dd>
+                                </div>
+                            ))}
+                        </dl>
+                    </section>
                     <section aria-labelledby="emp-fotos" className="space-y-3">
                         <h3 id="emp-fotos" className={A.secao}>Fotos</h3>
                         {fotos.length > 0

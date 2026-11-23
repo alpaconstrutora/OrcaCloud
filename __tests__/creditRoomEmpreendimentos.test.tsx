@@ -256,3 +256,84 @@ describe('CreditRoomEmpreendimentos — coluna Documentos', () => {
         expect(celula(within(tabela).getByText('Venda 01').closest('tr') as HTMLElement, col).textContent).toBe('2');
     });
 });
+
+describe('CreditRoomEmpreendimentos — card pelo objetivo', () => {
+    beforeEach(() => { localStorage.clear(); });
+
+    const LOCACAO = emp({
+        id: 'e2', nome: 'Edifício Bela Vista', objetivo: 'LOCACAO', alugadas: 6, disponiveis: 4, vendidas: 0,
+        aluguel_locadas: 18_000, aluguel_disponiveis: 6_000, disponiveis_sem_aluguel: 2,
+    });
+    const SERVICO = emp({
+        id: 'e3', nome: 'Igreja Divino', objetivo: 'SERVICO',
+        servico: { n_contratos: 1, valor_contratos: 466_000, faturado: 100_000, a_faturar: 366_000 },
+    });
+    const SERVICO_SEM = emp({
+        id: 'e4', nome: 'Capela Nova', objetivo: 'SERVICO',
+        servico: { n_contratos: 0, valor_contratos: 0, faturado: 0, a_faturar: 0 },
+    });
+    const VENDAS = emp({ id: 'e5', nome: 'Condomínio Vendas', objetivo: 'VENDAS' });
+    const card = (nome: string) => screen.getByRole('button', { name: new RegExp(nome) });
+
+    it.each(['indigo', 'portal'] as const)('locação: unidades locadas e disponíveis com o aluguel, sem VGV — %s', accent => {
+        abrir(versao({ empreendimentos: [LOCACAO], contratos: [] }), accent);
+        const c = within(card('Edifício Bela Vista'));
+        expect(c.getByText('Unidades locadas')).toBeInTheDocument();
+        expect(c.getByText(/^6 · .*18\.000,00\/mês$/)).toBeInTheDocument();
+        expect(c.getByText('Unidades disponíveis')).toBeInTheDocument();
+        expect(c.getByText(/^4 · .*6\.000,00\/mês$/)).toBeInTheDocument();
+        expect(c.getByText('Sem aluguel cadastrado')).toBeInTheDocument();
+        expect(c.getByText('2 unidades')).toBeInTheDocument();
+        expect(c.getByText('Renda do mês')).toBeInTheDocument();
+        expect(c.queryByText('VGV vendido')).toBeNull();
+        expect(c.queryByText('VGV disponível')).toBeNull();
+    });
+
+    it.each(['indigo', 'portal'] as const)('serviço: contrato faturado e a faturar — %s', accent => {
+        abrir(versao({ empreendimentos: [SERVICO], contratos: [] }), accent);
+        const c = within(card('Igreja Divino'));
+        expect(c.getByText('Contrato faturado')).toBeInTheDocument();
+        expect(c.getByText(/100\.000,00/)).toBeInTheDocument();
+        expect(c.getByText('Contrato a faturar')).toBeInTheDocument();
+        expect(c.getByText(/366\.000,00/)).toBeInTheDocument();
+        expect(c.queryByText('VGV vendido')).toBeNull();
+    });
+
+    it.each(['indigo', 'portal'] as const)('serviço sem contrato válido: diz "sem contrato de serviço ativo", sem R$ 0,00 — %s', accent => {
+        abrir(versao({ empreendimentos: [SERVICO_SEM], contratos: [] }), accent);
+        const c = within(card('Capela Nova'));
+        const frase = c.getByText('sem contrato de serviço ativo');
+        expect(frase.className).toMatch(accent === 'indigo' ? /amber/ : /8A6A16/);
+        expect(c.queryByText('Contrato faturado')).toBeNull();
+        expect(card('Capela Nova').textContent).not.toMatch(/R\$\s0,00/);
+    });
+
+    it('versão liberada antes dos campos novos: locação e serviço mostram "—", não zero', () => {
+        const antigoLoc = emp({ id: 'e6', nome: 'Antigo Loc', objetivo: 'LOCACAO', alugadas: 3, disponiveis: 2 });
+        const antigoSrv = emp({ id: 'e7', nome: 'Antigo Srv', objetivo: 'SERVICO' });
+        abrir(versao({ empreendimentos: [antigoLoc, antigoSrv], contratos: [] }));
+        expect(within(card('Antigo Loc')).getByText('3 · —')).toBeInTheDocument();
+        expect(within(card('Antigo Loc')).getByText('2 · —')).toBeInTheDocument();
+        expect(within(card('Antigo Srv')).getAllByText('—').length).toBeGreaterThanOrEqual(2);
+        expect(card('Antigo Srv').textContent).not.toMatch(/R\$\s0,00/);
+    });
+
+    it('vendas (e misto) seguem com VGV vendido e disponível', () => {
+        abrir(versao({ empreendimentos: [VENDAS, emp({ id: 'e8', nome: 'Misto', objetivo: 'MISTO' })], contratos: [] }));
+        for (const nome of ['Condomínio Vendas', 'Misto']) {
+            const c = within(card(nome));
+            expect(c.getByText('VGV vendido')).toBeInTheDocument();
+            expect(c.getByText('VGV disponível')).toBeInTheDocument();
+            expect(c.queryByText('Unidades locadas')).toBeNull();
+        }
+    });
+
+    it.each(['indigo', 'portal'] as const)('o painel do empreendimento traz os mesmos números do objetivo — %s', accent => {
+        abrir(versao({ empreendimentos: [SERVICO, LOCACAO], contratos: [] }), accent);
+        fireEvent.click(card('Igreja Divino'));
+        const painel = within(screen.getByRole('dialog'));
+        expect(painel.getByText('Números')).toBeInTheDocument();
+        expect(painel.getByText('Contrato faturado')).toBeInTheDocument();
+        expect(painel.getByText(/366\.000,00/)).toBeInTheDocument();
+    });
+});

@@ -294,6 +294,18 @@ export interface SnapshotEmpreendimentoItem {
     vgv_vendido: number;
     vgv_disponivel: number;
     renda_mensal: number;
+    // Cards por objetivo (22/11/2026). Opcionais: versão liberada antes disto segue abrindo, com "—".
+    /** Σ aluguel mensal contratado das locações vigentes do empreendimento; `null` = sem locação vigente / sem fonte. */
+    aluguel_locadas?: number | null;
+    /** Σ `rental_price` das unidades disponíveis COM valor; `null` = nenhuma com valor cadastrado. */
+    aluguel_disponiveis?: number | null;
+    /** Unidades disponíveis sem aluguel cadastrado — contadas à parte, nunca como R$ 0. */
+    disponiveis_sem_aluguel?: number;
+    /**
+     * Objetivo SERVIÇO: contratos `SERVICOS` Ativo/Concluído da obra do empreendimento. `n_contratos = 0` = sem
+     * contrato de serviço ativo; `null` = não foi possível ler (nunca zero).
+     */
+    servico?: { n_contratos: number; valor_contratos: number; faturado: number; a_faturar: number } | null;
     capa: string | null;
     /** No máximo 8. */
     fotos: { url: string; legenda: string | null }[];

@@ -179,9 +179,10 @@ export default function Ribbon<Id extends string>({
 }
 
 /**
- * Um grupo do painel: os controles em cima, o rótulo em caixa alta embaixo —
- * o "panel" do ribbon do Revit. A divisória à direita separa do grupo seguinte;
- * o último não tem.
+ * Um grupo do painel: os controles em cima, o rótulo embaixo — o "panel" do
+ * ribbon do Revit. A divisória à direita separa do grupo seguinte; o último não tem.
+ * Rótulo SEM caixa alta (23/11/2026, Planejamento: o "COLUNAS" destoava do padrão
+ * do app — guia §6.2/§21); o texto sai como o `rotulo` foi escrito.
  */
 export function GrupoDoRibbon({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
   return (
@@ -191,7 +192,7 @@ export function GrupoDoRibbon({ rotulo, children }: { rotulo: string; children: 
       className="flex flex-col justify-between gap-0.5 border-r border-slate-200 pr-3 last:border-r-0 last:pr-0"
     >
       <div className="flex flex-wrap items-center gap-1">{children}</div>
-      <span className="text-[10px] uppercase tracking-wide text-slate-400">{rotulo}</span>
+      <span className="text-[10px] text-slate-400">{rotulo}</span>
     </div>
   );
 }

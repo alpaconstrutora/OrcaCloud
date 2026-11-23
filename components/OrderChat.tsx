@@ -115,11 +115,21 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, por
         try {
             if (enviarPeloWhatsapp) {
                 // A Edge Function grava a linha no chat (canal 'whatsapp') e põe a
-                // mensagem na fila do número do ÒPURA; relê a conversa para
-                // mostrá-la já com o selo, sem esperar o realtime.
+                // mensagem na fila do número do ÒPURA.
                 await whatsappOpenwaService.responderNoPedido(orderId, messageText);
-                const lista = await chatService.listMessages(orderId);
-                setMessages(lista);
+                // Daqui em diante a mensagem SAIU: o campo fica vazio e nada pode
+                // devolver o texto nem acusar erro de envio — cada clique leva um
+                // comando_id novo, e um "reenviar" mandaria um 2º WhatsApp ao
+                // fornecedor (revisão da Tarefa 7). Reler a conversa é só para
+                // mostrar a linha já com o selo; falhou, o realtime a traz.
+                void (async () => {
+                    try {
+                        const lista = await chatService.listMessages(orderId);
+                        setMessages(lista);
+                    } catch (falhaAoReler) {
+                        console.warn('[OrderChat] Mensagem enviada; não consegui reler a conversa:', falhaAoReler);
+                    }
+                })();
                 return;
             }
             const sentMsg = portalToken

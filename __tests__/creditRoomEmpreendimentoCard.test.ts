@@ -57,6 +57,14 @@ describe('linhasDoCardDoEmpreendimento — Locação', () => {
         expect(linhas[2].valor).toBe('Assinatura: 1');
     });
 
+    it('negociações não lidas (null): linha "Em negociação" com "—", nunca zero', () => {
+        const linhas = linhasDoCardDoEmpreendimento(emp({ ...base, aluguel_locadas: 1, em_negociacao: null, aluguel_em_negociacao: null }));
+        const l = linhas.find(x => x.rotulo === 'Em negociação')!;
+        expect(l.valor).toBe('—');
+        expect(l.tom).toBe('aviso');
+        expect(linhas.some(x => x.rotulo === 'Etapa da negociação')).toBe(false);
+    });
+
     it('várias etapas na mesma linha; nenhuma em negociação (0 ou versão antiga) = sem a linha', () => {
         const varias = linhasDoCardDoEmpreendimento(emp({
             ...base, em_negociacao: 3, aluguel_em_negociacao: 9_000, em_negociacao_por_etapa: { Reserva: 1, Assinatura: 2 },

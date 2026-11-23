@@ -301,10 +301,10 @@ export interface SnapshotEmpreendimentoItem {
      */
     aluguel_locadas?: number | null;
     // Etapa da negociação (23/11/2026). Ausente = versão anterior: o card não mostra a linha.
-    /** Unidades com negociação de locação em Reserva, Contrato ou Assinatura (`utils/creditRoomLocacaoEtapa`). */
-    em_negociacao?: number;
-    /** Σ aluguel delas: o do contrato vigente, senão a parcela da negociação. */
-    aluguel_em_negociacao?: number;
+    /** Unidades com negociação de locação em Reserva, Contrato ou Assinatura (`utils/creditRoomLocacaoEtapa`); `null` = negociações não lidas ("—"). */
+    em_negociacao?: number | null;
+    /** Σ aluguel delas: o do contrato vigente, senão a parcela da negociação; `null` = desconhecido. */
+    aluguel_em_negociacao?: number | null;
     /** Quantas em cada etapa, pelo rótulo do stepper ("Assinatura": 1). */
     em_negociacao_por_etapa?: Record<string, number>;
     /** Σ `rental_price` das unidades disponíveis COM valor; `null` = nenhuma com valor cadastrado. */

@@ -46,7 +46,9 @@ export function linhasDoCardDoEmpreendimento(e: SnapshotEmpreendimentoItem, op: 
         const linhas: LinhaDoCard[] = [
             { rotulo: 'Unidades locadas', valor: `${quantidade(e.alugadas)} · ${mensal(e.aluguel_locadas)}` },
         ];
-        // Etapa da negociação (Reserva/Contrato/Assinatura): só aparece quando há alguma; versão antiga não tem o campo.
+        // Etapa da negociação (Reserva/Contrato/Assinatura): só aparece quando há alguma; versão antiga não tem o
+        // campo (sem linha). `null` = negociações não lidas na coleta: a linha aparece com "—", nunca como zero.
+        if (e.em_negociacao === null) linhas.push({ rotulo: 'Em negociação', valor: ausente, tom: 'aviso' });
         const negociando = e.em_negociacao ?? 0;
         if (negociando > 0) {
             linhas.push({ rotulo: 'Em negociação', valor: `${inteiro(negociando)} · ${mensal(e.aluguel_em_negociacao)}` });

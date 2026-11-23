@@ -590,15 +590,79 @@ async function datasDePagamento(ids: string[]): Promise<Map<string, string>> {
  * espelho do Comercial (`commercial_properties.price`) quando tem preço
  * próprio. O porquê está em `coletarUnidades`.
  */
-async function unidadesComPreco(empreendimentoId: string): Promise<{
+type NegociacaoDeLocacao = {
+    status: string | null; value: number | null; installment_value: number | null;
+    /** `true` = o imóvel é o PRINCIPAL do negócio (`commercial_deals.property_id`); a parcela é dele. */
+    principal: boolean;
+};
+
+/**
+ * Negociações de LOCAÇÃO de cada imóvel, pelas duas formas de vínculo que o sistema usa
+ * (`commercialService.dealIdsForProperties`, `fn_negociacao_unidade_ocupada`): o imóvel
+ * principal (`commercial_deals.property_id`) e os demais imóveis do negócio
+ * (`commercial_deal_units`). `null` = a leitura falhou (etapa DESCONHECIDA, não "nenhuma").
+ */
+async function negociacoesDeLocacao(imoveis: string[]): Promise<Map<string, NegociacaoDeLocacao[]> | null> {
+    const out = new Map<string, NegociacaoDeLocacao[]>();
+    const add = (pid: string, n: NegociacaoDeLocacao) => {
+        const l = out.get(pid);
+        if (l) l.push(n); else out.set(pid, [n]);
+    };
+    type DealRow = { id: string; property_id: string | null; status: string | null; value: number | null; installment_value: number | null };
+    try {
+        const extras: { deal_id: string; property_id: string }[] = [];
+        for (const lote of lotes(imoveis)) {
+            const [principais, demais] = await Promise.all([
+                supabase.from('commercial_deals')
+                    .select('id, property_id, status, value, installment_value')
+                    .eq('type', 'RENTAL')
+                    .in('property_id', lote),
+                supabase.from('commercial_deal_units').select('deal_id, property_id').in('property_id', lote),
+            ]);
+            if (principais.error) throw principais.error;
+            if (demais.error) throw demais.error;
+            for (const d of (principais.data ?? []) as DealRow[]) {
+                if (d.property_id) add(d.property_id, { ...d, principal: true });
+            }
+            extras.push(...((demais.data ?? []) as { deal_id: string; property_id: string }[]));
+        }
+        // Imóvel que entra no negócio só por `commercial_deal_units`: lê o negócio (se for de locação).
+        const dealPorId = new Map<string, DealRow>();
+        for (const lote of lotes([...new Set(extras.map(x => x.deal_id))])) {
+            const { data, error } = await supabase.from('commercial_deals')
+                .select('id, property_id, status, value, installment_value')
+                .eq('type', 'RENTAL')
+                .in('id', lote);
+            if (error) throw error;
+            for (const d of (data ?? []) as DealRow[]) dealPorId.set(d.id, d);
+        }
+        for (const x of extras) {
+            const d = dealPorId.get(x.deal_id);
+            // O principal já entrou acima; aqui só os demais imóveis do negócio.
+            if (!d || d.property_id === x.property_id) continue;
+            add(x.property_id, { ...d, principal: false });
+        }
+        return out;
+    } catch (e) {
+        console.warn('[creditRoomService] etapa das negociações de locação indisponível no snapshot:', e);
+        return null;
+    }
+}
+
+async function unidadesComPreco(empreendimentoId: string, opcoes: { comEtapa?: boolean } = {}): Promise<{
     status: string; rental_status: string | null; price: number | null; rental_price: number | null;
     /** `true` = o aluguel dela dependia do espelho de Locações e a leitura falhou: valor DESCONHECIDO (não "sem valor cadastrado"). */
     aluguel_indisponivel: boolean;
     rental_property_id: string | null;
     /** Etapa mais avançada das negociações de LOCAÇÃO do imóvel (`etapaMaisAvancada`); `null` = nenhuma que decida. */
     etapa_locacao: string | null;
-    /** Aluguel mensal da negociação dessa etapa (`getDealInstallmentValue`); `null` sem negociação. */
+    /**
+     * Aluguel mensal da negociação dessa etapa (`getDealInstallmentValue`); `null` sem negociação. Imóvel que
+     * não é o principal do negócio leva 0: a parcela é do negócio inteiro e já está no principal.
+     */
     aluguel_da_negociacao: number | null;
+    /** `true` = a leitura das negociações falhou: a etapa é DESCONHECIDA (a unidade cai no status dela). */
+    etapa_indisponivel: boolean;
 }[]> {
     const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
     const idsEspelho = units.map(u => u.commercial_property_id).filter((v): v is string => !!v);
@@ -631,27 +695,14 @@ async function unidadesComPreco(empreendimentoId: string): Promise<{
         }
     }
     // Etapa da negociação de locação de cada imóvel (Gerenciar Negociação › Contrato). Falha = etapa
-    // desconhecida: a unidade cai no status dela, a regra de antes (`situacaoDeLocacao`).
+    // desconhecida: a unidade cai no status dela, a regra de antes (`situacaoDeLocacao`), e a coleta
+    // marca o "em negociação" como desconhecido. `comEtapa: false` (bloco de vendas do room) não lê.
     const imoveisLocacao = [...new Set(units.map(u => u.rental_property_id).filter((v): v is string => !!v))];
-    const negociacoes = new Map<string, { status: string | null; value: number | null; installment_value: number | null }[]>();
-    for (const lote of lotes(imoveisLocacao)) {
-        const { data, error } = await supabase
-            .from('commercial_deals')
-            .select('property_id, status, value, installment_value')
-            .eq('type', 'RENTAL')
-            .in('property_id', lote);
-        if (error) {
-            console.warn('[creditRoomService] etapa das negociações de locação indisponível no snapshot:', error);
-            negociacoes.clear();
-            break;
-        }
-        for (const d of (data ?? []) as Array<{ property_id: string; status: string | null; value: number | null; installment_value: number | null }>) {
-            const l = negociacoes.get(d.property_id);
-            if (l) l.push(d); else negociacoes.set(d.property_id, [d]);
-        }
-    }
+    const negociacoes = opcoes.comEtapa === false || !imoveisLocacao.length
+        ? new Map<string, NegociacaoDeLocacao[]>()
+        : await negociacoesDeLocacao(imoveisLocacao);
     return units.map(u => {
-        const ds = u.rental_property_id ? negociacoes.get(u.rental_property_id) ?? [] : [];
+        const ds = u.rental_property_id ? negociacoes?.get(u.rental_property_id) ?? [] : [];
         const etapa = etapaMaisAvancada(ds.map(d => d.status));
         const deal = etapa ? ds.find(d => d.status === etapa) : undefined;
         return {
@@ -664,7 +715,8 @@ async function unidadesComPreco(empreendimentoId: string): Promise<{
             aluguel_indisponivel: espelhoFalhou && u.rental_price == null && !!u.rental_property_id,
             rental_property_id: u.rental_property_id ?? null,
             etapa_locacao: etapa,
-            aluguel_da_negociacao: deal ? round2(getDealInstallmentValue(deal)) : null,
+            aluguel_da_negociacao: deal ? (deal.principal ? round2(getDealInstallmentValue(deal)) : 0) : null,
+            etapa_indisponivel: negociacoes === null,
         };
     });
 }
@@ -1421,7 +1473,7 @@ export const creditRoomService = {
     async coletarUnidades(empreendimentoId?: string) {
         if (!empreendimentoId) return null;
         try {
-            const units = await unidadesComPreco(empreendimentoId);
+            const units = await unidadesComPreco(empreendimentoId, { comEtapa: false });
             return units.map(u => ({ status: u.status, price: u.price }));
         } catch (e) {
             console.warn('[creditRoomService] unidades indisponíveis no snapshot:', e);
@@ -1984,6 +2036,8 @@ export const creditRoomService = {
                 const doEmp = locacoes.filter(l => l.empreendimentoId === e.id);
                 // Em negociação: o aluguel do contrato vigente do imóvel (já pode existir, ex.: Ativo em
                 // Assinatura), senão a parcela da negociação. Esse contrato sai da soma das locadas.
+                // Limite conhecido: contrato vigente sem negócio na cadeia (`propertyId` null) não tem como
+                // ser ligado à unidade e fica nas locadas.
                 const negociando = us.filter(emNegociacao);
                 const imoveisNegociando = new Set(negociando.map(u => u.rental_property_id).filter((v): v is string => !!v));
                 const doImovel = (pid: string | null) => (pid ? doEmp.filter(l => l.propertyId === pid) : []);
@@ -1991,6 +2045,8 @@ export const creditRoomService = {
                     const ls = doImovel(u.rental_property_id);
                     return a + (ls.length ? ls.reduce((b, l) => b + num(l.aluguelMensal), 0) : num(u.aluguel_da_negociacao));
                 }, 0);
+                // Negociações não lidas: "em negociação" é DESCONHECIDO (null → "—"), nunca "nenhuma" (0).
+                const etapaDesconhecida = us.some(u => u.etapa_indisponivel);
                 const porEtapa: Record<string, number> = {};
                 for (const u of negociando) {
                     const r = rotuloDaEtapaDeLocacao(u.etapa_locacao as string);
@@ -2018,9 +2074,9 @@ export const creditRoomService = {
                     aluguel_locadas: round2(doEmp
                         .filter(l => !(l.propertyId && imoveisNegociando.has(l.propertyId)))
                         .reduce((a, l) => a + num(l.aluguelMensal), 0)),
-                    em_negociacao: negociando.length,
-                    aluguel_em_negociacao: round2(aluguelNegociando),
-                    em_negociacao_por_etapa: porEtapa,
+                    em_negociacao: etapaDesconhecida ? null : negociando.length,
+                    aluguel_em_negociacao: etapaDesconhecida ? null : round2(aluguelNegociando),
+                    em_negociacao_por_etapa: etapaDesconhecida ? undefined : porEtapa,
                     aluguel_disponiveis: !aluguelDesconhecido && aluguelPedido.length
                         ? round2(aluguelPedido.reduce((a, u) => a + num(u.rental_price), 0))
                         : null,

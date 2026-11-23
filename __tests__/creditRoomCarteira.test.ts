@@ -93,6 +93,17 @@ describe('montarCarteira', () => {
         expect(l.parcela_mensal).toBe(1_500);
     });
 
+    it('etapa da negociação vai na linha (com título e locação sem título); sem negociação = null', () => {
+        const out = montarCarteira([
+            titulo({ id: 'v1', contractId: 'V', amount: 1_000 }),
+            titulo({ id: 'x1', contractId: 'X', amount: 500 }),
+        ], [locacao({ contractId: 'L', aluguelMensal: 3_500 })], DATA_BASE,
+        new Map(), new Map(), new Map([['V', 'COMPLETED'], ['L', 'ASSINATURA']]));
+        expect(out.find(x => x.contract_id === 'V')!.etapa_negociacao).toBe('COMPLETED');
+        expect(out.find(x => x.contract_id === 'L')!.etapa_negociacao).toBe('ASSINATURA');
+        expect(out.find(x => x.contract_id === 'X')!.etapa_negociacao).toBeNull();
+    });
+
     it('VENDA sem valor de contrato cai na soma dos títulos', () => {
         const out = montarCarteira([
             titulo({ id: 'v1', contractId: 'V', amount: 1_000 }),

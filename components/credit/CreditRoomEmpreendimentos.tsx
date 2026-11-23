@@ -12,7 +12,7 @@ import {
 import type { CreditRoomDocument, CreditRoomVersion } from '../../types/creditRoom';
 import type { SnapshotContrato, SnapshotEmpreendimentoItem } from '../../utils/creditRoomSnapshot';
 import { ROTULO_DO_OBJETIVO } from '../../utils/empreendimentoObjetivo';
-import { textoDaSituacao } from '../../utils/creditRoomCarteira';
+import { textoDaEtapa, textoDaSituacao } from '../../utils/creditRoomCarteira';
 import { ehPrevia, horaDaPrevia } from '../../utils/creditRoomPrevia';
 import { linhasDoCardDoEmpreendimento } from '../../utils/creditRoomEmpreendimentoCard';
 
@@ -122,6 +122,7 @@ const COLUNAS: StandardTableColumn[] = [
     { key: 'primeiro', label: '1º venc.', sortable: true, width: 110 },
     { key: 'ultimo', label: 'Último venc.', sortable: true, width: 110 },
     { key: 'situacao', label: 'Situação', sortable: true, width: 170 },
+    { key: 'etapa', label: 'Etapa da negociação', sortable: true, width: 170 },
 ];
 
 /** Só existe quando a tela passa `documentos`: sem a lista não há o que contar (e "0" mentiria). */
@@ -134,7 +135,7 @@ const COLUNAS_A_DIREITA = new Set([...COLUNAS_MONETARIAS, 'documentos']);
 const TOTAIS_SEM_VALOR = new Set(['valor', 'saldo', 'vencido']);
 
 /** Colunas da tabela do painel de um empreendimento (o empreendimento e as datas já estão no contexto). */
-const COLUNAS_DO_PAINEL: readonly string[] = ['rotulo', 'tipo', 'unidade', 'parcela', 'saldo', 'vencido', 'situacao'];
+const COLUNAS_DO_PAINEL: readonly string[] = ['rotulo', 'tipo', 'unidade', 'parcela', 'saldo', 'vencido', 'situacao', 'etapa'];
 const ROTULO_DA_COLUNA: Record<string, string> = Object.fromEntries([...COLUNAS, COLUNA_DOCUMENTOS].map(c => [c.key, c.label]));
 
 const dataCelula = (acc: Accent, v: string | null) => (acc === 'portal' ? fmtDate(v) : formatDateBR(v));
@@ -166,6 +167,7 @@ function conteudo(key: string, c: LinhaContrato, acc: Accent, A: Paleta): React.
             // App: texto colorido, sem pílula (§8). Portal: StatusPill do kit (§24).
             return acc === 'portal' ? <StatusPill tone={s.tom}>{s.texto}</StatusPill> : <span className={s.cor}>{s.texto}</span>;
         }
+        case 'etapa': return textoDaEtapa(c);
         default: return null;
     }
 }
@@ -184,6 +186,7 @@ function ordenavel(key: string, c: LinhaContrato): string | number | null {
         case 'primeiro': return c.primeiro_vencimento;
         case 'ultimo': return c.ultimo_vencimento;
         case 'situacao': return situacaoDe(c, ACCENTS.indigo).texto;
+        case 'etapa': return c.etapa_negociacao ? textoDaEtapa(c) : null;
         default: return null;
     }
 }

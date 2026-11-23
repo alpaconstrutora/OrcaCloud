@@ -56,6 +56,8 @@ export interface LocacaoVigente {
     contractId: string;
     organizationId: string;
     empreendimentoId: string | null;
+    /** Imóvel do negócio (`commercial_deals.property_id`) — liga a locação à unidade (etapa da negociação). */
+    propertyId?: string | null;
     partyKey: string | null;
     aluguelMensal: number;
     inicio: string | null;

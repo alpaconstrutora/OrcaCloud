@@ -19,9 +19,17 @@ const builder = (tabela: string) => {
     let colunas = '';
     const filtros: unknown[] = [];
     const chave = () => `${tabela}:${colunas}`;
+    // `.eq`/`.in` filtram de verdade, mas só pela coluna que a linha simulada traz (linha sem a coluna passa).
+    const passa = (row: Record<string, unknown>) => filtros.every(f => {
+        const [m, [col, v]] = f as [string, [string, unknown]];
+        if (!(col in row)) return true;
+        if (m === 'eq') return row[col] === v;
+        if (m === 'in') return (v as unknown[]).includes(row[col]);
+        return true;
+    });
     const resposta = () => (erros.has(tabela) || erros.has(chave())
         ? { data: null, error: new Error('falhou') }
-        : { data: respostas[chave()] ?? respostas[tabela] ?? [], error: null });
+        : { data: ((respostas[chave()] ?? respostas[tabela] ?? []) as Record<string, unknown>[]).filter(passa), error: null });
     const b: Record<string, unknown> = {};
     b.select = (c: string) => { colunas = c; return b; };
     for (const m of ['eq', 'in', 'or', 'order']) b[m] = (...a: unknown[]) => { filtros.push([m, a]); return b; };
@@ -96,11 +104,75 @@ describe('coletarEmpreendimentosDoEscopo — cards por objetivo', () => {
         expect(e.aluguel_locadas).toBe(5_000); // 2.000 + 3.000; os 999 são de outro empreendimento
     });
 
-    it('sem locação vigente do empreendimento: aluguel_locadas null (não R$ 0)', async () => {
+    it('sem locação vigente do empreendimento: aluguel_locadas 0 (zero é dado; "—" só em versão antiga)', async () => {
         const e = (await coletar()).get('eVen')!;
         expect(e.aluguel_locadas).toBe(999); // este tem uma
         const r = await creditRoomService.coletarEmpreendimentosDoEscopo(['o1'], [], [], [], '2026-11-20', { vendas: true, alugueis: true });
-        expect(r!.find(x => x.id === 'eLoc')!.aluguel_locadas).toBeNull();
+        expect(r!.find(x => x.id === 'eLoc')!.aluguel_locadas).toBe(0);
+    });
+
+    describe('etapa da negociação de locação', () => {
+        const DEALS = 'commercial_deals:id, property_id, status, value, installment_value';
+        const comEtapas = async () => {
+            unidadesDe.eLoc = [
+                // caso real 014/102: contrato Ativo, negociação em Assinatura, unidade Reservado
+                unidade({ id: 'n1', rental_status: 'RESERVADO', rental_property_id: 'rp-n1', rental_price: 3_500 }),
+                // negociação em Alugado com a unidade ainda Disponível: conta como locada
+                unidade({ id: 'n2', rental_property_id: 'rp-n2', rental_price: 900 }),
+                // em Reserva, sem contrato: aluguel da negociação
+                unidade({ id: 'n3', rental_property_id: 'rp-n3', rental_price: 1_000 }),
+                // só proposta: segue disponível
+                unidade({ id: 'n4', rental_property_id: 'rp-n4', rental_price: 2_000 }),
+                // 2ª unidade do MESMO negócio do n1 (só em `commercial_deal_units`): em negociação, sem 2ª parcela
+                unidade({ id: 'n5', rental_status: 'RESERVADO', rental_property_id: 'rp-n5', rental_price: 400 }),
+            ];
+            respostas[DEALS] = [
+                { id: 'd1', type: 'RENTAL', property_id: 'rp-n1', status: 'ASSINATURA', value: 3_500, installment_value: null },
+                { id: 'd1x', type: 'RENTAL', property_id: 'rp-n1', status: 'CANCELLED', value: 1, installment_value: null },
+                { id: 'd2', type: 'RENTAL', property_id: 'rp-n2', status: 'COMPLETED', value: 900, installment_value: 900 },
+                { id: 'd3', type: 'RENTAL', property_id: 'rp-n3', status: 'RESERVA', value: 99_999, installment_value: 1_200 },
+                { id: 'd4', type: 'RENTAL', property_id: 'rp-n4', status: 'IN_NEGOTIATION', value: 2_000, installment_value: null },
+                // negociação de VENDA do mesmo imóvel: não é etapa de locação
+                { id: 'dv', type: 'SALE', property_id: 'rp-n4', status: 'COMPLETED', value: 500_000, installment_value: null },
+            ];
+            respostas['commercial_deal_units'] = [
+                { deal_id: 'd1', property_id: 'rp-n1' },
+                { deal_id: 'd1', property_id: 'rp-n5' },
+            ];
+            const ls: LocacaoVigente[] = [
+                { ...locacao('eLoc', 3_500), propertyId: 'rp-n1' },
+                { ...locacao('eLoc', 900), propertyId: 'rp-n2' },
+            ];
+            const r = await creditRoomService.coletarEmpreendimentosDoEscopo(['o1'], [], [], ls, '2026-11-20', { vendas: true, alugueis: true });
+            return r!.find(x => x.id === 'eLoc')!;
+        };
+
+        it('Alugado = locada; Reserva/Contrato/Assinatura = em negociação (fora das disponíveis); Proposta = disponível', async () => {
+            const e = await comEtapas();
+            expect(e.alugadas).toBe(1); // n2
+            expect(e.em_negociacao).toBe(3); // n1, n3 e n5 (2ª unidade do negócio do n1)
+            expect(e.disponiveis).toBe(1); // n4 — a venda concluída do mesmo imóvel não conta como locação
+            expect(e.em_negociacao_por_etapa).toEqual({ Assinatura: 2, Reserva: 1 });
+        });
+
+        it('aluguel: o contrato da unidade em negociação sai das locadas; sem contrato, vale a parcela da negociação', async () => {
+            const e = await comEtapas();
+            expect(e.aluguel_locadas).toBe(900);
+            // 3.500 (contrato do n1) + 1.200 (installment_value do n3, não o value); o n5 não soma a parcela do d1 de novo
+            expect(e.aluguel_em_negociacao).toBe(4_700);
+            expect(e.aluguel_disponiveis).toBe(2_000);
+        });
+
+        it.each([DEALS, 'commercial_deal_units'])('falha ao ler %s: "em negociação" desconhecido (null), unidade no status dela, card de pé', async tabela => {
+            erros.add(tabela);
+            const e = await comEtapas();
+            expect(e.em_negociacao).toBeNull();
+            expect(e.aluguel_em_negociacao).toBeNull();
+            expect(e.em_negociacao_por_etapa).toBeUndefined();
+            expect(e.alugadas).toBe(0);
+            expect(e.disponiveis).toBe(5); // RESERVADO não é LOCADO: disponível, como antes
+            expect(console.warn).toHaveBeenCalled();
+        });
     });
 
     it('serviço: falha na leitura dos contratos vira servico null só nele; os demais seguem, e não-serviço fica sem o campo', async () => {

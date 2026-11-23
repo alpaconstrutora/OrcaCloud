@@ -68,6 +68,7 @@ import { round2 } from '../utils/financialMath';
 import { originIdFromRef, refPrefixOrFilter } from '../lib/receivableRef';
 import { STATUS_SERVICO_VALIDOS, resumirServico, type ContratoDeServico, type ResumoDeServico } from '../utils/creditRoomServico';
 import { getDealInstallmentValue } from '../lib/rentalPortfolio';
+import { etapaMaisAvancada, rotuloDaEtapaDeLocacao, situacaoDeLocacao } from '../utils/creditRoomLocacaoEtapa';
 import { saleDealStage } from '../lib/salesAnalysis';
 import type { Receivable } from '../types/financial';
 import type { DebtPosition } from '../types/debt';
@@ -555,7 +556,7 @@ async function dealsDaCadeia(contratos: ContratoDaCadeia[]): Promise<Map<string,
 
 type DealLido = {
     id: string; type: string | null; property_id: string | null; client_id: string | null;
-    value: number | null; installment_value: number | null;
+    value: number | null; installment_value: number | null; status: string | null;
 };
 
 async function lerDeals(ids: string[]): Promise<Map<string, DealLido>> {
@@ -563,7 +564,7 @@ async function lerDeals(ids: string[]): Promise<Map<string, DealLido>> {
     for (const lote of lotes([...new Set(ids)])) {
         const { data, error } = await supabase
             .from('commercial_deals')
-            .select('id, type, property_id, client_id, value, installment_value')
+            .select('id, type, property_id, client_id, value, installment_value, status')
             .in('id', lote);
         if (error) throw error;
         for (const d of (data ?? []) as DealLido[]) out.set(d.id, d);
@@ -589,10 +590,79 @@ async function datasDePagamento(ids: string[]): Promise<Map<string, string>> {
  * espelho do Comercial (`commercial_properties.price`) quando tem preço
  * próprio. O porquê está em `coletarUnidades`.
  */
-async function unidadesComPreco(empreendimentoId: string): Promise<{
+type NegociacaoDeLocacao = {
+    status: string | null; value: number | null; installment_value: number | null;
+    /** `true` = o imóvel é o PRINCIPAL do negócio (`commercial_deals.property_id`); a parcela é dele. */
+    principal: boolean;
+};
+
+/**
+ * Negociações de LOCAÇÃO de cada imóvel, pelas duas formas de vínculo que o sistema usa
+ * (`commercialService.dealIdsForProperties`, `fn_negociacao_unidade_ocupada`): o imóvel
+ * principal (`commercial_deals.property_id`) e os demais imóveis do negócio
+ * (`commercial_deal_units`). `null` = a leitura falhou (etapa DESCONHECIDA, não "nenhuma").
+ */
+async function negociacoesDeLocacao(imoveis: string[]): Promise<Map<string, NegociacaoDeLocacao[]> | null> {
+    const out = new Map<string, NegociacaoDeLocacao[]>();
+    const add = (pid: string, n: NegociacaoDeLocacao) => {
+        const l = out.get(pid);
+        if (l) l.push(n); else out.set(pid, [n]);
+    };
+    type DealRow = { id: string; property_id: string | null; status: string | null; value: number | null; installment_value: number | null };
+    try {
+        const extras: { deal_id: string; property_id: string }[] = [];
+        for (const lote of lotes(imoveis)) {
+            const [principais, demais] = await Promise.all([
+                supabase.from('commercial_deals')
+                    .select('id, property_id, status, value, installment_value')
+                    .eq('type', 'RENTAL')
+                    .in('property_id', lote),
+                supabase.from('commercial_deal_units').select('deal_id, property_id').in('property_id', lote),
+            ]);
+            if (principais.error) throw principais.error;
+            if (demais.error) throw demais.error;
+            for (const d of (principais.data ?? []) as DealRow[]) {
+                if (d.property_id) add(d.property_id, { ...d, principal: true });
+            }
+            extras.push(...((demais.data ?? []) as { deal_id: string; property_id: string }[]));
+        }
+        // Imóvel que entra no negócio só por `commercial_deal_units`: lê o negócio (se for de locação).
+        const dealPorId = new Map<string, DealRow>();
+        for (const lote of lotes([...new Set(extras.map(x => x.deal_id))])) {
+            const { data, error } = await supabase.from('commercial_deals')
+                .select('id, property_id, status, value, installment_value')
+                .eq('type', 'RENTAL')
+                .in('id', lote);
+            if (error) throw error;
+            for (const d of (data ?? []) as DealRow[]) dealPorId.set(d.id, d);
+        }
+        for (const x of extras) {
+            const d = dealPorId.get(x.deal_id);
+            // O principal já entrou acima; aqui só os demais imóveis do negócio.
+            if (!d || d.property_id === x.property_id) continue;
+            add(x.property_id, { ...d, principal: false });
+        }
+        return out;
+    } catch (e) {
+        console.warn('[creditRoomService] etapa das negociações de locação indisponível no snapshot:', e);
+        return null;
+    }
+}
+
+async function unidadesComPreco(empreendimentoId: string, opcoes: { comEtapa?: boolean } = {}): Promise<{
     status: string; rental_status: string | null; price: number | null; rental_price: number | null;
     /** `true` = o aluguel dela dependia do espelho de Locações e a leitura falhou: valor DESCONHECIDO (não "sem valor cadastrado"). */
     aluguel_indisponivel: boolean;
+    rental_property_id: string | null;
+    /** Etapa mais avançada das negociações de LOCAÇÃO do imóvel (`etapaMaisAvancada`); `null` = nenhuma que decida. */
+    etapa_locacao: string | null;
+    /**
+     * Aluguel mensal da negociação dessa etapa (`getDealInstallmentValue`); `null` sem negociação. Imóvel que
+     * não é o principal do negócio leva 0: a parcela é do negócio inteiro e já está no principal.
+     */
+    aluguel_da_negociacao: number | null;
+    /** `true` = a leitura das negociações falhou: a etapa é DESCONHECIDA (a unidade cai no status dela). */
+    etapa_indisponivel: boolean;
 }[]> {
     const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
     const idsEspelho = units.map(u => u.commercial_property_id).filter((v): v is string => !!v);
@@ -624,15 +694,31 @@ async function unidadesComPreco(empreendimentoId: string): Promise<{
             if (cp.rental_price != null) aluguelEspelho.set(cp.id, Number(cp.rental_price));
         }
     }
-    return units.map(u => ({
-        status: u.status,
-        rental_status: u.rental_status ?? null,
-        price: u.price
-            ?? (u.commercial_property_id ? precoEspelho.get(u.commercial_property_id) ?? null : null),
-        rental_price: u.rental_price
-            ?? (u.rental_property_id ? aluguelEspelho.get(u.rental_property_id) ?? null : null),
-        aluguel_indisponivel: espelhoFalhou && u.rental_price == null && !!u.rental_property_id,
-    }));
+    // Etapa da negociação de locação de cada imóvel (Gerenciar Negociação › Contrato). Falha = etapa
+    // desconhecida: a unidade cai no status dela, a regra de antes (`situacaoDeLocacao`), e a coleta
+    // marca o "em negociação" como desconhecido. `comEtapa: false` (bloco de vendas do room) não lê.
+    const imoveisLocacao = [...new Set(units.map(u => u.rental_property_id).filter((v): v is string => !!v))];
+    const negociacoes = opcoes.comEtapa === false || !imoveisLocacao.length
+        ? new Map<string, NegociacaoDeLocacao[]>()
+        : await negociacoesDeLocacao(imoveisLocacao);
+    return units.map(u => {
+        const ds = u.rental_property_id ? negociacoes?.get(u.rental_property_id) ?? [] : [];
+        const etapa = etapaMaisAvancada(ds.map(d => d.status));
+        const deal = etapa ? ds.find(d => d.status === etapa) : undefined;
+        return {
+            status: u.status,
+            rental_status: u.rental_status ?? null,
+            price: u.price
+                ?? (u.commercial_property_id ? precoEspelho.get(u.commercial_property_id) ?? null : null),
+            rental_price: u.rental_price
+                ?? (u.rental_property_id ? aluguelEspelho.get(u.rental_property_id) ?? null : null),
+            aluguel_indisponivel: espelhoFalhou && u.rental_price == null && !!u.rental_property_id,
+            rental_property_id: u.rental_property_id ?? null,
+            etapa_locacao: etapa,
+            aluguel_da_negociacao: deal ? (deal.principal ? round2(getDealInstallmentValue(deal)) : 0) : null,
+            etapa_indisponivel: negociacoes === null,
+        };
+    });
 }
 
 type LinhaRecebivel = {
@@ -1070,7 +1156,7 @@ export const creditRoomService = {
                     ...titulosDoEscopo.map(t => t.contractId).filter((v): v is string => !!v),
                     ...locacoesDoEscopo.map(l => l.contractId),
                 ])
-                : Promise.resolve({ unidade: new Map<string, string>(), valor: new Map<string, number>() }),
+                : Promise.resolve({ unidade: new Map<string, string>(), valor: new Map<string, number>(), etapa: new Map<string, string>() }),
         ]);
 
         // Despesa operacional média por org (só desconta dos aluguéis). NOI que
@@ -1143,7 +1229,7 @@ export const creditRoomService = {
             : null;
 
         const contratos = titulosDoEscopo && locacoesDoEscopo
-            ? montarCarteira(titulosDoEscopo, locacoesDoEscopo, dataBase, dadosDosContratos.unidade, dadosDosContratos.valor)
+            ? montarCarteira(titulosDoEscopo, locacoesDoEscopo, dataBase, dadosDosContratos.unidade, dadosDosContratos.valor, dadosDosContratos.etapa)
             : null;
 
         const snapshot = buildSnapshot({
@@ -1387,7 +1473,7 @@ export const creditRoomService = {
     async coletarUnidades(empreendimentoId?: string) {
         if (!empreendimentoId) return null;
         try {
-            const units = await unidadesComPreco(empreendimentoId);
+            const units = await unidadesComPreco(empreendimentoId, { comEtapa: false });
             return units.map(u => ({ status: u.status, price: u.price }));
         } catch (e) {
             console.warn('[creditRoomService] unidades indisponíveis no snapshot:', e);
@@ -1628,6 +1714,7 @@ export const creditRoomService = {
                         organizationId: c.organization_id,
                         empreendimentoId: c.empreendimento_id
                             ?? (deal?.property_id ? empDoImovel.get(deal.property_id) ?? null : null),
+                        propertyId: deal?.property_id ?? null,
                         partyKey: c.client_id ?? deal?.client_id ?? null,
                         aluguelMensal: round2(c.current_value != null
                             ? num(c.current_value)
@@ -1896,8 +1983,10 @@ export const creditRoomService = {
     /**
      * Empreendimentos do escopo com unidades, VGV, renda do mês e fotos.
      *
-     * Unidades: `status` é o eixo de VENDA, `rental_status` o de LOCAÇÃO
-     * (`types/empreendimento.ts`). `alugadas` = `rental_status = 'LOCADO'`; a
+     * Unidades: `status` é o eixo de VENDA; o de LOCAÇÃO é a ETAPA DA NEGOCIAÇÃO
+     * (`situacaoDeLocacao`, 23/11/2026): "Alugado" = alugada; Reserva/Contrato/
+     * Assinatura = em negociação (nem alugada, nem disponível); sem negociação
+     * que decida, o `rental_status` da unidade. A
      * unidade alugada NÃO conta como disponível (nem no VGV disponível, que
      * vira estoque): o aluguel dela já está na renda, e contá-la também como
      * estoque a vender seria o mesmo imóvel duas vezes na frente do banco.
@@ -1936,14 +2025,33 @@ export const creditRoomService = {
 
             return emps.map((e, i): SnapshotEmpreendimentoItem => {
                 const us = unidades[i];
-                const alugada = (u: typeof us[number]) => u.rental_status === 'LOCADO';
+                const alugada = (u: typeof us[number]) => situacaoDeLocacao(u) === 'LOCADA';
+                const emNegociacao = (u: typeof us[number]) => situacaoDeLocacao(u) === 'EM_NEGOCIACAO';
                 const vendida = (u: typeof us[number]) => u.status === 'VENDIDO' || u.status === 'PERMUTADO';
-                const disponivel = (u: typeof us[number]) => u.status === 'DISPONIVEL' && !alugada(u);
+                const disponivel = (u: typeof us[number]) => situacaoDeLocacao(u) === 'DISPONIVEL';
                 const vgv = (pred: (u: typeof us[number]) => boolean) =>
                     round2(us.filter(pred).reduce((a, u) => a + num(u.price), 0));
                 const fs = (fotos.get(e.id) ?? []).slice(0, 8);
                 // Aluguel contratado: as locações vigentes DESTE empreendimento (a mesma base da renda da série).
                 const doEmp = locacoes.filter(l => l.empreendimentoId === e.id);
+                // Em negociação: o aluguel do contrato vigente do imóvel (já pode existir, ex.: Ativo em
+                // Assinatura), senão a parcela da negociação. Esse contrato sai da soma das locadas.
+                // Limite conhecido: contrato vigente sem negócio na cadeia (`propertyId` null) não tem como
+                // ser ligado à unidade e fica nas locadas.
+                const negociando = us.filter(emNegociacao);
+                const imoveisNegociando = new Set(negociando.map(u => u.rental_property_id).filter((v): v is string => !!v));
+                const doImovel = (pid: string | null) => (pid ? doEmp.filter(l => l.propertyId === pid) : []);
+                const aluguelNegociando = negociando.reduce((a, u) => {
+                    const ls = doImovel(u.rental_property_id);
+                    return a + (ls.length ? ls.reduce((b, l) => b + num(l.aluguelMensal), 0) : num(u.aluguel_da_negociacao));
+                }, 0);
+                // Negociações não lidas: "em negociação" é DESCONHECIDO (null → "—"), nunca "nenhuma" (0).
+                const etapaDesconhecida = us.some(u => u.etapa_indisponivel);
+                const porEtapa: Record<string, number> = {};
+                for (const u of negociando) {
+                    const r = rotuloDaEtapaDeLocacao(u.etapa_locacao as string);
+                    porEtapa[r] = (porEtapa[r] ?? 0) + 1;
+                }
                 const aluguelPedido = us.filter(disponivel).filter(u => num(u.rental_price) > 0);
                 // Leitura do aluguel falhou para alguma disponível: a soma e a contagem das "sem valor" não são confiáveis.
                 const aluguelDesconhecido = us.filter(disponivel).some(u => u.aluguel_indisponivel);
@@ -1962,7 +2070,13 @@ export const creditRoomService = {
                     vgv_vendido: vgv(vendida),
                     vgv_disponivel: vgv(disponivel),
                     renda_mensal: rendaMensalDoEmpreendimento(e.id, titulos, locacoes, dataBase, fluxos),
-                    aluguel_locadas: doEmp.length ? round2(doEmp.reduce((a, l) => a + num(l.aluguelMensal), 0)) : null,
+                    // Sem locação vigente = R$ 0 (é dado, não ausência): só a versão antiga, sem o campo, mostra "—".
+                    aluguel_locadas: round2(doEmp
+                        .filter(l => !(l.propertyId && imoveisNegociando.has(l.propertyId)))
+                        .reduce((a, l) => a + num(l.aluguelMensal), 0)),
+                    em_negociacao: etapaDesconhecida ? null : negociando.length,
+                    aluguel_em_negociacao: etapaDesconhecida ? null : round2(aluguelNegociando),
+                    em_negociacao_por_etapa: etapaDesconhecida ? undefined : porEtapa,
                     aluguel_disponiveis: !aluguelDesconhecido && aluguelPedido.length
                         ? round2(aluguelPedido.reduce((a, u) => a + num(u.rental_price), 0))
                         : null,
@@ -1988,9 +2102,11 @@ export const creditRoomService = {
      * (`montarCarteira`). Falha = mapas vazios: a coluna fica "—" e o valor
      * cai na soma dos títulos; a carteira não cai.
      */
-    async coletarDadosDosContratos(contractIds: string[]): Promise<{ unidade: Map<string, string>; valor: Map<string, number> }> {
+    async coletarDadosDosContratos(contractIds: string[]): Promise<{ unidade: Map<string, string>; valor: Map<string, number>; etapa: Map<string, string> }> {
         const unidade = new Map<string, string>();
         const valor = new Map<string, number>();
+        // Etapa da negociação (Gerenciar Negociação › Contrato) de cada contrato, subindo a renovação.
+        const etapa = new Map<string, string>();
         try {
             const ids = [...new Set(contractIds.filter(id => UUID.test(id)))];
             const contratos: (ContratoDaCadeia & { current_value: number | null })[] = [];
@@ -2017,11 +2133,13 @@ export const creditRoomService = {
             for (const [contrato, dealId] of dealDoContrato) {
                 const nome = nomeDoImovel.get(deals.get(dealId)?.property_id ?? '');
                 if (nome) unidade.set(contrato, nome);
+                const st = deals.get(dealId)?.status;
+                if (st) etapa.set(contrato, st);
             }
         } catch (e) {
             console.warn('[creditRoomService] unidades/valores dos contratos indisponíveis no snapshot:', e);
         }
-        return { unidade, valor };
+        return { unidade, valor, etapa };
     },
 
     // ── Data Room (GED) ───────────────────────────────────────────────────

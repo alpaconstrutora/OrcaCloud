@@ -20,6 +20,7 @@
  */
 
 import { round2 } from './financialMath';
+import { getDealStatusDisplay } from '../lib/dealWorkflow';
 import { rotuloMascarado, type LocacaoVigente, type Natureza, type TituloCarteira } from './creditCapacity';
 // `import type`: creditRoomSnapshot não importa nada daqui, mas manter só tipo
 // evita qualquer ciclo em runtime.
@@ -50,6 +51,8 @@ export function montarCarteira(
     dataBase: string,
     unidadePorContrato: Map<string, string> = new Map(),
     valorDoContrato: Map<string, number> = new Map(),
+    /** Etapa da negociação do contrato (`commercial_deals.status`); sem negociação → `null`. */
+    etapaDoContrato: Map<string, string> = new Map(),
 ): SnapshotContrato[] {
     const db = dia(dataBase);
     const soma = (ts: TituloCarteira[]) => round2(ts.reduce((a, t) => a + n0(t.amount), 0));
@@ -92,6 +95,7 @@ export function montarCarteira(
             ultimo_vencimento: datas[datas.length - 1] ?? null,
             status,
             tem_parcelas: true,
+            etapa_negociacao: etapaDoContrato.get(contractId) ?? null,
         });
     }
     for (const l of locacoes) {
@@ -110,6 +114,7 @@ export function montarCarteira(
             ultimo_vencimento: null,
             status: 'SEM_PARCELAS',
             tem_parcelas: false,
+            etapa_negociacao: etapaDoContrato.get(l.contractId) ?? null,
         });
     }
 
@@ -131,6 +136,16 @@ const SITUACAO_PT: Record<string, string> = {
  * (Empreendimentos e contratos) e no book em PDF. Locação sem títulos gerados é
  * normal: o aluguel vem do contrato (não é alerta); venda sem parcelas é furo de cadastro.
  */
+/**
+ * Etapa da negociação do contrato, no vocabulário do stepper (Gerenciar Negociação › Contrato):
+ * Proposta · Aprovação · Reserva · Contrato · Assinatura · Alugado/Concluído · Cancelado.
+ * Sem negociação ou versão antiga (campo ausente) → "—".
+ */
+export function textoDaEtapa(c: Pick<SnapshotContrato, 'tipo' | 'etapa_negociacao'>): string {
+    if (!c.etapa_negociacao) return '—';
+    return getDealStatusDisplay(c.etapa_negociacao, c.tipo === 'LOCACAO' ? 'RENTAL' : 'SALE').label;
+}
+
 export function textoDaSituacao(c: Pick<SnapshotContrato, 'tipo' | 'status' | 'tem_parcelas'>): string {
     if (!c.tem_parcelas) return c.tipo === 'LOCACAO' ? 'aluguel pelo contrato' : 'sem parcelas geradas';
     return SITUACAO_PT[c.status] ?? (c.status ? c.status.toLowerCase().replace(/_/g, ' ') : '—');

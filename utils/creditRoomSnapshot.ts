@@ -295,8 +295,18 @@ export interface SnapshotEmpreendimentoItem {
     vgv_disponivel: number;
     renda_mensal: number;
     // Cards por objetivo (22/11/2026). Opcionais: versão liberada antes disto segue abrindo, com "—".
-    /** Σ aluguel mensal contratado das locações vigentes do empreendimento; `null` = sem locação vigente / sem fonte. */
+    /**
+     * Σ aluguel mensal contratado das locações vigentes do empreendimento, fora as de unidade EM NEGOCIAÇÃO.
+     * Sem locação vigente = 0 (desde 23/11/2026; antes vinha `null`). `null`/ausente = versão antiga ("—").
+     */
     aluguel_locadas?: number | null;
+    // Etapa da negociação (23/11/2026). Ausente = versão anterior: o card não mostra a linha.
+    /** Unidades com negociação de locação em Reserva, Contrato ou Assinatura (`utils/creditRoomLocacaoEtapa`); `null` = negociações não lidas ("—"). */
+    em_negociacao?: number | null;
+    /** Σ aluguel delas: o do contrato vigente, senão a parcela da negociação; `null` = desconhecido. */
+    aluguel_em_negociacao?: number | null;
+    /** Quantas em cada etapa, pelo rótulo do stepper ("Assinatura": 1). */
+    em_negociacao_por_etapa?: Record<string, number>;
     /** Σ `rental_price` das unidades disponíveis COM valor; `null` = nenhuma com valor cadastrado. */
     aluguel_disponiveis?: number | null;
     /** Unidades disponíveis sem aluguel cadastrado — contadas à parte, nunca como R$ 0. */
@@ -330,6 +340,8 @@ export interface SnapshotContrato {
     ultimo_vencimento: string | null;
     status: string;
     tem_parcelas: boolean;
+    /** Etapa da negociação do contrato (`commercial_deals.status`, subindo a renovação); `null` = sem negociação; ausente = versão antiga. */
+    etapa_negociacao?: string | null;
 }
 
 /** Capacidade de pagamento (spec 2026-11-21): série mensal e limites calculados. */

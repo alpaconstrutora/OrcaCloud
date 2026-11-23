@@ -104,6 +104,30 @@ describe('CreditRoomEmpreendimentos', () => {
         expect(screen.getByRole('button', { name: /Residencial Aurora/ })).toBeInTheDocument();
     });
 
+    it.each(['indigo', 'portal'] as const)('coluna "Etapa da negociação" pelo vocabulário do stepper; sem negociação "—" — %s', accent => {
+        const cs = [
+            contrato({ rotulo: 'Locação 07', tipo: 'LOCACAO', contract_id: 'c7', etapa_negociacao: 'ASSINATURA' }),
+            contrato({ rotulo: 'Locação 08', tipo: 'LOCACAO', contract_id: 'c8', etapa_negociacao: 'COMPLETED' }),
+            contrato({ rotulo: 'Venda 09', contract_id: 'c9', etapa_negociacao: null }),
+            // versão liberada antes da coluna: o campo nem existe
+            contrato({ rotulo: 'Venda 10', contract_id: 'c10' }),
+        ];
+        abrir(versao({ empreendimentos: EMPS, contratos: cs }), accent);
+        const tabela = screen.getByRole('table');
+        const cabecalhos = within(tabela).getAllByRole('columnheader');
+        const col = cabecalhos.findIndex(h => /Etapa da negociação/.test(h.textContent ?? ''));
+        expect(col).toBeGreaterThan(-1);
+        // A célula da coluna, pela posição do cabeçalho (não "algum — da linha").
+        const celula = (r: string) => {
+            const tr = within(tabela).getByText(r).closest('tr') as HTMLElement;
+            return within(tr).getAllByRole('cell')[col].textContent;
+        };
+        expect(celula('Locação 07')).toBe('Assinatura');
+        expect(celula('Locação 08')).toBe('Alugado');
+        expect(celula('Venda 09')).toBe('—');
+        expect(celula('Venda 10')).toBe('—');
+    });
+
     it('app: o filtro Venda/Locação estreita as linhas', () => {
         abrir(versao({ empreendimentos: EMPS, contratos: CONTRATOS }));
         const tabela = screen.getByRole('table');

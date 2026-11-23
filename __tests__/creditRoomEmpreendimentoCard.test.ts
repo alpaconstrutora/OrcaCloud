@@ -42,6 +42,40 @@ describe('linhasDoCardDoEmpreendimento — Vendas', () => {
 describe('linhasDoCardDoEmpreendimento — Locação', () => {
     const base = { objetivo: 'LOCACAO', alugadas: 6, disponiveis: 4 };
 
+    it('sem locação vigente: "0 · R$ 0,00/mês" (zero é dado), não "—"', () => {
+        const linhas = linhasDoCardDoEmpreendimento(emp({ ...base, alugadas: 0, aluguel_locadas: 0, aluguel_disponiveis: 10_000 }));
+        expect(linhas[0].valor).toBe(`0 · ${R(0)}/mês`);
+    });
+
+    it('com unidade em negociação: linha "Em negociação" com aluguel e a etapa, entre locadas e disponíveis', () => {
+        const linhas = linhasDoCardDoEmpreendimento(emp({
+            ...base, alugadas: 0, aluguel_locadas: 0, aluguel_disponiveis: 6_090, disponiveis: 1,
+            em_negociacao: 1, aluguel_em_negociacao: 3_500, em_negociacao_por_etapa: { Assinatura: 1 },
+        }));
+        expect(linhas.map(l => l.rotulo)).toEqual(['Unidades locadas', 'Em negociação', 'Etapa da negociação', 'Unidades disponíveis', 'Renda do mês']);
+        expect(linhas[1].valor).toBe(`1 · ${R(3_500)}/mês`);
+        expect(linhas[2].valor).toBe('Assinatura: 1');
+    });
+
+    it('negociações não lidas (null): linha "Em negociação" com "—", nunca zero', () => {
+        const linhas = linhasDoCardDoEmpreendimento(emp({ ...base, aluguel_locadas: 1, em_negociacao: null, aluguel_em_negociacao: null }));
+        const l = linhas.find(x => x.rotulo === 'Em negociação')!;
+        expect(l.valor).toBe('—');
+        expect(l.tom).toBe('aviso');
+        expect(linhas.some(x => x.rotulo === 'Etapa da negociação')).toBe(false);
+    });
+
+    it('várias etapas na mesma linha; nenhuma em negociação (0 ou versão antiga) = sem a linha', () => {
+        const varias = linhasDoCardDoEmpreendimento(emp({
+            ...base, em_negociacao: 3, aluguel_em_negociacao: 9_000, em_negociacao_por_etapa: { Reserva: 1, Assinatura: 2 },
+        }));
+        expect(varias.find(l => l.rotulo === 'Etapa da negociação')!.valor).toBe('Reserva: 1 · Assinatura: 2');
+        for (const over of [{ em_negociacao: 0 }, {}]) {
+            const linhas = linhasDoCardDoEmpreendimento(emp({ ...base, aluguel_locadas: 1, ...over }));
+            expect(linhas.some(l => l.rotulo === 'Em negociação')).toBe(false);
+        }
+    });
+
     it('com aluguel contratado e pedido: quantidade + valor mensal; sem linha de aviso', () => {
         const linhas = linhasDoCardDoEmpreendimento(emp({
             ...base, aluguel_locadas: 18_000, aluguel_disponiveis: 10_000, disponiveis_sem_aluguel: 0,

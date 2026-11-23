@@ -10,13 +10,15 @@
 --     wa_conexoes direto (só pela wa_situacao);
 --   • wa_pode_usar: sem a flag → false; com a flag → true; outra org → false;
 --     superadmin → true; EXECUTE negado a authenticated;
---   • wa_pegar_pendentes: marca enviando + trava; a 2ª chamada não devolve as travadas;
+--   • wa_pegar_pendentes: marca enviando + trava + tentativas+1; a 2ª chamada não devolve as
+--     travadas; retoma presa em enviando com trava vencida (< 23 h) e marca incerta a mais velha;
 --     respeita proxima_tentativa_em e trava_ate; negado a authenticated;
 --   • (organization_id, comando_id) único; saída sem organização recusada;
 --   • saída pendente toca a campainha (1 linha em realtime.messages, tópico wa-campainha,
 --     payload sem telefone/texto); entrada não toca;
 --   • wa_definir_uso: membro comum → erro; owner → grava; desligar apaga;
 --   • order_chats.canal nasce 'app' e só aceita app|whatsapp; job wa-limpar-eventos.
+--     Só service_role grava canal whatsapp (INSERT de authenticated sai app; UPDATE mantém).
 --
 -- BEGIN … ROLLBACK: não grava nada. Falha = RAISE EXCEPTION 'FALHOU: …';
 -- sucesso = a linha final 'TUDO OK'. Sem a migration (linha MIGRATION vazia), falha em
@@ -59,7 +61,8 @@ DO $$
 DECLARE
     org_a UUID; org_b UUID; m UUID; dono UUID; sa UUID;
     s_a UUID; s_b UUID; e_null UUID;
-    p1 UUID; p2 UUID; p3 UUID; p4 UUID; p5 UUID;
+    p1 UUID; p2 UUID; p3 UUID; p4 UUID; p5 UUID; e1 UUID; e2 UUID; e3 UUID;
+    ped UUID; comprador UUID; oc UUID;
     pegou1 UUID[]; pegou2 UUID[];
     n_antes BIGINT; n_depois BIGINT;
     v TEXT; t TEXT;
@@ -180,6 +183,18 @@ BEGIN
     EXECUTE format(ins, org_a, 'pendente', 'ts-p4', now() + interval '1 hour') INTO p4;
     EXECUTE format(ins, org_a, 'pendente', 'ts-p5', '2000-01-01') INTO p5;
     UPDATE public.wa_mensagens SET trava_ate = now() + interval '5 minutes' WHERE id = p5;
+    -- presas em enviando (o worker caiu no meio do envio), já com 1 tentativa:
+    -- e1: trava vencida, criada há 1 h → volta; e2: trava vencida, criada há 24 h → incerta;
+    -- e3: trava ainda valendo → não volta.
+    INSERT INTO public.wa_mensagens (organization_id, direcao, chat_id_remoto, texto, status, comando_id, tentativas, trava_ate, criado_em)
+    VALUES (org_a, 'saida', '5565999990000@c.us', 'TS', 'enviando', 'ts-e1', 1, now() - interval '1 minute', now() - interval '1 hour')
+    RETURNING id INTO e1;
+    INSERT INTO public.wa_mensagens (organization_id, direcao, chat_id_remoto, texto, status, comando_id, tentativas, trava_ate, criado_em)
+    VALUES (org_a, 'saida', '5565999990000@c.us', 'TS', 'enviando', 'ts-e2', 1, now() - interval '1 minute', now() - interval '24 hours')
+    RETURNING id INTO e2;
+    INSERT INTO public.wa_mensagens (organization_id, direcao, chat_id_remoto, texto, status, comando_id, tentativas, trava_ate, criado_em)
+    VALUES (org_a, 'saida', '5565999990000@c.us', 'TS', 'enviando', 'ts-e3', 1, now() + interval '1 minute', now() - interval '1 hour')
+    RETURNING id INTO e3;
 
     v := pg_temp.como(m, 'SELECT count(*)::text FROM public.wa_pegar_pendentes(10)');
     PERFORM pg_temp.confere(v LIKE '42501:%', 'wa_pegar_pendentes: negado a authenticated (veio ' || v || ')');
@@ -187,14 +202,29 @@ BEGIN
     SELECT array_agg(id) INTO pegou1 FROM public.wa_pegar_pendentes(10);
     PERFORM pg_temp.confere(pegou1 @> ARRAY[p1, p2, p3], 'wa_pegar_pendentes: 1ª chamada devolve as 3 elegíveis');
     PERFORM pg_temp.confere(NOT (pegou1 && ARRAY[p4, p5]), 'wa_pegar_pendentes: não devolve a de hora futura nem a travada');
-    PERFORM pg_temp.confere((SELECT bool_and(status = 'enviando' AND trava_ate > now() + interval '1 minute'
+    PERFORM pg_temp.confere((SELECT bool_and(status = 'enviando' AND tentativas = 1
+                                             AND trava_ate > now() + interval '1 minute'
                                              AND trava_ate <= now() + interval '2 minutes')
                                FROM public.wa_mensagens WHERE id IN (p1, p2, p3)),
-        'wa_pegar_pendentes: as pegas viram enviando com trava de 2 min');
-    PERFORM pg_temp.confere((SELECT bool_and(status = 'pendente') FROM public.wa_mensagens WHERE id IN (p4, p5)),
-        'wa_pegar_pendentes: as não elegíveis continuam pendente');
+        'wa_pegar_pendentes: as pegas viram enviando com trava de 2 min e tentativas 0 → 1');
+    PERFORM pg_temp.confere((SELECT bool_and(status = 'pendente' AND tentativas = 0) FROM public.wa_mensagens WHERE id IN (p4, p5)),
+        'wa_pegar_pendentes: as não elegíveis continuam pendente, sem tentativa');
+    -- (a) presa em enviando, trava vencida, criada há 1 h: volta e soma 1 tentativa
+    PERFORM pg_temp.confere(e1 = ANY (pegou1), 'wa_pegar_pendentes: presa em enviando com trava vencida (1 h) volta');
+    PERFORM pg_temp.confere((SELECT status = 'enviando' AND tentativas = 2 AND trava_ate > now() + interval '1 minute'
+                               FROM public.wa_mensagens WHERE id = e1),
+        'wa_pegar_pendentes: a presa retomada ganha trava nova e tentativas 1 → 2');
+    -- (b) presa criada há 24 h: não volta e vira incerta
+    PERFORM pg_temp.confere(NOT (e2 = ANY (pegou1)), 'wa_pegar_pendentes: presa criada há 24 h NÃO volta');
+    PERFORM pg_temp.confere((SELECT status = 'incerta' AND tentativas = 1 AND trava_ate IS NULL AND erro LIKE '%24 h%'
+                               FROM public.wa_mensagens WHERE id = e2),
+        'wa_pegar_pendentes: presa criada há 24 h vira incerta, com o motivo');
+    -- (c) enviando com trava ainda valendo: não volta
+    PERFORM pg_temp.confere(NOT (e3 = ANY (pegou1)), 'wa_pegar_pendentes: enviando com trava valendo NÃO volta');
+    PERFORM pg_temp.confere((SELECT status = 'enviando' AND tentativas = 1 FROM public.wa_mensagens WHERE id = e3),
+        'wa_pegar_pendentes: enviando com trava valendo fica como estava');
     SELECT coalesce(array_agg(id), '{}') INTO pegou2 FROM public.wa_pegar_pendentes(10);
-    PERFORM pg_temp.confere(NOT (pegou2 && ARRAY[p1, p2, p3, p4, p5]), 'wa_pegar_pendentes: 2ª chamada não devolve as já travadas');
+    PERFORM pg_temp.confere(NOT (pegou2 && ARRAY[p1, p2, p3, p4, p5, e1, e2, e3]), 'wa_pegar_pendentes: 2ª chamada não devolve as já travadas');
 
     -- ── unicidade e CHECKs ─────────────────────────────────────────────────
     BEGIN
@@ -270,6 +300,32 @@ BEGIN
                                      WHERE conrelid = 'public.order_chats'::regclass AND contype = 'c'
                                        AND pg_get_constraintdef(oid) LIKE '%canal%app%whatsapp%'),
         'order_chats.canal: CHECK app|whatsapp');
+
+    -- Só service_role grava canal = 'whatsapp'. comprador: conta com e-mail de membro da
+    -- org do projeto do pedido (a regra de purchase_order_is_buyer).
+    SELECT po.id, au.id INTO ped, comprador
+      FROM public.purchase_orders po
+      JOIN public.projects p ON p.id = po.project_id
+      JOIN public.organization_members om ON om.organization_id = p.organization_id
+      JOIN auth.users au ON lower(au.email) = lower(om.email)
+     ORDER BY po.id, au.id LIMIT 1;
+    PERFORM pg_temp.confere(ped IS NOT NULL, 'fixture: um pedido e um comprador dele');
+    v := pg_temp.como(comprador, format(
+        'INSERT INTO public.order_chats (order_id, sender_email, sender_name, message, sender_role, canal) '
+        || 'VALUES (%L, ''ts@ts'', ''TS'', ''TS falso'', ''buyer'', ''whatsapp'') RETURNING canal', ped));
+    PERFORM pg_temp.confere(v = 'ok:app', 'order_chats: comprador (authenticated) que manda canal whatsapp grava app (veio ' || v || ')');
+
+    -- service_role grava whatsapp; quem não é service_role não troca o canal no UPDATE.
+    PERFORM set_config('request.jwt.claims', '{"role": "service_role"}', true);
+    INSERT INTO public.order_chats (order_id, sender_email, sender_name, message, sender_role, canal)
+    VALUES (ped, 'ts@ts', 'TS', 'TS do whatsapp', 'supplier', 'whatsapp') RETURNING id INTO oc;
+    PERFORM pg_temp.confere((SELECT canal FROM public.order_chats WHERE id = oc) = 'whatsapp',
+        'order_chats: service_role grava canal whatsapp');
+    PERFORM set_config('request.jwt.claims', json_build_object('sub', comprador, 'role', 'authenticated')::text, true);
+    UPDATE public.order_chats SET canal = 'app', message = 'TS editada' WHERE id = oc;
+    PERFORM set_config('request.jwt.claims', '', true);
+    PERFORM pg_temp.confere((SELECT canal = 'whatsapp' AND message = 'TS editada' FROM public.order_chats WHERE id = oc),
+        'order_chats: UPDATE de quem não é service_role mantém o canal anterior');
 
     -- ── forma ──────────────────────────────────────────────────────────────
     PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM pg_policies WHERE schemaname = 'public'

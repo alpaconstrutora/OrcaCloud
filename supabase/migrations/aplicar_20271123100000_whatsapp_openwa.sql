@@ -15,7 +15,8 @@
 --                            pedido; o superadmin atribui depois).
 --   • wa_eventos_recebidos — deduplicação do webhook do OpenWA; expurgo a 30 dias pelo
 --                            job wa-limpar-eventos (diário, 04h30 de Brasília).
---   • order_chats.canal    — 'app' | 'whatsapp', para a bolha mostrar de onde veio.
+--   • order_chats.canal    — 'app' | 'whatsapp', para a bolha mostrar de onde veio. Só
+--                            service_role grava 'whatsapp' (gatilho trg_order_chats_canal).
 --   • wa_pode_usar · wa_pegar_pendentes · wa_situacao · wa_definir_uso · gatilho
 --     wa_tocar_campainha (realtime.send com payload vazio no tópico wa-campainha).
 --
@@ -46,6 +47,11 @@
 --       realtime.send só acrescenta um id aleatório) — não vaza id, texto nem telefone.
 --       REVOKE de todos.
 --     • fn_wa_atualizado_em (gatilho, INVOKER): só carimba atualizado_em. REVOKE de todos.
+--     • fn_order_chats_canal (gatilho, INVOKER): quem não é service_role não grava
+--       canal = 'whatsapp' (INSERT sai 'app'; UPDATE mantém o anterior). REVOKE de todos.
+--     • wa_pegar_pendentes também retoma presa em enviando com trava vencida (soma 1 em
+--       tentativas); presa criada há > 23 h vira incerta (fora da janela de 24 h do
+--       Idempotency-Key do OpenWA).
 --   Pergunta 3 (Edge Function): nenhuma nesta migration (Tasks 3–5).
 --
 -- ── Aplicar ────────────────────────────────────────────────────────────────────
@@ -185,6 +191,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS wa_mensagens_provider_unico
 CREATE INDEX IF NOT EXISTS wa_mensagens_fila
     ON public.wa_mensagens (proxima_tentativa_em, criado_em)
     WHERE direcao = 'saida' AND status = 'pendente';
+CREATE INDEX IF NOT EXISTS wa_mensagens_enviando_trava
+    ON public.wa_mensagens (trava_ate)
+    WHERE direcao = 'saida' AND status = 'enviando';
 CREATE INDEX IF NOT EXISTS wa_mensagens_org_criado
     ON public.wa_mensagens (organization_id, criado_em DESC);
 CREATE INDEX IF NOT EXISTS wa_mensagens_entidade
@@ -241,7 +250,36 @@ BEGIN
             ADD CONSTRAINT order_chats_canal_check CHECK (canal IN ('app', 'whatsapp'));
     END IF;
 END $$;
-COMMENT ON COLUMN public.order_chats.canal IS 'De onde veio a mensagem do chat do pedido: app | whatsapp.';
+COMMENT ON COLUMN public.order_chats.canal IS
+    'De onde veio a mensagem do chat do pedido: app | whatsapp. Só service_role grava whatsapp (gatilho trg_order_chats_canal).';
+
+-- As policies de INSERT de order_chats (comprador/fornecedor) não olham `canal`: sem
+-- isto, qualquer um gravaria canal = 'whatsapp' e a bolha mostraria o selo falso.
+-- Quem não é service_role: INSERT sai sempre 'app'; UPDATE mantém o canal que estava.
+-- Mesmo teste de papel do resto do repositório: sem JWT (postgres, migration) conta
+-- como service_role.
+CREATE OR REPLACE FUNCTION public.fn_order_chats_canal()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $fn$
+BEGIN
+    IF coalesce(auth.role(), 'service_role') <> 'service_role' THEN
+        IF TG_OP = 'INSERT' THEN
+            NEW.canal := 'app';
+        ELSE
+            NEW.canal := OLD.canal;
+        END IF;
+    END IF;
+    RETURN NEW;
+END;
+$fn$;
+REVOKE ALL ON FUNCTION public.fn_order_chats_canal() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_order_chats_canal ON public.order_chats;
+CREATE TRIGGER trg_order_chats_canal
+    BEFORE INSERT OR UPDATE ON public.order_chats
+    FOR EACH ROW EXECUTE FUNCTION public.fn_order_chats_canal();
 
 -- ─── 6. wa_pode_usar — permissão de usar o número (só Edge Functions) ─────────
 -- Mesma regra de is_superadmin(), mas pelo e-mail da conta p_user (e não do JWT), OU
@@ -279,9 +317,13 @@ REVOKE ALL ON FUNCTION public.wa_pode_usar(uuid, uuid) FROM PUBLIC, anon, authen
 GRANT EXECUTE ON FUNCTION public.wa_pode_usar(uuid, uuid) TO service_role;
 
 -- ─── 7. wa_pegar_pendentes — claim atômico da fila (só o worker, via Edge Function) ──
--- Pega saídas pendentes cuja hora chegou e sem trava valendo, trava por 2 min e marca
--- enviando. SKIP LOCKED: dois workers simultâneos nunca pegam a mesma linha.
--- Não incrementa `tentativas` (quem conta é o reportar do worker).
+-- Pega (a) saídas pendentes cuja hora chegou e sem trava valendo e (b) saídas presas em
+-- enviando com a trava vencida (o worker caiu no meio do envio); trava por 2 min, marca
+-- enviando e soma 1 em `tentativas` a cada pega. SKIP LOCKED: dois workers simultâneos
+-- nunca pegam a mesma linha.
+-- Reenviar uma presa em enviando só é seguro dentro da janela do Idempotency-Key do
+-- OpenWA (24 h; o worker sempre manda Idempotency-Key = comando_id): presa criada há
+-- mais de 23 h NÃO volta — vira `incerta` na mesma transação.
 CREATE OR REPLACE FUNCTION public.wa_pegar_pendentes(p_limite integer)
 RETURNS SETOF public.wa_mensagens
 LANGUAGE plpgsql
@@ -292,21 +334,44 @@ BEGIN
     IF coalesce(auth.role(), 'service_role') <> 'service_role' THEN
         RAISE EXCEPTION 'wa_pegar_pendentes: só o worker pega a fila' USING ERRCODE = '42501';
     END IF;
+
+    -- presa em enviando, fora da janela segura de reenvio → incerta (não reenvia)
+    WITH velhas AS (
+        SELECT w.id
+          FROM public.wa_mensagens w
+         WHERE w.direcao = 'saida'
+           AND w.status = 'enviando'
+           AND w.trava_ate < now()
+           AND w.criado_em < now() - interval '23 hours'
+         FOR UPDATE SKIP LOCKED
+    )
+    UPDATE public.wa_mensagens w
+       SET status = 'incerta',
+           trava_ate = NULL,
+           erro = coalesce(w.erro || ' · ', '')
+                  || 'envio interrompido e fora da janela de 24 h para reenviar com segurança — confira no celular do número'
+      FROM velhas
+     WHERE w.id = velhas.id;
+
     RETURN QUERY
     WITH alvo AS (
         SELECT w.id
           FROM public.wa_mensagens w
          WHERE w.direcao = 'saida'
-           AND w.status = 'pendente'
-           AND w.proxima_tentativa_em <= now()
-           AND (w.trava_ate IS NULL OR w.trava_ate < now())
+           AND ((w.status = 'pendente'
+                 AND w.proxima_tentativa_em <= now()
+                 AND (w.trava_ate IS NULL OR w.trava_ate < now()))
+             OR (w.status = 'enviando'
+                 AND w.trava_ate < now()
+                 AND w.criado_em >= now() - interval '23 hours'))
          ORDER BY w.proxima_tentativa_em, w.criado_em
          LIMIT greatest(1, least(coalesce(p_limite, 10), 100))
          FOR UPDATE SKIP LOCKED
     )
     UPDATE public.wa_mensagens w
        SET status = 'enviando',
-           trava_ate = now() + interval '2 minutes'
+           trava_ate = now() + interval '2 minutes',
+           tentativas = w.tentativas + 1
       FROM alvo
      WHERE w.id = alvo.id
     RETURNING w.*;
@@ -442,7 +507,7 @@ DECLARE
     v_t   text;
 BEGIN
     -- Só service_role (e o dono) executam.
-    FOREACH v_fn IN ARRAY ARRAY['wa_pode_usar', 'wa_pegar_pendentes', 'fn_wa_tocar_campainha', 'fn_wa_atualizado_em'] LOOP
+    FOREACH v_fn IN ARRAY ARRAY['wa_pode_usar', 'wa_pegar_pendentes', 'fn_wa_tocar_campainha', 'fn_wa_atualizado_em', 'fn_order_chats_canal'] LOOP
         SELECT proacl::text INTO v_acl FROM pg_proc WHERE proname = v_fn AND pronamespace = 'public'::regnamespace;
         IF v_acl IS NULL OR v_acl LIKE '%authenticated=%' OR v_acl LIKE '%anon=%' OR v_acl LIKE '{=%' OR v_acl LIKE '%,=%' THEN
             RAISE EXCEPTION '% executável por quem não é service_role: %', v_fn, v_acl;

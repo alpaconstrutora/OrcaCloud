@@ -18,6 +18,7 @@ import * as nucleo from '../infra/openwa/worker/nucleo.mjs';
 
 const {
     requisicaoDeEnvio, resultadoDoEnvio, criarCoalescedor, idDaSessaoPorNome, leituraDaSessao, podeEnviar,
+    eventoDaCampainha,
 } = nucleo as Record<string, any>;
 
 const ITEM = {
@@ -200,5 +201,32 @@ describe('sessão do OpenWA', () => {
         for (const s of ['qr_ready', 'disconnected', 'initializing', 'failed', null, undefined, 'READY ']) {
             expect(podeEnviar(s)).toBe(false);
         }
+    });
+});
+
+describe('eventoDaCampainha', () => {
+    const atual = { nome: 'canal-atual' };
+    const velho = { nome: 'canal-velho' };
+
+    it('evento de canal que não é mais o atual → ignorar (o CLOSED do removeChannel do canal velho não re-arma)', () => {
+        for (const status of ['SUBSCRIBED', 'CLOSED', 'CHANNEL_ERROR', 'TIMED_OUT']) {
+            expect(eventoDaCampainha({ status, canal: velho, canalAtual: atual, parando: false })).toBe('ignorar');
+        }
+    });
+
+    it('sem canal atual (já zerado antes do removeChannel) → ignorar', () => {
+        expect(eventoDaCampainha({ status: 'CLOSED', canal: velho, canalAtual: null, parando: false })).toBe('ignorar');
+    });
+
+    it('parando → ignorar, qualquer status', () => {
+        expect(eventoDaCampainha({ status: 'CLOSED', canal: atual, canalAtual: atual, parando: true })).toBe('ignorar');
+    });
+
+    it('canal atual: SUBSCRIBED → assinada; CLOSED de verdade → reassinar; erro/timeout → avisar', () => {
+        const base = { canal: atual, canalAtual: atual, parando: false };
+        expect(eventoDaCampainha({ ...base, status: 'SUBSCRIBED' })).toBe('assinada');
+        expect(eventoDaCampainha({ ...base, status: 'CLOSED' })).toBe('reassinar');
+        expect(eventoDaCampainha({ ...base, status: 'CHANNEL_ERROR' })).toBe('avisar');
+        expect(eventoDaCampainha({ ...base, status: 'TIMED_OUT' })).toBe('avisar');
     });
 });

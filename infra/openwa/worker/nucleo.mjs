@@ -137,3 +137,20 @@ export function leituraDaSessao(sessao) {
 export function podeEnviar(status) {
     return status === 'ready';
 }
+
+/**
+ * Evento de status da assinatura da campainha → o que fazer.
+ *   · evento de um canal que NÃO é mais o atual → 'ignorar'. O removeChannel(velho) do
+ *     realtime-js chama unsubscribe(), que dispara de novo o callback do canal velho com
+ *     CLOSED; sem esta guarda ele re-armava a reassinatura, que derrubava o canal novo
+ *     (sadio), e assim para sempre a cada 60 s;
+ *   · parando → 'ignorar';
+ *   · canal atual: SUBSCRIBED → 'assinada'; CLOSED de verdade → 'reassinar' (em 60 s);
+ *     CHANNEL_ERROR / TIMED_OUT → 'avisar' (o realtime-js tenta de novo sozinho).
+ */
+export function eventoDaCampainha({ status, canal, canalAtual, parando }) {
+    if (parando || !canalAtual || canal !== canalAtual) return 'ignorar';
+    if (status === 'SUBSCRIBED') return 'assinada';
+    if (status === 'CLOSED') return 'reassinar';
+    return 'avisar';
+}

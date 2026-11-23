@@ -17,7 +17,7 @@
 
 import { createClient } from '@supabase/supabase-js';
 import {
-    OPENWA_BASE_PADRAO, criarCoalescedor, idDaSessaoPorNome, leituraDaSessao, podeEnviar,
+    OPENWA_BASE_PADRAO, criarCoalescedor, eventoDaCampainha, idDaSessaoPorNome, leituraDaSessao, podeEnviar,
     requisicaoDeEnvio, resultadoDoEnvio,
 } from './nucleo.mjs';
 
@@ -251,18 +251,23 @@ let ultimoAvisoCampainha = 0;
 function assinarCampainha() {
     if (parando) return;
     try {
-        canal = supabase
+        const ch = supabase
             .channel('wa-campainha', { config: { broadcast: { self: false } } })
-            .on('broadcast', { event: 'fila' }, () => { fila.tocar(); })
-            .subscribe((status, err) => {
-                if (status === 'SUBSCRIBED') {
+            .on('broadcast', { event: 'fila' }, () => { if (ch === canal) fila.tocar(); });
+        canal = ch;
+        ch.subscribe((status, err) => {
+            // Só o canal ATUAL decide (eventoDaCampainha): o CLOSED que o removeChannel
+            // dispara no canal velho não pode re-armar a reassinatura.
+            switch (eventoDaCampainha({ status, canal: ch, canalAtual: canal, parando })) {
+                case 'assinada':
                     log('info', 'campainha assinada');
                     fila.tocar(); // pode ter entrado algo enquanto estava fora
-                } else if (status === 'CLOSED') {
-                    if (parando) return;
+                    break;
+                case 'reassinar':
                     log('aviso', 'campainha fechou; varredura de 60 s segue; nova assinatura em 60 s');
                     agendarReassinatura();
-                } else {
+                    break;
+                case 'avisar': {
                     // TIMED_OUT / CHANNEL_ERROR: o realtime-js tenta de novo sozinho. Aviso no
                     // máximo a cada 5 min para não inundar o log com a Realtime fora.
                     const agora = Date.now();
@@ -270,8 +275,12 @@ function assinarCampainha() {
                         ultimoAvisoCampainha = agora;
                         log('aviso', 'campainha com problema; varredura de 60 s segue', { status, motivo: err?.message ?? null });
                     }
+                    break;
                 }
-            });
+                default:
+                    break; // canal velho ou parando
+            }
+        });
     } catch (e) {
         log('aviso', 'não deu para assinar a campainha; varredura de 60 s segue', { codigo: codigoCurto(e) });
         agendarReassinatura();
@@ -282,8 +291,11 @@ function agendarReassinatura() {
     if (parando || religar) return;
     religar = setTimeout(async () => {
         religar = null;
-        try { if (canal) await supabase.removeChannel(canal); } catch { /* já fechado */ }
+        // Solta o canal ANTES de remover: o CLOSED que o removeChannel dispara chega com
+        // canalAtual = null e é ignorado.
+        const velho = canal;
         canal = null;
+        try { if (velho) await supabase.removeChannel(velho); } catch { /* já fechado */ }
         assinarCampainha();
     }, RECONECTAR_CAMPAINHA_MS);
 }
@@ -306,7 +318,9 @@ async function parar(sinal) {
     clearInterval(varredura);
     clearInterval(batimento);
     if (religar) clearTimeout(religar);
-    try { if (canal) await supabase.removeChannel(canal); } catch { /* segue */ }
+    const velho = canal;
+    canal = null;
+    try { if (velho) await supabase.removeChannel(velho); } catch { /* segue */ }
     // O envio em curso termina (≤ 30 s) e é reportado; não aborta no meio (desfecho incerto).
     const limite = new Promise((r) => setTimeout(r, 35_000));
     await Promise.race([fila.rodando() ? fila.tocar() : Promise.resolve(), limite]);

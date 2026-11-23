@@ -1,0 +1,166 @@
+# OpenWA + worker — máquina do escritório (WSL2 Ubuntu dedicado, Docker Engine próprio).
+#
+# Plano: docs/planos/2026-11-23-whatsapp-openwa-piloto-pedido.md (Task 9). Instalação: LEIA-ME.md.
+#
+# Nada fica exposto à internet:
+#   • openwa: só 127.0.0.1:2785 (painel/QR local). O worker fala com ele pela rede do Compose.
+#   • redis: sem porta publicada, numa rede interna (sem saída) só com o openwa.
+#   • worker: sem porta. Só conexões de SAÍDA (Supabase Realtime + Edge Function).
+#
+# Variáveis do OpenWA conferidas no .env.example do commit fixado (5eaadd39, v0.31.0).
+# Valores fixos aqui ficam no `environment:` do container: o ambiente do processo vence o
+# .env e o data/.env.generated do painel (por isso a fila/Redis valem mesmo sendo
+# "gerenciados pelo painel" no compose oficial). Nada de env_file: cada serviço recebe só
+# o que precisa — o openwa nunca vê o WA_WORKER_SECRET, o worker nunca vê a chave mestra.
+
+name: openwa
+
+services:
+  openwa:
+    # Imagem fixada por digest (nunca tag solta). Sem OPENWA_DIGEST no .env o compose não sobe.
+    image: ghcr.io/rmyndharis/openwa@${OPENWA_DIGEST:?defina OPENWA_DIGEST no .env (sha256:...)}
+    container_name: openwa
+    restart: unless-stopped
+    # Encerramento ordenado do OpenWA com fila/Redis ligados: até 63 s (compose oficial: 75 s).
+    stop_grace_period: 75s
+    ports:
+      - "127.0.0.1:2785:2785"
+    networks:
+      - saida
+      - redis-interna
+    # Endurecimento igual ao compose oficial (entrypoint faz chown de /app/data e troca de usuário).
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - KILL
+      - SETGID
+      - SETUID
+    read_only: true
+    tmpfs:
+      - /tmp
+    pids_limit: 512
+    mem_limit: 1g
+    environment:
+      NODE_ENV: production
+      TZ: UTC
+      HOME: /tmp
+      XDG_CONFIG_HOME: /tmp/.config
+      XDG_CACHE_HOME: /tmp/.cache
+      PORT: "2785"
+      LOG_LEVEL: info
+      # Identidade estável do nó (o padrão é o hostname, que muda a cada recriação).
+      NODE_ID: openwa-escritorio
+      # Uma instância só: religa a sessão pareada sozinho depois de queda/reinício.
+      AUTO_START_SESSIONS: "true"
+      # Motor e banco.
+      ENGINE_TYPE: baileys
+      DATABASE_TYPE: sqlite
+      DATABASE_SYNCHRONIZE: "false"
+      # Sem isto o celular pareado fica sem notificação enquanto o gateway estiver ligado (#871).
+      BAILEYS_MARK_ONLINE_ON_CONNECT: "false"
+      # Entrada: senderPhone no message.received quando o remetente vem por @lid.
+      RESOLVE_LID_TO_PHONE: "true"
+      # Saída: governador anti-banimento (aquecimento diário + limite de conversa fria).
+      SEND_PACING_ENABLED: "true"
+      # Fila (BullMQ) — a retentativa de webhook só existe com ela — e Redis.
+      QUEUE_ENABLED: "true"
+      REDIS_ENABLED: "true"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      # Webhook: mídia inline até 5 MiB. O corpo do webhook precisa caber 4/3 disso (base64)
+      # + envelope, senão a mídia > ~768 KiB vira { omitted: true } — 7 MiB, abaixo do teto
+      # de 8 MiB da Edge Function whatsapp-openwa-webhook.
+      WEBHOOK_MEDIA_INLINE_MAX_BYTES: "5242880"
+      WEBHOOK_MAX_PAYLOAD_BYTES: "7340032"
+      # Painel em http://127.0.0.1:2785 sem TLS: sem isto o navegador "sobe" para https e a tela fica branca.
+      CSP_UPGRADE_INSECURE_REQUESTS: "false"
+      # Chave ADMIN inicial (só no 1º boot; >= 32 caracteres em produção). Ver LEIA-ME.
+      API_MASTER_KEY: ${API_MASTER_KEY:?defina API_MASTER_KEY no .env (>= 32 caracteres)}
+      # WEBHOOK_SSRF_PROTECT fica no padrão (ligado): a URL do webhook é pública (Supabase),
+      # então SSRF_ALLOWED_HOSTS não é necessário.
+    volumes:
+      - ./dados/openwa:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2785/api/health/ready"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  redis:
+    # Tag do brief; para fixar por digest troque por redis:7-alpine@sha256:<digest>.
+    image: redis:7-alpine
+    container_name: openwa-redis
+    restart: unless-stopped
+    networks:
+      - redis-interna
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - FOWNER
+      - SETGID
+      - SETUID
+    mem_limit: 256m
+    pids_limit: 128
+    # noeviction é exigido pelo BullMQ (outra política pode apagar job da fila).
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory-policy", "noeviction"]
+    volumes:
+      - ./dados/redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  worker:
+    build:
+      context: ./worker
+      args:
+        NODE_IMAGE: ${WORKER_NODE_IMAGE:-node:22-alpine}
+    image: openwa-worker:local
+    container_name: openwa-worker
+    restart: unless-stopped
+    init: true
+    # Envio em curso (até 30 s) termina e é reportado antes de sair.
+    stop_grace_period: 45s
+    networks:
+      - saida
+    security_opt:
+      - "no-new-privileges:true"
+    cap_drop:
+      - ALL
+    read_only: true
+    tmpfs:
+      - /tmp
+    mem_limit: 256m
+    pids_limit: 64
+    environment:
+      SUPABASE_URL: ${SUPABASE_URL:?defina SUPABASE_URL no .env}
+      SUPABASE_ANON_KEY: ${SUPABASE_ANON_KEY:?defina SUPABASE_ANON_KEY no .env}
+      WA_WORKER_SECRET: ${WA_WORKER_SECRET:?defina WA_WORKER_SECRET no .env}
+      # Vazio na 1ª subida (a chave só existe depois do OpenWA no ar): o worker avisa no log e espera.
+      OPENWA_API_KEY: ${OPENWA_API_KEY:-}
+      OPENWA_URL: http://openwa:2785
+      OPENWA_SESSAO_NOME: ${OPENWA_SESSAO_NOME:-opura}
+    depends_on:
+      openwa:
+        # Só "iniciado": com o OpenWA fora o worker continua mandando o "estou vivo"
+        # (a tela mostra desconectado em vez de máquina fora).
+        condition: service_started
+
+networks:
+  saida: {}
+  redis-interna:
+    internal: true

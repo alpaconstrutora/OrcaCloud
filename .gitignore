@@ -56,3 +56,7 @@ scratch/
 .impeccable/review/
 .impeccable/hook.cache.json
 .impeccable/config.local.json
+
+# OpenWA na máquina do escritório: segredos e dados da sessão nunca vão para o git
+infra/openwa/.env
+infra/openwa/dados/

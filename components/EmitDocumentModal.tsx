@@ -45,6 +45,24 @@ interface Props {
 }
 
 const slug = (s: string) => (s || '').replace(/[^\w.\-]+/g, '_').replace(/^_+|_+$/g, '');
+const semAcento = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '');
+
+/** "Contrato de Locação", "Contrato de Compra e Venda", "Contrato de Empreitada Global"… */
+const tipoDoContrato = (c: Contract): string => {
+    if (c.nature === 'Locação') return 'Contrato de Locação';
+    const tipo = (c.contract_type ?? '').trim();
+    if (!tipo || tipo === 'Outros') return 'Contrato';
+    return /^contrato\b/i.test(tipo) ? tipo : `Contrato de ${tipo}`;
+};
+
+/**
+ * Nome do documento gerado pelo modelo: "<nº do contrato> - Minuta do <tipo>"
+ * (ex.: "CTL-014-057-0001 - Minuta do Contrato de Locação"). Antes era
+ * "Minuta — <nome do modelo>", e o nome do arquivo .docx do modelo não diz que
+ * documento é (23/11/2026). O modelo usado continua nas observações da versão.
+ */
+const nomeDaMinuta = (c: Contract): string =>
+    [c.number?.trim(), `Minuta do ${tipoDoContrato(c)}`].filter(Boolean).join(' - ');
 
 const EmitDocumentModal: React.FC<Props> = ({
     organizationId, contract, organization: organizationProp, onClose, onManageTemplates, onFallbackPdf, notify,
@@ -173,9 +191,12 @@ const EmitDocumentModal: React.FC<Props> = ({
         try {
             const sourceBlob = await documentTemplateService.downloadFile(template);
             const filled = await fillDocx(sourceBlob, resolved);
-            const baseName = `${slug(contract.number)}_${slug(template.name)}`;
+            const nome = nomeDaMinuta(contract);
             const output = kind === 'docx' ? filled : await docxBlobToPdf(filled);
-            const fileName = `${baseName}.${kind}`;
+            // Quem baixa vê o nome legível; a chave no storage fica só em ASCII
+            // (o Storage recusa chave com acento — "Locação").
+            const fileName = `${slug(semAcento(nome))}.${kind}`;
+            const downloadName = `${nome}.${kind}`;
 
             // Persistir ANTES de baixar: invertido, o usuário já teria o arquivo
             // na mão quando o erro aparecesse, e o toast viraria ruído. Assim o
@@ -201,7 +222,7 @@ const EmitDocumentModal: React.FC<Props> = ({
                         templateId: template.id,
                         source: 'TEMPLATE_DOCX',
                         kind: 'MINUTA',
-                        name: `Minuta — ${template.name}`,
+                        name: nome,
                         notes: `Gerada do modelo "${template.name}" em ${new Date().toLocaleString('pt-BR')}.`,
                     });
                     savedAsVersion = true;
@@ -219,7 +240,7 @@ const EmitDocumentModal: React.FC<Props> = ({
             // Baixa SEMPRE, mesmo se a gravação falhou: a geração é cara
             // (docxBlobToPdf roda html2canvas) e uma falha de storage não pode
             // custar o arquivo inteiro.
-            saveAs(output, fileName);
+            saveAs(output, downloadName);
 
             if (persistVersion && kind === 'docx') {
                 notify?.('.docx baixado para edição — ele não entra na tabela de documentos. Depois de editar, salve em PDF e use "Subir documento".', 'info');

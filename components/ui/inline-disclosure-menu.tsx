@@ -102,6 +102,10 @@ export function InlineDisclosureMenu({
   // overflow da tabela o corta e nenhuma célula fixa (sticky) o cobre. Dentro de um diálogo
   // Radix fica no lugar (portal para o body ali seria inclicável: o Radix desliga o ponteiro
   // fora do diálogo). Nos dois casos, mede e abre PARA CIMA quando não cabe embaixo.
+  // A camada do portal é z-[10000], a mesma do HierarchicalSelect: no <body> o painel compete
+  // com as telas-overlay do app (DealModal z-[110]/z-[130], ContractModal z-[100], ÒPURA Docs
+  // z-[9999]). Com z-[60] ele abria ATRÁS delas e o ⋮ parecia não fazer nada — Locações ›
+  // Gerenciar Negociação › Contrato › Documentos › Modelos de documento (23/11/2026).
   const [noLugar, setNoLugar] = React.useState(false);
   const [posicao, setPosicao] = React.useState<{ top: number; right: number; acima: boolean } | null>(null);
 
@@ -177,7 +181,7 @@ export function InlineDisclosureMenu({
           ref={painelRef}
           onClick={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
-          className={`${emPortal ? "fixed z-[60]" : `absolute right-0 z-50 ${acima ? "bottom-10" : "top-10"}`} w-52 overflow-hidden rounded-2xl border-2 border-[#EEEEF2] bg-white shadow-xl`}
+          className={`${emPortal ? "fixed z-[10000]" : `absolute right-0 z-50 ${acima ? "bottom-10" : "top-10"}`} w-52 overflow-hidden rounded-2xl border-2 border-[#EEEEF2] bg-white shadow-xl`}
           style={{
             transformOrigin: acima ? "bottom right" : "top right",
             ...(emPortal

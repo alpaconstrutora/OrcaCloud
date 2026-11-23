@@ -10,8 +10,9 @@ import { describe, it, expect } from 'vitest';
 import { createHmac } from 'node:crypto';
 import {
     ESPERAS_MS, JANELA_VINCULO_DIAS, assinaturaConfere, avancarStatus, chatIdDoTelefone,
-    classificarEnvio, comandoIdEnvioAutomatico, escolherVinculo, esperaAposFalha,
-    idsDeMensagemIguais, montarTextoDoPedido, statusDoAck, telefoneDoRemetente,
+    classificarEnvio, comandoIdEnvioAutomatico, escolherVinculo, esperaAposFalha, estadoDaConexao,
+    idsDeMensagemIguais, lerResultadoDoWorker, montarTextoDoPedido, planoDoReporte, statusDoAck,
+    telefoneDoRemetente,
 } from '../utils/whatsappOpenwa';
 import { formatarValorBRL } from '../utils/whatsappPedido';
 
@@ -192,5 +193,99 @@ describe('escolherVinculo', () => {
     });
     it('janela de 60 dias', () => {
         expect(JANELA_VINCULO_DIAS).toBe(60);
+    });
+});
+
+describe('estadoDaConexao (vivo do worker)', () => {
+    it('normaliza o estado bruto do OpenWA', () => {
+        expect(estadoDaConexao('ready')).toBe('conectado');
+        expect(estadoDaConexao('qr_ready')).toBe('aguardando_qr');
+        expect(estadoDaConexao('authenticating')).toBe('aguardando_qr');
+        expect(estadoDaConexao('disconnected')).toBe('desconectado');
+        expect(estadoDaConexao('action_required')).toBe('desconectado');
+        expect(estadoDaConexao('failed')).toBe('erro');
+        expect(estadoDaConexao('  READY ')).toBe('conectado');
+    });
+    it('estado desconhecido ou ausente nunca vira conectado', () => {
+        expect(estadoDaConexao('initializing')).toBe('desconectado');
+        expect(estadoDaConexao('')).toBe('desconectado');
+        expect(estadoDaConexao(null)).toBe('desconectado');
+        expect(estadoDaConexao(42)).toBe('desconectado');
+    });
+});
+
+describe('lerResultadoDoWorker', () => {
+    const ID = '0b5c3f0e-1d2a-4c3b-9e8f-112233445566';
+    it('aceita o formato do worker', () => {
+        expect(lerResultadoDoWorker({ id: ID, httpStatus: 201, erro: null, messageId: 'true_5511@c.us_ABC' }))
+            .toEqual({ id: ID, httpStatus: 201, erro: null, messageId: 'true_5511@c.us_ABC' });
+        expect(lerResultadoDoWorker({ id: ID.toUpperCase(), httpStatus: null, erro: 'timeout' }))
+            .toEqual({ id: ID.toUpperCase(), httpStatus: null, erro: 'timeout', messageId: null });
+    });
+    it('id que não é uuid, status fora de 100–599, erro desconhecido ou messageId estranho → null', () => {
+        expect(lerResultadoDoWorker({ id: 'x', httpStatus: 200, erro: null, messageId: null })).toBeNull();
+        expect(lerResultadoDoWorker({ id: ID, httpStatus: 99, erro: null, messageId: null })).toBeNull();
+        expect(lerResultadoDoWorker({ id: ID, httpStatus: 200.5, erro: null, messageId: null })).toBeNull();
+        expect(lerResultadoDoWorker({ id: ID, httpStatus: '200', erro: null, messageId: null })).toBeNull();
+        expect(lerResultadoDoWorker({ id: ID, httpStatus: null, erro: 'outro', messageId: null })).toBeNull();
+        expect(lerResultadoDoWorker({ id: ID, httpStatus: 200, erro: null, messageId: 'a'.repeat(301) })).toBeNull();
+        expect(lerResultadoDoWorker({ id: ID, httpStatus: 200, erro: null, messageId: 7 })).toBeNull();
+        expect(lerResultadoDoWorker(null)).toBeNull();
+        expect(lerResultadoDoWorker('x')).toBeNull();
+    });
+    it('messageId vazio vira null', () => {
+        expect(lerResultadoDoWorker({ id: ID, httpStatus: 200, erro: null, messageId: '  ' })?.messageId).toBeNull();
+    });
+});
+
+describe('planoDoReporte', () => {
+    const AGORA = Date.parse('2026-11-23T12:00:00Z');
+    const haUmaHora = new Date(AGORA - HORA).toISOString();
+    const linha = (tentativas: number, criadoEm = haUmaHora, status: 'enviando' | 'pendente' | 'aceita' = 'enviando') =>
+        ({ status, tentativas, criadoEm });
+    const ok = { httpStatus: 201, erro: null, messageId: 'MID' } as const;
+    const r503 = { httpStatus: 503, erro: null, messageId: null } as const;
+
+    it('só aplica em linha que está enviando (relato atrasado ou repetido não regride)', () => {
+        expect(planoDoReporte(linha(1, haUmaHora, 'aceita'), ok, AGORA)).toEqual({ tipo: 'ignorar' });
+        expect(planoDoReporte(linha(1, haUmaHora, 'pendente'), r503, AGORA)).toEqual({ tipo: 'ignorar' });
+    });
+    it('2xx → aceita com o id da mensagem', () => {
+        expect(planoDoReporte(linha(1), ok, AGORA)).toEqual({ tipo: 'aceita', status: 'aceita', providerMessageId: 'MID' });
+    });
+    it('primeira falha passageira (tentativas = 1, já contando a atual) espera 30 s', () => {
+        const p = planoDoReporte(linha(1), r503, AGORA);
+        expect(p.tipo).toBe('repetir');
+        if (p.tipo !== 'repetir') return;
+        expect(p.status).toBe('pendente');
+        expect(Date.parse(p.proximaTentativaEm) - AGORA).toBe(ESPERAS_MS[0]);
+        expect(p.erro).toContain('503');
+    });
+    it('a espera cresce com as tentativas: tentativas N espera ESPERAS_MS[N-1]', () => {
+        for (let n = 1; n <= ESPERAS_MS.length; n++) {
+            const p = planoDoReporte(linha(n), { httpStatus: null, erro: 'recusada', messageId: null }, AGORA);
+            expect(p.tipo, String(n)).toBe('repetir');
+            if (p.tipo === 'repetir') expect(Date.parse(p.proximaTentativaEm) - AGORA, String(n)).toBe(ESPERAS_MS[n - 1]);
+        }
+    });
+    it('esgotou as tentativas → incerta (pode ter saído), não falhou', () => {
+        const p = planoDoReporte(linha(ESPERAS_MS.length + 1), r503, AGORA);
+        expect(p.tipo).toBe('incerta');
+        if (p.tipo === 'incerta') expect(p.erro).toContain('esgotou as tentativas');
+    });
+    it('recusa definitiva → falhou mesmo com as tentativas esgotadas', () => {
+        const p = planoDoReporte(linha(ESPERAS_MS.length + 1), { httpStatus: 422, erro: null, messageId: null }, AGORA);
+        expect(p.tipo).toBe('falhou');
+        if (p.tipo === 'falhou') expect(p.erro).toContain('422');
+    });
+    it('passageira com comando de mais de 23 h → incerta', () => {
+        const velha = new Date(AGORA - 23 * HORA - 1).toISOString();
+        expect(planoDoReporte(linha(1, velha), r503, AGORA).tipo).toBe('incerta');
+    });
+    it('criado_em ilegível → incerta (falha fechado)', () => {
+        expect(planoDoReporte(linha(1, 'ontem'), r503, AGORA).tipo).toBe('incerta');
+    });
+    it('sem resposta e sem erro → incerta', () => {
+        expect(planoDoReporte(linha(1), { httpStatus: null, erro: null, messageId: null }, AGORA).tipo).toBe('incerta');
     });
 });

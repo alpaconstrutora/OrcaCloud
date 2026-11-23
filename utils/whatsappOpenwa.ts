@@ -147,6 +147,120 @@ export function esperaAposFalha(tentativas: number): number | null {
     return i < ESPERAS_MS.length ? ESPERAS_MS[i] : null;
 }
 
+/** Estado normalizado de `wa_conexoes.estado` (o que a tela mostra). */
+export type EstadoConexao = 'maquina_fora' | 'desconectado' | 'aguardando_qr' | 'conectado' | 'erro';
+
+/**
+ * Estado bruto da sessão no OpenWA (o worker manda no "estou vivo") → estado
+ * normalizado. Desconhecido ou ausente → `desconectado`: nunca dizer
+ * "conectado" sem o OpenWA ter dito `ready`. (`maquina_fora` não vem daqui: é a
+ * falta de "estou vivo" há 3 min, conferida na tela.)
+ */
+export function estadoDaConexao(estadoBruto: unknown): EstadoConexao {
+    switch (typeof estadoBruto === 'string' ? estadoBruto.trim().toLowerCase() : '') {
+        case 'ready': return 'conectado';
+        case 'qr_ready':
+        case 'authenticating': return 'aguardando_qr';
+        case 'failed': return 'erro';
+        default: return 'desconectado'; // disconnected, action_required e o que não se conhece
+    }
+}
+
+/** Resultado de um envio, como o worker informa em `reportar`. */
+export interface ResultadoDoWorker {
+    id: string;
+    httpStatus: number | null;
+    erro: 'recusada' | 'timeout' | null;
+    messageId: string | null;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MESSAGE_ID_MAX = 300;
+
+/** Valida um item de `reportar.resultados`. Fora do formato → `null` (a function não aplica). */
+export function lerResultadoDoWorker(v: unknown): ResultadoDoWorker | null {
+    if (!v || typeof v !== 'object') return null;
+    const o = v as Record<string, unknown>;
+    if (typeof o.id !== 'string' || !UUID_RE.test(o.id)) return null;
+
+    const s = o.httpStatus ?? null;
+    if (s !== null && !(typeof s === 'number' && Number.isInteger(s) && s >= 100 && s <= 599)) return null;
+
+    const erro = o.erro ?? null;
+    if (erro !== null && erro !== 'recusada' && erro !== 'timeout') return null;
+
+    const mid = o.messageId ?? null;
+    if (mid !== null && typeof mid !== 'string') return null;
+    const messageId = typeof mid === 'string' ? mid.trim() : '';
+    if (messageId.length > MESSAGE_ID_MAX) return null;
+
+    return { id: o.id, httpStatus: s as number | null, erro: erro as ResultadoDoWorker['erro'], messageId: messageId || null };
+}
+
+/** O que aconteceu na tentativa, em português, para `wa_mensagens.erro` e o log. */
+function descreverTentativa(r: { httpStatus: number | null; erro: 'recusada' | 'timeout' | null }): string {
+    if (r.erro === 'recusada') return 'o OpenWA não atendeu (conexão recusada na máquina)';
+    if (r.erro === 'timeout') return 'o OpenWA não respondeu a tempo';
+    if (r.httpStatus === null) return 'o OpenWA não deu resposta';
+    return `o OpenWA respondeu HTTP ${r.httpStatus}`;
+}
+
+export type PlanoDoReporte =
+    | { tipo: 'ignorar' }
+    | { tipo: 'aceita'; status: 'aceita'; providerMessageId: string | null }
+    | { tipo: 'repetir'; status: 'pendente'; proximaTentativaEm: string; erro: string }
+    | { tipo: 'falhou'; status: 'falhou'; erro: string }
+    | { tipo: 'incerta'; status: 'incerta'; erro: string };
+
+/**
+ * Relato do worker sobre uma linha → o que gravar nela.
+ *
+ *   · Só vale para linha em `enviando` (a que foi pega): relato atrasado ou
+ *     repetido de linha que já andou → `ignorar` (não regride status).
+ *   · `tentativas` JÁ CONTA a tentativa atual (`wa_pegar_pendentes` soma 1 a
+ *     cada pega). Falhas até aqui = `tentativas`, então a espera é
+ *     `esperaAposFalha(tentativas - 1)`: a 1ª falha espera ESPERAS_MS[0] (30 s)
+ *     e a N-ésima, ESPERAS_MS[N-1]. Sem espera (`null`) → `incerta`, não
+ *     `falhou`: uma falha passageira (timeout, 503) pode ter saído.
+ *   · Recusa definitiva do gateway (4xx, 501) → `falhou`, mesmo no limite.
+ */
+export function planoDoReporte(
+    linha: { status: StatusSaida; tentativas: number; criadoEm: string },
+    r: { httpStatus: number | null; erro: 'recusada' | 'timeout' | null; messageId: string | null },
+    agoraMs: number,
+): PlanoDoReporte {
+    if (linha.status !== 'enviando') return { tipo: 'ignorar' };
+
+    const desfecho = classificarEnvio(r, agoraMs - Date.parse(linha.criadoEm));
+    const oQue = descreverTentativa(r);
+    switch (desfecho) {
+        case 'aceita':
+            return { tipo: 'aceita', status: 'aceita', providerMessageId: r.messageId };
+        case 'falhou':
+            return { tipo: 'falhou', status: 'falhou', erro: `O WhatsApp não aceitou a mensagem: ${oQue}.` };
+        case 'repetir': {
+            const espera = esperaAposFalha(linha.tentativas - 1);
+            if (espera === null) {
+                return {
+                    tipo: 'incerta', status: 'incerta',
+                    erro: `Confirmação pendente: esgotou as tentativas (${linha.tentativas}); na última, ${oQue}. `
+                        + 'Pode ter saído — confira no celular do número antes de reenviar.',
+                };
+            }
+            return {
+                tipo: 'repetir', status: 'pendente',
+                proximaTentativaEm: new Date(agoraMs + espera).toISOString(),
+                erro: `Tentativa ${linha.tentativas} sem sucesso: ${oQue}. Nova tentativa em ${Math.round(espera / 1000)} s.`,
+            };
+        }
+        default:
+            return {
+                tipo: 'incerta', status: 'incerta',
+                erro: `Confirmação pendente: ${oQue}. Pode ter saído — confira no celular do número antes de reenviar.`,
+            };
+    }
+}
+
 /**
  * Confere `X-OpenWA-Signature: sha256=<hex>` — HMAC-SHA256 dos BYTES ORIGINAIS
  * do corpo (não do JSON reparseado) com o segredo da conexão. Comparação em

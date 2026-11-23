@@ -523,3 +523,10 @@ verify_jwt = true
 # Depois de publicar, provar o 401 sem header.
 [functions.whatsapp-openwa]
 verify_jwt = true
+
+# Worker do WhatsApp pelo OpenWA (mesmo plano, Task 4): chamado só pelo programa da máquina local
+# (pegar / reportar / vivo), que não tem JWT de usuário — gate = WA_WORKER_SECRET no código
+# (chamadaComSegredo, tempo constante; secret ausente ou < 32 caracteres → 503). REGRA #7 pergunta 3:
+# com o gateway desligado, a autorização é toda do código — depois de publicar, provar o 401 sem header.
+[functions.whatsapp-openwa-worker]
+verify_jwt = false

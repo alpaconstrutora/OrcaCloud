@@ -689,7 +689,7 @@ export function rotuloDaEntrega(status: StatusSaida, confirmacaoPendente: boolea
 
 - [ ] **Passo 1** — `wsl --install -d Ubuntu-24.04 --name openwa` (ou import), `systemd=true` em `/etc/wsl.conf`, Docker Engine oficial dentro da distro. Prova: `wsl -d openwa -- docker info` responde com o Docker Desktop **fechado**.
 - [ ] **Passo 2** — tarefa agendada "ao iniciar o sistema", "executar estando o usuário conectado ou não": `wsl.exe -d openwa --exec /bin/sh -c "sleep infinity"` (mantém a distro viva) — prova: reiniciar **sem login** e, de outra máquina/celular, ver `visto_em` atualizando na tela de Configurações.
-- [ ] **Passo 3** — copiar `infra/openwa` para a distro, criar `.env` (chave do OpenWA gerada na máquina, `WA_WORKER_SECRET`, `OPENWA_WEBHOOK_SECRET`, URL e anon key do Supabase), `docker compose up -d`. Prova: `curl -s 127.0.0.1:2785/api/health/ready`; de fora da máquina, a porta 2785 **não** responde.
+- [ ] **Passo 3** — copiar `infra/openwa` para a distro, criar `.env` (chave do OpenWA gerada na máquina, `WA_WORKER_SECRET`, `OPENWA_WEBHOOK_SECRET`, URL e anon key do Supabase), `docker compose up -d`; criar a sessão e gravar o **UUID** dela em `wa_conexoes.sessao_remota` (o OpenWA identifica a sessão por id, não por nome — Ruling 17; ver `infra/openwa/LEIA-ME.md` passo 8). Prova: `curl -s 127.0.0.1:2785/api/health/ready`; de fora da máquina, a porta 2785 **não** responde.
 - [ ] **Passo 4** — o usuário ativa o WhatsApp Business no chip (no celular que ficará na empresa), aquece alguns dias, e lê o QR no painel local. Prova: situação "Conectado · <número>" na tela.
 - [ ] **Passo 5** — usuário confere na BIOS "Restore AC Power Loss = Power On". Backup diário do `./dados` agendado (destino e retenção anotados no LEIA-ME).
 

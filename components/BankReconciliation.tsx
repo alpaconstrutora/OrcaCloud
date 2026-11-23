@@ -5,8 +5,8 @@ import {
     ArrowRightLeft, FileText, Download, Trash2, Check,
     Plus, Calendar, DollarSign, Briefcase, RefreshCw,
     Zap, ShieldCheck, Settings2, Info, ArrowUpDown, X,
-    LayoutGrid, List, UserPlus, ExternalLink, Rows3, Pencil, MoveHorizontal, EyeOff, Brain,
-    Link2, Scale, Loader2
+    UserPlus, ExternalLink, Pencil, MoveHorizontal, EyeOff, Brain,
+    Link2, Scale, Loader2, SlidersHorizontal
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import type { ClientOption } from './ClientSelect';
@@ -58,6 +58,7 @@ import {
     type CampoAgruparExtrato, type CampoAgruparLancamento,
 } from '../utils/pendentesGrupos';
 import AjustarDiferencaSheet from './reconciliation/AjustarDiferencaSheet';
+import PreferenciasPendentesSheet, { type ModoPendentes } from './reconciliation/PreferenciasPendentesSheet';
 import { resumoDaSelecao, type ModoConciliacaoGrupo } from '../utils/reconciliationSelection';
 import { extratoForaDaConciliacao, valorParaConciliar, COLUNA_VALOR_ESPERADO, COLUNA_VALOR_VARIAVEL, FILTRO_SEM_TRIBUTO_RETIDO } from '../utils/reconciliationRules';
 import type { ReconcileGroupParams } from '../services/bankReconciliationService';
@@ -344,6 +345,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [pendentesCompact, setPendentesCompact] = useState<boolean>(
         localStorage.getItem('reconciliation_pendentes_compact') === 'true'
     );
+    // Linha / Compacto / Grade numa escolha só, em Preferências (compacto só existe no modo lista).
+    const modoPendentes: ModoPendentes = pendentesViewMode === 'grid' ? 'grade' : pendentesCompact ? 'compacto' : 'linha';
+    const setModoPendentes = (m: ModoPendentes) => {
+        setPendentesViewMode(m === 'grade' ? 'grid' : 'list');
+        if (m !== 'grade') setPendentesCompact(m === 'compacto');
+    };
+    const [preferenciasAbertas, setPreferenciasAbertas] = useState(false);
     const [isImporting, setIsImporting] = useState(false);
     const [rules, setRules] = useState<ReconciliationRule[]>([]);
     const [masterSuppliers, setMasterSuppliers] = useState<string[]>([]);
@@ -2837,6 +2845,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
             {orgTargetModal}
 
+            {preferenciasAbertas && (
+                <PreferenciasPendentesSheet
+                    open
+                    onClose={() => setPreferenciasAbertas(false)}
+                    modo={modoPendentes}
+                    onModo={setModoPendentes}
+                />
+            )}
+
             {registerEntityModal && (
                 <div className="fixed inset-0 bg-gray-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-300" onClick={() => !savingEntity && setRegisterEntityModal(null)}>
                     <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
@@ -3306,6 +3323,15 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     {activeView === 'pending' && (
                         <>
                             <button
+                                type="button"
+                                onClick={() => setPreferenciasAbertas(true)}
+                                title="Preferências dos pendentes (modo de visualização)"
+                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-slate-700 bg-white border border-gray-200 hover:bg-gray-50 transition-all"
+                            >
+                                <SlidersHorizontal className="w-[15px] h-[15px]" />
+                                Preferências
+                            </button>
+                            <button
                                 onClick={handleSyncAllData}
                                 disabled={isLoading}
                                 className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium border transition-all ${
@@ -3626,7 +3652,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     onUpdateInternalCategory={handleUpdateInternalCategory}
                 />
             ) : (activeView === 'pending' || activeView === 'statement') ? (
-                <div className="space-y-6">
+                // 12px entre aviso, Extrato e Lançamentos — cromo da mesma tarefa (guia §20.1).
+                // O seletor de visualização que ficava aqui foi para Preferências (23/11/2026).
+                <div className="space-y-3">
                     {activeView === 'pending' && recorteDoDashboard && (
                         <div role="status" className="flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-[10px] px-4 py-2.5 text-sm text-blue-900">
                             <span>
@@ -3641,35 +3669,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             </button>
                         </div>
                     )}
-                    {activeView === 'pending' && (
-                    <div className="flex justify-end px-4 -mb-4">
-                        <div className="flex bg-white border border-gray-100 p-1 rounded-xl shadow-sm">
-                            <button
-                                onClick={() => setPendentesViewMode('list')}
-                                className={`p-2 rounded-lg transition-all ${pendentesViewMode === 'list' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                title="Visualização em Linha"
-                            >
-                                <List className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => setPendentesCompact(c => !c)}
-                                className={`p-2 rounded-lg transition-all ${pendentesCompact ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                title="Visualização Compacta"
-                            >
-                                <Rows3 className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => setPendentesViewMode('grid')}
-                                className={`p-2 rounded-lg transition-all ${pendentesViewMode === 'grid' ? 'bg-blue-50 text-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
-                                title="Visualização em Grade"
-                            >
-                                <LayoutGrid className="w-4 h-4" />
-                            </button>
-                        </div>
-                    </div>
-                    )}
-
-                    <div className={activeView === 'statement' ? "grid grid-cols-1 gap-8 min-h-[500px]" : "grid grid-cols-1 lg:grid-cols-2 gap-8 min-h-[500px]"}>
+                    <div className={activeView === 'statement' ? "grid grid-cols-1 gap-3 min-h-[500px]" : "grid grid-cols-1 lg:grid-cols-2 gap-3 min-h-[500px]"}>
                     {/* Left: Bank Statement */}
                     <div className="space-y-4">
                         {/* Toolbar acoplada à tabela (§5.2, padrão OpuraDocsModule/GED) — só na

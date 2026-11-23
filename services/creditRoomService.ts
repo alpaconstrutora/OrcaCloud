@@ -589,7 +589,11 @@ async function datasDePagamento(ids: string[]): Promise<Map<string, string>> {
  * espelho do Comercial (`commercial_properties.price`) quando tem preço
  * próprio. O porquê está em `coletarUnidades`.
  */
-async function unidadesComPreco(empreendimentoId: string): Promise<{ status: string; rental_status: string | null; price: number | null; rental_price: number | null }[]> {
+async function unidadesComPreco(empreendimentoId: string): Promise<{
+    status: string; rental_status: string | null; price: number | null; rental_price: number | null;
+    /** `true` = o aluguel dela dependia do espelho de Locações e a leitura falhou: valor DESCONHECIDO (não "sem valor cadastrado"). */
+    aluguel_indisponivel: boolean;
+}[]> {
     const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
     const idsEspelho = units.map(u => u.commercial_property_id).filter((v): v is string => !!v);
     const precoEspelho = new Map<string, number>();
@@ -605,11 +609,17 @@ async function unidadesComPreco(empreendimentoId: string): Promise<{ status: str
     // Aluguel-alvo: o da unidade vence; sem ele, o do espelho de Locações (`rental_property_id`).
     const idsLocacao = units.filter(u => u.rental_price == null).map(u => u.rental_property_id).filter((v): v is string => !!v);
     const aluguelEspelho = new Map<string, number>();
+    let espelhoFalhou = false;
     if (idsLocacao.length) {
-        const { data } = await supabase
+        // Erro aqui não derruba a venda, mas também não pode virar "sem valor cadastrado": o aluguel fica desconhecido.
+        const { data, error } = await supabase
             .from('commercial_properties')
             .select('id, rental_price')
             .in('id', idsLocacao);
+        if (error) {
+            espelhoFalhou = true;
+            console.warn('[creditRoomService] aluguel das unidades (espelho de Locações) indisponível no snapshot:', error);
+        }
         for (const cp of (data ?? []) as Array<{ id: string; rental_price: number | null }>) {
             if (cp.rental_price != null) aluguelEspelho.set(cp.id, Number(cp.rental_price));
         }
@@ -621,6 +631,7 @@ async function unidadesComPreco(empreendimentoId: string): Promise<{ status: str
             ?? (u.commercial_property_id ? precoEspelho.get(u.commercial_property_id) ?? null : null),
         rental_price: u.rental_price
             ?? (u.rental_property_id ? aluguelEspelho.get(u.rental_property_id) ?? null : null),
+        aluguel_indisponivel: espelhoFalhou && u.rental_price == null && !!u.rental_property_id,
     }));
 }
 
@@ -1934,6 +1945,8 @@ export const creditRoomService = {
                 // Aluguel contratado: as locações vigentes DESTE empreendimento (a mesma base da renda da série).
                 const doEmp = locacoes.filter(l => l.empreendimentoId === e.id);
                 const aluguelPedido = us.filter(disponivel).filter(u => num(u.rental_price) > 0);
+                // Leitura do aluguel falhou para alguma disponível: a soma e a contagem das "sem valor" não são confiáveis.
+                const aluguelDesconhecido = us.filter(disponivel).some(u => u.aluguel_indisponivel);
                 return {
                     id: e.id,
                     nome: e.name,
@@ -1950,8 +1963,10 @@ export const creditRoomService = {
                     vgv_disponivel: vgv(disponivel),
                     renda_mensal: rendaMensalDoEmpreendimento(e.id, titulos, locacoes, dataBase, fluxos),
                     aluguel_locadas: doEmp.length ? round2(doEmp.reduce((a, l) => a + num(l.aluguelMensal), 0)) : null,
-                    aluguel_disponiveis: aluguelPedido.length ? round2(aluguelPedido.reduce((a, u) => a + num(u.rental_price), 0)) : null,
-                    disponiveis_sem_aluguel: us.filter(disponivel).length - aluguelPedido.length,
+                    aluguel_disponiveis: !aluguelDesconhecido && aluguelPedido.length
+                        ? round2(aluguelPedido.reduce((a, u) => a + num(u.rental_price), 0))
+                        : null,
+                    disponiveis_sem_aluguel: aluguelDesconhecido ? undefined : us.filter(disponivel).length - aluguelPedido.length,
                     servico: e.objetivo === 'SERVICO'
                         ? (e.project_id ? servicoPorObra?.get(e.project_id) ?? null : resumirServico([], new Map()))
                         : undefined,

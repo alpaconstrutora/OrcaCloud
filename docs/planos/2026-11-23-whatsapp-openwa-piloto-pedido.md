@@ -696,7 +696,7 @@ export function rotuloDaEntrega(status: StatusSaida, confirmacaoPendente: boolea
 ### Task 11 — Verificação de ponta a ponta e publicação
 
 - [ ] **Passo 1** — `npx vitest run --project leves` (contar falhas por grep, não por tail); `npx tsc --noEmit`; `bash scripts/check-ui-standard.sh` nos `.tsx`; `bash scripts/check-org-selector-guard.sh`; `bash scripts/verificar-views-anon.sh`.
-- [ ] **Passo 2** — PR (rascunho) → CI verde (ler a lista do `pesados-quais`) → merge pelo fluxo do projeto (eu faço o merge) → `bash scripts/conferir-producao.sh`.
+- [ ] **Passo 2** — **PORTÃO:** antes do push/merge, conferir no banco que as migrations `aplicar_20271123100000` e `aplicar_20271123110000` estão aplicadas (`SELECT 1 FROM information_schema.columns WHERE table_name='order_chats' AND column_name='canal'` e `SELECT to_regprocedure('public.wa_situacao()')`) — o front novo lê `order_chats.canal` e quebra o chat de todas as orgs sem ela (Ruling 16). Depois: PR (rascunho) → CI verde (ler a lista do `pesados-quais`) → merge pelo fluxo do projeto (eu faço o merge) → `bash scripts/conferir-producao.sh`.
 - [ ] **Passo 3** — roteiro "Verificação de ponta a ponta" (itens 1–8 acima) em produção, com 1 pedido real da Alpa e 1 da SPE do Garden, fornecedor de teste com o celular do usuário. Cada item com evidência (print ou SELECT) anotada em "Estado".
 
 ## Estado

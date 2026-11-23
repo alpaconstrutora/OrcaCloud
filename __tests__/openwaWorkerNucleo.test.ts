@@ -187,6 +187,85 @@ describe('criarCoalescedor', () => {
     });
 });
 
+describe('criarCoalescedor — campainha com intervalo mínimo de 5 s (tópico público pode ser inundado)', () => {
+    /** Relógio e agenda falsos: nada de timer real no teste. */
+    function relogio() {
+        let t = 1_000_000;
+        const agendados: { quando: number; fn: () => void }[] = [];
+        return {
+            agora: () => t,
+            agendar: (fn: () => void, ms: number) => { agendados.push({ quando: t + ms, fn }); },
+            agendados,
+            async avancar(ms: number) {
+                t += ms;
+                for (const a of agendados.filter((x) => x.quando <= t)) {
+                    agendados.splice(agendados.indexOf(a), 1);
+                    a.fn();
+                }
+                await new Promise((r) => setTimeout(r, 0));
+            },
+        };
+    }
+
+    it('primeira campainha → ciclo na hora', async () => {
+        const r = relogio();
+        let n = 0;
+        const c = criarCoalescedor(async () => { n++; }, () => {}, { agora: r.agora, agendar: r.agendar });
+        await c.campainha();
+        expect(n).toBe(1);
+    });
+
+    it('inundação: 100 toques em 1 s → 1 ciclo na hora + 1 adiado para 5 s depois do anterior', async () => {
+        const r = relogio();
+        let n = 0;
+        const c = criarCoalescedor(async () => { n++; }, () => {}, { agora: r.agora, agendar: r.agendar });
+        await c.campainha();
+        for (let i = 0; i < 100; i++) {
+            await r.avancar(10);
+            c.campainha();
+        }
+        await new Promise((x) => setTimeout(x, 0));
+        expect(n).toBe(1);
+        expect(r.agendados).toHaveLength(1);
+        expect(r.agendados[0].quando).toBe(1_000_000 + 5_000);
+        await r.avancar(4_000);
+        expect(n).toBe(2);
+        expect(r.agendados).toHaveLength(0);
+    });
+
+    it('campainha 5 s depois da anterior → na hora, sem adiar', async () => {
+        const r = relogio();
+        let n = 0;
+        const c = criarCoalescedor(async () => { n++; }, () => {}, { agora: r.agora, agendar: r.agendar });
+        await c.campainha();
+        await r.avancar(5_000);
+        await c.campainha();
+        expect(n).toBe(2);
+        expect(r.agendados).toHaveLength(0);
+    });
+
+    it('a varredura (tocar) não é afetada pelo intervalo da campainha', async () => {
+        const r = relogio();
+        let n = 0;
+        const c = criarCoalescedor(async () => { n++; }, () => {}, { agora: r.agora, agendar: r.agendar });
+        await c.campainha();
+        await r.avancar(100);
+        await c.tocar();
+        expect(n).toBe(2);
+    });
+
+    it('intervalo configurável', async () => {
+        const r = relogio();
+        let n = 0;
+        const c = criarCoalescedor(async () => { n++; }, () => {}, { agora: r.agora, agendar: r.agendar, intervaloCampainhaMs: 1_000 });
+        await c.campainha();
+        c.campainha();
+        expect(r.agendados[0].quando).toBe(1_000_000 + 1_000);
+        await r.avancar(1_000);
+        expect(n).toBe(2);
+    });
+});
+
 describe('sessão do OpenWA', () => {
     const lista = [
         { id: 'id-outra', name: 'opura-teste', status: 'ready' },

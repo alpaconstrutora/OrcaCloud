@@ -87,10 +87,24 @@ export function resultadoDoEnvio({ status = null, corpo = null, erro = null } = 
  *   · ciclo que devolve 'de_novo' (fila veio cheia) → roda outra vez;
  *   · ciclo que lança → `aoFalhar(erro)` e o coalescedor segue livre.
  * `tocar()` devolve a promessa do laço em curso (termina quando não há mais ciclo a rodar).
+ *
+ * `campainha()` é o `tocar()` de quem vem da campainha (tópico público do Realtime: qualquer
+ * um com a anon key pode tocar em rajada). Entre dois ciclos disparados por ela há no
+ * mínimo `intervaloCampainhaMs` (5 s): toque antes disso não roda na hora — agenda UM
+ * toque para quando o intervalo vencer (vários toques no intervalo = esse mesmo um), então
+ * nenhum aviso real se perde, só atrasa até 5 s. A varredura de 60 s chama `tocar()` e não
+ * passa por esse limite. `agora`/`agendar` vêm de fora para o teste não usar relógio real.
  */
-export function criarCoalescedor(ciclo, aoFalhar = () => {}) {
+export function criarCoalescedor(ciclo, aoFalhar = () => {}, opcoes = {}) {
+    const {
+        intervaloCampainhaMs = 5_000,
+        agora = () => Date.now(),
+        agendar = (fn, ms) => setTimeout(fn, ms),
+    } = opcoes;
     let atual = null;
     let deNovo = false;
+    let ultimaCampainha = -Infinity;
+    let campainhaAdiada = false;
 
     async function laco() {
         try {
@@ -109,15 +123,34 @@ export function criarCoalescedor(ciclo, aoFalhar = () => {}) {
         }
     }
 
-    return {
-        tocar() {
-            if (atual) {
-                deNovo = true;
-                return atual;
-            }
-            atual = laco();
+    function tocar() {
+        if (atual) {
+            deNovo = true;
             return atual;
-        },
+        }
+        atual = laco();
+        return atual;
+    }
+
+    function campainha() {
+        if (campainhaAdiada) return undefined; // já há um toque marcado para o fim do intervalo
+        const falta = ultimaCampainha + intervaloCampainhaMs - agora();
+        if (falta <= 0) {
+            ultimaCampainha = agora();
+            return tocar();
+        }
+        campainhaAdiada = true;
+        agendar(() => {
+            campainhaAdiada = false;
+            ultimaCampainha = agora();
+            tocar();
+        }, falta);
+        return undefined;
+    }
+
+    return {
+        tocar,
+        campainha,
         rodando: () => atual !== null,
     };
 }

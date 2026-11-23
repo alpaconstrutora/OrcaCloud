@@ -4,7 +4,9 @@
 //
 // O que faz (só conexões de SAÍDA; nada escuta porta):
 //   • Assina a campainha (Realtime broadcast, tópico `wa-campainha`, evento `fila`, canal
-//     público, payload vazio) com a anon key. Tocou → ciclo.
+//     público, payload vazio) com a anon key. Tocou → ciclo, no máximo um a cada 5 s
+//     (fila.campainha: o tópico é público e pode ser inundado; toque no intervalo é adiado,
+//     não perdido).
 //   • A cada 60 s roda o ciclo mesmo sem campainha (rede de segurança: se a assinatura
 //     cair, só fica um aviso no log — nunca derruba o processo).
 //   • Ciclo: confere a sessão no OpenWA (`ready`?) → `pegar` na Edge Function
@@ -76,24 +78,31 @@ async function openwaGet(caminho) {
     return { status: resp.status, corpo };
 }
 
-/** Lê a sessão no OpenWA. Devolve { status } (do OpenWA) ou { falha } (motivo curto, sem dado sensível). */
+/**
+ * Lê a sessão no OpenWA. Devolve { id, sessao, estado_bruto, numero } — `id` é o da sessão
+ * que foi de fato conferida — ou { falha } (motivo curto, sem dado sensível).
+ * O `vivo` roda em paralelo ao ciclo e pode zerar/trocar `sessaoId` no meio; por isso o
+ * id lido aqui é local e devolvido, e o ciclo envia com ele (não com a variável global).
+ */
 async function lerSessao() {
     try {
-        if (!sessaoId) {
+        let id = sessaoId;
+        if (!id) {
             const r = await openwaGet(`/api/sessions?name=${encodeURIComponent(SESSAO_NOME)}`);
             if (r.status === 401 || r.status === 403) return { falha: `openwa_chave_recusada_${r.status}` };
             if (r.status !== 200) return { falha: `openwa_http_${r.status}` };
-            sessaoId = idDaSessaoPorNome(r.corpo, SESSAO_NOME);
-            if (!sessaoId) return { falha: 'sessao_inexistente' };
-            log('info', 'sessão do OpenWA encontrada pelo nome', { sessao: SESSAO_NOME, id: sessaoId });
+            id = idDaSessaoPorNome(r.corpo, SESSAO_NOME);
+            if (!id) return { falha: 'sessao_inexistente' };
+            sessaoId = id;
+            log('info', 'sessão do OpenWA encontrada pelo nome', { sessao: SESSAO_NOME, id });
         }
-        const r = await openwaGet(`/api/sessions/${encodeURIComponent(sessaoId)}`);
+        const r = await openwaGet(`/api/sessions/${encodeURIComponent(id)}`);
         if (r.status === 404) {
-            sessaoId = null; // apagada/recriada: procura pelo nome de novo no próximo
+            if (sessaoId === id) sessaoId = null; // apagada/recriada: procura pelo nome de novo no próximo
             return { falha: 'sessao_inexistente' };
         }
         if (r.status !== 200) return { falha: `openwa_http_${r.status}` };
-        return { sessao: r.corpo, ...leituraDaSessao(r.corpo) };
+        return { id, sessao: r.corpo, ...leituraDaSessao(r.corpo) };
     } catch (e) {
         return { falha: 'openwa_inacessivel', codigo: codigoCurto(e) };
     }
@@ -103,8 +112,9 @@ function codigoCurto(e) {
     return (e && (e.cause?.code || e.code || e.name)) || 'erro';
 }
 
-async function enviar(item) {
-    const req = requisicaoDeEnvio(item, sessaoId, OPENWA_API_KEY, OPENWA_URL);
+/** `sid` = id da sessão capturado no ciclo (nunca o `sessaoId` global, que o vivo pode zerar). */
+async function enviar(item, sid) {
+    const req = requisicaoDeEnvio(item, sid, OPENWA_API_KEY, OPENWA_URL);
     const ctrl = new AbortController();
     const relogio = setTimeout(() => ctrl.abort(), TIMEOUT_ENVIO_MS);
     try {
@@ -184,6 +194,14 @@ async function ciclo() {
     await esvaziarReportesPendentes();
 
     const s = await lerSessao();
+    // O id da sessão é capturado UMA vez por ciclo (o que acabou de ser conferido `ready`) e
+    // vai para cada envio: o vivo, em paralelo, pode zerar `sessaoId` (404) no meio do laço,
+    // e enviar com null mandaria para /api/sessions/null — 4xx = falha definitiva.
+    const sid = s.id ?? null;
+    if (!sid) {
+        log('info', 'fila fica para depois: sessão do OpenWA sem id', { estado: s.falha ?? null });
+        return undefined;
+    }
     if (!s.sessao || !podeEnviar(s.estado_bruto)) {
         log('info', 'fila fica para depois: sessão não está pronta', { estado: s.estado_bruto ?? s.falha ?? null });
         return undefined;
@@ -203,7 +221,7 @@ async function ciclo() {
     for (const item of itens) {
         // Parando no meio: os que sobraram voltam sozinhos (trava de 2 min vence).
         if (parando) break;
-        const { resultado, codigo } = await enviar(item);
+        const { resultado, codigo } = await enviar(item, sid);
         log('info', 'envio', { id: item.id, http: resultado.httpStatus, erro: resultado.erro, codigo });
         const r = { id: item.id, ...resultado };
         if (!(await reportar([r]))) guardarReporte(r);
@@ -226,12 +244,13 @@ async function vivo() {
         // A Edge Function acha a conexão por wa_conexoes.sessao_remota = id da sessão do OpenWA
         // (o mesmo que o webhook traz em `sessionId`). Sem id ainda → sem `sessao`
         // (ela usa a conexão da plataforma).
-        if (sessaoId) corpo.sessao = sessaoId;
+        const sid = s.id ?? sessaoId;
+        if (sid) corpo.sessao = sid;
         try {
             await chamarFuncao(corpo);
         } catch (e) {
-            if (e.httpStatus === 404 && sessaoId) {
-                log('aviso', 'vivo: a Edge Function não conhece esta sessão — wa_conexoes.sessao_remota precisa ser o id da sessão do OpenWA (LEIA-ME, passo "Ligar a sessão ao banco")', { id: sessaoId });
+            if (e.httpStatus === 404 && sid) {
+                log('aviso', 'vivo: a Edge Function não conhece esta sessão — wa_conexoes.sessao_remota precisa ser o id da sessão do OpenWA (LEIA-ME, passo "Ligar a sessão ao banco")', { id: sid });
             } else {
                 log('aviso', 'vivo falhou', { http: e.httpStatus ?? null, codigo: codigoCurto(e) });
             }
@@ -255,7 +274,7 @@ function assinarCampainha() {
     try {
         const ch = supabase
             .channel('wa-campainha', { config: { broadcast: { self: false } } })
-            .on('broadcast', { event: 'fila' }, () => { if (ch === canal) fila.tocar(); });
+            .on('broadcast', { event: 'fila' }, () => { if (ch === canal) fila.campainha(); });
         canal = ch;
         ch.subscribe((status, err) => {
             // Só o canal ATUAL decide (eventoDaCampainha): o CLOSED que o removeChannel

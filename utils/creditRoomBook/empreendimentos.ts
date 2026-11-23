@@ -7,6 +7,7 @@ import {
     subtitulo, tabela, type Ctx, type FotoPronta,
 } from './base';
 import { fotosDoEmpreendimento } from './fotos';
+import { linhasDoCardDoEmpreendimento } from '../creditRoomEmpreendimentoCard';
 
 function localizacao(e: SnapshotEmpreendimentoItem): string {
     const lugar = e.cidade && e.uf ? `${e.cidade}/${e.uf}` : (e.cidade ?? e.uf ?? '');
@@ -23,9 +24,11 @@ export function secaoEmpreendimentos(c: Ctx, versao: CreditRoomVersion, imagens:
         garantir(c, 40);
         subtitulo(c, e.nome);
         aviso(c, localizacao(e));
-        tabela(c, ['Unidades', 'Vendidas', 'Alugadas', 'Disponíveis', 'VGV vendido', 'VGV disponível', 'Renda mensal'], [[
+        // As colunas de números seguem o objetivo (vendas, locação ou serviço); ausente = "n/d".
+        const linhas = linhasDoCardDoEmpreendimento(e, { ausente: N_D, money });
+        tabela(c, ['Unidades', 'Vendidas', 'Alugadas', 'Disponíveis', ...linhas.map(l => l.rotulo)], [[
             inteiro(e.unidades_total), inteiro(e.vendidas), inteiro(e.alugadas), inteiro(e.disponiveis),
-            money(e.vgv_vendido), money(e.vgv_disponivel), money(e.renda_mensal),
+            ...linhas.map(l => l.valor),
         ]], { direitaA: 0 });
         const fotos = fotosDoEmpreendimento(e)
             .map(u => prepararFoto(c.doc, imagens[u]))

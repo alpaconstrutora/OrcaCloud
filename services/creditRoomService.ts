@@ -65,7 +65,8 @@ import {
 import { montarCarteira } from '../utils/creditRoomCarteira';
 import { buildSchedule } from '../utils/debtAmortization';
 import { round2 } from '../utils/financialMath';
-import { originIdFromRef } from '../lib/receivableRef';
+import { originIdFromRef, refPrefixOrFilter } from '../lib/receivableRef';
+import { STATUS_SERVICO_VALIDOS, resumirServico, type ContratoDeServico, type ResumoDeServico } from '../utils/creditRoomServico';
 import { getDealInstallmentValue } from '../lib/rentalPortfolio';
 import { saleDealStage } from '../lib/salesAnalysis';
 import type { Receivable } from '../types/financial';
@@ -588,7 +589,11 @@ async function datasDePagamento(ids: string[]): Promise<Map<string, string>> {
  * espelho do Comercial (`commercial_properties.price`) quando tem preço
  * próprio. O porquê está em `coletarUnidades`.
  */
-async function unidadesComPreco(empreendimentoId: string): Promise<{ status: string; rental_status: string | null; price: number | null }[]> {
+async function unidadesComPreco(empreendimentoId: string): Promise<{
+    status: string; rental_status: string | null; price: number | null; rental_price: number | null;
+    /** `true` = o aluguel dela dependia do espelho de Locações e a leitura falhou: valor DESCONHECIDO (não "sem valor cadastrado"). */
+    aluguel_indisponivel: boolean;
+}[]> {
     const units = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
     const idsEspelho = units.map(u => u.commercial_property_id).filter((v): v is string => !!v);
     const precoEspelho = new Map<string, number>();
@@ -601,11 +606,32 @@ async function unidadesComPreco(empreendimentoId: string): Promise<{ status: str
             if (cp.price != null) precoEspelho.set(cp.id, Number(cp.price));
         }
     }
+    // Aluguel-alvo: o da unidade vence; sem ele, o do espelho de Locações (`rental_property_id`).
+    const idsLocacao = units.filter(u => u.rental_price == null).map(u => u.rental_property_id).filter((v): v is string => !!v);
+    const aluguelEspelho = new Map<string, number>();
+    let espelhoFalhou = false;
+    if (idsLocacao.length) {
+        // Erro aqui não derruba a venda, mas também não pode virar "sem valor cadastrado": o aluguel fica desconhecido.
+        const { data, error } = await supabase
+            .from('commercial_properties')
+            .select('id, rental_price')
+            .in('id', idsLocacao);
+        if (error) {
+            espelhoFalhou = true;
+            console.warn('[creditRoomService] aluguel das unidades (espelho de Locações) indisponível no snapshot:', error);
+        }
+        for (const cp of (data ?? []) as Array<{ id: string; rental_price: number | null }>) {
+            if (cp.rental_price != null) aluguelEspelho.set(cp.id, Number(cp.rental_price));
+        }
+    }
     return units.map(u => ({
         status: u.status,
         rental_status: u.rental_status ?? null,
         price: u.price
             ?? (u.commercial_property_id ? precoEspelho.get(u.commercial_property_id) ?? null : null),
+        rental_price: u.rental_price
+            ?? (u.rental_property_id ? aluguelEspelho.get(u.rental_property_id) ?? null : null),
+        aluguel_indisponivel: espelhoFalhou && u.rental_price == null && !!u.rental_property_id,
     }));
 }
 
@@ -1808,6 +1834,66 @@ export const creditRoomService = {
     },
 
     /**
+     * Serviço por obra (`projects.id`): contratos `SERVICOS` Ativo/Concluído de cada obra, com o que já foi
+     * faturado (Σ dos títulos a receber gerados no financeiro, recebidos ou não).
+     *
+     * Os títulos são lidos AQUI, direto de `vw_receivables`, e não tirados de `titulos`: o título de serviço
+     * não tem empreendimento (`natureza` só existe para VENDA/LOCACAO) e, com filtro de empreendimentos na
+     * sala, `titulosDoEscopo` descarta tudo que não tem empreendimento — o faturado sairia 0 em silêncio.
+     * O contrato sai de `originIdFromRef` (o `reference_id` é composto; `.in()` com o uuid nunca casa — por
+     * isso o `like` de `refPrefixOrFilter`, conferido depois por igualdade exata).
+     *
+     * Falha = `null` (o chamador grava `servico: null`, "—"); nunca zero.
+     */
+    async coletarServicoPorObra(orgs: string[], projectIds: string[]): Promise<Map<string, ResumoDeServico> | null> {
+        const ids = [...new Set(projectIds.filter(Boolean))];
+        if (!ids.length) return new Map();
+        try {
+            const contratos: (ContratoDeServico & { project_id: string })[] = [];
+            for (const lote of lotes(ids)) {
+                const linhas = await todasAsPaginas((de, ate) => supabase
+                    .from('contracts')
+                    .select('id, project_id, status, current_value')
+                    .eq('domain', 'SERVICOS')
+                    .in('organization_id', orgs)
+                    .in('project_id', lote)
+                    .in('status', [...STATUS_SERVICO_VALIDOS])
+                    .order('id')
+                    .range(de, ate));
+                contratos.push(...(linhas as (ContratoDeServico & { project_id: string })[]));
+            }
+
+            const faturadoPorContrato = new Map<string, number>();
+            const doConjunto = new Set(contratos.map(c => c.id));
+            for (const lote of lotes([...doConjunto], 20)) {
+                const filtro = refPrefixOrFilter(lote);
+                if (!filtro) continue;
+                const titulos = await todasAsPaginas((de, ate) => supabase
+                    .from('vw_receivables')
+                    .select('id, reference_id, amount')
+                    .in('organization_id', orgs)
+                    .or(filtro)
+                    .order('id')
+                    .range(de, ate));
+                for (const t of titulos as { reference_id: string | null; amount: number | null }[]) {
+                    const contrato = originIdFromRef(t.reference_id);
+                    if (!doConjunto.has(contrato)) continue;
+                    faturadoPorContrato.set(contrato, (faturadoPorContrato.get(contrato) ?? 0) + num(t.amount));
+                }
+            }
+
+            const out = new Map<string, ResumoDeServico>();
+            for (const projectId of ids) {
+                out.set(projectId, resumirServico(contratos.filter(c => c.project_id === projectId), faturadoPorContrato));
+            }
+            return out;
+        } catch (e) {
+            console.warn('[creditRoomService] contratos de serviço indisponíveis no snapshot:', e);
+            return null;
+        }
+    },
+
+    /**
      * Empreendimentos do escopo com unidades, VGV, renda do mês e fotos.
      *
      * Unidades: `status` é o eixo de VENDA, `rental_status` o de LOCAÇÃO
@@ -1836,13 +1922,16 @@ export const creditRoomService = {
             });
             if (!emps.length) return [];
 
-            const [unidades, fotos] = await Promise.all([
+            const projetosDeServico = emps.filter(e => e.objetivo === 'SERVICO' && e.project_id).map(e => e.project_id as string);
+            const [unidades, fotos, servicoPorObra] = await Promise.all([
                 Promise.all(emps.map(e => unidadesComPreco(e.id))),
                 // Foto que falha não derruba os números do empreendimento.
                 fotosDosEmpreendimentos(emps.map(e => e.id)).catch(err => {
                     console.warn('[creditRoomService] fotos dos empreendimentos indisponíveis:', err);
                     return new Map<string, { url: string; legenda: string | null }[]>();
                 }),
+                // Falha nos contratos de serviço só tira o bloco de serviço (`servico: null`), não o resto.
+                projetosDeServico.length ? this.coletarServicoPorObra(orgs, projetosDeServico) : Promise.resolve(null),
             ]);
 
             return emps.map((e, i): SnapshotEmpreendimentoItem => {
@@ -1853,6 +1942,11 @@ export const creditRoomService = {
                 const vgv = (pred: (u: typeof us[number]) => boolean) =>
                     round2(us.filter(pred).reduce((a, u) => a + num(u.price), 0));
                 const fs = (fotos.get(e.id) ?? []).slice(0, 8);
+                // Aluguel contratado: as locações vigentes DESTE empreendimento (a mesma base da renda da série).
+                const doEmp = locacoes.filter(l => l.empreendimentoId === e.id);
+                const aluguelPedido = us.filter(disponivel).filter(u => num(u.rental_price) > 0);
+                // Leitura do aluguel falhou para alguma disponível: a soma e a contagem das "sem valor" não são confiáveis.
+                const aluguelDesconhecido = us.filter(disponivel).some(u => u.aluguel_indisponivel);
                 return {
                     id: e.id,
                     nome: e.name,
@@ -1868,6 +1962,14 @@ export const creditRoomService = {
                     vgv_vendido: vgv(vendida),
                     vgv_disponivel: vgv(disponivel),
                     renda_mensal: rendaMensalDoEmpreendimento(e.id, titulos, locacoes, dataBase, fluxos),
+                    aluguel_locadas: doEmp.length ? round2(doEmp.reduce((a, l) => a + num(l.aluguelMensal), 0)) : null,
+                    aluguel_disponiveis: !aluguelDesconhecido && aluguelPedido.length
+                        ? round2(aluguelPedido.reduce((a, u) => a + num(u.rental_price), 0))
+                        : null,
+                    disponiveis_sem_aluguel: aluguelDesconhecido ? undefined : us.filter(disponivel).length - aluguelPedido.length,
+                    servico: e.objetivo === 'SERVICO'
+                        ? (e.project_id ? servicoPorObra?.get(e.project_id) ?? null : resumirServico([], new Map()))
+                        : undefined,
                     capa: fs[0]?.url ?? null,
                     fotos: fs.map(f => ({ url: f.url, legenda: f.legenda ?? null })),
                 };

@@ -16,6 +16,7 @@ import { formatMoney } from '../components/ui/Format';
 import { CENARIOS_ESTRESSE, estresseDaVersao, fluxosDaOperacao, resumoDaCapacidade } from '../utils/creditCapacity';
 import { fotosDoEmpreendimento, montarBook, urlsDasFotosDoBook } from '../utils/creditRoomBook';
 import { versaoDaPrevia } from '../utils/creditRoomPrevia';
+import type { SnapshotEmpreendimentoItem } from '../utils/creditRoomSnapshot';
 import {
     extrasPadrao, NOME_DE_CLIENTE, VALOR_MAXIMO_CONGELADO, versaoSchema1, versaoSchema2,
 } from './fixtures/creditRoomBookFixture';
@@ -261,5 +262,54 @@ describe('montarBook - book interno da prévia', () => {
         expect(texto(doc)).not.toContain('PRÉVIA');
         expect(texto(doc)).not.toContain('Prévia');
         expect(paginas(doc)[0]).toContain('Versão V3');
+    });
+});
+
+describe('montarBook - empreendimentos pelo objetivo', () => {
+    const base = versaoSchema2();
+    const e = (over: Partial<SnapshotEmpreendimentoItem>): SnapshotEmpreendimentoItem => ({
+        ...base.snapshot.empreendimentos![1], capa: null, fotos: [], ...over,
+    });
+    const livro = (emps: SnapshotEmpreendimentoItem[]) =>
+        texto(montarBook({ ...base, snapshot: { ...base.snapshot, empreendimentos: emps } }, extrasPadrao()));
+
+    it('vendas: VGV vendido e disponível, como sempre', () => {
+        const t = livro([e({ nome: 'Emp Vendas', objetivo: 'VENDAS', vgv_vendido: 7_000_000, vgv_disponivel: 2_000_000 })]);
+        expect(t).toContain('VGV vendido');
+        expect(t).toContain('VGV dispon');
+        expect(t).toContain(dinheiro(7_000_000));
+        expect(t).not.toContain('Unidades locadas');
+    });
+
+    it('locação: locadas e disponíveis com o aluguel; sem valor cadastrado aparece à parte', () => {
+        const t = livro([e({
+            nome: 'Emp Locacao', objetivo: 'LOCACAO', alugadas: 6, disponiveis: 4,
+            aluguel_locadas: 18_000, aluguel_disponiveis: 6_000, disponiveis_sem_aluguel: 2,
+        })]);
+        expect(t).toContain('Unidades locadas');
+        expect(t).toContain(`${dinheiro(18_000)}/m`);
+        expect(t).toContain('Unidades dispon');
+        expect(t).toContain(`${dinheiro(6_000)}/m`);
+        expect(t).toContain('Sem aluguel cadastrado');
+        expect(t).toContain('2 unidades');
+        expect(t).not.toContain('VGV vendido');
+    });
+
+    it('serviço: faturado e a faturar; sem contrato válido diz a frase; versão antiga é n/d', () => {
+        const com = livro([e({
+            nome: 'Emp Servico', objetivo: 'SERVICO',
+            servico: { n_contratos: 1, valor_contratos: 466_000, faturado: 100_000, a_faturar: 366_000 },
+        })]);
+        expect(com).toContain('Contrato faturado');
+        expect(com).toContain(dinheiro(100_000));
+        expect(com).toContain('Contrato a faturar');
+        expect(com).toContain(dinheiro(366_000));
+
+        const sem = livro([e({ nome: 'Emp Sem', objetivo: 'SERVICO', servico: { n_contratos: 0, valor_contratos: 0, faturado: 0, a_faturar: 0 } })]);
+        expect(sem).toContain('sem contrato de servi');
+
+        const antigo = livro([e({ nome: 'Emp Antigo', objetivo: 'SERVICO' })]);
+        expect(antigo).toContain('Contrato faturado');
+        expect(antigo).toContain('n/d');
     });
 });

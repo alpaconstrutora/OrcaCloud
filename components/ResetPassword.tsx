@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Lock, Loader2, AlertCircle, CheckCircle, Mail, ShieldAlert } from 'lucide-react';
 import Button from './ui/Button';
@@ -22,6 +22,12 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete, email, emailD
     const emailDaSessao = (email || '').trim().toLowerCase();
     const emailMostrado = emailDoLink || emailDaSessao;
     const sessaoDeOutraConta = !!emailDoLink && !!emailDaSessao && emailDaSessao !== emailDoLink;
+    // Logout com a tela aberta (nesta aba ou em outra — as abas dividem a sessão):
+    // a sessão que o link abriu acabou e não há conta onde gravar. Só conta depois
+    // de a sessão ter aparecido: ao abrir, ela chega um instante depois da tela.
+    const [sessaoJaVista, setSessaoJaVista] = useState(!!emailDaSessao);
+    useEffect(() => { if (emailDaSessao) setSessaoJaVista(true); }, [emailDaSessao]);
+    const sessaoEncerrada = sessaoJaVista && !emailDaSessao;
     const [loading, setLoading] = useState(false);
     const [password, setPassword] = useState('');
     const [confirmPassword, setConfirmPassword] = useState('');
@@ -44,8 +50,12 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete, email, emailD
             if (emailDoLink) {
                 const { data } = await supabase.auth.getUser();
                 const atual = (data.user?.email || '').toLowerCase();
+                if (!atual) {
+                    setErrorMessage('Você não está mais conectado (houve logout, nesta ou em outra aba). Nada foi gravado. Abra o link do e-mail de novo; se ele avisar que já foi usado, peça um novo.');
+                    return;
+                }
                 if (atual !== emailDoLink) {
-                    setErrorMessage(`Este navegador está conectado como ${atual || 'outra conta'}, não como ${emailDoLink}. Nada foi gravado. Feche as outras abas do sistema e abra o link do e-mail de novo.`);
+                    setErrorMessage(`Este navegador está conectado como ${atual}, não como ${emailDoLink}. Nada foi gravado. Feche as outras abas do sistema e abra o link do e-mail de novo.`);
                     return;
                 }
             }
@@ -89,6 +99,21 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete, email, emailD
                         <p className="text-sm text-gray-600">
                             Feche as outras abas do sistema e abra o link do e-mail de novo — ou abra o link numa janela anônima.
                         </p>
+                    </div>
+                ) : sessaoEncerrada && !success ? (
+                    <div className="space-y-4">
+                        <div className="bg-amber-50 border border-amber-200 text-amber-800 p-4 rounded-lg text-sm flex items-start gap-2">
+                            <ShieldAlert className="w-5 h-5 shrink-0" />
+                            <span>
+                                Você saiu da conta (logout, nesta ou em outra aba), e a sessão aberta por este link
+                                terminou. Nada será gravado aqui.
+                            </span>
+                        </div>
+                        <p className="text-sm text-gray-600">
+                            Abra o link do e-mail de novo para criar a senha de <strong>{emailDoLink || 'sua conta'}</strong>.
+                            Se ele avisar que já foi usado, peça um novo — em “Esqueceu a senha?”, na tela de login.
+                        </p>
+                        <Button onClick={onComplete} className="w-full">Ir para o login</Button>
                     </div>
                 ) : success ? (
                     <div className="text-center py-4">

@@ -1578,6 +1578,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     /** Rascunho da data em edição na tabela de parcelas do contrato (id + valor).
      *  Cada tecla ali seria um UPDATE no banco — ver a nota na própria célula. */
     const [entryDateDraft, setEntryDateDraft] = useState<{ id: string; value: string } | null>(null);
+    /** Idem para o valor do desconto: cada tecla gravava e já abria a pergunta
+     *  "Ajustar o Valor Total do Contrato?" no meio da digitação. */
+    const [entryDiscountDraft, setEntryDiscountDraft] = useState<{ id: string; value: string } | null>(null);
     /** Data do 1º Pagamento no momento em que o campo recebeu o foco — base de
      *  comparação para perguntar (uma vez, no blur) se as parcelas recalculam. */
     const dueDateAoFocar = useRef<string>('');
@@ -4539,13 +4542,27 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 <option value="VALUE">R$</option>
                                                 <option value="PERCENT">%</option>
                                             </select>
+                                            {/* Rascunho + gravação no blur/Enter, como o vencimento:
+                                                gravar a cada tecla abria "Ajustar o Valor Total do
+                                                Contrato?" no 1º dígito (desconto de 150 virava 1). */}
                                             {e.discount_type && (
                                                 <input
                                                     type="number" min="0" step="0.01"
-                                                    value={e.discount_amount ?? ''}
+                                                    value={entryDiscountDraft?.id === e.id
+                                                        ? entryDiscountDraft.value
+                                                        : (e.discount_amount ?? '')}
                                                     disabled={pago}
                                                     placeholder={e.discount_type === 'PERCENT' ? '%' : 'R$'}
-                                                    onChange={(ev) => patchContractEntry(e.id, { discount_amount: parseFloat(ev.target.value) || 0 })}
+                                                    onChange={(ev) => setEntryDiscountDraft({ id: e.id, value: ev.target.value })}
+                                                    onBlur={() => {
+                                                        const rascunho = entryDiscountDraft;
+                                                        setEntryDiscountDraft(null);
+                                                        if (!rascunho || rascunho.id !== e.id) return;
+                                                        const novo = parseFloat(rascunho.value) || 0;
+                                                        if (novo === (Number(e.discount_amount) || 0)) return;
+                                                        patchContractEntry(e.id, { discount_amount: novo });
+                                                    }}
+                                                    onKeyDown={(ev) => { if (ev.key === 'Enter') { ev.preventDefault(); ev.currentTarget.blur(); } }}
                                                     className={`${pago ? CELL_RO : CELL} w-24`}
                                                 />
                                             )}

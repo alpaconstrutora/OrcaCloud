@@ -5,6 +5,7 @@ import {
     mesesEntre,
     fimDaVigencia,
     mesesDaVigencia,
+    vigenciaParaOContrato,
     expandirBloco,
     agruparPlano,
     subtotalDoBloco,
@@ -418,5 +419,38 @@ describe('mesesDaVigencia', () => {
         expect(mesesDaVigencia('2016-09-23', '2016-09-23')).toBeNull();
         expect(mesesDaVigencia('', '2017-09-22')).toBeNull();
         expect(mesesDaVigencia('2016-09-23', '')).toBeNull();
+    });
+});
+
+/**
+ * Caso real (23/11/2026, CTL-006-012-0001): o contrato nasceu sem fim de
+ * vigência; o fim foi preenchido depois em "Dados do contrato" (que edita a
+ * negociação) e nunca chegou ao contrato — a aba Renovações, que lê o contrato,
+ * dizia "Preencha o fim da vigência" com o campo preenchido.
+ */
+describe('vigenciaParaOContrato', () => {
+    const negociacao = { date: '2016-09-23', end_date: '2019-03-22' };
+
+    it('contrato sem fim recebe o fim da negociação', () => {
+        expect(vigenciaParaOContrato(negociacao, { start_date: '2016-09-23', end_date: null }, false))
+            .toEqual({ end_date: '2019-03-22' });
+    });
+    it('início e fim alterados vão os dois', () => {
+        expect(vigenciaParaOContrato(negociacao, { start_date: '2016-10-01', end_date: '2017-09-22' }, false))
+            .toEqual({ start_date: '2016-09-23', end_date: '2019-03-22' });
+    });
+    it('já igual → null (não grava à toa)', () => {
+        expect(vigenciaParaOContrato(negociacao, { start_date: '2016-09-23', end_date: '2019-03-22' }, false)).toBeNull();
+    });
+    it('contrato RENOVADO → null: o fim passou a ser da renovação', () => {
+        expect(vigenciaParaOContrato(negociacao, { start_date: '2016-09-23', end_date: '2022-03-22' }, true)).toBeNull();
+    });
+    it('negociação com campo vazio nunca apaga o do contrato', () => {
+        expect(vigenciaParaOContrato({ date: '2025-08-01', end_date: null }, { start_date: '2025-08-01', end_date: '2028-07-31' }, false))
+            .toBeNull();
+    });
+    it('fim não posterior ao início não é levado (a tela já avisa)', () => {
+        expect(vigenciaParaOContrato({ date: '2016-09-23', end_date: '2016-09-01' }, { start_date: '2016-09-23', end_date: null }, false))
+            .toBeNull();
     });
 });

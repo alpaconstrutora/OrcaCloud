@@ -40,3 +40,10 @@ o valor real.
 **NO AR** (PR #659, squash 1a8a271; `conferir-producao.sh`: o domínio serve 1a8a271). Conferido em produção (22/11):
 a ficha da Garden SPE mostra a seção "Marketplace público" com o campo vazio (`https://orcacloud.vercel.app/m/`).
 Pendente (usuário): cadastrar o endereço da Garden SPE, salvar e abrir a vitrine (passo 16 do roteiro de teste).
+
+## Correção de 23/11 — caminho no aviso
+Pedido do usuário (23/11): "pode corrigir". O aviso âmbar do cadastro de oportunidade dizia "Minha Organização ›
+Organização › Marketplace público" e omitia o passo **Detalhes** (o menu `Organização` abre a LISTA; a seção fica na
+ficha aberta pelo botão "Detalhes" da linha — `OrganizationList.tsx` › `OrganizationDetail` › aba Organização).
+Texto novo: "Minha Organização › Organização › Detalhes da organização › Marketplace público"; o teste confere o caminho.
+Estado da Garden SPE em 23/11 (banco): `slug = garden-cambuhy` gravado pelo usuário pela tela.

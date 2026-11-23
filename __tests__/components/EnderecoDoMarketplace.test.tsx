@@ -86,6 +86,7 @@ describe('a oportunidade avisa quando a organização não tem vitrine', () => {
         useStore.setState({ organizations: [org()] });
         render(<OpportunityForm initial={{ title: 'Garden' }} organizationId="garden" onSave={vi.fn()} onClose={vi.fn()} />);
         expect(await screen.findByText(/ainda não tem endereço do marketplace/)).toBeTruthy();
+        expect(screen.getByText(/Minha Organização › Organização › Detalhes da organização › Marketplace público/)).toBeTruthy();
     });
 
     it('com endereço: mostra o link da vitrine', async () => {

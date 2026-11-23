@@ -1550,8 +1550,9 @@ com poucas linhas. No `StandardTable`, campo guardado que deixou de ser opção 
 "Todas") vale como sem agrupamento.
 
 Em 24/10/2026 para Financeiro › Conciliação Bancária › **Pendentes** (Extrato e Lançamentos, só no modo lista;
-`docs/planos/2026-10-24-conciliacao-pendentes-agrupar.md`). As duas tabelas ficam lado a lado, então o `AgruparControles`
-vai numa **linha própria** entre a toolbar e a tabela (a toolbar da meia-tela não comporta três controles a mais); o total
+`docs/planos/2026-10-24-conciliacao-pendentes-agrupar.md`). As duas tabelas ficam lado a lado; o `AgruparControles`
+nasceu numa linha própria e, desde 23/11/2026 (pedido do usuário, já com a ordem só no ícone), vai **na linha da busca**,
+antes da configuração de colunas — a linha do Extrato quebra (`flex-wrap`) e a busca guarda `min-w-[14rem]`; o total
 do grupo é o **saldo** (créditos − débitos), porque as listas misturam entrada e saída (`utils/pendentesGrupos.ts`).
 Desde 23/11/2026 a ordem dos grupos ali é **só o ícone** (`direcaoSoIcone`): botão `h-9 w-9` que alterna
 Crescente/Decrescente, com o sentido no `title` e no `aria-label` ("Ordem dos grupos: Crescente"). As demais telas

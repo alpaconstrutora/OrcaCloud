@@ -500,7 +500,7 @@ Deno), OpenWA 0.31.0 (Baileys) em Docker, worker Node (`.mjs`, sem build).
 
 ---
 
-### T1 — Regras puras do WhatsApp/OpenWA
+### Task 1 — Regras puras do WhatsApp/OpenWA
 
 **Arquivos:** criar `utils/whatsappOpenwa.ts` (sem `Deno.*`, só `globalThis.crypto`; imports internos com extensão `.ts`, como `utils/pedidoItemValor.ts`, porque as Edge Functions o importam por `../../../utils/whatsappOpenwa.ts`, igual ao `whatsapp-cloud` com `whatsappPedido.ts`); teste `__tests__/openwaPolitica.test.ts`.
 
@@ -545,7 +545,7 @@ export const JANELA_VINCULO_DIAS = 60;
 - [ ] **Passo 4** — mesmo comando → PASSA.
 - [ ] **Passo 5** — commit `feat(whatsapp): regras puras do envio pelo OpenWA`.
 
-### T2 — Banco: fila, conexão, uso por organização, campainha
+### Task 2 — Banco: fila, conexão, uso por organização, campainha
 
 **Arquivos:** modificar `utils/rotinasAutomaticas.ts` (CATALOGO); criar `supabase/migrations/aplicar_20271123100000_whatsapp_openwa.sql` (conferir antes com `ls supabase/migrations | grep 20271123` — nenhum outro com o prefixo); prova `scripts/teste-whatsapp-openwa.sql` (modelo: `scripts/teste-tarefas-superadmin.sql`, com `-- MIGRATION`, `pg_temp.confere`, `pg_temp.como`, `ROLLBACK`, linha final `TUDO OK`).
 
@@ -585,7 +585,7 @@ trigger wa_tocar_campainha AFTER INSERT ON wa_mensagens (direcao='saida' AND sta
 - [ ] **Passo 5** — `bash scripts/check-rls-postura.sh` sem achado novo; commit `feat(whatsapp): fila e conexão do OpenWA no banco`.
 - [ ] **Passo 6** — usuário aplica a migration (`npx supabase db query --linked -f supabase/migrations/aplicar_20271123100000_whatsapp_openwa.sql`); conferir com `SELECT policyname FROM pg_policies WHERE tablename LIKE 'wa_%'`.
 
-### T3 — Edge Function `whatsapp-openwa` (tela → fila)
+### Task 3 — Edge Function `whatsapp-openwa` (tela → fila)
 
 **Arquivos:** criar `supabase/functions/whatsapp-openwa/index.ts`; `supabase/config.toml` (`[functions.whatsapp-openwa] verify_jwt = true`, com comentário); criar `services/whatsappOpenwaService.ts`; teste `__tests__/whatsappOpenwaService.test.ts`.
 
@@ -601,7 +601,7 @@ trigger wa_tocar_campainha AFTER INSERT ON wa_mensagens (direcao='saida' AND sta
 - [ ] **Passo 2** — roda → FALHA. **Passo 3** — implementar service e function. **Passo 4** — roda → PASSA; `npx tsc --noEmit -p .` (ler exit por grep).
 - [ ] **Passo 5** — commit; usuário publica a function; provas: sem header → 401; usuário sem permissão (manual) → 403; pedido de fornecedor sem telefone → 422 e **nenhuma** linha nova em `wa_mensagens`.
 
-### T4 — Edge Function `whatsapp-openwa-worker` (máquina ↔ fila)
+### Task 4 — Edge Function `whatsapp-openwa-worker` (máquina ↔ fila)
 
 **Arquivos:** criar `supabase/functions/whatsapp-openwa-worker/index.ts`; `config.toml` (`verify_jwt = false` + comentário "gate = WA_WORKER_SECRET"); secret `WA_WORKER_SECRET` (≥ 32 caracteres, o usuário grava com `supabase secrets set`).
 
@@ -614,7 +614,7 @@ trigger wa_tocar_campainha AFTER INSERT ON wa_mensagens (direcao='saida' AND sta
 
 - [ ] **Passo 1** — commit; usuário publica e grava o secret. Provas (curl): sem header → 401; header errado → 401; `pegar` com fila vazia → `{itens:[]}`; com 1 pendente → item volta e a linha fica `enviando`; `reportar` com `httpStatus:503` e linha de 1 h → volta `pendente` com `proxima_tentativa_em` ≈ +30 s.
 
-### T5 — Edge Function `whatsapp-openwa-webhook` (OpenWA → app)
+### Task 5 — Edge Function `whatsapp-openwa-webhook` (OpenWA → app)
 
 **Arquivos:** criar `supabase/functions/whatsapp-openwa-webhook/index.ts`; `config.toml` (`verify_jwt = false` + "gate = HMAC"); secret `OPENWA_WEBHOOK_SECRET`.
 
@@ -631,7 +631,7 @@ trigger wa_tocar_campainha AFTER INSERT ON wa_mensagens (direcao='saida' AND sta
 
 - [ ] **Passo 1** — commit; usuário publica e grava o secret. Provas (curl com corpo assinado por `node -e`): assinatura errada → 401 e nada gravado; o mesmo evento 20× → 1 linha em `wa_eventos_recebidos` e 1 em `order_chats`; ack `delivered` depois de `read` → continua `lida`.
 
-### T6 — Permissão "Usar o WhatsApp da empresa"
+### Task 6 — Permissão "Usar o WhatsApp da empresa"
 
 **Arquivos:** `types/users.ts` (`canUseWhatsappEmpresa?: boolean`); `components/OrganizationUsers.tsx` (`baseViewer` com `false`; **depois** do `reduce` de owner/admin, `canUseWhatsappEmpresa: false` explícito; `DETAILED_PERMISSIONS` com `{ group: 'WhatsApp', title: 'Usar o WhatsApp da empresa', view: 'canUseWhatsappEmpresa' }`); criar `utils/permissaoWhatsappEmpresa.ts`; teste `__tests__/permissaoWhatsappEmpresa.test.ts`.
 
@@ -640,7 +640,7 @@ trigger wa_tocar_campainha AFTER INSERT ON wa_mensagens (direcao='saida' AND sta
 - [ ] **Passo 1** — testes: `getDefaultPermissions('owner'|'admin'|'member'|'viewer').canUseWhatsappEmpresa === false`; `podeUsarWhatsappEmpresa` true só com a flag `true` ou `acessoTotal`; `DETAILED_PERMISSIONS` tem a entrada no grupo `'WhatsApp'` (não em `'Geral'`).
 - [ ] **Passo 2** FALHA · **Passo 3** implementar · **Passo 4** PASSA · `check-ui-standard.sh components/OrganizationUsers.tsx` · **Passo 5** commit.
 
-### T7 — Pedido: botão, envio automático, situação e chat
+### Task 7 — Pedido: botão, envio automático, situação e chat
 
 **Arquivos:** criar `utils/canalWhatsappDoPedido.ts` + teste `__tests__/canalWhatsappDoPedido.test.ts`; modificar `components/SupplyChainOrderDetails.tsx` (`handleWhatsAppShare` ~944, card "Histórico de Notificações" ~2318), `services/orderService.ts:475-489`, `components/OrderChat.tsx`, `services/chatService.ts` (`canal` em `mapChatRow`/`CHAT_COLUMNS`), `components/notifications/notificationTypes.ts` (`whatsapp_resposta_pedido: { category: 'suprimentos', label: 'Resposta do fornecedor pelo WhatsApp' }`).
 
@@ -661,7 +661,7 @@ export function rotuloDaEntrega(status: StatusSaida, confirmacaoPendente: boolea
 - [ ] **Passo 1** — testes de `escolherCanalDoPedido` (as 6 combinações acima) e `rotuloDaEntrega` (os 7 status + `confirmacaoPendente`).
 - [ ] **Passo 2** FALHA · **Passo 3** implementar util e ligar nas telas · **Passo 4** PASSA · `tsc` · `check-ui-standard.sh` nos 2 `.tsx` · **Passo 5** commit.
 
-### T8 — Configurações › WhatsApp & Integrações: bloco do ÒPURA
+### Task 8 — Configurações › WhatsApp & Integrações: bloco do ÒPURA
 
 **Arquivos:** criar `components/settings/WhatsappOpenwaSettings.tsx`; montar em `components/Settings.tsx` (aba `whatsapp`, **acima** de `<WhatsappCloudSettings />`); teste `__tests__/components/WhatsappOpenwaSettings.test.tsx` (modelo: `__tests__/components/WhatsappCloudSettings.test.tsx`).
 
@@ -672,7 +672,7 @@ export function rotuloDaEntrega(status: StatusSaida, confirmacaoPendente: boolea
 - [ ] **Passo 1** — testes: membro comum vê situação e controles desligados com `title`; owner liga o uso → `definirUso(org, true, true)`; superadmin vê "Mensagens sem pedido"; `visto_em` de 5 min atrás → texto "Máquina fora".
 - [ ] **Passo 2** FALHA · **Passo 3** implementar · **Passo 4** PASSA · `check-ui-standard.sh` · `bash scripts/check-org-selector-guard.sh` · **Passo 5** commit.
 
-### T9 — Worker e Compose (`infra/openwa/`)
+### Task 9 — Worker e Compose (`infra/openwa/`)
 
 **Arquivos:** criar `infra/openwa/docker-compose.yml`, `infra/openwa/.env.example`, `infra/openwa/worker/{package.json,worker.mjs,nucleo.mjs,Dockerfile}`, `infra/openwa/LEIA-ME.md`; `.gitignore` (`infra/openwa/.env`, `infra/openwa/dados/`); teste `__tests__/openwaWorkerNucleo.test.ts`.
 
@@ -685,7 +685,7 @@ export function rotuloDaEntrega(status: StatusSaida, confirmacaoPendente: boolea
 - [ ] **Passo 1** — testes de `nucleo.mjs`: `Idempotency-Key` = `comando_id`; `linkPreview:false`; `ECONNREFUSED`→`recusada`; `AbortError`→`timeout`; `201 {messageId:'x'}` → `{httpStatus:201, messageId:'x', erro:null}`.
 - [ ] **Passo 2** FALHA · **Passo 3** implementar · **Passo 4** PASSA · `docker compose -f infra/openwa/docker-compose.yml config` sem erro · **Passo 5** commit.
 
-### T10 — Instalação na máquina (com o usuário)
+### Task 10 — Instalação na máquina (com o usuário)
 
 - [ ] **Passo 1** — `wsl --install -d Ubuntu-24.04 --name openwa` (ou import), `systemd=true` em `/etc/wsl.conf`, Docker Engine oficial dentro da distro. Prova: `wsl -d openwa -- docker info` responde com o Docker Desktop **fechado**.
 - [ ] **Passo 2** — tarefa agendada "ao iniciar o sistema", "executar estando o usuário conectado ou não": `wsl.exe -d openwa --exec /bin/sh -c "sleep infinity"` (mantém a distro viva) — prova: reiniciar **sem login** e, de outra máquina/celular, ver `visto_em` atualizando na tela de Configurações.
@@ -693,7 +693,7 @@ export function rotuloDaEntrega(status: StatusSaida, confirmacaoPendente: boolea
 - [ ] **Passo 4** — o usuário ativa o WhatsApp Business no chip (no celular que ficará na empresa), aquece alguns dias, e lê o QR no painel local. Prova: situação "Conectado · <número>" na tela.
 - [ ] **Passo 5** — usuário confere na BIOS "Restore AC Power Loss = Power On". Backup diário do `./dados` agendado (destino e retenção anotados no LEIA-ME).
 
-### T11 — Verificação de ponta a ponta e publicação
+### Task 11 — Verificação de ponta a ponta e publicação
 
 - [ ] **Passo 1** — `npx vitest run --project leves` (contar falhas por grep, não por tail); `npx tsc --noEmit`; `bash scripts/check-ui-standard.sh` nos `.tsx`; `bash scripts/check-org-selector-guard.sh`; `bash scripts/verificar-views-anon.sh`.
 - [ ] **Passo 2** — PR (rascunho) → CI verde (ler a lista do `pesados-quais`) → merge pelo fluxo do projeto (eu faço o merge) → `bash scripts/conferir-producao.sh`.

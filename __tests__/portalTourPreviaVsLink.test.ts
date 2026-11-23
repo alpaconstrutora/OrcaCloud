@@ -7,7 +7,8 @@
  * cromo de admin. Quando o tour passou a ter "modo prévia" (não abre sozinho,
  * não grava "já viu"), `modoPrevia={isPreview}` desligou o tour do LINK REAL.
  * Prévia do gestor = isPreview SEM token. O Fornecedor tem teste de
- * comportamento (SupplierPortalAjuda.test.tsx); o Corretor não tem harness de
+ * comportamento (SupplierPortalAjuda.test.tsx; o Cliente, ClientPortalAjuda.test.tsx,
+ * inclusive para assinar); o Corretor não tem harness de
  * componente, então o contrato fica preso aqui no código-fonte.
  */
 import { describe, it, expect } from 'vitest';
@@ -24,9 +25,20 @@ describe('modoPrevia exclui o acesso pelo link', () => {
     expect(app).toMatch(/<ClientArea[\s\S]{0,400}?portalToken=\{token\}[\s\S]{0,200}?isPreview/);
   });
 
-  it.each(['components/SupplierDashboard.tsx', 'components/BrokerPortal.tsx', 'components/ClientArea.tsx'])('%s: modoPrevia = isPreview && !portalToken', (f) => {
+  it.each(['components/SupplierDashboard.tsx', 'components/BrokerPortal.tsx'])('%s: modoPrevia = isPreview && !portalToken', (f) => {
     const fonte = ler(f);
     expect(fonte).toContain('modoPrevia={isPreview && !portalToken}');
     expect(fonte).not.toMatch(/modoPrevia=\{isPreview\}/);
+  });
+
+  // 22/11/2026: o cartão de assinar repetiu o erro (somenteLeitura={isPreview}) e o
+  // cliente do link via "Prévia do portal: só o cliente assina". A regra virou uma
+  // constante só, usada no tour E no assinar.
+  it('components/ClientArea.tsx: tour e assinar usam previaDoGestor = isPreview && !portalToken', () => {
+    const fonte = ler('components/ClientArea.tsx');
+    expect(fonte).toContain('const previaDoGestor = isPreview && !portalToken;');
+    expect(fonte).toContain('modoPrevia={previaDoGestor}');
+    expect(fonte).toContain('somenteLeitura={previaDoGestor}');
+    expect(fonte).not.toMatch(/(modoPrevia|somenteLeitura)=\{isPreview\}/);
   });
 });

@@ -24,6 +24,7 @@ import {
     saldoDoPlano,
     fimDaVigencia,
     mesesDaVigencia,
+    vigenciaParaOContrato,
     alvoDasCobrancasLancadas,
     somarDias,
     somarMeses,
@@ -2940,6 +2941,29 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 const contrato = await handleGenerateContract();
                 if (!contrato && erroContratoRef.current) {
                     notifyError(`Negociação salva, mas o contrato não foi gerado: ${erroContratoRef.current}`);
+                }
+            }
+
+            // Locação com contrato já gerado: a vigência de "Dados do contrato"
+            // é gravada na negociação, mas quem a lê é o CONTRATO (aba
+            // Renovações, fila de vencimentos). Sem isto, o fim preenchido
+            // depois de gerar o contrato nunca chegava a ele — "Preencha o fim
+            // da vigência" com o campo preenchido (CTL-006-012-0001, 23/11/2026).
+            // Contrato renovado fica de fora — ver vigenciaParaOContrato.
+            if (formData.type === 'RENTAL' && linkedContract) {
+                try {
+                    const cadeia = await contractRenewalService.getRenewalChain(linkedContract.id);
+                    const atual = cadeia.find(c => c.id === linkedContract.id) ?? cadeia[0];
+                    const aditivos = await contractService.listAddendums(linkedContract.id);
+                    const renovado = cadeia.length > 1
+                        || aditivos.some(a => a.new_start_date && a.status !== 'Cancelado');
+                    const patch = atual ? vigenciaParaOContrato(formData, atual, renovado) : null;
+                    if (patch) {
+                        await contractService.updateContract(linkedContract.id, patch);
+                        setLinkedContract(prev => (prev ? { ...prev, ...patch } : prev));
+                    }
+                } catch (err) {
+                    notifyError(`Negociação salva, mas a vigência não foi levada ao contrato: ${err instanceof Error ? err.message : 'erro desconhecido'}`);
                 }
             }
 

@@ -112,6 +112,33 @@ export function mesesDaVigencia(inicio: string, fim: string): number | null {
 }
 
 /**
+ * O que levar da vigência da negociação (aba Contrato › Dados do contrato) ao
+ * contrato de locação já gerado. `null` = nada a gravar.
+ *
+ * O contrato só recebia a vigência ao NASCER (`createFromDeal`); preenchida
+ * depois, ficava só na negociação, e quem lê o contrato (aba Renovações, fila
+ * de vencimentos) achava a vigência vazia. Caso real: CTL-006-012-0001.
+ *
+ * - Contrato RENOVADO não recebe nada: dali em diante o fim é da renovação
+ *   (aditivo avança `end_date`), e a negociação guarda o período original.
+ * - Campo vazio na negociação nunca apaga o do contrato.
+ * - Fim que não é posterior ao início não é levado (a tela já avisa).
+ */
+export function vigenciaParaOContrato(
+    negociacao: { date?: string | null; end_date?: string | null },
+    contrato: { start_date?: string | null; end_date?: string | null },
+    renovado: boolean,
+): { start_date?: string; end_date?: string } | null {
+    if (renovado) return null;
+    const inicio = (negociacao.date || '').slice(0, 10);
+    const fim = (negociacao.end_date || '').slice(0, 10);
+    const patch: { start_date?: string; end_date?: string } = {};
+    if (inicio && inicio !== (contrato.start_date || '').slice(0, 10)) patch.start_date = inicio;
+    if (fim && (!inicio || fim > inicio) && fim !== (contrato.end_date || '').slice(0, 10)) patch.end_date = fim;
+    return Object.keys(patch).length > 0 ? patch : null;
+}
+
+/**
  * Expande um bloco nas suas parcelas. `idBase` prefixa os ids para as linhas do
  * mesmo bloco continuarem reconhecíveis ao reagrupar.
  */

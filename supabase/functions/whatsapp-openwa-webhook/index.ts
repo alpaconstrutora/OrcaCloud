@@ -15,18 +15,22 @@
 //       menos quando há envio 'enviando' para o mesmo chatId (o ack chegou antes do
 //       relato do worker) → 500, e o OpenWA repete depois.
 //   • message.received — resposta do fornecedor (classificarEventoRecebido: grupo,
-//       transmissão, canal, @lid sem telefone → ignora). Candidatos = saídas
-//       aceita|entregue|lida de pedido para o mesmo telefone (variantesDoTelefoneBR:
-//       com e sem o nono dígito) nos últimos JANELA_VINCULO_DIAS, de TODAS as
-//       organizações (o número é um só); escolherVinculo decide — nunca por palpite.
+//       transmissão, canal, @lid sem telefone → ignora). Saídas de pedido para o
+//       mesmo telefone (variantesDoTelefoneBR: com e sem o nono dígito) nos últimos
+//       JANELA_VINCULO_DIAS, de TODAS as organizações (o número é um só): alvo de
+//       vínculo só aceita|entregue|lida; pendente|enviando|incerta só CONTAM a
+//       organização (outra org ali → sem vínculo, salvo citação). escolherVinculo
+//       decide — nunca por palpite.
 //         – com vínculo → wa_mensagens (entrada, org do pedido) + order_chats
 //           (sender_role supplier, canal whatsapp, sender_name = fornecedor,
 //           sender_email '') + aviso no sino para quem enviou (criado_por da saída).
 //         – sem vínculo → wa_mensagens com organization_id NULL, sem chat e sem
 //           aviso a nenhuma organização (triagem do superadmin na whatsapp-openwa).
 //       Mídia inline aceita (tipo na lista, ≤ 5 MiB) → bucket privado whatsapp-midia
-//       em <org|sem-org>/<wa_mensagens.id>/<nome seguro>; referência em
-//       wa_mensagens.midia. Omitida/grande ou tipo não aceito → só a linha no chat
+//       em <org|sem-org>/<wa_mensagens.id>/<nome seguro, extensão sempre a do tipo>;
+//       referência em wa_mensagens.midia. Conteúdo cujo começo não bate com o tipo
+//       declarado (conteudoConfereComTipo: magic bytes) conta como tipo não aceito.
+//       Omitida/grande ou tipo não aceito → só a linha no chat
 //       mandando abrir no celular (o OpenWA não é alcançável de fora: sem túnel).
 //   • session.status / session.disconnected → wa_conexoes.estado (estadoDaConexao);
 //       virou desconectado → aviso no sino para os superadmins (no máximo 1 a cada
@@ -53,6 +57,22 @@
 //      desfaz a resposta gravada).
 //   7. 2xx só depois das gravações; erro de banco → 500 (o OpenWA repete).
 //
+// ⚠️ RISCO ACEITO NO PILOTO — dedup órfã em morte dura do isolate:
+//   O QUE PODE ACONTECER: se o isolate for morto (limite de CPU/memória/tempo,
+//   redeploy, queda do runtime) DEPOIS do INSERT da dedup e ANTES de terminar, o
+//   catch não roda, a linha de dedup fica e toda repetição do OpenWA recebe 200
+//   "duplicado" — o evento se perde em silêncio (resposta do fornecedor fora do
+//   chat do pedido; ack sem efeito; estado da sessão desatualizado).
+//   POR QUE ACEITO: é raro (o processamento é curto, e o pior caso é a mídia de
+//   5 MiB), a resposta continua no celular do número, e o ack/estado se corrigem
+//   no próximo evento ou no "vivo" do worker. Corrigir de verdade pede gravação
+//   transacional (RPC única) ou dedup com estado "processando" + expiração —
+//   fica para depois do piloto.
+//   COMO DETECTAR: comparar o log de entregas do OpenWA (eventos message.received
+//   entregues com 200) com wa_mensagens (direcao='entrada', provider_message_id =
+//   data.id): evento entregue sem linha correspondente = perdido; a chave dele
+//   está em wa_eventos_recebidos.chave_evento.
+//
 // REGRA #7, pergunta 3: verify_jwt = false (supabase/config.toml) — o OpenWA não tem
 // JWT. O gate é o código: HMAC-SHA256 do corpo com OPENWA_WEBHOOK_SECRET, conferido
 // em tempo constante antes de tudo. Depois de publicar, provar contra o bundle
@@ -64,7 +84,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import {
-    CORPO_WEBHOOK_MAX_BYTES, JANELA_VINCULO_DIAS, MIDIA_MAX_BYTES,
+    CORPO_WEBHOOK_MAX_BYTES, JANELA_VINCULO_DIAS, MIDIA_MAX_BYTES, STATUS_ALVO_DE_VINCULO, STATUS_QUE_CONTAM_ORG,
     assinaturaConfere, avancarStatus, avisoDaResposta, candidatoDoVinculo, classificarEventoRecebido,
     deveAvisarDesconexao, escolherVinculo, espelhoDoAckNoLog, estadoDoEventoDeSessao, eventoVelhoDemais,
     idCurtoDaMensagem, idsDeMensagemIguais, statusDoAck, variantesDoTelefoneBR,
@@ -277,14 +297,17 @@ async function processarRecebida(admin: Admin, env: Envelope): Promise<Record<st
     const ev = classificarEventoRecebido(env.data);
     if (ev.tipo === 'ignorar') return { ignorado: ev.motivo };
 
-    // Candidatos de TODAS as organizações: o número é um só. Quem decide é escolherVinculo.
+    // Saídas de TODAS as organizações: o número é um só. Quem decide é escolherVinculo.
+    // Lidas em STATUS_QUE_CONTAM_ORG (inclui pendente/enviando/incerta): só
+    // aceita|entregue|lida são alvo de vínculo, mas toda org com envio àquele
+    // telefone conta — senão a resposta ao pedido "incerto" da org B cairia na org A.
     const desde = new Date(Date.now() - JANELA_VINCULO_DIAS * 86400_000).toISOString();
     const { data: saidas, error: eCand } = await admin
         .from('wa_mensagens')
-        .select('id, organization_id, entidade_id, provider_message_id, criado_em, criado_por')
+        .select('id, organization_id, entidade_id, provider_message_id, criado_em, criado_por, status')
         .eq('direcao', 'saida')
         .eq('entidade_tipo', 'purchase_order')
-        .in('status', ['aceita', 'entregue', 'lida'])
+        .in('status', STATUS_QUE_CONTAM_ORG)
         .in('telefone', variantesDoTelefoneBR(ev.telefone))
         .gte('criado_em', desde)
         .not('entidade_id', 'is', null)
@@ -293,14 +316,16 @@ async function processarRecebida(admin: Admin, env: Envelope): Promise<Record<st
     if (eCand) falha('procurar os pedidos enviados ao telefone', eCand);
     const linhas = (saidas ?? []) as {
         id: string; organization_id: string; entidade_id: string; provider_message_id: string | null;
-        criado_em: string; criado_por: string | null;
+        criado_em: string; criado_por: string | null; status: StatusSaida;
     }[];
-    const candidatos: CandidatoComAutor[] = linhas.map((l) => ({
+    const alvos = linhas.filter((l) => STATUS_ALVO_DE_VINCULO.includes(l.status));
+    const outrasOrgs = linhas.filter((l) => !STATUS_ALVO_DE_VINCULO.includes(l.status)).map((l) => l.organization_id);
+    const candidatos: CandidatoComAutor[] = alvos.map((l) => ({
         id: l.id, criadoPor: l.criado_por, organizationId: l.organization_id, orderId: l.entidade_id,
         providerMessageId: l.provider_message_id, enviadoEm: l.criado_em,
     }));
 
-    let vinculo: Vinculo = escolherVinculo(candidatos, ev.citadoId);
+    let vinculo: Vinculo = escolherVinculo(candidatos, ev.citadoId, outrasOrgs);
     // Lista cortada no teto: outra organização pode ter ficado de fora → "único" não é certo.
     if (vinculo.tipo === 'unico' && linhas.length >= CANDIDATOS_MAX) vinculo = { tipo: 'sem_vinculo' };
 

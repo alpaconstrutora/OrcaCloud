@@ -15,6 +15,7 @@ import {
     telefoneDoRemetente,
     // Task 5 — webhook do OpenWA
     CORPO_WEBHOOK_MAX_BYTES, MIDIA_MAX_BYTES, avisoDaResposta, candidatoDoVinculo, classificarEventoRecebido,
+    conteudoConfereComTipo, STATUS_ALVO_DE_VINCULO, STATUS_QUE_CONTAM_ORG,
     decidirMidia, deveAvisarDesconexao, espelhoDoAckNoLog, estadoDoEventoDeSessao, eventoVelhoDemais,
     idCurtoDaMensagem, linhaDaMidia, nomeSeguroDoArquivo, normalizarMimetype, tamanhoDoBase64,
     variantesDoTelefoneBR,
@@ -197,6 +198,19 @@ describe('escolherVinculo', () => {
         expect(escolherVinculo([], null)).toEqual({ tipo: 'sem_vinculo' });
         expect(escolherVinculo([], 'AAA')).toEqual({ tipo: 'sem_vinculo' });
     });
+    it('org B com envio incerta/enviando (fora da lista de vínculo) + org A aceita, sem citação → sem vínculo', () => {
+        const lista = [c('orgA', 'pA', 'true_5511@c.us_AAA', '2026-11-20T10:00:00Z')];
+        expect(escolherVinculo(lista, null, ['orgB'])).toEqual({ tipo: 'sem_vinculo' });
+        // A própria org A nos ocupados não muda nada.
+        expect(escolherVinculo(lista, null, ['orgA'])).toEqual({ tipo: 'unico', organizationId: 'orgA', orderId: 'pA' });
+    });
+    it('mesma situação, mas citando a mensagem da org A → A (a citação vence)', () => {
+        const lista = [c('orgA', 'pA', 'true_5511@c.us_AAA', '2026-11-20T10:00:00Z')];
+        expect(escolherVinculo(lista, 'AAA', ['orgB'])).toEqual({ tipo: 'citacao', organizationId: 'orgA', orderId: 'pA' });
+    });
+    it('só envio incerta (nenhum alvo de vínculo) → sem vínculo', () => {
+        expect(escolherVinculo([], null, ['orgA'])).toEqual({ tipo: 'sem_vinculo' });
+    });
     it('janela de 60 dias', () => {
         expect(JANELA_VINCULO_DIAS).toBe(60);
     });
@@ -369,6 +383,22 @@ describe('idCurtoDaMensagem', () => {
 
 describe('mídia do message.received', () => {
     const b64 = (n: number) => Buffer.alloc(n, 7).toString('base64');
+    /** Arquivo de `n` bytes com a assinatura (magic bytes) do tipo no começo. */
+    const MAGICO: Record<string, number[]> = {
+        'application/pdf': [0x25, 0x50, 0x44, 0x46, 0x2d],
+        'image/jpeg': [0xff, 0xd8, 0xff, 0xe0],
+        'image/png': [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a],
+        'image/webp': [0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4, 0x57, 0x45, 0x42, 0x50],
+        'audio/ogg': [0x4f, 0x67, 0x67, 0x53],
+        'audio/mpeg': [0x49, 0x44, 0x33],
+        'video/mp4': [0, 0, 0, 0x20, 0x66, 0x74, 0x79, 0x70],
+    };
+    const arquivo = (tipo: string, n: number) => {
+        const b = Buffer.alloc(n, 7);
+        Buffer.from(MAGICO[tipo]).copy(b);
+        return b;
+    };
+    const b64De = (tipo: string, n: number) => arquivo(tipo, n).toString('base64');
 
     it('normalizarMimetype tira parâmetros e caixa', () => {
         expect(normalizarMimetype('audio/ogg; codecs=opus')).toBe('audio/ogg');
@@ -385,8 +415,8 @@ describe('mídia do message.received', () => {
         expect(tamanhoDoBase64('')).toBeNull();
     });
     it('inline aceito e dentro do limite → gravar', () => {
-        const d = decidirMidia({ mimetype: 'image/jpeg', data: b64(1000), filename: 'foto.jpg' });
-        expect(d).toEqual({ acao: 'gravar', mimetype: 'image/jpeg', base64: b64(1000), bytes: 1000, nome: 'foto.jpg' });
+        const d = decidirMidia({ mimetype: 'image/jpeg', data: b64De('image/jpeg', 1000), filename: 'foto.jpg' });
+        expect(d).toEqual({ acao: 'gravar', mimetype: 'image/jpeg', base64: b64De('image/jpeg', 1000), bytes: 1000, nome: 'foto.jpg' });
     });
     it('inline acima de 5 MiB → grande; omitido → grande', () => {
         expect(decidirMidia({ mimetype: 'application/pdf', data: b64(MIDIA_MAX_BYTES + 1) }))
@@ -402,7 +432,29 @@ describe('mídia do message.received', () => {
         expect(decidirMidia({ data: b64(10) })).toEqual({ acao: 'tipo_nao_aceito', mimetype: 'desconhecido' });
     });
     it('áudio de voz (audio/ogg; codecs=opus) é aceito', () => {
-        expect(decidirMidia({ mimetype: 'audio/ogg; codecs=opus', data: b64(10) })?.acao).toBe('gravar');
+        expect(decidirMidia({ mimetype: 'audio/ogg; codecs=opus', data: b64De('audio/ogg', 10) })?.acao).toBe('gravar');
+    });
+    it('conteúdo que não bate com o tipo declarado → tipo_nao_aceito (ex.: executável dito PDF)', () => {
+        const exe = Buffer.concat([Buffer.from('MZ'), Buffer.alloc(100, 0)]).toString('base64');
+        expect(decidirMidia({ mimetype: 'application/pdf', data: exe, filename: 'Orcamento.pdf.exe' }))
+            .toEqual({ acao: 'tipo_nao_aceito', mimetype: 'application/pdf' });
+        expect(decidirMidia({ mimetype: 'image/png', data: b64De('image/jpeg', 50) }))
+            .toEqual({ acao: 'tipo_nao_aceito', mimetype: 'image/png' });
+    });
+    it('conteudoConfereComTipo: cada tipo aceito pela assinatura, e recusa trocado/curto/desconhecido', () => {
+        for (const tipo of Object.keys(MAGICO)) {
+            expect(conteudoConfereComTipo(new Uint8Array(arquivo(tipo, 32)), tipo), tipo).toBe(true);
+        }
+        // MP3 sem ID3: começa direto no frame (FF Fx / FF Ex).
+        expect(conteudoConfereComTipo(new Uint8Array([0xff, 0xfb, 0x90, 0x44, 0, 0]), 'audio/mpeg')).toBe(true);
+        expect(conteudoConfereComTipo(new Uint8Array([0xff, 0x1b, 0x90, 0x44, 0, 0]), 'audio/mpeg')).toBe(false);
+        expect(conteudoConfereComTipo(new Uint8Array(arquivo('image/jpeg', 32)), 'application/pdf')).toBe(false);
+        expect(conteudoConfereComTipo(new Uint8Array(arquivo('audio/ogg', 32)), 'video/mp4')).toBe(false);
+        // RIFF que não é WEBP (WAV/AVI).
+        const wav = Buffer.from([0x52, 0x49, 0x46, 0x46, 1, 2, 3, 4, 0x57, 0x41, 0x56, 0x45]);
+        expect(conteudoConfereComTipo(new Uint8Array(wav), 'image/webp')).toBe(false);
+        expect(conteudoConfereComTipo(new Uint8Array([0x25, 0x50]), 'application/pdf')).toBe(false);
+        expect(conteudoConfereComTipo(new Uint8Array(arquivo('application/pdf', 32)), 'text/html')).toBe(false);
     });
     it('sem dado e sem marcador, ou base64 inválido → indisponivel; sem mídia → null', () => {
         expect(decidirMidia({ mimetype: 'image/png' })).toEqual({ acao: 'indisponivel', mimetype: 'image/png' });
@@ -411,7 +463,10 @@ describe('mídia do message.received', () => {
         expect(decidirMidia(null)).toBeNull();
     });
     it('nomeSeguroDoArquivo: sem caminho, sem caractere estranho, com extensão de reserva', () => {
-        expect(nomeSeguroDoArquivo('../../etc/passwd', 'application/pdf')).toBe('passwd');
+        expect(nomeSeguroDoArquivo('../../etc/passwd', 'application/pdf')).toBe('passwd.pdf');
+        // Extensão sempre a do tipo: a do remetente sai (e o ponto interno vira _).
+        expect(nomeSeguroDoArquivo('Orcamento.pdf.exe', 'application/pdf')).toBe('Orcamento_pdf.pdf');
+        expect(nomeSeguroDoArquivo('foto.PNG', 'image/jpeg')).toBe('foto.jpg');
         expect(nomeSeguroDoArquivo('Orçamento final (2).pdf', 'application/pdf')).toBe('Or_amento_final_2_.pdf');
         expect(nomeSeguroDoArquivo(undefined, 'image/jpeg')).toBe('arquivo.jpg');
         expect(nomeSeguroDoArquivo('...', 'audio/ogg')).toBe('arquivo.ogg');
@@ -470,13 +525,20 @@ describe('classificarEventoRecebido', () => {
         expect(v.tipo === 'mensagem' && v.texto).toBe('Fornecedor enviou uma mensagem sem texto (location); abrir no celular do número.');
     });
     it('mídia: legenda vai depois da linha do arquivo; corpo que é o próprio base64 é descartado', () => {
-        const media = { mimetype: 'image/jpeg', data: Buffer.alloc(30, 1).toString('base64') };
+        const media = { mimetype: 'image/jpeg', data: Buffer.from([0xff, 0xd8, 0xff, 0xe0, ...Array(26).fill(1)]).toString('base64') };
         const r = classificarEventoRecebido({ ...base, type: 'image', body: 'nota fiscal', media });
         expect(r.tipo === 'mensagem' && r.texto).toBe('Fornecedor enviou um arquivo (imagem)\nnota fiscal');
         expect(r.tipo === 'mensagem' && r.midia?.acao).toBe('gravar');
         const lixo = Buffer.alloc(400, 3).toString('base64');
         const s = classificarEventoRecebido({ ...base, type: 'image', body: lixo, media });
         expect(s.tipo === 'mensagem' && s.texto).toBe('Fornecedor enviou um arquivo (imagem)');
+    });
+});
+
+describe('status do vínculo', () => {
+    it('alvo = aceita|entregue|lida; contam organização também pendente|enviando|incerta', () => {
+        expect([...STATUS_ALVO_DE_VINCULO]).toEqual(['aceita', 'entregue', 'lida']);
+        expect([...STATUS_QUE_CONTAM_ORG]).toEqual(['pendente', 'enviando', 'incerta', 'aceita', 'entregue', 'lida']);
     });
 });
 

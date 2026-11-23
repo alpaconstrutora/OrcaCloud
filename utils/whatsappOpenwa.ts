@@ -372,6 +372,18 @@ export type Vinculo = { tipo: 'citacao' | 'unico'; organizationId: string; order
 /** Quantos dias para trás procurar pedidos enviados àquele telefone (quem chama filtra). */
 export const JANELA_VINCULO_DIAS = 60;
 
+/** Status de saída que podem receber a resposta (o fornecedor de fato recebeu a mensagem). */
+export const STATUS_ALVO_DE_VINCULO: readonly StatusSaida[] = Object.freeze(['aceita', 'entregue', 'lida'] as StatusSaida[]);
+/**
+ * Status de saída que CONTAM a organização na regra "uma só organização":
+ * também pendente/enviando/incerta — o fornecedor pode ter recebido (incerta) ou
+ * estar para receber a mensagem de outra empresa; contar só as aceitas
+ * vincularia a resposta dela a outra organização.
+ */
+export const STATUS_QUE_CONTAM_ORG: readonly StatusSaida[] = Object.freeze(
+    ['pendente', 'enviando', 'incerta', 'aceita', 'entregue', 'lida'] as StatusSaida[],
+);
+
 /**
  * A qual pedido (e organização) pertence a resposta do fornecedor.
  * `candidatos` = mensagens de pedido enviadas àquele telefone dentro da janela.
@@ -379,8 +391,12 @@ export const JANELA_VINCULO_DIAS = 60;
  *   2. senão, uma só organização na lista → o pedido mais recente dela;
  *   3. senão (nenhuma ou mais de uma) → sem vínculo (triagem do superadmin).
  * Citação que não casa com nenhum candidato → sem vínculo (não cai na regra 2).
+ * `outrasOrgs` = organizações com saída àquele telefone na janela em status que
+ * não é alvo de vínculo (pendente/enviando/incerta — STATUS_QUE_CONTAM_ORG):
+ * não recebem a resposta, mas contam na regra 2 — uma segunda organização ali
+ * → sem vínculo. A citação (regra 1) continua vencendo.
  */
-export function escolherVinculo(candidatos: Candidato[], citadoId: string | null): Vinculo {
+export function escolherVinculo(candidatos: Candidato[], citadoId: string | null, outrasOrgs: Iterable<string> = []): Vinculo {
     if (citadoId) {
         const citado = candidatos.find((c) => c.providerMessageId && idsDeMensagemIguais(c.providerMessageId, citadoId));
         if (citado) return { tipo: 'citacao', organizationId: citado.organizationId, orderId: citado.orderId };
@@ -388,7 +404,9 @@ export function escolherVinculo(candidatos: Candidato[], citadoId: string | null
         // a resposta é sobre outra coisa — cair na regra 2 seria vincular por palpite.
         return { tipo: 'sem_vinculo' };
     }
+    if (candidatos.length === 0) return { tipo: 'sem_vinculo' };
     const orgs = new Set(candidatos.map((c) => c.organizationId));
+    for (const o of outrasOrgs) orgs.add(o);
     if (orgs.size !== 1) return { tipo: 'sem_vinculo' };
     const instante = (c: Candidato) => {
         const t = Date.parse(c.enviadoEm);
@@ -461,18 +479,55 @@ export function tamanhoDoBase64(b64: unknown): number | null {
 
 /**
  * Nome de arquivo seguro para o caminho no bucket: só o último pedaço (sem
- * pasta), só `[A-Za-z0-9._-]`, sem ponto no começo, até 100 caracteres
- * (preservando a extensão). Vazio → `arquivo.<extensão do tipo>`.
+ * pasta), sem a extensão do remetente (`Orcamento.pdf.exe` → `Orcamento_pdf`),
+ * só `[A-Za-z0-9_-]`, e a extensão SEMPRE a do tipo (EXTENSAO_DO_TIPO) — o nome
+ * escolhido por quem manda não decide como o arquivo abre. Até 100 caracteres.
+ * Vazio → `arquivo.<extensão do tipo>`.
  */
 export function nomeSeguroDoArquivo(nome: unknown, mimetype: string): string {
+    const ext = EXTENSAO_DO_TIPO[mimetype] ?? 'bin';
     const ultimo = (typeof nome === 'string' ? nome : '').split(/[\\/]/).pop() ?? '';
-    let n = ultimo.replace(/[^A-Za-z0-9._-]/g, '_').replace(/_+/g, '_').replace(/^[._]+/, '');
-    if (!n || !/[A-Za-z0-9]/.test(n)) return `arquivo.${EXTENSAO_DO_TIPO[mimetype] ?? 'bin'}`;
-    if (n.length > 100) {
-        const ext = /\.[A-Za-z0-9]{1,10}$/.exec(n)?.[0] ?? '';
-        n = n.slice(0, 100 - ext.length) + ext;
+    const semExtensao = ultimo.replace(/\.[^.]*$/, '');
+    const base = semExtensao.replace(/[^A-Za-z0-9_-]/g, '_').replace(/_+/g, '_').replace(/^[_-]+/, '');
+    if (!base || !/[A-Za-z0-9]/.test(base)) return `arquivo.${ext}`;
+    return `${base.slice(0, 100 - ext.length - 1)}.${ext}`;
+}
+
+function comeca(b: Uint8Array, assinatura: number[], deslocamento = 0): boolean {
+    if (b.length < deslocamento + assinatura.length) return false;
+    return assinatura.every((v, i) => b[deslocamento + i] === v);
+}
+
+/**
+ * O conteúdo bate com o tipo declarado? Confere a assinatura (magic bytes) do
+ * começo do arquivo para cada tipo de TIPOS_DE_MIDIA_ACEITOS. Tipo fora da
+ * lista → false. O mimetype quem escolhe é o remetente; o conteúdo, não.
+ */
+export function conteudoConfereComTipo(bytes: Uint8Array, mimetype: string): boolean {
+    switch (mimetype) {
+        case 'application/pdf': return comeca(bytes, [0x25, 0x50, 0x44, 0x46]); // %PDF
+        case 'image/jpeg': return comeca(bytes, [0xff, 0xd8, 0xff]);
+        case 'image/png': return comeca(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+        case 'image/webp': // RIFF....WEBP
+            return comeca(bytes, [0x52, 0x49, 0x46, 0x46]) && comeca(bytes, [0x57, 0x45, 0x42, 0x50], 8);
+        case 'audio/ogg': return comeca(bytes, [0x4f, 0x67, 0x67, 0x53]); // OggS
+        case 'audio/mpeg': // ID3, ou direto no frame (sincronismo de 11 bits: FF Ex / FF Fx)
+            return comeca(bytes, [0x49, 0x44, 0x33]) || (bytes.length >= 2 && bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0);
+        case 'video/mp4': return comeca(bytes, [0x66, 0x74, 0x79, 0x70], 4); // 'ftyp' no byte 4
+        default: return false;
     }
-    return n;
+}
+
+/** Primeiros bytes (até 18) do base64, sem decodificar o resto. Ilegível → vazio. */
+function primeirosBytesDoBase64(b64: string): Uint8Array {
+    try {
+        let pedaco = b64.slice(0, 24);
+        if (pedaco.length % 4 !== 0) pedaco = pedaco.padEnd(pedaco.length + (4 - (pedaco.length % 4)), '=');
+        const bin = globalThis.atob(pedaco);
+        return Uint8Array.from(bin, (ch) => ch.charCodeAt(0));
+    } catch {
+        return new Uint8Array(0);
+    }
 }
 
 export type DecisaoDeMidia =
@@ -488,6 +543,7 @@ export type DecisaoDeMidia =
  *   · tipo fora de TIPOS_DE_MIDIA_ACEITOS → tipo_nao_aceito (vem antes do tamanho);
  *   · `omitted` (acima do limite do OpenWA) ou acima de 5 MiB → grande;
  *   · sem dado ou base64 ilegível → indisponivel;
+ *   · começo do arquivo não bate com o tipo (conteudoConfereComTipo) → tipo_nao_aceito;
  *   · senão → gravar.
  */
 export function decidirMidia(media: unknown): DecisaoDeMidia | null {
@@ -499,7 +555,9 @@ export function decidirMidia(media: unknown): DecisaoDeMidia | null {
     const bytes = tamanhoDoBase64(m.data);
     if (bytes === null) return { acao: 'indisponivel', mimetype };
     if (bytes > MIDIA_MAX_BYTES) return { acao: 'grande', mimetype };
-    return { acao: 'gravar', mimetype, base64: base64Limpo(m.data as string), bytes, nome: nomeSeguroDoArquivo(m.filename, mimetype) };
+    const base64 = base64Limpo(m.data as string);
+    if (!conteudoConfereComTipo(primeirosBytesDoBase64(base64), mimetype)) return { acao: 'tipo_nao_aceito', mimetype };
+    return { acao: 'gravar', mimetype, base64, bytes, nome: nomeSeguroDoArquivo(m.filename, mimetype) };
 }
 
 function rotuloDoTipo(mimetype: string): string {

@@ -3701,9 +3701,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </h4>
                             </div>
                         )}
-                        <div className={useAcoplada
-                            ? "flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white"
-                            : "flex flex-wrap justify-between items-center gap-y-2 px-4"}>
+                        {/* Pendentes (meia-tela) quebra a linha: com o Agrupar na linha da busca, sem
+                            quebrar a busca encolhia a quase nada em tela estreita — ela guarda 14rem. */}
+                        <div className={!useAcoplada
+                            ? "flex flex-wrap justify-between items-center gap-y-2 px-4"
+                            : activeView === 'pending'
+                                ? "flex flex-wrap gap-2.5 items-center p-2 border-b border-gray-100 bg-white"
+                                : "flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white"}>
                             {!useAcoplada && (
                             <h4 className="text-xs font-black text-gray-400 flex items-center gap-2">
                                 <Download className="w-4 h-4" />
@@ -3711,7 +3715,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             </h4>
                             )}
                             {useAcoplada && (
-                            <div className="flex-1 relative w-full order-1">
+                            <div className={`flex-1 relative w-full order-1 ${activeView === 'pending' ? 'min-w-[14rem]' : ''}`}>
                                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
@@ -3841,6 +3845,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         title="Agrupar o extrato"
                                     />
                                 )}
+                                {/* Pendentes: Agrupar na linha da busca (pedido de 23/11/2026; antes, linha própria). */}
+                                {activeView === 'pending' && pendentesViewMode === 'list' && (
+                                    <AgruparControles
+                                        opcoes={OPCOES_AGRUPAR_EXTRATO}
+                                        campo={agrupExtrato.campo}
+                                        onCampo={agrupExtrato.setCampo}
+                                        direcao={agrupExtrato.direcao}
+                                        onDirecao={agrupExtrato.setDirecao}
+                                        direcaoSoIcone
+                                        chavesDosGrupos={gruposExtrato.map(g => g.key)}
+                                        algumRecolhido={agrupExtrato.recolhidos.size > 0}
+                                        onAlternarTodos={agrupExtrato.alternarTodos}
+                                        title="Agrupar os extratos"
+                                    />
+                                )}
                                 {activeView === 'statement' && (
                                     <button
                                         onClick={loadTransactions}
@@ -3938,25 +3957,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 )}
                             </div>
                         </div>
-
-                        {/* Agrupar (§6.12) — numa linha própria: a toolbar de cima já ocupa a meia-tela
-                            da Pendentes e três controles a mais estourariam a largura. */}
-                        {activeView === 'pending' && pendentesViewMode === 'list' && (
-                            <div className="flex items-center gap-2 px-2 py-2 border-b border-gray-100 bg-white">
-                                <AgruparControles
-                                    opcoes={OPCOES_AGRUPAR_EXTRATO}
-                                    campo={agrupExtrato.campo}
-                                    onCampo={agrupExtrato.setCampo}
-                                    direcao={agrupExtrato.direcao}
-                                    onDirecao={agrupExtrato.setDirecao}
-                                    direcaoSoIcone
-                                    chavesDosGrupos={gruposExtrato.map(g => g.key)}
-                                    algumRecolhido={agrupExtrato.recolhidos.size > 0}
-                                    onAlternarTodos={agrupExtrato.alternarTodos}
-                                    title="Agrupar os extratos"
-                                />
-                            </div>
-                        )}
 
                         <div className={activeView === 'statement' ? '' : `min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : 'bg-transparent'}`}>
                             {activeView === 'statement' ? (
@@ -4579,6 +4579,21 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             </button>
                                         )}
                                     </div>
+                                    {/* Agrupar na linha da busca (pedido de 23/11/2026; antes, linha própria). */}
+                                    {pendentesViewMode === 'list' && (
+                                        <AgruparControles
+                                            opcoes={OPCOES_AGRUPAR_LANCAMENTO}
+                                            campo={agrupLanc.campo}
+                                            onCampo={agrupLanc.setCampo}
+                                            direcao={agrupLanc.direcao}
+                                            onDirecao={agrupLanc.setDirecao}
+                                            direcaoSoIcone
+                                            chavesDosGrupos={gruposLanc.map(g => g.key)}
+                                            algumRecolhido={agrupLanc.recolhidos.size > 0}
+                                            onAlternarTodos={agrupLanc.alternarTodos}
+                                            title="Agrupar os lançamentos"
+                                        />
+                                    )}
                                     {pendentesViewMode === 'list' && (
                                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                             <ColumnConfigButton
@@ -4603,23 +4618,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </div>
                             </div>
                         </div>
-
-                        {pendentesViewMode === 'list' && (
-                            <div className="flex items-center gap-2 px-2 py-2 border-b border-gray-100 bg-white">
-                                <AgruparControles
-                                    opcoes={OPCOES_AGRUPAR_LANCAMENTO}
-                                    campo={agrupLanc.campo}
-                                    onCampo={agrupLanc.setCampo}
-                                    direcao={agrupLanc.direcao}
-                                    onDirecao={agrupLanc.setDirecao}
-                                    direcaoSoIcone
-                                    chavesDosGrupos={gruposLanc.map(g => g.key)}
-                                    algumRecolhido={agrupLanc.recolhidos.size > 0}
-                                    onAlternarTodos={agrupLanc.alternarTodos}
-                                    title="Agrupar os lançamentos"
-                                />
-                            </div>
-                        )}
 
                         <div className={`min-h-[400px] ${pendentesViewMode === 'grid' ? 'bg-transparent border-none shadow-none' : 'bg-transparent'}`}>
                             {internalTransactions.length === 0 ? (

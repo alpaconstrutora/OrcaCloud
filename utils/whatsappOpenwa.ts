@@ -261,6 +261,46 @@ export function planoDoReporte(
     }
 }
 
+export type EspelhoDoLog =
+    | { acao: 'nada' }
+    | { acao: 'sent'; waMessageId: string | null }
+    | { acao: 'failed'; erro: string }
+    | { acao: 'confirmacao_pendente'; erro: string };
+
+/**
+ * Reparo do `notification_log` a partir da mensagem da fila (varredura do
+ * `vivo`). O espelho feito no `reportar` é best-effort e pode não achar o log
+ * (a fila entra antes do log na whatsapp-openwa); esta regra conserta depois.
+ *   · log que já saiu de `pending` → nada (nunca sobrescreve);
+ *   · aceita/entregue/lida → `sent`; falhou → `failed` com o erro;
+ *   · incerta → continua `pending` com confirmação pendente (uma vez só);
+ *   · pendente/enviando/cancelada → nada.
+ */
+export function espelhoDoLog(
+    msg: { status: StatusSaida; providerMessageId: string | null; erro: string | null },
+    log: { status: string; metadata: Record<string, unknown> | null },
+): EspelhoDoLog {
+    if (log.status !== 'pending') return { acao: 'nada' };
+    switch (msg.status) {
+        case 'aceita':
+        case 'entregue':
+        case 'lida':
+            return { acao: 'sent', waMessageId: msg.providerMessageId };
+        case 'falhou':
+            return { acao: 'failed', erro: msg.erro?.trim() || 'O WhatsApp não aceitou a mensagem.' };
+        case 'incerta': {
+            const marcada = log.metadata?.confirmacao !== undefined && log.metadata?.confirmacao !== null;
+            if (marcada) return { acao: 'nada' };
+            return {
+                acao: 'confirmacao_pendente',
+                erro: msg.erro?.trim() || 'Confirmação pendente: confira no celular do número antes de reenviar.',
+            };
+        }
+        default:
+            return { acao: 'nada' };
+    }
+}
+
 /**
  * Confere `X-OpenWA-Signature: sha256=<hex>` — HMAC-SHA256 dos BYTES ORIGINAIS
  * do corpo (não do JSON reparseado) com o segredo da conexão. Comparação em

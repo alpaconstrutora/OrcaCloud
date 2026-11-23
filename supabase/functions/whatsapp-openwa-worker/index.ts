@@ -23,9 +23,11 @@
 //   • vivo { estado_bruto, numero?, sessao? } → { estado }
 //       — wa_conexoes.visto_em = now(), estado normalizado (estadoDaConexao), estado_bruto,
 //         numero_exibicao (quando veio). Sessão: `sessao` (sessao_remota) ou, sem ela, a
-//         conexão da plataforma (a primeira, como wa_situacao). Também espelha no
-//         notification_log as linhas que o próprio wa_pegar_pendentes virou incerta
-//         (no máximo 50 por chamada; roda a cada 60 s).
+//         conexão da plataforma (a primeira, como wa_situacao). Também conserta o
+//         notification_log ainda 'pending' de mensagem já resolvida (aceita/entregue/lida
+//         → sent, falhou → failed, incerta → confirmacao pendente): espelho do reportar
+//         que falhou, log gravado depois do relato, incerta criada pelo wa_pegar_pendentes
+//         (sincronizarLog; 2 dias, no máximo 50 por chamada; roda a cada 60 s).
 //
 // REGRA #7, pergunta 3: verify_jwt = false (supabase/config.toml) — o worker não tem
 // JWT de usuário. O gate é o código: `Authorization: Bearer <WA_WORKER_SECRET>`,
@@ -41,7 +43,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { chamadaComSegredo, segredoConfigurado } from "../_shared/auth.ts"
 import {
-    estadoDaConexao, lerResultadoDoWorker, planoDoReporte,
+    espelhoDoLog, estadoDaConexao, lerResultadoDoWorker, planoDoReporte,
     type PlanoDoReporte, type StatusSaida,
 } from "../../../utils/whatsappOpenwa.ts"
 
@@ -123,37 +125,55 @@ async function espelharNoLog(admin: Admin, mensagemId: string, plano: PlanoDoRep
 }
 
 /**
- * Linhas que o wa_pegar_pendentes virou `incerta` sozinho (presas em enviando há
- * > 23 h) não passam pelo reportar: o log delas ficaria 'pending' sem a marca de
- * confirmação. Recentes primeiro, no máximo 50 por chamada.
+ * Conserta o notification_log que ficou 'pending' com a mensagem já resolvida
+ * na fila. Dois caminhos deixam isso acontecer: o espelho do `reportar` é
+ * best-effort (falha de leitura/gravação só vai para o console), e a
+ * whatsapp-openwa grava a fila ANTES do log — um worker rápido pode reportar
+ * antes de o log existir. Também cobre a `incerta` que o próprio
+ * wa_pegar_pendentes criou (sem passar pelo reportar).
+ * Regra por linha: espelhoDoLog (utils/whatsappOpenwa.ts). Mensagens de saída
+ * resolvidas nos últimos 2 dias, recentes primeiro, no máximo 50 por chamada;
+ * UPDATE só em log ainda 'pending' (nunca sobrescreve quem já saiu).
  */
-async function sincronizarIncertas(admin: Admin, agoraIso: string): Promise<number> {
+async function sincronizarLog(admin: Admin, agoraIso: string): Promise<number> {
     const desde = new Date(Date.parse(agoraIso) - 2 * 86400_000).toISOString();
     const { data, error } = await admin
         .from('wa_mensagens')
-        .select('id, erro')
+        .select('id, status, provider_message_id, erro')
         .eq('direcao', 'saida')
-        .eq('status', 'incerta')
+        .in('status', ['aceita', 'entregue', 'lida', 'falhou', 'incerta'])
         .gte('atualizado_em', desde)
         .order('atualizado_em', { ascending: false })
         .limit(SINCRONIZAR_MAX);
     if (error) {
-        console.error('[whatsapp-openwa-worker] leitura das incertas falhou:', error.message);
+        console.error('[whatsapp-openwa-worker] leitura da fila para o log falhou:', error.message);
         return 0;
     }
-    const incertas = (data ?? []) as { id: string; erro: string | null }[];
-    const erroDe = new Map(incertas.map((m) => [m.id, m.erro]));
-    const logs = (await logsPendentes(admin, incertas.map((m) => m.id)))
-        .filter((l) => l.metadata?.confirmacao === undefined || l.metadata?.confirmacao === null);
+    const mensagens = (data ?? []) as { id: string; status: StatusSaida; provider_message_id: string | null; erro: string | null }[];
+    const msgDe = new Map(mensagens.map((m) => [m.id, m]));
+    const logs = await logsPendentes(admin, mensagens.map((m) => m.id));
     let n = 0;
     for (const log of logs) {
-        const metadata = { ...(log.metadata ?? {}), confirmacao: 'pendente' };
-        const { error: e } = await admin
-            .from('notification_log')
-            .update({ metadata, error: erroDe.get(log.wa) ?? 'Confirmação pendente: confira no celular do número antes de reenviar.' })
-            .eq('id', log.id)
-            .eq('status', 'pending');
-        if (e) console.error('[whatsapp-openwa-worker] espelho da incerta falhou:', e.message);
+        const m = msgDe.get(log.wa);
+        if (!m) continue;
+        const espelho = espelhoDoLog(
+            { status: m.status, providerMessageId: m.provider_message_id, erro: m.erro },
+            { status: log.status, metadata: log.metadata },
+        );
+        if (espelho.acao === 'nada') continue;
+        const metadata = { ...(log.metadata ?? {}) };
+        let mudanca: Record<string, unknown>;
+        if (espelho.acao === 'sent') {
+            metadata.wa_message_id = espelho.waMessageId;
+            mudanca = { status: 'sent', error: null, metadata };
+        } else if (espelho.acao === 'failed') {
+            mudanca = { status: 'failed', error: espelho.erro, metadata };
+        } else {
+            metadata.confirmacao = 'pendente';
+            mudanca = { error: espelho.erro, metadata };
+        }
+        const { error: e } = await admin.from('notification_log').update(mudanca).eq('id', log.id).eq('status', 'pending');
+        if (e) console.error('[whatsapp-openwa-worker] reparo do notification_log falhou:', e.message);
         else n++;
     }
     return n;
@@ -312,7 +332,7 @@ serve(async (req: Request) => {
         if (eVivo) return json({ error: `Erro ao gravar o estado: ${eVivo.message}` }, 500);
         if (!gravada || gravada.length === 0) return json({ error: 'Sessão desconhecida.' }, 404);
 
-        const sincronizadas = await sincronizarIncertas(admin, new Date().toISOString());
+        const sincronizadas = await sincronizarLog(admin, new Date().toISOString());
         return json({ estado, sincronizadas });
     }
 

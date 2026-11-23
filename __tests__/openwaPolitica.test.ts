@@ -10,11 +10,12 @@ import { describe, it, expect } from 'vitest';
 import { createHmac } from 'node:crypto';
 import {
     ESPERAS_MS, JANELA_VINCULO_DIAS, assinaturaConfere, avancarStatus, chatIdDoTelefone,
-    classificarEnvio, comandoIdEnvioAutomatico, escolherVinculo, esperaAposFalha, estadoDaConexao,
+    classificarEnvio, comandoIdEnvioAutomatico, escolherVinculo, esperaAposFalha, espelhoDoLog, estadoDaConexao,
     idsDeMensagemIguais, lerResultadoDoWorker, montarTextoDoPedido, planoDoReporte, statusDoAck,
     telefoneDoRemetente,
 } from '../utils/whatsappOpenwa';
 import { formatarValorBRL } from '../utils/whatsappPedido';
+import type { StatusSaida } from '../utils/whatsappOpenwa';
 
 const HORA = 3600_000;
 
@@ -287,5 +288,38 @@ describe('planoDoReporte', () => {
     });
     it('sem resposta e sem erro → incerta', () => {
         expect(planoDoReporte(linha(1), { httpStatus: null, erro: null, messageId: null }, AGORA).tipo).toBe('incerta');
+    });
+});
+
+describe('espelhoDoLog (varredura do vivo)', () => {
+    const pend = (metadata: Record<string, unknown> | null = { wa_mensagem_id: 'm' }) => ({ status: 'pending', metadata });
+    const msg = (status: StatusSaida, providerMessageId: string | null = null, erro: string | null = null) =>
+        ({ status, providerMessageId, erro });
+
+    it('aceita, entregue ou lida → sent com o id da mensagem', () => {
+        for (const st of ['aceita', 'entregue', 'lida'] as const) {
+            expect(espelhoDoLog(msg(st, 'MID'), pend()), st).toEqual({ acao: 'sent', waMessageId: 'MID' });
+        }
+    });
+    it('falhou → failed com o erro gravado (ou um texto padrão)', () => {
+        expect(espelhoDoLog(msg('falhou', null, 'O WhatsApp não aceitou'), pend())).toEqual({ acao: 'failed', erro: 'O WhatsApp não aceitou' });
+        const semErro = espelhoDoLog(msg('falhou'), pend());
+        expect(semErro.acao).toBe('failed');
+        if (semErro.acao === 'failed') expect(semErro.erro.length).toBeGreaterThan(0);
+    });
+    it('incerta → continua pending com confirmação pendente; já marcada → nada', () => {
+        expect(espelhoDoLog(msg('incerta', null, 'pode ter saído'), pend())).toEqual({ acao: 'confirmacao_pendente', erro: 'pode ter saído' });
+        expect(espelhoDoLog(msg('incerta'), pend({ wa_mensagem_id: 'm', confirmacao: 'pendente' }))).toEqual({ acao: 'nada' });
+    });
+    it('log que já saiu de pending nunca é sobrescrito', () => {
+        for (const st of ['sent', 'failed']) {
+            expect(espelhoDoLog(msg('aceita', 'MID'), { status: st, metadata: null }), st).toEqual({ acao: 'nada' });
+            expect(espelhoDoLog(msg('falhou', null, 'x'), { status: st, metadata: null }), st).toEqual({ acao: 'nada' });
+        }
+    });
+    it('mensagem ainda na fila, enviando ou cancelada → nada', () => {
+        for (const st of ['pendente', 'enviando', 'cancelada'] as const) {
+            expect(espelhoDoLog(msg(st), pend()), st).toEqual({ acao: 'nada' });
+        }
     });
 });

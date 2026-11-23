@@ -19,10 +19,16 @@
 //         chave é comandoIdEnvioAutomatico(id, updated_at), uma por transição.
 //         Texto e telefone saem do pedido gravado: o navegador não escolhe
 //         destinatário nem texto. Fornecedor sem telefone → 422 sem_telefone, sem
-//         gravar nada. Conflito de comando_id → devolve a linha existente.
+//         gravar nada. Conflito de comando_id → devolve a linha existente (a tela
+//         repete o mesmo comando_id depois de um erro); se essa linha foi CANCELADA
+//         → 409 `cancelada` (nada saiu; a tela gera outro comando_id).
+//         Falha ao gravar o notification_log → cancela a linha da fila se ainda
+//         `pendente` (500 `cancelada`: nada saiu) ou, se o worker já a pegou, 500
+//         `registro_falhou` (a mensagem sai, só não aparece nos Logs de envio).
 //   • responder_no_pedido { order_id, texto, comando_id } — membro + wa_pode_usar;
 //       texto livre (1–4096) para o telefone do fornecedor DAQUELE pedido; grava em
-//       order_chats (sender_role buyer, canal whatsapp) e na fila.
+//       order_chats (sender_role buyer, canal whatsapp) e na fila. Mesmo comando_id
+//       de uma linha cancelada → 409 `cancelada`.
 //   • listar_sem_pedido — só superadmin: respostas sem organização (30 dias).
 //   • atribuir { mensagem_id, order_id } — só superadmin: a resposta sem
 //       organização passa a ser do pedido e vira linha no chat dele.
@@ -101,10 +107,10 @@ async function lerFornecedor(admin: Admin, supplierId: string | null): Promise<{
 }
 
 /** Linha da fila já gravada com este comando (idempotência). */
-async function mensagemDoComando(admin: Admin, org: string, comandoId: string): Promise<{ id: string } | null> {
+async function mensagemDoComando(admin: Admin, org: string, comandoId: string): Promise<{ id: string; status: string } | null> {
     const { data } = await admin
         .from('wa_mensagens')
-        .select('id')
+        .select('id, status')
         .eq('organization_id', org)
         .eq('comando_id', comandoId)
         .maybeSingle();
@@ -116,12 +122,12 @@ async function mensagemDoComando(admin: Admin, org: string, comandoId: string): 
  * linha que já existia (`nova: false`), sem duplicar.
  */
 async function enfileirar(admin: Admin, linha: Record<string, unknown>):
-    Promise<{ ok: true; id: string; nova: boolean } | { ok: false; erro: string }> {
+    Promise<{ ok: true; id: string; nova: boolean; status: string } | { ok: false; erro: string }> {
     const { data, error } = await admin.from('wa_mensagens').insert(linha).select('id').single();
-    if (!error && data?.id) return { ok: true, id: data.id, nova: true };
+    if (!error && data?.id) return { ok: true, id: data.id, nova: true, status: 'pendente' };
     if (error?.code === '23505') {
         const existente = await mensagemDoComando(admin, linha.organization_id as string, linha.comando_id as string);
-        if (existente) return { ok: true, id: existente.id, nova: false };
+        if (existente) return { ok: true, id: existente.id, nova: false, status: existente.status };
     }
     return { ok: false, erro: error?.message || 'Erro ao gravar na fila do WhatsApp.' };
 }
@@ -150,6 +156,27 @@ const semTelefone = () => json({
     error: 'Fornecedor sem telefone cadastrado. Adicione o telefone na ficha do fornecedor.',
     codigo: 'sem_telefone',
 }, 422);
+
+/**
+ * O comando_id repetido é de uma linha CANCELADA (antes de sair): devolver "na fila"
+ * seria mentir — nada vai sair. `cancelada` faz a tela gerar outro comando_id.
+ */
+const comandoCancelado = () => json({
+    error: 'Este envio foi cancelado antes de sair; nada foi enviado. Tente de novo.',
+    codigo: 'cancelada',
+}, 409);
+
+/** Cancela a linha da fila se ainda não saiu. true = cancelou (nada foi enviado). */
+async function cancelarSeAindaPendente(admin: Admin, id: string, erro: string): Promise<boolean> {
+    const { data, error } = await admin.from('wa_mensagens')
+        .update({ status: 'cancelada', erro })
+        .eq('id', id)
+        .eq('status', 'pendente')
+        .select('id')
+        .maybeSingle();
+    if (error) console.error('[whatsapp-openwa] cancelar a linha da fila falhou:', error.message);
+    return !error && !!data;
+}
 
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -224,6 +251,7 @@ serve(async (req: Request) => {
         // Repetição do mesmo comando (rede, retentativa, gatilho repetido): devolve a
         // linha que já existe ANTES de mexer em share_token ou montar texto.
         const jaExiste = await mensagemDoComando(admin, org, comandoId);
+        if (jaExiste?.status === 'cancelada') return comandoCancelado();
         if (jaExiste) return json({ status: 'na_fila', mensagem_id: jaExiste.id });
 
         // Link público: reusa o do pedido; gera só se não tem. `.is(null)` evita que
@@ -280,10 +308,11 @@ serve(async (req: Request) => {
             criado_por: vinculo.userId,
         });
         if (!fila.ok) return json({ error: fila.erro }, 500);
+        if (!fila.nova && fila.status === 'cancelada') return comandoCancelado();
 
         if (fila.nova) {
             // Mesmo registro da aba Comunicação / Logs de envio; o worker atualiza o status.
-            await admin.from('notification_log').insert({
+            const { error: eLog } = await admin.from('notification_log').insert({
                 order_id: pedido.id,
                 channel: 'whatsapp',
                 recipient: telefone,
@@ -294,6 +323,23 @@ serve(async (req: Request) => {
                     automatico, shareUrl, por: vinculo.email,
                 },
             });
+            if (eLog) {
+                // Sem o log a mensagem sairia e o pedido não mostraria nada (a varredura do
+                // worker só conserta log que existe): cancela enquanto ainda não saiu.
+                console.error('[whatsapp-openwa] gravar o notification_log falhou:', eLog.message);
+                if (await cancelarSeAindaPendente(admin, fila.id, `não entrou nos Logs de envio do pedido: ${eLog.message}`)) {
+                    return json({
+                        error: 'Não deu para registrar o envio no pedido, e ele foi cancelado: nada foi enviado. Tente de novo.',
+                        codigo: 'cancelada',
+                    }, 500);
+                }
+                // O worker já pegou a linha: a mensagem vai sair; repetir o mesmo comando
+                // não duplica (devolve esta linha).
+                return json({
+                    error: 'A mensagem foi para o WhatsApp, mas não entrou nos Logs de envio do pedido. Não reenvie: confira no celular do número.',
+                    codigo: 'registro_falhou',
+                }, 500);
+            }
         }
         return json({ status: 'na_fila', mensagem_id: fila.id });
     }
@@ -345,6 +391,8 @@ serve(async (req: Request) => {
             criado_por: vinculo.userId,
         });
         if (!fila.ok) return json({ error: fila.erro }, 500);
+        // Repetição do mesmo comando, mas a linha foi cancelada (ex.: não entrou no chat).
+        if (!fila.nova && fila.status === 'cancelada') return comandoCancelado();
         // Repetição do mesmo clique: a linha do chat já foi gravada da primeira vez.
         if (!fila.nova) return json({ ok: true, mensagem_id: fila.id });
 
@@ -359,11 +407,11 @@ serve(async (req: Request) => {
         });
         if (eChat) {
             // Sem a linha no chat a mensagem sairia "invisível": cancela se ainda não saiu.
-            await admin.from('wa_mensagens')
-                .update({ status: 'cancelada', erro: `não entrou no chat do pedido: ${eChat.message}` })
-                .eq('id', fila.id)
-                .eq('status', 'pendente');
-            return json({ error: `Erro ao gravar a mensagem no chat do pedido: ${eChat.message}` }, 500);
+            const cancelou = await cancelarSeAindaPendente(admin, fila.id, `não entrou no chat do pedido: ${eChat.message}`);
+            return json({
+                error: `Erro ao gravar a mensagem no chat do pedido: ${eChat.message}`,
+                codigo: cancelou ? 'cancelada' : 'registro_falhou',
+            }, 500);
         }
         return json({ ok: true, mensagem_id: fila.id });
     }

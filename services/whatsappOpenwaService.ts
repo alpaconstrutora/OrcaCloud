@@ -8,9 +8,11 @@
  *     `canUseWhatsappEmpresa`, ou — no envio automático — que a organização ligou
  *     o envio automático), monta o texto a partir do pedido gravado e põe na fila.
  *     A resposta é "na fila" na hora; quem envia é o worker da máquina local.
- *   • cada clique leva um `comando_id` novo (crypto.randomUUID): é a chave de
- *     idempotência — a mesma requisição repetida pela rede não duplica a mensagem;
- *     o envio automático não leva (o servidor calcula um por transição para Enviado).
+ *   • cada envio leva um `comando_id` (crypto.randomUUID, ou o `comandoId` que a
+ *     tela guardou para repetir o MESMO envio depois de um erro — comandoParaTentativa
+ *     em utils/canalWhatsappDoPedido): é a chave de idempotência — a repetição não
+ *     duplica a mensagem; o envio automático não leva (o servidor calcula um por
+ *     transição para Enviado).
  *   • situação e uso por organização vão direto às RPCs `wa_situacao` /
  *     `wa_definir_uso` (recorte e autorização dentro delas).
  */
@@ -100,21 +102,28 @@ export const whatsappOpenwaService = {
      * Põe o pedido na fila de envio ao fornecedor. O servidor escolhe telefone e
      * texto a partir do pedido. `automatico` = chamado pelo orderService logo
      * depois de marcar Enviado (vale a chave da organização, não a permissão).
+     * `comandoId`: a chave que a tela guardou para repetir o mesmo envio (manual);
+     * sem ela, uma nova.
      */
-    async enviarPedido(orderId: string, opcoes?: { automatico?: boolean }): Promise<{ status: 'na_fila' }> {
+    async enviarPedido(orderId: string, opcoes?: { automatico?: boolean; comandoId?: string }): Promise<{ status: 'na_fila' }> {
         const corpo: Record<string, unknown> = { order_id: orderId };
         if (opcoes?.automatico) corpo.automatico = true;
-        else corpo.comando_id = crypto.randomUUID();
+        else corpo.comando_id = opcoes?.comandoId || crypto.randomUUID();
         await invocar<{ status: 'na_fila'; mensagem_id: string }>('enviar_pedido', corpo);
         return { status: 'na_fila' };
     },
 
-    /** Mensagem livre do comprador, para o fornecedor DAQUELE pedido; entra no chat do pedido. */
-    async responderNoPedido(orderId: string, texto: string): Promise<void> {
+    /**
+     * Mensagem livre do comprador, para o fornecedor DAQUELE pedido; entra no chat do pedido.
+     * `comandoId`: a chave guardada para repetir o mesmo texto depois de um erro; sem ela, uma nova.
+     */
+    async responderNoPedido(orderId: string, texto: string, opcoes?: { comandoId?: string }): Promise<void> {
         const limpo = (texto ?? '').trim();
         if (!limpo) throw new ErroWhatsappOpenwa('Escreva a mensagem.', 'texto_invalido');
         if (limpo.length > 4096) throw new ErroWhatsappOpenwa('Mensagem longa demais (até 4096 caracteres).', 'texto_invalido');
-        await invocar('responder_no_pedido', { order_id: orderId, texto: limpo, comando_id: crypto.randomUUID() });
+        await invocar('responder_no_pedido', {
+            order_id: orderId, texto: limpo, comando_id: opcoes?.comandoId || crypto.randomUUID(),
+        });
     },
 
     /** Owner/admin da organização (ou superadmin) liga/desliga o uso. `envioAutomatico` null = mantém. */

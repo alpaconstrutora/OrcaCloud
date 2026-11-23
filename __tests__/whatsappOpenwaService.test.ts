@@ -2,7 +2,8 @@
  * WhatsApp pelo OpenWA — o service do front (tela → Edge Function `whatsapp-openwa`).
  *
  * O que trava:
- *   1. `enviarPedido` manda SÓ o id do pedido e um `comando_id` novo por clique —
+ *   1. `enviarPedido` manda SÓ o id do pedido e um `comando_id` (novo, ou o que a tela
+ *      guardou para repetir depois de um erro) —
  *      nada de telefone ou texto vindo do navegador; dois cliques = dois comandos;
  *   2. o envio automático não leva `comando_id` (o servidor calcula um por transição);
  *   3. o erro da function chega com a mensagem do corpo `{ error }` (e o `codigo`);
@@ -109,6 +110,25 @@ describe('whatsappOpenwaService', () => {
         expect(body.order_id).toBe('po-1');
         expect(body.texto).toBe('pode entregar amanhã?');
         expect(String(body.comando_id)).toMatch(UUID_RE);
+    });
+
+    it('enviarPedido com comandoId → manda esse (repetição depois de erro reaproveita a chave)', async () => {
+        await whatsappOpenwaService.enviarPedido('po-1', { comandoId: 'cmd-fixo' });
+        await whatsappOpenwaService.enviarPedido('po-1', { comandoId: 'cmd-fixo' });
+        expect(invocacoes.map((i) => i.body.comando_id)).toEqual(['cmd-fixo', 'cmd-fixo']);
+    });
+
+    it('enviarPedido automático ignora comandoId (o servidor calcula a chave da transição)', async () => {
+        await whatsappOpenwaService.enviarPedido('po-1', { automatico: true, comandoId: 'cmd-fixo' });
+        expect(invocacoes[0].body).toEqual({ acao: 'enviar_pedido', order_id: 'po-1', automatico: true });
+    });
+
+    it('responderNoPedido com comandoId → manda esse; sem → um novo', async () => {
+        respostaDaFunction = { data: { ok: true }, error: null };
+        await whatsappOpenwaService.responderNoPedido('po-1', 'oi', { comandoId: 'cmd-fixo' });
+        await whatsappOpenwaService.responderNoPedido('po-1', 'oi');
+        expect(invocacoes[0].body.comando_id).toBe('cmd-fixo');
+        expect(String(invocacoes[1].body.comando_id)).toMatch(UUID_RE);
     });
 
     it('responderNoPedido com texto vazio não chama a function', async () => {

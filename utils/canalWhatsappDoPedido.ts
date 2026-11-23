@@ -8,7 +8,9 @@
  *   · `rotuloDaEntrega` / `entregaDoLog` / `rotuloDoLogWhatsapp` — a linha de
  *     WhatsApp no Histórico de Notificações (aba Comunicação);
  *   · `ultimaDoFornecedorPeloWhatsapp` — a caixa "Enviar também pelo WhatsApp" do chat;
- *   · `avisoDoEnvioAutomatico` — o aviso ao marcar Enviado.
+ *   · `avisoDoEnvioAutomatico` — o aviso ao marcar Enviado;
+ *   · `comandoParaTentativa` / `comandoAposErro` — o `comando_id` reaproveitado
+ *     quando a pessoa repete o mesmo envio depois de um erro.
  *
  * Quem libera o envio é o banco (`wa_pode_usar`, `wa_uso_por_org`) e a Edge
  * Function `whatsapp-openwa`: a tela só escolhe o caminho e explica.
@@ -158,4 +160,30 @@ export function avisoDoEnvioAutomatico(
         return 'Pedido marcado como Enviado, mas o WhatsApp não saiu: fornecedor sem telefone cadastrado. Adicione o telefone em Minha organização › Fornecedores e envie pelo botão do WhatsApp.';
     }
     return `Pedido marcado como Enviado, mas o WhatsApp não entrou na fila: ${r.mensagem}`;
+}
+
+/**
+ * `comando_id` de uma tentativa de envio pelo WhatsApp do ÒPURA (revisão final, M6).
+ * O servidor é idempotente por `comando_id`; um id novo a cada clique faria a
+ * repetição do MESMO envio depois de um erro (resposta perdida na rede, function
+ * fora do ar no meio) mandar duas mensagens ao fornecedor. Então a tela guarda o
+ * comando até uma resposta de sucesso e o reaproveita se a pessoa tentar de novo
+ * a mesma coisa (`chave` = o texto, ou o id do pedido). Chave diferente → novo.
+ */
+export interface ComandoGuardado {
+    chave: string;
+    comandoId: string;
+}
+
+export function comandoParaTentativa(guardado: ComandoGuardado | null, chave: string, novo: () => string): ComandoGuardado {
+    return guardado && guardado.chave === chave ? guardado : { chave, comandoId: novo() };
+}
+
+/**
+ * Depois de um erro: continua guardado (a próxima tentativa do mesmo envio usa a
+ * mesma chave), salvo quando o servidor diz `cancelada` — a linha da fila daquele
+ * comando foi cancelada antes de sair, e repetir a chave só devolveria "cancelada".
+ */
+export function comandoAposErro(guardado: ComandoGuardado | null, codigo: string | null | undefined): ComandoGuardado | null {
+    return codigo === 'cancelada' ? null : guardado;
 }

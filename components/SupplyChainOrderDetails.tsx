@@ -11,8 +11,11 @@ import { orderService } from '../services/orderService';
 import { getOrderNumberLockReason, regenerateOrderNumber } from '../services/orderNumberRegenService';
 import { receiptService, PurchaseReceipt } from '../services/receiptService';
 import { whatsappService } from '../services/whatsappService';
-import { whatsappOpenwaService, type SituacaoOpenwa } from '../services/whatsappOpenwaService';
-import { escolherCanalDoPedido, conexaoAceitaEnvio, rotuloDoLogWhatsapp } from '../utils/canalWhatsappDoPedido';
+import { whatsappOpenwaService, ErroWhatsappOpenwa, type SituacaoOpenwa } from '../services/whatsappOpenwaService';
+import {
+    escolherCanalDoPedido, conexaoAceitaEnvio, rotuloDoLogWhatsapp, comandoParaTentativa, comandoAposErro,
+    type ComandoGuardado,
+} from '../utils/canalWhatsappDoPedido';
 import { podeUsarWhatsappEmpresa } from '../utils/permissaoWhatsappEmpresa';
 import { normalizarTelefoneWhatsapp } from '../utils/whatsappPedido';
 import { vinculosDoUsuario } from '../utils/modulosPermitidos';
@@ -353,6 +356,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [respostasFornecedor, setRespostasFornecedor] = React.useState<Record<string, string>>({});
     const [resolvingId, setResolvingId] = React.useState<string | null>(null);
     const [isSendingWhatsApp, setIsSendingWhatsApp] = React.useState(false);
+    // comando_id do envio manual pelo WhatsApp do ÒPURA, guardado até dar certo: tentar de
+    // novo o MESMO pedido depois de um erro reaproveita a chave (o servidor não duplica).
+    const comandoEnvioWhatsapp = React.useRef<ComandoGuardado | null>(null);
     // WhatsApp pela API oficial: o token é da ORGANIZAÇÃO do pedido, no servidor
     // (achado F75, 18/11/2026). Só o comprador consulta — o botão é só dele.
     const [waApiAtiva, setWaApiAtiva] = React.useState(false);
@@ -1008,10 +1014,16 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         if (canalWhatsapp.tipo === 'openwa') {
             try {
                 setIsSendingWhatsApp(true);
-                await whatsappOpenwaService.enviarPedido(order.id);
+                const comando = comandoParaTentativa(comandoEnvioWhatsapp.current, order.id, () => crypto.randomUUID());
+                comandoEnvioWhatsapp.current = comando;
+                await whatsappOpenwaService.enviarPedido(order.id, { comandoId: comando.comandoId });
+                comandoEnvioWhatsapp.current = null; // deu certo: o próximo clique é um envio novo
                 await loadOrderData();
                 notify('Pedido na fila do WhatsApp do ÒPURA. Acompanhe a entrega na aba Comunicação.', 'info');
             } catch (err: unknown) {
+                comandoEnvioWhatsapp.current = comandoAposErro(
+                    comandoEnvioWhatsapp.current, err instanceof ErroWhatsappOpenwa ? err.codigo : null,
+                );
                 const error = err instanceof Error ? err : new Error(String(err));
                 notify(`O WhatsApp não entrou na fila: ${error.message}`, 'error');
             } finally {

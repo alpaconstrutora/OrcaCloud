@@ -11,6 +11,8 @@ import {
     maquinaFora,
     ultimaDoFornecedorPeloWhatsapp,
     avisoDoEnvioAutomatico,
+    comandoParaTentativa,
+    comandoAposErro,
     DICA_NUMERO_DESCONECTADO,
 } from '../utils/canalWhatsappDoPedido';
 import { MOTIVO_SEM_WHATSAPP_EMPRESA } from '../utils/permissaoWhatsappEmpresa';
@@ -200,5 +202,37 @@ describe('avisoDoEnvioAutomatico', () => {
     it('outro erro → repete a mensagem do servidor', () => {
         expect(avisoDoEnvioAutomatico({ ok: false, codigo: 'nao_usa', mensagem: 'O envio automático está desligado.' }))
             .toContain('O envio automático está desligado.');
+    });
+});
+
+describe('comando_id reaproveitado depois de erro (revisão final, M6)', () => {
+    const gerador = () => {
+        let n = 0;
+        return () => `cmd-${++n}`;
+    };
+
+    it('sem comando guardado → um novo para a chave', () => {
+        expect(comandoParaTentativa(null, 'pedido:1', gerador())).toEqual({ chave: 'pedido:1', comandoId: 'cmd-1' });
+    });
+
+    it('mesma chave (mesmo texto/pedido) depois de um erro → o MESMO comando_id', () => {
+        const g = gerador();
+        const primeiro = comandoParaTentativa(null, 'oi', g);
+        expect(comandoParaTentativa(primeiro, 'oi', g)).toBe(primeiro);
+    });
+
+    it('chave diferente → comando_id novo', () => {
+        const g = gerador();
+        const primeiro = comandoParaTentativa(null, 'oi', g);
+        expect(comandoParaTentativa(primeiro, 'oi, tudo bem?', g)).toEqual({ chave: 'oi, tudo bem?', comandoId: 'cmd-2' });
+    });
+
+    it('depois do erro: guarda para reaproveitar, salvo quando o servidor diz que cancelou (nada saiu)', () => {
+        const g = { chave: 'oi', comandoId: 'cmd-1' };
+        expect(comandoAposErro(g, 'registro_falhou')).toBe(g);
+        expect(comandoAposErro(g, null)).toBe(g);
+        expect(comandoAposErro(g, undefined)).toBe(g);
+        expect(comandoAposErro(g, 'cancelada')).toBeNull();
+        expect(comandoAposErro(null, 'cancelada')).toBeNull();
     });
 });

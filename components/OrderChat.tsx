@@ -2,8 +2,10 @@ import React from 'react';
 import { Send, User, Bot, AlertCircle, MessageCircle } from 'lucide-react';
 import { chatService, OrderChatMessage, OrderChatRole } from '../services/chatService';
 import { supplierPortalTokenService } from '../services/supplierPortalTokenService';
-import { whatsappOpenwaService } from '../services/whatsappOpenwaService';
-import { ultimaDoFornecedorPeloWhatsapp } from '../utils/canalWhatsappDoPedido';
+import { whatsappOpenwaService, ErroWhatsappOpenwa } from '../services/whatsappOpenwaService';
+import {
+    ultimaDoFornecedorPeloWhatsapp, comandoParaTentativa, comandoAposErro, type ComandoGuardado,
+} from '../utils/canalWhatsappDoPedido';
 
 interface OrderChatProps {
     orderId: string;
@@ -59,6 +61,9 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, por
     const mostrarCaixaWhatsapp = whatsappDoOpenwa && !portalToken && meuPapel === 'buyer';
     const enviarPeloWhatsapp = mostrarCaixaWhatsapp && (pelaEscolha ?? ultimaDoFornecedorPeloWhatsapp(messages));
     const scrollRef = React.useRef<HTMLDivElement>(null);
+    // comando_id da resposta pelo WhatsApp, guardado até dar certo: mandar de novo o MESMO
+    // texto depois de um erro reaproveita a chave (o servidor não duplica a mensagem).
+    const comandoWhatsapp = React.useRef<ComandoGuardado | null>(null);
 
     React.useEffect(() => {
         let cancelado = false;
@@ -116,10 +121,15 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, por
             if (enviarPeloWhatsapp) {
                 // A Edge Function grava a linha no chat (canal 'whatsapp') e põe a
                 // mensagem na fila do número do ÒPURA.
-                await whatsappOpenwaService.responderNoPedido(orderId, messageText);
+                const comando = comandoParaTentativa(
+                    comandoWhatsapp.current, `${orderId}\n${messageText}`, () => crypto.randomUUID(),
+                );
+                comandoWhatsapp.current = comando;
+                await whatsappOpenwaService.responderNoPedido(orderId, messageText, { comandoId: comando.comandoId });
+                comandoWhatsapp.current = null;
                 // Daqui em diante a mensagem SAIU: o campo fica vazio e nada pode
-                // devolver o texto nem acusar erro de envio — cada clique leva um
-                // comando_id novo, e um "reenviar" mandaria um 2º WhatsApp ao
+                // devolver o texto nem acusar erro de envio — o comando guardado foi
+                // solto, e um "reenviar" agora seria um envio novo, um 2º WhatsApp ao
                 // fornecedor (revisão da Tarefa 7). Reler a conversa é só para
                 // mostrar a linha já com o selo; falhou, o realtime a traz.
                 void (async () => {
@@ -144,6 +154,13 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, por
             setMessages(prev => (prev.some(m => m.id === sentMsg.id) ? prev : [...prev, sentMsg]));
         } catch (error) {
             console.error('Error sending message:', error);
+            // Erro antes da confirmação: o mesmo texto, de novo, reaproveita o comando_id
+            // (salvo se o servidor cancelou aquele comando — aí vai um novo).
+            if (enviarPeloWhatsapp) {
+                comandoWhatsapp.current = comandoAposErro(
+                    comandoWhatsapp.current, error instanceof ErroWhatsappOpenwa ? error.codigo : null,
+                );
+            }
             setErro(error instanceof Error ? error.message : 'Erro ao enviar mensagem.');
             // Devolve o texto para o campo — reescrever do zero é o pior desfecho
             // possível de uma falha de rede.

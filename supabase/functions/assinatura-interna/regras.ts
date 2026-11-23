@@ -201,6 +201,27 @@ export function validarPedido(body: unknown): ResultadoValidacao {
     }
 }
 
+/** `a***@dominio.com` — igual ao `email_mascarado` do banco. */
+export function mascararEmail(v: unknown): string {
+    return String(v ?? '').replace(/^(.).*(@.*)$/, '$1***$2');
+}
+
+/**
+ * Representante logado com OUTRA conta da empresa (23/11/2026: o link abriu na
+ * conta errada e a tela só dizia "Assinatura não encontrada ou sem permissão").
+ * Diz o que fazer — só para quem é membro da MESMA empresa do signatário; para
+ * qualquer outro a resposta continua a genérica (não revela que o pedido existe).
+ */
+export function recusaDoMembroDeOutraConta(
+    s: { canal: string; user_id: string | null; email: string | null } | null,
+    userId: string | null,
+    membroDaMesmaEmpresa: boolean,
+): string | null {
+    if (!s || s.canal !== 'MEMBRO' || !userId || !membroDaMesmaEmpresa || s.user_id === userId) return null;
+    return `Este pedido de assinatura é para outro usuário (${mascararEmail(s.email)}). `
+        + 'Abra o link numa janela anônima e entre com essa conta.';
+}
+
 /** Erro de RPC → status HTTP. 42501 = sem permissão (mesma resposta para "não existe"). */
 export function respostaDoErroDaRpc(erro: { code?: string; message?: string } | null | undefined): { status: number; erro: string } {
     const code = erro?.code ?? '';

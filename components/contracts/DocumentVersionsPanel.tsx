@@ -4,7 +4,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
-import { assinaturaDaVersao as assinaturaDe, contractDocumentVersionService, motivoNaoEnviaAoPortal } from '../../services/contractDocumentVersionService';
+import { arquivoDaVersao, assinaturaDaVersao as assinaturaDe, contractDocumentVersionService, motivoNaoEnviaAoPortal } from '../../services/contractDocumentVersionService';
 import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../../lib/storageAssinado';
 import { ContractDocumentVersion, DocumentKind, DocumentOwnerType, DocumentSource } from '../../types';
 import { EnviarParaAssinaturaSheet } from '../assinatura/EnviarParaAssinaturaSheet';
@@ -282,11 +282,11 @@ const DocumentVersionsPanel: React.FC<Props> = ({
                                 )}
                                 <ActionIconButton
                                     kind="view"
-                                    title="Abrir documento"
+                                    title={arquivoDaVersao(v).assinada ? 'Abrir via assinada' : 'Abrir documento'}
                                     icon={<ExternalLink className="w-4 h-4" />}
                                     onClick={() => {
-                                        // Bucket privado: URL assinada na hora (storage_path, ou a URL antiga em `url`).
-                                        abrirArquivoAssinado(BUCKET_DOCUMENTOS, v.storage_path || v.url)
+                                        // Bucket privado: URL assinada na hora. Versão assinada abre a via assinada.
+                                        abrirArquivoAssinado(BUCKET_DOCUMENTOS, arquivoDaVersao(v).caminho)
                                             .catch(e => notifyRef.current(e instanceof Error ? e.message : 'Não foi possível abrir o documento.', 'error'));
                                     }}
                                 />

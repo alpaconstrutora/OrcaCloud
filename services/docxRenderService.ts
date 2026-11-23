@@ -110,6 +110,45 @@ export async function docxToHtml(docx: Blob | ArrayBuffer): Promise<string> {
 
 const PX_TO_MM = 25.4 / 96;
 
+/** Uma folha do PDF: deslocamento DENTRO do bloco capturado e altura, em px. */
+export interface FatiaDaPagina { off: number; h: number }
+/** Um bloco capturado de uma vez pelo html2canvas, já com as folhas que saem dele. */
+export interface BlocoDeCaptura { top: number; height: number; fatias: FatiaDaPagina[] }
+
+/**
+ * Plano de corte de uma página renderizada em folhas A4 e em blocos de captura.
+ *
+ * Bug de 23/11/2026 (minuta de 16 páginas saiu com 32): a página do Word medida
+ * no navegador fica 1–12 px MAIOR que a folha calculada, e a sobra virava uma
+ * folha própria de ~1 pt de altura depois de cada página. Agora:
+ *  • sobra de até 3% da folha é absorvida pela última folha (não vira página);
+ *  • os blocos de captura terminam em fronteira de folha — um bloco nunca corta
+ *    uma folha ao meio (com o limite de 14000 px isso também gerava folha curta).
+ */
+export function planejarFatias(totalH: number, pageHpx: number, maxBlocoPx: number): BlocoDeCaptura[] {
+    const tolerancia = Math.round(pageHpx * 0.03);
+    const alturas: number[] = [];
+    for (let off = 0; off < totalH;) {
+        const resto = totalH - off;
+        const h = resto - pageHpx <= tolerancia ? resto : pageHpx;
+        alturas.push(h);
+        off += h;
+    }
+    const blocos: BlocoDeCaptura[] = [];
+    let top = 0;
+    for (const h of alturas) {
+        const atual = blocos[blocos.length - 1];
+        if (atual && atual.height + h <= maxBlocoPx) {
+            atual.fatias.push({ off: atual.height, h });
+            atual.height += h;
+        } else {
+            blocos.push({ top, height: h, fatias: [{ off: 0, h }] });
+        }
+        top += h;
+    }
+    return blocos;
+}
+
 /**
  * Gera um PDF **fiel ao layout do Word** a partir de um .docx já preenchido.
  *
@@ -197,11 +236,14 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
             if (w < 1 || totalH < 1) { diag.push(`p${i + 1}:vazia ${w}x${totalH}`); continue; }
 
             const wMm = w * PX_TO_MM;
-            const pageHpx = Math.max(200, Math.floor(w * A4_RATIO)); // altura de 1 folha A4
+            // round, não floor: 794 px × 297/210 = 1122,9 → floor dava 1122 e a página
+            // de 1123 px deixava 1 px de sobra (uma folha de ~1 pt no PDF).
+            const pageHpx = Math.max(200, Math.round(w * A4_RATIO)); // altura de 1 folha A4
             const wScaled = Math.round(w * SCALE);
 
-            for (let chunkTop = 0; chunkTop < totalH; chunkTop += MAX_CHUNK_PX) {
-                const chunkH = Math.min(MAX_CHUNK_PX, totalH - chunkTop);
+            for (const bloco of planejarFatias(totalH, pageHpx, MAX_CHUNK_PX)) {
+                const chunkTop = bloco.top;
+                const chunkH = bloco.height;
                 let big: HTMLCanvasElement;
                 try {
                     big = await html2canvas(page, {
@@ -225,8 +267,7 @@ export async function docxBlobToPdf(docx: Blob | ArrayBuffer): Promise<Blob> {
                 if (!big.width || !big.height) { diag.push(`p${i + 1}@${chunkTop}:cv0`); continue; }
 
                 // Recorta o bloco em páginas A4 (drawImage em memória — rápido).
-                for (let off = 0; off < chunkH; off += pageHpx) {
-                    const sliceH = Math.min(pageHpx, chunkH - off);
+                for (const { off, h: sliceH } of bloco.fatias) {
                     const sliceCanvas = window.document.createElement('canvas');
                     sliceCanvas.width = wScaled;
                     sliceCanvas.height = Math.round(sliceH * SCALE);

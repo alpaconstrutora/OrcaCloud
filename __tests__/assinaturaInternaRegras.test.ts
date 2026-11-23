@@ -3,6 +3,7 @@ import {
     validarPedido, cpfValido, mascararCpf, formatarCpf, respostaDoErroDaRpc, codigoDeSeisDigitos,
     materialDoCodigo, sha256Hex, ipDoPedido, pareceUmPdf, pastaDaOrigem, caminhoDoAssinado,
     linkParaAssinar, sanitizarWinAnsi, blocosDoManifesto, quebrarLinhas, TERMO_DE_ACEITE, TERMO_VERSAO, validarLeitura,
+    mascararEmail, recusaDoMembroDeOutraConta,
 } from '../supabase/functions/assinatura-interna/regras';
 
 /**
@@ -176,5 +177,21 @@ describe('manifesto', () => {
         const medir = (t: string) => t.length;
         expect(quebrarLinhas('um dois três quatro', 9, medir)).toEqual(['um dois', 'três', 'quatro']);
         expect(quebrarLinhas('a'.repeat(25), 10, medir)).toEqual(['a'.repeat(10), 'a'.repeat(10), 'a'.repeat(5)]);
+    });
+});
+
+describe('representante logado com outra conta (23/11/2026)', () => {
+    const SIG = { canal: 'MEMBRO', user_id: 'u-rep', email: 'altair@empresa.com.br' };
+    it('membro da mesma empresa com outra conta: diz para quem é e o que fazer', () => {
+        expect(mascararEmail('altair@empresa.com.br')).toBe('a***@empresa.com.br');
+        expect(recusaDoMembroDeOutraConta(SIG, 'u-dev', true))
+            .toBe('Este pedido de assinatura é para outro usuário (a***@empresa.com.br). Abra o link numa janela anônima e entre com essa conta.');
+    });
+    it('fora da empresa, a própria conta, outro canal ou signatário inexistente: resposta genérica (null)', () => {
+        expect(recusaDoMembroDeOutraConta(SIG, 'u-dev', false)).toBeNull();
+        expect(recusaDoMembroDeOutraConta(SIG, 'u-rep', true)).toBeNull();
+        expect(recusaDoMembroDeOutraConta({ ...SIG, canal: 'PORTAL_CLIENTE' }, 'u-dev', true)).toBeNull();
+        expect(recusaDoMembroDeOutraConta(null, 'u-dev', true)).toBeNull();
+        expect(recusaDoMembroDeOutraConta(SIG, null, true)).toBeNull();
     });
 });

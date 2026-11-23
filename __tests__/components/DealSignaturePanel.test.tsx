@@ -6,9 +6,11 @@
  *  2. no portal, o envio assina a VERSÃO do contrato (origem CDV) — a mesma da Emissão;
  *  3. versão não emitida desliga o envio E diz o motivo à vista;
  *  4. sem contrato gerado, diz o que fazer;
- *  5. negociação que já foi ao ZapSign abre no ZapSign.
+ *  5. negociação que já foi ao ZapSign abre no ZapSign;
+ *  6. versão ASSINADA abre a via assinada, não o original (relato de 23/11/2026).
  */
 import React from 'react';
+import { abrirArquivoAssinado } from '../../lib/storageAssinado';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
@@ -43,7 +45,7 @@ function montar(props: Partial<React.ComponentProps<typeof DealSignaturePanel>> 
     );
 }
 
-beforeEach(() => { versoes = []; });
+beforeEach(() => { versoes = []; vi.mocked(abrirArquivoAssinado).mockClear(); });
 
 describe('DealSignaturePanel', () => {
     it('oferece portal e ZapSign; envia a versão emitida do contrato pelo portal', async () => {
@@ -67,6 +69,21 @@ describe('DealSignaturePanel', () => {
     it('sem contrato gerado: diz o que fazer', () => {
         montar({ contrato: null });
         expect(screen.getByText(/Gere o contrato acima/)).toBeTruthy();
+    });
+
+    it('versão assinada: "Abrir via assinada" abre o PDF assinado, não o original', async () => {
+        versoes = [versao({ signature_status: 'SIGNED', signature_provider: 'PORTAL', assinatura_envelope_id: 'env-1',
+            signed_file_url: 'contract-minutas/ct-1/assinado-env-1.pdf' })];
+        montar();
+        fireEvent.click(await screen.findByRole('button', { name: /Abrir via assinada/ }));
+        expect(abrirArquivoAssinado).toHaveBeenCalledWith('documents', 'contract-minutas/ct-1/assinado-env-1.pdf');
+    });
+
+    it('versão sem assinatura abre o original', async () => {
+        versoes = [versao({})];
+        montar();
+        fireEvent.click(await screen.findByRole('button', { name: /Abrir documento/ }));
+        expect(abrirArquivoAssinado).toHaveBeenCalledWith('documents', 'p.pdf');
     });
 
     it('negociação já enviada ao ZapSign abre no ZapSign', () => {

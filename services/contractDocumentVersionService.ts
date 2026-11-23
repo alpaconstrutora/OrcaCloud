@@ -58,6 +58,14 @@ export const assinaturaDaVersao = (v: ContractDocumentVersion) => {
     return { ...r, texto: `${r.texto} (${onde})` };
 };
 
+/** O arquivo que "Abrir documento" mostra: a via ASSINADA quando existe (portal ou
+ *  ZapSign) — depois de assinada, o original sem assinatura confundia ("o contrato
+ *  não está assinado", 23/11/2026). Mesmo critério de DocumentosDaNegociacaoPanel. */
+export const arquivoDaVersao = (v: Pick<ContractDocumentVersion, 'signature_status' | 'signed_file_url' | 'storage_path' | 'url'>) => {
+    const assinada = v.signature_status === 'SIGNED' && !!v.signed_file_url;
+    return { caminho: assinada ? v.signed_file_url! : (v.storage_path || v.url), assinada };
+};
+
 /** Por que a versão não pode ir para a assinatura no portal — `null` quando pode.
  *  Uma regra só para a Emissão e para a negociação (DealSignaturePanel). */
 export const motivoNaoEnviaAoPortal = (v: ContractDocumentVersion): string | null => {

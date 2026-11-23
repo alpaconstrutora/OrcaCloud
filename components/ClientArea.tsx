@@ -168,6 +168,9 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         startDate: new Date().toISOString().split('T')[0]
     });
     // Na prévia mobile, renderiza exatamente o que o cliente vê (sem permissões de admin).
+    // Prévia do gestor = isPreview SEM token. O link real (App.tsx) também passa
+    // isPreview, só para esconder o cromo de admin — e o cliente ali é de verdade.
+    const previaDoGestor = isPreview && !portalToken;
     const isAdmin = !isPreview && (profile?.role === UserProfile.ADMIN || profile?.role === UserProfile.DEVELOPER || profile?.group === 'DESENVOLVEDOR');
 
     const [showTabConfig, setShowTabConfig] = React.useState(false);
@@ -4586,7 +4589,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                 {/* Assinatura interna (sem certificado): pendências em qualquer aba; os já
                     assinados só em Contratos. Plano 2026-11-21-assinatura-eletronica-interna. */}
                 {portalToken && (
-                    <DocumentosParaAssinar portal="cliente" token={portalToken} somenteLeitura={isPreview}
+                    <DocumentosParaAssinar portal="cliente" token={portalToken} somenteLeitura={previaDoGestor}
                         mostrarAssinados={activeTab === 'contratos'} className="mb-6" />
                 )}
                 {activeTab === 'dashboard' && ehLocacao(clientCategory) && renderDashboardLocacao()}
@@ -4941,9 +4944,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     if (sub) setAbaCondominio(sub);
                     setActiveTab(aba as ClientAreaTabId);
                 }}
-                // a rota pública do link TAMBÉM passa isPreview (só para esconder o
-                // cromo de admin): prévia do gestor é isPreview SEM token
-                modoPrevia={isPreview && !portalToken}
+                modoPrevia={previaDoGestor}
                 forcarTour={forcarTour}
                 checklistSlot={isAdmin ? null : slotChecklist}
                 accent="coral"

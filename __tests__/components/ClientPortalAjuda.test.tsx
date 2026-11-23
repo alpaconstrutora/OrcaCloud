@@ -12,6 +12,8 @@
  *   4. o link real chega com portalToken E isPreview (App.tsx) e mesmo assim
  *      não é prévia — a prévia do gestor (isPreview sem token) não abre nada;
  *   5. cliente LOGADO (sem a casca do link) também tem o "?".
+ *   6. o mesmo vale para ASSINAR: no link real o cartão não é "Prévia do portal"
+ *      (22/11/2026 — o cliente via "só o cliente assina" e não conseguia assinar).
  */
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -57,6 +59,11 @@ vi.mock('../../components/AIInsightCard', () => ({ default: () => null }));
 vi.mock('../../components/MobilePreviewFrame', () => ({ default: () => null }));
 vi.mock('../../components/client/ClientPortalLinkModal', () => ({ default: () => null }));
 vi.mock('../../components/client/portal/ClientPortalMyData', () => ({ default: () => null }));
+// Cartão de assinar: só interessa se o portal o deixa assinar (somenteLeitura).
+const assinarProps = vi.fn();
+vi.mock('../../components/assinatura/DocumentosParaAssinar', () => ({
+  DocumentosParaAssinar: (p: { somenteLeitura?: boolean }) => { assinarProps(p); return null; },
+}));
 
 import { ClientArea } from '../../components/ClientArea';
 import { ConfirmProvider } from '../../components/ui/confirm';
@@ -100,6 +107,12 @@ describe('Portal do Cliente › ajuda', () => {
     await new Promise(r => setTimeout(r, 100));
     expect(getMine).not.toHaveBeenCalled();
     expect(getByToken).not.toHaveBeenCalled();
+  });
+
+  it('link real (portalToken E isPreview): o cliente ASSINA — o cartão não vem como prévia do gestor', async () => {
+    montar(['dashboard', 'contratos']);
+    await waitFor(() => expect(assinarProps).toHaveBeenCalled());
+    expect(assinarProps.mock.calls.every(([p]) => p.somenteLeitura === false)).toBe(true);
   });
 
   it('botão "?" do header abre a central, só com as seções liberadas e o contato da construtora', async () => {

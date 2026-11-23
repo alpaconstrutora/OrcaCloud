@@ -307,9 +307,12 @@ se o tópico pode ser público ou precisa de canal privado com policy em
   `falhou` (motivo), ou `incerta`; atualiza `wa_mensagens` e `notification_log`.
   - Retentativa só para falha **comprovadamente anterior ao envio** (sessão
     fora, recusa), com espera crescente e limite.
-  - **Timeout ou `503` em envio → `incerta`, sem reenvio automático** (a
-    documentação do OpenWA diz que um `503` em escrita pode ter sido aplicado).
-    A tela mostra "confirmação pendente" e um botão "reenviar" consciente.
+  - **Timeout ou `503` em envio:** a documentação do OpenWA diz que um `503`
+    em escrita pode ter sido aplicado, e que repetir só é seguro **com o mesmo
+    `Idempotency-Key`** (que o gateway guarda por 24 h). Como todo envio leva
+    `comando_id` como chave, repetimos dentro de 23 h; passou disso →
+    `incerta`, sem reenvio automático. A tela mostra "confirmação pendente" e
+    um botão "reenviar" consciente. *(Refinado no plano, 23/11.)*
 - `vivo` — "estou vivo" com o estado da sessão; atualiza `wa_conexoes`.
 - Não há job de cron no Supabase: quem reenvia é o worker. Se a máquina está
   fora, nada sai — e nada se perde.
@@ -429,6 +432,9 @@ se o tópico pode ser público ou precisa de canal privado com policy em
   instalação (item de verificação).
 - **OpenWA é projeto de terceiro em mudança rápida**: imagem fixada por digest;
   atualização só manual e testada.
+- **Mídia recebida acima de 5 MB não chega ao app** (sem túnel, o app não
+  consegue buscar o arquivo no OpenWA): o chat avisa "abrir no celular do
+  número". Se isso incomodar, o worker pode passar a subir esses arquivos.
 
 ## Verificação de ponta a ponta (critério de pronto do piloto)
 
@@ -456,7 +462,242 @@ se o tópico pode ser público ou precisa de canal privado com policy em
 
 ## Plano
 
-*(entra aqui depois da aprovação deste design)*
+> **Para agentes:** SUB-SKILL OBRIGATÓRIA: superpowers:subagent-driven-development
+> (recomendado) ou superpowers:executing-plans, tarefa por tarefa. Passos com `- [ ]`.
+
+**Objetivo:** o pedido de compra sai pelo número do ÒPURA (OpenWA), fica
+registrado no pedido, e a resposta do fornecedor volta para o chat do pedido.
+
+**Arquitetura:** fila `wa_mensagens` no Supabase; um worker na máquina
+(WSL2 + Docker, ao lado do OpenWA em `127.0.0.1`) é acordado por uma
+"campainha" do Realtime, busca, envia e informa por uma Edge Function própria;
+o OpenWA manda os eventos (respostas, confirmações) para uma Edge Function
+de webhook assinada por HMAC. Regras puras num módulo único testado no Vitest.
+
+**Stack:** React/TS (Vite), Supabase (Postgres, RLS, Realtime, Edge Functions
+Deno), OpenWA 0.31.0 (Baileys) em Docker, worker Node (`.mjs`, sem build).
+
+**Spec:** este arquivo, seções "Design" e "Decisões".
+
+### Restrições globais
+
+- Frente `C:\D\frentes\whatsapp-openwa-pedido` (branch `feat/whatsapp-openwa-pedido`). Nunca o checkout de integração.
+- Banco: nunca `db push`. Migration e prova SQL **o usuário aplica** (`db query -f` de escrita é barrado pelo auto mode). Ensaio: `bash scripts/montar-ensaio.sh` + `npx supabase db query --linked -f`.
+- Edge Function: **o usuário publica** (`npx supabase functions deploy <nome>` pela PowerShell, a partir da frente). Prova obrigatória depois: chamada sem header → 401.
+- REGRA #7 em toda policy/função/function (policy por conjunto `IN (SELECT minhas_orgs_membro())`, REVOKE PUBLIC/anon, `SET search_path`), com as respostas no cabeçalho da migration.
+- Testes só em `__tests__/**/*.test.ts(x)` (projeto `leves`); nada novo em `TESTES_PESADOS`.
+- Rótulos sem caixa alta; campos `h-9`; botão desligado sempre diz o motivo (`title`); `bash scripts/check-ui-standard.sh <arquivo.tsx>` em todo `.tsx` tocado.
+- Nada de segredo (`WA_WORKER_SECRET`, `OPENWA_WEBHOOK_SECRET`, chave do OpenWA) no front, em log, em commit. `infra/openwa/.env` no `.gitignore`.
+- Imagem do OpenWA fixada por **digest** (nunca `latest`).
+
+### Foco da revisão (o que nenhuma tarefa cobre sozinha e mais pode morder)
+
+1. **Remetente `@lid`** (sem telefone no `from`): sem `RESOLVE_LID_TO_PHONE=true`, a resposta não acha o pedido. → teste em T1 (`telefoneDoRemetente`) e env em T9.
+2. **Pedido marcado Enviado duas vezes** (volta para Rascunho e reenvia): cada transição é um `comando_id` novo — é reenvio intencional, não duplicata. → teste em T1 (`comandoIdEnvioAutomatico`).
+3. **Fornecedor sem telefone** (o caso comum: 8 de 18): `enviar_pedido` devolve `sem_telefone` sem gravar fila; o botão diz isso. → teste em T7 (`escolherCanalDoPedido`) e prova em T3.
+4. **Toque perdido do Realtime / Realtime público desligado no projeto**: a checagem de 60 s cobre; o envio atrasa no máximo 1 min. → prova em T11 (passo 3).
+5. **Evento atrasado regride status** (ack `delivered` depois de `read`): `avancarStatus` nunca volta. → teste em T1.
+
+---
+
+### T1 — Regras puras do WhatsApp/OpenWA
+
+**Arquivos:** criar `utils/whatsappOpenwa.ts` (sem `Deno.*`, só `globalThis.crypto`; imports internos com extensão `.ts`, como `utils/pedidoItemValor.ts`, porque as Edge Functions o importam por `../../../utils/whatsappOpenwa.ts`, igual ao `whatsapp-cloud` com `whatsappPedido.ts`); teste `__tests__/openwaPolitica.test.ts`.
+
+**Produz (assinaturas exatas):**
+```ts
+export type StatusSaida = 'pendente'|'enviando'|'aceita'|'entregue'|'lida'|'falhou'|'incerta'|'cancelada';
+export interface DadosTextoPedido { empresa: string; fornecedor: string; numero: string; obra: string;
+  quantidadeDeItens: number; total: number; dataDeEntrega: string | null; link: string }
+export function montarTextoDoPedido(d: DadosTextoPedido): string;
+export function chatIdDoTelefone(telefone: string | null | undefined): string;      // '' = sem telefone
+export function comandoIdEnvioAutomatico(orderId: string, atualizadoEm: string): string;
+export function statusDoAck(status: string): StatusSaida | null;
+export function avancarStatus(atual: StatusSaida, novo: StatusSaida): StatusSaida;
+export type Desfecho = 'aceita' | 'repetir' | 'falhou' | 'incerta';
+export function classificarEnvio(r: { httpStatus: number | null; erro: 'recusada' | 'timeout' | null },
+  idadeDoComandoMs: number): Desfecho;
+export const ESPERAS_MS: readonly number[];                 // [30e3, 60e3, 120e3, 300e3, 600e3, 1800e3]
+export function esperaAposFalha(tentativas: number): number | null;  // null = desistir
+export function assinaturaConfere(corpo: Uint8Array, cabecalho: string | null, segredo: string): Promise<boolean>;
+export function telefoneDoRemetente(data: { from?: string; senderPhone?: string | null }): string;
+export function idsDeMensagemIguais(a: string, b: string): boolean;
+export interface Candidato { organizationId: string; orderId: string; providerMessageId: string | null; enviadoEm: string }
+export type Vinculo = { tipo: 'citacao' | 'unico'; organizationId: string; orderId: string } | { tipo: 'sem_vinculo' };
+export function escolherVinculo(candidatos: Candidato[], citadoId: string | null): Vinculo;
+export const JANELA_VINCULO_DIAS = 60;
+```
+
+- [ ] **Passo 1 — testes que falham** (`__tests__/openwaPolitica.test.ts`):
+  - `montarTextoDoPedido` → primeira linha `*Alpa Construtora e Incorporadora* — Pedido de compra nº 42`; contém `Fornecedor: X`, `Obra: Y`, `Itens: 3 · Total: R$ 1.234,50` (usa `formatarValorBRL`), `Entrega: 20/11/2026` (e `Entrega: A definir` com `null`, via `formatarDataDeEntrega`), e termina com `Ver o pedido completo: <link>`.
+  - `chatIdDoTelefone('(11) 99999-0000') === '5511999990000@c.us'`; `''`, `null`, `'sem número'` → `''` (reusa `normalizarTelefoneWhatsapp`).
+  - `comandoIdEnvioAutomatico('o1','2026-11-23T10:00:00Z') === 'pedido:o1:enviado:2026-11-23T10:00:00Z'`; outro `atualizadoEm` → outro id.
+  - `statusDoAck`: `sent→aceita`, `delivered→entregue`, `read→lida`, `played→lida`, `failed→falhou`, `pending→null`, `qualquer→null`.
+  - `avancarStatus('lida','entregue') === 'lida'`; `('aceita','entregue') === 'entregue'`; `('incerta','aceita') === 'aceita'`; `('falhou','entregue') === 'entregue'`; `('cancelada','aceita') === 'cancelada'`.
+  - `classificarEnvio`: `201→aceita`; `400/401/403/404/413/422/501→falhou`; `429`, `503`, `409`, `erro:'recusada'`, `erro:'timeout'` → `repetir` com idade 1 h e `incerta` com idade 23 h + 1 ms; `{httpStatus:null,erro:null}` → `incerta`.
+  - `esperaAposFalha(0) === 30000`, `(5) === 1800000`, `(6) === null`.
+  - `assinaturaConfere`: confere com `'sha256=' + createHmac('sha256',s).update(corpo).digest('hex')` (node:crypto); falso com segredo errado, cabeçalho `null`, sem prefixo `sha256=`, hex truncado, e corpo com um espaço a mais.
+  - `telefoneDoRemetente({from:'5511999990000@c.us'}) === '5511999990000'`; `({from:'123@lid', senderPhone:'5511999990000'}) === '5511999990000'`; `({from:'123@lid'}) === ''`; `({from:'1203@g.us'}) === ''`.
+  - `idsDeMensagemIguais('true_5511@c.us_3EB0AB','3EB0AB') === true`; ids diferentes → `false`.
+  - `escolherVinculo`: citado casa com `providerMessageId` de um candidato → `citacao` daquele pedido, mesmo havendo candidatos de outra org; sem citação e todos da mesma org → `unico` com o `enviadoEm` mais recente; duas orgs sem citação → `sem_vinculo`; lista vazia → `sem_vinculo`.
+- [ ] **Passo 2** — `npx vitest run __tests__/openwaPolitica.test.ts` → FALHA (módulo não existe).
+- [ ] **Passo 3** — implementar `utils/whatsappOpenwa.ts`. `assinaturaConfere`: HMAC por `crypto.subtle` e comparação em tempo constante (laço com XOR sobre o mesmo tamanho; tamanho diferente → false).
+- [ ] **Passo 4** — mesmo comando → PASSA.
+- [ ] **Passo 5** — commit `feat(whatsapp): regras puras do envio pelo OpenWA`.
+
+### T2 — Banco: fila, conexão, uso por organização, campainha
+
+**Arquivos:** modificar `utils/rotinasAutomaticas.ts` (CATALOGO); criar `supabase/migrations/aplicar_20271123100000_whatsapp_openwa.sql` (conferir antes com `ls supabase/migrations | grep 20271123` — nenhum outro com o prefixo); prova `scripts/teste-whatsapp-openwa.sql` (modelo: `scripts/teste-tarefas-superadmin.sql`, com `-- MIGRATION`, `pg_temp.confere`, `pg_temp.como`, `ROLLBACK`, linha final `TUDO OK`).
+
+**Produz:** tabelas `wa_conexoes`, `wa_uso_por_org`, `wa_mensagens`, `wa_eventos_recebidos` e coluna `order_chats.canal` exatamente como no Design §2; e:
+```sql
+public.wa_pode_usar(p_user uuid, p_org uuid) RETURNS boolean      -- DEFINER; só service_role
+  -- superadmin (mesma regra de is_superadmin(), parametrizada por p_user) OU membro de p_org com
+  -- permissions->>'canUseWhatsappEmpresa' = 'true'
+public.wa_pegar_pendentes(p_limite int) RETURNS SETOF public.wa_mensagens  -- DEFINER; só service_role
+  -- saida + pendente + proxima_tentativa_em <= now() + (trava_ate IS NULL OR trava_ate < now()),
+  -- FOR UPDATE SKIP LOCKED, marca status='enviando', trava_ate=now()+interval '2 minutes'
+public.wa_situacao() RETURNS TABLE(estado text, numero_exibicao text, visto_em timestamptz,
+  usa_na_org boolean, envio_automatico_pedido boolean, organization_id uuid)  -- INVOKER; authenticated
+public.wa_definir_uso(p_org uuid, p_usar boolean, p_envio_automatico boolean) RETURNS void
+  -- DEFINER; exige owner/admin de p_org (minhas_orgs_gestor()) ou superadmin; authenticated
+trigger wa_tocar_campainha AFTER INSERT ON wa_mensagens (direcao='saida' AND status='pendente')
+  -- PERFORM realtime.send('{}'::jsonb, 'fila', 'wa-campainha', false)
+```
+- `wa_mensagens.organization_id` NULL só com `direcao='entrada'` (CHECK). Únicos: `(organization_id, comando_id)` e `(chat_id_remoto, provider_message_id) WHERE provider_message_id IS NOT NULL`.
+- RLS: `wa_mensagens` e `wa_uso_por_org` SELECT por conjunto; `wa_conexoes` sem policy de leitura direta (só pela RPC). Nenhuma policy de escrita.
+- `order_chats.canal text NOT NULL DEFAULT 'app' CHECK (canal IN ('app','whatsapp'))`.
+- Uma linha inicial em `wa_conexoes` (`nome='ÒPURA'`, `sessao_remota='opura'`, `estado='maquina_fora'`).
+- Job `pg_cron` `wa-limpar-eventos` (diário, 04:30, SQL puro: apaga `wa_eventos_recebidos` com mais de 30 dias) + entrada no `CATALOGO` de `utils/rotinasAutomaticas.ts` (grupo `tecnicas`, "Limpa o registro de eventos do WhatsApp com mais de 30 dias").
+
+- [ ] **Passo 1 — prova que falha** (`scripts/teste-whatsapp-openwa.sql`), asserções:
+  - membro da org A não vê `wa_mensagens` da org B; vê as da A.
+  - linha de entrada com `organization_id NULL` invisível para membro comum.
+  - `authenticated` não consegue `INSERT/UPDATE/DELETE` em nenhuma das 4 tabelas.
+  - `wa_pode_usar`: membro sem a flag → false; com a flag → true; de outra org → false; `EXECUTE` negado a `authenticated`.
+  - duas chamadas a `wa_pegar_pendentes(10)` seguidas: a segunda não devolve as já travadas; status vira `enviando`.
+  - inserir dois `comando_id` iguais na mesma org → erro de unicidade.
+  - inserir saída pendente gera 1 linha em `realtime.messages` com `topic='wa-campainha'` e `payload` sem `telefone`/`texto`.
+  - `wa_definir_uso` por membro comum → erro; por owner → grava.
+- [ ] **Passo 2** — montar ensaio sem a migration (`bash scripts/montar-ensaio.sh -o "$TEMP/ensaio.sql" scripts/teste-whatsapp-openwa.sql`) e **pedir ao usuário** para rodar → FALHA.
+- [ ] **Passo 3** — escrever a migration (cabeçalho com as 3 perguntas da REGRA #7 respondidas; `BEGIN; … COMMIT;` com `SET LOCAL lock_timeout`).
+- [ ] **Passo 4** — ensaio com a migration (`… scripts/teste-whatsapp-openwa.sql supabase/migrations/aplicar_20271123100000_whatsapp_openwa.sql`) → usuário roda → `TUDO OK`. Se `realtime.send` não existir/negar, registrar aqui e trocar a campainha por canal privado com policy em `realtime.messages` (modelo `aplicar_20271116905800_blueprint_canal_ramo_privado.sql`).
+- [ ] **Passo 5** — `bash scripts/check-rls-postura.sh` sem achado novo; commit `feat(whatsapp): fila e conexão do OpenWA no banco`.
+- [ ] **Passo 6** — usuário aplica a migration (`npx supabase db query --linked -f supabase/migrations/aplicar_20271123100000_whatsapp_openwa.sql`); conferir com `SELECT policyname FROM pg_policies WHERE tablename LIKE 'wa_%'`.
+
+### T3 — Edge Function `whatsapp-openwa` (tela → fila)
+
+**Arquivos:** criar `supabase/functions/whatsapp-openwa/index.ts`; `supabase/config.toml` (`[functions.whatsapp-openwa] verify_jwt = true`, com comentário); criar `services/whatsappOpenwaService.ts`; teste `__tests__/whatsappOpenwaService.test.ts`.
+
+**Consome:** T1 (`utils/whatsappOpenwa.ts`: `montarTextoDoPedido`, `chatIdDoTelefone`, `comandoIdEnvioAutomatico`), T2 (`wa_pode_usar`, tabelas), `_shared/auth.ts` (`exigirMembro`, `exigirSuperadmin`, `respostaDeErro`).
+
+**Produz (ações, corpo `{ acao, ... }`):**
+- `enviar_pedido { order_id, comando_id?, automatico? }` → `200 { status: 'na_fila', mensagem_id }` · `422 { codigo: 'sem_telefone' }` · `409 { codigo: 'nao_usa' }` (org sem `wa_uso_por_org`) · `403 { codigo: 'sem_permissao' }` (manual sem `wa_pode_usar`). Org = a do pedido (com o fallback `companies.org_id` igual ao `whatsapp-cloud`). `automatico=true` usa `comandoIdEnvioAutomatico(order.id, order.updated_at)`, exige `wa_uso_por_org.envio_automatico_pedido` e **não** exige a permissão do usuário (é da organização). Reusa `share_token` (gera só se nulo). Grava `wa_mensagens` (`entidade_tipo='purchase_order'`) e `notification_log` (`channel='whatsapp'`, `status='pending'`, `metadata.wa_mensagem_id`). Conflito de `comando_id` → devolve a linha existente (idempotente).
+- `responder_no_pedido { order_id, texto, comando_id }` → exige `wa_pode_usar`; texto 1–4096; grava `order_chats` (`sender_role='buyer'`, `canal='whatsapp'`) e `wa_mensagens`.
+- `atribuir { mensagem_id, order_id }` → só superadmin; entrada sem organização passa a ter a org do pedido e vira linha em `order_chats`.
+- Front: `whatsappOpenwaService.{ situacao(): Promise<SituacaoOpenwa[]>, enviarPedido(orderId, opcoes?: { automatico?: boolean }): Promise<{ status: 'na_fila' }>, responderNoPedido(orderId, texto): Promise<void>, definirUso(orgId, usar, envioAutomatico): Promise<void>, listarSemPedido(): Promise<…>, atribuir(mensagemId, orderId): Promise<void> }` — `comando_id` gerado com `crypto.randomUUID()` no clique; erro da function vira `Error(mensagem)` como em `whatsappService.invocar`.
+
+- [ ] **Passo 1** — teste do service (mock de `supabase.functions.invoke`): `enviarPedido` manda `{acao:'enviar_pedido', order_id, comando_id: <uuid>}`; dois cliques → dois `comando_id` diferentes; corpo `{error:'Fornecedor sem telefone…'}` vira `Error` com essa mensagem.
+- [ ] **Passo 2** — roda → FALHA. **Passo 3** — implementar service e function. **Passo 4** — roda → PASSA; `npx tsc --noEmit -p .` (ler exit por grep).
+- [ ] **Passo 5** — commit; usuário publica a function; provas: sem header → 401; usuário sem permissão (manual) → 403; pedido de fornecedor sem telefone → 422 e **nenhuma** linha nova em `wa_mensagens`.
+
+### T4 — Edge Function `whatsapp-openwa-worker` (máquina ↔ fila)
+
+**Arquivos:** criar `supabase/functions/whatsapp-openwa-worker/index.ts`; `config.toml` (`verify_jwt = false` + comentário "gate = WA_WORKER_SECRET"); secret `WA_WORKER_SECRET` (≥ 32 caracteres, o usuário grava com `supabase secrets set`).
+
+**Consome:** T1 (`classificarEnvio`, `esperaAposFalha`, `statusDoAck`, `avancarStatus`), T2 (`wa_pegar_pendentes`).
+
+**Produz:** `Authorization: Bearer <WA_WORKER_SECRET>` (comparação em tempo constante, segredo < 32 → 503 fail-closed). Ações:
+- `pegar { limite }` → `{ itens: [{ id, chat_id, texto, comando_id }] }`.
+- `reportar { resultados: [{ id, httpStatus: number|null, erro: 'recusada'|'timeout'|null, messageId: string|null }] }` → aplica `classificarEnvio(r, now - criado_em)`: `aceita` grava `provider_message_id` + `notification_log.status='sent'`; `repetir` volta a `pendente` com `proxima_tentativa_em = now + esperaAposFalha(tentativas)` (ou `incerta` se `null`); `falhou` → `notification_log.status='failed'` + erro legível; `incerta` → `metadata.confirmacao='pendente'`.
+- `vivo { estado_bruto, numero }` → `wa_conexoes.visto_em = now()`, `estado` normalizado (`ready→conectado`, `qr_ready|authenticating→aguardando_qr`, `disconnected|action_required→desconectado`, `failed→erro`).
+
+- [ ] **Passo 1** — commit; usuário publica e grava o secret. Provas (curl): sem header → 401; header errado → 401; `pegar` com fila vazia → `{itens:[]}`; com 1 pendente → item volta e a linha fica `enviando`; `reportar` com `httpStatus:503` e linha de 1 h → volta `pendente` com `proxima_tentativa_em` ≈ +30 s.
+
+### T5 — Edge Function `whatsapp-openwa-webhook` (OpenWA → app)
+
+**Arquivos:** criar `supabase/functions/whatsapp-openwa-webhook/index.ts`; `config.toml` (`verify_jwt = false` + "gate = HMAC"); secret `OPENWA_WEBHOOK_SECRET`.
+
+**Consome:** T1 (`assinaturaConfere`, `statusDoAck`, `avancarStatus`, `telefoneDoRemetente`, `escolherVinculo`, `JANELA_VINCULO_DIAS`, `idsDeMensagemIguais`), T2.
+
+**Produz:**
+- Lê `await req.arrayBuffer()` **antes** de qualquer parse; `assinaturaConfere` falsa → 401 sem gravar. Corpo > 8 MiB → 413 (mídia inline vai até 5 MiB, ~6,7 MiB em base64). `sessionId` ≠ `wa_conexoes.sessao_remota` → 403.
+- Dedup: `INSERT … ON CONFLICT DO NOTHING` em `wa_eventos_recebidos(chave_evento = idempotencyKey)`; repetido → 200 sem efeito.
+- `message.ack` / `message.failed`: casa `data.messageId` com `provider_message_id` (`idsDeMensagemIguais`), aplica `avancarStatus(atual, statusDoAck(data.status))`, espelha em `notification_log.metadata.entrega`.
+- `message.received` (ignorar `isGroup`): grava entrada; candidatos = saídas `aceita|entregue|lida` com `entidade_tipo='purchase_order'` para o mesmo telefone nos últimos `JANELA_VINCULO_DIAS`; `escolherVinculo(candidatos, data.quotedMessage?.id ?? null)`. Com vínculo → `order_chats` (`sender_role='supplier'`, `canal='whatsapp'`, `sender_name` = nome do fornecedor, `sender_email=''`) + `notifications` (`type='whatsapp_resposta_pedido'`, `organization_id`, `link='/supplies-orders?pedido=<id>'`, destinatário = e-mail de `criado_por` da saída). Sem vínculo → fica sem organização.
+- Mídia: se `data.media` inline → grava em bucket privado `whatsapp-midia/<org|sem-org>/<id>` (tipo e tamanho conferidos; link assinado só na hora de abrir); se `omitted` → o `GET …/media` **não** é possível (o OpenWA não é alcançável de fora) → linha no chat "Fornecedor enviou um arquivo (<mimetype>) maior que 5 MB; abrir no celular do número". *(Consequência do "sem túnel"; ver Riscos.)*
+- `session.status` / `session.disconnected` → `wa_conexoes.estado`; virou `desconectado` → aviso no sino para superadmins.
+- 2xx só depois de gravar; erro de banco → 500 (o OpenWA repete).
+
+- [ ] **Passo 1** — commit; usuário publica e grava o secret. Provas (curl com corpo assinado por `node -e`): assinatura errada → 401 e nada gravado; o mesmo evento 20× → 1 linha em `wa_eventos_recebidos` e 1 em `order_chats`; ack `delivered` depois de `read` → continua `lida`.
+
+### T6 — Permissão "Usar o WhatsApp da empresa"
+
+**Arquivos:** `types/users.ts` (`canUseWhatsappEmpresa?: boolean`); `components/OrganizationUsers.tsx` (`baseViewer` com `false`; **depois** do `reduce` de owner/admin, `canUseWhatsappEmpresa: false` explícito; `DETAILED_PERMISSIONS` com `{ group: 'WhatsApp', title: 'Usar o WhatsApp da empresa', view: 'canUseWhatsappEmpresa' }`); criar `utils/permissaoWhatsappEmpresa.ts`; teste `__tests__/permissaoWhatsappEmpresa.test.ts`.
+
+**Produz:** `podeUsarWhatsappEmpresa(args: { permissoes: Record<string, unknown> | null | undefined; acessoTotal: boolean }): boolean`; `MOTIVO_SEM_WHATSAPP_EMPRESA = 'O envio pelo número do ÒPURA depende da permissão "Usar o WhatsApp da empresa" (Minha organização › Usuários).'`.
+
+- [ ] **Passo 1** — testes: `getDefaultPermissions('owner'|'admin'|'member'|'viewer').canUseWhatsappEmpresa === false`; `podeUsarWhatsappEmpresa` true só com a flag `true` ou `acessoTotal`; `DETAILED_PERMISSIONS` tem a entrada no grupo `'WhatsApp'` (não em `'Geral'`).
+- [ ] **Passo 2** FALHA · **Passo 3** implementar · **Passo 4** PASSA · `check-ui-standard.sh components/OrganizationUsers.tsx` · **Passo 5** commit.
+
+### T7 — Pedido: botão, envio automático, situação e chat
+
+**Arquivos:** criar `utils/canalWhatsappDoPedido.ts` + teste `__tests__/canalWhatsappDoPedido.test.ts`; modificar `components/SupplyChainOrderDetails.tsx` (`handleWhatsAppShare` ~944, card "Histórico de Notificações" ~2318), `services/orderService.ts:475-489`, `components/OrderChat.tsx`, `services/chatService.ts` (`canal` em `mapChatRow`/`CHAT_COLUMNS`), `components/notifications/notificationTypes.ts` (`whatsapp_resposta_pedido: { category: 'suprimentos', label: 'Resposta do fornecedor pelo WhatsApp' }`).
+
+**Produz:**
+```ts
+export type CanalDoPedido = { tipo: 'openwa' } | { tipo: 'api_oficial' } | { tipo: 'whatsapp_pessoal'; dica?: string }
+  | { tipo: 'sem_telefone' };
+export function escolherCanalDoPedido(a: { orgUsaOpenwa: boolean; conexaoConectadaOuFora: boolean;
+  podeUsar: boolean; apiOficialAtiva: boolean; fornecedorTemTelefone: boolean }): CanalDoPedido;
+export function rotuloDaEntrega(status: StatusSaida, confirmacaoPendente: boolean): string;
+  // pendente|enviando→'Na fila', aceita→'Enviada', entregue→'Entregue', lida→'Lida',
+  // falhou→'Falhou', incerta ou confirmacaoPendente→'Confirmação pendente'
+```
+- `escolherCanalDoPedido`: org usa OpenWA + pode usar → `openwa` (mesmo com a máquina fora: entra na fila) se tem telefone, senão `sem_telefone`; org usa OpenWA + não pode → `whatsapp_pessoal` com `dica = MOTIVO_SEM_WHATSAPP_EMPRESA`; org não usa → `api_oficial` se ativa, senão `whatsapp_pessoal` sem dica (o de hoje, intacto).
+- `orderService` ao virar `Enviado`: primeiro `wa_situacao` da org; se usa OpenWA com envio automático → `whatsappOpenwaService.enviarPedido(id, { automatico: true })`; senão o caminho da API oficial de hoje. Continua em `try/catch` que nunca derruba o pedido; o aviso ao usuário diz "na fila" ou o motivo.
+- `OrderChat`: bolha com `canal==='whatsapp'` ganha selo "WhatsApp"; caixa "Enviar também pelo WhatsApp" só quando o canal é `openwa`, marcada se a última mensagem do fornecedor tem `canal==='whatsapp'`; marcada → `whatsappOpenwaService.responderNoPedido` (que já grava em `order_chats`), desmarcada → `chatService.sendMessage` de hoje.
+
+- [ ] **Passo 1** — testes de `escolherCanalDoPedido` (as 6 combinações acima) e `rotuloDaEntrega` (os 7 status + `confirmacaoPendente`).
+- [ ] **Passo 2** FALHA · **Passo 3** implementar util e ligar nas telas · **Passo 4** PASSA · `tsc` · `check-ui-standard.sh` nos 2 `.tsx` · **Passo 5** commit.
+
+### T8 — Configurações › WhatsApp & Integrações: bloco do ÒPURA
+
+**Arquivos:** criar `components/settings/WhatsappOpenwaSettings.tsx`; montar em `components/Settings.tsx` (aba `whatsapp`, **acima** de `<WhatsappCloudSettings />`); teste `__tests__/components/WhatsappOpenwaSettings.test.tsx` (modelo: `__tests__/components/WhatsappCloudSettings.test.tsx`).
+
+**Consome:** `whatsappOpenwaService` (T3), `useOrgContext` (REGRA #5), `temAcessoTotal`.
+
+**Produz (tela):** situação (`Conectado · <número>` / `Número desconectado — ler o QR no painel do OpenWA na máquina` / `Máquina fora — os envios esperam na fila`, por `visto_em` > 3 min); para owner/admin da org ativa: "Usar o WhatsApp do ÒPURA nesta organização" e "Enviar o pedido automaticamente ao marcar Enviado" (`definirUso`); para superadmin: tabela "Mensagens sem pedido" (StandardTable) com ação "Atribuir a um pedido". Em "Todas as organizações": só a situação, com o motivo nos controles desligados.
+
+- [ ] **Passo 1** — testes: membro comum vê situação e controles desligados com `title`; owner liga o uso → `definirUso(org, true, true)`; superadmin vê "Mensagens sem pedido"; `visto_em` de 5 min atrás → texto "Máquina fora".
+- [ ] **Passo 2** FALHA · **Passo 3** implementar · **Passo 4** PASSA · `check-ui-standard.sh` · `bash scripts/check-org-selector-guard.sh` · **Passo 5** commit.
+
+### T9 — Worker e Compose (`infra/openwa/`)
+
+**Arquivos:** criar `infra/openwa/docker-compose.yml`, `infra/openwa/.env.example`, `infra/openwa/worker/{package.json,worker.mjs,nucleo.mjs,Dockerfile}`, `infra/openwa/LEIA-ME.md`; `.gitignore` (`infra/openwa/.env`, `infra/openwa/dados/`); teste `__tests__/openwaWorkerNucleo.test.ts`.
+
+**Produz:**
+- Compose: `openwa` (imagem `ghcr.io/rmyndharis/openwa@sha256:<digest>` — digest anotado no LEIA-ME), `ports: ["127.0.0.1:2785:2785"]`; env `ENGINE_TYPE=baileys`, `DATABASE_TYPE=sqlite`, `RESOLVE_LID_TO_PHONE=true`, `SEND_PACING_ENABLED=true`, `WEBHOOK_MEDIA_INLINE_MAX_BYTES=5242880`, `QUEUE_ENABLED=true` + `REDIS_ENABLED=true` (serviço `redis:7-alpine` sem porta publicada — a retentativa de webhook do OpenWA só existe com a fila); volume `./dados`. `worker` (`node:22-alpine`, depende de `openwa`). Nomes de variáveis **conferidos no `.env.example` do commit fixado** antes de usar.
+- `nucleo.mjs`: `export function requisicaoDeEnvio(item, sessao, chaveApi)` → `{ url: 'http://openwa:2785/api/sessions/<sessao>/messages/send-text', headers: { 'X-API-Key', 'Idempotency-Key': item.comando_id, 'Content-Type' }, corpo: { chatId: item.chat_id, text: item.texto, linkPreview: false } }`; `export function resultadoDoEnvio({ status, corpo, erro })` → `{ httpStatus, erro: 'recusada'|'timeout'|null, messageId }` (`ECONNREFUSED`→`recusada`, abort→`timeout`, `201`→`messageId = corpo.messageId`).
+- `worker.mjs`: `@supabase/supabase-js` assina `wa-campainha` evento `fila` (anon key); ao tocar e a cada 60 s → `pegar` → envia (timeout 30 s) → `reportar`; a cada 60 s → `vivo`. Log sem texto nem telefone.
+- Registro do webhook no OpenWA (feito uma vez no LEIA-ME): `POST /api/sessions/opura/webhooks` com `url=https://oxedkknreghxrgenyjiu.supabase.co/functions/v1/whatsapp-openwa-webhook`, `events=["message.received","message.ack","message.failed","session.status","session.disconnected"]`, `secret=$OPENWA_WEBHOOK_SECRET`.
+
+- [ ] **Passo 1** — testes de `nucleo.mjs`: `Idempotency-Key` = `comando_id`; `linkPreview:false`; `ECONNREFUSED`→`recusada`; `AbortError`→`timeout`; `201 {messageId:'x'}` → `{httpStatus:201, messageId:'x', erro:null}`.
+- [ ] **Passo 2** FALHA · **Passo 3** implementar · **Passo 4** PASSA · `docker compose -f infra/openwa/docker-compose.yml config` sem erro · **Passo 5** commit.
+
+### T10 — Instalação na máquina (com o usuário)
+
+- [ ] **Passo 1** — `wsl --install -d Ubuntu-24.04 --name openwa` (ou import), `systemd=true` em `/etc/wsl.conf`, Docker Engine oficial dentro da distro. Prova: `wsl -d openwa -- docker info` responde com o Docker Desktop **fechado**.
+- [ ] **Passo 2** — tarefa agendada "ao iniciar o sistema", "executar estando o usuário conectado ou não": `wsl.exe -d openwa --exec /bin/sh -c "sleep infinity"` (mantém a distro viva) — prova: reiniciar **sem login** e, de outra máquina/celular, ver `visto_em` atualizando na tela de Configurações.
+- [ ] **Passo 3** — copiar `infra/openwa` para a distro, criar `.env` (chave do OpenWA gerada na máquina, `WA_WORKER_SECRET`, `OPENWA_WEBHOOK_SECRET`, URL e anon key do Supabase), `docker compose up -d`. Prova: `curl -s 127.0.0.1:2785/api/health/ready`; de fora da máquina, a porta 2785 **não** responde.
+- [ ] **Passo 4** — o usuário ativa o WhatsApp Business no chip (no celular que ficará na empresa), aquece alguns dias, e lê o QR no painel local. Prova: situação "Conectado · <número>" na tela.
+- [ ] **Passo 5** — usuário confere na BIOS "Restore AC Power Loss = Power On". Backup diário do `./dados` agendado (destino e retenção anotados no LEIA-ME).
+
+### T11 — Verificação de ponta a ponta e publicação
+
+- [ ] **Passo 1** — `npx vitest run --project leves` (contar falhas por grep, não por tail); `npx tsc --noEmit`; `bash scripts/check-ui-standard.sh` nos `.tsx`; `bash scripts/check-org-selector-guard.sh`; `bash scripts/verificar-views-anon.sh`.
+- [ ] **Passo 2** — PR (rascunho) → CI verde (ler a lista do `pesados-quais`) → merge pelo fluxo do projeto (eu faço o merge) → `bash scripts/conferir-producao.sh`.
+- [ ] **Passo 3** — roteiro "Verificação de ponta a ponta" (itens 1–8 acima) em produção, com 1 pedido real da Alpa e 1 da SPE do Garden, fornecedor de teste com o celular do usuário. Cada item com evidência (print ou SELECT) anotada em "Estado".
 
 ## Estado
 

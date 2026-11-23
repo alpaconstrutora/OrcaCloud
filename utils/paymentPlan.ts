@@ -82,6 +82,36 @@ export function mesesEntre(isoA: string, isoB: string): number {
 }
 
 /**
+ * Fim da vigência de um contrato de `meses` meses que começa em `inicio`:
+ * início + N meses − 1 dia (23/09/2016 + 12 → 22/09/2017). Quando o dia do
+ * início não existe no mês de chegada, `somarMeses` já para no último dia do
+ * mês — e esse É o fim (31/01 + 1 → 28/02; com o − 1 terminaria em 27/02).
+ * Sem início ou prazo < 1 → `''`.
+ */
+export function fimDaVigencia(inicio: string, meses: number): string {
+    const [a, m, d] = (inicio || '').split('-').map(Number);
+    if (!a || !m || !d || !(meses >= 1)) return '';
+    const chegada = somarMeses(inicio, Math.floor(meses));
+    const limitou = Number(chegada.slice(8, 10)) !== d;
+    return limitou ? chegada : somarDias(chegada, -1);
+}
+
+/**
+ * Inverso de `fimDaVigencia`: quantos meses inteiros vão de `inicio` a `fim`,
+ * ou `null` quando o fim não fecha meses inteiros (data digitada à mão).
+ * O candidato vem de `mesesEntre(inicio, fim + 1 dia)`; o caso limitado ao
+ * último dia do mês fica um mês abaixo, por isso confere os dois.
+ */
+export function mesesDaVigencia(inicio: string, fim: string): number | null {
+    if (!inicio || !fim) return null;
+    const n = mesesEntre(inicio, somarDias(fim, 1));
+    for (const candidato of [n, n - 1]) {
+        if (candidato >= 1 && fimDaVigencia(inicio, candidato) === fim) return candidato;
+    }
+    return null;
+}
+
+/**
  * Expande um bloco nas suas parcelas. `idBase` prefixa os ids para as linhas do
  * mesmo bloco continuarem reconhecíveis ao reagrupar.
  */

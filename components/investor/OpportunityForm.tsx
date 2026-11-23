@@ -484,7 +484,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             {vitrine ? (
                                 <p className="text-xs text-gray-500 mt-0.5">Endereço: <a href={vitrine} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">{vitrine}</a></p>
                             ) : (
-                                <p className="text-xs text-amber-700 mt-0.5">Esta organização ainda não tem endereço do marketplace: sem ele, a vitrine não abre. Cadastre em Minha Organização › Organização › Marketplace público.</p>
+                                <p className="text-xs text-amber-700 mt-0.5">Esta organização ainda não tem endereço do marketplace: sem ele, a vitrine não abre. Cadastre em Minha Organização › Organização › Detalhes da organização › Marketplace público.</p>
                             )}
                         </div>
                         <span title={!form.is_published ? 'Publique para os investidores antes de pôr no marketplace.' : undefined}>

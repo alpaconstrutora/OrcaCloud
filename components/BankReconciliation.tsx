@@ -3689,18 +3689,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 : {};
                             return (
                         <StatementCardWrapper {...wrapperProps}>
-                        {/* Na aba Pendentes as duas tabelas ficam lado a lado; a da direita já se
-                            identifica como "Lançamentos", então a da esquerda precisa do rótulo
-                            equivalente ("Extrato") — sem ele o usuário não sabe qual é qual.
-                            Na aba Extrato o título da tela já diz isso, então não se repete. */}
-                        {useAcoplada && activeView === 'pending' && (
-                            <div className="flex items-center px-2 pt-2">
-                                <h4 className="text-xs font-black text-gray-400 flex items-center gap-2">
-                                    <Download className="w-4 h-4" />
-                                    Extrato
-                                </h4>
-                            </div>
-                        )}
                         {/* Pendentes (meia-tela) quebra a linha: com o Agrupar na linha da busca, sem
                             quebrar a busca encolhia a quase nada em tela estreita — ela guarda 14rem. */}
                         <div className={!useAcoplada
@@ -3712,6 +3700,16 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             <h4 className="text-xs font-black text-gray-400 flex items-center gap-2">
                                 <Download className="w-4 h-4" />
                                 Extrato Bancário
+                            </h4>
+                            )}
+                            {/* Na Pendentes as duas tabelas ficam lado a lado; a da direita se chama
+                                "Lançamentos", então a da esquerda precisa do rótulo "Extrato" — na frente
+                                da busca, como o de Lançamentos (pedido de 23/11/2026; antes, linha própria).
+                                Na aba Extrato o título da tela já diz isso, então não se repete. */}
+                            {useAcoplada && activeView === 'pending' && (
+                            <h4 className="text-xs font-black text-gray-400 flex items-center gap-2 shrink-0 mr-1.5">
+                                <Download className="w-4 h-4" />
+                                Extrato
                             </h4>
                             )}
                             {useAcoplada && (

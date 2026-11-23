@@ -16,6 +16,10 @@ Depois da pesquisa (opções gratuitas) e da proposta de testar com uma escritur
 > Só escritura ou também outros documentos? Outros documentos.
 > Linhas duvidosas: destacar para revisão
 
+23/11/2026, depois da 1ª publicação (#676), ao ver o texto dentro do painel lateral:
+
+> a transcricao em drawer fica muito ruim a visualizacao. implemente uma tela
+
 ## Pesquisa e teste (23/11/2026)
 
 Opções gratuitas levantadas: texto do próprio PDF (pdf.js, já no app), Tesseract.js no navegador,
@@ -39,6 +43,7 @@ Teste com duas escrituras reais (CASA, 3 páginas; TERRENO, 2 páginas — Cart�
 |---|---|---|
 | 23/11/2026 | Só escritura ou também outros documentos? | Outros documentos — todo PDF/imagem da aba |
 | 23/11/2026 | Linhas duvidosas: destacar ou esconder? | Destacar para revisão |
+| 23/11/2026 | Onde ler a transcrição? | Numa tela, não no drawer ("implemente uma tela") |
 
 Decisões técnicas (minhas, registradas para revisão):
 
@@ -87,9 +92,35 @@ Decisões técnicas (minhas, registradas para revisão):
    *Pronto quando:* enviar a ESCRITURA TERRENO.pdf num item do checklist mostra o progresso e,
    no fim, o texto com as linhas duvidosas destacadas; reabrir o painel mostra o texto gravado.
 
+### Fase 2 — tela própria (pedido "implemente uma tela", 23/11/2026)
+
+Decisão de desenho (minha): a tela ocupa o lugar da **aba Documentos** (voltar de 1 salto,
+§23.1), não do detalhe inteiro — a fila de transcrição mora na aba, e sair dela cancelaria a
+leitura. **Arquivo original à esquerda, texto à direita**: revisar linha duvidosa é olhar os dois.
+
+6. **`components/empreendimento/TelaDeTranscricao.tsx`** (novo) — cabeçalho com voltar, nome do
+   arquivo, copiar / transcrever de novo / "Revisar texto"; coluna do arquivo (PDF no
+   visualizador do navegador por URL local `blob:`, imagem por `<img>`); coluna do texto com
+   contagem e navegação ‹ › entre linhas duvidosas (rola só a caixa), "Marcar tudo como
+   revisado", revisão em área de texto da altura da coluna; texto não salvo pergunta ao sair
+   (`useUnsavedChanges` com `guardarNavegacao`: vale também para trocar de aba do empreendimento).
+   *Pronto quando:* tsc e `check-ui-standard.sh` limpos; print com as duas colunas, a navegação
+   sem rolar a página e o modo de revisão.
+7. **`TranscricaoDoDocumento.tsx`** — o painel deixa de mostrar o texto: fica o andamento, o
+   resumo ("N linhas, M com leitura duvidosa") e "Abrir transcrição" (desligado com o motivo se o
+   painel tem alteração não salva). Leitura e estados viram peças comuns ao painel e à tela.
+   *Pronto quando:* print do painel com o resumo.
+8. **`DocumentosEmpreendimentoTab.tsx`** — estado da tela; ação "Ver transcrição" no menu da linha
+   do checklist e botão na linha de "Outros documentos" (desligado com o motivo para
+   Word/Excel/DWG/ZIP ou item sem arquivo; coluna Tipo 180→150 para caber a coluna de ações).
+   *Pronto quando:* tsc limpo; abrir pela linha e pelo painel chega à mesma tela.
+
 ## Estado
 
-- [ ] 1. Migration — escrita e `segurancaMigrations.test.ts` verde; **falta aplicar no banco**
+- [x] 1. Migration — aplicada em 23/11/2026 com autorização do usuário ("Aplique você mesmo");
+      no banco: RLS ligada, 4 policies, ACL sem anon e sem TRUNCATE/REFERENCES/TRIGGER para
+      authenticated; prova como usuário comum (bloco desfeito no fim): grava na própria org, recusa
+      org alheia, recusa versão de outra org, recusa TRUNCATE
 - [x] 2. Regras puras + teste — 14 testes verdes
 - [x] 3. Serviço — tsc limpo; provado no Chrome (Playwright, página temporária que chama o
       serviço): ESCRITURA TERRENO.pdf 2 páginas escaneadas em 17 s (com o download do modelo),
@@ -97,8 +128,15 @@ Decisões técnicas (minhas, registradas para revisão):
       < 1 s, origem TEXTO_DO_PDF, 0 duvidosas; JPG em 5 s; 0 erro no console
 - [x] 4. Componente + fila — `check-ui-standard.sh` sem achado, tsc limpo; conferido por
       print (progresso; texto com as linhas duvidosas em âmbar)
-- [ ] 5. Ligação na aba — código pronto, tsc limpo; **falta a prova na tela real** (envio de
-      escritura no checklist → texto gravado → reabrir o painel), que depende da migration
+- [ ] 5. Ligação na aba — no ar desde #676 (8fb67cb, conferir-producao ✅); **falta a prova na
+      tela real logada** (envio de escritura no checklist → texto gravado → reabrir)
+- [x] 6. Tela própria — tsc e `check-ui-standard.sh` limpos; prints (Chrome 1440×900, componente
+      real, escritura TERRENO): duas colunas cabem na janela; 12 cliques em "próxima" levaram a
+      "12 de 29" com a página parada (scrollY 44 → 44) e só a caixa rolando; modo de revisão
+- [x] 7. Painel compacto — print: "109 linhas, 29 com leitura duvidosa para revisar" + "Abrir
+      transcrição"
+- [ ] 8. Ligação da tela na aba — tsc limpo; **falta a prova na tela real logada** (abrir pela
+      linha e pelo painel)
 
 ## Verificação
 

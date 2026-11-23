@@ -450,8 +450,9 @@ se o tópico pode ser público ou precisa de canal privado com policy em
    chega ao fornecedor.
 5. Webhook com assinatura errada → 401 e nada gravado; o mesmo evento 20 vezes
    → um registro só.
-6. Usuário sem a permissão: botão desligado com motivo; chamada direta à
-   function → 403.
+6. Usuário sem a permissão: o botão cai no WhatsApp pessoal (ou na API
+   oficial, se a org tem) com a dica da permissão; chamada direta à function
+   → 403.
 7. Usuário de outra organização não vê as `wa_mensagens` nem o chat de pedido
    que não é da sua organização; nenhum segredo aparece no navegador, no bundle
    ou em log.
@@ -697,7 +698,7 @@ export function rotuloDaEntrega(status: StatusSaida, confirmacaoPendente: boolea
 
 - [ ] **Passo 1** — `npx vitest run --project leves` (contar falhas por grep, não por tail); `npx tsc --noEmit`; `bash scripts/check-ui-standard.sh` nos `.tsx`; `bash scripts/check-org-selector-guard.sh`; `bash scripts/verificar-views-anon.sh`.
 - [ ] **Passo 2** — **PORTÃO:** antes do push/merge, conferir no banco que as migrations `aplicar_20271123100000` e `aplicar_20271123110000` estão aplicadas (`SELECT 1 FROM information_schema.columns WHERE table_name='order_chats' AND column_name='canal'` e `SELECT to_regprocedure('public.wa_situacao()')`) — o front novo lê `order_chats.canal` e quebra o chat de todas as orgs sem ela (Ruling 16). Depois: PR (rascunho) → CI verde (ler a lista do `pesados-quais`) → merge pelo fluxo do projeto (eu faço o merge) → `bash scripts/conferir-producao.sh`.
-- [ ] **Passo 3** — roteiro "Verificação de ponta a ponta" (itens 1–8 acima) em produção, com 1 pedido real da Alpa e 1 da SPE do Garden, fornecedor de teste com o celular do usuário. Cada item com evidência (print ou SELECT) anotada em "Estado".
+- [ ] **Passo 3** — roteiro "Verificação de ponta a ponta" (itens 1–8 acima) em produção, com 1 pedido real da Alpa e 1 da SPE do Garden, fornecedor de teste com o celular do usuário. Cada item com evidência (print ou SELECT) anotada em "Estado". Também: capturar 1 payload bruto de `message.received` e 1 de `message.ack` (log temporário ou `GET /api/webhooks/delivery-failures`/painel do OpenWA) e conferir `from`, `messageId`, `quotedMessage.id` e `status`; e 1 resposta do fornecedor CITANDO a mensagem do pedido.
 
 ## Estado
 

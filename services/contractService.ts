@@ -1526,7 +1526,9 @@ export const contractService = {
                 .from('contracts')
                 // `empresa_id`/`execution_address` entram para a reconciliação de
                 // createFromDeal saber o que ainda está vazio (backfill).
-                .select('id, organization_id, deal_id, client_id, empresa_id, execution_address, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
+                // `nature`/`contract_type`: dão nome ao documento gerado pelo modelo
+                // ("… - Minuta do Contrato de Locação", EmitDocumentModal).
+                .select('id, organization_id, deal_id, client_id, empresa_id, execution_address, number, title, status, original_value, current_value, direction, domain, nature, contract_type, signature_status, signed_contract_url, created_at')
                 .eq('deal_id', dealId)
                 .maybeSingle();
             if (error) {
@@ -1641,7 +1643,7 @@ export const contractService = {
                     .from('contracts')
                     .update(patch as any)
                     .eq('id', existing.id)
-                    .select('id, organization_id, deal_id, client_id, empresa_id, execution_address, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
+                    .select('id, organization_id, deal_id, client_id, empresa_id, execution_address, number, title, status, original_value, current_value, direction, domain, nature, contract_type, signature_status, signed_contract_url, created_at')
                     .maybeSingle();
                 if (fixed) return fixed as Contract;
             }
@@ -1670,7 +1672,7 @@ export const contractService = {
         // Idempotência secundária: contrato com este número já existe?
         const { data: byNumber } = await supabase
             .from('contracts')
-            .select('id, organization_id, client_id, number, title, status, original_value, current_value, direction, domain, signature_status, signed_contract_url, created_at')
+            .select('id, organization_id, client_id, number, title, status, original_value, current_value, direction, domain, nature, contract_type, signature_status, signed_contract_url, created_at')
             .eq('organization_id', deal.organization_id)
             .eq('number', number)
             .maybeSingle();

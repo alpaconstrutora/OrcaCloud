@@ -59,10 +59,10 @@ import { ConfirmProvider } from '../../components/ui/confirm';
 const CONTRATO = { id: 'c-1', number: 'CTS-001', organization_id: 'org-1' } as never;
 const RAIZ = path.resolve(__dirname, '../..');
 
-const montar = (onClose = vi.fn(), notify = vi.fn()) => {
+const montar = (onClose = vi.fn(), notify = vi.fn(), contrato = CONTRATO) => {
     render(
         <ConfirmProvider>
-            <EmitDocumentModal organizationId="org-1" contract={CONTRATO} organization={null}
+            <EmitDocumentModal organizationId="org-1" contract={contrato} organization={null}
                 onClose={onClose} notify={notify} persistVersion />
         </ConfirmProvider>,
     );
@@ -98,6 +98,39 @@ describe('Gerar pelo modelo — versão sempre em PDF', () => {
         fireEvent.click(await screen.findByRole('button', { name: /Gerar versão \(PDF\)/ }));
         expect(await screen.findByText(/NÃO foi salvo como versão: mime type not supported/)).toBeTruthy();
         expect(onClose).not.toHaveBeenCalled();
+    });
+});
+
+// 23/11/2026: o documento era salvo como "Minuta — <nome do modelo>"; o pedido é
+// "<nº do contrato> - Minuta do Contrato de Locação".
+describe('Gerar pelo modelo — nome do documento', () => {
+    beforeEach(() => { addVersionFromBlob.mockReset(); saveAs.mockReset(); addVersionFromBlob.mockResolvedValue({}); });
+
+    const gerar = async (contrato: object) => {
+        montar(vi.fn(), vi.fn(), contrato as never);
+        fireEvent.click(await screen.findByRole('button', { name: /Gerar versão \(PDF\)/ }));
+        await waitFor(() => expect(addVersionFromBlob).toHaveBeenCalledTimes(1));
+        return addVersionFromBlob.mock.calls[0][0] as { name: string; fileName: string; notes: string };
+    };
+
+    it('locação: "<nº> - Minuta do Contrato de Locação", no documento e no download', async () => {
+        const arg = await gerar({ id: 'c-1', number: 'CTL-014-057-0001', organization_id: 'org-1', nature: 'Locação', contract_type: 'Contrato Recorrente' });
+        expect(arg.name).toBe('CTL-014-057-0001 - Minuta do Contrato de Locação');
+        expect(saveAs.mock.calls[0][1]).toBe('CTL-014-057-0001 - Minuta do Contrato de Locação.pdf');
+        // chave do storage sem acento nem espaço
+        expect(arg.fileName).toBe('CTL-014-057-0001_-_Minuta_do_Contrato_de_Locacao.pdf');
+        // o modelo usado continua registrado
+        expect(arg.notes).toContain('Contrato padrão');
+    });
+
+    it('outros tipos usam o tipo do contrato', async () => {
+        const arg = await gerar({ id: 'c-2', number: 'CV-001', organization_id: 'org-1', nature: 'Outros', contract_type: 'Compra e Venda' });
+        expect(arg.name).toBe('CV-001 - Minuta do Contrato de Compra e Venda');
+    });
+
+    it('sem tipo definido: "Minuta do Contrato"', async () => {
+        const arg = await gerar(CONTRATO);
+        expect(arg.name).toBe('CTS-001 - Minuta do Contrato');
     });
 });
 

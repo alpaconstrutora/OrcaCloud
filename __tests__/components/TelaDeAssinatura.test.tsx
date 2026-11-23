@@ -7,7 +7,8 @@
  *  3. a leitura vai junto no assinar (modo TELA, fim medido);
  *  4. PDF que não desenha: abrir o arquivo à parte libera, registrado como PDF_EXTERNO;
  *  5. "voltar" volta no histórico do navegador e fecha a tela;
- *  6. leituraDoScroll: página atual, última vista e fim.
+ *  6. leituraDoScroll: página atual, última vista e fim;
+ *  7. link do representante aberto com OUTRA conta: diz para quem é e oferece copiar o link (23/11/2026).
  */
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
@@ -40,6 +41,7 @@ vi.mock('../../components/assinatura/PaginasDoPdf', async (importOriginal) => {
 
 import { FluxoDeAssinatura } from '../../components/assinatura/FluxoDeAssinatura';
 import { leituraDoScroll } from '../../components/assinatura/PaginasDoPdf';
+import { ErroDeAssinatura } from '../../services/assinaturaInternaService';
 
 const VISAO = {
     url: 'https://x/doc.pdf',
@@ -141,5 +143,27 @@ describe('leituraDoScroll', () => {
     });
     it('documento curto que cabe inteiro já está no fim', () => {
         expect(leituraDoScroll([0], 0, 800, 600)).toEqual({ atual: 1, ultimaVista: 1, total: 1, noFim: true });
+    });
+});
+
+describe('link do representante aberto com outra conta', () => {
+    it('título próprio, a mensagem da Edge e "Copiar o link" com o endereço do e-mail', async () => {
+        const msg = 'Este pedido de assinatura é para outro usuário (a***@empresa.com.br). Abra o link numa janela anônima e entre com essa conta.';
+        ver.mockRejectedValue(new ErroDeAssinatura(msg, 403, false, true));
+        const escrever = vi.fn(async () => {});
+        Object.defineProperty(navigator, 'clipboard', { value: { writeText: escrever }, configurable: true });
+        render(<FluxoDeAssinatura aberto onFechar={() => {}} acesso={{ signatarioId: 'sig-9', canal: 'MEMBRO', credencial: null }} />);
+        expect(await screen.findByText('Assinatura de outro usuário')).toBeTruthy();
+        expect(screen.getByText(msg)).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: /Copiar o link/ }));
+        expect(escrever).toHaveBeenCalledWith(`${window.location.origin}/?assinar=sig-9`);
+        expect(await screen.findByRole('button', { name: /Link copiado/ })).toBeTruthy();
+    });
+
+    it('outro erro qualquer: continua "Não foi possível abrir", sem copiar link', async () => {
+        ver.mockRejectedValue(new ErroDeAssinatura('Assinatura não encontrada ou sem permissão.', 403));
+        render(<FluxoDeAssinatura aberto onFechar={() => {}} acesso={{ signatarioId: 'sig-9', canal: 'MEMBRO', credencial: null }} />);
+        expect(await screen.findByText('Não foi possível abrir')).toBeTruthy();
+        expect(screen.queryByRole('button', { name: /Copiar o link/ })).toBeNull();
     });
 });

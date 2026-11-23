@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ExternalLink, FileSignature, FileDown, Loader2, RefreshCw, Send, Upload, XCircle } from 'lucide-react';
 import { signatureService, SignatureSigner } from '../services/signatureService';
 import {
-    assinaturaDaVersao, contractDocumentVersionService, motivoNaoEnviaAoPortal,
+    arquivoDaVersao, assinaturaDaVersao, contractDocumentVersionService, motivoNaoEnviaAoPortal,
 } from '../services/contractDocumentVersionService';
 import { abrirArquivoAssinado, BUCKET_DOCUMENTOS } from '../lib/storageAssinado';
 import { PropertyDeal, Client, ContractDocumentVersion } from '../types';
@@ -186,10 +186,10 @@ function AssinaturaNoPortal({ contrato, dealId, onGerarDocumento, versoesRefresh
                 <button
                     type="button"
                     className={btnSecundario}
-                    onClick={() => abrirArquivoAssinado(BUCKET_DOCUMENTOS, v.storage_path || v.url)
+                    onClick={() => abrirArquivoAssinado(BUCKET_DOCUMENTOS, arquivoDaVersao(v).caminho)
                         .catch(e => notifyRef.current(e instanceof Error ? e.message : 'Não foi possível abrir o documento.', 'error'))}
                 >
-                    <ExternalLink className="w-[15px] h-[15px]" /> Abrir documento
+                    <ExternalLink className="w-[15px] h-[15px]" /> {arquivoDaVersao(v).assinada ? 'Abrir via assinada' : 'Abrir documento'}
                 </button>
             </div>
             {/* Botão desligado diz o motivo — também à vista, não só no title. */}

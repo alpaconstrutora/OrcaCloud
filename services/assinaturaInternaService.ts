@@ -68,9 +68,10 @@ export interface VisaoParaAssinar {
 
 export interface ResultadoDaAssinatura { concluido: boolean; faltam: number }
 
-/** Erro da Edge com a mensagem que ela escreveu (e se convém pedir um código novo). */
+/** Erro da Edge com a mensagem que ela escreveu (e se convém pedir um código novo;
+ *  `outroUsuario`: o link é de outra conta da empresa — a tela oferece copiar o link). */
 export class ErroDeAssinatura extends Error {
-    constructor(mensagem: string, readonly status: number, readonly pedirCodigo = false) {
+    constructor(mensagem: string, readonly status: number, readonly pedirCodigo = false, readonly outroUsuario = false) {
         super(mensagem);
     }
 }
@@ -81,17 +82,19 @@ async function chamar<T>(corpo: Record<string, unknown>): Promise<T> {
     let mensagem = 'Não foi possível concluir agora. Tente de novo.';
     let status = 0;
     let pedirCodigo = false;
+    let outroUsuario = false;
     if (error instanceof FunctionsHttpError) {
         status = error.context.status;
         try {
-            const j = (await error.context.json()) as { error?: string; pedir_codigo?: boolean };
+            const j = (await error.context.json()) as { error?: string; pedir_codigo?: boolean; outro_usuario?: boolean };
             if (j.error) mensagem = j.error;
             pedirCodigo = !!j.pedir_codigo;
+            outroUsuario = !!j.outro_usuario;
         } catch {
             // corpo não era JSON: fica a mensagem genérica
         }
     }
-    throw new ErroDeAssinatura(mensagem, status, pedirCodigo);
+    throw new ErroDeAssinatura(mensagem, status, pedirCodigo, outroUsuario);
 }
 
 const doAcesso = (a: AcessoDoSignatario) => ({ signatario_id: a.signatarioId, canal: a.canal, credencial: a.credencial });

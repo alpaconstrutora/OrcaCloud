@@ -30,7 +30,7 @@ import { garantirTokenDoPortal } from "../_shared/portalAcesso.ts"
 import { enviarEmail, base64DeBytes } from "../_shared/resend.ts"
 import { propagarVersao, propagarDocumentoDaNegociacao } from "../_shared/assinaturaPropagar.ts"
 import {
-    validarPedido, respostaDoErroDaRpc, codigoDeSeisDigitos, materialDoCodigo, sha256Hex,
+    validarPedido, respostaDoErroDaRpc, recusaDoMembroDeOutraConta, codigoDeSeisDigitos, materialDoCodigo, sha256Hex,
     ipDoPedido, pareceUmPdf, pastaDaOrigem, caminhoDoAssinado, linkParaAssinar, urlDeValidacao,
     dataHoraBrasilia, TERMO_DE_ACEITE, TERMO_VERSAO, ROTULO_DO_PAPEL, MAX_BYTES_PDF,
     type Canal, type OrigemDoArquivo, type Pedido,
@@ -316,10 +316,24 @@ serve(async (req: Request) => {
         const quem = await identidade(req, p.canal);
         if (!quem.ok) return quem.resposta;
         const base = { p_signatario: p.signatario_id, p_canal: p.canal, p_credencial: p.credencial, p_user: quem.user };
+        // Sem permissão no canal MEMBRO: se é outra conta da mesma empresa, diz o que fazer.
+        const recusar = async (error: { code?: string; message?: string } | null) => {
+            if (p.canal === 'MEMBRO' && quem.user && error?.code === '42501') {
+                const { data: s } = await admin.from('assinatura_signatarios')
+                    .select('canal, user_id, email, organization_id').eq('id', p.signatario_id).maybeSingle();
+                const { data: m } = s
+                    ? await admin.from('organization_members').select('user_id')
+                        .eq('user_id', quem.user).eq('organization_id', s.organization_id).limit(1).maybeSingle()
+                    : { data: null };
+                const msg = recusaDoMembroDeOutraConta(s, quem.user, !!m);
+                if (msg) return json({ error: msg, outro_usuario: true }, 403);
+            }
+            return erroDaRpc(error);
+        };
 
         if (p.acao === 'ver') {
             const { data, error } = await admin.rpc('assinatura_ver', { ...base, p_ip: ip, p_ua: ua });
-            if (error) return erroDaRpc(error);
+            if (error) return await recusar(error);
             const caminho = data.status === 'CONCLUIDO' && data.final_path ? data.final_path : data.original_path;
             let url: string | null = null;
             if (caminhoSemTravessia(caminho)) {
@@ -337,7 +351,7 @@ serve(async (req: Request) => {
             const { data, error } = await admin.rpc('assinatura_registrar_codigo', {
                 ...base, p_otp_hash: await sha256Hex(materialDoCodigo(p.signatario_id, codigo)), p_ip: ip, p_ua: ua,
             });
-            if (error) return erroDaRpc(error);
+            if (error) return await recusar(error);
             if (!data?.ok) return json({ error: data?.erro ?? 'Não foi possível enviar o código.' }, 400);
             const { data: env } = await admin.from('assinatura_signatarios').select('organization_id').eq('id', p.signatario_id).maybeSingle();
             const { data: org } = await admin.from('organizations').select('name').eq('id', env?.organization_id).maybeSingle();
@@ -353,7 +367,7 @@ serve(async (req: Request) => {
             p_cpf: p.cpf, p_aceite: p.aceite, p_termo_versao: p.termo_versao, p_ip: ip, p_ua: ua,
             p_leitura: p.leitura,
         });
-        if (error) return erroDaRpc(error);
+        if (error) return await recusar(error);
         if (!data?.ok) return json({ error: data?.erro ?? 'Não foi possível assinar.', pedir_codigo: !!data?.pedir_codigo }, 400);
         if (!data.finalizar) return json({ ok: true, concluido: false, faltam: data.faltam });
         const r = await finalizar(admin, data.envelope_id, frontend);

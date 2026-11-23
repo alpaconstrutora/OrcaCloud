@@ -238,3 +238,33 @@ Sugestão aceita: "Aprovado. inclusive o opcional". O opcional é exigir a leitu
   - a leitura enviada foi `{modo: TELA, paginas: 6, ultima_pagina: 6, chegou_ao_fim: true}`;
   - "voltar" fecha a tela e a URL fica sem token;
   - nenhum erro de página.
+
+## Ajustes do teste real (23/11/2026)
+
+### Pedido original (literal)
+
+Depois do teste de ponta a ponta no contrato de locação CTL-014-057-0001:
+
+> "Os dois receberam o e-mail com o PDF assinado anexado? Sim. porem temos uma folha em comercial > locacoes > Gerenciar Negociação > contrato > documentos > o contrato não esta assinado.
+>
+> 1. Corrigir a conversão: de acordo
+> 2. Melhorar a mensagem: de acordo"
+
+O que foi apurado (banco e PDF baixado): envelope CONCLUIDO, trilha íntegra, hashes conferem, PDF final com
+rodapé + manifesto. Três defeitos:
+
+- **A. "Abrir documento" abria o ORIGINAL** de uma versão já assinada (`storage_path`), no painel de versões e no
+  bloco de assinatura da negociação — a via assinada (`signed_file_url`) só abria pelo "Acompanhar". Regra única
+  `arquivoDaVersao` em `contractDocumentVersionService` (via assinada quando existe — portal ou ZapSign), o mesmo
+  critério que `DocumentosDaNegociacaoPanel` já usava (`signed_path || storage_path`). O envio ao ZapSign continua
+  mandando o original.
+- **B. Word → PDF gerava folhas de ~1 pt**: a minuta de 16 páginas saiu com 32. A página medida (1123 px) ficava
+  1 px maior que a folha calculada com `Math.floor` (1122), e a sobra virava página. `planejarFatias`
+  (`services/docxRenderService.ts`): `Math.round`, sobra de até 3% absorvida, blocos de captura em fronteira de
+  folha. Medido no Chrome com .docx sintético de 5 páginas: antes 10 páginas `[842,1,842,1,…]`, depois 5 × 842.
+  PDFs já gerados (e assinados) não mudam.
+- **C. Link do representante aberto com outra conta** mostrava "Assinatura não encontrada ou sem permissão". A Edge,
+  no 42501 do canal MEMBRO, responde com o e-mail mascarado de quem deve assinar + `outro_usuario` — só para membro
+  da MESMA empresa do signatário (fora dela segue a resposta genérica). A tela troca o título e oferece "Copiar o
+  link" para abrir numa janela anônima com a conta certa (sair/entrar automático ficou de fora: a sessão é
+  compartilhada entre abas — ver `lib/loginNestaAba.ts`).

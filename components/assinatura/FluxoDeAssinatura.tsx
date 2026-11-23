@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import {
-    ArrowLeft, ArrowRight, CheckCircle2, Download, FileSignature, Loader2, Mail, Minus, Plus, ShieldCheck, XCircle,
+    ArrowLeft, ArrowRight, CheckCircle2, Copy, Download, FileSignature, Loader2, Mail, Minus, Plus, ShieldCheck, XCircle,
 } from 'lucide-react';
 import {
     assinaturaInternaService, ErroDeAssinatura, ROTULO_PAPEL, ROTULO_SITUACAO,
@@ -76,6 +76,9 @@ export function FluxoDeAssinatura({ aberto, onFechar, acesso, onAssinado, soment
     const [visao, setVisao] = React.useState<VisaoParaAssinar | null>(null);
     const [carregando, setCarregando] = React.useState(false);
     const [erroCarga, setErroCarga] = React.useState<string | null>(null);
+    /** O link é de outra conta da empresa: oferece copiar o link para abrir com a conta certa. */
+    const [outroUsuario, setOutroUsuario] = React.useState(false);
+    const [linkCopiado, setLinkCopiado] = React.useState(false);
 
     const [cpf, setCpf] = React.useState('');
     const [codigo, setCodigo] = React.useState('');
@@ -98,10 +101,12 @@ export function FluxoDeAssinatura({ aberto, onFechar, acesso, onAssinado, soment
         if (!acesso) return;
         setCarregando(true);
         setErroCarga(null);
+        setOutroUsuario(false);
         try {
             setVisao(await assinaturaInternaService.ver(acesso));
         } catch (e) {
             setErroCarga(e instanceof Error ? e.message : 'Não foi possível abrir o documento.');
+            setOutroUsuario(e instanceof ErroDeAssinatura && e.outroUsuario);
         } finally {
             setCarregando(false);
         }
@@ -240,9 +245,19 @@ export function FluxoDeAssinatura({ aberto, onFechar, acesso, onAssinado, soment
     } else if (erroCarga || !doc) {
         corpo = telaCheia(<>
             <XCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Não foi possível abrir</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">{outroUsuario ? 'Assinatura de outro usuário' : 'Não foi possível abrir'}</h2>
             <p className="text-sm text-gray-600">{erroCarga}</p>
-            <button type="button" onClick={fechar} className={`${btnSecundario} mt-6`}><ArrowLeft className="w-[15px] h-[15px]" /> Voltar</button>
+            <div className="mt-6 flex flex-wrap items-center justify-center gap-2">
+                {outroUsuario && acesso && (
+                    <button type="button" className={btnPrimario} onClick={() => {
+                        const link = `${window.location.origin}/?assinar=${encodeURIComponent(acesso.signatarioId)}`;
+                        void navigator.clipboard?.writeText(link).then(() => setLinkCopiado(true), () => setLinkCopiado(false));
+                    }}>
+                        <Copy className="w-[15px] h-[15px]" /> {linkCopiado ? 'Link copiado' : 'Copiar o link'}
+                    </button>
+                )}
+                <button type="button" onClick={fechar} className={btnSecundario}><ArrowLeft className="w-[15px] h-[15px]" /> Voltar</button>
+            </div>
         </>);
     } else if (resultado) {
         corpo = telaCheia(<>

@@ -45,8 +45,17 @@ export function linhasDoCardDoEmpreendimento(e: SnapshotEmpreendimentoItem, op: 
     if (e.objetivo === 'LOCACAO') {
         const linhas: LinhaDoCard[] = [
             { rotulo: 'Unidades locadas', valor: `${quantidade(e.alugadas)} · ${mensal(e.aluguel_locadas)}` },
-            { rotulo: 'Unidades disponíveis', valor: `${quantidade(e.disponiveis)} · ${mensal(e.aluguel_disponiveis)}` },
         ];
+        // Etapa da negociação (Reserva/Contrato/Assinatura): só aparece quando há alguma; versão antiga não tem o campo.
+        const negociando = e.em_negociacao ?? 0;
+        if (negociando > 0) {
+            linhas.push({ rotulo: 'Em negociação', valor: `${inteiro(negociando)} · ${mensal(e.aluguel_em_negociacao)}` });
+            const etapas = Object.entries(e.em_negociacao_por_etapa ?? {});
+            if (etapas.length) {
+                linhas.push({ rotulo: 'Etapa da negociação', valor: etapas.map(([r, n]) => `${r}: ${inteiro(n)}`).join(' · ') });
+            }
+        }
+        linhas.push({ rotulo: 'Unidades disponíveis', valor: `${quantidade(e.disponiveis)} · ${mensal(e.aluguel_disponiveis)}` });
         // Só avisa quando há o que contar: versão antiga (campo ausente) e "nenhuma sem valor" (0) não geram linha.
         const semValor = e.disponiveis_sem_aluguel ?? 0;
         if (semValor > 0) linhas.push({ rotulo: 'Sem aluguel cadastrado', valor: unidades(semValor), tom: 'aviso' });

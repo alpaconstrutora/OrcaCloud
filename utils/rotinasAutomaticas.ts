@@ -146,6 +146,10 @@ const CATALOGO: Record<string, MetaRotina> = {
         nome: 'Limpeza do histórico das rotinas', grupo: 'tecnicas', sensivel: false,
         oQueFaz: 'Apaga os registros de execução das rotinas com mais de 60 dias. Desligada, o histórico volta a crescer sem limite.',
     },
+    'wa-limpar-eventos': {
+        nome: 'Limpeza dos eventos do WhatsApp', grupo: 'tecnicas', sensivel: false,
+        oQueFaz: 'Limpa o registro de eventos do WhatsApp com mais de 30 dias.',
+    },
 };
 
 /** `jobname` NULL é job criado por `cron.schedule(expr, cmd)` sem nome — identificado pelo jobid. */

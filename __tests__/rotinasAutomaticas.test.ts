@@ -49,6 +49,13 @@ describe('rotinaMeta', () => {
         expect(m.oQueFaz).toMatch(/60 dias/);
     });
 
+    it('a limpeza dos eventos do WhatsApp (OpenWA) é técnica e não pede confirmação para desligar', () => {
+        const m = rotinaMeta('wa-limpar-eventos');
+        expect(m.grupo).toBe('tecnicas');
+        expect(m.sensivel).toBe(false);
+        expect(m.oQueFaz).toBe('Limpa o registro de eventos do WhatsApp com mais de 30 dias.');
+    });
+
     it('os grupos do desenho, na ordem', () => {
         expect(GRUPOS_ROTINA.map(g => g.rotulo)).toEqual([
             'Avisos à equipe', 'Dinheiro e sistemas externos', 'Relatórios', 'Técnicas', 'Outras',

@@ -22,6 +22,8 @@ import {
     expandirBloco,
     subtotalDoBloco,
     saldoDoPlano,
+    fimDaVigencia,
+    mesesDaVigencia,
     alvoDasCobrancasLancadas,
     somarDias,
     somarMeses,
@@ -1584,6 +1586,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     /** Data do 1º Pagamento no momento em que o campo recebeu o foco — base de
      *  comparação para perguntar (uma vez, no blur) se as parcelas recalculam. */
     const dueDateAoFocar = useRef<string>('');
+    /** Vigência da locação (aba Contrato): rascunho do campo "Prazo (meses)"
+     *  enquanto digita, e o prazo em meses no momento em que o Início recebeu o
+     *  foco — é ele que o Fim acompanha. Lido no foco, não a cada tecla: o
+     *  campo de data passa por anos intermediários ("0002", "0020"…) enquanto
+     *  o ano é digitado, e o prazo recalculado sobre eles se perderia. */
+    const [prazoVigenciaDraft, setPrazoVigenciaDraft] = useState<string | null>(null);
+    const prazoVigenciaAoFocarInicio = useRef<number | null>(null);
 
     /**
      * Pergunta se o Valor Total do Contrato deve acompanhar o desconto.
@@ -5257,38 +5266,89 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     <input
                                                         type="date"
                                                         value={formData.date || ''}
-                                                        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                                                        onFocus={() => {
+                                                            prazoVigenciaAoFocarInicio.current =
+                                                                mesesDaVigencia((formData.date || '').slice(0, 10), formData.end_date || '');
+                                                        }}
+                                                        onChange={(e) => {
+                                                            // Fim acompanha o Início (decisão do usuário, 23/11/2026):
+                                                            // se o fim era início + N meses, continua sendo N meses.
+                                                            // Fim digitado à mão (não fecha meses inteiros) não é tocado.
+                                                            const novo = e.target.value;
+                                                            const prazo = prazoVigenciaAoFocarInicio.current;
+                                                            const anoCompleto = Number(novo.slice(0, 4)) >= 1900;
+                                                            setFormData({
+                                                                ...formData,
+                                                                date: novo,
+                                                                ...(prazo && anoCompleto ? { end_date: fimDaVigencia(novo, prazo) } : {}),
+                                                            });
+                                                        }}
                                                         className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                     />
                                                 </div>
 
-                                                <div className="space-y-2">
-                                                    <div className="flex items-center justify-between px-1">
-                                                        <label className="text-xs font-semibold text-slate-500">Fim da Vigência</label>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => {
-                                                                // +12 meses − 1 dia, em UTC puro (em UTC-3 o
-                                                                // construtor local retrocede um dia).
-                                                                const base = formData.date || new Date().toISOString().slice(0, 10);
-                                                                const [y, m, d] = base.slice(0, 10).split('-').map(Number);
-                                                                const dt = new Date(Date.UTC(y, m - 1, d));
-                                                                dt.setUTCFullYear(dt.getUTCFullYear() + 1);
-                                                                dt.setUTCDate(dt.getUTCDate() - 1);
-                                                                setFormData({ ...formData, end_date: dt.toISOString().slice(0, 10) });
-                                                            }}
-                                                            className="text-xs font-medium text-blue-600 hover:text-blue-700"
-                                                        >
-                                                            12 meses
-                                                        </button>
-                                                    </div>
-                                                    <input
-                                                        type="date"
-                                                        value={formData.end_date || ''}
-                                                        onChange={(e) => setFormData({ ...formData, end_date: e.target.value })}
-                                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                    />
-                                                </div>
+                                                {/* Fim da Vigência = Início + prazo em meses − 1 dia
+                                                    (fimDaVigencia). O prazo não é gravado: deriva das duas
+                                                    datas (mesesDaVigencia), e fica vazio quando o fim foi
+                                                    digitado à mão fora de meses inteiros. */}
+                                                {(() => {
+                                                    const inicio = (formData.date || '').slice(0, 10);
+                                                    const semInicio = Number(inicio.slice(0, 4)) < 1900 || !inicio;
+                                                    const motivoSemInicio = semInicio ? 'Preencha o Início da Vigência para calcular o fim pelo prazo.' : undefined;
+                                                    const prazoAtual = mesesDaVigencia(inicio, formData.end_date || '');
+                                                    const aplicarPrazo = (meses: number) =>
+                                                        setFormData(prev => ({ ...prev, end_date: fimDaVigencia((prev.date || '').slice(0, 10), meses) }));
+                                                    return (
+                                                        <div className="space-y-2">
+                                                            <div className="flex items-center justify-between px-1">
+                                                                <label htmlFor="deal-fim-vigencia" className="text-xs font-semibold text-slate-500">Fim da Vigência</label>
+                                                                <div className="flex items-center gap-2 text-xs" title={motivoSemInicio}>
+                                                                    {[12, 24, 30, 36].map(n => (
+                                                                        <button
+                                                                            key={n}
+                                                                            type="button"
+                                                                            disabled={semInicio}
+                                                                            aria-label={`Prazo de ${n} meses`}
+                                                                            onClick={() => { setPrazoVigenciaDraft(null); aplicarPrazo(n); }}
+                                                                            className={`font-medium disabled:text-gray-400 disabled:cursor-not-allowed ${prazoAtual === n ? 'text-blue-700 underline underline-offset-2' : 'text-blue-600 hover:text-blue-700'}`}
+                                                                        >
+                                                                            {n} meses
+                                                                        </button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex items-center gap-2">
+                                                                <div className="relative w-32 shrink-0" title={motivoSemInicio}>
+                                                                    <input
+                                                                        type="number"
+                                                                        min={1}
+                                                                        step={1}
+                                                                        inputMode="numeric"
+                                                                        aria-label="Prazo da vigência em meses"
+                                                                        placeholder="Prazo"
+                                                                        disabled={semInicio}
+                                                                        value={prazoVigenciaDraft ?? (prazoAtual ?? '')}
+                                                                        onChange={(e) => {
+                                                                            setPrazoVigenciaDraft(e.target.value);
+                                                                            const meses = Math.floor(Number(e.target.value));
+                                                                            if (meses >= 1) aplicarPrazo(meses);
+                                                                        }}
+                                                                        onBlur={() => setPrazoVigenciaDraft(null)}
+                                                                        className="w-full h-9 pl-3 pr-14 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
+                                                                    />
+                                                                    <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">meses</span>
+                                                                </div>
+                                                                <input
+                                                                    id="deal-fim-vigencia"
+                                                                    type="date"
+                                                                    value={formData.end_date || ''}
+                                                                    onChange={(e) => { setPrazoVigenciaDraft(null); setFormData({ ...formData, end_date: e.target.value }); }}
+                                                                    className="flex-1 min-w-0 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    );
+                                                })()}
                                             </div>
 
                                             {formData.end_date && formData.date && formData.end_date <= formData.date && (

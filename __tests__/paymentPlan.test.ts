@@ -3,6 +3,8 @@ import {
     somarMeses,
     somarDias,
     mesesEntre,
+    fimDaVigencia,
+    mesesDaVigencia,
     expandirBloco,
     agruparPlano,
     subtotalDoBloco,
@@ -384,5 +386,37 @@ describe('alvoDasCobrancasLancadas', () => {
     it('sem Valor Total gravado (legado/serviço), cai no value', () => {
         expect(alvoDasCobrancasLancadas({ type: 'SALE', value: 500000, contract_total_value: null })).toBe(500000);
         expect(alvoDasCobrancasLancadas({ type: 'SERVICE', value: 12000 })).toBe(12000);
+    });
+});
+
+describe('fimDaVigencia', () => {
+    it('início + N meses − 1 dia (caso do print: 23/09/2016)', () => {
+        expect(fimDaVigencia('2016-09-23', 12)).toBe('2017-09-22');
+        expect(fimDaVigencia('2016-09-23', 30)).toBe('2019-03-22');
+        expect(fimDaVigencia('2016-09-01', 1)).toBe('2016-09-30');
+    });
+    it('dia que não existe no mês de chegada fica no último dia, sem o − 1', () => {
+        expect(fimDaVigencia('2026-01-31', 1)).toBe('2026-02-28');
+        expect(fimDaVigencia('2028-01-31', 1)).toBe('2028-02-29');
+    });
+    it('sem início ou prazo < 1 → vazio', () => {
+        expect(fimDaVigencia('', 12)).toBe('');
+        expect(fimDaVigencia('2026-01-10', 0)).toBe('');
+    });
+});
+
+describe('mesesDaVigencia', () => {
+    it('é o inverso de fimDaVigencia', () => {
+        for (const inicio of ['2016-09-23', '2026-01-31', '2026-03-01', '2027-12-15']) {
+            for (const n of [1, 6, 12, 24, 30, 36, 60]) {
+                expect(mesesDaVigencia(inicio, fimDaVigencia(inicio, n))).toBe(n);
+            }
+        }
+    });
+    it('fim que não fecha meses inteiros → null', () => {
+        expect(mesesDaVigencia('2016-09-23', '2018-05-15')).toBeNull();
+        expect(mesesDaVigencia('2016-09-23', '2016-09-23')).toBeNull();
+        expect(mesesDaVigencia('', '2017-09-22')).toBeNull();
+        expect(mesesDaVigencia('2016-09-23', '')).toBeNull();
     });
 });

@@ -22,6 +22,9 @@ interface ControlesProps<C extends string> {
      *  "Ordenar por" que o §6.4 proíbe. */
     direcao?: DirecaoGrupos;
     onDirecao?: (d: DirecaoGrupos) => void;
+    /** Ordem dos grupos só com o ícone: botão `h-9 w-9` que alterna Crescente/Decrescente,
+     *  o sentido no `title`. Para barra estreita (Conciliação › Pendentes, meia-tela). */
+    direcaoSoIcone?: boolean;
     /** Chaves dos grupos atuais — para "recolher todos". */
     chavesDosGrupos: string[];
     algumRecolhido: boolean;
@@ -32,7 +35,7 @@ interface ControlesProps<C extends string> {
 
 /** Seletor "Agrupar" + recolher/expandir todos (sempre visível; desligado sem agrupamento).
  *  Vai na toolbar acoplada, depois do Filtro avançado. */
-export function AgruparControles<C extends string>({ opcoes, campo, onCampo, direcao = 'asc', onDirecao, chavesDosGrupos, algumRecolhido, onAlternarTodos, title }: ControlesProps<C>) {
+export function AgruparControles<C extends string>({ opcoes, campo, onCampo, direcao = 'asc', onDirecao, direcaoSoIcone = false, chavesDosGrupos, algumRecolhido, onAlternarTodos, title }: ControlesProps<C>) {
     const ativo = campo !== 'none';
     const IconeDirecao = direcao === 'desc' ? ArrowDownWideNarrow : ArrowUpNarrowWide;
     return (
@@ -58,7 +61,21 @@ export function AgruparControles<C extends string>({ opcoes, campo, onCampo, dir
             </div>
             {/* Ordem dos grupos — sempre visível, como o "recolher todos": sem agrupamento
                 fica desligado e diz o porquê (o `title` no invólucro, pelo mesmo motivo). */}
-            {onDirecao && (
+            {onDirecao && direcaoSoIcone && (
+                <span className="shrink-0" title={ativo ? undefined : MOTIVO_SEM_ORDEM_DOS_GRUPOS}>
+                    <button
+                        type="button"
+                        onClick={() => onDirecao(direcao === 'desc' ? 'asc' : 'desc')}
+                        disabled={!ativo}
+                        title={ativo ? `Ordem dos grupos: ${direcao === 'desc' ? 'Decrescente' : 'Crescente'} — clique para inverter` : MOTIVO_SEM_ORDEM_DOS_GRUPOS}
+                        aria-label={`Ordem dos grupos: ${direcao === 'desc' ? 'Decrescente' : 'Crescente'}`}
+                        className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-500 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:active:scale-100"
+                    >
+                        <IconeDirecao className="w-4 h-4" />
+                    </button>
+                </span>
+            )}
+            {onDirecao && !direcaoSoIcone && (
                 <span className="relative shrink-0" title={ativo ? undefined : MOTIVO_SEM_ORDEM_DOS_GRUPOS}>
                     {/* O ícone fica fora do <select>: esmaece à mão junto com o `disabled:opacity-40`. */}
                     <IconeDirecao className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500 ${ativo ? '' : 'opacity-40'}`} />

@@ -1553,6 +1553,10 @@ Em 24/10/2026 para Financeiro › Conciliação Bancária › **Pendentes** (Ext
 `docs/planos/2026-10-24-conciliacao-pendentes-agrupar.md`). As duas tabelas ficam lado a lado, então o `AgruparControles`
 vai numa **linha própria** entre a toolbar e a tabela (a toolbar da meia-tela não comporta três controles a mais); o total
 do grupo é o **saldo** (créditos − débitos), porque as listas misturam entrada e saída (`utils/pendentesGrupos.ts`).
+Desde 23/11/2026 a ordem dos grupos ali é **só o ícone** (`direcaoSoIcone`): botão `h-9 w-9` que alterna
+Crescente/Decrescente, com o sentido no `title` e no `aria-label` ("Ordem dos grupos: Crescente"). As demais telas
+seguem com o `<select>` de texto. Na mesma data saíram da Pendentes os filtros Categoria e Cliente/credor (dos dois
+lados) — os do extrato bancário seguem só na aba Extrato, e o que estiver escolhido lá não filtra a Pendentes.
 Na aba **Extrato** (`docs/planos/2026-10-24-extrato-agrupar.md`) o controle vai na toolbar, logo depois do Filtro avançado, e há dois campos a mais (Plano de Contas e Status, este na ordem do fluxo). A paginação é a própria da aba: as páginas, o rodapé e o Shift+clique usam as linhas da tela sem os grupos recolhidos.
 
 Em 24/10/2026 para Minha Organização › Centro de custo (`CostCenterModule.tsx`, `docs/planos/2026-10-24-centro-de-custo-agrupar.md`).

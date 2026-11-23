@@ -245,9 +245,18 @@ describe('lerResultadoDoWorker', () => {
     const ID = '0b5c3f0e-1d2a-4c3b-9e8f-112233445566';
     it('aceita o formato do worker', () => {
         expect(lerResultadoDoWorker({ id: ID, httpStatus: 201, erro: null, messageId: 'true_5511@c.us_ABC' }))
-            .toEqual({ id: ID, httpStatus: 201, erro: null, messageId: 'true_5511@c.us_ABC' });
+            .toEqual({ id: ID, httpStatus: 201, erro: null, messageId: 'true_5511@c.us_ABC', codigo: null });
         expect(lerResultadoDoWorker({ id: ID.toUpperCase(), httpStatus: null, erro: 'timeout' }))
-            .toEqual({ id: ID.toUpperCase(), httpStatus: null, erro: 'timeout', messageId: null });
+            .toEqual({ id: ID.toUpperCase(), httpStatus: null, erro: 'timeout', messageId: null, codigo: null });
+    });
+    it('codigo (o `code` do OpenWA) é opcional: [A-Z0-9_] até 64; fora disso vira null sem perder o relato', () => {
+        expect(lerResultadoDoWorker({ id: ID, httpStatus: 429, erro: null, messageId: null, codigo: 'SEND_PACING_LIMITED' }))
+            .toEqual({ id: ID, httpStatus: 429, erro: null, messageId: null, codigo: 'SEND_PACING_LIMITED' });
+        for (const codigo of ['send_pacing_limited', 'A B', 'X'.repeat(65), '', 7, {}]) {
+            const r = lerResultadoDoWorker({ id: ID, httpStatus: 429, erro: null, messageId: null, codigo });
+            expect(r, String(codigo)).not.toBeNull();
+            expect(r?.codigo, String(codigo)).toBeNull();
+        }
     });
     it('id que não é uuid, status fora de 100–599, erro desconhecido ou messageId estranho → null', () => {
         expect(lerResultadoDoWorker({ id: 'x', httpStatus: 200, erro: null, messageId: null })).toBeNull();
@@ -314,6 +323,49 @@ describe('planoDoReporte', () => {
     });
     it('sem resposta e sem erro → incerta', () => {
         expect(planoDoReporte(linha(1), { httpStatus: null, erro: null, messageId: null }, AGORA).tipo).toBe('incerta');
+    });
+
+    // 429 SEND_PACING_LIMITED: o aquecimento do número recusou ANTES de enviar — nada
+    // saiu e o OpenWA libera a chave (docs/06 §Idempotent sends). Não é "pode ter saído".
+    const pacing = { httpStatus: 429, erro: null, messageId: null, codigo: 'SEND_PACING_LIMITED' } as const;
+    it('429 SEND_PACING_LIMITED → repetir em 15 min devolvendo a tentativa (não consome)', () => {
+        const p = planoDoReporte(linha(1), pacing, AGORA);
+        expect(p.tipo).toBe('repetir');
+        if (p.tipo !== 'repetir') return;
+        expect(p.status).toBe('pendente');
+        expect(Date.parse(p.proximaTentativaEm) - AGORA).toBe(15 * 60_000);
+        expect(p.tentativas).toBe(0);
+        expect(p.erro).toContain('aquecimento');
+    });
+    it('429 SEND_PACING_LIMITED com tentativas esgotadas → continua repetir, nunca incerta', () => {
+        const n = ESPERAS_MS.length + 3;
+        const p = planoDoReporte(linha(n), pacing, AGORA);
+        expect(p.tipo).toBe('repetir');
+        if (p.tipo === 'repetir') expect(p.tentativas).toBe(n - 1);
+    });
+    it('429 SEND_PACING_LIMITED entre 23 h e 24 h → ainda repetir (nada saiu, a chave foi liberada)', () => {
+        const p = planoDoReporte(linha(1, new Date(AGORA - 23.5 * HORA).toISOString()), pacing, AGORA);
+        expect(p.tipo).toBe('repetir');
+    });
+    it('429 SEND_PACING_LIMITED com o comando há mais de 24 h → falhou "reenviar mais tarde"', () => {
+        const p = planoDoReporte(linha(1, new Date(AGORA - 24 * HORA - 1).toISOString()), pacing, AGORA);
+        expect(p).toEqual({ tipo: 'falhou', status: 'falhou', erro: expect.stringContaining('limite de aquecimento do número; reenviar mais tarde') });
+        expect(planoDoReporte(linha(1, 'ontem'), pacing, AGORA).tipo).toBe('falhou');
+    });
+    it('429 sem code (limitador global) ou com outro code → regra comum (consome tentativa)', () => {
+        for (const codigo of [null, undefined, 'OUTRO_CODIGO']) {
+            const p = planoDoReporte(linha(1), { httpStatus: 429, erro: null, messageId: null, codigo }, AGORA);
+            expect(p.tipo, String(codigo)).toBe('repetir');
+            if (p.tipo === 'repetir') {
+                expect(Date.parse(p.proximaTentativaEm) - AGORA, String(codigo)).toBe(ESPERAS_MS[0]);
+                expect(p.tentativas, String(codigo)).toBeUndefined();
+            }
+        }
+        expect(planoDoReporte(linha(ESPERAS_MS.length + 1), { httpStatus: 429, erro: null, messageId: null, codigo: null }, AGORA).tipo)
+            .toBe('incerta');
+    });
+    it('SEND_PACING_LIMITED só vale com 429', () => {
+        expect(planoDoReporte(linha(1), { ...pacing, httpStatus: 400 }, AGORA).tipo).toBe('falhou');
     });
 });
 

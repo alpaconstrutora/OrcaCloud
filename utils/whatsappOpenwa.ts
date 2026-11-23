@@ -172,12 +172,20 @@ export interface ResultadoDoWorker {
     httpStatus: number | null;
     erro: 'recusada' | 'timeout' | null;
     messageId: string | null;
+    /** `code` do corpo de erro do OpenWA (ex.: `SEND_PACING_LIMITED`); null sem corpo ou sem code. */
+    codigo: string | null;
 }
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MESSAGE_ID_MAX = 300;
+/** Formato do `code` de erro do OpenWA que a function aceita (o worker filtra igual). */
+const CODIGO_OPENWA_RE = /^[A-Z0-9_]{1,64}$/;
 
-/** Valida um item de `reportar.resultados`. Fora do formato → `null` (a function não aplica). */
+/**
+ * Valida um item de `reportar.resultados`. Fora do formato → `null` (a function não aplica).
+ * `codigo` é opcional e não derruba o relato: fora de `[A-Z0-9_]{1,64}` vira null (o
+ * status HTTP continua valendo e a regra comum, mais conservadora, decide).
+ */
 export function lerResultadoDoWorker(v: unknown): ResultadoDoWorker | null {
     if (!v || typeof v !== 'object') return null;
     const o = v as Record<string, unknown>;
@@ -194,7 +202,11 @@ export function lerResultadoDoWorker(v: unknown): ResultadoDoWorker | null {
     const messageId = typeof mid === 'string' ? mid.trim() : '';
     if (messageId.length > MESSAGE_ID_MAX) return null;
 
-    return { id: o.id, httpStatus: s as number | null, erro: erro as ResultadoDoWorker['erro'], messageId: messageId || null };
+    const codigo = typeof o.codigo === 'string' && CODIGO_OPENWA_RE.test(o.codigo) ? o.codigo : null;
+
+    return {
+        id: o.id, httpStatus: s as number | null, erro: erro as ResultadoDoWorker['erro'], messageId: messageId || null, codigo,
+    };
 }
 
 /** O que aconteceu na tentativa, em português, para `wa_mensagens.erro` e o log. */
@@ -208,9 +220,20 @@ function descreverTentativa(r: { httpStatus: number | null; erro: 'recusada' | '
 export type PlanoDoReporte =
     | { tipo: 'ignorar' }
     | { tipo: 'aceita'; status: 'aceita'; providerMessageId: string | null }
-    | { tipo: 'repetir'; status: 'pendente'; proximaTentativaEm: string; erro: string }
+    | {
+        tipo: 'repetir'; status: 'pendente'; proximaTentativaEm: string; erro: string;
+        /** Quando vem: gravar em `tentativas` (o 429 de aquecimento devolve a tentativa da pega). */
+        tentativas?: number;
+    }
     | { tipo: 'falhou'; status: 'falhou'; erro: string }
     | { tipo: 'incerta'; status: 'incerta'; erro: string };
+
+/** 429 do aquecimento do número (send pacing) — recusa ANTES de enviar. */
+export const CODIGO_LIMITE_DE_AQUECIMENTO = 'SEND_PACING_LIMITED';
+/** Espera depois de um 429 de aquecimento. */
+export const ESPERA_LIMITE_DE_AQUECIMENTO_MS = 15 * 60_000;
+/** Passado isso desde o comando, o 429 de aquecimento vira `falhou` (reenvio consciente na tela). */
+const LIMITE_AQUECIMENTO_MS = 24 * 3600_000;
 
 /**
  * Relato do worker sobre uma linha → o que gravar nela.
@@ -223,13 +246,41 @@ export type PlanoDoReporte =
  *     e a N-ésima, ESPERAS_MS[N-1]. Sem espera (`null`) → `incerta`, não
  *     `falhou`: uma falha passageira (timeout, 503) pode ter saído.
  *   · Recusa definitiva do gateway (4xx, 501) → `falhou`, mesmo no limite.
+ *   · 429 com `codigo` SEND_PACING_LIMITED (aquecimento do número): o OpenWA recusou
+ *     ANTES de entregar ao WhatsApp e liberou a chave (docs/06, "Idempotent sends") —
+ *     nada saiu. Repetir em 15 min SEM consumir tentativa: o plano devolve
+ *     `tentativas - 1` (a pega já tinha somado 1), então esse 429 nunca leva a
+ *     "esgotou as tentativas"/`incerta`, e uma linha que só levou 429 de aquecimento
+ *     continua com `tentativas = 0` (o wa_pegar_pendentes não a confunde com uma que
+ *     pode ter saído). Comando com mais de 24 h (ou idade ilegível) → `falhou`
+ *     ("reenviar mais tarde"). Repetir depois de 23 h com a mesma chave só é seguro
+ *     AQUI, porque o 429 de aquecimento garante que nada saiu. O 429 sem esse code
+ *     (limitador global do OpenWA) segue a regra comum.
  */
 export function planoDoReporte(
     linha: { status: StatusSaida; tentativas: number; criadoEm: string },
-    r: { httpStatus: number | null; erro: 'recusada' | 'timeout' | null; messageId: string | null },
+    r: { httpStatus: number | null; erro: 'recusada' | 'timeout' | null; messageId: string | null; codigo?: string | null },
     agoraMs: number,
 ): PlanoDoReporte {
     if (linha.status !== 'enviando') return { tipo: 'ignorar' };
+
+    if (r.httpStatus === 429 && r.codigo === CODIGO_LIMITE_DE_AQUECIMENTO) {
+        const idade = agoraMs - Date.parse(linha.criadoEm);
+        if (!(idade <= LIMITE_AQUECIMENTO_MS)) {
+            return {
+                tipo: 'falhou', status: 'falhou',
+                erro: 'O OpenWA segurou o envio por mais de 24 h: limite de aquecimento do número; reenviar mais tarde. '
+                    + 'Nada saiu.',
+            };
+        }
+        const tentativas = Number.isFinite(linha.tentativas) ? Math.max(0, Math.floor(linha.tentativas) - 1) : 0;
+        return {
+            tipo: 'repetir', status: 'pendente',
+            proximaTentativaEm: new Date(agoraMs + ESPERA_LIMITE_DE_AQUECIMENTO_MS).toISOString(),
+            erro: 'O OpenWA segurou o envio (limite de aquecimento do número); nada saiu. Nova tentativa em 15 min.',
+            tentativas,
+        };
+    }
 
     const desfecho = classificarEnvio(r, agoraMs - Date.parse(linha.criadoEm));
     const oQue = descreverTentativa(r);

@@ -114,11 +114,13 @@ async function enviar(item) {
             body: JSON.stringify(req.corpo),
             signal: ctrl.signal,
         });
-        // Abort no meio do corpo: já temos o status; sem corpo, messageId fica null.
+        // Abort no meio do corpo: já temos o status; sem corpo, messageId e codigo ficam null.
         const corpo = await resp.json().catch(() => null);
-        const codigo = corpo && typeof corpo.code === 'string' ? corpo.code : undefined;
-        return { resultado: resultadoDoEnvio({ status: resp.status, corpo }), codigo };
+        // `resultado.codigo` (o `code` do OpenWA, ex.: SEND_PACING_LIMITED) vai no reportar.
+        const resultado = resultadoDoEnvio({ status: resp.status, corpo });
+        return { resultado, codigo: resultado.codigo ?? undefined };
     } catch (erro) {
+        // Erro de rede: o código (ECONNRESET…) só vai para o log; o reportar leva codigo null.
         return { resultado: resultadoDoEnvio({ erro }), codigo: codigoCurto(erro) };
     } finally {
         clearTimeout(relogio);

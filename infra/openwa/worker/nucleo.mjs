@@ -31,6 +31,15 @@ export function requisicaoDeEnvio(item, sessao, chaveApi, base = OPENWA_BASE_PAD
     };
 }
 
+/** `code` do corpo de erro do OpenWA (ex.: SEND_PACING_LIMITED): só [A-Z0-9_], até 64. */
+const CODIGO_OPENWA_RE = /^[A-Z0-9_]{1,64}$/;
+
+/** `code` do corpo de erro do OpenWA, se tem o formato esperado; senão null. */
+function codigoDoCorpo(corpo) {
+    const code = corpo && typeof corpo === 'object' ? corpo.code : null;
+    return typeof code === 'string' && CODIGO_OPENWA_RE.test(code) ? code : null;
+}
+
 /** Código de erro de rede do Node: no próprio erro ou na `cause` (o fetch embrulha). */
 function codigoDoErro(erro) {
     if (!erro || typeof erro !== 'object') return null;
@@ -46,26 +55,29 @@ function codigoDoErro(erro) {
  *   · abort do nosso timeout (AbortError/TimeoutError) → `timeout`;
  *   · qualquer outro erro de rede (ex.: ECONNRESET no meio) → sem status e sem erro:
  *     pode ter saído — a Edge Function marca incerta, nunca repete às cegas;
- *   · resposta HTTP → o status; `messageId` só em 2xx com o campo do OpenWA.
+ *   · resposta HTTP → o status; `messageId` só em 2xx com o campo do OpenWA;
+ *     `codigo` = o `code` do corpo de erro (não-2xx), ex.: 429 SEND_PACING_LIMITED,
+ *     que a Edge Function trata como "nada saiu, repetir mais tarde".
+ * Todo resultado leva `codigo` (null quando não há).
  * Quem decide aceita/repetir/falhou/incerta é a Edge Function (planoDoReporte).
  */
 export function resultadoDoEnvio({ status = null, corpo = null, erro = null } = {}) {
     if (erro) {
         const nome = erro && typeof erro === 'object' ? erro.name : null;
         if (nome === 'AbortError' || nome === 'TimeoutError') {
-            return { httpStatus: null, erro: 'timeout', messageId: null };
+            return { httpStatus: null, erro: 'timeout', messageId: null, codigo: null };
         }
         if (NAO_CHEGOU.has(codigoDoErro(erro))) {
-            return { httpStatus: null, erro: 'recusada', messageId: null };
+            return { httpStatus: null, erro: 'recusada', messageId: null, codigo: null };
         }
-        return { httpStatus: null, erro: null, messageId: null };
+        return { httpStatus: null, erro: null, messageId: null, codigo: null };
     }
     const httpStatus = Number.isInteger(status) ? status : null;
     const ok = httpStatus !== null && httpStatus >= 200 && httpStatus < 300;
     const mid = ok && corpo && typeof corpo === 'object' && typeof corpo.messageId === 'string'
         ? corpo.messageId.trim()
         : '';
-    return { httpStatus, erro: null, messageId: mid || null };
+    return { httpStatus, erro: null, messageId: mid || null, codigo: ok ? null : codigoDoCorpo(corpo) };
 }
 
 /**

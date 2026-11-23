@@ -10,13 +10,15 @@
 //       — wa_pegar_pendentes(limite): pendentes vencidas + presas em enviando com a
 //         trava vencida (criadas há < 23 h); marca enviando, trava 2 min e soma 1 em
 //         `tentativas`. Presa com > 23 h vira incerta lá dentro (não volta).
-//   • reportar { resultados: [{ id, httpStatus, erro, messageId }] }
+//   • reportar { resultados: [{ id, httpStatus, erro, messageId, codigo? }] }
 //       → { aplicados: [{ id, status }], ignorados: [{ id, motivo }] }
 //       — planoDoReporte (utils/whatsappOpenwa.ts) decide; só mexe em linha que está
 //         `enviando` (UPDATE condicionado a status = 'enviando'): relato atrasado ou
 //         repetido de linha que já andou volta em `ignorados` e não regride nada.
 //         Espera da retentativa: `tentativas` já conta a atual → esperaAposFalha(tentativas - 1)
 //         (1ª falha = 30 s). Sem espera → incerta ("esgotou as tentativas").
+//         429 com codigo SEND_PACING_LIMITED (aquecimento do número, nada saiu): repetir
+//         em 15 min e o plano devolve `tentativas` (desconta a da pega); > 24 h → falhou.
 //         Espelho em notification_log (linha com metadata.wa_mensagem_id, gravada pela
 //         whatsapp-openwa): aceita → 'sent' + wa_message_id/aceita_em; falhou → 'failed'
 //         + error legível; incerta → continua 'pending' + metadata.confirmacao='pendente'.
@@ -273,6 +275,8 @@ serve(async (req: Request) => {
             } else if (plano.tipo === 'repetir') {
                 mudanca.proxima_tentativa_em = plano.proximaTentativaEm;
                 mudanca.erro = plano.erro;
+                // 429 de aquecimento: a tentativa não conta (devolve a que a pega somou).
+                if (plano.tentativas !== undefined) mudanca.tentativas = plano.tentativas;
             } else {
                 mudanca.erro = plano.erro;
             }

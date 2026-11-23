@@ -6,7 +6,8 @@
  *      = `comando_id` (retentativa não duplica), `linkPreview: false`, chave no `X-API-Key`.
  *   2. `resultadoDoEnvio`: o que o worker manda no `reportar` — `ECONNREFUSED` → `recusada`,
  *      abort/timeout → `timeout`, `201 { messageId }` → aceita com o id; erro de rede que
- *      pode ter saído (reset no meio) → sem status e sem erro (a Edge Function marca incerta).
+ *      pode ter saído (reset no meio) → sem status e sem erro (a Edge Function marca incerta);
+ *      todo resultado leva `codigo` = o `code` do corpo de erro do OpenWA (429 SEND_PACING_LIMITED).
  *   3. `criarCoalescedor`: a campainha e a varredura nunca rodam dois `pegar` ao mesmo
  *      tempo; toque(s) durante um ciclo agendam exatamente UM ciclo a mais.
  *   4. `idDaSessaoPorNome` / `leituraDaSessao` / `podeEnviar`: o OpenWA endereça a sessão
@@ -62,43 +63,54 @@ describe('requisicaoDeEnvio', () => {
 describe('resultadoDoEnvio', () => {
     it('201 { messageId } → aceita com o id', () => {
         expect(resultadoDoEnvio({ status: 201, corpo: { messageId: 'x', timestamp: 1 } }))
-            .toEqual({ httpStatus: 201, erro: null, messageId: 'x' });
+            .toEqual({ httpStatus: 201, erro: null, messageId: 'x', codigo: null });
     });
 
     it('201 sem corpo legível → status sem messageId', () => {
-        expect(resultadoDoEnvio({ status: 201, corpo: null })).toEqual({ httpStatus: 201, erro: null, messageId: null });
+        expect(resultadoDoEnvio({ status: 201, corpo: null })).toEqual({ httpStatus: 201, erro: null, messageId: null, codigo: null });
     });
 
-    it('4xx/5xx → só o status (quem decide é a Edge Function)', () => {
-        expect(resultadoDoEnvio({ status: 429, corpo: { code: 'SEND_PACING_LIMITED' } }))
-            .toEqual({ httpStatus: 429, erro: null, messageId: null });
+    it('4xx/5xx → o status e o `code` do corpo de erro do OpenWA (quem decide é a Edge Function)', () => {
+        expect(resultadoDoEnvio({ status: 429, corpo: { statusCode: 429, code: 'SEND_PACING_LIMITED', retryAfterSeconds: 60 } }))
+            .toEqual({ httpStatus: 429, erro: null, messageId: null, codigo: 'SEND_PACING_LIMITED' });
+        expect(resultadoDoEnvio({ status: 409, corpo: { code: 'IDEMPOTENCY_KEY_IN_PROGRESS' } }))
+            .toEqual({ httpStatus: 409, erro: null, messageId: null, codigo: 'IDEMPOTENCY_KEY_IN_PROGRESS' });
         expect(resultadoDoEnvio({ status: 400, corpo: { messageId: 'nao-vale' } }))
-            .toEqual({ httpStatus: 400, erro: null, messageId: null });
+            .toEqual({ httpStatus: 400, erro: null, messageId: null, codigo: null });
+    });
+
+    it('`code` fora do formato (só [A-Z0-9_], até 64) ou de resposta 2xx → codigo null', () => {
+        for (const code of ['send_pacing', 'A-B', 'X'.repeat(65), '', 42, null, { a: 1 }]) {
+            expect(resultadoDoEnvio({ status: 429, corpo: { code } }).codigo, String(code)).toBeNull();
+        }
+        expect(resultadoDoEnvio({ status: 429, corpo: { code: 'X'.repeat(64) } }).codigo).toBe('X'.repeat(64));
+        expect(resultadoDoEnvio({ status: 429, corpo: null }).codigo).toBeNull();
+        expect(resultadoDoEnvio({ status: 201, corpo: { messageId: 'x', code: 'SEND_PACING_LIMITED' } }).codigo).toBeNull();
     });
 
     it('ECONNREFUSED (no erro ou na causa do fetch) → recusada', () => {
         const direto = Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' });
         const doFetch = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNREFUSED' } });
         for (const erro of [direto, doFetch]) {
-            expect(resultadoDoEnvio({ erro })).toEqual({ httpStatus: null, erro: 'recusada', messageId: null });
+            expect(resultadoDoEnvio({ erro })).toEqual({ httpStatus: null, erro: 'recusada', messageId: null, codigo: null });
         }
     });
 
     it('nome do OpenWA que não resolve (ENOTFOUND) → recusada: o pedido não chegou a sair', () => {
         const erro = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ENOTFOUND' } });
-        expect(resultadoDoEnvio({ erro })).toEqual({ httpStatus: null, erro: 'recusada', messageId: null });
+        expect(resultadoDoEnvio({ erro })).toEqual({ httpStatus: null, erro: 'recusada', messageId: null, codigo: null });
     });
 
     it('AbortError e TimeoutError → timeout', () => {
         const abort = Object.assign(new Error('This operation was aborted'), { name: 'AbortError' });
         const tempo = Object.assign(new Error('The operation timed out'), { name: 'TimeoutError' });
-        expect(resultadoDoEnvio({ erro: abort })).toEqual({ httpStatus: null, erro: 'timeout', messageId: null });
-        expect(resultadoDoEnvio({ erro: tempo })).toEqual({ httpStatus: null, erro: 'timeout', messageId: null });
+        expect(resultadoDoEnvio({ erro: abort })).toEqual({ httpStatus: null, erro: 'timeout', messageId: null, codigo: null });
+        expect(resultadoDoEnvio({ erro: tempo })).toEqual({ httpStatus: null, erro: 'timeout', messageId: null, codigo: null });
     });
 
     it('conexão caída no meio (ECONNRESET) → sem status nem erro: pode ter saído', () => {
         const erro = Object.assign(new TypeError('fetch failed'), { cause: { code: 'ECONNRESET' } });
-        expect(resultadoDoEnvio({ erro })).toEqual({ httpStatus: null, erro: null, messageId: null });
+        expect(resultadoDoEnvio({ erro })).toEqual({ httpStatus: null, erro: null, messageId: null, codigo: null });
     });
 });
 

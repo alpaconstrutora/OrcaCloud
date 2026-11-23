@@ -51,7 +51,10 @@
 --       canal = 'whatsapp' (INSERT sai 'app'; UPDATE mantém o anterior). REVOKE de todos.
 --     • wa_pegar_pendentes também retoma presa em enviando com trava vencida (soma 1 em
 --       tentativas); presa criada há > 23 h vira incerta (fora da janela de 24 h do
---       Idempotency-Key do OpenWA).
+--       Idempotency-Key do OpenWA). Idem pendente que JÁ foi tentada (tentativas > 0:
+--       voltou de timeout/5xx/409) e tem > 23 h — reenviá-la com a chave já esquecida
+--       pelo OpenWA duplicaria a mensagem. Pendente nunca tentada (tentativas = 0) sai.
+--     • wa_definir_uso(p_usar = false) também cancela as saídas `pendente` da org.
 --   Pergunta 3 (Edge Function): nenhuma nesta migration (Tasks 3–5).
 --
 -- ── Aplicar ────────────────────────────────────────────────────────────────────
@@ -323,7 +326,12 @@ GRANT EXECUTE ON FUNCTION public.wa_pode_usar(uuid, uuid) TO service_role;
 -- nunca pegam a mesma linha.
 -- Reenviar uma presa em enviando só é seguro dentro da janela do Idempotency-Key do
 -- OpenWA (24 h; o worker sempre manda Idempotency-Key = comando_id): presa criada há
--- mais de 23 h NÃO volta — vira `incerta` na mesma transação.
+-- mais de 23 h NÃO volta — vira `incerta` na mesma transação. O mesmo vale para a
+-- PENDENTE que já foi tentada (tentativas > 0: voltou a pendente depois de timeout,
+-- 5xx ou 409) e ficou parada > 23 h (máquina ou número fora): a 1ª tentativa pode ter
+-- saído e a chave já não protege. Pendente com tentativas = 0 nunca saiu — segue.
+-- (O 429 de aquecimento do OpenWA devolve a tentativa — planoDoReporte —, então a
+-- linha que só levou esse 429 continua com tentativas = 0.)
 CREATE OR REPLACE FUNCTION public.wa_pegar_pendentes(p_limite integer)
 RETURNS SETOF public.wa_mensagens
 LANGUAGE plpgsql
@@ -353,6 +361,24 @@ BEGIN
       FROM velhas
      WHERE w.id = velhas.id;
 
+    -- pendente já tentada, fora da janela segura → incerta (não reenvia)
+    WITH velhas_pendentes AS (
+        SELECT w.id
+          FROM public.wa_mensagens w
+         WHERE w.direcao = 'saida'
+           AND w.status = 'pendente'
+           AND w.tentativas > 0
+           AND w.criado_em < now() - interval '23 hours'
+         FOR UPDATE SKIP LOCKED
+    )
+    UPDATE public.wa_mensagens w
+       SET status = 'incerta',
+           trava_ate = NULL,
+           erro = coalesce(w.erro || ' · ', '')
+                  || 'ficou mais de 23 h sem confirmação; pode ter saído — confira no celular do número'
+      FROM velhas_pendentes
+     WHERE w.id = velhas_pendentes.id;
+
     RETURN QUERY
     WITH alvo AS (
         SELECT w.id
@@ -360,7 +386,8 @@ BEGIN
          WHERE w.direcao = 'saida'
            AND ((w.status = 'pendente'
                  AND w.proxima_tentativa_em <= now()
-                 AND (w.trava_ate IS NULL OR w.trava_ate < now()))
+                 AND (w.trava_ate IS NULL OR w.trava_ate < now())
+                 AND (w.tentativas = 0 OR w.criado_em >= now() - interval '23 hours'))
              OR (w.status = 'enviando'
                  AND w.trava_ate < now()
                  AND w.criado_em >= now() - interval '23 hours'))
@@ -419,8 +446,9 @@ REVOKE ALL ON FUNCTION public.wa_situacao() FROM PUBLIC, anon;
 GRANT EXECUTE ON FUNCTION public.wa_situacao() TO authenticated, service_role;
 
 -- ─── 9. wa_definir_uso — owner/admin liga/desliga o uso na própria organização ──
--- p_usar false = tira a organização do uso (apaga a linha). p_envio_automatico NULL =
--- mantém o que estava (true na primeira vez).
+-- p_usar false = tira a organização do uso (apaga a linha) e cancela as saídas dela
+-- que ainda estão `pendente` (o que já está `enviando` termina; o worker relata).
+-- p_envio_automatico NULL = mantém o que estava (true na primeira vez).
 CREATE OR REPLACE FUNCTION public.wa_definir_uso(p_org uuid, p_usar boolean, p_envio_automatico boolean)
 RETURNS void
 LANGUAGE plpgsql
@@ -444,6 +472,13 @@ BEGIN
 
     IF NOT coalesce(p_usar, false) THEN
         DELETE FROM public.wa_uso_por_org WHERE organization_id = p_org;
+        UPDATE public.wa_mensagens
+           SET status = 'cancelada',
+               trava_ate = NULL,
+               erro = 'uso do WhatsApp desligado na organização'
+         WHERE organization_id = p_org
+           AND direcao = 'saida'
+           AND status = 'pendente';
         RETURN;
     END IF;
 

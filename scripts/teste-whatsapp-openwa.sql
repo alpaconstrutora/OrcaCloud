@@ -12,11 +12,14 @@
 --     superadmin → true; EXECUTE negado a authenticated;
 --   • wa_pegar_pendentes: marca enviando + trava + tentativas+1; a 2ª chamada não devolve as
 --     travadas; retoma presa em enviando com trava vencida (< 23 h) e marca incerta a mais velha;
+--     pendente que JÁ foi tentada (tentativas > 0) e tem mais de 23 h vira incerta e não volta
+--     (a chave do OpenWA já expirou); pendente nunca tentada com mais de 23 h continua saindo;
 --     respeita proxima_tentativa_em e trava_ate; negado a authenticated;
 --   • (organization_id, comando_id) único; saída sem organização recusada;
 --   • saída pendente toca a campainha (1 linha em realtime.messages, tópico wa-campainha,
 --     payload sem telefone/texto); entrada não toca;
---   • wa_definir_uso: membro comum → erro; owner → grava; desligar apaga;
+--   • wa_definir_uso: membro comum → erro; owner → grava; desligar apaga e cancela as saídas
+--     pendentes daquela org (não mexe em outra org nem no que já está enviando);
 --   • order_chats.canal nasce 'app' e só aceita app|whatsapp; job wa-limpar-eventos.
 --     Só service_role grava canal whatsapp (INSERT de authenticated sai app; UPDATE mantém).
 --
@@ -62,6 +65,7 @@ DECLARE
     org_a UUID; org_b UUID; m UUID; dono UUID; sa UUID;
     s_a UUID; s_b UUID; e_null UUID;
     p1 UUID; p2 UUID; p3 UUID; p4 UUID; p5 UUID; e1 UUID; e2 UUID; e3 UUID;
+    pv0 UUID; pv1 UUID; b_pend UUID;
     ped UUID; comprador UUID; oc UUID;
     pegou1 UUID[]; pegou2 UUID[];
     n_antes BIGINT; n_depois BIGINT;
@@ -186,15 +190,26 @@ BEGIN
     -- presas em enviando (o worker caiu no meio do envio), já com 1 tentativa:
     -- e1: trava vencida, criada há 1 h → volta; e2: trava vencida, criada há 24 h → incerta;
     -- e3: trava ainda valendo → não volta.
-    INSERT INTO public.wa_mensagens (organization_id, direcao, chat_id_remoto, texto, status, comando_id, tentativas, trava_ate, criado_em)
-    VALUES (org_a, 'saida', '5565999990000@c.us', 'TS', 'enviando', 'ts-e1', 1, now() - interval '1 minute', now() - interval '1 hour')
+    -- proxima_tentativa_em no passado distante (como p1..p3): a pega ordena por ela e tem
+    -- LIMIT — com now() a prova dependeria de a fila real ter menos de 10 linhas na frente.
+    INSERT INTO public.wa_mensagens (organization_id, direcao, chat_id_remoto, texto, status, comando_id, tentativas, trava_ate, criado_em, proxima_tentativa_em)
+    VALUES (org_a, 'saida', '5565999990000@c.us', 'TS', 'enviando', 'ts-e1', 1, now() - interval '1 minute', now() - interval '1 hour', '2000-01-01')
     RETURNING id INTO e1;
-    INSERT INTO public.wa_mensagens (organization_id, direcao, chat_id_remoto, texto, status, comando_id, tentativas, trava_ate, criado_em)
-    VALUES (org_a, 'saida', '5565999990000@c.us', 'TS', 'enviando', 'ts-e2', 1, now() - interval '1 minute', now() - interval '24 hours')
+    INSERT INTO public.wa_mensagens (organization_id, direcao, chat_id_remoto, texto, status, comando_id, tentativas, trava_ate, criado_em, proxima_tentativa_em)
+    VALUES (org_a, 'saida', '5565999990000@c.us', 'TS', 'enviando', 'ts-e2', 1, now() - interval '1 minute', now() - interval '24 hours', '2000-01-01')
     RETURNING id INTO e2;
-    INSERT INTO public.wa_mensagens (organization_id, direcao, chat_id_remoto, texto, status, comando_id, tentativas, trava_ate, criado_em)
-    VALUES (org_a, 'saida', '5565999990000@c.us', 'TS', 'enviando', 'ts-e3', 1, now() + interval '1 minute', now() - interval '1 hour')
+    INSERT INTO public.wa_mensagens (organization_id, direcao, chat_id_remoto, texto, status, comando_id, tentativas, trava_ate, criado_em, proxima_tentativa_em)
+    VALUES (org_a, 'saida', '5565999990000@c.us', 'TS', 'enviando', 'ts-e3', 1, now() + interval '1 minute', now() - interval '1 hour', '2000-01-01')
     RETURNING id INTO e3;
+    -- pendentes criadas há 24 h: pv1 já foi tentada (voltou a pendente depois de um timeout/5xx)
+    -- → a chave do OpenWA (24 h) já pode ter expirado: vira incerta, não volta; pv0 nunca foi
+    -- tentada → sai normalmente.
+    INSERT INTO public.wa_mensagens (organization_id, direcao, chat_id_remoto, texto, status, comando_id, tentativas, criado_em, proxima_tentativa_em)
+    VALUES (org_a, 'saida', '5565999990000@c.us', 'TS', 'pendente', 'ts-pv1', 1, now() - interval '24 hours', '2000-01-01')
+    RETURNING id INTO pv1;
+    INSERT INTO public.wa_mensagens (organization_id, direcao, chat_id_remoto, texto, status, comando_id, tentativas, criado_em, proxima_tentativa_em)
+    VALUES (org_a, 'saida', '5565999990000@c.us', 'TS', 'pendente', 'ts-pv0', 0, now() - interval '24 hours', '2000-01-01')
+    RETURNING id INTO pv0;
 
     v := pg_temp.como(m, 'SELECT count(*)::text FROM public.wa_pegar_pendentes(10)');
     PERFORM pg_temp.confere(v LIKE '42501:%', 'wa_pegar_pendentes: negado a authenticated (veio ' || v || ')');
@@ -223,8 +238,18 @@ BEGIN
     PERFORM pg_temp.confere(NOT (e3 = ANY (pegou1)), 'wa_pegar_pendentes: enviando com trava valendo NÃO volta');
     PERFORM pg_temp.confere((SELECT status = 'enviando' AND tentativas = 1 FROM public.wa_mensagens WHERE id = e3),
         'wa_pegar_pendentes: enviando com trava valendo fica como estava');
+    -- (d) pendente já tentada, criada há 24 h: não volta e vira incerta
+    PERFORM pg_temp.confere(NOT (pv1 = ANY (pegou1)), 'wa_pegar_pendentes: pendente já tentada com mais de 23 h NÃO volta');
+    PERFORM pg_temp.confere((SELECT status = 'incerta' AND tentativas = 1 AND trava_ate IS NULL
+                                    AND erro LIKE '%mais de 23 h sem confirmação; pode ter saído%'
+                               FROM public.wa_mensagens WHERE id = pv1),
+        'wa_pegar_pendentes: pendente já tentada com mais de 23 h vira incerta, com o motivo');
+    -- (e) pendente nunca tentada, criada há 24 h: sai normalmente
+    PERFORM pg_temp.confere(pv0 = ANY (pegou1), 'wa_pegar_pendentes: pendente nunca tentada com mais de 23 h volta');
+    PERFORM pg_temp.confere((SELECT status = 'enviando' AND tentativas = 1 FROM public.wa_mensagens WHERE id = pv0),
+        'wa_pegar_pendentes: pendente nunca tentada vira enviando com tentativas 0 → 1');
     SELECT coalesce(array_agg(id), '{}') INTO pegou2 FROM public.wa_pegar_pendentes(10);
-    PERFORM pg_temp.confere(NOT (pegou2 && ARRAY[p1, p2, p3, p4, p5, e1, e2, e3]), 'wa_pegar_pendentes: 2ª chamada não devolve as já travadas');
+    PERFORM pg_temp.confere(NOT (pegou2 && ARRAY[p1, p2, p3, p4, p5, e1, e2, e3, pv0, pv1]), 'wa_pegar_pendentes: 2ª chamada não devolve as já travadas');
 
     -- ── unicidade e CHECKs ─────────────────────────────────────────────────
     BEGIN
@@ -279,15 +304,33 @@ BEGIN
                                                          WHERE organization_id = org_b AND user_id = dono AND role IN ('owner', 'admin')),
         'wa_definir_uso: owner da A não liga a B (veio ' || v || ')');
 
-    v := pg_temp.como(m, format('SELECT string_agg(estado || ''|'' || usa_na_org || ''|'' || envio_automatico_pedido, '','') FROM public.wa_situacao() WHERE organization_id = %L', org_a));
-    PERFORM pg_temp.confere(v = 'ok:maquina_fora|true|false', 'wa_situacao: membro vê a A usando, sem envio automático (veio ' || v || ')');
+    -- estado: só "veio preenchido" — depois de aplicada a migration o worker muda o estado real.
+    v := pg_temp.como(m, format('SELECT string_agg((estado IS NOT NULL) || ''|'' || usa_na_org || ''|'' || envio_automatico_pedido, '','') FROM public.wa_situacao() WHERE organization_id = %L', org_a));
+    PERFORM pg_temp.confere(v = 'ok:true|true|false', 'wa_situacao: membro vê a A usando, sem envio automático (veio ' || v || ')');
     v := pg_temp.como(m, format('SELECT count(*)::text FROM public.wa_situacao() WHERE organization_id = %L', org_b));
     PERFORM pg_temp.confere(v = 'ok:0', 'wa_situacao: não traz org de que o usuário não é membro (veio ' || v || ')');
     PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.wa_situacao()), 'wa_situacao: sem usuário na requisição = vazio');
 
+    -- antes de desligar: a A tem pendentes (p4 de hora futura, p5 travada, ts-campainha) e
+    -- e1/pv0 em enviando; a B tem uma pendente.
+    EXECUTE format(ins, org_b, 'pendente', 'ts-m5-b', '2000-01-01') INTO b_pend;
+    PERFORM pg_temp.confere((SELECT count(*) FROM public.wa_mensagens
+                              WHERE organization_id = org_a AND direcao = 'saida' AND status = 'pendente') >= 3,
+        'fixture: a org A tem saídas pendentes antes de desligar');
     v := pg_temp.como(dono, format('SELECT public.wa_definir_uso(%L, false, NULL)::text', org_a));
     PERFORM pg_temp.confere(v LIKE 'ok:%' AND NOT EXISTS (SELECT 1 FROM public.wa_uso_por_org WHERE organization_id = org_a),
         'wa_definir_uso: desligar tira a org do uso (veio ' || v || ')');
+    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.wa_mensagens
+                                         WHERE organization_id = org_a AND direcao = 'saida' AND status = 'pendente'),
+        'wa_definir_uso: desligar não deixa saída pendente na org');
+    PERFORM pg_temp.confere((SELECT bool_and(status = 'cancelada' AND trava_ate IS NULL
+                                             AND erro LIKE '%uso do WhatsApp desligado na organização%')
+                               FROM public.wa_mensagens WHERE id IN (p4, p5)),
+        'wa_definir_uso: desligar cancela as pendentes da org, com o motivo');
+    PERFORM pg_temp.confere((SELECT status FROM public.wa_mensagens WHERE id = b_pend) = 'pendente',
+        'wa_definir_uso: desligar a A não mexe na pendente da B');
+    PERFORM pg_temp.confere((SELECT bool_and(status = 'enviando') FROM public.wa_mensagens WHERE id IN (e1, pv0)),
+        'wa_definir_uso: desligar não mexe no que já está enviando');
     v := pg_temp.como(m, format('SELECT string_agg(usa_na_org || ''|'' || envio_automatico_pedido, '','') FROM public.wa_situacao() WHERE organization_id = %L', org_a));
     PERFORM pg_temp.confere(v = 'ok:false|false', 'wa_situacao: org desligada aparece sem uso (veio ' || v || ')');
 

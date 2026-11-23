@@ -104,6 +104,10 @@ describe('classificarEnvio', () => {
             expect(classificarEnvio(r, 23 * HORA + 1), JSON.stringify(r)).toBe('incerta');
         }
     });
+    it('idade ilegível falha fechado → incerta', () => {
+        expect(classificarEnvio({ httpStatus: 503, erro: null }, NaN)).toBe('incerta');
+        expect(classificarEnvio({ httpStatus: null, erro: 'timeout' }, NaN)).toBe('incerta');
+    });
     it('sem resposta e sem erro → incerta', () => {
         expect(classificarEnvio({ httpStatus: null, erro: null }, 0)).toBe('incerta');
     });
@@ -176,6 +180,11 @@ describe('escolherVinculo', () => {
     it('duas orgs sem citação → sem vínculo (nunca por palpite)', () => {
         const lista = [c('orgA', 'p1', null, '2026-11-20T10:00:00Z'), c('orgB', 'p2', null, '2026-11-22T10:00:00Z')];
         expect(escolherVinculo(lista, null)).toEqual({ tipo: 'sem_vinculo' });
+    });
+    it('citou mensagem que não está na lista (pedido da org B fora da janela) → sem vínculo, nunca a org A por palpite', () => {
+        // Org B mandou pedido há 90 dias (fora da janela, quem chama já filtrou); org A há 10 dias.
+        const lista = [c('orgA', 'pA', 'true_5511@c.us_AAA', '2026-11-13T10:00:00Z')];
+        expect(escolherVinculo(lista, 'true_5511@c.us_BBB')).toEqual({ tipo: 'sem_vinculo' });
     });
     it('lista vazia → sem vínculo', () => {
         expect(escolherVinculo([], null)).toEqual({ tipo: 'sem_vinculo' });

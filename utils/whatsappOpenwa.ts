@@ -125,7 +125,8 @@ export function classificarEnvio(
     r: { httpStatus: number | null; erro: 'recusada' | 'timeout' | null },
     idadeDoComandoMs: number,
 ): Desfecho {
-    const repetirOuIncerta = (): Desfecho => (idadeDoComandoMs > LIMITE_REPETIR_MS ? 'incerta' : 'repetir');
+    // Idade ilegível (NaN/Infinity) falha fechado: incerta, nunca repetir sem saber.
+    const repetirOuIncerta = (): Desfecho => (!(idadeDoComandoMs <= LIMITE_REPETIR_MS) ? 'incerta' : 'repetir');
     if (r.erro === 'recusada' || r.erro === 'timeout') return repetirOuIncerta();
     const s = r.httpStatus;
     if (s === null || !Number.isFinite(s)) return 'incerta';
@@ -223,11 +224,15 @@ export const JANELA_VINCULO_DIAS = 60;
  *   1. respondeu citando uma mensagem nossa → o pedido dela;
  *   2. senão, uma só organização na lista → o pedido mais recente dela;
  *   3. senão (nenhuma ou mais de uma) → sem vínculo (triagem do superadmin).
+ * Citação que não casa com nenhum candidato → sem vínculo (não cai na regra 2).
  */
 export function escolherVinculo(candidatos: Candidato[], citadoId: string | null): Vinculo {
     if (citadoId) {
         const citado = candidatos.find((c) => c.providerMessageId && idsDeMensagemIguais(c.providerMessageId, citadoId));
         if (citado) return { tipo: 'citacao', organizationId: citado.organizationId, orderId: citado.orderId };
+        // Citou algo que não está na lista (ex.: pedido de outra org fora da janela):
+        // a resposta é sobre outra coisa — cair na regra 2 seria vincular por palpite.
+        return { tipo: 'sem_vinculo' };
     }
     const orgs = new Set(candidatos.map((c) => c.organizationId));
     if (orgs.size !== 1) return { tipo: 'sem_vinculo' };

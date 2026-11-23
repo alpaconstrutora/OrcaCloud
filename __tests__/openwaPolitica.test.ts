@@ -13,6 +13,11 @@ import {
     classificarEnvio, comandoIdEnvioAutomatico, escolherVinculo, esperaAposFalha, espelhoDoLog, estadoDaConexao,
     idsDeMensagemIguais, lerResultadoDoWorker, montarTextoDoPedido, planoDoReporte, statusDoAck,
     telefoneDoRemetente,
+    // Task 5 — webhook do OpenWA
+    CORPO_WEBHOOK_MAX_BYTES, MIDIA_MAX_BYTES, avisoDaResposta, candidatoDoVinculo, classificarEventoRecebido,
+    decidirMidia, deveAvisarDesconexao, espelhoDoAckNoLog, estadoDoEventoDeSessao, eventoVelhoDemais,
+    idCurtoDaMensagem, linhaDaMidia, nomeSeguroDoArquivo, normalizarMimetype, tamanhoDoBase64,
+    variantesDoTelefoneBR,
 } from '../utils/whatsappOpenwa';
 import { formatarValorBRL } from '../utils/whatsappPedido';
 import type { StatusSaida } from '../utils/whatsappOpenwa';
@@ -321,5 +326,251 @@ describe('espelhoDoLog (varredura do vivo)', () => {
         for (const st of ['pendente', 'enviando', 'cancelada'] as const) {
             expect(espelhoDoLog(msg(st), pend()), st).toEqual({ acao: 'nada' });
         }
+    });
+});
+
+// ─── Task 5 — webhook do OpenWA (whatsapp-openwa-webhook) ─────────────────────
+
+describe('limites do webhook', () => {
+    it('corpo até 8 MiB; mídia inline até 5 MiB decodificada', () => {
+        expect(CORPO_WEBHOOK_MAX_BYTES).toBe(8 * 1024 * 1024);
+        expect(MIDIA_MAX_BYTES).toBe(5 * 1024 * 1024);
+    });
+});
+
+describe('variantesDoTelefoneBR (nono dígito)', () => {
+    it('celular antigo de 8 dígitos (12 com DDI) também procura com o 9', () => {
+        expect(variantesDoTelefoneBR('551188887777')).toEqual(['551188887777', '5511988887777']);
+    });
+    it('celular de 9 dígitos (13 com DDI) também procura sem o 9', () => {
+        expect(variantesDoTelefoneBR('5511988887777')).toEqual(['5511988887777', '551188887777']);
+    });
+    it('fixo (começa com 2–5) não ganha 9 — nunca casar um fixo com o celular de outro', () => {
+        expect(variantesDoTelefoneBR('551133334444')).toEqual(['551133334444']);
+    });
+    it('celular novo (9 seguido de 1–5) não tem forma antiga', () => {
+        expect(variantesDoTelefoneBR('5511912345678')).toEqual(['5511912345678']);
+    });
+    it('fora do Brasil, tamanho fora do padrão ou vazio → só ele mesmo (ou nada)', () => {
+        expect(variantesDoTelefoneBR('14155550100')).toEqual(['14155550100']);
+        expect(variantesDoTelefoneBR('5511')).toEqual(['5511']);
+        expect(variantesDoTelefoneBR('')).toEqual([]);
+        expect(variantesDoTelefoneBR('+55 (11) 8888-7777')).toEqual(['551188887777', '5511988887777']);
+    });
+});
+
+describe('idCurtoDaMensagem', () => {
+    it('id serializado → curto; curto fica como está', () => {
+        expect(idCurtoDaMensagem('true_5511988887777@c.us_3EB0AB')).toBe('3EB0AB');
+        expect(idCurtoDaMensagem('3EB0AB')).toBe('3EB0AB');
+        expect(idCurtoDaMensagem('  ')).toBe('');
+    });
+});
+
+describe('mídia do message.received', () => {
+    const b64 = (n: number) => Buffer.alloc(n, 7).toString('base64');
+
+    it('normalizarMimetype tira parâmetros e caixa', () => {
+        expect(normalizarMimetype('audio/ogg; codecs=opus')).toBe('audio/ogg');
+        expect(normalizarMimetype(' Image/JPEG ')).toBe('image/jpeg');
+        expect(normalizarMimetype(undefined)).toBe('');
+        expect(normalizarMimetype('<script>/x')).toBe('');
+    });
+    it('tamanhoDoBase64 = bytes decodificados; inválido → null', () => {
+        expect(tamanhoDoBase64(b64(10))).toBe(10);
+        expect(tamanhoDoBase64(b64(11))).toBe(11);
+        expect(tamanhoDoBase64(b64(12))).toBe(12);
+        expect(tamanhoDoBase64('data:image/png;base64,' + b64(9))).toBe(9);
+        expect(tamanhoDoBase64('não é base64!')).toBeNull();
+        expect(tamanhoDoBase64('')).toBeNull();
+    });
+    it('inline aceito e dentro do limite → gravar', () => {
+        const d = decidirMidia({ mimetype: 'image/jpeg', data: b64(1000), filename: 'foto.jpg' });
+        expect(d).toEqual({ acao: 'gravar', mimetype: 'image/jpeg', base64: b64(1000), bytes: 1000, nome: 'foto.jpg' });
+    });
+    it('inline acima de 5 MiB → grande; omitido → grande', () => {
+        expect(decidirMidia({ mimetype: 'application/pdf', data: b64(MIDIA_MAX_BYTES + 1) }))
+            .toEqual({ acao: 'grande', mimetype: 'application/pdf' });
+        expect(decidirMidia({ mimetype: 'video/mp4', omitted: true, sizeBytes: 20e6 }))
+            .toEqual({ acao: 'grande', mimetype: 'video/mp4' });
+    });
+    it('tipo fora da lista → tipo_nao_aceito (antes do tamanho)', () => {
+        expect(decidirMidia({ mimetype: 'application/x-msdownload', data: b64(10) }))
+            .toEqual({ acao: 'tipo_nao_aceito', mimetype: 'application/x-msdownload' });
+        expect(decidirMidia({ mimetype: 'text/html', omitted: true, sizeBytes: 9e6 }))
+            .toEqual({ acao: 'tipo_nao_aceito', mimetype: 'text/html' });
+        expect(decidirMidia({ data: b64(10) })).toEqual({ acao: 'tipo_nao_aceito', mimetype: 'desconhecido' });
+    });
+    it('áudio de voz (audio/ogg; codecs=opus) é aceito', () => {
+        expect(decidirMidia({ mimetype: 'audio/ogg; codecs=opus', data: b64(10) })?.acao).toBe('gravar');
+    });
+    it('sem dado e sem marcador, ou base64 inválido → indisponivel; sem mídia → null', () => {
+        expect(decidirMidia({ mimetype: 'image/png' })).toEqual({ acao: 'indisponivel', mimetype: 'image/png' });
+        expect(decidirMidia({ mimetype: 'image/png', data: '%%%' })).toEqual({ acao: 'indisponivel', mimetype: 'image/png' });
+        expect(decidirMidia(undefined)).toBeNull();
+        expect(decidirMidia(null)).toBeNull();
+    });
+    it('nomeSeguroDoArquivo: sem caminho, sem caractere estranho, com extensão de reserva', () => {
+        expect(nomeSeguroDoArquivo('../../etc/passwd', 'application/pdf')).toBe('passwd');
+        expect(nomeSeguroDoArquivo('Orçamento final (2).pdf', 'application/pdf')).toBe('Or_amento_final_2_.pdf');
+        expect(nomeSeguroDoArquivo(undefined, 'image/jpeg')).toBe('arquivo.jpg');
+        expect(nomeSeguroDoArquivo('...', 'audio/ogg')).toBe('arquivo.ogg');
+        expect(nomeSeguroDoArquivo('a'.repeat(300) + '.pdf', 'application/pdf').length).toBeLessThanOrEqual(100);
+        expect(nomeSeguroDoArquivo('a'.repeat(300) + '.pdf', 'application/pdf').endsWith('.pdf')).toBe(true);
+    });
+    it('linhaDaMidia — o que aparece no chat do pedido', () => {
+        expect(linhaDaMidia({ acao: 'gravar', mimetype: 'image/png', base64: '', bytes: 1, nome: 'a.png' }))
+            .toBe('Fornecedor enviou um arquivo (imagem)');
+        expect(linhaDaMidia({ acao: 'gravar', mimetype: 'application/pdf', base64: '', bytes: 1, nome: 'a.pdf' }))
+            .toBe('Fornecedor enviou um arquivo (PDF)');
+        expect(linhaDaMidia({ acao: 'grande', mimetype: 'video/mp4' }))
+            .toBe('Fornecedor enviou um arquivo (video/mp4) maior que 5 MB; abrir no celular do número.');
+        expect(linhaDaMidia({ acao: 'tipo_nao_aceito', mimetype: 'text/html' }))
+            .toBe('Fornecedor enviou um arquivo (text/html) de tipo não aceito; abrir no celular do número.');
+        expect(linhaDaMidia({ acao: 'indisponivel', mimetype: 'image/png' }))
+            .toBe('Fornecedor enviou um arquivo (image/png) que não chegou; abrir no celular do número.');
+    });
+});
+
+describe('classificarEventoRecebido', () => {
+    const base = {
+        id: 'true_5511988887777@c.us_ABC', from: '5511988887777@c.us', to: '5511900000000@c.us',
+        body: 'Pode entregar amanhã', type: 'chat', timestamp: 1_790_000_000, isGroup: false,
+    };
+
+    it('1:1 com texto → mensagem com telefone, chat, id, texto', () => {
+        expect(classificarEventoRecebido(base)).toEqual({
+            tipo: 'mensagem', telefone: '5511988887777', chatIdRemoto: '5511988887777@c.us',
+            providerMessageId: 'true_5511988887777@c.us_ABC', citadoId: null, texto: 'Pode entregar amanhã', midia: null,
+        });
+    });
+    it('citação → citadoId', () => {
+        const r = classificarEventoRecebido({ ...base, quotedMessage: { id: 'true_5511@c.us_Q1', body: 'pedido' } });
+        expect(r.tipo === 'mensagem' && r.citadoId).toBe('true_5511@c.us_Q1');
+    });
+    it('@lid com senderPhone → telefone resolvido; @lid sem telefone → ignorar', () => {
+        const r = classificarEventoRecebido({ ...base, from: '987654321@lid', senderPhone: '5511988887777' });
+        expect(r.tipo === 'mensagem' && r.telefone).toBe('5511988887777');
+        expect(r.tipo === 'mensagem' && r.chatIdRemoto).toBe('5511988887777@c.us');
+        expect(classificarEventoRecebido({ ...base, from: '987654321@lid' })).toEqual({ tipo: 'ignorar', motivo: 'sem_telefone' });
+    });
+    it('grupo, transmissão, canal, mensagem nossa ou fora do formato → ignorar', () => {
+        expect(classificarEventoRecebido({ ...base, isGroup: true }).tipo).toBe('ignorar');
+        expect(classificarEventoRecebido({ ...base, from: '1203@g.us' }).tipo).toBe('ignorar');
+        expect(classificarEventoRecebido({ ...base, from: 'status@broadcast' }).tipo).toBe('ignorar');
+        expect(classificarEventoRecebido({ ...base, from: '1203@newsletter' }).tipo).toBe('ignorar');
+        expect(classificarEventoRecebido({ ...base, fromMe: true }).tipo).toBe('ignorar');
+        expect(classificarEventoRecebido(null).tipo).toBe('ignorar');
+        expect(classificarEventoRecebido('x').tipo).toBe('ignorar');
+    });
+    it('texto longo é cortado em 4096; sem texto e sem mídia → linha que manda abrir no celular', () => {
+        const r = classificarEventoRecebido({ ...base, body: 'a'.repeat(5000) });
+        expect(r.tipo === 'mensagem' && r.texto.length).toBe(4096);
+        const v = classificarEventoRecebido({ ...base, body: '', type: 'location' });
+        expect(v.tipo === 'mensagem' && v.texto).toBe('Fornecedor enviou uma mensagem sem texto (location); abrir no celular do número.');
+    });
+    it('mídia: legenda vai depois da linha do arquivo; corpo que é o próprio base64 é descartado', () => {
+        const media = { mimetype: 'image/jpeg', data: Buffer.alloc(30, 1).toString('base64') };
+        const r = classificarEventoRecebido({ ...base, type: 'image', body: 'nota fiscal', media });
+        expect(r.tipo === 'mensagem' && r.texto).toBe('Fornecedor enviou um arquivo (imagem)\nnota fiscal');
+        expect(r.tipo === 'mensagem' && r.midia?.acao).toBe('gravar');
+        const lixo = Buffer.alloc(400, 3).toString('base64');
+        const s = classificarEventoRecebido({ ...base, type: 'image', body: lixo, media });
+        expect(s.tipo === 'mensagem' && s.texto).toBe('Fornecedor enviou um arquivo (imagem)');
+    });
+});
+
+describe('candidatoDoVinculo', () => {
+    const c = (id: string, organizationId: string, orderId: string, providerMessageId: string | null, enviadoEm: string) =>
+        ({ id, organizationId, orderId, providerMessageId, enviadoEm });
+    const lista = [
+        c('m1', 'orgA', 'p1', 'true_x@c.us_AAA', '2026-11-20T10:00:00Z'),
+        c('m2', 'orgA', 'p1', 'true_x@c.us_BBB', '2026-11-22T10:00:00Z'),
+        c('m3', 'orgA', 'p2', 'true_x@c.us_CCC', '2026-11-21T10:00:00Z'),
+    ];
+    it('citação → a própria mensagem citada (quem a enviou recebe o aviso)', () => {
+        const v = escolherVinculo(lista, 'AAA');
+        expect(candidatoDoVinculo(lista, v, 'AAA')?.id).toBe('m1');
+    });
+    it('único → a mensagem mais recente daquele pedido', () => {
+        const v = escolherVinculo(lista, null);
+        expect(v).toEqual({ tipo: 'unico', organizationId: 'orgA', orderId: 'p1' });
+        expect(candidatoDoVinculo(lista, v, null)?.id).toBe('m2');
+    });
+    it('sem vínculo → null', () => {
+        expect(candidatoDoVinculo(lista, { tipo: 'sem_vinculo' }, null)).toBeNull();
+    });
+});
+
+describe('espelhoDoAckNoLog (Logs de envio)', () => {
+    const log = (status: string, metadata: Record<string, unknown> | null = {}) => ({ status, metadata });
+
+    it('entregue/lida → sent, metadata.entrega e some a confirmação pendente', () => {
+        expect(espelhoDoAckNoLog(log('pending', { wa_mensagem_id: 'w', confirmacao: 'pendente' }), 'entregue', null))
+            .toEqual({ status: 'sent', error: null, metadata: { wa_mensagem_id: 'w', entrega: 'entregue' } });
+        expect(espelhoDoAckNoLog(log('sent', { entrega: 'entregue' }), 'lida', null))
+            .toEqual({ metadata: { entrega: 'lida' } });
+        // Entrega prova que chegou: vence um 'failed' anterior.
+        expect(espelhoDoAckNoLog(log('failed', {}), 'lida', null))
+            .toEqual({ status: 'sent', error: null, metadata: { entrega: 'lida' } });
+    });
+    it('nada a mudar → null (repetição do evento não regrava)', () => {
+        expect(espelhoDoAckNoLog(log('sent', { entrega: 'lida' }), 'lida', null)).toBeNull();
+        expect(espelhoDoAckNoLog(log('sent', {}), 'aceita', null)).toBeNull();
+        expect(espelhoDoAckNoLog(log('failed', { entrega: 'falhou' }), 'falhou', 'x')).toBeNull();
+    });
+    it('aceita com log pendente → sent sem confirmação pendente', () => {
+        expect(espelhoDoAckNoLog(log('pending', { confirmacao: 'pendente' }), 'aceita', null))
+            .toEqual({ status: 'sent', error: null, metadata: {} });
+    });
+    it('falhou → failed com o erro e entrega falhou', () => {
+        expect(espelhoDoAckNoLog(log('sent', null), 'falhou', 'recusou'))
+            .toEqual({ status: 'failed', error: 'recusou', metadata: { entrega: 'falhou' } });
+    });
+    it('status que não vem de ack → null', () => {
+        for (const st of ['pendente', 'enviando', 'incerta', 'cancelada'] as const) {
+            expect(espelhoDoAckNoLog(log('pending'), st, null), st).toBeNull();
+        }
+    });
+});
+
+describe('sessão do OpenWA', () => {
+    it('estadoDoEventoDeSessao', () => {
+        expect(estadoDoEventoDeSessao('session.status', { status: 'ready' }))
+            .toEqual({ estado: 'conectado', estadoBruto: 'ready', motivo: null });
+        expect(estadoDoEventoDeSessao('session.status', { status: 'qr_ready' })?.estado).toBe('aguardando_qr');
+        expect(estadoDoEventoDeSessao('session.status', { status: 'action_required' })?.estado).toBe('desconectado');
+        expect(estadoDoEventoDeSessao('session.disconnected', { reason: 'LOGOUT' }))
+            .toEqual({ estado: 'desconectado', estadoBruto: 'disconnected', motivo: 'LOGOUT' });
+        expect(estadoDoEventoDeSessao('message.ack', {})).toBeNull();
+    });
+    it('deveAvisarDesconexao: virou desconectado, ou o evento é a própria desconexão', () => {
+        expect(deveAvisarDesconexao({ evento: 'session.status', anterior: 'conectado', novo: 'desconectado' })).toBe(true);
+        expect(deveAvisarDesconexao({ evento: 'session.status', anterior: 'desconectado', novo: 'desconectado' })).toBe(false);
+        // O "vivo" do worker pode ter gravado desconectado antes do evento chegar.
+        expect(deveAvisarDesconexao({ evento: 'session.disconnected', anterior: 'desconectado', novo: 'desconectado' })).toBe(true);
+        expect(deveAvisarDesconexao({ evento: 'session.status', anterior: 'desconectado', novo: 'conectado' })).toBe(false);
+        expect(deveAvisarDesconexao({ evento: 'session.status', anterior: 'conectado', novo: 'erro' })).toBe(false);
+    });
+});
+
+describe('eventoVelhoDemais (reenvio de corpo assinado antigo)', () => {
+    const agora = Date.parse('2026-11-23T12:00:00Z');
+    it('mais de 7 dias → true; recente, futuro próximo ou ilegível → false', () => {
+        expect(eventoVelhoDemais('2026-11-10T12:00:00Z', agora)).toBe(true);
+        expect(eventoVelhoDemais('2026-11-22T12:00:00Z', agora)).toBe(false);
+        expect(eventoVelhoDemais('2026-11-23T12:05:00Z', agora)).toBe(false);
+        expect(eventoVelhoDemais(undefined, agora)).toBe(false);
+        expect(eventoVelhoDemais('ontem', agora)).toBe(false);
+    });
+});
+
+describe('avisoDaResposta (sino)', () => {
+    it('diz quem respondeu e qual pedido, com trecho curto numa linha', () => {
+        const a = avisoDaResposta({ fornecedor: 'Casa do Aço', numero: 'PC-42', texto: 'linha 1\nlinha 2 ' + 'x'.repeat(300) });
+        expect(a.title).toBe('Resposta do fornecedor no WhatsApp');
+        expect(a.message.startsWith('Casa do Aço respondeu o pedido nº PC-42: "linha 1 linha 2 ')).toBe(true);
+        expect(a.message.length).toBeLessThanOrEqual(220);
+        expect(avisoDaResposta({ fornecedor: '', numero: '', texto: '' }).message).toBe('Fornecedor respondeu o pedido nº —.');
     });
 });

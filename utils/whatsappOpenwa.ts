@@ -349,7 +349,7 @@ export function telefoneDoRemetente(data: { from?: string; senderPhone?: string 
  * O OpenWA às vezes manda o id serializado (`true_5511…@c.us_3EB0AB`, e em
  * grupo com `_<participante>` no fim) e às vezes só o id curto (`3EB0AB`).
  */
-function idCurtoDaMensagem(id: string): string {
+export function idCurtoDaMensagem(id: string): string {
     const t = (id ?? '').trim();
     const m = /^(?:true|false)_[^_]+_([^_]+)/.exec(t);
     return m ? m[1] : t;
@@ -396,4 +396,293 @@ export function escolherVinculo(candidatos: Candidato[], citadoId: string | null
     };
     const maisRecente = candidatos.reduce((a, b) => (instante(b) > instante(a) ? b : a));
     return { tipo: 'unico', organizationId: maisRecente.organizationId, orderId: maisRecente.orderId };
+}
+
+// ─── Webhook do OpenWA (whatsapp-openwa-webhook, Task 5) ──────────────────────
+
+/** Corpo máximo aceito pelo webhook: a mídia inline vai até 5 MiB (~6,7 MiB em base64) + o envelope. */
+export const CORPO_WEBHOOK_MAX_BYTES = 8 * 1024 * 1024;
+/** Mídia inline gravada no bucket: até 5 MiB decodificada. */
+export const MIDIA_MAX_BYTES = 5 * 1024 * 1024;
+/** Texto recebido guardado e mostrado no chat (o resto é cortado). */
+export const TEXTO_RECEBIDO_MAX = 4096;
+
+/** Tipos de arquivo do fornecedor que vão para o bucket `whatsapp-midia` (o bucket tem a mesma lista). */
+export const TIPOS_DE_MIDIA_ACEITOS: readonly string[] = Object.freeze([
+    'image/jpeg', 'image/png', 'image/webp', 'application/pdf', 'audio/ogg', 'audio/mpeg', 'video/mp4',
+]);
+
+const EXTENSAO_DO_TIPO: Record<string, string> = {
+    'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf',
+    'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'video/mp4': 'mp4',
+};
+
+/** Uma linha só (sem quebra), aparada e cortada em `max`; vazio → ''. */
+function umaLinha(v: unknown, max: number): string {
+    return typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '';
+}
+
+/**
+ * Variantes de um telefone brasileiro por causa do nono dígito: o WhatsApp de
+ * celular antigo ainda aparece com 8 dígitos (`55 DD NNNNNNNN`, 12 com DDI) e o
+ * cadastro do fornecedor costuma ter 9 (`55 DD 9NNNNNNNN`, 13) — ou o contrário.
+ * Só celular (primeiro dígito do número antigo 6–9): fixo (2–5) e celular novo
+ * (9 seguido de 1–5) não têm a outra forma, e inventá-la poderia casar com o
+ * número de outra pessoa. Primeiro sempre o próprio número.
+ */
+export function variantesDoTelefoneBR(digitos: string): string[] {
+    const d = (digitos ?? '').replace(/\D/g, '');
+    if (!d) return [];
+    if (d.startsWith('55') && d.length === 12 && /[6-9]/.test(d[4])) return [d, `${d.slice(0, 4)}9${d.slice(4)}`];
+    if (d.startsWith('55') && d.length === 13 && d[4] === '9' && /[6-9]/.test(d[5])) return [d, d.slice(0, 4) + d.slice(5)];
+    return [d];
+}
+
+/** `audio/ogg; codecs=opus` → `audio/ogg`. Fora do formato tipo/subtipo → ''. */
+export function normalizarMimetype(v: unknown): string {
+    const t = (typeof v === 'string' ? v : '').split(';')[0].trim().toLowerCase();
+    return t.length <= 100 && /^[a-z0-9][a-z0-9.+-]*\/[a-z0-9][a-z0-9.+-]*$/.test(t) ? t : '';
+}
+
+/** Base64 sem o prefixo `data:…;base64,` e sem espaços. */
+function base64Limpo(b64: string): string {
+    return b64.replace(/^data:[^,]*;base64,/i, '').replace(/\s+/g, '');
+}
+
+/** Bytes que o base64 vira, sem decodificar. Vazio ou fora do alfabeto → null. */
+export function tamanhoDoBase64(b64: unknown): number | null {
+    if (typeof b64 !== 'string') return null;
+    const s = base64Limpo(b64);
+    if (!s || !/^[A-Za-z0-9+/]*={0,2}$/.test(s)) return null;
+    const semPad = s.replace(/=+$/, '');
+    if (semPad.length % 4 === 1) return null;
+    return Math.floor((semPad.length * 3) / 4);
+}
+
+/**
+ * Nome de arquivo seguro para o caminho no bucket: só o último pedaço (sem
+ * pasta), só `[A-Za-z0-9._-]`, sem ponto no começo, até 100 caracteres
+ * (preservando a extensão). Vazio → `arquivo.<extensão do tipo>`.
+ */
+export function nomeSeguroDoArquivo(nome: unknown, mimetype: string): string {
+    const ultimo = (typeof nome === 'string' ? nome : '').split(/[\\/]/).pop() ?? '';
+    let n = ultimo.replace(/[^A-Za-z0-9._-]/g, '_').replace(/_+/g, '_').replace(/^[._]+/, '');
+    if (!n || !/[A-Za-z0-9]/.test(n)) return `arquivo.${EXTENSAO_DO_TIPO[mimetype] ?? 'bin'}`;
+    if (n.length > 100) {
+        const ext = /\.[A-Za-z0-9]{1,10}$/.exec(n)?.[0] ?? '';
+        n = n.slice(0, 100 - ext.length) + ext;
+    }
+    return n;
+}
+
+export type DecisaoDeMidia =
+    | { acao: 'gravar'; mimetype: string; base64: string; bytes: number; nome: string }
+    | { acao: 'grande'; mimetype: string }
+    | { acao: 'tipo_nao_aceito'; mimetype: string }
+    | { acao: 'indisponivel'; mimetype: string };
+
+/**
+ * `data.media` do `message.received` → o que fazer. O OpenWA não é alcançável
+ * de fora (sem túnel), então não há como buscar depois o que não veio inline.
+ *   · ausente → null;
+ *   · tipo fora de TIPOS_DE_MIDIA_ACEITOS → tipo_nao_aceito (vem antes do tamanho);
+ *   · `omitted` (acima do limite do OpenWA) ou acima de 5 MiB → grande;
+ *   · sem dado ou base64 ilegível → indisponivel;
+ *   · senão → gravar.
+ */
+export function decidirMidia(media: unknown): DecisaoDeMidia | null {
+    if (!media || typeof media !== 'object') return null;
+    const m = media as Record<string, unknown>;
+    const mimetype = normalizarMimetype(m.mimetype) || 'desconhecido';
+    if (!TIPOS_DE_MIDIA_ACEITOS.includes(mimetype)) return { acao: 'tipo_nao_aceito', mimetype };
+    if (m.omitted === true) return { acao: 'grande', mimetype };
+    const bytes = tamanhoDoBase64(m.data);
+    if (bytes === null) return { acao: 'indisponivel', mimetype };
+    if (bytes > MIDIA_MAX_BYTES) return { acao: 'grande', mimetype };
+    return { acao: 'gravar', mimetype, base64: base64Limpo(m.data as string), bytes, nome: nomeSeguroDoArquivo(m.filename, mimetype) };
+}
+
+function rotuloDoTipo(mimetype: string): string {
+    if (mimetype.startsWith('image/')) return 'imagem';
+    if (mimetype === 'application/pdf') return 'PDF';
+    if (mimetype.startsWith('audio/')) return 'áudio';
+    if (mimetype.startsWith('video/')) return 'vídeo';
+    return mimetype;
+}
+
+/** A linha do chat do pedido que conta que veio um arquivo. */
+export function linhaDaMidia(d: DecisaoDeMidia): string {
+    switch (d.acao) {
+        case 'gravar': return `Fornecedor enviou um arquivo (${rotuloDoTipo(d.mimetype)})`;
+        case 'grande': return `Fornecedor enviou um arquivo (${d.mimetype}) maior que 5 MB; abrir no celular do número.`;
+        case 'tipo_nao_aceito': return `Fornecedor enviou um arquivo (${d.mimetype}) de tipo não aceito; abrir no celular do número.`;
+        default: return `Fornecedor enviou um arquivo (${d.mimetype}) que não chegou; abrir no celular do número.`;
+    }
+}
+
+export type EventoRecebido =
+    | { tipo: 'ignorar'; motivo: 'formato' | 'grupo' | 'nossa' | 'nao_1a1' | 'sem_telefone' }
+    | {
+        tipo: 'mensagem';
+        /** Só dígitos com DDI. */
+        telefone: string;
+        /** `<telefone>@c.us` — a mesma forma do chat das saídas. */
+        chatIdRemoto: string;
+        providerMessageId: string | null;
+        citadoId: string | null;
+        /** O que vai para `wa_mensagens.texto` e para o chat do pedido. */
+        texto: string;
+        midia: DecisaoDeMidia | null;
+    };
+
+/**
+ * `data` do `message.received` → mensagem 1:1 a gravar, ou ignorar.
+ * Ignora grupo (`isGroup`, `@g.us`), lista de transmissão, canal, mensagem
+ * nossa (`fromMe`) e remetente sem telefone (`@lid` sem `senderPhone`).
+ * Texto: com arquivo → a linha do arquivo e, embaixo, a legenda; sem texto e
+ * sem arquivo (localização, figurinha…) → linha que manda abrir no celular.
+ */
+export function classificarEventoRecebido(data: unknown): EventoRecebido {
+    if (!data || typeof data !== 'object') return { tipo: 'ignorar', motivo: 'formato' };
+    const d = data as Record<string, unknown>;
+    if (d.isGroup === true) return { tipo: 'ignorar', motivo: 'grupo' };
+    if (d.fromMe === true) return { tipo: 'ignorar', motivo: 'nossa' };
+    const from = typeof d.from === 'string' ? d.from.trim() : '';
+    if (/@(g\.us|broadcast|newsletter)$/i.test(from)) return { tipo: 'ignorar', motivo: 'nao_1a1' };
+    const telefone = telefoneDoRemetente({ from, senderPhone: typeof d.senderPhone === 'string' ? d.senderPhone : null });
+    if (telefone.length < 8 || telefone.length > 15) return { tipo: 'ignorar', motivo: 'sem_telefone' };
+
+    const id = typeof d.id === 'string' ? d.id.trim() : '';
+    const quoted = d.quotedMessage && typeof d.quotedMessage === 'object' ? (d.quotedMessage as Record<string, unknown>) : null;
+    const citado = typeof quoted?.id === 'string' ? quoted.id.trim() : '';
+    const midia = decidirMidia(d.media);
+
+    let corpo = typeof d.body === 'string' ? d.body.trim() : '';
+    // Em mídia, versões do whatsapp-web.js põem o próprio base64 no body: não é legenda.
+    if (midia && /^[A-Za-z0-9+/=]{200,}$/.test(corpo)) corpo = '';
+    const tipoMsg = (typeof d.type === 'string' ? d.type.toLowerCase().replace(/[^a-z0-9_]/g, '') : '').slice(0, 30);
+
+    const texto = midia
+        ? linhaDaMidia(midia) + (corpo ? `\n${corpo}` : '')
+        : corpo || `Fornecedor enviou uma mensagem sem texto (${tipoMsg || 'desconhecido'}); abrir no celular do número.`;
+
+    return {
+        tipo: 'mensagem',
+        telefone,
+        chatIdRemoto: `${telefone}@c.us`,
+        providerMessageId: id && id.length <= 300 ? id : null,
+        citadoId: citado && citado.length <= 300 ? citado : null,
+        texto: texto.slice(0, TEXTO_RECEBIDO_MAX),
+        midia,
+    };
+}
+
+/**
+ * A mensagem de saída por trás do vínculo — de quem é o aviso da resposta
+ * (`criado_por` dela). Citação → a própria mensagem citada; único → a mais
+ * recente daquele pedido; sem vínculo → null.
+ */
+export function candidatoDoVinculo<T extends Candidato>(candidatos: T[], vinculo: Vinculo, citadoId: string | null): T | null {
+    if (vinculo.tipo === 'sem_vinculo') return null;
+    const doPedido = candidatos.filter((c) => c.organizationId === vinculo.organizationId && c.orderId === vinculo.orderId);
+    if (vinculo.tipo === 'citacao' && citadoId) {
+        return doPedido.find((c) => c.providerMessageId && idsDeMensagemIguais(c.providerMessageId, citadoId)) ?? null;
+    }
+    if (doPedido.length === 0) return null;
+    const instante = (c: T) => {
+        const t = Date.parse(c.enviadoEm);
+        return Number.isFinite(t) ? t : -Infinity;
+    };
+    return doPedido.reduce((a, b) => (instante(b) > instante(a) ? b : a));
+}
+
+export type MudancaNoLog = { status?: 'sent' | 'failed'; error?: string | null; metadata: Record<string, unknown> };
+
+/**
+ * Espelho do status da mensagem (já depois do ack) no `notification_log` (aba
+ * Logs de envio). Idempotente: a mesma entrada devolve null na segunda vez.
+ *   · entregue/lida → `sent`, `metadata.entrega` = o status e SEM
+ *     `metadata.confirmacao` (entrega confirmada não é "confirmação pendente");
+ *     vence até um `failed` anterior (prova de que chegou);
+ *   · aceita → `sent` só se o log ainda está `pending`;
+ *   · falhou → `failed` com o erro e `metadata.entrega = 'falhou'`;
+ *   · os demais → null.
+ */
+export function espelhoDoAckNoLog(
+    log: { status: string; metadata: Record<string, unknown> | null },
+    statusDaMensagem: StatusSaida,
+    erro: string | null,
+): MudancaNoLog | null {
+    const antes = log.metadata ?? {};
+    const tinhaConfirmacao = antes.confirmacao !== undefined;
+    const metadata: Record<string, unknown> = { ...antes };
+    delete metadata.confirmacao;
+    switch (statusDaMensagem) {
+        case 'entregue':
+        case 'lida':
+            metadata.entrega = statusDaMensagem;
+            if (log.status !== 'sent') return { status: 'sent', error: null, metadata };
+            if (antes.entrega === statusDaMensagem && !tinhaConfirmacao) return null;
+            return { metadata };
+        case 'aceita':
+            return log.status === 'pending' ? { status: 'sent', error: null, metadata } : null;
+        case 'falhou':
+            metadata.entrega = 'falhou';
+            if (log.status !== 'failed') {
+                return { status: 'failed', error: erro?.trim() || 'O WhatsApp não entregou a mensagem.', metadata };
+            }
+            if (antes.entrega === 'falhou' && !tinhaConfirmacao) return null;
+            return { metadata };
+        default:
+            return null;
+    }
+}
+
+/** `session.status` / `session.disconnected` → estado da conexão. Outro evento → null. */
+export function estadoDoEventoDeSessao(
+    evento: string, data: unknown,
+): { estado: EstadoConexao; estadoBruto: string | null; motivo: string | null } | null {
+    const d = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+    if (evento === 'session.disconnected') {
+        return { estado: 'desconectado', estadoBruto: 'disconnected', motivo: umaLinha(d.reason, 100) || null };
+    }
+    if (evento === 'session.status') {
+        const bruto = umaLinha(d.status, 100) || null;
+        return { estado: estadoDaConexao(bruto), estadoBruto: bruto, motivo: null };
+    }
+    return null;
+}
+
+/**
+ * Avisa os superadmins que o número caiu? Quando o estado vira `desconectado`
+ * — ou quando o evento é a própria desconexão, mesmo com o estado já
+ * `desconectado` (o "vivo" do worker pode ter gravado antes de o evento chegar).
+ * Repetição em sequência é contida por quem chama (janela de minutos).
+ */
+export function deveAvisarDesconexao(a: { evento: string; anterior: string | null; novo: EstadoConexao }): boolean {
+    return a.novo === 'desconectado' && (a.evento === 'session.disconnected' || a.anterior !== 'desconectado');
+}
+
+const IDADE_MAXIMA_DO_EVENTO_MS = 7 * 86400_000;
+
+/**
+ * Evento com `timestamp` de mais de 7 dias: corpo assinado antigo sendo
+ * reenviado (a deduplicação expira em 30 dias). Ilegível → false (não trava
+ * por mudança de formato; a assinatura já foi conferida).
+ */
+export function eventoVelhoDemais(timestamp: unknown, agoraMs: number): boolean {
+    const t = typeof timestamp === 'string' ? Date.parse(timestamp) : NaN;
+    return Number.isFinite(t) && agoraMs - t > IDADE_MAXIMA_DO_EVENTO_MS;
+}
+
+/** Título e texto do aviso no sino quando o fornecedor responde pelo WhatsApp. */
+export function avisoDaResposta(d: { fornecedor: string; numero: string; texto: string }): { title: string; message: string } {
+    const nome = umaLinha(d.fornecedor, 60) || 'Fornecedor';
+    const numero = umaLinha(d.numero, 30) || '—';
+    let trecho = umaLinha(d.texto, 1000);
+    if (trecho.length > 140) trecho = `${trecho.slice(0, 139)}…`;
+    return {
+        title: 'Resposta do fornecedor no WhatsApp',
+        message: trecho ? `${nome} respondeu o pedido nº ${numero}: "${trecho}"` : `${nome} respondeu o pedido nº ${numero}.`,
+    };
 }

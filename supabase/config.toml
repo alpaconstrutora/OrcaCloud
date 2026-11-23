@@ -530,3 +530,10 @@ verify_jwt = true
 # com o gateway desligado, a autorização é toda do código — depois de publicar, provar o 401 sem header.
 [functions.whatsapp-openwa-worker]
 verify_jwt = false
+
+# Webhook do OpenWA (mesmo plano, Task 5): o OpenWA da máquina do escritório faz POST dos eventos
+# (ack, resposta do fornecedor, sessão) e não tem JWT. gate = HMAC (OPENWA_WEBHOOK_SECRET): o código confere
+# X-OpenWA-Signature (HMAC-SHA256 dos bytes do corpo) antes de qualquer parse ou consulta; secret ausente ou
+# < 32 caracteres → 503. REGRA #7 pergunta 3: depois de publicar, provar o 401 sem header e com assinatura errada.
+[functions.whatsapp-openwa-webhook]
+verify_jwt = false

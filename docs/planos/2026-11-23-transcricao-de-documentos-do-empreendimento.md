@@ -128,15 +128,20 @@ leitura. **Arquivo original à esquerda, texto à direita**: revisar linha duvid
       < 1 s, origem TEXTO_DO_PDF, 0 duvidosas; JPG em 5 s; 0 erro no console
 - [x] 4. Componente + fila — `check-ui-standard.sh` sem achado, tsc limpo; conferido por
       print (progresso; texto com as linhas duvidosas em âmbar)
-- [ ] 5. Ligação na aba — no ar desde #676 (8fb67cb, conferir-producao ✅); **falta a prova na
-      tela real logada** (envio de escritura no checklist → texto gravado → reabrir)
+- [x] 5. Ligação na aba — no ar desde #676 (8fb67cb). Provado em produção: em 021 - Tamareiras
+      da Lagoa, os envios de "Escritura do terreno" (3 págs) e "Matrícula Terreno" (2 págs)
+      gravaram transcrição OCR às 21:31 e 21:32 UTC de 23/11 (134 linhas/40 duvidosas e
+      113/31), com autor
 - [x] 6. Tela própria — tsc e `check-ui-standard.sh` limpos; prints (Chrome 1440×900, componente
       real, escritura TERRENO): duas colunas cabem na janela; 12 cliques em "próxima" levaram a
       "12 de 29" com a página parada (scrollY 44 → 44) e só a caixa rolando; modo de revisão
 - [x] 7. Painel compacto — print: "109 linhas, 29 com leitura duvidosa para revisar" + "Abrir
       transcrição"
-- [ ] 8. Ligação da tela na aba — tsc limpo; **falta a prova na tela real logada** (abrir pela
-      linha e pelo painel)
+- [x] 8. Ligação da tela na aba — no ar desde #680. Provado em produção, logado (Claude in
+      Chrome, 23/11): menu da linha "Escritura do terreno" › Ver transcrição abre a tela com o PDF
+      e "40 linhas duvidosas"; › › leva a "2 de 40" sem rolar a página; voltar retorna à aba;
+      painel da "Matrícula Terreno" mostra "112 linhas, 31 com leitura duvidosa" e "Abrir
+      transcrição" abre a tela; nenhum erro no console. Nada foi gravado no teste.
 
 ## Verificação
 

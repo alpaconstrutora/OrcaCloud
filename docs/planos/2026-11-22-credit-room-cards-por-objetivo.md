@@ -54,3 +54,8 @@ Respostas às perguntas de definição (mesma data):
 - Objetivo vazio ou misto cai em Vendas (comportamento de hoje).
 - Locação usa o aluguel do CONTRATO vigente (mesma base da renda da série), não o `rental_price` da unidade locada.
 - Contrato de serviço achado pela obra do empreendimento (`project_id`), porque `contracts.empreendimento_id` está vazio em todos os contratos de serviço.
+
+## Estado (22/11/2026)
+Tasks 1 e 2 feitas e revisadas; Task 3: prova na tela feita (só leitura, 0 escritas) no room "Demonstração": 010 Galeria Altavista "Unidades locadas 11 · R$ 8.600/mês" e "Unidades disponíveis 1 · R$ 1.266/mês"; 020 "Sem aluguel cadastrado 4 unidades"; 019 e 015 "sem contrato de serviço ativo"; vendas iguais a antes. PR pendente.
+- Achados de cadastro: 014 tem locação vigente (R$ 3.500) sem unidade marcada "Locado"; 2 unidades de locação "Reservado" contam como disponíveis (comportamento de antes); 017 e 018 estão cadastrados como Vendas.
+- Aluguel pedido vem do espelho de Locações (`commercial_properties.rental_price` via `rental_property_id`) — em produção `empreendimento_units.rental_price` está vazio em todas as unidades.

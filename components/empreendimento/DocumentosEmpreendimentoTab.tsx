@@ -17,7 +17,7 @@
 import React from 'react';
 import {
   AlertCircle, AlertTriangle, CheckCircle2, Clock, ExternalLink, FileText, FolderOpen,
-  Link2, ListChecks, Paperclip, Plus, Unlink, Upload,
+  Link2, ListChecks, Paperclip, Plus, ScanText, Unlink, Upload,
 } from 'lucide-react';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { KpiCard } from '../ui/KpiCard';
@@ -39,7 +39,8 @@ import {
 import {
   empreendimentoDocumentosService as svc, EXTENSOES_ACEITAS, TAMANHO_MAXIMO_BYTES,
 } from '../../services/empreendimentoDocumentosService';
-import TranscricaoDoDocumento, { useFilaDeTranscricao } from './TranscricaoDoDocumento';
+import TranscricaoDoDocumento, { useFilaDeTranscricao, versaoTranscreve } from './TranscricaoDoDocumento';
+import TelaDeTranscricao from './TelaDeTranscricao';
 import { podeTranscrever } from '../../utils/transcricaoDocumento';
 
 // ─── Colunas ────────────────────────────────────────────────────────────────
@@ -61,7 +62,7 @@ const COLUNAS_LEGAIS: StandardTableColumn[] = [
 const COLUNAS_OUTROS: StandardTableColumn[] = [
   { key: 'nome', label: 'Documento', sortable: true, width: 280 },
   { key: 'categoria', label: 'Categoria no GED', sortable: true, width: 170 },
-  { key: 'tipo', label: 'Tipo', sortable: true, width: 180 },
+  { key: 'tipo', label: 'Tipo', sortable: true, width: 150 },
   { key: 'emissao', label: 'Data de emissão', sortable: true, width: 125 },
   { key: 'validade', label: 'Validade', sortable: true, width: 110 },
   { key: 'tamanho', label: 'Tamanho', sortable: true, width: 110, align: 'right' },
@@ -208,7 +209,21 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
   // ── Transcrição do texto (23/11/2026) ─────────────────────────────────────
   // Todo PDF/imagem enviado pela aba é transcrito logo depois, em segundo plano.
   const fila = useFilaDeTranscricao();
-  const [transcricaoSuja, setTranscricaoSuja] = React.useState(false);
+  /**
+   * Tela da transcrição aberta no lugar das tabelas (23/11/2026: "em drawer fica muito
+   * ruim a visualização"). Guarda só o id do documento: a versão vem de `doGed`, que
+   * é a lista atualizada depois de cada envio.
+   */
+  const [telaTranscricao, setTelaTranscricao] = React.useState<{ documentId: string; titulo: string } | null>(null);
+  const motivoSemTranscricao = (doc: OpuraDocument | undefined) =>
+    !doc?.active_version ? 'Este item ainda não tem arquivo.'
+      : !versaoTranscreve(doc.active_version) ? 'Só PDF e imagem (PNG, JPG, WEBP) têm transcrição.'
+        : undefined;
+  const abrirTranscricao = (documentId: string, titulo: string) => {
+    fecharItem();
+    fecharEnvio();
+    setTelaTranscricao({ documentId, titulo });
+  };
   const transcreverDepoisDoEnvio = (doc: OpuraDocument | undefined, arquivo: File) => {
     if (doc?.active_version) {
       fila.enfileirar({ versao: doc.active_version, organizationId: doc.organization_id, arquivo, automatico: true });
@@ -638,6 +653,33 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
   const faltamNaEscolhida = faltantesPorLista[listaEscolhida];
   const editando = itemAberto && itemAberto !== 'novo' ? itemAberto : null;
 
+  const toast = notification && (
+    <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+      notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+    }`}>
+      <AlertCircle className="w-4 h-4 shrink-0" />
+      {notification.message}
+    </div>
+  );
+
+  const docDaTela = telaTranscricao ? docGedPorId.get(telaTranscricao.documentId) : undefined;
+  if (telaTranscricao && docDaTela?.active_version) {
+    return (
+      <>
+        <TelaDeTranscricao
+          key={docDaTela.active_version.id}
+          titulo={telaTranscricao.titulo}
+          versao={docDaTela.active_version}
+          organizationId={docDaTela.organization_id}
+          fila={fila}
+          notify={notify}
+          onVoltar={() => setTelaTranscricao(null)}
+        />
+        {toast}
+      </>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {erro && (
@@ -732,6 +774,15 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
                       onClick: () => d.document_id && abrirNoGed(d.document_id),
                       disabled: !d.document_id, title: d.document_id ? undefined : 'Este item ainda não tem arquivo no GED.',
                     },
+                    (() => {
+                      const ged = d.document_id ? docGedPorId.get(d.document_id) : undefined;
+                      const motivo = motivoSemTranscricao(ged);
+                      return {
+                        icon: <ScanText className="w-[18px] h-[18px]" />, label: 'Ver transcrição',
+                        onClick: () => ged && abrirTranscricao(ged.id, d.titulo),
+                        disabled: !!motivo, title: motivo,
+                      };
+                    })(),
                     {
                       icon: <Unlink className="w-[18px] h-[18px]" />, label: 'Desvincular arquivo',
                       onClick: () => desvincular(d),
@@ -777,10 +828,20 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
             </button>
           }
           actions={{
-            width: 150,
+            width: 180,
             render: d => (
               <div className="flex items-center justify-end gap-1.5">
                 <ActionIconButton kind="edit" title="Editar" onClick={ev => { ev.stopPropagation(); abrirEdicaoOutro(d); }} />
+                {/* Desligado, o ActionIconButton não mostra o title: o motivo fica no span. */}
+                <span className="inline-flex" title={motivoSemTranscricao(d) ?? 'Ver transcrição'} onClick={ev => ev.stopPropagation()}>
+                  <ActionIconButton
+                    kind="view"
+                    icon={<ScanText className="w-4 h-4" />}
+                    title="Ver transcrição"
+                    disabled={!!motivoSemTranscricao(d)}
+                    onClick={ev => { ev.stopPropagation(); abrirTranscricao(d.id, d.nome); }}
+                  />
+                </span>
                 <ActionIconButton
                   kind="view"
                   icon={<ExternalLink className="w-4 h-4" />}
@@ -811,7 +872,7 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
       />
 
       {/* ── Sheet: item do checklist ── */}
-      <Sheet open={!!itemAberto} onClose={fecharItem} size="lg" dirty={sujo || !!arquivoDoItem || transcricaoSuja}>
+      <Sheet open={!!itemAberto} onClose={fecharItem} size="lg" dirty={sujo || !!arquivoDoItem}>
         <SheetHeader onClose={fecharItem}>
           <SheetTitle>{editando ? editando.titulo : 'Novo documento legal'}</SheetTitle>
           <SheetDescription>{e.name}</SheetDescription>
@@ -953,8 +1014,8 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
                 versao={docGedPorId.get(editando.document_id)?.active_version}
                 organizationId={docGedPorId.get(editando.document_id)?.organization_id ?? editando.organization_id}
                 fila={fila}
-                notify={notify}
-                onSujoChange={setTranscricaoSuja}
+                onAbrir={() => abrirTranscricao(editando.document_id!, editando.titulo)}
+                bloqueioDeAbrir={sujo || arquivoDoItem ? 'Salve ou descarte as alterações deste documento antes de abrir a transcrição.' : undefined}
               />
             )}
           </div>
@@ -1082,7 +1143,7 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
       </Sheet>
 
       {/* ── Sheet: enviar outro documento ── */}
-      <Sheet open={envioAberto} onClose={fecharEnvio} size="md" dirty={outroSujo || !!arquivoOutro || transcricaoSuja}>
+      <Sheet open={envioAberto} onClose={fecharEnvio} size="md" dirty={outroSujo || !!arquivoOutro}>
         <SheetHeader onClose={fecharEnvio}>
           <SheetTitle>{outroEditando ? outroEditando.nome : 'Enviar documento'}</SheetTitle>
           <SheetDescription>{e.name}</SheetDescription>
@@ -1144,15 +1205,15 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
                   onChange={ev => campoOutro('validade', ev.target.value)} />
               </div>
             </div>
-  
+
             {outroEditando && (
               <TranscricaoDoDocumento
                 key={outroEditando.id}
                 versao={docGedPorId.get(outroEditando.id)?.active_version ?? outroEditando.active_version}
                 organizationId={outroEditando.organization_id}
                 fila={fila}
-                notify={notify}
-                onSujoChange={setTranscricaoSuja}
+                onAbrir={() => abrirTranscricao(outroEditando.id, outroEditando.nome)}
+                bloqueioDeAbrir={outroSujo || arquivoOutro ? 'Salve ou descarte as alterações deste documento antes de abrir a transcrição.' : undefined}
               />
             )}
           </div>
@@ -1169,14 +1230,7 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
         </SheetFooter>
       </Sheet>
 
-      {notification && (
-        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-          notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
-        }`}>
-          <AlertCircle className="w-4 h-4 shrink-0" />
-          {notification.message}
-        </div>
-      )}
+      {toast}
     </div>
   );
 };

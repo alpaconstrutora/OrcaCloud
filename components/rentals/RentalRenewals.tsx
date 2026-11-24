@@ -6,7 +6,6 @@ import {
 import { KpiCard } from '../ui/KpiCard';
 import { useConfirm } from '../ui/confirm';
 import ActionIconButton from '../ui/ActionIconButton';
-import ContractReajusteDue from '../ContractReajusteDue';
 import { contractRenewalService, ExpiringRental } from '../../services/contractRenewalService';
 import { Client } from '../../types';
 
@@ -480,10 +479,9 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                 )}
             </div>
 
-            {/* Reajuste vencido — componente já existente do módulo Contratos, reusado aqui.
-                Um contrato pode precisar de reajuste sem estar perto do fim da vigência. */}
-            <ContractReajusteDue organizationId={organizationId || ''} />
-
+            {/* Reajuste anual NÃO mora aqui (pedido 24/11/2026): Renovações trata o
+                contrato que chega ao fim; o reajuste tem a aba própria Locações ›
+                Reajustes (RentalReajustes). */}
         </div>
     );
 };

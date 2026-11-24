@@ -25,11 +25,6 @@ const fmtDate = (iso?: string) => {
 };
 const fmtCur = (n?: number) =>
     (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const fmtMonth = (iso?: string) => {
-    if (!iso) return '';
-    const [y, m] = iso.slice(0, 10).split('-');
-    return `${m}/${y}`;
-};
 
 /** Atalhos do prazo — os mesmos de "Dados do contrato" (DealModal). */
 const PRAZOS_ATALHO = [12, 24, 30, 36];
@@ -108,9 +103,12 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
     const carregarPreview = useCallback(async () => {
         if (!vigente.end_date) { setPreview(null); return; }
         try {
+            // Renovar ≠ reajustar (decisão do usuário, 24/11/2026): o período novo
+            // nasce com o aluguel vigente; o reajuste anual é em Locações › Reajustes.
             const p = await contractRenewalService.previewRenewal(vigente.id, {
                 endDate: endDate || undefined,
                 mode,
+                applyReajuste: false,
             });
             setPreview(p);
             if (!endDate) setEndDate(p.endDate);
@@ -194,6 +192,7 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
             const base = {
                 endDate: endDate || undefined,
                 newValue: parsed && parsed > 0 ? parsed : undefined,
+                applyReajuste: false,
                 notes: notes || undefined,
                 inheritTerms: false,
                 overrides,
@@ -359,16 +358,9 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                         <div className="space-y-1.5">
                             <label htmlFor="renovacao-valor" className={ROTULO}>Valor do Aluguel</label>
                             <MoneyCentsInput id="renovacao-valor" value={valor} onChange={v => setValor(v)} className={CAMPO} />
-                            {preview?.index && (
-                                <p className="text-xs text-gray-500">
-                                    {preview.index.name} {fmtMonth(preview.index.baseMonth)} → {fmtMonth(preview.index.currentMonth)}
-                                    {' · '}fator {preview.fator.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
-                                    {' · '}sugerido {fmtCur(preview.newValue)}
-                                </p>
-                            )}
-                            {preview?.reajusteWarning && (
-                                <p className="text-xs text-amber-700">{preview.reajusteWarning}</p>
-                            )}
+                            <p className="text-xs text-gray-500">
+                                Aluguel vigente. O reajuste anual é aplicado em Locações › Reajustes, na data de aniversário do contrato.
+                            </p>
                         </div>
 
                         <div className="space-y-1.5">

@@ -7,6 +7,7 @@ import { contractIndexService, normalizeIndexName, IndexName } from './contractI
 import { commercialFinanceService } from './commercialFinanceService';
 import { rentalGuaranteeService } from './rentalGuaranteeService';
 import { Contract, ContractAddendum } from '../types';
+import { aniversarioAposRenovacao } from '../utils/reajusteParcelado';
 
 /**
  * ─────────────────────────────────────────────────────────────────────────
@@ -533,8 +534,9 @@ export const contractRenewalService = {
             // na 1ª ocorrência do dia de vencimento >= startDate.
             payment_days: 0,
             reajuste_index: opts.overrides?.reajuste_index ?? indexName ?? parent.reajuste_index,
-            reajuste_data_base: startDate,
-            reajuste_proximo: addMonthsUTC(startDate, 12),
+            // Renovar ≠ reajustar: com o aluguel mantido, o filho herda o
+            // aniversário do reajuste do pai (aniversarioAposRenovacao).
+            ...aniversarioAposRenovacao(parent, startDate, preview.currentValue, newValue),
             guarantor_name: termo('guarantor_name'),
             rescission_penalty_months: termo('rescission_penalty_months'),
             retention_rate: parent.retention_rate ?? 0,

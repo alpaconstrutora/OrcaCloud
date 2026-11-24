@@ -66,3 +66,37 @@ export function reajustarCronograma(
 
     return { cronograma: novo, acrescimo: centavos(acrescimo), reajustadas };
 }
+
+/**
+ * Aniversário do reajuste depois de uma RENOVAÇÃO (aditivo ou contrato novo).
+ *
+ * Renovar estende a vigência; reajustar corrige o valor no aniversário. São
+ * coisas diferentes (decisão do usuário, 24/11/2026 — plano
+ * 2026-11-24-locacoes-reajustes-separados-das-renovacoes). Até então as duas vias
+ * de renovação regravavam `reajuste_data_base = início do período novo` e
+ * `reajuste_proximo = início + 12 meses` mesmo sem mudar o aluguel — o reajuste
+ * anual era pulado.
+ *
+ * - Valor igual (diferença < 1 centavo): o aniversário continua o do contrato.
+ * - Valor diferente: quem renovou reajustou à mão; o aniversário reinicia no
+ *   período novo, como antes.
+ */
+export function aniversarioAposRenovacao(
+    contrato: { start_date?: string | null; reajuste_data_base?: string | null; reajuste_proximo?: string | null },
+    inicioNovo: string,
+    valorAtual: number,
+    valorNovo: number,
+): { reajuste_data_base: string; reajuste_proximo: string } {
+    const maisUmAno = (iso: string) => {
+        const [y, m, d] = iso.slice(0, 10).split('-').map(Number);
+        const dt = new Date(Date.UTC(y + 1, m - 1, d));
+        // 29/02 + 1 ano não existe: fica no último dia de fevereiro.
+        if (dt.getUTCMonth() !== m - 1) dt.setUTCDate(0);
+        return dt.toISOString().slice(0, 10);
+    };
+    if (Math.abs(Number(valorNovo || 0) - Number(valorAtual || 0)) >= 0.01) {
+        return { reajuste_data_base: inicioNovo, reajuste_proximo: maisUmAno(inicioNovo) };
+    }
+    const base = (contrato.reajuste_data_base || contrato.start_date || inicioNovo).slice(0, 10);
+    return { reajuste_data_base: base, reajuste_proximo: (contrato.reajuste_proximo || maisUmAno(base)).slice(0, 10) };
+}

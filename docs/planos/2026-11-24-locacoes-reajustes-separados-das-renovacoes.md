@@ -139,3 +139,11 @@ CTL-006-012-0001 tem vigência de 23/09/2016 a 22/03/2019 (30 meses), IGP-M, dat
   - O link `/rentals?tab=reajustes` agora abre a aba (`linkNotificacao` + evento). O `tab=renewals` também passou a valer.
 - [x] 11 — periodicidade vazia mostra Anual (e ganhou Trimestral). Salvar a negociação leva periodicidade e índice ao contrato (`termosDeReajusteParaOContrato`, recalcula o próximo aniversário). `createFromDeal` grava a periodicidade e o 1º aniversário por ela. Renovação por contrato novo herda os termos.
 - [ ] Conferência na tela (não feita nesta sessão: exige login).
+
+## Fase 3 — data do reajuste escolhida na gaveta (24/11/2026)
+
+Pedido original: *"na gaveta de reajuste incluir campo para o usuário escolher a data de reajuste. Vir pre selecionada a data que o app calculoiu"*
+
+- [x] 12. Campo "Data do reajuste" na gaveta (Locações › Reajustes › Reajustar), pré-preenchido com o aniversário calculado (data-base + periodicidade) e com "Usar a calculada" quando trocado. A data escolhida vira o aniversário: índice do mês dela, parcelas em aberto a partir dela, data-base nova = ela, próximo = ela + periodicidade, e é a data gravada no histórico.
+  - Validação (`motivoDaDataDeReajuste`, também no `decidir`): depois da data-base e até o fim da vigência; fora disso o botão fica desligado e diz o motivo.
+  - **Pronto quando:** testes de `reajusteAniversario` e `reajusteLocacaoService` cobrem data escolhida (CTL-006: 15/10/2017 → 2 parcelas, próximo 15/10/2018) e data recusada sem gravar; tsc e check-ui-standard limpos. ✅ Conferência na tela: pendente (precisa do login do usuário).

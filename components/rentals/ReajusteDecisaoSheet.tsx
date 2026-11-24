@@ -3,12 +3,14 @@ import { AlertTriangle, Info } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { reajusteLocacaoService, PreviaReajuste } from '../../services/reajusteLocacaoService';
-import { valorAposReajuste, DecisaoReajuste } from '../../utils/reajusteAniversario';
+import { valorAposReajuste, motivoDaDataDeReajuste, DecisaoReajuste } from '../../utils/reajusteAniversario';
 
 /**
  * Decisão do reajuste de UM aniversário (Locações › Reajustes). O usuário escolhe
  * 100% do índice, outro percentual, o valor novo, ou não reajustar — pedido de
- * 24/11/2026. A regra mora em reajusteLocacaoService/utils/reajusteAniversario.
+ * 24/11/2026. A data do reajuste vem pré-preenchida com a calculada e pode ser
+ * trocada (pedido do mesmo dia); índice, parcelas e próximo reajuste seguem a
+ * data escolhida. A regra mora em reajusteLocacaoService/utils/reajusteAniversario.
  */
 
 const fmtDate = (iso?: string | null) => {
@@ -43,22 +45,49 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
     const [percentual, setPercentual] = useState('');
     const [valor, setValor] = useState('');
     const [observacao, setObservacao] = useState('');
+    /** Data do reajuste: começa na calculada pelo app; o usuário pode trocar. */
+    const [dataReajuste, setDataReajuste] = useState('');
+    const [dataCalculada, setDataCalculada] = useState<string | null>(null);
+    const [recalculando, setRecalculando] = useState(false);
 
     useEffect(() => {
         if (!contractId) return;
         let vivo = true;
         setPrevia(null); setFalha(null); setCarregando(true);
         setPercentual(''); setValor(''); setObservacao('');
+        setDataReajuste(''); setDataCalculada(null);
         reajusteLocacaoService.previa(contractId)
             .then(p => {
                 if (!vivo) return;
                 setPrevia(p);
+                setDataCalculada(p.aniversario.aniversario);
+                setDataReajuste(p.aniversario.aniversario);
                 setTipo(p.fatorIndice ? 'INDICE' : 'PERCENTUAL');
             })
             .catch(e => { if (vivo) setFalha(e instanceof Error ? e.message : 'Não foi possível calcular o reajuste.'); })
             .finally(() => { if (vivo) setCarregando(false); });
         return () => { vivo = false; };
     }, [contractId]);
+
+    const motivoData = previa ? motivoDaDataDeReajuste(previa.contrato, dataReajuste) : null;
+
+    // Data trocada (e válida): refaz a prévia — índice do mês escolhido, parcelas a partir dela.
+    useEffect(() => {
+        if (!contractId || !previa || motivoData || dataReajuste === previa.aniversario.aniversario) return;
+        let vivo = true;
+        setRecalculando(true);
+        reajusteLocacaoService.previa(contractId, dataReajuste)
+            .then(p => {
+                if (!vivo) return;
+                setPrevia(p);
+                if (!p.fatorIndice) setTipo(t => (t === 'INDICE' ? 'PERCENTUAL' : t));
+            })
+            .catch(e => { if (vivo) onErro(e instanceof Error ? e.message : 'Não foi possível recalcular o reajuste.'); })
+            .finally(() => { if (vivo) setRecalculando(false); });
+        return () => { vivo = false; };
+    // onErro fora das dependências: o pai recria a função a cada render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [contractId, previa, motivoData, dataReajuste]);
 
     const decisao: DecisaoReajuste | null = useMemo(() => {
         if (tipo === 'INDICE' || tipo === 'NAO_APLICADO') return { tipo };
@@ -75,15 +104,16 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
 
     const motivoNaoGrava = gravando ? 'Gravando…'
         : !previa ? 'Aguarde o cálculo do reajuste.'
-        : !previa.aniversario.dentroDaVigencia ? 'Este aniversário é depois do fim da vigência — o caso é de renovação.'
+        : motivoData ?? (recalculando || dataReajuste !== previa.aniversario.aniversario ? 'Recalculando o reajuste para a data escolhida…' : null)
+        ?? (!previa.aniversario.dentroDaVigencia ? 'Este aniversário é depois do fim da vigência — o caso é de renovação.'
         : !decisao ? (tipo === 'PERCENTUAL' ? 'Informe o percentual.' : 'Informe o valor novo do aluguel.')
-        : resultado?.erro ?? null;
+        : resultado?.erro ?? null);
 
     const gravar = async () => {
         if (!contractId || !decisao || motivoNaoGrava) return;
         setGravando(true);
         try {
-            const { contrato, registro } = await reajusteLocacaoService.decidir(contractId, decisao, observacao);
+            const { contrato, registro } = await reajusteLocacaoService.decidir(contractId, decisao, observacao, dataReajuste);
             onDecidido(
                 registro.decisao === 'NAO_APLICADO'
                     ? `Reajuste de ${fmtDate(registro.aniversario)} do contrato ${contrato.number} registrado sem reajuste.`
@@ -140,6 +170,33 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
                         </div>
 
                         <div className="space-y-1.5">
+                            <label htmlFor="reajuste-data" className={ROTULO}>Data do reajuste</label>
+                            <div className="w-44">
+                                <input
+                                    id="reajuste-data" type="date"
+                                    value={dataReajuste}
+                                    onChange={e => setDataReajuste(e.target.value)}
+                                    aria-invalid={!!motivoData}
+                                    aria-describedby="reajuste-data-ajuda"
+                                    className={CAMPO}
+                                />
+                            </div>
+                            {motivoData && <p className="text-xs text-red-600 px-1">{motivoData}</p>}
+                            <p id="reajuste-data-ajuda" className="text-xs text-gray-500 px-1">
+                                Calculada pelo app: {fmtDate(dataCalculada)} (data-base {fmtDate(a?.dataBase)} + periodicidade).
+                                {' '}O índice, as parcelas e o próximo reajuste seguem a data escolhida.
+                                {dataCalculada && dataReajuste !== dataCalculada && (
+                                    <>
+                                        {' '}
+                                        <button type="button" onClick={() => setDataReajuste(dataCalculada)} className="text-blue-600 hover:text-blue-700 hover:underline">
+                                            Usar a calculada
+                                        </button>
+                                    </>
+                                )}
+                            </p>
+                        </div>
+
+                        <div className="space-y-1.5">
                             <p id="reajuste-decisao" className={ROTULO}>Como reajustar</p>
                             <div role="radiogroup" aria-labelledby="reajuste-decisao" className="space-y-2">
                                 {opcoes.map(op => (
@@ -185,7 +242,7 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
                                 placeholder="Opcional — ex.: acordo com o locatário" className={`${CAMPO} placeholder:text-gray-400`} />
                         </div>
 
-                        {resultado && !resultado.erro && (
+                        {resultado && !resultado.erro && !motivoNaoGrava && (
                             <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 text-blue-800 rounded-[10px] p-4 text-sm">
                                 <Info className="w-4 h-4 shrink-0 mt-0.5" />
                                 {tipo === 'NAO_APLICADO' ? (

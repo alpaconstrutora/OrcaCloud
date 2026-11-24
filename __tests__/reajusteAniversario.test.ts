@@ -5,6 +5,7 @@ import {
     valorAposReajuste,
     entraNaFilaDeReajuste,
     termosDeReajusteParaOContrato,
+    motivoDaDataDeReajuste,
 } from '../utils/reajusteAniversario';
 
 /**
@@ -58,6 +59,14 @@ describe('aniversarioDoReajuste', () => {
     });
     it('sem fim de vigência: sempre dentro', () => {
         expect(aniversarioDoReajuste({ ...CTL, end_date: null, reajuste_proximo: '2030-01-01' })?.dentroDaVigencia).toBe(true);
+    });
+    it('data escolhida pelo usuário: vira o aniversário e conta o próximo a partir dela', () => {
+        expect(aniversarioDoReajuste(CTL, '2017-11-01')).toEqual({
+            dataBase: '2016-09-23', aniversario: '2017-11-01', proximo: '2018-11-01', dentroDaVigencia: true,
+        });
+    });
+    it('data escolhida vazia: a calculada', () => {
+        expect(aniversarioDoReajuste(CTL, '')?.aniversario).toBe('2017-09-23');
     });
     it('sem nenhuma data: null', () => {
         expect(aniversarioDoReajuste({ start_date: null, reajuste_data_base: null, reajuste_proximo: null })).toBeNull();
@@ -117,5 +126,22 @@ describe('termosDeReajusteParaOContrato', () => {
     it('troca de índice vai junto', () => {
         expect(termosDeReajusteParaOContrato({ billing_cycle: null, reajuste_index: 'IPCA' }, contrato))
             .toEqual({ reajuste_index: 'IPCA' });
+    });
+});
+
+describe('motivoDaDataDeReajuste (data escolhida na gaveta)', () => {
+    it('depois da data-base e dentro da vigência: ok', () => {
+        expect(motivoDaDataDeReajuste(CTL, '2017-11-01')).toBeNull();
+        expect(motivoDaDataDeReajuste(CTL, '2019-03-22')).toBeNull();
+    });
+    it('vazia', () => {
+        expect(motivoDaDataDeReajuste(CTL, '')).toMatch(/Informe a data/);
+    });
+    it('na data-base ou antes', () => {
+        expect(motivoDaDataDeReajuste(CTL, '2016-09-23')).toMatch(/depois da data-base \(23\/09\/2016\)/);
+        expect(motivoDaDataDeReajuste(CTL, '2016-01-01')).toMatch(/depois da data-base/);
+    });
+    it('depois do fim da vigência = renovação', () => {
+        expect(motivoDaDataDeReajuste(CTL, '2019-03-23')).toMatch(/renovação/);
     });
 });

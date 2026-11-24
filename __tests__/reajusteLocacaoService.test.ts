@@ -119,6 +119,23 @@ describe('reajusteLocacaoService — caso CTL-006-012-0001', () => {
         expect(registro.percentual_aplicado).toBe(3);
     });
 
+    it('data de reajuste escolhida: parcelas, data-base e próximo seguem a data, não a calculada', async () => {
+        const p = await reajusteLocacaoService.previa('c1', '2017-10-15');
+        expect(p.aniversario).toMatchObject({ aniversario: '2017-10-15', proximo: '2018-10-15' });
+        expect(p.parcelasEmAberto).toBe(2); // a de 10/10/2017 vence antes da data escolhida
+        const { registro } = await reajusteLocacaoService.decidir('c1', { tipo: 'PERCENTUAL', percentual: 3 }, undefined, '2017-10-15');
+        expect(registro.aniversario).toBe('2017-10-15');
+        expect(registro.parcelas_atualizadas).toBe(2);
+        expect(contrato.reajuste_data_base).toBe('2017-10-15');
+        expect(contrato.reajuste_proximo).toBe('2018-10-15');
+    });
+
+    it('data de reajuste na data-base ou antes é recusada sem gravar nada', async () => {
+        await expect(reajusteLocacaoService.decidir('c1', { tipo: 'PERCENTUAL', percentual: 3 }, undefined, '2016-09-01'))
+            .rejects.toThrow(/depois da data-base/);
+        expect(ops).toHaveLength(0);
+    });
+
     it('a consulta das parcelas: em aberto, sem valor manual, desde o aniversário, do contrato E da negociação', async () => {
         await reajusteLocacaoService.previa('c1');
         const q = leituras.find(l => l.table === 'internal_transactions')!;

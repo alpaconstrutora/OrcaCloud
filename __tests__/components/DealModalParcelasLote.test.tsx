@@ -9,7 +9,7 @@
  *   1. todas as colunas aparecem no modal — as editáveis por parcela como
  *      campo (Vencimento, Valor, Desconto, Tipo, Forma de pagamento, Centro de
  *      Custo, Plano de Contas, Descrição); Cliente (do negócio) como leitura;
- *      Origem e Valor final entram na prévia por linha;
+ *      Origem e Valor bruto entram na prévia por linha;
  *   2. tudo nasce em "Não alterar" e Aplicar fica desabilitado até algo mudar;
  *   3. o patch só carrega o que o usuário escolheu — quem troca a descrição não
  *      manda desconto (era isso que apagava o desconto em lote);
@@ -89,7 +89,7 @@ describe('InstallmentLoteEditModal — todas as colunas da tabela', () => {
         expect(screen.getByText('Maria Silva')).toBeTruthy();
         expect(screen.getByText(/use a aba Dados do Cliente/i)).toBeTruthy();
         expect(screen.getByText(/Contrato 12/)).toBeTruthy();
-        expect(screen.getByText(/final R\$\s?900,00/)).toBeTruthy();
+        expect(screen.getByText(/bruto R\$\s?900,00/)).toBeTruthy();
     });
 
     it('nasce em "Não alterar" em tudo e Aplicar desabilitado', () => {

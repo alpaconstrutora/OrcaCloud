@@ -113,11 +113,12 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
         if (!contractId || !decisao || motivoNaoGrava) return;
         setGravando(true);
         try {
-            const { contrato, registro } = await reajusteLocacaoService.decidir(contractId, decisao, observacao, dataReajuste);
+            const { contrato, registro, tributosRecalculados } = await reajusteLocacaoService.decidir(contractId, decisao, observacao, dataReajuste);
             onDecidido(
-                registro.decisao === 'NAO_APLICADO'
+                (registro.decisao === 'NAO_APLICADO'
                     ? `Reajuste de ${fmtDate(registro.aniversario)} do contrato ${contrato.number} registrado sem reajuste.`
-                    : `Contrato ${contrato.number} reajustado para ${fmtCur(registro.valor_novo)} (${fmtPct(registro.percentual_aplicado)}); ${registro.parcelas_atualizadas} parcela(s) atualizada(s).`,
+                    : `Contrato ${contrato.number} reajustado para ${fmtCur(registro.valor_novo)} (${fmtPct(registro.percentual_aplicado)}); ${registro.parcelas_atualizadas} parcela(s) atualizada(s).`)
+                + (tributosRecalculados ? '' : ' Os tributos não foram recalculados — salve a negociação para refazê-los.'),
                 contractId,
             );
         } catch (e) {

@@ -30,6 +30,7 @@ function table(name: string) {
         single: async () => {
             if (name === 'contracts') return { data: contrato, error: null };
             if (name === 'contract_reajustes') return { data: { id: 'r1', ...(rec.args as object) }, error: null };
+            if (name === 'commercial_deals') return { data: { id: 'd1', type: 'RENTAL', property_id: 'pr1' }, error: null };
             return { data: null, error: null };
         },
         then: (resolve: (v: unknown) => void) => resolve(
@@ -54,6 +55,9 @@ vi.mock('../services/contractIndexService', () => ({
     },
 }));
 
+const gerarTributos = vi.fn(async () => {});
+vi.mock('../services/taxPayableService', () => ({ taxPayableService: { generateForDeal: (...a: unknown[]) => gerarTributos(...(a as [])) } }));
+
 import { reajusteLocacaoService } from '../services/reajusteLocacaoService';
 
 const CTL = {
@@ -66,6 +70,7 @@ const CTL = {
 
 beforeEach(() => {
     ops.length = 0;
+    gerarTributos.mockClear();
     leituras.length = 0;
     contrato = structuredClone(CTL);
     parcelas = [
@@ -134,6 +139,26 @@ describe('reajusteLocacaoService — caso CTL-006-012-0001', () => {
         await expect(reajusteLocacaoService.decidir('c1', { tipo: 'PERCENTUAL', percentual: 3 }, undefined, '2016-09-01'))
             .rejects.toThrow(/depois da data-base/);
         expect(ops).toHaveLength(0);
+    });
+
+    it('reajuste que muda parcelas regera os tributos do negócio (Tributos a Pagar e coluna Tributos)', async () => {
+        const r = await reajusteLocacaoService.decidir('c1', { tipo: 'INDICE' });
+        expect(gerarTributos).toHaveBeenCalledTimes(1);
+        expect(gerarTributos).toHaveBeenCalledWith({ id: 'd1', type: 'RENTAL', property_id: 'pr1' }, 'org1');
+        expect(r.tributosRecalculados).toBe(true);
+    });
+
+    it('não reajustar não mexe em parcela nem em tributo', async () => {
+        const r = await reajusteLocacaoService.decidir('c1', { tipo: 'NAO_APLICADO' });
+        expect(gerarTributos).not.toHaveBeenCalled();
+        expect(r.tributosRecalculados).toBe(true);
+    });
+
+    it('falha ao regerar tributos não desfaz o reajuste, mas avisa', async () => {
+        gerarTributos.mockRejectedValueOnce(new Error('rede'));
+        const r = await reajusteLocacaoService.decidir('c1', { tipo: 'INDICE' });
+        expect(r.registro.parcelas_atualizadas).toBe(3);
+        expect(r.tributosRecalculados).toBe(false);
     });
 
     it('a consulta das parcelas: em aberto, sem valor manual, desde o aniversário, do contrato E da negociação', async () => {

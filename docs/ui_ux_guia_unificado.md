@@ -2122,6 +2122,9 @@ inteira é um `<button>` que abre o detalhe no `Sheet` (tabela no padrão do §6
 > ℹ️ Quando a parcela aberta MAIS ANTIGA do contrato tem o mesmo valor esperado da sugerida, o
 > aviso âmbar vira o botão de texto **"usar a NN"** (`text-blue-600`, `font-medium`): concilia
 > o movimento com ela depois do `useConfirm` (variant `warning`, mostrando as duas datas).
+>
+> ℹ️ A mesma célula (`reconciliation/CelulaSequencia.tsx`) está na Pendentes › Lançamentos
+> Internos, entre Data e Valor — ali sem o "usar a NN" (não há movimento sugerido para trocar).
 
 ---
 

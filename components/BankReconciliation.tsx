@@ -129,6 +129,9 @@ import {
     ValorParaConciliar,
     ROTULO_OUTRA_ORG,
 } from './reconciliation/tabelasDaConciliacao';
+import { chaveDaSequencia, textoDaSequencia } from './reconciliation/CelulaSequencia';
+import { sequenciaParcelasService } from '../services/sequenciaParcelasService';
+import type { PosicaoNaSerie } from '../utils/sequenciaParcelas';
 
 const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId, defaultView }) => {
     const confirm = useConfirm();
@@ -463,7 +466,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [bankSortOrder, setBankSortOrder] = useState<'desc' | 'asc'>('desc');
     const [bankSortField, setBankSortField] = useState<BankSortField>('date');
     const [internalSortOrder, setInternalSortOrder] = useState<'desc' | 'asc'>('desc');
-    const [internalSortField, setInternalSortField] = useState<'date' | 'amount' | 'description' | 'category' | 'entity'>('date');
+    const [internalSortField, setInternalSortField] = useState<InternalSortField>('date');
     // Clique no header ordena pelo campo `field` (mesmo toggle asc/desc de sempre); usado
     // pelos <thead> das tabelas de Extrato e Pendentes › Extrato Bancário, que
     // compartilham bankSortField/bankSortOrder. Extraído para não repetir a mesma
@@ -566,6 +569,27 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         });
     }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, masterPlanoContas, orgNameById, statementAdvancedFilters.rules, statementFilterFields, activeView, recorteDoDashboard]);
 
+    // Coluna "Sequência sugerida" da Pendentes › Lançamentos Internos ("Parcela 05 de 30 ·
+    // 04 em aberto", a mesma da Central). Só consulta com a aba aberta e a coluna visível, e
+    // de novo só quando muda o CONJUNTO de contratos da lista.
+    const [posicoesPendentes, setPosicoesPendentes] = useState<Map<string, PosicaoNaSerie>>(() => new Map());
+    const contratosDosLancamentos = useMemo(() => (
+        activeView === 'pending' && pendingInternalColumns.visibleColumns.includes('sequencia')
+            ? [...new Set(internalTransactions.map(t => t.contract_id).filter((id): id is string => !!id))].sort().join(',')
+            : ''
+    ), [activeView, pendingInternalColumns.visibleColumns, internalTransactions]);
+    useEffect(() => {
+        if (!contratosDosLancamentos) { setPosicoesPendentes(new Map()); return; }
+        let vivo = true;
+        sequenciaParcelasService.posicoesDosContratos(contratosDosLancamentos.split(','))
+            .then(m => { if (vivo) setPosicoesPendentes(m); })
+            .catch((e: unknown) => {
+                console.error('[Pendentes] sequência das parcelas', e);
+                if (vivo) setActionFeedback({ message: 'Não foi possível ler a sequência das parcelas: ' + errorMessage(e, 'erro desconhecido'), type: 'error' });
+            });
+        return () => { vivo = false; };
+    }, [contratosDosLancamentos]);
+
     // Filtros e ordem dos lançamentos SEM a busca de texto: ela precisa de displayTitle/txCode/…,
     // declarados mais abaixo (ver `sortedInternalTransactions`).
     const internalSemBusca = useMemo(() => {
@@ -593,12 +617,17 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             } else if (internalSortField === 'entity') {
                 valA = (a.entity_name || '').toLowerCase();
                 valB = (b.entity_name || '').toLowerCase();
+            } else if (internalSortField === 'sequencia') {
+                // Por contrato e, dentro dele, pela posição; o que não é parcela vai para o fim.
+                valA = chaveDaSequencia(posicoesPendentes.get(a.id));
+                valB = chaveDaSequencia(posicoesPendentes.get(b.id));
+                if (!valA || !valB) return valA ? -1 : valB ? 1 : 0;
             }
             if (valA < valB) return internalSortOrder === 'asc' ? -1 : 1;
             if (valA > valB) return internalSortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [internalTransactions, internalSortOrder, internalSortField, flowFilter]);
+    }, [internalTransactions, internalSortOrder, internalSortField, flowFilter, posicoesPendentes]);
 
 
     const sortedMatches = useMemo(() => {
@@ -715,10 +744,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             ? internalSemBusca.filter(tx => combinaComBusca(internalSearch, [
                 tx.description, tx.category, tx.entity_name,
                 displayTitle(tx), displayPartyName(tx), txCode(tx), getSourceMeta(tx.source_system)?.label,
+                textoDaSequencia(posicoesPendentes.get(tx.id)),
             ]))
             : internalSemBusca),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [internalSemBusca, internalSearch, originPartyNames, supplierNameById, originCodes],
+        [internalSemBusca, internalSearch, originPartyNames, supplierNameById, originCodes, posicoesPendentes],
     );
 
     // Maps/Sets O(1) — evitam .find()/.some() lineares repetidos no render de cada card
@@ -4546,6 +4576,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             <option value="description">Descrição</option>
                                             <option value="category">Categoria</option>
                                             <option value="entity">Cliente/Credor</option>
+                                            <option value="sequencia">Sequência</option>
                                         </select>
                                         <button
                                             onClick={() => setInternalSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
@@ -4827,6 +4858,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         getSourceMeta, getOriginLink, goToOrigin, txCode, displayTitle, displayPartyName, displayDate,
                                                         projectName, costCenterName, categoryOptions,
                                                         onUpdateCategory: handleUpdateInternalCategory,
+                                                        posicaoNaSerie: t => posicoesPendentes.get(t.id),
                                                     };
                                                     return (
                                                         <tr key={tx.id} className={`transition-colors ${selectedInternalTxIds.has(tx.id) ? 'bg-emerald-50/40' : 'hover:bg-gray-50'}`}>

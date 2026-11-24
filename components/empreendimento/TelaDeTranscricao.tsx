@@ -14,7 +14,9 @@
 //
 // 24/11/2026 — aba "Partes identificadas" ao lado do texto: nome, papel, RG e
 // CPF/CNPJ de quem aparece qualificado no documento (utils/partesDaTranscricao);
-// no texto, os nomes delas vêm em negrito.
+// no texto, os nomes delas vêm em negrito. Depois, os OBJETOS (o que está em
+// maiúsculas no meio do texto: "UMA CASA DE MORADA", "DIREITO DE SERVIDÃO …"),
+// listados na mesma aba e também em negrito.
 // Plano: docs/planos/2026-11-24-partes-identificadas-na-transcricao.md
 import React from 'react';
 import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronUp, Copy, ExternalLink, Pencil, RotateCcw, ScanText } from 'lucide-react';
@@ -27,7 +29,7 @@ import {
   aplicarEdicao, contarDuvidosas, linhaDuvidosa, marcarRevisada, podeTranscrever, textoDaTranscricao,
   type Transcricao,
 } from '../../utils/transcricaoDocumento';
-import { formatarCnpj, formatarCpf, identificarPartes, trechosDasPartes, type ParteIdentificada, type Trecho } from '../../utils/partesDaTranscricao';
+import { formatarCnpj, formatarCpf, identificarObjetos, identificarPartes, trechosEmNegrito, type ParteIdentificada, type Trecho } from '../../utils/partesDaTranscricao';
 import {
   BOTAO_PRIMARIO, BOTAO_SECUNDARIO, blocoSemTexto, nomeDaVersao, resumoDaTranscricao, useTranscreverDeNovo,
   useTranscricao, type FilaDeTranscricao, type VersaoTranscrevivel,
@@ -84,7 +86,7 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
   const [foco, setFoco] = React.useState<number | null>(null); // índice na lista de duvidosas
   const [vista, setVista] = React.useState<Vista>('texto');
   const [linhaMarcada, setLinhaMarcada] = React.useState<number | null>(null); // linha da parte escolhida
-  const [copiadaParte, setCopiadaParte] = React.useState<number | null>(null);
+  const [itemCopiado, setItemCopiado] = React.useState<string | null>(null); // item da aba Partes e objetos
   const listaRef = React.useRef<HTMLDivElement>(null);
   const raizRef = React.useRef<HTMLDivElement>(null);
   // Abre com o cabeçalho desta tela no topo: as duas colunas usam a altura da janela.
@@ -136,26 +138,30 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
     rolarAte(indicesDuvidosos[p]);
   };
 
-  // ── Partes identificadas ──────────────────────────────────────────────────
+  // ── Partes e objetos identificados ────────────────────────────────────────
   const partes = React.useMemo(() => (transcricao ? identificarPartes(transcricao.linhas) : []), [transcricao]);
-  const negrito = React.useMemo(
-    () => (transcricao ? trechosDasPartes(transcricao.linhas, partes) : new Map<number, Trecho[]>()),
+  const objetos = React.useMemo(
+    () => (transcricao ? identificarObjetos(transcricao.linhas, partes) : []),
     [transcricao, partes],
   );
-  const verNoTexto = (p: ParteIdentificada) => {
+  const negrito = React.useMemo(
+    () => (transcricao ? trechosEmNegrito(transcricao.linhas, partes, objetos) : new Map<number, Trecho[]>()),
+    [transcricao, partes, objetos],
+  );
+  const verNoTexto = (linha: number) => {
     setFoco(null);
-    setLinhaMarcada(p.linha);
+    setLinhaMarcada(linha);
     setVista('texto');
   };
   // A caixa do texto só existe na vista Texto: rolar depois de ela aparecer.
   React.useEffect(() => {
     if (vista === 'texto' && linhaMarcada !== null) rolarAte(linhaMarcada);
   }, [vista, linhaMarcada, rolarAte]);
-  const copiarParte = async (p: ParteIdentificada, i: number) => {
+  const copiarItem = async (chave: string, conteudo: string) => {
     try {
-      await navigator.clipboard.writeText([p.nome, documentosDaParte(p)].filter(Boolean).join(' — '));
-      setCopiadaParte(i);
-      setTimeout(() => setCopiadaParte(atual => (atual === i ? null : atual)), 2000);
+      await navigator.clipboard.writeText(conteudo);
+      setItemCopiado(chave);
+      setTimeout(() => setItemCopiado(atual => (atual === chave ? null : atual)), 2000);
     } catch {
       notify('O navegador não deixou copiar. Selecione o texto e copie com Ctrl+C.', 'error');
     }
@@ -283,7 +289,7 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
             {transcricao && texto === null && !semTexto ? (
               <TabsBar<Vista> bare value={vista} onChange={setVista} tabs={[
                 { id: 'texto', label: 'Texto' },
-                { id: 'partes', label: 'Partes identificadas', badge: partes.length, badgeTitulo: 'Partes encontradas no texto' },
+                { id: 'partes', label: 'Partes e objetos', badge: partes.length + objetos.length, badgeTitulo: 'Partes e objetos encontrados no texto' },
               ]} />
             ) : (
               <h3 className="text-sm font-semibold text-gray-900">{texto !== null ? 'Revisando o texto' : 'Texto'}</h3>
@@ -322,53 +328,80 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
               </div>
             ) : transcricao && vista === 'partes' ? (
               <div className="h-full overflow-y-auto">
+                <h4 className="px-4 pt-3 pb-1 text-sm font-semibold text-gray-900">
+                  Partes <span className="font-normal text-gray-500">· {partes.length}</span>
+                </h4>
                 {partes.length === 0 ? (
-                  <div className="p-4 space-y-1">
-                    <p className="text-sm text-gray-900">Nenhuma parte identificada neste texto.</p>
-                    <p className="text-sm text-gray-600">
-                      A busca procura nomes em letras maiúsculas seguidos de qualificação — "brasileiro", "portador do RG", "inscrita no CNPJ".
-                    </p>
-                  </div>
+                  <p className="px-4 pb-3 text-sm text-gray-600">
+                    Nenhuma parte identificada. A busca procura nomes em letras maiúsculas seguidos de qualificação — "brasileiro", "portador do RG", "inscrita no CNPJ".
+                  </p>
                 ) : (
-                  <>
-                    <ul className="divide-y divide-gray-100">
-                      {partes.map((p, i) => {
-                        const docs = documentosDaParte(p);
-                        return (
-                          <li key={`${p.nome}-${p.linha}`} className="flex items-start justify-between gap-3 px-4 py-3">
-                            <div className="min-w-0 space-y-0.5">
-                              <p className="text-sm font-medium text-gray-900 break-words">{p.nome}</p>
-                              <p className="text-sm text-gray-600">
-                                {p.papel ?? 'Papel não identificado'}{p.conjugeDe ? ` · cônjuge de ${p.conjugeDe}` : ''}
+                  <ul className="divide-y divide-gray-100">
+                    {partes.map((p, i) => {
+                      const docs = documentosDaParte(p);
+                      const chave = `parte-${i}`;
+                      return (
+                        <li key={`${p.nome}-${p.linha}`} className="flex items-start justify-between gap-3 px-4 py-3">
+                          <div className="min-w-0 space-y-0.5">
+                            <p className="text-sm font-medium text-gray-900 break-words">{p.nome}</p>
+                            <p className="text-sm text-gray-600">
+                              {p.papel ?? 'Papel não identificado'}{p.conjugeDe ? ` · cônjuge de ${p.conjugeDe}` : ''}
+                            </p>
+                            <p className="text-sm text-gray-900 tabular-nums">
+                              {docs || <span className="text-gray-600">Nenhum documento encontrado junto ao nome</span>}
+                            </p>
+                            {(p.duvidosa || p.documentoInvalido) && (
+                              <p className="flex items-center gap-1.5 text-sm text-amber-800">
+                                <AlertTriangle className="w-4 h-4 shrink-0" />
+                                {p.documentoInvalido
+                                  ? 'O número lido não confere (dígito verificador) — confira no arquivo.'
+                                  : 'Saiu de linha com leitura duvidosa — confira no arquivo.'}
                               </p>
-                              <p className="text-sm text-gray-900 tabular-nums">
-                                {docs || <span className="text-gray-600">Nenhum documento encontrado junto ao nome</span>}
-                              </p>
-                              {(p.duvidosa || p.documentoInvalido) && (
-                                <p className="flex items-center gap-1.5 text-sm text-amber-800">
-                                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                                  {p.documentoInvalido
-                                    ? 'O número lido não confere (dígito verificador) — confira no arquivo.'
-                                    : 'Saiu de linha com leitura duvidosa — confira no arquivo.'}
-                                </p>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1 shrink-0">
-                              <ActionIconButton kind="duplicate" size="sm" title="Copiar nome e documentos"
-                                icon={copiadaParte === i ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
-                                onClick={() => void copiarParte(p, i)} />
-                              <ActionIconButton kind="view" size="sm" title="Ver no texto"
-                                icon={<ScanText className="w-3.5 h-3.5" />} onClick={() => verNoTexto(p)} />
-                            </div>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    <p className="px-4 py-3 border-t border-gray-100 text-xs text-gray-500">
-                      Lido automaticamente do texto: nomes em maiúsculas seguidos de qualificação. Confira com o arquivo original.
-                    </p>
-                  </>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <ActionIconButton kind="duplicate" size="sm" title="Copiar nome e documentos"
+                              icon={itemCopiado === chave ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                              onClick={() => void copiarItem(chave, [p.nome, docs].filter(Boolean).join(' — '))} />
+                            <ActionIconButton kind="view" size="sm" title="Ver no texto"
+                              icon={<ScanText className="w-3.5 h-3.5" />} onClick={() => verNoTexto(p.linha)} />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
                 )}
+
+                <h4 className="px-4 pt-3 pb-1 border-t border-gray-100 text-sm font-semibold text-gray-900">
+                  Objetos <span className="font-normal text-gray-500">· {objetos.length}</span>
+                </h4>
+                {objetos.length === 0 ? (
+                  <p className="px-4 pb-3 text-sm text-gray-600">
+                    Nenhum objeto identificado. A busca procura trechos em letras maiúsculas no meio do texto — "UMA CASA DE MORADA", "DIREITO DE SERVIDÃO".
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-gray-100">
+                    {objetos.map((o, i) => {
+                      const chave = `objeto-${i}`;
+                      return (
+                        <li key={`${o.texto}-${o.linha}`} className="flex items-start justify-between gap-3 px-4 py-3">
+                          <p className="min-w-0 text-sm font-medium text-gray-900 break-words">{o.texto}</p>
+                          <div className="flex items-center gap-1 shrink-0">
+                            <ActionIconButton kind="duplicate" size="sm" title="Copiar o objeto"
+                              icon={itemCopiado === chave ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                              onClick={() => void copiarItem(chave, o.texto)} />
+                            <ActionIconButton kind="view" size="sm" title="Ver no texto"
+                              icon={<ScanText className="w-3.5 h-3.5" />} onClick={() => verNoTexto(o.linha)} />
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+
+                <p className="px-4 py-3 border-t border-gray-100 text-xs text-gray-500">
+                  Lido automaticamente do texto: partes são nomes em maiúsculas seguidos de qualificação; objetos, os demais trechos em maiúsculas no meio do texto. Confira com o arquivo original.
+                </p>
               </div>
             ) : transcricao && transcricao.linhas.length === 0 ? (
               <p className="p-4 text-sm text-gray-600">Nenhum texto foi encontrado neste arquivo.</p>

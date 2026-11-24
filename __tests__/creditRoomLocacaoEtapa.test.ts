@@ -23,8 +23,12 @@ describe('situacaoDeLocacao — pela etapa da negociação', () => {
         expect(situacaoDeLocacao(u({ rental_status: 'LOCADO' }))).toBe('LOCADA');
         expect(situacaoDeLocacao(u({ etapa_locacao: 'IN_NEGOTIATION', rental_status: 'LOCADO' }))).toBe('LOCADA');
         expect(situacaoDeLocacao(u({ etapa_locacao: 'PENDING' }))).toBe('DISPONIVEL');
-        expect(situacaoDeLocacao(u({ rental_status: 'RESERVADO' }))).toBe('DISPONIVEL');
         expect(situacaoDeLocacao(u({ status: 'VENDIDO' }))).toBe('OUTRA');
+    });
+
+    it('caso real 010/Sala-301: Reservado sem negociação NÃO é disponível (nem com só Proposta)', () => {
+        expect(situacaoDeLocacao(u({ rental_status: 'RESERVADO' }))).toBe('OUTRA');
+        expect(situacaoDeLocacao(u({ rental_status: 'RESERVADO', etapa_locacao: 'IN_NEGOTIATION' }))).toBe('OUTRA');
     });
 });
 

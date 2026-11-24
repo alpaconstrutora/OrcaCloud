@@ -170,7 +170,7 @@ describe('coletarEmpreendimentosDoEscopo — cards por objetivo', () => {
             expect(e.aluguel_em_negociacao).toBeNull();
             expect(e.em_negociacao_por_etapa).toBeUndefined();
             expect(e.alugadas).toBe(0);
-            expect(e.disponiveis).toBe(5); // RESERVADO não é LOCADO: disponível, como antes
+            expect(e.disponiveis).toBe(3); // n2, n3, n4 — n1 e n5 são RESERVADO: reservada não é disponível (24/11)
             expect(console.warn).toHaveBeenCalled();
         });
     });

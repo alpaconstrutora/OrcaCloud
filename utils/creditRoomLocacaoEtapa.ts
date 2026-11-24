@@ -7,6 +7,8 @@
  *  - Em Reserva, Contrato ou Assinatura                      → EM_NEGOCIACAO (nem locada, nem disponível)
  *  - Sem negociação que decida (nenhuma, só Proposta/Aprovação, ou cancelada):
  *    vale o status da unidade, como antes — `rental_status = 'LOCADO'` → LOCADA;
+ *    `rental_status = 'RESERVADO'` → OUTRA (reservada NÃO é disponível — decisão do
+ *    usuário em 24/11/2026; ex.: 010 Sala-301, reservada sem negociação);
  *    `status = 'DISPONIVEL'` → DISPONIVEL; o resto (vendida, permutada…) → OUTRA.
  *
  * Por que o fallback: há unidades marcadas Locado sem negociação no sistema (cadastro
@@ -40,6 +42,7 @@ export function situacaoDeLocacao(u: { status: string; rental_status: string | n
     if (u.etapa_locacao === 'COMPLETED') return 'LOCADA';
     if (u.etapa_locacao && ETAPAS_EM_NEGOCIACAO.has(u.etapa_locacao)) return 'EM_NEGOCIACAO';
     if (u.rental_status === 'LOCADO') return 'LOCADA';
+    if (u.rental_status === 'RESERVADO') return 'OUTRA';
     if (u.status === 'DISPONIVEL') return 'DISPONIVEL';
     return 'OUTRA';
 }

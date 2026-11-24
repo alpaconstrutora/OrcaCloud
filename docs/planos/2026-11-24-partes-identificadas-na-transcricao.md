@@ -31,6 +31,16 @@ transcrição; vínculo com Meus Clientes como passo seguinte, a decidir):
 
 > implemente link, ao clicar em uma parte ou objeto identificado vá direito para o texto
 
+24/11/2026, depois do #694 ("ficou otimo!"):
+
+> Implemente nova funcionalidade
+> Em partes identificadas, implemente botão para adicionar as partes em minha organização > clientes
+
+Proposta: cadastrar direto (1 clique) × abrir o formulário de cliente preenchido (sai da
+transcrição e cancela leitura em andamento). Resposta:
+
+> Opção 1
+
 Continuação de `2026-11-23-transcricao-de-documentos-do-empreendimento.md`.
 
 ## Teste antes de implementar (24/11/2026)
@@ -54,6 +64,18 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
   no banco; revisar o texto atualiza as partes.
 - Vínculo/cadastro em Meus Clientes: **fora deste plano** (o usuário respondeu "sim" à
   implementação sem escolher esse passo; fica para quando pedir).
+- 24/11 (itens 7–8): **pedido** o cadastro em Clientes — botão por parte que grava DIRETO
+  (opção 1). Organização = a do seletor do topo; em "Todas" com várias, pergunta
+  (`useOrgWriteTarget`, modo `single` — cliente é de UMA organização, REGRA #5 exceção 4).
+  CPF/CNPJ é único no sistema inteiro (`find_client_by_document`, qualquer organização): parte
+  cujo documento já é cliente mostra "Já está em Clientes" em vez do botão. Parte sem CPF/CNPJ
+  válido não tem botão ativo (sem documento não dá para saber se já existe — cadastrar por
+  Clientes). Nome gravado em letra normal ("João da Silva"; 60 de 66 clientes estão assim),
+  conectivos em minúscula, sigla de empresa (LTDA, S/A, ME…) em maiúscula. Grava: nome, tipo
+  (PF/PJ pelo documento), CPF/CNPJ, RG com órgão/UF, e — se o texto diz "casado … com" —
+  estado civil Casado(a), nome e CPF do cônjuge. Nacionalidade, categoria, profissão, regime
+  de bens e endereço ficam vazios para completar em Clientes (não inventar). Vínculo com o
+  empreendimento: não pedido.
 
 ## Itens
 
@@ -116,6 +138,25 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    ✅ 24/11 — #694 no ar (conferir-producao: 4b9a52f); logado em produção: clicar em
    "DIREITO DE SERVIDÃO DE ÁGUA" e na 3ª parte levou à aba Texto com a linha de cada um
    marcada. Console sem erro (lido a partir da tela aberta).
+
+7. [ ] `utils/partesDaTranscricao.ts` — `nomeProprio(nome)` e `clienteDaParte(parte, partes)`
+   (o cadastro que a parte vira: nome em letra normal, PF/PJ, documento formatado, RG
+   separado em número/órgão/UF, cônjuge pelo par "casado … com"); `findDocumentOwner` em
+   `services/documentDuplicateCheck.ts` (a mesma RPC do bloqueio de duplicado, agora
+   devolvendo quem é o dono; `assertDocumentNotDuplicated` passa a usá-la).
+   **Pronto quando:** testes novos verdes (nome próprio, PJ com LTDA, casal com cônjuge nos
+   dois sentidos, RG com e sem órgão).
+   ✅ 24/11 — 23/23 (+ orgContextGuard e testes que usam o bloqueio de duplicado: verdes);
+   tsc exit 0. Nas transcrições reais do 021 (escritura e matrícula): as 4 partes com CPF que
+   confere → 4 cadastráveis, RG separado em número/SSP/UF, o casal com estado civil e o
+   cônjuge (nome e CPF) nos dois lados. Nenhum dos 4 CPFs está em Clientes hoje.
+8. [ ] `TelaDeTranscricao.tsx` — na aba Partes identificadas, por parte: "Adicionar aos
+   clientes" (grava direto na organização do topo; em "Todas", pergunta); "Já está em Clientes ·
+   código · organização" quando o CPF/CNPJ já é cliente; botão desligado com o motivo quando
+   não há CPF/CNPJ válido.
+   **Pronto quando:** tsc limpo, check-ui sem violação e, em produção (logado, 021), as 4
+   partes mostram o estado certo e — só com autorização do usuário para gravar — o botão
+   cria o cliente e a linha passa a "Já está em Clientes".
 
 ## Estado
 

@@ -129,7 +129,7 @@ import {
     ValorParaConciliar,
     ROTULO_OUTRA_ORG,
 } from './reconciliation/tabelasDaConciliacao';
-import { chaveDaSequencia, textoDaSequencia } from './reconciliation/CelulaSequencia';
+import { chaveDaSequencia, doisDigitos, textoDaSequencia } from './reconciliation/CelulaSequencia';
 import { sequenciaParcelasService } from '../services/sequenciaParcelasService';
 import type { PosicaoNaSerie } from '../utils/sequenciaParcelas';
 
@@ -485,6 +485,43 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [statementPage, setStatementPage] = useState(1);
     const [importingMessage, setImportingMessage] = useState<string | null>(null);
 
+    // Mapa de sugestão-topo por transação bancária, para evitar filter() O(n) dentro do render de cada linha
+    const topSuggestionByBankTxId = useMemo(() => {
+        const map = new Map<string, ReconciliationSuggestion>();
+        for (const s of suggestions) {
+            if (!map.has(s.bank_transaction_id)) map.set(s.bank_transaction_id, s);
+        }
+        return map;
+    }, [suggestions]);
+
+    // Coluna "Sequência sugerida" da Pendentes › Extrato Bancário (pedido de 24/11/2026): a
+    // parcela de contrato que o movimento provavelmente paga = a da sugestão-topo do motor
+    // ("Parcela 25 de 30 · 01 em aberto"). Só consulta com a aba aberta e a coluna visível, e
+    // de novo só quando muda o CONJUNTO de contratos sugeridos.
+    const [posicoesSugeridas, setPosicoesSugeridas] = useState<Map<string, PosicaoNaSerie>>(() => new Map());
+    const contratosSugeridos = useMemo(() => (
+        activeView === 'pending' && pendingBankColumns.visibleColumns.includes('sequencia')
+            ? [...new Set([...topSuggestionByBankTxId.values()]
+                .map(sg => sg.candidate_internal_transaction?.contract_id)
+                .filter((id): id is string => !!id))].sort().join(',')
+            : ''
+    ), [activeView, pendingBankColumns.visibleColumns, topSuggestionByBankTxId]);
+    useEffect(() => {
+        if (!contratosSugeridos) { setPosicoesSugeridas(new Map()); return; }
+        let vivo = true;
+        sequenciaParcelasService.posicoesDosContratos(contratosSugeridos.split(','))
+            .then(m => { if (vivo) setPosicoesSugeridas(m); })
+            .catch((e: unknown) => {
+                console.error('[Pendentes] sequência das parcelas', e);
+                if (vivo) setActionFeedback({ message: 'Não foi possível ler a sequência das parcelas: ' + errorMessage(e, 'erro desconhecido'), type: 'error' });
+            });
+        return () => { vivo = false; };
+    }, [contratosSugeridos]);
+    const posicaoDoExtrato = useCallback((bankTxId: string): PosicaoNaSerie | undefined => {
+        const id = topSuggestionByBankTxId.get(bankTxId)?.candidate_internal_transaction_id;
+        return id ? posicoesSugeridas.get(id) : undefined;
+    }, [topSuggestionByBankTxId, posicoesSugeridas]);
+
     const sortedBankTransactions = useMemo(() => {
         let filtered = [...bankTransactions];
         if (activeView === 'pending' && recorteDoDashboard === 'tarifas') filtered = filtered.filter(pareceTarifa);
@@ -493,6 +530,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             // Várias palavras em qualquer ordem (ver utils/buscaPendentes.ts).
             filtered = filtered.filter(tx => combinaComBusca(bankSearch, [
                 tx.description_normalized, tx.description_raw, tx.category, tx.counterparty_name,
+                textoDaSequencia(posicaoDoExtrato(tx.id)),
             ]));
         }
         // Categoria e Cliente/credor só existem na aba Extrato (pedido de 23/11/2026: ocultos
@@ -556,6 +594,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             } else if (bankSortField === 'costCenter') {
                 valA = (masterCostCenters.find(c => c.id === a.cost_center_id)?.name || '').toLowerCase();
                 valB = (masterCostCenters.find(c => c.id === b.cost_center_id)?.name || '').toLowerCase();
+            } else if (bankSortField === 'sequencia') {
+                // Por contrato e, dentro dele, pela posição; sem parcela sugerida vai para o fim.
+                valA = chaveDaSequencia(posicaoDoExtrato(a.id));
+                valB = chaveDaSequencia(posicaoDoExtrato(b.id));
+                if (!valA || !valB) return valA ? -1 : valB ? 1 : 0;
             } else if (bankSortField === 'planoContas') {
                 valA = (planoContasLabel(a.plano_de_contas_id) || '').toLowerCase();
                 valB = (planoContasLabel(b.plano_de_contas_id) || '').toLowerCase();
@@ -567,28 +610,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (valA > valB) return bankSortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, masterPlanoContas, orgNameById, statementAdvancedFilters.rules, statementFilterFields, activeView, recorteDoDashboard]);
-
-    // Coluna "Sequência sugerida" da Pendentes › Lançamentos Internos ("Parcela 05 de 30 ·
-    // 04 em aberto", a mesma da Central). Só consulta com a aba aberta e a coluna visível, e
-    // de novo só quando muda o CONJUNTO de contratos da lista.
-    const [posicoesPendentes, setPosicoesPendentes] = useState<Map<string, PosicaoNaSerie>>(() => new Map());
-    const contratosDosLancamentos = useMemo(() => (
-        activeView === 'pending' && pendingInternalColumns.visibleColumns.includes('sequencia')
-            ? [...new Set(internalTransactions.map(t => t.contract_id).filter((id): id is string => !!id))].sort().join(',')
-            : ''
-    ), [activeView, pendingInternalColumns.visibleColumns, internalTransactions]);
-    useEffect(() => {
-        if (!contratosDosLancamentos) { setPosicoesPendentes(new Map()); return; }
-        let vivo = true;
-        sequenciaParcelasService.posicoesDosContratos(contratosDosLancamentos.split(','))
-            .then(m => { if (vivo) setPosicoesPendentes(m); })
-            .catch((e: unknown) => {
-                console.error('[Pendentes] sequência das parcelas', e);
-                if (vivo) setActionFeedback({ message: 'Não foi possível ler a sequência das parcelas: ' + errorMessage(e, 'erro desconhecido'), type: 'error' });
-            });
-        return () => { vivo = false; };
-    }, [contratosDosLancamentos]);
+    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, masterPlanoContas, orgNameById, statementAdvancedFilters.rules, statementFilterFields, activeView, recorteDoDashboard, posicaoDoExtrato]);
 
     // Filtros e ordem dos lançamentos SEM a busca de texto: ela precisa de displayTitle/txCode/…,
     // declarados mais abaixo (ver `sortedInternalTransactions`).
@@ -617,17 +639,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             } else if (internalSortField === 'entity') {
                 valA = (a.entity_name || '').toLowerCase();
                 valB = (b.entity_name || '').toLowerCase();
-            } else if (internalSortField === 'sequencia') {
-                // Por contrato e, dentro dele, pela posição; o que não é parcela vai para o fim.
-                valA = chaveDaSequencia(posicoesPendentes.get(a.id));
-                valB = chaveDaSequencia(posicoesPendentes.get(b.id));
-                if (!valA || !valB) return valA ? -1 : valB ? 1 : 0;
             }
             if (valA < valB) return internalSortOrder === 'asc' ? -1 : 1;
             if (valA > valB) return internalSortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [internalTransactions, internalSortOrder, internalSortField, flowFilter, posicoesPendentes]);
+    }, [internalTransactions, internalSortOrder, internalSortField, flowFilter]);
 
 
     const sortedMatches = useMemo(() => {
@@ -645,15 +662,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             return matchSortOrder === 'desc' ? dateB - dateA : dateA - dateB;
         });
     }, [matches, matchSortOrder, flowFilter]);
-
-    // Mapa de sugestão-topo por transação bancária, para evitar filter() O(n) dentro do render de cada linha
-    const topSuggestionByBankTxId = useMemo(() => {
-        const map = new Map<string, ReconciliationSuggestion>();
-        for (const s of suggestions) {
-            if (!map.has(s.bank_transaction_id)) map.set(s.bank_transaction_id, s);
-        }
-        return map;
-    }, [suggestions]);
 
     // Fonte de verdade: financial_categories. O useMemo abaixo é apenas um alias ordenado.
     const uniqueCategories = useMemo(() => [...managedCategories].sort(), [managedCategories]);
@@ -744,11 +752,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             ? internalSemBusca.filter(tx => combinaComBusca(internalSearch, [
                 tx.description, tx.category, tx.entity_name,
                 displayTitle(tx), displayPartyName(tx), txCode(tx), getSourceMeta(tx.source_system)?.label,
-                textoDaSequencia(posicoesPendentes.get(tx.id)),
             ]))
             : internalSemBusca),
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [internalSemBusca, internalSearch, originPartyNames, supplierNameById, originCodes, posicoesPendentes],
+        [internalSemBusca, internalSearch, originPartyNames, supplierNameById, originCodes],
     );
 
     // Maps/Sets O(1) — evitam .find()/.some() lineares repetidos no render de cada card
@@ -1769,6 +1776,30 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     /** Concilia (ou confirma sem título). Devolve se deu certo — quem precisa (a Central)
      *  transforma `false` em erro; os botões da Pendentes só disparam. */
+    /**
+     * "usar a NN" da coluna Sequência sugerida: concilia o movimento com a parcela aberta MAIS
+     * ANTIGA do contrato (mesmo valor da sugerida) em vez da sugerida, depois de confirmar.
+     * A sugerida segue em aberto. Mesma regra da Central.
+     */
+    const usarParcelaMaisAntiga = async (tx: BankTransaction, antiga: NonNullable<PosicaoNaSerie['maisAntigaAberta']>) => {
+        const p = posicaoDoExtrato(tx.id);
+        if (!p) return;
+        const nn = (n: number) => doisDigitos(n, p.total);
+        const ok = await confirm({
+            title: `Conciliar com a parcela ${nn(antiga.numero)}?`,
+            message: `O movimento de ${formatDateBR(tx.transaction_date)} (${formatMoney(tx.amount)}) vai para a parcela ${nn(antiga.numero)} `
+                + `(venc. ${formatDateBR(antiga.due_date)}), a mais antiga em aberto do contrato ${p.numeroContrato || ''}, em vez da ${nn(p.numero)} sugerida. `
+                + `As duas têm o mesmo valor; a ${nn(p.numero)} continua em aberto. Para desfazer, use a aba Conciliados.`,
+            variant: 'warning',
+            confirmLabel: `Conciliar com a ${nn(antiga.numero)}`,
+        });
+        if (!ok) return;
+        if (await handleConfirmMatch(tx.id, antiga.id)) {
+            setActionFeedback({ message: `Conciliado com a parcela ${nn(antiga.numero)}`, type: 'success' });
+            setTimeout(() => setActionFeedback(null), 4000);
+        }
+    };
+
     const handleConfirmMatch = async (bankTxId: string, internalTxId?: string): Promise<boolean> => {
         try {
             const orgToUse = effectiveOrgId || organizationId;
@@ -3910,6 +3941,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         <option value="description">Descrição</option>
                                         <option value="category">Categoria</option>
                                         <option value="counterparty">Cliente/Credor</option>
+                                        <option value="sequencia">Sequência</option>
                                     </select>
                                     <button
                                         onClick={() => setBankSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
@@ -4417,6 +4449,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         onUpdateCategory: handleUpdateBankCategory,
                                                         onUpdateProject: handleUpdateBankProject,
                                                         onUpdateCostCenter: handleUpdateBankCostCenter,
+                                                        posicaoNaSerie: t => posicaoDoExtrato(t.id),
+                                                        onUsarMaisAntiga: usarParcelaMaisAntiga,
                                                     };
                                                     return (
                                                         <React.Fragment key={tx.id}>
@@ -4576,7 +4610,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             <option value="description">Descrição</option>
                                             <option value="category">Categoria</option>
                                             <option value="entity">Cliente/Credor</option>
-                                            <option value="sequencia">Sequência</option>
                                         </select>
                                         <button
                                             onClick={() => setInternalSortOrder(o => o === 'desc' ? 'asc' : 'desc')}
@@ -4858,7 +4891,6 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                                         getSourceMeta, getOriginLink, goToOrigin, txCode, displayTitle, displayPartyName, displayDate,
                                                         projectName, costCenterName, categoryOptions,
                                                         onUpdateCategory: handleUpdateInternalCategory,
-                                                        posicaoNaSerie: t => posicoesPendentes.get(t.id),
                                                     };
                                                     return (
                                                         <tr key={tx.id} className={`transition-colors ${selectedInternalTxIds.has(tx.id) ? 'bg-emerald-50/40' : 'hover:bg-gray-50'}`}>

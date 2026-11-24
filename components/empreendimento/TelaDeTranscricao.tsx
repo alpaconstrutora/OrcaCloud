@@ -13,7 +13,8 @@
 // aceitar ser embutido.
 //
 // 24/11/2026 — aba "Partes identificadas" ao lado do texto: nome, papel, RG e
-// CPF/CNPJ de quem aparece qualificado no documento (utils/partesDaTranscricao).
+// CPF/CNPJ de quem aparece qualificado no documento (utils/partesDaTranscricao);
+// no texto, os nomes delas vêm em negrito.
 // Plano: docs/planos/2026-11-24-partes-identificadas-na-transcricao.md
 import React from 'react';
 import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronUp, Copy, ExternalLink, Pencil, RotateCcw, ScanText } from 'lucide-react';
@@ -26,7 +27,7 @@ import {
   aplicarEdicao, contarDuvidosas, linhaDuvidosa, marcarRevisada, podeTranscrever, textoDaTranscricao,
   type Transcricao,
 } from '../../utils/transcricaoDocumento';
-import { formatarCnpj, formatarCpf, identificarPartes, type ParteIdentificada } from '../../utils/partesDaTranscricao';
+import { formatarCnpj, formatarCpf, identificarPartes, trechosDasPartes, type ParteIdentificada, type Trecho } from '../../utils/partesDaTranscricao';
 import {
   BOTAO_PRIMARIO, BOTAO_SECUNDARIO, blocoSemTexto, nomeDaVersao, resumoDaTranscricao, useTranscreverDeNovo,
   useTranscricao, type FilaDeTranscricao, type VersaoTranscrevivel,
@@ -38,6 +39,20 @@ const BOTAO_TEXTO = 'h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 
 const ALTURA_COLUNA = 'h-[70vh] lg:h-[calc(100vh-10rem)] min-h-[28rem]';
 
 type Vista = 'texto' | 'partes';
+
+/** Texto da linha com os nomes das partes em negrito (pedido de 24/11/2026). */
+function comNegrito(texto: string, trechos: Trecho[] | undefined): React.ReactNode {
+  if (!trechos || trechos.length === 0) return texto;
+  const pedacos: React.ReactNode[] = [];
+  let pos = 0;
+  trechos.forEach(([a, b], k) => {
+    if (a > pos) pedacos.push(texto.slice(pos, a));
+    pedacos.push(<strong key={k} className="font-semibold">{texto.slice(a, b)}</strong>);
+    pos = b;
+  });
+  if (pos < texto.length) pedacos.push(texto.slice(pos));
+  return pedacos;
+}
 
 function documentosDaParte(p: ParteIdentificada): string {
   return [
@@ -123,6 +138,10 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
 
   // ── Partes identificadas ──────────────────────────────────────────────────
   const partes = React.useMemo(() => (transcricao ? identificarPartes(transcricao.linhas) : []), [transcricao]);
+  const negrito = React.useMemo(
+    () => (transcricao ? trechosDasPartes(transcricao.linhas, partes) : new Map<number, Trecho[]>()),
+    [transcricao, partes],
+  );
   const verNoTexto = (p: ParteIdentificada) => {
     setFoco(null);
     setLinhaMarcada(p.linha);
@@ -363,7 +382,7 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
                     return (
                       <p key={i} data-linha={i}
                         className={`whitespace-pre-wrap break-words ${marcada ? '-mx-4 px-4 bg-blue-50 ring-1 ring-inset ring-blue-400' : ''}`}>
-                        {l.t}
+                        {comNegrito(l.t, negrito.get(i))}
                       </p>
                     );
                   }
@@ -372,7 +391,7 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
                     <p key={i} data-linha={i}
                       className={`-mx-4 px-4 border-l-2 border-amber-400 whitespace-pre-wrap break-words text-amber-900 ${emFoco ? 'bg-amber-100 ring-1 ring-inset ring-amber-400' : 'bg-amber-50'}`}
                       title={`Leitura duvidosa (confiança ${l.c}%)`}>
-                      {l.t}<span className="sr-only"> (leitura duvidosa)</span>
+                      {comNegrito(l.t, negrito.get(i))}<span className="sr-only"> (leitura duvidosa)</span>
                     </p>
                   );
                 })}

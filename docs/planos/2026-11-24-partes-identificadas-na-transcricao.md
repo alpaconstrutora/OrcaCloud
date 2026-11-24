@@ -11,6 +11,10 @@ transcrição; vínculo com Meus Clientes como passo seguinte, a decidir):
 
 > sim
 
+24/11/2026, depois do #684 no ar:
+
+> Perfeito. No texto aplique negrito nas partes identificadas
+
 Continuação de `2026-11-23-transcricao-de-documentos-do-empreendimento.md`.
 
 ## Teste antes de implementar (24/11/2026)
@@ -60,7 +64,16 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    "Partes identificadas 4" com os 4 nomes, papéis, cônjuge, CPF e RG; "Ver no texto" da
    4ª parte voltou à aba Texto e marcou a linha dela. Console sem erro (lido a partir da
    abertura da tela, não do carregamento da página). Nada gravado.
+4. [ ] Negrito no texto — `trechosDasPartes(linhas, partes)` em `utils/partesDaTranscricao.ts`
+   (toda ocorrência do nome, sem diferenciar maiúsculas — as assinaturas vêm em letra normal;
+   nome quebrado entre linhas vira um trecho por linha) e `comNegrito` na aba Texto de
+   `TelaDeTranscricao.tsx` (linha normal e duvidosa).
+   **Pronto quando:** testes verdes; nas transcrições reais do 021 os nomes saem marcados na
+   qualificação, no meio do texto e nas assinaturas; na tela em produção os nomes aparecem
+   em negrito. ✅ parcial 24/11 — 14/14 testes; nas reais: escritura 9 linhas marcadas
+   (qualificação, linhas 79–81 com nome quebrado, assinaturas 99–100), matrícula idem.
 
 ## Estado
 
 - 24/11/2026: itens 1–3 concluídos e provados em produção (#684). Vínculo com Meus Clientes: não pedido.
+- 24/11/2026: item 4 (negrito) implementado; falta prova em produção.

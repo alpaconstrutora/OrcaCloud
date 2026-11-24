@@ -49,13 +49,18 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    títulos fora, papéis, cônjuge com "6.515/77" no meio, CPF com espaço e hífen lido errado,
    nome quebrado entre linhas, CPF inválido marcado, duvidosa, empresa com CNPJ, sigla colada.
    **Pronto quando:** `npx vitest run __tests__/partesDaTranscricao.test.ts` verde. ✅ 10/10.
-3. [ ] `components/empreendimento/TelaDeTranscricao.tsx` — abas `Texto` / `Partes
+3. [x] `components/empreendimento/TelaDeTranscricao.tsx` — abas `Texto` / `Partes
    identificadas (n)` no cabeçalho da coluna (`TabsBar bare`); cada parte com nome, papel,
    documentos, aviso de duvidosa/número que não confere, "Copiar nome e documentos" e
    "Ver no texto" (volta à aba Texto, rola até a linha e marca de azul).
    **Pronto quando:** tsc limpo, `check-ui-standard.sh` sem falha nova, e na tela em produção
    (logado, 021 - Tamareiras da Lagoa) a aba mostra as 4 partes e "Ver no texto" leva à linha.
+   ✅ 24/11 — tsc (heap 12 GB) exit 0, `check-ui-standard.sh` sem violação; #684 no ar
+   (conferir-producao: 12cf6e0). Logado em produção, Escritura do terreno: aba
+   "Partes identificadas 4" com os 4 nomes, papéis, cônjuge, CPF e RG; "Ver no texto" da
+   4ª parte voltou à aba Texto e marcou a linha dela. Console sem erro (lido a partir da
+   abertura da tela, não do carregamento da página). Nada gravado.
 
 ## Estado
 
-- 24/11/2026: itens 1–2 feitos; item 3 implementado, falta tsc/checagem/prova em produção.
+- 24/11/2026: itens 1–3 concluídos e provados em produção (#684). Vínculo com Meus Clientes: não pedido.

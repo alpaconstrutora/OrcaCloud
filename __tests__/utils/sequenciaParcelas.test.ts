@@ -3,6 +3,7 @@ import {
     analisarSequencias,
     acharPagamentosJuntos,
     acharCreditosParecidos,
+    posicoesNasSeries,
     type ParcelaDeContrato,
     type ExtratoPendente,
 } from '../../utils/sequenciaParcelas';
@@ -307,5 +308,35 @@ describe('acharCreditosParecidos — parcela "aberta" que talvez foi paga com ou
     it('cada movimento aponta uma parcela só (a de vencimento mais próximo)', () => {
         const r = acharCreditosParecidos(serieComVencidas(), [ext({ transaction_date: '2026-03-08' })], []);
         expect([...r.keys()]).toEqual(['p-c1-2026-03']);
+    });
+});
+
+describe('posicoesNasSeries — coluna "Sequência sugerida" da Central', () => {
+    it('numera cada parcela na série do contrato (1..N, pelo vencimento) com o total', () => {
+        const pos = posicoesNasSeries([
+            parcela('2026-03'), conferida('2026-01', '2026-01-10'), parcela('2026-02'),
+        ]);
+        expect(pos.get('p-c1-2026-01')).toMatchObject({ numero: 1, total: 3, numeroContrato: 'CTL-001' });
+        expect(pos.get('p-c1-2026-03')).toMatchObject({ numero: 3, total: 3 });
+    });
+
+    it('aponta as parcelas ANTERIORES ainda em aberto (a sugestão pula uma mais antiga)', () => {
+        const pos = posicoesNasSeries([
+            conferida('2026-01', '2026-01-10'), parcela('2026-02'), parcela('2026-03'), parcela('2026-04'),
+        ]);
+        expect(pos.get('p-c1-2026-02')?.abertasAntes).toEqual([]);
+        expect(pos.get('p-c1-2026-04')?.abertasAntes).toEqual([2, 3]);
+    });
+
+    it('baixada fora do extrato conta como paga; retido e cancelada não entram na conta', () => {
+        const pos = posicoesNasSeries([
+            parcela('2026-01', { status: 'CONCILIATED' }),
+            parcela('2026-01', { id: 'irrf', business_status: 'RETIDO', due_date: '2026-01-25' }),
+            parcela('2026-02', { id: 'canc', status: 'CANCELLED' }),
+            parcela('2026-03'),
+        ]);
+        expect(pos.has('irrf')).toBe(false);
+        expect(pos.has('canc')).toBe(false);
+        expect(pos.get('p-c1-2026-03')).toMatchObject({ numero: 2, total: 2, abertasAntes: [] });
     });
 });

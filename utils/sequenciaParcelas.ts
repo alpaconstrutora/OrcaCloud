@@ -119,25 +119,67 @@ const diasEntre = (de: string, ate: string) => Math.round((ms(ate) - ms(de)) / D
 const mes = (d: string) => d.slice(0, 7);
 const centavos = (v: number) => Math.round(v * 100) / 100;
 
-const entraNaSerie = (p: ParcelaDeContrato) => p.status !== 'CANCELLED' && p.business_status !== 'RETIDO';
-const conferidaNoExtrato = (p: ParcelaDeContrato) => !!p.bank_reconciled_at;
-const paga = (p: ParcelaDeContrato) => conferidaNoExtrato(p) || p.status === 'CONCILIATED';
-const aberta = (p: ParcelaDeContrato) => !paga(p);
+const entraNaSerie = (p: Pick<ParcelaDeContrato, 'status' | 'business_status'>) => p.status !== 'CANCELLED' && p.business_status !== 'RETIDO';
+const conferidaNoExtrato = (p: Pick<ParcelaDeContrato, 'bank_reconciled_at'>) => !!p.bank_reconciled_at;
+const paga = (p: Pick<ParcelaDeContrato, 'status' | 'bank_reconciled_at'>) => conferidaNoExtrato(p) || p.status === 'CONCILIATED';
+const aberta = (p: Pick<ParcelaDeContrato, 'status' | 'bank_reconciled_at'>) => !paga(p);
 
-export function analisarSequencias(parcelas: ParcelaDeContrato[], o: OpcoesDaSequencia): SerieDeParcelas[] {
-    const porContrato = new Map<string, ParcelaDeContrato[]>();
+/** O mínimo para montar a série: identidade, vencimento e se está paga. */
+type ParcelaDaSerie = Pick<ParcelaDeContrato, 'id' | 'contract_id' | 'due_date' | 'reference_id' | 'status' | 'business_status' | 'bank_reconciled_at' | 'contrato'>;
+
+/** Séries por contrato (sem RETIDO e CANCELLED), na ordem 1..N: vencimento, depois `reference_id`. */
+function seriesOrdenadas<T extends ParcelaDaSerie>(parcelas: T[]): Map<string, T[]> {
+    const porContrato = new Map<string, T[]>();
     for (const p of parcelas) {
         if (!entraNaSerie(p)) continue;
         const l = porContrato.get(p.contract_id) ?? [];
         l.push(p);
         porContrato.set(p.contract_id, l);
     }
-
-    const series: SerieDeParcelas[] = [];
-    for (const [contractId, lista] of porContrato) {
+    for (const lista of porContrato.values())
         lista.sort((a, b) => dia(a.due_date).localeCompare(dia(b.due_date))
             || (a.reference_id ?? '').localeCompare(b.reference_id ?? '')
             || a.id.localeCompare(b.id));
+    return porContrato;
+}
+
+export interface PosicaoNaSerie {
+    contractId: string;
+    numeroContrato: string;
+    /** Posição 1..N na série do contrato. */
+    numero: number;
+    total: number;
+    /** Números das parcelas ANTERIORES ainda em aberto (não pagas). */
+    abertasAntes: number[];
+}
+
+/**
+ * Coluna "Sequência sugerida" da Central: em que posição da série do contrato está
+ * cada parcela ("Parcela 05 de 30") e quais anteriores seguem em aberto — sinal de
+ * que a sugestão pula uma parcela mais antiga (quem paga atrasado costuma quitar a
+ * mais antiga primeiro; CC art. 355 imputa o pagamento à dívida vencida há mais tempo).
+ */
+export function posicoesNasSeries(parcelas: ParcelaDaSerie[]): Map<string, PosicaoNaSerie> {
+    const r = new Map<string, PosicaoNaSerie>();
+    for (const [contractId, lista] of seriesOrdenadas(parcelas)) {
+        const abertas: number[] = [];
+        lista.forEach((p, i) => {
+            r.set(p.id, {
+                contractId,
+                numeroContrato: p.contrato?.number || lista[0].contrato?.number || '',
+                numero: i + 1,
+                total: lista.length,
+                abertasAntes: [...abertas],
+            });
+            if (aberta(p)) abertas.push(i + 1);
+        });
+    }
+    return r;
+}
+
+export function analisarSequencias(parcelas: ParcelaDeContrato[], o: OpcoesDaSequencia): SerieDeParcelas[] {
+    const series: SerieDeParcelas[] = [];
+    for (const [contractId, lista] of seriesOrdenadas(parcelas)) {
 
         // Índice da última parcela paga: aberta antes dela é furo.
         let ultimaPaga = -1;

@@ -28,6 +28,9 @@ vi.mock('../../services/reconciliationReprocessService', () => ({
     resumoDoReprocesso: () => '',
 }));
 vi.mock('../../components/GroupMatchPanel', () => ({ default: () => null }));
+vi.mock('../../components/reconciliation/SequenciaParcelasPanel', () => ({ default: () => null }));
+const { posicoesDosContratos } = vi.hoisted(() => ({ posicoesDosContratos: vi.fn() }));
+vi.mock('../../services/sequenciaParcelasService', () => ({ sequenciaParcelasService: { posicoesDosContratos } }));
 vi.mock('../../components/reconciliation/RegrasSheet', () => ({ default: () => null }));
 
 import SmartReconciliationCenter, { separarTitulosRepetidos } from '../../components/SmartReconciliationCenter';
@@ -128,6 +131,40 @@ describe('Central de Conciliação — tabela', () => {
         fireEvent.click(screen.getByRole('button', { name: /Conciliar selecionados/ }));
         await waitFor(() => expect(onConfirm).toHaveBeenCalledTimes(1));
         expect(await screen.findByText(/ficou\(aram\) de fora/)).toBeTruthy();
+    });
+});
+
+describe('Central — coluna "Sequência sugerida" (24/11/2026)', () => {
+    const doContrato = (t: ReturnType<typeof titulo>) => ({ ...t, contract_id: 'c-igreja' });
+    const pos = (numero: number, abertasAntes: number[]) => ({ contractId: 'c-igreja', numeroContrato: 'CTL-006-012-0001', numero, total: 30, abertasAntes });
+
+    beforeEach(() => {
+        localStorage.clear();
+        posicoesDosContratos.mockReset().mockResolvedValue(new Map([
+            ['t-mar17', pos(5, [])],
+            ['t-abr17', pos(6, [5])],
+            ['t-mar18', pos(17, [1])],
+        ]));
+    });
+
+    it('mostra "Parcela NN de NN" e avisa quando há parcela ANTERIOR em aberto', async () => {
+        montar([sug('s1', 'b-mar17', doContrato(MAR17), 78), sug('s3', 'b-mar18', doContrato(MAR18), 78)]);
+        expect(within(screen.getByRole('table')).getAllByRole('columnheader').map(th => th.textContent?.trim())).toContain('Sequência sugerida');
+        expect(await screen.findByText('Parcela 05 de 30')).toBeTruthy();
+        expect(screen.getByText('· 01 em aberto')).toBeTruthy();
+        expect(posicoesDosContratos).toHaveBeenCalledWith(['c-igreja']);
+    });
+
+    it('o candidato alternativo também mostra a posição (para escolher a parcela certa)', async () => {
+        montar([sug('s1', 'b-mar17', doContrato(MAR17), 78), sug('s2', 'b-mar17', doContrato(ABR17), 70)]);
+        await screen.findByText('Parcela 05 de 30');
+        fireEvent.click(screen.getByRole('button', { name: /\+1/ }));
+        expect(await screen.findByText('· 05 em aberto')).toBeTruthy();
+    });
+
+    it('lançamento que não é parcela de contrato fica com "—" e não consulta nada', () => {
+        montar([sug('s1', 'b-mar17', MAR17, 78)]);
+        expect(posicoesDosContratos).not.toHaveBeenCalled();
     });
 });
 

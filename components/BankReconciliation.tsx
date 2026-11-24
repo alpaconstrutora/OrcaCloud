@@ -1570,7 +1570,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     .select(
                         'id, bank_transaction_id, candidate_internal_transaction_id, confidence, reason, created_at, '
                         + 'bank_transaction:bank_transaction_id!inner(bank_account_id, status, transaction_date), '
-                        + 'candidate_internal_transaction:candidate_internal_transaction_id(id, description, amount, valor_esperado, valor_variavel, direction, entity_name, party_name, party_type, due_date, transaction_date, status, category, project_id, cost_center_id)',
+                        + 'candidate_internal_transaction:candidate_internal_transaction_id(id, description, amount, valor_esperado, valor_variavel, direction, entity_name, party_name, party_type, due_date, transaction_date, status, category, project_id, cost_center_id, contract_id)',
                     )
                     .eq('bank_transaction.bank_account_id', selectedAccountId)
                     .in('bank_transaction.status', ['IMPORTED', 'NORMALIZED', 'RULE_APPLIED', 'CONFIRMED']);

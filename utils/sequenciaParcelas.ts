@@ -125,7 +125,8 @@ const paga = (p: Pick<ParcelaDeContrato, 'status' | 'bank_reconciled_at'>) => co
 const aberta = (p: Pick<ParcelaDeContrato, 'status' | 'bank_reconciled_at'>) => !paga(p);
 
 /** O mínimo para montar a série: identidade, vencimento e se está paga. */
-type ParcelaDaSerie = Pick<ParcelaDeContrato, 'id' | 'contract_id' | 'due_date' | 'reference_id' | 'status' | 'business_status' | 'bank_reconciled_at' | 'contrato'>;
+type ParcelaDaSerie = Pick<ParcelaDeContrato, 'id' | 'contract_id' | 'due_date' | 'reference_id' | 'status' | 'business_status' | 'bank_reconciled_at' | 'contrato'>
+    & { amount?: number };
 
 /** Séries por contrato (sem RETIDO e CANCELLED), na ordem 1..N: vencimento, depois `reference_id`. */
 function seriesOrdenadas<T extends ParcelaDaSerie>(parcelas: T[]): Map<string, T[]> {
@@ -151,6 +152,22 @@ export interface PosicaoNaSerie {
     total: number;
     /** Números das parcelas ANTERIORES ainda em aberto (não pagas). */
     abertasAntes: number[];
+    /** Valor esperado desta parcela (líquido do retido), quando informado. */
+    valor?: number;
+    /** A parcela aberta MAIS ANTIGA da série, anterior a esta (alvo de "usar a NN"). */
+    maisAntigaAberta?: { id: string; numero: number; due_date: string; valor?: number };
+}
+
+/**
+ * "Usar a NN": a parcela aberta mais antiga do contrato, quando ela tem o MESMO valor
+ * esperado (ao centavo) da sugerida — aí as duas são trocáveis para o banco e o
+ * pagamento vai para a dívida vencida há mais tempo (CC art. 355). Valor diferente
+ * (reajuste, parcela variável) não troca: o vínculo passaria a ter outra diferença.
+ */
+export function trocaPelaMaisAntiga(p?: PosicaoNaSerie): PosicaoNaSerie['maisAntigaAberta'] | null {
+    const a = p?.maisAntigaAberta;
+    if (!p || !a || p.valor == null || a.valor == null) return null;
+    return Math.abs(a.valor - p.valor) <= 0.005 ? a : null;
 }
 
 /**
@@ -163,6 +180,7 @@ export function posicoesNasSeries(parcelas: ParcelaDaSerie[]): Map<string, Posic
     const r = new Map<string, PosicaoNaSerie>();
     for (const [contractId, lista] of seriesOrdenadas(parcelas)) {
         const abertas: number[] = [];
+        let maisAntiga: PosicaoNaSerie['maisAntigaAberta'];
         lista.forEach((p, i) => {
             r.set(p.id, {
                 contractId,
@@ -170,8 +188,13 @@ export function posicoesNasSeries(parcelas: ParcelaDaSerie[]): Map<string, Posic
                 numero: i + 1,
                 total: lista.length,
                 abertasAntes: [...abertas],
+                valor: p.amount,
+                maisAntigaAberta: maisAntiga,
             });
-            if (aberta(p)) abertas.push(i + 1);
+            if (aberta(p)) {
+                abertas.push(i + 1);
+                maisAntiga ??= { id: p.id, numero: i + 1, due_date: dia(p.due_date), valor: p.amount };
+            }
         });
     }
     return r;

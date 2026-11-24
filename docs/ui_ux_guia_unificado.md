@@ -2118,6 +2118,10 @@ inteira é um `<button>` que abre o detalhe no `Sheet` (tabela no padrão do §6
 > "Parcela 05 de 30" em texto §8 e, quando há parcela ANTERIOR do contrato em aberto,
 > " · 04 em aberto" em `text-amber-800` (o `title` lista quais). Ordenar pela coluna agrupa
 > por contrato na ordem da série. Repete na tabela "outros candidatos" do "+N".
+>
+> ℹ️ Quando a parcela aberta MAIS ANTIGA do contrato tem o mesmo valor esperado da sugerida, o
+> aviso âmbar vira o botão de texto **"usar a NN"** (`text-blue-600`, `font-medium`): concilia
+> o movimento com ela depois do `useConfirm` (variant `warning`, mostrando as duas datas).
 
 ---
 

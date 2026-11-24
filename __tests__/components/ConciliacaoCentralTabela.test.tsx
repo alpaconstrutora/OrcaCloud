@@ -162,6 +162,25 @@ describe('Central — coluna "Sequência sugerida" (24/11/2026)', () => {
         expect(await screen.findByText('· 05 em aberto')).toBeTruthy();
     });
 
+    it('"usar a 01": parcela mais antiga em aberto com o MESMO valor — concilia com ela após confirmar', async () => {
+        const antiga = { id: 't-nov16', numero: 1, due_date: '2016-11-10', valor: 4167.03 };
+        posicoesDosContratos.mockReset().mockResolvedValue(new Map([
+            ['t-mar18', { ...pos(17, [1]), valor: 4167.03, maisAntigaAberta: antiga }],
+        ]));
+        const onConfirm = montar([sug('s3', 'b-mar18', doContrato(MAR18), 78)]);
+        fireEvent.click(await screen.findByRole('button', { name: 'usar a 01' }));
+        await waitFor(() => expect(onConfirm).toHaveBeenCalledWith('b-mar18', 't-nov16'));
+    });
+
+    it('mais antiga com valor DIFERENTE (reajuste): só o aviso, sem "usar"', async () => {
+        posicoesDosContratos.mockReset().mockResolvedValue(new Map([
+            ['t-mar18', { ...pos(17, [1]), valor: 4338.43, maisAntigaAberta: { id: 't-nov16', numero: 1, due_date: '2016-11-10', valor: 4167.03 } }],
+        ]));
+        montar([sug('s3', 'b-mar18', doContrato(MAR18), 78)]);
+        expect(await screen.findByText('· 01 em aberto')).toBeTruthy();
+        expect(screen.queryByRole('button', { name: /usar a/ })).toBeNull();
+    });
+
     it('lançamento que não é parcela de contrato fica com "—" e não consulta nada', () => {
         montar([sug('s1', 'b-mar17', MAR17, 78)]);
         expect(posicoesDosContratos).not.toHaveBeenCalled();

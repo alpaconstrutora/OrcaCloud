@@ -167,7 +167,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, isAdmin, uploadedBy, em
             {gestor && candidatos && (
                 <div className="border border-blue-200 bg-blue-50/40 rounded-[10px] p-4 space-y-3">
                     {candidatos.length === 0 ? (
-                        <p className="text-sm text-slate-600">Todos os documentos do empreendimento já estão no Data Room (ou ainda não há documento com arquivo).</p>
+                        <p className="text-sm text-slate-600">Todos os documentos do empreendimento já estão nesta oportunidade (ou ainda não há documento com arquivo).</p>
                     ) : (
                         <ul className="space-y-1.5">
                             {candidatos.map(c => (
@@ -188,7 +188,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, isAdmin, uploadedBy, em
                             title={escolhidos.length === 0 ? 'Marque ao menos um documento.' : undefined}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed">
                             {adicionando && <Loader2 className="w-[15px] h-[15px] animate-spin" />}
-                            Adicionar ao Data Room
+                            Adicionar à oportunidade
                         </button>
                     </div>
                 </div>
@@ -204,7 +204,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, isAdmin, uploadedBy, em
             {docs.length === 0 ? (
                 <div className="text-center py-12 bg-gray-50 rounded-[10px] border border-gray-100">
                     <FolderOpen className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm font-medium text-gray-500">Nenhum documento no data room</p>
+                    <p className="text-sm font-medium text-gray-500">Nenhum documento compartilhado com esta oportunidade</p>
                 </div>
             ) : (
                 <div className="space-y-6">
@@ -250,7 +250,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, isAdmin, uploadedBy, em
                                             {gestor && (
                                                 <ActionIconButton
                                                     kind="delete"
-                                                    title="Tirar do Data Room (o documento continua no GED)"
+                                                    title="Tirar da oportunidade (o documento continua no GED)"
                                                     disabled={tirando === doc.id}
                                                     icon={tirando === doc.id ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
                                                     onClick={() => void tirar(doc)}

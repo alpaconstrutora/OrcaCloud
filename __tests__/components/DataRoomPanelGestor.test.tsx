@@ -48,10 +48,10 @@ describe('Data Room do gestor (GED)', () => {
         await user.click(await screen.findByRole('button', { name: /Adicionar do empreendimento/ }));
         expect(svc.candidatos).toHaveBeenCalledWith('emp1', ['g1']);
         await user.click(await screen.findByRole('checkbox'));
-        await user.click(screen.getByRole('button', { name: 'Adicionar ao Data Room' }));
+        await user.click(screen.getByRole('button', { name: 'Adicionar à oportunidade' }));
         await waitFor(() => expect(svc.compartilhar).toHaveBeenCalledWith(['g2'], 'op1', 'ana@x'));
 
-        await user.click(screen.getByTitle(/Tirar do Data Room/));
+        await user.click(screen.getByTitle(/Tirar da oportunidade/));
         await waitFor(() => expect(svc.descompartilhar).toHaveBeenCalledWith(['g1'], 'op1'));
     });
 
@@ -59,6 +59,6 @@ describe('Data Room do gestor (GED)', () => {
         render(<DataRoomPanel opportunityId="op1" organizationId="org" isAdmin={false} empreendimentoId="emp1" />);
         expect(await screen.findByText('Matrícula atualizada')).toBeTruthy();
         expect(screen.queryByRole('button', { name: /Adicionar do empreendimento/ })).toBeNull();
-        expect(screen.queryByTitle(/Tirar do Data Room/)).toBeNull();
+        expect(screen.queryByTitle(/Tirar da oportunidade/)).toBeNull();
     });
 });

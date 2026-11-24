@@ -91,7 +91,7 @@ export const opportunityDocumentsService = {
             .eq('audience', 'investidor')
             .eq('opportunity_id', opportunityId)
             .order('shared_at', { ascending: false });
-        if (error) throw new Error(`Falha ao ler o Data Room: ${error.message}`);
+        if (error) throw new Error(`Falha ao ler os documentos da oportunidade: ${error.message}`);
         return ((data ?? []) as unknown as LinhaDoCompartilhamento[])
             .map(documentoDoCompartilhamento)
             .filter((d): d is DocumentoDoDataRoom => d !== null);

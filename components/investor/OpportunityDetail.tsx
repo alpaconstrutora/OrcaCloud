@@ -156,14 +156,14 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity, organizationId, isAdm
         { id: 'pitch', label: 'Detalhes' },
         { id: 'cenarios', label: 'Viabilidade & Investimento' },
         ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra' }] : []),
-        { id: 'documentos', label: 'Data Room' },
+        { id: 'documentos', label: 'Documentos' },
         { id: 'interesses', label: interests.length > 0 ? `Interesses (${interests.length})` : 'Interesses' },
     ];
     const PUBLIC_TABS: { id: PitchTab; label: string }[] = [
         { id: 'pitch', label: 'Detalhes' },
         { id: 'cenarios', label: 'Viabilidade & Investimento' },
         ...(hasLinkedProject ? [{ id: 'obra' as PitchTab, label: 'Obra ao Vivo' }] : []),
-        { id: 'documentos', label: 'Data Room' },
+        { id: 'documentos', label: 'Documentos' },
     ];
     const tabs = isAdmin ? ADMIN_TABS : PUBLIC_TABS;
 

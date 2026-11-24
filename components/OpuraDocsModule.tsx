@@ -1520,7 +1520,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       title: 'Revogar compartilhamento?',
       message: `${recipient.name} deixará de ver ${shareDocIds.length > 1 ? `estes ${shareDocIds.length} documentos` : 'este documento'} ${
         recipient.audience === 'credor' ? 'no Portal de Crédito'
-          : recipient.audience === 'investidor' ? 'no Data Room da oportunidade (Portal do Investidor)'
+          : recipient.audience === 'investidor' ? 'nos Documentos da oportunidade (Portal do Investidor)'
             : `no Portal do ${recipient.audience === 'cliente' ? 'Cliente' : 'Colaborador'}`
       }.`,
       variant: 'danger',
@@ -4566,7 +4566,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <p className="text-xs text-slate-400 pt-1">
                       {portalShareOportunidades.length === 0
                         ? 'Nenhuma oportunidade nesta organização (Investidor → Oportunidades).'
-                        : 'Entra no Data Room da oportunidade; o investidor vê a versão ATIVA, só com a oportunidade publicada.'}
+                        : 'Entra nos Documentos da oportunidade; o investidor vê a versão ATIVA, só com a oportunidade publicada.'}
                     </p>
                   </div>
                 ) : (

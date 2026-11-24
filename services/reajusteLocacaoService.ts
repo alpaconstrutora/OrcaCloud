@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { contractIndexService, normalizeIndexName } from './contractIndexService';
 import {
-    aniversarioDoReajuste, valorAposReajuste, entraNaFilaDeReajuste,
+    aniversarioDoReajuste, valorAposReajuste, entraNaFilaDeReajuste, motivoDaDataDeReajuste,
     AniversarioReajuste, DecisaoReajuste,
 } from '../utils/reajusteAniversario';
 
@@ -162,10 +162,13 @@ export const reajusteLocacaoService = {
         return linhas;
     },
 
-    /** O que a decisão vai mexer — índices, fator, parcelas afetadas. Não grava nada. */
-    previa: async (contractId: string): Promise<PreviaReajuste> => {
+    /**
+     * O que a decisão vai mexer — índices, fator, parcelas afetadas. Não grava nada.
+     * `dataReajuste` = a data escolhida na gaveta (vazia = a calculada).
+     */
+    previa: async (contractId: string, dataReajuste?: string | null): Promise<PreviaReajuste> => {
         const contrato = await buscarContrato(contractId);
-        const aniversario = aniversarioDoReajuste(contrato);
+        const aniversario = aniversarioDoReajuste(contrato, dataReajuste);
         if (!aniversario) throw new Error(`Contrato ${contrato.number} sem data-base de reajuste nem início de vigência.`);
         const indice = normalizeIndexName(contrato.reajuste_index) ?? null;
         let base: PreviaReajuste['base'] = null;
@@ -192,12 +195,19 @@ export const reajusteLocacaoService = {
         };
     },
 
-    /** Decide o aniversário atual do contrato e avança para o próximo. */
-    decidir: async (contractId: string, decisao: DecisaoReajuste, observacao?: string): Promise<{
+    /**
+     * Decide o aniversário atual do contrato e avança para o próximo.
+     * `dataReajuste` = a data escolhida na gaveta (vazia = a calculada).
+     */
+    decidir: async (contractId: string, decisao: DecisaoReajuste, observacao?: string, dataReajuste?: string | null): Promise<{
         contrato: ContratoReajustavel; registro: RegistroDeReajuste;
     }> => {
-        const p = await reajusteLocacaoService.previa(contractId);
+        const p = await reajusteLocacaoService.previa(contractId, dataReajuste);
         const c = p.contrato;
+        if (dataReajuste) {
+            const motivo = motivoDaDataDeReajuste(c, dataReajuste);
+            if (motivo) throw new Error(motivo);
+        }
         if (c.domain !== 'LOCACAO' || !c.is_recurring) {
             throw new Error('O reajuste por aniversário vale para contrato de locação recorrente.');
         }

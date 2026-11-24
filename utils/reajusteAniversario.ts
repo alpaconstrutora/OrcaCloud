@@ -48,11 +48,16 @@ export interface AniversarioReajuste {
     dentroDaVigencia: boolean;
 }
 
-export function aniversarioDoReajuste(c: ContratoComReajuste): AniversarioReajuste | null {
+/**
+ * `dataEscolhida`: a data de reajuste que o usuário digitou na gaveta (pedido de
+ * 24/11/2026 — vem pré-preenchida com a calculada). Ela vira o aniversário: o
+ * índice "até", as parcelas a partir dela e o próximo = ela + periodicidade.
+ */
+export function aniversarioDoReajuste(c: ContratoComReajuste, dataEscolhida?: string | null): AniversarioReajuste | null {
     const periodo = mesesDaPeriodicidade(c.reajuste_periodicidade_meses);
     const dataBase = (c.reajuste_data_base || c.start_date || '').slice(0, 10);
     if (!dataBase) return null;
-    const aniversario = (c.reajuste_proximo || somarMeses(dataBase, periodo)).slice(0, 10);
+    const aniversario = (dataEscolhida || c.reajuste_proximo || somarMeses(dataBase, periodo)).slice(0, 10);
     const fim = (c.end_date || '').slice(0, 10);
     return {
         dataBase,
@@ -60,6 +65,18 @@ export function aniversarioDoReajuste(c: ContratoComReajuste): AniversarioReajus
         proximo: somarMeses(aniversario, periodo),
         dentroDaVigencia: !fim || aniversario <= fim,
     };
+}
+
+const dataBR = (iso: string) => iso.split('-').reverse().join('/');
+
+/** Por que a data de reajuste escolhida não serve; null = serve. */
+export function motivoDaDataDeReajuste(c: ContratoComReajuste, data: string): string | null {
+    if (!data) return 'Informe a data do reajuste.';
+    const a = aniversarioDoReajuste(c, data);
+    if (!a) return 'Contrato sem data-base de reajuste nem início de vigência.';
+    if (a.aniversario <= a.dataBase) return `A data do reajuste deve ser depois da data-base (${dataBR(a.dataBase)}).`;
+    if (!a.dentroDaVigencia) return `A data do reajuste (${dataBR(a.aniversario)}) é depois do fim da vigência — o caso é de renovação, não de reajuste.`;
+    return null;
 }
 
 export type DecisaoReajuste =

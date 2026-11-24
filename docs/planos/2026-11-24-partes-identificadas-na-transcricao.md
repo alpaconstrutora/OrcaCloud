@@ -139,7 +139,7 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    "DIREITO DE SERVIDÃO DE ÁGUA" e na 3ª parte levou à aba Texto com a linha de cada um
    marcada. Console sem erro (lido a partir da tela aberta).
 
-7. [ ] `utils/partesDaTranscricao.ts` — `nomeProprio(nome)` e `clienteDaParte(parte, partes)`
+7. [x] `utils/partesDaTranscricao.ts` — `nomeProprio(nome)` e `clienteDaParte(parte, partes)`
    (o cadastro que a parte vira: nome em letra normal, PF/PJ, documento formatado, RG
    separado em número/órgão/UF, cônjuge pelo par "casado … com"); `findDocumentOwner` em
    `services/documentDuplicateCheck.ts` (a mesma RPC do bloqueio de duplicado, agora
@@ -150,16 +150,26 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    tsc exit 0. Nas transcrições reais do 021 (escritura e matrícula): as 4 partes com CPF que
    confere → 4 cadastráveis, RG separado em número/SSP/UF, o casal com estado civil e o
    cônjuge (nome e CPF) nos dois lados. Nenhum dos 4 CPFs está em Clientes hoje.
-8. [ ] `TelaDeTranscricao.tsx` — na aba Partes identificadas, por parte: "Adicionar aos
+8. [x] `TelaDeTranscricao.tsx` — na aba Partes identificadas, por parte: "Adicionar aos
    clientes" (grava direto na organização do topo; em "Todas", pergunta); "Já está em Clientes ·
    código · organização" quando o CPF/CNPJ já é cliente; botão desligado com o motivo quando
    não há CPF/CNPJ válido.
    **Pronto quando:** tsc limpo, check-ui sem violação e, em produção (logado, 021), as 4
    partes mostram o estado certo e — só com autorização do usuário para gravar — o botão
    cria o cliente e a linha passa a "Já está em Clientes".
+   ✅ 24/11 — tsc exit 0, check-ui sem violação; #702 no ar (conferir-producao: cb390fb).
+   Logado em produção, Escritura do terreno: as 4 partes com o botão ligado (nenhum CPF era
+   cliente). Com autorização do usuário ("quero que você clique e prove o fluxo inteiro"; ele
+   escolheu a organização dona do 021), clique no 3º (comprador casado): topo em "Todas" →
+   modal "Selecionar organização" → Construção do Edifício Garden Cambuhy SPE → aviso
+   "cadastrado em Clientes (código 035)" e a linha passou a "Já está em Clientes · código 035 ·
+   Construção do Edifício Garden Cambuhy SPE". No banco: PF, CPF, RG + SSP/MG, Casado(a),
+   cônjuge com nome e CPF, Ativo; em Meus Clientes aparece com código 035. Console sem erro
+   (lido desde a abertura da tela). Categoria ("Tipo" na lista) ficou "Não definido" — de propósito.
 
 ## Estado
 
 - 24/11/2026: itens 1–3 concluídos e provados em produção (#684). Vínculo com Meus Clientes: não pedido.
 - 24/11/2026: item 4 (negrito) concluído e provado em produção (#688). Itens 1–4 fechados.
 - 24/11/2026: itens 5 (objetos, #691) e 6 (link, #694) concluídos e provados em produção. Itens 1–6 fechados.
+- 24/11/2026: itens 7–8 (Partes → Clientes, #702) concluídos e provados em produção. Itens 1–8 fechados.

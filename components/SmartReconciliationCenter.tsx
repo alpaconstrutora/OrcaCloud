@@ -16,6 +16,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { FilterPopover } from './ui/FilterPopover';
 import { useConfirm } from './ui/confirm';
 import GroupMatchPanel from './GroupMatchPanel';
+import SequenciaParcelasPanel from './reconciliation/SequenciaParcelasPanel';
 import { formatMoney as formatBRL, formatDateBR as formatDate } from './ui/Format';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ActionIconButton from './ui/ActionIconButton';
@@ -814,6 +815,9 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
 
             {/* Conciliação agrupada (1 pagamento → N títulos e vice-versa) */}
             <GroupMatchPanel organizationId={organizationId} selectedAccountId={selectedAccountId} onReload={onReload} />
+
+            {/* Sequência de parcelas de contrato: furos, atrasos, pagas juntas (24/11/2026) */}
+            <SequenciaParcelasPanel organizationId={organizationId} selectedAccountId={selectedAccountId} onReload={onReload} />
 
             {/* Tolerâncias — painel lateral (REGRA #4), malha §30 */}
             <Sheet open={showSettings} onClose={() => setShowSettings(false)} size="md">

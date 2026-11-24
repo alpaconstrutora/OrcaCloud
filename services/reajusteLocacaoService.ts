@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { contractIndexService, normalizeIndexName } from './contractIndexService';
+import { taxPayableService } from './taxPayableService';
+import type { PropertyDeal } from '../types';
 import {
     aniversarioDoReajuste, valorAposReajuste, entraNaFilaDeReajuste, motivoDaDataDeReajuste,
     AniversarioReajuste, DecisaoReajuste,
@@ -201,6 +203,8 @@ export const reajusteLocacaoService = {
      */
     decidir: async (contractId: string, decisao: DecisaoReajuste, observacao?: string, dataReajuste?: string | null): Promise<{
         contrato: ContratoReajustavel; registro: RegistroDeReajuste;
+        /** false = parcelas mudaram mas os tributos não foram regerados (salvar a negociação refaz). */
+        tributosRecalculados: boolean;
     }> => {
         const p = await reajusteLocacaoService.previa(contractId, dataReajuste);
         const c = p.contrato;
@@ -273,7 +277,26 @@ export const reajusteLocacaoService = {
             .single();
         if (errR) throw errR;
 
-        return { contrato: atualizado as unknown as ContratoReajustavel, registro: registro as RegistroDeReajuste };
+        // Tributos incidem sobre o valor da parcela: parcela reajustada sem regerar
+        // deixava Tributos a Pagar (e a coluna Tributos da aba Parcelas) no valor
+        // antigo. Mesma regeração do Salvar da negociação — pagos e DARF ficam.
+        let tributosRecalculados = true;
+        if (parcelasAtualizadas > 0 && c.deal_id) {
+            try {
+                const { data: deal, error: errD } = await supabase
+                    .from('commercial_deals')
+                    .select('id, type, property_id')
+                    .eq('id', c.deal_id)
+                    .single();
+                if (errD) throw errD;
+                await taxPayableService.generateForDeal(deal as Pick<PropertyDeal, 'id' | 'type' | 'property_id'>, c.organization_id);
+            } catch (e) {
+                console.error('[REAJUSTE] Parcelas reajustadas, mas os tributos não foram regerados:', e);
+                tributosRecalculados = false;
+            }
+        }
+
+        return { contrato: atualizado as unknown as ContratoReajustavel, registro: registro as RegistroDeReajuste, tributosRecalculados };
     },
 
     historico: async (contractId: string): Promise<RegistroDeReajuste[]> => {

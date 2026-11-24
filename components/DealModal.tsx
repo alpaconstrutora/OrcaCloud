@@ -62,6 +62,8 @@ import { propertyExportService } from '../services/propertyExportService';
 import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
+import { taxPayableService } from '../services/taxPayableService';
+import { receivableService } from '../services/receivableService';
 import { contractService, generateRecurringInstallmentsForPeriod } from '../services/contractService';
 import { resolverCategoriaReceitaFinanceira } from '../services/financialCategoryResolver';
 import { buildRentalResolveContext } from '../services/rentalDocumentContextService';
@@ -189,7 +191,7 @@ const fmtDataBR = (iso: string | undefined) => {
  * tabela: as editáveis por parcela (Vencimento, Valor, Desconto, Tipo, Forma de
  * pagamento, Centro de Custo, Plano de Contas, Descrição) viram campos; Cliente
  * é do NEGÓCIO (compradores, todos com o mesmo peso) e aparece como leitura com
- * o caminho para alterá-lo. Valor final e Origem são derivados e entram na
+ * o caminho para alterá-lo. Valor bruto e Origem são derivados e entram na
  * prévia de cada linha. Modelo: `components/BankTxEdicaoEmLoteModal.tsx`
  * (Financeiro → Extrato Bancário) — modal dedicado em vez de controles inline
  * na barra de seleção (guia §10).
@@ -198,7 +200,7 @@ const fmtDataBR = (iso: string | undefined) => {
  * mexer vai no patch. Sem isso, quem abria o lote só para trocar a Forma de
  * Pagamento APAGAVA, sem saber, o desconto de todas as parcelas selecionadas.
  *
- * Desconto recalcula o valor final de cada parcela a partir da própria base
+ * Desconto recalcula o valor bruto de cada parcela a partir da própria base
  * (originalValue ?? value), então parcelas com valores diferentes recebem o
  * desconto proporcional (%) ou o mesmo abatimento fixo (R$) corretamente.
  */
@@ -503,7 +505,7 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
                     </div>
 
                     {/* Prévia: cada parcela com origem, vencimento (atual → novo, se o
-                        lote mexer nele), bruto e valor final atual. */}
+                        lote mexer nele), valor e valor bruto atual. */}
                     <div className="bg-gray-50 rounded-[10px] border border-gray-100 divide-y divide-gray-100 max-h-40 overflow-y-auto">
                         {installments.map(i => {
                             const novo = previaVencimento(i.dueDate);
@@ -520,7 +522,7 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
                                     <div className="text-right shrink-0">
                                         <span className="block text-gray-500 font-bold">{fmtMoney(i.originalValue ?? i.value)}</span>
                                         {i.originalValue != null && i.originalValue !== i.value && (
-                                            <span className="block text-gray-400">final {fmtMoney(i.value)}</span>
+                                            <span className="block text-gray-400">bruto {fmtMoney(i.value)}</span>
                                         )}
                                     </div>
                                 </div>
@@ -677,6 +679,8 @@ const PARCELAS_COL_WIDTHS: Record<string, number> = {
     valor: 120,
     desconto: 170,
     valor_final: 120,
+    tributos: 120,
+    valor_liquido: 120,
     origem: 170,
     tipo: 150,
     forma_pagto: 150,
@@ -693,7 +697,12 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'cliente', label: 'Cliente', sortable: false },
     { key: 'valor', label: 'Valor', sortable: false },
     { key: 'desconto', label: 'Desconto', sortable: false },
-    { key: 'valor_final', label: 'Valor final', sortable: false },
+    // "Valor bruto" = valor − desconto (chave antiga `valor_final` mantida: ordem e
+    // largura salvas). Tributos = os de Tributos a Pagar sobre a parcela
+    // (tributos_da_parcela); Valor líquido = bruto − tributos. Pedido 24/11/2026.
+    { key: 'valor_final', label: 'Valor bruto', sortable: false },
+    { key: 'tributos', label: 'Tributos', sortable: false },
+    { key: 'valor_liquido', label: 'Valor líquido', sortable: false },
     // De onde a linha vem, agora que a aba tem UMA tabela: o plano da negociação
     // ou um contrato (renovação/aditivo). Substituiu o seletor "Ver parcelas de".
     { key: 'origem', label: 'Origem', sortable: false },
@@ -720,7 +729,9 @@ const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
     cliente:      { label: 'Cliente',         sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
     valor:        { label: 'Valor',           sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
     desconto:     { label: 'Desconto',        sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
-    valor_final:  { label: 'Valor final',     sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    valor_final:  { label: 'Valor bruto',     sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    tributos:     { label: 'Tributos',        sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
+    valor_liquido:{ label: 'Valor líquido',   sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
     origem:       { label: 'Origem',          sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
     tipo:         { label: 'Tipo',            sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
     forma_pagto:  { label: 'Forma pagto.',    sortable: false, className: 'overflow-hidden px-6 py-2 border-r border-gray-100' },
@@ -738,6 +749,8 @@ const PARCELAS_TD_CLASS: Record<string, string> = {
     valor: '',
     desconto: '',
     valor_final: 'text-sm font-medium text-gray-800',
+    tributos: 'text-sm font-normal text-gray-600',
+    valor_liquido: 'text-sm font-medium text-gray-800',
     origem: 'text-sm font-normal text-gray-600 truncate',
     tipo: '',
     forma_pagto: '',
@@ -1392,6 +1405,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // Receber vazio.
         await carregarAlvosDeGeracao(contrato);
         const lancadas = await contractService.listFinancialEntries(contrato).catch(() => []);
+        await regerarTributos();
         await recarregarParcelas();
         return lancadas.length;
     };
@@ -1660,6 +1674,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         __origem?: string;
     }[]>([]);
     const [loadingEntries, setLoadingEntries] = useState(false);
+    /** Tributos de cada parcela (os mesmos de Tributos a Pagar, via `tributos_da_parcela`).
+     *  Parcela ausente = ainda não lido / leitura falhou → "—". */
+    const [tributosPorParcela, setTributosPorParcela] = useState<Map<string, number> | null>(null);
+    const tributosLeituraRef = useRef(0);
     // Dimensões contábeis do cabeçalho (aba Financeiro). São DUAS
     // dimensões distintas — Centro de Custo é `cost_centers_v2`, Plano de Contas
     // é `plano_de_contas` (ver migration 20270822000013). Não intercambiáveis.
@@ -2378,6 +2396,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         const mexeuNoDesconto = patch.discount_type !== undefined || patch.discount_amount !== undefined;
         void contractService.updateFinancialEntry(entryId, patch)
             .then(async () => {
+                // Vencimento muda a data do tributo; valor/desconto, o valor dele.
+                if (recalcula || patch.due_date) await regerarTributos();
                 if (!recalcula) return;
                 const rows = await recarregarParcelas();
                 if (mexeuNoDesconto) {
@@ -2417,6 +2437,36 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         setContractEntries(todas);
         return todas;
     }, [generateTargets, formData.id, formData.organization_id, organizationId]);
+
+    // Colunas Tributos / Valor líquido: relidas a cada recarga das parcelas. A
+    // leitura mais nova vence (resposta antiga que chega depois é descartada).
+    useEffect(() => {
+        const ids = contractEntries.map(e => e.id);
+        const leitura = ++tributosLeituraRef.current;
+        if (ids.length === 0) { setTributosPorParcela(new Map()); return; }
+        void receivableService.resolveTributos(ids).then(mapa => {
+            if (leitura !== tributosLeituraRef.current) return;
+            setTributosPorParcela(new Map([...mapa].map(([id, t]) => [id, t.tributos])));
+        });
+    }, [contractEntries]);
+
+    /**
+     * Regera os tributos da negociação (Tributos a Pagar) depois de mudar valor,
+     * desconto, vencimento ou a lista de parcelas — a mesma regeração do Salvar
+     * (só os pendentes; pagos, conciliados e em DARF ficam). Sem isso a coluna
+     * Tributos mostrava o imposto do valor antigo até alguém salvar.
+     */
+    const regerarTributos = async () => {
+        const orgId = formData.organization_id || organizationId;
+        if (!formData.id || !orgId || (formData.type !== 'SALE' && formData.type !== 'RENTAL')) return;
+        try {
+            await taxPayableService.generateForDeal(
+                { id: formData.id, type: formData.type, property_id: formData.property_id ?? '' }, orgId);
+        } catch (err) {
+            console.error('[DealModal] Falha ao regerar tributos:', err);
+            notifyError('Parcela gravada, mas os tributos não foram recalculados — salve a negociação para refazê-los.');
+        }
+    };
 
     /** Seleção com intervalo por Shift+clique — mesmo comportamento do plano. */
     const handleEntryRowCheck = (id: string, index: number, checked: boolean, shiftKey: boolean, visiveis: string[]) => {
@@ -2474,6 +2524,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             // série 14 parcelas viravam ~40 idas ao servidor esperando uma pela
             // outra — a demora que o usuário sentiu.
             await Promise.all(alvos.map(e => contractService.updateFinancialEntry(e.id, camposDe(e))));
+            if (mexeuNoDesconto || mexeuNoValor || escolha) await regerarTributos();
             const rows = await recarregarParcelas();
             // A pergunta só faz sentido quando o VALOR cobrado mudou. Fora disso
             // ela aparecia depois de qualquer edição em lote — inclusive uma que
@@ -2503,6 +2554,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         try {
             await contractService.removeFinancialEntry(entryId);
             setContractEntries(prev => prev.filter(e => e.id !== entryId));
+            await regerarTributos();
         } catch (e) {
             notifyError(e instanceof Error ? e.message : 'Erro ao excluir a parcela.');
         }
@@ -2735,6 +2787,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 }
                 : { ok: false, msg: `Nenhuma parcela nova — as ${r.skipped} do período (${fmtDateBR(ini)} a ${fmtDateBR(fim)}) já estão pagas ou conciliadas e não são refeitas.` });
             // A tabela na tela ficou desatualizada depois do refazimento.
+            await regerarTributos();
             await recarregarParcelas();
         } catch (e) {
             // Log detalhado: o erro do PostgREST traz code/details/hint que a
@@ -4566,7 +4619,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     );
                                 // Mesmos dropdowns do plano de pagamento — os campos passaram a
                                 // existir em internal_transactions (migration 20270828000005).
-                                // "Valor" e' o bruto; "Valor final" e' o liquido cobrado.
+                                // "Valor" e' o original; "Valor bruto" e' o cobrado (valor - desconto).
                                 case 'desconto':
                                     return (
                                         <div className="flex items-center gap-1.5">
@@ -4611,6 +4664,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     );
                                 case 'valor_final':
                                     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(e.amount);
+                                case 'tributos': {
+                                    const t = tributosPorParcela?.get(e.id);
+                                    return t === undefined ? '—' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t);
+                                }
+                                case 'valor_liquido': {
+                                    const t = tributosPorParcela?.get(e.id);
+                                    return t === undefined ? '—' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format((Number(e.amount) || 0) - t);
+                                }
                                 case 'origem':
                                     return e.__origem || 'Contrato';
                                 case 'tipo':

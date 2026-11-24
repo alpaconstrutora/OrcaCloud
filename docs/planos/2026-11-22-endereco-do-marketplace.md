@@ -47,3 +47,10 @@ Organização › Marketplace público" e omitia o passo **Detalhes** (o menu `O
 ficha aberta pelo botão "Detalhes" da linha — `OrganizationList.tsx` › `OrganizationDetail` › aba Organização).
 Texto novo: "Minha Organização › Organização › Detalhes da organização › Marketplace público"; o teste confere o caminho.
 Estado da Garden SPE em 23/11 (banco): `slug = garden-cambuhy` gravado pelo usuário pela tela.
+
+## Correção de 24/11 — percentual com vírgula
+Conferindo o passo 16 no navegador (`/m/garden-cambuhy`, Garden 01 publicada): o detalhe mostrava "TIR estimada 19.0%".
+Pedido do usuário: "2. corrigir." Causa: `fmtPct` de `utils/format.ts` usava `toFixed(1)`. Agora `toLocaleString('pt-BR')`
+com 1 casa → "19,0%". Quem usa: `PublicMarketplaceView`, `PublicOpportunityDetail` e `investor/OpportunityDetail`
+(os demais `fmtPct` do app são locais e já eram pt-BR). Prova: `__tests__/formatPercentual.test.ts` (2 de 3 falham
+sem a correção; 3 de 3 com ela).

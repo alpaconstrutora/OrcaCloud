@@ -3,8 +3,9 @@ export const fmtBRL = (v: number | null | undefined): string => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 };
 
+/** Percentual no padrão brasileiro, 1 casa: 19,0%. (Era `toFixed(1)` → "19.0%" na vitrine pública, 23/11/2026.) */
 export const fmtPct = (v: number | null | undefined): string =>
-    v == null ? '—' : `${v.toFixed(1)}%`;
+    v == null ? '—' : `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
 export const fmtM2 = (v: number | null | undefined): string =>
     v == null ? '—' : `${new Intl.NumberFormat('pt-BR').format(v)} m²`;

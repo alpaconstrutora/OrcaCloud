@@ -64,16 +64,18 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    "Partes identificadas 4" com os 4 nomes, papéis, cônjuge, CPF e RG; "Ver no texto" da
    4ª parte voltou à aba Texto e marcou a linha dela. Console sem erro (lido a partir da
    abertura da tela, não do carregamento da página). Nada gravado.
-4. [ ] Negrito no texto — `trechosDasPartes(linhas, partes)` em `utils/partesDaTranscricao.ts`
+4. [x] Negrito no texto — `trechosDasPartes(linhas, partes)` em `utils/partesDaTranscricao.ts`
    (toda ocorrência do nome, sem diferenciar maiúsculas — as assinaturas vêm em letra normal;
    nome quebrado entre linhas vira um trecho por linha) e `comNegrito` na aba Texto de
    `TelaDeTranscricao.tsx` (linha normal e duvidosa).
    **Pronto quando:** testes verdes; nas transcrições reais do 021 os nomes saem marcados na
    qualificação, no meio do texto e nas assinaturas; na tela em produção os nomes aparecem
-   em negrito. ✅ parcial 24/11 — 14/14 testes; nas reais: escritura 9 linhas marcadas
+   em negrito. ✅ 24/11 — 14/14 testes; nas reais: escritura 9 linhas marcadas
    (qualificação, linhas 79–81 com nome quebrado, assinaturas 99–100), matrícula idem.
+   #688 no ar (conferir-producao: 84aa1ee); logado em produção, Escritura do terreno: os 4
+   nomes em negrito na qualificação e nas assinaturas do fim ("Vendedoras (aa) …"). Nada gravado.
 
 ## Estado
 
 - 24/11/2026: itens 1–3 concluídos e provados em produção (#684). Vínculo com Meus Clientes: não pedido.
-- 24/11/2026: item 4 (negrito) implementado; falta prova em produção.
+- 24/11/2026: item 4 (negrito) concluído e provado em produção (#688). Itens 1–4 fechados.

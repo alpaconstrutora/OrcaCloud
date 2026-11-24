@@ -8,6 +8,7 @@ import React from 'react';
 import { Check, Loader2 } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import { formatMoney, formatDateBR } from '../ui/Format';
+import { usePersistedState } from '../ui/TableUtils';
 import type { CandidatoJuntas, ExtratoPendente, ParcelaNaSerie, SerieDeParcelas, SituacaoParcela } from '../../utils/sequenciaParcelas';
 
 export const ROTULO_DOMINIO: Record<string, string> = {
@@ -32,6 +33,9 @@ const variacao = (extrato: number, esperado: number) => {
     const pct = esperado ? ((extrato - esperado) / esperado) * 100 : 0;
     return `${pct >= 0 ? '+' : '−'}${Math.abs(pct).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
 };
+
+/** Parcela já conciliada no extrato (em dia ou com atraso) — o que "Ocultar conciliadas" esconde. */
+const conciliada = (p: ParcelaNaSerie) => p.situacao === 'conferida' || p.situacao === 'conferida_atrasada';
 
 export const listaDeNumeros = (ns: number[]) =>
     ns.length <= 1 ? String(ns[0] ?? '') : `${ns.slice(0, -1).join(', ')} e ${ns[ns.length - 1]}`;
@@ -65,6 +69,11 @@ const SequenciaParcelasSheet: React.FC<Props> = ({ serie, candidatos, parecidos,
     const parcelasDoCandidato = new Map<string, CandidatoJuntas>();
     candidatos.forEach(c => c.parcelas.forEach(p => parcelasDoCandidato.set(p.id, c)));
     const o = serie?.ocorrencias;
+    // Mostrar/ocultar as conciliadas (pedido de 24/11/2026): numa série longa sobram só
+    // os furos, vencidas e a vencer. Fica lembrado neste navegador.
+    const [ocultarConciliadas, setOcultarConciliadas] = usePersistedState('conciliacao:sequencia:ocultarConciliadas', false);
+    const qtdConciliadas = serie ? serie.parcelas.filter(conciliada).length : 0;
+    const linhas = serie ? serie.parcelas.filter(p => !ocultarConciliadas || !conciliada(p)) : [];
     const comParecido = serie ? serie.parcelas.filter(p => parecidos.has(p.id)).length : 0;
 
     return (
@@ -108,6 +117,16 @@ const SequenciaParcelasSheet: React.FC<Props> = ({ serie, candidatos, parecidos,
                             );
                         })}
 
+                        <label className="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer select-none">
+                            <input
+                                type="checkbox"
+                                checked={ocultarConciliadas}
+                                onChange={e => setOcultarConciliadas(e.target.checked)}
+                                className="h-4 w-4 rounded-[4px] border-gray-300 text-blue-600 focus:ring-blue-500"
+                            />
+                            Ocultar conciliadas ({qtdConciliadas})
+                        </label>
+
                         <div className="overflow-x-auto rounded-[10px] border border-gray-100">
                             <table className="w-full text-left border-collapse">
                                 <thead>
@@ -120,7 +139,14 @@ const SequenciaParcelasSheet: React.FC<Props> = ({ serie, candidatos, parecidos,
                                     </tr>
                                 </thead>
                                 <tbody className="divide-y divide-gray-200">
-                                    {serie.parcelas.map(p => {
+                                    {linhas.length === 0 && (
+                                        <tr>
+                                            <td colSpan={5} className="px-4 py-6 text-center text-sm text-gray-600">
+                                                Todas as {serie.parcelas.length} parcelas estão conciliadas no extrato.
+                                            </td>
+                                        </tr>
+                                    )}
+                                    {linhas.map(p => {
                                         const s = SITUACAO[p.situacao];
                                         const candidato = parcelasDoCandidato.get(p.id);
                                         const parecido = parecidos.get(p.id);

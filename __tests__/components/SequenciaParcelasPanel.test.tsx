@@ -55,6 +55,7 @@ const renderizar = (onReload = vi.fn()) => render(
 
 describe('SequenciaParcelasPanel', () => {
     beforeEach(() => {
+        localStorage.clear();
         carregar.mockReset().mockResolvedValue(dados());
         conciliarJuntas.mockReset().mockResolvedValue(undefined);
     });
@@ -98,6 +99,17 @@ describe('SequenciaParcelasPanel', () => {
         expect(await screen.findByText('1 com movimento parecido')).toBeTruthy();
         fireEvent.click(screen.getByText('CTL-002 · Aluguel'));
         expect(await screen.findByText(/Crédito pendente de 06\/03\/2026 · R\$\s?1\.041,00 \(\+4,1%\) pode ser esta parcela/)).toBeTruthy();
+    });
+
+    it('"Ocultar conciliadas" na gaveta esconde as conferidas e fica lembrado', async () => {
+        renderizar();
+        fireEvent.click(await screen.findByText('CTL-001 · Aluguel'));
+        await screen.findByText('2 de 4 parcelas conferidas no extrato');
+        expect(screen.getAllByText('Conferida')).toHaveLength(2);
+        fireEvent.click(screen.getByRole('checkbox', { name: /Ocultar conciliadas \(2\)/ }));
+        expect(screen.queryAllByText('Conferida')).toHaveLength(0);
+        expect(screen.getAllByText('Furo — não paga')).toHaveLength(2);
+        expect(localStorage.getItem('conciliacao:sequencia:ocultarConciliadas')).toBe('true');
     });
 
     it('erro de leitura aparece no card', async () => {

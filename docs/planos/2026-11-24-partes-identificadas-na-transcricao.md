@@ -23,6 +23,10 @@ transcrição; vínculo com Meus Clientes como passo seguinte, a decidir):
 
 > de acordo
 
+24/11/2026, antes do #691 entrar (ele juntava partes e objetos numa aba só, "Partes e objetos"):
+
+> crie uma aba chamada objetos identificados ao lado de partes indentificadas. e da mesma forma que  partes indentificadas, liste os objetos que foram identificados
+
 Continuação de `2026-11-23-transcricao-de-documentos-do-empreendimento.md`.
 
 ## Teste antes de implementar (24/11/2026)
@@ -88,12 +92,14 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    (também com acento lido errado — "VERÁ MARINA …" na matrícula), pessoa citada ("Sr. …"),
    valor por extenso, cabeçalho/fórmula do cartório, linha duvidosa. `trechosDasPartes` →
    `trechosEmNegrito(linhas, partes, objetos)`: objeto em negrito só em maiúsculas. Aba
-   "Partes identificadas" → "Partes e objetos" (seções Partes · n e Objetos · n; copiar e
-   "Ver no texto" nos dois).
+   própria **"Objetos identificados (n)"** ao lado de "Partes identificadas (n)" — lista no
+   mesmo formato, com copiar e "Ver no texto" (a versão "Partes e objetos" numa aba só não
+   chegou a ir ao ar).
    **Pronto quando:** testes verdes; nas reais, escritura = UMA CASA DE MORADA, DIREITO DE
    SERVIDÃO DE ÁGUA, DIREITO DE SERVIDÃO DE ENERGIA ELÉTRICA e matrícula = nenhum (lá o imóvel
    está em letra normal); na tela em produção os 3 aparecem na aba e em negrito no texto.
-   ✅ parcial 24/11 — 18/18 (+14 da transcrição = 32/32), tsc exit 0, check-ui sem violação;
+   ✅ parcial 24/11 — 18/18 (+14 da transcrição = 32/32), tsc exit 0, check-ui sem violação
+   (também depois das abas separadas);
    nas reais saem exatamente os 3 objetos da escritura e nenhum na matrícula.
 
 ## Estado

@@ -4,6 +4,7 @@ import {
     acharPagamentosJuntos,
     acharCreditosParecidos,
     posicoesNasSeries,
+    trocaPelaMaisAntiga,
     type ParcelaDeContrato,
     type ExtratoPendente,
 } from '../../utils/sequenciaParcelas';
@@ -338,5 +339,27 @@ describe('posicoesNasSeries — coluna "Sequência sugerida" da Central', () => 
         expect(pos.has('irrf')).toBe(false);
         expect(pos.has('canc')).toBe(false);
         expect(pos.get('p-c1-2026-03')).toMatchObject({ numero: 2, total: 2, abertasAntes: [] });
+    });
+});
+
+describe('trocaPelaMaisAntiga — "usar a NN" na Central', () => {
+    it('aponta a parcela aberta MAIS ANTIGA quando o valor esperado é o mesmo', () => {
+        const pos = posicoesNasSeries([
+            conferida('2026-01', '2026-01-10'), parcela('2026-02'), parcela('2026-03'), parcela('2026-04'),
+        ]);
+        expect(trocaPelaMaisAntiga(pos.get('p-c1-2026-04'))).toMatchObject({ id: 'p-c1-2026-02', numero: 2, due_date: '2026-02-10' });
+        // A própria mais antiga não troca com ninguém.
+        expect(trocaPelaMaisAntiga(pos.get('p-c1-2026-02'))).toBeNull();
+    });
+
+    it('valor diferente (reajuste) não troca', () => {
+        const pos = posicoesNasSeries([parcela('2026-02', { amount: 1000 }), parcela('2026-03', { amount: 1041 })]);
+        expect(pos.get('p-c1-2026-03')?.maisAntigaAberta?.numero).toBe(1);
+        expect(trocaPelaMaisAntiga(pos.get('p-c1-2026-03'))).toBeNull();
+    });
+
+    it('sem parcela anterior em aberto não há troca', () => {
+        const pos = posicoesNasSeries([conferida('2026-01', '2026-01-10'), parcela('2026-02')]);
+        expect(trocaPelaMaisAntiga(pos.get('p-c1-2026-02'))).toBeNull();
     });
 });

@@ -18,7 +18,7 @@ import { useConfirm } from './ui/confirm';
 import GroupMatchPanel from './GroupMatchPanel';
 import SequenciaParcelasPanel from './reconciliation/SequenciaParcelasPanel';
 import { sequenciaParcelasService } from '../services/sequenciaParcelasService';
-import type { PosicaoNaSerie } from '../utils/sequenciaParcelas';
+import { trocaPelaMaisAntiga, type PosicaoNaSerie } from '../utils/sequenciaParcelas';
 import { formatMoney as formatBRL, formatDateBR as formatDate } from './ui/Format';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ActionIconButton from './ui/ActionIconButton';
@@ -155,14 +155,34 @@ const explicacaoDaOrdem = (p?: PosicaoNaSerie) => {
         + 'Quem paga atrasado costuma quitar a mais antiga primeiro — confira se este movimento não é dela (veja "+N" na Confiança).';
 };
 
-/** Célula da "Sequência sugerida": texto §8, aviso âmbar quando a sugestão pula parcela anterior. */
-function CelulaSequencia({ p }: { p?: PosicaoNaSerie }) {
+/**
+ * Célula da "Sequência sugerida": texto §8, aviso âmbar quando a sugestão pula parcela
+ * anterior. Se a mais antiga em aberto tem o MESMO valor (`trocaPelaMaisAntiga`), o aviso
+ * vira o botão "usar a NN" (pedido de 24/11/2026) — conciliar com ela, após confirmar.
+ */
+function CelulaSequencia({ p, onUsar, ocupado }: { p?: PosicaoNaSerie; onUsar?: (antiga: NonNullable<PosicaoNaSerie['maisAntigaAberta']>) => void; ocupado?: boolean }) {
     if (!p) return <span className="text-sm font-normal text-gray-500" title="O lançamento não é parcela de contrato">—</span>;
     const aviso = avisoDeOrdem(p);
+    const antiga = onUsar ? trocaPelaMaisAntiga(p) : null;
     return (
         <span className="block truncate text-sm font-normal text-gray-800 tabular-nums" title={explicacaoDaOrdem(p)}>
             {textoDaSequencia(p)}
-            {aviso && <span className="text-amber-800"> · {aviso}</span>}
+            {antiga ? (
+                <>
+                    {' · '}
+                    <button
+                        type="button"
+                        onClick={() => onUsar!(antiga)}
+                        disabled={ocupado}
+                        title={ocupado
+                            ? 'Aguarde a conciliação em andamento'
+                            : `Conciliar este movimento com a parcela ${doisDigitos(antiga.numero, p.total)} (venc. ${formatDate(antiga.due_date)}), a mais antiga em aberto — mesmo valor da ${doisDigitos(p.numero, p.total)}`}
+                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50 disabled:no-underline"
+                    >
+                        usar a {doisDigitos(antiga.numero, p.total)}
+                    </button>
+                </>
+            ) : aviso && <span className="text-amber-800"> · {aviso}</span>}
         </span>
     );
 }
@@ -410,6 +430,30 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
             showToast('Conciliado', 'success');
         });
 
+    /**
+     * "usar a NN": concilia o movimento com a parcela aberta MAIS ANTIGA do contrato (mesmo
+     * valor da sugerida) em vez da sugerida, depois de confirmar. A sugerida segue em aberto.
+     */
+    const usarMaisAntiga = async (sug: SuggestionRow, antiga: NonNullable<PosicaoNaSerie['maisAntigaAberta']>) => {
+        const p = posicaoDe(sug);
+        if (!p) return;
+        const bank = bankMap.get(sug.bank_transaction_id);
+        const nn = (n: number) => doisDigitos(n, p.total);
+        const ok = await confirmar({
+            title: `Conciliar com a parcela ${nn(antiga.numero)}?`,
+            message: `O movimento de ${formatDate(bank?.transaction_date)} (${formatBRL(bank?.amount)}) vai para a parcela ${nn(antiga.numero)} `
+                + `(venc. ${formatDate(antiga.due_date)}), a mais antiga em aberto do contrato ${p.numeroContrato || ''}, em vez da ${nn(p.numero)} sugerida. `
+                + `As duas têm o mesmo valor; a ${nn(p.numero)} continua em aberto. Para desfazer, use a aba Conciliados.`,
+            variant: 'warning',
+            confirmLabel: `Conciliar com a ${nn(antiga.numero)}`,
+        });
+        if (!ok) return;
+        await run(sug.id, async () => {
+            await onConfirm(sug.bank_transaction_id, antiga.id);
+            showToast(`Conciliado com a parcela ${nn(antiga.numero)}`, 'success');
+        });
+    };
+
     const reject = (sug: SuggestionRow) =>
         run(sug.id, async () => {
             // Dispensa o movimento inteiro (todas as sugestões dele), não só o candidato exibido
@@ -603,7 +647,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
             case 'vencimento':
                 return <span className="text-sm font-normal text-gray-600 tabular-nums">{formatDate(c?.due_date || c?.transaction_date)}</span>;
             case 'sequencia':
-                return <CelulaSequencia p={posicaoDe(l.sug)} />;
+                return <CelulaSequencia p={posicaoDe(l.sug)} onUsar={a => usarMaisAntiga(l.sug, a)} ocupado={busy !== null} />;
             case 'contraparte':
                 return texto(contraparteDoTitulo(c, l.bank?.direction));
             case 'lancamento':
@@ -672,7 +716,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{c?.description || '—'}</td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{contraparteDoTitulo(c, l.bank?.direction) || '—'}</td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{formatDate(c?.due_date || c?.transaction_date)}</td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 whitespace-nowrap"><CelulaSequencia p={posicaoDe(alt)} /></td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 whitespace-nowrap"><CelulaSequencia p={posicaoDe(alt)} onUsar={a => usarMaisAntiga(alt, a)} ocupado={busy !== null} /></td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 text-right tabular-nums">{formatBRL(valorPrevisto(c))}</td>
                                                     <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal ${BAND_STYLE[bnd].text}`}>{alt.confidence}%</td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{motivosDe(alt).join(' · ') || '—'}</td>

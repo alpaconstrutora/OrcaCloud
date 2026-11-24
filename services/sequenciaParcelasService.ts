@@ -151,12 +151,12 @@ export const sequenciaParcelasService = {
      */
     async posicoesDosContratos(contractIds: string[]): Promise<Map<string, PosicaoNaSerie>> {
         const ids = [...new Set(contractIds.filter(Boolean))];
-        type Linha = Pick<LinhaParcela, 'id' | 'contract_id' | 'due_date' | 'transaction_date' | 'reference_id' | 'status' | 'business_status' | 'bank_reconciled_at' | 'contracts'>;
+        type Linha = Pick<LinhaParcela, 'id' | 'contract_id' | 'due_date' | 'transaction_date' | 'amount' | 'valor_esperado' | 'reference_id' | 'status' | 'business_status' | 'bank_reconciled_at' | 'contracts'>;
         const linhas: Linha[] = [];
         for (let i = 0; i < ids.length; i += 100) {
             const lote = ids.slice(i, i + 100);
             const r = await fetchAllPages<Linha>(() => supabase.from('internal_transactions')
-                .select('id, contract_id, due_date, transaction_date, reference_id, status, business_status, bank_reconciled_at, contracts(number)')
+                .select(`id, contract_id, due_date, transaction_date, amount, ${COLUNA_VALOR_ESPERADO}, reference_id, status, business_status, bank_reconciled_at, contracts(number)`)
                 .in('contract_id', lote)
                 .in('source_system', ORIGENS_DA_SERIE)
                 .neq('status', 'CANCELLED')
@@ -165,7 +165,13 @@ export const sequenciaParcelasService = {
             if (r.error) throw r.error;
             linhas.push(...r.data);
         }
-        return posicoesNasSeries(linhas.map(l => ({ ...l, due_date: l.due_date || l.transaction_date, contrato: umSo(l.contracts) })));
+        return posicoesNasSeries(linhas.map(l => ({
+            ...l,
+            due_date: l.due_date || l.transaction_date,
+            // O que o banco deve mostrar (líquido do retido) — compara "mesmo valor" na troca.
+            amount: Number(comValorEsperado({ amount: Number(l.amount), valor_esperado: l.valor_esperado }).amount),
+            contrato: umSo(l.contracts),
+        })));
     },
 
     /** "Conciliar juntas": a mesma conciliação agrupada (atômica) dos agrupamentos sugeridos. */

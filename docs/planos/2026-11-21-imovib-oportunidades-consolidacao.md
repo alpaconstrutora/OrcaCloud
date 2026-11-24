@@ -84,7 +84,7 @@ despublicada; interesse grava investidor do token e valor.
 
 | # | Pendência | Quem | Situação |
 |---|---|---|---|
-| P1 | Apagar os buckets antigos `opportunity-dataroom`, `opportunity-photos` (público) e `due-diligence-findings` | usuário, pelo painel do Supabase › Storage | ⏳ PENDENTE (anotado pelo usuário em 21/11). Os 3 com **0 objetos** (conferido 21/11). SQL bloqueia (`storage.protect_delete`) e a CLI não autentica na API de storage com a chave nova |
+| P1 | Apagar os buckets antigos `opportunity-dataroom`, `opportunity-photos` (público) e `due-diligence-findings` | usuário, pelo painel do Supabase › Storage | ✅ FEITO em 24/11: o usuário apagou os 3 pelo painel (antes, conferido: 0 objetos e nenhum uso no código). Depois, no banco: 0 dos 3 em `storage.buckets` e 0 das 10 policies deles em `storage.objects`. |
 | P2 | Rodar o roteiro de tela ponta a ponta do §Verificação no Garden (congelar → publicar → link do investidor → baixar documento → interesse → "Tornar sócio" → despublicar e apagar a oportunidade de teste) | usuário faz o login no navegador; eu conduzo o roteiro | ⏳ PENDENTE (anotado pelo usuário em 21/11) |
 | P3 | Provar a recusa de SPE de outra org e o marketplace | — | ✅ 7.10 (21/11, transação desfeita) |
 | P4 | Teste instável `ImovibVersoes` | — | ✅ 7.11: causa = tempo-limite padrão de 5 s menor que o `waitFor` de 10 s |

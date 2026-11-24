@@ -5192,7 +5192,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             {formData.type === 'RENTAL' && linkedContract && contratoSubTab === 'renovacoes' && (
                                 <ContractRenewalsPanel
                                     contract={linkedContract}
-                                    onNotify={(msg, type) => (type === 'error' ? setContractError(msg) : setContractError(null))}
+                                    // Toast (§13): o `contractError` só aparece na sub-aba
+                                    // "Dados do contrato" — aqui o erro e o sucesso de
+                                    // renovar/desfazer ficavam mudos.
+                                    onNotify={(msg, type) => (type === 'error' ? notifyError(msg) : notifySuccess(msg))}
                                     onChanged={async () => {
                                         const atualizado = await contractService.getContractById(linkedContract.id);
                                         if (atualizado) setLinkedContract(atualizado);

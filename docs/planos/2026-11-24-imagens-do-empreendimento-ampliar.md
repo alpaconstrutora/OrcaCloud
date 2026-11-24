@@ -25,3 +25,7 @@
 ## Estado
 Itens 1–3 feitos no código (frente `imagens-empreendimento-zoom`): tsc 0 erros; `check-ui-standard` limpo nos 3 `.tsx`;
 13 arquivos / 89 testes de oportunidade/investidor/Guard verdes.
+**NO AR** (PR #698, squash 5d0bc8b; `conferir-producao.sh`: o domínio serve 5d0bc8b). Conferido em produção (24/11),
+gestor › Oportunidades › Garden 01 › Ver: clicar "Planta — Tipo 4" abre o visualizador ("4 de 11", setas,
+11 miniaturas, Tamanho real); Esc fecha; topo e card mostram "TIR 19,0%", lista "39,2% / 19,0%". O Portal do
+Investidor usa o mesmo componente — não conferido na tela pelo link do investidor.

@@ -10,6 +10,7 @@ import { Investor } from '../../services/investorService';
 import OpportunityForm from './OpportunityForm';
 import OpportunityDetail from './OpportunityDetail';
 import { naVitrine } from '../../utils/oportunidadeNumerosDaVersao';
+import { fmtPct } from '../../utils/format';
 import InterestsPanel from './InterestsPanel';
 import Button from '../ui/Button';
 import { useOrgWriteTarget } from '../../hooks/useOrgContext';
@@ -309,14 +310,14 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                 <div>
                                                     <p className="text-white/30 font-bold uppercase tracking-wider text-[9px]">ROI</p>
                                                     <p className="text-emerald-400 font-black flex items-center gap-1">
-                                                        <TrendingUp className="w-3 h-3" />{op.roi_pct.toFixed(1)}%
+                                                        <TrendingUp className="w-3 h-3" />{fmtPct(op.roi_pct)}
                                                     </p>
                                                 </div>
                                             )}
                                             {op.tir_pct != null && (
                                                 <div>
                                                     <p className="text-white/30 font-bold uppercase tracking-wider text-[9px]">TIR</p>
-                                                    <p className="text-blue-300 font-black">{op.tir_pct.toFixed(1)}%</p>
+                                                    <p className="text-blue-300 font-black">{fmtPct(op.tir_pct)}</p>
                                                 </div>
                                             )}
                                             {(op.cidade || op.uf) && (
@@ -395,9 +396,9 @@ const OpportunitiesTab: React.FC<Props> = ({
                                             <div className="text-right">
                                                 <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">ROI / TIR</p>
                                                 <p className="font-black">
-                                                    {op.roi_pct != null && <span className="text-emerald-600">{op.roi_pct.toFixed(1)}%</span>}
+                                                    {op.roi_pct != null && <span className="text-emerald-600">{fmtPct(op.roi_pct)}</span>}
                                                     {op.roi_pct != null && op.tir_pct != null && <span className="text-gray-300 mx-1">/</span>}
-                                                    {op.tir_pct != null && <span className="text-blue-600">{op.tir_pct.toFixed(1)}%</span>}
+                                                    {op.tir_pct != null && <span className="text-blue-600">{fmtPct(op.tir_pct)}</span>}
                                                     {op.roi_pct == null && op.tir_pct == null && <span className="text-gray-400">—</span>}
                                                 </p>
                                             </div>
@@ -466,11 +467,11 @@ const OpportunitiesTab: React.FC<Props> = ({
                                             </td>
                                             <td className="px-6 py-4 text-sm">
                                                 {op.roi_pct != null && (
-                                                    <span className="text-emerald-700 font-medium">{op.roi_pct.toFixed(1)}%</span>
+                                                    <span className="text-emerald-700 font-medium">{fmtPct(op.roi_pct)}</span>
                                                 )}
                                                 {op.roi_pct != null && op.tir_pct != null && <span className="text-gray-300 mx-1">/</span>}
                                                 {op.tir_pct != null && (
-                                                    <span className="text-blue-700 font-medium">{op.tir_pct.toFixed(1)}%</span>
+                                                    <span className="text-blue-700 font-medium">{fmtPct(op.tir_pct)}</span>
                                                 )}
                                                 {op.roi_pct == null && op.tir_pct == null && <span className="text-gray-400">—</span>}
                                             </td>

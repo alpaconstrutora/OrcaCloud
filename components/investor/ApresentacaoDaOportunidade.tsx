@@ -1,5 +1,6 @@
 import React from 'react';
-import { Building2, HardHat, MapPin, Ruler, Users } from 'lucide-react';
+import { Building2, HardHat, MapPin, Ruler, Users, ZoomIn } from 'lucide-react';
+import VisualizadorDeImagens from '../ui/VisualizadorDeImagens';
 import type { OportunidadeNaVitrine } from '../../utils/oportunidadeNumerosDaVersao';
 import { OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_TYPE_LABELS } from '../../services/investorPortalService';
 import { InvestmentSimulator, podeSimular } from './InvestmentSimulator';
@@ -54,6 +55,8 @@ const ApresentacaoDaOportunidade: React.FC<{
     semSimulador?: boolean;
 }> = ({ op, fichaTecnica, obra, semSimulador }) => {
     const cap = op.captacaoReal;
+    // Imagem ampliada (24/11/2026): clicar numa imagem do empreendimento abre o visualizador nela.
+    const [ampliada, setAmpliada] = React.useState<number | null>(null);
     return (
         <div className="space-y-8">
             <section className="bg-gray-50/50 rounded-[10px] p-5 border border-gray-100 space-y-2">
@@ -101,12 +104,25 @@ const ApresentacaoDaOportunidade: React.FC<{
                     <Titulo icon={<Building2 className="w-4 h-4" />}>Imagens do empreendimento</Titulo>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         {op.fotos!.map((f, idx) => (
-                            <figure key={`${f.url}-${idx}`} className="relative h-48 rounded-[10px] overflow-hidden border border-gray-100">
-                                <img src={f.url} alt={f.legenda ?? `Imagem ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
-                                {f.legenda && <figcaption className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-3 text-sm text-white">{f.legenda}</figcaption>}
-                            </figure>
+                            <button
+                                key={`${f.url}-${idx}`}
+                                type="button"
+                                onClick={() => setAmpliada(idx)}
+                                aria-label={`Ampliar ${f.legenda ?? `imagem ${idx + 1}`}`}
+                                title="Clique para ampliar"
+                                className="group relative block h-48 w-full rounded-[10px] overflow-hidden border border-gray-100 cursor-zoom-in text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                            >
+                                <img src={f.url} alt={f.legenda ?? `Imagem ${idx + 1}`} className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-[1.03]" loading="lazy" />
+                                <span className="absolute top-2 right-2 w-8 h-8 inline-flex items-center justify-center rounded-full bg-black/45 text-white opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity" aria-hidden="true">
+                                    <ZoomIn className="w-4 h-4" />
+                                </span>
+                                {f.legenda && <span className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-3 text-sm text-white">{f.legenda}</span>}
+                            </button>
                         ))}
                     </div>
+                    {ampliada != null && (
+                        <VisualizadorDeImagens imagens={op.fotos!} inicial={ampliada} onFechar={() => setAmpliada(null)} />
+                    )}
                 </section>
             )}
 

@@ -1112,7 +1112,7 @@ export const documentService = {
           target.audience === 'credor'
             ? 'Documento compartilhado com o Credit Room (Portal de Crédito)'
             : target.audience === 'investidor'
-              ? 'Documento compartilhado com o Data Room de uma oportunidade (Portal do Investidor)'
+              ? 'Documento compartilhado com uma oportunidade (Portal do Investidor)'
               : `Documento compartilhado com o Portal do ${target.audience === 'cliente' ? 'Cliente' : 'Colaborador'}`
         ).catch((err) => console.error('[DocumentService] Erro ao registrar auditoria de compartilhamento com portal:', err));
       }

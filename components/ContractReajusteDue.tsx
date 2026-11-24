@@ -1,16 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { AlertTriangle, CheckCircle2 } from 'lucide-react';
-import { contractIndexService, IndexName } from '../services/contractIndexService';
+import { contractIndexService } from '../services/contractIndexService';
 import { contractService } from '../services/contractService';
 
 interface Props {
     organizationId: string;
 }
 
-const fmtDate = (d: string) => {
-    const [y, m] = d.split('-');
-    return `${m}/${y}`;
-};
 const fmtCur = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
 const ContractReajusteDue: React.FC<Props> = ({ organizationId }) => {
@@ -35,29 +31,13 @@ const ContractReajusteDue: React.FC<Props> = ({ organizationId }) => {
 
     useEffect(() => { loadDue(); }, [loadDue]);
 
-    const handleApplyReajuste = async (contractId: string, indexName: string) => {
+    // A busca dos índices e o reajuste moram em contractService.aplicarReajustePeloIndice
+    // (o mesmo da aba Locações › Reajustes).
+    const handleApplyReajuste = async (contractId: string) => {
         setApplyingId(contractId);
         try {
-            const contract = await contractService.getContractById(contractId);
-            if (!contract?.reajuste_data_base) {
-                notify('Contrato sem data-base de reajuste definida. Aplique o primeiro reajuste manualmente.', 'error');
-                return;
-            }
-            const [baseRow, currentRow] = await Promise.all([
-                contractIndexService.getClosestTo(indexName as IndexName, contract.reajuste_data_base, organizationId),
-                contractIndexService.getClosestTo(indexName as IndexName, new Date().toISOString().slice(0, 10), organizationId),
-            ]);
-            if (!baseRow || !currentRow) {
-                notify(`Índice ${indexName} não encontrado para as datas necessárias. Cadastre os valores em Configurações do Sistema.`, 'error');
-                return;
-            }
-            if (baseRow.value === currentRow.value) {
-                notify('Índice base e atual são iguais — nenhum reajuste necessário.', 'info');
-                return;
-            }
-            await contractService.applyReajuste(contractId, baseRow.value, currentRow.value,
-                `${indexName} ${fmtDate(baseRow.reference_month)} → ${fmtDate(currentRow.reference_month)}`);
-            notify(`Reajuste aplicado ao contrato ${contract.number}.`, 'success');
+            const r = await contractService.aplicarReajustePeloIndice(contractId);
+            notify(`Reajuste aplicado ao contrato ${r.contract.number} (${r.indice} ${r.mesBase} → ${r.mesAtual}).`, 'success');
             loadDue();
         } catch (e) {
             notify(`Erro: ${e instanceof Error ? e.message : 'Tente novamente.'}`, 'error');
@@ -94,7 +74,7 @@ const ContractReajusteDue: React.FC<Props> = ({ organizationId }) => {
                                     </p>
                                 </div>
                                 <button
-                                    onClick={() => handleApplyReajuste(c.id, c.reajuste_index)}
+                                    onClick={() => handleApplyReajuste(c.id)}
                                     disabled={applyingId === c.id}
                                     className="shrink-0 px-3 py-1.5 bg-amber-600 text-white text-button font-semibold rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
                                 >

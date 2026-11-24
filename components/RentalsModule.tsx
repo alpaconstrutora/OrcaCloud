@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { moverEntreAbas } from './ui/abasPeloTeclado';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, MoveHorizontal, BarChart3, Check, Sliders, Download, Link2 } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Percent, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, MoveHorizontal, BarChart3, Check, Sliders, Download, Link2 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService, dealBuyersOf } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -41,6 +41,7 @@ import { pricingRuleApplicationService, buildApplicationRows } from '../services
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
+import RentalReajustes from './rentals/RentalReajustes';
 import RentalAnalysisOverview, { type AnalysisSources, type AnalysisSourceState, type AnalysisLeitura, type AnalysisDestino } from './rentals/RentalAnalysisOverview';
 import { useStore } from '../store/useStore';
 import { parseHashView } from '../lib/tabRouter';
@@ -83,7 +84,7 @@ interface RentalsModuleProps {
 
 // 'pricing-intelligence' (aba "Inteligência Hedônica") saiu em 2026-09-12: o
 // conteúdo dela virou o bloco de precificação no topo da aba 'intelligence'.
-type RentalsTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'renewals' | 'brokers' | 'price-tables' | 'intelligence';
+type RentalsTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'renewals' | 'reajustes' | 'brokers' | 'price-tables' | 'intelligence';
 
 // Valor de locação canônico da unidade: rental_price (gravado pela Inteligência
 // de Aluguéis e pela Tabela de aluguéis); fallback para price ("Aluguel base"
@@ -2571,6 +2572,15 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                 </span>
                             )}
                         </button>
+                        {/* Reajuste anual tem aba própria: Renovações trata só o contrato
+                            que chega ao fim (pedido 24/11/2026). */}
+                        <button type="button" role="tab" aria-selected={activeTab === 'reajustes'} tabIndex={activeTab === 'reajustes' ? 0 : -1}
+                            onClick={() => setActiveTab('reajustes')}
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'reajustes' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        >
+                            <Percent className="w-3.5 h-3.5" />
+                            Reajustes
+                        </button>
                         <button type="button" role="tab" aria-selected={activeTab === 'brokers'} tabIndex={activeTab === 'brokers' ? 0 : -1}
                             onClick={() => setActiveTab('brokers')}
                             className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'brokers' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
@@ -3163,6 +3173,15 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     clients={clients}
                     onChanged={(message) => { loadData(); notify(message); }}
                     onOpenContract={openDealForContract}
+                />
+            )}
+
+            {activeTab === 'reajustes' && (
+                <RentalReajustes
+                    organizationId={effectiveOrganizationId || null}
+                    clients={clients}
+                    onOpenContract={openDealForContract}
+                    onNotify={(message, type) => { if (type === 'success') loadData(); notify(message, type); }}
                 />
             )}
 

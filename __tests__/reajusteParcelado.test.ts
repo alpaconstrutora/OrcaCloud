@@ -7,7 +7,7 @@
  * E o fator incidia sobre o contrato inteiro, inclusive o que já tinha sido pago.
  */
 import { describe, it, expect } from 'vitest';
-import { reajustarCronograma } from '../utils/reajusteParcelado';
+import { reajustarCronograma, aniversarioAposRenovacao } from '../utils/reajusteParcelado';
 import type { ParcelaExistente } from '../utils/contratoParcelaVariavel';
 
 const C = 'ctr-1';
@@ -91,5 +91,31 @@ describe('reajustarCronograma', () => {
         const copia = structuredClone(cronograma);
         reajustarCronograma(cronograma, [], C, 1.05, '2026-11-09');
         expect(cronograma).toEqual(copia);
+    });
+});
+
+/**
+ * Renovar ≠ reajustar (pedido 24/11/2026, plano
+ * 2026-11-24-locacoes-reajustes-separados-das-renovacoes). A renovação que mantém
+ * o aluguel não pode empurrar o aniversário do reajuste para o início do período
+ * novo + 12 meses — o reajuste anual seria pulado.
+ */
+describe('aniversarioAposRenovacao', () => {
+    const contrato = { start_date: '2016-09-23', reajuste_data_base: '2024-09-23', reajuste_proximo: '2025-09-23' };
+
+    it('mesmo valor → aniversário continua o do contrato', () => {
+        expect(aniversarioAposRenovacao(contrato, '2026-03-23', 4556, 4556))
+            .toEqual({ reajuste_data_base: '2024-09-23', reajuste_proximo: '2025-09-23' });
+    });
+    it('valor diferente = reajuste na renovação → aniversário reinicia no período novo', () => {
+        expect(aniversarioAposRenovacao(contrato, '2026-03-23', 4556, 4800))
+            .toEqual({ reajuste_data_base: '2026-03-23', reajuste_proximo: '2027-03-23' });
+    });
+    it('contrato sem aniversário gravado: base = início do contrato, próximo = base + 12 meses', () => {
+        expect(aniversarioAposRenovacao({ start_date: '2016-09-23' }, '2019-03-23', 1000, 1000))
+            .toEqual({ reajuste_data_base: '2016-09-23', reajuste_proximo: '2017-09-23' });
+    });
+    it('diferença de arredondamento (< 1 centavo) não conta como reajuste', () => {
+        expect(aniversarioAposRenovacao(contrato, '2026-03-23', 4556, 4556.004).reajuste_proximo).toBe('2025-09-23');
     });
 });

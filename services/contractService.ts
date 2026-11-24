@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabase';
 import { financialService } from './financialService';
 import { projectService } from './projectService';
 import { approvalService } from './approvalService';
-import { normalizeIndexName } from './contractIndexService';
+import { contractIndexService, normalizeIndexName } from './contractIndexService';
 import { commercialFinanceService } from './commercialFinanceService';
 import { generateRentalContractNumber } from './rentalContractNumberingService';
 import { generateUnitSaleContractNumber } from './unitSaleContractNumberingService';
@@ -12,7 +12,7 @@ import { resolverCategoriaDoContrato, resolverCategoriaReceitaFinanceira } from 
 import {
     planejarSyncParcelas, parcelaBaixada, marcaDeValorManual, marcaDeVencimentoManual, COLUNAS_PARCELA_EXISTENTE, type ParcelaExistente,
 } from '../utils/contratoParcelaVariavel';
-import { reajustarCronograma, valorAtualDoContrato } from '../utils/reajusteParcelado';
+import { reajustarCronograma, valorAtualDoContrato, aniversarioAposRenovacao } from '../utils/reajusteParcelado';
 import {
     Contract,
     ContractItem,
@@ -377,7 +377,7 @@ export async function resolveDealUnitsInfo(dealId: string, fallbackPropertyId?: 
 async function applyProrrogacaoAddendum(addendum: ContractAddendum, approvedBy: string): Promise<boolean> {
     const { data: contract, error } = await supabase
         .from('contracts')
-        .select('id, organization_id, project_id, deal_id, number, title, domain, is_recurring, start_date, end_date, billing_cycle, due_day, payment_days, original_value, current_value, supplier_id, client_id, direction, status')
+        .select('id, organization_id, project_id, deal_id, number, title, domain, is_recurring, start_date, end_date, billing_cycle, due_day, payment_days, original_value, current_value, reajuste_data_base, reajuste_proximo, supplier_id, client_id, direction, status')
         .eq('id', addendum.contract_id)
         .single();
     if (error) throw error;
@@ -406,20 +406,17 @@ async function applyProrrogacaoAddendum(addendum: ContractAddendum, approvedBy: 
 
     // 2) Estende o contrato. UPDATE direto de propósito: updateContract
     //    recalcularia current_value e apagaria o reajuste embutido no aditivo.
-    const proximoReajuste = (() => {
-        const [y, m, d] = inicio.split('-').map(Number);
-        const dt = new Date(Date.UTC(y, m - 1, d));
-        dt.setUTCFullYear(dt.getUTCFullYear() + 1);
-        return dt.toISOString().slice(0, 10);
-    })();
+    //    Renovar ≠ reajustar: com o aluguel mantido, o aniversário do reajuste
+    //    continua o do contrato (aniversarioAposRenovacao).
+    const aniversario = aniversarioAposRenovacao(
+        contract, inicio, Number(contract.current_value ?? contract.original_value ?? 0), novoValor);
 
     const { error: updErr } = await supabase
         .from('contracts')
         .update({
             end_date: fim,
             current_value: novoValor,
-            reajuste_data_base: inicio,
-            reajuste_proximo: proximoReajuste,
+            ...aniversario,
             status: contract.status === 'Encerrado' ? 'Ativo' : contract.status,
         })
         .eq('id', contract.id);
@@ -3355,6 +3352,41 @@ export const contractService = {
         }
 
         return updated as Contract;
+    },
+
+    /**
+     * Reajuste pelo índice CADASTRADO (Configurações do Sistema › índices): busca o
+     * índice da data-base e o do mês atual e chama `applyReajuste`. Único ponto
+     * usado pelas filas de reajuste (Locações › Reajustes e a tela "Reajustes de
+     * Contrato" da Central) — antes a busca morava dentro de `ContractReajusteDue`.
+     * O índice é procurado na organização DO CONTRATO (REGRA #5), não na da tela.
+     */
+    aplicarReajustePeloIndice: async (contractId: string): Promise<{
+        contract: Contract; indice: string; mesBase: string; mesAtual: string;
+    }> => {
+        const contract = await contractService.getContractById(contractId);
+        if (!contract) throw new Error('Contrato não encontrado.');
+        const indice = normalizeIndexName(contract.reajuste_index);
+        if (!indice || indice === 'OUTROS') {
+            throw new Error(`Contrato ${contract.number} sem índice de reajuste definido — escolha o índice no contrato.`);
+        }
+        const dataBase = (contract.reajuste_data_base || contract.start_date || '').slice(0, 10);
+        if (!dataBase) throw new Error(`Contrato ${contract.number} sem data-base de reajuste nem início de vigência.`);
+        const hoje = new Date().toISOString().slice(0, 10);
+        const [base, atual] = await Promise.all([
+            contractIndexService.getClosestTo(indice, dataBase, contract.organization_id),
+            contractIndexService.getClosestTo(indice, hoje, contract.organization_id),
+        ]);
+        const mes = (iso: string) => `${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
+        if (!base || !atual) {
+            throw new Error(`Índice ${indice} não encontrado para ${mes(dataBase)} e ${mes(hoje)}. Cadastre os valores em Configurações do Sistema.`);
+        }
+        if (base.value === atual.value) {
+            throw new Error(`O ${indice} de ${mes(atual.reference_month)} é igual ao da data-base (${mes(base.reference_month)}) — o índice do mês ainda não foi cadastrado?`);
+        }
+        const updated = await contractService.applyReajuste(contractId, base.value, atual.value,
+            `${indice} ${mes(base.reference_month)} → ${mes(atual.reference_month)}`);
+        return { contract: updated, indice, mesBase: mes(base.reference_month), mesAtual: mes(atual.reference_month) };
     },
 
     // ─────────────────────────────────────────────────────────

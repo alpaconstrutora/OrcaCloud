@@ -204,6 +204,53 @@ export function identificarPartes(linhas: LinhaTranscrita[]): ParteIdentificada[
   return partes;
 }
 
+/** Trecho de uma linha: [início, fim) em caracteres de `linha.t`. */
+export type Trecho = [number, number];
+
+function escaparRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Onde os nomes das partes aparecem no texto, por linha — para o negrito (pedido de
+ * 24/11/2026: "No texto aplique negrito nas partes identificadas").
+ * Toda ocorrência conta, sem diferenciar maiúsculas: a escritura repete os nomes nas
+ * assinaturas em letra normal ("Vendedoras (aa) Ana Paula dos Santos"). Nome que quebrou
+ * de linha vira um trecho em cada linha.
+ */
+export function trechosDasPartes(linhas: LinhaTranscrita[], partes: ParteIdentificada[]): Map<number, Trecho[]> {
+  const porLinha = new Map<number, Trecho[]>();
+  if (partes.length === 0) return porLinha;
+  const { texto, inicios } = juntar(linhas);
+  const corrido = texto.replace(/\n/g, ' ');
+
+  for (const parte of partes) {
+    const re = new RegExp(`(?<!\\p{L})${parte.nome.split(' ').map(escaparRegex).join('\\s+')}(?!\\p{L})`, 'giu');
+    for (const m of corrido.matchAll(re)) {
+      const ini = m.index!;
+      const fim = ini + m[0].length;
+      for (let i = linhaDaPosicao(inicios, ini); i < linhas.length && inicios[i] < fim; i++) {
+        const a = Math.max(ini, inicios[i]) - inicios[i];
+        const b = Math.min(fim, inicios[i] + linhas[i].t.length) - inicios[i];
+        if (b > a) porLinha.set(i, [...(porLinha.get(i) ?? []), [a, b]]);
+      }
+    }
+  }
+
+  // Em ordem e sem sobreposição — a linha é cortada em pedaços por esses trechos.
+  for (const [i, trechos] of porLinha) {
+    trechos.sort((x, y) => x[0] - y[0]);
+    const unidos: Trecho[] = [];
+    for (const t of trechos) {
+      const ultimo = unidos[unidos.length - 1];
+      if (ultimo && t[0] <= ultimo[1]) ultimo[1] = Math.max(ultimo[1], t[1]);
+      else unidos.push([t[0], t[1]]);
+    }
+    porLinha.set(i, unidos);
+  }
+  return porLinha;
+}
+
 export function formatarCpf(d: string): string {
   return d.replace(/^(\d{3})(\d{3})(\d{3})(\d{2})$/, '$1.$2.$3-$4');
 }

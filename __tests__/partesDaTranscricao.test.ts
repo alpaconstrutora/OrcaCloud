@@ -3,7 +3,7 @@
 // Texto no molde das escrituras do cartório de Cambuí — nomes e números fictícios
 // (CPF/CNPJ de exemplo com dígito verificador válido).
 import { describe, expect, it } from 'vitest';
-import { formatarCnpj, formatarCpf, identificarPartes } from '../utils/partesDaTranscricao';
+import { formatarCnpj, formatarCpf, identificarPartes, trechosDasPartes } from '../utils/partesDaTranscricao';
 import type { LinhaTranscrita } from '../utils/transcricaoDocumento';
 
 const L = (...textos: string[]): LinhaTranscrita[] => textos.map(t => ({ t, c: 95 }));
@@ -78,6 +78,35 @@ describe('identificarPartes', () => {
   it('texto sem partes', () => {
     expect(identificarPartes(L('MATRÍCULA Nº 12.198', 'IMÓVEL: UM TERRENO RURAL'))).toEqual([]);
     expect(identificarPartes([])).toEqual([]);
+  });
+});
+
+describe('trechosDasPartes (negrito no texto)', () => {
+  const trechos = trechosDasPartes(ESCRITURA, identificarPartes(ESCRITURA));
+  const negrito = (i: number) => (trechos.get(i) ?? []).map(([a, b]) => ESCRITURA[i].t.slice(a, b));
+
+  it('marca o nome na linha em que aparece', () => {
+    expect(negrito(3)).toEqual(['ANA PAULA DOS SANTOS']);
+    expect(negrito(8)).toEqual(['CARLOS EDUARDO LIMA']);
+  });
+
+  it('nome que quebrou de linha vira um trecho em cada linha', () => {
+    expect(negrito(5)).toEqual(['JOANA']);
+    expect(negrito(6)).toEqual(['MARIA DE SOUZA']);
+  });
+
+  it('toda ocorrência, também em letra normal (assinaturas)', () => {
+    const linhas = [...ESCRITURA, { t: 'Vendedoras (aa) Ana Paula dos Santos e Joana Maria de Souza.', c: 95 }];
+    const t = trechosDasPartes(linhas, identificarPartes(linhas)).get(linhas.length - 1) ?? [];
+    expect(t.map(([a, b]) => linhas[linhas.length - 1].t.slice(a, b))).toEqual(['Ana Paula dos Santos', 'Joana Maria de Souza']);
+  });
+
+  it('não marca nome dentro de palavra maior nem linha sem parte', () => {
+    expect(negrito(0)).toEqual([]);
+    const linhas = [{ t: 'BEATRIZ LIMAS não é parte', c: null }];
+    const parte = identificarPartes(ESCRITURA)[3];
+    expect(trechosDasPartes(linhas, [parte]).size).toBe(0);
+    expect(trechosDasPartes(ESCRITURA, []).size).toBe(0);
   });
 });
 

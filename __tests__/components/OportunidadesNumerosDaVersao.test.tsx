@@ -72,8 +72,8 @@ describe('gestor: lista com a versão; formulário sem números digitados', () =
 
     it('a lista mostra VGV/ROI/TIR da versão', () => {
         montar();
-        expect(screen.getAllByText('39.2%').length).toBeGreaterThan(0);
-        expect(screen.getAllByText('19.0%').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('39,2%').length).toBeGreaterThan(0);
+        expect(screen.getAllByText('19,0%').length).toBeGreaterThan(0);
     });
 
     it('"Editar" não tem VGV/ROI/TIR/custo para digitar e mostra o que vem do estudo', async () => {

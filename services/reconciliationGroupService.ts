@@ -77,7 +77,7 @@ export function findSubset<T extends { amount: number }>(target: number, items: 
 
 // Tolerância de agrupamento APERTADA: a soma dos itens deve bater quase exatamente
 // com o pagamento/título (≤ 1% ou R$1). Diferente do 1:1, aqui folga grande gera lixo.
-const groupTol = (target: number) => Math.max(1, target * 0.01);
+export const groupTol = (target: number) => Math.max(1, target * 0.01);
 
 const NOISE = new Set(['LTDA', 'ME', 'EPP', 'SA', 'EIRELI', 'DA', 'DE', 'DO', 'DAS', 'DOS', 'E', 'COMERCIO', 'INDUSTRIA', 'SERVICOS']);
 const normalizeTxt = (s?: string) =>

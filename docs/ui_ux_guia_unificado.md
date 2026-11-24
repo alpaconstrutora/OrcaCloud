@@ -2099,6 +2099,21 @@ className) continua acusando só pílula de verdade.
 > ❌ Não vale para mais de uma letra: "ADM", "RH", "PJ" num círculo é selo → §8 inteiro.
 > Primeira ocorrência: `PayrollEventModal.tsx` (histórico de lançamentos da folha).
 
+### 8.3 Contagem de ocorrências numa lista de card — texto colorido, não chip (24/11/2026)
+
+Quando um card lista registros com **contagens de ocorrência** ao lado ("2 furos",
+"1 paga com atraso", "2 pagas juntas"), cada contagem é §8 puro: `text-sm font-normal` +
+cor, separadas por `gap-x-3`, sem fundo nem borda. Vermelho (`text-red-600`) para o que
+falta ou venceu, âmbar (`text-amber-800`) para atraso, índigo (`text-indigo-700`) para
+agrupamento e azul (`text-blue-700`) para pista de ação ("com movimento parecido"). A linha
+inteira é um `<button>` que abre o detalhe no `Sheet` (tabela no padrão do §6.9).
+
+> ℹ️ Referência: Conciliação › Central › card **Sequência de parcelas**
+> (`reconciliation/SequenciaParcelasPanel.tsx` + `SequenciaParcelasSheet.tsx`): contratos cuja
+> série de parcelas quebrou contra o extrato (furo, vencida, paga com atraso, pagas juntas),
+> com "Conciliar juntas" quando um movimento pendente = soma de parcelas abertas e seguidas.
+> Regra em `utils/sequenciaParcelas.ts`.
+
 ---
 
 ## 9. COLUNA DE AÇÕES

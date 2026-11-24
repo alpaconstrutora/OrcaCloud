@@ -211,29 +211,113 @@ function escaparRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/** Onde um nome/objeto aparece no texto corrido: [início, fim) de cada ocorrência. */
+function ocorrencias(corrido: string, texto: string, semDiferenciarMaiusculas: boolean): Trecho[] {
+  const re = new RegExp(
+    `(?<![\\p{L}\\d])${texto.split(' ').map(escaparRegex).join('\\s+')}(?![\\p{L}\\d])`,
+    semDiferenciarMaiusculas ? 'giu' : 'gu',
+  );
+  return [...corrido.matchAll(re)].map(m => [m.index!, m.index! + m[0].length] as Trecho);
+}
+
+// ── Objetos ─────────────────────────────────────────────────────────────────
+// Pedido de 24/11/2026: "mais uma coisa a ser identificada e destacada em negrito no
+// texto. que são os objetos que geralmente também estão em maiúscula". Na escritura do
+// 021: "possuidor(es) de UMA CASA DE MORADA", "transmitem ao comprador o DIREITO DE
+// SERVIDÃO DE ÁGUA", "BEM COMO O DIREITO DE SERVIDÃO DE ENERGIA ELÉTRICA".
+// OBJETO = trecho em MAIÚSCULAS no meio do texto corrido que não é parte, nem
+// cabeçalho/fórmula do cartório, nem valor por extenso.
+
+export interface ObjetoIdentificado {
+  texto: string;
+  /** Índice da linha (na transcrição) onde o objeto começa. */
+  linha: number;
+}
+
+// Palavras em maiúsculas, com conectivos e números no meio ("LOTE Nº 05 DA QUADRA 03").
+const TRECHO_EM_MAIUSCULAS = /(?<![\p{L}\d])\p{Lu}{2,}(?:[ \t]+(?:\p{Lu}{2,}|D[AEO]S?|E|À|AO|AOS|A|O|OS|AS|EM|N[º°]\.?|\d[\d.,/-]*[A-Z]?)(?![\p{L}\d]))*/gu;
+const PALAVRA_DE_LIGACAO = /^(?:D[AEO]S?|E|À|AO|AOS|A|O|OS|AS|EM|N[º°]\.?)$/;
+/** "BEM COMO O DIREITO …" → "DIREITO …". */
+const ABERTURA = /^(?:BEM\s+COMO|E|COM|ASSIM\s+COMO)(?:\s+(?:O|A|OS|AS))?\s+/;
+/** Cabeçalho e fórmulas do cartório; o OCR às vezes corta o começo ("SLADADA"). */
+const FORMULA_DO_CARTORIO = /REP[ÚU]BLICA|COMARCA|ESTADO\s+D[EO]|CART[ÓO]RIO|OF[ÍI]CIO|ESCRITURA|TRASLAD|SLADADA|FIELMENTE|TABELI|REGISTRO\s+DE|LIVRO|FOLHA|FLS|MATR[ÍI]CULA|CERTID|DOU\s+F[ÉE]|SAIBAM/;
+/** Valor por extenso ("R$ 50.000,00 (CINQUENTA MIL REAIS)"). */
+const VALOR_POR_EXTENSO = /\b(?:REAIS|REAL|MIL|CENTAVOS?|MILH[ÃÕ]O|MILH[ÕO]ES)\b/;
+
+function semAcento(s: string): string {
+  return s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+}
+
+export function identificarObjetos(linhas: LinhaTranscrita[], partes: ParteIdentificada[]): ObjetoIdentificado[] {
+  const { texto, inicios } = juntar(linhas);
+  const corrido = texto.replace(/\n/g, ' ');
+  const dasPartes = partes.flatMap(p => ocorrencias(corrido, p.nome, true));
+  const nomesSemAcento = partes.map(p => semAcento(p.nome));
+  const objetos: ObjetoIdentificado[] = [];
+  const vistos = new Set<string>();
+
+  for (const m of corrido.matchAll(TRECHO_EM_MAIUSCULAS)) {
+    let bruto = m[0];
+    let ini = m.index!;
+    const abertura = bruto.match(ABERTURA);
+    if (abertura) { bruto = bruto.slice(abertura[0].length); ini += abertura[0].length; }
+    const palavras = [...bruto.matchAll(/\S+/g)].map(p => ({ t: p[0], fim: ini + p.index! + p[0].length }));
+    while (palavras.length > 0 && PALAVRA_DE_LIGACAO.test(palavras[palavras.length - 1].t)) palavras.pop();
+    if (palavras.filter(p => /^\p{Lu}{2,}$/u.test(p.t) && !PALAVRA_DE_LIGACAO.test(p.t)).length < 2) continue;
+    const objeto = palavras.map(p => p.t).join(' ');
+    const fim = palavras[palavras.length - 1].fim;
+
+    if (FORMULA_DO_CARTORIO.test(objeto) || VALOR_POR_EXTENSO.test(objeto)) continue;
+    if (/R\$\s*[\d.,\s]*\(\s*$/.test(corrido.slice(Math.max(0, ini - 30), ini))) continue;
+    // Parte (ou pedaço dela) não é objeto — também com acento lido errado pelo OCR
+    // ("VERÁ MARINA …" na matrícula do 021). Nem pessoa citada ("Sr. FULANO").
+    if (dasPartes.some(([a, b]) => ini < b && fim > a)) continue;
+    const objetoSemAcento = semAcento(objeto);
+    if (nomesSemAcento.some(n => n.includes(objetoSemAcento) || objetoSemAcento.includes(n))) continue;
+    if (/\b(?:Sr|Sra|Srs|Dr|Dra)\.?\s*$/i.test(corrido.slice(Math.max(0, ini - 6), ini))) continue;
+
+    // Só no meio do texto corrido, em linha legível: cabeçalho é linha só de
+    // maiúsculas, e o lixo do carimbo vem em linha duvidosa.
+    const linha = linhaDaPosicao(inicios, ini);
+    const l = linhas[linha];
+    if (!l || linhaDuvidosa(l)) continue;
+    const resto = l.t.slice(0, ini - inicios[linha]) + ' ' + l.t.slice(Math.min(fim, inicios[linha] + l.t.length) - inicios[linha]);
+    if (!/\p{Ll}{3,}/u.test(resto)) continue;
+
+    if (vistos.has(objeto)) continue;
+    vistos.add(objeto);
+    objetos.push({ texto: objeto, linha });
+  }
+  return objetos;
+}
+
 /**
- * Onde os nomes das partes aparecem no texto, por linha — para o negrito (pedido de
- * 24/11/2026: "No texto aplique negrito nas partes identificadas").
- * Toda ocorrência conta, sem diferenciar maiúsculas: a escritura repete os nomes nas
- * assinaturas em letra normal ("Vendedoras (aa) Ana Paula dos Santos"). Nome que quebrou
- * de linha vira um trecho em cada linha.
+ * Onde partes e objetos aparecem no texto, por linha — para o negrito (pedidos de
+ * 24/11/2026: "No texto aplique negrito nas partes identificadas" e "...os objetos").
+ * Nome de parte: toda ocorrência, sem diferenciar maiúsculas — a escritura repete os
+ * nomes nas assinaturas em letra normal ("Vendedoras (aa) Ana Paula dos Santos").
+ * Objeto: só em maiúsculas — "direito de servidão" em letra normal é texto comum.
+ * O que quebrou de linha vira um trecho em cada linha.
  */
-export function trechosDasPartes(linhas: LinhaTranscrita[], partes: ParteIdentificada[]): Map<number, Trecho[]> {
+export function trechosEmNegrito(
+  linhas: LinhaTranscrita[],
+  partes: ParteIdentificada[],
+  objetos: ObjetoIdentificado[] = [],
+): Map<number, Trecho[]> {
   const porLinha = new Map<number, Trecho[]>();
-  if (partes.length === 0) return porLinha;
+  if (partes.length === 0 && objetos.length === 0) return porLinha;
   const { texto, inicios } = juntar(linhas);
   const corrido = texto.replace(/\n/g, ' ');
 
-  for (const parte of partes) {
-    const re = new RegExp(`(?<!\\p{L})${parte.nome.split(' ').map(escaparRegex).join('\\s+')}(?!\\p{L})`, 'giu');
-    for (const m of corrido.matchAll(re)) {
-      const ini = m.index!;
-      const fim = ini + m[0].length;
-      for (let i = linhaDaPosicao(inicios, ini); i < linhas.length && inicios[i] < fim; i++) {
-        const a = Math.max(ini, inicios[i]) - inicios[i];
-        const b = Math.min(fim, inicios[i] + linhas[i].t.length) - inicios[i];
-        if (b > a) porLinha.set(i, [...(porLinha.get(i) ?? []), [a, b]]);
-      }
+  const todas = [
+    ...partes.flatMap(p => ocorrencias(corrido, p.nome, true)),
+    ...objetos.flatMap(o => ocorrencias(corrido, o.texto, false)),
+  ];
+  for (const [ini, fim] of todas) {
+    for (let i = linhaDaPosicao(inicios, ini); i < linhas.length && inicios[i] < fim; i++) {
+      const a = Math.max(ini, inicios[i]) - inicios[i];
+      const b = Math.min(fim, inicios[i] + linhas[i].t.length) - inicios[i];
+      if (b > a) porLinha.set(i, [...(porLinha.get(i) ?? []), [a, b]]);
     }
   }
 

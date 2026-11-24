@@ -15,6 +15,18 @@ transcrição; vínculo com Meus Clientes como passo seguinte, a decidir):
 
 > Perfeito. No texto aplique negrito nas partes identificadas
 
+24/11/2026, depois do #688 no ar:
+
+> mais uma coisa a ser identificada a destacada em negrito no texto. que são os objetos que geralmente também estão em maiscula
+
+24/11/2026, depois de ver a regra testada nas transcrições reais (3 objetos na escritura do 021):
+
+> de acordo
+
+24/11/2026, antes do #691 entrar (ele juntava partes e objetos numa aba só, "Partes e objetos"):
+
+> crie uma aba chamada objetos identificados ao lado de partes indentificadas. e da mesma forma que  partes indentificadas, liste os objetos que foram identificados
+
 Continuação de `2026-11-23-transcricao-de-documentos-do-empreendimento.md`.
 
 ## Teste antes de implementar (24/11/2026)
@@ -74,8 +86,24 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    (qualificação, linhas 79–81 com nome quebrado, assinaturas 99–100), matrícula idem.
    #688 no ar (conferir-producao: 84aa1ee); logado em produção, Escritura do terreno: os 4
    nomes em negrito na qualificação e nas assinaturas do fim ("Vendedoras (aa) …"). Nada gravado.
+5. [ ] Objetos — `identificarObjetos(linhas, partes)` em `utils/partesDaTranscricao.ts`:
+   trecho em MAIÚSCULAS no meio do texto corrido (linha legível com prosa), com números e
+   conectivos ("LOTE Nº 05 DA QUADRA 03"), tirando a abertura "BEM COMO O"; fora: parte
+   (também com acento lido errado — "VERÁ MARINA …" na matrícula), pessoa citada ("Sr. …"),
+   valor por extenso, cabeçalho/fórmula do cartório, linha duvidosa. `trechosDasPartes` →
+   `trechosEmNegrito(linhas, partes, objetos)`: objeto em negrito só em maiúsculas. Aba
+   própria **"Objetos identificados (n)"** ao lado de "Partes identificadas (n)" — lista no
+   mesmo formato, com copiar e "Ver no texto" (a versão "Partes e objetos" numa aba só não
+   chegou a ir ao ar).
+   **Pronto quando:** testes verdes; nas reais, escritura = UMA CASA DE MORADA, DIREITO DE
+   SERVIDÃO DE ÁGUA, DIREITO DE SERVIDÃO DE ENERGIA ELÉTRICA e matrícula = nenhum (lá o imóvel
+   está em letra normal); na tela em produção os 3 aparecem na aba e em negrito no texto.
+   ✅ parcial 24/11 — 18/18 (+14 da transcrição = 32/32), tsc exit 0, check-ui sem violação
+   (também depois das abas separadas);
+   nas reais saem exatamente os 3 objetos da escritura e nenhum na matrícula.
 
 ## Estado
 
 - 24/11/2026: itens 1–3 concluídos e provados em produção (#684). Vínculo com Meus Clientes: não pedido.
 - 24/11/2026: item 4 (negrito) concluído e provado em produção (#688). Itens 1–4 fechados.
+- 24/11/2026: item 5 (objetos) implementado; falta prova em produção.

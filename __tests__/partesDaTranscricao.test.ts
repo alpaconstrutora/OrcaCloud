@@ -3,7 +3,7 @@
 // Texto no molde das escrituras do cartório de Cambuí — nomes e números fictícios
 // (CPF/CNPJ de exemplo com dígito verificador válido).
 import { describe, expect, it } from 'vitest';
-import { formatarCnpj, formatarCpf, identificarPartes, trechosDasPartes } from '../utils/partesDaTranscricao';
+import { formatarCnpj, formatarCpf, identificarObjetos, identificarPartes, trechosEmNegrito } from '../utils/partesDaTranscricao';
 import type { LinhaTranscrita } from '../utils/transcricaoDocumento';
 
 const L = (...textos: string[]): LinhaTranscrita[] => textos.map(t => ({ t, c: 95 }));
@@ -81,8 +81,8 @@ describe('identificarPartes', () => {
   });
 });
 
-describe('trechosDasPartes (negrito no texto)', () => {
-  const trechos = trechosDasPartes(ESCRITURA, identificarPartes(ESCRITURA));
+describe('trechosEmNegrito (negrito no texto)', () => {
+  const trechos = trechosEmNegrito(ESCRITURA, identificarPartes(ESCRITURA));
   const negrito = (i: number) => (trechos.get(i) ?? []).map(([a, b]) => ESCRITURA[i].t.slice(a, b));
 
   it('marca o nome na linha em que aparece', () => {
@@ -97,7 +97,7 @@ describe('trechosDasPartes (negrito no texto)', () => {
 
   it('toda ocorrência, também em letra normal (assinaturas)', () => {
     const linhas = [...ESCRITURA, { t: 'Vendedoras (aa) Ana Paula dos Santos e Joana Maria de Souza.', c: 95 }];
-    const t = trechosDasPartes(linhas, identificarPartes(linhas)).get(linhas.length - 1) ?? [];
+    const t = trechosEmNegrito(linhas, identificarPartes(linhas)).get(linhas.length - 1) ?? [];
     expect(t.map(([a, b]) => linhas[linhas.length - 1].t.slice(a, b))).toEqual(['Ana Paula dos Santos', 'Joana Maria de Souza']);
   });
 
@@ -105,8 +105,52 @@ describe('trechosDasPartes (negrito no texto)', () => {
     expect(negrito(0)).toEqual([]);
     const linhas = [{ t: 'BEATRIZ LIMAS não é parte', c: null }];
     const parte = identificarPartes(ESCRITURA)[3];
-    expect(trechosDasPartes(linhas, [parte]).size).toBe(0);
-    expect(trechosDasPartes(ESCRITURA, []).size).toBe(0);
+    expect(trechosEmNegrito(linhas, [parte]).size).toBe(0);
+    expect(trechosEmNegrito(ESCRITURA, []).size).toBe(0);
+  });
+});
+
+describe('identificarObjetos', () => {
+  const OBJETOS = L(
+    'como outorgante vendedor – ANA PAULA DOS SANTOS, brasileira, portadora do CPF nº 529.982.247-25,',
+    'legítima possuidora de UMA CASA DE MORADA, situada no Bairro da Água Branca, e do LOTE Nº 05 DA QUADRA 03',
+    'do loteamento. A vendedora transmite ao comprador o DIREITO DE SERVIDÃO DE',
+    'ÁGUA, conforme descrição; BEM COMO O DIREITO DE SERVIDÃO DE ENERGIA ELÉTRICA, distribuída',
+    'de transformador na propriedade do Sr. MIGUEL RODRIGUES PEREIRA, pelo preço de R$ 50.000,00 (CINQUENTA',
+    'MIL REAIS). Assina VERÁ ANA PAULA DOS SANTOS conforme TRASLADADA FIELMENTE DO ORIGINAL.',
+    'CARTORIO DO 1º OFICIO DE NOTAS',
+  );
+  const linhas = [...OBJETOS, { t: 'RE RERRAS IT ADS E sobre AMA DIR', c: 12 }];
+  const objetos = identificarObjetos(linhas, identificarPartes(linhas));
+
+  it('acha os trechos em maiúsculas do texto corrido — com número e quebra de linha', () => {
+    expect(objetos.map(o => o.texto)).toEqual([
+      'UMA CASA DE MORADA',
+      'LOTE Nº 05 DA QUADRA 03',
+      'DIREITO DE SERVIDÃO DE ÁGUA',
+      'DIREITO DE SERVIDÃO DE ENERGIA ELÉTRICA',
+    ]);
+    expect(objetos.map(o => o.linha)).toEqual([1, 1, 2, 3]);
+  });
+
+  it('fora: parte (mesmo com acento lido errado), pessoa citada, valor por extenso, fórmula, cabeçalho, linha duvidosa', () => {
+    const textos = objetos.map(o => o.texto).join(' / ');
+    for (const fora of ['ANA PAULA', 'MIGUEL', 'CINQUENTA', 'REAIS', 'TRASLADADA', 'CARTORIO', 'RERRAS']) {
+      expect(textos).not.toContain(fora);
+    }
+  });
+
+  it('na escritura de exemplo: a servidão é objeto; títulos e valor não', () => {
+    expect(identificarObjetos(ESCRITURA, identificarPartes(ESCRITURA)).map(o => o.texto)).toEqual(['DIREITO DE SERVIDÃO DE PASSAGEM']);
+  });
+
+  it('negrito: objeto só em maiúsculas, também quebrado entre linhas', () => {
+    const comMinuscula = [...linhas, { t: 'e o direito de servidão de água segue o registro.', c: null }];
+    const t = trechosEmNegrito(comMinuscula, identificarPartes(comMinuscula), objetos);
+    const negrito = (i: number) => (t.get(i) ?? []).map(([a, b]) => comMinuscula[i].t.slice(a, b));
+    expect(negrito(2)).toEqual(['DIREITO DE SERVIDÃO DE']);
+    expect(negrito(3)).toEqual(['ÁGUA', 'DIREITO DE SERVIDÃO DE ENERGIA ELÉTRICA']);
+    expect(negrito(comMinuscula.length - 1)).toEqual([]);
   });
 });
 

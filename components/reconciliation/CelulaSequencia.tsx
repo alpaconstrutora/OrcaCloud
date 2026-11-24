@@ -36,13 +36,15 @@ export const explicacaoDaOrdem = (p?: PosicaoNaSerie, dica = '') => {
  * antiga em aberto de MESMO valor (`trocaPelaMaisAntiga`), o aviso vira o botão "usar a NN"
  * (pedido de 24/11/2026) — só na Central, onde há um movimento sugerido para trocar.
  */
-export function CelulaSequencia({ p, onUsar, ocupado, dica }: {
+export function CelulaSequencia({ p, onUsar, ocupado, dica, vazio = 'O lançamento não é parcela de contrato' }: {
     p?: PosicaoNaSerie;
     onUsar?: (antiga: NonNullable<PosicaoNaSerie['maisAntigaAberta']>) => void;
     ocupado?: boolean;
     dica?: string;
+    /** `title` do "—" (sem posição). */
+    vazio?: string;
 }) {
-    if (!p) return <span className="text-sm font-normal text-gray-500" title="O lançamento não é parcela de contrato">—</span>;
+    if (!p) return <span className="text-sm font-normal text-gray-500" title={vazio}>—</span>;
     const aviso = avisoDeOrdem(p);
     const antiga = onUsar ? trocaPelaMaisAntiga(p) : null;
     return (

@@ -2123,8 +2123,10 @@ inteira é um `<button>` que abre o detalhe no `Sheet` (tabela no padrão do §6
 > aviso âmbar vira o botão de texto **"usar a NN"** (`text-blue-600`, `font-medium`): concilia
 > o movimento com ela depois do `useConfirm` (variant `warning`, mostrando as duas datas).
 >
-> ℹ️ A mesma célula (`reconciliation/CelulaSequencia.tsx`) está na Pendentes › Lançamentos
-> Internos, entre Data e Valor — ali sem o "usar a NN" (não há movimento sugerido para trocar).
+> ℹ️ A mesma célula (`reconciliation/CelulaSequencia.tsx`) está na Pendentes › **Extrato
+> Bancário**, entre Data e Valor: a parcela da sugestão-topo do motor para aquele movimento, com o
+> "usar a NN". Nos Lançamentos Internos NÃO entra — ali o número da parcela o app já gera; a
+> pergunta "este movimento pagou qual parcela?" é do extrato (decisão do usuário, 24/11/2026).
 
 ---
 

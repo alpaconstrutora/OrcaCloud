@@ -141,8 +141,8 @@ export const STATEMENT_COLUMNS: ColumnConfig[] = [
 // Campo de bankSortField que cada coluna ordena (state próprio da toolbar, não o
 // sortColumn genérico de useTableColumns — ver bankSortField/bankSortOrder no
 // componente). Ausente = não ordenável (ex: status mistura dado com ação inline).
-export type BankSortField = 'date' | 'amount' | 'description' | 'category' | 'counterparty' | 'project' | 'costCenter' | 'planoContas' | 'organization';
-export type InternalSortField = 'date' | 'amount' | 'description' | 'category' | 'entity' | 'sequencia';
+export type BankSortField = 'date' | 'amount' | 'description' | 'category' | 'counterparty' | 'project' | 'costCenter' | 'planoContas' | 'organization' | 'sequencia';
+export type InternalSortField = 'date' | 'amount' | 'description' | 'category' | 'entity';
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `tableColumns.orderedVisibleColumns` (ordem que o usuário arrasta), em vez de
@@ -303,6 +303,9 @@ export const PENDING_BANK_COLUMNS: ColumnConfig[] = [
     { key: 'project',      label: 'Obra',            sortable: false },
     { key: 'costCenter',   label: 'Centro de Custo', sortable: false },
     { key: 'date',         label: 'Data',            sortable: true  },
+    // Parcela de contrato que o movimento provavelmente paga ("Parcela 25 de 30 · 01 em
+    // aberto"): a da sugestão-topo do motor — mesma célula da Central (CelulaSequencia.tsx).
+    { key: 'sequencia',    label: 'Sequência sugerida', sortable: true },
     { key: 'amount',       label: 'Valor',           sortable: true  },
     { key: 'actions',      label: 'Ações',           sortable: false },
 ];
@@ -314,6 +317,7 @@ export const DEFAULT_PENDING_BANK_COL_WIDTHS: Record<string, number> = {
     project: 140,
     costCenter: 159,
     date: 100,
+    sequencia: 175,
     amount: 130,
     actions: 160,
 };
@@ -327,6 +331,7 @@ export const PENDING_BANK_COLUMN_HEADERS: Record<string, { label: string; classN
     project:      { label: 'Obra',                                       className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     costCenter:   { label: 'Centro de Custo',                            className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     date:         { label: 'Data',            sortField: 'date',         className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+    sequencia:    { label: 'Sequência sugerida', sortField: 'sequencia', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     amount:       { label: 'Valor',           sortField: 'amount',       className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
 };
 
@@ -340,6 +345,8 @@ export const PENDING_BANK_TD_META: Record<string, { className: string; stopPropa
     project:      { className: '',                                                         stopPropagation: true },
     costCenter:   { className: '',                                                         stopPropagation: true },
     date:         { className: 'text-center text-sm font-normal text-gray-500 whitespace-nowrap' },
+    // stopPropagation: o "usar a NN" não pode selecionar a linha junto.
+    sequencia:    { className: 'whitespace-nowrap overflow-hidden', stopPropagation: true },
     amount:       { className: 'text-right text-sm font-medium whitespace-nowrap' },
 };
 
@@ -353,9 +360,6 @@ export const PENDING_INTERNAL_COLUMNS: ColumnConfig[] = [
     { key: 'project',      label: 'Obra',                 sortable: false },
     { key: 'costCenter',   label: 'Centro de Custo',      sortable: false },
     { key: 'date',         label: 'Data',                 sortable: true  },
-    // Posição da parcela na série do contrato ("Parcela 05 de 30 · 04 em aberto") — a mesma
-    // coluna da Central (components/reconciliation/CelulaSequencia.tsx).
-    { key: 'sequencia',    label: 'Sequência sugerida',   sortable: true  },
     { key: 'amount',       label: 'Valor',                sortable: true  },
     { key: 'actions',      label: 'Ações',                sortable: false },
 ];
@@ -368,7 +372,6 @@ export const DEFAULT_PENDING_INTERNAL_COL_WIDTHS: Record<string, number> = {
     project: 120,
     costCenter: 159,
     date: 100,
-    sequencia: 175,
     amount: 130,
     actions: 160,
 };
@@ -385,7 +388,6 @@ export const PENDING_INTERNAL_COLUMN_HEADERS: Record<string, { label: string; cl
     project:     { label: 'Obra',                                       className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     costCenter:  { label: 'Centro de Custo',                            className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     date:        { label: 'Data',            sortField: 'date',         className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
-    sequencia:   { label: 'Sequência sugerida', sortField: 'sequencia', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     amount:      { label: 'Valor',           sortField: 'amount',       className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
 };
 
@@ -399,7 +401,6 @@ export const PENDING_INTERNAL_TD_CLASS: Record<string, string> = {
     project:     'text-sm font-normal text-sky-700 truncate max-w-[110px]',
     costCenter:  'text-sm font-normal text-violet-700 truncate max-w-[130px]',
     date:        'text-center text-sm font-normal text-gray-500 whitespace-nowrap',
-    sequencia:   'whitespace-nowrap overflow-hidden',
     amount:      'text-right text-sm font-medium text-gray-900 whitespace-nowrap',
 };
 
@@ -603,6 +604,10 @@ export interface PendingBankRowCtx {
     onUpdateCategory: (id: string, v: string) => void;
     onUpdateProject: (id: string, v: string) => void;
     onUpdateCostCenter: (id: string, v: string) => void;
+    /** Posição, na série do contrato, da parcela que a sugestão-topo aponta; undefined = sem sugestão de parcela. */
+    posicaoNaSerie: (tx: BankTransaction) => PosicaoNaSerie | undefined;
+    /** "usar a NN": conciliar com a parcela aberta mais antiga (mesmo valor), após confirmar. */
+    onUsarMaisAntiga: (tx: BankTransaction, antiga: NonNullable<PosicaoNaSerie['maisAntigaAberta']>) => void;
 }
 
 export function renderPendingBankCell(key: string, tx: BankTransaction, ctx: PendingBankRowCtx): React.ReactNode {
@@ -653,6 +658,8 @@ export function renderPendingBankCell(key: string, tx: BankTransaction, ctx: Pen
                     />
                 </div>
             );
+        case 'sequencia':
+            return <CelulaSequencia p={ctx.posicaoNaSerie(tx)} onUsar={a => ctx.onUsarMaisAntiga(tx, a)} dica="(veja a Sugestão abaixo da linha)" vazio="Sem sugestão de parcela de contrato para este movimento" />;
         case 'date':
             return formatDateBR(tx.transaction_date);
         case 'amount':
@@ -680,8 +687,6 @@ export interface PendingInternalRowCtx {
     costCenterName: (id?: string | null) => string | null;
     categoryOptions: LazyOption[];
     onUpdateCategory: (id: string, v: string) => void;
-    /** Posição na série do contrato (coluna "Sequência sugerida"); undefined = não é parcela de contrato. */
-    posicaoNaSerie: (tx: InternalTransaction) => PosicaoNaSerie | undefined;
 }
 
 /**
@@ -758,8 +763,6 @@ export function renderPendingInternalCell(key: string, tx: InternalTransaction, 
             return ctx.costCenterName(tx.cost_center_id) || <span className="text-gray-300">—</span>;
         case 'date':
             return formatDateBR(ctx.displayDate(tx));
-        case 'sequencia':
-            return <CelulaSequencia p={ctx.posicaoNaSerie(tx)} />;
         case 'amount':
             return <ValorParaConciliar tx={tx} />;
         default:

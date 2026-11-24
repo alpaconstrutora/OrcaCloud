@@ -1,47 +1,58 @@
 // @vitest-environment jsdom
 import React from 'react';
-import { describe, it, expect } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi } from 'vitest';
+import { render, screen, fireEvent } from '@testing-library/react';
 import {
-    renderPendingInternalCell, PENDING_INTERNAL_COLUMNS, PENDING_INTERNAL_COLUMN_HEADERS,
-    type PendingInternalRowCtx,
+    renderPendingBankCell, PENDING_BANK_COLUMNS, PENDING_BANK_COLUMN_HEADERS, PENDING_BANK_TD_META,
+    PENDING_INTERNAL_COLUMNS, type PendingBankRowCtx,
 } from '../../components/reconciliation/tabelasDaConciliacao';
 import { chaveDaSequencia } from '../../components/reconciliation/CelulaSequencia';
-import type { InternalTransaction } from '../../types';
+import type { BankTransaction } from '../../types';
 import type { PosicaoNaSerie } from '../../utils/sequenciaParcelas';
 
-// Pendentes › Lançamentos Internos: coluna "Sequência sugerida" (pedido de 24/11/2026),
-// a mesma célula da Central.
+// Pendentes › Extrato Bancário: coluna "Sequência sugerida" (pedido de 24/11/2026) — a parcela
+// que o movimento provavelmente paga (a da sugestão-topo do motor), mesma célula da Central.
+// Nos Lançamentos ela NÃO entra: ali o número da parcela o próprio app já gera.
 
-const tx = (id: string, contract_id: string | null = 'c1') => ({
-    id, organization_id: 'o1', source_system: 'CONTRACT_RECURRING', contract_id,
-    transaction_date: '2019-01-10', amount: 4167.03, direction: 'CREDIT', status: 'PENDING',
-}) as unknown as InternalTransaction;
+const tx = (id: string) => ({
+    id, bank_account_id: 'conta', transaction_date: '2019-01-07', amount: 4167.03, direction: 'CREDIT', status: 'NORMALIZED',
+}) as unknown as BankTransaction;
 
-const pos = (numero: number, abertasAntes: number[] = []): PosicaoNaSerie => ({
-    contractId: 'c1', numeroContrato: 'CTL-006-012-0001', numero, total: 30, abertasAntes,
+const pos = (numero: number, abertasAntes: number[] = [], extra: Partial<PosicaoNaSerie> = {}): PosicaoNaSerie => ({
+    contractId: 'c1', numeroContrato: 'CTL-006-012-0001', numero, total: 30, abertasAntes, ...extra,
 });
 
-const ctx = (m: Map<string, PosicaoNaSerie>) => ({ posicaoNaSerie: (t: InternalTransaction) => m.get(t.id) }) as unknown as PendingInternalRowCtx;
+const ctx = (m: Map<string, PosicaoNaSerie>, onUsarMaisAntiga = vi.fn()) =>
+    ({ posicaoNaSerie: (t: BankTransaction) => m.get(t.id), onUsarMaisAntiga }) as unknown as PendingBankRowCtx;
 
-describe('Pendentes › coluna Sequência sugerida', () => {
-    it('é coluna da tabela, ordenável, entre Data e Valor', () => {
-        const keys = PENDING_INTERNAL_COLUMNS.map(c => c.key);
+describe('Pendentes › Extrato Bancário › coluna Sequência sugerida', () => {
+    it('é coluna do Extrato, ordenável, entre Data e Valor — e não dos Lançamentos', () => {
+        const keys = PENDING_BANK_COLUMNS.map(c => c.key);
         expect(keys.indexOf('sequencia')).toBe(keys.indexOf('date') + 1);
-        expect(PENDING_INTERNAL_COLUMN_HEADERS.sequencia).toMatchObject({ label: 'Sequência sugerida', sortField: 'sequencia' });
+        expect(PENDING_BANK_COLUMN_HEADERS.sequencia).toMatchObject({ label: 'Sequência sugerida', sortField: 'sequencia' });
+        // o clique no "usar a NN" não pode selecionar a linha junto
+        expect(PENDING_BANK_TD_META.sequencia.stopPropagation).toBe(true);
+        expect(PENDING_INTERNAL_COLUMNS.map(c => c.key)).not.toContain('sequencia');
     });
 
-    it('parcela de contrato: "Parcela 05 de 30" e o aviso de anterior em aberto', () => {
-        render(<>{renderPendingInternalCell('sequencia', tx('t5'), ctx(new Map([['t5', pos(5, [4])]])))}</>);
-        expect(screen.getByText(/Parcela 05 de 30/)).toBeTruthy();
-        expect(screen.getByText('· 04 em aberto')).toBeTruthy();
-        // Na Pendentes não há movimento sugerido para trocar: nunca o botão "usar a NN".
-        expect(screen.queryByRole('button')).toBeNull();
+    it('movimento com sugestão de parcela: "Parcela 25 de 30" e o aviso de anterior em aberto', () => {
+        render(<>{renderPendingBankCell('sequencia', tx('b1'), ctx(new Map([['b1', pos(25, [1])]])))}</>);
+        expect(screen.getByText(/Parcela 25 de 30/)).toBeTruthy();
+        expect(screen.getByText('· 01 em aberto')).toBeTruthy();
     });
 
-    it('lançamento que não é parcela de contrato fica com "—"', () => {
-        render(<>{renderPendingInternalCell('sequencia', tx('m1', null), ctx(new Map()))}</>);
-        expect(screen.getByTitle('O lançamento não é parcela de contrato').textContent).toBe('—');
+    it('mais antiga em aberto com o MESMO valor: "usar a 01" chama a troca com ela', () => {
+        const antiga = { id: 't-nov16', numero: 1, due_date: '2016-11-10', valor: 4167.03 };
+        const onUsar = vi.fn();
+        render(<>{renderPendingBankCell('sequencia', tx('b1'),
+            ctx(new Map([['b1', pos(25, [1], { valor: 4167.03, maisAntigaAberta: antiga })]]), onUsar))}</>);
+        fireEvent.click(screen.getByRole('button', { name: 'usar a 01' }));
+        expect(onUsar).toHaveBeenCalledWith(expect.objectContaining({ id: 'b1' }), antiga);
+    });
+
+    it('movimento sem sugestão de parcela fica com "—"', () => {
+        render(<>{renderPendingBankCell('sequencia', tx('b2'), ctx(new Map()))}</>);
+        expect(screen.getByTitle('Sem sugestão de parcela de contrato para este movimento').textContent).toBe('—');
     });
 
     it('chave de ordenação agrupa por contrato, na ordem da série', () => {

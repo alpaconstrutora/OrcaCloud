@@ -540,6 +540,13 @@ const App: React.FC = () => {
       const destino = destinoDoLinkDeNotificacao(link);
       if (destino?.foco) useStore.getState().navigateToFocus(destino.view, destino.foco.ref, destino.foco.source);
       else if (destino?.pedidoId) { setSelectedOrderId(destino.pedidoId); setActiveView(destino.view); }
+      else if (destino?.abaLocacoes) {
+        // A aba de Locações mora no próprio módulo (localStorage + evento): grava
+        // antes de abrir a tela e avisa o módulo se ele já estiver aberto.
+        localStorage.setItem('rentals_active_tab', destino.abaLocacoes);
+        window.dispatchEvent(new CustomEvent('rentals:abrir-aba', { detail: destino.abaLocacoes }));
+        setActiveView(destino.view);
+      }
       else if (destino) setActiveView(destino.view);
     }
   }, [setActiveView, setIsNotificationOpen, setSelectedOrderId]);

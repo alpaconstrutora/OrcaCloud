@@ -14,6 +14,7 @@ import EmpreendimentoTypesSettings from './EmpreendimentoTypesSettings';
 import EmpreendimentoUnitCharacteristicsSettings from './EmpreendimentoUnitCharacteristicsSettings';
 import PaymentTypesSettings from './PaymentTypesSettings';
 import ContractIndexManager from './ContractIndexManager';
+import AvisoReajusteOrgSettings from './rentals/AvisoReajusteOrgSettings';
 import TaxSettingsManager from './TaxSettingsManager';
 import InssBracketsSettings from './InssBracketsSettings';
 import PisRatesSettings from './PisRatesSettings';
@@ -450,7 +451,8 @@ const Settings: React.FC = () => {
             {activeLeaf === 'catalogo-marcas' && <BrandsSettings />}
 
             {activeLeaf === 'indices' && (
-                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
+                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-8">
+                    <AvisoReajusteOrgSettings />
                     <ContractIndexManager />
                 </div>
             )}

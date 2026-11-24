@@ -64,6 +64,11 @@ export interface Contract {
     reajuste_proximo?: string;
     /** Não recorrente: quanto os reajustes somaram. current_value = original + aditivos + este. */
     reajuste_acumulado?: number;
+    /** De quantos em quantos meses o reajuste é aplicado. null = 12 (Anual). Locação: vem da
+     *  "Periodicidade do Reajuste" da negociação — `billing_cycle` é a cadência de COBRANÇA. */
+    reajuste_periodicidade_meses?: number | null;
+    /** Dias de antecedência do aviso de reajuste. null = padrão da organização (senão 30). */
+    reajuste_aviso_dias?: number | null;
     // Locação (domain='LOCACAO') — a garantia formal (caução/fiança/seguro) fica em
     // `contract_guarantees`; aqui ficam só os campos diretos do contrato de aluguel.
     guarantor_name?: string;            // Fiador (pessoa física)

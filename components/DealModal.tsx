@@ -68,6 +68,7 @@ import { buildRentalResolveContext } from '../services/rentalDocumentContextServ
 import EmitDocumentModal from './EmitDocumentModal';
 import DocxTemplateManager from './DocxTemplateManager';
 import { contractRenewalService } from '../services/contractRenewalService';
+import { termosDeReajusteParaOContrato } from '../utils/reajusteAniversario';
 import { getNumberLockReason, regenerateContractNumber } from '../services/contractNumberRegenService';
 import { getDealCodeLockReason, regenerateDealCode } from '../services/dealCodeRegenService';
 import { DocType } from '../services/documentNumbering';
@@ -1593,6 +1594,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      *  campo de data passa por anos intermediários ("0002", "0020"…) enquanto
      *  o ano é digitado, e o prazo recalculado sobre eles se perderia. */
     const [prazoVigenciaDraft, setPrazoVigenciaDraft] = useState<string | null>(null);
+    /** Rascunho do "Avisar antes do reajuste" (grava no contrato ao sair do campo). */
+    const [avisoReajusteDraft, setAvisoReajusteDraft] = useState<string | null>(null);
     const prazoVigenciaAoFocarInicio = useRef<number | null>(null);
 
     /**
@@ -2957,13 +2960,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     const aditivos = await contractService.listAddendums(linkedContract.id);
                     const renovado = cadeia.length > 1
                         || aditivos.some(a => a.new_start_date && a.status !== 'Cancelado');
-                    const patch = atual ? vigenciaParaOContrato(formData, atual, renovado) : null;
-                    if (patch) {
+                    const patch = atual ? {
+                        ...(vigenciaParaOContrato(formData, atual, renovado) ?? {}),
+                        // Periodicidade e índice do reajuste valem mesmo depois de renovado:
+                        // são termos do contrato, não do período (reajuste em Locações › Reajustes).
+                        ...(termosDeReajusteParaOContrato(formData, atual) ?? {}),
+                    } : null;
+                    if (patch && Object.keys(patch).length > 0) {
                         await contractService.updateContract(linkedContract.id, patch);
                         setLinkedContract(prev => (prev ? { ...prev, ...patch } : prev));
                     }
                 } catch (err) {
-                    notifyError(`Negociação salva, mas a vigência não foi levada ao contrato: ${err instanceof Error ? err.message : 'erro desconhecido'}`);
+                    notifyError(`Negociação salva, mas a vigência e o reajuste não foram levados ao contrato: ${err instanceof Error ? err.message : 'erro desconhecido'}`);
                 }
             }
 
@@ -5395,17 +5403,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 <div className="space-y-2">
                                                     <label className="text-xs font-semibold text-slate-500">Periodicidade do Reajuste</label>
                                                     <select
-                                                        value={formData.billing_cycle || 'Mensal'}
+                                                        value={formData.billing_cycle || 'Anual'}
                                                         onChange={(e) => setFormData({ ...formData, billing_cycle: e.target.value as PropertyDeal['billing_cycle'] })}
                                                         className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
                                                     >
                                                         <option value="Mensal">Mensal</option>
                                                         <option value="Bimestral">Bimestral</option>
+                                                        <option value="Trimestral">Trimestral</option>
                                                         <option value="Semestral">Semestral</option>
                                                         <option value="Anual">Anual</option>
                                                     </select>
-                                                    <p className="text-xs text-gray-400 px-1">
-                                                        De quanto em quanto tempo o índice é aplicado. Não define
+                                                    <p className="text-xs text-gray-500 px-1">
+                                                        De quanto em quanto tempo o índice é aplicado (vazio = Anual). Não define
                                                         as parcelas: o aluguel é cobrado mensalmente, na
                                                         quantidade do campo Número de Parcelas.
                                                     </p>
@@ -5427,9 +5436,59 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     </select>
                                                 </div>
                                             </div>
-                                            <p className="text-xs font-normal text-gray-400 px-1">
-                                                O índice precisa estar cadastrado em Configurações do Sistema para o reajuste ser calculado na renovação.
+                                            <p className="text-xs font-normal text-gray-500 px-1">
+                                                O reajuste é decidido em Locações › Reajustes, no aniversário do contrato. O índice
+                                                precisa estar cadastrado em Configurações do Sistema › Índices de Reajuste.
                                             </p>
+
+                                            {/* Aviso de reajuste — por contrato (padrão da organização em
+                                                Configurações › Índices de Reajuste). Grava direto no contrato ao
+                                                sair do campo, como o número do contrato: é dado do contrato, que
+                                                a negociação não guarda (decisão do usuário, 24/11/2026). */}
+                                            {linkedContract && (() => {
+                                                const salvo = linkedContract.reajuste_aviso_dias ?? null;
+                                                const texto = avisoReajusteDraft ?? (salvo == null ? '' : String(salvo));
+                                                const gravarAviso = async () => {
+                                                    if (avisoReajusteDraft == null) return;
+                                                    const bruto = avisoReajusteDraft.trim();
+                                                    const dias = bruto === '' ? null : Math.floor(Number(bruto));
+                                                    if (dias != null && (!Number.isFinite(dias) || dias < 0 || dias > 365)) {
+                                                        notifyError('O aviso de reajuste deve ficar entre 0 e 365 dias (vazio = padrão da organização).');
+                                                        return;
+                                                    }
+                                                    setAvisoReajusteDraft(null);
+                                                    if (dias === salvo) return;
+                                                    try {
+                                                        await contractService.updateContract(linkedContract.id, { reajuste_aviso_dias: dias });
+                                                        setLinkedContract(prev => (prev ? { ...prev, reajuste_aviso_dias: dias } : prev));
+                                                        notifySuccess(dias == null ? 'Aviso de reajuste: padrão da organização.' : `Aviso de reajuste: ${dias} dia(s) antes.`);
+                                                    } catch (err) {
+                                                        notifyError(`Não foi possível gravar o aviso de reajuste: ${err instanceof Error ? err.message : 'erro desconhecido'}`);
+                                                    }
+                                                };
+                                                return (
+                                                    <div className="space-y-1.5">
+                                                        <label htmlFor="deal-aviso-reajuste" className="block text-xs font-semibold text-slate-500">Avisar antes do reajuste</label>
+                                                        <div className="relative w-40">
+                                                            <input
+                                                                id="deal-aviso-reajuste"
+                                                                type="number" min={0} max={365} step={1} inputMode="numeric"
+                                                                placeholder="Padrão"
+                                                                value={texto}
+                                                                onChange={(e) => setAvisoReajusteDraft(e.target.value)}
+                                                                onBlur={gravarAviso}
+                                                                onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+                                                                className="w-full h-9 pl-3 pr-12 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                            />
+                                                            <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">dias</span>
+                                                        </div>
+                                                        <p className="text-xs text-gray-500 px-1">
+                                                            Gravado no contrato ao sair do campo. Vazio = padrão da organização
+                                                            (Configurações do Sistema › Índices de Reajuste), ou 30 dias.
+                                                        </p>
+                                                    </div>
+                                                );
+                                            })()}
                                         </div>
                                     )}
 

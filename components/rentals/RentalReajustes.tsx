@@ -1,25 +1,21 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, CalendarClock, CalendarX, Percent } from 'lucide-react';
+import { AlertTriangle, CalendarClock, CalendarX, ChevronRight, Percent } from 'lucide-react';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import { KpiCard } from '../ui/KpiCard';
-import { useConfirm } from '../ui/confirm';
 import ActionIconButton from '../ui/ActionIconButton';
-import { contractIndexService, ReajusteLocacao } from '../../services/contractIndexService';
-import { contractService } from '../../services/contractService';
+import ReajusteDecisaoSheet from './ReajusteDecisaoSheet';
+import { reajusteLocacaoService, LinhaDeReajuste, RegistroDeReajuste } from '../../services/reajusteLocacaoService';
 import { Client } from '../../types';
 
 /**
- * Locações › Reajustes — o reajuste ANUAL do aluguel, separado da renovação
- * (pedido 24/11/2026: "Aba renovações é para tratar renovar um contrato que chega
- * ao fim, e não de reajuste anual do contrato"). Plano:
- * docs/planos/2026-11-24-locacoes-reajustes-separados-das-renovacoes.md.
+ * Locações › Reajustes — o reajuste do aluguel no ANIVERSÁRIO, separado da
+ * renovação. Plano: docs/planos/2026-11-24-locacoes-reajustes-separados-das-renovacoes.md.
  *
- * Lista os contratos de locação ativos com índice cujo reajuste venceu ou vence
- * nos próximos 30 dias. "Aplicar" usa o índice cadastrado
- * (contractService.aplicarReajustePeloIndice) e só liga a partir da data.
+ * Fila: locações ativas com índice cujo aniversário está dentro da vigência e a
+ * até N dias (aviso do contrato → padrão da organização → 30); vencido fica até
+ * alguém decidir. A decisão (100% do índice, outro %, valor, ou não reajustar)
+ * é no ReajusteDecisaoSheet; a linha abre o histórico do contrato.
  */
-
-const DIAS_A_FRENTE = 30;
 
 const COLUMNS: StandardTableColumn[] = [
     { key: 'number', label: 'Contrato', sortable: true, width: 200 },
@@ -31,14 +27,21 @@ const COLUMNS: StandardTableColumn[] = [
     { key: 'value', label: 'Aluguel atual', sortable: true, width: 140, align: 'right' },
 ];
 
+const ROTULO_DECISAO: Record<RegistroDeReajuste['decisao'], string> = {
+    INDICE: '100% do índice',
+    PERCENTUAL: 'Percentual informado',
+    VALOR: 'Valor informado',
+    NAO_APLICADO: 'Não reajustado',
+};
+
 /** Data BR por split — `new Date(iso)` retrocede um dia em UTC-3. */
 const fmtDate = (iso?: string | null) => {
     if (!iso) return '—';
     const [y, m, d] = iso.slice(0, 10).split('-');
     return `${d}/${m}/${y}`;
 };
-const fmtCur = (n?: number | null) =>
-    (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const fmtCur = (n?: number | null) => (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
 
 /** Dias de hoje até a data (negativo = já passou), em datas de calendário. */
 const diasAte = (iso: string) => {
@@ -61,17 +64,18 @@ interface Props {
 }
 
 const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpenContract, onNotify }) => {
-    const [linhas, setLinhas] = useState<ReajusteLocacao[]>([]);
+    const [linhas, setLinhas] = useState<LinhaDeReajuste[]>([]);
     const [loading, setLoading] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
-    const [aplicandoId, setAplicandoId] = useState<string | null>(null);
-    const confirm = useConfirm();
+    const [decidindo, setDecidindo] = useState<string | null>(null);
+    const [aberto, setAberto] = useState<string | null>(null);
+    const [historicos, setHistoricos] = useState<Record<string, RegistroDeReajuste[] | 'carregando' | 'falhou'>>({});
 
     const carregar = useCallback(async () => {
         setLoading(true);
         setErro(null);
         try {
-            setLinhas(await contractIndexService.listReajustesLocacao(organizationId, DIAS_A_FRENTE));
+            setLinhas(await reajusteLocacaoService.listarFila(organizationId));
         } catch (e) {
             setErro(`Não foi possível carregar os reajustes: ${e instanceof Error ? e.message : 'erro desconhecido'}`);
         } finally {
@@ -81,42 +85,44 @@ const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpen
 
     useEffect(() => { carregar(); }, [carregar]);
 
+    const carregarHistorico = useCallback(async (contractId: string) => {
+        setHistoricos(prev => ({ ...prev, [contractId]: 'carregando' }));
+        try {
+            const h = await reajusteLocacaoService.historico(contractId);
+            setHistoricos(prev => ({ ...prev, [contractId]: h }));
+        } catch {
+            setHistoricos(prev => ({ ...prev, [contractId]: 'falhou' }));
+        }
+    }, []);
+
+    const alternarHistorico = (contractId: string) => {
+        if (aberto === contractId) { setAberto(null); return; }
+        setAberto(contractId);
+        if (!historicos[contractId] || historicos[contractId] === 'falhou') carregarHistorico(contractId);
+    };
+
     const nomeDoCliente = useMemo(() => {
         const mapa = new Map(clients.map(c => [c.id, c.name]));
         return (id?: string | null) => (id && mapa.get(id)) || '—';
     }, [clients]);
 
-    const vencidos = linhas.filter(l => diasAte(l.reajuste_proximo) <= 0).length;
+    const vencidos = linhas.filter(l => diasAte(l.aniversario.aniversario) <= 0).length;
     const proximos = linhas.length - vencidos;
 
-    const aplicar = async (l: ReajusteLocacao) => {
-        const ok = await confirm({
-            title: `Aplicar o reajuste do contrato ${l.number}?`,
-            message: `O aluguel de ${fmtCur(l.current_value ?? l.original_value)} é corrigido pelo ${l.reajuste_index} `
-                + `desde a data-base (${fmtDate(l.reajuste_data_base)}). As parcelas em aberto com vencimento a partir `
-                + 'de hoje passam ao valor novo; as pagas, conciliadas ou com valor alterado à mão não mudam.',
-            variant: 'warning',
-            confirmLabel: 'Aplicar reajuste',
-        });
-        if (!ok) return;
-        setAplicandoId(l.id);
-        try {
-            const r = await contractService.aplicarReajustePeloIndice(l.id);
-            onNotify(`Reajuste aplicado ao contrato ${r.contract.number}: ${fmtCur(r.contract.current_value)} (${r.indice} ${r.mesBase} → ${r.mesAtual}).`, 'success');
-            // O contrato reajustado sai da fila (próximo reajuste daqui a 12 meses).
-            setLinhas(prev => prev.filter(x => x.id !== l.id));
-        } catch (e) {
-            onNotify(e instanceof Error ? e.message : 'Erro ao aplicar o reajuste.', 'error');
-        } finally {
-            setAplicandoId(null);
-        }
+    // Depois de decidir: o contrato pode continuar na fila (próximo aniversário
+    // também já venceu — ex.: 2017 e 2018) ou sair; relê a fila e o histórico dele.
+    const aoDecidir = async (mensagem: string, contractId: string) => {
+        setDecidindo(null);
+        onNotify(mensagem, 'success');
+        await carregar();
+        if (aberto === contractId || historicos[contractId]) carregarHistorico(contractId);
     };
 
     return (
         <div className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                 <KpiCard size="sm" label="Reajuste vencido" value={vencidos} icon={<CalendarX className="w-4 h-4" />} color="red" />
-                <KpiCard size="sm" label={`Vencem em ${DIAS_A_FRENTE} dias`} value={proximos} icon={<CalendarClock className="w-4 h-4" />} color="amber" />
+                <KpiCard size="sm" label="Reajuste chegando" value={proximos} sub="Dentro do prazo de aviso" icon={<CalendarClock className="w-4 h-4" />} color="amber" />
             </div>
 
             {erro && (
@@ -126,7 +132,7 @@ const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpen
                 </div>
             )}
 
-            <StandardTable<ReajusteLocacao>
+            <StandardTable<LinhaDeReajuste>
                 storageKey="rentals:reajustes"
                 columns={COLUMNS}
                 rows={linhas}
@@ -141,24 +147,37 @@ const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpen
                         case 'number': return l.number;
                         case 'client': return nomeDoCliente(l.client_id);
                         case 'index': return l.reajuste_index;
-                        case 'data_base': return l.reajuste_data_base ?? '';
-                        case 'proximo': case 'situacao': return l.reajuste_proximo;
+                        case 'data_base': return l.aniversario.dataBase;
+                        case 'proximo': case 'situacao': return l.aniversario.aniversario;
                         case 'value': return Number(l.current_value ?? l.original_value ?? 0);
                         default: return '';
                     }
                 }}
                 renderCell={(key, l) => {
                     switch (key) {
-                        case 'number': return <span className="block truncate text-sm font-normal text-gray-700" title={l.title}>{l.number}</span>;
+                        case 'number':
+                            return (
+                                <button
+                                    type="button"
+                                    onClick={() => alternarHistorico(l.id)}
+                                    aria-expanded={aberto === l.id}
+                                    aria-label={`Histórico de reajustes de ${l.number}`}
+                                    className="flex items-center gap-1.5 min-w-0 text-left text-sm font-normal text-gray-700 hover:text-blue-600"
+                                    title={l.title}
+                                >
+                                    <ChevronRight className={`w-4 h-4 shrink-0 text-gray-400 transition-transform ${aberto === l.id ? 'rotate-90' : ''}`} />
+                                    <span className="block truncate">{l.number}</span>
+                                </button>
+                            );
                         case 'client': {
                             const nome = nomeDoCliente(l.client_id);
                             return <span className="block truncate text-sm font-normal text-gray-700" title={nome}>{nome}</span>;
                         }
                         case 'index': return <span className="text-sm font-normal text-gray-600">{l.reajuste_index}</span>;
-                        case 'data_base': return <span className="text-sm font-normal text-gray-600">{fmtDate(l.reajuste_data_base)}</span>;
-                        case 'proximo': return <span className="text-sm font-normal text-gray-600">{fmtDate(l.reajuste_proximo)}</span>;
+                        case 'data_base': return <span className="text-sm font-normal text-gray-600">{fmtDate(l.aniversario.dataBase)}</span>;
+                        case 'proximo': return <span className="text-sm font-normal text-gray-600">{fmtDate(l.aniversario.aniversario)}</span>;
                         case 'situacao': {
-                            const s = situacao(diasAte(l.reajuste_proximo));
+                            const s = situacao(diasAte(l.aniversario.aniversario));
                             return <span className={`text-sm font-normal ${s.cor}`}>{s.texto}</span>;
                         }
                         case 'value': return <span className="text-sm font-medium text-gray-800">{fmtCur(l.current_value ?? l.original_value)}</span>;
@@ -166,37 +185,75 @@ const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpen
                     }
                 }}
                 actions={{
-                    width: 200,
+                    width: 190,
                     render: l => {
-                        const dias = diasAte(l.reajuste_proximo);
-                        const motivo = aplicandoId === l.id ? 'Aplicando o reajuste…'
-                            : aplicandoId ? 'Aguarde: outro reajuste está sendo aplicado.'
-                            : dias > 0 ? `O reajuste vence em ${fmtDate(l.reajuste_proximo)} — aplique a partir dessa data.`
-                            : null;
+                        const dias = diasAte(l.aniversario.aniversario);
+                        const motivo = dias > 0 ? `O reajuste vence em ${fmtDate(l.aniversario.aniversario)} — decida a partir dessa data.` : null;
                         return (
-                            <div className="flex items-center justify-end gap-1.5">
+                            <>
                                 <span className="inline-flex" title={motivo ?? undefined}>
                                     <button
                                         type="button"
-                                        onClick={() => aplicar(l)}
+                                        onClick={() => setDecidindo(l.id)}
                                         disabled={!!motivo}
                                         className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all disabled:text-gray-400 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                                     >
-                                        {aplicandoId === l.id ? 'Aplicando…' : 'Aplicar reajuste'}
+                                        Reajustar
                                     </button>
                                 </span>
                                 {onOpenContract && (
                                     <ActionIconButton kind="view" title="Abrir a negociação do contrato" onClick={() => onOpenContract(l.id)} />
                                 )}
-                            </div>
+                            </>
                         );
                     },
                 }}
+                renderExpanded={(l, visibleCount) => {
+                    if (aberto !== l.id) return null;
+                    const h = historicos[l.id];
+                    return (
+                        <tr className="bg-gray-50/50">
+                            <td colSpan={visibleCount} className="px-6 py-3">
+                                <div className="sticky left-6 max-w-3xl" role="region" aria-label={`Histórico de reajustes de ${l.number}`}>
+                                    {h === 'carregando' || h === undefined ? (
+                                        <p className="text-sm text-gray-500">Carregando histórico…</p>
+                                    ) : h === 'falhou' ? (
+                                        <p className="text-sm text-red-600">
+                                            Não foi possível carregar o histórico. <button type="button" onClick={() => carregarHistorico(l.id)} className="font-medium underline">Tentar de novo</button>
+                                        </p>
+                                    ) : h.length === 0 ? (
+                                        <p className="text-sm text-gray-500">Nenhum reajuste decidido por aqui ainda.</p>
+                                    ) : (
+                                        <ul className="space-y-1.5">
+                                            {h.map(r => (
+                                                <li key={r.id} className="text-sm text-gray-700">
+                                                    <span className="font-medium text-gray-900">{fmtDate(r.aniversario)}</span>
+                                                    {' · '}{ROTULO_DECISAO[r.decisao]}
+                                                    {r.decisao !== 'NAO_APLICADO' && ` (${fmtPct(Number(r.percentual_aplicado))}): ${fmtCur(r.valor_anterior)} → ${fmtCur(r.valor_novo)} · ${r.parcelas_atualizadas} parcela(s)`}
+                                                    {r.percentual_indice != null && <span className="text-gray-500">{` · ${r.indice} no período ${fmtPct(Number(r.percentual_indice))}`}</span>}
+                                                    {r.observacao && <span className="text-gray-500">{` · "${r.observacao}"`}</span>}
+                                                    {r.criado_por && <span className="text-gray-500">{` · ${r.criado_por}`}</span>}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                </div>
+                            </td>
+                        </tr>
+                    );
+                }}
                 empty={{
                     icon: <Percent className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
-                    title: 'Nenhum reajuste a fazer',
-                    subtitle: `Nenhum contrato de locação com reajuste vencido ou nos próximos ${DIAS_A_FRENTE} dias.`,
+                    title: 'Nenhum reajuste a decidir',
+                    subtitle: 'Nenhuma locação com aniversário de reajuste vencido ou dentro do prazo de aviso.',
                 }}
+            />
+
+            <ReajusteDecisaoSheet
+                contractId={decidindo}
+                onClose={() => setDecidindo(null)}
+                onDecidido={aoDecidir}
+                onErro={m => onNotify(m, 'error')}
             />
         </div>
     );

@@ -14,7 +14,8 @@ describe('destinoDoLinkDeNotificacao', () => {
         expect(destinoDoLinkDeNotificacao('/riscos')).toEqual({ view: 'riscos' });
     });
     it('demais rotas continuam só trocando de tela (query ignorada, como antes)', () => {
-        expect(destinoDoLinkDeNotificacao('/rentals?tab=renewals&contract=9')).toEqual({ view: 'rentals' });
+        // Locações deixou de ignorar o `tab` em 24/11/2026 — ver o describe da aba de Locações.
+        expect(destinoDoLinkDeNotificacao('/contracts-reajuste?contract=9')).toEqual({ view: 'contracts-reajuste' });
         expect(destinoDoLinkDeNotificacao('/contas-a-receber')).toEqual({ view: 'contas-a-receber' });
     });
     it('link que não é rota interna não navega', () => {
@@ -61,5 +62,15 @@ describe('destinoDoLinkDeNotificacao', () => {
         expect(destinoDoLinkDeNotificacao('/supplies-orders?pedido=ped-1'))
             .toEqual({ view: 'supplies-orders', pedidoId: 'ped-1' });
         expect(destinoDoLinkDeNotificacao('/supplies-orders')).toEqual({ view: 'supplies-orders' });
+    });
+});
+
+describe('destinoDoLinkDeNotificacao — aba de Locações (24/11/2026)', () => {
+    it('aviso de reajuste abre Locações › Reajustes; o de renovação, Renovações', () => {
+        expect(destinoDoLinkDeNotificacao('/rentals?tab=reajustes&contract=c1'))
+            .toEqual({ view: 'rentals', abaLocacoes: 'reajustes' });
+        expect(destinoDoLinkDeNotificacao('/rentals?tab=renewals&contract=c1'))
+            .toEqual({ view: 'rentals', abaLocacoes: 'renewals' });
+        expect(destinoDoLinkDeNotificacao('/rentals')).toEqual({ view: 'rentals' });
     });
 });

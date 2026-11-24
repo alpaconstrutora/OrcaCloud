@@ -226,4 +226,8 @@ BEGIN
     RETURN v_created;
 END $function$;
 
+-- Mesmo REVOKE da criação (20270919000002): CREATE OR REPLACE mantém os grants,
+-- mas a trava de segurança lê o texto do arquivo.
+REVOKE EXECUTE ON FUNCTION public.fn_notif_contrato_reajuste(INTEGER) FROM PUBLIC, anon;
+
 COMMIT;

@@ -42,6 +42,12 @@ export interface DestinoDoLink {
      * não usa o foco do store — o detalhe abre por `setSelectedOrderId` no App.
      */
     pedidoId?: string;
+    /**
+     * Aba de Locações (`/rentals?tab=renewals` do aviso de renovação,
+     * `/rentals?tab=reajustes` do de reajuste — 24/11/2026). Até então o `tab`
+     * era ignorado e o aviso abria Locações na última aba usada.
+     */
+    abaLocacoes?: string;
 }
 
 /** `null` quando o link não é uma rota interna `/view[?query]`. */
@@ -55,6 +61,10 @@ export function destinoDoLinkDeNotificacao(link: string): DestinoDoLink | null {
     if (!link.startsWith('/')) return null;
     const [caminho, query = ''] = link.substring(1).split('?');
     if (!caminho) return null;
+    if (caminho === 'rentals') {
+        const aba = new URLSearchParams(query).get('tab');
+        return aba ? { view: caminho, abaLocacoes: aba } : { view: caminho };
+    }
     if (caminho === 'supplies-orders') {
         const pedidoId = new URLSearchParams(query).get('pedido');
         return pedidoId ? { view: caminho, pedidoId } : { view: caminho };

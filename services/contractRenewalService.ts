@@ -30,7 +30,7 @@ const RENEWAL_COLS =
     'id, organization_id, project_id, client_id, supplier_id, deal_id, number, title, description, ' +
     'contract_type, nature, domain, direction, status, start_date, end_date, is_recurring, billing_cycle, ' +
     'due_day, payment_days, payment_method, original_value, current_value, reajuste_index, ' +
-    'reajuste_data_base, reajuste_proximo, guarantor_name, rescission_penalty_months, retention_rate, ' +
+    'reajuste_data_base, reajuste_proximo, reajuste_periodicidade_meses, reajuste_aviso_dias, guarantor_name, rescission_penalty_months, retention_rate, ' +
     'empresa_id, cost_center_id, category_id, responsible_email, client_responsible, internal_responsible, ' +
     'parent_contract_id, renewal_seq, renewed_at, renewal_notice_days, created_at';
 
@@ -537,6 +537,9 @@ export const contractRenewalService = {
             // Renovar ≠ reajustar: com o aluguel mantido, o filho herda o
             // aniversário do reajuste do pai (aniversarioAposRenovacao).
             ...aniversarioAposRenovacao(parent, startDate, preview.currentValue, newValue),
+            // Os termos do reajuste continuam os do contrato renovado.
+            reajuste_periodicidade_meses: parent.reajuste_periodicidade_meses ?? null,
+            reajuste_aviso_dias: parent.reajuste_aviso_dias ?? null,
             guarantor_name: termo('guarantor_name'),
             rescission_penalty_months: termo('rescission_penalty_months'),
             retention_rate: parent.retention_rate ?? 0,

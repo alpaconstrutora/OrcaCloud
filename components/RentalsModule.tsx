@@ -1019,6 +1019,18 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         if (activeTab) localStorage.setItem('rentals_active_tab', activeTab);
     }, [activeTab]);
 
+    // Aviso de renovação/reajuste aberto com Locações já na tela (App.handleNavigate).
+    const ABAS_DO_AVISO: RentalsTab[] = ['renewals', 'reajustes'];
+    useEffect(() => {
+        const abrir = (e: Event) => {
+            const aba = (e as CustomEvent<string>).detail as RentalsTab;
+            if (ABAS_DO_AVISO.includes(aba)) setActiveTab(aba);
+        };
+        window.addEventListener('rentals:abrir-aba', abrir);
+        return () => window.removeEventListener('rentals:abrir-aba', abrir);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
     useEffect(() => {
         if (selectedBuildingId) {
             localStorage.setItem('rentals_selected_building_id', selectedBuildingId);

@@ -3,6 +3,9 @@ import { financialService } from './financialService';
 import { projectService } from './projectService';
 import { approvalService } from './approvalService';
 import { contractIndexService, normalizeIndexName } from './contractIndexService';
+import { reajusteLocacaoService } from './reajusteLocacaoService';
+import { mesesDoCicloDeReajuste, mesesDaPeriodicidade } from '../utils/reajusteAniversario';
+import { somarMeses } from '../utils/paymentPlan';
 import { commercialFinanceService } from './commercialFinanceService';
 import { generateRentalContractNumber } from './rentalContractNumberingService';
 import { generateUnitSaleContractNumber } from './unitSaleContractNumberingService';
@@ -1525,7 +1528,7 @@ export const contractService = {
                 // createFromDeal saber o que ainda está vazio (backfill).
                 // `nature`/`contract_type`: dão nome ao documento gerado pelo modelo
                 // ("… - Minuta do Contrato de Locação", EmitDocumentModal).
-                .select('id, organization_id, deal_id, client_id, empresa_id, execution_address, number, title, status, original_value, current_value, direction, domain, nature, contract_type, signature_status, signed_contract_url, created_at')
+                .select('id, organization_id, deal_id, client_id, empresa_id, execution_address, number, title, status, original_value, current_value, direction, domain, nature, contract_type, signature_status, signed_contract_url, reajuste_periodicidade_meses, reajuste_aviso_dias, created_at')
                 .eq('deal_id', dealId)
                 .maybeSingle();
             if (error) {
@@ -1640,7 +1643,7 @@ export const contractService = {
                     .from('contracts')
                     .update(patch as any)
                     .eq('id', existing.id)
-                    .select('id, organization_id, deal_id, client_id, empresa_id, execution_address, number, title, status, original_value, current_value, direction, domain, nature, contract_type, signature_status, signed_contract_url, created_at')
+                    .select('id, organization_id, deal_id, client_id, empresa_id, execution_address, number, title, status, original_value, current_value, direction, domain, nature, contract_type, signature_status, signed_contract_url, reajuste_periodicidade_meses, reajuste_aviso_dias, created_at')
                     .maybeSingle();
                 if (fixed) return fixed as Contract;
             }
@@ -1693,13 +1696,14 @@ export const contractService = {
             : 'Ativo';
 
         // Reajuste anual (locação): +12 meses a partir da data-base, sem drift de fuso.
+        // Periodicidade do reajuste = "Periodicidade do Reajuste" da negociação
+        // (vazio = Anual); o 1º aniversário é a data-base + essa periodicidade.
+        const periodicidadeReajuste = isRental ? mesesDoCicloDeReajuste(deal.billing_cycle) : null;
         const nextAdjustment = (() => {
             if (!isRental || !deal.date) return undefined;
             const [y, m, d] = deal.date.split('-').map(Number);
             if (!y || !m || !d) return undefined;
-            const dt = new Date(Date.UTC(y, m - 1, d));
-            dt.setUTCFullYear(dt.getUTCFullYear() + 1);
-            return dt.toISOString().split('T')[0];
+            return somarMeses(deal.date.slice(0, 10), mesesDaPeriodicidade(periodicidadeReajuste));
         })();
         // Dia de vencimento derivado do vencimento informado (UTC evita retroceder 1 dia).
         const dueDay = isRental && deal.payment_due_date
@@ -1786,6 +1790,7 @@ export const contractService = {
                 reajuste_index: normalizeIndexName(deal.reajuste_index) || 'IGP-M',
                 reajuste_data_base: deal.date || undefined,
                 reajuste_proximo: nextAdjustment,
+                reajuste_periodicidade_meses: periodicidadeReajuste,
             } : {}),
             payment_method: deal.payment_method || undefined,
             payment_installments: deal.installments || undefined,
@@ -3366,6 +3371,20 @@ export const contractService = {
     }> => {
         const contract = await contractService.getContractById(contractId);
         if (!contract) throw new Error('Contrato não encontrado.');
+        // Locação: reajuste pelo ANIVERSÁRIO (índice do mês do aniversário, parcelas
+        // em aberto a partir dele, próximo = aniversário + periodicidade, histórico).
+        // Ver reajusteLocacaoService — o caminho abaixo comparava com o índice de HOJE.
+        if (contract.domain === 'LOCACAO' && contract.is_recurring) {
+            const { registro } = await reajusteLocacaoService.decidir(contractId, { tipo: 'INDICE' });
+            const mesL = (iso?: string | null) => (iso ? `${iso.slice(5, 7)}/${iso.slice(0, 4)}` : '—');
+            const atualizado = await contractService.getContractById(contractId);
+            return {
+                contract: atualizado ?? contract,
+                indice: registro.indice ?? (contract.reajuste_index || ''),
+                mesBase: mesL(registro.indice_mes_base),
+                mesAtual: mesL(registro.indice_mes_atual),
+            };
+        }
         const indice = normalizeIndexName(contract.reajuste_index);
         if (!indice || indice === 'OUTROS') {
             throw new Error(`Contrato ${contract.number} sem índice de reajuste definido — escolha o índice no contrato.`);

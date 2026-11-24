@@ -2,20 +2,6 @@ import { supabase } from '../lib/supabase';
 
 export type IndexName = 'INCC' | 'INCC-M' | 'IPCA' | 'IGP-M' | 'CUB' | 'OUTROS';
 
-/** Linha da fila Locações › Reajustes (`listReajustesLocacao`). */
-export interface ReajusteLocacao {
-    id: string;
-    organization_id: string;
-    number: string;
-    title: string;
-    client_id: string | null;
-    reajuste_index: string;
-    reajuste_data_base: string | null;
-    reajuste_proximo: string;
-    current_value: number | null;
-    original_value: number | null;
-}
-
 export interface ContractIndexValue {
     id: string;
     organization_id: string | null;
@@ -124,30 +110,6 @@ export const contractIndexService = {
             .delete()
             .eq('id', id);
         if (error) throw error;
-    },
-
-    /**
-     * Fila da aba Locações › Reajustes: contratos de LOCAÇÃO ativos, com índice,
-     * cujo reajuste já venceu ou vence nos próximos `diasAFrente` dias.
-     * REGRA #5: `organizationId` nulo ("Todas") não filtra — a RLS recorta.
-     */
-    listReajustesLocacao: async (organizationId: string | null, diasAFrente = 30): Promise<ReajusteLocacao[]> => {
-        const ate = new Date();
-        ate.setDate(ate.getDate() + diasAFrente);
-        let q = supabase
-            .from('contracts')
-            .select('id, organization_id, number, title, client_id, reajuste_index, reajuste_data_base, reajuste_proximo, current_value, original_value')
-            .eq('domain', 'LOCACAO')
-            .in('status', ['Ativo', 'Assinado'])
-            .not('reajuste_index', 'is', null)
-            .not('reajuste_proximo', 'is', null)
-            .lte('reajuste_proximo', ate.toISOString().slice(0, 10))
-            .order('reajuste_proximo', { ascending: true })
-            .order('id', { ascending: true });
-        if (organizationId) q = q.eq('organization_id', organizationId);
-        const { data, error } = await q;
-        if (error) throw error;
-        return ((data ?? []) as ReajusteLocacao[]).filter(r => r.reajuste_index && r.reajuste_index !== 'Sem Reajuste');
     },
 
     /** Verifica contratos com reajuste_proximo <= hoje e retorna lista */

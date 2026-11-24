@@ -18,7 +18,8 @@ import { useConfirm } from './ui/confirm';
 import GroupMatchPanel from './GroupMatchPanel';
 import SequenciaParcelasPanel from './reconciliation/SequenciaParcelasPanel';
 import { sequenciaParcelasService } from '../services/sequenciaParcelasService';
-import { trocaPelaMaisAntiga, type PosicaoNaSerie } from '../utils/sequenciaParcelas';
+import type { PosicaoNaSerie } from '../utils/sequenciaParcelas';
+import { CelulaSequencia, chaveDaSequencia, doisDigitos, textoDaSequencia } from './reconciliation/CelulaSequencia';
 import { formatMoney as formatBRL, formatDateBR as formatDate } from './ui/Format';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ActionIconButton from './ui/ActionIconButton';
@@ -138,54 +139,6 @@ const COLUNAS_SUGESTAO: StandardTableColumn[] = [
     // composta, sem valor único para ordenar (§6.3); a ordem por força é a Confiança.
     { key: 'motivos',     label: 'Motivos',            sortable: false, width: 300, defaultHidden: true },
 ];
-
-/** "05" — com tantos dígitos quanto o total (mínimo 2). */
-const doisDigitos = (n: number, total: number) => String(n).padStart(Math.max(2, String(total).length), '0');
-const textoDaSequencia = (p?: PosicaoNaSerie) => (p ? `Parcela ${doisDigitos(p.numero, p.total)} de ${doisDigitos(p.total, p.total)}` : '');
-const avisoDeOrdem = (p?: PosicaoNaSerie) => {
-    if (!p || p.abertasAntes.length === 0) return '';
-    const ns = p.abertasAntes.map(n => doisDigitos(n, p.total));
-    return ns.length === 1 ? `${ns[0]} em aberto` : `${ns.length} anteriores em aberto`;
-};
-const explicacaoDaOrdem = (p?: PosicaoNaSerie) => {
-    if (!p) return undefined;
-    const base = `Contrato ${p.numeroContrato || '—'}: parcela ${p.numero} de ${p.total}.`;
-    if (p.abertasAntes.length === 0) return `${base} Nenhuma parcela anterior em aberto.`;
-    return `${base} Anteriores ainda em aberto: ${p.abertasAntes.map(n => doisDigitos(n, p.total)).join(', ')}. `
-        + 'Quem paga atrasado costuma quitar a mais antiga primeiro — confira se este movimento não é dela (veja "+N" na Confiança).';
-};
-
-/**
- * Célula da "Sequência sugerida": texto §8, aviso âmbar quando a sugestão pula parcela
- * anterior. Se a mais antiga em aberto tem o MESMO valor (`trocaPelaMaisAntiga`), o aviso
- * vira o botão "usar a NN" (pedido de 24/11/2026) — conciliar com ela, após confirmar.
- */
-function CelulaSequencia({ p, onUsar, ocupado }: { p?: PosicaoNaSerie; onUsar?: (antiga: NonNullable<PosicaoNaSerie['maisAntigaAberta']>) => void; ocupado?: boolean }) {
-    if (!p) return <span className="text-sm font-normal text-gray-500" title="O lançamento não é parcela de contrato">—</span>;
-    const aviso = avisoDeOrdem(p);
-    const antiga = onUsar ? trocaPelaMaisAntiga(p) : null;
-    return (
-        <span className="block truncate text-sm font-normal text-gray-800 tabular-nums" title={explicacaoDaOrdem(p)}>
-            {textoDaSequencia(p)}
-            {antiga ? (
-                <>
-                    {' · '}
-                    <button
-                        type="button"
-                        onClick={() => onUsar!(antiga)}
-                        disabled={ocupado}
-                        title={ocupado
-                            ? 'Aguarde a conciliação em andamento'
-                            : `Conciliar este movimento com a parcela ${doisDigitos(antiga.numero, p.total)} (venc. ${formatDate(antiga.due_date)}), a mais antiga em aberto — mesmo valor da ${doisDigitos(p.numero, p.total)}`}
-                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline disabled:opacity-50 disabled:no-underline"
-                    >
-                        usar a {doisDigitos(antiga.numero, p.total)}
-                    </button>
-                </>
-            ) : aviso && <span className="text-amber-800"> · {aviso}</span>}
-        </span>
-    );
-}
 
 /** O que o banco credita: líquido quando o cliente retém tributo, bruto quando não. */
 const valorPrevisto = (c?: CandidateTx | null): number | null => c?.valor_esperado ?? c?.amount ?? null;
@@ -647,7 +600,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
             case 'vencimento':
                 return <span className="text-sm font-normal text-gray-600 tabular-nums">{formatDate(c?.due_date || c?.transaction_date)}</span>;
             case 'sequencia':
-                return <CelulaSequencia p={posicaoDe(l.sug)} onUsar={a => usarMaisAntiga(l.sug, a)} ocupado={busy !== null} />;
+                return <CelulaSequencia p={posicaoDe(l.sug)} onUsar={a => usarMaisAntiga(l.sug, a)} ocupado={busy !== null} dica='(veja "+N" na Confiança)' />;
             case 'contraparte':
                 return texto(contraparteDoTitulo(c, l.bank?.direction));
             case 'lancamento':
@@ -682,7 +635,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                     if (key !== 'sequencia') return valorParaOrdenar(key, l);
                     // Ordena por contrato e, dentro dele, pela posição: a série fica em sequência.
                     const p = posicaoDe(l.sug);
-                    return p ? `${p.numeroContrato || p.contractId}#${String(p.numero).padStart(5, '0')}` : null;
+                    return p ? chaveDaSequencia(p) : null;
                 }}
                 renderCell={(key, l) => celula(key, l)}
                 rowClassName={l => (selecionados.has(l.bankId) ? 'bg-blue-50/60' : '')}
@@ -716,7 +669,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{c?.description || '—'}</td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{contraparteDoTitulo(c, l.bank?.direction) || '—'}</td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{formatDate(c?.due_date || c?.transaction_date)}</td>
-                                                    <td className="px-6 py-2.5 border-r border-gray-100 whitespace-nowrap"><CelulaSequencia p={posicaoDe(alt)} onUsar={a => usarMaisAntiga(alt, a)} ocupado={busy !== null} /></td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 whitespace-nowrap"><CelulaSequencia p={posicaoDe(alt)} onUsar={a => usarMaisAntiga(alt, a)} ocupado={busy !== null} dica='(veja "+N" na Confiança)' /></td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 text-right tabular-nums">{formatBRL(valorPrevisto(c))}</td>
                                                     <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal ${BAND_STYLE[bnd].text}`}>{alt.confidence}%</td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{motivosDe(alt).join(' · ') || '—'}</td>

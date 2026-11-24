@@ -245,6 +245,8 @@ export interface InternalTransaction {
         | 'CONTRACT_RECURRING' | 'CONTRACT_PARCELADO' | 'CONTRACT_AVISTA' | 'CONTRACT_MEASUREMENT'
         | 'PAYROLL' | 'PURCHASE' | (string & {});
     reference_id?: string;
+    /** Contrato de origem da parcela (CONTRACT_*) — base da coluna "Sequência sugerida". */
+    contract_id?: string | null;
     transaction_date: string;
     amount: number;
     direction: 'CREDIT' | 'DEBIT';

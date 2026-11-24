@@ -17,10 +17,10 @@
 // no texto, os nomes delas vêm em negrito. Depois, os OBJETOS (o que está em
 // maiúsculas no meio do texto: "UMA CASA DE MORADA", "DIREITO DE SERVIDÃO …"),
 // na aba própria "Objetos identificados", ao lado de "Partes identificadas", e
-// também em negrito no texto.
+// também em negrito no texto. O nome da parte / o objeto é link: leva à linha no texto.
 // Plano: docs/planos/2026-11-24-partes-identificadas-na-transcricao.md
 import React from 'react';
-import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronUp, Copy, ExternalLink, Pencil, RotateCcw, ScanText } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronUp, Copy, ExternalLink, Pencil, RotateCcw } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { TabsBar } from '../ui/TabsBar';
 import { useConfirm } from '../ui/confirm';
@@ -346,7 +346,10 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
                         return (
                           <li key={`${p.nome}-${p.linha}`} className="flex items-start justify-between gap-3 px-4 py-3">
                             <div className="min-w-0 space-y-0.5">
-                              <p className="text-sm font-medium text-gray-900 break-words">{p.nome}</p>
+                              <button type="button" onClick={() => verNoTexto(p.linha)} title="Ver no texto" aria-label={`Ver no texto: ${p.nome}`}
+                                className="block text-left text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline break-words">
+                                {p.nome}
+                              </button>
                               <p className="text-sm text-gray-600">
                                 {p.papel ?? 'Papel não identificado'}{p.conjugeDe ? ` · cônjuge de ${p.conjugeDe}` : ''}
                               </p>
@@ -366,8 +369,6 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
                               <ActionIconButton kind="duplicate" size="sm" title="Copiar nome e documentos"
                                 icon={itemCopiado === chave ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                                 onClick={() => void copiarItem(chave, [p.nome, docs].filter(Boolean).join(' — '))} />
-                              <ActionIconButton kind="view" size="sm" title="Ver no texto"
-                                icon={<ScanText className="w-3.5 h-3.5" />} onClick={() => verNoTexto(p.linha)} />
                             </div>
                           </li>
                         );
@@ -395,13 +396,14 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
                         const chave = `objeto-${i}`;
                         return (
                           <li key={`${o.texto}-${o.linha}`} className="flex items-start justify-between gap-3 px-4 py-3">
-                            <p className="min-w-0 text-sm font-medium text-gray-900 break-words">{o.texto}</p>
+                            <button type="button" onClick={() => verNoTexto(o.linha)} title="Ver no texto" aria-label={`Ver no texto: ${o.texto}`}
+                              className="min-w-0 text-left text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline break-words">
+                              {o.texto}
+                            </button>
                             <div className="flex items-center gap-1 shrink-0">
                               <ActionIconButton kind="duplicate" size="sm" title="Copiar o objeto"
                                 icon={itemCopiado === chave ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                                 onClick={() => void copiarItem(chave, o.texto)} />
-                              <ActionIconButton kind="view" size="sm" title="Ver no texto"
-                                icon={<ScanText className="w-3.5 h-3.5" />} onClick={() => verNoTexto(o.linha)} />
                             </div>
                           </li>
                         );

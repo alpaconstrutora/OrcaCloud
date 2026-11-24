@@ -90,7 +90,7 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    (qualificação, linhas 79–81 com nome quebrado, assinaturas 99–100), matrícula idem.
    #688 no ar (conferir-producao: 84aa1ee); logado em produção, Escritura do terreno: os 4
    nomes em negrito na qualificação e nas assinaturas do fim ("Vendedoras (aa) …"). Nada gravado.
-5. [ ] Objetos — `identificarObjetos(linhas, partes)` em `utils/partesDaTranscricao.ts`:
+5. [x] Objetos — `identificarObjetos(linhas, partes)` em `utils/partesDaTranscricao.ts`:
    trecho em MAIÚSCULAS no meio do texto corrido (linha legível com prosa), com números e
    conectivos ("LOTE Nº 05 DA QUADRA 03"), tirando a abertura "BEM COMO O"; fora: parte
    (também com acento lido errado — "VERÁ MARINA …" na matrícula), pessoa citada ("Sr. …"),
@@ -105,14 +105,20 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    ✅ parcial 24/11 — 18/18 (+14 da transcrição = 32/32), tsc exit 0, check-ui sem violação
    (também depois das abas separadas);
    nas reais saem exatamente os 3 objetos da escritura e nenhum na matrícula.
-6. [ ] Link — nas abas Partes identificadas e Objetos identificados, o nome da parte / o
+   ✅ 24/11 — #691 no ar (conferir-producao: 7bd2cb1); logado em produção, Escritura do
+   terreno: abas "Partes identificadas 4" e "Objetos identificados 3" com os 3 objetos; no
+   texto os 3 em negrito, inclusive o "ÁGUA" na linha seguinte. Nada gravado.
+6. [x] Link — nas abas Partes identificadas e Objetos identificados, o nome da parte / o
    objeto é link (`text-blue-600`, §tipografia "Link / item relacionado") que leva à aba Texto,
    rola até a linha e a marca de azul; o ícone "Ver no texto", que fazia o mesmo, saiu.
    **Pronto quando:** tsc limpo, check-ui sem violação e, em produção, clicar num nome e num
    objeto leva à linha dele no texto.
+   ✅ 24/11 — #694 no ar (conferir-producao: 4b9a52f); logado em produção: clicar em
+   "DIREITO DE SERVIDÃO DE ÁGUA" e na 3ª parte levou à aba Texto com a linha de cada um
+   marcada. Console sem erro (lido a partir da tela aberta).
 
 ## Estado
 
 - 24/11/2026: itens 1–3 concluídos e provados em produção (#684). Vínculo com Meus Clientes: não pedido.
 - 24/11/2026: item 4 (negrito) concluído e provado em produção (#688). Itens 1–4 fechados.
-- 24/11/2026: item 5 (objetos, #691) no ar; item 6 (link) implementado; falta a prova em produção dos dois.
+- 24/11/2026: itens 5 (objetos, #691) e 6 (link, #694) concluídos e provados em produção. Itens 1–6 fechados.

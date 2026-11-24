@@ -32,4 +32,4 @@
 
 ## Estado
 
-Em PR.
+NO AR em 24/11 (PR #708, merge ceba554; conferir-producao.sh achou "Adicionar à oportunidade" no bundle servido).

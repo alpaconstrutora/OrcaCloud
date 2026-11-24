@@ -11,9 +11,14 @@
 // as duas coisas ao mesmo tempo. O arquivo é mostrado por URL local (blob) — o
 // visualizador de PDF do navegador, com zoom e busca, sem depender de o Storage
 // aceitar ser embutido.
+//
+// 24/11/2026 — aba "Partes identificadas" ao lado do texto: nome, papel, RG e
+// CPF/CNPJ de quem aparece qualificado no documento (utils/partesDaTranscricao).
+// Plano: docs/planos/2026-11-24-partes-identificadas-na-transcricao.md
 import React from 'react';
-import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronUp, Copy, ExternalLink, Pencil, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronUp, Copy, ExternalLink, Pencil, RotateCcw, ScanText } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
+import { TabsBar } from '../ui/TabsBar';
 import { useConfirm } from '../ui/confirm';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import { transcricaoDocumentoService as svc } from '../../services/transcricaoDocumentoService';
@@ -21,6 +26,7 @@ import {
   aplicarEdicao, contarDuvidosas, linhaDuvidosa, marcarRevisada, podeTranscrever, textoDaTranscricao,
   type Transcricao,
 } from '../../utils/transcricaoDocumento';
+import { formatarCnpj, formatarCpf, identificarPartes, type ParteIdentificada } from '../../utils/partesDaTranscricao';
 import {
   BOTAO_PRIMARIO, BOTAO_SECUNDARIO, blocoSemTexto, nomeDaVersao, resumoDaTranscricao, useTranscreverDeNovo,
   useTranscricao, type FilaDeTranscricao, type VersaoTranscrevivel,
@@ -30,6 +36,16 @@ const AREA = 'w-full h-full resize-none px-4 py-3 bg-white text-sm font-normal t
 const BOTAO_TEXTO = 'h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all';
 /** Altura das duas colunas: a janela menos o cabeçalho desta tela (a tela rola até ele ao abrir). */
 const ALTURA_COLUNA = 'h-[70vh] lg:h-[calc(100vh-10rem)] min-h-[28rem]';
+
+type Vista = 'texto' | 'partes';
+
+function documentosDaParte(p: ParteIdentificada): string {
+  return [
+    p.cpf && `CPF ${formatarCpf(p.cpf)}`,
+    p.cnpj && `CNPJ ${formatarCnpj(p.cnpj)}`,
+    p.rg && `RG ${p.rg}`,
+  ].filter(Boolean).join(' · ');
+}
 
 interface Props {
   /** Nome do documento (título do item do checklist ou do documento no GED). */
@@ -51,6 +67,9 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
   const [salvando, setSalvando] = React.useState(false);
   const [copiado, setCopiado] = React.useState(false);
   const [foco, setFoco] = React.useState<number | null>(null); // índice na lista de duvidosas
+  const [vista, setVista] = React.useState<Vista>('texto');
+  const [linhaMarcada, setLinhaMarcada] = React.useState<number | null>(null); // linha da parte escolhida
+  const [copiadaParte, setCopiadaParte] = React.useState<number | null>(null);
   const listaRef = React.useRef<HTMLDivElement>(null);
   const raizRef = React.useRef<HTMLDivElement>(null);
   // Abre com o cabeçalho desta tela no topo: as duas colunas usam a altura da janela.
@@ -87,15 +106,40 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
     [transcricao],
   );
   const duvidosas = indicesDuvidosos.length;
+  // Rola só a caixa do texto: scrollIntoView rolaria também a página e tiraria o
+  // cabeçalho da tela.
+  const rolarAte = React.useCallback((indice: number) => {
+    const caixa = listaRef.current;
+    const linha = caixa?.querySelector<HTMLElement>(`[data-linha="${indice}"]`);
+    if (caixa && linha) caixa.scrollTo({ top: linha.offsetTop - caixa.clientHeight / 2, behavior: 'smooth' });
+  }, []);
   const irPara = (posicao: number) => {
     if (duvidosas === 0) return;
     const p = (posicao + duvidosas) % duvidosas;
     setFoco(p);
-    // Rola só a caixa do texto: scrollIntoView rolaria também a página e tiraria o
-    // cabeçalho da tela.
-    const caixa = listaRef.current;
-    const linha = caixa?.querySelector<HTMLElement>(`[data-linha="${indicesDuvidosos[p]}"]`);
-    if (caixa && linha) caixa.scrollTo({ top: linha.offsetTop - caixa.clientHeight / 2, behavior: 'smooth' });
+    setLinhaMarcada(null);
+    rolarAte(indicesDuvidosos[p]);
+  };
+
+  // ── Partes identificadas ──────────────────────────────────────────────────
+  const partes = React.useMemo(() => (transcricao ? identificarPartes(transcricao.linhas) : []), [transcricao]);
+  const verNoTexto = (p: ParteIdentificada) => {
+    setFoco(null);
+    setLinhaMarcada(p.linha);
+    setVista('texto');
+  };
+  // A caixa do texto só existe na vista Texto: rolar depois de ela aparecer.
+  React.useEffect(() => {
+    if (vista === 'texto' && linhaMarcada !== null) rolarAte(linhaMarcada);
+  }, [vista, linhaMarcada, rolarAte]);
+  const copiarParte = async (p: ParteIdentificada, i: number) => {
+    try {
+      await navigator.clipboard.writeText([p.nome, documentosDaParte(p)].filter(Boolean).join(' — '));
+      setCopiadaParte(i);
+      setTimeout(() => setCopiadaParte(atual => (atual === i ? null : atual)), 2000);
+    } catch {
+      notify('O navegador não deixou copiar. Selecione o texto e copie com Ctrl+C.', 'error');
+    }
   };
 
   // ── Ações ─────────────────────────────────────────────────────────────────
@@ -109,6 +153,7 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
       fila.registrar(salva);
       setTexto(null);
       setFoco(null);
+      setLinhaMarcada(null); // o texto salvo pode ter outras linhas
       notify(aviso);
     } catch (err) {
       notify(err instanceof Error ? err.message : 'Erro ao salvar a transcrição.', 'error');
@@ -163,7 +208,7 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
         icon={copiado ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />} onClick={copiar} />
       <ActionIconButton kind="history" title="Transcrever de novo" icon={<RotateCcw className="w-4 h-4" />}
         onClick={() => transcreverDeNovo(versao, organizationId, true)} />
-      <button type="button" onClick={() => setTexto(textoDaTranscricao(transcricao.linhas))} className={BOTAO_SECUNDARIO}>
+      <button type="button" onClick={() => { setVista('texto'); setTexto(textoDaTranscricao(transcricao.linhas)); }} className={BOTAO_SECUNDARIO}>
         <Pencil className="w-[15px] h-[15px]" /> Revisar texto
       </button>
     </>
@@ -216,8 +261,15 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
         {/* Texto transcrito */}
         <section aria-label="Texto transcrito" className={`flex flex-col bg-white rounded-[10px] border border-gray-200 overflow-hidden ${ALTURA_COLUNA}`}>
           <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 min-h-11 px-4 py-1.5 border-b border-gray-100 shrink-0">
-            <h3 className="text-sm font-semibold text-gray-900">{texto !== null ? 'Revisando o texto' : 'Texto'}</h3>
-            {transcricao && texto === null && duvidosas > 0 && (
+            {transcricao && texto === null && !semTexto ? (
+              <TabsBar<Vista> bare value={vista} onChange={setVista} tabs={[
+                { id: 'texto', label: 'Texto' },
+                { id: 'partes', label: 'Partes identificadas', badge: partes.length, badgeTitulo: 'Partes encontradas no texto' },
+              ]} />
+            ) : (
+              <h3 className="text-sm font-semibold text-gray-900">{texto !== null ? 'Revisando o texto' : 'Texto'}</h3>
+            )}
+            {transcricao && texto === null && vista === 'texto' && duvidosas > 0 && (
               <div className="flex flex-wrap items-center gap-2">
                 <span className="flex items-center gap-1.5 text-sm text-amber-800">
                   <AlertTriangle className="w-4 h-4 shrink-0" />
@@ -249,6 +301,56 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
                   Linha corrigida deixa de ser destacada; a que ficar igual continua destacada.
                 </p>
               </div>
+            ) : transcricao && vista === 'partes' ? (
+              <div className="h-full overflow-y-auto">
+                {partes.length === 0 ? (
+                  <div className="p-4 space-y-1">
+                    <p className="text-sm text-gray-900">Nenhuma parte identificada neste texto.</p>
+                    <p className="text-sm text-gray-600">
+                      A busca procura nomes em letras maiúsculas seguidos de qualificação — "brasileiro", "portador do RG", "inscrita no CNPJ".
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <ul className="divide-y divide-gray-100">
+                      {partes.map((p, i) => {
+                        const docs = documentosDaParte(p);
+                        return (
+                          <li key={`${p.nome}-${p.linha}`} className="flex items-start justify-between gap-3 px-4 py-3">
+                            <div className="min-w-0 space-y-0.5">
+                              <p className="text-sm font-medium text-gray-900 break-words">{p.nome}</p>
+                              <p className="text-sm text-gray-600">
+                                {p.papel ?? 'Papel não identificado'}{p.conjugeDe ? ` · cônjuge de ${p.conjugeDe}` : ''}
+                              </p>
+                              <p className="text-sm text-gray-900 tabular-nums">
+                                {docs || <span className="text-gray-600">Nenhum documento encontrado junto ao nome</span>}
+                              </p>
+                              {(p.duvidosa || p.documentoInvalido) && (
+                                <p className="flex items-center gap-1.5 text-sm text-amber-800">
+                                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                                  {p.documentoInvalido
+                                    ? 'O número lido não confere (dígito verificador) — confira no arquivo.'
+                                    : 'Saiu de linha com leitura duvidosa — confira no arquivo.'}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-1 shrink-0">
+                              <ActionIconButton kind="duplicate" size="sm" title="Copiar nome e documentos"
+                                icon={copiadaParte === i ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+                                onClick={() => void copiarParte(p, i)} />
+                              <ActionIconButton kind="view" size="sm" title="Ver no texto"
+                                icon={<ScanText className="w-3.5 h-3.5" />} onClick={() => verNoTexto(p)} />
+                            </div>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                    <p className="px-4 py-3 border-t border-gray-100 text-xs text-gray-500">
+                      Lido automaticamente do texto: nomes em maiúsculas seguidos de qualificação. Confira com o arquivo original.
+                    </p>
+                  </>
+                )}
+              </div>
             ) : transcricao && transcricao.linhas.length === 0 ? (
               <p className="p-4 text-sm text-gray-600">Nenhum texto foi encontrado neste arquivo.</p>
             ) : transcricao ? (
@@ -256,8 +358,16 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
                 {estado?.fase === 'erro' && <p className="mb-3 text-sm text-red-700">Não foi possível transcrever de novo: {estado.mensagem}</p>}
                 {transcricao.linhas.map((l, i) => {
                   if (!l.t.trim()) return <div key={i} className="h-3" aria-hidden="true" />;
-                  if (!linhaDuvidosa(l)) return <p key={i} className="whitespace-pre-wrap break-words">{l.t}</p>;
-                  const emFoco = foco !== null && indicesDuvidosos[foco] === i;
+                  const marcada = linhaMarcada === i;
+                  if (!linhaDuvidosa(l)) {
+                    return (
+                      <p key={i} data-linha={i}
+                        className={`whitespace-pre-wrap break-words ${marcada ? '-mx-4 px-4 bg-blue-50 ring-1 ring-inset ring-blue-400' : ''}`}>
+                        {l.t}
+                      </p>
+                    );
+                  }
+                  const emFoco = (foco !== null && indicesDuvidosos[foco] === i) || marcada;
                   return (
                     <p key={i} data-linha={i}
                       className={`-mx-4 px-4 border-l-2 border-amber-400 whitespace-pre-wrap break-words text-amber-900 ${emFoco ? 'bg-amber-100 ring-1 ring-inset ring-amber-400' : 'bg-amber-50'}`}

@@ -16,6 +16,7 @@
 //
 // Função pura sobre as linhas: nada é gravado; muda junto quando o texto é revisado.
 import { validateCNPJ, validateCPF } from '../lib/validators';
+import type { Client } from '../types';
 import { linhaDuvidosa, type LinhaTranscrita } from './transcricaoDocumento';
 
 export interface ParteIdentificada {
@@ -341,4 +342,65 @@ export function formatarCpf(d: string): string {
 
 export function formatarCnpj(d: string): string {
   return d.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+}
+
+// ── Cadastro em Clientes (pedido de 24/11/2026) ──────────────────────────────
+// "Em partes identificadas, implemente botão para adicionar as partes em minha
+// organização > clientes" — 1 clique grava o cliente com o que o texto traz.
+
+/** Conectivos de nome, sempre minúsculos depois da 1ª palavra. */
+const CONECTIVOS_DO_NOME = new Set(['da', 'das', 'de', 'do', 'dos', 'e']);
+/** Siglas de empresa que continuam em maiúsculas. */
+const SIGLA_DE_EMPRESA = /^(?:LTDA\.?|S\/A|S\.A\.?|ME|EPP|EIRELI|SPE|&)$/;
+
+/** "ANA PAULA DOS SANTOS" → "Ana Paula dos Santos" — como os clientes estão gravados. */
+export function nomeProprio(nome: string): string {
+  return nome.split(/\s+/).filter(Boolean).map((palavra, i) => {
+    if (SIGLA_DE_EMPRESA.test(palavra)) return palavra;
+    const minuscula = palavra.toLocaleLowerCase('pt-BR');
+    if (i > 0 && CONECTIVOS_DO_NOME.has(minuscula)) return minuscula;
+    return minuscula.charAt(0).toLocaleUpperCase('pt-BR') + minuscula.slice(1);
+  }).join(' ');
+}
+
+/**
+ * CPF/CNPJ (só dígitos) com que a parte pode virar cliente — null sem documento
+ * ou com número que não confere: aí não dá para saber se ela já está cadastrada
+ * (o CPF/CNPJ é único no sistema), e o cadastro fica para a tela de Clientes.
+ */
+export function documentoCadastravel(p: ParteIdentificada): string | null {
+  if (p.documentoInvalido) return null;
+  return p.cnpj ?? p.cpf;
+}
+
+/**
+ * O cadastro de cliente que a parte vira. Só o que o texto diz: nacionalidade,
+ * profissão, regime de bens e endereço ficam para completar em Clientes.
+ * Cônjuge pelo par "casado … com" — vale para os dois lados do casal.
+ */
+export function clienteDaParte(p: ParteIdentificada, partes: ParteIdentificada[]): Partial<Client> {
+  const cliente: Partial<Client> = {
+    name: nomeProprio(p.nome),
+    type: p.cnpj ? 'PJ' : 'PF',
+  };
+  const documento = documentoCadastravel(p);
+  if (documento) cliente.document = p.cnpj ? formatarCnpj(documento) : formatarCpf(documento);
+
+  if (p.rg) {
+    const rg = p.rg.match(/^(\S+) ([A-Z]+)\/([A-Z]{2})$/);
+    if (rg) Object.assign(cliente, { rg: rg[1], rg_issuing_agency: rg[2], rg_uf: rg[3] });
+    else cliente.rg = p.rg;
+  }
+
+  const conjuge = p.conjugeDe
+    ? partes.find(q => q.nome === p.conjugeDe)
+    : partes.find(q => q.conjugeDe === p.nome);
+  const nomeDoConjuge = p.conjugeDe ?? conjuge?.nome;
+  if (nomeDoConjuge) {
+    cliente.marital_status = 'Casado(a)';
+    cliente.spouse_name = nomeProprio(nomeDoConjuge);
+    const cpfDoConjuge = conjuge && !conjuge.documentoInvalido ? conjuge.cpf : null;
+    if (cpfDoConjuge) cliente.spouse_document = formatarCpf(cpfDoConjuge);
+  }
+  return cliente;
 }

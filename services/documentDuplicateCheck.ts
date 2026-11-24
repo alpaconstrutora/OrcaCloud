@@ -19,7 +19,8 @@ const LABEL_BY_KIND: Record<DuplicateDocumentEntityKind, string> = {
     investor: 'investidor',
 };
 
-interface DuplicateDocumentMatch {
+/** De outra organização a RPC pode não dizer nome nem código (Fase A8). */
+export interface DocumentOwner {
     id: string | null;
     name: string | null;
     code: string | null;
@@ -27,28 +28,41 @@ interface DuplicateDocumentMatch {
     organization_name: string | null;
 }
 
-export async function assertDocumentNotDuplicated(
+/**
+ * Quem já tem este CNPJ/CPF cadastrado (em qualquer organização) — null se
+ * ninguém. Lança o erro da RPC: quem chama decide se isso bloqueia.
+ */
+export async function findDocumentOwner(
     kind: DuplicateDocumentEntityKind,
     document: string | null | undefined,
     excludeId?: string | null,
-): Promise<void> {
+): Promise<DocumentOwner | null> {
     const digits = (document || '').replace(/\D/g, '');
-    if (!digits) return;
+    if (!digits) return null;
 
     const { data, error } = await supabase.rpc(RPC_BY_KIND[kind], {
         p_document: digits,
         p_exclude_id: excludeId || null,
     });
+    if (error) throw error;
+    return ((Array.isArray(data) ? data[0] : data) as DocumentOwner | undefined) ?? null;
+}
 
-    if (error) {
+export async function assertDocumentNotDuplicated(
+    kind: DuplicateDocumentEntityKind,
+    document: string | null | undefined,
+    excludeId?: string | null,
+): Promise<void> {
+    let match: DocumentOwner | null;
+    try {
+        match = await findDocumentOwner(kind, document, excludeId);
+    } catch (error) {
         // Não bloqueia o cadastro se a checagem em si falhar (ex: função ainda
         // não aplicada no banco) — a validação é uma camada extra, não deve
         // impedir o uso do sistema caso fique indisponível.
         console.warn(`[DOCUMENT DUPLICATE CHECK] Falha ao checar duplicidade de ${kind}:`, error);
         return;
     }
-
-    const match = (Array.isArray(data) ? data[0] : data) as DuplicateDocumentMatch | undefined;
     if (!match) return;
 
     const label = LABEL_BY_KIND[kind];

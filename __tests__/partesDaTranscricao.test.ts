@@ -3,7 +3,9 @@
 // Texto no molde das escrituras do cartório de Cambuí — nomes e números fictícios
 // (CPF/CNPJ de exemplo com dígito verificador válido).
 import { describe, expect, it } from 'vitest';
-import { formatarCnpj, formatarCpf, identificarObjetos, identificarPartes, trechosEmNegrito } from '../utils/partesDaTranscricao';
+import {
+  clienteDaParte, documentoCadastravel, formatarCnpj, formatarCpf, identificarObjetos, identificarPartes, nomeProprio, trechosEmNegrito,
+} from '../utils/partesDaTranscricao';
 import type { LinhaTranscrita } from '../utils/transcricaoDocumento';
 
 const L = (...textos: string[]): LinhaTranscrita[] => textos.map(t => ({ t, c: 95 }));
@@ -158,5 +160,57 @@ describe('formatar', () => {
   it('CPF e CNPJ', () => {
     expect(formatarCpf('52998224725')).toBe('529.982.247-25');
     expect(formatarCnpj('11222333000181')).toBe('11.222.333/0001-81');
+  });
+});
+
+describe('cadastro em Clientes (pedido de 24/11/2026)', () => {
+  const partes = identificarPartes(ESCRITURA);
+
+  it('nome em letra normal; conectivo minúsculo; sigla de empresa mantida', () => {
+    expect(nomeProprio('ANA PAULA DOS SANTOS')).toBe('Ana Paula dos Santos');
+    expect(nomeProprio('JOÃO E MARIA DA SILVA')).toBe('João e Maria da Silva');
+    expect(nomeProprio('ALFA CONSTRUÇÕES LTDA')).toBe('Alfa Construções LTDA');
+    expect(nomeProprio('BETA ENGENHARIA S/A')).toBe('Beta Engenharia S/A');
+    expect(nomeProprio('DE PAULA ÉRICO')).toBe('De Paula Érico');
+  });
+
+  it('só dá para cadastrar com CPF/CNPJ que confere', () => {
+    expect(partes.map(documentoCadastravel)).toEqual(['52998224725', '11144477735', null, null]);
+  });
+
+  it('pessoa: PF, CPF formatado, RG separado em número, órgão e UF', () => {
+    expect(clienteDaParte(partes[1], partes)).toEqual({
+      name: 'Joana Maria de Souza', type: 'PF', document: '111.444.777-35',
+      rg: 'M-1.234.567', rg_issuing_agency: 'SSP', rg_uf: 'MG',
+    });
+  });
+
+  it('casal: os dois lados levam o cônjuge; CPF do cônjuge só se conferir', () => {
+    const casal = identificarPartes(L(
+      'como outorgado comprador – PEDRO HENRIQUE ALVES, brasileiro, portador do CPF nº 529.982.247-25,',
+      'casado sob o regime da comunhão parcial com LUCIA ALVES, brasileira, portadora do RG nº 4.567.890 e',
+      'do CPF nº 111.444.777-35.',
+    ));
+    expect(clienteDaParte(casal[0], casal)).toMatchObject({
+      marital_status: 'Casado(a)', spouse_name: 'Lucia Alves', spouse_document: '111.444.777-35',
+    });
+    expect(clienteDaParte(casal[1], casal)).toMatchObject({
+      rg: '4.567.890', marital_status: 'Casado(a)', spouse_name: 'Pedro Henrique Alves', spouse_document: '529.982.247-25',
+    });
+    expect(clienteDaParte(casal[1], casal).rg_uf).toBeUndefined();
+    // Beatriz (cônjuge de Carlos, cujo CPF não confere): nome do cônjuge sim, CPF não.
+    expect(clienteDaParte(partes[3], partes)).toMatchObject({ spouse_name: 'Carlos Eduardo Lima' });
+    expect(clienteDaParte(partes[3], partes).spouse_document).toBeUndefined();
+    expect(clienteDaParte(partes[0], partes).marital_status).toBeUndefined();
+  });
+
+  it('empresa: PJ com CNPJ formatado', () => {
+    const [empresa] = identificarPartes(L(
+      'como outorgante cedente ALFA CONSTRUÇÕES LTDA, pessoa jurídica de direito privado, inscrita no CNPJ',
+      'sob nº 11.222.333/0001-81.',
+    ));
+    expect(clienteDaParte(empresa, [empresa])).toEqual({
+      name: 'Alfa Construções LTDA', type: 'PJ', document: '11.222.333/0001-81',
+    });
   });
 });

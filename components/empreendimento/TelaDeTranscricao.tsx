@@ -18,19 +18,27 @@
 // maiúsculas no meio do texto: "UMA CASA DE MORADA", "DIREITO DE SERVIDÃO …"),
 // na aba própria "Objetos identificados", ao lado de "Partes identificadas", e
 // também em negrito no texto. O nome da parte / o objeto é link: leva à linha no texto.
+// Cada parte com CPF/CNPJ que confere tem "Adicionar aos clientes": grava direto
+// em Clientes, na organização do topo; a que já é cliente mostra onde está.
 // Plano: docs/planos/2026-11-24-partes-identificadas-na-transcricao.md
 import React from 'react';
-import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronUp, Copy, ExternalLink, Pencil, RotateCcw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, Check, ChevronDown, ChevronUp, Copy, ExternalLink, Pencil, RotateCcw, UserCheck, UserPlus } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { TabsBar } from '../ui/TabsBar';
 import { useConfirm } from '../ui/confirm';
+import { targetOrgIds, useOrgWriteTarget } from '../../hooks/useOrgContext';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
+import { clientService } from '../../services/clientService';
+import { findDocumentOwner, type DocumentOwner } from '../../services/documentDuplicateCheck';
 import { transcricaoDocumentoService as svc } from '../../services/transcricaoDocumentoService';
 import {
   aplicarEdicao, contarDuvidosas, linhaDuvidosa, marcarRevisada, podeTranscrever, textoDaTranscricao,
   type Transcricao,
 } from '../../utils/transcricaoDocumento';
-import { formatarCnpj, formatarCpf, identificarObjetos, identificarPartes, trechosEmNegrito, type ParteIdentificada, type Trecho } from '../../utils/partesDaTranscricao';
+import {
+  clienteDaParte, documentoCadastravel, formatarCnpj, formatarCpf, identificarObjetos, identificarPartes, trechosEmNegrito,
+  type ParteIdentificada, type Trecho,
+} from '../../utils/partesDaTranscricao';
 import {
   BOTAO_PRIMARIO, BOTAO_SECUNDARIO, blocoSemTexto, nomeDaVersao, resumoDaTranscricao, useTranscreverDeNovo,
   useTranscricao, type FilaDeTranscricao, type VersaoTranscrevivel,
@@ -165,6 +173,57 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
       setTimeout(() => setItemCopiado(atual => (atual === chave ? null : atual)), 2000);
     } catch {
       notify('O navegador não deixou copiar. Selecione o texto e copie com Ctrl+C.', 'error');
+    }
+  };
+
+  // ── Partes → Clientes ─────────────────────────────────────────────────────
+  // Quem já tem o CPF/CNPJ em Clientes (qualquer organização — o documento é
+  // único no sistema). Chave = documento; ausente = conferindo; 'erro' = a
+  // consulta falhou (o botão fica, e o cadastro confere de novo ao gravar).
+  const [donos, setDonos] = React.useState<Record<string, DocumentOwner | null | 'erro'>>({});
+  const [adicionando, setAdicionando] = React.useState<string | null>(null);
+  const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
+  React.useEffect(() => {
+    if (vista !== 'partes') return;
+    const faltam = [...new Set(partes.map(documentoCadastravel))]
+      .filter((d): d is string => !!d && !(d in donos));
+    if (faltam.length === 0) return;
+    let vivo = true;
+    void Promise.all(faltam.map(async d =>
+      [d, await findDocumentOwner('client', d).catch(() => 'erro' as const)] as const))
+      .then(pares => { if (vivo) setDonos(atual => ({ ...atual, ...Object.fromEntries(pares) })); });
+    return () => { vivo = false; };
+  }, [vista, partes, donos]);
+
+  const adicionarAosClientes = async (p: ParteIdentificada) => {
+    const documento = documentoCadastravel(p);
+    if (!documento) return;
+    // Cliente é de UMA organização: a do topo; em "Todas" com várias, pergunta.
+    const alvo = await resolveWriteOrg('single');
+    if (!alvo) return;
+    const [orgId] = targetOrgIds(alvo);
+    setAdicionando(documento);
+    try {
+      const salvo = await clientService.saveClient({ ...clienteDaParte(p, partes), organization_id: orgId });
+      notify(`${salvo.name} cadastrado em Clientes${salvo.code ? ` (código ${salvo.code})` : ''}.`);
+      const dono = await findDocumentOwner('client', documento).catch(() => null);
+      setDonos(atual => ({
+        ...atual,
+        [documento]: dono ?? { id: salvo.id, name: salvo.name, code: salvo.code ?? null, organization_id: orgId, organization_name: null },
+      }));
+    } catch (err) {
+      // `42501` = a RLS de `clients` recusou a organização; o Error do serviço
+      // já vem com frase (CPF/CNPJ cadastrado enquanto a tela estava aberta).
+      const codigo = (err as { code?: string } | null)?.code;
+      notify(
+        codigo === '42501'
+          ? 'Você não tem permissão para cadastrar clientes nesta organização.'
+          : err instanceof Error && err.message ? err.message : 'Erro ao cadastrar o cliente.',
+        'error',
+      );
+      setDonos(({ [documento]: _, ...resto }) => resto); // confere de novo
+    } finally {
+      setAdicionando(null);
     }
   };
 
@@ -343,6 +402,13 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
                       {partes.map((p, i) => {
                         const docs = documentosDaParte(p);
                         const chave = `parte-${i}`;
+                        const documento = documentoCadastravel(p);
+                        const dono = documento ? donos[documento] : undefined;
+                        const jaCliente = dono && dono !== 'erro' ? dono : null;
+                        const motivoDesligado = !documento
+                          ? 'Sem CPF/CNPJ que confira no texto — sem ele não dá para saber se já é cliente. Cadastre em Minha organização › Clientes.'
+                          : dono === undefined ? 'Conferindo se já está em Clientes…'
+                          : adicionando ? 'Cadastrando…' : null;
                         return (
                           <li key={`${p.nome}-${p.linha}`} className="flex items-start justify-between gap-3 px-4 py-3">
                             <div className="min-w-0 space-y-0.5">
@@ -364,8 +430,23 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
                                     : 'Saiu de linha com leitura duvidosa — confira no arquivo.'}
                                 </p>
                               )}
+                              {jaCliente && (
+                                <p className="flex items-center gap-1.5 text-sm text-gray-600">
+                                  <UserCheck className="w-4 h-4 shrink-0 text-emerald-600" />
+                                  Já está em Clientes{jaCliente.code ? ` · código ${jaCliente.code}` : ''} · {jaCliente.organization_name ?? 'outra organização'}
+                                </p>
+                              )}
                             </div>
                             <div className="flex items-center gap-1 shrink-0">
+                              {!jaCliente && (
+                                <span title={motivoDesligado ?? undefined}>
+                                  <button type="button" disabled={!!motivoDesligado} onClick={() => void adicionarAosClientes(p)}
+                                    className={`${BOTAO_SECUNDARIO} disabled:pointer-events-none`}>
+                                    <UserPlus className="w-[15px] h-[15px]" />
+                                    {documento && adicionando === documento ? 'Cadastrando…' : 'Adicionar aos clientes'}
+                                  </button>
+                                </span>
+                              )}
                               <ActionIconButton kind="duplicate" size="sm" title="Copiar nome e documentos"
                                 icon={itemCopiado === chave ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                                 onClick={() => void copiarItem(chave, [p.nome, docs].filter(Boolean).join(' — '))} />
@@ -376,6 +457,7 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
                     </ul>
                     <p className="px-4 py-3 border-t border-gray-100 text-xs text-gray-500">
                       Lido automaticamente do texto: nomes em maiúsculas seguidos de qualificação. Confira com o arquivo original.
+                      "Adicionar aos clientes" grava nome, CPF/CNPJ, RG e cônjuge na organização do topo; o resto se completa em Clientes.
                     </p>
                   </>
                 )}
@@ -448,6 +530,7 @@ const TelaDeTranscricao: React.FC<Props> = ({ titulo, versao, organizationId, fi
           </div>
         </section>
       </div>
+      {orgTargetModal}
     </div>
   );
 };

@@ -27,6 +27,10 @@ transcrição; vínculo com Meus Clientes como passo seguinte, a decidir):
 
 > crie uma aba chamada objetos identificados ao lado de partes indentificadas. e da mesma forma que  partes indentificadas, liste os objetos que foram identificados
 
+24/11/2026, depois do #691:
+
+> implemente link, ao clicar em uma parte ou objeto identificado vá direito para o texto
+
 Continuação de `2026-11-23-transcricao-de-documentos-do-empreendimento.md`.
 
 ## Teste antes de implementar (24/11/2026)
@@ -101,9 +105,14 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    ✅ parcial 24/11 — 18/18 (+14 da transcrição = 32/32), tsc exit 0, check-ui sem violação
    (também depois das abas separadas);
    nas reais saem exatamente os 3 objetos da escritura e nenhum na matrícula.
+6. [ ] Link — nas abas Partes identificadas e Objetos identificados, o nome da parte / o
+   objeto é link (`text-blue-600`, §tipografia "Link / item relacionado") que leva à aba Texto,
+   rola até a linha e a marca de azul; o ícone "Ver no texto", que fazia o mesmo, saiu.
+   **Pronto quando:** tsc limpo, check-ui sem violação e, em produção, clicar num nome e num
+   objeto leva à linha dele no texto.
 
 ## Estado
 
 - 24/11/2026: itens 1–3 concluídos e provados em produção (#684). Vínculo com Meus Clientes: não pedido.
 - 24/11/2026: item 4 (negrito) concluído e provado em produção (#688). Itens 1–4 fechados.
-- 24/11/2026: item 5 (objetos) implementado; falta prova em produção.
+- 24/11/2026: item 5 (objetos, #691) no ar; item 6 (link) implementado; falta a prova em produção dos dois.

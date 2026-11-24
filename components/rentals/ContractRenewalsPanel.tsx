@@ -1,11 +1,13 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { RefreshCw, AlertTriangle, History } from 'lucide-react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { RefreshCw, AlertTriangle, History, Info } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
+import { SecaoTitulo } from '../ui/SecaoTitulo';
 import { contractRenewalService, RenewalMode, RenewalPreview } from '../../services/contractRenewalService';
 import { contractService } from '../../services/contractService';
 import { Contract, ContractAddendum } from '../../types';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
+import { fimDaVigencia, mesesDaVigencia } from '../../utils/paymentPlan';
 
 interface Props {
     /** Contrato gerado a partir desta negociação. */
@@ -28,17 +30,15 @@ const fmtMonth = (iso?: string) => {
     const [y, m] = iso.slice(0, 10).split('-');
     return `${m}/${y}`;
 };
-/** +N meses − 1 dia em UTC puro (em UTC-3 o construtor local retrocede um dia). */
-const fimApos = (inicio: string, meses: number) => {
-    const [y, m, d] = inicio.slice(0, 10).split('-').map(Number);
-    const dt = new Date(Date.UTC(y, m - 1, d));
-    dt.setUTCMonth(dt.getUTCMonth() + meses);
-    dt.setUTCDate(dt.getUTCDate() - 1);
-    return dt.toISOString().slice(0, 10);
-};
 
-const LABEL = 'text-xs font-semibold text-slate-500 px-1';
-const INPUT = 'w-full px-6 h-9 text-sm bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-[6px] outline-none font-bold text-gray-700 transition-all shadow-inner';
+/** Atalhos do prazo — os mesmos de "Dados do contrato" (DealModal). */
+const PRAZOS_ATALHO = [12, 24, 30, 36];
+
+// Régua do formulário: a mesma da sub-aba "Dados do contrato" (DealModal) —
+// §21 (rótulo) e §30 (h-9, rótulo→campo 6px; `block` porque <label> é inline
+// e ignora a margem do space-y).
+const ROTULO = 'block text-xs font-semibold text-slate-500';
+const CAMPO = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
 
 /**
  * Renovações DESTE contrato, dentro da negociação.
@@ -58,9 +58,17 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
     const [preview, setPreview] = useState<RenewalPreview | null>(null);
     const confirm = useConfirm();
 
+    // O pai passa `onNotify` inline (nova função a cada render). Como dependência
+    // de `load`, cada aviso (que re-renderiza o pai) recarregaria a cadeia — e um
+    // erro de carga viraria laço. A ref mantém a última sem entrar nas deps.
+    const onNotifyRef = useRef(onNotify);
+    useEffect(() => { onNotifyRef.current = onNotify; });
+    const notificar = useCallback((msg: string, type?: 'success' | 'error' | 'info') => onNotifyRef.current(msg, type), []);
+
     // Formulário do período novo
     const [mode, setMode] = useState<RenewalMode>('ADITIVO');
     const [endDate, setEndDate] = useState('');
+    const [prazoDraft, setPrazoDraft] = useState<string | null>(null);
     const [cycle, setCycle] = useState('');
     const [dueDay, setDueDay] = useState('');
     const [index, setIndex] = useState('');
@@ -87,11 +95,11 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
             const listas = await Promise.all(ids.map(id => contractService.listAddendums(id)));
             setAddendums(listas.flat().filter(a => a.new_start_date));
         } catch (e) {
-            onNotify(`Erro ao carregar renovações: ${e instanceof Error ? e.message : ''}`, 'error');
+            notificar(`Erro ao carregar renovações: ${e instanceof Error ? e.message : ''}`, 'error');
         } finally {
             setLoading(false);
         }
-    }, [contract.id, onNotify]);
+    }, [contract.id, notificar]);
 
     useEffect(() => { load(); }, [load]);
 
@@ -112,7 +120,7 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
             if (!valor) setValor(p.newValue.toFixed(2));
         } catch (e) {
             setPreview(null);
-            onNotify(e instanceof Error ? e.message : 'Não foi possível calcular a renovação.', 'error');
+            notificar(e instanceof Error ? e.message : 'Não foi possível calcular a renovação.', 'error');
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [vigente.id, vigente.end_date, endDate, mode]);
@@ -138,9 +146,9 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
             await contractRenewalService.undoAddendumRenewal(ad.id);
             await load();
             onChanged?.();
-            onNotify(`Aditivo ${ad.number} desfeito.`, 'success');
+            notificar(`Aditivo ${ad.number} desfeito.`, 'success');
         } catch (e) {
-            onNotify(e instanceof Error ? e.message : 'Erro ao desfazer o aditivo.', 'error');
+            notificar(e instanceof Error ? e.message : 'Erro ao desfazer o aditivo.', 'error');
         } finally {
             setSaving(false);
         }
@@ -165,9 +173,9 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
             await contractRenewalService.undoRenewal(filho.id);
             await load();
             onChanged?.();
-            onNotify(`Renovação ${filho.number} desfeita.`, 'success');
+            notificar(`Renovação ${filho.number} desfeita.`, 'success');
         } catch (e) {
-            onNotify(e instanceof Error ? e.message : 'Erro ao desfazer a renovação.', 'error');
+            notificar(e instanceof Error ? e.message : 'Erro ao desfazer a renovação.', 'error');
         } finally {
             setSaving(false);
         }
@@ -193,10 +201,10 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
 
             if (mode === 'ADITIVO') {
                 await contractRenewalService.renewByAddendum(vigente.id, base);
-                onNotify('Aditivo de prorrogação gerado e parcelas do novo período criadas.', 'success');
+                notificar('Aditivo de prorrogação gerado e parcelas do novo período criadas.', 'success');
             } else {
                 await contractRenewalService.renewContract(vigente.id, base);
-                onNotify('Novo contrato criado e o anterior encerrado.', 'success');
+                notificar('Novo contrato criado e o anterior encerrado.', 'success');
             }
             setNotes('');
             setEndDate('');
@@ -204,21 +212,39 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
             await load();
             onChanged?.();
         } catch (e) {
-            onNotify(e instanceof Error ? e.message : 'Erro ao renovar o contrato.', 'error');
+            notificar(e instanceof Error ? e.message : 'Erro ao renovar o contrato.', 'error');
         } finally {
             setSaving(false);
         }
     };
 
+    // Fim do período novo = início + prazo − 1 dia (mesma conta e mesmos atalhos
+    // de "Dados do contrato"). O prazo não é guardado: deriva das duas datas.
+    const inicioNovo = preview?.startDate?.slice(0, 10) ?? '';
+    const prazoAtual = inicioNovo ? mesesDaVigencia(inicioNovo, endDate) : null;
+    const aplicarPrazo = (meses: number) => { if (inicioNovo) setEndDate(fimDaVigencia(inicioNovo, meses)); };
+    const motivoSemInicio = inicioNovo ? undefined : 'Aguarde o cálculo do início do período novo.';
+    const fimAntesDoInicio = !!(endDate && inicioNovo && endDate <= inicioNovo);
+
+    // Botão desligado sempre diz o motivo.
+    const motivoNaoRenova = saving ? 'Aguarde: a operação anterior ainda está sendo gravada.'
+        : !preview ? 'Aguarde o cálculo da renovação.'
+        : !endDate ? 'Preencha o fim da vigência do período novo.'
+        : fimAntesDoInicio ? `O fim da vigência deve ser posterior a ${fmtDate(inicioNovo)}.`
+        : null;
+
+    const corDoStatus = (status?: string) =>
+        status === 'Aprovado' ? 'text-emerald-700' : status === 'Cancelado' ? 'text-red-600' : 'text-amber-800';
+
     return (
-        <div className="space-y-8">
-            {/* Situação atual */}
-            <div className="p-5 bg-gray-50 rounded-2xl border border-gray-100">
-                <p className="text-sm font-bold text-gray-800">
+        <div className="max-w-5xl space-y-8">
+            {/* Situação atual — bloco de estado, por isso card (§30) */}
+            <div className="bg-white rounded-[10px] border border-gray-200 px-4 py-3">
+                <p className="text-sm font-semibold text-gray-900">
                     {outroContrato ? `Contrato vigente ${vigente.number}: ` : 'Vigência atual: '}
                     {fmtDate(vigente.start_date)} a {fmtDate(vigente.end_date)}
                 </p>
-                <p className="text-xs font-medium text-gray-500 mt-1">
+                <p className="text-xs text-gray-500 mt-1">
                     Aluguel {fmtCur(vigente.current_value ?? vigente.original_value)}
                     {vigente.billing_cycle ? ` · ${vigente.billing_cycle.toLowerCase()}` : ''}
                     {vigente.due_day ? ` · todo dia ${vigente.due_day}` : ''}
@@ -228,98 +254,140 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
             </div>
 
             {semVigencia ? (
-                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-4 text-sm">
+                <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-[10px] p-4 text-sm">
                     <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
-                    <span>Preencha o fim da vigência em "Dados do contrato" para poder renovar.</span>
+                    <span>Preencha o fim da vigência em "Dados do contrato" e salve a negociação para poder renovar.</span>
                 </div>
             ) : (
-                <div className="space-y-6">
-                    {/* Via da renovação */}
-                    <div className="space-y-2">
-                        <label className={LABEL}>Como renovar</label>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                            <button
-                                type="button"
-                                onClick={() => setMode('ADITIVO')}
-                                className={`text-left p-5 rounded-2xl border transition-all ${
-                                    mode === 'ADITIVO' ? 'border-purple-500 bg-purple-50/60 ring-2 ring-purple-500/20' : 'border-gray-200 bg-white hover:border-gray-300'
-                                }`}
-                            >
-                                <p className="text-sm font-bold text-gray-900">Aditivo de prorrogação</p>
-                                <p className="text-xs font-medium text-gray-500 mt-1">
-                                    Mantém o contrato {vigente.number} e esta negociação. Só estende a vigência.
-                                </p>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => setMode('NOVO_CONTRATO')}
-                                className={`text-left p-5 rounded-2xl border transition-all ${
-                                    mode === 'NOVO_CONTRATO' ? 'border-purple-500 bg-purple-50/60 ring-2 ring-purple-500/20' : 'border-gray-200 bg-white hover:border-gray-300'
-                                }`}
-                            >
-                                <p className="text-sm font-bold text-gray-900">Novo contrato</p>
-                                <p className="text-xs font-medium text-gray-500 mt-1">
-                                    Cria {preview?.nextNumber ?? 'um contrato novo'} e encerra o {vigente.number}.
-                                </p>
-                            </button>
+                <section className="space-y-4">
+                    <SecaoTitulo icon={RefreshCw} titulo="Nova renovação" />
+
+                    {/* Via da renovação — escolha única (radio) */}
+                    <div className="space-y-1.5">
+                        <p id="renovacao-via" className={ROTULO}>Como renovar</p>
+                        <div role="radiogroup" aria-labelledby="renovacao-via" className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            {([
+                                { id: 'ADITIVO', titulo: 'Aditivo de prorrogação', texto: `Mantém o contrato ${vigente.number} e esta negociação. Só estende a vigência.` },
+                                { id: 'NOVO_CONTRATO', titulo: 'Novo contrato', texto: `Cria ${preview?.nextNumber ?? 'um contrato novo'} e encerra o ${vigente.number}.` },
+                            ] as const).map(op => (
+                                <button
+                                    key={op.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={mode === op.id}
+                                    onClick={() => setMode(op.id)}
+                                    className={`text-left px-4 py-3 rounded-[10px] border transition-all ${
+                                        mode === op.id ? 'border-blue-500 bg-blue-50/60 ring-2 ring-blue-500/20' : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
+                                >
+                                    <span className="block text-sm font-semibold text-gray-900">{op.titulo}</span>
+                                    <span className="block text-xs text-gray-500 mt-1">{op.texto}</span>
+                                </button>
+                            ))}
                         </div>
                     </div>
 
-                    {/* Vigência do período novo — mesmos campos de "Dados do contrato",
-                        porque é isso que define de onde até quando as parcelas nascem. */}
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className={LABEL}>Início da Vigência</label>
-                            <div
-                                className="w-full px-6 py-4 bg-gray-100 border border-transparent rounded-2xl font-bold text-gray-500"
-                                title="Dia seguinte ao fim da vigência atual — evita sobreposição de parcelas."
-                            >
-                                {fmtDate(preview?.startDate)}
-                            </div>
+                    {/* Período novo — mesmos campos de "Dados do contrato", porque é
+                        isso que define de onde até quando as parcelas nascem. Campos
+                        curtos em três colunas (§30): data e select não esticam. */}
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
+                        <div className="space-y-1.5">
+                            <label htmlFor="renovacao-inicio" className={ROTULO}>Início da Vigência</label>
+                            <input
+                                id="renovacao-inicio"
+                                type="text"
+                                readOnly
+                                value={preview?.startDate ? fmtDate(preview.startDate) : ''}
+                                placeholder="Calculando…"
+                                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 placeholder:text-gray-400 outline-none cursor-default"
+                            />
+                            <p className="text-xs text-gray-500">Dia seguinte ao fim da vigência atual.</p>
                         </div>
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between px-1">
-                                <label className={LABEL.replace(' px-1', '')}>Fim da Vigência</label>
-                                <div className="flex items-center gap-2">
-                                    {[12, 24, 36].map(m => (
+
+                        <div className="space-y-1.5">
+                            <div className="flex flex-wrap items-center justify-between gap-x-2">
+                                <label htmlFor="renovacao-fim" className={ROTULO}>Fim da Vigência</label>
+                                <div className="flex items-center gap-2 text-xs" title={motivoSemInicio}>
+                                    {PRAZOS_ATALHO.map(n => (
                                         <button
-                                            key={m}
+                                            key={n}
                                             type="button"
-                                            onClick={() => preview && setEndDate(fimApos(preview.startDate, m))}
-                                            className="text-[11px] font-black uppercase tracking-widest text-purple-600 hover:text-purple-700"
+                                            disabled={!inicioNovo}
+                                            aria-label={`Prazo de ${n} meses`}
+                                            onClick={() => { setPrazoDraft(null); aplicarPrazo(n); }}
+                                            className={`font-medium disabled:text-gray-400 disabled:cursor-not-allowed ${prazoAtual === n ? 'text-blue-700 underline underline-offset-2' : 'text-blue-600 hover:text-blue-700'}`}
                                         >
-                                            {m}m
+                                            {n} meses
                                         </button>
                                     ))}
                                 </div>
                             </div>
-                            <input
-                                type="date"
-                                value={endDate}
-                                onChange={e => setEndDate(e.target.value)}
-                                className={INPUT}
-                            />
+                            <div className="flex items-center gap-2">
+                                <div className="relative w-28 shrink-0" title={motivoSemInicio}>
+                                    <input
+                                        type="number"
+                                        min={1}
+                                        step={1}
+                                        inputMode="numeric"
+                                        aria-label="Prazo do período novo em meses"
+                                        placeholder="Prazo"
+                                        disabled={!inicioNovo}
+                                        value={prazoDraft ?? (prazoAtual ?? '')}
+                                        onChange={e => {
+                                            setPrazoDraft(e.target.value);
+                                            const meses = Math.floor(Number(e.target.value));
+                                            if (meses >= 1) aplicarPrazo(meses);
+                                        }}
+                                        onBlur={() => setPrazoDraft(null)}
+                                        className={`${CAMPO} pr-14 disabled:bg-gray-50 disabled:cursor-not-allowed`}
+                                    />
+                                    <span aria-hidden="true" className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-500 pointer-events-none">meses</span>
+                                </div>
+                                <input
+                                    id="renovacao-fim"
+                                    type="date"
+                                    value={endDate}
+                                    onChange={e => { setPrazoDraft(null); setEndDate(e.target.value); }}
+                                    className={`${CAMPO} flex-1 min-w-0`}
+                                />
+                            </div>
+                            {fimAntesDoInicio && (
+                                <p className="text-xs text-red-600">O fim deve ser posterior ao início.</p>
+                            )}
                         </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div className="space-y-2">
-                            <label className={LABEL}>Periodicidade</label>
-                            <select value={cycle} onChange={e => setCycle(e.target.value)} className={`${INPUT} cursor-pointer`}>
+                        <div className="space-y-1.5">
+                            <label htmlFor="renovacao-valor" className={ROTULO}>Valor do Aluguel</label>
+                            <MoneyCentsInput id="renovacao-valor" value={valor} onChange={v => setValor(v)} className={CAMPO} />
+                            {preview?.index && (
+                                <p className="text-xs text-gray-500">
+                                    {preview.index.name} {fmtMonth(preview.index.baseMonth)} → {fmtMonth(preview.index.currentMonth)}
+                                    {' · '}fator {preview.fator.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
+                                    {' · '}sugerido {fmtCur(preview.newValue)}
+                                </p>
+                            )}
+                            {preview?.reajusteWarning && (
+                                <p className="text-xs text-amber-700">{preview.reajusteWarning}</p>
+                            )}
+                        </div>
+
+                        <div className="space-y-1.5">
+                            <label htmlFor="renovacao-periodicidade" className={ROTULO}>Periodicidade</label>
+                            <select id="renovacao-periodicidade" value={cycle} onChange={e => setCycle(e.target.value)} className={`${CAMPO} cursor-pointer`}>
                                 <option value="Mensal">Mensal</option>
                                 <option value="Bimestral">Bimestral</option>
                                 <option value="Semestral">Semestral</option>
                                 <option value="Anual">Anual</option>
                             </select>
                         </div>
-                        <div className="space-y-2">
-                            <label className={LABEL}>Dia de Vencimento</label>
-                            <input type="number" min="1" max="31" value={dueDay}
-                                onChange={e => setDueDay(e.target.value)} className={INPUT} />
+                        <div className="space-y-1.5">
+                            <label htmlFor="renovacao-dia" className={ROTULO}>Dia de Vencimento</label>
+                            <input id="renovacao-dia" type="number" min="1" max="31" value={dueDay}
+                                onChange={e => setDueDay(e.target.value)} className={CAMPO} />
                         </div>
-                        <div className="space-y-2">
-                            <label className={LABEL}>Índice de Reajuste</label>
-                            <select value={index} onChange={e => setIndex(e.target.value)} className={`${INPUT} cursor-pointer`}>
+                        <div className="space-y-1.5">
+                            <label htmlFor="renovacao-indice" className={ROTULO}>Índice de Reajuste</label>
+                            <select id="renovacao-indice" value={index} onChange={e => setIndex(e.target.value)} className={`${CAMPO} cursor-pointer`}>
                                 <option value="IGP-M">IGP-M</option>
                                 <option value="IPCA">IPCA</option>
                                 <option value="INCC">INCC</option>
@@ -328,35 +396,18 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                                 <option value="OUTROS">Outros</option>
                             </select>
                         </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                            <label className={LABEL}>Valor do Aluguel</label>
-                            <MoneyCentsInput value={valor}
-                                onChange={v => setValor(v)} className={INPUT} />
-                            {preview?.index && (
-                                <p className="text-[11px] font-medium text-gray-400 px-1">
-                                    {preview.index.name} {fmtMonth(preview.index.baseMonth)} → {fmtMonth(preview.index.currentMonth)}
-                                    {' · '}fator {preview.fator.toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}
-                                    {' · '}sugerido {fmtCur(preview.newValue)}
-                                </p>
-                            )}
-                            {preview?.reajusteWarning && (
-                                <p className="text-[11px] font-bold text-amber-600 px-1">{preview.reajusteWarning}</p>
-                            )}
-                        </div>
-                        <div className="space-y-2">
-                            <label className={LABEL}>Observações</label>
-                            <input type="text" value={notes} onChange={e => setNotes(e.target.value)}
-                                placeholder="Opcional" className={INPUT} />
+                        <div className="space-y-1.5 md:col-span-3">
+                            <label htmlFor="renovacao-obs" className={ROTULO}>Observações</label>
+                            <input id="renovacao-obs" type="text" value={notes} onChange={e => setNotes(e.target.value)}
+                                placeholder="Opcional" className={`${CAMPO} placeholder:text-gray-400`} />
                         </div>
                     </div>
 
                     {/* Impacto — o que exatamente vai acontecer no financeiro */}
                     {preview && (
-                        <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 text-blue-800 rounded-2xl p-4 text-sm">
-                            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 text-blue-800 rounded-[10px] p-4 text-sm">
+                            <Info className="w-4 h-4 shrink-0 mt-0.5" />
                             {mode === 'ADITIVO' ? (
                                 <span>
                                     O contrato {vigente.number} <strong>não</strong> será encerrado: a vigência passa a
@@ -376,82 +427,86 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                         </div>
                     )}
 
-                    <button
-                        type="button"
-                        onClick={handleRenovar}
-                        disabled={saving || !preview || !endDate}
-                        className="flex items-center gap-3 px-8 py-4 bg-purple-600 text-white rounded-2xl font-black hover:bg-purple-700 transition-all active:scale-95 disabled:opacity-50"
-                    >
-                        <RefreshCw className={`w-5 h-5 ${saving ? 'animate-spin' : ''}`} />
-                        {saving ? 'PROCESSANDO…' : mode === 'ADITIVO' ? 'GERAR ADITIVO' : 'CRIAR NOVO CONTRATO'}
-                    </button>
-                </div>
+                    {/* Rodapé do formulário: linha solta, ação primária §17 */}
+                    <div className="flex items-center justify-end gap-4">
+                        <span className="inline-flex" title={motivoNaoRenova ?? undefined}>
+                            <button
+                                type="button"
+                                onClick={handleRenovar}
+                                disabled={!!motivoNaoRenova}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                <RefreshCw className={`w-[15px] h-[15px] ${saving ? 'animate-spin' : ''}`} />
+                                {saving ? 'Processando…' : mode === 'ADITIVO' ? 'Gerar aditivo' : 'Criar novo contrato'}
+                            </button>
+                        </span>
+                    </div>
+                </section>
             )}
 
             {/* Histórico */}
             {loading ? (
-                <div className="text-center py-8">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-purple-600 mx-auto"></div>
+                <div className="text-center py-12">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+                    <p className="mt-2 text-gray-500">Carregando renovações…</p>
                 </div>
             ) : addendums.length === 0 && chain.length <= 1 ? null : (
-                <div className="space-y-2">
-                    <label className={LABEL}>Histórico de renovações</label>
-                    {addendums.map(ad => (
-                        <div key={ad.id} className="flex items-start gap-3 p-4 rounded-2xl border border-gray-100">
-                            <History className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                                <p className="text-sm font-bold text-gray-800">
-                                    Aditivo {ad.number}
-                                    <span className={`ml-2 text-sm font-normal ${
-                                        ad.status === 'Aprovado' ? 'text-emerald-600'
-                                            : ad.status === 'Cancelado' ? 'text-red-600' : 'text-amber-600'}`}>
-                                        {ad.status}
-                                    </span>
-                                </p>
-                                <p className="text-xs font-medium text-gray-500 mt-0.5">
-                                    {fmtDate(ad.new_start_date)} a {fmtDate(ad.new_end_date)} · {fmtCur(ad.new_value)}
-                                    {ad.previous_value != null && ad.previous_value !== ad.new_value
-                                        ? ` (era ${fmtCur(ad.previous_value)})` : ''}
-                                    {ad.installments_generated ? ` · ${ad.installments_generated} parcela(s) geradas` : ''}
-                                </p>
+                <section className="space-y-4">
+                    <SecaoTitulo icon={History} titulo="Histórico de renovações" />
+                    <div className="space-y-2">
+                        {addendums.map(ad => (
+                            <div key={ad.id} className="flex items-start gap-3 px-4 py-3 rounded-[10px] border border-gray-200 bg-white">
+                                <History className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-gray-900">
+                                        Aditivo {ad.number}
+                                        <span className={`ml-2 text-sm font-normal ${corDoStatus(ad.status)}`}>{ad.status}</span>
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                        {fmtDate(ad.new_start_date)} a {fmtDate(ad.new_end_date)} · {fmtCur(ad.new_value)}
+                                        {ad.previous_value != null && ad.previous_value !== ad.new_value
+                                            ? ` (era ${fmtCur(ad.previous_value)})` : ''}
+                                        {ad.installments_generated ? ` · ${ad.installments_generated} parcela(s) geradas` : ''}
+                                    </p>
+                                </div>
+                                {/* Desfazer só faz sentido enquanto a renovação não virou
+                                    dinheiro: o serviço recusa se alguma parcela do período
+                                    novo já foi paga ou conciliada, e a mensagem dele é
+                                    mostrada como está. */}
+                                {ad.status !== 'Cancelado' && (
+                                    <ActionIconButton
+                                        kind="delete"
+                                        title="Desfazer esta prorrogação"
+                                        onClick={() => handleDesfazerAditivo(ad)}
+                                    />
+                                )}
                             </div>
-                            {/* Desfazer só faz sentido enquanto a renovação não virou
-                                dinheiro: o serviço recusa se alguma parcela do período
-                                novo já foi paga ou conciliada, e a mensagem dele é
-                                mostrada como está. */}
-                            {ad.status !== 'Cancelado' && (
-                                <ActionIconButton
-                                    kind="delete"
-                                    title="Desfazer esta prorrogação"
-                                    onClick={() => handleDesfazerAditivo(ad)}
-                                />
-                            )}
-                        </div>
-                    ))}
-                    {chain.filter(c => c.id !== contract.id).map(c => (
-                        <div key={c.id} className="flex items-start gap-3 p-4 rounded-2xl border border-gray-100">
-                            <RefreshCw className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
-                            <div className="min-w-0 flex-1">
-                                <p className="text-sm font-bold text-gray-800">
-                                    Contrato {c.number}
-                                    <span className="ml-2 text-sm font-normal text-gray-500">{c.status}</span>
-                                </p>
-                                <p className="text-xs font-medium text-gray-500 mt-0.5">
-                                    {fmtDate(c.start_date)} a {fmtDate(c.end_date)} · {fmtCur(c.current_value)}
-                                </p>
+                        ))}
+                        {chain.filter(c => c.id !== contract.id).map(c => (
+                            <div key={c.id} className="flex items-start gap-3 px-4 py-3 rounded-[10px] border border-gray-200 bg-white">
+                                <RefreshCw className="w-4 h-4 text-gray-400 mt-0.5 shrink-0" />
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-sm font-medium text-gray-900">
+                                        Contrato {c.number}
+                                        <span className="ml-2 text-sm font-normal text-gray-600">{c.status}</span>
+                                    </p>
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                        {fmtDate(c.start_date)} a {fmtDate(c.end_date)} · {fmtCur(c.current_value)}
+                                    </p>
+                                </div>
+                                {/* Só o ÚLTIMO da cadeia pode ser desfeito: excluir um do meio
+                                    deixaria o seguinte apontando para um pai inexistente. */}
+                                {c.id === vigente.id && c.parent_contract_id && (
+                                    <ActionIconButton
+                                        kind="delete"
+                                        title="Desfazer esta renovação e reabrir o contrato anterior"
+                                        onClick={() => handleDesfazerContrato(c)}
+                                    />
+                                )}
                             </div>
-                            {/* Só o ÚLTIMO da cadeia pode ser desfeito: excluir um do meio
-                                deixaria o seguinte apontando para um pai inexistente. */}
-                            {c.id === vigente.id && c.parent_contract_id && (
-                                <ActionIconButton
-                                    kind="delete"
-                                    title="Desfazer esta renovação e reabrir o contrato anterior"
-                                    onClick={() => handleDesfazerContrato(c)}
-                                />
-                            )}
-                        </div>
-                    ))}
-                </div>
+                        ))}
+                    </div>
+                </section>
             )}
         </div>
     );

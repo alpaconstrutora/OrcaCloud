@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import {
     Zap, Check, X, RefreshCw, Settings2, Loader2,
     ShieldCheck, AlertCircle, ListChecks, Lightbulb,
@@ -17,6 +17,8 @@ import { FilterPopover } from './ui/FilterPopover';
 import { useConfirm } from './ui/confirm';
 import GroupMatchPanel from './GroupMatchPanel';
 import SequenciaParcelasPanel from './reconciliation/SequenciaParcelasPanel';
+import { sequenciaParcelasService } from '../services/sequenciaParcelasService';
+import type { PosicaoNaSerie } from '../utils/sequenciaParcelas';
 import { formatMoney as formatBRL, formatDateBR as formatDate } from './ui/Format';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ActionIconButton from './ui/ActionIconButton';
@@ -34,6 +36,8 @@ interface CandidateTx {
     party_type?: 'SUPPLIER' | 'CLIENT' | string;
     due_date?: string;
     transaction_date?: string;
+    /** Contrato da parcela — monta a "Sequência sugerida" (posição na série). */
+    contract_id?: string | null;
 }
 
 /** Rótulo + nome da contraparte, inferindo o tipo pela direção quando não há party_type. */
@@ -110,17 +114,23 @@ export interface LinhaSugestao {
  * em tela estreita é ele que corta primeiro, e o `title` devolve o texto inteiro.
  * Visíveis: 1.065 px de dado + 40 da seleção + 160 de ações = 1.265 px, dentro dos
  * ~1.290 px úteis com a barra lateral aberta (senão "Conciliar" nasce fora da tela).
+ * 24/11/2026: + "Sequência sugerida" (175 px, pedido do usuário) com Extrato e
+ * Lançamento 30 px mais estreitos (cortam com `title`) = 1.380 px; abaixo disso a
+ * tabela rola na horizontal.
  * "Cliente/credor" nasce oculta: o pagador/favorecido já está na coluna Extrato, e o
  * nome do título só diverge quando o score já avisa ("Fornecedor similar").
  */
 const COLUNAS_SUGESTAO: StandardTableColumn[] = [
     { key: 'data',        label: 'Data',               sortable: true, width: 120 },
-    { key: 'extrato',     label: 'Extrato',            sortable: true, width: 185 },
+    { key: 'extrato',     label: 'Extrato',            sortable: true, width: 155 },
     { key: 'valor',       label: 'Valor',              sortable: true, width: 150, align: 'right' },
     { key: 'confianca',   label: 'Confiança',          sortable: true, width: 120 },
     { key: 'previsto',    label: 'Valor previsto',     sortable: true, width: 165, align: 'right' },
     { key: 'vencimento',  label: 'Vencimento',         sortable: true, width: 130 },
-    { key: 'lancamento',  label: 'Lançamento',         sortable: true, width: 195 },
+    // Posição da parcela na série do contrato ("Parcela 05 de 30") — para o usuário conferir a
+    // ordem; avisa quando há parcela ANTERIOR em aberto (a sugestão pula uma mais antiga).
+    { key: 'sequencia',   label: 'Sequência sugerida', sortable: true, width: 175 },
+    { key: 'lancamento',  label: 'Lançamento',         sortable: true, width: 165 },
     { key: 'contraparte', label: 'Cliente/credor',     sortable: true, width: 190, defaultHidden: true },
     { key: 'banco',       label: 'Descrição no banco', sortable: true, width: 230, defaultHidden: true },
     { key: 'bruto',       label: 'Valor bruto',        sortable: true, width: 130, align: 'right', defaultHidden: true },
@@ -128,6 +138,34 @@ const COLUNAS_SUGESTAO: StandardTableColumn[] = [
     // composta, sem valor único para ordenar (§6.3); a ordem por força é a Confiança.
     { key: 'motivos',     label: 'Motivos',            sortable: false, width: 300, defaultHidden: true },
 ];
+
+/** "05" — com tantos dígitos quanto o total (mínimo 2). */
+const doisDigitos = (n: number, total: number) => String(n).padStart(Math.max(2, String(total).length), '0');
+const textoDaSequencia = (p?: PosicaoNaSerie) => (p ? `Parcela ${doisDigitos(p.numero, p.total)} de ${doisDigitos(p.total, p.total)}` : '');
+const avisoDeOrdem = (p?: PosicaoNaSerie) => {
+    if (!p || p.abertasAntes.length === 0) return '';
+    const ns = p.abertasAntes.map(n => doisDigitos(n, p.total));
+    return ns.length === 1 ? `${ns[0]} em aberto` : `${ns.length} anteriores em aberto`;
+};
+const explicacaoDaOrdem = (p?: PosicaoNaSerie) => {
+    if (!p) return undefined;
+    const base = `Contrato ${p.numeroContrato || '—'}: parcela ${p.numero} de ${p.total}.`;
+    if (p.abertasAntes.length === 0) return `${base} Nenhuma parcela anterior em aberto.`;
+    return `${base} Anteriores ainda em aberto: ${p.abertasAntes.map(n => doisDigitos(n, p.total)).join(', ')}. `
+        + 'Quem paga atrasado costuma quitar a mais antiga primeiro — confira se este movimento não é dela (veja "+N" na Confiança).';
+};
+
+/** Célula da "Sequência sugerida": texto §8, aviso âmbar quando a sugestão pula parcela anterior. */
+function CelulaSequencia({ p }: { p?: PosicaoNaSerie }) {
+    if (!p) return <span className="text-sm font-normal text-gray-500" title="O lançamento não é parcela de contrato">—</span>;
+    const aviso = avisoDeOrdem(p);
+    return (
+        <span className="block truncate text-sm font-normal text-gray-800 tabular-nums" title={explicacaoDaOrdem(p)}>
+            {textoDaSequencia(p)}
+            {aviso && <span className="text-amber-800"> · {aviso}</span>}
+        </span>
+    );
+}
 
 /** O que o banco credita: líquido quando o cliente retém tributo, bruto quando não. */
 const valorPrevisto = (c?: CandidateTx | null): number | null => c?.valor_esperado ?? c?.amount ?? null;
@@ -203,6 +241,26 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
     // jogada fora. Foi por isso que o usuário clicou em Reprocessar e a tela ficou
     // muda enquanto o console mostrava 22P02 — guia §13.
     const { localToast, showToast } = useToast();
+
+    // "Sequência sugerida": a série inteira dos contratos das sugestões (a posição
+    // depende das outras parcelas). Recarrega só quando muda o conjunto de contratos.
+    const [posicoes, setPosicoes] = useState<Map<string, PosicaoNaSerie>>(() => new Map());
+    const contratosDasSugestoes = useMemo(() => [...new Set(suggestions
+        .map(s => s.candidate_internal_transaction?.contract_id)
+        .filter((id): id is string => !!id))].sort().join(','), [suggestions]);
+    useEffect(() => {
+        let vivo = true;
+        if (!contratosDasSugestoes) { setPosicoes(new Map()); return; }
+        sequenciaParcelasService.posicoesDosContratos(contratosDasSugestoes.split(','))
+            .then(m => { if (vivo) setPosicoes(m); })
+            .catch(e => {
+                console.error('[Center] sequência sugerida', e);
+                const err = e as { message?: string; code?: string };
+                if (vivo) showToast(`Não foi possível numerar as parcelas (Sequência sugerida): ${err?.message ?? String(e)}${err?.code ? ` (${err.code})` : ''}`, 'error');
+            });
+        return () => { vivo = false; };
+    }, [contratosDasSugestoes, showToast]);
+    const posicaoDe = (s?: SuggestionRow | null) => (s?.candidate_internal_transaction_id ? posicoes.get(s.candidate_internal_transaction_id) : undefined);
     const confirmar = useConfirm();
 
     /** Última execução do motor nesta conta. Responde "rodou? quando? deu erro?" —
@@ -544,6 +602,8 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
             }
             case 'vencimento':
                 return <span className="text-sm font-normal text-gray-600 tabular-nums">{formatDate(c?.due_date || c?.transaction_date)}</span>;
+            case 'sequencia':
+                return <CelulaSequencia p={posicaoDe(l.sug)} />;
             case 'contraparte':
                 return texto(contraparteDoTitulo(c, l.bank?.direction));
             case 'lancamento':
@@ -570,11 +630,16 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                 columns={COLUNAS_SUGESTAO}
                 rows={visible}
                 rowKey={l => l.bankId}
-                searchText={textoDeBusca}
+                searchText={l => `${textoDeBusca(l)} ${textoDaSequencia(posicaoDe(l.sug))}`}
                 search={busca}
                 onSearchChange={setBusca}
                 searchPlaceholder="Buscar por contraparte, lançamento, descrição ou valor..."
-                sortValue={valorParaOrdenar}
+                sortValue={(key, l) => {
+                    if (key !== 'sequencia') return valorParaOrdenar(key, l);
+                    // Ordena por contrato e, dentro dele, pela posição: a série fica em sequência.
+                    const p = posicaoDe(l.sug);
+                    return p ? `${p.numeroContrato || p.contractId}#${String(p.numero).padStart(5, '0')}` : null;
+                }}
                 renderCell={(key, l) => celula(key, l)}
                 rowClassName={l => (selecionados.has(l.bankId) ? 'bg-blue-50/60' : '')}
                 selection={{ selected: selecionados, onChange: setSelecionados }}
@@ -591,6 +656,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                                             <th className="px-6 py-2 border-r border-gray-100">Lançamento</th>
                                             <th className="px-6 py-2 border-r border-gray-100">Cliente/credor</th>
                                             <th className="px-6 py-2 border-r border-gray-100">Vencimento</th>
+                                            <th className="px-6 py-2 border-r border-gray-100">Sequência sugerida</th>
                                             <th className="px-6 py-2 border-r border-gray-100 text-right">Valor previsto</th>
                                             <th className="px-6 py-2 border-r border-gray-100">Confiança</th>
                                             <th className="px-6 py-2 border-r border-gray-100">Motivos</th>
@@ -606,6 +672,7 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{c?.description || '—'}</td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-700">{contraparteDoTitulo(c, l.bank?.direction) || '—'}</td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{formatDate(c?.due_date || c?.transaction_date)}</td>
+                                                    <td className="px-6 py-2.5 border-r border-gray-100 whitespace-nowrap"><CelulaSequencia p={posicaoDe(alt)} /></td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-medium text-gray-800 text-right tabular-nums">{formatBRL(valorPrevisto(c))}</td>
                                                     <td className={`px-6 py-2.5 border-r border-gray-100 text-sm font-normal ${BAND_STYLE[bnd].text}`}>{alt.confidence}%</td>
                                                     <td className="px-6 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">{motivosDe(alt).join(' · ') || '—'}</td>

@@ -8,6 +8,8 @@ import {
     analisarSequencias,
     acharPagamentosJuntos,
     acharCreditosParecidos,
+    posicoesNasSeries,
+    type PosicaoNaSerie,
     type CandidatoJuntas,
     type ExtratoPendente,
     type ParcelaDeContrato,
@@ -140,6 +142,30 @@ export const sequenciaParcelasService = {
         const candidatos = acharPagamentosJuntos(series, extrato);
         const parecidos = acharCreditosParecidos(series, extrato, candidatos.map(c => c.bank.id));
         return { series, candidatos, parecidos, primeiroExtrato, ultimoExtrato };
+    },
+
+    /**
+     * Coluna "Sequência sugerida" da Central: a posição de cada parcela na série do
+     * seu contrato. Lê a série INTEIRA dos contratos citados (a posição depende das
+     * outras parcelas), em lotes de 100 ids por causa do tamanho da URL do `in()`.
+     */
+    async posicoesDosContratos(contractIds: string[]): Promise<Map<string, PosicaoNaSerie>> {
+        const ids = [...new Set(contractIds.filter(Boolean))];
+        type Linha = Pick<LinhaParcela, 'id' | 'contract_id' | 'due_date' | 'transaction_date' | 'reference_id' | 'status' | 'business_status' | 'bank_reconciled_at' | 'contracts'>;
+        const linhas: Linha[] = [];
+        for (let i = 0; i < ids.length; i += 100) {
+            const lote = ids.slice(i, i + 100);
+            const r = await fetchAllPages<Linha>(() => supabase.from('internal_transactions')
+                .select('id, contract_id, due_date, transaction_date, reference_id, status, business_status, bank_reconciled_at, contracts(number)')
+                .in('contract_id', lote)
+                .in('source_system', ORIGENS_DA_SERIE)
+                .neq('status', 'CANCELLED')
+                .or(FILTRO_SEM_TRIBUTO_RETIDO)
+                .order('id', { ascending: true }) as unknown as RangeableQuery<Linha>);
+            if (r.error) throw r.error;
+            linhas.push(...r.data);
+        }
+        return posicoesNasSeries(linhas.map(l => ({ ...l, due_date: l.due_date || l.transaction_date, contrato: umSo(l.contracts) })));
     },
 
     /** "Conciliar juntas": a mesma conciliação agrupada (atômica) dos agrupamentos sugeridos. */

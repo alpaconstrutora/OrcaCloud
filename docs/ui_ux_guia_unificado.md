@@ -2113,6 +2113,11 @@ inteira é um `<button>` que abre o detalhe no `Sheet` (tabela no padrão do §6
 > série de parcelas quebrou contra o extrato (furo, vencida, paga com atraso, pagas juntas),
 > com "Conciliar juntas" quando um movimento pendente = soma de parcelas abertas e seguidas.
 > Regra em `utils/sequenciaParcelas.ts`.
+>
+> ℹ️ Mesma regra na tabela de sugestões da Central, coluna **Sequência sugerida** (24/11/2026):
+> "Parcela 05 de 30" em texto §8 e, quando há parcela ANTERIOR do contrato em aberto,
+> " · 04 em aberto" em `text-amber-800` (o `title` lista quais). Ordenar pela coluna agrupa
+> por contrato na ordem da série. Repete na tabela "outros candidatos" do "+N".
 
 ---
 

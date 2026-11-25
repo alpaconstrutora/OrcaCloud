@@ -212,8 +212,19 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
   quebrava sem a coluna nova — agora repete sem `anel_desenhado` em 42703, a ordem deploy × migration não importa
   mais; (3) a planta gravava contorno que se cruza — recusa com aviso; (4) a prévia rodava a conta cheia, o
   equilíbrio e as curvas desligadas a cada quadro — agora conta rala só para o selo, equilíbrio parado, curvas só
-  se visíveis (40 mil nós: 39 → 25 ms por quadro). 9 menores anotados no ledger para depois. Suíte 68 arquivos
-  726/726; `tsc` 0.
+  se visíveis (40 mil nós: 39 → 25 ms por quadro). Suíte 68 arquivos 726/726; `tsc` 0.
+- ⏳ Menores da revisão, deixados para depois (cada um com o efeito para quem usa):
+  1. Prévia presa se o 3D sair de cena no meio do gesto (camada Terreno oculta, troca de aba) — vale até o próximo
+     gesto.
+  2. O polígono azul não acompanha uma mudança de INCLINAÇÃO feita com o 3D aberto (as alças acompanham).
+  3. Arrastando um canto em equilíbrio, o selo perde "equilíbrio" no gesto e o saldo pula ao soltar.
+  4. Usar a seta a partir do equilíbrio grava uma cota fixa (sai do equilíbrio) — esperado, mas sem aviso.
+  5. Na grade rala da prévia, a última linha/coluna some quando (n − 1) não divide o passo: o terreno encolhe um
+     pouco durante o arraste.
+  6. "Parte do platô fora do relevo" só olha os cantos (um lado que cruza um buraco do levantamento não avisa).
+  7. Com superfície de projeto e anel da versão < 3 pontos, as curvas do terreno natural assentam na malha de projeto.
+  8. Duplo clique com menos de 3 cantos distintos encerra o desenho sem dizer por quê.
+  9. `pointercancel` no meio do gesto: a órbita só volta no próximo `pointerup`.
 - ⏳ Falta: migration aplicada pelo usuário → merge → prova logada em produção.
 - Fora (anotado): o "percorrer" a pé ainda anda no terreno natural, não no de projeto.
 

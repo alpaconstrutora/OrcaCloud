@@ -1072,6 +1072,27 @@ export function cotaDeProjeto(
  * `passo > 1`: grade RALA (um nó a cada `passo`, espaçamento × passo) — a prévia durante o arraste no
  * 3D quando a cheia não cabe num quadro.
  */
+/**
+ * A grade RALA (25/11/2026): um nó a cada `passo` (espaçamento × passo). É a prévia do arraste do platô no 3D —
+ * terreno, curvas e a conta da terraplenagem numa grade que cabe num quadro; ao soltar, a cheia. `passo ≤ 1` → a
+ * própria grade.
+ */
+export function gradeRala(grade: GradeDeElevacao, passo: number): GradeDeElevacao {
+  const p = Math.max(1, Math.floor(passo));
+  if (p === 1) return grade;
+  const { origem, espacamentoMm: esp, colunas, linhas, cotasM } = grade;
+  const cols = Math.ceil(colunas / p);
+  const lins = Math.ceil(linhas / p);
+  const saida: (number | null)[] = new Array(cols * lins);
+  for (let l = 0; l < lins; l++) for (let c = 0; c < cols; c++) saida[l * cols + c] = cotasM[l * p * colunas + c * p];
+  return { origem, espacamentoMm: esp * p, colunas: cols, linhas: lins, cotasM: saida };
+}
+
+/** O passo da prévia (P0, medido): o menor que deixa a grade com até ~12 mil nós. */
+export function passoDaPrevia(grade: Pick<GradeDeElevacao, 'colunas' | 'linhas'>): number {
+  return Math.max(1, Math.ceil(Math.sqrt((grade.colunas * grade.linhas) / 12_000)));
+}
+
 export function gradeDeProjeto(
   grade: GradeDeElevacao,
   anelPlato: Point[],

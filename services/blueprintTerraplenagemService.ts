@@ -14,6 +14,15 @@ const COLS =
   'empolamento_pct, contracao_pct, altura_do_lance_m, largura_da_banqueta_m, largura_da_via_m, ' +
   'talude_por_aresta, perfil_polilinha, drenagem, caimento_min_pct, hidraulica, estrutura, created_at, updated_at';
 
+/**
+ * Banco ANTIGO (25/11/2026): antes da migration `aplicar_20271125100000` a coluna `anel_desenhado` não existe
+ * (Postgres 42703). Ler e gravar repetem SEM ela — o deploy não pode depender da ordem com a migration, senão a
+ * terraplenagem de todos os estudos cai em "persistência indisponível".
+ */
+const COLS_SEM_DESENHO = COLS.replace(' anel_desenhado,', '');
+const semAColunaNova = (error: { code?: string; message: string } | null) =>
+  !!error && (error.code === '42703' || /anel_desenhado/.test(error.message));
+
 function fail(context: string, error: { message: string } | null): never {
   throw new Error(`blueprintTerraplenagem/${context}: ${error?.message ?? 'erro desconhecido'}`);
 }
@@ -45,11 +54,14 @@ export type PremissaDeTerraplenagem = Pick<
 export const blueprintTerraplenagemService = {
   /** `null` é o estado normal: a maioria dos estudos não tem platô. */
   async get(studyId: string): Promise<BlueprintTerraplenagemRow | null> {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('blueprint_study_terraplenagem')
       .select(COLS)
       .eq('study_id', studyId)
       .maybeSingle();
+    if (semAColunaNova(error)) {
+      ({ data, error } = await supabase.from('blueprint_study_terraplenagem').select(COLS_SEM_DESENHO).eq('study_id', studyId).maybeSingle());
+    }
     if (error) fail('get', error);
     return (data as BlueprintTerraplenagemRow | null) ?? null;
   },
@@ -60,11 +72,21 @@ export const blueprintTerraplenagemService = {
     organizationId: string,
     premissa: PremissaDeTerraplenagem,
   ): Promise<BlueprintTerraplenagemRow> {
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('blueprint_study_terraplenagem')
       .upsert({ ...premissa, study_id: studyId, organization_id: organizationId }, { onConflict: 'study_id' })
       .select(COLS)
       .single();
+    if (semAColunaNova(error)) {
+      // Sem a coluna, o desenho não tem onde ficar: grava o resto (a base DESENHADO, se for o caso, o CHECK antigo
+      // recusa — e o erro sobe, como antes).
+      const { anel_desenhado: _semColuna, ...resto } = premissa;
+      ({ data, error } = await supabase
+        .from('blueprint_study_terraplenagem')
+        .upsert({ ...resto, study_id: studyId, organization_id: organizationId }, { onConflict: 'study_id' })
+        .select(COLS_SEM_DESENHO)
+        .single());
+    }
     if (error) fail('save', error);
     return data as unknown as BlueprintTerraplenagemRow;
   },

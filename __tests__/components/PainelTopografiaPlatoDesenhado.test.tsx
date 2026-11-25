@@ -115,6 +115,11 @@ describe('PainelTopografia · o platô desenhado', () => {
     expect(b.getAttribute('title')).toMatch(/feche o lote/i);
   });
 
+  it('o contorno recusado aparece com o motivo', () => {
+    montar({ avisoDoPlato: 'O contorno não pode se cruzar — desenhe de novo, sem cruzar os lados.' });
+    expect(screen.getByText(/não pode se cruzar/)).toBeTruthy();
+  });
+
   it('o aviso dos lados mostra de N para M e some no "Entendi"', () => {
     const t = montar({ avisoDosLados: { de: 4, para: 5 } });
     expect(screen.getByText(/voltaram ao padrão \(o contorno mudou de 4 para 5 lados\)/)).toBeTruthy();

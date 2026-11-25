@@ -17,7 +17,7 @@ const ESCALA = 0.05;
 const MARGEM = 60;
 const naTela = (p: { x: number; y: number }) => ({ clientX: p.x * ESCALA + MARGEM, clientY: -p.y * ESCALA + MARGEM });
 
-function montar(onPlatoDesenhado: ReturnType<typeof vi.fn>) {
+function montar(onPlatoDesenhado: ReturnType<typeof vi.fn>, onPlatoRecusado?: ReturnType<typeof vi.fn>) {
   const m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
   const r = render(
     <BlueprintCanvas
@@ -37,6 +37,7 @@ function montar(onPlatoDesenhado: ReturnType<typeof vi.fn>) {
       dy={0}
       ortogonal
       onPlatoDesenhado={onPlatoDesenhado}
+      onPlatoRecusado={onPlatoRecusado}
     />,
   );
   const c = r.container.querySelector('canvas')!;
@@ -91,6 +92,20 @@ describe('BlueprintCanvas · ferramenta Platô', () => {
     clicar(c, { x: 8000, y: 0 });
     duplo(c, { x: 8000, y: 0 });
     expect(fn).not.toHaveBeenCalled();
+  });
+
+  it('contorno que se cruza (gravata) não grava e diz por quê', () => {
+    const fn = vi.fn();
+    const recusa = vi.fn();
+    const c = montar(fn, recusa);
+    // (0,0) → (8000,−6000) → (8000,0) → (0,−6000): os lados 1 e 3 se cruzam. Sem trava (Shift).
+    clicar(c, { x: 0, y: 0 }, true);
+    clicar(c, { x: 8000, y: -6000 }, true);
+    clicar(c, { x: 8000, y: 0 }, true);
+    clicar(c, { x: 0, y: -6000 }, true);
+    duplo(c, { x: 0, y: -6000 });
+    expect(fn).not.toHaveBeenCalled();
+    expect(recusa).toHaveBeenCalledWith('O contorno não pode se cruzar — desenhe de novo, sem cruzar os lados.');
   });
 
   it('a trava de 90° vale por padrão; com Shift o canto fica onde foi clicado', () => {

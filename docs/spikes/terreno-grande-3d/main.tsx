@@ -84,6 +84,7 @@ declare global {
     __entorno?: { predios: number; arvores: number };
     __plato3d?: { anel: { x: number; y: number }[]; cotaM: number } | null;
     __confirmacoes?: number;
+    __previas?: number[];
   }
 }
 window.__terreno = relevo ? { minY: relevo.minY, maxY: relevo.maxY, triangulos: relevo.triangulos } : null;
@@ -173,7 +174,11 @@ function usePlatoEditavel() {
           cotaZeroM: COTA_ZERO,
           equilibrio: false,
           cotaEm: () => atual.cotaM,
-          onPrevia: setPrevia,
+          onPrevia: (p: { anel: { x: number; y: number }[]; cotaM: number } | null) => {
+            // Espião do portão: a sequência de cotas da prévia durante o gesto.
+            if (p) (window.__previas ??= []).push(p.cotaM);
+            setPrevia(p);
+          },
           onConfirmar: (p: { anel: { x: number; y: number }[]; cotaM: number | null }) => {
             window.__confirmacoes = (window.__confirmacoes ?? 0) + 1;
             setPrevia(null);

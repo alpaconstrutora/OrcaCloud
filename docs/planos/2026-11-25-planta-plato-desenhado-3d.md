@@ -206,6 +206,14 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
   não gira, seta sobe a cota (866 → 882,20; aterro com talude). Dois defeitos que só o portão pegou: alças
   invisíveis (pequenas e brancas) e a órbita girando junto (desligar NO aperto, e após Esc só no pointerup).
   Suíte 67 arquivos 718/718; `tsc` 0.
+- [x] Revisão do branch inteiro (revisor novo, 25/11): 2 críticos + 2 importantes corrigidos, cada um com teste
+  vermelho → verde: (1) a SETA realimentava a própria posição — a cota da prévia ia e voltava e gravava ~metade
+  (portão `plato.mjs` agora exige prévia monotônica; altura do grupo da seta congelada no gesto); (2) o serviço
+  quebrava sem a coluna nova — agora repete sem `anel_desenhado` em 42703, a ordem deploy × migration não importa
+  mais; (3) a planta gravava contorno que se cruza — recusa com aviso; (4) a prévia rodava a conta cheia, o
+  equilíbrio e as curvas desligadas a cada quadro — agora conta rala só para o selo, equilíbrio parado, curvas só
+  se visíveis (40 mil nós: 39 → 25 ms por quadro). 9 menores anotados no ledger para depois. Suíte 68 arquivos
+  726/726; `tsc` 0.
 - ⏳ Falta: migration aplicada pelo usuário → merge → prova logada em produção.
 - Fora (anotado): o "percorrer" a pé ainda anda no terreno natural, não no de projeto.
 

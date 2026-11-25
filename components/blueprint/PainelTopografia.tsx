@@ -102,6 +102,8 @@ export interface TerraplenagemNoPainel {
   /** Os taludes/muros por lado voltaram ao padrão porque o contorno mudou de `de` para `para` lados. */
   avisoDosLados?: { de: number; para: number } | null;
   onEsquecerAvisoDosLados?: () => void;
+  /** O contorno desenhado foi recusado (por ex. se cruza): o motivo. */
+  avisoDoPlato?: string | null;
   /** Há envelope válido (recuos que cabem)? Sem ele, ENVELOPE cai no lote. */
   temEnvelope: boolean;
   /** F25: há o platô sob a casa (lançado pela casa automática) para escolher? */
@@ -2024,6 +2026,7 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
           )}
         </div>
       )}
+      {t.avisoDoPlato && <p className="mt-1.5 text-[11px] text-amber-700">{t.avisoDoPlato}</p>}
       {t.avisoDosLados && (
         <div className="mt-1.5 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
           <p className="flex-1">

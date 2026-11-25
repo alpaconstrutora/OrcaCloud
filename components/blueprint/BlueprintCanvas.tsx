@@ -113,6 +113,7 @@ const SEM_BLOCOS_COM_PROBLEMA: ReadonlySet<string> = new Set();
 import { COR_DA_FASE } from '../../utils/blueprintFases';
 import { linhasDoMobiliario, PENA_PX, PX_MINIMO_DO_DETALHE } from '../../utils/blueprintSimbolosMobiliario';
 import { COR_DA_FAMILIA, COR_PAREDE_HUMANIZADA, COR_SOMBRA, COR_VEGETACAO, sombraDaParede, tramaDoPiso, type EstiloDoPiso, type Planta } from '../../utils/blueprintHumanizada';
+import { anelValido } from '../../utils/blueprintPlato3d';
 import { formatarCotaM, type CurvaDeNivel, type GradeDeElevacao, type PontoCotado } from '../../utils/blueprintTopografia';
 import {
   comprimentoDaCurvaM,
@@ -1423,6 +1424,8 @@ interface Props {
   onPerfilTracado?: (pontos: Point[]) => void;
   /** 25/11/2026: a ferramenta Platô fechou um contorno (≥ 3 cantos distintos). Não cria entidade de kernel. */
   onPlatoDesenhado?: (anel: Point[]) => void;
+  /** O contorno fechado não serve (se cruza): o motivo, para a tela dizer. */
+  onPlatoRecusado?: (motivo: string) => void;
   /**
    * Uma cor por ambiente em vez do azul único.
    *
@@ -1839,6 +1842,7 @@ export default function BlueprintCanvas({
   linhaDoPerfilAtiva = null,
   onPerfilTracado,
   onPlatoDesenhado,
+  onPlatoRecusado,
   drenagem = null,
   onDrenagemTracada,
   eixosDeVia = null,
@@ -10368,7 +10372,11 @@ export default function BlueprintCanvas({
   /** Entrega o contorno do platô se tiver ≥ 3 cantos DISTINTOS; em qualquer caso, encerra o gesto. */
   function fecharPlato(pontos: Point[]) {
     const distintos = pontos.filter((p, i) => pontos.findIndex((q) => q.x === p.x && q.y === p.y) === i);
-    if (distintos.length >= 3) onPlatoDesenhado?.(distintos);
+    if (distintos.length >= 3) {
+      // Um contorno que se cruza dá volumes sem sentido — e no 3D nenhum arraste o salvaria (revisão do branch).
+      if (anelValido(distintos)) onPlatoDesenhado?.(distintos);
+      else onPlatoRecusado?.('O contorno não pode se cruzar — desenhe de novo, sem cruzar os lados.');
+    }
     setCadeia([]);
     setTrechos([]);
   }

@@ -120,7 +120,19 @@ if (alcas2b.length !== alcas2.length || Math.max(...andou) > 4) falhas.push(`Esc
 const verdes = (await manchas([120, 210, 140], 45)).filter((m) => m.n >= 8).sort((a, b) => a.y - b.y);
 if (verdes.length === 0) falhas.push('não achei a seta verde');
 else {
-  await arrastar(verdes[0], 0, -60);
+  await page.evaluate(() => (window.__previas = []));
+  // Mais passos que os outros gestos: a realimentação (a seta subindo com a prévia) aparece como cota que DESCE.
+  await page.mouse.move(caixa.x + verdes[0].x, caixa.y + verdes[0].y);
+  await page.mouse.down();
+  for (let k = 1; k <= 12; k++) {
+    await page.mouse.move(caixa.x + verdes[0].x, caixa.y + verdes[0].y - 5 * k);
+    await page.waitForTimeout(60);
+  }
+  await page.mouse.up();
+  await page.waitForTimeout(700);
+  const previas = await page.evaluate(() => window.__previas ?? []);
+  const desceu = previas.some((c, i) => i > 0 && c < previas[i - 1] - 0.001);
+  if (desceu) falhas.push(`seta: com o mouse só subindo, a cota da prévia desceu (${previas.join(' → ')})`);
   const depois3 = await estado();
   if (depois3.confirmacoes !== 2) falhas.push(`seta: ${depois3.confirmacoes} confirmações (esperava 2)`);
   if (!(depois3.plato.cotaM > depois2.plato.cotaM)) falhas.push(`seta: a cota não subiu (${depois2.plato.cotaM} → ${depois3.plato.cotaM})`);

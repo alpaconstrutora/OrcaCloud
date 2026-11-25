@@ -3153,6 +3153,9 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
 
   // A seta: o deslocamento vertical do PivotControls vira a cota (passo 5 cm).
   const cotaNoInicioDaSeta = useRef(plato.cotaM);
+  // A altura da seta CONGELA durante o gesto: o PivotControls mede o arraste contra a posição do grupo, e o grupo
+  // subindo com a prévia realimentava a conta — a cota ia e voltava (revisão do branch, portão plato.mjs).
+  const [ySetaFixo, setYSetaFixo] = useState<number | null>(null);
   const cotaDaSetaRef = useRef<number | null>(null);
   const quadroDaSeta = useRef(0);
 
@@ -3182,7 +3185,7 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
           <Edges color="#1d4ed8" />
         </mesh>
       ))}
-      <group key={chaveDaSeta} position={[centro.x / 1000, yDe(centro) + 0.1, centro.y / 1000]}>
+      <group key={chaveDaSeta} position={[centro.x / 1000, ySetaFixo ?? yDe(centro) + 0.1, centro.y / 1000]}>
         <PivotControls
           activeAxes={[false, true, false]}
           disableRotations
@@ -3194,6 +3197,7 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
           onDragStart={() => {
             cotaNoInicioDaSeta.current = cb.current.cotaM;
             cotaDaSetaRef.current = null;
+            setYSetaFixo(cb.current.cotaEm(centro) - cb.current.cotaZeroM + 0.1);
             // A órbita não pode pegar o mesmo arraste (a câmera girava junto com a seta — portão plato.mjs).
             if (controles) controles.enabled = false;
           }}
@@ -3213,7 +3217,8 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
             if (quadroDaSeta.current) cancelAnimationFrame(quadroDaSeta.current);
             quadroDaSeta.current = 0;
             const cota = cotaDaSetaRef.current;
-            // A seta volta ao centro (remonta); a cota é que mudou.
+            // A seta volta ao centro (remonta, já na cota nova); a cota é que mudou.
+            setYSetaFixo(null);
             setChaveDaSeta((k) => k + 1);
             if (cota !== null && cota !== cotaNoInicioDaSeta.current) cb.current.onConfirmar({ anel: cb.current.anel, cotaM: cota });
             else cb.current.onPrevia(null);

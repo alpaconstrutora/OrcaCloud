@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   gradeDeProjeto,
+  gradeRala,
   saldoDoPlato,
   PARAMETROS_PADRAO,
   terraplenagemComTalude,
@@ -87,5 +88,28 @@ describe('saldoDoPlato (o selo do 3D)', () => {
     const s = saldoDoPlato(terraplenagemComTalude(t, fora, 100, PARAMETROS_PADRAO, null), t, fora, true);
     expect(s.foraDoRelevo).toBe(true);
     expect(s.equilibrio).toBe(true);
+  });
+});
+
+describe('gradeRala (a prévia do arraste)', () => {
+  it('um nó a cada passo, espaçamento × passo, mesmas cotas nos nós que coincidem', () => {
+    const t = rampa();
+    const r = gradeRala(t, 3);
+    expect([r.colunas, r.linhas, r.espacamentoMm]).toEqual([14, 14, 3000]);
+    expect(r.origem).toEqual(t.origem);
+    expect(no(r, 2, 5)).toBe(no(t, 6, 15));
+  });
+  it('passo 1 devolve a própria grade', () => {
+    const t = rampa();
+    expect(gradeRala(t, 1)).toBe(t);
+  });
+  it('a conta da terraplenagem na grade rala fica perto da cheia (é só a prévia)', () => {
+    // Um platô que cobre muitas células da rala (30 × 30 m em células de 2 m) — o caso da prévia, que só entra em
+    // terreno de mais de 12 mil nós; num platô de 5 células por lado o erro passa de 25 %.
+    const t = rampa();
+    const grande = [{ x: -15000, y: -15000 }, { x: 15000, y: -15000 }, { x: 15000, y: 15000 }, { x: -15000, y: 15000 }];
+    const cheia = terraplenagemComTalude(t, grande, 99.8, PARAMETROS_PADRAO, null);
+    const rala = terraplenagemComTalude(gradeRala(t, 2), grande, 99.8, PARAMETROS_PADRAO, null);
+    expect(Math.abs(rala.corteTotalM3 - cheia.corteTotalM3) / cheia.corteTotalM3).toBeLessThan(0.25);
   });
 });

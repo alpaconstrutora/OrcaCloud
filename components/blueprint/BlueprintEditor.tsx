@@ -703,6 +703,8 @@ import {
   perfilAoLongo,
   terraplenagemComTalude,
   gradeDeProjeto,
+  gradeRala,
+  passoDaPrevia,
   saldoDoPlato,
 } from '../../utils/blueprintTopografiaAnalises';
 import {
@@ -5829,21 +5831,41 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   useEffect(() => {
     terraplenagem.definirAnelEmUso(anelDoPlato ?? null);
   }, [anelDoPlato, terraplenagem.definirAnelEmUso]);
+  // Durante a prévia o equilíbrio NÃO é refeito a cada quadro (a cota da prévia é a que vale); volta ao soltar.
+  const equilibrioAnteriorRef = useRef<number | null>(null);
   const cotaDeEquilibrioM = useMemo(() => {
+    if (previaDoPlato) return equilibrioAnteriorRef.current;
     const v = topografia.selecionada;
-    return v && anelDoPlato ? cotaDeEquilibrio(v.grade, anelDoPlato) : null;
+    const c = v && anelDoPlato ? cotaDeEquilibrio(v.grade, anelDoPlato) : null;
+    equilibrioAnteriorRef.current = c;
+    return c;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDaTopografia, anelDoPlato]);
+  }, [chaveDaTopografia, anelDoPlato, previaDoPlato !== null]);
   const cotaDoPlatoM = previaDoPlato ? previaDoPlato.cotaM : (terraplenagem.cotaPlatoM ?? cotaDeEquilibrioM);
   /** C1: o caimento do platô (`null` = horizontal). A cota acima é a do centro do anel. */
   const inclinacaoDoPlato = terraplenagem.inclinacao;
+  // Durante a prévia do 3D a conta CHEIA fica parada no último resultado (painel, planta, muros e orçamento mostram o
+  // estado de antes do gesto) e uma conta RALA à parte alimenta o selo do 3D — na cheia, a cada quadro, passava do
+  // orçamento de tempo (revisão do branch). Ao soltar, a cheia volta.
+  const terraplenagemCalcAnterior = useRef<ReturnType<typeof terraplenagemComTalude> | null>(null);
   const terraplenagemCalc = useMemo(() => {
+    if (previaDoPlato) return terraplenagemCalcAnterior.current;
     const v = topografia.selecionada;
-    return v && anelDoPlato && cotaDoPlatoM !== null
-      ? terraplenagemComTalude(v.grade, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, inclinacaoDoPlato)
-      : null;
+    const r =
+      v && anelDoPlato && cotaDoPlatoM !== null
+        ? terraplenagemComTalude(v.grade, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, inclinacaoDoPlato)
+        : null;
+    terraplenagemCalcAnterior.current = r;
+    return r;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chaveDaTopografia, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, inclinacaoDoPlato]);
+  }, [chaveDaTopografia, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, inclinacaoDoPlato, previaDoPlato !== null]);
+  const terraplenagemDaPrevia = useMemo(() => {
+    const v = topografia.selecionada;
+    if (!previaDoPlato || !v || !anelDoPlato || cotaDoPlatoM === null) return null;
+    const grade = gradeRala(v.grade, passoDaPrevia(v.grade));
+    return { grade, calc: terraplenagemComTalude(grade, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, inclinacaoDoPlato) };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [previaDoPlato, chaveDaTopografia, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, inclinacaoDoPlato]);
   /**
    * O TERRENO DE PROJETO NO 3D (25/11/2026, platô desenhado — P2): com a Terraplenagem à vista (a mesma chave do 2D),
    * o relevo do 3D é a superfície DEPOIS da obra (`gradeDeProjeto`, a `cotaDeProjeto` em cada nó) e as curvas são as
@@ -5853,7 +5875,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const v = topografia.selecionada;
     if (!v || !mostrarTerraplenagem || !terrenoAVista || !anelDoPlato || cotaDoPlatoM === null) return null;
     // Durante o arraste, a grade RALA (P0: ≤ ~12 mil nós cabe num quadro); ao soltar, a cheia.
-    const passo = previaDoPlato ? Math.max(1, Math.ceil(Math.sqrt((v.grade.colunas * v.grade.linhas) / 12_000))) : 1;
+    const passo = previaDoPlato ? passoDaPrevia(v.grade) : 1;
     const grade = gradeDeProjeto(v.grade, anelDoPlato, cotaDoPlatoM, terraplenagem.parametros, inclinacaoDoPlato, passo);
     const chave = `plato:${anelDoPlato.map((p) => `${p.x},${p.y}`).join(';')}:${cotaDoPlatoM}:${JSON.stringify(terraplenagem.parametros)}:${JSON.stringify(inclinacaoDoPlato)}`;
     return { grade, malha: malhaDaGrade(grade, cotaZeroDoTerrenoM), chave };
@@ -5893,9 +5915,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   /** O selo do 3D: corte, aterro e saldo — os números do painel (a mesma `terraplenagemCalc`). */
   const saldoDoPlato3d = useMemo(() => {
     const v = topografia.selecionada;
-    return superficieDeProjeto3d && terraplenagemCalc && anelDoPlato && v ? saldoDoPlato(terraplenagemCalc, v.grade, anelDoPlato, terraplenagem.cotaPlatoM === null) : null;
+    if (!superficieDeProjeto3d || !anelDoPlato || !v) return null;
+    if (terraplenagemDaPrevia) return saldoDoPlato(terraplenagemDaPrevia.calc, terraplenagemDaPrevia.grade, anelDoPlato, false);
+    return terraplenagemCalc ? saldoDoPlato(terraplenagemCalc, v.grade, anelDoPlato, terraplenagem.cotaPlatoM === null) : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [superficieDeProjeto3d, terraplenagemCalc, anelDoPlato, terraplenagem.cotaPlatoM]);
+  }, [superficieDeProjeto3d, terraplenagemCalc, terraplenagemDaPrevia, anelDoPlato, terraplenagem.cotaPlatoM]);
   /** A cota do plano em cada ponto — só existe com inclinação; o corte 2D e os muros 3D a recebem. */
   const cotaDoPlatoEmFn = useMemo(() => {
     if (!anelDoPlato || cotaDoPlatoM === null || !inclinacaoDoPlato) return undefined;
@@ -6143,8 +6167,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const projeto = superficieDeProjeto3d;
     const niveis = v ? [...new Set(v.curvas.map((c) => c.cotaM))].sort((a, b) => a - b) : [];
     const mestras = new Set(v ? v.curvas.filter((c) => c.mestra).map((c) => c.cotaM) : []);
+    // Só gera as curvas da superfície se elas estiverem à vista (eram o gargalo medido na P0).
     const curvasDaSuperficie =
-      v && projeto && v.anel.length >= 3 ? gerarCurvasNosNiveis(projeto.grade, v.anel, niveis, (n) => mestras.has(n)) : v?.curvas ?? [];
+      v && projeto && mostrarCurvasDeNivel && v.anel.length >= 3 ? gerarCurvasNosNiveis(projeto.grade, v.anel, niveis, (n) => mestras.has(n)) : v?.curvas ?? [];
     const gradeDaMalha = projeto ? projeto.grade : v?.grade;
     // Assentadas na MESMA malha do 3D (`relevo3d` usa `malhaDaGrade` com o teto padrão), subdivididas a ⅛ da célula.
     const curvas =
@@ -11644,6 +11669,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             },
             podeEditarContorno: !!anelDoPlato,
             avisoDosLados: terraplenagem.avisoDosLados,
+            avisoDoPlato,
             onEsquecerAvisoDosLados: terraplenagem.esquecerAvisoDosLados,
             cotaPlatoM: terraplenagem.cotaPlatoM,
             onCotaPlatoM: terraplenagem.setCotaPlatoM,
@@ -17784,8 +17810,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   }
                   linhasDoPerfil={(mostrarCurvasDeNivel && terrenoAVista) ? linhasDoPerfil : null}
                   linhaDoPerfilAtiva={usaLinhaDesenhada ? indiceDaLinha : null}
+                  onPlatoRecusado={(motivo) => setAvisoDoPlato(motivo)}
                   onPlatoDesenhado={(anel) => {
                     // O platô desenhado vira a base do platô e o corte/aterro aparece na planta.
+                    setAvisoDoPlato(null);
                     terraplenagem.definirAnelDesenhado(anel);
                     setMostrarTerraplenagem(true);
                     editor.setTool('selecionar');

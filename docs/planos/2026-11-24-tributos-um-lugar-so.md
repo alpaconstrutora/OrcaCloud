@@ -44,6 +44,11 @@ Problemas encontrados:
   - **Pronto quando:** `segurancaMigrations` verde ✅ e `pg_policies` com as 3 policies novas em cada tabela depois de aplicada (aplicação depende do OK do usuário).
 - [x] 4. **Aba Venda de Ativos.** Saem a coluna e as opções "Aplica a". O aviso amarelo e o subtítulo dizem que a lista vale só para Venda de Ativos.
 
+- [x] 5. **Seletor de ano começa no primeiro ano da tabela** (pedido de 24/11/2026: *"pesquise crie as tabelas de IRRF de anos anteriores de 2023"*).
+  - As tabelas já existiam: o IRRF de 01/04/2015 a 30/04/2023 está no banco e confere com a Lei 13.149/2015. O seletor é que começava fixo em 2023 e as escondia. Agora começa no primeiro ano cadastrado (`fiscalService.primeiroAnoDaTabela`).
+  - Não foram criadas tabelas anteriores a 04/2015, porque nenhum dado precisa delas: a 1ª parcela de locação com IRRF é de 12/2016, a folha começa em 11/2025 e o pró-labore em 05/2026.
+  - **Pronto quando:** tsc e check-ui-standard sem erros. ✅ Falta conferir na tela.
+
 ## Achados à parte (não mexidos)
 
 - A tabela de INSS da folha para **2023** tem as faixas de **2025** (1ª faixa até R$ 1.518,00). Não conferi na fonte oficial; falta o usuário confirmar.

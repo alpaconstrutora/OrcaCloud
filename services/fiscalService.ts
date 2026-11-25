@@ -46,6 +46,23 @@ function exigirLinha(data: unknown[] | null) {
 
 export const fiscalService = {
     /**
+     * Primeiro ano com vigência cadastrada na tabela — o seletor de ano da tela
+     * começa nele (até 24/11/2026 começava fixo em 2023 e escondia o IRRF de
+     * 04/2015 a 04/2023, que existe e é usado pelas locações). null = vazia.
+     */
+    async primeiroAnoDaTabela(tabela: 'inss' | 'irrf' | 'fgts'): Promise<number | null> {
+        const nome = tabela === 'inss' ? 'inss_brackets' : tabela === 'irrf' ? 'irrf_brackets' : 'fgts_config';
+        const { data, error } = await supabase
+            .from(nome)
+            .select('valid_from')
+            .order('valid_from', { ascending: true })
+            .limit(1);
+        if (error) throw error;
+        const de = (data?.[0] as { valid_from?: string } | undefined)?.valid_from;
+        return de ? Number(de.slice(0, 4)) : null;
+    },
+
+    /**
      * Busca as faixas de INSS válidas para uma determinada data (competência)
      */
     async getINSSBrackets(date: string): Promise<INSSBracket[]> {

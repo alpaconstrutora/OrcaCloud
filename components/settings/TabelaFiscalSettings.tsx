@@ -104,11 +104,21 @@ const TabelaFiscalSettings: React.FC<Props> = ({ tabela: activeTab, podeEditar }
     const [buscaInss, setBuscaInss] = usePersistedState<string>('labor:fiscal:inss:search', '');
     const [buscaIrrf, setBuscaIrrf] = usePersistedState<string>('labor:fiscal:irrf:search', '');
 
-    // Do primeiro ano com tabela cadastrada até o próximo (o ano seguinte é preparado antes de virar).
+    // Do primeiro ano com tabela cadastrada (lido do banco — o IRRF vem de 2015) até o
+    // próximo (o ano seguinte é preparado antes de virar). Até ler, 2023.
+    const [primeiroAno, setPrimeiroAno] = useState(2023);
+    useEffect(() => {
+        let vivo = true;
+        fiscalService.primeiroAnoDaTabela(activeTab)
+            .then(ano => { if (vivo && ano) setPrimeiroAno(ano); })
+            .catch(() => { /* fica 2023: o seletor só perde os anos antigos */ });
+        return () => { vivo = false; };
+    }, [activeTab]);
     const years = useMemo(() => {
         const ultimo = Math.max(new Date().getFullYear() + 1, selectedYear);
-        return Array.from({ length: ultimo - 2023 + 1 }, (_, i) => 2023 + i);
-    }, [selectedYear]);
+        const inicio = Math.min(primeiroAno, selectedYear);
+        return Array.from({ length: ultimo - inicio + 1 }, (_, i) => inicio + i);
+    }, [selectedYear, primeiroAno]);
 
     const loadData = async () => {
         setLoading(true);

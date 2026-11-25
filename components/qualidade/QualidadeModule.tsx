@@ -109,6 +109,13 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
         }
     }, [orgId]);
     React.useEffect(() => { void carregar(); }, [carregar]);
+    /**
+     * A recarga DEPOIS de uma gravação usa o `carregar` de agora, não o do render do clique: se o topo
+     * trocou de organização enquanto a gravação andava, recarregar a organização velha descartaria a
+     * resposta da nova (o `seq` é dela) e mostraria a lista de outra organização (REGRA #5).
+     */
+    const carregarRef = React.useRef(carregar);
+    carregarRef.current = carregar;
 
     /** Org sem linha em `quality_settings` = B. Com uma organização no topo, ela sempre tem linha no painel. */
     const niveis = React.useMemo<Record<string, NivelSiac>>(() => {
@@ -127,19 +134,26 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
     const carregarLista = async () => {
         const alvo = await resolveWriteOrg('all-allowed');
         if (!alvo) return;
-        const carga = tipoEfetivo === 'SERVICO'
-            ? (org: string) => qualidadeSiacService.carregarAnexo4(org)
-            : (org: string) => qualidadeSiacService.carregarSugestaoMateriais(org);
-        const { ok, failed } = await forEachTargetOrg(alvo, carga);
-        const oque = tipoEfetivo === 'SERVICO' ? 'Lista mínima do Anexo 4 carregada' : 'Sugestão de materiais carregada';
+        const servico = tipoEfetivo === 'SERVICO';
+        // O serviço devolve quantos itens ENTRARAM (o que já existia não é sobrescrito): soma por organização.
+        let incluidos = 0;
+        const { ok, failed } = await forEachTargetOrg(alvo, async (org: string) => {
+            const n = servico ? await qualidadeSiacService.carregarAnexo4(org) : await qualidadeSiacService.carregarSugestaoMateriais(org);
+            incluidos += n;
+        });
         if (ok === 0) {
             showToast(`Não foi possível carregar: ${errorMessage(failed[0]?.error, 'erro desconhecido')}`, 'error');
         } else {
             const nota = partialFailureNote(failed);
             const onde = ok > 1 ? ` em ${ok} organizações` : '';
-            showToast(`${oque}${onde}${nota ? ` (${nota})` : ''}.`, 'success');
+            const oque = incluidos === 0
+                ? 'Nada novo: a lista já estava carregada'
+                : servico
+                    ? `${incluidos} ${incluidos === 1 ? 'serviço incluído' : 'serviços incluídos'}${onde}`
+                    : `${incluidos} ${incluidos === 1 ? 'material incluído' : 'materiais incluídos'}${onde}`;
+            showToast(`${oque}${nota ? ` (${nota})` : ''}.`, 'success');
         }
-        await carregar();
+        await carregarRef.current();
     };
 
     const novoItem = async () => {
@@ -155,7 +169,7 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
         } catch (e) {
             showToast(`Não foi possível gravar o nível: ${errorMessage(e, 'erro desconhecido')}`, 'error');
         }
-        await carregar();
+        await carregarRef.current();
     };
 
     const cab = CABECALHO[abaEfetiva];
@@ -183,9 +197,10 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
                 </div>
             )}
 
-            {abaEfetiva === 'lista' && (
+            {/* Com erro de carga, só a faixa: a lista vazia ofereceria carregar o que talvez já exista. */}
+            {abaEfetiva === 'lista' && !erro && (
                 <div>
-                    {!carregando && !erro && (
+                    {!carregando && (
                         <PainelDoNivel itens={itens} niveis={niveis} procedimentos={procedimentos} nomesDasOrgs={nomesDasOrgs}
                             podeEditar={podeEditar} onNivel={(org, n) => void definirNivel(org, n)} />
                     )}

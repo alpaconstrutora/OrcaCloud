@@ -13,7 +13,7 @@
  *  (e) sem permissão de editar → o botão de carga desligado diz por quê no `title`.
  */
 import React from 'react';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { ItemControlado, RegistroTreinamento } from '../../types/qualidadeSiac';
@@ -130,6 +130,9 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         const painel = await screen.findByRole('region', { name: /Quanto falta para o nível/ });
         await waitFor(() => expect(within(painel).getByText(/procedimento aprovado 0\/11/)).toBeTruthy());
         expect(within(painel).getAllByText(/começa na fase 2/).length).toBeGreaterThan(0);
+        // a META das colunas futuras aparece ao lado do rótulo (40% de 27 = 11; metade = 6; um quarto = 3)
+        expect(within(painel).getByText(/aplicados com registro: meta 6 — começa na fase 2/)).toBeTruthy();
+        expect(within(painel).getByText(/em obra em andamento: meta 3 — começa na fase 2/)).toBeTruthy();
         await waitFor(() => expect(listarTreinamentos).toHaveBeenCalledWith(['curso-1', 'curso-2']));
 
         const treinados = celulasDaColuna('Treinados');
@@ -168,5 +171,58 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         const botao = await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }) as HTMLButtonElement;
         expect(botao.disabled).toBe(true);
         expect(botao.title).toBe(MOTIVO_SEM_EDICAO_QUALIDADE);
+    });
+    it('(b2) nível A: 27 serviços pedem 27 procedimentos, meta 14 aplicados e 7 em obra', async () => {
+        listarItens.mockResolvedValue(servicos(27));
+        listarNiveis.mockResolvedValue({ 'org-a': 'A' });
+        montar();
+        const painel = await screen.findByRole('region', { name: /Quanto falta para o nível A/ });
+        await waitFor(() => expect(within(painel).getByText(/procedimento aprovado 0\/27/)).toBeTruthy());
+        expect(within(painel).getByText(/aplicados com registro: meta 14 — começa na fase 2/)).toBeTruthy();
+        expect(within(painel).getByText(/em obra em andamento: meta 7 — começa na fase 2/)).toBeTruthy();
+    });
+
+    it('troca de organização durante a gravação: a recarga é da organização NOVA (REGRA #5)', async () => {
+        const user = userEvent.setup();
+        listarItens.mockImplementation(async (org: string | null) => (org === 'org-b' ? servicos(3, 'org-b') : []));
+        let terminarCarga: (n: number) => void = () => undefined;
+        carregarAnexo4.mockImplementation(() => new Promise<number>(r => { terminarCarga = r; }));
+        montar();
+        await user.click(await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }));
+        await waitFor(() => expect(carregarAnexo4).toHaveBeenCalledWith('org-a'));
+
+        act(() => { useStore.setState({ activeOrganizationId: 'org-b' }); });
+        await waitFor(() => expect(listarItens).toHaveBeenCalledWith('org-b'));
+        expect(await screen.findByText('Serviço 1')).toBeTruthy();
+
+        await act(async () => { terminarCarga(27); });
+        await waitFor(() => expect(listarItens).toHaveBeenCalledTimes(3));
+        expect(listarItens).toHaveBeenLastCalledWith('org-b');
+        await waitFor(() => expect(screen.getByText('Serviço 1')).toBeTruthy());
+        expect(screen.queryByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' })).toBeNull();
+    });
+
+    it('falha de carga: só a faixa de erro, sem o vazio que oferece carregar', async () => {
+        listarItens.mockRejectedValue(new Error('timeout do banco'));
+        montar();
+        expect(await screen.findByText(/Não foi possível carregar a lista controlada: timeout do banco/)).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' })).toBeNull();
+        expect(screen.queryByText('Nenhum serviço controlado')).toBeNull();
+    });
+
+    it('toast da carga conta o que entrou: "27 serviços incluídos"', async () => {
+        const user = userEvent.setup();
+        montar();
+        await user.click(await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }));
+        expect(await screen.findByText('27 serviços incluídos.')).toBeTruthy();
+    });
+
+    it('toast da carga sem nada novo: "Nada novo: a lista já estava carregada"', async () => {
+        const user = userEvent.setup();
+        carregarAnexo4.mockResolvedValue(0);
+        montar();
+        await user.click(await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }));
+        expect(await screen.findByText('Nada novo: a lista já estava carregada.')).toBeTruthy();
     });
 });

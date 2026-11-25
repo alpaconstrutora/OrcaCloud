@@ -9,8 +9,9 @@ import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac'
  *
  *  - N = itens ATIVOS do tipo (dispensado sai de N);
  *  - "procedimento aprovado" conta só documento com versão ativa e aprovado (`procedimentoConta`);
- *  - "aplicados com registro" e "em obra em andamento" ainda não existem: aparecem com a fase em que
- *    começam (2 para serviços, 3 para materiais) — nunca como zero, que seria o contador que mente;
+ *  - "aplicados com registro" e "em obra em andamento" ainda não existem: aparecem com a META do nível e a
+ *    fase em que começam (2 para serviços, 3 para materiais) — nunca com uma contagem zero, que seria o
+ *    contador que mente;
  *  - materiais com menos de 20 ativos mostram o aviso do mínimo do Anexo 4.
  *
  * Nível alvo é POR ORGANIZAÇÃO (REGRA #5): com o topo em "Todas", uma linha por organização, com o
@@ -41,7 +42,9 @@ function linhaDoTipo(
         procedimentoConta(i.procedure_document_id ? procedimentos[i.procedure_document_id] ?? null : null)).length;
     const fase = FASE_QUE_COMECA[tipo];
     const texto = `${NOME_DO_TIPO[tipo]} (${n}) · procedimento aprovado ${comProcedimento}/${meta.comProcedimento}`
-        + ` · aplicados com registro — começa na fase ${fase} · em obra em andamento — começa na fase ${fase}`;
+        // A META das colunas futuras aparece; a contagem não (ainda não há o que contar — nunca zero).
+        + ` · aplicados com registro: meta ${meta.aplicadosComRegistro} — começa na fase ${fase}`
+        + ` · em obra em andamento: meta ${meta.emObraEmAndamento} — começa na fase ${fase}`;
     const abaixoDoMinimo = tipo === 'MATERIAL' && n < MINIMO_MATERIAIS
         ? `abaixo do mínimo do Anexo 4: ${n} de ${MINIMO_MATERIAIS}`
         : null;

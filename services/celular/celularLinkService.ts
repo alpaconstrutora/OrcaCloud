@@ -5,10 +5,11 @@ import { supabase } from '../../lib/supabase'
  *
  *  - `tokenDoCelularDaUrl` / `urlDoLinkCelular`: o endereço do link;
  *  - `celularSessao`: quem é o dono do link e em qual organização (anônimo, só com o token);
- *  - `gerarLinkCelular` / `revogarLinkCelular` / `statusLinkCelular`: gestão pelo app logado
- *    (RPCs `mobile_link_*`, autorizadas no banco: gestor da org, ou a própria pessoa).
+ *  - `gerarLinkCelular` / `copiarLinkCelular` / `revogarLinkCelular` / `statusLinkCelular`: gestão
+ *    pelo app logado (RPCs `mobile_link_*`, autorizadas no banco: gestor da org, ou a própria pessoa).
  *
- * O token só existe em claro na URL e na resposta de `gerarLinkCelular`; o banco guarda o hash.
+ * O banco confere o link pelo hash; desde 25/11/2026 guarda também o token em claro, numa tabela sem
+ * acesso pela API, para "Copiar link" (`mobile_link_copiar`). Link revogado perde o token guardado.
  */
 
 /** Token válido: base64url (o banco gera 43 caracteres); 20 é o piso para barrar lixo sem RPC. */
@@ -56,12 +57,22 @@ export async function celularSessao(token: string): Promise<SessaoCelular | null
   return data as SessaoCelular
 }
 
-/** Gera (ou renova) o link da pessoa na organização e devolve a URL completa — o token só aparece agora. */
+/** Gera (ou renova) o link da pessoa na organização e devolve a URL completa. */
 export async function gerarLinkCelular(userId: string, orgId: string): Promise<string> {
   const { data, error } = await supabase.rpc('mobile_link_generate', { p_user_id: userId, p_org_id: orgId })
   if (error) throw error
   if (!data || typeof data !== 'string') throw new Error('Não foi possível gerar o link do celular.')
   return urlDoLinkCelular(data)
+}
+
+/**
+ * URL do link ATIVO, para copiar de novo. `null` = sem link ativo, ou link gerado antes de o endereço
+ * ficar guardado (só gerando um novo). Recusa de permissão chega como 42501.
+ */
+export async function copiarLinkCelular(userId: string, orgId: string): Promise<string | null> {
+  const { data, error } = await supabase.rpc('mobile_link_copiar', { p_user_id: userId, p_org_id: orgId })
+  if (error) throw error
+  return typeof data === 'string' && data ? urlDoLinkCelular(data) : null
 }
 
 export async function revogarLinkCelular(userId: string, orgId: string): Promise<void> {
@@ -74,6 +85,8 @@ export interface StatusLinkCelular {
   expires_at: string | null
   last_used_at: string | null
   revogado: boolean
+  /** Há endereço guardado do link ativo (`mobile_link_copiar` devolve). Ausente = banco antigo → `false`. */
+  copiavel?: boolean
 }
 
 export async function statusLinkCelular(userId: string, orgId: string): Promise<StatusLinkCelular> {

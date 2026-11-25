@@ -136,8 +136,11 @@ BEGIN
     PERFORM pg_temp.confere(l.id IS NOT NULL, 'linha criada em user_mobile_links');
     PERFORM pg_temp.confere(l.token_hash = public._mobile_link_hash(t1), 'token_hash = _mobile_link_hash(token)');
     PERFORM pg_temp.confere(l.token_hash = encode(extensions.digest(t1, 'sha256'), 'hex'), 'token_hash = SHA-256 hex do token');
-    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.user_mobile_links r WHERE strpos(r::text, t1) > 0),
-        'o token em claro não está gravado em nenhuma coluna');
+    -- Desde aplicar_20271125600000 (Copiar link) o token em claro fica na coluna `token`, e só nela;
+    -- a tabela segue sem acesso pela API (ver scripts/teste-link-celular-copiar.sql).
+    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.user_mobile_links r
+                                         WHERE strpos((to_jsonb(r) - 'token')::text, t1) > 0),
+        'o token em claro não está gravado em nenhuma coluna além de `token`');
     PERFORM pg_temp.confere(l.created_by = u, 'created_by = quem gerou');
     PERFORM pg_temp.confere(l.revoked_at IS NULL AND l.last_used_at IS NULL, 'novo: sem revogação e sem uso');
     PERFORM pg_temp.confere(l.expires_at BETWEEN now() + interval '89 days' AND now() + interval '91 days',

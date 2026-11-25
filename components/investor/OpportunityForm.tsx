@@ -12,9 +12,6 @@ import { ImovibStudy } from '../../types';
 import type { ImovibStudyVersion } from '../../utils/imovibVersoes';
 import Button from '../ui/Button';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
-import TableSwitch from '../ui/TableSwitch';
-import { useStore } from '../../store/useStore';
-import { urlDoMarketplace } from '../../utils/enderecoDoMarketplace';
 
 interface Props {
     initial?: Partial<InvestorOpportunity>;
@@ -29,9 +26,6 @@ const TYPES: OpportunityType[] = ['incorporacao', 'loteamento', 'obra_privada', 
 
 const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onClose }) => {
     const [studies, setStudies] = React.useState<ImovibStudy[]>([]);
-    // A vitrine aberta é por organização (`/m/<slug>`); sem endereço, a chave do marketplace não tem efeito.
-    const slugDaOrg = useStore(s => s.organizations.find(o => o.id === organizationId)?.slug);
-    const vitrine = urlDoMarketplace(slugDaOrg, typeof window !== 'undefined' ? window.location.origin : '');
 
     // Fase 4: a SPE que recebe o dinheiro (chamado e integralizado vêm dos sócios dela).
     const [spes, setSpes] = React.useState<SpeEntity[]>([]);
@@ -58,7 +52,6 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
         ticket_min: initial?.ticket_min ?? null,
         spe_entity_id: initial?.spe_entity_id ?? null,
         is_published: initial?.is_published ?? false,
-        no_marketplace: initial?.no_marketplace ?? false,
         imovib_study_id: initial?.imovib_study_id ?? null,
         imovib_version_id: initial?.imovib_version_id ?? null,
         distances_json: initial?.distances_json ?? [],
@@ -475,28 +468,6 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         </button>
                         </span>
                     </section>
-                    {/* Fase A6 (plano 2026-11-21-portal-do-investidor-consolidacao): publicar para os investidores não põe mais
-                        a oportunidade na vitrine aberta — o marketplace público é uma escolha própria. */}
-                    <section className="flex items-center justify-between gap-4 p-4 bg-gray-50 rounded-[10px]">
-                        <div>
-                            <p className="text-sm font-semibold text-gray-900">Também no marketplace público</p>
-                            <p className="text-xs text-gray-500 mt-0.5">Página aberta, sem login: só título, local, fotos, tipo, ticket mínimo, VGV, TIR e prazo.</p>
-                            {vitrine ? (
-                                <p className="text-xs text-gray-500 mt-0.5">Endereço: <a href={vitrine} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800">{vitrine}</a></p>
-                            ) : (
-                                <p className="text-xs text-amber-700 mt-0.5">Esta organização ainda não tem endereço do marketplace: sem ele, a vitrine não abre. Cadastre em Minha Organização › Organização › Detalhes da organização › Marketplace público.</p>
-                            )}
-                        </div>
-                        <span title={!form.is_published ? 'Publique para os investidores antes de pôr no marketplace.' : undefined}>
-                            <TableSwitch
-                                checked={!!form.no_marketplace && !!form.is_published}
-                                disabled={!form.is_published}
-                                onChange={() => set('no_marketplace', !form.no_marketplace)}
-                                ariaLabel="Também no marketplace público"
-                            />
-                        </span>
-                    </section>
-
                     {/* ── Ações ─────────────────────────────────────────── */}
                     <div className="flex gap-3 pt-2">
                         <Button

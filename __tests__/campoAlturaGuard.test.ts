@@ -113,7 +113,6 @@ const BASELINE: Record<string, number> = {
     'components/PricingIntelligenceModal.tsx': 1,       // DESTAQUE  preço-alvo da inteligência de preços
     'components/Auth.tsx': 2,                           // PUBLICO   login
     'components/ResetPassword.tsx': 3,                  // PUBLICO   redefinição de senha
-    'components/public/PublicOpportunityDetail.tsx': 3, // PUBLICO   página pública de oportunidade
 };
 
 function tsx(dir: string): string[] {

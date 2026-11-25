@@ -1,5 +1,4 @@
 import { supabase } from '../lib/supabase';
-import { enderecoParaGravar } from '../utils/enderecoDoMarketplace';
 import { Organization, OrganizationMember, OrganizationRole, ResourceRole, UserPermissions } from '../types';
 
 export const organizationService = {
@@ -267,8 +266,6 @@ export const organizationService = {
     colunasParaSalvar(org: Partial<Organization>): Record<string, unknown> {
         return {
             ...(org.code !== undefined && { code: org.code }),
-            // Endereço do marketplace (vazio = null: sem vitrine). Só vai quando o objeto o traz.
-            ...(org.slug !== undefined && { slug: enderecoParaGravar(org.slug) }),
             name: org.name,
             logo_url: org.logoUrl,
             resources: org.resources,

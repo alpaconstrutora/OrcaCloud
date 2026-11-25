@@ -10,17 +10,13 @@
 //     aqui não teria efeito (trg_org_campos_da_matriz repõe o valor da matriz).
 //   • org PF — não tem matriz (`companies` não comporta CPF): os campos ficam
 //     aqui, com CPF no lugar de CNPJ.
-// Marketplace público (22/11/2026, plano docs/planos/2026-11-22-endereco-do-marketplace.md): o endereço da
-// vitrine aberta (`organizations.slug` → `/m/<slug>`). Antes não havia tela para ele e a chave "Também no
-// marketplace público" da oportunidade não tinha efeito nas organizações sem endereço.
 // A seção "Contas Bancárias" que morava aqui gravava em `payment_accounts` — a
 // mesma lista de Minha Organização › Contas — e virou um atalho para lá.
 import React, { useState, useRef, useEffect } from 'react';
 import { Organization } from '../types';
 import { taxPayableService } from '../services/taxPayableService';
 import { organizationService } from '../services/organizationService';
-import { Building2, Save, Upload, Trash2, MapPin, Landmark, Phone, ArrowRight, Loader2, Globe, ExternalLink } from 'lucide-react';
-import { normalizarEnderecoDoMarketplace, urlDoMarketplace } from '../utils/enderecoDoMarketplace';
+import { Building2, Save, Upload, Trash2, MapPin, Landmark, Phone, ArrowRight, Loader2 } from 'lucide-react';
 import SaveStatus from './ui/SaveStatus';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
 
@@ -134,9 +130,6 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
     };
 
     const regimeMudou = (formData.settings?.tax_recognition_regime ?? 'CAIXA') !== initialRegime;
-    const origemDoApp = typeof window !== 'undefined' ? window.location.origin : '';
-    // O link só aparece para o endereço GRAVADO — o que está sendo digitado ainda não abre nada.
-    const vitrineSalva = urlDoMarketplace(organization.slug, origemDoApp);
 
     return (
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -270,45 +263,6 @@ const OrganizationPage: React.FC<OrganizationPageProps> = ({ organization, onUpd
                             Caixa usa a data de recebimento da parcela; Competência, o mês de auferimento da receita.
                             Ao salvar uma troca de regime, os tributos pendentes são reprocessados.
                         </p>
-                    </div>
-                </div>
-
-                {/* Marketplace público — a vitrine aberta das oportunidades marcadas para ela */}
-                <div className="space-y-4">
-                    <SectionTitle icon={<Globe className="w-4 h-4 text-blue-600" />}>Marketplace público</SectionTitle>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
-                        <Field label="Endereço do marketplace">
-                            <div className="flex items-center">
-                                <span className="h-9 px-3 flex items-center bg-gray-100 border border-r-0 border-gray-100 rounded-l-[6px] text-sm text-gray-600 whitespace-nowrap">
-                                    {origemDoApp}/m/
-                                </span>
-                                <input
-                                    type="text"
-                                    name="slug"
-                                    aria-label="Endereço do marketplace"
-                                    value={formData.slug ?? ''}
-                                    onChange={(e) => {
-                                        const slug = normalizarEnderecoDoMarketplace(e.target.value);
-                                        setFormData(prev => ({ ...prev, slug }));
-                                        markDirty();
-                                    }}
-                                    className={`${inputCls} rounded-l-none`}
-                                    placeholder="nome-da-organizacao"
-                                />
-                            </div>
-                        </Field>
-                        <div className="text-xs text-gray-500 sm:pt-6 space-y-1">
-                            <p>
-                                Página aberta, sem login, com as oportunidades marcadas "Também no marketplace público".
-                                Só letras minúsculas, números e hífen. Vazio = sem vitrine.
-                            </p>
-                            {vitrineSalva && (
-                                <a href={vitrineSalva} target="_blank" rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-800 font-medium">
-                                    Abrir a vitrine <ExternalLink className="w-3.5 h-3.5" />
-                                </a>
-                            )}
-                        </div>
                     </div>
                 </div>
 

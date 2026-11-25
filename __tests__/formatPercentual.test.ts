@@ -1,6 +1,5 @@
-// fmtPct (utils/format.ts) — percentual no padrão brasileiro. Usado na vitrine pública
-// (PublicMarketplaceView, PublicOpportunityDetail) e no detalhe da oportunidade do gestor.
-// Caso real (23/11/2026): a vitrine /m/garden-cambuhy mostrava "TIR estimada 19.0%".
+// fmtPct (utils/format.ts) — percentual no padrão brasileiro, nas listas e no detalhe da oportunidade.
+// Caso real (23/11/2026): a vitrine pública (removida em 25/11) mostrava "TIR estimada 19.0%".
 import { describe, it, expect } from 'vitest';
 import { fmtPct } from '../utils/format';
 

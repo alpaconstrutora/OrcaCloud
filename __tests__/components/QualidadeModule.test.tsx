@@ -15,6 +15,7 @@
  *      mostrando o item como veio da recarga;
  *  (g) o item some da lista depois de gravar um código → o próximo código soma ao gravado, não ao
  *      item de quando o Sheet abriu;
+ *  (i) a aba "Por obra" mostra a visão por obra com os itens ativos da lista carregada;
  *  (h) "Registrar treinamento em obra" do Sheet do item abre o registro; gravar avisa quantos
  *      registros entraram e recarrega (os Treinados do item vêm da recarga).
  */
@@ -36,6 +37,7 @@ const atualizarItem = vi.fn();
 const definirCodigos = vi.fn();
 const registrarTreinamentoEmObra = vi.fn();
 const listEmployees = vi.fn();
+const listarExclusoes = vi.fn();
 let codigosDaBase: string[] = [];
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -53,6 +55,7 @@ vi.mock('../../services/qualidadeSiacService', () => ({
         atualizarItem: (...a: unknown[]) => atualizarItem(...a),
         definirCodigos: (...a: unknown[]) => definirCodigos(...a),
         registrarTreinamentoEmObra: (...a: unknown[]) => registrarTreinamentoEmObra(...a),
+        listarExclusoes: (...a: unknown[]) => listarExclusoes(...a),
     },
 }));
 vi.mock('../../services/trainingsService', () => ({
@@ -127,6 +130,7 @@ beforeEach(() => {
     definirCodigos.mockReset().mockResolvedValue(undefined);
     registrarTreinamentoEmObra.mockReset().mockResolvedValue(2);
     listEmployees.mockReset().mockResolvedValue([]);
+    listarExclusoes.mockReset().mockResolvedValue([]);
     codigosDaBase = [];
     useStore.setState({
         activeOrganizationId: 'org-a',
@@ -135,6 +139,7 @@ beforeEach(() => {
             { id: 'org-a', name: 'Construtora A', address: {}, members: [] },
             { id: 'org-b', name: 'Construtora B', address: {}, members: [] },
         ] as never,
+        projects: [{ id: 'p1', name: 'Residencial Sol', organization_id: 'org-a', settings: {}, budget: [] }] as never,
         viewFocus: null,
     });
 });
@@ -315,5 +320,17 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         // o registro fecha; o Sheet do item continua aberto
         await waitFor(() => expect(screen.queryByRole('heading', { name: 'Registrar treinamento em obra' })).toBeNull());
         expect(screen.getByRole('heading', { name: 'Serviço 1' })).toBeTruthy();
+    });
+
+    it('(i) a aba "Por obra" mostra os itens ativos da lista carregada, por obra', async () => {
+        const user = userEvent.setup();
+        listarItens.mockResolvedValue([item({ id: 's1', nome: 'Serviço 1', anexo4_numero: 1, ordem: 1 })]);
+        montar();
+        await screen.findByText('Serviço 1');
+        await user.click(screen.getByRole('tab', { name: 'Por obra' }));
+        expect(await screen.findByRole('heading', { name: 'Qualidade por obra' })).toBeTruthy();
+        expect(await screen.findByLabelText('Obra')).toBeTruthy();
+        await waitFor(() => expect(listarExclusoes).toHaveBeenCalledWith('p1'));
+        expect(await screen.findByText('aplica')).toBeTruthy();
     });
 });

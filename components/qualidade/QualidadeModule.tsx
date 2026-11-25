@@ -14,6 +14,7 @@ import { TabsBar } from '../ui/TabsBar';
 import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac';
 import { PainelDoNivel } from './PainelDoNivel';
 import { ListaControlada } from './ListaControlada';
+import { PorObra } from './PorObra';
 import { ItemControladoSheet, type EdicaoDoItem } from './ItemControladoSheet';
 import { RegistrarTreinamentoSheet } from './RegistrarTreinamentoSheet';
 
@@ -236,8 +237,9 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
                 </div>
             )}
 
-            {/* Por obra: a visão por obra entra na Task 8 do plano de implementação (PorObra). */}
-            {abaEfetiva === 'por-obra' && <section aria-label="Qualidade por obra" />}
+            {/* Por obra: itens ativos da organização de cada obra, com a exceção "não se aplica" e o motivo.
+                Só aparece com a lista carregada: sem ela a tabela mostraria "nenhum item ativo" por engano. */}
+            {abaEfetiva === 'por-obra' && !erro && !carregando && <PorObra itens={itens} podeEditar={podeEditar} />}
 
             <ItemControladoSheet edicao={edicaoAtual}
                 itensDaOrg={itemAberto ? itens.filter(i => i.organization_id === itemAberto.organization_id) : []}

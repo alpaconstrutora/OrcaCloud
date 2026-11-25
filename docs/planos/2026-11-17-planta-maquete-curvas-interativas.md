@@ -58,7 +58,7 @@ Resposta do usuário em 25/11/2026 (com print do app: planta 2D com curvas + 3D 
     ladrilho (sem duplicar na divisa) → desenho com base na menor cota sob o prédio; tira o que cruza paredes
     e blocos do estudo (+1 m). Hook `usePrediosDaMaquete`.
   - Prova: 16 testes + harness `?osm=1&lat=-22.9056&lon=-47.0608` → 17 prédios reais em segundos.
-- [ ] F4 — Árvores da ESA WorldCover — PR 2 (falta só o deploy da function e a prova logado)
+- [x] F4 — Árvores da ESA WorldCover — PR 2 (#722)
   - `utils/geo/coberturaDoSolo.ts` (grade global 1/12000°, quadrícula 3° SW) — 8 testes + prova no ARQUIVO
     REAL (Campinas, Bosque dos Jequitibás: 46 % árvore, 2 pedidos, 0,15 MB, 2,3 s).
   - Edge Function `cobertura-do-solo` (JWT, ≤ 4 km², 400/502) + bundle `scripts/build-cobertura-do-solo.mjs`
@@ -68,6 +68,17 @@ Resposta do usuário em 25/11/2026 (com print do app: planta 2D com curvas + 3D 
     fora de prédio/obra/relevo, teto 15 mil — 5 testes. 3D: `InstancedMesh` copa + tronco, sem raycast
     (o hover atravessa a mata — portão do hover verde com prédios e árvores: 646/0).
   - Canto de créditos/avisos no 3D da Maquete (fonte, carregando, motivo de falha, terreno > 4 km²).
+  - Deploy da function pelo usuário em 25/11 (da frente em origin/main; do checkout de integração deu
+    "Entrypoint path does not exist"). Prova logada (`c:/tmp/pwtest/maquete_cobertura_logado.mjs`): 200 em
+    2 s com a MESMA grade da leitura direta no arquivo da ESA (60 × 54; 1480 árvore, 1759 construído, 1 pasto
+    = 46 %); caixa > 4 km² → 400 "Área maior que 4 km²". Sem login → 401.
+  - Prova de TELA em produção (print do usuário, 25/11): estudo rural com Copernicus no estilo Maquete —
+    bloco cortado, curvas cinza, mata real nos fundos de vale. Sem prédios no recorte (área rural; o canto
+    de notas ficou fora do print).
+
+## Estado final (25/11/2026)
+
+F1–F4 no ar (#721, #722) e provadas. Desvio aceito e anotado: hover 2D não testa peça sob o cursor.
 
 ## Contexto
 

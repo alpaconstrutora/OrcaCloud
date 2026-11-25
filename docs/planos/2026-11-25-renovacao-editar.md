@@ -45,6 +45,21 @@ fim de vigência, valor ou dia de vencimento, o que deve acontecer com o aditivo
    **Pronto quando:** em produção, o lápis aparece na linha do CTL-006 e abre a
    negociação em Contrato › Renovações com o formulário em edição.
 
+## Conferência em produção (#737, de1de78)
+
+Só leitura, cancelando sem salvar: lápis na linha do CTL-006 ✅, abre "Editar renovação
+AD-002" ✅, início 23/03/2019 ✅, a 1ª em 10/05/2019 ✅ (a série ignora as parcelas do
+AD-002), via escondida ✅, lápis do histórico desligado com o motivo ✅, cancelar volta a
+"Nova renovação" ✅, 0 escritas, 0 erros. ❌ **Fim veio 22/09/2022 (o AD-002 vai até
+22/09/2021) e 42 parcelas em vez de 30**: a prévia da Nova renovação, pedida ao abrir,
+chegava depois de Editar preencher o formulário e trocava o fim pelo padrão de +12 meses.
+
+5. **Correção — prévia atrasada** (`ContractRenewalsPanel.tsx`): só vale a prévia do último
+   pedido (contador), e o preenchimento automático só toca campo vazio no momento da
+   resposta. **Pronto quando:** `__tests__/components/renovacaoEditarPreviaAtrasada.test.tsx`
+   falha sem a correção (recebe 2022-09-22) e passa com ela ✅; em produção o fim aparece
+   22/09/2021 e 30 parcelas.
+
 ## Fora
 
 - Renovação por **novo contrato** não ganha edição (mesma lacuna de datas da #733,

@@ -35,7 +35,9 @@ import {
   type DefinicaoDoGrupo,
   type EstadoDaCamada,
   type EstadosDasCamadas,
+  type GrupoDeCamadas,
 } from '../../utils/blueprintCamadasPorDisciplina';
+import type { ItemDeExibicao } from './MenuExibir';
 import { usePersistedState } from '../ui/TableUtils';
 import {
   algumMapaAVista,
@@ -66,6 +68,14 @@ interface Props {
    * só no lote e na topografia. `motivoDesligado` = sem "Onde fica".
    */
   mapa?: { estados: EstadosDoMapa; onMudar: (e: EstadosDoMapa) => void; motivoDesligado: string | null };
+  /**
+   * 25/11/2026: AS OPÇÕES DO EXIBIR COMO SUBLINHAS — *"o que tem em exibir que falta implementar nas camadas como
+   * exemplo da terraplanagem?"* → *"Implemente, sem mover para as Camadas os itens de medidas e preenchimento do
+   * terreno."* Os itens são os MESMOS objetos do menu Exibir (um só lugar define rótulo, estado, alternar e motivo):
+   * Terreno › Curvas de nível, Corte e aterro…; Estrutura › Eixos. Só o olho — não são peças (sem contagem,
+   * meio-tom nem Isolar). O olho do grupo continua escondendo tudo dele de uma vez.
+   */
+  exibicao?: Partial<Record<GrupoDeCamadas, ItemDeExibicao[]>>;
 }
 
 const TEXTO_DO_ESTADO: Record<EstadoDaCamada | 'MISTO', string> = {
@@ -230,7 +240,34 @@ function LinhaDoMapa({ fonte, estado, motivoDesligado, onOlho, onMeioTom }: { fo
   );
 }
 
-export default function PainelCamadas({ estados, onMudar, contagem, baseAtenuada, onBaseAtenuada, onIsolar, onReexibir, mapa }: Props) {
+/**
+ * Uma linha de opção do Exibir: o mesmo item do menu. Só o olho, com vãos no lugar do meio-tom e do Isolar para as
+ * colunas alinharem. Item sem efeito agora (`desabilitado`) fica com o olho desligado e o motivo no `title`.
+ */
+function LinhaDeExibicao({ item }: { item: ItemDeExibicao }) {
+  const motivo = item.desabilitado ? item.ajuda : null;
+  const estado: EstadoDaCamada = item.ligado ? 'VISIVEL' : 'OCULTA';
+  return (
+    <li data-exibir={item.chave} data-estado={estado} className="flex items-center gap-1 py-0.5 pl-6 pr-1">
+      <span
+        className={`min-w-0 flex-1 truncate text-sm ${TEXTO_DO_ESTADO[estado]} ${motivo ? 'opacity-60' : ''}`}
+        title={`${item.rotulo} — ${item.ligado ? 'ligado' : 'desligado'}. ${item.ajuda} (A mesma opção de Vista › Exibir.)`}
+      >
+        {item.rotulo}
+      </span>
+      <span className="shrink-0 rounded-[6px] bg-slate-100 px-1.5 py-0.5 text-[11px] text-slate-400" title="Opção de exibição: não tem peças">
+        —
+      </span>
+      <span className="w-[22px] shrink-0" aria-hidden="true" />
+      <BotaoDaLinha titulo={item.ligado ? `Ocultar ${item.rotulo}` : `Exibir ${item.rotulo}`} pressionado={item.ligado} onClick={item.alternar} desligado={motivo}>
+        {item.ligado ? <Eye className="h-3.5 w-3.5 text-blue-600" /> : <EyeOff className="h-3.5 w-3.5 text-slate-400" />}
+      </BotaoDaLinha>
+      <span className="w-[22px] shrink-0" aria-hidden="true" />
+    </li>
+  );
+}
+
+export default function PainelCamadas({ estados, onMudar, contagem, baseAtenuada, onBaseAtenuada, onIsolar, onReexibir, mapa, exibicao }: Props) {
   // Grupos expandidos: preferência de leitura, como o aberto/fechado das seções.
   const [expandidos, setExpandidos] = usePersistedState<Record<string, boolean>>('blueprint:camadasExpandidas', {});
   const isolado = alvoIsolado(estados, { baseAtenuada });
@@ -285,17 +322,19 @@ export default function PainelCamadas({ estados, onMudar, contagem, baseAtenuada
 
       <ul className="divide-y divide-slate-100" aria-label="Camadas por disciplina">
         {GRUPOS_DE_CAMADAS.map((g) => {
-          // TERRENO com o mapa: a linha é a MESMA de hoje (lote e topografia), com a
-          // seta que abre as duas linhas do mapa de fundo — independentes dela.
-          if (g.id === 'TERRENO' && mapa && g.camadas.length === 1) {
+          // Grupo de UMA camada com sublinhas: a linha é a MESMA de hoje, com a seta que abre o mapa de fundo
+          // (Terreno) e as opções do Exibir (Terreno, Estrutura) — independentes dela.
+          const comMapa = g.id === 'TERRENO' && !!mapa;
+          const opcoes = exibicao?.[g.id] ?? [];
+          if (g.camadas.length === 1 && (comMapa || opcoes.length > 0)) {
             const aberto = expandidos[g.id] ?? false;
-            const idDoCorpo = 'camadas-terreno';
+            const idDoCorpo = `camadas-${g.id.toLowerCase()}`;
             return (
               <li key={g.id} className="list-none">
                 <ul>{linhaDaCamada(g.camadas[0], g, 0, { aberto, idDoCorpo, onAlternar: () => setExpandidos((e) => ({ ...e, [g.id]: !aberto })) })}</ul>
                 {aberto && (
-                  <ul id={idDoCorpo} className="ml-4 border-l border-slate-200" aria-label="Mapa de fundo">
-                    {FONTES_DO_MAPA.map((f) => (
+                  <ul id={idDoCorpo} className="ml-4 border-l border-slate-200" aria-label={`Dentro de ${g.rotulo}`}>
+                    {comMapa && mapa && FONTES_DO_MAPA.map((f) => (
                       <LinhaDoMapa
                         key={f}
                         fonte={f}
@@ -304,6 +343,9 @@ export default function PainelCamadas({ estados, onMudar, contagem, baseAtenuada
                         onOlho={() => mapa.onMudar(alternarOlhoDoMapa(mapa.estados, f))}
                         onMeioTom={() => mapa.onMudar(alternarMeioTomDoMapa(mapa.estados, f))}
                       />
+                    ))}
+                    {opcoes.map((it) => (
+                      <LinhaDeExibicao key={it.chave} item={it} />
                     ))}
                   </ul>
                 )}

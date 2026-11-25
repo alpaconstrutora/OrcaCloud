@@ -19,6 +19,9 @@ import { createRoot } from 'react-dom/client';
 import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
 import Blueprint3DTab from '../../../components/blueprint/Blueprint3DTab';
 import PainelCamadas from '../../../components/blueprint/PainelCamadas';
+import type { ItemDeExibicao } from '../../../components/blueprint/MenuExibir';
+import { Mountain } from 'lucide-react';
+import { MAPA_OCULTO } from '../../../utils/blueprintMapaDeFundo';
 import { ConfirmProvider } from '../../../components/ui/confirm';
 import { applyBatch, applyCommand, emptyModel, type BlueprintModel, type Command } from '../../../utils/blueprintKernel';
 import {
@@ -81,6 +84,32 @@ function App() {
     window.__selecionados = ids;
     setSelecionados(ids);
   };
+  // `?exibicao=1` (25/11/2026): as opções do Exibir como sublinhas do Terreno e da Estrutura (itens de exemplo).
+  const comExibicao = new URLSearchParams(location.search).get('exibicao') === '1';
+  const [ligados, setLigados] = useState<Record<string, boolean>>({ 'curvas-de-nivel': true, terraplenagem: true, envelope: true });
+  const it = (chave: string, rotulo: string, desabilitado = false): ItemDeExibicao => ({
+    chave,
+    rotulo,
+    ajuda: desabilitado ? 'Nenhum ponto do levantamento tem código de feição.' : `Exemplo: ${rotulo}.`,
+    ligado: !!ligados[chave],
+    alternar: () => setLigados((l) => ({ ...l, [chave]: !l[chave] })),
+    icone: Mountain,
+    desabilitado,
+  });
+  const exibicao = comExibicao
+    ? {
+        TERRENO: [
+          it('curvas-de-nivel', 'Curvas de nível'),
+          it('declividade', 'Declividade'),
+          it('hipsometria', 'Hipsométrico'),
+          it('feicoes-do-levantamento', 'Feições do levantamento', true),
+          it('nos-da-grade', 'Nós da grade'),
+          it('terraplenagem', 'Corte e aterro'),
+          it('envelope', 'Envelope construtivo'),
+        ],
+        ESTRUTURA: [it('eixos', 'Eixos')],
+      }
+    : undefined;
   return (
     <ConfirmProvider>
       <div>
@@ -96,6 +125,8 @@ function App() {
               setEstados(isolar(alvo, { baseAtenuada: base }));
             }}
             onReexibir={() => setEstados(antes ?? ESTADOS_PADRAO)}
+            exibicao={exibicao}
+            mapa={comExibicao ? { estados: MAPA_OCULTO, onMudar: () => {}, motivoDesligado: null } : undefined}
           />
         </aside>
         <main style={{ position: 'relative', flex: 1 }} data-testid="desenho">

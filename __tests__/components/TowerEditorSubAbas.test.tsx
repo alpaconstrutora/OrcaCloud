@@ -60,6 +60,19 @@ describe('Torres & Unidades › sub-abas', () => {
   });
   afterEach(() => registrarPendencia('teste', false));
 
+  it('card da torre sem "Nº de pavimentos": conta o cadastro de pavimentos, ou os andares das unidades', async () => {
+    montar();
+    await waitFor(() => expect(aba(/Unidades/)).toHaveTextContent('4'));
+    fireEvent.click(aba(/Torres/));
+    await screen.findByTestId('secao-torres');
+    const [a, b] = screen.getAllByTestId('pavimentos-da-torre');
+    expect(a).toHaveTextContent('2 pav.');
+    expect(a).toHaveAttribute('title', expect.stringMatching(/cadastro de pavimentos/));
+    expect(b).toHaveTextContent('1 pav.');
+    expect(b).toHaveAttribute('title', expect.stringMatching(/andares das unidades/));
+    expect(screen.queryByText(/sem pavimentos/)).not.toBeInTheDocument();
+  });
+
   it('abre em Terreno; cada aba mostra só a sua seção', async () => {
     montar();
     expect(await screen.findByTestId('secao-terreno')).toBeInTheDocument();

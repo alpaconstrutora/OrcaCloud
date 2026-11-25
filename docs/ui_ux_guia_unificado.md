@@ -1779,6 +1779,24 @@ Três armadilhas, todas medidas no navegador — cada uma passa limpa em teste d
 > ℹ️ Junto: célula de texto longo (Cliente) numa linha só (`block truncate` + `title`), nome com
 > `line-clamp-2`, e Status/Bloqueio com `whitespace-nowrap` — a linha caiu de 73px para 53px.
 
+### 6.14 NADA abaixo da tabela — o que não é a lista fica ACIMA dela
+
+Pedido do usuário (24/11/2026): *"Pare de colocar coisas abaixo de tabelas. Tabelas podem ficar
+enormes e o usuário não vai ver nada no fim de tabela."* Painel, card, sugestão, aviso ou lista
+auxiliar **nunca** vai depois de uma tabela que pode crescer. Ele vai:
+
+- **acima da tabela**, recolhido numa linha só com título + contagem
+  (`components/reconciliation/SecaoRecolhivel.tsx`: nasce recolhido, a escolha fica guardada por
+  seção, e a seção **some** quando não tem nada a mostrar); ou
+- num **botão da toolbar com contagem** que abre um `Sheet` (ex.: "Regras (3)").
+
+Só é exceção o **rodapé da própria tabela**: paginação (§6.7), totais e a linha "N ficaram fora do
+filtro". Isso é parte da tabela, não conteúdo depois dela.
+
+> ℹ️ Referência: Conciliação › Central. "Agrupamentos sugeridos", "Sequência de parcelas" e
+> "Regras sugeridas" ficavam depois da tabela de sugestões, que passa de centenas de linhas. O
+> usuário não achou o card. Agora são três linhas recolhíveis acima da tabela.
+
 ---
 
 ## 7. TABELA — `<tbody>` e TDs

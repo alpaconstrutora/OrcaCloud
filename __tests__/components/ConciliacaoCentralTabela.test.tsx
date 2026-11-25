@@ -27,8 +27,8 @@ vi.mock('../../services/reconciliationReprocessService', () => ({
     reconciliationReprocessService: { reprocessarTudo: vi.fn() },
     resumoDoReprocesso: () => '',
 }));
-vi.mock('../../components/GroupMatchPanel', () => ({ default: () => null }));
-vi.mock('../../components/reconciliation/SequenciaParcelasPanel', () => ({ default: () => null }));
+vi.mock('../../components/GroupMatchPanel', () => ({ default: () => <div data-testid="painel-agrupamentos" /> }));
+vi.mock('../../components/reconciliation/SequenciaParcelasPanel', () => ({ default: () => <div data-testid="painel-sequencia" /> }));
 const { posicoesDosContratos } = vi.hoisted(() => ({ posicoesDosContratos: vi.fn() }));
 vi.mock('../../services/sequenciaParcelasService', () => ({ sequenciaParcelasService: { posicoesDosContratos } }));
 vi.mock('../../components/reconciliation/RegrasSheet', () => ({ default: () => null }));
@@ -195,5 +195,17 @@ describe('separarTitulosRepetidos', () => {
         const { aConciliar, repetidos } = separarTitulosRepetidos([a, b, c]);
         expect(aConciliar.map(x => x.id)).toEqual(['a', 'b']);
         expect(repetidos.map(x => x.id)).toEqual(['c']);
+    });
+});
+
+describe('Central › nada abaixo da tabela (guia §6.14, 24/11/2026)', () => {
+    it('Agrupamentos e Sequência de parcelas vêm ANTES da tabela de sugestões', () => {
+        montar([sug('s1', 'b-mar17', MAR17, 78)]);
+        const tabela = screen.getByRole('table');
+        for (const id of ['painel-agrupamentos', 'painel-sequencia']) {
+            const painel = screen.getByTestId(id);
+            // DOCUMENT_POSITION_FOLLOWING: a tabela vem depois do painel
+            expect(painel.compareDocumentPosition(tabela) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        }
     });
 });

@@ -17,6 +17,7 @@ import { FilterPopover } from './ui/FilterPopover';
 import { useConfirm } from './ui/confirm';
 import GroupMatchPanel from './GroupMatchPanel';
 import SequenciaParcelasPanel from './reconciliation/SequenciaParcelasPanel';
+import { SecaoRecolhivel } from './reconciliation/SecaoRecolhivel';
 import { sequenciaParcelasService } from '../services/sequenciaParcelasService';
 import type { PosicaoNaSerie } from '../utils/sequenciaParcelas';
 import { CelulaSequencia, chaveDaSequencia, doisDigitos, textoDaSequencia } from './reconciliation/CelulaSequencia';
@@ -622,6 +623,51 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                 melhor candidato. Era uma pilha de cartões de três blocos (pedido de
                 11/10/2026: "informações empilhadas dificultando visualização"). O <h1>
                 "Central de Conciliação" do pai já diz onde o usuário está (§18). */}
+            {/* Tudo que não é a lista de sugestões fica ACIMA dela, recolhido numa linha com a
+                contagem (guia §6.14, pedido de 24/11/2026): abaixo de uma tabela longa ninguém vê.
+                Cada seção some quando não tem nada a mostrar. */}
+            <div className="space-y-2">
+                {/* Conciliação agrupada (1 pagamento → N títulos e vice-versa) */}
+                <GroupMatchPanel organizationId={organizationId} selectedAccountId={selectedAccountId} onReload={onReload} />
+                {/* Sequência de parcelas de contrato: furos, atrasos, pagas juntas (24/11/2026) */}
+                <SequenciaParcelasPanel organizationId={organizationId} selectedAccountId={selectedAccountId} onReload={onReload} />
+                {/* Regras sugeridas pela memória: contraparte classificada ≥ 5 vezes, sem regra.
+                    "Revisar e criar" abre o formulário preenchido — nada é criado sem revisão. */}
+                {sugeridas.length > 0 && (
+                    <SecaoRecolhivel
+                        chave="regras-sugeridas"
+                        icone={<Lightbulb className="w-4 h-4 text-amber-500 shrink-0" />}
+                        titulo="Regras sugeridas"
+                        resumo={`${sugeridas.length} ${sugeridas.length === 1 ? 'contraparte' : 'contrapartes'} que você já classificou várias vezes do mesmo jeito`}
+                    >
+                        <ul className="divide-y divide-gray-100">
+                            {sugeridas.slice(0, MAX_SUGERIDAS).map(c => (
+                                <li key={c.id} className="flex items-center gap-4 px-4 py-2.5">
+                                    <div className="min-w-0 flex-1">
+                                        <p className="text-sm text-gray-900 truncate" title={c.counterparty_key}>
+                                            Descrição contém "{c.counterparty_key}" → {c.category}
+                                            {c.party_name ? ` · ${c.party_name}` : ''}
+                                        </p>
+                                        <p className="text-xs text-gray-500">{c.hits} classificações iguais</p>
+                                    </div>
+                                    <button
+                                        onClick={() => aceitarSugestao(c)}
+                                        className="h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-blue-600 bg-white border border-blue-100 hover:bg-blue-50 transition-all shrink-0"
+                                    >
+                                        Revisar e criar
+                                    </button>
+                                </li>
+                            ))}
+                        </ul>
+                        {sugeridas.length > MAX_SUGERIDAS && (
+                            <p className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
+                                e mais {sugeridas.length - MAX_SUGERIDAS} — aparecem aqui conforme você cria as de cima.
+                            </p>
+                        )}
+                    </SecaoRecolhivel>
+                )}
+            </div>
+
             <StandardTable<LinhaSugestao>
                 storageKey="conciliacao:central:sugestoes"
                 columns={COLUNAS_SUGESTAO}
@@ -827,42 +873,6 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                 </div>
             )}
 
-            {/* Regras sugeridas pela memória: contraparte classificada ≥ 5 vezes, sem regra.
-                "Revisar e criar" abre o formulário preenchido — nada é criado sem revisão. */}
-            {sugeridas.length > 0 && (
-                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
-                        <Lightbulb className="w-4 h-4 text-amber-500" />
-                        <h3 className="text-sm font-semibold text-gray-900">Regras sugeridas</h3>
-                        <span className="text-sm text-gray-500">· contrapartes que você já classificou várias vezes do mesmo jeito</span>
-                    </div>
-                    <ul className="divide-y divide-gray-100">
-                        {sugeridas.slice(0, MAX_SUGERIDAS).map(c => (
-                            <li key={c.id} className="flex items-center gap-4 px-4 py-2.5">
-                                <div className="min-w-0 flex-1">
-                                    <p className="text-sm text-gray-900 truncate" title={c.counterparty_key}>
-                                        Descrição contém "{c.counterparty_key}" → {c.category}
-                                        {c.party_name ? ` · ${c.party_name}` : ''}
-                                    </p>
-                                    <p className="text-xs text-gray-500">{c.hits} classificações iguais</p>
-                                </div>
-                                <button
-                                    onClick={() => aceitarSugestao(c)}
-                                    className="h-9 px-3.5 rounded-[6px] text-[13px] font-medium text-blue-600 bg-white border border-blue-100 hover:bg-blue-50 transition-all shrink-0"
-                                >
-                                    Revisar e criar
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
-                    {sugeridas.length > MAX_SUGERIDAS && (
-                        <p className="px-4 py-2 text-xs text-gray-500 border-t border-gray-100">
-                            e mais {sugeridas.length - MAX_SUGERIDAS} — aparecem aqui conforme você cria as de cima.
-                        </p>
-                    )}
-                </div>
-            )}
-
             <RegrasSheet
                 open={regrasAberto}
                 onClose={() => { setRegrasAberto(false); setPreenchida(null); }}
@@ -876,12 +886,6 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
                 onChanged={carregarRegras}
                 onCategoriasExcluidasMudaram={onReload}
             />
-
-            {/* Conciliação agrupada (1 pagamento → N títulos e vice-versa) */}
-            <GroupMatchPanel organizationId={organizationId} selectedAccountId={selectedAccountId} onReload={onReload} />
-
-            {/* Sequência de parcelas de contrato: furos, atrasos, pagas juntas (24/11/2026) */}
-            <SequenciaParcelasPanel organizationId={organizationId} selectedAccountId={selectedAccountId} onReload={onReload} />
 
             {/* Tolerâncias — painel lateral (REGRA #4), malha §30 */}
             <Sheet open={showSettings} onClose={() => setShowSettings(false)} size="md">

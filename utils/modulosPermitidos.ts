@@ -249,7 +249,7 @@ export function permitidoNaOrg(
  */
 export const MODULO_DO_ITEM_DE_BUSCA: Record<string, keyof ModulosPermitidos> = {
   'eng-obras': 'obras', 'eng-orcamentos': 'obras', 'eng-planejamento': 'obras',
-  riscos: 'riscos', diretoria: 'diretoria',
+  riscos: 'riscos', diretoria: 'diretoria', 'qualidade-siac': 'qualidade_siac',
   'supplies-solicitacoes': 'compras', 'supplies-contracts': 'compras', 'supplies-quotations': 'compras', 'supplies-orders': 'compras',
   'financial-dashboard': 'financeiro', 'contas-a-pagar': 'financeiro', 'project-financial': 'financeiro',
   'fluxo-financeiro': 'financeiro', 'contas-a-receber': 'financeiro', 'boletos-pagar': 'financeiro',

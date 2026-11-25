@@ -86,8 +86,9 @@ interface StandardTableProps<T> {
     rowLabel?: (row: T) => string;
     rowClassName?: (row: T) => string;
     loading?: boolean;
-    /** Estado vazio (§12). `acao`: o caminho para resolver, quando há um (vazio que orienta). */
-    empty?: { icon?: React.ReactNode; title: string; subtitle?: string; acao?: { rotulo: string; onClick: () => void } };
+    /** Estado vazio (§12). `acao`: o caminho para resolver, quando há um (vazio que orienta).
+     *  `desligadoPor`: o botão aparece desligado e o motivo vira o `title` dele (botão desligado diz por quê). */
+    empty?: { icon?: React.ReactNode; title: string; subtitle?: string; acao?: { rotulo: string; onClick: () => void; desligadoPor?: string } };
     /** §6.9 — dentro de `Sheet`/modal a largura é escassa: `px-3` em vez de `px-6`. */
     dense?: boolean;
     /** Controles extras da toolbar (selects de filtro, `AdvancedFilterPanel`). */
@@ -406,7 +407,8 @@ export function StandardTable<T>({
                     <h3 className="text-lg font-bold text-gray-900 mb-2">{empty?.title ?? 'Nenhum registro encontrado'}</h3>
                     <p className="text-sm text-gray-500">{empty?.subtitle ?? (search ? 'Tente ajustar a busca.' : '')}</p>
                     {empty?.acao && (
-                        <button type="button" onClick={empty.acao.onClick} className="mt-4 inline-flex h-9 items-center rounded-[6px] border border-gray-200 bg-white px-3.5 text-sm font-medium text-blue-700 hover:bg-blue-50">
+                        <button type="button" onClick={empty.acao.onClick} disabled={!!empty.acao.desligadoPor} title={empty.acao.desligadoPor}
+                            className="mt-4 inline-flex h-9 items-center rounded-[6px] border border-gray-200 bg-white px-3.5 text-sm font-medium text-blue-700 hover:bg-blue-50 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white">
                             {empty.acao.rotulo}
                         </button>
                     )}

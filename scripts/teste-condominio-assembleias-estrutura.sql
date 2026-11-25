@@ -1,6 +1,7 @@
 -- scripts/teste-condominio-assembleias-estrutura.sql
 -- Prova da Tarefa A1 (assembleias de condomínio): tabelas, trava e RLS.
 -- Migration: supabase/migrations/aplicar_20271125860000_condominio_assembleias.sql
+--            (+ aplicar_20271125860100_condominio_assembleias_conduzir.sql, A2)
 -- Plano:     docs/planos/2026-11-25-condominio-assembleias-votacoes.md (R1–R10, "Desenho", Task A1).
 --
 -- O que se prova:
@@ -29,9 +30,14 @@
 -- sucesso = a linha final 'TUDO OK'. Sem a migration (linha MIGRATION vazia) falha já
 -- no primeiro INSERT em condominio_assembleias (a tabela não existe) — é o RED.
 --
--- Ensaio (migration ainda não aplicada; o montador tira o BEGIN;/COMMIT; dela):
+-- ⚠️ Desde a A2 esta prova vale para A1 + A2 (decisão 1 da revisão da A1: o app só grava
+-- 7 colunas da assembleia — membro mandando organization_id ou status recebe 42501, não a
+-- trava). Com a A1 sozinha, esses pontos falham de propósito.
+--
+-- Ensaio (migrations ainda não aplicadas; o montador tira o BEGIN;/COMMIT; delas):
 --   bash scripts/montar-ensaio.sh -o /tmp/e.sql scripts/teste-condominio-assembleias-estrutura.sql \
---        supabase/migrations/aplicar_20271125860000_condominio_assembleias.sql
+--        supabase/migrations/aplicar_20271125860000_condominio_assembleias.sql \
+--        supabase/migrations/aplicar_20271125860100_condominio_assembleias_conduzir.sql
 --   npx supabase db query --linked -f /tmp/e.sql
 -- Depois de aplicada:
 --   npx supabase db query --linked -f scripts/teste-condominio-assembleias-estrutura.sql
@@ -110,6 +116,11 @@ DECLARE
                         || '(empreendimento_id, organization_id, tipo, titulo, primeira_convocacao_em, segunda_convocacao_em%s) '
                         || 'VALUES (%L, %L, %L, %L, now() + interval ''7 days'', now() + interval ''7 days 30 minutes''%s) '
                         || 'RETURNING id) SELECT id::text FROM x';
+    -- Como o app grava (A2, decisão 1): só as colunas liberadas — sem organization_id/status.
+    nova_app CONSTANT TEXT := 'WITH x AS (INSERT INTO public.condominio_assembleias '
+                        || '(empreendimento_id, tipo, titulo, primeira_convocacao_em, segunda_convocacao_em) '
+                        || 'VALUES (%L, %L, %L, now() + interval ''7 days'', now() + interval ''7 days 30 minutes'') '
+                        || 'RETURNING id) SELECT id::text FROM x';
     item  CONSTANT TEXT := 'WITH x AS (INSERT INTO public.condominio_assembleia_itens '
                         || '(assembleia_id, ordem, titulo, tipo, opcoes, quorum) VALUES (%L, %s, %L, %L, %L::text[], %L) '
                         || 'RETURNING id) SELECT id::text FROM x';
@@ -147,20 +158,31 @@ BEGIN
     VALUES (e, org_b, 'Procuração teste', 'OUTRO', 'https://exemplo.invalid/proc.pdf', false) RETURNING id INTO doc_proc;
 
     -- ── organization_id vem de fn_org_do_condominio ──────────────────────────
-    -- O membro da B pede a org A: o gatilho grava a B (a org que opera o condomínio).
-    v := pg_temp.au(m, format(nova, '', e, org_a, 'AGE', 'Assembleia de teste', ''));
+    -- O membro da B cria sem dizer a org: o gatilho grava a B (a org que opera o condomínio).
+    v := pg_temp.au(m, format(nova_app, e, 'AGE', 'Assembleia de teste'));
     PERFORM pg_temp.confere(v LIKE 'ok:%', 'organization_id vem de fn_org_do_condominio: membro cria (veio ' || v || ')');
     a := substr(v, 4)::uuid;
     PERFORM pg_temp.confere((SELECT organization_id FROM public.condominio_assembleias WHERE id = a) = org_b,
-        'organization_id vem de fn_org_do_condominio (gravou a org B, não a A pedida)');
+        'organization_id vem de fn_org_do_condominio (membro: gravou a org B)');
+    -- Desde a A2 (decisão 1) o app nem tem privilégio em organization_id.
+    v := pg_temp.au(m, format(nova, '', e, org_a, 'AGE', 'Pedindo a org A', ''));
+    PERFORM pg_temp.confere(v LIKE '42501:%', 'membro não manda organization_id (privilégio por coluna) (veio ' || v || ')');
+    -- Quem tem o privilégio (postgres) e pede a org A: o gatilho grava a B mesmo assim.
+    v := pg_temp.pg(false, format(nova, '', e, org_a, 'AGE', 'Postgres pedindo a org A', ''));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (SELECT organization_id FROM public.condominio_assembleias
+                                                 WHERE id = substr(v, 4)::uuid) = org_b,
+        'organization_id vem de fn_org_do_condominio (gravou a org B, não a A pedida) (veio ' || v || ')');
     PERFORM pg_temp.confere((SELECT status FROM public.condominio_assembleias WHERE id = a) = 'RASCUNHO',
         'assembleia nasce RASCUNHO');
     -- Não-membro da B não cria (a org gravada é a B; RLS recusa).
-    v := pg_temp.au(n, format(nova, '', e, org_b, 'AGO', 'Intrusa', ''));
+    v := pg_temp.au(n, format(nova_app, e, 'AGO', 'Intrusa'));
     PERFORM pg_temp.confere(v LIKE '42501:%', 'não-membro não cria assembleia (veio ' || v || ')');
-    -- Nascer já fora de RASCUNHO = troca de status sem a marca.
+    -- Nascer já fora de RASCUNHO = troca de status sem a marca. O membro nem tem
+    -- privilégio em status (A2, decisão 1); quem tem (postgres) esbarra na trava.
     v := pg_temp.au(m, format(nova, ', status', e, org_b, 'AGO', 'Já convocada', ', ''CONVOCADA'''));
-    PERFORM pg_temp.confere(v LIKE trava, 'INSERT já CONVOCADA recusado (veio ' || v || ')');
+    PERFORM pg_temp.confere(v LIKE '42501:%', 'INSERT já CONVOCADA recusado — membro (veio ' || v || ')');
+    v := pg_temp.pg(false, format(nova, ', status', e, org_b, 'AGO', 'Já convocada', ', ''CONVOCADA'''));
+    PERFORM pg_temp.confere(v LIKE trava, 'INSERT já CONVOCADA recusado — postgres sem marca (veio ' || v || ')');
 
     -- ── rascunho editável por membro ─────────────────────────────────────────
     v := pg_temp.au(m, format(upd, 'condominio_assembleias',
@@ -194,8 +216,9 @@ BEGIN
     PERFORM pg_temp.confere(v LIKE chk, '2ª convocação não pode ser antes/igual à 1ª (veio ' || v || ')');
 
     -- ── UPDATE de status direto recusado (assembleia_travada) ────────────────
+    -- Membro: sem privilégio na coluna status (A2, decisão 1) → 42501.
     v := pg_temp.au(m, format(upd, 'condominio_assembleias', 'status = ''CONVOCADA''', a));
-    PERFORM pg_temp.confere(v LIKE trava, 'UPDATE de status direto recusado (assembleia_travada) — membro (veio ' || v || ')');
+    PERFORM pg_temp.confere(v LIKE '42501:%', 'UPDATE de status direto recusado — membro (veio ' || v || ')');
     v := pg_temp.pg(false, format(upd, 'condominio_assembleias', 'status = ''CONVOCADA''', a));
     PERFORM pg_temp.confere(v LIKE trava, 'UPDATE de status direto recusado (assembleia_travada) — postgres sem marca (veio ' || v || ')');
     -- unidades e votos não existem em RASCUNHO
@@ -365,7 +388,7 @@ BEGIN
     PERFORM pg_temp.confere(v LIKE trava, 'CANCELADA não volta a RASCUNHO (veio ' || v || ')');
 
     -- ── rascunho se exclui (com a pauta) ─────────────────────────────────────
-    v := pg_temp.au(m, format(nova, '', e, org_b, 'AGO', 'Para excluir', ''));
+    v := pg_temp.au(m, format(nova_app, e, 'AGO', 'Para excluir'));
     a_apagar := substr(v, 4)::uuid;
     v := pg_temp.au(m, format(item, a_apagar, 1, 'Item', 'APROVACAO', NULL, 'MAIORIA_PRESENTES'));
     PERFORM pg_temp.confere(v LIKE 'ok:%', 'item no rascunho a excluir (veio ' || v || ')');

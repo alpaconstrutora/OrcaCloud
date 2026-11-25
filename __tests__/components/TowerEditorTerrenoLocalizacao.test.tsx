@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const svc = vi.hoisted(() => ({ update: vi.fn(async () => ({})) }));
 vi.mock('../../services/empreendimentoService', () => ({
-  empreendimentoService: { listTowers: vi.fn(async () => []), update: svc.update },
+  empreendimentoService: { listTowers: vi.fn(async () => []), listFloorsDasTorres: vi.fn(async () => []), listUnits: vi.fn(async () => []), update: svc.update },
 }));
 vi.mock('../../services/blueprintTerrenoDaPlanta', () => ({ terrenoDaPlantaVinculada: vi.fn(async () => null) }));
 vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => vi.fn(async () => true) }));

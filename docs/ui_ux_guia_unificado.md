@@ -2559,6 +2559,16 @@ tela, não navegação de módulo), esta é a forma canônica. **Referência:
 > natureza diferente lado a lado — ex.: Áreas NBR 12721, **Entrada** (o que se preenche) | **Quadros** (o
 > que sai calculado). Não é árvore (§19.2): continua um trilho só, um nível.
 >
+> ✅ **Sub-abas DENTRO de uma aba que já é card — `bare` (25/11/2026):** Empreendimento › Torres & Unidades
+> (`components/empreendimento/TowerEditor.tsx`, `docs/planos/2026-11-25-torres-unidades-sub-abas.md`). A tela empilhava
+> Terreno, Torres (com Pavimentos, Unidades e Vista dentro de cada torre), Plantas e Decorado — com 200 unidades por
+> torre, uma página sem fim. Virou o trilho `TabsBar bare` (só o trilho: a aba do empreendimento já é o card) com
+> **Terreno · Torres · Unidades · Vista da janela · Tipologias**. Seção que é **por torre** (Unidades, Vista) mostra
+> UMA torre por vez, com um seletor de botões `h-9` ("Torre A · 17", `aria-pressed`) que some com uma torre só.
+> A sub-aba escolhida fica no navegador e a troca passa pela mesma guarda de saída (`haPendenciaDeSaida`) da aba
+> de cima. Os dados que mais de uma aba usa (pavimentos e unidades das torres) são carregados no pai — antes só
+> existiam depois de abrir o card da torre.
+>
 > ```tsx
 > <TabsBar tabs={[{ id: 'ciclos', label: 'Ciclos', badge: cycles.length }, { id: 'pdi', label: 'PDI' }]}
 >          value={tab} onChange={setTab}>

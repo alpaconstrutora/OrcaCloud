@@ -156,7 +156,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
   }, [tower.id]);
 
   React.useEffect(() => { load(); }, [load]);
-  React.useEffect(() => { onUnitsChange?.(tower.id, units); }, [units, tower.id, onUnitsChange]);
+  // Só avisa o pai depois de carregar (25/11/2026): o pai já tem as unidades da torre (TowerEditor carrega todas na
+  // entrada), e o `[]` do 1º render zerava as contagens dele até a lista chegar.
+  React.useEffect(() => { if (!loading) onUnitsChange?.(tower.id, units); }, [units, loading, tower.id, onUnitsChange]);
 
   // ── Sort + Group ────────────────────────────────────────────────────────────
 

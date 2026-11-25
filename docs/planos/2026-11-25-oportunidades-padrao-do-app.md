@@ -39,4 +39,4 @@ título e sem abas (só leitura), como antes.
 
 ## Estado
 
-Em PR.
+NO AR em 25/11 (PR #730, merge c1f8a49; produção servindo c1f8a49). Conferido no Chrome: título, abas, 4 KpiCard, tabela StandardTable com ROI e TIR em colunas, grade em cartão branco.

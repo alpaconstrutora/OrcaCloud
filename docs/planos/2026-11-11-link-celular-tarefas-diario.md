@@ -1234,5 +1234,9 @@ aceito: o gestor pode copiar e usar o link de um membro.
   "Gerar novo link" vira secundário); desligado com o motivo em link antigo; caixa do endereço sem
   o aviso "aparece só agora". **Pronto quando:** `__tests__/components/LinkDoCelularBloco.test.tsx`
   verde (14/14 em 25/11) e `check-ui-standard.sh` sem violação.
-- [ ] Conferir em produção: Minha organização › Usuários › Editar › Link do celular — gerar,
-  fechar, reabrir e copiar.
+- [x] Conferir em produção: Minha organização › Usuários › Editar › Link do celular — gerar,
+  fechar, reabrir e copiar. (25/11: usuário conferiu em produção — "funcionou".)
+
+Todos os itens concluídos. Nota: o prefixo `20271125600000` colidiu com a migration de Qualidade
+(#747, mesclada entre a conferência do prefixo e o merge do #748); renomeada para
+`20271125700000` no #752. Lição: conferir o prefixo de novo logo antes do merge, não só ao aplicar.

@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, Loader2 } from 'lucide-react';
+import { AlertCircle } from 'lucide-react';
 import { useOrgContext } from '../../hooks/useOrgContext';
 import { useConfirm } from '../ui/confirm';
 import { investorPortalService, type InvestorOpportunity } from '../../services/investorPortalService';
@@ -22,7 +22,6 @@ const OportunidadesModule: React.FC<Props> = ({ profile }) => {
     const { orgId } = useOrgContext();
     const gestor = ehGestorDoInvestidor(profile);
     const [opportunities, setOpportunities] = React.useState<InvestorOpportunity[]>([]);
-    const [viewMode, setViewMode] = React.useState<'grid' | 'list'>('list');
     const [carregando, setCarregando] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
     const confirm = useConfirm();
@@ -49,17 +48,8 @@ const OportunidadesModule: React.FC<Props> = ({ profile }) => {
             .catch(e => setErro(`Não foi possível excluir: ${(e as Error).message}`));
     };
 
-    if (carregando) {
-        return (
-            <div className="flex items-center justify-center py-20 gap-3 text-gray-500">
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span className="text-sm">Carregando oportunidades...</span>
-            </div>
-        );
-    }
-
     return (
-        <div className="space-y-4">
+        <div className="space-y-3">
             {erro && (
                 <div role="alert" className="flex items-center gap-3 p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700">
                     <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -69,9 +59,9 @@ const OportunidadesModule: React.FC<Props> = ({ profile }) => {
             <OpportunitiesTab
                 opportunities={opportunities}
                 isAdmin={gestor}
-                viewMode={viewMode}
+                titulo="Oportunidades"
+                loading={carregando}
                 organizationId={orgId}
-                onViewModeChange={setViewMode}
                 onDelete={excluir}
                 onUpdate={updated => setOpportunities(prev =>
                     prev.some(o => o.id === updated.id)

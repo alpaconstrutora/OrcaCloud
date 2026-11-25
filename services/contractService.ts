@@ -407,18 +407,27 @@ export async function regerarTributosDaNegociacao(dealId: string | null | undefi
  * Vencimento da ÚLTIMA parcela da série do contrato — as dele (`{id}-p…`) e as da
  * negociação de origem (`tx-{deal}-…`). A renovação por aditivo continua daqui
  * (utils/continuacaoDaSerie). null = sem parcela nenhuma.
+ *
+ * `excetoAditivoId`: ignora as parcelas marcadas com esse aditivo — é a série
+ * como ficaria sem ele (Editar a renovação = substituir o aditivo, 25/11/2026).
  */
 export async function ultimoVencimentoDaSerie(
     contract: { id: string; organization_id?: string | null; deal_id?: string | null },
+    excetoAditivoId?: string,
 ): Promise<string | null> {
     if (!contract.organization_id) return null;
     const padroes = [`reference_id.like.${contract.id}-p%`];
     if (contract.deal_id) padroes.push(`reference_id.like.tx-${contract.deal_id}-%`);
+    // Um `or` só (PostgREST): cada padrão vira and(padrão, fora do aditivo).
+    // `neq` sozinho descartaria as sem marca (NULL), que são a maioria.
+    const filtro = excetoAditivoId
+        ? padroes.map(p => `and(${p},or(contract_addendum_id.is.null,contract_addendum_id.neq.${excetoAditivoId}))`).join(',')
+        : padroes.join(',');
     const { data, error } = await supabase
         .from('internal_transactions')
         .select('due_date')
         .eq('organization_id', contract.organization_id)
-        .or(padroes.join(','))
+        .or(filtro)
         .not('due_date', 'is', null)
         .order('due_date', { ascending: false })
         .limit(1);

@@ -23,7 +23,7 @@ const COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão do redimensionamento de colunas (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 220, client: 180, status: 160, end_date: 175, days: 170, value: 130, index: 110, actions: 260,
+    number: 220, client: 180, status: 160, end_date: 175, days: 170, value: 130, index: 110, actions: 370,
 };
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -106,6 +106,8 @@ interface Props {
     onChanged?: (message: string) => void;
     /** Abre o detalhe do contrato (aditivos, documentos, assinatura). */
     onOpenContract?: (contractId: string) => void;
+    /** Editar a renovação: abre a negociação já editando o aditivo (= substituí-lo). */
+    onEditRenewal?: (contractId: string, addendumId: string) => void;
     /**
      * Negociações do empreendimento aberto (mesma regra da aba Contratos); null =
      * fora de um empreendimento, todos da organização. Pedido de 24/11/2026.
@@ -113,7 +115,7 @@ interface Props {
     negociacoesDoEmpreendimento?: Set<string> | null;
 }
 
-const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChanged, onOpenContract, negociacoesDoEmpreendimento = null }) => {
+const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChanged, onOpenContract, onEditRenewal, negociacoesDoEmpreendimento = null }) => {
     const [todas, setTodas] = useState<ExpiringRental[]>([]);
     const rows = useMemo(() => filaDoEmpreendimento(todas, negociacoesDoEmpreendimento), [todas, negociacoesDoEmpreendimento]);
     const [loading, setLoading] = useState(true);
@@ -418,7 +420,7 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
                                         <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         <td className="px-6 py-2.5 text-right">
-                                                <div className="flex items-center justify-end gap-1.5">
+                                                <div className="flex items-center justify-end gap-1.5 whitespace-nowrap">
                                                     {onOpenContract && (
                                                         <button
                                                             onClick={() => onOpenContract(r.id)}
@@ -456,6 +458,25 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                                                     >
                                                         Renovar
                                                     </button>
+                                                    {/* Editar renovação — mesma condição do Excluir. Por
+                                                        aditivo: leva à negociação já editando o aditivo
+                                                        (salvar = substituí-lo). Por contrato novo não
+                                                        há edição: desligado, com o motivo. */}
+                                                    {(r.renewed || r.last_addendum) && onEditRenewal && (
+                                                        <span
+                                                            className="inline-flex"
+                                                            title={r.renewed
+                                                                ? `Renovado pelo contrato ${r.renewed_by}: renovação por contrato novo não se edita — exclua e renove de novo.`
+                                                                : undefined}
+                                                        >
+                                                            <ActionIconButton
+                                                                kind="edit"
+                                                                title={r.last_addendum ? `Editar o aditivo ${r.last_addendum.number}` : 'Editar a renovação'}
+                                                                disabled={r.renewed || !r.last_addendum}
+                                                                onClick={() => r.last_addendum && onEditRenewal(r.id, r.last_addendum.id)}
+                                                            />
+                                                        </span>
+                                                    )}
                                                     {/* Excluir renovação — aparece só quando existe
                                                         renovação a desfazer neste contrato: um aditivo
                                                         de prorrogação, ou um contrato-filho criado por

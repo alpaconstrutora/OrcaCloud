@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { RefreshCw, AlertTriangle, History, Info } from 'lucide-react';
+import { RefreshCw, AlertTriangle, History, Info, Pencil } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
-import { contractRenewalService, RenewalMode, RenewalPreview } from '../../services/contractRenewalService';
+import { contractRenewalService, motivoParaNaoEditarAditivo, RenewalMode, RenewalPreview } from '../../services/contractRenewalService';
 import { contractService } from '../../services/contractService';
 import { Contract, ContractAddendum } from '../../types';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
@@ -15,6 +15,11 @@ interface Props {
     onNotify: (msg: string, type?: 'success' | 'error' | 'info') => void;
     /** Recarrega o contrato no pai (vigência e valor mudam ao renovar). */
     onChanged?: () => void;
+    /**
+     * Abre já editando este aditivo — vem do Editar da fila Locações ›
+     * Renovações, que só manda para cá (o único lugar onde se mexe na renovação).
+     */
+    editarAditivoId?: string;
 }
 
 /** Data BR por split — `new Date(iso)` retrocede um dia em UTC-3. */
@@ -45,7 +50,7 @@ const CAMPO = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] tex
  * índice, valor) porque é exatamente isso que a renovação define: sem eles não
  * há como saber de onde até quando as parcelas do período novo serão geradas.
  */
-const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged }) => {
+const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged, editarAditivoId }) => {
     const [addendums, setAddendums] = useState<ContractAddendum[]>([]);
     const [chain, setChain] = useState<Contract[]>([]);
     const [loading, setLoading] = useState(true);
@@ -69,6 +74,10 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
     const [index, setIndex] = useState('');
     const [valor, setValor] = useState('');
     const [notes, setNotes] = useState('');
+    // Editar = substituir este aditivo (decisão do usuário, 25/11/2026): o
+    // formulário é o mesmo, preenchido com ele, e a prévia é a de antes dele.
+    const [editando, setEditando] = useState<ContractAddendum | null>(null);
+    const formRef = useRef<HTMLElement>(null);
 
     // O contrato VIGENTE da cadeia, não necessariamente o desta negociação: se a
     // renovação anterior foi por "novo contrato", o daqui está Encerrado e quem
@@ -109,6 +118,7 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                 endDate: endDate || undefined,
                 mode,
                 applyReajuste: false,
+                substituindo: editando ?? undefined,
             });
             setPreview(p);
             if (!endDate) setEndDate(p.endDate);
@@ -123,9 +133,60 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
             notificar(e instanceof Error ? e.message : 'Não foi possível calcular a renovação.', 'error');
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [vigente.id, vigente.end_date, endDate, mode]);
+    }, [vigente.id, vigente.end_date, endDate, mode, editando]);
 
     useEffect(() => { if (!loading) carregarPreview(); }, [loading, carregarPreview]);
+
+    /** Por que este aditivo não pode ser editado — null = pode (mesma regra do serviço). */
+    const motivoNaoEdita = (ad: ContractAddendum): string | null =>
+        ad.contract_id !== vigente.id
+            ? `O contrato foi renovado depois pelo ${vigente.number}: só a última renovação pode ser editada.`
+            : motivoParaNaoEditarAditivo(ad, addendums);
+
+    // Botão desligado sempre diz o motivo.
+    const motivoBotaoEditar = (ad: ContractAddendum): string | null =>
+        saving ? 'Aguarde: a operação anterior ainda está sendo gravada.'
+            : editando?.id === ad.id ? `O ${ad.number} já está em edição no formulário acima.`
+            : motivoNaoEdita(ad);
+
+    const entrarEmEdicao = (ad: ContractAddendum) => {
+        setEditando(ad);
+        setMode('ADITIVO');
+        setPrazoDraft(null);
+        setEndDate(ad.new_end_date?.slice(0, 10) ?? '');
+        setValor((ad.new_value ?? vigente.current_value ?? 0).toFixed(2));
+        // Ciclo, dia e índice que o aditivo deixou no contrato (são os dele).
+        setCycle(vigente.billing_cycle || 'Mensal');
+        setDueDay(vigente.due_day ? String(vigente.due_day) : '');
+        setIndex(vigente.reajuste_index || 'IGP-M');
+        setNotes(ad.notes ?? '');
+        formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    };
+
+    // Campos vazios = a prévia preenche de novo com os da próxima renovação.
+    const sairDaEdicao = () => {
+        setEditando(null);
+        setPrazoDraft(null);
+        setEndDate('');
+        setValor('');
+        setNotes('');
+        setCycle('');
+        setDueDay('');
+        setIndex('');
+    };
+
+    // Veio do Editar da fila: entra em edição uma vez, quando a lista chegar.
+    const pedidoDaFila = useRef(editarAditivoId);
+    useEffect(() => {
+        if (loading || !pedidoDaFila.current) return;
+        const ad = addendums.find(a => a.id === pedidoDaFila.current);
+        pedidoDaFila.current = undefined;
+        if (!ad) return;
+        const motivo = motivoNaoEdita(ad);
+        if (motivo) notificar(motivo, 'error');
+        else entrarEmEdicao(ad);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [loading, addendums]);
 
     /**
      * Desfaz uma prorrogação por aditivo: apaga as parcelas do período novo,
@@ -200,6 +261,14 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                 overrides,
             };
 
+            if (editando) {
+                const { addendum, replaced } = await contractRenewalService.replaceAddendumRenewal(editando.id, base);
+                notificar(`Renovação alterada: o ${replaced.number} foi cancelado e o ${addendum.number} gerado com as parcelas do período.`, 'success');
+                sairDaEdicao();
+                await load();
+                onChanged?.();
+                return;
+            }
             if (mode === 'ADITIVO') {
                 await contractRenewalService.renewByAddendum(vigente.id, base);
                 notificar('Aditivo de prorrogação gerado e parcelas do novo período criadas.', 'success');
@@ -260,10 +329,15 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                     <span>Preencha o fim da vigência em "Dados do contrato" e salve a negociação para poder renovar.</span>
                 </div>
             ) : (
-                <section className="space-y-4">
-                    <SecaoTitulo icon={RefreshCw} titulo="Nova renovação" />
+                <section ref={formRef} className="space-y-4 scroll-mt-4">
+                    <SecaoTitulo
+                        icon={editando ? Pencil : RefreshCw}
+                        titulo={editando ? `Editar renovação ${editando.number}` : 'Nova renovação'}
+                    />
 
-                    {/* Via da renovação — escolha única (radio) */}
+                    {/* Via da renovação — escolha única (radio). Editar é sempre
+                        aditivo: o que se edita é um aditivo de prorrogação. */}
+                    {!editando && (
                     <div className="space-y-1.5">
                         <p id="renovacao-via" className={ROTULO}>Como renovar</p>
                         <div role="radiogroup" aria-labelledby="renovacao-via" className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -287,6 +361,7 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                             ))}
                         </div>
                     </div>
+                    )}
 
                     {/* Período novo — mesmos campos de "Dados do contrato", porque é
                         isso que define de onde até quando as parcelas nascem. Campos
@@ -302,7 +377,9 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                                 placeholder="Calculando…"
                                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 placeholder:text-gray-400 outline-none cursor-default"
                             />
-                            <p className="text-xs text-gray-500">Dia seguinte ao fim da vigência atual.</p>
+                            <p className="text-xs text-gray-500">
+                                {editando ? `Dia seguinte ao fim da vigência anterior ao ${editando.number}.` : 'Dia seguinte ao fim da vigência atual.'}
+                            </p>
                         </div>
 
                         <div className="space-y-1.5">
@@ -402,7 +479,15 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                     {preview && (
                         <div className="flex items-start gap-2 bg-blue-50 border border-blue-100 text-blue-800 rounded-[10px] p-4 text-sm">
                             <Info className="w-4 h-4 shrink-0 mt-0.5" />
-                            {mode === 'ADITIVO' ? (
+                            {editando ? (
+                                <span>
+                                    O {editando.number} será <strong>cancelado</strong> (fica no histórico) e o{' '}
+                                    {preview.nextAddendumNumber ?? 'aditivo novo'} gerado: vigência até{' '}
+                                    {fmtDate(endDate || preview.endDate)} e {preview.installmentsToGenerate} parcela(s)
+                                    {preview.firstInstallmentDate ? `, a 1ª em ${fmtDate(preview.firstInstallmentDate)}` : ''}.
+                                    As parcelas do {editando.number} são trocadas pelas novas e os tributos, refeitos.
+                                </span>
+                            ) : mode === 'ADITIVO' ? (
                                 <span>
                                     O contrato {vigente.number} <strong>não</strong> será encerrado: a vigência passa a
                                     terminar em {fmtDate(endDate || preview.endDate)} e serão geradas{' '}
@@ -423,6 +508,16 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
 
                     {/* Rodapé do formulário: linha solta, ação primária §17 */}
                     <div className="flex items-center justify-end gap-4">
+                        {editando && (
+                            <button
+                                type="button"
+                                onClick={sairDaEdicao}
+                                disabled={saving}
+                                className="h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Cancelar edição
+                            </button>
+                        )}
                         <span className="inline-flex" title={motivoNaoRenova ?? undefined}>
                             <button
                                 type="button"
@@ -431,7 +526,7 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                                 className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                             >
                                 <RefreshCw className={`w-[15px] h-[15px] ${saving ? 'animate-spin' : ''}`} />
-                                {saving ? 'Processando…' : mode === 'ADITIVO' ? 'Gerar aditivo' : 'Criar novo contrato'}
+                                {saving ? 'Processando…' : editando ? 'Salvar alterações' : mode === 'ADITIVO' ? 'Gerar aditivo' : 'Criar novo contrato'}
                             </button>
                         </span>
                     </div>
@@ -468,11 +563,23 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                                     novo já foi paga ou conciliada, e a mensagem dele é
                                     mostrada como está. */}
                                 {ad.status !== 'Cancelado' && (
-                                    <ActionIconButton
-                                        kind="delete"
-                                        title="Desfazer esta prorrogação"
-                                        onClick={() => handleDesfazerAditivo(ad)}
-                                    />
+                                    <div className="flex items-center gap-1.5 shrink-0">
+                                        {/* Editar = substituir: este vira Cancelado e nasce o
+                                            próximo com os dados novos. Só a última renovação. */}
+                                        <span className="inline-flex" title={motivoBotaoEditar(ad) ?? undefined}>
+                                            <ActionIconButton
+                                                kind="edit"
+                                                title={`Editar o ${ad.number}`}
+                                                disabled={!!motivoBotaoEditar(ad)}
+                                                onClick={() => entrarEmEdicao(ad)}
+                                            />
+                                        </span>
+                                        <ActionIconButton
+                                            kind="delete"
+                                            title="Desfazer esta prorrogação"
+                                            onClick={() => handleDesfazerAditivo(ad)}
+                                        />
+                                    </div>
                                 )}
                             </div>
                         ))}

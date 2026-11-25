@@ -135,6 +135,12 @@ export interface RenewOptions {
         'client_responsible' | 'internal_responsible'>>;
     /** ADITIVO: aprovar (e gerar as parcelas) na mesma ação. Default true. */
     autoApprove?: boolean;
+    /**
+     * ADITIVO, Editar a renovação: a prévia é calculada como se este aditivo não
+     * existisse (vigência, aluguel e série de antes dele) — é o que ele vira ao
+     * ser substituído. Ver `replaceAddendumRenewal`.
+     */
+    substituindo?: ContractAddendum;
 }
 
 export interface ExpiringRental extends Contract {
@@ -223,6 +229,45 @@ async function countPendingFrom(parent: Contract, fromDate: string): Promise<num
     return (byContract ?? 0) + byDeal;
 }
 
+/**
+ * Por que este aditivo de prorrogação NÃO pode ser editado (null = pode).
+ * Pura — a tela usa a mesma regra para desligar o botão com o motivo.
+ * `doContrato` = aditivos do mesmo contrato (qualquer ordem).
+ * Só a ÚLTIMA renovação: substituir uma do meio deixaria a seguinte começando
+ * de uma vigência que mudou.
+ */
+export function motivoParaNaoEditarAditivo(
+    ad: Pick<ContractAddendum, 'id' | 'number' | 'status' | 'new_start_date' | 'created_at' | 'contract_id'>,
+    doContrato: Pick<ContractAddendum, 'id' | 'number' | 'status' | 'new_start_date' | 'created_at' | 'contract_id'>[],
+): string | null {
+    if (!ad.new_start_date) return 'Este aditivo não é uma prorrogação de vigência.';
+    if (ad.status === 'Cancelado') return `O ${ad.number} está cancelado.`;
+    if (ad.status !== 'Aprovado') return `O ${ad.number} está "${ad.status}": só uma renovação aprovada pode ser editada.`;
+    const ultima = doContrato
+        .filter(a => a.contract_id === ad.contract_id && a.new_start_date && a.status !== 'Cancelado' && a.status !== 'Rejeitado')
+        .sort((a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? ''))[0];
+    if (ultima && ultima.id !== ad.id) return `Só a última renovação pode ser editada (a última é o ${ultima.number}).`;
+    return null;
+}
+
+/** A regra de cima + o que só o banco sabe: parcela do período já paga/conciliada. */
+async function motivoParaNaoEditarRenovacao(ad: ContractAddendum): Promise<string | null> {
+    const doContrato = await contractService.listAddendums(ad.contract_id);
+    const motivo = motivoParaNaoEditarAditivo(ad, doContrato);
+    if (motivo) return motivo;
+    const { data, error } = await supabase
+        .from('internal_transactions')
+        .select('id')
+        .eq('contract_addendum_id', ad.id)
+        .neq('status', 'PENDING')
+        .limit(1);
+    if (error) throw error;
+    if ((data ?? []).length > 0) {
+        return `O período do ${ad.number} já tem parcelas pagas ou conciliadas — não dá para editar. Use a rescisão do contrato.`;
+    }
+    return null;
+}
+
 // ─── Serviço ──────────────────────────────────────────────────────────────
 
 export const contractRenewalService = {
@@ -231,7 +276,13 @@ export const contractRenewalService = {
      * de renovação para o usuário conferir datas e valor antes de confirmar.
      */
     previewRenewal: async (parentContractId: string, opts: RenewOptions = {}): Promise<RenewalPreview> => {
-        const parent = await fetchContract(parentContractId);
+        const atual = await fetchContract(parentContractId);
+        // Substituindo um aditivo: o contrato como estava antes dele (é o estado
+        // que undoAddendumRenewal devolve antes de o aditivo novo nascer).
+        const sub = opts.substituindo;
+        const parent: Contract = sub
+            ? { ...atual, end_date: sub.previous_end_date ?? atual.end_date, current_value: sub.previous_value ?? atual.current_value }
+            : atual;
         assertRenewable(parent, await findChild(parent.id));
 
         const months = opts.months ?? 12;
@@ -287,7 +338,7 @@ export const contractRenewalService = {
         const pending = await countPendingFrom(parent, startDate);
         // Aditivo continua a série (mesma conta de applyProrrogacaoAddendum, com o
         // dia da própria série — a gaveta mostra e deixa trocar).
-        const ultimo = mode === 'ADITIVO' ? await ultimoVencimentoDaSerie(parent) : null;
+        const ultimo = mode === 'ADITIVO' ? await ultimoVencimentoDaSerie(parent, sub?.id) : null;
         const serie = mode === 'ADITIVO'
             ? continuacaoDaSerie({ ultimoVencimento: ultimo, inicio: startDate, fim: endDate, ciclo: parent.billing_cycle })
             : null;
@@ -382,6 +433,7 @@ export const contractRenewalService = {
             type: mesmoValor ? 'Prazo' : 'Ambos',
             description: `Prorrogação de vigência até ${preview.endDate}`
                 + (mesmoValor ? '' : ` com reajuste para ${preview.newValue.toFixed(2)}`)
+                + (opts.substituindo ? ` (substitui o ${opts.substituindo.number})` : '')
                 + (opts.notes ? ` — ${opts.notes}` : ''),
             // ⚠️ ZERO de propósito: em contrato recorrente o aditivo troca a
             // mensalidade (new_value), não soma um montante ao contrato.
@@ -498,6 +550,42 @@ export const contractRenewalService = {
 
         // As parcelas saíram: os tributos pendentes delas também.
         await regerarTributosDaNegociacao(contract.deal_id, contract.organization_id);
+    },
+
+    /**
+     * Editar uma renovação por aditivo = SUBSTITUIR (decisão do usuário,
+     * 25/11/2026 — mesmo comportamento do Editar do Reajuste): o aditivo vira
+     * Cancelado e fica no histórico, e nasce o próximo (AD-00X) com os dados
+     * novos, continuando a série de antes dele. Tributos refeitos nas duas pontas.
+     *
+     * Tudo o que pode recusar é conferido ANTES de desfazer — falhar no meio
+     * deixaria o contrato sem a renovação que tinha.
+     */
+    replaceAddendumRenewal: async (
+        addendumId: string,
+        opts: RenewOptions = {},
+    ): Promise<{ addendum: ContractAddendum; replaced: ContractAddendum }> => {
+        const ad = await contractService.getAddendumById(addendumId);
+        if (!ad) throw new Error('Aditivo não encontrado.');
+        const motivo = await motivoParaNaoEditarRenovacao(ad);
+        if (motivo) throw new Error(motivo);
+
+        // Prévia com o contrato de antes do aditivo: valida vigência e fim.
+        const preview = await contractRenewalService.previewRenewal(
+            ad.contract_id, { ...opts, mode: 'ADITIVO', substituindo: ad });
+        if (preview.endDate <= preview.startDate) {
+            throw new Error(`O fim da vigência deve ser posterior a ${preview.startDate.split('-').reverse().join('/')}.`);
+        }
+
+        await contractRenewalService.undoAddendumRenewal(ad.id);
+        try {
+            const { addendum } = await contractRenewalService.renewByAddendum(
+                ad.contract_id, { ...opts, substituindo: ad });
+            return { addendum, replaced: ad };
+        } catch (e) {
+            const msg = e instanceof Error ? e.message : String(e);
+            throw new Error(`O ${ad.number} foi desfeito, mas o aditivo novo não foi gerado (${msg}). Gere a renovação de novo em "Nova renovação".`);
+        }
     },
 
     /**

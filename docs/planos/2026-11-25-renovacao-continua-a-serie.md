@@ -49,7 +49,7 @@ respondeu: "sim".
    - o dia vem da série (`seriesDueDay`);
    - a prévia diz "a 1ª em dd/mm/aaaa (continua a série atual)".
 5. Aba Parcelas: a Origem mostra "Aditivo AD-00X (contrato)" nas parcelas marcadas.
-6. Migration `aplicar_20271125400000_parcela_do_aditivo.sql`: coluna
+6. Migration `aplicar_20271125410000_parcela_do_aditivo.sql`: coluna
    `internal_transactions.contract_addendum_id` com FK `ON DELETE SET NULL` e índice
    parcial. Ensaio em transação abortada: ok.
 7. **Dados do CTL-006:** fazer pelo próprio app, depois do deploy:

@@ -73,6 +73,17 @@ export interface PreviaReajuste {
     parcelasEmAberto: number;
 }
 
+/** Uma decisão do histórico geral (Locações › Reajustes › Histórico). */
+export interface RegistroComContrato extends RegistroDeReajuste {
+    contract_id: string;
+    contrato: { number: string; title: string | null; client_id: string | null };
+    /** Negociação do contrato (a da raiz, no renovado) — recorta pelo empreendimento. */
+    negociacaoId: string | null;
+}
+
+const COLUNAS_REGISTRO = 'id, aniversario, data_base, indice, indice_mes_base, indice_mes_atual, percentual_indice, decisao, '
+    + 'percentual_aplicado, valor_anterior, valor_novo, parcelas_atualizadas, observacao, criado_por, created_at';
+
 export interface RegistroDeReajuste {
     id: string;
     aniversario: string;
@@ -313,11 +324,34 @@ export const reajusteLocacaoService = {
     historico: async (contractId: string): Promise<RegistroDeReajuste[]> => {
         const { data, error } = await supabase
             .from('contract_reajustes')
-            .select('id, aniversario, data_base, indice, indice_mes_base, indice_mes_atual, percentual_indice, decisao, percentual_aplicado, valor_anterior, valor_novo, parcelas_atualizadas, observacao, criado_por, created_at')
+            .select(COLUNAS_REGISTRO)
             .eq('contract_id', contractId)
             .order('aniversario', { ascending: false });
         if (error) throw error;
-        return (data ?? []) as RegistroDeReajuste[];
+        return (data ?? []) as unknown as RegistroDeReajuste[];
+    },
+
+    /**
+     * Todas as decisões de reajuste (pedido de 24/11/2026: "quero ver historico de
+     * reajuste") — inclusive dos contratos que já saíram da fila. Mais recente
+     * primeiro. REGRA #5: `organizationId` nulo ("Todas") não filtra — a RLS recorta.
+     */
+    historicoGeral: async (organizationId: string | null): Promise<RegistroComContrato[]> => {
+        let q = supabase
+            .from('contract_reajustes')
+            .select(`${COLUNAS_REGISTRO}, contract_id, contracts!inner(number, title, client_id, deal_id, parent_contract_id)`);
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const { data, error } = await q.order('created_at', { ascending: false });
+        if (error) throw error;
+        type Linha = RegistroDeReajuste & { contract_id: string; contracts: { number: string; title: string | null; client_id: string | null; deal_id: string | null; parent_contract_id: string | null } };
+        const linhas = (data ?? []) as unknown as Linha[];
+        const porContrato = new Map(linhas.map(l => [l.contract_id, { id: l.contract_id, deal_id: l.contracts.deal_id, parent_contract_id: l.contracts.parent_contract_id }]));
+        const negociacoes = await negociacoesDosContratos([...porContrato.values()]);
+        return linhas.map(({ contracts, ...r }) => ({
+            ...r,
+            contrato: { number: contracts.number, title: contracts.title, client_id: contracts.client_id },
+            negociacaoId: negociacoes.get(r.contract_id) ?? null,
+        }));
     },
 
     /** Padrão da organização (Configurações do Sistema). null = não definido (30). */

@@ -161,3 +161,15 @@ Causa: dentro de um empreendimento (Gestão de Unidades), a aba Contratos filtra
   - `RentalRenewals` recebe `negociacoesDoEmpreendimento`, e `listRentalsExpiring` traz a `negociacaoId` de cada contrato.
   - A busca pela cadeia virou um serviço só (`services/negociacaoDoContratoService.ts`), usado por Reajustes e Renovações.
   - **Pronto quando:** `reajusteFilaPorEmpreendimento.test.ts` cobre `negociacoesDosContratos`, que lê os pais nível a nível e devolve a negociação da raiz. tsc e check-ui-standard sem erros. ✅ Falta conferir na tela.
+
+## Fase 5 — Histórico de reajustes (24/11/2026)
+
+Pedido original: *"quero ver historico de reajuste"*
+
+Motivo: o contrato decidido sai da fila (CTL-006-012-0001 foi reajustado com data de 05/11/2018 e o próximo aniversário cai depois do fim da vigência), e o histórico só abria a partir de uma linha da fila.
+
+- [x] 15. Locações › Reajustes ganhou um seletor **A decidir | Histórico** (`rentals:reajustes:visao`). O Histórico (`RentalReajustesHistorico.tsx`) lista todas as decisões, de `reajusteLocacaoService.historicoGeral`, com as colunas:
+  - contrato, locatário, data do reajuste, período, decisão (com a observação no title), %, aluguel anterior → novo, parcelas, quem decidiu (e-mail gravado em `criado_por`) e quando.
+
+  Recorta pelo empreendimento aberto (mesma regra da fila), relê depois de cada decisão e abre a negociação. Os formatos ficam em `reajusteFormatos.ts`, um arquivo só para a fila e o histórico.
+  - **Pronto quando:** `__tests__/reajusteHistoricoGeral.test.ts` passa (número, locatário e negociação da raiz no renovado; recorte pela organização, "Todas" não filtra; mais recente primeiro). tsc e check-ui-standard sem erros. ✅ Falta conferir na tela.

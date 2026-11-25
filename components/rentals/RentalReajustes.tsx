@@ -4,6 +4,9 @@ import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import { KpiCard } from '../ui/KpiCard';
 import ActionIconButton from '../ui/ActionIconButton';
 import ReajusteDecisaoSheet from './ReajusteDecisaoSheet';
+import RentalReajustesHistorico from './RentalReajustesHistorico';
+import { ROTULO_DECISAO, fmtDate, fmtCur, fmtPct } from './reajusteFormatos';
+import { usePersistedState } from '../ui/TableUtils';
 import { reajusteLocacaoService, LinhaDeReajuste, RegistroDeReajuste } from '../../services/reajusteLocacaoService';
 import { Client } from '../../types';
 import { filaDoEmpreendimento } from '../../utils/reajusteAniversario';
@@ -28,21 +31,7 @@ const COLUMNS: StandardTableColumn[] = [
     { key: 'value', label: 'Aluguel atual', sortable: true, width: 140, align: 'right' },
 ];
 
-const ROTULO_DECISAO: Record<RegistroDeReajuste['decisao'], string> = {
-    INDICE: '100% do índice',
-    PERCENTUAL: 'Percentual informado',
-    VALOR: 'Valor informado',
-    NAO_APLICADO: 'Não reajustado',
-};
-
-/** Data BR por split — `new Date(iso)` retrocede um dia em UTC-3. */
-const fmtDate = (iso?: string | null) => {
-    if (!iso) return '—';
-    const [y, m, d] = iso.slice(0, 10).split('-');
-    return `${d}/${m}/${y}`;
-};
-const fmtCur = (n?: number | null) => (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-const fmtPct = (n: number) => `${n >= 0 ? '+' : ''}${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`;
+type Visao = 'fila' | 'historico';
 
 /** Dias de hoje até a data (negativo = já passou), em datas de calendário. */
 const diasAte = (iso: string) => {
@@ -77,6 +66,10 @@ const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpen
     const [decidindo, setDecidindo] = useState<string | null>(null);
     const [aberto, setAberto] = useState<string | null>(null);
     const [historicos, setHistoricos] = useState<Record<string, RegistroDeReajuste[] | 'carregando' | 'falhou'>>({});
+    // "A decidir" (a fila) × "Histórico" (todas as decisões, inclusive de quem já saiu da fila).
+    const [visao, setVisao] = usePersistedState<Visao>('rentals:reajustes:visao', 'fila');
+    /** Sobe a cada decisão gravada — o histórico relê. */
+    const [versaoHistorico, setVersaoHistorico] = useState(0);
 
     const carregar = useCallback(async () => {
         setLoading(true);
@@ -120,13 +113,49 @@ const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpen
     // também já venceu — ex.: 2017 e 2018) ou sair; relê a fila e o histórico dele.
     const aoDecidir = async (mensagem: string, contractId: string) => {
         setDecidindo(null);
+        setVersaoHistorico(v => v + 1);
         onNotify(mensagem, 'success');
         await carregar();
         if (aberto === contractId || historicos[contractId]) carregarHistorico(contractId);
     };
 
+    const seletor = (
+        <div role="radiogroup" aria-label="Visão dos reajustes" className="inline-flex items-center gap-1 p-1 bg-gray-100 rounded-[8px]">
+            {([['fila', `A decidir (${loading ? '…' : linhas.length})`], ['historico', 'Histórico']] as const).map(([id, rotulo]) => (
+                <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={visao === id}
+                    onClick={() => setVisao(id)}
+                    className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                        visao === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                    }`}
+                >
+                    {rotulo}
+                </button>
+            ))}
+        </div>
+    );
+
+    if (visao === 'historico') {
+        return (
+            <div className="space-y-6">
+                {seletor}
+                <RentalReajustesHistorico
+                    organizationId={organizationId}
+                    negociacoesDoEmpreendimento={negociacoesDoEmpreendimento}
+                    nomeDoCliente={nomeDoCliente}
+                    onOpenContract={onOpenContract}
+                    versao={versaoHistorico}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
+            {seletor}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                 <KpiCard size="sm" label="Reajuste vencido" value={vencidos} icon={<CalendarX className="w-4 h-4" />} color="red" />
                 <KpiCard size="sm" label="Reajuste chegando" value={proximos} sub="Dentro do prazo de aviso" icon={<CalendarClock className="w-4 h-4" />} color="amber" />
@@ -229,7 +258,7 @@ const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpen
                                             Não foi possível carregar o histórico. <button type="button" onClick={() => carregarHistorico(l.id)} className="font-medium underline">Tentar de novo</button>
                                         </p>
                                     ) : h.length === 0 ? (
-                                        <p className="text-sm text-gray-500">Nenhum reajuste decidido por aqui ainda.</p>
+                                        <p className="text-sm text-gray-500">Nenhum reajuste decidido por aqui ainda. Os de todos os contratos ficam em "Histórico".</p>
                                     ) : (
                                         <ul className="space-y-1.5">
                                             {h.map(r => (

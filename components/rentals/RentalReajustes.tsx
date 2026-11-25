@@ -6,6 +6,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import ReajusteDecisaoSheet from './ReajusteDecisaoSheet';
 import { reajusteLocacaoService, LinhaDeReajuste, RegistroDeReajuste } from '../../services/reajusteLocacaoService';
 import { Client } from '../../types';
+import { filaDoEmpreendimento } from '../../utils/reajusteAniversario';
 
 /**
  * Locações › Reajustes — o reajuste do aluguel no ANIVERSÁRIO, separado da
@@ -61,10 +62,16 @@ interface Props {
     /** Abre a negociação do contrato (Gerenciar Negociação). */
     onOpenContract?: (contractId: string) => void;
     onNotify: (msg: string, type: 'success' | 'error') => void;
+    /**
+     * Negociações do empreendimento aberto (mesma regra da aba Contratos); null =
+     * fora de um empreendimento, a fila inteira da organização. Pedido de 24/11/2026.
+     */
+    negociacoesDoEmpreendimento?: Set<string> | null;
 }
 
-const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpenContract, onNotify }) => {
-    const [linhas, setLinhas] = useState<LinhaDeReajuste[]>([]);
+const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpenContract, onNotify, negociacoesDoEmpreendimento = null }) => {
+    const [fila, setFila] = useState<LinhaDeReajuste[]>([]);
+    const linhas = useMemo(() => filaDoEmpreendimento(fila, negociacoesDoEmpreendimento), [fila, negociacoesDoEmpreendimento]);
     const [loading, setLoading] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
     const [decidindo, setDecidindo] = useState<string | null>(null);
@@ -75,7 +82,7 @@ const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpen
         setLoading(true);
         setErro(null);
         try {
-            setLinhas(await reajusteLocacaoService.listarFila(organizationId));
+            setFila(await reajusteLocacaoService.listarFila(organizationId));
         } catch (e) {
             setErro(`Não foi possível carregar os reajustes: ${e instanceof Error ? e.message : 'erro desconhecido'}`);
         } finally {
@@ -245,7 +252,9 @@ const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpen
                 empty={{
                     icon: <Percent className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
                     title: 'Nenhum reajuste a decidir',
-                    subtitle: 'Nenhuma locação com aniversário de reajuste vencido ou dentro do prazo de aviso.',
+                    subtitle: negociacoesDoEmpreendimento
+                        ? 'Nenhuma locação deste empreendimento com aniversário de reajuste vencido ou dentro do prazo de aviso.'
+                        : 'Nenhuma locação com aniversário de reajuste vencido ou dentro do prazo de aviso.',
                 }}
             />
 

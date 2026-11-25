@@ -147,3 +147,14 @@ Pedido original: *"na gaveta de reajuste incluir campo para o usuário escolher 
 - [x] 12. Campo "Data do reajuste" na gaveta (Locações › Reajustes › Reajustar), pré-preenchido com o aniversário calculado (data-base + periodicidade) e com "Usar a calculada" quando trocado. A data escolhida vira o aniversário: índice do mês dela, parcelas em aberto a partir dela, data-base nova = ela, próximo = ela + periodicidade, e é a data gravada no histórico.
   - Validação (`motivoDaDataDeReajuste`, também no `decidir`): depois da data-base e até o fim da vigência; fora disso o botão fica desligado e diz o motivo.
   - **Pronto quando:** testes de `reajusteAniversario` e `reajusteLocacaoService` cobrem data escolhida (CTL-006: 15/10/2017 → 2 parcelas, próximo 15/10/2018) e data recusada sem gravar; tsc e check-ui-standard limpos. ✅ Conferência na tela: pendente (precisa do login do usuário).
+
+## Fase 4 — Reajustes recortado pelo empreendimento aberto (24/11/2026)
+
+Pedido original: *"Corrigir a aba reajuste: Inves de listar os lacatorias referentes ao respectivo empreedimento esta trazendo todos"*
+
+Causa: dentro de um empreendimento (Gestão de Unidades), a aba Contratos filtra pelo edifício aberto (`selectedBuildingId`). A aba Reajustes recebia só a organização e listava os contratos de todos os empreendimentos.
+
+- [x] 13. A regra "contrato do edifício aberto" saiu de dentro de `sortedDeals` e foi para `dealsDoEdificio`, em `components/RentalsModule.tsx`, valendo para as duas abas. A aba Reajustes recebe `negociacoesDoEmpreendimento` e filtra a fila com `filaDoEmpreendimento`. Os indicadores (vencido e chegando) contam a lista já filtrada.
+  - O contrato renovado não tem `deal_id`: `listarFila` sobe a cadeia por `parent_contract_id` (`negociacaoDaCadeia`). Sem isso, o renovado sumiria da lista dentro do empreendimento.
+  - **Pronto quando:** `__tests__/reajusteFilaPorEmpreendimento.test.ts` cobre a cadeia (renovado e renovado do renovado, laço, sem negociação) e o filtro (fora do empreendimento = tudo; dentro = só os dele; empreendimento sem negociação = vazio). tsc e check-ui-standard sem erros. ✅ Falta conferir na tela.
+- Observado: a aba **Renovações** (`RentalRenewals`) também recebe só a organização. Não foi mexida neste pedido.

@@ -3,7 +3,7 @@ import { contractIndexService, normalizeIndexName } from './contractIndexService
 import { taxPayableService } from './taxPayableService';
 import type { PropertyDeal } from '../types';
 import {
-    aniversarioDoReajuste, valorAposReajuste, entraNaFilaDeReajuste, motivoDaDataDeReajuste,
+    aniversarioDoReajuste, valorAposReajuste, entraNaFilaDeReajuste, motivoDaDataDeReajuste, negociacaoDaCadeia,
     AniversarioReajuste, DecisaoReajuste,
 } from '../utils/reajusteAniversario';
 
@@ -24,7 +24,7 @@ const AVISO_PADRAO_DIAS = 30;
 const COLUNAS_CONTRATO =
     'id, organization_id, number, title, client_id, deal_id, domain, status, is_recurring, start_date, end_date, '
     + 'current_value, original_value, reajuste_index, reajuste_data_base, reajuste_proximo, '
-    + 'reajuste_periodicidade_meses, reajuste_aviso_dias';
+    + 'reajuste_periodicidade_meses, reajuste_aviso_dias, parent_contract_id';
 
 export interface ContratoReajustavel {
     id: string;
@@ -45,12 +45,38 @@ export interface ContratoReajustavel {
     reajuste_proximo: string | null;
     reajuste_periodicidade_meses: number | null;
     reajuste_aviso_dias: number | null;
+    /** Renovado aponta para o contrato anterior e não tem deal_id. */
+    parent_contract_id: string | null;
 }
 
 /** Linha da fila (o contrato + o aniversário calculado + o aviso efetivo). */
 export interface LinhaDeReajuste extends ContratoReajustavel {
     aniversario: AniversarioReajuste;
     avisoDias: number;
+    /** Negociação do contrato (a da raiz, no renovado) — recorta a fila pelo empreendimento. */
+    negociacaoId: string | null;
+}
+
+/**
+ * Sobe a cadeia de renovação dos contratos sem deal_id, lendo os pais que faltam
+ * (um nível por ida; para em 10 — renovação de renovação de…).
+ */
+async function cadeiaDosContratos(
+    contratos: ContratoReajustavel[],
+): Promise<Map<string, { deal_id: string | null; parent_contract_id: string | null }>> {
+    const mapa = new Map(contratos.map(c => [c.id, { deal_id: c.deal_id, parent_contract_id: c.parent_contract_id }]));
+    for (let nivel = 0; nivel < 10; nivel++) {
+        const faltam = [...new Set([...mapa.values()]
+            .filter(c => !c.deal_id && c.parent_contract_id && !mapa.has(c.parent_contract_id))
+            .map(c => c.parent_contract_id as string))];
+        if (faltam.length === 0) break;
+        const { data, error } = await supabase.from('contracts').select('id, deal_id, parent_contract_id').in('id', faltam);
+        if (error) throw error;
+        const lidos = (data ?? []) as { id: string; deal_id: string | null; parent_contract_id: string | null }[];
+        if (lidos.length === 0) break;
+        for (const c of lidos) mapa.set(c.id, { deal_id: c.deal_id, parent_contract_id: c.parent_contract_id });
+    }
+    return mapa;
 }
 
 export interface PreviaReajuste {
@@ -153,13 +179,18 @@ export const reajusteLocacaoService = {
         if (error) throw error;
         const contratos = ((data ?? []) as unknown as ContratoReajustavel[])
             .filter(c => c.reajuste_index && c.reajuste_index !== 'Sem Reajuste');
-        const padroes = await avisoPadraoDasOrgs([...new Set(contratos.map(c => c.organization_id))]);
+        const [padroes, cadeia] = await Promise.all([
+            avisoPadraoDasOrgs([...new Set(contratos.map(c => c.organization_id))]),
+            cadeiaDosContratos(contratos),
+        ]);
         const hoje = hojeISO();
         const linhas: LinhaDeReajuste[] = [];
         for (const c of contratos) {
             const avisoDias = c.reajuste_aviso_dias ?? padroes.get(c.organization_id) ?? AVISO_PADRAO_DIAS;
             const aniversario = aniversarioDoReajuste(c);
-            if (aniversario && entraNaFilaDeReajuste(c, avisoDias, hoje)) linhas.push({ ...c, aniversario, avisoDias });
+            if (aniversario && entraNaFilaDeReajuste(c, avisoDias, hoje)) {
+                linhas.push({ ...c, aniversario, avisoDias, negociacaoId: negociacaoDaCadeia(c.id, cadeia) });
+            }
         }
         return linhas;
     },

@@ -15,7 +15,7 @@ const svc = vi.hoisted(() => ({
   daPlanta: { current: null as null | TerrenoDaPlanta },
 }));
 vi.mock('../../services/empreendimentoService', () => ({
-  empreendimentoService: { listTowers: vi.fn(async () => []), update: svc.update },
+  empreendimentoService: { listTowers: vi.fn(async () => []), listFloorsDasTorres: vi.fn(async () => []), listUnits: vi.fn(async () => []), update: svc.update },
 }));
 vi.mock('../../services/blueprintTerrenoDaPlanta', () => ({
   terrenoDaPlantaVinculada: vi.fn(async () => svc.daPlanta.current),
@@ -44,6 +44,9 @@ const PLANTA_OK: TerrenoDaPlanta = {
 const montar = (emp = GARDEN) =>
   render(<TowerEditor empreendimentoId={emp.id} organizationId={emp.organization_id} empreendimento={emp as never} />);
 const campo = (rotulo: string) => screen.getByLabelText(rotulo) as HTMLInputElement;
+/** Sub-abas desde 25/11/2026 (docs/planos/2026-11-25-torres-unidades-sub-abas.md): a escolha fica no navegador. */
+const abrirAba = (nome: string) => fireEvent.click(screen.getByRole('tab', { name: new RegExp(nome) }));
+beforeEach(() => localStorage.clear());
 
 describe('Torres & Unidades › Terreno × Planta vinculada', () => {
   beforeEach(() => {
@@ -113,17 +116,17 @@ describe('Torres & Unidades › Terreno × Planta vinculada', () => {
   });
 });
 
-describe('Torres & Unidades › seções em blocos (28/10/2026, "separe as sessões Terreno e torres")', () => {
-  it('Terreno e Torres são blocos separados, um não contém o outro', async () => {
+describe('Torres & Unidades › Terreno e Torres em sub-abas (28/10/2026 blocos separados; 25/11/2026 sub-abas)', () => {
+  it('abre em Terreno; a aba Torres mostra só as torres', async () => {
     svc.daPlanta.current = PLANTA_OK;
     montar();
     const terreno = await screen.findByTestId('secao-terreno');
-    const torres = screen.getByTestId('secao-torres');
     expect(terreno).toHaveAttribute('aria-label', 'Terreno');
+    expect(screen.queryByTestId('secao-torres')).not.toBeInTheDocument();
+    abrirAba('Torres');
+    const torres = await screen.findByTestId('secao-torres');
     expect(torres).toHaveAttribute('aria-label', 'Torres');
-    expect(terreno.contains(torres)).toBe(false);
-    expect(torres.contains(terreno)).toBe(false);
-    expect(terreno.className).toContain('border');
+    expect(screen.queryByTestId('secao-terreno')).not.toBeInTheDocument();
     expect(torres.className).toContain('border');
   });
 });
@@ -140,6 +143,7 @@ describe('Torres & Unidades › distância entre torres (28/10/2026)', () => {
     onTestFinished(() => listTowers.mockImplementation(async () => []));
     svc.update.mockClear();
     montar({ ...GARDEN, distancias_entre_torres: [{ torre_a: 'tA', torre_b: 'tB', distancia_m: 6 }] } as never);
+    abrirAba('Torres');
     const campo = (await screen.findByLabelText('Torre A ↔ Torre B (m)', {}, { timeout: 5000 })) as HTMLInputElement;
     expect(campo.value).toBe('6,00');
     fireEvent.change(campo, { target: { value: '8,5' } });
@@ -149,6 +153,7 @@ describe('Torres & Unidades › distância entre torres (28/10/2026)', () => {
 
   it('uma torre só: o bloco de distâncias não aparece', async () => {
     montar();
+    abrirAba('Torres');
     await screen.findByTestId('secao-torres');
     expect(screen.queryByTestId('distancias-entre-torres')).not.toBeInTheDocument();
   });

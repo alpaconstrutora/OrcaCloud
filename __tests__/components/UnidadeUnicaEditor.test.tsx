@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const svc = vi.hoisted(() => ({
   listTowers: vi.fn(async (): Promise<unknown[]> => []),
   listUnits: vi.fn(async (): Promise<unknown[]> => []),
+  listFloorsDasTorres: vi.fn(async (): Promise<unknown[]> => []),
   update: vi.fn(async () => ({})),
   salvarUnidadeUnica: vi.fn(async (_id: string, criar: { nomeDaTorre: string; nomeDaUnidade: string }, campos: Record<string, unknown>) => ({
     tower: { id: 't1', name: criar.nomeDaTorre },
@@ -28,6 +29,7 @@ const montar = (estrutura: keyof typeof NOME_PADRAO, nomeDoTipo: string = NOME_P
   render(<UnidadeUnicaEditor empreendimentoId="emp-1" organizationId="org-1" empreendimento={EMP as never} estrutura={estrutura} nomeDoTipo={nomeDoTipo} />);
 
 describe('UnidadeUnicaEditor', () => {
+  beforeEach(() => localStorage.clear());
   beforeEach(() => {
     Object.values(svc).forEach(f => f.mockClear());
     svc.listTowers.mockResolvedValue([]);
@@ -142,6 +144,8 @@ describe('UnidadeUnicaEditor', () => {
     svc.listTowers.mockResolvedValue([{ id: 't1', name: 'Torre A' }, { id: 't2', name: 'Torre B' }]);
     montar('LOTE');
     expect(await screen.findByTestId('unidade-unica-fora-do-molde')).toHaveTextContent(/2 torre\(s\)/);
+    // Torres & Unidades em sub-abas desde 25/11/2026: abre em Terreno; as torres estão na aba Torres.
+    fireEvent.click(await screen.findByRole('tab', { name: /Torres/ }));
     expect(await screen.findByTestId('secao-torres')).toBeInTheDocument();
     expect(svc.salvarUnidadeUnica).not.toHaveBeenCalled();
   });

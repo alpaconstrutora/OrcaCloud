@@ -4,13 +4,20 @@
 // casca visual da Viabilidade e (futuramente) do Planta IA. O miolo aqui é FloorEditor +
 // UnitEditor (unidade individual real); nos outros módulos o miolo difere, a casca não.
 //
-// Estrutura (desde 14/10/2026 — "confuso com campos sem uma ordem, sem separação clara"):
-//   Terreno   — <TerrenoSecao> (a mesma da aba de unidade única: Lote, Casa, Chácara)
-//   Torres    — título §30 + "Nova torre" (painel lateral) + cards
-//     └ card  — Pavimentos (FloorEditor) · Unidades (UnitEditor)
-// Plano e decisões: docs/planos/2026-10-14-torres-unidades-reorganizacao.md.
+// Estrutura em SUB-ABAS desde 25/11/2026 ("tela longa com tabela em cima de tabela" —
+// docs/planos/2026-11-25-torres-unidades-sub-abas.md; antes, docs/planos/2026-10-14-torres-unidades-reorganizacao.md):
+//   Terreno         — <TerrenoSecao> (a mesma da Visão Geral e da aba de unidade única)
+//   Torres          — "Nova torre" + cards (o card abre os Pavimentos) · distância entre torres · total geral
+//   Unidades        — seletor de torre + <UnitEditor> de UMA torre
+//   Vista da janela — seletor de torre + <VistasDaTorreSecao>
+//   Tipologias      — Plantas por tipologia + Decorado por tipologia
+// Sem o empreendimento em mãos (estudos), só Torres e Unidades. Pavimentos e unidades de todas as torres são
+// carregados aqui (antes, só ao abrir a torre): cada aba precisa deles sem passar pelas outras.
 import React from 'react';
-import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, MoveHorizontal } from 'lucide-react';
+import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, MoveHorizontal, MapPin, Home, Mountain, LayoutGrid } from 'lucide-react';
+import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
+import { usePersistedState } from '../ui/TableUtils';
+import { haPendenciaDeSaida, CONFIRMAR_SAIDA } from '../../lib/guardaDeSaida';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import ActionIconButton from '../ui/ActionIconButton';
 import Button from '../ui/Button';
@@ -57,6 +64,8 @@ interface Props {
 // Pé-direito padrão (27/10/2026): metros, opcional — vale para os pavimentos sem pé-direito próprio e para a torre
 // sem cadastro de pavimentos (a massa da Planta lê os dois).
 // Elevação do térreo (27/10/2026): a referência das elevações dos pavimentos (+0,00 ou a cota altimétrica); vazio = 0.
+type SubAba = 'terreno' | 'torres' | 'unidades' | 'vista' | 'tipologias';
+
 const emptyTorreForm = () => ({ name: '', floors_count: '', units_per_floor: '', pe_direito_padrao_m: '', elevacao_terreo_m: '' });
 const MSG_PE_DIREITO_TORRE = 'Pé-direito padrão entre 2,00 e 15,00 m (ou vazio).';
 const MSG_ELEVACAO_TORRE = 'Elevação do térreo em metros, ex.: +0,00 ou 745,30 (ou vazio, para 0).';
@@ -156,7 +165,23 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
   const load = React.useCallback(async () => {
     setLoading(true);
     try {
-      setTowers(await empreendimentoService.listTowers(empreendimentoId));
+      const lista = await empreendimentoService.listTowers(empreendimentoId);
+      setTowers(lista);
+      // Pavimentos e unidades de todas as torres já na entrada (25/11/2026): a aba Unidades precisa dos pavimentos
+      // (Gerar a partir dos pavimentos, elevação), a Vista das unidades, e o card fechado mostra as contagens.
+      // Falha aqui não derruba as torres: cada editor carrega o seu ao montar e avisa por callback.
+      const ids = lista.map(t => t.id);
+      // `Promise.resolve().then`: erro síncrono também cai no catch, não no das torres.
+      const [pavimentos, unidades] = await Promise.all([
+        Promise.resolve().then(() => empreendimentoService.listFloorsDasTorres(ids))
+          .catch(err => { console.error('[TowerEditor] pavimentos:', err); return null; }),
+        Promise.resolve().then(() => Promise.all(ids.map(id => empreendimentoService.listUnits(id))))
+          .catch(err => { console.error('[TowerEditor] unidades:', err); return null; }),
+      ]);
+      if (pavimentos) {
+        setFloorsByTower(Object.fromEntries(ids.map(id => [id, pavimentos.filter(f => f.tower_id === id)])));
+      }
+      if (unidades) setUnitsByTower(Object.fromEntries(ids.map((id, i) => [id, unidades[i]])));
     } catch (err) {
       console.error('[TowerEditor] erro ao carregar torres:', err);
     } finally {
@@ -247,6 +272,9 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
     try {
       await empreendimentoService.deleteTower(tower.id);
       setTowers(prev => prev.filter(t => t.id !== tower.id));
+      // As unidades e os pavimentos dela saem das contagens (total geral, seletor de torre).
+      setUnitsByTower(({ [tower.id]: _u, ...resto }) => resto);
+      setFloorsByTower(({ [tower.id]: _f, ...resto }) => resto);
     } catch (err: any) {
       notify(`Erro ao excluir torre: ${err.message}`, 'error');
     }
@@ -261,15 +289,93 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
   // Pavimentos e Unidades dentro de cada torre.
   const blocoCls = 'rounded-[10px] border border-gray-200 bg-white p-5 space-y-4';
 
+  // ── Sub-abas (25/11/2026) ──────────────────────────────────────────────────
+  // Terreno, Vista e Tipologias só com o empreendimento em mãos (nos estudos ele não vem — a mesma condição de
+  // antes); Unidades, Vista e Tipologias só com torre. Enquanto as torres carregam, conta como "tem torre": a
+  // aba gravada não pisca para outra e volta.
+  const temTorre = loading || towers.length > 0;
+  const abas: TabsBarItem<SubAba>[] = [
+    ...(empreendimento ? [{ id: 'terreno' as const, label: 'Terreno', icon: <MapPin className="w-3.5 h-3.5" /> }] : []),
+    { id: 'torres', label: 'Torres', icon: <Building className="w-3.5 h-3.5" />, badge: towers.length || undefined, badgeTitulo: 'Torres cadastradas' },
+    ...(temTorre ? [{
+      id: 'unidades' as const, label: 'Unidades', icon: <Home className="w-3.5 h-3.5" />,
+      badge: Object.values(unitsByTower).reduce((s, us) => s + us.length, 0) || undefined, badgeTitulo: 'Unidades de todas as torres',
+    }] : []),
+    ...(empreendimento && temTorre ? [
+      { id: 'vista' as const, label: 'Vista da janela', icon: <Mountain className="w-3.5 h-3.5" /> },
+      { id: 'tipologias' as const, label: 'Tipologias', icon: <LayoutGrid className="w-3.5 h-3.5" /> },
+    ] : []),
+  ];
+  // A escolha fica no navegador; a 1ª visita abre na 1ª aba (Terreno — o que ficava no topo até 25/11/2026).
+  // Aba gravada que não existe aqui (ex.: Vista num estudo) cai na 1ª disponível.
+  const [abaGravada, setAbaGravada] = usePersistedState<SubAba>('empreendimentoTorres:aba', 'terreno');
+  const aba: SubAba = abas.some(a => a.id === abaGravada) ? abaGravada : abas[0].id;
+  // A mesma guarda da troca de aba do empreendimento: o que está aberto desmonta ao trocar.
+  const podeTrocar = async () => !haPendenciaDeSaida() || confirm(CONFIRMAR_SAIDA);
+  const trocarAba = async (nova: SubAba) => { if (nova !== aba && await podeTrocar()) setAbaGravada(nova); };
+
+  // Torre exibida em Unidades e Vista da janela (a 1ª até o usuário escolher).
+  const [torreId, setTorreId] = React.useState<string | null>(null);
+  const torreAtual = towers.find(t => t.id === torreId) ?? towers[0];
+  const trocarTorre = async (id: string) => { if (id !== torreAtual?.id && await podeTrocar()) setTorreId(id); };
+  const seletorDeTorre = towers.length > 1 && torreAtual && (
+    <div className="flex flex-wrap items-center gap-2" data-testid="seletor-de-torre">
+      <span className="text-sm font-semibold text-slate-600">Torre</span>
+      <div className="flex flex-wrap gap-1" role="group" aria-label="Torre exibida">
+        {towers.map(t => {
+          const n = unitsByTower[t.id]?.length;
+          const ativa = t.id === torreAtual.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              aria-pressed={ativa}
+              onClick={() => void trocarTorre(t.id)}
+              className={`h-9 px-3 rounded-[6px] border text-sm font-medium transition-colors ${
+                ativa ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200 hover:text-blue-600'
+              }`}
+            >
+              {t.name}{n != null ? ` · ${n}` : ''}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+  const carregando = <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>;
+
   return (
     <div className="space-y-6">
-      {/* Terreno — dado do empreendimento (não de uma torre), 1 por empreendimento. Só com o empreendimento
-          em mãos: nas telas de estudo ele não vem e a seção mostraria campos vazios. Mora em TerrenoSecao desde
-          09/11/2026 (a aba de unidade única usa a mesma). */}
-      {empreendimento && (
+      {/* Trilho só (bare): a aba Torres & Unidades já é um card. */}
+      <TabsBar bare tabs={abas} value={aba} onChange={id => void trocarAba(id)} />
+
+      {/* Terreno — dado do empreendimento (não de uma torre), 1 por empreendimento. Mora em TerrenoSecao desde
+          09/11/2026 (a Visão Geral e a aba de unidade única usam a mesma). */}
+      {aba === 'terreno' && empreendimento && (
         <TerrenoSecao empreendimentoId={empreendimentoId} empreendimento={empreendimento} onTerrenoSaved={onTerrenoSaved} somenteLeitura={somenteLeitura} />
       )}
 
+      {/* Unidades — uma torre por vez: com 200 unidades por torre, as tabelas empilhadas viravam uma página sem fim. */}
+      {aba === 'unidades' && (loading ? carregando : torreAtual && (
+        <section className={blocoCls} aria-label="Unidades" data-testid="secao-unidades">
+          {seletorDeTorre}
+          <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 m-0 p-0">
+            <UnitEditor key={torreAtual.id} tower={torreAtual} floors={floorsByTower[torreAtual.id]} onUnitsChange={handleUnitsChange} onTowerChange={handleTowerChange} />
+          </fieldset>
+        </section>
+      ))}
+
+      {/* Vista da janela (Espelho de Vendas 3D, F6 — 10/11/2026), por torre. */}
+      {aba === 'vista' && empreendimento && (loading ? carregando : torreAtual && (
+        <section className={blocoCls} aria-label="Vista da janela" data-testid="secao-vistas">
+          {seletorDeTorre}
+          <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 m-0 p-0">
+            <VistasDaTorreSecao key={torreAtual.id} towerId={torreAtual.id} towerName={torreAtual.name} empreendimentoId={empreendimentoId} organizationId={organizationId} somenteLeitura={somenteLeitura} unidadesDaTorre={unitsByTower[torreAtual.id]} />
+          </fieldset>
+        </section>
+      ))}
+
+      {aba === 'torres' && (
       <section className={blocoCls} aria-label="Torres" data-testid="secao-torres">
         <SecaoTitulo
           icon={Building}
@@ -366,20 +472,11 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                 isOpen={isOpen}
                 onToggle={() => setExpandedId(isOpen ? null : tower.id)}
               >
-                {/* Cada seção no seu bloco (27/10/2026, "separar cada seção para melhorar a organização"). */}
+                {/* O card abre só os Pavimentos: Unidades e Vista da janela têm sub-aba própria (25/11/2026). */}
                 <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 m-0 p-4 space-y-4">
                   <section className="rounded-[10px] border border-gray-200 bg-white p-4" aria-label="Pavimentos" data-testid="secao-pavimentos">
                     <FloorEditor tower={tower} onFloorsChange={handleFloorsChange} unidades={unitsByTower[tower.id]} />
                   </section>
-                  <section className="rounded-[10px] border border-gray-200 bg-white p-4" aria-label="Unidades" data-testid="secao-unidades">
-                    <UnitEditor tower={tower} floors={floorsByTower[tower.id]} onUnitsChange={handleUnitsChange} onTowerChange={handleTowerChange} />
-                  </section>
-                  {/* Vista da janela (Espelho de Vendas 3D, F6 — 10/11/2026): só com o empreendimento em mãos. */}
-                  {empreendimento && (
-                    <section className="rounded-[10px] border border-gray-200 bg-white p-4" aria-label="Vista da janela" data-testid="secao-vistas">
-                      <VistasDaTorreSecao towerId={tower.id} towerName={tower.name} empreendimentoId={empreendimentoId} organizationId={organizationId} somenteLeitura={somenteLeitura} unidadesDaTorre={unitsByTower[tower.id]} />
-                    </section>
-                  )}
                 </fieldset>
               </TorreCard>
             );
@@ -444,9 +541,10 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
       })()}
 
       </section>
+      )}
 
-      {/* Plantas por tipologia (Espelho de Vendas 3D, F5 — 10/11/2026): só com o empreendimento em mãos e torre cadastrada. */}
-      {empreendimento && towers.length > 0 && (
+      {/* Tipologias: Plantas por tipologia (Espelho de Vendas 3D, F5) e Decorado por tipologia (F8) — 10/11/2026. */}
+      {aba === 'tipologias' && empreendimento && towers.length > 0 && (
         <PlantasPorTipologiaSecao
           empreendimentoId={empreendimentoId}
           organizationId={organizationId}
@@ -456,8 +554,8 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
         />
       )}
 
-      {/* Decorado por tipologia (Espelho de Vendas 3D, F8 — 10/11/2026): o corte 3D mobiliado e os ambientes. */}
-      {empreendimento && towers.length > 0 && (
+      {/* Decorado por tipologia: o corte 3D mobiliado e os ambientes. */}
+      {aba === 'tipologias' && empreendimento && towers.length > 0 && (
         <DecoradoPorTipologiaSecao
           empreendimentoId={empreendimentoId}
           organizationId={organizationId}
@@ -507,7 +605,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                   onChange={e => patchTorre({ elevacao_terreo_m: e.target.value })} />
               </div>
               <p className="col-span-2 text-xs text-gray-500">
-                Depois de criar, cadastre os pavimentos e as unidades dentro do card da torre.
+                Depois de criar, cadastre os pavimentos no card da torre e as unidades na aba Unidades.
               </p>
             </div>
           </SheetPanel>

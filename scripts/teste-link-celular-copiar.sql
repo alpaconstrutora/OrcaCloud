@@ -1,6 +1,6 @@
 -- scripts/teste-link-celular-copiar.sql
 -- Prova do "Copiar link" do link do celular
--- (aplicar_20271125600000_link_celular_copiar.sql; plano
+-- (aplicar_20271125700000_link_celular_copiar.sql; plano
 -- docs/planos/2026-11-11-link-celular-tarefas-diario.md, seção "Copiar link ativo").
 --
 -- BEGIN … ROLLBACK: não grava nada. Falha = RAISE EXCEPTION 'FALHOU: …';

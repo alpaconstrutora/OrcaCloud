@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { AlertTriangle, Info } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
-import { reajusteLocacaoService, PreviaReajuste } from '../../services/reajusteLocacaoService';
+import { reajusteLocacaoService, PreviaReajuste, RegistroDeReajuste } from '../../services/reajusteLocacaoService';
 import { valorAposReajuste, motivoDaDataDeReajuste, DecisaoReajuste } from '../../utils/reajusteAniversario';
 
 /**
@@ -11,6 +11,10 @@ import { valorAposReajuste, motivoDaDataDeReajuste, DecisaoReajuste } from '../.
  * 24/11/2026. A data do reajuste vem pré-preenchida com a calculada e pode ser
  * trocada (pedido do mesmo dia); índice, parcelas e próximo reajuste seguem a
  * data escolhida. A regra mora em reajusteLocacaoService/utils/reajusteAniversario.
+ *
+ * Com `substitui` é o Editar do Histórico (pedido de 25/11/2026): a gaveta abre
+ * preenchida com a decisão, a prévia parte do contrato de ANTES dela, e salvar
+ * desfaz a anterior e grava esta no lugar.
  */
 
 const fmtDate = (iso?: string | null) => {
@@ -34,9 +38,11 @@ interface Props {
     /** Depois de gravar: mensagem para o aviso e o contrato que mudou. */
     onDecidido: (mensagem: string, contractId: string) => void;
     onErro: (mensagem: string) => void;
+    /** Editar: a decisão que esta substitui (a última do contrato). */
+    substitui?: RegistroDeReajuste | null;
 }
 
-const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido, onErro }) => {
+const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido, onErro, substitui = null }) => {
     const [previa, setPrevia] = useState<PreviaReajuste | null>(null);
     const [carregando, setCarregando] = useState(false);
     const [falha, setFalha] = useState<string | null>(null);
@@ -56,18 +62,27 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
         setPrevia(null); setFalha(null); setCarregando(true);
         setPercentual(''); setValor(''); setObservacao('');
         setDataReajuste(''); setDataCalculada(null);
-        reajusteLocacaoService.previa(contractId)
+        reajusteLocacaoService.previa(contractId, null, substitui)
             .then(p => {
                 if (!vivo) return;
                 setPrevia(p);
                 setDataCalculada(p.aniversario.aniversario);
-                setDataReajuste(p.aniversario.aniversario);
-                setTipo(p.fatorIndice ? 'INDICE' : 'PERCENTUAL');
+                if (substitui) {
+                    // Editar: a decisão gravada, como estava (a data troca → a prévia refaz).
+                    setDataReajuste(substitui.aniversario);
+                    setTipo(substitui.decisao === 'INDICE' && !p.fatorIndice ? 'PERCENTUAL' : substitui.decisao);
+                    if (substitui.decisao === 'PERCENTUAL') setPercentual(String(Number(substitui.percentual_aplicado)));
+                    if (substitui.decisao === 'VALOR') setValor(Number(substitui.valor_novo).toFixed(2));
+                    setObservacao(substitui.observacao ?? '');
+                } else {
+                    setDataReajuste(p.aniversario.aniversario);
+                    setTipo(p.fatorIndice ? 'INDICE' : 'PERCENTUAL');
+                }
             })
             .catch(e => { if (vivo) setFalha(e instanceof Error ? e.message : 'Não foi possível calcular o reajuste.'); })
             .finally(() => { if (vivo) setCarregando(false); });
         return () => { vivo = false; };
-    }, [contractId]);
+    }, [contractId, substitui]);
 
     const motivoData = previa ? motivoDaDataDeReajuste(previa.contrato, dataReajuste) : null;
 
@@ -76,7 +91,7 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
         if (!contractId || !previa || motivoData || dataReajuste === previa.aniversario.aniversario) return;
         let vivo = true;
         setRecalculando(true);
-        reajusteLocacaoService.previa(contractId, dataReajuste)
+        reajusteLocacaoService.previa(contractId, dataReajuste, substitui)
             .then(p => {
                 if (!vivo) return;
                 setPrevia(p);
@@ -87,7 +102,7 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
         return () => { vivo = false; };
     // onErro fora das dependências: o pai recria a função a cada render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [contractId, previa, motivoData, dataReajuste]);
+    }, [contractId, previa, motivoData, dataReajuste, substitui]);
 
     const decisao: DecisaoReajuste | null = useMemo(() => {
         if (tipo === 'INDICE' || tipo === 'NAO_APLICADO') return { tipo };
@@ -113,9 +128,10 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
         if (!contractId || !decisao || motivoNaoGrava) return;
         setGravando(true);
         try {
-            const { contrato, registro, tributosRecalculados } = await reajusteLocacaoService.decidir(contractId, decisao, observacao, dataReajuste);
+            const { contrato, registro, tributosRecalculados } = await reajusteLocacaoService.decidir(contractId, decisao, observacao, dataReajuste, substitui);
             onDecidido(
-                (registro.decisao === 'NAO_APLICADO'
+                (substitui ? `Decisão de ${fmtDate(substitui.aniversario)} desfeita e substituída. ` : '')
+                + (registro.decisao === 'NAO_APLICADO'
                     ? `Reajuste de ${fmtDate(registro.aniversario)} do contrato ${contrato.number} registrado sem reajuste.`
                     : `Contrato ${contrato.number} reajustado para ${fmtCur(registro.valor_novo)} (${fmtPct(registro.percentual_aplicado)}); ${registro.parcelas_atualizadas} parcela(s) atualizada(s).`)
                 + (tributosRecalculados ? '' : ' Os tributos não foram recalculados — salve a negociação para refazê-los.'),
@@ -144,7 +160,7 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
     return (
         <Sheet open={!!contractId} onClose={onClose} size="lg">
             <SheetHeader onClose={onClose}>
-                <SheetTitle>Reajuste {previa ? `do contrato ${previa.contrato.number}` : ''}</SheetTitle>
+                <SheetTitle>{substitui ? 'Editar reajuste' : 'Reajuste'} {previa ? `do contrato ${previa.contrato.number}` : ''}</SheetTitle>
                 <SheetDescription>
                     {a ? `Aniversário em ${fmtDate(a.aniversario)} · período de ${fmtDate(a.dataBase)} a ${fmtDate(a.aniversario)}` : 'Calculando…'}
                 </SheetDescription>
@@ -162,8 +178,17 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
                     </div>
                 ) : previa && (
                     <div className="space-y-6">
+                        {substitui && (
+                            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 text-amber-800 rounded-[10px] p-4 text-sm">
+                                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                                <span>
+                                    Ao salvar, a decisão de {fmtDate(substitui.aniversario)} ({fmtCur(substitui.valor_anterior)} → {fmtCur(substitui.valor_novo)}) é desfeita
+                                    e esta grava no lugar. Parcelas já pagas não mudam.
+                                </span>
+                            </div>
+                        )}
                         <div className="bg-white rounded-[10px] border border-gray-200 px-4 py-3">
-                            <p className="text-sm font-semibold text-gray-900">Aluguel atual: {fmtCur(previa.valorAtual)}</p>
+                            <p className="text-sm font-semibold text-gray-900">{substitui ? 'Aluguel antes da decisão' : 'Aluguel atual'}: {fmtCur(previa.valorAtual)}</p>
                             <p className="text-xs text-gray-500 mt-1">
                                 {previa.indice ?? 'Sem índice'} · próximo aniversário depois deste: {fmtDate(a?.proximo)}
                                 {previa.contrato.end_date ? ` · vigência até ${fmtDate(previa.contrato.end_date)}` : ''}
@@ -273,7 +298,7 @@ const ReajusteDecisaoSheet: React.FC<Props> = ({ contractId, onClose, onDecidido
                         disabled={!!motivoNaoGrava}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
-                        {gravando ? 'Gravando…' : tipo === 'NAO_APLICADO' ? 'Registrar sem reajuste' : 'Aplicar reajuste'}
+                        {gravando ? 'Gravando…' : substitui ? 'Salvar alteração' : tipo === 'NAO_APLICADO' ? 'Registrar sem reajuste' : 'Aplicar reajuste'}
                     </button>
                 </span>
             </SheetFooter>

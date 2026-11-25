@@ -76,13 +76,14 @@ export interface PreviaReajuste {
 /** Uma decisão do histórico geral (Locações › Reajustes › Histórico). */
 export interface RegistroComContrato extends RegistroDeReajuste {
     contract_id: string;
-    contrato: { number: string; title: string | null; client_id: string | null };
+    contrato: { number: string; title: string | null; client_id: string | null; status: string | null };
     /** Negociação do contrato (a da raiz, no renovado) — recorta pelo empreendimento. */
     negociacaoId: string | null;
 }
 
 const COLUNAS_REGISTRO = 'id, aniversario, data_base, indice, indice_mes_base, indice_mes_atual, percentual_indice, decisao, '
-    + 'percentual_aplicado, valor_anterior, valor_novo, parcelas_atualizadas, observacao, criado_por, created_at';
+    + 'percentual_aplicado, valor_anterior, valor_novo, parcelas_atualizadas, observacao, criado_por, created_at, '
+    + 'indice_valor_base, indice_valor_atual, proximo_anterior, desfeito_em, desfeito_por';
 
 export interface RegistroDeReajuste {
     id: string;
@@ -100,6 +101,13 @@ export interface RegistroDeReajuste {
     observacao: string | null;
     criado_por: string | null;
     created_at: string;
+    indice_valor_base?: number | null;
+    indice_valor_atual?: number | null;
+    /** reajuste_proximo do contrato antes da decisão (null nas decisões antigas). */
+    proximo_anterior?: string | null;
+    /** Decisão desfeita (Histórico › Excluir) — a linha fica, marcada. */
+    desfeito_em?: string | null;
+    desfeito_por?: string | null;
 }
 
 const hojeISO = () => {
@@ -132,6 +140,67 @@ async function parcelasEmAbertoDesde(c: ContratoReajustavel, desde: string): Pro
     return (data ?? []) as { id: string; amount: number }[];
 }
 
+/**
+ * Tributos incidem sobre o valor da parcela: parcela que mudou sem regerar deixa
+ * Tributos a Pagar (e a coluna Tributos da aba Parcelas) no valor antigo. Mesma
+ * regeração do Salvar da negociação — pagos e DARF ficam. false = não regerou.
+ */
+async function regerarTributos(c: ContratoReajustavel): Promise<boolean> {
+    if (!c.deal_id) return true;
+    try {
+        const { data: deal, error } = await supabase
+            .from('commercial_deals')
+            .select('id, type, property_id')
+            .eq('id', c.deal_id)
+            .single();
+        if (error) throw error;
+        await taxPayableService.generateForDeal(deal as Pick<PropertyDeal, 'id' | 'type' | 'property_id'>, c.organization_id);
+        return true;
+    } catch (e) {
+        console.error('[REAJUSTE] Parcelas mudaram, mas os tributos não foram regerados:', e);
+        return false;
+    }
+}
+
+/** O que impede gravar a decisão sobre esta prévia (lança com o motivo). */
+function validarDecisao(p: PreviaReajuste, decisao: DecisaoReajuste, dataReajuste?: string | null) {
+    const c = p.contrato;
+    if (dataReajuste) {
+        const motivo = motivoDaDataDeReajuste(c, dataReajuste);
+        if (motivo) throw new Error(motivo);
+    }
+    if (c.domain !== 'LOCACAO' || !c.is_recurring) {
+        throw new Error('O reajuste por aniversário vale para contrato de locação recorrente.');
+    }
+    if (!['Ativo', 'Assinado'].includes(c.status)) {
+        throw new Error(`Não é possível reajustar um contrato "${c.status}". O contrato deve estar Ativo ou Assinado.`);
+    }
+    if (!p.aniversario.dentroDaVigencia) {
+        throw new Error(`O aniversário de ${p.aniversario.aniversario.split('-').reverse().join('/')} é depois do fim da vigência — o caso é de renovação, não de reajuste.`);
+    }
+    return valorAposReajuste(p.valorAtual, p.fatorIndice, decisao);
+}
+
+/** RPC desfazer_reajuste: aluguel, data-base, próximo e parcelas em aberto voltam, numa transação. */
+async function desfazerNoBanco(registroId: string): Promise<number> {
+    const { data, error } = await supabase.rpc('desfazer_reajuste', { p_registro: registroId });
+    if (error) throw new Error(error.message);
+    return Number((data as { parcelas_revertidas?: number } | null)?.parcelas_revertidas ?? 0);
+}
+
+/**
+ * O contrato como estava ANTES da decisão `r` — a prévia do Editar parte daqui
+ * (sem gravar nada; o desfazer de verdade só acontece ao salvar).
+ */
+function contratoAntesDe(c: ContratoReajustavel, r: RegistroDeReajuste): ContratoReajustavel {
+    return {
+        ...c,
+        current_value: Number(r.valor_anterior),
+        reajuste_data_base: r.data_base,
+        reajuste_proximo: r.proximo_anterior ?? null,
+    };
+}
+
 async function avisoPadraoDasOrgs(orgIds: string[]): Promise<Map<string, number>> {
     const mapa = new Map<string, number>();
     if (orgIds.length === 0) return mapa;
@@ -141,6 +210,79 @@ async function avisoPadraoDasOrgs(orgIds: string[]): Promise<Map<string, number>
         if (Number.isFinite(dias) && dias >= 0) mapa.set(o.id, dias);
     }
     return mapa;
+}
+
+/** O corpo de `decidir`: lê o contrato de novo, valida, muda parcelas, contrato e grava o registro. */
+async function gravarDecisao(contractId: string, decisao: DecisaoReajuste, observacao: string | undefined, dataReajuste: string | null | undefined, revertidas: number): Promise<{
+    contrato: ContratoReajustavel; registro: RegistroDeReajuste; tributosRecalculados: boolean;
+}> {
+    const p = await reajusteLocacaoService.previa(contractId, dataReajuste);
+    const c = p.contrato;
+    const { valorNovo, percentualAplicado } = validarDecisao(p, decisao, dataReajuste);
+    const mudaValor = Math.abs(valorNovo - p.valorAtual) >= 0.01;
+
+    // Parcelas remanescentes: cada uma pela mesma proporção (a 1ª, pró-rata,
+    // continua pró-rata). Lidas de novo aqui, não reaproveitadas da prévia.
+    // O valor de antes fica no registro — o desfazer devolve exato.
+    let parcelasAtualizadas = 0;
+    const alteradas: { id: string; antes: number }[] = [];
+    if (mudaValor && p.valorAtual > 0) {
+        const razao = valorNovo / p.valorAtual;
+        const parcelas = await parcelasEmAbertoDesde(c, p.aniversario.aniversario);
+        for (const parcela of parcelas) {
+            const { error } = await supabase
+                .from('internal_transactions')
+                .update({ amount: Math.round(Number(parcela.amount) * razao * 100) / 100 })
+                .eq('id', parcela.id)
+                .eq('status', 'PENDING');
+            if (error) throw error;
+            parcelasAtualizadas += 1;
+            alteradas.push({ id: parcela.id, antes: Number(parcela.amount) });
+        }
+    }
+
+    const { data: atualizado, error: errC } = await supabase
+        .from('contracts')
+        .update({
+            ...(mudaValor ? { current_value: valorNovo } : {}),
+            reajuste_data_base: p.aniversario.aniversario,
+            reajuste_proximo: p.aniversario.proximo,
+        })
+        .eq('id', c.id)
+        .select(COLUNAS_CONTRATO)
+        .single();
+    if (errC) throw errC;
+
+    const { data: registro, error: errR } = await supabase
+        .from('contract_reajustes')
+        .insert({
+            organization_id: c.organization_id,
+            contract_id: c.id,
+            aniversario: p.aniversario.aniversario,
+            data_base: p.aniversario.dataBase,
+            indice: p.indice,
+            indice_mes_base: p.base?.mes ?? null,
+            indice_valor_base: p.base?.valor ?? null,
+            indice_mes_atual: p.atual?.mes ?? null,
+            indice_valor_atual: p.atual?.valor ?? null,
+            percentual_indice: p.fatorIndice ? Math.round((p.fatorIndice - 1) * 10000) / 100 : null,
+            decisao: decisao.tipo,
+            percentual_aplicado: percentualAplicado,
+            valor_anterior: p.valorAtual,
+            valor_novo: valorNovo,
+            parcelas_atualizadas: parcelasAtualizadas,
+            parcelas_alteradas: alteradas,
+            proximo_anterior: c.reajuste_proximo,
+            observacao: observacao?.trim() || null,
+        })
+        .select('*')
+        .single();
+    if (errR) throw errR;
+
+    // Tributos: parcela reajustada (ou devolvida pelo desfazer do Editar).
+    const tributosRecalculados = parcelasAtualizadas + revertidas > 0 ? await regerarTributos(c) : true;
+
+    return { contrato: atualizado as unknown as ContratoReajustavel, registro: registro as RegistroDeReajuste, tributosRecalculados };
 }
 
 export const reajusteLocacaoService = {
@@ -190,8 +332,9 @@ export const reajusteLocacaoService = {
      * O que a decisão vai mexer — índices, fator, parcelas afetadas. Não grava nada.
      * `dataReajuste` = a data escolhida na gaveta (vazia = a calculada).
      */
-    previa: async (contractId: string, dataReajuste?: string | null): Promise<PreviaReajuste> => {
-        const contrato = await buscarContrato(contractId);
+    previa: async (contractId: string, dataReajuste?: string | null, substituindo?: RegistroDeReajuste | null): Promise<PreviaReajuste> => {
+        const lido = await buscarContrato(contractId);
+        const contrato = substituindo ? contratoAntesDe(lido, substituindo) : lido;
         const aniversario = aniversarioDoReajuste(contrato, dataReajuste);
         if (!aniversario) throw new Error(`Contrato ${contrato.number} sem data-base de reajuste nem início de vigência.`);
         const indice = normalizeIndexName(contrato.reajuste_index) ?? null;
@@ -222,103 +365,36 @@ export const reajusteLocacaoService = {
     /**
      * Decide o aniversário atual do contrato e avança para o próximo.
      * `dataReajuste` = a data escolhida na gaveta (vazia = a calculada).
+     * `substitui` = Editar do Histórico: a decisão anterior é desfeita e esta
+     * grava no lugar (validada ANTES de desfazer, sobre o contrato de antes).
      */
-    decidir: async (contractId: string, decisao: DecisaoReajuste, observacao?: string, dataReajuste?: string | null): Promise<{
+    decidir: async (contractId: string, decisao: DecisaoReajuste, observacao?: string, dataReajuste?: string | null, substitui?: RegistroDeReajuste | null): Promise<{
         contrato: ContratoReajustavel; registro: RegistroDeReajuste;
         /** false = parcelas mudaram mas os tributos não foram regerados (salvar a negociação refaz). */
         tributosRecalculados: boolean;
     }> => {
-        const p = await reajusteLocacaoService.previa(contractId, dataReajuste);
-        const c = p.contrato;
-        if (dataReajuste) {
-            const motivo = motivoDaDataDeReajuste(c, dataReajuste);
-            if (motivo) throw new Error(motivo);
+        let revertidas = 0;
+        if (substitui) {
+            validarDecisao(await reajusteLocacaoService.previa(contractId, dataReajuste, substitui), decisao, dataReajuste);
+            revertidas = await desfazerNoBanco(substitui.id);
         }
-        if (c.domain !== 'LOCACAO' || !c.is_recurring) {
-            throw new Error('O reajuste por aniversário vale para contrato de locação recorrente.');
+        try {
+            return await gravarDecisao(contractId, decisao, observacao, dataReajuste, revertidas);
+        } catch (e) {
+            if (!substitui) throw e;
+            throw new Error(`A decisão anterior foi desfeita, mas a nova não foi gravada: ${e instanceof Error ? e.message : 'erro desconhecido'}. O contrato voltou para "A decidir".`);
         }
-        if (!['Ativo', 'Assinado'].includes(c.status)) {
-            throw new Error(`Não é possível reajustar um contrato "${c.status}". O contrato deve estar Ativo ou Assinado.`);
-        }
-        if (!p.aniversario.dentroDaVigencia) {
-            throw new Error(`O aniversário de ${p.aniversario.aniversario.split('-').reverse().join('/')} é depois do fim da vigência — o caso é de renovação, não de reajuste.`);
-        }
-        const { valorNovo, percentualAplicado } = valorAposReajuste(p.valorAtual, p.fatorIndice, decisao);
-        const mudaValor = Math.abs(valorNovo - p.valorAtual) >= 0.01;
+    },
 
-        // Parcelas remanescentes: cada uma pela mesma proporção (a 1ª, pró-rata,
-        // continua pró-rata). Lidas de novo aqui, não reaproveitadas da prévia.
-        let parcelasAtualizadas = 0;
-        if (mudaValor && p.valorAtual > 0) {
-            const razao = valorNovo / p.valorAtual;
-            const parcelas = await parcelasEmAbertoDesde(c, p.aniversario.aniversario);
-            for (const parcela of parcelas) {
-                const { error } = await supabase
-                    .from('internal_transactions')
-                    .update({ amount: Math.round(Number(parcela.amount) * razao * 100) / 100 })
-                    .eq('id', parcela.id)
-                    .eq('status', 'PENDING');
-                if (error) throw error;
-                parcelasAtualizadas += 1;
-            }
-        }
-
-        const { data: atualizado, error: errC } = await supabase
-            .from('contracts')
-            .update({
-                ...(mudaValor ? { current_value: valorNovo } : {}),
-                reajuste_data_base: p.aniversario.aniversario,
-                reajuste_proximo: p.aniversario.proximo,
-            })
-            .eq('id', c.id)
-            .select(COLUNAS_CONTRATO)
-            .single();
-        if (errC) throw errC;
-
-        const { data: registro, error: errR } = await supabase
-            .from('contract_reajustes')
-            .insert({
-                organization_id: c.organization_id,
-                contract_id: c.id,
-                aniversario: p.aniversario.aniversario,
-                data_base: p.aniversario.dataBase,
-                indice: p.indice,
-                indice_mes_base: p.base?.mes ?? null,
-                indice_valor_base: p.base?.valor ?? null,
-                indice_mes_atual: p.atual?.mes ?? null,
-                indice_valor_atual: p.atual?.valor ?? null,
-                percentual_indice: p.fatorIndice ? Math.round((p.fatorIndice - 1) * 10000) / 100 : null,
-                decisao: decisao.tipo,
-                percentual_aplicado: percentualAplicado,
-                valor_anterior: p.valorAtual,
-                valor_novo: valorNovo,
-                parcelas_atualizadas: parcelasAtualizadas,
-                observacao: observacao?.trim() || null,
-            })
-            .select('*')
-            .single();
-        if (errR) throw errR;
-
-        // Tributos incidem sobre o valor da parcela: parcela reajustada sem regerar
-        // deixava Tributos a Pagar (e a coluna Tributos da aba Parcelas) no valor
-        // antigo. Mesma regeração do Salvar da negociação — pagos e DARF ficam.
-        let tributosRecalculados = true;
-        if (parcelasAtualizadas > 0 && c.deal_id) {
-            try {
-                const { data: deal, error: errD } = await supabase
-                    .from('commercial_deals')
-                    .select('id, type, property_id')
-                    .eq('id', c.deal_id)
-                    .single();
-                if (errD) throw errD;
-                await taxPayableService.generateForDeal(deal as Pick<PropertyDeal, 'id' | 'type' | 'property_id'>, c.organization_id);
-            } catch (e) {
-                console.error('[REAJUSTE] Parcelas reajustadas, mas os tributos não foram regerados:', e);
-                tributosRecalculados = false;
-            }
-        }
-
-        return { contrato: atualizado as unknown as ContratoReajustavel, registro: registro as RegistroDeReajuste, tributosRecalculados };
+    /**
+     * Histórico › Excluir: desfaz a ÚLTIMA decisão do contrato (decisão do usuário,
+     * 25/11/2026: desfazer e marcar). Aluguel, data-base, próximo reajuste e as
+     * parcelas EM ABERTO voltam; pagas ficam. A linha continua, marcada "desfeita".
+     */
+    desfazer: async (registro: RegistroDeReajuste & { contract_id: string }): Promise<{ parcelasRevertidas: number; tributosRecalculados: boolean }> => {
+        const parcelasRevertidas = await desfazerNoBanco(registro.id);
+        const tributosRecalculados = parcelasRevertidas > 0 ? await regerarTributos(await buscarContrato(registro.contract_id)) : true;
+        return { parcelasRevertidas, tributosRecalculados };
     },
 
     historico: async (contractId: string): Promise<RegistroDeReajuste[]> => {
@@ -339,17 +415,17 @@ export const reajusteLocacaoService = {
     historicoGeral: async (organizationId: string | null): Promise<RegistroComContrato[]> => {
         let q = supabase
             .from('contract_reajustes')
-            .select(`${COLUNAS_REGISTRO}, contract_id, contracts!inner(number, title, client_id, deal_id, parent_contract_id)`);
+            .select(`${COLUNAS_REGISTRO}, contract_id, contracts!inner(number, title, client_id, status, deal_id, parent_contract_id)`);
         if (organizationId) q = q.eq('organization_id', organizationId);
         const { data, error } = await q.order('created_at', { ascending: false });
         if (error) throw error;
-        type Linha = RegistroDeReajuste & { contract_id: string; contracts: { number: string; title: string | null; client_id: string | null; deal_id: string | null; parent_contract_id: string | null } };
+        type Linha = RegistroDeReajuste & { contract_id: string; contracts: { number: string; title: string | null; client_id: string | null; status: string | null; deal_id: string | null; parent_contract_id: string | null } };
         const linhas = (data ?? []) as unknown as Linha[];
         const porContrato = new Map(linhas.map(l => [l.contract_id, { id: l.contract_id, deal_id: l.contracts.deal_id, parent_contract_id: l.contracts.parent_contract_id }]));
         const negociacoes = await negociacoesDosContratos([...porContrato.values()]);
         return linhas.map(({ contracts, ...r }) => ({
             ...r,
-            contrato: { number: contracts.number, title: contracts.title, client_id: contracts.client_id },
+            contrato: { number: contracts.number, title: contracts.title, client_id: contracts.client_id, status: contracts.status },
             negociacaoId: negociacoes.get(r.contract_id) ?? null,
         }));
     },

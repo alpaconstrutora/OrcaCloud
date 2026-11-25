@@ -187,3 +187,32 @@ export function filaDoEmpreendimento<T extends { negociacaoId: string | null }>(
     if (!negociacoes) return fila;
     return fila.filter(l => !!l.negociacaoId && negociacoes.has(l.negociacaoId));
 }
+
+/** O mínimo de um registro de reajuste para decidir se ainda pode ser editado/desfeito. */
+export interface DecisaoNoHistorico {
+    id: string;
+    contract_id: string;
+    aniversario: string;
+    created_at: string;
+    desfeito_em?: string | null;
+}
+
+/**
+ * Por que esta decisão NÃO pode ser editada nem desfeita (null = pode). Mesma
+ * regra da função desfazer_reajuste no banco: só a última decisão ainda valendo
+ * do contrato, e só com o contrato Ativo ou Assinado. Pedido de 25/11/2026.
+ */
+export function motivoParaNaoAlterarDecisao(
+    r: DecisaoNoHistorico,
+    todas: DecisaoNoHistorico[],
+    statusDoContrato: string | null | undefined,
+): string | null {
+    if (r.desfeito_em) return 'Esta decisão já foi desfeita.';
+    const depois = todas.some(x => x.contract_id === r.contract_id && x.id !== r.id && !x.desfeito_em
+        && (x.aniversario > r.aniversario || (x.aniversario === r.aniversario && x.created_at > r.created_at)));
+    if (depois) return 'Só a última decisão de reajuste do contrato pode ser alterada.';
+    if (statusDoContrato && !['Ativo', 'Assinado'].includes(statusDoContrato)) {
+        return `O contrato está "${statusDoContrato}": só se altera reajuste de contrato Ativo ou Assinado.`;
+    }
+    return null;
+}

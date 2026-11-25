@@ -3,6 +3,7 @@ import { Check, Copy, Loader2, MessageCircle, Smartphone } from 'lucide-react'
 import Button from '../ui/Button'
 import { useConfirm } from '../ui/confirm'
 import {
+  copiarLinkCelular,
   gerarLinkCelular,
   revogarLinkCelular,
   statusLinkCelular,
@@ -11,7 +12,8 @@ import {
 
 /**
  * Gestão do link do celular de UMA pessoa em UMA organização (`/celular?token=`):
- * validade e último uso, **Gerar** / **Gerar novo**, **Copiar**, **WhatsApp** e **Revogar**.
+ * validade e último uso, **Gerar** / **Gerar novo**, **Copiar link** (a qualquer momento, como nos
+ * portais), **WhatsApp** e **Revogar**.
  *
  * Quem pode o quê é decidido no BANCO (`mobile_link_*`): a própria pessoa para si; o gestor da
  * organização revoga/consulta o de qualquer membro, mas GERA só para quem tem papel `member`
@@ -19,7 +21,8 @@ import {
  * `motivoGerarBloqueado`). Recusa chega como
  * 42501 e vira o texto de permissão.
  *
- * O token só existe em claro na URL devolvida por `gerarLinkCelular`. Ela fica só neste estado
+ * A URL com o token chega por `gerarLinkCelular` ou, a pedido, por `copiarLinkCelular` (o banco só
+ * a entrega à própria pessoa e ao gestor da org — `mobile_link_copiar`). Ela fica só neste estado
  * (some ao trocar de pessoa/organização, ao revogar e ao desmontar) — nunca vai para log,
  * `localStorage` ou toast. Por isso o `console.error` abaixo registra só o código do erro.
  */
@@ -63,6 +66,9 @@ export const textoDoWhatsapp = (url: string) => `Seu link do OrçaCloud no celul
 /** Por que o gestor não gera o link de quem não é membro comum (o banco recusa do mesmo jeito). */
 export const MOTIVO_GERAR_SO_O_PROPRIO = 'O gestor só gera link para membros comuns. Admin e owner geram o próprio, pelo menu da conta › Meu link do celular.'
 
+/** Link ativo gerado antes de 25/11/2026: o banco não guardou o endereço — não há o que copiar. */
+export const MOTIVO_COPIAR_LINK_ANTIGO = 'Este link foi gerado antes de o endereço ficar guardado. Para poder copiá-lo, gere um novo link.'
+
 /**
  * Motivo para desligar "Gerar link" ao gestor editar alguém: o banco só deixa gerar para quem é
  * `member` (papel SALVO), exceto o próprio usuário. `undefined` = liberado.
@@ -85,17 +91,17 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivo
   const confirm = useConfirm()
   const [status, setStatus] = React.useState<StatusLinkCelular | null>(null)
   const [carregando, setCarregando] = React.useState(true)
-  const [ocupado, setOcupado] = React.useState<'gerar' | 'revogar' | null>(null)
+  const [ocupado, setOcupado] = React.useState<'gerar' | 'copiar' | 'revogar' | null>(null)
   const [erro, setErro] = React.useState<string | null>(null)
-  /** URL com o token — só existe logo depois de gerar. */
-  const [urlGerada, setUrlGerada] = React.useState<string | null>(null)
+  /** URL com o token na tela — depois de gerar, ou de "Copiar link". */
+  const [urlNaTela, setUrlNaTela] = React.useState<string | null>(null)
   const [copiado, setCopiado] = React.useState(false)
 
   // Pessoa/organização nova = estado novo: o link gerado de outra pessoa nunca fica na tela.
   React.useEffect(() => {
     let cancelado = false
     setStatus(null)
-    setUrlGerada(null)
+    setUrlNaTela(null)
     setCopiado(false)
     setErro(null)
     setCarregando(true)
@@ -119,6 +125,7 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivo
 
   const situacao: Situacao = status ? situacaoDoLink(status) : 'nenhum'
   const temLinkAtivo = situacao === 'ativo'
+  const podeCopiar = temLinkAtivo && status?.copiavel === true
   const validade = comoData(status?.expires_at)
   const ultimoUso = comoData(status?.last_used_at)
 
@@ -145,7 +152,7 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivo
     setOcupado('gerar')
     setErro(null)
     try {
-      setUrlGerada(await gerarLinkCelular(userId, orgId))
+      setUrlNaTela(await gerarLinkCelular(userId, orgId))
       setCopiado(false)
       await recarregarStatus()
     } catch (e) {
@@ -169,7 +176,7 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivo
     setErro(null)
     try {
       await revogarLinkCelular(userId, orgId)
-      setUrlGerada(null)
+      setUrlNaTela(null)
       await recarregarStatus()
     } catch (e) {
       console.error('[LinkDoCelularBloco] revogar falhou:', (e as { code?: unknown })?.code)
@@ -179,10 +186,9 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivo
     }
   }
 
-  const copiar = async () => {
-    if (!urlGerada) return
+  const paraAreaDeTransferencia = async (url: string) => {
     try {
-      await navigator.clipboard.writeText(urlGerada)
+      await navigator.clipboard.writeText(url)
       setCopiado(true)
       setErro(null)
     } catch {
@@ -190,9 +196,36 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivo
     }
   }
 
+  const copiar = async () => {
+    if (urlNaTela) await paraAreaDeTransferencia(urlNaTela)
+  }
+
+  /** "Copiar link" sem ter gerado agora: busca o endereço do link ativo no banco e copia. */
+  const copiarLinkAtivo = async () => {
+    if (ocupado || !podeCopiar) return
+    setOcupado('copiar')
+    setErro(null)
+    try {
+      const url = await copiarLinkCelular(userId, orgId)
+      if (!url) {
+        // Revogado/vencido/regerado em outra tela entre a consulta e o clique.
+        setErro('O link mudou desde que esta tela abriu. Confira a situação acima.')
+        await recarregarStatus()
+        return
+      }
+      setUrlNaTela(url)
+      await paraAreaDeTransferencia(url)
+    } catch (e) {
+      console.error('[LinkDoCelularBloco] copiar falhou:', (e as { code?: unknown })?.code)
+      setErro(mensagemDoErro(e, 'copiar o link'))
+    } finally {
+      setOcupado(null)
+    }
+  }
+
   const enviarPorWhatsapp = () => {
-    if (!urlGerada) return
-    window.open(`https://wa.me/?text=${encodeURIComponent(textoDoWhatsapp(urlGerada))}`, '_blank', 'noopener,noreferrer')
+    if (!urlNaTela) return
+    window.open(`https://wa.me/?text=${encodeURIComponent(textoDoWhatsapp(urlNaTela))}`, '_blank', 'noopener,noreferrer')
   }
 
   // ── Texto de situação (§21: sentence case, valor escuro) ──
@@ -212,6 +245,13 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivo
     : ocupado
       ? 'Aguarde a operação em andamento.'
       : motivoGerarBloqueado
+  const motivoCopiarDesligado = carregando
+    ? 'Aguarde a consulta do link.'
+    : ocupado
+      ? 'Aguarde a operação em andamento.'
+      : !podeCopiar
+        ? MOTIVO_COPIAR_LINK_ANTIGO
+        : undefined
   const motivoRevogarDesligado = carregando
     ? 'Aguarde a consulta do link.'
     : ocupado
@@ -239,14 +279,14 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivo
         <p role="alert" className="rounded-[6px] border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{erro}</p>
       )}
 
-      {urlGerada && (
+      {urlNaTela && (
         <div className="space-y-2 rounded-[10px] border border-emerald-200 bg-emerald-50 p-3" data-testid="link-do-celular-gerado">
-          <p className="text-xs font-semibold text-slate-500">Link gerado — aparece só agora</p>
+          <p className="text-xs font-semibold text-slate-500">Endereço do link</p>
           <div
             className="select-all break-all rounded-[6px] border border-gray-200 bg-white px-3 py-2 text-sm text-gray-900"
             data-testid="link-do-celular-url"
           >
-            {urlGerada}
+            {urlNaTela}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="button" variant="secondary" onClick={copiar} data-testid="link-do-celular-copiar">
@@ -258,15 +298,25 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivo
               WhatsApp
             </Button>
           </div>
-          <p className="text-xs text-slate-500">
-            Depois de fechar esta tela o endereço não pode ser consultado de novo — só gerando um novo link.
-          </p>
         </div>
       )}
 
       <div className="flex flex-wrap items-center gap-2">
+        {temLinkAtivo && !urlNaTela && (
+          <Button
+            type="button"
+            onClick={copiarLinkAtivo}
+            disabled={carregando || !!ocupado || !podeCopiar}
+            title={motivoCopiarDesligado}
+            data-testid="link-do-celular-copiar-ativo"
+          >
+            {ocupado === 'copiar' ? <Loader2 className="h-4 w-4 animate-spin" /> : <Copy className="h-4 w-4" />}
+            Copiar link
+          </Button>
+        )}
         <Button
           type="button"
+          variant={temLinkAtivo ? 'secondary' : 'primary'}
           onClick={gerar}
           disabled={carregando || !!ocupado || !!motivoGerarBloqueado}
           title={motivoGerarDesligado}
@@ -288,6 +338,9 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivo
           Revogar link
         </Button>
       </div>
+      {temLinkAtivo && !podeCopiar && !urlNaTela && !carregando && !ocupado && (
+        <p className="text-xs text-slate-500" data-testid="link-do-celular-motivo-copiar">{MOTIVO_COPIAR_LINK_ANTIGO}</p>
+      )}
       {motivoGerarBloqueado && !carregando && !ocupado && (
         <p className="text-xs text-slate-500" data-testid="link-do-celular-motivo-gerar">{motivoGerarBloqueado}</p>
       )}

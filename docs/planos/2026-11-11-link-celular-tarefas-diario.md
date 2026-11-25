@@ -1195,3 +1195,44 @@ Front: reverter os commits da Parte 1 (a rota `/celular` sem as RPCs mostra a re
   Diário). Prova com link real que grava: com o usuário, ou com aval explícito na hora.
 - **Deploy:** migrations por `db query -f` (nunca `db push`) → Edge → front (push em
   `main`). As RPCs atuais mantêm assinatura: o front antigo segue funcionando no intervalo.
+
+## Copiar link ativo (pedido 2026-11-25)
+
+### Pedido original
+
+Sessão `9f7567f5-eb4c-4754-b44f-4c4b4ce8c3c1` · 2026-11-25
+
+> minha organização > usuários > Link do celular: existem dois botoes (gerar novo link e revogar link). porem não existe um botão Copiar link ativo.
+
+Resposta: não dava — `user_mobile_links` guardava só o SHA-256, o endereço aparecia uma vez.
+
+> verifique o funcionamento dos links nos portais. Veja print do portal do cliente onde posso copiar o link a qualquer momento
+
+Conferido no banco: os 7 portais (`client_`, `broker_`, `investor_`, `partner_`, `supplier_`,
+`sindico_portal_tokens`, `portal_tokens`) guardam o token em claro; só o celular guardava o hash.
+Proposta: guardar o token numa tabela sem acesso pela API, entregue só por RPC à própria pessoa
+e ao gestor da org; links antigos sem endereço (copiar só depois de gerar um novo). Risco
+aceito: o gestor pode copiar e usar o link de um membro.
+
+> Fica igual aos portais para quem usa, e o risco que sobra é o de cima: o gestor poder usar o link de um membro. Quer que eu siga assim? sim
+
+### Itens
+
+- [x] `supabase/migrations/aplicar_20271125600000_link_celular_copiar.sql` — coluna `token`;
+  `mobile_link_generate` grava; `mobile_link_copiar` (mesma autorização de status/revoke; só link
+  ativo); `mobile_link_status.copiavel`; gatilho `trg_user_mobile_links_revogado_sem_token`.
+  **Pronto quando:** `scripts/teste-link-celular-copiar.sql` dá `TUDO OK` com a migration no
+  lugar de `-- MIGRATION` (ensaiado 25/11: TUDO OK; sem a migration falha em 42703) e, depois de
+  aplicada, sozinho.
+- [x] Aplicar a migration no banco (`db query -f`). **Pronto quando:** a prova acima dá `TUDO OK`
+  sem a migration embutida. (25/11: aplicada; `teste-link-celular-copiar.sql` e
+  `teste-link-celular-tarefas.sql` TUDO OK; tabela segue sem GRANT para anon/authenticated.)
+- [x] `scripts/teste-link-celular-tarefas.sql` — a conferência "token em claro em nenhuma coluna"
+  passa a excluir a coluna `token`.
+- [x] `services/celular/celularLinkService.ts` — `copiarLinkCelular`, `StatusLinkCelular.copiavel`.
+- [x] `components/celular/LinkDoCelularBloco.tsx` — botão "Copiar link" (primário com link ativo;
+  "Gerar novo link" vira secundário); desligado com o motivo em link antigo; caixa do endereço sem
+  o aviso "aparece só agora". **Pronto quando:** `__tests__/components/LinkDoCelularBloco.test.tsx`
+  verde (14/14 em 25/11) e `check-ui-standard.sh` sem violação.
+- [ ] Conferir em produção: Minha organização › Usuários › Editar › Link do celular — gerar,
+  fechar, reabrir e copiar.

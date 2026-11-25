@@ -170,3 +170,74 @@ describe('reajusteLocacaoService — caso CTL-006-012-0001', () => {
         expect(q.filters).toContainEqual(['reference_id.like.c1%,reference_id.like.tx-d1-%']);
     });
 });
+
+describe('Histórico › Editar e Excluir (pedido de 25/11/2026: "faltou CRUD")', () => {
+    it('a decisão guarda o próximo de antes e o valor de antes de cada parcela — o desfazer devolve exato', async () => {
+        await reajusteLocacaoService.decidir('c1', { tipo: 'INDICE' });
+        const ins = ops.find(o => o.table === 'contract_reajustes' && o.op === 'insert')!.args as Record<string, unknown>;
+        expect(ins.proximo_anterior).toBe('2017-09-23');
+        expect(ins.parcelas_alteradas).toEqual([
+            { id: 'p-2017-10', antes: 4556 }, { id: 'p-2018-10', antes: 4556 }, { id: 'p-2019-04', antes: 4556 },
+        ]);
+    });
+
+    it('Excluir chama desfazer_reajuste e regera os tributos quando parcelas voltaram', async () => {
+        const { supabase } = await import('../lib/supabase');
+        const rpc = supabase.rpc as unknown as ReturnType<typeof vi.fn>;
+        rpc.mockReset();
+        rpc.mockResolvedValue({ data: { parcelas_revertidas: 3 }, error: null });
+        const r = await reajusteLocacaoService.desfazer({ id: 'r9', contract_id: 'c1' } as never);
+        expect(rpc).toHaveBeenCalledWith('desfazer_reajuste', { p_registro: 'r9' });
+        expect(r).toEqual({ parcelasRevertidas: 3, tributosRecalculados: true });
+        expect(gerarTributos).toHaveBeenCalledTimes(1);
+    });
+
+    it('Excluir recusado pelo banco: a mensagem chega e nada é regerado', async () => {
+        const { supabase } = await import('../lib/supabase');
+        const rpc = supabase.rpc as unknown as ReturnType<typeof vi.fn>;
+        rpc.mockReset();
+        rpc.mockResolvedValue({ data: null, error: { message: 'Só a última decisão de reajuste do contrato pode ser desfeita.' } });
+        await expect(reajusteLocacaoService.desfazer({ id: 'r9', contract_id: 'c1' } as never)).rejects.toThrow(/última decisão/);
+        expect(gerarTributos).not.toHaveBeenCalled();
+    });
+
+    // Contrato DEPOIS da decisão de 05/11/2018 (R$ 4.556 → 5.000), como está no banco.
+    const DECISAO_0511 = {
+        id: 'r1', aniversario: '2018-11-05', data_base: '2016-09-23', decisao: 'VALOR', valor_anterior: 4556, valor_novo: 5000,
+        percentual_aplicado: 9.75, proximo_anterior: null, observacao: null,
+    } as never;
+
+    it('Editar: a prévia parte do contrato de ANTES da decisão (aluguel 4.556, aniversário calculado 23/09/2017)', async () => {
+        contrato = { ...contrato, current_value: 5000, reajuste_data_base: '2018-11-05', reajuste_proximo: '2019-11-05' };
+        const p = await reajusteLocacaoService.previa('c1', null, DECISAO_0511);
+        expect(p.valorAtual).toBe(4556);
+        expect(p.aniversario).toMatchObject({ dataBase: '2016-09-23', aniversario: '2017-09-23', dentroDaVigencia: true });
+    });
+
+    it('Editar com data inválida é recusado ANTES de desfazer — nada muda no banco', async () => {
+        const { supabase } = await import('../lib/supabase');
+        const rpc = supabase.rpc as unknown as ReturnType<typeof vi.fn>;
+        rpc.mockReset();
+        contrato = { ...contrato, current_value: 5000, reajuste_data_base: '2018-11-05', reajuste_proximo: '2019-11-05' };
+        await expect(reajusteLocacaoService.decidir('c1', { tipo: 'INDICE' }, undefined, '2019-06-01', DECISAO_0511))
+            .rejects.toThrow(/depois do fim da vigência/);
+        expect(rpc).not.toHaveBeenCalled();
+        expect(ops).toHaveLength(0);
+    });
+
+    it('Editar válido: desfaz no banco e grava a nova decisão no lugar', async () => {
+        const { supabase } = await import('../lib/supabase');
+        const rpc = supabase.rpc as unknown as ReturnType<typeof vi.fn>;
+        rpc.mockReset();
+        // O banco devolve o contrato ao estado de antes (o mock faz o papel do desfazer).
+        rpc.mockImplementation(async () => {
+            contrato = { ...contrato, current_value: 4556, reajuste_data_base: '2016-09-23', reajuste_proximo: '2017-09-23' };
+            return { data: { parcelas_revertidas: 0 }, error: null };
+        });
+        contrato = { ...contrato, current_value: 5000, reajuste_data_base: '2018-11-05', reajuste_proximo: '2019-11-05' };
+        const { registro } = await reajusteLocacaoService.decidir('c1', { tipo: 'INDICE' }, undefined, '2017-09-23', DECISAO_0511);
+        expect(rpc).toHaveBeenCalledWith('desfazer_reajuste', { p_registro: 'r1' });
+        expect(registro).toMatchObject({ aniversario: '2017-09-23', valor_novo: 4783.8 });
+        expect(contrato.reajuste_proximo).toBe('2018-09-23');
+    });
+});

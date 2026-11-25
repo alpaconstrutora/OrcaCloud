@@ -148,6 +148,8 @@ const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpen
                     nomeDoCliente={nomeDoCliente}
                     onOpenContract={onOpenContract}
                     versao={versaoHistorico}
+                    onNotify={onNotify}
+                    onMudou={() => { setHistoricos({}); carregar(); }}
                 />
             </div>
         );
@@ -262,9 +264,10 @@ const RentalReajustes: React.FC<Props> = ({ organizationId, clients = [], onOpen
                                     ) : (
                                         <ul className="space-y-1.5">
                                             {h.map(r => (
-                                                <li key={r.id} className="text-sm text-gray-700">
+                                                <li key={r.id} className={`text-sm ${r.desfeito_em ? 'text-gray-500' : 'text-gray-700'}`}>
                                                     <span className="font-medium text-gray-900">{fmtDate(r.aniversario)}</span>
                                                     {' · '}{ROTULO_DECISAO[r.decisao]}
+                                                    {r.desfeito_em && <span className="text-amber-800">{` · desfeito por ${r.desfeito_por ?? '—'}`}</span>}
                                                     {r.decisao !== 'NAO_APLICADO' && ` (${fmtPct(Number(r.percentual_aplicado))}): ${fmtCur(r.valor_anterior)} → ${fmtCur(r.valor_novo)} · ${r.parcelas_atualizadas} parcela(s)`}
                                                     {r.percentual_indice != null && <span className="text-gray-500">{` · ${r.indice} no período ${fmtPct(Number(r.percentual_indice))}`}</span>}
                                                     {r.observacao && <span className="text-gray-500">{` · "${r.observacao}"`}</span>}

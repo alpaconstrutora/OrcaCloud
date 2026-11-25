@@ -187,6 +187,13 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
 
   O gargalo são as CURVAS, não a grade. **Decisão da prévia:** passo = menor inteiro que deixa a grade com
   até ~12 mil nós (`ceil(√(nós / 12 000))`): 10 mil → 1, 40 mil → 2, 160 mil → 4. Ao soltar, grade cheia.
+- [x] P1 (código) — Tarefas 1–4: migration `aplicar_20271125100000` + tipos/serviço; hook (`definirAnelDesenhado`,
+  `anel_desenhado` sempre gravado, aviso dos lados, restaurar da casa só com base CASA; na leitura com base
+  DESENHADO o `anelPlato` fica `null` — senão "Sob a casa" aparecia pelo desenho); painel ("Desenhado",
+  "Desenhar platô", "Editar contorno", aviso); ferramenta `plato` na planta (fecha no 1º canto ou duplo clique,
+  trava 90°, < 3 distintos não grava). Testes: hook 6 + casa 5, painel 4 (+7 da fase 2), canvas 4; suíte dos
+  64 arquivos afetados 693/693; `tsc` 0. Na tela (harness `topografia?desenhar=1`): o contorno desenhado vira
+  o platô e o corte/aterro do 2D segue a forma. ⏳ Migration aplicada pelo usuário ANTES do merge.
 
 ---
 

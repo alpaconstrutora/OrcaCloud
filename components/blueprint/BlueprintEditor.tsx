@@ -5800,9 +5800,17 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   const anelDoPlato = useMemo(
     () =>
-      // F25: na base CASA, o platô que a casa automática lançou (gravado com o anel).
-      terraplenagem.base === 'CASA' && terraplenagem.anelPlato ? terraplenagem.anelPlato : terraplenagem.base === 'ENVELOPE' && envelope?.valido ? envelope.anel : anelDoLoteFechado,
-    [terraplenagem.base, envelope, anelDoLoteFechado],
+      // 25/11/2026: na base DESENHADO, o contorno que o usuário desenhou.
+      terraplenagem.base === 'DESENHADO' && terraplenagem.anelDesenhado
+        ? terraplenagem.anelDesenhado
+        : // F25: na base CASA, o platô que a casa automática lançou (gravado com o anel).
+          terraplenagem.base === 'CASA' && terraplenagem.anelPlato
+          ? terraplenagem.anelPlato
+          : terraplenagem.base === 'ENVELOPE' && envelope?.valido
+            ? envelope.anel
+            : anelDoLoteFechado,
+    // Os anéis gravados entram nas deps: sem eles, desenhar (ou lançar a casa) não refazia a conta até outra mudança.
+    [terraplenagem.base, terraplenagem.anelDesenhado, terraplenagem.anelPlato, envelope, anelDoLoteFechado],
   );
   // F25: o anel em uso fica com a premissa (só em memória — vai ao banco na próxima mudança explícita dela) para o
   // orçamento recalcular os volumes a partir dele.
@@ -11553,6 +11561,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             onBase: terraplenagem.setBase,
             temEnvelope: !!envelope?.valido,
             temPlatoDaCasa: !!terraplenagem.anelPlato,
+            // 25/11/2026: o platô desenhado — desenhar na planta, ajustar no 3D.
+            temDesenho: !!terraplenagem.anelDesenhado,
+            onDesenharPlato: () => {
+              setMostrarTerraplenagem(true);
+              editor.setTool('plato');
+            },
+            onEditarContorno: () => {
+              if (anelDoPlato) terraplenagem.definirAnelDesenhado(anelDoPlato);
+            },
+            podeEditarContorno: !!anelDoPlato,
+            avisoDosLados: terraplenagem.avisoDosLados,
+            onEsquecerAvisoDosLados: terraplenagem.esquecerAvisoDosLados,
             cotaPlatoM: terraplenagem.cotaPlatoM,
             onCotaPlatoM: terraplenagem.setCotaPlatoM,
             inclinacao: terraplenagem.inclinacao,
@@ -17688,6 +17708,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   }
                   linhasDoPerfil={(mostrarCurvasDeNivel && terrenoAVista) ? linhasDoPerfil : null}
                   linhaDoPerfilAtiva={usaLinhaDesenhada ? indiceDaLinha : null}
+                  onPlatoDesenhado={(anel) => {
+                    // O platô desenhado vira a base do platô e o corte/aterro aparece na planta.
+                    terraplenagem.definirAnelDesenhado(anel);
+                    setMostrarTerraplenagem(true);
+                    editor.setTool('selecionar');
+                  }}
                   onPerfilTracado={(pontos) => {
                     const indice = terraplenagem.adicionarLinhaDoPerfil(pontos);
                     if (indice >= 0) {

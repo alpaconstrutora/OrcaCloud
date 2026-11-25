@@ -9,7 +9,7 @@ import { supabase } from '../lib/supabase';
 import type { BlueprintTerraplenagemRow } from '../types/blueprint';
 
 const COLS =
-  'id, study_id, organization_id, base, anel_plato, cota_plato_m, inclinacao_long_pct, inclinacao_transv_pct, inclinacao_azimute_deg, ' +
+  'id, study_id, organization_id, base, anel_plato, anel_desenhado, cota_plato_m, inclinacao_long_pct, inclinacao_transv_pct, inclinacao_azimute_deg, ' +
   'talude_corte_h, talude_aterro_h, ' +
   'empolamento_pct, contracao_pct, altura_do_lance_m, largura_da_banqueta_m, largura_da_via_m, ' +
   'talude_por_aresta, perfil_polilinha, drenagem, caimento_min_pct, hidraulica, estrutura, created_at, updated_at';
@@ -22,6 +22,7 @@ export type PremissaDeTerraplenagem = Pick<
   BlueprintTerraplenagemRow,
   | 'base'
   | 'anel_plato'
+  | 'anel_desenhado'
   | 'cota_plato_m'
   | 'inclinacao_long_pct'
   | 'inclinacao_transv_pct'

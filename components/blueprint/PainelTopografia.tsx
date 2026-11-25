@@ -89,8 +89,19 @@ export interface InundacaoNoPainel {
 }
 
 export interface TerraplenagemNoPainel {
-  base: 'ENVELOPE' | 'LOTE' | 'CASA';
-  onBase: (b: 'ENVELOPE' | 'LOTE' | 'CASA') => void;
+  base: 'ENVELOPE' | 'LOTE' | 'CASA' | 'DESENHADO';
+  onBase: (b: 'ENVELOPE' | 'LOTE' | 'CASA' | 'DESENHADO') => void;
+  /** 25/11/2026: há um contorno DESENHADO guardado para escolher? */
+  temDesenho?: boolean;
+  /** Liga a ferramenta "Platô" da planta (desenhar o contorno). */
+  onDesenharPlato?: () => void;
+  /** Copia o anel em uso (envelope, lote ou casa) para o desenho — para ajustar a partir dele. */
+  onEditarContorno?: () => void;
+  /** Há anel em uso para copiar? Sem ele, "Editar contorno" fica desligado com o motivo. */
+  podeEditarContorno?: boolean;
+  /** Os taludes/muros por lado voltaram ao padrão porque o contorno mudou de `de` para `para` lados. */
+  avisoDosLados?: { de: number; para: number } | null;
+  onEsquecerAvisoDosLados?: () => void;
   /** Há envelope válido (recuos que cabem)? Sem ele, ENVELOPE cai no lote. */
   temEnvelope: boolean;
   /** F25: há o platô sob a casa (lançado pela casa automática) para escolher? */
@@ -1960,7 +1971,9 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
             ['LOTE', 'No lote inteiro'],
             // F25: o platô sob a casa só existe depois de a casa automática lançá-lo.
             ...(t.temPlatoDaCasa || t.base === 'CASA' ? [['CASA', 'Sob a casa']] : []),
-          ] as ['ENVELOPE' | 'LOTE' | 'CASA', string][]
+            // 25/11/2026: o desenhado só existe depois de desenhado (ou de "Editar contorno").
+            ...(t.temDesenho || t.base === 'DESENHADO' ? [['DESENHADO', 'Desenhado']] : []),
+          ] as ['ENVELOPE' | 'LOTE' | 'CASA' | 'DESENHADO', string][]
         ).map(([valor, rotulo]) => (
           <button
             key={valor}
@@ -1979,6 +1992,49 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
         <p className="mt-1 text-[11px] text-amber-700">
           Sem envelope válido (recuos ausentes ou que não cabem): o platô usa o lote inteiro.
         </p>
+      )}
+
+      {/* 25/11/2026: o platô de forma livre — desenhar na planta, ajustar no 3D. */}
+      {(t.onDesenharPlato || t.onEditarContorno) && (
+        <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          {t.onDesenharPlato && (
+            <button
+              type="button"
+              onClick={t.onDesenharPlato}
+              title="Clique os cantos do platô na planta; feche no primeiro canto ou com duplo clique. Depois ajuste cantos e cota no 3D."
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50"
+            >
+              Desenhar platô
+            </button>
+          )}
+          {t.onEditarContorno && (
+            <button
+              type="button"
+              onClick={t.onEditarContorno}
+              disabled={!t.podeEditarContorno}
+              title={
+                t.podeEditarContorno
+                  ? 'Copia o contorno em uso (envelope, lote ou casa) para o Desenhado — ajuste os cantos no 3D'
+                  : 'Não há contorno em uso para copiar: feche o lote (ferramenta Terreno) ou desenhe o platô'
+              }
+              className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Editar contorno
+            </button>
+          )}
+        </div>
+      )}
+      {t.avisoDosLados && (
+        <div className="mt-1.5 flex items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-[11px] text-amber-800">
+          <p className="flex-1">
+            Os muros e taludes por lado voltaram ao padrão (o contorno mudou de {t.avisoDosLados.de} para {t.avisoDosLados.para} lados).
+          </p>
+          {t.onEsquecerAvisoDosLados && (
+            <button type="button" onClick={t.onEsquecerAvisoDosLados} className="shrink-0 font-medium text-amber-900 underline-offset-2 hover:underline">
+              Entendi
+            </button>
+          )}
+        </div>
       )}
 
       <label className="mt-2 flex items-center justify-between gap-2 text-xs text-slate-600">

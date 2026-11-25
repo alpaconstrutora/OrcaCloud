@@ -11703,7 +11703,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             avisoDosLados: terraplenagem.avisoDosLados,
             avisoDoPlato,
             onEsquecerAvisoDosLados: terraplenagem.esquecerAvisoDosLados,
-            onExcluirDesenho: terraplenagem.excluirAnelDesenhado,
+            // Excluir o desenho EM USO volta ao terreno natural (pedido 25/11/2026: *"foi junto todo o relevo"* — o
+            // envelope, aqui o lote inteiro, virava um platô plano): a camada Terraplenagem desliga.
+            onExcluirDesenho: () => {
+              const emUso = terraplenagem.base === 'DESENHADO';
+              terraplenagem.excluirAnelDesenhado();
+              if (emUso) setMostrarTerraplenagem(false);
+            },
             cotaPlatoM: terraplenagem.cotaPlatoM,
             onCotaPlatoM: terraplenagem.setCotaPlatoM,
             inclinacao: terraplenagem.inclinacao,

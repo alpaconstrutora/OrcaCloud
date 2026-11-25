@@ -1969,7 +1969,7 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
       title: 'Excluir o platô desenhado?',
       message:
         t.base === 'DESENHADO'
-          ? 'O contorno desenhado é apagado e o platô volta a ser o do envelope. Volumes e orçamento passam a usar o envelope.'
+          ? 'O contorno desenhado é apagado e o terreno volta ao natural (a Terraplenagem desliga). Para um platô novo, desenhe de novo — ou ligue a Terraplenagem para usar o envelope, na cota de equilíbrio.'
           : 'O contorno desenhado (guardado, sem uso agora) é apagado. A forma em uso não muda.',
       variant: 'danger',
       confirmLabel: 'Excluir',

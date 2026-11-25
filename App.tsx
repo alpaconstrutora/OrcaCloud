@@ -405,7 +405,6 @@ import { useProjectOperations } from './hooks/useProjectOperations';
 import { useOrgContext } from './hooks/useOrgContext';
 import AppRouter from './components/AppRouter';
 import { ErrorBoundary } from './components/ErrorBoundary';
-const PublicMarketplaceView = React.lazy(() => import('./components/public/PublicMarketplaceView'));
 const PublicPlantChecker = React.lazy(() => import('./components/public/PublicPlantChecker').then(m => ({ default: m.PublicPlantChecker })));
 const PublicCertificadoChecker = React.lazy(() => import('./components/public/PublicCertificadoChecker').then(m => ({ default: m.PublicCertificadoChecker })));
 const PublicDocumentoChecker = React.lazy(() => import('./components/public/PublicDocumentoChecker').then(m => ({ default: m.PublicDocumentoChecker })));
@@ -735,11 +734,6 @@ const App: React.FC = () => {
     return match ? match[1] : null;
   }, []);
 
-  const marketplaceSlug = React.useMemo(() => {
-    const match = window.location.pathname.match(/^\/m\/([a-z0-9-]+)\/?$/i);
-    return match ? match[1] : null;
-  }, []);
-
   const publicPlantDocId = React.useMemo(() => {
     const match = window.location.pathname.match(/^\/publico\/validar-planta\/([0-9a-f-]{36})$/i);
     return match ? match[1] : null;
@@ -876,11 +870,6 @@ const App: React.FC = () => {
   if (orderShareToken) return <PublicOrderView token={orderShareToken} />;
   if (proposalShareToken) return <PublicProposalView token={proposalShareToken} />;
   if (officesShareProjectId) return <PublicEspecificacoesView projetoId={officesShareProjectId} />;
-  if (marketplaceSlug) return (
-    <React.Suspense fallback={<div className="min-h-screen bg-gray-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
-      <PublicMarketplaceView slug={marketplaceSlug} />
-    </React.Suspense>
-  );
   if (publicPlantDocId) return (
     <React.Suspense fallback={<div className="min-h-screen bg-slate-50 flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}>
       <PublicPlantChecker />

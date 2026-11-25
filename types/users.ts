@@ -553,9 +553,6 @@ export interface Organization {
     phone?: string;
     website?: string;
     logoUrl?: string;
-    /** Endereço do marketplace público: a vitrine abre em `/m/<slug>`. Sem ele, não há vitrine
-     *  (utils/enderecoDoMarketplace.ts). */
-    slug?: string | null;
     created_at?: string;
     address: {
         street?: string;

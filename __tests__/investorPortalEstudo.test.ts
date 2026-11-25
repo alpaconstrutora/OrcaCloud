@@ -134,11 +134,17 @@ describe('vitrine pelo link (plano 2026-11-21, Fase 2): só números da versão,
         }
     });
 
-    it('o marketplace anônimo usa a vitrine e perde o EXECUTE de PUBLIC', () => {
-        const sql = ultima('get_public_marketplace');
-        expect(sql).toMatch(/fn_oportunidade_na_vitrine\(o\)/);
-        expect(sql).toMatch(/REVOKE EXECUTE ON FUNCTION public\.get_public_marketplace\(text\) FROM PUBLIC/);
-        expect(sql).not.toMatch(/'cost_estimate'|'vgv',\s+o\.vgv/);
+    it('o marketplace público saiu (25/11/2026): as 2 funções e as 2 colunas caem e nenhuma migration depois as recria', () => {
+        const nomes = readdirSync(pasta).filter(f => f.endsWith('.sql')).sort((a, b) => (a.match(/\d{14}/)?.[0] ?? '').localeCompare(b.match(/\d{14}/)?.[0] ?? ''));
+        const drop = 'aplicar_20271125200000_sem_marketplace.sql';
+        const sql = readFileSync(`${pasta}/${drop}`, 'utf-8');
+        expect(sql).toMatch(/DROP FUNCTION IF EXISTS public\.get_public_marketplace\(text\)/);
+        expect(sql).toMatch(/DROP FUNCTION IF EXISTS public\.submit_public_interest\(/);
+        expect(sql).toMatch(/DROP COLUMN IF EXISTS no_marketplace/);
+        expect(sql).toMatch(/organizations DROP COLUMN IF EXISTS slug/);
+        for (const f of nomes.slice(nomes.indexOf(drop) + 1)) {
+            expect(readFileSync(`${pasta}/${f}`, 'utf-8'), f).not.toMatch(/get_public_marketplace|submit_public_interest|no_marketplace/);
+        }
     });
 
     it('publicar exige estudo, versão com cálculo e parecer diferente de "reprovar"', () => {
@@ -167,11 +173,10 @@ describe('Data Room pelo GED (plano 2026-11-21, Fase 3)', () => {
         expect(sql).not.toMatch(/opportunity_documents/);
     });
 
-    it('a vitrine leva as fotos do empreendimento e não a galeria própria; o marketplace não lê opportunity_documents', () => {
+    it('a vitrine leva as fotos do empreendimento e não a galeria própria', () => {
         const vitrine = ultima('fn_oportunidade_na_vitrine');
         expect(vitrine).toContain(`'fotos'`);
         expect(vitrine).not.toContain('gallery_urls');
-        expect(ultima('get_public_marketplace')).not.toMatch(/opportunity_documents/);
     });
 });
 
@@ -190,24 +195,6 @@ describe('captação pela SPE (plano 2026-11-21, Fase 4)', () => {
         }
         expect(sql).toMatch(/IN \('investidor', 'scp'\)/);
         expect(sql).toMatch(/spe_partners/);
-    });
-
-    it('o marketplace anônimo não recebe captação nem SPE', () => {
-        // Desde a Fase A6 (plano 2026-11-21-portal-do-investidor-consolidacao): lista explícita do que sai.
-        const sql = corpo('get_public_marketplace');
-        expect(sql).not.toMatch(/'captacao'/);
-        expect(sql).not.toMatch(/'spe_entity_id'/);
-    });
-
-    it('marketplace (A6): só a vitrine pública marcada, e só VGV, TIR e prazo do estudo', () => {
-        const sql = corpo('get_public_marketplace');
-        expect(sql).toMatch(/o\.no_marketplace = true/);
-        expect(sql).toMatch(/'vgv'/);
-        expect(sql).toMatch(/'tirAnual'/);
-        expect(sql).toMatch(/'duracao'/);
-        for (const interno of ['custoObra', 'terreno', 'lucroLiquido', 'exposicaoMaxima', 'team_json', 'distances_json', 'imovib_study_id']) {
-            expect(sql).not.toContain(`'${interno}'`);
-        }
     });
 
     it('resumo pelo link (A3): settings da obra só com as chaves que a tela lê', () => {
@@ -237,7 +224,6 @@ describe('captação pela SPE (plano 2026-11-21, Fase 4)', () => {
         const sql = corpo('fn_investor_portal_submit_interest');
         expect(sql).toMatch(/ON CONFLICT \(opportunity_id, investor_id\) WHERE investor_id IS NOT NULL DO UPDATE/);
         expect(sql).toMatch(/texto_longo/);
-        expect(corpo('submit_public_interest')).toMatch(/no_marketplace = true/);
     });
 
     it('o interesse pelo link grava o investidor do token e o valor', () => {

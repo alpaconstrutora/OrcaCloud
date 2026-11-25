@@ -126,6 +126,19 @@ Contrato", entra neste plano? Resposta:
    - em produção: abrir o modal do AD-004, conferir a lista de modelos e fechar sem
      gerar (gerar grava uma versão; só com o seu OK).
 
+## Andamento
+
+- **PR 1 (itens 1, 2, 4, 5), 25/11/2026:**
+  - código e testes prontos: `renovacaoEditarPreviaAtrasada` monta a gaveta (falha sem a
+    proteção da prévia atrasada e passa com ela ✅); `renovacoesUmLugar` (fila abre a
+    gaveta em Renovar e Editar, Ver contrato abre a negociação, linha de situação com
+    atalho ✅);
+  - `ContractRenewalsPanel.tsx` e `RenewContractSheet.tsx` apagados, sem nenhum uso no
+    código ✅;
+  - `tsc` limpo, `check-ui-standard` sem achados nos 6 arquivos tocados, 160 testes
+    relacionados verdes ✅;
+  - falta: a conferência em produção (itens 2 e 4).
+
 ## Ordem de entrega
 
 - **PR 1:** itens 1, 2, 4 e 5 (a renovação muda de lugar).

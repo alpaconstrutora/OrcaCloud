@@ -14,7 +14,7 @@ import RenovacaoRegistroSheet from './RenovacaoRegistroSheet';
  * aditivos de prorrogação (inclusive cancelados) e contratos novos gerados por
  * renovação —, recortadas pelo empreendimento aberto, como a fila.
  *
- * Ações: Ver (detalhes), Editar (leva à negociação já editando o aditivo —
+ * Ações: Ver (detalhes), Editar (a gaveta de renovação em modo edição —
  * salvar = substituí-lo) e Excluir (desfaz; a linha fica, como cancelada).
  * Editar e Excluir só na última renovação de cada contrato.
  */
@@ -39,12 +39,15 @@ interface Props {
     negociacoesDoEmpreendimento: Set<string> | null;
     nomeDoCliente: (id?: string | null) => string;
     onOpenContract?: (contractId: string) => void;
+    /** Editar: o pai abre a gaveta de renovação em modo edição. */
     onEditRenewal?: (contractId: string, addendumId: string) => void;
+    /** Muda quando a gaveta do pai grava — o histórico relê. */
+    versao?: number;
     /** Desfez uma renovação: a fila do pai relê e avisa. */
     onMudou: (mensagem: string) => void;
 }
 
-const RentalRenovacoesHistorico: React.FC<Props> = ({ organizationId, negociacoesDoEmpreendimento, nomeDoCliente, onOpenContract, onEditRenewal, onMudou }) => {
+const RentalRenovacoesHistorico: React.FC<Props> = ({ organizationId, negociacoesDoEmpreendimento, nomeDoCliente, onOpenContract, onEditRenewal, versao = 0, onMudou }) => {
     const [todos, setTodos] = useState<RegistroDeRenovacao[]>([]);
     const [loading, setLoading] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
@@ -65,7 +68,7 @@ const RentalRenovacoesHistorico: React.FC<Props> = ({ organizationId, negociacoe
         }
     }, [organizationId]);
 
-    useEffect(() => { carregar(); }, [carregar]);
+    useEffect(() => { carregar(); }, [carregar, versao]);
 
     // Sobre TODAS as renovações lidas (não só as do empreendimento): "a última do
     // contrato" não pode depender do recorte da tela.

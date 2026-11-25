@@ -13,7 +13,8 @@ import type { Topografia } from '../../hooks/useBlueprintTopografia';
 import type { BlueprintTopografiaRow } from '../../types/blueprint';
 import { FONTES, fonteDeElevacao } from '../../utils/blueprintElevacaoProvedores';
 
-vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => vi.fn(async () => true) }));
+const { confirmar } = vi.hoisted(() => ({ confirmar: vi.fn(async (_o: { message?: string }) => true) }));
+vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => confirmar }));
 
 function versao(extra: Partial<BlueprintTopografiaRow> = {}): BlueprintTopografiaRow {
   return {
@@ -123,6 +124,14 @@ describe('PainelTopografia · o platô desenhado', () => {
     montar({ temDesenho: true, onExcluirDesenho });
     fireEvent.click(screen.getByRole('button', { name: 'Excluir platô desenhado' }));
     await waitFor(() => expect(onExcluirDesenho).toHaveBeenCalledTimes(1));
+  });
+
+  it('a confirmação diz que o terreno volta ao natural (pedido 25/11: excluir "levou junto todo o relevo")', async () => {
+    confirmar.mockClear();
+    montar({ temDesenho: true, base: 'DESENHADO', onExcluirDesenho: vi.fn() } as never);
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir platô desenhado' }));
+    await waitFor(() => expect(confirmar).toHaveBeenCalledTimes(1));
+    expect(confirmar.mock.calls[0][0].message).toMatch(/terreno volta ao natural/i);
   });
 
   it('o contorno recusado aparece com o motivo', () => {

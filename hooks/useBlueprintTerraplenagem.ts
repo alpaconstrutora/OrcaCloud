@@ -135,7 +135,8 @@ export interface Terraplenagem {
   esquecerAvisoDosLados: () => void;
   /**
    * 25/11/2026 (pedido: *"um botão Excluir platô desenhado no painel, com confirmação"*): apaga o desenho. Se ele
-   * estava em uso, a forma volta para o envelope (o padrão); com outra forma em uso, ela fica.
+   * estava em uso, a forma volta para o envelope (o padrão) e a cota volta a equilíbrio; com outra forma em uso,
+   * forma e cota ficam.
    */
   excluirAnelDesenhado: () => void;
 }
@@ -564,12 +565,17 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
   );
   const esquecerAvisoDosLados = useCallback(() => setAvisoDosLados(null), []);
   const excluirAnelDesenhado = useCallback(() => {
-    const b: BaseDoPlato = base === 'DESENHADO' ? 'ENVELOPE' : base;
+    const emUso = base === 'DESENHADO';
+    const b: BaseDoPlato = emUso ? 'ENVELOPE' : base;
+    // A cota fixa era a DO DESENHO: no envelope (que pode ser o lote inteiro) ela aplainava tudo — pedido 25/11/2026
+    // *"o plato foi deletado mas também foi junto todo o relevo"*. Em uso → volta a equilíbrio; senão, fica.
+    const cota = emUso ? null : cotaPlatoM;
     anelDesenhadoRef.current = null;
     setAnelDesenhado(null);
     setAvisoDosLados(null);
     setBaseLocal(b);
-    persistir(premissa(b, cotaPlatoM, parametros, linhasDoPerfil, drenagem));
+    setCotaLocal(cota);
+    persistir(premissa(b, cota, parametros, linhasDoPerfil, drenagem));
   }, [persistir, premissa, base, cotaPlatoM, parametros, linhasDoPerfil, drenagem]);
 
   return {

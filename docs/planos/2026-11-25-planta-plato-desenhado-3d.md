@@ -260,6 +260,11 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
   cada canto e a cota no meio (`"883,90 m"`, ` · equilíbrio` quando é a de equilíbrio), por cima das curvas; segue a
   prévia do 3D durante o arraste. Só leitura — ajustar continua no 3D. Teste `BlueprintCanvasPlatoNaPlanta` RED →
   GREEN; harness `docs/spikes/topografia/?desenhar=1` mostra o contorno depois de fechado.
+- [x] Achado do usuário 25/11: *"quando deletei o plato conforme sua orientacao, o plato foi deletado mas também foi
+  junto todo o relevo com as curvas de nivel"*. Banco: base ENVELOPE com a cota fixa 883,9 do desenho — o envelope
+  do estudo ≈ o lote inteiro, que virou um platô plano (corte 215 mil m³, aterro 1,6 milhão m³); o natural estava
+  intacto. Agora excluir o desenho EM USO volta ao terreno natural: cota → equilíbrio (null) e "Corte e aterro"
+  (Vista › Exibir — não é item do painel Camadas) desliga; com LOTE/CASA em uso, forma e cota ficam. Testes do hook e da confirmação RED → GREEN.
 
 ---
 

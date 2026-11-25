@@ -114,6 +114,30 @@ describe('useBlueprintTerraplenagem — o platô desenhado', () => {
     expect(salvos.at(-1)).toMatchObject({ base: 'ENVELOPE', anel_desenhado: null });
   });
 
+  it('excluir o desenho EM USO solta a cota fixa (volta a equilíbrio) — a cota do desenho no envelope aplainava o lote', async () => {
+    // Pedido 25/11/2026: *"quando deletei o plato ... foi junto todo o relevo"* — a base voltou ao envelope (≈ o lote
+    // inteiro) com a cota 883,90 do desenho, e o lote todo virou platô.
+    const { result } = await montar();
+    act(() => result.current.definirAnelDesenhado(QUADRADO));
+    act(() => result.current.setCotaPlatoM(883.9));
+    await esperarGravacao();
+    act(() => result.current.excluirAnelDesenhado());
+    expect(result.current.cotaPlatoM).toBeNull();
+    await esperarGravacao();
+    expect(salvos.at(-1)).toMatchObject({ base: 'ENVELOPE', anel_desenhado: null, cota_plato_m: null });
+  });
+
+  it('excluir o desenho guardado com o LOTE em uso não mexe na cota do lote', async () => {
+    const { result } = await montar();
+    act(() => result.current.definirAnelDesenhado(QUADRADO));
+    act(() => result.current.setBase('LOTE'));
+    act(() => result.current.setCotaPlatoM(870));
+    act(() => result.current.excluirAnelDesenhado());
+    expect(result.current.cotaPlatoM).toBe(870);
+    await esperarGravacao();
+    expect(salvos.at(-1)).toMatchObject({ base: 'LOTE', cota_plato_m: 870 });
+  });
+
   it('excluir com outra forma em uso (lote) apaga o desenho e mantém o lote', async () => {
     const { result } = await montar();
     act(() => result.current.definirAnelDesenhado(QUADRADO));

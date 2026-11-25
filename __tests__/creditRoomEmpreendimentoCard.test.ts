@@ -148,3 +148,10 @@ describe('linhasDoCardDoEmpreendimento — Serviço', () => {
         expect(linhas.some(l => l.valor === FRASE_SEM_CONTRATO_DE_SERVICO)).toBe(false);
     });
 });
+
+describe('linhasDoCardDoEmpreendimento — Imobilizado', () => {
+    it('só a renda do mês: sem VGV (nada à venda nem para locar)', () => {
+        const linhas = linhasDoCardDoEmpreendimento(emp({ objetivo: 'IMOBILIZADO' }));
+        expect(linhas).toEqual([{ rotulo: 'Renda do mês', valor: R(12_500) }]);
+    });
+});

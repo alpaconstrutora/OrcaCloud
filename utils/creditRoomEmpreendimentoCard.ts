@@ -6,6 +6,7 @@
  *  - Locação: unidades locadas e disponíveis, cada uma com o aluguel; unidade disponível sem
  *    aluguel cadastrado é contada à parte — nunca vira R$ 0.
  *  - Serviço: contrato faturado e a faturar; sem contrato válido, uma frase.
+ *  - Imobilizado (25/11/2026): só a renda do mês — nada à venda nem para locar, VGV não se aplica.
  *
  * Lê SÓ o snapshot congelado. Campo ausente (versão liberada antes deste recurso) é "dado ausente",
  * nunca zero: aparece como `ausente` ("—" na tela, "n/d" no book).
@@ -76,6 +77,8 @@ export function linhasDoCardDoEmpreendimento(e: SnapshotEmpreendimentoItem, op: 
             renda,
         ];
     }
+
+    if (e.objetivo === 'IMOBILIZADO') return [renda];
 
     return [
         { rotulo: 'VGV vendido', valor: dinheiro(e.vgv_vendido) },

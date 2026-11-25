@@ -15,6 +15,10 @@ describe('espelhosDoObjetivo', () => {
     expect(objetivoDe('SERVICO')).toBe('SERVICO');
     expect(espelhosDoObjetivo('SERVICO')).toEqual({ vendas: false, locacoes: false });
   });
+  it('Imobilizado (imóvel mantido no ativo) não mostra nenhum espelho', () => {
+    expect(objetivoDe('IMOBILIZADO')).toBe('IMOBILIZADO');
+    expect(espelhosDoObjetivo('IMOBILIZADO')).toEqual({ vendas: false, locacoes: false });
+  });
   it('nulo ou desconhecido conta como Misto (nenhuma aba some)', () => {
     expect(espelhosDoObjetivo(null)).toEqual({ vendas: true, locacoes: true });
     expect(espelhosDoObjetivo(undefined)).toEqual({ vendas: true, locacoes: true });

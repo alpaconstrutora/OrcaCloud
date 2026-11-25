@@ -41,6 +41,11 @@ transcrição e cancela leitura em andamento). Resposta:
 
 > Opção 1
 
+25/11/2026, depois do #702 (sobre a categoria vazia aparecer "Não definido" na lista):
+
+> implemente: "… Se preferir que quem entra pela transcrição já nasça com uma categoria (o
+> formulário manual sugere "Vendas"), é uma mudança pequena."
+
 Continuação de `2026-11-23-transcricao-de-documentos-do-empreendimento.md`.
 
 ## Teste antes de implementar (24/11/2026)
@@ -73,9 +78,14 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
   Clientes). Nome gravado em letra normal ("João da Silva"; 60 de 66 clientes estão assim),
   conectivos em minúscula, sigla de empresa (LTDA, S/A, ME…) em maiúscula. Grava: nome, tipo
   (PF/PJ pelo documento), CPF/CNPJ, RG com órgão/UF, e — se o texto diz "casado … com" —
-  estado civil Casado(a), nome e CPF do cônjuge. Nacionalidade, categoria, profissão, regime
+  estado civil Casado(a), nome e CPF do cônjuge. Nacionalidade, profissão, regime
   de bens e endereço ficam vazios para completar em Clientes (não inventar). Vínculo com o
   empreendimento: não pedido.
+- 25/11 (item 9): **categoria** deixa de ficar vazia — nasce com o mesmo tipo do formulário
+  manual, `CATEGORIA_PADRAO_DO_CLIENTE` ("Vendas", em `constants/clientCategories.ts`, agora
+  usada pelos dois). "Vendas" está no catálogo de toda organização (o serviço de categorias
+  completa com os padrões), então o tipo sempre aparece na lista e no formulário. Cliente já
+  cadastrado (035) não é alterado pelo código.
 
 ## Itens
 
@@ -165,7 +175,12 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    "cadastrado em Clientes (código 035)" e a linha passou a "Já está em Clientes · código 035 ·
    Construção do Edifício Garden Cambuhy SPE". No banco: PF, CPF, RG + SSP/MG, Casado(a),
    cônjuge com nome e CPF, Ativo; em Meus Clientes aparece com código 035. Console sem erro
-   (lido desde a abertura da tela). Categoria ("Tipo" na lista) ficou "Não definido" — de propósito.
+   (lido desde a abertura da tela). Categoria ("Tipo" na lista) ficou "Não definido" — de propósito
+   (mudou no item 9).
+9. [ ] Categoria padrão — `clienteDaParte` grava `category: CATEGORIA_PADRAO_DO_CLIENTE`; o
+   `ClientForm` usa a mesma constante no lugar do texto solto.
+   **Pronto quando:** testes de `clienteDaParte` exigem `category: 'Vendas'` (vermelho antes,
+   verde depois), tsc limpo e o texto novo servido em produção.
 
 ## Estado
 
@@ -173,3 +188,4 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
 - 24/11/2026: item 4 (negrito) concluído e provado em produção (#688). Itens 1–4 fechados.
 - 24/11/2026: itens 5 (objetos, #691) e 6 (link, #694) concluídos e provados em produção. Itens 1–6 fechados.
 - 24/11/2026: itens 7–8 (Partes → Clientes, #702) concluídos e provados em produção. Itens 1–8 fechados.
+- 25/11/2026: item 9 (categoria padrão) em andamento.

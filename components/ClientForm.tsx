@@ -8,6 +8,7 @@ import CityStateSelect from './CityStateSelect';
 import SaveStatus from './ui/SaveStatus';
 import { useStore } from '../store/useStore';
 import { clientCategoryService } from '../services/clientCategoryService';
+import { CATEGORIA_PADRAO_DO_CLIENTE } from '../constants/clientCategories';
 import { ClientCategory } from '../types';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { clientEmpreendimentoService } from '../services/clientEmpreendimentoService';
@@ -106,7 +107,7 @@ const EMPTY_FORM: Partial<Client> = {
     neighborhood: '',
     city: '',
     state: '',
-    category: 'Vendas',
+    category: CATEGORIA_PADRAO_DO_CLIENTE,
     portal: 'Nenhum',
 };
 

@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   gradeDeProjeto,
+  saldoDoPlato,
   PARAMETROS_PADRAO,
   terraplenagemComTalude,
   volumeEntreSuperficies,
@@ -69,5 +70,22 @@ describe('gradeDeProjeto', () => {
     const conta = terraplenagemComTalude(t, ANEL, 99.8, PARAMETROS_PADRAO, null);
     expect(v.corteM3).toBeGreaterThan(v.aterroM3);
     expect(conta.corteTotalM3).toBeGreaterThan(conta.aterroTotalM3);
+  });
+});
+
+describe('saldoDoPlato (o selo do 3D)', () => {
+  it('os números são os da conta da terraplenagem (corte total, aterro total, saldo em banco)', () => {
+    const t = rampa();
+    const conta = terraplenagemComTalude(t, ANEL, 99.8, PARAMETROS_PADRAO, null);
+    const s = saldoDoPlato(conta, t, ANEL, false);
+    expect(s).toEqual({ corteM3: conta.corteTotalM3, aterroM3: conta.aterroTotalM3, saldoM3: conta.saldoEmBancoM3, equilibrio: false, foraDoRelevo: false });
+  });
+
+  it('canto do platô fora do relevo → foraDoRelevo; a cota de equilíbrio passa adiante', () => {
+    const t = rampa();
+    const fora = [...ANEL.slice(0, 3), { x: -30_000, y: 5000 }];
+    const s = saldoDoPlato(terraplenagemComTalude(t, fora, 100, PARAMETROS_PADRAO, null), t, fora, true);
+    expect(s.foraDoRelevo).toBe(true);
+    expect(s.equilibrio).toBe(true);
   });
 });

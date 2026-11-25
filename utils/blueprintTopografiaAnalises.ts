@@ -1095,6 +1095,30 @@ export function gradeDeProjeto(
   return { origem, espacamentoMm: esp * p, colunas: cols, linhas: lins, cotasM: saida };
 }
 
+/**
+ * O SELO DO 3D (25/11/2026, "mass balance" do reel): corte, aterro e saldo do platô — os MESMOS números do painel
+ * e do orçamento (`terraplenagemComTalude`), nunca uma conta à parte. `foraDoRelevo`: algum canto do platô cai
+ * onde o levantamento não tem cota (a conta só vale onde há chão).
+ */
+export interface SaldoDoPlato {
+  corteM3: number;
+  aterroM3: number;
+  saldoM3: number;
+  equilibrio: boolean;
+  foraDoRelevo: boolean;
+}
+
+export function saldoDoPlato(calc: TerraplenagemComTalude, grade: GradeDeElevacao, anelPlato: Point[], equilibrio: boolean): SaldoDoPlato {
+  const terreno = amostradorDaGrade(grade);
+  return {
+    corteM3: calc.corteTotalM3,
+    aterroM3: calc.aterroTotalM3,
+    saldoM3: calc.saldoEmBancoM3,
+    equilibrio,
+    foraDoRelevo: anelPlato.some((p) => terreno(p) === null),
+  };
+}
+
 /** Profundidade até a qual a vala ainda é o que diz ser. */
 export function profundidadeLimiteDaDrenagem(tipo: TipoDeDrenagem): number {
   return tipo === 'TUBO' ? 1.5 : 0.6;

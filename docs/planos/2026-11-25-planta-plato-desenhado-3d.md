@@ -194,6 +194,20 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
   trava 90°, < 3 distintos não grava). Testes: hook 6 + casa 5, painel 4 (+7 da fase 2), canvas 4; suíte dos
   64 arquivos afetados 693/693; `tsc` 0. Na tela (harness `topografia?desenhar=1`): o contorno desenhado vira
   o platô e o corte/aterro do 2D segue a forma. ⏳ Migration aplicada pelo usuário ANTES do merge.
+- [x] P2 — terreno de projeto no 3D: com a Terraplenagem à vista o relevo e as curvas são os da superfície depois
+  da obra (`gradeDeProjeto` + `gerarCurvasNosNiveis` nos níveis/mestras da versão), em qualquer estilo; selo
+  embaixo à direita com corte/aterro/saldo (`saldoDoPlato`, os números do painel), botão "Equilíbrio" e aviso
+  de platô fora do relevo. Prova: harness `terreno-grande-3d?plato=1` (platô escavado, curvas contornando) e o
+  hover sobre a superfície de projeto (1281/0). Testes `saldoDoPlato` (2).
+- [x] P3 — editar no 3D: polígono azul translúcido, alça por canto (trava 90°, Shift libera), seta da cota
+  (passo 5 cm), rótulo "882,20 m" (+ "· equilíbrio"); prévia 1 por quadro com grade rala; um confirmar por gesto;
+  Esc desfaz; contorno que se cruza é recusado com aviso. Puros `utils/blueprintPlato3d.ts` (5 testes). Portão
+  `docs/spikes/terreno-grande-3d/plato.mjs` ✅: canto muda o anel (1 confirmar), Esc não muda nada e a câmera
+  não gira, seta sobe a cota (866 → 882,20; aterro com talude). Dois defeitos que só o portão pegou: alças
+  invisíveis (pequenas e brancas) e a órbita girando junto (desligar NO aperto, e após Esc só no pointerup).
+  Suíte 67 arquivos 718/718; `tsc` 0.
+- ⏳ Falta: migration aplicada pelo usuário → merge → prova logada em produção.
+- Fora (anotado): o "percorrer" a pé ainda anda no terreno natural, não no de projeto.
 
 ---
 

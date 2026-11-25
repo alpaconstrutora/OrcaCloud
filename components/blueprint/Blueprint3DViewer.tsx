@@ -97,6 +97,7 @@ import {
 } from '../../utils/blueprint3dEnquadramento';
 import { blocoDoTerreno, espessuraDoBloco, type MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import { COR_CURVA_3D, nivelMaisProximo, type ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
+import { cotaDaSeta, moverCanto } from '../../utils/blueprintPlato3d';
 import { formatarCotaM } from '../../utils/blueprintTopografia';
 import { uvNaCaixa, type PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaDeFundo';
 import { doDesenhoParaMundo, ESCALA_DO_DESENHO_NO_MUNDO, planoNoMundo } from '../../utils/blueprint3dEspelho';
@@ -186,6 +187,29 @@ interface Props {
    * muda quando o plano muda (outra versão, outra fonte, outra opacidade).
    */
   mapaNoRelevo?: { plano: PlanoDaTexturaDoMapa; chave: string } | null;
+  /**
+   * PLATÔ (25/11/2026, P2): corte, aterro e saldo da terraplenagem (os números do painel) para o selo do 3D, e o
+   * botão que volta a cota à de equilíbrio. `null` = sem terreno de projeto à vista.
+   */
+  saldoDoPlato?: { corteM3: number; aterroM3: number; saldoM3: number; equilibrio: boolean; foraDoRelevo: boolean } | null;
+  onEquilibrio?: () => void;
+  /**
+   * PLATÔ EDITÁVEL NO 3D (25/11/2026, P3 — reel "Terrain Modification Tool"): o platô desenhado em azul, com alça em
+   * cada canto (arrasta no plano da cota; trava 90° por padrão, Shift libera) e a seta da cota (passo 5 cm). Durante o
+   * gesto, `onPrevia` (no máximo 1 por quadro) — o editor refaz terreno, curvas e saldo com ela; ao soltar,
+   * `onConfirmar` (um save). Esc → `onPrevia(null)`. `cotaEm`: a cota do platô (m) num ponto do desenho (inclinado).
+   */
+  platoEditavel?: {
+    anel: { x: number; y: number }[];
+    cotaM: number;
+    cotaZeroM: number;
+    equilibrio: boolean;
+    cotaEm: (p: { x: number; y: number }) => number;
+    onPrevia: (p: { anel: { x: number; y: number }[]; cotaM: number } | null) => void;
+    onConfirmar: (p: { anel: { x: number; y: number }[]; cotaM: number | null }) => void;
+  } | null;
+  /** Aviso do platô (contorno recusado), mostrado no selo do saldo. */
+  avisoDoPlato?: string | null;
   /**
    * MAQUETE (25/11/2026): o entorno real — prédios do OpenStreetMap e árvores do ESA WorldCover —,
    * já no desenho (mm) com a base em Y de mundo (cota − zero). Só é desenhado no estilo Maquete.
@@ -3004,6 +3028,210 @@ function ArrastarNoPiso({
   return null;
 }
 
+/**
+ * O PLATÔ NO 3D (25/11/2026, P3): polígono azul translúcido na cota do platô, uma alça por canto e a seta da cota.
+ * Mora DENTRO do grupo espelhado do desenho (as posições são as do desenho: x/1000, cota − zero, y/1000); o mouse é
+ * convertido pelo `worldToLocal` do próprio grupo. A órbita sai de cena durante o gesto (como no arraste de peça).
+ */
+function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']> }) {
+  const camera = useThree((s) => s.camera);
+  const gl = useThree((s) => s.gl);
+  const controles = useThree((s) => s.controls) as { enabled: boolean } | null;
+  const grupo = useRef<THREE.Group>(null);
+  const [agarrado, setAgarrado] = useState<number | null>(null);
+  const [chaveDaSeta, setChaveDaSeta] = useState(0);
+  const cb = useRef(plato);
+  cb.current = plato;
+  const yDe = (p: { x: number; y: number }) => plato.cotaEm(p) - plato.cotaZeroM;
+
+  const geometria = useMemo(() => {
+    const contorno = plato.anel.map((p) => new THREE.Vector2(p.x, p.y));
+    const tris = THREE.ShapeUtils.triangulateShape(contorno, []);
+    const pos = new Float32Array(plato.anel.length * 3);
+    plato.anel.forEach((p, i) => pos.set([p.x / 1000, yDe(p) + 0.06, p.y / 1000], i * 3));
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    g.setIndex(tris.flat());
+    g.computeVertexNormals();
+    return g;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plato.anel, plato.cotaM, plato.cotaZeroM]);
+  useEffect(() => () => geometria.dispose(), [geometria]);
+
+  const contornoLinha = useMemo(
+    () => [...plato.anel, plato.anel[0]].map((p) => [p.x / 1000, yDe(p) + 0.08, p.y / 1000] as [number, number, number]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [plato.anel, plato.cotaM, plato.cotaZeroM],
+  );
+  const centro = useMemo(() => {
+    const n = plato.anel.length;
+    const c = plato.anel.reduce((a, p) => ({ x: a.x + p.x / n, y: a.y + p.y / n }), { x: 0, y: 0 });
+    return c;
+  }, [plato.anel]);
+  const diagonalM = useMemo(() => {
+    const xs = plato.anel.map((p) => p.x);
+    const ys = plato.anel.map((p) => p.y);
+    return Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 1000;
+  }, [plato.anel]);
+  const raioDaAlca = Math.max(0.25, diagonalM * 0.03);
+  const posicaoDoRotulo = useRef(new THREE.Vector3());
+  posicaoDoRotulo.current.set(centro.x / 1000, yDe(centro) + Math.max(1.5, diagonalM * 0.05), centro.y / 1000);
+
+  // O arraste de um canto: no plano horizontal da cota do platô naquele canto.
+  useEffect(() => {
+    if (agarrado === null) return;
+    const anelInicial = cb.current.anel;
+    const cotaInicial = cb.current.cotaM;
+    const cotaConfirmada = cb.current.equilibrio ? null : cotaInicial;
+    const yDoPlano = cb.current.cotaEm(anelInicial[agarrado]) - cb.current.cotaZeroM;
+    const raio = new THREE.Raycaster();
+    const plano = new THREE.Plane(new THREE.Vector3(0, 1, 0), -yDoPlano);
+    const ponto = new THREE.Vector3();
+    let atual = anelInicial;
+    let quadro = 0;
+    const seguir = (e: PointerEvent) => {
+      const g = grupo.current;
+      if (!g) return;
+      const r = gl.domElement.getBoundingClientRect();
+      raio.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+      // O plano é do DESENHO (y para cima não muda com o espelho): passa o raio para o referencial do grupo.
+      const inv = new THREE.Matrix4().copy(g.matrixWorld).invert();
+      const local = raio.ray.clone().applyMatrix4(inv);
+      if (!local.intersectPlane(plano, ponto)) return;
+      atual = moverCanto(anelInicial, agarrado, { x: ponto.x * 1000, y: ponto.z * 1000 }, !e.shiftKey);
+      if (!quadro) {
+        quadro = requestAnimationFrame(() => {
+          quadro = 0;
+          cb.current.onPrevia({ anel: atual, cotaM: cotaInicial });
+        });
+      }
+    };
+    const terminar = (confirmar: boolean) => {
+      if (quadro) cancelAnimationFrame(quadro);
+      setAgarrado(null);
+      if (confirmar) cb.current.onConfirmar({ anel: atual, cotaM: cotaConfirmada });
+      else cb.current.onPrevia(null);
+    };
+    const soltar = () => {
+      if (controles) controles.enabled = true;
+      terminar(true);
+    };
+    // Esc no meio do gesto: o botão do mouse ainda está apertado — a órbita só volta quando ele for solto, senão o
+    // resto do arraste giraria a câmera (portão plato.mjs).
+    const cancelar = () => {
+      window.addEventListener(
+        'pointerup',
+        () => {
+          if (controles) controles.enabled = true;
+        },
+        { once: true },
+      );
+      terminar(false);
+    };
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') cancelar();
+    };
+    window.addEventListener('pointermove', seguir);
+    window.addEventListener('pointerup', soltar);
+    window.addEventListener('pointercancel', cancelar);
+    window.addEventListener('keydown', tecla);
+    return () => {
+      window.removeEventListener('pointermove', seguir);
+      window.removeEventListener('pointerup', soltar);
+      window.removeEventListener('pointercancel', cancelar);
+      window.removeEventListener('keydown', tecla);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [agarrado]);
+  // Saiu de cena no meio de um gesto: a órbita não pode ficar desligada.
+  useEffect(
+    () => () => {
+      if (controles) controles.enabled = true;
+    },
+    [controles],
+  );
+
+  // A seta: o deslocamento vertical do PivotControls vira a cota (passo 5 cm).
+  const cotaNoInicioDaSeta = useRef(plato.cotaM);
+  const cotaDaSetaRef = useRef<number | null>(null);
+  const quadroDaSeta = useRef(0);
+
+  return (
+    <group ref={grupo} userData={{ naoCapturar: true }}>
+      <mesh geometry={geometria} renderOrder={21} raycast={() => null}>
+        <meshBasicMaterial color="#2563eb" transparent opacity={0.35} side={THREE.DoubleSide} depthWrite={false} />
+      </mesh>
+      <Line points={contornoLinha} color="#1d4ed8" lineWidth={2.5} side={THREE.DoubleSide} renderOrder={22} raycast={() => null} />
+      {plato.anel.map((p, i) => (
+        <mesh
+          key={`alca-${i}`}
+          position={[p.x / 1000, yDe(p) + 0.08, p.y / 1000]}
+          renderOrder={23}
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            // NA HORA, não no efeito: a OrbitControls ouve o <canvas> e já começou a girar quando o R3F entrega o
+            // aperto à alça (ver memória "arrastar pelo piso"); o efeito do gesto rodaria tarde demais.
+            if (controles) controles.enabled = false;
+            setAgarrado(i);
+          }}
+          onPointerOver={() => (document.body.style.cursor = 'grab')}
+          onPointerOut={() => (document.body.style.cursor = '')}
+        >
+          <sphereGeometry args={[raioDaAlca, 16, 12]} />
+          <meshBasicMaterial color={agarrado === i ? '#1e3a8a' : '#2563eb'} depthTest={false} />
+          <Edges color="#1d4ed8" />
+        </mesh>
+      ))}
+      <group key={chaveDaSeta} position={[centro.x / 1000, yDe(centro) + 0.1, centro.y / 1000]}>
+        <PivotControls
+          activeAxes={[false, true, false]}
+          disableRotations
+          disableScaling
+          disableSliders
+          depthTest={false}
+          fixed
+          scale={90}
+          onDragStart={() => {
+            cotaNoInicioDaSeta.current = cb.current.cotaM;
+            cotaDaSetaRef.current = null;
+            // A órbita não pode pegar o mesmo arraste (a câmera girava junto com a seta — portão plato.mjs).
+            if (controles) controles.enabled = false;
+          }}
+          onDrag={(l) => {
+            const dy = new THREE.Vector3().setFromMatrixPosition(l).y;
+            const cota = cotaDaSeta(cotaNoInicioDaSeta.current, dy);
+            cotaDaSetaRef.current = cota;
+            if (!quadroDaSeta.current) {
+              quadroDaSeta.current = requestAnimationFrame(() => {
+                quadroDaSeta.current = 0;
+                cb.current.onPrevia({ anel: cb.current.anel, cotaM: cota });
+              });
+            }
+          }}
+          onDragEnd={() => {
+            if (controles) controles.enabled = true;
+            if (quadroDaSeta.current) cancelAnimationFrame(quadroDaSeta.current);
+            quadroDaSeta.current = 0;
+            const cota = cotaDaSetaRef.current;
+            // A seta volta ao centro (remonta); a cota é que mudou.
+            setChaveDaSeta((k) => k + 1);
+            if (cota !== null && cota !== cotaNoInicioDaSeta.current) cb.current.onConfirmar({ anel: cb.current.anel, cotaM: cota });
+            else cb.current.onPrevia(null);
+          }}
+        />
+      </group>
+      <RotuloDeRede
+        texto={`${formatarCotaM(plato.cotaM)} m${plato.equilibrio ? ' · equilíbrio' : ''}`}
+        cor="#1e3a8a"
+        posicao={[0, 0, 0]}
+        posicaoViva={posicaoDoRotulo}
+        porCima
+        fracaoDaTela={0.03}
+      />
+    </group>
+  );
+}
+
 function Fantasma({ children }: { children: React.ReactNode }) {
   const ref = useRef<THREE.Group>(null);
   useFrame(() => {
@@ -3363,10 +3591,34 @@ export default function Blueprint3DViewer(props: Props) {
         // esquerda, ACIMA da linha da dica: em cima à esquerda mora a barra de captura da aba 3D
         // ("HD 1920 × 1080 / Exportar imagem") e a nota a cobria (print do usuário, 25/11/2026);
         // à direita ficam os botões.
-        <div className="pointer-events-none absolute bottom-16 left-2 z-10 max-w-[60%] space-y-0.5 rounded-[6px] bg-white/85 px-2 py-1 text-[11px] text-slate-600" data-testid="notas-da-maquete">
+        <div className="pointer-events-none absolute bottom-16 left-2 z-10 max-w-[55%] space-y-0.5 rounded-[6px] bg-white/85 px-2 py-1 text-[11px] text-slate-600" data-testid="notas-da-maquete">
           {props.notasDaMaquete!.map((n) => (
             <p key={n}>{n}</p>
           ))}
+        </div>
+      )}
+
+      {props.saldoDoPlato && (
+        // O SALDO DO PLATÔ (25/11/2026, "mass balance" do reel): embaixo à direita, acima da linha da dica.
+        <div className="absolute bottom-16 right-2 z-10 max-w-[42%] rounded-[6px] border border-slate-200 bg-white/90 px-2.5 py-1.5 text-[11px] text-slate-700 shadow-sm" data-testid="saldo-do-plato">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 tabular-nums">
+            <span>Corte {props.saldoDoPlato.corteM3.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} m³</span>
+            <span>Aterro {props.saldoDoPlato.aterroM3.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} m³</span>
+            <span className="font-medium">Saldo {props.saldoDoPlato.saldoM3.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} m³</span>
+            {props.onEquilibrio && (
+              <button
+                type="button"
+                onClick={props.onEquilibrio}
+                disabled={props.saldoDoPlato.equilibrio}
+                title={props.saldoDoPlato.equilibrio ? 'O platô já está na cota de equilíbrio (corte ≈ aterro)' : 'Volta a cota do platô à de equilíbrio (corte ≈ aterro)'}
+                className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Equilíbrio
+              </button>
+            )}
+          </div>
+          {props.saldoDoPlato.foraDoRelevo && <p className="mt-0.5 text-amber-700">Parte do platô fora do relevo — a conta só vale onde há cota.</p>}
+          {props.avisoDoPlato && <p className="mt-0.5 text-amber-700">{props.avisoDoPlato}</p>}
         </div>
       )}
 
@@ -3520,6 +3772,7 @@ export default function Blueprint3DViewer(props: Props) {
             </PivotControls>
           </group>
         )}
+        {props.platoEditavel && props.platoEditavel.anel.length >= 3 && !andando && <EditorDoPlato3d plato={props.platoEditavel} />}
         </group>
         {/* A ÓRBITA SAI DE CENA ao andar: os dois disputariam o mesmo mouse, e
             o resultado seria a câmera brigando consigo mesma a cada gesto. */}

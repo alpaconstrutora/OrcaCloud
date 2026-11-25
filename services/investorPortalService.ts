@@ -408,6 +408,25 @@ export const investorPortalService = {
         return saved;
     },
 
+    /**
+     * O que o detalhe da oportunidade lê pela sessão do GESTOR (app), no lugar das RPCs do link: a obra ao vivo e o
+     * acompanhamento — a MESMA conta das RPCs do link (fn_oportunidade_vista_do_gestor chama as mesmas funções
+     * internas; plano 2026-11-25-oportunidades-e-portal-do-investidor-sem-marketplace, F4). Rascunho também.
+     */
+    async vistaDoGestor(opportunityId: string): Promise<{
+        obra: import('../components/investor/ApresentacaoDaOportunidade').ObraAoVivo | null;
+        acompanhamento: import('../utils/acompanhamentoDoInvestidor').RealizadoDoInvestidor | null;
+    }> {
+        const { data, error } = await supabase.rpc('fn_oportunidade_vista_do_gestor', { p_opportunity_id: opportunityId });
+        if (error) throw new Error(`Falha ao ler a oportunidade: ${error.message}`);
+        const r = data as { valid?: boolean; obra?: unknown; acompanhamento?: unknown } | null;
+        if (!r?.valid) throw new Error('Sem acesso a esta oportunidade.');
+        return {
+            obra: (r.obra ?? null) as import('../components/investor/ApresentacaoDaOportunidade').ObraAoVivo | null,
+            acompanhamento: (r.acompanhamento ?? null) as import('../utils/acompanhamentoDoInvestidor').RealizadoDoInvestidor | null,
+        };
+    },
+
     // organizationId null/undefined ⇒ "todas as organizações": sem filtro de org,
     // a RLS do Supabase restringe às orgs que o usuário pode acessar.
     async listInterests(organizationId?: string | null, opportunityId?: string): Promise<OpportunityInterest[]> {

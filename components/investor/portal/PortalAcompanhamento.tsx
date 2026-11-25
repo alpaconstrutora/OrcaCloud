@@ -1,5 +1,4 @@
 import React from 'react';
-import { investorPortalTokenService } from '../../../services/investorPortalTokenService';
 import { linhasDoAcompanhamento, type RealizadoDoInvestidor } from '../../../utils/acompanhamentoDoInvestidor';
 import type { OportunidadeNaVitrine } from '../../../utils/oportunidadeNumerosDaVersao';
 import { fmtBRL, PortalLoading } from '../../portal/PortalKit';
@@ -12,18 +11,19 @@ import { fmtBRL, PortalLoading } from '../../portal/PortalKit';
 const fmt = (v: number | null, formato: 'moeda' | 'unidades' | 'pct') =>
     v == null ? '—' : formato === 'moeda' ? fmtBRL(v) : formato === 'pct' ? `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%` : v.toLocaleString('pt-BR');
 
-const PortalAcompanhamento: React.FC<{ op: OportunidadeNaVitrine; portalToken: string }> = ({ op, portalToken }) => {
+/** `ler`: pelo link (token) ou pela sessão do gestor — PortalOportunidadeDetalhe decide (F4 do plano 2026-11-25). Estável. */
+const PortalAcompanhamento: React.FC<{ op: OportunidadeNaVitrine; ler: () => Promise<RealizadoDoInvestidor | null> }> = ({ op, ler }) => {
     const [dados, setDados] = React.useState<RealizadoDoInvestidor | null | undefined>(undefined);
     const [erro, setErro] = React.useState<string | null>(null);
 
     React.useEffect(() => {
         if (!op.id) return;
         let vivo = true;
-        investorPortalTokenService.getAcompanhamentoByToken(portalToken, op.id)
+        ler()
             .then(d => { if (vivo) setDados(d); })
             .catch(e => { if (vivo) { setDados(null); setErro((e as Error).message); } });
         return () => { vivo = false; };
-    }, [op.id, portalToken]);
+    }, [op.id, ler]);
 
     if (dados === undefined) return <PortalLoading label="Carregando o acompanhamento..." />;
     if (erro) return <p role="alert" className="text-sm text-[#5F6573]">{erro}</p>;

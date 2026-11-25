@@ -53,6 +53,7 @@ const ImovibForm            = React.lazy(() => import('./ImovibForm'));
 const ImovibDetailView      = React.lazy(() => import('./ImovibDetailView'));
 const InvestorDashboard     = React.lazy(() => import('./InvestorDashboard'));
 const InvestorModule        = React.lazy(() => import('./InvestorModule'));
+const OportunidadesModule   = React.lazy(() => import('./investor/OportunidadesModule'));
 const SupplierDashboard     = React.lazy(() => import('./SupplierDashboard'));
 const BrokerPortal          = React.lazy(() => import('./BrokerPortal'));
 const SalesModule           = React.lazy(() => import('./SalesModule'));
@@ -1084,7 +1085,10 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         />
       );
 
+    // F5 (plano 2026-11-25-oportunidades-e-portal-do-investidor-sem-marketplace): "Área do Investidor" saiu do
+    // menu; o endereço antigo abre o Portal do Investidor.
     case 'investor-portal':
+    case 'investor-area':
       return (
         <InvestorModule
           organizationId={activeOrganizationId || undefined}
@@ -1094,9 +1098,11 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
         />
       );
 
-    case 'investor-area':
-    case 'holdings':
+    // F2: Incorporação › Oportunidades monta só a gestão das oportunidades, não o painel do investidor.
     case 'opportunities':
+      return <OportunidadesModule profile={currentProfile} />;
+
+    case 'holdings':
       return (
         <InvestorDashboard
           settings={settingsWithId}
@@ -1104,7 +1110,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           budget={budget}
           profile={currentProfile}
           investorProfile={investorProfile}
-          activeTab={activeView === 'investor-area' ? 'dashboard' : activeView as 'dashboard' | 'holdings' | 'opportunities' | 'reports'}
+          activeTab="holdings"
         />
       );
 

@@ -8,6 +8,7 @@ import { useConfirm } from '../ui/confirm';
 import ActionIconButton from '../ui/ActionIconButton';
 import { contractRenewalService, ExpiringRental } from '../../services/contractRenewalService';
 import { Client } from '../../types';
+import { filaDoEmpreendimento } from '../../utils/reajusteAniversario';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Contrato', sortable: true },
@@ -105,10 +106,16 @@ interface Props {
     onChanged?: (message: string) => void;
     /** Abre o detalhe do contrato (aditivos, documentos, assinatura). */
     onOpenContract?: (contractId: string) => void;
+    /**
+     * Negociações do empreendimento aberto (mesma regra da aba Contratos); null =
+     * fora de um empreendimento, todos da organização. Pedido de 24/11/2026.
+     */
+    negociacoesDoEmpreendimento?: Set<string> | null;
 }
 
-const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChanged, onOpenContract }) => {
-    const [rows, setRows] = useState<ExpiringRental[]>([]);
+const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChanged, onOpenContract, negociacoesDoEmpreendimento = null }) => {
+    const [todas, setTodas] = useState<ExpiringRental[]>([]);
+    const rows = useMemo(() => filaDoEmpreendimento(todas, negociacoesDoEmpreendimento), [todas, negociacoesDoEmpreendimento]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [faixa, setFaixa] = useState<Faixa>('all');
@@ -136,7 +143,7 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
             // null = TODOS os contratos de locação vigentes, não só os que vencem
             // em 90 dias. Sem a lista completa não há como encerrar nem corrigir
             // um contrato que está fora da janela ou sem vigência definida.
-            setRows(await contractRenewalService.listRentalsExpiring(organizationId, null, showClosed));
+            setTodas(await contractRenewalService.listRentalsExpiring(organizationId, null, showClosed));
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao carregar os contratos de locação.');
         } finally {
@@ -357,7 +364,9 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                 ) : filtered.length === 0 ? (
                     <div className="text-center py-12">
                         <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                        <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum contrato de locação vigente</h3>
+                        <h3 className="text-lg font-bold text-gray-900 mb-2">
+                            {negociacoesDoEmpreendimento ? 'Nenhum contrato de locação vigente neste empreendimento' : 'Nenhum contrato de locação vigente'}
+                        </h3>
                         <p className="text-sm text-gray-500">
                             Contratos ativos ou assinados aparecem aqui — inclusive os sem vigência definida.
                             Gere o contrato a partir da negociação, na aba Contratos.

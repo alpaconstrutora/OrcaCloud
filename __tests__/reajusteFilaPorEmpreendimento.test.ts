@@ -49,3 +49,37 @@ describe('filaDoEmpreendimento', () => {
         expect(filaDoEmpreendimento(fila, new Set())).toEqual([]);
     });
 });
+
+// Renovações usa o mesmo recorte (pedido de 24/11/2026, item 1: "Sim").
+import { vi } from 'vitest';
+const lidos: string[][] = [];
+vi.mock('../lib/supabase', () => ({
+    supabase: {
+        from: () => {
+            let ids: string[] = [];
+            const q: Record<string, unknown> = {};
+            q.select = () => q;
+            q.in = (_c: string, v: string[]) => { ids = v; lidos.push(v); return q; };
+            q.then = (ok: (r: unknown) => unknown) => Promise.resolve({
+                data: ids.flatMap(id => (id === 'pai' ? [{ id: 'pai', deal_id: null, parent_contract_id: 'avo' }]
+                    : id === 'avo' ? [{ id: 'avo', deal_id: 'd-avo', parent_contract_id: null }] : [])),
+                error: null,
+            }).then(ok);
+            return q;
+        },
+    },
+}));
+import { negociacoesDosContratos } from '../services/negociacaoDoContratoService';
+
+describe('negociacoesDosContratos (Reajustes e Renovações)', () => {
+    it('lê os pais que faltam, nível a nível, e devolve a negociação da raiz', async () => {
+        lidos.length = 0;
+        const m = await negociacoesDosContratos([
+            { id: 'neto', deal_id: null, parent_contract_id: 'pai' },
+            { id: 'direto', deal_id: 'd9', parent_contract_id: null },
+        ]);
+        expect(m.get('neto')).toBe('d-avo');
+        expect(m.get('direto')).toBe('d9');
+        expect(lidos).toEqual([['pai'], ['avo']]);
+    });
+});

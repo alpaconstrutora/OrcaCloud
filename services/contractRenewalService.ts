@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { negociacoesDosContratos } from './negociacaoDoContratoService';
 import {
     contractService, nextRentalNumber, removeContractTransactionsFrom, buildRecurringDueDates,
     resolveDealUnitsInfo,
@@ -141,6 +142,8 @@ export interface ExpiringRental extends Contract {
     renewed_child_id?: string;
     /** Última prorrogação por aditivo deste contrato, se houver. */
     last_addendum?: { id: string; number: string };
+    /** Negociação do contrato (a da raiz, no renovado) — recorta a aba pelo empreendimento. */
+    negociacaoId: string | null;
 }
 
 // ─── Interno ──────────────────────────────────────────────────────────────
@@ -719,6 +722,8 @@ export const contractRenewalService = {
             const k = a.contract_id as string;
             if (!lastAddendum.has(k)) lastAddendum.set(k, { id: a.id as string, number: a.number as string });
         });
+        const negociacoes = await negociacoesDosContratos(
+            rows as unknown as { id: string; deal_id?: string | null; parent_contract_id?: string | null }[]);
 
         return rows.map(r => ({
             ...r,
@@ -727,6 +732,7 @@ export const contractRenewalService = {
             renewed_by: childByParent.get(r.id)?.number as string | undefined,
             renewed_child_id: childByParent.get(r.id)?.id as string | undefined,
             last_addendum: lastAddendum.get(r.id),
+            negociacaoId: negociacoes.get(r.id) ?? null,
         }));
     },
 

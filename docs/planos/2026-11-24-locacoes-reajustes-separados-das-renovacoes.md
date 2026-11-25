@@ -157,4 +157,7 @@ Causa: dentro de um empreendimento (Gestão de Unidades), a aba Contratos filtra
 - [x] 13. A regra "contrato do edifício aberto" saiu de dentro de `sortedDeals` e foi para `dealsDoEdificio`, em `components/RentalsModule.tsx`, valendo para as duas abas. A aba Reajustes recebe `negociacoesDoEmpreendimento` e filtra a fila com `filaDoEmpreendimento`. Os indicadores (vencido e chegando) contam a lista já filtrada.
   - O contrato renovado não tem `deal_id`: `listarFila` sobe a cadeia por `parent_contract_id` (`negociacaoDaCadeia`). Sem isso, o renovado sumiria da lista dentro do empreendimento.
   - **Pronto quando:** `__tests__/reajusteFilaPorEmpreendimento.test.ts` cobre a cadeia (renovado e renovado do renovado, laço, sem negociação) e o filtro (fora do empreendimento = tudo; dentro = só os dele; empreendimento sem negociação = vazio). tsc e check-ui-standard sem erros. ✅ Falta conferir na tela.
-- Observado: a aba **Renovações** (`RentalRenewals`) também recebe só a organização. Não foi mexida neste pedido.
+- [x] 14. A aba **Renovações** passa a usar o mesmo recorte. O usuário respondeu "Sim" em 24/11/2026.
+  - `RentalRenewals` recebe `negociacoesDoEmpreendimento`, e `listRentalsExpiring` traz a `negociacaoId` de cada contrato.
+  - A busca pela cadeia virou um serviço só (`services/negociacaoDoContratoService.ts`), usado por Reajustes e Renovações.
+  - **Pronto quando:** `reajusteFilaPorEmpreendimento.test.ts` cobre `negociacoesDosContratos`, que lê os pais nível a nível e devolve a negociação da raiz. tsc e check-ui-standard sem erros. ✅ Falta conferir na tela.

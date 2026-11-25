@@ -18,7 +18,7 @@ import AvisoReajusteOrgSettings from './rentals/AvisoReajusteOrgSettings';
 import TaxSettingsManager from './TaxSettingsManager';
 import TabelaFiscalSettings from './settings/TabelaFiscalSettings';
 import AliquotaPorExercicioSettings from './settings/AliquotaPorExercicioSettings';
-import { CHAVE_FOLHA_PEDIDA } from '../utils/folhaDeConfiguracoes';
+import { lerFolhaPedida, esquecerFolhaPedida } from '../utils/folhaDeConfiguracoes';
 import PortalHelpSettings from './PortalHelpSettings';
 import BrandsSettings from './settings/BrandsSettings';
 import RotinasAutomaticasSettings from './settings/RotinasAutomaticasSettings';
@@ -91,12 +91,12 @@ function navDasConfiguracoes(ehSuperadmin: boolean): SettingsNavNode[] {
 
 /**
  * Folha pedida por quem abriu Configurações de fora (ex.: o endereço antigo
- * `labor-fiscal` → INSS). Lida UMA vez e apagada — mesmo padrão de
- * `rentals_active_tab`. Valor desconhecido é ignorado.
+ * `labor-fiscal` → INSS). A leitura NÃO apaga — a tela é montada mais de uma vez
+ * num carregamento (ver utils/folhaDeConfiguracoes). Valor desconhecido é ignorado.
  */
 function folhaPedida(): { folha: SettingsLeafId; grupo?: string } | null {
     let pedida: string | null = null;
-    try { pedida = localStorage.getItem(CHAVE_FOLHA_PEDIDA); localStorage.removeItem(CHAVE_FOLHA_PEDIDA); } catch { return null; }
+    pedida = lerFolhaPedida();
     if (!pedida) return null;
     for (const node of SETTINGS_NAV) {
         if (node.leafId === pedida) return { folha: node.leafId };
@@ -122,6 +122,7 @@ const Settings: React.FC = () => {
     const [menuAberto, setMenuAberto] = React.useState(false);
     const botaoMenuRef = React.useRef<HTMLButtonElement>(null);
     const escolherFolha = (id: SettingsLeafId) => {
+        esquecerFolhaPedida();
         setActiveLeaf(id);
         if (menuAberto) { setMenuAberto(false); botaoMenuRef.current?.focus(); }
     };

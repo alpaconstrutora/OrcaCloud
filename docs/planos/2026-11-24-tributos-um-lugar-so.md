@@ -49,6 +49,11 @@ Problemas encontrados:
   - Não foram criadas tabelas anteriores a 04/2015, porque nenhum dado precisa delas: a 1ª parcela de locação com IRRF é de 12/2016, a folha começa em 11/2025 e o pró-labore em 05/2026.
   - **Pronto quando:** tsc e check-ui-standard sem erros. ✅ Falta conferir na tela.
 
+- [x] 6. **Correção do pedido de folha** (achado na conferência em produção, 24/11/2026). O endereço antigo `labor-fiscal` e o pedido de folha abriam em Nomenclatura.
+  - Uma sonda em produção mostrou a causa: a tela é montada 3 vezes num carregamento (`get=tributos-irrf, remove, get=null, remove, get=null`). A 1ª montagem lia e apagava o pedido; a que fica na tela já não o achava.
+  - Agora a leitura não apaga. O pedido vale por 30 s e é apagado quando o usuário escolhe uma folha (`utils/folhaDeConfiguracoes.ts`).
+  - **Pronto quando:** `folhaDeConfiguracoes.test.ts` e `SettingsMenuCelular.test.tsx` (3 montagens seguidas abrem INSS; escolher outra folha esquece o pedido) passam, e na produção A2/A3 do `c:/tmp/pwtest/conferencia-24-11-parteA.cjs` dão OK.
+
 ## Achados à parte (não mexidos)
 
 - A tabela de INSS da folha para **2023** tem as faixas de **2025** (1ª faixa até R$ 1.518,00). Não conferi na fonte oficial; falta o usuário confirmar.

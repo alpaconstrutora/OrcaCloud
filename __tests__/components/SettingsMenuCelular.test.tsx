@@ -19,6 +19,7 @@ vi.mock('../../components/settings/NomenclaturaTable', () => ({ default: () => <
 vi.mock('../../components/settings/TabelaFiscalSettings', () => ({ default: ({ tabela }: { tabela: string }) => <div>tela do {tabela}</div> }));
 
 import Settings from '../../components/Settings';
+import { pedirFolha } from '../../utils/folhaDeConfiguracoes';
 import { ConfirmProvider } from '../../components/ui/confirm';
 
 const montar = async () => {
@@ -104,16 +105,30 @@ describe('Settings › menu das seções no celular', () => {
             .toEqual(expect.arrayContaining(['flex-col', 'lg:flex-row']));
     });
 
-    it('abre direto na folha pedida de fora (endereço antigo RH › Config. Fiscais → INSS) e apaga o pedido', async () => {
-        localStorage.setItem('settings_active_leaf', 'tributos-inss');
+    it('abre direto na folha pedida de fora (endereço antigo RH › Config. Fiscais → INSS), mesmo montada 3 vezes', async () => {
+        // Produção monta a tela três vezes num carregamento (sonda de 24/11/2026).
+        pedirFolha('tributos-inss');
+        for (let i = 0; i < 2; i++) {
+            const { unmount } = render(<ConfirmProvider><Settings /></ConfirmProvider>);
+            unmount();
+        }
         render(<ConfirmProvider><Settings /></ConfirmProvider>);
         expect(await screen.findByText('tela do inss')).toBeTruthy();
         expect(botaoMenu().textContent).toMatch(/Seção:\s*Tributos e Impostos › INSS$/);
+    });
+
+    it('escolher outra folha esquece o pedido', async () => {
+        const user = userEvent.setup();
+        pedirFolha('tributos-inss');
+        render(<ConfirmProvider><Settings /></ConfirmProvider>);
+        await screen.findByText('tela do inss');
+        await user.click(botaoMenu());
+        await user.click(screen.getByRole('button', { name: 'Nomenclatura' }));
         expect(localStorage.getItem('settings_active_leaf')).toBeNull();
     });
 
     it('pedido desconhecido é ignorado: abre na folha inicial', async () => {
-        localStorage.setItem('settings_active_leaf', 'nao-existe');
+        pedirFolha('nao-existe');
         await montar();
         expect(botaoMenu().textContent).toMatch(/Seção:\s*Nomenclatura/);
     });

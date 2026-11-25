@@ -29,4 +29,4 @@ auditoria seção por seção antes de editar; `check-ui-standard.sh` e `tsc` de
 
 ## Estado
 
-Em PR.
+NO AR em 25/11 (PR #735, merge 26fb36b; produção servindo 26fb36b). Conferido no Chrome: 4 KpiCard, régua com busca + Oportunidade + Estágio + lista/quadro, vazio. O banco tem 0 interesses: linhas e quadro com dados conferidos só nos testes.

@@ -329,6 +329,19 @@ Pedido: ver o 3º bloco de "Pedido original" (25/11, pós-publicação). Branch 
   oferecer a carga. Sem apagar. Conferido (sem mudança): o N do painel e "Por obra" já só contam ATIVO.
   Pronto quando: arquivar → some da lista e do N; o botão mostra; reativar → volta. ✅ `dd38134fb` —
   `QualidadeModule.test.tsx` (j, j2, j3).
+- [x] **A4 — Revisão dos ajustes (25/11): arquivar pede e guarda a justificativa.** O que muda: (1) arquivar
+  apagava a justificativa (prova da dispensa perante o SiAC) e permitia tirar um item do Anexo 4 do N sem
+  explicação → ARQUIVADO também EXIGE justificativa na tela (mesmo campo, rótulo "Justificativa do
+  arquivamento", erro no campo como no DISPENSADO); o texto é guardado em DISPENSADO e ARQUIVADO e só voltar
+  a ATIVO o limpa; a lista mostra `Arquivado — "motivo"`. O CHECK do banco segue só para DISPENSADO (sem
+  migration: a trava é da tela, por ora). (2) "Mostrar arquivados" vazava de Serviços para Materiais →
+  `ListaControlada` com `key` por sub-aba. (3) Treinados mostrava "Pessoa não encontrada no RH" enquanto a
+  busca dos nomes andava → "carregando…"; cada pessoa é procurada uma vez só. Pronto quando: arquivar sem
+  justificativa → erro no campo e nada gravado; com ela → gravada; DISPENSADO → ARQUIVADO mantém o texto;
+  volta a ATIVO → `null`; sub-aba nova começa escondendo arquivados; "carregando…" durante a busca. ✅
+  commit `fix(qualidade): arquivar pede e guarda a justificativa` — `ItemControladoSheet.test.tsx` (l, l2,
+  l3, l4, m) e `QualidadeModule.test.tsx` (j ajustado, j4). Verificação: 8 arquivos/106 testes, tsc 0,
+  `check-ui-standard` 0 nos 3 componentes, `check-org-selector-guard` 0.
 - Fora deste ajuste (decisão de 25/11): status VENCIDO do treinamento → fase 2.
 
 Verificação local: 8 arquivos/100 testes verdes (`permissaoQualidadeSiac`, `modulosPermitidosTodasOrgs`,

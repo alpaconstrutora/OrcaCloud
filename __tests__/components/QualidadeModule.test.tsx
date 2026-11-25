@@ -17,7 +17,8 @@
  *      item de quando o Sheet abriu;
  *  (i) a aba "Por obra" mostra a visão por obra com os itens ativos da lista carregada;
  *  (j) arquivar pelo Sheet tira o item da lista e do N; "Mostrar arquivados (N)" o mostra; reativar volta
- *      (pendência da fase 1 corrigida em 25/11); arquivado nunca aparece em "Por obra";
+ *      (pendência da fase 1 corrigida em 25/11), com a justificativa; arquivado nunca aparece em "Por obra";
+ *      "Mostrar arquivados" vale por sub-aba (não vaza de Serviços para Materiais);
  *  (h) "Registrar treinamento em obra" do Sheet do item abre o registro; gravar avisa quantos
  *      registros entraram e recarrega (os Treinados do item vêm da recarga).
  */
@@ -337,9 +338,13 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
     it('(j) arquivar: some da lista e do N; "Mostrar arquivados (1)" mostra; reativar volta', async () => {
         const user = userEvent.setup();
         const situacao: Record<string, SituacaoItem> = {};
-        listarItens.mockImplementation(async () => servicos(3).map(i => ({ ...i, situacao: situacao[i.id] ?? 'ATIVO' })));
-        atualizarItem.mockImplementation(async (id: string, patch: { situacao?: SituacaoItem }) => {
+        const justificativa: Record<string, string | null> = {};
+        listarItens.mockImplementation(async () => servicos(3).map(i => ({
+            ...i, situacao: situacao[i.id] ?? 'ATIVO', justificativa: justificativa[i.id] ?? null,
+        })));
+        atualizarItem.mockImplementation(async (id: string, patch: { situacao?: SituacaoItem; justificativa?: string | null }) => {
             if (patch.situacao) situacao[id] = patch.situacao;
+            if (patch.justificativa !== undefined) justificativa[id] = patch.justificativa;
         });
         montar();
         const tabela = await screen.findByRole('table');
@@ -353,8 +358,9 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         const select = await screen.findByLabelText('Situação') as HTMLSelectElement;
         expect([...select.options].map(o => o.textContent)).toEqual(['Ativo', 'Dispensado', 'Arquivado']);
         await user.selectOptions(select, 'ARQUIVADO');
+        await user.type(screen.getByLabelText('Justificativa do arquivamento'), 'Criado por engano');
         await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
-        await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('org-a-s2', expect.objectContaining({ situacao: 'ARQUIVADO', justificativa: null })));
+        await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('org-a-s2', expect.objectContaining({ situacao: 'ARQUIVADO', justificativa: 'Criado por engano' })));
         await waitFor(() => expect(listarItens).toHaveBeenCalledTimes(2));
         await user.click(screen.getByRole('button', { name: 'Voltar' }));
 
@@ -376,12 +382,29 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         await user.click(linhaArquivada);
         await user.selectOptions(await screen.findByLabelText('Situação'), 'ATIVO');
         await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
-        await waitFor(() => expect(atualizarItem).toHaveBeenLastCalledWith('org-a-s2', expect.objectContaining({ situacao: 'ATIVO' })));
+        await waitFor(() => expect(atualizarItem).toHaveBeenLastCalledWith('org-a-s2', expect.objectContaining({ situacao: 'ATIVO', justificativa: null })));
         await waitFor(() => expect(listarItens).toHaveBeenCalledTimes(3));
         await user.click(screen.getByRole('button', { name: 'Voltar' }));
         await waitFor(() => expect(screen.queryByRole('button', { name: /Mostrar arquivados/ })).toBeNull());
         expect(within(screen.getByRole('table')).getByText('Serviço 2')).toBeTruthy();
         expect(screen.getByRole('region', { name: /Quanto falta para o nível/ }).textContent).toContain('Serviços (3)');
+    });
+
+    it('(j4) "Mostrar arquivados" ligado em Serviços não vaza para Materiais', async () => {
+        const user = userEvent.setup();
+        listarItens.mockResolvedValue([
+            item({ id: 's1', nome: 'Serviço arquivado', anexo4_numero: 1, ordem: 1, situacao: 'ARQUIVADO', justificativa: 'engano' }),
+            item({ id: 'm1', tipo: 'MATERIAL', nome: 'Material arquivado', etapa: null, origem: 'PROPRIO', ordem: 1, situacao: 'ARQUIVADO', justificativa: 'engano' }),
+            item({ id: 'm2', tipo: 'MATERIAL', nome: 'Material ativo', etapa: null, origem: 'PROPRIO', ordem: 2 }),
+        ]);
+        montar();
+        await user.click(await screen.findByRole('button', { name: 'Mostrar arquivados (1)' }));
+        expect(screen.getByRole('button', { name: 'Mostrar arquivados (1)' }).getAttribute('aria-pressed')).toBe('true');
+        expect(await screen.findByText('Serviço arquivado')).toBeTruthy();
+        await user.click(screen.getByRole('tab', { name: 'Materiais' }));
+        expect(await screen.findByText('Material ativo')).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Mostrar arquivados (1)' }).getAttribute('aria-pressed')).toBe('false');
+        expect(screen.queryByText('Material arquivado')).toBeNull();
     });
 
     it('(j2) todos os itens arquivados: o vazio manda mostrar os arquivados, não oferece a carga', async () => {

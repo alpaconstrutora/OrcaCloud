@@ -91,7 +91,7 @@ export const ListaControlada: React.FC<Props> = ({
         i.situacao === 'DISPENSADO'
             ? `Dispensado — "${i.justificativa ?? ''}"`
             : i.situacao === 'ARQUIVADO'
-                ? `Arquivado · ${rotuloDoProcedimento(procedimentoDo(i, procedimentos))}`
+                ? (i.justificativa ? `Arquivado — "${i.justificativa}"` : 'Arquivado')
                 : rotuloDoProcedimento(procedimentoDo(i, procedimentos))
     ), [procedimentos]);
 

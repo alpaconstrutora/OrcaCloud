@@ -243,7 +243,8 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
                         <PainelDoNivel itens={itens} niveis={niveis} procedimentos={procedimentos} nomesDasOrgs={nomesDasOrgs}
                             podeEditar={podeEditar} onNivel={(org, n) => void definirNivel(org, n)} />
                     )}
-                    <ListaControlada tipo={tipoEfetivo} itens={itens} procedimentos={procedimentos} treinamentos={treinamentos}
+                    {/* `key` por sub-aba: "Mostrar arquivados" de Serviços não vaza para Materiais. */}
+                    <ListaControlada key={tipoEfetivo} tipo={tipoEfetivo} itens={itens} procedimentos={procedimentos} treinamentos={treinamentos}
                         podeEditar={podeEditar} carregando={carregando} nomesDasOrgs={nomesDasOrgs}
                         onCarregar={() => void carregarLista()} onNovo={() => void novoItem()}
                         onAbrir={item => setEdicao({ modo: 'editar', item })}

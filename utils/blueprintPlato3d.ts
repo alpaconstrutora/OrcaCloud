@@ -43,3 +43,32 @@ export function cotaDaSeta(cotaInicialM: number, dyMundoM: number, fino = false)
   const passos = Math.round((cotaInicialM + dy) / PASSO_DA_SETA_M);
   return Math.round(passos * PASSO_DA_SETA_M * 100) / 100;
 }
+
+/**
+ * INSERIR CANTO (25/11/2026, pedido: *"inserir canto com duplo clique num lado do platô no 3D"*): o ponto clicado é
+ * PROJETADO no lado mais próximo (inclusive o de fecho, do último ao primeiro canto) e entra entre as duas pontas
+ * dele, em mm inteiros. Em cima de um canto que já existe, nada muda.
+ */
+export function inserirCanto(anel: readonly Point[], ponto: Point): Point[] {
+  let melhor = { i: -1, d: Infinity, p: ponto };
+  for (let i = 0; i < anel.length; i++) {
+    const a = anel[i];
+    const b = anel[(i + 1) % anel.length];
+    const dx = b.x - a.x;
+    const dy = b.y - a.y;
+    const L2 = dx * dx + dy * dy;
+    const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((ponto.x - a.x) * dx + (ponto.y - a.y) * dy) / L2));
+    const p = { x: a.x + t * dx, y: a.y + t * dy };
+    const d = Math.hypot(ponto.x - p.x, ponto.y - p.y);
+    if (d < melhor.d) melhor = { i, d, p };
+  }
+  const novo = { x: Math.round(melhor.p.x), y: Math.round(melhor.p.y) };
+  if (melhor.i < 0 || anel.some((q) => q.x === novo.x && q.y === novo.y)) return [...anel];
+  return [...anel.slice(0, melhor.i + 1), novo, ...anel.slice(melhor.i + 1)];
+}
+
+/** REMOVER CANTO (botão direito numa bolinha): tira o i-ésimo — mas o platô nunca fica com menos de 3. */
+export function removerCanto(anel: readonly Point[], i: number): Point[] {
+  if (anel.length <= 3) return [...anel];
+  return anel.filter((_, k) => k !== i);
+}

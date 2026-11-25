@@ -103,6 +103,27 @@ describe('useBlueprintTerraplenagem — o platô desenhado', () => {
     expect(result.current.anelPlato).toBeNull();
   });
 
+  it('excluirAnelDesenhado apaga o desenho e, se ele estava em uso, a forma volta para o envelope', async () => {
+    const { result } = await montar();
+    act(() => result.current.definirAnelDesenhado(QUADRADO));
+    await esperarGravacao();
+    act(() => result.current.excluirAnelDesenhado());
+    expect(result.current.anelDesenhado).toBeNull();
+    expect(result.current.base).toBe('ENVELOPE');
+    await esperarGravacao();
+    expect(salvos.at(-1)).toMatchObject({ base: 'ENVELOPE', anel_desenhado: null });
+  });
+
+  it('excluir com outra forma em uso (lote) apaga o desenho e mantém o lote', async () => {
+    const { result } = await montar();
+    act(() => result.current.definirAnelDesenhado(QUADRADO));
+    act(() => result.current.setBase('LOTE'));
+    act(() => result.current.excluirAnelDesenhado());
+    expect(result.current.base).toBe('LOTE');
+    await esperarGravacao();
+    expect(salvos.at(-1)).toMatchObject({ base: 'LOTE', anel_desenhado: null });
+  });
+
   it('banco sem a coluna (migration não aplicada): o get falha → persistência indisponível, e o desenho fica na tela', async () => {
     get.mockImplementation(async () => {
       throw new Error('column blueprint_study_terraplenagem.anel_desenhado does not exist');

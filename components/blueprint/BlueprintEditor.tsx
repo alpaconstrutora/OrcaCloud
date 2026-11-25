@@ -1476,6 +1476,8 @@ const ROTULO_DA_FERRAMENTA: Partial<Record<BlueprintTool, string>> = {
   separador: 'Separador de ambiente',
   perfil: 'Perfil altimétrico',
   drenagem: 'Drenagem',
+  // 25/11/2026: sem isto, a barra de opções mostrava o nome interno "plato".
+  plato: 'Platô',
   corte: 'Corte',
   eixo: 'Eixo da malha',
   telhado: 'Água de telhado',
@@ -5912,6 +5914,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [terraplenagem.base, superficieDeProjeto3d, anelDoPlato, cotaDoPlatoM, cotaZeroDoTerrenoM, terraplenagem.cotaPlatoM, previaDoPlato, inclinacaoDoPlato, terraplenagem.anelDesenhado, terraplenagem.definirAnelDesenhado, terraplenagem.setCotaPlatoM]);
+  /**
+   * Topografia › Platô no 3D (pedido 25/11/2026 — o usuário clicou os cantos no 3D e nada acontecia): o contorno
+   * fechado no 3D segue o MESMO caminho do 2D (`onPlatoDesenhado`), com a mesma recusa de contorno que se cruza.
+   */
+  const desenharPlato3d = useMemo(
+    () => ({
+      onAnel: (anel: Point[]) => {
+        if (!anelValido(anel)) {
+          setAvisoDoPlato('O contorno não pode se cruzar — desenhe de novo, sem cruzar os lados.');
+          return;
+        }
+        setAvisoDoPlato(null);
+        terraplenagem.definirAnelDesenhado(anel);
+        setMostrarTerraplenagem(true);
+        editor.setTool('selecionar');
+      },
+    }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [terraplenagem.definirAnelDesenhado, editor.setTool],
+  );
   /** O selo do 3D: corte, aterro e saldo — os números do painel (a mesma `terraplenagemCalc`). */
   const saldoDoPlato3d = useMemo(() => {
     const v = topografia.selecionada;
@@ -11671,6 +11693,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             avisoDosLados: terraplenagem.avisoDosLados,
             avisoDoPlato,
             onEsquecerAvisoDosLados: terraplenagem.esquecerAvisoDosLados,
+            onExcluirDesenho: terraplenagem.excluirAnelDesenhado,
             cotaPlatoM: terraplenagem.cotaPlatoM,
             onCotaPlatoM: terraplenagem.setCotaPlatoM,
             inclinacao: terraplenagem.inclinacao,
@@ -12868,6 +12891,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       onEquilibrio={() => terraplenagem.setCotaPlatoM(null)}
       platoEditavel={mostrarTerreno3d && terrenoAVista ? platoEditavel3d : null}
       avisoDoPlato={avisoDoPlato}
+      desenharPlato3d={editor.tool === 'plato' && mostrarTerreno3d && terrenoAVista ? desenharPlato3d : null}
       alturaDoChao={mostrarTerreno3d && terrenoAVista ? alturaDoChao3d : undefined}
       extrasDoRelevo={mostrarTerreno3d && terrenoAVista ? extrasDoRelevoNo3d : null}
       mapaNoRelevo={mostrarTerreno3d && terrenoAVista ? mapaNoRelevo3d : null}

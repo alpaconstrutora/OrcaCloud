@@ -104,6 +104,8 @@ export interface TerraplenagemNoPainel {
   onEsquecerAvisoDosLados?: () => void;
   /** O contorno desenhado foi recusado (por ex. se cruza): o motivo. */
   avisoDoPlato?: string | null;
+  /** 25/11/2026: apaga o platô desenhado (depois da confirmação). */
+  onExcluirDesenho?: () => void;
   /** Há envelope válido (recuos que cabem)? Sem ele, ENVELOPE cai no lote. */
   temEnvelope: boolean;
   /** F25: há o platô sob a casa (lançado pela casa automática) para escolher? */
@@ -1961,6 +1963,19 @@ function SecaoDeclividade({ declividade: d }: { declividade: Declividade }) {
 /** Platô: base, cota (com a sugestão de equilíbrio) e os volumes. */
 function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
   const r = t.resultado;
+  const confirmar = useConfirm();
+  const excluirDesenho = async () => {
+    const ok = await confirmar({
+      title: 'Excluir o platô desenhado?',
+      message:
+        t.base === 'DESENHADO'
+          ? 'O contorno desenhado é apagado e o platô volta a ser o do envelope. Volumes e orçamento passam a usar o envelope.'
+          : 'O contorno desenhado (guardado, sem uso agora) é apagado. A forma em uso não muda.',
+      variant: 'danger',
+      confirmLabel: 'Excluir',
+    });
+    if (ok) t.onExcluirDesenho?.();
+  };
   const usandoEquilibrio = t.cotaPlatoM === null;
   return (
     <div className="mt-3 border-t border-slate-200 pt-3" data-testid="topografia-terraplenagem">
@@ -2022,6 +2037,16 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
               className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
             >
               Editar contorno
+            </button>
+          )}
+          {t.onExcluirDesenho && t.temDesenho && (
+            <button
+              type="button"
+              onClick={() => void excluirDesenho()}
+              title="Apaga o contorno desenhado do platô (pede confirmação)"
+              className="rounded-md border border-red-200 bg-white px-2 py-1 text-[11px] text-red-700 transition-colors hover:bg-red-50"
+            >
+              Excluir platô desenhado
             </button>
           )}
         </div>

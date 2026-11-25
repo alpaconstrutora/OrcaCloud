@@ -133,6 +133,11 @@ export interface Terraplenagem {
   /** O aviso de que os taludes/muros por lado voltaram ao padrão (o contorno mudou de `de` para `para` lados). */
   avisoDosLados: { de: number; para: number } | null;
   esquecerAvisoDosLados: () => void;
+  /**
+   * 25/11/2026 (pedido: *"um botão Excluir platô desenhado no painel, com confirmação"*): apaga o desenho. Se ele
+   * estava em uso, a forma volta para o envelope (o padrão); com outra forma em uso, ela fica.
+   */
+  excluirAnelDesenhado: () => void;
 }
 
 /** O JSON parcial gravado, completado com o padrão (e sem chaves estranhas). */
@@ -558,12 +563,21 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
     [persistir, premissa, base, cotaPlatoM, parametros, linhasDoPerfil, drenagem],
   );
   const esquecerAvisoDosLados = useCallback(() => setAvisoDosLados(null), []);
+  const excluirAnelDesenhado = useCallback(() => {
+    const b: BaseDoPlato = base === 'DESENHADO' ? 'ENVELOPE' : base;
+    anelDesenhadoRef.current = null;
+    setAnelDesenhado(null);
+    setAvisoDosLados(null);
+    setBaseLocal(b);
+    persistir(premissa(b, cotaPlatoM, parametros, linhasDoPerfil, drenagem));
+  }, [persistir, premissa, base, cotaPlatoM, parametros, linhasDoPerfil, drenagem]);
 
   return {
     anelDesenhado,
     definirAnelDesenhado,
     avisoDosLados,
     esquecerAvisoDosLados,
+    excluirAnelDesenhado,
     anelPlato,
     definirAnelEmUso,
     aplicarPlatoDaCasa,

@@ -237,6 +237,23 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
   2. A seta: 0,2 do arraste no gesto normal e 0,02 com **Shift** (ajuste fino), sempre a 5 cm. Teste puro RED →
      GREEN; portão `plato.mjs` mede: no lote de 346 m, 60 px = +6,5 m (antes +32,5 m) e com Shift +0,65 m.
 - Fora (anotado): o "percorrer" a pé ainda anda no terreno natural, não no de projeto.
+- [x] Ajustes — pedido do usuário 25/11 (com o print das bolinhas do reel): *"1. um botão Excluir platô desenhado no
+  painel, com confirmação; De acordo 2. inserir canto com duplo clique num lado do platô no 3D e remover canto com
+  clique direito numa bolinha;; De acordo 3. bolinhas do mesmo tamanho na tela em qualquer zoom. De acordo 4. veja
+  print o tamanho e formato da bolinha. implemente igual. 5. Tentei desenhar o plato com a ferramenta topografia >
+  plato mas nao funcionou"* (ele clicou **no 3D**; no 2D a ferramenta funcionava).
+  1. Painel › Terraplenagem: **Excluir platô desenhado** (confirmação `useConfirm`, vermelho); em uso, a base volta
+     a ENVELOPE e `anel_desenhado` vira null; com LOTE/CASA em uso, a base fica. Testes do hook e do painel.
+  2. `inserirCanto` (projeta no lado mais próximo, inclusive o de fechamento) e `removerCanto` (mínimo 3), puras e
+     testadas; no 3D: duplo clique no polígono azul insere, botão direito na bolinha remove — um confirmar cada.
+  3–4. Bolinha = SPRITE (disco branco com aro azul, 11 px, sem tone mapping), escala refeita a cada quadro pela
+     distância → mesmo tamanho na tela; área de pegar 2,2×. (Um disco girado à mão ficava de perfil no grupo
+     espelhado — por isso sprite.)
+  5. Topografia › Platô agora desenha **também no 3D**: clique no terreno marca canto (trava de 90°, Shift libera),
+     clique no 1º canto ou duplo clique fecha, Esc cancela; mesmo caminho e mesma recusa de contorno cruzado do 2D.
+  - A barra de opções mostrava "plato" cru → "Platô" (teste do editor RED → GREEN).
+  - Portão `plato.mjs` estendido: remover/inserir canto, tamanho da bolinha perto × longe (23 → 24 px de aro),
+    `?desenhar=1` com Esc no meio e 4 cliques + clique no 1º → contorno de 4 cantos. ✅
 
 ---
 

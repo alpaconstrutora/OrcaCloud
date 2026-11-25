@@ -97,7 +97,8 @@ import {
 } from '../../utils/blueprint3dEnquadramento';
 import { blocoDoTerreno, espessuraDoBloco, type MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import { COR_CURVA_3D, nivelMaisProximo, type ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
-import { cotaDaSeta, moverCanto } from '../../utils/blueprintPlato3d';
+import { cotaDaSeta, inserirCanto, moverCanto, removerCanto } from '../../utils/blueprintPlato3d';
+import { travarOrtogonal } from '../../utils/blueprintKernel';
 import { formatarCotaM } from '../../utils/blueprintTopografia';
 import { uvNaCaixa, type PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaDeFundo';
 import { doDesenhoParaMundo, ESCALA_DO_DESENHO_NO_MUNDO, planoNoMundo } from '../../utils/blueprint3dEspelho';
@@ -210,6 +211,12 @@ interface Props {
   } | null;
   /** Aviso do platô (contorno recusado), mostrado no selo do saldo. */
   avisoDoPlato?: string | null;
+  /**
+   * DESENHAR O PLATÔ NO 3D (25/11/2026, pedido: o usuário clicou os cantos no 3D com Topografia › Platô e "não
+   * funcionou"): com a ferramenta Platô ativa, cada clique no TERRENO do 3D marca um canto; clicar no 1º canto (ou
+   * duplo clique) fecha e entrega o contorno; Esc cancela. Shift libera a trava de 90°.
+   */
+  desenharPlato3d?: { onAnel: (anel: { x: number; y: number }[]) => void } | null;
   /**
    * MAQUETE (25/11/2026): o entorno real — prédios do OpenStreetMap e árvores do ESA WorldCover —,
    * já no desenho (mm) com a base em Y de mundo (cota − zero). Só é desenhado no estilo Maquete.
@@ -2342,6 +2349,8 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           position={[0, usaRelevo ? 0 : COTA_TERRENO_Y, 0]}
           receiveShadow
           castShadow={usaRelevo}
+          // Marca para o desenho do platô no 3D achar o chão sob o mouse (e só ele).
+          userData={{ terrenoDoPlato: true }}
           // Sem `stopPropagation`: o hover não rouba a órbita nem o clique das peças.
           onPointerMove={hoverDasCurvas ? aoMoverNoRelevo : undefined}
           onPointerOut={hoverDasCurvas ? aoSairDoRelevo : undefined}
@@ -3033,6 +3042,207 @@ function ArrastarNoPiso({
  * Mora DENTRO do grupo espelhado do desenho (as posições são as do desenho: x/1000, cota − zero, y/1000); o mouse é
  * convertido pelo `worldToLocal` do próprio grupo. A órbita sai de cena durante o gesto (como no arraste de peça).
  */
+/** Diâmetro da alça do canto NA TELA (px) — o do reel: bolinha branca com aro azul, pequena. */
+const ALCA_DO_CANTO_PX = 11;
+
+/** A textura da bolinha (disco branco com aro azul), feita uma vez por cor. */
+const TEXTURAS_DA_ALCA = new Map<string, THREE.CanvasTexture>();
+function texturaDaAlca(fundo: string, aro: string): THREE.CanvasTexture {
+  const chave = `${fundo}|${aro}`;
+  const pronta = TEXTURAS_DA_ALCA.get(chave);
+  if (pronta) return pronta;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const ctx = c.getContext('2d')!;
+  ctx.beginPath();
+  ctx.arc(32, 32, 26, 0, Math.PI * 2);
+  ctx.fillStyle = fundo;
+  ctx.fill();
+  ctx.lineWidth = 10;
+  ctx.strokeStyle = aro;
+  ctx.stroke();
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  TEXTURAS_DA_ALCA.set(chave, t);
+  return t;
+}
+
+/**
+ * A ALÇA DO CANTO (25/11/2026, pedido com o print do reel: *"veja print o tamanho e formato da bolinha. implemente
+ * igual"* + *"bolinhas do mesmo tamanho na tela em qualquer zoom"*): disco branco com aro azul, SPRITE (sempre de
+ * frente para a câmera — um disco girado à mão ficava de perfil dentro do grupo espelhado `scale(1,1,-1)`) e com o
+ * MESMO tamanho na tela: a escala é refeita a cada quadro pela distância à câmera. A área de pegar é um sprite
+ * invisível ~2× maior, para a bolinha pequena não exigir mira.
+ */
+function AlcaDoCanto({
+  posicao,
+  agarrada = false,
+  onPointerDown,
+  onContextMenu,
+}: {
+  posicao: [number, number, number];
+  agarrada?: boolean;
+  onPointerDown?: (e: any) => void;
+  onContextMenu?: (e: any) => void;
+}) {
+  const desenho = useRef<THREE.Sprite>(null);
+  const pega = useRef<THREE.Sprite>(null);
+  const camera = useThree((s) => s.camera);
+  const altura = useThree((s) => s.size.height);
+  const mundo = useMemo(() => new THREE.Vector3(), []);
+  useFrame(() => {
+    const d = desenho.current;
+    if (!d) return;
+    d.getWorldPosition(mundo);
+    const dist = camera.position.distanceTo(mundo);
+    const fov = (camera as THREE.PerspectiveCamera).fov ?? 45;
+    const mundoPorPx = (2 * dist * Math.tan((fov * Math.PI) / 360)) / Math.max(1, altura);
+    const lado = mundoPorPx * ALCA_DO_CANTO_PX * (64 / 61);
+    d.scale.set(lado, lado, 1);
+    pega.current?.scale.set(lado * 2.2, lado * 2.2, 1);
+  });
+  const textura = texturaDaAlca(agarrada ? '#dbeafe' : '#ffffff', agarrada ? '#1e3a8a' : '#2563eb');
+  const interativa = !!(onPointerDown || onContextMenu);
+  return (
+    <group position={posicao}>
+      {interativa && (
+        <sprite
+          ref={pega}
+          renderOrder={23}
+          onPointerDown={onPointerDown}
+          onContextMenu={onContextMenu}
+          onPointerOver={() => (document.body.style.cursor = 'grab')}
+          onPointerOut={() => (document.body.style.cursor = '')}
+        >
+          <spriteMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
+        </sprite>
+      )}
+      <sprite ref={desenho} renderOrder={24} raycast={() => null}>
+        <spriteMaterial map={textura} transparent depthTest={false} depthWrite={false} toneMapped={false} />
+      </sprite>
+    </group>
+  );
+}
+
+/**
+ * DESENHAR O PLATÔ NO 3D (25/11/2026): com a ferramenta Platô, clique no TERRENO marca um canto (o ponto do relevo
+ * sob o mouse, pelo `userData.terrenoDoPlato` da malha); clique no 1º canto (perto, na tela) ou duplo clique fecha;
+ * Esc cancela; Shift libera a trava de 90°. Clique = aperto e soltura sem andar (andou = era órbita).
+ */
+function DesenhoDoPlato3d({ onAnel }: { onAnel: (anel: { x: number; y: number }[]) => void }) {
+  const camera = useThree((s) => s.camera);
+  const gl = useThree((s) => s.gl);
+  const scene = useThree((s) => s.scene);
+  const grupo = useRef<THREE.Group>(null);
+  const [pontos, setPontos] = useState<{ x: number; y: number; yM: number }[]>([]);
+  const [cursor, setCursor] = useState<{ x: number; y: number; yM: number } | null>(null);
+  const cb = useRef(onAnel);
+  cb.current = onAnel;
+  const pontosRef = useRef(pontos);
+  pontosRef.current = pontos;
+
+  useEffect(() => {
+    const raio = new THREE.Raycaster();
+    let aperto: { x: number; y: number } | null = null;
+    let quadro = 0;
+    const noTerreno = (e: MouseEvent) => {
+      const g = grupo.current;
+      if (!g) return null;
+      const r = gl.domElement.getBoundingClientRect();
+      raio.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
+      const hit = raio.intersectObjects(scene.children, true).find((i) => i.object.userData?.terrenoDoPlato);
+      if (!hit) return null;
+      const local = g.worldToLocal(hit.point.clone());
+      return { x: local.x * 1000, y: local.z * 1000, yM: local.y };
+    };
+    const comTrava = (p: { x: number; y: number; yM: number }, shift: boolean) => {
+      const ultimo = pontosRef.current[pontosRef.current.length - 1];
+      if (!ultimo || shift) return p;
+      const t = travarOrtogonal(ultimo, p);
+      return { ...p, x: t.x, y: t.y };
+    };
+    const naTela = (p: { x: number; y: number; yM: number }) => {
+      const g = grupo.current!;
+      const v = g.localToWorld(new THREE.Vector3(p.x / 1000, p.yM, p.y / 1000)).project(camera);
+      const r = gl.domElement.getBoundingClientRect();
+      return { x: ((v.x + 1) / 2) * r.width + r.left, y: ((1 - v.y) / 2) * r.height + r.top };
+    };
+    const fechar = () => {
+      const lista = pontosRef.current;
+      const distintos = lista.filter((p, i) => lista.findIndex((q) => Math.round(q.x) === Math.round(p.x) && Math.round(q.y) === Math.round(p.y)) === i);
+      if (distintos.length >= 3) cb.current(distintos.map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) })));
+      setPontos([]);
+      setCursor(null);
+    };
+    const apertou = (e: PointerEvent) => {
+      if (e.button === 0) aperto = { x: e.clientX, y: e.clientY };
+    };
+    const soltou = (e: PointerEvent) => {
+      if (e.button !== 0 || !aperto) return;
+      const andou = Math.hypot(e.clientX - aperto.x, e.clientY - aperto.y) > 5;
+      aperto = null;
+      if (andou) return;
+      const lista = pontosRef.current;
+      if (lista.length >= 3) {
+        const primeiro = naTela(lista[0]);
+        if (Math.hypot(e.clientX - primeiro.x, e.clientY - primeiro.y) < 12) {
+          fechar();
+          return;
+        }
+      }
+      const p = noTerreno(e);
+      if (!p) return;
+      const q = comTrava(p, e.shiftKey);
+      const ultimo = lista[lista.length - 1];
+      if (ultimo && Math.hypot(q.x - ultimo.x, q.y - ultimo.y) < 1) return;
+      setPontos([...lista, q]);
+    };
+    const moveu = (e: PointerEvent) => {
+      if (quadro) return;
+      quadro = requestAnimationFrame(() => {
+        quadro = 0;
+        const p = noTerreno(e);
+        setCursor(p ? comTrava(p, e.shiftKey) : null);
+      });
+    };
+    const duplo = () => fechar();
+    const tecla = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setPontos([]);
+        setCursor(null);
+      }
+    };
+    const el = gl.domElement;
+    el.addEventListener('pointerdown', apertou);
+    el.addEventListener('pointerup', soltou);
+    el.addEventListener('pointermove', moveu);
+    el.addEventListener('dblclick', duplo);
+    window.addEventListener('keydown', tecla);
+    return () => {
+      if (quadro) cancelAnimationFrame(quadro);
+      el.removeEventListener('pointerdown', apertou);
+      el.removeEventListener('pointerup', soltou);
+      el.removeEventListener('pointermove', moveu);
+      el.removeEventListener('dblclick', duplo);
+      window.removeEventListener('keydown', tecla);
+    };
+  }, [camera, gl, scene]);
+
+  const linha = useMemo(() => {
+    const pts = [...pontos, ...(cursor ? [cursor] : []), ...(pontos.length >= 2 ? [pontos[0]] : [])];
+    return pts.map((p) => [p.x / 1000, p.yM + 0.15, p.y / 1000] as [number, number, number]);
+  }, [pontos, cursor]);
+
+  return (
+    <group ref={grupo} userData={{ naoCapturar: true }}>
+      {linha.length >= 2 && <Line points={linha} color="#2563eb" lineWidth={2.5} side={THREE.DoubleSide} depthTest={false} renderOrder={22} raycast={() => null} />}
+      {pontos.map((p, i) => (
+        <AlcaDoCanto key={`novo-${i}`} posicao={[p.x / 1000, p.yM + 0.15, p.y / 1000]} />
+      ))}
+    </group>
+  );
+}
+
 function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']> }) {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
@@ -3073,7 +3283,6 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
     const ys = plato.anel.map((p) => p.y);
     return Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 1000;
   }, [plato.anel]);
-  const raioDaAlca = Math.max(0.25, diagonalM * 0.03);
   const posicaoDoRotulo = useRef(new THREE.Vector3());
   posicaoDoRotulo.current.set(centro.x / 1000, yDe(centro) + Math.max(1.5, diagonalM * 0.05), centro.y / 1000);
 
@@ -3174,29 +3383,43 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
 
   return (
     <group ref={grupo} userData={{ naoCapturar: true }}>
-      <mesh geometry={geometria} renderOrder={21} raycast={() => null}>
+      <mesh
+        geometry={geometria}
+        renderOrder={21}
+        // Duplo clique no platô: um canto novo no LADO mais próximo do clique (pedido 25/11/2026).
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          const g = grupo.current;
+          if (!g) return;
+          const local = g.worldToLocal(e.point.clone());
+          const novo = inserirCanto(cb.current.anel, { x: local.x * 1000, y: local.z * 1000 });
+          if (novo.length !== cb.current.anel.length) cb.current.onConfirmar({ anel: novo, cotaM: cb.current.equilibrio ? null : cb.current.cotaM });
+        }}
+      >
         <meshBasicMaterial color="#2563eb" transparent opacity={0.35} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
       <Line points={contornoLinha} color="#1d4ed8" lineWidth={2.5} side={THREE.DoubleSide} renderOrder={22} raycast={() => null} />
       {plato.anel.map((p, i) => (
-        <mesh
+        <AlcaDoCanto
           key={`alca-${i}`}
-          position={[p.x / 1000, yDe(p) + 0.08, p.y / 1000]}
-          renderOrder={23}
+          posicao={[p.x / 1000, yDe(p) + 0.08, p.y / 1000]}
+          agarrada={agarrado === i}
           onPointerDown={(e) => {
+            if (e.button !== 0) return;
             e.stopPropagation();
             // NA HORA, não no efeito: a OrbitControls ouve o <canvas> e já começou a girar quando o R3F entrega o
             // aperto à alça (ver memória "arrastar pelo piso"); o efeito do gesto rodaria tarde demais.
             if (controles) controles.enabled = false;
             setAgarrado(i);
           }}
-          onPointerOver={() => (document.body.style.cursor = 'grab')}
-          onPointerOut={() => (document.body.style.cursor = '')}
-        >
-          <sphereGeometry args={[raioDaAlca, 16, 12]} />
-          <meshBasicMaterial color={agarrado === i ? '#1e3a8a' : '#2563eb'} depthTest={false} />
-          <Edges color="#1d4ed8" />
-        </mesh>
+          // Botão direito numa bolinha: tira o canto (o platô fica com pelo menos 3) — pedido 25/11/2026.
+          onContextMenu={(e) => {
+            e.stopPropagation();
+            e.nativeEvent?.preventDefault?.();
+            if (cb.current.anel.length <= 3) return;
+            cb.current.onConfirmar({ anel: removerCanto(cb.current.anel, i), cotaM: cb.current.equilibrio ? null : cb.current.cotaM });
+          }}
+        />
       ))}
       <group key={chaveDaSeta} position={[centro.x / 1000, ySetaFixo ?? yDe(centro) + 0.1, centro.y / 1000]}>
         <PivotControls
@@ -3645,7 +3868,9 @@ export default function Blueprint3DViewer(props: Props) {
             para orbitar" está simplesmente errado — a órbita saiu de cena —, e
             uma instrução falsa é pior que nenhuma: quem a segue conclui que
             quebrou. */}
-        {andando
+        {props.desenharPlato3d
+          ? 'Clique os cantos do platô no terreno · clique no 1º canto (ou duplo clique) fecha · Shift libera a trava de 90° · Esc cancela'
+          : andando
           ? 'WASD ou setas para andar · mouse para olhar · Esc para sair'
           : alca
             ? `Arraste a peça para movê-la (trava 90° ${(props.ortogonal ?? true) ? 'ligada' : 'desligada'}, Shift inverte) · setas da alça para um eixo${onElevar ? ', a verde sobe e desce' : ''} · Ctrl+Z desfaz`
@@ -3790,7 +4015,8 @@ export default function Blueprint3DViewer(props: Props) {
             </PivotControls>
           </group>
         )}
-        {props.platoEditavel && props.platoEditavel.anel.length >= 3 && !andando && <EditorDoPlato3d plato={props.platoEditavel} />}
+        {props.platoEditavel && props.platoEditavel.anel.length >= 3 && !andando && !props.desenharPlato3d && <EditorDoPlato3d plato={props.platoEditavel} />}
+        {props.desenharPlato3d && !andando && <DesenhoDoPlato3d onAnel={props.desenharPlato3d.onAnel} />}
         </group>
         {/* A ÓRBITA SAI DE CENA ao andar: os dois disputariam o mesmo mouse, e
             o resultado seria a câmera brigando consigo mesma a cada gesto. */}

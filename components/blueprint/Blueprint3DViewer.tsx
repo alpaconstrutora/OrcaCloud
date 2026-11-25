@@ -3156,6 +3156,19 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
   // A altura da seta CONGELA durante o gesto: o PivotControls mede o arraste contra a posição do grupo, e o grupo
   // subindo com a prévia realimentava a conta — a cota ia e voltava (revisão do branch, portão plato.mjs).
   const [ySetaFixo, setYSetaFixo] = useState<number | null>(null);
+  // Shift na seta = ajuste fino (0,02 do arraste em vez de 0,2 — prova em produção: a seta era sensível demais).
+  const shiftRef = useRef(false);
+  useEffect(() => {
+    const tecla = (e: KeyboardEvent) => {
+      shiftRef.current = e.shiftKey;
+    };
+    window.addEventListener('keydown', tecla);
+    window.addEventListener('keyup', tecla);
+    return () => {
+      window.removeEventListener('keydown', tecla);
+      window.removeEventListener('keyup', tecla);
+    };
+  }, []);
   const cotaDaSetaRef = useRef<number | null>(null);
   const quadroDaSeta = useRef(0);
 
@@ -3203,7 +3216,7 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
           }}
           onDrag={(l) => {
             const dy = new THREE.Vector3().setFromMatrixPosition(l).y;
-            const cota = cotaDaSeta(cotaNoInicioDaSeta.current, dy);
+            const cota = cotaDaSeta(cotaNoInicioDaSeta.current, dy, shiftRef.current);
             cotaDaSetaRef.current = cota;
             if (!quadroDaSeta.current) {
               quadroDaSeta.current = requestAnimationFrame(() => {

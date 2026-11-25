@@ -14925,6 +14925,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   rotulo="Drenagem"
                   onClick={editor.setTool}
                 />
+                {/* PLATÔ DESENHADO (25/11/2026): também aqui, junto das ferramentas irmãs — só no painel do
+                    terreno ele ficava escondido (prova em produção). Liga a Terraplenagem para o corte/aterro
+                    aparecer ao fechar, como o "Desenhar platô" do painel. */}
+                <BotaoDoRibbon
+                  icone={Square}
+                  rotulo="Platô"
+                  ativo={editor.tool === 'plato'}
+                  onClick={() => {
+                    setMostrarTerraplenagem(true);
+                    editor.setTool('plato');
+                  }}
+                  ajuda="Desenha o platô da terraplenagem: clique os cantos do platô na planta; feche no primeiro canto ou com duplo clique. Depois ajuste cantos e cota no 3D (a seta sobe e desce; com Shift, ajuste fino)."
+                />
                 {/* C2: o eixo de uma via de projeto e a gaveta com estacas, greide,
                     seções, volumes e nota de serviço. */}
                 <Ferramenta

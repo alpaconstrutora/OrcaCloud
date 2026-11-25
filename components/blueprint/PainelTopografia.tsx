@@ -2003,7 +2003,7 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
             <button
               type="button"
               onClick={t.onDesenharPlato}
-              title="Clique os cantos do platô na planta; feche no primeiro canto ou com duplo clique. Depois ajuste cantos e cota no 3D."
+              title="Clique os cantos do platô na planta; feche no primeiro canto ou com duplo clique. Depois ajuste cantos e cota no 3D (a seta sobe e desce; com Shift, ajuste fino)."
               className="rounded-md border border-slate-300 bg-white px-2 py-1 text-[11px] text-slate-700 transition-colors hover:bg-slate-50"
             >
               Desenhar platô

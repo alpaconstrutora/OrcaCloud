@@ -30,8 +30,16 @@ export function anelValido(anel: readonly Point[]): boolean {
   return distintos.length >= 3 && distintos.length === anel.length && isSimplePolygon([...anel]);
 }
 
-/** A cota depois de arrastar a seta `dyMundoM` metros, arredondada ao passo de 5 cm. */
-export function cotaDaSeta(cotaInicialM: number, dyMundoM: number): number {
-  const passos = Math.round((cotaInicialM + dyMundoM) / PASSO_DA_SETA_M);
+/**
+ * Quanto da subida do mouse vira cota (25/11/2026, prova em produção): 1 : 1 deixava a seta sensível demais em
+ * terreno grande — no lote de 344 m, 50 px de arraste davam +56 m. Normal = 0,2; com Shift (ajuste fino) = 0,02.
+ */
+export const FATOR_DA_SETA = 0.2;
+export const FATOR_DA_SETA_FINO = 0.02;
+
+/** A cota depois de arrastar a seta `dyMundoM` metros (com Shift: `fino`), arredondada ao passo de 5 cm. */
+export function cotaDaSeta(cotaInicialM: number, dyMundoM: number, fino = false): number {
+  const dy = dyMundoM * (fino ? FATOR_DA_SETA_FINO : FATOR_DA_SETA);
+  const passos = Math.round((cotaInicialM + dy) / PASSO_DA_SETA_M);
   return Math.round(passos * PASSO_DA_SETA_M * 100) / 100;
 }

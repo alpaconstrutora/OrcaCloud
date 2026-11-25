@@ -39,9 +39,16 @@ describe('anelValido', () => {
 });
 
 describe('cotaDaSeta', () => {
-  it('soma o deslocamento vertical e arredonda a 5 cm', () => {
-    expect(cotaDaSeta(100, 0.37)).toBe(100.35);
-    expect(cotaDaSeta(100, 0.38)).toBe(100.4);
-    expect(cotaDaSeta(45.7, -1.02)).toBe(44.7);
+  // Prova em produção (25/11): 1 m de arraste = 1 m de cota deixava a seta sensível demais (lote de 344 m: 50 px ≈
+  // +56 m). Normal = 0,2 do arraste; Shift (fino) = 0,02. Sempre arredondado a 5 cm.
+  it('gesto normal: 0,2 do deslocamento, arredondado a 5 cm', () => {
+    expect(cotaDaSeta(100, 10)).toBe(102);
+    expect(cotaDaSeta(45.7, -5.1)).toBe(44.7);
+    expect(cotaDaSeta(100, 0.37)).toBe(100.05);
+  });
+  it('com Shift (fino): 0,02 do deslocamento', () => {
+    expect(cotaDaSeta(100, 10, true)).toBe(100.2);
+    expect(cotaDaSeta(100, 1, true)).toBe(100);
+    expect(cotaDaSeta(100, 50, true)).toBe(101);
   });
 });

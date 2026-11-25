@@ -231,11 +231,11 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
   hover 2D ("866,00"); "Desenhar platô" → 4 cantos → base DESENHADO gravada (banco: `anel_desenhado` 4 pontos, cota
   null); 3D com polígono azul, alças, seta e "869,43 m · equilíbrio"; seta → 925,95 m gravado; "Equilíbrio" volta;
   canto arrastado → banco com o canto novo; recarregar mantém tudo. O usuário escolheu MANTER o platô no estudo.
-- ⏳ Achados da prova, para corrigir:
-  1. A ferramenta "Platô" só está no painel do terreno — falta no menu **Topografia ▾** da faixa, junto de Perfil e
-     Drenagem (onde se procura).
-  2. A seta é sensível demais em terreno grande: no lote de 344 m, 50 px ≈ +56 m. Precisa de controle fino (ex.:
-     passo menor com Shift, ou escala do arraste pela altura do terreno).
+- [x] Achados da prova — pedido do usuário 25/11: *"corrija os dois agora"*:
+  1. "Platô" no menu **Topografia ▾** da faixa (junto de Perfil e Drenagem), liga a Terraplenagem como o botão do
+     painel. Teste do editor RED → GREEN.
+  2. A seta: 0,2 do arraste no gesto normal e 0,02 com **Shift** (ajuste fino), sempre a 5 cm. Teste puro RED →
+     GREEN; portão `plato.mjs` mede: no lote de 346 m, 60 px = +6,5 m (antes +32,5 m) e com Shift +0,65 m.
 - Fora (anotado): o "percorrer" a pé ainda anda no terreno natural, não no de projeto.
 
 ---

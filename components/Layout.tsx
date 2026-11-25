@@ -1326,7 +1326,6 @@ const Layout: React.FC<LayoutProps> = ({
                 <div className="space-y-1 mb-4">
                   <div className="px-4 py-2 text-xs font-black text-gray-500 uppercase tracking-widest">Portais</div>
                   <NavItem id="client-properties" icon={Building2} label="Meus Imóveis" forceFull />
-                  <NavItem id="investor-area" icon={TrendingUp} label="Área do Investidor" forceFull />
                   <NavItem id="supplier-area" icon={Truck} label="Portal do Fornecedor" forceFull />
                   <NavItem id="broker-area" icon={Briefcase} label="Portal do Corretor" forceFull />
                   <NavItem id="partner-workspaces-admin" icon={Users} label="Portal de Parceiros" forceFull />

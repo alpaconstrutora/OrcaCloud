@@ -1,7 +1,7 @@
 import React from 'react';
 import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { TrendingUp, PieChart as PieChartIcon, Building2, Boxes, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, XCircle, ChevronDown, HelpCircle, MoreHorizontal, LogOut } from 'lucide-react';
-import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
+import { ProjectSettings, BudgetEntry, DiaryEntry } from '../types';
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext';
 import { Investor, investorService } from '../services/investorService';
 import { projectService, ProjectData } from '../services/projectService';
@@ -38,6 +38,7 @@ import PortalSpes, { PortalSpe } from './investor/portal/PortalSpes';
 import PortalEspelho from './investor/portal/PortalEspelho';
 import { carteiraDoInvestidor, resumoDaCarteira } from '../utils/investidorCarteira';
 import { useRealceDaAbaAtiva } from '../hooks/useRealceDaAbaAtiva';
+import { ehGestorDoInvestidor } from '../utils/gestorDoInvestidor';
 
 interface InvestorDashboardProps {
     activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios' | 'espelho';
@@ -121,11 +122,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
     const [selectedAsset, setSelectedAsset] = React.useState<HoldingItem | null>(null);
     const [portalSpes, setPortalSpes] = React.useState<PortalSpe[]>([]);
 
-    const isAdmin = !isPreview && (
-        profile?.role === UserProfile.ADMIN
-        || profile?.role === UserProfile.DEVELOPER
-        || profile?.group === 'DESENVOLVEDOR'
-    );
+    const isAdmin = !isPreview && ehGestorDoInvestidor(profile);
     // REGRA #5: na visão do GESTOR a organização é a do seletor do topo; "Todas" = null = sem filtro na
     // leitura (a RLS recorta) e criar pergunta a org (useOrgWriteTarget). Nunca `settings.organizationId`:
     // é a org da OBRA carregada no contexto. Em 22/11/2026, com o topo em "Todas" e uma obra da Alpa
@@ -862,9 +859,21 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             portalToken={portalToken}
                         />
                     ) : (
+                        // F3 do plano 2026-11-25-oportunidades-e-portal-do-investidor-sem-marketplace: aqui o gestor só
+                        // VÊ as oportunidades como o investidor (publicadas, sem criar/editar/publicar). Gerir é em
+                        // Incorporação › Oportunidades (OportunidadesModule).
+                        <div className="space-y-4">
+                        {isAdmin && (
+                            <div className="flex flex-wrap items-center justify-between gap-3 rounded-[10px] bg-slate-50 border border-slate-200 px-4 py-3">
+                                <p className="text-sm text-slate-600">As oportunidades publicadas, como o investidor as vê. Criar, editar e publicar ficam em Incorporação › Oportunidades.</p>
+                                <Button variant="secondary" size="sm" onClick={() => { window.location.hash = '#/opportunities'; }}>
+                                    Gerir em Oportunidades
+                                </Button>
+                            </div>
+                        )}
                         <OpportunitiesTab
                             opportunities={opportunities}
-                            isAdmin={isAdmin}
+                            isAdmin={false}
                             viewMode={viewMode}
                             organizationId={orgId}
                             investorProfile={investorProfile}
@@ -877,6 +886,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             )}
                             openConfirm={openConfirm}
                         />
+                        </div>
                     )
                 )}
                 {activeTab === 'reports' && isPublicExperience && (

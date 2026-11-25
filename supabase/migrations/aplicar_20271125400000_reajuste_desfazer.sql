@@ -1,4 +1,9 @@
 -- =============================================================================
+-- ⚠️ JÁ APLICADA em produção (25/11/2026 — `desfazer_reajuste` existe no banco).
+-- NÃO rodar de novo. Nome antigo: aplicar_20271125300000_reajuste_desfazer.sql —
+-- renomeada para 20271125400000 porque colidia com
+-- aplicar_20271125300000_oportunidade_vista_do_gestor.sql (#727), que chegou antes.
+-- =============================================================================
 -- Locações › Reajustes › Histórico: desfazer (e editar) uma decisão de reajuste.
 -- Plano: docs/planos/2026-11-25-reajustes-historico-crud.md
 --

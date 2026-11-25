@@ -22,7 +22,7 @@
 
 ## Itens
 
-1. **Migration** `aplicar_20271125300000_reajuste_desfazer.sql`:
+1. **Migration** `aplicar_20271125400000_reajuste_desfazer.sql` (era 20271125300000; renomeada por colidir com a de Oportunidades):
    - colunas `proximo_anterior`, `parcelas_alteradas`, `desfeito_em` e `desfeito_por`;
    - uma policy de UPDATE que só permite **marcar** a decisão como desfeita, uma vez,
      com o e-mail de quem desfez;

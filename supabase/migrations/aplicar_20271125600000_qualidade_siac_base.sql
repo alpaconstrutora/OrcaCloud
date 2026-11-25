@@ -145,6 +145,13 @@ SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
+    -- Organização do item é imutável: mover o item deixaria para trás quem aponta
+    -- para ele (substitui_item_id de outro item, exclusões em obras da org antiga).
+    IF TG_OP = 'UPDATE' AND NEW.organization_id IS DISTINCT FROM OLD.organization_id THEN
+        RAISE EXCEPTION 'A organização de um item controlado não pode ser trocada.'
+            USING ERRCODE = '42501';
+    END IF;
+
     IF NEW.procedure_document_id IS NOT NULL AND NOT EXISTS (
         SELECT 1 FROM public.opura_documents d
          WHERE d.id = NEW.procedure_document_id
@@ -314,7 +321,8 @@ GRANT SELECT, INSERT, UPDATE, DELETE
 
 -- ── 4. RPC: registrar treinamento em obra ───────────────────────────────────
 -- p_novos_terceiros: [{ "nome": text (obrigatório), "cpf": text?, "empreiteira": text? }]
--- Terceiro com CPF já cadastrado na org (comparando só os dígitos) reaproveita a
+-- CPF informado tem de ter 11 dígitos e é gravado como 000.000.000-00 (formato do
+-- app). Terceiro com CPF já cadastrado na org (comparando só os dígitos) reaproveita a
 -- ficha; senão ganha ficha própria (EMPREITEIRO, academy_externo, sem e-mail e
 -- sem acesso a portal). Um registro em employee_trainings por pessoa distinta.
 -- Devolve quantos registros gravou.
@@ -395,9 +403,21 @@ BEGIN
 
         v_nome        := btrim(v_t ->> 'nome');
         v_cpf         := nullif(btrim(coalesce(v_t ->> 'cpf', '')), '');
-        v_cpf_digitos := nullif(regexp_replace(coalesce(v_cpf, ''), '\D', '', 'g'), '');
+        v_cpf_digitos := regexp_replace(coalesce(v_cpf, ''), '\D', '', 'g');
         v_empreiteira := nullif(btrim(coalesce(v_t ->> 'empreiteira', '')), '');
         v_emp         := NULL;
+
+        -- CPF: ausente é permitido; informado tem de ter 11 dígitos e é gravado no
+        -- formato do app (000.000.000-00) — o índice único (org_id, cpf) compara o
+        -- texto cru, e o RH grava com máscara.
+        IF v_cpf IS NULL THEN
+            v_cpf_digitos := NULL;
+        ELSIF length(v_cpf_digitos) <> 11 THEN
+            RAISE EXCEPTION 'CPF inválido para %: informe os 11 dígitos.', v_nome USING ERRCODE = '22023';
+        ELSE
+            v_cpf := substr(v_cpf_digitos, 1, 3) || '.' || substr(v_cpf_digitos, 4, 3) || '.'
+                  || substr(v_cpf_digitos, 7, 3) || '-' || substr(v_cpf_digitos, 10, 2);
+        END IF;
 
         IF v_cpf_digitos IS NOT NULL THEN
             SELECT e.id INTO v_emp

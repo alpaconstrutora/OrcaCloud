@@ -45,9 +45,11 @@ interface Props {
     versao?: number;
     /** Desfez uma renovação: a fila do pai relê e avisa. */
     onMudou: (mensagem: string) => void;
+    /** Documentos do aditivo › "Modelos de documento": o pai abre a tela de modelos. */
+    onGerenciarModelos?: (organizationId: string) => void;
 }
 
-const RentalRenovacoesHistorico: React.FC<Props> = ({ organizationId, negociacoesDoEmpreendimento, nomeDoCliente, onOpenContract, onEditRenewal, versao = 0, onMudou }) => {
+const RentalRenovacoesHistorico: React.FC<Props> = ({ organizationId, negociacoesDoEmpreendimento, nomeDoCliente, onOpenContract, onEditRenewal, versao = 0, onMudou, onGerenciarModelos }) => {
     const [todos, setTodos] = useState<RegistroDeRenovacao[]>([]);
     const [loading, setLoading] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
@@ -228,6 +230,8 @@ const RentalRenovacoesHistorico: React.FC<Props> = ({ organizationId, negociacoe
                 nomeDoCliente={nomeDoCliente}
                 onClose={() => setVendo(null)}
                 onOpenContract={onOpenContract ? id => { setVendo(null); onOpenContract(id); } : undefined}
+                onNotify={(msg, type) => (type === 'error' ? setErro(msg) : onMudou(msg))}
+                onGerenciarModelos={onGerenciarModelos ? org => { setVendo(null); onGerenciarModelos(org); } : undefined}
             />
         </div>
     );

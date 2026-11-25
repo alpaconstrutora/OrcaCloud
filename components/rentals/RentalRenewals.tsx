@@ -108,6 +108,8 @@ interface Props {
     onChanged?: (message: string) => void;
     /** Abre o detalhe do contrato (aditivos, documentos, assinatura). */
     onOpenContract?: (contractId: string) => void;
+    /** Documentos do aditivo › "Modelos de documento": o módulo abre a tela de modelos. */
+    onGerenciarModelos?: (organizationId: string) => void;
     /**
      * Negociações do empreendimento aberto (mesma regra da aba Contratos); null =
      * fora de um empreendimento, todos da organização. Pedido de 24/11/2026.
@@ -115,7 +117,7 @@ interface Props {
     negociacoesDoEmpreendimento?: Set<string> | null;
 }
 
-const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChanged, onOpenContract, negociacoesDoEmpreendimento = null }) => {
+const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChanged, onOpenContract, onGerenciarModelos, negociacoesDoEmpreendimento = null }) => {
     const [todas, setTodas] = useState<ExpiringRental[]>([]);
     const rows = useMemo(() => filaDoEmpreendimento(todas, negociacoesDoEmpreendimento), [todas, negociacoesDoEmpreendimento]);
     const [loading, setLoading] = useState(true);
@@ -322,6 +324,7 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                     onEditRenewal={(contractId, editarAditivoId) => setGavetaDe({ contractId, editarAditivoId })}
                     versao={versaoHistorico}
                     onMudou={mensagem => { loadData(); onChanged?.(mensagem); }}
+                    onGerenciarModelos={onGerenciarModelos}
                 />
                 {gaveta}
             </div>

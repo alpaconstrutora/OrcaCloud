@@ -137,7 +137,25 @@ else {
   if (depois3.confirmacoes !== 2) falhas.push(`seta: ${depois3.confirmacoes} confirmações (esperava 2)`);
   if (!(depois3.plato.cotaM > depois2.plato.cotaM)) falhas.push(`seta: a cota não subiu (${depois2.plato.cotaM} → ${depois3.plato.cotaM})`);
   await page.screenshot({ path: `${saida}/plato-3d-seta.png`, clip: caixa });
-  console.log(JSON.stringify({ cotaAntes: depois2.plato.cotaM, cotaDepois: depois3.plato.cotaM }));
+  // Sensibilidade (prova em produção: 50 px ≈ +56 m num lote de 344 m): 60 px no lote de 346 m têm de dar pouco.
+  const subidaNormal = depois3.plato.cotaM - depois2.plato.cotaM;
+  if (subidaNormal > 12) falhas.push(`seta: sensível demais — 60 px subiram ${subidaNormal.toFixed(2)} m`);
+  // Com Shift: ajuste fino (bem menor que o normal, mas ainda anda).
+  const verdes2 = (await manchas([120, 210, 140], 45)).filter((m) => m.n >= 8).sort((a, b) => a.y - b.y);
+  await page.keyboard.down('Shift');
+  await page.mouse.move(caixa.x + verdes2[0].x, caixa.y + verdes2[0].y);
+  await page.mouse.down();
+  for (let k = 1; k <= 12; k++) {
+    await page.mouse.move(caixa.x + verdes2[0].x, caixa.y + verdes2[0].y - 5 * k);
+    await page.waitForTimeout(60);
+  }
+  await page.mouse.up();
+  await page.keyboard.up('Shift');
+  await page.waitForTimeout(700);
+  const depois4 = await estado();
+  const subidaFina = depois4.plato.cotaM - depois3.plato.cotaM;
+  if (!(subidaFina > 0 && subidaFina < subidaNormal / 4)) falhas.push(`seta com Shift: subiu ${subidaFina.toFixed(2)} m (normal ${subidaNormal.toFixed(2)} m)`);
+  console.log(JSON.stringify({ cotaAntes: depois2.plato.cotaM, normal: depois3.plato.cotaM, fino: depois4.plato.cotaM }));
 }
 if (erros.length) falhas.push(...erros);
 console.log(JSON.stringify({ alcas: alcas.length, anelAntes: inicio.plato.anel, anelDepois: depois1.plato.anel }));

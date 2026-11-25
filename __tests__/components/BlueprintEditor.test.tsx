@@ -8564,6 +8564,22 @@ describe('BlueprintEditor · vias e greide (C2)', () => {
 });
 
 /**
+ * PLATÔ DESENHADO (25/11/2026, prova em produção): a ferramenta também mora no menu Topografia, junto de Perfil
+ * e Drenagem — só no painel do terreno ela ficava escondida de quem a procura entre as irmãs.
+ */
+describe('BlueprintEditor · platô no menu Topografia', () => {
+  it('"Platô" fica no menu Topografia e liga a ferramenta de desenhar o platô', async () => {
+    await montar();
+    await abrirAba(/^terreno$/i);
+    const grupo = screen.getByLabelText(/^topografia$/i);
+    const plato = within(grupo).getByRole('button', { name: /^platô$/i });
+    expect(plato).toHaveAttribute('title', expect.stringMatching(/cantos do platô/i));
+    await userEvent.setup().click(plato);
+    expect(botao(/^platô$/i)).toHaveAttribute('aria-pressed', 'true');
+  }, 60000);
+});
+
+/**
  * GeoINCRA / SIGEF (A4): o botão mora no grupo Lote da aba Terreno, junto do
  * Roteiro, e sem lote fica apagado dizendo o caminho.
  */

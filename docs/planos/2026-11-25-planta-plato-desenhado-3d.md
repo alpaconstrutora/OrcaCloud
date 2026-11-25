@@ -225,7 +225,17 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
   7. Com superfície de projeto e anel da versão < 3 pontos, as curvas do terreno natural assentam na malha de projeto.
   8. Duplo clique com menos de 3 cantos distintos encerra o desenho sem dizer por quê.
   9. `pointercancel` no meio do gesto: a órbita só volta no próximo `pointerup`.
-- ⏳ Falta: migration aplicada pelo usuário → merge → prova logada em produção.
+- [x] Migration aplicada pelo usuário (25/11, conferida: CHECK com DESENHADO, coluna e trava ≥ 3) → merge #724 com
+  18/18 verdes → `conferir-producao` (3f7592d) → CI da main verde.
+- [x] Prova LOGADA em produção (25/11, "Estudp Relevo", Chrome do usuário): Maquete com mata e notas no canto certo;
+  hover 2D ("866,00"); "Desenhar platô" → 4 cantos → base DESENHADO gravada (banco: `anel_desenhado` 4 pontos, cota
+  null); 3D com polígono azul, alças, seta e "869,43 m · equilíbrio"; seta → 925,95 m gravado; "Equilíbrio" volta;
+  canto arrastado → banco com o canto novo; recarregar mantém tudo. O usuário escolheu MANTER o platô no estudo.
+- ⏳ Achados da prova, para corrigir:
+  1. A ferramenta "Platô" só está no painel do terreno — falta no menu **Topografia ▾** da faixa, junto de Perfil e
+     Drenagem (onde se procura).
+  2. A seta é sensível demais em terreno grande: no lote de 344 m, 50 px ≈ +56 m. Precisa de controle fino (ex.:
+     passo menor com Shift, ou escala do arraste pela altura do terreno).
 - Fora (anotado): o "percorrer" a pé ainda anda no terreno natural, não no de projeto.
 
 ---

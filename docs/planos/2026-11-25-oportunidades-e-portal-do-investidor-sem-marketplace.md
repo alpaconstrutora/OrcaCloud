@@ -1,7 +1,7 @@
 # Oportunidades × Portal do Investidor: um lugar para cada coisa, sem marketplace — 25/11/2026
 
 > REGRA #6. Uma frente por fase, a partir do `origin/main`. Merge é meu, push em `main` é o deploy (REGRA #8).
-> **Status: aprovado em 25/11** ("Aprovado  e apagar a coluna também"). Em execução, fase a fase.
+> **Status: NO AR (25/11).** Aprovado em 25/11 ("Aprovado  e apagar a coluna também"); F1 a F5 publicadas e conferidas.
 
 ## Pedido (literal)
 
@@ -64,7 +64,7 @@ junto da F2).
   08092be), depois a migration `aplicar_20271125200000_sem_marketplace.sql`, aplicada com `db query -f`. Antes do DROP,
   recontado: 3 organizações com endereço, 1 oportunidade marcada, 0 interesses (iguais à reversão). Depois: 0 das 2
   funções, 0 das 2 colunas. Reversão: `scripts/rollback-sem-marketplace.sql`.
-- **F2, F3, F4 e F5 — num PR só** (mexem nos mesmos arquivos: AppRouter, InvestorDashboard, OpportunitiesTab).
+- **F2, F3, F4 e F5 — NO AR (25/11), PR #727 (merge 7d87a6c), num PR só** (mexem nos mesmos arquivos: AppRouter, InvestorDashboard, OpportunitiesTab).
   - F2: `components/investor/OportunidadesModule.tsx`; a regra de gestor numa função só (`utils/gestorDoInvestidor.ts`).
   - F3: no painel do investidor a aba Oportunidades passa `isAdmin={false}` (só publicadas, sem gestão) + atalho.
   - F4: "Ver" abre `PortalOportunidadeDetalhe` no lugar da lista; sai `OpportunityDetail.tsx` (e `LinkedProjectPanel`,
@@ -72,9 +72,20 @@ junto da F2).
     (`imovibService.versaoPublicada`, como o detalhe antigo). Obra e acompanhamento do gestor: migration
     `aplicar_20271125300000_oportunidade_vista_do_gestor.sql` — o miolo das 2 RPCs do link vira função interna
     (copiado do banco em 25/11, sem mudar a conta) e a RPC nova `fn_oportunidade_vista_do_gestor` (membro da org,
-    rascunho também) chama o mesmo miolo. Prova pedida antes de publicar: a resposta das 2 RPCs do link para o Garden
-    01 igual antes e depois (md5 guardado).
+    rascunho também) chama o mesmo miolo. Aplicada com o OK do usuário ("sim", 25/11) ANTES do merge. Prova: a resposta
+    das 2 RPCs do link para o Garden 01 com o mesmo md5 antes e depois (obra 284da506…, acompanhamento ef9494e2…);
+    EXECUTE: internas só postgres/service_role, a do gestor só authenticated.
   - F5: sai do menu; `#/investor-area` abre o Portal do Investidor.
+
+## Conferido em produção (25/11, Chrome logado, produção servindo 7d87a6c)
+
+- Incorporação › Oportunidades: só Oportunidades/Interesses, sem a barra das 11 abas.
+- "Ver" do Garden 01: a tela do investidor (Apresentação · Acompanhamento · Viabilidade · Documentos) com a faixa do
+  gestor (Interesses (0), Editar e o aviso real de versão desatualizada: o estudo de hoje tem VGV R$ 25.000.002 contra
+  R$ 11.648.000 da versão publicada). Acompanhamento pela RPC nova: obra Garden Cambuhy, 0 de 38 unidades, 5,4%.
+- `#/investor-area` abre o Portal do Investidor (lista de investidores).
+- Portal do Investidor › Tiago › Oportunidades: aviso + "Gerir em Oportunidades", só "Ver" na linha.
+- Não conferido: a tela pelo link do investidor (mesmo componente; coberto pelo teste OportunidadeDetalheUnico).
 
 ## Fora, de propósito
 

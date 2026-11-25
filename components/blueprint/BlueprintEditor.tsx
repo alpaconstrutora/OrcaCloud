@@ -11600,6 +11600,110 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * PROPRIEDADES da divisa selecionada. Era o miolo da seção "Ambientes".
    */
   /**
+   * OPÇÕES DO EXIBIR QUE SÃO DE UMA DISCIPLINA (25/11/2026) — *"o que tem em exibir que falta implementar nas camadas
+   * como exemplo da terraplanagem?"* → *"Implemente, sem mover para as Camadas os itens de medidas e preenchimento do
+   * terreno."* UMA definição para os dois lugares: o menu Vista › Exibir e as sublinhas do painel Camadas (Terreno ›
+   * Curvas de nível…; Estrutura › Eixos). Medidas, preenchimento e unidades ficam só no Exibir.
+   */
+  const itemDosEixosNoExibir: ItemDeExibicao = {
+    chave: 'eixos',
+    rotulo: 'Eixos',
+    icone: Hash,
+    ligado: mostrarEixos,
+    alternar: () => setMostrarEixos((v) => !v),
+    desabilitado: (editor.model.eixos ?? []).length === 0,
+    ajuda:
+      (editor.model.eixos ?? []).length === 0
+        ? 'Não há eixo no estudo: gere a malha em Estrutural › Eixos automáticos (das paredes, dos blocos ou, sem eles, dos lados do lote), ou desenhe com a ferramenta Eixo.'
+        : 'Os eixos da malha — linha traço-ponto com a bolha e o nome (A, B… / 1, 2…) nas pontas. Oculto, o eixo não é desenhado nem dá encaixe, mas continua valendo para os Pilares automáticos.',
+  };
+  const itensDoTerrenoNoExibir: ItemDeExibicao[] = [
+    {
+      chave: 'curvas-de-nivel',
+      rotulo: 'Curvas de nível',
+      icone: Mountain,
+      ligado: mostrarCurvasDeNivel,
+      alternar: () => setMostrarCurvasDeNivel((v) => !v),
+      desabilitado: !topografia.selecionada && topografia.pontosCotados.length === 0,
+      ajuda: topografia.selecionada
+        ? `Curvas da versão v${topografia.selecionada.versao} e os pontos cotados em edição. Mestras mais grossas, com a cota escrita.`
+        : 'Não há topografia gerada — em Ambientes › Terreno › Curvas de nível.',
+    },
+    {
+      chave: 'declividade',
+      rotulo: 'Declividade',
+      icone: TrendingUp,
+      ligado: mostrarDeclividade,
+      alternar: () => {
+        const ligar = !mostrarDeclividade;
+        setMostrarDeclividade(ligar);
+        // Ligar uma pintura desliga a outra (mesma regra da aba Preferências).
+        aplicarConsequenciasDaEscolha('mostrarDeclividade', ligar);
+      },
+      desabilitado: !topografia.selecionada,
+      ajuda: topografia.selecionada
+        ? 'Pinta cada célula da grade com a faixa de inclinação: verde até 5 %, amarelo até 15 %, laranja até 30 %, vermelho acima. A legenda com as áreas está no painel.'
+        : 'Não há topografia gerada.',
+    },
+    {
+      chave: 'hipsometria',
+      rotulo: 'Hipsométrico',
+      icone: Palette,
+      ligado: mostrarHipsometria,
+      alternar: () => {
+        const ligar = !mostrarHipsometria;
+        setMostrarHipsometria(ligar);
+        aplicarConsequenciasDaEscolha('mostrarHipsometria', ligar);
+      },
+      desabilitado: !topografia.selecionada,
+      ajuda: topografia.selecionada
+        ? 'Pinta cada célula pela cota: 8 faixas iguais, faixas por equidistância, ou a rampa contínua arco-íris (azul no nível mais baixo, vermelho no mais alto). Desliga a declividade: as duas pinturas juntas não se leem.'
+        : 'Não há topografia gerada.',
+    },
+    {
+      chave: 'feicoes-do-levantamento',
+      rotulo: 'Feições do levantamento',
+      icone: Fence,
+      ligado: mostrarFeicoes,
+      alternar: () => setMostrarFeicoes((v) => !v),
+      desabilitado: !feicoesNoCanvas,
+      ajuda: feicoesNoCanvas
+        ? 'Cerca, muro, meio-fio, edificação, poste, árvore… pelos códigos dos pontos do levantamento. Cada feição liga e desliga no painel do terreno.'
+        : 'Nenhum ponto do levantamento tem código de feição (CE, MU, MF, ED, PO, AR…).',
+    },
+    {
+      chave: 'nos-da-grade',
+      rotulo: 'Nós da grade',
+      icone: Grid3x3,
+      ligado: mostrarNosDaGrade,
+      alternar: () => setMostrarNosDaGrade((v) => !v),
+      desabilitado: !topografia.selecionada,
+      ajuda: topografia.selecionada
+        ? 'Um pontinho em cada nó amostrado da grade, na cor da cota — onde a fonte foi lida (como o "plot sampling points" do Contour Map Creator).'
+        : 'Não há topografia gerada.',
+    },
+    {
+      chave: 'terraplenagem',
+      rotulo: 'Corte e aterro',
+      icone: Layers,
+      ligado: mostrarTerraplenagem,
+      alternar: () => setMostrarTerraplenagem((v) => !v),
+      desabilitado: !terraplenagemCalc,
+      ajuda: terraplenagemCalc
+        ? 'Hachura do platô: vermelho onde o terreno está acima da cota (corte), azul onde está abaixo (aterro). No corte, a linha tracejada azul é o platô.'
+        : 'Defina a cota do platô em Terreno › Corte e aterro.',
+    },
+    {
+      chave: 'envelope',
+      rotulo: 'Envelope construtivo',
+      icone: Hexagon,
+      ligado: mostrarEnvelope,
+      alternar: () => setMostrarEnvelope((v) => !v),
+      ajuda:
+        'A hachura diagonal da área construível — o terreno já descontado os recuos. É uma restrição calculada, separada do preenchimento do lote.',
+    },
+  ];
+  /**
    * ⚠️ FUNÇÃO, e não constante (P2.64): este painel é montado em DOIS lugares —
    * no dock quando há divisa selecionada e na gaveta "Dados do lote". Só a
    * gaveta recebe o pedido de importação; com o token nos dois, o clique no
@@ -16563,18 +16667,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                       ajuda:
                         'Cota os LADOS da edificação, na borda do desenho: total pela face externa, parcial nos eixos das divisórias. Parede do miolo que não encosta no contorno não aparece aqui.',
                     },
-                    {
-                      chave: 'eixos',
-                      rotulo: 'Eixos',
-                      icone: Hash,
-                      ligado: mostrarEixos,
-                      alternar: () => setMostrarEixos((v) => !v),
-                      desabilitado: (editor.model.eixos ?? []).length === 0,
-                      ajuda:
-                        (editor.model.eixos ?? []).length === 0
-                          ? 'Não há eixo no estudo: gere a malha em Estrutural › Eixos automáticos (das paredes, dos blocos ou, sem eles, dos lados do lote), ou desenhe com a ferramenta Eixo.'
-                          : 'Os eixos da malha — linha traço-ponto com a bolha e o nome (A, B… / 1, 2…) nas pontas. Oculto, o eixo não é desenhado nem dá encaixe, mas continua valendo para os Pilares automáticos.',
-                    },
+                    itemDosEixosNoExibir,
                     {
                       chave: 'interna',
                       rotulo: 'Cota interna dos ambientes',
@@ -16644,90 +16737,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                         ? 'O verde fraco por dentro do lote. Desligado, restam as divisas — é como se confere o traçado contra o levantamento topográfico ou a planta de fundo, sem perder a cor dos ambientes.'
                         : 'Não há divisa de terreno desenhada — use a ferramenta Terreno para criar o lote.',
                     },
-                    {
-                      chave: 'curvas-de-nivel',
-                      rotulo: 'Curvas de nível',
-                      icone: Mountain,
-                      ligado: mostrarCurvasDeNivel,
-                      alternar: () => setMostrarCurvasDeNivel((v) => !v),
-                      desabilitado: !topografia.selecionada && topografia.pontosCotados.length === 0,
-                      ajuda: topografia.selecionada
-                        ? `Curvas da versão v${topografia.selecionada.versao} e os pontos cotados em edição. Mestras mais grossas, com a cota escrita.`
-                        : 'Não há topografia gerada — em Ambientes › Terreno › Curvas de nível.',
-                    },
-                    {
-                      chave: 'declividade',
-                      rotulo: 'Declividade',
-                      icone: TrendingUp,
-                      ligado: mostrarDeclividade,
-                      alternar: () => {
-                        const ligar = !mostrarDeclividade;
-                        setMostrarDeclividade(ligar);
-                        // Ligar uma pintura desliga a outra (mesma regra da aba Preferências).
-                        aplicarConsequenciasDaEscolha('mostrarDeclividade', ligar);
-                      },
-                      desabilitado: !topografia.selecionada,
-                      ajuda: topografia.selecionada
-                        ? 'Pinta cada célula da grade com a faixa de inclinação: verde até 5 %, amarelo até 15 %, laranja até 30 %, vermelho acima. A legenda com as áreas está no painel.'
-                        : 'Não há topografia gerada.',
-                    },
-                    {
-                      chave: 'hipsometria',
-                      rotulo: 'Hipsométrico',
-                      icone: Palette,
-                      ligado: mostrarHipsometria,
-                      alternar: () => {
-                        const ligar = !mostrarHipsometria;
-                        setMostrarHipsometria(ligar);
-                        aplicarConsequenciasDaEscolha('mostrarHipsometria', ligar);
-                      },
-                      desabilitado: !topografia.selecionada,
-                      ajuda: topografia.selecionada
-                        ? 'Pinta cada célula pela cota: 8 faixas iguais, faixas por equidistância, ou a rampa contínua arco-íris (azul no nível mais baixo, vermelho no mais alto). Desliga a declividade: as duas pinturas juntas não se leem.'
-                        : 'Não há topografia gerada.',
-                    },
-                    {
-                      chave: 'feicoes-do-levantamento',
-                      rotulo: 'Feições do levantamento',
-                      icone: Fence,
-                      ligado: mostrarFeicoes,
-                      alternar: () => setMostrarFeicoes((v) => !v),
-                      desabilitado: !feicoesNoCanvas,
-                      ajuda: feicoesNoCanvas
-                        ? 'Cerca, muro, meio-fio, edificação, poste, árvore… pelos códigos dos pontos do levantamento. Cada feição liga e desliga no painel do terreno.'
-                        : 'Nenhum ponto do levantamento tem código de feição (CE, MU, MF, ED, PO, AR…).',
-                    },
-                    {
-                      chave: 'nos-da-grade',
-                      rotulo: 'Nós da grade',
-                      icone: Grid3x3,
-                      ligado: mostrarNosDaGrade,
-                      alternar: () => setMostrarNosDaGrade((v) => !v),
-                      desabilitado: !topografia.selecionada,
-                      ajuda: topografia.selecionada
-                        ? 'Um pontinho em cada nó amostrado da grade, na cor da cota — onde a fonte foi lida (como o "plot sampling points" do Contour Map Creator).'
-                        : 'Não há topografia gerada.',
-                    },
-                    {
-                      chave: 'terraplenagem',
-                      rotulo: 'Corte e aterro',
-                      icone: Layers,
-                      ligado: mostrarTerraplenagem,
-                      alternar: () => setMostrarTerraplenagem((v) => !v),
-                      desabilitado: !terraplenagemCalc,
-                      ajuda: terraplenagemCalc
-                        ? 'Hachura do platô: vermelho onde o terreno está acima da cota (corte), azul onde está abaixo (aterro). No corte, a linha tracejada azul é o platô.'
-                        : 'Defina a cota do platô em Terreno › Corte e aterro.',
-                    },
-                    {
-                      chave: 'envelope',
-                      rotulo: 'Envelope construtivo',
-                      icone: Hexagon,
-                      ligado: mostrarEnvelope,
-                      alternar: () => setMostrarEnvelope((v) => !v),
-                      ajuda:
-                        'A hachura diagonal da área construível — o terreno já descontado os recuos. É uma restrição calculada, separada do preenchimento do lote.',
-                    },
+                    ...itensDoTerrenoNoExibir,
                     {
                       // 28/10/2026: as unidades do Empreendimento no bloco de massa — e arrastá-las de vaga.
                       chave: 'unidades-na-planta',
@@ -18185,6 +18195,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 onBaseAtenuada={setIsolarComBaseAtenuada}
                 onIsolar={isolarCamada}
                 onReexibir={reexibirCamadas}
+                // As opções do Exibir que são de uma disciplina (25/11/2026): os MESMOS itens do menu.
+                exibicao={{ TERRENO: itensDoTerrenoNoExibir, ESTRUTURA: [itemDosEixosNoExibir] }}
                 mapa={{
                   estados: estadosDoMapa,
                   onMudar: setMapaSalvo,

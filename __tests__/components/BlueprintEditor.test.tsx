@@ -8582,6 +8582,29 @@ describe('BlueprintEditor · platô no menu Topografia', () => {
 });
 
 /**
+ * Camadas × Exibir (25/11/2026, *"o que tem em exibir que falta implementar nas camadas como exemplo da
+ * terraplanagem?"* → *"Implemente, sem mover … medidas e preenchimento do terreno"*): o Terreno abre nas opções de
+ * análise do relevo, a Estrutura em Eixos — e medidas/preenchimento não entram.
+ */
+describe('BlueprintEditor · opções do Exibir nas Camadas', () => {
+  it('Terreno › Corte e aterro e Curvas de nível; Estrutura › Eixos; sem medidas nem preenchimento', async () => {
+    await montar();
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Expandir Terreno' }));
+    for (const chave of ['curvas-de-nivel', 'declividade', 'hipsometria', 'feicoes-do-levantamento', 'nos-da-grade', 'terraplenagem', 'envelope']) {
+      expect(document.querySelector(`li[data-exibir="${chave}"]`)).not.toBeNull();
+    }
+    expect(document.querySelector('li[data-exibir="preenchimento-terreno"], li[data-exibir="medidas-lote-massa"]')).toBeNull();
+    // Sem topografia, "Corte e aterro" não tem efeito: o olho desligado diz o motivo (o mesmo texto do Exibir).
+    const corte = screen.getByRole('button', { name: /^(Exibir|Ocultar) Corte e aterro$/ });
+    expect(corte).toBeDisabled();
+    expect(corte.getAttribute('title')).toMatch(/cota do platô/i);
+    await user.click(screen.getByRole('button', { name: 'Expandir Estrutura' }));
+    expect(document.querySelector('li[data-exibir="eixos"]')).not.toBeNull();
+  }, 60000);
+});
+
+/**
  * GeoINCRA / SIGEF (A4): o botão mora no grupo Lote da aba Terreno, junto do
  * Roteiro, e sem lote fica apagado dizendo o caminho.
  */

@@ -12,7 +12,7 @@
  * `?fonte=dem` mostra o painel com a fonte remota escolhida (sem georreferência).
  */
 import '../../../index.css';
-import React from 'react';
+import React, { useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import BlueprintCanvas from '../../../components/blueprint/BlueprintCanvas';
 import ElevationCanvas from '../../../components/blueprint/ElevationCanvas';
@@ -452,6 +452,16 @@ window.__topografia = {
 };
 
 function App() {
+  // `?desenhar=1` (25/11/2026): a ferramenta Platô ativa; o contorno desenhado vira o platô do corte/aterro.
+  const desenhar = busca.get('desenhar') === '1';
+  const [anelDesenhado, setAnelDesenhado] = useState<Point[] | null>(null);
+  const terraplenagemDoDesenho = useMemo(
+    () => (anelDesenhado ? terraplenagemComTalude(versao.grade, anelDesenhado, cotaPlato, PARAMETROS, null) : null),
+    [anelDesenhado],
+  );
+  (window as unknown as { __plato?: unknown }).__plato = anelDesenhado
+    ? { anel: anelDesenhado, celulasDeCorte: terraplenagemDoDesenho!.ladoDaCelula.filter((l) => l === 'CORTE').length, celulasDeAterro: terraplenagemDoDesenho!.ladoDaCelula.filter((l) => l === 'ATERRO').length }
+    : null;
   if (vista === 'corte') {
     return (
       <div className="h-full w-full">
@@ -506,7 +516,8 @@ function App() {
       <div className="min-w-0 flex-1" hidden={soPainel}>
         <BlueprintCanvas
           model={model}
-          tool="selecionar"
+          tool={desenhar && !anelDesenhado ? 'plato' : 'selecionar'}
+          onPlatoDesenhado={setAnelDesenhado}
           levelId={levelId}
           selectedIds={[]}
           onSelecionar={() => {}}
@@ -534,7 +545,9 @@ function App() {
           }
           declividade={comDeclividade ? { grade: versao.grade, faixaDaCelula: declividade.faixaDaCelula } : null}
           terraplenagem={
-            comPlato
+            terraplenagemDoDesenho
+              ? { grade: versao.grade, ladoDaCelula: terraplenagemDoDesenho.ladoDaCelula, muros: [] }
+              : comPlato
               ? {
                   grade: versao.grade,
                   ladoDaCelula: terraplenagem.ladoDaCelula,

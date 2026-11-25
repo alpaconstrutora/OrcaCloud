@@ -113,6 +113,7 @@ const SEM_BLOCOS_COM_PROBLEMA: ReadonlySet<string> = new Set();
 import { COR_DA_FASE } from '../../utils/blueprintFases';
 import { linhasDoMobiliario, PENA_PX, PX_MINIMO_DO_DETALHE } from '../../utils/blueprintSimbolosMobiliario';
 import { COR_DA_FAMILIA, COR_PAREDE_HUMANIZADA, COR_SOMBRA, COR_VEGETACAO, sombraDaParede, tramaDoPiso, type EstiloDoPiso, type Planta } from '../../utils/blueprintHumanizada';
+import { anelValido } from '../../utils/blueprintPlato3d';
 import { formatarCotaM, type CurvaDeNivel, type GradeDeElevacao, type PontoCotado } from '../../utils/blueprintTopografia';
 import {
   comprimentoDaCurvaM,
@@ -404,6 +405,8 @@ const COR_TALUDE_CORTE = 'rgba(239, 68, 68, 0.45)';
 const COR_TALUDE_ATERRO = 'rgba(59, 130, 246, 0.45)';
 /** A linha do perfil altimétrico: roxo, que nenhuma outra camada usa. */
 const COR_PERFIL = '#7c3aed';
+/** O platô desenhado em curso (25/11/2026): o azul do platô no 3D. */
+const COR_PLATO = '#2563eb';
 /** Drenagem: azul-água, com a que não atende ao caimento em vermelho; muro: grafite. */
 const COR_DRENAGEM = '#0284c7';
 const COR_DRENAGEM_FALHA = '#dc2626';
@@ -1419,6 +1422,10 @@ interface Props {
   linhaDoPerfilAtiva?: number | null;
   /** A ferramenta Perfil terminou uma polilinha (≥ 2 pontos). Não cria entidade de kernel. */
   onPerfilTracado?: (pontos: Point[]) => void;
+  /** 25/11/2026: a ferramenta Platô fechou um contorno (≥ 3 cantos distintos). Não cria entidade de kernel. */
+  onPlatoDesenhado?: (anel: Point[]) => void;
+  /** O contorno fechado não serve (se cruza): o motivo, para a tela dizer. */
+  onPlatoRecusado?: (motivo: string) => void;
   /**
    * Uma cor por ambiente em vez do azul único.
    *
@@ -1834,6 +1841,8 @@ export default function BlueprintCanvas({
   linhasDoPerfil = null,
   linhaDoPerfilAtiva = null,
   onPerfilTracado,
+  onPlatoDesenhado,
+  onPlatoRecusado,
   drenagem = null,
   onDrenagemTracada,
   eixosDeVia = null,
@@ -9276,9 +9285,10 @@ export default function BlueprintCanvas({
     // PERFIL em curso: a polilinha inteira tracejada em roxo até o cursor, com a
     // cota do trecho. É desenhada inteira (e não só o lado em curso, como o
     // terreno) porque nada dela existe ainda no modelo — só nasce ao terminar.
-    if ((tool === 'perfil' || tool === 'drenagem' || tool === 'eixo-via') && inicio && cursor) {
-      const corDoGesto = tool === 'perfil' ? COR_PERFIL : tool === 'eixo-via' ? COR_EIXO_DE_VIA : COR_DRENAGEM;
-      const emTela = [...cadeia, cursor].map(paraTela);
+    if ((tool === 'perfil' || tool === 'drenagem' || tool === 'eixo-via' || tool === 'plato') && inicio && cursor) {
+      const corDoGesto = tool === 'perfil' ? COR_PERFIL : tool === 'eixo-via' ? COR_EIXO_DE_VIA : tool === 'plato' ? COR_PLATO : COR_DRENAGEM;
+      // O platô mostra também o lado de volta ao 1º canto: ele FECHA, e a pessoa vê o contorno nascer.
+      const emTela = [...cadeia, cursor, ...(tool === 'plato' && cadeia.length >= 2 ? [cadeia[0]] : [])].map(paraTela);
       ctx.strokeStyle = corDoGesto;
       ctx.lineWidth = 1.5;
       ctx.setLineDash([8, 4]);
@@ -10359,6 +10369,18 @@ export default function BlueprintCanvas({
    * libera o traço livre; com orto desligado ele trava. Ter um botão que só liga
    * e uma tecla que só liga seria duas formas de fazer a mesma coisa.
    */
+  /** Entrega o contorno do platô se tiver ≥ 3 cantos DISTINTOS; em qualquer caso, encerra o gesto. */
+  function fecharPlato(pontos: Point[]) {
+    const distintos = pontos.filter((p, i) => pontos.findIndex((q) => q.x === p.x && q.y === p.y) === i);
+    if (distintos.length >= 3) {
+      // Um contorno que se cruza dá volumes sem sentido — e no 3D nenhum arraste o salvaria (revisão do branch).
+      if (anelValido(distintos)) onPlatoDesenhado?.(distintos);
+      else onPlatoRecusado?.('O contorno não pode se cruzar — desenhe de novo, sem cruzar os lados.');
+    }
+    setCadeia([]);
+    setTrechos([]);
+  }
+
   function ortoAtivo(e: { shiftKey: boolean }): boolean {
     return ortogonal !== e.shiftKey;
   }
@@ -10882,7 +10904,7 @@ export default function BlueprintCanvas({
       return;
     }
 
-    if (tool === 'perfil' || tool === 'drenagem' || tool === 'eixo-via') {
+    if (tool === 'perfil' || tool === 'drenagem' || tool === 'eixo-via' || tool === 'plato') {
       // Encaixa na grade e nas pontas como o resto; a trava ortogonal vale
       // porque perfil reto é o caso comum (uma seção da rua ao fundo).
       let alvo = capturar(paraMundo(px, py));
@@ -11679,6 +11701,28 @@ export default function BlueprintCanvas({
     // clicando no último vértice (ou com duplo clique, que cai aqui duas vezes:
     // o segundo clique cai em cima do primeiro e termina). A polilinha inteira
     // vai para o editor de uma vez — meio perfil não serve para nada.
+    // ── PLATÔ DESENHADO (25/11/2026) ───────────────────────────────────────
+    // Como o perfil, mas FECHA: clicar no 1º canto (com ≥ 3) entrega o contorno;
+    // clicar de novo no último canto não acrescenta nada (o duplo clique cai aqui
+    // antes de terminar no `aoDuploClique`).
+    if (tool === 'plato') {
+      const bruto = capturar(mundo);
+      if (!inicio) {
+        setCadeia([bruto]);
+        setTrechos([]);
+        return;
+      }
+      const tol = HIT_PX / vista.escala;
+      if (cadeia.length >= 3 && Math.hypot(bruto.x - cadeia[0].x, bruto.y - cadeia[0].y) < tol) {
+        fecharPlato(cadeia);
+        return;
+      }
+      const ponto = ortoAtivo(e) ? travarOrtogonal(inicio, bruto) : bruto;
+      if (Math.hypot(ponto.x - inicio.x, ponto.y - inicio.y) < tol) return;
+      setCadeia((c) => [...c, ponto]);
+      return;
+    }
+
     if (tool === 'perfil' || tool === 'drenagem' || tool === 'eixo-via') {
       let ponto = capturar(mundo);
       if (!inicio) {
@@ -11835,6 +11879,10 @@ export default function BlueprintCanvas({
       if (cadeia.length >= 2) (tool === 'perfil' ? onPerfilTracado : tool === 'eixo-via' ? onEixoDeViaTracado : onDrenagemTracada)?.(cadeia);
       setCadeia([]);
       setTrechos([]);
+      return;
+    }
+    if (tool === 'plato') {
+      fecharPlato(cadeia);
       return;
     }
     // TERRENO fecha sozinho no duplo clique: o lado de volta ao primeiro vértice
@@ -12330,6 +12378,12 @@ export default function BlueprintCanvas({
           ? inicio
             ? 'Clique para o próximo vértice do eixo · clique no último vértice (ou duplo clique) termina · Esc cancela'
             : 'Clique onde a via COMEÇA (estaca 0) — o estaqueamento segue o sentido do traçado'
+          : tool === 'plato'
+          ? inicio
+            ? cadeia.length >= 3
+              ? 'Clique no 1º canto (ou duplo clique) para FECHAR o platô · Esc cancela'
+              : 'Clique o próximo canto do platô · Esc cancela'
+            : 'Clique o 1º canto do platô — depois ajuste cantos e cota no 3D'
           : tool === 'juntar'
           ? pontasSoltas.length === 0
             ? 'Nenhuma ponta solta nesta planta — não há canto aberto para juntar'

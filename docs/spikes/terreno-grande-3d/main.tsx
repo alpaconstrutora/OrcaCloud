@@ -14,6 +14,8 @@ import { applyBatch, applyCommand, emptyModel, point, type Command } from '../..
 import { amostradorDaMalha, gerarCurvas, malhaDaGrade, planejarGrade } from '../../../utils/blueprintTopografia';
 import { corArcoIrisDaCota } from '../../../utils/blueprintTopografiaAnalises';
 import { curvasDeNivel3d } from '../../../utils/blueprintTopografia3dExtras';
+import { gradeDeProjeto, PARAMETROS_PADRAO, saldoDoPlato, terraplenagemComTalude } from '../../../utils/blueprintTopografiaAnalises';
+import { anelValido } from '../../../utils/blueprintPlato3d';
 import { planoDaTexturaDoMapa } from '../../../utils/blueprintMapaDeFundo';
 import { ATRIBUICAO_OSM, caixaGeoDaGrade, prediosNoDesenho } from '../../../utils/blueprintMaqueteOsm';
 import { buscarPrediosNoOpenFreeMap } from '../../../hooks/usePrediosDaMaquete';
@@ -33,7 +35,8 @@ const lados: Command[] = CANTOS.map((c, i) => ({ type: 'AddBoundary' as const, l
 const model = applyBatch(base.model, lados).model;
 
 // O morro: 900 m a NO do centro, descendo a 860 m nas bordas SE (grade de 15 m, como a do usuário).
-const grade = planejarGrade(CANTOS, 15_000);
+// `?plato=1` (25/11/2026): grade de 5 m, para o talude do platô aparecer.
+const grade = planejarGrade(CANTOS, q.get('plato') ? 5_000 : 15_000);
 const cotasM = grade.cotasM.map((_, k) => {
   const c = k % grade.colunas;
   const l = Math.floor(k / grade.colunas);
@@ -42,7 +45,16 @@ const cotasM = grade.cotasM.map((_, k) => {
   const d2 = (x + 60) ** 2 + (y - 70) ** 2;
   return 860 + 40 * Math.exp(-d2 / (2 * 110 ** 2));
 });
-const relevo = malhaDaGrade({ ...grade, cotasM }, COTA_ZERO);
+const gradeNatural = { ...grade, cotasM };
+// `?plato=1` (25/11/2026, P2 do platô desenhado): um platô fixo na encosta SE, a `?cotaPlato=` (866 m); o relevo e as
+// curvas viram os da superfície de PROJETO, e o selo mostra corte/aterro/saldo da conta da terraplenagem.
+const ANEL_DO_PLATO = q.get('plato') ? [point(0, -110_000), point(100_000, -110_000), point(100_000, -30_000), point(0, -30_000)] : null;
+const COTA_DO_PLATO = Number(q.get('cotaPlato') ?? 866);
+const gradeDoTerreno = ANEL_DO_PLATO ? gradeDeProjeto(gradeNatural, ANEL_DO_PLATO, COTA_DO_PLATO, PARAMETROS_PADRAO, null) : gradeNatural;
+const SALDO = ANEL_DO_PLATO
+  ? saldoDoPlato(terraplenagemComTalude(gradeNatural, ANEL_DO_PLATO, COTA_DO_PLATO, PARAMETROS_PADRAO, null), gradeNatural, ANEL_DO_PLATO, false)
+  : null;
+const relevo = malhaDaGrade(gradeDoTerreno, COTA_ZERO);
 // `?curvas=1`: as linhas das curvas de 1 m sobre o relevo; `&arcoiris=1` pinta pela cota (860 → 900).
 // `?mapa=RUAS` | `?mapa=RELEVO` | `?mapa=AMBOS` (`&meio=1`): o mapa colado no relevo, com "Onde fica"
 // no centro do terreno do pedido (o relevo aqui é sintético — o que se confere é o mapa no lugar).
@@ -59,10 +71,10 @@ const planoDoMapa = fontesDoMapa.length
 // `&semAssentar=1`: a linha na cota da curva, sem assentar na malha (como era — fica tracejada).
 const curvas = q.get('curvas')
   ? curvasDeNivel3d(
-      gerarCurvas({ ...grade, cotasM }, CANTOS, 1),
+      gerarCurvas(gradeDoTerreno, CANTOS, 1),
       COTA_ZERO,
       q.get('arcoiris') ? (c: number) => corArcoIrisDaCota(c, 860, 900) : null,
-      q.get('semAssentar') ? null : { altura: amostradorDaMalha({ ...grade, cotasM }), passoMm: grade.espacamentoMm / 8 },
+      q.get('semAssentar') ? null : { altura: amostradorDaMalha(gradeDoTerreno), passoMm: grade.espacamentoMm / 8 },
     )
   : [];
 
@@ -70,6 +82,9 @@ declare global {
   interface Window {
     __terreno?: { minY: number; maxY: number; triangulos: number } | null;
     __entorno?: { predios: number; arvores: number };
+    __plato3d?: { anel: { x: number; y: number }[]; cotaM: number } | null;
+    __confirmacoes?: number;
+    __previas?: number[];
   }
 }
 window.__terreno = relevo ? { minY: relevo.minY, maxY: relevo.maxY, triangulos: relevo.triangulos } : null;
@@ -132,8 +147,52 @@ function useEntorno(): { entorno: Entorno | null; notas: string[] } {
   return r;
 }
 
+/**
+ * `?editar=1` (25/11/2026, P3): o platô fixo vira EDITÁVEL no 3D — alças nos cantos e a seta. A prévia refaz o
+ * relevo, as curvas e o saldo; o confirmar grava no estado (e conta em `window.__confirmacoes`, o espião do portão).
+ */
+function usePlatoEditavel() {
+  const [plato, setPlato] = useState<{ anel: { x: number; y: number }[]; cotaM: number } | null>(ANEL_DO_PLATO ? { anel: ANEL_DO_PLATO, cotaM: COTA_DO_PLATO } : null);
+  const [previa, setPrevia] = useState<{ anel: { x: number; y: number }[]; cotaM: number } | null>(null);
+  const atual = previa ?? plato;
+  const derivado = React.useMemo(() => {
+    if (!atual || !q.get('editar')) return null;
+    const g = gradeDeProjeto(gradeNatural, atual.anel, atual.cotaM, PARAMETROS_PADRAO, null);
+    return {
+      relevo: malhaDaGrade(g, COTA_ZERO),
+      curvas: curvasDeNivel3d(gerarCurvas(g, CANTOS, 1), COTA_ZERO, null, { altura: amostradorDaMalha(g), passoMm: g.espacamentoMm / 8 }),
+      saldo: saldoDoPlato(terraplenagemComTalude(gradeNatural, atual.anel, atual.cotaM, PARAMETROS_PADRAO, null), gradeNatural, atual.anel, false),
+      chave: `${atual.anel.map((p) => `${p.x},${p.y}`).join(';')}:${atual.cotaM}`,
+    };
+  }, [atual]);
+  window.__plato3d = plato;
+  const editavel =
+    atual && q.get('editar')
+      ? {
+          anel: atual.anel,
+          cotaM: atual.cotaM,
+          cotaZeroM: COTA_ZERO,
+          equilibrio: false,
+          cotaEm: () => atual.cotaM,
+          onPrevia: (p: { anel: { x: number; y: number }[]; cotaM: number } | null) => {
+            // Espião do portão: a sequência de cotas da prévia durante o gesto.
+            if (p) (window.__previas ??= []).push(p.cotaM);
+            setPrevia(p);
+          },
+          onConfirmar: (p: { anel: { x: number; y: number }[]; cotaM: number | null }) => {
+            window.__confirmacoes = (window.__confirmacoes ?? 0) + 1;
+            setPrevia(null);
+            if (!anelValido(p.anel)) return;
+            setPlato({ anel: p.anel, cotaM: p.cotaM ?? atual.cotaM });
+          },
+        }
+      : null;
+  return { derivado, editavel };
+}
+
 function Cena3d() {
   const { entorno, notas } = useEntorno();
+  const { derivado, editavel } = usePlatoEditavel();
   return (
   <div className="h-full w-full">
     {/* `?semTerreno=1`: o "Terreno" do 3D desligado (Exibir) — o padrão do editor.
@@ -142,15 +201,18 @@ function Cena3d() {
       model={model}
       mostrarTerreno={!q.get('semTerreno')}
       mostrarLaje
-      relevo={q.get('semTerreno') ? null : relevo}
-      relevoChave={`h:${COTA_ZERO}`}
+      relevo={q.get('semTerreno') ? null : (derivado?.relevo ?? relevo)}
+      relevoChave={`h:${COTA_ZERO}:${derivado?.chave ?? ''}`}
       envelope={q.get('envelope') ? [{ levelId, nome: 'Térreo', anel: CANTOS, baseMm: 0, topoMm: 2800, acimaDoGabarito: false }] : undefined}
-      extrasDoRelevo={curvas.length ? { drenagem: [], muros: [], curvas, cotaZeroM: COTA_ZERO } : null}
-      extrasChave={`curvas:${q.get('curvas') ?? ''}:${q.get('arcoiris') ?? ''}:${q.get('semAssentar') ?? ''}`}
+      extrasDoRelevo={(derivado?.curvas ?? curvas).length ? { drenagem: [], muros: [], curvas: derivado?.curvas ?? curvas, cotaZeroM: COTA_ZERO } : null}
+      extrasChave={`curvas:${q.get('curvas') ?? ''}:${q.get('arcoiris') ?? ''}:${q.get('semAssentar') ?? ''}:${derivado?.chave ?? ''}`}
       mapaNoRelevo={planoDoMapa ? { plano: planoDoMapa, chave: `${q.get('mapa')}:${q.get('meio') ?? ''}` } : null}
       // `?estilo=MAQUETE` (25/11/2026): o estilo do 3D (Sombreado, Concepção, Maquete…).
       estilo={(q.get('estilo') ?? undefined) as never}
       entornoDaMaquete={entorno}
+      saldoDoPlato={derivado?.saldo ?? SALDO}
+      platoEditavel={editavel}
+      onEquilibrio={() => {}}
       notasDaMaquete={notas}
     />
   </div>

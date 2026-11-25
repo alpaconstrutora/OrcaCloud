@@ -98,6 +98,11 @@ export type BlueprintTool =
    */
   | 'perfil'
   /**
+   * PLATÔ DESENHADO (25/11/2026, reel "Terrain Modification Tool"): cliques encadeados que FECHAM no 1º canto (ou
+   * no duplo clique), sem entidade de kernel — o contorno vai para a premissa de terraplenagem (base DESENHADO).
+   */
+  | 'plato'
+  /**
    * DRENAGEM traçada (fase 6 da topografia): polilinha no sentido do
    * escoamento, mesmo gesto do perfil; vira linha de drenagem na premissa.
    */

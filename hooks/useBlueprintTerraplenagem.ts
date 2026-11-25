@@ -19,7 +19,7 @@ import {
 } from '../utils/blueprintTopografiaDimensionamento';
 
 /** F25: 'CASA' = o platô sob a casa, que a casa automática lança (o anel vem gravado). */
-export type BaseDoPlato = 'ENVELOPE' | 'LOTE' | 'CASA';
+export type BaseDoPlato = 'ENVELOPE' | 'LOTE' | 'CASA' | 'DESENHADO';
 
 /** F25: o platô que a casa automática lança na aba de terraplenagem. */
 export interface PlatoDaCasaParaGravar {
@@ -118,8 +118,21 @@ export interface Terraplenagem {
    * que estava antes (11/11/2026), para o Ctrl+Z da casa voltar a ele com `restaurarPlato`.
    */
   aplicarPlatoDaCasa: (p: PlatoDaCasaParaGravar) => PlatoAnterior;
-  /** 11/11/2026: grava de volta o platô de antes da casa (o Ctrl+Z que desfez a casa). */
+  /**
+   * 11/11/2026: grava de volta o platô de antes da casa (o Ctrl+Z que desfez a casa). 25/11/2026: só age se a base
+   * ainda for CASA — quem já passou para outra (o desenho, por ex.) não perde o que escolheu.
+   */
   restaurarPlato: (a: PlatoAnterior) => void;
+  /** 25/11/2026: o contorno DESENHADO, guardado à parte (`anel_desenhado`); `null` = nunca desenhado. */
+  anelDesenhado: Point[] | null;
+  /**
+   * Grava o desenho (arredondado a mm) e passa a base para DESENHADO. Se o contorno passou a ter OUTRO número de
+   * lados que o anel em uso, os taludes/muros por lado (indexados pelo lado) voltam ao padrão e `avisoDosLados` liga.
+   */
+  definirAnelDesenhado: (anel: Point[]) => void;
+  /** O aviso de que os taludes/muros por lado voltaram ao padrão (o contorno mudou de `de` para `para` lados). */
+  avisoDosLados: { de: number; para: number } | null;
+  esquecerAvisoDosLados: () => void;
 }
 
 /** O JSON parcial gravado, completado com o padrão (e sem chaves estranhas). */
@@ -267,6 +280,10 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
   // F25: o anel gravado (base CASA) e o anel em uso na tela (vai junto da próxima gravação explícita).
   const [anelPlato, setAnelPlato] = useState<Point[] | null>(null);
   const anelEmUsoRef = useRef<Point[] | null>(null);
+  // 25/11/2026: o desenho, à parte do anel em uso (que cada troca de base sobrescreve).
+  const [anelDesenhado, setAnelDesenhado] = useState<Point[] | null>(null);
+  const anelDesenhadoRef = useRef<Point[] | null>(null);
+  const [avisoDosLados, setAvisoDosLados] = useState<{ de: number; para: number } | null>(null);
 
   useEffect(() => {
     let vivo = true;
@@ -276,7 +293,11 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
         if (!vivo) return;
         if (row) {
           setBaseLocal(row.base);
-          setAnelPlato(anelDaColuna(row.anel_plato));
+          // 25/11/2026: na base DESENHADO o `anel_plato` é o desenho — não é platô da casa ("Sob a casa" não aparece por ele).
+          setAnelPlato(row.base === 'DESENHADO' ? null : anelDaColuna(row.anel_plato));
+          const desenho = anelDaColuna(row.anel_desenhado);
+          anelDesenhadoRef.current = desenho;
+          setAnelDesenhado(desenho);
           setCotaLocal(row.cota_plato_m);
           setInclinacaoLocal(inclinacaoDaLinha(row));
           setParametrosLocal(parametrosDaLinha(row));
@@ -338,8 +359,10 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
       hidraulica: hidraulicaRef.current,
       estrutura: estruturaRef.current,
       base: b,
-      // F25: na base CASA, o anel gravado da casa; senão, o anel em uso na tela (envelope ou lote).
-      anel_plato: b === 'CASA' ? anelCasaRef.current : anelEmUsoRef.current,
+      // F25: na base CASA, o anel gravado da casa; 25/11: na DESENHADO, o desenho; senão, o anel em uso na tela.
+      anel_plato: b === 'DESENHADO' ? anelDesenhadoRef.current : b === 'CASA' ? anelCasaRef.current : anelEmUsoRef.current,
+      // O desenho vai SEMPRE: é ele que sobrevive às trocas de base.
+      anel_desenhado: anelDesenhadoRef.current,
       cota_plato_m: cota,
       inclinacao_long_pct: inclinacaoRef.current?.declividadeLongPct ?? null,
       inclinacao_transv_pct: inclinacaoRef.current?.declividadeTransvPct ?? null,
@@ -503,6 +526,8 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
 
   const restaurarPlato = useCallback(
     (a: PlatoAnterior) => {
+      // 25/11/2026: o Ctrl+Z da casa só volta o platô se ele ainda for o da casa.
+      if (base !== 'CASA') return;
       const parametrosNovos = { ...parametros, taludePorAresta: a.taludePorAresta };
       anelCasaRef.current = a.anelPlato;
       setAnelPlato(a.anelPlato);
@@ -513,10 +538,32 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
       setParametrosLocal(parametrosNovos);
       persistir(premissa(a.base, a.cotaPlatoM, parametrosNovos, linhasDoPerfil, drenagem));
     },
-    [persistir, premissa, parametros, linhasDoPerfil, drenagem],
+    [persistir, premissa, base, parametros, linhasDoPerfil, drenagem],
   );
 
+  const definirAnelDesenhado = useCallback(
+    (anelNovo: Point[]) => {
+      const anel = anelNovo.map((q) => ({ x: Math.round(q.x), y: Math.round(q.y) }));
+      const emUso = base === 'DESENHADO' ? anelDesenhadoRef.current : base === 'CASA' ? anelCasaRef.current : anelEmUsoRef.current;
+      const porLado = parametros.taludePorAresta ?? [];
+      const mudouOsLados = !!emUso && emUso.length !== anel.length && porLado.length > 0;
+      const parametrosNovos = mudouOsLados ? { ...parametros, taludePorAresta: [] } : parametros;
+      if (mudouOsLados) setAvisoDosLados({ de: emUso!.length, para: anel.length });
+      anelDesenhadoRef.current = anel;
+      setAnelDesenhado(anel);
+      setBaseLocal('DESENHADO');
+      setParametrosLocal(parametrosNovos);
+      persistir(premissa('DESENHADO', cotaPlatoM, parametrosNovos, linhasDoPerfil, drenagem));
+    },
+    [persistir, premissa, base, cotaPlatoM, parametros, linhasDoPerfil, drenagem],
+  );
+  const esquecerAvisoDosLados = useCallback(() => setAvisoDosLados(null), []);
+
   return {
+    anelDesenhado,
+    definirAnelDesenhado,
+    avisoDosLados,
+    esquecerAvisoDosLados,
     anelPlato,
     definirAnelEmUso,
     aplicarPlatoDaCasa,

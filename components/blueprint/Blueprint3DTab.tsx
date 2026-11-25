@@ -71,6 +71,29 @@ interface Props {
   /** 12/10/2026: o mapa (ruas/relevo das camadas) colado na malha do relevo — ver `Blueprint3DViewer`. */
   mapaNoRelevo?: { plano: PlanoDaTexturaDoMapa; chave: string } | null;
   /**
+   * PLATÔ (25/11/2026, P2): corte, aterro e saldo da terraplenagem (os números do painel) para o selo do 3D, e o
+   * botão que volta a cota à de equilíbrio. `null` = sem terreno de projeto à vista.
+   */
+  saldoDoPlato?: { corteM3: number; aterroM3: number; saldoM3: number; equilibrio: boolean; foraDoRelevo: boolean } | null;
+  onEquilibrio?: () => void;
+  /**
+   * PLATÔ EDITÁVEL NO 3D (25/11/2026, P3 — reel "Terrain Modification Tool"): o platô desenhado em azul, com alça em
+   * cada canto (arrasta no plano da cota; trava 90° por padrão, Shift libera) e a seta da cota (passo 5 cm). Durante o
+   * gesto, `onPrevia` (no máximo 1 por quadro) — o editor refaz terreno, curvas e saldo com ela; ao soltar,
+   * `onConfirmar` (um save). Esc → `onPrevia(null)`. `cotaEm`: a cota do platô (m) num ponto do desenho (inclinado).
+   */
+  platoEditavel?: {
+    anel: { x: number; y: number }[];
+    cotaM: number;
+    cotaZeroM: number;
+    equilibrio: boolean;
+    cotaEm: (p: { x: number; y: number }) => number;
+    onPrevia: (p: { anel: { x: number; y: number }[]; cotaM: number } | null) => void;
+    onConfirmar: (p: { anel: { x: number; y: number }[]; cotaM: number | null }) => void;
+  } | null;
+  /** Aviso do platô (contorno recusado), mostrado no selo do saldo. */
+  avisoDoPlato?: string | null;
+  /**
    * MAQUETE (25/11/2026): o entorno real — prédios do OpenStreetMap e árvores do ESA WorldCover —,
    * já no desenho (mm) com a base em Y de mundo (cota − zero). Só é desenhado no estilo Maquete.
    */

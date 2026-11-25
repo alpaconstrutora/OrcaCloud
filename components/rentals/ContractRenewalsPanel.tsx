@@ -109,7 +109,13 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged,
 
     // Prévia (datas, reajuste sugerido, nº de parcelas). Recalcula quando o
     // usuário muda o término ou a via.
+    // Só a prévia do ÚLTIMO pedido vale. A da "Nova renovação" (pedida ao abrir)
+    // chegava depois de Editar já ter preenchido o formulário e trocava o fim
+    // pelo padrão de +12 meses (CTL-006, 25/11/2026: AD-002 até 22/09/2021
+    // aparecia até 22/09/2022).
+    const previaSeq = useRef(0);
     const carregarPreview = useCallback(async () => {
+        const seq = ++previaSeq.current;
         if (!vigente.end_date) { setPreview(null); return; }
         try {
             // Renovar ≠ reajustar (decisão do usuário, 24/11/2026): o período novo
@@ -120,15 +126,18 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged,
                 applyReajuste: false,
                 substituindo: editando ?? undefined,
             });
+            if (seq !== previaSeq.current) return;
             setPreview(p);
-            if (!endDate) setEndDate(p.endDate);
-            if (!cycle) setCycle(p.parent.billing_cycle || 'Mensal');
+            // Só preenche o que está VAZIO agora (não no momento do pedido).
+            setEndDate(v => v || p.endDate);
+            setCycle(v => v || p.parent.billing_cycle || 'Mensal');
             // O dia em que a série vence DE FATO (última parcela); o due_day do
             // contrato pode estar diferente (CTL-006: 23 × parcelas no dia 10).
-            if (!dueDay) setDueDay(String(p.seriesDueDay ?? p.parent.due_day ?? ''));
-            if (!index) setIndex(p.parent.reajuste_index || 'IGP-M');
-            if (!valor) setValor(p.newValue.toFixed(2));
+            setDueDay(v => v || String(p.seriesDueDay ?? p.parent.due_day ?? ''));
+            setIndex(v => v || p.parent.reajuste_index || 'IGP-M');
+            setValor(v => v || p.newValue.toFixed(2));
         } catch (e) {
+            if (seq !== previaSeq.current) return;
             setPreview(null);
             notificar(e instanceof Error ? e.message : 'Não foi possível calcular a renovação.', 'error');
         }

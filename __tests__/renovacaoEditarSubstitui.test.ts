@@ -7,17 +7,23 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 let parcelasNaoPendentes: { id: string }[] = [];
+let reajustesDepois: { aniversario: string }[] = [];
 const filtrosParcelas: unknown[][] = [];
-function table() {
+const escritas: string[] = [];
+function table(name: string) {
     const b: Record<string, unknown> = {};
-    const filt = (...a: unknown[]) => { filtrosParcelas.push(a); return b; };
+    const filt = (...a: unknown[]) => { if (name === 'internal_transactions') filtrosParcelas.push(a); return b; };
+    const escreve = (op: string) => () => { escritas.push(`${op} ${name}`); return b; };
     Object.assign(b, {
-        select: () => b, eq: filt, neq: filt, limit: filt,
-        then: (resolve: (v: unknown) => void) => resolve({ data: parcelasNaoPendentes, error: null }),
+        select: () => b, eq: filt, neq: filt, limit: filt, is: filt, gt: filt, order: filt, like: filt, gte: filt, in: filt,
+        update: escreve('update'), delete: escreve('delete'),
+        maybeSingle: async () => ({ data: { id: 'c1', organization_id: 'org1', deal_id: 'd1', end_date: '2020-03-22', current_value: 5832.48 }, error: null }),
+        then: (resolve: (v: unknown) => void) => resolve({
+            data: name === 'contract_reajustes' ? reajustesDepois : parcelasNaoPendentes, error: null }),
     });
     return b;
 }
-vi.mock('../lib/supabase', () => ({ supabase: { from: () => table(), rpc: vi.fn() } }));
+vi.mock('../lib/supabase', () => ({ supabase: { from: (name: string) => table(name), rpc: vi.fn() } }));
 
 const getAddendumById = vi.fn();
 const listAddendums = vi.fn();
@@ -121,5 +127,27 @@ describe('replaceAddendumRenewal — CTL-006, AD-002', () => {
         renew.mockImplementation(async () => { throw new Error('falhou'); });
         await expect(contractRenewalService.replaceAddendumRenewal('ad2', { endDate: '2021-12-22' }))
             .rejects.toThrow(/AD-002 foi desfeito, mas o aditivo novo não foi gerado \(falhou\)\. Gere a renovação de novo/);
+    });
+});
+
+describe('undoAddendumRenewal — reajuste aplicado depois do aditivo (CTL-006, AD-003 + reajuste de 05/11/2019)', () => {
+    beforeEach(() => {
+        vi.restoreAllMocks();
+        escritas.length = 0;
+        parcelasNaoPendentes = [];
+        getAddendumById.mockResolvedValue({ ...AD3, new_end_date: '2020-03-22' });
+    });
+
+    it('recusa sem apagar nem alterar nada — senão o reajuste sumiria', async () => {
+        reajustesDepois = [{ aniversario: '2019-11-05' }];
+        await expect(contractRenewalService.undoAddendumRenewal('ad3'))
+            .rejects.toThrow(/reajuste de 05\/11\/2019 foi aplicado depois do AD-003.*Desfaça o reajuste antes/);
+        expect(escritas).toEqual([]);
+    });
+
+    it('sem reajuste depois: desfaz normalmente', async () => {
+        reajustesDepois = [];
+        await contractRenewalService.undoAddendumRenewal('ad3');
+        expect(escritas).toContain('update contract_addendums');
     });
 });

@@ -492,6 +492,26 @@ export const contractRenewalService = {
         }
         const contract = await fetchContract(addendum.contract_id);
 
+        // Reajuste aplicado DEPOIS do aditivo mexeu nas parcelas dele e no aluguel
+        // vigente. Desfazer o aditivo apagaria essas parcelas e devolveria o valor
+        // de antes — o reajuste sumiria em silêncio (CTL-006, 25/11/2026: AD-003
+        // seguido do reajuste de 05/11/2019). Vale para Excluir e para Editar.
+        const { data: reajDepois, error: errReaj } = await supabase
+            .from('contract_reajustes')
+            .select('aniversario')
+            .eq('contract_id', addendum.contract_id)
+            .is('desfeito_em', null)
+            .gt('created_at', addendum.created_at ?? '1900-01-01')
+            .order('created_at', { ascending: false })
+            .limit(1);
+        if (errReaj) throw errReaj;
+        const ultimoReaj = (reajDepois ?? [])[0] as { aniversario?: string } | undefined;
+        if (ultimoReaj) {
+            const quando = ultimoReaj.aniversario ? ` de ${ultimoReaj.aniversario.slice(0, 10).split('-').reverse().join('/')}` : '';
+            throw new Error(`O reajuste${quando} foi aplicado depois do ${addendum.number}, nas parcelas dele. `
+                + 'Desfaça o reajuste antes (Locações › Reajustes › Histórico) — senão ele se perderia.');
+        }
+
         // Parcelas MARCADAS com o aditivo (desde 25/11/2026): só elas saem. Por
         // data (>= início do período novo) levava junto a última parcela do
         // contrato original quando ela cobra o mês depois (CTL-006: 10/04/2019).

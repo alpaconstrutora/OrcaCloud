@@ -11,6 +11,7 @@ const ops: Op[] = [];
 let contrato: Record<string, unknown> = {};
 let aditivo: Record<string, unknown> = {};
 let ultimaParcela: string | null = '2019-04-10';
+const filtrosOr: string[] = [];
 
 function table(name: string) {
     const rec: Op = { table: name, op: '', filters: [] };
@@ -32,7 +33,8 @@ function table(name: string) {
             return b;
         },
         delete: () => { rec.op = 'delete'; ops.push(rec); return b; },
-        eq: filt, in: filt, like: filt, filter: filt, gte: filt, lte: filt, order: filt, limit: filt, or: filt, not: filt, neq: filt,
+        eq: filt, in: filt, like: filt, filter: filt, gte: filt, lte: filt, order: filt, limit: filt, not: filt, neq: filt,
+        or: (f: string) => { filtrosOr.push(f); return filt('or', f); },
         maybeSingle: async () => linha(),
         single: async () => linha(),
         then: (resolve: (v: unknown) => void) => resolve(
@@ -52,7 +54,7 @@ vi.mock('../services/commercialFinanceService', () => ({ commercialFinanceServic
 const gerarTributos = vi.fn(async () => {});
 vi.mock('../services/taxPayableService', () => ({ taxPayableService: { generateForDeal: (...a: unknown[]) => gerarTributos(...(a as [])) } }));
 
-import { contractService } from '../services/contractService';
+import { contractService, ultimoVencimentoDaSerie } from '../services/contractService';
 
 const CTL = {
     id: 'c1', organization_id: 'org1', project_id: null, deal_id: 'd1', number: 'CTL-006-012-0001', title: 'Salão',
@@ -111,5 +113,22 @@ describe('aprovar aditivo de prorrogação — CTL-006-012-0001', () => {
         const p = parcelasGeradas();
         expect(p[0].due_date).toBe('2019-03-23');
         expect(cortarNegociacao).toHaveBeenCalledWith('d1', 'org1', '2019-03-23');
+    });
+});
+
+describe('série sem o aditivo que está sendo substituído (Editar a renovação)', () => {
+    it('sem aditivo a excluir: o filtro de sempre', async () => {
+        filtrosOr.length = 0;
+        await ultimoVencimentoDaSerie({ id: 'c1', organization_id: 'org1', deal_id: 'd1' });
+        expect(filtrosOr).toEqual(['reference_id.like.c1-p%,reference_id.like.tx-d1-%']);
+    });
+
+    it('excluindo o AD-002: cada padrão só com parcela sem marca (NULL) ou de outro aditivo', async () => {
+        filtrosOr.length = 0;
+        await ultimoVencimentoDaSerie({ id: 'c1', organization_id: 'org1', deal_id: 'd1' }, 'ad2');
+        expect(filtrosOr).toEqual([
+            'and(reference_id.like.c1-p%,or(contract_addendum_id.is.null,contract_addendum_id.neq.ad2)),'
+            + 'and(reference_id.like.tx-d1-%,or(contract_addendum_id.is.null,contract_addendum_id.neq.ad2))',
+        ]);
     });
 });

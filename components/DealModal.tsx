@@ -666,6 +666,8 @@ interface DealModalProps {
     buildingId?: string;
     /** Abre direto numa aba (ex.: 'contrato', vindo da fila de Renovações). */
     initialTab?: string;
+    /** Com initialTab='contrato': abre Renovações já editando este aditivo (Editar da fila). */
+    editarRenovacaoId?: string;
 }
 
 // Colunas da aba Parcelas. A aba tem UMA tabela só desde 2026-08-01: plano da
@@ -759,7 +761,7 @@ const PARCELAS_TD_CLASS: Record<string, string> = {
     descricao: '',
 };
 
-const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId, initialTab }) => {
+const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId, initialTab, editarRenovacaoId }) => {
     const [activeTab, setActiveTab] = useState<TabId>((initialTab as TabId) || 'cliente');
     // Sub-aba de "Contrato e Assinatura" (só locação com contrato gerado).
     const [contratoSubTab, setContratoSubTab] = useState<'dados' | 'renovacoes' | 'documentos'>('dados');
@@ -5269,6 +5271,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             {formData.type === 'RENTAL' && linkedContract && contratoSubTab === 'renovacoes' && (
                                 <ContractRenewalsPanel
                                     contract={linkedContract}
+                                    editarAditivoId={editarRenovacaoId}
                                     // Toast (§13): o `contractError` só aparece na sub-aba
                                     // "Dados do contrato" — aqui o erro e o sucesso de
                                     // renovar/desfazer ficavam mudos.

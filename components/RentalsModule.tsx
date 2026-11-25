@@ -804,6 +804,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // detalhe de contrato aqui dentro criaria um segundo caminho para a mesma
     // coisa. Por isso "Ver contrato" e "Renovar" levam para lá.
     const [dealModalTab, setDealModalTab] = useState<string | undefined>(undefined);
+    // Editar da fila de Renovações: a negociação abre já editando este aditivo.
+    const [renovacaoParaEditar, setRenovacaoParaEditar] = useState<string | undefined>(undefined);
     const [properties, setProperties] = useState<Property[]>([]);
     // Imóvel → empreendimento. O vínculo não é FK na tabela do Comercial: vem de
     // `empreendimento_units.rental_property_id` (unidade) ou de
@@ -943,7 +945,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
      * O vínculo é `contracts.deal_id`; contrato sem negociação (ex.: filho de uma
      * renovação anterior) não tem para onde ir, e a fila avisa em vez de abrir vazio.
      */
-    const openDealForContract = async (contractId: string) => {
+    const openDealForContract = async (contractId: string, editarAditivoId?: string) => {
         try {
             // Sobe a cadeia de renovação até achar a negociação. Contrato-filho
             // não herda `deal_id` de propósito (getContractByDealId usa
@@ -978,6 +980,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             }
             setEditingDeal(deal);
             setDealModalTab('contrato');
+            setRenovacaoParaEditar(editarAditivoId);
             setIsDealModalOpen(true);
         } catch (e) {
             notify(`Erro ao abrir a negociação: ${e instanceof Error ? e.message : ''}`, 'error');
@@ -3192,7 +3195,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     organizationId={effectiveOrganizationId}
                     clients={clients}
                     onChanged={(message) => { loadData(); notify(message); }}
-                    onOpenContract={openDealForContract}
+                    onOpenContract={id => openDealForContract(id)}
+                    onEditRenewal={(id, aditivoId) => openDealForContract(id, aditivoId)}
                     negociacoesDoEmpreendimento={negociacoesDoEdificio}
                 />
             )}
@@ -3352,11 +3356,12 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
             <DealModal
                 isOpen={isDealModalOpen}
-                onClose={() => { setIsDealModalOpen(false); setEditingDeal(undefined); setDealModalTab(undefined); }}
+                onClose={() => { setIsDealModalOpen(false); setEditingDeal(undefined); setDealModalTab(undefined); setRenovacaoParaEditar(undefined); }}
                 onSave={() => loadData()}
                 initialData={editingDeal}
                 organizationId={organizationId}
                 initialTab={dealModalTab}
+                editarRenovacaoId={renovacaoParaEditar}
                 // Dentro de "Gestão de Unidades" a negociação só pode enxergar as
                 // unidades DESTE edifício — sem isso o seletor de unidades listava
                 // as unidades de todos os imóveis misturadas (Vendas já passava).

@@ -7,6 +7,8 @@ import { reajusteLocacaoService } from './reajusteLocacaoService';
 import { mesesDoCicloDeReajuste, mesesDaPeriodicidade } from '../utils/reajusteAniversario';
 import { somarMeses } from '../utils/paymentPlan';
 import { commercialFinanceService } from './commercialFinanceService';
+import { taxPayableService } from './taxPayableService';
+import { continuacaoDaSerie } from '../utils/continuacaoDaSerie';
 import { generateRentalContractNumber } from './rentalContractNumberingService';
 import { generateUnitSaleContractNumber } from './unitSaleContractNumberingService';
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
@@ -29,7 +31,8 @@ import {
     ContractPrecedentCondition,
     ContractDocumentRequirement,
     ContractDocumentGateItem,
-    DocumentRequirementPhase
+    DocumentRequirementPhase,
+    PropertyDeal,
 } from '../types';
 
 // Colunas de aditivo — inclui os campos de prorrogação e assinatura da
@@ -377,6 +380,52 @@ export async function resolveDealUnitsInfo(dealId: string, fallbackPropertyId?: 
  * Retorna false quando o aditivo não é desse tipo (aí o chamador segue pelo
  * caminho antigo, de suprimentos/serviços).
  */
+/**
+ * Regera os tributos da negociação (Tributos a Pagar) depois que as parcelas do
+ * contrato mudaram por fora dela (aditivo aprovado ou desfeito). Mesma regeração
+ * do Salvar da negociação — pagos, conciliados e em DARF ficam. Falha não desfaz
+ * a operação de quem chamou: devolve false e salvar a negociação refaz.
+ */
+export async function regerarTributosDaNegociacao(dealId: string | null | undefined, organizationId: string | null | undefined): Promise<boolean> {
+    if (!dealId || !organizationId) return true;
+    try {
+        const { data: deal, error } = await supabase
+            .from('commercial_deals')
+            .select('id, type, property_id')
+            .eq('id', dealId)
+            .single();
+        if (error) throw error;
+        await taxPayableService.generateForDeal(deal as Pick<PropertyDeal, 'id' | 'type' | 'property_id'>, organizationId);
+        return true;
+    } catch (e) {
+        console.error('[CONTRACTS] Parcelas do contrato mudaram, mas os tributos não foram regerados — salve a negociação para refazê-los.', e);
+        return false;
+    }
+}
+
+/**
+ * Vencimento da ÚLTIMA parcela da série do contrato — as dele (`{id}-p…`) e as da
+ * negociação de origem (`tx-{deal}-…`). A renovação por aditivo continua daqui
+ * (utils/continuacaoDaSerie). null = sem parcela nenhuma.
+ */
+export async function ultimoVencimentoDaSerie(
+    contract: { id: string; organization_id?: string | null; deal_id?: string | null },
+): Promise<string | null> {
+    if (!contract.organization_id) return null;
+    const padroes = [`reference_id.like.${contract.id}-p%`];
+    if (contract.deal_id) padroes.push(`reference_id.like.tx-${contract.deal_id}-%`);
+    const { data, error } = await supabase
+        .from('internal_transactions')
+        .select('due_date')
+        .eq('organization_id', contract.organization_id)
+        .or(padroes.join(','))
+        .not('due_date', 'is', null)
+        .order('due_date', { ascending: false })
+        .limit(1);
+    if (error) throw error;
+    return ((data ?? [])[0] as { due_date?: string } | undefined)?.due_date?.slice(0, 10) ?? null;
+}
+
 async function applyProrrogacaoAddendum(addendum: ContractAddendum, approvedBy: string): Promise<boolean> {
     const { data: contract, error } = await supabase
         .from('contracts')
@@ -395,13 +444,25 @@ async function applyProrrogacaoAddendum(addendum: ContractAddendum, approvedBy: 
     const fim = addendum.new_end_date;
     if (!fim) throw new Error('Aditivo de prorrogação sem nova data de término.');
 
+    // 0) CONTINUA a série que já existe (pedido de 25/11/2026, CTL-006-012-0001):
+    //    a 1ª parcela nova é um ciclo depois da última, no dia da série. Começar
+    //    no 1º dia do período novo duplicava os meses em que o contrato original
+    //    ainda cobra (ele cobra o mês depois: última parcela em 10/04/2019 para a
+    //    vigência até 22/03/2019, e o aditivo nascia em 23/03/2019).
+    const serie = continuacaoDaSerie({
+        ultimoVencimento: await ultimoVencimentoDaSerie(contract),
+        inicio, fim, ciclo: contract.billing_cycle, dia: contract.due_day,
+    });
+
     // 1) Corta o resíduo da NEGOCIAÇÃO no período novo. A negociação só conhece
     //    a vigência original; o que ela tiver dali para frente colidiria com as
-    //    parcelas do aditivo (mesmo aluguel cobrado duas vezes).
+    //    parcelas do aditivo (mesmo aluguel cobrado duas vezes). Com a série
+    //    continuada, o corte é a partir da 1ª parcela nova — antes dela ainda é
+    //    cobrança do período original.
     if (contract.deal_id && contract.organization_id) {
         try {
             await commercialFinanceService.deleteDealInstallmentsFrom(
-                contract.deal_id, contract.organization_id, inicio);
+                contract.deal_id, contract.organization_id, serie?.primeiro ?? inicio);
         } catch (e) {
             console.error('[CONTRACTS] Prorrogação: erro ao cortar parcelas da negociação:', e);
         }
@@ -425,11 +486,21 @@ async function applyProrrogacaoAddendum(addendum: ContractAddendum, approvedBy: 
         .eq('id', contract.id);
     if (updErr) throw updErr;
 
-    // 3) Gera as parcelas só da janela nova (idempotente por data).
+    // 3) Gera as parcelas só da janela nova (idempotente por data), marcadas com
+    //    o aditivo. Série continuada: âncora na 1ª parcela nova e uma por ciclo.
     const result = await generateRecurringInstallmentsForPeriod(
         { ...contract, end_date: fim } as unknown as Contract,
-        { fromDate: inicio, toDate: fim, amount: novoValor, label: `Aluguel ${contract.number || ''} (${addendum.number})`.trim() },
+        {
+            fromDate: serie?.primeiro ?? inicio, toDate: fim, amount: novoValor,
+            label: `Aluguel ${contract.number || ''} (${addendum.number})`.trim(),
+            ...(serie ? { firstDueDate: serie.primeiro, maxCount: serie.quantidade } : {}),
+            contractAddendumId: addendum.id,
+        },
     );
+
+    // 4) Tributos (IRRF/PIS/COFINS/INSS) das parcelas novas — a renovação não
+    //    gerava (CTL-006, 25/11/2026: 30 parcelas sem IRRF).
+    if (result.inserted > 0) await regerarTributosDaNegociacao(contract.deal_id, contract.organization_id);
 
     await supabase
         .from('contract_addendums')
@@ -1019,6 +1090,9 @@ export async function generateRecurringInstallmentsForPeriod(
          *  sem Plano de Contas — ver 20270846000000_commercial_deals_cost_center_plano_contas.sql. */
         costCenterId?: string | null;
         planoDeContasId?: string | null;
+        /** Aditivo de prorrogação que gera estas parcelas — fica gravado em cada
+         *  uma (`contract_addendum_id`): desfazer o aditivo apaga só as dele. */
+        contractAddendumId?: string | null;
     },
 ): Promise<{
     inserted: number; skipped: number; removed: number; dueDates: string[];
@@ -1210,6 +1284,7 @@ export async function generateRecurringInstallmentsForPeriod(
         plano_de_contas_id: opts.planoDeContasId ?? contract.plano_de_contas_id ?? null,
         // Idem: o tipo sai da cadência da série (o override manda, quando existe).
         installment_type: tipoDaCadencia(cycle),
+        ...(opts.contractAddendumId ? { contract_addendum_id: opts.contractAddendumId } : {}),
     })), { onConflict: 'organization_id,reference_id,entry_type' });
     if (error) throw error;
 
@@ -2632,6 +2707,8 @@ export const contractService = {
         vencimento_manual?: boolean | null; vencimento_manual_anterior?: string | null;
         vencimento_manual_em?: string | null; vencimento_manual_por?: string | null;
         vencimento_manual_por_nome?: string | null;
+        /** Aditivo de prorrogação que gerou a parcela (aba Parcelas › Origem). */
+        contract_addendum_id?: string | null;
     }[]> => {
         if (!contract.organization_id) return [];
 
@@ -2644,7 +2721,7 @@ export const contractService = {
         const measurementSources = ['CONTRACT_AVISTA', 'CONTRACT_PARCELADO', 'CONTRACT_RECURRING', 'CONTRACT_MEASUREMENT'];
         const { data: byContract, error: e1 } = await supabase
             .from('internal_transactions')
-            .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, business_status, original_amount, discount_type, discount_amount, installment_type, payment_type, cost_center_id, plano_de_contas_id, valor_manual, valor_manual_anterior, valor_manual_em, valor_manual_por, vencimento_manual, vencimento_manual_anterior, vencimento_manual_em, vencimento_manual_por')
+            .select('id, source_system, reference_id, transaction_date, amount, direction, description, category, status, business_status, original_amount, discount_type, discount_amount, installment_type, payment_type, cost_center_id, plano_de_contas_id, valor_manual, valor_manual_anterior, valor_manual_em, valor_manual_por, vencimento_manual, vencimento_manual_anterior, vencimento_manual_em, vencimento_manual_por, contract_addendum_id')
             .eq('organization_id', contract.organization_id)
             .in('source_system', measurementSources)
             .like('reference_id', `${contract.id}%`);

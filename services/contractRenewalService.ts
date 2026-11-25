@@ -2,8 +2,9 @@ import { supabase } from '../lib/supabase';
 import { negociacoesDosContratos } from './negociacaoDoContratoService';
 import {
     contractService, nextRentalNumber, removeContractTransactionsFrom, buildRecurringDueDates,
-    resolveDealUnitsInfo,
+    resolveDealUnitsInfo, ultimoVencimentoDaSerie, regerarTributosDaNegociacao,
 } from './contractService';
+import { continuacaoDaSerie } from '../utils/continuacaoDaSerie';
 import { contractIndexService, normalizeIndexName, IndexName } from './contractIndexService';
 import { commercialFinanceService } from './commercialFinanceService';
 import { rentalGuaranteeService } from './rentalGuaranteeService';
@@ -90,6 +91,11 @@ export interface RenewalPreview {
     mode: RenewalMode;
     /** ADITIVO: quantas parcelas o período prorrogado vai gerar. */
     installmentsToGenerate: number;
+    /** ADITIVO: vencimento da 1ª parcela nova — continua a série existente. */
+    firstInstallmentDate?: string;
+    /** Dia em que a série existente vence de fato (a última parcela) — o
+     *  `due_day` do contrato pode estar diferente (CTL-006: 23 × série no dia 10). */
+    seriesDueDay?: number;
     /** ADITIVO: número do próximo aditivo (AD-00X). */
     nextAddendumNumber?: string;
 }
@@ -279,6 +285,12 @@ export const contractRenewalService = {
         // o resíduo da negociação que invadiria o período novo. Por isso
         // pendingToCancel só faz sentido na via do contrato-filho.
         const pending = await countPendingFrom(parent, startDate);
+        // Aditivo continua a série (mesma conta de applyProrrogacaoAddendum, com o
+        // dia da própria série — a gaveta mostra e deixa trocar).
+        const ultimo = mode === 'ADITIVO' ? await ultimoVencimentoDaSerie(parent) : null;
+        const serie = mode === 'ADITIVO'
+            ? continuacaoDaSerie({ ultimoVencimento: ultimo, inicio: startDate, fim: endDate, ciclo: parent.billing_cycle })
+            : null;
 
         return {
             parent,
@@ -292,7 +304,9 @@ export const contractRenewalService = {
             reajusteWarning,
             mode,
             pendingToCancel: mode === 'ADITIVO' ? 0 : pending,
-            installmentsToGenerate: mode === 'ADITIVO'
+            firstInstallmentDate: serie?.primeiro,
+            seriesDueDay: ultimo ? Number(ultimo.slice(8, 10)) : undefined,
+            installmentsToGenerate: serie ? serie.quantidade : mode === 'ADITIVO'
                 ? buildRecurringDueDates({
                     startDate: parent.start_date,
                     from: startDate,
@@ -426,7 +440,27 @@ export const contractRenewalService = {
         }
         const contract = await fetchContract(addendum.contract_id);
 
-        if (contract.organization_id) {
+        // Parcelas MARCADAS com o aditivo (desde 25/11/2026): só elas saem. Por
+        // data (>= início do período novo) levava junto a última parcela do
+        // contrato original quando ela cobra o mês depois (CTL-006: 10/04/2019).
+        const { data: doAditivo, error: errAd } = contract.organization_id
+            ? await supabase
+                .from('internal_transactions')
+                .select('id, status')
+                .eq('organization_id', contract.organization_id)
+                .eq('contract_addendum_id', addendum.id)
+            : { data: [], error: null };
+        if (errAd) throw errAd;
+        const marcadas = (doAditivo ?? []) as { id: string; status: string }[];
+
+        if (contract.organization_id && marcadas.length > 0) {
+            if (marcadas.some(t => t.status !== 'PENDING')) {
+                throw new Error('O período prorrogado já tem parcelas pagas ou conciliadas. Desfazer não é possível — use a rescisão do contrato.');
+            }
+            const { error: errDel } = await supabase.from('internal_transactions').delete().in('id', marcadas.map(t => t.id));
+            if (errDel) throw errDel;
+        } else if (contract.organization_id) {
+            // Aditivo anterior à marca: regra antiga, por data.
             const { count } = await supabase
                 .from('internal_transactions')
                 .select('id', { count: 'exact', head: true })
@@ -438,13 +472,14 @@ export const contractRenewalService = {
             if ((count ?? 0) > 0) {
                 throw new Error('O período prorrogado já tem parcelas pagas ou conciliadas. Desfazer não é possível — use a rescisão do contrato.');
             }
-            await supabase
+            const { error: errDel } = await supabase
                 .from('internal_transactions')
                 .delete()
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_RECURRING')
                 .like('reference_id', `${contract.id}%`)
                 .gte('due_date', addendum.new_start_date);
+            if (errDel) throw errDel;
         }
 
         await supabase
@@ -460,6 +495,9 @@ export const contractRenewalService = {
             .from('contract_addendums')
             .update({ status: 'Cancelado', installments_generated: 0 })
             .eq('id', addendumId);
+
+        // As parcelas saíram: os tributos pendentes delas também.
+        await regerarTributosDaNegociacao(contract.deal_id, contract.organization_id);
     },
 
     /**

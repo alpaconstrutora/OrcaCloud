@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { empresaDoEmpreendimentoDoImovel } from './empresaDoEmpreendimento';
 import type { PropertyDeal } from '../types';
 import type { TaxPayable, TaxPayableBusinessStatus } from '../types/financial';
 import { taxSettingsService } from './taxSettingsService';
@@ -481,39 +482,10 @@ export const taxPayableService = {
         console.log('[TAX-REGIME] property', propertyId, '→ company_id direto:', companyId);
 
         if (!companyId) {
-            // Herança do empreendimento. A unidade NÃO tem empreendimento_id direto:
-            // liga por tower_id → empreendimento_towers.empreendimento_id. E o imóvel
-            // liga à unidade por rental_property_id (Locação) ou commercial_property_id
-            // (Venda). Consultas separadas e tolerantes a erro.
-            const findTowerBy = async (col: string): Promise<string | null> => {
-                const { data, error } = await supabase
-                    .from('empreendimento_units')
-                    .select('tower_id')
-                    .eq(col, propertyId)
-                    .limit(1);
-                if (error) { console.warn(`[TAX-REGIME] busca por ${col} falhou:`, error.message); return null; }
-                return (data as { tower_id?: string | null }[] | null)?.[0]?.tower_id ?? null;
-            };
-            const towerId = (await findTowerBy('rental_property_id')) ?? (await findTowerBy('commercial_property_id'));
-            console.log('[TAX-REGIME] tower_id da unidade:', towerId);
-            if (towerId) {
-                const { data: tower } = await supabase
-                    .from('empreendimento_towers')
-                    .select('empreendimento_id')
-                    .eq('id', towerId)
-                    .maybeSingle();
-                const empId = (tower as { empreendimento_id?: string | null } | null)?.empreendimento_id ?? null;
-                console.log('[TAX-REGIME] empreendimento_id da torre:', empId);
-                if (empId) {
-                    const { data: emp } = await supabase
-                        .from('empreendimentos')
-                        .select('company_id')
-                        .eq('id', empId)
-                        .maybeSingle();
-                    companyId = (emp as { company_id?: string | null } | null)?.company_id ?? null;
-                    console.log('[TAX-REGIME] empreendimento', empId, '→ company_id:', companyId);
-                }
-            }
+            // Herança do empreendimento (unidade → torre → empreendimento): função
+            // comum com o locador dos documentos.
+            companyId = await empresaDoEmpreendimentoDoImovel(propertyId);
+            console.log('[TAX-REGIME] empresa herdada do empreendimento:', companyId);
         }
         if (!companyId) { console.warn('[TAX-REGIME] nenhuma empresa resolvida p/ property', propertyId); return null; }
 

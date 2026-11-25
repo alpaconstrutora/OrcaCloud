@@ -40,7 +40,7 @@ describe('textoRecibo — corpo do recibo', () => {
         const t = textoRecibo(recibo());
         expect(t).toContain('Recebemos de Ivana Braga (CPF 005.871.088-43)');
         expect(t).toMatch(/R\$\s?1\.234,50/);
-        expect(t).toContain('mil e duzentos e trinta e quatro reais e cinquenta centavos');
+        expect(t).toContain('mil duzentos e trinta e quatro reais e cinquenta centavos');
         expect(t).toContain('referente a Parcela 3/12 — Lote 7, dando plena quitação deste valor.');
     });
 

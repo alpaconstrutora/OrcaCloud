@@ -170,6 +170,35 @@ Contrato", entra neste plano? Resposta:
 - **PR 2:** itens 3 e 3b (documentos do aditivo).
 - Item 6 no fim.
 
+## Pedido de 25/11/2026: os três achados da conferência
+
+Os três achados foram apresentados ao usuário (vigência da negociação × do contrato;
+extenso "cinco mil e oitocentos"; locador herdado do empreendimento). Resposta:
+
+> Corrija todos
+
+7. **Vigência original na negociação** (`DealModal.tsx`, `SituacaoDaVigencia.tsx`): contrato
+   renovado → os campos viram "Início/Fim da Vigência original" e uma frase diz até quando
+   o contrato foi prorrogado e por qual aditivo. O que é gravado não muda (a divergência é
+   legítima — `vigenciaParaOContrato`, #682). Pronto quando:
+   - `situacaoDaVigenciaOriginal.test.tsx` verde ✅;
+   - em produção o CTL-006 mostra "Fim da Vigência original" e "prorrogado até 22/09/2021
+     (AD-004)".
+8. **Extenso** (`services/docxFieldCatalog.ts`): o "e" entre os grupos só entra antes de grupo
+   menor que cem ou centena redonda; milhão/bilhão redondo vira "de reais". Vale para
+   contratos, aditivos e recibos. Pronto quando: `valorPorExtenso.test.ts` verde ✅ — e o
+   `reciboRecebimento.test.ts`, que cravava o erro ("mil e duzentos e trinta e quatro"), foi
+   corrigido ✅.
+9. **Locador herdado do empreendimento** (`services/empresaDoEmpreendimento.ts`, nova): uma
+   função só (unidade → torre → empreendimento), usada pelo locador dos documentos (a
+   consulta antiga pedia `empreendimento_units.empreendimento_id`, que não existe) e pelo
+   regime tributário (`taxPayableService`, que já fazia certo). Medido antes no banco:
+   **0 dos 9 contratos de locação mudam de locador** hoje. Pronto quando:
+   `empresaDoEmpreendimento.test.ts` verde ✅ e, em produção, a geração do aditivo do CTL-006
+   sem o 400 em `empreendimento_units`.
+
+Verificação: `tsc` limpo, `check-ui-standard` sem achados, 1.003 testes relacionados verdes ✅.
+
 ## Fora
 
 - Reajuste: nenhuma mudança de fluxo.

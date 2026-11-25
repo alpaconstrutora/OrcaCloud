@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { CalendarClock } from 'lucide-react';
 import { contractRenewalService } from '../../services/contractRenewalService';
 import { contractService } from '../../services/contractService';
@@ -15,6 +15,20 @@ interface Props {
     contract: Contract;
     /** Dentro da Gestão de Unidades: fecha a negociação e abre a aba. Fora dela, sem atalho. */
     onIrPara?: (aba: 'renewals' | 'reajustes') => void;
+    /**
+     * Avisa o pai se o contrato já foi renovado: os campos de vigência da
+     * negociação passam a ser o período ORIGINAL (a divergência é legítima — ver
+     * vigenciaParaOContrato) e precisam dizer isso.
+     */
+    onSituacao?: (s: SituacaoRenovacao) => void;
+}
+
+export interface SituacaoRenovacao {
+    renovado: boolean;
+    /** Fim da vigência do contrato vigente (o da renovação). */
+    fimAtual: string | null;
+    /** Número da última renovação (AD-00X) ou do contrato vigente da cadeia. */
+    por: string | null;
 }
 
 /** Data BR por split — `new Date(iso)` retrocede um dia em UTC-3. */
@@ -24,10 +38,13 @@ const fmtDate = (iso?: string | null) => {
     return `${d}/${m}/${y}`;
 };
 
-const SituacaoDaVigencia: React.FC<Props> = ({ contract, onIrPara }) => {
+const SituacaoDaVigencia: React.FC<Props> = ({ contract, onIrPara, onSituacao }) => {
     // Vigente da cadeia (renovação por contrato novo encerra este) e a última renovação dele.
     const [vigente, setVigente] = useState<Contract>(contract);
     const [ultima, setUltima] = useState<ContractAddendum | null>(null);
+    // O pai passa o callback inline; a ref evita reler a cadeia a cada render dele.
+    const onSituacaoRef = useRef(onSituacao);
+    useEffect(() => { onSituacaoRef.current = onSituacao; });
 
     useEffect(() => {
         let vivo = true;
@@ -39,7 +56,14 @@ const SituacaoDaVigencia: React.FC<Props> = ({ contract, onIrPara }) => {
                 if (!vivo) return;
                 setVigente(v);
                 // listAddendums vem do mais recente para o mais antigo.
-                setUltima(ads.find(a => a.new_start_date && a.status !== 'Cancelado' && a.status !== 'Rejeitado') ?? null);
+                const u = ads.find(a => a.new_start_date && a.status !== 'Cancelado' && a.status !== 'Rejeitado') ?? null;
+                setUltima(u);
+                const outroContrato = v.id !== contract.id;
+                onSituacaoRef.current?.({
+                    renovado: !!u || outroContrato,
+                    fimAtual: v.end_date ?? null,
+                    por: u?.number ?? (outroContrato ? v.number : null),
+                });
             } catch {
                 // Só leitura: sem a cadeia, mostra o contrato desta negociação.
             }

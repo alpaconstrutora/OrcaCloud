@@ -53,9 +53,9 @@ const envolver = (el: React.ReactElement) => render(<ToastProvider><ConfirmProvi
 describe('Incorporação › Oportunidades (F2)', () => {
     it('o gestor gere ali: Nova Oportunidade, rascunho na lista, Interesses — e nenhuma aba do painel do investidor', async () => {
         envolver(<OportunidadesModule profile={gestor} />);
-        expect(await screen.findByRole('button', { name: /Nova Oportunidade/ })).toBeTruthy();
+        expect(await screen.findByRole('button', { name: /Nova oportunidade/i })).toBeTruthy();
         expect(screen.getAllByText('Rascunho X').length).toBeGreaterThan(0);
-        expect(screen.getByRole('button', { name: /Interesses/ })).toBeTruthy();
+        expect(screen.getByRole('tab', { name: /Interesses/ })).toBeTruthy();
         for (const aba of ['Carteira', 'Fiscal e Tributário', 'Comunicados', 'Espelho de Vendas']) {
             expect(screen.queryByRole('button', { name: aba })).toBeNull();
             expect(screen.queryByRole('tab', { name: aba })).toBeNull();
@@ -65,7 +65,7 @@ describe('Incorporação › Oportunidades (F2)', () => {
     it('quem não é gestor só vê as publicadas, sem Nova Oportunidade', async () => {
         envolver(<OportunidadesModule profile={{ group: 'USUARIO', role: 'USER' }} />);
         await waitFor(() => expect(screen.queryByText('Carregando oportunidades...')).toBeNull());
-        expect(screen.queryByRole('button', { name: /Nova Oportunidade/ })).toBeNull();
+        expect(screen.queryByRole('button', { name: /Nova oportunidade/i })).toBeNull();
     });
 });
 
@@ -78,7 +78,7 @@ describe('Portal do Investidor › investidor › Oportunidades (F3)', () => {
         expect(await screen.findByRole('button', { name: 'Gerir em Oportunidades' })).toBeTruthy();
         expect(screen.getAllByText('Garden 01').length).toBeGreaterThan(0);
         expect(screen.queryByText('Rascunho X')).toBeNull();
-        expect(screen.queryByRole('button', { name: /Nova Oportunidade/ })).toBeNull();
+        expect(screen.queryByRole('button', { name: /Nova oportunidade/i })).toBeNull();
         expect(screen.queryByTitle('Editar')).toBeNull();
         expect(screen.queryByTitle('Despublicar')).toBeNull();
     });

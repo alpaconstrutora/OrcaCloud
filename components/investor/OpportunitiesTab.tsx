@@ -1,27 +1,42 @@
 import React from 'react';
-import { Plus, LayoutDashboard, Table2, Pencil, Trash2, Eye, EyeOff, MapPin, Building2, TrendingUp, Users, BarChart3 } from 'lucide-react';
+import { Plus, LayoutGrid, List, Search, Eye, EyeOff, MapPin, Building2, TrendingUp, BarChart3 } from 'lucide-react';
 import {
     InvestorOpportunity, OpportunityStatus,
-    OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_COLORS, OPPORTUNITY_STATUS_TEXT,
+    OPPORTUNITY_STATUS_LABELS, OPPORTUNITY_STATUS_TEXT,
     OPPORTUNITY_TYPE_LABELS,
     investorPortalService,
 } from '../../services/investorPortalService';
 import OpportunityForm from './OpportunityForm';
 import PortalOportunidadeDetalhe, { type AbaDoDetalhe } from './portal/PortalOportunidadeDetalhe';
-import { naVitrine } from '../../utils/oportunidadeNumerosDaVersao';
+import { naVitrine, type OportunidadeNaVitrine } from '../../utils/oportunidadeNumerosDaVersao';
 import { fmtPct } from '../../utils/format';
 import InterestsPanel from './InterestsPanel';
+import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
+import { KpiCard } from '../ui/KpiCard';
+import { TabsBar } from '../ui/TabsBar';
+import { FilterPopover } from '../ui/FilterPopover';
+import { normalizarTexto } from '../ui/FilterUtils';
+import ActionIconButton from '../ui/ActionIconButton';
 import Button from '../ui/Button';
+import { usePersistedState } from '../ui/TableUtils';
 import { useOrgWriteTarget } from '../../hooks/useOrgContext';
 import { useToast } from '../../hooks/useToast';
 
+/**
+ * Lista de oportunidades — Incorporação › Oportunidades (gestor, com `titulo`) e, só leitura, a aba Oportunidades
+ * do painel do investidor. No padrão do app (docs/ui_ux_guia_unificado.md; 25/11/2026, pedido do usuário: "os
+ * dashcards, titulo, fonts alias tudo na tela não esta no padrao do app"): título §20, abas §19.1, KpiCard §4,
+ * StandardTable §6.10 com busca e filtro de status §5.4, grade/lista §5.1.
+ */
 interface Props {
     opportunities: InvestorOpportunity[];
     isAdmin: boolean;
-    viewMode: 'grid' | 'list';
     /** A org do topo; `null` = "Todas" (REGRA #5). Só filtra leitura: criar e editar usam a org resolvida. */
     organizationId?: string | null;
-    onViewModeChange: (mode: 'grid' | 'list') => void;
+    /** Título da tela (§20). Só quando a lista É a tela (Incorporação › Oportunidades); dentro do painel do
+     *  investidor o título é o do painel. */
+    titulo?: string;
+    loading?: boolean;
     onDelete: (id: string) => void;
     onUpdate: (updated: InvestorOpportunity) => void;
     openConfirm: (msg: string, onConfirm: () => void) => void;
@@ -35,16 +50,46 @@ const fmtBRL = (v: number | null | undefined) => {
 };
 
 type AdminTab = 'opportunities' | 'interests';
+type Modo = 'grid' | 'list';
+
+const ORDEM_DO_STATUS = Object.keys(OPPORTUNITY_STATUS_LABELS) as OpportunityStatus[];
+// §5.5: as opções saem do mapa de rótulos (um status novo entra sozinho).
+const OPCOES_DE_STATUS: { value: OpportunityStatus | ''; label: string }[] = [
+    { value: '', label: 'Todos' },
+    ...ORDEM_DO_STATUS.map(s => ({ value: s, label: OPPORTUNITY_STATUS_LABELS[s] })),
+];
+
+// §6.3: ROI e TIR eram uma célula só ("39,2% / 19,0%"), que não ordenava — agora uma coluna cada.
+const COLUNAS: StandardTableColumn[] = [
+    { key: 'oportunidade', label: 'Oportunidade', sortable: true, width: 300 },
+    { key: 'status', label: 'Status', sortable: true, width: 170 },
+    { key: 'vgv', label: 'VGV', sortable: true, width: 130, align: 'right' },
+    { key: 'roi', label: 'ROI', sortable: true, width: 100, align: 'right' },
+    { key: 'tir', label: 'TIR', sortable: true, width: 100, align: 'right' },
+    { key: 'local', label: 'Local', sortable: true, width: 180 },
+];
+
+const localDe = (op: OportunidadeNaVitrine) => [op.cidade, op.uf].filter(Boolean).join(', ');
+const textoDeBusca = (op: OportunidadeNaVitrine) => [
+    op.title, op.subtitle, localDe(op),
+    op.status ? OPPORTUNITY_STATUS_LABELS[op.status] : '',
+    op.opportunity_type ? OPPORTUNITY_TYPE_LABELS[op.opportunity_type] : '',
+].filter(Boolean).join(' ');
+const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`;
 
 const OpportunitiesTab: React.FC<Props> = ({
-    opportunities, isAdmin, viewMode, organizationId,
-    onViewModeChange, onDelete, onUpdate, openConfirm,
+    opportunities, isAdmin, organizationId, titulo, loading = false,
+    onDelete, onUpdate, openConfirm,
 }) => {
     const [detail, setDetail] = React.useState<InvestorOpportunity | null>(null);
     const [abaDoDetalhe, setAbaDoDetalhe] = React.useState<AbaDoDetalhe>('apresentacao');
     const [editing, setEditing] = React.useState<InvestorOpportunity | null | 'new'>(null);
     const [saving, setSaving] = React.useState(false);
     const [adminTab, setAdminTab] = React.useState<AdminTab>('opportunities');
+    // §3: busca, recorte e modo sobrevivem a navegação e recarga.
+    const [busca, setBusca] = usePersistedState<string>('oportunidades:busca', '');
+    const [filtroStatus, setFiltroStatus] = usePersistedState<OpportunityStatus | ''>('oportunidades:status', '');
+    const [modo, setModo] = usePersistedState<Modo>('oportunidades:modo', 'list');
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const { showToast } = useToast();
     const [createOrgId, setCreateOrgId] = React.useState<string | undefined>(undefined);
@@ -117,24 +162,31 @@ const OpportunitiesTab: React.FC<Props> = ({
         }
     };
 
-    const visibleOpportunities = isAdmin ? opportunities : opportunities.filter(o => o.is_published);
+    const visibleOpportunities = React.useMemo(
+        () => (isAdmin ? opportunities : opportunities.filter(o => o.is_published)),
+        [isAdmin, opportunities],
+    );
     // Números exibidos: só os da versão do Imovib (utils/oportunidadeNumerosDaVersao.ts, naVitrine).
     // Editar abre a ORIGINAL: o formulário mostra e grava só os campos digitados à mão.
-    const exibidas = visibleOpportunities.map(naVitrine);
+    const exibidas = React.useMemo(() => visibleOpportunities.map(naVitrine), [visibleOpportunities]);
+    // Recorte de status antes da tabela (a busca o StandardTable faz; a grade repete a mesma função).
+    const recortadas = React.useMemo(
+        () => (filtroStatus ? exibidas.filter(o => o.status === filtroStatus) : exibidas),
+        [exibidas, filtroStatus],
+    );
+    const naGrade = React.useMemo(() => {
+        const termo = normalizarTexto(busca.trim());
+        return termo ? recortadas.filter(o => normalizarTexto(textoDeBusca(o)).includes(termo)) : recortadas;
+    }, [recortadas, busca]);
     const abrir = (op: InvestorOpportunity) => { setAbaDoDetalhe('apresentacao'); setDetail(op); };
     const editar = (op: InvestorOpportunity) => setEditing(opportunities.find(o => o.id === op.id) ?? op);
 
-    // ── Pipeline executivo ────────────────────────────────────────────────────
-    const activeOpps = opportunities.filter(o => o.status !== 'encerrada' && o.is_published);
-    const totalVgv = activeOpps.reduce((sum, o) => sum + (naVitrine(o).vgv ?? 0), 0);
-    const statusCounts = (['estudo','viabilidade','lancamento','captacao'] as OpportunityStatus[])
-        .map(s => ({ status: s, count: opportunities.filter(o => o.status === s).length }))
-        .filter(x => x.count > 0);
-    const fmtVgv = (v: number) => {
-        if (v >= 1_000_000) return `R$ ${(v / 1_000_000).toFixed(1).replace('.', ',')}M`;
-        if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
-        return v === 0 ? '—' : `R$ ${v}`;
-    };
+    // ── Indicadores (§4) ──────────────────────────────────────────────────────
+    const ativas = exibidas.filter(o => o.status !== 'encerrada' && o.is_published);
+    const vgvDasAtivas = ativas.reduce((soma, o) => soma + (o.vgv ?? 0), 0);
+    const publicadas = exibidas.filter(o => o.is_published).length;
+    const emCaptacao = exibidas.filter(o => o.status === 'captacao').length;
+    const rascunhos = exibidas.filter(o => !o.is_published).length;
 
     const formulario = editing !== null && editingOrganizationId && (
         <OpportunityForm
@@ -165,389 +217,228 @@ const OpportunitiesTab: React.FC<Props> = ({
         );
     }
 
+    // ── Peças da régua (§5.1/§5.4) — as mesmas na grade e na tabela ─────────────
+    const filtroDeStatus = (
+        <FilterPopover<OpportunityStatus | ''> label="Status" value={filtroStatus} onChange={setFiltroStatus} options={OPCOES_DE_STATUS} />
+    );
+    const alternador = (
+        <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+            <button type="button" onClick={() => setModo('grid')} title="Visualização em grade" aria-pressed={modo === 'grid'}
+                className={`p-1.5 rounded-[6px] transition-all ${modo === 'grid' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                <LayoutGrid className="w-4 h-4" />
+            </button>
+            <button type="button" onClick={() => setModo('list')} title="Visualização em lista" aria-pressed={modo === 'list'}
+                className={`p-1.5 rounded-[6px] transition-all ${modo === 'list' ? 'bg-blue-600 text-white' : 'text-gray-400 hover:text-gray-600'}`}>
+                <List className="w-4 h-4" />
+            </button>
+        </div>
+    );
+
+    // §9/§9.2: "Ver" em texto azul + ícones secundários sempre visíveis.
+    const acoes = (op: OportunidadeNaVitrine) => (
+        <div className="flex items-center justify-end gap-1.5" onClick={e => e.stopPropagation()}>
+            <button type="button" onClick={() => abrir(op)}
+                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all">
+                Ver
+            </button>
+            {isAdmin && (
+                <>
+                    <ActionIconButton kind="view" title={tituloDoPublicar(op)} aria-label={op.is_published ? 'Despublicar' : 'Publicar'}
+                        icon={op.is_published ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        onClick={() => void handleTogglePublish(op)} />
+                    <ActionIconButton kind="edit" onClick={() => editar(op)} />
+                    <ActionIconButton kind="delete" title="Excluir oportunidade"
+                        onClick={() => openConfirm('Remover esta oportunidade?', () => onDelete(op.id!))} />
+                </>
+            )}
+        </div>
+    );
+
+    // §8: texto colorido, sem pílula.
+    const status = (op: OportunidadeNaVitrine) => (
+        <span className="text-sm font-normal">
+            {op.status && <span className={OPPORTUNITY_STATUS_TEXT[op.status]}>{OPPORTUNITY_STATUS_LABELS[op.status]}</span>}
+            {isAdmin && !op.is_published && (
+                <span className="text-amber-700" title="Rascunho: o investidor ainda não vê">{op.status ? ' · ' : ''}Rascunho</span>
+            )}
+        </span>
+    );
+
+    const vazio: { title: string; subtitle?: string; acao?: { rotulo: string; onClick: () => void } } =
+        visibleOpportunities.length > 0
+            ? { title: 'Nenhuma oportunidade encontrada', subtitle: 'Tente ajustar a busca ou o filtro de status.' }
+            : {
+                title: isAdmin ? 'Nenhuma oportunidade cadastrada' : 'Nenhuma oportunidade disponível no momento',
+                subtitle: isAdmin ? 'Crie uma oportunidade a partir de um estudo de viabilidade e publique para os investidores.' : undefined,
+                acao: isAdmin ? { rotulo: 'Criar primeira oportunidade', onClick: () => void handleNew() } : undefined,
+            };
+    const iconeDoVazio = <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />;
+
     return (
-        <div className="space-y-8">
-            {/* Header */}
-            <div className="flex justify-between items-center">
-                <div className="flex items-center gap-6">
-                    <h3 className="text-xl font-bold text-gray-900">Oportunidades</h3>
+        <div className="space-y-6">
+            {titulo && (
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{titulo}</h1>
+                    <p className="text-gray-500 text-sm mt-1.5 font-medium">
+                        Vitrine e captação: o que se publica no Portal do Investidor e os interesses recebidos.
+                    </p>
+                </div>
+            )}
 
-                    {isAdmin && (
-                        <div className="flex bg-gray-100 p-1 rounded-lg">
-                            <button
-                                onClick={() => setAdminTab('opportunities')}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-button font-bold transition-all ${adminTab === 'opportunities' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                            >
-                                <Building2 className="w-3.5 h-3.5" />
-                                Oportunidades
-                            </button>
-                            <button
-                                onClick={() => setAdminTab('interests')}
-                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-button font-bold transition-all ${adminTab === 'interests' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                            >
-                                <Users className="w-3.5 h-3.5" />
-                                Interesses
-                            </button>
-                        </div>
-                    )}
-
+            {isAdmin && (
+                <TabsBar<AdminTab>
+                    tabs={[
+                        { id: 'opportunities', label: 'Oportunidades', badge: visibleOpportunities.length },
+                        { id: 'interests', label: 'Interesses' },
+                    ]}
+                    value={adminTab}
+                    onChange={setAdminTab}
+                >
                     {adminTab === 'opportunities' && (
-                        <div className="flex bg-gray-100 p-1 rounded-lg">
-                            <button
-                                onClick={() => onViewModeChange('grid')}
-                                className={`p-1.5 rounded-md transition-all ${viewMode === 'grid' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                                title="Grade"
-                            >
-                                <LayoutDashboard className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={() => onViewModeChange('list')}
-                                className={`p-1.5 rounded-md transition-all ${viewMode === 'list' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
-                                title="Lista"
-                            >
-                                <Table2 className="w-4 h-4" />
-                            </button>
-                        </div>
+                        <Button variant="primary" onClick={() => void handleNew()}>
+                            <Plus className="w-[15px] h-[15px]" />
+                            Nova oportunidade
+                        </Button>
                     )}
-                </div>
-
-                {isAdmin && adminTab === 'opportunities' && (
-                    <Button
-                        variant="primary"
-                        onClick={handleNew}
-                    >
-                        <Plus className="w-4 h-4" />
-                        Nova Oportunidade
-                    </Button>
-                )}
-            </div>
-
-            {/* Pipeline executivo */}
-            {adminTab === 'opportunities' && opportunities.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="bg-[#0B1727] rounded-2xl p-5 text-white col-span-2 md:col-span-1">
-                        <div className="flex items-center gap-2 mb-2">
-                            <BarChart3 className="w-3.5 h-3.5 text-blue-400" />
-                            <span className="text-xs font-black text-blue-300 uppercase tracking-widest">VGV Pipeline</span>
-                        </div>
-                        <p className="text-2xl font-black">{fmtVgv(totalVgv)}</p>
-                        <p className="text-xs text-white/40 mt-1">{activeOpps.length} oportunidade{activeOpps.length !== 1 ? 's' : ''} ativas</p>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5">
-                        <div className="flex items-center gap-2 mb-2">
-                            <Building2 className="w-3.5 h-3.5 text-gray-400" />
-                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Total</span>
-                        </div>
-                        <p className="text-2xl font-black text-gray-900">{opportunities.length}</p>
-                        <p className="text-xs text-gray-400 mt-1">{opportunities.filter(o => o.is_published).length} publicadas</p>
-                    </div>
-                    <div className="bg-gray-50 border border-gray-100 rounded-2xl p-5 col-span-2">
-                        <div className="flex items-center gap-2 mb-3">
-                            <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Por status</span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {statusCounts.length > 0 ? statusCounts.map(({ status, count }) => (
-                                <span key={status} className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-bold ${OPPORTUNITY_STATUS_COLORS[status]}`}>
-                                    {OPPORTUNITY_STATUS_LABELS[status]}
-                                    <span className="font-black">{count}</span>
-                                </span>
-                            )) : (
-                                <span className="text-xs text-gray-400">Nenhuma ativa</span>
-                            )}
-                        </div>
-                    </div>
-                </div>
+                </TabsBar>
             )}
 
-            {/* Painel de interesses (admin) */}
             {isAdmin && adminTab === 'interests' && (
-                <InterestsPanel
-                    organizationId={organizationId}
-                    opportunities={opportunities}
-                />
+                <InterestsPanel organizationId={organizationId} opportunities={opportunities} />
             )}
 
-            {/* Lista de oportunidades */}
             {adminTab === 'opportunities' && (
                 <>
-                    {visibleOpportunities.length === 0 ? (
-                        <div className="text-center py-16 bg-gray-50 rounded-2xl">
-                            <Building2 className="w-10 h-10 text-gray-300 mx-auto mb-3" />
-                            <p className="text-sm font-bold text-gray-400">
-                                {isAdmin ? 'Nenhuma oportunidade cadastrada' : 'Nenhuma oportunidade disponível no momento'}
-                            </p>
-                            {isAdmin && (
-                                <Button
-                                    variant="primary"
-                                    className="mt-4"
-                                    onClick={handleNew}
-                                >
-                                    Criar primeira oportunidade
-                                </Button>
+                    <div className={`grid grid-cols-1 md:grid-cols-2 ${isAdmin ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-3 mb-3`}>
+                        <KpiCard label="VGV das ativas" value={ativas.length ? (fmtBRL(vgvDasAtivas) ?? '—') : '—'}
+                            sub={plural(ativas.length, 'publicada e não encerrada', 'publicadas e não encerradas')}
+                            icon={<BarChart3 className="w-4 h-4" />} color="blue" />
+                        <KpiCard label="Oportunidades" value={visibleOpportunities.length}
+                            sub={plural(publicadas, 'publicada', 'publicadas')}
+                            icon={<Building2 className="w-4 h-4" />} color="indigo" />
+                        <KpiCard label="Em captação" value={emCaptacao}
+                            icon={<TrendingUp className="w-4 h-4" />} color="emerald" />
+                        {isAdmin && (
+                            <KpiCard label="Rascunhos" value={rascunhos} sub="O investidor ainda não vê"
+                                icon={<EyeOff className="w-4 h-4" />} color="amber" />
+                        )}
+                    </div>
+
+                    {modo === 'grid' ? (
+                        /* §5.2 — régua e grade no mesmo card; a busca é a mesma da tabela. */
+                        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                            <div className="p-2 border-b border-gray-100 bg-white">
+                                <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                                    <div className="flex-1 relative w-full">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <input type="text" placeholder="Buscar oportunidade, local ou status..." value={busca}
+                                            onChange={e => setBusca(e.target.value)} aria-label="Buscar oportunidade"
+                                            className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all" />
+                                    </div>
+                                    {filtroDeStatus}
+                                    {alternador}
+                                </div>
+                            </div>
+                            {loading ? (
+                                <div className="text-center py-12">
+                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto" />
+                                    <p className="mt-2 text-gray-500">Carregando...</p>
+                                </div>
+                            ) : naGrade.length === 0 ? (
+                                <div className="text-center py-12">
+                                    {iconeDoVazio}
+                                    <h3 className="text-lg font-bold text-gray-900 mb-2">{vazio.title}</h3>
+                                    {vazio.subtitle && <p className="text-sm text-gray-500">{vazio.subtitle}</p>}
+                                    {vazio.acao && (
+                                        <button type="button" onClick={vazio.acao.onClick} className="mt-4 text-sm font-medium text-blue-600 hover:text-blue-800">
+                                            {vazio.acao.rotulo}
+                                        </button>
+                                    )}
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 p-4 bg-gray-50">
+                                    {naGrade.map(op => (
+                                        <article key={op.id} aria-label={op.title} className="bg-white rounded-[10px] border border-gray-200 overflow-hidden flex flex-col">
+                                            {op.capa ? (
+                                                <img src={op.capa} alt="" className="h-36 w-full object-cover" />
+                                            ) : (
+                                                <div className="h-36 bg-gray-100 flex items-center justify-center" aria-hidden>
+                                                    <Building2 className="w-8 h-8 text-gray-300" />
+                                                </div>
+                                            )}
+                                            <div className="p-4 space-y-3 flex-1">
+                                                <div>
+                                                    <h3 className="text-base font-semibold text-gray-900 leading-snug">{op.title}</h3>
+                                                    {op.subtitle && <p className="text-sm text-gray-600 mt-0.5 line-clamp-2">{op.subtitle}</p>}
+                                                </div>
+                                                <p className="text-sm font-normal">
+                                                    {status(op)}
+                                                    {op.opportunity_type && <span className="text-gray-600"> · {OPPORTUNITY_TYPE_LABELS[op.opportunity_type]}</span>}
+                                                </p>
+                                                <dl className="grid grid-cols-3 gap-3">
+                                                    {([['VGV', fmtBRL(op.vgv)], ['ROI', op.roi_pct != null ? fmtPct(op.roi_pct) : null], ['TIR', op.tir_pct != null ? fmtPct(op.tir_pct) : null]] as const).map(([rotulo, valor]) => (
+                                                        <div key={rotulo}>
+                                                            <dt className="text-xs text-gray-500">{rotulo}</dt>
+                                                            <dd className="text-sm font-medium text-gray-800 tabular-nums">{valor ?? '—'}</dd>
+                                                        </div>
+                                                    ))}
+                                                </dl>
+                                                {localDe(op) && (
+                                                    <p className="flex items-center gap-1.5 text-sm text-gray-600">
+                                                        <MapPin className="w-3.5 h-3.5 text-gray-400 shrink-0" />{localDe(op)}
+                                                    </p>
+                                                )}
+                                            </div>
+                                            <div className="px-4 py-3 border-t border-gray-100">{acoes(op)}</div>
+                                        </article>
+                                    ))}
+                                </div>
                             )}
                         </div>
-                    ) : viewMode === 'grid' ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            {exibidas.map(op => (
-                                <div
-                                    key={op.id}
-                                    className="group bg-[#0B1727] rounded-3xl overflow-hidden relative cursor-pointer hover:scale-[1.01] transition-transform duration-200"
-                                    onClick={() => abrir(op)}
-                                >
-                                    {/* Thumbnail ou gradiente */}
-                                    {op.capa ? (
-                                        <div className="h-40 overflow-hidden relative">
-                                            <img src={op.capa} alt={op.title} className="w-full h-full object-cover opacity-60" />
-                                            <div className="absolute inset-0 bg-gradient-to-b from-transparent to-[#0B1727]" />
-                                        </div>
-                                    ) : (
-                                        <div className="absolute top-0 right-0 w-64 h-64 bg-blue-600/20 rounded-full blur-[80px] -mr-20 -mt-20 pointer-events-none" />
-                                    )}
-
-                                    <div className="relative z-10 p-6 pt-4">
-                                        {/* Badges */}
-                                        <div className="flex flex-wrap gap-2 mb-3">
-                                            {op.status && (
-                                                <span className={`text-xs font-medium ${OPPORTUNITY_STATUS_TEXT[op.status]}`}>
-                                                    {OPPORTUNITY_STATUS_LABELS[op.status]}
-                                                </span>
-                                            )}
-                                            {op.opportunity_type && (
-                                                <span className="px-2.5 py-1 bg-white/10 text-white/60 rounded-full text-xs font-bold">
-                                                    {OPPORTUNITY_TYPE_LABELS[op.opportunity_type]}
-                                                </span>
-                                            )}
-                                            {isAdmin && !op.is_published && (
-                                                <span className="px-2.5 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs font-bold">
-                                                    Rascunho
-                                                </span>
-                                            )}
-                                        </div>
-
-                                        <h4 className="text-xl font-black text-white mb-1 leading-tight">{op.title}</h4>
-                                        {op.subtitle && <p className="text-sm text-white/50 mb-4 line-clamp-2">{op.subtitle}</p>}
-
-                                        {/* KPIs inline */}
-                                        <div className="flex flex-wrap gap-4 text-xs mb-4">
-                                            {op.vgv != null && (
-                                                <div>
-                                                    <p className="text-white/30 font-bold uppercase tracking-wider text-[9px]">VGV</p>
-                                                    <p className="text-white font-black">{fmtBRL(op.vgv)}</p>
-                                                </div>
-                                            )}
-                                            {op.roi_pct != null && (
-                                                <div>
-                                                    <p className="text-white/30 font-bold uppercase tracking-wider text-[9px]">ROI</p>
-                                                    <p className="text-emerald-400 font-black flex items-center gap-1">
-                                                        <TrendingUp className="w-3 h-3" />{fmtPct(op.roi_pct)}
-                                                    </p>
-                                                </div>
-                                            )}
-                                            {op.tir_pct != null && (
-                                                <div>
-                                                    <p className="text-white/30 font-bold uppercase tracking-wider text-[9px]">TIR</p>
-                                                    <p className="text-blue-300 font-black">{fmtPct(op.tir_pct)}</p>
-                                                </div>
-                                            )}
-                                            {(op.cidade || op.uf) && (
-                                                <div>
-                                                    <p className="text-white/30 font-bold uppercase tracking-wider text-[9px]">Local</p>
-                                                    <p className="text-white/70 font-bold flex items-center gap-1">
-                                                        <MapPin className="w-3 h-3" />
-                                                        {[op.cidade, op.uf].filter(Boolean).join(', ')}
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-
-                                        <div className="flex items-center justify-between">
-                                            <button
-                                                onClick={e => { e.stopPropagation(); abrir(op); }}
-                                                className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-button font-bold rounded-xl transition-all border border-white/10"
-                                            >
-                                                Ver detalhes
-                                            </button>
-
-                                            {isAdmin && (
-                                                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                    onClick={e => e.stopPropagation()}>
-                                                    <button
-                                                        onClick={() => handleTogglePublish(op)}
-                                                        title={tituloDoPublicar(op)}
-                                                        className="p-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all"
-                                                    >
-                                                        {op.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                                    </button>
-                                                    <button
-                                                        onClick={() => editar(op)} title="Editar"
-                                                        className="p-2 bg-white/10 hover:bg-blue-600 text-white rounded-lg transition-all"
-                                                    >
-                                                        <Pencil className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button
-                                                        onClick={() => openConfirm('Remover esta oportunidade?', () => onDelete(op.id!))}
-                                                        className="p-2 bg-white/10 hover:bg-red-600 text-white rounded-lg transition-all"
-                                                    >
-                                                        <Trash2 className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
                     ) : (
-                        /* Modo lista */
-                        <>
-                            <div className="md:hidden space-y-4">
-                                {exibidas.map(op => (
-                                    <div key={op.id} className="bg-white rounded-2xl border border-gray-100 shadow-sm p-4 space-y-4">
-                                        <div className="flex items-start justify-between gap-3">
-                                            <div className="min-w-0">
-                                                <p className="font-black text-gray-900 leading-tight">{op.title}</p>
-                                                {op.subtitle && <p className="text-xs text-gray-500 mt-1 line-clamp-2">{op.subtitle}</p>}
-                                                {isAdmin && !op.is_published && (
-                                                    <span className="inline-flex mt-2 text-xs text-yellow-600 font-bold">Rascunho</span>
-                                                )}
-                                            </div>
-                                            {op.status && (
-                                                <span className={`text-xs font-medium whitespace-nowrap ${OPPORTUNITY_STATUS_TEXT[op.status]}`}>
-                                                    {OPPORTUNITY_STATUS_LABELS[op.status]}
-                                                </span>
-                                            )}
+                        <StandardTable<OportunidadeNaVitrine>
+                            storageKey="oportunidades:tabela"
+                            columns={COLUNAS}
+                            rows={recortadas}
+                            rowKey={op => op.id!}
+                            rowLabel={op => op.title}
+                            search={busca}
+                            onSearchChange={setBusca}
+                            searchText={textoDeBusca}
+                            searchPlaceholder="Buscar oportunidade, local ou status..."
+                            filters={<>{filtroDeStatus}{alternador}</>}
+                            loading={loading}
+                            onRowClick={abrir}
+                            sortValue={(key, op) => {
+                                switch (key) {
+                                    case 'oportunidade': return op.title;
+                                    case 'status': return op.status ? ORDEM_DO_STATUS.indexOf(op.status) : null;
+                                    case 'vgv': return op.vgv;
+                                    case 'roi': return op.roi_pct;
+                                    case 'tir': return op.tir_pct;
+                                    case 'local': return localDe(op);
+                                    default: return null;
+                                }
+                            }}
+                            renderCell={(key, op) => {
+                                switch (key) {
+                                    case 'oportunidade': return (
+                                        <div className="min-w-0">
+                                            <span className="block truncate text-sm font-normal text-gray-700" title={op.title}>{op.title}</span>
+                                            {op.subtitle && <span className="block truncate text-sm font-normal text-gray-600" title={op.subtitle}>{op.subtitle}</span>}
                                         </div>
-                                        <div className="grid grid-cols-2 gap-3 text-sm">
-                                            <div>
-                                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">VGV</p>
-                                                <p className="font-black text-gray-900">{fmtBRL(op.vgv) ?? '—'}</p>
-                                            </div>
-                                            <div className="text-right">
-                                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest mb-1">ROI / TIR</p>
-                                                <p className="font-black">
-                                                    {op.roi_pct != null && <span className="text-emerald-600">{fmtPct(op.roi_pct)}</span>}
-                                                    {op.roi_pct != null && op.tir_pct != null && <span className="text-gray-300 mx-1">/</span>}
-                                                    {op.tir_pct != null && <span className="text-blue-600">{fmtPct(op.tir_pct)}</span>}
-                                                    {op.roi_pct == null && op.tir_pct == null && <span className="text-gray-400">—</span>}
-                                                </p>
-                                            </div>
-                                        </div>
-                                        <div className="flex items-center justify-between gap-3 pt-3 border-t border-gray-50">
-                                            <span className="text-xs font-bold text-gray-400 truncate">
-                                                {[op.cidade, op.uf].filter(Boolean).join(', ') || 'Local não informado'}
-                                            </span>
-                                            <div className="flex items-center gap-1 flex-shrink-0">
-                                                <Button
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    className="bg-blue-50 text-blue-600 hover:bg-blue-100"
-                                                    onClick={() => abrir(op)}
-                                                >
-                                                    Ver
-                                                </Button>
-                                                {isAdmin && (
-                                                    <>
-                                                        <button onClick={() => handleTogglePublish(op)} title={tituloDoPublicar(op)} className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
-                                                            {op.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                                        </button>
-                                                        <button onClick={() => editar(op)} title="Editar" className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg">
-                                                            <Pencil className="w-3.5 h-3.5" />
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </div>
-                                        </div>
-                                    </div>
-                                ))}
-                            </div>
-                            <div className="hidden md:block bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                            <table className="w-full text-left">
-                                <thead className="bg-white border-b border-gray-100">
-                                    <tr className="text-xs font-black text-gray-400 uppercase tracking-widest">
-                                        <th className="px-6 py-4">Oportunidade</th>
-                                        <th className="px-6 py-4">Status</th>
-                                        <th className="px-6 py-4">VGV</th>
-                                        <th className="px-6 py-4">ROI / TIR</th>
-                                        <th className="px-6 py-4">Local</th>
-                                        <th className="px-6 py-4 text-right">Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody className="divide-y divide-gray-50">
-                                    {exibidas.map(op => (
-                                        <tr key={op.id} className="hover:bg-blue-50/30 transition-colors group">
-                                            <td className="px-6 py-4">
-                                                <div className="flex flex-col">
-                                                    <span className="text-gray-900">{op.title}</span>
-                                                    {op.subtitle && <span className="text-xs text-gray-500 line-clamp-1">{op.subtitle}</span>}
-                                                    {isAdmin && !op.is_published && (
-                                                        <span className="text-xs text-yellow-700 mt-0.5">Rascunho</span>
-                                                    )}
-                                                </div>
-                                            </td>
-                                            <td className="px-6 py-4">
-                                                {op.status && (
-                                                    <span className={`text-xs font-medium ${OPPORTUNITY_STATUS_TEXT[op.status]}`}>
-                                                        {OPPORTUNITY_STATUS_LABELS[op.status]}
-                                                    </span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 font-medium text-gray-800 text-sm">
-                                                {fmtBRL(op.vgv) ?? '—'}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm">
-                                                {op.roi_pct != null && (
-                                                    <span className="text-emerald-700 font-medium">{fmtPct(op.roi_pct)}</span>
-                                                )}
-                                                {op.roi_pct != null && op.tir_pct != null && <span className="text-gray-300 mx-1">/</span>}
-                                                {op.tir_pct != null && (
-                                                    <span className="text-blue-700 font-medium">{fmtPct(op.tir_pct)}</span>
-                                                )}
-                                                {op.roi_pct == null && op.tir_pct == null && <span className="text-gray-400">—</span>}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm text-gray-500">
-                                                {[op.cidade, op.uf].filter(Boolean).join(', ') || '—'}
-                                            </td>
-                                            <td className="px-6 py-4 text-right">
-                                                <div className="flex justify-end gap-1">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                                        onClick={() => abrir(op)}
-                                                    >
-                                                        Ver
-                                                    </Button>
-                                                    {isAdmin && (
-                                                        <>
-                                                            <button
-                                                                onClick={() => handleTogglePublish(op)}
-                                                                title={tituloDoPublicar(op)}
-                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                            >
-                                                                {op.is_published ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
-                                                            </button>
-                                                            <button
-                                                                onClick={() => editar(op)} title="Editar"
-                                                                className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                                                            >
-                                                                <Pencil className="w-3.5 h-3.5" />
-                                                            </button>
-                                                            <button
-                                                                onClick={() => openConfirm('Remover esta oportunidade?', () => onDelete(op.id!))}
-                                                                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                                                            >
-                                                                <Trash2 className="w-3.5 h-3.5" />
-                                                            </button>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                            </div>
-                        </>
+                                    );
+                                    case 'status': return status(op);
+                                    case 'vgv': return <span className="text-sm font-medium text-gray-800">{fmtBRL(op.vgv) ?? '—'}</span>;
+                                    case 'roi': return <span className="text-sm font-normal text-gray-700">{op.roi_pct != null ? fmtPct(op.roi_pct) : '—'}</span>;
+                                    case 'tir': return <span className="text-sm font-normal text-gray-700">{op.tir_pct != null ? fmtPct(op.tir_pct) : '—'}</span>;
+                                    case 'local': return <span className="block truncate text-sm font-normal text-gray-700" title={localDe(op) || undefined}>{localDe(op) || '—'}</span>;
+                                    default: return null;
+                                }
+                            }}
+                            actions={{ width: isAdmin ? 190 : 90, render: acoes }}
+                            empty={{ icon: iconeDoVazio, ...vazio }}
+                        />
                     )}
                 </>
             )}

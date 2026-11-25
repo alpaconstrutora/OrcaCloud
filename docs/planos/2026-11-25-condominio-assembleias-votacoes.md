@@ -459,7 +459,7 @@ jsPDF/autotable por `import()` dinâmico, Vitest.
 - Banco: **nunca `supabase db push`**. Ensaio com `scripts/montar-ensaio.sh`; aplicar com
   `npx supabase db query --linked -f <arquivo>` só depois do ensaio dar `TUDO OK`.
 - Prefixo de migration único conferido contra **todos** os nomes
-  (`ls supabase/migrations | grep -c 2027112560` = 0 antes de criar); se outra frente
+  (`ls supabase/migrations | grep -c 2027112586` = 0 antes de criar); se outra frente
   ocupou, subir o número.
 - REGRA #7: toda função nova `REVOKE ALL … FROM PUBLIC, anon`; núcleo `_assembleia_*`
   revogado também de `authenticated`; `REVOKE TRUNCATE` nas tabelas novas; policy pelo
@@ -494,7 +494,7 @@ jsPDF/autotable por `import()` dinâmico, Vitest.
 ### Tarefa A1 — Estrutura: tabelas, trava e RLS
 
 **Arquivos**
-- Criar: `supabase/migrations/aplicar_20271125600000_condominio_assembleias.sql`
+- Criar: `supabase/migrations/aplicar_20271125860000_condominio_assembleias.sql`
 - Teste: `scripts/teste-condominio-assembleias-estrutura.sql`
 
 **Produz** (nomes fixos, usados pelas tarefas seguintes)
@@ -523,12 +523,15 @@ jsPDF/autotable por `import()` dinâmico, Vitest.
 - `condominio_assembleia_votos_historico` (gatilho AFTER INSERT OR UPDATE em votos
   copia a linha nova).
 - `condominio_assembleia_eventos`: `id, assembleia_id CASCADE, evento, ator uuid,
-  papel ('GESTOR'|'SINDICO'), unit_id, detalhe jsonb, em`.
+  papel ('GESTOR'|'SINDICO'|'CONDOMINO'), unit_id, detalhe jsonb, em`.
 - Gatilho de trava `trg_condominio_assembleia_trava` (assembleias, itens, unidades,
   votos): recusa com `23514`, HINT `assembleia_travada`, quando —
   troca de `status` sem `current_setting('app.assembleia_transicao', true) = 'on'`;
+  **qualquer UPDATE de `condominio_assembleias` fora de RASCUNHO sem essa marca** (datas,
+  local e título fazem parte do edital: depois de convocar só mudam pelas RPCs);
   qualquer mudança com status ENCERRADA/CANCELADA (exceto `ata_documento_id` em
-  ENCERRADA); itens fora de RASCUNHO (exceto `deliberacao` em INSTALADA); unidades e
+  ENCERRADA, também só com a marca); itens fora de RASCUNHO (exceto `deliberacao` em
+  INSTALADA); unidades e
   votos fora de CONVOCADA/INSTALADA; DELETE de assembleia fora de RASCUNHO; DELETE de
   voto sempre.
 - RLS: assembleias e itens — SELECT/INSERT/UPDATE/DELETE por conjunto; unidades, votos,
@@ -552,7 +555,7 @@ jsPDF/autotable por `import()` dinâmico, Vitest.
 ### Tarefa A2 — Conduzir: impedimento, apuração e transições do gestor
 
 **Arquivos**
-- Criar: `supabase/migrations/aplicar_20271125600100_condominio_assembleias_conduzir.sql`
+- Criar: `supabase/migrations/aplicar_20271125860100_condominio_assembleias_conduzir.sql`
 - Teste: `scripts/teste-condominio-assembleias-conduzir.sql`
 
 **Consome:** tabelas da A1.
@@ -613,6 +616,14 @@ jsPDF/autotable por `import()` dinâmico, Vitest.
   Cada um: `fn_org_do_condominio(emp) IN (SELECT minhas_orgs_membro())`, senão `42501`;
   chama o núcleo com `auth.uid(), 'GESTOR'`.
 
+**Ordem dentro do núcleo (por causa da trava da A1):** convocar troca o status para
+CONVOCADA **antes** de inserir as unidades; encerrar grava as `deliberacao` dos itens
+**com o status ainda INSTALADA**, depois calcula o retrato e só então troca para
+ENCERRADA. **Hora nos testes:** nada de "relógio falso" no código de produção; o teste
+(que roda como `postgres`) convoca com datas futuras e depois desloca
+`primeira/segunda_convocacao_em` para o passado com a marca
+`app.assembleia_transicao = 'on'` ligada pelo próprio teste.
+
 - [ ] **1. Escrever o teste.** Fixture: 4 unidades com frações 0,1 / 0,2 / 0,3 / 0,4
   (total 1,0) + 1 sem fração, títulos de cota fabricados no teste. Casos com os
   números: `convocar cria 4 unidades e devolve 1 fora`; `convocar publica aviso
@@ -639,7 +650,7 @@ jsPDF/autotable por `import()` dinâmico, Vitest.
 ### Tarefa A3 — Portal: leitura e voto do condômino
 
 **Arquivos**
-- Criar: `supabase/migrations/aplicar_20271125600200_condominio_assembleias_portal.sql`
+- Criar: `supabase/migrations/aplicar_20271125860200_condominio_assembleias_portal.sql`
 - Teste: `scripts/teste-condominio-assembleias-portal.sql`
 
 **Consome:** A1, A2 (`fn_assembleia_unidade_impedida`, `fn_assembleia_apurar`).
@@ -662,7 +673,7 @@ jsPDF/autotable por `import()` dinâmico, Vitest.
   — sem token e sem client_id: identidade só pelo JWT (cliente com e-mail igual e
   PROPRIETARIO vigente de `p_unit`), senão `42501` HINT `sem_direito_de_voto`;
   assembleia CONVOCADA/INSTALADA; unidade na assembleia; não impedida; opção válida;
-  upsert origem PORTAL, `client_id`; evento com papel NULL. GRANT só `authenticated`.
+  upsert origem PORTAL, `client_id`; evento com papel `CONDOMINO`. GRANT só `authenticated`.
 
 - [ ] **1. Escrever o teste** com claims de usuário real (`pg_temp.claims`). Casos:
   `proprietário logado vota`; `votar com token + sessão` (lê por token e vota pela
@@ -745,11 +756,12 @@ jsPDF/autotable por `import()` dinâmico, Vitest.
   <título> marcada para <data da 1ª> foi cancelada. Motivo: <motivo>."
 - `montarEdital(a, itens, condominio: { nome; cnpj }): EditalModelo` e
   `montarAta(retrato: Retrato, a: Assembleia, condominio): AtaModelo` — seções da R9
-  em ordem, fração em % (`fracaoParaPercentual` de `components/client/CondominioTab`)
-  e nº de unidades por opção.
+  em ordem, peso em **% do total da assembleia** (`percentualDoTotal(fracao, total)`,
+  exportada daqui: no Bella Vista a soma das frações é 0,01, então a fração crua em %
+  daria 0,125% — o que importa é 12,5% = 1/8) e nº de unidades por opção.
 
 - [ ] **1. Teste**: `dataHoraBrasilia('2026-12-10T22:00:00Z') === '10/12/2026 às
-  19:00'`; `textoConvocacao contém as duas datas, a pauta numerada e "art. 1.354-A"`;
+  19:00'`; `percentualDoTotal(0.00125, 0.01) === '12,50%'`; `textoConvocacao contém as duas datas, a pauta numerada e "art. 1.354-A"`;
   `montarAta lista presença com forma "procurador: <nome>"`; `montarAta traz
   "Quórum não atingido" e o quórum exigido`; `montarAta lista impedidas na
   instalação`; `anexo tem uma linha por unidade × item`; `ESCOLHA mostra a

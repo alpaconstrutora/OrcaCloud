@@ -39,7 +39,8 @@ describe('Tornar sócio', () => {
         svc.listInterests.mockResolvedValue([interesse({ investor_id: 'inv1' })]);
         svc.listInvestors.mockResolvedValue([{ id: 'inv1', name: 'Tiago Investidor' }]);
         render(<InterestsPanel organizationId="org" opportunities={[comSpe]} />);
-        expect(await screen.findByText(/Pretende aportar/)).toBeTruthy();
+        // Lista: o valor na coluna "Valor pretendido" e no indicador do mesmo nome.
+        expect((await screen.findAllByText(/R\$\s?200\.000/)).length).toBe(2);
         await user.click(screen.getByRole('button', { name: /Tornar sócio/ }));
         expect(await screen.findByText('Tiago Investidor')).toBeTruthy();
         await user.type(screen.getByLabelText('Participação na SPE (%)'), '5');

@@ -118,11 +118,14 @@ const TornarSocioSheet: React.FC<{
             </SheetPanel>
             <SheetFooter>
                 <button type="button" onClick={onClose} className="h-9 px-3.5 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">Cancelar</button>
-                <button type="button" onClick={() => void confirmar()} disabled={salvando || !!motivo} title={motivo}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed">
-                    {salvando && <Loader2 className="w-[15px] h-[15px] animate-spin" />}
-                    Tornar sócio
-                </button>
+                {/* Desligado, o botão não mostra o title: o motivo fica no invólucro (guia §9.2). */}
+                <span className="inline-flex" title={motivo}>
+                    <button type="button" onClick={() => void confirmar()} disabled={salvando || !!motivo}
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed">
+                        {salvando && <Loader2 className="w-[15px] h-[15px] animate-spin" />}
+                        Tornar sócio
+                    </button>
+                </span>
             </SheetFooter>
         </Sheet>
     );

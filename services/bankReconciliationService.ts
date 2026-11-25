@@ -1081,7 +1081,7 @@ export const bankReconciliationService = {
         // (campos opcionais tipados sem `null` para casar com scoreCandidate/resolveBankParty;
         //  em runtime o PostgREST devolve null e os `||` lá dentro já tratam)
         type BankRow = { id: string; transaction_date: string; amount: number; direction: string; description_raw: string; description_normalized?: string; counterparty_name?: string; bank_account_id?: string };
-        type PendingRow = { id: string; transaction_date: string; due_date?: string; amount: number; direction: string; description?: string; entity_name?: string; party_name?: string; party_id?: string; payment_account_id?: string; valor_esperado?: number | null; valor_variavel?: boolean | null };
+        type PendingRow = { id: string; transaction_date: string; due_date?: string; amount: number; direction: string; description?: string; entity_name?: string; party_name?: string; party_id?: string; payment_account_id?: string; valor_esperado?: number | null; valor_variavel?: boolean | null; contract_id?: string | null };
 
         const [{ data: bankTxs, error: bankErr }, partyIndex] = await Promise.all([
             fetchAllPages<BankRow>(() => supabase
@@ -1104,7 +1104,7 @@ export const bankReconciliationService = {
 
         const { data: pending, error: pendingErr } = await fetchAllPages<PendingRow>(() => supabase
             .from('internal_transactions')
-            .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id, ${regras.COLUNA_VALOR_ESPERADO}, ${regras.COLUNA_VALOR_VARIAVEL}`)
+            .select(`id, transaction_date, due_date, amount, direction, description, entity_name, party_name, party_id, payment_account_id, contract_id, ${regras.COLUNA_VALOR_ESPERADO}, ${regras.COLUNA_VALOR_VARIAVEL}`)
             .in('organization_id', orgsDosTitulos)
             .eq('status', 'PENDING')
             .or(regras.FILTRO_SEM_TRIBUTO_RETIDO)

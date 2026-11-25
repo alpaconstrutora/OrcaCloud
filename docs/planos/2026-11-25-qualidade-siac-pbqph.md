@@ -354,8 +354,8 @@ se já existir tabela de configuração por org que sirva.
 
 ## Estado
 
-- [ ] Desenho da Fase 1 aprovado pelo usuário
-- [ ] Plano de implementação da Fase 1 (itens por arquivo, critério de pronto)
+- [x] Desenho da Fase 1 aprovado pelo usuário ("ok", 25/11)
+- [x] Plano de implementação da Fase 1 — `docs/planos/2026-11-25-qualidade-siac-fase1-implementacao.md` (decisões da execução e verificação na tela registradas lá)
 - [ ] Fase 1 no ar
 - [ ] Desenho da Fase 2 … Fase 6 (um por vez)
 

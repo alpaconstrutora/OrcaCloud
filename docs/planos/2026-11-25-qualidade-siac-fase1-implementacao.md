@@ -255,4 +255,46 @@ permissão própria, padrão herdado de Obras).
 
 ## Estado
 
-- [ ] Task 1 · [ ] Task 2 · [ ] Task 3 · [ ] Task 4 · [ ] Task 5 · [ ] Task 6 · [ ] Task 7 · [ ] Task 8 · [ ] Task 9
+- [x] Task 1 — `d75f99802`, `52adaede5` (migration aplicada em produção em 25/11)
+- [x] Task 2 — `052606395`
+- [x] Task 3 — `631a829d7`
+- [x] Task 4 — `8e760f7cf`
+- [x] Task 5 — `f9565d624`, `f0fb39f66`
+- [x] Task 6 — `a8f3e96ca`, `5c421138f`
+- [x] Task 7 — `746eaba45`
+- [x] Task 8 — `3aabfa680`
+- [x] Revisão da branch inteira + onda de correção — `2406b1d99`
+- [ ] Task 9 — Steps 1 e 2 feitos (abaixo); Step 3 (limpeza) aguarda o usuário; Step 4 (PR/CI/merge) e Step 5 pendentes
+
+### Decisões tomadas durante a execução (25/11)
+
+- Painel mostra a **meta** ao lado de "começa na fase 2/3" (ex.: "meta 6 — começa na fase 2"): o critério 4 pedia 11/6/3 e a regra de cálculo pedia "nunca zero"; mostra o alvo sem inventar contagem.
+- Em "Todas", o painel lista só as organizações que já têm lista ou nível (o usuário tem 10+ orgs; uma linha vazia por org poluiria).
+- CPF de pessoa de empreiteira gravado como `000.000.000-00` e casado pelos dígitos com a ficha existente (o índice `idx_employees_cpf_unique` compara texto cru).
+- A organização de um item é imutável depois de criado.
+- Procedimento só conta se a aprovação no GED for posterior à versão ativa; documento arquivado no GED não conta.
+- Vigência do treinamento: dia posterior ao da versão ativa, ou mesmo dia com o registro feito depois dela.
+- Em "Todas", edita a Qualidade só quem pode editar em todas as suas organizações (Riscos/Treinamentos não mexidos).
+- "Novo" cria só nome/etapa/origem (replica em "Todas"); procedimento, curso e códigos se ligam ao editar.
+
+### Pendências conhecidas (não bloqueiam a fase 1)
+
+- AppRouter decide "Todas" pelo `activeOrganizationId` cru: com **empresa** no topo, quem é viewer em outra org vê a Qualidade só leitura (mais restritivo; não abre gravação). Corrigir derivando o membro de `useOrgContext().orgId`.
+- Funções antigas do Pós-Obra `quality_calculate_score`, `quality_emit_event`, `quality_lock_condition` executáveis por PUBLIC/anon (anteriores a esta frente).
+- Item não pode ser arquivado/apagado pela tela (só dispensado); nomes da lista de Treinados não recarregam para pessoa nova; status VENCIDO do treinamento não é considerado — perguntar na fase 2.
+
+### Verificação na tela — 25/11, app local da frente, login do usuário, org Alpa
+
+| Critério | Resultado |
+|---|---|
+| 1 | ✅ "Carregar a lista mínima" → 27 serviços, nº 1–27, etapas do Anexo 4; banco: 27 ativos, 27 chaves distintas. (Depois de carregado o botão some; "não duplica" é garantido pelo UNIQUE + `ignoreDuplicates`.) |
+| 2 | ✅ Dispensar sem justificativa → "Escreva por que o item foi dispensado." no campo; o banco também recusa (prova SQL da Task 1). |
+| 3 | ✅ Procedimento enviado pela tela ficou `rascunho` e não contou (0/10); 1ª aprovação da história do GED (`submitForApproval` → `approveDocument`, chamados no navegador com a sessão do usuário) → "procedimento aprovado 1/10". |
+| 3b | ✅ Treinamento de hoje (2 próprios + 1 empreiteira, que ganhou ficha sem e-mail) → "3 (2 próprios, 1 empreit.)"; revisão nova enviada → "Nenhum na revisão vigente · 3 treinado(s) em revisão anterior" e "nova revisão aguardando aprovação" (0/10); aprovar a revisão → 1/10. |
+| 4 | ✅ 27 serviços: B "0/11 · meta 6 · meta 3"; A "0/27 · meta 14 · meta 7"; 2 dispensados (N=25) em B "0/10 · meta 5 · meta 3". |
+| 5 | ✅ 24 materiais sem aviso; dispensando 5 → "abaixo do mínimo do Anexo 4: 19 de 20". |
+| 6 | ✅ "Por obra": 14 obras da Alpa, só OBRA (a "Igreja Divino Espirito Santo" aparece 1×; orçamento/diário/planejamento e "Gestão Comercial" fora); 44 itens ativos (25+19), sem dispensados; exceção com motivo gravada e desfeita (banco: 0 exceções). |
+| 7 | ✅ por SQL com sessão real (Task 1): outra org não lê nem grava. |
+| 8 | ✅ local: 12 arquivos/129 testes, tsc 0, check-* 0. CI do PR: pendente. |
+
+Não conferido na tela: "Buscar na Base" (códigos) e "Escolher do GED" — cobertos só por teste de componente.

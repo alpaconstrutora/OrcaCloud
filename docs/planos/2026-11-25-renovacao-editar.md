@@ -60,6 +60,21 @@ chegava depois de Editar preencher o formulário e trocava o fim pelo padrão de
    falha sem a correção (recebe 2022-09-22) e passa com ela ✅; em produção o fim aparece
    22/09/2021 e 30 parcelas.
 
+## Pedido de 25/11/2026, mesma sessão
+
+> verique por que o segundo reajuste não foi aplicado nas parcelas
+
+Achado: o reajuste de 05/11/2019 FOI aplicado — nas 6 parcelas que existiam depois do
+aniversário (nov/2019–abr/2020). Às 15:51 o Editar da renovação (#737, ainda com a
+prévia atrasada) foi salvo com fim 22/03/2020: o AD-002 (30 parcelas, até 22/09/2021)
+virou AD-003 (12 parcelas). O reajuste veio às 15:56, sobre o que restou.
+
+6. **Trava — reajuste depois do aditivo** (`undoAddendumRenewal`, vale para Excluir e
+   Editar): recusa, antes de qualquer escrita, se há reajuste não desfeito criado depois
+   do aditivo — desfazer apagaria as parcelas reajustadas e devolveria o valor de antes.
+   **Pronto quando:** teste em `renovacaoEditarSubstitui.test.ts` falha sem a trava e
+   passa com ela, sem nenhuma escrita na recusa ✅.
+
 ## Fora
 
 - Renovação por **novo contrato** não ganha edição (mesma lacuna de datas da #733,

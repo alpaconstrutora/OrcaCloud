@@ -12,7 +12,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import {
-    ASSUNTOS_COMUNS, ROTULO_OPCAO, ROTULO_QUORUM, ROTULO_RESULTADO, ROTULO_STATUS,
+    ASSUNTOS_COMUNS, ROTULO_OPCAO, ROTULO_QUORUM, REGRA_QUORUM, REGRA_IMPEDIMENTO, ROTULO_RESULTADO, ROTULO_STATUS,
     INSTRUCOES_VOTO, dataHoraBrasilia, percentualDoTotal, textoConvocacao, textoCancelamento,
     montarEdital, montarAta,
 } from '../utils/assembleiaTextos';
@@ -317,7 +317,7 @@ describe('montarAta', () => {
 
     it('por item: quórum exigido, % do total e nº de unidades por opção, deliberação', () => {
         const i1 = ata.itens[0];
-        expect(i1.quorumExigido).toContain(ROTULO_QUORUM.MAIORIA_PRESENTES);
+        expect(i1.quorumExigido).toEqual({ rotulo: ROTULO_QUORUM.MAIORIA_PRESENTES, regra: REGRA_QUORUM.MAIORIA_PRESENTES });
         expect(i1.opcoes).toEqual([
             { opcao: 'Sim', percentual: '50,00%', unidades: 4 },
             { opcao: 'Não', percentual: '12,50%', unidades: 1 },
@@ -331,7 +331,7 @@ describe('montarAta', () => {
     it('"Quórum não atingido" e o quórum exigido', () => {
         const i3 = ata.itens[2];
         expect(i3.resultado).toBe('Quórum não atingido');
-        expect(i3.quorumExigido).toContain(ROTULO_QUORUM.DOIS_TERCOS);
+        expect(i3.quorumExigido).toEqual({ rotulo: ROTULO_QUORUM.DOIS_TERCOS, regra: REGRA_QUORUM.DOIS_TERCOS });
         expect(i3.deliberacao).toBeNull();
     });
 
@@ -358,5 +358,32 @@ describe('montarAta', () => {
             { papel: 'Secretário', nome: 'Daniela Souza' },
         ]);
         expect(ata.observacaoGeral).toBe('Sem mais.');
+    });
+});
+
+// ─── lei × regra do sistema ──────────────────────────────────────────────────
+
+describe('CC art. 1.335, III só é citado para o direito do condômino quite', () => {
+    const edital = montarEdital(assembleia(), itens, condominio);
+    const ata = montarAta(retrato(), assembleia({ status: 'ENCERRADA' }), condominio);
+    // Frases (ponto seguido de espaço e maiúscula; "art. 1.335" não quebra).
+    const frases = [...textosDe(edital), ...textosDe(ata)]
+        .flatMap(t => t.split(/(?<=\.)\s+(?=[A-ZÁÉÍÓÚÂÊÔÃÕÇ])/));
+    const citam = frases.filter(f => f.includes('1.335'));
+
+    it('o edital e a ata citam o artigo', () => {
+        expect(edital.regras).toContain(REGRA_IMPEDIMENTO);
+        expect(citam.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('a frase que cita 1.335, III fala só do direito do quite — nada de presença, quórum ou impedimento', () => {
+        for (const f of citam) {
+            expect(f).toBe('O condômino quite com as contribuições tem direito a votar e participar (CC art. 1.335, III).');
+        }
+    });
+
+    it('a regra de não contar a impedida no quórum é dita como regra do sistema', () => {
+        expect(REGRA_IMPEDIMENTO).toContain('O sistema considera impedida');
+        expect(ata.quorumInstalacao.explicacao).toContain('O sistema considera impedida');
     });
 });

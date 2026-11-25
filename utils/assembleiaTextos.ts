@@ -118,9 +118,12 @@ export const INSTRUCOES_VOTO =
 const REGRA_INSTALACAO =
     'Em 1ª convocação, a assembleia se instala com condôminos que representem pelo menos metade das '
     + 'frações ideais; em 2ª convocação, com qualquer número (CC arts. 1.352 e 1.353).';
-const REGRA_IMPEDIMENTO =
-    'A unidade com cota condominial vencida e não paga no momento do voto não vota nem conta como presente '
-    + '(CC art. 1.335, III).';
+// Lei × regra do sistema: o CC 1.335 III só dá o direito de votar e participar ao
+// condômino QUITE; "impedida não conta no quórum" é regra do sistema (R3/R6), não da lei.
+const DIREITO_DO_QUITE = 'O condômino quite com as contribuições tem direito a votar e participar (CC art. 1.335, III).';
+export const REGRA_IMPEDIMENTO =
+    `${DIREITO_DO_QUITE} O sistema considera impedida a unidade com cota condominial vencida e não paga `
+    + 'e não a conta no quórum de instalação.';
 
 // ─── formatação ──────────────────────────────────────────────────────────────
 
@@ -289,7 +292,8 @@ export interface ItemAta {
     numero: number;
     titulo: string;
     tipo: string;
-    quorumExigido: string;
+    /** Separados para o PDF dispor rótulo e regra em lugares diferentes. */
+    quorumExigido: { rotulo: string; regra: string };
     opcoes: OpcaoApuradaAta[];
     semVoto: { percentual: string; unidades: number };
     /** Aprovação: rótulo do resultado. Escolha com vencedora: 'Vencedora: <opção>'. */
@@ -396,8 +400,9 @@ export function montarAta(retrato: Retrato, a: Assembleia, condominio: Condomini
         percentual: percentualDoTotal(qi?.presentesFracao ?? 0, qi?.total ?? total),
         unidades: qi?.presentesUnidades ?? 0,
         totalUnidades,
-        explicacao: 'Unidades presentes na sala, por procurador ou com voto pelo portal no instante da instalação, '
-            + 'sem as impedidas (CC art. 1.335, III).',
+        explicacao: 'Unidades presentes na sala, por procurador ou com voto pelo portal no instante da instalação. '
+            + `${DIREITO_DO_QUITE} O sistema considera impedida a unidade com cota condominial vencida e não paga `
+            + 'e não a conta neste quórum.',
     };
     const participaramDaVotacao: MedidaPresenca = {
         rotulo: 'Participaram da votação',
@@ -457,7 +462,7 @@ export function montarAta(retrato: Retrato, a: Assembleia, condominio: Condomini
             numero: i + 1,
             titulo: it.titulo,
             tipo: ROTULO_TIPO_ITEM[it.tipo],
-            quorumExigido: `${ROTULO_QUORUM[it.quorum]} — ${REGRA_QUORUM[it.quorum]}`,
+            quorumExigido: { rotulo: ROTULO_QUORUM[it.quorum], regra: REGRA_QUORUM[it.quorum] },
             opcoes,
             semVoto: {
                 percentual: percentualDoTotal(Math.max(total - somaFr, 0), total),

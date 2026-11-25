@@ -16,6 +16,7 @@
 import React from 'react';
 import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, MoveHorizontal, MapPin, Home, Mountain, LayoutGrid } from 'lucide-react';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
+import { pavimentosDaTorre, ORIGEM_DOS_PAVIMENTOS } from '../../utils/empreendimentoPavimentosDaTorre';
 import { usePersistedState } from '../ui/TableUtils';
 import { haPendenciaDeSaida, CONFIRMAR_SAIDA } from '../../lib/guardaDeSaida';
 import { empreendimentoService } from '../../services/empreendimentoService';
@@ -404,9 +405,13 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
             const towerPriv = towerUnits.reduce((s, u) => s + (u.private_area ?? 0), 0);
             const towerComum = towerUnits.reduce((s, u) => s + (u.common_area ?? 0), 0);
 
+            // Nº de pavimentos da torre vazio → o do cadastro de pavimentos (ou o das unidades), com a origem na dica.
+            const pav = pavimentosDaTorre(tower.floors_count, floorsByTower[tower.id], towerUnits);
             const subtitle = (
               <>
-                {tower.floors_count ? `${tower.floors_count} pav.` : 'sem pavimentos'}
+                {pav
+                  ? <span title={ORIGEM_DOS_PAVIMENTOS[pav.fonte]} data-testid="pavimentos-da-torre">{pav.n} pav.</span>
+                  : 'sem pavimentos'}
                 {tower.units_per_floor ? ` · ${tower.units_per_floor} un/pav` : ''}
                 {tower.pe_direito_padrao_m != null ? ` · pé-direito ${Number(tower.pe_direito_padrao_m).toFixed(2).replace('.', ',')} m` : ''}
                 {tower.elevacao_terreo_m != null ? ` · térreo em ${fmtElevacao(Number(tower.elevacao_terreo_m))} m` : ''}

@@ -96,13 +96,57 @@ export function metaDoNivel(n: number, tipo: TipoItemControlado, nivel: NivelSia
   };
 }
 
+const instante = (iso: string): number => Date.parse(iso);
+
+/** Aprovado no GED depois (ou no instante) em que a versão ativa entrou: a aprovação é desta revisão. */
+function aprovacaoCobreVersaoAtiva(p: ProcedimentoResumo): boolean {
+  if (p.versao_ativa_em === null || p.aprovado_em === null) return false;
+  return instante(p.aprovado_em) >= instante(p.versao_ativa_em);
+}
+
+/**
+ * Procedimento conta quando: tem versão ativa, não está arquivado no GED, está aprovado e a
+ * aprovação é posterior à versão ativa (no GED a aprovação é do documento — revisão nova enviada
+ * depois da aprovação ainda não foi aprovada).
+ */
 export function procedimentoConta(p: ProcedimentoResumo | null): boolean {
-  return p !== null && p.versao_ativa_em !== null && p.approval_status === 'aprovado';
+  return p !== null
+    && p.versao_ativa_em !== null
+    && p.status !== 'arquivado'
+    && p.approval_status === 'aprovado'
+    && aprovacaoCobreVersaoAtiva(p);
 }
 
 export function rotuloDoProcedimento(p: ProcedimentoResumo | null): string {
   if (p === null || p.versao_ativa_em === null) return 'sem procedimento';
-  return `${p.nome} rev.${p.revisao ?? '—'} ${p.approval_status}`;
+  const base = `${p.nome} rev.${p.revisao ?? '—'}`;
+  if (p.status === 'arquivado') return `${base} arquivado no GED`;
+  if (p.approval_status === 'aprovado' && !aprovacaoCobreVersaoAtiva(p)) return `${base} nova revisão aguardando aprovação`;
+  return `${base} ${p.approval_status}`;
+}
+
+/** Por que o procedimento vinculado não conta no nível (null quando conta). */
+export function motivoDoProcedimentoNaoContar(p: ProcedimentoResumo): string | null {
+  if (procedimentoConta(p)) return null;
+  if (p.status === 'arquivado') return 'Este procedimento está arquivado no GED e não conta.';
+  if (p.versao_ativa_em !== null && p.approval_status === 'aprovado') {
+    return 'A revisão nova deste procedimento ainda não foi aprovada no GED; até lá, ele não conta.';
+  }
+  return `Este procedimento só conta quando aprovado no GED${p.versao_ativa_em === null ? ' e com uma versão ativa' : ''}.`;
+}
+
+/**
+ * Treinamento da revisão vigente: realizado num dia posterior ao da versão ativa, ou no mesmo dia
+ * e registrado (`registrado_em`) depois da versão ativa. Mesmo dia sem horário de registro = revisão
+ * anterior (não dá para saber qual revisão foi treinada).
+ */
+export function treinamentoVigente(reg: RegistroTreinamento, versaoAtivaEm: string | null): boolean {
+  if (versaoAtivaEm === null) return false;
+  const dia = reg.data_realizacao.slice(0, 10);
+  const corte = versaoAtivaEm.slice(0, 10);
+  if (dia > corte) return true;
+  if (dia < corte) return false;
+  return reg.registrado_em !== null && instante(reg.registrado_em) >= instante(versaoAtivaEm);
 }
 
 export interface ContagemTreinados {
@@ -112,20 +156,20 @@ export interface ContagemTreinados {
 }
 
 /**
- * Pessoas distintas com treinamento aprovado. Vigente = realizado na data da versão ativa
- * ou depois. Quem tem registro vigente não entra em `revisaoAnterior`.
+ * Pessoas distintas com treinamento aprovado. Vigente = `treinamentoVigente` (dia posterior ao da
+ * versão ativa, ou mesmo dia registrado depois dela). Quem tem registro vigente não entra em
+ * `revisaoAnterior`.
  */
 export function contarTreinados(
   registros: RegistroTreinamento[],
   versaoAtivaEm: string | null,
 ): ContagemTreinados {
-  const corte = versaoAtivaEm === null ? null : versaoAtivaEm.slice(0, 10);
   const vigentes = new Map<string, boolean>(); // pessoa -> externo
   const anteriores = new Set<string>();
 
   for (const reg of registros) {
     if (!reg.aprovado) continue;
-    if (corte !== null && reg.data_realizacao.slice(0, 10) >= corte) {
+    if (treinamentoVigente(reg, versaoAtivaEm)) {
       vigentes.set(reg.employee_id, (vigentes.get(reg.employee_id) ?? false) || reg.externo);
     } else {
       anteriores.add(reg.employee_id);

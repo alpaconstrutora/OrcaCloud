@@ -144,7 +144,7 @@ describe('Qualidade (SiAC) — Sheet do item controlado', () => {
     it('(c) procedimento em rascunho: avisa que só conta quando aprovado no GED', async () => {
         montar({
             edicao: { modo: 'editar', item: item({ procedure_document_id: 'doc-1' }) },
-            procedimento: { id: 'doc-1', nome: 'PES-06', revisao: '2', approval_status: 'rascunho', versao_ativa_em: '2026-09-01T10:00:00Z' },
+            procedimento: { id: 'doc-1', nome: 'PES-06', revisao: '2', status: 'ativo', approval_status: 'rascunho', versao_ativa_em: '2026-09-01T10:00:00Z', aprovado_em: null },
         });
         expect(await screen.findByText('PES-06 rev.2 rascunho')).toBeTruthy();
         expect(screen.getByText(/só conta quando aprovado no GED/)).toBeTruthy();

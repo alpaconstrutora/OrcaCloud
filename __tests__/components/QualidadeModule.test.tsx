@@ -89,7 +89,7 @@ const servicos = (n: number, org = 'org-a'): ItemControlado[] =>
     }));
 
 const PROCEDIMENTOS = {
-    'doc-1': { id: 'doc-1', nome: 'PES-06', revisao: '2', approval_status: 'rascunho', versao_ativa_em: '2026-09-01T10:00:00Z' },
+    'doc-1': { id: 'doc-1', nome: 'PES-06', revisao: '2', status: 'ativo', approval_status: 'rascunho', versao_ativa_em: '2026-09-01T10:00:00Z', aprovado_em: null },
 };
 
 const materiais = (n: number): ItemControlado[] =>
@@ -99,10 +99,10 @@ const materiais = (n: number): ItemControlado[] =>
 
 const TREINOS: Record<string, RegistroTreinamento[]> = {
     'curso-1': [
-        { employee_id: 'e1', data_realizacao: '2026-10-01', aprovado: true, externo: false },
-        { employee_id: 'e2', data_realizacao: '2026-10-01', aprovado: true, externo: true },
+        { employee_id: 'e1', data_realizacao: '2026-10-01', aprovado: true, externo: false, registrado_em: null },
+        { employee_id: 'e2', data_realizacao: '2026-10-01', aprovado: true, externo: true, registrado_em: null },
     ],
-    'curso-2': [{ employee_id: 'e3', data_realizacao: '2026-10-01', aprovado: true, externo: false }],
+    'curso-2': [{ employee_id: 'e3', data_realizacao: '2026-10-01', aprovado: true, externo: false, registrado_em: null }],
 };
 
 const montar = (podeEditar = true) => render(<ConfirmProvider><QualidadeModule podeEditar={podeEditar} /></ConfirmProvider>);

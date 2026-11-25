@@ -1,9 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const chamadas: { metodo: string; args: unknown[] }[] = [];
-let resposta: { data: unknown; error: { message: string } | null } = { data: null, error: null };
+type Resposta = { data: unknown; error: { message: string } | null };
+let resposta: Resposta = { data: null, error: null };
+/** Resposta própria de uma tabela (consultas a mais de uma tabela na mesma chamada). */
+let respostaPorTabela: Record<string, Resposta> = {};
 
-function cadeia() {
+function cadeia(tabela?: string) {
+  const r = () => (tabela !== undefined && respostaPorTabela[tabela]) || resposta;
   const c: Record<string, unknown> = {};
   for (const m of ['select', 'eq', 'in', 'order', 'upsert', 'insert', 'update', 'delete']) {
     c[m] = (...args: unknown[]) => {
@@ -11,9 +15,9 @@ function cadeia() {
       return c;
     };
   }
-  c.single = () => Promise.resolve(resposta);
-  c.maybeSingle = () => Promise.resolve(resposta);
-  c.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve(resposta).then(ok, ko);
+  c.single = () => Promise.resolve(r());
+  c.maybeSingle = () => Promise.resolve(r());
+  c.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve(r()).then(ok, ko);
   return c;
 }
 
@@ -21,7 +25,7 @@ vi.mock('../lib/supabase', () => ({
   supabase: {
     from: (tabela: string) => {
       chamadas.push({ metodo: 'from', args: [tabela] });
-      return cadeia();
+      return cadeia(tabela);
     },
     rpc: (nome: string, params: unknown) => {
       chamadas.push({ metodo: 'rpc', args: [nome, params] });
@@ -37,6 +41,7 @@ const achar = (metodo: string) => chamadas.filter((c) => c.metodo === metodo);
 beforeEach(() => {
   chamadas.length = 0;
   resposta = { data: null, error: null };
+  respostaPorTabela = {};
 });
 
 describe('qualidadeSiacService', () => {
@@ -92,25 +97,59 @@ describe('qualidadeSiacService', () => {
   });
 
   it('resumirProcedimentos monta o resumo com a data da versão ativa (objeto ou array; nula se faltar)', async () => {
-    resposta = {
+    respostaPorTabela.opura_documents = {
       data: [
-        { id: 'd1', nome: 'P1', revisao: '2', approval_status: 'APPROVED', active_version: { created_at: '2026-01-01' } },
-        { id: 'd2', nome: 'P2', revisao: null, approval_status: 'DRAFT', active_version: [{ created_at: '2026-02-02' }] },
-        { id: 'd3', nome: 'P3', revisao: null, approval_status: 'DRAFT', active_version: null },
+        { id: 'd1', nome: 'P1', revisao: '2', status: 'ativo', approval_status: 'aprovado', active_version: { created_at: '2026-01-01' } },
+        { id: 'd2', nome: 'P2', revisao: null, status: 'ativo', approval_status: 'rascunho', active_version: [{ created_at: '2026-02-02' }] },
+        { id: 'd3', nome: 'P3', revisao: null, status: 'arquivado', approval_status: 'rascunho', active_version: null },
       ],
       error: null,
     };
+    respostaPorTabela.opura_document_approvals = { data: [], error: null };
     const r = await qualidadeSiacService.resumirProcedimentos(['d1', 'd2', 'd3']);
     expect(achar('in')[0].args).toEqual(['id', ['d1', 'd2', 'd3']]);
     expect(r.d1.versao_ativa_em).toBe('2026-01-01');
     expect(r.d2.versao_ativa_em).toBe('2026-02-02');
     expect(r.d3.versao_ativa_em).toBeNull();
+    expect(r.d1.approval_status).toBe('aprovado');
+    expect(r.d3.status).toBe('arquivado');
+  });
+
+  it('resumirProcedimentos traz a data da aprovação mais recente de cada documento (updated_at da linha aprovada)', async () => {
+    respostaPorTabela.opura_documents = {
+      data: [
+        { id: 'd1', nome: 'P1', revisao: '2', status: 'ativo', approval_status: 'aprovado', active_version: { created_at: '2026-03-01T10:00:00Z' } },
+        { id: 'd2', nome: 'P2', revisao: '1', status: 'ativo', approval_status: 'aprovado', active_version: { created_at: '2026-03-01T10:00:00Z' } },
+      ],
+      error: null,
+    };
+    respostaPorTabela.opura_document_approvals = {
+      data: [
+        { document_id: 'd1', updated_at: '2026-02-01T10:00:00Z' },
+        { document_id: 'd1', updated_at: '2026-03-02T10:00:00Z' },
+        { document_id: 'd1', updated_at: '2026-01-01T10:00:00Z' },
+      ],
+      error: null,
+    };
+    const r = await qualidadeSiacService.resumirProcedimentos(['d1', 'd2']);
+    const froms = achar('from').map((c) => c.args[0]);
+    expect(froms).toEqual(['opura_documents', 'opura_document_approvals']);
+    expect(achar('eq').map((c) => c.args)).toContainEqual(['status', 'aprovado']);
+    expect(achar('in').map((c) => c.args)).toContainEqual(['document_id', ['d1', 'd2']]);
+    expect(r.d1.aprovado_em).toBe('2026-03-02T10:00:00Z');
+    expect(r.d2.aprovado_em).toBeNull();
+  });
+
+  it('resumirProcedimentos: erro ao ler as aprovações sobe como Error', async () => {
+    respostaPorTabela.opura_documents = { data: [], error: null };
+    respostaPorTabela.opura_document_approvals = { data: null, error: { message: 'sem acesso às aprovações' } };
+    await expect(qualidadeSiacService.resumirProcedimentos(['d1'])).rejects.toThrow('sem acesso às aprovações');
   });
 
   it('listarTreinamentos agrupa por curso e marca externo', async () => {
     resposta = {
       data: [
-        { course_id: 'c1', employee_id: 'e1', data_realizacao: '2026-03-01', aprovado: true, employees: { contract_type: 'CLT', academy_externo: false } },
+        { course_id: 'c1', employee_id: 'e1', data_realizacao: '2026-03-01', aprovado: true, created_at: '2026-03-01T14:00:00Z', employees: { contract_type: 'CLT', academy_externo: false } },
         { course_id: 'c1', employee_id: 'e2', data_realizacao: '2026-03-02', aprovado: true, employees: [{ contract_type: 'EMPREITEIRO', academy_externo: false }] },
         { course_id: 'c2', employee_id: 'e3', data_realizacao: '2026-03-03', aprovado: false, employees: { contract_type: 'CLT', academy_externo: true } },
         { course_id: 'c2', employee_id: 'e4', data_realizacao: '2026-03-04', aprovado: true, employees: null },
@@ -121,6 +160,9 @@ describe('qualidadeSiacService', () => {
     expect(r.c1.map((x) => x.externo)).toEqual([false, true]);
     expect(r.c2.map((x) => x.externo)).toEqual([true, false]);
     expect(r.c2[0].aprovado).toBe(false);
+    expect(achar('select')[0].args[0]).toContain('created_at');
+    expect(r.c1[0].registrado_em).toBe('2026-03-01T14:00:00Z');
+    expect(r.c1[1].registrado_em).toBeNull();
   });
 
   it('definirCodigos grava só os novos, sem vazios nem repetidos, e apaga os ausentes', async () => {

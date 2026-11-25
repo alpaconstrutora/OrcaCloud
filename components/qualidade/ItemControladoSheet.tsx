@@ -20,7 +20,9 @@ import { SecaoTitulo } from '../ui/SecaoTitulo';
 import SaveStatus from '../ui/SaveStatus';
 import { DocumentPicker } from '../ui/DocumentPicker';
 import DatabasePickerModal from '../DatabasePickerModal';
-import { empreiteiraDaFicha, procedimentoConta, rotuloDoProcedimento } from '../../utils/qualidadeSiac';
+import {
+    empreiteiraDaFicha, motivoDoProcedimentoNaoContar, rotuloDoProcedimento, treinamentoVigente,
+} from '../../utils/qualidadeSiac';
 import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac';
 import { ROTULO_ORIGEM } from './ListaControlada';
 
@@ -506,10 +508,8 @@ const SecaoProcedimento: React.FC<{
             ) : (
                 <p className="text-sm text-gray-700">Sem procedimento vinculado.</p>
             )}
-            {vinculado && resumo && !procedimentoConta(resumo) && (
-                <p className="text-sm text-amber-700">
-                    Este procedimento só conta quando aprovado no GED{resumo.versao_ativa_em === null ? ' e com uma versão ativa' : ''}.
-                </p>
+            {vinculado && resumo && motivoDoProcedimentoNaoContar(resumo) !== null && (
+                <p className="text-sm text-amber-700">{motivoDoProcedimentoNaoContar(resumo)}</p>
             )}
             {escolhendo && (
                 // Durante uma gravação a lista fica desligada (e o `escolher` confere de novo): dois cliques
@@ -594,7 +594,6 @@ const SecaoTreinamento: React.FC<{
             : `Não foi possível criar o curso: ${m}`));
     };
 
-    const corte = versaoAtivaEm === null ? null : versaoAtivaEm.slice(0, 10);
     const linhas = [...treinamentos].sort((a, b) => b.data_realizacao.localeCompare(a.data_realizacao));
 
     return (
@@ -634,10 +633,9 @@ const SecaoTreinamento: React.FC<{
                         {linhas.map((r, i) => {
                             const p = pessoas[r.employee_id];
                             const emp = empreiteiraDaFicha(p);
-                            const vigente = corte !== null && r.data_realizacao.slice(0, 10) >= corte;
                             const situacao = !r.aprovado ? { t: 'não aprovado', c: 'text-red-700' }
-                                : corte === null ? { t: 'sem versão ativa do procedimento', c: 'text-gray-700' }
-                                : vigente ? { t: 'revisão vigente', c: 'text-emerald-700' }
+                                : versaoAtivaEm === null ? { t: 'sem versão ativa do procedimento', c: 'text-gray-700' }
+                                : treinamentoVigente(r, versaoAtivaEm) ? { t: 'revisão vigente', c: 'text-emerald-700' }
                                 : { t: 'revisão anterior', c: 'text-amber-700' };
                             return (
                                 <li key={`${r.employee_id}-${r.data_realizacao}-${i}`} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2 text-sm">

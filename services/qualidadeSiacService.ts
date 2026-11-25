@@ -180,31 +180,55 @@ export const qualidadeSiacService = {
     );
   },
 
+  /**
+   * Resumo dos procedimentos vinculados, com a data da última aprovação no GED. A aprovação é do
+   * documento (`approval_status`), não da versão: `documentService.uploadNewVersion` troca
+   * `active_version_id` sem mexer nela. `approveDocument` grava `updated_at` na linha de
+   * `opura_document_approvals` ao aprovar — é essa a data que vale (`aprovado_em`).
+   */
   async resumirProcedimentos(documentIds: string[]): Promise<Record<string, ProcedimentoResumo>> {
     if (documentIds.length === 0) return {};
-    const data = ok(
-      await supabase
+    const [docs, aprovacoes] = await Promise.all([
+      supabase
         .from('opura_documents')
-        .select('id, nome, revisao, approval_status, active_version:opura_document_versions!fk_active_version(created_at)')
-        .in('id', documentIds) as unknown as {
+        .select('id, nome, revisao, status, approval_status, active_version:opura_document_versions!fk_active_version(created_at)')
+        .in('id', documentIds) as unknown as Promise<{
         data: Array<{
           id: string;
           nome: string;
           revisao: string | null;
+          status: string;
           approval_status: string;
           active_version: { created_at: string | null } | Array<{ created_at: string | null }> | null;
         }> | null;
         error: ErroSupabase;
-      },
-    );
+      }>,
+      supabase
+        .from('opura_document_approvals')
+        .select('document_id, updated_at')
+        .eq('status', 'aprovado')
+        .in('document_id', documentIds) as unknown as Promise<{
+        data: Array<{ document_id: string; updated_at: string | null }> | null;
+        error: ErroSupabase;
+      }>,
+    ]);
+    const data = ok(docs);
+    const ultimaAprovacao: Record<string, string> = {};
+    for (const a of ok(aprovacoes) ?? []) {
+      if (!a.updated_at) continue;
+      const atual = ultimaAprovacao[a.document_id];
+      if (atual === undefined || Date.parse(a.updated_at) > Date.parse(atual)) ultimaAprovacao[a.document_id] = a.updated_at;
+    }
     const mapa: Record<string, ProcedimentoResumo> = {};
     for (const d of data ?? []) {
       mapa[d.id] = {
         id: d.id,
         nome: d.nome,
         revisao: d.revisao ?? null,
+        status: d.status,
         approval_status: d.approval_status,
         versao_ativa_em: umOuNulo(d.active_version)?.created_at ?? null,
+        aprovado_em: ultimaAprovacao[d.id] ?? null,
       };
     }
     return mapa;
@@ -216,13 +240,14 @@ export const qualidadeSiacService = {
     const data = ok(
       await supabase
         .from('employee_trainings')
-        .select('course_id, employee_id, data_realizacao, aprovado, employees(contract_type, academy_externo)')
+        .select('course_id, employee_id, data_realizacao, aprovado, created_at, employees(contract_type, academy_externo)')
         .in('course_id', courseIds) as unknown as {
         data: Array<{
           course_id: string;
           employee_id: string;
           data_realizacao: string;
           aprovado: boolean;
+          created_at?: string | null;
           employees: Emp | Emp[] | null;
         }> | null;
         error: ErroSupabase;
@@ -237,6 +262,7 @@ export const qualidadeSiacService = {
         data_realizacao: t.data_realizacao,
         aprovado: t.aprovado,
         externo,
+        registrado_em: t.created_at ?? null,
       });
     }
     return porCurso;

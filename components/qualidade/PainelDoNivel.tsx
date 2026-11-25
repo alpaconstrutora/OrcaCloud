@@ -8,7 +8,8 @@ import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac'
  * de tabela). Regras de docs/planos/2026-11-25-qualidade-siac-pbqph.md, "Regras de cálculo da tela":
  *
  *  - N = itens ATIVOS do tipo (dispensado sai de N);
- *  - "procedimento aprovado" conta só documento com versão ativa e aprovado (`procedimentoConta`);
+ *  - "procedimento aprovado" conta só documento com versão ativa, não arquivado e aprovado depois da
+ *    versão ativa (`procedimentoConta`);
  *  - "aplicados com registro" e "em obra em andamento" ainda não existem: aparecem com a META do nível e a
  *    fase em que começam (2 para serviços, 3 para materiais) — nunca com uma contagem zero, que seria o
  *    contador que mente;

@@ -361,7 +361,7 @@ const MODULES_BY_PRODUCT: Record<ProductContext, { key: string; label: string; d
         // Sem valor gravado na matriz, segue o que o cargo tem em "Engenharia / Obras".
         { key: 'riscos',     label: 'Riscos',                           description: 'Registro, avaliação e tratamento de riscos do empreendimento, da obra e do contrato' },
         // Qualidade (SiAC) (25/11/2026): sem valor gravado, segue o cargo em "Engenharia / Obras".
-        { key: 'qualidade_siac', label: 'Qualidade (SiAC)',            description: 'Sistema de gestão da qualidade da obra (PBQP-H/SiAC): treinamentos, não conformidades e registros' },
+        { key: 'qualidade_siac', label: 'Qualidade (SiAC)',            description: 'Sistema de gestão da qualidade da obra (PBQP-H/SiAC): lista de serviços e materiais controlados, procedimentos, treinamentos e o painel do nível' },
         { key: 'pro',       label: 'ÒPURA Pro (Add-on)',               description: 'Modelos rápidos de orçamento para prestadores' },
         { key: 'offices',    label: 'ÒPURA Offices (Add-on)',           description: 'Projetos e especificações de arquitetura/design' },
         { key: 'ecommerce',  label: 'ÒPURA E-commerce (Add-on)',        description: 'Governança operacional e conformidade TTS' },

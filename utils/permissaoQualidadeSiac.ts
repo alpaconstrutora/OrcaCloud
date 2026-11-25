@@ -1,6 +1,6 @@
 /**
- * Quem vê e quem edita o módulo Qualidade (SiAC) — fase 1 do plano
- * docs/planos/2026-11-25-qualidade-siac.md.
+ * Quem vê e quem edita o módulo Qualidade (SiAC) — fase 1 do desenho
+ * docs/planos/2026-11-25-qualidade-siac-pbqph.md.
  *
  * Chaves próprias (`canViewQualitySystem`/`canEditQualitySystem` e o módulo
  * `qualidade_siac` na matriz por cargo). Sem valor gravado, **herda de Obras**:
@@ -36,7 +36,7 @@ export const MOTIVO_SEM_EDICAO_QUALIDADE =
 
 export function podeEditarQualidadeSiac(args: {
     permissoes: Permissoes;
-    /** admin da organização, desenvolvedor, ou "Todas" sem membro resolvido — editam sempre */
+    /** admin da organização, desenvolvedor, ou organização ativa com membro ainda carregando — editam sempre */
     administrador: boolean;
     /** papel do membro na organização ativa (`viewer` = visitante) */
     papel?: string | null;
@@ -48,4 +48,27 @@ export function podeEditarQualidadeSiac(args: {
     const deObras = args.permissoes?.canEditBudget;
     if (definido(deObras)) return deObras;
     return args.papel !== 'viewer';
+}
+
+/** O vínculo do usuário com uma organização — o `VinculoDoUsuario` de `utils/modulosPermitidos`. */
+interface VinculoParaEditar {
+    member: { permissions?: unknown; role?: string | null };
+}
+
+/**
+ * Topo em "Todas as organizações": não há membro ativo, e a tela mostra (e deixa gravar) itens de
+ * todas as organizações do usuário. Edita só se pode editar em CADA uma delas — basta uma sem a
+ * permissão para a tela abrir só para leitura (antes, "Todas" contava como administrador).
+ * Desenvolvedor (grupo DESENVOLVEDOR ou e-mail de acesso total) edita sempre. Sem vínculo conhecido
+ * (lista de organizações ainda carregando) não bloqueia — o mesmo do guard de rota do AppRouter;
+ * quem barra a gravação, no fim, é a RLS.
+ */
+export function podeEditarQualidadeSiacEmTodas(vinculos: ReadonlyArray<VinculoParaEditar>, dev: boolean): boolean {
+    if (dev) return true;
+    if (vinculos.length === 0) return true;
+    return vinculos.every(v => podeEditarQualidadeSiac({
+        permissoes: v.member.permissions as Permissoes,
+        administrador: v.member.role === 'admin',
+        papel: v.member.role ?? null,
+    }));
 }

@@ -8,6 +8,8 @@ import {
   rotuloDoProcedimento,
   contarTreinados,
   rotuloDosTreinados,
+  treinamentoVigente,
+  motivoDoProcedimentoNaoContar,
 } from '../utils/qualidadeSiac';
 import type { ProcedimentoResumo, RegistroTreinamento } from '../types/qualidadeSiac';
 
@@ -43,13 +45,37 @@ describe('metaDoNivel', () => {
 
 describe('procedimento', () => {
   const base: ProcedimentoResumo = {
-    id: 'p1', nome: 'PE-01', revisao: '2', approval_status: 'aprovado', versao_ativa_em: '2026-11-20T10:00:00Z',
+    id: 'p1', nome: 'PE-01', revisao: '2', status: 'ativo', approval_status: 'aprovado',
+    versao_ativa_em: '2026-11-20T10:00:00Z', aprovado_em: '2026-11-21T09:00:00Z',
   };
   it('só conta aprovado com versão ativa', () => {
     expect(procedimentoConta(null)).toBe(false);
     expect(procedimentoConta({ ...base, approval_status: 'rascunho' })).toBe(false);
     expect(procedimentoConta({ ...base, versao_ativa_em: null })).toBe(false);
     expect(procedimentoConta(base)).toBe(true);
+  });
+  it('aprovação anterior à versão ativa não conta (revisão nova aguardando aprovação)', () => {
+    // No GED a aprovação é do documento; subir versão nova troca active_version_id sem mexer em approval_status.
+    expect(procedimentoConta({ ...base, aprovado_em: '2026-11-19T23:00:00Z' })).toBe(false);
+    expect(procedimentoConta({ ...base, aprovado_em: null })).toBe(false);
+    expect(procedimentoConta({ ...base, aprovado_em: '2026-11-20T10:00:00Z' })).toBe(true);
+    expect(rotuloDoProcedimento({ ...base, aprovado_em: '2026-11-19T23:00:00Z' }))
+      .toBe('PE-01 rev.2 nova revisão aguardando aprovação');
+    expect(motivoDoProcedimentoNaoContar({ ...base, aprovado_em: '2026-11-19T23:00:00Z' }))
+      .toBe('A revisão nova deste procedimento ainda não foi aprovada no GED; até lá, ele não conta.');
+  });
+  it('documento arquivado no GED não conta e o rótulo diz que está arquivado', () => {
+    const arquivado = { ...base, status: 'arquivado' };
+    expect(procedimentoConta(arquivado)).toBe(false);
+    expect(rotuloDoProcedimento(arquivado)).toBe('PE-01 rev.2 arquivado no GED');
+    expect(motivoDoProcedimentoNaoContar(arquivado)).toBe('Este procedimento está arquivado no GED e não conta.');
+  });
+  it('motivo de não contar: rascunho e sem versão ativa; nenhum quando conta', () => {
+    expect(motivoDoProcedimentoNaoContar(base)).toBeNull();
+    expect(motivoDoProcedimentoNaoContar({ ...base, approval_status: 'rascunho' }))
+      .toBe('Este procedimento só conta quando aprovado no GED.');
+    expect(motivoDoProcedimentoNaoContar({ ...base, approval_status: 'rascunho', versao_ativa_em: null }))
+      .toBe('Este procedimento só conta quando aprovado no GED e com uma versão ativa.');
   });
   it('rotula', () => {
     expect(rotuloDoProcedimento(null)).toBe('sem procedimento');
@@ -60,20 +86,44 @@ describe('procedimento', () => {
 });
 
 describe('contarTreinados', () => {
-  const r = (employee_id: string, data_realizacao: string, aprovado = true, externo = false): RegistroTreinamento =>
-    ({ employee_id, data_realizacao, aprovado, externo });
+  const r = (
+    employee_id: string, data_realizacao: string, aprovado = true, externo = false, registrado_em: string | null = null,
+  ): RegistroTreinamento => ({ employee_id, data_realizacao, aprovado, externo, registrado_em });
 
   it('separa vigentes, empreiteira e revisão anterior', () => {
     const registros = [
       r('A', '2026-11-21'),
       r('A', '2026-11-22'),
-      r('B', '2026-11-20', true, true),
+      r('B', '2026-11-20', true, true, '2026-11-20T12:00:00Z'), // mesmo dia da versão, registrado depois dela
       r('C', '2026-10-01'),
       r('D', '2026-10-01'),
       r('D', '2026-11-25'),
       r('E', '2026-11-25', false),
     ];
     expect(contarTreinados(registros, '2026-11-20T10:00:00Z')).toEqual({ proprios: 2, empreiteira: 1, revisaoAnterior: 1 });
+  });
+
+  it('vigência no mesmo dia da revisão nova decide pelo horário do registro', () => {
+    const versao = '2026-11-20T10:00:00Z';
+    // dia seguinte: vigente
+    expect(treinamentoVigente(r('A', '2026-11-21'), versao)).toBe(true);
+    // mesmo dia, registrado depois da versão: vigente
+    expect(treinamentoVigente(r('A', '2026-11-20', true, false, '2026-11-20T15:00:00Z'), versao)).toBe(true);
+    expect(treinamentoVigente(r('A', '2026-11-20', true, false, '2026-11-20T10:00:00Z'), versao)).toBe(true);
+    // mesmo dia, registrado antes da versão: revisão anterior
+    expect(treinamentoVigente(r('A', '2026-11-20', true, false, '2026-11-20T08:00:00Z'), versao)).toBe(false);
+    // mesmo dia sem horário de registro: revisão anterior
+    expect(treinamentoVigente(r('A', '2026-11-20'), versao)).toBe(false);
+    // dia anterior: revisão anterior (mesmo registrado depois)
+    expect(treinamentoVigente(r('A', '2026-11-19', true, false, '2026-11-20T15:00:00Z'), versao)).toBe(false);
+    // sem versão ativa: nunca vigente
+    expect(treinamentoVigente(r('A', '2026-11-21'), null)).toBe(false);
+
+    expect(contarTreinados([
+      r('A', '2026-11-20', true, false, '2026-11-20T15:00:00Z'),
+      r('B', '2026-11-20', true, false, '2026-11-20T08:00:00Z'),
+      r('C', '2026-11-20', true, true),
+    ], versao)).toEqual({ proprios: 1, empreiteira: 0, revisaoAnterior: 2 });
   });
 
   it('sem versão ativa, todos caem em revisão anterior', () => {

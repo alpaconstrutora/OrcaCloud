@@ -16,6 +16,8 @@
  *  (g) o item some da lista depois de gravar um código → o próximo código soma ao gravado, não ao
  *      item de quando o Sheet abriu;
  *  (i) a aba "Por obra" mostra a visão por obra com os itens ativos da lista carregada;
+ *  (j) arquivar pelo Sheet tira o item da lista e do N; "Mostrar arquivados (N)" o mostra; reativar volta
+ *      (pendência da fase 1 corrigida em 25/11); arquivado nunca aparece em "Por obra";
  *  (h) "Registrar treinamento em obra" do Sheet do item abre o registro; gravar avisa quantos
  *      registros entraram e recarrega (os Treinados do item vêm da recarga).
  */
@@ -23,7 +25,7 @@ import React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import type { ItemControlado, RegistroTreinamento } from '../../types/qualidadeSiac';
+import type { ItemControlado, RegistroTreinamento, SituacaoItem } from '../../types/qualidadeSiac';
 import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac';
 
 const listarItens = vi.fn();
@@ -330,6 +332,78 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         // continua aberto (§25) e o título já é o do item recarregado
         expect(await screen.findByRole('heading', { name: 'Serviço renomeado' })).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Salvar alterações' })).toBeTruthy();
+    });
+
+    it('(j) arquivar: some da lista e do N; "Mostrar arquivados (1)" mostra; reativar volta', async () => {
+        const user = userEvent.setup();
+        const situacao: Record<string, SituacaoItem> = {};
+        listarItens.mockImplementation(async () => servicos(3).map(i => ({ ...i, situacao: situacao[i.id] ?? 'ATIVO' })));
+        atualizarItem.mockImplementation(async (id: string, patch: { situacao?: SituacaoItem }) => {
+            if (patch.situacao) situacao[id] = patch.situacao;
+        });
+        montar();
+        const tabela = await screen.findByRole('table');
+        const painel = await screen.findByRole('region', { name: /Quanto falta para o nível/ });
+        await waitFor(() => expect(painel.textContent).toContain('Serviços (3)'));
+        // sem arquivado, não há o botão
+        expect(screen.queryByRole('button', { name: /Mostrar arquivados/ })).toBeNull();
+
+        // arquivar um item ATIVO pelo Sheet
+        await user.click(await within(tabela).findByText('Serviço 2'));
+        const select = await screen.findByLabelText('Situação') as HTMLSelectElement;
+        expect([...select.options].map(o => o.textContent)).toEqual(['Ativo', 'Dispensado', 'Arquivado']);
+        await user.selectOptions(select, 'ARQUIVADO');
+        await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+        await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('org-a-s2', expect.objectContaining({ situacao: 'ARQUIVADO', justificativa: null })));
+        await waitFor(() => expect(listarItens).toHaveBeenCalledTimes(2));
+        await user.click(screen.getByRole('button', { name: 'Voltar' }));
+
+        // some da lista e do N do painel
+        await waitFor(() => expect(within(screen.getByRole('table')).queryByText('Serviço 2')).toBeNull());
+        expect(screen.getByRole('region', { name: /Quanto falta para o nível/ }).textContent).toContain('Serviços (2)');
+
+        // o botão aparece com a contagem e mostra o arquivado
+        const mostrar = screen.getByRole('button', { name: 'Mostrar arquivados (1)' });
+        expect(mostrar.getAttribute('aria-pressed')).toBe('false');
+        await user.click(mostrar);
+        expect(screen.getByRole('button', { name: 'Mostrar arquivados (1)' }).getAttribute('aria-pressed')).toBe('true');
+        const linhaArquivada = await within(screen.getByRole('table')).findByText('Serviço 2');
+        expect(within(linhaArquivada.closest('tr') as HTMLElement).getByText(/^Arquivado/)).toBeTruthy();
+        // mostrar não muda o N: arquivado nunca conta
+        expect(screen.getByRole('region', { name: /Quanto falta para o nível/ }).textContent).toContain('Serviços (2)');
+
+        // reabrir e reativar
+        await user.click(linhaArquivada);
+        await user.selectOptions(await screen.findByLabelText('Situação'), 'ATIVO');
+        await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+        await waitFor(() => expect(atualizarItem).toHaveBeenLastCalledWith('org-a-s2', expect.objectContaining({ situacao: 'ATIVO' })));
+        await waitFor(() => expect(listarItens).toHaveBeenCalledTimes(3));
+        await user.click(screen.getByRole('button', { name: 'Voltar' }));
+        await waitFor(() => expect(screen.queryByRole('button', { name: /Mostrar arquivados/ })).toBeNull());
+        expect(within(screen.getByRole('table')).getByText('Serviço 2')).toBeTruthy();
+        expect(screen.getByRole('region', { name: /Quanto falta para o nível/ }).textContent).toContain('Serviços (3)');
+    });
+
+    it('(j2) todos os itens arquivados: o vazio manda mostrar os arquivados, não oferece a carga', async () => {
+        listarItens.mockResolvedValue(servicos(2).map(i => ({ ...i, situacao: 'ARQUIVADO' as const })));
+        montar();
+        expect(await screen.findByText('Todos os serviços estão arquivados')).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Mostrar arquivados (2)' })).toBeTruthy();
+    });
+
+    it('(j3) arquivado não aparece em "Por obra"', async () => {
+        const user = userEvent.setup();
+        listarItens.mockResolvedValue([
+            item({ id: 'a1', nome: 'Serviço ativo', anexo4_numero: 1, ordem: 1 }),
+            item({ id: 'a2', nome: 'Serviço arquivado', anexo4_numero: 2, ordem: 2, situacao: 'ARQUIVADO' }),
+        ]);
+        montar();
+        await screen.findByRole('table');
+        await user.click(screen.getByRole('tab', { name: 'Por obra' }));
+        await waitFor(() => expect(listarExclusoes).toHaveBeenCalledWith('p1'));
+        expect(await screen.findByText('Serviço ativo')).toBeTruthy();
+        expect(screen.queryByText('Serviço arquivado')).toBeNull();
     });
 
     it('(g) item some da lista depois de gravar C1: incluir C2 grava [C1, C2]', async () => {

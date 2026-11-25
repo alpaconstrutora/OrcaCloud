@@ -299,7 +299,9 @@ const SheetDoItem: React.FC<PropsInternas> = ({
             .sort((a, b) => (a.anexo4_numero ?? a.ordem) - (b.anexo4_numero ?? b.ordem))
         : [];
     const origens: OrigemItem[] = ORIGENS_NOVAS.includes(form.origem) ? ORIGENS_NOVAS : [form.origem, ...ORIGENS_NOVAS];
-    const situacoes: SituacaoItem[] = form.situacao === 'ARQUIVADO' ? ['ATIVO', 'DISPENSADO', 'ARQUIVADO'] : ['ATIVO', 'DISPENSADO'];
+    // Item gravado sempre pode ser arquivado (o "apagar" da tela: sai da lista e do painel, nada se perde) e,
+    // arquivado, volta a Ativo pelo mesmo select. Item novo não mostra a situação (nasce Ativo).
+    const situacoes: SituacaoItem[] = ['ATIVO', 'DISPENSADO', 'ARQUIVADO'];
 
     const ondeCria = edicao.modo === 'novo'
         ? edicao.alvo.kind === 'all'
@@ -378,6 +380,12 @@ const SheetDoItem: React.FC<PropsInternas> = ({
                                         {situacoes.map(s => <option key={s} value={s}>{ROTULO_SITUACAO[s]}</option>)}
                                     </select>
                                 </div>
+                                {form.situacao === 'ARQUIVADO' && (
+                                    <p className="text-xs text-gray-600">
+                                        Arquivado sai da lista controlada, do painel do nível e da visão por obra. Para reativar, use
+                                        "Mostrar arquivados" acima da tabela, abra o item e volte a situação para Ativo.
+                                    </p>
+                                )}
                                 {form.situacao === 'DISPENSADO' && (
                                     <div className="space-y-1.5">
                                         <label className={ROTULO} htmlFor="qi-justificativa">Justificativa da dispensa</label>

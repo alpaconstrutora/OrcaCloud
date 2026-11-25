@@ -1,5 +1,5 @@
 import React from 'react';
-import { ClipboardCheck, Plus } from 'lucide-react';
+import { Archive, ClipboardCheck, Plus } from 'lucide-react';
 import type {
     ItemControlado, OrigemItem, ProcedimentoResumo, RegistroTreinamento, TipoItemControlado,
 } from '../../types/qualidadeSiac';
@@ -11,8 +11,10 @@ import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
  * Lista controlada (serviços ou materiais) — a tabela da aba "Lista controlada".
  * Rascunho em docs/planos/2026-11-25-qualidade-siac-pbqph.md, "Telas (rascunho)".
  *
- *  - Dispensado aparece com a justificativa na coluna Procedimento (sai do N do painel, mas não some);
- *    arquivado não aparece.
+ *  - Dispensado aparece com a justificativa na coluna Procedimento (sai do N do painel, mas não some).
+ *  - Arquivado (o "apagar" da tela — item criado por engano, inclusive replicado em "Todas") fica
+ *    escondido; "Mostrar arquivados (N)", acima da tabela e só quando há algum, o mostra marcado
+ *    "Arquivado" para reabrir e reativar. Nunca conta no painel (que só conta ATIVO).
  *  - Treinados é CONTAGEM, nunca "x de y": o denominador só existe quando a FVS (fase 2) registrar
  *    quem executou o serviço em cada obra.
  *  - Lista vazia: o vazio orienta com a carga (Anexo 4 para serviços, sugestão para materiais).
@@ -25,8 +27,11 @@ export const ROTULO_ORIGEM: Record<OrigemItem, string> = {
     FAD_DATEC: 'FAD/DATec',
 };
 
-const TEXTO_DO_TIPO: Record<TipoItemControlado, { novo: string; carregar: string; vazio: string; subtitulo: string; nome: string }> = {
+const TEXTO_DO_TIPO: Record<TipoItemControlado, {
+    novo: string; carregar: string; vazio: string; subtitulo: string; nome: string; todosArquivados: string;
+}> = {
     SERVICO: {
+        todosArquivados: 'Todos os serviços estão arquivados',
         novo: 'Novo serviço',
         carregar: 'Carregar a lista mínima do Anexo 4 (27 serviços)',
         vazio: 'Nenhum serviço controlado',
@@ -34,6 +39,7 @@ const TEXTO_DO_TIPO: Record<TipoItemControlado, { novo: string; carregar: string
         nome: 'Serviço',
     },
     MATERIAL: {
+        todosArquivados: 'Todos os materiais estão arquivados',
         novo: 'Novo material',
         carregar: 'Carregar sugestão de materiais (editável)',
         vazio: 'Nenhum material controlado',
@@ -67,9 +73,16 @@ export const ListaControlada: React.FC<Props> = ({
 }) => {
     const texto = TEXTO_DO_TIPO[tipo];
 
-    const linhas = React.useMemo(
-        () => itens.filter(i => i.tipo === tipo && i.situacao !== 'ARQUIVADO'),
+    const [mostrarArquivados, setMostrarArquivados] = React.useState(false);
+    const arquivados = React.useMemo(
+        () => itens.filter(i => i.tipo === tipo && i.situacao === 'ARQUIVADO').length,
         [itens, tipo],
+    );
+    // Sem arquivado o botão some; o próximo arquivamento volta a esconder por padrão.
+    React.useEffect(() => { if (arquivados === 0) setMostrarArquivados(false); }, [arquivados]);
+    const linhas = React.useMemo(
+        () => itens.filter(i => i.tipo === tipo && (mostrarArquivados || i.situacao !== 'ARQUIVADO')),
+        [itens, tipo, mostrarArquivados],
     );
     const mostrarOrg = React.useMemo(() => new Set(linhas.map(i => i.organization_id)).size > 1, [linhas]);
     const nomeOrg = React.useCallback((id: string) => nomesDasOrgs?.[id] ?? 'Organização fora da lista', [nomesDasOrgs]);
@@ -77,7 +90,9 @@ export const ListaControlada: React.FC<Props> = ({
     const rotuloProcedimento = React.useCallback((i: ItemControlado) => (
         i.situacao === 'DISPENSADO'
             ? `Dispensado — "${i.justificativa ?? ''}"`
-            : rotuloDoProcedimento(procedimentoDo(i, procedimentos))
+            : i.situacao === 'ARQUIVADO'
+                ? `Arquivado · ${rotuloDoProcedimento(procedimentoDo(i, procedimentos))}`
+                : rotuloDoProcedimento(procedimentoDo(i, procedimentos))
     ), [procedimentos]);
 
     const contagem = React.useCallback((i: ItemControlado) => {
@@ -113,6 +128,16 @@ export const ListaControlada: React.FC<Props> = ({
         </span>
     );
 
+    const filtroArquivados = arquivados > 0 ? (
+        <button type="button" aria-pressed={mostrarArquivados} onClick={() => setMostrarArquivados(v => !v)}
+            title={mostrarArquivados ? 'Esconder os itens arquivados' : 'Mostrar os itens arquivados para reabrir ou reativar'}
+            className={`flex items-center gap-1.5 h-9 px-3.5 border rounded-[6px] font-medium text-[13px] transition-all shrink-0 ${mostrarArquivados
+                ? 'bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100'
+                : 'bg-white text-gray-700 border-gray-200 hover:bg-gray-50'}`}>
+            <Archive className="w-[15px] h-[15px]" aria-hidden="true" /> Mostrar arquivados ({arquivados})
+        </button>
+    ) : undefined;
+
     const temLista = linhas.length > 0;
 
     return (
@@ -123,6 +148,7 @@ export const ListaControlada: React.FC<Props> = ({
             rowKey={i => i.id}
             loading={carregando}
             toolbarTop={abas}
+            filters={filtroArquivados}
             toolbarRight={novo}
             searchText={i => `${i.nome} ${i.etapa ?? ''} ${ROTULO_ORIGEM[i.origem]} ${rotuloProcedimento(i)} ${i.codigos.join(' ')}`}
             searchPlaceholder={tipo === 'SERVICO' ? 'Buscar por serviço, etapa, procedimento ou código...' : 'Buscar por material, procedimento ou código...'}
@@ -153,7 +179,7 @@ export const ListaControlada: React.FC<Props> = ({
                     case 'origem': return <span className="text-sm font-normal text-gray-700">{ROTULO_ORIGEM[i.origem]}</span>;
                     case 'procedimento': {
                         const t = rotuloProcedimento(i);
-                        return <span className={`block truncate text-sm font-normal ${i.situacao === 'DISPENSADO' ? 'text-gray-600' : 'text-gray-700'}`} title={t}>{t}</span>;
+                        return <span className={`block truncate text-sm font-normal ${i.situacao === 'ATIVO' ? 'text-gray-700' : 'text-gray-600'}`} title={t}>{t}</span>;
                     }
                     case 'treinados': { const t = rotuloTreinados(i); return <span className="block truncate text-sm font-normal text-gray-700" title={t}>{t}</span>; }
                     case 'codigos': return <span className="text-sm font-normal text-gray-700">{i.codigos.length}</span>;
@@ -162,12 +188,19 @@ export const ListaControlada: React.FC<Props> = ({
             }}
             empty={temLista
                 ? { icon: <ClipboardCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum item com esta busca', subtitle: 'Mude a busca.' }
-                : {
-                    icon: <ClipboardCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
-                    title: texto.vazio,
-                    subtitle: texto.subtitulo,
-                    acao: { rotulo: texto.carregar, onClick: onCarregar, desligadoPor: podeEditar ? undefined : MOTIVO_SEM_EDICAO_QUALIDADE },
-                }}
+                : arquivados > 0
+                    // Tudo arquivado: a carga não traria nada (a chave padrão já existe) — o caminho é reativar.
+                    ? {
+                        icon: <ClipboardCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                        title: texto.todosArquivados,
+                        subtitle: 'Use "Mostrar arquivados" acima da tabela para vê-los, abrir um item e voltar a situação para Ativo.',
+                    }
+                    : {
+                        icon: <ClipboardCheck className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                        title: texto.vazio,
+                        subtitle: texto.subtitulo,
+                        acao: { rotulo: texto.carregar, onClick: onCarregar, desligadoPor: podeEditar ? undefined : MOTIVO_SEM_EDICAO_QUALIDADE },
+                    }}
         />
     );
 };

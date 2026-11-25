@@ -1346,27 +1346,35 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
     // Contratos ordenáveis (§6.3) — Imóvel/Cliente não são campos diretos do
     // negócio, então resolvemos o nome uma vez antes de comparar.
-    const sortedDeals = useMemo(() => {
-        // Dentro de "Gestão de Unidades" a aba Contratos mostra SÓ os contratos
-        // deste edifício — antes listava todos os contratos de locação da
-        // organização, misturando unidades de imóveis diferentes. O vínculo é
-        // pela unidade: qualquer unidade do contrato (units[] ou property_id)
-        // que seja filha do edifício aberto — ou o próprio edifício, quando ele
-        // é alugado inteiro.
+    // Dentro de "Gestão de Unidades" as abas mostram SÓ os contratos deste
+    // edifício — antes listavam todos os contratos de locação da organização,
+    // misturando unidades de imóveis diferentes. O vínculo é pela unidade:
+    // qualquer unidade do contrato (units[] ou property_id) que seja filha do
+    // edifício aberto — ou o próprio edifício, quando ele é alugado inteiro.
+    // Uma regra só para Contratos e Reajustes (Reajustes listava todos — 24/11/2026).
+    const dealsDoEdificio = useMemo(() => {
+        if (!selectedBuildingId) return deals;
         const pertenceAoEdificio = (id?: string | null) => {
             if (!id) return false;
             if (String(id).toLowerCase() === String(selectedBuildingId).toLowerCase()) return true;
             const unidade = properties.find(p => p.id === id);
             return !!unidade && String(unidade.parent_id ?? '').toLowerCase() === String(selectedBuildingId).toLowerCase();
         };
-        const escopo = selectedBuildingId
-            ? deals.filter(d => {
-                const ids = (d.units && d.units.length > 0)
-                    ? d.units.map(u => u.property_id)
-                    : [d.property_id];
-                return ids.some(pertenceAoEdificio);
-            })
-            : deals;
+        return deals.filter(d => {
+            const ids = (d.units && d.units.length > 0)
+                ? d.units.map(u => u.property_id)
+                : [d.property_id];
+            return ids.some(pertenceAoEdificio);
+        });
+    }, [deals, properties, selectedBuildingId]);
+    /** Negociações do edifício aberto; null = fora dele (Reajustes mostra a fila inteira). */
+    const negociacoesDoEdificio = useMemo(
+        () => (selectedBuildingId ? new Set(dealsDoEdificio.map(d => d.id)) : null),
+        [selectedBuildingId, dealsDoEdificio],
+    );
+
+    const sortedDeals = useMemo(() => {
+        const escopo = dealsDoEdificio;
 
         const withLookup = escopo.map(d => {
             // Um contrato pode reunir várias unidades — o rótulo mostra a
@@ -1420,7 +1428,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             if (aValue > bValue) return direction === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [deals, properties, clients, dealSortConfig, selectedBuildingId, dealSearchTerm, empreendimentoByProperty]);
+    }, [dealsDoEdificio, properties, clients, dealSortConfig, dealSearchTerm, empreendimentoByProperty]);
 
     // Corretores ordenáveis (§6.3) — busca própria (§5.2): o searchTerm global
     // pertence à aba Unidades e não tem input visível aqui, então a aba
@@ -3194,6 +3202,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     clients={clients}
                     onOpenContract={openDealForContract}
                     onNotify={(message, type) => { if (type === 'success') loadData(); notify(message, type); }}
+                    negociacoesDoEmpreendimento={negociacoesDoEdificio}
                 />
             )}
 

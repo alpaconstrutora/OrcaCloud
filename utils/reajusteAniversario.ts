@@ -154,3 +154,36 @@ export function termosDeReajusteParaOContrato(
     }
     return Object.keys(patch).length > 0 ? patch : null;
 }
+
+/**
+ * Negociação de um contrato de locação: o próprio `deal_id` ou, no renovado (que
+ * não herda deal_id — ver contractRenewalService.renewContract), o da raiz da
+ * cadeia por `parent_contract_id`. null = nenhum elo tem negociação (ou laço).
+ */
+export function negociacaoDaCadeia(
+    contratoId: string,
+    contratos: Map<string, { deal_id: string | null; parent_contract_id: string | null }>,
+): string | null {
+    const vistos = new Set<string>();
+    let atual: string | null = contratoId;
+    while (atual && !vistos.has(atual)) {
+        vistos.add(atual);
+        const c = contratos.get(atual);
+        if (!c) return null;
+        if (c.deal_id) return c.deal_id;
+        atual = c.parent_contract_id;
+    }
+    return null;
+}
+
+/**
+ * Fila de Locações › Reajustes recortada pelo empreendimento aberto (pedido de
+ * 24/11/2026). `negociacoes` null = fora de um empreendimento: a fila inteira.
+ */
+export function filaDoEmpreendimento<T extends { negociacaoId: string | null }>(
+    fila: T[],
+    negociacoes: Set<string> | null,
+): T[] {
+    if (!negociacoes) return fila;
+    return fila.filter(l => !!l.negociacaoId && negociacoes.has(l.negociacaoId));
+}

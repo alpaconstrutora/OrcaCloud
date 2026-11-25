@@ -60,11 +60,21 @@ junto da F2).
 
 ## Andamento
 
-- **F1** — código em PR; ordem de publicação: **primeiro o código** (que deixa de pedir `no_marketplace`), conferido
-  em produção, **depois** a migration `aplicar_20271125200000_sem_marketplace.sql` — ao contrário, a lista de
-  oportunidades em produção pediria uma coluna que não existe (42703). Reversão: `scripts/rollback-sem-marketplace.sql`
-  (as 2 funções como estavam, as 2 colunas com os valores de antes: `garden-cambuhy`, `alpa`,
-  `alpa-empreendimentos`; Garden 01 com `no_marketplace = true`).
+- **F1 — NO AR (25/11).** PR #726 (merge 08092be). Ordem: primeiro o código (conferido: a produção passou a servir
+  08092be), depois a migration `aplicar_20271125200000_sem_marketplace.sql`, aplicada com `db query -f`. Antes do DROP,
+  recontado: 3 organizações com endereço, 1 oportunidade marcada, 0 interesses (iguais à reversão). Depois: 0 das 2
+  funções, 0 das 2 colunas. Reversão: `scripts/rollback-sem-marketplace.sql`.
+- **F2, F3, F4 e F5 — num PR só** (mexem nos mesmos arquivos: AppRouter, InvestorDashboard, OpportunitiesTab).
+  - F2: `components/investor/OportunidadesModule.tsx`; a regra de gestor numa função só (`utils/gestorDoInvestidor.ts`).
+  - F3: no painel do investidor a aba Oportunidades passa `isAdmin={false}` (só publicadas, sem gestão) + atalho.
+  - F4: "Ver" abre `PortalOportunidadeDetalhe` no lugar da lista; sai `OpportunityDetail.tsx` (e `LinkedProjectPanel`,
+    que só ele usava). O detalhe lê de uma `fonte`: link (token) ou gestor (sessão). Versão do gestor: pela sessão
+    (`imovibService.versaoPublicada`, como o detalhe antigo). Obra e acompanhamento do gestor: migration
+    `aplicar_20271125300000_oportunidade_vista_do_gestor.sql` — o miolo das 2 RPCs do link vira função interna
+    (copiado do banco em 25/11, sem mudar a conta) e a RPC nova `fn_oportunidade_vista_do_gestor` (membro da org,
+    rascunho também) chama o mesmo miolo. Prova pedida antes de publicar: a resposta das 2 RPCs do link para o Garden
+    01 igual antes e depois (md5 guardado).
+  - F5: sai do menu; `#/investor-area` abre o Portal do Investidor.
 
 ## Fora, de propósito
 

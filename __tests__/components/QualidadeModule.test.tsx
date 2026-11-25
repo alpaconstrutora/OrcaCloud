@@ -16,6 +16,9 @@
  *  (g) o item some da lista depois de gravar um código → o próximo código soma ao gravado, não ao
  *      item de quando o Sheet abriu;
  *  (i) a aba "Por obra" mostra a visão por obra com os itens ativos da lista carregada;
+ *  (j) arquivar pelo Sheet tira o item da lista e do N; "Mostrar arquivados (N)" o mostra; reativar volta
+ *      (pendência da fase 1 corrigida em 25/11), com a justificativa; arquivado nunca aparece em "Por obra";
+ *      "Mostrar arquivados" vale por sub-aba (não vaza de Serviços para Materiais);
  *  (h) "Registrar treinamento em obra" do Sheet do item abre o registro; gravar avisa quantos
  *      registros entraram e recarrega (os Treinados do item vêm da recarga).
  */
@@ -23,7 +26,7 @@ import React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import type { ItemControlado, RegistroTreinamento } from '../../types/qualidadeSiac';
+import type { ItemControlado, RegistroTreinamento, SituacaoItem } from '../../types/qualidadeSiac';
 import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac';
 
 const listarItens = vi.fn();
@@ -105,7 +108,7 @@ const TREINOS: Record<string, RegistroTreinamento[]> = {
     'curso-2': [{ employee_id: 'e3', data_realizacao: '2026-10-01', aprovado: true, externo: false, registrado_em: null }],
 };
 
-const montar = (podeEditar = true) => render(<ConfirmProvider><QualidadeModule podeEditar={podeEditar} /></ConfirmProvider>);
+const montar = (acessoTotal = false) => render(<ConfirmProvider><QualidadeModule acessoTotal={acessoTotal} /></ConfirmProvider>);
 
 /** Células de uma coluna da tabela, achada pelo cabeçalho. */
 function celulasDaColuna(rotulo: string): HTMLElement[] {
@@ -135,6 +138,8 @@ beforeEach(() => {
     useStore.setState({
         activeOrganizationId: 'org-a',
         activeEmpresaId: null,
+        companies: [],
+        session: null,
         organizations: [
             { id: 'org-a', name: 'Construtora A', address: {}, members: [] },
             { id: 'org-b', name: 'Construtora B', address: {}, members: [] },
@@ -201,11 +206,63 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
     });
 
     it('(e) sem permissão de editar: o botão de carga fica desligado e diz por quê', async () => {
-        montar(false);
+        useStore.setState({
+            session: { user: { id: 'u1', email: 'Ana@Alpa.com' } },
+            organizations: [
+                { id: 'org-a', name: 'Construtora A', address: {}, members: [{ email: 'ana@alpa.com', role: 'viewer', permissions: {} }] },
+            ] as never,
+        });
+        montar();
         const botao = await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }) as HTMLButtonElement;
         expect(botao.disabled).toBe(true);
         expect(botao.title).toBe(MOTIVO_SEM_EDICAO_QUALIDADE);
     });
+    // Pendência da fase 1 corrigida em 25/11 (REGRA #5 item 5): a permissão segue a organização que a
+    // tela MOSTRA (useOrgContext), não o `activeOrganizationId` cru — com empresa no topo ele é null.
+    const ANA_EDITORA_EM_A_VISITANTE_EM_B = () => useStore.setState({
+        session: { user: { id: 'u1', email: 'ana@alpa.com' } },
+        organizations: [
+            { id: 'org-a', name: 'Construtora A', address: {}, members: [{ email: 'ana@alpa.com', role: 'member', permissions: {} }] },
+            { id: 'org-b', name: 'Construtora B', address: {}, members: [{ email: 'ana@alpa.com', role: 'viewer', permissions: {} }] },
+        ] as never,
+    });
+
+    it('(e2) empresa no topo (cru null, org resolvida A): editora em A e visitante em B edita', async () => {
+        ANA_EDITORA_EM_A_VISITANTE_EM_B();
+        useStore.setState({
+            activeOrganizationId: null,
+            activeEmpresaId: 'emp-1',
+            companies: [{ id: 'emp-1', name: 'Empresa da A', org_id: 'org-a' }] as never,
+        });
+        montar();
+        await waitFor(() => expect(listarItens).toHaveBeenCalledWith('org-a'));
+        const botao = await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }) as HTMLButtonElement;
+        expect(botao.disabled).toBe(false);
+        expect(screen.queryByText(MOTIVO_SEM_EDICAO_QUALIDADE)).toBeNull();
+    });
+
+    it('(e3) "Todas" com a mesma usuária (visitante em B): só leitura, com o motivo', async () => {
+        ANA_EDITORA_EM_A_VISITANTE_EM_B();
+        useStore.setState({ activeOrganizationId: null, activeEmpresaId: null });
+        montar();
+        await waitFor(() => expect(listarItens).toHaveBeenCalledWith(null));
+        const botao = await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }) as HTMLButtonElement;
+        expect(botao.disabled).toBe(true);
+        expect(botao.title).toBe(MOTIVO_SEM_EDICAO_QUALIDADE);
+    });
+
+    it('(e4) acesso total (desenvolvedor) edita mesmo visitante na organização do topo', async () => {
+        useStore.setState({
+            session: { user: { id: 'u1', email: 'ana@alpa.com' } },
+            organizations: [
+                { id: 'org-a', name: 'Construtora A', address: {}, members: [{ email: 'ana@alpa.com', role: 'viewer', permissions: {} }] },
+            ] as never,
+        });
+        montar(true);
+        const botao = await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }) as HTMLButtonElement;
+        expect(botao.disabled).toBe(false);
+    });
+
     it('(b2) nível A: 27 serviços pedem 27 procedimentos, meta 14 aplicados e 7 em obra', async () => {
         listarItens.mockResolvedValue(servicos(27));
         listarNiveis.mockResolvedValue({ 'org-a': 'A' });
@@ -276,6 +333,100 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         // continua aberto (§25) e o título já é o do item recarregado
         expect(await screen.findByRole('heading', { name: 'Serviço renomeado' })).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Salvar alterações' })).toBeTruthy();
+    });
+
+    it('(j) arquivar: some da lista e do N; "Mostrar arquivados (1)" mostra; reativar volta', async () => {
+        const user = userEvent.setup();
+        const situacao: Record<string, SituacaoItem> = {};
+        const justificativa: Record<string, string | null> = {};
+        listarItens.mockImplementation(async () => servicos(3).map(i => ({
+            ...i, situacao: situacao[i.id] ?? 'ATIVO', justificativa: justificativa[i.id] ?? null,
+        })));
+        atualizarItem.mockImplementation(async (id: string, patch: { situacao?: SituacaoItem; justificativa?: string | null }) => {
+            if (patch.situacao) situacao[id] = patch.situacao;
+            if (patch.justificativa !== undefined) justificativa[id] = patch.justificativa;
+        });
+        montar();
+        const tabela = await screen.findByRole('table');
+        const painel = await screen.findByRole('region', { name: /Quanto falta para o nível/ });
+        await waitFor(() => expect(painel.textContent).toContain('Serviços (3)'));
+        // sem arquivado, não há o botão
+        expect(screen.queryByRole('button', { name: /Mostrar arquivados/ })).toBeNull();
+
+        // arquivar um item ATIVO pelo Sheet
+        await user.click(await within(tabela).findByText('Serviço 2'));
+        const select = await screen.findByLabelText('Situação') as HTMLSelectElement;
+        expect([...select.options].map(o => o.textContent)).toEqual(['Ativo', 'Dispensado', 'Arquivado']);
+        await user.selectOptions(select, 'ARQUIVADO');
+        await user.type(screen.getByLabelText('Justificativa do arquivamento'), 'Criado por engano');
+        await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+        await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('org-a-s2', expect.objectContaining({ situacao: 'ARQUIVADO', justificativa: 'Criado por engano' })));
+        await waitFor(() => expect(listarItens).toHaveBeenCalledTimes(2));
+        await user.click(screen.getByRole('button', { name: 'Voltar' }));
+
+        // some da lista e do N do painel
+        await waitFor(() => expect(within(screen.getByRole('table')).queryByText('Serviço 2')).toBeNull());
+        expect(screen.getByRole('region', { name: /Quanto falta para o nível/ }).textContent).toContain('Serviços (2)');
+
+        // o botão aparece com a contagem e mostra o arquivado
+        const mostrar = screen.getByRole('button', { name: 'Mostrar arquivados (1)' });
+        expect(mostrar.getAttribute('aria-pressed')).toBe('false');
+        await user.click(mostrar);
+        expect(screen.getByRole('button', { name: 'Mostrar arquivados (1)' }).getAttribute('aria-pressed')).toBe('true');
+        const linhaArquivada = await within(screen.getByRole('table')).findByText('Serviço 2');
+        expect(within(linhaArquivada.closest('tr') as HTMLElement).getByText(/^Arquivado/)).toBeTruthy();
+        // mostrar não muda o N: arquivado nunca conta
+        expect(screen.getByRole('region', { name: /Quanto falta para o nível/ }).textContent).toContain('Serviços (2)');
+
+        // reabrir e reativar
+        await user.click(linhaArquivada);
+        await user.selectOptions(await screen.findByLabelText('Situação'), 'ATIVO');
+        await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+        await waitFor(() => expect(atualizarItem).toHaveBeenLastCalledWith('org-a-s2', expect.objectContaining({ situacao: 'ATIVO', justificativa: null })));
+        await waitFor(() => expect(listarItens).toHaveBeenCalledTimes(3));
+        await user.click(screen.getByRole('button', { name: 'Voltar' }));
+        await waitFor(() => expect(screen.queryByRole('button', { name: /Mostrar arquivados/ })).toBeNull());
+        expect(within(screen.getByRole('table')).getByText('Serviço 2')).toBeTruthy();
+        expect(screen.getByRole('region', { name: /Quanto falta para o nível/ }).textContent).toContain('Serviços (3)');
+    });
+
+    it('(j4) "Mostrar arquivados" ligado em Serviços não vaza para Materiais', async () => {
+        const user = userEvent.setup();
+        listarItens.mockResolvedValue([
+            item({ id: 's1', nome: 'Serviço arquivado', anexo4_numero: 1, ordem: 1, situacao: 'ARQUIVADO', justificativa: 'engano' }),
+            item({ id: 'm1', tipo: 'MATERIAL', nome: 'Material arquivado', etapa: null, origem: 'PROPRIO', ordem: 1, situacao: 'ARQUIVADO', justificativa: 'engano' }),
+            item({ id: 'm2', tipo: 'MATERIAL', nome: 'Material ativo', etapa: null, origem: 'PROPRIO', ordem: 2 }),
+        ]);
+        montar();
+        await user.click(await screen.findByRole('button', { name: 'Mostrar arquivados (1)' }));
+        expect(screen.getByRole('button', { name: 'Mostrar arquivados (1)' }).getAttribute('aria-pressed')).toBe('true');
+        expect(await screen.findByText('Serviço arquivado')).toBeTruthy();
+        await user.click(screen.getByRole('tab', { name: 'Materiais' }));
+        expect(await screen.findByText('Material ativo')).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Mostrar arquivados (1)' }).getAttribute('aria-pressed')).toBe('false');
+        expect(screen.queryByText('Material arquivado')).toBeNull();
+    });
+
+    it('(j2) todos os itens arquivados: o vazio manda mostrar os arquivados, não oferece a carga', async () => {
+        listarItens.mockResolvedValue(servicos(2).map(i => ({ ...i, situacao: 'ARQUIVADO' as const })));
+        montar();
+        expect(await screen.findByText('Todos os serviços estão arquivados')).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' })).toBeNull();
+        expect(screen.getByRole('button', { name: 'Mostrar arquivados (2)' })).toBeTruthy();
+    });
+
+    it('(j3) arquivado não aparece em "Por obra"', async () => {
+        const user = userEvent.setup();
+        listarItens.mockResolvedValue([
+            item({ id: 'a1', nome: 'Serviço ativo', anexo4_numero: 1, ordem: 1 }),
+            item({ id: 'a2', nome: 'Serviço arquivado', anexo4_numero: 2, ordem: 2, situacao: 'ARQUIVADO' }),
+        ]);
+        montar();
+        await screen.findByRole('table');
+        await user.click(screen.getByRole('tab', { name: 'Por obra' }));
+        await waitFor(() => expect(listarExclusoes).toHaveBeenCalledWith('p1'));
+        expect(await screen.findByText('Serviço ativo')).toBeTruthy();
+        expect(screen.queryByText('Serviço arquivado')).toBeNull();
     });
 
     it('(g) item some da lista depois de gravar C1: incluir C2 grava [C1, C2]', async () => {

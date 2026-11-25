@@ -45,7 +45,9 @@ import { ROTULO_ORIGEM } from './ListaControlada';
  *    `definirCodigos` troca o conjunto inteiro, então montar a lista a partir de um item velho
  *    (recarga que ainda não chegou, item que saiu da lista do topo) apagaria o que já foi gravado.
  *    A cada item novo vindo da recarga, o estado local passa a ser o dele.
- *  - O banco recusa DISPENSADO sem justificativa (CHECK) e referência de outra organização (42501):
+ *  - Dispensar e arquivar pedem justificativa (é a prova perante o SiAC; arquivar não pode tirar um
+ *    item do Anexo 4 do N sem explicação) e o texto é GUARDADO — só voltar a Ativo o limpa.
+ *  - O banco recusa DISPENSADO sem justificativa (CHECK; ARQUIVADO é só pela tela) e referência de outra organização (42501):
  *    o erro sobe no toast, com a mensagem do banco.
  */
 export type EdicaoDoItem =
@@ -213,6 +215,7 @@ const SheetDoItem: React.FC<PropsInternas> = ({
         const e: { nome?: string; justificativa?: string } = {};
         if (!form.nome.trim()) e.nome = texto.semNome;
         if (form.situacao === 'DISPENSADO' && !form.justificativa.trim()) e.justificativa = 'Escreva por que o item foi dispensado.';
+        if (form.situacao === 'ARQUIVADO' && !form.justificativa.trim()) e.justificativa = 'Escreva por que o item foi arquivado.';
         setErros(e);
         const primeiro = e.nome ? 'qi-nome' : e.justificativa ? 'qi-justificativa' : null;
         if (primeiro) document.getElementById(primeiro)?.focus();
@@ -242,16 +245,17 @@ const SheetDoItem: React.FC<PropsInternas> = ({
         if (!validar()) return;
         setSalvando(true);
         try {
-            const dispensado = form.situacao === 'DISPENSADO';
+            // Dispensado e arquivado guardam a justificativa (prova perante o SiAC); só Ativo a limpa.
+            const justificativa = form.situacao === 'ATIVO' ? null : form.justificativa.trim();
             await qualidadeSiacService.atualizarItem(atual.id, {
                 nome: form.nome.trim(),
                 etapa: form.etapa.trim() || null,
                 origem: form.origem,
                 substitui_item_id: form.substitui_item_id || null,
                 situacao: form.situacao,
-                justificativa: dispensado ? form.justificativa.trim() : null,
+                justificativa,
             });
-            const gravado = { ...form, nome: form.nome.trim(), etapa: form.etapa.trim(), justificativa: dispensado ? form.justificativa.trim() : '' };
+            const gravado = { ...form, nome: form.nome.trim(), etapa: form.etapa.trim(), justificativa: justificativa ?? '' };
             setForm(gravado);
             setSalvo(gravado);
             setSavedAt(Date.now());
@@ -299,7 +303,9 @@ const SheetDoItem: React.FC<PropsInternas> = ({
             .sort((a, b) => (a.anexo4_numero ?? a.ordem) - (b.anexo4_numero ?? b.ordem))
         : [];
     const origens: OrigemItem[] = ORIGENS_NOVAS.includes(form.origem) ? ORIGENS_NOVAS : [form.origem, ...ORIGENS_NOVAS];
-    const situacoes: SituacaoItem[] = form.situacao === 'ARQUIVADO' ? ['ATIVO', 'DISPENSADO', 'ARQUIVADO'] : ['ATIVO', 'DISPENSADO'];
+    // Item gravado sempre pode ser arquivado (o "apagar" da tela: sai da lista e do painel, nada se perde) e,
+    // arquivado, volta a Ativo pelo mesmo select. Item novo não mostra a situação (nasce Ativo).
+    const situacoes: SituacaoItem[] = ['ATIVO', 'DISPENSADO', 'ARQUIVADO'];
 
     const ondeCria = edicao.modo === 'novo'
         ? edicao.alvo.kind === 'all'
@@ -378,15 +384,26 @@ const SheetDoItem: React.FC<PropsInternas> = ({
                                         {situacoes.map(s => <option key={s} value={s}>{ROTULO_SITUACAO[s]}</option>)}
                                     </select>
                                 </div>
-                                {form.situacao === 'DISPENSADO' && (
+                                {(form.situacao === 'DISPENSADO' || form.situacao === 'ARQUIVADO') && (
                                     <div className="space-y-1.5">
-                                        <label className={ROTULO} htmlFor="qi-justificativa">Justificativa da dispensa</label>
+                                        <label className={ROTULO} htmlFor="qi-justificativa">
+                                            {form.situacao === 'ARQUIVADO' ? 'Justificativa do arquivamento' : 'Justificativa da dispensa'}
+                                        </label>
                                         <textarea id="qi-justificativa" className={`${AREA} ${erros.justificativa ? COM_ERRO : ''}`}
-                                            value={form.justificativa} placeholder="Ex.: a construtora não executa alvenaria estrutural"
+                                            value={form.justificativa}
+                                            placeholder={form.situacao === 'ARQUIVADO'
+                                                ? 'Ex.: criado por engano em todas as organizações'
+                                                : 'Ex.: a construtora não executa alvenaria estrutural'}
                                             aria-invalid={!!erros.justificativa}
                                             aria-describedby={erros.justificativa ? 'qi-justificativa-erro' : undefined}
                                             onChange={e => set('justificativa', e.target.value)} />
                                         <ErroDoCampo id="qi-justificativa-erro" erro={erros.justificativa} />
+                                        {form.situacao === 'ARQUIVADO' && (
+                                            <p className="text-xs text-gray-600">
+                                                Arquivado sai da lista controlada, do painel do nível e da visão por obra. Para reativar, use
+                                                "Mostrar arquivados" acima da tabela, abra o item e volte a situação para Ativo.
+                                            </p>
+                                        )}
                                     </div>
                                 )}
                             </>
@@ -547,19 +564,41 @@ const SecaoTreinamento: React.FC<{
         return () => { vivo = false; };
     }, [org, recarga]);
 
-    // Nomes das pessoas: o registro só traz o employee_id. Só busca quando há registro para mostrar.
+    // Nomes das pessoas: o registro só traz o employee_id. Busca no RH sempre que há registro de alguém
+    // cujo nome o Sheet ainda não conhece — não só no primeiro registro: o 2º treinamento em obra pode
+    // trazer uma pessoa de empreiteira que acabou de ganhar ficha (antes ela aparecia como "não
+    // encontrada"). A dependência é o CONJUNTO dessas pessoas (texto ordenado): quem o RH não devolve
+    // é marcado como já procurado e não volta à busca. Enquanto a busca anda, a linha diz "carregando…"
+    // (antes dizia "Pessoa não encontrada no RH" até a resposta chegar).
     const [pessoas, setPessoas] = React.useState<Record<string, Employee>>({});
+    const [procurados, setProcurados] = React.useState<ReadonlySet<string>>(() => new Set());
     const [erroPessoas, setErroPessoas] = React.useState<string | null>(null);
-    const temRegistro = treinamentos.length > 0;
+    const semNome = React.useMemo(
+        () => [...new Set(treinamentos.map(r => r.employee_id).filter(id => !pessoas[id] && !procurados.has(id)))].sort().join(','),
+        [treinamentos, pessoas, procurados],
+    );
     React.useEffect(() => {
-        if (!temRegistro) return;
+        if (!semNome) return;
         let vivo = true;
+        const ids = semNome.split(',');
+        const marcarProcurados = () => setProcurados(s => new Set([...s, ...ids]));
         setErroPessoas(null);
+        // Nomes e "procurados" mudam no MESMO callback (um render só): senão o conjunto mudaria entre os
+        // dois e a busca recomeçaria para quem o RH não devolveu.
         laborService.listEmployees(org)
-            .then(l => { if (vivo) setPessoas(Object.fromEntries(l.map(e => [e.id, e]))); })
-            .catch(e => { if (vivo) setErroPessoas(errorMessage(e, 'erro desconhecido')); });
+            .then(l => {
+                if (!vivo) return;
+                setPessoas(p => ({ ...p, ...Object.fromEntries(l.map(e => [e.id, e])) }));
+                marcarProcurados();
+            })
+            .catch(e => {
+                if (!vivo) return;
+                setErroPessoas(errorMessage(e, 'erro desconhecido'));
+                marcarProcurados();
+            });
         return () => { vivo = false; };
-    }, [org, temRegistro]);
+    }, [org, semNome]);
+    const buscandoNome = React.useMemo(() => new Set(semNome ? semNome.split(',') : []), [semNome]);
 
     const motivo = !podeEditar ? MOTIVO_SEM_EDICAO_QUALIDADE : ocupado ? MOTIVO_OCUPADO : undefined;
     const motivoRegistrar = !podeEditar ? MOTIVO_SEM_EDICAO_QUALIDADE : !item.training_course_id ? MOTIVO_SEM_CURSO : undefined;
@@ -639,7 +678,7 @@ const SecaoTreinamento: React.FC<{
                                 : { t: 'revisão anterior', c: 'text-amber-700' };
                             return (
                                 <li key={`${r.employee_id}-${r.data_realizacao}-${i}`} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2 text-sm">
-                                    <span className="min-w-0 truncate text-gray-900">{p?.name ?? 'Pessoa não encontrada no RH'}</span>
+                                    <span className="min-w-0 truncate text-gray-900">{p?.name ?? (buscandoNome.has(r.employee_id) ? 'carregando…' : 'Pessoa não encontrada no RH')}</span>
                                     <span className="flex flex-wrap items-center gap-x-3 text-gray-700">
                                         <span>{r.externo ? `Empreiteira${emp ? ` · ${emp}` : ''}` : 'Próprio'}</span>
                                         <span>{dataBr(r.data_realizacao)}</span>

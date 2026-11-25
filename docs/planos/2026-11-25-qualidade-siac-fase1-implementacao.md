@@ -8,6 +8,10 @@
 >
 > **25/11/2026 14:00** — "seguir com plano dessas frentes por fase"
 >
+> **25/11/2026 (pós-publicação)** — "12. ... Corrigir" (o item do AppRouter, transcrito como chegou). Para a
+> lista "ficou para depois", a decisão foi: corrigir já as duas que são defeito da fase 1 (arquivar item;
+> nomes na lista de Treinados); a pergunta do VENCIDO fica para a fase 2. Ver "Ajustes pós-publicação (25/11)".
+>
 > Sessão: `c3015bbd-c4c3-4c7d-9bca-95fa2943cdac`
 
 Decisões do usuário (a tabela completa está no desenho): "vamos de C"; "separar as duas coisas"
@@ -279,9 +283,9 @@ permissão própria, padrão herdado de Obras).
 
 ### Pendências conhecidas (não bloqueiam a fase 1)
 
-- AppRouter decide "Todas" pelo `activeOrganizationId` cru: com **empresa** no topo, quem é viewer em outra org vê a Qualidade só leitura (mais restritivo; não abre gravação). Corrigir derivando o membro de `useOrgContext().orgId`.
+- AppRouter decide "Todas" pelo `activeOrganizationId` cru: com **empresa** no topo, quem é viewer em outra org vê a Qualidade só leitura (mais restritivo; não abre gravação). Corrigir derivando o membro de `useOrgContext().orgId`. → ✅ corrigido em 25/11 (`ef28ef630`, ver "Ajustes pós-publicação").
 - Funções antigas do Pós-Obra `quality_calculate_score`, `quality_emit_event`, `quality_lock_condition` executáveis por PUBLIC/anon (anteriores a esta frente).
-- Item não pode ser arquivado/apagado pela tela (só dispensado); nomes da lista de Treinados não recarregam para pessoa nova; status VENCIDO do treinamento não é considerado — perguntar na fase 2.
+- Item não pode ser arquivado/apagado pela tela (só dispensado); nomes da lista de Treinados não recarregam para pessoa nova; status VENCIDO do treinamento não é considerado — perguntar na fase 2. → ✅ arquivar corrigido (`dd38134fb`) e nomes corrigidos (`8222c276c`) em 25/11; VENCIDO segue para a fase 2.
 
 ### Verificação na tela — 25/11, app local da frente, login do usuário, org Alpa
 
@@ -298,3 +302,49 @@ permissão própria, padrão herdado de Obras).
 | 8 | ✅ local: 12 arquivos/129 testes, tsc 0, check-* 0. CI do PR: pendente. |
 
 Não conferido na tela: "Buscar na Base" (códigos) e "Escolher do GED" — cobertos só por teste de componente.
+
+### Ajustes pós-publicação (25/11)
+
+Pedido: ver o 3º bloco de "Pedido original" (25/11, pós-publicação). Branch `feat/qualidade-ajustes`.
+
+- [x] **A1 — Permissão de edição pela organização do `useOrgContext()` (REGRA #5 item 5).** O que muda: o
+  `AppRouter` deixa de decidir pelo `activeOrganizationId` cru (com empresa no topo ele é `null` e virava
+  "Todas", `every` sobre todas as orgs); o `QualidadeModule` decide pela MESMA org que mostra, com
+  `podeEditarQualidadeSiacNoContexto` (`utils/permissaoQualidadeSiac.ts`): org resolvida → membro dela;
+  "Todas" → `podeEditarQualidadeSiacEmTodas`; o `AppRouter` só passa `acessoTotal` (grupo DESENVOLVEDOR ou
+  e-mail de acesso total). Por que dentro do módulo: o `currentMember`/`activeOrg` do `AppRouter` também
+  servem o guard de rota e Riscos/Treinamentos (fora do escopo), e decidir onde a tela lê a org garante
+  que permissão e lista nunca divergem. Pronto quando: empresa no topo (cru null, org A) + editora em A e
+  visitante em B → edita; "Todas" com a mesma usuária → só leitura. ✅ `ef28ef630` —
+  `__tests__/permissaoQualidadeSiac.test.ts` (6 novos) e `QualidadeModule.test.tsx` (e2, e3, e4).
+- [x] **A2 — Nomes da lista de Treinados recarregam para pessoa nova.** O que muda: a busca no RH do Sheet
+  do item segue o conjunto de `employee_id` sem nome conhecido (antes só a passagem sem→com registro) e soma
+  ao que já conhece; quem o RH não devolve não faz a busca repetir. Pronto quando: 2º registro com pessoa
+  nova → o nome aparece, e recarga com as mesmas pessoas não busca de novo. ✅ `8222c276c` —
+  `ItemControladoSheet.test.tsx` (k).
+- [x] **A3 — Arquivar item pela tela.** O que muda: o select de situação do item gravado sempre oferece
+  Arquivado (com o aviso de onde ele some e como reativar); a lista esconde arquivados por padrão e mostra
+  "Mostrar arquivados (N)" acima da tabela só com N > 0; arquivado aparece marcado "Arquivado" na coluna
+  Procedimento e volta a Ativo pelo Sheet; tudo arquivado → o vazio manda mostrar os arquivados em vez de
+  oferecer a carga. Sem apagar. Conferido (sem mudança): o N do painel e "Por obra" já só contam ATIVO.
+  Pronto quando: arquivar → some da lista e do N; o botão mostra; reativar → volta. ✅ `dd38134fb` —
+  `QualidadeModule.test.tsx` (j, j2, j3).
+- [x] **A4 — Revisão dos ajustes (25/11): arquivar pede e guarda a justificativa.** O que muda: (1) arquivar
+  apagava a justificativa (prova da dispensa perante o SiAC) e permitia tirar um item do Anexo 4 do N sem
+  explicação → ARQUIVADO também EXIGE justificativa na tela (mesmo campo, rótulo "Justificativa do
+  arquivamento", erro no campo como no DISPENSADO); o texto é guardado em DISPENSADO e ARQUIVADO e só voltar
+  a ATIVO o limpa; a lista mostra `Arquivado — "motivo"`. O CHECK do banco segue só para DISPENSADO (sem
+  migration: a trava é da tela, por ora). (2) "Mostrar arquivados" vazava de Serviços para Materiais →
+  `ListaControlada` com `key` por sub-aba. (3) Treinados mostrava "Pessoa não encontrada no RH" enquanto a
+  busca dos nomes andava → "carregando…"; cada pessoa é procurada uma vez só. Pronto quando: arquivar sem
+  justificativa → erro no campo e nada gravado; com ela → gravada; DISPENSADO → ARQUIVADO mantém o texto;
+  volta a ATIVO → `null`; sub-aba nova começa escondendo arquivados; "carregando…" durante a busca. ✅
+  commit `fix(qualidade): arquivar pede e guarda a justificativa` — `ItemControladoSheet.test.tsx` (l, l2,
+  l3, l4, m) e `QualidadeModule.test.tsx` (j ajustado, j4). Verificação: 8 arquivos/106 testes, tsc 0,
+  `check-ui-standard` 0 nos 3 componentes, `check-org-selector-guard` 0.
+- Fora deste ajuste (decisão de 25/11): status VENCIDO do treinamento → fase 2.
+
+Verificação local: 8 arquivos/100 testes verdes (`permissaoQualidadeSiac`, `modulosPermitidosTodasOrgs`,
+`QualidadeModule`, `ItemControladoSheet`, `RegistrarTreinamentoSheet`, `PorObra`, `orgContextGuard`,
+`RiscosModule`); `npm run typecheck` 0 erros; `check-ui-standard.sh` 0 nos 4 componentes tocados;
+`check-org-selector-guard.sh` 0. Não conferido na tela (sem app aberto nesta frente).

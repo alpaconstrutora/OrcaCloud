@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-    MOTIVO_SEM_EDICAO_QUALIDADE, podeEditarQualidadeSiac, podeEditarQualidadeSiacEmTodas, podeVerQualidadeSiac,
+    MOTIVO_SEM_EDICAO_QUALIDADE, podeEditarQualidadeSiac, podeEditarQualidadeSiacEmTodas,
+    podeEditarQualidadeSiacNoContexto, podeVerQualidadeSiac,
 } from '../utils/permissaoQualidadeSiac';
 
 describe('podeVerQualidadeSiac — permissão própria → matriz do cargo → herança de Obras', () => {
@@ -66,5 +67,35 @@ describe('podeEditarQualidadeSiacEmTodas — topo em "Todas": edita só se pode 
     });
     it('sem vínculo conhecido (lista de organizações carregando) não bloqueia — o mesmo do guard de rota', () => {
         expect(podeEditarQualidadeSiacEmTodas([], false)).toBe(true);
+    });
+});
+
+describe('podeEditarQualidadeSiacNoContexto — decide pela organização do useOrgContext, não pelo valor cru do topo', () => {
+    const v = (orgId: string, permissions: Record<string, unknown> | undefined, role = 'member') =>
+        ({ org: { id: orgId }, member: { permissions, role } });
+    // editor em A (sem chave gravada, papel member herda), visitante em B
+    const vinculos = [v('org-a', {}), v('org-b', {}, 'viewer')];
+
+    it('organização resolvida (empresa no topo): vale o membro DELA — editor em A edita, mesmo visitante em B', () => {
+        expect(podeEditarQualidadeSiacNoContexto({ orgId: 'org-a', isAllOrgs: false, vinculos, acessoTotal: false })).toBe(true);
+    });
+    it('organização resolvida onde é visitante: só leitura', () => {
+        expect(podeEditarQualidadeSiacNoContexto({ orgId: 'org-b', isAllOrgs: false, vinculos, acessoTotal: false })).toBe(false);
+    });
+    it('"Todas": edita só se pode em todas — visitante em B basta para só leitura', () => {
+        expect(podeEditarQualidadeSiacNoContexto({ orgId: null, isAllOrgs: true, vinculos, acessoTotal: false })).toBe(false);
+        expect(podeEditarQualidadeSiacNoContexto({ orgId: null, isAllOrgs: true, vinculos: [v('org-a', {})], acessoTotal: false })).toBe(true);
+    });
+    it('admin da organização resolvida edita com a chave desligada', () => {
+        expect(podeEditarQualidadeSiacNoContexto({
+            orgId: 'org-b', isAllOrgs: false, vinculos: [v('org-b', { canEditQualitySystem: false }, 'admin')], acessoTotal: false,
+        })).toBe(true);
+    });
+    it('membro da organização resolvida ainda carregando: não bloqueia (o mesmo do guard de rota)', () => {
+        expect(podeEditarQualidadeSiacNoContexto({ orgId: 'org-c', isAllOrgs: false, vinculos, acessoTotal: false })).toBe(true);
+    });
+    it('acesso total (desenvolvedor) edita sempre, em qualquer contexto', () => {
+        expect(podeEditarQualidadeSiacNoContexto({ orgId: 'org-b', isAllOrgs: false, vinculos, acessoTotal: true })).toBe(true);
+        expect(podeEditarQualidadeSiacNoContexto({ orgId: null, isAllOrgs: true, vinculos, acessoTotal: true })).toBe(true);
     });
 });

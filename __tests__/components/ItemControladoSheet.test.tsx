@@ -13,10 +13,13 @@
  *  (g) remover dois códigos seguidos sem a recarga chegar → o 2º não traz de volta o 1º;
  *  (h) upload no GED ok e vínculo falho → a mensagem diz que o documento FICOU no GED;
  *  (i) escolher documento durante uma gravação não grava de novo;
- *  (j) "substitui" apontando para item fora da lista → o select mostra o valor e o Salvar o mantém.
+ *  (j) "substitui" apontando para item fora da lista → o select mostra o valor e o Salvar o mantém;
+ *  (k) 2º registro com pessoa nova → o nome dela aparece (a busca no RH segue as pessoas sem nome);
+ *  (l) ARQUIVADO pede justificativa e a guarda; DISPENSADO → ARQUIVADO mantém o texto; só ATIVO limpa;
+ *  (m) enquanto a busca dos nomes anda, a linha diz "carregando…", não "Pessoa não encontrada no RH".
  */
 import React from 'react';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import type { ItemControlado, ProcedimentoResumo } from '../../types/qualidadeSiac';
@@ -171,6 +174,34 @@ describe('Qualidade (SiAC) — Sheet do item controlado', () => {
         expect(botao.title).toBe('Escolha o curso de treinamento primeiro');
     });
 
+    it('(k) 2º registro com pessoa NOVA de empreiteira: o nome dela aparece nos Treinados (busca o RH de novo)', async () => {
+        const comCurso = item({ training_course_id: 'curso-1' });
+        const edicao = { modo: 'editar' as const, item: comCurso };
+        const r1 = { employee_id: 'e1', data_realizacao: '2026-10-01', aprovado: true, externo: false, registrado_em: null };
+        const r2 = { employee_id: 'e2', data_realizacao: '2026-11-20', aprovado: true, externo: true, registrado_em: null };
+        listEmployees
+            .mockResolvedValueOnce([{ id: 'e1', org_id: 'org-a', name: 'Ana Própria' }])
+            .mockResolvedValueOnce([{ id: 'e1', org_id: 'org-a', name: 'Ana Própria' }, { id: 'e2', org_id: 'org-a', name: 'Bruno Empreiteiro' }]);
+        const ui = (treinamentos: typeof r1[]) => (
+            <ConfirmProvider>
+                <ItemControladoSheet edicao={edicao} itensDaOrg={[comCurso]} procedimento={null} treinamentos={treinamentos} podeEditar
+                    onClose={vi.fn()} onSaved={vi.fn(async () => undefined)} onRegistrarTreinamento={vi.fn()} />
+            </ConfirmProvider>
+        );
+        const { rerender } = render(ui([r1]));
+        expect(await screen.findByText('Ana Própria')).toBeTruthy();
+        // a recarga do módulo traz o 2º registro, de uma pessoa que o Sheet ainda não conhece
+        rerender(ui([r1, r2]));
+        expect(await screen.findByText('Bruno Empreiteiro')).toBeTruthy();
+        expect(screen.queryByText('Pessoa não encontrada no RH')).toBeNull();
+        expect(listEmployees).toHaveBeenCalledTimes(2);
+        expect(listEmployees).toHaveBeenLastCalledWith('org-a');
+        // recarga com as MESMAS pessoas (array novo): todos os nomes já conhecidos, não busca de novo
+        rerender(ui([{ ...r1 }, { ...r2 }]));
+        await waitFor(() => expect(screen.getByText('Bruno Empreiteiro')).toBeTruthy());
+        expect(listEmployees).toHaveBeenCalledTimes(2);
+    });
+
     it('(f) novo em "Todas": cria em cada organização do alvo, avisa e fecha', async () => {
         const user = userEvent.setup();
         const { onSaved, onClose } = montar({
@@ -242,5 +273,69 @@ describe('Qualidade (SiAC) — Sheet do item controlado', () => {
         await user.type(nome, 'outro nome');
         await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
         await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('item-1', expect.objectContaining({ substitui_item_id: 'fora-1' })));
+    });
+    it('(l) ARQUIVADO sem justificativa: não grava e mostra o erro no campo', async () => {
+        const user = userEvent.setup();
+        montar();
+        await user.selectOptions(await screen.findByLabelText('Situação'), 'ARQUIVADO');
+        await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+        expect(await screen.findByText('Escreva por que o item foi arquivado.')).toBeTruthy();
+        expect(screen.getByLabelText('Justificativa do arquivamento').getAttribute('aria-invalid')).toBe('true');
+        expect(atualizarItem).not.toHaveBeenCalled();
+    });
+
+    it('(l2) ARQUIVADO com justificativa: grava a situação e o texto', async () => {
+        const user = userEvent.setup();
+        montar();
+        await user.selectOptions(await screen.findByLabelText('Situação'), 'ARQUIVADO');
+        await user.type(screen.getByLabelText('Justificativa do arquivamento'), '  criado por engano em Todas  ');
+        await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+        await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('item-1',
+            expect.objectContaining({ situacao: 'ARQUIVADO', justificativa: 'criado por engano em Todas' })));
+    });
+
+    it('(l3) DISPENSADO → ARQUIVADO: a justificativa da dispensa fica no campo e é gravada', async () => {
+        const user = userEvent.setup();
+        montar({ edicao: { modo: 'editar', item: item({ situacao: 'DISPENSADO', justificativa: 'não executa alvenaria estrutural' }) } });
+        expect((await screen.findByLabelText('Justificativa da dispensa') as HTMLTextAreaElement).value).toBe('não executa alvenaria estrutural');
+        await user.selectOptions(screen.getByLabelText('Situação'), 'ARQUIVADO');
+        expect((screen.getByLabelText('Justificativa do arquivamento') as HTMLTextAreaElement).value).toBe('não executa alvenaria estrutural');
+        await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+        await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('item-1',
+            expect.objectContaining({ situacao: 'ARQUIVADO', justificativa: 'não executa alvenaria estrutural' })));
+        // o estado gravado guardou o texto: nada a salvar de novo, e o campo continua com ele
+        await waitFor(() => expect((screen.getByRole('button', { name: 'Salvar alterações' }) as HTMLButtonElement).disabled).toBe(true));
+        expect((screen.getByLabelText('Justificativa do arquivamento') as HTMLTextAreaElement).value).toBe('não executa alvenaria estrutural');
+    });
+
+    it('(l4) de volta a ATIVO: a justificativa é limpa', async () => {
+        const user = userEvent.setup();
+        montar({ edicao: { modo: 'editar', item: item({ situacao: 'ARQUIVADO', justificativa: 'criado por engano' }) } });
+        await user.selectOptions(await screen.findByLabelText('Situação'), 'ATIVO');
+        expect(screen.queryByLabelText(/Justificativa/)).toBeNull();
+        await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+        await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('item-1',
+            expect.objectContaining({ situacao: 'ATIVO', justificativa: null })));
+    });
+
+    it('(m) nomes ainda buscando: "carregando…"; a busca volta vazia: "Pessoa não encontrada no RH"', async () => {
+        let responder: (l: unknown[]) => void = () => undefined;
+        listEmployees.mockImplementation(() => new Promise(r => { responder = r; }));
+        const comCurso = item({ training_course_id: 'curso-1' });
+        render(
+            <ConfirmProvider>
+                <ItemControladoSheet edicao={{ modo: 'editar', item: comCurso }} itensDaOrg={[comCurso]} procedimento={null}
+                    treinamentos={[{ employee_id: 'e1', data_realizacao: '2026-10-01', aprovado: true, externo: false, registrado_em: null }]}
+                    podeEditar onClose={vi.fn()} onSaved={vi.fn(async () => undefined)} onRegistrarTreinamento={vi.fn()} />
+            </ConfirmProvider>,
+        );
+        expect(await screen.findByText('carregando…')).toBeTruthy();
+        expect(screen.queryByText('Pessoa não encontrada no RH')).toBeNull();
+        await waitFor(() => expect(listEmployees).toHaveBeenCalledTimes(1));
+        await act(async () => { responder([]); });
+        expect(await screen.findByText('Pessoa não encontrada no RH')).toBeTruthy();
+        expect(screen.queryByText('carregando…')).toBeNull();
+        // quem o RH não devolveu não dispara outra busca
+        expect(listEmployees).toHaveBeenCalledTimes(1);
     });
 });

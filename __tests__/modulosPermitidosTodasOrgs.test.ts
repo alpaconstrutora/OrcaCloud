@@ -78,6 +78,33 @@ describe('permitidoNaOrg — a regra do guard de rota', () => {
     });
 });
 
+describe('Qualidade (SiAC) — chave própria, herda de Obras', () => {
+    const base = { activeEmpresa: null, profile, activeOrg: undefined, isDevEmail: false };
+
+    it('sem nada gravado, qualidade_siac segue obras', () => {
+        const sem = membro(EU, { permissions: { canViewBudget: false } as never });
+        const com = membro(EU, { permissions: { canViewBudget: true } as never });
+        expect(modulosPermitidos({ ...base, currentMember: sem }).qualidade_siac).toBe(false);
+        expect(modulosPermitidos({ ...base, currentMember: com }).qualidade_siac).toBe(true);
+    });
+
+    it('canViewQualitySystem:false explícito vence obras ligado', () => {
+        const m = membro(EU, { permissions: { canViewBudget: true, canViewQualitySystem: false } as never });
+        expect(modulosPermitidos({ ...base, currentMember: m }).qualidade_siac).toBe(false);
+    });
+
+    it('em "Todas" (sem membro resolvido) segue obras', () => {
+        const m = modulosPermitidosNoContexto({ ...base, currentMember: null, organizations: [org('a', [membro(EU, { permissions: { canViewQualitySystem: true, canViewBudget: false } as never })])], email: EU });
+        expect(m.qualidade_siac).toBe(true);
+        expect(modulosPermitidos({ ...base, currentMember: null }).qualidade_siac).toBe(true);
+    });
+
+    it('administrador e desenvolvedor sempre veem', () => {
+        expect(modulosPermitidos({ ...base, currentMember: membro(EU, { role: 'admin' }) }).qualidade_siac).toBe(true);
+        expect(modulosPermitidos({ ...base, profile: { group: 'DESENVOLVEDOR' }, currentMember: null }).qualidade_siac).toBe(true);
+    });
+});
+
 describe('busca rápida (Ctrl+K) usa as chaves do menu', () => {
     const layout = fs.readFileSync(path.resolve(__dirname, '../components/Layout.tsx'), 'utf8');
     const chaves = Object.keys(modulosPermitidos({ activeEmpresa: null, profile: { group: 'DESENVOLVEDOR' }, currentMember: null, activeOrg: undefined, isDevEmail: false }));

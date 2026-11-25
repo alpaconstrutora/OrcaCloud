@@ -413,6 +413,9 @@ export interface UserPermissions {
     /** Módulo Riscos (14/11/2026). Sem valor gravado, herda de Obras — ver utils/permissaoRiscos.ts. */
     canViewRisks?: boolean;
     canEditRisks?: boolean;
+    /** Módulo Qualidade (SiAC) (25/11/2026). Sem valor gravado, herda de Obras — ver utils/permissaoQualidadeSiac.ts. */
+    canViewQualitySystem?: boolean;
+    canEditQualitySystem?: boolean;
     /** Diretoria / ÒPURA CEO (17/11/2026). Desligada para todos, sem herança; o banco confere a
      *  mesma flag (`_diretoria_orgs`) — ver utils/permissaoDiretoria.ts. */
     canViewDiretoria?: boolean;

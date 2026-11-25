@@ -75,6 +75,7 @@ import type { SupplierPortalTab } from './SupplierDashboard';
 import { podeAcessarMarket } from '../utils/acessoAoMarket';
 import { podeEditarTreinamentos } from '../utils/permissaoTreinamentos';
 import { podeEditarRiscos } from '../utils/permissaoRiscos';
+import { podeEditarQualidadeSiac, podeEditarQualidadeSiacEmTodas } from '../utils/permissaoQualidadeSiac';
 import { podeVerDiretoria } from '../utils/permissaoDiretoria';
 import { temAcessoTotal } from '../lib/acessoTotal';
 import { pedirFolha } from '../utils/folhaDeConfiguracoes';
@@ -84,6 +85,7 @@ const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplate
 const AppraisalModule = React.lazy(() => import('./AppraisalModule'));
 const WarrantyModule        = React.lazy(() => import('./WarrantyModule'));
 const RiscosModule         = React.lazy(() => import('./riscos/RiscosModule'));
+const QualidadeModule      = React.lazy(() => import('./qualidade/QualidadeModule'));
 const DiretoriaModule      = React.lazy(() => import('./diretoria/DiretoriaModule'));
 const BIDashboard           = React.lazy(() => import('./BIDashboard'));
 const CentralControle       = React.lazy(() => import('./CentralControle'));
@@ -391,6 +393,10 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     } else if (activeView === 'riscos') {
       // Chave própria; sem nada gravado, herda de Obras (utils/permissaoRiscos.ts).
       allowed = isModuleAllowed('canViewRisks', 'riscos', naOrg => naOrg('canViewBudget', 'obras'));
+    } else if (activeView === 'qualidade-siac') {
+      // Qualidade (SiAC): chave própria; sem nada gravado, herda de Obras (utils/permissaoQualidadeSiac.ts).
+      // `quality` é o Pós-Obra & Garantia — outro módulo, outra chave.
+      allowed = isModuleAllowed('canViewQualitySystem', 'qualidade_siac', naOrg => naOrg('canViewBudget', 'obras'));
     } else if (['eng-obras', 'eng-orcamentos', 'analytic', 'parametric', 'explorer'].includes(activeView)) {
       allowed = isModuleAllowed('canViewBudget', 'obras');
     } else if (activeView.startsWith('supplies-')) {
@@ -1376,6 +1382,27 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             administrador: currentProfile.group === 'DESENVOLVEDOR' || isDevEmail || !currentMember || currentMember.role === 'admin',
             papel: currentMember?.role ?? null,
           })}
+        />
+      );
+
+    // ── Qualidade (SiAC/PBQP-H, 25/11/2026, docs/planos/2026-11-25-qualidade-siac-pbqph.md) ──
+    case 'qualidade-siac':
+      return (
+        // Organização pelo `useOrgContext()` dentro do módulo (REGRA #5); só a permissão de
+        // edição é decidida aqui, onde o membro da organização ativa já está resolvido.
+        // Topo em "Todas": edita só quem pode editar em TODAS as suas organizações
+        // (`podeEditarQualidadeSiacEmTodas`) — "Todas" não conta mais como administrador.
+        <QualidadeModule
+          podeEditar={activeOrganizationId
+            ? podeEditarQualidadeSiac({
+              permissoes: currentMember?.permissions as unknown as Record<string, unknown> | undefined,
+              administrador: currentProfile.group === 'DESENVOLVEDOR' || isDevEmail || !currentMember || currentMember.role === 'admin',
+              papel: currentMember?.role ?? null,
+            })
+            : podeEditarQualidadeSiacEmTodas(
+              vinculosDoUsuario(organizations, session?.user?.email),
+              currentProfile.group === 'DESENVOLVEDOR' || isDevEmail,
+            )}
         />
       );
 

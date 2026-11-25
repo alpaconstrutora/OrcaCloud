@@ -3,6 +3,7 @@ import { useStore } from '../store/useStore';
 import type { Company, Organization } from '../types';
 import { podeVerTreinamentos } from './permissaoTreinamentos';
 import { podeVerRiscos } from './permissaoRiscos';
+import { podeVerQualidadeSiac } from './permissaoQualidadeSiac';
 import { podeVerDiretoria } from './permissaoDiretoria';
 import { temAcessoTotal } from '../lib/acessoTotal';
 
@@ -37,15 +38,15 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
 
   if (profile.group === 'DESENVOLVEDOR' || isDevEmail) {
     return {
-      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true, diretoria
+      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true, qualidade_siac: true, diretoria
     };
   }
 
-  if (!currentMember) return { ...baseMods, ecommerce: false, treinamentos: baseMods.rh !== false, riscos: baseMods.obras !== false, diretoria };
+  if (!currentMember) return { ...baseMods, ecommerce: false, treinamentos: baseMods.rh !== false, riscos: baseMods.obras !== false, qualidade_siac: baseMods.obras !== false, diretoria };
 
   if (currentMember.role === 'admin') {
     return {
-      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true, diretoria
+      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true, riscos: true, qualidade_siac: true, diretoria
     };
   }
 
@@ -87,6 +88,7 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
       ecommerce: false,
       treinamentos: false,
       riscos: false,
+      qualidade_siac: false,
       diretoria,
     };
   }
@@ -103,6 +105,7 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
       ecommerce: false,
       treinamentos: false,
       riscos: false,
+      qualidade_siac: false,
       diretoria,
     };
   }
@@ -124,6 +127,13 @@ export function modulosPermitidos({ activeEmpresa, profile, currentMember, activ
     // decide para o usuário (utils/permissaoRiscos.ts) — a MESMA herança da rota
     // (AppRouter: `isModuleAllowed('canViewRisks', 'riscos', () => isModuleAllowed('canViewBudget', 'obras'))`).
     riscos: podeVerRiscos({
+      permissoes: currentMember.permissions as unknown as Record<string, unknown> | undefined,
+      matrizDoCargo: roleConfig,
+      podeVerObras: obras,
+    }),
+    // Qualidade (SiAC) (25/11/2026): chave própria; sem nada gravado, herda Obras
+    // (utils/permissaoQualidadeSiac.ts) — a MESMA herança da rota.
+    qualidade_siac: podeVerQualidadeSiac({
       permissoes: currentMember.permissions as unknown as Record<string, unknown> | undefined,
       matrizDoCargo: roleConfig,
       podeVerObras: obras,
@@ -239,7 +249,7 @@ export function permitidoNaOrg(
  */
 export const MODULO_DO_ITEM_DE_BUSCA: Record<string, keyof ModulosPermitidos> = {
   'eng-obras': 'obras', 'eng-orcamentos': 'obras', 'eng-planejamento': 'obras',
-  riscos: 'riscos', diretoria: 'diretoria',
+  riscos: 'riscos', diretoria: 'diretoria', 'qualidade-siac': 'qualidade_siac',
   'supplies-solicitacoes': 'compras', 'supplies-contracts': 'compras', 'supplies-quotations': 'compras', 'supplies-orders': 'compras',
   'financial-dashboard': 'financeiro', 'contas-a-pagar': 'financeiro', 'project-financial': 'financeiro',
   'fluxo-financeiro': 'financeiro', 'contas-a-receber': 'financeiro', 'boletos-pagar': 'financeiro',

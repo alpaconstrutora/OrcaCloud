@@ -1,6 +1,6 @@
 import React from 'react';
 import { assinarGravacoes, obterSituacaoGravacao } from '../utils/projetoPersistido';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes, Smartphone, Wallet, ShieldAlert, Gavel } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes, Smartphone, Wallet, ShieldAlert, Gavel, BadgeCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -449,6 +449,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'eng-orcamentos', label: 'Orçamentos', group: 'Engenharia', icon: FolderOpen },
       { id: 'eng-planejamento', label: 'Planejamento', group: 'Engenharia', icon: Calendar },
       { id: 'riscos', label: 'Riscos', group: 'Engenharia', icon: ShieldAlert },
+      { id: 'qualidade-siac', label: 'Qualidade', group: 'Engenharia', icon: BadgeCheck },
       { id: 'supplies-solicitacoes', label: 'Solicitações de compra', group: 'Suprimentos', icon: ClipboardPen },
       { id: 'supplies-contracts', label: 'Contratos', group: 'Suprimentos', icon: FileText },
       { id: 'supplies-quotations', label: 'Cotações', group: 'Suprimentos', icon: FileText },
@@ -947,6 +948,8 @@ const Layout: React.FC<LayoutProps> = ({
                   <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" />
                   {/* Riscos (14/11/2026): chave própria `canViewRisks`; sem nada gravado, herda Obras. */}
                   {(mod.riscos || isDev) && <NavItem id="riscos" icon={ShieldAlert} label="Riscos" />}
+                  {/* Qualidade SiAC (25/11/2026): chave própria `canViewQualitySystem`; sem nada gravado, herda Obras. */}
+                  {(mod.qualidade_siac || isDev) && <NavItem id="qualidade-siac" icon={BadgeCheck} label="Qualidade" />}
                 </>
               )}
 
@@ -1359,6 +1362,7 @@ const Layout: React.FC<LayoutProps> = ({
 
               <NavItem id="pos-obra" icon={Shield} label="Pós-Obra & Garantia" forceFull />
               {(mod.riscos || isDev) && <NavItem id="riscos" icon={ShieldAlert} label="Riscos" forceFull />}
+              {(mod.qualidade_siac || isDev) && <NavItem id="qualidade-siac" icon={BadgeCheck} label="Qualidade" forceFull />}
 
               {(mod.ecommerce || isDev) && (
                 <NavItem id="opura-governance" icon={Shield} label="Governança Corporativa" forceFull />

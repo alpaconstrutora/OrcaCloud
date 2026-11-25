@@ -70,6 +70,17 @@ interface Props {
   extrasChave?: string;
   /** 12/10/2026: o mapa (ruas/relevo das camadas) colado na malha do relevo — ver `Blueprint3DViewer`. */
   mapaNoRelevo?: { plano: PlanoDaTexturaDoMapa; chave: string } | null;
+  /**
+   * MAQUETE (25/11/2026): o entorno real — prédios do OpenStreetMap e árvores do ESA WorldCover —,
+   * já no desenho (mm) com a base em Y de mundo (cota − zero). Só é desenhado no estilo Maquete.
+   */
+  entornoDaMaquete?: {
+    predios: { id: string; anel: { x: number; y: number }[]; baseY: number; alturaM: number }[];
+    arvores: { x: number; y: number; baseY: number; alturaM: number; copaM: number }[];
+    chave: string;
+  } | null;
+  /** Créditos das fontes e avisos (por que algo não veio), no canto do 3D da Maquete. */
+  notasDaMaquete?: string[];
   /** Ids de peça que a lista de Componentes mandou esconder. Não muda o modelo. */
   ocultos?: Set<string>;
   /** CAMADAS EM MEIO-TOM (04/10/2026): peças translúcidas e sem clique — ver `Fantasma` no `Blueprint3DViewer`. */

@@ -1063,6 +1063,38 @@ export function cotaDeProjeto(
   };
 }
 
+/**
+ * A SUPERFÍCIE DE PROJETO COMO GRADE (25/11/2026, platô desenhado ajustado no 3D): a mesma grade do
+ * terreno (origem e espaçamento), com `cotaDeProjeto` em cada nó — o que passa por `malhaDaGrade`,
+ * `gerarCurvasNosNiveis` e `volumeEntreSuperficies` como o terreno natural passa. Nó sem cota natural
+ * fica `null` (nem dentro do anel: o platô não inventa chão onde o levantamento não chegou).
+ *
+ * `passo > 1`: grade RALA (um nó a cada `passo`, espaçamento × passo) — a prévia durante o arraste no
+ * 3D quando a cheia não cabe num quadro.
+ */
+export function gradeDeProjeto(
+  grade: GradeDeElevacao,
+  anelPlato: Point[],
+  cotaPlatoM: number,
+  parametros: ParametrosDeTerraplenagem,
+  inclinacao: InclinacaoDoPlato | null,
+  passo = 1,
+): GradeDeElevacao {
+  const { origem, espacamentoMm: esp, colunas, linhas, cotasM } = grade;
+  const p = Math.max(1, Math.floor(passo));
+  const cols = Math.ceil(colunas / p);
+  const lins = Math.ceil(linhas / p);
+  const cota = cotaDeProjeto(grade, anelPlato, cotaPlatoM, parametros, inclinacao);
+  const saida: (number | null)[] = new Array(cols * lins);
+  for (let l = 0; l < lins; l++) {
+    for (let c = 0; c < cols; c++) {
+      const natural = cotasM[l * p * colunas + c * p];
+      saida[l * cols + c] = natural === null ? null : cota({ x: origem.x + c * p * esp, y: origem.y + l * p * esp });
+    }
+  }
+  return { origem, espacamentoMm: esp * p, colunas: cols, linhas: lins, cotasM: saida };
+}
+
 /** Profundidade até a qual a vala ainda é o que diz ser. */
 export function profundidadeLimiteDaDrenagem(tipo: TipoDeDrenagem): number {
   return tipo === 'TUBO' ? 1.5 : 0.6;

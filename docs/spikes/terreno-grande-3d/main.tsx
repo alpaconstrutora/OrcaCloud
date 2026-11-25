@@ -85,6 +85,7 @@ declare global {
     __plato3d?: { anel: { x: number; y: number }[]; cotaM: number } | null;
     __confirmacoes?: number;
     __previas?: number[];
+    __anelDesenhado?: { x: number; y: number }[] | null;
   }
 }
 window.__terreno = relevo ? { minY: relevo.minY, maxY: relevo.maxY, triangulos: relevo.triangulos } : null;
@@ -212,6 +213,8 @@ function Cena3d() {
       entornoDaMaquete={entorno}
       saldoDoPlato={derivado?.saldo ?? SALDO}
       platoEditavel={editavel}
+      // `?desenhar=1` (25/11/2026): a ferramenta Platô ativa no 3D — o contorno fechado vai para o espião.
+      desenharPlato3d={q.get('desenhar') ? { onAnel: (anel) => (window.__anelDesenhado = anel) } : null}
       onEquilibrio={() => {}}
       notasDaMaquete={notas}
     />

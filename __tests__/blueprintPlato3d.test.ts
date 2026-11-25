@@ -3,7 +3,7 @@
  * 90°), validar o contorno e a cota da seta (passo de 5 cm).
  */
 import { describe, expect, it } from 'vitest';
-import { anelValido, cotaDaSeta, moverCanto } from '../utils/blueprintPlato3d';
+import { anelValido, cotaDaSeta, inserirCanto, moverCanto, removerCanto } from '../utils/blueprintPlato3d';
 
 const RET = [
   { x: 0, y: 0 },
@@ -50,5 +50,25 @@ describe('cotaDaSeta', () => {
     expect(cotaDaSeta(100, 10, true)).toBe(100.2);
     expect(cotaDaSeta(100, 1, true)).toBe(100);
     expect(cotaDaSeta(100, 50, true)).toBe(101);
+  });
+});
+
+describe('inserirCanto e removerCanto (25/11: duplo clique num lado / botão direito numa bolinha)', () => {
+  it('inserirCanto põe o ponto PROJETADO no lado mais próximo, entre as duas pontas dele', () => {
+    // Clique perto do lado de baixo (y = 0), um pouco fora: entra (4000, 0) entre os cantos 0 e 1.
+    const r = inserirCanto(RET, { x: 4000.4, y: -300 });
+    expect(r).toEqual([RET[0], { x: 4000, y: 0 }, RET[1], RET[2], RET[3]]);
+  });
+  it('perto do lado de fecho (do último ao primeiro canto), entra no fim', () => {
+    const r = inserirCanto(RET, { x: 200, y: 3000 });
+    expect(r).toEqual([...RET, { x: 0, y: 3000 }]);
+  });
+  it('em cima de um canto existente não duplica', () => {
+    expect(inserirCanto(RET, { x: 10000, y: 0 })).toEqual(RET);
+  });
+  it('removerCanto tira o i-ésimo; com 3 cantos não remove (o platô precisa de 3)', () => {
+    expect(removerCanto(RET, 1)).toEqual([RET[0], RET[2], RET[3]]);
+    const tri = [RET[0], RET[1], RET[2]];
+    expect(removerCanto(tri, 0)).toEqual(tri);
   });
 });

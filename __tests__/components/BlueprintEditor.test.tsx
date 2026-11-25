@@ -8576,6 +8576,8 @@ describe('BlueprintEditor · platô no menu Topografia', () => {
     expect(plato).toHaveAttribute('title', expect.stringMatching(/cantos do platô/i));
     await userEvent.setup().click(plato);
     expect(botao(/^platô$/i)).toHaveAttribute('aria-pressed', 'true');
+    // A barra de opções diz o nome da ferramenta — não o id interno "plato" (visto em produção, 25/11).
+    expect(screen.queryByText(/^plato$/)).toBeNull();
   }, 60000);
 });
 

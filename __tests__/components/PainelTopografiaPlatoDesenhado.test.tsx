@@ -6,7 +6,7 @@
  * Montagem copiada de `PainelTopografiaFase2.test.tsx`.
  */
 import React from 'react';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import PainelTopografia, { type TerraplenagemNoPainel } from '../../components/blueprint/PainelTopografia';
 import type { Topografia } from '../../hooks/useBlueprintTopografia';
@@ -113,6 +113,16 @@ describe('PainelTopografia · o platô desenhado', () => {
     const b = screen.getByRole('button', { name: 'Editar contorno' });
     expect(b).toBeDisabled();
     expect(b.getAttribute('title')).toMatch(/feche o lote/i);
+  });
+
+  it('"Excluir platô desenhado" só aparece com desenho e, confirmado, chama onExcluirDesenho', async () => {
+    montar();
+    expect(screen.queryByRole('button', { name: 'Excluir platô desenhado' })).toBeNull();
+    cleanup();
+    const onExcluirDesenho = vi.fn();
+    montar({ temDesenho: true, onExcluirDesenho });
+    fireEvent.click(screen.getByRole('button', { name: 'Excluir platô desenhado' }));
+    await waitFor(() => expect(onExcluirDesenho).toHaveBeenCalledTimes(1));
   });
 
   it('o contorno recusado aparece com o motivo', () => {

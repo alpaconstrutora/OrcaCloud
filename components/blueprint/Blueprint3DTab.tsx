@@ -94,6 +94,12 @@ interface Props {
   /** Aviso do platô (contorno recusado), mostrado no selo do saldo. */
   avisoDoPlato?: string | null;
   /**
+   * DESENHAR O PLATÔ NO 3D (25/11/2026, pedido: o usuário clicou os cantos no 3D com Topografia › Platô e "não
+   * funcionou"): com a ferramenta Platô ativa, cada clique no TERRENO do 3D marca um canto; clicar no 1º canto (ou
+   * duplo clique) fecha e entrega o contorno; Esc cancela. Shift libera a trava de 90°.
+   */
+  desenharPlato3d?: { onAnel: (anel: { x: number; y: number }[]) => void } | null;
+  /**
    * MAQUETE (25/11/2026): o entorno real — prédios do OpenStreetMap e árvores do ESA WorldCover —,
    * já no desenho (mm) com a base em Y de mundo (cota − zero). Só é desenhado no estilo Maquete.
    */

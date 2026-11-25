@@ -2426,10 +2426,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const recarregarParcelas = useCallback(async () => {
         const orgId = formData.organization_id || organizationId;
         const alvos = generateTargets.filter(t => t.kind === 'CONTRACT');
+        // Parcela gerada por aditivo de prorrogação diz qual (pedido de 25/11/2026:
+        // as da renovação do CTL-006 não se distinguiam das do contrato original).
+        const rotuloDoAditivo = new Map(generateTargets
+            .filter(t => t.kind === 'ADDENDUM')
+            .map(t => [t.id.replace(/^ad:/, ''), t.label]));
 
         const dosContratos = await Promise.all(alvos.map(a =>
             contractService.listFinancialEntries(a.contract)
-                .then(rows => rows.map(r => ({ ...r, __origem: a.label as string })))
+                .then(rows => rows.map(r => ({
+                    ...r,
+                    __origem: (r.contract_addendum_id && rotuloDoAditivo.get(r.contract_addendum_id)) || (a.label as string),
+                })))
                 .catch(() => [])
         ));
 

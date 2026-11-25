@@ -113,7 +113,9 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
             setPreview(p);
             if (!endDate) setEndDate(p.endDate);
             if (!cycle) setCycle(p.parent.billing_cycle || 'Mensal');
-            if (!dueDay) setDueDay(String(p.parent.due_day ?? ''));
+            // O dia em que a série vence DE FATO (última parcela); o due_day do
+            // contrato pode estar diferente (CTL-006: 23 × parcelas no dia 10).
+            if (!dueDay) setDueDay(String(p.seriesDueDay ?? p.parent.due_day ?? ''));
             if (!index) setIndex(p.parent.reajuste_index || 'IGP-M');
             if (!valor) setValor(p.newValue.toFixed(2));
         } catch (e) {
@@ -404,7 +406,7 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged 
                                 <span>
                                     O contrato {vigente.number} <strong>não</strong> será encerrado: a vigência passa a
                                     terminar em {fmtDate(endDate || preview.endDate)} e serão geradas{' '}
-                                    {preview.installmentsToGenerate} parcela(s) de {fmtDate(preview.startDate)} até lá.
+                                    {preview.installmentsToGenerate} parcela(s){preview.firstInstallmentDate ? `, a 1ª em ${fmtDate(preview.firstInstallmentDate)} (continua a série atual)` : ` de ${fmtDate(preview.startDate)} até lá`}.
                                     Parcelas anteriores não são afetadas.
                                 </span>
                             ) : (

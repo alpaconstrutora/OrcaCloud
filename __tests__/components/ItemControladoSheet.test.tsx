@@ -13,7 +13,8 @@
  *  (g) remover dois códigos seguidos sem a recarga chegar → o 2º não traz de volta o 1º;
  *  (h) upload no GED ok e vínculo falho → a mensagem diz que o documento FICOU no GED;
  *  (i) escolher documento durante uma gravação não grava de novo;
- *  (j) "substitui" apontando para item fora da lista → o select mostra o valor e o Salvar o mantém.
+ *  (j) "substitui" apontando para item fora da lista → o select mostra o valor e o Salvar o mantém;
+ *  (k) 2º registro com pessoa nova → o nome dela aparece (a busca no RH segue as pessoas sem nome).
  */
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -169,6 +170,34 @@ describe('Qualidade (SiAC) — Sheet do item controlado', () => {
         const botao = await screen.findByRole('button', { name: 'Registrar treinamento em obra' }) as HTMLButtonElement;
         expect(botao.disabled).toBe(true);
         expect(botao.title).toBe('Escolha o curso de treinamento primeiro');
+    });
+
+    it('(k) 2º registro com pessoa NOVA de empreiteira: o nome dela aparece nos Treinados (busca o RH de novo)', async () => {
+        const comCurso = item({ training_course_id: 'curso-1' });
+        const edicao = { modo: 'editar' as const, item: comCurso };
+        const r1 = { employee_id: 'e1', data_realizacao: '2026-10-01', aprovado: true, externo: false, registrado_em: null };
+        const r2 = { employee_id: 'e2', data_realizacao: '2026-11-20', aprovado: true, externo: true, registrado_em: null };
+        listEmployees
+            .mockResolvedValueOnce([{ id: 'e1', org_id: 'org-a', name: 'Ana Própria' }])
+            .mockResolvedValueOnce([{ id: 'e1', org_id: 'org-a', name: 'Ana Própria' }, { id: 'e2', org_id: 'org-a', name: 'Bruno Empreiteiro' }]);
+        const ui = (treinamentos: typeof r1[]) => (
+            <ConfirmProvider>
+                <ItemControladoSheet edicao={edicao} itensDaOrg={[comCurso]} procedimento={null} treinamentos={treinamentos} podeEditar
+                    onClose={vi.fn()} onSaved={vi.fn(async () => undefined)} onRegistrarTreinamento={vi.fn()} />
+            </ConfirmProvider>
+        );
+        const { rerender } = render(ui([r1]));
+        expect(await screen.findByText('Ana Própria')).toBeTruthy();
+        // a recarga do módulo traz o 2º registro, de uma pessoa que o Sheet ainda não conhece
+        rerender(ui([r1, r2]));
+        expect(await screen.findByText('Bruno Empreiteiro')).toBeTruthy();
+        expect(screen.queryByText('Pessoa não encontrada no RH')).toBeNull();
+        expect(listEmployees).toHaveBeenCalledTimes(2);
+        expect(listEmployees).toHaveBeenLastCalledWith('org-a');
+        // recarga com as MESMAS pessoas (array novo): todos os nomes já conhecidos, não busca de novo
+        rerender(ui([{ ...r1 }, { ...r2 }]));
+        await waitFor(() => expect(screen.getByText('Bruno Empreiteiro')).toBeTruthy());
+        expect(listEmployees).toHaveBeenCalledTimes(2);
     });
 
     it('(f) novo em "Todas": cria em cada organização do alvo, avisa e fecha', async () => {

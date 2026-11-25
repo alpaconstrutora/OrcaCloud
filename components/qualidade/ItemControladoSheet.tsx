@@ -547,19 +547,26 @@ const SecaoTreinamento: React.FC<{
         return () => { vivo = false; };
     }, [org, recarga]);
 
-    // Nomes das pessoas: o registro só traz o employee_id. Só busca quando há registro para mostrar.
+    // Nomes das pessoas: o registro só traz o employee_id. Busca no RH sempre que há registro de alguém
+    // cujo nome o Sheet ainda não conhece — não só no primeiro registro: o 2º treinamento em obra pode
+    // trazer uma pessoa de empreiteira que acabou de ganhar ficha (antes ela aparecia como "não
+    // encontrada"). A dependência é o CONJUNTO dessas pessoas (texto ordenado): quem o RH não devolve
+    // continua no conjunto, que não muda, e a busca não se repete em laço.
     const [pessoas, setPessoas] = React.useState<Record<string, Employee>>({});
     const [erroPessoas, setErroPessoas] = React.useState<string | null>(null);
-    const temRegistro = treinamentos.length > 0;
+    const semNome = React.useMemo(
+        () => [...new Set(treinamentos.map(r => r.employee_id).filter(id => !pessoas[id]))].sort().join(','),
+        [treinamentos, pessoas],
+    );
     React.useEffect(() => {
-        if (!temRegistro) return;
+        if (!semNome) return;
         let vivo = true;
         setErroPessoas(null);
         laborService.listEmployees(org)
-            .then(l => { if (vivo) setPessoas(Object.fromEntries(l.map(e => [e.id, e]))); })
+            .then(l => { if (vivo) setPessoas(p => ({ ...p, ...Object.fromEntries(l.map(e => [e.id, e])) })); })
             .catch(e => { if (vivo) setErroPessoas(errorMessage(e, 'erro desconhecido')); });
         return () => { vivo = false; };
-    }, [org, temRegistro]);
+    }, [org, semNome]);
 
     const motivo = !podeEditar ? MOTIVO_SEM_EDICAO_QUALIDADE : ocupado ? MOTIVO_OCUPADO : undefined;
     const motivoRegistrar = !podeEditar ? MOTIVO_SEM_EDICAO_QUALIDADE : !item.training_course_id ? MOTIVO_SEM_CURSO : undefined;

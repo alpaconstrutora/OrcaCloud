@@ -12,6 +12,7 @@ import { sequenciaParcelasService, type SequenciaDaConta } from '../../services/
 import type { CandidatoJuntas, ExtratoPendente, SerieDeParcelas } from '../../utils/sequenciaParcelas';
 import { useToast } from '../../hooks/useToast';
 import { formatMoney, formatDateBR } from '../ui/Format';
+import { SecaoRecolhivel } from './SecaoRecolhivel';
 import SequenciaParcelasSheet, { ROTULO_DOMINIO, listaDeNumeros } from './SequenciaParcelasSheet';
 
 const LIMITE_INICIAL = 5;
@@ -92,26 +93,30 @@ const SequenciaParcelasPanel: React.FC<Props> = ({ organizationId, selectedAccou
     const mostradas = mostrarTodos ? visiveis : visiveis.slice(0, LIMITE_INICIAL);
     const aberta = (data?.series ?? []).find(s => s.contractId === abertaId) ?? null;
 
+    // Acima da tabela da Central (guia §6.14): sem contrato com ocorrência, nem a linha aparece.
+    const semNada = !erro && visiveis.length === 0;
+
     return (
-        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
-                <ListOrdered className="w-4 h-4 text-gray-500" />
-                <h3 className="text-sm font-semibold text-gray-900">Sequência de parcelas</h3>
-                <span className="text-sm text-gray-500">
-                    · {loading ? 'calculando…' : visiveis.length === 0 ? 'nenhum contrato com ocorrência' : plural(visiveis.length, 'contrato com ocorrência', 'contratos com ocorrência')}
-                </span>
+        <>
+        {!semNada && (
+        <SecaoRecolhivel
+            chave="sequencia-parcelas"
+            icone={<ListOrdered className="w-4 h-4 text-gray-500 shrink-0" />}
+            titulo="Sequência de parcelas"
+            resumo={loading ? 'calculando…' : erro ? 'não foi possível ler' : plural(visiveis.length, 'contrato com ocorrência', 'contratos com ocorrência')}
+            acoes={
                 <button
                     type="button"
                     onClick={load}
                     disabled={loading}
-                    className="ml-auto h-8 w-8 flex items-center justify-center rounded-[6px] text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 hover:text-gray-700 transition-all disabled:opacity-50"
+                    className="h-8 w-8 flex items-center justify-center rounded-[6px] text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 hover:text-gray-700 transition-all disabled:opacity-50"
                     title="Recalcular"
                     aria-label="Recalcular a sequência de parcelas"
                 >
                     <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 </button>
-            </div>
-
+            }
+        >
             {erro && (
                 <p className="px-4 py-3 text-sm text-red-600 border-b border-gray-100">Não foi possível ler a sequência de parcelas: {erro}</p>
             )}
@@ -179,6 +184,8 @@ const SequenciaParcelasPanel: React.FC<Props> = ({ organizationId, selectedAccou
                     </button>
                 </div>
             )}
+        </SecaoRecolhivel>
+        )}
 
             <SequenciaParcelasSheet
                 serie={aberta}
@@ -188,7 +195,7 @@ const SequenciaParcelasPanel: React.FC<Props> = ({ organizationId, selectedAccou
                 onConciliar={conciliar}
                 onClose={() => setAbertaId(null)}
             />
-        </div>
+        </>
     );
 };
 

@@ -5,6 +5,7 @@ import { bankReconciliationService } from '../services/bankReconciliationService
 import type { GroupSuggestions } from '../services/reconciliationGroupService';
 import { useToast } from '../hooks/useToast';
 import { formatMoney as formatBRL, formatDateBR as formatDate } from './ui/Format';
+import { SecaoRecolhivel } from './reconciliation/SecaoRecolhivel';
 function partyOf(t: { entity_name?: string; party_name?: string; direction?: string }): { label: string; name: string } | null {
     const name = t.entity_name || t.party_name;
     if (!name) return null;
@@ -69,25 +70,28 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
     const label = 'text-xs font-semibold text-slate-500';
     const botao = 'flex items-center gap-1 h-8 px-3 rounded-[6px] text-[13px] font-medium text-blue-600 bg-white border border-blue-200 hover:bg-blue-50 transition-all disabled:opacity-50';
 
-    return (
-        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-            {/* Título de seção — mesmo vocabulário de "Regras sugeridas" (§21/§30) */}
-            <div className="flex items-center gap-2 px-4 py-3 border-b border-gray-100">
-                <Layers className="w-4 h-4 text-gray-500" />
-                <h3 className="text-sm font-semibold text-gray-900">Agrupamentos sugeridos</h3>
-                <span className="text-sm text-gray-500">
-                    · {loading ? 'calculando…' : total === 0 ? 'nenhum agrupamento provável' : `${total} ${total === 1 ? 'grupo' : 'grupos'}`}
-                </span>
-                <button
-                    onClick={load}
-                    disabled={loading}
-                    className="ml-auto h-8 w-8 flex items-center justify-center rounded-[6px] text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 hover:text-gray-700 transition-all disabled:opacity-50"
-                    title="Recalcular"
-                >
-                    <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                </button>
-            </div>
+    // Acima da tabela da Central (guia §6.14): sem nada a mostrar, nem a linha aparece.
+    if (!erro && total === 0) return null;
 
+    const recalcular = (
+        <button
+            onClick={load}
+            disabled={loading}
+            className="h-8 w-8 flex items-center justify-center rounded-[6px] text-gray-500 bg-white border border-gray-200 hover:bg-gray-50 hover:text-gray-700 transition-all disabled:opacity-50"
+            title="Recalcular"
+        >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
+    );
+
+    return (
+        <SecaoRecolhivel
+            chave="agrupamentos"
+            icone={<Layers className="w-4 h-4 text-gray-500 shrink-0" />}
+            titulo="Agrupamentos sugeridos"
+            resumo={loading ? 'calculando…' : erro ? 'não foi possível calcular' : `${total} ${total === 1 ? 'grupo' : 'grupos'}`}
+            acoes={recalcular}
+        >
             {erro && (
                 <p className="px-4 py-3 text-sm text-red-600 border-b border-gray-100">Não foi possível calcular os agrupamentos: {erro}</p>
             )}
@@ -207,7 +211,7 @@ const GroupMatchPanel: React.FC<GroupMatchPanelProps> = ({ organizationId, selec
                     })}
                 </div>
             )}
-        </div>
+        </SecaoRecolhivel>
     );
 };
 

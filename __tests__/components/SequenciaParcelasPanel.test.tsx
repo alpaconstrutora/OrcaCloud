@@ -56,6 +56,8 @@ const renderizar = (onReload = vi.fn()) => render(
 describe('SequenciaParcelasPanel', () => {
     beforeEach(() => {
         localStorage.clear();
+        // Os casos abaixo olham o conteúdo: seção já aberta (o padrão recolhido tem teste próprio).
+        localStorage.setItem('conciliacao:secao:sequencia-parcelas:aberta', 'true');
         carregar.mockReset().mockResolvedValue(dados());
         conciliarJuntas.mockReset().mockResolvedValue(undefined);
     });
@@ -110,6 +112,25 @@ describe('SequenciaParcelasPanel', () => {
         expect(screen.queryAllByText('Conferida')).toHaveLength(0);
         expect(screen.getAllByText('Furo — não paga')).toHaveLength(2);
         expect(localStorage.getItem('conciliacao:sequencia:ocultarConciliadas')).toBe('true');
+    });
+
+    it('acima da tabela: nasce RECOLHIDA, uma linha com a contagem; o clique abre e fica lembrado', async () => {
+        localStorage.clear();
+        renderizar();
+        const titulo = await screen.findByRole('button', { name: /Sequência de parcelas.*2 contratos com ocorrência/ });
+        expect(titulo.getAttribute('aria-expanded')).toBe('false');
+        expect(screen.queryByText('CTL-001 · Aluguel')).toBeNull();
+        fireEvent.click(titulo);
+        expect(await screen.findByText('CTL-001 · Aluguel')).toBeTruthy();
+        expect(localStorage.getItem('conciliacao:secao:sequencia-parcelas:aberta')).toBe('true');
+    });
+
+    it('sem contrato com ocorrência, a seção nem aparece', async () => {
+        carregar.mockReset().mockResolvedValue({ ...dados(), series: [], candidatos: [], parecidos: new Map() });
+        const { container } = renderizar();
+        await waitFor(() => expect(carregar).toHaveBeenCalled());
+        await waitFor(() => expect(screen.queryByText(/calculando/)).toBeNull());
+        expect(container.textContent).not.toContain('Sequência de parcelas');
     });
 
     it('erro de leitura aparece no card', async () => {

@@ -14,7 +14,9 @@
  *  (f) clicar na linha abre o Sheet do item; salvar grava, recarrega e o Sheet fica aberto (§25)
  *      mostrando o item como veio da recarga;
  *  (g) o item some da lista depois de gravar um código → o próximo código soma ao gravado, não ao
- *      item de quando o Sheet abriu.
+ *      item de quando o Sheet abriu;
+ *  (h) "Registrar treinamento em obra" do Sheet do item abre o registro; gravar avisa quantos
+ *      registros entraram e recarrega (os Treinados do item vêm da recarga).
  */
 import React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
@@ -32,6 +34,8 @@ const listarTreinamentos = vi.fn();
 const definirNivel = vi.fn();
 const atualizarItem = vi.fn();
 const definirCodigos = vi.fn();
+const registrarTreinamentoEmObra = vi.fn();
+const listEmployees = vi.fn();
 let codigosDaBase: string[] = [];
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -48,12 +52,13 @@ vi.mock('../../services/qualidadeSiacService', () => ({
         criarItem: vi.fn(),
         atualizarItem: (...a: unknown[]) => atualizarItem(...a),
         definirCodigos: (...a: unknown[]) => definirCodigos(...a),
+        registrarTreinamentoEmObra: (...a: unknown[]) => registrarTreinamentoEmObra(...a),
     },
 }));
 vi.mock('../../services/trainingsService', () => ({
     trainingsService: { listTrainingCourses: vi.fn(async () => []), createTrainingCourse: vi.fn() },
 }));
-vi.mock('../../services/laborService', () => ({ laborService: { listEmployees: vi.fn(async () => []) } }));
+vi.mock('../../services/laborService', () => ({ laborService: { listEmployees: (...a: unknown[]) => listEmployees(...a) } }));
 vi.mock('../../services/documentService', () => ({ documentService: { uploadNewDocument: vi.fn() } }));
 // O catálogo da Base instancia o serviço do SINAPI na importação (supabase simulado não tem `from`).
 vi.mock('../../components/DatabasePickerModal', () => ({
@@ -120,6 +125,8 @@ beforeEach(() => {
     definirNivel.mockReset().mockResolvedValue(undefined);
     atualizarItem.mockReset().mockResolvedValue(undefined);
     definirCodigos.mockReset().mockResolvedValue(undefined);
+    registrarTreinamentoEmObra.mockReset().mockResolvedValue(2);
+    listEmployees.mockReset().mockResolvedValue([]);
     codigosDaBase = [];
     useStore.setState({
         activeOrganizationId: 'org-a',
@@ -283,5 +290,30 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         await user.click(screen.getByRole('button', { name: 'confirmar base' }));
         await waitFor(() => expect(definirCodigos).toHaveBeenCalledTimes(2));
         expect(definirCodigos).toHaveBeenLastCalledWith('s1', ['C1', 'C2']);
+    });
+
+    it('(h) Registrar treinamento em obra: abre pelo Sheet do item, grava, avisa e recarrega', async () => {
+        const user = userEvent.setup();
+        listarItens.mockResolvedValue([item({ id: 's1', nome: 'Serviço 1', anexo4_numero: 1, ordem: 1, training_course_id: 'curso-1' })]);
+        listEmployees.mockResolvedValue([
+            { id: 'e1', org_id: 'org-a', name: 'Ana Própria', contract_type: 'CLT', status: 'ATIVO', role: 'Pedreira' },
+            { id: 'e2', org_id: 'org-a', name: 'Bruno Próprio', contract_type: 'CLT', status: 'ATIVO', role: 'Servente' },
+        ]);
+        montar();
+        await user.click(await screen.findByText('Serviço 1'));
+        await user.click(await screen.findByRole('button', { name: 'Registrar treinamento em obra' }));
+        expect(await screen.findByRole('heading', { name: 'Registrar treinamento em obra' })).toBeTruthy();
+        await user.click(await screen.findByRole('checkbox', { name: /Ana Própria/ }));
+        await user.click(screen.getByRole('checkbox', { name: /Bruno Próprio/ }));
+        await user.click(screen.getByRole('button', { name: 'Registrar treinamento' }));
+        await waitFor(() => expect(registrarTreinamentoEmObra).toHaveBeenCalledWith(expect.objectContaining({
+            organizationId: 'org-a', courseId: 'curso-1', employeeIds: ['e1', 'e2'], novosTerceiros: [],
+        })));
+        expect(await screen.findByText('2 registros de treinamento gravados.')).toBeTruthy();
+        await waitFor(() => expect(listarItens).toHaveBeenCalledTimes(2));
+        await waitFor(() => expect(listarTreinamentos).toHaveBeenCalledTimes(2));
+        // o registro fecha; o Sheet do item continua aberto
+        await waitFor(() => expect(screen.queryByRole('heading', { name: 'Registrar treinamento em obra' })).toBeNull());
+        expect(screen.getByRole('heading', { name: 'Serviço 1' })).toBeTruthy();
     });
 });

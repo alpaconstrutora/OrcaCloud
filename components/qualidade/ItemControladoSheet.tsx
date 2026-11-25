@@ -20,7 +20,7 @@ import { SecaoTitulo } from '../ui/SecaoTitulo';
 import SaveStatus from '../ui/SaveStatus';
 import { DocumentPicker } from '../ui/DocumentPicker';
 import DatabasePickerModal from '../DatabasePickerModal';
-import { procedimentoConta, rotuloDoProcedimento } from '../../utils/qualidadeSiac';
+import { empreiteiraDaFicha, procedimentoConta, rotuloDoProcedimento } from '../../utils/qualidadeSiac';
 import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac';
 import { ROTULO_ORIGEM } from './ListaControlada';
 
@@ -96,9 +96,6 @@ const ROTULO_SITUACAO: Record<SituacaoItem, string> = { ATIVO: 'Ativo', DISPENSA
 const MOTIVO_SEM_CURSO = 'Escolha o curso de treinamento primeiro';
 const MOTIVO_SEM_ALTERACAO = 'Nada a salvar: nenhum campo mudou.';
 const MOTIVO_OCUPADO = 'Aguarde: a gravação anterior ainda não terminou.';
-
-/** Prefixo que a RPC `quality_registrar_treinamento_em_obra` grava em `notes` do terceiro novo. */
-const NOTA_DO_TERCEIRO = 'Pessoal de empreiteira cadastrado pelo registro de treinamento em obra — ';
 
 /** O que grava na hora: o Sheet guarda o último estado confirmado (ver o topo do arquivo). */
 type Vinculos = Pick<ItemControlado, 'codigos' | 'procedure_document_id' | 'training_course_id'>;
@@ -599,10 +596,6 @@ const SecaoTreinamento: React.FC<{
 
     const corte = versaoAtivaEm === null ? null : versaoAtivaEm.slice(0, 10);
     const linhas = [...treinamentos].sort((a, b) => b.data_realizacao.localeCompare(a.data_realizacao));
-    const empreiteiraDe = (e?: Employee) => {
-        const nota = e?.notes ?? '';
-        return nota.startsWith(NOTA_DO_TERCEIRO) ? nota.slice(NOTA_DO_TERCEIRO.length).trim() : '';
-    };
 
     return (
         <div className={CARTAO}>
@@ -640,7 +633,7 @@ const SecaoTreinamento: React.FC<{
                     <ul className="divide-y divide-gray-100 border border-gray-100 rounded-[8px]">
                         {linhas.map((r, i) => {
                             const p = pessoas[r.employee_id];
-                            const emp = empreiteiraDe(p);
+                            const emp = empreiteiraDaFicha(p);
                             const vigente = corte !== null && r.data_realizacao.slice(0, 10) >= corte;
                             const situacao = !r.aprovado ? { t: 'não aprovado', c: 'text-red-700' }
                                 : corte === null ? { t: 'sem versão ativa do procedimento', c: 'text-gray-700' }

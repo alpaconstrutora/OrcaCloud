@@ -150,3 +150,12 @@ export function rotuloDosTreinados(c: ContagemTreinados): string {
   if (total === 0) return '—';
   return `${total} (${c.proprios} próprios, ${c.empreiteira} empreit.)`;
 }
+
+/** Prefixo que a RPC `quality_registrar_treinamento_em_obra` grava em `notes` da ficha do terceiro novo. */
+export const NOTA_DO_TERCEIRO = 'Pessoal de empreiteira cadastrado pelo registro de treinamento em obra — ';
+
+/** Nome da empreiteira gravado nas notas da ficha criada pelo registro em obra ('' se não houver). */
+export function empreiteiraDaFicha(e?: { notes?: string | null } | null): string {
+  const nota = e?.notes ?? '';
+  return nota.startsWith(NOTA_DO_TERCEIRO) ? nota.slice(NOTA_DO_TERCEIRO.length).trim() : '';
+}

@@ -15,6 +15,7 @@ import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac'
 import { PainelDoNivel } from './PainelDoNivel';
 import { ListaControlada } from './ListaControlada';
 import { ItemControladoSheet, type EdicaoDoItem } from './ItemControladoSheet';
+import { RegistrarTreinamentoSheet } from './RegistrarTreinamentoSheet';
 
 /**
  * Módulo Qualidade (SiAC/PBQP-H), fase 1 — casca da tela
@@ -79,8 +80,8 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
     const [carregando, setCarregando] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
     const [edicao, setEdicao] = React.useState<EdicaoDoItem | null>(null);
-    /** Item pedido pelo "Registrar treinamento em obra" do Sheet: a tela do registro entra na Task 7. */
-    const [, setTreinoEmObra] = React.useState<ItemControlado | null>(null);
+    /** Item pedido pelo "Registrar treinamento em obra" do Sheet do item: abre o registro por cima dele. */
+    const [treinoEmObra, setTreinoEmObra] = React.useState<ItemControlado | null>(null);
 
     // ── Carga (sem `if (!orgId) return`: em "Todas" a tela carrega tudo o que a RLS deixa) ──
     const seq = React.useRef(0);
@@ -173,6 +174,12 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
         await carregarRef.current();
     };
 
+    /** O registro em obra já gravou (numa transação só): avisa quantos entraram e recarrega a organização de AGORA. */
+    const registrosGravados = (n: number) => {
+        showToast(`${n} ${n === 1 ? 'registro de treinamento gravado' : 'registros de treinamento gravados'}.`, 'success');
+        void carregarRef.current();
+    };
+
     /**
      * O Sheet mostra o item como veio da ÚLTIMA recarga que o trouxe (procedimento, curso e códigos gravam
      * na hora e a recarga traz o estado novo). Recarga sem o item (outra organização no topo, erro de carga)
@@ -240,6 +247,13 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
                 onClose={() => setEdicao(null)}
                 onSaved={() => carregarRef.current()}
                 onRegistrarTreinamento={i => setTreinoEmObra(i)} />
+
+            {/* Por cima do Sheet do item. Gravar avisa e recarrega: os Treinados do item vêm da recarga. */}
+            {treinoEmObra && (
+                <RegistrarTreinamentoSheet open item={treinoEmObra}
+                    onClose={() => setTreinoEmObra(null)}
+                    onSaved={registrosGravados} />
+            )}
 
             {orgTargetModal}
 

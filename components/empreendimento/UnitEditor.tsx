@@ -42,6 +42,10 @@ import { fmtElevacao } from './FloorEditor';
 import { faixasPorAndar, lerNumeroInicial, unidadesDosPavimentos as montarUnidadesDosPavimentos, NUMERO_INICIAL_MAX } from '../../utils/empreendimentoUnidadesDosPavimentos';
 import { compararNaOrdemDoEmpreendimento, moverNaOrdem, ordemPorNumero, type NovaOrdem } from '../../utils/empreendimentoOrdemDasUnidades';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
+import { AgruparControles } from '../ui/Agrupamento';
+import { useAgrupamento } from '../../hooks/useAgrupamento';
+import { CHAVE_VAZIA } from '../../utils/agruparLinhas';
+import { OPCOES_AGRUPAR_UNIDADE, agruparUnidades, type CampoAgruparUnidade } from '../../utils/unidadesGrupos';
 
 // ── Constantes de exibição ───────────────────────────────────────────────────
 
@@ -125,8 +129,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
   const [sortCol, setSortCol] = React.useState<SortCol>('floor');
   const [sortDir, setSortDir] = React.useState<'asc' | 'desc'>('asc');
 
-  // Grupos colapsados
-  const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
+  // Agrupar (§6.12, 25/11/2026): abre por Pavimento, como sempre foi; o usuário troca o campo, a ordem dos
+  // grupos e recolhe/expande todos. A escolha fica no navegador e vale para todas as torres.
+  const agrupamento = useAgrupamento<CampoAgruparUnidade>('empreendimentoUnidades:agrupar', undefined, 'pavimento');
 
   // Seleção em lote
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -177,29 +182,6 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
     return 0;
   }, [sortCol, sortDir]);
 
-  const groups = React.useMemo(() => {
-    const map = new Map<string, EmpreendimentoUnit[]>();
-    for (const u of units) {
-      const key = u.floor != null ? String(u.floor) : '__null__';
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(u);
-    }
-    return Array.from(map.entries())
-      .sort(([a], [b]) => {
-        if (a === '__null__') return 1;
-        if (b === '__null__') return -1;
-        return Number(a) - Number(b);
-      })
-      .map(([key, grpUnits]) => ({
-        key,
-        label: key === '__null__' ? 'Sem Pavimento' : `Pavimento ${key}`,
-        // No empate (a coluna Pavimento, a padrão), a ordem do pavimento — a que a massa da Planta segue.
-        units: [...grpUnits].sort((a, b) => sortFn(a, b) || compararNaOrdemDoEmpreendimento(a, b)),
-        totalPriv: grpUnits.reduce((s, u) => s + (u.private_area ?? 0), 0),
-        totalComum: grpUnits.reduce((s, u) => s + (u.common_area ?? 0), 0),
-      }));
-  }, [units, sortFn]);
-
   // A elevação de cada pavimento no cabeçalho do grupo (27/10/2026, "aonde está a coluna elevação?"): a torre sem
   // pavimentos cadastrados (o Garden) só tem andares pelas unidades, e a tabela de Pavimentos fica vazia. O cálculo é
   // o mesmo da tabela de Pavimentos e da massa da Planta (`estruturaDaTorre`).
@@ -210,6 +192,29 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
     );
     return new Map([...e.garagens, ...e.acima].map(p => [p.numero, p]));
   }, [tower.id, tower.name, tower.floors_count, tower.pe_direito_padrao_m, tower.elevacao_terreo_m, units, floors]);
+  // Os grupos do Agrupar (`utils/unidadesGrupos.ts`). As unidades entram já ordenadas pela coluna da tabela;
+  // no empate (a coluna Pavimento, a padrão), a ordem do pavimento — a que a massa da Planta segue.
+  // Sem agrupamento, um grupo só, sem cabeçalho.
+  const groups = React.useMemo(() => {
+    const ordenadas = [...units].sort((a, b) => sortFn(a, b) || compararNaOrdemDoEmpreendimento(a, b));
+    const grupos = agrupamento.agrupando
+      ? agruparUnidades(ordenadas, agrupamento.campo as CampoAgruparUnidade, agrupamento.direcao, {
+          // O nome do pavimento como está na seção Pavimentos (28/10/2026: "Pavimento -4" confundia com
+          // "Estacionamento 2"); sem cadastro, o nome que a estrutura dá ao andar.
+          nomeDoAndar: andar => elevacaoDoAndar.get(andar)?.nome,
+          tipoDoPavimento: FLOOR_TIPO_LABEL, posicao: POSITION_LABEL, vista: VIEW_LABEL, orientacao: SUN_LABEL,
+        })
+      : [{ key: '__todas__', label: '', itens: ordenadas, total: 0 }];
+    return grupos.map(g => ({
+      key: g.key,
+      label: g.label,
+      units: g.itens,
+      totalPriv: g.itens.reduce((s, u) => s + (u.private_area ?? 0), 0),
+      totalComum: g.itens.reduce((s, u) => s + (u.common_area ?? 0), 0),
+    }));
+  }, [units, sortFn, agrupamento.agrupando, agrupamento.campo, agrupamento.direcao, elevacaoDoAndar]);
+  const porPavimento = agrupamento.campo === 'pavimento';
+
   /** A elevação do andar para a coluna da unidade: "+2,70 m", "(calc.)" quando calculada, "—" sem andar. */
   const textoDaElevacao = (andar: number | null) => {
     const piso = andar == null || !Number.isFinite(andar) ? undefined : elevacaoDoAndar.get(andar);
@@ -385,6 +390,8 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
     }
   };
   const motivoSemSetas = (grpUnits: EmpreendimentoUnit[], i: number, passo: -1 | 1): string | null => {
+    // A vizinha da seta é a do grupo na tela: só agrupado por Pavimento ela é a vizinha no pavimento (25/11/2026).
+    if (!porPavimento) return 'Agrupe por Pavimento para mudar a ordem';
     if (!ordemDoPavimentoNaTela) return 'Ordene a tabela pela coluna Pavimento para mudar a ordem';
     if (ordenando) return 'Gravando a ordem…';
     if (passo === -1 && i === 0) return 'Já é a primeira do pavimento';
@@ -604,6 +611,21 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
           <p className="text-xs mt-1">Use os botões acima: gere a partir dos pavimentos, gere em série ou cadastre uma a uma.</p>
         </div>
       ) : (
+        <>
+        {/* Agrupar (§6.12, 25/11/2026): campo, ordem dos grupos e recolher/expandir todos, logo acima da tabela. */}
+        <div className="flex flex-wrap items-center gap-2" data-testid="agrupar-unidades">
+          <AgruparControles
+            opcoes={OPCOES_AGRUPAR_UNIDADE}
+            campo={agrupamento.campo}
+            onCampo={agrupamento.setCampo}
+            direcao={agrupamento.direcao}
+            onDirecao={agrupamento.setDirecao}
+            chavesDosGrupos={groups.map(g => g.key)}
+            algumRecolhido={agrupamento.recolhidos.size > 0}
+            onAlternarTodos={agrupamento.alternarTodos}
+            title="Agrupar as unidades"
+          />
+        </div>
         <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
           <table className="w-full text-left text-xs">
@@ -639,11 +661,14 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
             </thead>
             <tbody>
               {groups.map(group => {
-                const collapsed = collapsedGroups.has(group.key);
+                const collapsed = agrupamento.recolhidos.has(group.key);
                 const allGroupSelected = group.units.every(u => selected.has(u.id));
+                // Grupo de UM pavimento: o cabeçalho traz o andar, a elevação e o "Ordenar por número".
+                const andarDoGrupo = porPavimento && group.key !== CHAVE_VAZIA ? Number(group.key) : null;
                 return (
                   <React.Fragment key={group.key}>
-                    {/* Cabeçalho do grupo */}
+                    {/* Cabeçalho do grupo — sem agrupamento, a lista corre sem ele */}
+                    {agrupamento.agrupando && (
                     <tr className="bg-gray-50/70 border-b border-gray-100 hover:bg-gray-100/60 transition-colors">
                       {/* Checkbox do grupo */}
                       <td className="py-2 px-3 w-10">
@@ -657,28 +682,25 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                       {/* Label + toggle */}
                       <td colSpan={5} className="py-2 px-3">
                         <button
-                          onClick={() => setCollapsedGroups(prev => {
-                            const n = new Set(prev);
-                            n.has(group.key) ? n.delete(group.key) : n.add(group.key);
-                            return n;
-                          })}
+                          type="button"
+                          onClick={() => agrupamento.alternar(group.key)}
+                          aria-expanded={!collapsed}
                           className="flex items-center gap-2 hover:text-blue-600 transition-colors"
                         >
                           {collapsed
                             ? <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
                             : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
                           }
-                          {/* O nome do pavimento como está na seção Pavimentos (28/10/2026: "Pavimento -4" confundia com
-                              "Estacionamento 2"); sem cadastro, o nome que a estrutura dá ao andar. O número do andar fica ao lado. */}
-                          <span className="font-semibold text-gray-700 text-sm" data-testid="nome-do-pavimento">
-                            {group.key === '__null__' ? group.label : (elevacaoDoAndar.get(Number(group.key))?.nome ?? group.label)}
+                          {/* Por Pavimento, o rótulo é o nome do pavimento (`utils/unidadesGrupos.ts`); o número do andar fica ao lado. */}
+                          <span className="font-semibold text-gray-700 text-sm" data-testid={porPavimento ? 'nome-do-pavimento' : 'nome-do-grupo'}>
+                            {group.label}
                           </span>
-                          {group.key !== '__null__' && <span className="text-xs font-normal text-gray-500">andar {group.key}</span>}
+                          {andarDoGrupo !== null && <span className="text-xs font-normal text-gray-500">andar {group.key}</span>}
                           <span className="bg-gray-200 text-gray-600 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
                             {group.units.length}
                           </span>
                           {(() => {
-                            const piso = group.key === '__null__' ? undefined : elevacaoDoAndar.get(Number(group.key));
+                            const piso = andarDoGrupo === null ? undefined : elevacaoDoAndar.get(andarDoGrupo);
                             if (!piso) return null;
                             return (
                               <span
@@ -703,9 +725,10 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                       </td>
                       <td colSpan={7} />
                       <td className="py-2 px-4 text-center">
-                        {(() => {
-                          const mudancas = group.key === '__null__' ? [] : ordemPorNumero(group.units);
-                          const motivo = group.key === '__null__'
+                        {/* A ordem é do pavimento: agrupado por outro campo, o botão não se aplica. */}
+                        {porPavimento && (() => {
+                          const mudancas = andarDoGrupo === null ? [] : ordemPorNumero(group.units);
+                          const motivo = andarDoGrupo === null
                             ? 'Unidade sem pavimento não tem ordem no pavimento'
                             : !ordemDoPavimentoNaTela ? 'Ordene a tabela pela coluna Pavimento para mudar a ordem'
                             : ordenando ? 'Gravando a ordem…'
@@ -726,6 +749,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                         })()}
                       </td>
                     </tr>
+                    )}
 
                     {/* Unidades do grupo */}
                     {!collapsed && group.units.map(u => {
@@ -871,6 +895,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
           </table>
           </div>
         </div>
+        </>
       )}
 
       {/* Barra de edição em lote */}

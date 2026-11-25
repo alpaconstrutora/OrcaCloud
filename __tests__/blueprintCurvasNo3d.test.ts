@@ -1,11 +1,11 @@
 /**
  * Curvas de nível no 3D (12/10/2026): as linhas da planta sobre o relevo, na
- * convenção do 3D (X = x/1000, Y = cota − zero + folga, Z = y/1000), em
- * grupos por cor e tipo.
+ * convenção do 3D (X = x/1000, Y = cota − zero + folga, Z = y/1000), um
+ * grupo por cota (25/11/2026, para o hover achar a curva sob o cursor).
  */
 import { describe, expect, it } from 'vitest';
-import { COR_CURVA_3D, curvasDeNivel3d, FOLGA_DA_CURVA_3D_M } from '../utils/blueprintTopografia3dExtras';
-import { amostradorDaMalha, gerarCurvas, planejarGrade } from '../utils/blueprintTopografia';
+import { COR_CURVA_3D, curvasDeNivel3d, FOLGA_DA_CURVA_3D_M, nivelMaisProximo } from '../utils/blueprintTopografia3dExtras';
+import { amostradorDaMalha, formatarCotaM, gerarCurvas, planejarGrade } from '../utils/blueprintTopografia';
 import type { CurvaDeNivel } from '../utils/blueprintTopografia';
 
 const quadrado = (cotaM: number, mestra: boolean, lado = 10_000): CurvaDeNivel => ({
@@ -25,6 +25,7 @@ describe('curvasDeNivel3d', () => {
   it('cada trecho vira um par de pontas, na cota relativa ao zero + a folga', () => {
     const [g] = curvasDeNivel3d([quadrado(890, false)], 887.94);
     expect(g.cor).toBe(COR_CURVA_3D);
+    expect(g.cotaM).toBe(890);
     expect(g.mestra).toBe(false);
     // 4 trechos × 2 pontas × 3 coordenadas.
     expect(g.posicoes).toHaveLength(24);
@@ -32,11 +33,18 @@ describe('curvasDeNivel3d', () => {
     expect(Array.from(g.posicoes.slice(0, 6))).toEqual([0, expect.closeTo(y, 5), 0, 10, expect.closeTo(y, 5), 0]);
   });
 
-  it('agrupa por cor e por mestra: um grupo por combinação, não um por curva', () => {
-    const gs = curvasDeNivel3d([quadrado(880, true), quadrado(881, false), quadrado(882, false), quadrado(885, true)], 880);
-    expect(gs).toHaveLength(2);
-    expect(gs.find((g) => g.mestra)!.posicoes).toHaveLength(48);
-    expect(gs.find((g) => !g.mestra)!.posicoes).toHaveLength(48);
+  it('agrupa por COTA: as partes da mesma cota num grupo só, em ordem crescente', () => {
+    const gs = curvasDeNivel3d([quadrado(885, true), quadrado(881, false), quadrado(881, false, 5_000), quadrado(880, true)], 880);
+    expect(gs.map((g) => g.cotaM)).toEqual([880, 881, 885]);
+    expect(gs.map((g) => g.mestra)).toEqual([true, false, true]);
+    // As duas partes da 881 (lados 10 m e 5 m) somam 8 trechos.
+    expect(gs[1].posicoes).toHaveLength(48);
+  });
+
+  it('a geometria total é a mesma de antes: nenhum trecho perdido no reagrupamento', () => {
+    const cs = [quadrado(880, true), quadrado(881, false), quadrado(882, false), quadrado(885, true)];
+    const total = curvasDeNivel3d(cs, 880).reduce((s, g) => s + g.posicoes.length, 0);
+    expect(total).toBe(4 * 24);
   });
 
   it('com a cor pela cota (arco-íris), cada cor vira um grupo', () => {
@@ -70,6 +78,33 @@ describe('curvasDeNivel3d', () => {
     for (const g of gs) for (let i = 1; i < g.posicoes.length; i += 3) ys.add(Math.round((g.posicoes[i] - FOLGA_DA_CURVA_3D_M) * 1000) / 1000);
     const esperadas = new Set(curvas.map((c) => Math.round((c.cotaM - 875) * 1000) / 1000));
     expect([...ys].sort()).toEqual([...esperadas].sort());
+  });
+});
+
+describe('nivelMaisProximo (a curva que o hover acende)', () => {
+  const niveis = [880, 881, 882, 885];
+  it('acha a cota mais próxima por busca binária', () => {
+    expect(nivelMaisProximo(niveis, 880.2)).toBe(0);
+    expect(nivelMaisProximo(niveis, 880.6)).toBe(1);
+    expect(nivelMaisProximo(niveis, 883.4)).toBe(2);
+    expect(nivelMaisProximo(niveis, 884)).toBe(3);
+  });
+  it('fora da faixa fica na ponta; empate vai para a de baixo', () => {
+    expect(nivelMaisProximo(niveis, 870)).toBe(0);
+    expect(nivelMaisProximo(niveis, 900)).toBe(3);
+    expect(nivelMaisProximo(niveis, 880.5)).toBe(0);
+  });
+  it('lista vazia ou cota inválida: null', () => {
+    expect(nivelMaisProximo([], 880)).toBeNull();
+    expect(nivelMaisProximo(niveis, Number.NaN)).toBeNull();
+  });
+});
+
+describe('formatarCotaM', () => {
+  it('duas casas e vírgula, como a planta escreve', () => {
+    expect(formatarCotaM(885)).toBe('885,00');
+    expect(formatarCotaM(887.945)).toBe('887,95');
+    expect(formatarCotaM(-2.5)).toBe('-2,50');
   });
 });
 

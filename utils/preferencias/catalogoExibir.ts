@@ -87,6 +87,8 @@ const OPCOES_ESTILO_3D: readonly OpcaoDeExibicao[] = [
   { valor: 'TRANSPARENTE', rotulo: 'Transparente' },
   // 29/10/2026: o 3D para mostrar ao cliente (utils/blueprintConcepcao).
   { valor: 'CONCEPCAO', rotulo: 'Concepção' },
+  // 25/11/2026: o terreno como maquete (o reel da Hektar).
+  { valor: 'MAQUETE', rotulo: 'Maquete' },
 ];
 const OPCOES_MODO_DE_COR: readonly OpcaoDeExibicao[] = [
   { valor: 'NENHUM', rotulo: 'Sem cor (cinza)' },

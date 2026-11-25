@@ -6007,7 +6007,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           })
         : [];
     if (curvas.length === 0) return extrasDoRelevo3d;
-    return { drenagem: extrasDoRelevo3d?.drenagem ?? [], muros: extrasDoRelevo3d?.muros ?? [], curvas };
+    return { drenagem: extrasDoRelevo3d?.drenagem ?? [], muros: extrasDoRelevo3d?.muros ?? [], curvas, cotaZeroM: cotaZeroDoTerrenoM };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extrasDoRelevo3d, chaveDaTopografia, mostrarCurvasDeNivel, cotaZeroDoTerrenoM, curvasPelaCota, corDaCota]);
   const extrasDoRelevoNo3dChave = `${extrasDoRelevo3dChave}|curvas:${mostrarCurvasDeNivel ? 1 : 0}:${curvasPelaCota && faixaDaRampa ? `${faixaDaRampa.deM}-${faixaDaRampa.ateM}` : 'cor'}:${chaveDaTopografia}:${cotaZeroDoTerrenoM}`;

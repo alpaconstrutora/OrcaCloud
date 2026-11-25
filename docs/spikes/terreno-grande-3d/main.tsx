@@ -79,9 +79,11 @@ createRoot(document.getElementById('raiz')!).render(
       relevo={q.get('semTerreno') ? null : relevo}
       relevoChave={`h:${COTA_ZERO}`}
       envelope={q.get('envelope') ? [{ levelId, nome: 'Térreo', anel: CANTOS, baseMm: 0, topoMm: 2800, acimaDoGabarito: false }] : undefined}
-      extrasDoRelevo={curvas.length ? { drenagem: [], muros: [], curvas } : null}
+      extrasDoRelevo={curvas.length ? { drenagem: [], muros: [], curvas, cotaZeroM: COTA_ZERO } : null}
       extrasChave={`curvas:${q.get('curvas') ?? ''}:${q.get('arcoiris') ?? ''}:${q.get('semAssentar') ?? ''}`}
       mapaNoRelevo={planoDoMapa ? { plano: planoDoMapa, chave: `${q.get('mapa')}:${q.get('meio') ?? ''}` } : null}
+      // `?estilo=MAQUETE` (25/11/2026): o estilo do 3D (Sombreado, Concepção, Maquete…).
+      estilo={(q.get('estilo') ?? undefined) as never}
     />
   </div>,
 );

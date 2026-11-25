@@ -170,8 +170,8 @@ BEGIN
         'fixture: orgs A e B, membro m da B, não-membro n');
 
     -- Condomínio da org A operado pela org B (fn_org_do_condominio = B).
-    INSERT INTO public.empreendimentos (organization_id, condominio_org_id, name)
-    VALUES (org_a, org_b, 'Teste assembleias A2 (ROLLBACK)') RETURNING id INTO e;
+    INSERT INTO public.empreendimentos (organization_id, condominio_org_id, name, condominio_cnpj)
+    VALUES (org_a, org_b, 'Teste assembleias A2 (ROLLBACK)', '12.345.678/0001-90') RETURNING id INTO e;
     INSERT INTO public.empreendimentos (organization_id, condominio_org_id, name)
     VALUES (org_a, org_b, 'Outro condomínio A2 (ROLLBACK)') RETURNING id INTO e2;
     INSERT INTO public.empreendimento_towers (empreendimento_id, name) VALUES (e, 'Torre T') RETURNING id INTO t;
@@ -379,7 +379,7 @@ BEGIN
     v := pg_temp.presenca(m, a, u4, NULL);
     PERFORM pg_temp.confere(v LIKE 'ok:%' AND (SELECT presenca FROM public.condominio_assembleia_unidades
                                                  WHERE assembleia_id = a AND unit_id = u4) IS NULL,
-        'presença NULL remove (veio ' || v || ')');
+        'remove presença sem voto presencial (presença NULL) (veio ' || v || ')');
     v := pg_temp.presenca(m, a, u3, 'PROCURADOR', 'Procurador X', doc_proc_outro);
     PERFORM pg_temp.confere(v LIKE 'P0001|procuracao_invalida|%', 'procuração de outro condomínio recusada (veio ' || v || ')');
     v := pg_temp.presenca(m, a, u3, 'PROCURADOR', '  ', doc_proc);
@@ -454,6 +454,16 @@ BEGIN
     -- ═══ apuração (R8) ══════════════════════════════════════════════════════
     PERFORM pg_temp.vota(m, iA1, u3, 'SIM');
     PERFORM pg_temp.vota(m, iA1, u2, 'NAO');
+    -- Voto presencial não se apaga; a presença de quem votou na sala também não.
+    v := pg_temp.presenca(m, a, u3, NULL);
+    PERFORM pg_temp.confere(v LIKE 'P0001|tem_voto_presencial|%'
+                        AND (SELECT presenca FROM public.condominio_assembleia_unidades
+                              WHERE assembleia_id = a AND unit_id = u3) = 'PROCURADOR',
+        'não remove presença com voto presencial (veio ' || v || ')');
+    v := pg_temp.presenca(m, a, u3, 'PRESENCIAL');
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'trocar a forma de presença de quem votou continua valendo (veio ' || v || ')');
+    v := pg_temp.presenca(m, a, u3, 'PROCURADOR', 'Procurador X', doc_proc);
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'volta ao procurador (veio ' || v || ')');
     PERFORM pg_temp.confere(pg_temp.res(a, iA1) = 'APROVADO', 'MAIORIA_PRESENTES: SIM 0,3 × NÃO 0,2 → APROVADO (veio ' || coalesce(pg_temp.res(a, iA1), '<null>') || ')');
 
     PERFORM pg_temp.vota(m, iA2, u2, 'SIM');
@@ -565,6 +575,18 @@ BEGIN
                         AND ret -> 'cabecalho' ->> 'presidente' = 'Maria Presidente'
                         AND (ret -> 'cabecalho' ->> 'convocacao')::int = 1
                         AND ret -> 'cabecalho' ->> 'observacaoGeral' = 'Sem mais assuntos.'
+                        AND ret -> 'cabecalho' ->> 'condominioCnpj' = '12.345.678/0001-90'
+                        AND ret -> 'cabecalho' -> 'instaladaPor' ->> 'id' = m::text
+                        AND ret -> 'cabecalho' -> 'instaladaPor' ->> 'papel' = 'GESTOR'
+                        AND (ret -> 'cabecalho' -> 'instaladaPor' ->> 'em')::timestamptz
+                            = (SELECT instalada_em FROM public.condominio_assembleias WHERE id = a)
+                        AND ret -> 'cabecalho' -> 'instaladaPor' ? 'nome'
+                        AND ret -> 'cabecalho' -> 'instaladaPor' -> 'nome'
+                            = coalesce(to_jsonb((SELECT p.name FROM public.profiles p WHERE p.id = m)), 'null'::jsonb)
+                        AND ret -> 'cabecalho' -> 'editalConfirmadoPor' ->> 'id' = m::text
+                        AND ret -> 'cabecalho' -> 'editalConfirmadoPor' ? 'nome'
+                        AND (ret -> 'cabecalho' -> 'editalConfirmadoPor' ->> 'em')::timestamptz
+                            = (SELECT edital_entregue_em FROM public.condominio_assembleias WHERE id = a)
                         AND ret -> 'deliberacoes' ->> iA5::text = 'Ana eleita.'
                         AND EXISTS (SELECT 1 FROM jsonb_array_elements(ret -> 'votos') x
                                      WHERE x ->> 'itemId' = iA4::text AND x ->> 'unitId' = u2::text AND x ->> 'origem' = 'PRESENCIAL')

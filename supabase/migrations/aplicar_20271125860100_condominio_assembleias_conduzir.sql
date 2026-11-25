@@ -34,7 +34,8 @@
 --
 -- Erros de regra: SQLSTATE P0001 e HINT com o código que a tela traduz:
 --   estado, sem_datas, primeira_no_passado, sem_itens, sem_corpo, sem_unidades,
---   sem_motivo, unidade_fora, presenca_invalida, unidade_impedida (DETAIL = motivo),
+--   sem_motivo, unidade_fora, presenca_invalida, tem_voto_presencial,
+--   unidade_impedida (DETAIL = motivo),
 --   procuracao_invalida, convocacao_invalida, edital_nao_confirmado, sem_mesa,
 --   antes_do_horario, sem_quorum_primeira, sem_presenca, opcao_invalida,
 --   deliberacoes_invalidas, item_fora, documento_invalido, papel_invalido.
@@ -595,6 +596,14 @@ BEGIN
     END IF;
 
     IF p_presenca IS NULL THEN
+        -- Voto presencial não se apaga (trava da A1) e conta na apuração: a unidade que
+        -- votou na sala não pode sumir da presença (nem da ata) depois disso.
+        IF EXISTS (SELECT 1 FROM public.condominio_assembleia_votos v
+                    WHERE v.assembleia_id = p_assembleia AND v.unit_id = p_unit AND v.origem = 'PRESENCIAL') THEN
+            RAISE EXCEPTION 'A unidade % já tem voto lançado na sala: a presença dela não pode ser removida.',
+                    coalesce(v_u.unidade_rotulo, '')
+                USING ERRCODE = 'P0001', HINT = 'tem_voto_presencial';
+        END IF;
         UPDATE public.condominio_assembleia_unidades
            SET presenca = NULL, procurador_nome = NULL, procuracao_documento_id = NULL, presenca_em = NULL
          WHERE id = v_u.id;
@@ -714,8 +723,10 @@ BEGIN
                                    'presentesFracao', v_pres_fr, 'presentesUnidades', v_pres_n,
                                    'impedidas', v_impedidas, 'em', v_agora);
 
+    -- O MESMO conjunto gravado em quorum_instalacao.impedidas (sem recalcular).
     UPDATE public.condominio_assembleia_unidades u
-       SET impedida_na_instalacao = (public.fn_assembleia_unidade_impedida(u.unit_id) IS NOT NULL)
+       SET impedida_na_instalacao = EXISTS (SELECT 1 FROM jsonb_array_elements(v_impedidas) x
+                                             WHERE x ->> 'unitId' = u.unit_id::text)
      WHERE u.assembleia_id = p_assembleia;
 
     PERFORM set_config('app.assembleia_transicao', 'on', true);
@@ -817,6 +828,7 @@ DECLARE
     v_agora   timestamptz := now();
     v_obs     text := nullif(btrim(coalesce(p_observacao, '')), '');
     v_retrato jsonb;
+    v_instalou jsonb;
 BEGIN
     v_a := public._assembleia_travar(p_assembleia);
     PERFORM public._assembleia_exige_condutor(p_papel);
@@ -840,11 +852,23 @@ BEGIN
            AND p_deliberacoes ? i.id::text;
     END IF;
 
+    SELECT jsonb_build_object(
+               'id', ev.ator, 'papel', ev.papel, 'em', ev.em,
+               'nome', CASE ev.papel
+                           WHEN 'SINDICO' THEN (SELECT c.name FROM public.clients c WHERE c.id = ev.ator)
+                           ELSE (SELECT p.name FROM public.profiles p WHERE p.id = ev.ator) END)
+      INTO v_instalou
+      FROM public.condominio_assembleia_eventos ev
+     WHERE ev.assembleia_id = p_assembleia AND ev.evento = 'INSTALADA'
+     ORDER BY ev.em DESC
+     LIMIT 1;
+
     v_retrato := public.fn_assembleia_apurar(p_assembleia) || jsonb_build_object(
         'cabecalho', jsonb_build_object(
             'assembleiaId', v_a.id,
             'empreendimentoId', v_a.empreendimento_id,
             'condominio', (SELECT e.name FROM public.empreendimentos e WHERE e.id = v_a.empreendimento_id),
+            'condominioCnpj', (SELECT e.condominio_cnpj FROM public.empreendimentos e WHERE e.id = v_a.empreendimento_id),
             'tipo', v_a.tipo,
             'titulo', v_a.titulo,
             'local', v_a.local,
@@ -857,6 +881,12 @@ BEGIN
             'convocacao', v_a.instalada_convocacao,
             'presidente', v_a.presidente_nome,
             'secretario', v_a.secretario_nome,
+            -- Autoria da instalação e da confirmação do edital (as duas acontecem em
+            -- Instalar): o evento INSTALADA, com o nome de quem agiu — gestor em
+            -- profiles, síndico (fase B) em clients.
+            'instaladaPor', v_instalou,
+            'editalConfirmadoPor', CASE WHEN v_instalou IS NULL THEN NULL
+                                        ELSE v_instalou || jsonb_build_object('em', v_a.edital_entregue_em) END,
             'quorumInstalacao', v_a.quorum_instalacao,
             'observacaoGeral', v_obs,
             'encerradaEm', v_agora,

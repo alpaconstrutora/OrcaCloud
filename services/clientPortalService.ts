@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { erroDoLinkDePortal, MSG_LINK_PORTAL_SO_GESTOR } from '../utils/portalLinkPermissao';
 import { mapReceivableRow, type ReceivableRow } from './commercialFinanceService';
 import type { PaymentInstallment } from '../types';
 
@@ -339,7 +340,7 @@ export const clientPortalService = {
             p_client_id: clientId,
             p_org_id: orgId,
         });
-        if (error) throw error;
+        if (error) throw erroDoLinkDePortal(error);
         return data as string;
     },
 
@@ -603,12 +604,15 @@ export const clientPortalService = {
         return data as ClientPortalToken | null;
     },
 
+    /** Desativa o link. A RLS deixa só owner/admin gravar: 0 linhas = não revogou (lança, nunca finge). */
     async revokeToken(clientId: string): Promise<void> {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('client_portal_tokens')
             .update({ is_active: false })
-            .eq('client_id', clientId);
-        if (error) throw error;
+            .eq('client_id', clientId)
+            .select('id');
+        if (error) throw erroDoLinkDePortal(error);
+        if (!data || data.length === 0) throw new Error(MSG_LINK_PORTAL_SO_GESTOR);
     },
 
     buildPortalUrl(token: string): string {

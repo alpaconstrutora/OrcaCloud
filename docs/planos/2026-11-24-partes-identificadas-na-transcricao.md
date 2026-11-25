@@ -177,10 +177,13 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
    cônjuge com nome e CPF, Ativo; em Meus Clientes aparece com código 035. Console sem erro
    (lido desde a abertura da tela). Categoria ("Tipo" na lista) ficou "Não definido" — de propósito
    (mudou no item 9).
-9. [ ] Categoria padrão — `clienteDaParte` grava `category: CATEGORIA_PADRAO_DO_CLIENTE`; o
+9. [x] Categoria padrão — `clienteDaParte` grava `category: CATEGORIA_PADRAO_DO_CLIENTE`; o
    `ClientForm` usa a mesma constante no lugar do texto solto.
    **Pronto quando:** testes de `clienteDaParte` exigem `category: 'Vendas'` (vermelho antes,
    verde depois), tsc limpo e o texto novo servido em produção.
+   ✅ 25/11 — 2 testes vermelhos antes, 23/23 depois; 40/40 nos testes de ClientForm/categorias;
+   tsc exit 0, check-ui sem violação. #760 no ar (conferir-producao: 1f8c288, que contém o #760).
+   Clique em produção não repetido: gravaria outro cliente real, e não foi pedido.
 
 ## Estado
 
@@ -188,4 +191,4 @@ Nas duas transcrições gravadas do 021 - Tamareiras da Lagoa (escritura, 134 li
 - 24/11/2026: item 4 (negrito) concluído e provado em produção (#688). Itens 1–4 fechados.
 - 24/11/2026: itens 5 (objetos, #691) e 6 (link, #694) concluídos e provados em produção. Itens 1–6 fechados.
 - 24/11/2026: itens 7–8 (Partes → Clientes, #702) concluídos e provados em produção. Itens 1–8 fechados.
-- 25/11/2026: item 9 (categoria padrão) em andamento.
+- 25/11/2026: item 9 (categoria padrão, #760) concluído e no ar. Itens 1–9 fechados.

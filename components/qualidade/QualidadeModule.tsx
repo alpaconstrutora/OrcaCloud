@@ -11,7 +11,8 @@ import { useToast } from '../../hooks/useToast';
 import { useStore } from '../../store/useStore';
 import { usePersistedState } from '../ui/TableUtils';
 import { TabsBar } from '../ui/TabsBar';
-import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac';
+import { MOTIVO_SEM_EDICAO_QUALIDADE, podeEditarQualidadeSiacNoContexto } from '../../utils/permissaoQualidadeSiac';
+import { vinculosDoUsuario } from '../../utils/modulosPermitidos';
 import { PainelDoNivel } from './PainelDoNivel';
 import { ListaControlada } from './ListaControlada';
 import { PorObra } from './PorObra';
@@ -59,15 +60,28 @@ const CABECALHO: Record<Aba, { titulo: string; subtitulo: string }> = {
 export type { EdicaoDoItem };
 
 interface Props {
-    /** `podeEditarQualidadeSiac` resolvido no `AppRouter`. Falso = só leitura, com o motivo visível. */
-    podeEditar: boolean;
+    /**
+     * Grupo DESENVOLVEDOR ou e-mail de acesso total — a única parte da permissão que não depende da
+     * organização, resolvida no `AppRouter`. O resto é decidido AQUI, pela organização do `useOrgContext()`.
+     */
+    acessoTotal: boolean;
 }
 
-const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
-    const { orgId } = useOrgContext();
+const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
+    const { orgId, isAllOrgs } = useOrgContext();
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const { showToast, localToast } = useToast();
     const organizations = useStore(s => s.organizations);
+    const email = useStore(s => s.session?.user?.email ?? null);
+
+    /**
+     * Quem edita (REGRA #5 item 5): pela MESMA organização que a tela mostra. Com empresa no topo o
+     * `activeOrganizationId` cru é null, mas `orgId` já é a organização dona dela — decidir pelo cru
+     * caía em "Todas" e deixava só leitura quem é visitante em outra organização.
+     */
+    const podeEditar = React.useMemo(() => podeEditarQualidadeSiacNoContexto({
+        orgId, isAllOrgs, vinculos: vinculosDoUsuario(organizations, email), acessoTotal,
+    }), [orgId, isAllOrgs, organizations, email, acessoTotal]);
 
     const [aba, setAba] = usePersistedState<Aba>('qualidade:aba', 'lista');
     const abaEfetiva: Aba = ABAS.some(a => a.id === aba) ? aba : 'lista';

@@ -72,3 +72,32 @@ export function podeEditarQualidadeSiacEmTodas(vinculos: ReadonlyArray<VinculoPa
         papel: v.member.role ?? null,
     }));
 }
+
+/**
+ * A decisão que a tela usa (pendência da fase 1 corrigida em 25/11, REGRA #5 item 5): a permissão segue a
+ * organização que a tela MOSTRA — a do `useOrgContext()` —, não o `activeOrganizationId` cru do topo.
+ * Com uma EMPRESA no topo o valor cru é `null`, mas o contexto resolve a organização dona dela e a lista
+ * mostra só essa; decidir por "Todas" ali (`every` sobre todas as organizações) deixava só leitura quem
+ * edita nela e é visitante em outra.
+ *
+ *  - acesso total (grupo DESENVOLVEDOR ou e-mail de acesso total) → edita sempre;
+ *  - "Todas" (`isAllOrgs`) → `podeEditarQualidadeSiacEmTodas`;
+ *  - organização resolvida → o membro DELA; admin edita; membro ainda carregando não bloqueia (o mesmo
+ *    do guard de rota do AppRouter; quem barra a gravação, no fim, é a RLS).
+ */
+export function podeEditarQualidadeSiacNoContexto(args: {
+    orgId: string | null;
+    isAllOrgs: boolean;
+    vinculos: ReadonlyArray<VinculoParaEditar & { org: { id: string } }>;
+    acessoTotal: boolean;
+}): boolean {
+    if (args.acessoTotal) return true;
+    if (args.isAllOrgs || !args.orgId) return podeEditarQualidadeSiacEmTodas(args.vinculos, false);
+    const vinculo = args.vinculos.find(v => v.org.id === args.orgId);
+    if (!vinculo) return true;
+    return podeEditarQualidadeSiac({
+        permissoes: vinculo.member.permissions as Permissoes,
+        administrador: vinculo.member.role === 'admin',
+        papel: vinculo.member.role ?? null,
+    });
+}

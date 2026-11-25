@@ -105,7 +105,7 @@ const TREINOS: Record<string, RegistroTreinamento[]> = {
     'curso-2': [{ employee_id: 'e3', data_realizacao: '2026-10-01', aprovado: true, externo: false, registrado_em: null }],
 };
 
-const montar = (podeEditar = true) => render(<ConfirmProvider><QualidadeModule podeEditar={podeEditar} /></ConfirmProvider>);
+const montar = (acessoTotal = false) => render(<ConfirmProvider><QualidadeModule acessoTotal={acessoTotal} /></ConfirmProvider>);
 
 /** Células de uma coluna da tabela, achada pelo cabeçalho. */
 function celulasDaColuna(rotulo: string): HTMLElement[] {
@@ -135,6 +135,8 @@ beforeEach(() => {
     useStore.setState({
         activeOrganizationId: 'org-a',
         activeEmpresaId: null,
+        companies: [],
+        session: null,
         organizations: [
             { id: 'org-a', name: 'Construtora A', address: {}, members: [] },
             { id: 'org-b', name: 'Construtora B', address: {}, members: [] },
@@ -201,11 +203,63 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
     });
 
     it('(e) sem permissão de editar: o botão de carga fica desligado e diz por quê', async () => {
-        montar(false);
+        useStore.setState({
+            session: { user: { id: 'u1', email: 'Ana@Alpa.com' } },
+            organizations: [
+                { id: 'org-a', name: 'Construtora A', address: {}, members: [{ email: 'ana@alpa.com', role: 'viewer', permissions: {} }] },
+            ] as never,
+        });
+        montar();
         const botao = await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }) as HTMLButtonElement;
         expect(botao.disabled).toBe(true);
         expect(botao.title).toBe(MOTIVO_SEM_EDICAO_QUALIDADE);
     });
+    // Pendência da fase 1 corrigida em 25/11 (REGRA #5 item 5): a permissão segue a organização que a
+    // tela MOSTRA (useOrgContext), não o `activeOrganizationId` cru — com empresa no topo ele é null.
+    const ANA_EDITORA_EM_A_VISITANTE_EM_B = () => useStore.setState({
+        session: { user: { id: 'u1', email: 'ana@alpa.com' } },
+        organizations: [
+            { id: 'org-a', name: 'Construtora A', address: {}, members: [{ email: 'ana@alpa.com', role: 'member', permissions: {} }] },
+            { id: 'org-b', name: 'Construtora B', address: {}, members: [{ email: 'ana@alpa.com', role: 'viewer', permissions: {} }] },
+        ] as never,
+    });
+
+    it('(e2) empresa no topo (cru null, org resolvida A): editora em A e visitante em B edita', async () => {
+        ANA_EDITORA_EM_A_VISITANTE_EM_B();
+        useStore.setState({
+            activeOrganizationId: null,
+            activeEmpresaId: 'emp-1',
+            companies: [{ id: 'emp-1', name: 'Empresa da A', org_id: 'org-a' }] as never,
+        });
+        montar();
+        await waitFor(() => expect(listarItens).toHaveBeenCalledWith('org-a'));
+        const botao = await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }) as HTMLButtonElement;
+        expect(botao.disabled).toBe(false);
+        expect(screen.queryByText(MOTIVO_SEM_EDICAO_QUALIDADE)).toBeNull();
+    });
+
+    it('(e3) "Todas" com a mesma usuária (visitante em B): só leitura, com o motivo', async () => {
+        ANA_EDITORA_EM_A_VISITANTE_EM_B();
+        useStore.setState({ activeOrganizationId: null, activeEmpresaId: null });
+        montar();
+        await waitFor(() => expect(listarItens).toHaveBeenCalledWith(null));
+        const botao = await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }) as HTMLButtonElement;
+        expect(botao.disabled).toBe(true);
+        expect(botao.title).toBe(MOTIVO_SEM_EDICAO_QUALIDADE);
+    });
+
+    it('(e4) acesso total (desenvolvedor) edita mesmo visitante na organização do topo', async () => {
+        useStore.setState({
+            session: { user: { id: 'u1', email: 'ana@alpa.com' } },
+            organizations: [
+                { id: 'org-a', name: 'Construtora A', address: {}, members: [{ email: 'ana@alpa.com', role: 'viewer', permissions: {} }] },
+            ] as never,
+        });
+        montar(true);
+        const botao = await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }) as HTMLButtonElement;
+        expect(botao.disabled).toBe(false);
+    });
+
     it('(b2) nível A: 27 serviços pedem 27 procedimentos, meta 14 aplicados e 7 em obra', async () => {
         listarItens.mockResolvedValue(servicos(27));
         listarNiveis.mockResolvedValue({ 'org-a': 'A' });

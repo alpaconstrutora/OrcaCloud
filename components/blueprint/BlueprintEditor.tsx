@@ -686,7 +686,7 @@ import { ATRIBUICAO_OSM, caixaGeoDaGrade, prediosNoDesenho } from '../../utils/b
 import { arvoresDaCobertura } from '../../utils/blueprintMaqueteArvores';
 import { anelValido } from '../../utils/blueprintPlato3d';
 import { AREA_MAXIMA_KM2, areaDaCaixaKm2, ATRIBUICAO_WORLDCOVER } from '../../utils/geo/coberturaDoSolo';
-import { amostradorDaGrade, amostradorDaMalha, amostradorDoChao, gerarCurvasNosNiveis, malhaDaGrade } from '../../utils/blueprintTopografia';
+import { amostradorDaGrade, amostradorDaMalha, amostradorDoChao, formatarCotaM, gerarCurvasNosNiveis, malhaDaGrade } from '../../utils/blueprintTopografia';
 import {
   comprimentoDaCurvaM,
   cotaDeEquilibrio,
@@ -5934,6 +5934,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [terraplenagem.definirAnelDesenhado, editor.setTool],
   );
+  /**
+   * O PLATÔ NA PLANTA (25/11/2026 — *"o planta não aparece desenhado na planta"*): o contorno desenhado em uso, com a
+   * cota escrita como no 3D (`formatarCotaM` + " · equilíbrio"). Mesma regra do 3D: só a base DESENHADO (envelope e
+   * lote já têm traço próprio na planta). Segue a prévia do 3D enquanto um canto ou a seta é arrastado.
+   */
+  const platoNaPlanta = useMemo(() => {
+    if (terraplenagem.base !== 'DESENHADO' || !anelDoPlato || anelDoPlato.length < 3 || cotaDoPlatoM === null) return null;
+    const equilibrio = terraplenagem.cotaPlatoM === null && !previaDoPlato;
+    return { anel: anelDoPlato, texto: `${formatarCotaM(cotaDoPlatoM)} m${equilibrio ? ' · equilíbrio' : ''}` };
+  }, [terraplenagem.base, anelDoPlato, cotaDoPlatoM, terraplenagem.cotaPlatoM, previaDoPlato]);
   /** O selo do 3D: corte, aterro e saldo — os números do painel (a mesma `terraplenagemCalc`). */
   const saldoDoPlato3d = useMemo(() => {
     const v = topografia.selecionada;
@@ -17808,6 +17818,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                         }
                       : null
                   }
+                  platoNaPlanta={(mostrarTerraplenagem && terrenoAVista) ? platoNaPlanta : null}
                   drenagem={
                     (mostrarCurvasDeNivel && terrenoAVista) && terraplenagem.drenagem.length > 0
                       ? { linhas: terraplenagem.drenagem, ativa: drenagemAtiva, atende: atendeDrenagem }

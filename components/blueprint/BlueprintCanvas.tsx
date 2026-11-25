@@ -1422,6 +1422,11 @@ interface Props {
   linhaDoPerfilAtiva?: number | null;
   /** A ferramenta Perfil terminou uma polilinha (≥ 2 pontos). Não cria entidade de kernel. */
   onPerfilTracado?: (pontos: Point[]) => void;
+  /**
+   * O PLATÔ EM USO NA PLANTA (25/11/2026 — *"o planta não aparece desenhado na planta"*): contorno azul (a cor do
+   * platô no 3D), bolinha em cada canto e a cota no meio (`texto`, o mesmo do 3D). Só leitura: ajustar é no 3D.
+   */
+  platoNaPlanta?: { anel: Point[]; texto: string } | null;
   /** 25/11/2026: a ferramenta Platô fechou um contorno (≥ 3 cantos distintos). Não cria entidade de kernel. */
   onPlatoDesenhado?: (anel: Point[]) => void;
   /** O contorno fechado não serve (se cruza): o motivo, para a tela dizer. */
@@ -1832,6 +1837,7 @@ export default function BlueprintCanvas({
   feicoesDoLevantamento = null,
   declividade = null,
   terraplenagem = null,
+  platoNaPlanta = null,
   hipsometria = null,
   corDaCurva = null,
   nosDaGrade = null,
@@ -5883,6 +5889,41 @@ export default function BlueprintCanvas({
           ctx.fillStyle = corDaCurva ? corDaCurva(c.cotaM) : COR_CURVA_DE_NIVEL;
           ctx.fillText(texto, m.x, m.y);
         }
+        ctx.restore();
+      }
+
+      // O platô em uso (25/11/2026): por cima das curvas, para não sumir no meio delas.
+      if (platoNaPlanta && platoNaPlanta.anel.length >= 3) {
+        ctx.save();
+        const cantos = platoNaPlanta.anel.map(paraTela);
+        ctx.beginPath();
+        cantos.forEach((c, i) => (i === 0 ? ctx.moveTo(c.x, c.y) : ctx.lineTo(c.x, c.y)));
+        ctx.closePath();
+        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = COR_PLATO;
+        ctx.setLineDash([]);
+        ctx.stroke();
+        // As bolinhas do 3D: branco com aro azul, pequenas.
+        ctx.lineWidth = 1.5;
+        for (const c of cantos) {
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, 4, 0, Math.PI * 2);
+          ctx.fillStyle = '#ffffff';
+          ctx.fill();
+          ctx.stroke();
+        }
+        // A cota no meio da caixa do contorno, com halo branco (como as cotas das curvas).
+        const xs = cantos.map((c) => c.x);
+        const ys = cantos.map((c) => c.y);
+        const meio = { x: (Math.min(...xs) + Math.max(...xs)) / 2, y: (Math.min(...ys) + Math.max(...ys)) / 2 };
+        ctx.font = `600 ${Math.round(12 * fz)}px sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.95)';
+        ctx.strokeText(platoNaPlanta.texto, meio.x, meio.y);
+        ctx.fillStyle = COR_PLATO;
+        ctx.fillText(platoNaPlanta.texto, meio.x, meio.y);
         ctx.restore();
       }
 
@@ -10316,6 +10357,7 @@ export default function BlueprintCanvas({
     feicoesDoLevantamento,
     declividade,
     terraplenagem,
+    platoNaPlanta,
     hipsometria,
     corDaCurva,
     nosDaGrade,

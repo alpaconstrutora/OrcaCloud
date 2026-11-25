@@ -256,13 +256,45 @@ export function contrapartesDiscordam(textoExtrato: string | undefined, contrapa
 }
 
 /**
+ * Faixa de "possível reajuste" (pedido de 24/11/2026, contrato CTL-006-012-0001): a parcela de
+ * contrato do MÊS do depósito, do mesmo cliente, com valor até 15% diferente — o aluguel
+ * reajustado que não chegou ao título. Mesma faixa do "movimento parecido" do card
+ * Sequência de parcelas (utils/sequenciaParcelas.ts).
+ */
+export const PCT_REAJUSTE = 15;
+
+/** Começo do motivo de "atraso com encargos" — a Regra A de `planMatching` o procura. */
+export const PREFIXO_ENCARGOS = 'Diferença compatível com encargos';
+
+/**
+ * O extrato nomeia o MESMO cliente/fornecedor do título? Mesma escada do score: cadastro por
+ * id, nome reconhecido (CNPJ/PIX/apelido) parecido, ou nome do extrato muito parecido (≥ 0,8).
+ * "Fornecedor similar" (0,5) não basta: aqui o nome é o que decide.
+ */
+export function contraparteDoTituloConfere(
+    bTx: { counterparty_name?: string; description_normalized?: string },
+    c: { description?: string; entity_name?: string; party_name?: string; party_id?: string },
+    resolved?: ResolvedParty | null,
+): boolean {
+    const intParty = c.entity_name || c.party_name || c.description || '';
+    if (resolved?.party_id && c.party_id && c.party_id === resolved.party_id) return true;
+    if (resolved?.party_name && calculateSimilarity(intParty, resolved.party_name) >= 0.7) return true;
+    return calculateSimilarity(bTx.counterparty_name || bTx.description_normalized || '', intParty) >= 0.8;
+}
+
+const dataBR = (iso: string) => {
+    const [a, m, d] = iso.slice(0, 10).split('-');
+    return `${d}/${m}/${a}`;
+};
+
+/**
  * Pontua um candidato interno contra um movimento bancário, com motivos explicáveis.
  * Pesos: valor exato +40 / encargos compatíveis +35 / valor próximo +20;
  *        mesma data +20 / próxima +15..8; fornecedor +30/+15; documento +40.
  */
 export function scoreCandidate(
     bTx: { amount: number; direction: string; transaction_date: string; description_normalized?: string; description_raw?: string; counterparty_name?: string; bank_account_id?: string },
-    c: { amount: number; transaction_date: string; due_date?: string; description?: string; entity_name?: string; party_name?: string; party_id?: string; payment_account_id?: string },
+    c: { amount: number; transaction_date: string; due_date?: string; description?: string; entity_name?: string; party_name?: string; party_id?: string; payment_account_id?: string; contract_id?: string | null },
     s: ReconciliationEngineSettings,
     resolved?: ResolvedParty | null,
 ): { score: number; reasons: string[] } {
@@ -294,6 +326,7 @@ export function scoreCandidate(
     const diff = Math.round((bTx.amount - c.amount) * 100) / 100;
 
     // ── Valor (com inteligência de juros/multa) ──
+    let valorPontuou = true;
     if (Math.abs(diff) < 0.01) {
         score += 40; reasons.push('Valor exato');
     } else {
@@ -305,6 +338,8 @@ export function scoreCandidate(
             reasons.push(`Diferença compatível com encargos: multa ${fmt(interest.multa)} + juros ${fmt(interest.juros)} (${interest.daysLate}d) → esperado ${fmt(interest.expected)}`);
         } else if (Math.abs(diff) <= Math.max(s.value_tol_abs, c.amount * (s.value_tol_pct / 100))) {
             score += 20; reasons.push(`Valor próximo (dif ${fmt(Math.abs(diff))})`);
+        } else {
+            valorPontuou = false;
         }
     }
 
@@ -326,6 +361,18 @@ export function scoreCandidate(
         const sim = calculateSimilarity(bankParty, intParty);
         if (sim >= 0.8) { score += 30; reasons.push('Mesmo fornecedor (alta similaridade)'); }
         else if (sim >= 0.5) { score += 15; reasons.push('Fornecedor similar'); }
+    }
+
+    // ── Regra B (24/11/2026): parcela de contrato do MÊS, mesmo cliente, valor reajustado ──
+    // O depósito de R$ 4.338,43 contra a parcela de R$ 4.167,03 (4,1%: fora da tolerância
+    // de 3%) ficava com 38–45 e perdia para a parcela de 2 meses antes "com encargos" (65).
+    // Só parcela de contrato, só com o nome conferindo e na janela de datas; nunca chega
+    // sozinha ao limiar de conciliação automática.
+    if (c.contract_id && !valorPontuou && dDays <= s.date_window_days
+        && Math.abs(diff) <= c.amount * (PCT_REAJUSTE / 100)
+        && contraparteDoTituloConfere(bTx, c, resolved)) {
+        score += 15;
+        reasons.push(`Valor ${(Math.abs(diff) / c.amount * 100).toFixed(1).replace('.', ',')}% diferente (possível reajuste)`);
     }
 
     // ── Documento (NF) ──
@@ -511,6 +558,8 @@ export interface TituloParaPlano {
     party_id?: string; payment_account_id?: string;
     /** Parcela de contrato com valor VARIÁVEL (campo computado `valor_variavel`). */
     valor_variavel?: boolean | null;
+    /** Contrato da parcela — Regra B ("possível reajuste") só vale para parcela de contrato. */
+    contract_id?: string | null;
 }
 
 /**
@@ -629,6 +678,37 @@ export interface PlanoDeConciliacao {
     exactUnique: number;
 }
 
+/**
+ * Regra A (24/11/2026, contrato CTL-006-012-0001): "pagou a parcela antiga atrasado, com
+ * multa e juros" não vale quando a parcela antiga JÁ TEM o seu depósito — outro movimento
+ * pendente, ANTERIOR a este, do mesmo cliente, na janela de datas do vencimento dela e com
+ * valor na faixa da parcela. Sem isto, cada depósito mensal reajustado ia para a parcela de
+ * dois meses antes (encargos +35 batiam a parcela do próprio mês).
+ */
+export function descartarEncargosComDonoNoMes<R extends { c: TituloParaPlano; score: number; reasons: string[] }>(
+    r: R,
+    bTx: BankRowParaPlano,
+    bankTxs: readonly BankRowParaPlano[],
+    s: ReconciliationEngineSettings,
+    partyIndex: PartyIndex,
+): R {
+    const i = r.reasons.findIndex(m => m.startsWith(PREFIXO_ENCARGOS));
+    if (i < 0) return r;
+    const venc = new Date(r.c.due_date || r.c.transaction_date).getTime();
+    const este = new Date(bTx.transaction_date).getTime();
+    const dono = bankTxs.find(m => {
+        if (m.id === bTx.id || m.direction !== bTx.direction) return false;
+        const t = new Date(m.transaction_date).getTime();
+        if (t >= este || Math.abs(t - venc) > s.date_window_days * DAY) return false;
+        if (Math.abs(m.amount - r.c.amount) > r.c.amount * (PCT_REAJUSTE / 100)) return false;
+        return contraparteDoTituloConfere(m, r.c, resolveBankParty(m, partyIndex));
+    });
+    if (!dono) return r;
+    const reasons = [...r.reasons];
+    reasons[i] = `Encargos descartados: o depósito de ${dataBR(dono.transaction_date)} do mesmo cliente já é desta parcela`;
+    return { ...r, score: r.score - 35, reasons };
+}
+
 export function planMatching(
     bankTxsTodos: BankRowParaPlano[],
     candidatesAll: TituloParaPlano[],
@@ -694,8 +774,16 @@ export function planMatching(
                 // (pontuarParcelaVariavel) exige o fornecedor e limita a sugestão. E o
                 // pagamento do ciclo costuma sair ANTES do vencimento (faxina: PIX em 03/07
                 // para a parcela de 10/07), então a janela à frente é o ciclo, não 5 dias.
-                if (!c.valor_variavel && (c.amount < amtMin || c.amount > amtMax)) return false;
                 const t = new Date(c.transaction_date).getTime();
+                // Parcela de contrato NA JANELA de datas do depósito: até PCT_REAJUSTE% para os
+                // dois lados (Regra B, reajuste), e só com o cliente conferindo. Fora disso, a faixa
+                // de sempre — alargar sem essas condições trazia comissão de meses antes e tributo
+                // de R$ 70 contra conta de internet (medido em 24/11/2026).
+                const reajusteNaJanela = !!c.contract_id && Math.abs(t - bDate) <= settings.date_window_days * DAY
+                    && contraparteDoTituloConfere(bTx, c, resolved);
+                if (!c.valor_variavel && (reajusteNaJanela
+                    ? Math.abs(bTx.amount - c.amount) > c.amount * (PCT_REAJUSTE / 100)
+                    : (c.amount < amtMin || c.amount > amtMax))) return false;
                 return t >= minT && t <= (c.valor_variavel ? bDate + 31 * DAY : maxT);
             })
             .map(c => ({
@@ -704,6 +792,7 @@ export function planMatching(
                     ? pontuarParcelaVariavel(bTx, c, settings, resolved)
                     : scoreCandidate(bTx, c, settings, resolved)),
             }))
+            .map(r => descartarEncargosComDonoNoMes(r, bTx, bankTxs, settings, partyIndex))
             .filter(r => r.score >= MIN_SUGGESTION)
             .sort((a, b) => b.score - a.score);
 

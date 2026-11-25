@@ -254,6 +254,12 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
   - A barra de opções mostrava "plato" cru → "Platô" (teste do editor RED → GREEN).
   - Portão `plato.mjs` estendido: remover/inserir canto, tamanho da bolinha perto × longe (23 → 24 px de aro),
     `?desenhar=1` com Esc no meio e 4 cliques + clique no 1º → contorno de 4 cantos. ✅
+- [x] O platô na planta 2D — pedido 25/11: *"mais um item, o planta não aparece desenhado na planta"*. Depois de
+  fechado, a planta só pintava as células de corte/aterro; o contorno sumia. Agora, com a camada Terraplenagem
+  ligada e a base DESENHADO (a mesma regra do 3D), sai o contorno azul `#2563eb`, uma bolinha branca com aro azul em
+  cada canto e a cota no meio (`"883,90 m"`, ` · equilíbrio` quando é a de equilíbrio), por cima das curvas; segue a
+  prévia do 3D durante o arraste. Só leitura — ajustar continua no 3D. Teste `BlueprintCanvasPlatoNaPlanta` RED →
+  GREEN; harness `docs/spikes/topografia/?desenhar=1` mostra o contorno depois de fechado.
 
 ---
 

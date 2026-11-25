@@ -518,6 +518,8 @@ function App() {
           model={model}
           tool={desenhar && !anelDesenhado ? 'plato' : 'selecionar'}
           onPlatoDesenhado={setAnelDesenhado}
+          // O platô desenhado fica na planta (25/11/2026): contorno azul, bolinhas e a cota.
+          platoNaPlanta={anelDesenhado ? { anel: anelDesenhado, texto: '883,90 m' } : null}
           levelId={levelId}
           selectedIds={[]}
           onSelecionar={() => {}}

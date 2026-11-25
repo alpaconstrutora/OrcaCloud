@@ -72,3 +72,21 @@ export function removerCanto(anel: readonly Point[], i: number): Point[] {
   if (anel.length <= 3) return [...anel];
   return anel.filter((_, k) => k !== i);
 }
+
+/**
+ * A ALÇA DO MEIO DO LADO (25/11/2026, reel "Terrain Modification Tool": arrastar o lado inteiro). O lado `i`
+ * (`anel[i]` → `anel[i+1]`, o último fecha no primeiro) anda na PERPENDICULAR dele: só o componente do `deslocamento`
+ * na normal conta (o lado não escorrega ao longo de si). Os dois cantos do lado andam juntos; mm inteiros.
+ */
+export function moverLado(anel: readonly Point[], i: number, deslocamento: Point): Point[] {
+  const n = anel.length;
+  const a = anel[i];
+  const b = anel[(i + 1) % n];
+  const comp = Math.hypot(b.x - a.x, b.y - a.y);
+  if (comp === 0) return anel.slice();
+  const nx = (b.y - a.y) / comp;
+  const ny = -(b.x - a.x) / comp;
+  const d = deslocamento.x * nx + deslocamento.y * ny;
+  const mover = (p: Point): Point => ({ x: Math.round(p.x + nx * d), y: Math.round(p.y + ny * d) });
+  return anel.map((p, k) => (k === i || k === (i + 1) % n ? mover(p) : p));
+}

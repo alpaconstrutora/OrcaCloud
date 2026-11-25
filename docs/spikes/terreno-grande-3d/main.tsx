@@ -88,6 +88,8 @@ declare global {
     __anelDesenhado?: { x: number; y: number }[] | null;
   }
 }
+// `?editar=1`: liga o espião do editor do platô (onde cada alça está na tela) para o portão plato.mjs.
+(window as unknown as { __depurarPlato3d?: boolean }).__depurarPlato3d = !!q.get('editar');
 window.__terreno = relevo ? { minY: relevo.minY, maxY: relevo.maxY, triangulos: relevo.triangulos } : null;
 
 /**

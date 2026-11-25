@@ -76,6 +76,7 @@ import { podeEditarTreinamentos } from '../utils/permissaoTreinamentos';
 import { podeEditarRiscos } from '../utils/permissaoRiscos';
 import { podeVerDiretoria } from '../utils/permissaoDiretoria';
 import { temAcessoTotal } from '../lib/acessoTotal';
+import { CHAVE_FOLHA_PEDIDA } from '../utils/folhaDeConfiguracoes';
 import { permitidoNaOrg, vinculosDoUsuario } from '../utils/modulosPermitidos';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
@@ -318,6 +319,13 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
   const setActiveViewDoStore = useStore(s => s.setActiveView);
   React.useEffect(() => {
     if (activeView === 'area-engine') setActiveViewDoStore('blueprint');
+    // RH › Config. Fiscais virou Configurações do Sistema › Tributos e Impostos
+    // (24/11/2026, docs/planos/2026-11-24-tributos-um-lugar-so.md). O endereço
+    // antigo — view salva, busca, atalho — abre a folha do INSS.
+    if (activeView === 'labor-fiscal') {
+      try { localStorage.setItem(CHAVE_FOLHA_PEDIDA, 'tributos-inss'); } catch { /* sem localStorage: abre na folha inicial */ }
+      setActiveViewDoStore('settings');
+    }
   }, [activeView, setActiveViewDoStore]);
 
   React.useEffect(() => {
@@ -869,7 +877,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'labor-payroll':
     case 'labor-rubrics':
     case 'labor-encargos':
-    case 'labor-fiscal':
     // Fase 1 extras
     case 'labor-epis':
     case 'labor-absences':

@@ -16,7 +16,7 @@ vi.mock('../../services/rotinasAutomaticasService', () => ({
 }));
 // as telas das folhas não interessam aqui
 vi.mock('../../components/settings/NomenclaturaTable', () => ({ default: () => <div>nomenclatura</div> }));
-vi.mock('../../components/InssBracketsSettings', () => ({ default: () => <div>tela do inss</div> }));
+vi.mock('../../components/settings/TabelaFiscalSettings', () => ({ default: ({ tabela }: { tabela: string }) => <div>tela do {tabela}</div> }));
 
 import Settings from '../../components/Settings';
 import { ConfirmProvider } from '../../components/ui/confirm';
@@ -102,5 +102,19 @@ describe('Settings › menu das seções no celular', () => {
         expect(caixa.className.split(/\s+/)).toEqual(expect.arrayContaining(['w-full', 'lg:w-64']));
         expect((caixa.parentElement as HTMLElement).className.split(/\s+/))
             .toEqual(expect.arrayContaining(['flex-col', 'lg:flex-row']));
+    });
+
+    it('abre direto na folha pedida de fora (endereço antigo RH › Config. Fiscais → INSS) e apaga o pedido', async () => {
+        localStorage.setItem('settings_active_leaf', 'tributos-inss');
+        render(<ConfirmProvider><Settings /></ConfirmProvider>);
+        expect(await screen.findByText('tela do inss')).toBeTruthy();
+        expect(botaoMenu().textContent).toMatch(/Seção:\s*Tributos e Impostos › INSS$/);
+        expect(localStorage.getItem('settings_active_leaf')).toBeNull();
+    });
+
+    it('pedido desconhecido é ignorado: abre na folha inicial', async () => {
+        localStorage.setItem('settings_active_leaf', 'nao-existe');
+        await montar();
+        expect(botaoMenu().textContent).toMatch(/Seção:\s*Nomenclatura/);
     });
 });

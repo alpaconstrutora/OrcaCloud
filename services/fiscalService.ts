@@ -35,6 +35,15 @@ export interface FGTSConfig {
     rate: number;
 }
 
+/**
+ * As tabelas fiscais são globais e só superadmin grava (policy com is_superadmin()).
+ * A RLS barra UPDATE/DELETE sem erro — 0 linhas — e a tela dizia "atualizada".
+ * Sem linha de volta = recusado.
+ */
+function exigirLinha(data: unknown[] | null) {
+    if (!data?.length) throw new Error('O banco recusou a gravação — só o superadmin altera as tabelas oficiais.');
+}
+
 export const fiscalService = {
     /**
      * Busca as faixas de INSS válidas para uma determinada data (competência)
@@ -99,43 +108,53 @@ export const fiscalService = {
     },
 
     async updateINSSBracket(id: string, bracket: Partial<INSSBracket>) {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('inss_brackets')
             .update(bracket)
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
         if (error) throw error;
+        exigirLinha(data);
     },
 
     async updateIRRFBracket(id: string, bracket: Partial<IRRFBracket>) {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('irrf_brackets')
             .update(bracket)
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
         if (error) throw error;
+        exigirLinha(data);
     },
 
     async updateFGTSConfig(id: string, config: Partial<FGTSConfig>) {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('fgts_config')
             .update(config)
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
         if (error) throw error;
+        exigirLinha(data);
     },
 
     async deleteINSSBracket(id: string) {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('inss_brackets')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
         if (error) throw error;
+        exigirLinha(data);
     },
 
     async deleteIRRFBracket(id: string) {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('irrf_brackets')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
         if (error) throw error;
+        exigirLinha(data);
     },
 
     async createINSSBracket(bracket: Omit<INSSBracket, 'id'>) {

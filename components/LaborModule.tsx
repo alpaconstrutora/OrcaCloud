@@ -16,7 +16,6 @@ import LaborDocuments from './LaborDocuments';
 import LaborPayroll from './LaborPayroll';
 import LaborCostDashboard from './LaborCostDashboard';
 import LaborRubrics from './LaborRubrics';
-import LaborFiscalSettings from './LaborFiscalSettings';
 import LaborEncargos from './LaborEncargos';
 import LaborEPIs from './LaborEPIs';
 import LaborAbsences from './LaborAbsences';
@@ -45,7 +44,7 @@ import Button from './ui/Button';
 
 // ─── Types ──────────────────────────────────────────────────
 // 'allocations' saiu: virou aba de `LaborPayroll` em 2026-08-23.
-type LaborTab = 'employees' | 'teams' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao' | 'bi_analytics' | 'esocial' | 'vale_refeicao' | 'incentivos' | 'cargos' | 'remuneracao_societaria';
+type LaborTab = 'employees' | 'teams' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao' | 'bi_analytics' | 'esocial' | 'vale_refeicao' | 'incentivos' | 'cargos' | 'remuneracao_societaria';
 
 const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-dashboard': 'rh_dashboard',   // endereço antigo (o AppRouter também redireciona)
@@ -63,7 +62,6 @@ const SECTION_TO_TAB: Record<string, LaborTab> = {
     'labor-payroll': 'payroll',
     'labor-rubrics': 'rubrics',
     'labor-encargos': 'encargos',
-    'labor-fiscal': 'fiscal',
     'labor-epis': 'epis',
     'labor-absences':     'absences',
     'labor-trainings':    'trainings',
@@ -309,7 +307,6 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
                         />
                     )}
                     {activeTab === 'rubrics' && <LaborRubrics />}
-                    {activeTab === 'fiscal' && <LaborFiscalSettings />}
                     {activeTab === 'encargos' && (
                         <LaborEncargos
                             orgId={orgId}

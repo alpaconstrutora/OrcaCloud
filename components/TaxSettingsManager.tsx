@@ -14,7 +14,6 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'aliquota',       label: 'Alíquota (%)',      sortable: true },
     { key: 'base_calculo',   label: 'Base de Cálculo',   sortable: false },
     { key: 'regra_retencao', label: 'Regra de Retenção', sortable: false },
-    { key: 'aplica',         label: 'Aplica a',          sortable: false },
     { key: 'ativo',          label: 'Ativo',             sortable: true },
     { key: 'actions',        label: 'Ações',             sortable: false },
 ];
@@ -31,7 +30,6 @@ const TAX_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; cl
     aliquota:       { label: 'Alíquota (%)',      className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
     base_calculo:   { label: 'Base de Cálculo',   sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
     regra_retencao: { label: 'Regra de Retenção', sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
-    aplica:         { label: 'Aplica a',          sortable: false, className: 'px-6 py-2 border-r border-gray-100' },
     ativo:          { label: 'Ativo',             className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
 };
 
@@ -71,16 +69,6 @@ function renderTaxCell(key: string, item: TaxSetting): React.ReactNode {
             return <span className="text-sm font-normal text-gray-600">{item.base_calculo || '—'}</span>;
         case 'regra_retencao':
             return <span className="text-sm font-normal text-gray-600">{item.regra_retencao || '—'}</span>;
-        case 'aplica': {
-            const parts: string[] = [];
-            if (item.aplica_venda_ativo) parts.push('Venda de Ativo');
-            if (item.aplica_locacao) parts.push('Locação');
-            return (
-                <span className="text-sm font-normal text-gray-600 whitespace-nowrap">
-                    {parts.length ? parts.join(' · ') : <span className="text-gray-400">—</span>}
-                </span>
-            );
-        }
         case 'ativo':
             return <span className={item.ativo ? 'text-sm text-emerald-600' : 'text-sm text-gray-400'}>{item.ativo ? 'Sim' : 'Não'}</span>;
         default:
@@ -230,8 +218,11 @@ const TaxSettingsManager: React.FC = () => {
                         <Landmark className="w-6 h-6 text-indigo-600" />
                     </div>
                     <div>
-                        <h2 className="text-lg font-semibold text-gray-800">Tributos e Impostos</h2>
-                        <p className="text-sm text-gray-500 mt-1">Alíquota, base de cálculo e regra de retenção usados como referência para os tributos da organização.</p>
+                        <h2 className="text-lg font-semibold text-gray-800">Venda de Ativos</h2>
+                        <p className="text-sm text-gray-500 mt-1">
+                            Tributos e alíquotas desta organização aplicados sobre cada parcela de Venda de Ativos. Locação não usa esta
+                            lista: ela calcula pelas tabelas INSS, IRRF, PIS e COFINS ao lado.
+                        </p>
                     </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
@@ -265,7 +256,7 @@ const TaxSettingsManager: React.FC = () => {
                         {incompleteActive.length === 1
                             ? <><b>{incompleteActive[0].nome}</b> está ativo mas sem alíquota definida</>
                             : <>{incompleteActive.length} tributos ativos estão sem alíquota definida ({incompleteActive.map(i => i.nome).join(', ')})</>}
-                        {' '}— não entram no cálculo de Tributos a Pagar até a alíquota ser preenchida.
+                        {' '}— não entram nos tributos de Venda de Ativos até a alíquota ser preenchida.
                     </span>
                 </div>
             )}
@@ -304,14 +295,6 @@ const TaxSettingsManager: React.FC = () => {
                             placeholder="Regra de retenção"
                             className={`${inputCls} flex-1 min-w-[10rem]`}
                         />
-                        <label className="flex items-center gap-1.5 h-8 px-1 text-sm text-gray-600 shrink-0" title="Incide sobre Vendas de Ativos">
-                            <input type="checkbox" checked={form.aplica_venda_ativo} onChange={e => setForm(f => ({ ...f, aplica_venda_ativo: e.target.checked }))} />
-                            Venda de Ativo
-                        </label>
-                        <label className="flex items-center gap-1.5 h-8 px-1 text-sm text-gray-600 shrink-0" title="Incide sobre Locações">
-                            <input type="checkbox" checked={form.aplica_locacao} onChange={e => setForm(f => ({ ...f, aplica_locacao: e.target.checked }))} />
-                            Locação
-                        </label>
                         <label className="flex items-center gap-1.5 h-8 px-1 text-sm text-gray-600 shrink-0">
                             <input type="checkbox" checked={form.ativo} onChange={e => setForm(f => ({ ...f, ativo: e.target.checked }))} />
                             Ativo

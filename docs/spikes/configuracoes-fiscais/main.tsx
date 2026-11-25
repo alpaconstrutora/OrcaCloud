@@ -1,5 +1,5 @@
 /**
- * Harness: monta o `LaborFiscalSettings` DE PRODUÇÃO (RH › Configurações Fiscais)
+ * Harness: monta o `TabelaFiscalSettings` DE PRODUÇÃO (Configurações › Tributos e Impostos › INSS)
  * para conferir na tela as abas e as tabelas de 25/10/2026
  * (docs/planos/2026-10-25-rh-configuracoes-fiscais-abas-tabela.md).
  *
@@ -10,7 +10,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import '../../../index.css';
-import LaborFiscalSettings from '../../../components/LaborFiscalSettings';
+import TabelaFiscalSettings from '../../../components/settings/TabelaFiscalSettings';
 import { ConfirmProvider } from '../../../components/ui/confirm';
 import { ToastProvider } from '../../../components/ui/toast';
 
@@ -21,7 +21,7 @@ function Harness() {
         <div className="flex min-h-screen">
           <aside style={{ width: 260 }} className="shrink-0 bg-slate-900" />
           <main className="flex-1 min-w-0 p-4 md:p-6">
-            <LaborFiscalSettings />
+            <TabelaFiscalSettings tabela="inss" podeEditar />
           </main>
         </div>
       </ToastProvider>

@@ -16,9 +16,9 @@ import PaymentTypesSettings from './PaymentTypesSettings';
 import ContractIndexManager from './ContractIndexManager';
 import AvisoReajusteOrgSettings from './rentals/AvisoReajusteOrgSettings';
 import TaxSettingsManager from './TaxSettingsManager';
-import InssBracketsSettings from './InssBracketsSettings';
-import PisRatesSettings from './PisRatesSettings';
-import CofinsRatesSettings from './CofinsRatesSettings';
+import TabelaFiscalSettings from './settings/TabelaFiscalSettings';
+import AliquotaPorExercicioSettings from './settings/AliquotaPorExercicioSettings';
+import { CHAVE_FOLHA_PEDIDA } from '../utils/folhaDeConfiguracoes';
 import PortalHelpSettings from './PortalHelpSettings';
 import BrandsSettings from './settings/BrandsSettings';
 import RotinasAutomaticasSettings from './settings/RotinasAutomaticasSettings';
@@ -29,7 +29,7 @@ type SettingsLeafId =
     | 'cat-clientes' | 'cat-fornecedores' | 'cat-contratos'
     | 'cat-empreendimentos' | 'cat-caracteristicas-unidade' | 'cat-financeiro' | 'cat-pagamentos'
     | 'catalogo-marcas'
-    | 'indices' | 'tributos-geral' | 'tributos-inss' | 'tributos-pis' | 'tributos-cofins'
+    | 'indices' | 'tributos-geral' | 'tributos-inss' | 'tributos-irrf' | 'tributos-fgts' | 'tributos-pis' | 'tributos-cofins'
     | 'whatsapp' | 'email' | 'database' | 'rotinas-automaticas' | 'ajuda-portais';
 
 interface SettingsNavLeaf { id: SettingsLeafId; label: string; }
@@ -60,9 +60,13 @@ const SETTINGS_NAV: SettingsNavNode[] = [
     // (pedido de 13/10). docs/planos/2026-10-13-marcas-e-modelos.md
     { id: 'catalogo', label: 'Marcas e Modelos', icon: Tags, leafId: 'catalogo-marcas' },
     { id: 'indices', label: 'Índices de Reajuste', icon: Percent, leafId: 'indices' },
+    // Um lugar só para tributos (24/11/2026): INSS/IRRF/FGTS vieram de RH › Config.
+    // Fiscais e a cópia do INSS da locação saiu. docs/planos/2026-11-24-tributos-um-lugar-so.md
     { id: 'tributos', label: 'Tributos e Impostos', icon: Landmark, children: [
-        { id: 'tributos-geral', label: 'Geral' },
+        { id: 'tributos-geral', label: 'Venda de Ativos' },
         { id: 'tributos-inss', label: 'INSS' },
+        { id: 'tributos-irrf', label: 'IRRF' },
+        { id: 'tributos-fgts', label: 'FGTS' },
         { id: 'tributos-pis', label: 'PIS' },
         { id: 'tributos-cofins', label: 'COFINS' },
     ]},
@@ -85,11 +89,29 @@ function navDasConfiguracoes(ehSuperadmin: boolean): SettingsNavNode[] {
     return [...SETTINGS_NAV.slice(0, depoisDe), NO_ROTINAS_AUTOMATICAS, ...SETTINGS_NAV.slice(depoisDe)];
 }
 
+/**
+ * Folha pedida por quem abriu Configurações de fora (ex.: o endereço antigo
+ * `labor-fiscal` → INSS). Lida UMA vez e apagada — mesmo padrão de
+ * `rentals_active_tab`. Valor desconhecido é ignorado.
+ */
+function folhaPedida(): { folha: SettingsLeafId; grupo?: string } | null {
+    let pedida: string | null = null;
+    try { pedida = localStorage.getItem(CHAVE_FOLHA_PEDIDA); localStorage.removeItem(CHAVE_FOLHA_PEDIDA); } catch { return null; }
+    if (!pedida) return null;
+    for (const node of SETTINGS_NAV) {
+        if (node.leafId === pedida) return { folha: node.leafId };
+        const filha = node.children?.find(c => c.id === pedida);
+        if (filha) return { folha: filha.id, grupo: node.id };
+    }
+    return null;
+}
+
 const Settings: React.FC = () => {
     const confirm = useConfirm();
+    const [pedida] = React.useState(folhaPedida);
     // Nomenclatura é a folha inicial (agora item de nível único, sem submenu).
-    const [activeLeaf, setActiveLeaf] = React.useState<SettingsLeafId>('nomenclatura');
-    const [openNavNodes, setOpenNavNodes] = React.useState<Record<string, boolean>>({});
+    const [activeLeaf, setActiveLeaf] = React.useState<SettingsLeafId>(pedida?.folha ?? 'nomenclatura');
+    const [openNavNodes, setOpenNavNodes] = React.useState<Record<string, boolean>>(pedida?.grupo ? { [pedida.grupo]: true } : {});
     const toggleNavNode = (id: string) => setOpenNavNodes(o => ({ ...o, [id]: !o[id] }));
     // Abaixo de `lg` (celular e tablet) a árvore recolhe atrás de um botão com a seção atual —
     // ao lado da folha ela tomava 256 px de 358 a 390 px de tela. Escolher folha fecha;
@@ -458,9 +480,11 @@ const Settings: React.FC = () => {
             )}
 
             {activeLeaf === 'tributos-geral' && <TaxSettingsManager />}
-            {activeLeaf === 'tributos-inss' && <InssBracketsSettings />}
-            {activeLeaf === 'tributos-pis' && <PisRatesSettings />}
-            {activeLeaf === 'tributos-cofins' && <CofinsRatesSettings />}
+            {activeLeaf === 'tributos-inss' && <TabelaFiscalSettings key="inss" tabela="inss" podeEditar={ehSuperadmin} />}
+            {activeLeaf === 'tributos-irrf' && <TabelaFiscalSettings key="irrf" tabela="irrf" podeEditar={ehSuperadmin} />}
+            {activeLeaf === 'tributos-fgts' && <TabelaFiscalSettings key="fgts" tabela="fgts" podeEditar={ehSuperadmin} />}
+            {activeLeaf === 'tributos-pis' && <AliquotaPorExercicioSettings key="pis" tributo="PIS" podeEditar={ehSuperadmin} />}
+            {activeLeaf === 'tributos-cofins' && <AliquotaPorExercicioSettings key="cofins" tributo="COFINS" podeEditar={ehSuperadmin} />}
                 </div>
             </div>
         </div>

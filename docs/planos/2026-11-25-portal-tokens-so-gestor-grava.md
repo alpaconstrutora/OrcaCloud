@@ -30,8 +30,11 @@ alterar ou apagar link de portal ficaria só para owner e admin. Faço?"
   verde (8/8).
 - [x] `components/client/ClientPortalLinkModal.tsx` — o toast mostra a mensagem de permissão em vez
   de "Erro ao gerar/revogar". A tela do RH (`LaborPortal`) já mostrava `e.message`.
-- [ ] Publicar o front ANTES da migration (o front novo funciona com as duas policies; o antigo, com a
+- [x] Publicar o front ANTES da migration (o front novo funciona com as duas policies; o antigo, com a
   policy nova, diria "Acesso revogado" sem revogar). **Pronto quando:** `conferir-producao.sh` mostra o
-  commit do merge servido.
-- [ ] Aplicar a migration (`db query -f`). **Pronto quando:** a prova dá TUDO OK sozinha e
-  `pg_policies` mostra as 4 policies novas em cada tabela.
+  commit do merge servido. (25/11: PR #757, `24eed26` servido antes de aplicar.)
+- [x] Aplicar a migration (`db query -f`). **Pronto quando:** a prova dá TUDO OK sozinha e
+  `pg_policies` mostra as 4 policies novas em cada tabela. (25/11: aplicada; prova TUDO OK; 4 policies
+  em cada tabela; `check-rls-postura.sh` limpa nas 9 verificações.)
+
+Todos os itens concluídos.

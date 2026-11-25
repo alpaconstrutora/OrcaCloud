@@ -799,13 +799,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // O painel executivo são 8 indicadores; o resto fica recolhido. "20 não é
     // dashboard, é relatório" — decisão registrada no plano da Fase 3.
     const [showDetail, setShowDetail] = usePersistedState('rentals:analysisDetail', false);
-    // A aba Renovações é só a FILA. Contrato, vigência, renovações e documentos
-    // moram todos em Gerenciar Negociação › Contrato e Assinatura — abrir um
-    // detalhe de contrato aqui dentro criaria um segundo caminho para a mesma
-    // coisa. Por isso "Ver contrato" e "Renovar" levam para lá.
+    // Renovar e reajustar acontecem AQUI (abas Renovações e Reajustes, com gaveta
+    // própria — plano docs/planos/2026-11-25-renovacoes-e-reajustes-um-lugar.md).
+    // "Ver contrato" abre a negociação em Contrato › Dados do contrato, que só
+    // mostra a situação da vigência e o atalho de volta para cá.
     const [dealModalTab, setDealModalTab] = useState<string | undefined>(undefined);
-    // Editar da fila de Renovações: a negociação abre já editando este aditivo.
-    const [renovacaoParaEditar, setRenovacaoParaEditar] = useState<string | undefined>(undefined);
     const [properties, setProperties] = useState<Property[]>([]);
     // Imóvel → empreendimento. O vínculo não é FK na tabela do Comercial: vem de
     // `empreendimento_units.rental_property_id` (unidade) ou de
@@ -941,11 +939,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
     /**
      * Da fila de Renovações para a negociação de origem, já na aba
-     * "Contrato e Assinatura" — é lá que vivem vigência, renovações e documentos.
+     * "Contrato e Assinatura" (Ver contrato) — dados e documentos do contrato.
      * O vínculo é `contracts.deal_id`; contrato sem negociação (ex.: filho de uma
      * renovação anterior) não tem para onde ir, e a fila avisa em vez de abrir vazio.
      */
-    const openDealForContract = async (contractId: string, editarAditivoId?: string) => {
+    const openDealForContract = async (contractId: string) => {
         try {
             // Sobe a cadeia de renovação até achar a negociação. Contrato-filho
             // não herda `deal_id` de propósito (getContractByDealId usa
@@ -980,7 +978,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             }
             setEditingDeal(deal);
             setDealModalTab('contrato');
-            setRenovacaoParaEditar(editarAditivoId);
             setIsDealModalOpen(true);
         } catch (e) {
             notify(`Erro ao abrir a negociação: ${e instanceof Error ? e.message : ''}`, 'error');
@@ -3196,7 +3193,6 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     clients={clients}
                     onChanged={(message) => { loadData(); notify(message); }}
                     onOpenContract={id => openDealForContract(id)}
-                    onEditRenewal={(id, aditivoId) => openDealForContract(id, aditivoId)}
                     negociacoesDoEmpreendimento={negociacoesDoEdificio}
                 />
             )}
@@ -3356,12 +3352,12 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
 
             <DealModal
                 isOpen={isDealModalOpen}
-                onClose={() => { setIsDealModalOpen(false); setEditingDeal(undefined); setDealModalTab(undefined); setRenovacaoParaEditar(undefined); }}
+                onClose={() => { setIsDealModalOpen(false); setEditingDeal(undefined); setDealModalTab(undefined); }}
                 onSave={() => loadData()}
                 initialData={editingDeal}
                 organizationId={organizationId}
                 initialTab={dealModalTab}
-                editarRenovacaoId={renovacaoParaEditar}
+                onIrParaLocacoes={aba => { setIsDealModalOpen(false); setEditingDeal(undefined); setDealModalTab(undefined); setActiveTab(aba); }}
                 // Dentro de "Gestão de Unidades" a negociação só pode enxergar as
                 // unidades DESTE edifício — sem isso o seletor de unidades listava
                 // as unidades de todos os imóveis misturadas (Vendas já passava).

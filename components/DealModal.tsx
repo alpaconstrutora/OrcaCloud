@@ -78,7 +78,7 @@ import { Contract } from '../types';
 import DealWorkflowBar from './DealWorkflowBar';
 import { DealWorkflowStatus } from '../lib/dealWorkflow';
 import DealSignaturePanel from './DealSignaturePanel';
-import ContractRenewalsPanel from './rentals/ContractRenewalsPanel';
+import SituacaoDaVigencia from './rentals/SituacaoDaVigencia';
 import RentalGuaranteePanel from './rentals/RentalGuaranteePanel';
 import DocumentVersionsPanel from './contracts/DocumentVersionsPanel';
 import CreditAnalysisPanel from './CreditAnalysisPanel';
@@ -666,8 +666,11 @@ interface DealModalProps {
     buildingId?: string;
     /** Abre direto numa aba (ex.: 'contrato', vindo da fila de Renovações). */
     initialTab?: string;
-    /** Com initialTab='contrato': abre Renovações já editando este aditivo (Editar da fila). */
-    editarRenovacaoId?: string;
+    /**
+     * Dentro da Gestão de Unidades: o atalho da situação da vigência fecha a
+     * negociação e abre a aba (Renovações ou Reajustes). Fora dela, sem atalho.
+     */
+    onIrParaLocacoes?: (aba: 'renewals' | 'reajustes') => void;
 }
 
 // Colunas da aba Parcelas. A aba tem UMA tabela só desde 2026-08-01: plano da
@@ -761,10 +764,10 @@ const PARCELAS_TD_CLASS: Record<string, string> = {
     descricao: '',
 };
 
-const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId, initialTab, editarRenovacaoId }) => {
+const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onSave, defaultType, organizationId, buildingId, initialTab, onIrParaLocacoes }) => {
     const [activeTab, setActiveTab] = useState<TabId>((initialTab as TabId) || 'cliente');
     // Sub-aba de "Contrato e Assinatura" (só locação com contrato gerado).
-    const [contratoSubTab, setContratoSubTab] = useState<'dados' | 'renovacoes' | 'documentos'>('dados');
+    const [contratoSubTab, setContratoSubTab] = useState<'dados' | 'documentos'>('dados');
     const confirm = useConfirm();
     // Organizações do usuário — para listar corretores de TODAS elas (um corretor
     // cadastrado na Alpa Construtora aparece nas negociações das SPEs de cada
@@ -813,7 +816,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             // Abre na aba pedida por quem chamou (a fila de Renovações manda
             // 'contrato'); sem isso o modal sempre voltava para 'cliente'.
             setActiveTab((initialTab as TabId) || 'cliente');
-            setContratoSubTab(initialTab === 'contrato' ? 'renovacoes' : 'dados');
+            setContratoSubTab('dados');
             const inicial: Partial<PropertyDeal> = {
                 type: defaultType || 'SALE',
                 status: 'IN_NEGOTIATION',
@@ -5238,18 +5241,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     ══════════════════════════════════════════ */}
                     {activeTab === 'contrato' && (
                         <div className="space-y-8">
-                            {/* Sub-abas — só locação com contrato gerado. Renovações e
-                                documentos do contrato moram AQUI, na mesma aba de
-                                sempre: a fila em Locações › Renovações apenas aponta
-                                para cá, para não existirem dois lugares que mexem no
-                                mesmo contrato. */}
+                            {/* Sub-abas — só locação com contrato gerado. Renovar e
+                                reajustar NÃO moram aqui (plano 2026-11-25-renovacoes-e-
+                                reajustes-um-lugar): ficam em Gestão de Unidades ›
+                                Renovações / Reajustes; aqui só a situação, só leitura. */}
                             {/* Trilho em card branco (§19.1) — sobre o fundo cinza da
                                 página um trilho bg-gray-50 solto perderia definição. */}
                             {formData.type === 'RENTAL' && linkedContract && (
                                 <div className="flex flex-wrap items-center bg-white p-1 rounded-[10px] border border-gray-200 shadow-sm gap-1 w-fit">
                                     {([
                                         { id: 'dados', label: 'Dados do contrato' },
-                                        { id: 'renovacoes', label: 'Renovações' },
                                         { id: 'documentos', label: 'Documentos' },
                                     ] as const).map(sub => (
                                         <button
@@ -5268,19 +5269,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
                             )}
 
-                            {formData.type === 'RENTAL' && linkedContract && contratoSubTab === 'renovacoes' && (
-                                <ContractRenewalsPanel
-                                    contract={linkedContract}
-                                    editarAditivoId={editarRenovacaoId}
-                                    // Toast (§13): o `contractError` só aparece na sub-aba
-                                    // "Dados do contrato" — aqui o erro e o sucesso de
-                                    // renovar/desfazer ficavam mudos.
-                                    onNotify={(msg, type) => (type === 'error' ? notifyError(msg) : notifySuccess(msg))}
-                                    onChanged={async () => {
-                                        const atualizado = await contractService.getContractById(linkedContract.id);
-                                        if (atualizado) setLinkedContract(atualizado);
-                                    }}
-                                />
+                            {formData.type === 'RENTAL' && linkedContract && contratoSubTab === 'dados' && (
+                                <SituacaoDaVigencia contract={linkedContract} onIrPara={onIrParaLocacoes} />
                             )}
 
                             {formData.type === 'RENTAL' && linkedContract && contratoSubTab === 'documentos' && (

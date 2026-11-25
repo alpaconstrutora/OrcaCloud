@@ -10,6 +10,7 @@ import { contractRenewalService, ExpiringRental } from '../../services/contractR
 import { Client } from '../../types';
 import { filaDoEmpreendimento } from '../../utils/reajusteAniversario';
 import RentalRenovacoesHistorico from './RentalRenovacoesHistorico';
+import RenovacaoSheet from './RenovacaoSheet';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Contrato', sortable: true },
@@ -107,8 +108,6 @@ interface Props {
     onChanged?: (message: string) => void;
     /** Abre o detalhe do contrato (aditivos, documentos, assinatura). */
     onOpenContract?: (contractId: string) => void;
-    /** Editar a renovação: abre a negociação já editando o aditivo (= substituí-lo). */
-    onEditRenewal?: (contractId: string, addendumId: string) => void;
     /**
      * Negociações do empreendimento aberto (mesma regra da aba Contratos); null =
      * fora de um empreendimento, todos da organização. Pedido de 24/11/2026.
@@ -116,13 +115,18 @@ interface Props {
     negociacoesDoEmpreendimento?: Set<string> | null;
 }
 
-const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChanged, onOpenContract, onEditRenewal, negociacoesDoEmpreendimento = null }) => {
+const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChanged, onOpenContract, negociacoesDoEmpreendimento = null }) => {
     const [todas, setTodas] = useState<ExpiringRental[]>([]);
     const rows = useMemo(() => filaDoEmpreendimento(todas, negociacoesDoEmpreendimento), [todas, negociacoesDoEmpreendimento]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [faixa, setFaixa] = useState<Faixa>('all');
     const [closingId, setClosingId] = useState<string | null>(null);
+    // Renovar e Editar abrem a gaveta AQUI (plano 2026-11-25-renovacoes-e-reajustes-um-lugar):
+    // antes levavam para a negociação, e o mesmo assunto vivia em dois lugares.
+    const [gavetaDe, setGavetaDe] = useState<{ contractId: string; editarAditivoId?: string } | null>(null);
+    // Muda quando a gaveta grava — o Histórico relê.
+    const [versaoHistorico, setVersaoHistorico] = useState(0);
     const confirm = useConfirm();
     const [searchTerm, setSearchTerm] = usePersistedState('rentalRenewals:search', '');
     const [showClosed, setShowClosed] = usePersistedState<boolean>('rentalRenewals:showClosed', false);
@@ -291,6 +295,21 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
         </div>
     );
 
+    const gaveta = gavetaDe && (
+        <RenovacaoSheet
+            key={`${gavetaDe.contractId}-${gavetaDe.editarAditivoId ?? 'nova'}`}
+            contractId={gavetaDe.contractId}
+            editarAditivoId={gavetaDe.editarAditivoId}
+            onClose={() => setGavetaDe(null)}
+            onDone={mensagem => {
+                setGavetaDe(null);
+                setVersaoHistorico(v => v + 1);
+                loadData();
+                onChanged?.(mensagem);
+            }}
+        />
+    );
+
     if (visao === 'historico') {
         return (
             <div className="space-y-6">
@@ -300,9 +319,11 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                     negociacoesDoEmpreendimento={negociacoesDoEmpreendimento}
                     nomeDoCliente={id => clientName(id ?? undefined)}
                     onOpenContract={onOpenContract}
-                    onEditRenewal={onEditRenewal}
+                    onEditRenewal={(contractId, editarAditivoId) => setGavetaDe({ contractId, editarAditivoId })}
+                    versao={versaoHistorico}
                     onMudou={mensagem => { loadData(); onChanged?.(mensagem); }}
                 />
+                {gaveta}
             </div>
         );
     }
@@ -482,27 +503,28 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                                                     {/* Renovar exige vigência: sem fim definido não há de onde
                                                         derivar o início do contrato-filho. Botão fica disabled
                                                         com title explicando, nunca some nem morre em silêncio. */}
-                                                    {/* Renovar leva para a negociação (aba Contrato
-                                                        e Assinatura › Renovações), que é o único
-                                                        lugar onde se mexe no contrato. A fila aqui
-                                                        só mostra o que está vencendo. */}
-                                                    <button
-                                                        onClick={() => onOpenContract?.(r.id)}
-                                                        disabled={r.renewed || !r.end_date}
+                                                    {/* Renovar abre a gaveta aqui mesmo (plano 2026-11-25). */}
+                                                    <span
+                                                        className="inline-flex"
                                                         title={
                                                             r.renewed ? `Já renovado pelo contrato ${r.renewed_by}`
-                                                                : !r.end_date ? 'Informe o fim da vigência na negociação (aba Contrato) antes de renovar'
+                                                                : !r.end_date ? 'Informe o fim da vigência na negociação (Dados do contrato) antes de renovar'
                                                                 : undefined
                                                         }
-                                                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all disabled:text-gray-300 disabled:hover:bg-transparent"
                                                     >
-                                                        Renovar
-                                                    </button>
+                                                        <button
+                                                            onClick={() => setGavetaDe({ contractId: r.id })}
+                                                            disabled={r.renewed || !r.end_date}
+                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all disabled:text-gray-300 disabled:hover:bg-transparent"
+                                                        >
+                                                            Renovar
+                                                        </button>
+                                                    </span>
                                                     {/* Editar renovação — mesma condição do Excluir. Por
-                                                        aditivo: leva à negociação já editando o aditivo
-                                                        (salvar = substituí-lo). Por contrato novo não
-                                                        há edição: desligado, com o motivo. */}
-                                                    {(r.renewed || r.last_addendum) && onEditRenewal && (
+                                                        aditivo: abre a gaveta em modo edição (salvar =
+                                                        substituí-lo). Por contrato novo não há edição:
+                                                        desligado, com o motivo. */}
+                                                    {(r.renewed || r.last_addendum) && (
                                                         <span
                                                             className="inline-flex"
                                                             title={r.renewed
@@ -513,7 +535,7 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
                                                                 kind="edit"
                                                                 title={r.last_addendum ? `Editar o aditivo ${r.last_addendum.number}` : 'Editar a renovação'}
                                                                 disabled={r.renewed || !r.last_addendum}
-                                                                onClick={() => r.last_addendum && onEditRenewal(r.id, r.last_addendum.id)}
+                                                                onClick={() => r.last_addendum && setGavetaDe({ contractId: r.id, editarAditivoId: r.last_addendum.id })}
                                                             />
                                                         </span>
                                                     )}
@@ -552,6 +574,7 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
             {/* Reajuste anual NÃO mora aqui (pedido 24/11/2026): Renovações trata o
                 contrato que chega ao fim; o reajuste tem a aba própria Locações ›
                 Reajustes (RentalReajustes). */}
+            {gaveta}
         </div>
     );
 };

@@ -9,7 +9,11 @@
  *  (c) procedimento em rascunho → "só conta quando aprovado no GED";
  *  (d) 2 itens escolhidos na Base → `definirCodigos(id, [c1, c2])`;
  *  (e) sem curso → "Registrar treinamento em obra" desligado com o motivo;
- *  (f) item novo em "Todas" → cria em cada organização do alvo (`forEachTargetOrg`) e fecha.
+ *  (f) item novo em "Todas" → cria em cada organização do alvo (`forEachTargetOrg`) e fecha;
+ *  (g) remover dois códigos seguidos sem a recarga chegar → o 2º não traz de volta o 1º;
+ *  (h) upload no GED ok e vínculo falho → a mensagem diz que o documento FICOU no GED;
+ *  (i) escolher documento durante uma gravação não grava de novo;
+ *  (j) "substitui" apontando para item fora da lista → o select mostra o valor e o Salvar o mantém.
  */
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -79,15 +83,16 @@ const item = (p: Partial<ItemControlado> = {}): ItemControlado => ({
 const montar = (over: {
     edicao?: EdicaoDoItem | null;
     procedimento?: ProcedimentoResumo | null;
-    onSaved?: () => void;
+    itensDaOrg?: ItemControlado[];
+    onSaved?: () => Promise<void>;
     onClose?: () => void;
 } = {}) => {
     const edicao = over.edicao === undefined ? { modo: 'editar' as const, item: item() } : over.edicao;
-    const onSaved = over.onSaved ?? vi.fn();
+    const onSaved = over.onSaved ?? vi.fn(async () => undefined);
     const onClose = over.onClose ?? vi.fn();
     render(
         <ConfirmProvider>
-            <ItemControladoSheet edicao={edicao} itensDaOrg={edicao?.modo === 'editar' ? [edicao.item] : []}
+            <ItemControladoSheet edicao={edicao} itensDaOrg={over.itensDaOrg ?? (edicao?.modo === 'editar' ? [edicao.item] : [])}
                 procedimento={over.procedimento ?? null} treinamentos={[]} podeEditar
                 onClose={onClose} onSaved={onSaved} onRegistrarTreinamento={vi.fn()} />
         </ConfirmProvider>,
@@ -183,5 +188,59 @@ describe('Qualidade (SiAC) — Sheet do item controlado', () => {
         expect(await screen.findByText('Serviço criado em 2 organizações.')).toBeTruthy();
         expect(onSaved).toHaveBeenCalled();
         expect(onClose).toHaveBeenCalled();
+    });
+
+    it('(g) remover dois códigos seguidos sem a recarga chegar: o 2º não traz de volta o 1º', async () => {
+        const user = userEvent.setup();
+        // onSaved resolve, mas as props não mudam: a recarga "não chegou" ao Sheet
+        montar({ edicao: { modo: 'editar', item: item({ codigos: ['A', 'B', 'C'] }) } });
+        await user.click(await screen.findByRole('button', { name: 'Remover o código A' }));
+        await waitFor(() => expect(definirCodigos).toHaveBeenCalledWith('item-1', ['B', 'C']));
+        await waitFor(() => expect(screen.queryByRole('button', { name: 'Remover o código A' })).toBeNull());
+        await waitFor(() => expect((screen.getByRole('button', { name: 'Remover o código B' }) as HTMLButtonElement).disabled).toBe(false));
+        await user.click(screen.getByRole('button', { name: 'Remover o código B' }));
+        await waitFor(() => expect(definirCodigos).toHaveBeenCalledTimes(2));
+        expect(definirCodigos).toHaveBeenLastCalledWith('item-1', ['C']);
+    });
+
+    it('(h) upload no GED ok e vínculo falho: a mensagem diz que o documento ficou no GED', async () => {
+        const user = userEvent.setup();
+        uploadNewDocument.mockResolvedValue({ id: 'doc-novo', nome: 'Procedimento' });
+        atualizarItem.mockRejectedValue(new Error('new row violates row-level security policy [42501]'));
+        montar();
+        const arquivo = new File(['x'], 'pes.pdf', { type: 'application/pdf' });
+        await user.upload(await screen.findByLabelText('Arquivo do procedimento'), arquivo);
+        await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('item-1', { procedure_document_id: 'doc-novo' }));
+        expect(await screen.findByText(/O procedimento foi enviado ao GED, mas não foi possível vinculá-lo/)).toBeTruthy();
+        expect(screen.getByText(/escolha-o em "Escolher do GED"/)).toBeTruthy();
+        expect(screen.queryByText(/Não foi possível enviar o procedimento/)).toBeNull();
+    });
+
+    it('(i) escolher documento durante uma gravação não grava de novo', async () => {
+        const user = userEvent.setup();
+        let terminar: () => void = () => undefined;
+        atualizarItem.mockImplementation(() => new Promise<void>(r => { terminar = r; }));
+        montar();
+        await user.click(await screen.findByRole('button', { name: 'Escolher do GED' }));
+        const doc = screen.getByRole('button', { name: 'documento PES-06' });
+        await user.click(doc);
+        await user.click(doc);
+        expect(atualizarItem).toHaveBeenCalledTimes(1);
+        terminar();
+        await waitFor(() => expect(screen.queryByRole('button', { name: 'documento PES-06' })).toBeNull());
+    });
+
+    it('(j) "substitui" com item fora da lista: o select mostra o valor e o Salvar o mantém', async () => {
+        const user = userEvent.setup();
+        const proprio = item({ origem: 'PROPRIO', anexo4_numero: null, chave_padrao: null, substitui_item_id: 'fora-1' });
+        montar({ edicao: { modo: 'editar', item: proprio }, itensDaOrg: [proprio] });
+        const select = await screen.findByLabelText('Substitui o item nº') as HTMLSelectElement;
+        expect(select.value).toBe('fora-1');
+        expect(select.selectedOptions[0].textContent).not.toBe('Não substitui item do Anexo 4');
+        const nome = screen.getByLabelText('Nome');
+        await user.clear(nome);
+        await user.type(nome, 'outro nome');
+        await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+        await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('item-1', expect.objectContaining({ substitui_item_id: 'fora-1' })));
     });
 });

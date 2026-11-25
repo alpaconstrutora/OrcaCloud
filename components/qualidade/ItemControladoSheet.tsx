@@ -37,7 +37,12 @@ import { ROTULO_ORIGEM } from './ListaControlada';
  * Gravação:
  *  - Os dados do item (nome, etapa, origem, substitui, situação, justificativa) vão no "Salvar".
  *  - Procedimento, curso e códigos gravam NA HORA (são vínculos: escolher já é a decisão) e pedem a
- *    recarga ao módulo (`onSaved`). O que aparece no Sheet vem do que o módulo recarregou do banco.
+ *    recarga ao módulo (`onSaved`, que devolve a Promise da recarga). Uma gravação de cada vez: a
+ *    próxima só é liberada depois que a recarga terminou.
+ *  - Toda gravação de vínculo parte do ÚLTIMO estado confirmado, que o Sheet guarda (`vinculos`):
+ *    `definirCodigos` troca o conjunto inteiro, então montar a lista a partir de um item velho
+ *    (recarga que ainda não chegou, item que saiu da lista do topo) apagaria o que já foi gravado.
+ *    A cada item novo vindo da recarga, o estado local passa a ser o dele.
  *  - O banco recusa DISPENSADO sem justificativa (CHECK) e referência de outra organização (42501):
  *    o erro sobe no toast, com a mensagem do banco.
  */
@@ -54,8 +59,8 @@ interface Props {
     treinamentos: RegistroTreinamento[];
     podeEditar: boolean;
     onClose(): void;
-    /** Pede a recarga ao módulo. Nunca fecha nada (§25). */
-    onSaved(): void;
+    /** Pede a recarga ao módulo e devolve a Promise dela. Nunca fecha nada (§25). */
+    onSaved(): Promise<void>;
     onRegistrarTreinamento(item: ItemControlado): void;
 }
 
@@ -94,6 +99,15 @@ const MOTIVO_OCUPADO = 'Aguarde: a gravação anterior ainda não terminou.';
 
 /** Prefixo que a RPC `quality_registrar_treinamento_em_obra` grava em `notes` do terceiro novo. */
 const NOTA_DO_TERCEIRO = 'Pessoal de empreiteira cadastrado pelo registro de treinamento em obra — ';
+
+/** O que grava na hora: o Sheet guarda o último estado confirmado (ver o topo do arquivo). */
+type Vinculos = Pick<ItemControlado, 'codigos' | 'procedure_document_id' | 'training_course_id'>;
+const vinculosDe = (i: ItemControlado): Vinculos => ({
+    codigos: i.codigos, procedure_document_id: i.procedure_document_id, training_course_id: i.training_course_id,
+});
+
+type Falha = string | ((erro: string) => string);
+type Vincular = (acao: () => Promise<unknown>, sucesso: string, falha: Falha) => Promise<boolean>;
 
 interface Form {
     nome: string;
@@ -175,9 +189,17 @@ const SheetDoItem: React.FC<PropsInternas> = ({
         if (k === 'nome' || k === 'justificativa' || k === 'situacao') setErros(e => ({ ...e, [k === 'situacao' ? 'justificativa' : k]: undefined }));
     };
 
-    // Vínculos que gravam na hora (procedimento, curso, códigos): um de cada vez.
+    // Vínculos que gravam na hora (procedimento, curso, códigos): um de cada vez — o ref barra o
+    // segundo clique antes mesmo de o estado `vinculando` chegar à tela.
     const [vinculando, setVinculando] = React.useState(false);
+    const vinculandoRef = React.useRef(false);
     const ocupado = salvando || vinculando;
+
+    const [vinculos, setVinculos] = React.useState<Vinculos | null>(() => (item ? vinculosDe(item) : null));
+    // Item novo da recarga (o módulo só troca o item quando a lista recarregada o traz): passa a valer.
+    React.useEffect(() => { if (item) setVinculos(vinculosDe(item)); }, [item]);
+    const aplicar = React.useCallback((p: Partial<Vinculos>) => setVinculos(v => (v ? { ...v, ...p } : v)), []);
+    const atual: ItemControlado | null = item && vinculos ? { ...item, ...vinculos } : null;
 
     const fechar = async () => {
         if (dirty && !(await confirm({
@@ -210,7 +232,7 @@ const SheetDoItem: React.FC<PropsInternas> = ({
             }
             const nota = partialFailureNote(failed);
             showToast(`${texto.criado}${ok > 1 ? ` em ${ok} organizações` : ''}${nota ? ` (${nota})` : ''}.`, 'success');
-            onSaved();
+            await onSaved();
             onClose();
         } finally {
             setSalvando(false);
@@ -235,7 +257,7 @@ const SheetDoItem: React.FC<PropsInternas> = ({
             setSalvo(gravado);
             setSavedAt(Date.now());
             showToast(`${texto.nome} salvo.`, 'success');
-            onSaved();
+            await onSaved();
         } catch (e) {
             showToast(`Não foi possível salvar: ${errorMessage(e, 'erro desconhecido')}`, 'error');
         } finally {
@@ -243,18 +265,27 @@ const SheetDoItem: React.FC<PropsInternas> = ({
         }
     };
 
-    /** Grava um vínculo na hora e pede a recarga. Devolve se deu certo. */
-    const vincular = async (acao: () => Promise<unknown>, sucesso: string, falha: string): Promise<boolean> => {
+    /**
+     * Grava um vínculo na hora e ESPERA a recarga antes de liberar a próxima gravação. A `acao` chama
+     * `aplicar` com o que o banco confirmou. Devolve se deu certo.
+     */
+    const vincular: Vincular = async (acao, sucesso, falha) => {
+        if (vinculandoRef.current) return false;
+        vinculandoRef.current = true;
         setVinculando(true);
         try {
-            await acao();
+            try {
+                await acao();
+            } catch (e) {
+                const m = errorMessage(e, 'erro desconhecido');
+                showToast(typeof falha === 'function' ? falha(m) : `${falha}: ${m}`, 'error');
+                return false;
+            }
             showToast(sucesso, 'success');
-            onSaved();
+            await onSaved();
             return true;
-        } catch (e) {
-            showToast(`${falha}: ${errorMessage(e, 'erro desconhecido')}`, 'error');
-            return false;
         } finally {
+            vinculandoRef.current = false;
             setVinculando(false);
         }
     };
@@ -328,6 +359,13 @@ const SheetDoItem: React.FC<PropsInternas> = ({
                                     <select id="qi-substitui" className={CAMPO} value={form.substitui_item_id}
                                         onChange={e => set('substitui_item_id', e.target.value)}>
                                         <option value="">Não substitui item do Anexo 4</option>
+                                        {/* Valor gravado fora da lista (outro tipo de origem, item que saiu): o select
+                                            mostra o que está gravado, e o Salvar não o troca por "não substitui". */}
+                                        {form.substitui_item_id && !substituiveis.some(i => i.id === form.substitui_item_id) && (
+                                            <option value={form.substitui_item_id}>
+                                                {itensDaOrg.find(i => i.id === form.substitui_item_id)?.nome ?? 'Item gravado (fora da lista do Anexo 4)'}
+                                            </option>
+                                        )}
                                         {substituiveis.map(i => (
                                             <option key={i.id} value={i.id}>{i.anexo4_numero ?? '—'} · {i.nome}</option>
                                         ))}
@@ -357,16 +395,22 @@ const SheetDoItem: React.FC<PropsInternas> = ({
                     </fieldset>
                 </div>
 
-                {item && (
-                    <>
-                        <SecaoProcedimento item={item} procedimento={procedimento} podeEditar={podeEditar} ocupado={ocupado}
-                            emailUsuario={emailUsuario} vincular={vincular} />
-                        <SecaoTreinamento item={item} treinamentos={treinamentos} versaoAtivaEm={procedimento?.versao_ativa_em ?? null}
-                            podeEditar={podeEditar} ocupado={ocupado} vincular={vincular} setVinculando={setVinculando}
-                            showToast={showToast} onRegistrarTreinamento={onRegistrarTreinamento} />
-                        <SecaoCodigos item={item} texto={texto} podeEditar={podeEditar} ocupado={ocupado} vincular={vincular} />
-                    </>
-                )}
+                {item && atual && (() => {
+                    // As props vêm do item do MÓDULO; valem só se forem do vínculo atual (entre gravar e recarregar,
+                    // ou com o item fora da lista do topo, são do anterior).
+                    const resumo = procedimento && procedimento.id === atual.procedure_document_id ? procedimento : null;
+                    const registros = atual.training_course_id === item.training_course_id ? treinamentos : [];
+                    return (
+                        <>
+                            <SecaoProcedimento item={atual} procedimento={resumo} podeEditar={podeEditar} ocupado={ocupado}
+                                emailUsuario={emailUsuario} vincular={vincular} aplicar={aplicar} />
+                            <SecaoTreinamento item={atual} treinamentos={registros} versaoAtivaEm={resumo?.versao_ativa_em ?? null}
+                                podeEditar={podeEditar} ocupado={ocupado} vincular={vincular} aplicar={aplicar}
+                                onRegistrarTreinamento={onRegistrarTreinamento} />
+                            <SecaoCodigos item={atual} texto={texto} podeEditar={podeEditar} ocupado={ocupado} vincular={vincular} aplicar={aplicar} />
+                        </>
+                    );
+                })()}
             </SheetPanel>
 
             <SheetFooter>
@@ -381,8 +425,6 @@ const SheetDoItem: React.FC<PropsInternas> = ({
     );
 };
 
-type Vincular = (acao: () => Promise<unknown>, sucesso: string, falha: string) => Promise<boolean>;
-
 // ── Procedimento escrito (GED) ──────────────────────────────────────────────
 const SecaoProcedimento: React.FC<{
     item: ItemControlado;
@@ -391,7 +433,8 @@ const SecaoProcedimento: React.FC<{
     ocupado: boolean;
     emailUsuario?: string;
     vincular: Vincular;
-}> = ({ item, procedimento, podeEditar, ocupado, emailUsuario, vincular }) => {
+    aplicar: (p: Partial<Vinculos>) => void;
+}> = ({ item, procedimento, podeEditar, ocupado, emailUsuario, vincular, aplicar }) => {
     const [escolhendo, setEscolhendo] = React.useState(false);
     const arquivoRef = React.useRef<HTMLInputElement>(null);
     const vinculado = item.procedure_document_id !== null;
@@ -400,14 +443,19 @@ const SecaoProcedimento: React.FC<{
     const motivo = !podeEditar ? MOTIVO_SEM_EDICAO_QUALIDADE : ocupado ? MOTIVO_OCUPADO : undefined;
 
     const escolher = async (docId: string) => {
-        const ok = await vincular(
-            () => qualidadeSiacService.atualizarItem(item.id, { procedure_document_id: docId }),
-            'Procedimento vinculado.', 'Não foi possível vincular o procedimento');
+        if (ocupado) return;
+        const ok = await vincular(async () => {
+            await qualidadeSiacService.atualizarItem(item.id, { procedure_document_id: docId });
+            aplicar({ procedure_document_id: docId });
+        }, 'Procedimento vinculado.', 'Não foi possível vincular o procedimento');
         if (ok) setEscolhendo(false);
     };
 
     const enviar = async (file: File | null) => {
         if (!file) return;
+        // Upload e vínculo são dois passos: se só o segundo falha, o documento JÁ está no GED — reenviar
+        // duplicaria. A mensagem manda escolher o que foi enviado.
+        let enviado = false;
         await vincular(async () => {
             const doc = await documentService.uploadNewDocument({
                 organization_id: item.organization_id,
@@ -419,13 +467,19 @@ const SecaoProcedimento: React.FC<{
                 alerta_dias_antecedencia: 30,
                 tags: ['qualidade-siac'],
             }, file, emailUsuario ?? undefined);
+            enviado = true;
             await qualidadeSiacService.atualizarItem(item.id, { procedure_document_id: doc.id });
-        }, 'Procedimento enviado ao GED e vinculado.', 'Não foi possível enviar o procedimento');
+            aplicar({ procedure_document_id: doc.id });
+        }, 'Procedimento enviado ao GED e vinculado.', m => (enviado
+            ? `O procedimento foi enviado ao GED, mas não foi possível vinculá-lo (${m}); escolha-o em "Escolher do GED".`
+            : `Não foi possível enviar o procedimento: ${m}`));
         if (arquivoRef.current) arquivoRef.current.value = '';
     };
 
-    const desvincular = () => vincular(
-        () => qualidadeSiacService.atualizarItem(item.id, { procedure_document_id: null }),
+    const desvincular = () => vincular(async () => {
+        await qualidadeSiacService.atualizarItem(item.id, { procedure_document_id: null });
+        aplicar({ procedure_document_id: null });
+    },
         'Procedimento desvinculado (o documento continua no GED).', 'Não foi possível desvincular o procedimento');
 
     return (
@@ -447,7 +501,7 @@ const SecaoProcedimento: React.FC<{
             <p className="text-xs text-gray-600">Escolher ou enviar grava na hora. O documento fica no GED, categoria Engenharia.</p>
             {vinculado ? (
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-sm text-gray-900">{resumo ? rotuloDoProcedimento(resumo) : 'Documento vinculado (carregando…)'}</span>
+                    <span className="text-sm text-gray-900">{resumo ? rotuloDoProcedimento(resumo) : 'Documento vinculado'}</span>
                     <button type="button" className={BOTAO_SECUNDARIO} disabled={!!motivo} title={motivo} onClick={() => void desvincular()}>
                         Desvincular
                     </button>
@@ -461,8 +515,12 @@ const SecaoProcedimento: React.FC<{
                 </p>
             )}
             {escolhendo && (
-                <DocumentPicker organizationId={item.organization_id} excludeIntegrated
-                    storageKey="qualidade:item:procedimento:busca" onPick={d => void escolher(d.id)} />
+                // Durante uma gravação a lista fica desligada (e o `escolher` confere de novo): dois cliques
+                // não viram duas gravações.
+                <fieldset disabled={ocupado} title={ocupado ? MOTIVO_OCUPADO : undefined} className="min-w-0">
+                    <DocumentPicker organizationId={item.organization_id} excludeIntegrated
+                        storageKey="qualidade:item:procedimento:busca" onPick={d => void escolher(d.id)} />
+                </fieldset>
             )}
         </div>
     );
@@ -476,10 +534,9 @@ const SecaoTreinamento: React.FC<{
     podeEditar: boolean;
     ocupado: boolean;
     vincular: Vincular;
-    setVinculando: (v: boolean) => void;
-    showToast: (m: string, t?: 'success' | 'error') => void;
+    aplicar: (p: Partial<Vinculos>) => void;
     onRegistrarTreinamento: (item: ItemControlado) => void;
-}> = ({ item, treinamentos, versaoAtivaEm, podeEditar, ocupado, vincular, setVinculando, showToast, onRegistrarTreinamento }) => {
+}> = ({ item, treinamentos, versaoAtivaEm, podeEditar, ocupado, vincular, aplicar, onRegistrarTreinamento }) => {
     const org = item.organization_id;
     const [cursos, setCursos] = React.useState<TrainingCourse[]>([]);
     const [erroCursos, setErroCursos] = React.useState<string | null>(null);
@@ -511,13 +568,16 @@ const SecaoTreinamento: React.FC<{
     const motivoRegistrar = !podeEditar ? MOTIVO_SEM_EDICAO_QUALIDADE : !item.training_course_id ? MOTIVO_SEM_CURSO : undefined;
     const cursoAtual = cursos.find(c => c.id === item.training_course_id);
 
-    const escolherCurso = (id: string) => vincular(
-        () => qualidadeSiacService.atualizarItem(item.id, { training_course_id: id || null }),
+    const escolherCurso = (id: string) => vincular(async () => {
+        await qualidadeSiacService.atualizarItem(item.id, { training_course_id: id || null });
+        aplicar({ training_course_id: id || null });
+    },
         id ? 'Curso vinculado.' : 'Curso desvinculado.', 'Não foi possível vincular o curso');
 
     const criarCurso = async () => {
-        setVinculando(true);
-        try {
+        // Criar e vincular são dois passos: se só o vínculo falha, o curso JÁ existe no Treinamentos.
+        let criado = false;
+        await vincular(async () => {
             const novo = await trainingsService.createTrainingCourse({
                 org_id: org,
                 nome: item.nome,
@@ -528,16 +588,13 @@ const SecaoTreinamento: React.FC<{
                 roles_obrigatorios: [],
                 carga_horaria: 1,
             });
+            criado = true;
             setRecarga(n => n + 1);
-            setVinculando(false);
-            await vincular(
-                () => qualidadeSiacService.atualizarItem(item.id, { training_course_id: novo.id }),
-                'Curso presencial criado e vinculado.', 'O curso foi criado, mas não foi possível vinculá-lo');
-        } catch (e) {
-            showToast(`Não foi possível criar o curso: ${errorMessage(e, 'erro desconhecido')}`, 'error');
-        } finally {
-            setVinculando(false);
-        }
+            await qualidadeSiacService.atualizarItem(item.id, { training_course_id: novo.id });
+            aplicar({ training_course_id: novo.id });
+        }, 'Curso presencial criado e vinculado.', m => (criado
+            ? `O curso foi criado no Treinamentos, mas não foi possível vinculá-lo (${m}); escolha-o na lista de cursos.`
+            : `Não foi possível criar o curso: ${m}`));
     };
 
     const corte = versaoAtivaEm === null ? null : versaoAtivaEm.slice(0, 10);
@@ -614,19 +671,26 @@ const SecaoCodigos: React.FC<{
     podeEditar: boolean;
     ocupado: boolean;
     vincular: Vincular;
-}> = ({ item, texto, podeEditar, ocupado, vincular }) => {
+    aplicar: (p: Partial<Vinculos>) => void;
+}> = ({ item, texto, podeEditar, ocupado, vincular, aplicar }) => {
     const [buscando, setBuscando] = React.useState(false);
     const motivo = !podeEditar ? MOTIVO_SEM_EDICAO_QUALIDADE : ocupado ? MOTIVO_OCUPADO : undefined;
 
     const adicionar = async (escolhidos: SinapiItem[]) => {
         setBuscando(false);
         const novos = [...new Set([...item.codigos, ...escolhidos.map(s => s.code)])];
-        await vincular(() => qualidadeSiacService.definirCodigos(item.id, novos),
+        await vincular(async () => {
+            await qualidadeSiacService.definirCodigos(item.id, novos);
+            aplicar({ codigos: novos });
+        },
             escolhidos.length === 1 ? 'Código incluído.' : 'Códigos incluídos.', 'Não foi possível incluir os códigos');
     };
 
-    const remover = (codigo: string) => vincular(
-        () => qualidadeSiacService.definirCodigos(item.id, item.codigos.filter(c => c !== codigo)),
+    const remover = (codigo: string) => vincular(async () => {
+        const restantes = item.codigos.filter(c => c !== codigo);
+        await qualidadeSiacService.definirCodigos(item.id, restantes);
+        aplicar({ codigos: restantes });
+    },
         `Código ${codigo} removido.`, 'Não foi possível remover o código');
 
     return (

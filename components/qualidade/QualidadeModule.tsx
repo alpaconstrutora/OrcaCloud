@@ -174,15 +174,19 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
     };
 
     /**
-     * O Sheet mostra o item como está NA LISTA recarregada (procedimento, curso e códigos gravam na hora
-     * e a recarga traz o novo estado). Fora da lista (outra organização no topo, erro de carga), fica o
-     * item como foi aberto — e as gravações continuam na organização DELE.
+     * O Sheet mostra o item como veio da ÚLTIMA recarga que o trouxe (procedimento, curso e códigos gravam
+     * na hora e a recarga traz o estado novo). Recarga sem o item (outra organização no topo, erro de carga)
+     * não o faz voltar ao de quando foi aberto: fica o último recarregado, e as gravações continuam na
+     * organização DELE.
      */
-    const edicaoAtual = React.useMemo<EdicaoDoItem | null>(() => {
-        if (edicao?.modo !== 'editar') return edicao;
-        const fresco = itens.find(i => i.id === edicao.item.id);
-        return fresco ? { modo: 'editar', item: fresco } : edicao;
-    }, [edicao, itens]);
+    React.useEffect(() => {
+        setEdicao(e => {
+            if (e?.modo !== 'editar') return e;
+            const fresco = itens.find(i => i.id === e.item.id);
+            return fresco && fresco !== e.item ? { modo: 'editar', item: fresco } : e;
+        });
+    }, [itens]);
+    const edicaoAtual = edicao;
     const itemAberto = edicaoAtual?.modo === 'editar' ? edicaoAtual.item : null;
 
     const cab = CABECALHO[abaEfetiva];
@@ -234,7 +238,7 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
                 treinamentos={itemAberto?.training_course_id ? treinamentos[itemAberto.training_course_id] ?? [] : []}
                 podeEditar={podeEditar}
                 onClose={() => setEdicao(null)}
-                onSaved={() => void carregarRef.current()}
+                onSaved={() => carregarRef.current()}
                 onRegistrarTreinamento={i => setTreinoEmObra(i)} />
 
             {orgTargetModal}

@@ -12,7 +12,9 @@
  *  (d) "Todas" com itens de 2 organizações → uma linha por organização, com o nome dela;
  *  (e) sem permissão de editar → o botão de carga desligado diz por quê no `title`;
  *  (f) clicar na linha abre o Sheet do item; salvar grava, recarrega e o Sheet fica aberto (§25)
- *      mostrando o item como veio da recarga.
+ *      mostrando o item como veio da recarga;
+ *  (g) o item some da lista depois de gravar um código → o próximo código soma ao gravado, não ao
+ *      item de quando o Sheet abriu.
  */
 import React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
@@ -29,6 +31,8 @@ const resumirProcedimentos = vi.fn();
 const listarTreinamentos = vi.fn();
 const definirNivel = vi.fn();
 const atualizarItem = vi.fn();
+const definirCodigos = vi.fn();
+let codigosDaBase: string[] = [];
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 
@@ -43,7 +47,7 @@ vi.mock('../../services/qualidadeSiacService', () => ({
         definirNivel: (...a: unknown[]) => definirNivel(...a),
         criarItem: vi.fn(),
         atualizarItem: (...a: unknown[]) => atualizarItem(...a),
-        definirCodigos: vi.fn(),
+        definirCodigos: (...a: unknown[]) => definirCodigos(...a),
     },
 }));
 vi.mock('../../services/trainingsService', () => ({
@@ -52,7 +56,10 @@ vi.mock('../../services/trainingsService', () => ({
 vi.mock('../../services/laborService', () => ({ laborService: { listEmployees: vi.fn(async () => []) } }));
 vi.mock('../../services/documentService', () => ({ documentService: { uploadNewDocument: vi.fn() } }));
 // O catálogo da Base instancia o serviço do SINAPI na importação (supabase simulado não tem `from`).
-vi.mock('../../components/DatabasePickerModal', () => ({ default: () => null }));
+vi.mock('../../components/DatabasePickerModal', () => ({
+    default: ({ isOpen, onSelectMany }: { isOpen: boolean; onSelectMany?: (i: Array<{ code: string }>) => void }) =>
+        isOpen ? <button type="button" onClick={() => onSelectMany?.(codigosDaBase.map(code => ({ code })))}>confirmar base</button> : null,
+}));
 
 import { useStore } from '../../store/useStore';
 import { ConfirmProvider } from '../../components/ui/confirm';
@@ -112,6 +119,8 @@ beforeEach(() => {
     listarTreinamentos.mockReset().mockResolvedValue({});
     definirNivel.mockReset().mockResolvedValue(undefined);
     atualizarItem.mockReset().mockResolvedValue(undefined);
+    definirCodigos.mockReset().mockResolvedValue(undefined);
+    codigosDaBase = [];
     useStore.setState({
         activeOrganizationId: 'org-a',
         activeEmpresaId: null,
@@ -255,5 +264,24 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         // continua aberto (§25) e o título já é o do item recarregado
         expect(await screen.findByRole('heading', { name: 'Serviço renomeado' })).toBeTruthy();
         expect(screen.getByRole('button', { name: 'Salvar alterações' })).toBeTruthy();
+    });
+
+    it('(g) item some da lista depois de gravar C1: incluir C2 grava [C1, C2]', async () => {
+        const user = userEvent.setup();
+        listarItens.mockResolvedValueOnce([item({ id: 's1', nome: 'Serviço 1', anexo4_numero: 1, ordem: 1 })]);
+        listarItens.mockResolvedValue([]); // a recarga depois de gravar já não traz o item
+        montar();
+        await user.click(await screen.findByText('Serviço 1'));
+        codigosDaBase = ['C1'];
+        await user.click(await screen.findByRole('button', { name: 'Buscar composição na Base' }));
+        await user.click(screen.getByRole('button', { name: 'confirmar base' }));
+        await waitFor(() => expect(definirCodigos).toHaveBeenCalledWith('s1', ['C1']));
+        await waitFor(() => expect(listarItens).toHaveBeenCalledTimes(2));
+        codigosDaBase = ['C2'];
+        await waitFor(() => expect((screen.getByRole('button', { name: 'Buscar composição na Base' }) as HTMLButtonElement).disabled).toBe(false));
+        await user.click(screen.getByRole('button', { name: 'Buscar composição na Base' }));
+        await user.click(screen.getByRole('button', { name: 'confirmar base' }));
+        await waitFor(() => expect(definirCodigos).toHaveBeenCalledTimes(2));
+        expect(definirCodigos).toHaveBeenLastCalledWith('s1', ['C1', 'C2']);
     });
 });

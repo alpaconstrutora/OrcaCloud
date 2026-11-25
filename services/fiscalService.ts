@@ -35,7 +35,33 @@ export interface FGTSConfig {
     rate: number;
 }
 
+/**
+ * As tabelas fiscais são globais e só superadmin grava (policy com is_superadmin()).
+ * A RLS barra UPDATE/DELETE sem erro — 0 linhas — e a tela dizia "atualizada".
+ * Sem linha de volta = recusado.
+ */
+function exigirLinha(data: unknown[] | null) {
+    if (!data?.length) throw new Error('O banco recusou a gravação — só o superadmin altera as tabelas oficiais.');
+}
+
 export const fiscalService = {
+    /**
+     * Primeiro ano com vigência cadastrada na tabela — o seletor de ano da tela
+     * começa nele (até 24/11/2026 começava fixo em 2023 e escondia o IRRF de
+     * 04/2015 a 04/2023, que existe e é usado pelas locações). null = vazia.
+     */
+    async primeiroAnoDaTabela(tabela: 'inss' | 'irrf' | 'fgts'): Promise<number | null> {
+        const nome = tabela === 'inss' ? 'inss_brackets' : tabela === 'irrf' ? 'irrf_brackets' : 'fgts_config';
+        const { data, error } = await supabase
+            .from(nome)
+            .select('valid_from')
+            .order('valid_from', { ascending: true })
+            .limit(1);
+        if (error) throw error;
+        const de = (data?.[0] as { valid_from?: string } | undefined)?.valid_from;
+        return de ? Number(de.slice(0, 4)) : null;
+    },
+
     /**
      * Busca as faixas de INSS válidas para uma determinada data (competência)
      */
@@ -99,43 +125,53 @@ export const fiscalService = {
     },
 
     async updateINSSBracket(id: string, bracket: Partial<INSSBracket>) {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('inss_brackets')
             .update(bracket)
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
         if (error) throw error;
+        exigirLinha(data);
     },
 
     async updateIRRFBracket(id: string, bracket: Partial<IRRFBracket>) {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('irrf_brackets')
             .update(bracket)
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
         if (error) throw error;
+        exigirLinha(data);
     },
 
     async updateFGTSConfig(id: string, config: Partial<FGTSConfig>) {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('fgts_config')
             .update(config)
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
         if (error) throw error;
+        exigirLinha(data);
     },
 
     async deleteINSSBracket(id: string) {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('inss_brackets')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
         if (error) throw error;
+        exigirLinha(data);
     },
 
     async deleteIRRFBracket(id: string) {
-        const { error } = await supabase
+        const { data, error } = await supabase
             .from('irrf_brackets')
             .delete()
-            .eq('id', id);
+            .eq('id', id)
+            .select('id');
         if (error) throw error;
+        exigirLinha(data);
     },
 
     async createINSSBracket(bracket: Omit<INSSBracket, 'id'>) {

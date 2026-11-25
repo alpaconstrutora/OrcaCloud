@@ -1,21 +1,6 @@
-import { supabase } from '../lib/supabase';
+import { servicoDeAliquotaPorExercicio, AliquotaPorExercicio } from './aliquotaPorExercicioService';
 
-export interface PisRate {
-    id: string;
-    exercicio: number;
-    regime_tributario: string;
-    aliquota: number;
-}
+export type PisRate = AliquotaPorExercicio;
 
-export const pisRatesService = {
-    /** Alíquotas oficiais de PIS por exercício/regime — globais, iguais para todas as organizações. */
-    async list(): Promise<PisRate[]> {
-        const { data, error } = await supabase
-            .from('tax_pis_rates')
-            .select('id, exercicio, regime_tributario, aliquota')
-            .order('exercicio', { ascending: false })
-            .order('regime_tributario', { ascending: true });
-        if (error) throw error;
-        return data ?? [];
-    },
-};
+/** Alíquotas oficiais de PIS por exercício/regime — globais, iguais para todas as organizações. */
+export const pisRatesService = servicoDeAliquotaPorExercicio('tax_pis_rates');

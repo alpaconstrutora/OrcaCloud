@@ -2,25 +2,42 @@ import React, { useState, useEffect, useMemo } from 'react';
 import {
     Calendar, Shield, Building2, AlertCircle, Plus, TrendingUp, Info, Loader2, Check, X, Copy,
 } from 'lucide-react';
-import ActionIconButton from './ui/ActionIconButton';
-import TabsBar from './ui/TabsBar';
-import StandardTable, { StandardTableColumn } from './ui/StandardTable';
-import { usePersistedState } from './ui/TableUtils';
-import { useConfirm } from './ui/confirm';
-import { useToast } from '../hooks/useToast';
-import { fiscalService, INSSBracket, IRRFBracket, FGTSConfig } from '../services/fiscalService';
+import ActionIconButton from '../ui/ActionIconButton';
+import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
+import { usePersistedState } from '../ui/TableUtils';
+import { useConfirm } from '../ui/confirm';
+import { useToast } from '../../hooks/useToast';
+import { fiscalService, INSSBracket, IRRFBracket, FGTSConfig } from '../../services/fiscalService';
 
-type FiscalTab = 'inss' | 'irrf' | 'fgts';
+/**
+ * Tabelas fiscais oficiais (INSS, IRRF, FGTS) — Configurações do Sistema ›
+ * Tributos e Impostos. Até 24/11/2026 era RH › Config. Fiscais; o usuário pediu
+ * um lugar só para tributos (plano docs/planos/2026-11-24-tributos-um-lugar-so.md).
+ * Valem para TODAS as organizações: só superadmin grava (policy no banco com
+ * is_superadmin(); `podeEditar` só decide o que a tela oferece).
+ */
+export type FiscalTab = 'inss' | 'irrf' | 'fgts';
 /** As duas tabelas progressivas têm a mesma forma (faixa, alíquota, parcela a deduzir). */
 type TabelaFaixas = 'inss' | 'irrf';
 type Faixa = INSSBracket & IRRFBracket;
 
-// Uma aba por tabela (§19.1). O título é o da tela; o subtítulo acompanha a aba (§20).
-const SUBTITULOS: Record<FiscalTab, string> = {
-    inss: 'Faixas progressivas do INSS do empregado, por ano de vigência.',
-    irrf: 'Faixas do Imposto de Renda retido na fonte, com a parcela a deduzir.',
-    fgts: 'Alíquota do Fundo de Garantia — custo direto do empregador.',
+const TITULOS: Record<FiscalTab, string> = {
+    inss: 'INSS — Faixas por vigência',
+    irrf: 'IRRF — Faixas por vigência',
+    fgts: 'FGTS — Alíquota por vigência',
 };
+// Quem usa cada tabela — o usuário precisa saber o que muda ao editar.
+const SUBTITULOS: Record<FiscalTab, string> = {
+    inss: 'Faixas progressivas do INSS. Usadas pela folha de pagamento (pela competência) e pelo INSS das locações (pela data da parcela).',
+    irrf: 'Faixas do Imposto de Renda retido na fonte, com a parcela a deduzir. Usadas pela folha de pagamento e pelo IRRF retido nas locações.',
+    fgts: 'Alíquota do Fundo de Garantia — custo do empregador, usada pela folha de pagamento.',
+};
+const ICONES: Record<FiscalTab, React.ReactNode> = {
+    inss: <Shield className="w-6 h-6 text-indigo-600" />,
+    irrf: <TrendingUp className="w-6 h-6 text-indigo-600" />,
+    fgts: <Building2 className="w-6 h-6 text-indigo-600" />,
+};
+const MOTIVO_SO_SUPERADMIN = 'Só o superadmin altera as tabelas oficiais — elas valem para todas as organizações.';
 
 // Colunas das tabelas padrão (§6.10). Soma ~1040px + Ações: cabe em 1290px úteis.
 const FAIXA_COLUMNS: StandardTableColumn[] = [
@@ -66,10 +83,15 @@ const INPUT_CELULA = 'h-8 text-right text-sm font-normal text-gray-900 border bo
 const BOTAO_SECUNDARIO = 'flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed';
 const BOTAO_PRIMARIO = 'flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed';
 
-const LaborFiscalSettings: React.FC = () => {
+interface Props {
+    tabela: FiscalTab;
+    /** Superadmin (o banco recusa a gravação dos demais). */
+    podeEditar: boolean;
+}
+
+const TabelaFiscalSettings: React.FC<Props> = ({ tabela: activeTab, podeEditar }) => {
     const confirm = useConfirm();
     const { localToast, showToast } = useToast();
-    const [activeTab, setActiveTab] = usePersistedState<FiscalTab>('labor:fiscal:tab', 'inss');
     const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
     const [inssBrackets, setInssBrackets] = useState<INSSBracket[]>([]);
     const [irrfBrackets, setIrrfBrackets] = useState<IRRFBracket[]>([]);
@@ -82,11 +104,21 @@ const LaborFiscalSettings: React.FC = () => {
     const [buscaInss, setBuscaInss] = usePersistedState<string>('labor:fiscal:inss:search', '');
     const [buscaIrrf, setBuscaIrrf] = usePersistedState<string>('labor:fiscal:irrf:search', '');
 
-    // Do primeiro ano com tabela cadastrada até o próximo (o ano seguinte é preparado antes de virar).
+    // Do primeiro ano com tabela cadastrada (lido do banco — o IRRF vem de 2015) até o
+    // próximo (o ano seguinte é preparado antes de virar). Até ler, 2023.
+    const [primeiroAno, setPrimeiroAno] = useState(2023);
+    useEffect(() => {
+        let vivo = true;
+        fiscalService.primeiroAnoDaTabela(activeTab)
+            .then(ano => { if (vivo && ano) setPrimeiroAno(ano); })
+            .catch(() => { /* fica 2023: o seletor só perde os anos antigos */ });
+        return () => { vivo = false; };
+    }, [activeTab]);
     const years = useMemo(() => {
         const ultimo = Math.max(new Date().getFullYear() + 1, selectedYear);
-        return Array.from({ length: ultimo - 2023 + 1 }, (_, i) => 2023 + i);
-    }, [selectedYear]);
+        const inicio = Math.min(primeiroAno, selectedYear);
+        return Array.from({ length: ultimo - inicio + 1 }, (_, i) => inicio + i);
+    }, [selectedYear, primeiroAno]);
 
     const loadData = async () => {
         setLoading(true);
@@ -189,7 +221,7 @@ const LaborFiscalSettings: React.FC = () => {
             setEdicao(null);
         } catch (err) {
             console.error(err);
-            showToast(`Erro ao salvar a faixa de ${nomeDe(t)}`, 'error');
+            showToast(err instanceof Error ? err.message : `Erro ao salvar a faixa de ${nomeDe(t)}`, 'error');
         } finally {
             setSaving(false);
         }
@@ -206,7 +238,7 @@ const LaborFiscalSettings: React.FC = () => {
             showToast('FGTS atualizado', 'success');
         } catch (err) {
             console.error(err);
-            showToast('Erro ao salvar o FGTS', 'error');
+            showToast(err instanceof Error ? err.message : 'Erro ao salvar o FGTS', 'error');
         } finally {
             setSaving(false);
         }
@@ -216,7 +248,7 @@ const LaborFiscalSettings: React.FC = () => {
         if (!f.id) return;
         const ok = await confirm({
             title: `Excluir faixa de ${nomeDe(t)}?`,
-            message: `${fmtBRL(f.min_value)} ${f.max_value ? `até ${fmtBRL(f.max_value)}` : 'em diante'} · ${fmtPct(f.rate)}. A folha deixa de usar esta faixa.`,
+            message: `${fmtBRL(f.min_value)} ${f.max_value ? `até ${fmtBRL(f.max_value)}` : 'em diante'} · ${fmtPct(f.rate)}. A folha e o ${nomeDe(t)} das locações deixam de usar esta faixa.`,
             variant: 'danger',
             confirmLabel: 'Excluir',
         });
@@ -227,7 +259,7 @@ const LaborFiscalSettings: React.FC = () => {
             setListaDe(t)(prev => prev.filter(b => b.id !== f.id));
             showToast(`Faixa de ${nomeDe(t)} excluída`, 'success');
         } catch (err) {
-            showToast('Erro ao excluir faixa', 'error');
+            showToast(err instanceof Error ? err.message : 'Erro ao excluir faixa', 'error');
         }
     };
 
@@ -264,7 +296,7 @@ const LaborFiscalSettings: React.FC = () => {
             loadData();
         } catch (err) {
             console.error(err);
-            showToast('Erro ao clonar tabelas', 'error');
+            showToast(err instanceof Error ? err.message : 'Erro ao clonar tabelas', 'error');
         } finally {
             setSaving(false);
         }
@@ -344,7 +376,9 @@ const LaborFiscalSettings: React.FC = () => {
         }
     };
 
-    const motivoOcupado = saving ? 'Aguarde a gravação em andamento' : edicao ? 'Termine a edição da linha aberta (Enter grava, Esc cancela)' : null;
+    const motivoOcupado = !podeEditar ? MOTIVO_SO_SUPERADMIN
+        : saving ? 'Aguarde a gravação em andamento'
+        : edicao ? 'Termine a edição da linha aberta (Enter grava, Esc cancela)' : null;
 
     /** Ações da linha: lápis + lixeira; na linha em edição, gravar + cancelar. */
     const acoesDaLinha = (t: FiscalTab, id: string | undefined, salvar: () => void, excluir?: () => void) => {
@@ -382,8 +416,9 @@ const LaborFiscalSettings: React.FC = () => {
         <div className="flex items-start gap-2 px-6 py-3 border-t border-gray-100">
             <Info className="w-4 h-4 text-gray-400 shrink-0 mt-0.5" />
             <p className="text-xs text-gray-500">
-                A folha usa as faixas vigentes na competência. Para preparar um ano novo, use "Clonar tabelas" e ajuste só o que mudou —
-                a vigência de um ano não encerra a do anterior sozinha.
+                Vale a faixa vigente na data: a folha usa a competência; os tributos das locações, a data da parcela. Para preparar
+                um ano novo, use "Clonar tabelas" (copia INSS, IRRF e FGTS) e ajuste só o que mudou — a vigência de um ano não encerra a
+                do anterior sozinha.
             </p>
         </div>
     );
@@ -413,49 +448,42 @@ const LaborFiscalSettings: React.FC = () => {
     );
 
     return (
-        <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-300">
-            {/* 1. Título */}
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Configurações Fiscais</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">{SUBTITULOS[activeTab]}</p>
-            </div>
-
-            {/* 2. Toolbar de abas (§19.1) — à direita, o escopo (ano, §5.3) e a ação primária da aba (§17) */}
-            <TabsBar<FiscalTab>
-                tabs={[
-                    { id: 'inss', label: 'Tabela INSS', icon: <Shield className="w-4 h-4" />, badge: loading ? undefined : inssBrackets.length, badgeTitulo: `Faixas vigentes em ${selectedYear}` },
-                    { id: 'irrf', label: 'Tabela IRRF', icon: <TrendingUp className="w-4 h-4" />, badge: loading ? undefined : irrfBrackets.length, badgeTitulo: `Faixas vigentes em ${selectedYear}` },
-                    { id: 'fgts', label: 'Fundo de Garantia (FGTS)', icon: <Building2 className="w-4 h-4" /> },
-                ]}
-                value={activeTab}
-                onChange={t => { setEdicao(null); setActiveTab(t); }}
-            >
-                <label className="text-xs font-semibold text-slate-500 flex items-center gap-1" htmlFor="fiscal-ano">
-                    <Calendar className="w-3 h-3" /> Ano de referência
-                </label>
-                <select
-                    id="fiscal-ano"
-                    value={selectedYear}
-                    onChange={e => setSelectedYear(parseInt(e.target.value))}
-                    className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
-                >
-                    {years.map(y => <option key={y} value={y}>{y}</option>)}
-                </select>
-                <span className="inline-flex" title={motivoOcupado ?? (loading ? 'Carregando as tabelas' : `Copia as tabelas de outro ano para ${selectedYear}`)}>
-                    <button onClick={clonarTabelas} disabled={!!motivoOcupado || loading} className={BOTAO_SECUNDARIO}>
-                        {saving && !edicao ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Copy className="w-[15px] h-[15px]" />}
-                        Clonar tabelas
-                    </button>
-                </span>
-                {activeTab !== 'fgts' && (
-                    <span className="inline-flex" title={motivoOcupado ?? (loading ? 'Carregando as tabelas' : `Nova faixa de ${nomeDe(activeTab)} em ${selectedYear}`)}>
-                        <button onClick={() => novaFaixa(activeTab)} disabled={!!motivoOcupado || loading} className={BOTAO_PRIMARIO}>
-                            <Plus className="w-[15px] h-[15px]" />
-                            Nova faixa
+        <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 p-6 space-y-6">
+            <div className="flex items-start gap-4 flex-wrap">
+                <div className="p-3 bg-indigo-50 rounded-[10px]">{ICONES[activeTab]}</div>
+                <div className="flex-1 min-w-[240px]">
+                    <h2 className="text-lg font-semibold text-gray-800">{TITULOS[activeTab]}</h2>
+                    <p className="text-sm text-gray-500 mt-1">{SUBTITULOS[activeTab]}</p>
+                </div>
+                {/* Escopo (ano, §5.3) e ações; desligadas dizem o motivo (§17) */}
+                <div className="flex items-center gap-2 flex-wrap">
+                    <label className="text-xs font-semibold text-slate-500 flex items-center gap-1" htmlFor="fiscal-ano">
+                        <Calendar className="w-3 h-3" /> Ano de referência
+                    </label>
+                    <select
+                        id="fiscal-ano"
+                        value={selectedYear}
+                        onChange={e => setSelectedYear(parseInt(e.target.value))}
+                        className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                    >
+                        {years.map(y => <option key={y} value={y}>{y}</option>)}
+                    </select>
+                    <span className="inline-flex" title={motivoOcupado ?? (loading ? 'Carregando as tabelas' : `Copia INSS, IRRF e FGTS de outro ano para ${selectedYear}`)}>
+                        <button onClick={clonarTabelas} disabled={!!motivoOcupado || loading} className={BOTAO_SECUNDARIO}>
+                            {saving && !edicao ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Copy className="w-[15px] h-[15px]" />}
+                            Clonar tabelas
                         </button>
                     </span>
-                )}
-            </TabsBar>
+                    {activeTab !== 'fgts' && (
+                        <span className="inline-flex" title={motivoOcupado ?? (loading ? 'Carregando as tabelas' : `Nova faixa de ${nomeDe(activeTab)} em ${selectedYear}`)}>
+                            <button onClick={() => novaFaixa(activeTab)} disabled={!!motivoOcupado || loading} className={BOTAO_PRIMARIO}>
+                                <Plus className="w-[15px] h-[15px]" />
+                                Nova faixa
+                            </button>
+                        </span>
+                    )}
+                </div>
+            </div>
 
             {/* 3. Tabela da aba (§6.10) — toolbar acoplada com busca, colunas e ajuste de largura */}
             {activeTab === 'inss' && tabelaFaixas('inss', linhasInss)}
@@ -503,4 +531,4 @@ const LaborFiscalSettings: React.FC = () => {
     );
 };
 
-export default LaborFiscalSettings;
+export default TabelaFiscalSettings;

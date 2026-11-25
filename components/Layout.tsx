@@ -1001,7 +1001,6 @@ const Layout: React.FC<LayoutProps> = ({
                   {/* "Portal Colaborador" saiu daqui para Portais › Portal do Colaborador (24/10/2026). */}
 
                   <DropdownGroupLabel label="Configurações" />
-                  <DropdownItem id="labor-fiscal" label="Config. Fiscais" icon={Settings} />
                   <DropdownItem id="labor-rubrics" label="Rubricas" icon={Shield} />
                 </NavDropdown>
               )}

@@ -4,10 +4,9 @@ import type { TaxPayable, TaxPayableBusinessStatus } from '../types/financial';
 import { taxSettingsService } from './taxSettingsService';
 import { pisRatesService } from './pisRatesService';
 import { cofinsRatesService } from './cofinsRatesService';
-import { inssBracketsService } from './inssBracketsService';
 import { numerarParcelas, descricaoTributo } from '../utils/tributoDescricao';
 import { irrfDoAluguel } from '../utils/retencaoIrrfLocacao';
-import { fiscalService, type IRRFBracket } from './fiscalService';
+import { fiscalService, type IRRFBracket, type INSSBracket } from './fiscalService';
 import { exigirAlcadaLiberada } from './alcadaDaBaixa';
 import { origemDoTributo, ORIGEM_TRIBUTO_LABEL } from '../utils/tributoOrigem';
 import {
@@ -35,20 +34,21 @@ function rateForYear(
     return candidates.find(r => r.exercicio === ex)?.aliquota ?? null;
 }
 
-/** Alíquota da faixa de INSS onde o valor cai (exercício mais recente ≤ ano). */
-function inssRateForValue(
-    brackets: { exercicio: number; base_de: number; base_ate: number; aliquota: number }[],
-    value: number,
-    year: number,
-): number | null {
-    const years = brackets.filter(b => b.exercicio <= year).map(b => b.exercicio);
-    if (years.length === 0) return null;
-    const ex = Math.max(...years);
-    const inYear = brackets.filter(b => b.exercicio === ex);
-    const hit = inYear.find(b => value >= b.base_de && value <= b.base_ate);
-    if (hit) return hit.aliquota;
-    // Acima da última faixa: aplica a alíquota da faixa de maior teto.
-    return inYear.reduce((top, b) => (b.base_ate > (top?.base_ate ?? -1) ? b : top), inYear[0])?.aliquota ?? null;
+/**
+ * INSS da locação: tabela ÚNICA de INSS (`inss_brackets`, a da folha — vigência
+ * por data, alíquota em fração), desde 24/11/2026. Antes a locação lia uma cópia
+ * por ano (`tax_inss_brackets`) que começava em 2024; o corte abaixo mantém o
+ * resultado de antes para parcelas de 2023 (plano 2026-11-24-tributos-um-lugar-so).
+ */
+const INICIO_INSS_LOCACAO = '2024-01-01';
+
+/** Alíquota (em %) da faixa de INSS onde o valor cai; acima da última, a de maior teto. */
+function inssPercentualDaFaixa(faixas: INSSBracket[], value: number): number | null {
+    if (faixas.length === 0) return null;
+    const hit = faixas.find(b => value >= b.min_value && (b.max_value == null || value <= b.max_value));
+    const faixa = hit ?? faixas.reduce((top, b) =>
+        ((b.max_value ?? Infinity) > (top.max_value ?? Infinity) ? b : top), faixas[0]);
+    return Number(faixa.rate) * 100;
 }
 
 export interface TaxPayableFilters {
@@ -752,7 +752,7 @@ export const taxPayableService = {
         };
 
         if (deal.type === 'SALE') {
-            // Vendas de Ativos: catálogo livre da aba Geral (tax_settings), como antes.
+            // Vendas de Ativos: catálogo da folha "Venda de Ativos" (ex-Geral, tax_settings).
             const taxes = (await taxSettingsService.list(organizationId))
                 .filter(t => t.ativo && t.aliquota != null && t.aliquota > 0 && t.aplica_venda_ativo);
             if (taxes.length === 0) return;
@@ -764,16 +764,21 @@ export const taxPayableService = {
         } else {
             // Locações: PIS/COFINS pelas tabelas oficiais (exercício + regime da
             // empresa dona do imóvel) e INSS pela faixa progressiva onde a parcela cai.
-            const [regime, pisRates, cofinsRates, inssBrackets] = await Promise.all([
+            const [regime, pisRates, cofinsRates] = await Promise.all([
                 this.resolveRentalRegime(deal.property_id, organizationId),
                 pisRatesService.list(),
                 cofinsRatesService.list(),
-                inssBracketsService.list(),
             ]);
+            // Faixas de INSS vigentes na data da parcela (uma leitura por data, como o IRRF).
+            const faixasInssPorData = new Map<string, Promise<INSSBracket[]>>();
+            const faixasInss = (data: string) => {
+                if (!faixasInssPorData.has(data)) faixasInssPorData.set(data, fiscalService.getINSSBrackets(data));
+                return faixasInssPorData.get(data)!;
+            };
             // Locador PF: sem PIS/COFINS, qualquer que seja o regime da empresa do imóvel.
             const regimeLabel = regime && !locadorPf ? REGIME_LABEL[regime] : null;
             if (locadorPf) console.log(`[TAX-PAYABLE] Locação ${shortId}: locador pessoa física — só IRRF; PIS/COFINS/INSS não incidem.`);
-            console.log(`[TAX-PAYABLE] Locação ${shortId}: regime=${JSON.stringify(regime)} → label=${JSON.stringify(regimeLabel)}; pisRates=${pisRates.length} cofinsRates=${cofinsRates.length} inssBrackets=${inssBrackets.length}`);
+            console.log(`[TAX-PAYABLE] Locação ${shortId}: regime=${JSON.stringify(regime)} → label=${JSON.stringify(regimeLabel)}; pisRates=${pisRates.length} cofinsRates=${cofinsRates.length}`);
             if (!regimeLabel) {
                 console.warn(`[TAX-PAYABLE] Locação ${shortId}: sem empresa/regime (Lucro Real/Presumido) definidos no imóvel/empreendimento — PIS/COFINS não gerados. INSS segue.`);
             }
@@ -799,7 +804,9 @@ export const taxPayableService = {
                     if (cofins != null) pushRow(parcel, 'cofins', 'COFINS', parcel.amount * cofins / 100);
                 }
                 // INSS também é de pessoa jurídica: não incide com locador PF.
-                const inss = locadorPf ? null : inssRateForValue(inssBrackets, parcel.amount, year);
+                const inss = locadorPf || parcel.fato_gerador < INICIO_INSS_LOCACAO
+                    ? null
+                    : inssPercentualDaFaixa(await faixasInss(parcel.fato_gerador), parcel.amount);
                 if (inss != null) pushRow(parcel, 'inss', 'INSS', parcel.amount * inss / 100);
             }
         }

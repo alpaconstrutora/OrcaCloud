@@ -3359,9 +3359,11 @@ export default function Blueprint3DViewer(props: Props) {
       )}
 
       {props.estilo === 'MAQUETE' && (props.notasDaMaquete?.length ?? 0) > 0 && (
-        // Créditos das fontes (exigidos pelas licenças) e o motivo quando algo não veio. No canto de
-        // cima à esquerda: embaixo mora a dica, à direita os botões.
-        <div className="pointer-events-none absolute left-2 top-2 z-10 max-w-[60%] space-y-0.5 rounded-[6px] bg-white/85 px-2 py-1 text-[11px] text-slate-600" data-testid="notas-da-maquete">
+        // Créditos das fontes (exigidos pelas licenças) e o motivo quando algo não veio. Embaixo à
+        // esquerda, ACIMA da linha da dica: em cima à esquerda mora a barra de captura da aba 3D
+        // ("HD 1920 × 1080 / Exportar imagem") e a nota a cobria (print do usuário, 25/11/2026);
+        // à direita ficam os botões.
+        <div className="pointer-events-none absolute bottom-16 left-2 z-10 max-w-[60%] space-y-0.5 rounded-[6px] bg-white/85 px-2 py-1 text-[11px] text-slate-600" data-testid="notas-da-maquete">
           {props.notasDaMaquete!.map((n) => (
             <p key={n}>{n}</p>
           ))}

@@ -3,7 +3,7 @@
  * 90°), validar o contorno e a cota da seta (passo de 5 cm).
  */
 import { describe, expect, it } from 'vitest';
-import { anelValido, cotaDaSeta, inserirCanto, moverCanto, removerCanto } from '../utils/blueprintPlato3d';
+import { anelValido, cotaDaSeta, inserirCanto, moverCanto, moverLado, removerCanto } from '../utils/blueprintPlato3d';
 
 const RET = [
   { x: 0, y: 0 },
@@ -70,5 +70,44 @@ describe('inserirCanto e removerCanto (25/11: duplo clique num lado / botão dir
     expect(removerCanto(RET, 1)).toEqual([RET[0], RET[2], RET[3]]);
     const tri = [RET[0], RET[1], RET[2]];
     expect(removerCanto(tri, 0)).toEqual(tri);
+  });
+});
+
+describe('moverLado (25/11: a alça do meio do lado arrasta o lado inteiro, como no reel)', () => {
+  const Q = [
+    { x: 0, y: 0 },
+    { x: 10000, y: 0 },
+    { x: 10000, y: 8000 },
+    { x: 0, y: 8000 },
+  ];
+  it('empurra o lado na perpendicular: os dois cantos dele andam juntos, os outros ficam', () => {
+    // Lado 1 = (10000,0)→(10000,8000); puxar 2 m para fora (+x).
+    expect(moverLado(Q, 1, { x: 2000, y: 0 })).toEqual([
+      { x: 0, y: 0 },
+      { x: 12000, y: 0 },
+      { x: 12000, y: 8000 },
+      { x: 0, y: 8000 },
+    ]);
+  });
+  it('a parte do arraste AO LONGO do lado não conta (o lado não escorrega)', () => {
+    expect(moverLado(Q, 1, { x: 2000, y: 3000 })).toEqual(moverLado(Q, 1, { x: 2000, y: 0 }));
+  });
+  it('o lado de fechamento (último → primeiro) também anda', () => {
+    // Lado 3 = (0,8000)→(0,0); para dentro (+x) 1,5 m.
+    const r = moverLado(Q, 3, { x: 1500, y: 0 });
+    expect(r[3]).toEqual({ x: 1500, y: 8000 });
+    expect(r[0]).toEqual({ x: 1500, y: 0 });
+  });
+  it('lado inclinado: anda na normal dele, arredondado ao mm', () => {
+    const T = [
+      { x: 0, y: 0 },
+      { x: 10000, y: 10000 },
+      { x: 0, y: 10000 },
+    ];
+    const r = moverLado(T, 0, { x: 1000, y: 0 });
+    // normal de (1,1)/√2 é (1,−1)/√2; o componente de (1000,0) nela é 707,1 → (500,−500) em cada canto.
+    expect(r[0]).toEqual({ x: 500, y: -500 });
+    expect(r[1]).toEqual({ x: 10500, y: 9500 });
+    expect(r[2]).toEqual({ x: 0, y: 10000 });
   });
 });

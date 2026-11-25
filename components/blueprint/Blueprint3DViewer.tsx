@@ -97,7 +97,7 @@ import {
 } from '../../utils/blueprint3dEnquadramento';
 import { blocoDoTerreno, espessuraDoBloco, type MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import { COR_CURVA_3D, nivelMaisProximo, type ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
-import { cotaDaSeta, inserirCanto, moverCanto, removerCanto } from '../../utils/blueprintPlato3d';
+import { cotaDaSeta, inserirCanto, moverCanto, moverLado, removerCanto } from '../../utils/blueprintPlato3d';
 import { travarOrtogonal } from '../../utils/blueprintKernel';
 import { formatarCotaM } from '../../utils/blueprintTopografia';
 import { uvNaCaixa, type PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaDeFundo';
@@ -211,6 +211,8 @@ interface Props {
   } | null;
   /** Aviso do platô (contorno recusado), mostrado no selo do saldo. */
   avisoDoPlato?: string | null;
+  /** Interno (25/11/2026): o mouse está sobre o platô editável ou uma alça dele — o hover das curvas sai do caminho. */
+  sobreOPlato?: React.MutableRefObject<{ mesh: boolean; alca: boolean }>;
   /**
    * DESENHAR O PLATÔ NO 3D (25/11/2026, pedido: o usuário clicou os cantos no 3D com Topografia › Platô e "não
    * funcionou"): com a ferramenta Platô ativa, cada clique no TERRENO do 3D marca um canto; clicar no 1º canto (ou
@@ -1444,7 +1446,7 @@ function ArvoresDaMaquete({ arvores }: { arvores: { x: number; y: number; baseY:
   );
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, rotulosDaMassa: mostrarRotulosDaMassa, pisoDaMassa, unidadeDaMassa, onPisoDaMassa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, entornoDaMaquete, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO' }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, rotulosDaMassa: mostrarRotulosDaMassa, pisoDaMassa, unidadeDaMassa, onPisoDaMassa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, entornoDaMaquete, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO', sobreOPlato }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
   // CONCEPÇÃO (29/10/2026): as peças do modelo saem brancas com aresta, como na Linha oculta; a massa ganha o tom e o
@@ -1956,6 +1958,12 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curvaSobOMouse, extrasChave]);
   const aoMoverNoRelevo = (e: any) => {
+    // Sobre o platô ou uma alça dele, o rótulo da curva sai do caminho (25/11/2026: ele cobria as bolinhas).
+    // (O evento do terreno não traz o platô nas interseções: a marca vem do próprio editor, pelo pointerover/out.)
+    if (sobreOPlato?.current.mesh || sobreOPlato?.current.alca) {
+      setCurvaSobOMouse(null);
+      return;
+    }
     // A altura no referencial da MALHA (o grupo do mundo espelha z, não y).
     const local = e.object.worldToLocal(e.point.clone());
     const n = niveisDasCurvas3d;
@@ -3072,18 +3080,24 @@ function texturaDaAlca(fundo: string, aro: string): THREE.CanvasTexture {
  * igual"* + *"bolinhas do mesmo tamanho na tela em qualquer zoom"*): disco branco com aro azul, SPRITE (sempre de
  * frente para a câmera — um disco girado à mão ficava de perfil dentro do grupo espelhado `scale(1,1,-1)`) e com o
  * MESMO tamanho na tela: a escala é refeita a cada quadro pela distância à câmera. A área de pegar é um sprite
- * invisível ~2× maior, para a bolinha pequena não exigir mira.
+ * invisível ~2× maior, para a bolinha pequena não exigir mira. `destaque` (mouse em cima, ou o lado dela sob o mouse —
+ * como no reel) = azul cheio. A pega leva `userData.plato`: o hover das curvas não acende por baixo dela.
  */
 function AlcaDoCanto({
   posicao,
   agarrada = false,
+  destaque = false,
   onPointerDown,
   onContextMenu,
+  onSobre,
 }: {
   posicao: [number, number, number];
   agarrada?: boolean;
+  destaque?: boolean;
   onPointerDown?: (e: any) => void;
   onContextMenu?: (e: any) => void;
+  /** Mouse entrou (true) ou saiu (false) da área de pegar. */
+  onSobre?: (dentro: boolean) => void;
 }) {
   const desenho = useRef<THREE.Sprite>(null);
   const pega = useRef<THREE.Sprite>(null);
@@ -3094,14 +3108,12 @@ function AlcaDoCanto({
     const d = desenho.current;
     if (!d) return;
     d.getWorldPosition(mundo);
-    const dist = camera.position.distanceTo(mundo);
-    const fov = (camera as THREE.PerspectiveCamera).fov ?? 45;
-    const mundoPorPx = (2 * dist * Math.tan((fov * Math.PI) / 360)) / Math.max(1, altura);
-    const lado = mundoPorPx * ALCA_DO_CANTO_PX * (64 / 61);
+    const lado = mundoPorPixel(camera, mundo, altura) * ALCA_DO_CANTO_PX * (64 / 61);
     d.scale.set(lado, lado, 1);
     pega.current?.scale.set(lado * 2.2, lado * 2.2, 1);
   });
-  const textura = texturaDaAlca(agarrada ? '#dbeafe' : '#ffffff', agarrada ? '#1e3a8a' : '#2563eb');
+  const cheia = agarrada || destaque;
+  const textura = texturaDaAlca(cheia ? '#2563eb' : '#ffffff', cheia ? '#1e40af' : '#2563eb');
   const interativa = !!(onPointerDown || onContextMenu);
   return (
     <group position={posicao}>
@@ -3109,16 +3121,211 @@ function AlcaDoCanto({
         <sprite
           ref={pega}
           renderOrder={23}
+          userData={{ plato: true }}
           onPointerDown={onPointerDown}
           onContextMenu={onContextMenu}
-          onPointerOver={() => (document.body.style.cursor = 'grab')}
-          onPointerOut={() => (document.body.style.cursor = '')}
+          onPointerOver={() => {
+            document.body.style.cursor = 'grab';
+            onSobre?.(true);
+          }}
+          onPointerOut={() => {
+            document.body.style.cursor = '';
+            onSobre?.(false);
+          }}
         >
           <spriteMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
         </sprite>
       )}
       <sprite ref={desenho} renderOrder={24} raycast={() => null}>
         <spriteMaterial map={textura} transparent depthTest={false} depthWrite={false} toneMapped={false} />
+      </sprite>
+    </group>
+  );
+}
+
+/** Mundo por pixel na distância de `ponto` (câmera em perspectiva): o que mantém as alças do mesmo tamanho na tela. */
+function mundoPorPixel(camera: THREE.Camera, ponto: THREE.Vector3, alturaPx: number): number {
+  const dist = camera.position.distanceTo(ponto);
+  const fov = (camera as THREE.PerspectiveCamera).fov ?? 45;
+  return (2 * dist * Math.tan((fov * Math.PI) / 360)) / Math.max(1, alturaPx);
+}
+
+/** As texturas da pílula do lado (`=`) e do ↕ do centro, feitas uma vez por cor. */
+const TEXTURAS_DO_PLATO = new Map<string, THREE.CanvasTexture>();
+function texturaDoPlato(tipo: 'lado' | 'altura', cheia: boolean): THREE.CanvasTexture {
+  const chave = `${tipo}|${cheia}`;
+  const pronta = TEXTURAS_DO_PLATO.get(chave);
+  if (pronta) return pronta;
+  const fundo = cheia ? '#2563eb' : '#ffffff';
+  const traco = cheia ? '#ffffff' : '#2563eb';
+  const c = document.createElement('canvas');
+  const ctx = c.getContext('2d')!;
+  if (tipo === 'lado') {
+    // Pílula com duas barras paralelas ao lado (o "=" do reel).
+    c.width = 96;
+    c.height = 48;
+    ctx.beginPath();
+    ctx.roundRect(6, 6, 84, 36, 18);
+    ctx.fillStyle = fundo;
+    ctx.fill();
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#2563eb';
+    ctx.stroke();
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = traco;
+    ctx.beginPath();
+    ctx.moveTo(32, 19);
+    ctx.lineTo(64, 19);
+    ctx.moveTo(32, 29);
+    ctx.lineTo(64, 29);
+    ctx.stroke();
+  } else {
+    // Disco com a seta dupla ↕ (o "mover para cima e para baixo" do reel).
+    c.width = c.height = 96;
+    ctx.beginPath();
+    ctx.arc(48, 48, 40, 0, Math.PI * 2);
+    ctx.fillStyle = fundo;
+    ctx.fill();
+    ctx.lineWidth = 7;
+    ctx.strokeStyle = '#2563eb';
+    ctx.stroke();
+    ctx.fillStyle = traco;
+    ctx.strokeStyle = traco;
+    ctx.lineWidth = 6;
+    ctx.beginPath();
+    ctx.moveTo(48, 34);
+    ctx.lineTo(48, 62);
+    ctx.stroke();
+    for (const s of [-1, 1]) {
+      ctx.beginPath();
+      ctx.moveTo(48, 48 + s * 30);
+      ctx.lineTo(36, 48 + s * 14);
+      ctx.lineTo(60, 48 + s * 14);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  TEXTURAS_DO_PLATO.set(chave, t);
+  return t;
+}
+
+/**
+ * A ALÇA DO MEIO DO LADO (25/11/2026, reel: o "=" no meio de cada lado arrasta o lado inteiro). Pílula de tamanho fixo
+ * na tela, girada a cada quadro para ficar ao longo do lado como ele aparece na tela.
+ */
+function AlcaDoLado({
+  a,
+  b,
+  destaque,
+  onPointerDown,
+  onSobre,
+}: {
+  a: [number, number, number];
+  b: [number, number, number];
+  destaque: boolean;
+  onPointerDown: (e: any) => void;
+  onSobre: (dentro: boolean) => void;
+}) {
+  const desenho = useRef<THREE.Sprite>(null);
+  const pega = useRef<THREE.Sprite>(null);
+  const material = useRef<THREE.SpriteMaterial>(null);
+  const camera = useThree((s) => s.camera);
+  const tamanho = useThree((s) => s.size);
+  const va = useMemo(() => new THREE.Vector3(), []);
+  const vb = useMemo(() => new THREE.Vector3(), []);
+  const mundo = useMemo(() => new THREE.Vector3(), []);
+  const meio: [number, number, number] = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2];
+  useFrame(() => {
+    const d = desenho.current;
+    const pai = d?.parent?.parent;
+    if (!d || !pai) return;
+    d.getWorldPosition(mundo);
+    const px = mundoPorPixel(camera, mundo, tamanho.height);
+    d.scale.set(px * 20, px * 10, 1);
+    pega.current?.scale.set(px * 30, px * 22, 1);
+    // O ângulo do lado NA TELA (o grupo espelha z: a conta é com os pontos já projetados).
+    va.set(...a);
+    vb.set(...b);
+    pai.localToWorld(va).project(camera);
+    pai.localToWorld(vb).project(camera);
+    let ang = Math.atan2((vb.y - va.y) * tamanho.height, (vb.x - va.x) * tamanho.width);
+    if (ang > Math.PI / 2) ang -= Math.PI;
+    if (ang < -Math.PI / 2) ang += Math.PI;
+    if (material.current) material.current.rotation = ang;
+  });
+  return (
+    <group position={meio}>
+      <sprite
+        ref={pega}
+        renderOrder={23}
+        userData={{ plato: true }}
+        onPointerDown={onPointerDown}
+        onPointerOver={() => {
+          document.body.style.cursor = 'grab';
+          onSobre(true);
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = '';
+          onSobre(false);
+        }}
+      >
+        <spriteMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
+      </sprite>
+      <sprite ref={desenho} renderOrder={24} raycast={() => null}>
+        <spriteMaterial ref={material} map={texturaDoPlato('lado', destaque)} transparent depthTest={false} depthWrite={false} toneMapped={false} />
+      </sprite>
+    </group>
+  );
+}
+
+/** O ↕ do centro do platô (reel): arrastar para cima/baixo muda a cota. Tamanho fixo na tela. */
+function AlcaDeAltura({
+  posicao,
+  destaque,
+  onPointerDown,
+  onSobre,
+}: {
+  posicao: [number, number, number];
+  destaque: boolean;
+  onPointerDown: (e: any) => void;
+  onSobre: (dentro: boolean) => void;
+}) {
+  const desenho = useRef<THREE.Sprite>(null);
+  const pega = useRef<THREE.Sprite>(null);
+  const camera = useThree((s) => s.camera);
+  const altura = useThree((s) => s.size.height);
+  const mundo = useMemo(() => new THREE.Vector3(), []);
+  useFrame(() => {
+    const d = desenho.current;
+    if (!d) return;
+    d.getWorldPosition(mundo);
+    const px = mundoPorPixel(camera, mundo, altura);
+    d.scale.set(px * 22, px * 22, 1);
+    pega.current?.scale.set(px * 34, px * 34, 1);
+  });
+  return (
+    <group position={posicao}>
+      <sprite
+        ref={pega}
+        renderOrder={23}
+        userData={{ plato: true }}
+        onPointerDown={onPointerDown}
+        onPointerOver={() => {
+          document.body.style.cursor = 'ns-resize';
+          onSobre(true);
+        }}
+        onPointerOut={() => {
+          document.body.style.cursor = '';
+          onSobre(false);
+        }}
+      >
+        <spriteMaterial transparent opacity={0} depthTest={false} depthWrite={false} />
+      </sprite>
+      <sprite ref={desenho} renderOrder={25} raycast={() => null}>
+        <spriteMaterial map={texturaDoPlato('altura', destaque)} transparent depthTest={false} depthWrite={false} toneMapped={false} />
       </sprite>
     </group>
   );
@@ -3243,16 +3450,36 @@ function DesenhoDoPlato3d({ onAnel }: { onAnel: (anel: { x: number; y: number }[
   );
 }
 
-function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']> }) {
+/**
+ * O PLATÔ EDITÁVEL NO 3D, com os gestos do reel "Terrain Modification Tool" (25/11/2026 — pedido: *"assista este
+ * video novamente e teste so o app reproduz fielmente a facilidade de uso e funcionalidades"*; aprovado: itens 1, 2,
+ * 3 e 5 do teste):
+ *  - canto: bolinha (arrasta o canto; trava de 90°, Shift libera — decisão do usuário: "fica livre com o shift");
+ *  - LADO: a pílula "=" no meio de cada lado arrasta o lado inteiro, na perpendicular (`moverLado`);
+ *  - ALTURA: o ↕ no centro do platô sobe/desce a cota, medido em PIXELS da tela (não realimenta com o platô
+ *    subindo); linha guia vertical tracejada e a cota numa etiqueta AO LADO (não em cima dos cantos);
+ *  - realce: o que está sob o mouse fica azul cheio (o lado acende junto com os dois cantos dele);
+ *  - contorno TRACEJADO enquanto um canto ou lado é arrastado;
+ *  - o hover das curvas não acende por cima do platô nem das alças (`userData.plato`, lido no `aoMoverNoRelevo`).
+ * Duplo clique no platô insere canto; botão direito numa bolinha remove (pedidos anteriores, mantidos).
+ */
+type GestoDoPlato =
+  | { tipo: 'canto'; i: number }
+  | { tipo: 'lado'; i: number; inicio: { x: number; y: number } }
+  | { tipo: 'altura'; y0: number; mundoPorPx: number };
+type SobreNoPlato = { tipo: 'canto' | 'lado'; i: number } | { tipo: 'altura' } | null;
+
+function EditorDoPlato3d({ plato, sobreOPlato }: { plato: NonNullable<Props['platoEditavel']>; sobreOPlato?: Props['sobreOPlato'] }) {
   const camera = useThree((s) => s.camera);
   const gl = useThree((s) => s.gl);
   const controles = useThree((s) => s.controls) as { enabled: boolean } | null;
   const grupo = useRef<THREE.Group>(null);
-  const [agarrado, setAgarrado] = useState<number | null>(null);
-  const [chaveDaSeta, setChaveDaSeta] = useState(0);
+  const [gesto, setGesto] = useState<GestoDoPlato | null>(null);
+  const [sobre, setSobre] = useState<SobreNoPlato>(null);
   const cb = useRef(plato);
   cb.current = plato;
   const yDe = (p: { x: number; y: number }) => plato.cotaEm(p) - plato.cotaZeroM;
+  const n = plato.anel.length;
 
   const geometria = useMemo(() => {
     const contorno = plato.anel.map((p) => new THREE.Vector2(p.x, p.y));
@@ -3268,66 +3495,111 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
   }, [plato.anel, plato.cotaM, plato.cotaZeroM]);
   useEffect(() => () => geometria.dispose(), [geometria]);
 
+  const noPlato = (p: { x: number; y: number }, acima = 0.08) => [p.x / 1000, yDe(p) + acima, p.y / 1000] as [number, number, number];
   const contornoLinha = useMemo(
-    () => [...plato.anel, plato.anel[0]].map((p) => [p.x / 1000, yDe(p) + 0.08, p.y / 1000] as [number, number, number]),
+    () => [...plato.anel, plato.anel[0]].map((p) => noPlato(p)),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [plato.anel, plato.cotaM, plato.cotaZeroM],
   );
   const centro = useMemo(() => {
-    const n = plato.anel.length;
     const c = plato.anel.reduce((a, p) => ({ x: a.x + p.x / n, y: a.y + p.y / n }), { x: 0, y: 0 });
     return c;
-  }, [plato.anel]);
+  }, [plato.anel, n]);
   const diagonalM = useMemo(() => {
     const xs = plato.anel.map((p) => p.x);
     const ys = plato.anel.map((p) => p.y);
     return Math.hypot(Math.max(...xs) - Math.min(...xs), Math.max(...ys) - Math.min(...ys)) / 1000;
   }, [plato.anel]);
+  const posCentro = noPlato(centro, 0.12);
   const posicaoDoRotulo = useRef(new THREE.Vector3());
-  posicaoDoRotulo.current.set(centro.x / 1000, yDe(centro) + Math.max(1.5, diagonalM * 0.05), centro.y / 1000);
+  posicaoDoRotulo.current.set(...posCentro);
 
-  // O arraste de um canto: no plano horizontal da cota do platô naquele canto.
-  useEffect(() => {
-    if (agarrado === null) return;
+  /** O ponto do DESENHO (mm) onde o raio do mouse corta o plano horizontal `yDoPlano` (referencial do grupo). */
+  const pontoNoPlano = (clientX: number, clientY: number, yDoPlano: number): { x: number; y: number } | null => {
+    const g = grupo.current;
+    if (!g) return null;
+    const r = gl.domElement.getBoundingClientRect();
+    const raio = new THREE.Raycaster();
+    raio.setFromCamera(new THREE.Vector2(((clientX - r.left) / r.width) * 2 - 1, -((clientY - r.top) / r.height) * 2 + 1), camera);
+    // O plano é do DESENHO (y para cima não muda com o espelho): passa o raio para o referencial do grupo.
+    const local = raio.ray.clone().applyMatrix4(new THREE.Matrix4().copy(g.matrixWorld).invert());
+    const ponto = new THREE.Vector3();
+    if (!local.intersectPlane(new THREE.Plane(new THREE.Vector3(0, 1, 0), -yDoPlano), ponto)) return null;
+    return { x: ponto.x * 1000, y: ponto.z * 1000 };
+  };
+  const meioDoLado = (anel: readonly { x: number; y: number }[], i: number) => {
+    const a = anel[i];
+    const b = anel[(i + 1) % anel.length];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  };
+  /**
+   * Começa um gesto. Tudo NA HORA do aperto, não num efeito: a OrbitControls já ouviu o aperto (ver "arrastar pelo
+   * piso"), e um clique rápido soltava ANTES de o efeito instalar o `pointerup` — o gesto ficava preso (contorno
+   * tracejado, lado aceso e órbita desligada; portão plato.mjs, duplo clique perto de uma pílula).
+   */
+  const desmontarGesto = useRef<(() => void) | null>(null);
+  const comecar = (e: any, g: GestoDoPlato) => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    if (controles) controles.enabled = false;
+    desmontarGesto.current?.();
+    setGesto(g);
     const anelInicial = cb.current.anel;
     const cotaInicial = cb.current.cotaM;
     const cotaConfirmada = cb.current.equilibrio ? null : cotaInicial;
-    const yDoPlano = cb.current.cotaEm(anelInicial[agarrado]) - cb.current.cotaZeroM;
-    const raio = new THREE.Raycaster();
-    const plano = new THREE.Plane(new THREE.Vector3(0, 1, 0), -yDoPlano);
-    const ponto = new THREE.Vector3();
-    let atual = anelInicial;
+    const yDoPlano =
+      g.tipo === 'canto'
+        ? cb.current.cotaEm(anelInicial[g.i]) - cb.current.cotaZeroM
+        : g.tipo === 'lado'
+          ? cb.current.cotaEm(meioDoLado(anelInicial, g.i)) - cb.current.cotaZeroM
+          : 0;
+    let anel = anelInicial;
+    let cota = cotaInicial;
     let quadro = 0;
-    const seguir = (e: PointerEvent) => {
-      const g = grupo.current;
-      if (!g) return;
-      const r = gl.domElement.getBoundingClientRect();
-      raio.setFromCamera(new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1), camera);
-      // O plano é do DESENHO (y para cima não muda com o espelho): passa o raio para o referencial do grupo.
-      const inv = new THREE.Matrix4().copy(g.matrixWorld).invert();
-      const local = raio.ray.clone().applyMatrix4(inv);
-      if (!local.intersectPlane(plano, ponto)) return;
-      atual = moverCanto(anelInicial, agarrado, { x: ponto.x * 1000, y: ponto.z * 1000 }, !e.shiftKey);
+    const seguir = (ev: PointerEvent) => {
+      if (g.tipo === 'altura') {
+        cota = cotaDaSeta(cotaInicial, (g.y0 - ev.clientY) * g.mundoPorPx, ev.shiftKey);
+      } else {
+        const p = pontoNoPlano(ev.clientX, ev.clientY, yDoPlano);
+        if (!p) return;
+        anel =
+          g.tipo === 'canto'
+            ? moverCanto(anelInicial, g.i, p, !ev.shiftKey)
+            : moverLado(anelInicial, g.i, { x: p.x - g.inicio.x, y: p.y - g.inicio.y });
+      }
       if (!quadro) {
         quadro = requestAnimationFrame(() => {
           quadro = 0;
-          cb.current.onPrevia({ anel: atual, cotaM: cotaInicial });
+          cb.current.onPrevia({ anel, cotaM: cota });
         });
       }
     };
-    const terminar = (confirmar: boolean) => {
+    const desmontar = () => {
       if (quadro) cancelAnimationFrame(quadro);
-      setAgarrado(null);
-      if (confirmar) cb.current.onConfirmar({ anel: atual, cotaM: cotaConfirmada });
+      quadro = 0;
+      window.removeEventListener('pointermove', seguir);
+      window.removeEventListener('pointerup', soltar);
+      window.removeEventListener('pointercancel', cancelar);
+      window.removeEventListener('keydown', tecla);
+      if (desmontarGesto.current === desmontar) desmontarGesto.current = null;
+    };
+    const terminar = (confirmar: boolean) => {
+      desmontar();
+      setGesto(null);
+      if (!confirmar) return cb.current.onPrevia(null);
+      if (g.tipo === 'altura') {
+        if (cota !== cotaInicial) cb.current.onConfirmar({ anel: anelInicial, cotaM: cota });
+        else cb.current.onPrevia(null);
+      } else if (anel !== anelInicial) cb.current.onConfirmar({ anel, cotaM: cotaConfirmada });
       else cb.current.onPrevia(null);
     };
-    const soltar = () => {
+    function soltar() {
       if (controles) controles.enabled = true;
       terminar(true);
-    };
+    }
     // Esc no meio do gesto: o botão do mouse ainda está apertado — a órbita só volta quando ele for solto, senão o
     // resto do arraste giraria a câmera (portão plato.mjs).
-    const cancelar = () => {
+    function cancelar() {
       window.addEventListener(
         'pointerup',
         () => {
@@ -3336,56 +3608,83 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
         { once: true },
       );
       terminar(false);
-    };
-    const tecla = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') cancelar();
-    };
+    }
+    function tecla(ev: KeyboardEvent) {
+      if (ev.key === 'Escape') cancelar();
+    }
     window.addEventListener('pointermove', seguir);
     window.addEventListener('pointerup', soltar);
     window.addEventListener('pointercancel', cancelar);
     window.addEventListener('keydown', tecla);
-    return () => {
-      window.removeEventListener('pointermove', seguir);
-      window.removeEventListener('pointerup', soltar);
-      window.removeEventListener('pointercancel', cancelar);
-      window.removeEventListener('keydown', tecla);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [agarrado]);
+    desmontarGesto.current = desmontar;
+  };
   // Saiu de cena no meio de um gesto: a órbita não pode ficar desligada.
   useEffect(
     () => () => {
+      desmontarGesto.current?.();
       if (controles) controles.enabled = true;
+      document.body.style.cursor = '';
     },
     [controles],
   );
 
-  // A seta: o deslocamento vertical do PivotControls vira a cota (passo 5 cm).
-  const cotaNoInicioDaSeta = useRef(plato.cotaM);
-  // A altura da seta CONGELA durante o gesto: o PivotControls mede o arraste contra a posição do grupo, e o grupo
-  // subindo com a prévia realimentava a conta — a cota ia e voltava (revisão do branch, portão plato.mjs).
-  const [ySetaFixo, setYSetaFixo] = useState<number | null>(null);
-  // Shift na seta = ajuste fino (0,02 do arraste em vez de 0,2 — prova em produção: a seta era sensível demais).
-  const shiftRef = useRef(false);
-  useEffect(() => {
-    const tecla = (e: KeyboardEvent) => {
-      shiftRef.current = e.shiftKey;
+  // Espião dos portões (só com `window.__depurarPlato3d`): onde cada alça está NA TELA, em px do cliente.
+  useFrame(() => {
+    const w = window as unknown as { __depurarPlato3d?: boolean; __platoNaTela?: unknown };
+    const g = grupo.current;
+    if (!w.__depurarPlato3d || !g) return;
+    const r = gl.domElement.getBoundingClientRect();
+    const tela = (p: [number, number, number]) => {
+      const v = g.localToWorld(new THREE.Vector3(...p)).project(camera);
+      return { x: r.left + ((v.x + 1) / 2) * r.width, y: r.top + ((1 - v.y) / 2) * r.height };
     };
-    window.addEventListener('keydown', tecla);
-    window.addEventListener('keyup', tecla);
-    return () => {
-      window.removeEventListener('keydown', tecla);
-      window.removeEventListener('keyup', tecla);
+    w.__platoNaTela = {
+      cantos: cb.current.anel.map((p) => tela(noPlato(p))),
+      lados: cb.current.anel.map((_, i) => tela(noPlato(meioDoLado(cb.current.anel, i)))),
+      altura: tela(posCentro),
     };
-  }, []);
-  const cotaDaSetaRef = useRef<number | null>(null);
-  const quadroDaSeta = useRef(0);
+  });
+
+  const ladoAceso = gesto?.tipo === 'lado' ? gesto.i : sobre?.tipo === 'lado' ? sobre.i : null;
+  const cantoAceso = (i: number) =>
+    (sobre?.tipo === 'canto' && sobre.i === i) || (ladoAceso !== null && (i === ladoAceso || i === (ladoAceso + 1) % n));
+  const arrastando = gesto?.tipo === 'canto' || gesto?.tipo === 'lado';
+  const mexendoNaAltura = gesto?.tipo === 'altura' || sobre?.tipo === 'altura';
+  const linhaGuia = useMemo(
+    () => [
+      [posCentro[0], posCentro[1] - Math.max(20, diagonalM), posCentro[2]],
+      [posCentro[0], posCentro[1] + Math.max(20, diagonalM), posCentro[2]],
+    ] as [number, number, number][],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [posCentro[0], posCentro[1], posCentro[2], diagonalM],
+  );
+  const sair = (alvo: SobreNoPlato) => {
+    if (sobreOPlato) sobreOPlato.current.alca = false;
+    setSobre((s) => (JSON.stringify(s) === JSON.stringify(alvo) ? null : s));
+  };
+  const entrar = (alvo: NonNullable<SobreNoPlato>) => {
+    if (sobreOPlato) sobreOPlato.current.alca = true;
+    setSobre(alvo);
+  };
+  useEffect(
+    () => () => {
+      if (sobreOPlato) sobreOPlato.current = { mesh: false, alca: false };
+    },
+    [sobreOPlato],
+  );
 
   return (
     <group ref={grupo} userData={{ naoCapturar: true }}>
       <mesh
         geometry={geometria}
         renderOrder={21}
+        userData={{ plato: true }}
+        onPointerOver={() => {
+          if (sobreOPlato) sobreOPlato.current.mesh = true;
+        }}
+        onPointerOut={() => {
+          if (sobreOPlato) sobreOPlato.current.mesh = false;
+        }}
         // Duplo clique no platô: um canto novo no LADO mais próximo do clique (pedido 25/11/2026).
         onDoubleClick={(e) => {
           e.stopPropagation();
@@ -3398,20 +3697,53 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
       >
         <meshBasicMaterial color="#2563eb" transparent opacity={0.35} side={THREE.DoubleSide} depthWrite={false} />
       </mesh>
-      <Line points={contornoLinha} color="#1d4ed8" lineWidth={2.5} side={THREE.DoubleSide} renderOrder={22} raycast={() => null} />
+      <Line
+        key={arrastando ? 'tracejado' : 'cheio'}
+        points={contornoLinha}
+        color="#1d4ed8"
+        lineWidth={2.5}
+        dashed={arrastando}
+        dashSize={Math.max(0.5, diagonalM * 0.025)}
+        gapSize={Math.max(0.4, diagonalM * 0.018)}
+        side={THREE.DoubleSide}
+        renderOrder={22}
+        raycast={() => null}
+      />
+      {ladoAceso !== null && (
+        <Line
+          points={[noPlato(plato.anel[ladoAceso], 0.1), noPlato(plato.anel[(ladoAceso + 1) % n], 0.1)]}
+          color="#1d4ed8"
+          lineWidth={4.5}
+          side={THREE.DoubleSide}
+          depthTest={false}
+          renderOrder={23}
+          raycast={() => null}
+        />
+      )}
+      {mexendoNaAltura && (
+        <Line points={linhaGuia} color="#ef4444" lineWidth={1.5} dashed dashSize={1.2} gapSize={0.8} transparent opacity={0.8} side={THREE.DoubleSide} depthTest={false} renderOrder={22} raycast={() => null} />
+      )}
+      {plato.anel.map((p, i) => (
+        <AlcaDoLado
+          key={`lado-${i}`}
+          a={noPlato(p, 0.1)}
+          b={noPlato(plato.anel[(i + 1) % n], 0.1)}
+          destaque={ladoAceso === i}
+          onPointerDown={(e) => {
+            const inicio = pontoNoPlano(e.nativeEvent.clientX, e.nativeEvent.clientY, yDe(meioDoLado(cb.current.anel, i)));
+            if (inicio) comecar(e, { tipo: 'lado', i, inicio });
+          }}
+          onSobre={(dentro) => (dentro ? entrar({ tipo: 'lado', i }) : sair({ tipo: 'lado', i }))}
+        />
+      ))}
       {plato.anel.map((p, i) => (
         <AlcaDoCanto
           key={`alca-${i}`}
-          posicao={[p.x / 1000, yDe(p) + 0.08, p.y / 1000]}
-          agarrada={agarrado === i}
-          onPointerDown={(e) => {
-            if (e.button !== 0) return;
-            e.stopPropagation();
-            // NA HORA, não no efeito: a OrbitControls ouve o <canvas> e já começou a girar quando o R3F entrega o
-            // aperto à alça (ver memória "arrastar pelo piso"); o efeito do gesto rodaria tarde demais.
-            if (controles) controles.enabled = false;
-            setAgarrado(i);
-          }}
+          posicao={noPlato(p)}
+          agarrada={gesto?.tipo === 'canto' && gesto.i === i}
+          destaque={cantoAceso(i)}
+          onPointerDown={(e) => comecar(e, { tipo: 'canto', i })}
+          onSobre={(dentro) => (dentro ? entrar({ tipo: 'canto', i }) : sair({ tipo: 'canto', i }))}
           // Botão direito numa bolinha: tira o canto (o platô fica com pelo menos 3) — pedido 25/11/2026.
           onContextMenu={(e) => {
             e.stopPropagation();
@@ -3421,46 +3753,18 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
           }}
         />
       ))}
-      <group key={chaveDaSeta} position={[centro.x / 1000, ySetaFixo ?? yDe(centro) + 0.1, centro.y / 1000]}>
-        <PivotControls
-          activeAxes={[false, true, false]}
-          disableRotations
-          disableScaling
-          disableSliders
-          depthTest={false}
-          fixed
-          scale={90}
-          onDragStart={() => {
-            cotaNoInicioDaSeta.current = cb.current.cotaM;
-            cotaDaSetaRef.current = null;
-            setYSetaFixo(cb.current.cotaEm(centro) - cb.current.cotaZeroM + 0.1);
-            // A órbita não pode pegar o mesmo arraste (a câmera girava junto com a seta — portão plato.mjs).
-            if (controles) controles.enabled = false;
-          }}
-          onDrag={(l) => {
-            const dy = new THREE.Vector3().setFromMatrixPosition(l).y;
-            const cota = cotaDaSeta(cotaNoInicioDaSeta.current, dy, shiftRef.current);
-            cotaDaSetaRef.current = cota;
-            if (!quadroDaSeta.current) {
-              quadroDaSeta.current = requestAnimationFrame(() => {
-                quadroDaSeta.current = 0;
-                cb.current.onPrevia({ anel: cb.current.anel, cotaM: cota });
-              });
-            }
-          }}
-          onDragEnd={() => {
-            if (controles) controles.enabled = true;
-            if (quadroDaSeta.current) cancelAnimationFrame(quadroDaSeta.current);
-            quadroDaSeta.current = 0;
-            const cota = cotaDaSetaRef.current;
-            // A seta volta ao centro (remonta, já na cota nova); a cota é que mudou.
-            setYSetaFixo(null);
-            setChaveDaSeta((k) => k + 1);
-            if (cota !== null && cota !== cotaNoInicioDaSeta.current) cb.current.onConfirmar({ anel: cb.current.anel, cotaM: cota });
-            else cb.current.onPrevia(null);
-          }}
-        />
-      </group>
+      <AlcaDeAltura
+        posicao={posCentro}
+        destaque={mexendoNaAltura}
+        onPointerDown={(e) => {
+          const g = grupo.current;
+          if (!g) return;
+          const mundo = g.localToWorld(new THREE.Vector3(...posCentro));
+          comecar(e, { tipo: 'altura', y0: e.nativeEvent.clientY, mundoPorPx: mundoPorPixel(camera, mundo, gl.domElement.getBoundingClientRect().height) });
+        }}
+        onSobre={(dentro) => (dentro ? entrar({ tipo: 'altura' }) : sair({ tipo: 'altura' }))}
+      />
+      {/* A cota AO LADO do ↕ (como no reel), não por cima dos cantos. */}
       <RotuloDeRede
         texto={`${formatarCotaM(plato.cotaM)} m${plato.equilibrio ? ' · equilíbrio' : ''}`}
         cor="#1e3a8a"
@@ -3468,6 +3772,7 @@ function EditorDoPlato3d({ plato }: { plato: NonNullable<Props['platoEditavel']>
         posicaoViva={posicaoDoRotulo}
         porCima
         fracaoDaTela={0.03}
+        centro={[-0.25, 0.5]}
       />
     </group>
   );
@@ -3636,6 +3941,7 @@ function idsDoModelo(model: Props['model']): Set<string> {
 }
 
 export default function Blueprint3DViewer(props: Props) {
+  const sobreOPlato = useRef({ mesh: false, alca: false });
   const controlsRef = useRef<{ target?: THREE.Vector3; update?: () => void } | null>(null);
   const { model, mostrarTerreno, relevo, relevoChave, alturaDoChao, onToggleFullscreen, isFullscreen = false } = props;
 
@@ -3947,14 +4253,14 @@ export default function Blueprint3DViewer(props: Props) {
           // CAMADAS EM MEIO-TOM: a principal esconde os atenuados; o fantasma mostra só eles.
           const { atenuados, terrenoEmMeioTom, ocultos } = props;
           const comMeioTom = (atenuados?.size ?? 0) > 0 || !!terrenoEmMeioTom;
-          if (!comMeioTom) return <Cena {...props} onAgarrar={agarrar} />;
+          if (!comMeioTom) return <Cena {...props} onAgarrar={agarrar} sobreOPlato={sobreOPlato} />;
           const ocultosDaPrincipal = new Set([...(ocultos ?? []), ...(atenuados ?? [])]);
           const ocultosDoFantasma = new Set([...(ocultos ?? [])]);
           for (const id of idsDoModelo(props.model)) if (!atenuados?.has(id)) ocultosDoFantasma.add(id);
           const semTerreno = { mostrarTerreno: false, relevo: null, extrasDoRelevo: null, envelope: undefined, massa: undefined };
           return (
             <>
-              <Cena {...props} onAgarrar={agarrar} ocultos={ocultosDaPrincipal} {...(terrenoEmMeioTom ? semTerreno : {})} />
+              <Cena {...props} onAgarrar={agarrar} ocultos={ocultosDaPrincipal} sobreOPlato={sobreOPlato} {...(terrenoEmMeioTom ? semTerreno : {})} />
               <Fantasma>
                 <Cena
                   {...props}
@@ -4015,7 +4321,7 @@ export default function Blueprint3DViewer(props: Props) {
             </PivotControls>
           </group>
         )}
-        {props.platoEditavel && props.platoEditavel.anel.length >= 3 && !andando && !props.desenharPlato3d && <EditorDoPlato3d plato={props.platoEditavel} />}
+        {props.platoEditavel && props.platoEditavel.anel.length >= 3 && !andando && !props.desenharPlato3d && <EditorDoPlato3d plato={props.platoEditavel} sobreOPlato={sobreOPlato} />}
         {props.desenharPlato3d && !andando && <DesenhoDoPlato3d onAnel={props.desenharPlato3d.onAnel} />}
         </group>
         {/* A ÓRBITA SAI DE CENA ao andar: os dois disputariam o mesmo mouse, e

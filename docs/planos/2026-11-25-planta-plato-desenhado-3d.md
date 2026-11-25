@@ -237,6 +237,22 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
   2. A seta: 0,2 do arraste no gesto normal e 0,02 com **Shift** (ajuste fino), sempre a 5 cm. Teste puro RED →
      GREEN; portão `plato.mjs` mede: no lote de 346 m, 60 px = +6,5 m (antes +32,5 m) e com Shift +0,65 m.
 - Fora (anotado): o "percorrer" a pé ainda anda no terreno natural, não no de projeto.
+- [x] Revisão contra o reel — pedido 25/11: *"assista este video novamente e teste so o app reproduz fielmente a
+  facilidade de uso e funcionalidades"*. Teste logado no "Estudp Relevo" (estado guardado antes e devolvido pelo banco
+  depois, com ok do usuário). Faltavam 5 coisas; aprovadas 1, 2, 3 e 5 (*"Sim"*), e o item 4 ficou como está
+  (*"Fica livre com o shift"* = trava de 90°, Shift libera):
+  1. pílula "=" no meio de cada lado arrasta o LADO inteiro, na perpendicular (`moverLado`, testada);
+  2. ↕ no centro do platô no lugar da seta verde: mede o arraste em pixels da tela (não realimenta), linha guia
+     vertical tracejada e a cota numa etiqueta ao lado (não mais por cima dos cantos);
+  3. realce no hover (canto azul cheio; o lado acende com os dois cantos) e o rótulo da curva some sobre o platô ou
+     uma alça (marca por `pointerover/out` numa ref do viewer — o evento do terreno NÃO traz o platô em
+     `e.intersections`, medido);
+  5. contorno tracejado enquanto um canto ou lado é arrastado.
+  - Achado no portão e corrigido: o gesto era montado num efeito; um clique rápido soltava antes do `pointerup` existir
+    e o gesto ficava preso (tracejado, lado aceso, órbita desligada). Agora os ouvintes nascem no próprio aperto.
+  - Portão `plato.mjs` reescrito com o espião `window.__platoNaTela` (só com `__depurarPlato3d`, ligado pelo harness):
+    canto, Esc, altura normal/Shift, lado, remover/inserir, bolinha 23 → 23 px, curva sobre o platô +0 × terreno +2326,
+    desenho no 3D. ✅ `hover.mjs` ✅ nos dois estilos.
 - [x] Ajustes — pedido do usuário 25/11 (com o print das bolinhas do reel): *"1. um botão Excluir platô desenhado no
   painel, com confirmação; De acordo 2. inserir canto com duplo clique num lado do platô no 3D e remover canto com
   clique direito numa bolinha;; De acordo 3. bolinhas do mesmo tamanho na tela em qualquer zoom. De acordo 4. veja

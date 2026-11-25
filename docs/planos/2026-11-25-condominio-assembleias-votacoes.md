@@ -491,7 +491,7 @@ jsPDF/autotable por `import()` dinâmico, Vitest.
 
 ---
 
-### Tarefa A1 — Estrutura: tabelas, trava e RLS
+### Task A1: Estrutura: tabelas, trava e RLS
 
 **Arquivos**
 - Criar: `supabase/migrations/aplicar_20271125860000_condominio_assembleias.sql`
@@ -552,7 +552,7 @@ jsPDF/autotable por `import()` dinâmico, Vitest.
 
 **Pronto quando:** ensaio `TUDO OK`.
 
-### Tarefa A2 — Conduzir: impedimento, apuração e transições do gestor
+### Task A2: Conduzir: impedimento, apuração e transições do gestor
 
 **Arquivos**
 - Criar: `supabase/migrations/aplicar_20271125860100_condominio_assembleias_conduzir.sql`
@@ -647,7 +647,7 @@ ENCERRADA. **Hora nos testes:** nada de "relógio falso" no código de produçã
 
 **Pronto quando:** ensaio `TUDO OK`.
 
-### Tarefa A3 — Portal: leitura e voto do condômino
+### Task A3: Portal: leitura e voto do condômino
 
 **Arquivos**
 - Criar: `supabase/migrations/aplicar_20271125860200_condominio_assembleias_portal.sql`
@@ -689,7 +689,7 @@ ENCERRADA. **Hora nos testes:** nada de "relógio falso" no código de produçã
 
 **Pronto quando:** ensaio `TUDO OK`.
 
-### Tarefa A4 — Serviço TS do gestor e tradução de erro
+### Task A4: Serviço TS do gestor e tradução de erro
 
 **Arquivos**
 - Criar: `services/condominioAssembleiaService.ts`
@@ -727,7 +727,7 @@ ENCERRADA. **Hora nos testes:** nada de "relógio falso" no código de produçã
 - [ ] **4. Rodar** → passa.
 - [ ] **5. Commit** `feat(condominio): serviço de assembleias`.
 
-### Tarefa A5 — Textos: convocação, edital e ata (modelo puro)
+### Task A5: Textos: convocação, edital e ata (modelo puro)
 
 **Arquivos**
 - Criar: `utils/assembleiaTextos.ts`
@@ -771,7 +771,7 @@ ENCERRADA. **Hora nos testes:** nada de "relógio falso" no código de produçã
 - [ ] **4. Rodar** → passa.
 - [ ] **5. Commit** `feat(condominio): textos de convocação, edital e ata`.
 
-### Tarefa A6 — PDF do edital e da ata
+### Task A6: PDF do edital e da ata
 
 **Arquivos**
 - Criar: `services/assembleiaPdf.ts` (molde `services/relatorioRateioPdf.ts`: paleta,
@@ -788,7 +788,7 @@ ENCERRADA. **Hora nos testes:** nada de "relógio falso" no código de produçã
   local, e abrir: acentos certos, nenhuma tabela cortada, rodapé em todas as páginas.
 - [ ] **3. Commit** `feat(condominio): PDF de edital e ata`.
 
-### Tarefa A7 — App: aba Assembleias e tela da assembleia
+### Task A7: App: aba Assembleias e tela da assembleia
 
 **Arquivos**
 - Criar: `components/condominio/AssembleiasTab.tsx` (lista StandardTable + ação
@@ -834,7 +834,7 @@ ENCERRADA. **Hora nos testes:** nada de "relógio falso" no código de produçã
   passa; `bash scripts/check-ui-standard.sh` nos 4 `.tsx` → 0.
 - [ ] **5. Commit** `feat(condominio): aba Assembleias e condução pelo gestor`.
 
-### Tarefa A8 — Portal do Cliente: sub-aba Assembleias e cédula
+### Task A8: Portal do Cliente: sub-aba Assembleias e cédula
 
 **Arquivos**
 - Modificar: `services/clientPortalService.ts` — tipo `PortalAssembleia` (= payload da
@@ -865,7 +865,7 @@ ENCERRADA. **Hora nos testes:** nada de "relógio falso" no código de produçã
 - [ ] **4. Rodar** → passa; `check-ui-standard.sh` nos `.tsx` alterados → 0.
 - [ ] **5. Commit** `feat(portal-cliente): assembleias do condomínio e voto por unidade`.
 
-### Tarefa A9 — Aplicar, publicar e provar de ponta a ponta
+### Task A9: Aplicar, publicar e provar de ponta a ponta
 
 - [ ] **1.** Ensaio final A1+A2+A3 → `TUDO OK`; aplicar as 3 migrations em ordem com
   `db query -f`; rodar os 3 scripts de teste contra o banco aplicado → `TUDO OK`.
@@ -884,7 +884,7 @@ assembleia real do Bella Vista acontecer pelo app (pré-requisitos operacionais 
 
 ---
 
-### Tarefa B1 — Banco: porta do síndico
+### Task B1: Banco: porta do síndico
 
 **Arquivos**
 - Criar: `supabase/migrations/aplicar_<prefixo livre>_condominio_assembleias_sindico.sql`
@@ -911,7 +911,7 @@ escolha ao usuário antes de criar outro.
 - [ ] **2–4.** Ensaio sem → falha; migration; ensaio com → `TUDO OK`.
 - [ ] **5. Commit** `feat(portal-sindico): síndico conduz assembleia`.
 
-### Tarefa B2 — Portal do Síndico: aba Assembleias
+### Task B2: Portal do Síndico: aba Assembleias
 
 **Arquivos**
 - Modificar: `services/sindicoPortalService.ts` — `operacoesDoSindico(token, clientId): OperacoesAssembleia`
@@ -925,7 +925,7 @@ escolha ao usuário antes de criar outro.
 - [ ] **1–4.** Teste → falha → implementar → passa; `check-ui-standard.sh` → 0.
 - [ ] **5. Commit** `feat(portal-sindico): aba Assembleias`.
 
-### Tarefa B3 — Aplicar, publicar e provar
+### Task B3: Aplicar, publicar e provar
 
 - [ ] **1.** Ensaio, aplicar, scripts `TUDO OK`; PR com todos os jobs verdes; merge;
   prova do SHA.

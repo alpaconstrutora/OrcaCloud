@@ -191,12 +191,19 @@ function inteiroExtenso(n: number): string {
     const milhoes = Math.floor((n % 1_000_000_000) / 1_000_000);
     const milhares = Math.floor((n % 1_000_000) / 1000);
     const resto = n % 1000;
-    const parts: string[] = [];
-    if (bilhoes > 0) parts.push(bilhoes === 1 ? 'um bilhão' : `${trio(bilhoes)} bilhões`);
-    if (milhoes > 0) parts.push(milhoes === 1 ? 'um milhão' : `${trio(milhoes)} milhões`);
-    if (milhares > 0) parts.push(milhares === 1 ? 'mil' : `${trio(milhares)} mil`);
-    if (resto > 0) parts.push(trio(resto));
-    return parts.join(' e ');
+    // Cada grupo guarda o próprio valor (1–999): é ele que decide a junção.
+    const grupos: { valor: number; texto: string }[] = [];
+    if (bilhoes > 0) grupos.push({ valor: bilhoes, texto: bilhoes === 1 ? 'um bilhão' : `${trio(bilhoes)} bilhões` });
+    if (milhoes > 0) grupos.push({ valor: milhoes, texto: milhoes === 1 ? 'um milhão' : `${trio(milhoes)} milhões` });
+    if (milhares > 0) grupos.push({ valor: milhares, texto: milhares === 1 ? 'mil' : `${trio(milhares)} mil` });
+    if (resto > 0) grupos.push({ valor: resto, texto: trio(resto) });
+    // Português: o "e" entre grupos só entra quando o grupo seguinte é menor que
+    // cem ou uma centena redonda — "mil e duzentos", "mil e cinquenta", mas
+    // "cinco mil oitocentos e trinta e dois" (era "cinco mil e oitocentos…",
+    // achado em 25/11/2026 no aditivo AD-004 do CTL-006).
+    return grupos
+        .map((g, i) => (i === 0 ? '' : (g.valor < 100 || g.valor % 100 === 0 ? ' e ' : ' ')) + g.texto)
+        .join('');
 }
 
 /** Número inteiro por extenso — prazo em meses, nº de aluguéis da multa etc. */
@@ -205,13 +212,15 @@ export function numeroPorExtenso(n?: number | null): string {
     return inteiroExtenso(Math.abs(Math.trunc(n)));
 }
 
-/** "R$ 1.234,50" → "mil, duzentos e trinta e quatro reais e cinquenta centavos" */
+/** "R$ 1.234,50" → "mil duzentos e trinta e quatro reais e cinquenta centavos" */
 export function valorPorExtenso(valor?: number | null): string {
     if (typeof valor !== 'number' || isNaN(valor)) return '';
     const reais = Math.floor(valor);
     const centavos = Math.round((valor - reais) * 100);
     const parts: string[] = [];
-    if (reais > 0) parts.push(`${inteiroExtenso(reais)} ${reais === 1 ? 'real' : 'reais'}`);
+    // Milhão/bilhão redondo pede "de": "um milhão de reais", "dois bilhões de reais".
+    const de = reais >= 1_000_000 && reais % 1_000_000 === 0 ? 'de ' : '';
+    if (reais > 0) parts.push(`${inteiroExtenso(reais)} ${de}${reais === 1 ? 'real' : 'reais'}`);
     if (centavos > 0) parts.push(`${inteiroExtenso(centavos)} ${centavos === 1 ? 'centavo' : 'centavos'}`);
     if (parts.length === 0) return 'zero real';
     return parts.join(' e ');

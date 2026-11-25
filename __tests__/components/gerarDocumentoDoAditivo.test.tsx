@@ -98,8 +98,6 @@ describe('Catálogo de campos — grupo Aditivo com o AD-004', () => {
         expect(r.c).toBe('22/09/2021');
         expect(r.d).toBe('22/03/2020');
         expect(r.e).toMatch(/5\.832,48/);
-        // Só o que importa aqui: o grupo Aditivo resolve. A gramática do extenso
-        // ("cinco mil e oitocentos") é defeito anterior do valorPorExtenso, fora deste plano.
-        expect(r.f.toLowerCase()).toMatch(/^cinco mil .*reais e quarenta e oito centavos$/);
+        expect(r.f).toBe('cinco mil oitocentos e trinta e dois reais e quarenta e oito centavos');
     });
 });

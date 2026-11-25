@@ -78,7 +78,7 @@ import { Contract } from '../types';
 import DealWorkflowBar from './DealWorkflowBar';
 import { DealWorkflowStatus } from '../lib/dealWorkflow';
 import DealSignaturePanel from './DealSignaturePanel';
-import SituacaoDaVigencia from './rentals/SituacaoDaVigencia';
+import SituacaoDaVigencia, { SituacaoRenovacao } from './rentals/SituacaoDaVigencia';
 import RentalGuaranteePanel from './rentals/RentalGuaranteePanel';
 import DocumentVersionsPanel from './contracts/DocumentVersionsPanel';
 import CreditAnalysisPanel from './CreditAnalysisPanel';
@@ -768,6 +768,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [activeTab, setActiveTab] = useState<TabId>((initialTab as TabId) || 'cliente');
     // Sub-aba de "Contrato e Assinatura" (só locação com contrato gerado).
     const [contratoSubTab, setContratoSubTab] = useState<'dados' | 'documentos'>('dados');
+    // Contrato já renovado: os campos de vigência daqui viram o período ORIGINAL
+    // (a vigência atual é a da renovação). Pedido de 25/11/2026: o CTL-006 mostrava
+    // "Fim da Vigência 22/03/2019" logo abaixo de "Vigência até 22/09/2021".
+    const [renovacaoDoContrato, setRenovacaoDoContrato] = useState<SituacaoRenovacao | null>(null);
     const confirm = useConfirm();
     // Organizações do usuário — para listar corretores de TODAS elas (um corretor
     // cadastrado na Alpa Construtora aparece nas negociações das SPEs de cada
@@ -817,6 +821,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             // 'contrato'); sem isso o modal sempre voltava para 'cliente'.
             setActiveTab((initialTab as TabId) || 'cliente');
             setContratoSubTab('dados');
+            setRenovacaoDoContrato(null);
             const inicial: Partial<PropertyDeal> = {
                 type: defaultType || 'SALE',
                 status: 'IN_NEGOTIATION',
@@ -5270,7 +5275,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             )}
 
                             {formData.type === 'RENTAL' && linkedContract && contratoSubTab === 'dados' && (
-                                <SituacaoDaVigencia contract={linkedContract} onIrPara={onIrParaLocacoes} />
+                                <SituacaoDaVigencia contract={linkedContract} onIrPara={onIrParaLocacoes} onSituacao={setRenovacaoDoContrato} />
                             )}
 
                             {formData.type === 'RENTAL' && linkedContract && contratoSubTab === 'documentos' && (
@@ -5359,7 +5364,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <div className="space-y-6">
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <div className="space-y-2">
-                                                    <label className="text-xs font-semibold text-slate-500">Início da Vigência</label>
+                                                    <label className="text-xs font-semibold text-slate-500">
+                                                        {renovacaoDoContrato?.renovado ? 'Início da Vigência original' : 'Início da Vigência'}
+                                                    </label>
                                                     <input
                                                         type="date"
                                                         value={formData.date || ''}
@@ -5398,7 +5405,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     return (
                                                         <div className="space-y-2">
                                                             <div className="flex items-center justify-between px-1">
-                                                                <label htmlFor="deal-fim-vigencia" className="text-xs font-semibold text-slate-500">Fim da Vigência</label>
+                                                                <label htmlFor="deal-fim-vigencia" className="text-xs font-semibold text-slate-500">
+                                                                    {renovacaoDoContrato?.renovado ? 'Fim da Vigência original' : 'Fim da Vigência'}
+                                                                </label>
                                                                 <div className="flex items-center gap-2 text-xs" title={motivoSemInicio}>
                                                                     {[12, 24, 30, 36].map(n => (
                                                                         <button
@@ -5447,6 +5456,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     );
                                                 })()}
                                             </div>
+                                            {renovacaoDoContrato?.renovado && (
+                                                <p className="text-xs text-gray-500 px-1">
+                                                    Período original desta negociação. O contrato foi prorrogado
+                                                    {renovacaoDoContrato.fimAtual ? ` até ${renovacaoDoContrato.fimAtual.slice(0, 10).split('-').reverse().join('/')}` : ''}
+                                                    {renovacaoDoContrato.por ? ` (${renovacaoDoContrato.por})` : ''}: a vigência atual é a da linha acima, e as
+                                                    renovações ficam em Gestão de Unidades › Renovações.
+                                                </p>
+                                            )}
 
                                             {formData.end_date && formData.date && formData.end_date <= formData.date && (
                                                 <p className="text-xs font-normal text-red-600 px-1">

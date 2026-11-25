@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { empresaDoEmpreendimentoDoImovel } from './empresaDoEmpreendimento';
 import { Contract } from '../types/contracts';
 import { Client } from '../types/users';
 import { Property } from '../types/imovib';
@@ -276,27 +277,12 @@ async function resolveCompanyId(input: {
 }): Promise<string | null> {
     if (input.primaryProperty?.company_id) return input.primaryProperty.company_id;
 
-    // Herança pelo empreendimento: a unidade comercial é espelhada em
-    // `empreendimento_units.commercial_property_id` (ver migration 20270826000002).
-    if (input.primaryProperty?.id) {
-        try {
-            const { data: link } = await supabase
-                .from('empreendimento_units')
-                .select('empreendimento_id')
-                .eq('commercial_property_id', input.primaryProperty.id)
-                .maybeSingle();
-            const empId = (link as { empreendimento_id?: string } | null)?.empreendimento_id;
-            if (empId) {
-                const { data: emp } = await supabase
-                    .from('empreendimentos')
-                    .select('company_id')
-                    .eq('id', empId)
-                    .maybeSingle();
-                const cid = (emp as { company_id?: string } | null)?.company_id;
-                if (cid) return cid;
-            }
-        } catch { /* empreendimento é opcional — segue para o próximo degrau */ }
-    }
+    // Herança pelo empreendimento (unidade → torre → empreendimento). A consulta
+    // antiga pedia empreendimento_units.empreendimento_id, que não existe (400
+    // engolido — achado em 25/11/2026); o caminho certo é o mesmo do regime
+    // tributário.
+    const doEmpreendimento = await empresaDoEmpreendimentoDoImovel(input.primaryProperty?.id);
+    if (doEmpreendimento) return doEmpreendimento;
 
     if (input.contractEmpresaId) return input.contractEmpresaId;
 

@@ -217,6 +217,8 @@ export const getDefaultPermissions = (role: OrganizationRole): UserPermissions =
         canViewWarranty: true, canEditWarranty: false,
         // Riscos (14/11/2026): mesmo padrão do Pós-Obra — ver sim, editar não.
         canViewRisks: true, canEditRisks: false,
+        // Qualidade (SiAC) (25/11/2026): mesmo padrão de Riscos — ver sim, editar não.
+        canViewQualitySystem: true, canEditQualitySystem: false,
         // Diretoria / ÒPURA CEO (17/11/2026): desligada para todos os cargos, admin inclusive;
         // só liga quem marcar aqui (utils/permissaoDiretoria.ts, conferida também no banco).
         canViewDiretoria: false, canEditDiretoria: false,
@@ -306,6 +308,7 @@ export const getDefaultPermissions = (role: OrganizationRole): UserPermissions =
                 canEditQuality: true,
                 canEditWarranty: true,
                 canEditRisks: true,
+                canEditQualitySystem: true,
                 canEditP2P: true,
                 canEditProcurementPlan: true,
                 canEditSupplyContracts: true,
@@ -357,6 +360,8 @@ const MODULES_BY_PRODUCT: Record<ProductContext, { key: string; label: string; d
         { key: 'quality',    label: 'Pós-Obra & Garantia',              description: 'Chamados de assistência técnica, prazos NBR 17170 e SLAs' },
         // Sem valor gravado na matriz, segue o que o cargo tem em "Engenharia / Obras".
         { key: 'riscos',     label: 'Riscos',                           description: 'Registro, avaliação e tratamento de riscos do empreendimento, da obra e do contrato' },
+        // Qualidade (SiAC) (25/11/2026): sem valor gravado, segue o cargo em "Engenharia / Obras".
+        { key: 'qualidade_siac', label: 'Qualidade (SiAC)',            description: 'Sistema de gestão da qualidade da obra (PBQP-H/SiAC): treinamentos, não conformidades e registros' },
         { key: 'pro',       label: 'ÒPURA Pro (Add-on)',               description: 'Modelos rápidos de orçamento para prestadores' },
         { key: 'offices',    label: 'ÒPURA Offices (Add-on)',           description: 'Projetos e especificações de arquitetura/design' },
         { key: 'ecommerce',  label: 'ÒPURA E-commerce (Add-on)',        description: 'Governança operacional e conformidade TTS' },
@@ -443,6 +448,8 @@ export const DETAILED_PERMISSIONS: { group: string; title: string; view: string;
     // consulta `canViewRisks` (AppRouter) e a tela, `canEditRisks`. Sem valor
     // gravado, herda de Obras (utils/permissaoRiscos.ts).
     { group: 'Operação de Obra', title: 'Riscos', view: 'canViewRisks', edit: 'canEditRisks' },
+    // Qualidade (SiAC) (25/11/2026): sem valor gravado, herda de Obras (utils/permissaoQualidadeSiac.ts).
+    { group: 'Operação de Obra', title: 'Qualidade (SiAC)', view: 'canViewQualitySystem', edit: 'canEditQualitySystem' },
 
     // --- Treinamentos --- (saiu de dentro do RH em 16/10/2026: quem gerencia
     // treinamento não é só o RH — segurança do trabalho, engenharia de obra)
@@ -640,6 +647,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         if (moduleKey === 'treinamentos') return visivelNaMatriz(settings, roleId, 'rh');
         // Riscos (14/11/2026) sem valor gravado segue "Engenharia / Obras" (utils/permissaoRiscos.ts).
         if (moduleKey === 'riscos') return visivelNaMatriz(settings, roleId, 'obras');
+        if (moduleKey === 'qualidade_siac') return visivelNaMatriz(settings, roleId, 'obras');
         return true;
     };
 
@@ -1148,6 +1156,9 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         // igual ao menu e à rota (utils/permissaoRiscos.ts).
         if (salvas.canViewRisks === undefined && salvas.canViewBudget !== undefined) efetivas.canViewRisks = salvas.canViewBudget;
         if (salvas.canEditRisks === undefined && salvas.canEditBudget !== undefined) efetivas.canEditRisks = salvas.canEditBudget;
+        // Qualidade (SiAC) (25/11/2026): idem — herda de Obras (utils/permissaoQualidadeSiac.ts).
+        if (salvas.canViewQualitySystem === undefined && salvas.canViewBudget !== undefined) efetivas.canViewQualitySystem = salvas.canViewBudget;
+        if (salvas.canEditQualitySystem === undefined && salvas.canEditBudget !== undefined) efetivas.canEditQualitySystem = salvas.canEditBudget;
         return efetivas;
     };
 

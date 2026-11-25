@@ -68,8 +68,10 @@ describe('Empreendimento › abas', () => {
     expect(screen.getByRole('tab', { name: /Espelho de Locações/ })).toBeInTheDocument();
   });
 
-  it('Serviço não mostra nenhum espelho (docs/planos/2026-11-21-empreendimentos-objetivo-servico-agrupar.md)', () => {
-    montar('SERVICO');
+  // Serviço: docs/planos/2026-11-21-empreendimentos-objetivo-servico-agrupar.md;
+  // Imobilizado: docs/planos/2026-11-25-empreendimento-objetivo-imobilizado.md.
+  it.each(['SERVICO', 'IMOBILIZADO'] as const)('%s não mostra nenhum espelho', objetivo => {
+    montar(objetivo);
     expect(screen.queryByRole('tab', { name: /Espelho de Vendas/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('tab', { name: /Espelho de Locações/ })).not.toBeInTheDocument();
     expect(screen.getByRole('tab', { name: /Documentos/ })).toBeInTheDocument();

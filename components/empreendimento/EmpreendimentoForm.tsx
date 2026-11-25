@@ -223,7 +223,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, modo = 'pa
   }, [editing?.id, escondeAlgum]); // eslint-disable-line react-hooks/exhaustive-deps
   const avisoDoObjetivo = (() => {
     if (!publicadas) return null;
-    // Serviço esconde os dois espelhos: o aviso junta as duas contagens numa frase só.
+    // Serviço e Imobilizado escondem os dois espelhos: o aviso junta as duas contagens numa frase só.
     const partes = [
       !espelhos.vendas && publicadas.vendas > 0 ? { n: publicadas.vendas, onde: 'Vendas' } : null,
       !espelhos.locacoes && publicadas.locacoes > 0 ? { n: publicadas.locacoes, onde: 'Locações' } : null,
@@ -352,7 +352,7 @@ export const EmpreendimentoForm: React.FC<Props> = ({ organizationId, modo = 'pa
             htmlFor="emp-objetivo"
             ajuda={avisoDoObjetivo
               ? <span className="text-amber-700" data-testid="aviso-objetivo">{avisoDoObjetivo}</span>
-              : 'Decide quais espelhos a ficha mostra: Vendas, Locações, os dois ou nenhum (Serviço).'}
+              : 'Decide quais espelhos a ficha mostra: Vendas, Locações, os dois ou nenhum (Serviço e Imobilizado).'}
           >
             <select id="emp-objetivo" className={inputCls} value={form.objetivo} onChange={e => set('objetivo', e.target.value)}>
               {OBJETIVOS.map(o => <option key={o} value={o}>{ROTULO_DO_OBJETIVO[o]}</option>)}

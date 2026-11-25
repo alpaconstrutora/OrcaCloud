@@ -16,7 +16,7 @@
 import React from 'react';
 import {
   Plus, Loader2, Layers, X, Check, Zap, Home, ListPlus, Hash, Tag,
-  ChevronDown, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown,
+  ChevronDown, ChevronRight, ArrowUp, ArrowDown, ArrowUpDown, MoveHorizontal,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import Button from '../ui/Button';
@@ -43,6 +43,7 @@ import { faixasPorAndar, lerNumeroInicial, unidadesDosPavimentos as montarUnidad
 import { compararNaOrdemDoEmpreendimento, moverNaOrdem, ordemPorNumero, type NovaOrdem } from '../../utils/empreendimentoOrdemDasUnidades';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { AgruparControles } from '../ui/Agrupamento';
+import { useResizableColumns } from '../ui/TableUtils';
 import { useAgrupamento } from '../../hooks/useAgrupamento';
 import { CHAVE_VAZIA } from '../../utils/agruparLinhas';
 import { OPCOES_AGRUPAR_UNIDADE, agruparUnidades, type CampoAgruparUnidade } from '../../utils/unidadesGrupos';
@@ -83,6 +84,17 @@ const emptyGenForm = (tower: EmpreendimentoTower) => ({
 /** Quantas unidades os pavimentos descrevem — mesma conta do gerador (generateUnitsFromFloors). */
 const unidadesDosPavimentos = (floors: EmpreendimentoFloor[], tower: EmpreendimentoTower) =>
   floors.reduce((s, f) => s + f.repeat_count * (f.units_per_floor ?? tower.units_per_floor ?? 1), 0);
+
+// Larguras padrão das colunas (25/11/2026, §6.1 — "implementar botão de ajuste automático de largura de colunas";
+// docs/planos/2026-11-25-unidades-grupo-colunas-autofit.md). Soma ~1.700 px: a tabela já rolava na horizontal em
+// 1600 px; o ajuste ao conteúdo (MoveHorizontal) encolhe o que sobra e a folga vai para o espaçador antes de Ações.
+const COL_WIDTHS: Record<string, number> = {
+  name: 140, floor: 80, floor_tipo: 110, elevacao: 120, typology: 110, private_area: 100, common_area: 110,
+  bedrooms: 120, bathrooms: 115, suites: 90, parking_spaces: 85, position_type: 100, view_type: 100, sun_orientation: 100,
+  actions: 190,
+};
+const COLUNAS_DE_DADO = Object.keys(COL_WIDTHS).filter(k => k !== 'actions');
+const LARGURA_CHECKBOX = 40;
 
 // ── Props ────────────────────────────────────────────────────────────────────
 
@@ -132,6 +144,10 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
   // Agrupar (§6.12, 25/11/2026): abre por Pavimento, como sempre foi; o usuário troca o campo, a ordem dos
   // grupos e recolhe/expande todos. A escolha fica no navegador e vale para todas as torres.
   const agrupamento = useAgrupamento<CampoAgruparUnidade>('empreendimentoUnidades:agrupar', undefined, 'pavimento');
+
+  // Colunas redimensionáveis + ajuste ao conteúdo (§6.1/§6.1.2), larguras guardadas no navegador.
+  const cols = useResizableColumns(COL_WIDTHS, 'empreendimentoUnidadesColWidths');
+  const larguraDaTabela = LARGURA_CHECKBOX + COLUNAS_DE_DADO.reduce((s, k) => s + cols.getWidth(k), 0) + cols.getWidth('actions');
 
   // Seleção em lote
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -204,6 +220,11 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
           // O nome do pavimento como está na seção Pavimentos (28/10/2026: "Pavimento -4" confundia com
           // "Estacionamento 2"); sem cadastro, o nome que a estrutura dá ao andar.
           nomeDoAndar: andar => elevacaoDoAndar.get(andar)?.nome,
+          // O mesmo texto da coluna Elevação (`textoDaElevacao`).
+          elevacaoDoAndar: andar => {
+            const p = elevacaoDoAndar.get(andar);
+            return p ? { mm: p.elevacaoMm, texto: `${fmtElevacao(p.elevacaoMm / 1000)} m${p.elevacaoDigitada ? '' : ' (calc.)'}` } : undefined;
+          },
           tipoDoPavimento: FLOOR_TIPO_LABEL, posicao: POSITION_LABEL, vista: VIEW_LABEL, orientacao: SUN_LABEL,
         })
       : [{ key: '__todas__', label: '', itens: ordenadas, total: 0 }];
@@ -627,10 +648,28 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
             onAlternarTodos={agrupamento.alternarTodos}
             title="Agrupar as unidades"
           />
+          {/* Ajustar largura ao conteúdo (§6.1.2): sob comando, nunca automático. Mesmo desenho do recolher todos. */}
+          <button
+            type="button"
+            onClick={() => cols.autoFit()}
+            title="Ajustar largura das colunas ao conteúdo"
+            aria-label="Ajustar largura das colunas ao conteúdo"
+            className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95"
+          >
+            <MoveHorizontal className="w-4 h-4" />
+          </button>
         </div>
         <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
+          {/* Nunca w-full com colunas redimensionáveis (§6.1): largura = soma exata, minWidth 100% dá a folga ao espaçador. */}
+          <table ref={cols.tableRef} className="text-left text-xs" style={{ tableLayout: 'fixed', width: larguraDaTabela, minWidth: '100%' }}>
+            <colgroup>
+              <col style={{ width: `${LARGURA_CHECKBOX}px` }} />
+              {COLUNAS_DE_DADO.map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+              {/* espaçador ANTES de Ações (§6.1.1): absorve a folga e Ações fica na borda direita */}
+              <col />
+              <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
+            </colgroup>
             <thead>
               <tr className="border-b border-gray-200 text-gray-500 font-semibold text-xs bg-gray-50">
                 {/* Checkbox select-all */}
@@ -643,21 +682,22 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                     className="w-3.5 h-3.5 rounded accent-blue-600 cursor-pointer"
                   />
                 </th>
-                <SortableHeader col="name" current={sortCol} dir={sortDir} onSort={handleSort}>Unidade</SortableHeader>
-                <SortableHeader col="floor" current={sortCol} dir={sortDir} onSort={handleSort}>Pav.</SortableHeader>
-                <SortableHeader col="floor_tipo" current={sortCol} dir={sortDir} onSort={handleSort}>Tipo Pav.</SortableHeader>
+                <SortableHeader col="name" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="name" />}>Unidade</SortableHeader>
+                <SortableHeader col="floor" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="floor" />}>Pav.</SortableHeader>
+                <SortableHeader col="floor_tipo" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="floor_tipo" />}>Tipo Pav.</SortableHeader>
                 {/* Elevação do andar da unidade (28/10/2026): a mesma da seção Pavimentos — calculada ou digitada. */}
-                <th className="py-2.5 px-4 text-table-header font-semibold text-gray-500 whitespace-nowrap">Elevação</th>
-                <SortableHeader col="typology" current={sortCol} dir={sortDir} onSort={handleSort}>Tipologia</SortableHeader>
-                <SortableHeader col="private_area" current={sortCol} dir={sortDir} onSort={handleSort}>Priv. m²</SortableHeader>
-                <SortableHeader col="common_area" current={sortCol} dir={sortDir} onSort={handleSort}>Comum m²</SortableHeader>
-                <SortableHeader col="bedrooms" current={sortCol} dir={sortDir} onSort={handleSort}>Dormitórios</SortableHeader>
-                <SortableHeader col="bathrooms" current={sortCol} dir={sortDir} onSort={handleSort}>Banheiros</SortableHeader>
-                <SortableHeader col="suites" current={sortCol} dir={sortDir} onSort={handleSort}>Suítes</SortableHeader>
-                <SortableHeader col="parking_spaces" current={sortCol} dir={sortDir} onSort={handleSort}>Vagas</SortableHeader>
-                <SortableHeader col="position_type" current={sortCol} dir={sortDir} onSort={handleSort}>Posição</SortableHeader>
-                <SortableHeader col="view_type" current={sortCol} dir={sortDir} onSort={handleSort}>Vista</SortableHeader>
-                <SortableHeader col="sun_orientation" current={sortCol} dir={sortDir} onSort={handleSort}>Orient.</SortableHeader>
+                <th className="relative overflow-hidden py-2.5 px-4 text-table-header font-semibold text-gray-500 whitespace-nowrap">Elevação<cols.ResizeHandle colKey="elevacao" /></th>
+                <SortableHeader col="typology" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="typology" />}>Tipologia</SortableHeader>
+                <SortableHeader col="private_area" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="private_area" />}>Priv. m²</SortableHeader>
+                <SortableHeader col="common_area" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="common_area" />}>Comum m²</SortableHeader>
+                <SortableHeader col="bedrooms" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="bedrooms" />}>Dormitórios</SortableHeader>
+                <SortableHeader col="bathrooms" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="bathrooms" />}>Banheiros</SortableHeader>
+                <SortableHeader col="suites" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="suites" />}>Suítes</SortableHeader>
+                <SortableHeader col="parking_spaces" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="parking_spaces" />}>Vagas</SortableHeader>
+                <SortableHeader col="position_type" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="position_type" />}>Posição</SortableHeader>
+                <SortableHeader col="view_type" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="view_type" />}>Vista</SortableHeader>
+                <SortableHeader col="sun_orientation" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="sun_orientation" />}>Orient.</SortableHeader>
+                <th aria-hidden="true"></th>
                 <th className="py-2.5 px-4 text-center text-table-header font-semibold text-gray-500">Ações</th>
               </tr>
             </thead>
@@ -725,7 +765,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                       <td className="py-2.5 px-4 text-sm font-medium text-teal-600">
                         {group.totalComum > 0 ? `${fmtArea(group.totalComum)} m²` : '—'}
                       </td>
-                      <td colSpan={7} />
+                      <td colSpan={8} />
                       <td className="py-2 px-4 text-center">
                         {/* A ordem é do pavimento: agrupado por outro campo, o botão não se aplica. */}
                         {porPavimento && (() => {
@@ -807,6 +847,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                                   {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
                                 </select>
                               </td>
+                              <td aria-hidden="true"></td>
                               <td className="py-2 px-3 text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   <button onClick={() => handleSaveEdit(u)} className="p-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-[6px]"><Check className="w-3.5 h-3.5" /></button>
@@ -848,6 +889,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                                   ? <span className={textColor(SUN_STYLE[u.sun_orientation])}>{SUN_LABEL[u.sun_orientation]}</span>
                                   : <span className="text-gray-300">—</span>}
                               </td>
+                              <td aria-hidden="true"></td>
                               <td className="py-2.5 px-4 text-center">
                                 <div className="flex items-center justify-center gap-1">
                                   {([-1, 1] as const).map(passo => {
@@ -891,7 +933,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                 </td>
                 <td className="py-2.5 px-4 font-medium text-blue-600">{totalPriv > 0 ? `${fmtArea(totalPriv)} m²` : '—'}</td>
                 <td className="py-2.5 px-4 font-medium text-teal-600">{totalComum > 0 ? `${fmtArea(totalComum)} m²` : '—'}</td>
-                <td colSpan={8} />
+                <td colSpan={9} />
               </tr>
             </tfoot>
           </table>
@@ -1124,12 +1166,14 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
 const SortableHeader: React.FC<{
   col: SortCol; current: SortCol; dir: 'asc' | 'desc';
   onSort: (col: SortCol) => void; children: React.ReactNode;
-}> = ({ col, current, dir, onSort, children }) => {
+  /** A alça de redimensionar (`cols.ResizeHandle`), absoluta na borda direita. */
+  resize?: React.ReactNode;
+}> = ({ col, current, dir, onSort, children, resize }) => {
   const active = col === current;
   return (
     <th
       onClick={() => onSort(col)}
-      className={`py-2.5 px-4 text-table-header font-semibold cursor-pointer select-none transition-colors ${active ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
+      className={`relative overflow-hidden py-2.5 px-4 text-table-header font-semibold cursor-pointer select-none transition-colors ${active ? 'text-blue-600' : 'text-gray-500 hover:text-gray-700'}`}
     >
       <div className="flex items-center gap-1">
         {children}
@@ -1137,6 +1181,7 @@ const SortableHeader: React.FC<{
           ? (dir === 'asc' ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />)
           : <ArrowUpDown className="w-3 h-3 opacity-30" />}
       </div>
+      {resize}
     </th>
   );
 };

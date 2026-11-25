@@ -65,4 +65,19 @@ describe('Torres e Unidades › Agrupar', () => {
     expect(nomesNaTela()).toEqual(['101', '102', '201']);
     expect(screen.getByRole('button', { name: 'Recolher todos os grupos' })).toBeDisabled();
   });
+
+  it('todas as colunas no Agrupar (menos Unidade) e o botão de ajustar a largura (25/11/2026)', async () => {
+    render(<UnitEditor tower={TORRE as never} />);
+    await waitFor(() => expect(nomesNaTela()).toHaveLength(3));
+    const opcoes = within(screen.getByRole('combobox', { name: 'Agrupar as unidades' })).getAllByRole('option').map(o => o.textContent);
+    expect(opcoes).toEqual(['Agrupar', 'Pavimento', 'Tipo do pavimento', 'Elevação', 'Tipologia', 'Área privativa', 'Área comum',
+      'Dormitórios', 'Banheiros', 'Suítes', 'Vagas', 'Posição', 'Vista', 'Orientação']);
+    // jsdom não tem layout: o ajuste não mede nada e não pode quebrar (nem zerar as larguras).
+    await userEvent.click(screen.getByRole('button', { name: 'Ajustar largura das colunas ao conteúdo' }));
+    expect(nomesNaTela()).toEqual(['101', '102', '201']);
+    // Cada coluna de dado tem a sua <col> (o ajuste lê por elas) e o espaçador fica antes de Ações.
+    const chaves = Array.from(document.querySelectorAll('colgroup col')).map(c => c.getAttribute('data-col-key'));
+    expect(chaves.slice(-2)).toEqual([null, 'actions']);
+    expect(chaves.filter(Boolean)).toHaveLength(15);
+  });
 });

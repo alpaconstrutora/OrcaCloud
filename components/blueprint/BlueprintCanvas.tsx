@@ -113,7 +113,7 @@ const SEM_BLOCOS_COM_PROBLEMA: ReadonlySet<string> = new Set();
 import { COR_DA_FASE } from '../../utils/blueprintFases';
 import { linhasDoMobiliario, PENA_PX, PX_MINIMO_DO_DETALHE } from '../../utils/blueprintSimbolosMobiliario';
 import { COR_DA_FAMILIA, COR_PAREDE_HUMANIZADA, COR_SOMBRA, COR_VEGETACAO, sombraDaParede, tramaDoPiso, type EstiloDoPiso, type Planta } from '../../utils/blueprintHumanizada';
-import type { CurvaDeNivel, GradeDeElevacao, PontoCotado } from '../../utils/blueprintTopografia';
+import { formatarCotaM, type CurvaDeNivel, type GradeDeElevacao, type PontoCotado } from '../../utils/blueprintTopografia';
 import {
   comprimentoDaCurvaM,
   curvaSob,
@@ -394,6 +394,8 @@ const COR_TERRENO_FUNDO = 'rgba(21, 128, 61, 0.06)';
 const COR_ENVELOPE = 'rgba(217, 119, 6, 0.45)';
 /** Curva de nível: terra, distinta do verde do lote e do âmbar do envelope. */
 const COR_CURVA_DE_NIVEL = '#b45309';
+/** A curva sob o mouse (25/11/2026, o reel da Hektar): a mesma terra, mais escura e grossa. */
+const COR_CURVA_SOB_O_MOUSE = '#78350f';
 const COR_PONTO_COTADO = '#1d4ed8';
 /** Corte (terreno acima do platô) em vermelho; aterro em azul — convenção de terraplenagem. */
 const COR_CORTE_TERRA = '#ef4444';
@@ -1953,6 +1955,18 @@ export default function BlueprintCanvas({
   /** Dá para mitrar a junção com o trecho anterior? Só se o lado não mudou. */
   const mesmoLado = !ultimoTrecho || ultimoTrecho.lado === alinhamento;
   const [cursor, setCursor] = useState<Point | null>(null);
+  /**
+   * HOVER DA CURVA DE NÍVEL (25/11/2026, *"ao passar o mouse mostre o valor de
+   * cada linha"*): o índice em `curvasDeNivel` da curva sob o mouse, com a
+   * ferramenta Selecionar. Só muda quando o ÍNDICE muda — o canvas redesenha
+   * tudo a cada estado, e redesenhar por pixel de movimento travaria. O rótulo
+   * segue o cursor por `transform` no próprio elemento (ref), sem estado.
+   */
+  const [curvaSobOMouse, setCurvaSobOMouse] = useState<number | null>(null);
+  const rotuloDaCurvaRef = useRef<HTMLDivElement | null>(null);
+  const hoverDaCurvaRaf = useRef<number | null>(null);
+  // Outra ferramenta ou outras curvas (nova versão, curvas ocultas): o índice antigo não vale mais.
+  useEffect(() => setCurvaSobOMouse(null), [tool, curvasDeNivel]);
   const [arrastando, setArrastando] = useState(false);
   /**
    * Laço em curso, em MILÍMETRO do modelo.
@@ -5795,14 +5809,21 @@ export default function BlueprintCanvas({
 
       if (curvasDeNivel.length > 0) {
         ctx.save();
-        curvasDeNivel.forEach((c, i) => {
+        const tracarCurva = (c: CurvaDeNivel, i: number) => {
           if (c.pontos.length < 2) return;
           const destacada = curvaEmDestaque?.indice === i;
-          ctx.strokeStyle = destacada ? COR_SELECIONADA : corDaCurva ? corDaCurva(c.cotaM) : COR_CURVA_DE_NIVEL;
+          const sobOMouse = !destacada && curvaSobOMouse === i;
+          ctx.strokeStyle = destacada
+            ? COR_SELECIONADA
+            : corDaCurva
+              ? corDaCurva(c.cotaM)
+              : sobOMouse
+                ? COR_CURVA_SOB_O_MOUSE
+                : COR_CURVA_DE_NIVEL;
           // Colorida pela cota, a curva é a informação: sai cheia, como no
           // Contour Map Creator (traço 2, sem transparência).
-          ctx.lineWidth = destacada ? 2.6 : corDaCurva ? (c.mestra ? 2 : 1.4) : c.mestra ? 1.6 : 0.8;
-          ctx.globalAlpha = destacada || corDaCurva ? 1 : c.mestra ? 0.9 : 0.55;
+          ctx.lineWidth = destacada || sobOMouse ? 2.6 : corDaCurva ? (c.mestra ? 2 : 1.4) : c.mestra ? 1.6 : 0.8;
+          ctx.globalAlpha = destacada || sobOMouse || corDaCurva ? 1 : c.mestra ? 0.9 : 0.55;
           ctx.beginPath();
           const p0 = paraTela(c.pontos[0]);
           ctx.moveTo(p0.x, p0.y);
@@ -5811,14 +5832,19 @@ export default function BlueprintCanvas({
             ctx.lineTo(q.x, q.y);
           }
           ctx.stroke();
+        };
+        // A curva sob o mouse por ÚLTIMO, por cima das vizinhas.
+        curvasDeNivel.forEach((c, i) => {
+          if (i !== curvaSobOMouse) tracarCurva(c, i);
         });
+        if (curvaSobOMouse !== null && curvasDeNivel[curvaSobOMouse]) tracarCurva(curvasDeNivel[curvaSobOMouse], curvaSobOMouse);
         ctx.globalAlpha = 1;
 
         // O rótulo da curva clicada: cota e comprimento, no ponto do clique.
         const cd = curvaEmDestaque ? curvasDeNivel[curvaEmDestaque.indice] : undefined;
         if (cd && curvaEmDestaque) {
           const t = paraTela(curvaEmDestaque.ponto);
-          const texto = `${cd.cotaM.toFixed(2).replace('.', ',')} m · ${comprimentoDaCurvaM(cd).toFixed(1).replace('.', ',')} m`;
+          const texto = `${formatarCotaM(cd.cotaM)} m · ${comprimentoDaCurvaM(cd).toFixed(1).replace('.', ',')} m`;
           ctx.font = `${Math.round(11 * fz)}px sans-serif`;
           const w = ctx.measureText(texto).width + 10;
           ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
@@ -5839,7 +5865,7 @@ export default function BlueprintCanvas({
         for (const c of curvasDeNivel) {
           if (!c.mestra || c.pontos.length < 2) continue;
           const m = paraTela(c.pontos[Math.floor(c.pontos.length / 2)]);
-          const texto = c.cotaM.toFixed(2).replace('.', ',');
+          const texto = formatarCotaM(c.cotaM);
           // Halo branco: a cota precisa ler sobre o preenchimento do lote e das
           // salas, e sobre a planta de fundo.
           ctx.lineWidth = 3;
@@ -5889,7 +5915,7 @@ export default function BlueprintCanvas({
           ctx.moveTo(q.x, q.y - 5);
           ctx.lineTo(q.x, q.y + 5);
           ctx.stroke();
-          ctx.fillText(p.cotaM.toFixed(2).replace('.', ','), q.x + 6, q.y - 3);
+          ctx.fillText(formatarCotaM(p.cotaM), q.x + 6, q.y - 3);
           // A2: o nome do ponto, embaixo — só com zoom, senão 500 nomes viram mancha.
           if (p.nome && vista.escala > 0.03) {
             ctx.save();
@@ -10284,6 +10310,7 @@ export default function BlueprintCanvas({
     corDaCurva,
     nosDaGrade,
     curvaEmDestaque,
+    curvaSobOMouse,
     centroDeCargas,
     linhasDoPerfil,
     linhaDoPerfilAtiva,
@@ -10500,6 +10527,31 @@ export default function BlueprintCanvas({
       },
       conexao,
     };
+  }
+
+  /**
+   * O hover da curva: o rótulo anda com o cursor já (transform, sem estado) e o
+   * `curvaSob` roda no máximo uma vez por quadro, com o último ponteiro — o
+   * estado só muda quando a curva sob o mouse é OUTRA.
+   */
+  function acompanharCurva(px: number, py: number) {
+    const el = rotuloDaCurvaRef.current;
+    if (el) el.style.transform = `translate(${Math.round(px + 12)}px, ${Math.round(py - 28)}px)`;
+    if (hoverDaCurvaRaf.current !== null) return;
+    hoverDaCurvaRaf.current = requestAnimationFrame(() => {
+      hoverDaCurvaRaf.current = null;
+      const p = ponteiro.current;
+      const i = p ? curvaSob(curvasDeNivel, p, HIT_PX / vista.escala) : null;
+      setCurvaSobOMouse((atual) => (atual === i ? atual : i));
+    });
+  }
+
+  function esquecerCurvaSobOMouse() {
+    if (hoverDaCurvaRaf.current !== null) {
+      cancelAnimationFrame(hoverDaCurvaRaf.current);
+      hoverDaCurvaRaf.current = null;
+    }
+    setCurvaSobOMouse(null);
   }
 
   function aoMover(e: React.PointerEvent) {
@@ -10850,6 +10902,8 @@ export default function BlueprintCanvas({
 
     if (tool !== 'parede') {
       setCursor(null);
+      if (tool === 'selecionar' && onClicarCurva && curvasDeNivel.length > 0) acompanharCurva(px, py);
+      else if (curvaSobOMouse !== null) setCurvaSobOMouse(null);
       return;
     }
     // A PRÉVIA TEM QUE APLICAR A MESMA TRAVA DO CLIQUE. Se ela mostrasse o traço
@@ -12207,7 +12261,12 @@ export default function BlueprintCanvas({
                   : 'default',
         }}
         onPointerMove={aoMover}
-        onPointerDown={aoApertar}
+        onPointerLeave={esquecerCurvaSobOMouse}
+        onPointerDown={(e) => {
+          // Apertar encerra o hover: durante o arraste/laço o `aoMover` sai cedo e não o atualizaria.
+          if (curvaSobOMouse !== null) esquecerCurvaSobOMouse();
+          aoApertar(e);
+        }}
         onDoubleClick={aoDuploClique}
         onPointerUp={aoSoltar}
         onKeyDown={aoTeclar}
@@ -12227,6 +12286,19 @@ export default function BlueprintCanvas({
         }}
         onContextMenu={(e) => e.preventDefault()}
       />
+
+      {/* A cota da curva sob o mouse (25/11/2026). Sempre montado — o `transform` vem do
+          `acompanharCurva` a cada movimento; só a visibilidade depende do estado. */}
+      <div
+        ref={rotuloDaCurvaRef}
+        data-testid="rotulo-curva-sob-o-mouse"
+        aria-hidden={curvaSobOMouse === null}
+        className={`pointer-events-none absolute left-0 top-0 rounded-[4px] border border-amber-900/40 bg-white/95 px-1.5 py-0.5 text-[11px] tabular-nums text-amber-950 shadow-sm ${
+          curvaSobOMouse !== null && curvasDeNivel[curvaSobOMouse] ? '' : 'hidden'
+        }`}
+      >
+        {curvaSobOMouse !== null && curvasDeNivel[curvaSobOMouse] ? formatarCotaM(curvasDeNivel[curvaSobOMouse].cotaM) : ''}
+      </div>
 
       {/* Atribuição exigida pela licença dos mapas, só enquanto um deles está à vista. No
           canto de CIMA: embaixo a barra de dicas do canvas ocupa a largura e a cobria. */}

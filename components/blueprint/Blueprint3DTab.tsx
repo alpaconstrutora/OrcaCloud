@@ -42,7 +42,7 @@ interface Props {
   /** Rótulos "ø100 mm" das redes hidráulicas — ver `Blueprint3DViewer`. */
   mostrarRotulosDeRede?: boolean;
   /** ESTILO (E8.2): repassado ao visualizador. */
-  estilo?: 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE' | 'CONCEPCAO';
+  estilo?: 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE' | 'CONCEPCAO' | 'MAQUETE';
   mostrarTerreno?: boolean;
   /** ENVELOPE 3D (E3.3): prismas edificáveis por pavimento. Ver `Blueprint3DViewer`. */
   envelope?: { levelId: string; nome: string; anel: { x: number; y: number }[]; pecas?: { x: number; y: number }[][]; baseMm: number; topoMm: number; acimaDoGabarito: boolean }[];

@@ -513,6 +513,8 @@ function App() {
           ortogonal
           mostrarMedidasParedes
           curvasDeNivel={versao.curvas}
+          // Como o editor com as curvas à vista: liga o clique e o hover da curva (25/11/2026).
+          onClicarCurva={() => {}}
           pontosCotados={PONTOS_DA_TELA}
           feicoesDoLevantamento={FEICOES_NA_PLANTA}
           eixosDeVia={

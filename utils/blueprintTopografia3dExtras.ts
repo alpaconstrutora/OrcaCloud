@@ -31,16 +31,25 @@ export interface ExtrasDoRelevo3d {
   muros: MuroDeArrimo3d[];
   /** 12/10/2026: as linhas das curvas de nível sobre o relevo. */
   curvas?: CurvasDoRelevo3d[];
+  /**
+   * A cota (m) que vale Y = 0 no 3D — a mesma passada a `curvasDeNivel3d`. O
+   * hover compara a altura do ponto sob o mouse (Y local da malha) com
+   * `cotaM − cotaZeroM` de cada curva.
+   */
+  cotaZeroM?: number;
 }
 
 /**
  * CURVAS DE NÍVEL NO 3D (12/10/2026, pedido: *"as curvas de nivel nao esta
- * sendo mostradas no 3d"* → *"SIM"* para desenhar as linhas). Um grupo por cor
- * e tipo (mestra ou não) — um `LineSegments` por grupo, e não um objeto por
- * curva: um terreno de 40 m com curva de 1 m tem dezenas de curvas e
- * milhares de trechos.
+ * sendo mostradas no 3d"* → *"SIM"* para desenhar as linhas). Um grupo POR
+ * COTA (25/11/2026): todas as partes da mesma cota num `LineSegments` só —
+ * não um objeto por polilinha (milhares de trechos), e não mais um por cor,
+ * porque o hover do 3D acende a curva inteira DAQUELA cota (o reel da Hektar:
+ * *"ao passar o mouse mostre o valor de cada linha"*) e precisa achá-la.
  */
 export interface CurvasDoRelevo3d {
+  /** A cota da curva (m), a mesma de `CurvaDeNivel.cotaM`. */
+  cotaM: number;
   cor: string;
   mestra: boolean;
   /** Pares de vértices (cada trecho é ponta + ponta), x, y, z em metros de mundo. */
@@ -71,16 +80,14 @@ export function curvasDeNivel3d(
    */
   malha?: { altura: (p: { x: number; y: number }) => number | null; passoMm: number } | null,
 ): CurvasDoRelevo3d[] {
-  const grupos = new Map<string, { cor: string; mestra: boolean; v: number[] }>();
+  const grupos = new Map<number, { cotaM: number; cor: string; mestra: boolean; v: number[] }>();
   for (const c of curvas) {
     if (c.pontos.length < 2) continue;
-    const cor = corDe ? corDe(c.cotaM) : COR_CURVA_3D;
-    const chave = `${cor}|${c.mestra ? 1 : 0}`;
-    let g = grupos.get(chave);
+    let g = grupos.get(c.cotaM);
     if (!g) {
-      g = { cor, mestra: c.mestra, v: [] };
-      grupos.set(chave, g);
-    }
+      g = { cotaM: c.cotaM, cor: corDe ? corDe(c.cotaM) : COR_CURVA_3D, mestra: c.mestra, v: [] };
+      grupos.set(c.cotaM, g);
+    } else if (c.mestra) g.mestra = true;
     const yDe = (x: number, y: number) => ((malha ? malha.altura({ x, y }) : null) ?? c.cotaM) - cotaZeroM + FOLGA_DA_CURVA_3D_M;
     for (let i = 0; i + 1 < c.pontos.length; i++) {
       const a = c.pontos[i];
@@ -100,7 +107,28 @@ export function curvasDeNivel3d(
       }
     }
   }
-  return [...grupos.values()].map((g) => ({ cor: g.cor, mestra: g.mestra, posicoes: new Float32Array(g.v) }));
+  return [...grupos.values()]
+    .sort((a, b) => a.cotaM - b.cotaM)
+    .map((g) => ({ cotaM: g.cotaM, cor: g.cor, mestra: g.mestra, posicoes: new Float32Array(g.v) }));
+}
+
+/**
+ * O índice, em `niveis` (cotas em ordem CRESCENTE), da cota mais próxima de
+ * `cotaM` — a curva que o hover do 3D acende sob o cursor. Busca binária: roda
+ * a cada movimento do mouse. Lista vazia → `null`; empate → a de baixo.
+ */
+export function nivelMaisProximo(niveis: readonly number[], cotaM: number): number | null {
+  if (niveis.length === 0 || !Number.isFinite(cotaM)) return null;
+  let lo = 0;
+  let hi = niveis.length - 1;
+  while (lo < hi) {
+    const meio = (lo + hi) >> 1;
+    if (niveis[meio] < cotaM) lo = meio + 1;
+    else hi = meio;
+  }
+  // `lo` = primeira cota ≥ cotaM (ou a última); a vizinha de baixo pode estar mais perto.
+  if (lo > 0 && cotaM - niveis[lo - 1] <= niveis[lo] - cotaM) return lo - 1;
+  return lo;
 }
 
 /** A linha, amostrada a `passoMm`, apoiada na superfície de projeto e 5 cm acima dela (para não sumir dentro da malha). */

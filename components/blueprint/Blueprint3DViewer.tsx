@@ -95,8 +95,9 @@ import {
   saiuDoQuadro,
   sombraDaCena,
 } from '../../utils/blueprint3dEnquadramento';
-import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
-import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
+import { blocoDoTerreno, espessuraDoBloco, type MalhaDoTerreno } from '../../utils/blueprintTopografia';
+import { COR_CURVA_3D, nivelMaisProximo, type ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
+import { formatarCotaM } from '../../utils/blueprintTopografia';
 import { uvNaCaixa, type PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaDeFundo';
 import { doDesenhoParaMundo, ESCALA_DO_DESENHO_NO_MUNDO, planoNoMundo } from '../../utils/blueprint3dEspelho';
 import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
@@ -128,7 +129,7 @@ interface Props {
   mostrarRotulosDeRede?: boolean;
   /** ESTILO (E8.2): sombreado (padrão), linha oculta (branco + arestas) ou transparente (paredes/lajes a 35 %). */
   /** CONCEPÇÃO (29/10/2026): o 3D para mostrar ao cliente — ver `utils/blueprintConcepcao`. */
-  estilo?: 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE' | 'CONCEPCAO';
+  estilo?: 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE' | 'CONCEPCAO' | 'MAQUETE';
   /** O polígono do lote (divisas `TERRENO`) como um plano de chão. */
   mostrarTerreno?: boolean;
   /** ENVELOPE 3D (E3.3): um prisma translúcido por pavimento — âmbar; vermelho acima do gabarito. */
@@ -1123,6 +1124,17 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void, selecionados?:
  */
 /** A cor do chão do relevo — também o fundo da textura do mapa (onde nenhum ladrilho chegou ainda). */
 const COR_DO_CHAO = '#d9cfbd';
+/**
+ * O estilo MAQUETE (25/11/2026, o reel da Hektar): topo do terreno claro e quente, laterais do bloco
+ * em bege (o "volume em corte"), fundo da cena claro, curvas em cinza-pedra. A curva acesa pelo
+ * mouse continua quase preta (`#1c1917`) em qualquer estilo.
+ */
+const COR_TOPO_DA_MAQUETE = '#f1eee8';
+const COR_LATERAL_DA_MAQUETE = '#d6cbb8';
+const COR_FUNDO_DA_MAQUETE = '#eeece7';
+const COR_CURVA_DA_MAQUETE = '#57534e';
+/** Sem relevo, o lote vira uma placa desta espessura (m). */
+const ESPESSURA_DA_PLACA_DA_MAQUETE = 1.5;
 
 /**
  * A TEXTURA DO MAPA SOBRE O RELEVO (12/10/2026): um canvas do tamanho do plano,
@@ -1215,6 +1227,8 @@ function RotuloDeRede({
   porCima = false,
   peso = 600,
   fracaoDaTela,
+  posicaoViva,
+  centro,
 }: {
   texto: string;
   cor: string;
@@ -1223,6 +1237,10 @@ function RotuloDeRede({
   porCima?: boolean;
   peso?: number;
   fracaoDaTela?: number;
+  /** A posição lida a cada quadro (o rótulo do hover da curva segue o mouse sem re-render). */
+  posicaoViva?: React.MutableRefObject<THREE.Vector3>;
+  /** O ponto do sprite que fica na posição (0,5/0,5 = centro); o hover desloca para o lado do cursor. */
+  centro?: [number, number];
 }) {
   const textura = useMemo(() => {
     if (typeof document === 'undefined') return null;
@@ -1251,6 +1269,7 @@ function RotuloDeRede({
   const ref = useRef<THREE.Sprite>(null);
   useFrame(({ camera }) => {
     const s = ref.current;
+    if (s && posicaoViva) s.position.copy(posicaoViva.current);
     if (!s || !textura || !fracaoDaTela) return;
     const k = 2 * Math.tan((((camera as THREE.PerspectiveCamera).fov ?? 45) * Math.PI) / 360);
     s.scale.set(fracaoDaTela * k * textura.aspecto, fracaoDaTela * k, 1);
@@ -1262,6 +1281,7 @@ function RotuloDeRede({
       ref={ref}
       position={posicao}
       scale={fracaoDaTela ? undefined : [alturaM * textura.aspecto, alturaM, 1]}
+      center={centro ?? [0.5, 0.5]}
       renderOrder={porCima ? 30 : 20}
       raycast={() => null}
     >
@@ -1339,6 +1359,9 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
   // contorno forte do uso, as chamadas e o lote em cor sólida (mais abaixo).
   const concepcao = estilo === 'CONCEPCAO';
   const linhaOculta = estilo === 'LINHA_OCULTA' || concepcao;
+  const maquete = estilo === 'MAQUETE';
+  /** Paredes, estrutura e massa em branco: linha oculta, concepção e maquete. */
+  const branco = linhaOculta || maquete;
 
   // `Set` tem identidade nova a cada alternância, então a dep é o CONTEÚDO — o
   // mesmo idioma do `levelIds?.join(',')` que os memos daqui já usam.
@@ -1759,6 +1782,33 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
   const texturaDoMapa = useTexturaDoMapa(comMapa ? mapaNoRelevo : null);
 
   /**
+   * O VOLUME EM CORTE da Maquete (25/11/2026): com relevo, as laterais e o fundo
+   * que fecham a malha (`blocoDoTerreno`, puro e testado); sem relevo, o lote
+   * vira uma placa. O topo continua sendo a malha/o lote de sempre.
+   */
+  const blocoDaMaquete = useMemo(() => {
+    if (!maquete || !mostrarTerreno) return null;
+    if (usaRelevo && relevo) {
+      const b = blocoDoTerreno(relevo);
+      const geom = new THREE.BufferGeometry();
+      geom.setAttribute('position', new THREE.Float32BufferAttribute(b.posicoes, 3));
+      geom.setIndex(new THREE.BufferAttribute(b.indices, 1));
+      geom.computeVertexNormals();
+      return { geom, y: 0 };
+    }
+    const t = medirTerreno(model.boundaries);
+    if (!t || t.anel.length < 3) return null;
+    const geom = new THREE.ExtrudeGeometry(shapeDoAnel(t.anel), { depth: ESPESSURA_DA_PLACA_DA_MAQUETE, bevelEnabled: false });
+    // A extrusão sobe em +z; girada, sobe em +y. Desce a espessura (e um fio) para o topo ficar sob o lote.
+    geom.rotateX(-Math.PI / 2);
+    geom.translate(0, -ESPESSURA_DA_PLACA_DA_MAQUETE - 0.005, 0);
+    geom.computeVertexNormals();
+    return { geom, y: COTA_TERRENO_Y };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maquete, mostrarTerreno, usaRelevo, relevoChave, model.boundaries]);
+  useEffect(() => () => blocoDaMaquete?.geom.dispose(), [blocoDaMaquete]);
+
+  /**
    * Drenagem e muros sobre o relevo (fase 8): as linhas viram `Line` (uma cor
    * para o que escoa, vermelho para o que não escoa); a face do muro vira uma
    * tira de triângulos. Tudo já em metros de mundo, vindo de
@@ -1778,15 +1828,53 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       g.computeVertexNormals();
       return { aresta: m.aresta, geometria: g };
     });
-    // 12/10/2026: as curvas de nível, um LineSegments por cor (ver `curvasDeNivel3d`).
+    // As curvas de nível, um LineSegments por COTA (25/11/2026, ver `curvasDeNivel3d`).
     const curvas = (extrasDoRelevo.curvas ?? []).map((c, i) => {
       const g = new THREE.BufferGeometry();
       g.setAttribute('position', new THREE.Float32BufferAttribute(c.posicoes, 3));
-      return { chave: `${c.cor}-${c.mestra ? 'm' : 'n'}-${i}`, cor: c.cor, mestra: c.mestra, geometria: g };
+      return { chave: `${c.cotaM}-${i}`, cor: c.cor, mestra: c.mestra, geometria: g };
     });
     return { linhas, muros, curvas };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mostrarTerreno, extrasChave]);
+
+  /**
+   * HOVER DAS CURVAS (25/11/2026, o reel da Hektar: *"ao passar o mouse mostre
+   * o valor de cada linha"*). O ponto do relevo sob o mouse dá a altura (Y
+   * local da malha = cota − zero); a curva de cota mais próxima acende grossa
+   * e escura — todas as partes da mesma cota — e o rótulo com a cota segue o
+   * cursor. Estado só quando a CURVA muda; o rótulo anda por ref.
+   */
+  const niveisDasCurvas3d = useMemo(() => {
+    const zero = extrasDoRelevo?.cotaZeroM ?? 0;
+    return (extrasDoRelevo?.curvas ?? []).map((c) => c.cotaM - zero);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [extrasChave]);
+  const hoverDasCurvas = usaRelevo && niveisDasCurvas3d.length > 0;
+  const [curvaSobOMouse, setCurvaSobOMouse] = useState<number | null>(null);
+  useEffect(() => setCurvaSobOMouse(null), [extrasChave, hoverDasCurvas]);
+  const posicaoDoRotuloDaCurva = useRef(new THREE.Vector3());
+  const pontosDaCurvaSobOMouse = useMemo(() => {
+    const c = curvaSobOMouse !== null ? extrasDoRelevo?.curvas?.[curvaSobOMouse] : undefined;
+    if (!c) return null;
+    const pts: [number, number, number][] = [];
+    // Um pouco acima da linha fina, para a grossa não brigar com ela na profundidade.
+    for (let i = 0; i + 2 < c.posicoes.length; i += 3) pts.push([c.posicoes[i], c.posicoes[i + 1] + 0.02, c.posicoes[i + 2]]);
+    return pts.length >= 2 ? { pontos: pts, texto: formatarCotaM(c.cotaM) } : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curvaSobOMouse, extrasChave]);
+  const aoMoverNoRelevo = (e: any) => {
+    // A altura no referencial da MALHA (o grupo do mundo espelha z, não y).
+    const local = e.object.worldToLocal(e.point.clone());
+    const n = niveisDasCurvas3d;
+    const passo = n.length > 1 ? (n[n.length - 1] - n[0]) / (n.length - 1) : 1;
+    const fora = local.y < n[0] - passo || local.y > n[n.length - 1] + passo;
+    const i = fora ? null : nivelMaisProximo(n, local.y);
+    // O rótulo mora ao lado da malha (mesmo pai): a posição vai no referencial dele.
+    posicaoDoRotuloDaCurva.current.copy(e.object.parent ? e.object.parent.worldToLocal(e.point.clone()) : e.point);
+    setCurvaSobOMouse((atual) => (atual === i ? atual : i));
+  };
+  const aoSairDoRelevo = () => setCurvaSobOMouse(null);
 
   /** Os prismas do envelope edificável (E3.3), já na cota de cada pavimento. */
   const prismasDoEnvelope = useMemo(() => {
@@ -2035,8 +2123,8 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       ))}
       {prismasDoEntorno.map((p) => (
         <mesh key={`entorno-${p.id}`} geometry={p.geom} castShadow receiveShadow>
-          <meshStandardMaterial color="#cbd5e1" roughness={0.9} />
-          <Edges color="#94a3b8" />
+          <meshStandardMaterial color={maquete ? '#ffffff' : '#cbd5e1'} roughness={0.9} />
+          <Edges color={maquete ? '#d6d3d1' : '#94a3b8'} />
         </mesh>
       ))}
       {prismasDaMassa.map((p) => {
@@ -2056,17 +2144,18 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             {/* Na Concepção, o tom quase branco do uso e as linhas dos pavimentos mais leves; o vermelho do problema
                 fica para os outros estilos (é aviso de projeto, não do cliente). */}
             <meshStandardMaterial
-              color={unidadeSel ? '#f59e0b' : pisoSel ? '#1d4ed8' : sel ? '#60a5fa' : concepcao ? (tomDoBloco.get(p.id) ?? '#ffffff') : p.problema ? '#f87171' : p.cor}
-              roughness={concepcao ? 1 : 0.85}
+              color={unidadeSel ? '#f59e0b' : pisoSel ? '#1d4ed8' : sel ? '#60a5fa' : concepcao ? (tomDoBloco.get(p.id) ?? '#ffffff') : maquete ? '#ffffff' : p.problema ? '#f87171' : p.cor}
+              roughness={concepcao || maquete ? 1 : 0.85}
               // Na Concepção, o volume quase branco das referências: com só a luz, o tom claro saía cinza.
-              emissive={concepcao && !sel ? (tomDoBloco.get(p.id) ?? '#ffffff') : '#000000'}
-              emissiveIntensity={concepcao && !sel ? 0.55 : 0}
+              // Na Maquete, o branco do papel com um pouco de luz própria (a sombra ainda dá o volume).
+              emissive={concepcao && !sel ? (tomDoBloco.get(p.id) ?? '#ffffff') : maquete && !sel ? '#ffffff' : '#000000'}
+              emissiveIntensity={concepcao && !sel ? 0.55 : maquete && !sel ? 0.25 : 0}
               polygonOffset
               polygonOffsetFactor={1}
               polygonOffsetUnits={1}
             />
             <lineSegments geometry={p.arestas} raycast={() => null}>
-              <lineBasicMaterial color={unidadeSel ? '#78350f' : pisoSel ? '#172554' : sel ? '#1d4ed8' : concepcao ? '#64748b' : p.problema ? '#b91c1c' : '#1e293b'} />
+              <lineBasicMaterial color={unidadeSel ? '#78350f' : pisoSel ? '#172554' : sel ? '#1d4ed8' : concepcao ? '#64748b' : maquete ? '#a8a29e' : p.problema ? '#b91c1c' : '#1e293b'} />
             </lineSegments>
           </mesh>
         );
@@ -2088,9 +2177,39 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           mesmo peso relativo da planta (a largura de linha do WebGL é 1 px). */}
       {extras3d?.curvas.map((c) => (
         <lineSegments key={`curva-${c.chave}`} geometry={c.geometria}>
-          <lineBasicMaterial color={c.cor} transparent opacity={c.mestra ? 1 : 0.6} />
+          {/* Na Maquete, a cor única vira cinza-pedra; o arco-íris (curvas pela cota) fica. */}
+          <lineBasicMaterial
+            color={maquete && c.cor === COR_CURVA_3D ? COR_CURVA_DA_MAQUETE : c.cor}
+            transparent
+            opacity={maquete ? (c.mestra ? 0.9 : 0.45) : c.mestra ? 1 : 0.6}
+          />
         </lineSegments>
       ))}
+      {/* A curva sob o mouse: drei `Line` (Line2), porque a linha do WebGL é sempre 1 px.
+          `DoubleSide` como nas outras `Line` grossas: o mundo é espelhado (scale z −1) e a face
+          dos quadrinhos do Line2 vira — sem ele a linha some inteira. */}
+      {hoverDasCurvas && pontosDaCurvaSobOMouse && (
+        <>
+          <Line
+            segments
+            points={pontosDaCurvaSobOMouse.pontos}
+            color="#1c1917"
+            lineWidth={3}
+            side={THREE.DoubleSide}
+            renderOrder={22}
+            raycast={() => null}
+          />
+          <RotuloDeRede
+            texto={pontosDaCurvaSobOMouse.texto}
+            cor="#1c1917"
+            posicao={[0, 0, 0]}
+            posicaoViva={posicaoDoRotuloDaCurva}
+            centro={[-0.12, -0.35]}
+            porCima
+            fracaoDaTela={0.03}
+          />
+        </>
+      )}
       {extras3d?.muros.map((m) => (
         <mesh key={`muro-${m.aresta}`} geometry={m.geometria} castShadow receiveShadow>
           <meshStandardMaterial color="#6b7280" roughness={0.9} side={THREE.DoubleSide} />
@@ -2108,13 +2227,24 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         // que fazia o defeito passar despercebido.
         //
         // Com RELEVO a malha já carrega a cota em Y: nada de deslocar.
-        <mesh geometry={terreno} position={[0, usaRelevo ? 0 : COTA_TERRENO_Y, 0]} receiveShadow castShadow={usaRelevo}>
+        <mesh
+          geometry={terreno}
+          position={[0, usaRelevo ? 0 : COTA_TERRENO_Y, 0]}
+          receiveShadow
+          castShadow={usaRelevo}
+          // Sem `stopPropagation`: o hover não rouba a órbita nem o clique das peças.
+          onPointerMove={hoverDasCurvas ? aoMoverNoRelevo : undefined}
+          onPointerOut={hoverDasCurvas ? aoSairDoRelevo : undefined}
+        >
           <meshStandardMaterial
             // Com o mapa, a textura dá a cor (branco não tinge); o `key` recria o
             // material ao ligar/desligar o mapa — trocar `map` de nulo para
             // textura num material já compilado não refaz o shader.
             key={texturaDoMapa ? 'com-mapa' : 'sem-mapa'}
-            color={texturaDoMapa ? '#ffffff' : concepcao ? COR_DO_LOTE_NA_CONCEPCAO : COR_DO_CHAO}
+            color={texturaDoMapa ? '#ffffff' : maquete ? COR_TOPO_DA_MAQUETE : concepcao ? COR_DO_LOTE_NA_CONCEPCAO : COR_DO_CHAO}
+            // Na Maquete, o papel claro do vídeo: sem luz própria a encosta virada para longe do sol saía cinza.
+            emissive={maquete && !texturaDoMapa ? COR_TOPO_DA_MAQUETE : '#000000'}
+            emissiveIntensity={maquete && !texturaDoMapa ? 0.35 : 0}
             map={texturaDoMapa ?? null}
             roughness={1}
             side={THREE.DoubleSide}
@@ -2125,7 +2255,13 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             polygonOffsetFactor={1}
             polygonOffsetUnits={1}
           />
-          <Edges color="#a8a29e" />
+          {/* Na Maquete o relevo é liso: a aresta de cada triângulo riscaria o papel. */}
+          {!maquete && <Edges color="#a8a29e" />}
+        </mesh>
+      )}
+      {blocoDaMaquete && (
+        <mesh geometry={blocoDaMaquete.geom} position={[0, blocoDaMaquete.y, 0]} receiveShadow castShadow>
+          <meshStandardMaterial color={COR_LATERAL_DA_MAQUETE} emissive={COR_LATERAL_DA_MAQUETE} emissiveIntensity={0.2} roughness={1} side={THREE.DoubleSide} />
         </mesh>
       )}
       {paredes.map((p, i) => (
@@ -2144,13 +2280,13 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             color={
               selecionados?.has(p.id)
                 ? COR_SELECIONADA
-                : linhaOculta
+                : branco
                   ? '#ffffff'
                   : p.cortina
                     ? '#7dd3fc'
                     : (coresPorUid?.get(p.uid) ?? ((p.funcao && COR_CAMADA_3D[p.funcao]) || '#e2e8f0'))
             }
-            roughness={linhaOculta ? 1 : p.cortina ? 0.15 : 0.85}
+            roughness={branco ? 1 : p.cortina ? 0.15 : 0.85}
             side={THREE.DoubleSide}
             // CORTINA DE VIDRO (P2.20): translúcida em qualquer estilo — é vidro.
             transparent={estilo === 'TRANSPARENTE' || p.cortina}
@@ -2166,12 +2302,12 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           sairiam como risco duplo no canto. */}
       {juncoes.map((j, i) => (
         <mesh key={`juncao-${i}`} geometry={j.geom} position={[0, j.y, 0]} castShadow receiveShadow>
-          <meshStandardMaterial color="#e2e8f0" roughness={0.85} side={THREE.DoubleSide} />
+          <meshStandardMaterial color={maquete ? '#ffffff' : '#e2e8f0'} roughness={0.85} side={THREE.DoubleSide} />
         </mesh>
       ))}
       {lajes.map((l, i) => (
         <mesh key={`laje-${i}`} geometry={l.geom} position={[0, l.y, 0]} receiveShadow>
-          <meshStandardMaterial color="#cbd5e1" roughness={0.95} side={THREE.DoubleSide} />
+          <meshStandardMaterial color={maquete ? '#f5f5f4' : '#cbd5e1'} roughness={0.95} side={THREE.DoubleSide} />
         </mesh>
       ))}
       {/* ESTRUTURA por último: ela fica DENTRO da alvenaria quase sempre, e
@@ -2193,7 +2329,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             color={
               selecionados?.has(s.id)
                 ? COR_SELECIONADA
-                : linhaOculta
+                : branco
                   ? '#ffffff'
                   : (coresPorUid?.get(s.uid) ?? (s.enterrada ? '#a8a29e' : '#94a3b8'))
             }
@@ -2955,7 +3091,18 @@ export default function Blueprint3DViewer(props: Props) {
   // 12/10/2026: o ENVELOPE também entra — vem de fora do modelo, como o relevo,
   // e sem ele um estudo só com lote enquadrava a cena vazia (ver a função).
   const { centro, raio, spread, alturaTopo } = useMemo(
-    () => enquadramentoDoModelo(model, !!mostrarTerreno, mostrarTerreno ? (relevo ?? null) : null, props.envelope ?? null),
+    () =>
+      enquadramentoDoModelo(
+        model,
+        !!mostrarTerreno,
+        // Na Maquete o bloco desce abaixo do relevo: o enquadramento vai até o fundo dele.
+        mostrarTerreno && relevo
+          ? props.estilo === 'MAQUETE'
+            ? { ...relevo, minY: relevo.minY - espessuraDoBloco(relevo) }
+            : relevo
+          : null,
+        props.envelope ?? null,
+      ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, mostrarTerreno, relevoChave, props.envelope],
   );
@@ -3151,7 +3298,7 @@ export default function Blueprint3DViewer(props: Props) {
           far: spread * 20,
         }}
       >
-        <color attach="background" args={[props.estilo === 'CONCEPCAO' ? '#ffffff' : '#f8fafc']} />
+        <color attach="background" args={[props.estilo === 'CONCEPCAO' ? '#ffffff' : props.estilo === 'MAQUETE' ? COR_FUNDO_DA_MAQUETE : '#f8fafc']} />
         <ambientLight intensity={0.75} />
         {/* A câmera de sombra acompanha a CENA (`sombraDaCena`): a padrão cobre
             ±5 m, e num lote de 60 m com relevo a sombra simplesmente não
@@ -3181,7 +3328,8 @@ export default function Blueprint3DViewer(props: Props) {
           shadow-bias={-0.0005}
         />
         <directionalLight position={[-spread, spread, -spread]} intensity={0.3} />
-        {props.estilo !== 'CONCEPCAO' && (
+        {/* Na Maquete o bloco "flutua" no fundo claro, como a maquete na mesa — sem grade. */}
+        {props.estilo !== 'CONCEPCAO' && props.estilo !== 'MAQUETE' && (
         <Grid
           args={[spread * 6, spread * 6]}
           cellSize={passoDaGrade}

@@ -141,6 +141,15 @@ export interface CurvaDeNivel {
   fechada: boolean;
 }
 
+/**
+ * A cota de uma curva como a planta a escreve: duas casas, vírgula decimal,
+ * sem unidade — "885,00". Fonte única do rótulo da mestra, do balão do clique
+ * e do hover (2D e 3D, 25/11/2026: *"mostrar o valor que o app ja mostra hoje"*).
+ */
+export function formatarCotaM(cotaM: number): string {
+  return cotaM.toFixed(2).replace('.', ',');
+}
+
 export interface EstatisticasDoTerreno {
   cotaMinM: number;
   cotaMaxM: number;
@@ -1415,6 +1424,87 @@ export function malhaDaGrade(
     maxY,
     triangulos: indices.length / 3,
   };
+}
+
+/**
+ * O TERRENO EM BLOCO, como maquete (25/11/2026, o reel da Hektar: *"No video
+ * mostra o volume em corte"*): as LATERAIS e o FUNDO que fecham a malha do
+ * relevo num sólido cortado. Só o que falta à malha — o topo continua sendo a
+ * própria `MalhaDoTerreno`, com a sua cor.
+ *
+ * Laterais: cada aresta de BORDA do topo (usada por um só triângulo — a grade
+ * com nodata tem borda recortada, e é ela que vale) desce numa face vertical
+ * até `baseY`. Cada face tem os seus 4 vértices: normais chapadas, sem o
+ * sombreado "arredondar" a quina com o topo. Fundo: os mesmos triângulos do
+ * topo achatados em `baseY`, com a ordem invertida (olham para baixo).
+ *
+ * `baseY = minY − espessura`; a espessura padrão é a maior entre 15 % do
+ * desnível, 6 % do lado maior do terreno e 2 m — a fatia que se vê em corte na
+ * maquete. Só pelo desnível, um terreno de 300 m com 40 m de desnível saía com
+ * uma lâmina de 6 m, fina demais perto do vídeo.
+ */
+export interface BlocoDoTerreno {
+  posicoes: Float32Array;
+  indices: Uint32Array;
+  baseY: number;
+  /** Quantas arestas de borda viraram parede (para teste e diagnóstico). */
+  paredes: number;
+}
+
+export function espessuraDoBloco(malha: Pick<MalhaDoTerreno, 'minY' | 'maxY' | 'posicoes'>): number {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  const p = malha.posicoes;
+  for (let i = 0; i + 2 < p.length; i += 3) {
+    if (p[i] < minX) minX = p[i];
+    if (p[i] > maxX) maxX = p[i];
+    if (p[i + 2] < minZ) minZ = p[i + 2];
+    if (p[i + 2] > maxZ) maxZ = p[i + 2];
+  }
+  const lado = Number.isFinite(minX) ? Math.max(maxX - minX, maxZ - minZ) : 0;
+  return Math.max(2, 0.15 * (malha.maxY - malha.minY), 0.06 * lado);
+}
+
+export function blocoDoTerreno(malha: MalhaDoTerreno, espessuraM = espessuraDoBloco(malha)): BlocoDoTerreno {
+  const { posicoes: p, indices: t } = malha;
+  const baseY = malha.minY - espessuraM;
+
+  // Arestas de borda: chave (menor, maior) → quantas vezes aparece e a ordem em que apareceu.
+  const contagem = new Map<number, { a: number; b: number; n: number }>();
+  const nv = p.length / 3;
+  for (let k = 0; k < t.length; k += 3) {
+    for (let e = 0; e < 3; e++) {
+      const a = t[k + e];
+      const b = t[k + ((e + 1) % 3)];
+      const chave = Math.min(a, b) * nv + Math.max(a, b);
+      const atual = contagem.get(chave);
+      if (atual) atual.n++;
+      else contagem.set(chave, { a, b, n: 1 });
+    }
+  }
+
+  const pos: number[] = [];
+  const idx: number[] = [];
+  let paredes = 0;
+  for (const { a, b, n } of contagem.values()) {
+    if (n !== 1) continue;
+    const base = pos.length / 3;
+    pos.push(p[a * 3], p[a * 3 + 1], p[a * 3 + 2]);
+    pos.push(p[b * 3], p[b * 3 + 1], p[b * 3 + 2]);
+    pos.push(p[b * 3], baseY, p[b * 3 + 2]);
+    pos.push(p[a * 3], baseY, p[a * 3 + 2]);
+    idx.push(base, base + 1, base + 2, base, base + 2, base + 3);
+    paredes++;
+  }
+
+  // Fundo: os vértices do topo achatados, triângulos invertidos.
+  const baseDoFundo = pos.length / 3;
+  for (let i = 0; i < nv; i++) pos.push(p[i * 3], baseY, p[i * 3 + 2]);
+  for (let k = 0; k < t.length; k += 3) idx.push(baseDoFundo + t[k], baseDoFundo + t[k + 2], baseDoFundo + t[k + 1]);
+
+  return { posicoes: new Float32Array(pos), indices: new Uint32Array(idx), baseY, paredes };
 }
 
 /**

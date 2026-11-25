@@ -2471,6 +2471,29 @@ confira se essa informação já não está persistente no shell (ex:
 header em `OrganizationList.tsx`: o bloco "logo + Minha Organização + Filtro
 Ativo: X" foi removido, sobrando só um ícone-âncora com `title`.
 
+### 18.1 Uma operação, um lugar
+
+**Regra do usuário, 25/11/2026** — *"Mesmo assunto em dois lugares diferentes.
+Sugiro concentrar em um local para renovações e um local para reajustes."*
+
+Criar, editar e excluir uma coisa acontece em **uma tela só**. As outras telas
+que precisam do assunto mostram a **situação, só leitura**, e um **atalho** para
+o lugar onde se age. Nunca um segundo formulário, nem um segundo histórico com
+Editar/Excluir.
+
+| Assunto | Onde se age | Onde só se vê |
+|---|---|---|
+| Renovação de locação | Gestão de Unidades › Renovações (fila + Histórico, gaveta `RenovacaoSheet`; documentos do aditivo no Ver) | Negociação › Contrato › Dados do contrato (`SituacaoDaVigencia`) |
+| Reajuste de locação | Gestão de Unidades › Reajustes | Negociação: só as **condições** (índice, periodicidade, aviso), que são regra do contrato, não a operação |
+
+✅ Condição ≠ operação: o índice de reajuste é campo do contrato e fica na
+negociação; *decidir* o reajuste é operação e fica na aba Reajustes.
+❌ Não "aponte" de uma tela para a outra e deixe as duas editáveis: era o caso
+da fila de Renovações que levava para a sub-aba Renovações da negociação, e as
+duas acabaram com Editar e Excluir.
+
+Plano: `docs/planos/2026-11-25-renovacoes-e-reajustes-um-lugar.md`.
+
 ---
 
 ## 19. NAVEGAÇÃO DE MÓDULOS (histórico: abas superiores → sidebar)

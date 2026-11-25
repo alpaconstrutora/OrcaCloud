@@ -137,7 +137,32 @@ Contrato", entra neste plano? Resposta:
     código ✅;
   - `tsc` limpo, `check-ui-standard` sem achados nos 6 arquivos tocados, 160 testes
     relacionados verdes ✅;
-  - falta: a conferência em produção (itens 2 e 4).
+  - conferido em produção (#746, 481ff4c), só lendo e cancelando: Renovar abre a gaveta
+    na própria aba (início 23/09/2021, 12 parcelas, a 1ª em 10/11/2021), Editar o AD-004
+    abre em edição (23/03/2020 a 22/09/2021, R$ 5.832,48, 18 parcelas), a negociação não
+    abre; Ver contrato abre a negociação com as sub-abas só Dados do contrato |
+    Documentos e a linha "Vigência até 22/09/2021 · última renovação AD-004 · próximo
+    reajuste 05/11/2020" com atalhos; 0 gravações, 0 erros ✅. Itens 1, 2, 4 e 5
+    concluídos.
+  - observação: na mesma tela, o campo Fim da Vigência DA NEGOCIAÇÃO mostra 22/03/2019
+    (os 30 meses originais) — é a vigência da negociação, não a do contrato. Pode
+    confundir ao lado da linha de situação; fora deste plano.
+- **PR 2 (itens 3, 3b e 6), 25/11/2026:**
+  - `EmitDocumentModal` com `addendum`: grava ADDENDUM/ADITIVO no aditivo, nome
+    "CTL-006-012-0001 - Aditivo AD-004 ao Contrato de Locação", aditivo no contexto;
+    sem ele nada muda ✅ (`gerarDocumentoDoAditivo.test.tsx`, mais os 3 testes antigos
+    do modal verdes);
+  - catálogo: `addendum.*` resolve com o AD-004 ✅. ⚠️ Achado fora do plano: o
+    `valorPorExtenso` escreve "cinco mil **e** oitocentos e trinta e dois" (o certo é
+    "cinco mil oitocentos e trinta e dois"); vale para as minutas também. Não corrigido aqui;
+  - Ver da renovação: "Documentos do aditivo" com `DocumentVersionsPanel
+    ownerType=ADDENDUM`, Gerar documento do aditivo (desligado no cancelado, com o motivo) e
+    Modelos de documento ✅ (`renovacaoDocumentosDoAditivo.test.tsx`);
+  - storage: o caminho `contract-addendums/<aditivo>/` já é aceito pela função aplicada
+    `documents_objeto_da_minha_org` (conferido no banco) ✅;
+  - item 6: guia §18.1 "Uma operação, um lugar" + memória ✅;
+  - `tsc` limpo, `check-ui-standard` sem achados, 188 testes relacionados verdes ✅;
+  - falta: conferência em produção (abrir o Ver do AD-004 e o modal, fechar sem gerar).
 
 ## Ordem de entrega
 

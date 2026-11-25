@@ -30,6 +30,7 @@ type PropertyFormData = Partial<Property> & {
 import { clientService } from '../services/clientService';
 import PropertyModal from './PropertyModal';
 import DealModal from './DealModal';
+import DocxTemplateManager from './DocxTemplateManager';
 import { RentalsDashboard } from './RentalsDashboard';
 import PropertyUnitMap from './common/PropertyUnitMap';
 import { PriceTableManager } from './PriceTableManager';
@@ -804,6 +805,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // "Ver contrato" abre a negociação em Contrato › Dados do contrato, que só
     // mostra a situação da vigência e o atalho de volta para cá.
     const [dealModalTab, setDealModalTab] = useState<string | undefined>(undefined);
+    // Renovações › Ver › Documentos do aditivo › "Modelos de documento": a mesma
+    // tela de modelos da negociação, aberta daqui (plano 2026-11-25, item 3b).
+    const [modelosDaOrg, setModelosDaOrg] = useState<string | null>(null);
     const [properties, setProperties] = useState<Property[]>([]);
     // Imóvel → empreendimento. O vínculo não é FK na tabela do Comercial: vem de
     // `empreendimento_units.rental_property_id` (unidade) ou de
@@ -3193,6 +3197,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     clients={clients}
                     onChanged={(message) => { loadData(); notify(message); }}
                     onOpenContract={id => openDealForContract(id)}
+                    onGerenciarModelos={org => setModelosDaOrg(org)}
                     negociacoesDoEmpreendimento={negociacoesDoEdificio}
                 />
             )}
@@ -3363,6 +3368,16 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 // as unidades de todos os imóveis misturadas (Vendas já passava).
                 buildingId={selectedBuildingId || undefined}
             />
+
+            {/* Tela de modelos por cima do módulo — mesmo invólucro da negociação
+                (DealModal): absolute + overflow-y-auto, quem rola é ele. */}
+            {modelosDaOrg && (
+                <div className="absolute inset-0 z-[110] bg-gray-50 overflow-y-auto">
+                    <div className="p-4 md:p-6">
+                        <DocxTemplateManager organizationId={modelosDaOrg} onClose={() => setModelosDaOrg(null)} />
+                    </div>
+                </div>
+            )}
 
             {notificationToast}
         </div >

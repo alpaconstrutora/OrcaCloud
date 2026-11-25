@@ -11,7 +11,7 @@ import { projectService } from '../services/projectService';
 import { fillDocx, docxBlobToPdf } from '../services/docxRenderService';
 import { resolveFields, describeMapping, ResolveContext, fornecedorComoCliente } from '../services/docxFieldCatalog';
 import { contractDocumentVersionService } from '../services/contractDocumentVersionService';
-import { Contract } from '../types/contracts';
+import { Contract, ContractAddendum } from '../types/contracts';
 import { Client, Organization, Supplier } from '../types/users';
 import { ProjectSettings } from '../types/project';
 import Button from './ui/Button';
@@ -42,6 +42,13 @@ interface Props {
     lockClient?: boolean;
     /** Disparado após gravar a versão, para o pai recarregar o painel de Documentos. */
     onVersionSaved?: () => void;
+    /**
+     * Documento DO ADITIVO (Gestão de Unidades › Renovações › Ver — plano
+     * docs/planos/2026-11-25-renovacoes-e-reajustes-um-lugar.md, item 3b): a
+     * versão é gravada no aditivo (ADDENDUM/ADITIVO), o nome diz qual aditivo e
+     * os campos `addendum.*` do modelo resolvem. Sem ele, nada muda (contrato).
+     */
+    addendum?: ContractAddendum | null;
 }
 
 const slug = (s: string) => (s || '').replace(/[^\w.\-]+/g, '_').replace(/^_+|_+$/g, '');
@@ -64,9 +71,13 @@ const tipoDoContrato = (c: Contract): string => {
 const nomeDaMinuta = (c: Contract): string =>
     [c.number?.trim(), `Minuta do ${tipoDoContrato(c)}`].filter(Boolean).join(' - ');
 
+/** "CTL-006-012-0001 - Aditivo AD-004 ao Contrato de Locação". */
+export const nomeDoAditivo = (c: Contract, ad: Pick<ContractAddendum, 'number'>): string =>
+    [c.number?.trim(), `Aditivo ${ad.number} ao ${tipoDoContrato(c)}`].filter(Boolean).join(' - ');
+
 const EmitDocumentModal: React.FC<Props> = ({
     organizationId, contract, organization: organizationProp, onClose, onManageTemplates, onFallbackPdf, notify,
-    contextExtra, loadContext, persistVersion = false, lockClient = false, onVersionSaved,
+    contextExtra, loadContext, persistVersion = false, lockClient = false, onVersionSaved, addendum = null,
 }) => {
     const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
     const [clients, setClients] = useState<Client[]>([]);
@@ -171,8 +182,10 @@ const EmitDocumentModal: React.FC<Props> = ({
             client: client ?? (temFornecedor ? fornecedorComoCliente(supplier) : null),
             supplier: supplier ?? null,
             contract, project, ...(extra ?? {}),
+            // Por último: o aditivo é desta emissão, nenhum contexto extra o troca.
+            ...(addendum ? { addendum } : {}),
         }),
-        [organization, client, temFornecedor, supplier, contract, project, extra],
+        [organization, client, temFornecedor, supplier, contract, project, extra, addendum],
     );
 
     const resolved = useMemo(
@@ -191,7 +204,7 @@ const EmitDocumentModal: React.FC<Props> = ({
         try {
             const sourceBlob = await documentTemplateService.downloadFile(template);
             const filled = await fillDocx(sourceBlob, resolved);
-            const nome = nomeDaMinuta(contract);
+            const nome = addendum ? nomeDoAditivo(contract, addendum) : nomeDaMinuta(contract);
             const output = kind === 'docx' ? filled : await docxBlobToPdf(filled);
             // Quem baixa vê o nome legível; a chave no storage fica só em ASCII
             // (o Storage recusa chave com acento — "Locação").
@@ -213,15 +226,15 @@ const EmitDocumentModal: React.FC<Props> = ({
             if (gravaVersao) {
                 try {
                     await contractDocumentVersionService.addVersionFromBlob({
-                        ownerType: 'CONTRACT',
-                        ownerId: contract.id,
+                        ownerType: addendum ? 'ADDENDUM' : 'CONTRACT',
+                        ownerId: addendum ? addendum.id : contract.id,
                         contractId: contract.id,
                         organizationId: contract.organization_id ?? organizationId ?? null,
                         blob: output,
                         fileName,
                         templateId: template.id,
                         source: 'TEMPLATE_DOCX',
-                        kind: 'MINUTA',
+                        kind: addendum ? 'ADITIVO' : 'MINUTA',
                         name: nome,
                         notes: `Gerada do modelo "${template.name}" em ${new Date().toLocaleString('pt-BR')}.`,
                     });
@@ -297,7 +310,7 @@ const EmitDocumentModal: React.FC<Props> = ({
         <Modal open onClose={onClose} size="2xl">
             <ModalHeader
                 onClose={onClose}
-                title={<>{persistVersion ? 'Gerar pelo modelo' : 'Emitir documento'} — {contract.number}</>}
+                title={<>{persistVersion ? 'Gerar pelo modelo' : 'Emitir documento'} — {addendum ? `Aditivo ${addendum.number} (${contract.number})` : contract.number}</>}
                 description={persistVersion
                     ? 'O PDF gerado entra como rascunho na tabela de documentos; o portal só mostra depois de emitido.'
                     : 'Escolha o modelo para gerar o documento.'}

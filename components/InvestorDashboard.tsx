@@ -876,7 +876,6 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             isAdmin={false}
                             viewMode={viewMode}
                             organizationId={orgId}
-                            investorProfile={investorProfile}
                             onViewModeChange={setViewMode}
                             onDelete={handleDeleteOpportunity}
                             onUpdate={(updated) => setOpportunities(prev =>

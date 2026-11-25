@@ -6,9 +6,8 @@ import {
     OPPORTUNITY_TYPE_LABELS,
     investorPortalService,
 } from '../../services/investorPortalService';
-import { Investor } from '../../services/investorService';
 import OpportunityForm from './OpportunityForm';
-import OpportunityDetail from './OpportunityDetail';
+import PortalOportunidadeDetalhe, { type AbaDoDetalhe } from './portal/PortalOportunidadeDetalhe';
 import { naVitrine } from '../../utils/oportunidadeNumerosDaVersao';
 import { fmtPct } from '../../utils/format';
 import InterestsPanel from './InterestsPanel';
@@ -22,7 +21,6 @@ interface Props {
     viewMode: 'grid' | 'list';
     /** A org do topo; `null` = "Todas" (REGRA #5). Só filtra leitura: criar e editar usam a org resolvida. */
     organizationId?: string | null;
-    investorProfile?: Investor | null;
     onViewModeChange: (mode: 'grid' | 'list') => void;
     onDelete: (id: string) => void;
     onUpdate: (updated: InvestorOpportunity) => void;
@@ -39,10 +37,11 @@ const fmtBRL = (v: number | null | undefined) => {
 type AdminTab = 'opportunities' | 'interests';
 
 const OpportunitiesTab: React.FC<Props> = ({
-    opportunities, isAdmin, viewMode, organizationId, investorProfile,
+    opportunities, isAdmin, viewMode, organizationId,
     onViewModeChange, onDelete, onUpdate, openConfirm,
 }) => {
     const [detail, setDetail] = React.useState<InvestorOpportunity | null>(null);
+    const [abaDoDetalhe, setAbaDoDetalhe] = React.useState<AbaDoDetalhe>('apresentacao');
     const [editing, setEditing] = React.useState<InvestorOpportunity | null | 'new'>(null);
     const [saving, setSaving] = React.useState(false);
     const [adminTab, setAdminTab] = React.useState<AdminTab>('opportunities');
@@ -122,6 +121,7 @@ const OpportunitiesTab: React.FC<Props> = ({
     // Números exibidos: só os da versão do Imovib (utils/oportunidadeNumerosDaVersao.ts, naVitrine).
     // Editar abre a ORIGINAL: o formulário mostra e grava só os campos digitados à mão.
     const exibidas = visibleOpportunities.map(naVitrine);
+    const abrir = (op: InvestorOpportunity) => { setAbaDoDetalhe('apresentacao'); setDetail(op); };
     const editar = (op: InvestorOpportunity) => setEditing(opportunities.find(o => o.id === op.id) ?? op);
 
     // ── Pipeline executivo ────────────────────────────────────────────────────
@@ -135,6 +135,35 @@ const OpportunitiesTab: React.FC<Props> = ({
         if (v >= 1_000) return `R$ ${(v / 1_000).toFixed(0)}k`;
         return v === 0 ? '—' : `R$ ${v}`;
     };
+
+    const formulario = editing !== null && editingOrganizationId && (
+        <OpportunityForm
+            initial={editing === 'new' ? undefined : editing}
+            organizationId={editingOrganizationId}
+            onSave={handleSave}
+            onClose={() => { if (!saving) { setEditing(null); setCreateOrgId(undefined); } }}
+        />
+    );
+
+    // F4 do plano 2026-11-25-oportunidades-e-portal-do-investidor-sem-marketplace: "Ver" abre a MESMA tela do
+    // investidor (PortalOportunidadeDetalhe), no lugar da lista; o gestor ganha a faixa dele em cima.
+    if (detail) {
+        return (
+            <div className="space-y-4">
+                <PortalOportunidadeDetalhe
+                    opportunity={detail}
+                    aba={abaDoDetalhe}
+                    onAba={setAbaDoDetalhe}
+                    onVoltar={() => setDetail(null)}
+                    gestor={isAdmin ? {
+                        onEditar: () => editar(detail),
+                        onVerInteresses: () => { setDetail(null); setAdminTab('interests'); },
+                    } : undefined}
+                />
+                {formulario}
+            </div>
+        );
+    }
 
     return (
         <div className="space-y-8">
@@ -263,7 +292,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                 <div
                                     key={op.id}
                                     className="group bg-[#0B1727] rounded-3xl overflow-hidden relative cursor-pointer hover:scale-[1.01] transition-transform duration-200"
-                                    onClick={() => setDetail(op)}
+                                    onClick={() => abrir(op)}
                                 >
                                     {/* Thumbnail ou gradiente */}
                                     {op.capa ? (
@@ -333,7 +362,7 @@ const OpportunitiesTab: React.FC<Props> = ({
 
                                         <div className="flex items-center justify-between">
                                             <button
-                                                onClick={e => { e.stopPropagation(); setDetail(op); }}
+                                                onClick={e => { e.stopPropagation(); abrir(op); }}
                                                 className="px-4 py-2 bg-white/10 hover:bg-white/20 text-white text-button font-bold rounded-xl transition-all border border-white/10"
                                             >
                                                 Ver detalhes
@@ -412,7 +441,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                     variant="ghost"
                                                     size="sm"
                                                     className="bg-blue-50 text-blue-600 hover:bg-blue-100"
-                                                    onClick={() => setDetail(op)}
+                                                    onClick={() => abrir(op)}
                                                 >
                                                     Ver
                                                 </Button>
@@ -484,7 +513,7 @@ const OpportunitiesTab: React.FC<Props> = ({
                                                         variant="ghost"
                                                         size="sm"
                                                         className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
-                                                        onClick={() => setDetail(op)}
+                                                        onClick={() => abrir(op)}
                                                     >
                                                         Ver
                                                     </Button>
@@ -524,24 +553,7 @@ const OpportunitiesTab: React.FC<Props> = ({
             )}
 
             {/* Modais */}
-            {detail && (
-                <OpportunityDetail
-                    opportunity={detail}
-                    organizationId={detail.organization_id}
-                    isAdmin={isAdmin}
-                    investorProfile={investorProfile}
-                    onClose={() => setDetail(null)}
-                />
-            )}
-
-            {editing !== null && editingOrganizationId && (
-                <OpportunityForm
-                    initial={editing === 'new' ? undefined : editing}
-                    organizationId={editingOrganizationId}
-                    onSave={handleSave}
-                    onClose={() => { if (!saving) { setEditing(null); setCreateOrgId(undefined); } }}
-                />
-            )}
+            {formulario}
 
             {orgTargetModal}
         </div>

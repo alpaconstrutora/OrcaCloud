@@ -17,6 +17,7 @@
 // Função pura sobre as linhas: nada é gravado; muda junto quando o texto é revisado.
 import { validateCNPJ, validateCPF } from '../lib/validators';
 import type { Client } from '../types';
+import { CATEGORIA_PADRAO_DO_CLIENTE } from '../constants/clientCategories';
 import { linhaDuvidosa, type LinhaTranscrita } from './transcricaoDocumento';
 
 export interface ParteIdentificada {
@@ -382,6 +383,9 @@ export function clienteDaParte(p: ParteIdentificada, partes: ParteIdentificada[]
   const cliente: Partial<Client> = {
     name: nomeProprio(p.nome),
     type: p.cnpj ? 'PJ' : 'PF',
+    // Mesmo tipo com que o formulário manual nasce (pedido de 25/11/2026) — vazio
+    // aparecia "Não definido" na coluna Tipo de Meus Clientes.
+    category: CATEGORIA_PADRAO_DO_CLIENTE,
   };
   const documento = documentoCadastravel(p);
   if (documento) cliente.document = p.cnpj ? formatarCnpj(documento) : formatarCpf(documento);

@@ -181,7 +181,7 @@ describe('cadastro em Clientes (pedido de 24/11/2026)', () => {
   it('pessoa: PF, CPF formatado, RG separado em número, órgão e UF', () => {
     expect(clienteDaParte(partes[1], partes)).toEqual({
       name: 'Joana Maria de Souza', type: 'PF', document: '111.444.777-35',
-      rg: 'M-1.234.567', rg_issuing_agency: 'SSP', rg_uf: 'MG',
+      rg: 'M-1.234.567', rg_issuing_agency: 'SSP', rg_uf: 'MG', category: 'Vendas',
     });
   });
 
@@ -210,7 +210,7 @@ describe('cadastro em Clientes (pedido de 24/11/2026)', () => {
       'sob nº 11.222.333/0001-81.',
     ));
     expect(clienteDaParte(empresa, [empresa])).toEqual({
-      name: 'Alfa Construções LTDA', type: 'PJ', document: '11.222.333/0001-81',
+      name: 'Alfa Construções LTDA', type: 'PJ', document: '11.222.333/0001-81', category: 'Vendas',
     });
   });
 });

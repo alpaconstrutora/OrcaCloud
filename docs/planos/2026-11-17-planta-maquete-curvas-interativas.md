@@ -80,6 +80,13 @@ Resposta do usuário em 25/11/2026 (com print do app: planta 2D com curvas + 3D 
 
 F1–F4 no ar (#721, #722) e provadas. Desvio aceito e anotado: hover 2D não testa peça sob o cursor.
 
+- 25/11, 2º print do usuário: o canto de notas da Maquete (em cima à esquerda) cobria a barra de captura
+  da aba 3D ("HD 1920 × 1080 / Exportar imagem"). Foi para embaixo à esquerda, acima da dica (#723).
+  O print confirmou as notas certas num terreno rural: "Nenhum prédio do OpenStreetMap nesta área" e
+  "Árvores: ESA WorldCover 2021 (CC BY 4.0)".
+- ⏳ Não conferido: "Ver no 3D" de um corte com o estilo Maquete (o plano de corte recorta o bloco; a
+  face cortada pode ficar oca, sem tampa).
+
 ## Contexto
 
 O usuário mandou um reel da Hektar (11 s). O terreno 3D aparece como **maquete**: um bloco recortado com as

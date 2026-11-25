@@ -1,0 +1,25 @@
+-- ==========================================================================
+-- Rotinas automáticas — a listagem lê só a janela de 40 dias, não o histórico inteiro
+-- Date: 2026-11-25
+-- Plano: docs/planos/2026-11-25-rotinas-automaticas-timeout.md
+-- ==========================================================================
+-- Pedido do usuário (25/11/2026): a tela Configurações › Rotinas automáticas ficou carregando e
+-- terminou em "Não foi possível carregar as rotinas: canceling statement due to statement
+-- timeout" (authenticated tem statement_timeout = 8s).
+--
+-- CAUSA (medida em 25/11)
+-- - `cron.job_run_details` tem 236 mil linhas em 319 MB (40.818 páginas). A limpeza de 16/11
+--   apagou 242 mil linhas; o espaço fica reservado no arquivo (o dono é supabase_admin, não dá
+--   VACUUM FULL daqui). Cerca de metade das páginas está vazia.
+-- - A janela de 40 dias de `fn_rotinas_automaticas_listar` são ~164 mil linhas, ~70% do total:
+--   o planejador escolhe Seq Scan e lê as 40.818 páginas. Pela chave `runid` (Bitmap Index Scan)
+--   são 13.877 páginas — as linhas estão agrupadas pela ordem de inserção.
+-- - Com cache frio a varredura levou 6,2 s; com cache quente, 0,49 s. Sob carga, passa dos 8 s.
+--
+-- O QUE MUDA
+-- `enable_seqscan = off` só dentro da função: a janela sai pela chave, ~3× menos leitura.
+-- Mesma assinatura, mesmo retorno, mesmas permissões (ALTER FUNCTION não mexe em GRANT).
+-- Idempotente.
+-- ==========================================================================
+
+ALTER FUNCTION public.fn_rotinas_automaticas_listar() SET enable_seqscan = off;

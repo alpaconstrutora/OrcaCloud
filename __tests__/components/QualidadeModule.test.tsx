@@ -10,7 +10,9 @@
  *      e a coluna Treinados não tem fração "x de y" (sem denominador na fase 1);
  *  (c) 19 materiais → "abaixo do mínimo do Anexo 4: 19 de 20";
  *  (d) "Todas" com itens de 2 organizações → uma linha por organização, com o nome dela;
- *  (e) sem permissão de editar → o botão de carga desligado diz por quê no `title`.
+ *  (e) sem permissão de editar → o botão de carga desligado diz por quê no `title`;
+ *  (f) clicar na linha abre o Sheet do item; salvar grava, recarrega e o Sheet fica aberto (§25)
+ *      mostrando o item como veio da recarga.
  */
 import React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
@@ -26,6 +28,7 @@ const carregarSugestaoMateriais = vi.fn();
 const resumirProcedimentos = vi.fn();
 const listarTreinamentos = vi.fn();
 const definirNivel = vi.fn();
+const atualizarItem = vi.fn();
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 
@@ -39,8 +42,17 @@ vi.mock('../../services/qualidadeSiacService', () => ({
         listarTreinamentos: (...a: unknown[]) => listarTreinamentos(...a),
         definirNivel: (...a: unknown[]) => definirNivel(...a),
         criarItem: vi.fn(),
+        atualizarItem: (...a: unknown[]) => atualizarItem(...a),
+        definirCodigos: vi.fn(),
     },
 }));
+vi.mock('../../services/trainingsService', () => ({
+    trainingsService: { listTrainingCourses: vi.fn(async () => []), createTrainingCourse: vi.fn() },
+}));
+vi.mock('../../services/laborService', () => ({ laborService: { listEmployees: vi.fn(async () => []) } }));
+vi.mock('../../services/documentService', () => ({ documentService: { uploadNewDocument: vi.fn() } }));
+// O catálogo da Base instancia o serviço do SINAPI na importação (supabase simulado não tem `from`).
+vi.mock('../../components/DatabasePickerModal', () => ({ default: () => null }));
 
 import { useStore } from '../../store/useStore';
 import { ConfirmProvider } from '../../components/ui/confirm';
@@ -99,6 +111,7 @@ beforeEach(() => {
     resumirProcedimentos.mockReset().mockResolvedValue({});
     listarTreinamentos.mockReset().mockResolvedValue({});
     definirNivel.mockReset().mockResolvedValue(undefined);
+    atualizarItem.mockReset().mockResolvedValue(undefined);
     useStore.setState({
         activeOrganizationId: 'org-a',
         activeEmpresaId: null,
@@ -224,5 +237,23 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         montar();
         await user.click(await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' }));
         expect(await screen.findByText('Nada novo: a lista já estava carregada.')).toBeTruthy();
+    });
+
+    it('(f) clicar na linha abre o item; salvar grava, recarrega e o Sheet fica aberto com o item recarregado', async () => {
+        const user = userEvent.setup();
+        let nome = 'Serviço 1';
+        listarItens.mockImplementation(async () => [item({ id: 's1', nome, anexo4_numero: 1, ordem: 1 })]);
+        atualizarItem.mockImplementation(async (_id: string, patch: { nome: string }) => { nome = patch.nome; });
+        montar();
+        await user.click(await screen.findByText('Serviço 1'));
+        const campo = await screen.findByLabelText('Nome');
+        await user.clear(campo);
+        await user.type(campo, 'Serviço renomeado');
+        await user.click(screen.getByRole('button', { name: 'Salvar alterações' }));
+        await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('s1', expect.objectContaining({ nome: 'Serviço renomeado' })));
+        await waitFor(() => expect(listarItens).toHaveBeenCalledTimes(2));
+        // continua aberto (§25) e o título já é o do item recarregado
+        expect(await screen.findByRole('heading', { name: 'Serviço renomeado' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Salvar alterações' })).toBeTruthy();
     });
 });

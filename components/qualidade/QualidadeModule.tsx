@@ -5,7 +5,7 @@ import type {
 } from '../../types/qualidadeSiac';
 import { qualidadeSiacService } from '../../services/qualidadeSiacService';
 import {
-    errorMessage, forEachTargetOrg, partialFailureNote, useOrgContext, useOrgWriteTarget, type WriteTarget,
+    errorMessage, forEachTargetOrg, partialFailureNote, useOrgContext, useOrgWriteTarget,
 } from '../../hooks/useOrgContext';
 import { useToast } from '../../hooks/useToast';
 import { useStore } from '../../store/useStore';
@@ -14,6 +14,7 @@ import { TabsBar } from '../ui/TabsBar';
 import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac';
 import { PainelDoNivel } from './PainelDoNivel';
 import { ListaControlada } from './ListaControlada';
+import { ItemControladoSheet, type EdicaoDoItem } from './ItemControladoSheet';
 
 /**
  * Módulo Qualidade (SiAC/PBQP-H), fase 1 — casca da tela
@@ -52,10 +53,8 @@ const CABECALHO: Record<Aba, { titulo: string; subtitulo: string }> = {
     },
 };
 
-/** O que Task 6 (Sheet do item) consome: item aberto, ou item novo já com o alvo resolvido. */
-export type EdicaoDoItem =
-    | { modo: 'editar'; item: ItemControlado }
-    | { modo: 'novo'; tipo: TipoItemControlado; alvo: WriteTarget };
+/** Item aberto no Sheet, ou item novo já com o alvo resolvido (o tipo mora no Sheet). */
+export type { EdicaoDoItem };
 
 interface Props {
     /** `podeEditarQualidadeSiac` resolvido no `AppRouter`. Falso = só leitura, com o motivo visível. */
@@ -79,7 +78,9 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
     const [treinamentos, setTreinamentos] = React.useState<Record<string, RegistroTreinamento[]>>({});
     const [carregando, setCarregando] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
-    const [, setEdicao] = React.useState<EdicaoDoItem | null>(null);
+    const [edicao, setEdicao] = React.useState<EdicaoDoItem | null>(null);
+    /** Item pedido pelo "Registrar treinamento em obra" do Sheet: a tela do registro entra na Task 7. */
+    const [, setTreinoEmObra] = React.useState<ItemControlado | null>(null);
 
     // ── Carga (sem `if (!orgId) return`: em "Todas" a tela carrega tudo o que a RLS deixa) ──
     const seq = React.useRef(0);
@@ -172,6 +173,18 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
         await carregarRef.current();
     };
 
+    /**
+     * O Sheet mostra o item como está NA LISTA recarregada (procedimento, curso e códigos gravam na hora
+     * e a recarga traz o novo estado). Fora da lista (outra organização no topo, erro de carga), fica o
+     * item como foi aberto — e as gravações continuam na organização DELE.
+     */
+    const edicaoAtual = React.useMemo<EdicaoDoItem | null>(() => {
+        if (edicao?.modo !== 'editar') return edicao;
+        const fresco = itens.find(i => i.id === edicao.item.id);
+        return fresco ? { modo: 'editar', item: fresco } : edicao;
+    }, [edicao, itens]);
+    const itemAberto = edicaoAtual?.modo === 'editar' ? edicaoAtual.item : null;
+
     const cab = CABECALHO[abaEfetiva];
 
     return (
@@ -214,6 +227,15 @@ const QualidadeModule: React.FC<Props> = ({ podeEditar }) => {
 
             {/* Por obra: a visão por obra entra na Task 8 do plano de implementação (PorObra). */}
             {abaEfetiva === 'por-obra' && <section aria-label="Qualidade por obra" />}
+
+            <ItemControladoSheet edicao={edicaoAtual}
+                itensDaOrg={itemAberto ? itens.filter(i => i.organization_id === itemAberto.organization_id) : []}
+                procedimento={itemAberto?.procedure_document_id ? procedimentos[itemAberto.procedure_document_id] ?? null : null}
+                treinamentos={itemAberto?.training_course_id ? treinamentos[itemAberto.training_course_id] ?? [] : []}
+                podeEditar={podeEditar}
+                onClose={() => setEdicao(null)}
+                onSaved={() => void carregarRef.current()}
+                onRegistrarTreinamento={i => setTreinoEmObra(i)} />
 
             {orgTargetModal}
 

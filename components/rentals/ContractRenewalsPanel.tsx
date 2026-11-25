@@ -28,6 +28,9 @@ const fmtDate = (iso?: string) => {
     const [y, m, d] = iso.slice(0, 10).split('-');
     return `${d}/${m}/${y}`;
 };
+/** Data e hora locais de um timestamp. */
+const fmtDataHora = (iso?: string | null) =>
+    (iso ? new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—');
 const fmtCur = (n?: number) =>
     (n ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -566,6 +569,14 @@ const ContractRenewalsPanel: React.FC<Props> = ({ contract, onNotify, onChanged,
                                             ? ` (era ${fmtCur(ad.previous_value)})` : ''}
                                         {ad.installments_generated ? ` · ${ad.installments_generated} parcela(s) geradas` : ''}
                                     </p>
+                                    {/* Autoria (desde 25/11/2026; antes não era gravada). */}
+                                    {(ad.requested_by || ad.cancelado_em) && (
+                                        <p className="text-xs text-gray-500 mt-0.5">
+                                            {ad.requested_by ? `Feito por ${ad.requested_by}${ad.created_at ? ` em ${fmtDataHora(ad.created_at)}` : ''}` : ''}
+                                            {ad.requested_by && ad.cancelado_em ? ' · ' : ''}
+                                            {ad.cancelado_em ? `Cancelado por ${ad.cancelado_por ?? '—'} em ${fmtDataHora(ad.cancelado_em)}` : ''}
+                                        </p>
+                                    )}
                                 </div>
                                 {/* Desfazer só faz sentido enquanto a renovação não virou
                                     dinheiro: o serviço recusa se alguma parcela do período

@@ -42,7 +42,8 @@ const ADDENDUM_COLS =
     'id, contract_id, organization_id, number, type, description, value_impact, new_end_date, ' +
     'new_start_date, previous_end_date, new_value, previous_value, reajuste_index, reajuste_fator, ' +
     'installments_generated, status, requested_by, approved_by, approved_at, notes, ' +
-    'signature_status, signature_token, signature_url, signature_completed_at, signed_document_url, created_at';
+    'signature_status, signature_token, signature_url, signature_completed_at, signed_document_url, created_at, ' +
+    'cancelado_em, cancelado_por';
 
 // Resolve supplier name from DB (returns fallback string on error)
 async function resolveSupplierName(supplierId: string | undefined, fallback: string): Promise<string> {

@@ -158,6 +158,43 @@ export interface ExpiringRental extends Contract {
     negociacaoId: string | null;
 }
 
+/** Uma renovação no Histórico (Locações › Renovações). */
+export interface RegistroDeRenovacao {
+    /** Id do aditivo, ou do contrato-filho. */
+    id: string;
+    via: 'ADITIVO' | 'CONTRATO';
+    /** Contrato renovado: o do aditivo, ou o PAI do contrato-filho. */
+    contract_id: string;
+    /** AD-00X, ou o número do contrato-filho. */
+    numero: string;
+    status: string;
+    inicio: string | null;
+    fim: string | null;
+    fimAnterior: string | null;
+    valor: number | null;
+    valorAnterior: number | null;
+    /** Só aditivo: parcelas geradas (0 depois de cancelado). */
+    parcelas: number | null;
+    descricao: string | null;
+    criado_em: string;
+    criado_por: string | null;
+    cancelado_em: string | null;
+    cancelado_por: string | null;
+    contrato: { number: string; title: string | null; client_id: string | null; status: string | null };
+    /** Negociação do contrato (a da raiz) — recorta pelo empreendimento aberto. */
+    negociacaoId: string | null;
+    /** Via ADITIVO: o aditivo inteiro (Editar/Excluir usam). */
+    aditivo?: ContractAddendum;
+    /** Via CONTRATO: o filho, e se ele já foi renovado (só o último se desfaz). */
+    filhoId?: string;
+    filhoTemRenovacao?: boolean;
+}
+
+const COLUNAS_ADITIVO_HISTORICO =
+    'id, contract_id, organization_id, number, type, description, value_impact, status, new_start_date, new_end_date, ' +
+    'previous_end_date, new_value, previous_value, installments_generated, notes, requested_by, created_at, ' +
+    'cancelado_em, cancelado_por';
+
 // ─── Interno ──────────────────────────────────────────────────────────────
 
 async function fetchContract(id: string): Promise<Contract> {
@@ -880,6 +917,105 @@ export const contractRenewalService = {
             last_addendum: lastAddendum.get(r.id),
             negociacaoId: negociacoes.get(r.id) ?? null,
         }));
+    },
+
+    /**
+     * Locações › Renovações › Histórico (pedido de 25/11/2026): todas as
+     * renovações — aditivos de prorrogação (inclusive cancelados) e contratos
+     * novos gerados por renovação — de todas as locações. `organizationId` nulo
+     * = todas as orgs do usuário (REGRA #5: a RLS recorta).
+     */
+    historicoGeral: async (organizationId: string | null): Promise<RegistroDeRenovacao[]> => {
+        let qa = supabase
+            .from('contract_addendums')
+            .select(`${COLUNAS_ADITIVO_HISTORICO}, contracts!inner(number, title, client_id, status, deal_id, parent_contract_id, domain)`)
+            .not('new_start_date', 'is', null)
+            .eq('contracts.domain', 'LOCACAO');
+        if (organizationId) qa = qa.eq('organization_id', organizationId);
+        let qf = supabase
+            .from('contracts')
+            .select('id, organization_id, number, title, client_id, status, start_date, end_date, current_value, original_value, created_at, parent_contract_id, deal_id')
+            .eq('domain', 'LOCACAO')
+            .not('parent_contract_id', 'is', null);
+        if (organizationId) qf = qf.eq('organization_id', organizationId);
+        const [{ data: ads, error: errA }, { data: filhos, error: errF }] = await Promise.all([qa, qf]);
+        if (errA) throw errA;
+        if (errF) throw errF;
+
+        type ContratoResumo = { id: string; number: string; title: string | null; client_id: string | null; status: string | null; deal_id: string | null; parent_contract_id: string | null; end_date?: string | null; current_value?: number | null };
+        type LinhaAditivo = ContractAddendum & { contracts: Omit<ContratoResumo, 'id'> };
+        type Filho = ContratoResumo & { start_date: string | null; original_value: number | null; created_at: string };
+        const linhasAd = (ads ?? []) as unknown as LinhaAditivo[];
+        const linhasFi = (filhos ?? []) as unknown as Filho[];
+
+        // Pais dos contratos-filho (sem FK de propósito — não dá para embutir).
+        const idsPais = [...new Set(linhasFi.map(f => f.parent_contract_id!).filter(Boolean))];
+        const pais = new Map<string, ContratoResumo>();
+        if (idsPais.length > 0) {
+            const { data, error } = await supabase
+                .from('contracts')
+                .select('id, number, title, client_id, status, deal_id, parent_contract_id, end_date, current_value')
+                .in('id', idsPais);
+            if (error) throw error;
+            ((data ?? []) as unknown as ContratoResumo[]).forEach(p => pais.set(p.id, p));
+        }
+        // Filho que já tem filho não é a última renovação da cadeia.
+        const temFilho = new Set(linhasFi.map(f => f.parent_contract_id!));
+
+        const contratos = new Map<string, { id: string; deal_id?: string | null; parent_contract_id?: string | null }>();
+        linhasAd.forEach(a => contratos.set(a.contract_id, { id: a.contract_id, deal_id: a.contracts.deal_id, parent_contract_id: a.contracts.parent_contract_id }));
+        linhasFi.forEach(f => { const p = pais.get(f.parent_contract_id!); if (p) contratos.set(p.id, p); });
+        const negociacoes = await negociacoesDosContratos([...contratos.values()]);
+
+        const deAditivos: RegistroDeRenovacao[] = linhasAd.map(({ contracts, ...a }) => ({
+            id: a.id,
+            via: 'ADITIVO',
+            contract_id: a.contract_id,
+            numero: a.number,
+            status: a.status,
+            inicio: a.new_start_date ?? null,
+            fim: a.new_end_date ?? null,
+            fimAnterior: a.previous_end_date ?? null,
+            valor: a.new_value ?? null,
+            valorAnterior: a.previous_value ?? null,
+            parcelas: a.installments_generated ?? null,
+            descricao: a.description || null,
+            criado_em: a.created_at ?? '',
+            criado_por: a.requested_by ?? null,
+            cancelado_em: a.cancelado_em ?? null,
+            cancelado_por: a.cancelado_por ?? null,
+            contrato: { number: contracts.number, title: contracts.title, client_id: contracts.client_id, status: contracts.status },
+            negociacaoId: negociacoes.get(a.contract_id) ?? null,
+            aditivo: a as ContractAddendum,
+        }));
+        const deContratos: RegistroDeRenovacao[] = linhasFi.flatMap(f => {
+            const p = pais.get(f.parent_contract_id!);
+            if (!p) return [];
+            return [{
+                id: f.id,
+                via: 'CONTRATO' as const,
+                contract_id: p.id,
+                numero: f.number,
+                status: f.status ?? '',
+                inicio: f.start_date,
+                fim: f.end_date ?? null,
+                fimAnterior: p.end_date ?? null,
+                valor: f.current_value ?? f.original_value ?? null,
+                valorAnterior: p.current_value ?? null,
+                parcelas: null,
+                descricao: null,
+                criado_em: f.created_at,
+                // contracts não guarda autor.
+                criado_por: null,
+                cancelado_em: null,
+                cancelado_por: null,
+                contrato: { number: p.number, title: p.title, client_id: p.client_id, status: p.status },
+                negociacaoId: negociacoes.get(p.id) ?? null,
+                filhoId: f.id,
+                filhoTemRenovacao: temFilho.has(f.id),
+            }];
+        });
+        return [...deAditivos, ...deContratos].sort((x, y) => y.criado_em.localeCompare(x.criado_em));
     },
 
     /**

@@ -9,6 +9,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { contractRenewalService, ExpiringRental } from '../../services/contractRenewalService';
 import { Client } from '../../types';
 import { filaDoEmpreendimento } from '../../utils/reajusteAniversario';
+import RentalRenovacoesHistorico from './RentalRenovacoesHistorico';
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Contrato', sortable: true },
@@ -125,6 +126,9 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
     const confirm = useConfirm();
     const [searchTerm, setSearchTerm] = usePersistedState('rentalRenewals:search', '');
     const [showClosed, setShowClosed] = usePersistedState<boolean>('rentalRenewals:showClosed', false);
+    // "A renovar" (a fila) × "Histórico" (todas as renovações, inclusive canceladas) —
+    // mesmo seletor de Locações › Reajustes (pedido de 25/11/2026).
+    const [visao, setVisao] = usePersistedState<'fila' | 'historico'>('rentals:renovacoes:visao', 'fila');
     const tableColumns = useTableColumns(COLUMNS, 'rentalRenewalsColumns');
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'rentalRenewalsColWidths');
     // Largura = soma exata das colunas visíveis (§6.1) — "Ações" não é togglável
@@ -268,8 +272,44 @@ const RentalRenewals: React.FC<Props> = ({ organizationId, clients = [], onChang
         }
     };
 
+    const seletor = (
+        <div role="radiogroup" aria-label="Visão das renovações" className="inline-flex items-center gap-1 p-1 bg-gray-100 rounded-[8px]">
+            {([['fila', `A renovar (${loading ? '…' : rows.length})`], ['historico', 'Histórico']] as const).map(([id, rotulo]) => (
+                <button
+                    key={id}
+                    type="button"
+                    role="radio"
+                    aria-checked={visao === id}
+                    onClick={() => setVisao(id)}
+                    className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
+                        visao === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
+                    }`}
+                >
+                    {rotulo}
+                </button>
+            ))}
+        </div>
+    );
+
+    if (visao === 'historico') {
+        return (
+            <div className="space-y-6">
+                {seletor}
+                <RentalRenovacoesHistorico
+                    organizationId={organizationId}
+                    negociacoesDoEmpreendimento={negociacoesDoEmpreendimento}
+                    nomeDoCliente={id => clientName(id ?? undefined)}
+                    onOpenContract={onOpenContract}
+                    onEditRenewal={onEditRenewal}
+                    onMudou={mensagem => { loadData(); onChanged?.(mensagem); }}
+                />
+            </div>
+        );
+    }
+
     return (
         <div className="space-y-6">
+            {seletor}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
                 <button onClick={() => toggleFaixa('vencidos')} className="text-left">
                     <KpiCard shadow={false} size="sm" label="Vencidos" value={stats.vencidos} icon={<CalendarX className="w-4 h-4" />} color="red" />

@@ -237,6 +237,9 @@ export interface ContractAddendum {
     signature_completed_at?: string;
     signed_document_url?: string;
     created_at?: string;
+    /** Quando e por quem foi cancelado — gatilho no banco (desde 25/11/2026; antes, NULL). */
+    cancelado_em?: string | null;
+    cancelado_por?: string | null;
 }
 
 // ─────────────────────────────────────────────────────────────

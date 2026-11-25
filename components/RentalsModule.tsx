@@ -3193,6 +3193,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     clients={clients}
                     onChanged={(message) => { loadData(); notify(message); }}
                     onOpenContract={openDealForContract}
+                    negociacoesDoEmpreendimento={negociacoesDoEdificio}
                 />
             )}
 

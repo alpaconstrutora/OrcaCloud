@@ -95,12 +95,42 @@ operação do reajuste.
    couber, ou só o plano + memória se o guia não tiver seção de fluxo). Pronto quando:
    o texto existe e cita este plano.
 
-## Decisão em aberto (antes do item 3)
+## Decisão do usuário (25/11/2026)
 
-- **Gerar o documento do aditivo por modelo** (como "Gerar Documento do Contrato"):
-  hoje a emissão por modelo só existe para o contrato. O item 3 entrega anexar PDF e
-  assinatura; gerar por modelo é trabalho à parte (variáveis do aditivo no modelo
-  .docx). Fica fora deste plano, a não ser que você peça.
+Pergunta: gerar o documento do aditivo por modelo (.docx), como "Gerar Documento do
+Contrato", entra neste plano? Resposta:
+
+> Uma decisão sua antes do item 3: incluir
+
+3b. **Gerar o documento do aditivo por modelo** — o que já existe e é reaproveitado:
+   - o catálogo de campos tem o grupo **Aditivo** (`services/docxFieldCatalog.ts`: número,
+     descrição, início/fim da nova vigência, fim anterior, novo valor e por extenso,
+     valor anterior, índice, fator, aprovação);
+   - `ResolveContext.addendum` já existe;
+   - o contexto de locação vem de `buildRentalResolveContext` (o mesmo da minuta do
+     contrato).
+
+   O que muda: `EmitDocumentModal` ganha a prop `addendum`. Com ela:
+   - grava a versão com `ownerType: 'ADDENDUM'`, `ownerId` do aditivo e `kind: 'ADITIVO'`;
+   - nomeia o documento como "CTL-006-012-0001 - Aditivo AD-004 ao Contrato de Locação";
+   - põe o aditivo no contexto.
+
+   Na gaveta Ver da renovação, o botão **"Gerar documento do aditivo"** abre o modal, e
+   o PDF gerado entra na lista de documentos do aditivo (item 3). "Modelos de documento"
+   abre a mesma tela de modelos (`DocxTemplateManager`) a partir da Gestão de Unidades.
+   Pronto quando:
+   - teste do modal: com `addendum`, a versão é gravada como ADDENDUM/ADITIVO no aditivo
+     certo; sem `addendum`, nada muda (CONTRACT/MINUTA);
+   - teste do catálogo: os campos `addendum.*` resolvem com os dados do AD-004
+     (23/03/2020, 22/09/2021, R$ 5.832,48 e por extenso);
+   - em produção: abrir o modal do AD-004, conferir a lista de modelos e fechar sem
+     gerar (gerar grava uma versão; só com o seu OK).
+
+## Ordem de entrega
+
+- **PR 1:** itens 1, 2, 4 e 5 (a renovação muda de lugar).
+- **PR 2:** itens 3 e 3b (documentos do aditivo).
+- Item 6 no fim.
 
 ## Fora
 

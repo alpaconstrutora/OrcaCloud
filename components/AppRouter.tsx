@@ -76,7 +76,7 @@ import { podeEditarTreinamentos } from '../utils/permissaoTreinamentos';
 import { podeEditarRiscos } from '../utils/permissaoRiscos';
 import { podeVerDiretoria } from '../utils/permissaoDiretoria';
 import { temAcessoTotal } from '../lib/acessoTotal';
-import { CHAVE_FOLHA_PEDIDA } from '../utils/folhaDeConfiguracoes';
+import { pedirFolha } from '../utils/folhaDeConfiguracoes';
 import { permitidoNaOrg, vinculosDoUsuario } from '../utils/modulosPermitidos';
 const NotificationsCenter   = React.lazy(() => import('./NotificationsCenter'));
 const ProjectTypeTemplateEditor = React.lazy(() => import('./ProjectTypeTemplateEditor'));
@@ -323,7 +323,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     // (24/11/2026, docs/planos/2026-11-24-tributos-um-lugar-so.md). O endereço
     // antigo — view salva, busca, atalho — abre a folha do INSS.
     if (activeView === 'labor-fiscal') {
-      try { localStorage.setItem(CHAVE_FOLHA_PEDIDA, 'tributos-inss'); } catch { /* sem localStorage: abre na folha inicial */ }
+      pedirFolha('tributos-inss');
       setActiveViewDoStore('settings');
     }
   }, [activeView, setActiveViewDoStore]);

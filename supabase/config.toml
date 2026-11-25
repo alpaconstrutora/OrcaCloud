@@ -444,6 +444,13 @@ verify_jwt = false
 [functions.fiscal-nfe-processor]
 verify_jwt = false
 
+# Motor de conciliação: o cron (`reconciliation-engine-sweep`) chama com o CRON_SECRET, que não
+# é JWT; o navegador manda o JWT do usuário e o código confere (`exigirUsuario`/`exigirMembro`
+# ou `chamadaDeCron`). Publicado com verify_jwt = false desde sempre; em 24/11/2026 um deploy
+# sem a flag (e sem esta entrada) religou o gateway e o cron passou a tomar 401.
+[functions.reconciliation-engine]
+verify_jwt = false
+
 # Asaas (docs/planos/2026-10-16-asaas-pendencias-e-pix.md). Nenhuma das duas
 # recebe JWT: o webhook autentica pelo header `asaas-access-token`
 # (ASAAS_WEBHOOK_TOKEN, comparação em tempo constante) e o status-sync pelo

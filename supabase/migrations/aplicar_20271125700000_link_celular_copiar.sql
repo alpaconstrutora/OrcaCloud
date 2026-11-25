@@ -1,4 +1,8 @@
--- aplicar_20271125600000_link_celular_copiar.sql
+-- aplicar_20271125700000_link_celular_copiar.sql
+--
+-- ⚠️ JÁ APLICADA em produção (25/11/2026 — `mobile_link_copiar` e a coluna `token` existem no banco).
+-- NÃO rodar de novo. Nome antigo: aplicar_20271125600000_link_celular_copiar.sql — renomeada para
+-- 20271125700000 porque colidia com aplicar_20271125600000_qualidade_siac_base.sql (#747), que chegou antes.
 --
 -- Link do celular — "Copiar link" a qualquer momento, como nos portais.
 -- Pedido 25/11/2026 (docs/planos/2026-11-11-link-celular-tarefas-diario.md,

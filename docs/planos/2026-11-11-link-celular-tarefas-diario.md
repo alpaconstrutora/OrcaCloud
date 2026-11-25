@@ -1218,7 +1218,7 @@ aceito: o gestor pode copiar e usar o link de um membro.
 
 ### Itens
 
-- [x] `supabase/migrations/aplicar_20271125600000_link_celular_copiar.sql` — coluna `token`;
+- [x] `supabase/migrations/aplicar_20271125700000_link_celular_copiar.sql` — coluna `token`;
   `mobile_link_generate` grava; `mobile_link_copiar` (mesma autorização de status/revoke; só link
   ativo); `mobile_link_status.copiavel`; gatilho `trg_user_mobile_links_revogado_sem_token`.
   **Pronto quando:** `scripts/teste-link-celular-copiar.sql` dá `TUDO OK` com a migration no

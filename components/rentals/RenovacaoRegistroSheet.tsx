@@ -19,7 +19,7 @@ interface Props {
 const Linha: React.FC<{ rotulo: string; children: React.ReactNode }> = ({ rotulo, children }) => (
     <div className="grid grid-cols-[160px_1fr] gap-3 py-2 border-b border-gray-100 last:border-b-0">
         <dt className="text-xs font-semibold text-slate-500 pt-0.5">{rotulo}</dt>
-        <dd className="text-sm text-gray-800">{children}</dd>
+        <dd className="text-sm text-gray-800 min-w-0 break-words">{children}</dd>
     </div>
 );
 
@@ -38,7 +38,7 @@ const RenovacaoRegistroSheet: React.FC<Props> = ({ registro: r, nomeDoCliente, o
                             <span>
                                 {r.cancelado_em
                                     ? `Cancelada por ${r.cancelado_por ?? '—'} em ${fmtDataHora(r.cancelado_em)}.`
-                                    : 'Cancelada antes de 25/11/2026: quem e quando não foram registrados.'}
+                                    : 'Cancelada antes de o sistema registrar quem e quando (o registro começou em 25/11/2026).'}
                                 {' '}As parcelas do período foram apagadas.
                             </span>
                         </div>
@@ -56,7 +56,7 @@ const RenovacaoRegistroSheet: React.FC<Props> = ({ registro: r, nomeDoCliente, o
                         </Linha>
                         {r.via === 'ADITIVO' && <Linha rotulo="Parcelas geradas">{r.parcelas ?? '—'}</Linha>}
                         <Linha rotulo="Descrição">{r.descricao || '—'}</Linha>
-                        <Linha rotulo="Feito por">{r.criado_por ?? 'Não registrado (antes de 25/11/2026)'}</Linha>
+                        <Linha rotulo="Feito por">{r.criado_por ?? 'Não registrado (o registro começou em 25/11/2026)'}</Linha>
                         <Linha rotulo="Em">{fmtDataHora(r.criado_em)}</Linha>
                     </dl>
                 </div>

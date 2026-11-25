@@ -170,14 +170,14 @@ const RentalRenovacoesHistorico: React.FC<Props> = ({ organizationId, negociacoe
                         case 'situacao': return cancelado(r) ? (
                             <span
                                 className="block truncate text-sm font-normal text-red-600"
-                                title={r.cancelado_em ? `Cancelado por ${r.cancelado_por ?? '—'} em ${fmtDataHora(r.cancelado_em)}` : 'Cancelado antes de 25/11/2026: quem e quando não foram registrados.'}
+                                title={r.cancelado_em ? `Cancelado por ${r.cancelado_por ?? '—'} em ${fmtDataHora(r.cancelado_em)}` : 'Cancelado antes de o sistema registrar quem e quando (o registro começou em 25/11/2026).'}
                             >
                                 Cancelado
                             </span>
                         ) : (
                             <span className={`text-sm font-normal ${r.status === 'Aprovado' || r.status === 'Ativo' ? 'text-emerald-700' : 'text-amber-800'}`}>{r.status}</span>
                         );
-                        case 'quem': return <span className="block truncate text-sm font-normal text-gray-600" title={r.criado_por ?? 'Não registrado (antes de 25/11/2026)'}>{r.criado_por ?? '—'}</span>;
+                        case 'quem': return <span className="block truncate text-sm font-normal text-gray-600" title={r.criado_por ?? 'Não registrado (o registro começou em 25/11/2026)'}>{r.criado_por ?? '—'}</span>;
                         case 'quando': return <span className="text-sm font-normal text-gray-600">{fmtDataHora(r.criado_em)}</span>;
                         default: return null;
                     }

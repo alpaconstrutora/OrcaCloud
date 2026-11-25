@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { erroDoLinkDePortal, MSG_LINK_PORTAL_SO_GESTOR } from '../utils/portalLinkPermissao';
 import type { PayrollEvent, PayrollItem, PayrollResultWithEmployee, PayrollRubric, PayrollRun } from './payrollService';
 import type { OrganizacaoParaHolerite } from '../utils/empregadorDoHolerite';
 
@@ -272,13 +273,15 @@ export const atsService = {
             p_employee_id: employeeId,
             p_org_id: orgId,
         });
-        if (error) throw error;
+        if (error) throw erroDoLinkDePortal(error);
         return data as string;
     },
 
+    /** Desativa o link. A RLS deixa só owner/admin gravar: 0 linhas = não revogou (lança, nunca finge). */
     async revokePortalToken(tokenId: string): Promise<void> {
-        const { error } = await supabase.from('portal_tokens').update({ is_active: false }).eq('id', tokenId);
-        if (error) throw error;
+        const { data, error } = await supabase.from('portal_tokens').update({ is_active: false }).eq('id', tokenId).select('id');
+        if (error) throw erroDoLinkDePortal(error);
+        if (!data || data.length === 0) throw new Error(MSG_LINK_PORTAL_SO_GESTOR);
     },
 
     async validatePortalToken(token: string): Promise<{ valid: boolean; employee_id?: string; org_id?: string; name?: string; role?: string; error?: string }> {

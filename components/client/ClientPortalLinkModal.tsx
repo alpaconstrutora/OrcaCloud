@@ -7,6 +7,7 @@ import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
 import ActionIconButton from '../ui/ActionIconButton';
 import ConvitePortalBloco from '../portal/ConvitePortalBloco';
+import { MSG_LINK_PORTAL_SO_GESTOR } from '../../utils/portalLinkPermissao';
 
 interface ClientPortalLinkModalProps {
     client: Client;
@@ -78,7 +79,7 @@ const ClientPortalLinkModal: React.FC<ClientPortalLinkModalProps> = ({ client, o
             showToast('Link gerado com sucesso!', 'success');
         } catch (e) {
             console.error('[ClientPortal] Erro ao gerar token:', e);
-            showToast('Erro ao gerar link.', 'error');
+            showToast(e instanceof Error && e.message === MSG_LINK_PORTAL_SO_GESTOR ? e.message : 'Erro ao gerar link.', 'error');
         } finally {
             setLoading(false);
         }
@@ -105,7 +106,7 @@ const ClientPortalLinkModal: React.FC<ClientPortalLinkModalProps> = ({ client, o
             setToken(null);
             showToast('Acesso revogado.', 'success');
         } catch (e) {
-            showToast('Erro ao revogar.', 'error');
+            showToast(e instanceof Error && e.message === MSG_LINK_PORTAL_SO_GESTOR ? e.message : 'Erro ao revogar.', 'error');
         } finally {
             setLoading(false);
         }

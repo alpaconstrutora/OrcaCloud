@@ -680,6 +680,11 @@ import type { PranchaExport } from '../../services/blueprintExportService';
 import { useBlueprintMedicoes } from '../../hooks/useBlueprintMedicoes';
 import { useBlueprintZonaUrbanistica } from '../../hooks/useBlueprintZonaUrbanistica';
 import { useBlueprintTopografia } from '../../hooks/useBlueprintTopografia';
+import { usePrediosDaMaquete } from '../../hooks/usePrediosDaMaquete';
+import { useCoberturaDaMaquete } from '../../hooks/useCoberturaDaMaquete';
+import { ATRIBUICAO_OSM, caixaGeoDaGrade, prediosNoDesenho } from '../../utils/blueprintMaqueteOsm';
+import { arvoresDaCobertura } from '../../utils/blueprintMaqueteArvores';
+import { AREA_MAXIMA_KM2, areaDaCaixaKm2, ATRIBUICAO_WORLDCOVER } from '../../utils/geo/coberturaDoSolo';
 import { amostradorDaGrade, amostradorDaMalha, amostradorDoChao, malhaDaGrade } from '../../utils/blueprintTopografia';
 import {
   comprimentoDaCurvaM,
@@ -5354,6 +5359,69 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chaveDaTopografia, mapaDeFundo]);
+
+  /**
+   * O ENTORNO DA MAQUETE (25/11/2026, o reel da Hektar; F3 prédios do OpenStreetMap, F4 árvores do
+   * ESA WorldCover). Só com o estilo Maquete, o Terreno à vista, curvas geradas e o estudo
+   * georreferenciado: a caixa é a da GRADE (a malha do relevo cobre exatamente ela). O que o estudo
+   * já desenhou (paredes, blocos de massa, com 1 m de folga) tira prédio e árvore de cima.
+   */
+  const maqueteAtiva = estilo3d === 'MAQUETE' && mostrarTerreno3d && terrenoAVista;
+  const caixaDaMaquete = useMemo(() => {
+    const v = topografia.selecionada;
+    const g = editor.model.georreferencia;
+    return maqueteAtiva && v && g ? caixaGeoDaGrade(v.grade, g) : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maqueteAtiva, chaveDaTopografia, editor.model.georreferencia]);
+  const coberturaCabe = !!caixaDaMaquete && areaDaCaixaKm2(caixaDaMaquete) <= AREA_MAXIMA_KM2;
+  const prediosOsm = usePrediosDaMaquete(caixaDaMaquete);
+  const coberturaDoSolo = useCoberturaDaMaquete(coberturaCabe ? caixaDaMaquete : null);
+  const construidoDoEstudo = useMemo(() => {
+    const folga = 1000;
+    const caixa = (pts: { x: number; y: number }[], extra: number) => ({
+      minX: Math.min(...pts.map((p) => p.x)) - extra,
+      minY: Math.min(...pts.map((p) => p.y)) - extra,
+      maxX: Math.max(...pts.map((p) => p.x)) + extra,
+      maxY: Math.max(...pts.map((p) => p.y)) + extra,
+    });
+    return [
+      ...editor.model.walls.map((w) => caixa([w.a, w.b], folga + w.thicknessMm / 2)),
+      ...(editor.model.blocos ?? []).filter((b) => b.pontos.length >= 3).map((b) => caixa(b.pontos, folga)),
+    ];
+  }, [editor.model.walls, editor.model.blocos]);
+  const entornoDaMaquete = useMemo(() => {
+    const v = topografia.selecionada;
+    const g = editor.model.georreferencia;
+    if (!maqueteAtiva || !v || !g) return null;
+    const cotaEm = amostradorDaMalha(v.grade);
+    const predios = prediosOsm.estado === 'pronto' ? prediosNoDesenho(prediosOsm.predios, g, cotaEm, construidoDoEstudo) : [];
+    const arvores =
+      coberturaDoSolo.estado === 'pronto'
+        ? arvoresDaCobertura(coberturaDoSolo.grade, g, cotaEm, { predios: predios.map((p) => p.anel), construido: construidoDoEstudo })
+        : [];
+    if (predios.length === 0 && arvores.length === 0) return null;
+    return {
+      predios: predios.map((p) => ({ id: p.id, anel: p.anel, baseY: p.baseM - cotaZeroDoTerrenoM, alturaM: p.alturaM })),
+      arvores: arvores.map((a) => ({ x: a.x, y: a.y, baseY: a.baseM - cotaZeroDoTerrenoM, alturaM: a.alturaM, copaM: a.copaM })),
+      chave: `${chaveDaTopografia}|${cotaZeroDoTerrenoM}|${predios.length}|${arvores.length}|${construidoDoEstudo.length}`,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maqueteAtiva, chaveDaTopografia, editor.model.georreferencia, prediosOsm, coberturaDoSolo, construidoDoEstudo, cotaZeroDoTerrenoM]);
+  const notasDaMaquete = useMemo(() => {
+    if (!maqueteAtiva) return [];
+    if (!topografia.selecionada) return ['Sem prédios e árvores: gere as curvas de nível do terreno — o entorno se apoia no relevo.'];
+    if (!editor.model.georreferencia) return ['Sem prédios e árvores: o estudo não está georreferenciado (Terreno › Onde fica).'];
+    const notas: string[] = [];
+    if (prediosOsm.estado === 'carregando') notas.push('Buscando os prédios do OpenStreetMap…');
+    else if (prediosOsm.estado === 'erro') notas.push(`Prédios não vieram: ${prediosOsm.motivo}.`);
+    else if (prediosOsm.estado === 'pronto') notas.push((entornoDaMaquete?.predios.length ?? 0) > 0 ? `Prédios ${ATRIBUICAO_OSM}` : 'Nenhum prédio do OpenStreetMap nesta área.');
+    if (!coberturaCabe) notas.push(`Sem árvores: o terreno passa de ${AREA_MAXIMA_KM2} km².`);
+    else if (coberturaDoSolo.estado === 'carregando') notas.push('Buscando as árvores (ESA WorldCover)…');
+    else if (coberturaDoSolo.estado === 'erro') notas.push(`Árvores não vieram: ${coberturaDoSolo.motivo}.`);
+    else if (coberturaDoSolo.estado === 'pronto') notas.push((entornoDaMaquete?.arvores.length ?? 0) > 0 ? `Árvores: ${ATRIBUICAO_WORLDCOVER}` : 'Nenhuma mata nesta área (ESA WorldCover).');
+    return notas;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maqueteAtiva, chaveDaTopografia, editor.model.georreferencia, prediosOsm, coberturaDoSolo, coberturaCabe, entornoDaMaquete]);
 
   /**
    * O chão sob a pessoa no modo de percorrer, em metros de mundo: o 3D usa
@@ -12681,6 +12749,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       alturaDoChao={mostrarTerreno3d && terrenoAVista ? alturaDoChao3d : undefined}
       extrasDoRelevo={mostrarTerreno3d && terrenoAVista ? extrasDoRelevoNo3d : null}
       mapaNoRelevo={mostrarTerreno3d && terrenoAVista ? mapaNoRelevo3d : null}
+      entornoDaMaquete={entornoDaMaquete}
+      notasDaMaquete={notasDaMaquete}
       extrasChave={extrasDoRelevoNo3dChave}
       ocultos={ocultosNo3d}
       atenuados={idsDasCamadas.atenuados}

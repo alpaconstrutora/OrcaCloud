@@ -12,7 +12,7 @@
 //   npm run dev  # servidor NOVO
 //   PLAYWRIGHT_CORE=/c/tmp/pwtest/node_modules/playwright-core \
 //     node docs/spikes/blueprint-3d/passeio.mjs http://localhost:3100
-import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrbitControls, PointerLockControls, Grid, Edges, PivotControls, useGLTF, Line } from '@react-three/drei';
@@ -186,6 +186,17 @@ interface Props {
    * muda quando o plano muda (outra versão, outra fonte, outra opacidade).
    */
   mapaNoRelevo?: { plano: PlanoDaTexturaDoMapa; chave: string } | null;
+  /**
+   * MAQUETE (25/11/2026): o entorno real — prédios do OpenStreetMap e árvores do ESA WorldCover —,
+   * já no desenho (mm) com a base em Y de mundo (cota − zero). Só é desenhado no estilo Maquete.
+   */
+  entornoDaMaquete?: {
+    predios: { id: string; anel: { x: number; y: number }[]; baseY: number; alturaM: number }[];
+    arvores: { x: number; y: number; baseY: number; alturaM: number; copaM: number }[];
+    chave: string;
+  } | null;
+  /** Créditos das fontes e avisos (por que algo não veio), no canto do 3D da Maquete. */
+  notasDaMaquete?: string[];
   extrasChave?: string;
   /**
    * Ids de peça escondidos pela lista de Componentes (pedido de 01/09/2026).
@@ -1352,7 +1363,57 @@ function EtiquetaDeChamada({ titulo, subtitulo, cor, posicao }: { titulo: string
   );
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, rotulosDaMassa: mostrarRotulosDaMassa, pisoDaMassa, unidadeDaMassa, onPisoDaMassa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO' }: Props) {
+/**
+ * AS ÁRVORES DA MAQUETE (25/11/2026): copa (icosaedro verde-claro) e tronco, cada um um
+ * `InstancedMesh` — milhares de árvores em dois draw calls. Sem raycast: o mouse atravessa a mata
+ * e chega ao relevo (o hover das curvas continua valendo).
+ */
+function ArvoresDaMaquete({ arvores }: { arvores: { x: number; y: number; baseY: number; alturaM: number; copaM: number }[] }) {
+  const copa = useRef<THREE.InstancedMesh>(null);
+  const tronco = useRef<THREE.InstancedMesh>(null);
+  const geoCopa = useMemo(() => new THREE.IcosahedronGeometry(1, 1), []);
+  const geoTronco = useMemo(() => new THREE.CylinderGeometry(0.1, 0.16, 1, 6), []);
+  useEffect(
+    () => () => {
+      geoCopa.dispose();
+      geoTronco.dispose();
+    },
+    [geoCopa, geoTronco],
+  );
+  useLayoutEffect(() => {
+    const c = copa.current;
+    const t = tronco.current;
+    if (!c || !t) return;
+    const m = new THREE.Matrix4();
+    const q = new THREE.Quaternion();
+    const pos = new THREE.Vector3();
+    const esc = new THREE.Vector3();
+    arvores.forEach((a, i) => {
+      const alturaDoTronco = Math.max(0.8, a.alturaM - a.copaM * 1.7);
+      m.compose(pos.set(a.x * S, a.baseY + alturaDoTronco + a.copaM * 0.75, a.y * S), q, esc.set(a.copaM, a.copaM * 0.9, a.copaM));
+      c.setMatrixAt(i, m);
+      m.compose(pos.set(a.x * S, a.baseY + alturaDoTronco / 2, a.y * S), q, esc.set(1, alturaDoTronco + 0.3, 1));
+      t.setMatrixAt(i, m);
+    });
+    c.instanceMatrix.needsUpdate = true;
+    t.instanceMatrix.needsUpdate = true;
+    c.computeBoundingSphere();
+    t.computeBoundingSphere();
+  }, [arvores]);
+  if (arvores.length === 0) return null;
+  return (
+    <>
+      <instancedMesh ref={copa} args={[geoCopa, undefined, arvores.length]} castShadow receiveShadow raycast={() => null}>
+        <meshStandardMaterial color="#b5cfa8" roughness={1} flatShading />
+      </instancedMesh>
+      <instancedMesh ref={tronco} args={[geoTronco, undefined, arvores.length]} castShadow raycast={() => null}>
+        <meshStandardMaterial color="#a8a29e" roughness={1} />
+      </instancedMesh>
+    </>
+  );
+}
+
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, rotulosDaMassa: mostrarRotulosDaMassa, pisoDaMassa, unidadeDaMassa, onPisoDaMassa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, entornoDaMaquete, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO' }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
   // CONCEPÇÃO (29/10/2026): as peças do modelo saem brancas com aresta, como na Linha oculta; a massa ganha o tom e o
@@ -2063,6 +2124,21 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [entorno]);
 
+  /** MAQUETE (F3): os prédios do OpenStreetMap, brancos, da base no relevo até a altura deles. */
+  const prismasDosPrediosDaMaquete = useMemo(() => {
+    if (!maquete || !mostrarTerreno || !entornoDaMaquete) return [];
+    return entornoDaMaquete.predios
+      .filter((p) => p.anel.length >= 3 && p.alturaM > 0)
+      .map((p) => {
+        const geom = new THREE.ExtrudeGeometry(shapeDoAnel(p.anel), { depth: p.alturaM, bevelEnabled: false });
+        geom.rotateX(-Math.PI / 2);
+        geom.translate(0, p.baseY, 0);
+        return { id: p.id, geom };
+      });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [maquete, mostrarTerreno, entornoDaMaquete?.chave]);
+  useEffect(() => () => prismasDosPrediosDaMaquete.forEach((p) => p.geom.dispose()), [prismasDosPrediosDaMaquete]);
+
   return (
     <group>
       {caixasDeComponentes.map((c) => {
@@ -2127,6 +2203,16 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           <Edges color={maquete ? '#d6d3d1' : '#94a3b8'} />
         </mesh>
       ))}
+      {prismasDosPrediosDaMaquete.map((p) => (
+        // Sem raycast: o prédio do entorno não é peça do estudo, e o mouse tem de chegar ao relevo.
+        <mesh key={`predio-osm-${p.id}`} geometry={p.geom} castShadow receiveShadow raycast={() => null}>
+          <meshStandardMaterial color="#ffffff" emissive="#ffffff" emissiveIntensity={0.2} roughness={1} />
+          <Edges color="#d6d3d1" />
+        </mesh>
+      ))}
+      {maquete && mostrarTerreno && entornoDaMaquete && entornoDaMaquete.arvores.length > 0 && (
+        <ArvoresDaMaquete key={entornoDaMaquete.chave} arvores={entornoDaMaquete.arvores} />
+      )}
       {prismasDaMassa.map((p) => {
         const sel = selecionados?.has(p.id) ?? false;
         const pisoSel = sel && !!pisoDaMassa && pisoDaMassa === (p.piso ?? p.chave);
@@ -3268,6 +3354,16 @@ export default function Blueprint3DViewer(props: Props) {
                 />
               ))}
             </div>
+          ))}
+        </div>
+      )}
+
+      {props.estilo === 'MAQUETE' && (props.notasDaMaquete?.length ?? 0) > 0 && (
+        // Créditos das fontes (exigidos pelas licenças) e o motivo quando algo não veio. No canto de
+        // cima à esquerda: embaixo mora a dica, à direita os botões.
+        <div className="pointer-events-none absolute left-2 top-2 z-10 max-w-[60%] space-y-0.5 rounded-[6px] bg-white/85 px-2 py-1 text-[11px] text-slate-600" data-testid="notas-da-maquete">
+          {props.notasDaMaquete!.map((n) => (
+            <p key={n}>{n}</p>
           ))}
         </div>
       )}

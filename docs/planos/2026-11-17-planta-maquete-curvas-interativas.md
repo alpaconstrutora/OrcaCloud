@@ -45,9 +45,29 @@ Resposta do usuário em 25/11/2026 (com print do app: planta 2D com curvas + 3D 
     paredes/estrutura/massa/entorno brancos; enquadramento até o fundo do bloco.
   - Prova: `__tests__/blueprintMaqueteBlocoDoTerreno.test.ts` (sólido fechado: cada aresta em 2 faces) +
     foto `?curvas=1&estilo=MAQUETE`.
-- [ ] F3 — Prédios do OpenStreetMap — módulo puro + hook escritos (9 testes), falta ligar no editor/3D
-- [ ] F4 — Árvores da ESA WorldCover — leitor (6 testes + prova no arquivo real de Campinas: 46 % árvore,
-  2 pedidos, 0,15 MB), Edge Function e bundle escritos; falta ligar no 3D, deploy da function e prova logado
+- [x] F3 — Prédios do OpenStreetMap — PR 2
+  - ⚠️ MUDANÇA DE FONTE (25/11, medido): o Overpass do plano falhou na prática — principal "at capacity"
+    (502) e noutra hora 40 s; espelhos 504 e dois estourando 60 s. Os MESMOS dados do OSM vêm do
+    OpenFreeMap em ladrilho vetorial (esquema OpenMapTiles): CORS `*`, ~80 ms por ladrilho, camada
+    `building` com `render_height`. No z14 o OpenMapTiles junta prédios de mesma altura numa feição com
+    vários anéis (centro de Campinas: 170 prédios em 14 feições). A decisão do usuário ("prédios do OSM")
+    continua: só muda o servidor.
+  - `npm install @mapbox/vector-tile pbf` foi BARRADO pelo auto mode → decodificador próprio
+    `utils/geo/mvt.ts` (protobuf + comandos MVT 2.1), testado com um codificador escrito pela especificação.
+  - `utils/blueprintMaqueteOsm.ts`: caixa da grade → ladrilhos z14 (teto 16) → anel externo recortado no
+    ladrilho (sem duplicar na divisa) → desenho com base na menor cota sob o prédio; tira o que cruza paredes
+    e blocos do estudo (+1 m). Hook `usePrediosDaMaquete`.
+  - Prova: 16 testes + harness `?osm=1&lat=-22.9056&lon=-47.0608` → 17 prédios reais em segundos.
+- [ ] F4 — Árvores da ESA WorldCover — PR 2 (falta só o deploy da function e a prova logado)
+  - `utils/geo/coberturaDoSolo.ts` (grade global 1/12000°, quadrícula 3° SW) — 8 testes + prova no ARQUIVO
+    REAL (Campinas, Bosque dos Jequitibás: 46 % árvore, 2 pedidos, 0,15 MB, 2,3 s).
+  - Edge Function `cobertura-do-solo` (JWT, ≤ 4 km², 400/502) + bundle `scripts/build-cobertura-do-solo.mjs`
+    com teste de bundle velho. ⏳ deploy: `npx supabase functions deploy cobertura-do-solo` (de pasta em
+    origin/main, depois do merge).
+  - `utils/blueprintMaqueteArvores.ts`: 1–2 árvores por pixel de mata, determinísticas pelo pixel global,
+    fora de prédio/obra/relevo, teto 15 mil — 5 testes. 3D: `InstancedMesh` copa + tronco, sem raycast
+    (o hover atravessa a mata — portão do hover verde com prédios e árvores: 646/0).
+  - Canto de créditos/avisos no 3D da Maquete (fonte, carregando, motivo de falha, terreno > 4 km²).
 
 ## Contexto
 

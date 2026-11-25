@@ -73,7 +73,7 @@ describe('Histórico de renovações — Ações', () => {
         const cancelados = screen.getAllByText('Cancelado');
         expect(cancelados.map(c => c.getAttribute('title'))).toEqual(expect.arrayContaining([
             expect.stringMatching(/^Cancelado por quem@exemplo\.com em 25\/11\/2026/),
-            'Cancelado antes de 25/11/2026: quem e quando não foram registrados.',
+            'Cancelado antes de o sistema registrar quem e quando (o registro começou em 25/11/2026).',
         ]));
     });
 

@@ -103,9 +103,10 @@ const AssembleiasTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo
     }, [registrarAcaoDoTitulo, abrirNova]);
 
     // §22 — costura local.
-    const salva = (a: Assembleia) => {
+    const salva = (a: Assembleia, pautaSalva: boolean) => {
         setLista(prev => (prev.some(x => x.id === a.id) ? prev.map(x => (x.id === a.id ? a : x)) : [a, ...prev]));
-        notify('Rascunho salvo. Para publicar, abra a assembleia e convoque.');
+        // Pauta que falhou: a gaveta continua aberta com o erro; aqui só não se diz "salvo".
+        if (pautaSalva) notify('Rascunho salvo. Para publicar, abra a assembleia e convoque.');
     };
 
     const excluir = async (a: Assembleia) => {

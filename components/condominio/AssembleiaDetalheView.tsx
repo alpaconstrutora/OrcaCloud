@@ -156,7 +156,24 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
     const presentes = React.useMemo(
         () => presentesAptos(unidades, votos, new Set(impedidas.keys())), [unidades, votos, impedidas]);
 
+    // Situação da unidade. Em ENCERRADA vale o que ficou CONGELADO na instalação (retrato /
+    // quorum_instalacao) — ops.impedimentos é o "agora" e só existe com a assembleia viva.
+    // Em CANCELADA (sempre antes de instalar) não há situação gravada: a coluna sai.
+    const congelada = a?.status === 'ENCERRADA' || a?.status === 'CANCELADA';
+    const impedidasNaInstalacao = React.useMemo(() => {
+        const lista = a?.retrato?.impedidasNaInstalacao?.length ? a.retrato.impedidasNaInstalacao
+            : (a?.quorumInstalacao?.impedidas ?? a?.retrato?.cabecalho.quorumInstalacao?.impedidas ?? []);
+        return new Map(lista.map(i => [i.unitId, i.motivo]));
+    }, [a?.retrato, a?.quorumInstalacao]);
+    const mostrarSituacao = !(a?.status === 'CANCELADA' && !a.quorumInstalacao);
+    const colunasUnidades = React.useMemo(
+        () => (mostrarSituacao ? COLUNAS_UNIDADES : COLUNAS_UNIDADES.filter(c => c.key !== 'situacao')), [mostrarSituacao]);
+
     const fecharGaveta = () => { setGaveta(null); setErroGaveta(null); };
+    // HINT 'estado': outro gestor (ou um duplo clique) já mudou o estado — mostra o estado real.
+    const seOutroAgiu = (err: unknown) => {
+        if ((err as { hint?: string })?.hint === 'estado') carregar(true);
+    };
 
     // ── convocar (R1, R4) ────────────────────────────────────────────────
     const abrirConvocar = async () => {
@@ -185,6 +202,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
             await carregar(true);
         } catch (err) {
             setErroGaveta(msg(err, 'Erro ao convocar.'));
+            seOutroAgiu(err);
         } finally { setGravando(false); }
     };
 
@@ -201,6 +219,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
             await carregar(true);
         } catch (err) {
             setErroGaveta(msg(err, 'Erro ao instalar.'));
+            seOutroAgiu(err);
         } finally { setGravando(false); }
     };
 
@@ -247,8 +266,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
         } catch (err) {
             setErroGaveta(msg(err, 'Erro ao encerrar.'));
             setGravando(false);
-            // "já foi encerrada" (outro gestor, duplo clique): mostra o estado real.
-            if ((err as { hint?: string })?.hint === 'estado') carregar(true);
+            seOutroAgiu(err); // "já foi encerrada" (outro gestor, duplo clique)
             return;
         }
         setGravando(false);
@@ -276,6 +294,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
             await carregar(true);
         } catch (err) {
             setErroGaveta(msg(err, 'Erro ao cancelar.'));
+            seOutroAgiu(err);
         } finally { setGravando(false); }
     };
 
@@ -289,15 +308,23 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
         }
     };
 
+    /**
+     * A URL da ata é assinada na hora (duas idas ao servidor), e `window.open` DEPOIS de
+     * um `await` é bloqueado como pop-up — a aba nasce no clique, em branco, e só depois
+     * recebe o endereço (mesmo caminho do DocumentosTab).
+     */
     const abrirAta = async () => {
         if (!a?.ataDocumentoId) return;
+        const janela = window.open('', '_blank');
         try {
             const docs = await condominioComunicacaoService.listDocumentos(e.id);
             const doc = docs.find(d => d.id === a.ataDocumentoId);
             if (!doc) throw new Error('A ata não está entre os documentos deste condomínio.');
             const url = await condominioComunicacaoService.abrirDocumento(doc);
-            window.open(url, '_blank', 'noopener,noreferrer');
+            if (janela) janela.location.href = url;
+            else window.open(url, '_blank', 'noopener');
         } catch (err) {
+            janela?.close();
             notify(msg(err, 'Não foi possível abrir a ata.'), 'error');
         }
     };
@@ -406,7 +433,16 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
         const origem = [c?.portal ? `${c.portal} portal` : '', c?.sala ? `${c.sala} sala` : ''].filter(Boolean).join(', ');
         return `${n} de ${itens.length} (${origem})`;
     };
-    const motivoImpedida = (u: UnidadeNaAssembleia) => impedidas.get(u.unitId) ?? null;
+    /** Impedimento AGORA (só com a assembleia viva) — é o que trava presença e voto. */
+    const motivoImpedida = (u: UnidadeNaAssembleia) => (congelada ? null : impedidas.get(u.unitId) ?? null);
+    const situacao = (u: UnidadeNaAssembleia): { impedida: boolean; texto: string } => {
+        if (congelada) {
+            const m = impedidasNaInstalacao.get(u.unitId) ?? (u.impedidaNaInstalacao ? 'cota condominial vencida' : null);
+            return m ? { impedida: true, texto: `Impedida na instalação: ${m}` } : { impedida: false, texto: 'Apta na instalação' };
+        }
+        const m = impedidas.get(u.unitId);
+        return m ? { impedida: true, texto: `Impedida: ${m}` } : { impedida: false, texto: 'Apta' };
+    };
 
     const portalVotaram = React.useMemo(
         () => new Set(votos.filter(v => v.origem === 'PORTAL').map(v => v.unitId)).size, [votos]);
@@ -454,7 +490,8 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                                     <XCircle className="w-[15px] h-[15px]" /> Cancelar assembleia
                                 </button>
                             )}
-                            {a.status !== 'RASCUNHO' && a.status !== 'CANCELADA' && (
+                            {/* R4: o edital baixa a qualquer momento depois de convocar — cancelada inclusive. */}
+                            {a.status !== 'RASCUNHO' && (
                                 <button type="button" onClick={baixarEdital} className={BOTAO_SECUNDARIO}>
                                     <FileDown className="w-[15px] h-[15px]" /> Baixar edital
                                 </button>
@@ -527,7 +564,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                                 <StandardTable<UnidadeNaAssembleia>
                                     storageKey="condominio:assembleia:unidades"
                                     searchScope={a.id}
-                                    columns={COLUNAS_UNIDADES}
+                                    columns={colunasUnidades}
                                     rows={unidades}
                                     rowKey={u => u.unitId}
                                     searchText={u => `${u.unidadeRotulo ?? ''} ${u.proprietarioNome ?? ''} ${u.procuradorNome ?? ''}`}
@@ -539,7 +576,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                                         : key === 'proprietario' ? u.proprietarioNome
                                             : key === 'peso' ? u.fracao
                                                 : key === 'presenca' ? textoPresenca(u)
-                                                    : key === 'situacao' ? (motivoImpedida(u) ? `Impedida ${motivoImpedida(u)}` : 'Apta')
+                                                    : key === 'situacao' ? situacao(u).texto
                                                         : (votosPorUnidade.get(u.unitId)?.portal ?? 0) + (votosPorUnidade.get(u.unitId)?.sala ?? 0)}
                                     renderCell={(key, u) => {
                                         if (key === 'unidade') return <span className="block truncate text-sm font-normal text-gray-700" title={u.unidadeRotulo ?? ''}>{u.unidadeRotulo ?? '—'}</span>;
@@ -550,10 +587,8 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                                             return <span className={`block truncate text-sm font-normal ${t === 'Ausente' ? 'text-gray-600' : 'text-emerald-700'}`} title={t}>{t}</span>;
                                         }
                                         if (key === 'situacao') {
-                                            const m = motivoImpedida(u);
-                                            return m
-                                                ? <span className="block truncate text-sm font-normal text-red-600" title={m}>Impedida: {m}</span>
-                                                : <span className="text-sm font-normal text-gray-700">Apta</span>;
+                                            const s = situacao(u);
+                                            return <span className={`block truncate text-sm font-normal ${s.impedida ? 'text-red-600' : 'text-gray-700'}`} title={s.texto}>{s.texto}</span>;
                                         }
                                         return <span className="text-sm font-normal text-gray-600">{textoVotos(u)}</span>;
                                     }}

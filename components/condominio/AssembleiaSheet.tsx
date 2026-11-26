@@ -77,8 +77,11 @@ interface Props {
     empreendimentoId: string;
     /** null = nova assembleia. */
     assembleiaId: string | null;
-    /** Devolve a assembleia gravada (§22: a lista costura sem recarregar). */
-    onSalva: (a: Assembleia) => void;
+    /**
+     * Devolve a assembleia gravada (§22: a lista costura sem recarregar). `pautaSalva`
+     * false = o rascunho foi gravado mas a pauta não (a gaveta continua aberta com o erro).
+     */
+    onSalva: (a: Assembleia, pautaSalva: boolean) => void;
 }
 
 const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, assembleiaId, onSalva }) => {
@@ -187,11 +190,19 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
                 segundaConvocacaoEm: p2,
             });
             setIdGravado(a.id);
-            onSalva(a);
-            await condominioAssembleiaService.salvarItens(a.id, form.itens.map(i => ({
-                id: i.id, titulo: i.titulo, descricao: i.descricao, tipo: i.tipo, quorum: i.quorum,
-                assunto: i.assunto, opcoes: i.tipo === 'ESCOLHA' ? i.opcoes.filter(o => o.trim()) : null,
-            })));
+            try {
+                await condominioAssembleiaService.salvarItens(a.id, form.itens.map(i => ({
+                    id: i.id, titulo: i.titulo, descricao: i.descricao, tipo: i.tipo, quorum: i.quorum,
+                    assunto: i.assunto, opcoes: i.tipo === 'ESCOLHA' ? i.opcoes.filter(o => o.trim()) : null,
+                })));
+            } catch (e: unknown) {
+                // O rascunho existe (a lista precisa mostrá-lo), a pauta não: diz isso, sem "salvo".
+                onSalva(a, false);
+                setErro(`O rascunho foi gravado, mas a pauta não: ${e instanceof Error ? e.message : 'erro desconhecido'}`
+                    + ' Corrija e salve de novo.');
+                return;
+            }
+            onSalva(a, true);
             onClose();
         } catch (e: unknown) {
             setErro(e instanceof Error ? e.message : 'Erro ao salvar o rascunho.');

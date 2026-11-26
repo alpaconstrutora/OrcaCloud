@@ -21,7 +21,10 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { uploadDocumento, listAvisos, listDocumentos, abrirDocumento, listAllUnitsForEmpreendimento, salvos } = vi.hoisted(() => ({
+const { uploadDocumento, listAvisos, listDocumentos, abrirDocumento, listAllUnitsForEmpreendimento, salvos,
+    salvarRascunho, salvarItens } = vi.hoisted(() => ({
+    salvarRascunho: vi.fn(),
+    salvarItens: vi.fn(),
     uploadDocumento: vi.fn(),
     listAvisos: vi.fn(),
     listDocumentos: vi.fn(),
@@ -35,6 +38,12 @@ vi.mock('../services/condominioComunicacaoService', async (importOriginal) => ({
     ...(await importOriginal<typeof import('../services/condominioComunicacaoService')>()),
     condominioComunicacaoService: { uploadDocumento, listAvisos, listDocumentos, abrirDocumento },
 }));
+// A gaveta de rascunho grava pela tabela (serviço); o resto do módulo (ErroAssembleia,
+// operacoesDoGestor) é o real.
+vi.mock('../services/condominioAssembleiaService', async (importOriginal) => {
+    const orig = await importOriginal<typeof import('../services/condominioAssembleiaService')>();
+    return { ...orig, condominioAssembleiaService: { ...orig.condominioAssembleiaService, salvarRascunho, salvarItens } };
+});
 vi.mock('../services/empreendimentoService', () => ({
     empreendimentoService: { listAllUnitsForEmpreendimento },
 }));
@@ -57,6 +66,8 @@ vi.mock('../services/assembleiaPdf', async (importOriginal) => {
 
 import { ConfirmProvider } from '../components/ui/confirm';
 import AssembleiaDetalheView from '../components/condominio/AssembleiaDetalheView';
+import AssembleiaSheet from '../components/condominio/AssembleiaSheet';
+import { ErroAssembleia } from '../services/condominioAssembleiaService';
 import { gerarAtaPdf, baixarEditalPdf } from '../services/assembleiaPdf';
 import { textoCancelamento, textoConvocacao } from '../utils/assembleiaTextos';
 import type {
@@ -412,5 +423,135 @@ describe('cancelar e edital', () => {
         await waitFor(() => expect(salvos).toHaveLength(1));
         expect(baixarEditalPdf).toHaveBeenCalledTimes(1);
         expect(salvos[0].nome).toMatch(/\.pdf$/);
+    });
+});
+
+// ─── rodada de correção 1 (revisão da A7) ────────────────────────────────────
+
+describe('abrir ata (pop-up)', () => {
+    const encerradaComAta = () => carregada(assembleia({ status: 'ENCERRADA', encerradaEm: ENCERRADA_EM, retrato,
+        quorumInstalacao: retrato.cabecalho.quorumInstalacao, ataDocumentoId: 'doc-ata' }), 4);
+
+    it('a aba nasce no clique, em branco, e só depois recebe o endereço assinado', async () => {
+        const janela = { location: { href: '' }, close: vi.fn() };
+        const abrir = vi.spyOn(window, 'open').mockReturnValue(janela as unknown as Window);
+        listDocumentos.mockResolvedValue([{ id: 'doc-ata', storage_path: 'org/emp/ata.pdf', url: null }]);
+        abrirDocumento.mockResolvedValue('https://assinada/ata.pdf');
+        montar(opsFalso(encerradaComAta()));
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Abrir ata' }));
+        // Síncrono, ainda dentro do clique — antes de qualquer await.
+        expect(abrir).toHaveBeenCalledWith('', '_blank');
+        await waitFor(() => expect(janela.location.href).toBe('https://assinada/ata.pdf'));
+        expect(abrir).toHaveBeenCalledTimes(1);
+        abrir.mockRestore();
+    });
+
+    it('erro fecha a aba em branco e avisa', async () => {
+        const janela = { location: { href: '' }, close: vi.fn() };
+        const abrir = vi.spyOn(window, 'open').mockReturnValue(janela as unknown as Window);
+        listDocumentos.mockResolvedValue([{ id: 'doc-ata', storage_path: 'org/emp/ata.pdf', url: null }]);
+        abrirDocumento.mockRejectedValue(new Error('Falha ao gerar o link do arquivo: expirou'));
+        montar(opsFalso(encerradaComAta()));
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Abrir ata' }));
+        await waitFor(() => expect(janela.close).toHaveBeenCalled());
+        expect(await screen.findByText(/expirou/)).toBeInTheDocument();
+        abrir.mockRestore();
+    });
+});
+
+describe('situação congelada', () => {
+    it('encerrada mostra a impedida DA INSTALAÇÃO, não o impedimento de agora', async () => {
+        const MOTIVO = 'Cota de 10/2026 vencida em 10/11/2026';
+        const impedidas = [{ unitId: 'u3', rotulo: 'Torre A — 103', motivo: MOTIVO }];
+        const r: Retrato = { ...retrato, impedidasNaInstalacao: impedidas };
+        const d = carregada(assembleia({ status: 'ENCERRADA', encerradaEm: ENCERRADA_EM, retrato: r, ataDocumentoId: 'doc-ata',
+            quorumInstalacao: { ...retrato.cabecalho.quorumInstalacao!, impedidas } }), 4);
+        d.unidades = d.unidades.map(u => ({ ...u, impedidaNaInstalacao: u.unitId === 'u3' }));
+        const ops = opsFalso(d);
+        montar(ops);
+
+        expect(await screen.findByText(`Impedida na instalação: ${MOTIVO}`)).toBeInTheDocument();
+        expect(screen.getAllByText('Apta na instalação')).toHaveLength(7);
+        expect(screen.queryByText('Apta')).not.toBeInTheDocument();
+        // Encerrada não consulta o "agora".
+        expect(ops.impedimentos).not.toHaveBeenCalled();
+    });
+
+    it('cancelada: o edital continua baixável e a coluna Situação sai', async () => {
+        montar(opsFalso(carregada(assembleia({ status: 'CANCELADA', canceladaEm: agoraMais(-HORA),
+            motivoCancelamento: 'Reforma do salão' }), 0)));
+
+        expect(await screen.findByRole('button', { name: 'Baixar edital' })).toBeInTheDocument();
+        expect(await screen.findByRole('columnheader', { name: /Presença/ })).toBeInTheDocument();
+        expect(screen.queryByRole('columnheader', { name: /Situação/ })).not.toBeInTheDocument();
+    });
+});
+
+describe('outro gestor já agiu (HINT estado)', () => {
+    const jaEncerrada = (): never => { throw new ErroAssembleia({ hint: 'estado', message: 'Esta assembleia já foi encerrada.' }); };
+
+    it('instalar recarrega a tela', async () => {
+        const ops = opsFalso(carregada(assembleia(), 4), { instalar: vi.fn(async () => jaEncerrada()) });
+        montar(ops);
+        fireEvent.click(await screen.findByRole('button', { name: 'Instalar' }));
+        const gaveta = await screen.findByRole('dialog', { name: 'Instalar assembleia' });
+        fireEvent.change(within(gaveta).getByLabelText('Presidente da mesa'), { target: { value: 'Paula' } });
+        fireEvent.change(within(gaveta).getByLabelText('Secretário da mesa'), { target: { value: 'Sérgio' } });
+        fireEvent.click(within(gaveta).getByLabelText('Confirmo que o edital foi entregue a todas as unidades'));
+        fireEvent.click(within(gaveta).getByRole('button', { name: 'Instalar assembleia' }));
+
+        expect(await within(gaveta).findByText('Esta assembleia já foi encerrada.')).toBeInTheDocument();
+        await waitFor(() => expect(ops.carregar).toHaveBeenCalledTimes(2));
+    });
+
+    it('cancelar recarrega a tela', async () => {
+        const ops = opsFalso(carregada(assembleia(), 0), { cancelar: vi.fn(async () => jaEncerrada()) });
+        montar(ops);
+        fireEvent.click(await screen.findByRole('button', { name: 'Cancelar assembleia' }));
+        const gaveta = await screen.findByRole('dialog', { name: 'Cancelar assembleia' });
+        fireEvent.change(within(gaveta).getByLabelText('Motivo do cancelamento'), { target: { value: 'Reforma' } });
+        fireEvent.click(within(gaveta).getByRole('button', { name: 'Cancelar e avisar os condôminos' }));
+        await waitFor(() => expect(ops.carregar).toHaveBeenCalledTimes(2));
+    });
+});
+
+describe('gaveta de rascunho', () => {
+    const gravada = assembleia({ id: 'a9', status: 'RASCUNHO', titulo: 'AGO 2027', primeiraConvocacaoEm: null,
+        segundaConvocacaoEm: null, convocadaEm: null, avisoId: null });
+
+    function abrirGaveta() {
+        const onSalva = vi.fn();
+        const onClose = vi.fn();
+        render(
+            <ConfirmProvider>
+                <AssembleiaSheet open onClose={onClose} empreendimentoId="emp1" assembleiaId={null} onSalva={onSalva} />
+            </ConfirmProvider>,
+        );
+        fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'AGO 2027' } });
+        fireEvent.change(screen.getByLabelText('Título do item'), { target: { value: 'Aprovar contas' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Criar rascunho' }));
+        return { onSalva, onClose };
+    }
+
+    it('só diz "salvo" depois que a pauta também foi gravada', async () => {
+        salvarRascunho.mockResolvedValue(gravada);
+        salvarItens.mockResolvedValue([]);
+        const { onSalva, onClose } = abrirGaveta();
+
+        await waitFor(() => expect(onClose).toHaveBeenCalled());
+        expect(onSalva).toHaveBeenCalledWith(gravada, true);
+        expect(onSalva.mock.invocationCallOrder[0]).toBeGreaterThan(salvarItens.mock.invocationCallOrder[0]);
+    });
+
+    it('pauta falha: avisa que só o rascunho foi gravado e a gaveta continua aberta', async () => {
+        salvarRascunho.mockResolvedValue(gravada);
+        salvarItens.mockRejectedValue(new Error('Item 1: há opção em branco.'));
+        const { onSalva, onClose } = abrirGaveta();
+
+        expect(await screen.findByText(/O rascunho foi gravado, mas a pauta não: Item 1: há opção em branco\./)).toBeInTheDocument();
+        expect(onSalva).toHaveBeenCalledWith(gravada, false);
+        expect(onClose).not.toHaveBeenCalled();
     });
 });

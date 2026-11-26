@@ -538,7 +538,8 @@ que já grava ação corretiva e evidência mas não é usado pela tela.
 
 - [x] Desenho da Fase 1 aprovado pelo usuário ("ok", 25/11)
 - [x] Plano de implementação da Fase 1 — `docs/planos/2026-11-25-qualidade-siac-fase1-implementacao.md` (decisões da execução e verificação na tela registradas lá)
-- [ ] Fase 1 no ar
+- [x] Fase 1 no ar (#747, ajustes #762; segurança das funções antigas #758)
+- [x] Desenho da Fase 2 aprovado ("ok", 26/11) · plano `docs/planos/2026-11-26-qualidade-siac-fase2-implementacao.md`
 - [ ] Desenho da Fase 2 … Fase 6 (um por vez)
 
 ## Verificação

@@ -193,4 +193,44 @@ inspeções aprovadas para o painel.
 
 ## Estado
 
-- [ ] Task 1 · [ ] Task 2 · [ ] Task 3 · [ ] Task 4 · [ ] Task 5 · [ ] Task 6 · [ ] Task 7 · [ ] Task 8 · [ ] Task 9
+- [x] Task 1 — `0f576eb2d`, `11137aa70`, `e260da5a4`, `c5d885df3` (migration …100000 aplicada em produção)
+- [x] Task 2 — `d527568cd`, `028604792` (migration …110000 aplicada)
+- [x] Task 3 — `4a7380cd2`
+- [x] Task 4 — `2095caea2`
+- [x] Task 5 — `08f0c1ff5`, `68b4c1660`
+- [x] Task 6 — `11a9c3afe`, `baa28cb4b` (migration nova …120000, motivo da eficácia — aplicada pelo usuário em 26/11)
+- [x] Task 7 — `d900e08a4`
+- [x] Task 8 — `4d5633eb5`, `95353856d`
+- [x] Revisão da branch inteira + onda de correção — `eecd427cc` (migration nova …130000 — aplicada pelo usuário em 26/11; prova 29/29)
+- [ ] Task 9 — Steps 1–3 feitos (abaixo); Step 4 (PR/CI/merge) e Step 5 pendentes
+
+### Decisões tomadas durante a execução (26/11)
+
+- Migrations novas além do plano: **…120000** (`non_conformances.eficacia_motivo` + histórico da NC com descrição e motivo — o motivo do "não eficaz" não pode reescrever a descrição) e **…130000** (ficha obrigatória na OE controlada; permissões conferidas na organização DONA DO SERVIÇO controlado; desfazer o SGQ exige dono/admin do SGQ atual). As quatro migrations recusam reaplicação fora de ordem (guarda no topo; reaplicar = 100000 → 110000 → 120000 → 130000 com `SET qualidade.reaplicar_fase2_na_ordem='on'` na mesma sessão).
+- Registro imutável: resposta, NC, validação e log de status de OE controlada não se apagam nem se movem; o serviço não se solta de OE com registro; histórico com autor gravado pelo banco.
+- "Aprovar/Reprovar inspeção" pela RPC para toda OE (permissão só na controlada); Kanban em Aprovada/Reprovada abre a aba Inspeção.
+- Acesso total da Qualidade na tela = e-mail de superadmin (o grupo DESENVOLVEDOR não conta — igual ao banco).
+- Trocar a ficha de OE controlada fica travado (a ficha vem do serviço); editor da ficha abre como painel irmão do painel do item.
+
+### Verificação na tela — 26/11, app local da frente, sessão do usuário, Chrome sem janela (com janela a página cai nesta máquina)
+
+Preparo (funções do próprio app): procedimento enviado pela tela e aprovado no GED, curso criado pela tela, 2 executores treinados hoje; "Liberar OE" exige equipe e não há nenhuma equipe cadastrada → planejada → liberada → em execução direto no banco (que só confere a ficha de pré-início).
+
+| Critério | Resultado |
+|---|---|
+| ficha | ✅ "Criar ficha" pela tela; editor gravou 2 itens pré-conclusão obrigatórios com critério/método |
+| form | ✅ OE-0001 na Casa de Oração: 27 serviços listados; escolher o serviço aplicou a ficha e travou o modelo com o motivo; aviso "obrigatório para mandar para inspeção"; gravou serviço, ficha e executores |
+| 1 | ✅ pedir inspeção com 2 itens sem resposta: "2 itens obrigatórios … não cumpridos", Confirmar desligado; UPDATE direto → P0001 com a mesma mensagem |
+| 2 | ✅ "Não conforme" abriu NC; pedir inspeção: "1 item … · 1 não conformidade em aberto"; encerrar NC sem causa no banco → 23514; na tela, Encerrar desligado sem causa |
+| 5 | ✅ encerrar com causa/ação → não eficaz com motivo (reabre) → encerrar → eficaz; histórico da NC com as 4 mudanças e o motivo na coluna própria |
+| 4c | ✅ reinspeção: a resposta "não conforme" anterior ficou no histórico com o vínculo da NC e autor; excluir item com resposta → explica e oferece "Desativar" → `ativo=false` |
+| 4 | ✅ "Aprovar inspeção" → OE aprovada; validação com quem, quando, versão do procedimento e executores (2, treinado: sim); painel "aplicados com registro: 1 (meta 6) · em obra em andamento: 1 (meta 3)"; linha "2 de 2" |
+| 4b | ✅ topo na Garden: SGQ → Alpa pela tela (confirmação), faixa "usa o sistema da qualidade de Alpa…"; formulário de OE da Garden lista os serviços da Alpa |
+| 6 | ✅ OE comum (sem serviço) aprovada pelo "Aprovar inspeção", sem executores congelados |
+| 3 | ✅ só pela prova do banco (29/29 e anteriores): não há segundo usuário sem a permissão para conferir na tela |
+| 7 | ⚠️ sugestão pelo código não conferida na tela: 18 de 19 obras sem orçamento com código; coberto por teste de componente |
+| 8 | local: 16 arquivos / 266 testes; CI do PR pendente |
+
+Visto e não explicado: 2 respostas 406 no console durante a criação/aprovação (não se repetiram ao reabrir as mesmas telas) — não conferi a origem.
+
+Limpeza (26/11, combinada com o usuário): dados de teste apagados (2 OEs com registros e históricos — travas desligadas só dentro da transação e conferidas religadas —, ficha, curso, treinamentos, procedimento e arquivo do GED, avisos); **mantida** a Garden SPE apontando para o SGQ da Alpa.

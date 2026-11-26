@@ -17,7 +17,11 @@
 --
 -- A correção: quality_inspecoes_aprovadas_do_sgq(p_sgq) — SECURITY DEFINER — devolve
 -- UMA linha por validação de inspeção aprovada (type 'inspection', status 'approved')
--- de OE cujo serviço controlado é de p_sgq, de qualquer organização. Só campos de
+-- de OE cujo serviço controlado é de p_sgq E cuja organização (work_orders.org_id) tem
+-- HOJE p_sgq como SGQ: a própria (sem linha em quality_settings ou apontando para si)
+-- e as SPEs que apontam para ela agora. SPE que deixou de apontar para p_sgq não conta
+-- mais — o gatilho work_orders_servico_controlado_do_sgq só confere a OE quando ela é
+-- gravada, não reconfere as que já existem quando o SGQ da organização muda. Só campos de
 -- CONTAGEM: serviço, quando, se a obra está "Em andamento" e quantos executores /
 -- quantos treinados. SEM nome de pessoa, SEM id de OE, SEM id de colaborador — o
 -- membro da Alpa passa a contar a OE da SPE, mas não passa a ver a SPE.
@@ -95,13 +99,17 @@ BEGIN
       LEFT JOIN public.projects p            ON p.id = wo.project_id
      WHERE v.type = 'inspection'
        AND v.status = 'approved'
-       AND i.organization_id = p_sgq;
+       AND i.organization_id = p_sgq
+       -- SGQ ATUAL da organização da OE (sem linha = ela mesma): SPE que deixou de apontar
+       -- para p_sgq sai da conta, ainda que a OE antiga siga no serviço de p_sgq.
+       AND COALESCE((SELECT s.sgq_organization_id FROM public.quality_settings s
+                      WHERE s.organization_id = wo.org_id), wo.org_id) = p_sgq;
 END
 $$;
 
 COMMENT ON FUNCTION public.quality_inspecoes_aprovadas_do_sgq(uuid) IS
     'Painel da Qualidade (SiAC): inspeções aprovadas das OEs com serviço controlado do SGQ '
-    'p_sgq, de qualquer organização que aponta para ele — só contagem (serviço, data, obra em '
+    'p_sgq, das organizações cujo SGQ atual é p_sgq (a própria e as que apontam para ela) — só contagem (serviço, data, obra em '
     'andamento, executores/treinados), sem nomes nem ids. Só membro de p_sgq ou superadmin; '
     'senão 42501. Migration aplicar_20271126140000.';
 

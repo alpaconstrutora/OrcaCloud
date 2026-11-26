@@ -48,4 +48,12 @@ describe('migration 140000 — quality_inspecoes_aprovadas_do_sgq', () => {
     expect(semComentarios).toMatch(/v\.status = 'approved'/);
     expect(semComentarios).toMatch(/i\.organization_id = p_sgq/);
   });
+
+  it('só OE de organização cujo SGQ ATUAL é p_sgq (SPE que deixou de apontar para ele não conta)', () => {
+    // sem linha em quality_settings (ou apontando para si) = a própria organização é o SGQ
+    expect(semComentarios.replace(/\s+/g, ' ')).toMatch(
+      /AND COALESCE\(\(SELECT s\.sgq_organization_id FROM public\.quality_settings s WHERE s\.organization_id = wo\.org_id\), wo\.org_id\) = p_sgq/,
+    );
+    expect(SQL).not.toMatch(/de qualquer organiza/);
+  });
 });

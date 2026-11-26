@@ -60,4 +60,4 @@ Link vencido: hash `#error=…otp_expired` preservado; tela "Link expirado ou j�
 
 - [x] 1 — teste vermelho → verde
 - [x] 2 — prova no app real (26/11)
-- [ ] publicado (PR, CI verde, merge, `conferir-producao.sh`)
+- [x] publicado — PR #768 (8466df1), domínio servindo 8466df1; provado de novo em produção no convite do síndico (26/11: sessão gravada, 'Criar sua senha')

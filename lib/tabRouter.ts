@@ -11,6 +11,13 @@ export function parseHashView(hash: string): string | null {
   return view || null;
 }
 
+/** O hash é o retorno de um link de autenticação do Supabase (sessão ou erro)? */
+export function ehRetornoDaAutenticacao(hash: string): boolean {
+  if (!hash || hash.startsWith('#/')) return false;
+  const p = new URLSearchParams(hash.replace(/^#/, ''));
+  return p.has('access_token') || p.has('refresh_token') || p.has('error_code');
+}
+
 /** Read initial view from URL hash, falling back to localStorage. */
 export function getInitialView(): string {
   if (typeof window === 'undefined') return 'central';
@@ -31,6 +38,13 @@ export function syncViewToUrl(view: string): void {
   if (typeof window === 'undefined') return;
   // ÒPURA Pro público (/pro): não há telas do app ali — sem `#/central` no endereço do autônomo.
   if (proPublicoAtivo(window.location.pathname)) return;
+  // Retorno do link de convite / "esqueci a senha" (26/11/2026): o hash é a sessão
+  // (ou o erro) que o Supabase acabou de devolver, e o cliente do Supabase só o lê
+  // depois da trava de inicialização — que termina DEPOIS da 1ª renderização do App.
+  // Trocar o hash aqui perdia a sessão do link: "Nova senha" abria sem sessão e o
+  // salvar dizia "Você não está mais conectado". O próprio Supabase apaga o hash
+  // depois de ler; a vista é escrita na próxima chamada.
+  if (ehRetornoDaAutenticacao(window.location.hash)) return;
   if (parseHashView(window.location.hash) === view) return;
   window.history.replaceState(null, '', `#/${view}`);
 }

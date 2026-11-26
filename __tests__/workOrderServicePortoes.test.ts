@@ -85,9 +85,29 @@ describe('workOrderService.validateTransition — portões do banco + checagens 
     expect(achar('rpc')[0].args).toEqual(['oe_portoes', { p_work_order_id: 'wo1', p_novo_status: 'released' }]);
     expect(r.valid).toBe(false);
     expect(r.errors).toEqual([
-      'Equipe não vinculada',
+      'Informe a equipe ou os colaboradores que vão executar',
       '2 itens obrigatórios do checklist antes de iniciar não cumpridos',
     ]);
+  });
+
+  it('released: sem equipe mas com colaborador informado → não pede equipe', async () => {
+    respostaPorTabela.work_orders = { data: oe({ team_id: null, collaborator_ids: ['e1'] }), error: null };
+    const r = await workOrderService.validateTransition('wo1', 'released');
+    expect(r).toEqual({ valid: true, errors: [] });
+  });
+
+  it('released: sem equipe e sem colaborador → pede um dos dois; as outras checagens seguem', async () => {
+    respostaPorTabela.work_orders = {
+      data: oe({ team_id: null, collaborator_ids: [], responsible_id: null, planned_cost: null }),
+      error: null,
+    };
+    const r = await workOrderService.validateTransition('wo1', 'released');
+    expect(r.errors).toEqual([
+      'Informe a equipe ou os colaboradores que vão executar',
+      'Responsável não definido',
+      'Custo previsto não informado',
+    ]);
+    expect(r.errors).not.toContain('Equipe não vinculada');
   });
 
   it('não conta mais o checklist local: item pendente na OE, banco sem mensagem → válido', async () => {

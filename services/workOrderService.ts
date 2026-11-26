@@ -223,7 +223,12 @@ export const workOrderService = {
 
     // 2. Checagens próprias do app (as de checklist/NC/executores/inspeção são do banco — passo 3)
     if (newStatus === 'released') {
-      if (!wo.team_id) errors.push('Equipe não vinculada')
+      // Equipe cadastrada OU colaboradores escolhidos na OE: quem não tem equipe cadastrada
+      // informa as pessoas (pendência da Qualidade fase 2, 26/11).
+      const colaboradores = (wo.collaborator_ids as string[] | null | undefined) ?? []
+      if (!wo.team_id && colaboradores.length === 0) {
+        errors.push('Informe a equipe ou os colaboradores que vão executar')
+      }
       if (!wo.responsible_id) errors.push('Responsável não definido')
       if (!wo.planned_start_date || !wo.planned_end_date) errors.push('Datas planejadas não preenchidas')
       if (!wo.planned_cost) errors.push('Custo previsto não informado')

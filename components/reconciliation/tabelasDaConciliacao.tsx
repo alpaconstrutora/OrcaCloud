@@ -121,6 +121,21 @@ function CelulaPlanoContas({ tx, registros, nome, onChange }: { tx: BankTransact
 // movimento da conta Itaú da org Altair).
 export const ROTULO_OUTRA_ORG = '— outra organização —';
 
+/** Lançamento gerado por contrato (Recorrente, Parcelado, À Vista, Medição). */
+export const ehLancamentoDeContrato = (tx: Pick<InternalTransaction, 'source_system'>): boolean =>
+    !!tx.source_system?.startsWith('CONTRACT_');
+
+/**
+ * Descrição do lançamento para EXIBIR na Conciliação (Pendentes e Conciliados). Contrato:
+ * "Contrato CTL-006-…" / "Aluguel CTL-006-…" → começa pelo nº do contrato (pedido de
+ * 26/11/2026: a palavra antes do número só alonga o texto). "Contrato: Água — À Vista"
+ * (título, sem nº) fica igual. O texto gravado e a busca pelo texto cru não mudam.
+ */
+export function descricaoDoLancamento(tx: Pick<InternalTransaction, 'source_system' | 'description'>): string {
+    const d = tx.description ?? '';
+    return ehLancamentoDeContrato(tx) ? d.replace(/^(?:Contrato|Aluguel)\s+(?=[A-Z]{2,4}-\d)/, '') : d;
+}
+
 export const STATEMENT_COLUMNS: ColumnConfig[] = [
     { key: 'description',  label: 'Descrição',          sortable: true },
     { key: 'client',       label: 'Cliente',            sortable: true },
@@ -714,7 +729,7 @@ export function renderPendingInternalCell(key: string, tx: InternalTransaction, 
             // Contrato: a descrição já começa pelo nº do contrato, então o rótulo ("Contrato
             // Recorrente" etc.) não acrescenta nada e só alonga a linha (pedido de 26/11/2026).
             // Fica só o ícone que abre o contrato; o nome da origem vai no title.
-            const soIcone = !!originLink && !!tx.source_system?.startsWith('CONTRACT_');
+            const soIcone = !!originLink && ehLancamentoDeContrato(tx);
             return (
                 <div className="flex items-center gap-2 min-w-0">
                     <p className="text-sm font-normal text-gray-900 truncate" title={ctx.displayTitle(tx)}>

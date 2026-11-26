@@ -7,6 +7,7 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState, useResizableColumns } from '../ui/TableUtils';
 import { LazySelect, type LazyOption } from './LazySelect';
+import { descricaoDoLancamento, ehLancamentoDeContrato } from './tabelasDaConciliacao';
 import type { BankTransaction, InternalTransaction } from '../../types';
 
 /**
@@ -193,9 +194,13 @@ export default function ConciliatedTab({
                             <Briefcase className="w-5 h-5" />
                         </div>
                         <div className="min-w-0 flex-1 flex flex-col gap-1">
-                            <p className="text-sm font-normal text-gray-700 break-words">{iTx.description}</p>
+                            <p className="text-sm font-normal text-gray-700 break-words">{descricaoDoLancamento(iTx)}</p>
                             <div className="flex items-center gap-2">
-                                <span className="text-xs font-normal text-gray-400 shrink-0">{iTx.source_system}</span>
+                                {/* Contrato: o código da origem (CONTRACT_RECURRING…) não acrescenta nada —
+                                    a descrição já começa pelo nº do contrato (pedido de 26/11/2026). */}
+                                {!ehLancamentoDeContrato(iTx) && (
+                                    <span className="text-xs font-normal text-gray-400 shrink-0">{iTx.source_system}</span>
+                                )}
                                 <LazySelect
                                     value={iTx.category || ''}
                                     currentLabel={iTx.category || ''}
@@ -442,7 +447,7 @@ export default function ConciliatedTab({
                                             </div>
                                             <div className="min-w-0 flex flex-col gap-1">
                                                 <p className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Sistema Interno</p>
-                                                <p className="text-xs font-bold text-gray-900 truncate max-w-[150px] mb-1">{iTx.description}</p>
+                                                <p className="text-xs font-bold text-gray-900 truncate max-w-[150px] mb-1" title={descricaoDoLancamento(iTx)}>{descricaoDoLancamento(iTx)}</p>
                                                 <LazySelect
                                                     value={iTx.category || ''}
                                                     currentLabel={iTx.category || ''}
@@ -460,7 +465,9 @@ export default function ConciliatedTab({
                                         <div className="flex flex-col items-end gap-2">
                                             <div className="text-right">
                                                 <p className="text-xs font-black text-gray-900">{formatMoney(iTx.amount)}</p>
-                                                <span className="text-[8px] font-black text-emerald-600">{iTx.source_system}</span>
+                                                {!ehLancamentoDeContrato(iTx) && (
+                                                    <span className="text-[8px] font-black text-emerald-600">{iTx.source_system}</span>
+                                                )}
                                             </div>
                                             <button
                                                 onClick={() => onUndoMatch(m.id, bTx.id, iTx.id)}

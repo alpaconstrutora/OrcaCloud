@@ -17,7 +17,11 @@
  *      desligado com "…de outra organização, que você não acessa";
  *  (h) SGQ legível e vazio → "Nenhum serviço controlado ativo para esta obra";
  *  (i) com serviço controlado, os colaboradores avisam "obrigatório para mandar para inspeção";
- *  (j) erro do banco ao salvar aparece com a mensagem dele (não o texto genérico).
+ *  (j) erro do banco ao salvar aparece com a mensagem dele (não o texto genérico);
+ *  (k) revisão final: com serviço controlado, o "Modelo de checklist" fica PRESO à ficha do serviço
+ *      (desligado, com o motivo) — o banco só deixa a OE ir à inspeção com a ficha do serviço;
+ *  (l) serviço sem ficha → "Crie a ficha de verificação do serviço na Qualidade" e a OE vai sem ficha
+ *      (null explícito: não fica a ficha antiga escolhida à mão).
  */
 import React from 'react';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -273,5 +277,71 @@ describe('OperacionalForm — serviço controlado (Qualidade SiAC fase 2)', () =
         await user.selectOptions(campoServico(), 'srv-rev');
         await user.click(screen.getByRole('button', { name: /Salvar alterações/ }));
         expect(await screen.findByText(/não pode ser trocado/)).toBeTruthy();
+    });
+    it('(k) com serviço controlado, o modelo de checklist fica preso à ficha do serviço (desligado, com o motivo)', async () => {
+        const user = userEvent.setup();
+        renderizar();
+        await waitFor(() => expect(campoServico().disabled).toBe(false));
+        expect(campoFicha().disabled).toBe(false); // OE comum escolhe livre
+
+        await user.selectOptions(campoServico(), 'srv-alv');
+        expect(campoFicha().value).toBe('tpl-alv');
+        expect(campoFicha().disabled).toBe(true);
+        expect(motivo(campoFicha())).toMatch(/vem do serviço controlado/);
+
+        await user.selectOptions(campoServico(), '');
+        expect(campoFicha().disabled).toBe(false);
+    });
+
+    it('(k) OE controlada sem registro com ficha diferente da do serviço: salvar grava a ficha do serviço', async () => {
+        const user = userEvent.setup();
+        getById.mockResolvedValue(oe({
+            controlled_item_id: 'srv-alv', checklist_template_id: 'tpl-own',
+            checklist_template: { id: 'tpl-own', name: 'Ficha própria', service_type: null },
+        }));
+        renderizar('wo-1');
+        await waitFor(() => expect(campoServico().disabled).toBe(false));
+        await waitFor(() => expect(campoFicha().value).toBe('tpl-alv'));
+        expect(campoFicha().disabled).toBe(true);
+        await user.click(screen.getByRole('button', { name: /Salvar alterações/ }));
+        await waitFor(() => expect(update).toHaveBeenCalled());
+        expect(update.mock.calls[0][1]).toMatchObject({ controlledItemId: 'srv-alv', checklistTemplateId: 'tpl-alv' });
+    });
+
+    it('(l) serviço sem ficha: aviso para criar a ficha na Qualidade e a OE vai sem ficha (null)', async () => {
+        const SEM_FICHA = servico({ id: 'srv-sem', nome: 'Impermeabilização', checklist_template_id: null });
+        servicosParaOE.mockResolvedValue([ALVENARIA, SEM_FICHA]);
+        const user = userEvent.setup();
+        getById.mockResolvedValue(oe({
+            checklist_template_id: 'tpl-own',
+            checklist_template: { id: 'tpl-own', name: 'Ficha própria', service_type: null },
+        }));
+        renderizar('wo-1');
+        await waitFor(() => expect(campoServico().disabled).toBe(false));
+        expect(screen.queryByText(/Crie a ficha de verificação do serviço na Qualidade/)).toBeNull();
+
+        await user.selectOptions(campoServico(), 'srv-sem');
+        expect(screen.getByText(/Crie a ficha de verificação do serviço na Qualidade/)).toBeTruthy();
+        expect(campoFicha().value).toBe('');
+        expect(campoFicha().disabled).toBe(true);
+
+        await user.click(screen.getByRole('button', { name: /Salvar alterações/ }));
+        await waitFor(() => expect(update).toHaveBeenCalled());
+        expect(update.mock.calls[0][1]).toMatchObject({ controlledItemId: 'srv-sem', checklistTemplateId: null });
+    });
+
+    it('(d) OE com registro: a ficha que está fica (não é trocada pela do serviço)', async () => {
+        const user = userEvent.setup();
+        getById.mockResolvedValue(oe({
+            controlled_item_id: 'srv-alv', checklist_template_id: 'tpl-own', status: 'in_progress',
+            checklist_template: { id: 'tpl-own', name: 'Ficha própria', service_type: null },
+        }));
+        oeTemRegistro.mockResolvedValue(true);
+        renderizar('wo-1');
+        await waitFor(() => expect(campoFicha().disabled).toBe(true));
+        expect(campoFicha().value).toBe('tpl-own');
+        await user.click(screen.getByRole('button', { name: /Salvar alterações/ }));
+        await waitFor(() => expect(update).toHaveBeenCalled());
+        expect(update.mock.calls[0][1]).toMatchObject({ checklistTemplateId: 'tpl-own' });
     });
 });

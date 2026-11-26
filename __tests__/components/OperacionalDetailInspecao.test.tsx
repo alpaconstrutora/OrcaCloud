@@ -7,8 +7,11 @@
  *  (a) em `pending_inspection` os botões são "Aprovar inspeção"/"Reprovar inspeção" (nunca "Aprovar"/
  *      "Reprovar"), para toda OE; aprovar chama `aprovarInspecao(id, true, '')` — não `transition`;
  *  (b) reprovar pede o motivo: sem ele não chama; com ele chama `aprovarInspecao(id, false, motivo)`;
- *  (c) OE controlada sem `canReleaseQualitySystem` no SGQ → os dois desligados com o motivo;
- *      OE comum → ligados (a régua de permissão é só da controlada);
+ *  (c) OE controlada sem `canReleaseQualitySystem` na org DONA DO SERVIÇO → os dois desligados com o
+ *      motivo; OE comum → ligados (a régua de permissão é só da controlada); admin só da SPE (SGQ
+ *      desfeito) não aprova OE de serviço da Alpa;
+ *  (g) em `pending_inspection` a tela pergunta `oe_portoes(id, 'pending_inspection')`: NC aberta ou item
+ *      desfeito depois do pedido → "Aprovar inspeção" desligado com as mensagens (reprovar segue ligado);
  *  (d) erro da RPC aparece com a mensagem dela (aviso, não `alert`);
  *  (e) aba "Inspeção": a última validação — quem, quando, revisão, executores treinado sim/não;
  *  (f) `abaInicial="inspecao"` abre direto nela (o Kanban usa).
@@ -32,6 +35,7 @@ const getById = vi.fn();
 const validateTransition = vi.fn();
 const transition = vi.fn();
 const aprovarInspecao = vi.fn();
+const portoesDaOE = vi.fn();
 vi.mock('../../services/workOrderService', async () => {
     const tipos = await vi.importActual<typeof import('../../types/operational-control')>('../../types/operational-control');
     return {
@@ -41,13 +45,14 @@ vi.mock('../../services/workOrderService', async () => {
             validateTransition: (...a: unknown[]) => validateTransition(...a),
             transition: (...a: unknown[]) => transition(...a),
             aprovarInspecao: (...a: unknown[]) => aprovarInspecao(...a),
+            portoesDaOE: (...a: unknown[]) => portoesDaOE(...a),
             unblock: vi.fn(),
         },
     };
 });
-const sgqDaOrganizacao = vi.fn();
+const orgDoServicoControlado = vi.fn();
 vi.mock('../../services/qualidadeSiacService', () => ({
-    qualidadeSiacService: { sgqDaOrganizacao: (...a: unknown[]) => sgqDaOrganizacao(...a) },
+    qualidadeSiacService: { orgDoServicoControlado: (...a: unknown[]) => orgDoServicoControlado(...a) },
 }));
 // as abas filhas têm teste próprio
 vi.mock('../../components/OperacionalWorkLog', () => ({ default: () => null }));
@@ -85,7 +90,8 @@ beforeEach(() => {
     getById.mockResolvedValue(oe());
     validateTransition.mockResolvedValue({ valid: true, errors: [] });
     aprovarInspecao.mockResolvedValue('val-1');
-    sgqDaOrganizacao.mockResolvedValue('org-alpa');
+    orgDoServicoControlado.mockResolvedValue('org-alpa');
+    portoesDaOE.mockResolvedValue([]);
     useStore.setState({
         session: { user: { id: 'u-1', email: 'ana@spe.com' } } as never,
         currentProfile: { ...useStore.getState().currentProfile, group: 'USUARIO' } as never,
@@ -132,7 +138,7 @@ describe('OperacionalDetail — Aprovar inspeção (fase 2)', () => {
         });
         montar();
         const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
-        await waitFor(() => expect(sgqDaOrganizacao).toHaveBeenCalledWith('org-spe'));
+        await waitFor(() => expect(orgDoServicoControlado).toHaveBeenCalledWith('srv-alv'));
         await waitFor(() => expect((aprovar as HTMLButtonElement).disabled).toBe(true));
         expect(motivo(aprovar)).toBe(MOTIVO_SEM_LIBERACAO);
         const reprovar = screen.getByRole('button', { name: 'Reprovar inspeção' }) as HTMLButtonElement;
@@ -170,13 +176,13 @@ describe('OperacionalDetail — Aprovar inspeção (fase 2)', () => {
         });
         montar();
         const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
-        await waitFor(() => expect(sgqDaOrganizacao).toHaveBeenCalled());
+        await waitFor(() => expect(orgDoServicoControlado).toHaveBeenCalled());
         await waitFor(() => expect((aprovar as HTMLButtonElement).disabled).toBe(false));
     });
 
-    it('(c) falha ao conferir o SGQ fecha: desligados com a mensagem do erro', async () => {
+    it('(c) falha ao conferir a org do serviço fecha: desligados com a mensagem do erro', async () => {
         getById.mockResolvedValue(oe({ controlled_item_id: 'srv-alv' }));
-        sgqDaOrganizacao.mockRejectedValue(new Error('tempo esgotado'));
+        orgDoServicoControlado.mockRejectedValue(new Error('tempo esgotado'));
         // admin da SPE: cair para a org da OE ligaria os botões — o banco recusaria
         useStore.setState({ organizations: [membro('org-spe', 'SPE Garden', {}, 'admin')] as never });
         montar();
@@ -186,11 +192,63 @@ describe('OperacionalDetail — Aprovar inspeção (fase 2)', () => {
         expect((screen.getByRole('button', { name: 'Reprovar inspeção' }) as HTMLButtonElement).disabled).toBe(true);
     });
 
+    it('(c) admin só da SPE (SGQ desfeito): o serviço é da Alpa → desligados (a permissão é da org do serviço)', async () => {
+        getById.mockResolvedValue(oe({ controlled_item_id: 'srv-alv' }));
+        // a SPE desfez o SGQ: o SGQ da org da OE agora é a própria SPE — mas o serviço segue da Alpa
+        orgDoServicoControlado.mockResolvedValue('org-alpa');
+        useStore.setState({ organizations: [membro('org-spe', 'SPE Garden', {}, 'admin')] as never });
+        montar();
+        const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
+        await waitFor(() => expect(motivo(aprovar)).toBe(MOTIVO_SEM_LIBERACAO));
+        expect((aprovar as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByRole('button', { name: 'Reprovar inspeção' }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('(c) serviço invisível (RLS: não é membro da org dona) → desligados, mesmo admin da SPE', async () => {
+        getById.mockResolvedValue(oe({ controlled_item_id: 'srv-alv' }));
+        orgDoServicoControlado.mockResolvedValue(null);
+        useStore.setState({ organizations: [membro('org-spe', 'SPE Garden', {}, 'admin')] as never });
+        montar();
+        const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
+        await waitFor(() => expect(motivo(aprovar)).toBe(MOTIVO_SEM_LIBERACAO));
+        expect((aprovar as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('(g) portão de inspeção não passa mais (NC aberta depois do pedido) → Aprovar desligado com a mensagem; Reprovar ligado', async () => {
+        portoesDaOE.mockResolvedValue(['1 não conformidade(s) em aberto', '1 itens obrigatórios do checklist antes de concluir não cumpridos']);
+        const user = userEvent.setup();
+        montar();
+        const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
+        await waitFor(() => expect(portoesDaOE).toHaveBeenCalledWith('wo-1', 'pending_inspection'));
+        await waitFor(() => expect((aprovar as HTMLButtonElement).disabled).toBe(true));
+        expect(motivo(aprovar)).toMatch(/1 não conformidade\(s\) em aberto/);
+        expect(motivo(aprovar)).toMatch(/antes de concluir não cumpridos/);
+        const reprovar = screen.getByRole('button', { name: 'Reprovar inspeção' }) as HTMLButtonElement;
+        expect(reprovar.disabled).toBe(false);
+        await user.click(aprovar);
+        expect(aprovarInspecao).not.toHaveBeenCalled();
+    });
+
+    it('(g) erro ao conferir o portão fecha: Aprovar desligado com a mensagem do erro', async () => {
+        portoesDaOE.mockRejectedValue(new Error('tempo esgotado'));
+        montar();
+        const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
+        await waitFor(() => expect(motivo(aprovar)).toMatch(/tempo esgotado/));
+        expect((aprovar as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('(g) fora de pending_inspection não pergunta o portão de inspeção', async () => {
+        getById.mockResolvedValue(oe({ status: 'in_progress' }));
+        montar();
+        await screen.findByRole('tab', { name: /Inspeção/ });
+        expect(portoesDaOE).not.toHaveBeenCalled();
+    });
+
     it('(c) OE comum: ligados mesmo sem a permissão (a régua é só da controlada)', async () => {
         montar();
         const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
         expect((aprovar as HTMLButtonElement).disabled).toBe(false);
-        expect(sgqDaOrganizacao).not.toHaveBeenCalled();
+        expect(orgDoServicoControlado).not.toHaveBeenCalled();
     });
 
     it('(d) erro da RPC aparece com a mensagem dela', async () => {

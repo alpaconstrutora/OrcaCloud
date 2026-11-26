@@ -107,12 +107,13 @@ export function podeEditarQualidadeSiacNoContexto(args: {
 // Chaves `canInspectQualitySystem` (responder a ficha de OE de serviço controlado) e
 // `canReleaseQualitySystem` (a ação "Aprovar inspeção"). Mesma régua de `_qualidade_pode` no banco:
 // dono/admin da organização (ou acesso total) sempre; os demais só com a chave `true` — sem herança
-// (editar Qualidade ou Obras não liga). O banco confere na organização DONA DO SGQ da OE: quem chama
-// passa as permissões e o papel do membro DESSA organização.
+// (editar Qualidade ou Obras não liga). O banco confere na organização DONA DO SERVIÇO CONTROLADO da OE
+// (`quality_controlled_items.organization_id`): quem chama passa as permissões e o papel do membro
+// DESSA organização.
 
 interface ArgsQualidadeOE {
     permissoes: Permissoes;
-    /** papel do membro na organização dona do SGQ (`owner`/`admin` ligam) */
+    /** papel do membro na organização dona do serviço controlado (`owner`/`admin` ligam) */
     papel?: string | null;
     /**
      * SÓ o e-mail de acesso total (`temAcessoTotal`) — o espelho de `is_superadmin()` (tabela

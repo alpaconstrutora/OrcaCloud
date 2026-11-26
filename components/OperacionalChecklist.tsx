@@ -101,6 +101,17 @@ const RESPOSTA_LABELS: Record<ResponseStatus, string> = {
 const MOTIVO_FICHA_TRAVADA =
   'A ficha de verificação de uma OE de serviço controlado com registro de inspeção (resposta, histórico de resposta, NC ou validação) não pode ser trocada nem retirada.'
 
+/**
+ * OE de serviço controlado: a ficha é a do serviço (Qualidade › serviço › ficha de verificação) — o banco
+ * só deixa ir à inspeção com ela (`_oe_portoes`, migration 130000). Trocar aqui pularia a ficha do serviço.
+ */
+const MOTIVO_FICHA_DO_SERVICO =
+  'A ficha de uma OE de serviço controlado vem do serviço controlado (Qualidade) — não se troca aqui; para mudar, edite a ficha do serviço na Qualidade ou o serviço da OE.'
+
+/** OE controlada sem ficha: o caminho é criar a ficha do serviço, não escolher um modelo qualquer. */
+const AVISO_SERVICO_SEM_FICHA =
+  'Crie a ficha de verificação do serviço na Qualidade e salve a OE de novo: esta OE é de serviço controlado e está sem ficha (a ficha vem do serviço).'
+
 const MOTIVO_NA_SEM_OBSERVACAO =
   'Escreva a observação: item obrigatório só conta como cumprido em "não aplicável" com o motivo.'
 
@@ -173,10 +184,15 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
   const [showTemplateSelector, setShowTemplateSelector] = useState(false)
 
   // Qualidade SiAC (fase 2): OE de serviço controlado
-  const [orgDaOE, setOrgDaOE] = useState<string | null>(null)
-  const [controlada, setControlada] = useState(false)
-  /** OE controlada com registro de inspeção: o banco não deixa trocar a ficha. */
-  const [fichaTravada, setFichaTravada] = useState(false)
+  const [controlledItemId, setControlledItemId] = useState<string | null>(null)
+  const controlada = controlledItemId !== null
+  /**
+   * Por que a ficha não se troca aqui (null = troca livre — OE comum). OE controlada: sempre travada
+   * (a ficha vem do serviço); com registro de inspeção, a frase do gatilho do banco; sem conseguir
+   * conferir o registro, o erro (fecha, não abre — e a ficha carrega mesmo assim).
+   */
+  const [motivoFichaTravada, setMotivoFichaTravada] = useState<string | null>(null)
+  const fichaTravada = motivoFichaTravada !== null
   /** A ficha é do SGQ de outra organização que o usuário não lê (RLS): os itens não vêm. */
   const [fichaSemAcesso, setFichaSemAcesso] = useState(false)
   // "Não aplicável" em item obrigatório: observação obrigatória antes de gravar
@@ -189,7 +205,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
 
   const confirm = useConfirm()
   const { showToast, localToast } = useToast()
-  const permissao = usePermissaoQualidadeDaOE(orgDaOE, controlada)
+  const permissao = usePermissaoQualidadeDaOE(controlledItemId)
   const nomeDoUsuario = useNomeDoUsuario()
 
   /** Motivo de as respostas estarem desligadas (null = ligadas). Régua só da OE controlada. */
@@ -216,11 +232,21 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
       setCurrentTemplateId(wo.checklist_template_id ?? null)
       setSelectedTemplateId(wo.checklist_template_id ?? '')
       const ehControlada = Boolean(wo.controlled_item_id)
-      setOrgDaOE(wo.org_id ?? null)
-      setControlada(ehControlada)
+      setControlledItemId((wo.controlled_item_id as string | null) ?? null)
       setFichaSemAcesso(false)
-      // A mesma régua do gatilho que recusa trocar a ficha (resposta, histórico, NC ou validação).
-      setFichaTravada(ehControlada ? await qualidadeSiacService.oeTemRegistro(workOrderId) : false)
+      if (ehControlada) {
+        // A mesma régua do gatilho que recusa trocar a ficha (resposta, histórico, NC ou validação).
+        // Falha ao conferir NÃO derruba a ficha: trava a troca com o motivo e segue carregando.
+        let motivo = MOTIVO_FICHA_DO_SERVICO
+        try {
+          if (await qualidadeSiacService.oeTemRegistro(workOrderId)) motivo = MOTIVO_FICHA_TRAVADA
+        } catch (e: unknown) {
+          motivo = `Não foi possível conferir se a OE tem registro de inspeção: ${errorMessage(e, 'erro desconhecido')}`
+        }
+        setMotivoFichaTravada(motivo)
+      } else {
+        setMotivoFichaTravada(null)
+      }
 
       if (!wo.checklist_template_id) {
         setItems([])
@@ -314,6 +340,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
 
   const handleSeedFromTemplate = async () => {
     if (!template || !tipoObra || !orgId) return
+    if (controlada) return // a ficha da OE controlada vem do serviço (botão nem aparece)
     setSeeding(true)
     setError(null)
     try {
@@ -500,9 +527,9 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
     setUploading(item.id)
     setError(null)
     try {
-      // Mesmo upload da foto da correção da NC: bucket privado, evidence_files.file_url = PATH.
+      // Mesmo upload da foto da correção da NC: bucket privado, evidence_files.file_url = PATH, na
+      // pasta da org DA OE (o service lê work_orders.org_id) — não a do topo (REGRA #5).
       const evidenciaId = await workOrderService.enviarFotoEvidencia({
-        orgId,
         workOrderId,
         file,
         prefixo: `cl_${item.id}`,
@@ -557,7 +584,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
       <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-[10px]">
         <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
         <p className="text-sm text-amber-900">
-          A ficha deste serviço é do sistema da qualidade de {permissao.nomeSgq ?? 'outra organização'} — você não tem acesso para inspecionar
+          A ficha deste serviço é do sistema da qualidade de {permissao.nomeOrgDoServico ?? 'outra organização'} — você não tem acesso para inspecionar
         </p>
       </div>
     )
@@ -578,6 +605,13 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
           <p className="text-xs mt-1 text-slate-400">Selecione um template abaixo ou use o padrão do tipo de obra</p>
         </div>
 
+        {controlada && (
+          <p className="flex items-start gap-2 max-w-sm text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-[10px] px-3 py-2">
+            <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+            {AVISO_SERVICO_SEM_FICHA}
+          </p>
+        )}
+
         {/* Template selector no empty state */}
         {availableTemplates.length > 0 && (
           <div className="flex items-center gap-2 w-full max-w-sm">
@@ -592,8 +626,8 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
-            {/* OE controlada com registro: o banco recusa pôr a ficha (42501) — desligado, dizendo por quê. */}
-            <span className="inline-flex" title={fichaTravada ? MOTIVO_FICHA_TRAVADA : undefined}>
+            {/* OE controlada: a ficha vem do serviço (com registro, o banco recusa — 42501) — desligado, dizendo por quê. */}
+            <span className="inline-flex" title={motivoFichaTravada ?? undefined}>
               <Button
                 onClick={handleApplyTemplate}
                 disabled={!selectedTemplateId || applyingTemplate || fichaTravada}
@@ -606,7 +640,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
           </div>
         )}
 
-        {tipoObra && template && template.checklist_template.length > 0 && orgId && (
+        {tipoObra && template && template.checklist_template.length > 0 && orgId && !controlada && (
           <button
             onClick={handleSeedFromTemplate}
             disabled={seeding}
@@ -659,7 +693,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
-              <span className="inline-flex" title={fichaTravada ? MOTIVO_FICHA_TRAVADA : undefined}>
+              <span className="inline-flex" title={motivoFichaTravada ?? undefined}>
                 <Button
                   onClick={handleApplyTemplate}
                   disabled={applyingTemplate || fichaTravada}
@@ -677,8 +711,8 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
               </button>
             </>
           ) : (
-            // OE controlada com registro: o banco recusa a troca (42501) — desligado, dizendo por quê.
-            <span className="inline-flex" title={fichaTravada ? MOTIVO_FICHA_TRAVADA : undefined}>
+            // OE controlada: a ficha vem do serviço (com registro, o banco recusa — 42501) — desligado, dizendo por quê.
+            <span className="inline-flex" title={motivoFichaTravada ?? undefined}>
               <button
                 onClick={() => setShowTemplateSelector(true)}
                 disabled={fichaTravada}

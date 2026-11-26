@@ -237,6 +237,21 @@ describe('qualidadeSiacService', () => {
     await expect(qualidadeSiacService.sgqDaOrganizacao('spe')).rejects.toThrow('falhou');
   });
 
+  it('orgDoServicoControlado lê a org dona do serviço (quality_controlled_items); invisível = null; erro sobe', async () => {
+    resposta = { data: { organization_id: 'alpa' }, error: null };
+    expect(await qualidadeSiacService.orgDoServicoControlado('srv-1')).toBe('alpa');
+    expect(achar('from')[0].args).toEqual(['quality_controlled_items']);
+    expect(achar('select')[0].args).toEqual(['organization_id']);
+    expect(achar('eq')[0].args).toEqual(['id', 'srv-1']);
+
+    // a RLS esconde o serviço de quem não é membro da org dona dele — não é erro, é "sem vínculo"
+    resposta = { data: null, error: null };
+    expect(await qualidadeSiacService.orgDoServicoControlado('srv-1')).toBeNull();
+
+    resposta = { data: null, error: { message: 'falhou' } };
+    await expect(qualidadeSiacService.orgDoServicoControlado('srv-1')).rejects.toThrow('falhou');
+  });
+
   it('sgqLegivel = o SGQ está em minhas_orgs_membro(); erro sobe', async () => {
     resposta = { data: ['spe', 'alpa'], error: null };
     expect(await qualidadeSiacService.sgqLegivel('alpa')).toBe(true);

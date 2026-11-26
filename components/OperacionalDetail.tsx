@@ -208,10 +208,30 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
   const [activeTab, setActiveTab] = useState<Tab>(abaInicial ?? 'geral')
   const { showToast, localToast } = useToast()
   const nomeDoUsuario = useNomeDoUsuario()
-  // Régua de "Aprovar inspeção" (canReleaseQualitySystem no SGQ da org DA OE): só OE controlada.
+  // Régua de "Aprovar inspeção" (canReleaseQualitySystem na org DONA DO SERVIÇO controlado da OE):
+  // só OE controlada.
   const controlada = Boolean(wo?.controlled_item_id)
-  const permissao = usePermissaoQualidadeDaOE((wo?.org_id as string | undefined) ?? null, controlada)
+  const permissao = usePermissaoQualidadeDaOE((wo?.controlled_item_id as string | undefined) ?? null)
   const motivoSemLiberar = controlada ? permissao.motivoSemLiberacao : null
+  // Portão de inspeção NO MOMENTO (a RPC reconfere ao aprovar): NC aberta ou item desfeito depois do
+  // pedido de inspeção desliga "Aprovar inspeção" com as mensagens do banco. Erro fecha. Reprovar não
+  // depende dele. Reconfere ao trocar de aba (a pessoa corrige a ficha/NC e volta).
+  const [portaoInspecao, setPortaoInspecao] = useState<{ id: string; motivo: string | null } | null>(null)
+  const emInspecao = wo?.status === 'pending_inspection'
+  useEffect(() => {
+    if (!emInspecao) return
+    let vivo = true
+    workOrderService.portoesDaOE(workOrderId, 'pending_inspection')
+      .then(msgs => { if (vivo) setPortaoInspecao({ id: workOrderId, motivo: msgs.length > 0 ? msgs.join('; ') : null }) })
+      .catch((e: unknown) => {
+        if (vivo) setPortaoInspecao({ id: workOrderId, motivo: `Não foi possível conferir o portão da inspeção: ${errorMessage(e, 'erro desconhecido')}` })
+      })
+    return () => { vivo = false }
+  }, [workOrderId, emInspecao, wo, activeTab])
+  const motivoSemAprovar: string | null = !emInspecao
+    ? null
+    : (motivoSemLiberar
+      ?? (portaoInspecao?.id !== workOrderId ? 'Conferindo o portão da inspeção…' : portaoInspecao.motivo))
   const [pendingTransition, setPendingTransition] = useState<WorkOrderStatus | null>(null)
   const [transitionErrors, setTransitionErrors] = useState<string[]>([])
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -245,7 +265,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
     if (wo && ehDecisaoDeInspecao(wo.status as WorkOrderStatus, newStatus)) {
       // Os portões de aprovar a RPC reconfere na hora (P0001 com a mensagem); validateTransition daria
       // "use Aprovar inspeção" — é justamente o que este botão faz.
-      if (motivoSemLiberar) return
+      if (newStatus === 'approved' ? motivoSemAprovar : motivoSemLiberar) return
       setTransitionErrors([])
       setPendingTransition(newStatus)
       return
@@ -448,7 +468,9 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
             )}
             {allowedNext.map(next => {
               // Desligado sempre diz o motivo, no invólucro (o botão desligado não recebe o mouse).
-              const motivo = ehDecisaoDeInspecao(status, next) ? motivoSemLiberar : null
+              const motivo = ehDecisaoDeInspecao(status, next)
+                ? (next === 'approved' ? motivoSemAprovar : motivoSemLiberar)
+                : null
               return (
                 <span key={next} className="inline-flex" title={motivo ?? undefined}>
                   <button
@@ -732,10 +754,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
 
           {/* Tab: NCs */}
           {activeTab === 'ncs' && (
-            <OperacionalNC
-              workOrderId={workOrderId}
-              orgId={orgId}
-            />
+            <OperacionalNC workOrderId={workOrderId} />
           )}
 
           {/* Tab: Histórico */}

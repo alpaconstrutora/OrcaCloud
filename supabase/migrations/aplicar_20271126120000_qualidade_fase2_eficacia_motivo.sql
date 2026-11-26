@@ -18,6 +18,15 @@
 -- Aplicar com: npx supabase db query --linked -f <este arquivo>  (nunca db push).
 -- A função de 1ª versão é de aplicar_20271126100000_qualidade_fase2_estrutura.sql
 -- (4.7); aqui é a mesma função com as duas colunas a mais.
+--
+-- ⚠️ REAPLICAR NA ORDEM (revisão final, 26/11): as quatro migrations da fase 2
+--    redefinem as mesmas funções; reaplicar uma antiga depois das novas DESFAZ as
+--    novas. Ordem: 100000 → 110000 → 120000 → 130000. A 100000 e a 110000 têm guarda
+--    (DO) que recusa reaplicar sozinha; esta 120000 é aditiva e pode ser
+--    reaplicada sozinha (nada da 130000 depende do que ela redefine). Para
+--    reaplicar a sequência de propósito: um arquivo só com
+--    `SET qualidade.reaplicar_fase2_na_ordem = 'on';` + as quatro, na ordem.
+--
 -- ============================================================================
 
 ALTER TABLE public.non_conformances

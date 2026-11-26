@@ -46,6 +46,12 @@ const MOTIVO_SGQ_ILEGIVEL =
   'Os serviços controlados vêm do sistema da qualidade de outra organização, que você não acessa'
 const MOTIVO_SEM_SERVICOS = 'Nenhum serviço controlado ativo para esta obra'
 const ROTULO_SERVICO_ILEGIVEL = 'Serviço controlado do sistema da qualidade'
+// OE de serviço controlado: a ficha é a do serviço — o banco só deixa ir à inspeção com ela
+// (`_oe_portoes`, migration 130000). O campo fica preso a ela, desligado, dizendo por quê.
+const MOTIVO_FICHA_DO_SERVICO =
+  'A ficha de uma OE de serviço controlado vem do serviço controlado (Qualidade) — para mudar, edite a ficha do serviço na Qualidade'
+const AVISO_SERVICO_SEM_FICHA =
+  'Crie a ficha de verificação do serviço na Qualidade: este serviço controlado ainda não tem ficha, e sem ela a OE não vai para inspeção'
 
 const fmtCurrency = (v: number) =>
   v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -514,13 +520,16 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
     }
   }
 
-  /** Escolhe o serviço controlado e aplica a ficha dele (sem resposta ainda, não há o que perguntar). */
+  /**
+   * Escolhe o serviço controlado e aplica a ficha dele (sem resposta ainda, não há o que perguntar).
+   * Serviço sem ficha: a OE fica sem ficha (não herda a escolhida à mão — o banco não a aceitaria).
+   */
   const aplicarServico = (id: string, sugerido: boolean) => {
     const servico = servicos.find(s => s.id === id)
     setForm(f => ({
       ...f,
       controlledItemId: id,
-      checklistTemplateId: servico?.checklist_template_id ? servico.checklist_template_id : f.checklistTemplateId,
+      checklistTemplateId: servico ? (servico.checklist_template_id ?? '') : f.checklistTemplateId,
     }))
     setServicoSugerido(sugerido && id !== '')
   }
@@ -605,7 +614,9 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
         plannedQuantity: form.plannedQuantity ? parseFloat(form.plannedQuantity) : undefined,
         plannedCost: form.plannedCost ? parseFloat(form.plannedCost) : undefined,
         predecessorId: form.predecessorId || undefined,
-        checklistTemplateId: form.checklistTemplateId || undefined,
+        // OE controlada: a ficha do serviço, e sem ficha vai null explícito (undefined não mexeria na
+        // coluna e deixaria a ficha antiga).
+        checklistTemplateId: fichaEfetiva || (form.controlledItemId ? null : undefined),
         controlledItemId: form.controlledItemId || null,
         budgetItemRef: selectedBudgetItem ?? undefined,
         planningItemRef: selectedPlanningItem ?? undefined,
@@ -661,6 +672,14 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
     ?? (erroServicos ? `Não foi possível carregar os serviços controlados: ${erroServicos}` : null)
     ?? (sgqIlegivel ? MOTIVO_SGQ_ILEGIVEL : null)
     ?? (servicos.length === 0 && form.controlledItemId === '' ? MOTIVO_SEM_SERVICOS : null)
+  // A ficha da OE controlada é a do serviço escolhido (quando o serviço está na lista e a ficha não
+  // está travada por registro/status — aí fica a que está, o banco não deixaria trocar).
+  const servicoEscolhido = form.controlledItemId ? servicos.find(s => s.id === form.controlledItemId) ?? null : null
+  const fichaEfetiva = servicoEscolhido && motivoTravaFicha === null
+    ? (servicoEscolhido.checklist_template_id ?? '')
+    : form.checklistTemplateId
+  const motivoCampoFicha = motivoTravaFicha ?? (form.controlledItemId ? MOTIVO_FICHA_DO_SERVICO : null)
+  const servicoSemFicha = servicoEscolhido !== null && !servicoEscolhido.checklist_template_id
   const fichasDoCampo = useMemo(() => {
     const vistas = new Map<string, ChecklistTemplate>()
     for (const t of [...templates, ...fichasDosServicos, ...(fichaDaOE ? [fichaDaOE] : [])]) {
@@ -1104,20 +1123,23 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
               {motivoCampoServico && servicosCarregados && (
                 <p className="mt-1 text-xs text-slate-500">{motivoCampoServico}</p>
               )}
+              {servicoSemFicha && (
+                <p className="mt-1 text-xs font-medium text-amber-800">{AVISO_SERVICO_SEM_FICHA}</p>
+              )}
             </Field>
-            {(fichasDoCampo.length > 0 || form.checklistTemplateId !== '') && (
+            {(fichasDoCampo.length > 0 || fichaEfetiva !== '') && (
               <Field label="Modelo de checklist">
-                <div className="relative" title={motivoTravaFicha ?? undefined}>
+                <div className="relative" title={motivoCampoFicha ?? undefined}>
                   <select
                     aria-label="Modelo de checklist"
-                    value={form.checklistTemplateId}
+                    value={fichaEfetiva}
                     onChange={e => setForm(f => ({ ...f, checklistTemplateId: e.target.value }))}
-                    disabled={motivoTravaFicha !== null}
+                    disabled={motivoCampoFicha !== null}
                     className={selectCls + ' disabled:bg-slate-50 disabled:opacity-100 disabled:cursor-not-allowed'}
                   >
                     <option value="">Nenhum</option>
-                    {form.checklistTemplateId !== '' && !fichasDoCampo.some(t => t.id === form.checklistTemplateId) && (
-                      <option value={form.checklistTemplateId}>Ficha do serviço controlado</option>
+                    {fichaEfetiva !== '' && !fichasDoCampo.some(t => t.id === fichaEfetiva) && (
+                      <option value={fichaEfetiva}>Ficha do serviço controlado</option>
                     )}
                     {fichasDoCampo.map(t => (
                       <option key={t.id} value={t.id}>

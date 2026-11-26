@@ -428,7 +428,7 @@ export interface CreateWorkOrderInput {
   plannedQuantity?: number
   plannedCost?: number
   predecessorId?: string
-  checklistTemplateId?: string
+  checklistTemplateId?: string | null
   /** Serviço controlado (Qualidade SiAC); `null` = sem serviço. Ausente no update = não mexe. */
   controlledItemId?: string | null
   budgetItemRef?: BudgetItemRef
@@ -450,7 +450,7 @@ export interface UpdateWorkOrderInput {
   plannedQuantity?: number
   plannedCost?: number
   predecessorId?: string
-  checklistTemplateId?: string
+  checklistTemplateId?: string | null
   /** Serviço controlado (Qualidade SiAC); `null` = sem serviço. Ausente no update = não mexe. */
   controlledItemId?: string | null
   budgetItemRef?: BudgetItemRef

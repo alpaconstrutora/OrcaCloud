@@ -67,7 +67,7 @@ const nc = (p: Record<string, unknown>) => ({
     created_at: '2026-11-20T10:00:00Z', closed_at: null, oe_checklist_responses: [], ...p,
 });
 
-const montar = () => render(<ConfirmProvider><OperacionalNC workOrderId="wo-1" orgId="org-spe" /></ConfirmProvider>);
+const montar = () => render(<ConfirmProvider><OperacionalNC workOrderId="wo-1" /></ConfirmProvider>);
 const motivo = (el: HTMLElement) => el.closest('[title]')?.getAttribute('title') ?? '';
 const abrirCard = async (descricao = 'Reboco com fissura') => {
     await userEvent.click(await screen.findByText(descricao));
@@ -137,8 +137,11 @@ describe('OperacionalNC — causa, ação corretiva e eficácia (fase 2)', () =>
 
         await waitFor(() => expect(encerrarNC).toHaveBeenCalledTimes(1));
         expect(enviarFotoEvidencia).toHaveBeenCalledWith(expect.objectContaining({
-            orgId: 'org-spe', workOrderId: 'wo-1', file: foto,
+            workOrderId: 'wo-1', file: foto,
         }));
+        // REGRA #5: a pasta da foto é a da organização DA OE, que o service lê da OE — a tela não manda
+        // a org que recebeu (a do topo).
+        expect(enviarFotoEvidencia.mock.calls[0][0]).not.toHaveProperty('orgId');
         expect(encerrarNC).toHaveBeenCalledWith('nc-1', { causa: 'Traço errado', acaoCorretiva: 'Refazer o reboco', evidenciaId: 'ev-1' });
     });
 

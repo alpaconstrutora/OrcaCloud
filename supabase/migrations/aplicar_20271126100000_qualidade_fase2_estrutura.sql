@@ -53,11 +53,32 @@
 --
 -- Idempotente (IF NOT EXISTS / CREATE OR REPLACE / DROP ... IF EXISTS).
 -- Aplicar com `npx supabase db query --linked -f` — nunca `db push`.
+--
+-- ⚠️ REAPLICAR NA ORDEM (revisão final, 26/11): as quatro migrations da fase 2
+--    redefinem as mesmas funções; reaplicar uma antiga depois das novas DESFAZ as
+--    novas. Ordem: 100000 → 110000 → 120000 → 130000. Guarda no topo (DO) recusa
+--    reaplicar sozinha. Para reaplicar de propósito: um arquivo só com
+--    `SET qualidade.reaplicar_fase2_na_ordem = 'on';` + as quatro, na ordem.
+--
+--    Esta 100000 regride, se reaplicada depois: non_conformances_grava_historico e
+--    o gatilho dela (120000), work_orders_servico_controlado_do_sgq (110000) e
+--    quality_settings_sgq_valido (130000). A guarda detecta a 110000 pela tabela
+--    work_order_validation_history (criada lá): na 1ª aplicação ela não existe e
+--    a guarda passa.
 -- =============================================================================
 
 SET lock_timeout = '3s';
 
 BEGIN;
+
+-- ── 0. Guarda de reaplicação ───────────────────────────────────────────────
+DO $$
+BEGIN
+    IF to_regclass('public.work_order_validation_history') IS NOT NULL
+       AND coalesce(current_setting('qualidade.reaplicar_fase2_na_ordem', true), '') <> 'on' THEN
+        RAISE EXCEPTION 'Migration já superada por 110000/120000/130000 — reaplicar as quatro NA ORDEM (100000 → 110000 → 120000 → 130000)';
+    END IF;
+END $$;
 
 -- ── 1. Colunas ──────────────────────────────────────────────────────────────
 

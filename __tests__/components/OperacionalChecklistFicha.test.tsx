@@ -15,6 +15,10 @@
  *      motivo; OE comum: exclusão das respostas que falha NÃO troca a ficha;
  *  (h) decisão (b): membro só da SPE (a RLS esconde os itens da ficha do SGQ) → a ficha explica
  *      que é do sistema da qualidade de outra organização, em vez de "nenhum checklist".
+ *  (i) revisão final: OE controlada → a ficha vem do serviço; "Trocar template"/"Aplicar" desligados
+ *      com o motivo (o banco exige a ficha do serviço para ir à inspeção);
+ *  (j) falha ao conferir o registro não derruba a ficha: carrega e trava a troca com o motivo;
+ *  (k) a foto do item não manda a org do topo (o service usa a org da OE).
  */
 import React from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
@@ -79,15 +83,21 @@ vi.mock('../../lib/supabase', () => ({
 
 // ── serviços simulados ───────────────────────────────────────────────────────
 const listarHistoricoResposta = vi.fn();
+const enviarFotoEvidencia = vi.fn();
 vi.mock('../../services/workOrderService', () => ({
-    workOrderService: { listarHistoricoResposta: (...a: unknown[]) => listarHistoricoResposta(...a) },
+    workOrderService: {
+        listarHistoricoResposta: (...a: unknown[]) => listarHistoricoResposta(...a),
+        enviarFotoEvidencia: (...a: unknown[]) => enviarFotoEvidencia(...a),
+    },
 }));
 const sgqDaOrganizacao = vi.fn();
+const orgDoServicoControlado = vi.fn();
 const sgqLegivel = vi.fn();
 const oeTemRegistro = vi.fn();
 vi.mock('../../services/qualidadeSiacService', () => ({
     qualidadeSiacService: {
         sgqDaOrganizacao: (...a: unknown[]) => sgqDaOrganizacao(...a),
+        orgDoServicoControlado: (...a: unknown[]) => orgDoServicoControlado(...a),
         sgqLegivel: (...a: unknown[]) => sgqLegivel(...a),
         oeTemRegistro: (...a: unknown[]) => oeTemRegistro(...a),
     },
@@ -137,6 +147,8 @@ beforeEach(() => {
         templates: [{ id: 'tpl-1', name: 'Ficha própria', service_type: null }, { id: 'tpl-2', name: 'Outra ficha', service_type: null }],
     };
     sgqDaOrganizacao.mockResolvedValue('org-alpa');
+    orgDoServicoControlado.mockResolvedValue('org-alpa');
+    enviarFotoEvidencia.mockResolvedValue('ev-1');
     sgqLegivel.mockResolvedValue(true);
     oeTemRegistro.mockResolvedValue(false);
     listarHistoricoResposta.mockResolvedValue([]);
@@ -217,7 +229,7 @@ describe('OperacionalChecklist — ficha de verificação (fase 2)', () => {
         await waitFor(() => expect((botaoDoItem('Prumo da parede', 'Conforme') as HTMLButtonElement).disabled).toBe(true));
         expect(motivo(botaoDoItem('Prumo da parede', 'Conforme'))).toBe(MOTIVO_SEM_INSPECAO);
         expect((botaoDoItem('Prumo da parede', 'N/A') as HTMLButtonElement).disabled).toBe(true);
-        expect(sgqDaOrganizacao).toHaveBeenCalledWith('org-spe');
+        expect(orgDoServicoControlado).toHaveBeenCalledWith('srv-alv');
     });
 
     it('(d) OE controlada com canInspectQualitySystem no SGQ → respostas ligadas', async () => {
@@ -246,9 +258,9 @@ describe('OperacionalChecklist — ficha de verificação (fase 2)', () => {
         expect((botaoDoItem('Prumo da parede', 'Conforme') as HTMLButtonElement).disabled).toBe(true);
     });
 
-    it('(d) falha ao conferir o SGQ fecha: respostas desligadas com a mensagem do erro', async () => {
+    it('(d) falha ao conferir a org do serviço fecha: respostas desligadas com a mensagem do erro', async () => {
         estado.wo = { ...estado.wo, controlled_item_id: 'srv-alv' };
-        sgqDaOrganizacao.mockRejectedValue(new Error('tempo esgotado'));
+        orgDoServicoControlado.mockRejectedValue(new Error('tempo esgotado'));
         // admin da SPE: se o hook caísse para a org da OE, ligaria — o banco recusaria
         useStore.setState({
             organizations: [
@@ -352,5 +364,52 @@ describe('OperacionalChecklist — ficha de verificação (fase 2)', () => {
         expect(await screen.findByText(
             'A ficha deste serviço é do sistema da qualidade de Alpa Construtora — você não tem acesso para inspecionar',
         )).toBeTruthy();
+    });
+    it('(i) OE controlada sem registro: "Trocar template" desligado — a ficha vem do serviço controlado', async () => {
+        estado.wo = { ...estado.wo, controlled_item_id: 'srv-alv' };
+        montar();
+        await screen.findByText('Prumo da parede');
+        const trocar = await screen.findByRole('button', { name: /Trocar template/ });
+        await waitFor(() => expect((trocar as HTMLButtonElement).disabled).toBe(true));
+        expect(motivo(trocar)).toMatch(/vem do serviço controlado/);
+    });
+
+    it('(i) OE controlada sem ficha: "Aplicar" desligado e a tela manda criar a ficha na Qualidade', async () => {
+        estado.wo = { ...estado.wo, controlled_item_id: 'srv-alv', checklist_template_id: null };
+        estado.respostas = [];
+        const user = userEvent.setup();
+        montar();
+        expect(await screen.findByText('Nenhum checklist vinculado')).toBeTruthy();
+        expect(screen.getByText(/ficha de verificação do serviço na Qualidade/)).toBeTruthy();
+        await user.selectOptions(screen.getByLabelText('Modelo de checklist'), 'tpl-1');
+        const aplicar = screen.getByRole('button', { name: /Aplicar/ }) as HTMLButtonElement;
+        expect(aplicar.disabled).toBe(true);
+        expect(motivo(aplicar)).toMatch(/vem do serviço controlado/);
+        await user.click(aplicar);
+        expect(gravacoes('update', 'work_orders')).toHaveLength(0);
+    });
+
+    it('(j) falha ao conferir o registro: a ficha carrega e a troca fica travada com o motivo', async () => {
+        estado.wo = { ...estado.wo, controlled_item_id: 'srv-alv' };
+        oeTemRegistro.mockRejectedValue(new Error('tempo esgotado'));
+        montar();
+        expect(await screen.findByText('Prumo da parede')).toBeTruthy();
+        expect(screen.queryByText(/Erro ao carregar checklist/)).toBeNull();
+        const trocar = screen.getByRole('button', { name: /Trocar template/ }) as HTMLButtonElement;
+        expect(trocar.disabled).toBe(true);
+        expect(motivo(trocar)).toMatch(/Não foi possível conferir se a OE tem registro de inspeção: tempo esgotado/);
+    });
+
+    it('(k) foto do item: o upload não leva a org do topo (o service usa a org DA OE)', async () => {
+        estado.itens = [item({ id: 'it-foto', description: 'Foto do prumo', requires_photo: true })];
+        estado.respostas = [];
+        const { container } = montar();
+        await screen.findByText('Foto do prumo');
+        const input = container.querySelector('input[type="file"]') as HTMLInputElement;
+        const foto = new File(['x'], 'prumo.jpg', { type: 'image/jpeg' });
+        await userEvent.upload(input, foto);
+        await waitFor(() => expect(enviarFotoEvidencia).toHaveBeenCalledTimes(1));
+        expect(enviarFotoEvidencia.mock.calls[0][0]).toMatchObject({ workOrderId: 'wo-1', file: foto, prefixo: 'cl_it-foto' });
+        expect(enviarFotoEvidencia.mock.calls[0][0]).not.toHaveProperty('orgId');
     });
 });

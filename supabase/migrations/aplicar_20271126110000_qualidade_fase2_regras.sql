@@ -74,11 +74,32 @@
 --
 -- Idempotente (IF NOT EXISTS / CREATE OR REPLACE / DROP ... IF EXISTS).
 -- Aplicar com `npx supabase db query --linked -f` — nunca `db push`.
+--
+-- ⚠️ REAPLICAR NA ORDEM (revisão final, 26/11): as quatro migrations da fase 2
+--    redefinem as mesmas funções; reaplicar uma antiga depois das novas DESFAZ as
+--    novas. Ordem: 100000 → 110000 → 120000 → 130000. Guarda no topo (DO) recusa
+--    reaplicar sozinha. Para reaplicar de propósito: um arquivo só com
+--    `SET qualidade.reaplicar_fase2_na_ordem = 'on';` + as quatro, na ordem.
+--
+--    Esta 110000 regride, se reaplicada depois da 130000: _oe_portoes (ficha
+--    obrigatória), os gatilhos da resposta e da validação e quality_aprovar_inspecao
+--    (permissão na org do serviço). A guarda detecta a 130000 pela função
+--    _qualidade_pode_no_servico (criada lá); antes dela, reaplicar sozinha segue
+--    idempotente como era.
 -- =============================================================================
 
 SET lock_timeout = '3s';
 
 BEGIN;
+
+-- ── 0. Guarda de reaplicação ───────────────────────────────────────────────
+DO $$
+BEGIN
+    IF to_regprocedure('public._qualidade_pode_no_servico(uuid, text)') IS NOT NULL
+       AND coalesce(current_setting('qualidade.reaplicar_fase2_na_ordem', true), '') <> 'on' THEN
+        RAISE EXCEPTION 'Migration já superada por 130000 — reaplicar as quatro NA ORDEM (100000 → 110000 → 120000 → 130000)';
+    END IF;
+END $$;
 
 -- ── 1. Histórico da validação ──────────────────────────────────────────────
 -- Mesmo desenho dos históricos da Task 1: DESACOPLADO da linha-mãe

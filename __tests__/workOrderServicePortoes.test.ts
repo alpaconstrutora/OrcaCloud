@@ -224,16 +224,20 @@ describe('workOrderService — inspeção e NC da fase 2', () => {
     expect(achar('insert')[0].args[0]).toMatchObject({ causa: null, corrective_action: null });
   });
 
-  it('enviarFotoEvidencia: sobe no bucket privado e grava evidence_files com o PATH; devolve o id', async () => {
+  it('enviarFotoEvidencia: sobe no bucket privado (pasta da org DA OE) e grava evidence_files com o PATH; devolve o id', async () => {
+    // REGRA #5: a pasta é a da organização da OE (work_orders.org_id), nunca a do topo.
+    respostaPorTabela.work_orders = { data: { org_id: 'org-da-oe' }, error: null };
     respostaPorTabela.evidence_files = { data: { id: 'ev1' }, error: null };
     const file = new File(['x'], 'foto.png', { type: 'image/png' });
     const id = await workOrderService.enviarFotoEvidencia({
-      orgId: 'org1', workOrderId: 'wo1', file, prefixo: 'nc_nc1', gate: 'execution', description: 'Correção da NC',
+      workOrderId: 'wo1', file, prefixo: 'nc_nc1', gate: 'execution', description: 'Correção da NC',
     });
     expect(id).toBe('ev1');
+    expect(achar('from')[0].args).toEqual(['work_orders']);
+    expect(achar('eq')[0].args).toEqual(['id', 'wo1']);
     const [bucket, path] = achar('upload')[0].args as [string, string];
     expect(bucket).toBe('operational-evidence');
-    expect(path).toMatch(/^evidence\/org1\/wo1\/nc_nc1_\d+\.png$/);
+    expect(path).toMatch(/^evidence\/org-da-oe\/wo1\/nc_nc1_\d+\.png$/);
     expect(achar('insert')[0].args[0]).toMatchObject({
       work_order_id: 'wo1', file_type: 'photo', file_url: path, gate: 'execution', description: 'Correção da NC',
     });
@@ -241,9 +245,37 @@ describe('workOrderService — inspeção e NC da fase 2', () => {
     chamadas.length = 0;
     respostaUpload = { message: 'sem permissão no bucket' };
     await expect(workOrderService.enviarFotoEvidencia({
-      orgId: null, workOrderId: 'wo1', file, prefixo: 'p', gate: 'free', description: 'd',
+      workOrderId: 'wo1', file, prefixo: 'p', gate: 'free', description: 'd',
     })).rejects.toThrow('sem permissão no bucket');
     expect(achar('insert')).toHaveLength(0);
+  });
+
+  it('enviarFotoEvidencia: sem conseguir ler a org da OE não sobe nada (nem para uma pasta "default")', async () => {
+    const file = new File(['x'], 'foto.png', { type: 'image/png' });
+    respostaPorTabela.work_orders = { data: null, error: { message: 'tempo esgotado' } };
+    await expect(workOrderService.enviarFotoEvidencia({
+      workOrderId: 'wo1', file, prefixo: 'p', gate: 'free', description: 'd',
+    })).rejects.toThrow('tempo esgotado');
+    expect(achar('upload')).toHaveLength(0);
+
+    chamadas.length = 0;
+    respostaPorTabela.work_orders = { data: { org_id: null }, error: null };
+    await expect(workOrderService.enviarFotoEvidencia({
+      workOrderId: 'wo1', file, prefixo: 'p', gate: 'free', description: 'd',
+    })).rejects.toThrow(/organização da OE/);
+    expect(achar('upload')).toHaveLength(0);
+  });
+
+  it('portoesDaOE chama oe_portoes e devolve as mensagens; erro do banco sobe', async () => {
+    respostaRpc = { data: ['1 não conformidade(s) em aberto'], error: null };
+    expect(await workOrderService.portoesDaOE('wo1', 'pending_inspection')).toEqual(['1 não conformidade(s) em aberto']);
+    expect(achar('rpc')[0].args).toEqual(['oe_portoes', { p_work_order_id: 'wo1', p_novo_status: 'pending_inspection' }]);
+
+    respostaRpc = { data: null, error: null };
+    expect(await workOrderService.portoesDaOE('wo1', 'pending_inspection')).toEqual([]);
+
+    respostaRpc = { data: null, error: { message: 'OE não encontrada ou sem acesso.', code: '42501' } };
+    await expect(workOrderService.portoesDaOE('wo1', 'pending_inspection')).rejects.toThrow('OE não encontrada ou sem acesso.');
   });
 
   it('histórico da NC e da resposta: tabela própria, filtrado e em ordem cronológica', async () => {
@@ -277,5 +309,26 @@ describe('workOrderService.update — serviço controlado (Task 4)', () => {
     chamadas.length = 0;
     await workOrderService.update('wo1', { title: 'OE' });
     expect(achar('update')[0].args[0]).not.toHaveProperty('controlled_item_id');
+  });
+});
+
+describe('workOrderService.transition / unblock — o histórico de status não falha calado', () => {
+  it('transition: erro ao gravar work_order_status_log sobe (o status mudou, o histórico não)', async () => {
+    respostaPorTabela.work_orders = { data: oe({ status: 'in_progress' }), error: null };
+    respostaPorTabela.work_order_status_log = { data: null, error: { message: 'histórico recusado', code: '42501' } };
+    await expect(workOrderService.transition('wo1', 'blocked')).rejects.toThrow('histórico recusado');
+  });
+
+  it('transition: histórico gravado → devolve a OE', async () => {
+    respostaPorTabela.work_orders = { data: oe({ status: 'in_progress' }), error: null };
+    respostaPorTabela.work_order_status_log = { data: null, error: null };
+    await expect(workOrderService.transition('wo1', 'blocked')).resolves.toMatchObject({ id: 'wo1' });
+    expect(achar('insert')[0].args[0]).toMatchObject({ work_order_id: 'wo1', new_status: 'blocked' });
+  });
+
+  it('unblock: erro ao gravar work_order_status_log sobe', async () => {
+    respostaPorTabela.work_orders = { data: { status: 'blocked', status_before_block: 'in_progress', replanning_count: 0 }, error: null };
+    respostaPorTabela.work_order_status_log = { data: null, error: { message: 'histórico recusado' } };
+    await expect(workOrderService.unblock('wo1')).rejects.toThrow('histórico recusado');
   });
 });

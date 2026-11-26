@@ -31,7 +31,6 @@ interface NonConformance {
 
 interface Props {
   workOrderId: string
-  orgId: string
 }
 
 const SEVERITY_CONFIG = {
@@ -63,7 +62,7 @@ const CAMPO_TEXTO = 'w-full px-3 py-2 bg-white border border-slate-200 rounded-[
 const CAMPO_LINHA = 'w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-red-400'
 const ROTULO = 'text-xs font-semibold text-slate-500'
 
-const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
+const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
   const [ncs, setNcs] = useState<NonConformance[]>([])
   const [loading, setLoading] = useState(true)
   const [showForm, setShowForm] = useState(false)
@@ -213,8 +212,8 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
         if (fotoEnviada?.file === foto) {
           evidenciaId = fotoEnviada.id
         } else {
+          // A pasta é a da org DA OE (o service lê work_orders.org_id) — não a do topo (REGRA #5).
           evidenciaId = await workOrderService.enviarFotoEvidencia({
-            orgId,
             workOrderId,
             file: foto,
             prefixo: `nc_${nc.id}`,

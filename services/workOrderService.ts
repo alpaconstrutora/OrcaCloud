@@ -314,14 +314,16 @@ export const workOrderService = {
     // P0001 do gatilho de portões traz os motivos juntos por "; " — sobe como Error com a mensagem.
     if (error) throw erroDoBanco(error)
 
-    // Gravar no histórico
-    await supabase.from('work_order_status_log').insert({
+    // Gravar no histórico — erro aqui não passa calado (o status mudou e o histórico, que o portão
+    // "approved" usa como corte, não): sobe com a mensagem do banco.
+    const { error: erroLog } = await supabase.from('work_order_status_log').insert({
       work_order_id: workOrderId,
       previous_status: previousStatus,
       new_status: newStatus,
       changed_by_id: options?.changedById ?? null,
       reason: options?.reason ?? null,
     })
+    if (erroLog) throw erroDoBanco(erroLog)
 
     return data
   },
@@ -351,13 +353,14 @@ export const workOrderService = {
 
     if (error) throw error
 
-    await supabase.from('work_order_status_log').insert({
+    const { error: erroLog } = await supabase.from('work_order_status_log').insert({
       work_order_id: workOrderId,
       previous_status: 'blocked',
       new_status: restoreStatus,
       changed_by_id: options?.changedById ?? null,
       reason: options?.reason ?? null,
     })
+    if (erroLog) throw erroDoBanco(erroLog)
 
     return data
   },
@@ -447,20 +450,31 @@ export const workOrderService = {
 
   /**
    * Foto de evidência da OE (checklist e correção de NC — um upload só): sobe no bucket privado
-   * `operational-evidence` em `evidence/{orgId}/{workOrderId}/{prefixo}_{ts}.{ext}` (a policy
+   * `operational-evidence` em `evidence/{orgDaOE}/{workOrderId}/{prefixo}_{ts}.{ext}` (a policy
    * do bucket confere a org pelo 2º segmento) e grava `evidence_files` com o PATH em `file_url`
    * (a leitura resolve signed URL — ver OperacionalEvidence.resolveSignedUrls). Devolve o id.
+   *
+   * A pasta é a da organização DA OE (`work_orders.org_id`), lida aqui — nunca a do topo (REGRA #5:
+   * com "Todas" ou outra org no topo, a foto ia para a pasta errada). Sem conseguir ler, não sobe.
    */
   async enviarFotoEvidencia(input: {
-    orgId: string | null | undefined
     workOrderId: string
     file: File
     prefixo: string
     gate: EvidenceGate
     description: string
   }): Promise<string> {
+    const { data: oe, error: erroOE } = await supabase
+      .from('work_orders')
+      .select('org_id')
+      .eq('id', input.workOrderId)
+      .single()
+    if (erroOE) throw erroDoBanco(erroOE)
+    const orgDaOE = (oe as { org_id?: string | null } | null)?.org_id
+    if (!orgDaOE) throw new Error('Não foi possível ler a organização da OE para guardar a foto.')
+
     const ext = input.file.name.split('.').pop() ?? 'jpg'
-    const path = `evidence/${input.orgId ?? 'default'}/${input.workOrderId}/${input.prefixo}_${Date.now()}.${ext}`
+    const path = `evidence/${orgDaOE}/${input.workOrderId}/${input.prefixo}_${Date.now()}.${ext}`
 
     const { error: upErr } = await supabase.storage
       .from('operational-evidence')
@@ -568,6 +582,19 @@ export const workOrderService = {
    * status para approved/rejected e grava o histórico. Reprovar exige `notas`. Devolve o id da
    * validação. P0001 = portões (mensagens por "; "); 42501 = sem permissão.
    */
+  /**
+   * Portões do banco (`oe_portoes`) para a OE ir a `novoStatus` — as mensagens, uma por problema
+   * (vazio = passa). Erro do banco sobe (quem chama fecha, com a mensagem como motivo).
+   */
+  async portoesDaOE(workOrderId: string, novoStatus: WorkOrderStatus): Promise<string[]> {
+    const { data, error } = await supabase.rpc('oe_portoes', {
+      p_work_order_id: workOrderId,
+      p_novo_status: novoStatus,
+    })
+    if (error) throw erroDoBanco(error)
+    return (data as string[] | null) ?? []
+  },
+
   async aprovarInspecao(workOrderId: string, aprovar: boolean, notas: string): Promise<string> {
     const { data, error } = await supabase.rpc('quality_aprovar_inspecao', {
       p_work_order_id: workOrderId,

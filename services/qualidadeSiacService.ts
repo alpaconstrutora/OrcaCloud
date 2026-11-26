@@ -318,6 +318,23 @@ export const qualidadeSiacService = {
   },
 
   /**
+   * Organização DONA do serviço controlado (`quality_controlled_items.organization_id`) — onde o banco
+   * confere `canInspectQualitySystem`/`canReleaseQualitySystem` de uma OE controlada (não no SGQ atual da
+   * org da OE: desfazer o SGQ da SPE não muda de quem é a permissão sobre o serviço da Alpa).
+   * `null` = a RLS esconde o serviço (quem chama não é membro da org dona dele → sem permissão).
+   */
+  async orgDoServicoControlado(itemId: string): Promise<string | null> {
+    const data = ok(
+      await supabase
+        .from('quality_controlled_items')
+        .select('organization_id')
+        .eq('id', itemId)
+        .maybeSingle() as unknown as { data: { organization_id: string } | null; error: ErroSupabase },
+    );
+    return data?.organization_id ?? null;
+  },
+
+  /**
    * Aponta (ou, com `null`, desfaz) a organização dona do SGQ de `orgId`. Só dono/admin das duas
    * organizações (ou superadmin) — o banco recusa os demais com 42501; sem cadeia (22023).
    */

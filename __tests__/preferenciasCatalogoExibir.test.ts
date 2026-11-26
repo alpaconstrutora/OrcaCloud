@@ -93,6 +93,15 @@ describe('catálogo do que a planta exibe', () => {
     expect(ITENS_DE_EXIBICAO.find((i) => i.item === 'modoDeCor')?.rotulo).toBe('Uma cor por ambiente');
   });
 
+  it('"Platô no 3D" (25/11/2026): completo no painel lateral (padrão) ou compacto no rodapé', () => {
+    const item = ITENS_DE_EXIBICAO.find((i) => i.item === 'vista3dPainelDoPlato');
+    expect(item).toBeTruthy();
+    expect(item!.grupo).toBe('3D');
+    expect(item!.tipo).toBe('opcao');
+    expect(item!.padrao).toBe('COMPLETO');
+    expect((item as { opcoes: { valor: string }[] }).opcoes.map((o) => o.valor)).toEqual(['COMPLETO', 'COMPACTO']);
+  });
+
   it('"Camadas por disciplina" (seção do painel) não entra', () => {
     expect(ITENS_DE_EXIBICAO.some((i) => /camadas.*disciplina/i.test(i.rotulo))).toBe(false);
   });

@@ -98,6 +98,7 @@ import {
 import { blocoDoTerreno, espessuraDoBloco, type MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import { COR_CURVA_3D, nivelMaisProximo, type ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 import { cotaDaSeta, inserirCanto, moverCanto, moverLado, removerCanto } from '../../utils/blueprintPlato3d';
+import { PlatoNo3d, type PainelDoPlatoNo3d } from './PainelDoPlato3d';
 import { travarOrtogonal } from '../../utils/blueprintKernel';
 import { formatarCotaM } from '../../utils/blueprintTopografia';
 import { uvNaCaixa, type PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaDeFundo';
@@ -211,6 +212,11 @@ interface Props {
   } | null;
   /** Aviso do platô (contorno recusado), mostrado no selo do saldo. */
   avisoDoPlato?: string | null;
+  /**
+   * O PAINEL DO PLATÔ (25/11/2026, reel da Hektar): com `modo` COMPLETO, o card à esquerda no lugar do selo do rodapé;
+   * COMPACTO, o selo com o botão "Painel". Ausente: só o selo, como antes.
+   */
+  painelDoPlato?: PainelDoPlatoNo3d | null;
   /** Interno (25/11/2026): o mouse está sobre o platô editável ou uma alça dele — o hover das curvas sai do caminho. */
   sobreOPlato?: React.MutableRefObject<{ mesh: boolean; alca: boolean }>;
   /**
@@ -4146,27 +4152,8 @@ export default function Blueprint3DViewer(props: Props) {
       )}
 
       {props.saldoDoPlato && (
-        // O SALDO DO PLATÔ (25/11/2026, "mass balance" do reel): embaixo à direita, acima da linha da dica.
-        <div className="absolute bottom-16 right-2 z-10 max-w-[42%] rounded-[6px] border border-slate-200 bg-white/90 px-2.5 py-1.5 text-[11px] text-slate-700 shadow-sm" data-testid="saldo-do-plato">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 tabular-nums">
-            <span>Corte {props.saldoDoPlato.corteM3.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} m³</span>
-            <span>Aterro {props.saldoDoPlato.aterroM3.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} m³</span>
-            <span className="font-medium">Saldo {props.saldoDoPlato.saldoM3.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} m³</span>
-            {props.onEquilibrio && (
-              <button
-                type="button"
-                onClick={props.onEquilibrio}
-                disabled={props.saldoDoPlato.equilibrio}
-                title={props.saldoDoPlato.equilibrio ? 'O platô já está na cota de equilíbrio (corte ≈ aterro)' : 'Volta a cota do platô à de equilíbrio (corte ≈ aterro)'}
-                className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Equilíbrio
-              </button>
-            )}
-          </div>
-          {props.saldoDoPlato.foraDoRelevo && <p className="mt-0.5 text-amber-700">Parte do platô fora do relevo — a conta só vale onde há cota.</p>}
-          {props.avisoDoPlato && <p className="mt-0.5 text-amber-700">{props.avisoDoPlato}</p>}
-        </div>
+        // O platô no 3D: o painel completo à esquerda ou o selo compacto do rodapé (escolha do usuário, 25/11/2026).
+        <PlatoNo3d saldo={props.saldoDoPlato} painel={props.painelDoPlato} onEquilibrio={props.onEquilibrio} aviso={props.avisoDoPlato} semControles={props.semControles} />
       )}
 
       <div className={`pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs text-slate-500 shadow-sm backdrop-blur${props.semControles ? ' hidden' : ''}`}>

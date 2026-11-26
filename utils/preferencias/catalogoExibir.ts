@@ -104,6 +104,15 @@ const OPCOES_MODO_DE_COR: readonly OpcaoDeExibicao[] = [
  * Valores = `EscolhaDaArrumacao` (utils/blueprintUnidadesNoPavimento). 28/10/2026: "Do Empreendimento" (o padrão) segue
  * a escolha de cada torre em Torres e Unidades; as outras duas valem só para quem escolheu.
  */
+/**
+ * O PLATÔ NO 3D (25/11/2026) — *"Crie opcao para o usuário escolher como ele quer visualizar, compacto no rodapé ou
+ * completo no painel lateral"*; padrão escolhido pelo usuário: COMPLETO.
+ */
+export const OPCOES_PAINEL_DO_PLATO: readonly OpcaoDeExibicao[] = [
+  { valor: 'COMPLETO', rotulo: 'Completo no painel lateral' },
+  { valor: 'COMPACTO', rotulo: 'Compacto no rodapé' },
+];
+
 export const OPCOES_UNIDADES_NO_PAVIMENTO: readonly OpcaoDeExibicao[] = [
   { valor: 'DO_EMPREENDIMENTO', rotulo: 'Do Empreendimento' },
   { valor: 'AUTOMATICA', rotulo: 'Pela posição' },
@@ -178,6 +187,16 @@ export const ITENS_DE_EXIBICAO: readonly ItemDeExibicao[] = [
     tipo: 'opcao',
     opcoes: OPCOES_UNIDADES_NO_PAVIMENTO,
     padrao: 'DO_EMPREENDIMENTO',
+  },
+  // Como o platô aparece no 3D: o card completo à esquerda (como no reel) ou o selo compacto do rodapé (25/11/2026).
+  {
+    item: 'vista3dPainelDoPlato',
+    chaveAntiga: 'blueprint:vista3dPainelDoPlato',
+    rotulo: 'Platô no 3D',
+    grupo: '3D',
+    tipo: 'opcao',
+    opcoes: OPCOES_PAINEL_DO_PLATO,
+    padrao: 'COMPLETO',
   },
 
   // ── Estilos ───────────────────────────────────────────────────────────────────────────

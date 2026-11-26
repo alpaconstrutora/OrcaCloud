@@ -249,3 +249,13 @@ Frente `C:/D/frentes/qualidade-pendencias-f2`, branch `feat/qualidade-pendencias
 | 4 | 406 esporádico no console | `.single()` com 0 linhas é 406 (PGRST116). `project_ops_config` tem 0 linhas em produção → todo "Solicitar inspeção" dava 406 em `_getProjectConfig` (bate com "durante a criação/aprovação" e "não se repete ao reabrir": reabrir não valida transição). Trocados por `maybeSingle` com tratamento: `_getProjectConfig` (sem linha = 95%; erro vira motivo), custo/hora da equipe (`addWorkLog`, `OperacionalWorkLog`), `generateDiary` (dia sem diário), código da atividade no `OperacionalForm` (projeto de planejamento apagado/fora do alcance). Inserts/updates com `.select().single()` e leituras da própria OE ficaram. De carona (arquivo tocado): `confirm()` nativo do `OperacionalWorkLog` → `useConfirm` | `workOrderServicePortoes`, `OperacionalFormServicoControlado`, `OperacionalWorkLogCusto` RED → GREEN. Não conferido na tela | `4bb6e140b` |
 
 Verificação local: 12 arquivos / 189 testes verdes (tocados + `orgContextGuard`, `segurancaMigrations`, `migrationsPrefixo`, `rotuloSemCaixaAltaGuard`); `npm run typecheck` 0 erros. PR/CI pendentes.
+
+#### Rodada 1 da revisão das pendências (26/11)
+
+| Achado | O que mudou | Commit |
+|---|---|---|
+| RPC contava SPE que deixou de apontar para o SGQ (o gatilho não reconfere OE antiga) | `quality_inspecoes_aprovadas_do_sgq` também exige SGQ ATUAL da org da OE = `p_sgq` (`quality_settings.sgq_organization_id`, sem linha = ela mesma); cabeçalho corrigido; trava de texto cobre o filtro | `3db072355` |
+| Fallback com qualquer 42883 | só PGRST202, ou 42883 citando `quality_inspecoes_aprovadas_do_sgq`; o resto sobe ("não contado") | `fd82b5233` |
+| 42501 numa org derrubava o painel de todas | `Promise.allSettled` com erro por organização: só a linha/os serviços da org que falhou ficam "não contado", com o nome dela | `28a19bf54` |
+| "Ações Disponíveis" em caixa alta | "Ações disponíveis" sem `uppercase` | `951c9f447` |
+| Prova no banco | `prova-painel-sgq.sql` (fora do git) ganhou superadmin (vê) e 3ª org que não aponta para a Alpa (não conta); NOT NULL conferidas em information_schema (`projects.user_id` explícito) — **pendente: rodar depois de aplicar** | — |

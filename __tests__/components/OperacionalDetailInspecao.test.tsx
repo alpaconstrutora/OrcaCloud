@@ -77,6 +77,13 @@ const membro = (orgId: string, nome: string, permissions: Record<string, unknown
     members: [{ id: `m-${orgId}`, email: 'ana@spe.com', role, userId: 'u-1', name: 'Ana Inspetora', permissions }],
 });
 
+// O botão nasce desligado ("Conferindo o portão da inspeção…") até `oe_portoes`/a org do serviço voltarem:
+// quem espera ligado espera o estado assentado, não o primeiro render.
+const botaoLigado = async (nome: string) => {
+    const b = await screen.findByRole('button', { name: nome }) as HTMLButtonElement;
+    await waitFor(() => expect(b.disabled).toBe(false));
+    return b;
+};
 const motivo = (el: HTMLElement) => el.closest('[title]')?.getAttribute('title') ?? '';
 const montar = (props: Partial<React.ComponentProps<typeof OperacionalDetail>> = {}) =>
     render(
@@ -103,7 +110,7 @@ describe('OperacionalDetail — Aprovar inspeção (fase 2)', () => {
     it('(a) em inspeção os botões são "Aprovar inspeção"/"Reprovar inspeção"; aprovar chama a RPC', async () => {
         const user = userEvent.setup();
         montar();
-        const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
+        const aprovar = await botaoLigado('Aprovar inspeção');
         expect(screen.getByRole('button', { name: 'Reprovar inspeção' })).toBeTruthy();
         expect(screen.queryByRole('button', { name: 'Aprovar' })).toBeNull();
         expect(screen.queryByRole('button', { name: 'Reprovar' })).toBeNull();
@@ -246,8 +253,7 @@ describe('OperacionalDetail — Aprovar inspeção (fase 2)', () => {
 
     it('(c) OE comum: ligados mesmo sem a permissão (a régua é só da controlada)', async () => {
         montar();
-        const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
-        expect((aprovar as HTMLButtonElement).disabled).toBe(false);
+        await botaoLigado('Aprovar inspeção');
         expect(orgDoServicoControlado).not.toHaveBeenCalled();
     });
 
@@ -256,7 +262,7 @@ describe('OperacionalDetail — Aprovar inspeção (fase 2)', () => {
         const alerta = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
         const user = userEvent.setup();
         montar();
-        await user.click(await screen.findByRole('button', { name: 'Aprovar inspeção' }));
+        await user.click(await botaoLigado('Aprovar inspeção'));
         await user.click(await screen.findByRole('button', { name: 'Confirmar' }));
         expect(await screen.findByText(/1 não conformidade\(s\) em aberto/)).toBeTruthy();
         expect(alerta).not.toHaveBeenCalled();

@@ -243,11 +243,12 @@ describe('OperacionalForm — serviço controlado (Qualidade SiAC fase 2)', () =
         getById.mockResolvedValue(oe({ controlled_item_id: 'srv-alv', checklist_template_id: 'tpl-alv' }));
         renderizar('wo-1');
 
-        await waitFor(() => expect(campoServico().disabled).toBe(true));
+        // desligado também enquanto carrega: o que assenta é o MOTIVO (não o disabled)
+        await waitFor(() => expect(motivo(campoServico())).toBe(
+            'Os serviços controlados vêm do sistema da qualidade de outra organização, que você não acessa'));
+        expect(campoServico().disabled).toBe(true);
         expect(textoDaOpcao(campoServico())).toBe('Serviço controlado do sistema da qualidade');
         expect(screen.queryByText(/Alvenaria de vedação/)).toBeNull();
-        expect(motivo(campoServico())).toBe(
-            'Os serviços controlados vêm do sistema da qualidade de outra organização, que você não acessa');
         expect(sgqLegivel).toHaveBeenCalledWith('org-alpa');
     });
 
@@ -255,17 +256,17 @@ describe('OperacionalForm — serviço controlado (Qualidade SiAC fase 2)', () =
         servicosParaOE.mockResolvedValue([]);
         sgqLegivel.mockResolvedValue(false);
         renderizar();
-        await waitFor(() => expect(campoServico().disabled).toBe(true));
-        expect(motivo(campoServico())).toBe(
-            'Os serviços controlados vêm do sistema da qualidade de outra organização, que você não acessa');
+        await waitFor(() => expect(motivo(campoServico())).toBe(
+            'Os serviços controlados vêm do sistema da qualidade de outra organização, que você não acessa'));
+        expect(campoServico().disabled).toBe(true);
     });
 
     it('(h) SGQ legível e vazio: "Nenhum serviço controlado ativo para esta obra"', async () => {
         servicosParaOE.mockResolvedValue([]);
         sgqDaOrganizacao.mockResolvedValue('org-spe');
         renderizar();
-        await waitFor(() => expect(campoServico().disabled).toBe(true));
-        expect(motivo(campoServico())).toBe('Nenhum serviço controlado ativo para esta obra');
+        await waitFor(() => expect(motivo(campoServico())).toBe('Nenhum serviço controlado ativo para esta obra'));
+        expect(campoServico().disabled).toBe(true);
     });
 
     it('(j) erro do banco ao salvar mostra a mensagem dele', async () => {

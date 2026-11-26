@@ -43,6 +43,10 @@
 -- resposta e NC de OE de serviço controlado não se apagam direto; trocar o SGQ
 -- exige dono/admin das duas orgs (ou superadmin) e não forma cadeia; NC aceita o
 -- SET NULL do serviço apagado; eficacia_por/em gravados pelo banco.
+-- Correção 2: OE controlada com registro não perde/troca o serviço nem se apaga
+-- direto; resposta e NC não mudam de OE (nem a resposta de item); a exclusão de
+-- resposta/NC também vai para o histórico (evento 'exclusao'); eficácia
+-- 'pendente' não tem autor.
 --
 -- Idempotente (IF NOT EXISTS / CREATE OR REPLACE / DROP ... IF EXISTS).
 -- Aplicar com `npx supabase db query --linked -f` — nunca `db push`.
@@ -239,6 +243,26 @@ ALTER TABLE public.non_conformance_history
     ADD CONSTRAINT non_conformance_history_nc_id_fkey
     FOREIGN KEY (nc_id) REFERENCES public.non_conformances(id) ON DELETE SET NULL;
 
+-- Correção 2: o histórico também guarda a EXCLUSÃO (estado OLD, gravado no
+-- BEFORE DELETE — vale também quando a exclusão vem de cascata).
+ALTER TABLE public.oe_checklist_response_history
+    ADD COLUMN IF NOT EXISTS evento text NOT NULL DEFAULT 'alteracao';
+ALTER TABLE public.oe_checklist_response_history
+    DROP CONSTRAINT IF EXISTS oe_checklist_response_history_evento_check;
+ALTER TABLE public.oe_checklist_response_history
+    ADD CONSTRAINT oe_checklist_response_history_evento_check CHECK (evento IN ('alteracao', 'exclusao'));
+ALTER TABLE public.non_conformance_history
+    ADD COLUMN IF NOT EXISTS evento text NOT NULL DEFAULT 'alteracao';
+ALTER TABLE public.non_conformance_history
+    DROP CONSTRAINT IF EXISTS non_conformance_history_evento_check;
+ALTER TABLE public.non_conformance_history
+    ADD CONSTRAINT non_conformance_history_evento_check CHECK (evento IN ('alteracao', 'exclusao'));
+
+COMMENT ON COLUMN public.oe_checklist_response_history.evento IS
+    'alteracao = a resposta foi substituída (linha = a anterior); exclusao = a resposta foi apagada (linha = a última).';
+COMMENT ON COLUMN public.non_conformance_history.evento IS
+    'alteracao = a NC mudou (linha = o estado novo); exclusao = a NC foi apagada (linha = o último estado).';
+
 CREATE INDEX IF NOT EXISTS idx_non_conformance_history_nc
     ON public.non_conformance_history (nc_id, created_at);
 CREATE INDEX IF NOT EXISTS idx_non_conformance_history_wo
@@ -406,6 +430,13 @@ CREATE TRIGGER trg_quality_controlled_items_mesma_org
 -- 4.3 work_orders: o serviço controlado é da organização dona do SGQ da org da
 -- OE (coalesce(sgq_organization_id, org da OE)). INVOKER: quem não é membro da
 -- org do SGQ não enxerga o item e é recusado.
+-- Correção 2: OE controlada que já tem REGISTRO (resposta com conteúdo, NC ou
+-- validação) não troca nem perde o serviço controlado num UPDATE direto — senão
+-- bastava desligar o serviço, apagar o registro (OE "comum") e religar. O SET NULL
+-- da cascata (serviço controlado apagado, pg_trigger_depth() > 1) passa.
+-- "Resposta com conteúdo": status, completed, observação, NC ou evidência — a
+-- linha vazia que o app cria ao aplicar o modelo (initChecklistForWorkOrder) não
+-- é registro.
 CREATE OR REPLACE FUNCTION public.work_orders_servico_controlado_do_sgq()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -415,6 +446,20 @@ AS $$
 DECLARE
     v_sgq uuid;
 BEGIN
+    IF TG_OP = 'UPDATE' AND pg_trigger_depth() = 1
+       AND OLD.controlled_item_id IS NOT NULL
+       AND NEW.controlled_item_id IS DISTINCT FROM OLD.controlled_item_id
+       AND (EXISTS (SELECT 1 FROM public.oe_checklist_responses r
+                     WHERE r.work_order_id = OLD.id
+                       AND (r.response_status IS NOT NULL OR r.completed
+                            OR r.nc_id IS NOT NULL OR r.evidence_id IS NOT NULL
+                            OR btrim(coalesce(r.notes, '')) <> ''))
+            OR EXISTS (SELECT 1 FROM public.non_conformances nc WHERE nc.work_order_id = OLD.id)
+            OR EXISTS (SELECT 1 FROM public.work_order_validations v WHERE v.work_order_id = OLD.id)) THEN
+        RAISE EXCEPTION 'O serviço controlado de uma OE com registro de inspeção (resposta, NC ou validação) não pode ser trocado nem retirado.'
+            USING ERRCODE = '42501';
+    END IF;
+
     IF NEW.controlled_item_id IS NULL THEN
         RETURN NEW;
     END IF;
@@ -449,6 +494,42 @@ CREATE TRIGGER trg_work_orders_servico_controlado_do_sgq
     BEFORE INSERT OR UPDATE OF controlled_item_id, org_id ON public.work_orders
     FOR EACH ROW EXECUTE FUNCTION public.work_orders_servico_controlado_do_sgq();
 
+-- 4.3b Correção 2: OE controlada com registro não se apaga direto (a policy
+-- work_orders_access é FOR ALL para qualquer membro; apagar a OE levaria o
+-- registro junto). Cascata (organização apagada) passa. OE controlada sem
+-- registro e OE comum continuam podendo ser apagadas. INVOKER: quem apaga a OE a
+-- enxerga, e com ela respostas/NCs/validações (RLS pela OE).
+CREATE OR REPLACE FUNCTION public.work_orders_bloqueia_exclusao_controlada()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF pg_trigger_depth() > 1 OR OLD.controlled_item_id IS NULL THEN
+        RETURN OLD;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM public.oe_checklist_responses r
+                WHERE r.work_order_id = OLD.id
+                  AND (r.response_status IS NOT NULL OR r.completed
+                       OR r.nc_id IS NOT NULL OR r.evidence_id IS NOT NULL
+                       OR btrim(coalesce(r.notes, '')) <> ''))
+       OR EXISTS (SELECT 1 FROM public.non_conformances nc WHERE nc.work_order_id = OLD.id)
+       OR EXISTS (SELECT 1 FROM public.work_order_validations v WHERE v.work_order_id = OLD.id) THEN
+        RAISE EXCEPTION 'Uma OE de serviço controlado com registro de inspeção (resposta, NC ou validação) não pode ser apagada.'
+            USING ERRCODE = '42501';
+    END IF;
+
+    RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_work_orders_bloqueia_exclusao_controlada ON public.work_orders;
+CREATE TRIGGER trg_work_orders_bloqueia_exclusao_controlada
+    BEFORE DELETE ON public.work_orders
+    FOR EACH ROW EXECUTE FUNCTION public.work_orders_bloqueia_exclusao_controlada();
+
 -- 4.4 oe_checklist_responses: quem/quando + cópia congelada da ficha.
 -- A cópia (descrição/critério/método do item + revisão/versão do procedimento do
 -- serviço controlado da OE) é tirada quando a resposta nasce ou muda de status
@@ -462,6 +543,15 @@ SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
+    -- Correção 2: a resposta não muda de OE nem de item num UPDATE direto (nenhum
+    -- fluxo legítimo move; mover tiraria o registro da OE controlada sem rastro).
+    IF TG_OP = 'UPDATE' AND pg_trigger_depth() = 1
+       AND (NEW.work_order_id IS DISTINCT FROM OLD.work_order_id
+            OR NEW.item_id IS DISTINCT FROM OLD.item_id) THEN
+        RAISE EXCEPTION 'A resposta do checklist não pode mudar de OE nem de item.'
+            USING ERRCODE = '42501';
+    END IF;
+
     IF TG_OP = 'INSERT'
        OR NEW.response_status IS DISTINCT FROM OLD.response_status
        OR NEW.item_id IS DISTINCT FROM OLD.item_id THEN
@@ -507,9 +597,12 @@ CREATE TRIGGER trg_oe_checklist_responses_copia_ficha
     BEFORE INSERT OR UPDATE ON public.oe_checklist_responses
     FOR EACH ROW EXECUTE FUNCTION public.oe_checklist_responses_copia_ficha();
 
--- 4.5 oe_checklist_responses → histórico: grava a resposta ANTERIOR (OLD).
+-- 4.5 oe_checklist_responses → histórico: grava a resposta ANTERIOR (OLD) quando
+-- ela é substituída (AFTER UPDATE) e a última quando é apagada (BEFORE DELETE —
+-- direto ou por cascata; no BEFORE a resposta ainda existe e o response_id vira
+-- NULL pelo ON DELETE SET NULL logo depois).
 -- SECURITY DEFINER: authenticated não tem INSERT no histórico. Autorização: o
--- gatilho só roda depois que o UPDATE passou pela RLS de quem grava, e só copia a
+-- gatilho só roda depois que o comando passou pela RLS de quem grava, e só copia a
 -- própria linha (OLD) — não recebe parâmetro nenhum.
 CREATE OR REPLACE FUNCTION public.oe_checklist_responses_grava_historico()
 RETURNS trigger
@@ -520,10 +613,11 @@ AS $$
 BEGIN
     INSERT INTO public.oe_checklist_response_history (
         response_id, work_order_id, item_id, response_status, notes, nc_id,
-        evidence_id, respondido_por, respondido_em, copia)
+        evidence_id, respondido_por, respondido_em, evento, copia)
     VALUES (
         OLD.id, OLD.work_order_id, OLD.item_id, OLD.response_status, OLD.notes, OLD.nc_id,
         OLD.evidence_id, OLD.respondido_por, OLD.respondido_em,
+        CASE WHEN TG_OP = 'DELETE' THEN 'exclusao' ELSE 'alteracao' END,
         jsonb_build_object(
             'item_descricao',         OLD.item_descricao,
             'item_criterio',          OLD.item_criterio,
@@ -533,9 +627,14 @@ BEGIN
             'completed',              OLD.completed,
             'completed_at',           OLD.completed_at,
             'completed_by_id',        OLD.completed_by_id));
-    RETURN NULL;
+    RETURN OLD;  -- no BEFORE DELETE, NULL cancelaria a exclusão; no AFTER UPDATE é ignorado
 END;
 $$;
+
+DROP TRIGGER IF EXISTS trg_oe_checklist_responses_grava_historico_exclusao ON public.oe_checklist_responses;
+CREATE TRIGGER trg_oe_checklist_responses_grava_historico_exclusao
+    BEFORE DELETE ON public.oe_checklist_responses
+    FOR EACH ROW EXECUTE FUNCTION public.oe_checklist_responses_grava_historico();
 
 DROP TRIGGER IF EXISTS trg_oe_checklist_responses_grava_historico ON public.oe_checklist_responses;
 CREATE TRIGGER trg_oe_checklist_responses_grava_historico
@@ -559,6 +658,14 @@ SECURITY INVOKER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
+    -- Correção 2: a NC não muda de OE num UPDATE direto (nenhum fluxo legítimo
+    -- move; mover tiraria a NC aberta da OE controlada sem rastro).
+    IF TG_OP = 'UPDATE' AND pg_trigger_depth() = 1
+       AND NEW.work_order_id IS DISTINCT FROM OLD.work_order_id THEN
+        RAISE EXCEPTION 'A não conformidade não pode mudar de OE.'
+            USING ERRCODE = '42501';
+    END IF;
+
     IF TG_OP = 'INSERT' OR NEW.work_order_id IS DISTINCT FROM OLD.work_order_id THEN
         SELECT wo.controlled_item_id INTO NEW.controlled_item_id
           FROM public.work_orders wo
@@ -571,7 +678,9 @@ END;
 $$;
 
 -- 4.6b non_conformances: quem/quando verificou a eficácia é o banco que grava
--- (auth.uid(), now()) quando `eficacia` muda — o que o app mandar é ignorado.
+-- (auth.uid(), now()) quando `eficacia` muda para um resultado (eficaz /
+-- nao_eficaz); pendente ou NULL = ninguém verificou ainda (NULL/NULL). O que o
+-- app mandar é ignorado.
 CREATE OR REPLACE FUNCTION public.non_conformances_eficacia_autor()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -580,12 +689,12 @@ SET search_path = public, pg_temp
 AS $$
 BEGIN
     IF TG_OP = 'INSERT' OR NEW.eficacia IS DISTINCT FROM OLD.eficacia THEN
-        IF NEW.eficacia IS NULL THEN
-            NEW.eficacia_por := NULL;
-            NEW.eficacia_em  := NULL;
-        ELSE
+        IF NEW.eficacia IN ('eficaz', 'nao_eficaz') THEN
             NEW.eficacia_por := auth.uid();
             NEW.eficacia_em  := now();
+        ELSE
+            NEW.eficacia_por := NULL;
+            NEW.eficacia_em  := NULL;
         END IF;
     ELSE
         NEW.eficacia_por := OLD.eficacia_por;
@@ -614,6 +723,18 @@ AS $$
 BEGIN
     IF pg_trigger_depth() > 1 THEN
         RETURN OLD;
+    END IF;
+
+    -- Correção 2: a linha vazia que o app cria ao aplicar o modelo
+    -- (initChecklistForWorkOrder) não é registro — pode sair (trocar o modelo de
+    -- uma OE controlada ainda não respondida). A exclusão fica no histórico.
+    IF TG_TABLE_NAME = 'oe_checklist_responses' THEN
+        -- IF aninhado: as colunas da resposta só são lidas nesta tabela.
+        IF OLD.response_status IS NULL AND NOT OLD.completed
+           AND OLD.nc_id IS NULL AND OLD.evidence_id IS NULL
+           AND btrim(coalesce(OLD.notes, '')) = '' THEN
+            RETURN OLD;
+        END IF;
     END IF;
 
     IF EXISTS (SELECT 1 FROM public.work_orders wo
@@ -647,8 +768,9 @@ CREATE TRIGGER trg_non_conformances_servico_controlado
     BEFORE INSERT OR UPDATE ON public.non_conformances
     FOR EACH ROW EXECUTE FUNCTION public.non_conformances_servico_controlado();
 
--- 4.7 non_conformances → histórico: grava o estado NOVO e quem mudou.
--- SECURITY DEFINER pelo mesmo motivo do 4.5; só copia a própria linha (NEW).
+-- 4.7 non_conformances → histórico: grava o estado NOVO e quem mudou (AFTER
+-- UPDATE) e o último estado quando a NC é apagada (BEFORE DELETE — direto ou
+-- por cascata). SECURITY DEFINER pelo mesmo motivo do 4.5; só copia a própria linha.
 CREATE OR REPLACE FUNCTION public.non_conformances_grava_historico()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -656,11 +778,21 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-    INSERT INTO public.non_conformance_history (nc_id, work_order_id, status, causa, corrective_action, eficacia, alterado_por)
-    VALUES (NEW.id, NEW.work_order_id, NEW.status, NEW.causa, NEW.corrective_action, NEW.eficacia, auth.uid());
+    IF TG_OP = 'DELETE' THEN
+        INSERT INTO public.non_conformance_history (nc_id, work_order_id, status, causa, corrective_action, eficacia, alterado_por, evento)
+        VALUES (OLD.id, OLD.work_order_id, OLD.status, OLD.causa, OLD.corrective_action, OLD.eficacia, auth.uid(), 'exclusao');
+        RETURN OLD;  -- NULL cancelaria a exclusão
+    END IF;
+    INSERT INTO public.non_conformance_history (nc_id, work_order_id, status, causa, corrective_action, eficacia, alterado_por, evento)
+    VALUES (NEW.id, NEW.work_order_id, NEW.status, NEW.causa, NEW.corrective_action, NEW.eficacia, auth.uid(), 'alteracao');
     RETURN NULL;
 END;
 $$;
+
+DROP TRIGGER IF EXISTS trg_non_conformances_grava_historico_exclusao ON public.non_conformances;
+CREATE TRIGGER trg_non_conformances_grava_historico_exclusao
+    BEFORE DELETE ON public.non_conformances
+    FOR EACH ROW EXECUTE FUNCTION public.non_conformances_grava_historico();
 
 DROP TRIGGER IF EXISTS trg_non_conformances_grava_historico ON public.non_conformances;
 CREATE TRIGGER trg_non_conformances_grava_historico
@@ -792,5 +924,8 @@ GRANT  EXECUTE ON FUNCTION public.non_conformances_eficacia_autor() TO authentic
 
 REVOKE EXECUTE ON FUNCTION public.qualidade_bloqueia_exclusao_direta() FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.qualidade_bloqueia_exclusao_direta() TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.work_orders_bloqueia_exclusao_controlada() FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.work_orders_bloqueia_exclusao_controlada() TO authenticated;
 
 COMMIT;

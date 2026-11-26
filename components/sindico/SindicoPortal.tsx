@@ -51,8 +51,8 @@ import { hojeEmBrasilia } from '../../utils/mandatoSindico';
  *
  * Assembleias (26/11/2026, docs/planos/2026-11-25-condominio-assembleias-votacoes.md,
  * fase B): o síndico cria, convoca e conduz a assembleia na MESMA tela do gestor, pela
- * porta dele (operacoesDoSindico). Exige o login do síndico — pelo link, ou pela
- * administradora no app, a aba só diz por quê (o banco recusa do mesmo jeito).
+ * porta dele (operacoesDoSindico), com o login dele — pelo link sozinho a aba só diz
+ * por quê. A administradora no app conduz pela porta do gestor (operacoesDoGestor).
  */
 
 interface Props {
@@ -241,9 +241,9 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
                                     onAlterado={recarregar} notify={notify} />
                             )}
                             {aba === 'assembleias' && (
-                                // Conduzir exige o SÍNDICO logado (modo 'sessao' no banco): entrada por e-mail
-                                // e senha (`onLogout`) OU sessão ativa com o portal aberto pelo link. A
-                                // administradora conduz pelo app. `onAlterado`: o aviso da convocação e a ata
+                                // O síndico conduz logado (modo 'sessao' no banco): entrada por e-mail e senha
+                                // (`onLogout`) OU sessão ativa com o portal aberto pelo link. A administradora
+                                // conduz aqui pela porta do gestor. `onAlterado`: o aviso da convocação e a ata
                                 // aparecem em Avisos e Documentos sem recarregar a página.
                                 <PainelAssembleiasDoSindico identidade={identidade} condominios={dados.condominios}
                                     logado={!!onLogout || sessaoAtiva} comoAdministradora={comoAdministradora}

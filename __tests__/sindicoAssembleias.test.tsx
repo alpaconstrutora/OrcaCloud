@@ -7,7 +7,9 @@
  * O que fica travado:
  *   • sem sessão (portal aberto só pelo link) a aba diz "Entre com e-mail e senha para
  *     conduzir a assembleia" e NÃO chama o banco — as RPCs da B1 recusam o link sozinho;
- *   • a administradora (portal pelo app) é mandada para a tela do gestor, sem chamar o banco;
+ *   • a administradora (portal pelo app) conduz no portal pela porta do GESTOR
+ *     (operacoesDoGestor), nunca pela do síndico — pedido de 25/10: "nao faz o menor sentido
+ *     bloquear o portal do condominio na visão do app";
  *   • logado, a lista, a gaveta e a TELA da assembleia (a mesma do gestor) usam
  *     operacoesDoSindico — as RPCs sindico_portal_assembleia_* com a identidade do síndico;
  *   • documento sobe pela Edge Function sindico-portal-documentos (FormData), com o motivo
@@ -45,7 +47,9 @@ import { ConfirmProvider } from '../components/ui/confirm';
 import SindicoPortal from '../components/sindico/SindicoPortal';
 import PainelAssembleiasDoSindico, { MOTIVO_SEM_SESSAO } from '../components/sindico/PainelAssembleiasDoSindico';
 import { operacoesDoSindico, type CondominioDoSindico } from '../services/sindicoPortalService';
-import { ErroAssembleia } from '../services/condominioAssembleiaService';
+import { ErroAssembleia, linhasDaAssembleia, operacoesDoGestor } from '../services/condominioAssembleiaService';
+
+const { assembleiaDe } = linhasDaAssembleia;
 import { SINDICO_PORTAL_TAB_IDS, SINDICO_PORTAL_TAB_LABELS } from '../utils/sindicoPortalTabs';
 
 const CONDOMINIO: CondominioDoSindico = {
@@ -113,11 +117,15 @@ describe('sem sessão', () => {
         expect(sb.invoke).not.toHaveBeenCalled();
     });
 
-    it('administradora pelo app: conduz pela tela do gestor, sem chamar a porta do síndico', async () => {
+    it('administradora pelo app: conduz no portal pela porta do gestor, nunca pela do síndico', async () => {
+        const listar = vi.spyOn(operacoesDoGestor, 'listar').mockResolvedValue([assembleiaDe(linha())]);
         montar({ identidade: { clientId: 's1' }, logado: false, comoAdministradora: true });
-        expect(await screen.findByText('Como administradora, conduza a assembleia pelo app')).toBeInTheDocument();
+        expect(await screen.findByText('AGO 2026')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Nova assembleia/ })).toBeInTheDocument();
         expect(screen.queryByText(MOTIVO_SEM_SESSAO)).not.toBeInTheDocument();
-        expect(sb.rpc).not.toHaveBeenCalled();
+        expect(listar).toHaveBeenCalledWith('c1');
+        expect(rpcs().filter(fn => fn.startsWith('sindico_portal_assembleia_'))).toEqual([]);
+        listar.mockRestore();
     });
 });
 
@@ -165,13 +173,16 @@ describe('SindicoPortal › aba Assembleias (casca)', () => {
         expect(sb.cancelou).toHaveBeenCalled();
     });
 
-    it('administradora pelo app (tem sessão, mas é dela): continua mandada para a tela do gestor', async () => {
+    it('administradora pelo app (tem sessão, mas é dela): conduz pela porta do gestor, não pela do síndico', async () => {
         sb.sessao = { user: { id: 'u-admin' } };
         banco({ sindico_portal_dados: DADOS });
+        const listar = vi.spyOn(operacoesDoGestor, 'listar').mockResolvedValue([assembleiaDe(linha())]);
         render(<ConfirmProvider><SindicoPortal clientId="s1" comoAdministradora embutido /></ConfirmProvider>);
         await abrirAba();
-        expect(await screen.findByText('Como administradora, conduza a assembleia pelo app')).toBeInTheDocument();
+        expect(await screen.findByText('AGO 2026')).toBeInTheDocument();
+        expect(listar).toHaveBeenCalledWith('c1');
         expect(rpcs().filter(fn => fn.startsWith('sindico_portal_assembleia_'))).toEqual([]);
+        listar.mockRestore();
     });
 });
 

@@ -104,7 +104,7 @@ import { PortalHelp } from './portal/PortalHelp';
 import { DocumentosParaAssinar } from './assinatura/DocumentosParaAssinar';
 import { signatarioDaUrl } from '../services/assinaturaInternaService';
 import { avisarAcaoDoPortal } from '../utils/portalEventos';
-import { CLIENT_PORTAL_TAB_IDS, type ClientPortalTabId, secoesLiberadas, secaoAtual, destinoDaSecao } from '../utils/clientPortalTabs';
+import { CLIENT_PORTAL_TAB_IDS, type ClientPortalTabId, secoesLiberadas, secaoAtual, destinoDaSecao, abaVisivelDoPortal } from '../utils/clientPortalTabs';
 
 /** As abas do portal. Era uma união literal repetida em dois lugares (prop e
  *  `useState`) — aba nova exigia editar as duas, e esquecer uma só aparece como
@@ -4052,6 +4052,14 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const chaveAbas = enabledTabIds.join(',');
     // eslint-disable-next-line react-hooks/exhaustive-deps
     const secoesDaAjuda = React.useMemo(() => secoesLiberadas(enabledTabIds), [chaveAbas]);
+
+    // Aba fora das liberadas (a inicial é `dashboard`, ou um link pediu outra): vai
+    // para a primeira liberada — ver `abaVisivelDoPortal`.
+    React.useEffect(() => {
+        const visivel = abaVisivelDoPortal(activeTab, enabledTabIds, isAdmin);
+        if (visivel !== activeTab) setActiveTab(visivel as ClientAreaTabId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [activeTab, chaveAbas, isAdmin]);
 
     // tabs visíveis para o cliente (mobile + client desktop)
     const tabs = ALL_TABS.filter(t => enabledTabIds.includes(t.id));

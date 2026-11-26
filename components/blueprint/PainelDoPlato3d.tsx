@@ -49,8 +49,8 @@ const lerNumero = (s: string) => Number(s.replace(',', '.'));
 /** Um parâmetro de talude 1:h, com a inclinação em % (100/h) ao lado. */
 function CampoDeTalude({ rotulo, valor, idPct, onMudar }: { rotulo: string; valor: number; idPct: string; onMudar: (v: number) => void }) {
   return (
-    <label className="block text-[11px] text-slate-600">
-      <span className="block">{rotulo}</span>
+    <label className="block">
+      <span className="block text-xs font-semibold text-slate-500">{rotulo}</span>
       <span className="mt-0.5 flex items-center gap-1.5">
         <input
           type="number"
@@ -134,9 +134,8 @@ export default function PainelDoPlato3d({
     <div
       className="pointer-events-auto absolute left-3 top-16 z-10 w-64 max-h-[calc(100%-9rem)] overflow-y-auto rounded-[10px] border border-slate-200 bg-white/95 p-3 text-xs text-slate-700 shadow-sm"
       data-testid="painel-do-plato"
-      // O card não é do canvas: nada de órbita nem de seleção por baixo dele.
+      // O card fica FORA do canvas (a roda e o arraste nele não chegam à órbita); o aperto não sobe para o viewer.
       onPointerDown={(e) => e.stopPropagation()}
-      onWheel={(e) => e.stopPropagation()}
     >
       <div className="flex items-center gap-1.5">
         <span className="h-2.5 w-2.5 shrink-0 rounded-[2px] bg-blue-600" aria-hidden="true" />
@@ -166,7 +165,7 @@ export default function PainelDoPlato3d({
       {/* Cota — o "Height over sea level" do reel. */}
       <div className="mt-3">
         <div className="flex items-center justify-between gap-2">
-          <label htmlFor="painel-plato-cota" className="text-[11px] text-slate-600">
+          <label htmlFor="painel-plato-cota" className="text-xs font-semibold text-slate-500">
             Cota do platô (m)
           </label>
           <input

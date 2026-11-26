@@ -6,7 +6,7 @@
 // nem árvore nova. As torres e unidades são as mesmas que foram vendidas.
 import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import React from 'react';
-import { FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet, AlertCircle, FolderOpen, Plus, Link2, Unlink } from 'lucide-react';
+import { FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet, AlertCircle, FolderOpen, Plus, Link2, Unlink, Vote } from 'lucide-react';
 import ClientSelect, { type ClientOption } from '../ClientSelect';
 import OcupacoesTab from './OcupacoesTab';
 import ManutencaoTab from './ManutencaoTab';
@@ -16,6 +16,9 @@ import ComunicacaoTab from './ComunicacaoTab';
 import DocumentosTab from './DocumentosTab';
 import FinanceiroTab from './FinanceiroTab';
 import RateioDetalheView from './RateioDetalheView';
+import AssembleiasTab from './AssembleiasTab';
+import AssembleiaDetalheView from './AssembleiaDetalheView';
+import { operacoesDoGestor } from '../../services/condominioAssembleiaService';
 import type { Rateio } from '../../services/condominioRateioService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { clientService } from '../../services/clientService';
@@ -30,7 +33,7 @@ import { mandatoVencido as mandatoJaVenceu } from '../../utils/mandatoSindico';
 import { orgDoCondominio } from '../../utils/orgDoCondominio';
 import { useStore } from '../../store/useStore';
 
-export type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'documentos' | 'ativos' | 'manutencao' | 'financeiro' | 'comunicacao';
+export type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'documentos' | 'ativos' | 'manutencao' | 'financeiro' | 'assembleias' | 'comunicacao';
 
 /** §19.1 — cada aba troca o assunto da tela, então troca o título junto. */
 const TITULOS: Record<Aba, { titulo: string; subtitulo: string }> = {
@@ -41,6 +44,7 @@ const TITULOS: Record<Aba, { titulo: string; subtitulo: string }> = {
     ativos: { titulo: 'Ativos do edifício', subtitulo: 'equipamentos e garantia do fornecedor' },
     manutencao: { titulo: 'Manutenção predial', subtitulo: 'plano NBR 5674 e ordens de serviço' },
     financeiro: { titulo: 'Financeiro', subtitulo: 'rateio das despesas entre as unidades' },
+    assembleias: { titulo: 'Assembleias', subtitulo: 'convocação, presença, votação e ata' },
     comunicacao: { titulo: 'Comunicação', subtitulo: 'avisos e documentos do portal' },
 };
 
@@ -77,6 +81,8 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
     // Rateio aberto como TELA (troca in-flow). Mora aqui, e não no
     // `FinanceiroTab`, porque é este componente que faz o early return.
     const [rateioAberto, setRateioAberto] = React.useState<Rateio | null>(null);
+    // Assembleia aberta como TELA — mesmo motivo do rateio: o early return é daqui.
+    const [assembleiaAberta, setAssembleiaAberta] = React.useState<string | null>(null);
     const [e, setE] = React.useState<Empreendimento>(empreendimento);
     const identidade = React.useMemo(
         () => identidadeDoCondominio(e.name, e.code),
@@ -256,6 +262,9 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         { id: 'manutencao', label: 'Manutenção', icon: Wrench },
         // Depois de Manutenção porque é dela que sai boa parte da despesa a ratear.
         { id: 'financeiro', label: 'Financeiro', icon: Wallet },
+        // Depois do Financeiro porque a cota vencida é o que impede a unidade de
+        // votar (CC 1.335 III); antes da Comunicação porque convocar publica no mural.
+        { id: 'assembleias', label: 'Assembleias', icon: Vote },
         // Última porque é o que SAI do condomínio para o condômino — as demais
         // são o que se sabe sobre ele.
         { id: 'comunicacao', label: 'Comunicação', icon: Megaphone },
@@ -273,6 +282,19 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                 rateio={rateioAberto}
                 onBack={() => setRateioAberto(null)}
                 onBackParaLista={onBack}
+            />
+        );
+    }
+
+    // ── Assembleia: TELA, não painel (mesmo early return do rateio) ───────
+    if (assembleiaAberta) {
+        return (
+            <AssembleiaDetalheView
+                assembleiaId={assembleiaAberta}
+                empreendimento={e}
+                ops={operacoesDoGestor}
+                onVoltar={() => setAssembleiaAberta(null)}
+                onVoltarParaLista={onBack}
             />
         );
     }
@@ -578,6 +600,9 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
             {aba === 'ativos' && <AtivosTab empreendimento={e} />}
             {aba === 'manutencao' && <ManutencaoTab empreendimento={e} />}
             {aba === 'financeiro' && <FinanceiroTab empreendimento={e} onAbrirRateio={setRateioAberto} />}
+            {aba === 'assembleias' && (
+                <AssembleiasTab empreendimento={e} registrarAcaoDoTitulo={setAcaoDoTitulo} onAbrirAssembleia={setAssembleiaAberta} />
+            )}
             {aba === 'comunicacao' && <ComunicacaoTab empreendimento={e} />}
 
             {notification && (

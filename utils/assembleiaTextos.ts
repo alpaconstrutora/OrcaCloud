@@ -78,7 +78,11 @@ export const ROTULO_OPCAO: Record<'SIM' | 'NAO' | 'ABSTENCAO', string> = {
 export const rotuloOpcao = (op: OpcaoVoto): string =>
     (ROTULO_OPCAO as Record<string, string>)[op] ?? op;
 
-const ROTULO_ORIGEM: Record<OrigemVoto, string> = { PORTAL: 'portal', PRESENCIAL: 'sala' };
+export const ROTULO_ORIGEM: Record<OrigemVoto, string> = { PORTAL: 'portal', PRESENCIAL: 'sala' };
+
+/** As duas "presenças" da ata (ver o cabeçalho deste arquivo) — a tela (A7) usa os mesmos rótulos. */
+export const ROTULO_QUORUM_INSTALACAO = 'Quórum de instalação (presentes aptos)';
+export const ROTULO_PARTICIPARAM_DA_VOTACAO = 'Participaram da votação';
 
 const ROTULO_PAPEL: Record<PapelCondutor, string> = { GESTOR: 'gestor', SINDICO: 'síndico' };
 
@@ -396,7 +400,7 @@ export function montarAta(retrato: Retrato, a: Assembleia, condominio: Condomini
     // Duas presenças: instalação (sem impedidas, gravada e nunca refeita) × votação.
     const qi = c.quorumInstalacao;
     const quorumInstalacao: MedidaPresenca = {
-        rotulo: 'Quórum de instalação (presentes aptos)',
+        rotulo: ROTULO_QUORUM_INSTALACAO,
         percentual: percentualDoTotal(qi?.presentesFracao ?? 0, qi?.total ?? total),
         unidades: qi?.presentesUnidades ?? 0,
         totalUnidades,
@@ -405,7 +409,7 @@ export function montarAta(retrato: Retrato, a: Assembleia, condominio: Condomini
             + 'e não a conta neste quórum.',
     };
     const participaramDaVotacao: MedidaPresenca = {
-        rotulo: 'Participaram da votação',
+        rotulo: ROTULO_PARTICIPARAM_DA_VOTACAO,
         percentual: percentualDoTotal(retrato.presentesFracao, total),
         unidades: retrato.presentesUnidades,
         totalUnidades,

@@ -305,6 +305,45 @@ describe('PDF da ata com anexo longo (60 unidades × 2 itens)', () => {
             expect(anexo.split(`Condômino número ${k + 1} com nome`).length - 1, `unidade ${k + 1}`).toBe(2);
         }
         expect(anexo).toContain('Bloco B — Apto 159');
+
+        // Toda página do anexo diz de qual item são os votos nela. Na fixture os
+        // votos do item 1 são em sala às 20:00 e o item 2 não teve voto — dá para
+        // saber pelo texto de que item é cada linha da página.
+        doAnexo.forEach((pg, k) => {
+            const onde = `página ${idxAnexo + k + 1}`;
+            expect(pg, onde).toMatch(/Item [12] — /);
+            if (pg.includes('às 20:00')) expect(pg, onde).toContain('Item 1 — Aprovação das contas de 2026');
+            if (pg.includes('Sem voto')) expect(pg, onde).toContain('Item 2 — Eleição do síndico');
+            // rótulo nunca órfão: se a página tem o rótulo, tem linha do item
+            if (pg.includes('Item 1 — ')) expect(pg, onde).toContain('às 20:00');
+            if (pg.includes('Item 2 — ')) expect(pg, onde).toContain('Sem voto');
+        });
+        // o item que continua de página anterior vem marcado
+        expect(doAnexo.slice(1).some(pg => pg.includes('(continuação)'))).toBe(true);
     }, 60_000);
 });
 
+
+describe('rodapé com nome de condomínio muito longo', () => {
+    const LONGO = 'Condomínio Edifício Residencial e Comercial Parque das Araucárias São João Batista '
+        + 'Torres Norte, Sul e Leste — Associação dos Proprietários do Loteamento Jardim Botânico';
+
+    it('a marca e o "n / total" ficam em toda página; encurta o nome do condomínio', async () => {
+        const cond = { nome: LONGO, cnpj: '12345678000190' };
+        const grande: Retrato = { ...retrato, cabecalho: { ...retrato.cabecalho, condominio: LONGO } };
+        for (const blob of [
+            await gerarEditalPdf(montarEdital(assembleia, itens, cond)),
+            await gerarAtaPdf(montarAta(grande, assembleia, cond)),
+        ]) {
+            const dir = process.env.ASSEMBLEIA_PDF_DIR;
+            if (dir) (await import('node:fs')).writeFileSync(`${dir}/nome-longo-${blob.size}.pdf`, Buffer.from(await blob.arrayBuffer()));
+            const paginas = await textoDasPaginas(await blob.arrayBuffer());
+            rodapeEmTodas(paginas);
+            paginas.forEach((pg, i) => {
+                expect(pg, `página ${i + 1}`).toContain('Documento gerado pelo Òpura.');
+                // o nome encurtado começa igual e termina com reticências
+                expect(pg, `página ${i + 1}`).toMatch(/Condomínio Edifício Residencial[^—]*… — /);
+            });
+        }
+    }, 60_000);
+});

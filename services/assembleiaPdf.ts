@@ -160,15 +160,25 @@ function cabecalho(p: Pagina, titulo: string, condominio: string, cnpj: string) 
     p.y = altura + 8;
 }
 
-/** Rodapé em TODAS as páginas (rodar depois da última página existir). */
-function rodapes(p: Pagina, texto: string) {
+const MARCA = ' · Documento gerado pelo Òpura.';
+
+/** Rodapé em TODAS as páginas (rodar depois da última página existir).
+ *  A marca e o "n / total" ficam sempre. Se não couber numa linha, quem encolhe
+ *  é o nome do condomínio (e, em último caso, o título), com reticências. */
+function rodapes(p: Pagina, condominio: string, titulo: string) {
     const { doc, W } = p;
     const total = doc.getNumberOfPages();
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    // Uma linha só: nome longo de condomínio/assembleia corta antes do número.
-    const linha = (doc.splitTextToSize(`${texto} · Documento gerado pelo Òpura.`, W - 2 * MARGEM - 22) as string[]);
-    const textoRodape = linha.length > 1 ? `${linha[0]}…` : linha[0];
+    const cabe = (t: string) => doc.getTextWidth(t) <= W - 2 * MARGEM - 22;
+    const curto = (t: string, n: number) => `${t.slice(0, n).trimEnd()}…`;
+    let nome = condominio;
+    let tit = titulo;
+    const montar = () => `${nome} — ${tit}${MARCA}`;
+    // 1º o condomínio (até 20 caracteres), depois o título.
+    for (let n = condominio.length - 1; n >= 20 && !cabe(montar()); n--) nome = curto(condominio, n);
+    for (let n = titulo.length - 1; n >= 1 && !cabe(montar()); n--) tit = curto(titulo, n);
+    const textoRodape = montar();
     for (let i = 1; i <= total; i++) {
         doc.setPage(i);
         const H = doc.internal.pageSize.getHeight();
@@ -180,6 +190,15 @@ function rodapes(p: Pagina, texto: string) {
         doc.text(textoRodape, MARGEM, H - 4.5);
         doc.text(`${i} / ${total}`, W - MARGEM, H - 4.5, { align: 'right' });
     }
+}
+
+/** Altura (mm) do bloco de assinatura: 16 de espaço para assinar + nome que
+ *  pode quebrar em várias linhas + papel. Nome longo não pode cair no rodapé. */
+function alturaAssinatura(p: Pagina, largura: number, nome: string, papel: string | null): number {
+    p.doc.setFont('helvetica', 'bold');
+    p.doc.setFontSize(9);
+    const linhas = (p.doc.splitTextToSize(nome, largura) as string[]).length;
+    return 16 + 5 + linhas * 4 + (papel ? 4 : 0) + 2;
 }
 
 /** Linha de assinatura centrada em `cx`, com nome e papel embaixo. */
@@ -259,12 +278,13 @@ async function desenharEdital(m: EditalModelo) {
     p.y += 2;
 
     // Emissão + assinatura da administração: ficam juntas na mesma página.
-    garantir(p, 40);
+    const alturaAdm = alturaAssinatura(p, 90, m.assinatura, null);
+    garantir(p, alturaAdm + (m.emitidoEm ? 6 : 0));
     if (m.emitidoEm) paragrafo(p, `Emitido em ${m.emitidoEm}.`, { cor: GRAY });
     linhaDeAssinatura(p, p.W / 2, 90, m.assinatura, null);
-    p.y += 30;
+    p.y += alturaAdm;
 
-    rodapes(p, `${m.condominio.nome} — ${m.titulo}`);
+    rodapes(p, m.condominio.nome, m.titulo);
     return doc;
 }
 
@@ -419,17 +439,20 @@ export async function gerarAtaPdf(m: AtaModelo): Promise<Blob> {
 
     // ── Encerramento + assinaturas (juntos, na mesma página) ─────────────
     tituloDeSecao(p, 'Encerramento');
-    const linhasEnc = (doc.splitTextToSize(m.encerramento, p.W - 2 * MARGEM - 2) as string[]).length;
-    garantir(p, linhasEnc * alturaLinha(9.5) + 44);
-    paragrafo(p, m.encerramento, { tamanho: 9.5 });
-    p.y += 6;
     const n = m.assinaturas.length;
     const largura = Math.min(80, (p.W - 2 * MARGEM) / Math.max(n, 1) - 10);
+    const alturaAss = Math.max(0, ...m.assinaturas.map(a => alturaAssinatura(p, largura, a.nome, a.papel)));
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9.5);
+    const linhasEnc = (doc.splitTextToSize(m.encerramento, p.W - 2 * MARGEM - 2) as string[]).length;
+    garantir(p, linhasEnc * alturaLinha(9.5) + 8 + alturaAss);
+    paragrafo(p, m.encerramento, { tamanho: 9.5 });
+    p.y += 6;
     m.assinaturas.forEach((a, i) => {
         const cx = MARGEM + ((p.W - 2 * MARGEM) / n) * (i + 0.5);
         linhaDeAssinatura(p, cx, largura, a.nome, a.papel);
     });
-    p.y += 32;
+    p.y += alturaAss;
 
     // ── Anexo: voto de cada unidade em cada item, SEMPRE em página própria ─
     doc.addPage();
@@ -445,36 +468,43 @@ export async function gerarAtaPdf(m: AtaModelo): Promise<Blob> {
     if (m.anexo.length === 0) {
         paragrafo(p, 'Nenhum item na pauta, nenhum voto a listar.', { cor: GRAY });
     } else {
-        // Linha de grupo por item (colSpan) + uma linha por unidade.
-        const linhas: any[] = [];
-        const semVoto = new Set<number>();
-        let itemAtual = -1;
-        for (const l of m.anexo) {
-            if (l.item !== itemAtual) {
-                itemAtual = l.item;
-                linhas.push([{
-                    content: `${l.item}. ${l.itemTitulo}`, colSpan: 5,
-                    styles: { fontStyle: 'bold', fillColor: LIGHT, textColor: PRIMARY },
-                }]);
-            }
-            if (l.voto === 'Sem voto') semVoto.add(linhas.length);
-            linhas.push([l.unidade, l.nome, l.voto, l.origem, l.votadoEm ?? '—']);
+        // Uma tabela por item. O rótulo do item é a 1ª linha do CABEÇALHO, e o
+        // cabeçalho se repete em toda página que a tabela atravessa: página de
+        // continuação nunca mostra votos sem dizer de qual item são (documento
+        // legal). O garantir() antes impede rótulo órfão no pé da página.
+        const porItem = new Map<number, typeof m.anexo>();
+        for (const l of m.anexo) porItem.set(l.item, [...(porItem.get(l.item) ?? []), l]);
+        for (const [numero, linhas] of porItem) {
+            const rotulo = `Item ${numero} — ${linhas[0].itemTitulo}`;
+            garantir(p, 30);   // 2 linhas de cabeçalho + ao menos 1 linha de voto
+            tabela(p, {
+                head: [
+                    [{
+                        content: rotulo, colSpan: 5,
+                        styles: { fillColor: LIGHT, textColor: PRIMARY, fontStyle: 'bold', fontSize: 9 },
+                    }],
+                    ['Unidade', 'Proprietário', 'Voto', 'Origem', 'Data e hora'],
+                ],
+                body: linhas.map(l => [l.unidade, l.nome, l.voto, l.origem, l.votadoEm ?? '—']),
+                columnStyles: {
+                    0: { cellWidth: 28 }, 1: { cellWidth: 60 }, 2: { cellWidth: 40 }, 3: { cellWidth: 18 }, 4: { cellWidth: 36 },
+                },
+                didParseCell: (d: any) => {
+                    if (d.section === 'body' && linhas[d.row.index]?.voto === 'Sem voto') {
+                        d.cell.styles.textColor = GRAY;
+                        d.cell.styles.fontStyle = 'italic';
+                    }
+                },
+                willDrawCell: (d: any) => {
+                    // pageNumber conta as páginas DESTA tabela: > 1 = continuação.
+                    if (d.section === 'head' && d.row.index === 0 && d.pageNumber > 1) {
+                        d.cell.text = [`${rotulo} (continuação)`];
+                    }
+                },
+            }, 8);
         }
-        tabela(p, {
-            head: [['Unidade', 'Proprietário', 'Voto', 'Origem', 'Data e hora']],
-            body: linhas,
-            columnStyles: {
-                0: { cellWidth: 28 }, 1: { cellWidth: 60 }, 2: { cellWidth: 40 }, 3: { cellWidth: 18 }, 4: { cellWidth: 36 },
-            },
-            didParseCell: (d: any) => {
-                if (d.section === 'body' && semVoto.has(d.row.index)) {
-                    d.cell.styles.textColor = GRAY;
-                    d.cell.styles.fontStyle = 'italic';
-                }
-            },
-        });
     }
 
-    rodapes(p, `${c.condominio} — ${m.titulo}`);
+    rodapes(p, c.condominio, m.titulo);
     return doc.output('blob') as Blob;
 }

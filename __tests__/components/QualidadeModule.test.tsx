@@ -524,9 +524,10 @@ describe('Qualidade (SiAC) — fase 2: SGQ da organização e painel com número
     };
     /** 25 serviços; o 1º com procedimento que conta. */
     const vinteECinco = () => servicos(25).map((s, i) => (i === 0 ? { ...s, procedure_document_id: 'doc-ok' } : s));
+    // Formato de contagem (RPC quality_inspecoes_aprovadas_do_sgq): sem nomes nem ids.
     const inspecao = (p: Partial<InspecaoAprovada>): InspecaoAprovada => ({
-        work_order_id: 'oe-1', controlled_item_id: 'org-a-s1', obra_status: 'Em andamento', aprovado_em: '2026-11-20T10:00:00Z',
-        executores: [{ employee_id: 'e1', nome: 'Ana', treinado: true }], ...p,
+        controlled_item_id: 'org-a-s1', aprovado_em: '2026-11-20T10:00:00Z', obra_em_andamento: true,
+        executores_total: 1, executores_treinados: 1, ...p,
     });
 
     it('painel: 1 inspeção toda treinada em obra "Em andamento" → 1 (meta 5) e 1 (meta 3); materiais seguem na fase 3', async () => {
@@ -544,9 +545,7 @@ describe('Qualidade (SiAC) — fase 2: SGQ da organização e painel com número
     it('linha do serviço: "1 de 2" quando um executor não estava treinado (e não conta no painel); sem inspeção "—"', async () => {
         listarItens.mockResolvedValue(vinteECinco());
         resumirProcedimentos.mockResolvedValue({ ...PROCEDIMENTOS, 'doc-ok': PROC_OK });
-        inspecoesAprovadas.mockResolvedValue([inspecao({
-            executores: [{ employee_id: 'e1', nome: 'Ana', treinado: true }, { employee_id: 'e2', nome: 'Bruno', treinado: false }],
-        })]);
+        inspecoesAprovadas.mockResolvedValue([inspecao({ executores_total: 2, executores_treinados: 1 })]);
         montar();
         const painel = await screen.findByRole('region', { name: /Quanto falta para o nível B/ });
         await waitFor(() => expect(within(painel).getByText(/aplicados com registro: 0 \(meta 5\)/)).toBeTruthy());

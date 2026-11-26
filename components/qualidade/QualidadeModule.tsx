@@ -39,7 +39,8 @@ import { RegistrarTreinamentoSheet } from './RegistrarTreinamentoSheet';
  * (`sgqDaOrganizacao`). Se for outra (SPE que usa o da construtora), só a faixa e a configuração
  * aparecem — a lista e o painel são os da organização dona, e não há o que editar aqui. Em "Todas"
  * nada disso aparece (o SGQ é por organização). O painel conta pelas inspeções aprovadas
- * (`inspecoesAprovadas` de cada organização do painel, que é o SGQ dos próprios itens).
+ * (`inspecoesAprovadas` de cada organização do painel, que é o SGQ dos próprios itens — pela RPC
+ * `quality_inspecoes_aprovadas_do_sgq`, a mesma conta para qualquer membro do SGQ).
  */
 type Aba = 'lista' | 'por-obra';
 

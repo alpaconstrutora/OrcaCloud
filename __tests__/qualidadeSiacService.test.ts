@@ -1,8 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const chamadas: { metodo: string; args: unknown[] }[] = [];
-type Resposta = { data: unknown; error: { message: string } | null };
+type Resposta = { data: unknown; error: { message: string; code?: string } | null };
 let resposta: Resposta = { data: null, error: null };
+/** Resposta própria do `rpc` (quando a mesma chamada também lê tabela). */
+let respostaRpc: Resposta | null = null;
 /** Resposta própria de uma tabela (consultas a mais de uma tabela na mesma chamada). */
 let respostaPorTabela: Record<string, Resposta> = {};
 
@@ -29,7 +31,7 @@ vi.mock('../lib/supabase', () => ({
     },
     rpc: (nome: string, params: unknown) => {
       chamadas.push({ metodo: 'rpc', args: [nome, params] });
-      return Promise.resolve(resposta);
+      return Promise.resolve(respostaRpc ?? resposta);
     },
   },
 }));
@@ -41,6 +43,7 @@ const achar = (metodo: string) => chamadas.filter((c) => c.metodo === metodo);
 beforeEach(() => {
   chamadas.length = 0;
   resposta = { data: null, error: null };
+  respostaRpc = null;
   respostaPorTabela = {};
 });
 
@@ -313,40 +316,71 @@ describe('qualidadeSiacService', () => {
     expect(r[0].codigos).toEqual(['1']);
   });
 
-  it('inspecoesAprovadas: validações de inspeção aprovadas de OEs com serviço do SGQ, com o status da obra', async () => {
-    resposta = {
+  it('inspecoesAprovadas: pela RPC quality_inspecoes_aprovadas_do_sgq — só contagem, igual para quem olha', async () => {
+    respostaRpc = {
       data: [
-        {
-          work_order_id: 'wo1', liberado_em: '2026-11-20T10:00:00Z', created_at: '2026-11-20T09:00:00Z',
-          executores: [{ employee_id: 'e1', nome: 'Ana', treinado: true }],
-          work_orders: { controlled_item_id: 'forma', projects: { obra_status: 'Em andamento' } },
-        },
-        {
-          work_order_id: 'wo2', liberado_em: null, created_at: '2026-11-21T09:00:00Z', executores: null,
-          work_orders: [{ controlled_item_id: 'concreto', projects: [{ obra_status: null }] }],
-        },
+        { controlled_item_id: 'forma', aprovado_em: '2026-11-20T10:00:00Z', obra_em_andamento: true,
+          executores_total: 2, executores_treinados: 1 },
+        { controlled_item_id: 'concreto', aprovado_em: '2026-11-21T09:00:00Z', obra_em_andamento: false,
+          executores_total: 0, executores_treinados: 0 },
       ],
       error: null,
     };
 
     const r = await qualidadeSiacService.inspecoesAprovadas('alpa');
 
-    expect(achar('from')[0].args).toEqual(['work_order_validations']);
-    const sel = achar('select')[0].args[0] as string;
-    expect(sel).toContain('work_orders!inner');
-    expect(sel).toContain('quality_controlled_items!inner');
-    expect(sel).toContain('settings->>obraStatus');
-    const eqs = achar('eq').map((c) => c.args);
-    expect(eqs).toContainEqual(['type', 'inspection']);
-    expect(eqs).toContainEqual(['status', 'approved']);
-    expect(eqs).toContainEqual(['work_orders.quality_controlled_items.organization_id', 'alpa']);
+    expect(achar('rpc').map((c) => c.args)).toEqual([['quality_inspecoes_aprovadas_do_sgq', { p_sgq: 'alpa' }]]);
+    expect(achar('from')).toHaveLength(0);
     expect(r).toEqual([
-      {
-        work_order_id: 'wo1', controlled_item_id: 'forma', obra_status: 'Em andamento', aprovado_em: '2026-11-20T10:00:00Z',
-        executores: [{ employee_id: 'e1', nome: 'Ana', treinado: true }],
-      },
-      { work_order_id: 'wo2', controlled_item_id: 'concreto', obra_status: null, aprovado_em: '2026-11-21T09:00:00Z', executores: [] },
+      { controlled_item_id: 'forma', aprovado_em: '2026-11-20T10:00:00Z', obra_em_andamento: true,
+        executores_total: 2, executores_treinados: 1 },
+      { controlled_item_id: 'concreto', aprovado_em: '2026-11-21T09:00:00Z', obra_em_andamento: false,
+        executores_total: 0, executores_treinados: 0 },
     ]);
+  });
+
+  for (const code of ['PGRST202', '42883']) {
+    it(`inspecoesAprovadas: RPC ainda não aplicada (${code}) → lê pela RLS como antes, no formato de contagem`, async () => {
+      respostaRpc = { data: null, error: { message: 'Could not find the function', code } };
+      respostaPorTabela.work_order_validations = {
+        data: [
+          {
+            work_order_id: 'wo1', liberado_em: '2026-11-20T10:00:00Z', created_at: '2026-11-20T09:00:00Z',
+            executores: [{ employee_id: 'e1', nome: 'Ana', treinado: true }, { employee_id: 'e2', nome: 'Bia', treinado: false }],
+            work_orders: { controlled_item_id: 'forma', projects: { obra_status: 'Em andamento' } },
+          },
+          {
+            work_order_id: 'wo2', liberado_em: null, created_at: '2026-11-21T09:00:00Z', executores: null,
+            work_orders: [{ controlled_item_id: 'concreto', projects: [{ obra_status: null }] }],
+          },
+        ],
+        error: null,
+      };
+
+      const r = await qualidadeSiacService.inspecoesAprovadas('alpa');
+
+      expect(achar('from')[0].args).toEqual(['work_order_validations']);
+      const sel = achar('select')[0].args[0] as string;
+      expect(sel).toContain('work_orders!inner');
+      expect(sel).toContain('quality_controlled_items!inner');
+      expect(sel).toContain('settings->>obraStatus');
+      const eqs = achar('eq').map((c) => c.args);
+      expect(eqs).toContainEqual(['type', 'inspection']);
+      expect(eqs).toContainEqual(['status', 'approved']);
+      expect(eqs).toContainEqual(['work_orders.quality_controlled_items.organization_id', 'alpa']);
+      expect(r).toEqual([
+        { controlled_item_id: 'forma', aprovado_em: '2026-11-20T10:00:00Z', obra_em_andamento: true,
+          executores_total: 2, executores_treinados: 1 },
+        { controlled_item_id: 'concreto', aprovado_em: '2026-11-21T09:00:00Z', obra_em_andamento: false,
+          executores_total: 0, executores_treinados: 0 },
+      ]);
+    });
+  }
+
+  it('inspecoesAprovadas: outro erro da RPC (42501) sobe — não cai na leitura pela RLS', async () => {
+    respostaRpc = { data: null, error: { message: 'Sem acesso ao sistema da qualidade desta organização.', code: '42501' } };
+    await expect(qualidadeSiacService.inspecoesAprovadas('alpa')).rejects.toThrow('Sem acesso ao sistema da qualidade');
+    expect(achar('from')).toHaveLength(0);
   });
 
   it('criarFichaModelo insere o modelo ativo na org do item, com o nome do serviço, e devolve o id; erro sobe', async () => {
@@ -365,8 +399,9 @@ describe('qualidadeSiacService', () => {
     await expect(qualidadeSiacService.criarFichaModelo('org-1', 'X', null)).rejects.toThrow('row-level security');
   });
 
-  it('inspecoesAprovadas: erro sobe como Error', async () => {
-    resposta = { data: null, error: { message: 'sem acesso' } };
+  it('inspecoesAprovadas: erro da leitura pela RLS (RPC ausente) sobe como Error', async () => {
+    respostaRpc = { data: null, error: { message: 'Could not find the function', code: 'PGRST202' } };
+    respostaPorTabela.work_order_validations = { data: null, error: { message: 'sem acesso' } };
     await expect(qualidadeSiacService.inspecoesAprovadas('alpa')).rejects.toThrow('sem acesso');
   });
 

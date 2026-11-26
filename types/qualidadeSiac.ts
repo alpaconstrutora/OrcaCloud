@@ -68,16 +68,20 @@ export interface ExecutorDaInspecao {
 
 /**
  * Inspeção aprovada de OE de serviço controlado (fase 2) — `work_order_validations` type
- * 'inspection' status 'approved', com o serviço da OE e o `obraStatus` da obra.
+ * 'inspection' status 'approved' — no formato de CONTAGEM da RPC
+ * `quality_inspecoes_aprovadas_do_sgq` (migration aplicar_20271126140000): o membro do SGQ conta as
+ * OEs das SPEs que apontam para ele sem ver nomes nem ids delas.
  */
 export interface InspecaoAprovada {
-  work_order_id: string;
   controlled_item_id: string;
-  /** `projects.settings->>'obraStatus'` ('Em andamento' = obra em andamento). */
-  obra_status: string | null;
   /** `liberado_em` (ou `created_at` da validação, se faltar). */
   aprovado_em: string;
-  executores: ExecutorDaInspecao[];
+  /** `projects.settings->>'obraStatus' = 'Em andamento'`. */
+  obra_em_andamento: boolean;
+  /** Executores congelados na aprovação. */
+  executores_total: number;
+  /** Dos executores, quantos estavam treinados na revisão vigente do procedimento. */
+  executores_treinados: number;
 }
 
 export interface MetaDoNivel {

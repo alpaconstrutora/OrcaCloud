@@ -31,8 +31,10 @@ interface Props {
     procedimentos: Record<string, ProcedimentoResumo>;
     nomesDasOrgs: Record<string, string>;
     /**
-     * Inspeções aprovadas dos SGQs das organizações do painel (`inspecoesAprovadas`); `contarAplicados`
-     * casa pelo serviço, então a lista de várias organizações serve a cada linha.
+     * Inspeções aprovadas dos SGQs das organizações do painel (`inspecoesAprovadas`, pela RPC
+     * `quality_inspecoes_aprovadas_do_sgq`: conta as OEs das SPEs que apontam para o SGQ igual para
+     * qualquer membro dele — só contagem, sem nomes nem ids); `contarAplicados` casa pelo serviço,
+     * então a lista de várias organizações serve a cada linha.
      */
     inspecoes: InspecaoAprovada[];
     /** A leitura das inspeções falhou: a linha de serviços não conta (nunca um zero que mente). */

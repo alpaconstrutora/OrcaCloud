@@ -16,6 +16,10 @@
 //   • deliberação só entra pelo Encerrar (ops.encerrar) — nunca gravando o item em
 //     INSTALADA (trava/deadlock com a apuração);
 //   • voto na sala sobre voto do PORTAL pede confirmação (R7) antes de ir ao banco;
+//   • a tela não fica velha durante a reunião: abrir Instalar, abrir a unidade e
+//     "Atualizar apuração" RECARREGAM votos e unidades (o voto do portal chega com a
+//     tela aberta); se mesmo assim o banco disser que o voto da sala substituiu um voto
+//     do portal que a tela não conhecia, a tela avisa;
 //   • a ata sai do RETRATO devolvido pelo encerrar; upload falho deixa "Gerar ata
 //     novamente", que refaz do mesmo retrato (e não encerra de novo);
 //   • organização de upload = orgDoCondominio(e) (catraca orgDoCondominioGuard).
@@ -33,7 +37,7 @@ import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { KpiCard } from '../ui/KpiCard';
 import SecaoTitulo from '../ui/SecaoTitulo';
 import { useConfirm } from '../ui/confirm';
-import { identidadeDoCondominio } from '../../utils/condominioIdentidade';
+import { identidadeDoCondominio, nomeDoCondominioNosDocumentos } from '../../utils/condominioIdentidade';
 import { orgDoCondominio } from '../../utils/orgDoCondominio';
 import {
     dataHoraBrasilia, montarAta, montarEdital, percentualDoTotal, rotuloOpcao, ROTULO_STATUS, ROTULO_TIPO,
@@ -79,8 +83,9 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
     // A org da OPERAÇÃO do condomínio (pode ser própria — 21/10/2026).
     const orgId = orgDoCondominio(e);
     const identidade = identidadeDoCondominio(e.name, e.code);
+    // Edital e ata com o MESMO nome: o banco congela este critério no retrato (encerrar).
     const condominio = React.useMemo(
-        () => ({ nome: e.condominio_razao_social || e.name, cnpj: e.condominio_cnpj ?? null }),
+        () => ({ nome: nomeDoCondominioNosDocumentos(e.condominio_razao_social, e.name), cnpj: e.condominio_cnpj ?? null }),
         [e.condominio_razao_social, e.name, e.condominio_cnpj]);
 
     const [dados, setDados] = React.useState<AssembleiaCarregada | null>(null);
@@ -103,8 +108,8 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
     // Upload que deu certo mas o vínculo falhou: refaz só o vínculo (sem 2º PDF em Documentos).
     const ataEnviada = React.useRef<string | null>(null);
 
-    const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
-    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+    const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
+    const notify = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 4500);
     };
@@ -126,11 +131,22 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
         }
     }, [ops]);
 
+    // Geração da leitura: só a leitura MAIS NOVA aplica o resultado, e toda costura local
+    // (presença, voto, encerrar, ata) invalida a leitura em curso — senão uma recarga que
+    // saiu antes do voto chegaria depois e apagaria o voto recém-lançado da tela.
+    const geracao = React.useRef(0);
+    const costurar = (f: (d: AssembleiaCarregada | null) => AssembleiaCarregada | null) => {
+        geracao.current += 1;
+        setDados(f);
+    };
+
     const carregar = React.useCallback(async (silencioso = false) => {
+        const g = ++geracao.current;
         if (!silencioso) setCarregando(true);
         setErro(null);
         try {
             const d = await ops.carregar(assembleiaId);
+            if (g !== geracao.current) return; // outra leitura ou uma gravação local veio depois
             setDados(d);
             await atualizarApuracao(d.assembleia);
             if (d.assembleia.avisoId) {
@@ -140,7 +156,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                     .catch(() => setLeituras(null));
             }
         } catch (err) {
-            setErro(msg(err, 'Erro ao carregar a assembleia.'));
+            if (g === geracao.current) setErro(msg(err, 'Erro ao carregar a assembleia.'));
         } finally {
             if (!silencioso) setCarregando(false);
         }
@@ -207,6 +223,13 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
     };
 
     // ── instalar (R4, R6) ────────────────────────────────────────────────
+    // Recarrega ao abrir: o voto do portal que chegou com a tela aberta conta como presença
+    // (R6) — sem isso a 1ª convocação ficaria desligada quando o banco aceitaria.
+    const abrirInstalar = () => {
+        setGaveta('instalar');
+        carregar(true);
+    };
+
     const instalar = async (d: DadosInstalacao) => {
         if (!a) return;
         setGravando(true);
@@ -245,7 +268,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
             }
             const v = await ops.vincularAta(assembleia.id, documentoId);
             ataEnviada.current = null;
-            setDados(d => (d ? { ...d, assembleia: { ...d.assembleia, ataDocumentoId: v.ataDocumentoId } } : d));
+            costurar(d => (d ? { ...d, assembleia: { ...d.assembleia, ataDocumentoId: v.ataDocumentoId } } : d));
             setAta({ gerando: false, erro: null });
             notify('Assembleia encerrada e ata vinculada.');
         } catch (err) {
@@ -274,7 +297,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
         const encerrada: Assembleia = {
             ...a, status: 'ENCERRADA', retrato, encerradaEm: retrato.cabecalho.encerradaEm, observacaoGeral: observacao,
         };
-        setDados(d => (d ? {
+        costurar(d => (d ? {
             ...d, assembleia: encerrada,
             itens: d.itens.map(i => ({ ...i, deliberacao: retrato.deliberacoes?.[i.id] ?? null })),
         } : d));
@@ -352,7 +375,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
             }
             const r = await ops.registrarPresenca(a.id, unidade.unitId, p.presenca, p.procurador, procuracaoId);
             // §22 — costura local.
-            setDados(d => (d ? {
+            costurar(d => (d ? {
                 ...d,
                 unidades: d.unidades.map(u => (u.unitId === r.unitId ? {
                     ...u, presenca: r.presenca, procuradorNome: r.procurador, procuracaoDocumentoId: r.procuracaoDocumentoId,
@@ -384,7 +407,16 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
         try {
             const r = await ops.lancarVoto(item.id, unidade.unitId, opcao);
             const agora = new Date().toISOString();
-            setDados(d => {
+            // R7: o banco devolve o voto que foi substituído. Se era do PORTAL e não é o que a
+            // tela mostrou na confirmação (chegou depois da última leitura), o gestor fica sabendo.
+            const ant = r.anterior;
+            const conhecido = !!ant && atual?.origem === 'PORTAL' && atual.opcao === ant.opcao
+                && new Date(atual.votadoEm).getTime() === new Date(ant.votadoEm).getTime();
+            if (ant?.origem === 'PORTAL' && !conhecido) {
+                notify(`Esta unidade tinha votado ${rotuloOpcao(ant.opcao)} pelo portal em ${dataHoraBrasilia(ant.votadoEm)}; `
+                    + `o voto da sala (${rotuloOpcao(r.opcao)}) substituiu.`, 'warning');
+            }
+            costurar(d => {
                 if (!d) return d;
                 const outros = d.votos.filter(v => !(v.itemId === r.itemId && v.unitId === r.unitId));
                 return { ...d, votos: [...outros, {
@@ -401,7 +433,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
     // ── cabeçalho ────────────────────────────────────────────────────────
     const acao: { label: string; icone: React.ReactNode; onClick: () => void; desligada?: boolean } | null = !a ? null
         : a.status === 'RASCUNHO' ? { label: 'Convocar', icone: <Megaphone className="w-[15px] h-[15px]" />, onClick: abrirConvocar }
-            : a.status === 'CONVOCADA' ? { label: 'Instalar', icone: <Gavel className="w-[15px] h-[15px]" />, onClick: () => setGaveta('instalar') }
+            : a.status === 'CONVOCADA' ? { label: 'Instalar', icone: <Gavel className="w-[15px] h-[15px]" />, onClick: abrirInstalar }
                 : a.status === 'INSTALADA' ? { label: 'Encerrar', icone: <CheckSquare className="w-[15px] h-[15px]" />, onClick: () => setGaveta('encerrar') }
                     : a.status === 'ENCERRADA' && !a.ataDocumentoId && a.retrato
                         ? { label: ata.gerando ? 'Gerando a ata...' : 'Gerar ata novamente', icone: <FileText className="w-[15px] h-[15px]" />,
@@ -540,7 +572,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                     <PautaSecao assembleia={a} itens={itens} onVoltarParaEditar={onVoltar} />
                     {a.status !== 'RASCUNHO' && a.status !== 'CANCELADA' && (
                         <ApuracaoSecao assembleia={a} itens={itens} apuracao={apuracao} totalUnidades={unidades.length}
-                            erro={erroApuracao} atualizando={atualizandoApuracao} onAtualizar={() => atualizarApuracao(a)} />
+                            erro={erroApuracao} atualizando={atualizandoApuracao} onAtualizar={() => carregar(true)} />
                     )}
 
                     {/* Unidades — ÚLTIMA seção: é a única tabela da tela (§6.14). */}
@@ -557,7 +589,8 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                                     <p className="text-sm text-gray-700">
                                         {leituras === null
                                             ? 'Confirmações de leitura do aviso de convocação: não disponíveis agora.'
-                                            : `Aviso de convocação lido por ${leituras} ${leituras === 1 ? 'condômino' : 'condôminos'}`
+                                            // A leitura é registrada por PESSOA (condômino), não por unidade.
+                                            : `Aviso de convocação: ${leituras} ${leituras === 1 ? 'condômino que leu' : 'condôminos que leram'}`
                                                 + ' — só informação: a leitura não é exigida para instalar.'}
                                     </p>
                                 )}
@@ -570,7 +603,8 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                                     searchText={u => `${u.unidadeRotulo ?? ''} ${u.proprietarioNome ?? ''} ${u.procuradorNome ?? ''}`}
                                     searchPlaceholder="Buscar unidade, proprietário ou procurador..."
                                     // §9.1 — abrir a gaveta é a única ação da linha: o clique (ou Enter) na linha.
-                                    onRowClick={u => setUnidadeAberta(u.unitId)}
+                                    // Recarrega ao abrir: a confirmação da R7 precisa do voto do portal de agora.
+                                    onRowClick={u => { setUnidadeAberta(u.unitId); carregar(true); }}
                                     rowLabel={u => `${u.unidadeRotulo ?? 'Unidade'}: abrir presença e votos`}
                                     sortValue={(key, u) => key === 'unidade' ? u.unidadeRotulo
                                         : key === 'proprietario' ? u.proprietarioNome
@@ -618,7 +652,8 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
 
             {notification && (
                 <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
-                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                    notification.type === 'success' ? 'bg-emerald-600 text-white'
+                        : notification.type === 'warning' ? 'bg-amber-600 text-white' : 'bg-red-600 text-white'
                 }`}>
                     <AlertCircle className="w-4 h-4 shrink-0" />
                     {notification.message}

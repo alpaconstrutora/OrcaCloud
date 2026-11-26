@@ -209,6 +209,10 @@ describe('PDF do edital', () => {
         expect(t).toContain('Portal do Cliente › Condomínio › Assembleias');
         expect(t).toContain('CC art. 1.335, III');
         expect(t).toContain(`A administração do ${NOME}`);
+        // CC 1.354-A §1º: o edital diz que a assembleia é híbrida e que o voto pelo portal é presença.
+        expect(t).toContain(edital.forma);
+        expect(t).toContain('A assembleia será realizada de forma híbrida');
+        expect(t).toContain('a unidade que votar pelo portal conta como presente (CC art. 1.354-A)');
     });
 
     it('rodapé em todas as páginas', () => rodapeEmTodas(paginasEdital));

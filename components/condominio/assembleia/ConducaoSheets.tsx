@@ -168,16 +168,24 @@ export const InstalarSheet: React.FC<InstalarProps> = ({
     const [presidente, setPresidente] = React.useState('');
     const [secretario, setSecretario] = React.useState('');
     const [edital, setEdital] = React.useState(false);
+    // O gestor escolheu a convocação à mão? Senão, a escolhida acompanha o padrão — a tela
+    // recarrega ao abrir esta gaveta, e o voto do portal que chegou pode liberar a 1ª.
+    const escolheuAMao = React.useRef(false);
 
     // Cada abertura parte do que vale AGORA (o relógio e a presença andam).
     React.useEffect(() => {
         if (!open) return;
+        escolheuAMao.current = false;
         setConvocacao(padrao);
         setPresidente(a.presidenteNome ?? '');
         setSecretario(a.secretarioNome ?? '');
         setEdital(false);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
+
+    React.useEffect(() => {
+        if (open && !escolheuAMao.current) setConvocacao(padrao);
+    }, [open, padrao]);
 
     const escolhida = convocacao === 1 && motivo1 ? null : convocacao === 2 && motivo2 ? null : convocacao;
     const motivo = !escolhida
@@ -213,7 +221,7 @@ export const InstalarSheet: React.FC<InstalarProps> = ({
                             <div key={o.n} className="space-y-1">
                                 <label className={`flex items-center gap-2 text-sm text-gray-900 ${o.motivo ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}>
                                     <input type="radio" name="instalar-convocacao" checked={escolhida === o.n}
-                                        disabled={!!o.motivo} onChange={() => setConvocacao(o.n)}
+                                        disabled={!!o.motivo} onChange={() => { escolheuAMao.current = true; setConvocacao(o.n); }}
                                         className="w-4 h-4 border-gray-300 text-blue-600 focus:ring-blue-500" />
                                     {o.rotulo}{o.em ? ` — marcada para ${dataHoraBrasilia(o.em)}` : ''}
                                 </label>
@@ -247,7 +255,7 @@ export const InstalarSheet: React.FC<InstalarProps> = ({
                     </label>
                     <p className="text-xs text-gray-500 pl-6">
                         Fica gravado com o seu nome e a data, e sai na ata.
-                        {leituras !== null && ` O aviso de convocação foi lido por ${leituras} ${leituras === 1 ? 'condômino' : 'condôminos'} — só informação: leitura não é exigida.`}
+                        {leituras !== null && ` Aviso de convocação: ${leituras} ${leituras === 1 ? 'condômino que leu' : 'condôminos que leram'} — só informação: leitura não é exigida.`}
                     </p>
                 </section>
                 <Erro texto={erro} />

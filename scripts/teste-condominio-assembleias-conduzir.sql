@@ -170,8 +170,10 @@ BEGIN
         'fixture: orgs A e B, membro m da B, não-membro n');
 
     -- Condomínio da org A operado pela org B (fn_org_do_condominio = B).
-    INSERT INTO public.empreendimentos (organization_id, condominio_org_id, name, condominio_cnpj)
-    VALUES (org_a, org_b, 'Teste assembleias A2 (ROLLBACK)', '12.345.678/0001-90') RETURNING id INTO e;
+    -- Razão social ≠ nome: o edital usa a razão social, e a ata tem de sair com o MESMO nome.
+    INSERT INTO public.empreendimentos (organization_id, condominio_org_id, name, condominio_cnpj, condominio_razao_social)
+    VALUES (org_a, org_b, 'Teste assembleias A2 (ROLLBACK)', '12.345.678/0001-90', 'Condomínio Residencial Teste A2')
+    RETURNING id INTO e;
     INSERT INTO public.empreendimentos (organization_id, condominio_org_id, name)
     VALUES (org_a, org_b, 'Outro condomínio A2 (ROLLBACK)') RETURNING id INTO e2;
     INSERT INTO public.empreendimento_towers (empreendimento_id, name) VALUES (e, 'Torre T') RETURNING id INTO t;
@@ -576,6 +578,8 @@ BEGIN
                         AND (ret -> 'cabecalho' ->> 'convocacao')::int = 1
                         AND ret -> 'cabecalho' ->> 'observacaoGeral' = 'Sem mais assuntos.'
                         AND ret -> 'cabecalho' ->> 'condominioCnpj' = '12.345.678/0001-90'
+                        -- nome do edital (razão social, senão o nome) congelado no retrato
+                        AND ret -> 'cabecalho' ->> 'condominio' = 'Condomínio Residencial Teste A2'
                         AND ret -> 'cabecalho' -> 'instaladaPor' ->> 'id' = m::text
                         AND ret -> 'cabecalho' -> 'instaladaPor' ->> 'papel' = 'GESTOR'
                         AND (ret -> 'cabecalho' -> 'instaladaPor' ->> 'em')::timestamptz

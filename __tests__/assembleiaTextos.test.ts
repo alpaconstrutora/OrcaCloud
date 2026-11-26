@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import {
     ASSUNTOS_COMUNS, ROTULO_OPCAO, ROTULO_QUORUM, REGRA_QUORUM, REGRA_IMPEDIMENTO, ROTULO_RESULTADO, ROTULO_STATUS,
     INSTRUCOES_VOTO, dataHoraBrasilia, percentualDoTotal, textoConvocacao, textoCancelamento,
-    montarEdital, montarAta,
+    montarEdital, montarAta, formaDaAssembleia,
 } from '../utils/assembleiaTextos';
 import type { Assembleia, ItemAssembleia, Retrato } from '../services/condominioAssembleiaService';
 
@@ -212,6 +212,23 @@ describe('textoConvocacao', () => {
             + 'equipamento ou de conexão dos condôminos (CC art. 1.354-A §2º).');
     });
 
+    // CC 1.354-A §1º: o instrumento de convocação diz que a assembleia é (também)
+    // eletrônica; e R6: o voto pelo portal conta como presença.
+    it('diz a forma da assembleia: híbrida, com transmissão e voto pelo portal (CC art. 1.354-A)', () => {
+        expect(t).toContain(
+            'A assembleia será realizada de forma híbrida: presencial no local indicado e eletrônica, com '
+            + 'transmissão pelo link e voto pelo Portal do Cliente; a unidade que votar pelo portal conta como '
+            + 'presente (CC art. 1.354-A).');
+    });
+
+    it('sem link, a forma não fala em transmissão', () => {
+        const s = textoConvocacao(assembleia({ linkTransmissao: null }), itens, 'X');
+        expect(s).toContain(
+            'A assembleia será realizada de forma híbrida: presencial no local indicado e eletrônica, com '
+            + 'voto pelo Portal do Cliente; a unidade que votar pelo portal conta como presente (CC art. 1.354-A).');
+        expect(s).not.toContain('transmissão');
+    });
+
     it('nunca imprime "null"', () => {
         const s = textoConvocacao(assembleia({ local: null, linkTransmissao: null }), itens, 'X');
         expect(s).not.toContain('null');
@@ -252,6 +269,23 @@ describe('montarEdital', () => {
     it('instruções do voto pelo portal', () => {
         expect(e.instrucoes).toBe(INSTRUCOES_VOTO);
     });
+
+    it('diz a forma da assembleia (CC art. 1.354-A §1º), a mesma frase do aviso', () => {
+        expect(e.forma).toBe(formaDaAssembleia(assembleia()));
+        expect(e.forma).toContain('forma híbrida');
+        expect(e.forma).toContain('transmissão pelo link');
+        expect(e.forma).toContain('a unidade que votar pelo portal conta como presente');
+        expect(montarEdital(assembleia({ linkTransmissao: null }), itens, condominio).forma).not.toContain('transmissão');
+    });
+});
+
+describe('formaDaAssembleia', () => {
+    it('só transmissão (sem local): eletrônica, sem "presencial no local indicado"', () => {
+        const f = formaDaAssembleia(assembleia({ local: null }));
+        expect(f).toBe(
+            'A assembleia será realizada de forma eletrônica, com transmissão pelo link e voto pelo Portal do '
+            + 'Cliente; a unidade que votar pelo portal conta como presente (CC art. 1.354-A).');
+    });
 });
 
 // ─── ata ─────────────────────────────────────────────────────────────────────
@@ -265,6 +299,14 @@ describe('montarAta', () => {
         expect(ata.cabecalho.convocacao).toContain('2ª convocação');
         expect(ata.cabecalho.presidente).toBe('Carlos Lima');
         expect(ata.cabecalho.secretario).toBe('Daniela Souza');
+    });
+
+    // O nome do condomínio na ata é o CONGELADO no retrato (o mesmo do edital: razão
+    // social, senão o nome) — não o do cadastro de hoje.
+    it('condomínio da ata = o congelado no retrato, mesmo que o cadastro tenha mudado', () => {
+        const a2 = montarAta(retrato({ condominio: 'Condomínio Residencial Bella Vista' }), assembleia({ status: 'ENCERRADA' }),
+            { nome: 'Bella Vista (nome novo)', cnpj: null });
+        expect(a2.cabecalho.condominio).toBe('Condomínio Residencial Bella Vista');
     });
 
     it('lista presença com forma "procurador: <nome>", sala e portal', () => {

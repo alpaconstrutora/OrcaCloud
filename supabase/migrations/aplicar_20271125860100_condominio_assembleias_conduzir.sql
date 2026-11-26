@@ -867,7 +867,10 @@ BEGIN
         'cabecalho', jsonb_build_object(
             'assembleiaId', v_a.id,
             'empreendimentoId', v_a.empreendimento_id,
-            'condominio', (SELECT e.name FROM public.empreendimentos e WHERE e.id = v_a.empreendimento_id),
+            -- O MESMO nome do edital (razão social, senão o nome — AssembleiaDetalheView):
+            -- congelado aqui, a ata sai com ele mesmo que o cadastro mude depois.
+            'condominio', (SELECT coalesce(nullif(btrim(e.condominio_razao_social), ''), e.name)
+                             FROM public.empreendimentos e WHERE e.id = v_a.empreendimento_id),
             'condominioCnpj', (SELECT e.condominio_cnpj FROM public.empreendimentos e WHERE e.id = v_a.empreendimento_id),
             'tipo', v_a.tipo,
             'titulo', v_a.titulo,

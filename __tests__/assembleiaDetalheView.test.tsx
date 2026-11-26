@@ -234,6 +234,81 @@ describe('voto presencial', () => {
     });
 });
 
+// ─── tela velha durante a reunião: voto do portal que chegou depois ─────────
+// votos e unidades só vinham no carregamento: o voto do portal que chegou com a tela
+// aberta não contava em "presentes aptos" (1ª convocação desligada quando o banco
+// aceitaria) e a confirmação da R7 não aparecia — o voto do portal sumia calado.
+
+const votoDoPortal = (unitId: string, itemId = 'i1'): VotoAssembleia => ({
+    id: `vp-${unitId}-${itemId}`, assembleiaId: 'a1', itemId, unitId, opcao: 'SIM', origem: 'PORTAL',
+    clientId: `c-${unitId}`, lancadoPor: null, votadoEm: '2026-12-10T22:02:00Z',
+});
+
+describe('tela atualizada durante a reunião', () => {
+    it('abrir Instalar recarrega: voto do portal que chegou depois conta para a 1ª convocação', async () => {
+        // Ao abrir: 1 de 8 na sala (12,50%). Depois, 3 unidades votaram pelo portal: 4 de 8 = metade.
+        const ops = opsFalso(carregada(assembleia(), 1));
+        ops.carregar.mockResolvedValueOnce(carregada(assembleia(), 1))
+            .mockResolvedValue(carregada(assembleia(), 1, ['u2', 'u3', 'u4'].map(u => votoDoPortal(u))));
+        montar(ops);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Instalar' }));
+        const gaveta = await screen.findByRole('dialog', { name: 'Instalar assembleia' });
+        await waitFor(() => expect(within(gaveta).getByRole('radio', { name: /1ª convocação/ })).toBeEnabled());
+        expect(ops.carregar).toHaveBeenCalledTimes(2);
+        // E passa a ser a escolhida (o gestor ainda não tinha escolhido à mão).
+        expect(within(gaveta).getByRole('radio', { name: /1ª convocação/ })).toBeChecked();
+    });
+
+    it('abrir a unidade recarrega: voto do portal que chegou depois pede a confirmação da R7', async () => {
+        const instalada = assembleia({ status: 'INSTALADA', instaladaEm: agoraMais(-HORA / 4), instaladaConvocacao: 2 });
+        const ops = opsFalso(carregada(instalada, 4));
+        ops.carregar.mockResolvedValueOnce(carregada(instalada, 4))
+            .mockResolvedValue(carregada(instalada, 4, [votoDoPortal('u1')]));
+        montar(ops);
+
+        const gaveta = await abrirUnidade('Torre A — 101');
+        await waitFor(() => expect(ops.carregar).toHaveBeenCalledTimes(2));
+        const item = within(gaveta).getByRole('group', { name: 'Aprovar contas de 2026' });
+        await waitFor(() => expect(within(item).getByText(/portal/i)).toBeInTheDocument());
+        fireEvent.click(within(item).getByRole('button', { name: 'Não' }));
+        expect(await screen.findByText('Esta unidade votou Sim pelo portal em 10/12/2026 às 19:02. Substituir?'))
+            .toBeInTheDocument();
+    });
+
+    it('"Atualizar apuração" recarrega votos e unidades, não só a apuração', async () => {
+        const ops = opsFalso(carregada(assembleia(), 1));
+        ops.carregar.mockResolvedValueOnce(carregada(assembleia(), 1))
+            .mockResolvedValue(carregada(assembleia(), 1, [votoDoPortal('u2')]));
+        montar(ops);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Atualizar apuração' }));
+        await waitFor(() => expect(ops.carregar).toHaveBeenCalledTimes(2));
+        // A unidade 102 passa a constar como presente pelo portal na tabela.
+        expect(await screen.findByText('Pelo portal')).toBeInTheDocument();
+    });
+
+    it('voto da sala que substituiu um voto do portal que a tela não conhecia: avisa', async () => {
+        const instalada = assembleia({ status: 'INSTALADA', instaladaEm: agoraMais(-HORA / 4), instaladaConvocacao: 2 });
+        const ops = opsFalso(carregada(instalada, 4), {
+            // O voto do portal chegou entre o recarregar da gaveta e o clique.
+            lancarVoto: vi.fn(async (itemId: string, unitId: string, opcao: string) => ({
+                votoId: 'v-novo', itemId, unitId, opcao, origem: 'PRESENCIAL' as const,
+                anterior: { opcao: 'SIM', origem: 'PORTAL' as const, votadoEm: '2026-12-10T22:05:00Z', clientId: 'c1', lancadoPor: null },
+            })),
+        });
+        montar(ops);
+
+        const gaveta = await abrirUnidade('Torre A — 101');
+        const item = within(gaveta).getByRole('group', { name: 'Aprovar contas de 2026' });
+        fireEvent.click(within(item).getByRole('button', { name: 'Não' }));
+        await waitFor(() => expect(ops.lancarVoto).toHaveBeenCalledWith('i1', 'u1', 'NAO'));
+        expect(await screen.findByText(
+            'Esta unidade tinha votado Sim pelo portal em 10/12/2026 às 19:05; o voto da sala (Não) substituiu.'))
+            .toBeInTheDocument();
+    });
+});
+
 // ─── instalar (R4, R6) ───────────────────────────────────────────────────────
 
 describe('instalar', () => {
@@ -352,8 +427,10 @@ describe('convocar', () => {
         fireEvent.click(within(gaveta).getByRole('button', { name: 'Convocar e publicar aviso' }));
         await waitFor(() => expect(ops.convocar).toHaveBeenCalledWith('a1', textoConvocacao(rascunho, ITENS, NOME_CONDOMINIO)));
 
-        // Convocada: a seção Unidades diz quantos leram o aviso (só informação).
-        expect(await screen.findByText(/Aviso de convocação lido por 3 condôminos/)).toBeInTheDocument();
+        // Convocada: a seção Unidades diz quantos CONDÔMINOS (pessoas, não unidades) leram o
+        // aviso — a leitura é registrada por pessoa (só informação).
+        expect(await screen.findByText(/Aviso de convocação: 3 condôminos que leram — só informação: a leitura não é exigida para instalar/))
+            .toBeInTheDocument();
     });
 });
 
@@ -503,7 +580,8 @@ describe('outro gestor já agiu (HINT estado)', () => {
         fireEvent.click(within(gaveta).getByRole('button', { name: 'Instalar assembleia' }));
 
         expect(await within(gaveta).findByText('Esta assembleia já foi encerrada.')).toBeInTheDocument();
-        await waitFor(() => expect(ops.carregar).toHaveBeenCalledTimes(2));
+        // 1ª ao montar, 2ª ao abrir Instalar (tela atualizada), 3ª pelo HINT 'estado'.
+        await waitFor(() => expect(ops.carregar).toHaveBeenCalledTimes(3));
     });
 
     it('cancelar recarrega a tela', async () => {

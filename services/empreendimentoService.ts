@@ -701,6 +701,12 @@ export const empreendimentoService = {
         } catch { /* histórico não bloqueia a operação */ }
 
         const { error } = await supabase.from('empreendimentos').delete().eq('id', id);
+        // A cascata chega à trava da assembleia (_assembleia_trava, migration 860100):
+        // assembleia convocada/encerrada/cancelada é registro legal e não se exclui. A
+        // mensagem dela fala de UMA assembleia — aqui quem clicou excluiu o condomínio.
+        if (error && (error as { hint?: string }).hint === 'assembleia_travada') {
+            throw new Error('Este condomínio tem assembleias registradas e não pode ser excluído.');
+        }
         if (error) throw new Error(`Failed to delete empreendimento: ${error.message}`);
 
         await empreendimentoAuditService.record({

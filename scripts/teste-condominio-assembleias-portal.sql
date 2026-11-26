@@ -17,7 +17,8 @@
 --       sem cabeçalho nem nomes);
 --   • voto (client_portal_assembleia_votar, identidade SÓ pelo JWT):
 --       "proprietário logado vota"; "votar com token + sessão"; "anon não vota";
---       "membro não vota" (sem_direito_de_voto); "inquilino não vota"; "troca de voto até
+--       "membro não vota" (sem_direito_de_voto); "e-mail não confirmado não vota" (e
+--       sessaoValida = false); "inquilino não vota"; "troca de voto até
 --       encerrar vale o último"; "voto PORTAL depois de PRESENCIAL substitui";
 --       "impedida recebe unidade_impedida"; opção inválida; unidade fora; item inexistente;
 --   • condominio_assembleia_impedimentos: membro vê a impedida com o motivo; não-membro 42501;
@@ -120,7 +121,7 @@ $$;
 DO $$
 DECLARE
     org_a UUID; org_b UUID; m UUID; p UUID; q UUID;
-    email_p TEXT; email_q TEXT;
+    email_p TEXT; email_q TEXT; confirmado_p TIMESTAMPTZ;
     e UUID; t UUID; u1 UUID; u2 UUID; u3 UUID; u5 UUID;
     c_p UUID; c_inq UUID; c_outro UUID;
     r1 UUID; tx2 UUID; doc_ata UUID;
@@ -147,14 +148,14 @@ BEGIN
     SELECT o.id INTO org_a FROM public.organizations o WHERE o.id <> org_b ORDER BY o.id LIMIT 1;
     -- p e q: não são membros da org B, e-mails diferentes entre si e do de m.
     SELECT au.id, au.email INTO p, email_p FROM auth.users au
-     WHERE nullif(btrim(au.email), '') IS NOT NULL
+     WHERE nullif(btrim(au.email), '') IS NOT NULL AND au.email_confirmed_at IS NOT NULL
        AND lower(au.email) <> (SELECT lower(x.email) FROM auth.users x WHERE x.id = m)
        AND NOT EXISTS (SELECT 1 FROM public.organization_members om
                         WHERE om.organization_id = org_b
                           AND (om.user_id = au.id OR lower(om.email) = lower(au.email)))
      ORDER BY au.id LIMIT 1;
     SELECT au.id, au.email INTO q, email_q FROM auth.users au
-     WHERE nullif(btrim(au.email), '') IS NOT NULL AND au.id <> p
+     WHERE nullif(btrim(au.email), '') IS NOT NULL AND au.email_confirmed_at IS NOT NULL AND au.id <> p
        AND lower(au.email) NOT IN (lower(email_p), (SELECT lower(x.email) FROM auth.users x WHERE x.id = m))
        AND NOT EXISTS (SELECT 1 FROM public.organization_members om
                         WHERE om.organization_id = org_b
@@ -339,6 +340,17 @@ BEGIN
     PERFORM pg_temp.confere(v LIKE '42501|sem_direito_de_voto|%', 'proprietário não vota por unidade de outro (veio ' || v || ')');
     v := pg_temp.como(NULL, 'anon', format('SELECT public.client_portal_assembleia_votar(%L, %L, %L)::text', i1, u1, 'SIM'));
     PERFORM pg_temp.confere(v LIKE '42501|%', 'anon não vota (veio ' || v || ')');
+    -- E-mail não confirmado: o JWT traz o e-mail do cadastro, mas a conta nunca provou que
+    -- o e-mail é dela — não vota, e a leitura diz sessaoValida = false (a cédula desliga).
+    -- (Só dentro deste BEGIN … ROLLBACK; volta ao valor original logo depois.)
+    SELECT email_confirmed_at INTO confirmado_p FROM auth.users WHERE id = p;
+    UPDATE auth.users SET email_confirmed_at = NULL WHERE id = p;
+    v := pg_temp.vota(p, i1, u1, 'SIM');
+    PERFORM pg_temp.confere(v LIKE '42501|sem_direito_de_voto|%', 'e-mail não confirmado não vota (veio ' || v || ')');
+    res := pg_temp.le(p, c_p);
+    PERFORM pg_temp.confere(pg_temp.da(res, a) ->> 'sessaoValida' = 'false',
+        'e-mail não confirmado: sessaoValida = false (veio ' || res::text || ')');
+    UPDATE auth.users SET email_confirmed_at = confirmado_p WHERE id = p;
     PERFORM pg_temp.confere((SELECT opcao FROM public.condominio_assembleia_votos WHERE item_id = i1 AND unit_id = u1) = 'NAO',
         'recusas não mudaram o voto');
 

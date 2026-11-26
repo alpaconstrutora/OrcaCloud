@@ -4,7 +4,7 @@
 // 01/09/2026: o cabeçalho mostrava "010 - Galeria Altavista · 010 · quem é
 // dono…". Código repetido faz o leitor procurar uma diferença que não existe.
 import { describe, it, expect } from 'vitest';
-import { identidadeDoCondominio } from '../utils/condominioIdentidade';
+import { identidadeDoCondominio, nomeDoCondominioNosDocumentos } from '../utils/condominioIdentidade';
 
 describe('identidadeDoCondominio', () => {
     it('não repete o código que o nome já traz (o bug real)', () => {
@@ -46,5 +46,19 @@ describe('identidadeDoCondominio', () => {
         expect(() => identidadeDoCondominio('Ed. Solar', 'C+1')).not.toThrow();
         expect(identidadeDoCondominio('Ed. Solar', 'C+1')).toBe('Ed. Solar · C+1');
         expect(identidadeDoCondominio('Ed. Solar C+1', 'C+1')).toBe('Ed. Solar C+1');
+    });
+});
+
+// Edital e ata da assembleia: o MESMO nome nos dois (o banco congela este mesmo
+// critério no retrato do encerramento — _assembleia_encerrar, migration 860100).
+describe('nomeDoCondominioNosDocumentos', () => {
+    it('razão social quando há; senão o nome', () => {
+        expect(nomeDoCondominioNosDocumentos('Condomínio Residencial Bella Vista', '007 - Bella Vista'))
+            .toBe('Condomínio Residencial Bella Vista');
+        expect(nomeDoCondominioNosDocumentos(null, '007 - Bella Vista')).toBe('007 - Bella Vista');
+    });
+    it('razão social em branco cai no nome (como o nullif(btrim(...)) do banco)', () => {
+        expect(nomeDoCondominioNosDocumentos('   ', '007 - Bella Vista')).toBe('007 - Bella Vista');
+        expect(nomeDoCondominioNosDocumentos('', '007 - Bella Vista')).toBe('007 - Bella Vista');
     });
 });

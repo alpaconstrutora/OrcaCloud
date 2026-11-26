@@ -225,7 +225,8 @@ SET lock_timeout = '5s';
 -- • minhasUnidades = unidades DA ASSEMBLEIA (congeladas na convocação) em que ele é
 --   PROPRIETARIO vigente agora. impedida = motivo do banco (R3) ou null; null também na
 --   ENCERRADA (a votação acabou; o motivo deixaria a cédula com a razão errada).
--- • sessaoValida = há sessão e o e-mail do JWT é o do cadastro (o critério do voto).
+-- • sessaoValida = há sessão, o e-mail do JWT é o do cadastro e a conta confirmou o e-mail
+--   (o critério do voto).
 -- • Só os votos das minhas unidades; resultado = retrato -> 'itens' (sem cabeçalho).
 -- • total = soma das frações de TODAS as unidades participantes (R8) — o denominador do % do
 --   resultado, o mesmo da ata. Na ENCERRADA, o do retrato (congelado); antes, a soma de
@@ -238,8 +239,11 @@ CREATE OR REPLACE FUNCTION public.fn_assembleias_payload_for_client(p_client_id 
  SET search_path TO 'public', 'pg_temp'
 AS $$
     WITH sessao AS (
+        -- Mesmo critério do voto (client_portal_assembleia_votar), e-mail confirmado inclusive.
         SELECT coalesce((SELECT auth.uid() IS NOT NULL AND c.email IS NOT NULL
                                 AND lower(c.email) = lower(coalesce(auth.jwt() ->> 'email', ''))
+                                AND EXISTS (SELECT 1 FROM auth.users au
+                                             WHERE au.id = auth.uid() AND au.email_confirmed_at IS NOT NULL)
                            FROM public.clients c WHERE c.id = p_client_id), false) AS valida
     ),
     predios AS (
@@ -367,6 +371,9 @@ SET lock_timeout = '5s';
 
 -- R2: sem token e sem client_id. Vota quem está logado com o e-mail de um cadastro que é
 -- PROPRIETARIO vigente da unidade. Membro da org, inquilino, morador: 42501.
+-- O e-mail do JWT só vale se a conta da sessão CONFIRMOU o e-mail (auth.users
+-- .email_confirmed_at): sem isso, quem cria conta com o e-mail de um proprietário
+-- votaria por ele sem nunca ter provado que o e-mail é seu.
 CREATE OR REPLACE FUNCTION public.client_portal_assembleia_votar(p_item uuid, p_unit uuid, p_opcao text)
  RETURNS jsonb
  LANGUAGE plpgsql
@@ -378,7 +385,9 @@ DECLARE
     v_email  text := lower(coalesce(auth.jwt() ->> 'email', ''));
     v_client uuid;
 BEGIN
-    IF v_uid IS NOT NULL AND v_email <> '' THEN
+    IF v_uid IS NOT NULL AND v_email <> ''
+       AND EXISTS (SELECT 1 FROM auth.users au
+                    WHERE au.id = v_uid AND au.email_confirmed_at IS NOT NULL) THEN
         SELECT c.id INTO v_client
           FROM public.clients c
           JOIN public.unit_occupancies o ON o.client_id = c.id

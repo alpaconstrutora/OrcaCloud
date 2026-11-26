@@ -246,6 +246,9 @@ async function desenharEdital(m: EditalModelo) {
 
     paragrafo(p, m.abertura, { tamanho: 9.5 });
     p.y += 2;
+    // CC 1.354-A §1º: a forma (híbrida/eletrônica) e o voto pelo portal como presença.
+    paragrafo(p, m.forma, { tamanho: 9.5 });
+    p.y += 2;
 
     tituloDeSecao(p, 'Ordem do dia');
     if (m.pauta.length === 0) {

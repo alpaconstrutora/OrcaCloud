@@ -33,6 +33,13 @@
 --
 -- Idempotente (IF NOT EXISTS / CREATE OR REPLACE / DROP ... IF EXISTS).
 -- Aplicar com `npx supabase db query --linked -f` — nunca `db push`.
+--
+-- ⚠️ ORDEM OBRIGATÓRIA: 860000, 860100 e 860200 são UM conjunto — aplicar SEMPRE os
+-- três, juntos e nesta ordem (860000 → 860100 → 860200). Reaplicar só esta 860000
+-- depois da 860100 DESFAZ o que a 860100 ajustou por cima dela: os GRANTs por coluna
+-- (UPDATE de authenticated volta a valer para a tabela inteira), a mensagem da trava
+-- para o ON DELETE SET NULL e a proteção de created_by. Se precisar reaplicar esta,
+-- reaplique as três em sequência.
 -- =============================================================================
 
 SET lock_timeout = '5s';

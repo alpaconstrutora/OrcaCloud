@@ -118,6 +118,22 @@ export const INSTRUCOES_VOTO =
     + 'voto registrado da unidade, pelo portal ou na reunião. A administração não responde por falhas de '
     + 'equipamento ou de conexão dos condôminos (CC art. 1.354-A §2º).';
 
+/**
+ * A FORMA da assembleia (CC 1.354-A §1º: o instrumento de convocação diz que ela é
+ * eletrônica) e que o voto pelo portal é presença (R6). Vai no aviso e no edital — a
+ * mesma frase. Sem link, não fala em transmissão; só link (sem local), não é presencial.
+ */
+export function formaDaAssembleia(a: Pick<Assembleia, 'local' | 'linkTransmissao'>): string {
+    const temLocal = !!texto(a.local);
+    const temLink = !!texto(a.linkTransmissao);
+    const canais = temLink ? 'transmissão pelo link e voto pelo Portal do Cliente' : 'voto pelo Portal do Cliente';
+    const forma = !temLocal && temLink
+        ? `de forma eletrônica, com ${canais}`
+        : `de forma híbrida: presencial no local indicado e eletrônica, com ${canais}`;
+    return `A assembleia será realizada ${forma}; a unidade que votar pelo portal conta como presente `
+        + '(CC art. 1.354-A).';
+}
+
 /** Só no edital (documento formal): instalação e impedimento. */
 const REGRA_INSTALACAO =
     'Em 1ª convocação, a assembleia se instala com condôminos que representem pelo menos metade das '
@@ -188,6 +204,8 @@ export function textoConvocacao(a: Assembleia, itens: ItemAssembleia[], condomin
     if (texto(a.local)) linhas.push(`Local: ${texto(a.local)}`);
     if (texto(a.linkTransmissao)) linhas.push(`Transmissão: ${texto(a.linkTransmissao)}`);
     linhas.push('');
+    linhas.push(formaDaAssembleia(a));
+    linhas.push('');
     linhas.push('Pauta:');
     ordenar(itens).forEach((it, i) => {
         linhas.push(`${i + 1}. ${it.titulo}${texto(it.descricao) ? ` — ${texto(it.descricao)}` : ''}`);
@@ -235,6 +253,8 @@ export interface EditalModelo {
     local: string;
     link: string | null;
     abertura: string;
+    /** A forma da assembleia (CC 1.354-A §1º) — a mesma frase do aviso (formaDaAssembleia). */
+    forma: string;
     pauta: LinhaPauta[];
     instrucoes: string;
     regras: string[];
@@ -260,6 +280,7 @@ export function montarEdital(a: Assembleia, itens: ItemAssembleia[], condominio:
             `Ficam os condôminos do ${nome} convocados para a ${tipo} — ${a.titulo}, em 1ª convocação em `
             + `${dataHoraOu(a.primeiraConvocacaoEm)} e, não havendo quórum, em 2ª convocação em `
             + `${dataHoraOu(a.segundaConvocacaoEm)}, para deliberar sobre a seguinte ordem do dia:`,
+        forma: formaDaAssembleia(a),
         pauta: ordenar(itens).map((it, i) => ({
             numero: i + 1,
             titulo: it.titulo,

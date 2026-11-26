@@ -41,7 +41,8 @@ import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import {
   distanciaAoAnelComAresta,
   pontoAtrasDeMuro,
-  superficieDeProjeto,
+  cotaDentroDoPlato,
+  projetoForaDoPlato,
   type ParametrosDeTerraplenagem,
 } from './blueprintTopografiaAnalises';
 import {
@@ -204,8 +205,10 @@ export interface ProjecaoCorte {
   base: BaseElevacao;
   levelIds: ObjectId[];
   /** Os blocos de massa (29/10/2026), cortados e atrás — ver `comMassa` em `blueprintMassaNaVista`. */
-  massa?: BlocoNaVista[];
-  /** As unidades de cada pavimento da massa (09/11/2026), quando há os pavimentos das torres. */
+  massa?: BlocoNaVista[];
+
+  /** As unidades de cada pavimento da massa (09/11/2026), quando há os pavimentos das torres. */
+
   unidadesDaMassa?: UnidadeNaVista[];
   /** O que o plano atravessa. Pintado por CIMA da vista. */
   cortados: ItemCortado[];
@@ -717,6 +720,19 @@ function platoNoCorte(
   for (let u = uMin; u <= uMax; u += passo) {
     const p = pontoEmU(u);
     if (pointInPolygon(plato.anel, p)) {
+      // Modo do balanço (25/11/2026): onde o modo não deixa tocar (em CORTE, o terreno abaixo da cota; em ATERRO, o
+      // acima), não há platô — o chão natural fica, e a linha do projeto quebra ali (a mesma `cotaDentroDoPlato`).
+      if (plato.parametros) {
+        const t = terreno.cotaEmM(p);
+        if (t !== null && cotaDentroDoPlato(cotaDoPlatoEm(p), t, plato.parametros) === null) {
+          if (atual.length >= 2) pedacos.push(atual);
+          atual = [];
+          dentroAntes = false;
+          muroAntes = false;
+          uAnterior = u;
+          continue;
+        }
+      }
       if (!dentroAntes && muroAntes) {
         // Entrando no platô vindo de trás de um muro: a face do muro primeiro,
         // no MESMO u — é vertical, não uma rampa de um passo.
@@ -764,14 +780,13 @@ function platoNoCorte(
           empolamentoPct: 0,
           contracaoPct: 0,
         };
-        const cotaDaBorda = cotaDoPlatoEm(p);
-        const s = superficieDeProjeto(cotaDaBorda, proximidade.dMm, proximidade, parametros);
-        if (s.naVia) {
-          vTalude = vDe(cotaDaBorda);
+        // A decisão única de projeto (via, talude reto/suave, modo do balanço) — a mesma da conta e do 3D.
+        const r = projetoForaDoPlato(cotaDoPlatoEm(p), t, proximidade, parametros);
+        if (r?.via) {
+          vTalude = vDe(r.cotaM);
           naVia = true;
-        }
-        else if ((hc || plato.parametros) && t > s.corteM) vTalude = vDe(s.corteM);
-        else if ((ha || plato.parametros) && t < s.aterroM) vTalude = vDe(s.aterroM);
+        } else if (r && r.cotaM < t && (hc || plato.parametros)) vTalude = vDe(r.cotaM);
+        else if (r && r.cotaM > t && (ha || plato.parametros)) vTalude = vDe(r.cotaM);
       }
     }
     if (vTalude !== null) {

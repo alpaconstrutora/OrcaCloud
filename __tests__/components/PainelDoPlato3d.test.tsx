@@ -7,7 +7,7 @@
  * volumes em barra — os MESMOS números do selo do rodapé.
  */
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import PainelDoPlato3d, { PlatoNo3d, type DadosDoPainelDoPlato } from '../../components/blueprint/PainelDoPlato3d';
 
 const DADOS: DadosDoPainelDoPlato = {
@@ -121,6 +121,40 @@ describe('PainelDoPlato3d', () => {
     montar({}, { foraDoRelevo: true, aviso: 'O contorno não pode se cruzar.' });
     expect(screen.getByText(/fora do relevo/i)).toBeTruthy();
     expect(screen.getByText('O contorno não pode se cruzar.')).toBeTruthy();
+  });
+});
+
+describe('PainelDoPlato3d · balanço de massa e forma do talude (PR 2)', () => {
+  it('balanço: os 3 cartões; escolher Aterro chama onParametros', () => {
+    const p = montar();
+    const g = screen.getByRole('radiogroup', { name: 'Balanço de massa' });
+    expect(within(g).getByRole('radio', { name: 'Corte e aterro' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(within(g).getByRole('radio', { name: 'Aterro' }));
+    expect(p.onParametros).toHaveBeenCalledWith({ modoDoBalanco: 'ATERRO' });
+  });
+
+  it('em Corte (ou Aterro), o Equilíbrio fica desligado e diz por quê', () => {
+    montar({}, { modoDoBalanco: 'CORTE' });
+    const b = screen.getByRole('button', { name: 'Equilíbrio' });
+    expect(b).toBeDisabled();
+    expect(b.getAttribute('title')).toMatch(/só corta.*não se compensam/i);
+  });
+
+  it('talude Suave: a largura (m) no deslizante — grava ao soltar; o 1:h some', () => {
+    const p = montar({}, { formaDoTalude: 'SUAVE', larguraDoTaludeSuaveM: 5 });
+    expect(screen.queryByLabelText('Talude de corte 1:')).toBeNull();
+    const faixa = screen.getByLabelText('Largura do talude (m)') as HTMLInputElement;
+    expect(faixa.value).toBe('5');
+    fireEvent.change(faixa, { target: { value: '9.5' } });
+    expect(p.onParametros).not.toHaveBeenCalled();
+    fireEvent.pointerUp(faixa);
+    expect(p.onParametros).toHaveBeenCalledWith({ larguraDoTaludeSuaveM: 9.5 });
+  });
+
+  it('talude: escolher Suave chama onParametros', () => {
+    const p = montar();
+    fireEvent.click(within(screen.getByRole('radiogroup', { name: 'Forma do talude' })).getByRole('radio', { name: 'Suave' }));
+    expect(p.onParametros).toHaveBeenCalledWith({ formaDoTalude: 'SUAVE' });
   });
 });
 

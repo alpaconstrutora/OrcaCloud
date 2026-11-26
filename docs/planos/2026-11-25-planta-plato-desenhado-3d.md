@@ -247,7 +247,18 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
   - `PlatoNo3d`: o selo do rodapé saiu do viewer para cá; COMPACTO ganha o botão "Painel".
   - Preferência por usuário `vista3dPainelDoPlato` (COMPLETO | COMPACTO, padrão COMPLETO), também em Preferências.
   - Testes: painel 14 (RED → GREEN), catálogo 32, editor 287; portão `painel.mjs` ✅ e `plato.mjs` ✅.
-- [ ] PR 2: modo de balanço (Corte / Corte e aterro / Aterro) + talude Suave/Reto — conta, migration, painéis.
+- [x] **PR 2**: modo de balanço (Corte / Corte e aterro / Aterro) + talude Suave/Reto.
+  - Decisão única ponto a ponto: `projetoForaDoPlato` (via, muro, reto 1:h ou suave, modo) e `cotaDentroDoPlato` —
+    a conta, a superfície de projeto (3D) e o corte 2D usam as mesmas. Suave = smoothstep numa largura L em planta
+    (banquetas e talude por lado só no reto).
+  - Banco: `aplicar_20271125997500_terraplenagem_balanco_talude_suave.sql` (3 colunas anuláveis + CHECK; NULL = o de
+    sempre), aplicada pelo usuário; o serviço recua em 42703 por camada (sem as novas → só elas saem; sem
+    `anel_desenhado` → as duas camadas).
+  - Painéis: os mesmos cartões com ícone (`EscolhasDoPlato`) no painel Terreno e no card do 3D; Suave troca o 1:h
+    por um deslizante de largura; Corte/Aterro desligam o Equilíbrio dizendo por quê (texto comum).
+  - Testes: conta 9 (RED → GREEN), serviço 3, hook 2, painéis 4+3+4; 50 suítes antigas de terraplenagem/corte
+    911/911 (o caso de sempre não mudou); portão `painel.mjs` ✅ (Corte: aterro 0 e corte 71.256 m³; Suave: corte
+    71.256 → 45.675 m³).
 - [x] Revisão contra o reel — pedido 25/11: *"assista este video novamente e teste so o app reproduz fielmente a
   facilidade de uso e funcionalidades"*. Teste logado no "Estudp Relevo" (estado guardado antes e devolvido pelo banco
   depois, com ok do usuário). Faltavam 5 coisas; aprovadas 1, 2, 3 e 5 (*"Sim"*), e o item 4 ficou como está

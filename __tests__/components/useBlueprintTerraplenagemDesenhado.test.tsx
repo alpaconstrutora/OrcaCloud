@@ -148,6 +148,19 @@ describe('useBlueprintTerraplenagem — o platô desenhado', () => {
     expect(salvos.at(-1)).toMatchObject({ base: 'LOTE', anel_desenhado: null });
   });
 
+  it('balanço de massa e talude suave (25/11/2026): vão às colunas e voltam do banco', async () => {
+    const { result } = await montar();
+    act(() => result.current.setParametros({ modoDoBalanco: 'CORTE', formaDoTalude: 'SUAVE', larguraDoTaludeSuaveM: 7 }));
+    await esperarGravacao();
+    expect(salvos.at(-1)).toMatchObject({ modo_do_balanco: 'CORTE', forma_do_talude: 'SUAVE', largura_do_talude_suave_m: 7 });
+  });
+
+  it('linha do banco com as colunas novas → parâmetros; sem elas → o de sempre', async () => {
+    get.mockImplementation(async () => ({ base: 'LOTE', modo_do_balanco: 'ATERRO', forma_do_talude: 'SUAVE', largura_do_talude_suave_m: '4.5' }));
+    const { result } = await montar();
+    expect(result.current.parametros).toMatchObject({ modoDoBalanco: 'ATERRO', formaDoTalude: 'SUAVE', larguraDoTaludeSuaveM: 4.5 });
+  });
+
   it('banco sem a coluna (migration não aplicada): o get falha → persistência indisponível, e o desenho fica na tela', async () => {
     get.mockImplementation(async () => {
       throw new Error('column blueprint_study_terraplenagem.anel_desenhado does not exist');

@@ -43,7 +43,7 @@ import { faixasPorAndar, lerNumeroInicial, unidadesDosPavimentos as montarUnidad
 import { compararNaOrdemDoEmpreendimento, moverNaOrdem, ordemPorNumero, type NovaOrdem } from '../../utils/empreendimentoOrdemDasUnidades';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { AgruparControles } from '../ui/Agrupamento';
-import { useResizableColumns } from '../ui/TableUtils';
+import { useResizableColumns, useTableColumns, ColumnConfigButton, type ColumnConfig } from '../ui/TableUtils';
 import { useAgrupamento } from '../../hooks/useAgrupamento';
 import { CHAVE_VAZIA } from '../../utils/agruparLinhas';
 import { OPCOES_AGRUPAR_UNIDADE, agruparUnidades, type CampoAgruparUnidade } from '../../utils/unidadesGrupos';
@@ -94,6 +94,14 @@ const COL_WIDTHS: Record<string, number> = {
   actions: 190,
 };
 const COLUNAS_DE_DADO = Object.keys(COL_WIDTHS).filter(k => k !== 'actions');
+/** As colunas do seletor (a engrenagem), na ordem da tabela. Unidade fica sempre — não entra na lista do seletor. */
+const COLUNAS_DA_TABELA: ColumnConfig[] = [
+  { key: 'name', label: 'Unidade' }, { key: 'floor', label: 'Pavimento' }, { key: 'floor_tipo', label: 'Tipo do pavimento' },
+  { key: 'elevacao', label: 'Elevação' }, { key: 'typology', label: 'Tipologia' }, { key: 'private_area', label: 'Área privativa (m²)' },
+  { key: 'common_area', label: 'Área comum (m²)' }, { key: 'bedrooms', label: 'Dormitórios' }, { key: 'bathrooms', label: 'Banheiros' },
+  { key: 'suites', label: 'Suítes' }, { key: 'parking_spaces', label: 'Vagas' }, { key: 'position_type', label: 'Posição' },
+  { key: 'view_type', label: 'Vista' }, { key: 'sun_orientation', label: 'Orientação' },
+];
 const LARGURA_CHECKBOX = 40;
 
 // ── Props ────────────────────────────────────────────────────────────────────
@@ -147,7 +155,22 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
 
   // Colunas redimensionáveis + ajuste ao conteúdo (§6.1/§6.1.2), larguras guardadas no navegador.
   const cols = useResizableColumns(COL_WIDTHS, 'empreendimentoUnidadesColWidths');
-  const larguraDaTabela = LARGURA_CHECKBOX + COLUNAS_DE_DADO.reduce((s, k) => s + cols.getWidth(k), 0) + cols.getWidth('actions');
+  // Seletor de colunas (25/11/2026, "adicione seletor de colunas"): Unidade e Ações ficam sempre.
+  const colunas = useTableColumns(COLUNAS_DA_TABELA, 'empreendimentoUnidadesColunas');
+  const vis = (k: string) => k === 'name' || colunas.visibleColumns.includes(k);
+  const colunasVisiveis = COLUNAS_DE_DADO.filter(vis);
+  const larguraDaTabela = LARGURA_CHECKBOX + colunasVisiveis.reduce((s, k) => s + cols.getWidth(k), 0) + cols.getWidth('actions');
+  // Cabeçalho do grupo e total: o rótulo ocupa as colunas até a 1ª área visível; cada área fica na coluna dela
+  // (Priv. e Comum são vizinhas); o resto, mais o espaçador (e Ações, no total), numa célula só.
+  const posicoesDasAreas = (['private_area', 'common_area'] as const).map(k => colunasVisiveis.indexOf(k)).filter(i => i >= 0);
+  const spanDoRotulo = posicoesDasAreas.length ? Math.min(...posicoesDasAreas) : colunasVisiveis.length;
+  const celulasDasAreas = (priv: number, comum: number, cls: string, alemDoEspacador = 0) => (
+    <>
+      {vis('private_area') && <td className={`${cls} text-blue-600`}>{priv > 0 ? `${fmtArea(priv)} m²` : '—'}</td>}
+      {vis('common_area') && <td className={`${cls} text-teal-600`}>{comum > 0 ? `${fmtArea(comum)} m²` : '—'}</td>}
+      <td colSpan={colunasVisiveis.length - spanDoRotulo - posicoesDasAreas.length + 1 + alemDoEspacador} />
+    </>
+  );
 
   // Seleção em lote
   const [selected, setSelected] = React.useState<Set<string>>(new Set());
@@ -648,16 +671,26 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
             onAlternarTodos={agrupamento.alternarTodos}
             title="Agrupar as unidades"
           />
-          {/* Ajustar largura ao conteúdo (§6.1.2): sob comando, nunca automático. Mesmo desenho do recolher todos. */}
-          <button
-            type="button"
-            onClick={() => cols.autoFit()}
-            title="Ajustar largura das colunas ao conteúdo"
-            aria-label="Ajustar largura das colunas ao conteúdo"
-            className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-600 rounded-[6px] hover:bg-gray-50 transition-all active:scale-95"
-          >
-            <MoveHorizontal className="w-4 h-4" />
-          </button>
+          {/* Configurar as colunas (§5.1): quais aparecem + ajustar a largura ao conteúdo (§6.1.2, sob comando). */}
+          <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-200 gap-1 shrink-0">
+            <ColumnConfigButton
+              columns={COLUNAS_DA_TABELA.filter(c => c.key !== 'name')}
+              visibleColumns={colunas.visibleColumns}
+              showColumnConfig={colunas.showColumnConfig}
+              onToggleShow={() => colunas.setShowColumnConfig(!colunas.showColumnConfig)}
+              onToggleColumn={colunas.toggleColumn}
+              onReset={colunas.resetColumns}
+            />
+            <button
+              type="button"
+              onClick={() => cols.autoFit()}
+              title="Ajustar largura das colunas ao conteúdo"
+              aria-label="Ajustar largura das colunas ao conteúdo"
+              className="p-1.5 rounded-[6px] text-gray-500 hover:text-gray-700 transition-all"
+            >
+              <MoveHorizontal className="w-4 h-4" />
+            </button>
+          </div>
         </div>
         <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
           <div className="overflow-x-auto">
@@ -665,7 +698,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
           <table ref={cols.tableRef} className="text-left text-xs" style={{ tableLayout: 'fixed', width: larguraDaTabela, minWidth: '100%' }}>
             <colgroup>
               <col style={{ width: `${LARGURA_CHECKBOX}px` }} />
-              {COLUNAS_DE_DADO.map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
+              {colunasVisiveis.map(k => <col key={k} data-col-key={k} style={{ width: `${cols.getWidth(k)}px` }} />)}
               {/* espaçador ANTES de Ações (§6.1.1): absorve a folga e Ações fica na borda direita */}
               <col />
               <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />
@@ -683,20 +716,20 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                   />
                 </th>
                 <SortableHeader col="name" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="name" />}>Unidade</SortableHeader>
-                <SortableHeader col="floor" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="floor" />}>Pav.</SortableHeader>
-                <SortableHeader col="floor_tipo" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="floor_tipo" />}>Tipo Pav.</SortableHeader>
+                {vis('floor') && <SortableHeader col="floor" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="floor" />}>Pav.</SortableHeader>}
+                {vis('floor_tipo') && <SortableHeader col="floor_tipo" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="floor_tipo" />}>Tipo Pav.</SortableHeader>}
                 {/* Elevação do andar da unidade (28/10/2026): a mesma da seção Pavimentos — calculada ou digitada. */}
-                <th className="relative overflow-hidden py-2.5 px-4 text-table-header font-semibold text-gray-500 whitespace-nowrap">Elevação<cols.ResizeHandle colKey="elevacao" /></th>
-                <SortableHeader col="typology" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="typology" />}>Tipologia</SortableHeader>
-                <SortableHeader col="private_area" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="private_area" />}>Priv. m²</SortableHeader>
-                <SortableHeader col="common_area" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="common_area" />}>Comum m²</SortableHeader>
-                <SortableHeader col="bedrooms" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="bedrooms" />}>Dormitórios</SortableHeader>
-                <SortableHeader col="bathrooms" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="bathrooms" />}>Banheiros</SortableHeader>
-                <SortableHeader col="suites" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="suites" />}>Suítes</SortableHeader>
-                <SortableHeader col="parking_spaces" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="parking_spaces" />}>Vagas</SortableHeader>
-                <SortableHeader col="position_type" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="position_type" />}>Posição</SortableHeader>
-                <SortableHeader col="view_type" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="view_type" />}>Vista</SortableHeader>
-                <SortableHeader col="sun_orientation" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="sun_orientation" />}>Orient.</SortableHeader>
+                {vis('elevacao') && <th className="relative overflow-hidden py-2.5 px-4 text-table-header font-semibold text-gray-500 whitespace-nowrap">Elevação<cols.ResizeHandle colKey="elevacao" /></th>}
+                {vis('typology') && <SortableHeader col="typology" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="typology" />}>Tipologia</SortableHeader>}
+                {vis('private_area') && <SortableHeader col="private_area" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="private_area" />}>Priv. m²</SortableHeader>}
+                {vis('common_area') && <SortableHeader col="common_area" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="common_area" />}>Comum m²</SortableHeader>}
+                {vis('bedrooms') && <SortableHeader col="bedrooms" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="bedrooms" />}>Dormitórios</SortableHeader>}
+                {vis('bathrooms') && <SortableHeader col="bathrooms" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="bathrooms" />}>Banheiros</SortableHeader>}
+                {vis('suites') && <SortableHeader col="suites" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="suites" />}>Suítes</SortableHeader>}
+                {vis('parking_spaces') && <SortableHeader col="parking_spaces" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="parking_spaces" />}>Vagas</SortableHeader>}
+                {vis('position_type') && <SortableHeader col="position_type" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="position_type" />}>Posição</SortableHeader>}
+                {vis('view_type') && <SortableHeader col="view_type" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="view_type" />}>Vista</SortableHeader>}
+                {vis('sun_orientation') && <SortableHeader col="sun_orientation" current={sortCol} dir={sortDir} onSort={handleSort} resize={<cols.ResizeHandle colKey="sun_orientation" />}>Orient.</SortableHeader>}
                 <th aria-hidden="true"></th>
                 <th className="py-2.5 px-4 text-center text-table-header font-semibold text-gray-500">Ações</th>
               </tr>
@@ -722,7 +755,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                         />
                       </td>
                       {/* Label + toggle */}
-                      <td colSpan={5} className="py-2 px-3">
+                      <td colSpan={spanDoRotulo} className="py-2 px-3">
                         <button
                           type="button"
                           onClick={() => agrupamento.alternar(group.key)}
@@ -758,14 +791,8 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                           })()}
                         </button>
                       </td>
-                      {/* Somatório de áreas por pavimento */}
-                      <td className="py-2.5 px-4 text-sm font-medium text-blue-600">
-                        {group.totalPriv > 0 ? `${fmtArea(group.totalPriv)} m²` : '—'}
-                      </td>
-                      <td className="py-2.5 px-4 text-sm font-medium text-teal-600">
-                        {group.totalComum > 0 ? `${fmtArea(group.totalComum)} m²` : '—'}
-                      </td>
-                      <td colSpan={8} />
+                      {/* Somatório de áreas do grupo, na coluna de cada área (se visível) */}
+                      {celulasDasAreas(group.totalPriv, group.totalComum, 'py-2.5 px-4 text-sm font-medium')}
                       <td className="py-2 px-4 text-center">
                         {/* A ordem é do pavimento: agrupado por outro campo, o botão não se aplica. */}
                         {porPavimento && (() => {
@@ -812,41 +839,51 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                           {isEditing ? (
                             <>
                               <td className="py-2 px-3"><input className={editCls} value={editForm.name} onChange={e => setEditForm(p => ({ ...p, name: e.target.value }))} autoFocus /></td>
-                              <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.floor} onChange={e => setEditForm(p => ({ ...p, floor: e.target.value }))} /></td>
+                              {vis('floor') && <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.floor} onChange={e => setEditForm(p => ({ ...p, floor: e.target.value }))} /></td>}
+                              {vis('floor_tipo') && (
                               <td className="py-2 px-3">
                                 <select value={editForm.floor_tipo} onChange={e => setEditForm(p => ({ ...p, floor_tipo: e.target.value as FloorTipo | '' }))} className={editCls}>
                                   <option value="">— Tipo</option>
                                   {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
                                 </select>
                               </td>
+                              )}
+                              {vis('elevacao') && (
                               <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap" title="A elevação é do pavimento — mude na seção Pavimentos">
                                 {textoDaElevacao(editForm.floor === '' ? null : Number(editForm.floor))}
                               </td>
-                              <td className="py-2 px-3"><input className={editCls} value={editForm.typology} onChange={e => setEditForm(p => ({ ...p, typology: e.target.value }))} /></td>
-                              <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.private_area} onChange={e => setEditForm(p => ({ ...p, private_area: e.target.value }))} /></td>
-                              <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.common_area} onChange={e => setEditForm(p => ({ ...p, common_area: e.target.value }))} /></td>
-                              <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.bedrooms} onChange={e => setEditForm(p => ({ ...p, bedrooms: e.target.value }))} /></td>
-                              <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.bathrooms} onChange={e => setEditForm(p => ({ ...p, bathrooms: e.target.value }))} /></td>
-                              <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.suites} onChange={e => setEditForm(p => ({ ...p, suites: e.target.value }))} /></td>
-                              <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.parking_spaces} onChange={e => setEditForm(p => ({ ...p, parking_spaces: e.target.value }))} /></td>
+                              )}
+                              {vis('typology') && <td className="py-2 px-3"><input className={editCls} value={editForm.typology} onChange={e => setEditForm(p => ({ ...p, typology: e.target.value }))} /></td>}
+                              {vis('private_area') && <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.private_area} onChange={e => setEditForm(p => ({ ...p, private_area: e.target.value }))} /></td>}
+                              {vis('common_area') && <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.common_area} onChange={e => setEditForm(p => ({ ...p, common_area: e.target.value }))} /></td>}
+                              {vis('bedrooms') && <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.bedrooms} onChange={e => setEditForm(p => ({ ...p, bedrooms: e.target.value }))} /></td>}
+                              {vis('bathrooms') && <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.bathrooms} onChange={e => setEditForm(p => ({ ...p, bathrooms: e.target.value }))} /></td>}
+                              {vis('suites') && <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.suites} onChange={e => setEditForm(p => ({ ...p, suites: e.target.value }))} /></td>}
+                              {vis('parking_spaces') && <td className="py-2 px-3"><input className={editCls} type="number" value={editForm.parking_spaces} onChange={e => setEditForm(p => ({ ...p, parking_spaces: e.target.value }))} /></td>}
+                              {vis('position_type') && (
                               <td className="py-2 px-3">
                                 <select value={editForm.position_type} onChange={e => setEditForm(p => ({ ...p, position_type: e.target.value as UnitPositionType | '' }))} className={editCls}>
                                   <option value="">—</option>
                                   {(Object.keys(POSITION_LABEL) as UnitPositionType[]).map(t => <option key={t} value={t}>{POSITION_LABEL[t]}</option>)}
                                 </select>
                               </td>
+                              )}
+                              {vis('view_type') && (
                               <td className="py-2 px-3">
                                 <select value={editForm.view_type} onChange={e => setEditForm(p => ({ ...p, view_type: e.target.value as UnitViewType | '' }))} className={editCls}>
                                   <option value="">—</option>
                                   {(Object.keys(VIEW_LABEL) as UnitViewType[]).map(t => <option key={t} value={t}>{VIEW_LABEL[t]}</option>)}
                                 </select>
                               </td>
+                              )}
+                              {vis('sun_orientation') && (
                               <td className="py-2 px-3">
                                 <select value={editForm.sun_orientation} onChange={e => setEditForm(p => ({ ...p, sun_orientation: e.target.value as UnitSunOrientation | '' }))} className={editCls}>
                                   <option value="">—</option>
                                   {(Object.keys(SUN_LABEL) as UnitSunOrientation[]).map(t => <option key={t} value={t}>{SUN_LABEL[t]}</option>)}
                                 </select>
                               </td>
+                              )}
                               <td aria-hidden="true"></td>
                               <td className="py-2 px-3 text-center">
                                 <div className="flex items-center justify-center gap-1">
@@ -858,37 +895,47 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                           ) : (
                             <>
                               <td className="py-2.5 px-4 text-sm font-normal text-gray-700">{u.name}</td>
-                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.floor ?? '—'}</td>
+                              {vis('floor') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.floor ?? '—'}</td>}
+                              {vis('floor_tipo') && (
                               <td className="py-2.5 px-4 text-sm font-normal">
                                 {u.floor_tipo
                                   ? <span className={textColor(FLOOR_TIPO_STYLE[u.floor_tipo])}>{FLOOR_TIPO_LABEL[u.floor_tipo]}</span>
                                   : <span className="text-gray-300">—</span>}
                               </td>
+                              )}
+                              {vis('elevacao') && (
                               <td className="py-2.5 px-4 text-sm font-normal text-gray-600 whitespace-nowrap" data-testid="elevacao-da-unidade">
                                 {textoDaElevacao(u.floor ?? null)}
                               </td>
-                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.typology || '—'}</td>
-                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
-                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.common_area != null ? `${u.common_area} m²` : '—'}</td>
-                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bedrooms ?? '—'}</td>
-                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bathrooms ?? '—'}</td>
-                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.suites ?? '—'}</td>
-                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.parking_spaces ?? '—'}</td>
+                              )}
+                              {vis('typology') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.typology || '—'}</td>}
+                              {vis('private_area') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>}
+                              {vis('common_area') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.common_area != null ? `${u.common_area} m²` : '—'}</td>}
+                              {vis('bedrooms') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bedrooms ?? '—'}</td>}
+                              {vis('bathrooms') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bathrooms ?? '—'}</td>}
+                              {vis('suites') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.suites ?? '—'}</td>}
+                              {vis('parking_spaces') && <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.parking_spaces ?? '—'}</td>}
+                              {vis('position_type') && (
                               <td className="py-2.5 px-4 text-sm font-normal">
                                 {u.position_type
                                   ? <span className={textColor(POSITION_STYLE[u.position_type])}>{POSITION_LABEL[u.position_type]}</span>
                                   : <span className="text-gray-300">—</span>}
                               </td>
+                              )}
+                              {vis('view_type') && (
                               <td className="py-2.5 px-4 text-sm font-normal">
                                 {u.view_type
                                   ? <span className={textColor(VIEW_STYLE[u.view_type])}>{VIEW_LABEL[u.view_type]}</span>
                                   : <span className="text-gray-300">—</span>}
                               </td>
+                              )}
+                              {vis('sun_orientation') && (
                               <td className="py-2.5 px-4 text-sm font-normal">
                                 {u.sun_orientation
                                   ? <span className={textColor(SUN_STYLE[u.sun_orientation])}>{SUN_LABEL[u.sun_orientation]}</span>
                                   : <span className="text-gray-300">—</span>}
                               </td>
+                              )}
                               <td aria-hidden="true"></td>
                               <td className="py-2.5 px-4 text-center">
                                 <div className="flex items-center justify-center gap-1">
@@ -928,12 +975,10 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
             <tfoot>
               <tr className="border-t-2 border-gray-200 bg-gray-50/70 text-sm text-gray-700">
                 <td className="py-2.5 px-3" />
-                <td className="py-2.5 px-4" colSpan={5}>
+                <td className="py-2.5 px-4" colSpan={spanDoRotulo}>
                   <span className="text-xs font-semibold text-gray-500">Total ({units.length} unid.)</span>
                 </td>
-                <td className="py-2.5 px-4 font-medium text-blue-600">{totalPriv > 0 ? `${fmtArea(totalPriv)} m²` : '—'}</td>
-                <td className="py-2.5 px-4 font-medium text-teal-600">{totalComum > 0 ? `${fmtArea(totalComum)} m²` : '—'}</td>
-                <td colSpan={9} />
+                {celulasDasAreas(totalPriv, totalComum, 'py-2.5 px-4 font-medium', 1)}
               </tr>
             </tfoot>
           </table>

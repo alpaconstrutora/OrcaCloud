@@ -6211,6 +6211,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         aviso: avisoDoPlato,
         taludeCorteH: terraplenagem.parametros.taludeCorteH,
         taludeAterroH: terraplenagem.parametros.taludeAterroH,
+        modoDoBalanco: terraplenagem.parametros.modoDoBalanco,
+        formaDoTalude: terraplenagem.parametros.formaDoTalude,
+        larguraDoTaludeSuaveM: terraplenagem.parametros.larguraDoTaludeSuaveM,
       },
       onCotaPrevia: (cotaM: number) => {
         setAvisoDoPlato(null);

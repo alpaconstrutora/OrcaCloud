@@ -14,7 +14,7 @@ import { applyBatch, applyCommand, emptyModel, point, type Command } from '../..
 import { amostradorDaMalha, gerarCurvas, malhaDaGrade, planejarGrade } from '../../../utils/blueprintTopografia';
 import { corArcoIrisDaCota } from '../../../utils/blueprintTopografiaAnalises';
 import { curvasDeNivel3d } from '../../../utils/blueprintTopografia3dExtras';
-import { gradeDeProjeto, PARAMETROS_PADRAO, saldoDoPlato, terraplenagemComTalude } from '../../../utils/blueprintTopografiaAnalises';
+import { gradeDeProjeto, PARAMETROS_PADRAO, saldoDoPlato, terraplenagemComTalude, type ParametrosDeTerraplenagem } from '../../../utils/blueprintTopografiaAnalises';
 import { anelValido } from '../../../utils/blueprintPlato3d';
 import { planoDaTexturaDoMapa } from '../../../utils/blueprintMapaDeFundo';
 import { ATRIBUICAO_OSM, caixaGeoDaGrade, prediosNoDesenho } from '../../../utils/blueprintMaqueteOsm';
@@ -157,17 +157,19 @@ function useEntorno(): { entorno: Entorno | null; notas: string[] } {
 function usePlatoEditavel() {
   const [plato, setPlato] = useState<{ anel: { x: number; y: number }[]; cotaM: number } | null>(ANEL_DO_PLATO ? { anel: ANEL_DO_PLATO, cotaM: COTA_DO_PLATO } : null);
   const [previa, setPrevia] = useState<{ anel: { x: number; y: number }[]; cotaM: number } | null>(null);
+  // PR 2 (25/11/2026): os parâmetros mudam pelo painel (balanço de massa, forma do talude).
+  const [parametros, setParametros] = useState<ParametrosDeTerraplenagem>(PARAMETROS_PADRAO);
   const atual = previa ?? plato;
   const derivado = React.useMemo(() => {
     if (!atual || !q.get('editar')) return null;
-    const g = gradeDeProjeto(gradeNatural, atual.anel, atual.cotaM, PARAMETROS_PADRAO, null);
+    const g = gradeDeProjeto(gradeNatural, atual.anel, atual.cotaM, parametros, null);
     return {
       relevo: malhaDaGrade(g, COTA_ZERO),
       curvas: curvasDeNivel3d(gerarCurvas(g, CANTOS, 1), COTA_ZERO, null, { altura: amostradorDaMalha(g), passoMm: g.espacamentoMm / 8 }),
-      saldo: saldoDoPlato(terraplenagemComTalude(gradeNatural, atual.anel, atual.cotaM, PARAMETROS_PADRAO, null), gradeNatural, atual.anel, false),
-      chave: `${atual.anel.map((p) => `${p.x},${p.y}`).join(';')}:${atual.cotaM}`,
+      saldo: saldoDoPlato(terraplenagemComTalude(gradeNatural, atual.anel, atual.cotaM, parametros, null), gradeNatural, atual.anel, false),
+      chave: `${atual.anel.map((p) => `${p.x},${p.y}`).join(';')}:${atual.cotaM}:${JSON.stringify(parametros)}`,
     };
-  }, [atual]);
+  }, [atual, parametros]);
   window.__plato3d = plato;
   const editavel =
     atual && q.get('editar')
@@ -190,12 +192,12 @@ function usePlatoEditavel() {
           },
         }
       : null;
-  return { derivado, editavel };
+  return { derivado, editavel, parametros, setParametros };
 }
 
 function Cena3d() {
   const { entorno, notas } = useEntorno();
-  const { derivado, editavel } = usePlatoEditavel();
+  const { derivado, editavel, parametros, setParametros } = usePlatoEditavel();
   // O painel do platô (25/11/2026): completo à esquerda ou compacto no rodapé; o modo vai para o espião do portão.
   const [modoDoPainel, setModoDoPainel] = useState<'COMPLETO' | 'COMPACTO'>('COMPLETO');
   (window as unknown as { __modoDoPainel?: string }).__modoDoPainel = modoDoPainel;
@@ -217,13 +219,16 @@ function Cena3d() {
             saldoM3: saldoAtual.saldoM3,
             foraDoRelevo: saldoAtual.foraDoRelevo,
             aviso: null,
-            taludeCorteH: 1.5,
-            taludeAterroH: 1.5,
+            taludeCorteH: parametros.taludeCorteH,
+            taludeAterroH: parametros.taludeAterroH,
+            modoDoBalanco: parametros.modoDoBalanco,
+            formaDoTalude: parametros.formaDoTalude,
+            larguraDoTaludeSuaveM: parametros.larguraDoTaludeSuaveM,
           },
           onCotaPrevia: (cotaM: number) => editavel.onPrevia({ anel: editavel.anel, cotaM }),
           onCota: (cotaM: number) => editavel.onConfirmar({ anel: editavel.anel, cotaM }),
           onEquilibrio: () => {},
-          onParametros: () => {},
+          onParametros: (patch: Partial<ParametrosDeTerraplenagem>) => setParametros((p) => ({ ...p, ...patch })),
           onExcluir: () => {},
         }
       : null;

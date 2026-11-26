@@ -91,6 +91,40 @@ if (!(await page.getByTestId('painel-do-plato').isVisible())) falhas.push('"Pain
   await page.screenshot({ path: `${saida}/painel-depois-da-cota.png`, clip: caixa });
 }
 
+// 5. (PR 2) balanço de massa: Corte → aterro 0; volta a Corte e aterro → aterro de novo.
+// Antes, a cota volta a 866 m pelo campo (o passo 3 subiu o platô acima de tudo: corte e aterro já eram 0).
+{
+  const campo = page.getByLabel('Cota do platô (m)');
+  await campo.fill('866');
+  await campo.press('Enter');
+  await page.waitForTimeout(900);
+  const aterroNivelando = await page.getByTestId('painel-plato-aterro').textContent();
+  if (/^0 m³$/.test(aterroNivelando.trim())) falhas.push('a 866 m o caso não tem aterro — o passo 5 não provaria nada');
+  const grupo = page.getByRole('radiogroup', { name: 'Balanço de massa' });
+  await grupo.getByRole('radio', { name: 'Corte', exact: true }).click();
+  await page.waitForTimeout(900);
+  const aterro = await page.getByTestId('painel-plato-aterro').textContent();
+  const corte = await page.getByTestId('painel-plato-corte').textContent();
+  console.log(JSON.stringify({ modoCorte: { corte, aterro } }));
+  if (!/^0 m³$/.test(aterro.trim())) falhas.push(`Corte: o aterro devia ser 0 (veio ${aterro})`);
+  if (/^0 m³$/.test(corte.trim())) falhas.push('Corte: o corte não podia ser 0 a 866 m');
+  if (!(await page.getByRole('button', { name: 'Equilíbrio' }).isDisabled())) falhas.push('Corte: o Equilíbrio devia estar desligado');
+  await page.screenshot({ path: `${saida}/painel-modo-corte.png`, clip: caixa });
+  await grupo.getByRole('radio', { name: 'Corte e aterro' }).click();
+  await page.waitForTimeout(600);
+}
+// 6. (PR 2) talude Suave: os volumes mudam e aparece a largura.
+{
+  const antes = await page.getByTestId('painel-plato-corte').textContent();
+  await page.getByRole('radiogroup', { name: 'Forma do talude' }).getByRole('radio', { name: 'Suave' }).click();
+  await page.waitForTimeout(900);
+  const depois = await page.getByTestId('painel-plato-corte').textContent();
+  console.log(JSON.stringify({ suave: { antes, depois } }));
+  if (!(await page.getByLabel('Largura do talude (m)').isVisible())) falhas.push('Suave: a largura do talude não apareceu');
+  if (depois === antes) falhas.push('Suave: os volumes não mudaram');
+  await page.screenshot({ path: `${saida}/painel-suave.png`, clip: caixa });
+}
+
 if (erros.length) falhas.push(...erros);
 console.log(falhas.length ? `❌ ${falhas.join(' · ')}` : '✅ card à esquerda; Recolher/Painel trocam o modo; deslizante grava uma vez e refaz os volumes; câmera parada');
 await browser.close();

@@ -10,6 +10,13 @@
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { PanelLeftClose, PanelLeftOpen, Trash2 } from 'lucide-react';
+import {
+  LARGURA_DO_TALUDE_SUAVE_PADRAO_M,
+  type FormaDoTalude,
+  type ModoDoBalanco,
+  type ParametrosDeTerraplenagem,
+} from '../../utils/blueprintTopografiaAnalises';
+import { EscolhaDaFormaDoTalude, EscolhaDoBalanco } from './EscolhasDoPlato';
 
 export type BaseDoPlatoNoPainel = 'ENVELOPE' | 'LOTE' | 'CASA' | 'DESENHADO';
 
@@ -30,6 +37,21 @@ export interface DadosDoPainelDoPlato {
   aviso: string | null;
   taludeCorteH: number;
   taludeAterroH: number;
+  /** PR 2 (25/11/2026): balanço de massa e forma do talude (ausentes = nivela, talude reto). */
+  modoDoBalanco?: ModoDoBalanco;
+  formaDoTalude?: FormaDoTalude;
+  larguraDoTaludeSuaveM?: number;
+}
+
+/** Os parâmetros que o painel muda (os mesmos de `ParametrosDeTerraplenagem`). */
+export type PatchDoPainelDoPlato = Partial<
+  Pick<ParametrosDeTerraplenagem, 'taludeCorteH' | 'taludeAterroH' | 'modoDoBalanco' | 'formaDoTalude' | 'larguraDoTaludeSuaveM'>
+>;
+
+/** Por que o Equilíbrio não vale fora de "Corte e aterro" (o mesmo texto no selo e no painel). */
+export function motivoSemEquilibrio(modo: ModoDoBalanco | undefined): string | null {
+  if (!modo || modo === 'CORTE_E_ATERRO') return null;
+  return `${modo === 'CORTE' ? 'Só corta' : 'Só aterra'}: corte e aterro não se compensam — não há cota de equilíbrio. Fixe a cota.`;
 }
 
 const ROTULO_DA_BASE: Record<BaseDoPlatoNoPainel, string> = {
@@ -87,7 +109,7 @@ export default function PainelDoPlato3d({
   /** Soltou o deslizante ou confirmou o campo: grava uma vez. */
   onCota: (cotaM: number) => void;
   onEquilibrio: () => void;
-  onParametros: (patch: { taludeCorteH?: number; taludeAterroH?: number }) => void;
+  onParametros: (patch: PatchDoPainelDoPlato) => void;
   /** Volta ao selo compacto do rodapé (a escolha fica guardada por usuário). */
   onRecolher: () => void;
   /** Só com o platô desenhado (pede confirmação no editor). */
@@ -126,6 +148,17 @@ export default function PainelDoPlato3d({
     setTexto(null);
     if (Number.isFinite(v)) onCota(Math.round(v * 100) / 100);
   };
+
+  // A largura do talude suave: o deslizante mostra ao vivo e grava ao soltar (a conta é cheia — não há prévia).
+  const [larguraRascunho, setLarguraRascunho] = useState<number | null>(null);
+  const largura = larguraRascunho ?? dados.larguraDoTaludeSuaveM ?? LARGURA_DO_TALUDE_SUAVE_PADRAO_M;
+  const gravarLargura = () => {
+    if (larguraRascunho === null) return;
+    onParametros({ larguraDoTaludeSuaveM: larguraRascunho });
+    setLarguraRascunho(null);
+  };
+  const semEquilibrio = motivoSemEquilibrio(dados.modoDoBalanco);
+  const suave = dados.formaDoTalude === 'SUAVE';
 
   const totalM3 = dados.corteM3 + dados.aterroM3;
   const pctCorte = totalM3 > 0 ? (dados.corteM3 / totalM3) * 100 : 50;
@@ -200,8 +233,8 @@ export default function PainelDoPlato3d({
           <button
             type="button"
             onClick={onEquilibrio}
-            disabled={dados.equilibrio}
-            title={dados.equilibrio ? 'O platô já está na cota de equilíbrio (corte ≈ aterro)' : 'Volta a cota do platô à de equilíbrio (corte ≈ aterro)'}
+            disabled={dados.equilibrio || !!semEquilibrio}
+            title={semEquilibrio ?? (dados.equilibrio ? 'O platô já está na cota de equilíbrio (corte ≈ aterro)' : 'Volta a cota do platô à de equilíbrio (corte ≈ aterro)')}
             className="h-7 rounded-[6px] border border-slate-300 bg-white px-2 text-[11px] text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Equilíbrio
@@ -209,12 +242,45 @@ export default function PainelDoPlato3d({
         </div>
       </div>
 
-      {/* Talude — o "Side slope" do reel (hoje: reto, por inclinação 1:h). */}
+      {/* Talude — o "Side slope" do reel: Suave (largura em planta) ou Reto (1:h). */}
       <div className="mt-3 border-t border-slate-100 pt-3">
         <p className="text-[11px] font-medium text-slate-700">Talude</p>
-        <div className="mt-1.5 grid grid-cols-2 gap-2">
-          <CampoDeTalude rotulo="Talude de corte 1:" valor={dados.taludeCorteH} idPct="painel-plato-talude-corte-pct" onMudar={(v) => onParametros({ taludeCorteH: v })} />
-          <CampoDeTalude rotulo="Talude de aterro 1:" valor={dados.taludeAterroH} idPct="painel-plato-talude-aterro-pct" onMudar={(v) => onParametros({ taludeAterroH: v })} />
+        <div className="mt-1.5">
+          <EscolhaDaFormaDoTalude valor={dados.formaDoTalude ?? 'RETO'} onEscolher={(v) => onParametros({ formaDoTalude: v })} />
+        </div>
+        {suave ? (
+          <div className="mt-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-semibold text-slate-500">Largura do talude</span>
+              <span className="tabular-nums text-slate-800">{largura.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} m</span>
+            </div>
+            <input
+              type="range"
+              aria-label="Largura do talude (m)"
+              min={1}
+              max={30}
+              step={0.5}
+              value={largura}
+              onChange={(e) => setLarguraRascunho(Number(e.target.value))}
+              onPointerUp={gravarLargura}
+              onKeyUp={gravarLargura}
+              onBlur={gravarLargura}
+              className="mt-1 w-full accent-blue-600"
+            />
+          </div>
+        ) : (
+          <div className="mt-2 grid grid-cols-2 gap-2">
+            <CampoDeTalude rotulo="Talude de corte 1:" valor={dados.taludeCorteH} idPct="painel-plato-talude-corte-pct" onMudar={(v) => onParametros({ taludeCorteH: v })} />
+            <CampoDeTalude rotulo="Talude de aterro 1:" valor={dados.taludeAterroH} idPct="painel-plato-talude-aterro-pct" onMudar={(v) => onParametros({ taludeAterroH: v })} />
+          </div>
+        )}
+      </div>
+
+      {/* Balanço de massa — o "Mass balance" do reel. */}
+      <div className="mt-3 border-t border-slate-100 pt-3">
+        <p className="text-[11px] font-medium text-slate-700">Balanço de massa</p>
+        <div className="mt-1.5">
+          <EscolhaDoBalanco valor={dados.modoDoBalanco ?? 'CORTE_E_ATERRO'} onEscolher={(v) => onParametros({ modoDoBalanco: v })} />
         </div>
       </div>
 
@@ -282,7 +348,7 @@ export interface PainelDoPlatoNo3d {
   onCotaPrevia: (cotaM: number) => void;
   onCota: (cotaM: number) => void;
   onEquilibrio: () => void;
-  onParametros: (patch: { taludeCorteH?: number; taludeAterroH?: number }) => void;
+  onParametros: (patch: PatchDoPainelDoPlato) => void;
   onExcluir?: () => void;
 }
 
@@ -336,8 +402,11 @@ export function PlatoNo3d({
           <button
             type="button"
             onClick={onEquilibrio}
-            disabled={saldo.equilibrio}
-            title={saldo.equilibrio ? 'O platô já está na cota de equilíbrio (corte ≈ aterro)' : 'Volta a cota do platô à de equilíbrio (corte ≈ aterro)'}
+            disabled={saldo.equilibrio || !!motivoSemEquilibrio(painel?.dados.modoDoBalanco)}
+            title={
+              motivoSemEquilibrio(painel?.dados.modoDoBalanco) ??
+              (saldo.equilibrio ? 'O platô já está na cota de equilíbrio (corte ≈ aterro)' : 'Volta a cota do platô à de equilíbrio (corte ≈ aterro)')
+            }
             className="rounded-md border border-slate-300 bg-white px-1.5 py-0.5 text-[11px] text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
           >
             Equilíbrio

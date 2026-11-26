@@ -218,7 +218,7 @@ function LinhaDoMapa({ fonte, estado, motivoDesligado, onOlho, onMeioTom }: { fo
     <li data-mapa={fonte} data-estado={estado} className="flex items-center gap-1 py-0.5 pl-6 pr-1">
       <span
         className={`min-w-0 flex-1 truncate text-sm ${TEXTO_DO_ESTADO[estado]} ${motivoDesligado ? 'opacity-60' : ''}`}
-        title={`${rotulo} — ${ROTULO_DO_ESTADO[estado]}. ${ajuda}${motivoDesligado ? ` ${motivoDesligado}` : ''}`}
+        title={`${rotulo} — ${ROTULO_DO_ESTADO[estado]}. ${ajuda} Um mapa de fundo por vez: ligar este desliga os outros.${motivoDesligado ? ` ${motivoDesligado}` : ''}`}
       >
         {rotulo}
       </span>

@@ -250,10 +250,12 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
                                     notify={notify} onAlterado={recarregar} />
                             )}
                             {aba === 'financeiro' && (
-                                // Operar exige LOGIN (`onLogout` só existe na entrada por e-mail e senha)
-                                // ou a administradora pelo app; decidir rateio é só do síndico.
+                                // Operar exige LOGIN — a mesma regra de Assembleias: entrada por e-mail e
+                                // senha (`onLogout`) OU sessão ativa com o portal aberto pelo link do convite
+                                // — ou a administradora pelo app; decidir rateio é só do síndico. Quem decide
+                                // se a sessão é DO síndico é o banco (fn_sindico_operar).
                                 <PainelFinanceiroDoSindico identidade={identidade} dados={dados} comoAdministradora={comoAdministradora}
-                                    logado={!!onLogout || comoAdministradora} notify={notify} onAlteradoPortal={recarregar}
+                                    logado={!!onLogout || sessaoAtiva || comoAdministradora} notify={notify} onAlteradoPortal={recarregar}
                                     resolverComprovantes={resolverComprovantes} />
                             )}
                             {(aba === 'documentos' || aba === 'manutencao' || aba === 'equipamentos') && (

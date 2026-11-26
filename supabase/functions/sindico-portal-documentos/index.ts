@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { exigirUsuario, respostaDeErro } from "../_shared/auth.ts"
-import { BUCKET, caminhoDoDocumento, validarPedido } from "./regras.ts"
+import { BUCKET, caminhoDoDocumento, descricaoDoEnvio, recusaPeloTamanhoDoCorpo, validarPedido } from "./regras.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -25,7 +25,8 @@ const json = (body: unknown, status = 200) =>
 // (RLS por organização) do app não servem para ele.
 //
 // FormData: token?, clientId?, empreendimentoId, categoria (ATA | OUTRO), titulo,
-//           visivelPortal ('true' | 'false'), file. Resposta: { documentoId }.
+//           visivelPortal ('true' | 'false'; a procuração OUTRO é sempre false), file.
+//           Resposta: { documentoId }. Corpo acima de 51 MB → 413 antes de ler.
 //
 // Autorização (REGRA #7, pergunta 3 — no CÓDIGO, nunca só no gateway):
 //  1. exigirUsuario: JWT de USUÁRIO de verdade (a chave anon sozinha → 401);
@@ -47,6 +48,10 @@ serve(async (req: Request) => {
 
     const ehMultipart = (req.headers.get('content-type') || '').toLowerCase().startsWith('multipart/form-data');
     if (!ehMultipart) return json({ error: 'Envie o arquivo como multipart/form-data.' }, 400);
+
+    // Corpo acima de 50 MB + 1 MB: recusa ANTES de ler (formData() carregaria tudo na memória).
+    const grande = recusaPeloTamanhoDoCorpo(req.headers.get('content-length'));
+    if (grande) return json({ error: grande.erro }, grande.status);
 
     let form: FormData;
     try {
@@ -90,6 +95,11 @@ serve(async (req: Request) => {
     const admin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { autoRefreshToken: false, persistSession: false },
     });
+    // Autor do envio (descrição do documento): o nome do cadastro do síndico que o banco
+    // resolveu. Best-effort — sem o nome, a frase sai sem ele.
+    const { data: cadastro } = typeof auth.clientId === 'string'
+        ? await admin.from('clients').select('name').eq('id', auth.clientId).maybeSingle()
+        : { data: null };
     const caminho = caminhoDoDocumento(auth.org, pedido.empreendimentoId, crypto.randomUUID(), arquivo!.name);
 
     const { error: erroUpload } = await admin.storage.from(BUCKET)
@@ -111,6 +121,7 @@ serve(async (req: Request) => {
         file_name: arquivo!.name,
         mime_type: pedido.tipo,
         file_size: arquivo!.size,
+        descricao: descricaoDoEnvio(cadastro?.name ?? null, new Date()),
         visivel_portal: pedido.visivelPortal,
     }).select('id').single();
     if (erroLinha || !linha?.id) {

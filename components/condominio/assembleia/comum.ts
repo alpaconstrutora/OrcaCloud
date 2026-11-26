@@ -50,7 +50,8 @@ export interface Acento {
     areaDeTexto: string;
     /** Rádio e caixa de marcar (cor da marcação e do foco). */
     marca: string;
-    /** Link de texto. */
+    /** Link de texto: só a COR. Sublinhado e `break-all` ficam em quem usa (o link de transmissão
+     *  tem os dois; no botão "Voltar para editar" `break-all` cortaria palavra no meio). */
     link: string;
     /** Botão de escolha marcado (a cédula da sala). */
     escolhida: string;

@@ -22,6 +22,25 @@ export const MIME_PERMITIDOS: readonly string[] = [
 /** Igual a `TAMANHO_MAXIMO_BYTES` do serviço (= file_size_limit do bucket): 50 MB. */
 export const TAMANHO_MAXIMO_BYTES = 52428800;
 
+/**
+ * Teto do CORPO do pedido: o arquivo (50 MB) + 1 MB de folga para os campos e as fronteiras
+ * do multipart. Conferido pelo `Content-Length` ANTES de `req.formData()` — sem isso a
+ * função leria o corpo inteiro na memória só para recusar depois (M2 da revisão final da B).
+ */
+export const TETO_DO_CORPO_BYTES = TAMANHO_MAXIMO_BYTES + 1048576;
+
+/**
+ * 413 quando o `Content-Length` declarado passa do teto do corpo; `null` = segue. Sem o
+ * cabeçalho (ou com lixo nele) segue como antes: o tamanho do arquivo é conferido em
+ * `validarPedido`, e o gateway da Supabase tem o próprio teto.
+ */
+export function recusaPeloTamanhoDoCorpo(contentLength: string | null): { status: 413; erro: string } | null {
+    const bruto = (contentLength ?? '').trim();
+    if (!/^\d+$/.test(bruto)) return null;
+    if (Number(bruto) <= TETO_DO_CORPO_BYTES) return null;
+    return { status: 413, erro: `O arquivo passa do limite de ${TAMANHO_MAXIMO_BYTES / 1048576} MB.` };
+}
+
 /** O síndico só envia a ATA da assembleia e a procuração (OUTRO). */
 export const CATEGORIAS = ['ATA', 'OUTRO'] as const;
 export type CategoriaDoSindico = typeof CATEGORIAS[number];
@@ -111,10 +130,28 @@ export function validarPedido(campos: CamposRecebidos, arquivo: ArquivoRecebido 
             empreendimentoId,
             categoria: categoria as CategoriaDoSindico,
             titulo,
-            visivelPortal: booleano(campos.visivelPortal),
+            // Procuração (OUTRO) NUNCA vai ao portal: tem dados pessoais do proprietário e de
+            // quem o representa. O servidor força — o pedido não decide (M1 da revisão final da B).
+            visivelPortal: categoria === 'OUTRO' ? false : booleano(campos.visivelPortal),
             tipo,
         },
     };
+}
+
+/**
+ * Texto de `condominio_documentos.descricao`: quem enviou e quando, para a administradora
+ * saber que o documento veio do síndico pelo portal (M3 da revisão final da B). A hora é a
+ * de Brasília (America/Sao_Paulo), nunca a do servidor (UTC).
+ */
+export function descricaoDoEnvio(nomeDoSindico: string | null | undefined, quando: Date): string {
+    const partes = new Intl.DateTimeFormat('pt-BR', {
+        timeZone: 'America/Sao_Paulo', day: '2-digit', month: '2-digit', year: 'numeric',
+        hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
+    }).formatToParts(quando);
+    const p = (tipo: string) => partes.find(x => x.type === tipo)?.value ?? '';
+    const nome = (nomeDoSindico ?? '').trim();
+    const quem = nome ? `Enviado pelo síndico ${nome}` : 'Enviado pelo síndico';
+    return `${quem} pelo Portal do Síndico em ${p('day')}/${p('month')}/${p('year')} às ${p('hour')}:${p('minute')} (horário de Brasília)`;
 }
 
 /** `Convencao 2026.PDF` → `pdf`. Vazio quando o nome não tem extensão (= `extensaoDe` do serviço). */

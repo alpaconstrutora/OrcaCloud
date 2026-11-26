@@ -12,6 +12,9 @@ import {
     validarPedido,
     extensaoDe,
     caminhoDoDocumento,
+    TETO_DO_CORPO_BYTES,
+    recusaPeloTamanhoDoCorpo,
+    descricaoDoEnvio,
 } from '../supabase/functions/sindico-portal-documentos/regras';
 import {
     BUCKET_DOCUMENTOS,
@@ -82,6 +85,62 @@ describe('sindico-portal-documentos · validarPedido', () => {
     });
 });
 
+describe('sindico-portal-documentos · procuração nunca no portal (M1)', () => {
+    it('OUTRO com visivelPortal=true: o servidor força false (o pedido não decide)', () => {
+        for (const v of ['true', '1', 'on', 'sim']) {
+            const r = validarPedido({ ...campos, categoria: 'OUTRO', visivelPortal: v }, pdf);
+            expect(r.ok && r.pedido.visivelPortal).toBe(false);
+        }
+        expect(validarPedido({ ...campos, categoria: 'outro', visivelPortal: 'true' }, pdf))
+            .toMatchObject({ ok: true, pedido: { categoria: 'OUTRO', visivelPortal: false } });
+    });
+
+    it('a ATA continua obedecendo o pedido', () => {
+        const ligada = validarPedido({ ...campos, categoria: 'ATA', visivelPortal: 'true' }, pdf);
+        const desligada = validarPedido({ ...campos, categoria: 'ATA', visivelPortal: 'false' }, pdf);
+        expect(ligada.ok && ligada.pedido.visivelPortal).toBe(true);
+        expect(desligada.ok && desligada.pedido.visivelPortal).toBe(false);
+    });
+});
+
+describe('sindico-portal-documentos · corpo grande recusado antes de ler (M2)', () => {
+    it('teto do corpo = 50 MB do arquivo + 1 MB de folga (campos e fronteiras do multipart)', () => {
+        expect(TETO_DO_CORPO_BYTES).toBe(TAMANHO_MAXIMO_BYTES + 1048576);
+    });
+
+    it('Content-Length acima do teto → 413 em português', () => {
+        const r = recusaPeloTamanhoDoCorpo(String(TETO_DO_CORPO_BYTES + 1));
+        expect(r).toEqual({ status: 413, erro: 'O arquivo passa do limite de 50 MB.' });
+    });
+
+    it('no teto, abaixo dele, sem Content-Length ou com lixo: segue (o arquivo é conferido depois)', () => {
+        expect(recusaPeloTamanhoDoCorpo(String(TETO_DO_CORPO_BYTES))).toBeNull();
+        expect(recusaPeloTamanhoDoCorpo('1024')).toBeNull();
+        expect(recusaPeloTamanhoDoCorpo(null)).toBeNull();
+        expect(recusaPeloTamanhoDoCorpo('')).toBeNull();
+        expect(recusaPeloTamanhoDoCorpo('abc')).toBeNull();
+    });
+});
+
+describe('sindico-portal-documentos · autor do envio na descrição (M3)', () => {
+    it('nome do síndico e data/hora de Brasília (22:05 UTC = 19:05 do mesmo dia)', () => {
+        expect(descricaoDoEnvio('  Maria Síndica ', new Date('2026-12-10T22:05:00Z')))
+            .toBe('Enviado pelo síndico Maria Síndica pelo Portal do Síndico em 10/12/2026 às 19:05 (horário de Brasília)');
+    });
+
+    it('fuso: 02:30 UTC do dia 11 ainda é 23:30 do dia 10 em Brasília', () => {
+        expect(descricaoDoEnvio('Maria', new Date('2026-12-11T02:30:00Z')))
+            .toBe('Enviado pelo síndico Maria pelo Portal do Síndico em 10/12/2026 às 23:30 (horário de Brasília)');
+    });
+
+    it('sem nome (cadastro não achado): a frase continua sem buraco', () => {
+        expect(descricaoDoEnvio(null, new Date('2026-12-10T22:05:00Z')))
+            .toBe('Enviado pelo síndico pelo Portal do Síndico em 10/12/2026 às 19:05 (horário de Brasília)');
+        expect(descricaoDoEnvio('   ', new Date('2026-12-10T22:05:00Z')))
+            .toBe('Enviado pelo síndico pelo Portal do Síndico em 10/12/2026 às 19:05 (horário de Brasília)');
+    });
+});
+
 describe('sindico-portal-documentos · caminho no bucket', () => {
     it('{org}/{empreendimento}/{uuid}.{ext}, como uploadDocumento', () => {
         expect(caminhoDoDocumento(ORG, EMP, ID, 'Procuração 101.PDF')).toBe(`${ORG}/${EMP}/${ID}.pdf`);
@@ -110,6 +169,17 @@ describe('sindico-portal-documentos · o portão está no código (REGRA #7, per
         expect(admin).toBeGreaterThan(rpc);
         expect(upload).toBeGreaterThan(admin);
         expect(insert).toBeGreaterThan(upload);
+    });
+
+    it('o Content-Length é conferido ANTES de ler o formulário (M2)', () => {
+        const recusa = fonte.indexOf("recusaPeloTamanhoDoCorpo(req.headers.get('content-length'))");
+        expect(recusa).toBeGreaterThan(0);
+        expect(fonte.indexOf('await req.formData()')).toBeGreaterThan(recusa);
+    });
+
+    it('a linha grava o autor na descrição, com o nome do cadastro do síndico (M3)', () => {
+        expect(fonte).toMatch(/\.from\('clients'\)\.select\('name'\)\.eq\('id', auth\.clientId\)/);
+        expect(fonte).toMatch(/descricao: descricaoDoEnvio\(/);
     });
 
     it('a RPC roda com a credencial de quem chamou, e a falha da linha apaga o arquivo', () => {

@@ -74,6 +74,7 @@ vi.mock('../services/assembleiaPdf', async (importOriginal) => {
 import { ConfirmProvider } from '../components/ui/confirm';
 import AssembleiaDetalheView from '../components/condominio/AssembleiaDetalheView';
 import AssembleiaSheet from '../components/condominio/AssembleiaSheet';
+import { IdentificacaoSecao } from '../components/condominio/assembleia/SecoesDaAssembleia';
 import { ErroAssembleia } from '../services/condominioAssembleiaService';
 import { gerarAtaPdf, baixarEditalPdf } from '../services/assembleiaPdf';
 import { textoCancelamento, textoConvocacao } from '../utils/assembleiaTextos';
@@ -783,4 +784,22 @@ describe('catraca B2: a tela e as peças dela não chamam serviço por fora de o
         }
         expect(achados).toEqual([]);
     });
+});
+
+// ─── M6 da revisão final da B: o link de transmissão quebra URL longa ────────
+// ACCENTS[x].link é só a COR (também vale para o botão "Voltar para editar", onde
+// `break-all` cortaria palavra no meio). O sublinhado e o `break-all` do link de
+// transmissão moram no próprio <a> — o mesmo que o gestor tinha antes da B2.
+
+describe('Identificação › link de transmissão (gestor e síndico)', () => {
+    const URL_LONGA = 'https://meet.example.com/' + 'a'.repeat(180);
+    for (const accent of ['indigo', 'portal'] as const) {
+        it(`${accent}: sublinha no hover e quebra a URL longa (break-all)`, () => {
+            render(<IdentificacaoSecao assembleia={assembleia({ linkTransmissao: URL_LONGA })} accent={accent} />);
+            const link = screen.getByRole('link', { name: URL_LONGA });
+            expect(link).toHaveClass('hover:underline', 'break-all');
+            expect(link).toHaveAttribute('target', '_blank');
+            expect(link).toHaveAttribute('rel', 'noopener noreferrer');
+        });
+    }
 });

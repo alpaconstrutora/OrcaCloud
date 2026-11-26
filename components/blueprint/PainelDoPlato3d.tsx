@@ -165,7 +165,7 @@ export default function PainelDoPlato3d({
 
   return (
     <div
-      className="pointer-events-auto absolute left-3 top-16 z-10 w-64 max-h-[calc(100%-9rem)] overflow-y-auto rounded-[10px] border border-slate-200 bg-white/95 p-3 text-xs text-slate-700 shadow-sm"
+      className="pointer-events-auto absolute left-3 top-16 z-10 w-64 max-h-[calc(100%-12rem)] overflow-y-auto rounded-[10px] border border-slate-200 bg-white/95 p-3 text-xs text-slate-700 shadow-sm"
       data-testid="painel-do-plato"
       // O card fica FORA do canvas (a roda e o arraste nele não chegam à órbita); o aperto não sobe para o viewer.
       onPointerDown={(e) => e.stopPropagation()}

@@ -15,8 +15,13 @@ import {
   geoDoLadrilho,
   ladrilhoFracionario,
   ladrilhosDaArea,
+  FONTE_DO_MAPA,
+  FONTES_DO_MAPA,
+  ladrilhoAcima,
   MAPA_OCULTO,
+  motivoDaFonteIndisponivel,
   sanearEstadosDoMapa,
+  urlDaFonte,
   urlDoLadrilho,
   zoomDoLadrilho,
 } from '../utils/blueprintMapaDeFundo';
@@ -107,11 +112,11 @@ describe('afimDoLadrilho', () => {
 describe('estado das linhas do mapa', () => {
   it('começa oculto; saneia lixo do navegador', () => {
     expect(sanearEstadosDoMapa(null)).toEqual(MAPA_OCULTO);
-    expect(sanearEstadosDoMapa({ RUAS: 'VISIVEL', RELEVO: 'qualquer', OUTRO: 1 })).toEqual({ RUAS: 'VISIVEL', RELEVO: 'OCULTA' });
+    expect(sanearEstadosDoMapa({ RUAS: 'VISIVEL', RELEVO: 'qualquer', OUTRO: 1 })).toEqual({ SATELITE: 'OCULTA', RUAS: 'VISIVEL', RELEVO: 'OCULTA' });
   });
   it('olho e meio-tom com a mesma regra das camadas', () => {
     const v = alternarOlhoDoMapa(MAPA_OCULTO, 'RUAS');
-    expect(v).toEqual({ RUAS: 'VISIVEL', RELEVO: 'OCULTA' });
+    expect(v).toEqual({ SATELITE: 'OCULTA', RUAS: 'VISIVEL', RELEVO: 'OCULTA' });
     expect(alternarOlhoDoMapa(v, 'RUAS').RUAS).toBe('OCULTA');
     expect(alternarMeioTomDoMapa(MAPA_OCULTO, 'RELEVO').RELEVO).toBe('ATENUADA');
     expect(alternarMeioTomDoMapa({ RUAS: 'OCULTA', RELEVO: 'ATENUADA' }, 'RELEVO').RELEVO).toBe('VISIVEL');
@@ -189,3 +194,58 @@ describe('planoDaTexturaDoMapa (o mapa sobre o relevo no 3D, 12/10/2026)', () =>
     expect(p.camadas.every((c) => c.ladrilhos.length > 0 && c.ladrilhos.length <= 64)).toBe(true);
   });
 });
+
+/**
+ * MAPA: SATÉLITE (26/11/2026) — pergunta: *"é possivel inserirnos visão via satelite? estamos usando o open street
+ * maps e ele nao tem imagem por satelite?"* → *"siga com a Esri"*. World Imagery da Esri pelo serviço COM chave
+ * (`ibasemaps-api`, ArcGIS Location Platform — uso comercial com a chave; CORS `*`, serve de textura no 3D). A chave
+ * vem de `VITE_ARCGIS_API_KEY`; sem ela, a camada fica indisponível e diz por quê.
+ */
+describe('Mapa: satélite (Esri World Imagery)', () => {
+  it('⚠️ PRONTO QUANDO: é uma fonte do mapa, por BAIXO de ruas e relevo, oculta por padrão', () => {
+    expect(FONTES_DO_MAPA).toEqual(['SATELITE', 'RUAS', 'RELEVO']);
+    expect(MAPA_OCULTO.SATELITE).toBe('OCULTA');
+    expect(sanearEstadosDoMapa({ SATELITE: 'ATENUADA' }).SATELITE).toBe('ATENUADA');
+    expect(FONTE_DO_MAPA.SATELITE.rotulo).toBe('Mapa: satélite');
+  });
+
+  it('o ladrilho é o World Imagery com a chave (ordem z/y/x da Esri)', () => {
+    const url = urlDoLadrilho('SATELITE', { z: 17, x: 48_000, y: 73_000 }, 'CHAVE-TESTE');
+    expect(url).toBe('https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/17/73000/48000?blankTile=false&token=CHAVE-TESTE');
+    // O Leaflet (Desenhar no mapa) recebe o modelo já com a chave.
+    expect(urlDaFonte('SATELITE', 'K')).toBe('https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?blankTile=false&token=K');
+    // As outras fontes não mudam.
+    expect(urlDoLadrilho('RUAS', { z: 3, x: 1, y: 2 })).toBe('https://a.tile.openstreetmap.org/3/1/2.png');
+  });
+
+  it('a atribuição exigida pela Esri: "Powered by Esri" + os créditos do item World Imagery', () => {
+    expect(FONTE_DO_MAPA.SATELITE.atribuicaoTexto).toBe('Powered by Esri · Esri, Vantor, Earthstar Geographics, and the GIS User Community');
+  });
+
+  it('sem chave, indisponível — e diz por quê; com chave (ou outra fonte), disponível', () => {
+    expect(motivoDaFonteIndisponivel('SATELITE', '')).toMatch(/chave da Esri/i);
+    expect(motivoDaFonteIndisponivel('SATELITE', 'K')).toBeNull();
+    expect(motivoDaFonteIndisponivel('RUAS', '')).toBeNull();
+  });
+});
+
+/**
+ * O RECUO DO LADRILHO (26/11/2026): a Esri não tem imagem no zoom 19 (e às vezes 18) fora das cidades — medido: em MT,
+ * BA e AM só até o 17; em Campinas, até o 19. Com `blankTile=false` o servidor responde 404 no lugar do ladrilho
+ * "Map data not yet available", e quem desenha cai para o PAI (o recorte dele que cobre o ladrilho), até 3 níveis.
+ */
+describe('ladrilhoAcima (recuo para o pai quando falta imagem)', () => {
+  it('n = 0: o próprio ladrilho, inteiro', () => {
+    expect(ladrilhoAcima({ z: 19, x: 10, y: 6 }, 0)).toEqual({ pai: { z: 19, x: 10, y: 6 }, recorte: { sx: 0, sy: 0, lado: 256 } });
+  });
+  it('n = 1: o pai e o quarto dele (x ímpar, y par → canto de cima à direita)', () => {
+    expect(ladrilhoAcima({ z: 19, x: 11, y: 6 }, 1)).toEqual({ pai: { z: 18, x: 5, y: 3 }, recorte: { sx: 128, sy: 0, lado: 128 } });
+  });
+  it('n = 2: o avô e o 1/16 dele', () => {
+    expect(ladrilhoAcima({ z: 19, x: 7, y: 5 }, 2)).toEqual({ pai: { z: 17, x: 1, y: 1 }, recorte: { sx: 192, sy: 64, lado: 64 } });
+  });
+  it('a URL do satélite pede 404 no lugar do ladrilho vazio (blankTile=false)', () => {
+    expect(urlDoLadrilho('SATELITE', { z: 19, x: 1, y: 2 }, 'K')).toContain('blankTile=false');
+  });
+});
+

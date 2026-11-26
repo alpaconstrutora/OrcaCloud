@@ -46,6 +46,7 @@ import {
   FONTE_DO_MAPA,
   FONTES_DO_MAPA,
   MAPA_OCULTO,
+  motivoDaFonteIndisponivel,
   type EstadosDoMapa,
   type FonteDoMapa,
 } from '../../utils/blueprintMapaDeFundo';
@@ -339,7 +340,7 @@ export default function PainelCamadas({ estados, onMudar, contagem, baseAtenuada
                         key={f}
                         fonte={f}
                         estado={mapa.estados[f]}
-                        motivoDesligado={mapa.motivoDesligado}
+                        motivoDesligado={mapa.motivoDesligado ?? motivoDaFonteIndisponivel(f)}
                         onOlho={() => mapa.onMudar(alternarOlhoDoMapa(mapa.estados, f))}
                         onMeioTom={() => mapa.onMudar(alternarMeioTomDoMapa(mapa.estados, f))}
                       />

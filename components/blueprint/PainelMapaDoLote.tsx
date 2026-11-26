@@ -29,7 +29,7 @@ import {
   retanguloGeoPorCantos,
   type AreaParaLote,
 } from '../../utils/blueprintMapaDoLote';
-import { FONTE_DO_MAPA, type FonteDoMapa } from '../../utils/blueprintMapaDeFundo';
+import { FONTE_DO_MAPA, motivoDaFonteIndisponivel, urlDaFonte, type FonteDoMapa } from '../../utils/blueprintMapaDeFundo';
 
 const ROTULO = 'text-xs font-semibold text-slate-500';
 const CAMPO =
@@ -47,6 +47,8 @@ const MODOS: TabsBarItem<Modo>[] = [
 const FUNDOS: TabsBarItem<Fundo>[] = [
   { id: 'RUAS', label: 'Ruas' },
   { id: 'RELEVO', label: 'Relevo' },
+  // 26/11/2026: o satélite da Esri — traçar o lote por cima da foto. Só aparece com a chave configurada.
+  ...(motivoDaFonteIndisponivel('SATELITE') === null ? [{ id: 'SATELITE' as const, label: 'Satélite' }] : []),
 ];
 
 /**
@@ -207,7 +209,7 @@ export default function PainelMapaDoLote({
     camadaDeFundo.current?.remove();
     const c = FONTE_DO_MAPA[fundo];
     camadaDeFundo.current = lf
-      .tileLayer(c.url, { attribution: c.atribuicaoHtml, subdomains: [...c.subdominios], maxNativeZoom: c.maxNativeZoom, maxZoom: ZOOM_MAXIMO })
+      .tileLayer(urlDaFonte(fundo), { attribution: c.atribuicaoHtml, subdomains: [...c.subdominios], maxNativeZoom: c.maxNativeZoom, maxZoom: ZOOM_MAXIMO })
       .addTo(m);
   }, [fundo, mapaPronto]);
 

@@ -60,7 +60,8 @@ const relevo = malhaDaGrade(gradeDoTerreno, COTA_ZERO);
 // no centro do terreno do pedido (o relevo aqui é sintético — o que se confere é o mapa no lugar).
 // `?lat=…&lon=…` (25/11/2026): "Onde fica" em outro lugar — a Maquete busca os prédios do OSM de lá.
 const GEO = { latitude: Number(q.get('lat') ?? -22.6163977), longitude: Number(q.get('lon') ?? -46.0412014) };
-const fontesDoMapa = ({ RUAS: ['RUAS'], RELEVO: ['RELEVO'], AMBOS: ['RUAS', 'RELEVO'] } as Record<string, ('RUAS' | 'RELEVO')[]>)[q.get('mapa') ?? ''] ?? [];
+// `?mapa=SATELITE` (26/11/2026): o satélite da Esri (precisa de VITE_ARCGIS_API_KEY no ambiente do Vite).
+const fontesDoMapa = ({ RUAS: ['RUAS'], RELEVO: ['RELEVO'], AMBOS: ['RUAS', 'RELEVO'], SATELITE: ['SATELITE'] } as Record<string, ('RUAS' | 'RELEVO' | 'SATELITE')[]>)[q.get('mapa') ?? ''] ?? [];
 const planoDoMapa = fontesDoMapa.length
   ? planoDaTexturaDoMapa(
       { minX: grade.origem.x, minY: grade.origem.y, maxX: grade.origem.x + (grade.colunas - 1) * grade.espacamentoMm, maxY: grade.origem.y + (grade.linhas - 1) * grade.espacamentoMm },

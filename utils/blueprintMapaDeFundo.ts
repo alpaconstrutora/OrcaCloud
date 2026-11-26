@@ -20,14 +20,21 @@ import type { Georreferencia, Point } from './blueprintKernel';
 import { geoParaLocal, localParaGeo, type LatLon } from './blueprintTopografia';
 import type { EstadoDaCamada } from './blueprintCamadasPorDisciplina';
 
-export type FonteDoMapa = 'RUAS' | 'RELEVO';
-/** Ruas embaixo, relevo por cima — a ordem de desenho. */
-export const FONTES_DO_MAPA: readonly FonteDoMapa[] = ['RUAS', 'RELEVO'];
+export type FonteDoMapa = 'SATELITE' | 'RUAS' | 'RELEVO';
+/** Satélite no fundo, ruas, relevo por cima — a ordem de desenho. */
+export const FONTES_DO_MAPA: readonly FonteDoMapa[] = ['SATELITE', 'RUAS', 'RELEVO'];
+
+/**
+ * A CHAVE DA ESRI (26/11/2026, "Mapa: satélite"): API key da ArcGIS Location Platform com o privilégio de basemaps.
+ * É de NAVEGADOR por desenho (vai no bundle, como a anon key do Supabase) — a proteção é restringir a chave ao domínio
+ * do app no painel da Esri. Sem ela, o satélite fica indisponível e diz por quê.
+ */
+export const CHAVE_DA_ESRI: string = ((import.meta as unknown as { env?: Record<string, string | undefined> }).env?.VITE_ARCGIS_API_KEY ?? '').trim();
 
 export interface DefinicaoDaFonteDoMapa {
   rotulo: string;
   ajuda: string;
-  /** Modelo do Leaflet: `{s}` subdomínio, `{z}/{x}/{y}` o ladrilho. */
+  /** Modelo do Leaflet: `{s}` subdomínio, `{z}/{x}/{y}` o ladrilho, `{token}` a chave (só a Esri). */
   url: string;
   subdominios: readonly string[];
   /** Até onde o servidor tem ladrilho; acima disso, amplia-se o último. */
@@ -38,6 +45,21 @@ export interface DefinicaoDaFonteDoMapa {
 }
 
 export const FONTE_DO_MAPA: Record<FonteDoMapa, DefinicaoDaFonteDoMapa> = {
+  // MAPA: SATÉLITE (26/11/2026) — *"é possivel inserirnos visão via satelite?"* → *"siga com a Esri"*. World Imagery
+  // pelo serviço COM chave (ibasemaps-api: uso comercial pela ArcGIS Location Platform; CORS `*`, vira textura no 3D).
+  // Créditos: os do item World Imagery na ArcGIS Online (conferidos em 26/11/2026) + "Powered by Esri".
+  SATELITE: {
+    rotulo: 'Mapa: satélite',
+    ajuda: 'Imagem de satélite (Esri World Imagery) por baixo da planta, no lugar de "Onde fica". A data e a nitidez variam por região; referência, não levantamento.',
+    // `blankTile=false`: onde não há imagem nesse zoom (o interior, acima do 17), 404 no lugar do ladrilho "Map data
+    // not yet available" — quem desenha cai para o pai (`ladrilhoAcima`). Medido em 26/11/2026.
+    url: 'https://ibasemaps-api.arcgis.com/arcgis/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}?blankTile=false&token={token}',
+    subdominios: [''],
+    maxNativeZoom: 19,
+    atribuicaoHtml:
+      'Powered by <a href="https://www.esri.com">Esri</a> · Esri, Vantor, Earthstar Geographics, and the GIS User Community',
+    atribuicaoTexto: 'Powered by Esri · Esri, Vantor, Earthstar Geographics, and the GIS User Community',
+  },
   RUAS: {
     rotulo: 'Mapa: ruas',
     ajuda: 'Ruas, rios e quadras do OpenStreetMap por baixo da planta, no lugar de "Onde fica". Referência, não levantamento: em área rural o traçado pode estar alguns metros fora.',
@@ -64,7 +86,7 @@ export const FONTE_DO_MAPA: Record<FonteDoMapa, DefinicaoDaFonteDoMapa> = {
 export type EstadosDoMapa = Record<FonteDoMapa, EstadoDaCamada>;
 
 /** Ocultos por padrão: o mapa baixa imagem da internet e não liga sozinho. */
-export const MAPA_OCULTO: EstadosDoMapa = { RUAS: 'OCULTA', RELEVO: 'OCULTA' };
+export const MAPA_OCULTO: EstadosDoMapa = { SATELITE: 'OCULTA', RUAS: 'OCULTA', RELEVO: 'OCULTA' };
 
 /** Meio-tom do mapa: claro o bastante para o desenho e as curvas lerem por cima. */
 export const OPACIDADE_DO_MAPA: Record<EstadoDaCamada, number> = { VISIVEL: 1, ATENUADA: 0.45, OCULTA: 0 };
@@ -72,7 +94,17 @@ export const OPACIDADE_DO_MAPA: Record<EstadoDaCamada, number> = { VISIVEL: 1, A
 export function sanearEstadosDoMapa(raw: unknown): EstadosDoMapa {
   const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const ok = (v: unknown): v is EstadoDaCamada => v === 'VISIVEL' || v === 'ATENUADA' || v === 'OCULTA';
-  return { RUAS: ok(o.RUAS) ? o.RUAS : 'OCULTA', RELEVO: ok(o.RELEVO) ? o.RELEVO : 'OCULTA' };
+  return {
+    SATELITE: ok(o.SATELITE) ? o.SATELITE : 'OCULTA',
+    RUAS: ok(o.RUAS) ? o.RUAS : 'OCULTA',
+    RELEVO: ok(o.RELEVO) ? o.RELEVO : 'OCULTA',
+  };
+}
+
+/** Por que a fonte não pode ser ligada agora (`null` = pode). Hoje só o satélite depende de algo: a chave da Esri. */
+export function motivoDaFonteIndisponivel(f: FonteDoMapa, chave: string = CHAVE_DA_ESRI): string | null {
+  if (f === 'SATELITE' && !chave) return 'Satélite indisponível: falta configurar a chave da Esri (VITE_ARCGIS_API_KEY) no ambiente do app.';
+  return null;
 }
 
 /** O olho: oculto → visível; qualquer outro → oculto (a mesma regra das camadas). */
@@ -184,7 +216,7 @@ export interface CamadaDaTexturaDoMapa {
   fonte: FonteDoMapa;
   opacidade: number;
   /** `matriz` = setTransform(a, b, c, d, e, f) do canvas: pixel do ladrilho (0..256) → pixel da textura. */
-  ladrilhos: { url: string; matriz: [number, number, number, number, number, number] }[];
+  ladrilhos: { url: string; ladrilho: Ladrilho; matriz: [number, number, number, number, number, number] }[];
 }
 
 export interface PlanoDaTexturaDoMapa {
@@ -230,7 +262,7 @@ export function planoDaTexturaDoMapa(
       const o = naTextura(a.origem);
       const ex = naTextura({ x: a.origem.x + a.porPxX.x, y: a.origem.y + a.porPxX.y });
       const ey = naTextura({ x: a.origem.x + a.porPxY.x, y: a.origem.y + a.porPxY.y });
-      return { url: urlDoLadrilho(fonte, t), matriz: [ex.x - o.x, ex.y - o.y, ey.x - o.x, ey.y - o.y, o.x, o.y] as [number, number, number, number, number, number] };
+      return { url: urlDoLadrilho(fonte, t), ladrilho: t, matriz: [ex.x - o.x, ex.y - o.y, ey.x - o.x, ey.y - o.y, o.x, o.y] as [number, number, number, number, number, number] };
     });
     return { fonte, opacidade, ladrilhos };
   });
@@ -242,8 +274,29 @@ export function uvNaCaixa(caixa: PlanoDaTexturaDoMapa['caixa'], xMm: number, yMm
   return [(xMm - caixa.minX) / (caixa.maxX - caixa.minX), (yMm - caixa.minY) / (caixa.maxY - caixa.minY)];
 }
 
-export function urlDoLadrilho(f: FonteDoMapa, t: Ladrilho): string {
+/** Quantos níveis acima se procura imagem quando o ladrilho falha (404 do satélite fora das cidades). */
+export const NIVEIS_DE_RECUO = 3;
+
+/**
+ * O ladrilho `n` níveis ACIMA de `t` e o recorte dele (em px do ladrilho de 256) que cobre `t` — para desenhar o pai
+ * ampliado no lugar de um ladrilho que não existe. `n = 0` é o próprio, inteiro.
+ */
+export function ladrilhoAcima(t: Ladrilho, n: number): { pai: Ladrilho; recorte: { sx: number; sy: number; lado: number } } {
+  const k = 2 ** n;
+  const lado = 256 / k;
+  return {
+    pai: { z: t.z - n, x: Math.floor(t.x / k), y: Math.floor(t.y / k) },
+    recorte: { sx: (t.x % k) * lado, sy: (t.y % k) * lado, lado },
+  };
+}
+
+/** O modelo de URL da fonte com a chave já posta (o Leaflet do "Desenhar no mapa" usa este). */
+export function urlDaFonte(f: FonteDoMapa, chave: string = CHAVE_DA_ESRI): string {
+  return FONTE_DO_MAPA[f].url.replace('{token}', encodeURIComponent(chave));
+}
+
+export function urlDoLadrilho(f: FonteDoMapa, t: Ladrilho, chave: string = CHAVE_DA_ESRI): string {
   const d = FONTE_DO_MAPA[f];
   const s = d.subdominios[(t.x + t.y) % d.subdominios.length];
-  return d.url.replace('{s}', s).replace('{z}', String(t.z)).replace('{x}', String(t.x)).replace('{y}', String(t.y));
+  return urlDaFonte(f, chave).replace('{s}', s).replace('{z}', String(t.z)).replace('{x}', String(t.x)).replace('{y}', String(t.y));
 }

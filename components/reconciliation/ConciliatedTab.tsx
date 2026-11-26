@@ -1,12 +1,12 @@
 import React from 'react';
 import {
-    ArrowRightLeft, ArrowUpDown, Briefcase, Calendar, Check, CheckCircle2, FileText,
+    ArrowRightLeft, ArrowUpDown, Briefcase, Calendar, Check, CheckCircle2, Download, FileText,
     LayoutGrid, MoveHorizontal, Search, Table2, X,
 } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, usePersistedState, useResizableColumns } from '../ui/TableUtils';
-import { LazySelect, type LazyOption } from './LazySelect';
+import { descricaoDoLancamento, ehLancamentoDeContrato } from './tabelasDaConciliacao';
 import type { BankTransaction, InternalTransaction } from '../../types';
 
 /**
@@ -42,9 +42,9 @@ export const CONCILIATED_COLUMNS: ColumnConfig[] = [
     { key: 'bankDate',   label: 'Data do extrato' },
     { key: 'bankAmount', label: 'Valor do extrato' },
     { key: 'link',       label: 'Vínculo' },
-    { key: 'intDesc',    label: 'Interno: descrição' },
-    { key: 'intDate',    label: 'Data do interno' },
-    { key: 'intAmount',  label: 'Valor do interno' },
+    { key: 'intDesc',    label: 'Lançamento: descrição' },
+    { key: 'intDate',    label: 'Data do lançamento' },
+    { key: 'intAmount',  label: 'Valor do lançamento' },
     { key: 'actions',    label: 'Ações', sortable: false },
 ];
 
@@ -54,6 +54,14 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     bankDesc: 230, bankDate: 120, bankAmount: 130, link: 96,
     intDesc: 230, intDate: 120, intAmount: 130, actions: 70,
 };
+
+/** Cabeçalho em dois níveis (guia §6.10, `gruposDeColunas`): diz o que é do Extrato e o que é do
+ *  Lançamento, com os mesmos rótulos e ícones dos dois painéis da aba Pendentes (pedido de
+ *  26/11/2026). O rótulo cobre as colunas VISÍVEIS e vizinhas do grupo; "Vínculo" fica sem grupo. */
+const GRUPOS_DE_COLUNAS: { rotulo: string; icone: React.ReactNode; colunas: string[] }[] = [
+    { rotulo: 'Extrato',     icone: <Download className="w-3.5 h-3.5" />, colunas: ['bankDesc', 'bankDate', 'bankAmount'] },
+    { rotulo: 'Lançamentos', icone: <Check className="w-3.5 h-3.5" />,    colunas: ['intDesc', 'intDate', 'intAmount'] },
+];
 
 const ALINHAMENTO_CABECALHO: Record<string, string> = {
     bankDesc: '', intDesc: '',
@@ -74,10 +82,7 @@ interface Props {
     setConciliatedViewMode: (m: 'grid' | 'list') => void;
     matchSortOrder: 'desc' | 'asc';
     setMatchSortOrder: (o: 'desc' | 'asc') => void;
-    categoryOptions: LazyOption[];
     onUndoMatch: (matchId: string, bankTxId: string, internalTxId: string) => void;
-    onUpdateBankCategory: (id: string, category: string) => void;
-    onUpdateInternalCategory: (id: string, category: string) => void;
 }
 
 const semAcento = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -86,17 +91,16 @@ function textoDeBusca(m: VinculoDeConciliacao): string {
     const b = m.bank_transaction;
     const i = m.internal_transaction;
     return semAcento([
-        b?.description_normalized, b?.description_raw, b?.category, b?.counterparty_name,
+        b?.description_normalized, b?.description_raw, b?.counterparty_name,
         b && formatMoney(b.amount), b?.amount,
-        i?.description, i?.category, i?.source_system, i?.entity_name, i?.party_name,
+        i?.description, i?.source_system, i?.entity_name, i?.party_name,
         i && formatMoney(i.amount), i?.amount,
     ].filter(v => v !== undefined && v !== null && v !== '').join(' '));
 }
 
 export default function ConciliatedTab({
     matches, sortedMatches, conciliatedViewMode, setConciliatedViewMode,
-    matchSortOrder, setMatchSortOrder, categoryOptions,
-    onUndoMatch, onUpdateBankCategory, onUpdateInternalCategory,
+    matchSortOrder, setMatchSortOrder, onUndoMatch,
 }: Props) {
     // §3: busca de TELA persiste (a lista é o recorte de trabalho do usuário)
     const [busca, setBusca] = usePersistedState<string>('conciliacaoConciliados:search', '');
@@ -117,6 +121,15 @@ export default function ConciliatedTab({
     const temAcoes = chavesVisiveis.includes('actions');
     // §6.1: a largura do <table> é a SOMA exata das colunas visíveis (nunca 100%); o
     // `minWidth: 100%` + o <col /> espaçador antes de "Ações" absorvem a folga.
+    // Linha de cima do cabeçalho: trechos de colunas visíveis e vizinhas do mesmo grupo (se o
+    // usuário arrastar uma coluna para longe do grupo, o rótulo aparece sobre cada trecho).
+    const trechosDoCabecalho: { chave: string; grupo: (typeof GRUPOS_DE_COLUNAS)[number] | null; n: number }[] = [];
+    colunasDeDados.forEach(k => {
+        const grupo = GRUPOS_DE_COLUNAS.find(g => g.colunas.includes(k)) ?? null;
+        const ult = trechosDoCabecalho[trechosDoCabecalho.length - 1];
+        if (ult && grupo && ult.grupo === grupo) ult.n += 1;
+        else trechosDoCabecalho.push({ chave: k, grupo, n: 1 });
+    });
     const larguraTotal = colunasDeDados.reduce((t, k) => t + cols.getWidth(k), 0) + (temAcoes ? cols.getWidth('actions') : 0);
 
     const cabecalho = (key: string) => {
@@ -132,9 +145,9 @@ export default function ConciliatedTab({
                 </button>
             );
         }
-        // Cabeçalho curto: as duas metades da linha já são separadas por "Extrato:/Interno:".
+        // Cabeçalho curto: a linha de cima (Extrato / Lançamentos) já diz de qual lado é a coluna.
         // Os nomes completos (Data do extrato…) ficam na engrenagem, onde precisam distinguir.
-        const curto: Record<string, string> = { bankDate: 'Data', intDate: 'Data', bankAmount: 'Valor', intAmount: 'Valor' };
+        const curto: Record<string, string> = { bankDesc: 'Descrição', intDesc: 'Descrição', bankDate: 'Data', intDate: 'Data', bankAmount: 'Valor', intAmount: 'Valor' };
         return curto[key] ?? CONCILIATED_COLUMNS.find(c => c.key === key)?.label ?? key;
     };
 
@@ -148,23 +161,9 @@ export default function ConciliatedTab({
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${bTx.direction === 'DEBIT' ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}`}>
                             <FileText className="w-5 h-5" />
                         </div>
-                        <div className="min-w-0 flex-1 flex flex-col gap-1">
-                            <p className="text-sm font-normal text-gray-700 break-words" title={bTx.description_normalized || bTx.description_raw}>
-                                {bTx.description_normalized || bTx.description_raw}
-                            </p>
-                            <LazySelect
-                                value={bTx.category || ''}
-                                currentLabel={bTx.category || ''}
-                                onChange={(v) => onUpdateBankCategory(bTx.id, v)}
-                                options={categoryOptions}
-                                placeholder="Pendente"
-                                className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
-                                    bTx.category
-                                        ? 'text-gray-900 bg-gray-50 border-gray-100'
-                                        : 'text-gray-400 bg-white border-dashed border-gray-200'
-                                }`}
-                            />
-                        </div>
+                        <p className="min-w-0 flex-1 text-sm font-normal text-gray-700 truncate" title={bTx.description_normalized || bTx.description_raw}>
+                            {bTx.description_normalized || bTx.description_raw}
+                        </p>
                     </>
                 );
             case 'bankDate':
@@ -182,7 +181,7 @@ export default function ConciliatedTab({
                 );
             case 'link':
                 return (
-                    <div className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center shadow-sm">
+                    <div title="Vinculado" aria-label="Vinculado" role="img" className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center shadow-sm">
                         <Check className="w-4 h-4" />
                     </div>
                 );
@@ -192,24 +191,15 @@ export default function ConciliatedTab({
                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iTx.direction === 'DEBIT' ? 'bg-amber-50 text-amber-600' : 'bg-blue-50 text-blue-600'}`}>
                             <Briefcase className="w-5 h-5" />
                         </div>
-                        <div className="min-w-0 flex-1 flex flex-col gap-1">
-                            <p className="text-sm font-normal text-gray-700 break-words">{iTx.description}</p>
-                            <div className="flex items-center gap-2">
-                                <span className="text-xs font-normal text-gray-400 shrink-0">{iTx.source_system}</span>
-                                <LazySelect
-                                    value={iTx.category || ''}
-                                    currentLabel={iTx.category || ''}
-                                    onChange={(v) => onUpdateInternalCategory(iTx.id, v)}
-                                    options={categoryOptions}
-                                    placeholder="Pendente"
-                                    className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
-                                        iTx.category
-                                            ? 'text-gray-900 bg-gray-50 border-gray-100'
-                                            : 'text-gray-400 bg-white border-dashed border-gray-200'
-                                    }`}
-                                />
-                            </div>
-                        </div>
+                        {/* Uma linha só (pedido de 26/11/2026: nada empilhado). Contrato: o código da
+                            origem (CONTRACT_RECURRING…) não acrescenta nada — a descrição já começa
+                            pelo nº do contrato. */}
+                        <p className="min-w-0 flex-1 text-sm font-normal text-gray-700 truncate" title={descricaoDoLancamento(iTx)}>
+                            {descricaoDoLancamento(iTx)}
+                        </p>
+                        {!ehLancamentoDeContrato(iTx) && iTx.source_system && (
+                            <span className="text-xs font-normal text-gray-400 shrink-0">{iTx.source_system}</span>
+                        )}
                     </>
                 );
             case 'intDate':
@@ -221,10 +211,9 @@ export default function ConciliatedTab({
                 );
             case 'intAmount':
                 return (
-                    <>
-                        <p className="text-sm font-medium text-gray-800">{formatMoney(iTx.amount)}</p>
-                        <span className="text-xs font-normal text-emerald-600">Vinculado</span>
-                    </>
+                    // "Vinculado" saiu daqui (pedido de 26/11/2026: nada empilhado) — toda linha desta
+                    // aba é vinculada, e a coluna Vínculo já mostra o ✓.
+                    <p className="text-sm font-medium text-gray-800">{formatMoney(iTx.amount)}</p>
                 );
             case 'actions':
                 return (
@@ -244,8 +233,7 @@ export default function ConciliatedTab({
     /** Layout de cada célula (alinhamento e direção) — o conteúdo vem de `celula`. */
     const layoutCelula = (key: string) => {
         if (key === 'bankDesc' || key === 'intDesc') return 'flex items-center gap-4 min-w-0';
-        if (key === 'bankAmount') return 'flex items-center justify-end';
-        if (key === 'intAmount') return 'flex flex-col items-end justify-center';
+        if (key === 'bankAmount' || key === 'intAmount') return 'flex items-center justify-end';
         return 'flex items-center justify-center gap-2';
     };
 
@@ -259,7 +247,7 @@ export default function ConciliatedTab({
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
-                                placeholder="Buscar por descrição, categoria, origem ou valor..."
+                                placeholder="Buscar por descrição, origem ou valor..."
                                 value={busca}
                                 onChange={(e) => setBusca(e.target.value)}
                                 className="w-full h-9 pl-9 pr-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -351,8 +339,24 @@ export default function ConciliatedTab({
                                 <col />
                                 {temAcoes && <col data-col-key="actions" style={{ width: `${cols.getWidth('actions')}px` }} />}
                             </colgroup>
-                            <thead>
-                                <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                            <thead className="sticky top-0 z-10 bg-white">
+                                <tr className="bg-white text-gray-700 font-semibold text-xs">
+                                    {trechosDoCabecalho.map(t => (
+                                        <th
+                                            key={t.chave}
+                                            colSpan={t.n}
+                                            scope={t.grupo ? 'colgroup' : undefined}
+                                            className={`px-6 py-1.5 text-xs font-semibold text-gray-700 border-r border-gray-100 ${t.grupo ? 'border-b border-gray-200' : 'border-b border-gray-100'}`}
+                                        >
+                                            {t.grupo && (
+                                                <span className="inline-flex items-center gap-1.5">{t.grupo.icone}{t.grupo.rotulo}</span>
+                                            )}
+                                        </th>
+                                    ))}
+                                    <th aria-hidden="true" className="border-r border-b border-gray-100" />
+                                    {temAcoes && <th aria-hidden="true" className="border-b border-gray-100" />}
+                                </tr>
+                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {colunasDeDados.map(k => (
                                         <th key={k} className={`relative overflow-hidden px-6 py-2 whitespace-nowrap border-r border-gray-100 font-semibold ${ALINHAMENTO_CABECALHO[k] ?? ''}`}>
                                             {cabecalho(k)}
@@ -406,18 +410,6 @@ export default function ConciliatedTab({
                                             <div className="min-w-0 flex flex-col gap-1">
                                                 <p className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Extrato Bancário</p>
                                                 <p className="text-xs font-bold text-gray-900 truncate max-w-[150px] mb-1">{bTx.description_normalized || bTx.description_raw}</p>
-                                                <LazySelect
-                                                    value={bTx.category || ''}
-                                                    currentLabel={bTx.category || ''}
-                                                    onChange={(v) => onUpdateBankCategory(bTx.id, v)}
-                                                    options={categoryOptions}
-                                                    placeholder="Pendente"
-                                                    className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
-                                                        bTx.category
-                                                            ? 'text-gray-900 bg-gray-50 border-gray-100'
-                                                            : 'text-gray-400 bg-white border-dashed border-gray-200'
-                                                    }`}
-                                                />
                                             </div>
                                         </div>
                                         <div className="text-right">
@@ -441,26 +433,16 @@ export default function ConciliatedTab({
                                                 <Briefcase className="w-4 h-4" />
                                             </div>
                                             <div className="min-w-0 flex flex-col gap-1">
-                                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Sistema Interno</p>
-                                                <p className="text-xs font-bold text-gray-900 truncate max-w-[150px] mb-1">{iTx.description}</p>
-                                                <LazySelect
-                                                    value={iTx.category || ''}
-                                                    currentLabel={iTx.category || ''}
-                                                    onChange={(v) => onUpdateInternalCategory(iTx.id, v)}
-                                                    options={categoryOptions}
-                                                    placeholder="Pendente"
-                                                    className={`text-sm font-normal px-2 py-0.5 rounded border transition-all appearance-none cursor-pointer w-fit ${
-                                                        iTx.category
-                                                            ? 'text-gray-900 bg-gray-50 border-gray-100'
-                                                            : 'text-gray-400 bg-white border-dashed border-gray-200'
-                                                    }`}
-                                                />
+                                                <p className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none">Lançamento</p>
+                                                <p className="text-xs font-bold text-gray-900 truncate max-w-[150px] mb-1" title={descricaoDoLancamento(iTx)}>{descricaoDoLancamento(iTx)}</p>
                                             </div>
                                         </div>
                                         <div className="flex flex-col items-end gap-2">
                                             <div className="text-right">
                                                 <p className="text-xs font-black text-gray-900">{formatMoney(iTx.amount)}</p>
-                                                <span className="text-[8px] font-black text-emerald-600">{iTx.source_system}</span>
+                                                {!ehLancamentoDeContrato(iTx) && (
+                                                    <span className="text-[8px] font-black text-emerald-600">{iTx.source_system}</span>
+                                                )}
                                             </div>
                                             <button
                                                 onClick={() => onUndoMatch(m.id, bTx.id, iTx.id)}

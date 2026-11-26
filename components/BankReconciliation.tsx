@@ -125,6 +125,7 @@ import {
     isStatementColumnVisibleForFlow,
     renderPendingBankCell,
     renderPendingInternalCell,
+    descricaoDoLancamento,
     renderStatementCell,
     ValorParaConciliar,
     ROTULO_OUTRA_ORG,
@@ -735,13 +736,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             const nome = displayPartyName(tx);
             if (nome) return nome;
         }
-        // Contratos: "Contrato CTL-006-…" / "Aluguel CTL-006-…" → começa pelo nº do contrato
-        // (pedido de 26/11/2026: a palavra antes do número só alonga o texto). Só exibição —
-        // o texto gravado e a busca pelo texto cru continuam iguais.
-        if (tx.source_system?.startsWith('CONTRACT_')) {
-            return (tx.description ?? '').replace(/^(?:Contrato|Aluguel)\s+(?=[A-Z]{2,4}-\d)/, '');
-        }
-        return tx.description ?? '';
+        return descricaoDoLancamento(tx);
     };
 
     // Data a exibir = vencimento real (due_date) quando houver; senão a data do lançamento.
@@ -3713,10 +3708,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     setConciliatedViewMode={setConciliatedViewMode}
                     matchSortOrder={matchSortOrder}
                     setMatchSortOrder={setMatchSortOrder}
-                    categoryOptions={categoryOptions}
                     onUndoMatch={handleUndoMatch}
-                    onUpdateBankCategory={handleUpdateBankCategory}
-                    onUpdateInternalCategory={handleUpdateInternalCategory}
                 />
             ) : (activeView === 'pending' || activeView === 'statement') ? (
                 // 12px entre aviso, Extrato e Lançamentos — cromo da mesma tarefa (guia §20.1).

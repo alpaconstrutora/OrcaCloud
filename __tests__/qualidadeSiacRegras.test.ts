@@ -215,12 +215,16 @@ describe('sugerirServico — pelo código do item do orçamento ou da atividade 
 });
 
 describe('contarAplicados — inspeção aprovada com TODOS os executores treinados', () => {
+  // Formato de contagem da RPC quality_inspecoes_aprovadas_do_sgq (sem nomes nem ids): o 1º
+  // argumento (OE) só identifica a linha no teste.
   const insp = (
-    work_order_id: string, controlled_item_id: string, obra_status: string | null, aprovado_em: string,
+    _oe: string, controlled_item_id: string, obra_status: string | null, aprovado_em: string,
     treinados: boolean[],
   ): InspecaoAprovada => ({
-    work_order_id, controlled_item_id, obra_status, aprovado_em,
-    executores: treinados.map((t, i) => ({ employee_id: `e${i}`, nome: `E${i}`, treinado: t })),
+    controlled_item_id, aprovado_em,
+    obra_em_andamento: obra_status === 'Em andamento',
+    executores_total: treinados.length,
+    executores_treinados: treinados.filter(Boolean).length,
   });
   const itens = [item('forma', []), item('concreto', [])];
 

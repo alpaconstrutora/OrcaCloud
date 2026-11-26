@@ -259,7 +259,7 @@ export interface ContagemAplicados {
 }
 
 const todaTreinada = (i: InspecaoAprovada): boolean =>
-  i.executores.length > 0 && i.executores.every((e) => e.treinado);
+  i.executores_total > 0 && i.executores_treinados === i.executores_total;
 
 /**
  * "Aplicados com registro" e "em obra em andamento" do nível (serviços). Conta só os `itens`
@@ -279,15 +279,12 @@ export function contarAplicados(inspecoes: InspecaoAprovada[], itens: ItemContro
     if (atual === undefined || instante(insp.aprovado_em) > instante(atual.aprovado_em)) maisRecente.set(id, insp);
     if (!todaTreinada(insp)) continue;
     aplicados.add(id);
-    if (insp.obra_status === 'Em andamento') emObra.add(id);
+    if (insp.obra_em_andamento) emObra.add(id);
   }
 
   const porItem: ContagemAplicados['porItem'] = {};
   maisRecente.forEach((insp, id) => {
-    porItem[id] = {
-      treinados: insp.executores.filter((e) => e.treinado).length,
-      executores: insp.executores.length,
-    };
+    porItem[id] = { treinados: insp.executores_treinados, executores: insp.executores_total };
   });
   return { aplicados: aplicados.size, emObra: emObra.size, porItem };
 }

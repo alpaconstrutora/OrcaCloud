@@ -9,6 +9,8 @@ type Resposta = { data: unknown; error: { message: string; code?: string } | nul
 let respostaPorTabela: Record<string, Resposta> = {};
 let respostaRpc: Resposta = { data: [], error: null };
 let respostaUpload: { message: string } | null = null;
+/** Tabelas sem linha para a consulta (0 linhas). */
+let semLinha = new Set<string>();
 
 function cadeia(tabela: string) {
   const r = () => respostaPorTabela[tabela] ?? { data: null, error: null };
@@ -19,8 +21,18 @@ function cadeia(tabela: string) {
       return c;
     };
   }
-  c.single = () => Promise.resolve(r());
-  c.maybeSingle = () => Promise.resolve(r());
+  // .single() com 0 linhas é HTTP 406 no PostgREST (PGRST116): quem manda `semLinha` simula isso.
+  c.single = () => {
+    chamadas.push({ metodo: 'single', args: [tabela] });
+    if (semLinha.has(tabela)) {
+      return Promise.resolve({ data: null, error: { message: 'JSON object requested, multiple (or no) rows returned', code: 'PGRST116' } });
+    }
+    return Promise.resolve(r());
+  };
+  c.maybeSingle = () => {
+    chamadas.push({ metodo: 'maybeSingle', args: [tabela] });
+    return Promise.resolve(semLinha.has(tabela) ? { data: null, error: null } : r());
+  };
   c.then = (ok: (v: unknown) => unknown, ko?: (e: unknown) => unknown) => Promise.resolve(r()).then(ok, ko);
   return c;
 }
@@ -73,6 +85,7 @@ beforeEach(() => {
   respostaPorTabela = {};
   respostaRpc = { data: [], error: null };
   respostaUpload = null;
+  semLinha = new Set();
 });
 
 describe('workOrderService.validateTransition — portões do banco + checagens próprias', () => {
@@ -85,9 +98,29 @@ describe('workOrderService.validateTransition — portões do banco + checagens 
     expect(achar('rpc')[0].args).toEqual(['oe_portoes', { p_work_order_id: 'wo1', p_novo_status: 'released' }]);
     expect(r.valid).toBe(false);
     expect(r.errors).toEqual([
-      'Equipe não vinculada',
+      'Informe a equipe ou os colaboradores que vão executar',
       '2 itens obrigatórios do checklist antes de iniciar não cumpridos',
     ]);
+  });
+
+  it('released: sem equipe mas com colaborador informado → não pede equipe', async () => {
+    respostaPorTabela.work_orders = { data: oe({ team_id: null, collaborator_ids: ['e1'] }), error: null };
+    const r = await workOrderService.validateTransition('wo1', 'released');
+    expect(r).toEqual({ valid: true, errors: [] });
+  });
+
+  it('released: sem equipe e sem colaborador → pede um dos dois; as outras checagens seguem', async () => {
+    respostaPorTabela.work_orders = {
+      data: oe({ team_id: null, collaborator_ids: [], responsible_id: null, planned_cost: null }),
+      error: null,
+    };
+    const r = await workOrderService.validateTransition('wo1', 'released');
+    expect(r.errors).toEqual([
+      'Informe a equipe ou os colaboradores que vão executar',
+      'Responsável não definido',
+      'Custo previsto não informado',
+    ]);
+    expect(r.errors).not.toContain('Equipe não vinculada');
   });
 
   it('não conta mais o checklist local: item pendente na OE, banco sem mensagem → válido', async () => {
@@ -330,5 +363,42 @@ describe('workOrderService.transition / unblock — o histórico de status não 
     respostaPorTabela.work_orders = { data: { status: 'blocked', status_before_block: 'in_progress', replanning_count: 0 }, error: null };
     respostaPorTabela.work_order_status_log = { data: null, error: { message: 'histórico recusado' } };
     await expect(workOrderService.unblock('wo1')).rejects.toThrow('histórico recusado');
+  });
+});
+
+// Pendência da fase 2 (26/11): 406 no console. `.single()` com 0 linhas é HTTP 406 (PGRST116); onde
+// 0 linhas é o caso normal, a leitura é `.maybeSingle()` e a ausência tem tratamento próprio.
+describe('workOrderService — 0 linhas legítimas sem 406', () => {
+  it('pedir inspeção numa obra sem project_ops_config (o normal: tabela vazia) → maybeSingle e mínimo 95%', async () => {
+    respostaPorTabela.work_orders = { data: oe({ status: 'in_progress', completion_pct: 90 }), error: null };
+    semLinha.add('project_ops_config');
+    const r = await workOrderService.validateTransition('wo1', 'pending_inspection');
+    expect(achar('maybeSingle').map((c) => c.args[0])).toContain('project_ops_config');
+    expect(achar('single').map((c) => c.args[0])).not.toContain('project_ops_config');
+    expect(r.errors).toEqual(['Execução em 90% — mínimo 95% para solicitar inspeção']);
+  });
+
+  it('erro ao ler project_ops_config vira motivo — a inspeção não fica liberada calada', async () => {
+    respostaPorTabela.work_orders = { data: oe({ status: 'in_progress', completion_pct: 100 }), error: null };
+    respostaPorTabela.project_ops_config = { data: null, error: { message: 'permission denied for table project_ops_config' } };
+    const r = await workOrderService.validateTransition('wo1', 'pending_inspection');
+    expect(r.valid).toBe(false);
+    expect(r.errors).toEqual(['Configuração da obra não lida: permission denied for table project_ops_config']);
+  });
+
+  it('addWorkLog: equipe sem custo/hora na view → maybeSingle e custo vazio (não 406)', async () => {
+    semLinha.add('vw_team_hourly_cost');
+    respostaPorTabela.work_logs = { data: [{ id: 'log1' }], error: null };
+    await workOrderService.addWorkLog({ workOrderId: 'wo1', logDate: '2026-11-26', teamId: 't1', hoursWorked: 8 } as never);
+    expect(achar('maybeSingle').map((c) => c.args[0])).toContain('vw_team_hourly_cost');
+    expect(achar('single').map((c) => c.args[0])).not.toContain('vw_team_hourly_cost');
+    expect((achar('insert')[0].args[0] as Record<string, unknown>).calculated_cost).toBeNull();
+  });
+
+  it('generateDiary: dia ainda sem diário → maybeSingle (não 406)', async () => {
+    semLinha.add('site_diary');
+    await workOrderService.generateDiary('p1', '2026-11-26').catch(() => undefined);
+    const doDiario = chamadas.filter((c) => (c.metodo === 'single' || c.metodo === 'maybeSingle') && c.args[0] === 'site_diary');
+    expect(doDiario[0].metodo).toBe('maybeSingle');
   });
 });

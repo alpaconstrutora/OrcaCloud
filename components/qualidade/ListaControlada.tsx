@@ -70,6 +70,11 @@ interface Props {
      * `null` = as inspeções não puderam ser lidas: a célula diz "não contado", não "—" (que seria "nenhuma").
      */
     executoresPorItem?: Record<string, { treinados: number; executores: number }> | null;
+    /**
+     * Organizações cujas inspeções não puderam ser lidas (organização → motivo): os serviços delas dizem
+     * "não contado"; os das outras seguem contados.
+     */
+    orgsNaoContadas?: Record<string, string>;
 }
 
 const procedimentoDo = (i: ItemControlado, procedimentos: Record<string, ProcedimentoResumo>) =>
@@ -77,7 +82,7 @@ const procedimentoDo = (i: ItemControlado, procedimentos: Record<string, Procedi
 
 export const ListaControlada: React.FC<Props> = ({
     tipo, itens, procedimentos, treinamentos, podeEditar, onCarregar, onNovo, onAbrir, carregando, nomesDasOrgs, abas,
-    executoresPorItem,
+    executoresPorItem, orgsNaoContadas,
 }) => {
     const texto = TEXTO_DO_TIPO[tipo];
 
@@ -116,11 +121,15 @@ export const ListaControlada: React.FC<Props> = ({
         return `${vigentes} · ${c.revisaoAnterior} treinado(s) em revisão anterior`;
     }, [contagem]);
 
+    const naoContado = React.useCallback(
+        (i: ItemControlado) => executoresPorItem === null || Boolean(orgsNaoContadas?.[i.organization_id]),
+        [executoresPorItem, orgsNaoContadas],
+    );
     const rotuloExecutores = React.useCallback((i: ItemControlado) => {
-        if (executoresPorItem === null) return 'não contado';
+        if (naoContado(i)) return 'não contado';
         const e = executoresPorItem?.[i.id];
         return e ? `${e.treinados} de ${e.executores}` : '—';
-    }, [executoresPorItem]);
+    }, [executoresPorItem, naoContado]);
 
     const colunas = React.useMemo<StandardTableColumn[]>(() => [
         { key: 'numero', label: 'Nº', sortable: true, width: 70, align: 'right' },
@@ -176,7 +185,7 @@ export const ListaControlada: React.FC<Props> = ({
                     case 'origem': return ROTULO_ORIGEM[i.origem];
                     case 'procedimento': return rotuloProcedimento(i);
                     case 'treinados': { const c = contagem(i); return c ? c.proprios + c.empreiteira : -1; }
-                    case 'executores': { const e = executoresPorItem?.[i.id]; return e ? e.treinados / Math.max(e.executores, 1) : -1; }
+                    case 'executores': { const e = naoContado(i) ? undefined : executoresPorItem?.[i.id]; return e ? e.treinados / Math.max(e.executores, 1) : -1; }
                     case 'codigos': return i.codigos.length;
                     default: return i.nome;
                 }
@@ -200,7 +209,7 @@ export const ListaControlada: React.FC<Props> = ({
                     case 'treinados': { const t = rotuloTreinados(i); return <span className="block truncate text-sm font-normal text-gray-700" title={t}>{t}</span>; }
                     case 'executores': {
                         const t = rotuloExecutores(i);
-                        return <span className="text-sm font-normal text-gray-700" title={executoresPorItem === null ? 'Não foi possível ler as inspeções aprovadas: os executores treinados não foram contados' : t === '—' ? 'Nenhuma inspeção aprovada deste serviço' : 'Executores treinados na inspeção aprovada mais recente'}>{t}</span>;
+                        return <span className="text-sm font-normal text-gray-700" title={naoContado(i) ? 'Não foi possível ler as inspeções aprovadas: os executores treinados não foram contados' : t === '—' ? 'Nenhuma inspeção aprovada deste serviço' : 'Executores treinados na inspeção aprovada mais recente'}>{t}</span>;
                     }
                     case 'codigos': return <span className="text-sm font-normal text-gray-700">{i.codigos.length}</span>;
                     default: return null;

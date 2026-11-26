@@ -234,3 +234,28 @@ Preparo (funções do próprio app): procedimento enviado pela tela e aprovado n
 Visto e não explicado: 2 respostas 406 no console durante a criação/aprovação (não se repetiram ao reabrir as mesmas telas) — não conferi a origem.
 
 Limpeza (26/11, combinada com o usuário): dados de teste apagados (2 OEs com registros e históricos — travas desligadas só dentro da transação e conferidas religadas —, ficha, curso, treinamentos, procedimento e arquivo do GED, avisos); **mantida** a Garden SPE apontando para o SGQ da Alpa.
+
+### Pendências resolvidas (26/11)
+
+Pedido do usuário (26/11, transcrito literalmente): "resolver pendencias e iniciar fase 3"
+
+Frente `C:/D/frentes/qualidade-pendencias-f2`, branch `feat/qualidade-pendencias-f2` (a fase 3 começa depois destas quatro).
+
+| # | Pendência | O que mudou | Como sei que terminou | Commit |
+|---|---|---|---|---|
+| 1 | Caixa alta na fileira de transições do Operacional | `OperacionalDetail.tsx`: abas (`TabBtn`), botões de transição, "Desbloquear" e o cabeçalho "Requisitos não atendidos" do modal sem `uppercase tracking-widest`; rótulos das transições em capitalização de frase ("Iniciar execução", "Solicitar inspeção", "Registrar medição", "Voltar para planejada") | teste `OperacionalDetailInspecao` (sem caixa alta forçada) RED → GREEN; `check-ui-standard` 0; `rotuloSemCaixaAltaGuard` verde | `acaba553e` |
+| 2 | Painel conta conforme quem olha | RPC nova `quality_inspecoes_aprovadas_do_sgq(p_sgq)` (SECURITY DEFINER; membro do SGQ ou superadmin, senão 42501; só contagem — serviço, data, obra em andamento, executores/treinados — sem nomes nem ids) na migration **`aplicar_20271126140000_qualidade_painel_por_sgq.sql` — NÃO aplicada, o usuário aplica**. Service chama a RPC; sem ela no banco (PGRST202/42883) volta à leitura pela RLS. `InspecaoAprovada` no formato de contagem; `contarAplicados` conta por ele | testes de service/regras/módulo RED → GREEN + trava do texto da migration (`qualidadePainelPorSgqMigration`); prova no banco `prova-painel-sgq.sql` (pasta da frente, fora do git) **pendente: rodar depois de aplicar** | `5b6d7e097` |
+| 3 | "Liberar OE" exige equipe e não há equipe cadastrada | `validateTransition('released')`: equipe OU ao menos um colaborador; sem os dois, "Informe a equipe ou os colaboradores que vão executar" (responsável, datas, custo e predecessora iguais) | `workOrderServicePortoes` RED → GREEN | `08e55852a` |
+| 4 | 406 esporádico no console | `.single()` com 0 linhas é 406 (PGRST116). `project_ops_config` tem 0 linhas em produção → todo "Solicitar inspeção" dava 406 em `_getProjectConfig` (bate com "durante a criação/aprovação" e "não se repete ao reabrir": reabrir não valida transição). Trocados por `maybeSingle` com tratamento: `_getProjectConfig` (sem linha = 95%; erro vira motivo), custo/hora da equipe (`addWorkLog`, `OperacionalWorkLog`), `generateDiary` (dia sem diário), código da atividade no `OperacionalForm` (projeto de planejamento apagado/fora do alcance). Inserts/updates com `.select().single()` e leituras da própria OE ficaram. De carona (arquivo tocado): `confirm()` nativo do `OperacionalWorkLog` → `useConfirm` | `workOrderServicePortoes`, `OperacionalFormServicoControlado`, `OperacionalWorkLogCusto` RED → GREEN. Não conferido na tela | `4bb6e140b` |
+
+Verificação local: 12 arquivos / 189 testes verdes (tocados + `orgContextGuard`, `segurancaMigrations`, `migrationsPrefixo`, `rotuloSemCaixaAltaGuard`); `npm run typecheck` 0 erros. PR/CI pendentes.
+
+#### Rodada 1 da revisão das pendências (26/11)
+
+| Achado | O que mudou | Commit |
+|---|---|---|
+| RPC contava SPE que deixou de apontar para o SGQ (o gatilho não reconfere OE antiga) | `quality_inspecoes_aprovadas_do_sgq` também exige SGQ ATUAL da org da OE = `p_sgq` (`quality_settings.sgq_organization_id`, sem linha = ela mesma); cabeçalho corrigido; trava de texto cobre o filtro | `3db072355` |
+| Fallback com qualquer 42883 | só PGRST202, ou 42883 citando `quality_inspecoes_aprovadas_do_sgq`; o resto sobe ("não contado") | `fd82b5233` |
+| 42501 numa org derrubava o painel de todas | `Promise.allSettled` com erro por organização: só a linha/os serviços da org que falhou ficam "não contado", com o nome dela | `28a19bf54` |
+| "Ações Disponíveis" em caixa alta | "Ações disponíveis" sem `uppercase` | `951c9f447` |
+| Prova no banco | `prova-painel-sgq.sql` (fora do git) ganhou superadmin (vê) e 3ª org que não aponta para a Alpa (não conta); NOT NULL conferidas em information_schema (`projects.user_id` explícito) — **pendente: rodar depois de aplicar** | — |

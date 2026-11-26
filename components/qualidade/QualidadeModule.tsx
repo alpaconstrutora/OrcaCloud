@@ -39,7 +39,8 @@ import { RegistrarTreinamentoSheet } from './RegistrarTreinamentoSheet';
  * (`sgqDaOrganizacao`). Se for outra (SPE que usa o da construtora), só a faixa e a configuração
  * aparecem — a lista e o painel são os da organização dona, e não há o que editar aqui. Em "Todas"
  * nada disso aparece (o SGQ é por organização). O painel conta pelas inspeções aprovadas
- * (`inspecoesAprovadas` de cada organização do painel, que é o SGQ dos próprios itens).
+ * (`inspecoesAprovadas` de cada organização do painel, que é o SGQ dos próprios itens — pela RPC
+ * `quality_inspecoes_aprovadas_do_sgq`, a mesma conta para qualquer membro do SGQ).
  */
 type Aba = 'lista' | 'por-obra';
 
@@ -103,7 +104,8 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
     const [procedimentos, setProcedimentos] = React.useState<Record<string, ProcedimentoResumo>>({});
     const [treinamentos, setTreinamentos] = React.useState<Record<string, RegistroTreinamento[]>>({});
     const [inspecoes, setInspecoes] = React.useState<InspecaoAprovada[]>([]);
-    const [erroInspecoes, setErroInspecoes] = React.useState<string | null>(null);
+    /** Organização do painel → por que as inspeções dela não puderam ser lidas (as demais seguem contadas). */
+    const [errosInspecoes, setErrosInspecoes] = React.useState<Record<string, string>>({});
     /** SGQ da organização do topo, com a organização a que se refere (`null` em "Todas"): troca de topo não usa o da anterior. */
     const [sgqDoTopo, setSgqDoTopo] = React.useState<{ org: string; sgq: string } | null>(null);
     const [gravandoSgq, setGravandoSgq] = React.useState(false);
@@ -135,17 +137,25 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
             const [procs, treinos, insp] = await Promise.all([
                 qualidadeSiacService.resumirProcedimentos(docs),
                 qualidadeSiacService.listarTreinamentos(cursos),
-                Promise.all(orgsDoPainel.map(o => qualidadeSiacService.inspecoesAprovadas(o)))
-                    .then(l => ({ lista: l.flat(), erro: null as string | null }))
-                    .catch((e: unknown) => ({ lista: [] as InspecaoAprovada[], erro: errorMessage(e, 'erro desconhecido') })),
+                // Por organização: um 42501 (ou timeout) numa não derruba a conta das outras.
+                Promise.allSettled(orgsDoPainel.map(o => qualidadeSiacService.inspecoesAprovadas(o)))
+                    .then(resultados => {
+                        const lista: InspecaoAprovada[] = [];
+                        const erros: Record<string, string> = {};
+                        resultados.forEach((r, i) => {
+                            if (r.status === 'fulfilled') lista.push(...r.value);
+                            else erros[orgsDoPainel[i]] = errorMessage(r.reason, 'erro desconhecido');
+                        });
+                        return { lista, erros };
+                    }),
             ]);
             if (minha !== seq.current) return;
             setItens(lista); setNiveisGravados(niveis); setProcedimentos(procs); setTreinamentos(treinos);
-            setInspecoes(insp.lista); setErroInspecoes(insp.erro); setSgqDoTopo(orgId && sgqLido ? { org: orgId, sgq: sgqLido } : null);
+            setInspecoes(insp.lista); setErrosInspecoes(insp.erros); setSgqDoTopo(orgId && sgqLido ? { org: orgId, sgq: sgqLido } : null);
         } catch (e) {
             if (minha !== seq.current) return;
             setItens([]); setNiveisGravados({}); setProcedimentos({}); setTreinamentos({});
-            setInspecoes([]); setErroInspecoes(null); setSgqDoTopo(null);
+            setInspecoes([]); setErrosInspecoes({}); setSgqDoTopo(null);
             setErro(errorMessage(e, 'erro desconhecido'));
         } finally {
             if (minha === seq.current) setCarregando(false);
@@ -175,8 +185,8 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
 
     /** "x de y" da inspeção aprovada mais recente de cada serviço (qualquer procedimento: é a linha); `null` = não contado. */
     const executoresPorItem = React.useMemo(
-        () => (erroInspecoes ? null : contarAplicados(inspecoes, itens).porItem),
-        [inspecoes, itens, erroInspecoes],
+        () => contarAplicados(inspecoes, itens).porItem,
+        [inspecoes, itens],
     );
 
     /** Topo numa organização cujo SGQ é outra: lista e painel são os de lá. */
@@ -311,13 +321,13 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
                         <>
                             {!carregando && (
                                 <PainelDoNivel itens={itens} niveis={niveis} procedimentos={procedimentos} nomesDasOrgs={nomesDasOrgs}
-                                    inspecoes={inspecoes} erroInspecoes={erroInspecoes}
+                                    inspecoes={inspecoes} errosInspecoes={errosInspecoes}
                                     podeEditar={podeEditar} onNivel={(org, n) => void definirNivel(org, n)} />
                             )}
                             {/* `key` por sub-aba: "Mostrar arquivados" de Serviços não vaza para Materiais. */}
                             <ListaControlada key={tipoEfetivo} tipo={tipoEfetivo} itens={itens} procedimentos={procedimentos} treinamentos={treinamentos}
                                 podeEditar={podeEditar} carregando={carregando} nomesDasOrgs={nomesDasOrgs}
-                                executoresPorItem={executoresPorItem}
+                                executoresPorItem={executoresPorItem} orgsNaoContadas={errosInspecoes}
                                 onCarregar={() => void carregarLista()} onNovo={() => void novoItem()}
                                 onAbrir={item => setEdicao({ modo: 'editar', item })}
                                 abas={<TabsBar<TipoItemControlado> tabs={SUB_ABAS} value={tipoEfetivo} onChange={setTipo} bare />} />

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react'
 import { Plus, Clock, DollarSign, ChevronDown, ChevronUp, Loader2, AlertCircle } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import Button from './ui/Button'
+import { useConfirm } from './ui/confirm'
 
 interface WorkLog {
   id: string
@@ -39,6 +40,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
   const [showForm, setShowForm] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const confirmar = useConfirm()
 
   const [form, setForm] = useState({
     logDate: new Date().toISOString().split('T')[0],
@@ -93,11 +95,13 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
 
       // Calculate cost from team hourly rate if team selected and hours given
       if (form.teamId && form.hoursWorked) {
-        const { data: costData } = await supabase
+        // Equipe sem custo/hora na view é legítimo (o custo fica vazio): maybeSingle, não 406.
+        const { data: costData, error: erroCusto } = await supabase
           .from('vw_team_hourly_cost')
           .select('total_hourly_cost')
           .eq('team_id', form.teamId)
-          .single()
+          .maybeSingle()
+        if (erroCusto) throw new Error(erroCusto.message)
         if (costData) {
           payload.calculated_cost = costData.total_hourly_cost * parseFloat(form.hoursWorked)
         }
@@ -118,7 +122,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Remover este apontamento?')) return
+    if (!(await confirmar({ title: 'Remover apontamento', message: 'Remover este apontamento?', variant: 'danger' }))) return
     const { error: delErr } = await supabase.from('work_logs').delete().eq('id', id)
     if (delErr) { setError(delErr.message); return }
     await loadData()

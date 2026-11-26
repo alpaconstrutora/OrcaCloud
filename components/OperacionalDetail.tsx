@@ -82,14 +82,14 @@ const STATUS_CONFIG: Record<WorkOrderStatus, { label: string; color: string; bg:
 
 const TRANSITION_LABELS: Partial<Record<WorkOrderStatus, string>> = {
   released:           'Liberar OE',
-  in_progress:        'Iniciar Execução',
-  pending_inspection: 'Solicitar Inspeção',
+  in_progress:        'Iniciar execução',
+  pending_inspection: 'Solicitar inspeção',
   approved:           'Aprovar',
   rejected:           'Reprovar',
-  measured:           'Registrar Medição',
+  measured:           'Registrar medição',
   closed:             'Encerrar',
   blocked:            'Bloquear',
-  planned:            'Voltar para Planejada',
+  planned:            'Voltar para planejada',
 }
 
 function fmtCurrency(v: number | null | undefined) {
@@ -119,7 +119,7 @@ const TabBtn: React.FC<{ active: boolean; label: string; badge?: number; onClick
     aria-selected={active}
     tabIndex={active ? 0 : -1}
     onClick={onClick}
-    className={`outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 flex items-center gap-1.5 px-4 py-2.5 text-button font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap
+    className={`outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 flex items-center gap-1.5 px-4 py-2.5 text-button font-black border-b-2 transition-all whitespace-nowrap
       ${active ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-700'}`}
   >
     {label}
@@ -152,7 +152,7 @@ const TransitionModal: React.FC<{
 
         {errors.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-1">
-            <p className="text-xs font-black text-red-600 uppercase tracking-widest mb-2">Requisitos não atendidos</p>
+            <p className="text-xs font-black text-red-600 mb-2">Requisitos não atendidos</p>
             {errors.map((e, i) => (
               <div key={i} className="flex items-start gap-2">
                 <XCircle className="w-3.5 h-3.5 text-red-500 mt-0.5 flex-shrink-0" />
@@ -455,12 +455,12 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
       {/* Workflow buttons */}
       {(allowedNext.length > 0 || status === 'blocked') && (
         <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Ações Disponíveis</p>
+          <p className="text-xs font-black text-slate-400 mb-3">Ações disponíveis</p>
           <div className="flex flex-wrap gap-2">
             {status === 'blocked' && (
               <button
                 onClick={() => setShowUnblockModal(true)}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-button font-black uppercase tracking-widest hover:bg-emerald-700 active:scale-95"
+                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl text-button font-black hover:bg-emerald-700 active:scale-95"
               >
                 <CheckCircle2 className="w-4 h-4" />
                 Desbloquear
@@ -476,7 +476,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                   <button
                     onClick={() => handleTransitionClick(next)}
                     disabled={Boolean(motivo)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-black active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                       next === 'blocked' ? 'bg-red-50 text-red-700 hover:bg-red-100' :
                       next === 'rejected' ? 'bg-red-50 text-red-700 hover:bg-red-100' :
                       'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-900/20'

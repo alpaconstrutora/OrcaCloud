@@ -4,7 +4,9 @@
  * Plano: docs/planos/2026-10-20-portal-do-sindico.md
  */
 export const SINDICO_PORTAL_TAB_IDS = [
-    'visao', 'unidades', 'chamados', 'financeiro', 'avisos', 'documentos', 'manutencao', 'equipamentos',
+    // Assembleias logo depois de Avisos (26/11/2026, B2): convocar publica o aviso no
+    // mural, e a ata cai em Documentos — a aba fica entre as duas.
+    'visao', 'unidades', 'chamados', 'financeiro', 'avisos', 'assembleias', 'documentos', 'manutencao', 'equipamentos',
 ] as const;
 export type SindicoPortalTabId = typeof SINDICO_PORTAL_TAB_IDS[number];
 
@@ -16,6 +18,7 @@ export const SINDICO_PORTAL_TAB_LABELS: Record<SindicoPortalTabId, string> = {
     // condomínio em 24/10/2026, e a prestação de contas é uma sub-aba dele.
     financeiro: 'Financeiro',
     avisos: 'Avisos',
+    assembleias: 'Assembleias',
     documentos: 'Documentos',
     manutencao: 'Manutenção',
     equipamentos: 'Equipamentos',

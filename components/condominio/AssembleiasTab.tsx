@@ -10,6 +10,8 @@
 // banco recusa com mensagem genérica, então a ação simplesmente não aparece.
 //
 // A organização não sai daqui: o gatilho do banco grava fn_org_do_condominio.
+// Lê e grava por `ops` (operacoesDoGestor, passado pelo CondominioDetail) — a mesma
+// porta que a gaveta e a tela da assembleia usam (B2).
 
 import React from 'react';
 import { Vote, FilePen, CheckCircle2, AlertCircle, Plus } from 'lucide-react';
@@ -19,8 +21,8 @@ import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import type { AcaoDoTitulo } from './CondominioDetail';
 import AssembleiaSheet from './AssembleiaSheet';
-import {
-    condominioAssembleiaService, type Assembleia, type ResultadoItem, type StatusAssembleia,
+import type {
+    Assembleia, OperacoesAssembleia, ResultadoItem, StatusAssembleia,
 } from '../../services/condominioAssembleiaService';
 import {
     dataHoraBrasilia, percentualDoTotal, ROTULO_RESULTADO, ROTULO_STATUS, ROTULO_TIPO,
@@ -63,13 +65,14 @@ function resultadoDe(a: Assembleia): string {
 
 interface Props {
     empreendimento: Empreendimento;
+    ops: OperacoesAssembleia;
     /** Publica "Nova assembleia" na linha do título do condomínio (§17). */
     registrarAcaoDoTitulo?: (acao: AcaoDoTitulo | null) => void;
     /** Abre a TELA da assembleia (o pai faz o early return). */
     onAbrirAssembleia: (id: string) => void;
 }
 
-const AssembleiasTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo, onAbrirAssembleia }) => {
+const AssembleiasTab: React.FC<Props> = ({ empreendimento, ops, registrarAcaoDoTitulo, onAbrirAssembleia }) => {
     const confirm = useConfirm();
     const [lista, setLista] = React.useState<Assembleia[]>([]);
     const [loading, setLoading] = React.useState(true);
@@ -85,13 +88,13 @@ const AssembleiasTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo
         setLoading(true);
         setErro(null);
         try {
-            setLista(await condominioAssembleiaService.listar(empreendimento.id));
+            setLista(await ops.listar(empreendimento.id));
         } catch (e: unknown) {
             setErro(e instanceof Error ? e.message : 'Erro ao carregar as assembleias.');
         } finally {
             setLoading(false);
         }
-    }, [empreendimento.id]);
+    }, [empreendimento.id, ops]);
 
     React.useEffect(() => { carregar(); }, [carregar]);
 
@@ -118,7 +121,7 @@ const AssembleiasTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo
         });
         if (!ok) return;
         try {
-            await condominioAssembleiaService.excluirRascunho(a.id);
+            await ops.excluirRascunho(a.id);
             setLista(prev => prev.filter(x => x.id !== a.id));
             notify('Rascunho excluído.');
         } catch (e: unknown) {
@@ -206,6 +209,7 @@ const AssembleiasTab: React.FC<Props> = ({ empreendimento, registrarAcaoDoTitulo
                 onClose={() => setSheet({ open: false, id: null })}
                 empreendimentoId={empreendimento.id}
                 assembleiaId={sheet.id}
+                ops={ops}
                 onSalva={salva}
             />
 

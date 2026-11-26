@@ -4,9 +4,9 @@
 // botão desligado antes de chamar o banco. A regra que vale é a do banco (A2) —
 // estas contas existem para o gestor ler o porquê sem precisar errar primeiro.
 //
-// ⚠️ Nada aqui sabe a organização: quem grava recebe `orgId` pronto de
-// AssembleiaDetalheView (orgDoCondominio). A catraca orgDoCondominioGuard só lê a
-// pasta de cima, então esta pasta não pode nem tocar no empreendimento cru.
+// ⚠️ Nada aqui sabe a organização: quem grava é `ops` (B2 — gestor com orgDoCondominio,
+// síndico pela Edge Function). A catraca orgDoCondominioGuard só lê a pasta de cima,
+// então esta pasta não pode nem tocar no empreendimento cru.
 
 import type {
     ImpedimentoUnidade, ItemAssembleia, OpcaoVoto, StatusAssembleia, UnidadeNaAssembleia, VotoAssembleia,

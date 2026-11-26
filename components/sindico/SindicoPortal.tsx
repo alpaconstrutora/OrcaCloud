@@ -1,7 +1,7 @@
 import React from 'react';
 import {
     AlertTriangle, Building, CalendarClock, CheckCircle2, ChevronDown, ClipboardList, FileText, Home,
-    Loader2, LogOut, Megaphone, Package, ShieldCheck, Wallet, Wrench,
+    Loader2, LogOut, Megaphone, Package, ShieldCheck, Vote, Wallet, Wrench,
 } from 'lucide-react';
 import {
     KpiStrip, PortalCard, CardHeader, DetailField, fmtBRLCents, fmtDate, type KpiItem,
@@ -14,6 +14,7 @@ import PainelUnidadesDoPredio from './PainelUnidadesDoPredio';
 import PainelAvisosDoSindico from './PainelAvisosDoSindico';
 import PainelChamadosDoSindico from './PainelChamadosDoSindico';
 import PainelFinanceiroDoSindico from './PainelFinanceiroDoSindico';
+import PainelAssembleiasDoSindico from './PainelAssembleiasDoSindico';
 import { useSindicoPortal } from './useSindicoPortal';
 import { sindicoPortalService, type IdentidadeDoSindico, type PortalSindico } from '../../services/sindicoPortalService';
 import {
@@ -46,6 +47,11 @@ import { hojeEmBrasilia } from '../../utils/mandatoSindico';
  * o caixa do condomínio — resumo do mês, contas a pagar (lançar, pagar, editar,
  * cancelar, com login), contas a receber e a prestação de contas de antes.
  * Identidade: sky (o cartão do LoginGateway); conteúdo no PortalKit (§24).
+ *
+ * Assembleias (26/11/2026, docs/planos/2026-11-25-condominio-assembleias-votacoes.md,
+ * fase B): o síndico cria, convoca e conduz a assembleia na MESMA tela do gestor, pela
+ * porta dele (operacoesDoSindico). Exige o login do síndico — pelo link, ou pela
+ * administradora no app, a aba só diz por quê (o banco recusa do mesmo jeito).
  */
 
 interface Props {
@@ -65,6 +71,7 @@ const TAB_ICONS: Record<SindicoPortalTabId, React.ComponentType<{ className?: st
     chamados: ClipboardList,
     financeiro: Wallet,
     avisos: Megaphone,
+    assembleias: Vote,
     documentos: FileText,
     manutencao: Wrench,
     equipamentos: Package,
@@ -208,6 +215,12 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
                             {aba === 'avisos' && (
                                 <PainelAvisosDoSindico identidade={identidade} avisos={dados.avisos} condominios={dados.condominios}
                                     onAlterado={recarregar} notify={notify} />
+                            )}
+                            {aba === 'assembleias' && (
+                                // Conduzir exige o SÍNDICO logado (modo 'sessao' no banco): a entrada por
+                                // e-mail e senha é a única com `onLogout`. A administradora conduz pelo app.
+                                <PainelAssembleiasDoSindico identidade={identidade} condominios={dados.condominios}
+                                    logado={!!onLogout} comoAdministradora={comoAdministradora} notify={notify} />
                             )}
                             {aba === 'financeiro' && (
                                 // Operar exige LOGIN (`onLogout` só existe na entrada por e-mail e senha)

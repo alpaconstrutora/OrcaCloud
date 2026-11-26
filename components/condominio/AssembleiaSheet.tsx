@@ -6,9 +6,11 @@
 // lugar onde rascunho e pauta se editam (guia §18.1) — a tela da assembleia só
 // mostra e aponta para cá.
 //
-// Grava pela TABELA (RLS do conjunto de orgs): condominioAssembleiaService
-// .salvarRascunho + .salvarItens. A organização quem põe é o gatilho do banco
-// (fn_org_do_condominio) — esta gaveta não manda organization_id.
+// Grava por `ops` (B2): o gestor pela TABELA (RLS do conjunto de orgs —
+// operacoesDoGestor → condominioAssembleiaService.salvarRascunho + .salvarItens); o
+// síndico pelas RPCs da porta dele (operacoesDoSindico), no Portal do Síndico. A
+// organização quem põe é o gatilho do banco (fn_org_do_condominio) — esta gaveta não
+// manda organization_id.
 //
 // "Assunto comum" sugere tipo e quórum (ASSUNTOS_COMUNS do A5); "Outro assunto"
 // deixa escolher à mão. Item de ESCOLHA só se decide por maioria dos presentes
@@ -23,9 +25,8 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import SecaoTitulo from '../ui/SecaoTitulo';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
-import {
-    condominioAssembleiaService, operacoesDoGestor,
-    type Assembleia, type Quorum, type TipoAssembleia, type TipoItem,
+import type {
+    Assembleia, OperacoesAssembleia, Quorum, TipoAssembleia, TipoItem,
 } from '../../services/condominioAssembleiaService';
 import { ASSUNTOS_COMUNS, REGRA_QUORUM, ROTULO_QUORUM, ROTULO_TIPO, ROTULO_TIPO_ITEM } from '../../utils/assembleiaTextos';
 import {
@@ -77,6 +78,8 @@ interface Props {
     empreendimentoId: string;
     /** null = nova assembleia. */
     assembleiaId: string | null;
+    /** Quem grava: operacoesDoGestor (app) ou operacoesDoSindico (Portal do Síndico). */
+    ops: OperacoesAssembleia;
     /**
      * Devolve a assembleia gravada (§22: a lista costura sem recarregar). `pautaSalva`
      * false = o rascunho foi gravado mas a pauta não (a gaveta continua aberta com o erro).
@@ -84,7 +87,7 @@ interface Props {
     onSalva: (a: Assembleia, pautaSalva: boolean) => void;
 }
 
-const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, assembleiaId, onSalva }) => {
+const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, assembleiaId, ops, onSalva }) => {
     const confirm = useConfirm();
     const [form, setForm] = React.useState<Form>(formVazio);
     const [inicial, setInicial] = React.useState<string>(JSON.stringify(formVazio()));
@@ -106,7 +109,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
         }
         let vivo = true;
         setCarregando(true);
-        operacoesDoGestor.carregar(assembleiaId)
+        ops.carregar(assembleiaId)
             .then(({ assembleia: a, itens }) => {
                 if (!vivo) return;
                 const f: Form = {
@@ -123,7 +126,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
             .catch((e: unknown) => { if (vivo) setErro(e instanceof Error ? e.message : 'Erro ao carregar o rascunho.'); })
             .finally(() => { if (vivo) setCarregando(false); });
         return () => { vivo = false; };
-    }, [open, assembleiaId]);
+    }, [open, assembleiaId, ops]);
 
     const dirty = !carregando && JSON.stringify(form) !== inicial;
     // O X e o Voltar/Cancelar não passam pela guarda do Sheet (só Esc e o véu): guarda própria (§25).
@@ -179,7 +182,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
         setSalvando(true);
         setErro(null);
         try {
-            const a = await condominioAssembleiaService.salvarRascunho({
+            const a = await ops.salvarRascunho({
                 id: assembleiaId ?? idGravado ?? undefined,
                 empreendimentoId,
                 tipo: form.tipo,
@@ -191,7 +194,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
             });
             setIdGravado(a.id);
             try {
-                await condominioAssembleiaService.salvarItens(a.id, form.itens.map(i => ({
+                await ops.salvarItens(a.id, form.itens.map(i => ({
                     id: i.id, titulo: i.titulo, descricao: i.descricao, tipo: i.tipo, quorum: i.quorum,
                     assunto: i.assunto, opcoes: i.tipo === 'ESCOLHA' ? i.opcoes.filter(o => o.trim()) : null,
                 })));

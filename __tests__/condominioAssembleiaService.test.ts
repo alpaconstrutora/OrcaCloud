@@ -41,6 +41,24 @@ vi.mock('../lib/supabase', () => {
     };
 });
 
+// B2: o que a tela lia/subia por fora (upload, avisos, documentos, unidades) agora é do gestor.
+const c = vi.hoisted(() => ({
+    uploadDocumento: vi.fn(),
+    listAvisos: vi.fn(),
+    listDocumentos: vi.fn(),
+    abrirDocumento: vi.fn(),
+    listAllUnitsForEmpreendimento: vi.fn(),
+}));
+vi.mock('../services/condominioComunicacaoService', () => ({
+    condominioComunicacaoService: {
+        uploadDocumento: c.uploadDocumento, listAvisos: c.listAvisos,
+        listDocumentos: c.listDocumentos, abrirDocumento: c.abrirDocumento,
+    },
+}));
+vi.mock('../services/empreendimentoService', () => ({
+    empreendimentoService: { listAllUnitsForEmpreendimento: c.listAllUnitsForEmpreendimento },
+}));
+
 import {
     traduzirErroAssembleia,
     operacoesDoGestor,
@@ -447,5 +465,83 @@ describe('condominioAssembleiaService — rascunho', () => {
     it('excluirRascunho que não apagou nada avisa', async () => {
         m.responder = () => ({ data: [], error: null });
         await expect(condominioAssembleiaService.excluirRascunho('a1')).rejects.toThrow(/não encontrad/);
+    });
+});
+
+// ─── B2: o que a tela fazia por fora de ops, agora no gestor ─────────────────
+describe('operacoesDoGestor — documentos, avisos e unidades (B2)', () => {
+    // A assembleia a1 é do condomínio e1; o condomínio tem ORG PRÓPRIA (org-condo).
+    const responder = (cc: Chamada): Resposta => {
+        if (cc.tabela === 'condominio_assembleias') return { data: { empreendimento_id: 'e1', aviso_id: 'av1' }, error: null };
+        if (cc.tabela === 'empreendimentos') {
+            return { data: { id: 'e1', organization_id: 'org-construtora', condominio_org_id: 'org-condo' }, error: null };
+        }
+        return { data: [], error: null };
+    };
+    beforeEach(() => {
+        vi.clearAllMocks();
+        m.responder = responder;
+        c.uploadDocumento.mockImplementation(async (_f: File, payload: { categoria: string }) => ({ id: `doc-${payload.categoria}` }));
+    });
+
+    it('enviarDocumento grava na org da OPERAÇÃO do condomínio (orgDoCondominio), não na do empreendimento', async () => {
+        const arquivo = new File(['%PDF-1.4'], 'procuracao.pdf', { type: 'application/pdf' });
+        const r = await operacoesDoGestor.enviarDocumento('a1', arquivo,
+            { categoria: 'OUTRO', titulo: 'Procuração — Torre A — 102 — AGO 2026', visivelPortal: false });
+        expect(r).toEqual({ documentoId: 'doc-OUTRO' });
+        expect(c.uploadDocumento).toHaveBeenCalledWith(arquivo, {
+            empreendimento_id: 'e1', organization_id: 'org-condo', titulo: 'Procuração — Torre A — 102 — AGO 2026',
+            categoria: 'OUTRO', visivel_portal: false,
+        });
+        const assembleia = m.chamadas.find(cc => cc.tabela === 'condominio_assembleias')!;
+        expect(assembleia.ops).toContainEqual({ op: 'eq', args: ['id', 'a1'] });
+        const emp = m.chamadas.find(cc => cc.tabela === 'empreendimentos')!;
+        expect(String(arg(emp, 'select'))).toContain('condominio_org_id');
+        expect(emp.ops).toContainEqual({ op: 'eq', args: ['id', 'e1'] });
+    });
+
+    it('sem org própria, a do empreendimento', async () => {
+        m.responder = cc => (cc.tabela === 'empreendimentos'
+            ? { data: { id: 'e1', organization_id: 'org-construtora', condominio_org_id: null }, error: null }
+            : responder(cc));
+        await operacoesDoGestor.enviarDocumento('a1', new File(['x'], 'ata.pdf', { type: 'application/pdf' }),
+            { categoria: 'ATA', titulo: 'Ata', visivelPortal: true });
+        expect(c.uploadDocumento.mock.calls[0][1]).toMatchObject({ organization_id: 'org-construtora', categoria: 'ATA', visivel_portal: true });
+    });
+
+    it('leiturasDoAviso conta as do aviso da convocação; sem aviso, 0 sem consultar', async () => {
+        c.listAvisos.mockResolvedValue([{ id: 'outro', _leituras: 9 }, { id: 'av1', _leituras: 3 }]);
+        expect(await operacoesDoGestor.leiturasDoAviso('a1')).toBe(3);
+        expect(c.listAvisos).toHaveBeenCalledWith('e1');
+
+        c.listAvisos.mockClear();
+        m.responder = cc => (cc.tabela === 'condominio_assembleias'
+            ? { data: { empreendimento_id: 'e1', aviso_id: null }, error: null } : responder(cc));
+        expect(await operacoesDoGestor.leiturasDoAviso('a1')).toBe(0);
+        expect(c.listAvisos).not.toHaveBeenCalled();
+    });
+
+    it('unidadesFora: as sem fração ideal, com o rótulo do banco', async () => {
+        c.listAllUnitsForEmpreendimento.mockResolvedValue([
+            { id: 'u1', name: '101', _tower_name: 'Torre A', fracao_ideal_decimal: 0.00125 },
+            { id: 'u9', name: 'Estacionamento', _tower_name: 'Torre A', fracao_ideal_decimal: null },
+            { id: 'u8', name: 'Zelador', _tower_name: 'Torre A', fracao_ideal_decimal: '0' },
+        ]);
+        expect(await operacoesDoGestor.unidadesFora('a1')).toEqual(['Torre A — Estacionamento', 'Torre A — Zelador']);
+        expect(c.listAllUnitsForEmpreendimento).toHaveBeenCalledWith('e1');
+    });
+
+    it('abrirDocumento acha o documento no condomínio da assembleia e assina', async () => {
+        c.listDocumentos.mockResolvedValue([{ id: 'doc-ata', storage_path: 'org/e1/ata.pdf', url: null }]);
+        c.abrirDocumento.mockResolvedValue('https://assinada/ata.pdf');
+        expect(await operacoesDoGestor.abrirDocumento('a1', 'doc-ata')).toBe('https://assinada/ata.pdf');
+        expect(c.listDocumentos).toHaveBeenCalledWith('e1');
+        await expect(operacoesDoGestor.abrirDocumento('a1', 'sumiu')).rejects.toThrow('não está entre os documentos');
+    });
+
+    it('assembleia que não aparece (RLS) diz que não encontrou', async () => {
+        m.responder = cc => (cc.tabela === 'condominio_assembleias' ? { data: null, error: null } : responder(cc));
+        await expect(operacoesDoGestor.leiturasDoAviso('a1')).rejects.toThrow('Assembleia não encontrada.');
+        expect(c.uploadDocumento).not.toHaveBeenCalled();
     });
 });

@@ -9,14 +9,19 @@
 //   • Toda transição (convocar, cancelar, presença, instalar, voto presencial,
 //     encerrar, ata, marcar impedida — A10) é RPC SECURITY DEFINER: a regra (estado, R3, R6–R9) está no
 //     banco, não aqui. Este arquivo só chama e traduz o erro.
-//   • `OperacoesAssembleia` é a porta da tela de condução. A fase B (síndico pelo
-//     Portal do Síndico) implementa a MESMA interface com as RPCs dele — a tela
-//     não sabe quem conduz.
+//   • `OperacoesAssembleia` é a porta da tela (lista, gaveta de rascunho e condução).
+//     A fase B (síndico pelo Portal do Síndico, `operacoesDoSindico` em
+//     sindicoPortalService) implementa a MESMA interface com as RPCs dele — a tela
+//     não sabe quem conduz. Por isso o que a tela lia/subia por fora (unidades sem
+//     fração, leituras do aviso, upload e abertura de documento — B2) também é `ops`.
 //
 // Organização: não se grava organization_id — o gatilho do banco põe
-// fn_org_do_condominio(empreendimento) (REGRA #5 no banco).
+// fn_org_do_condominio(empreendimento) (REGRA #5 no banco). O upload de documento do
+// gestor usa orgDoCondominio(empreendimento), o espelho no TS.
 
 import { supabase } from '../lib/supabase';
+import { condominioComunicacaoService } from './condominioComunicacaoService';
+import { orgDoCondominio } from '../utils/orgDoCondominio';
 
 // ─── tipos (colunas/JSON das A1–A3 em camelCase) ─────────────────────────────
 
@@ -303,10 +308,41 @@ export interface AssembleiaCarregada {
 }
 
 /**
- * A condução da assembleia. O gestor implementa com as RPCs condominio_assembleia_*;
- * a fase B (síndico) implementa a mesma interface com as RPCs da porta dele.
+ * Documento que a tela da assembleia sobe (B2): a ata (ATA, visível no portal) e a
+ * procuração (OUTRO, NUNCA visível no portal — a tela fixa isso). O gestor grava em
+ * condominio_documentos pela RLS; o síndico, pela Edge Function sindico-portal-documentos.
+ */
+export interface DocumentoDaAssembleia {
+    categoria: 'ATA' | 'OUTRO';
+    titulo: string;
+    visivelPortal: boolean;
+}
+
+/**
+ * A porta da tela da assembleia: lista, gaveta de rascunho e condução. O gestor
+ * implementa com a tabela (RLS) e as RPCs condominio_assembleia_*; a fase B (síndico)
+ * implementa a mesma interface com as RPCs da porta dele (sindico_portal_assembleia_*).
  */
 export interface OperacoesAssembleia {
+    // ── lista e rascunho (AssembleiasTab, AssembleiaSheet, PainelAssembleiasDoSindico) ──
+    listar(empreendimentoId: string): Promise<Assembleia[]>;
+    /** Cria (sem id) ou atualiza o RASCUNHO. */
+    salvarRascunho(dados: DadosRascunho): Promise<Assembleia>;
+    /** Reescreve a pauta na ordem da lista. Só em RASCUNHO. */
+    salvarItens(id: string, itens: ItemRascunho[]): Promise<ItemAssembleia[]>;
+    excluirRascunho(id: string): Promise<void>;
+
+    // ── o que a tela da assembleia lia ou subia por fora (B2) ──
+    /** Rótulos ("Torre — Unidade") das unidades do condomínio SEM fração ideal (R1): ficam fora ao convocar. */
+    unidadesFora(id: string): Promise<string[]>;
+    /** Quantas pessoas leram o aviso da convocação (0 sem aviso). Só informação (R4). */
+    leiturasDoAviso(id: string): Promise<number>;
+    /** Sobe o arquivo aos documentos do condomínio da assembleia. */
+    enviarDocumento(id: string, arquivo: File, documento: DocumentoDaAssembleia): Promise<{ documentoId: string }>;
+    /** Endereço (assinado) para abrir AGORA um documento do condomínio da assembleia. */
+    abrirDocumento(id: string, documentoId: string): Promise<string>;
+
+    // ── condução ──
     convocar(id: string, corpoAviso: string): Promise<ResultadoConvocar>;
     cancelar(id: string, motivo: string, corpoAviso: string): Promise<ResultadoCancelar>;
     /** `presenca` null remove a presença (recusado se a unidade já votou na sala). */
@@ -576,75 +612,153 @@ function votoDe(l: Linha): VotoAssembleia {
     };
 }
 
-// ─── operações do gestor (RPCs) ──────────────────────────────────────────────
+// ─── condução por RPC (gestor e síndico) ─────────────────────────────────────
 
-async function chamar<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+/**
+ * Chama uma RPC da assembleia e traduz o erro (ErroAssembleia guarda code/hint).
+ * Exportada para a porta do síndico (sindicoPortalService), que levanta erro igual.
+ */
+export async function chamarRpcDaAssembleia<T>(fn: string, args: Record<string, unknown>): Promise<T> {
     const { data, error } = await supabase.rpc(fn, args);
     if (error) falhar(error);
     return data as T;
 }
 
+/** Linha crua (snake_case) → tipo. A porta do síndico devolve as linhas por to_jsonb. */
+export const linhasDaAssembleia = { assembleiaDe, itemDe, unidadeDe, votoDe };
+
+type Conducao = Pick<OperacoesAssembleia,
+    'convocar' | 'cancelar' | 'registrarPresenca' | 'instalar' | 'lancarVoto' | 'encerrar' | 'vincularAta'
+    | 'apuracao' | 'impedimentos' | 'marcarImpedida' | 'cotasConferidas'>;
+
+/**
+ * As transições e leituras da condução, pelas RPCs `${prefixo}<ação>`. O gestor
+ * (`condominio_assembleia_`) e o síndico (`sindico_portal_assembleia_`, com a
+ * identidade em `extra`) chamam o MESMO núcleo no banco, com os mesmos parâmetros —
+ * a conversão do resultado é uma só.
+ */
+export function conducaoPorRpc(prefixo: string, extra: Record<string, unknown> = {}): Conducao {
+    const chamar = <T,>(acao: string, args: Record<string, unknown>) =>
+        chamarRpcDaAssembleia<T>(`${prefixo}${acao}`, { ...extra, ...args });
+    return {
+        async convocar(id, corpoAviso) {
+            const r = await chamar<Linha>('convocar', { p_assembleia: id, p_corpo_aviso: corpoAviso });
+            return { unidades: num(r.unidades), fora: (r.fora ?? []) as string[], avisoId: r.avisoId };
+        },
+
+        async cancelar(id, motivo, corpoAviso) {
+            return chamar<ResultadoCancelar>('cancelar', { p_assembleia: id, p_motivo: motivo, p_corpo_aviso: corpoAviso });
+        },
+
+        async registrarPresenca(id, unitId, presenca, procurador, procuracaoId) {
+            return chamar<ResultadoPresenca>('registrar_presenca', {
+                p_assembleia: id, p_unit: unitId, p_presenca: presenca,
+                p_procurador: procurador ?? null, p_procuracao: procuracaoId ?? null,
+            });
+        },
+
+        async instalar(id, { convocacao, presidente, secretario, editalEntregue }) {
+            const q = await chamar<Linha>('instalar', {
+                p_assembleia: id, p_convocacao: convocacao, p_presidente: presidente,
+                p_secretario: secretario, p_edital_entregue: editalEntregue,
+            });
+            return quorumInstalacaoDe(q)!;
+        },
+
+        async lancarVoto(itemId, unitId, opcao) {
+            return chamar<ResultadoVotoLancado>('lancar_voto', { p_item: itemId, p_unit: unitId, p_opcao: opcao });
+        },
+
+        async encerrar(id, deliberacoes, observacao) {
+            const r = await chamar<Linha>('encerrar', { p_assembleia: id, p_deliberacoes: deliberacoes, p_observacao: observacao });
+            return retratoDe(r)!;
+        },
+
+        async vincularAta(id, documentoId) {
+            return chamar<{ ataDocumentoId: string }>('vincular_ata', { p_assembleia: id, p_documento: documentoId });
+        },
+
+        async apuracao(id) {
+            return apuracaoDe(await chamar<Linha>('apuracao', { p_assembleia: id }));
+        },
+
+        async impedimentos(id) {
+            const lista = (await chamar<Linha[] | null>('impedimentos', { p_assembleia: id })) ?? [];
+            return lista.map(i => ({
+                unitId: i.unitId, motivo: i.motivo, origem: i.origem === 'MANUAL' ? 'MANUAL' as const : 'AUTOMATICA' as const,
+            }));
+        },
+
+        async marcarImpedida(id, unitId, motivo) {
+            const r = await chamar<Linha>('marcar_impedida', { p_assembleia: id, p_unit: unitId, p_motivo: motivo });
+            return { unitId: r.unitId, motivo: r.motivo ?? null, em: r.em ?? null };
+        },
+
+        async cotasConferidas(id) {
+            return (await chamar<boolean | null>('cotas_conferidas', { p_assembleia: id })) === true;
+        },
+    };
+}
+
+// ─── operações do gestor ─────────────────────────────────────────────────────
+
+/** De qual condomínio é a assembleia, e o aviso da convocação (o gestor lê pela RLS). */
+async function condominioDaAssembleia(id: string): Promise<{ empreendimentoId: string; avisoId: string | null }> {
+    const { data, error } = await supabase.from('condominio_assembleias')
+        .select('empreendimento_id, aviso_id').eq('id', id).maybeSingle();
+    if (error) falhar(error);
+    if (!data) throw new Error('Assembleia não encontrada.');
+    const l = data as Linha;
+    return { empreendimentoId: l.empreendimento_id, avisoId: l.aviso_id ?? null };
+}
+
 export const operacoesDoGestor: OperacoesAssembleia = {
-    async convocar(id, corpoAviso) {
-        const r = await chamar<Linha>('condominio_assembleia_convocar', { p_assembleia: id, p_corpo_aviso: corpoAviso });
-        return { unidades: num(r.unidades), fora: (r.fora ?? []) as string[], avisoId: r.avisoId };
+    ...conducaoPorRpc('condominio_assembleia_'),
+
+    listar: empreendimentoId => condominioAssembleiaService.listar(empreendimentoId),
+    salvarRascunho: dados => condominioAssembleiaService.salvarRascunho(dados),
+    salvarItens: (id, itens) => condominioAssembleiaService.salvarItens(id, itens),
+    excluirRascunho: id => condominioAssembleiaService.excluirRascunho(id),
+
+    async unidadesFora(id) {
+        const { empreendimentoId } = await condominioDaAssembleia(id);
+        // Import tardio: o cadastro de unidades é pesado e só o Convocar do gestor precisa.
+        const { empreendimentoService } = await import('./empreendimentoService');
+        const todas = await empreendimentoService.listAllUnitsForEmpreendimento(empreendimentoId);
+        // Mesmo rótulo do banco: "Torre — Unidade".
+        return todas.filter(u => !(Number(u.fracao_ideal_decimal) > 0)).map(u => `${u._tower_name} — ${u.name}`);
     },
 
-    async cancelar(id, motivo, corpoAviso) {
-        return chamar<ResultadoCancelar>('condominio_assembleia_cancelar',
-            { p_assembleia: id, p_motivo: motivo, p_corpo_aviso: corpoAviso });
+    async leiturasDoAviso(id) {
+        const { empreendimentoId, avisoId } = await condominioDaAssembleia(id);
+        if (!avisoId) return 0;
+        const avisos = await condominioComunicacaoService.listAvisos(empreendimentoId);
+        return avisos.find(av => av.id === avisoId)?._leituras ?? 0;
     },
 
-    async registrarPresenca(id, unitId, presenca, procurador, procuracaoId) {
-        return chamar<ResultadoPresenca>('condominio_assembleia_registrar_presenca', {
-            p_assembleia: id, p_unit: unitId, p_presenca: presenca,
-            p_procurador: procurador ?? null, p_procuracao: procuracaoId ?? null,
+    async enviarDocumento(id, arquivo, { categoria, titulo, visivelPortal }) {
+        const { empreendimentoId } = await condominioDaAssembleia(id);
+        // A org da OPERAÇÃO do condomínio (pode ser própria — 21/10/2026), não a do empreendimento.
+        const { data, error } = await supabase.from('empreendimentos')
+            .select('id, organization_id, condominio_org_id').eq('id', empreendimentoId).maybeSingle();
+        if (error) falhar(error);
+        if (!data) throw new Error('Condomínio da assembleia não encontrado.');
+        const doc = await condominioComunicacaoService.uploadDocumento(arquivo, {
+            empreendimento_id: empreendimentoId,
+            organization_id: orgDoCondominio(data as { organization_id: string; condominio_org_id?: string | null }),
+            titulo,
+            categoria,
+            visivel_portal: visivelPortal,
         });
+        return { documentoId: doc.id };
     },
 
-    async instalar(id, { convocacao, presidente, secretario, editalEntregue }) {
-        const q = await chamar<Linha>('condominio_assembleia_instalar', {
-            p_assembleia: id, p_convocacao: convocacao, p_presidente: presidente,
-            p_secretario: secretario, p_edital_entregue: editalEntregue,
-        });
-        return quorumInstalacaoDe(q)!;
-    },
-
-    async lancarVoto(itemId, unitId, opcao) {
-        return chamar<ResultadoVotoLancado>('condominio_assembleia_lancar_voto',
-            { p_item: itemId, p_unit: unitId, p_opcao: opcao });
-    },
-
-    async encerrar(id, deliberacoes, observacao) {
-        const r = await chamar<Linha>('condominio_assembleia_encerrar',
-            { p_assembleia: id, p_deliberacoes: deliberacoes, p_observacao: observacao });
-        return retratoDe(r)!;
-    },
-
-    async vincularAta(id, documentoId) {
-        return chamar<{ ataDocumentoId: string }>('condominio_assembleia_vincular_ata',
-            { p_assembleia: id, p_documento: documentoId });
-    },
-
-    async apuracao(id) {
-        return apuracaoDe(await chamar<Linha>('condominio_assembleia_apuracao', { p_assembleia: id }));
-    },
-
-    async impedimentos(id) {
-        const lista = (await chamar<Linha[] | null>('condominio_assembleia_impedimentos', { p_assembleia: id })) ?? [];
-        return lista.map(i => ({
-            unitId: i.unitId, motivo: i.motivo, origem: i.origem === 'MANUAL' ? 'MANUAL' as const : 'AUTOMATICA' as const,
-        }));
-    },
-
-    async marcarImpedida(id, unitId, motivo) {
-        const r = await chamar<Linha>('condominio_assembleia_marcar_impedida',
-            { p_assembleia: id, p_unit: unitId, p_motivo: motivo });
-        return { unitId: r.unitId, motivo: r.motivo ?? null, em: r.em ?? null };
-    },
-
-    async cotasConferidas(id) {
-        return (await chamar<boolean | null>('condominio_assembleia_cotas_conferidas', { p_assembleia: id })) === true;
+    async abrirDocumento(id, documentoId) {
+        const { empreendimentoId } = await condominioDaAssembleia(id);
+        const docs = await condominioComunicacaoService.listDocumentos(empreendimentoId);
+        const doc = docs.find(d => d.id === documentoId);
+        if (!doc) throw new Error('O documento não está entre os documentos deste condomínio.');
+        return condominioComunicacaoService.abrirDocumento(doc);
     },
 
     async carregar(id) {
@@ -720,6 +834,24 @@ function conferirItem(item: ItemRascunho, posicao: number): void {
     }
 }
 
+/**
+ * A pauta como o banco grava (sem assembleia e ordem — a ordem é a da lista), conferida
+ * ANTES de gravar: o gestor (tabela) e o síndico (RPC sindico_portal_assembleia_salvar_itens)
+ * mandam a mesma coisa e recusam com a mesma frase.
+ */
+export function pautaParaGravar(itens: ItemRascunho[]) {
+    itens.forEach((it, i) => conferirItem(it, i + 1));
+    return itens.map(it => ({
+        ...(it.id ? { id: it.id } : {}),
+        titulo: it.titulo.trim(),
+        descricao: textoOuNulo(it.descricao),
+        tipo: it.tipo,
+        opcoes: it.tipo === 'ESCOLHA' ? (it.opcoes ?? []).map(o => o.trim()) : null,
+        quorum: it.quorum,
+        assunto: textoOuNulo(it.assunto),
+    }));
+}
+
 export const condominioAssembleiaService = {
     async listar(empreendimentoId: string): Promise<Assembleia[]> {
         const { data, error } = await supabase
@@ -762,19 +894,7 @@ export const condominioAssembleiaService = {
      * Só vale em RASCUNHO (a trava do banco recusa nos outros estados).
      */
     async salvarItens(assembleiaId: string, itens: ItemRascunho[]): Promise<ItemAssembleia[]> {
-        itens.forEach((it, i) => conferirItem(it, i + 1));
-
-        const novas = itens.map((it, i) => ({
-            ...(it.id ? { id: it.id } : {}),
-            assembleia_id: assembleiaId,
-            ordem: i + 1,
-            titulo: it.titulo.trim(),
-            descricao: textoOuNulo(it.descricao),
-            tipo: it.tipo,
-            opcoes: it.tipo === 'ESCOLHA' ? (it.opcoes ?? []).map(o => o.trim()) : null,
-            quorum: it.quorum,
-            assunto: textoOuNulo(it.assunto),
-        }));
+        const novas = pautaParaGravar(itens).map((it, i) => ({ ...it, assembleia_id: assembleiaId, ordem: i + 1 }));
 
         const atual = await supabase.from('condominio_assembleia_itens').select(COLS_ITEM)
             .eq('assembleia_id', assembleiaId).order('ordem', { ascending: true });

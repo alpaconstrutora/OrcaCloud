@@ -8,8 +8,10 @@
 // faz o early return — a tela substitui o condomínio inteiro, cabeçalho e abas.
 //
 // A condução entra por `ops: OperacoesAssembleia`. O gestor passa
-// `operacoesDoGestor` (A4); a fase B (síndico) passa a implementação da porta
-// dele — a tela não sabe quem conduz. A regra (estado, R3, R6–R9) é do BANCO:
+// `operacoesDoGestor` (A4); o síndico, no Portal do Síndico, passa
+// `operacoesDoSindico` (B2) — a tela não sabe quem conduz. Por isso ela não chama
+// serviço nenhum por fora: unidades sem fração, leituras do aviso, upload e abertura
+// de documento também são `ops` (B2). A regra (estado, R3, R6–R9) é do BANCO:
 // aqui só se diz o motivo de um botão desligado antes de errar.
 //
 // Decisões que moram aqui:
@@ -22,7 +24,9 @@
 //     do portal que a tela não conhecia, a tela avisa;
 //   • a ata sai do RETRATO devolvido pelo encerrar; upload falho deixa "Gerar ata
 //     novamente", que refaz do mesmo retrato (e não encerra de novo);
-//   • organização de upload = orgDoCondominio(e) (catraca orgDoCondominioGuard);
+//   • a org do upload é de quem implementa `ops` (gestor: orgDoCondominio; síndico: a
+//     Edge Function, pela org do condomínio no banco). A tela fixa SÓ a natureza do
+//     documento: ata = ATA visível no portal; procuração = OUTRO, NUNCA visível no portal;
 //   • A10: sem cota cobrada pelo app (ops.cotasConferidas = false), aviso — que não bloqueia
 //     nada — no Convocar, no Instalar e no topo de Unidades; o gestor marca a impedida à mão
 //     na gaveta da unidade (ops.marcarImpedida). A situação diz a origem: "Impedida (marcada
@@ -42,16 +46,13 @@ import { KpiCard } from '../ui/KpiCard';
 import SecaoTitulo from '../ui/SecaoTitulo';
 import { useConfirm } from '../ui/confirm';
 import { identidadeDoCondominio, nomeDoCondominioNosDocumentos } from '../../utils/condominioIdentidade';
-import { orgDoCondominio } from '../../utils/orgDoCondominio';
 import {
     dataHoraBrasilia, montarAta, montarEdital, percentualDoTotal, rotuloOpcao, ROTULO_STATUS, ROTULO_TIPO,
 } from '../../utils/assembleiaTextos';
 import { baixarEditalPdf, gerarAtaPdf } from '../../services/assembleiaPdf';
-import { condominioComunicacaoService } from '../../services/condominioComunicacaoService';
-import { empreendimentoService } from '../../services/empreendimentoService';
 import type {
-    Apuracao, Assembleia, AssembleiaCarregada, DadosInstalacao, ImpedimentoUnidade, ItemAssembleia, OpcaoVoto,
-    OperacoesAssembleia, PresencaAssembleia, Retrato, UnidadeNaAssembleia,
+    Apuracao, Assembleia, AssembleiaCarregada, DadosInstalacao, DocumentoDaAssembleia, ImpedimentoUnidade,
+    ItemAssembleia, OpcaoVoto, OperacoesAssembleia, PresencaAssembleia, Retrato, UnidadeNaAssembleia,
 } from '../../services/condominioAssembleiaService';
 import type { Empreendimento } from '../../types/empreendimento';
 import UnidadeSheet from './assembleia/UnidadeSheet';
@@ -64,15 +65,25 @@ import {
     type ImpedimentoAgora,
 } from './assembleia/comum';
 
+/** O que a tela usa do condomínio: identidade e o nome nos documentos. O Portal do Síndico monta isto. */
+export type CondominioDaAssembleia = Pick<Empreendimento, 'id' | 'name' | 'code' | 'condominio_razao_social' | 'condominio_cnpj'>;
+
 interface Props {
     assembleiaId: string;
-    empreendimento: Empreendimento;
+    empreendimento: CondominioDaAssembleia;
     ops: OperacoesAssembleia;
     /** Volta para a aba Assembleias do condomínio. */
     onVoltar: () => void;
     /** Volta para a LISTA de condomínios — o primeiro salto da migalha. */
     onVoltarParaLista?: () => void;
+    /** Primeiro salto da migalha (padrão "Condomínios"; no Portal do Síndico, "Assembleias"). */
+    rotuloDaLista?: string;
 }
+
+/** A natureza de cada documento é da TELA, não de quem implementa `ops` (B1/B2). */
+const DOC_ATA: Omit<DocumentoDaAssembleia, 'titulo'> = { categoria: 'ATA', visivelPortal: true };
+/** Procuração é documento pessoal: NUNCA visível no portal. */
+const DOC_PROCURACAO: Omit<DocumentoDaAssembleia, 'titulo'> = { categoria: 'OUTRO', visivelPortal: false };
 
 type Gaveta = 'convocar' | 'instalar' | 'encerrar' | 'cancelar' | null;
 
@@ -87,10 +98,10 @@ const COLUNAS_UNIDADES: StandardTableColumn[] = [
     { key: 'votos', label: 'Votos', sortable: true, width: 160 },
 ];
 
-const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: e, ops, onVoltar, onVoltarParaLista }) => {
+const AssembleiaDetalheView: React.FC<Props> = ({
+    assembleiaId, empreendimento: e, ops, onVoltar, onVoltarParaLista, rotuloDaLista = 'Condomínios',
+}) => {
     const confirm = useConfirm();
-    // A org da OPERAÇÃO do condomínio (pode ser própria — 21/10/2026).
-    const orgId = orgDoCondominio(e);
     const identidade = identidadeDoCondominio(e.name, e.code);
     // Edital e ata com o MESMO nome: o banco congela este critério no retrato (encerrar).
     const condominio = React.useMemo(
@@ -162,8 +173,8 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
             await atualizarApuracao(d.assembleia);
             if (d.assembleia.avisoId) {
                 // Só informação (R4): leitura não trava nada, e falhar aqui não derruba a tela.
-                condominioComunicacaoService.listAvisos(e.id)
-                    .then(avisos => setLeituras(avisos.find(av => av.id === d.assembleia.avisoId)?._leituras ?? 0))
+                ops.leiturasDoAviso(d.assembleia.id)
+                    .then(n => setLeituras(n))
                     .catch(() => setLeituras(null));
             }
         } catch (err) {
@@ -171,7 +182,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
         } finally {
             if (!silencioso) setCarregando(false);
         }
-    }, [ops, assembleiaId, atualizarApuracao, e.id]);
+    }, [ops, assembleiaId, atualizarApuracao]);
 
     React.useEffect(() => { carregar(); }, [carregar]);
 
@@ -228,10 +239,10 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
         setGaveta('convocar');
         setFora(null);
         setErroFora(null);
+        if (!a) return;
         try {
-            // Mesmo rótulo do banco: "Torre — Unidade".
-            const todas = await empreendimentoService.listAllUnitsForEmpreendimento(e.id);
-            setFora(todas.filter(u => !(Number(u.fracao_ideal_decimal) > 0)).map(u => `${u._tower_name} — ${u.name}`));
+            // Mesmo rótulo e ordem do banco: "Torre — Unidade".
+            setFora(await ops.unidadesFora(a.id));
         } catch (err) {
             setErroFora(msg(err, 'erro desconhecido'));
         }
@@ -288,15 +299,10 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                 const pdf = await gerarAtaPdf(modelo);
                 const dia = diaBrasilia(retrato.cabecalho.encerradaEm ?? assembleia.encerradaEm ?? new Date());
                 const arquivo = new File([pdf], `ata-${dia}.pdf`, { type: 'application/pdf' });
-                const doc = await condominioComunicacaoService.uploadDocumento(arquivo, {
-                    empreendimento_id: e.id,
-                    organization_id: orgId,
-                    titulo: `${modelo.titulo} — ${assembleia.titulo}`,
-                    categoria: 'ATA',
-                    visivel_portal: true,
-                });
-                documentoId = doc.id;
-                ataEnviada.current = doc.id;
+                const doc = await ops.enviarDocumento(assembleia.id, arquivo,
+                    { ...DOC_ATA, titulo: `${modelo.titulo} — ${assembleia.titulo}` });
+                documentoId = doc.documentoId;
+                ataEnviada.current = doc.documentoId;
             }
             const v = await ops.vincularAta(assembleia.id, documentoId);
             ataEnviada.current = null;
@@ -372,10 +378,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
         if (!a?.ataDocumentoId) return;
         const janela = window.open('', '_blank');
         try {
-            const docs = await condominioComunicacaoService.listDocumentos(e.id);
-            const doc = docs.find(d => d.id === a.ataDocumentoId);
-            if (!doc) throw new Error('A ata não está entre os documentos deste condomínio.');
-            const url = await condominioComunicacaoService.abrirDocumento(doc);
+            const url = await ops.abrirDocumento(a.id, a.ataDocumentoId);
             if (janela) janela.location.href = url;
             else window.open(url, '_blank', 'noopener');
         } catch (err) {
@@ -395,14 +398,9 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
             if (p.presenca === 'PROCURADOR') {
                 procuracaoId = unidade.procuracaoDocumentoId;
                 if (p.arquivo) {
-                    const doc = await condominioComunicacaoService.uploadDocumento(p.arquivo, {
-                        empreendimento_id: e.id,
-                        organization_id: orgId,
-                        titulo: `Procuração — ${unidade.unidadeRotulo ?? 'unidade'} — ${a.titulo}`,
-                        categoria: 'OUTRO',
-                        visivel_portal: false,
-                    });
-                    procuracaoId = doc.id;
+                    const doc = await ops.enviarDocumento(a.id, p.arquivo,
+                        { ...DOC_PROCURACAO, titulo: `Procuração — ${unidade.unidadeRotulo ?? 'unidade'} — ${a.titulo}` });
+                    procuracaoId = doc.documentoId;
                 }
             }
             const r = await ops.registrarPresenca(a.id, unidade.unitId, p.presenca, p.procurador, procuracaoId);
@@ -554,7 +552,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                 <Breadcrumb
                     className="mb-1.5"
                     items={[
-                        { label: 'Condomínios', onClick: onVoltarParaLista ?? onVoltar },
+                        { label: rotuloDaLista, onClick: onVoltarParaLista ?? onVoltar },
                         { label: identidade, onClick: onVoltar },
                         { label: titulo },
                     ]}

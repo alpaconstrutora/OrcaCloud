@@ -970,8 +970,24 @@ nome. Erros da porta: 42501 com HINT `sindico_sem_sessao` | `sindico_sem_acesso`
 - Teste: `__tests__/sindicoAssembleias.test.tsx` — `sem sessão mostra "Entre com
   e-mail e senha para conduzir a assembleia"`; `usa operacoesDoSindico`.
 
-- [ ] **1–4.** Teste → falha → implementar → passa; `check-ui-standard.sh` → 0.
-- [ ] **5. Commit** `feat(portal-sindico): aba Assembleias`.
+- [x] **1–4.** Teste → falha → implementar → passa; `check-ui-standard.sh` → 0.
+- [x] **5. Commit** `feat(portal-sindico): aba Assembleias`.
+
+**Execução (26/11):** a porta da tela é uma só — `OperacoesAssembleia` ganhou também
+`listar`/`salvarRascunho`/`salvarItens`/`excluirRascunho` (a lista e a gaveta de rascunho
+passam a receber `ops`, sem cópia) e `abrirDocumento(id, documentoId)` (o "Abrir ata" também
+lia o serviço por fora), além de `unidadesFora`, `leiturasDoAviso` e `enviarDocumento`. A
+condução do gestor e a do síndico saem do mesmo `conducaoPorRpc(prefixo, identidade)` — as
+RPCs têm os mesmos parâmetros, só muda o prefixo e a identidade. O gestor resolve o condomínio
+pela assembleia (`condominio_assembleias.empreendimento_id`) e sobe com
+`orgDoCondominio(empreendimentos)`; o síndico sobe pela `sindico-portal-documentos`. A tela fixa
+a natureza do documento: ata = ATA visível no portal; procuração = OUTRO, **nunca** visível
+no portal. A tela recebe só `CondominioDaAssembleia` (id, nome, código, razão social, CNPJ) —
+o Portal do Síndico monta isso do payload dele. Aba "Assembleias" entre Avisos e Documentos
+(convocar publica o aviso; a ata cai em Documentos). Sem sessão (link) a aba diz "Entre com
+e-mail e senha para conduzir a assembleia" e não chama o banco; a administradora (portal pelo
+app) é mandada para a tela do gestor. Catraca nova no teste da A7: a tela, a gaveta e a lista
+não chamam `condominioComunicacaoService`/`empreendimentoService`/`supabase` por fora de `ops`.
 
 ### Task B3: Aplicar, publicar e provar
 
@@ -987,4 +1003,4 @@ nome. Erros da porta: 42501 com HINT `sindico_sem_sessao` | `sindico_sem_acesso`
 
 - [x] Desenho aprovado pelo usuário (25/11/2026)
 - [ ] Fase A: 0 de 9
-- [ ] Fase B: 1 de 3 (B1 commitada; migration e function ainda não aplicadas/publicadas)
+- [ ] Fase B: 2 de 3 (B1 e B2 commitadas; migration e function ainda não aplicadas/publicadas)

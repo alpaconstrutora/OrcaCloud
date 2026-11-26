@@ -8,18 +8,25 @@
  * aqui é o que só a TELA decide:
  *   • voto na sala sobre voto do portal pede confirmação antes de chamar o banco (R7);
  *   • Instalar exige a caixa do edital e a 1ª convocação diz por que está desligada (R4/R6);
- *   • Encerrar → retrato → ata em PDF → Documentos (ATA, visível no portal, org do
- *     CONDOMÍNIO) → vincular; upload falho deixa "Gerar ata novamente" (R9);
+ *   • Encerrar → retrato → ata em PDF → ops.enviarDocumento (ATA, visível no portal) →
+ *     vincular; upload falho deixa "Gerar ata novamente" (R9). A org do upload é de quem
+ *     implementa `ops` (B2) — o gestor a prova em condominioAssembleiaService.test.ts;
  *   • Convocar mostra quem fica fora e a antecedência, e manda o texto do A5 (R1/R4);
- *   • presença por procurador sobe a procuração antes de registrar (R7);
+ *   • presença por procurador sobe a procuração antes de registrar (R7) — SEMPRE
+ *     OUTRO e NUNCA visível no portal (B2: a tela fixa isso, não quem implementa `ops`);
  *   • Cancelar manda o texto de cancelamento do A5 (R10).
+ *
+ * B2: a tela não fala com serviço nenhum por fora de `ops` (catraca no fim do arquivo) —
+ * os serviços abaixo continuam espiados só para provar que NÃO são chamados.
  *
  * O PDF é o de verdade (A6): edital e ata saem do jsPDF uma vez por esta tela. Só o
  * `doc.save` é trocado (o jsdom não baixa arquivo).
  */
 import React from 'react';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 
 const { uploadDocumento, listAvisos, listDocumentos, abrirDocumento, listAllUnitsForEmpreendimento, salvos,
     salvarRascunho, salvarItens } = vi.hoisted(() => ({
@@ -182,6 +189,15 @@ function opsFalso(primeira: AssembleiaCarregada, extra: Partial<OperacoesAssembl
         marcarImpedida: vi.fn(async (_id: string, unitId: string, motivo: string | null) =>
             ({ unitId, motivo, em: motivo ? new Date().toISOString() : null })),
         cotasConferidas: vi.fn(async () => true),
+        // B2 — o que a tela lia/subia por fora agora é ops.
+        unidadesFora: vi.fn(async () => [] as string[]),
+        leiturasDoAviso: vi.fn(async () => 3),
+        enviarDocumento: vi.fn(async (_id: string, _arquivo: File, d: { categoria: string }) => ({ documentoId: `doc-${d.categoria}` })),
+        abrirDocumento: vi.fn(async () => 'https://assinada/doc.pdf'),
+        listar: vi.fn(async () => [] as Assembleia[]),
+        salvarRascunho: vi.fn(),
+        salvarItens: vi.fn(),
+        excluirRascunho: vi.fn(async () => undefined),
         ...extra,
     };
     return ops as typeof ops & OperacoesAssembleia;
@@ -204,11 +220,13 @@ async function abrirUnidade(rotulo: string) {
 beforeEach(() => {
     vi.clearAllMocks();
     salvos.length = 0;
-    listAvisos.mockResolvedValue([{ id: 'av1', _leituras: 3 }]);
-    listDocumentos.mockResolvedValue([]);
-    uploadDocumento.mockImplementation(async (arquivo: File, payload: any) => ({ id: `doc-${payload.categoria}`, ...payload,
-        file_name: arquivo.name }));
-    listAllUnitsForEmpreendimento.mockResolvedValue([]);
+});
+
+// A tela da assembleia só fala com `ops` (B2): nenhum serviço é chamado por fora.
+afterEach(() => {
+    for (const f of [uploadDocumento, listAvisos, listDocumentos, abrirDocumento, listAllUnitsForEmpreendimento]) {
+        expect(f).not.toHaveBeenCalled();
+    }
 });
 
 // ─── voto na sala sobre voto do portal (R7) ──────────────────────────────────
@@ -373,19 +391,19 @@ describe('encerrar', () => {
         expect(ops.encerrar).toHaveBeenCalledWith('a1',
             { i1: 'Contas aprovadas sem ressalvas.', i2: null }, null);
         expect(gerarAtaPdf).toHaveBeenCalledTimes(1);
-        const [arquivo, payload] = uploadDocumento.mock.calls[0];
+        const [id, arquivo, documento] = ops.enviarDocumento.mock.calls[0];
+        expect(id).toBe('a1');
         expect(arquivo).toBeInstanceOf(File);
         expect((arquivo as File).name).toBe('ata-2026-12-10.pdf');
         expect((arquivo as File).size).toBeGreaterThan(1000); // o PDF real
-        expect(payload).toMatchObject({ empreendimento_id: 'emp1', organization_id: 'org-condo', categoria: 'ATA',
-            visivel_portal: true });
+        expect(documento).toEqual({ categoria: 'ATA', visivelPortal: true, titulo: expect.stringMatching(/ — AGO 2026$/) });
         expect(screen.queryByRole('button', { name: 'Gerar ata novamente' })).not.toBeInTheDocument();
         expect(await screen.findByText(/Ata gravada em Documentos/)).toBeInTheDocument();
     });
 
     it('upload falho mostra Gerar ata novamente', async () => {
         const ops = opsFalso(instalada());
-        uploadDocumento.mockRejectedValueOnce(new Error('Falha ao enviar o arquivo: rede caiu'));
+        ops.enviarDocumento.mockRejectedValueOnce(new Error('Falha ao enviar o arquivo: rede caiu'));
         montar(ops);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Encerrar' }));
@@ -400,7 +418,7 @@ describe('encerrar', () => {
         fireEvent.click(novamente);
         await waitFor(() => expect(ops.vincularAta).toHaveBeenCalledWith('a1', 'doc-ATA'));
         expect(ops.encerrar).toHaveBeenCalledTimes(1);
-        expect(uploadDocumento).toHaveBeenCalledTimes(2);
+        expect(ops.enviarDocumento).toHaveBeenCalledTimes(2);
     });
 });
 
@@ -417,15 +435,13 @@ describe('convocar', () => {
         const convocada = { ...rascunho, status: 'CONVOCADA' as const, convocadaEm: new Date().toISOString(), avisoId: 'av1' };
         const ops = opsFalso(carregada(rascunho, 0));
         ops.carregar.mockResolvedValueOnce(carregada(rascunho, 0)).mockResolvedValue(carregada(convocada, 0));
-        listAllUnitsForEmpreendimento.mockResolvedValue([
-            { id: 'u1', name: '101', _tower_name: 'Torre A', fracao_ideal_decimal: 0.00125 },
-            { id: 'u9', name: 'Estacionamento', _tower_name: 'Torre A', fracao_ideal_decimal: null },
-        ]);
+        ops.unidadesFora.mockResolvedValue(['Torre A — Estacionamento']);
         montar(ops);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Convocar' }));
         const gaveta = await screen.findByRole('dialog', { name: 'Convocar assembleia' });
         expect(await within(gaveta).findByText('Torre A — Estacionamento')).toBeInTheDocument();
+        expect(ops.unidadesFora).toHaveBeenCalledWith('a1');
         expect(within(gaveta).getByText(/fora da assembleia: sem fração ideal/)).toBeInTheDocument();
         expect(within(gaveta).getByText(/10 dias de antecedência/)).toBeInTheDocument();
 
@@ -436,6 +452,7 @@ describe('convocar', () => {
         // aviso — a leitura é registrada por pessoa (só informação).
         expect(await screen.findByText(/Aviso de convocação: 3 condôminos que leram — só informação: a leitura não é exigida para instalar/))
             .toBeInTheDocument();
+        expect(ops.leiturasDoAviso).toHaveBeenCalledWith('a1');
     });
 });
 
@@ -460,10 +477,13 @@ describe('presença', () => {
 
         await waitFor(() => expect(ops.registrarPresenca)
             .toHaveBeenCalledWith('a1', 'u2', 'PROCURADOR', 'Carlos Procurador', 'doc-OUTRO'));
-        expect(uploadDocumento).toHaveBeenCalledWith(arquivo, expect.objectContaining({
-            empreendimento_id: 'emp1', organization_id: 'org-condo', categoria: 'OUTRO', visivel_portal: false,
-            titulo: 'Procuração — Torre A — 102 — AGO 2026',
-        }));
+        // B2: procuração é SEMPRE OUTRO e NUNCA visível no portal — quem fixa é a tela.
+        expect(ops.enviarDocumento).toHaveBeenCalledTimes(1);
+        expect(ops.enviarDocumento).toHaveBeenCalledWith('a1', arquivo, {
+            categoria: 'OUTRO', visivelPortal: false, titulo: 'Procuração — Torre A — 102 — AGO 2026',
+        });
+        expect(ops.registrarPresenca.mock.invocationCallOrder[0])
+            .toBeGreaterThan(ops.enviarDocumento.mock.invocationCallOrder[0]);
     });
 
     it('não oferece remover a presença de quem já votou na sala', async () => {
@@ -517,14 +537,14 @@ describe('abrir ata (pop-up)', () => {
     it('a aba nasce no clique, em branco, e só depois recebe o endereço assinado', async () => {
         const janela = { location: { href: '' }, close: vi.fn() };
         const abrir = vi.spyOn(window, 'open').mockReturnValue(janela as unknown as Window);
-        listDocumentos.mockResolvedValue([{ id: 'doc-ata', storage_path: 'org/emp/ata.pdf', url: null }]);
-        abrirDocumento.mockResolvedValue('https://assinada/ata.pdf');
-        montar(opsFalso(encerradaComAta()));
+        const ops = opsFalso(encerradaComAta(), { abrirDocumento: vi.fn(async () => 'https://assinada/ata.pdf') });
+        montar(ops);
 
         fireEvent.click(await screen.findByRole('button', { name: 'Abrir ata' }));
         // Síncrono, ainda dentro do clique — antes de qualquer await.
         expect(abrir).toHaveBeenCalledWith('', '_blank');
         await waitFor(() => expect(janela.location.href).toBe('https://assinada/ata.pdf'));
+        expect(ops.abrirDocumento).toHaveBeenCalledWith('a1', 'doc-ata');
         expect(abrir).toHaveBeenCalledTimes(1);
         abrir.mockRestore();
     });
@@ -532,9 +552,9 @@ describe('abrir ata (pop-up)', () => {
     it('erro fecha a aba em branco e avisa', async () => {
         const janela = { location: { href: '' }, close: vi.fn() };
         const abrir = vi.spyOn(window, 'open').mockReturnValue(janela as unknown as Window);
-        listDocumentos.mockResolvedValue([{ id: 'doc-ata', storage_path: 'org/emp/ata.pdf', url: null }]);
-        abrirDocumento.mockRejectedValue(new Error('Falha ao gerar o link do arquivo: expirou'));
-        montar(opsFalso(encerradaComAta()));
+        montar(opsFalso(encerradaComAta(), {
+            abrirDocumento: vi.fn(async () => { throw new Error('Falha ao gerar o link do arquivo: expirou'); }),
+        }));
 
         fireEvent.click(await screen.findByRole('button', { name: 'Abrir ata' }));
         await waitFor(() => expect(janela.close).toHaveBeenCalled());
@@ -607,9 +627,11 @@ describe('gaveta de rascunho', () => {
     function abrirGaveta() {
         const onSalva = vi.fn();
         const onClose = vi.fn();
+        // B2: a gaveta grava por `ops` (gestor: tabela; síndico: RPC) — aqui, o falso.
+        const ops = opsFalso(carregada(gravada, 0), { salvarRascunho, salvarItens });
         render(
             <ConfirmProvider>
-                <AssembleiaSheet open onClose={onClose} empreendimentoId="emp1" assembleiaId={null} onSalva={onSalva} />
+                <AssembleiaSheet open onClose={onClose} empreendimentoId="emp1" assembleiaId={null} ops={ops} onSalva={onSalva} />
             </ConfirmProvider>,
         );
         fireEvent.change(screen.getByLabelText('Título'), { target: { value: 'AGO 2027' } });
@@ -736,5 +758,26 @@ describe('impedimento marcado à mão (A10)', () => {
         expect(await within(gaveta).findByText('Impedida: Cota de 10/2026 vencida em 10/11/2026.')).toBeInTheDocument();
         expect(within(gaveta).queryByRole('button', { name: 'Desmarcar' })).not.toBeInTheDocument();
         expect(within(gaveta).getByRole('button', { name: 'Marcar como impedida' })).toBeInTheDocument();
+    });
+});
+
+// ─── B2: a tela da assembleia só fala com `ops` ──────────────────────────────
+
+describe('catraca B2: a tela e as peças dela não chamam serviço por fora de ops', () => {
+    it('AssembleiaDetalheView e assembleia/* não usam condominioComunicacaoService/empreendimentoService', () => {
+        const raiz = path.join(process.cwd(), 'components', 'condominio');
+        const arquivos = ['AssembleiaDetalheView.tsx', 'AssembleiaSheet.tsx', 'AssembleiasTab.tsx',
+            ...readdirSync(path.join(raiz, 'assembleia')).map(f => path.join('assembleia', f))];
+        const achados: string[] = [];
+        for (const f of arquivos) {
+            readFileSync(path.join(raiz, f), 'utf8').split('\n').forEach((linha, i) => {
+                if (/^\s*(\/\/|\*)/.test(linha)) return; // comentário
+                if (/\b(condominioComunicacaoService|empreendimentoService|condominioAssembleiaService)\s*\./.test(linha)
+                    || /\bsupabase\b/.test(linha)) {
+                    achados.push(`${f}:${i + 1}: ${linha.trim()}`);
+                }
+            });
+        }
+        expect(achados).toEqual([]);
     });
 });

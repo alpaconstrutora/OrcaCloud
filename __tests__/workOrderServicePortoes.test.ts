@@ -8,6 +8,7 @@ const chamadas: { metodo: string; args: unknown[] }[] = [];
 type Resposta = { data: unknown; error: { message: string; code?: string } | null };
 let respostaPorTabela: Record<string, Resposta> = {};
 let respostaRpc: Resposta = { data: [], error: null };
+let respostaUpload: { message: string } | null = null;
 
 function cadeia(tabela: string) {
   const r = () => respostaPorTabela[tabela] ?? { data: null, error: null };
@@ -33,6 +34,14 @@ vi.mock('../lib/supabase', () => ({
     rpc: (nome: string, params: unknown) => {
       chamadas.push({ metodo: 'rpc', args: [nome, params] });
       return Promise.resolve(respostaRpc);
+    },
+    storage: {
+      from: (bucket: string) => ({
+        upload: (path: string, file: unknown, opts: unknown) => {
+          chamadas.push({ metodo: 'upload', args: [bucket, path, file, opts] });
+          return Promise.resolve({ error: respostaUpload });
+        },
+      }),
     },
   },
 }));
@@ -63,6 +72,7 @@ beforeEach(() => {
   chamadas.length = 0;
   respostaPorTabela = {};
   respostaRpc = { data: [], error: null };
+  respostaUpload = null;
 });
 
 describe('workOrderService.validateTransition — portões do banco + checagens próprias', () => {
@@ -157,6 +167,13 @@ describe('workOrderService — inspeção e NC da fase 2', () => {
     expect(achar('eq')[0].args).toEqual(['id', 'nc1']);
   });
 
+  it('encerrarNC sem foto nova não mexe na evidência anterior (decisão 3: não zera resolution_evidence_id)', async () => {
+    await workOrderService.encerrarNC('nc1', { causa: 'traço errado', acaoCorretiva: 'refazer' });
+    const patch = achar('update')[0].args[0] as Record<string, unknown>;
+    expect(patch).toMatchObject({ status: 'closed', causa: 'traço errado', corrective_action: 'refazer', eficacia: 'pendente' });
+    expect('resolution_evidence_id' in patch).toBe(false);
+  });
+
   it('encerrarNC sem causa ou sem ação corretiva é recusado antes de ir ao banco', async () => {
     await expect(workOrderService.encerrarNC('nc1', { causa: ' ', acaoCorretiva: 'x' })).rejects.toThrow(/causa/i);
     await expect(workOrderService.encerrarNC('nc1', { causa: 'x', acaoCorretiva: '' })).rejects.toThrow(/ação corretiva/i);
@@ -176,6 +193,56 @@ describe('workOrderService — inspeção e NC da fase 2', () => {
     await workOrderService.registrarEficacia('nc1', false);
     expect(achar('update')[0].args[0]).toEqual({ eficacia: 'nao_eficaz', status: 'open', closed_at: null });
     expect(achar('eq')[0].args).toEqual(['id', 'nc1']);
+  });
+
+  it('registrarEficacia não eficaz com motivo: reabre e acrescenta o motivo à descrição da NC', async () => {
+    respostaPorTabela.non_conformances = { data: { description: 'Reboco com fissura' }, error: null };
+    await workOrderService.registrarEficacia('nc1', false, '  fissura voltou ');
+    const patch = achar('update')[0].args[0] as Record<string, unknown>;
+    expect(patch).toMatchObject({ eficacia: 'nao_eficaz', status: 'open', closed_at: null });
+    expect(String(patch.description)).toMatch(/^Reboco com fissura\n\nVerificação de eficácia em \d{2}\/\d{2}\/\d{4}: não eficaz — fissura voltou$/);
+    expect(achar('select')[0].args).toEqual(['description']);
+  });
+
+  it('closeNonConformance saiu (decisão 2: encerrar é só encerrarNC)', () => {
+    expect('closeNonConformance' in workOrderService).toBe(false);
+  });
+
+  it('createNonConformance leva causa e ação corretiva opcionais (decisão 1)', async () => {
+    respostaPorTabela.non_conformances = { data: { id: 'nc-nova' }, error: null };
+    const nova = await workOrderService.createNonConformance({
+      workOrderId: 'wo1', description: 'Prumo fora', severity: 'minor', causa: ' gabarito torto ', correctiveAction: 'refazer',
+    });
+    expect(nova).toEqual({ id: 'nc-nova' });
+    expect(achar('insert')[0].args[0]).toMatchObject({
+      work_order_id: 'wo1', description: 'Prumo fora', severity: 'minor', causa: 'gabarito torto', corrective_action: 'refazer', status: 'open',
+    });
+
+    chamadas.length = 0;
+    await workOrderService.createNonConformance({ workOrderId: 'wo1', description: 'x', causa: '  ' });
+    expect(achar('insert')[0].args[0]).toMatchObject({ causa: null, corrective_action: null });
+  });
+
+  it('enviarFotoEvidencia: sobe no bucket privado e grava evidence_files com o PATH; devolve o id', async () => {
+    respostaPorTabela.evidence_files = { data: { id: 'ev1' }, error: null };
+    const file = new File(['x'], 'foto.png', { type: 'image/png' });
+    const id = await workOrderService.enviarFotoEvidencia({
+      orgId: 'org1', workOrderId: 'wo1', file, prefixo: 'nc_nc1', gate: 'execution', description: 'Correção da NC',
+    });
+    expect(id).toBe('ev1');
+    const [bucket, path] = achar('upload')[0].args as [string, string];
+    expect(bucket).toBe('operational-evidence');
+    expect(path).toMatch(/^evidence\/org1\/wo1\/nc_nc1_\d+\.png$/);
+    expect(achar('insert')[0].args[0]).toMatchObject({
+      work_order_id: 'wo1', file_type: 'photo', file_url: path, gate: 'execution', description: 'Correção da NC',
+    });
+
+    chamadas.length = 0;
+    respostaUpload = { message: 'sem permissão no bucket' };
+    await expect(workOrderService.enviarFotoEvidencia({
+      orgId: null, workOrderId: 'wo1', file, prefixo: 'p', gate: 'free', description: 'd',
+    })).rejects.toThrow('sem permissão no bucket');
+    expect(achar('insert')).toHaveLength(0);
   });
 
   it('histórico da NC e da resposta: tabela própria, filtrado e em ordem cronológica', async () => {

@@ -487,6 +487,10 @@ export interface CreateNonConformanceInput {
   severity?: NCSeverity
   responsibleId?: string
   dueDate?: string
+  /** Causa já conhecida na abertura (opcional) — encerrar exige causa (CHECK no banco). */
+  causa?: string
+  /** Ação corretiva planejada na abertura (opcional). */
+  correctiveAction?: string
 }
 
 // ────────────────────────────────────────────────────────────

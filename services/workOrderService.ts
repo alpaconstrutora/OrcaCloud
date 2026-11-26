@@ -6,6 +6,7 @@ import type {
   CreateWorkLogInput,
   CreateEvidenceInput,
   CreateNonConformanceInput,
+  EvidenceGate,
   TransitionValidationResult,
   NonConformanceHistoryRow,
   OeChecklistResponseHistoryRow,
@@ -444,6 +445,44 @@ export const workOrderService = {
     return data
   },
 
+  /**
+   * Foto de evidência da OE (checklist e correção de NC — um upload só): sobe no bucket privado
+   * `operational-evidence` em `evidence/{orgId}/{workOrderId}/{prefixo}_{ts}.{ext}` (a policy
+   * do bucket confere a org pelo 2º segmento) e grava `evidence_files` com o PATH em `file_url`
+   * (a leitura resolve signed URL — ver OperacionalEvidence.resolveSignedUrls). Devolve o id.
+   */
+  async enviarFotoEvidencia(input: {
+    orgId: string | null | undefined
+    workOrderId: string
+    file: File
+    prefixo: string
+    gate: EvidenceGate
+    description: string
+  }): Promise<string> {
+    const ext = input.file.name.split('.').pop() ?? 'jpg'
+    const path = `evidence/${input.orgId ?? 'default'}/${input.workOrderId}/${input.prefixo}_${Date.now()}.${ext}`
+
+    const { error: upErr } = await supabase.storage
+      .from('operational-evidence')
+      .upload(path, input.file, { upsert: false })
+    if (upErr) throw erroDoBanco(upErr)
+
+    const { data, error } = await supabase
+      .from('evidence_files')
+      .insert({
+        work_order_id: input.workOrderId,
+        file_type: 'photo',
+        file_url: path,
+        gate: input.gate,
+        description: input.description,
+        captured_at: new Date().toISOString(),
+      })
+      .select('id')
+      .single()
+    if (error) throw erroDoBanco(error)
+    return (data as { id: string }).id
+  },
+
   // ────────────────────────────────────────────────────────────
   // CHECKLIST
   // ────────────────────────────────────────────────────────────
@@ -507,33 +546,15 @@ export const workOrderService = {
         description: input.description,
         severity: input.severity ?? 'moderate',
         responsible_id: input.responsibleId ?? null,
-        due_date: input.dueDate ?? null,
+        due_date: input.dueDate || null,
+        causa: input.causa?.trim() || null,
+        corrective_action: input.correctiveAction?.trim() || null,
         status: 'open',
       })
       .select()
       .single()
 
-    if (error) throw error
-    return data
-  },
-
-  async closeNonConformance(ncId: string, options: {
-    correctiveAction: string
-    resolutionEvidenceId?: string
-  }) {
-    const { data, error } = await supabase
-      .from('non_conformances')
-      .update({
-        status: 'closed',
-        corrective_action: options.correctiveAction,
-        resolution_evidence_id: options.resolutionEvidenceId ?? null,
-        closed_at: new Date().toISOString(),
-      })
-      .eq('id', ncId)
-      .select()
-      .single()
-
-    if (error) throw error
+    if (error) throw erroDoBanco(error)
     return data
   },
 
@@ -567,16 +588,19 @@ export const workOrderService = {
     if (!causa) throw new Error('Informe a causa da não conformidade para encerrá-la.')
     if (!acaoCorretiva) throw new Error('Informe a ação corretiva para encerrar a não conformidade.')
 
+    // Sem foto nova, a evidência de um encerramento anterior fica (não zera resolution_evidence_id).
+    const patch: Record<string, unknown> = {
+      status: 'closed',
+      causa,
+      corrective_action: acaoCorretiva,
+      closed_at: new Date().toISOString(),
+      eficacia: 'pendente',
+    }
+    if (input.evidenciaId) patch.resolution_evidence_id = input.evidenciaId
+
     const { error } = await supabase
       .from('non_conformances')
-      .update({
-        status: 'closed',
-        causa,
-        corrective_action: acaoCorretiva,
-        resolution_evidence_id: input.evidenciaId ?? null,
-        closed_at: new Date().toISOString(),
-        eficacia: 'pendente',
-      })
+      .update(patch)
       .eq('id', ncId)
     if (error) throw erroDoBanco(error)
   },
@@ -584,11 +608,28 @@ export const workOrderService = {
   /**
    * Verificação de eficácia da NC encerrada. Não eficaz reabre a NC (o histórico guarda o
    * encerramento anterior). Quem/quando verificou é o banco que grava.
+   * `motivo` (não eficaz): não há coluna própria — vai acrescentado à descrição da NC reaberta
+   * ("Verificação de eficácia em dd/mm/aaaa: não eficaz — motivo"), para não se perder.
    */
-  async registrarEficacia(ncId: string, eficaz: boolean): Promise<void> {
-    const patch = eficaz
+  async registrarEficacia(ncId: string, eficaz: boolean, motivo?: string): Promise<void> {
+    const patch: Record<string, unknown> = eficaz
       ? { eficacia: 'eficaz' }
       : { eficacia: 'nao_eficaz', status: 'open', closed_at: null }
+
+    const motivoLimpo = motivo?.trim()
+    if (!eficaz && motivoLimpo) {
+      const { data, error: selErr } = await supabase
+        .from('non_conformances')
+        .select('description')
+        .eq('id', ncId)
+        .single()
+      if (selErr) throw erroDoBanco(selErr)
+      const atual = ((data as { description?: string | null } | null)?.description ?? '').trimEnd()
+      const dia = new Date().toLocaleDateString('pt-BR')
+      const linha = `Verificação de eficácia em ${dia}: não eficaz — ${motivoLimpo}`
+      patch.description = atual ? `${atual}\n\n${linha}` : linha
+    }
+
     const { error } = await supabase.from('non_conformances').update(patch).eq('id', ncId)
     if (error) throw erroDoBanco(error)
   },

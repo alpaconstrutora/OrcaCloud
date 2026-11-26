@@ -478,19 +478,13 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
     setSaving(item.id)
     setError(null)
     try {
-      const { data: nc, error: ncErr } = await supabase
-        .from('non_conformances')
-        .insert({
-          work_order_id: workOrderId,
-          description: ncForm.description,
-          severity: ncForm.severity,
-          due_date: ncForm.dueDate || null,
-          corrective_action: ncForm.correctiveAction || null,
-          status: 'open',
-        })
-        .select('id')
-        .single()
-      if (ncErr) throw ncErr
+      const nc = await workOrderService.createNonConformance({
+        workOrderId,
+        description: ncForm.description,
+        severity: ncForm.severity,
+        dueDate: ncForm.dueDate || undefined,
+        correctiveAction: ncForm.correctiveAction || undefined,
+      })
 
       const ok = await saveResponse(item, 'nao_conforme', { ncId: nc.id })
       if (!ok) return
@@ -506,38 +500,24 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
     setUploading(item.id)
     setError(null)
     try {
-      const ext = file.name.split('.').pop() ?? 'jpg'
-      const path = `evidence/${orgId ?? 'default'}/${workOrderId}/cl_${item.id}_${Date.now()}.${ext}`
-
-      const { error: upErr } = await supabase.storage
-        .from('operational-evidence')
-        .upload(path, file, { upsert: false })
-      if (upErr) throw upErr
-
-      // Bucket privado: evidence_files.file_url guarda o PATH (não a URL pública);
-      // a leitura resolve signed URL (ver OperacionalEvidence.resolveSignedUrls).
-      const { data: ev, error: evErr } = await supabase
-        .from('evidence_files')
-        .insert({
-          work_order_id: workOrderId,
-          file_type: 'photo',
-          file_url: path,
-          gate: item.gate,
-          description: `Checklist: ${item.description}`,
-          captured_at: new Date().toISOString(),
-        })
-        .select('id')
-        .single()
-      if (evErr) throw evErr
+      // Mesmo upload da foto da correção da NC: bucket privado, evidence_files.file_url = PATH.
+      const evidenciaId = await workOrderService.enviarFotoEvidencia({
+        orgId,
+        workOrderId,
+        file,
+        prefixo: `cl_${item.id}`,
+        gate: item.gate,
+        description: `Checklist: ${item.description}`,
+      })
 
       const current = responses[item.id]
       // Erro aqui (ex.: 42501 de OE controlada) não pode passar calado: a foto subiu, o vínculo não.
       const { error: respErr } = current
-        ? await supabase.from('oe_checklist_responses').update({ evidence_id: ev.id }).eq('id', current.id)
+        ? await supabase.from('oe_checklist_responses').update({ evidence_id: evidenciaId }).eq('id', current.id)
         : await supabase.from('oe_checklist_responses').insert({
           work_order_id: workOrderId,
           item_id: item.id,
-          evidence_id: ev.id,
+          evidence_id: evidenciaId,
           completed: false,
         })
       if (respErr) throw respErr

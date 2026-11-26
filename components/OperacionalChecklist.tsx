@@ -11,10 +11,7 @@ import { workOrderService } from '../services/workOrderService'
 import { qualidadeSiacService } from '../services/qualidadeSiacService'
 import { errorMessage } from '../hooks/useOrgContext'
 import { useToast } from '../hooks/useToast'
-import {
-  MOTIVO_CONFERINDO_PERMISSAO_QUALIDADE, useNomeDoUsuario, usePermissaoQualidadeDaOE,
-} from '../hooks/usePermissaoQualidadeDaOE'
-import { MOTIVO_SEM_INSPECAO } from '../utils/permissaoQualidadeSiac'
+import { useNomeDoUsuario, usePermissaoQualidadeDaOE } from '../hooks/usePermissaoQualidadeDaOE'
 import Button from './ui/Button'
 import { useConfirm } from './ui/confirm'
 import { Sheet, SheetDescription, SheetHeader, SheetPanel, SheetTitle } from './ui/sheet'
@@ -196,9 +193,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
   const nomeDoUsuario = useNomeDoUsuario()
 
   /** Motivo de as respostas estarem desligadas (null = ligadas). Régua só da OE controlada. */
-  const motivoSemResposta = !controlada ? null
-    : permissao.conferindo ? MOTIVO_CONFERINDO_PERMISSAO_QUALIDADE
-      : permissao.podeInspecionar ? null : MOTIVO_SEM_INSPECAO
+  const motivoSemResposta = controlada ? permissao.motivoSemInspecao : null
 
   useEffect(() => { loadData() }, [workOrderId])
 
@@ -617,14 +612,17 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
-            <Button
-              onClick={handleApplyTemplate}
-              disabled={!selectedTemplateId || applyingTemplate}
-              className="flex items-center gap-1.5 rounded-xl text-button font-black disabled:opacity-40"
-            >
-              {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
-              Aplicar
-            </Button>
+            {/* OE controlada com registro: o banco recusa pôr a ficha (42501) — desligado, dizendo por quê. */}
+            <span className="inline-flex" title={fichaTravada ? MOTIVO_FICHA_TRAVADA : undefined}>
+              <Button
+                onClick={handleApplyTemplate}
+                disabled={!selectedTemplateId || applyingTemplate || fichaTravada}
+                className="flex items-center gap-1.5 rounded-xl text-button font-black disabled:opacity-40"
+              >
+                {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
+                Aplicar
+              </Button>
+            </span>
           </div>
         )}
 
@@ -681,14 +679,16 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
-              <Button
-                onClick={handleApplyTemplate}
-                disabled={applyingTemplate}
-                className="flex items-center gap-1.5 rounded-xl text-button font-black disabled:opacity-40"
-              >
-                {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
-                Aplicar
-              </Button>
+              <span className="inline-flex" title={fichaTravada ? MOTIVO_FICHA_TRAVADA : undefined}>
+                <Button
+                  onClick={handleApplyTemplate}
+                  disabled={applyingTemplate || fichaTravada}
+                  className="flex items-center gap-1.5 rounded-xl text-button font-black disabled:opacity-40"
+                >
+                  {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
+                  Aplicar
+                </Button>
+              </span>
               <button
                 onClick={() => { setShowTemplateSelector(false); setSelectedTemplateId(currentTemplateId ?? '') }}
                 className="px-3 py-2 text-slate-500 hover:bg-slate-100 rounded-xl text-button font-bold"

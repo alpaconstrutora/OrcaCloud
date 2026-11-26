@@ -17,10 +17,7 @@ import OperacionalNC from './OperacionalNC'
 import { formatDateBR as fmtDate } from './ui/Format'
 import { errorMessage } from '../hooks/useOrgContext'
 import { useToast } from '../hooks/useToast'
-import {
-  MOTIVO_CONFERINDO_PERMISSAO_QUALIDADE, useNomeDoUsuario, usePermissaoQualidadeDaOE,
-} from '../hooks/usePermissaoQualidadeDaOE'
-import { MOTIVO_SEM_LIBERACAO } from '../utils/permissaoQualidadeSiac'
+import { useNomeDoUsuario, usePermissaoQualidadeDaOE } from '../hooks/usePermissaoQualidadeDaOE'
 
 type Tab = 'geral' | 'apontamentos' | 'checklist' | 'inspecao' | 'evidencias' | 'ncs' | 'historico'
 
@@ -214,9 +211,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
   // Régua de "Aprovar inspeção" (canReleaseQualitySystem no SGQ da org DA OE): só OE controlada.
   const controlada = Boolean(wo?.controlled_item_id)
   const permissao = usePermissaoQualidadeDaOE((wo?.org_id as string | undefined) ?? null, controlada)
-  const motivoSemLiberar = !controlada ? null
-    : permissao.conferindo ? MOTIVO_CONFERINDO_PERMISSAO_QUALIDADE
-      : permissao.podeLiberar ? null : MOTIVO_SEM_LIBERACAO
+  const motivoSemLiberar = controlada ? permissao.motivoSemLiberacao : null
   const [pendingTransition, setPendingTransition] = useState<WorkOrderStatus | null>(null)
   const [transitionErrors, setTransitionErrors] = useState<string[]>([])
   const [isTransitioning, setIsTransitioning] = useState(false)

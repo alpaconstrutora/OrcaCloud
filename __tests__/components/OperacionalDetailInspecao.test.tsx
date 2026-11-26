@@ -150,6 +150,42 @@ describe('OperacionalDetail — Aprovar inspeção (fase 2)', () => {
         await waitFor(() => expect((aprovar as HTMLButtonElement).disabled).toBe(false));
     });
 
+    it('(c) grupo DESENVOLVEDOR sem e-mail de superadmin e sem a chave → desligados com o motivo', async () => {
+        getById.mockResolvedValue(oe({ controlled_item_id: 'srv-alv' }));
+        useStore.setState({
+            currentProfile: { ...useStore.getState().currentProfile, group: 'DESENVOLVEDOR' } as never,
+            organizations: [membro('org-spe', 'SPE Garden', {}), membro('org-alpa', 'Alpa', {})] as never,
+        });
+        montar();
+        const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
+        await waitFor(() => expect(motivo(aprovar)).toBe(MOTIVO_SEM_LIBERACAO));
+        expect((aprovar as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('(c) e-mail de acesso total (superadmin do banco) liga mesmo sem vínculo no SGQ', async () => {
+        getById.mockResolvedValue(oe({ controlled_item_id: 'srv-alv' }));
+        useStore.setState({
+            session: { user: { id: 'u-dev', email: 'desenvolvedor@alpaconstrutora.com.br' } } as never,
+            organizations: [] as never,
+        });
+        montar();
+        const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
+        await waitFor(() => expect(sgqDaOrganizacao).toHaveBeenCalled());
+        await waitFor(() => expect((aprovar as HTMLButtonElement).disabled).toBe(false));
+    });
+
+    it('(c) falha ao conferir o SGQ fecha: desligados com a mensagem do erro', async () => {
+        getById.mockResolvedValue(oe({ controlled_item_id: 'srv-alv' }));
+        sgqDaOrganizacao.mockRejectedValue(new Error('tempo esgotado'));
+        // admin da SPE: cair para a org da OE ligaria os botões — o banco recusaria
+        useStore.setState({ organizations: [membro('org-spe', 'SPE Garden', {}, 'admin')] as never });
+        montar();
+        const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });
+        await waitFor(() => expect(motivo(aprovar)).toMatch(/tempo esgotado/));
+        expect((aprovar as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByRole('button', { name: 'Reprovar inspeção' }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
     it('(c) OE comum: ligados mesmo sem a permissão (a régua é só da controlada)', async () => {
         montar();
         const aprovar = await screen.findByRole('button', { name: 'Aprovar inspeção' });

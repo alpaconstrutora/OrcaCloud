@@ -114,7 +114,12 @@ interface ArgsQualidadeOE {
     permissoes: Permissoes;
     /** papel do membro na organização dona do SGQ (`owner`/`admin` ligam) */
     papel?: string | null;
-    /** grupo DESENVOLVEDOR ou e-mail de acesso total (o superadmin do banco) */
+    /**
+     * SÓ o e-mail de acesso total (`temAcessoTotal`) — o espelho de `is_superadmin()` (tabela
+     * `superadmins`), o único atalho de `_qualidade_pode`. O grupo DESENVOLVEDOR NÃO conta: ele é dado
+     * a quem entra pela "Área do Desenvolvedor" e o banco não o conhece — ligar por ele mostra botão
+     * que o banco recusa com 42501.
+     */
     acessoTotal: boolean;
 }
 

@@ -232,6 +232,35 @@ describe('OperacionalChecklist — ficha de verificação (fase 2)', () => {
         await waitFor(() => expect((botaoDoItem('Prumo da parede', 'Conforme') as HTMLButtonElement).disabled).toBe(false));
     });
 
+    it('(d) grupo DESENVOLVEDOR sem e-mail de superadmin não liga: a régua é a do banco (is_superadmin)', async () => {
+        estado.wo = { ...estado.wo, controlled_item_id: 'srv-alv' };
+        useStore.setState({
+            currentProfile: { ...useStore.getState().currentProfile, group: 'DESENVOLVEDOR' } as never,
+            organizations: [
+                { id: 'org-alpa', name: 'Alpa', address: {}, members: [{ id: 'm2', email: 'ana@spe.com', role: 'member', userId: 'u-1', name: 'Ana', permissions: {} }] },
+            ] as never,
+        });
+        montar();
+        await screen.findByText('Prumo da parede');
+        await waitFor(() => expect(motivo(botaoDoItem('Prumo da parede', 'Conforme'))).toBe(MOTIVO_SEM_INSPECAO));
+        expect((botaoDoItem('Prumo da parede', 'Conforme') as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    it('(d) falha ao conferir o SGQ fecha: respostas desligadas com a mensagem do erro', async () => {
+        estado.wo = { ...estado.wo, controlled_item_id: 'srv-alv' };
+        sgqDaOrganizacao.mockRejectedValue(new Error('tempo esgotado'));
+        // admin da SPE: se o hook caísse para a org da OE, ligaria — o banco recusaria
+        useStore.setState({
+            organizations: [
+                { id: 'org-spe', name: 'SPE Garden', address: {}, members: [{ id: 'm1', email: 'ana@spe.com', role: 'admin', userId: 'u-1', name: 'Ana', permissions: {} }] },
+            ] as never,
+        });
+        montar();
+        await screen.findByText('Prumo da parede');
+        await waitFor(() => expect(motivo(botaoDoItem('Prumo da parede', 'Conforme'))).toMatch(/tempo esgotado/));
+        expect((botaoDoItem('Prumo da parede', 'Conforme') as HTMLButtonElement).disabled).toBe(true);
+    });
+
     it('(e) erro do banco ao gravar aparece com a mensagem dele', async () => {
         erros['oe_checklist_responses:insert'] = { message: 'Sem permissão para inspecionar serviço controlado', code: '42501' };
         const user = userEvent.setup();
@@ -267,6 +296,19 @@ describe('OperacionalChecklist — ficha de verificação (fase 2)', () => {
         const trocar = await screen.findByRole('button', { name: /Trocar template/ });
         await waitFor(() => expect((trocar as HTMLButtonElement).disabled).toBe(true));
         expect(motivo(trocar)).toMatch(/não pode ser trocada/);
+    });
+
+    it('(g) estado vazio: OE controlada com registro e sem ficha → "Aplicar" desligado com o motivo', async () => {
+        estado.wo = { ...estado.wo, controlled_item_id: 'srv-alv', checklist_template_id: null };
+        estado.respostas = [];
+        oeTemRegistro.mockResolvedValue(true);
+        const user = userEvent.setup();
+        montar();
+        expect(await screen.findByText('Nenhum checklist vinculado')).toBeTruthy();
+        await user.selectOptions(screen.getByLabelText('Modelo de checklist'), 'tpl-1');
+        const aplicar = screen.getByRole('button', { name: /Aplicar/ }) as HTMLButtonElement;
+        expect(aplicar.disabled).toBe(true);
+        expect(motivo(aplicar)).toMatch(/não pode ser trocada/);
     });
 
     it('(g) OE comum: exclusão das respostas falha → não troca a ficha e mostra o erro', async () => {

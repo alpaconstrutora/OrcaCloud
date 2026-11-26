@@ -195,3 +195,19 @@ describe('workOrderService — inspeção e NC da fase 2', () => {
     await expect(workOrderService.listarHistoricoResposta('r1')).rejects.toThrow('sem acesso');
   });
 });
+
+describe('workOrderService.update — serviço controlado (Task 4)', () => {
+  it('manda controlled_item_id só quando o formulário envia (null = retirar); ausente não mexe', async () => {
+    respostaPorTabela.work_orders = { data: oe(), error: null };
+    await workOrderService.update('wo1', { title: 'OE', controlledItemId: 's1', checklistTemplateId: 'tpl' });
+    expect(achar('update')[0].args[0]).toMatchObject({ controlled_item_id: 's1', checklist_template_id: 'tpl' });
+
+    chamadas.length = 0;
+    await workOrderService.update('wo1', { title: 'OE', controlledItemId: null });
+    expect(achar('update')[0].args[0]).toMatchObject({ controlled_item_id: null });
+
+    chamadas.length = 0;
+    await workOrderService.update('wo1', { title: 'OE' });
+    expect(achar('update')[0].args[0]).not.toHaveProperty('controlled_item_id');
+  });
+});

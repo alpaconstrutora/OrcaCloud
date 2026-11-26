@@ -237,6 +237,31 @@ describe('qualidadeSiacService', () => {
     await expect(qualidadeSiacService.sgqDaOrganizacao('spe')).rejects.toThrow('falhou');
   });
 
+  it('sgqLegivel = o SGQ está em minhas_orgs_membro(); erro sobe', async () => {
+    resposta = { data: ['spe', 'alpa'], error: null };
+    expect(await qualidadeSiacService.sgqLegivel('alpa')).toBe(true);
+    expect(achar('rpc')[0].args).toEqual(['minhas_orgs_membro', undefined]);
+    resposta = { data: ['spe'], error: null };
+    expect(await qualidadeSiacService.sgqLegivel('alpa')).toBe(false);
+    resposta = { data: null, error: { message: 'falhou' } };
+    await expect(qualidadeSiacService.sgqLegivel('alpa')).rejects.toThrow('falhou');
+  });
+
+  it('oeTemRegistro pergunta ao banco (_qualidade_oe_tem_registro); erro sobe', async () => {
+    resposta = { data: true, error: null };
+    expect(await qualidadeSiacService.oeTemRegistro('wo-1')).toBe(true);
+    expect(achar('rpc')[0].args).toEqual(['_qualidade_oe_tem_registro', { p_work_order_id: 'wo-1' }]);
+    resposta = { data: false, error: null };
+    expect(await qualidadeSiacService.oeTemRegistro('wo-1')).toBe(false);
+    resposta = { data: null, error: { message: 'falhou' } };
+    await expect(qualidadeSiacService.oeTemRegistro('wo-1')).rejects.toThrow('falhou');
+  });
+
+  it('listarItens traz a ficha modelo do serviço (checklist_template_id)', async () => {
+    await qualidadeSiacService.listarItens('org-1');
+    expect(String(achar('select')[0].args[0])).toContain('checklist_template_id');
+  });
+
   it('definirSgq faz upsert por organization_id só com o SGQ (null = a própria); 42501 sobe', async () => {
     await qualidadeSiacService.definirSgq('spe', 'alpa');
     const up = achar('upsert')[0];

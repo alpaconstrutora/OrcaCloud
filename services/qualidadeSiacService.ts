@@ -37,7 +37,7 @@ function listaDe<T>(v: T | T[] | null | undefined): T[] {
 }
 
 const COLUNAS_ITEM =
-  'id, organization_id, tipo, nome, etapa, origem, anexo4_numero, chave_padrao, substitui_item_id, situacao, justificativa, procedure_document_id, training_course_id, ordem, codigos:quality_controlled_item_codes(item_code)';
+  'id, organization_id, tipo, nome, etapa, origem, anexo4_numero, chave_padrao, substitui_item_id, situacao, justificativa, procedure_document_id, training_course_id, checklist_template_id, ordem, codigos:quality_controlled_item_codes(item_code)';
 
 const ON_CONFLICT_PADRAO = { onConflict: 'organization_id,chave_padrao', ignoreDuplicates: true } as const;
 
@@ -337,6 +337,33 @@ export const qualidadeSiacService = {
     ]);
     const excluidos = new Set(exclusoes.map((e) => e.item_id));
     return itens.filter((i) => i.tipo === 'SERVICO' && i.situacao === 'ATIVO' && !excluidos.has(i.id));
+  },
+
+  /**
+   * O usuário lê o sistema da qualidade `sgqOrgId`? A RLS dos itens controlados é por
+   * `minhas_orgs_membro()` (sem exceção para superadmin) — então legível = membro dele.
+   * Serve para explicar a lista vazia do campo da OE ("vem de outra organização, que você não acessa").
+   */
+  async sgqLegivel(sgqOrgId: string): Promise<boolean> {
+    const data = ok(
+      await supabase.rpc('minhas_orgs_membro') as unknown as { data: string[] | null; error: ErroSupabase },
+    );
+    return (data ?? []).includes(sgqOrgId);
+  },
+
+  /**
+   * A OE já tem registro de inspeção (`_qualidade_oe_tem_registro`: resposta, histórico de resposta,
+   * NC, validação ou histórico de validação)? É a mesma régua dos gatilhos que recusam trocar o serviço
+   * controlado e a ficha — o formulário desliga os dois campos com o motivo.
+   */
+  async oeTemRegistro(workOrderId: string): Promise<boolean> {
+    const data = ok(
+      await supabase.rpc('_qualidade_oe_tem_registro', { p_work_order_id: workOrderId }) as unknown as {
+        data: boolean | null;
+        error: ErroSupabase;
+      },
+    );
+    return data === true;
   },
 
   /**

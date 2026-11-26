@@ -19,6 +19,11 @@ export interface ItemControlado {
   training_course_id: string | null;
   ordem: number;
   codigos: string[];
+  /**
+   * Ficha modelo do serviço (fase 2): modelo de checklist do Controle Operacional, da mesma
+   * organização do item. Escolher o serviço na OE aplica esta ficha. Ausente = não lida.
+   */
+  checklist_template_id?: string | null;
 }
 
 export interface ProcedimentoResumo {

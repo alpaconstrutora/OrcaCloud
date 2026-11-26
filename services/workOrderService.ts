@@ -118,6 +118,7 @@ export const workOrderService = {
       planned_cost: input.plannedCost ?? null,
       predecessor_id: input.predecessorId ?? null,
       checklist_template_id: input.checklistTemplateId ?? null,
+      controlled_item_id: input.controlledItemId ?? null,
       budget_item_ref: input.budgetItemRef ?? null,
       status: 'planned',
     }
@@ -172,6 +173,11 @@ export const workOrderService = {
     // Incluir apenas se explicitamente enviado (coluna adicionada na migration 20260630000002)
     if ('planningItemRef' in input) {
       updatePayload.planning_item_ref = input.planningItemRef ?? null
+    }
+    // Serviço controlado: só se enviado. Mudar com a OE em inspeção ou com registro o banco
+    // recusa (42501, work_orders_servico_controlado_do_sgq); mandar o MESMO valor passa.
+    if ('controlledItemId' in input) {
+      updatePayload.controlled_item_id = input.controlledItemId ?? null
     }
 
     const { data, error } = await supabase

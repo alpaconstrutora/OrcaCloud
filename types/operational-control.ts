@@ -257,6 +257,8 @@ export interface NonConformance {
   causa: string | null
   eficacia: NCEficacia | null
   eficaciaEm: string | null
+  /** Motivo da última verificação de eficácia (gravado no "não eficaz"). */
+  eficaciaMotivo: string | null
   /** Serviço controlado da OE — preenchido pelo banco. */
   controlledItemId: string | null
 }
@@ -286,6 +288,10 @@ export interface NonConformanceHistoryRow {
   causa: string | null
   corrective_action: string | null
   eficacia: NCEficacia | null
+  /** Motivo da verificação de eficácia naquele estado (ex.: por que não foi eficaz). */
+  eficacia_motivo: string | null
+  /** Descrição da NC naquele estado (mudar a descrição também gera linha). */
+  description: string | null
   evento: 'alteracao' | 'exclusao'
   alterado_por: string | null
   created_at: string

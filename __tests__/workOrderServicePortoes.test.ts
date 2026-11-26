@@ -172,6 +172,7 @@ describe('workOrderService — inspeção e NC da fase 2', () => {
     const patch = achar('update')[0].args[0] as Record<string, unknown>;
     expect(patch).toMatchObject({ status: 'closed', causa: 'traço errado', corrective_action: 'refazer', eficacia: 'pendente' });
     expect('resolution_evidence_id' in patch).toBe(false);
+    expect(patch.eficacia_motivo).toBeNull();
   });
 
   it('encerrarNC sem causa ou sem ação corretiva é recusado antes de ir ao banco', async () => {
@@ -187,21 +188,21 @@ describe('workOrderService — inspeção e NC da fase 2', () => {
 
   it('registrarEficacia: eficaz só marca; não eficaz reabre a NC', async () => {
     await workOrderService.registrarEficacia('nc1', true);
-    expect(achar('update')[0].args[0]).toEqual({ eficacia: 'eficaz' });
+    expect(achar('update')[0].args[0]).toEqual({ eficacia: 'eficaz', eficacia_motivo: null });
 
     chamadas.length = 0;
     await workOrderService.registrarEficacia('nc1', false);
-    expect(achar('update')[0].args[0]).toEqual({ eficacia: 'nao_eficaz', status: 'open', closed_at: null });
+    expect(achar('update')[0].args[0]).toEqual({ eficacia: 'nao_eficaz', status: 'open', closed_at: null, eficacia_motivo: null });
     expect(achar('eq')[0].args).toEqual(['id', 'nc1']);
   });
 
-  it('registrarEficacia não eficaz com motivo: reabre e acrescenta o motivo à descrição da NC', async () => {
-    respostaPorTabela.non_conformances = { data: { description: 'Reboco com fissura' }, error: null };
+  it('registrarEficacia não eficaz com motivo: um UPDATE só, motivo em eficacia_motivo, descrição intocada', async () => {
     await workOrderService.registrarEficacia('nc1', false, '  fissura voltou ');
+    expect(achar('select')).toHaveLength(0);
+    expect(achar('update')).toHaveLength(1);
     const patch = achar('update')[0].args[0] as Record<string, unknown>;
-    expect(patch).toMatchObject({ eficacia: 'nao_eficaz', status: 'open', closed_at: null });
-    expect(String(patch.description)).toMatch(/^Reboco com fissura\n\nVerificação de eficácia em \d{2}\/\d{2}\/\d{4}: não eficaz — fissura voltou$/);
-    expect(achar('select')[0].args).toEqual(['description']);
+    expect(patch).toEqual({ eficacia: 'nao_eficaz', status: 'open', closed_at: null, eficacia_motivo: 'fissura voltou' });
+    expect('description' in patch).toBe(false);
   });
 
   it('closeNonConformance saiu (decisão 2: encerrar é só encerrarNC)', () => {

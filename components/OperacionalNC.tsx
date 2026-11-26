@@ -7,6 +7,7 @@ import { errorMessage } from '../hooks/useOrgContext'
 import { useToast } from '../hooks/useToast'
 import { useNomeDoUsuario } from '../hooks/usePermissaoQualidadeDaOE'
 import Button from './ui/Button'
+import { useConfirm } from './ui/confirm'
 import { Sheet, SheetDescription, SheetFooter, SheetHeader, SheetPanel, SheetTitle } from './ui/sheet'
 
 interface NonConformance {
@@ -20,6 +21,8 @@ interface NonConformance {
   eficacia: NCEficacia | null
   eficacia_em: string | null
   eficacia_por: string | null
+  /** Motivo da última verificação de eficácia (gravado no "não eficaz"). */
+  eficacia_motivo: string | null
   resolution_evidence_id: string | null
   created_at: string
   closed_at: string | null
@@ -94,6 +97,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
   const [historico, setHistorico] = useState<NonConformanceHistoryRow[]>([])
   const [carregandoHistorico, setCarregandoHistorico] = useState(false)
 
+  const confirm = useConfirm()
   const { showToast, localToast } = useToast()
   const nomeDoUsuario = useNomeDoUsuario()
 
@@ -185,6 +189,20 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
     foto !== null
   )
 
+  /** X e "Cancelar": com texto/foto, pergunta antes de descartar (Esc e clique fora: `dirty` do Sheet). */
+  const confirmarDescarte = () => confirm({
+    title: 'Sair sem salvar?',
+    message: 'Há alterações não salvas. Se sair agora, elas serão perdidas.',
+    variant: 'warning',
+    confirmLabel: 'Sair e descartar',
+    cancelLabel: 'Continuar editando',
+  })
+
+  const fecharEncerrar = async () => {
+    if (encerrarSujo && !encerrando && !(await confirmarDescarte())) return
+    setEncerrarDe(null)
+  }
+
   const handleEncerrar = async () => {
     const nc = encerrarDe
     if (!nc || motivoSemEncerrar || encerrando) return
@@ -228,11 +246,29 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
     setMotivoNaoEficaz('')
   }
 
+  const eficaciaSujo = Boolean(eficaciaDe) && motivoNaoEficaz.trim() !== ''
+
+  const fecharEficacia = async () => {
+    if (eficaciaSujo && !registrandoEficacia && !(await confirmarDescarte())) return
+    setEficaciaDe(null)
+  }
+
   const handleEficacia = async (eficaz: boolean) => {
     const nc = eficaciaDe
     if (!nc || registrandoEficacia) return
     const motivo = motivoNaoEficaz.trim()
     if (!eficaz && !motivo) return
+    // O motivo é do "não eficaz": registrar eficaz com motivo digitado descarta o texto — pergunta antes.
+    if (eficaz && motivo) {
+      const ok = await confirm({
+        title: 'Registrar como eficaz?',
+        message: 'O motivo digitado é para o "não eficaz" e não será gravado.',
+        variant: 'warning',
+        confirmLabel: 'Registrar eficaz',
+        cancelLabel: 'Voltar',
+      })
+      if (!ok) return
+    }
     setRegistrandoEficacia(true)
     try {
       if (eficaz) await workOrderService.registrarEficacia(nc.id, true)
@@ -466,10 +502,15 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
                       </p>
                     )}
                     {nc.status !== 'closed' && nc.eficacia === 'nao_eficaz' && (
-                      <p className="text-xs text-red-700">
-                        Reaberta: a correção anterior foi verificada como não eficaz
-                        ({nomeDoUsuario(nc.eficacia_por)} · {fmtDataHora(nc.eficacia_em)}).
-                      </p>
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-red-700">
+                          Reaberta: a correção anterior foi verificada como não eficaz
+                          ({nomeDoUsuario(nc.eficacia_por)} · {fmtDataHora(nc.eficacia_em)}).
+                        </p>
+                        {nc.eficacia_motivo && (
+                          <p className="text-sm text-slate-800 whitespace-pre-line">Motivo: {nc.eficacia_motivo}</p>
+                        )}
+                      </div>
                     )}
                     <div className="flex items-center gap-2 flex-wrap">
                       {nc.status === 'open' && (
@@ -508,7 +549,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
       <Sheet open={Boolean(encerrarDe)} onClose={() => setEncerrarDe(null)} size="lg" dirty={encerrarSujo && !encerrando}>
         {encerrarDe && (
           <>
-            <SheetHeader onClose={() => setEncerrarDe(null)}>
+            <SheetHeader onClose={fecharEncerrar}>
               <SheetTitle>Encerrar não conformidade</SheetTitle>
               <SheetDescription>{encerrarDe.description}</SheetDescription>
             </SheetHeader>
@@ -553,7 +594,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
               </div>
             </SheetPanel>
             <SheetFooter>
-              <Button variant="secondary" onClick={() => setEncerrarDe(null)}>Cancelar</Button>
+              <Button variant="secondary" onClick={fecharEncerrar}>Cancelar</Button>
               <span className="inline-flex" title={motivoSemEncerrar ?? (encerrando ? 'Encerrando…' : undefined)}>
                 <Button onClick={handleEncerrar} disabled={Boolean(motivoSemEncerrar) || encerrando} className="flex items-center gap-2">
                   {encerrando && <Loader2 className="w-3 h-3 animate-spin" />}
@@ -566,10 +607,10 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
       </Sheet>
 
       {/* Verificar eficácia */}
-      <Sheet open={Boolean(eficaciaDe)} onClose={() => setEficaciaDe(null)} size="lg">
+      <Sheet open={Boolean(eficaciaDe)} onClose={() => setEficaciaDe(null)} size="lg" dirty={eficaciaSujo && !registrandoEficacia}>
         {eficaciaDe && (
           <>
-            <SheetHeader onClose={() => setEficaciaDe(null)}>
+            <SheetHeader onClose={fecharEficacia}>
               <SheetTitle>Verificar eficácia</SheetTitle>
               <SheetDescription>{eficaciaDe.description}</SheetDescription>
             </SheetHeader>
@@ -585,7 +626,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
                 </div>
               </div>
               <p className="text-sm text-slate-600">
-                A correção resolveu a não conformidade? Não eficaz reabre a NC; o motivo fica registrado na descrição dela.
+                A correção resolveu a não conformidade? Não eficaz reabre a NC; o motivo fica na NC e no histórico.
               </p>
               <div className="space-y-1.5">
                 <label htmlFor="nc-eficacia-motivo" className={ROTULO}>Motivo (obrigatório se não eficaz)</label>
@@ -600,7 +641,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
               </div>
             </SheetPanel>
             <SheetFooter>
-              <Button variant="secondary" onClick={() => setEficaciaDe(null)}>Cancelar</Button>
+              <Button variant="secondary" onClick={fecharEficacia}>Cancelar</Button>
               <span
                 className="inline-flex"
                 title={!motivoNaoEficaz.trim() ? MOTIVO_NAO_EFICAZ_SEM_MOTIVO : (registrandoEficacia ? 'Registrando…' : undefined)}
@@ -638,7 +679,10 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
                 <p className="text-sm text-slate-500">Nenhuma mudança registrada desde a abertura.</p>
               ) : (
                 <ol className="space-y-3">
-                  {[...historico].reverse().map(h => {
+                  {[...historico].reverse().map((h, i, lista) => {
+                    // Descrição só aparece quando muda em relação à linha anterior (mais antiga).
+                    const anterior = lista[i + 1]
+                    const descricaoMudou = Boolean(h.description) && (anterior ? anterior.description !== h.description : false)
                     const status = h.status && h.status in STATUS_CONFIG
                       ? STATUS_CONFIG[h.status as keyof typeof STATUS_CONFIG].label
                       : (h.status ?? '—')
@@ -650,6 +694,8 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId, orgId }) => {
                         {h.causa && <p className="text-xs text-slate-700">Causa: {h.causa}</p>}
                         {h.corrective_action && <p className="text-xs text-slate-700">Ação corretiva: {h.corrective_action}</p>}
                         {h.eficacia && <p className="text-xs text-slate-700">Eficácia: {EFICACIA_LABELS[h.eficacia] ?? h.eficacia}</p>}
+                        {h.eficacia_motivo && <p className="text-xs text-slate-700">Motivo: {h.eficacia_motivo}</p>}
+                        {descricaoMudou && <p className="text-xs text-slate-700">Descrição: {h.description}</p>}
                         <p className="text-xs text-slate-500">
                           {nomeDoUsuario(h.alterado_por)} · {fmtDataHora(h.created_at)}
                         </p>

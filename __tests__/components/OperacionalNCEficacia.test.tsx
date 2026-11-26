@@ -63,7 +63,7 @@ import OperacionalNC from '../../components/OperacionalNC';
 
 const nc = (p: Record<string, unknown>) => ({
     id: 'nc-1', description: 'Reboco com fissura', severity: 'moderate', status: 'open', due_date: null,
-    corrective_action: null, causa: null, eficacia: null, eficacia_em: null, resolution_evidence_id: null,
+    corrective_action: null, causa: null, eficacia: null, eficacia_em: null, eficacia_motivo: null, resolution_evidence_id: null,
     created_at: '2026-11-20T10:00:00Z', closed_at: null, oe_checklist_responses: [], ...p,
 });
 
@@ -145,7 +145,7 @@ describe('OperacionalNC — causa, ação corretiva e eficácia (fase 2)', () =>
     it('(c) não eficaz pede motivo → registrarEficacia(id, false, motivo) e a NC volta a "Aberta"', async () => {
         ncs = [nc({ status: 'closed', causa: 'Traço errado', corrective_action: 'Refazer', eficacia: 'pendente', closed_at: '2026-11-25T10:00:00Z' })];
         registrarEficacia.mockImplementation(async () => {
-            ncs = [nc({ status: 'open', causa: 'Traço errado', corrective_action: 'Refazer', eficacia: 'nao_eficaz', closed_at: null })];
+            ncs = [nc({ status: 'open', causa: 'Traço errado', corrective_action: 'Refazer', eficacia: 'nao_eficaz', eficacia_motivo: 'Fissura voltou', closed_at: null })];
         });
         montar();
         await abrirCard();
@@ -167,6 +167,9 @@ describe('OperacionalNC — causa, ação corretiva e eficácia (fase 2)', () =>
         const card = screen.getByText('Reboco com fissura').closest('[data-nc]') as HTMLElement;
         await waitFor(() => expect(within(card).getByText('Aberta')).toBeTruthy());
         expect(within(card).queryByText('Encerrada')).toBeNull();
+        expect(within(card).getByText('Motivo: Fissura voltou')).toBeTruthy();
+        // a descrição da NC não é reescrita com o motivo
+        expect(within(card).getByText('Reboco com fissura')).toBeTruthy();
     });
 
     it('(c) eficaz → registrarEficacia(id, true)', async () => {
@@ -180,8 +183,9 @@ describe('OperacionalNC — causa, ação corretiva e eficácia (fase 2)', () =>
 
     it('(d) "Histórico" lista as mudanças da NC (listarHistoricoNC)', async () => {
         listarHistoricoNC.mockResolvedValue([
-            { id: 'h1', nc_id: 'nc-1', work_order_id: 'wo-1', status: 'closed', causa: 'Traço errado', corrective_action: 'Refazer', eficacia: 'pendente', evento: 'alteracao', alterado_por: 'u-1', created_at: '2026-11-25T10:00:00Z' },
-            { id: 'h2', nc_id: 'nc-1', work_order_id: 'wo-1', status: 'open', causa: 'Traço errado', corrective_action: 'Refazer', eficacia: 'nao_eficaz', evento: 'alteracao', alterado_por: 'u-1', created_at: '2026-11-26T10:00:00Z' },
+            { id: 'h1', nc_id: 'nc-1', work_order_id: 'wo-1', status: 'closed', causa: 'Traço errado', corrective_action: 'Refazer', eficacia: 'pendente', eficacia_motivo: null, description: 'Reboco com fissura', evento: 'alteracao', alterado_por: 'u-1', created_at: '2026-11-25T10:00:00Z' },
+            { id: 'h2', nc_id: 'nc-1', work_order_id: 'wo-1', status: 'open', causa: 'Traço errado', corrective_action: 'Refazer', eficacia: 'nao_eficaz', eficacia_motivo: 'Fissura voltou', description: 'Reboco com fissura', evento: 'alteracao', alterado_por: 'u-1', created_at: '2026-11-26T10:00:00Z' },
+            { id: 'h3', nc_id: 'nc-1', work_order_id: 'wo-1', status: 'open', causa: 'Traço errado', corrective_action: 'Refazer', eficacia: 'nao_eficaz', eficacia_motivo: 'Fissura voltou', description: 'Reboco com fissura na fachada', evento: 'alteracao', alterado_por: 'u-1', created_at: '2026-11-26T11:00:00Z' },
         ]);
         montar();
         await abrirCard();
@@ -189,9 +193,58 @@ describe('OperacionalNC — causa, ação corretiva e eficácia (fase 2)', () =>
 
         expect(listarHistoricoNC).toHaveBeenCalledWith('nc-1');
         const sheet = painel();
-        expect(await within(sheet).findByText(/Eficácia: não eficaz/)).toBeTruthy();
-        expect(within(sheet).getAllByText(/Causa: Traço errado/).length).toBe(2);
+        expect((await within(sheet).findAllByText(/Eficácia: não eficaz/)).length).toBe(2);
+        expect(within(sheet).getAllByText(/Causa: Traço errado/).length).toBe(3);
+        expect(within(sheet).getAllByText('Motivo: Fissura voltou').length).toBe(2);
+        // a descrição só aparece na linha em que mudou
+        expect(within(sheet).getAllByText(/^Descrição:/).length).toBe(1);
+        expect(within(sheet).getByText('Descrição: Reboco com fissura na fachada')).toBeTruthy();
         expect(within(sheet).getAllByText(/Ana/).length).toBeGreaterThan(0);
+    });
+
+    it('(f) X e "Cancelar" do encerrar com texto digitado pedem confirmação antes de descartar', async () => {
+        montar();
+        await abrirCard();
+        await userEvent.click(screen.getByRole('button', { name: 'Encerrar NC' }));
+        await userEvent.type(within(painel()).getByLabelText(/^Causa/), 'Traço errado');
+
+        await userEvent.click(within(painel()).getByRole('button', { name: 'Fechar painel' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Continuar editando' }));
+        expect((within(painel()).getByLabelText(/^Causa/) as HTMLTextAreaElement).value).toBe('Traço errado');
+
+        await userEvent.click(within(painel()).getByRole('button', { name: 'Cancelar' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Sair e descartar' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        expect(encerrarNC).not.toHaveBeenCalled();
+    });
+
+    it('(f) encerrar sem nada digitado fecha direto, sem pergunta', async () => {
+        montar();
+        await abrirCard();
+        await userEvent.click(screen.getByRole('button', { name: 'Encerrar NC' }));
+        await userEvent.click(within(painel()).getByRole('button', { name: 'Cancelar' }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+        expect(screen.queryByRole('button', { name: 'Sair e descartar' })).toBeNull();
+    });
+
+    it('(f) eficácia: X com motivo digitado pergunta; "Eficaz" com motivo digitado pergunta antes de descartá-lo', async () => {
+        ncs = [nc({ status: 'closed', causa: 'Traço errado', corrective_action: 'Refazer', eficacia: 'pendente', closed_at: '2026-11-25T10:00:00Z' })];
+        montar();
+        await abrirCard();
+        await userEvent.click(screen.getByRole('button', { name: 'Verificar eficácia' }));
+        await userEvent.type(within(painel()).getByLabelText(/^Motivo/), 'Fissura voltou');
+
+        await userEvent.click(within(painel()).getByRole('button', { name: 'Fechar painel' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Continuar editando' }));
+        expect(screen.getByRole('dialog')).toBeTruthy();
+
+        await userEvent.click(within(painel()).getByRole('button', { name: 'Eficaz' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Voltar' }));
+        expect(registrarEficacia).not.toHaveBeenCalled();
+
+        await userEvent.click(within(painel()).getByRole('button', { name: 'Eficaz' }));
+        await userEvent.click(await screen.findByRole('button', { name: 'Registrar eficaz' }));
+        await waitFor(() => expect(registrarEficacia).toHaveBeenCalledWith('nc-1', true));
     });
 
     it('(e) criar passa pelo serviço e leva a causa opcional', async () => {

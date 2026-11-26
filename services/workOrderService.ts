@@ -595,6 +595,8 @@ export const workOrderService = {
       corrective_action: acaoCorretiva,
       closed_at: new Date().toISOString(),
       eficacia: 'pendente',
+      // O motivo do "não eficaz" anterior fica no histórico; a NC encerrada de novo começa sem.
+      eficacia_motivo: null,
     }
     if (input.evidenciaId) patch.resolution_evidence_id = input.evidenciaId
 
@@ -608,28 +610,13 @@ export const workOrderService = {
   /**
    * Verificação de eficácia da NC encerrada. Não eficaz reabre a NC (o histórico guarda o
    * encerramento anterior). Quem/quando verificou é o banco que grava.
-   * `motivo` (não eficaz): não há coluna própria — vai acrescentado à descrição da NC reaberta
-   * ("Verificação de eficácia em dd/mm/aaaa: não eficaz — motivo"), para não se perder.
+   * `motivo` (não eficaz) vai em `eficacia_motivo` — coluna própria, copiada para o histórico
+   * (aplicar_20271126120000). A descrição da NC nunca é tocada. Eficaz limpa o motivo.
    */
   async registrarEficacia(ncId: string, eficaz: boolean, motivo?: string): Promise<void> {
-    const patch: Record<string, unknown> = eficaz
-      ? { eficacia: 'eficaz' }
-      : { eficacia: 'nao_eficaz', status: 'open', closed_at: null }
-
-    const motivoLimpo = motivo?.trim()
-    if (!eficaz && motivoLimpo) {
-      const { data, error: selErr } = await supabase
-        .from('non_conformances')
-        .select('description')
-        .eq('id', ncId)
-        .single()
-      if (selErr) throw erroDoBanco(selErr)
-      const atual = ((data as { description?: string | null } | null)?.description ?? '').trimEnd()
-      const dia = new Date().toLocaleDateString('pt-BR')
-      const linha = `Verificação de eficácia em ${dia}: não eficaz — ${motivoLimpo}`
-      patch.description = atual ? `${atual}\n\n${linha}` : linha
-    }
-
+    const patch = eficaz
+      ? { eficacia: 'eficaz', eficacia_motivo: null }
+      : { eficacia: 'nao_eficaz', status: 'open', closed_at: null, eficacia_motivo: motivo?.trim() || null }
     const { error } = await supabase.from('non_conformances').update(patch).eq('id', ncId)
     if (error) throw erroDoBanco(error)
   },

@@ -4,9 +4,9 @@
 // botão desligado antes de chamar o banco. A regra que vale é a do banco (A2) —
 // estas contas existem para o gestor ler o porquê sem precisar errar primeiro.
 //
-// ⚠️ Nada aqui sabe a organização: quem grava recebe `orgId` pronto de
-// AssembleiaDetalheView (orgDoCondominio). A catraca orgDoCondominioGuard só lê a
-// pasta de cima, então esta pasta não pode nem tocar no empreendimento cru.
+// ⚠️ Nada aqui sabe a organização: quem grava é `ops` (B2 — gestor com orgDoCondominio,
+// síndico pela Edge Function). A catraca orgDoCondominioGuard só lê a pasta de cima,
+// então esta pasta não pode nem tocar no empreendimento cru.
 
 import type {
     ImpedimentoUnidade, ItemAssembleia, OpcaoVoto, StatusAssembleia, UnidadeNaAssembleia, VotoAssembleia,
@@ -35,6 +35,55 @@ export const BOTAO_VOLTAR = 'h-9 px-3.5 rounded-[6px] text-sm font-medium text-g
 export const MOTIVO = 'text-xs text-amber-700';
 export const CARD = 'bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4';
 
+// ─── acento (§24 — tela compartilhada app × portal) ──────────────────────────
+// A tela da assembleia serve o gestor (app, 'indigo') e o síndico (Portal do Síndico,
+// 'portal', coral). Só a COR DE IDENTIDADE muda (ação primária, foco, marcação, link);
+// a cor que significa algo (status, impedida, aviso âmbar, perigo vermelho) é igual nos
+// dois. Cada classe por extenso: o JIT do Tailwind não enxerga classe montada em runtime.
+
+export type AcentoDaAssembleia = 'indigo' | 'portal';
+
+export interface Acento {
+    /** Botão da ação principal (§17 no app; PrimaryButton coral no portal). */
+    primario: string;
+    campo: string;
+    areaDeTexto: string;
+    /** Rádio e caixa de marcar (cor da marcação e do foco). */
+    marca: string;
+    /** Link de texto: só a COR. Sublinhado e `break-all` ficam em quem usa (o link de transmissão
+     *  tem os dois; no botão "Voltar para editar" `break-all` cortaria palavra no meio). */
+    link: string;
+    /** Botão de escolha marcado (a cédula da sala). */
+    escolhida: string;
+    spinner: string;
+}
+
+export const ACCENTS: Record<AcentoDaAssembleia, Acento> = {
+    indigo: {
+        primario: BOTAO_PRIMARIO,
+        campo: CAMPO,
+        areaDeTexto: AREA_DE_TEXTO,
+        marca: 'text-blue-600 focus:ring-blue-500',
+        link: 'text-blue-600 hover:text-blue-800',
+        escolhida: 'border-blue-300 bg-blue-50 text-blue-700',
+        spinner: 'text-blue-600',
+    },
+    portal: {
+        primario: 'flex items-center gap-1.5 h-9 px-3.5 bg-[#E1553C] text-white rounded-[8px] hover:bg-[#C8452E] '
+            + 'font-semibold text-[13px] transition-all active:scale-95 shrink-0 whitespace-nowrap '
+            + 'disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100',
+        campo: 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 '
+            + 'placeholder:text-gray-400 focus:ring-2 focus:ring-[#E1553C]/20 focus:border-[#E1553C] outline-none '
+            + 'disabled:bg-gray-50 disabled:cursor-not-allowed',
+        areaDeTexto: 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 '
+            + 'placeholder:text-gray-400 focus:ring-2 focus:ring-[#E1553C]/20 focus:border-[#E1553C] outline-none',
+        marca: 'text-[#E1553C] focus:ring-[#E1553C]',
+        link: 'text-[#C24428] hover:text-[#E1553C]',
+        escolhida: 'border-[#F4B8A9] bg-[#FDEDE8] text-[#C24428]',
+        spinner: 'text-[#E1553C]',
+    },
+};
+
 /** §8 — texto colorido, sem pílula. */
 export const COR_STATUS: Record<StatusAssembleia, string> = {
     RASCUNHO: 'text-gray-600',
@@ -57,9 +106,12 @@ export const AVISO_COTAS_NAO_CONFERIDAS =
 /** O impedimento de agora, sem o unitId. */
 export type ImpedimentoAgora = Pick<ImpedimentoUnidade, 'motivo' | 'origem'>;
 
-/** 'Impedida (marcada pelo gestor): <motivo>' × 'Impedida: <motivo automático>'. */
+/**
+ * 'Impedida (marcada à mão): <motivo>' × 'Impedida: <motivo automático>'. "À mão", não "pelo
+ * gestor": desde a B2 o síndico também marca, e impedimento_manual não guarda o papel.
+ */
 export const textoImpedimento = (i: ImpedimentoAgora): string =>
-    i.origem === 'MANUAL' ? `Impedida (marcada pelo gestor): ${i.motivo}` : `Impedida: ${i.motivo}`;
+    i.origem === 'MANUAL' ? `Impedida (marcada à mão): ${i.motivo}` : `Impedida: ${i.motivo}`;
 
 // ─── hora em Brasília ────────────────────────────────────────────────────────
 

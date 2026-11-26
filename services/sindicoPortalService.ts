@@ -10,6 +10,9 @@ import type {
     CotaParaGerar, CriterioDoRateio, PagadorDaCota, PreviaDoRateio, TipoDoRateio,
 } from '../utils/rateioDoSindico';
 import { linhasParaImportar, type CandidatoDoMovimento, type MovimentoDoExtrato } from '../utils/extratoDoSindico';
+import {
+    chamarRpcDaAssembleia, conducaoPorRpc, linhasDaAssembleia, pautaParaGravar, type OperacoesAssembleia,
+} from './condominioAssembleiaService';
 
 /**
  * Portal do Síndico — leitura e gestão do acesso.
@@ -219,6 +222,97 @@ async function escrever(rpc: string, args: Record<string, unknown>, padrao: stri
 async function motivoDaFunction(error: unknown, padrao: string): Promise<string> {
     const corpo = await (error as { context?: Response }).context?.json?.().catch(() => null);
     return corpo?.error || padrao;
+}
+
+// ── Assembleias pelo síndico (B2, 26/11/2026) ───────────────────────────────
+//    Plano: docs/planos/2026-11-25-condominio-assembleias-votacoes.md (fase B).
+
+const FN_DOCUMENTOS = 'sindico-portal-documentos';
+const RPC_ASSEMBLEIA = 'sindico_portal_assembleia_';
+
+/**
+ * A porta do síndico para a MESMA tela da assembleia do gestor (`OperacoesAssembleia`).
+ * Tudo pelas RPCs `sindico_portal_assembleia_*` (B1), que exigem o síndico LOGADO
+ * (e-mail e senha — modo 'sessao' do resolvedor) com mandato vigente NAQUELE condomínio;
+ * a autorização é do banco, que recusa com HINT traduzido por `traduzirErroAssembleia`.
+ * A condução chama o mesmo núcleo do gestor (`conducaoPorRpc`), só que com o papel SINDICO.
+ * Documentos (ata, procuração) sobem pela Edge Function `sindico-portal-documentos`,
+ * que grava na org do condomínio (`fn_org_do_condominio`) — o síndico não é membro dela.
+ *
+ * `condominioId` = o condomínio em que o síndico está (a function precisa dele para subir).
+ */
+export function operacoesDoSindico(id: IdentidadeDoSindico, condominioId: string): OperacoesAssembleia {
+    const quem = params(id);
+    const chamar = <T,>(acao: string, args: Record<string, unknown>) =>
+        chamarRpcDaAssembleia<T>(`${RPC_ASSEMBLEIA}${acao}`, { ...quem, ...args });
+    const { assembleiaDe, itemDe, unidadeDe, votoDe } = linhasDaAssembleia;
+    type Linha = Record<string, any>;
+
+    return {
+        ...conducaoPorRpc(RPC_ASSEMBLEIA, quem),
+
+        async listar(empreendimentoId) {
+            const linhas = (await chamar<Linha[] | null>('listar', { p_empreendimento: empreendimentoId })) ?? [];
+            return linhas.map(assembleiaDe);
+        },
+
+        async salvarRascunho(d) {
+            const r = await chamar<Linha>('salvar_rascunho', {
+                p_assembleia: d.id ?? null, p_empreendimento: d.empreendimentoId, p_tipo: d.tipo,
+                p_titulo: (d.titulo ?? '').trim(), p_local: d.local?.trim() || null, p_link_transmissao: d.linkTransmissao?.trim() || null,
+                p_primeira_convocacao_em: d.primeiraConvocacaoEm ?? null, p_segunda_convocacao_em: d.segundaConvocacaoEm ?? null,
+            });
+            return assembleiaDe(r);
+        },
+
+        async salvarItens(assembleiaId, itens) {
+            // Conferida antes (mesmas frases do gestor); o banco grava numa transação só.
+            const linhas = (await chamar<Linha[] | null>('salvar_itens',
+                { p_assembleia: assembleiaId, p_itens: pautaParaGravar(itens) })) ?? [];
+            return linhas.map(itemDe).sort((a, b) => a.ordem - b.ordem);
+        },
+
+        async excluirRascunho(assembleiaId) {
+            await chamar('excluir_rascunho', { p_assembleia: assembleiaId });
+        },
+
+        async carregar(assembleiaId) {
+            const r = await chamar<Linha>('carregar', { p_assembleia: assembleiaId });
+            if (!r?.assembleia) throw new Error('Assembleia não encontrada.');
+            return {
+                assembleia: assembleiaDe(r.assembleia),
+                itens: ((r.itens ?? []) as Linha[]).map(itemDe),
+                unidades: ((r.unidades ?? []) as Linha[]).map(unidadeDe),
+                votos: ((r.votos ?? []) as Linha[]).map(votoDe),
+            };
+        },
+
+        async unidadesFora(assembleiaId) {
+            return (await chamar<string[] | null>('unidades_fora', { p_assembleia: assembleiaId })) ?? [];
+        },
+
+        async leiturasDoAviso(assembleiaId) {
+            return Number(await chamar<number | null>('leituras', { p_assembleia: assembleiaId })) || 0;
+        },
+
+        async enviarDocumento(_assembleiaId, arquivo, { categoria, titulo, visivelPortal }) {
+            const form = new FormData();
+            if (id.token) form.append('token', id.token);
+            if (id.clientId) form.append('clientId', id.clientId);
+            form.append('empreendimentoId', condominioId);
+            form.append('categoria', categoria);
+            form.append('titulo', titulo);
+            form.append('visivelPortal', visivelPortal ? 'true' : 'false');
+            form.append('file', arquivo);
+            const { data, error } = await supabase.functions.invoke(FN_DOCUMENTOS, { body: form });
+            if (error) throw new Error(await motivoDaFunction(error, 'Não foi possível enviar o documento.'));
+            if (!data?.documentoId) throw new Error(data?.error || 'Não foi possível enviar o documento.');
+            return { documentoId: data.documentoId as string };
+        },
+
+        // Mesmo caminho dos Documentos do portal (client-portal-condominio-download, portal 'sindico').
+        abrirDocumento: (_assembleiaId, documentoId) => sindicoPortalService.abrirDocumento(id, documentoId),
+    };
 }
 
 export const sindicoPortalService = {

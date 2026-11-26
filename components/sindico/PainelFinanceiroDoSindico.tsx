@@ -54,7 +54,7 @@ interface Props {
     dados: PortalSindico;
     /** A administradora pelo app: grava, mas aprovar/devolver rateio é só do síndico. */
     comoAdministradora: boolean;
-    /** Pode gravar: síndico com e-mail e senha, ou a administradora pelo app. */
+    /** Pode gravar: síndico logado (e-mail e senha, ou sessão ativa com o link), ou a administradora pelo app. */
     logado: boolean;
     notify: (m: string, t?: 'success' | 'error') => void;
     /** Recarrega o payload do portal (a prestação de contas mora nele). */

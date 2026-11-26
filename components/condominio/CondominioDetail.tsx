@@ -601,7 +601,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
             {aba === 'manutencao' && <ManutencaoTab empreendimento={e} />}
             {aba === 'financeiro' && <FinanceiroTab empreendimento={e} onAbrirRateio={setRateioAberto} />}
             {aba === 'assembleias' && (
-                <AssembleiasTab empreendimento={e} registrarAcaoDoTitulo={setAcaoDoTitulo} onAbrirAssembleia={setAssembleiaAberta} />
+                <AssembleiasTab empreendimento={e} ops={operacoesDoGestor} registrarAcaoDoTitulo={setAcaoDoTitulo} onAbrirAssembleia={setAssembleiaAberta} />
             )}
             {aba === 'comunicacao' && <ComunicacaoTab empreendimento={e} />}
 

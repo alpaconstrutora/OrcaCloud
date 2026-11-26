@@ -6,9 +6,11 @@
 // lugar onde rascunho e pauta se editam (guia §18.1) — a tela da assembleia só
 // mostra e aponta para cá.
 //
-// Grava pela TABELA (RLS do conjunto de orgs): condominioAssembleiaService
-// .salvarRascunho + .salvarItens. A organização quem põe é o gatilho do banco
-// (fn_org_do_condominio) — esta gaveta não manda organization_id.
+// Grava por `ops` (B2): o gestor pela TABELA (RLS do conjunto de orgs —
+// operacoesDoGestor → condominioAssembleiaService.salvarRascunho + .salvarItens); o
+// síndico pelas RPCs da porta dele (operacoesDoSindico), no Portal do Síndico. A
+// organização quem põe é o gatilho do banco (fn_org_do_condominio) — esta gaveta não
+// manda organization_id.
 //
 // "Assunto comum" sugere tipo e quórum (ASSUNTOS_COMUNS do A5); "Outro assunto"
 // deixa escolher à mão. Item de ESCOLHA só se decide por maioria dos presentes
@@ -23,14 +25,13 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import SecaoTitulo from '../ui/SecaoTitulo';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
-import {
-    condominioAssembleiaService, operacoesDoGestor,
-    type Assembleia, type Quorum, type TipoAssembleia, type TipoItem,
+import type {
+    Assembleia, OperacoesAssembleia, Quorum, TipoAssembleia, TipoItem,
 } from '../../services/condominioAssembleiaService';
 import { ASSUNTOS_COMUNS, REGRA_QUORUM, ROTULO_QUORUM, ROTULO_TIPO, ROTULO_TIPO_ITEM } from '../../utils/assembleiaTextos';
 import {
-    AREA_DE_TEXTO, BOTAO_PRIMARIO, BOTAO_SECUNDARIO, BOTAO_VOLTAR, CAMPO, MOTIVO, ROTULO,
-    deCampoDataHora, paraCampoDataHora,
+    ACCENTS, AREA_DE_TEXTO, BOTAO_PRIMARIO, BOTAO_SECUNDARIO, BOTAO_VOLTAR, CAMPO, MOTIVO, ROTULO,
+    deCampoDataHora, paraCampoDataHora, type AcentoDaAssembleia,
 } from './assembleia/comum';
 
 interface ItemForm {
@@ -77,14 +78,19 @@ interface Props {
     empreendimentoId: string;
     /** null = nova assembleia. */
     assembleiaId: string | null;
+    /** Quem grava: operacoesDoGestor (app) ou operacoesDoSindico (Portal do Síndico). */
+    ops: OperacoesAssembleia;
     /**
      * Devolve a assembleia gravada (§22: a lista costura sem recarregar). `pautaSalva`
      * false = o rascunho foi gravado mas a pauta não (a gaveta continua aberta com o erro).
      */
     onSalva: (a: Assembleia, pautaSalva: boolean) => void;
+    /** §24: 'portal' no Portal do Síndico (coral); padrão 'indigo' (app). */
+    accent?: AcentoDaAssembleia;
 }
 
-const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, assembleiaId, onSalva }) => {
+const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, assembleiaId, ops, onSalva, accent = 'indigo' }) => {
+    const ac = ACCENTS[accent];
     const confirm = useConfirm();
     const [form, setForm] = React.useState<Form>(formVazio);
     const [inicial, setInicial] = React.useState<string>(JSON.stringify(formVazio()));
@@ -106,7 +112,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
         }
         let vivo = true;
         setCarregando(true);
-        operacoesDoGestor.carregar(assembleiaId)
+        ops.carregar(assembleiaId)
             .then(({ assembleia: a, itens }) => {
                 if (!vivo) return;
                 const f: Form = {
@@ -123,7 +129,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
             .catch((e: unknown) => { if (vivo) setErro(e instanceof Error ? e.message : 'Erro ao carregar o rascunho.'); })
             .finally(() => { if (vivo) setCarregando(false); });
         return () => { vivo = false; };
-    }, [open, assembleiaId]);
+    }, [open, assembleiaId, ops]);
 
     const dirty = !carregando && JSON.stringify(form) !== inicial;
     // O X e o Voltar/Cancelar não passam pela guarda do Sheet (só Esc e o véu): guarda própria (§25).
@@ -179,7 +185,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
         setSalvando(true);
         setErro(null);
         try {
-            const a = await condominioAssembleiaService.salvarRascunho({
+            const a = await ops.salvarRascunho({
                 id: assembleiaId ?? idGravado ?? undefined,
                 empreendimentoId,
                 tipo: form.tipo,
@@ -191,7 +197,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
             });
             setIdGravado(a.id);
             try {
-                await condominioAssembleiaService.salvarItens(a.id, form.itens.map(i => ({
+                await ops.salvarItens(a.id, form.itens.map(i => ({
                     id: i.id, titulo: i.titulo, descricao: i.descricao, tipo: i.tipo, quorum: i.quorum,
                     assunto: i.assunto, opcoes: i.tipo === 'ESCOLHA' ? i.opcoes.filter(o => o.trim()) : null,
                 })));
@@ -227,7 +233,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
                         <div className="space-y-1.5">
                             <label htmlFor="assembleia-tipo" className={ROTULO}>Tipo</label>
                             <select id="assembleia-tipo" value={form.tipo} disabled={carregando}
-                                onChange={ev => set('tipo', ev.target.value as TipoAssembleia)} className={CAMPO}>
+                                onChange={ev => set('tipo', ev.target.value as TipoAssembleia)} className={ac.campo}>
                                 {(Object.keys(ROTULO_TIPO) as TipoAssembleia[]).map(t => (
                                     <option key={t} value={t}>{ROTULO_TIPO[t]} ({t})</option>
                                 ))}
@@ -237,7 +243,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
                             <label htmlFor="assembleia-titulo" className={ROTULO}>Título</label>
                             <input id="assembleia-titulo" type="text" value={form.titulo} disabled={carregando}
                                 onChange={ev => set('titulo', ev.target.value)} placeholder="Ex.: AGO 2026 — contas e orçamento"
-                                className={CAMPO} />
+                                className={ac.campo} />
                         </div>
                         <div className="space-y-1.5">
                             <label htmlFor="assembleia-primeira" className={ROTULO}>1ª convocação (horário de Brasília)</label>
@@ -247,22 +253,22 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
                                     // A 2ª costuma ser meia hora depois: preenche se ainda estiver vazia.
                                     setForm(f => ({ ...f, primeira: v, segunda: f.segunda || (v ? maisMeiaHora(v) : '') }));
                                 }}
-                                className={CAMPO} />
+                                className={ac.campo} />
                         </div>
                         <div className="space-y-1.5">
                             <label htmlFor="assembleia-segunda" className={ROTULO}>2ª convocação (horário de Brasília)</label>
                             <input id="assembleia-segunda" type="datetime-local" value={form.segunda} disabled={carregando}
-                                onChange={ev => set('segunda', ev.target.value)} className={CAMPO} />
+                                onChange={ev => set('segunda', ev.target.value)} className={ac.campo} />
                         </div>
                         <div className="space-y-1.5">
                             <label htmlFor="assembleia-local" className={ROTULO}>Local</label>
                             <input id="assembleia-local" type="text" value={form.local} disabled={carregando}
-                                onChange={ev => set('local', ev.target.value)} placeholder="Ex.: Salão de festas" className={CAMPO} />
+                                onChange={ev => set('local', ev.target.value)} placeholder="Ex.: Salão de festas" className={ac.campo} />
                         </div>
                         <div className="space-y-1.5">
                             <label htmlFor="assembleia-link" className={ROTULO}>Link de transmissão</label>
                             <input id="assembleia-link" type="url" value={form.link} disabled={carregando}
-                                onChange={ev => set('link', ev.target.value)} placeholder="https://..." className={CAMPO} />
+                                onChange={ev => set('link', ev.target.value)} placeholder="https://..." className={ac.campo} />
                         </div>
                     </div>
                     <p className="text-xs text-gray-500">
@@ -296,19 +302,19 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
                                 <div className="space-y-1.5">
                                     <label htmlFor={`${it.chave}-assunto`} className={ROTULO}>Assunto comum</label>
                                     <select id={`${it.chave}-assunto`} value={it.assunto}
-                                        onChange={ev => escolherAssunto(it.chave, ev.target.value)} className={CAMPO}>
+                                        onChange={ev => escolherAssunto(it.chave, ev.target.value)} className={ac.campo}>
                                         {ASSUNTOS_COMUNS.map(a => <option key={a.id} value={a.id}>{a.rotulo}</option>)}
                                     </select>
                                 </div>
                                 <div className="space-y-1.5">
                                     <label htmlFor={`${it.chave}-titulo`} className={ROTULO}>Título do item</label>
                                     <input id={`${it.chave}-titulo`} type="text" value={it.titulo}
-                                        onChange={ev => setItem(it.chave, i => ({ ...i, titulo: ev.target.value }))} className={CAMPO} />
+                                        onChange={ev => setItem(it.chave, i => ({ ...i, titulo: ev.target.value }))} className={ac.campo} />
                                 </div>
                                 <div className="space-y-1.5">
                                     <label htmlFor={`${it.chave}-tipo`} className={ROTULO}>Tipo de votação</label>
                                     <select id={`${it.chave}-tipo`} value={it.tipo}
-                                        onChange={ev => escolherTipo(it.chave, ev.target.value as TipoItem)} className={CAMPO}>
+                                        onChange={ev => escolherTipo(it.chave, ev.target.value as TipoItem)} className={ac.campo}>
                                         {(Object.keys(ROTULO_TIPO_ITEM) as TipoItem[]).map(t => (
                                             <option key={t} value={t}>{ROTULO_TIPO_ITEM[t]}</option>
                                         ))}
@@ -317,7 +323,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
                                 <div className="space-y-1.5">
                                     <label htmlFor={`${it.chave}-quorum`} className={ROTULO}>Quórum</label>
                                     <select id={`${it.chave}-quorum`} value={it.quorum} disabled={it.tipo === 'ESCOLHA'}
-                                        onChange={ev => setItem(it.chave, i => ({ ...i, quorum: ev.target.value as Quorum }))} className={CAMPO}>
+                                        onChange={ev => setItem(it.chave, i => ({ ...i, quorum: ev.target.value as Quorum }))} className={ac.campo}>
                                         {(Object.keys(ROTULO_QUORUM) as Quorum[]).map(q => (
                                             <option key={q} value={q}>{ROTULO_QUORUM[q]}</option>
                                         ))}
@@ -332,7 +338,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
                                     <label htmlFor={`${it.chave}-descricao`} className={ROTULO}>Descrição</label>
                                     <textarea id={`${it.chave}-descricao`} rows={2} value={it.descricao}
                                         onChange={ev => setItem(it.chave, i => ({ ...i, descricao: ev.target.value }))}
-                                        placeholder="Opcional — vai para o edital e para o aviso" className={AREA_DE_TEXTO} />
+                                        placeholder="Opcional — vai para o edital e para o aviso" className={ac.areaDeTexto} />
                                 </div>
                             </div>
                             {it.tipo === 'ESCOLHA' && (
@@ -344,7 +350,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
                                                 onChange={ev => setItem(it.chave, i => ({
                                                     ...i, opcoes: i.opcoes.map((o, j) => (j === k ? ev.target.value : o)),
                                                 }))}
-                                                placeholder={`Opção ${k + 1}`} className={CAMPO} />
+                                                placeholder={`Opção ${k + 1}`} className={ac.campo} />
                                             <ActionIconButton kind="delete" title="Tirar esta opção"
                                                 onClick={() => setItem(it.chave, i => ({ ...i, opcoes: i.opcoes.filter((_, j) => j !== k) }))} />
                                         </div>
@@ -369,7 +375,7 @@ const AssembleiaSheet: React.FC<Props> = ({ open, onClose, empreendimentoId, ass
             <SheetFooter className="flex-wrap">
                 {motivo && <p className={`${MOTIVO} mr-auto max-w-sm`}>{motivo}</p>}
                 <button type="button" onClick={fechar} className={BOTAO_VOLTAR}>{assembleiaId ? 'Voltar' : 'Cancelar'}</button>
-                <button type="button" onClick={salvar} disabled={!!motivo || salvando} className={BOTAO_PRIMARIO}>
+                <button type="button" onClick={salvar} disabled={!!motivo || salvando} className={ac.primario}>
                     {salvando ? 'Salvando...' : assembleiaId ? 'Salvar rascunho' : 'Criar rascunho'}
                 </button>
             </SheetFooter>

@@ -116,6 +116,7 @@ function unidades(presentes: number): UnidadeNaAssembleia[] {
         unidadeRotulo: `Torre A — 10${k + 1}`, proprietarioNome: `Dono ${k + 1}`,
         presenca: k < presentes ? 'PRESENCIAL' as const : null, procuradorNome: null, procuracaoDocumentoId: null,
         presencaEm: k < presentes ? agoraMais(-HORA / 4) : null, impedidaNaInstalacao: null,
+        impedimentoManual: null, impedimentoManualEm: null,
     }));
 }
 
@@ -150,7 +151,7 @@ const retrato: Retrato = {
         instaladaPor: { id: 'u-gestor', papel: 'GESTOR', em: '2026-12-10T22:31:00Z', nome: 'Gestora' },
         editalConfirmadoPor: { id: 'u-gestor', papel: 'GESTOR', em: '2026-12-10T22:31:00Z', nome: 'Gestora' },
         quorumInstalacao: { convocacao: 2, total: 0.01, presentesFracao: 0.005, presentesUnidades: 4, impedidas: [],
-            em: '2026-12-10T22:31:00Z' },
+            em: '2026-12-10T22:31:00Z', cotasConferidas: true },
         observacaoGeral: null, encerradaEm: ENCERRADA_EM, encerradaPor: 'u-gestor', encerradaPorPapel: 'GESTOR',
     },
     deliberacoes: {},
@@ -173,11 +174,14 @@ function opsFalso(primeira: AssembleiaCarregada, extra: Partial<OperacoesAssembl
         registrarPresenca: vi.fn(async (_id: string, unitId: string, presenca: any, procurador?: string | null, procuracaoId?: string | null) =>
             ({ unitId, presenca, procurador: procurador ?? null, procuracaoDocumentoId: procuracaoId ?? null })),
         instalar: vi.fn(async (_id: string, d: { convocacao: 1 | 2 }) => ({ convocacao: d.convocacao, total: 0.01,
-            presentesFracao: 0.005, presentesUnidades: 4, impedidas: [], em: new Date().toISOString() })),
+            presentesFracao: 0.005, presentesUnidades: 4, impedidas: [], em: new Date().toISOString(), cotasConferidas: true })),
         lancarVoto: vi.fn(async (itemId: string, unitId: string, opcao: string) =>
             ({ votoId: 'v-novo', itemId, unitId, opcao, origem: 'PRESENCIAL' as const, anterior: null })),
         encerrar: vi.fn(async () => retrato),
         vincularAta: vi.fn(async (_id: string, documentoId: string) => ({ ataDocumentoId: documentoId })),
+        marcarImpedida: vi.fn(async (_id: string, unitId: string, motivo: string | null) =>
+            ({ unitId, motivo, em: motivo ? new Date().toISOString() : null })),
+        cotasConferidas: vi.fn(async () => true),
         ...extra,
     };
     return ops as typeof ops & OperacoesAssembleia;
@@ -256,8 +260,9 @@ describe('tela atualizada durante a reunião', () => {
         const gaveta = await screen.findByRole('dialog', { name: 'Instalar assembleia' });
         await waitFor(() => expect(within(gaveta).getByRole('radio', { name: /1ª convocação/ })).toBeEnabled());
         expect(ops.carregar).toHaveBeenCalledTimes(2);
-        // E passa a ser a escolhida (o gestor ainda não tinha escolhido à mão).
-        expect(within(gaveta).getByRole('radio', { name: /1ª convocação/ })).toBeChecked();
+        // E passa a ser a escolhida (o gestor ainda não tinha escolhido à mão). É um efeito da
+        // gaveta, depois do render que liga o rádio: espera por ele.
+        await waitFor(() => expect(within(gaveta).getByRole('radio', { name: /1ª convocação/ })).toBeChecked());
     });
 
     it('abrir a unidade recarrega: voto do portal que chegou depois pede a confirmação da R7', async () => {
@@ -541,7 +546,7 @@ describe('abrir ata (pop-up)', () => {
 describe('situação congelada', () => {
     it('encerrada mostra a impedida DA INSTALAÇÃO, não o impedimento de agora', async () => {
         const MOTIVO = 'Cota de 10/2026 vencida em 10/11/2026';
-        const impedidas = [{ unitId: 'u3', rotulo: 'Torre A — 103', motivo: MOTIVO }];
+        const impedidas = [{ unitId: 'u3', rotulo: 'Torre A — 103', motivo: MOTIVO, origem: 'AUTOMATICA' as const }];
         const r: Retrato = { ...retrato, impedidasNaInstalacao: impedidas };
         const d = carregada(assembleia({ status: 'ENCERRADA', encerradaEm: ENCERRADA_EM, retrato: r, ataDocumentoId: 'doc-ata',
             quorumInstalacao: { ...retrato.cabecalho.quorumInstalacao!, impedidas } }), 4);
@@ -631,5 +636,103 @@ describe('gaveta de rascunho', () => {
         expect(await screen.findByText(/O rascunho foi gravado, mas a pauta não: Item 1: há opção em branco\./)).toBeInTheDocument();
         expect(onSalva).toHaveBeenCalledWith(gravada, false);
         expect(onClose).not.toHaveBeenCalled();
+    });
+});
+
+// ─── A10: impedimento marcado à mão e cotas não conferidas ──────────────────
+
+const AVISO_COTAS = 'Este condomínio não tem cotas cobradas pelo Òpura: a inadimplência não é conferida automaticamente. '
+    + 'Marque à mão a unidade impedida.';
+
+describe('cotas não conferidas (A10)', () => {
+    it('aviso aparece com cotasConferidas=false: topo de Unidades e gaveta Instalar', async () => {
+        const ops = opsFalso(carregada(assembleia(), 4), { cotasConferidas: vi.fn(async () => false) });
+        montar(ops);
+
+        // As gavetas ficam montadas (escondidas): o do topo de Unidades é o que está fora delas.
+        await waitFor(() => expect(screen.getAllByText(AVISO_COTAS).some(el => !el.closest('[role="dialog"]'))).toBe(true));
+        fireEvent.click(screen.getByRole('button', { name: 'Instalar' }));
+        const gaveta = await screen.findByRole('dialog', { name: 'Instalar assembleia' });
+        expect(within(gaveta).getByText(AVISO_COTAS)).toBeInTheDocument();
+        // Não bloqueia: com a caixa e a mesa, instala.
+        fireEvent.change(within(gaveta).getByLabelText('Presidente da mesa'), { target: { value: 'Paula' } });
+        fireEvent.change(within(gaveta).getByLabelText('Secretário da mesa'), { target: { value: 'Sérgio' } });
+        fireEvent.click(within(gaveta).getByLabelText('Confirmo que o edital foi entregue a todas as unidades'));
+        expect(within(gaveta).getByRole('button', { name: 'Instalar assembleia' })).toBeEnabled();
+    });
+
+    it('aviso aparece na gaveta Convocar do rascunho', async () => {
+        const rascunho = assembleia({ status: 'RASCUNHO', convocadaEm: null, avisoId: null,
+            primeiraConvocacaoEm: agoraMais(5 * 24 * HORA), segundaConvocacaoEm: agoraMais(5 * 24 * HORA + HORA) });
+        const ops = opsFalso(carregada(rascunho, 0), { cotasConferidas: vi.fn(async () => false) });
+        montar(ops);
+
+        fireEvent.click(await screen.findByRole('button', { name: 'Convocar' }));
+        const gaveta = await screen.findByRole('dialog', { name: 'Convocar assembleia' });
+        expect(await within(gaveta).findByText(AVISO_COTAS)).toBeInTheDocument();
+        expect(within(gaveta).getByRole('button', { name: 'Convocar e publicar aviso' })).toBeEnabled();
+    });
+
+    it('com cotas conferidas, sem aviso', async () => {
+        const ops = opsFalso(carregada(assembleia(), 4));
+        montar(ops);
+        await waitFor(() => expect(ops.cotasConferidas).toHaveBeenCalledWith('a1'));
+        expect(screen.queryByText(AVISO_COTAS)).not.toBeInTheDocument();
+    });
+});
+
+describe('impedimento marcado à mão (A10)', () => {
+    it('marcar exige motivo; marcada, a situação diz que foi o gestor', async () => {
+        const ops = opsFalso(carregada(assembleia(), 1));
+        montar(ops);
+
+        const gaveta = await abrirUnidade('Torre A — 102');
+        const marcar = within(gaveta).getByRole('button', { name: 'Marcar como impedida' });
+        expect(marcar).toBeDisabled();
+        expect(within(gaveta).getByText('Informe o motivo do impedimento.')).toBeInTheDocument();
+        fireEvent.change(within(gaveta).getByLabelText('Motivo do impedimento'), { target: { value: '   ' } });
+        expect(marcar).toBeDisabled();
+
+        fireEvent.change(within(gaveta).getByLabelText('Motivo do impedimento'),
+            { target: { value: '  Acordo de parcelamento descumprido ' } });
+        expect(marcar).toBeEnabled();
+        fireEvent.click(marcar);
+        await waitFor(() => expect(ops.marcarImpedida).toHaveBeenCalledWith('a1', 'u2', 'Acordo de parcelamento descumprido'));
+
+        // A gaveta passa a dizer a situação e a oferecer Desmarcar; a presença fica travada.
+        expect(await within(gaveta).findByText('Impedida (marcada pelo gestor): Acordo de parcelamento descumprido.'))
+            .toBeInTheDocument();
+        expect(within(gaveta).getByRole('button', { name: 'Desmarcar' })).toBeEnabled();
+        expect(within(gaveta).getByRole('radio', { name: 'Na sala' })).toBeDisabled();
+    });
+
+    it('situação com origem: marcada pelo gestor × automática; desmarcar manda null', async () => {
+        const d = carregada(assembleia(), 0);
+        d.unidades = d.unidades.map(u => (u.unitId === 'u2'
+            ? { ...u, impedimentoManual: 'Acordo descumprido', impedimentoManualEm: agoraMais(-HORA) } : u));
+        const ops = opsFalso(d, { impedimentos: vi.fn(async () => [
+            { unitId: 'u1', motivo: 'Cota de 10/2026 vencida em 10/11/2026', origem: 'AUTOMATICA' as const },
+            { unitId: 'u2', motivo: 'Acordo descumprido', origem: 'MANUAL' as const },
+        ]) });
+        montar(ops);
+
+        expect(await screen.findByText('Impedida: Cota de 10/2026 vencida em 10/11/2026')).toBeInTheDocument();
+        expect(screen.getByText('Impedida (marcada pelo gestor): Acordo descumprido')).toBeInTheDocument();
+
+        const gaveta = await abrirUnidade('Torre A — 102');
+        fireEvent.click(within(gaveta).getByRole('button', { name: 'Desmarcar' }));
+        await waitFor(() => expect(ops.marcarImpedida).toHaveBeenCalledWith('a1', 'u2', null));
+    });
+
+    it('a automática não oferece desmarcar (só o pagamento libera), mas aceita a marca do gestor por cima', async () => {
+        const ops = opsFalso(carregada(assembleia(), 0), { impedimentos: vi.fn(async () => [
+            { unitId: 'u1', motivo: 'Cota de 10/2026 vencida em 10/11/2026', origem: 'AUTOMATICA' as const },
+        ]) });
+        montar(ops);
+
+        const gaveta = await abrirUnidade('Torre A — 101');
+        expect(await within(gaveta).findByText('Impedida: Cota de 10/2026 vencida em 10/11/2026.')).toBeInTheDocument();
+        expect(within(gaveta).queryByRole('button', { name: 'Desmarcar' })).not.toBeInTheDocument();
+        expect(within(gaveta).getByRole('button', { name: 'Marcar como impedida' })).toBeInTheDocument();
     });
 });

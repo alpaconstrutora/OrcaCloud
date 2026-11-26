@@ -22,7 +22,7 @@
 
 import type {
     Assembleia, ItemAssembleia, OpcaoVoto, OrigemVoto, PapelCondutor, Quorum, Retrato, RetratoUnidade,
-    ResultadoItem, StatusAssembleia, TipoAssembleia, TipoItem, AutorAssembleia,
+    ResultadoItem, StatusAssembleia, TipoAssembleia, TipoItem, AutorAssembleia, OrigemImpedimento,
 } from '../services/condominioAssembleiaService';
 import { fmtCnpj } from './format';
 
@@ -143,7 +143,18 @@ const REGRA_INSTALACAO =
 const DIREITO_DO_QUITE = 'O condômino quite com as contribuições tem direito a votar e participar (CC art. 1.335, III).';
 export const REGRA_IMPEDIMENTO =
     `${DIREITO_DO_QUITE} O sistema considera impedida a unidade com cota condominial vencida e não paga `
-    + 'e não a conta no quórum de instalação.';
+    + '(ou indicada pela administração, quando a cota não é cobrada pelo sistema) e não a conta no quórum de instalação.';
+
+/** A10: de onde veio cada impedida da ata (rótulo sem caixa alta). */
+export const ROTULO_ORIGEM_IMPEDIMENTO: Record<OrigemImpedimento, string> = {
+    MANUAL: 'Indicada pelo gestor',
+    AUTOMATICA: 'Conferida pelo sistema (cota vencida)',
+};
+
+/** A10: a ata diz quando a regra automática não tinha o que conferir (quorum_instalacao.cotasConferidas = false). */
+export const FRASE_INADIMPLENCIA_NAO_CONFERIDA =
+    'A inadimplência não foi conferida pelo sistema, porque o condomínio não tem cotas cobradas pelo Òpura; '
+    + 'as unidades impedidas foram indicadas pelo gestor.';
 
 // ─── formatação ──────────────────────────────────────────────────────────────
 
@@ -369,7 +380,10 @@ export interface AtaModelo {
     participaramDaVotacao: MedidaPresenca;
     presenca: LinhaPresencaAta[];
     ausentes: { unidade: string; nome: string }[];
-    impedidas: { unidade: string; motivo: string }[];
+    /** origem = ROTULO_ORIGEM_IMPEDIMENTO (indicada pelo gestor × conferida pelo sistema). */
+    impedidas: { unidade: string; motivo: string; origem: string }[];
+    /** A10: FRASE_INADIMPLENCIA_NAO_CONFERIDA quando a instalação gravou cotasConferidas = false; senão null. */
+    inadimplenciaNaoConferida: string | null;
     procuracoes: { unidade: string; procurador: string; documentoId: string | null }[];
     ordemDoDia: string[];
     itens: ItemAta[];
@@ -426,8 +440,8 @@ export function montarAta(retrato: Retrato, a: Assembleia, condominio: Condomini
         unidades: qi?.presentesUnidades ?? 0,
         totalUnidades,
         explicacao: 'Unidades presentes na sala, por procurador ou com voto pelo portal no instante da instalação. '
-            + `${DIREITO_DO_QUITE} O sistema considera impedida a unidade com cota condominial vencida e não paga `
-            + 'e não a conta neste quórum.',
+            + `${DIREITO_DO_QUITE} O sistema considera impedida a unidade com cota condominial vencida e não paga, `
+            + 'ou a indicada pelo gestor, e não a conta neste quórum.',
     };
     const participaramDaVotacao: MedidaPresenca = {
         rotulo: ROTULO_PARTICIPARAM_DA_VOTACAO,
@@ -453,7 +467,10 @@ export function montarAta(retrato: Retrato, a: Assembleia, condominio: Condomini
     const impedidas = impedidasFonte.map(i => ({
         unidade: ou(i.rotulo, rotuloUnidade(porUnidade.get(i.unitId), i.unitId)),
         motivo: ou(i.motivo, 'cota vencida'),
+        origem: ROTULO_ORIGEM_IMPEDIMENTO[i.origem === 'MANUAL' ? 'MANUAL' : 'AUTOMATICA'],
     }));
+    // Só afirma "não conferida" se a instalação gravou isso (null = não se sabe).
+    const inadimplenciaNaoConferida = qi?.cotasConferidas === false ? FRASE_INADIMPLENCIA_NAO_CONFERIDA : null;
 
     const procuracoes = retrato.unidades
         .filter(u => u.presenca === 'PROCURADOR')
@@ -542,6 +559,7 @@ export function montarAta(retrato: Retrato, a: Assembleia, condominio: Condomini
         presenca,
         ausentes,
         impedidas,
+        inadimplenciaNaoConferida,
         procuracoes,
         ordemDoDia: itensOrdenados.map((it, i) => `${i + 1}. ${it.titulo}`),
         itens,

@@ -8,7 +8,7 @@
 // (utils/assembleiaTextos) e é o que a gaveta mostra e o que o pai envia.
 
 import React from 'react';
-import { CalendarClock, ListChecks, MapPinOff, Megaphone, Gavel, FileText } from 'lucide-react';
+import { AlertTriangle, CalendarClock, ListChecks, MapPinOff, Megaphone, Gavel, FileText } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../../ui/sheet';
 import SecaoTitulo from '../../ui/SecaoTitulo';
 import {
@@ -16,7 +16,7 @@ import {
 } from '../../../utils/assembleiaTextos';
 import type { Assembleia, DadosInstalacao, ItemAssembleia } from '../../../services/condominioAssembleiaService';
 import {
-    AREA_DE_TEXTO, BOTAO_PERIGO, BOTAO_PRIMARIO, BOTAO_VOLTAR, CAMPO, MOTIVO, ROTULO,
+    AREA_DE_TEXTO, AVISO_COTAS_NAO_CONFERIDAS, BOTAO_PERIGO, BOTAO_PRIMARIO, BOTAO_VOLTAR, CAMPO, MOTIVO, ROTULO,
     diasDeAntecedencia, temMetade, type Presentes,
 } from './comum';
 
@@ -32,6 +32,17 @@ const Rodape: React.FC<{ motivo: string | null; onVoltar: () => void; children: 
 const Erro: React.FC<{ texto: string | null }> = ({ texto }) =>
     texto ? <p role="alert" className="text-sm text-red-600">{texto}</p> : null;
 
+/**
+ * A10: o condomínio não tem cota cobrada pelo app — a regra automática de inadimplência
+ * não pega ninguém. Só avisa (não desliga nada): o gestor marca a impedida à mão.
+ */
+export const AvisoCotasNaoConferidas: React.FC = () => (
+    <div role="note" className="flex items-start gap-2.5 rounded-[10px] border border-amber-200 bg-amber-50 px-4 py-3">
+        <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0 text-amber-700" aria-hidden="true" />
+        <p className="text-sm text-amber-800">{AVISO_COTAS_NAO_CONFERIDAS}</p>
+    </div>
+);
+
 // ─── Convocar (R1, R4) ───────────────────────────────────────────────────────
 
 interface ConvocarProps {
@@ -45,11 +56,13 @@ interface ConvocarProps {
     erroFora: string | null;
     gravando: boolean;
     erro: string | null;
+    /** A10: false = avisa que a inadimplência não é conferida (null = não se sabe). */
+    cotasConferidas: boolean | null;
     onConvocar: (corpoAviso: string) => void;
 }
 
 export const ConvocarSheet: React.FC<ConvocarProps> = ({
-    open, onClose, assembleia: a, itens, condominioNome, fora, erroFora, gravando, erro, onConvocar,
+    open, onClose, assembleia: a, itens, condominioNome, fora, erroFora, gravando, erro, cotasConferidas, onConvocar,
 }) => {
     const corpo = React.useMemo(() => textoConvocacao(a, itens, condominioNome), [a, itens, condominioNome]);
     const agora = Date.now();
@@ -71,6 +84,7 @@ export const ConvocarSheet: React.FC<ConvocarProps> = ({
                 <SheetDescription>{a.titulo}</SheetDescription>
             </SheetHeader>
             <SheetPanel className="p-6 space-y-8">
+                {cotasConferidas === false && <AvisoCotasNaoConferidas />}
                 <section className="space-y-4">
                     <SecaoTitulo icon={CalendarClock} titulo="Antecedência" />
                     {dias !== null && a.primeiraConvocacaoEm ? (
@@ -141,11 +155,13 @@ interface InstalarProps {
     leituras: number | null;
     gravando: boolean;
     erro: string | null;
+    /** A10: false = avisa que a inadimplência não é conferida (null = não se sabe). */
+    cotasConferidas: boolean | null;
     onInstalar: (dados: DadosInstalacao) => void;
 }
 
 export const InstalarSheet: React.FC<InstalarProps> = ({
-    open, onClose, assembleia: a, presentes, impedidas, leituras, gravando, erro, onInstalar,
+    open, onClose, assembleia: a, presentes, impedidas, leituras, gravando, erro, cotasConferidas, onInstalar,
 }) => {
     const agora = Date.now();
     const pct = percentualDoTotal(presentes.fracao, presentes.total);
@@ -208,12 +224,13 @@ export const InstalarSheet: React.FC<InstalarProps> = ({
                 <SheetDescription>{a.titulo}</SheetDescription>
             </SheetHeader>
             <SheetPanel className="p-6 space-y-8">
+                {cotasConferidas === false && <AvisoCotasNaoConferidas />}
                 <section className="space-y-4">
                     <SecaoTitulo icon={ListChecks} titulo={ROTULO_QUORUM_INSTALACAO}
                         resumo={`${pct} · ${presentes.unidades} de ${presentes.totalUnidades} unidades`} />
                     <p className="text-xs text-gray-500">
                         Conta quem está na sala (pessoalmente ou por procurador) ou já votou pelo portal, sem as
-                        impedidas{impedidas > 0 ? ` (${impedidas} agora)` : ''}. O número é gravado ao instalar e não muda depois.
+                        impedidas — cota vencida ou marcada pelo gestor{impedidas > 0 ? ` (${impedidas} agora)` : ''}. O número é gravado ao instalar e não muda depois.
                     </p>
                     <fieldset className="space-y-3">
                         <legend className="sr-only">Em qual convocação a assembleia se instala</legend>

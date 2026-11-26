@@ -106,8 +106,8 @@ const retrato: Retrato = {
         editalConfirmadoPor: { id: 'p1', papel: 'GESTOR', em: '2026-12-10T22:31:00Z', nome: 'Gestora Fernanda Ribeiro' },
         quorumInstalacao: {
             convocacao: 2, total: 0.01, presentesFracao: 6 * F, presentesUnidades: 6,
-            impedidas: [{ unitId: 'u7', rotulo: 'Apto 707', motivo: 'Cota de 10/2026 vencida em 10/11/2026' }],
-            em: '2026-12-10T22:32:00Z',
+            impedidas: [{ unitId: 'u7', rotulo: 'Apto 707', motivo: 'Cota de 10/2026 vencida em 10/11/2026', origem: 'AUTOMATICA' }],
+            em: '2026-12-10T22:32:00Z', cotasConferidas: true,
         },
         observacaoGeral: 'A reunião transcorreu sem intercorrências; a transmissão ficou disponível durante toda a sessão.',
         encerradaEm: '2026-12-11T00:15:00Z', encerradaPor: 'p1', encerradaPorPapel: 'GESTOR',
@@ -132,7 +132,7 @@ const retrato: Retrato = {
         voto('i2', 5, 'ABSTENCAO', 'PRESENCIAL'), voto('i2', 6, 'Ana Conceição', 'PORTAL'),
         voto('i2', 7, 'Bruno Gonçalves', 'PORTAL'),
     ],
-    impedidasNaInstalacao: [{ unitId: 'u7', rotulo: 'Apto 707', motivo: 'Cota de 10/2026 vencida em 10/11/2026' }],
+    impedidasNaInstalacao: [{ unitId: 'u7', rotulo: 'Apto 707', motivo: 'Cota de 10/2026 vencida em 10/11/2026', origem: 'AUTOMATICA' }],
 };
 
 const condominio = { nome: NOME, cnpj: '12345678000190' };
@@ -248,6 +248,8 @@ describe('PDF da ata', () => {
         expect(t).toContain('procurador: Maria Procuradora de Assunção');
         expect(t).toContain('Apto 707');
         expect(t).toContain('Cota de 10/2026 vencida em 10/11/2026');
+        expect(t).toContain('Conferida pelo sistema');
+        expect(t).not.toContain('A inadimplência não foi conferida pelo sistema');
         expect(t).toContain('Abstenção');
         expect(t).toContain('Não');
         expect(t).toContain('Vencedora: Bruno Gonçalves');
@@ -272,6 +274,23 @@ describe('PDF da ata', () => {
     });
 
     it('rodapé em todas as páginas, inclusive as do anexo', () => rodapeEmTodas(paginasAta));
+});
+
+describe('PDF da ata: cotas não conferidas (A10)', () => {
+    it('diz que a inadimplência não foi conferida e lista a impedida indicada pelo gestor', async () => {
+        const manual = [{ unitId: 'u7', rotulo: 'Apto 707', motivo: 'Acordo de parcelamento descumprido', origem: 'MANUAL' as const }];
+        const r: Retrato = {
+            ...retrato,
+            impedidasNaInstalacao: manual,
+            cabecalho: { ...retrato.cabecalho,
+                quorumInstalacao: { ...retrato.cabecalho.quorumInstalacao!, cotasConferidas: false, impedidas: manual } },
+        };
+        const t = (await textoDasPaginas(await (await gerarAtaPdf(montarAta(r, assembleia, condominio))).arrayBuffer())).join(' ');
+        expect(t).toContain('A inadimplência não foi conferida pelo sistema, porque o condomínio não tem cotas cobradas '
+            + 'pelo Òpura; as unidades impedidas foram indicadas pelo gestor.');
+        expect(t).toContain('Indicada pelo gestor');
+        expect(t).toContain('Acordo de parcelamento descumprido');
+    }, 30_000);
 });
 
 describe('PDF da ata com anexo longo (60 unidades × 2 itens)', () => {

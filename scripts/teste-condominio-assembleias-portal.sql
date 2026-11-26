@@ -21,7 +21,10 @@
 --       sessaoValida = false); "inquilino não vota"; "troca de voto até
 --       encerrar vale o último"; "voto PORTAL depois de PRESENCIAL substitui";
 --       "impedida recebe unidade_impedida"; opção inválida; unidade fora; item inexistente;
---   • condominio_assembleia_impedimentos: membro vê a impedida com o motivo; não-membro 42501;
+--   • condominio_assembleia_impedimentos: membro vê a impedida com o motivo e a origem
+--     (MANUAL | AUTOMATICA); não-membro 42501;
+--   • A10: "portal recebe o motivo manual em impedida"; "voto do portal recusado para
+--     unidade marcada"; a marca do gestor vale sobre a automática; desmarcar volta à regra;
 --   • A2 refatorada aqui (núcleo do voto em auxiliares comuns): o voto presencial continua
 --     exigindo presença e recusando impedida;
 --   • privilégios: payload fora da API; token para anon+authenticated; demais só authenticated.
@@ -130,6 +133,7 @@ DECLARE
     v TEXT; res JSONB; ass JSONB; ced JSONB; j JSONB; ret JSONB; f TEXT;
     hoje DATE := (now() AT TIME ZONE 'America/Sao_Paulo')::date;
     venc DATE; comp DATE; motivo_u2 TEXT;
+    motivo_manual CONSTANT TEXT := 'Inadimplente segundo a administradora (planilha de 11/2026)';
     nova CONSTANT TEXT := 'WITH x AS (INSERT INTO public.condominio_assembleias '
                        || '(empreendimento_id, tipo, titulo, local, link_transmissao, primeira_convocacao_em, segunda_convocacao_em) '
                        || 'VALUES (%L, %L, %L, ''Salão de festas'', ''https://exemplo.invalid/sala'', %L::timestamptz, %L::timestamptz) '
@@ -380,8 +384,38 @@ BEGIN
 
     -- ═══ impedimentos (leitura do gestor) ═══════════════════════════════════
     v := pg_temp.au(m, format('SELECT public.condominio_assembleia_impedimentos(%L)::text', a));
-    PERFORM pg_temp.confere(v LIKE 'ok:%' AND substr(v, 4)::jsonb = jsonb_build_array(jsonb_build_object('unitId', u2, 'motivo', motivo_u2)),
-        'impedimentos: membro vê a impedida com o motivo (veio ' || v || ')');
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND substr(v, 4)::jsonb = jsonb_build_array(
+                                jsonb_build_object('unitId', u2, 'motivo', motivo_u2, 'origem', 'AUTOMATICA')),
+        'impedimentos: membro vê a impedida com o motivo e a origem (veio ' || v || ')');
+
+    -- ═══ A10: impedimento marcado à mão chega ao portal ═════════════════════
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_marcar_impedida(%L, %L, %L)::text', a, u1, motivo_manual));
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'gestor marca 101 impedida (veio ' || v || ')');
+    ass := pg_temp.da(pg_temp.le(p, c_p), a);
+    PERFORM pg_temp.confere(pg_temp.cedula(ass, u1) ->> 'impedida' = motivo_manual
+                        AND pg_temp.cedula(ass, u2) ->> 'impedida' = motivo_u2,
+        'portal recebe o motivo manual em impedida (veio ' || coalesce((ass -> 'minhasUnidades')::text, '<null>') || ')');
+    v := pg_temp.vota(p, i1, u1, 'SIM');
+    PERFORM pg_temp.confere(v LIKE 'P0001|unidade_impedida|' || motivo_manual || '|%'
+                        AND (SELECT opcao FROM public.condominio_assembleia_votos WHERE item_id = i1 AND unit_id = u1) = 'NAO',
+        'voto do portal recusado para unidade marcada (e o voto anterior continua valendo) (veio ' || v || ')');
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_impedimentos(%L)::text', a));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND substr(v, 4)::jsonb = jsonb_build_array(
+                                jsonb_build_object('unitId', u1, 'motivo', motivo_manual, 'origem', 'MANUAL'),
+                                jsonb_build_object('unitId', u2, 'motivo', motivo_u2, 'origem', 'AUTOMATICA')),
+        'impedimentos: marcada à mão vem com origem MANUAL (veio ' || v || ')');
+    -- A marca do gestor vale sobre a regra automática na mesma unidade.
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_marcar_impedida(%L, %L, %L)::text', a, u2, 'Outro motivo'));
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_impedimentos(%L)::text', a));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND substr(v, 4)::jsonb -> 1 = jsonb_build_object('unitId', u2, 'motivo', 'Outro motivo', 'origem', 'MANUAL'),
+        'impedimentos: marca do gestor vale sobre a automática (veio ' || v || ')');
+    PERFORM pg_temp.au(m, format('SELECT public.condominio_assembleia_marcar_impedida(%L, %L, NULL)::text', a, u1));
+    PERFORM pg_temp.au(m, format('SELECT public.condominio_assembleia_marcar_impedida(%L, %L, NULL)::text', a, u2));
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_impedimentos(%L)::text', a));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND substr(v, 4)::jsonb = jsonb_build_array(
+                                jsonb_build_object('unitId', u2, 'motivo', motivo_u2, 'origem', 'AUTOMATICA'))
+                        AND pg_temp.cedula(pg_temp.da(pg_temp.le(p, c_p), a), u1) -> 'impedida' = 'null'::jsonb,
+        'desmarcar: volta a regra automática, e a cédula de 101 volta a valer (veio ' || v || ')');
     v := pg_temp.au(p, format('SELECT public.condominio_assembleia_impedimentos(%L)::text', a));
     PERFORM pg_temp.confere(v LIKE '42501|%', 'impedimentos: não-membro recebe 42501 (veio ' || v || ')');
     v := pg_temp.au(p, format('SELECT public.condominio_assembleia_impedimentos(%L)::text', gen_random_uuid()));

@@ -22,7 +22,11 @@
 //     do portal que a tela não conhecia, a tela avisa;
 //   • a ata sai do RETRATO devolvido pelo encerrar; upload falho deixa "Gerar ata
 //     novamente", que refaz do mesmo retrato (e não encerra de novo);
-//   • organização de upload = orgDoCondominio(e) (catraca orgDoCondominioGuard).
+//   • organização de upload = orgDoCondominio(e) (catraca orgDoCondominioGuard);
+//   • A10: sem cota cobrada pelo app (ops.cotasConferidas = false), aviso — que não bloqueia
+//     nada — no Convocar, no Instalar e no topo de Unidades; o gestor marca a impedida à mão
+//     na gaveta da unidade (ops.marcarImpedida). A situação diz a origem: "Impedida (marcada
+//     pelo gestor): …" × "Impedida: <cota vencida>".
 //
 // Ordem das seções: Identificação · Edital e ata · Pauta · Apuração · Unidades. A
 // lista de Unidades é a única TABELA e vem por último — nada abaixo de tabela (§6.14).
@@ -51,9 +55,14 @@ import type {
 } from '../../services/condominioAssembleiaService';
 import type { Empreendimento } from '../../types/empreendimento';
 import UnidadeSheet from './assembleia/UnidadeSheet';
-import { CancelarSheet, ConvocarSheet, EncerrarSheet, InstalarSheet } from './assembleia/ConducaoSheets';
+import {
+    AvisoCotasNaoConferidas, CancelarSheet, ConvocarSheet, EncerrarSheet, InstalarSheet,
+} from './assembleia/ConducaoSheets';
 import { ApuracaoSecao, EditalAtaSecao, IdentificacaoSecao, PautaSecao } from './assembleia/SecoesDaAssembleia';
-import { BOTAO_PRIMARIO, BOTAO_SECUNDARIO, COR_STATUS, diaBrasilia, presentesAptos, temMetade } from './assembleia/comum';
+import {
+    BOTAO_PRIMARIO, BOTAO_SECUNDARIO, COR_STATUS, diaBrasilia, presentesAptos, temMetade, textoImpedimento,
+    type ImpedimentoAgora,
+} from './assembleia/comum';
 
 interface Props {
     assembleiaId: string;
@@ -96,6 +105,8 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
     const [erroApuracao, setErroApuracao] = React.useState<string | null>(null);
     const [atualizandoApuracao, setAtualizandoApuracao] = React.useState(false);
     const [leituras, setLeituras] = React.useState<number | null>(null);
+    // A10: o condomínio tem cota cobrada pelo app? false = avisa (null = não conferido ainda).
+    const [cotasConferidas, setCotasConferidas] = React.useState<boolean | null>(null);
 
     const [gaveta, setGaveta] = React.useState<Gaveta>(null);
     const [gravando, setGravando] = React.useState(false);
@@ -168,9 +179,30 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
     const itens = dados?.itens ?? [];
     const unidades = dados?.unidades ?? [];
     const votos = dados?.votos ?? [];
-    const impedidas = React.useMemo(() => new Map(impedimentos.map(i => [i.unitId, i.motivo])), [impedimentos]);
+    // Impedimento AGORA (só com a assembleia viva). A marca do gestor (A10) vem da própria
+    // linha da unidade — a costura local a mostra na hora —; o resto, do banco
+    // (ops.impedimentos: regra automática, e a marca de outro gestor).
+    const impedidas = React.useMemo(() => {
+        const m = new Map<string, ImpedimentoAgora>(impedimentos.map(i => [i.unitId, { motivo: i.motivo, origem: i.origem }]));
+        for (const u of unidades) {
+            if (u.impedimentoManual) m.set(u.unitId, { motivo: u.impedimentoManual, origem: 'MANUAL' });
+        }
+        return m;
+    }, [impedimentos, unidades]);
     const presentes = React.useMemo(
         () => presentesAptos(unidades, votos, new Set(impedidas.keys())), [unidades, votos, impedidas]);
+
+    // A10: só antes de encerrar faz sentido avisar (Convocar, Instalar, presença).
+    const statusAtual = dados?.assembleia.status;
+    React.useEffect(() => {
+        if (!statusAtual || !['RASCUNHO', 'CONVOCADA', 'INSTALADA'].includes(statusAtual)) return;
+        let vivo = true;
+        ops.cotasConferidas(assembleiaId)
+            .then(c => { if (vivo) setCotasConferidas(c); })
+            // Falhar aqui não derruba a tela: sem a resposta, não se afirma nada.
+            .catch(() => { if (vivo) setCotasConferidas(null); });
+        return () => { vivo = false; };
+    }, [ops, assembleiaId, statusAtual]);
 
     // Situação da unidade. Em ENCERRADA vale o que ficou CONGELADO na instalação (retrato /
     // quorum_instalacao) — ops.impedimentos é o "agora" e só existe com a assembleia viva.
@@ -179,7 +211,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
     const impedidasNaInstalacao = React.useMemo(() => {
         const lista = a?.retrato?.impedidasNaInstalacao?.length ? a.retrato.impedidasNaInstalacao
             : (a?.quorumInstalacao?.impedidas ?? a?.retrato?.cabecalho.quorumInstalacao?.impedidas ?? []);
-        return new Map(lista.map(i => [i.unitId, i.motivo]));
+        return new Map<string, ImpedimentoAgora>(lista.map(i => [i.unitId, { motivo: i.motivo, origem: i.origem }]));
     }, [a?.retrato, a?.quorumInstalacao]);
     const mostrarSituacao = !(a?.status === 'CANCELADA' && !a.quorumInstalacao);
     const colunasUnidades = React.useMemo(
@@ -430,6 +462,30 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
         } finally { setGravando(false); }
     };
 
+    // ── impedimento marcado à mão (A10, R3) ──────────────────────────────
+    // Marcar impede presença e voto daqui em diante; voto já lançado continua valendo e o
+    // quórum gravado na instalação não muda — a regra é do banco.
+    const marcarImpedida = async (motivo: string | null) => {
+        if (!a || !unidade) return;
+        setGravando(true);
+        try {
+            const r = await ops.marcarImpedida(a.id, unidade.unitId, motivo);
+            costurar(d => (d ? {
+                ...d,
+                unidades: d.unidades.map(u => (u.unitId === r.unitId
+                    ? { ...u, impedimentoManual: r.motivo, impedimentoManualEm: r.em } : u)),
+            } : d));
+            // Desmarcada, some a marca; a regra automática (se houver) volta pela releitura abaixo.
+            setImpedimentos(lista => lista.filter(i => !(i.unitId === r.unitId && i.origem === 'MANUAL')));
+            notify(r.motivo
+                ? `Unidade marcada como impedida: ${unidade.unidadeRotulo ?? 'unidade'}.`
+                : `Marca de impedimento retirada: ${unidade.unidadeRotulo ?? 'unidade'}.`);
+            atualizarApuracao(a);
+        } catch (err) {
+            notify(msg(err, 'Erro ao marcar o impedimento.'), 'error');
+        } finally { setGravando(false); }
+    };
+
     // ── cabeçalho ────────────────────────────────────────────────────────
     const acao: { label: string; icone: React.ReactNode; onClick: () => void; desligada?: boolean } | null = !a ? null
         : a.status === 'RASCUNHO' ? { label: 'Convocar', icone: <Megaphone className="w-[15px] h-[15px]" />, onClick: abrirConvocar }
@@ -466,14 +522,17 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
         return `${n} de ${itens.length} (${origem})`;
     };
     /** Impedimento AGORA (só com a assembleia viva) — é o que trava presença e voto. */
-    const motivoImpedida = (u: UnidadeNaAssembleia) => (congelada ? null : impedidas.get(u.unitId) ?? null);
+    const impedimentoAgora = (u: UnidadeNaAssembleia) => (congelada ? null : impedidas.get(u.unitId) ?? null);
     const situacao = (u: UnidadeNaAssembleia): { impedida: boolean; texto: string } => {
         if (congelada) {
-            const m = impedidasNaInstalacao.get(u.unitId) ?? (u.impedidaNaInstalacao ? 'cota condominial vencida' : null);
-            return m ? { impedida: true, texto: `Impedida na instalação: ${m}` } : { impedida: false, texto: 'Apta na instalação' };
+            const m = impedidasNaInstalacao.get(u.unitId)
+                ?? (u.impedidaNaInstalacao ? { motivo: 'cota condominial vencida', origem: 'AUTOMATICA' as const } : null);
+            return m
+                ? { impedida: true, texto: `Impedida na instalação${m.origem === 'MANUAL' ? ' (marcada pelo gestor)' : ''}: ${m.motivo}` }
+                : { impedida: false, texto: 'Apta na instalação' };
         }
         const m = impedidas.get(u.unitId);
-        return m ? { impedida: true, texto: `Impedida: ${m}` } : { impedida: false, texto: 'Apta' };
+        return m ? { impedida: true, texto: textoImpedimento(m) } : { impedida: false, texto: 'Apta' };
     };
 
     const portalVotaram = React.useMemo(
@@ -560,8 +619,8 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                             <KpiCard label="Presentes aptos agora" value={percentualDoTotal(presentes.fracao, presentes.total)}
                                 sub={`${presentes.unidades} de ${presentes.totalUnidades} unidades${temMetade(presentes) ? ' · metade atingida' : ''}`}
                                 icon={<UserCheck className="w-4 h-4" />} color={temMetade(presentes) ? 'emerald' : 'amber'} />
-                            <KpiCard label="Impedidas agora" value={impedimentos.length} sub="cota condominial vencida"
-                                icon={<Ban className="w-4 h-4" />} color={impedimentos.length ? 'red' : 'gray'} />
+                            <KpiCard label="Impedidas agora" value={impedidas.size} sub="cota vencida ou marcada pelo gestor"
+                                icon={<Ban className="w-4 h-4" />} color={impedidas.size ? 'red' : 'gray'} />
                             <KpiCard label="Votaram pelo portal" value={portalVotaram} sub="unidades com ao menos um voto"
                                 icon={<Smartphone className="w-4 h-4" />} color="indigo" />
                         </div>
@@ -585,6 +644,10 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                             </p>
                         ) : (
                             <>
+                                {/* A10: aviso ACIMA da tabela (nada abaixo de tabela — §6.14). */}
+                                {cotasConferidas === false && (a.status === 'CONVOCADA' || a.status === 'INSTALADA') && (
+                                    <AvisoCotasNaoConferidas />
+                                )}
                                 {a.avisoId && (
                                     <p className="text-sm text-gray-700">
                                         {leituras === null
@@ -634,10 +697,10 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
 
                     <ConvocarSheet open={gaveta === 'convocar'} onClose={fecharGaveta} assembleia={a} itens={itens}
                         condominioNome={condominio.nome} fora={fora} erroFora={erroFora} gravando={gravando} erro={erroGaveta}
-                        onConvocar={convocar} />
+                        cotasConferidas={cotasConferidas} onConvocar={convocar} />
                     <InstalarSheet open={gaveta === 'instalar'} onClose={fecharGaveta} assembleia={a} presentes={presentes}
-                        impedidas={impedimentos.length} leituras={leituras} gravando={gravando} erro={erroGaveta}
-                        onInstalar={instalar} />
+                        impedidas={impedidas.size} leituras={leituras} gravando={gravando} erro={erroGaveta}
+                        cotasConferidas={cotasConferidas} onInstalar={instalar} />
                     <EncerrarSheet open={gaveta === 'encerrar'} onClose={fecharGaveta} assembleia={a} itens={itens}
                         gravando={gravando} erro={erroGaveta} onEncerrar={encerrar} />
                     <CancelarSheet open={gaveta === 'cancelar'} onClose={fecharGaveta} assembleia={a}
@@ -645,8 +708,9 @@ const AssembleiaDetalheView: React.FC<Props> = ({ assembleiaId, empreendimento: 
                     <UnidadeSheet open={!!unidade} onClose={() => setUnidadeAberta(null)} status={a.status} unidade={unidade}
                         total={presentes.total} itens={itens}
                         votos={unidade ? votos.filter(v => v.unitId === unidade.unitId) : []}
-                        impedimento={unidade ? motivoImpedida(unidade) : null} gravando={gravando}
-                        onRegistrarPresenca={registrarPresenca} onLancarVoto={lancarVoto} />
+                        impedimento={unidade ? impedimentoAgora(unidade) : null} gravando={gravando}
+                        onRegistrarPresenca={registrarPresenca} onLancarVoto={lancarVoto}
+                        onMarcarImpedida={marcarImpedida} />
                 </>
             )}
 

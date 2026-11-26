@@ -23,6 +23,11 @@
 --   • cancelar publica 'Cancelada: …';
 --   • invólucros: não-membro recebe 42501 em todos; anon/authenticated não executam
 --     _assembleia_* nem fn_assembleia_*;
+--   • A10 (impedimento marcado à mão): "marcar impedida bloqueia presença e voto"; "voto
+--     dado antes de marcar continua valendo"; "desmarcar libera"; "motivo vazio recusado
+--     (sem_motivo)"; "não-membro 42501"; "cotas_conferidas false sem título / true com
+--     título" (título em rateio CANCELADO não conta); "instalar grava cotasConferidas e
+--     origem" (MANUAL × AUTOMATICA em quorum_instalacao.impedidas);
 --   • decisões da revisão da A1 (nesta migration):
 --       1. assembleia: INSERT/UPDATE do app só nas 7 colunas do rascunho (retrato,
 --          ata_documento_id, created_by… recusados com 42501);
@@ -128,12 +133,20 @@ CREATE FUNCTION pg_temp.presenca(p_m UUID, p_a UUID, p_unit UUID, p_presenca TEX
                                   p_a, p_unit, p_presenca, p_procurador, p_procuracao))
 $$;
 
+-- A10: p_user marca (motivo) ou desmarca (NULL) a unidade como impedida; devolve o resultado cru.
+CREATE FUNCTION pg_temp.marcar(p_user UUID, p_a UUID, p_unit UUID, p_motivo TEXT) RETURNS TEXT LANGUAGE sql AS $$
+    SELECT pg_temp.au(p_user, format('SELECT public.condominio_assembleia_marcar_impedida(%L, %L, %L)::text',
+                                     p_a, p_unit, p_motivo))
+$$;
+
 DO $$
 DECLARE
     org_a UUID; org_b UUID; m UUID; n UUID;
     e UUID; e2 UUID; t UUID; u1 UUID; u2 UUID; u3 UUID; u4 UUID; u5 UUID;
     c1 UUID; c1b UUID; c2 UUID; c3 UUID; c4 UUID; c_ex UUID; c_inq UUID;
-    r1 UUID; r2 UUID; r3 UUID;
+    r1 UUID; r2 UUID; r3 UUID; r4 UUID;
+    ea UUID; iE1 UUID; a_e2 UUID; tx_e2 UUID;
+    motivo_m CONSTANT TEXT := 'Acordo de parcelamento descumprido (débito de 03/2026)';
     tx1_velho UUID; tx1_novo UUID; tx2_canc UUID; tx2_rcanc UUID; tx3_pago UUID; tx4_hoje UUID;
     doc_proc UUID; doc_proc_outro UUID; doc_ata UUID; doc_ata_outro UUID; doc_outro UUID;
     a UUID; b UUID; c UUID; d UUID;
@@ -295,8 +308,9 @@ BEGIN
     PERFORM pg_temp.confere(v LIKE 'P0001|sem_itens|%', 'não convoca sem item (veio ' || v || ')');
     -- Condomínio sem nenhuma fração ideal: total seria 0 e todo quórum perderia sentido.
     v := pg_temp.au(m, format(nova, e2, 'AGO', 'Sem frações', p1, p2));
-    PERFORM pg_temp.au(m, format(item, substr(v, 4)::uuid, 1, 'Item', 'APROVACAO', NULL, 'MAIORIA_PRESENTES'));
-    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_convocar(%L, %L)::text', substr(v, 4)::uuid, 'Edital'));
+    a_e2 := substr(v, 4)::uuid;
+    PERFORM pg_temp.au(m, format(item, a_e2, 1, 'Item', 'APROVACAO', NULL, 'MAIORIA_PRESENTES'));
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_convocar(%L, %L)::text', a_e2, 'Edital'));
     PERFORM pg_temp.confere(v LIKE 'P0001|sem_unidades|%', 'não convoca condomínio sem unidade com fração (veio ' || v || ')');
 
     -- Assembleia A: a reunião completa.
@@ -354,6 +368,125 @@ BEGIN
         'a marca de transição não fica ligada depois da RPC');
     v := pg_temp.au(m, format('SELECT public.condominio_assembleia_convocar(%L, %L)::text', a, 'De novo'));
     PERFORM pg_temp.confere(v LIKE 'P0001|estado|%', 'convocar duas vezes recusa pelo estado (veio ' || v || ')');
+
+    -- ═══ A10: cotas conferidas e impedimento marcado à mão ══════════════════
+    -- Conferida = há título de cota (transaction_id) em rateio NÃO cancelado do condomínio.
+    PERFORM pg_temp.confere(public.fn_assembleia_cotas_conferidas(e) IS TRUE,
+        'cotas_conferidas false sem título / true com título: condomínio com títulos → true');
+    PERFORM pg_temp.confere(public.fn_assembleia_cotas_conferidas(e2) IS FALSE,
+        'cotas_conferidas false sem título / true com título: condomínio sem título → false');
+    -- Título que vence no futuro (não impede ninguém): só a existência dele importa aqui.
+    INSERT INTO public.internal_transactions (organization_id, source_system, transaction_date, due_date, amount, direction, status, business_status, description)
+    VALUES (org_b, 'CONDOMINIO_RATEIO', hoje + 30, hoje + 30, 100, 'CREDIT', 'PENDING', 'PREVISTO', 'Cota teste e2') RETURNING id INTO tx_e2;
+    INSERT INTO public.condominio_rateios (empreendimento_id, organization_id, competencia, criterio)
+    VALUES (e2, org_b, comp_velha, 'FRACAO_IDEAL') RETURNING id INTO r4;
+    INSERT INTO public.condominio_rateio_itens (rateio_id, unit_id, organization_id, peso, valor, transaction_id)
+    VALUES (r4, u4, org_b, 1, 100, tx_e2);
+    PERFORM pg_temp.confere(public.fn_assembleia_cotas_conferidas(e2) IS TRUE,
+        'cotas_conferidas: título em rateio não cancelado conta');
+    UPDATE public.condominio_rateios SET status = 'CANCELADO' WHERE id = r4;
+    PERFORM pg_temp.confere(public.fn_assembleia_cotas_conferidas(e2) IS FALSE,
+        'cotas_conferidas: título só em rateio CANCELADO não conta');
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_cotas_conferidas(%L)::text', a_e2));
+    PERFORM pg_temp.confere(v = 'ok:false', 'RPC cotas_conferidas: rascunho de condomínio sem título → false (veio ' || v || ')');
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_cotas_conferidas(%L)::text', a));
+    PERFORM pg_temp.confere(v = 'ok:true', 'RPC cotas_conferidas: condomínio com título → true (veio ' || v || ')');
+    v := pg_temp.au(n, format('SELECT public.condominio_assembleia_cotas_conferidas(%L)::text', a));
+    PERFORM pg_temp.confere(v LIKE '42501|%', 'RPC cotas_conferidas: não-membro 42501 (veio ' || v || ')');
+
+    -- Assembleia E: o gestor marca à mão.
+    v := pg_temp.au(m, format(nova, e, 'AGE', 'Assembleia E (impedimento à mão)', p1, p2));
+    ea := substr(v, 4)::uuid;
+    iE1 := substr(pg_temp.au(m, format(item, ea, 1, 'Pintura da fachada', 'APROVACAO', NULL, 'MAIORIA_PRESENTES')), 4)::uuid;
+    v := pg_temp.marcar(m, ea, u2, motivo_m);
+    PERFORM pg_temp.confere(v LIKE 'P0001|estado|%', 'marcar impedida em RASCUNHO recusa pelo estado (veio ' || v || ')');
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_convocar(%L, %L)::text', ea, 'Edital E'));
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'convocar E (veio ' || v || ')');
+
+    v := pg_temp.marcar(m, ea, u2, '   ');
+    PERFORM pg_temp.confere(v LIKE 'P0001|sem_motivo|%', 'motivo vazio recusado (sem_motivo): só espaços (veio ' || v || ')');
+    v := pg_temp.marcar(m, ea, u2, '');
+    PERFORM pg_temp.confere(v LIKE 'P0001|sem_motivo|%', 'motivo vazio recusado (sem_motivo): texto vazio (veio ' || v || ')');
+    v := pg_temp.marcar(n, ea, u2, motivo_m);
+    PERFORM pg_temp.confere(v LIKE '42501|%', 'não-membro 42501 ao marcar (veio ' || v || ')');
+    v := pg_temp.como(NULL, 'anon', format('SELECT public.condominio_assembleia_marcar_impedida(%L, %L, %L)::text', ea, u2, motivo_m));
+    PERFORM pg_temp.confere(v LIKE '42501|%', 'anon não marca (veio ' || v || ')');
+    v := pg_temp.marcar(m, ea, u5, motivo_m);
+    PERFORM pg_temp.confere(v LIKE 'P0001|unidade_fora|%', 'marcar unidade fora da assembleia recusado (veio ' || v || ')');
+    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.condominio_assembleia_unidades
+                                         WHERE assembleia_id = ea AND impedimento_manual IS NOT NULL),
+        'recusas não marcaram nada');
+
+    v := pg_temp.marcar(m, ea, u2, '  ' || motivo_m || '  ');
+    PERFORM pg_temp.confere(v LIKE 'ok:%'
+                        AND (SELECT impedimento_manual FROM public.condominio_assembleia_unidades
+                              WHERE assembleia_id = ea AND unit_id = u2) = motivo_m
+                        AND (SELECT impedimento_manual_em IS NOT NULL FROM public.condominio_assembleia_unidades
+                              WHERE assembleia_id = ea AND unit_id = u2),
+        'marcar impedida grava o motivo (sem espaços nas pontas) e a hora (veio ' || v || ')');
+    PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM public.condominio_assembleia_eventos
+                                     WHERE assembleia_id = ea AND evento = 'IMPEDIMENTO_MANUAL' AND papel = 'GESTOR'
+                                       AND ator = m AND unit_id = u2 AND detalhe ->> 'motivo' = motivo_m),
+        'marcar impedida grava evento IMPEDIMENTO_MANUAL com ator, papel e motivo');
+    PERFORM pg_temp.confere(public.fn_assembleia_impedimento(ea, u2) = motivo_m
+                        AND public.fn_assembleia_impedimento(ea, u1) = motivo_u1
+                        AND public.fn_assembleia_impedimento(ea, u3) IS NULL,
+        'fn_assembleia_impedimento: marcado à mão → motivo do gestor; senão a regra automática');
+    v := pg_temp.presenca(m, ea, u2, 'PRESENCIAL');
+    PERFORM pg_temp.confere(v LIKE 'P0001|unidade_impedida|' || motivo_m || '|%',
+        'marcar impedida bloqueia presença e voto: presença recusada com o motivo do gestor (veio ' || v || ')');
+
+    -- desmarcar libera
+    v := pg_temp.marcar(m, ea, u4, 'Teste de desmarcar');
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'marcar u4 (veio ' || v || ')');
+    v := pg_temp.presenca(m, ea, u4, 'PRESENCIAL');
+    PERFORM pg_temp.confere(v LIKE 'P0001|unidade_impedida|%', 'u4 marcada não registra presença (veio ' || v || ')');
+    v := pg_temp.marcar(m, ea, u4, NULL);
+    PERFORM pg_temp.confere(v LIKE 'ok:%'
+                        AND (SELECT impedimento_manual IS NULL AND impedimento_manual_em IS NULL
+                               FROM public.condominio_assembleia_unidades WHERE assembleia_id = ea AND unit_id = u4)
+                        AND EXISTS (SELECT 1 FROM public.condominio_assembleia_eventos
+                                     WHERE assembleia_id = ea AND evento = 'IMPEDIMENTO_MANUAL' AND unit_id = u4
+                                       AND detalhe -> 'motivo' = 'null'::jsonb),
+        'desmarcar libera: limpa motivo e hora, evento com motivo null (veio ' || v || ')');
+    v := pg_temp.presenca(m, ea, u4, 'PRESENCIAL');
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'desmarcar libera: presença registrada (veio ' || v || ')');
+    v := pg_temp.presenca(m, ea, u3, 'PRESENCIAL');
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'presença u3 em E (veio ' || v || ')');
+
+    -- instalar grava cotasConferidas e origem
+    PERFORM pg_temp.desloca(ea, now() - interval '40 minutes', now() - interval '10 minutes');
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_instalar(%L, 2::smallint, %L, %L, true)::text', ea, 'P', 'S'));
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'instalar E (veio ' || v || ')');
+    SELECT quorum_instalacao INTO q FROM public.condominio_assembleias WHERE id = ea;
+    PERFORM pg_temp.confere(q -> 'cotasConferidas' = 'true'::jsonb
+                        AND jsonb_array_length(q -> 'impedidas') = 2
+                        AND (q ->> 'presentesUnidades')::int = 2
+                        AND (q ->> 'presentesFracao')::numeric = 0.7
+                        AND EXISTS (SELECT 1 FROM jsonb_array_elements(q -> 'impedidas') x
+                                     WHERE x ->> 'unitId' = u1::text AND x ->> 'origem' = 'AUTOMATICA' AND x ->> 'motivo' = motivo_u1)
+                        AND EXISTS (SELECT 1 FROM jsonb_array_elements(q -> 'impedidas') x
+                                     WHERE x ->> 'unitId' = u2::text AND x ->> 'origem' = 'MANUAL' AND x ->> 'motivo' = motivo_m)
+                        AND (SELECT impedida_na_instalacao FROM public.condominio_assembleia_unidades WHERE assembleia_id = ea AND unit_id = u2),
+        'instalar grava cotasConferidas e origem (veio ' || coalesce(q::text, '<null>') || ')');
+
+    -- voto dado antes de marcar continua valendo
+    PERFORM pg_temp.vota(m, iE1, u3, 'SIM');
+    v := pg_temp.marcar(m, ea, u3, 'Débito reconhecido na reunião');
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'marcar depois de votar (veio ' || v || ')');
+    PERFORM pg_temp.confere((SELECT opcao || '/' || origem FROM public.condominio_assembleia_votos WHERE item_id = iE1 AND unit_id = u3) = 'SIM/PRESENCIAL'
+                        AND (pg_temp.item_apurado(ea, iE1) -> 'porOpcao' -> 'SIM' ->> 'unidades')::int = 1
+                        AND (SELECT quorum_instalacao FROM public.condominio_assembleias WHERE id = ea) = q,
+        'voto dado antes de marcar continua valendo (e o quórum gravado não muda)');
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_lancar_voto(%L, %L, %L)::text', iE1, u3, 'NAO'));
+    PERFORM pg_temp.confere(v LIKE 'P0001|unidade_impedida|Débito reconhecido na reunião|%'
+                        AND (SELECT opcao FROM public.condominio_assembleia_votos WHERE item_id = iE1 AND unit_id = u3) = 'SIM',
+        'marcar impedida bloqueia presença e voto: voto recusado (veio ' || v || ')');
+    v := pg_temp.marcar(m, ea, u3, NULL);
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'desmarcar u3 (veio ' || v || ')');
+    PERFORM pg_temp.vota(m, iE1, u3, 'NAO');
+    PERFORM pg_temp.confere((SELECT opcao FROM public.condominio_assembleia_votos WHERE item_id = iE1 AND unit_id = u3) = 'NAO',
+        'desmarcar libera: volta a votar');
 
     -- ═══ instalar: 1ª convocação e quórum ═══════════════════════════════════
     v := pg_temp.au(m, format('SELECT public.condominio_assembleia_instalar(%L, 1::smallint, %L, %L, true)::text', a, 'Pres', 'Sec'));
@@ -541,7 +674,9 @@ BEGIN
         format('SELECT public.condominio_assembleia_lancar_voto(%L, %L, %L)::text', iA1, u4, 'SIM'),
         format('SELECT public.condominio_assembleia_encerrar(%L, NULL, NULL)::text', a),
         format('SELECT public.condominio_assembleia_vincular_ata(%L, %L)::text', a, doc_ata),
-        format('SELECT public.condominio_assembleia_apuracao(%L)::text', a)] LOOP
+        format('SELECT public.condominio_assembleia_apuracao(%L)::text', a),
+        format('SELECT public.condominio_assembleia_marcar_impedida(%L, %L, %L)::text', a, u4, 'x'),
+        format('SELECT public.condominio_assembleia_cotas_conferidas(%L)::text', a)] LOOP
         v := pg_temp.au(n, f);
         PERFORM pg_temp.confere(v LIKE '42501|%', 'não-membro recebe 42501 em todos os invólucros: ' || f || ' (veio ' || v || ')');
         v := pg_temp.como(NULL, 'anon', f);
@@ -679,7 +814,8 @@ BEGIN
         (SELECT count(*) FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace
             AND p.proname IN ('_assembleia_convocar', '_assembleia_cancelar', '_assembleia_registrar_presenca',
                               '_assembleia_instalar', '_assembleia_lancar_voto', '_assembleia_encerrar',
-                              '_assembleia_vincular_ata', 'fn_assembleia_apurar', 'fn_assembleia_unidade_impedida')) = 9
+                              '_assembleia_vincular_ata', 'fn_assembleia_apurar', 'fn_assembleia_unidade_impedida',
+                              '_assembleia_marcar_impedida', 'fn_assembleia_impedimento', 'fn_assembleia_cotas_conferidas')) = 12
         AND (SELECT bool_and(NOT has_function_privilege('anon', p.oid, 'EXECUTE')
                          AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE')
                          AND NOT EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x
@@ -695,13 +831,18 @@ BEGIN
             AND p.proname IN ('condominio_assembleia_convocar', 'condominio_assembleia_cancelar',
                               'condominio_assembleia_registrar_presenca', 'condominio_assembleia_instalar',
                               'condominio_assembleia_lancar_voto', 'condominio_assembleia_encerrar',
-                              'condominio_assembleia_vincular_ata', 'condominio_assembleia_apuracao')
+                              'condominio_assembleia_vincular_ata', 'condominio_assembleia_apuracao',
+                              'condominio_assembleia_marcar_impedida', 'condominio_assembleia_cotas_conferidas')
             AND has_function_privilege('authenticated', p.oid, 'EXECUTE')
             AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
             AND NOT EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x
                              WHERE x.grantee = 0 AND x.privilege_type = 'EXECUTE')
-            AND p.prosecdef AND 'search_path=public, pg_temp' = ANY (p.proconfig)) = 8,
-        'os 8 invólucros: authenticated executa; anon e PUBLIC não');
+            AND p.prosecdef AND 'search_path=public, pg_temp' = ANY (p.proconfig)) = 10,
+        'os 10 invólucros: authenticated executa; anon e PUBLIC não');
+    PERFORM pg_temp.confere(NOT has_column_privilege('authenticated', 'public.condominio_assembleia_unidades', 'impedimento_manual', 'UPDATE')
+                        AND NOT has_column_privilege('authenticated', 'public.condominio_assembleia_unidades', 'impedimento_manual', 'INSERT')
+                        AND has_column_privilege('authenticated', 'public.condominio_assembleia_unidades', 'impedimento_manual', 'SELECT'),
+        'impedimento_manual: o app só lê (marca só pela RPC)');
     PERFORM pg_temp.confere(
         (SELECT NOT has_function_privilege('anon', p.oid, 'EXECUTE')
             AND NOT EXISTS (SELECT 1 FROM aclexplode(coalesce(p.proacl, acldefault('f', p.proowner))) x

@@ -9,7 +9,7 @@
 // pasta de cima, então esta pasta não pode nem tocar no empreendimento cru.
 
 import type {
-    ItemAssembleia, OpcaoVoto, StatusAssembleia, UnidadeNaAssembleia, VotoAssembleia,
+    ImpedimentoUnidade, ItemAssembleia, OpcaoVoto, StatusAssembleia, UnidadeNaAssembleia, VotoAssembleia,
 } from '../../../services/condominioAssembleiaService';
 
 // ─── régua (§16, §21, §30, §32) ──────────────────────────────────────────────
@@ -43,6 +43,23 @@ export const COR_STATUS: Record<StatusAssembleia, string> = {
     ENCERRADA: 'text-emerald-700',
     CANCELADA: 'text-red-600',
 };
+
+// ─── impedimento (R3 + A10) ──────────────────────────────────────────────────
+
+/**
+ * A10: sem cota cobrada pelo app, a regra automática não confere ninguém — o aviso (que não
+ * bloqueia nada) sai nas gavetas Convocar e Instalar e no topo da seção Unidades.
+ */
+export const AVISO_COTAS_NAO_CONFERIDAS =
+    'Este condomínio não tem cotas cobradas pelo Òpura: a inadimplência não é conferida automaticamente. '
+    + 'Marque à mão a unidade impedida.';
+
+/** O impedimento de agora, sem o unitId. */
+export type ImpedimentoAgora = Pick<ImpedimentoUnidade, 'motivo' | 'origem'>;
+
+/** 'Impedida (marcada pelo gestor): <motivo>' × 'Impedida: <motivo automático>'. */
+export const textoImpedimento = (i: ImpedimentoAgora): string =>
+    i.origem === 'MANUAL' ? `Impedida (marcada pelo gestor): ${i.motivo}` : `Impedida: ${i.motivo}`;
 
 // ─── hora em Brasília ────────────────────────────────────────────────────────
 

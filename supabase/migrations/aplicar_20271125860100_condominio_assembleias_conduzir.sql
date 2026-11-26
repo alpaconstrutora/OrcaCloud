@@ -21,6 +21,20 @@
 --   • Invólucros do gestor condominio_assembleia_* (GRANT authenticated): conferem
 --     fn_org_do_condominio(empreendimento) IN (SELECT minhas_orgs_membro()) — senão
 --     42501 — e chamam o núcleo com auth.uid(), 'GESTOR'.
+--   • Task A10 (decisão de 26/11: nenhum rateio do app tem cobrança gerada, a regra
+--     automática não pega ninguém → aviso + marcar à mão):
+--       – condominio_assembleia_unidades.impedimento_manual (motivo; NULL = sem marca) e
+--         impedimento_manual_em. Autoria no evento IMPEDIMENTO_MANUAL ({ motivo | null }).
+--       – fn_assembleia_impedimento(assembleia, unit) = coalesce(marca do gestor, regra
+--         automática). TODA checagem de impedimento passa por ela (presença, voto
+--         presencial, voto do portal, quórum de instalação, impedimentos, portal).
+--       – fn_assembleia_cotas_conferidas(empreendimento): há título de cota em rateio não
+--         cancelado. Instalar grava cotasConferidas e a origem (MANUAL | AUTOMATICA) de
+--         cada impedida em quorum_instalacao (o retrato herda).
+--       – núcleo _assembleia_marcar_impedida (papel GESTOR | SINDICO — a fase B chama o
+--         mesmo) e os invólucros condominio_assembleia_marcar_impedida e
+--         condominio_assembleia_cotas_conferidas. Marcar impede ações FUTURAS: voto já
+--         dado continua valendo (R3, "momento da checagem").
 --
 -- Decisões da revisão da A1, aplicadas aqui (a A1 fica como está):
 --   1. condominio_assembleias: o app só grava (INSERT/UPDATE) as 7 colunas do rascunho
@@ -44,8 +58,8 @@
 -- REGRA #7:
 --   Pergunta 1 — nenhuma policy nova.
 --   Pergunta 2 — toda função nova: REVOKE ALL de PUBLIC e anon. Núcleo, fn_assembleia_*
---   e auxiliares revogados também de authenticated (só os invólucros chamam). Os 8
---   invólucros: GRANT authenticated, autorização DENTRO deles. fn_assembleia_opcoes_validas
+--   e auxiliares revogados também de authenticated (só os invólucros chamam). Os 10
+--   invólucros (8 da A2 + 2 da A10): GRANT authenticated, autorização DENTRO deles. fn_assembleia_opcoes_validas
 --   (função pura do CHECK) precisa de EXECUTE de quem grava o item: GRANT authenticated
 --   e service_role.
 --
@@ -257,7 +271,64 @@ AS $$
 $$;
 
 COMMENT ON FUNCTION public.fn_assembleia_unidade_impedida(uuid) IS
-    'R3: NULL = unidade quite; senão o motivo da cota vencida e não paga mais antiga. Uso interno (núcleo).';
+    'R3: NULL = unidade quite; senão o motivo da cota vencida e não paga mais antiga. Uso interno: '
+    'quem confere impedimento chama fn_assembleia_impedimento (marca do gestor + esta regra).';
+
+-- A10: a marca do gestor. Só pelo núcleo (_assembleia_marcar_impedida) — o app tem
+-- apenas SELECT nesta tabela (A1), e a trava da A1 só aceita a escrita em
+-- CONVOCADA/INSTALADA.
+ALTER TABLE public.condominio_assembleia_unidades
+    ADD COLUMN IF NOT EXISTS impedimento_manual    text,
+    ADD COLUMN IF NOT EXISTS impedimento_manual_em timestamptz;
+ALTER TABLE public.condominio_assembleia_unidades
+    DROP CONSTRAINT IF EXISTS condominio_assembleia_unidades_impedimento_manual;
+ALTER TABLE public.condominio_assembleia_unidades
+    ADD CONSTRAINT condominio_assembleia_unidades_impedimento_manual CHECK (
+        (impedimento_manual IS NULL AND impedimento_manual_em IS NULL)
+     OR (btrim(impedimento_manual) <> '' AND impedimento_manual_em IS NOT NULL));
+
+COMMENT ON COLUMN public.condominio_assembleia_unidades.impedimento_manual IS
+    'A10: motivo do impedimento marcado à mão pelo gestor/síndico (NULL = sem marca). Vale sobre a regra '
+    'automática (fn_assembleia_impedimento). Autoria: evento IMPEDIMENTO_MANUAL.';
+
+-- A10: o impedimento da unidade NESTA assembleia — a marca do gestor, senão a regra
+-- automática (R3). NULL = apta. É a única porta: nenhuma checagem chama só a automática.
+CREATE OR REPLACE FUNCTION public.fn_assembleia_impedimento(p_assembleia uuid, p_unit uuid)
+ RETURNS text
+ LANGUAGE sql
+ STABLE
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $$
+    SELECT coalesce(
+        (SELECT u.impedimento_manual FROM public.condominio_assembleia_unidades u
+          WHERE u.assembleia_id = p_assembleia AND u.unit_id = p_unit),
+        public.fn_assembleia_unidade_impedida(p_unit))
+$$;
+
+COMMENT ON FUNCTION public.fn_assembleia_impedimento(uuid, uuid) IS
+    'A10/R3: coalesce(impedimento_manual, fn_assembleia_unidade_impedida). NULL = apta. Uso interno (núcleo).';
+
+-- A10: o condomínio tem cota COBRADA pelo app? (título em rateio não cancelado). Sem
+-- isso, a regra automática não confere nada e a tela avisa o gestor.
+CREATE OR REPLACE FUNCTION public.fn_assembleia_cotas_conferidas(p_empreendimento uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $$
+    SELECT EXISTS (
+        SELECT 1
+          FROM public.condominio_rateio_itens it
+          JOIN public.condominio_rateios r ON r.id = it.rateio_id
+         WHERE r.empreendimento_id = p_empreendimento
+           AND r.status <> 'CANCELADO'
+           AND it.transaction_id IS NOT NULL)
+$$;
+
+COMMENT ON FUNCTION public.fn_assembleia_cotas_conferidas(uuid) IS
+    'A10: true se há ao menos um título de cota (transaction_id) em rateio não cancelado do condomínio. Uso interno.';
 
 -- { total, presentesFracao, presentesUnidades,
 --   itens: [{ itemId, ordem, titulo, tipo, quorum,
@@ -613,7 +684,7 @@ BEGIN
             RAISE EXCEPTION 'Presença é na sala (PRESENCIAL) ou por procurador (PROCURADOR).'
                 USING ERRCODE = 'P0001', HINT = 'presenca_invalida';
         END IF;
-        v_motivo := public.fn_assembleia_unidade_impedida(p_unit);
+        v_motivo := public.fn_assembleia_impedimento(p_assembleia, p_unit);
         IF v_motivo IS NOT NULL THEN
             RAISE EXCEPTION 'A unidade % está impedida: %.', coalesce(v_u.unidade_rotulo, ''), v_motivo
                 USING ERRCODE = 'P0001', HINT = 'unidade_impedida', DETAIL = v_motivo;
@@ -682,10 +753,12 @@ BEGIN
         RAISE EXCEPTION 'Informe o presidente e o secretário da mesa.' USING ERRCODE = 'P0001', HINT = 'sem_mesa';
     END IF;
 
-    -- Presente = presença registrada ou voto pelo portal, e NÃO impedida neste instante.
+    -- Presente = presença registrada ou voto pelo portal, e NÃO impedida neste instante
+    -- (marca do gestor ou regra automática — fn_assembleia_impedimento, A10).
     WITH s AS (
         SELECT u.unit_id, u.fracao, u.unidade_rotulo,
-               public.fn_assembleia_unidade_impedida(u.unit_id) AS motivo,
+               public.fn_assembleia_impedimento(p_assembleia, u.unit_id) AS motivo,
+               CASE WHEN u.impedimento_manual IS NOT NULL THEN 'MANUAL' ELSE 'AUTOMATICA' END AS origem,
                (u.presenca IS NOT NULL
                 OR EXISTS (SELECT 1 FROM public.condominio_assembleia_votos v
                             WHERE v.assembleia_id = p_assembleia AND v.unit_id = u.unit_id AND v.origem = 'PORTAL')) AS presente
@@ -695,7 +768,8 @@ BEGIN
     SELECT coalesce(sum(fracao), 0),
            coalesce(sum(fracao) FILTER (WHERE presente AND motivo IS NULL), 0),
            count(*) FILTER (WHERE presente AND motivo IS NULL),
-           coalesce(jsonb_agg(jsonb_build_object('unitId', unit_id, 'rotulo', unidade_rotulo, 'motivo', motivo)
+           coalesce(jsonb_agg(jsonb_build_object('unitId', unit_id, 'rotulo', unidade_rotulo, 'motivo', motivo,
+                                                 'origem', origem)
                               ORDER BY unidade_rotulo) FILTER (WHERE motivo IS NOT NULL), '[]'::jsonb)
       INTO v_total, v_pres_fr, v_pres_n, v_impedidas
       FROM s;
@@ -719,9 +793,12 @@ BEGIN
             USING ERRCODE = 'P0001', HINT = 'antes_do_horario';
     END IF;
 
+    -- cotasConferidas (A10): false = a regra automática não tinha o que conferir (nenhuma
+    -- cota cobrada pelo app) e as impedidas são as que o gestor indicou — a ata diz isso.
     v_quorum := jsonb_build_object('convocacao', p_convocacao, 'total', v_total,
                                    'presentesFracao', v_pres_fr, 'presentesUnidades', v_pres_n,
-                                   'impedidas', v_impedidas, 'em', v_agora);
+                                   'impedidas', v_impedidas, 'em', v_agora,
+                                   'cotasConferidas', public.fn_assembleia_cotas_conferidas(v_a.empreendimento_id));
 
     -- O MESMO conjunto gravado em quorum_instalacao.impedidas (sem recalcular).
     UPDATE public.condominio_assembleia_unidades u
@@ -775,7 +852,7 @@ BEGIN
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Esta unidade não participa da assembleia.' USING ERRCODE = 'P0001', HINT = 'unidade_fora';
     END IF;
-    v_motivo := public.fn_assembleia_unidade_impedida(p_unit);
+    v_motivo := public.fn_assembleia_impedimento(v_aid, p_unit);
     IF v_motivo IS NOT NULL THEN
         RAISE EXCEPTION 'A unidade % está impedida: %.', coalesce(v_u.unidade_rotulo, ''), v_motivo
             USING ERRCODE = 'P0001', HINT = 'unidade_impedida', DETAIL = v_motivo;
@@ -967,6 +1044,50 @@ BEGIN
 END;
 $$;
 
+-- A10/R3: o gestor (ou o síndico, fase B) marca a unidade como impedida, com motivo;
+-- p_motivo NULL desmarca. Só CONVOCADA/INSTALADA (a trava da A1 também só aceita a
+-- escrita nesses estados). Marcar impede ações FUTURAS (presença, voto): voto já dado
+-- continua valendo, e o quórum gravado na instalação não muda (R3, "momento da checagem").
+CREATE OR REPLACE FUNCTION public._assembleia_marcar_impedida(p_assembleia uuid, p_unit uuid, p_motivo text,
+                                                              p_ator uuid, p_papel text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $$
+DECLARE
+    v_a      public.condominio_assembleias;
+    v_u      public.condominio_assembleia_unidades;
+    v_motivo text := nullif(btrim(p_motivo), '');
+    v_em     timestamptz;
+BEGIN
+    v_a := public._assembleia_travar(p_assembleia);
+    PERFORM public._assembleia_exige_condutor(p_papel);
+    PERFORM public._assembleia_exige_estado(v_a.status, ARRAY['CONVOCADA', 'INSTALADA']);
+
+    SELECT * INTO v_u FROM public.condominio_assembleia_unidades
+     WHERE assembleia_id = p_assembleia AND unit_id = p_unit;
+    IF NOT FOUND THEN
+        RAISE EXCEPTION 'Esta unidade não participa da assembleia.' USING ERRCODE = 'P0001', HINT = 'unidade_fora';
+    END IF;
+    -- NULL desmarca; texto em branco não é motivo.
+    IF p_motivo IS NOT NULL AND v_motivo IS NULL THEN
+        RAISE EXCEPTION 'Informe o motivo do impedimento.' USING ERRCODE = 'P0001', HINT = 'sem_motivo';
+    END IF;
+
+    v_em := CASE WHEN v_motivo IS NOT NULL THEN now() END;
+    UPDATE public.condominio_assembleia_unidades
+       SET impedimento_manual = v_motivo, impedimento_manual_em = v_em
+     WHERE id = v_u.id;
+
+    INSERT INTO public.condominio_assembleia_eventos (assembleia_id, evento, ator, papel, unit_id, detalhe)
+    VALUES (p_assembleia, 'IMPEDIMENTO_MANUAL', p_ator, p_papel, p_unit,
+            jsonb_build_object('motivo', v_motivo, 'anterior', v_u.impedimento_manual));
+
+    RETURN jsonb_build_object('unitId', p_unit, 'motivo', v_motivo, 'em', v_em);
+END;
+$$;
+
 -- ═══ BLOCO 7 — invólucros do gestor (GRANT authenticated) ════════════════════
 SET lock_timeout = '5s';
 
@@ -1091,6 +1212,35 @@ BEGIN
 END;
 $$;
 
+-- A10: marcar (motivo) / desmarcar (NULL) a unidade impedida.
+CREATE OR REPLACE FUNCTION public.condominio_assembleia_marcar_impedida(p_assembleia uuid, p_unit uuid, p_motivo text)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $$
+BEGIN
+    PERFORM public._assembleia_exige_gestor(p_assembleia);
+    RETURN public._assembleia_marcar_impedida(p_assembleia, p_unit, p_motivo, auth.uid(), 'GESTOR');
+END;
+$$;
+
+-- A10: o condomínio desta assembleia tem cota cobrada pelo app? Vale em qualquer estado
+-- (a tela avisa já no Convocar).
+CREATE OR REPLACE FUNCTION public.condominio_assembleia_cotas_conferidas(p_assembleia uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ STABLE
+ SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $$
+BEGIN
+    PERFORM public._assembleia_exige_gestor(p_assembleia);
+    RETURN public.fn_assembleia_cotas_conferidas(
+        (SELECT a.empreendimento_id FROM public.condominio_assembleias a WHERE a.id = p_assembleia));
+END;
+$$;
+
 -- ═══ BLOCO 8 — privilégios ═══════════════════════════════════════════════════
 SET lock_timeout = '5s';
 
@@ -1116,6 +1266,9 @@ REVOKE ALL ON FUNCTION public._assembleia_instalar(uuid, smallint, text, text, b
 REVOKE ALL ON FUNCTION public._assembleia_lancar_voto(uuid, uuid, text, uuid, text)        FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._assembleia_encerrar(uuid, jsonb, text, uuid, text)          FROM PUBLIC, anon, authenticated;
 REVOKE ALL ON FUNCTION public._assembleia_vincular_ata(uuid, uuid, uuid, text)             FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public._assembleia_marcar_impedida(uuid, uuid, text, uuid, text)    FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.fn_assembleia_impedimento(uuid, uuid)                        FROM PUBLIC, anon, authenticated;
+REVOKE ALL ON FUNCTION public.fn_assembleia_cotas_conferidas(uuid)                         FROM PUBLIC, anon, authenticated;
 
 -- Invólucros do gestor: só authenticated (a autorização está dentro).
 REVOKE ALL ON FUNCTION public.condominio_assembleia_convocar(uuid, text)                   FROM PUBLIC, anon;
@@ -1134,5 +1287,9 @@ GRANT EXECUTE ON FUNCTION public.condominio_assembleia_lancar_voto(uuid, uuid, t
 GRANT EXECUTE ON FUNCTION public.condominio_assembleia_encerrar(uuid, jsonb, text)         TO authenticated;
 GRANT EXECUTE ON FUNCTION public.condominio_assembleia_vincular_ata(uuid, uuid)            TO authenticated;
 GRANT EXECUTE ON FUNCTION public.condominio_assembleia_apuracao(uuid)                      TO authenticated;
+REVOKE ALL ON FUNCTION public.condominio_assembleia_marcar_impedida(uuid, uuid, text)      FROM PUBLIC, anon;
+REVOKE ALL ON FUNCTION public.condominio_assembleia_cotas_conferidas(uuid)                 FROM PUBLIC, anon;
+GRANT EXECUTE ON FUNCTION public.condominio_assembleia_marcar_impedida(uuid, uuid, text)   TO authenticated;
+GRANT EXECUTE ON FUNCTION public.condominio_assembleia_cotas_conferidas(uuid)              TO authenticated;
 
 COMMIT;

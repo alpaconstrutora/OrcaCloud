@@ -368,13 +368,19 @@ export async function gerarAtaPdf(m: AtaModelo): Promise<Blob> {
         }, 8);
     }
 
-    if (m.impedidas.length > 0) {
+    if (m.impedidas.length > 0 || m.inadimplenciaNaoConferida) {
         tituloDeSecao(p, 'Impedidas na instalação');
-        tabela(p, {
-            head: [['Unidade', 'Motivo']],
-            body: m.impedidas.map(i => [i.unidade, i.motivo]),
-            columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 142 } },
-        }, 8);
+        // A10: sem cota cobrada pelo app, a ata diz que quem indicou as impedidas foi o gestor.
+        if (m.inadimplenciaNaoConferida) paragrafo(p, m.inadimplenciaNaoConferida, { tamanho: 9.5 });
+        if (m.impedidas.length > 0) {
+            tabela(p, {
+                head: [['Unidade', 'Origem', 'Motivo']],
+                body: m.impedidas.map(i => [i.unidade, i.origem, i.motivo]),
+                columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 46 }, 2: { cellWidth: 96 } },
+            }, 8);
+        } else {
+            paragrafo(p, 'Nenhuma unidade foi indicada como impedida.', { cor: GRAY });
+        }
     }
 
     if (m.procuracoes.length > 0) {

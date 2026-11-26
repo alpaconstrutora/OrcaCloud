@@ -6,9 +6,14 @@
 // Quem grava é o pai (AssembleiaDetalheView): esta gaveta só junta o que o gestor
 // escolheu e diz, à vista, por que um botão está desligado — unidade impedida, sem
 // presença, assembleia ainda não instalada, voto na sala que trava a presença.
+//
+// A10: o gestor marca a unidade como impedida à mão (motivo obrigatório) e desmarca. A
+// marca vale sobre a regra automática e impede presença e voto DAQUI EM DIANTE — voto já
+// lançado continua valendo (R3). A impedida pela regra automática (cota vencida) não se
+// desmarca aqui: quem a libera é o pagamento.
 
 import React from 'react';
-import { UserCheck, Vote, Paperclip } from 'lucide-react';
+import { Ban, UserCheck, Vote, Paperclip } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../../ui/sheet';
 import SecaoTitulo from '../../ui/SecaoTitulo';
 import { EXTENSOES_ACEITAS } from '../../../services/condominioComunicacaoService';
@@ -18,7 +23,10 @@ import {
 import type {
     ItemAssembleia, OpcaoVoto, PresencaAssembleia, StatusAssembleia, UnidadeNaAssembleia, VotoAssembleia,
 } from '../../../services/condominioAssembleiaService';
-import { BOTAO_PRIMARIO, BOTAO_VOLTAR, CAMPO, MOTIVO, ROTULO, opcoesDoItem } from './comum';
+import {
+    BOTAO_PRIMARIO, BOTAO_SECUNDARIO, BOTAO_VOLTAR, CAMPO, MOTIVO, ROTULO, opcoesDoItem, textoImpedimento,
+    type ImpedimentoAgora,
+} from './comum';
 
 type Escolha = PresencaAssembleia | 'NENHUMA';
 
@@ -38,22 +46,26 @@ interface Props {
     itens: ItemAssembleia[];
     /** Votos DESTA unidade. */
     votos: VotoAssembleia[];
-    /** Motivo do impedimento agora (R3), ou null. */
-    impedimento: string | null;
+    /** Impedimento agora (R3 + marca do gestor, A10), com a origem; ou null. */
+    impedimento: ImpedimentoAgora | null;
     gravando: boolean;
     onRegistrarPresenca: (p: {
         presenca: PresencaAssembleia | null; procurador: string | null; arquivo: File | null;
     }) => Promise<void>;
     onLancarVoto: (item: ItemAssembleia, opcao: OpcaoVoto) => Promise<void>;
+    /** A10: marca (motivo já sem espaços nas pontas) ou desmarca (null). */
+    onMarcarImpedida: (motivo: string | null) => Promise<void>;
 }
 
 const UnidadeSheet: React.FC<Props> = ({
     open, onClose, status, unidade, total, itens, votos, impedimento, gravando, onRegistrarPresenca, onLancarVoto,
+    onMarcarImpedida,
 }) => {
     const atual: Escolha = unidade?.presenca ?? 'NENHUMA';
     const [escolha, setEscolha] = React.useState<Escolha>(atual);
     const [procurador, setProcurador] = React.useState('');
     const [arquivo, setArquivo] = React.useState<File | null>(null);
+    const [motivoImpedimento, setMotivoImpedimento] = React.useState('');
 
     // Abrir outra unidade (ou a mesma depois de gravar) parte do que está gravado.
     React.useEffect(() => {
@@ -61,6 +73,7 @@ const UnidadeSheet: React.FC<Props> = ({
         setProcurador(unidade?.procuradorNome ?? '');
         setArquivo(null);
     }, [unidade?.unitId, unidade?.presenca, unidade?.procuradorNome, open]);
+    React.useEffect(() => { setMotivoImpedimento(''); }, [unidade?.unitId, unidade?.impedimentoManual, open]);
 
     const emAndamento = status === 'CONVOCADA' || status === 'INSTALADA';
     const temVotoNaSala = votos.some(v => v.origem === 'PRESENCIAL');
@@ -70,7 +83,9 @@ const UnidadeSheet: React.FC<Props> = ({
     const motivoPresenca = !emAndamento
         ? 'Presença só se registra com a assembleia convocada ou instalada.'
         : impedimento
-            ? `Unidade impedida: ${impedimento}. Ela não registra presença enquanto a cota estiver vencida (CC art. 1.335, III).`
+            ? `${textoImpedimento(impedimento)}. ` + (impedimento.origem === 'MANUAL'
+                ? 'Ela não registra presença enquanto estiver marcada: desmarque em Impedimento para liberar.'
+                : 'Ela não registra presença enquanto a cota estiver vencida (CC art. 1.335, III).')
             : null;
     const motivoSemPresenca = temVotoNaSala
         ? 'Esta unidade já tem voto lançado na sala: a presença dela não pode ser removida.'
@@ -98,10 +113,17 @@ const UnidadeSheet: React.FC<Props> = ({
             ? 'Voto na sala só depois de instalar a assembleia. Até lá, o condômino vota pelo portal.'
             : 'Esta assembleia não aceita mais votos.')
         : impedimento
-            ? `Unidade impedida: ${impedimento}.`
+            ? `${textoImpedimento(impedimento)}. Ela não vota enquanto estiver impedida.`
             : !unidade?.presenca
                 ? 'Registre a presença da unidade (na sala ou por procurador) antes de lançar o voto.'
                 : gravando ? 'Aguarde: gravando o voto anterior.' : null;
+
+    // ── impedimento marcado à mão (A10) ──────────────────────────────────
+    const marcada = impedimento?.origem === 'MANUAL';
+    const motivoImpedimentoLimpo = motivoImpedimento.trim();
+    const motivoMarcar = !motivoImpedimentoLimpo ? 'Informe o motivo do impedimento.'
+        : gravando ? 'Aguarde: gravando.' : null;
+    const marcadaEm = unidade?.impedimentoManualEm ?? null;
 
     const descricaoPresenca = (u: UnidadeNaAssembleia) => u.presenca === 'PROCURADOR'
         ? `Por procurador: ${u.procuradorNome ?? 'nome não informado'}`
@@ -121,7 +143,50 @@ const UnidadeSheet: React.FC<Props> = ({
             </SheetHeader>
             <SheetPanel className="p-6 space-y-8">
                 {impedimento && (
-                    <p className="text-sm text-red-600">Impedida agora: {impedimento}.</p>
+                    <p className="text-sm text-red-600">{textoImpedimento(impedimento)}.</p>
+                )}
+
+                {/* ── Impedimento marcado à mão (A10) ────────────────── */}
+                {emAndamento && (
+                    <section className="space-y-4">
+                        <SecaoTitulo icon={Ban} titulo="Impedimento"
+                            resumo="impede presença e voto daqui em diante; voto já lançado continua valendo" />
+                        {marcada ? (
+                            <div className="flex flex-wrap items-center justify-end gap-3">
+                                <p className="text-sm text-gray-700 mr-auto">
+                                    Marcada pelo gestor{marcadaEm ? ` em ${dataHoraBrasilia(marcadaEm)}` : ''}. Desmarcar
+                                    devolve a unidade à regra automática (cota vencida).
+                                </p>
+                                {gravando && <p className={MOTIVO}>Aguarde: gravando.</p>}
+                                <button type="button" onClick={() => onMarcarImpedida(null)} disabled={gravando}
+                                    className={BOTAO_SECUNDARIO}>
+                                    Desmarcar
+                                </button>
+                            </div>
+                        ) : (
+                            <>
+                                {impedimento && (
+                                    <p className="text-sm text-gray-700">
+                                        A regra automática já impede esta unidade; só o pagamento a libera. A marca do
+                                        gestor, se houver, vale por cima dela.
+                                    </p>
+                                )}
+                                <div className="space-y-1.5">
+                                    <label htmlFor="assembleia-motivo-impedimento" className={ROTULO}>Motivo do impedimento</label>
+                                    <input id="assembleia-motivo-impedimento" type="text" value={motivoImpedimento}
+                                        onChange={ev => setMotivoImpedimento(ev.target.value)}
+                                        placeholder="Ex.: cota de 10/2026 em aberto na administradora" className={CAMPO} />
+                                </div>
+                                <div className="flex flex-wrap items-center justify-end gap-3">
+                                    {motivoMarcar && <p className={`${MOTIVO} mr-auto`}>{motivoMarcar}</p>}
+                                    <button type="button" onClick={() => onMarcarImpedida(motivoImpedimentoLimpo)}
+                                        disabled={!!motivoMarcar} className={BOTAO_SECUNDARIO}>
+                                        Marcar como impedida
+                                    </button>
+                                </div>
+                            </>
+                        )}
+                    </section>
                 )}
 
                 {/* ── Presença ───────────────────────────────────────── */}

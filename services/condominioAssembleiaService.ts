@@ -7,7 +7,7 @@
 //     tem privilégio de gravar 7 colunas de condominio_assembleias (A2, decisão 1);
 //     status, retrato, quórum, ata, org e autoria são do banco.
 //   • Toda transição (convocar, cancelar, presença, instalar, voto presencial,
-//     encerrar, ata) é RPC SECURITY DEFINER: a regra (estado, R3, R6–R9) está no
+//     encerrar, ata, marcar impedida — A10) é RPC SECURITY DEFINER: a regra (estado, R3, R6–R9) está no
 //     banco, não aqui. Este arquivo só chama e traduz o erro.
 //   • `OperacoesAssembleia` é a porta da tela de condução. A fase B (síndico pelo
 //     Portal do Síndico) implementa a MESMA interface com as RPCs dele — a tela
@@ -31,10 +31,17 @@ export type PapelCondutor = 'GESTOR' | 'SINDICO';
 /** APROVACAO: SIM | NAO | ABSTENCAO. ESCOLHA: uma das `opcoes` do item ou ABSTENCAO. */
 export type OpcaoVoto = string;
 
-/** Unidade impedida (R3): motivo = 'Cota de MM/AAAA vencida em DD/MM/AAAA'. */
+/**
+ * De onde vem o impedimento (A10): MANUAL = o gestor marcou à mão, com motivo livre (vale
+ * sobre a regra); AUTOMATICA = cota vencida e não paga (R3).
+ */
+export type OrigemImpedimento = 'MANUAL' | 'AUTOMATICA';
+
+/** Unidade impedida AGORA. AUTOMATICA: motivo = 'Cota de MM/AAAA vencida em DD/MM/AAAA'. */
 export interface ImpedimentoUnidade {
     unitId: string;
     motivo: string;
+    origem: OrigemImpedimento;
 }
 
 /** Impedida gravada no instante de Instalar (quorum_instalacao.impedidas). */
@@ -42,6 +49,7 @@ export interface ImpedidaNaInstalacao {
     unitId: string;
     rotulo: string | null;
     motivo: string;
+    origem: OrigemImpedimento;
 }
 
 /** condominio_assembleias.quorum_instalacao — gravado em Instalar e nunca refeito (R6). */
@@ -52,6 +60,12 @@ export interface QuorumInstalacao {
     presentesUnidades: number;
     impedidas: ImpedidaNaInstalacao[];
     em: string;
+    /**
+     * A10: o condomínio tinha cota cobrada pelo app na instalação? false = a regra automática
+     * não tinha o que conferir e as impedidas foram indicadas pelo gestor (a ata diz isso).
+     * null = não gravado.
+     */
+    cotasConferidas: boolean | null;
 }
 
 export interface Assembleia {
@@ -115,6 +129,9 @@ export interface UnidadeNaAssembleia {
     presencaEm: string | null;
     /** null até Instalar. */
     impedidaNaInstalacao: boolean | null;
+    /** A10: motivo do impedimento marcado à mão (null = sem marca). */
+    impedimentoManual: string | null;
+    impedimentoManualEm: string | null;
 }
 
 export interface VotoAssembleia {
@@ -263,6 +280,13 @@ export interface ResultadoVotoLancado {
     anterior: VotoAnterior | null;
 }
 
+/** A10: resultado de marcar (motivo) / desmarcar (null) a unidade impedida. */
+export interface ResultadoMarcarImpedida {
+    unitId: string;
+    motivo: string | null;
+    em: string | null;
+}
+
 export interface DadosInstalacao {
     convocacao: 1 | 2;
     presidente: string;
@@ -294,8 +318,15 @@ export interface OperacoesAssembleia {
     encerrar(id: string, deliberacoes: Record<string, string | null>, observacao: string | null): Promise<Retrato>;
     vincularAta(id: string, documentoId: string): Promise<{ ataDocumentoId: string }>;
     apuracao(id: string): Promise<Apuracao>;
-    /** Unidades impedidas AGORA (R3) — a tela de presença mostra o motivo. */
+    /** Unidades impedidas AGORA (R3) — a tela de presença mostra o motivo e a origem. */
     impedimentos(id: string): Promise<ImpedimentoUnidade[]>;
+    /**
+     * A10: marca a unidade como impedida (motivo obrigatório) ou desmarca (`motivo` null).
+     * Só CONVOCADA/INSTALADA; impede presença e voto daqui em diante (voto já dado vale).
+     */
+    marcarImpedida(id: string, unitId: string, motivo: string | null): Promise<ResultadoMarcarImpedida>;
+    /** A10: o condomínio tem cota cobrada pelo app? false = a tela avisa (a inadimplência não é conferida). */
+    cotasConferidas(id: string): Promise<boolean>;
     carregar(id: string): Promise<AssembleiaCarregada>;
 }
 
@@ -342,7 +373,7 @@ const FRASE_DO_HINT: Record<string, string> = {
     sem_datas: 'Informe a data e a hora da 1ª e da 2ª convocação antes de convocar.',
     sem_itens: 'A pauta precisa de pelo menos 1 item para convocar.',
     sem_mesa: 'Informe o presidente e o secretário da mesa.',
-    sem_motivo: 'Informe o motivo do cancelamento.',
+    sem_motivo: 'Informe o motivo.',
     sem_presenca: 'Registre a presença da unidade antes de lançar o voto presencial.',
     sem_quorum_primeira: 'Presentes não somam metade das frações: só é possível instalar em 2ª convocação.',
     sem_unidades: 'Nenhuma unidade deste condomínio tem fração ideal: preencha as frações antes de convocar.',
@@ -373,6 +404,8 @@ export function traduzirErroAssembleia(e: ErroDoBanco): string {
     // 'estado': o banco já diz em que estado ela está ("já foi encerrada") — é o que
     // o segundo clique em Encerrar precisa ler.
     if (hint === 'estado') return e.message || FRASE_DO_HINT.estado;
+    // 'sem_motivo' vale para cancelar e para marcar impedida (A10): a frase do banco diz qual.
+    if (hint === 'sem_motivo') return e.message?.startsWith('Informe o motivo') ? e.message : FRASE_DO_HINT.sem_motivo;
     if (hint && FRASE_DO_HINT[hint]) return FRASE_DO_HINT[hint];
     if (e.code === '42501') return 'Sem permissão neste condomínio.';
     for (const [restricao, frase] of FRASE_DO_CHECK) {
@@ -399,9 +432,20 @@ function quorumInstalacaoDe(q: Linha | null | undefined): QuorumInstalacao | nul
         total: num(q.total),
         presentesFracao: num(q.presentesFracao),
         presentesUnidades: num(q.presentesUnidades),
-        impedidas: (q.impedidas ?? []) as ImpedidaNaInstalacao[],
+        impedidas: impedidasDe(q.impedidas),
         em: q.em,
+        cotasConferidas: typeof q.cotasConferidas === 'boolean' ? q.cotasConferidas : null,
     };
+}
+
+/** Sem `origem` gravada, a impedida é a da regra automática (a única antes da A10). */
+function impedidasDe(lista: unknown): ImpedidaNaInstalacao[] {
+    return ((lista ?? []) as Linha[]).map(i => ({
+        unitId: i.unitId,
+        rotulo: i.rotulo ?? null,
+        motivo: i.motivo,
+        origem: i.origem === 'MANUAL' ? 'MANUAL' : 'AUTOMATICA',
+    }));
 }
 
 function apuracaoDe(a: Linha): Apuracao {
@@ -432,7 +476,7 @@ function retratoDe(r: Linha | null | undefined): Retrato | null {
         deliberacoes: (r.deliberacoes ?? {}) as Record<string, string>,
         unidades: ((r.unidades ?? []) as Linha[]).map(u => ({ ...(u as RetratoUnidade), fracao: num(u.fracao) })),
         votos: (r.votos ?? []) as RetratoVoto[],
-        impedidasNaInstalacao: (r.impedidasNaInstalacao ?? []) as ImpedidaNaInstalacao[],
+        impedidasNaInstalacao: impedidasDe(r.impedidasNaInstalacao),
     };
 }
 
@@ -444,7 +488,7 @@ const COLS_ASSEMBLEIA =
 const COLS_ITEM = 'id, assembleia_id, ordem, titulo, descricao, tipo, opcoes, quorum, assunto, deliberacao';
 const COLS_UNIDADE =
     'id, assembleia_id, unit_id, fracao, unidade_rotulo, proprietario_nome, presenca, procurador_nome, '
-    + 'procuracao_documento_id, presenca_em, impedida_na_instalacao';
+    + 'procuracao_documento_id, presenca_em, impedida_na_instalacao, impedimento_manual, impedimento_manual_em';
 const COLS_VOTO = 'id, assembleia_id, item_id, unit_id, opcao, origem, client_id, lancado_por, votado_em';
 
 function assembleiaDe(l: Linha): Assembleia {
@@ -507,6 +551,8 @@ function unidadeDe(l: Linha): UnidadeNaAssembleia {
         procuracaoDocumentoId: l.procuracao_documento_id ?? null,
         presencaEm: l.presenca_em ?? null,
         impedidaNaInstalacao: l.impedida_na_instalacao ?? null,
+        impedimentoManual: l.impedimento_manual ?? null,
+        impedimentoManualEm: l.impedimento_manual_em ?? null,
     };
 }
 
@@ -579,7 +625,20 @@ export const operacoesDoGestor: OperacoesAssembleia = {
     },
 
     async impedimentos(id) {
-        return (await chamar<ImpedimentoUnidade[] | null>('condominio_assembleia_impedimentos', { p_assembleia: id })) ?? [];
+        const lista = (await chamar<Linha[] | null>('condominio_assembleia_impedimentos', { p_assembleia: id })) ?? [];
+        return lista.map(i => ({
+            unitId: i.unitId, motivo: i.motivo, origem: i.origem === 'MANUAL' ? 'MANUAL' as const : 'AUTOMATICA' as const,
+        }));
+    },
+
+    async marcarImpedida(id, unitId, motivo) {
+        const r = await chamar<Linha>('condominio_assembleia_marcar_impedida',
+            { p_assembleia: id, p_unit: unitId, p_motivo: motivo });
+        return { unitId: r.unitId, motivo: r.motivo ?? null, em: r.em ?? null };
+    },
+
+    async cotasConferidas(id) {
+        return (await chamar<boolean | null>('condominio_assembleia_cotas_conferidas', { p_assembleia: id })) === true;
     },
 
     async carregar(id) {

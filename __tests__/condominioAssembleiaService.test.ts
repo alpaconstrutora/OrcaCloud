@@ -222,11 +222,58 @@ describe('operacoesDoGestor → RPCs', () => {
         expect(r.itens[0].resultado).toBe('APROVADO');
     });
 
-    it('impedimentos', async () => {
-        m.respostaRpc = { data: [{ unitId: 'u1', motivo: 'Cota de 10/2026 vencida em 10/10/2026' }], error: null };
+    it('impedimentos (com a origem: MANUAL × AUTOMATICA — A10)', async () => {
+        m.respostaRpc = { data: [
+            { unitId: 'u1', motivo: 'Cota de 10/2026 vencida em 10/10/2026', origem: 'AUTOMATICA' },
+            { unitId: 'u2', motivo: 'Acordo descumprido', origem: 'MANUAL' },
+        ], error: null };
         const r = await operacoesDoGestor.impedimentos('a1');
         expect(m.rpcs).toEqual([{ fn: 'condominio_assembleia_impedimentos', args: { p_assembleia: 'a1' } }]);
-        expect(r).toEqual([{ unitId: 'u1', motivo: 'Cota de 10/2026 vencida em 10/10/2026' }]);
+        expect(r).toEqual([
+            { unitId: 'u1', motivo: 'Cota de 10/2026 vencida em 10/10/2026', origem: 'AUTOMATICA' },
+            { unitId: 'u2', motivo: 'Acordo descumprido', origem: 'MANUAL' },
+        ]);
+    });
+
+    it('marcarImpedida: marcar com motivo e desmarcar com null (A10)', async () => {
+        m.respostaRpc = { data: { unitId: 'u2', motivo: 'Acordo descumprido', em: '2026-12-10T22:10:00Z' }, error: null };
+        const r = await operacoesDoGestor.marcarImpedida('a1', 'u2', 'Acordo descumprido');
+        expect(r).toEqual({ unitId: 'u2', motivo: 'Acordo descumprido', em: '2026-12-10T22:10:00Z' });
+        m.respostaRpc = { data: { unitId: 'u2', motivo: null, em: null }, error: null };
+        await operacoesDoGestor.marcarImpedida('a1', 'u2', null);
+        expect(m.rpcs).toEqual([
+            { fn: 'condominio_assembleia_marcar_impedida', args: { p_assembleia: 'a1', p_unit: 'u2', p_motivo: 'Acordo descumprido' } },
+            { fn: 'condominio_assembleia_marcar_impedida', args: { p_assembleia: 'a1', p_unit: 'u2', p_motivo: null } },
+        ]);
+    });
+
+    it('marcarImpedida sem motivo: a frase do banco (sem_motivo vale para cancelar e para marcar)', async () => {
+        m.respostaRpc = { data: null, error: { code: 'P0001', hint: 'sem_motivo', message: 'Informe o motivo do impedimento.' } };
+        await expect(operacoesDoGestor.marcarImpedida('a1', 'u2', '  ')).rejects.toThrow('Informe o motivo do impedimento.');
+        expect(traduzirErroAssembleia({ code: 'P0001', hint: 'sem_motivo', message: 'Informe o motivo do cancelamento.' }))
+            .toBe('Informe o motivo do cancelamento.');
+    });
+
+    it('cotasConferidas (A10)', async () => {
+        m.respostaRpc = { data: false, error: null };
+        expect(await operacoesDoGestor.cotasConferidas('a1')).toBe(false);
+        m.respostaRpc = { data: true, error: null };
+        expect(await operacoesDoGestor.cotasConferidas('a1')).toBe(true);
+        expect(m.rpcs).toEqual([
+            { fn: 'condominio_assembleia_cotas_conferidas', args: { p_assembleia: 'a1' } },
+            { fn: 'condominio_assembleia_cotas_conferidas', args: { p_assembleia: 'a1' } },
+        ]);
+    });
+
+    it('instalar devolve cotasConferidas e a origem de cada impedida (A10)', async () => {
+        m.respostaRpc = { data: { convocacao: 2, total: 0.01, presentesFracao: 0.005, presentesUnidades: 4, em: '2026-12-10T22:31:00Z',
+            cotasConferidas: false,
+            impedidas: [{ unitId: 'u7', rotulo: 'Apto 707', motivo: 'Acordo descumprido', origem: 'MANUAL' },
+                        { unitId: 'u8', rotulo: 'Apto 808', motivo: 'Cota de 10/2026 vencida em 10/11/2026' }] }, error: null };
+        const q = await operacoesDoGestor.instalar('a1', { convocacao: 2, presidente: 'A', secretario: 'B', editalEntregue: true });
+        expect(q.cotasConferidas).toBe(false);
+        // Sem origem gravada = a regra automática.
+        expect(q.impedidas.map(i => i.origem)).toEqual(['MANUAL', 'AUTOMATICA']);
     });
 
     it('erro da RPC vira ErroAssembleia com a frase traduzida e o HINT', async () => {
@@ -258,7 +305,8 @@ describe('operacoesDoGestor → RPCs', () => {
             if (c.tabela === 'condominio_assembleia_unidades') return { data: [
                 { id: 'x1', assembleia_id: 'a1', unit_id: 'u1', fracao: '0.00125', unidade_rotulo: 'Torre A — 101',
                   proprietario_nome: 'João', presenca: null, procurador_nome: null, procuracao_documento_id: null,
-                  presenca_em: null, impedida_na_instalacao: null },
+                  presenca_em: null, impedida_na_instalacao: null, impedimento_manual: 'Acordo descumprido',
+                  impedimento_manual_em: '2026-11-26T10:00:00+00:00' },
             ], error: null };
             if (c.tabela === 'condominio_assembleia_votos') return { data: [
                 { id: 'v1', assembleia_id: 'a1', item_id: 'i1', unit_id: 'u1', opcao: 'SIM', origem: 'PORTAL',
@@ -270,7 +318,10 @@ describe('operacoesDoGestor → RPCs', () => {
         expect(r.assembleia).toMatchObject({ id: 'a1', empreendimentoId: 'e1', primeiraConvocacaoEm: '2026-12-10T22:00:00+00:00', status: 'CONVOCADA', avisoId: 'av1' });
         expect(r.itens).toEqual([{ id: 'i1', assembleiaId: 'a1', ordem: 1, titulo: 'Contas', descricao: null, tipo: 'APROVACAO',
             opcoes: null, quorum: 'MAIORIA_PRESENTES', assunto: 'APROVAR_CONTAS', deliberacao: null }]);
-        expect(r.unidades[0]).toMatchObject({ unitId: 'u1', fracao: 0.00125, unidadeRotulo: 'Torre A — 101', proprietarioNome: 'João' });
+        expect(r.unidades[0]).toMatchObject({ unitId: 'u1', fracao: 0.00125, unidadeRotulo: 'Torre A — 101', proprietarioNome: 'João',
+            impedimentoManual: 'Acordo descumprido', impedimentoManualEm: '2026-11-26T10:00:00+00:00' });
+        const unid = m.chamadas.find(c => c.tabela === 'condominio_assembleia_unidades')!;
+        expect(String(arg(unid, 'select'))).toContain('impedimento_manual');
         expect(r.votos[0]).toMatchObject({ itemId: 'i1', unitId: 'u1', opcao: 'SIM', origem: 'PORTAL', clientId: 'c1' });
         const itens = m.chamadas.find(c => c.tabela === 'condominio_assembleia_itens')!;
         expect(itens.ops).toContainEqual({ op: 'eq', args: ['assembleia_id', 'a1'] });

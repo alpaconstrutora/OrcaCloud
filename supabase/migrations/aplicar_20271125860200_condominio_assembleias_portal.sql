@@ -20,8 +20,11 @@
 --   • client_portal_assembleia_votar(item, unidade, opção) — SÓ a sessão: o cliente com
 --     e-mail = e-mail do JWT e PROPRIETARIO vigente da unidade; sem perna "membro da org"
 --     e sem token (R2). Núcleo próprio _assembleia_votar_portal (papel CONDOMINO).
---   • condominio_assembleia_impedimentos(assembleia) — [{ unitId, motivo }] das unidades
---     impedidas agora (R3), para a tela de presença do gestor (membro da org).
+--   • condominio_assembleia_impedimentos(assembleia) — [{ unitId, motivo, origem }] das
+--     unidades impedidas agora (R3; origem MANUAL | AUTOMATICA desde a A10), para a tela de
+--     presença do gestor (membro da org).
+--   • A10: toda checagem de impedimento daqui (voto do portal, voto presencial, cédula do
+--     payload, impedimentos) usa fn_assembleia_impedimento (marca do gestor + regra).
 --   • Auxiliares do voto, comuns ao gestor e ao portal (a A2 tinha esses blocos dentro de
 --     _assembleia_lancar_voto, que é recriada aqui usando-os, com o mesmo comportamento):
 --     _assembleia_unidade_votante (unidade_fora, unidade_impedida), _assembleia_exige_opcao
@@ -64,7 +67,8 @@ BEGIN
     IF NOT FOUND THEN
         RAISE EXCEPTION 'Esta unidade não participa da assembleia.' USING ERRCODE = 'P0001', HINT = 'unidade_fora';
     END IF;
-    v_motivo := public.fn_assembleia_unidade_impedida(p_unit);
+    -- A10: marca do gestor ou regra automática (fn_assembleia_impedimento).
+    v_motivo := public.fn_assembleia_impedimento(p_assembleia, p_unit);
     IF v_motivo IS NOT NULL THEN
         RAISE EXCEPTION 'A unidade % está impedida: %.', coalesce(v_u.unidade_rotulo, ''), v_motivo
             USING ERRCODE = 'P0001', HINT = 'unidade_impedida', DETAIL = v_motivo;
@@ -223,7 +227,8 @@ SET lock_timeout = '5s';
 -- • Recorte = o de fn_condominio_payload_for_client: condomínios EM_OPERACAO onde o cliente
 --   tem ocupação vigente (qualquer papel — o inquilino vê a assembleia, sem cédula).
 -- • minhasUnidades = unidades DA ASSEMBLEIA (congeladas na convocação) em que ele é
---   PROPRIETARIO vigente agora. impedida = motivo do banco (R3) ou null; null também na
+--   PROPRIETARIO vigente agora. impedida = motivo do banco (R3: marca do gestor ou cota
+--   vencida — fn_assembleia_impedimento) ou null; null também na
 --   ENCERRADA (a votação acabou; o motivo deixaria a cédula com a razão errada).
 -- • sessaoValida = há sessão, o e-mail do JWT é o do cadastro e a conta confirmou o e-mail
 --   (o critério do voto).
@@ -280,7 +285,7 @@ AS $$
                                       'unitId', au.unit_id,
                                       'rotulo', au.unidade_rotulo,
                                       'impedida', CASE WHEN a.status IN ('CONVOCADA', 'INSTALADA')
-                                                       THEN public.fn_assembleia_unidade_impedida(au.unit_id) END,
+                                                       THEN public.fn_assembleia_impedimento(a.id, au.unit_id) END,
                                       'votos', (SELECT coalesce(jsonb_object_agg(v.item_id::text, jsonb_build_object(
                                                            'opcao', v.opcao, 'origem', v.origem, 'votadoEm', v.votado_em)),
                                                        '{}'::jsonb)
@@ -408,7 +413,8 @@ $$;
 -- ═══ BLOCO 6 — impedidas agora, para a tela de presença do gestor ═══════════
 SET lock_timeout = '5s';
 
--- R3: [{ unitId, motivo }] das unidades da assembleia impedidas neste instante.
+-- R3/A10: [{ unitId, motivo, origem }] das unidades da assembleia impedidas neste instante.
+-- origem: 'MANUAL' (marcada pelo gestor — vale sobre a regra) | 'AUTOMATICA' (cota vencida).
 -- Autorização dos invólucros da A2: membro da org de fn_org_do_condominio, senão 42501.
 CREATE OR REPLACE FUNCTION public.condominio_assembleia_impedimentos(p_assembleia uuid)
  RETURNS jsonb
@@ -419,9 +425,11 @@ CREATE OR REPLACE FUNCTION public.condominio_assembleia_impedimentos(p_assemblei
 AS $$
 BEGIN
     PERFORM public._assembleia_exige_gestor(p_assembleia);
-    RETURN (SELECT coalesce(jsonb_agg(jsonb_build_object('unitId', s.unit_id, 'motivo', s.motivo)
+    RETURN (SELECT coalesce(jsonb_agg(jsonb_build_object('unitId', s.unit_id, 'motivo', s.motivo, 'origem', s.origem)
                                       ORDER BY s.unidade_rotulo, s.unit_id), '[]'::jsonb)
-              FROM (SELECT u.unit_id, u.unidade_rotulo, public.fn_assembleia_unidade_impedida(u.unit_id) AS motivo
+              FROM (SELECT u.unit_id, u.unidade_rotulo,
+                           public.fn_assembleia_impedimento(p_assembleia, u.unit_id) AS motivo,
+                           CASE WHEN u.impedimento_manual IS NOT NULL THEN 'MANUAL' ELSE 'AUTOMATICA' END AS origem
                       FROM public.condominio_assembleia_unidades u
                      WHERE u.assembleia_id = p_assembleia) s
              WHERE s.motivo IS NOT NULL);

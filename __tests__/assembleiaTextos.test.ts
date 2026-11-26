@@ -14,7 +14,7 @@ import { describe, it, expect } from 'vitest';
 import {
     ASSUNTOS_COMUNS, ROTULO_OPCAO, ROTULO_QUORUM, REGRA_QUORUM, REGRA_IMPEDIMENTO, ROTULO_RESULTADO, ROTULO_STATUS,
     INSTRUCOES_VOTO, dataHoraBrasilia, percentualDoTotal, textoConvocacao, textoCancelamento,
-    montarEdital, montarAta, formaDaAssembleia,
+    montarEdital, montarAta, formaDaAssembleia, ROTULO_ORIGEM_IMPEDIMENTO, FRASE_INADIMPLENCIA_NAO_CONFERIDA,
 } from '../utils/assembleiaTextos';
 import type { Assembleia, ItemAssembleia, Retrato } from '../services/condominioAssembleiaService';
 
@@ -88,8 +88,8 @@ const retrato = (cab: Partial<Retrato['cabecalho']> = {}): Retrato => ({
         editalConfirmadoPor: { id: 'p1', papel: 'GESTOR', em: '2026-12-10T22:31:00Z', nome: 'Gestora Fernanda' },
         quorumInstalacao: {
             convocacao: 2, total: 0.01, presentesFracao: 6 * F, presentesUnidades: 6,
-            impedidas: [{ unitId: 'u7', rotulo: 'Apto 707', motivo: 'Cota de 10/2026 vencida em 10/11/2026' }],
-            em: '2026-12-10T22:32:00Z',
+            impedidas: [{ unitId: 'u7', rotulo: 'Apto 707', motivo: 'Cota de 10/2026 vencida em 10/11/2026', origem: 'AUTOMATICA' }],
+            em: '2026-12-10T22:32:00Z', cotasConferidas: true,
         },
         observacaoGeral: 'Sem mais.', encerradaEm: '2026-12-11T00:15:00Z', encerradaPor: 'p1', encerradaPorPapel: 'GESTOR',
         ...cab,
@@ -111,7 +111,7 @@ const retrato = (cab: Partial<Retrato['cabecalho']> = {}): Retrato => ({
         { itemId: 'i1', unitId: 'u3', opcao: 'SIM', origem: 'PORTAL', votadoEm: '2026-12-01T12:00:00Z', clientId: 'c3', lancadoPor: null },
         { itemId: 'i2', unitId: 'u3', opcao: 'Bruno', origem: 'PORTAL', votadoEm: '2026-12-01T12:00:00Z', clientId: 'c3', lancadoPor: null },
     ],
-    impedidasNaInstalacao: [{ unitId: 'u7', rotulo: 'Apto 707', motivo: 'Cota de 10/2026 vencida em 10/11/2026' }],
+    impedidasNaInstalacao: [{ unitId: 'u7', rotulo: 'Apto 707', motivo: 'Cota de 10/2026 vencida em 10/11/2026', origem: 'AUTOMATICA' }],
 });
 
 const condominio = { nome: 'Residencial Bella Vista', cnpj: '12345678000190' };
@@ -319,9 +319,33 @@ describe('montarAta', () => {
         expect(ata.presenca.find(p => p.unidade === 'Apto 101')?.peso).toBe('12,50%');
     });
 
-    it('ausentes e impedidas na instalação', () => {
+    it('ausentes e impedidas na instalação (com a origem de cada impedida)', () => {
         expect(ata.ausentes.map(a => a.unidade)).toEqual(['Apto 808']);
-        expect(ata.impedidas).toEqual([{ unidade: 'Apto 707', motivo: 'Cota de 10/2026 vencida em 10/11/2026' }]);
+        expect(ata.impedidas).toEqual([{ unidade: 'Apto 707', motivo: 'Cota de 10/2026 vencida em 10/11/2026',
+            origem: ROTULO_ORIGEM_IMPEDIMENTO.AUTOMATICA }]);
+        // Cotas conferidas: sem a frase de "não conferida".
+        expect(ata.inadimplenciaNaoConferida).toBeNull();
+    });
+
+    it('A10: cotas não conferidas na instalação → a frase, e a impedida indicada pelo gestor', () => {
+        const manual = [{ unitId: 'u7', rotulo: 'Apto 707', motivo: 'Acordo de parcelamento descumprido', origem: 'MANUAL' as const }];
+        const r = retrato();
+        const semCotas: Retrato = {
+            ...r,
+            impedidasNaInstalacao: manual,
+            cabecalho: { ...r.cabecalho, quorumInstalacao: { ...r.cabecalho.quorumInstalacao!, cotasConferidas: false, impedidas: manual } },
+        };
+        const a2 = montarAta(semCotas, assembleia({ status: 'ENCERRADA' }), condominio);
+        expect(FRASE_INADIMPLENCIA_NAO_CONFERIDA).toBe('A inadimplência não foi conferida pelo sistema, porque o condomínio '
+            + 'não tem cotas cobradas pelo Òpura; as unidades impedidas foram indicadas pelo gestor.');
+        expect(a2.inadimplenciaNaoConferida).toBe(FRASE_INADIMPLENCIA_NAO_CONFERIDA);
+        expect(a2.impedidas).toEqual([{ unidade: 'Apto 707', motivo: 'Acordo de parcelamento descumprido',
+            origem: ROTULO_ORIGEM_IMPEDIMENTO.MANUAL }]);
+        expect(ROTULO_ORIGEM_IMPEDIMENTO.MANUAL).toBe('Indicada pelo gestor');
+        // Sem o campo gravado (null): não afirma nada.
+        const semCampo: Retrato = { ...r, cabecalho: { ...r.cabecalho,
+            quorumInstalacao: { ...r.cabecalho.quorumInstalacao!, cotasConferidas: null } } };
+        expect(montarAta(semCampo, assembleia({ status: 'ENCERRADA' }), condominio).inadimplenciaNaoConferida).toBeNull();
     });
 
     it('procuração listada', () => {

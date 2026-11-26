@@ -48,6 +48,9 @@ documento e a votação do Portal do Investidor, que é outro domínio.)
 | 25/11 | Jurídico antes ou em paralelo? | **Construir com as regras propostas; o jurídico revisa em paralelo** |
 | 25/11 | Voto antecipado conta como presença? | Usuário pediu recomendação → **sim** (R5/R6). Se o jurídico vetar: aceitar voto só em INSTALADA — muda uma checagem e o edital, não a estrutura |
 | 25/11 | Presencial × portal | Usuário pediu recomendação → **vale o último, nos dois sentidos**, com confirmação do gestor ao substituir (R7) |
+| 26/11 | Inadimplência: nenhum rateio do app tem cobrança gerada hoje | **Aviso + marcar à mão** (Task A10) |
+| 26/11 | Condomínio de teste da A9 não pode ser excluído (trava) | **Apagar por script**, desligando a trava só nessa operação |
+| 26/11 | Aplicar e publicar a fase A | **Sim**, após as correções da revisão final e a A10 |
 
 ## Por que existe
 
@@ -865,6 +868,29 @@ ENCERRADA. **Hora nos testes:** nada de "relógio falso" no código de produçã
 - [ ] **4. Rodar** → passa; `check-ui-standard.sh` nos `.tsx` alterados → 0.
 - [ ] **5. Commit** `feat(portal-cliente): assembleias do condomínio e voto por unidade`.
 
+### Task A10: Impedimento marcado à mão e aviso de cotas não conferidas
+
+Decisão do usuário (26/11): hoje nenhum rateio do app tem cobrança gerada (0 itens com transaction_id; Bella Vista só tem rateios CANCELADO/RASCUNHO), então a regra automática de inadimplência (R3) não pega ninguém. Escolha: **aviso + marcar à mão**.
+
+**O que muda**
+- Banco (editar no lugar as migrations ainda não aplicadas — 860100 para o núcleo/gestor e 860200 para o portal; manter idempotência, REVOKE/GRANT, DEFINER + search_path):
+  - `condominio_assembleia_unidades` ganha `impedimento_manual text` (motivo; NULL = sem marcação), `impedimento_manual_em timestamptz`; autoria vai em `condominio_assembleia_eventos` (evento `IMPEDIMENTO_MANUAL`, detalhe {motivo|null}).
+  - `fn_assembleia_impedimento(p_assembleia uuid, p_unit uuid) RETURNS text` (revogada de todos): `coalesce(impedimento_manual, fn_assembleia_unidade_impedida(p_unit))`. **Toda** checagem de impedimento da assembleia passa a usar esta função (presença, voto presencial, voto do portal, quórum de instalação, `condominio_assembleia_impedimentos`, payload do portal). Nenhum lugar continua chamando só a regra automática.
+  - `fn_assembleia_cotas_conferidas(p_empreendimento uuid) RETURNS boolean` (revogada de todos): existe ao menos um `condominio_rateio_itens` com `transaction_id` em rateio ≠ CANCELADO desse condomínio.
+  - Núcleo `_assembleia_marcar_impedida(p_assembleia, p_unit, p_motivo text, p_ator, p_papel)`: FOR UPDATE primeiro; só CONVOCADA/INSTALADA; unidade na assembleia; `p_motivo` NULL desmarca, senão `btrim` não vazio (HINT `sem_motivo`); recusa marcar unidade que já tem voto PRESENCIAL lançado (HINT `tem_voto_presencial`)? — **não**: marcar impede ações futuras, voto já dado continua valendo (mesma regra do R3 "momento da checagem"). Invólucro do gestor `condominio_assembleia_marcar_impedida(p_assembleia, p_unit, p_motivo)` (membro da org, 42501; GRANT authenticated).
+  - `condominio_assembleia_impedimentos` passa a devolver `[{ unitId, motivo, origem: 'MANUAL'|'AUTOMATICA' }]` e uma RPC nova `condominio_assembleia_cotas_conferidas(p_assembleia) RETURNS boolean` (membro, GRANT authenticated).
+  - `_assembleia_instalar` grava em `quorum_instalacao` também `cotasConferidas` (boolean) e, em cada impedida, `origem`; o retrato herda.
+- TS: `services/condominioAssembleiaService.ts` — tipos novos (`origem` nas impedidas, `cotasConferidas`), `OperacoesAssembleia.marcarImpedida(id, unitId, motivo|null)` e `.cotasConferidas(id): Promise<boolean>`; tradução dos HINTs novos.
+- Tela (AssembleiaDetalheView + UnidadeSheet + ConducaoSheets): quando `cotasConferidas = false`, aviso (não bloqueia) nas gavetas Convocar e Instalar e no topo da seção Unidades: "Este condomínio não tem cotas cobradas pelo Òpura: a inadimplência não é conferida automaticamente. Marque à mão a unidade impedida." Na gaveta da unidade: "Marcar como impedida" com motivo obrigatório, e "Desmarcar"; a situação mostra "Impedida (marcada pelo gestor): <motivo>" × "Impedida: <motivo automático>".
+- Textos/PDF (utils/assembleiaTextos.ts, services/assembleiaPdf.ts): a ata lista a origem de cada impedida; quando `cotasConferidas = false` na instalação, frase: "A inadimplência não foi conferida pelo sistema, porque o condomínio não tem cotas cobradas pelo Òpura; as unidades impedidas foram indicadas pelo gestor."
+- Portal: nada novo na tela — o motivo manual chega como `impedida` pelo payload (já é texto).
+
+**Testes**
+- SQL (`scripts/teste-condominio-assembleias-conduzir.sql` e `-portal.sql`): `marcar impedida bloqueia presença e voto`; `voto dado antes de marcar continua valendo`; `desmarcar libera`; `motivo vazio recusado (sem_motivo)`; `não-membro 42501`; `cotas_conferidas false sem título / true com título`; `instalar grava cotasConferidas e origem`; `portal recebe o motivo manual em impedida`; `voto do portal recusado para unidade marcada`.
+- Vitest: serviço (RPC e tradução), tela (aviso aparece com cotasConferidas=false; marcar exige motivo; situação com origem), textos/PDF (frase de não conferida; origem na lista de impedidas).
+
+**Pronto quando:** os 3 ensaios SQL `TUDO OK`, Vitest verde, `check-ui-standard` 0 nos `.tsx` tocados, `npm run typecheck` 0.
+
 ### Task A9: Aplicar, publicar e provar de ponta a ponta
 
 - [ ] **1.** Ensaio final A1+A2+A3 → `TUDO OK`; aplicar as 3 migrations em ordem com
@@ -877,7 +903,7 @@ ENCERRADA. **Hora nos testes:** nada de "relógio falso" no código de produçã
   mural → cliente logado vota → gestor instala em 2ª, registra presença da outra
   unidade por procurador, lança voto, substitui o voto do portal com confirmação →
   encerra → ata em Documentos e no portal. Print de cada passo.
-- [ ] **4.** Excluir o condomínio de teste e o cliente de teste.
+- [ ] **4.** Excluir o condomínio de teste e o cliente de teste **por script como postgres**, desligando a trava só nessa transação (decisão 26/11).
 
 **Pronto (fase A):** os 4 passos feitos. **Fase A só fecha de verdade** quando a
 assembleia real do Bella Vista acontecer pelo app (pré-requisitos operacionais acima).

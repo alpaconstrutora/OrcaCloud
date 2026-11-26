@@ -191,6 +191,9 @@ export function parametrosDaLinha(row: {
   largura_da_via_m?: number | null;
   talude_por_aresta?: ParametrosDeTerraplenagem['taludePorAresta'] | null;
   caimento_min_pct?: number | null;
+  modo_do_balanco?: ParametrosDeTerraplenagem['modoDoBalanco'] | null;
+  forma_do_talude?: ParametrosDeTerraplenagem['formaDoTalude'] | null;
+  largura_do_talude_suave_m?: number | null;
 }): ParametrosDeTerraplenagem {
   const n = (v: number | null | undefined, padrao: number) => (v === null || v === undefined ? padrao : Number(v));
   return {
@@ -203,6 +206,12 @@ export function parametrosDaLinha(row: {
     larguraDaViaM: n(row.largura_da_via_m, PARAMETROS_PADRAO.larguraDaViaM ?? 0),
     taludePorAresta: Array.isArray(row.talude_por_aresta) ? row.talude_por_aresta : [],
     caimentoMinPct: n(row.caimento_min_pct, PARAMETROS_PADRAO.caimentoMinPct ?? 0.5),
+    // 25/11/2026: ausentes (banco antigo ou null) = o de sempre — nivela, talude reto.
+    ...(row.modo_do_balanco ? { modoDoBalanco: row.modo_do_balanco } : {}),
+    ...(row.forma_do_talude ? { formaDoTalude: row.forma_do_talude } : {}),
+    ...(row.largura_do_talude_suave_m !== null && row.largura_do_talude_suave_m !== undefined
+      ? { larguraDoTaludeSuaveM: Number(row.largura_do_talude_suave_m) }
+      : {}),
   };
 }
 
@@ -384,6 +393,9 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
       perfil_polilinha: linhas.length > 0 ? linhas : null,
       drenagem: dren,
       caimento_min_pct: p.caimentoMinPct ?? 0.5,
+      modo_do_balanco: p.modoDoBalanco ?? null,
+      forma_do_talude: p.formaDoTalude ?? null,
+      largura_do_talude_suave_m: p.larguraDoTaludeSuaveM ?? null,
     }),
     [],
   );

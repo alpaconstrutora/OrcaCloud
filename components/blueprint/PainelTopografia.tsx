@@ -35,7 +35,9 @@ import {
   type ParametrosDeTerraplenagem,
   type PontoDoPerfil,
   type TerraplenagemComTalude as ResultadoDaTerraplenagem,
+  LARGURA_DO_TALUDE_SUAVE_PADRAO_M,
 } from '../../utils/blueprintTopografiaAnalises';
+import { EscolhaDaFormaDoTalude, EscolhaDoBalanco } from './EscolhasDoPlato';
 import { avisoDaClasse, type CoresDaExportacao, type ExtrasDaTopografia } from '../../utils/blueprintTopografiaExport';
 import {
   avisoExecutivo,
@@ -1974,6 +1976,9 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
     if (ok) t.onExcluirDesenho?.();
   };
   const usandoEquilibrio = t.cotaPlatoM === null;
+  // Talude SUAVE (25/11/2026): a largura em planta no lugar do 1:h; banquetas não se aplicam.
+  const suave = t.parametros.formaDoTalude === 'SUAVE';
+  const modoDoBalanco = t.parametros.modoDoBalanco ?? 'CORTE_E_ATERRO';
   return (
     <div className="mt-3 border-t border-slate-200 pt-3" data-testid="topografia-terraplenagem">
       <p className="text-xs font-medium text-slate-700">Corte e aterro (preliminar)</p>
@@ -2090,7 +2095,10 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
           : t.cotaDeEquilibrioM !== null
             ? `Equilíbrio em ${formatar(t.cotaDeEquilibrioM)} m.`
             : ''}
-        {!usandoEquilibrio && t.cotaDeEquilibrioM !== null && (
+        {modoDoBalanco !== 'CORTE_E_ATERRO' && (
+          <> {modoDoBalanco === 'CORTE' ? 'Só corta' : 'Só aterra'}: corte e aterro não se compensam — a cota de equilíbrio é só referência; fixe a cota.</>
+        )}
+        {!usandoEquilibrio && t.cotaDeEquilibrioM !== null && modoDoBalanco === 'CORTE_E_ATERRO' && (
           <>
             {' '}
             <button
@@ -2153,23 +2161,45 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
         </div>
       )}
 
+      {/* Balanço de massa e forma do talude (25/11/2026, reel da Hektar) — os mesmos cartões do painel do platô no 3D. */}
+      <p className="mt-3 text-xs font-medium text-slate-700">Balanço de massa</p>
+      <div className="mt-1">
+        <EscolhaDoBalanco valor={t.parametros.modoDoBalanco ?? 'CORTE_E_ATERRO'} onEscolher={(v) => t.onParametros({ modoDoBalanco: v })} />
+      </div>
+      <p className="mt-3 text-xs font-medium text-slate-700">Forma do talude</p>
+      <div className="mt-1">
+        <EscolhaDaFormaDoTalude valor={t.parametros.formaDoTalude ?? 'RETO'} onEscolher={(v) => t.onParametros({ formaDoTalude: v })} />
+      </div>
+
       {/* Talude e material — os parâmetros de PROJETO (fase 3). */}
       <p className="mt-3 text-xs font-medium text-slate-700">Talude e material</p>
       <div className="mt-1 grid grid-cols-2 gap-x-3 gap-y-1">
-        <CampoParametro
-          rotulo="Talude corte 1:"
-          valor={t.parametros.taludeCorteH}
-          passo="0.25"
-          min="0.1"
-          onMudar={(v) => t.onParametros({ taludeCorteH: v })}
-        />
-        <CampoParametro
-          rotulo="Talude aterro 1:"
-          valor={t.parametros.taludeAterroH}
-          passo="0.25"
-          min="0.1"
-          onMudar={(v) => t.onParametros({ taludeAterroH: v })}
-        />
+        {suave ? (
+          <CampoParametro
+            rotulo="Largura do talude (m)"
+            valor={t.parametros.larguraDoTaludeSuaveM ?? LARGURA_DO_TALUDE_SUAVE_PADRAO_M}
+            passo="0.5"
+            min="0.5"
+            onMudar={(v) => t.onParametros({ larguraDoTaludeSuaveM: v })}
+          />
+        ) : (
+          <>
+            <CampoParametro
+              rotulo="Talude corte 1:"
+              valor={t.parametros.taludeCorteH}
+              passo="0.25"
+              min="0.1"
+              onMudar={(v) => t.onParametros({ taludeCorteH: v })}
+            />
+            <CampoParametro
+              rotulo="Talude aterro 1:"
+              valor={t.parametros.taludeAterroH}
+              passo="0.25"
+              min="0.1"
+              onMudar={(v) => t.onParametros({ taludeAterroH: v })}
+            />
+          </>
+        )}
         <CampoParametro
           rotulo="Empolamento"
           valor={t.parametros.empolamentoPct}
@@ -2186,23 +2216,27 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
           sufixo="%"
           onMudar={(v) => t.onParametros({ contracaoPct: v })}
         />
-        {/* Fase 4: banqueta e via de serviço. Zero desliga. */}
-        <CampoParametro
-          rotulo="Banqueta a cada"
-          valor={t.parametros.alturaDoLanceM ?? 0}
-          passo="0.5"
-          min="0"
-          sufixo="m"
-          onMudar={(v) => t.onParametros({ alturaDoLanceM: v })}
-        />
-        <CampoParametro
-          rotulo="Largura da banqueta"
-          valor={t.parametros.larguraDaBanquetaM ?? 0}
-          passo="0.5"
-          min="0"
-          sufixo="m"
-          onMudar={(v) => t.onParametros({ larguraDaBanquetaM: v })}
-        />
+        {/* Fase 4: banqueta e via de serviço. Zero desliga. Banqueta só no talude RETO. */}
+        {!suave && (
+          <>
+            <CampoParametro
+              rotulo="Banqueta a cada"
+              valor={t.parametros.alturaDoLanceM ?? 0}
+              passo="0.5"
+              min="0"
+              sufixo="m"
+              onMudar={(v) => t.onParametros({ alturaDoLanceM: v })}
+            />
+            <CampoParametro
+              rotulo="Largura da banqueta"
+              valor={t.parametros.larguraDaBanquetaM ?? 0}
+              passo="0.5"
+              min="0"
+              sufixo="m"
+              onMudar={(v) => t.onParametros({ larguraDaBanquetaM: v })}
+            />
+          </>
+        )}
         <CampoParametro
           rotulo="Via de serviço"
           valor={t.parametros.larguraDaViaM ?? 0}

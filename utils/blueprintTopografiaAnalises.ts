@@ -268,6 +268,8 @@ export function terraplenagemPreliminar(
   anelPlato: Point[],
   cotaPlatoM: number,
   inclinacao: InclinacaoDoPlato | null = null,
+  /** O modo do balanço (25/11/2026): só o `modoDoBalanco` é lido daqui. */
+  parametros: Pick<ParametrosDeTerraplenagem, 'modoDoBalanco'> = {},
 ): Terraplenagem {
   const centroDoAnel = centroDoPlato(anelPlato);
   const cotaEm = (p: Point) => cotaDoPlatoEm(cotaPlatoM, inclinacao, centroDoAnel, p);
@@ -290,7 +292,9 @@ export function terraplenagemPreliminar(
       semCota++;
       continue;
     }
-    const delta = cotaEm({ x: grade.origem.x + (c + 0.5) * esp, y: grade.origem.y + (l + 0.5) * esp }) - v;
+    const cota = cotaEm({ x: grade.origem.x + (c + 0.5) * esp, y: grade.origem.y + (l + 0.5) * esp });
+    // Modo do balanço: em CORTE o que está abaixo fica natural; em ATERRO, o que está acima (delta 0: é platô, intocado).
+    const delta = cotaDentroDoPlato(cota, v, parametros) === null ? 0 : cota - v;
     deltaDaCelulaM[i] = delta;
     area += areaCelM2;
     if (delta > 0) {
@@ -413,7 +417,31 @@ export interface ParametrosDeTerraplenagem {
   taludePorAresta?: ({ corteH?: number | null; aterroH?: number | null; muro?: boolean | null } | null)[];
   /** Caimento mínimo das canaletas traçadas, em % (fase 6). Padrão 0,5. */
   caimentoMinPct?: number;
+  /**
+   * O BALANÇO DE MASSA (25/11/2026, reel da Hektar "Cut / Cut & Fill / Fill"): CORTE só rebaixa o que está acima
+   * da cota; ATERRO só enche o que está abaixo; CORTE_E_ATERRO (padrão, ausente) nivela.
+   */
+  modoDoBalanco?: ModoDoBalanco;
+  /** A forma do talude (25/11/2026, "Smooth / Straight"): RETO (padrão) por 1:h; SUAVE por largura em planta. */
+  formaDoTalude?: FormaDoTalude;
+  /** Largura do talude SUAVE, em m (padrão `LARGURA_DO_TALUDE_SUAVE_PADRAO_M`). */
+  larguraDoTaludeSuaveM?: number;
 }
+
+export type ModoDoBalanco = 'CORTE' | 'CORTE_E_ATERRO' | 'ATERRO';
+export type FormaDoTalude = 'RETO' | 'SUAVE';
+export const LARGURA_DO_TALUDE_SUAVE_PADRAO_M = 5;
+/** Os textos dos modos e das formas — os mesmos no painel Terreno e no painel do platô no 3D. */
+export const MODOS_DO_BALANCO: readonly { valor: ModoDoBalanco; rotulo: string; explicacao: string }[] = [
+  { valor: 'CORTE', rotulo: 'Corte', explicacao: 'Rebaixa o que está acima da cota e deixa como está o que está abaixo.' },
+  { valor: 'CORTE_E_ATERRO', rotulo: 'Corte e aterro', explicacao: 'Nivela: rebaixa o que está acima e enche o que está abaixo.' },
+  { valor: 'ATERRO', rotulo: 'Aterro', explicacao: 'Enche o que está abaixo da cota e deixa como está o que está acima.' },
+];
+export const FORMAS_DO_TALUDE: readonly { valor: FormaDoTalude; rotulo: string; explicacao: string }[] = [
+  { valor: 'RETO', rotulo: 'Reto', explicacao: 'Inclinação constante 1:h, com banquetas e talude por lado.' },
+  { valor: 'SUAVE', rotulo: 'Suave', explicacao: 'Curva que nasce e morre na horizontal, numa largura fixa em planta (sem banquetas).' },
+];
+const modoDoBalancoDe = (p: Pick<ParametrosDeTerraplenagem, 'modoDoBalanco'>): ModoDoBalanco => p.modoDoBalanco ?? 'CORTE_E_ATERRO';
 
 /** O lado tem muro de arrimo em vez de talude? */
 export function arestaComMuro(parametros: ParametrosDeTerraplenagem, aresta: number): boolean {
@@ -631,6 +659,56 @@ export function superficieDeProjeto(
   };
 }
 
+/**
+ * O TALUDE SUAVE (25/11/2026, "Smooth" do reel): da borda (`dM` = 0, cota do platô) ao terreno natural (`dM` ≥ L)
+ * por uma smoothstep (3t² − 2t³) — começa e termina na horizontal, sem quina na crista nem no pé. Corta onde o
+ * terreno está acima da borda, aterra onde está abaixo.
+ */
+export function cotaNoTaludeSuave(cotaDaBordaM: number, terrenoM: number, dM: number, larguraM: number): number {
+  if (larguraM <= 0 || dM >= larguraM) return terrenoM;
+  if (dM <= 0) return cotaDaBordaM;
+  const t = dM / larguraM;
+  return cotaDaBordaM + (terrenoM - cotaDaBordaM) * t * t * (3 - 2 * t);
+}
+
+/**
+ * DENTRO do platô: a cota de projeto num ponto, com o modo do balanço. `null` = o terreno fica como está (em CORTE,
+ * o que está abaixo da cota; em ATERRO, o que está acima).
+ */
+export function cotaDentroDoPlato(cotaM: number, terrenoM: number, parametros: Pick<ParametrosDeTerraplenagem, 'modoDoBalanco'>): number | null {
+  const modo = modoDoBalancoDe(parametros);
+  if (modo === 'CORTE' && terrenoM < cotaM) return null;
+  if (modo === 'ATERRO' && terrenoM > cotaM) return null;
+  return cotaM;
+}
+
+/**
+ * FORA do platô: a decisão ÚNICA de projeto num ponto — via de serviço, muro, talude RETO (1:h com banquetas e talude
+ * por aresta) ou SUAVE (largura em planta), e o modo do balanço. `null` = terreno natural (nada a fazer). Usada pela
+ * conta (`terraplenagemComTalude`), pela superfície de projeto (`cotaDeProjeto`) e pelo corte 2D — sempre a mesma.
+ */
+export function projetoForaDoPlato(
+  cotaDaBordaM: number,
+  terrenoM: number,
+  proximidade: ProximidadeAoAnel,
+  parametros: ParametrosDeTerraplenagem,
+): { cotaM: number; via: boolean; naBanqueta: boolean } | null {
+  const s = superficieDeProjeto(cotaDaBordaM, proximidade.dMm, proximidade, parametros);
+  if (s.muro) return null;
+  const modo = modoDoBalancoDe(parametros);
+  const permite = (z: number) => !((modo === 'CORTE' && z > terrenoM) || (modo === 'ATERRO' && z < terrenoM));
+  if (s.naVia) return permite(cotaDaBordaM) ? { cotaM: cotaDaBordaM, via: true, naBanqueta: false } : null;
+  if (parametros.formaDoTalude === 'SUAVE') {
+    const via = Math.max(0, parametros.larguraDaViaM ?? 0);
+    const dM = Math.max(0, proximidade.dMm / 1000 - via);
+    const z = cotaNoTaludeSuave(cotaDaBordaM, terrenoM, dM, parametros.larguraDoTaludeSuaveM ?? LARGURA_DO_TALUDE_SUAVE_PADRAO_M);
+    return z !== terrenoM && permite(z) ? { cotaM: z, via: false, naBanqueta: false } : null;
+  }
+  if (terrenoM > s.corteM) return permite(s.corteM) ? { cotaM: s.corteM, via: false, naBanqueta: s.naBanquetaCorte } : null;
+  if (terrenoM < s.aterroM) return permite(s.aterroM) ? { cotaM: s.aterroM, via: false, naBanqueta: s.naBanquetaAterro } : null;
+  return null;
+}
+
 /** Um muro de arrimo numa aresta do platô (fase 6): o que se orça dele. */
 export interface MuroDeArrimo {
   aresta: number;
@@ -773,7 +851,7 @@ export function terraplenagemComTalude(
   parametros: ParametrosDeTerraplenagem = PARAMETROS_PADRAO,
   inclinacao: InclinacaoDoPlato | null = null,
 ): TerraplenagemComTalude {
-  const base = terraplenagemPreliminar(grade, anelPlato, cotaPlatoM, inclinacao);
+  const base = terraplenagemPreliminar(grade, anelPlato, cotaPlatoM, inclinacao, parametros);
   const centroDoAnel = centroDoPlato(anelPlato);
   const cotaEm = (p: Point) => cotaDoPlatoEm(cotaPlatoM, inclinacao, centroDoAnel, p);
   const { origem, espacamentoMm: esp, colunas, linhas } = grade;
@@ -802,12 +880,13 @@ export function terraplenagemComTalude(
         // Com inclinação, a crista do talude nasce na cota do plano NAQUELE ponto
         // (o plano extrapolado até a célula), não numa cota única.
         const cotaDaBorda = cotaEm(centro);
-        const s = superficieDeProjeto(cotaDaBorda, proximidade.dMm, proximidade, parametros);
-        if (s.muro) continue; // atrás do muro de arrimo o terreno fica como está
+        // A decisão única de projeto (via, muro, talude reto/suave, modo do balanço) — a mesma de `cotaDeProjeto`.
+        const r = projetoForaDoPlato(cotaDaBorda, terreno, proximidade, parametros);
+        if (!r) continue; // terreno natural (atrás de muro, além do talude, ou o modo não deixa)
 
         // Via de serviço: faixa na cota do platô — corta ou aterra como o platô.
-        if (s.naVia) {
-          const delta = cotaDaBorda - terreno;
+        if (r.via) {
+          const delta = r.cotaM - terreno;
           areaVia += areaCelM2;
           deltaDaCelulaM[i] = delta;
           if (delta < 0) {
@@ -820,18 +899,18 @@ export function terraplenagemComTalude(
           continue;
         }
 
-        if (terreno > s.corteM) {
-          const h = terreno - s.corteM;
+        if (terreno > r.cotaM) {
+          const h = terreno - r.cotaM;
           taludeCorte += h * areaCelM2;
           areaTalude += areaCelM2;
-          if (s.naBanquetaCorte) areaBanquetas += areaCelM2;
+          if (r.naBanqueta) areaBanquetas += areaCelM2;
           ladoDaCelula[i] = 'TALUDE_CORTE';
           deltaDaCelulaM[i] = -h;
-        } else if (terreno < s.aterroM) {
-          const h = s.aterroM - terreno;
+        } else if (terreno < r.cotaM) {
+          const h = r.cotaM - terreno;
           taludeAterro += h * areaCelM2;
           areaTalude += areaCelM2;
-          if (s.naBanquetaAterro) areaBanquetas += areaCelM2;
+          if (r.naBanqueta) areaBanquetas += areaCelM2;
           ladoDaCelula[i] = 'TALUDE_ATERRO';
           deltaDaCelulaM[i] = h;
         }
@@ -1049,17 +1128,16 @@ export function cotaDeProjeto(
   const centroDoAnel = centroDoPlato(anelPlato);
   const cotaEm = (q: Point) => cotaDoPlatoEm(cotaPlatoM, inclinacao, centroDoAnel, q);
   return (p: Point) => {
-    if (pointInPolygon(anelPlato, p)) return cotaEm(p);
+    if (pointInPolygon(anelPlato, p)) {
+      const c = cotaEm(p);
+      const t = terreno(p);
+      // Modo do balanço: o que o modo não deixa tocar fica natural (sem cota natural, o platô vale como antes).
+      return t === null ? c : (cotaDentroDoPlato(c, t, parametros) ?? t);
+    }
     const t = terreno(p);
     if (t === null) return null;
-    const proximidade = distanciaAoAnelComAresta(p, anelPlato);
-    const cotaDaBorda = cotaEm(p);
-    const s = superficieDeProjeto(cotaDaBorda, proximidade.dMm, proximidade, parametros);
-    if (s.muro) return t;
-    if (s.naVia) return cotaDaBorda;
-    if (t > s.corteM) return s.corteM;
-    if (t < s.aterroM) return s.aterroM;
-    return t;
+    const r = projetoForaDoPlato(cotaEm(p), t, distanciaAoAnelComAresta(p, anelPlato), parametros);
+    return r ? r.cotaM : t;
   };
 }
 

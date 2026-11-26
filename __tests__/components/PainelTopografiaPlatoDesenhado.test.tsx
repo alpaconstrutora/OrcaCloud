@@ -6,7 +6,7 @@
  * Montagem copiada de `PainelTopografiaFase2.test.tsx`.
  */
 import React from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import PainelTopografia, { type TerraplenagemNoPainel } from '../../components/blueprint/PainelTopografia';
 import type { Topografia } from '../../hooks/useBlueprintTopografia';
@@ -145,4 +145,31 @@ describe('PainelTopografia · o platô desenhado', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Entendi' }));
     expect(t.onEsquecerAvisoDosLados).toHaveBeenCalledTimes(1);
   });
+
+  it('balanço de massa (25/11/2026, reel): Corte / Corte e aterro / Aterro, com a explicação do escolhido', () => {
+    const t = montar();
+    const grupo = screen.getByRole('radiogroup', { name: 'Balanço de massa' });
+    expect(within(grupo).getByRole('radio', { name: 'Corte e aterro' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByText(/rebaixa o que está acima e enche o que está abaixo/i)).toBeTruthy();
+    fireEvent.click(within(grupo).getByRole('radio', { name: 'Aterro' }));
+    expect(t.onParametros).toHaveBeenCalledWith({ modoDoBalanco: 'ATERRO' });
+  });
+
+  it('forma do talude: Suave mostra a largura (m) e esconde o 1:h; Reto é o de sempre', () => {
+    const t = montar({ parametros: { taludeCorteH: 1.5, taludeAterroH: 1.5, empolamentoPct: 25, contracaoPct: 15, formaDoTalude: 'SUAVE', larguraDoTaludeSuaveM: 5 } });
+    const grupo = screen.getByRole('radiogroup', { name: 'Forma do talude' });
+    expect(within(grupo).getByRole('radio', { name: 'Suave' }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.change(screen.getByLabelText('Largura do talude (m)'), { target: { value: '8' } });
+    expect(t.onParametros).toHaveBeenCalledWith({ larguraDoTaludeSuaveM: 8 });
+    expect(screen.queryByLabelText('Talude corte 1:')).toBeNull();
+    fireEvent.click(within(grupo).getByRole('radio', { name: 'Reto' }));
+    expect(t.onParametros).toHaveBeenCalledWith({ formaDoTalude: 'RETO' });
+  });
+
+  it('em Corte ou Aterro, o equilíbrio não se aplica: some o "Usar o equilíbrio" e o painel diz por quê', () => {
+    montar({ cotaPlatoM: 103, parametros: { taludeCorteH: 1.5, taludeAterroH: 1.5, empolamentoPct: 25, contracaoPct: 15, modoDoBalanco: 'CORTE' } });
+    expect(screen.queryByRole('button', { name: 'Usar o equilíbrio' })).toBeNull();
+    expect(screen.getByText(/só corta: corte e aterro não se compensam/i)).toBeTruthy();
+  });
 });
+

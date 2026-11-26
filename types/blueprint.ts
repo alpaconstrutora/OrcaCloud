@@ -112,6 +112,10 @@ export interface BlueprintTerraplenagemRow {
   /** Fase 6 (migration `aplicar_20270921000010`): drenagem traçada e caimento mínimo. */
   drenagem: LinhaDeDrenagem[];
   caimento_min_pct: number;
+  /** 25/11/2026 — o balanço de massa do platô (null = CORTE_E_ATERRO) e a forma do talude (null = RETO). */
+  modo_do_balanco?: 'CORTE' | 'CORTE_E_ATERRO' | 'ATERRO' | null;
+  forma_do_talude?: 'RETO' | 'SUAVE' | null;
+  largura_do_talude_suave_m?: number | null;
   /** Fase 7 (migration `aplicar_20270921000011`): hipóteses do pré-dimensionamento, parciais. */
   hidraulica: Partial<ParametrosHidraulicos>;
   estrutura: Partial<ParametrosEstruturais>;

@@ -15,8 +15,14 @@ import OperacionalChecklist from './OperacionalChecklist'
 import OperacionalEvidence from './OperacionalEvidence'
 import OperacionalNC from './OperacionalNC'
 import { formatDateBR as fmtDate } from './ui/Format'
+import { errorMessage } from '../hooks/useOrgContext'
+import { useToast } from '../hooks/useToast'
+import { useNomeDoUsuario, usePermissaoQualidadeDaOE } from '../hooks/usePermissaoQualidadeDaOE'
 
-type Tab = 'geral' | 'apontamentos' | 'checklist' | 'evidencias' | 'ncs' | 'historico'
+type Tab = 'geral' | 'apontamentos' | 'checklist' | 'inspecao' | 'evidencias' | 'ncs' | 'historico'
+
+/** Aba da tela da OE — o Kanban abre direto em `inspecao` quando a OE é solta em Aprovada/Reprovada. */
+export type AbaDaOE = Tab
 
 interface Props {
   workOrderId: string
@@ -24,7 +30,36 @@ interface Props {
   onBack: () => void
   onEdit: (id: string) => void
   onViewOther?: (id: string) => void
+  /** Aba em que a tela abre (padrão: Geral). */
+  abaInicial?: Tab
 }
+
+/** Validação de inspeção como a RPC `quality_aprovar_inspecao` grava (work_order_validations). */
+interface ValidacaoInspecao {
+  id: string
+  type: string
+  status: string
+  notes: string | null
+  created_at: string
+  liberado_por: string | null
+  liberado_em: string | null
+  procedimento_revisao: string | null
+  executores: Array<{ employee_id: string; nome: string | null; treinado: boolean }> | null
+}
+
+/**
+ * Aprovar/reprovar a inspeção é a RPC `quality_aprovar_inspecao` para TODA OE em `pending_inspection`:
+ * o banco recusa `approved` sem a validação que só ela grava (e, na OE controlada, também `rejected`).
+ */
+const ehDecisaoDeInspecao = (atual: WorkOrderStatus, proximo: WorkOrderStatus) =>
+  atual === 'pending_inspection' && (proximo === 'approved' || proximo === 'rejected')
+
+const rotuloDaTransicao = (atual: WorkOrderStatus, proximo: WorkOrderStatus) =>
+  ehDecisaoDeInspecao(atual, proximo)
+    ? (proximo === 'approved' ? 'Aprovar inspeção' : 'Reprovar inspeção')
+    : (TRANSITION_LABELS[proximo] ?? proximo)
+
+const MOTIVO_REPROVAR_SEM_MOTIVO = 'Descreva o motivo da reprovação para confirmar.'
 
 interface SuccessorRow {
   id: string
@@ -101,9 +136,14 @@ const TransitionModal: React.FC<{
   onCancel: () => void
   errors: string[]
   isLoading: boolean
-}> = ({ newStatus, onConfirm, onCancel, errors, isLoading }) => {
+  /** Título no lugar do rótulo padrão da transição ("Aprovar inspeção"/"Reprovar inspeção"). */
+  titulo?: string
+  /** Reprovar a inspeção: o motivo é obrigatório (o banco também exige). */
+  motivoObrigatorio?: boolean
+}> = ({ newStatus, onConfirm, onCancel, errors, isLoading, titulo, motivoObrigatorio = false }) => {
   const [reason, setReason] = useState('')
-  const label = TRANSITION_LABELS[newStatus] ?? newStatus
+  const label = titulo ?? TRANSITION_LABELS[newStatus] ?? newStatus
+  const faltaMotivo = motivoObrigatorio && !reason.trim()
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -123,15 +163,16 @@ const TransitionModal: React.FC<{
         )}
 
         <div>
-          <label className="block text-xs font-semibold text-slate-500 mb-1.5">
-            Motivo / Observação
+          <label htmlFor="transicao-motivo" className="block text-xs font-semibold text-slate-500 mb-1.5">
+            {motivoObrigatorio ? 'Motivo da reprovação (obrigatório)' : 'Motivo / Observação'}
           </label>
           <textarea
+            id="transicao-motivo"
             value={reason}
             onChange={e => setReason(e.target.value)}
             rows={3}
-            placeholder="Opcional — descreva o motivo da transição"
-            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+            placeholder={motivoObrigatorio ? 'O que não passou na inspeção' : 'Opcional — descreva o motivo da transição'}
+            className="w-full px-3 py-2 border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
           />
         </div>
 
@@ -142,14 +183,16 @@ const TransitionModal: React.FC<{
           >
             Cancelar
           </button>
-          <button
-            disabled={errors.length > 0 || isLoading}
-            onClick={() => onConfirm(reason)}
-            className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-          >
-            {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-            Confirmar
-          </button>
+          <span className="flex-1 flex" title={faltaMotivo ? MOTIVO_REPROVAR_SEM_MOTIVO : undefined}>
+            <button
+              disabled={errors.length > 0 || isLoading || faltaMotivo}
+              onClick={() => { if (!faltaMotivo) onConfirm(reason) }}
+              className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-xl text-sm font-black hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            >
+              {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+              Confirmar
+            </button>
+          </span>
         </div>
       </div>
     </div>
@@ -157,12 +200,38 @@ const TransitionModal: React.FC<{
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit, onViewOther }) => {
+const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit, onViewOther, abaInicial }) => {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [wo, setWo] = useState<Record<string, any> | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<Tab>('geral')
+  const [activeTab, setActiveTab] = useState<Tab>(abaInicial ?? 'geral')
+  const { showToast, localToast } = useToast()
+  const nomeDoUsuario = useNomeDoUsuario()
+  // Régua de "Aprovar inspeção" (canReleaseQualitySystem na org DONA DO SERVIÇO controlado da OE):
+  // só OE controlada.
+  const controlada = Boolean(wo?.controlled_item_id)
+  const permissao = usePermissaoQualidadeDaOE((wo?.controlled_item_id as string | undefined) ?? null)
+  const motivoSemLiberar = controlada ? permissao.motivoSemLiberacao : null
+  // Portão de inspeção NO MOMENTO (a RPC reconfere ao aprovar): NC aberta ou item desfeito depois do
+  // pedido de inspeção desliga "Aprovar inspeção" com as mensagens do banco. Erro fecha. Reprovar não
+  // depende dele. Reconfere ao trocar de aba (a pessoa corrige a ficha/NC e volta).
+  const [portaoInspecao, setPortaoInspecao] = useState<{ id: string; motivo: string | null } | null>(null)
+  const emInspecao = wo?.status === 'pending_inspection'
+  useEffect(() => {
+    if (!emInspecao) return
+    let vivo = true
+    workOrderService.portoesDaOE(workOrderId, 'pending_inspection')
+      .then(msgs => { if (vivo) setPortaoInspecao({ id: workOrderId, motivo: msgs.length > 0 ? msgs.join('; ') : null }) })
+      .catch((e: unknown) => {
+        if (vivo) setPortaoInspecao({ id: workOrderId, motivo: `Não foi possível conferir o portão da inspeção: ${errorMessage(e, 'erro desconhecido')}` })
+      })
+    return () => { vivo = false }
+  }, [workOrderId, emInspecao, wo, activeTab])
+  const motivoSemAprovar: string | null = !emInspecao
+    ? null
+    : (motivoSemLiberar
+      ?? (portaoInspecao?.id !== workOrderId ? 'Conferindo o portão da inspeção…' : portaoInspecao.motivo))
   const [pendingTransition, setPendingTransition] = useState<WorkOrderStatus | null>(null)
   const [transitionErrors, setTransitionErrors] = useState<string[]>([])
   const [isTransitioning, setIsTransitioning] = useState(false)
@@ -193,6 +262,14 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
   }, [workOrderId])
 
   const handleTransitionClick = async (newStatus: WorkOrderStatus) => {
+    if (wo && ehDecisaoDeInspecao(wo.status as WorkOrderStatus, newStatus)) {
+      // Os portões de aprovar a RPC reconfere na hora (P0001 com a mensagem); validateTransition daria
+      // "use Aprovar inspeção" — é justamente o que este botão faz.
+      if (newStatus === 'approved' ? motivoSemAprovar : motivoSemLiberar) return
+      setTransitionErrors([])
+      setPendingTransition(newStatus)
+      return
+    }
     const result = await workOrderService.validateTransition(workOrderId, newStatus)
     setTransitionErrors(result.errors)
     setPendingTransition(newStatus)
@@ -200,9 +277,15 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
 
   const handleTransitionConfirm = async (reason: string) => {
     if (!pendingTransition) return
+    const decisao = wo ? ehDecisaoDeInspecao(wo.status as WorkOrderStatus, pendingTransition) : false
+    const aprovar = pendingTransition === 'approved'
+    if (decisao && !aprovar && !reason.trim()) return // reprovar exige o motivo (o banco também)
     setIsTransitioning(true)
     try {
-      if (pendingTransition === (wo?.status as string) && wo?.status === 'blocked') {
+      if (decisao) {
+        await workOrderService.aprovarInspecao(workOrderId, aprovar, reason.trim())
+        showToast(aprovar ? 'Inspeção aprovada' : 'Inspeção reprovada', 'success')
+      } else if (pendingTransition === (wo?.status as string) && wo?.status === 'blocked') {
         await workOrderService.unblock(workOrderId, { reason })
       } else {
         await workOrderService.transition(workOrderId, pendingTransition, { reason })
@@ -210,7 +293,8 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
       setPendingTransition(null)
       await load()
     } catch (e: unknown) {
-      alert(e instanceof Error ? e.message : 'Erro na transição')
+      // P0001 (portões, por "; ") / 42501 (sem permissão): a mensagem do banco.
+      showToast(errorMessage(e, 'Erro na transição'), 'error')
     } finally {
       setIsTransitioning(false)
     }
@@ -246,6 +330,16 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
 
   return (
     <div className="space-y-5">
+      {/* Aviso (guia §13) — sem ToastProvider montado, o componente desenha o próprio */}
+      {localToast && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+          localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {localToast.message}
+        </div>
+      )}
+
       {/* Header */}
       <div className="flex flex-col md:flex-row md:items-start gap-4">
         <button
@@ -372,19 +466,27 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
                 Desbloquear
               </button>
             )}
-            {allowedNext.map(next => (
-              <button
-                key={next}
-                onClick={() => handleTransitionClick(next)}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest active:scale-95 transition-all ${
-                  next === 'blocked' ? 'bg-red-50 text-red-700 hover:bg-red-100' :
-                  next === 'rejected' ? 'bg-red-50 text-red-700 hover:bg-red-100' :
-                  'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-900/20'
-                }`}
-              >
-                {TRANSITION_LABELS[next] ?? next}
-              </button>
-            ))}
+            {allowedNext.map(next => {
+              // Desligado sempre diz o motivo, no invólucro (o botão desligado não recebe o mouse).
+              const motivo = ehDecisaoDeInspecao(status, next)
+                ? (next === 'approved' ? motivoSemAprovar : motivoSemLiberar)
+                : null
+              return (
+                <span key={next} className="inline-flex" title={motivo ?? undefined}>
+                  <button
+                    onClick={() => handleTransitionClick(next)}
+                    disabled={Boolean(motivo)}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-button font-black uppercase tracking-widest active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+                      next === 'blocked' ? 'bg-red-50 text-red-700 hover:bg-red-100' :
+                      next === 'rejected' ? 'bg-red-50 text-red-700 hover:bg-red-100' :
+                      'bg-blue-600 text-white hover:bg-blue-700 shadow-lg shadow-blue-900/20'
+                    }`}
+                  >
+                    {rotuloDaTransicao(status, next)}
+                  </button>
+                </span>
+              )
+            })}
           </div>
         </div>
       )}
@@ -395,6 +497,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
           <TabBtn active={activeTab === 'geral'}        label="Geral"        onClick={() => setActiveTab('geral')} />
           <TabBtn active={activeTab === 'apontamentos'} label="Apontamentos" badge={logCount}     onClick={() => setActiveTab('apontamentos')} />
           <TabBtn active={activeTab === 'checklist'}    label="Checklist"    badge={checklistTotal - checklistDone} onClick={() => setActiveTab('checklist')} />
+          <TabBtn active={activeTab === 'inspecao'}     label="Inspeção"     onClick={() => setActiveTab('inspecao')} />
           <TabBtn active={activeTab === 'evidencias'}   label="Evidências"   badge={evidenceCount} onClick={() => setActiveTab('evidencias')} />
           <TabBtn active={activeTab === 'ncs'}          label="NCs"          badge={openNcs}       onClick={() => setActiveTab('ncs')} />
           <TabBtn active={activeTab === 'historico'}    label="Histórico"    onClick={() => setActiveTab('historico')} />
@@ -571,6 +674,76 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
             />
           )}
 
+          {/* Tab: Inspeção — a última validação (gravada pela RPC "Aprovar inspeção") */}
+          {activeTab === 'inspecao' && (() => {
+            const ultima = ((wo.validations as ValidacaoInspecao[] | null) ?? [])
+              .filter(v => v.type === 'inspection' && (v.status === 'approved' || v.status === 'rejected'))
+              .sort((a, b) => new Date(b.liberado_em ?? b.created_at).getTime() - new Date(a.liberado_em ?? a.created_at).getTime())[0]
+            const executores = ultima?.executores ?? []
+            return (
+              <section aria-label="Inspeção" className="space-y-4">
+                {status === 'pending_inspection' && (
+                  <p className="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-[10px] px-4 py-3">
+                    Aguardando inspeção: use "Aprovar inspeção" ou "Reprovar inspeção" em Ações disponíveis.
+                  </p>
+                )}
+                {!ultima ? (
+                  <p className="text-sm text-slate-500 text-center py-4">Nenhuma inspeção registrada</p>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 mb-0.5">Resultado</p>
+                        <p className={`text-sm font-bold ${ultima.status === 'approved' ? 'text-emerald-700' : 'text-red-700'}`}>
+                          {ultima.status === 'approved' ? 'Aprovada' : 'Reprovada'}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 mb-0.5">Quem</p>
+                        <p className="text-sm font-bold text-slate-900">{nomeDoUsuario(ultima.liberado_por)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 mb-0.5">Quando</p>
+                        <p className="text-sm font-bold text-slate-900">{fmtDateTime(ultima.liberado_em ?? ultima.created_at)}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 mb-0.5">Procedimento</p>
+                        <p className="text-sm font-bold text-slate-900">
+                          {ultima.procedimento_revisao ? `Revisão ${ultima.procedimento_revisao}` : '—'}
+                        </p>
+                      </div>
+                    </div>
+                    {ultima.notes && (
+                      <div>
+                        <p className="text-xs font-semibold text-slate-500 mb-0.5">Observação</p>
+                        <p className="text-sm text-slate-900">{ultima.notes}</p>
+                      </div>
+                    )}
+                    <div>
+                      <p className="text-xs font-semibold text-slate-500 mb-1.5">Executores</p>
+                      {executores.length === 0 ? (
+                        <p className="text-sm text-slate-500">
+                          {controlada ? 'Nenhum executor registrado na aprovação.' : 'OE sem serviço controlado: executores não são registrados na inspeção.'}
+                        </p>
+                      ) : (
+                        <ul className="divide-y divide-slate-100 border border-slate-100 rounded-[10px]">
+                          {executores.map(ex => (
+                            <li key={ex.employee_id} className="flex items-center justify-between gap-3 px-3 py-2">
+                              <span className="text-sm text-slate-900">{ex.nome ?? 'Colaborador sem nome visível'}</span>
+                              <span className={`text-sm ${ex.treinado ? 'text-emerald-700' : 'text-red-700'}`}>
+                                Treinado na revisão: {ex.treinado ? 'sim' : 'não'}
+                              </span>
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </section>
+            )
+          })()}
+
           {/* Tab: Evidências */}
           {activeTab === 'evidencias' && (
             <OperacionalEvidence
@@ -581,10 +754,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
 
           {/* Tab: NCs */}
           {activeTab === 'ncs' && (
-            <OperacionalNC
-              workOrderId={workOrderId}
-              orgId={orgId}
-            />
+            <OperacionalNC workOrderId={workOrderId} />
           )}
 
           {/* Tab: Histórico */}
@@ -627,6 +797,8 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
       {pendingTransition && (
         <TransitionModal
           newStatus={pendingTransition}
+          titulo={rotuloDaTransicao(status, pendingTransition)}
+          motivoObrigatorio={ehDecisaoDeInspecao(status, pendingTransition) && pendingTransition === 'rejected'}
           errors={transitionErrors}
           isLoading={isTransitioning}
           onConfirm={handleTransitionConfirm}

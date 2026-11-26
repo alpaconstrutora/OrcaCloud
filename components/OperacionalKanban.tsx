@@ -22,7 +22,16 @@ import { supabase } from '../lib/supabase'
 import { workOrderService } from '../services/workOrderService'
 import { ALLOWED_TRANSITIONS } from '../types/operational-control'
 import type { WorkOrderStatus, WorkOrderPriority } from '../types/operational-control'
+import type { AbaDaOE } from './OperacionalDetail'
+import { useToast } from '../hooks/useToast'
 import Button from './ui/Button'
+
+/**
+ * Colunas que não se alcançam arrastando: aprovar/reprovar a inspeção é a RPC "Aprovar inspeção" (o banco
+ * recusa `approved` — e, na OE controlada, `rejected` — sem a validação que só ela grava). Soltar ali abre
+ * a OE na aba Inspeção.
+ */
+const COLUNAS_DA_INSPECAO: ReadonlySet<WorkOrderStatus> = new Set(['approved', 'rejected'])
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -253,7 +262,8 @@ const KanbanColumn: React.FC<{
 interface Props {
   projectId: string
   orgId: string
-  onViewDetail: (id: string) => void
+  /** `aba`: em que aba a tela da OE abre (soltar em Aprovada/Reprovada abre em `inspecao`). */
+  onViewDetail: (id: string, aba?: AbaDaOE) => void
   onCreateNew: () => void
 }
 
@@ -262,6 +272,7 @@ const OperacionalKanban: React.FC<Props> = ({
   onViewDetail,
   onCreateNew,
 }) => {
+  const { showToast, localToast } = useToast()
   const [workOrders, setWorkOrders] = useState<WorkOrderRow[]>([])
   const [loading, setLoading] = useState(true)
   const [activeId, setActiveId] = useState<string | null>(null)
@@ -354,6 +365,12 @@ const OperacionalKanban: React.FC<Props> = ({
     if (!wo || wo.status === targetStatus) return
     if (!ALLOWED_TRANSITIONS[wo.status].includes(targetStatus)) return
 
+    if (COLUNAS_DA_INSPECAO.has(targetStatus)) {
+      showToast('Use Aprovar inspeção na tela da OE', 'error')
+      onViewDetail(draggedId, 'inspecao')
+      return
+    }
+
     // Optimistic
     setWorkOrders(prev => prev.map(w => w.id === draggedId ? { ...w, status: targetStatus } : w))
     setTransitionError(null)
@@ -366,7 +383,7 @@ const OperacionalKanban: React.FC<Props> = ({
       setTransitionError(e instanceof Error ? e.message : 'Erro na transição')
       setTimeout(() => setTransitionError(null), 6000)
     }
-  }, [workOrders])
+  }, [workOrders, showToast, onViewDetail])
 
   // ── Render ───────────────────────────────────────────────────────────────────
   if (loading) {
@@ -379,6 +396,16 @@ const OperacionalKanban: React.FC<Props> = ({
 
   return (
     <div className="flex flex-col gap-4">
+      {/* Aviso (guia §13) — sem ToastProvider montado, o componente desenha o próprio */}
+      {localToast && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+          localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          {localToast.message}
+        </div>
+      )}
+
       {/* Transition error toast */}
       {transitionError && (
         <div className="flex items-center gap-3 bg-red-50 border border-red-200 rounded-2xl px-4 py-3">

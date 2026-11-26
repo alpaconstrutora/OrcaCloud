@@ -1,6 +1,6 @@
 import React from 'react';
-import type { ItemControlado, NivelSiac, ProcedimentoResumo, TipoItemControlado } from '../../types/qualidadeSiac';
-import { MINIMO_MATERIAIS, metaDoNivel, procedimentoConta } from '../../utils/qualidadeSiac';
+import type { InspecaoAprovada, ItemControlado, NivelSiac, ProcedimentoResumo, TipoItemControlado } from '../../types/qualidadeSiac';
+import { MINIMO_MATERIAIS, contarAplicados, metaDoNivel, procedimentoConta } from '../../utils/qualidadeSiac';
 import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac';
 
 /**
@@ -10,9 +10,10 @@ import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac'
  *  - N = itens ATIVOS do tipo (dispensado sai de N);
  *  - "procedimento aprovado" conta só documento com versão ativa, não arquivado e aprovado depois da
  *    versão ativa (`procedimentoConta`);
- *  - "aplicados com registro" e "em obra em andamento" ainda não existem: aparecem com a META do nível e a
- *    fase em que começam (2 para serviços, 3 para materiais) — nunca com uma contagem zero, que seria o
- *    contador que mente;
+ *  - serviços (fase 2): "aplicados com registro" e "em obra em andamento" contam pelas inspeções aprovadas
+ *    (`contarAplicados`) dos serviços ativos com procedimento que conta — "N (meta M)". Inspeções que não
+ *    puderam ser lidas não viram zero: a linha diz que não contou (o contador que mente);
+ *  - materiais: ainda não há o que contar — aparecem com a META e "começa na fase 3", nunca com zero;
  *  - materiais com menos de 20 ativos mostram o aviso do mínimo do Anexo 4.
  *
  * Nível alvo é POR ORGANIZAÇÃO (REGRA #5): com o topo em "Todas", uma linha por organização, com o
@@ -20,7 +21,8 @@ import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac'
  */
 export const ROTULO_NIVEL: Record<NivelSiac, string> = { B: 'Nível B', A: 'Nível A' };
 
-const FASE_QUE_COMECA: Record<TipoItemControlado, number> = { SERVICO: 2, MATERIAL: 3 };
+/** Fase em que materiais passam a contar "aplicados" e "em obra" (serviços já contam desde a fase 2). */
+const FASE_DOS_MATERIAIS = 3;
 const NOME_DO_TIPO: Record<TipoItemControlado, string> = { SERVICO: 'Serviços', MATERIAL: 'Materiais' };
 
 interface Props {
@@ -28,6 +30,13 @@ interface Props {
     niveis: Record<string, NivelSiac>;
     procedimentos: Record<string, ProcedimentoResumo>;
     nomesDasOrgs: Record<string, string>;
+    /**
+     * Inspeções aprovadas dos SGQs das organizações do painel (`inspecoesAprovadas`); `contarAplicados`
+     * casa pelo serviço, então a lista de várias organizações serve a cada linha.
+     */
+    inspecoes: InspecaoAprovada[];
+    /** A leitura das inspeções falhou: a linha de serviços não conta (nunca um zero que mente). */
+    erroInspecoes: string | null;
     podeEditar: boolean;
     onNivel(orgId: string, nivel: NivelSiac): void;
 }
@@ -35,24 +44,37 @@ interface Props {
 /** A linha de um tipo (serviços ou materiais) para uma organização. */
 function linhaDoTipo(
     itens: ItemControlado[], tipo: TipoItemControlado, nivel: NivelSiac, procedimentos: Record<string, ProcedimentoResumo>,
+    inspecoes: InspecaoAprovada[] | null,
 ): { texto: string; abaixoDoMinimo: string | null } {
     const ativos = itens.filter(i => i.tipo === tipo && i.situacao === 'ATIVO');
     const n = ativos.length;
     const meta = metaDoNivel(n, tipo, nivel);
-    const comProcedimento = ativos.filter(i =>
-        procedimentoConta(i.procedure_document_id ? procedimentos[i.procedure_document_id] ?? null : null)).length;
-    const fase = FASE_QUE_COMECA[tipo];
-    const texto = `${NOME_DO_TIPO[tipo]} (${n}) · procedimento aprovado ${comProcedimento}/${meta.comProcedimento}`
+    const comProcedimentoQueConta = ativos.filter(i =>
+        procedimentoConta(i.procedure_document_id ? procedimentos[i.procedure_document_id] ?? null : null));
+    let aplicacao: string;
+    if (tipo === 'MATERIAL') {
         // A META das colunas futuras aparece; a contagem não (ainda não há o que contar — nunca zero).
-        + ` · aplicados com registro: meta ${meta.aplicadosComRegistro} — começa na fase ${fase}`
-        + ` · em obra em andamento: meta ${meta.emObraEmAndamento} — começa na fase ${fase}`;
+        aplicacao = ` · aplicados com registro: meta ${meta.aplicadosComRegistro} — começa na fase ${FASE_DOS_MATERIAIS}`
+            + ` · em obra em andamento: meta ${meta.emObraEmAndamento} — começa na fase ${FASE_DOS_MATERIAIS}`;
+    } else if (inspecoes === null) {
+        aplicacao = ` · aplicados com registro: não contado (meta ${meta.aplicadosComRegistro})`
+            + ` · em obra em andamento: não contado (meta ${meta.emObraEmAndamento})`;
+    } else {
+        // Só conta serviço ativo com procedimento que conta (regra do desenho, "Aplicados com registro").
+        const c = contarAplicados(inspecoes, comProcedimentoQueConta);
+        aplicacao = ` · aplicados com registro: ${c.aplicados} (meta ${meta.aplicadosComRegistro})`
+            + ` · em obra em andamento: ${c.emObra} (meta ${meta.emObraEmAndamento})`;
+    }
+    const texto = `${NOME_DO_TIPO[tipo]} (${n}) · procedimento aprovado ${comProcedimentoQueConta.length}/${meta.comProcedimento}${aplicacao}`;
     const abaixoDoMinimo = tipo === 'MATERIAL' && n < MINIMO_MATERIAIS
         ? `abaixo do mínimo do Anexo 4: ${n} de ${MINIMO_MATERIAIS}`
         : null;
     return { texto, abaixoDoMinimo };
 }
 
-export const PainelDoNivel: React.FC<Props> = ({ itens, niveis, procedimentos, nomesDasOrgs, podeEditar, onNivel }) => {
+export const PainelDoNivel: React.FC<Props> = ({
+    itens, niveis, procedimentos, nomesDasOrgs, inspecoes, erroInspecoes, podeEditar, onNivel,
+}) => {
     const orgs = React.useMemo(() => {
         const ids = new Set<string>([...Object.keys(niveis), ...itens.map(i => i.organization_id)]);
         return [...ids].sort((a, b) => (nomesDasOrgs[a] ?? a).localeCompare(nomesDasOrgs[b] ?? b, 'pt-BR'));
@@ -67,13 +89,16 @@ export const PainelDoNivel: React.FC<Props> = ({ itens, niveis, procedimentos, n
     return (
         <section aria-label={titulo} className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 mb-3">
             <h2 className="text-sm font-semibold text-gray-900">{titulo}</h2>
+            {erroInspecoes && (
+                <p className="mt-2 text-sm text-red-700">Não foi possível contar as inspeções aprovadas: {erroInspecoes}</p>
+            )}
             <ul className="mt-3 divide-y divide-gray-100">
                 {orgs.map(org => {
                     const nivel = niveis[org] ?? 'B';
                     const doOrg = itens.filter(i => i.organization_id === org);
                     const nome = nomesDasOrgs[org] ?? 'Organização fora da lista';
-                    const servicos = linhaDoTipo(doOrg, 'SERVICO', nivel, procedimentos);
-                    const materiais = linhaDoTipo(doOrg, 'MATERIAL', nivel, procedimentos);
+                    const servicos = linhaDoTipo(doOrg, 'SERVICO', nivel, procedimentos, erroInspecoes ? null : inspecoes);
+                    const materiais = linhaDoTipo(doOrg, 'MATERIAL', nivel, procedimentos, null);
                     const idSeletor = `qualidade-nivel-${org}`;
                     return (
                         <li key={org} className="flex flex-col md:flex-row md:items-start gap-3 py-3 first:pt-0 last:pb-0">

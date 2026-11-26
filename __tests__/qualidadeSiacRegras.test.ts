@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   ANEXO4_SERVICOS,
   SUGESTAO_MATERIAIS,
@@ -10,8 +10,11 @@ import {
   rotuloDosTreinados,
   treinamentoVigente,
   motivoDoProcedimentoNaoContar,
+  sugerirServico,
+  contarAplicados,
+  hojeLocal,
 } from '../utils/qualidadeSiac';
-import type { ProcedimentoResumo, RegistroTreinamento } from '../types/qualidadeSiac';
+import type { InspecaoAprovada, ItemControlado, ProcedimentoResumo, RegistroTreinamento } from '../types/qualidadeSiac';
 
 describe('listas fixas do Anexo 4', () => {
   it('traz os 27 serviços, numerados de 1 a 27 sem buraco', () => {
@@ -134,5 +137,135 @@ describe('contarTreinados', () => {
   it('rotula', () => {
     expect(rotuloDosTreinados({ proprios: 5, empreiteira: 3, revisaoAnterior: 0 })).toBe('8 (5 próprios, 3 empreit.)');
     expect(rotuloDosTreinados({ proprios: 0, empreiteira: 0, revisaoAnterior: 4 })).toBe('—');
+  });
+});
+
+describe('validade do treinamento (fase 2: VENCIDO sozinho não tira; data_validade passada tira)', () => {
+  const versao = '2026-11-20T10:00:00Z';
+  const r = (employee_id: string, data_validade: string | null | undefined, externo = false): RegistroTreinamento => ({
+    employee_id, data_realizacao: '2026-11-21', aprovado: true, externo, registrado_em: null, data_validade,
+  });
+
+  it('treinamentoVigente: sem validade ou validade a partir de hoje conta; anterior a hoje não', () => {
+    const hoje = '2026-11-26';
+    expect(treinamentoVigente(r('A', null), versao, hoje)).toBe(true);
+    expect(treinamentoVigente(r('A', undefined), versao, hoje)).toBe(true);
+    expect(treinamentoVigente(r('A', '2026-11-26'), versao, hoje)).toBe(true);
+    expect(treinamentoVigente(r('A', '2027-01-01'), versao, hoje)).toBe(true);
+    expect(treinamentoVigente(r('A', '2026-11-25'), versao, hoje)).toBe(false);
+  });
+
+  it('contarTreinados não conta registro vencido (nem como revisão anterior)', () => {
+    expect(contarTreinados([
+      r('A', '2026-11-25'),
+      r('B', '2026-12-31'),
+      r('C', '2026-11-01', true),
+      r('D', null, true),
+    ], versao, '2026-11-26')).toEqual({ proprios: 1, empreiteira: 1, revisaoAnterior: 0 });
+  });
+
+  it('a mesma pessoa com um registro vencido e outro válido continua treinada', () => {
+    expect(contarTreinados([r('A', '2026-01-01'), r('A', null)], versao, '2026-11-26'))
+      .toEqual({ proprios: 1, empreiteira: 0, revisaoAnterior: 0 });
+  });
+
+  it('hojeLocal usa a data LOCAL (não a de UTC)', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 10, 26, 23, 30)); // 26/11 23:30 no fuso local
+      expect(hojeLocal()).toBe('2026-11-26');
+      vi.setSystemTime(new Date(2026, 10, 27, 0, 15));
+      expect(hojeLocal()).toBe('2026-11-27');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('sem hoje informado, usa hojeLocal (validade no passado distante nunca conta)', () => {
+    expect(treinamentoVigente(r('A', '2000-01-01'), versao)).toBe(false);
+    expect(treinamentoVigente(r('A', '2999-01-01'), versao)).toBe(true);
+  });
+});
+
+const item = (id: string, codigos: string[], extra: Partial<ItemControlado> = {}): ItemControlado => ({
+  id, organization_id: 'alpa', tipo: 'SERVICO', nome: id, etapa: null, origem: 'ANEXO4', anexo4_numero: null,
+  chave_padrao: null, substitui_item_id: null, situacao: 'ATIVO', justificativa: null, procedure_document_id: null,
+  training_course_id: null, ordem: 1, codigos, ...extra,
+});
+
+describe('sugerirServico — pelo código do item do orçamento ou da atividade do planejamento', () => {
+  const itens = [item('forma', ['92873', '92874']), item('concreto', ['94965']), item('cimento', ['111'], { tipo: 'MATERIAL' })];
+
+  it('acha pelo código do orçamento', () => {
+    expect(sugerirServico({ orcamento: '94965' }, itens)?.id).toBe('concreto');
+  });
+  it('acha pelo código do planejamento', () => {
+    expect(sugerirServico({ orcamento: null, planejamento: ' 92874 ' }, itens)?.id).toBe('forma');
+  });
+  it('o código do orçamento vem antes do planejamento', () => {
+    expect(sugerirServico({ orcamento: '92873', planejamento: '94965' }, itens)?.id).toBe('forma');
+    expect(sugerirServico({ orcamento: '000', planejamento: '94965' }, itens)?.id).toBe('concreto');
+  });
+  it('sem código (ou código sem serviço) → null; material não é sugerido como serviço', () => {
+    expect(sugerirServico({}, itens)).toBeNull();
+    expect(sugerirServico({ orcamento: '', planejamento: null }, itens)).toBeNull();
+    expect(sugerirServico({ orcamento: '999' }, itens)).toBeNull();
+    expect(sugerirServico({ orcamento: '111' }, itens)).toBeNull();
+  });
+});
+
+describe('contarAplicados — inspeção aprovada com TODOS os executores treinados', () => {
+  const insp = (
+    work_order_id: string, controlled_item_id: string, obra_status: string | null, aprovado_em: string,
+    treinados: boolean[],
+  ): InspecaoAprovada => ({
+    work_order_id, controlled_item_id, obra_status, aprovado_em,
+    executores: treinados.map((t, i) => ({ employee_id: `e${i}`, nome: `E${i}`, treinado: t })),
+  });
+  const itens = [item('forma', []), item('concreto', [])];
+
+  it('2 inspeções do mesmo serviço (uma com não treinado, outra toda treinada em obra em andamento)', () => {
+    const r = contarAplicados([
+      insp('wo1', 'forma', 'Em andamento', '2026-11-10T10:00:00Z', [true, false]),
+      insp('wo2', 'forma', 'Em andamento', '2026-11-20T10:00:00Z', [true, true, true]),
+    ], itens);
+    expect(r.aplicados).toBe(1);
+    expect(r.emObra).toBe(1);
+    expect(r.porItem).toEqual({ forma: { treinados: 3, executores: 3 } });
+  });
+
+  it('porItem é da inspeção mais recente, mesmo que ela não conte', () => {
+    const r = contarAplicados([
+      insp('wo2', 'forma', 'Em andamento', '2026-11-20T10:00:00Z', [true, true]),
+      insp('wo1', 'forma', 'Em andamento', '2026-11-25T10:00:00Z', [true, false, false]),
+    ], itens);
+    expect(r.aplicados).toBe(1);
+    expect(r.porItem.forma).toEqual({ treinados: 1, executores: 3 });
+  });
+
+  it('obra "Concluída" (ou sem obraStatus) conta em aplicados, não em obra', () => {
+    const r = contarAplicados([
+      insp('wo1', 'forma', 'Concluída', '2026-11-10T10:00:00Z', [true]),
+      insp('wo2', 'concreto', null, '2026-11-10T10:00:00Z', [true]),
+    ], itens);
+    expect(r).toMatchObject({ aplicados: 2, emObra: 0 });
+  });
+
+  it('em obra exige a MESMA inspeção toda treinada e em andamento', () => {
+    const r = contarAplicados([
+      insp('wo1', 'forma', 'Concluída', '2026-11-10T10:00:00Z', [true]),
+      insp('wo2', 'forma', 'Em andamento', '2026-11-11T10:00:00Z', [false]),
+    ], itens);
+    expect(r).toMatchObject({ aplicados: 1, emObra: 0 });
+  });
+
+  it('sem executores não conta; serviço fora da lista não conta nem aparece', () => {
+    const r = contarAplicados([
+      insp('wo1', 'forma', 'Em andamento', '2026-11-10T10:00:00Z', []),
+      insp('wo2', 'outro', 'Em andamento', '2026-11-10T10:00:00Z', [true]),
+    ], itens);
+    expect(r.aplicados).toBe(0);
+    expect(r.emObra).toBe(0);
+    expect(r.porItem).toEqual({ forma: { treinados: 0, executores: 0 } });
   });
 });

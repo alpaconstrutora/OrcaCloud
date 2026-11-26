@@ -1,7 +1,14 @@
 import React, { useState, useEffect } from 'react'
 import { AlertTriangle, Plus, Loader2, AlertCircle, CheckCircle2, Clock } from 'lucide-react'
 import { supabase } from '../lib/supabase'
+import { workOrderService } from '../services/workOrderService'
+import type { NCEficacia, NonConformanceHistoryRow } from '../types/operational-control'
+import { errorMessage } from '../hooks/useOrgContext'
+import { useToast } from '../hooks/useToast'
+import { useNomeDoUsuario } from '../hooks/usePermissaoQualidadeDaOE'
 import Button from './ui/Button'
+import { useConfirm } from './ui/confirm'
+import { Sheet, SheetDescription, SheetFooter, SheetHeader, SheetPanel, SheetTitle } from './ui/sheet'
 
 interface NonConformance {
   id: string
@@ -10,6 +17,13 @@ interface NonConformance {
   status: 'open' | 'in_treatment' | 'closed'
   due_date: string | null
   corrective_action: string | null
+  causa: string | null
+  eficacia: NCEficacia | null
+  eficacia_em: string | null
+  eficacia_por: string | null
+  /** Motivo da última verificação de eficácia (gravado no "não eficaz"). */
+  eficacia_motivo: string | null
+  resolution_evidence_id: string | null
   created_at: string
   closed_at: string | null
   checklist_item_description?: string | null
@@ -17,20 +31,36 @@ interface NonConformance {
 
 interface Props {
   workOrderId: string
-  orgId: string
 }
 
 const SEVERITY_CONFIG = {
-  minor: { label: 'Leve', cls: 'bg-yellow-100 text-yellow-700' },
-  moderate: { label: 'Moderada', cls: 'bg-orange-100 text-orange-700' },
-  major: { label: 'Grave', cls: 'bg-red-100 text-red-700' },
+  minor: { label: 'Leve', cls: 'text-yellow-700' },
+  moderate: { label: 'Moderada', cls: 'text-orange-700' },
+  major: { label: 'Grave', cls: 'text-red-700' },
 }
 
 const STATUS_CONFIG = {
-  open: { label: 'Aberta', cls: 'bg-red-100 text-red-700', icon: AlertTriangle },
-  in_treatment: { label: 'Em tratamento', cls: 'bg-amber-100 text-amber-700', icon: Clock },
-  closed: { label: 'Encerrada', cls: 'bg-green-100 text-green-700', icon: CheckCircle2 },
+  open: { label: 'Aberta', cls: 'text-red-700', icon: AlertTriangle },
+  in_treatment: { label: 'Em tratamento', cls: 'text-amber-700', icon: Clock },
+  closed: { label: 'Encerrada', cls: 'text-green-700', icon: CheckCircle2 },
 }
+
+const EFICACIA_LABELS: Record<NCEficacia, string> = {
+  pendente: 'pendente',
+  eficaz: 'eficaz',
+  nao_eficaz: 'não eficaz',
+}
+
+const MOTIVO_SEM_CAUSA = 'Informe a causa para encerrar a não conformidade.'
+const MOTIVO_SEM_ACAO = 'Informe a ação corretiva para encerrar a não conformidade.'
+const MOTIVO_NAO_EFICAZ_SEM_MOTIVO = 'Informe o motivo para registrar a correção como não eficaz.'
+
+const fmtDataHora = (d: string | null) =>
+  d ? new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
+
+const CAMPO_TEXTO = 'w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-red-400 resize-none'
+const CAMPO_LINHA = 'w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-red-400'
+const ROTULO = 'text-xs font-semibold text-slate-500'
 
 const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
   const [ncs, setNcs] = useState<NonConformance[]>([])
@@ -44,15 +74,39 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
     description: '',
     severity: 'minor' as 'minor' | 'moderate' | 'major',
     dueDate: '',
+    causa: '',
     correctiveAction: '',
   })
+
+  // Encerrar (Sheet): causa e ação corretiva obrigatórias, foto da correção opcional.
+  const [encerrarDe, setEncerrarDe] = useState<NonConformance | null>(null)
+  const [encerrarForm, setEncerrarForm] = useState({ causa: '', acao: '' })
+  const [foto, setFoto] = useState<File | null>(null)
+  /** Foto já enviada nesta tentativa: se o encerramento falhar, tentar de novo não sobe outra. */
+  const [fotoEnviada, setFotoEnviada] = useState<{ file: File; id: string } | null>(null)
+  const [encerrando, setEncerrando] = useState(false)
+
+  // Verificar eficácia (Sheet)
+  const [eficaciaDe, setEficaciaDe] = useState<NonConformance | null>(null)
+  const [motivoNaoEficaz, setMotivoNaoEficaz] = useState('')
+  const [registrandoEficacia, setRegistrandoEficacia] = useState(false)
+
+  // Histórico (Sheet)
+  const [historicoDe, setHistoricoDe] = useState<NonConformance | null>(null)
+  const [historico, setHistorico] = useState<NonConformanceHistoryRow[]>([])
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false)
+
+  const confirm = useConfirm()
+  const { showToast, localToast } = useToast()
+  const nomeDoUsuario = useNomeDoUsuario()
 
   useEffect(() => {
     loadNCs()
   }, [workOrderId])
 
-  const loadNCs = async () => {
-    setLoading(true)
+  /** `silencioso`: recarrega depois de uma ação sem trocar a lista pelo "carregando". */
+  const loadNCs = async (silencioso = false) => {
+    if (!silencioso) setLoading(true)
     setError(null)
     try {
       const { data, error: fetchErr } = await supabase
@@ -75,7 +129,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
       }))
       setNcs(mapped)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar NCs')
+      setError(errorMessage(e, 'Erro ao carregar NCs'))
     } finally {
       setLoading(false)
     }
@@ -84,39 +138,173 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setSaving(true)
-    setError(null)
     try {
-      const { error: insErr } = await supabase.from('non_conformances').insert({
-        work_order_id: workOrderId,
+      await workOrderService.createNonConformance({
+        workOrderId,
         description: form.description,
         severity: form.severity,
-        due_date: form.dueDate || null,
-        corrective_action: form.correctiveAction || null,
-        status: 'open',
+        dueDate: form.dueDate || undefined,
+        causa: form.causa || undefined,
+        correctiveAction: form.correctiveAction || undefined,
       })
-      if (insErr) throw insErr
-      setForm({ description: '', severity: 'minor', dueDate: '', correctiveAction: '' })
+      setForm({ description: '', severity: 'minor', dueDate: '', causa: '', correctiveAction: '' })
       setShowForm(false)
-      await loadNCs()
+      await loadNCs(true)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao registrar NC')
+      showToast(errorMessage(e, 'Erro ao registrar NC'), 'error')
     } finally {
       setSaving(false)
     }
   }
 
-  const handleStatusChange = async (id: string, newStatus: NonConformance['status']) => {
-    setError(null)
+  const iniciarTratamento = async (id: string) => {
     try {
-      const updates: Record<string, unknown> = { status: newStatus }
-      if (newStatus === 'closed') updates.closed_at = new Date().toISOString()
-      const { error: updErr } = await supabase.from('non_conformances').update(updates).eq('id', id)
+      const { error: updErr } = await supabase.from('non_conformances').update({ status: 'in_treatment' }).eq('id', id)
       if (updErr) throw updErr
-      await loadNCs()
+      await loadNCs(true)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao atualizar NC')
+      showToast(errorMessage(e, 'Erro ao atualizar NC'), 'error')
     }
   }
+
+  // ── Encerrar ────────────────────────────────────────────────────────────────
+
+  const abrirEncerrar = (nc: NonConformance) => {
+    setEncerrarDe(nc)
+    setEncerrarForm({ causa: nc.causa ?? '', acao: nc.corrective_action ?? '' })
+    setFoto(null)
+    setFotoEnviada(null)
+  }
+
+  const motivoSemEncerrar = !encerrarForm.causa.trim()
+    ? MOTIVO_SEM_CAUSA
+    : !encerrarForm.acao.trim()
+      ? MOTIVO_SEM_ACAO
+      : null
+
+  const encerrarSujo = Boolean(encerrarDe) && (
+    encerrarForm.causa !== (encerrarDe?.causa ?? '') ||
+    encerrarForm.acao !== (encerrarDe?.corrective_action ?? '') ||
+    foto !== null
+  )
+
+  /** X e "Cancelar": com texto/foto, pergunta antes de descartar (Esc e clique fora: `dirty` do Sheet). */
+  const confirmarDescarte = () => confirm({
+    title: 'Sair sem salvar?',
+    message: 'Há alterações não salvas. Se sair agora, elas serão perdidas.',
+    variant: 'warning',
+    confirmLabel: 'Sair e descartar',
+    cancelLabel: 'Continuar editando',
+  })
+
+  const fecharEncerrar = async () => {
+    if (encerrarSujo && !encerrando && !(await confirmarDescarte())) return
+    setEncerrarDe(null)
+  }
+
+  const handleEncerrar = async () => {
+    const nc = encerrarDe
+    if (!nc || motivoSemEncerrar || encerrando) return
+    setEncerrando(true)
+    try {
+      let evidenciaId: string | undefined
+      if (foto) {
+        if (fotoEnviada?.file === foto) {
+          evidenciaId = fotoEnviada.id
+        } else {
+          // A pasta é a da org DA OE (o service lê work_orders.org_id) — não a do topo (REGRA #5).
+          evidenciaId = await workOrderService.enviarFotoEvidencia({
+            workOrderId,
+            file: foto,
+            prefixo: `nc_${nc.id}`,
+            gate: 'free',
+            description: `Correção da NC: ${nc.description}`,
+          })
+          setFotoEnviada({ file: foto, id: evidenciaId })
+        }
+      }
+      await workOrderService.encerrarNC(nc.id, {
+        causa: encerrarForm.causa,
+        acaoCorretiva: encerrarForm.acao,
+        ...(evidenciaId ? { evidenciaId } : {}),
+      })
+      setEncerrarDe(null)
+      showToast('Não conformidade encerrada — a eficácia fica pendente de verificação.')
+      await loadNCs(true)
+    } catch (e: unknown) {
+      showToast(errorMessage(e, 'Erro ao encerrar a NC'), 'error')
+    } finally {
+      setEncerrando(false)
+    }
+  }
+
+  // ── Eficácia ────────────────────────────────────────────────────────────────
+
+  const abrirEficacia = (nc: NonConformance) => {
+    setEficaciaDe(nc)
+    setMotivoNaoEficaz('')
+  }
+
+  const eficaciaSujo = Boolean(eficaciaDe) && motivoNaoEficaz.trim() !== ''
+
+  const fecharEficacia = async () => {
+    if (eficaciaSujo && !registrandoEficacia && !(await confirmarDescarte())) return
+    setEficaciaDe(null)
+  }
+
+  const handleEficacia = async (eficaz: boolean) => {
+    const nc = eficaciaDe
+    if (!nc || registrandoEficacia) return
+    const motivo = motivoNaoEficaz.trim()
+    if (!eficaz && !motivo) return
+    // O motivo é do "não eficaz": registrar eficaz com motivo digitado descarta o texto — pergunta antes.
+    if (eficaz && motivo) {
+      const ok = await confirm({
+        title: 'Registrar como eficaz?',
+        message: 'O motivo digitado é para o "não eficaz" e não será gravado.',
+        variant: 'warning',
+        confirmLabel: 'Registrar eficaz',
+        cancelLabel: 'Voltar',
+      })
+      if (!ok) return
+    }
+    setRegistrandoEficacia(true)
+    try {
+      if (eficaz) await workOrderService.registrarEficacia(nc.id, true)
+      else await workOrderService.registrarEficacia(nc.id, false, motivo)
+      setEficaciaDe(null)
+      showToast(eficaz ? 'Correção verificada como eficaz.' : 'Não eficaz: a não conformidade foi reaberta.')
+      await loadNCs(true)
+    } catch (e: unknown) {
+      showToast(errorMessage(e, 'Erro ao registrar a eficácia'), 'error')
+    } finally {
+      setRegistrandoEficacia(false)
+    }
+  }
+
+  // ── Histórico ───────────────────────────────────────────────────────────────
+
+  const abrirHistorico = async (nc: NonConformance) => {
+    setHistoricoDe(nc)
+    setHistorico([])
+    setCarregandoHistorico(true)
+    try {
+      setHistorico(await workOrderService.listarHistoricoNC(nc.id))
+    } catch (e: unknown) {
+      showToast(errorMessage(e, 'Erro ao carregar o histórico da NC'), 'error')
+    } finally {
+      setCarregandoHistorico(false)
+    }
+  }
+
+  const avisoLocal = localToast && (
+    <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+      localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+    }`}>
+      <AlertCircle className="w-4 h-4 shrink-0" />
+      {localToast.message}
+    </div>
+  )
 
   if (loading) {
     return (
@@ -160,68 +348,85 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
       <Button
         variant="danger"
         onClick={() => setShowForm(s => !s)}
-        className="flex items-center gap-2 rounded-xl text-button font-black uppercase tracking-widest"
+        className="flex items-center gap-2"
       >
         <Plus className="w-4 h-4" />
         {showForm ? 'Cancelar' : 'Registrar NC'}
       </Button>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-100">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="col-span-2">
-              <label className="text-xs font-semibold text-slate-500">Descrição</label>
+        <form onSubmit={handleSubmit} className="bg-slate-50 rounded-[10px] p-4 border border-slate-100">
+          <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+            <div className="col-span-2 space-y-1.5">
+              <label htmlFor="nc-nova-descricao" className={ROTULO}>Descrição</label>
               <textarea
+                id="nc-nova-descricao"
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 required
                 rows={2}
                 placeholder="Descreva a não conformidade..."
-                className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-red-400 resize-none"
+                className={CAMPO_TEXTO}
               />
             </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-500">Severidade</label>
+            <div className="space-y-1.5">
+              <label htmlFor="nc-nova-severidade" className={ROTULO}>Severidade</label>
               <select
+                id="nc-nova-severidade"
                 value={form.severity}
                 onChange={e => setForm(f => ({ ...f, severity: e.target.value as typeof form.severity }))}
-                className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-red-400"
+                className={CAMPO_LINHA}
               >
                 <option value="minor">Leve</option>
                 <option value="moderate">Moderada</option>
                 <option value="major">Grave</option>
               </select>
             </div>
-            <div>
-              <label className="text-xs font-semibold text-slate-500">Prazo</label>
+            <div className="space-y-1.5">
+              <label htmlFor="nc-nova-prazo" className={ROTULO}>Prazo</label>
               <input
+                id="nc-nova-prazo"
                 type="date"
                 value={form.dueDate}
                 onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
-                className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-red-400"
+                className={CAMPO_LINHA}
               />
             </div>
-            <div className="col-span-2">
-              <label className="text-xs font-semibold text-slate-500">Ação corretiva</label>
+            <div className="col-span-2 space-y-1.5">
+              <label htmlFor="nc-nova-causa" className={ROTULO}>Causa (opcional)</label>
               <textarea
+                id="nc-nova-causa"
+                value={form.causa}
+                onChange={e => setForm(f => ({ ...f, causa: e.target.value }))}
+                rows={2}
+                placeholder="Se já conhecida — para encerrar, a causa é obrigatória"
+                className={CAMPO_TEXTO}
+              />
+            </div>
+            <div className="col-span-2 space-y-1.5">
+              <label htmlFor="nc-nova-acao" className={ROTULO}>Ação corretiva</label>
+              <textarea
+                id="nc-nova-acao"
                 value={form.correctiveAction}
                 onChange={e => setForm(f => ({ ...f, correctiveAction: e.target.value }))}
                 rows={2}
                 placeholder="Descreva a ação corretiva planejada..."
-                className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-red-400 resize-none"
+                className={CAMPO_TEXTO}
               />
             </div>
           </div>
-          <div className="flex justify-end">
-            <Button
-              variant="danger"
-              type="submit"
-              disabled={saving}
-              className="flex items-center gap-2 rounded-xl text-button font-black uppercase tracking-widest disabled:opacity-60"
-            >
-              {saving && <Loader2 className="w-3 h-3 animate-spin" />}
-              Registrar
-            </Button>
+          <div className="flex justify-end mt-4">
+            <span className="inline-flex" title={saving ? 'Registrando…' : undefined}>
+              <Button
+                variant="danger"
+                type="submit"
+                disabled={saving}
+                className="flex items-center gap-2"
+              >
+                {saving && <Loader2 className="w-3 h-3 animate-spin" />}
+                Registrar
+              </Button>
+            </span>
           </div>
         </form>
       )}
@@ -238,9 +443,10 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
             const stsCfg = STATUS_CONFIG[nc.status]
             const StsIcon = stsCfg.icon
             const isExpanded = expandedId === nc.id
+            const podeVerificarEficacia = nc.status === 'closed' && nc.eficacia !== 'eficaz'
 
             return (
-              <div key={nc.id} className="bg-white rounded-2xl border border-slate-100 overflow-hidden">
+              <div key={nc.id} data-nc className="bg-white rounded-[10px] border border-slate-100 overflow-hidden">
                 <button
                   onClick={() => setExpandedId(isExpanded ? null : nc.id)}
                   className="w-full flex items-start justify-between px-4 py-3 hover:bg-slate-50 transition-colors"
@@ -248,16 +454,17 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
                   <div className="flex items-start gap-3 text-left">
                     <StsIcon className={`w-4 h-4 mt-0.5 shrink-0 ${nc.status === 'open' ? 'text-red-500' : nc.status === 'in_treatment' ? 'text-amber-500' : 'text-green-500'}`} />
                     <div>
-                      <p className="text-sm font-bold text-slate-800">{nc.description}</p>
-                      <div className="flex items-center gap-2 mt-1 flex-wrap">
-                        <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${sevCfg.cls}`}>
-                          {sevCfg.label}
-                        </span>
-                        <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${stsCfg.cls}`}>
-                          {stsCfg.label}
-                        </span>
+                      <p className="text-sm font-bold text-slate-800 whitespace-pre-line">{nc.description}</p>
+                      <div className="flex items-center gap-x-3 gap-y-1 mt-1 flex-wrap">
+                        <span className={`text-sm font-normal ${sevCfg.cls}`}>{sevCfg.label}</span>
+                        <span className={`text-sm font-normal ${stsCfg.cls}`}>{stsCfg.label}</span>
+                        {nc.status === 'closed' && (
+                          <span className={`text-sm font-normal ${nc.eficacia === 'eficaz' ? 'text-green-700' : 'text-amber-700'}`}>
+                            Eficácia {nc.eficacia === 'eficaz' ? 'verificada' : 'pendente'}
+                          </span>
+                        )}
                         {nc.due_date && (
-                          <span className="text-xs text-slate-400">
+                          <span className="text-xs text-slate-500">
                             Prazo: {new Date(nc.due_date + 'T12:00:00').toLocaleDateString('pt-BR')}
                           </span>
                         )}
@@ -272,33 +479,60 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
                 </button>
 
                 {isExpanded && (
-                  <div className="px-4 pb-4 space-y-3 border-t border-slate-50">
+                  <div className="px-4 pb-4 pt-3 space-y-3 border-t border-slate-50">
+                    {nc.causa && (
+                      <div className="space-y-0.5">
+                        <p className={ROTULO}>Causa</p>
+                        <p className="text-sm text-slate-800 whitespace-pre-line">{nc.causa}</p>
+                      </div>
+                    )}
                     {nc.corrective_action && (
-                      <div className="pt-3">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-wide mb-1">Ação corretiva</p>
-                        <p className="text-sm text-slate-700">{nc.corrective_action}</p>
+                      <div className="space-y-0.5">
+                        <p className={ROTULO}>Ação corretiva</p>
+                        <p className="text-sm text-slate-800 whitespace-pre-line">{nc.corrective_action}</p>
                       </div>
                     )}
-                    {nc.status !== 'closed' && (
-                      <div className="flex items-center gap-2">
-                        {nc.status === 'open' && (
-                          <button
-                            onClick={() => handleStatusChange(nc.id, 'in_treatment')}
-                            className="px-3 py-1.5 bg-amber-100 text-amber-700 rounded-lg text-button font-black hover:bg-amber-200 transition-colors"
-                          >
-                            Iniciar tratamento
-                          </button>
+                    {nc.resolution_evidence_id && (
+                      <p className="text-xs text-slate-600">Foto da correção anexada (aba Evidências).</p>
+                    )}
+                    {nc.status === 'closed' && nc.eficacia === 'eficaz' && (
+                      <p className="text-xs text-slate-600">
+                        Eficácia verificada: eficaz · {nomeDoUsuario(nc.eficacia_por)} · {fmtDataHora(nc.eficacia_em)}
+                      </p>
+                    )}
+                    {nc.status !== 'closed' && nc.eficacia === 'nao_eficaz' && (
+                      <div className="space-y-0.5">
+                        <p className="text-xs text-red-700">
+                          Reaberta: a correção anterior foi verificada como não eficaz
+                          ({nomeDoUsuario(nc.eficacia_por)} · {fmtDataHora(nc.eficacia_em)}).
+                        </p>
+                        {nc.eficacia_motivo && (
+                          <p className="text-sm text-slate-800 whitespace-pre-line">Motivo: {nc.eficacia_motivo}</p>
                         )}
-                        <button
-                          onClick={() => handleStatusChange(nc.id, 'closed')}
-                          className="px-3 py-1.5 bg-green-100 text-green-700 rounded-lg text-button font-black hover:bg-green-200 transition-colors"
-                        >
-                          Encerrar NC
-                        </button>
                       </div>
                     )}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {nc.status === 'open' && (
+                        <Button size="sm" variant="secondary" onClick={() => iniciarTratamento(nc.id)}>
+                          Iniciar tratamento
+                        </Button>
+                      )}
+                      {nc.status !== 'closed' && (
+                        <Button size="sm" variant="secondary" onClick={() => abrirEncerrar(nc)}>
+                          Encerrar NC
+                        </Button>
+                      )}
+                      {podeVerificarEficacia && (
+                        <Button size="sm" variant="secondary" onClick={() => abrirEficacia(nc)}>
+                          Verificar eficácia
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" onClick={() => abrirHistorico(nc)}>
+                        Histórico
+                      </Button>
+                    </div>
                     {nc.closed_at && (
-                      <p className="text-xs text-slate-400">
+                      <p className="text-xs text-slate-500">
                         Encerrada em {new Date(nc.closed_at).toLocaleDateString('pt-BR')}
                       </p>
                     )}
@@ -309,6 +543,172 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
           })}
         </div>
       )}
+
+      {/* Encerrar NC */}
+      <Sheet open={Boolean(encerrarDe)} onClose={() => setEncerrarDe(null)} size="lg" dirty={encerrarSujo && !encerrando}>
+        {encerrarDe && (
+          <>
+            <SheetHeader onClose={fecharEncerrar}>
+              <SheetTitle>Encerrar não conformidade</SheetTitle>
+              <SheetDescription>{encerrarDe.description}</SheetDescription>
+            </SheetHeader>
+            <SheetPanel className="px-6 py-5 space-y-4">
+              <p className="text-sm text-slate-600">
+                Causa e ação corretiva são obrigatórias. Depois de encerrada, a eficácia da correção fica pendente de verificação.
+              </p>
+              <div className="space-y-1.5">
+                <label htmlFor="nc-encerrar-causa" className={ROTULO}>Causa</label>
+                <textarea
+                  id="nc-encerrar-causa"
+                  value={encerrarForm.causa}
+                  onChange={e => setEncerrarForm(f => ({ ...f, causa: e.target.value }))}
+                  rows={3}
+                  placeholder="Por que a não conformidade aconteceu?"
+                  className={CAMPO_TEXTO}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="nc-encerrar-acao" className={ROTULO}>Ação corretiva</label>
+                <textarea
+                  id="nc-encerrar-acao"
+                  value={encerrarForm.acao}
+                  onChange={e => setEncerrarForm(f => ({ ...f, acao: e.target.value }))}
+                  rows={3}
+                  placeholder="O que foi feito para corrigir?"
+                  className={CAMPO_TEXTO}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="nc-encerrar-foto" className={ROTULO}>Foto da correção (opcional)</label>
+                <input
+                  id="nc-encerrar-foto"
+                  type="file"
+                  accept="image/*"
+                  onChange={e => setFoto(e.target.files?.[0] ?? null)}
+                  className="block w-full text-sm text-slate-900 file:mr-3 file:h-9 file:px-3 file:rounded-[6px] file:border-0 file:bg-slate-100 file:text-sm file:font-medium file:text-slate-700 hover:file:bg-slate-200"
+                />
+                {encerrarDe.resolution_evidence_id && !foto && (
+                  <p className="text-xs text-slate-600">Já há foto de um encerramento anterior; sem foto nova, ela continua.</p>
+                )}
+              </div>
+            </SheetPanel>
+            <SheetFooter>
+              <Button variant="secondary" onClick={fecharEncerrar}>Cancelar</Button>
+              <span className="inline-flex" title={motivoSemEncerrar ?? (encerrando ? 'Encerrando…' : undefined)}>
+                <Button onClick={handleEncerrar} disabled={Boolean(motivoSemEncerrar) || encerrando} className="flex items-center gap-2">
+                  {encerrando && <Loader2 className="w-3 h-3 animate-spin" />}
+                  Encerrar
+                </Button>
+              </span>
+            </SheetFooter>
+          </>
+        )}
+      </Sheet>
+
+      {/* Verificar eficácia */}
+      <Sheet open={Boolean(eficaciaDe)} onClose={() => setEficaciaDe(null)} size="lg" dirty={eficaciaSujo && !registrandoEficacia}>
+        {eficaciaDe && (
+          <>
+            <SheetHeader onClose={fecharEficacia}>
+              <SheetTitle>Verificar eficácia</SheetTitle>
+              <SheetDescription>{eficaciaDe.description}</SheetDescription>
+            </SheetHeader>
+            <SheetPanel className="px-6 py-5 space-y-4">
+              <div className="rounded-[10px] border border-slate-200 p-3 space-y-2">
+                <div className="space-y-0.5">
+                  <p className={ROTULO}>Causa</p>
+                  <p className="text-sm text-slate-800 whitespace-pre-line">{eficaciaDe.causa || '—'}</p>
+                </div>
+                <div className="space-y-0.5">
+                  <p className={ROTULO}>Ação corretiva</p>
+                  <p className="text-sm text-slate-800 whitespace-pre-line">{eficaciaDe.corrective_action || '—'}</p>
+                </div>
+              </div>
+              <p className="text-sm text-slate-600">
+                A correção resolveu a não conformidade? Não eficaz reabre a NC; o motivo fica na NC e no histórico.
+              </p>
+              <div className="space-y-1.5">
+                <label htmlFor="nc-eficacia-motivo" className={ROTULO}>Motivo (obrigatório se não eficaz)</label>
+                <textarea
+                  id="nc-eficacia-motivo"
+                  value={motivoNaoEficaz}
+                  onChange={e => setMotivoNaoEficaz(e.target.value)}
+                  rows={3}
+                  placeholder="O que mostra que a correção não resolveu?"
+                  className={CAMPO_TEXTO}
+                />
+              </div>
+            </SheetPanel>
+            <SheetFooter>
+              <Button variant="secondary" onClick={fecharEficacia}>Cancelar</Button>
+              <span
+                className="inline-flex"
+                title={!motivoNaoEficaz.trim() ? MOTIVO_NAO_EFICAZ_SEM_MOTIVO : (registrandoEficacia ? 'Registrando…' : undefined)}
+              >
+                <Button
+                  variant="danger"
+                  onClick={() => handleEficacia(false)}
+                  disabled={!motivoNaoEficaz.trim() || registrandoEficacia}
+                >
+                  Não eficaz
+                </Button>
+              </span>
+              <span className="inline-flex" title={registrandoEficacia ? 'Registrando…' : undefined}>
+                <Button onClick={() => handleEficacia(true)} disabled={registrandoEficacia}>
+                  Eficaz
+                </Button>
+              </span>
+            </SheetFooter>
+          </>
+        )}
+      </Sheet>
+
+      {/* Histórico */}
+      <Sheet open={Boolean(historicoDe)} onClose={() => setHistoricoDe(null)} size="lg">
+        {historicoDe && (
+          <>
+            <SheetHeader onClose={() => setHistoricoDe(null)}>
+              <SheetTitle>Histórico da não conformidade</SheetTitle>
+              <SheetDescription>{historicoDe.description}</SheetDescription>
+            </SheetHeader>
+            <SheetPanel className="px-6 py-5 space-y-4">
+              {carregandoHistorico ? (
+                <div className="text-center py-12"><Loader2 className="w-5 h-5 text-blue-600 animate-spin inline" /></div>
+              ) : historico.length === 0 ? (
+                <p className="text-sm text-slate-500">Nenhuma mudança registrada desde a abertura.</p>
+              ) : (
+                <ol className="space-y-3">
+                  {[...historico].reverse().map((h, i, lista) => {
+                    // Descrição só aparece quando muda em relação à linha anterior (mais antiga).
+                    const anterior = lista[i + 1]
+                    const descricaoMudou = Boolean(h.description) && (anterior ? anterior.description !== h.description : false)
+                    const status = h.status && h.status in STATUS_CONFIG
+                      ? STATUS_CONFIG[h.status as keyof typeof STATUS_CONFIG].label
+                      : (h.status ?? '—')
+                    return (
+                      <li key={h.id} className="rounded-[10px] border border-slate-200 p-3 space-y-0.5">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {h.evento === 'exclusao' ? 'Não conformidade apagada' : status}
+                        </p>
+                        {h.causa && <p className="text-xs text-slate-700">Causa: {h.causa}</p>}
+                        {h.corrective_action && <p className="text-xs text-slate-700">Ação corretiva: {h.corrective_action}</p>}
+                        {h.eficacia && <p className="text-xs text-slate-700">Eficácia: {EFICACIA_LABELS[h.eficacia] ?? h.eficacia}</p>}
+                        {h.eficacia_motivo && <p className="text-xs text-slate-700">Motivo: {h.eficacia_motivo}</p>}
+                        {descricaoMudou && <p className="text-xs text-slate-700">Descrição: {h.description}</p>}
+                        <p className="text-xs text-slate-500">
+                          {nomeDoUsuario(h.alterado_por)} · {fmtDataHora(h.created_at)}
+                        </p>
+                      </li>
+                    )
+                  })}
+                </ol>
+              )}
+            </SheetPanel>
+          </>
+        )}
+      </Sheet>
+
+      {avisoLocal}
     </div>
   )
 }

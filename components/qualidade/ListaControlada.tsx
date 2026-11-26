@@ -15,8 +15,9 @@ import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
  *  - Arquivado (o "apagar" da tela — item criado por engano, inclusive replicado em "Todas") fica
  *    escondido; "Mostrar arquivados (N)", acima da tabela e só quando há algum, o mostra marcado
  *    "Arquivado" para reabrir e reativar. Nunca conta no painel (que só conta ATIVO).
- *  - Treinados é CONTAGEM, nunca "x de y": o denominador só existe quando a FVS (fase 2) registrar
- *    quem executou o serviço em cada obra.
+ *  - Treinados é CONTAGEM (quem tem registro no curso), nunca "x de y".
+ *  - Executores treinados (serviços, fase 2) é a fração "x de y" da inspeção aprovada MAIS RECENTE do
+ *    serviço (executores congelados na aprovação, `contarAplicados().porItem`); "—" sem inspeção.
  *  - Lista vazia: o vazio orienta com a carga (Anexo 4 para serviços, sugestão para materiais).
  *  - Clicar na linha abre o item (`onAbrir`).
  */
@@ -63,6 +64,12 @@ interface Props {
     nomesDasOrgs?: Record<string, string>;
     /** Sub-abas (Serviços | Materiais), acopladas no topo do card da tabela (§19.1 acoplada). */
     abas?: React.ReactNode;
+    /** Serviços: executores treinados da inspeção aprovada mais recente, por item (`contarAplicados().porItem`). */
+    /**
+     * Serviços: executores treinados da inspeção aprovada mais recente, por item (`contarAplicados().porItem`).
+     * `null` = as inspeções não puderam ser lidas: a célula diz "não contado", não "—" (que seria "nenhuma").
+     */
+    executoresPorItem?: Record<string, { treinados: number; executores: number }> | null;
 }
 
 const procedimentoDo = (i: ItemControlado, procedimentos: Record<string, ProcedimentoResumo>) =>
@@ -70,6 +77,7 @@ const procedimentoDo = (i: ItemControlado, procedimentos: Record<string, Procedi
 
 export const ListaControlada: React.FC<Props> = ({
     tipo, itens, procedimentos, treinamentos, podeEditar, onCarregar, onNovo, onAbrir, carregando, nomesDasOrgs, abas,
+    executoresPorItem,
 }) => {
     const texto = TEXTO_DO_TIPO[tipo];
 
@@ -108,6 +116,12 @@ export const ListaControlada: React.FC<Props> = ({
         return `${vigentes} · ${c.revisaoAnterior} treinado(s) em revisão anterior`;
     }, [contagem]);
 
+    const rotuloExecutores = React.useCallback((i: ItemControlado) => {
+        if (executoresPorItem === null) return 'não contado';
+        const e = executoresPorItem?.[i.id];
+        return e ? `${e.treinados} de ${e.executores}` : '—';
+    }, [executoresPorItem]);
+
     const colunas = React.useMemo<StandardTableColumn[]>(() => [
         { key: 'numero', label: 'Nº', sortable: true, width: 70, align: 'right' },
         { key: 'nome', label: texto.nome, sortable: true, width: 320 },
@@ -116,8 +130,9 @@ export const ListaControlada: React.FC<Props> = ({
         { key: 'origem', label: 'Origem', sortable: true, width: 150 },
         { key: 'procedimento', label: 'Procedimento', sortable: true, width: 260 },
         { key: 'treinados', label: 'Treinados (rev. vigente)', sortable: true, width: 220 },
+        ...(tipo === 'SERVICO' ? [{ key: 'executores', label: 'Executores treinados', sortable: true, width: 170 }] : []),
         { key: 'codigos', label: 'Códigos', sortable: true, width: 100, align: 'right' },
-    ], [texto.nome, mostrarOrg]);
+    ], [texto.nome, mostrarOrg, tipo]);
 
     const novo = (
         <span className="inline-flex" title={podeEditar ? undefined : MOTIVO_SEM_EDICAO_QUALIDADE}>
@@ -161,6 +176,7 @@ export const ListaControlada: React.FC<Props> = ({
                     case 'origem': return ROTULO_ORIGEM[i.origem];
                     case 'procedimento': return rotuloProcedimento(i);
                     case 'treinados': { const c = contagem(i); return c ? c.proprios + c.empreiteira : -1; }
+                    case 'executores': { const e = executoresPorItem?.[i.id]; return e ? e.treinados / Math.max(e.executores, 1) : -1; }
                     case 'codigos': return i.codigos.length;
                     default: return i.nome;
                 }
@@ -182,6 +198,10 @@ export const ListaControlada: React.FC<Props> = ({
                         return <span className={`block truncate text-sm font-normal ${i.situacao === 'ATIVO' ? 'text-gray-700' : 'text-gray-600'}`} title={t}>{t}</span>;
                     }
                     case 'treinados': { const t = rotuloTreinados(i); return <span className="block truncate text-sm font-normal text-gray-700" title={t}>{t}</span>; }
+                    case 'executores': {
+                        const t = rotuloExecutores(i);
+                        return <span className="text-sm font-normal text-gray-700" title={executoresPorItem === null ? 'Não foi possível ler as inspeções aprovadas: os executores treinados não foram contados' : t === '—' ? 'Nenhuma inspeção aprovada deste serviço' : 'Executores treinados na inspeção aprovada mais recente'}>{t}</span>;
+                    }
                     case 'codigos': return <span className="text-sm font-normal text-gray-700">{i.codigos.length}</span>;
                     default: return null;
                 }

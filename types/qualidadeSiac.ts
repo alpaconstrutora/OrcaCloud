@@ -19,6 +19,11 @@ export interface ItemControlado {
   training_course_id: string | null;
   ordem: number;
   codigos: string[];
+  /**
+   * Ficha modelo do serviço (fase 2): modelo de checklist do Controle Operacional, da mesma
+   * organização do item. Escolher o serviço na OE aplica esta ficha. Ausente = não lida.
+   */
+  checklist_template_id?: string | null;
 }
 
 export interface ProcedimentoResumo {
@@ -46,6 +51,33 @@ export interface RegistroTreinamento {
   externo: boolean;
   /** `employee_trainings.created_at` — desempata treinamento e revisão nova no mesmo dia. */
   registrado_em: string | null;
+  /**
+   * `employee_trainings.data_validade` (fase 2). Validade anterior a hoje (data local) tira o
+   * registro da conta; o `status` VENCIDO sozinho não tira. Ausente/null = sem validade.
+   */
+  data_validade?: string | null;
+}
+
+/** Executor congelado na aprovação da inspeção (`work_order_validations.executores`). */
+export interface ExecutorDaInspecao {
+  employee_id: string;
+  nome: string;
+  /** Treinado na revisão vigente do procedimento no momento da aprovação. */
+  treinado: boolean;
+}
+
+/**
+ * Inspeção aprovada de OE de serviço controlado (fase 2) — `work_order_validations` type
+ * 'inspection' status 'approved', com o serviço da OE e o `obraStatus` da obra.
+ */
+export interface InspecaoAprovada {
+  work_order_id: string;
+  controlled_item_id: string;
+  /** `projects.settings->>'obraStatus'` ('Em andamento' = obra em andamento). */
+  obra_status: string | null;
+  /** `liberado_em` (ou `created_at` da validação, se faltar). */
+  aprovado_em: string;
+  executores: ExecutorDaInspecao[];
 }
 
 export interface MetaDoNivel {

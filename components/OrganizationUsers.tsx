@@ -219,6 +219,10 @@ export const getDefaultPermissions = (role: OrganizationRole): UserPermissions =
         canViewRisks: true, canEditRisks: false,
         // Qualidade (SiAC) (25/11/2026): mesmo padrão de Riscos — ver sim, editar não.
         canViewQualitySystem: true, canEditQualitySystem: false,
+        // Qualidade (SiAC) fase 2 (26/11/2026): inspecionar e aprovar inspeção de serviço controlado.
+        // false EXPLÍCITO aqui: o reduce de owner/admin abaixo liga (é o que o banco faz —
+        // `_qualidade_pode`), e member/viewer herdam o false de `baseViewer` (sem herança de Obras).
+        canInspectQualitySystem: false, canReleaseQualitySystem: false,
         // Diretoria / ÒPURA CEO (17/11/2026): desligada para todos os cargos, admin inclusive;
         // só liga quem marcar aqui (utils/permissaoDiretoria.ts, conferida também no banco).
         canViewDiretoria: false, canEditDiretoria: false,
@@ -450,6 +454,10 @@ export const DETAILED_PERMISSIONS: { group: string; title: string; view: string;
     { group: 'Operação de Obra', title: 'Riscos', view: 'canViewRisks', edit: 'canEditRisks' },
     // Qualidade (SiAC) (25/11/2026): sem valor gravado, herda de Obras (utils/permissaoQualidadeSiac.ts).
     { group: 'Operação de Obra', title: 'Qualidade (SiAC)', view: 'canViewQualitySystem', edit: 'canEditQualitySystem' },
+    // Qualidade (SiAC) fase 2 (26/11/2026): sem herança; dono/admin sempre podem (o banco confere
+    // `_qualidade_pode` na organização dona do SGQ da OE — utils/permissaoQualidadeSiac.ts).
+    { group: 'Operação de Obra', title: 'Qualidade — inspecionar serviço controlado', view: 'canInspectQualitySystem' },
+    { group: 'Operação de Obra', title: 'Qualidade — aprovar inspeção', view: 'canReleaseQualitySystem' },
 
     // --- Treinamentos --- (saiu de dentro do RH em 16/10/2026: quem gerencia
     // treinamento não é só o RH — segurança do trabalho, engenharia de obra)

@@ -9,7 +9,7 @@ import {
 import { ColumnConfig, useTableColumns, useResizableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from './ui/TableUtils'
 import { KpiCard } from './ui/KpiCard'
 import OperacionalList from './OperacionalList'
-import OperacionalDetail from './OperacionalDetail'
+import OperacionalDetail, { type AbaDaOE } from './OperacionalDetail'
 import OperacionalForm from './OperacionalForm'
 import OperacionalDashboard from './OperacionalDashboard'
 import OperacionalDiary from './OperacionalDiary'
@@ -375,6 +375,8 @@ const OperacionalModule: React.FC<Props> = ({
   })
 
   const [selectedWorkOrderId, setSelectedWorkOrderId] = useState<string | null>(null)
+  /** Aba em que a tela da OE abre (o Kanban abre em "inspecao" ao soltar em Aprovada/Reprovada). */
+  const [abaDaOE, setAbaDaOE] = useState<AbaDaOE | undefined>(undefined)
   const [editingWorkOrderId, setEditingWorkOrderId] = useState<string | null>(null)
   const [orgId, setOrgId] = useState<string | null>(activeOrganizationId ?? null)
 
@@ -532,7 +534,7 @@ const OperacionalModule: React.FC<Props> = ({
         <OperacionalList
           projectId={selectedProjectId}
           orgId={orgId ?? ''}
-          onViewDetail={(id) => { setSelectedWorkOrderId(id); setView('detail') }}
+          onViewDetail={(id) => { setSelectedWorkOrderId(id); setAbaDaOE(undefined); setView('detail') }}
           onCreateNew={() => { setEditingWorkOrderId(null); setView('form') }}
           onEdit={(id) => { setEditingWorkOrderId(id); setView('form') }}
         />
@@ -542,7 +544,7 @@ const OperacionalModule: React.FC<Props> = ({
         <OperacionalKanban
           projectId={selectedProjectId}
           orgId={orgId ?? ''}
-          onViewDetail={(id) => { setSelectedWorkOrderId(id); setView('detail') }}
+          onViewDetail={(id, aba) => { setSelectedWorkOrderId(id); setAbaDaOE(aba); setView('detail') }}
           onCreateNew={() => { setEditingWorkOrderId(null); setView('form') }}
         />
       )}
@@ -554,6 +556,7 @@ const OperacionalModule: React.FC<Props> = ({
           onBack={() => { setSelectedWorkOrderId(null); setView('list') }}
           onEdit={(id) => { setEditingWorkOrderId(id); setView('form') }}
           onViewOther={(id) => setSelectedWorkOrderId(id)}
+          abaInicial={abaDaOE}
         />
       )}
 
@@ -562,7 +565,7 @@ const OperacionalModule: React.FC<Props> = ({
           workOrderId={editingWorkOrderId ?? undefined}
           projectId={selectedProjectId}
           orgId={orgId ?? ''}
-          onSave={(id) => { setSelectedWorkOrderId(id); setView('detail') }}
+          onSave={(id) => { setSelectedWorkOrderId(id); setAbaDaOE(undefined); setView('detail') }}
           onCancel={() => setView(selectedWorkOrderId ? 'detail' : 'list')}
         />
       )}

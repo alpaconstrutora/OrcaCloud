@@ -7,6 +7,9 @@ import * as XLSX from 'xlsx'
 import { supabase } from '../lib/supabase'
 import Button from './ui/Button'
 import ActionIconButton from './ui/ActionIconButton'
+import { useConfirm } from './ui/confirm'
+import { useToast } from '../hooks/useToast'
+import { errorMessage } from '../hooks/useOrgContext'
 
 interface Template {
   id: string
@@ -27,11 +30,24 @@ interface TemplateItem {
   sort_order: number
   severity: 'minor' | 'moderate' | 'major'
   category: string | null
+  /** Critério de aceitação (tolerância) — a ficha mostra sob a descrição. */
+  criterio: string | null
+  /** Método de verificação. */
+  metodo: string | null
+  /** Item com resposta não se apaga (FK RESTRICT): desativa e some das fichas novas. */
+  ativo: boolean
 }
 
 interface Props {
   orgId: string
+  /** Mostra só esse modelo, já aberto (usado pela Qualidade): sem criar, importar nem lista dos outros. */
+  somenteTemplateId?: string
 }
+
+const COLUNAS_ITEM = 'id, template_id, description, required, requires_photo, gate, sort_order, severity, category, criterio, metodo, ativo'
+const MSG_MODELO_COM_RESPOSTAS = 'Este modelo já tem respostas em tarefas; desative-o em vez de excluir'
+const FK_VIOLADA = '23503'
+const codigoDoErro = (e: unknown) => (e && typeof e === 'object' ? (e as { code?: unknown }).code : undefined)
 
 const GATE_OPTIONS = [
   { value: 'pre_start',      label: 'Pré-início' },
@@ -58,7 +74,8 @@ const ItemRow: React.FC<{
   item: TemplateItem
   onSave: (id: string, patch: Partial<TemplateItem>) => Promise<void>
   onDelete: (id: string) => Promise<void>
-}> = ({ item, onSave, onDelete }) => {
+  onSetAtivo: (id: string, ativo: boolean) => Promise<void>
+}> = ({ item, onSave, onDelete, onSetAtivo }) => {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(item)
   const [saving, setSaving] = useState(false)
@@ -72,6 +89,8 @@ const ItemRow: React.FC<{
       gate:           draft.gate,
       severity:       draft.severity,
       category:       draft.category || null,
+      criterio:       draft.criterio?.trim() || null,
+      metodo:         draft.metodo?.trim() || null,
     })
     setSaving(false)
     setEditing(false)
@@ -79,10 +98,12 @@ const ItemRow: React.FC<{
 
   if (!editing) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50 group rounded-xl transition-colors">
+      <div data-item-modelo={item.id} className="flex items-center gap-2 px-3 py-2.5 hover:bg-slate-50 group rounded-xl transition-colors">
         <GripVertical className="w-4 h-4 text-slate-200 group-hover:text-slate-400 shrink-0" />
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium text-slate-800 truncate">{item.description}</p>
+          <p className={`text-sm font-medium truncate ${item.ativo ? 'text-slate-800' : 'text-slate-500 line-through'}`}>{item.description}</p>
+          {item.criterio && <p className="text-xs text-slate-600 mt-0.5"><span className="font-semibold">Critério:</span> {item.criterio}</p>}
+          {item.metodo && <p className="text-xs text-slate-600"><span className="font-semibold">Método:</span> {item.metodo}</p>}
           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
             <span className={`text-xs font-black px-1.5 py-0.5 rounded ${GATE_COLORS[item.gate]}`}>
               {GATE_OPTIONS.find(g => g.value === item.gate)?.label}
@@ -93,8 +114,18 @@ const ItemRow: React.FC<{
             <span className="text-xs text-slate-400">
               {SEVERITY_OPTIONS.find(s => s.value === item.severity)?.label}
             </span>
+            {!item.ativo && <span className="text-xs font-bold text-amber-600">Desativado</span>}
           </div>
         </div>
+        {!item.ativo && (
+          <button
+            type="button"
+            onClick={() => onSetAtivo(item.id, true)}
+            className="px-3 h-9 shrink-0 text-xs font-bold text-blue-700 border border-blue-200 bg-white hover:bg-blue-50 rounded-[6px] transition-colors"
+          >
+            Reativar
+          </button>
+        )}
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           <ActionIconButton kind="edit" size="sm" onClick={() => { setDraft(item); setEditing(true) }} />
           <ActionIconButton kind="delete" size="sm" onClick={() => onDelete(item.id)} />
@@ -113,6 +144,28 @@ const ItemRow: React.FC<{
         className={inputCls}
         placeholder="Descrição do item"
       />
+      <div>
+        <label htmlFor={`criterio-${item.id}`} className="text-xs font-semibold text-slate-500">Critério de aceitação</label>
+        <input
+          id={`criterio-${item.id}`}
+          type="text"
+          value={draft.criterio ?? ''}
+          onChange={e => setDraft(d => ({ ...d, criterio: e.target.value }))}
+          placeholder="Ex: desvio máximo de 3 mm por metro"
+          className={`mt-1 ${inputCls}`}
+        />
+      </div>
+      <div>
+        <label htmlFor={`metodo-${item.id}`} className="text-xs font-semibold text-slate-500">Método de verificação</label>
+        <input
+          id={`metodo-${item.id}`}
+          type="text"
+          value={draft.metodo ?? ''}
+          onChange={e => setDraft(d => ({ ...d, metodo: e.target.value }))}
+          placeholder="Ex: régua de 2 m e nível"
+          className={`mt-1 ${inputCls}`}
+        />
+      </div>
       <div className="grid grid-cols-2 gap-2">
         <select
           value={draft.gate}
@@ -184,8 +237,12 @@ const TemplateCard: React.FC<{
   onRename: (id: string, name: string, serviceType: string) => Promise<void>
   onDuplicate: (id: string) => Promise<void>
   onExport: (id: string) => Promise<void>
-}> = ({ template, onToggleActive, onDelete, onRename, onDuplicate, onExport }) => {
-  const [expanded, setExpanded] = useState(false)
+  /** Aberto de saída e sem duplicar/excluir (modelo único da Qualidade). */
+  escopo?: boolean
+}> = ({ template, onToggleActive, onDelete, onRename, onDuplicate, onExport, escopo = false }) => {
+  const confirm = useConfirm()
+  const { showToast, localToast } = useToast()
+  const [expanded, setExpanded] = useState(escopo)
   const [items, setItems] = useState<TemplateItem[]>([])
   const [loadingItems, setLoadingItems] = useState(false)
   const [showAddItem, setShowAddItem] = useState(false)
@@ -193,6 +250,7 @@ const TemplateCard: React.FC<{
     description: '', gate: 'free' as TemplateItem['gate'],
     required: false, requires_photo: false,
     severity: 'moderate' as TemplateItem['severity'], category: '',
+    criterio: '', metodo: '',
   })
   const [savingNew, setSavingNew] = useState(false)
   const [editingName, setEditingName] = useState(false)
@@ -202,14 +260,17 @@ const TemplateCard: React.FC<{
 
   const loadItems = async () => {
     setLoadingItems(true)
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from('oe_checklist_items')
-      .select('id, template_id, description, required, requires_photo, gate, sort_order, severity, category')
+      .select(COLUNAS_ITEM)
       .eq('template_id', template.id)
       .order('sort_order')
-    setItems(data ?? [])
+    if (error) showToast(errorMessage(error, 'Erro ao carregar os itens do modelo'), 'error')
+    setItems((data as TemplateItem[] | null) ?? [])
     setLoadingItems(false)
   }
+
+  useEffect(() => { if (escopo) loadItems() }, [escopo, template.id])
 
   const handleExpand = () => {
     setExpanded(e => !e)
@@ -218,14 +279,37 @@ const TemplateCard: React.FC<{
 
   const handleSaveItem = async (id: string, patch: Partial<TemplateItem>) => {
     const { error } = await supabase.from('oe_checklist_items').update(patch).eq('id', id)
-    if (error) return
+    if (error) { showToast(errorMessage(error, 'Erro ao salvar o item'), 'error'); return }
+    await loadItems()
+  }
+
+  const handleSetAtivo = async (id: string, ativo: boolean) => {
+    const { error } = await supabase.from('oe_checklist_items').update({ ativo }).eq('id', id)
+    if (error) { showToast(errorMessage(error, ativo ? 'Erro ao reativar o item' : 'Erro ao desativar o item'), 'error'); return }
     await loadItems()
   }
 
   const handleDeleteItem = async (id: string) => {
-    if (!confirm('Remover este item do template?')) return
-    await supabase.from('oe_checklist_items').delete().eq('id', id)
-    await loadItems()
+    const remover = await confirm({
+      title: 'Remover este item do modelo?',
+      confirmLabel: 'Remover',
+      variant: 'danger',
+    })
+    if (!remover) return
+    const { error } = await supabase.from('oe_checklist_items').delete().eq('id', id)
+    if (!error) { await loadItems(); return }
+    if (codigoDoErro(error) !== FK_VIOLADA) {
+      showToast(errorMessage(error, 'Erro ao remover o item'), 'error')
+      return
+    }
+    // Item com resposta em alguma tarefa não se apaga (FK RESTRICT): oferece desativar.
+    const desativar = await confirm({
+      title: 'Este item já tem respostas em tarefas',
+      message: 'Não dá para excluí-lo sem apagar o histórico. Desativado, ele deixa de aparecer nas fichas novas e continua nas que já foram respondidas.',
+      confirmLabel: 'Desativar',
+      variant: 'warning',
+    })
+    if (desativar) await handleSetAtivo(id, false)
   }
 
   const handleAddItem = async () => {
@@ -242,14 +326,16 @@ const TemplateCard: React.FC<{
         requires_photo: newItem.requires_photo,
         severity: newItem.severity,
         category: newItem.category || null,
+        criterio: newItem.criterio.trim() || null,
+        metodo: newItem.metodo.trim() || null,
         sort_order: maxOrder,
       })
       if (error) throw error
-      setNewItem({ description: '', gate: 'free', required: false, requires_photo: false, severity: 'moderate', category: '' })
+      setNewItem({ description: '', gate: 'free', required: false, requires_photo: false, severity: 'moderate', category: '', criterio: '', metodo: '' })
       setShowAddItem(false)
       await loadItems()
     } catch (e: unknown) {
-      setItemError(e instanceof Error ? e.message : 'Erro ao adicionar item')
+      setItemError(errorMessage(e, 'Erro ao adicionar item'))
     } finally {
       setSavingNew(false)
     }
@@ -262,6 +348,15 @@ const TemplateCard: React.FC<{
 
   return (
     <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
+      {/* Aviso (guia §13): sem ToastProvider montado, o próprio componente desenha */}
+      {localToast && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+          localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {localToast.message}
+        </div>
+      )}
       {/* Template header */}
       <div className="flex items-center gap-3 px-4 py-3">
         <button onClick={handleExpand} className="flex-1 flex items-center gap-3 text-left min-w-0">
@@ -306,7 +401,7 @@ const TemplateCard: React.FC<{
             <span className="text-xs text-slate-400">{template.item_count} itens</span>
           )}
           <ActionIconButton kind="edit" size="sm" title="Renomear" onClick={e => { e.stopPropagation(); setEditingName(true); setDraftName(template.name); setDraftServiceType(template.service_type ?? '') }} />
-          <ActionIconButton kind="duplicate" size="sm" onClick={e => { e.stopPropagation(); onDuplicate(template.id) }} />
+          {!escopo && <ActionIconButton kind="duplicate" size="sm" onClick={e => { e.stopPropagation(); onDuplicate(template.id) }} />}
           <ActionIconButton kind="download" size="sm" title="Exportar JSON" onClick={e => { e.stopPropagation(); onExport(template.id) }} />
           <label className="relative inline-flex items-center cursor-pointer" title={template.active ? 'Ativo' : 'Inativo'}>
             <input
@@ -319,7 +414,7 @@ const TemplateCard: React.FC<{
               <div className={`w-3.5 h-3.5 bg-white rounded-full shadow transition-transform mt-0.5 ${template.active ? 'translate-x-4' : 'translate-x-0.5'}`} />
             </div>
           </label>
-          <ActionIconButton kind="delete" size="sm" onClick={() => onDelete(template.id)} />
+          {!escopo && <ActionIconButton kind="delete" size="sm" onClick={() => onDelete(template.id)} />}
         </div>
       </div>
 
@@ -338,6 +433,7 @@ const TemplateCard: React.FC<{
                   item={item}
                   onSave={handleSaveItem}
                   onDelete={handleDeleteItem}
+                  onSetAtivo={handleSetAtivo}
                 />
               ))}
               {items.length === 0 && !showAddItem && (
@@ -363,6 +459,28 @@ const TemplateCard: React.FC<{
                 className={inputCls}
                 onKeyDown={e => { if (e.key === 'Enter') handleAddItem() }}
               />
+              <div>
+                <label htmlFor={`novo-criterio-${template.id}`} className="text-xs font-semibold text-slate-500">Critério de aceitação</label>
+                <input
+                  id={`novo-criterio-${template.id}`}
+                  type="text"
+                  value={newItem.criterio}
+                  onChange={e => setNewItem(n => ({ ...n, criterio: e.target.value }))}
+                  placeholder="Ex: desvio máximo de 3 mm por metro (opcional)"
+                  className={`mt-1 ${inputCls}`}
+                />
+              </div>
+              <div>
+                <label htmlFor={`novo-metodo-${template.id}`} className="text-xs font-semibold text-slate-500">Método de verificação</label>
+                <input
+                  id={`novo-metodo-${template.id}`}
+                  type="text"
+                  value={newItem.metodo}
+                  onChange={e => setNewItem(n => ({ ...n, metodo: e.target.value }))}
+                  placeholder="Ex: régua de 2 m e nível (opcional)"
+                  className={`mt-1 ${inputCls}`}
+                />
+              </div>
               <div className="grid grid-cols-2 gap-2">
                 <select
                   value={newItem.gate}
@@ -441,7 +559,9 @@ const TemplateCard: React.FC<{
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
+const OperacionalTemplateManager: React.FC<Props> = ({ orgId, somenteTemplateId }) => {
+  const confirm = useConfirm()
+  const { showToast, localToast } = useToast()
   const [templates, setTemplates] = useState<Template[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -453,19 +573,20 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
   const importInputRef = useRef<HTMLInputElement>(null)
   const importXlsxRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => { loadTemplates() }, [orgId])
+  useEffect(() => { loadTemplates() }, [orgId, somenteTemplateId])
 
   const loadTemplates = async () => {
     setLoading(true)
     setError(null)
     try {
-      const { data, error: fetchErr } = await supabase
+      // Modelo único (Qualidade): pelo id — o modelo pode ser de outra organização que a do topo (RLS decide).
+      const base = supabase
         .from('oe_checklist_templates')
         .select(`
           id, name, service_type, active, created_at,
           oe_checklist_items(count)
         `)
-        .eq('org_id', orgId)
+      const { data, error: fetchErr } = await (somenteTemplateId ? base.eq('id', somenteTemplateId) : base.eq('org_id', orgId))
         .order('name')
       if (fetchErr) throw fetchErr
 
@@ -476,7 +597,7 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
       }))
       setTemplates(mapped)
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao carregar templates')
+      setError(errorMessage(e, 'Erro ao carregar templates'))
     } finally {
       setLoading(false)
     }
@@ -499,20 +620,32 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
       setShowNewForm(false)
       await loadTemplates()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao criar template')
+      setError(errorMessage(e, 'Erro ao criar template'))
     } finally {
       setSavingNew(false)
     }
   }
 
   const handleToggleActive = async (id: string, active: boolean) => {
-    await supabase.from('oe_checklist_templates').update({ active }).eq('id', id)
+    const { error: updErr } = await supabase.from('oe_checklist_templates').update({ active }).eq('id', id)
+    if (updErr) { showToast(errorMessage(updErr, 'Erro ao alterar o modelo'), 'error'); return }
     await loadTemplates()
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Excluir este template? Os itens serão removidos. OEs que o usam não serão afetadas.')) return
-    await supabase.from('oe_checklist_templates').delete().eq('id', id)
+    const excluir = await confirm({
+      title: 'Excluir este template?',
+      message: 'Os itens serão removidos. OEs que o usam não serão afetadas.',
+      confirmLabel: 'Excluir modelo',
+      variant: 'danger',
+    })
+    if (!excluir) return
+    const { error: delErr } = await supabase.from('oe_checklist_templates').delete().eq('id', id)
+    if (delErr) {
+      // Itens com resposta não se apagam (FK RESTRICT) e o modelo leva os itens junto: o banco recusa tudo.
+      showToast(codigoDoErro(delErr) === FK_VIOLADA ? MSG_MODELO_COM_RESPOSTAS : errorMessage(delErr, 'Erro ao excluir o modelo'), 'error')
+      return
+    }
     await loadTemplates()
   }
 
@@ -529,8 +662,9 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
     if (!tmpl) return
     const { data: items } = await supabase
       .from('oe_checklist_items')
-      .select('description, required, requires_photo, gate, sort_order, severity, category')
+      .select('description, required, requires_photo, gate, sort_order, severity, category, criterio, metodo')
       .eq('template_id', id)
+      .eq('ativo', true)
       .order('sort_order')
     const { data: newTmpl, error: insErr } = await supabase
       .from('oe_checklist_templates')
@@ -551,8 +685,9 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
     if (!tmpl) return
     const { data: items } = await supabase
       .from('oe_checklist_items')
-      .select('description, required, requires_photo, gate, sort_order, severity, category')
+      .select('description, required, requires_photo, gate, sort_order, severity, category, criterio, metodo')
       .eq('template_id', id)
+      .eq('ativo', true)
       .order('sort_order')
     const payload = { name: tmpl.name, service_type: tmpl.service_type, items: items ?? [] }
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' })
@@ -590,6 +725,8 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
               requires_photo: item.requires_photo ?? false,
               severity: item.severity ?? 'moderate',
               category: item.category ?? null,
+              criterio: item.criterio ?? null,
+              metodo: item.metodo ?? null,
               sort_order: item.sort_order ?? idx,
             }))
           )
@@ -750,6 +887,16 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
         </div>
       )}
 
+      {localToast && (
+        <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
+          localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+        }`}>
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          {localToast.message}
+        </div>
+      )}
+
+      {!somenteTemplateId && (
       <div className="flex items-center justify-between">
         <div>
           <h3 className="text-lg font-black text-slate-900">Templates de Checklist</h3>
@@ -797,9 +944,10 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
           </Button>
         </div>
       </div>
+      )}
 
       {/* New template form */}
-      {showNewForm && (
+      {!somenteTemplateId && showNewForm && (
         <div className="bg-blue-50 border border-blue-100 rounded-2xl p-4 space-y-3">
           <p className="text-xs font-black text-blue-700 uppercase tracking-widest">Novo Template</p>
           <div className="grid grid-cols-2 gap-3">
@@ -845,7 +993,15 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
       )}
 
       {/* Template list */}
-      {templates.length === 0 ? (
+      {templates.length === 0 && somenteTemplateId ? (
+        // Modelo único (Qualidade) que não voltou: excluído, ou de uma organização que a RLS não deixa ler.
+        // Com erro de leitura, só a faixa do erro (acima) — não dizer "não encontrada" sem saber.
+        error ? null : <div className="flex flex-col items-center justify-center h-48 text-center">
+          <ClipboardList className="w-12 h-12 mb-3 text-gray-300" aria-hidden="true" />
+          <p className="text-sm font-semibold text-gray-900">Ficha não encontrada</p>
+          <p className="text-sm text-gray-700 mt-1">Ela pode ter sido excluída ou ser de uma organização que você não acessa.</p>
+        </div>
+      ) : templates.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 text-slate-300">
           <ClipboardList className="w-12 h-12 mb-3" />
           <p className="text-sm font-bold text-slate-400">Nenhum template criado</p>
@@ -862,6 +1018,7 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
               onRename={handleRename}
               onDuplicate={handleDuplicate}
               onExport={handleExport}
+              escopo={!!somenteTemplateId}
             />
           ))}
         </div>

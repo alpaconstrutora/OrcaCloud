@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useRef } from 'react'
 import {
   CheckSquare, Loader2, AlertCircle, ChevronDown, ChevronRight, Wand2,
-  CheckCircle2, XCircle, MinusCircle, Ban, Camera, ClipboardList, RefreshCw,
+  CheckCircle2, XCircle, MinusCircle, Ban, Camera, ClipboardList, RefreshCw, History, Lock,
 } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { TipoObra, ProjectTypeTemplate } from '../types/project'
+import type { OeChecklistResponseHistoryRow } from '../types/operational-control'
 import { projectTypeTemplatesService } from '../services/projectTypeTemplatesService'
+import { workOrderService } from '../services/workOrderService'
+import { qualidadeSiacService } from '../services/qualidadeSiacService'
+import { errorMessage } from '../hooks/useOrgContext'
+import { useToast } from '../hooks/useToast'
+import { useNomeDoUsuario, usePermissaoQualidadeDaOE } from '../hooks/usePermissaoQualidadeDaOE'
 import Button from './ui/Button'
+import { useConfirm } from './ui/confirm'
+import { Sheet, SheetDescription, SheetHeader, SheetPanel, SheetTitle } from './ui/sheet'
 
 type ResponseStatus = 'conforme' | 'nao_conforme' | 'parcial' | 'nao_aplicavel'
 
@@ -19,6 +27,11 @@ interface ChecklistItem {
   sort_order: number
   severity: 'minor' | 'moderate' | 'major' | null
   category: string | null
+  /** Critério de aceitação (tolerância) e método de verificação — Qualidade SiAC fase 2. */
+  criterio: string | null
+  metodo: string | null
+  /** Item desativado: some da ficha se não tem resposta; com resposta, fica (é registro). */
+  ativo: boolean
 }
 
 interface ChecklistResponse {
@@ -30,6 +43,9 @@ interface ChecklistResponse {
   evidence_id: string | null
   nc_id: string | null
   completed_at: string | null
+  /** Gravados pelo banco quando a resposta muda (auth.uid / now). */
+  respondido_por: string | null
+  respondido_em: string | null
 }
 
 interface AvailableTemplate {
@@ -72,6 +88,35 @@ const GATE_COLORS: Record<string, string> = {
   pre_completion: 'bg-purple-100 text-purple-700',
   free: 'bg-slate-100 text-slate-600',
 }
+
+/** Rótulo completo da resposta (o botão usa "N/A"; o histórico escreve por extenso). */
+const RESPOSTA_LABELS: Record<ResponseStatus, string> = {
+  conforme: 'Conforme',
+  nao_conforme: 'Não conforme',
+  parcial: 'Parcial',
+  nao_aplicavel: 'Não aplicável',
+}
+
+/** O banco recusa (work_orders_ficha_travada, 42501) — o botão desliga antes, com a mesma frase. */
+const MOTIVO_FICHA_TRAVADA =
+  'A ficha de verificação de uma OE de serviço controlado com registro de inspeção (resposta, histórico de resposta, NC ou validação) não pode ser trocada nem retirada.'
+
+/**
+ * OE de serviço controlado: a ficha é a do serviço (Qualidade › serviço › ficha de verificação) — o banco
+ * só deixa ir à inspeção com ela (`_oe_portoes`, migration 130000). Trocar aqui pularia a ficha do serviço.
+ */
+const MOTIVO_FICHA_DO_SERVICO =
+  'A ficha de uma OE de serviço controlado vem do serviço controlado (Qualidade) — não se troca aqui; para mudar, edite a ficha do serviço na Qualidade ou o serviço da OE.'
+
+/** OE controlada sem ficha: o caminho é criar a ficha do serviço, não escolher um modelo qualquer. */
+const AVISO_SERVICO_SEM_FICHA =
+  'Crie a ficha de verificação do serviço na Qualidade e salve a OE de novo: esta OE é de serviço controlado e está sem ficha (a ficha vem do serviço).'
+
+const MOTIVO_NA_SEM_OBSERVACAO =
+  'Escreva a observação: item obrigatório só conta como cumprido em "não aplicável" com o motivo.'
+
+const fmtDataHora = (d: string | null) =>
+  d ? new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—'
 
 const SEVERITY_LABELS: Record<string, string> = {
   minor: 'Leve',
@@ -138,6 +183,34 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
   const [applyingTemplate, setApplyingTemplate] = useState(false)
   const [showTemplateSelector, setShowTemplateSelector] = useState(false)
 
+  // Qualidade SiAC (fase 2): OE de serviço controlado
+  const [controlledItemId, setControlledItemId] = useState<string | null>(null)
+  const controlada = controlledItemId !== null
+  /**
+   * Por que a ficha não se troca aqui (null = troca livre — OE comum). OE controlada: sempre travada
+   * (a ficha vem do serviço); com registro de inspeção, a frase do gatilho do banco; sem conseguir
+   * conferir o registro, o erro (fecha, não abre — e a ficha carrega mesmo assim).
+   */
+  const [motivoFichaTravada, setMotivoFichaTravada] = useState<string | null>(null)
+  const fichaTravada = motivoFichaTravada !== null
+  /** A ficha é do SGQ de outra organização que o usuário não lê (RLS): os itens não vêm. */
+  const [fichaSemAcesso, setFichaSemAcesso] = useState(false)
+  // "Não aplicável" em item obrigatório: observação obrigatória antes de gravar
+  const [expandedNAItemId, setExpandedNAItemId] = useState<string | null>(null)
+  const [naNotas, setNaNotas] = useState<Record<string, string>>({})
+  // Histórico do item (Sheet)
+  const [historicoDe, setHistoricoDe] = useState<{ item: ChecklistItem; resp: ChecklistResponse } | null>(null)
+  const [historico, setHistorico] = useState<OeChecklistResponseHistoryRow[]>([])
+  const [carregandoHistorico, setCarregandoHistorico] = useState(false)
+
+  const confirm = useConfirm()
+  const { showToast, localToast } = useToast()
+  const permissao = usePermissaoQualidadeDaOE(controlledItemId)
+  const nomeDoUsuario = useNomeDoUsuario()
+
+  /** Motivo de as respostas estarem desligadas (null = ligadas). Régua só da OE controlada. */
+  const motivoSemResposta = controlada ? permissao.motivoSemInspecao : null
+
   useEffect(() => { loadData() }, [workOrderId])
 
   const loadData = async () => {
@@ -146,7 +219,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
     try {
       // Load available active templates for this org in parallel with work order
       const [woRes, tmplsRes] = await Promise.all([
-        supabase.from('work_orders').select('checklist_template_id, project_id').eq('id', workOrderId).single(),
+        supabase.from('work_orders').select('checklist_template_id, project_id, org_id, controlled_item_id').eq('id', workOrderId).single(),
         orgId
           ? supabase.from('oe_checklist_templates').select('id, name, service_type').eq('org_id', orgId).eq('active', true).order('name')
           : Promise.resolve({ data: [], error: null }),
@@ -158,6 +231,22 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
       setAvailableTemplates(tmplsRes.data ?? [])
       setCurrentTemplateId(wo.checklist_template_id ?? null)
       setSelectedTemplateId(wo.checklist_template_id ?? '')
+      const ehControlada = Boolean(wo.controlled_item_id)
+      setControlledItemId((wo.controlled_item_id as string | null) ?? null)
+      setFichaSemAcesso(false)
+      if (ehControlada) {
+        // A mesma régua do gatilho que recusa trocar a ficha (resposta, histórico, NC ou validação).
+        // Falha ao conferir NÃO derruba a ficha: trava a troca com o motivo e segue carregando.
+        let motivo = MOTIVO_FICHA_DO_SERVICO
+        try {
+          if (await qualidadeSiacService.oeTemRegistro(workOrderId)) motivo = MOTIVO_FICHA_TRAVADA
+        } catch (e: unknown) {
+          motivo = `Não foi possível conferir se a OE tem registro de inspeção: ${errorMessage(e, 'erro desconhecido')}`
+        }
+        setMotivoFichaTravada(motivo)
+      } else {
+        setMotivoFichaTravada(null)
+      }
 
       if (!wo.checklist_template_id) {
         setItems([])
@@ -183,12 +272,12 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
       const [itemsRes, responsesRes] = await Promise.all([
         supabase
           .from('oe_checklist_items')
-          .select('id, description, required, requires_photo, gate, sort_order, severity, category')
+          .select('id, description, required, requires_photo, gate, sort_order, severity, category, criterio, metodo, ativo')
           .eq('template_id', wo.checklist_template_id)
           .order('sort_order'),
         supabase
           .from('oe_checklist_responses')
-          .select('id, item_id, completed, response_status, notes, evidence_id, nc_id, completed_at')
+          .select('id, item_id, completed, response_status, notes, evidence_id, nc_id, completed_at, respondido_por, respondido_em')
           .eq('work_order_id', workOrderId),
       ])
 
@@ -199,6 +288,13 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
       const respMap: Record<string, ChecklistResponse> = {}
       for (const r of responsesRes.data ?? []) respMap[r.item_id] = r
       setResponses(respMap)
+
+      // Ficha de OE controlada sem itens legíveis: é do SGQ de outra organização e a RLS os esconde
+      // de quem é membro só da SPE — a tela explica, em vez de mostrar "nenhum checklist".
+      if (ehControlada && (itemsRes.data ?? []).length === 0 && wo.org_id) {
+        const sgq = await qualidadeSiacService.sgqDaOrganizacao(wo.org_id)
+        setFichaSemAcesso(sgq !== wo.org_id && !(await qualidadeSiacService.sgqLegivel(sgq)))
+      }
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Erro ao carregar checklist')
     } finally {
@@ -208,15 +304,25 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
 
   const handleApplyTemplate = async () => {
     if (!selectedTemplateId) return
-    const hasResponses = Object.keys(responses).length > 0
-    if (hasResponses && selectedTemplateId !== currentTemplateId) {
-      if (!window.confirm('Trocar o template irá remover as respostas já registradas nesta OE. Confirmar?')) return
+    if (fichaTravada) return // botão desligado com o motivo; o banco recusaria (42501)
+    const apagaRespostas = Object.keys(responses).length > 0 && selectedTemplateId !== currentTemplateId
+    if (apagaRespostas) {
+      const ok = await confirm({
+        title: 'Trocar a ficha?',
+        message: 'Trocar a ficha apaga as respostas já registradas nesta OE.',
+        variant: 'danger',
+        confirmLabel: 'Trocar ficha',
+      })
+      if (!ok) return
     }
     setApplyingTemplate(true)
     setError(null)
     try {
-      if (hasResponses && selectedTemplateId !== currentTemplateId) {
-        await supabase.from('oe_checklist_responses').delete().eq('work_order_id', workOrderId)
+      if (apagaRespostas) {
+        // Exclusão que falha NÃO troca a ficha: trocar com as respostas antigas ainda lá deixaria
+        // a OE com respostas de itens de outra ficha.
+        const { error: delErr } = await supabase.from('oe_checklist_responses').delete().eq('work_order_id', workOrderId)
+        if (delErr) throw delErr
       }
       const { error: woErr } = await supabase
         .from('work_orders')
@@ -226,7 +332,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
       setShowTemplateSelector(false)
       await loadData()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao aplicar template')
+      showToast(errorMessage(e, 'Erro ao aplicar template'), 'error')
     } finally {
       setApplyingTemplate(false)
     }
@@ -234,6 +340,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
 
   const handleSeedFromTemplate = async () => {
     if (!template || !tipoObra || !orgId) return
+    if (controlada) return // a ficha da OE controlada vem do serviço (botão nem aparece)
     setSeeding(true)
     setError(null)
     try {
@@ -288,22 +395,30 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
     }
   }
 
+  /**
+   * Grava a resposta. `nc_id` só vai quando há NC nova (antes ia `null` a cada troca e desfazia o
+   * vínculo da NC do item); a resposta anterior vai para o histórico pelo banco. `notes` só vai
+   * quando a tela a pediu (não aplicável de item obrigatório). Devolve se gravou.
+   */
   const saveResponse = async (
     item: ChecklistItem,
     status: ResponseStatus,
-    ncId: string | null = null,
-  ) => {
+    extras: { ncId?: string; notes?: string } = {},
+  ): Promise<boolean> => {
     setSaving(item.id)
     setError(null)
     try {
-      const isComplete = status !== 'nao_aplicavel'
       const current = responses[item.id]
-      const payload = {
+      const notas = extras.notes ?? current?.notes ?? null
+      // "Cumprido": não aplicável só com observação; as demais respostas contam como respondidas.
+      const isComplete = status !== 'nao_aplicavel' || Boolean(notas?.trim())
+      const payload: Record<string, unknown> = {
         response_status: status,
         completed: isComplete,
         completed_at: isComplete ? new Date().toISOString() : null,
-        nc_id: ncId,
       }
+      if (extras.ncId) payload.nc_id = extras.ncId
+      if (extras.notes !== undefined) payload.notes = extras.notes
 
       if (current) {
         const { error: updErr } = await supabase
@@ -319,18 +434,31 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
       }
 
       await loadData()
+      return true
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao salvar resposta')
+      // 42501 (sem permissão de inspecionar) / P0001: a mensagem do banco, não um texto genérico.
+      showToast(errorMessage(e, 'Erro ao salvar resposta'), 'error')
+      return false
     } finally {
       setSaving(null)
     }
   }
 
   const handleStatusSelect = (item: ChecklistItem, status: ResponseStatus) => {
+    if (motivoSemResposta) return
     const current = responses[item.id]
     if (current?.response_status === status) return
 
+    // Item obrigatório: "não aplicável" só conta com o motivo — abre a observação antes de gravar.
+    if (status === 'nao_aplicavel' && item.required) {
+      setExpandedNCItemId(null)
+      setExpandedNAItemId(item.id)
+      setNaNotas(n => ({ ...n, [item.id]: current?.notes ?? '' }))
+      return
+    }
+
     if (status === 'nao_conforme') {
+      setExpandedNAItemId(null)
       setExpandedNCItemId(item.id)
       setNcForms(f => ({
         ...f,
@@ -344,7 +472,31 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
       return
     }
 
+    setExpandedNAItemId(null)
     saveResponse(item, status)
+  }
+
+  const handleNASubmit = async (item: ChecklistItem) => {
+    const notas = naNotas[item.id]?.trim()
+    if (!notas) return
+    const ok = await saveResponse(item, 'nao_aplicavel', { notes: notas })
+    if (ok) {
+      setExpandedNAItemId(null)
+      setNaNotas(n => { const x = { ...n }; delete x[item.id]; return x })
+    }
+  }
+
+  const abrirHistorico = async (item: ChecklistItem, resp: ChecklistResponse) => {
+    setHistoricoDe({ item, resp })
+    setHistorico([])
+    setCarregandoHistorico(true)
+    try {
+      setHistorico(await workOrderService.listarHistoricoResposta(resp.id))
+    } catch (e: unknown) {
+      showToast(errorMessage(e, 'Erro ao carregar o histórico da resposta'), 'error')
+    } finally {
+      setCarregandoHistorico(false)
+    }
   }
 
   const handleNCSubmit = async (item: ChecklistItem) => {
@@ -353,25 +505,20 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
     setSaving(item.id)
     setError(null)
     try {
-      const { data: nc, error: ncErr } = await supabase
-        .from('non_conformances')
-        .insert({
-          work_order_id: workOrderId,
-          description: ncForm.description,
-          severity: ncForm.severity,
-          due_date: ncForm.dueDate || null,
-          corrective_action: ncForm.correctiveAction || null,
-          status: 'open',
-        })
-        .select('id')
-        .single()
-      if (ncErr) throw ncErr
+      const nc = await workOrderService.createNonConformance({
+        workOrderId,
+        description: ncForm.description,
+        severity: ncForm.severity,
+        dueDate: ncForm.dueDate || undefined,
+        correctiveAction: ncForm.correctiveAction || undefined,
+      })
 
-      await saveResponse(item, 'nao_conforme', nc.id)
+      const ok = await saveResponse(item, 'nao_conforme', { ncId: nc.id })
+      if (!ok) return
       setExpandedNCItemId(null)
       setNcForms(f => { const n = { ...f }; delete n[item.id]; return n })
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao registrar NC')
+      showToast(errorMessage(e, 'Erro ao registrar NC'), 'error')
       setSaving(null)
     }
   }
@@ -380,45 +527,31 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
     setUploading(item.id)
     setError(null)
     try {
-      const ext = file.name.split('.').pop() ?? 'jpg'
-      const path = `evidence/${orgId ?? 'default'}/${workOrderId}/cl_${item.id}_${Date.now()}.${ext}`
-
-      const { error: upErr } = await supabase.storage
-        .from('operational-evidence')
-        .upload(path, file, { upsert: false })
-      if (upErr) throw upErr
-
-      // Bucket privado: evidence_files.file_url guarda o PATH (não a URL pública);
-      // a leitura resolve signed URL (ver OperacionalEvidence.resolveSignedUrls).
-      const { data: ev, error: evErr } = await supabase
-        .from('evidence_files')
-        .insert({
-          work_order_id: workOrderId,
-          file_type: 'photo',
-          file_url: path,
-          gate: item.gate,
-          description: `Checklist: ${item.description}`,
-          captured_at: new Date().toISOString(),
-        })
-        .select('id')
-        .single()
-      if (evErr) throw evErr
+      // Mesmo upload da foto da correção da NC: bucket privado, evidence_files.file_url = PATH, na
+      // pasta da org DA OE (o service lê work_orders.org_id) — não a do topo (REGRA #5).
+      const evidenciaId = await workOrderService.enviarFotoEvidencia({
+        workOrderId,
+        file,
+        prefixo: `cl_${item.id}`,
+        gate: item.gate,
+        description: `Checklist: ${item.description}`,
+      })
 
       const current = responses[item.id]
-      if (current) {
-        await supabase.from('oe_checklist_responses').update({ evidence_id: ev.id }).eq('id', current.id)
-      } else {
-        await supabase.from('oe_checklist_responses').insert({
+      // Erro aqui (ex.: 42501 de OE controlada) não pode passar calado: a foto subiu, o vínculo não.
+      const { error: respErr } = current
+        ? await supabase.from('oe_checklist_responses').update({ evidence_id: evidenciaId }).eq('id', current.id)
+        : await supabase.from('oe_checklist_responses').insert({
           work_order_id: workOrderId,
           item_id: item.id,
-          evidence_id: ev.id,
+          evidence_id: evidenciaId,
           completed: false,
         })
-      }
+      if (respErr) throw respErr
 
       await loadData()
     } catch (e: unknown) {
-      setError(e instanceof Error ? e.message : 'Erro ao enviar foto')
+      showToast(errorMessage(e, 'Erro ao enviar foto'), 'error')
     } finally {
       setUploading(null)
     }
@@ -434,21 +567,56 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
     )
   }
 
+  // ── Aviso (guia §13) — sem ToastProvider montado, o próprio componente desenha ──
+  const avisoLocal = localToast && (
+    <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+      localToast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+    }`}>
+      <AlertCircle className="w-4 h-4 shrink-0" />
+      {localToast.message}
+    </div>
+  )
+
+  // ── Ficha do SGQ de outra organização, ilegível para quem é membro só da SPE ──
+
+  if (fichaSemAcesso) {
+    return (
+      <div className="flex items-start gap-3 p-4 bg-amber-50 border border-amber-200 rounded-[10px]">
+        <Lock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+        <p className="text-sm text-amber-900">
+          A ficha deste serviço é do sistema da qualidade de {permissao.nomeOrgDoServico ?? 'outra organização'} — você não tem acesso para inspecionar
+        </p>
+      </div>
+    )
+  }
+
+  // Item desativado sem resposta sai da ficha; com resposta fica (é registro da inspeção).
+  const visibleItems = items.filter(i => i.ativo !== false || Boolean(responses[i.id]))
+
   // ── Empty state ───────────────────────────────────────────────────────────
 
-  if (items.length === 0) {
+  if (visibleItems.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center py-10 text-slate-300 gap-4">
+        {avisoLocal}
         <CheckSquare className="w-10 h-10 mb-2" />
         <div className="text-center">
           <p className="text-sm font-bold text-slate-400">Nenhum checklist vinculado</p>
           <p className="text-xs mt-1 text-slate-400">Selecione um template abaixo ou use o padrão do tipo de obra</p>
         </div>
 
+        {controlada && (
+          <p className="flex items-start gap-2 max-w-sm text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-[10px] px-3 py-2">
+            <Lock className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+            {AVISO_SERVICO_SEM_FICHA}
+          </p>
+        )}
+
         {/* Template selector no empty state */}
         {availableTemplates.length > 0 && (
           <div className="flex items-center gap-2 w-full max-w-sm">
             <select
+              aria-label="Modelo de checklist"
               value={selectedTemplateId}
               onChange={e => setSelectedTemplateId(e.target.value)}
               className="flex-1 px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:border-blue-400"
@@ -458,18 +626,21 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
             </select>
-            <Button
-              onClick={handleApplyTemplate}
-              disabled={!selectedTemplateId || applyingTemplate}
-              className="flex items-center gap-1.5 rounded-xl text-button font-black disabled:opacity-40"
-            >
-              {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
-              Aplicar
-            </Button>
+            {/* OE controlada: a ficha vem do serviço (com registro, o banco recusa — 42501) — desligado, dizendo por quê. */}
+            <span className="inline-flex" title={motivoFichaTravada ?? undefined}>
+              <Button
+                onClick={handleApplyTemplate}
+                disabled={!selectedTemplateId || applyingTemplate || fichaTravada}
+                className="flex items-center gap-1.5 rounded-xl text-button font-black disabled:opacity-40"
+              >
+                {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
+                Aplicar
+              </Button>
+            </span>
           </div>
         )}
 
-        {tipoObra && template && template.checklist_template.length > 0 && orgId && (
+        {tipoObra && template && template.checklist_template.length > 0 && orgId && !controlada && (
           <button
             onClick={handleSeedFromTemplate}
             disabled={seeding}
@@ -486,7 +657,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
   // ── Group by gate ─────────────────────────────────────────────────────────
 
   const byGate: Record<string, ChecklistItem[]> = {}
-  for (const item of items) {
+  for (const item of visibleItems) {
     if (!byGate[item.gate]) byGate[item.gate] = []
     byGate[item.gate].push(item)
   }
@@ -494,10 +665,11 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
   const totalAnswered = Object.values(responses).filter(r => r.response_status !== null).length
   const conformeCount = Object.values(responses).filter(r => r.response_status === 'conforme').length
   const ncCount       = Object.values(responses).filter(r => r.response_status === 'nao_conforme').length
-  const pct = items.length > 0 ? Math.round((totalAnswered / items.length) * 100) : 0
+  const pct = visibleItems.length > 0 ? Math.min(100, Math.round((totalAnswered / visibleItems.length) * 100)) : 0
 
   return (
     <div className="space-y-4">
+      {avisoLocal}
       {error && (
         <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-xl text-red-700 text-sm">
           <AlertCircle className="w-4 h-4 shrink-0" />
@@ -511,6 +683,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
           {showTemplateSelector ? (
             <>
               <select
+                aria-label="Modelo de checklist"
                 value={selectedTemplateId}
                 onChange={e => setSelectedTemplateId(e.target.value)}
                 className="flex-1 px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:border-blue-400"
@@ -520,14 +693,16 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                   <option key={t.id} value={t.id}>{t.name}</option>
                 ))}
               </select>
-              <Button
-                onClick={handleApplyTemplate}
-                disabled={applyingTemplate}
-                className="flex items-center gap-1.5 rounded-xl text-button font-black disabled:opacity-40"
-              >
-                {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
-                Aplicar
-              </Button>
+              <span className="inline-flex" title={motivoFichaTravada ?? undefined}>
+                <Button
+                  onClick={handleApplyTemplate}
+                  disabled={applyingTemplate || fichaTravada}
+                  className="flex items-center gap-1.5 rounded-xl text-button font-black disabled:opacity-40"
+                >
+                  {applyingTemplate ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ClipboardList className="w-3.5 h-3.5" />}
+                  Aplicar
+                </Button>
+              </span>
               <button
                 onClick={() => { setShowTemplateSelector(false); setSelectedTemplateId(currentTemplateId ?? '') }}
                 className="px-3 py-2 text-slate-500 hover:bg-slate-100 rounded-xl text-button font-bold"
@@ -536,13 +711,17 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
               </button>
             </>
           ) : (
-            <button
-              onClick={() => setShowTemplateSelector(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-button font-bold hover:bg-slate-50 transition-colors"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Trocar template
-            </button>
+            // OE controlada: a ficha vem do serviço (com registro, o banco recusa — 42501) — desligado, dizendo por quê.
+            <span className="inline-flex" title={motivoFichaTravada ?? undefined}>
+              <button
+                onClick={() => setShowTemplateSelector(true)}
+                disabled={fichaTravada}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 text-slate-500 rounded-xl text-button font-bold hover:bg-slate-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Trocar template
+              </button>
+            </span>
           )}
         </div>
       )}
@@ -550,7 +729,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
       {/* Progress */}
       <div className="bg-slate-50 rounded-2xl p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-black text-slate-700">{totalAnswered} / {items.length} respondidos</span>
+          <span className="text-sm font-black text-slate-700">{totalAnswered} / {visibleItems.length} respondidos</span>
           <span className="text-sm font-black text-blue-600">{pct}%</span>
         </div>
         <div className="w-full bg-slate-200 rounded-full h-2">
@@ -599,13 +778,33 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                   const hasPhoto = Boolean(resp?.evidence_id)
                   const isNCExpanded = expandedNCItemId === item.id
                   const ncForm = ncForms[item.id]
+                  const isNAExpanded = expandedNAItemId === item.id
+                  const naNota = naNotas[item.id] ?? ''
 
                   return (
-                    <div key={item.id} className="px-4 py-3 space-y-3">
+                    <div key={item.id} data-item-ficha={item.id} className="px-4 py-3 space-y-3">
                       {/* Description + meta */}
                       <div className="flex items-start gap-2">
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium text-slate-800">{item.description}</p>
+                          {item.criterio && (
+                            <p className="text-xs text-slate-600 mt-0.5">
+                              <span className="font-semibold">Critério:</span> {item.criterio}
+                            </p>
+                          )}
+                          {item.metodo && (
+                            <p className="text-xs text-slate-600 mt-0.5">
+                              <span className="font-semibold">Método:</span> {item.metodo}
+                            </p>
+                          )}
+                          {item.ativo === false && (
+                            <p className="text-xs text-slate-500 mt-0.5">Item desativado na ficha — mantido porque já tem resposta</p>
+                          )}
+                          {currentStatus === 'nao_aplicavel' && resp?.notes && (
+                            <p className="text-xs text-slate-600 mt-0.5">
+                              <span className="font-semibold">Observação:</span> {resp.notes}
+                            </p>
+                          )}
                           <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                             {item.required && (
                               <span className="text-xs font-bold text-red-500">Obrigatório</span>
@@ -639,20 +838,33 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                           const Icon = opt.icon
                           const isActive = currentStatus === opt.value
                           return (
-                            <button
-                              key={opt.value}
-                              disabled={isSaving}
-                              onClick={() => handleStatusSelect(item, opt.value)}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-black border transition-all disabled:opacity-50
-                                ${isActive
-                                  ? opt.activeCls + ' shadow-sm'
-                                  : 'border-slate-200 text-slate-500 ' + opt.hoverCls}`}
-                            >
-                              <Icon className="w-3.5 h-3.5" />
-                              {opt.label}
-                            </button>
+                            <span key={opt.value} className="inline-flex" title={motivoSemResposta ?? undefined}>
+                              <button
+                                disabled={isSaving || Boolean(motivoSemResposta)}
+                                onClick={() => handleStatusSelect(item, opt.value)}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-black border transition-all disabled:opacity-50 disabled:cursor-not-allowed
+                                  ${isActive
+                                    ? opt.activeCls + ' shadow-sm'
+                                    : 'border-slate-200 text-slate-500 ' + opt.hoverCls}`}
+                              >
+                                <Icon className="w-3.5 h-3.5" />
+                                {opt.label}
+                              </button>
+                            </span>
                           )
                         })}
+
+                        {/* Histórico do item: as respostas anteriores (reinspeções), gravadas pelo banco */}
+                        {resp && (
+                          <button
+                            type="button"
+                            onClick={() => abrirHistorico(item, resp)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-button font-bold border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                            Histórico
+                          </button>
+                        )}
 
                         {/* Photo button (always visible if requires_photo) */}
                         {item.requires_photo && (
@@ -669,22 +881,63 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                                 e.target.value = ''
                               }}
                             />
-                            <button
-                              disabled={isUploadingThis}
-                              onClick={() => fileRefs.current[item.id]?.click()}
-                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-form-input font-black border transition-all
-                                ${hasPhoto
-                                  ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                  : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}
-                            >
-                              {isUploadingThis
-                                ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                : <Camera className="w-3.5 h-3.5" />}
-                              {hasPhoto ? 'Foto OK' : 'Foto'}
-                            </button>
+                            {/* A foto grava evidence_id na resposta: na OE controlada, o banco exige inspecionar. */}
+                            <span className="inline-flex" title={motivoSemResposta ?? undefined}>
+                              <button
+                                disabled={isUploadingThis || Boolean(motivoSemResposta)}
+                                onClick={() => fileRefs.current[item.id]?.click()}
+                                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-form-input font-black border transition-all disabled:opacity-50 disabled:cursor-not-allowed
+                                  ${hasPhoto
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                    : 'border-slate-200 text-slate-500 hover:bg-slate-100'}`}
+                              >
+                                {isUploadingThis
+                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                  : <Camera className="w-3.5 h-3.5" />}
+                                {hasPhoto ? 'Foto OK' : 'Foto'}
+                              </button>
+                            </span>
                           </>
                         )}
                       </div>
+
+                      {/* "Não aplicável" em item obrigatório: só conta como cumprido com o motivo */}
+                      {isNAExpanded && (
+                        <div className="bg-slate-50 border border-slate-200 rounded-xl p-3 space-y-3">
+                          <div className="space-y-1.5">
+                            <label htmlFor={`na-${item.id}`} className="text-xs font-semibold text-slate-500">
+                              Observação do não aplicável (obrigatória)
+                            </label>
+                            <textarea
+                              id={`na-${item.id}`}
+                              value={naNota}
+                              onChange={e => setNaNotas(n => ({ ...n, [item.id]: e.target.value }))}
+                              rows={2}
+                              placeholder="Por que este item não se aplica a esta OE"
+                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-blue-400 resize-none"
+                            />
+                          </div>
+                          <div className="flex items-center gap-2 justify-end">
+                            <button
+                              type="button"
+                              onClick={() => setExpandedNAItemId(null)}
+                              className="px-3 py-1.5 text-slate-500 hover:bg-slate-100 rounded-xl text-button font-bold"
+                            >
+                              Cancelar
+                            </button>
+                            <span className="inline-flex" title={!naNota.trim() ? MOTIVO_NA_SEM_OBSERVACAO : undefined}>
+                              <Button
+                                disabled={isSaving || !naNota.trim()}
+                                onClick={() => handleNASubmit(item)}
+                                className="flex items-center gap-1.5"
+                              >
+                                {isSaving && <Loader2 className="w-3 h-3 animate-spin" />}
+                                Confirmar não aplicável
+                              </Button>
+                            </span>
+                          </div>
+                        </div>
+                      )}
 
                       {/* NC inline form */}
                       {isNCExpanded && ncForm && (
@@ -766,6 +1019,59 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
           </div>
         )
       })}
+
+      {/* Histórico do item — só leitura: cada linha é a resposta que foi substituída (ou apagada) */}
+      <Sheet open={Boolean(historicoDe)} onClose={() => setHistoricoDe(null)} size="lg">
+        {historicoDe && (
+          <>
+            <SheetHeader onClose={() => setHistoricoDe(null)}>
+              <SheetTitle>Histórico da resposta</SheetTitle>
+              <SheetDescription>{historicoDe.item.description}</SheetDescription>
+            </SheetHeader>
+            <SheetPanel className="px-6 py-5 space-y-4">
+              <div className="rounded-[10px] border border-blue-100 bg-blue-50/60 p-3 space-y-0.5">
+                <p className="text-xs font-semibold text-slate-500">Resposta atual</p>
+                <p className="text-sm font-semibold text-slate-900">
+                  {historicoDe.resp.response_status ? RESPOSTA_LABELS[historicoDe.resp.response_status] : 'Sem resposta'}
+                </p>
+                <p className="text-xs text-slate-600">
+                  {nomeDoUsuario(historicoDe.resp.respondido_por)} · {fmtDataHora(historicoDe.resp.respondido_em)}
+                </p>
+                {historicoDe.resp.notes && <p className="text-xs text-slate-700">Observação: {historicoDe.resp.notes}</p>}
+              </div>
+
+              {carregandoHistorico ? (
+                <div className="text-center py-12"><Loader2 className="w-5 h-5 text-blue-600 animate-spin inline" /></div>
+              ) : historico.length === 0 ? (
+                <p className="text-sm text-slate-500">Nenhuma resposta anterior: este item foi respondido uma vez só.</p>
+              ) : (
+                <ol className="space-y-3">
+                  {[...historico].reverse().map(h => {
+                    const criterio = typeof h.copia?.item_criterio === 'string' ? h.copia.item_criterio : null
+                    const revisao = typeof h.copia?.procedimento_revisao === 'string' ? h.copia.procedimento_revisao : null
+                    return (
+                      <li key={h.id} className="rounded-[10px] border border-slate-200 p-3 space-y-0.5">
+                        <p className="text-sm font-semibold text-slate-900">
+                          {h.response_status ? RESPOSTA_LABELS[h.response_status] : 'Sem resposta'}
+                        </p>
+                        <p className="text-xs text-slate-600">
+                          Respondido por {nomeDoUsuario(h.respondido_por)} · {fmtDataHora(h.respondido_em)}
+                        </p>
+                        {h.notes && <p className="text-xs text-slate-700">Observação: {h.notes}</p>}
+                        {criterio && <p className="text-xs text-slate-600">Critério na época: {criterio}</p>}
+                        {revisao && <p className="text-xs text-slate-600">Procedimento: revisão {revisao}</p>}
+                        <p className="text-xs text-slate-500">
+                          {h.evento === 'exclusao' ? 'Resposta apagada' : 'Substituída'} por {nomeDoUsuario(h.alterado_por)} · {fmtDataHora(h.created_at)}
+                        </p>
+                      </li>
+                    )
+                  })}
+                </ol>
+              )}
+            </SheetPanel>
+          </>
+        )}
+      </Sheet>
     </div>
   )
 }

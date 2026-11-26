@@ -36,6 +36,12 @@ export type ValidationType = 'start_release' | 'inspection' | 'completion_approv
 
 export type ValidationStatus = 'pending' | 'approved' | 'rejected'
 
+/** `oe_checklist_responses.response_status` — "cumprido" = conforme, ou não aplicável com observação. */
+export type ChecklistResponseStatus = 'conforme' | 'nao_conforme' | 'parcial' | 'nao_aplicavel'
+
+/** `non_conformances.eficacia` (Qualidade SiAC, fase 2). */
+export type NCEficacia = 'pendente' | 'eficaz' | 'nao_eficaz'
+
 export type WeatherCondition = 'sunny' | 'cloudy' | 'rain' | 'heavy_rain'
 
 export type FieldCondition = 'normal' | 'compromised' | 'halted'
@@ -103,6 +109,15 @@ export interface OeChecklistItem {
   requiresPhoto: boolean
   gate: ChecklistGate
   sortOrder: number
+  /** Severidade da NC gerada pela resposta não conforme. */
+  severity: NCSeverity | null
+  category: string | null
+  /** Critério de aceitação (tolerância) — fase 2. */
+  criterio: string | null
+  /** Método de verificação — fase 2. */
+  metodo: string | null
+  /** Item desativado não entra em OE nova; item com resposta não se apaga, só se desativa. */
+  ativo: boolean
 }
 
 export interface ProjectOpsConfig {
@@ -160,6 +175,8 @@ export interface WorkOrder {
 
   predecessorId: string | null
   checklistTemplateId: string | null
+  /** Serviço controlado (Qualidade SiAC) — da organização dona do SGQ da organização da OE. */
+  controlledItemId: string | null
   replanningCount: number
 
   createdAt: string
@@ -214,6 +231,14 @@ export interface OeChecklistResponse {
   notes: string | null
   completedById: string | null
   completedAt: string | null
+  responseStatus: ChecklistResponseStatus | null
+  ncId: string | null
+  /** Gravados pelo banco quando `response_status` muda (auth.uid / now). */
+  respondidoPor: string | null
+  respondidoEm: string | null
+  /** Cópia congelada do critério e do método do item no momento da resposta. */
+  itemCriterio: string | null
+  itemMetodo: string | null
 }
 
 export interface NonConformance {
@@ -228,6 +253,14 @@ export interface NonConformance {
   resolutionEvidenceId: string | null
   createdAt: string
   closedAt: string | null
+  /** Encerrar exige causa e ação corretiva (CHECK no banco). */
+  causa: string | null
+  eficacia: NCEficacia | null
+  eficaciaEm: string | null
+  /** Motivo da última verificação de eficácia (gravado no "não eficaz"). */
+  eficaciaMotivo: string | null
+  /** Serviço controlado da OE — preenchido pelo banco. */
+  controlledItemId: string | null
 }
 
 export interface WorkOrderValidation {
@@ -238,6 +271,49 @@ export interface WorkOrderValidation {
   approvedById: string | null
   notes: string | null
   createdAt: string
+  /** Quem aprovou/reprovou a inspeção (auth.uid) e quando — gravados pela RPC. */
+  liberadoPor: string | null
+  liberadoEm: string | null
+  /** Congelado na aprovação: cada executor e se estava treinado na revisão vigente. */
+  executores: Array<{ employee_id: string; nome: string; treinado: boolean }>
+  procedimentoRevisao: string | null
+}
+
+/** Linha de `non_conformance_history` (só leitura) — o estado NOVO a cada mudança da NC. */
+export interface NonConformanceHistoryRow {
+  id: string
+  nc_id: string | null
+  work_order_id: string
+  status: string | null
+  causa: string | null
+  corrective_action: string | null
+  eficacia: NCEficacia | null
+  /** Motivo da verificação de eficácia naquele estado (ex.: por que não foi eficaz). */
+  eficacia_motivo: string | null
+  /** Descrição da NC naquele estado (mudar a descrição também gera linha). */
+  description: string | null
+  evento: 'alteracao' | 'exclusao'
+  alterado_por: string | null
+  created_at: string
+}
+
+/** Linha de `oe_checklist_response_history` (só leitura) — a resposta ANTERIOR a cada reinspeção. */
+export interface OeChecklistResponseHistoryRow {
+  id: string
+  response_id: string | null
+  work_order_id: string
+  item_id: string
+  response_status: ChecklistResponseStatus | null
+  notes: string | null
+  nc_id: string | null
+  evidence_id: string | null
+  respondido_por: string | null
+  respondido_em: string | null
+  /** item_descricao, item_criterio, item_metodo, procedimento_revisao, procedimento_versao_id, completed… */
+  copia: Record<string, unknown> | null
+  evento: 'alteracao' | 'exclusao'
+  alterado_por: string | null
+  created_at: string
 }
 
 export interface SiteDiary {
@@ -352,7 +428,9 @@ export interface CreateWorkOrderInput {
   plannedQuantity?: number
   plannedCost?: number
   predecessorId?: string
-  checklistTemplateId?: string
+  checklistTemplateId?: string | null
+  /** Serviço controlado (Qualidade SiAC); `null` = sem serviço. Ausente no update = não mexe. */
+  controlledItemId?: string | null
   budgetItemRef?: BudgetItemRef
   planningItemRef?: PlanningItemRef
 }
@@ -372,7 +450,9 @@ export interface UpdateWorkOrderInput {
   plannedQuantity?: number
   plannedCost?: number
   predecessorId?: string
-  checklistTemplateId?: string
+  checklistTemplateId?: string | null
+  /** Serviço controlado (Qualidade SiAC); `null` = sem serviço. Ausente no update = não mexe. */
+  controlledItemId?: string | null
   budgetItemRef?: BudgetItemRef
   planningItemRef?: PlanningItemRef
 }
@@ -413,6 +493,10 @@ export interface CreateNonConformanceInput {
   severity?: NCSeverity
   responsibleId?: string
   dueDate?: string
+  /** Causa já conhecida na abertura (opcional) — encerrar exige causa (CHECK no banco). */
+  causa?: string
+  /** Ação corretiva planejada na abertura (opcional). */
+  correctiveAction?: string
 }
 
 // ────────────────────────────────────────────────────────────

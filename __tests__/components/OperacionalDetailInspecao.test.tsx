@@ -316,6 +316,8 @@ describe('OperacionalDetail — sem caixa alta forçada', () => {
         expect(liberar.className).not.toMatch(/\buppercase\b/);
         for (const aba of screen.getAllByRole('tab')) expect(aba.className).not.toMatch(/\buppercase\b/);
         expect(screen.getByRole('button', { name: 'Bloquear' }).className).not.toMatch(/\buppercase\b/);
+        const titulo = screen.getByText('Ações disponíveis');
+        expect(titulo.className).not.toMatch(/uppercase/);
         await user.click(liberar);
         const cabecalho = await screen.findByText('Requisitos não atendidos');
         expect(cabecalho.className).not.toMatch(/\buppercase\b/);

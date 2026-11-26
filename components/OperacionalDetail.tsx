@@ -455,7 +455,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
       {/* Workflow buttons */}
       {(allowedNext.length > 0 || status === 'blocked') && (
         <div className="bg-white rounded-2xl border border-slate-100 p-4 shadow-sm">
-          <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Ações Disponíveis</p>
+          <p className="text-xs font-black text-slate-400 mb-3">Ações disponíveis</p>
           <div className="flex flex-wrap gap-2">
             {status === 'blocked' && (
               <button

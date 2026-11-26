@@ -65,7 +65,11 @@ interface Props {
     /** Sub-abas (Serviços | Materiais), acopladas no topo do card da tabela (§19.1 acoplada). */
     abas?: React.ReactNode;
     /** Serviços: executores treinados da inspeção aprovada mais recente, por item (`contarAplicados().porItem`). */
-    executoresPorItem?: Record<string, { treinados: number; executores: number }>;
+    /**
+     * Serviços: executores treinados da inspeção aprovada mais recente, por item (`contarAplicados().porItem`).
+     * `null` = as inspeções não puderam ser lidas: a célula diz "não contado", não "—" (que seria "nenhuma").
+     */
+    executoresPorItem?: Record<string, { treinados: number; executores: number }> | null;
 }
 
 const procedimentoDo = (i: ItemControlado, procedimentos: Record<string, ProcedimentoResumo>) =>
@@ -113,6 +117,7 @@ export const ListaControlada: React.FC<Props> = ({
     }, [contagem]);
 
     const rotuloExecutores = React.useCallback((i: ItemControlado) => {
+        if (executoresPorItem === null) return 'não contado';
         const e = executoresPorItem?.[i.id];
         return e ? `${e.treinados} de ${e.executores}` : '—';
     }, [executoresPorItem]);
@@ -195,7 +200,7 @@ export const ListaControlada: React.FC<Props> = ({
                     case 'treinados': { const t = rotuloTreinados(i); return <span className="block truncate text-sm font-normal text-gray-700" title={t}>{t}</span>; }
                     case 'executores': {
                         const t = rotuloExecutores(i);
-                        return <span className="text-sm font-normal text-gray-700" title={t === '—' ? 'Nenhuma inspeção aprovada deste serviço' : 'Executores treinados na inspeção aprovada mais recente'}>{t}</span>;
+                        return <span className="text-sm font-normal text-gray-700" title={executoresPorItem === null ? 'Não foi possível ler as inspeções aprovadas: os executores treinados não foram contados' : t === '—' ? 'Nenhuma inspeção aprovada deste serviço' : 'Executores treinados na inspeção aprovada mais recente'}>{t}</span>;
                     }
                     case 'codigos': return <span className="text-sm font-normal text-gray-700">{i.codigos.length}</span>;
                     default: return null;

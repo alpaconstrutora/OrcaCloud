@@ -107,14 +107,15 @@ const montar = (over: {
     const edicao = over.edicao === undefined ? { modo: 'editar' as const, item: item() } : over.edicao;
     const onSaved = over.onSaved ?? vi.fn(async () => undefined);
     const onClose = over.onClose ?? vi.fn();
+    const onEditarFicha = vi.fn();
     render(
         <ConfirmProvider>
             <ItemControladoSheet edicao={edicao} itensDaOrg={over.itensDaOrg ?? (edicao?.modo === 'editar' ? [edicao.item] : [])}
                 procedimento={over.procedimento ?? null} treinamentos={[]} podeEditar
-                onClose={onClose} onSaved={onSaved} onRegistrarTreinamento={vi.fn()} />
+                onClose={onClose} onSaved={onSaved} onRegistrarTreinamento={vi.fn()} onEditarFicha={onEditarFicha} />
         </ConfirmProvider>,
     );
-    return { onSaved, onClose };
+    return { onSaved, onClose, onEditarFicha };
 };
 
 beforeEach(() => {
@@ -200,7 +201,7 @@ describe('Qualidade (SiAC) — Sheet do item controlado', () => {
         const ui = (treinamentos: typeof r1[]) => (
             <ConfirmProvider>
                 <ItemControladoSheet edicao={edicao} itensDaOrg={[comCurso]} procedimento={null} treinamentos={treinamentos} podeEditar
-                    onClose={vi.fn()} onSaved={vi.fn(async () => undefined)} onRegistrarTreinamento={vi.fn()} />
+                    onClose={vi.fn()} onSaved={vi.fn(async () => undefined)} onRegistrarTreinamento={vi.fn()} onEditarFicha={vi.fn()} />
             </ConfirmProvider>
         );
         const { rerender } = render(ui([r1]));
@@ -341,7 +342,7 @@ describe('Qualidade (SiAC) — Sheet do item controlado', () => {
             <ConfirmProvider>
                 <ItemControladoSheet edicao={{ modo: 'editar', item: comCurso }} itensDaOrg={[comCurso]} procedimento={null}
                     treinamentos={[{ employee_id: 'e1', data_realizacao: '2026-10-01', aprovado: true, externo: false, registrado_em: null }]}
-                    podeEditar onClose={vi.fn()} onSaved={vi.fn(async () => undefined)} onRegistrarTreinamento={vi.fn()} />
+                    podeEditar onClose={vi.fn()} onSaved={vi.fn(async () => undefined)} onRegistrarTreinamento={vi.fn()} onEditarFicha={vi.fn()} />
             </ConfirmProvider>,
         );
         expect(await screen.findByText('carregando…')).toBeTruthy();
@@ -358,7 +359,7 @@ describe('Qualidade (SiAC) — Sheet do item controlado', () => {
 describe('Qualidade (SiAC) — fase 2: ficha de verificação do serviço', () => {
     it('(n) "Criar ficha": cria o modelo na org do item com o nome do serviço e grava checklist_template_id; "Editar ficha" abre só ele', async () => {
         const user = userEvent.setup();
-        const { onSaved } = montar();
+        const { onSaved, onEditarFicha } = montar();
         expect(await screen.findByText('Sem ficha de verificação.')).toBeTruthy();
         await user.click(screen.getByRole('button', { name: 'Criar ficha' }));
         await waitFor(() => expect(criarFichaModelo).toHaveBeenCalledWith('org-a', 'concretagem de peça estrutural', 'Estrutura'));
@@ -367,28 +368,36 @@ describe('Qualidade (SiAC) — fase 2: ficha de verificação do serviço', () =
         expect(await screen.findByText(/Ficha de verificação criada/)).toBeTruthy();
         // o estado confirmado já tem a ficha, mesmo sem a recarga chegar
         expect(screen.queryByRole('button', { name: 'Criar ficha' })).toBeNull();
+        // "Editar ficha" NÃO abre o editor dentro deste Sheet: pede ao módulo (irmão, fora do painel)
         await user.click(await screen.findByRole('button', { name: 'Editar ficha' }));
-        const editor = await screen.findByTestId('editor-da-ficha');
-        expect(editor.getAttribute('data-template')).toBe('tpl-novo');
-        expect(editor.getAttribute('data-org')).toBe('org-a');
-        expect(screen.getByRole('heading', { name: 'Editar ficha de verificação' })).toBeTruthy();
+        expect(onEditarFicha).toHaveBeenCalledWith(expect.objectContaining({ id: 'item-1', checklist_template_id: 'tpl-novo' }), 'tpl-novo');
+        expect(screen.queryByTestId('editor-da-ficha')).toBeNull();
     });
 
     it('(n1) serviço com ficha: "Editar ficha" abre o editor do modelo gravado', async () => {
         const user = userEvent.setup();
-        montar({ edicao: { modo: 'editar', item: item({ checklist_template_id: 'tpl-7' }) } });
+        const { onEditarFicha } = montar({ edicao: { modo: 'editar', item: item({ checklist_template_id: 'tpl-7' }) } });
         await user.click(await screen.findByRole('button', { name: 'Editar ficha' }));
-        expect((await screen.findByTestId('editor-da-ficha')).getAttribute('data-template')).toBe('tpl-7');
+        expect(onEditarFicha).toHaveBeenCalledWith(expect.objectContaining({ id: 'item-1' }), 'tpl-7');
         expect(criarFichaModelo).not.toHaveBeenCalled();
     });
 
-    it('(n2) modelo criado e vínculo recusado: a mensagem diz que a ficha ficou criada', async () => {
+    it('(n2) modelo criado e vínculo recusado: diz que a ficha ficou criada; tentar de novo só vincula (sem 2º modelo)', async () => {
         const user = userEvent.setup();
-        atualizarItem.mockRejectedValue(new Error('a ficha modelo tem de ser da organização do item [42501]'));
+        atualizarItem.mockRejectedValueOnce(new Error('a ficha modelo tem de ser da organização do item [42501]'));
         montar();
         await user.click(await screen.findByRole('button', { name: 'Criar ficha' }));
         expect(await screen.findByText(/A ficha foi criada no Controle Operacional, mas não foi possível vinculá-la ao serviço \(a ficha modelo tem de ser da organização do item \[42501\]\)/)).toBeTruthy();
-        expect(screen.getByRole('button', { name: 'Criar ficha' })).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Criar ficha' })).toBeNull();
+        expect(screen.getByText('Ficha criada, ainda não vinculada a este serviço.')).toBeTruthy();
+        const vincular = await screen.findByRole('button', { name: 'Vincular ficha criada' }) as HTMLButtonElement;
+        await waitFor(() => expect(vincular.disabled).toBe(false));
+        await user.click(vincular);
+        await waitFor(() => expect(atualizarItem).toHaveBeenCalledTimes(2));
+        expect(atualizarItem).toHaveBeenLastCalledWith('item-1', { checklist_template_id: 'tpl-novo' });
+        expect(criarFichaModelo).toHaveBeenCalledTimes(1);
+        expect(await screen.findByRole('button', { name: 'Editar ficha' })).toBeTruthy();
+        expect(screen.getByText('Ficha de verificação vinculada.')).toBeTruthy();
     });
 
     it('(n3) material não tem ficha; sem permissão, "Criar ficha" desligado diz por quê', async () => {
@@ -401,7 +410,7 @@ describe('Qualidade (SiAC) — fase 2: ficha de verificação do serviço', () =
         render(
             <ConfirmProvider>
                 <ItemControladoSheet edicao={{ modo: 'editar', item: item() }} itensDaOrg={[item()]} procedimento={null} treinamentos={[]}
-                    podeEditar={false} onClose={vi.fn()} onSaved={vi.fn(async () => undefined)} onRegistrarTreinamento={vi.fn()} />
+                    podeEditar={false} onClose={vi.fn()} onSaved={vi.fn(async () => undefined)} onRegistrarTreinamento={vi.fn()} onEditarFicha={vi.fn()} />
             </ConfirmProvider>,
         );
         const botao = await screen.findByRole('button', { name: 'Criar ficha' }) as HTMLButtonElement;

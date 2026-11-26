@@ -18,7 +18,7 @@ import { contarAplicados } from '../../utils/qualidadeSiac';
 import { PainelDoNivel } from './PainelDoNivel';
 import { ListaControlada } from './ListaControlada';
 import { PorObra } from './PorObra';
-import { ItemControladoSheet, type EdicaoDoItem } from './ItemControladoSheet';
+import { EditorDaFichaSheet, ItemControladoSheet, type EdicaoDoItem } from './ItemControladoSheet';
 import { RegistrarTreinamentoSheet } from './RegistrarTreinamentoSheet';
 
 /**
@@ -112,6 +112,8 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
     const [edicao, setEdicao] = React.useState<EdicaoDoItem | null>(null);
     /** Item pedido pelo "Registrar treinamento em obra" do Sheet do item: abre o registro por cima dele. */
     const [treinoEmObra, setTreinoEmObra] = React.useState<ItemControlado | null>(null);
+    /** Ficha modelo aberta pelo "Editar ficha" do Sheet do item: o editor é IRMÃO dele, não filho (drawer aninhado fica preso no painel). */
+    const [fichaAberta, setFichaAberta] = React.useState<{ item: ItemControlado; templateId: string } | null>(null);
 
     // ── Carga (sem `if (!orgId) return`: em "Todas" a tela carrega tudo o que a RLS deixa) ──
     const seq = React.useRef(0);
@@ -171,9 +173,9 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
         [organizations],
     );
 
-    /** "x de y" da inspeção aprovada mais recente de cada serviço (qualquer procedimento: é a linha). */
+    /** "x de y" da inspeção aprovada mais recente de cada serviço (qualquer procedimento: é a linha); `null` = não contado. */
     const executoresPorItem = React.useMemo(
-        () => (erroInspecoes ? {} : contarAplicados(inspecoes, itens).porItem),
+        () => (erroInspecoes ? null : contarAplicados(inspecoes, itens).porItem),
         [inspecoes, itens, erroInspecoes],
     );
 
@@ -335,13 +337,20 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
                 podeEditar={podeEditar}
                 onClose={() => setEdicao(null)}
                 onSaved={() => carregarRef.current()}
-                onRegistrarTreinamento={i => setTreinoEmObra(i)} />
+                onRegistrarTreinamento={i => setTreinoEmObra(i)}
+                onEditarFicha={(i, templateId) => setFichaAberta({ item: i, templateId })} />
 
             {/* Por cima do Sheet do item. Gravar avisa e recarrega: os Treinados do item vêm da recarga. */}
             {treinoEmObra && (
                 <RegistrarTreinamentoSheet open item={treinoEmObra}
                     onClose={() => setTreinoEmObra(null)}
                     onSaved={registrosGravados} />
+            )}
+
+            {/* Editor da ficha modelo, por cima do Sheet do item e FORA dele. Fechar recarrega (organização de AGORA). */}
+            {fichaAberta && (
+                <EditorDaFichaSheet item={fichaAberta.item} templateId={fichaAberta.templateId}
+                    onClose={() => { setFichaAberta(null); void carregarRef.current(); }} />
             )}
 
             {orgTargetModal}

@@ -84,6 +84,13 @@ vi.mock('../../components/DatabasePickerModal', () => ({
         isOpen ? <button type="button" onClick={() => onSelectMany?.(codigosDaBase.map(code => ({ code })))}>confirmar base</button> : null,
 }));
 
+// O editor de modelos tem teste próprio: aqui só importa ONDE ele abre e qual modelo.
+vi.mock('../../components/OperacionalTemplateManager', () => ({
+    default: ({ orgId, somenteTemplateId }: { orgId: string; somenteTemplateId?: string }) => (
+        <div data-testid="editor-da-ficha" data-org={orgId} data-template={somenteTemplateId}>editor da ficha</div>
+    ),
+}));
+
 import { useStore } from '../../store/useStore';
 import { ConfirmProvider } from '../../components/ui/confirm';
 import QualidadeModule from '../../components/qualidade/QualidadeModule';
@@ -560,6 +567,33 @@ describe('Qualidade (SiAC) — fase 2: SGQ da organização e painel com número
         await waitFor(() => expect(within(painel).getByText(/Não foi possível contar as inspeções aprovadas: timeout do banco/)).toBeTruthy());
         expect(within(painel).queryByText(/aplicados com registro: 0/)).toBeNull();
         expect(screen.getByRole('table')).toBeTruthy();
+        // a coluna também não finge "nenhuma inspeção": diz que não contou, e o title diz por quê
+        const celulas = celulasDaColuna('Executores treinados');
+        expect(celulas.every(c => c.textContent === 'não contado')).toBe(true);
+        expect((celulas[0].querySelector('span') as HTMLElement).title).toMatch(/Não foi possível ler as inspeções aprovadas/);
+    });
+
+    it('"Editar ficha" abre o editor FORA do Sheet do item (irmão, não aninhado); fechar recarrega', async () => {
+        const user = userEvent.setup();
+        listarItens.mockResolvedValue([item({ id: 's1', nome: 'Serviço 1', anexo4_numero: 1, ordem: 1, checklist_template_id: 'tpl-7' })]);
+        montar();
+        await user.click(await screen.findByText('Serviço 1'));
+        const painelDoItem = await screen.findByRole('dialog', { name: 'Serviço 1' });
+        await user.click(within(painelDoItem).getByRole('button', { name: 'Editar ficha' }));
+        const editor = await screen.findByTestId('editor-da-ficha');
+        expect(editor.getAttribute('data-template')).toBe('tpl-7');
+        expect(editor.getAttribute('data-org')).toBe('org-a');
+        expect(painelDoItem.contains(editor)).toBe(false);
+        const painelDoEditor = screen.getByRole('dialog', { name: 'Editar ficha de verificação' });
+        expect(painelDoEditor.contains(editor)).toBe(true);
+        expect(painelDoItem.contains(painelDoEditor)).toBe(false);
+        expect(painelDoEditor.contains(painelDoItem)).toBe(false);
+        const cargas = listarItens.mock.calls.length;
+        await user.click(within(painelDoEditor).getByRole('button', { name: /Fechar/ }));
+        await waitFor(() => expect(screen.queryByTestId('editor-da-ficha')).toBeNull());
+        await waitFor(() => expect(listarItens.mock.calls.length).toBe(cargas + 1));
+        // o Sheet do item continua aberto
+        expect(screen.getByRole('dialog', { name: 'Serviço 1' })).toBeTruthy();
     });
 
     it('topo numa SPE cujo SGQ é outra organização: faixa, sem lista nem painel; a configuração fica para desfazer', async () => {

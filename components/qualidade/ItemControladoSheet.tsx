@@ -54,7 +54,10 @@ const OperacionalTemplateManager = React.lazy(() => import('../OperacionalTempla
  *    o erro sobe no toast, com a mensagem do banco.
  *  - Ficha de verificação (fase 2, só serviço): "Criar ficha" cria o modelo de checklist do Controle
  *    Operacional na organização do item, com o nome do serviço, e grava `checklist_template_id` — é um
- *    vínculo como os outros (grava na hora). "Editar ficha" abre o editor só desse modelo num Sheet.
+ *    vínculo como os outros (grava na hora). Se só o vínculo falha, o id criado fica guardado e o botão
+ *    vira "Vincular ficha criada" (tentar de novo não cria um 2º modelo). "Editar ficha" pede ao módulo
+ *    (`onEditarFicha`) o `EditorDaFichaSheet`, IRMÃO deste Sheet: Sheet dentro do painel de outro fica
+ *    preso no `transform`/`overflow-hidden` dele (UI_PATTERNS, drawer aninhado).
  */
 export type EdicaoDoItem =
     | { modo: 'editar'; item: ItemControlado }
@@ -72,6 +75,8 @@ interface Props {
     /** Pede a recarga ao módulo e devolve a Promise dela. Nunca fecha nada (§25). */
     onSaved(): Promise<void>;
     onRegistrarTreinamento(item: ItemControlado): void;
+    /** "Editar ficha": o módulo abre o `EditorDaFichaSheet` FORA deste Sheet. */
+    onEditarFicha(item: ItemControlado, templateId: string): void;
 }
 
 const ROTULO = 'block text-xs font-semibold text-slate-500';
@@ -175,7 +180,7 @@ type PropsInternas = Omit<Props, 'edicao'> & {
 };
 
 const SheetDoItem: React.FC<PropsInternas> = ({
-    edicao, itensDaOrg, procedimento, treinamentos, podeEditar, onClose, onSaved, onRegistrarTreinamento, showToast,
+    edicao, itensDaOrg, procedimento, treinamentos, podeEditar, onClose, onSaved, onRegistrarTreinamento, onEditarFicha, showToast,
 }) => {
     const confirm = useConfirm();
     const organizations = useStore(s => s.organizations);
@@ -430,7 +435,8 @@ const SheetDoItem: React.FC<PropsInternas> = ({
                             <SecaoProcedimento item={atual} procedimento={resumo} podeEditar={podeEditar} ocupado={ocupado}
                                 emailUsuario={emailUsuario} vincular={vincular} aplicar={aplicar} />
                             {atual.tipo === 'SERVICO' && (
-                                <SecaoFicha item={atual} podeEditar={podeEditar} ocupado={ocupado} vincular={vincular} aplicar={aplicar} />
+                                <SecaoFicha item={atual} podeEditar={podeEditar} ocupado={ocupado} vincular={vincular} aplicar={aplicar}
+                                    onEditarFicha={onEditarFicha} />
                             )}
                             <SecaoTreinamento item={atual} treinamentos={registros} versaoAtivaEm={resumo?.versao_ativa_em ?? null}
                                 podeEditar={podeEditar} ocupado={ocupado} vincular={vincular} aplicar={aplicar}
@@ -559,21 +565,26 @@ const SecaoFicha: React.FC<{
     ocupado: boolean;
     vincular: Vincular;
     aplicar: (p: Partial<Vinculos>) => void;
-}> = ({ item, podeEditar, ocupado, vincular, aplicar }) => {
-    const [editando, setEditando] = React.useState(false);
+    onEditarFicha: (item: ItemControlado, templateId: string) => void;
+}> = ({ item, podeEditar, ocupado, vincular, aplicar, onEditarFicha }) => {
     const fichaId = item.checklist_template_id ?? null;
+    // Modelo já criado cujo vínculo falhou: tentar de novo só vincula (não cria um 2º modelo órfão).
+    const [criadaSemVinculo, setCriadaSemVinculo] = React.useState<string | null>(null);
     const motivo = !podeEditar ? MOTIVO_SEM_EDICAO_QUALIDADE : ocupado ? MOTIVO_OCUPADO : undefined;
 
     const criar = async () => {
         // Criar e vincular são dois passos: se só o vínculo falha, o modelo JÁ existe no Controle Operacional.
-        let criada = false;
+        let criada = criadaSemVinculo;
         await vincular(async () => {
-            const id = await qualidadeSiacService.criarFichaModelo(item.organization_id, item.nome, item.etapa);
-            criada = true;
-            await qualidadeSiacService.atualizarItem(item.id, { checklist_template_id: id });
-            aplicar({ checklist_template_id: id });
-        }, 'Ficha de verificação criada. Inclua os itens em "Editar ficha".', m => (criada
-            ? `A ficha foi criada no Controle Operacional, mas não foi possível vinculá-la ao serviço (${m}).`
+            if (!criada) {
+                criada = await qualidadeSiacService.criarFichaModelo(item.organization_id, item.nome, item.etapa);
+                setCriadaSemVinculo(criada);
+            }
+            await qualidadeSiacService.atualizarItem(item.id, { checklist_template_id: criada });
+            aplicar({ checklist_template_id: criada });
+            setCriadaSemVinculo(null);
+        }, criadaSemVinculo ? 'Ficha vinculada ao serviço.' : 'Ficha de verificação criada. Inclua os itens em "Editar ficha".', m => (criada
+            ? `A ficha foi criada no Controle Operacional, mas não foi possível vinculá-la ao serviço (${m}). Use "Vincular ficha criada".`
             : `Não foi possível criar a ficha: ${m}`));
     };
 
@@ -581,35 +592,41 @@ const SecaoFicha: React.FC<{
         <div className={CARTAO}>
             <SecaoTitulo icon={ClipboardCheck} titulo="Ficha de verificação" acoes={fichaId ? (
                 <button type="button" className={BOTAO_SECUNDARIO} disabled={!!motivo} title={motivo ?? 'Abre os itens da ficha: critério, método e quando se verifica'}
-                    onClick={() => setEditando(true)}>
+                    onClick={() => onEditarFicha(item, fichaId)}>
                     <Pencil className="w-[15px] h-[15px]" aria-hidden="true" /> Editar ficha
                 </button>
             ) : (
-                <button type="button" className={BOTAO_SECUNDARIO} disabled={!!motivo} title={motivo ?? 'Cria a ficha com o nome do serviço no Controle Operacional'}
+                <button type="button" className={BOTAO_SECUNDARIO} disabled={!!motivo}
+                    title={motivo ?? (criadaSemVinculo ? 'A ficha já foi criada: grava o vínculo dela com este serviço' : 'Cria a ficha com o nome do serviço no Controle Operacional')}
                     onClick={() => void criar()}>
-                    <Plus className="w-[15px] h-[15px]" aria-hidden="true" /> Criar ficha
+                    <Plus className="w-[15px] h-[15px]" aria-hidden="true" /> {criadaSemVinculo ? 'Vincular ficha criada' : 'Criar ficha'}
                 </button>
             )} />
             <p className="text-sm text-gray-700">
-                {fichaId ? 'Ficha de verificação vinculada.' : 'Sem ficha de verificação.'}
+                {fichaId ? 'Ficha de verificação vinculada.' : criadaSemVinculo ? 'Ficha criada, ainda não vinculada a este serviço.' : 'Sem ficha de verificação.'}
             </p>
             <p className="text-xs text-gray-600">Escolher este serviço numa OE aplica a ficha dele. Criar grava na hora.</p>
-            {editando && fichaId && (
-                <Sheet open onClose={() => setEditando(false)} size="2xl" zIndex={60}>
-                    <SheetHeader onClose={() => setEditando(false)}>
-                        <SheetTitle>Editar ficha de verificação</SheetTitle>
-                        <SheetDescription>{item.nome}</SheetDescription>
-                    </SheetHeader>
-                    <SheetPanel className="px-6 py-5">
-                        <React.Suspense fallback={<p className="text-sm text-gray-700">Carregando a ficha…</p>}>
-                            <OperacionalTemplateManager orgId={item.organization_id} somenteTemplateId={fichaId} />
-                        </React.Suspense>
-                    </SheetPanel>
-                </Sheet>
-            )}
         </div>
     );
 };
+
+/**
+ * Editor da ficha modelo de um serviço — aberto pelo MÓDULO, irmão do Sheet do item (nunca dentro do
+ * painel dele). Edita só o modelo `templateId` (`OperacionalTemplateManager somenteTemplateId`).
+ */
+export const EditorDaFichaSheet: React.FC<{ item: ItemControlado; templateId: string; onClose(): void }> = ({ item, templateId, onClose }) => (
+    <Sheet open onClose={onClose} size="2xl" zIndex={60}>
+        <SheetHeader onClose={onClose}>
+            <SheetTitle>Editar ficha de verificação</SheetTitle>
+            <SheetDescription>{item.nome}</SheetDescription>
+        </SheetHeader>
+        <SheetPanel className="px-6 py-5">
+            <React.Suspense fallback={<p className="text-sm text-gray-700">Carregando a ficha…</p>}>
+                <OperacionalTemplateManager orgId={item.organization_id} somenteTemplateId={templateId} />
+            </React.Suspense>
+        </SheetPanel>
+    </Sheet>
+);
 
 // ── Treinamento (curso) e treinados ─────────────────────────────────────────
 const SecaoTreinamento: React.FC<{

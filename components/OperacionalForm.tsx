@@ -545,9 +545,10 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
   /** Código do item da atividade: `sinapiItem.code` da entrada do `budget` do projeto de planejamento. */
   const codigoDaAtividade = async (ref: PlanningItemRef): Promise<string | null> => {
     try {
+      // Projeto de planejamento apagado ou fora do alcance = sem código (0 linhas é legítimo: maybeSingle, não 406).
       const { data, error: erroProjeto } = await supabase
-        .from('projects').select('budget').eq('id', ref.planningProjectId).single()
-      if (erroProjeto) return null
+        .from('projects').select('budget').eq('id', ref.planningProjectId).maybeSingle()
+      if (erroProjeto || !data) return null
       const budget = (data as { budget?: unknown } | null)?.budget
       const entrada = (Array.isArray(budget) ? budget as BudgetEntry[] : []).find(b => b.id === ref.itemScheduleId)
       return entrada?.sinapiItem?.code ?? null

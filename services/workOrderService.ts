@@ -18,6 +18,9 @@ export { ALLOWED_TRANSITIONS } from '../types/operational-control'
 
 type ErroBanco = { message: string; code?: string } | null
 
+/** Linha de `project_ops_config` da obra; `null` = a obra não tem (vale o padrão). */
+type ConfigOperacionalDaObra = { gate_config: { minPctForInspection?: number } | null } | null
+
 /** Erro do supabase como `Error` de verdade (a tela mostra `e.message`), com o `code` (42501/P0001…). */
 function erroDoBanco(error: NonNullable<ErroBanco>): Error {
   return Object.assign(new Error(error.message), { code: error.code })
@@ -240,8 +243,14 @@ export const workOrderService = {
     }
 
     if (newStatus === 'pending_inspection') {
-      // Gate configurável: min % padrão 95, pode ser sobrescrito por project_ops_config
-      const config = await workOrderService._getProjectConfig(wo.project_id)
+      // Gate configurável: min % padrão 95, pode ser sobrescrito por project_ops_config. Obra sem
+      // linha é o normal (padrão); erro ao ler vira motivo — a inspeção não fica liberada calada.
+      let config: ConfigOperacionalDaObra = null
+      try {
+        config = await workOrderService._getProjectConfig(wo.project_id)
+      } catch (e) {
+        errors.push(`Configuração da obra não lida: ${e instanceof Error ? e.message : String(e)}`)
+      }
       const minPct = config?.gate_config?.minPctForInspection ?? 95
 
       if (wo.completion_pct < minPct) {
@@ -378,11 +387,13 @@ export const workOrderService = {
     // Buscar custo médio/hora da equipe
     let calculatedCost: number | null = null
     if (input.teamId && input.hoursWorked) {
-      const { data: teamCost } = await supabase
+      // Equipe sem custo/hora na view é legítimo (custo fica vazio): maybeSingle, não 406.
+      const { data: teamCost, error: erroCusto } = await supabase
         .from('vw_team_hourly_cost')
         .select('avg_hourly_cost')
         .eq('team_id', input.teamId)
-        .single()
+        .maybeSingle()
+      if (erroCusto) throw erroDoBanco(erroCusto)
 
       if (teamCost) {
         calculatedCost = input.hoursWorked * teamCost.avg_hourly_cost
@@ -681,12 +692,14 @@ export const workOrderService = {
 
   async generateDiary(projectId: string, date: string) {
     // Verificar se já existe diário revisado (não sobrescreve)
-    const { data: existing } = await supabase
+    // Dia ainda sem diário é o caso normal: maybeSingle (0 linhas não é 406).
+    const { data: existing, error: erroExistente } = await supabase
       .from('site_diary')
       .select('id, auto_generated, reviewed_at')
       .eq('project_id', projectId)
       .eq('diary_date', date)
-      .single()
+      .maybeSingle()
+    if (erroExistente) throw erroDoBanco(erroExistente)
 
     if (existing && !existing.auto_generated) return existing
 
@@ -800,14 +813,19 @@ export const workOrderService = {
     return data as string
   },
 
-  async _getProjectConfig(projectId: string) {
-    const { data } = await supabase
+  /**
+   * Configuração operacional da obra, ou `null` quando a obra não tem linha (o normal — vale o
+   * padrão). `maybeSingle`: com `.single()` a obra sem linha era HTTP 406 no console a cada
+   * "Solicitar inspeção" (pendência da Qualidade fase 2, 26/11). Erro de leitura sobe.
+   */
+  async _getProjectConfig(projectId: string): Promise<ConfigOperacionalDaObra> {
+    const { data, error } = await supabase
       .from('project_ops_config')
       .select('gate_config')
       .eq('project_id', projectId)
-      .single()
-
-    return data
+      .maybeSingle()
+    if (error) throw erroDoBanco(error)
+    return data as ConfigOperacionalDaObra
   },
 
   async _recalculateTotals(workOrderId: string) {

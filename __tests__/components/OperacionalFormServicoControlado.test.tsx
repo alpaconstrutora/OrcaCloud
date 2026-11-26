@@ -62,12 +62,17 @@ function resolver(tabela: string, f: Filtros): unknown {
     }
 }
 
+/** Como cada leitura de uma linha terminou (`single` × `maybeSingle`), com a tabela e os filtros. */
+const terminais: { metodo: string; tabela: string; filtros: Filtros }[] = [];
+
 function consulta(tabela: string) {
     const filtros: Filtros = {};
     const q: Record<string, unknown> = {};
     const encadeia = () => q;
     Object.assign(q, {
-        select: encadeia, order: encadeia, neq: encadeia, filter: encadeia, limit: encadeia, single: encadeia,
+        select: encadeia, order: encadeia, neq: encadeia, filter: encadeia, limit: encadeia,
+        single: () => { terminais.push({ metodo: 'single', tabela, filtros }); return q; },
+        maybeSingle: () => { terminais.push({ metodo: 'maybeSingle', tabela, filtros }); return q; },
         eq: (col: string, val: unknown) => { filtros[col] = val; return q; },
         in: (col: string, val: unknown) => { filtros[col] = val; return q; },
         then: (ok: (r: unknown) => unknown, erro?: (e: unknown) => unknown) =>
@@ -135,6 +140,7 @@ function renderizar(workOrderId?: string) {
 
 beforeEach(() => {
     vi.clearAllMocks();
+    terminais.length = 0;
     servicosParaOE.mockResolvedValue([ALVENARIA, REVESTIMENTO]);
     sgqDaOrganizacao.mockResolvedValue('org-alpa');
     sgqLegivel.mockResolvedValue(true);
@@ -194,6 +200,10 @@ describe('OperacionalForm — serviço controlado (Qualidade SiAC fase 2)', () =
         await waitFor(() => expect(campoServico().value).toBe('srv-rev'));
         expect(screen.getByText('sugerido pelo código do item')).toBeTruthy();
         expect(campoFicha().value).toBe('tpl-rev');
+        // Pendência da fase 2 (406): o projeto de planejamento da atividade pode ter sido apagado ou
+        // não estar acessível — 0 linhas é legítimo (sem código), então maybeSingle, não single.
+        const doPlanejamento = terminais.filter(t => t.tabela === 'projects' && t.filtros.id === 'plan-1');
+        expect(doPlanejamento.map(t => t.metodo)).toEqual(['maybeSingle']);
     });
 
     it('(d) OE com registro de inspeção: serviço e ficha desligados com o motivo', async () => {

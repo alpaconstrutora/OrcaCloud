@@ -38,7 +38,7 @@ interface Props {
      */
     inspecoes: InspecaoAprovada[];
     /** A leitura das inspeções falhou: a linha de serviços não conta (nunca um zero que mente). */
-    erroInspecoes: string | null;
+    errosInspecoes: Record<string, string>;
     podeEditar: boolean;
     onNivel(orgId: string, nivel: NivelSiac): void;
 }
@@ -75,7 +75,7 @@ function linhaDoTipo(
 }
 
 export const PainelDoNivel: React.FC<Props> = ({
-    itens, niveis, procedimentos, nomesDasOrgs, inspecoes, erroInspecoes, podeEditar, onNivel,
+    itens, niveis, procedimentos, nomesDasOrgs, inspecoes, errosInspecoes, podeEditar, onNivel,
 }) => {
     const orgs = React.useMemo(() => {
         const ids = new Set<string>([...Object.keys(niveis), ...itens.map(i => i.organization_id)]);
@@ -91,15 +91,17 @@ export const PainelDoNivel: React.FC<Props> = ({
     return (
         <section aria-label={titulo} className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 mb-3">
             <h2 className="text-sm font-semibold text-gray-900">{titulo}</h2>
-            {erroInspecoes && (
-                <p className="mt-2 text-sm text-red-700">Não foi possível contar as inspeções aprovadas: {erroInspecoes}</p>
-            )}
+            {orgs.filter(org => errosInspecoes[org]).map(org => (
+                <p key={org} className="mt-2 text-sm text-red-700">
+                    Não foi possível contar as inspeções aprovadas{variasOrgs ? ` de ${nomesDasOrgs[org] ?? 'Organização fora da lista'}` : ''}: {errosInspecoes[org]}
+                </p>
+            ))}
             <ul className="mt-3 divide-y divide-gray-100">
                 {orgs.map(org => {
                     const nivel = niveis[org] ?? 'B';
                     const doOrg = itens.filter(i => i.organization_id === org);
                     const nome = nomesDasOrgs[org] ?? 'Organização fora da lista';
-                    const servicos = linhaDoTipo(doOrg, 'SERVICO', nivel, procedimentos, erroInspecoes ? null : inspecoes);
+                    const servicos = linhaDoTipo(doOrg, 'SERVICO', nivel, procedimentos, errosInspecoes[org] ? null : inspecoes);
                     const materiais = linhaDoTipo(doOrg, 'MATERIAL', nivel, procedimentos, null);
                     const idSeletor = `qualidade-nivel-${org}`;
                     return (

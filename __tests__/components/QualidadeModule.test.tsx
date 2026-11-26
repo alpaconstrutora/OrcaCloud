@@ -572,6 +572,32 @@ describe('Qualidade (SiAC) — fase 2: SGQ da organização e painel com número
         expect((celulas[0].querySelector('span') as HTMLElement).title).toMatch(/Não foi possível ler as inspeções aprovadas/);
     });
 
+    it('"Todas": 42501 numa organização não derruba o painel das outras — só a dela fica "não contado"', async () => {
+        useStore.setState({ activeOrganizationId: null });
+        const daA = servicos(3, 'org-a').map((s, i) => (i === 0 ? { ...s, procedure_document_id: 'doc-ok' } : s));
+        listarItens.mockResolvedValue([...daA, ...servicos(2, 'org-b')]);
+        resumirProcedimentos.mockResolvedValue({ ...PROCEDIMENTOS, 'doc-ok': PROC_OK });
+        inspecoesAprovadas.mockImplementation(async (org: string) => {
+            if (org === 'org-b') throw new Error('Sem acesso ao sistema da qualidade desta organização.');
+            return [inspecao({ executores_total: 2, executores_treinados: 2 })];
+        });
+        montar();
+        const painel = await screen.findByRole('region', { name: /Quanto falta para o nível/ });
+        await waitFor(() => expect(within(painel).getAllByRole('listitem').length).toBe(2));
+        const [a, b] = within(painel).getAllByRole('listitem');
+        await waitFor(() => expect(a.textContent).toMatch(/aplicados com registro: 1 \(meta/));
+        expect(a.textContent).not.toMatch(/não contado/);
+        expect(b.textContent).toMatch(/aplicados com registro: não contado/);
+        expect(within(painel).getByText(/Não foi possível contar as inspeções aprovadas de Construtora B: Sem acesso/)).toBeTruthy();
+        // coluna: a linha da A conta ("2 de 2"); as 2 da B dizem que não contou; o resto da A, "—"
+        const tabela = screen.getByRole('table');
+        const linhas = within(tabela).getAllByRole('row').slice(1);
+        const celulas = celulasDaColuna('Executores treinados');
+        const idxA1 = linhas.findIndex(l => l.textContent?.includes('PES-01'));   // Serviço 1 da A
+        expect(celulas[idxA1].textContent).toBe('2 de 2');
+        expect(celulas.map(c => c.textContent).sort()).toEqual(['2 de 2', 'não contado', 'não contado', '—', '—']);
+    });
+
     it('"Editar ficha" abre o editor FORA do Sheet do item (irmão, não aninhado); fechar recarrega', async () => {
         const user = userEvent.setup();
         listarItens.mockResolvedValue([item({ id: 's1', nome: 'Serviço 1', anexo4_numero: 1, ordem: 1, checklist_template_id: 'tpl-7' })]);

@@ -48,7 +48,7 @@
 --
 -- Erros de regra: SQLSTATE P0001 e HINT com o código que a tela traduz:
 --   estado, sem_datas, primeira_no_passado, sem_itens, sem_corpo, sem_unidades,
---   sem_motivo, unidade_fora, presenca_invalida, tem_voto_presencial,
+--   sem_motivo, motivo_longo (A10), unidade_fora, presenca_invalida, tem_voto_presencial,
 --   unidade_impedida (DETAIL = motivo),
 --   procuracao_invalida, convocacao_invalida, edital_nao_confirmado, sem_mesa,
 --   antes_do_horario, sem_quorum_primeira, sem_presenca, opcao_invalida,
@@ -285,7 +285,8 @@ ALTER TABLE public.condominio_assembleia_unidades
 ALTER TABLE public.condominio_assembleia_unidades
     ADD CONSTRAINT condominio_assembleia_unidades_impedimento_manual CHECK (
         (impedimento_manual IS NULL AND impedimento_manual_em IS NULL)
-     OR (btrim(impedimento_manual) <> '' AND impedimento_manual_em IS NOT NULL));
+     OR (btrim(impedimento_manual) <> '' AND char_length(impedimento_manual) <= 200
+         AND impedimento_manual_em IS NOT NULL));
 
 COMMENT ON COLUMN public.condominio_assembleia_unidades.impedimento_manual IS
     'A10: motivo do impedimento marcado à mão pelo gestor/síndico (NULL = sem marca). Vale sobre a regra '
@@ -1058,7 +1059,9 @@ AS $$
 DECLARE
     v_a      public.condominio_assembleias;
     v_u      public.condominio_assembleia_unidades;
-    v_motivo text := nullif(btrim(p_motivo), '');
+    -- Sem espaços nas pontas nem ponto final: o motivo entra em frases ("está impedida:
+    -- <motivo>.", a cédula do portal, a ata), que já põem o ponto.
+    v_motivo text := nullif(btrim(rtrim(btrim(p_motivo), '.')), '');
     v_em     timestamptz;
 BEGIN
     v_a := public._assembleia_travar(p_assembleia);
@@ -1073,6 +1076,10 @@ BEGIN
     -- NULL desmarca; texto em branco não é motivo.
     IF p_motivo IS NOT NULL AND v_motivo IS NULL THEN
         RAISE EXCEPTION 'Informe o motivo do impedimento.' USING ERRCODE = 'P0001', HINT = 'sem_motivo';
+    END IF;
+    IF char_length(v_motivo) > 200 THEN
+        RAISE EXCEPTION 'O motivo do impedimento tem % caracteres: use até 200.', char_length(v_motivo)
+            USING ERRCODE = 'P0001', HINT = 'motivo_longo';
     END IF;
 
     v_em := CASE WHEN v_motivo IS NOT NULL THEN now() END;

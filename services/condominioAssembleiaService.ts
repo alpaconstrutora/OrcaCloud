@@ -374,6 +374,7 @@ const FRASE_DO_HINT: Record<string, string> = {
     sem_itens: 'A pauta precisa de pelo menos 1 item para convocar.',
     sem_mesa: 'Informe o presidente e o secretário da mesa.',
     sem_motivo: 'Informe o motivo.',
+    motivo_longo: 'O motivo do impedimento pode ter até 200 caracteres.',
     sem_presenca: 'Registre a presença da unidade antes de lançar o voto presencial.',
     sem_quorum_primeira: 'Presentes não somam metade das frações: só é possível instalar em 2ª convocação.',
     sem_unidades: 'Nenhuma unidade deste condomínio tem fração ideal: preencha as frações antes de convocar.',

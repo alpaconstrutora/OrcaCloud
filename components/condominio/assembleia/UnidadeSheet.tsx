@@ -30,6 +30,9 @@ import {
 
 type Escolha = PresencaAssembleia | 'NENHUMA';
 
+/** Limite do banco para o motivo do impedimento (HINT motivo_longo — A10). */
+const MOTIVO_MAX = 200;
+
 const ROTULO_ESCOLHA: Record<Escolha, string> = {
     PRESENCIAL: 'Na sala',
     PROCURADOR: 'Por procurador',
@@ -174,8 +177,12 @@ const UnidadeSheet: React.FC<Props> = ({
                                 <div className="space-y-1.5">
                                     <label htmlFor="assembleia-motivo-impedimento" className={ROTULO}>Motivo do impedimento</label>
                                     <input id="assembleia-motivo-impedimento" type="text" value={motivoImpedimento}
-                                        onChange={ev => setMotivoImpedimento(ev.target.value)}
+                                        onChange={ev => setMotivoImpedimento(ev.target.value)} maxLength={MOTIVO_MAX}
+                                        aria-describedby="assembleia-motivo-impedimento-ajuda"
                                         placeholder="Ex.: cota de 10/2026 em aberto na administradora" className={CAMPO} />
+                                    <p id="assembleia-motivo-impedimento-ajuda" className="text-xs text-gray-500">
+                                        Aparece para o condômino no portal e na ata.
+                                    </p>
                                 </div>
                                 <div className="flex flex-wrap items-center justify-end gap-3">
                                     {motivoMarcar && <p className={`${MOTIVO} mr-auto`}>{motivoMarcar}</p>}

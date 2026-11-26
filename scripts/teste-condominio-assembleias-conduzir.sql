@@ -146,6 +146,7 @@ DECLARE
     c1 UUID; c1b UUID; c2 UUID; c3 UUID; c4 UUID; c_ex UUID; c_inq UUID;
     r1 UUID; r2 UUID; r3 UUID; r4 UUID;
     ea UUID; iE1 UUID; a_e2 UUID; tx_e2 UUID;
+    e3 UUID; t3 UUID; u31 UUID; a3 UUID; i31 UUID;
     motivo_m CONSTANT TEXT := 'Acordo de parcelamento descumprido (débito de 03/2026)';
     tx1_velho UUID; tx1_novo UUID; tx2_canc UUID; tx2_rcanc UUID; tx3_pago UUID; tx4_hoje UUID;
     doc_proc UUID; doc_proc_outro UUID; doc_ata UUID; doc_ata_outro UUID; doc_outro UUID;
@@ -407,6 +408,10 @@ BEGIN
     PERFORM pg_temp.confere(v LIKE 'P0001|sem_motivo|%', 'motivo vazio recusado (sem_motivo): só espaços (veio ' || v || ')');
     v := pg_temp.marcar(m, ea, u2, '');
     PERFORM pg_temp.confere(v LIKE 'P0001|sem_motivo|%', 'motivo vazio recusado (sem_motivo): texto vazio (veio ' || v || ')');
+    v := pg_temp.marcar(m, ea, u2, ' ... ');
+    PERFORM pg_temp.confere(v LIKE 'P0001|sem_motivo|%', 'motivo só com pontos recusado (sem_motivo) (veio ' || v || ')');
+    v := pg_temp.marcar(m, ea, u2, repeat('x', 201));
+    PERFORM pg_temp.confere(v LIKE 'P0001|motivo_longo|%', 'motivo com 201 caracteres recusado (motivo_longo) (veio ' || v || ')');
     v := pg_temp.marcar(n, ea, u2, motivo_m);
     PERFORM pg_temp.confere(v LIKE '42501|%', 'não-membro 42501 ao marcar (veio ' || v || ')');
     v := pg_temp.como(NULL, 'anon', format('SELECT public.condominio_assembleia_marcar_impedida(%L, %L, %L)::text', ea, u2, motivo_m));
@@ -417,13 +422,13 @@ BEGIN
                                          WHERE assembleia_id = ea AND impedimento_manual IS NOT NULL),
         'recusas não marcaram nada');
 
-    v := pg_temp.marcar(m, ea, u2, '  ' || motivo_m || '  ');
+    v := pg_temp.marcar(m, ea, u2, '  ' || motivo_m || '.  ');
     PERFORM pg_temp.confere(v LIKE 'ok:%'
                         AND (SELECT impedimento_manual FROM public.condominio_assembleia_unidades
                               WHERE assembleia_id = ea AND unit_id = u2) = motivo_m
                         AND (SELECT impedimento_manual_em IS NOT NULL FROM public.condominio_assembleia_unidades
                               WHERE assembleia_id = ea AND unit_id = u2),
-        'marcar impedida grava o motivo (sem espaços nas pontas) e a hora (veio ' || v || ')');
+        'marcar impedida grava o motivo (sem espaços nas pontas nem ponto final) e a hora (veio ' || v || ')');
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM public.condominio_assembleia_eventos
                                      WHERE assembleia_id = ea AND evento = 'IMPEDIMENTO_MANUAL' AND papel = 'GESTOR'
                                        AND ator = m AND unit_id = u2 AND detalhe ->> 'motivo' = motivo_m),
@@ -437,8 +442,11 @@ BEGIN
         'marcar impedida bloqueia presença e voto: presença recusada com o motivo do gestor (veio ' || v || ')');
 
     -- desmarcar libera
-    v := pg_temp.marcar(m, ea, u4, 'Teste de desmarcar');
-    PERFORM pg_temp.confere(v LIKE 'ok:%', 'marcar u4 (veio ' || v || ')');
+    -- 200 caracteres (o ponto final sai antes de contar) é o limite que passa.
+    v := pg_temp.marcar(m, ea, u4, repeat('y', 200) || '...');
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (SELECT impedimento_manual FROM public.condominio_assembleia_unidades
+                                                 WHERE assembleia_id = ea AND unit_id = u4) = repeat('y', 200),
+        'motivo com 200 caracteres (+ pontos finais) aceito e normalizado (veio ' || v || ')');
     v := pg_temp.presenca(m, ea, u4, 'PRESENCIAL');
     PERFORM pg_temp.confere(v LIKE 'P0001|unidade_impedida|%', 'u4 marcada não registra presença (veio ' || v || ')');
     v := pg_temp.marcar(m, ea, u4, NULL);
@@ -487,6 +495,34 @@ BEGIN
     PERFORM pg_temp.vota(m, iE1, u3, 'NAO');
     PERFORM pg_temp.confere((SELECT opcao FROM public.condominio_assembleia_votos WHERE item_id = iE1 AND unit_id = u3) = 'NAO',
         'desmarcar libera: volta a votar');
+
+    -- Condomínio SEM título de cota: instalar grava cotasConferidas = false, e o retrato herda.
+    INSERT INTO public.empreendimentos (organization_id, condominio_org_id, name)
+    VALUES (org_a, org_b, 'Condomínio sem cotas A10 (ROLLBACK)') RETURNING id INTO e3;
+    INSERT INTO public.empreendimento_towers (empreendimento_id, name) VALUES (e3, 'Torre S') RETURNING id INTO t3;
+    INSERT INTO public.empreendimento_units (tower_id, name, fracao_ideal_decimal) VALUES (t3, '201', 1) RETURNING id INTO u31;
+    PERFORM pg_temp.confere(public.fn_assembleia_cotas_conferidas(e3) IS FALSE, 'fixture: condomínio sem título');
+    a3 := substr(pg_temp.au(m, format(nova, e3, 'AGE', 'Assembleia sem cotas', p1, p2)), 4)::uuid;
+    i31 := substr(pg_temp.au(m, format(item, a3, 1, 'Orçamento', 'APROVACAO', NULL, 'MAIORIA_PRESENTES')), 4)::uuid;
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_convocar(%L, %L)::text', a3, 'Edital sem cotas'));
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'convocar a assembleia sem cotas (veio ' || v || ')');
+    v := pg_temp.marcar(m, a3, u31, 'Em atraso segundo a administradora');
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'marcar a única unidade (veio ' || v || ')');
+    PERFORM pg_temp.desloca(a3, now() - interval '40 minutes', now() - interval '10 minutes');
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_instalar(%L, 2::smallint, %L, %L, true)::text', a3, 'P', 'S'));
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'instalar a assembleia sem cotas (veio ' || v || ')');
+    SELECT quorum_instalacao INTO q FROM public.condominio_assembleias WHERE id = a3;
+    PERFORM pg_temp.confere(q -> 'cotasConferidas' = 'false'::jsonb
+                        AND q -> 'impedidas' -> 0 ->> 'origem' = 'MANUAL'
+                        AND q -> 'impedidas' -> 0 ->> 'motivo' = 'Em atraso segundo a administradora',
+        'instalar sem título de cota grava cotasConferidas = false (veio ' || coalesce(q::text, '<null>') || ')');
+    v := pg_temp.au(m, format('SELECT public.condominio_assembleia_encerrar(%L, NULL, NULL)::text', a3));
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'encerrar a assembleia sem cotas (veio ' || v || ')');
+    SELECT retrato INTO ret FROM public.condominio_assembleias WHERE id = a3;
+    PERFORM pg_temp.confere(ret -> 'cabecalho' -> 'quorumInstalacao' -> 'cotasConferidas' = 'false'::jsonb
+                        AND ret -> 'impedidasNaInstalacao' -> 0 ->> 'origem' = 'MANUAL',
+        'o retrato herda cotasConferidas = false e a origem MANUAL (veio ' || coalesce(ret::text, '<null>') || ')');
+    ret := NULL;
 
     -- ═══ instalar: 1ª convocação e quórum ═══════════════════════════════════
     v := pg_temp.au(m, format('SELECT public.condominio_assembleia_instalar(%L, 1::smallint, %L, %L, true)::text', a, 'Pres', 'Sec'));

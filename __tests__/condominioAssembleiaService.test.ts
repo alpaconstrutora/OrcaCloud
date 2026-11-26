@@ -112,7 +112,7 @@ describe('traduzirErroAssembleia — demais HINTs do banco', () => {
         'opcao_invalida', 'papel_invalido', 'presenca_invalida', 'primeira_no_passado',
         'procuracao_invalida', 'sem_corpo', 'sem_datas', 'sem_itens', 'sem_mesa', 'sem_motivo',
         'sem_presenca', 'sem_quorum_primeira', 'sem_unidades', 'tem_voto_presencial',
-        'unidade_fora', 'unidade_impedida', 'sem_direito_de_voto',
+        'unidade_fora', 'unidade_impedida', 'sem_direito_de_voto', 'motivo_longo',
     ];
 
     // 'estado' fica de fora de propósito: a frase do banco diz o estado (teste abaixo).

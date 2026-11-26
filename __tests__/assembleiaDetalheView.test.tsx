@@ -690,6 +690,8 @@ describe('impedimento marcado à mão (A10)', () => {
         const marcar = within(gaveta).getByRole('button', { name: 'Marcar como impedida' });
         expect(marcar).toBeDisabled();
         expect(within(gaveta).getByText('Informe o motivo do impedimento.')).toBeInTheDocument();
+        expect(within(gaveta).getByText('Aparece para o condômino no portal e na ata.')).toBeInTheDocument();
+        expect(within(gaveta).getByLabelText('Motivo do impedimento')).toHaveAttribute('maxLength', '200');
         fireEvent.change(within(gaveta).getByLabelText('Motivo do impedimento'), { target: { value: '   ' } });
         expect(marcar).toBeDisabled();
 

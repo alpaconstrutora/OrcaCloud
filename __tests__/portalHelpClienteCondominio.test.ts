@@ -82,6 +82,13 @@ describe('Portal do Cliente › Condomínio por subseção', () => {
     for (const a of INVENTARIO[secao].ancoras) expect(fonte, a).toContain(`data-tour="${a}"`);
   });
 
+  it('assembleias: a ajuda não promete que pagar libera sozinho (A10 — a impedida pode ser indicada pela administração)', () => {
+    const texto = DEFAULT_ITEMS.cliente.filter(d => d.section === 'condominio.assembleias').map(d => d.body_html).join(' ');
+    expect(texto).toContain('conferida pelo sistema ou indicada pela administração');
+    expect(texto).toContain('quando o sistema ou a administração conferir o pagamento');
+    expect(texto).not.toContain('Pagou, a cédula volta a valer');
+  });
+
   it.each(SUBS)('%s: o artigo explica todo item do inventário e há pergunta frequente', (secao) => {
     const texto = DEFAULT_ITEMS.cliente.filter(d => d.kind === 'artigo' && d.section === secao).map(d => d.body_html).join(' ');
     for (const t of INVENTARIO[secao].termos) expect(texto, `${secao}: "${t}"`).toContain(t);

@@ -287,8 +287,9 @@ describe('PDF da ata: cotas não conferidas (A10)', () => {
         };
         const t = (await textoDasPaginas(await (await gerarAtaPdf(montarAta(r, assembleia, condominio))).arrayBuffer())).join(' ');
         expect(t).toContain('A inadimplência não foi conferida pelo sistema, porque o condomínio não tem cotas cobradas '
-            + 'pelo Òpura; as unidades impedidas foram indicadas pelo gestor.');
-        expect(t).toContain('Indicada pelo gestor');
+            + 'pelo Òpura; as unidades impedidas foram indicadas pela administração.');
+        expect(t).toContain('Indicada pela administração');
+        expect(t).not.toContain('pelo gestor');
         expect(t).toContain('Acordo de parcelamento descumprido');
     }, 30_000);
 });

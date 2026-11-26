@@ -552,7 +552,7 @@ const CLIENTE: DefaultHelpItem[] = [
       'Abra uma para ver o tipo, a data da 1ª e da 2ª convocação, o local, o <strong>link de transmissão</strong> e a <strong>pauta</strong>, com o quórum de cada item.',
       'Há <strong>uma cédula por unidade</strong> de que você é <strong>proprietário</strong>. Inquilino e morador veem a pauta, sem cédula.',
       'Para votar, entre com <strong>e-mail e senha</strong>: pelo link, sem login, a cédula aparece desligada com o motivo.',
-      'Unidade com cota condominial vencida fica <strong>impedida</strong> de votar; a cédula diz qual cota. Pagou, a cédula volta a valer.',
+      'Unidade em atraso com as contribuições (conferida pelo sistema ou indicada pela administração) fica <strong>impedida</strong> de votar; a cédula diz o motivo. Quitado o débito, a cédula volta a valer quando o sistema ou a administração conferir o pagamento.',
       'Você pode <strong>trocar o voto</strong> até o encerramento; vale o último, dado pelo portal ou na reunião. Abaixo de cada item aparece quando e por onde o voto foi dado.',
       'Encerrada: o <strong>Resultado</strong> de cada item, com as unidades e o percentual de cada opção (sobre o total das frações ideais das unidades participantes, como na ata), o voto da sua unidade e o botão <strong>Baixar ata</strong>.',
     ),

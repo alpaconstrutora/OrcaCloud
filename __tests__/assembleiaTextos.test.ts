@@ -337,11 +337,11 @@ describe('montarAta', () => {
         };
         const a2 = montarAta(semCotas, assembleia({ status: 'ENCERRADA' }), condominio);
         expect(FRASE_INADIMPLENCIA_NAO_CONFERIDA).toBe('A inadimplência não foi conferida pelo sistema, porque o condomínio '
-            + 'não tem cotas cobradas pelo Òpura; as unidades impedidas foram indicadas pelo gestor.');
+            + 'não tem cotas cobradas pelo Òpura; as unidades impedidas foram indicadas pela administração.');
         expect(a2.inadimplenciaNaoConferida).toBe(FRASE_INADIMPLENCIA_NAO_CONFERIDA);
         expect(a2.impedidas).toEqual([{ unidade: 'Apto 707', motivo: 'Acordo de parcelamento descumprido',
             origem: ROTULO_ORIGEM_IMPEDIMENTO.MANUAL }]);
-        expect(ROTULO_ORIGEM_IMPEDIMENTO.MANUAL).toBe('Indicada pelo gestor');
+        expect(ROTULO_ORIGEM_IMPEDIMENTO.MANUAL).toBe('Indicada pela administração');
         // Sem o campo gravado (null): não afirma nada.
         const semCampo: Retrato = { ...r, cabecalho: { ...r.cabecalho,
             quorumInstalacao: { ...r.cabecalho.quorumInstalacao!, cotasConferidas: null } } };
@@ -451,5 +451,18 @@ describe('CC art. 1.335, III só é citado para o direito do condômino quite', 
     it('a regra de não contar a impedida no quórum é dita como regra do sistema', () => {
         expect(REGRA_IMPEDIMENTO).toContain('O sistema considera impedida');
         expect(ata.quorumInstalacao.explicacao).toContain('O sistema considera impedida');
+    });
+
+    it('A10: a regra cita as duas origens, sem condição, e o documento formal diz "administração" (nunca "gestor")', () => {
+        const regra = 'O sistema considera impedida a unidade com cota condominial vencida e não paga, ou a que a '
+            + 'administração indicar como em atraso com as contribuições,';
+        expect(REGRA_IMPEDIMENTO).toContain(regra);
+        expect(ata.quorumInstalacao.explicacao).toContain(regra);
+        expect(REGRA_IMPEDIMENTO).not.toMatch(/quando a cota/);
+        // Só os textos do impedimento: "pelo gestor" como autor da instalação é da A5.
+        for (const t of [REGRA_IMPEDIMENTO, ata.quorumInstalacao.explicacao, FRASE_INADIMPLENCIA_NAO_CONFERIDA,
+            ...Object.values(ROTULO_ORIGEM_IMPEDIMENTO), ...ata.impedidas.map(i => i.origem)]) {
+            expect(t).not.toMatch(/gestor/i);
+        }
     });
 });

@@ -370,7 +370,7 @@ export async function gerarAtaPdf(m: AtaModelo): Promise<Blob> {
 
     if (m.impedidas.length > 0 || m.inadimplenciaNaoConferida) {
         tituloDeSecao(p, 'Impedidas na instalação');
-        // A10: sem cota cobrada pelo app, a ata diz que quem indicou as impedidas foi o gestor.
+        // A10: sem cota cobrada pelo app, a ata diz que quem indicou as impedidas foi a administração.
         if (m.inadimplenciaNaoConferida) paragrafo(p, m.inadimplenciaNaoConferida, { tamanho: 9.5 });
         if (m.impedidas.length > 0) {
             tabela(p, {

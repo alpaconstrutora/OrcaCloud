@@ -1,7 +1,7 @@
 import React from 'react';
-import { Lock } from 'lucide-react';
+import { Info, Lock } from 'lucide-react';
 import type {
-    ItemControlado, NivelSiac, ProcedimentoResumo, RegistroTreinamento, TipoItemControlado,
+    InspecaoAprovada, ItemControlado, NivelSiac, ProcedimentoResumo, RegistroTreinamento, TipoItemControlado,
 } from '../../types/qualidadeSiac';
 import { qualidadeSiacService } from '../../services/qualidadeSiacService';
 import {
@@ -9,10 +9,12 @@ import {
 } from '../../hooks/useOrgContext';
 import { useToast } from '../../hooks/useToast';
 import { useStore } from '../../store/useStore';
+import { useConfirm } from '../ui/confirm';
 import { usePersistedState } from '../ui/TableUtils';
 import { TabsBar } from '../ui/TabsBar';
 import { MOTIVO_SEM_EDICAO_QUALIDADE, podeEditarQualidadeSiacNoContexto } from '../../utils/permissaoQualidadeSiac';
 import { vinculosDoUsuario } from '../../utils/modulosPermitidos';
+import { contarAplicados } from '../../utils/qualidadeSiac';
 import { PainelDoNivel } from './PainelDoNivel';
 import { ListaControlada } from './ListaControlada';
 import { PorObra } from './PorObra';
@@ -31,6 +33,13 @@ import { RegistrarTreinamentoSheet } from './RegistrarTreinamentoSheet';
  * mantida "Todas" replica em cada organização (`forEachTargetOrg`) — a chave padrão única
  * (`organization_id, chave_padrao`) faz a carga repetida não duplicar. O nível alvo é por organização:
  * o painel grava na organização da própria linha.
+ *
+ * Fase 2 — organização dona do sistema da qualidade (SGQ, desenho "Organização dona do sistema da
+ * qualidade"): com UMA organização no topo, a tela pergunta ao banco qual é o SGQ dela
+ * (`sgqDaOrganizacao`). Se for outra (SPE que usa o da construtora), só a faixa e a configuração
+ * aparecem — a lista e o painel são os da organização dona, e não há o que editar aqui. Em "Todas"
+ * nada disso aparece (o SGQ é por organização). O painel conta pelas inspeções aprovadas
+ * (`inspecoesAprovadas` de cada organização do painel, que é o SGQ dos próprios itens).
  */
 type Aba = 'lista' | 'por-obra';
 
@@ -69,6 +78,7 @@ interface Props {
 
 const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
     const { orgId, isAllOrgs } = useOrgContext();
+    const confirm = useConfirm();
     const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget();
     const { showToast, localToast } = useToast();
     const organizations = useStore(s => s.organizations);
@@ -92,6 +102,11 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
     const [niveisGravados, setNiveisGravados] = React.useState<Record<string, NivelSiac>>({});
     const [procedimentos, setProcedimentos] = React.useState<Record<string, ProcedimentoResumo>>({});
     const [treinamentos, setTreinamentos] = React.useState<Record<string, RegistroTreinamento[]>>({});
+    const [inspecoes, setInspecoes] = React.useState<InspecaoAprovada[]>([]);
+    const [erroInspecoes, setErroInspecoes] = React.useState<string | null>(null);
+    /** SGQ da organização do topo, com a organização a que se refere (`null` em "Todas"): troca de topo não usa o da anterior. */
+    const [sgqDoTopo, setSgqDoTopo] = React.useState<{ org: string; sgq: string } | null>(null);
+    const [gravandoSgq, setGravandoSgq] = React.useState(false);
     const [carregando, setCarregando] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
     const [edicao, setEdicao] = React.useState<EdicaoDoItem | null>(null);
@@ -105,21 +120,30 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
         setCarregando(true);
         setErro(null);
         try {
-            const [lista, niveis] = await Promise.all([
+            const [lista, niveis, sgqLido] = await Promise.all([
                 qualidadeSiacService.listarItens(orgId),
                 qualidadeSiacService.listarNiveis(orgId),
+                orgId ? qualidadeSiacService.sgqDaOrganizacao(orgId) : Promise.resolve(null),
             ]);
             const docs = [...new Set(lista.map(i => i.procedure_document_id).filter((x): x is string => !!x))];
             const cursos = [...new Set(lista.map(i => i.training_course_id).filter((x): x is string => !!x))];
-            const [procs, treinos] = await Promise.all([
+            // Cada organização do painel é o SGQ dos próprios itens: as inspeções contam as OEs dela e das
+            // SPEs que apontam para ela. Falha aqui não derruba a lista: o painel diz que não contou.
+            const orgsDoPainel = [...new Set([...(orgId ? [orgId] : []), ...lista.map(i => i.organization_id)])];
+            const [procs, treinos, insp] = await Promise.all([
                 qualidadeSiacService.resumirProcedimentos(docs),
                 qualidadeSiacService.listarTreinamentos(cursos),
+                Promise.all(orgsDoPainel.map(o => qualidadeSiacService.inspecoesAprovadas(o)))
+                    .then(l => ({ lista: l.flat(), erro: null as string | null }))
+                    .catch((e: unknown) => ({ lista: [] as InspecaoAprovada[], erro: errorMessage(e, 'erro desconhecido') })),
             ]);
             if (minha !== seq.current) return;
             setItens(lista); setNiveisGravados(niveis); setProcedimentos(procs); setTreinamentos(treinos);
+            setInspecoes(insp.lista); setErroInspecoes(insp.erro); setSgqDoTopo(orgId && sgqLido ? { org: orgId, sgq: sgqLido } : null);
         } catch (e) {
             if (minha !== seq.current) return;
             setItens([]); setNiveisGravados({}); setProcedimentos({}); setTreinamentos({});
+            setInspecoes([]); setErroInspecoes(null); setSgqDoTopo(null);
             setErro(errorMessage(e, 'erro desconhecido'));
         } finally {
             if (minha === seq.current) setCarregando(false);
@@ -146,6 +170,16 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
         () => Object.fromEntries(organizations.map(o => [o.id, o.name])) as Record<string, string>,
         [organizations],
     );
+
+    /** "x de y" da inspeção aprovada mais recente de cada serviço (qualquer procedimento: é a linha). */
+    const executoresPorItem = React.useMemo(
+        () => (erroInspecoes ? {} : contarAplicados(inspecoes, itens).porItem),
+        [inspecoes, itens, erroInspecoes],
+    );
+
+    /** Topo numa organização cujo SGQ é outra: lista e painel são os de lá. */
+    const sgq = sgqDoTopo && sgqDoTopo.org === orgId ? sgqDoTopo.sgq : null;
+    const usaOutroSgq = !!orgId && !isAllOrgs && sgq !== null && sgq !== orgId;
 
     // ── Gravações (recarregam a lista: o painel conta pelo que está no banco) ──
     const carregarLista = async () => {
@@ -185,6 +219,32 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
             showToast(`Nível alvo de ${nomesDasOrgs[org] ?? 'organização'}: ${nivel}.`, 'success');
         } catch (e) {
             showToast(`Não foi possível gravar o nível: ${errorMessage(e, 'erro desconhecido')}`, 'error');
+        }
+        await carregarRef.current();
+    };
+
+    /**
+     * Aponta (ou desfaz) a organização dona do SGQ da organização do topo. Apontar para outra pede
+     * confirmação (a lista daqui deixa de aparecer); voltar ao próprio, não. O banco decide quem pode
+     * (dono/admin das duas, 42501) e recusa destino que já usa o de outra (22023): o erro vai no aviso.
+     */
+    const definirSgq = async (org: string, destino: string | null) => {
+        const nome = destino ? nomesDasOrgs[destino] ?? 'outra organização' : null;
+        if (destino && !(await confirm({
+            title: `Usar o sistema da qualidade de ${nome}?`,
+            message: `A lista controlada desta organização deixa de aparecer aqui. As OEs das obras desta organização passam a escolher o serviço controlado na lista de ${nome}, com a ficha, o procedimento e os treinados de lá, e contam no painel de lá.`,
+            variant: 'warning', confirmLabel: `Usar o de ${nome}`, cancelLabel: 'Cancelar',
+        }))) return;
+        setGravandoSgq(true);
+        try {
+            await qualidadeSiacService.definirSgq(org, destino);
+            showToast(destino
+                ? `Esta organização passou a usar o sistema da qualidade de ${nome}.`
+                : 'Esta organização voltou a usar o próprio sistema da qualidade.', 'success');
+        } catch (e) {
+            showToast(`Não foi possível gravar o sistema da qualidade: ${errorMessage(e, 'erro desconhecido')}`, 'error');
+        } finally {
+            setGravandoSgq(false);
         }
         await carregarRef.current();
     };
@@ -239,16 +299,28 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
             {/* Com erro de carga, só a faixa: a lista vazia ofereceria carregar o que talvez já exista. */}
             {abaEfetiva === 'lista' && !erro && (
                 <div>
-                    {!carregando && (
-                        <PainelDoNivel itens={itens} niveis={niveis} procedimentos={procedimentos} nomesDasOrgs={nomesDasOrgs}
-                            podeEditar={podeEditar} onNivel={(org, n) => void definirNivel(org, n)} />
+                    {/* SGQ: só com UMA organização no topo (em "Todas" nada de novo) e já carregado. */}
+                    {!carregando && orgId && !isAllOrgs && (usaOutroSgq || podeEditar) && (
+                        <SistemaDaQualidade orgId={orgId} sgq={sgq ?? orgId} organizations={organizations} nomesDasOrgs={nomesDasOrgs}
+                            podeEditar={podeEditar} gravando={gravandoSgq} onDefinir={destino => void definirSgq(orgId, destino)} />
                     )}
-                    {/* `key` por sub-aba: "Mostrar arquivados" de Serviços não vaza para Materiais. */}
-                    <ListaControlada key={tipoEfetivo} tipo={tipoEfetivo} itens={itens} procedimentos={procedimentos} treinamentos={treinamentos}
-                        podeEditar={podeEditar} carregando={carregando} nomesDasOrgs={nomesDasOrgs}
-                        onCarregar={() => void carregarLista()} onNovo={() => void novoItem()}
-                        onAbrir={item => setEdicao({ modo: 'editar', item })}
-                        abas={<TabsBar<TipoItemControlado> tabs={SUB_ABAS} value={tipoEfetivo} onChange={setTipo} bare />} />
+                    {/* SGQ de outra organização: nada a editar aqui (a lista e o painel são os de lá). */}
+                    {!usaOutroSgq && (
+                        <>
+                            {!carregando && (
+                                <PainelDoNivel itens={itens} niveis={niveis} procedimentos={procedimentos} nomesDasOrgs={nomesDasOrgs}
+                                    inspecoes={inspecoes} erroInspecoes={erroInspecoes}
+                                    podeEditar={podeEditar} onNivel={(org, n) => void definirNivel(org, n)} />
+                            )}
+                            {/* `key` por sub-aba: "Mostrar arquivados" de Serviços não vaza para Materiais. */}
+                            <ListaControlada key={tipoEfetivo} tipo={tipoEfetivo} itens={itens} procedimentos={procedimentos} treinamentos={treinamentos}
+                                podeEditar={podeEditar} carregando={carregando} nomesDasOrgs={nomesDasOrgs}
+                                executoresPorItem={executoresPorItem}
+                                onCarregar={() => void carregarLista()} onNovo={() => void novoItem()}
+                                onAbrir={item => setEdicao({ modo: 'editar', item })}
+                                abas={<TabsBar<TipoItemControlado> tabs={SUB_ABAS} value={tipoEfetivo} onChange={setTipo} bare />} />
+                        </>
+                    )}
                 </div>
             )}
 
@@ -282,6 +354,58 @@ const QualidadeModule: React.FC<Props> = ({ acessoTotal }) => {
                 </div>
             )}
         </div>
+    );
+};
+
+/**
+ * "Sistema da qualidade desta organização" — acima do painel (guia §6.14). Mostra a faixa quando o SGQ é
+ * outra organização (para todos) e o seletor para quem edita (também para desfazer). Escolher grava
+ * na hora (como o nível alvo); as opções são as outras organizações do usuário.
+ */
+const SistemaDaQualidade: React.FC<{
+    orgId: string;
+    sgq: string;
+    organizations: Array<{ id: string; name: string }>;
+    nomesDasOrgs: Record<string, string>;
+    podeEditar: boolean;
+    gravando: boolean;
+    onDefinir(destino: string | null): void;
+}> = ({ orgId, sgq, organizations, nomesDasOrgs, podeEditar, gravando, onDefinir }) => {
+    const usaOutro = sgq !== orgId;
+    const outras = organizations.filter(o => o.id !== orgId).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+    const valor = usaOutro ? sgq : '';
+    const motivo = gravando ? 'Aguarde: a gravação anterior ainda não terminou.' : undefined;
+    return (
+        <section aria-label="Sistema da qualidade" className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 mb-3 space-y-3">
+            {usaOutro && (
+                <div className="flex items-start gap-2 text-sm text-blue-800 bg-blue-50 border border-blue-100 rounded-[8px] px-3 py-2">
+                    <Info className="w-4 h-4 mt-0.5 shrink-0" aria-hidden="true" />
+                    <div>
+                        <p className="font-medium">Esta organização usa o sistema da qualidade de {nomesDasOrgs[sgq] ?? 'outra organização'}.</p>
+                        <p>A lista controlada, a ficha, o procedimento e os treinados são os de lá; as OEs das obras daqui contam no painel de lá.</p>
+                    </div>
+                </div>
+            )}
+            {podeEditar && (
+                <div className="flex flex-col md:flex-row md:items-end gap-3">
+                    <div className="space-y-1.5">
+                        <label htmlFor="qualidade-sgq" className="block text-xs font-semibold text-slate-500">Sistema da qualidade desta organização</label>
+                        <span className="inline-flex" title={motivo}>
+                            <select id="qualidade-sgq" value={valor} disabled={gravando}
+                                onChange={e => onDefinir(e.target.value || null)}
+                                className="w-72 max-w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:bg-gray-50 disabled:text-gray-700 disabled:cursor-not-allowed transition-all">
+                                <option value="">Usa o próprio sistema da qualidade</option>
+                                {usaOutro && !outras.some(o => o.id === sgq) && <option value={sgq}>Organização fora da lista</option>}
+                                {outras.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                            </select>
+                        </span>
+                    </div>
+                    <p className="text-xs text-gray-600 md:pb-2.5">
+                        Para uma SPE: escolha a organização cujo sistema da qualidade vale para ela. Só o dono ou um administrador das duas organizações pode mudar.
+                    </p>
+                </div>
+            )}
+        </section>
     );
 };
 

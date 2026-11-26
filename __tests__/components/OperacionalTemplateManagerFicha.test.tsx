@@ -221,6 +221,13 @@ describe('OperacionalTemplateManager — ficha do modelo (fase 2)', () => {
         expect(leitura?.filtros).toMatchObject({ id: 'tpl-1' });
     });
 
+    it('(d2) somenteTemplateId que o usuário não lê (RLS devolve nada): diz isso, não "Nenhum template criado"', async () => {
+        montar({ somenteTemplateId: 'tpl-de-outra-org' });
+        expect(await screen.findByText('Ficha não encontrada')).toBeTruthy();
+        expect(screen.getByText(/de uma organização que você não acessa/)).toBeTruthy();
+        expect(screen.queryByText('Nenhum template criado')).toBeNull();
+    });
+
     it('(d) sem somenteTemplateId lista todos e mostra criar/importar', async () => {
         montar();
         expect(await screen.findByText('Ficha de alvenaria')).toBeTruthy();

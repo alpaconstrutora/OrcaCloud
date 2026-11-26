@@ -1,5 +1,5 @@
 import React from 'react';
-import { BookOpen, ClipboardList, FileText, GraduationCap, Hash, Lock, Search, Upload, X } from 'lucide-react';
+import { BookOpen, ClipboardCheck, ClipboardList, FileText, GraduationCap, Hash, Lock, Pencil, Plus, Search, Upload, X } from 'lucide-react';
 import type {
     ItemControlado, OrigemItem, ProcedimentoResumo, RegistroTreinamento, SituacaoItem, TipoItemControlado,
 } from '../../types/qualidadeSiac';
@@ -26,6 +26,9 @@ import {
 import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac';
 import { ROTULO_ORIGEM } from './ListaControlada';
 
+/** O editor de modelos traz o xlsx (importar Excel): só carrega quando a ficha é aberta. */
+const OperacionalTemplateManager = React.lazy(() => import('../OperacionalTemplateManager'));
+
 /**
  * Sheet do item controlado (serviço ou material) do SiAC — fase 1
  * (docs/planos/2026-11-25-qualidade-siac-pbqph.md, "Telas (rascunho)").
@@ -49,6 +52,9 @@ import { ROTULO_ORIGEM } from './ListaControlada';
  *    item do Anexo 4 do N sem explicação) e o texto é GUARDADO — só voltar a Ativo o limpa.
  *  - O banco recusa DISPENSADO sem justificativa (CHECK; ARQUIVADO é só pela tela) e referência de outra organização (42501):
  *    o erro sobe no toast, com a mensagem do banco.
+ *  - Ficha de verificação (fase 2, só serviço): "Criar ficha" cria o modelo de checklist do Controle
+ *    Operacional na organização do item, com o nome do serviço, e grava `checklist_template_id` — é um
+ *    vínculo como os outros (grava na hora). "Editar ficha" abre o editor só desse modelo num Sheet.
  */
 export type EdicaoDoItem =
     | { modo: 'editar'; item: ItemControlado }
@@ -102,9 +108,12 @@ const MOTIVO_SEM_ALTERACAO = 'Nada a salvar: nenhum campo mudou.';
 const MOTIVO_OCUPADO = 'Aguarde: a gravação anterior ainda não terminou.';
 
 /** O que grava na hora: o Sheet guarda o último estado confirmado (ver o topo do arquivo). */
-type Vinculos = Pick<ItemControlado, 'codigos' | 'procedure_document_id' | 'training_course_id'>;
+type Vinculos = Pick<ItemControlado, 'codigos' | 'procedure_document_id' | 'training_course_id'> & {
+    checklist_template_id: string | null;
+};
 const vinculosDe = (i: ItemControlado): Vinculos => ({
     codigos: i.codigos, procedure_document_id: i.procedure_document_id, training_course_id: i.training_course_id,
+    checklist_template_id: i.checklist_template_id ?? null,
 });
 
 type Falha = string | ((erro: string) => string);
@@ -420,6 +429,9 @@ const SheetDoItem: React.FC<PropsInternas> = ({
                         <>
                             <SecaoProcedimento item={atual} procedimento={resumo} podeEditar={podeEditar} ocupado={ocupado}
                                 emailUsuario={emailUsuario} vincular={vincular} aplicar={aplicar} />
+                            {atual.tipo === 'SERVICO' && (
+                                <SecaoFicha item={atual} podeEditar={podeEditar} ocupado={ocupado} vincular={vincular} aplicar={aplicar} />
+                            )}
                             <SecaoTreinamento item={atual} treinamentos={registros} versaoAtivaEm={resumo?.versao_ativa_em ?? null}
                                 podeEditar={podeEditar} ocupado={ocupado} vincular={vincular} aplicar={aplicar}
                                 onRegistrarTreinamento={onRegistrarTreinamento} />
@@ -535,6 +547,65 @@ const SecaoProcedimento: React.FC<{
                     <DocumentPicker organizationId={item.organization_id} excludeIntegrated
                         storageKey="qualidade:item:procedimento:busca" onPick={d => void escolher(d.id)} />
                 </fieldset>
+            )}
+        </div>
+    );
+};
+
+// ── Ficha de verificação (modelo de checklist do Controle Operacional) ─────
+const SecaoFicha: React.FC<{
+    item: ItemControlado;
+    podeEditar: boolean;
+    ocupado: boolean;
+    vincular: Vincular;
+    aplicar: (p: Partial<Vinculos>) => void;
+}> = ({ item, podeEditar, ocupado, vincular, aplicar }) => {
+    const [editando, setEditando] = React.useState(false);
+    const fichaId = item.checklist_template_id ?? null;
+    const motivo = !podeEditar ? MOTIVO_SEM_EDICAO_QUALIDADE : ocupado ? MOTIVO_OCUPADO : undefined;
+
+    const criar = async () => {
+        // Criar e vincular são dois passos: se só o vínculo falha, o modelo JÁ existe no Controle Operacional.
+        let criada = false;
+        await vincular(async () => {
+            const id = await qualidadeSiacService.criarFichaModelo(item.organization_id, item.nome, item.etapa);
+            criada = true;
+            await qualidadeSiacService.atualizarItem(item.id, { checklist_template_id: id });
+            aplicar({ checklist_template_id: id });
+        }, 'Ficha de verificação criada. Inclua os itens em "Editar ficha".', m => (criada
+            ? `A ficha foi criada no Controle Operacional, mas não foi possível vinculá-la ao serviço (${m}).`
+            : `Não foi possível criar a ficha: ${m}`));
+    };
+
+    return (
+        <div className={CARTAO}>
+            <SecaoTitulo icon={ClipboardCheck} titulo="Ficha de verificação" acoes={fichaId ? (
+                <button type="button" className={BOTAO_SECUNDARIO} disabled={!!motivo} title={motivo ?? 'Abre os itens da ficha: critério, método e quando se verifica'}
+                    onClick={() => setEditando(true)}>
+                    <Pencil className="w-[15px] h-[15px]" aria-hidden="true" /> Editar ficha
+                </button>
+            ) : (
+                <button type="button" className={BOTAO_SECUNDARIO} disabled={!!motivo} title={motivo ?? 'Cria a ficha com o nome do serviço no Controle Operacional'}
+                    onClick={() => void criar()}>
+                    <Plus className="w-[15px] h-[15px]" aria-hidden="true" /> Criar ficha
+                </button>
+            )} />
+            <p className="text-sm text-gray-700">
+                {fichaId ? 'Ficha de verificação vinculada.' : 'Sem ficha de verificação.'}
+            </p>
+            <p className="text-xs text-gray-600">Escolher este serviço numa OE aplica a ficha dele. Criar grava na hora.</p>
+            {editando && fichaId && (
+                <Sheet open onClose={() => setEditando(false)} size="2xl" zIndex={60}>
+                    <SheetHeader onClose={() => setEditando(false)}>
+                        <SheetTitle>Editar ficha de verificação</SheetTitle>
+                        <SheetDescription>{item.nome}</SheetDescription>
+                    </SheetHeader>
+                    <SheetPanel className="px-6 py-5">
+                        <React.Suspense fallback={<p className="text-sm text-gray-700">Carregando a ficha…</p>}>
+                            <OperacionalTemplateManager orgId={item.organization_id} somenteTemplateId={fichaId} />
+                        </React.Suspense>
+                    </SheetPanel>
+                </Sheet>
             )}
         </div>
     );

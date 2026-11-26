@@ -119,7 +119,8 @@ export const qualidadeSiacService = {
     patch: Partial<
       Pick<
         ItemControlado,
-        'nome' | 'etapa' | 'origem' | 'substitui_item_id' | 'situacao' | 'justificativa' | 'procedure_document_id' | 'training_course_id'
+        | 'nome' | 'etapa' | 'origem' | 'substitui_item_id' | 'situacao' | 'justificativa' | 'procedure_document_id'
+        | 'training_course_id' | 'checklist_template_id'
       >
     >,
   ): Promise<void> {
@@ -326,6 +327,22 @@ export const qualidadeSiacService = {
         .from('quality_settings')
         .upsert({ organization_id: orgId, sgq_organization_id: sgqOrgId }, { onConflict: 'organization_id' }),
     );
+  },
+
+  /**
+   * Cria a ficha modelo de um serviço controlado: modelo ATIVO de checklist do Controle Operacional
+   * (`oe_checklist_templates`) na organização do item, com o nome do serviço. Devolve o id — quem
+   * chama grava `checklist_template_id` no item (o banco exige modelo da mesma organização, 42501).
+   */
+  async criarFichaModelo(organizationId: string, nome: string, tipoDeServico: string | null): Promise<string> {
+    const data = ok(
+      await supabase
+        .from('oe_checklist_templates')
+        .insert({ org_id: organizationId, name: nome, service_type: tipoDeServico, active: true })
+        .select('id')
+        .single() as unknown as { data: { id: string }; error: ErroSupabase },
+    );
+    return data.id;
   },
 
   /** Serviços ATIVOS do SGQ da organização da OE que a obra não excluiu — a lista do campo da OE. */

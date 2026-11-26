@@ -21,12 +21,18 @@
  *      "Mostrar arquivados" vale por sub-aba (não vaza de Serviços para Materiais);
  *  (h) "Registrar treinamento em obra" do Sheet do item abre o registro; gravar avisa quantos
  *      registros entraram e recarrega (os Treinados do item vêm da recarga).
+ *
+ * Fase 2 (Task 8): o painel conta "aplicados com registro" e "em obra em andamento" pelas inspeções
+ * aprovadas (`contarAplicados`); a coluna "Executores treinados" mostra "x de y" da inspeção mais
+ * recente; topo numa organização cujo SGQ é outra → faixa e sem lista/painel; a configuração
+ * "Sistema da qualidade desta organização" grava pelo `definirSgq` (erro do banco no toast).
+ * (b) e (b2) mudaram de texto: "meta N — começa na fase 2" virou "N (meta M)".
  */
 import React from 'react';
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
-import type { ItemControlado, RegistroTreinamento, SituacaoItem } from '../../types/qualidadeSiac';
+import type { InspecaoAprovada, ItemControlado, RegistroTreinamento, SituacaoItem } from '../../types/qualidadeSiac';
 import { MOTIVO_SEM_EDICAO_QUALIDADE } from '../../utils/permissaoQualidadeSiac';
 
 const listarItens = vi.fn();
@@ -41,6 +47,9 @@ const definirCodigos = vi.fn();
 const registrarTreinamentoEmObra = vi.fn();
 const listEmployees = vi.fn();
 const listarExclusoes = vi.fn();
+const sgqDaOrganizacao = vi.fn();
+const definirSgq = vi.fn();
+const inspecoesAprovadas = vi.fn();
 let codigosDaBase: string[] = [];
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -59,6 +68,9 @@ vi.mock('../../services/qualidadeSiacService', () => ({
         definirCodigos: (...a: unknown[]) => definirCodigos(...a),
         registrarTreinamentoEmObra: (...a: unknown[]) => registrarTreinamentoEmObra(...a),
         listarExclusoes: (...a: unknown[]) => listarExclusoes(...a),
+        sgqDaOrganizacao: (...a: unknown[]) => sgqDaOrganizacao(...a),
+        definirSgq: (...a: unknown[]) => definirSgq(...a),
+        inspecoesAprovadas: (...a: unknown[]) => inspecoesAprovadas(...a),
     },
 }));
 vi.mock('../../services/trainingsService', () => ({
@@ -134,6 +146,9 @@ beforeEach(() => {
     registrarTreinamentoEmObra.mockReset().mockResolvedValue(2);
     listEmployees.mockReset().mockResolvedValue([]);
     listarExclusoes.mockReset().mockResolvedValue([]);
+    sgqDaOrganizacao.mockReset().mockImplementation(async (org: string) => org);
+    definirSgq.mockReset().mockResolvedValue(undefined);
+    inspecoesAprovadas.mockReset().mockResolvedValue([]);
     codigosDaBase = [];
     useStore.setState({
         activeOrganizationId: 'org-a',
@@ -168,10 +183,12 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         montar();
         const painel = await screen.findByRole('region', { name: /Quanto falta para o nível/ });
         await waitFor(() => expect(within(painel).getByText(/procedimento aprovado 0\/11/)).toBeTruthy());
-        expect(within(painel).getAllByText(/começa na fase 2/).length).toBeGreaterThan(0);
-        // a META das colunas futuras aparece ao lado do rótulo (40% de 27 = 11; metade = 6; um quarto = 3)
-        expect(within(painel).getByText(/aplicados com registro: meta 6 — começa na fase 2/)).toBeTruthy();
-        expect(within(painel).getByText(/em obra em andamento: meta 3 — começa na fase 2/)).toBeTruthy();
+        // fase 2: serviços contam pelas inspeções aprovadas (nenhuma aqui); materiais seguem "começa na fase 3"
+        // (40% de 27 = 11; metade = 6; um quarto = 3)
+        expect(within(painel).getByText(/aplicados com registro: 0 \(meta 6\)/)).toBeTruthy();
+        expect(within(painel).getByText(/em obra em andamento: 0 \(meta 3\)/)).toBeTruthy();
+        expect(within(painel).queryByText(/começa na fase 2/)).toBeNull();
+        expect(within(painel).getAllByText(/começa na fase 3/).length).toBeGreaterThan(0);
         await waitFor(() => expect(listarTreinamentos).toHaveBeenCalledWith(['curso-1', 'curso-2']));
 
         const treinados = celulasDaColuna('Treinados');
@@ -203,6 +220,13 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         // nível por organização: B é o padrão de quem não tem linha; A veio do banco
         expect((within(a).getByLabelText(/Nível alvo/) as HTMLSelectElement).value).toBe('B');
         expect((within(b).getByLabelText(/Nível alvo/) as HTMLSelectElement).value).toBe('A');
+        // fase 2: em "Todas" não há configuração do SGQ nem faixa (é por organização)
+        expect(screen.queryByLabelText('Sistema da qualidade desta organização')).toBeNull();
+        expect(screen.queryByText(/usa o sistema da qualidade de/)).toBeNull();
+        expect(sgqDaOrganizacao).not.toHaveBeenCalled();
+        // as inspeções são lidas por organização do painel (cada uma é o SGQ dos próprios itens)
+        await waitFor(() => expect(inspecoesAprovadas).toHaveBeenCalledWith('org-a'));
+        expect(inspecoesAprovadas).toHaveBeenCalledWith('org-b');
     });
 
     it('(e) sem permissão de editar: o botão de carga fica desligado e diz por quê', async () => {
@@ -269,8 +293,8 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         montar();
         const painel = await screen.findByRole('region', { name: /Quanto falta para o nível A/ });
         await waitFor(() => expect(within(painel).getByText(/procedimento aprovado 0\/27/)).toBeTruthy());
-        expect(within(painel).getByText(/aplicados com registro: meta 14 — começa na fase 2/)).toBeTruthy();
-        expect(within(painel).getByText(/em obra em andamento: meta 7 — começa na fase 2/)).toBeTruthy();
+        expect(within(painel).getByText(/aplicados com registro: 0 \(meta 14\)/)).toBeTruthy();
+        expect(within(painel).getByText(/em obra em andamento: 0 \(meta 7\)/)).toBeTruthy();
     });
 
     it('troca de organização durante a gravação: a recarga é da organização NOVA (REGRA #5)', async () => {
@@ -483,5 +507,122 @@ describe('Qualidade (SiAC) — lista controlada e painel do nível', () => {
         expect(await screen.findByLabelText('Obra')).toBeTruthy();
         await waitFor(() => expect(listarExclusoes).toHaveBeenCalledWith('p1'));
         expect(await screen.findByText('aplica')).toBeTruthy();
+    });
+});
+
+describe('Qualidade (SiAC) — fase 2: SGQ da organização e painel com números', () => {
+    const PROC_OK = {
+        id: 'doc-ok', nome: 'PES-01', revisao: '1', status: 'ativo', approval_status: 'aprovado',
+        versao_ativa_em: '2026-09-01T10:00:00Z', aprovado_em: '2026-09-02T10:00:00Z',
+    };
+    /** 25 serviços; o 1º com procedimento que conta. */
+    const vinteECinco = () => servicos(25).map((s, i) => (i === 0 ? { ...s, procedure_document_id: 'doc-ok' } : s));
+    const inspecao = (p: Partial<InspecaoAprovada>): InspecaoAprovada => ({
+        work_order_id: 'oe-1', controlled_item_id: 'org-a-s1', obra_status: 'Em andamento', aprovado_em: '2026-11-20T10:00:00Z',
+        executores: [{ employee_id: 'e1', nome: 'Ana', treinado: true }], ...p,
+    });
+
+    it('painel: 1 inspeção toda treinada em obra "Em andamento" → 1 (meta 5) e 1 (meta 3); materiais seguem na fase 3', async () => {
+        listarItens.mockResolvedValue(vinteECinco());
+        resumirProcedimentos.mockResolvedValue({ ...PROCEDIMENTOS, 'doc-ok': PROC_OK });
+        inspecoesAprovadas.mockResolvedValue([inspecao({})]);
+        montar();
+        const painel = await screen.findByRole('region', { name: /Quanto falta para o nível B/ });
+        await waitFor(() => expect(within(painel).getByText(/aplicados com registro: 1 \(meta 5\)/)).toBeTruthy());
+        expect(within(painel).getByText(/em obra em andamento: 1 \(meta 3\)/)).toBeTruthy();
+        expect(within(painel).getByText(/Materiais \(0\).*começa na fase 3/)).toBeTruthy();
+        expect(inspecoesAprovadas).toHaveBeenCalledWith('org-a');
+    });
+
+    it('linha do serviço: "1 de 2" quando um executor não estava treinado (e não conta no painel); sem inspeção "—"', async () => {
+        listarItens.mockResolvedValue(vinteECinco());
+        resumirProcedimentos.mockResolvedValue({ ...PROCEDIMENTOS, 'doc-ok': PROC_OK });
+        inspecoesAprovadas.mockResolvedValue([inspecao({
+            executores: [{ employee_id: 'e1', nome: 'Ana', treinado: true }, { employee_id: 'e2', nome: 'Bruno', treinado: false }],
+        })]);
+        montar();
+        const painel = await screen.findByRole('region', { name: /Quanto falta para o nível B/ });
+        await waitFor(() => expect(within(painel).getByText(/aplicados com registro: 0 \(meta 5\)/)).toBeTruthy());
+        const tabela = screen.getByRole('table');
+        const celulas = celulasDaColuna('Executores treinados');
+        expect(celulas.length).toBe(25);
+        const linha1 = within(tabela).getByText('Serviço 1').closest('tr') as HTMLElement;
+        const idx = within(tabela).getAllByRole('row').indexOf(linha1) - 1;
+        expect(celulas[idx].textContent).toBe('1 de 2');
+        expect(celulas.filter((_, i) => i !== idx).every(c => c.textContent === '—')).toBe(true);
+    });
+
+    it('falha ao ler as inspeções: o painel diz que não contou (nunca um zero que mente) e a lista continua', async () => {
+        listarItens.mockResolvedValue(vinteECinco());
+        inspecoesAprovadas.mockRejectedValue(new Error('timeout do banco'));
+        montar();
+        const painel = await screen.findByRole('region', { name: /Quanto falta para o nível B/ });
+        await waitFor(() => expect(within(painel).getByText(/Não foi possível contar as inspeções aprovadas: timeout do banco/)).toBeTruthy());
+        expect(within(painel).queryByText(/aplicados com registro: 0/)).toBeNull();
+        expect(screen.getByRole('table')).toBeTruthy();
+    });
+
+    it('topo numa SPE cujo SGQ é outra organização: faixa, sem lista nem painel; a configuração fica para desfazer', async () => {
+        const user = userEvent.setup();
+        sgqDaOrganizacao.mockResolvedValue('org-b');
+        montar();
+        expect(await screen.findByText('Esta organização usa o sistema da qualidade de Construtora B.')).toBeTruthy();
+        expect(sgqDaOrganizacao).toHaveBeenCalledWith('org-a');
+        expect(screen.queryByRole('table')).toBeNull();
+        expect(screen.queryByRole('region', { name: /Quanto falta para o nível/ })).toBeNull();
+        expect(screen.queryByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' })).toBeNull();
+        const select = screen.getByLabelText('Sistema da qualidade desta organização') as HTMLSelectElement;
+        expect(select.value).toBe('org-b');
+        // desfazer: volta ao próprio, sem confirmação
+        sgqDaOrganizacao.mockImplementation(async (org: string) => org);
+        await user.selectOptions(select, '');
+        await waitFor(() => expect(definirSgq).toHaveBeenCalledWith('org-a', null));
+        expect(await screen.findByRole('button', { name: 'Carregar a lista mínima do Anexo 4 (27 serviços)' })).toBeTruthy();
+    });
+
+    it('configuração do SGQ: apontar para outra organização confirma, grava, avisa e recarrega', async () => {
+        const user = userEvent.setup();
+        montar();
+        const select = await screen.findByLabelText('Sistema da qualidade desta organização') as HTMLSelectElement;
+        expect(select.value).toBe('');
+        expect([...select.options].map(o => o.textContent)).toEqual(['Usa o próprio sistema da qualidade', 'Construtora B']);
+        await user.selectOptions(select, 'org-b');
+        await user.click(await screen.findByRole('button', { name: 'Usar o de Construtora B' }));
+        await waitFor(() => expect(definirSgq).toHaveBeenCalledWith('org-a', 'org-b'));
+        expect(await screen.findByText('Esta organização passou a usar o sistema da qualidade de Construtora B.')).toBeTruthy();
+        await waitFor(() => expect(listarItens).toHaveBeenCalledTimes(2));
+    });
+
+    it('configuração do SGQ: recusar a confirmação não grava', async () => {
+        const user = userEvent.setup();
+        montar();
+        await user.selectOptions(await screen.findByLabelText('Sistema da qualidade desta organização'), 'org-b');
+        await user.click(await screen.findByRole('button', { name: 'Cancelar' }));
+        expect(definirSgq).not.toHaveBeenCalled();
+        expect((screen.getByLabelText('Sistema da qualidade desta organização') as HTMLSelectElement).value).toBe('');
+    });
+
+    it('configuração do SGQ: erro do banco aparece no aviso, com a mensagem dele', async () => {
+        const user = userEvent.setup();
+        definirSgq.mockRejectedValue(new Error('só dono ou administrador das duas organizações [42501]'));
+        montar();
+        await user.selectOptions(await screen.findByLabelText('Sistema da qualidade desta organização'), 'org-b');
+        await user.click(await screen.findByRole('button', { name: 'Usar o de Construtora B' }));
+        expect(await screen.findByText(/Não foi possível gravar o sistema da qualidade: só dono ou administrador das duas organizações \[42501\]/)).toBeTruthy();
+        expect((screen.getByLabelText('Sistema da qualidade desta organização') as HTMLSelectElement).value).toBe('');
+    });
+
+    it('configuração do SGQ: quem não edita não a vê; a faixa da SPE aparece assim mesmo', async () => {
+        useStore.setState({
+            session: { user: { id: 'u1', email: 'ana@alpa.com' } },
+            organizations: [
+                { id: 'org-a', name: 'Construtora A', address: {}, members: [{ email: 'ana@alpa.com', role: 'viewer', permissions: {} }] },
+                { id: 'org-b', name: 'Construtora B', address: {}, members: [{ email: 'ana@alpa.com', role: 'viewer', permissions: {} }] },
+            ] as never,
+        });
+        sgqDaOrganizacao.mockResolvedValue('org-b');
+        montar();
+        expect(await screen.findByText('Esta organização usa o sistema da qualidade de Construtora B.')).toBeTruthy();
+        expect(screen.queryByLabelText('Sistema da qualidade desta organização')).toBeNull();
     });
 });

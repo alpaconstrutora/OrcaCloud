@@ -993,7 +993,15 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId, somenteTemplateId 
       )}
 
       {/* Template list */}
-      {templates.length === 0 ? (
+      {templates.length === 0 && somenteTemplateId ? (
+        // Modelo único (Qualidade) que não voltou: excluído, ou de uma organização que a RLS não deixa ler.
+        // Com erro de leitura, só a faixa do erro (acima) — não dizer "não encontrada" sem saber.
+        error ? null : <div className="flex flex-col items-center justify-center h-48 text-center">
+          <ClipboardList className="w-12 h-12 mb-3 text-gray-300" aria-hidden="true" />
+          <p className="text-sm font-semibold text-gray-900">Ficha não encontrada</p>
+          <p className="text-sm text-gray-700 mt-1">Ela pode ter sido excluída ou ser de uma organização que você não acessa.</p>
+        </div>
+      ) : templates.length === 0 ? (
         <div className="flex flex-col items-center justify-center h-48 text-slate-300">
           <ClipboardList className="w-12 h-12 mb-3" />
           <p className="text-sm font-bold text-slate-400">Nenhum template criado</p>

@@ -17,6 +17,12 @@
  *  (k) 2º registro com pessoa nova → o nome dela aparece (a busca no RH segue as pessoas sem nome);
  *  (l) ARQUIVADO pede justificativa e a guarda; DISPENSADO → ARQUIVADO mantém o texto; só ATIVO limpa;
  *  (m) enquanto a busca dos nomes anda, a linha diz "carregando…", não "Pessoa não encontrada no RH".
+ *
+ * Fase 2 (Task 8) — seção "Ficha de verificação" do serviço:
+ *  (n) "Criar ficha" cria o modelo na organização do item, com o nome do serviço, e grava
+ *      `checklist_template_id`; depois "Editar ficha" abre o editor só desse modelo;
+ *  (n2) modelo criado e vínculo recusado → a mensagem diz que a ficha FICOU criada;
+ *  (n3) material não tem ficha de verificação; sem permissão, "Criar ficha" diz por quê.
  */
 import React from 'react';
 import { act, render, screen, waitFor } from '@testing-library/react';
@@ -31,6 +37,7 @@ const listTrainingCourses = vi.fn();
 const createTrainingCourse = vi.fn();
 const uploadNewDocument = vi.fn();
 const listEmployees = vi.fn();
+const criarFichaModelo = vi.fn();
 
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
 
@@ -39,7 +46,14 @@ vi.mock('../../services/qualidadeSiacService', () => ({
         criarItem: (...a: unknown[]) => criarItem(...a),
         atualizarItem: (...a: unknown[]) => atualizarItem(...a),
         definirCodigos: (...a: unknown[]) => definirCodigos(...a),
+        criarFichaModelo: (...a: unknown[]) => criarFichaModelo(...a),
     },
+}));
+// O editor de modelos tem teste próprio (OperacionalTemplateManagerFicha): aqui só importa QUAL modelo abre.
+vi.mock('../../components/OperacionalTemplateManager', () => ({
+    default: ({ orgId, somenteTemplateId }: { orgId: string; somenteTemplateId?: string }) => (
+        <div data-testid="editor-da-ficha" data-org={orgId} data-template={somenteTemplateId}>editor da ficha</div>
+    ),
 }));
 vi.mock('../../services/trainingsService', () => ({
     trainingsService: {
@@ -112,6 +126,7 @@ beforeEach(() => {
     createTrainingCourse.mockReset();
     uploadNewDocument.mockReset();
     listEmployees.mockReset().mockResolvedValue([]);
+    criarFichaModelo.mockReset().mockResolvedValue('tpl-novo');
     useStore.setState({
         activeOrganizationId: 'org-a',
         organizations: [
@@ -337,5 +352,60 @@ describe('Qualidade (SiAC) — Sheet do item controlado', () => {
         expect(screen.queryByText('carregando…')).toBeNull();
         // quem o RH não devolveu não dispara outra busca
         expect(listEmployees).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('Qualidade (SiAC) — fase 2: ficha de verificação do serviço', () => {
+    it('(n) "Criar ficha": cria o modelo na org do item com o nome do serviço e grava checklist_template_id; "Editar ficha" abre só ele', async () => {
+        const user = userEvent.setup();
+        const { onSaved } = montar();
+        expect(await screen.findByText('Sem ficha de verificação.')).toBeTruthy();
+        await user.click(screen.getByRole('button', { name: 'Criar ficha' }));
+        await waitFor(() => expect(criarFichaModelo).toHaveBeenCalledWith('org-a', 'concretagem de peça estrutural', 'Estrutura'));
+        await waitFor(() => expect(atualizarItem).toHaveBeenCalledWith('item-1', { checklist_template_id: 'tpl-novo' }));
+        await waitFor(() => expect(onSaved).toHaveBeenCalled());
+        expect(await screen.findByText(/Ficha de verificação criada/)).toBeTruthy();
+        // o estado confirmado já tem a ficha, mesmo sem a recarga chegar
+        expect(screen.queryByRole('button', { name: 'Criar ficha' })).toBeNull();
+        await user.click(await screen.findByRole('button', { name: 'Editar ficha' }));
+        const editor = await screen.findByTestId('editor-da-ficha');
+        expect(editor.getAttribute('data-template')).toBe('tpl-novo');
+        expect(editor.getAttribute('data-org')).toBe('org-a');
+        expect(screen.getByRole('heading', { name: 'Editar ficha de verificação' })).toBeTruthy();
+    });
+
+    it('(n1) serviço com ficha: "Editar ficha" abre o editor do modelo gravado', async () => {
+        const user = userEvent.setup();
+        montar({ edicao: { modo: 'editar', item: item({ checklist_template_id: 'tpl-7' }) } });
+        await user.click(await screen.findByRole('button', { name: 'Editar ficha' }));
+        expect((await screen.findByTestId('editor-da-ficha')).getAttribute('data-template')).toBe('tpl-7');
+        expect(criarFichaModelo).not.toHaveBeenCalled();
+    });
+
+    it('(n2) modelo criado e vínculo recusado: a mensagem diz que a ficha ficou criada', async () => {
+        const user = userEvent.setup();
+        atualizarItem.mockRejectedValue(new Error('a ficha modelo tem de ser da organização do item [42501]'));
+        montar();
+        await user.click(await screen.findByRole('button', { name: 'Criar ficha' }));
+        expect(await screen.findByText(/A ficha foi criada no Controle Operacional, mas não foi possível vinculá-la ao serviço \(a ficha modelo tem de ser da organização do item \[42501\]\)/)).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Criar ficha' })).toBeTruthy();
+    });
+
+    it('(n3) material não tem ficha; sem permissão, "Criar ficha" desligado diz por quê', async () => {
+        montar({ edicao: { modo: 'editar', item: item({ tipo: 'MATERIAL', origem: 'PROPRIO', etapa: null }) } });
+        await screen.findByRole('button', { name: 'Buscar insumo na Base' });
+        expect(screen.queryByRole('button', { name: 'Criar ficha' })).toBeNull();
+    });
+
+    it('(n4) sem permissão: "Criar ficha" desligado, com o motivo no title', async () => {
+        render(
+            <ConfirmProvider>
+                <ItemControladoSheet edicao={{ modo: 'editar', item: item() }} itensDaOrg={[item()]} procedimento={null} treinamentos={[]}
+                    podeEditar={false} onClose={vi.fn()} onSaved={vi.fn(async () => undefined)} onRegistrarTreinamento={vi.fn()} />
+            </ConfirmProvider>,
+        );
+        const botao = await screen.findByRole('button', { name: 'Criar ficha' }) as HTMLButtonElement;
+        expect(botao.disabled).toBe(true);
+        expect(botao.title).toMatch(/não editar/);
     });
 });

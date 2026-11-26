@@ -334,6 +334,22 @@ describe('qualidadeSiacService', () => {
     ]);
   });
 
+  it('criarFichaModelo insere o modelo ativo na org do item, com o nome do serviço, e devolve o id; erro sobe', async () => {
+    resposta = { data: { id: 'tpl-1' }, error: null };
+    const id = await qualidadeSiacService.criarFichaModelo('org-1', 'Execução de alvenaria', 'Vedação');
+    expect(id).toBe('tpl-1');
+    expect(achar('from')[0].args).toEqual(['oe_checklist_templates']);
+    expect(achar('insert')[0].args[0]).toEqual({ org_id: 'org-1', name: 'Execução de alvenaria', service_type: 'Vedação', active: true });
+    expect(achar('select')[0].args[0]).toBe('id');
+
+    chamadas.length = 0;
+    await qualidadeSiacService.criarFichaModelo('org-1', 'Pintura', null);
+    expect(achar('insert')[0].args[0]).toMatchObject({ service_type: null });
+
+    resposta = { data: null, error: { message: 'new row violates row-level security policy' } };
+    await expect(qualidadeSiacService.criarFichaModelo('org-1', 'X', null)).rejects.toThrow('row-level security');
+  });
+
   it('inspecoesAprovadas: erro sobe como Error', async () => {
     resposta = { data: null, error: { message: 'sem acesso' } };
     await expect(qualidadeSiacService.inspecoesAprovadas('alpa')).rejects.toThrow('sem acesso');

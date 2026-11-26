@@ -220,11 +220,21 @@ export const useTableColumns = (
   // que a tela deve mapear para renderizar coluna/cabeçalho/célula, em vez da
   // sequência fixa do JSX. Chave visível mas ausente de columnOrder (não deveria acontecer
   // após o merge de loadPersistedTableState, mas é defesa barata) vai pro fim.
+  //
+  // Só entram chaves que a tela define AGORA. Preferência gravada pode citar coluna que
+  // saiu (ou que a tela só mostra em outro modo, ex.: "Org" em "Todas as organizações"):
+  // o <tbody> desenhava uma célula para ela e o <thead>, sem título, a pulava — tudo à
+  // direita ficava uma coluna fora do cabeçalho (Conciliação › Pendentes › Lançamentos,
+  // 26/11/2026: 'sequencia', criada no #707 e tirada no #712, empurrava o Valor). A
+  // preferência gravada fica intacta: a coluna condicional volta como o usuário a deixou.
+  const chavesDaTela = allColumns.join('\u0000');
   const orderedVisibleColumns = React.useMemo(() => {
-    const inOrder = columnOrder.filter(k => visibleColumns.includes(k));
-    const missing = visibleColumns.filter(k => !columnOrder.includes(k));
+    const daTela = new Set(chavesDaTela.split('\u0000'));
+    const visiveis = visibleColumns.filter(k => daTela.has(k));
+    const inOrder = columnOrder.filter(k => visiveis.includes(k));
+    const missing = visiveis.filter(k => !columnOrder.includes(k));
     return missing.length ? [...inOrder, ...missing] : inOrder;
-  }, [columnOrder, visibleColumns]);
+  }, [columnOrder, visibleColumns, chavesDaTela]);
 
   // Estilo ClickUp: arrastar o cabeçalho de `dragKey` e soltar sobre `dropKey`
   // move a coluna na ordem geral (não só entre visíveis) — ver moverColuna.

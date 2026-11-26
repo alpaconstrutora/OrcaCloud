@@ -47,6 +47,9 @@
 -- direto; resposta e NC não mudam de OE (nem a resposta de item); a exclusão de
 -- resposta/NC também vai para o histórico (evento 'exclusao'); eficácia
 -- 'pendente' não tem autor.
+-- Correção 3: registro = qualquer resposta ou linha de histórico da OE (sem
+-- exceção para resposta "vazia"); o histórico da resposta também grava mudança
+-- de `completed` e quem alterou/apagou (alterado_por).
 --
 -- Idempotente (IF NOT EXISTS / CREATE OR REPLACE / DROP ... IF EXISTS).
 -- Aplicar com `npx supabase db query --linked -f` — nunca `db push`.
@@ -207,7 +210,7 @@ CREATE INDEX IF NOT EXISTS idx_oe_checklist_response_history_wo
 
 COMMENT ON TABLE public.oe_checklist_response_history IS
     'Qualidade (SiAC): resposta anterior do checklist da OE, gravada pelo banco quando a resposta muda '
-    '(response_status, notes, nc_id ou evidence_id). Só leitura para o app.';
+    '(response_status, notes, nc_id, evidence_id ou completed) ou é apagada (evento). Só leitura para o app.';
 
 CREATE TABLE IF NOT EXISTS public.non_conformance_history (
     id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -257,6 +260,12 @@ ALTER TABLE public.non_conformance_history
     DROP CONSTRAINT IF EXISTS non_conformance_history_evento_check;
 ALTER TABLE public.non_conformance_history
     ADD CONSTRAINT non_conformance_history_evento_check CHECK (evento IN ('alteracao', 'exclusao'));
+
+-- Correção 3: quem substituiu/apagou a resposta (gravado pelo gatilho).
+ALTER TABLE public.oe_checklist_response_history
+    ADD COLUMN IF NOT EXISTS alterado_por uuid DEFAULT auth.uid();
+COMMENT ON COLUMN public.oe_checklist_response_history.alterado_por IS
+    'Usuário (auth.uid) que substituiu ou apagou a resposta — gravado pelo gatilho.';
 
 COMMENT ON COLUMN public.oe_checklist_response_history.evento IS
     'alteracao = a resposta foi substituída (linha = a anterior); exclusao = a resposta foi apagada (linha = a última).';
@@ -430,13 +439,14 @@ CREATE TRIGGER trg_quality_controlled_items_mesma_org
 -- 4.3 work_orders: o serviço controlado é da organização dona do SGQ da org da
 -- OE (coalesce(sgq_organization_id, org da OE)). INVOKER: quem não é membro da
 -- org do SGQ não enxerga o item e é recusado.
--- Correção 2: OE controlada que já tem REGISTRO (resposta com conteúdo, NC ou
--- validação) não troca nem perde o serviço controlado num UPDATE direto — senão
--- bastava desligar o serviço, apagar o registro (OE "comum") e religar. O SET NULL
--- da cascata (serviço controlado apagado, pg_trigger_depth() > 1) passa.
--- "Resposta com conteúdo": status, completed, observação, NC ou evidência — a
--- linha vazia que o app cria ao aplicar o modelo (initChecklistForWorkOrder) não
--- é registro.
+-- Correção 2: OE controlada que já tem REGISTRO não troca nem perde o serviço
+-- controlado num UPDATE direto — senão bastava desligar o serviço, apagar o
+-- registro (OE "comum") e religar. O SET NULL da cascata (serviço controlado
+-- apagado, pg_trigger_depth() > 1) passa.
+-- Correção 3: REGISTRO = qualquer linha em oe_checklist_responses OU em
+-- oe_checklist_response_history da OE, qualquer NC ou qualquer validação. Não há
+-- exceção para resposta "vazia": zerar a resposta é um UPDATE comum (e vai para o
+-- histórico), então "vazia" não prova que nunca houve inspeção.
 CREATE OR REPLACE FUNCTION public.work_orders_servico_controlado_do_sgq()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -449,14 +459,11 @@ BEGIN
     IF TG_OP = 'UPDATE' AND pg_trigger_depth() = 1
        AND OLD.controlled_item_id IS NOT NULL
        AND NEW.controlled_item_id IS DISTINCT FROM OLD.controlled_item_id
-       AND (EXISTS (SELECT 1 FROM public.oe_checklist_responses r
-                     WHERE r.work_order_id = OLD.id
-                       AND (r.response_status IS NOT NULL OR r.completed
-                            OR r.nc_id IS NOT NULL OR r.evidence_id IS NOT NULL
-                            OR btrim(coalesce(r.notes, '')) <> ''))
+       AND (EXISTS (SELECT 1 FROM public.oe_checklist_responses r WHERE r.work_order_id = OLD.id)
+            OR EXISTS (SELECT 1 FROM public.oe_checklist_response_history h WHERE h.work_order_id = OLD.id)
             OR EXISTS (SELECT 1 FROM public.non_conformances nc WHERE nc.work_order_id = OLD.id)
             OR EXISTS (SELECT 1 FROM public.work_order_validations v WHERE v.work_order_id = OLD.id)) THEN
-        RAISE EXCEPTION 'O serviço controlado de uma OE com registro de inspeção (resposta, NC ou validação) não pode ser trocado nem retirado.'
+        RAISE EXCEPTION 'O serviço controlado de uma OE com registro de inspeção (resposta, histórico de resposta, NC ou validação) não pode ser trocado nem retirado.'
             USING ERRCODE = '42501';
     END IF;
 
@@ -510,14 +517,11 @@ BEGIN
         RETURN OLD;
     END IF;
 
-    IF EXISTS (SELECT 1 FROM public.oe_checklist_responses r
-                WHERE r.work_order_id = OLD.id
-                  AND (r.response_status IS NOT NULL OR r.completed
-                       OR r.nc_id IS NOT NULL OR r.evidence_id IS NOT NULL
-                       OR btrim(coalesce(r.notes, '')) <> ''))
+    IF EXISTS (SELECT 1 FROM public.oe_checklist_responses r WHERE r.work_order_id = OLD.id)
+       OR EXISTS (SELECT 1 FROM public.oe_checklist_response_history h WHERE h.work_order_id = OLD.id)
        OR EXISTS (SELECT 1 FROM public.non_conformances nc WHERE nc.work_order_id = OLD.id)
        OR EXISTS (SELECT 1 FROM public.work_order_validations v WHERE v.work_order_id = OLD.id) THEN
-        RAISE EXCEPTION 'Uma OE de serviço controlado com registro de inspeção (resposta, NC ou validação) não pode ser apagada.'
+        RAISE EXCEPTION 'Uma OE de serviço controlado com registro de inspeção (resposta, histórico de resposta, NC ou validação) não pode ser apagada.'
             USING ERRCODE = '42501';
     END IF;
 
@@ -613,11 +617,12 @@ AS $$
 BEGIN
     INSERT INTO public.oe_checklist_response_history (
         response_id, work_order_id, item_id, response_status, notes, nc_id,
-        evidence_id, respondido_por, respondido_em, evento, copia)
+        evidence_id, respondido_por, respondido_em, evento, alterado_por, copia)
     VALUES (
         OLD.id, OLD.work_order_id, OLD.item_id, OLD.response_status, OLD.notes, OLD.nc_id,
         OLD.evidence_id, OLD.respondido_por, OLD.respondido_em,
         CASE WHEN TG_OP = 'DELETE' THEN 'exclusao' ELSE 'alteracao' END,
+        auth.uid(),
         jsonb_build_object(
             'item_descricao',         OLD.item_descricao,
             'item_criterio',          OLD.item_criterio,
@@ -643,7 +648,8 @@ CREATE TRIGGER trg_oe_checklist_responses_grava_historico
     WHEN (OLD.response_status IS DISTINCT FROM NEW.response_status
        OR OLD.notes           IS DISTINCT FROM NEW.notes
        OR OLD.nc_id           IS DISTINCT FROM NEW.nc_id
-       OR OLD.evidence_id     IS DISTINCT FROM NEW.evidence_id)
+       OR OLD.evidence_id     IS DISTINCT FROM NEW.evidence_id
+       OR OLD.completed       IS DISTINCT FROM NEW.completed)
     EXECUTE FUNCTION public.oe_checklist_responses_grava_historico();
 
 -- 4.6 non_conformances: serviço controlado vem da OE (o app não escolhe).
@@ -725,17 +731,8 @@ BEGIN
         RETURN OLD;
     END IF;
 
-    -- Correção 2: a linha vazia que o app cria ao aplicar o modelo
-    -- (initChecklistForWorkOrder) não é registro — pode sair (trocar o modelo de
-    -- uma OE controlada ainda não respondida). A exclusão fica no histórico.
-    IF TG_TABLE_NAME = 'oe_checklist_responses' THEN
-        -- IF aninhado: as colunas da resposta só são lidas nesta tabela.
-        IF OLD.response_status IS NULL AND NOT OLD.completed
-           AND OLD.nc_id IS NULL AND OLD.evidence_id IS NULL
-           AND btrim(coalesce(OLD.notes, '')) = '' THEN
-            RETURN OLD;
-        END IF;
-    END IF;
+    -- Correção 3: sem exceção para resposta "vazia" — toda resposta de OE
+    -- controlada é registro (zerar e apagar não pode apagar a inspeção).
 
     IF EXISTS (SELECT 1 FROM public.work_orders wo
                 WHERE wo.id = OLD.work_order_id

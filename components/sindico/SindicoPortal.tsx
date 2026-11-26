@@ -10,6 +10,7 @@ import {
     PainelDocumentos, PainelEquipamentos, PainelManutencao, competencia,
 } from '../client/CondominioTab';
 import { usePersistedState } from '../ui/TableUtils';
+import { supabase } from '../../lib/supabase';
 import PainelUnidadesDoPredio from './PainelUnidadesDoPredio';
 import PainelAvisosDoSindico from './PainelAvisosDoSindico';
 import PainelChamadosDoSindico from './PainelChamadosDoSindico';
@@ -77,6 +78,28 @@ const TAB_ICONS: Record<SindicoPortalTabId, React.ComponentType<{ className?: st
     equipamentos: Package,
 };
 
+type AvisoDoPortal = 'success' | 'error' | 'warning';
+
+/**
+ * Há sessão do Supabase neste navegador? O link do convite (/portal-sindico?token=…) monta
+ * o portal SEM `onLogout` — a rota do link vem antes da sessão no App —, então o síndico já
+ * logado que abre o link não seria "logado" só por `onLogout`. Quem decide se a sessão é
+ * DO síndico é o banco (`sindico_sem_sessao`, traduzido na tela). Fix 1 da revisão da B2.
+ */
+function useSessaoAtiva(): boolean {
+    const [ativa, setAtiva] = React.useState(false);
+    React.useEffect(() => {
+        let vivo = true;
+        const auth = supabase.auth;
+        auth.getSession()
+            .then(({ data }) => { if (vivo) setAtiva(!!data.session); })
+            .catch(() => { if (vivo) setAtiva(false); });
+        const { data } = auth.onAuthStateChange((_evento, sessao) => { if (vivo) setAtiva(!!sessao); });
+        return () => { vivo = false; data.subscription.unsubscribe(); };
+    }, []);
+    return ativa;
+}
+
 const iniciaisDe = (nome: string | undefined) =>
     (nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join('') || '?';
 
@@ -84,8 +107,9 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
     const identidade = React.useMemo<IdentidadeDoSindico>(
         () => (token ? { token } : { clientId: clientId ?? '' }), [token, clientId]);
     const { dados, carregando, erro, recarregar } = useSindicoPortal(identidade);
-    const [toast, setToast] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
-    const notify = React.useCallback((message: string, type: 'success' | 'error' = 'success') => {
+    const sessaoAtiva = useSessaoAtiva();
+    const [toast, setToast] = React.useState<{ message: string; type: AvisoDoPortal } | null>(null);
+    const notify = React.useCallback((message: string, type: AvisoDoPortal = 'success') => {
         setToast({ message, type });
         setTimeout(() => setToast(null), 4500);
     }, []);
@@ -217,10 +241,13 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
                                     onAlterado={recarregar} notify={notify} />
                             )}
                             {aba === 'assembleias' && (
-                                // Conduzir exige o SÍNDICO logado (modo 'sessao' no banco): a entrada por
-                                // e-mail e senha é a única com `onLogout`. A administradora conduz pelo app.
+                                // Conduzir exige o SÍNDICO logado (modo 'sessao' no banco): entrada por e-mail
+                                // e senha (`onLogout`) OU sessão ativa com o portal aberto pelo link. A
+                                // administradora conduz pelo app. `onAlterado`: o aviso da convocação e a ata
+                                // aparecem em Avisos e Documentos sem recarregar a página.
                                 <PainelAssembleiasDoSindico identidade={identidade} condominios={dados.condominios}
-                                    logado={!!onLogout} comoAdministradora={comoAdministradora} notify={notify} />
+                                    logado={!!onLogout || sessaoAtiva} comoAdministradora={comoAdministradora}
+                                    notify={notify} onAlterado={recarregar} />
                             )}
                             {aba === 'financeiro' && (
                                 // Operar exige LOGIN (`onLogout` só existe na entrada por e-mail e senha)
@@ -275,7 +302,8 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
                 // No TOPO: embaixo ele cobria o botão principal do painel lateral
                 // aberto em seguida (Financeiro, 24/10/2026).
                 <div className={`fixed top-20 right-4 md:right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium ${
-                    toast.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                    toast.type === 'success' ? 'bg-emerald-600 text-white'
+                        : toast.type === 'warning' ? 'bg-amber-600 text-white' : 'bg-red-600 text-white'
                 }`}>
                     {toast.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertTriangle className="w-4 h-4 shrink-0" />}
                     {toast.message}

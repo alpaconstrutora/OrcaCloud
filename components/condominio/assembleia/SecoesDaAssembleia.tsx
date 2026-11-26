@@ -14,7 +14,9 @@ import {
     ROTULO_QUORUM, ROTULO_QUORUM_INSTALACAO, ROTULO_RESULTADO, ROTULO_STATUS, ROTULO_TIPO, ROTULO_TIPO_ITEM,
 } from '../../../utils/assembleiaTextos';
 import type { Apuracao, Assembleia, ItemAssembleia, ResultadoItem } from '../../../services/condominioAssembleiaService';
-import { BOTAO_SECUNDARIO, CARD, COR_STATUS, diasDeAntecedencia, opcoesDoItem } from './comum';
+import {
+    ACCENTS, BOTAO_SECUNDARIO, CARD, COR_STATUS, diasDeAntecedencia, opcoesDoItem, type AcentoDaAssembleia,
+} from './comum';
 
 const Par: React.FC<{ rotulo: string; children: React.ReactNode; largo?: boolean }> = ({ rotulo, children, largo }) => (
     <div className={`space-y-1.5 ${largo ? 'col-span-2' : ''}`}>
@@ -25,7 +27,9 @@ const Par: React.FC<{ rotulo: string; children: React.ReactNode; largo?: boolean
 
 // ─── Identificação ───────────────────────────────────────────────────────────
 
-export const IdentificacaoSecao: React.FC<{ assembleia: Assembleia }> = ({ assembleia: a }) => {
+export const IdentificacaoSecao: React.FC<{ assembleia: Assembleia; accent?: AcentoDaAssembleia }> = ({
+    assembleia: a, accent = 'indigo',
+}) => {
     const q = a.quorumInstalacao;
     const antecedencia = a.convocadaEm && a.primeiraConvocacaoEm
         ? diasDeAntecedencia(a.primeiraConvocacaoEm, new Date(a.convocadaEm)) : null;
@@ -40,7 +44,7 @@ export const IdentificacaoSecao: React.FC<{ assembleia: Assembleia }> = ({ assem
                 <Par rotulo="Local">{a.local || (a.linkTransmissao ? 'somente por transmissão' : 'a definir')}</Par>
                 <Par rotulo="Transmissão">
                     {a.linkTransmissao
-                        ? <a href={a.linkTransmissao} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{a.linkTransmissao}</a>
+                        ? <a href={a.linkTransmissao} target="_blank" rel="noopener noreferrer" className={`${ACCENTS[accent].link} hover:underline break-all`}>{a.linkTransmissao}</a>
                         : 'sem link'}
                 </Par>
                 {a.convocadaEm && (
@@ -110,13 +114,14 @@ export const PautaSecao: React.FC<{
     assembleia: Assembleia;
     itens: ItemAssembleia[];
     onVoltarParaEditar: () => void;
-}> = ({ assembleia: a, itens, onVoltarParaEditar }) => {
+    accent?: AcentoDaAssembleia;
+}> = ({ assembleia: a, itens, onVoltarParaEditar, accent = 'indigo' }) => {
     const deliberacao = (i: ItemAssembleia) => a.retrato?.deliberacoes?.[i.id] ?? i.deliberacao;
     return (
         <div className={CARD}>
             <SecaoTitulo icon={ClipboardList} titulo="Pauta" resumo={`${itens.length} ${itens.length === 1 ? 'item' : 'itens'}`}
                 acoes={a.status === 'RASCUNHO' ? (
-                    <button type="button" onClick={onVoltarParaEditar} className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                    <button type="button" onClick={onVoltarParaEditar} className={`text-sm font-medium ${ACCENTS[accent].link}`}>
                         Editar na lista de assembleias
                     </button>
                 ) : undefined} />

@@ -438,7 +438,10 @@ describe('convocar', () => {
         ops.unidadesFora.mockResolvedValue(['Torre A — Estacionamento']);
         montar(ops);
 
-        fireEvent.click(await screen.findByRole('button', { name: 'Convocar' }));
+        const botaoConvocar = await screen.findByRole('button', { name: 'Convocar' });
+        // §24: o gestor fica no padrão 'indigo' (azul do app).
+        expect(botaoConvocar.className).toContain('bg-blue-600');
+        fireEvent.click(botaoConvocar);
         const gaveta = await screen.findByRole('dialog', { name: 'Convocar assembleia' });
         expect(await within(gaveta).findByText('Torre A — Estacionamento')).toBeInTheDocument();
         expect(ops.unidadesFora).toHaveBeenCalledWith('a1');
@@ -704,7 +707,7 @@ describe('cotas não conferidas (A10)', () => {
 });
 
 describe('impedimento marcado à mão (A10)', () => {
-    it('marcar exige motivo; marcada, a situação diz que foi o gestor', async () => {
+    it('marcar exige motivo; marcada, a situação diz que foi à mão (gestor ou síndico — a marca não guarda o papel)', async () => {
         const ops = opsFalso(carregada(assembleia(), 1));
         montar(ops);
 
@@ -724,13 +727,13 @@ describe('impedimento marcado à mão (A10)', () => {
         await waitFor(() => expect(ops.marcarImpedida).toHaveBeenCalledWith('a1', 'u2', 'Acordo de parcelamento descumprido'));
 
         // A gaveta passa a dizer a situação e a oferecer Desmarcar; a presença fica travada.
-        expect(await within(gaveta).findByText('Impedida (marcada pelo gestor): Acordo de parcelamento descumprido.'))
+        expect(await within(gaveta).findByText('Impedida (marcada à mão): Acordo de parcelamento descumprido.'))
             .toBeInTheDocument();
         expect(within(gaveta).getByRole('button', { name: 'Desmarcar' })).toBeEnabled();
         expect(within(gaveta).getByRole('radio', { name: 'Na sala' })).toBeDisabled();
     });
 
-    it('situação com origem: marcada pelo gestor × automática; desmarcar manda null', async () => {
+    it('situação com origem: marcada à mão × automática; desmarcar manda null', async () => {
         const d = carregada(assembleia(), 0);
         d.unidades = d.unidades.map(u => (u.unitId === 'u2'
             ? { ...u, impedimentoManual: 'Acordo descumprido', impedimentoManualEm: agoraMais(-HORA) } : u));
@@ -741,7 +744,7 @@ describe('impedimento marcado à mão (A10)', () => {
         montar(ops);
 
         expect(await screen.findByText('Impedida: Cota de 10/2026 vencida em 10/11/2026')).toBeInTheDocument();
-        expect(screen.getByText('Impedida (marcada pelo gestor): Acordo descumprido')).toBeInTheDocument();
+        expect(screen.getByText('Impedida (marcada à mão): Acordo descumprido')).toBeInTheDocument();
 
         const gaveta = await abrirUnidade('Torre A — 102');
         fireEvent.click(within(gaveta).getByRole('button', { name: 'Desmarcar' }));

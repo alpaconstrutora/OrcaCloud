@@ -250,6 +250,16 @@ export const PrimaryButton: React.FC<BtnProps> = ({ children, className = '', ..
     </button>
 );
 
+/** O PrimaryButton como LINK — navegação (ex.: ir para a entrada por e-mail e senha). */
+export const PrimaryLink: React.FC<React.AnchorHTMLAttributes<HTMLAnchorElement> & { children: React.ReactNode }> = ({ children, className = '', ...rest }) => (
+    <a
+        {...rest}
+        className={`inline-flex items-center gap-2 h-9 px-4 rounded-[8px] bg-[#E1553C] text-white text-[13px] font-semibold hover:bg-[#C8452E] active:scale-95 transition-all ${className}`}
+    >
+        {children}
+    </a>
+);
+
 export const SoftButton: React.FC<BtnProps> = ({ children, className = '', ...rest }) => (
     <button
         type="button"

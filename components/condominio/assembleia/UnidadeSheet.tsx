@@ -24,8 +24,8 @@ import type {
     ItemAssembleia, OpcaoVoto, PresencaAssembleia, StatusAssembleia, UnidadeNaAssembleia, VotoAssembleia,
 } from '../../../services/condominioAssembleiaService';
 import {
-    BOTAO_PRIMARIO, BOTAO_SECUNDARIO, BOTAO_VOLTAR, CAMPO, MOTIVO, ROTULO, opcoesDoItem, textoImpedimento,
-    type ImpedimentoAgora,
+    ACCENTS, BOTAO_PRIMARIO, BOTAO_SECUNDARIO, BOTAO_VOLTAR, CAMPO, MOTIVO, ROTULO, opcoesDoItem, textoImpedimento,
+    type AcentoDaAssembleia, type ImpedimentoAgora,
 } from './comum';
 
 type Escolha = PresencaAssembleia | 'NENHUMA';
@@ -58,12 +58,15 @@ interface Props {
     onLancarVoto: (item: ItemAssembleia, opcao: OpcaoVoto) => Promise<void>;
     /** A10: marca (motivo já sem espaços nas pontas) ou desmarca (null). */
     onMarcarImpedida: (motivo: string | null) => Promise<void>;
+    /** §24: 'portal' no Portal do Síndico (coral); padrão 'indigo' (app). */
+    accent?: AcentoDaAssembleia;
 }
 
 const UnidadeSheet: React.FC<Props> = ({
     open, onClose, status, unidade, total, itens, votos, impedimento, gravando, onRegistrarPresenca, onLancarVoto,
-    onMarcarImpedida,
+    onMarcarImpedida, accent = 'indigo',
 }) => {
+    const ac = ACCENTS[accent];
     const atual: Escolha = unidade?.presenca ?? 'NENHUMA';
     const [escolha, setEscolha] = React.useState<Escolha>(atual);
     const [procurador, setProcurador] = React.useState('');
@@ -157,7 +160,7 @@ const UnidadeSheet: React.FC<Props> = ({
                         {marcada ? (
                             <div className="flex flex-wrap items-center justify-end gap-3">
                                 <p className="text-sm text-gray-700 mr-auto">
-                                    Marcada pelo gestor{marcadaEm ? ` em ${dataHoraBrasilia(marcadaEm)}` : ''}. Desmarcar
+                                    Marcada à mão{marcadaEm ? ` em ${dataHoraBrasilia(marcadaEm)}` : ''}. Desmarcar
                                     devolve a unidade à regra automática (cota vencida).
                                 </p>
                                 {gravando && <p className={MOTIVO}>Aguarde: gravando.</p>}
@@ -170,8 +173,8 @@ const UnidadeSheet: React.FC<Props> = ({
                             <>
                                 {impedimento && (
                                     <p className="text-sm text-gray-700">
-                                        A regra automática já impede esta unidade; só o pagamento a libera. A marca do
-                                        gestor, se houver, vale por cima dela.
+                                        A regra automática já impede esta unidade; só o pagamento a libera. A marca feita
+                                        à mão, se houver, vale por cima dela.
                                     </p>
                                 )}
                                 <div className="space-y-1.5">
@@ -179,7 +182,7 @@ const UnidadeSheet: React.FC<Props> = ({
                                     <input id="assembleia-motivo-impedimento" type="text" value={motivoImpedimento}
                                         onChange={ev => setMotivoImpedimento(ev.target.value)} maxLength={MOTIVO_MAX}
                                         aria-describedby="assembleia-motivo-impedimento-ajuda"
-                                        placeholder="Ex.: cota de 10/2026 em aberto na administradora" className={CAMPO} />
+                                        placeholder="Ex.: cota de 10/2026 em aberto na administradora" className={ac.campo} />
                                     <p id="assembleia-motivo-impedimento-ajuda" className="text-xs text-gray-500">
                                         Aparece para o condômino no portal e na ata.
                                     </p>
@@ -211,7 +214,7 @@ const UnidadeSheet: React.FC<Props> = ({
                                             checked={escolha === op}
                                             disabled={desligada}
                                             onChange={() => setEscolha(op)}
-                                            className="w-4 h-4 border-gray-300 text-blue-600 focus:ring-blue-500"
+                                            className={`w-4 h-4 border-gray-300 ${ac.marca}`}
                                         />
                                         {ROTULO_ESCOLHA[op]}
                                     </label>
@@ -230,7 +233,7 @@ const UnidadeSheet: React.FC<Props> = ({
                                 <label htmlFor="assembleia-procurador" className={ROTULO}>Nome do procurador</label>
                                 <input id="assembleia-procurador" type="text" value={procurador}
                                     onChange={ev => setProcurador(ev.target.value)}
-                                    placeholder="Nome completo" className={CAMPO} />
+                                    placeholder="Nome completo" className={ac.campo} />
                             </div>
                             <div className="space-y-1.5">
                                 <label htmlFor="assembleia-procuracao" className={ROTULO}>Procuração (arquivo)</label>
@@ -251,7 +254,7 @@ const UnidadeSheet: React.FC<Props> = ({
                         <div className="flex flex-wrap items-center justify-end gap-3">
                             {motivoRegistrar && <p className={`${MOTIVO} mr-auto`}>{motivoRegistrar}</p>}
                             <button type="button" onClick={registrar} disabled={!!motivoRegistrar || gravando}
-                                className={BOTAO_PRIMARIO}>
+                                className={ac.primario}>
                                 {gravando ? 'Gravando...' : 'Registrar presença'}
                             </button>
                         </div>
@@ -288,7 +291,7 @@ const UnidadeSheet: React.FC<Props> = ({
                                                     disabled={!!motivoVoto}
                                                     onClick={() => onLancarVoto(item, op)}
                                                     className={`h-9 px-3.5 rounded-[6px] border text-sm font-medium transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${
-                                                        marcada ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
+                                                        marcada ? ac.escolhida : 'border-gray-200 bg-white text-gray-700 hover:bg-gray-50'
                                                     }`}>
                                                     {rotuloOpcao(op)}
                                                 </button>

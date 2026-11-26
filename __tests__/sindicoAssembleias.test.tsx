@@ -21,12 +21,28 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const sb = vi.hoisted(() => ({
     rpc: vi.fn(),
     invoke: vi.fn(),
+    sessao: null as null | { user: { id: string } },
+    ouvintes: [] as ((evento: string, sessao: unknown) => void)[],
+    cancelou: vi.fn(),
 }));
 vi.mock('../lib/supabase', () => ({
-    supabase: { rpc: sb.rpc, functions: { invoke: sb.invoke }, from: vi.fn(() => { throw new Error('o síndico não lê tabela'); }) },
+    supabase: {
+        rpc: sb.rpc,
+        functions: { invoke: sb.invoke },
+        from: vi.fn(() => { throw new Error('o síndico não lê tabela'); }),
+        auth: {
+            getSession: async () => ({ data: { session: sb.sessao }, error: null }),
+            onAuthStateChange: (f: (evento: string, sessao: unknown) => void) => {
+                sb.ouvintes.push(f);
+                return { data: { subscription: { unsubscribe: sb.cancelou } } };
+            },
+        },
+    },
 }));
 
+import { act } from '@testing-library/react';
 import { ConfirmProvider } from '../components/ui/confirm';
+import SindicoPortal from '../components/sindico/SindicoPortal';
 import PainelAssembleiasDoSindico, { MOTIVO_SEM_SESSAO } from '../components/sindico/PainelAssembleiasDoSindico';
 import { operacoesDoSindico, type CondominioDoSindico } from '../services/sindicoPortalService';
 import { ErroAssembleia } from '../services/condominioAssembleiaService';
@@ -61,17 +77,21 @@ const rpcs = () => sb.rpc.mock.calls.map(c => c[0] as string);
 
 function montar(props: Partial<React.ComponentProps<typeof PainelAssembleiasDoSindico>> = {}) {
     const notify = vi.fn();
+    const onAlterado = vi.fn();
     render(
         <ConfirmProvider>
-            <PainelAssembleiasDoSindico identidade={{ token: 'tok' }} condominios={[CONDOMINIO]} logado notify={notify} {...props} />
+            <PainelAssembleiasDoSindico identidade={{ token: 'tok' }} condominios={[CONDOMINIO]} logado notify={notify}
+                onAlterado={onAlterado} {...props} />
         </ConfirmProvider>,
     );
-    return { notify };
+    return { notify, onAlterado };
 }
 
 beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    sb.sessao = null;
+    sb.ouvintes = [];
 });
 
 describe('aba Assembleias do Portal do Síndico', () => {
@@ -98,6 +118,60 @@ describe('sem sessão', () => {
         expect(await screen.findByText('Como administradora, conduza a assembleia pelo app')).toBeInTheDocument();
         expect(screen.queryByText(MOTIVO_SEM_SESSAO)).not.toBeInTheDocument();
         expect(sb.rpc).not.toHaveBeenCalled();
+    });
+});
+
+// ─── a casca decide "logado" (fix 1 da revisão da B2) ────────────────────────
+// O link do convite (/portal-sindico?token=…) monta o portal SEM `onLogout` mesmo com o
+// síndico já logado no navegador: "logado" = entrada por e-mail OU sessão ativa. Quem decide
+// se a sessão é do síndico é o banco (sindico_sem_sessao, traduzido).
+describe('SindicoPortal › aba Assembleias (casca)', () => {
+    const DADOS = {
+        ok: true, sindico: { clientId: 's1', nome: 'Maria Síndica', email: 'maria@x.com' }, condominios: [CONDOMINIO],
+        unidades: [], avisos: [], documentos: [], manutencao: [], ordens: [], ativos: [], rateios: [], chamados: [],
+    };
+    const abrirAba = async () => {
+        await screen.findAllByText('010 - Galeria Altavista');
+        fireEvent.click(screen.getAllByRole('button', { name: /^Assembleias$/ })[0]);
+    };
+
+    it('só o link, sem sessão: diz como entrar (com o caminho do login) e não chama a porta', async () => {
+        banco({ sindico_portal_dados: DADOS });
+        render(<ConfirmProvider><SindicoPortal token="tok" /></ConfirmProvider>);
+        await abrirAba();
+        expect(await screen.findByText(MOTIVO_SEM_SESSAO)).toBeInTheDocument();
+        expect(screen.getByRole('link', { name: 'Entrar com e-mail e senha' })).toHaveAttribute('href', '/portal-sindico');
+        expect(rpcs().filter(fn => fn.startsWith('sindico_portal_assembleia_'))).toEqual([]);
+    });
+
+    it('link + sessão ativa: o painel conduz (lista pela porta do síndico)', async () => {
+        sb.sessao = { user: { id: 'u-sindica' } };
+        banco({ sindico_portal_dados: DADOS, sindico_portal_assembleia_listar: [linha()] });
+        render(<ConfirmProvider><SindicoPortal token="tok" /></ConfirmProvider>);
+        await abrirAba();
+        expect(await screen.findByText('AGO 2026')).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Nova assembleia/ })).toBeInTheDocument();
+        expect(screen.queryByText(MOTIVO_SEM_SESSAO)).not.toBeInTheDocument();
+    });
+
+    it('entrou na sessão com o portal aberto: o painel acompanha; ao desmontar, cancela a escuta', async () => {
+        banco({ sindico_portal_dados: DADOS, sindico_portal_assembleia_listar: [] });
+        const { unmount } = render(<ConfirmProvider><SindicoPortal token="tok" /></ConfirmProvider>);
+        await abrirAba();
+        expect(await screen.findByText(MOTIVO_SEM_SESSAO)).toBeInTheDocument();
+        act(() => { for (const f of sb.ouvintes) f('SIGNED_IN', { user: { id: 'u-sindica' } }); });
+        expect(await screen.findByRole('button', { name: /Nova assembleia/ })).toBeInTheDocument();
+        unmount();
+        expect(sb.cancelou).toHaveBeenCalled();
+    });
+
+    it('administradora pelo app (tem sessão, mas é dela): continua mandada para a tela do gestor', async () => {
+        sb.sessao = { user: { id: 'u-admin' } };
+        banco({ sindico_portal_dados: DADOS });
+        render(<ConfirmProvider><SindicoPortal clientId="s1" comoAdministradora embutido /></ConfirmProvider>);
+        await abrirAba();
+        expect(await screen.findByText('Como administradora, conduza a assembleia pelo app')).toBeInTheDocument();
+        expect(rpcs().filter(fn => fn.startsWith('sindico_portal_assembleia_'))).toEqual([]);
     });
 });
 
@@ -166,6 +240,81 @@ describe('usa operacoesDoSindico', () => {
         expect(await screen.findByText(/Para conduzir a assembleia, entre no Portal do Síndico com seu e-mail e senha\./))
             .toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Tentar de novo' })).toBeInTheDocument();
+    });
+});
+
+// ─── §24 no portal e releitura da casca (fixes 2 e 4 da revisão da B2) ───────
+describe('a tela da assembleia no portal', () => {
+    const futuro = new Date(Date.now() + 10 * 24 * 3600_000).toISOString();
+    const rascunho = linha({ primeira_convocacao_em: futuro, segunda_convocacao_em: new Date(Date.now() + 10 * 24 * 3600_000 + 1800_000).toISOString() });
+
+    it('coral (accent portal) na ação, no campo e na gaveta — nada de azul do app', async () => {
+        banco({
+            sindico_portal_assembleia_listar: [rascunho],
+            sindico_portal_assembleia_carregar: { assembleia: rascunho, itens: [ITEM], unidades: [], votos: [] },
+            sindico_portal_assembleia_cotas_conferidas: true,
+        });
+        montar();
+        // A gaveta de rascunho (a da A7) também no coral.
+        fireEvent.click(await screen.findByRole('button', { name: /Nova assembleia/ }));
+        const criar = await screen.findByRole('button', { name: 'Criar rascunho' });
+        expect(criar.className).toContain('bg-[#E1553C]');
+        expect(criar.className).not.toContain('bg-blue-600');
+        expect(screen.getByLabelText('Título').className).toContain('focus:border-[#E1553C]');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Abrir' }));
+        const convocar = await screen.findByRole('button', { name: 'Convocar' });
+        expect(convocar.className).toContain('bg-[#E1553C]');
+        expect(convocar.className).not.toContain('bg-blue-600');
+    });
+
+    it('convocada: faixa de KPIs do kit (KpiStrip), não os KpiCard do app', async () => {
+        const convocada = linha({ status: 'CONVOCADA', convocada_em: '2026-11-26T12:00:00+00:00', aviso_id: 'av1' });
+        banco({
+            sindico_portal_assembleia_listar: [convocada],
+            sindico_portal_assembleia_carregar: { assembleia: convocada, itens: [ITEM], unidades: [], votos: [] },
+            sindico_portal_assembleia_apuracao: { total: 0, presentesFracao: 0, presentesUnidades: 0, itens: [] },
+            sindico_portal_assembleia_impedimentos: [],
+            sindico_portal_assembleia_cotas_conferidas: true,
+            sindico_portal_assembleia_leituras: 2,
+        });
+        montar();
+        fireEvent.click(await screen.findByRole('button', { name: 'Abrir' }));
+        const rotulo = await screen.findByText('Presentes aptos agora');
+        // KpiStrip: rótulo <p> de 13px no card único do kit (o KpiCard do app tem ícone colorido).
+        expect(rotulo.className).toContain('text-[13px]');
+        expect(screen.getByRole('button', { name: 'Instalar' }).className).toContain('bg-[#E1553C]');
+    });
+
+    it('convocar avisa pelo toast da casca e relê o portal (o aviso aparece em Avisos)', async () => {
+        const convocada = { ...rascunho, status: 'CONVOCADA', convocada_em: new Date().toISOString(), aviso_id: 'av1' };
+        let carregou = 0;
+        sb.rpc.mockImplementation(async (fn: string) => {
+            const r: Record<string, unknown> = {
+                sindico_portal_assembleia_listar: [rascunho],
+                sindico_portal_assembleia_cotas_conferidas: true,
+                sindico_portal_assembleia_unidades_fora: [],
+                sindico_portal_assembleia_convocar: { unidades: 8, fora: [], avisoId: 'av1' },
+                sindico_portal_assembleia_apuracao: { total: 0, presentesFracao: 0, presentesUnidades: 0, itens: [] },
+                sindico_portal_assembleia_impedimentos: [],
+                sindico_portal_assembleia_leituras: 0,
+            };
+            if (fn === 'sindico_portal_assembleia_carregar') {
+                carregou += 1;
+                return { data: { assembleia: carregou === 1 ? rascunho : convocada, itens: [ITEM], unidades: [], votos: [] }, error: null };
+            }
+            return fn in r ? { data: r[fn], error: null } : { data: null, error: { message: `RPC inesperada: ${fn}` } };
+        });
+        const { notify, onAlterado } = montar();
+        fireEvent.click(await screen.findByRole('button', { name: 'Abrir' }));
+        fireEvent.click(await screen.findByRole('button', { name: 'Convocar' }));
+        const gaveta = await screen.findByRole('dialog', { name: 'Convocar assembleia' });
+        fireEvent.click(within(gaveta).getByRole('button', { name: 'Convocar e publicar aviso' }));
+
+        await waitFor(() => expect(notify).toHaveBeenCalledWith(expect.stringMatching(/^Assembleia convocada: 8 unidades participam/), 'success'));
+        expect(onAlterado).toHaveBeenCalled();
+        // O toast é o da casca: a tela não desenha o dela.
+        expect(document.querySelector('.fixed.bottom-6.right-6')).toBeNull();
     });
 });
 

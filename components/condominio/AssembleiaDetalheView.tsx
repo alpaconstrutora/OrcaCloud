@@ -30,10 +30,15 @@
 //   • A10: sem cota cobrada pelo app (ops.cotasConferidas = false), aviso — que não bloqueia
 //     nada — no Convocar, no Instalar e no topo de Unidades; o gestor marca a impedida à mão
 //     na gaveta da unidade (ops.marcarImpedida). A situação diz a origem: "Impedida (marcada
-//     pelo gestor): …" × "Impedida: <cota vencida>".
+//     à mão): …" × "Impedida: <cota vencida>" — "à mão" porque o síndico também marca (B2).
 //
 // Ordem das seções: Identificação · Edital e ata · Pauta · Apuração · Unidades. A
 // lista de Unidades é a única TABELA e vem por último — nada abaixo de tabela (§6.14).
+//
+// §24 (tela compartilhada app × portal): `accent` 'indigo' (padrão, gestor) ou 'portal'
+// (Portal do Síndico, coral) — muda a cor de identidade (ação, foco, marcação, link) e a
+// faixa de KPIs (KpiCard × KpiStrip do kit); cor que significa algo não muda. No portal o
+// aviso sai pelo `notify` da casca (toast no topo), não pelo toast desta tela.
 
 import React from 'react';
 import {
@@ -43,6 +48,7 @@ import {
 import Breadcrumb from '../ui/Breadcrumb';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import { KpiCard } from '../ui/KpiCard';
+import { KpiStrip } from '../portal/PortalKit';
 import SecaoTitulo from '../ui/SecaoTitulo';
 import { useConfirm } from '../ui/confirm';
 import { identidadeDoCondominio, nomeDoCondominioNosDocumentos } from '../../utils/condominioIdentidade';
@@ -61,8 +67,8 @@ import {
 } from './assembleia/ConducaoSheets';
 import { ApuracaoSecao, EditalAtaSecao, IdentificacaoSecao, PautaSecao } from './assembleia/SecoesDaAssembleia';
 import {
-    BOTAO_PRIMARIO, BOTAO_SECUNDARIO, COR_STATUS, diaBrasilia, presentesAptos, temMetade, textoImpedimento,
-    type ImpedimentoAgora,
+    ACCENTS, BOTAO_SECUNDARIO, COR_STATUS, diaBrasilia, presentesAptos, temMetade, textoImpedimento,
+    type AcentoDaAssembleia, type ImpedimentoAgora,
 } from './assembleia/comum';
 
 /** O que a tela usa do condomínio: identidade e o nome nos documentos. O Portal do Síndico monta isto. */
@@ -78,7 +84,18 @@ interface Props {
     onVoltarParaLista?: () => void;
     /** Primeiro salto da migalha (padrão "Condomínios"; no Portal do Síndico, "Assembleias"). */
     rotuloDaLista?: string;
+    /** §24: 'portal' no Portal do Síndico; padrão 'indigo' (app). */
+    accent?: AcentoDaAssembleia;
+    /** Aviso da casca (Portal do Síndico); sem ele, a tela mostra o próprio toast. */
+    notify?: (message: string, type: TipoDeAviso) => void;
+    /**
+     * Algo que outras abas mostram mudou: o aviso da convocação/cancelamento (Avisos) ou um
+     * documento (ata, procuração — Documentos). O Portal do Síndico relê o payload dele.
+     */
+    onAlterado?: () => void;
 }
+
+type TipoDeAviso = 'success' | 'error' | 'warning';
 
 /** A natureza de cada documento é da TELA, não de quem implementa `ops` (B1/B2). */
 const DOC_ATA: Omit<DocumentoDaAssembleia, 'titulo'> = { categoria: 'ATA', visivelPortal: true };
@@ -100,8 +117,10 @@ const COLUNAS_UNIDADES: StandardTableColumn[] = [
 
 const AssembleiaDetalheView: React.FC<Props> = ({
     assembleiaId, empreendimento: e, ops, onVoltar, onVoltarParaLista, rotuloDaLista = 'Condomínios',
+    accent = 'indigo', notify: notifyDaCasca, onAlterado,
 }) => {
     const confirm = useConfirm();
+    const ac = ACCENTS[accent];
     const identidade = identidadeDoCondominio(e.name, e.code);
     // Edital e ata com o MESMO nome: o banco congela este critério no retrato (encerrar).
     const condominio = React.useMemo(
@@ -130,8 +149,9 @@ const AssembleiaDetalheView: React.FC<Props> = ({
     // Upload que deu certo mas o vínculo falhou: refaz só o vínculo (sem 2º PDF em Documentos).
     const ataEnviada = React.useRef<string | null>(null);
 
-    const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' | 'warning' } | null>(null);
-    const notify = (message: string, type: 'success' | 'error' | 'warning' = 'success') => {
+    const [notification, setNotification] = React.useState<{ message: string; type: TipoDeAviso } | null>(null);
+    const notify = (message: string, type: TipoDeAviso = 'success') => {
+        if (notifyDaCasca) { notifyDaCasca(message, type); return; }
         setNotification({ message, type });
         setTimeout(() => setNotification(null), 4500);
     };
@@ -255,6 +275,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({
         try {
             const r = await ops.convocar(a.id, corpo);
             fecharGaveta();
+            onAlterado?.(); // o aviso da convocação está no mural
             notify(`Assembleia convocada: ${r.unidades} ${r.unidades === 1 ? 'unidade participa' : 'unidades participam'}`
                 + `${r.fora.length ? `; fora (sem fração ideal): ${r.fora.join(', ')}` : ''}. Aviso publicado no mural.`);
             // As unidades nasceram no banco (lista congelada, R1): recarrega.
@@ -303,6 +324,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({
                     { ...DOC_ATA, titulo: `${modelo.titulo} — ${assembleia.titulo}` });
                 documentoId = doc.documentoId;
                 ataEnviada.current = doc.documentoId;
+                onAlterado?.(); // a ata está em Documentos
             }
             const v = await ops.vincularAta(assembleia.id, documentoId);
             ataEnviada.current = null;
@@ -351,6 +373,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({
         try {
             await ops.cancelar(a.id, motivo, corpo);
             fecharGaveta();
+            onAlterado?.(); // o aviso de cancelamento está no mural
             notify('Assembleia cancelada. O aviso de cancelamento foi publicado no mural.');
             await carregar(true);
         } catch (err) {
@@ -401,6 +424,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({
                     const doc = await ops.enviarDocumento(a.id, p.arquivo,
                         { ...DOC_PROCURACAO, titulo: `Procuração — ${unidade.unidadeRotulo ?? 'unidade'} — ${a.titulo}` });
                     procuracaoId = doc.documentoId;
+                    onAlterado?.(); // a procuração está em Documentos (interna)
                 }
             }
             const r = await ops.registrarPresenca(a.id, unidade.unitId, p.presenca, p.procurador, procuracaoId);
@@ -526,7 +550,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({
             const m = impedidasNaInstalacao.get(u.unitId)
                 ?? (u.impedidaNaInstalacao ? { motivo: 'cota condominial vencida', origem: 'AUTOMATICA' as const } : null);
             return m
-                ? { impedida: true, texto: `Impedida na instalação${m.origem === 'MANUAL' ? ' (marcada pelo gestor)' : ''}: ${m.motivo}` }
+                ? { impedida: true, texto: `Impedida na instalação${m.origem === 'MANUAL' ? ' (marcada à mão)' : ''}: ${m.motivo}` }
                 : { impedida: false, texto: 'Apta na instalação' };
         }
         const m = impedidas.get(u.unitId);
@@ -539,7 +563,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({
     if (carregando) {
         return (
             <div className="text-center py-16">
-                <Loader2 className="w-8 h-8 text-blue-600 mx-auto animate-spin" />
+                <Loader2 className={`w-8 h-8 ${ac.spinner} mx-auto animate-spin`} />
                 <p className="mt-2 text-gray-500">Carregando a assembleia...</p>
             </div>
         );
@@ -592,7 +616,7 @@ const AssembleiaDetalheView: React.FC<Props> = ({
                             )}
                             {/* §17 — a ação do ESTADO, o único azul sólido da tela. */}
                             {acao && (
-                                <button type="button" onClick={acao.onClick} disabled={acao.desligada} className={BOTAO_PRIMARIO}>
+                                <button type="button" onClick={acao.onClick} disabled={acao.desligada} className={ac.primario}>
                                     {acao.icone}{acao.label}
                                 </button>
                             )}
@@ -610,23 +634,33 @@ const AssembleiaDetalheView: React.FC<Props> = ({
 
             {a && (
                 <>
-                    {(a.status === 'CONVOCADA' || a.status === 'INSTALADA') && (
+                    {(a.status === 'CONVOCADA' || a.status === 'INSTALADA') && accent === 'portal' && (
+                        // §24: no portal a faixa é a do kit (card único, sem ícone).
+                        <KpiStrip items={[
+                            { label: 'Unidades na assembleia', value: String(unidades.length), hint: 'com fração ideal, congeladas na convocação' },
+                            { label: 'Presentes aptos agora', value: percentualDoTotal(presentes.fracao, presentes.total),
+                                hint: `${presentes.unidades} de ${presentes.totalUnidades} unidades${temMetade(presentes) ? ' · metade atingida' : ''}` },
+                            { label: 'Impedidas agora', value: String(impedidas.size), hint: 'cota vencida ou marcada à mão' },
+                            { label: 'Votaram pelo portal', value: String(portalVotaram), hint: 'unidades com ao menos um voto' },
+                        ]} />
+                    )}
+                    {(a.status === 'CONVOCADA' || a.status === 'INSTALADA') && accent === 'indigo' && (
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
                             <KpiCard label="Unidades na assembleia" value={unidades.length}
                                 sub="com fração ideal, congeladas na convocação" icon={<Users className="w-4 h-4" />} color="blue" />
                             <KpiCard label="Presentes aptos agora" value={percentualDoTotal(presentes.fracao, presentes.total)}
                                 sub={`${presentes.unidades} de ${presentes.totalUnidades} unidades${temMetade(presentes) ? ' · metade atingida' : ''}`}
                                 icon={<UserCheck className="w-4 h-4" />} color={temMetade(presentes) ? 'emerald' : 'amber'} />
-                            <KpiCard label="Impedidas agora" value={impedidas.size} sub="cota vencida ou marcada pelo gestor"
+                            <KpiCard label="Impedidas agora" value={impedidas.size} sub="cota vencida ou marcada à mão"
                                 icon={<Ban className="w-4 h-4" />} color={impedidas.size ? 'red' : 'gray'} />
                             <KpiCard label="Votaram pelo portal" value={portalVotaram} sub="unidades com ao menos um voto"
                                 icon={<Smartphone className="w-4 h-4" />} color="indigo" />
                         </div>
                     )}
 
-                    <IdentificacaoSecao assembleia={a} />
+                    <IdentificacaoSecao assembleia={a} accent={accent} />
                     <EditalAtaSecao assembleia={a} ata={ata} />
-                    <PautaSecao assembleia={a} itens={itens} onVoltarParaEditar={onVoltar} />
+                    <PautaSecao assembleia={a} itens={itens} onVoltarParaEditar={onVoltar} accent={accent} />
                     {a.status !== 'RASCUNHO' && a.status !== 'CANCELADA' && (
                         <ApuracaoSecao assembleia={a} itens={itens} apuracao={apuracao} totalUnidades={unidades.length}
                             erro={erroApuracao} atualizando={atualizandoApuracao} onAtualizar={() => carregar(true)} />
@@ -695,20 +729,20 @@ const AssembleiaDetalheView: React.FC<Props> = ({
 
                     <ConvocarSheet open={gaveta === 'convocar'} onClose={fecharGaveta} assembleia={a} itens={itens}
                         condominioNome={condominio.nome} fora={fora} erroFora={erroFora} gravando={gravando} erro={erroGaveta}
-                        cotasConferidas={cotasConferidas} onConvocar={convocar} />
+                        cotasConferidas={cotasConferidas} onConvocar={convocar} accent={accent} />
                     <InstalarSheet open={gaveta === 'instalar'} onClose={fecharGaveta} assembleia={a} presentes={presentes}
                         impedidas={impedidas.size} leituras={leituras} gravando={gravando} erro={erroGaveta}
-                        cotasConferidas={cotasConferidas} onInstalar={instalar} />
+                        cotasConferidas={cotasConferidas} onInstalar={instalar} accent={accent} />
                     <EncerrarSheet open={gaveta === 'encerrar'} onClose={fecharGaveta} assembleia={a} itens={itens}
-                        gravando={gravando} erro={erroGaveta} onEncerrar={encerrar} />
+                        gravando={gravando} erro={erroGaveta} onEncerrar={encerrar} accent={accent} />
                     <CancelarSheet open={gaveta === 'cancelar'} onClose={fecharGaveta} assembleia={a}
-                        gravando={gravando} erro={erroGaveta} onCancelar={cancelar} />
+                        gravando={gravando} erro={erroGaveta} onCancelar={cancelar} accent={accent} />
                     <UnidadeSheet open={!!unidade} onClose={() => setUnidadeAberta(null)} status={a.status} unidade={unidade}
                         total={presentes.total} itens={itens}
                         votos={unidade ? votos.filter(v => v.unitId === unidade.unitId) : []}
                         impedimento={unidade ? impedimentoAgora(unidade) : null} gravando={gravando}
                         onRegistrarPresenca={registrarPresenca} onLancarVoto={lancarVoto}
-                        onMarcarImpedida={marcarImpedida} />
+                        onMarcarImpedida={marcarImpedida} accent={accent} />
                 </>
             )}
 

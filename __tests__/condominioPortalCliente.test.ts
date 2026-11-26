@@ -9,7 +9,12 @@ import { describe, it, expect } from 'vitest';
 import {
     agruparPorCondominio, fracaoParaPercentual, periodicidade, competencia, resolverAba,
 } from '../components/client/CondominioTab';
-import type { PortalUnidadeCondominio } from '../services/clientPortalService';
+import type {
+    PortalUnidadeCondominio, PortalAssembleia, PortalItemAssembleia,
+} from '../services/clientPortalService';
+import {
+    motivoDaCedulaDesligada, opcoesDaCedula, aplicarVotoLocal, linhasDoResultado,
+} from '../components/client/AssembleiasCondominio';
 
 const unidade = (over: Partial<PortalUnidadeCondominio>): PortalUnidadeCondominio => ({
     unitId: 'u1', unidade: 'Sala - 201', torre: 'Torre Única', pavimento: 2,
@@ -149,5 +154,111 @@ describe('resolverAba', () => {
         expect(resolverAba('')).toBe('dados');
         expect(resolverAba(null)).toBe('dados');
         expect(resolverAba(undefined)).toBe('dados');
+    });
+});
+
+// ── Assembleias (Task A8, 26/11/2026) ───────────────────────────────────────
+// Plano: docs/planos/2026-11-25-condominio-assembleias-votacoes.md (R2, R3, R5, R9).
+// As regras puras da cédula. O que erra em SILÊNCIO aqui é o botão LIGADO para
+// quem o banco vai recusar (gestor espiando, link sem login, unidade impedida) —
+// o clique vira um erro que o condômino não entende — e o percentual com o
+// denominador errado: o payload do portal não traz o total da assembleia.
+describe('resolverAba — Assembleias', () => {
+    it('a sub-aba nova é reconhecida (não cai em Dados Gerais)', () => {
+        expect(resolverAba('assembleias')).toBe('assembleias');
+    });
+});
+
+const itemAprov: PortalItemAssembleia = {
+    id: 'i1', ordem: 1, titulo: 'Aprovar contas de 2026', descricao: null,
+    tipo: 'APROVACAO', opcoes: null, quorum: 'MAIORIA_PRESENTES',
+};
+const itemEscolha: PortalItemAssembleia = {
+    id: 'i2', ordem: 2, titulo: 'Eleger síndico', descricao: null,
+    tipo: 'ESCOLHA', opcoes: ['Ana', 'Bruno'], quorum: 'MAIORIA_PRESENTES',
+};
+const assembleia = (over: Partial<PortalAssembleia> = {}): PortalAssembleia => ({
+    id: 'a1', condominioNome: 'Bella Vista', tipo: 'AGO', titulo: 'AGO 2026',
+    local: 'Salão de festas', linkTransmissao: null,
+    primeiraConvocacaoEm: '2026-12-10T22:00:00Z', segundaConvocacaoEm: '2026-12-10T22:30:00Z',
+    status: 'CONVOCADA', itens: [itemAprov, itemEscolha], sessaoValida: true,
+    minhasUnidades: [{ unitId: 'u1', rotulo: 'Apto 101', impedida: null, votos: {} }],
+    resultado: null, ataDocumentoId: null, ...over,
+});
+
+describe('motivoDaCedulaDesligada', () => {
+    const u = assembleia().minhasUnidades[0];
+
+    it('cédula sem sessão desligada com o motivo (link sem login, gestor espiando)', () => {
+        expect(motivoDaCedulaDesligada(assembleia({ sessaoValida: false }), u, true))
+            .toBe('Entre com e-mail e senha para votar.');
+    });
+
+    it('impedida mostra o motivo do banco', () => {
+        const imp = { ...u, impedida: 'cota de 10/2026 vencida' };
+        expect(motivoDaCedulaDesligada(assembleia(), imp, true)).toContain('cota de 10/2026 vencida');
+    });
+
+    it('encerrada: "Votação encerrada." vence qualquer outro motivo', () => {
+        expect(motivoDaCedulaDesligada(assembleia({ status: 'ENCERRADA', sessaoValida: false }), u, true))
+            .toBe('Votação encerrada.');
+    });
+
+    it('sem quem grave o voto (prévia) também desliga, dizendo por quê', () => {
+        expect(motivoDaCedulaDesligada(assembleia(), u, false)).not.toBeNull();
+    });
+
+    it('logado, quite e com a votação aberta: ligada', () => {
+        expect(motivoDaCedulaDesligada(assembleia(), u, true)).toBeNull();
+        expect(motivoDaCedulaDesligada(assembleia({ status: 'INSTALADA' }), u, true)).toBeNull();
+    });
+});
+
+describe('opcoesDaCedula', () => {
+    it('aprovação: Sim, Não, Abstenção', () => {
+        expect(opcoesDaCedula(itemAprov)).toEqual(['SIM', 'NAO', 'ABSTENCAO']);
+    });
+    it('escolha: as opções cadastradas + Abstenção', () => {
+        expect(opcoesDaCedula(itemEscolha)).toEqual(['Ana', 'Bruno', 'ABSTENCAO']);
+    });
+});
+
+describe('aplicarVotoLocal', () => {
+    it('marca o voto só na unidade e no item votados, sem tocar nas outras', () => {
+        const a = assembleia({
+            minhasUnidades: [
+                { unitId: 'u1', rotulo: 'Apto 101', impedida: null, votos: {} },
+                { unitId: 'u2', rotulo: 'Apto 102', impedida: null, votos: { i1: { opcao: 'NAO', origem: 'PRESENCIAL', votadoEm: '2026-12-10T22:40:00Z' } } },
+            ],
+        });
+        const voto = { opcao: 'SIM', origem: 'PORTAL' as const, votadoEm: '2026-12-01T13:00:00Z' };
+        const [depois] = aplicarVotoLocal([a], 'i1', 'u1', voto);
+        expect(depois.minhasUnidades[0].votos.i1).toEqual(voto);
+        expect(depois.minhasUnidades[1].votos.i1.opcao).toBe('NAO');
+        expect(a.minhasUnidades[0].votos.i1).toBeUndefined(); // não muta o estado anterior
+    });
+});
+
+describe('linhasDoResultado', () => {
+    it('percentual sobre as frações QUE VOTARAM (o portal não recebe o total da assembleia)', () => {
+        const r = {
+            itemId: 'i1', ordem: 1, titulo: 'Aprovar contas de 2026', tipo: 'APROVACAO' as const,
+            quorum: 'MAIORIA_PRESENTES' as const, resultado: 'APROVADO' as const, vencedora: null,
+            porOpcao: { SIM: { fracao: 0.00375, unidades: 3 }, NAO: { fracao: 0.00125, unidades: 1 }, ABSTENCAO: { fracao: 0, unidades: 0 } },
+        };
+        expect(linhasDoResultado(r, itemAprov)).toEqual([
+            { opcao: 'SIM', rotulo: 'Sim', unidades: 3, percentual: '75,00%' },
+            { opcao: 'NAO', rotulo: 'Não', unidades: 1, percentual: '25,00%' },
+            { opcao: 'ABSTENCAO', rotulo: 'Abstenção', unidades: 0, percentual: '0,00%' },
+        ]);
+    });
+
+    it('ninguém votou: percentual é "—", não 0% nem NaN', () => {
+        const r = {
+            itemId: 'i2', ordem: 2, titulo: 'Eleger síndico', tipo: 'ESCOLHA' as const,
+            quorum: 'MAIORIA_PRESENTES' as const, resultado: 'SEM_DECISAO' as const, vencedora: null,
+            porOpcao: { Ana: { fracao: 0, unidades: 0 }, Bruno: { fracao: 0, unidades: 0 }, ABSTENCAO: { fracao: 0, unidades: 0 } },
+        };
+        expect(linhasDoResultado(r, itemEscolha).map(l => l.percentual)).toEqual(['—', '—', '—']);
     });
 });

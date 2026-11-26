@@ -20,7 +20,8 @@ export type ClientPortalTabId = typeof CLIENT_PORTAL_TAB_IDS[number];
  * que Dados gerais, Avisos, Documentos, Financeiro, Manutenção e Equipamentos
  * ficaram sem tour e sem ajuda próprios.
  */
-export const CONDOMINIO_SECOES = ['dados', 'avisos', 'documentos', 'financeiro', 'manutencao', 'equipamentos'] as const;
+// 'assembleias' entrou em 26/11/2026 (Task A8), entre Avisos e Documentos.
+export const CONDOMINIO_SECOES = ['dados', 'avisos', 'assembleias', 'documentos', 'financeiro', 'manutencao', 'equipamentos'] as const;
 export type CondominioSecao = typeof CONDOMINIO_SECOES[number];
 
 /** Subseção salva que não existe mais cai em 'dados' — o mesmo que

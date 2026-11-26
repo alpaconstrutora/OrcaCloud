@@ -49,7 +49,7 @@ import SindicoAcessoCard from './SindicoAcessoCard';
 import SindicoPortal from '../sindico/SindicoPortal';
 import CondominioTab, { type AbaCondominio } from '../client/CondominioTab';
 import { CONDOMINIO_SECOES, secaoDoCondominio, destinoDaSecao } from '../../utils/clientPortalTabs';
-import { clientPortalService, CONDOMINIO_VAZIO, type PortalCondominio } from '../../services/clientPortalService';
+import { clientPortalService, CONDOMINIO_VAZIO, type PortalCondominio, type PortalAssembleia } from '../../services/clientPortalService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { unitOccupancyService } from '../../services/unitOccupancyService';
 import { useOrgContext } from '../../hooks/useOrgContext';
@@ -727,14 +727,18 @@ const PreviaDoPortal: React.FC<{
  */
 const PreviaDoPortalDoCliente: React.FC<{ clientId: string; aba: AbaCondominio; onAbaChange: (a: AbaCondominio) => void }> = ({ clientId, aba, onAbaChange }) => {
     const [dados, setDados] = React.useState<PortalCondominio>(CONDOMINIO_VAZIO);
+    const [assembleias, setAssembleias] = React.useState<PortalAssembleia[]>([]);
     const [carregando, setCarregando] = React.useState(true);
 
     React.useEffect(() => {
         let vivo = true;
         setCarregando(true);
-        clientPortalService.getCondominioForClient(clientId)
-            .then(d => { if (vivo) setDados(d); })
-            .finally(() => { if (vivo) setCarregando(false); });
+        // Assembleias pela mesma porta (membro da org lê; sessaoValida = false, então
+        // a cédula aparece desligada com o motivo — e o banco recusa o voto de membro).
+        Promise.all([
+            clientPortalService.getCondominioForClient(clientId).then(d => { if (vivo) setDados(d); }),
+            clientPortalService.getAssembleiasForClient(clientId).then(a => { if (vivo) setAssembleias(a); }),
+        ]).finally(() => { if (vivo) setCarregando(false); });
         return () => { vivo = false; };
     }, [clientId]);
 
@@ -742,7 +746,8 @@ const PreviaDoPortalDoCliente: React.FC<{ clientId: string; aba: AbaCondominio; 
         <div className="rounded-[10px] border border-gray-100 overflow-hidden shadow-sm bg-white p-4 md:p-6">
             {/* Sem `onMarcarLido` e sem `onResolverDocumento`: a prévia não grava
                 leitura nem emite URL assinada em nome de ninguém. */}
-            <CondominioTab dados={dados} loading={carregando} aba={aba} onAbaChange={onAbaChange} />
+            {/* Sem `onVotar`: a prévia não vota em nome do condômino. */}
+            <CondominioTab dados={dados} loading={carregando} aba={aba} onAbaChange={onAbaChange} assembleias={assembleias} />
         </div>
     );
 };

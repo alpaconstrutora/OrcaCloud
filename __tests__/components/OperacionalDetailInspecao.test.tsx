@@ -303,3 +303,28 @@ describe('OperacionalDetail — Aprovar inspeção (fase 2)', () => {
         expect(within(screen.getByRole('region', { name: 'Inspeção' })).getByText(/Nenhuma inspeção registrada/)).toBeTruthy();
     });
 });
+
+// Pendência da fase 2 (26/11): rótulo sem caixa alta (guia §21) — abas, botões de transição e o
+// cabeçalho "Requisitos não atendidos" do modal; o texto fica em capitalização de frase.
+describe('OperacionalDetail — sem caixa alta forçada', () => {
+    it('abas, botões de transição e "Requisitos não atendidos" não usam uppercase', async () => {
+        getById.mockResolvedValue(oe({ status: 'planned' }));
+        validateTransition.mockResolvedValue({ valid: false, errors: ['Informe a equipe ou os colaboradores que vão executar'] });
+        const user = userEvent.setup();
+        montar();
+        const liberar = await screen.findByRole('button', { name: 'Liberar OE' });
+        expect(liberar.className).not.toMatch(/\buppercase\b/);
+        for (const aba of screen.getAllByRole('tab')) expect(aba.className).not.toMatch(/\buppercase\b/);
+        expect(screen.getByRole('button', { name: 'Bloquear' }).className).not.toMatch(/\buppercase\b/);
+        await user.click(liberar);
+        const cabecalho = await screen.findByText('Requisitos não atendidos');
+        expect(cabecalho.className).not.toMatch(/\buppercase\b/);
+    });
+
+    it('rótulos das transições em capitalização de frase', async () => {
+        getById.mockResolvedValue(oe({ status: 'released' }));
+        montar();
+        expect(await screen.findByRole('button', { name: 'Iniciar execução' })).toBeTruthy();
+        expect(screen.getByRole('button', { name: 'Voltar para planejada' })).toBeTruthy();
+    });
+});

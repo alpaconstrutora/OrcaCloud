@@ -24,6 +24,11 @@ As "frentes" são as 4 lacunas apontadas na avaliação do Regimento contra o ap
 | 25/11 17:48 | Abordagem A (tudo espalhado nos módulos), B (módulo próprio que duplica) ou C (registro onde o trabalho acontece + módulo Qualidade como casa)? | "vamos de C" |
 | 25/11 | Revisão do desenho: só curso EAD/híbrido tem versão; treinamento de obra é presencial. Procedimento = curso, ou separar procedimento escrito (GED) de treinamento (curso de qualquer modalidade)? | "separar as duas coisas" |
 | 25/11 | Quem executa os serviços: equipe própria, empreiteiros ou os dois? | "os dois" — a conta de treinados inclui pessoal de empreiteira |
+| 25/11 | (fase 2) Pedido: "O próximo passo é o desenho da fase 2: iniciar" | — |
+| 25/11 | (fase 2) Quem preenche a FVS e onde? Quem libera? (A app na tarefa · B celular · C celular + liberação no app) | O usuário (conta desenvolvedor) é hoje quem inspeciona e libera → "sim" a: ficha na tela da tarefa, permissão de **inspecionar** separada da de **liberar**, celular depois |
+| 25/11 | (fase 2) A: usar checklist + inspeção que a OE já tem e consertar os portões · B: ficha nova separada | "opção A" |
+| 26/11 | (fase 2) Obra de SPE (Garden, ALPA Empreendimentos): vale a lista da Alpa (b) ou uma cópia por SPE (a)? | "b" — a SPE aponta para o sistema da qualidade da Alpa; lista, fichas, procedimentos, treinamentos e conta do nível ficam na Alpa |
+| 26/11 | (fase 2) "Aplicado com pessoal treinado" exige que quem executou a OE esteja treinado na revisão vigente? | "sim" — OE de serviço controlado exige os executores; conta só eles; cada registro fica preso à revisão da época |
 
 ## Por que existe
 
@@ -351,6 +356,183 @@ se já existir tabela de configuração por org que sirva.
 - Se o gate de checklist da OE trava o avanço de status hoje (fase 2).
 - Se a policy `USING (true)` de `purchase_receipts` foi corrigida depois (fase 3).
 - Se alguma portaria posterior a 2021 substituiu a 577.
+
+## Fase 2 — desenho
+
+### Por que e para quem
+A fase 2 faz a obra gerar o registro que o SiAC mais cobra: **serviço controlado só passa para a
+etapa seguinte depois de inspecionado e liberado** (8.6.1), e o que sai reprovado vira não
+conformidade tratada até a causa (8.7 / 10.2). Hoje quem inspeciona e libera é o próprio usuário,
+no app; a separação das duas permissões existe para que, quando a equipe estiver treinada, um
+estagiário ou encarregado preencha a ficha sem poder liberar.
+
+**Objetivos:** tarefa (OE) de serviço controlado com ficha de verificação (FVS) que trava o avanço
+de verdade — na tela e no banco; liberação registrada com quem e quando; NC com causa, ação
+corretiva, evidência e verificação de eficácia; o painel da Qualidade passa a contar
+"aplicados com registro" e "em obra em andamento" com números reais.
+
+**Não objetivos:** preencher pelo celular (link do encarregado) — fica para quando houver equipe
+treinada; inspeção de material e lote (fase 3); fornecedores (fase 4); auditoria e análise crítica
+(fase 5).
+
+**Anti-objetivos:**
+- segunda lista de verificação ao lado do checklist da OE, ou segunda tabela de NC (a escolha foi a A);
+- portão que só a tela respeita — hoje um `UPDATE work_orders SET status` direto passa;
+- ficha que o inspetor preenche depois, de memória, só para cumprir tabela: a ficha mostra o
+  critério e o método de cada item, para servir de guia na hora da inspeção.
+
+### O que existe e muda (levantado em `origin/main` e no banco, 25/11)
+
+| Peça | Hoje | Na fase 2 |
+|---|---|---|
+| Portão de **liberar** (`released`) | `workOrderService.validateTransition` (`services/workOrderService.ts:215-222`): itens `pre_start` obrigatórios com resposta incompleta | itens obrigatórios **sem resposta** também bloqueiam (hoje só bloqueia o que tem linha) |
+| Portão de **mandar para inspeção** (`pending_inspection`) | itens `pre_completion` obrigatórios, ≥ 95% executado, nenhuma NC aberta (`:239-252`) | igual + "parcial" e "não conforme" não contam como cumpridos |
+| **Aprovar** (`approved`) | exige `work_order_validations` tipo `inspection` com status `approved` (`:255-261`) — 0 registros em produção | aprovar a inspeção de OE de serviço controlado = **liberar**; exige a permissão de liberar; grava quem e quando |
+| Banco | nenhum gatilho barra status (só `trg_work_orders_updated_at`) | gatilho `BEFORE UPDATE OF status` repete os portões; gatilho em `work_order_validations` confere a permissão de liberar |
+| Resposta do checklist | `response_status` conforme/não conforme/parcial/não aplicável; `completed = status ≠ não aplicável`; quem respondeu não é gravado pela tela | grava **quem** (usuário logado) e **quando**; "não aplicável" em item obrigatório exige observação |
+| Modelo de checklist | `oe_checklist_templates` / `oe_checklist_items` (descrição, obrigatório, foto, portão, severidade, categoria); ligado à OE à mão (`work_orders.checklist_template_id`) | o item do checklist ganha **critério de aceitação** (tolerância) e **método de verificação**; o serviço controlado aponta para o seu modelo (a "ficha modelo") |
+| OE ↔ serviço controlado | não existe; 0 das 14 OEs têm `sinapiCode` | `work_orders.controlled_item_id`; escolhido no formulário da OE entre os serviços ativos da obra; sugerido quando o código do item de orçamento bate |
+| NC (`non_conformances`) | descrição, severidade, status, responsável, prazo, ação corretiva (opcional), evidência de resolução (nunca preenchida) | + **causa**, ação corretiva **obrigatória para encerrar**, foto da correção, **verificação de eficácia** (eficaz / não eficaz → reabre), ligação ao serviço controlado |
+| Painel da Qualidade | "aplicados com registro: meta N — começa na fase 2" | número real ao lado da meta |
+
+### Telas (rascunho)
+
+**Tarefa (OE) — formulário:** campo novo "Serviço controlado" (opcional), lista dos serviços
+ativos da organização da obra que não estão marcados "não se aplica" nessa obra; se o item de
+orçamento escolhido tem um código ligado a um serviço controlado, o campo vem sugerido. Escolher
+aplica a ficha modelo como checklist da OE (se a OE já tem respostas, pergunta antes de trocar).
+
+**Tarefa — aba Checklist:** cada item mostra o critério e o método embaixo da descrição; ao
+responder grava quem e quando; "não aplicável" pede observação.
+
+```
+Ficha de verificação — concretagem de peça estrutural          (serviço controlado · PES-06 rev.3)
+ Antes de iniciar
+  ✔ Fôrma e armadura liberadas            critério: FVS de fôrma/armadura aprovadas    Altair · 25/11 09:12
+ Antes de concluir
+  ✖ Abatimento (slump)                    critério: 10 ± 2 cm · método: cone de Abrams  → NC #3 aberta
+  ○ Cura iniciada                         critério: até 6 h após o lançamento           (sem resposta — bloqueia)
+```
+
+**Tarefa — inspeção/liberação:** no status "aguardando inspeção", o bloco de inspeção mostra o
+resultado da ficha e o botão **Liberar** (aprova a inspeção) — desligado, com o motivo, para quem
+não tem a permissão de liberar, ou enquanto houver item obrigatório sem resposta / NC aberta.
+Reprovar volta a OE para "em execução" (transição que já existe).
+
+**NC (aba da OE e lista):** campos novos causa, ação corretiva (obrigatória para encerrar), foto
+da correção; depois de encerrada, "Verificar eficácia" → eficaz (fica encerrada) ou não eficaz
+(reabre com histórico).
+
+**Qualidade — Sheet do serviço:** seção "Ficha de verificação": criar a ficha modelo do serviço
+(nasce com o nome do serviço e os portões "antes de iniciar"/"antes de concluir") ou abrir a
+existente no editor de modelos do Controle Operacional — **um lugar só para editar a ficha**
+(guia §18.1); a Qualidade só mostra e leva até lá.
+
+### Organização dona do sistema da qualidade (decisão do usuário, 26/11)
+
+- `quality_settings` ganha `sgq_organization_id`: a organização cujo sistema da qualidade vale
+  para esta. Sem valor = a própria. As SPEs (Garden Cambuhy SPE, ALPA Empreendimentos) apontam
+  para a Alpa. Configurado na Qualidade por quem é membro das duas.
+- Uma OE de obra da SPE escolhe o serviço controlado **na lista da organização dona do SGQ**;
+  a ficha modelo, o procedimento e os treinados são os de lá. O gatilho de "mesma organização"
+  passa a aceitar a organização dona do SGQ da organização da OE.
+- A OE continua na organização da obra (RLS dela). Ler o serviço controlado e a ficha de outra
+  organização exige ser membro dela — a policy dos itens já faz isso; quem é só da SPE vê a OE
+  sem o nome do serviço (o desenho fino da RLS é do construtor, sem abrir leitura a quem não é
+  membro).
+- O painel da Qualidade da Alpa conta as OEs das SPEs que apontam para ela.
+
+### Regras
+
+- **Executores da OE controlada (decisão do usuário, 26/11):** OE de serviço controlado exige
+  os colaboradores que executaram (`work_orders.collaborator_ids`, já existe; equipe sozinha não
+  basta) antes de ir para inspeção. Ao **aprovar a inspeção**, o app grava para cada executor se
+  ele tinha treinamento aprovado no curso do serviço **na revisão vigente naquele momento**
+  (mesma regra da fase 1: dia posterior à versão ativa, ou mesmo dia registrado depois) — o
+  registro fica congelado com a revisão da época.
+- **Aplicados com registro** (serviços): serviço ativo com procedimento que conta e ao menos 1 OE
+  com inspeção aprovada em que **todos os executores** estavam treinados na revisão da época.
+  A linha do serviço mostra a fração real "x de y executores treinados".
+- **Em obra em andamento:** o mesmo, numa OE de obra com `projects.settings.obraStatus =
+  'Em andamento'` (campo do cadastro da obra, `ProjectModal.tsx`). Obra sem `obraStatus` não conta.
+- Materiais continuam "começa na fase 3".
+- Portões valem para **toda** OE (não só as de serviço controlado): são correções de defeito. A
+  permissão de liberar só é exigida em OE de serviço controlado.
+- **Nome:** a aprovação da inspeção se chama **"Aprovar inspeção"** na tela — "Liberar OE" já
+  existe e é outra coisa (planejada → liberada, `OperacionalDetail.tsx:49`).
+- Permissões novas: `canInspectQuality` (responder a ficha de OE de serviço controlado — conferida
+  também no banco, gatilho em `oe_checklist_responses`) e `canReleaseQuality` (aprovar a inspeção
+  de OE controlada — só essa transição; "Liberar OE" continua como está). Dono/admin da organização: ligadas. Demais
+  membros: **desligadas explicitamente** (false no padrão, depois do reduce — ver a armadilha
+  de permissão nova). Desenvolvedor: tudo.
+
+### Dados (proposta — nomes são do construtor)
+
+- `quality_controlled_items.checklist_template_id` → `oe_checklist_templates` (SET NULL), mesma org.
+- `oe_checklist_items.criterio text`, `oe_checklist_items.metodo text`.
+- `work_orders.controlled_item_id` → `quality_controlled_items` (SET NULL), mesma org da OE (gatilho).
+- `oe_checklist_responses.respondido_por uuid DEFAULT auth.uid()`, `respondido_em timestamptz`.
+- **Ficha congelada (minha chamada):** cada resposta guarda a cópia do que foi verificado —
+  descrição, critério, método do item e a revisão do procedimento vigente (`opura_documents.revisao`
+  + versão ativa) no momento da resposta. Item de modelo que já tem resposta não pode ser apagado
+  (só desativado); a FK `item_id … ON DELETE CASCADE` deixa de apagar respostas.
+- **Histórico de reinspeção (minha chamada):** responder de novo um item não sobrescreve — a
+  resposta anterior fica no histórico (tabela de histórico ou várias linhas por item; hoje há
+  `UNIQUE(work_order_id, item_id)` e `saveResponse` zera `nc_id`). O portão lê só a última.
+- `work_order_validations`: na aprovação, a lista de executores com "treinado na revisão: sim/não"
+  e a revisão do procedimento (congelado).
+- `quality_settings.sgq_organization_id` → `organizations` (ver acima).
+- `work_order_validations.liberado_por uuid`, `liberado_em timestamptz` (o `approved_by_id` atual
+  aponta para `employees` e o liberador pode não ser colaborador).
+- `non_conformances.causa text`, `eficacia text CHECK ('pendente','eficaz','nao_eficaz')`,
+  `eficacia_em`, `eficacia_por`, `controlled_item_id`, `reaberta_de uuid` (ou histórico equivalente);
+  CHECK: encerrar exige `corrective_action` e `causa`.
+- Gatilhos: `work_orders` BEFORE UPDATE OF status (portões); `work_order_validations` BEFORE
+  INSERT/UPDATE (liberar exige permissão em OE controlada — a autorização lê
+  `organization_members.permissions`/papel; ver como a Diretoria confere permissão no banco).
+
+### Critério de pronto da fase 2
+
+1. OE de serviço controlado com item obrigatório sem resposta → "mandar para inspeção" recusado
+   na tela **e** num `UPDATE` direto pelo banco (sessão real).
+2. Item "não conforme" abre NC; a OE não vai para inspeção até a NC encerrar; encerrar sem causa ou
+   sem ação corretiva é recusado.
+3. Usuário sem `canReleaseQuality` vê "Liberar" desligado com o motivo; pelo banco, o insert/update
+   da inspeção aprovada é recusado.
+4. "Aprovar inspeção" grava quem, quando, a revisão do procedimento e os executores com
+   treinado sim/não; com todos treinados numa obra "Em andamento", o painel passa a
+   "aplicados com registro: 1 (meta 5)" e "em obra em andamento: 1 (meta 3)"; com um executor
+   sem treinamento vigente, não conta.
+4b. OE de obra da SPE Garden escolhe o serviço na lista da Alpa e conta no painel da Alpa.
+4c. Apagar no modelo um item que já tem resposta é recusado; reinspecionar mantém a resposta
+   anterior no histórico.
+5. NC encerrada → "não eficaz" reabre e mantém o histórico.
+6. OE comum (sem serviço controlado) continua funcionando; os portões consertados valem para ela.
+7. Escolher um item de orçamento cujo código está ligado a um serviço controlado sugere o serviço.
+8. Testes, `check-*` e CI verdes.
+
+### Chamadas minhas (fase 2)
+
+- Portões consertados para toda OE, não só as controladas (é defeito; 14 OEs hoje, pouco uso).
+- "Parcial" não cumpre o item; "não aplicável" em item obrigatório cumpre só com observação.
+- Treinamento com status `VENCIDO` (pendência da fase 1): conta como treinado, **a não ser** que o
+  curso tenha validade definida e ela tenha passado — procedimento de execução não vence sozinho.
+- A ficha modelo é um modelo de checklist do Controle Operacional (editado lá), não um editor novo.
+- ~~"Obra em andamento" definida pelas OEs não encerradas~~ — **corrigido em 26/11**: existe
+  `projects.settings.obraStatus` (6 "Em andamento", 5 "Não Iniciado", 4 "Concluída"); vale ele.
+- Ficha respondida guarda cópia do que foi verificado e a revisão do procedimento; reinspeção guarda
+  histórico (registro de inspeção não pode mudar depois).
+- NC sem OE (material, auditoria) fica para a fase 3; NC "não eficaz" reaberta só registra — não
+  desfaz a aprovação da inspeção nem tira o serviço do "aplicados com registro".
+- Sugestão do serviço controlado na OE também pela atividade de Planejamento (`planning_item_ref`),
+  além do código do item de orçamento: 18 de 19 obras têm `projects.budget` vazio e nenhuma OE tem
+  `sinapiCode` — só o código quase nunca sugeriria nada.
+
+### Deixado ao construtor
+
+Nomes de colunas e funções, onde o formulário da OE sugere o serviço, desenho fino das telas
+segundo o guia, e como reaproveitar `closeNonConformance` (`services/workOrderService.ts:524`),
+que já grava ação corretiva e evidência mas não é usado pela tela.
 
 ## Estado
 

@@ -197,9 +197,9 @@ export const CONDOMINIO_VAZIO: PortalCondominio = {
 // aplicar_20271125860200_condominio_assembleias_portal.sql). Plano:
 // docs/planos/2026-11-25-condominio-assembleias-votacoes.md (R2, R3, R5, R9).
 // O que NÃO vem, de propósito: voto de outra unidade, nome de quem votou ou
-// conduziu, deliberações e o TOTAL da assembleia (o retrato do portal é só
-// `retrato -> 'itens'`) — por isso o percentual do resultado é sobre as frações
-// que votaram, e a tela diz isso.
+// conduziu e deliberações (o retrato do portal é só `retrato -> 'itens'`). Vem o
+// `total` da assembleia (soma das frações de todas as participantes, R8): é o
+// denominador do % do resultado, o mesmo da ata.
 
 export interface PortalVotoAssembleia {
     opcao: OpcaoVoto;
@@ -239,6 +239,9 @@ export interface PortalAssembleia {
     segundaConvocacaoEm: string | null;
     /** O portal só recebe estas três (RASCUNHO e CANCELADA ficam de fora). */
     status: Extract<StatusAssembleia, 'CONVOCADA' | 'INSTALADA' | 'ENCERRADA'>;
+    /** Soma das frações de TODAS as unidades participantes (inclusive ausentes e
+     *  impedidas) — o denominador do % do resultado (R8), o mesmo da ata. */
+    total: number;
     itens: PortalItemAssembleia[];
     /** Há sessão e o e-mail dela é o do cadastro — o critério do voto (R2). Falso
      *  no link sem login e no gestor espiando o portal. */
@@ -260,6 +263,7 @@ function assembleiasDoPayload(data: unknown, origem: string): PortalAssembleia[]
     }
     return (res.assembleias ?? []).map((a: any): PortalAssembleia => ({
         ...a,
+        total: numeroDoBanco(a.total),
         itens: (a.itens ?? []) as PortalItemAssembleia[],
         minhasUnidades: ((a.minhasUnidades ?? []) as any[]).map(u => ({ ...u, votos: u.votos ?? {} })),
         resultado: a.resultado

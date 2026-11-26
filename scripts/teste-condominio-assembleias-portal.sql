@@ -241,6 +241,11 @@ BEGIN
                         AND ass -> 'resultado' = 'null'::jsonb AND ass -> 'ataDocumentoId' = 'null'::jsonb
                         AND ass ->> 'sessaoValida' = 'true',
         'payload: dados da assembleia e sessão válida do proprietário (veio ' || ass::text || ')');
+    -- total = soma das frações de TODAS as participantes (101 + 102 + 103 = 0,25 + 0,25 + 0,5),
+    -- inclusive a impedida e a que não é do cliente: é o denominador do % do resultado (R8).
+    PERFORM pg_temp.confere((ass ->> 'total')::numeric = 1
+                        AND (ass ->> 'total')::numeric = (SELECT sum(fracao) FROM public.condominio_assembleia_unidades WHERE assembleia_id = a),
+        'payload: total = soma das frações participantes (veio ' || coalesce(ass ->> 'total', 'null') || ')');
     PERFORM pg_temp.confere(jsonb_array_length(ass -> 'itens') = 2
                         AND ass -> 'itens' -> 0 ->> 'id' = i1::text AND (ass -> 'itens' -> 0 ->> 'ordem')::int = 1
                         AND ass -> 'itens' -> 0 ->> 'titulo' = 'Aprovar contas' AND ass -> 'itens' -> 0 ->> 'descricao' = 'Contas de 2029'
@@ -426,6 +431,8 @@ BEGIN
                         AND pg_temp.cedula(ass, u1) -> 'votos' -> i1::text ->> 'opcao' = 'ABSTENCAO'
                         AND pg_temp.cedula(ass, u2) -> 'impedida' = 'null'::jsonb,
         'ENCERRADA traz resultado e recusa voto: resultado = itens do retrato, voto da unidade (veio ' || coalesce(ass::text, res::text) || ')');
+    PERFORM pg_temp.confere(ass -> 'total' = ret -> 'total' AND (ass ->> 'total')::numeric = 1,
+        'ENCERRADA: total = o do retrato (o mesmo da ata) (veio ' || coalesce(ass ->> 'total', 'null') || ')');
     PERFORM pg_temp.confere(position('Maria Presidente' IN res::text) = 0 AND position('instaladaPor' IN res::text) = 0
                         AND position('cabecalho' IN res::text) = 0 AND position(m::text IN res::text) = 0
                         AND position(u3::text IN res::text) = 0,

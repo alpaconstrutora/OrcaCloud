@@ -212,13 +212,23 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     // O voto não depende disso: ele passa pela SESSÃO (quem abriu o link e também
     // está logado com o e-mail do cadastro vota; o admin espiando, não).
     const [assembleias, setAssembleias] = React.useState<PortalAssembleia[]>([]);
+    const [assembleiasLoading, setAssembleiasLoading] = React.useState(false);
+    // Resposta velha não sobrescreve a nova: entrar de novo na aba, ou a releitura
+    // depois de um voto recusado, dispara outra chamada; só a última vale.
+    const pedidoDeAssembleias = React.useRef(0);
     const carregarAssembleias = React.useCallback(() => {
+        const pedido = ++pedidoDeAssembleias.current;
+        const vivo = () => pedido === pedidoDeAssembleias.current;
+        setAssembleiasLoading(true);
         const load = portalToken
             ? clientPortalService.getAssembleiasByToken(portalToken)
             : (clientProfile
                 ? clientPortalService.getAssembleiasForClient(clientProfile.id)
                 : Promise.resolve([] as PortalAssembleia[]));
-        return load.then(setAssembleias).catch(console.error);
+        return load
+            .then(lista => { if (vivo()) setAssembleias(lista); })
+            .catch(console.error)
+            .finally(() => { if (vivo()) setAssembleiasLoading(false); });
     }, [portalToken, clientProfile?.id]);
     const votarAssembleia = React.useCallback(async (itemId: string, unitId: string, opcao: OpcaoVoto) => {
         try {
@@ -4713,7 +4723,10 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         onAbaChange={setAbaCondominio}
                         abasNoMenuLateral={isStandalone}
                         assembleias={assembleias}
-                        onVotar={votarAssembleia}
+                        assembleiasLoading={assembleiasLoading}
+                        // Gestor espiando (prévia sem token) não vota: a cédula diz
+                        // que é prévia, e o banco recusaria de qualquer jeito.
+                        onVotar={previaDoGestor ? undefined : votarAssembleia}
                         // Só pelo token: marcar lido é ato do morador. O admin
                         // espiando o portal não pode confirmar leitura em nome
                         // dele — era o número que o síndico usa para saber se a

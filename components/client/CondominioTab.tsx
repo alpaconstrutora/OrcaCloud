@@ -1068,12 +1068,14 @@ interface Props {
      *  própria, carregada pela tela dona na mesma precedência do condomínio
      *  (token manda; senão o cliente logado). */
     assembleias?: PortalAssembleia[];
+    /** A RPC das assembleias ainda não respondeu (a do condomínio é outra). */
+    assembleiasLoading?: boolean;
     /** Grava o voto pela SESSÃO (o banco só aceita o proprietário logado). Sem
      *  ele, a cédula fica desligada dizendo por quê. */
     onVotar?: (itemId: string, unitId: string, opcao: OpcaoVoto) => Promise<void>;
 }
 
-const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopTabsBar, onResolverDocumento, onResolverComprovantes, aba, onAbaChange, abasNoMenuLateral = false, assembleias = [], onVotar }) => {
+const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopTabsBar, onResolverDocumento, onResolverComprovantes, aba, onAbaChange, abasNoMenuLateral = false, assembleias = [], assembleiasLoading = false, onVotar }) => {
     const porCondominio = React.useMemo(
         () => agruparPorCondominio(dados.unidades), [dados.unidades]);
 
@@ -1177,7 +1179,7 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                         <PainelAvisos avisos={dados.avisos} multi={multi} naoLidos={naoLidos} onMarcarLido={onMarcarLido} />
                     )}
                     {abaAtiva === 'assembleias' && (
-                        <PainelAssembleias assembleias={assembleias} multi={multi} onVotar={onVotar} onResolverDocumento={onResolverDocumento} />
+                        <PainelAssembleias assembleias={assembleias} carregando={assembleiasLoading} multi={multi} onVotar={onVotar} onResolverDocumento={onResolverDocumento} />
                     )}
                     {abaAtiva === 'documentos' && (
                         <PainelDocumentos documentos={dados.documentos} multi={multi} onResolverDocumento={onResolverDocumento} />

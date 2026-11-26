@@ -217,7 +217,7 @@ $$;
 SET lock_timeout = '5s';
 
 -- [{ id, condominioNome, tipo, titulo, local, linkTransmissao, primeiraConvocacaoEm,
---    segundaConvocacaoEm, status, itens: [{ id, ordem, titulo, descricao, tipo, opcoes, quorum }],
+--    segundaConvocacaoEm, status, total, itens: [{ id, ordem, titulo, descricao, tipo, opcoes, quorum }],
 --    sessaoValida, minhasUnidades: [{ unitId, rotulo, impedida, votos: { <itemId>: { opcao,
 --    origem, votadoEm } } }], resultado: <itens do retrato> | null, ataDocumentoId }]
 -- • Recorte = o de fn_condominio_payload_for_client: condomínios EM_OPERACAO onde o cliente
@@ -227,6 +227,9 @@ SET lock_timeout = '5s';
 --   ENCERRADA (a votação acabou; o motivo deixaria a cédula com a razão errada).
 -- • sessaoValida = há sessão e o e-mail do JWT é o do cadastro (o critério do voto).
 -- • Só os votos das minhas unidades; resultado = retrato -> 'itens' (sem cabeçalho).
+-- • total = soma das frações de TODAS as unidades participantes (R8) — o denominador do % do
+--   resultado, o mesmo da ata. Na ENCERRADA, o do retrato (congelado); antes, a soma de
+--   condominio_assembleia_unidades (congelada na convocação — dá o mesmo número).
 CREATE OR REPLACE FUNCTION public.fn_assembleias_payload_for_client(p_client_id uuid)
  RETURNS jsonb
  LANGUAGE sql
@@ -259,6 +262,10 @@ AS $$
         'primeiraConvocacaoEm', a.primeira_convocacao_em,
         'segundaConvocacaoEm',  a.segunda_convocacao_em,
         'status',               a.status,
+        'total',                coalesce(CASE WHEN a.status = 'ENCERRADA' THEN a.retrato -> 'total' END,
+                                         (SELECT to_jsonb(coalesce(sum(u.fracao), 0))
+                                            FROM public.condominio_assembleia_unidades u
+                                           WHERE u.assembleia_id = a.id)),
         'itens', (SELECT coalesce(jsonb_agg(jsonb_build_object(
                              'id', i.id, 'ordem', i.ordem, 'titulo', i.titulo, 'descricao', i.descricao,
                              'tipo', i.tipo, 'opcoes', to_jsonb(i.opcoes), 'quorum', i.quorum)

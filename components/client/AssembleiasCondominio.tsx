@@ -15,8 +15,9 @@
 //     senha para votar."; impedida → o texto do banco (R3). O banco recusa do mesmo
 //     jeito — a tela só não deixa a pessoa descobrir clicando.
 //   • Trocar um voto já dado pede confirmação (R5: vale o último até o encerramento).
-//   • Percentual do resultado é sobre as frações QUE VOTARAM no item: o payload do
-//     portal traz só os itens do retrato, sem o total da assembleia. A tela diz isso.
+//   • Percentual do resultado é sobre o TOTAL DA ASSEMBLEIA (soma das frações de todas
+//     as unidades participantes, inclusive ausentes e impedidas — R8), o mesmo
+//     denominador da ata: `percentualDoTotal(fracao, total)` da A5.
 //
 // ⚠️ Vocabulário coral (§24), como o resto da aba — ver o cabeçalho de CondominioTab.tsx.
 // Este arquivo NÃO importa CondominioTab (ele é quem importa este).
@@ -29,20 +30,26 @@ import type { ApuracaoItem, OpcaoVoto, OrigemVoto, ResultadoItem } from '../../s
 import {
     ROTULO_TIPO, ROTULO_STATUS, ROTULO_QUORUM, ROTULO_RESULTADO, rotuloOpcao, dataHoraBrasilia, percentualDoTotal,
 } from '../../utils/assembleiaTextos';
-import { ChoiceButton, SoftButton } from '../portal/PortalKit';
+import { ChoiceButton, SoftButton, PortalLoading } from '../portal/PortalKit';
 import { useConfirm } from '../ui/confirm';
 
 // ─── regras puras ────────────────────────────────────────────────────────────
 
+/** O motivo do banco vem com inicial maiúscula ("Cota de 10/2026 vencida em …");
+ *  depois de dois-pontos, no meio da frase, vai em minúscula. */
+const minusculaInicial = (t: string) => (t ? t.charAt(0).toLocaleLowerCase('pt-BR') + t.slice(1) : t);
+
 /** Por que a cédula desta unidade não aceita voto agora — ou null se aceita.
- *  `podeGravar` = a tela tem quem grave (falso na prévia sem `onVotar`). */
+ *  `podeGravar` = a tela tem quem grave (falso na prévia do gestor, sem `onVotar`).
+ *  A prévia vem ANTES da sessão: o gestor espiando também tem `sessaoValida=false`,
+ *  e "Entre com e-mail e senha" seria o motivo errado para ele. */
 export function motivoDaCedulaDesligada(
     a: PortalAssembleia, u: PortalUnidadeAssembleia, podeGravar: boolean,
 ): string | null {
     if (a.status === 'ENCERRADA') return 'Votação encerrada.';
-    if (!a.sessaoValida) return 'Entre com e-mail e senha para votar.';
-    if (u.impedida) return `Unidade impedida de votar: ${u.impedida}.`;
     if (!podeGravar) return 'Prévia do portal: o voto é dado pelo condômino.';
+    if (!a.sessaoValida) return 'Entre com e-mail e senha para votar.';
+    if (u.impedida) return `Unidade impedida de votar: ${minusculaInicial(u.impedida.replace(/\.$/, ''))}.`;
     return null;
 }
 
@@ -69,25 +76,23 @@ export interface LinhaResultado {
     opcao: OpcaoVoto;
     rotulo: string;
     unidades: number;
-    /** % das frações que votaram no item; '—' se ninguém votou. */
+    /** % do TOTAL da assembleia (R8, como na ata); '—' se o total não veio. */
     percentual: string;
 }
 
-/** Uma linha por opção da cédula, na ordem da cédula. O denominador é a soma das
- *  frações que votaram no item (abstenção inclusive) — o portal não recebe o total
- *  da assembleia, e inventar um faria o número mentir. */
-export function linhasDoResultado(r: ApuracaoItem, item?: PortalItemAssembleia): LinhaResultado[] {
+/** Uma linha por opção da cédula, na ordem da cédula. Denominador = `total` da
+ *  assembleia (soma das frações de TODAS as participantes, inclusive ausentes e
+ *  impedidas) — o mesmo da ata. Sem total (> 0), '—': nunca um número inventado. */
+export function linhasDoResultado(r: ApuracaoItem, total: number, item?: PortalItemAssembleia): LinhaResultado[] {
     const ordem = item ? opcoesDaCedula(item) : [];
     const extras = Object.keys(r.porOpcao).filter(op => !ordem.includes(op));
-    const opcoes = [...ordem, ...extras];
-    const votado = opcoes.reduce((s, op) => s + (r.porOpcao[op]?.fracao ?? 0), 0);
-    return opcoes.map(op => {
+    return [...ordem, ...extras].map(op => {
         const soma = r.porOpcao[op] ?? { fracao: 0, unidades: 0 };
         return {
             opcao: op,
             rotulo: rotuloOpcao(op),
             unidades: soma.unidades,
-            percentual: votado > 0 ? percentualDoTotal(soma.fracao, votado) : '—',
+            percentual: total > 0 ? percentualDoTotal(soma.fracao, total) : '—',
         };
     });
 }
@@ -197,7 +202,7 @@ const Cedula: React.FC<{ assembleia: PortalAssembleia; unidade: PortalUnidadeAss
                 {[...assembleia.itens].sort((x, y) => x.ordem - y.ordem).map(item => {
                     const voto = unidade.votos[item.id];
                     return (
-                        <div key={item.id} data-testid={`item-${item.id}`} className="space-y-1.5">
+                        <div key={item.id} role="group" aria-label={item.titulo} data-testid={`item-${item.id}`} className="space-y-1.5">
                             <p className="text-sm font-medium text-gray-900">{item.ordem}. {item.titulo}</p>
                             <div className="flex flex-wrap gap-2">
                                 {opcoesDaCedula(item).map(op => (
@@ -225,13 +230,13 @@ const Cedula: React.FC<{ assembleia: PortalAssembleia; unidade: PortalUnidadeAss
 };
 
 /** Resultado de um item (R9) — só na encerrada. */
-const ResultadoDoItem: React.FC<{ r: ApuracaoItem; item?: PortalItemAssembleia }> = ({ r, item }) => {
+const ResultadoDoItem: React.FC<{ r: ApuracaoItem; total: number; item?: PortalItemAssembleia }> = ({ r, total, item }) => {
     const titulo = r.tipo === 'ESCOLHA' && r.vencedora ? `Vencedora: ${r.vencedora}` : ROTULO_RESULTADO[r.resultado];
     return (
         <div data-tour="condominio-assembleia-resultado" data-testid={`resultado-${r.itemId}`} className="mt-2 rounded-[10px] bg-gray-50/60 border border-gray-100 p-3 space-y-1.5">
             <p className={`text-sm font-semibold ${COR_RESULTADO[r.resultado] ?? 'text-gray-600'}`}>{titulo}</p>
             <ul className="space-y-0.5">
-                {linhasDoResultado(r, item).map(l => (
+                {linhasDoResultado(r, total, item).map(l => (
                     <li key={l.opcao} className="text-sm text-gray-700">
                         {l.rotulo}: {unidadesTxt(l.unidades)} · {l.percentual}
                     </li>
@@ -331,14 +336,14 @@ const DetalheDaAssembleia: React.FC<{
                                 <p className="text-sm font-semibold text-gray-900">{item.ordem}. {item.titulo}</p>
                                 {item.descricao && <p className="text-sm text-gray-700 mt-0.5 whitespace-pre-line">{item.descricao}</p>}
                                 <p className="text-sm text-gray-500 mt-0.5">Quórum: {ROTULO_QUORUM[item.quorum] ?? item.quorum}</p>
-                                {r && <ResultadoDoItem r={r} item={item} />}
+                                {r && <ResultadoDoItem r={r} total={a.total} item={item} />}
                             </li>
                         );
                     })}
                 </ol>
                 {a.status === 'ENCERRADA' && a.resultado && (
                     <p className="text-sm text-gray-500">
-                        Percentual sobre as frações ideais das unidades que votaram em cada item. O voto de cada unidade está na ata.
+                        Percentual sobre o total das frações ideais das unidades participantes (inclusive ausentes e impedidas), como na ata. O voto de cada unidade está na ata.
                     </p>
                 )}
             </div>
@@ -370,7 +375,10 @@ export const PainelAssembleias: React.FC<{
     onVotar?: Votar;
     /** O mesmo resolvedor dos Documentos do condomínio — a ata é um deles. */
     onResolverDocumento?: (documentoId: string) => Promise<string>;
-}> = ({ assembleias, multi, onVotar, onResolverDocumento }) => {
+    /** A RPC das assembleias ainda não respondeu: sem isto, a aba diria
+     *  "Nenhuma assembleia convocada" a quem tem assembleia. */
+    carregando?: boolean;
+}> = ({ assembleias, multi, onVotar, onResolverDocumento, carregando = false }) => {
     const [abertaId, setAbertaId] = React.useState<string | null>(null);
     // Derivada da lista: depois do voto o pai troca o array e o detalhe acompanha.
     const aberta = abertaId ? assembleias.find(a => a.id === abertaId) ?? null : null;
@@ -390,7 +398,9 @@ export const PainelAssembleias: React.FC<{
     return (
         <div>
             <Descricao>Assembleias do condomínio: pauta, voto pelo portal e resultado</Descricao>
-            {assembleias.length === 0 ? (
+            {carregando && assembleias.length === 0 ? (
+                <PortalLoading label="Carregando assembleias..." />
+            ) : assembleias.length === 0 ? (
                 <div className="text-center py-12">
                     <span className="inline-block text-gray-300 mb-4"><Gavel className="w-12 h-12" /></span>
                     <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma assembleia convocada</h3>

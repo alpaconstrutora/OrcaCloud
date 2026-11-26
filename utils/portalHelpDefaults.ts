@@ -554,7 +554,7 @@ const CLIENTE: DefaultHelpItem[] = [
       'Para votar, entre com <strong>e-mail e senha</strong>: pelo link, sem login, a cédula aparece desligada com o motivo.',
       'Unidade com cota condominial vencida fica <strong>impedida</strong> de votar; a cédula diz qual cota. Pagou, a cédula volta a valer.',
       'Você pode <strong>trocar o voto</strong> até o encerramento; vale o último, dado pelo portal ou na reunião. Abaixo de cada item aparece quando e por onde o voto foi dado.',
-      'Encerrada: o <strong>Resultado</strong> de cada item, com as unidades e o percentual de cada opção (sobre as frações das unidades que votaram), o voto da sua unidade e o botão <strong>Baixar ata</strong>.',
+      'Encerrada: o <strong>Resultado</strong> de cada item, com as unidades e o percentual de cada opção (sobre o total das frações ideais das unidades participantes, como na ata), o voto da sua unidade e o botão <strong>Baixar ata</strong>.',
     ),
   },
   {

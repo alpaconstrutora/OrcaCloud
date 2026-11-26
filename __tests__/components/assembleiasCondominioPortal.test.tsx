@@ -21,7 +21,7 @@ const base = (over: Partial<PortalAssembleia> = {}): PortalAssembleia => ({
     id: 'a1', condominioNome: 'Bella Vista', tipo: 'AGO', titulo: 'AGO 2026',
     local: 'Salão de festas', linkTransmissao: 'https://meet.exemplo/ago',
     primeiraConvocacaoEm: '2026-12-10T22:00:00Z', segundaConvocacaoEm: '2026-12-10T22:30:00Z',
-    status: 'CONVOCADA',
+    status: 'CONVOCADA', total: 0.01,
     itens: [
         { id: 'i1', ordem: 1, titulo: 'Aprovar contas de 2026', descricao: 'Balanço anexo ao edital.', tipo: 'APROVACAO', opcoes: null, quorum: 'MAIORIA_PRESENTES' },
         { id: 'i2', ordem: 2, titulo: 'Eleger síndico', descricao: null, tipo: 'ESCOLHA', opcoes: ['Ana', 'Bruno'], quorum: 'MAIORIA_PRESENTES' },
@@ -52,11 +52,11 @@ describe('PainelAssembleias — cédula', () => {
 
     it('impedida mostra o motivo do banco', () => {
         montar(<PainelAssembleias
-            assembleias={[base({ minhasUnidades: [{ unitId: 'u1', rotulo: 'Apto 101', impedida: 'cota de 10/2026 vencida', votos: {} }] })]}
+            assembleias={[base({ minhasUnidades: [{ unitId: 'u1', rotulo: 'Apto 101', impedida: 'Cota de 10/2026 vencida em 10/11/2026', votos: {} }] })]}
             multi={false} onVotar={vi.fn()} />);
         abrirAssembleia();
         const cedula = screen.getByTestId('cedula-u1');
-        expect(within(cedula).getByText(/cota de 10\/2026 vencida/)).toBeInTheDocument();
+        expect(within(cedula).getByText('Unidade impedida de votar: cota de 10/2026 vencida em 10/11/2026.')).toBeInTheDocument();
         expect(botaoOpcao(cedula, 'i1', 'Sim')).toBeDisabled();
     });
 
@@ -112,6 +112,22 @@ describe('PainelAssembleias — cédula', () => {
         expect(await screen.findByText('Unidade impedida de votar: cota de 11/2026 vencida')).toBeInTheDocument();
     });
 
+    it('prévia do gestor (sem onVotar): a cédula diz que é prévia, não pede login', () => {
+        montar(<PainelAssembleias assembleias={[base({ sessaoValida: false })]} multi={false} />);
+        abrirAssembleia();
+        const cedula = screen.getByTestId('cedula-u1');
+        expect(within(cedula).getByText('Prévia do portal: o voto é dado pelo condômino.')).toBeInTheDocument();
+        expect(within(cedula).queryByText('Entre com e-mail e senha para votar.')).toBeNull();
+        expect(botaoOpcao(cedula, 'i1', 'Sim')).toBeDisabled();
+    });
+
+    it('cada item da cédula é um grupo com o título do item', () => {
+        montar(<PainelAssembleias assembleias={[base()]} multi={false} onVotar={vi.fn()} />);
+        abrirAssembleia();
+        const grupo = within(screen.getByTestId('cedula-u1')).getByRole('group', { name: 'Eleger síndico' });
+        expect(within(grupo).getByRole('button', { name: /^Ana/ })).toBeInTheDocument();
+    });
+
     it('inquilino (sem unidade própria na assembleia) vê a pauta e o porquê de não haver cédula', () => {
         montar(<PainelAssembleias assembleias={[base({ minhasUnidades: [] })]} multi={false} onVotar={vi.fn()} />);
         abrirAssembleia();
@@ -150,7 +166,9 @@ describe('PainelAssembleias — encerrada', () => {
 
         const r1 = screen.getByTestId('resultado-i1');
         expect(within(r1).getByText('Aprovado')).toBeInTheDocument();
-        expect(within(r1).getByText(/75,00%/)).toBeInTheDocument();
+        // % do TOTAL da assembleia (0,01), como na ata: 3 × 0,00125 = 37,50%
+        expect(within(r1).getByText(/Sim: 3 unidades · 37,50%/)).toBeInTheDocument();
+        expect(within(r1).getByText(/Não: 1 unidade · 12,50%/)).toBeInTheDocument();
         expect(within(screen.getByTestId('resultado-i2')).getByText('Vencedora: Ana')).toBeInTheDocument();
 
         // o voto da unidade continua visível, e a cédula diz por que não vota mais
@@ -172,6 +190,17 @@ describe('PainelAssembleias — encerrada', () => {
     });
 });
 
+describe('PainelAssembleias — carregando', () => {
+    it('enquanto a RPC não responde, não diz "Nenhuma assembleia"', () => {
+        const { rerender } = montar(<PainelAssembleias assembleias={[]} carregando multi={false} />);
+        expect(screen.queryByText(/Nenhuma assembleia/)).toBeNull();
+        expect(screen.getByText('Carregando assembleias...')).toBeInTheDocument();
+        // respondeu vazio: aí sim o estado vazio
+        rerender(<ConfirmProvider><PainelAssembleias assembleias={[]} multi={false} /></ConfirmProvider>);
+        expect(screen.getByText('Nenhuma assembleia convocada')).toBeInTheDocument();
+    });
+});
+
 describe('CondominioTab — sub-aba Assembleias', () => {
     const dados: PortalCondominio = {
         ...CONDOMINIO_VAZIO,
@@ -183,6 +212,12 @@ describe('CondominioTab — sub-aba Assembleias', () => {
             condominioNome: '007 - Bella Vista', condominioCnpj: null, ocupacoes: [],
         }],
     };
+
+    it('repassa o carregando das assembleias ao painel', () => {
+        montar(<CondominioTab dados={dados} loading={false} aba="assembleias" onAbaChange={vi.fn()} assembleias={[]} assembleiasLoading />);
+        expect(screen.queryByText(/Nenhuma assembleia/)).toBeNull();
+        expect(screen.getByText('Carregando assembleias...')).toBeInTheDocument();
+    });
 
     it('fica entre Avisos e Documentos e abre as assembleias recebidas', () => {
         montar(<CondominioTab dados={dados} loading={false} assembleias={[base()]} onVotar={vi.fn()} />);

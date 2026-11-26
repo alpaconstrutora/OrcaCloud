@@ -402,14 +402,14 @@ export const qualidadeSiacService = {
 
   /**
    * Inspeções aprovadas (`work_order_validations` inspection/approved) das OEs cujo serviço
-   * controlado é do SGQ `sgqOrgId` — de todas as organizações que apontam para ele e da própria —,
-   * só com o que se conta (serviço, data, obra em andamento, executores/treinados).
+   * controlado é do SGQ `sgqOrgId` — da própria e das organizações que apontam para ele HOJE —, só
+   * com o que se conta (serviço, data, obra em andamento, executores/treinados).
    *
    * Lê pela RPC `quality_inspecoes_aprovadas_do_sgq` (SECURITY DEFINER, migration
    * aplicar_20271126140000): o membro só do SGQ conta as OEs das SPEs que apontam para ele — pela
    * RLS ele não as via e o painel contava menos, calado, conforme quem olhava. Não membro → 42501
-   * (sobe). Se a RPC ainda não existe no banco (app publicado antes da migration: PGRST202/42883),
-   * volta para a leitura antiga pela RLS — o painel segue como antes.
+   * (sobe). Se a RPC ainda não existe no banco (app publicado antes da migration: PGRST202, ou
+   * 42883 com o nome dela), volta para a leitura antiga pela RLS — o painel segue como antes.
    */
   async inspecoesAprovadas(sgqOrgId: string): Promise<InspecaoAprovada[]> {
     const { data, error } = await supabase.rpc('quality_inspecoes_aprovadas_do_sgq', { p_sgq: sgqOrgId }) as {
@@ -423,7 +423,11 @@ export const qualidadeSiacService = {
       error: { message: string; code?: string } | null;
     };
     if (error) {
-      if (error.code === 'PGRST202' || error.code === '42883') return qualidadeSiacService._inspecoesAprovadasPelaRls(sgqOrgId);
+      // Só "a PRÓPRIA RPC não existe": PGRST202 (cache do PostgREST), ou 42883 citando o nome dela.
+      // Um 42883 de função chamada por DENTRO dela que sumiu sobe — não vira contagem menor calada.
+      const rpcAusente = error.code === 'PGRST202'
+        || (error.code === '42883' && (error.message ?? '').includes('quality_inspecoes_aprovadas_do_sgq'));
+      if (rpcAusente) return qualidadeSiacService._inspecoesAprovadasPelaRls(sgqOrgId);
       throw new Error(error.message);
     }
     return (data ?? []).map((r) => ({

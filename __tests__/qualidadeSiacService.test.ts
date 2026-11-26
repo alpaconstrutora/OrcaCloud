@@ -339,9 +339,12 @@ describe('qualidadeSiacService', () => {
     ]);
   });
 
-  for (const code of ['PGRST202', '42883']) {
+  for (const [code, message] of [
+    ['PGRST202', 'Could not find the function public.quality_inspecoes_aprovadas_do_sgq(p_sgq) in the schema cache'],
+    ['42883', 'function public.quality_inspecoes_aprovadas_do_sgq(p_sgq => uuid) does not exist'],
+  ]) {
     it(`inspecoesAprovadas: RPC ainda não aplicada (${code}) → lê pela RLS como antes, no formato de contagem`, async () => {
-      respostaRpc = { data: null, error: { message: 'Could not find the function', code } };
+      respostaRpc = { data: null, error: { message, code } };
       respostaPorTabela.work_order_validations = {
         data: [
           {
@@ -376,6 +379,12 @@ describe('qualidadeSiacService', () => {
       ]);
     });
   }
+
+  it('inspecoesAprovadas: 42883 de OUTRA função (chamada por dentro da RPC) sobe — não vira contagem menor calada', async () => {
+    respostaRpc = { data: null, error: { message: 'function public.minhas_orgs_membro() does not exist', code: '42883' } };
+    await expect(qualidadeSiacService.inspecoesAprovadas('alpa')).rejects.toThrow('minhas_orgs_membro');
+    expect(achar('from')).toHaveLength(0);
+  });
 
   it('inspecoesAprovadas: outro erro da RPC (42501) sobe — não cai na leitura pela RLS', async () => {
     respostaRpc = { data: null, error: { message: 'Sem acesso ao sistema da qualidade desta organização.', code: '42501' } };

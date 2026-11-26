@@ -270,6 +270,24 @@ export const GhostButton: React.FC<BtnProps> = ({ children, className = '', ...r
     </button>
 );
 
+/** Opção de escolha única que fica marcada (ex.: a cédula da assembleia — Sim,
+ *  Não, Abstenção). Marcada = fundo suave + contorno no acento, com `aria-pressed`;
+ *  desligada mantém o rótulo legível (o motivo vai em texto ao lado, não aqui). */
+export const ChoiceButton: React.FC<BtnProps & { selected?: boolean }> = ({ children, selected = false, className = '', ...rest }) => (
+    <button
+        type="button"
+        aria-pressed={selected}
+        {...rest}
+        className={`inline-flex items-center gap-1.5 h-9 px-3.5 rounded-[8px] border text-[13px] transition-all disabled:cursor-not-allowed ${
+            selected
+                ? 'border-[#E1553C] bg-[#FDEDE8] text-[#C24428] font-semibold'
+                : 'border-[#ECECEF] bg-white text-[#1F2430] font-medium enabled:hover:border-[#E1553C] enabled:hover:bg-[#FDEDE8]/40 disabled:bg-gray-50'
+        } ${className}`}
+    >
+        {children}
+    </button>
+);
+
 /** Ação em texto dentro de uma linha de tabela (ex.: "Recibo Nº 000001"). Não
  *  aumenta a altura da linha como os botões h-9; cor do acento do portal. */
 export const TextLinkButton: React.FC<BtnProps> = ({ children, className = '', ...rest }) => (

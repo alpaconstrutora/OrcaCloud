@@ -58,7 +58,9 @@ import {
 } from 'lucide-react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip as RechartsTooltip, AreaChart, Area, XAxis, YAxis, CartesianGrid, Line, ComposedChart, Bar, LabelList, Legend } from 'recharts';
 import { buildPlanningView, type PlanningView, type PlanningScale } from '../utils/portalPlanningUtils';
-import type { PortalPlanning, PortalCondominio, PortalUnidades } from '../services/clientPortalService';
+import type { PortalPlanning, PortalCondominio, PortalUnidades, PortalAssembleia } from '../services/clientPortalService';
+import type { OpcaoVoto } from '../services/condominioAssembleiaService';
+import { aplicarVotoLocal } from './client/AssembleiasCondominio';
 import { CONDOMINIO_VAZIO, UNIDADES_VAZIO } from '../services/clientPortalService';
 import CondominioTab, { ABAS_CONDOMINIO, type AbaCondominio } from './client/CondominioTab';
 import UnidadeTab from './client/UnidadeTab';
@@ -205,6 +207,42 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
     const [gedDocsLoading, setGedDocsLoading] = React.useState(false);
     const [condominio, setCondominio] = React.useState<PortalCondominio>(CONDOMINIO_VAZIO);
     const [condominioLoading, setCondominioLoading] = React.useState(false);
+    // Assembleias do condomínio (Task A8): RPC própria, na MESMA precedência do
+    // condomínio — token manda; sem ele, o cliente logado (ou o admin espiando).
+    // O voto não depende disso: ele passa pela SESSÃO (quem abriu o link e também
+    // está logado com o e-mail do cadastro vota; o admin espiando, não).
+    const [assembleias, setAssembleias] = React.useState<PortalAssembleia[]>([]);
+    const [assembleiasLoading, setAssembleiasLoading] = React.useState(false);
+    // Resposta velha não sobrescreve a nova: entrar de novo na aba, ou a releitura
+    // depois de um voto recusado, dispara outra chamada; só a última vale.
+    const pedidoDeAssembleias = React.useRef(0);
+    const carregarAssembleias = React.useCallback(() => {
+        const pedido = ++pedidoDeAssembleias.current;
+        const vivo = () => pedido === pedidoDeAssembleias.current;
+        setAssembleiasLoading(true);
+        const load = portalToken
+            ? clientPortalService.getAssembleiasByToken(portalToken)
+            : (clientProfile
+                ? clientPortalService.getAssembleiasForClient(clientProfile.id)
+                : Promise.resolve([] as PortalAssembleia[]));
+        return load
+            .then(lista => { if (vivo()) setAssembleias(lista); })
+            .catch(console.error)
+            .finally(() => { if (vivo()) setAssembleiasLoading(false); });
+    }, [portalToken, clientProfile?.id]);
+    const votarAssembleia = React.useCallback(async (itemId: string, unitId: string, opcao: OpcaoVoto) => {
+        try {
+            const voto = await clientPortalService.votarAssembleia(itemId, unitId, opcao);
+            // §22 — estado local, sem recarregar a lista inteira.
+            setAssembleias(prev => aplicarVotoLocal(prev, itemId, unitId, voto));
+        } catch (e) {
+            // Recusado: o estado do banco mudou (encerrou, cota venceu) — a tela
+            // relê para a cédula mostrar o motivo certo. O erro (já traduzido)
+            // sobe para a cédula exibir.
+            carregarAssembleias();
+            throw e;
+        }
+    }, [carregarAssembleias]);
     // A seção do Condomínio sobe para cá porque, no link público, quem a escolhe
     // é o MENU LATERAL (subitens do grupo "Condomínio"), não a barra de abas
     // dentro da tela. Mesma chave que o `CondominioTab` usa sozinho na prévia do
@@ -377,6 +415,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                     : Promise.resolve(CONDOMINIO_VAZIO));
             loadCond.then(setCondominio).catch(console.error).finally(() => setCondominioLoading(false));
         }
+        if (activeTab === 'condominio') carregarAssembleias();
         // Aba "Dados da Unidade": a ficha do imóvel comprado/alugado.
         // ⚠️ AS DUAS PONTAS SÃO RPC, pela mesma razão do Condomínio acima —
         // `commercial_deals`/`commercial_properties` têm RLS `is_org_member` e o
@@ -3987,7 +4026,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         financeiro: { title: 'Financeiro', subtitle: 'Parcelas, pagamentos e recibos.' },
         suporte: { title: 'Suporte', subtitle: 'Fale com a incorporadora.' },
         manutencao: { title: 'Manutenção', subtitle: 'Chamados de assistência técnica.' },
-        condominio: { title: 'Condomínio', subtitle: 'Unidades, avisos, documentos, rateio, manutenção e equipamentos do prédio.' },
+        condominio: { title: 'Condomínio', subtitle: 'Unidades, avisos, assembleias, documentos, rateio, manutenção e equipamentos do prédio.' },
     };
     const tabMeta = TAB_META[activeTab] ?? TAB_META.dashboard!;
     // `utils/clientCategory.ts` — o mapa literal que vivia aqui ignorava
@@ -4683,6 +4722,11 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                         aba={abaCondominio}
                         onAbaChange={setAbaCondominio}
                         abasNoMenuLateral={isStandalone}
+                        assembleias={assembleias}
+                        assembleiasLoading={assembleiasLoading}
+                        // Gestor espiando (prévia sem token) não vota: a cédula diz
+                        // que é prévia, e o banco recusaria de qualquer jeito.
+                        onVotar={previaDoGestor ? undefined : votarAssembleia}
                         // Só pelo token: marcar lido é ato do morador. O admin
                         // espiando o portal não pode confirmar leitura em nome
                         // dele — era o número que o síndico usa para saber se a

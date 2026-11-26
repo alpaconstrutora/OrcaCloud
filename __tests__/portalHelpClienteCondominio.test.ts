@@ -46,6 +46,10 @@ describe('Portal do Cliente › Condomínio por subseção', () => {
       ancoras: ['condominio-avisos-contador', 'condominio-avisos-lista', 'condominio-aviso', 'condominio-aviso-categoria'],
       termos: ['número vermelho do menu', 'mais novo', 'Não lido', 'Lido', 'categoria', 'data', 'Nenhum aviso publicado'],
     },
+    'condominio.assembleias': {
+      ancoras: ['condominio-assembleias-lista', 'condominio-assembleia', 'condominio-assembleia-cedula', 'condominio-assembleia-resultado', 'condominio-assembleia-ata'],
+      termos: ['Convocada', 'Instalada', 'Encerrada', 'link de transmissão', 'pauta', 'uma cédula por unidade', 'proprietário', 'e-mail e senha', 'impedida', 'trocar o voto', 'Resultado', 'Baixar ata'],
+    },
     'condominio.documentos': {
       ancoras: ['condominio-documentos-lista', 'condominio-documento'],
       termos: ['convenção', 'regulamento interno', 'atas', 'categoria', 'aba nova', 'mensagem aparece abaixo da lista'],
@@ -64,7 +68,7 @@ describe('Portal do Cliente › Condomínio por subseção', () => {
     },
   };
 
-  it('o inventário cobre as seis subseções', () => {
+  it('o inventário cobre todas as subseções', () => {
     expect(Object.keys(INVENTARIO)).toEqual(SUBS);
   });
 
@@ -73,9 +77,16 @@ describe('Portal do Cliente › Condomínio por subseção', () => {
   });
 
   it.each(SUBS)('%s: todo elemento do inventário existe na tela', (secao) => {
-    const fonte = ['components/client/CondominioTab.tsx', 'components/ClientArea.tsx']
+    const fonte = ['components/client/CondominioTab.tsx', 'components/client/AssembleiasCondominio.tsx', 'components/ClientArea.tsx']
       .map(f => readFileSync(resolve(__dirname, '..', f), 'utf-8')).join(' ');
     for (const a of INVENTARIO[secao].ancoras) expect(fonte, a).toContain(`data-tour="${a}"`);
+  });
+
+  it('assembleias: a ajuda não promete que pagar libera sozinho (A10 — a impedida pode ser indicada pela administração)', () => {
+    const texto = DEFAULT_ITEMS.cliente.filter(d => d.section === 'condominio.assembleias').map(d => d.body_html).join(' ');
+    expect(texto).toContain('conferida pelo sistema ou indicada pela administração');
+    expect(texto).toContain('quando o sistema ou a administração conferir o pagamento');
+    expect(texto).not.toContain('Pagou, a cédula volta a valer');
   });
 
   it.each(SUBS)('%s: o artigo explica todo item do inventário e há pergunta frequente', (secao) => {

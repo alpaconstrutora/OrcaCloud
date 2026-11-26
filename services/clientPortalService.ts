@@ -2,6 +2,11 @@ import { supabase } from '../lib/supabase';
 import { erroDoLinkDePortal, MSG_LINK_PORTAL_SO_GESTOR } from '../utils/portalLinkPermissao';
 import { mapReceivableRow, type ReceivableRow } from './commercialFinanceService';
 import type { PaymentInstallment } from '../types';
+import {
+    ErroAssembleia,
+    type ApuracaoItem, type OpcaoVoto, type OrigemVoto, type Quorum, type StatusAssembleia,
+    type TipoAssembleia, type TipoItem,
+} from './condominioAssembleiaService';
 
 export interface ClientPortalToken {
     id: string;
@@ -186,6 +191,93 @@ export const CONDOMINIO_VAZIO: PortalCondominio = {
     ok: true, unidades: [], avisos: [], documentos: [],
     manutencao: [], ordens: [], ativos: [], rateios: [],
 };
+
+// ── Aba "Condomínio" › Assembleias (Task A8) ────────────────────────────────
+// Payload de fn_assembleias_payload_for_client (migration
+// aplicar_20271125860200_condominio_assembleias_portal.sql). Plano:
+// docs/planos/2026-11-25-condominio-assembleias-votacoes.md (R2, R3, R5, R9).
+// O que NÃO vem, de propósito: voto de outra unidade, nome de quem votou ou
+// conduziu e deliberações (o retrato do portal é só `retrato -> 'itens'`). Vem o
+// `total` da assembleia (soma das frações de todas as participantes, R8): é o
+// denominador do % do resultado, o mesmo da ata.
+
+export interface PortalVotoAssembleia {
+    opcao: OpcaoVoto;
+    origem: OrigemVoto;
+    votadoEm: string;
+}
+
+export interface PortalItemAssembleia {
+    id: string;
+    ordem: number;
+    titulo: string;
+    descricao: string | null;
+    tipo: TipoItem;
+    /** Só ESCOLHA; APROVACAO vem null (a cédula é Sim/Não/Abstenção). */
+    opcoes: string[] | null;
+    quorum: Quorum;
+}
+
+/** Unidade DA ASSEMBLEIA em que o cliente é PROPRIETARIO vigente (R2). */
+export interface PortalUnidadeAssembleia {
+    unitId: string;
+    rotulo: string | null;
+    /** Motivo do banco (R3, "cota de 10/2026 vencida") ou null; sempre null na ENCERRADA. */
+    impedida: string | null;
+    /** { id do item: voto que vale } — só desta unidade. */
+    votos: Record<string, PortalVotoAssembleia>;
+}
+
+export interface PortalAssembleia {
+    id: string;
+    condominioNome: string;
+    tipo: TipoAssembleia;
+    titulo: string;
+    local: string | null;
+    linkTransmissao: string | null;
+    primeiraConvocacaoEm: string | null;
+    segundaConvocacaoEm: string | null;
+    /** O portal só recebe estas três (RASCUNHO e CANCELADA ficam de fora). */
+    status: Extract<StatusAssembleia, 'CONVOCADA' | 'INSTALADA' | 'ENCERRADA'>;
+    /** Soma das frações de TODAS as unidades participantes (inclusive ausentes e
+     *  impedidas) — o denominador do % do resultado (R8), o mesmo da ata. */
+    total: number;
+    itens: PortalItemAssembleia[];
+    /** Há sessão e o e-mail dela é o do cadastro — o critério do voto (R2). Falso
+     *  no link sem login e no gestor espiando o portal. */
+    sessaoValida: boolean;
+    minhasUnidades: PortalUnidadeAssembleia[];
+    /** Itens do retrato (só ENCERRADA), sem cabeçalho nem deliberações. */
+    resultado: ApuracaoItem[] | null;
+    ataDocumentoId: string | null;
+}
+
+/** numeric do jsonb chega como number; string por garantia (outro caminho, outro driver). */
+const numeroDoBanco = (v: unknown): number => (v === null || v === undefined || v === '' ? 0 : Number(v));
+
+function assembleiasDoPayload(data: unknown, origem: string): PortalAssembleia[] {
+    const res = data as { ok?: boolean; motivo?: string; assembleias?: any[] } | null;
+    if (!res?.ok) {
+        if (res?.motivo) console.error(`[clientPortalService] ${origem}:`, res.motivo);
+        return [];
+    }
+    return (res.assembleias ?? []).map((a: any): PortalAssembleia => ({
+        ...a,
+        total: numeroDoBanco(a.total),
+        itens: (a.itens ?? []) as PortalItemAssembleia[],
+        minhasUnidades: ((a.minhasUnidades ?? []) as any[]).map(u => ({ ...u, votos: u.votos ?? {} })),
+        resultado: a.resultado
+            ? (a.resultado as any[]).map(i => ({
+                ...i,
+                ordem: Number(i.ordem),
+                vencedora: i.vencedora ?? null,
+                porOpcao: Object.fromEntries(Object.entries((i.porOpcao ?? {}) as Record<string, any>)
+                    .map(([op, s]) => [op, { fracao: numeroDoBanco(s?.fracao), unidades: numeroDoBanco(s?.unidades) }])),
+            }))
+            : null,
+        ataDocumentoId: a.ataDocumentoId ?? null,
+    }));
+}
 
 // ── Aba "Dados da Unidade" ──────────────────────────────────────────────────
 // A ficha do imóvel que o cliente comprou ou alugou. Fonte primária é
@@ -419,6 +511,41 @@ export const clientPortalService = {
         if (error) { console.error('[clientPortalService] getCondominioForClient:', error); return CONDOMINIO_VAZIO; }
         const res = data as PortalCondominio;
         return res?.ok ? { ...CONDOMINIO_VAZIO, ...res } : CONDOMINIO_VAZIO;
+    },
+
+    // ── Assembleias do condomínio (Task A8) ─────────────────────────────────
+    // Mesma bifurcação do condomínio acima: link público pelo token; sem ele, o
+    // cliente logado (ou o admin espiando). Erro → [] com console.error, como
+    // getCondominioByToken: a aba mostra o estado vazio, não quebra.
+
+    /** Link público (`/portal-cliente?token=`). `sessaoValida` sai da SESSÃO da
+     *  chamada, não do token: o proprietário logado que abriu o link vota. */
+    async getAssembleiasByToken(token: string): Promise<PortalAssembleia[]> {
+        const { data, error } = await supabase.rpc('client_portal_get_assembleias', { p_token: token });
+        if (error) { console.error('[clientPortalService] getAssembleiasByToken:', error); return []; }
+        return assembleiasDoPayload(data, 'getAssembleiasByToken');
+    },
+
+    /** Cliente logado, e admin abrindo o portal por dentro (lê, não vota). */
+    async getAssembleiasForClient(clientId: string): Promise<PortalAssembleia[]> {
+        const { data, error } = await supabase.rpc('client_portal_get_assembleias_for_client', { p_client_id: clientId });
+        if (error) { console.error('[clientPortalService] getAssembleiasForClient:', error); return []; }
+        return assembleiasDoPayload(data, 'getAssembleiasForClient');
+    },
+
+    /**
+     * Voto do condômino num item, por uma unidade (R2/R5: vale o último até o
+     * encerramento). Sem token e sem client_id: quem vota é a SESSÃO — o banco
+     * recusa (HINT sem_direito_de_voto) quem não é o proprietário logado. Erro
+     * sai traduzido (`traduzirErroAssembleia`, via ErroAssembleia).
+     */
+    async votarAssembleia(itemId: string, unitId: string, opcao: OpcaoVoto): Promise<PortalVotoAssembleia> {
+        const { data, error } = await supabase.rpc('client_portal_assembleia_votar', {
+            p_item: itemId, p_unit: unitId, p_opcao: opcao,
+        });
+        if (error) throw new ErroAssembleia(error);
+        const r = data as { opcao: OpcaoVoto; origem?: OrigemVoto; votadoEm: string };
+        return { opcao: r.opcao, origem: r.origem ?? 'PORTAL', votadoEm: r.votadoEm };
     },
 
     // ── Recebíveis (aba Financeiro) ─────────────────────────────────────────

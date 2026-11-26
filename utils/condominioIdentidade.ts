@@ -32,3 +32,16 @@ export const identidadeDoCondominio = (name?: string | null, code?: string | nul
     const jaNoNome = new RegExp(`(^|${borda})${escapado}($|${borda})`).test(nome);
     return jaNoNome ? nome : `${nome} · ${cod}`;
 };
+
+/**
+ * Nome do condomínio nos DOCUMENTOS da assembleia (edital e ata): a razão social,
+ * e o nome do cadastro quando ela falta ou está em branco.
+ *
+ * ⚠️ O banco congela este MESMO critério no retrato do encerramento
+ * (`_assembleia_encerrar`: `coalesce(nullif(btrim(condominio_razao_social), ''), name)`),
+ * e a ata sai do retrato — mudar um sem o outro faz edital e ata com nomes diferentes.
+ */
+export const nomeDoCondominioNosDocumentos = (razaoSocial?: string | null, name?: string | null): string => {
+    const razao = (razaoSocial || '').trim();
+    return razao || (name || '');
+};

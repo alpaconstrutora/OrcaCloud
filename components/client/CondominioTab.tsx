@@ -29,8 +29,10 @@ import {
 } from 'lucide-react';
 import type {
     PortalCondominio, PortalUnidadeCondominio, PortalAvisoCondominio,
-    PortalRateioCondominio, PortalAtivoCondominio,
+    PortalRateioCondominio, PortalAtivoCondominio, PortalAssembleia,
 } from '../../services/clientPortalService';
+import type { OpcaoVoto } from '../../services/condominioAssembleiaService';
+import { PainelAssembleias } from './AssembleiasCondominio';
 import { CRITERIO_LABEL, type CriterioRateio } from '../../services/condominioRateioService';
 // O MESMO rótulo do admin. O payload traz a descrição como está no banco, e os
 // rateios criados antes de 23/09/2026 guardaram o texto cru do boleto — podar
@@ -154,9 +156,12 @@ export function fracaoParaPercentual(v: number | null | undefined): string {
     return `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 4, maximumFractionDigits: 4 })}%`;
 }
 
-/** As seis seções da aba, na ordem pedida pelo usuário em 24/09/2026
+/** As seções da aba, na ordem pedida pelo usuário em 24/09/2026
  *  ("transforme cada painel em uma aba"). Os rótulos são os que ele escreveu —
  *  não encurtar: o `PortalTabs` rola na horizontal quando não cabe.
+ *  "Assembleias" entrou em 26/11/2026 entre Avisos e Documentos (plano
+ *  2026-11-25-condominio-assembleias-votacoes, Task A8) — o painel mora em
+ *  `./AssembleiasCondominio.tsx`.
  *
  *  `curto` é o rótulo no MENU LATERAL do link público (13/10/2026: assuntos
  *  diferentes viram subitens do grupo "Condomínio", não abas — guia §19). Lá o
@@ -165,6 +170,7 @@ export function fracaoParaPercentual(v: number | null | undefined): string {
 export const ABAS_CONDOMINIO = [
     { id: 'dados', label: 'Dados Gerais', curto: 'Dados gerais' },
     { id: 'avisos', label: 'Avisos', curto: 'Avisos' },
+    { id: 'assembleias', label: 'Assembleias', curto: 'Assembleias' },
     { id: 'documentos', label: 'Documentos do condomínio', curto: 'Documentos' },
     { id: 'financeiro', label: 'Financeiro do condomínio', curto: 'Financeiro' },
     { id: 'manutencao', label: 'Manutenção do prédio', curto: 'Manutenção' },
@@ -1058,9 +1064,18 @@ interface Props {
      *  card ganha o nome da seção. No celular ela continua — lá não há menu
      *  lateral, só a barra inferior com um botão "Condomínio". */
     abasNoMenuLateral?: boolean;
+    /** Assembleias convocadas/instaladas/encerradas (Task A8). Vêm por RPC
+     *  própria, carregada pela tela dona na mesma precedência do condomínio
+     *  (token manda; senão o cliente logado). */
+    assembleias?: PortalAssembleia[];
+    /** A RPC das assembleias ainda não respondeu (a do condomínio é outra). */
+    assembleiasLoading?: boolean;
+    /** Grava o voto pela SESSÃO (o banco só aceita o proprietário logado). Sem
+     *  ele, a cédula fica desligada dizendo por quê. */
+    onVotar?: (itemId: string, unitId: string, opcao: OpcaoVoto) => Promise<void>;
 }
 
-const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopTabsBar, onResolverDocumento, onResolverComprovantes, aba, onAbaChange, abasNoMenuLateral = false }) => {
+const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopTabsBar, onResolverDocumento, onResolverComprovantes, aba, onAbaChange, abasNoMenuLateral = false, assembleias = [], assembleiasLoading = false, onVotar }) => {
     const porCondominio = React.useMemo(
         () => agruparPorCondominio(dados.unidades), [dados.unidades]);
 
@@ -1162,6 +1177,9 @@ const CondominioTab: React.FC<Props> = ({ dados, loading, onMarcarLido, desktopT
                     {abaAtiva === 'dados' && <PainelDadosGerais grupos={porCondominio} />}
                     {abaAtiva === 'avisos' && (
                         <PainelAvisos avisos={dados.avisos} multi={multi} naoLidos={naoLidos} onMarcarLido={onMarcarLido} />
+                    )}
+                    {abaAtiva === 'assembleias' && (
+                        <PainelAssembleias assembleias={assembleias} carregando={assembleiasLoading} multi={multi} onVotar={onVotar} onResolverDocumento={onResolverDocumento} />
                     )}
                     {abaAtiva === 'documentos' && (
                         <PainelDocumentos documentos={dados.documentos} multi={multi} onResolverDocumento={onResolverDocumento} />

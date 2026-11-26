@@ -83,6 +83,7 @@ export const PORTAL_SECTIONS: Record<Portal, PortalSection[]> = {
     // cada uma tem artigos e "como usar esta tela" próprios.
     { id: 'condominio.dados', label: 'Condomínio › Dados gerais' },
     { id: 'condominio.avisos', label: 'Condomínio › Avisos' },
+    { id: 'condominio.assembleias', label: 'Condomínio › Assembleias' },
     { id: 'condominio.documentos', label: 'Condomínio › Documentos' },
     { id: 'condominio.financeiro', label: 'Condomínio › Financeiro' },
     { id: 'condominio.manutencao', label: 'Condomínio › Manutenção' },
@@ -516,6 +517,7 @@ const CLIENTE: DefaultHelpItem[] = [
     body_html: p('O Condomínio reúne o que é do prédio, separado em seções (no computador, os subitens do menu; no celular, as abas no topo do cartão):') + ul(
       '<strong>Dados gerais</strong>: as unidades que você ocupa no prédio.',
       '<strong>Avisos</strong>: comunicados da administração. O número no menu mostra os que você ainda não leu.',
+      '<strong>Assembleias</strong>: a pauta, o voto pelo portal (para o proprietário) e o resultado com a ata.',
       '<strong>Documentos</strong>: convenção, regulamento interno e atas.',
       '<strong>Financeiro</strong>: o rateio das despesas, mês a mês.',
       '<strong>Manutenção</strong>: o plano de manutenção do prédio e as ordens de serviço.',
@@ -541,6 +543,19 @@ const CLIENTE: DefaultHelpItem[] = [
       'Aviso não lido vem destacado, com <strong>Não lido</strong>. Clique nele para marcá-lo como lido: o destaque some, aparece <strong>Lido</strong> e a contagem diminui.',
       'Abaixo de cada aviso ficam a <strong>categoria</strong> e a <strong>data</strong> de publicação; com mais de um condomínio, também o prédio.',
     ) + p('A administração acompanha quem já leu cada comunicado. Sem nenhum aviso, a tela diz "Nenhum aviso publicado".'),
+  },
+  {
+    key: 'cliente.condominio.assembleias', kind: 'artigo', section: 'condominio.assembleias',
+    title: 'Assembleias: pauta, voto e resultado',
+    body_html: ul(
+      'A lista traz as assembleias do prédio com a situação: <strong>Convocada</strong> e <strong>Instalada</strong> (votação aberta) ou <strong>Encerrada</strong>.',
+      'Abra uma para ver o tipo, a data da 1ª e da 2ª convocação, o local, o <strong>link de transmissão</strong> e a <strong>pauta</strong>, com o quórum de cada item.',
+      'Há <strong>uma cédula por unidade</strong> de que você é <strong>proprietário</strong>. Inquilino e morador veem a pauta, sem cédula.',
+      'Para votar, entre com <strong>e-mail e senha</strong>: pelo link, sem login, a cédula aparece desligada com o motivo.',
+      'Unidade em atraso com as contribuições (conferida pelo sistema ou indicada pela administração) fica <strong>impedida</strong> de votar; a cédula diz o motivo. Quitado o débito, a cédula volta a valer quando o sistema ou a administração conferir o pagamento.',
+      'Você pode <strong>trocar o voto</strong> até o encerramento; vale o último, dado pelo portal ou na reunião. Abaixo de cada item aparece quando e por onde o voto foi dado.',
+      'Encerrada: o <strong>Resultado</strong> de cada item, com as unidades e o percentual de cada opção (sobre o total das frações ideais das unidades participantes, como na ata), o voto da sua unidade e o botão <strong>Baixar ata</strong>.',
+    ),
   },
   {
     key: 'cliente.condominio.documentos', kind: 'artigo', section: 'condominio.documentos',
@@ -638,6 +653,11 @@ const CLIENTE: DefaultHelpItem[] = [
     key: 'cliente.faq.condominio-aviso-lido', kind: 'faq', section: 'condominio.avisos',
     title: 'Como marco um aviso como lido?',
     body_html: p('Clique no aviso. Ele deixa de aparecer como <strong>Não lido</strong> e sai da contagem do menu.'),
+  },
+  {
+    key: 'cliente.faq.condominio-assembleia-nao-vota', kind: 'faq', section: 'condominio.assembleias',
+    title: 'Por que não consigo votar na assembleia?',
+    body_html: p('A cédula diz o motivo: é preciso entrar com e-mail e senha (o link sozinho não vota), ser proprietário da unidade e estar com a cota condominial em dia. Depois do encerramento, ninguém vota mais; o resultado e a ata ficam na assembleia.'),
   },
   {
     key: 'cliente.faq.condominio-documento-nao-abre', kind: 'faq', section: 'condominio.documentos',
@@ -952,9 +972,10 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
       { key: 'cliente.tour.geral.financeiro', anchor: 'aba-financeiro', section: 'financeiro', title: 'Financeiro', body: 'Suas parcelas, o que já foi pago e os recibos.' },
       { key: 'cliente.tour.geral.financeiro-resumo', anchor: 'financeiro-resumo', section: 'financeiro', title: 'Resumo financeiro', body: 'Total do contrato, valor pago e saldo. As parcelas e os recibos vêm logo abaixo.' },
       { key: 'cliente.tour.geral.manutencao', anchor: 'aba-manutencao', section: 'manutencao', title: 'Manutenção', body: 'Precisa de um reparo? Abra o chamado por aqui e acompanhe o atendimento.' },
-      { key: 'cliente.tour.geral.condominio', anchor: 'aba-condominio', section: 'condominio', title: 'Condomínio', body: 'Tudo o que é do prédio, em seis seções. O número vermelho mostra os avisos que você ainda não leu.' },
+      { key: 'cliente.tour.geral.condominio', anchor: 'aba-condominio', section: 'condominio', title: 'Condomínio', body: 'Tudo o que é do prédio, em sete seções. O número vermelho mostra os avisos que você ainda não leu.' },
       { key: 'cliente.tour.geral.condominio-dados', anchor: 'aba-condominio.dados', section: 'condominio.dados', title: 'Dados gerais', body: 'As unidades em que você consta no prédio: fração ideal, área, o seu papel e quem mais está registrado nelas.' },
       { key: 'cliente.tour.geral.condominio-avisos', anchor: 'aba-condominio.avisos', section: 'condominio.avisos', title: 'Avisos', body: 'Os comunicados da administração. O número ao lado conta os que você ainda não leu.' },
+      { key: 'cliente.tour.geral.condominio-assembleias', anchor: 'aba-condominio.assembleias', section: 'condominio.assembleias', title: 'Assembleias', body: 'As assembleias do prédio: a pauta, a cédula de cada unidade sua e, depois do encerramento, o resultado e a ata.' },
       { key: 'cliente.tour.geral.condominio-documentos', anchor: 'aba-condominio.documentos', section: 'condominio.documentos', title: 'Documentos', body: 'Convenção, regulamento interno e atas publicados pela administração.' },
       { key: 'cliente.tour.geral.condominio-financeiro', anchor: 'aba-condominio.financeiro', section: 'condominio.financeiro', title: 'Financeiro', body: 'O rateio das despesas do prédio, mês a mês, com a sua cota e o PDF.' },
       { key: 'cliente.tour.geral.condominio-manutencao', anchor: 'aba-condominio.manutencao', section: 'condominio.manutencao', title: 'Manutenção', body: 'O plano de manutenção do prédio e as ordens de serviço da administração.' },
@@ -984,7 +1005,7 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
       // pessoa está (a aba sozinha nunca é a seção atual).
       'condominio.dados': tourDe('condominio.dados', [
         { key: 'cliente.tour.condominio.predio', anchor: 'condominio-predio', section: 'condominio.dados', title: 'Seu condomínio', body: 'O nome do prédio, quantas unidades suas há nele e o CNPJ do condomínio. Com mais de um condomínio, diz quantos são.', quando: 'quando você tiver uma unidade num condomínio' },
-        { key: 'cliente.tour.condominio.secoes', anchor: 'condominio-secoes', section: 'condominio.dados', title: 'As seções', body: 'Dados gerais, Avisos, Documentos, Financeiro, Manutenção e Equipamentos: cada assunto do prédio na sua seção.' },
+        { key: 'cliente.tour.condominio.secoes', anchor: 'condominio-secoes', section: 'condominio.dados', title: 'As seções', body: 'Dados gerais, Avisos, Assembleias, Documentos, Financeiro, Manutenção e Equipamentos: cada assunto do prédio na sua seção.' },
         { key: 'cliente.tour.condominio.dados.grupo', anchor: 'condominio-dados-grupo', section: 'condominio.dados', title: 'Cada condomínio', body: 'Com unidades em mais de um condomínio, elas aparecem agrupadas por prédio, com o nome, as unidades e o CNPJ.', quando: 'quando você tiver unidades em mais de um condomínio' },
         { key: 'cliente.tour.condominio.dados.unidade', anchor: 'condominio-dados-unidade', section: 'condominio.dados', title: 'Sua unidade', body: 'Cada cartão é uma unidade: o número, a torre, o pavimento e a tipologia.', quando: 'quando você tiver uma unidade num condomínio' },
         { key: 'cliente.tour.condominio.dados.fracao', anchor: 'condominio-dados-fracao', section: 'condominio.dados', title: 'Fração ideal', body: 'A parte da unidade no condomínio. É ela que costuma definir a sua cota no rateio das despesas.', quando: 'quando você tiver uma unidade num condomínio' },
@@ -996,6 +1017,13 @@ export const TOURS: Record<Portal, { geral: TourStep[]; porAba: Partial<Record<s
         { key: 'cliente.tour.condominio.avisos.lista', anchor: 'condominio-avisos-lista', section: 'condominio.avisos', title: 'Comunicados', body: 'Os avisos da administração, do mais novo para o mais antigo.', quando: 'quando a administração publicar um aviso' },
         { key: 'cliente.tour.condominio.avisos.aviso', anchor: 'condominio-aviso', section: 'condominio.avisos', title: 'Lido e não lido', body: 'Aviso não lido vem destacado, com "Não lido". Clique nele para marcá-lo como lido: o destaque some e a contagem diminui.', quando: 'quando a administração publicar um aviso' },
         { key: 'cliente.tour.condominio.avisos.categoria', anchor: 'condominio-aviso-categoria', section: 'condominio.avisos', title: 'Categoria e data', body: 'O assunto do aviso e quando foi publicado. Com mais de um condomínio, diz também de qual prédio é.', quando: 'quando a administração publicar um aviso' },
+      ]),
+      'condominio.assembleias': tourDe('condominio.assembleias', [
+        { key: 'cliente.tour.condominio.assembleias.lista', anchor: 'condominio-assembleias-lista', section: 'condominio.assembleias', title: 'Assembleias do prédio', body: 'As assembleias convocadas, em andamento e encerradas, com a data e a situação.', quando: 'quando a administração convocar uma assembleia' },
+        { key: 'cliente.tour.condominio.assembleias.assembleia', anchor: 'condominio-assembleia', section: 'condominio.assembleias', title: 'Abrir uma assembleia', body: 'Clique para ver as datas, o local, o link de transmissão, a pauta e a sua cédula.', quando: 'quando a administração convocar uma assembleia' },
+        { key: 'cliente.tour.condominio.assembleias.cedula', anchor: 'condominio-assembleia-cedula', section: 'condominio.assembleias', title: 'Sua cédula', body: 'Uma por unidade de que você é proprietário. Escolha a opção de cada item; dá para trocar até o encerramento. Se o voto não puder ser dado, a cédula diz por quê.', quando: 'quando você abrir uma assembleia sendo proprietário' },
+        { key: 'cliente.tour.condominio.assembleias.resultado', anchor: 'condominio-assembleia-resultado', section: 'condominio.assembleias', title: 'Resultado', body: 'Depois do encerramento: o resultado de cada item, com as unidades e o percentual de cada opção.', quando: 'quando você abrir uma assembleia encerrada' },
+        { key: 'cliente.tour.condominio.assembleias.ata', anchor: 'condominio-assembleia-ata', section: 'condominio.assembleias', title: 'Baixar ata', body: 'Abre a ata da assembleia encerrada numa aba nova.', quando: 'quando você abrir uma assembleia encerrada' },
       ]),
       'condominio.documentos': tourDe('condominio.documentos', [
         { key: 'cliente.tour.condominio.documentos.lista', anchor: 'condominio-documentos-lista', section: 'condominio.documentos', title: 'Documentos do condomínio', body: 'Convenção, regulamento interno e atas publicados pela administração.', quando: 'quando a administração publicar um documento' },

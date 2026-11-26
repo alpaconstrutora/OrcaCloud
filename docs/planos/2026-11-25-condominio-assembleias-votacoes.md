@@ -51,6 +51,7 @@ documento e a votação do Portal do Investidor, que é outro domínio.)
 | 26/11 | Inadimplência: nenhum rateio do app tem cobrança gerada hoje | **Aviso + marcar à mão** (Task A10) |
 | 26/11 | Condomínio de teste da A9 não pode ser excluído (trava) | **Apagar por script**, desligando a trava só nessa operação |
 | 26/11 | Aplicar e publicar a fase A | **Sim**, após as correções da revisão final e a A10 |
+| 26/11 | Fase B: envio de ata/procuração pelo síndico (o único envio do Portal do Síndico grava no armazenamento do Financeiro) | **Função nova e própria de documentos do condomínio pelo síndico** (`sindico-portal-documentos`), mesma checagem de login/mandato |
 
 ## Por que existe
 
@@ -924,11 +925,19 @@ cancelar, registrar presença, instalar, lançar voto, encerrar, vincular ata, a
 listar/carregar. Cada um: `fn_sindico_resolver(p_token, p_client_id, 'sessao')` (login
 + mandato vigente), confere que a assembleia é de um prédio do síndico, chama o núcleo
 com `auth.uid(), 'SINDICO'`. Rascunho/itens passam por funções DEFINER próprias (o
-síndico não é membro da org; RLS não serve). **Upload de ata e procuração:** antes de
-escrever, conferir como o Portal do Síndico já anexa arquivo (Síndico › Financeiro
-anexa comprovante por Edge Function — `docs/planos/2026-10-20-portal-do-sindico.md`) e
-usar o mesmo caminho; se ele não servir para `condominio_documentos`, parar e trazer a
-escolha ao usuário antes de criar outro.
+síndico não é membro da org; RLS não serve). **Upload de ata e procuração (decisão 26/11):** Edge Function NOVA `supabase/functions/sindico-portal-documentos/index.ts`
+(FormData: `token?`, `clientId?`, `empreendimentoId`, `categoria` ATA|OUTRO, `titulo`, `visivelPortal`, `file`).
+Autoriza pelo MESMO caminho do `sindico-portal-financeiro` (sessão do síndico com mandato vigente daquele
+condomínio — conferido no código: `exigirUsuario` + `fn_sindico_resolver(...,'sessao')`; nunca só o gateway,
+REGRA #7 p3), grava no bucket `condominio-documentos` em `{org do condomínio}/{empreendimento}/{uuid}.{ext}`
+(mesmos MIME e teto de `condominioComunicacaoService`), cria a linha em `condominio_documentos` com
+service_role e devolve `{ documentoId }`. Recusa e apaga o arquivo se a linha falhar.
+
+**Leituras que a tela da assembleia faz por fora de `ops` (A7)** — unidades do condomínio sem fração
+(lista "fora" antes de convocar) e leituras do aviso (`_leituras`) — ganham RPCs do síndico:
+`sindico_portal_assembleia_unidades_fora(p_token, p_client_id, p_assembleia)` e
+`sindico_portal_assembleia_leituras(p_token, p_client_id, p_assembleia) RETURNS int`. Também
+`sindico_portal_assembleia_impedimentos`, `_marcar_impedida` e `_cotas_conferidas` (A10).
 
 - [ ] **1. Teste**: `síndico logado convoca e encerra`; `síndico só por link (sem
   sessão) recusado`; `mandato vencido recusado`; `síndico de outro prédio recusado`;
@@ -941,6 +950,8 @@ escolha ao usuário antes de criar outro.
 
 **Arquivos**
 - Modificar: `services/sindicoPortalService.ts` — `operacoesDoSindico(token, clientId): OperacoesAssembleia`
+- Modificar: `services/condominioAssembleiaService.ts` — `OperacoesAssembleia` ganha `unidadesFora(id)`, `leiturasDoAviso(id)` e `enviarDocumento(id, arquivo, { categoria, titulo, visivelPortal }): Promise<{ documentoId }>`; `operacoesDoGestor` implementa com o que a A7 já usa
+- Modificar: `components/condominio/AssembleiaDetalheView.tsx` (+ `assembleia/*`) — passa a usar só `ops` para essas três coisas (nenhuma chamada direta a `condominioComunicacaoService`/`empreendimentoService` na tela da assembleia); testes da A7 seguem verdes
 - Criar: `components/sindico/PainelAssembleiasDoSindico.tsx` — lista + Sheet de
   rascunho + `AssembleiaDetalheView` com `ops = operacoesDoSindico(...)` (a mesma tela
   da A7, sem cópia)

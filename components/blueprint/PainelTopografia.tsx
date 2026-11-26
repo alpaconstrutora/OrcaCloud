@@ -1967,10 +1967,7 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
   const excluirDesenho = async () => {
     const ok = await confirmar({
       title: 'Excluir o platô desenhado?',
-      message:
-        t.base === 'DESENHADO'
-          ? 'O contorno desenhado é apagado e o terreno volta ao natural ("Corte e aterro", em Vista › Exibir, desliga). Para um platô novo, desenhe de novo — ou ligue "Corte e aterro" para usar o envelope, na cota de equilíbrio.'
-          : 'O contorno desenhado (guardado, sem uso agora) é apagado. A forma em uso não muda.',
+      message: mensagemDeExcluirPlatoDesenhado(t.base === 'DESENHADO'),
       variant: 'danger',
       confirmLabel: 'Excluir',
     });
@@ -2402,6 +2399,13 @@ function SecaoTerraplenagem({ t }: { t: TerraplenagemNoPainel }) {
       )}
     </div>
   );
+}
+
+/** A confirmação de "Excluir platô desenhado" — a mesma no painel Terreno e no painel do platô no 3D. */
+export function mensagemDeExcluirPlatoDesenhado(emUso: boolean): string {
+  return emUso
+    ? 'O contorno desenhado é apagado e o terreno volta ao natural ("Corte e aterro", em Vista › Exibir, desliga). Para um platô novo, desenhe de novo — ou ligue "Corte e aterro" para usar o envelope, na cota de equilíbrio.'
+    : 'O contorno desenhado (guardado, sem uso agora) é apagado. A forma em uso não muda.';
 }
 
 /** Um parâmetro numérico curto: rótulo em cima, campo embaixo (cabe em 2 colunas). */

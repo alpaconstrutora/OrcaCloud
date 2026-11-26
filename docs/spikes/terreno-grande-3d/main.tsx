@@ -196,6 +196,37 @@ function usePlatoEditavel() {
 function Cena3d() {
   const { entorno, notas } = useEntorno();
   const { derivado, editavel } = usePlatoEditavel();
+  // O painel do platô (25/11/2026): completo à esquerda ou compacto no rodapé; o modo vai para o espião do portão.
+  const [modoDoPainel, setModoDoPainel] = useState<'COMPLETO' | 'COMPACTO'>('COMPLETO');
+  (window as unknown as { __modoDoPainel?: string }).__modoDoPainel = modoDoPainel;
+  const saldoAtual = derivado?.saldo ?? SALDO;
+  const painelDoPlato =
+    editavel && saldoAtual
+      ? {
+          modo: modoDoPainel,
+          onModo: setModoDoPainel,
+          dados: {
+            base: 'DESENHADO' as const,
+            cotaM: editavel.cotaM,
+            equilibrio: false,
+            faixaDaCotaM: [840, 900] as [number, number],
+            areaM2: 8000,
+            perimetroM: 360,
+            corteM3: saldoAtual.corteM3,
+            aterroM3: saldoAtual.aterroM3,
+            saldoM3: saldoAtual.saldoM3,
+            foraDoRelevo: saldoAtual.foraDoRelevo,
+            aviso: null,
+            taludeCorteH: 1.5,
+            taludeAterroH: 1.5,
+          },
+          onCotaPrevia: (cotaM: number) => editavel.onPrevia({ anel: editavel.anel, cotaM }),
+          onCota: (cotaM: number) => editavel.onConfirmar({ anel: editavel.anel, cotaM }),
+          onEquilibrio: () => {},
+          onParametros: () => {},
+          onExcluir: () => {},
+        }
+      : null;
   return (
   <div className="h-full w-full">
     {/* `?semTerreno=1`: o "Terreno" do 3D desligado (Exibir) — o padrão do editor.
@@ -215,6 +246,7 @@ function Cena3d() {
       entornoDaMaquete={entorno}
       saldoDoPlato={derivado?.saldo ?? SALDO}
       platoEditavel={editavel}
+      painelDoPlato={q.get('painel') ? painelDoPlato : null}
       // `?desenhar=1` (25/11/2026): a ferramenta Platô ativa no 3D — o contorno fechado vai para o espião.
       desenharPlato3d={q.get('desenhar') ? { onAnel: (anel) => (window.__anelDesenhado = anel) } : null}
       onEquilibrio={() => {}}

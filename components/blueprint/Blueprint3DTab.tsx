@@ -14,6 +14,7 @@ import type { MalhaDoTerreno } from '../../utils/blueprintTopografia';
 import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
 import type { ExtrasDoRelevo3d } from '../../utils/blueprintTopografia3dExtras';
 import type { PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaDeFundo';
+import type { PainelDoPlatoNo3d } from './PainelDoPlato3d';
 
 const Blueprint3DViewer = React.lazy(() => import('./Blueprint3DViewer'));
 
@@ -93,6 +94,8 @@ interface Props {
   } | null;
   /** Aviso do platô (contorno recusado), mostrado no selo do saldo. */
   avisoDoPlato?: string | null;
+  /** O painel do platô (25/11/2026): completo à esquerda ou compacto no rodapé — ver o viewer. */
+  painelDoPlato?: PainelDoPlatoNo3d | null;
   /**
    * DESENHAR O PLATÔ NO 3D (25/11/2026, pedido: o usuário clicou os cantos no 3D com Topografia › Platô e "não
    * funcionou"): com a ferramenta Platô ativa, cada clique no TERRENO do 3D marca um canto; clicar no 1º canto (ou

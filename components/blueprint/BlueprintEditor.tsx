@@ -576,7 +576,8 @@ import PainelZonaUrbanistica from './PainelZonaUrbanistica';
 import { dadosDoEmpreendimentoParaPlanta } from '../../utils/blueprintDadosDoEmpreendimento';
 import { comandosDaEscrituraPelaFicha, compararComFicha, medidasDaPlantaParaFicha, patchDaPlantaParaFicha, ROTULO_DA_COLUNA } from '../../utils/blueprintTerrenoDaFicha';
 import type { FichaNoPainel } from './FichaDoTerrenoNaPlanta';
-import PainelTopografia from './PainelTopografia';
+import PainelTopografia, { mensagemDeExcluirPlatoDesenhado } from './PainelTopografia';
+import type { ModoDoPainelDoPlato } from './PainelDoPlato3d';
 import QuadroDeDivisas from './QuadroDeDivisas';
 import { useConfirm } from '../ui/confirm';
 import { usePersistedState } from '../ui/TableUtils';
@@ -2517,6 +2518,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const [modoDeCor, setModoDeCor] = usePreferenciaDaPlanta<ModoDeCor>('modoDeCor');
   /** ESTILO DO 3D (E8.2): sombreado, linha oculta ou transparente. */
   const [estilo3d, setEstilo3d] = usePreferenciaDaPlanta<Estilo3d>('vista3dEstilo');
+  // O platô no 3D: painel completo à esquerda (padrão) ou selo compacto no rodapé — 25/11/2026, reel da Hektar.
+  const [modoDoPainelDoPlato, setModoDoPainelDoPlato] = usePreferenciaDaPlanta<ModoDoPainelDoPlato>('vista3dPainelDoPlato');
   /** ESTILO DA PLANTA (E8.4): técnica ou humanizada (pisos por material, sombra, mobiliário colorido, vegetação). */
   const [estiloPlanta, setEstiloPlanta] = usePreferenciaDaPlanta<EstiloDaPlanta>('estiloPlanta');
   /** FASES DE REFORMA (E10.2): o filtro da vista (tudo / antes / depois / só demolição). */
@@ -5952,6 +5955,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     return terraplenagemCalc ? saldoDoPlato(terraplenagemCalc, v.grade, anelDoPlato, terraplenagem.cotaPlatoM === null) : null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [superficieDeProjeto3d, terraplenagemCalc, terraplenagemDaPrevia, anelDoPlato, terraplenagem.cotaPlatoM]);
+  /**
+   * Excluir o platô desenhado (sem perguntar — quem chama confirma): em uso, volta ao terreno natural (cota →
+   * equilíbrio no hook e "Corte e aterro" desliga). O painel Terreno e o painel do platô no 3D usam esta mesma.
+   */
+  const excluirPlatoDesenhado = () => {
+    const emUso = terraplenagem.base === 'DESENHADO';
+    terraplenagem.excluirAnelDesenhado();
+    if (emUso) setMostrarTerraplenagem(false);
+  };
   /** A cota do plano em cada ponto — só existe com inclinação; o corte 2D e os muros 3D a recebem. */
   const cotaDoPlatoEmFn = useMemo(() => {
     if (!anelDoPlato || cotaDoPlatoM === null || !inclinacaoDoPlato) return undefined;
@@ -6160,6 +6172,69 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       }),
     [anelDoPlato],
   );
+  /** A faixa do deslizante de cota do painel do platô: a do terreno inteiro, com 5 m de folga para cada lado. */
+  const faixaDaCotaDoPlato = useMemo((): [number, number] | null => {
+    const v = topografia.selecionada;
+    if (!v) return null;
+    let mn = Infinity;
+    let mx = -Infinity;
+    for (const c of v.grade.cotasM) {
+      if (c === null) continue;
+      if (c < mn) mn = c;
+      if (c > mx) mx = c;
+    }
+    return Number.isFinite(mn) ? [Math.floor(mn - 5), Math.ceil(mx + 5)] : null;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chaveDaTopografia]);
+  /**
+   * O PAINEL DO PLATÔ NO 3D (25/11/2026, reel da Hektar): os números do selo (`saldoDoPlato3d`) + área, perímetro, cota
+   * e talude. O deslizante usa a MESMA prévia da seta do 3D (grade rala) e grava uma vez ao soltar.
+   */
+  const painelDoPlato3d = useMemo(() => {
+    if (!saldoDoPlato3d || !anelDoPlato || cotaDoPlatoM === null || !faixaDaCotaDoPlato) return null;
+    const calc = terraplenagemDaPrevia?.calc ?? terraplenagemCalc;
+    const anel = anelDoPlato;
+    return {
+      modo: modoDoPainelDoPlato,
+      onModo: setModoDoPainelDoPlato,
+      dados: {
+        base: terraplenagem.base,
+        cotaM: cotaDoPlatoM,
+        equilibrio: terraplenagem.cotaPlatoM === null && !previaDoPlato,
+        faixaDaCotaM: faixaDaCotaDoPlato,
+        areaM2: calc ? calc.areaPlatoM2 : null,
+        perimetroM: arestasDoPlatoM.reduce((a, b) => a + b, 0),
+        corteM3: saldoDoPlato3d.corteM3,
+        aterroM3: saldoDoPlato3d.aterroM3,
+        saldoM3: saldoDoPlato3d.saldoM3,
+        foraDoRelevo: saldoDoPlato3d.foraDoRelevo,
+        aviso: avisoDoPlato,
+        taludeCorteH: terraplenagem.parametros.taludeCorteH,
+        taludeAterroH: terraplenagem.parametros.taludeAterroH,
+      },
+      onCotaPrevia: (cotaM: number) => {
+        setAvisoDoPlato(null);
+        setPreviaDoPlato({ anel, cotaM });
+      },
+      onCota: (cotaM: number) => {
+        setPreviaDoPlato(null);
+        terraplenagem.setCotaPlatoM(cotaM);
+      },
+      onEquilibrio: () => terraplenagem.setCotaPlatoM(null),
+      onParametros: terraplenagem.setParametros,
+      onExcluir:
+        terraplenagem.base === 'DESENHADO' && terraplenagem.anelDesenhado
+          ? () =>
+              void confirmar({
+                title: 'Excluir o platô desenhado?',
+                message: mensagemDeExcluirPlatoDesenhado(true),
+                variant: 'danger',
+                confirmLabel: 'Excluir',
+              }).then((ok) => ok && excluirPlatoDesenhado())
+          : undefined,
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [saldoDoPlato3d, anelDoPlato, cotaDoPlatoM, faixaDaCotaDoPlato, terraplenagemDaPrevia, terraplenagemCalc, modoDoPainelDoPlato, terraplenagem.base, terraplenagem.cotaPlatoM, terraplenagem.parametros, terraplenagem.anelDesenhado, previaDoPlato, arestasDoPlatoM, avisoDoPlato]);
 
   // ── Fase 3: hipsometria e perfil altimétrico ──────────────────────────────
   const intervaloHipsometricoM = hipsometriaIntervaloM ?? topografia.selecionada?.equidistancia_m ?? 1;
@@ -11809,11 +11884,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             onEsquecerAvisoDosLados: terraplenagem.esquecerAvisoDosLados,
             // Excluir o desenho EM USO volta ao terreno natural (pedido 25/11/2026: *"foi junto todo o relevo"* — o
             // envelope, aqui o lote inteiro, virava um platô plano): a camada Terraplenagem desliga.
-            onExcluirDesenho: () => {
-              const emUso = terraplenagem.base === 'DESENHADO';
-              terraplenagem.excluirAnelDesenhado();
-              if (emUso) setMostrarTerraplenagem(false);
-            },
+            onExcluirDesenho: excluirPlatoDesenhado,
             cotaPlatoM: terraplenagem.cotaPlatoM,
             onCotaPlatoM: terraplenagem.setCotaPlatoM,
             inclinacao: terraplenagem.inclinacao,
@@ -13011,6 +13082,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       onEquilibrio={() => terraplenagem.setCotaPlatoM(null)}
       platoEditavel={mostrarTerreno3d && terrenoAVista ? platoEditavel3d : null}
       avisoDoPlato={avisoDoPlato}
+      painelDoPlato={mostrarTerreno3d && terrenoAVista ? painelDoPlato3d : null}
       desenharPlato3d={editor.tool === 'plato' && mostrarTerreno3d && terrenoAVista ? desenharPlato3d : null}
       alturaDoChao={mostrarTerreno3d && terrenoAVista ? alturaDoChao3d : undefined}
       extrasDoRelevo={mostrarTerreno3d && terrenoAVista ? extrasDoRelevoNo3d : null}

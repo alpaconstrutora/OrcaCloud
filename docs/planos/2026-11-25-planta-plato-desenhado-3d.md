@@ -237,6 +237,17 @@ volumes e o orçamento (uma verdade só): mexer nele no 3D é mexer no estudo.
   2. A seta: 0,2 do arraste no gesto normal e 0,02 com **Shift** (ajuste fino), sempre a 5 cm. Teste puro RED →
      GREEN; portão `plato.mjs` mede: no lote de 346 m, 60 px = +6,5 m (antes +32,5 m) e com Shift +0,65 m.
 - Fora (anotado): o "percorrer" a pé ainda anda no terreno natural, não no de projeto.
+- [x] **Painel do platô no 3D** (PR 1 de 2) — pedido 25/11: *"assista o video https://www.instagram.com/reel/DgLvZqTSc-h/
+  e implemente e ou aprimore o painel de visualizacao lateral como no video. hoje no rodapé ja tenho algumas destas
+  informações. Crie opcao para o usuário escolher como ele quer visualizar, compacto no rodapé ou completo no painel
+  lateral"*. Decisões: escopo "painel + os dois" (modo de balanço e talude suave, PR 2) e padrão COMPLETO.
+  - `PainelDoPlato3d` (card à esquerda): cota (deslizante com prévia na grade rala + campo, grava uma vez), Equilíbrio,
+    talude corte/aterro 1:h com %, área, perímetro, volumes em barra (vermelho corte / azul aterro, as cores da
+    planta) com os números do selo; Excluir (desenhado, confirmação comum ao painel Terreno) e Recolher.
+  - `PlatoNo3d`: o selo do rodapé saiu do viewer para cá; COMPACTO ganha o botão "Painel".
+  - Preferência por usuário `vista3dPainelDoPlato` (COMPLETO | COMPACTO, padrão COMPLETO), também em Preferências.
+  - Testes: painel 14 (RED → GREEN), catálogo 32, editor 287; portão `painel.mjs` ✅ e `plato.mjs` ✅.
+- [ ] PR 2: modo de balanço (Corte / Corte e aterro / Aterro) + talude Suave/Reto — conta, migration, painéis.
 - [x] Revisão contra o reel — pedido 25/11: *"assista este video novamente e teste so o app reproduz fielmente a
   facilidade de uso e funcionalidades"*. Teste logado no "Estudp Relevo" (estado guardado antes e devolvido pelo banco
   depois, com ok do usuário). Faltavam 5 coisas; aprovadas 1, 2, 3 e 5 (*"Sim"*), e o item 4 ficou como está

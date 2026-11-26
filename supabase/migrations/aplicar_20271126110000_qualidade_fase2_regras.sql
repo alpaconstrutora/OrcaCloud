@@ -56,6 +56,22 @@
 --   privilégio).
 --   Pergunta 2 — ver o bloco 9 (quem executa cada função e por que DEFINER/INVOKER).
 --
+-- Correção 1 (revisão, 26/11):
+--   • 'rejected' de OE controlada só com validação inspection/rejected posterior ao
+--     corte (= só pela RPC, com permissão e motivo) — espelho do 'approved'.
+--   • work_orders_servico_controlado_do_sgq (Task 1) redefinida aqui: o serviço
+--     controlado não se troca, retira NEM ATRIBUI em UPDATE direto com a OE em
+--     inspeção/aprovada/reprovada/medida/encerrada (ou bloqueada vinda de um
+--     desses) nem com registro (_qualidade_oe_tem_registro, nos dois sentidos) —
+--     senão: desligar o serviço, aprovar como OE comum e religar. Apagar o serviço
+--     controlado segue a mesma régua (o SET NULL soltaria a OE).
+--   • A RPC, para aprovar, reconfere o portão de pending_inspection no momento
+--     (NC aberta / item desfeito depois do pedido de inspeção).
+--   • Membro conferido com COALESCE(… IN minhas_orgs_membro(), false).
+--   • work_order_validation_history.created_at DEFAULT clock_timestamp().
+--   • _qualidade_sgq_da_org devolve NULL (não erro) a quem não é membro da org
+--     nem do SGQ dela (nem superadmin) — NULL fecha: _qualidade_pode(NULL, …) = false.
+--
 -- Idempotente (IF NOT EXISTS / CREATE OR REPLACE / DROP ... IF EXISTS).
 -- Aplicar com `npx supabase db query --linked -f` — nunca `db push`.
 -- =============================================================================
@@ -86,8 +102,11 @@ CREATE TABLE IF NOT EXISTS public.work_order_validation_history (
     procedimento_versao_id uuid,
     evento                 text NOT NULL DEFAULT 'criacao',
     alterado_por           uuid DEFAULT auth.uid(),
-    created_at             timestamptz NOT NULL DEFAULT now()
+    created_at             timestamptz NOT NULL DEFAULT clock_timestamp()
 );
+
+-- Correção 1: quem já aplicou a 1ª versão (DEFAULT now()).
+ALTER TABLE public.work_order_validation_history ALTER COLUMN created_at SET DEFAULT clock_timestamp();
 
 ALTER TABLE public.work_order_validation_history
     DROP CONSTRAINT IF EXISTS work_order_validation_history_evento_check;
@@ -126,6 +145,9 @@ GRANT SELECT ON public.work_order_validation_history TO authenticated;
 -- Organização dona do SGQ que vale para p_org. SECURITY DEFINER: decisão de
 -- autorização não pode depender da RLS de quem chama (linha escondida = a própria
 -- org = permissão conferida no lugar errado). Devolve só um id de organização.
+-- Correção 1: só responde a quem é membro de p_org ou do SGQ dela, superadmin, ou
+-- a chamada sem usuário (service_role/postgres); aos demais devolve NULL — e NULL
+-- fecha (_qualidade_pode(NULL, …) só é verdadeiro para superadmin).
 CREATE OR REPLACE FUNCTION public._qualidade_sgq_da_org(p_org uuid)
 RETURNS uuid
 LANGUAGE sql
@@ -133,10 +155,17 @@ STABLE
 SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
-    SELECT coalesce(
-               (SELECT s.sgq_organization_id FROM public.quality_settings s
-                 WHERE s.organization_id = p_org),
-               p_org)
+    SELECT CASE
+               WHEN auth.uid() IS NULL
+                 OR public.is_superadmin()
+                 OR COALESCE(p_org IN (SELECT public.minhas_orgs_membro()), false)
+                 OR COALESCE(x.sgq IN (SELECT public.minhas_orgs_membro()), false)
+               THEN x.sgq
+           END
+      FROM (SELECT coalesce(
+                       (SELECT s.sgq_organization_id FROM public.quality_settings s
+                         WHERE s.organization_id = p_org),
+                       p_org) AS sgq) x
 $$;
 
 -- O PRÓPRIO usuário (auth.uid()) pode <chave> em p_org? Superadmin, dono/admin ou
@@ -271,10 +300,15 @@ BEGIN
         END IF;
     END IF;
 
-    IF p_novo_status = 'approved' THEN
-        -- A inspeção aprovada vale UMA vez: tem de ser posterior à última entrada
-        -- em pending_inspection, approved ou rejected do histórico de status (a RPC
-        -- grava 'approved' depois da validação — ela não serve para a próxima volta).
+    IF p_novo_status = 'approved'
+       OR (p_novo_status = 'rejected' AND p_controlled_item_id IS NOT NULL) THEN
+        -- A inspeção aprovada (ou reprovada) vale UMA vez: tem de ser posterior à
+        -- última entrada em pending_inspection, approved ou rejected do histórico de
+        -- status (a RPC grava o status novo depois da validação — ela não serve
+        -- para a próxima volta).
+        -- Correção 1: 'rejected' de OE controlada exige a validação reprovada (que
+        -- só a RPC grava, com permissão, motivo e liberado_por) — espelho do
+        -- 'approved'. 'rejected' de OE comum segue livre, como antes.
         SELECT max(l.created_at) INTO v_corte
           FROM public.work_order_status_log l
          WHERE l.work_order_id = p_work_order_id
@@ -282,9 +316,11 @@ BEGIN
         IF NOT EXISTS (
             SELECT 1 FROM public.work_order_validations v
              WHERE v.work_order_id = p_work_order_id
-               AND v.type = 'inspection' AND v.status = 'approved'
+               AND v.type = 'inspection' AND v.status = p_novo_status
                AND (v_corte IS NULL OR v.created_at > v_corte)) THEN
-            v_msgs := v_msgs || 'Registro de inspeção aprovada não encontrado — use "Aprovar inspeção"'::text;
+            v_msgs := v_msgs || CASE p_novo_status
+                WHEN 'approved' THEN 'Registro de inspeção aprovada não encontrado — use "Aprovar inspeção"'
+                ELSE 'Registro de inspeção reprovada não encontrado — use "Aprovar inspeção"' END;
         END IF;
     END IF;
 
@@ -315,7 +351,8 @@ DECLARE
 BEGIN
     SELECT * INTO v_wo FROM public.work_orders wo WHERE wo.id = p_work_order_id;
     IF NOT FOUND
-       OR NOT (public.is_superadmin() OR v_wo.org_id IN (SELECT public.minhas_orgs_membro())) THEN
+       OR NOT (public.is_superadmin()
+               OR COALESCE(v_wo.org_id IN (SELECT public.minhas_orgs_membro()), false)) THEN
         RAISE EXCEPTION 'OE não encontrada ou sem acesso.' USING ERRCODE = '42501';
     END IF;
     RETURN public._oe_portoes(v_wo.id, v_wo.status, p_novo_status, v_wo.checklist_template_id,
@@ -575,6 +612,9 @@ CREATE TRIGGER trg_work_order_validations_grava_historico_exclusao
 -- Cascata (organização apagada, pg_trigger_depth() > 1) passa. DEFINER: quem
 -- apaga o item da Alpa pode não enxergar as OEs da SPE que apontam para ele; não
 -- recebe parâmetro e só diz "tem registro".
+-- Correção 1: também não se apaga se alguma OE dele está em inspeção, aprovada,
+-- reprovada, medida ou encerrada (ou bloqueada vinda de um desses) — a mesma régua
+-- de trocar o serviço da OE (o SET NULL a deixaria comum nesse status).
 CREATE OR REPLACE FUNCTION public.quality_controlled_items_bloqueia_exclusao_com_registro()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -591,7 +631,80 @@ BEGIN
         RAISE EXCEPTION 'Este serviço controlado tem OE com registro de inspeção (resposta, histórico de resposta, NC ou validação) e não pode ser apagado.'
             USING ERRCODE = '42501';
     END IF;
+    IF EXISTS (SELECT 1 FROM public.work_orders wo
+                WHERE wo.controlled_item_id = OLD.id
+                  AND coalesce(CASE WHEN wo.status = 'blocked' THEN wo.status_before_block END, wo.status)
+                      IN ('pending_inspection', 'approved', 'rejected', 'measured', 'closed')) THEN
+        RAISE EXCEPTION 'Este serviço controlado tem OE em inspeção, aprovada, reprovada, medida ou encerrada e não pode ser apagado.'
+            USING ERRCODE = '42501';
+    END IF;
     RETURN OLD;
+END;
+$$;
+
+-- Correção 1: work_orders_servico_controlado_do_sgq (Task 1) REDEFINIDA aqui.
+-- UPDATE direto (pg_trigger_depth() = 1) que MUDA controlled_item_id — trocar,
+-- retirar ou ATRIBUIR (NULL → valor) — é recusado (42501):
+--   • com a OE (antes ou depois) em pending_inspection, approved, rejected,
+--     measured ou closed — ou bloqueada vinda de um desses (status_before_block).
+--     Sem isso: OE controlada em inspeção sem registro → desligar o serviço →
+--     validação aprovada direta (OE comum) → approved → religar (OLD NULL pulava);
+--   • com registro (_qualidade_oe_tem_registro: resposta, histórico de resposta,
+--     NC, validação ou histórico de validação), nos dois sentidos — ligar o serviço
+--     a uma OE comum que já tem registro faria de respostas de quem não tinha
+--     canInspectQualitySystem um registro de inspeção.
+-- O resto é igual à Task 1 (o item tem de ser do SGQ da org da OE). Cascata
+-- (serviço apagado → SET NULL, pg_trigger_depth() > 1) passa. INVOKER: quem grava
+-- a OE enxerga o registro dela (RLS pela OE) e só o item do SGQ que enxerga.
+CREATE OR REPLACE FUNCTION public.work_orders_servico_controlado_do_sgq()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_sgq uuid;
+BEGIN
+    IF TG_OP = 'UPDATE' AND pg_trigger_depth() = 1
+       AND NEW.controlled_item_id IS DISTINCT FROM OLD.controlled_item_id THEN
+        IF coalesce(CASE WHEN OLD.status = 'blocked' THEN OLD.status_before_block END, OLD.status)
+               IN ('pending_inspection', 'approved', 'rejected', 'measured', 'closed')
+           OR NEW.status IN ('pending_inspection', 'approved', 'rejected', 'measured', 'closed') THEN
+            RAISE EXCEPTION 'O serviço controlado de uma OE em inspeção, aprovada, reprovada, medida ou encerrada não pode ser trocado, retirado nem atribuído.'
+                USING ERRCODE = '42501';
+        END IF;
+        IF public._qualidade_oe_tem_registro(OLD.id) THEN
+            RAISE EXCEPTION 'O serviço controlado de uma OE com registro de inspeção (resposta, histórico de resposta, NC ou validação) não pode ser trocado, retirado nem atribuído.'
+                USING ERRCODE = '42501';
+        END IF;
+    END IF;
+
+    IF NEW.controlled_item_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+
+    IF TG_OP = 'UPDATE'
+       AND NEW.controlled_item_id IS NOT DISTINCT FROM OLD.controlled_item_id
+       AND NEW.org_id IS NOT DISTINCT FROM OLD.org_id THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT coalesce(
+               (SELECT s.sgq_organization_id FROM public.quality_settings s
+                 WHERE s.organization_id = NEW.org_id),
+               NEW.org_id)
+      INTO v_sgq;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM public.quality_controlled_items i
+         WHERE i.id = NEW.controlled_item_id
+           AND i.organization_id = v_sgq
+    ) THEN
+        RAISE EXCEPTION 'O serviço controlado escolhido não é do sistema da qualidade da organização desta OE.'
+            USING ERRCODE = '42501';
+    END IF;
+
+    RETURN NEW;
 END;
 $$;
 
@@ -652,6 +765,7 @@ DECLARE
     v_novo       text;
     v_id         uuid;
     v_notas      text := nullif(btrim(coalesce(p_notas, '')), '');
+    v_msgs       text[];
 BEGIN
     IF v_uid IS NULL THEN
         RAISE EXCEPTION 'Sem usuário na requisição.' USING ERRCODE = '42501';
@@ -662,7 +776,8 @@ BEGIN
 
     SELECT * INTO v_wo FROM public.work_orders wo WHERE wo.id = p_work_order_id FOR UPDATE;
     IF NOT FOUND
-       OR NOT (public.is_superadmin() OR v_wo.org_id IN (SELECT public.minhas_orgs_membro())) THEN
+       OR NOT (public.is_superadmin()
+               OR COALESCE(v_wo.org_id IN (SELECT public.minhas_orgs_membro()), false)) THEN
         RAISE EXCEPTION 'OE não encontrada ou sem acesso.' USING ERRCODE = '42501';
     END IF;
 
@@ -674,13 +789,21 @@ BEGIN
         RAISE EXCEPTION 'Para reprovar a inspeção, descreva o motivo.' USING ERRCODE = '22023';
     END IF;
 
+    -- Correção 1: aprovar reconfere, no momento, o portão de pending_inspection
+    -- (NC aberta ou item desfeito DEPOIS do pedido de inspeção; executores da OE
+    -- controlada). Reprovar não precisa.
+    IF p_aprovar THEN
+        v_msgs := public._oe_portoes(v_wo.id, 'in_progress', 'pending_inspection', v_wo.checklist_template_id,
+                                     v_wo.controlled_item_id, v_wo.collaborator_ids);
+        IF coalesce(cardinality(v_msgs), 0) > 0 THEN
+            RAISE EXCEPTION '%', array_to_string(v_msgs, '; ') USING ERRCODE = 'P0001';
+        END IF;
+    END IF;
+
     IF v_wo.controlled_item_id IS NOT NULL THEN
         IF NOT public._qualidade_pode(public._qualidade_sgq_da_org(v_wo.org_id), 'canReleaseQualitySystem') THEN
             RAISE EXCEPTION 'Sem permissão para aprovar a inspeção de serviço controlado'
                 USING ERRCODE = '42501';
-        END IF;
-        IF p_aprovar AND coalesce(cardinality(v_wo.collaborator_ids), 0) = 0 THEN
-            RAISE EXCEPTION 'Informe quem executou o serviço controlado' USING ERRCODE = 'P0001';
         END IF;
 
         SELECT q.training_course_id, d.revisao, d.active_version_id, ver.created_at
@@ -776,5 +899,9 @@ GRANT  EXECUTE ON FUNCTION public.quality_controlled_items_bloqueia_exclusao_com
 
 REVOKE EXECUTE ON FUNCTION public.work_orders_ficha_travada() FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.work_orders_ficha_travada() TO authenticated;
+
+-- Redefinida aqui (Correção 1); mesmo ACL da Task 1.
+REVOKE EXECUTE ON FUNCTION public.work_orders_servico_controlado_do_sgq() FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.work_orders_servico_controlado_do_sgq() TO authenticated;
 
 COMMIT;

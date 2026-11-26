@@ -1,8 +1,75 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+
+vi.mock('../lib/supabase', () => ({ supabase: {} }));
+
 import {
-    MOTIVO_SEM_EDICAO_QUALIDADE, podeEditarQualidadeSiac, podeEditarQualidadeSiacEmTodas,
-    podeEditarQualidadeSiacNoContexto, podeVerQualidadeSiac,
+    MOTIVO_SEM_EDICAO_QUALIDADE, MOTIVO_SEM_INSPECAO, MOTIVO_SEM_LIBERACAO, podeEditarQualidadeSiac,
+    podeEditarQualidadeSiacEmTodas, podeEditarQualidadeSiacNoContexto, podeInspecionarQualidade,
+    podeLiberarQualidade, podeVerQualidadeSiac,
 } from '../utils/permissaoQualidadeSiac';
+
+describe('fase 2 — inspecionar e aprovar inspeção de serviço controlado (o banco confere o mesmo)', () => {
+    const casos = [
+        ['inspecionar', podeInspecionarQualidade, 'canInspectQualitySystem'],
+        ['liberar', podeLiberarQualidade, 'canReleaseQualitySystem'],
+    ] as const;
+
+    for (const [nome, pode, chave] of casos) {
+        it(`${nome}: membro sem a chave não pode; nada herda (editar Qualidade/Obras não basta)`, () => {
+            expect(pode({ permissoes: {}, papel: 'member', acessoTotal: false })).toBe(false);
+            expect(pode({ permissoes: undefined, papel: 'member', acessoTotal: false })).toBe(false);
+            expect(pode({
+                permissoes: { canEditQualitySystem: true, canEditBudget: true, canEditOperational: true },
+                papel: 'member', acessoTotal: false,
+            })).toBe(false);
+            expect(pode({ permissoes: { [chave]: false }, papel: 'member', acessoTotal: false })).toBe(false);
+            expect(pode({ permissoes: {}, papel: null, acessoTotal: false })).toBe(false);
+        });
+        it(`${nome}: dono e admin sempre podem, mesmo com a chave desligada`, () => {
+            expect(pode({ permissoes: { [chave]: false }, papel: 'owner', acessoTotal: false })).toBe(true);
+            expect(pode({ permissoes: {}, papel: 'admin', acessoTotal: false })).toBe(true);
+        });
+        it(`${nome}: a chave true liga; acesso total sempre`, () => {
+            expect(pode({ permissoes: { [chave]: true }, papel: 'member', acessoTotal: false })).toBe(true);
+            expect(pode({ permissoes: { [chave]: true }, papel: 'viewer', acessoTotal: false })).toBe(true);
+            expect(pode({ permissoes: {}, papel: 'viewer', acessoTotal: true })).toBe(true);
+        });
+    }
+
+    it('a chave de uma não liga a outra', () => {
+        expect(podeInspecionarQualidade({ permissoes: { canReleaseQualitySystem: true }, papel: 'member', acessoTotal: false })).toBe(false);
+        expect(podeLiberarQualidade({ permissoes: { canInspectQualitySystem: true }, papel: 'member', acessoTotal: false })).toBe(false);
+    });
+
+    it('os motivos citam a permissão certa', () => {
+        expect(MOTIVO_SEM_INSPECAO).toContain('Qualidade — inspecionar serviço controlado');
+        expect(MOTIVO_SEM_LIBERACAO).toContain('Qualidade — aprovar inspeção');
+    });
+
+    it('padrão do papel: dono/admin ligadas; membro e visitante com false EXPLÍCITO', async () => {
+        const { getDefaultPermissions } = await import('../components/OrganizationUsers');
+        for (const papel of ['owner', 'admin'] as const) {
+            const p = getDefaultPermissions(papel) as Record<string, unknown>;
+            expect(p.canInspectQualitySystem).toBe(true);
+            expect(p.canReleaseQualitySystem).toBe(true);
+        }
+        for (const papel of ['member', 'viewer'] as const) {
+            const p = getDefaultPermissions(papel) as Record<string, unknown>;
+            expect(p).toHaveProperty('canInspectQualitySystem', false);
+            expect(p).toHaveProperty('canReleaseQualitySystem', false);
+        }
+    });
+
+    it('Permissões detalhadas têm as duas linhas novas', async () => {
+        const { DETAILED_PERMISSIONS } = await import('../components/OrganizationUsers');
+        const insp = DETAILED_PERMISSIONS.find(x => x.view === 'canInspectQualitySystem');
+        const lib = DETAILED_PERMISSIONS.find(x => x.view === 'canReleaseQualitySystem');
+        expect(insp?.title).toBe('Qualidade — inspecionar serviço controlado');
+        expect(lib?.title).toBe('Qualidade — aprovar inspeção');
+        expect(insp?.edit).toBeUndefined();
+        expect(lib?.edit).toBeUndefined();
+    });
+});
 
 describe('podeVerQualidadeSiac — permissão própria → matriz do cargo → herança de Obras', () => {
     it('canViewQualitySystem:false explícito vence obras=true', () => {

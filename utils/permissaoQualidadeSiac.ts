@@ -101,3 +101,37 @@ export function podeEditarQualidadeSiacNoContexto(args: {
         papel: vinculo.member.role ?? null,
     });
 }
+
+// ─── Fase 2: inspecionar e aprovar inspeção de serviço controlado ───────────
+//
+// Chaves `canInspectQualitySystem` (responder a ficha de OE de serviço controlado) e
+// `canReleaseQualitySystem` (a ação "Aprovar inspeção"). Mesma régua de `_qualidade_pode` no banco:
+// dono/admin da organização (ou acesso total) sempre; os demais só com a chave `true` — sem herança
+// (editar Qualidade ou Obras não liga). O banco confere na organização DONA DO SGQ da OE: quem chama
+// passa as permissões e o papel do membro DESSA organização.
+
+interface ArgsQualidadeOE {
+    permissoes: Permissoes;
+    /** papel do membro na organização dona do SGQ (`owner`/`admin` ligam) */
+    papel?: string | null;
+    /** grupo DESENVOLVEDOR ou e-mail de acesso total (o superadmin do banco) */
+    acessoTotal: boolean;
+}
+
+const donoOuAdmin = (papel?: string | null) => papel === 'owner' || papel === 'admin';
+
+export const MOTIVO_SEM_INSPECAO =
+    'Sem permissão para inspecionar serviço controlado: peça a permissão "Qualidade — inspecionar serviço controlado" a um administrador da organização.';
+
+export const MOTIVO_SEM_LIBERACAO =
+    'Sem permissão para aprovar a inspeção de serviço controlado: peça a permissão "Qualidade — aprovar inspeção" a um administrador da organização.';
+
+export function podeInspecionarQualidade(args: ArgsQualidadeOE): boolean {
+    if (args.acessoTotal || donoOuAdmin(args.papel)) return true;
+    return args.permissoes?.canInspectQualitySystem === true;
+}
+
+export function podeLiberarQualidade(args: ArgsQualidadeOE): boolean {
+    if (args.acessoTotal || donoOuAdmin(args.papel)) return true;
+    return args.permissoes?.canReleaseQualitySystem === true;
+}

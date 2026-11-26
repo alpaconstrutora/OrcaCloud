@@ -1,5 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type {
+  ExecutorDaInspecao,
+  InspecaoAprovada,
   ItemControlado,
   NivelSiac,
   ProcedimentoResumo,
@@ -240,7 +242,7 @@ export const qualidadeSiacService = {
     const data = ok(
       await supabase
         .from('employee_trainings')
-        .select('course_id, employee_id, data_realizacao, aprovado, created_at, employees(contract_type, academy_externo)')
+        .select('course_id, employee_id, data_realizacao, aprovado, created_at, data_validade, employees(contract_type, academy_externo)')
         .in('course_id', courseIds) as unknown as {
         data: Array<{
           course_id: string;
@@ -248,6 +250,7 @@ export const qualidadeSiacService = {
           data_realizacao: string;
           aprovado: boolean;
           created_at?: string | null;
+          data_validade?: string | null;
           employees: Emp | Emp[] | null;
         }> | null;
         error: ErroSupabase;
@@ -263,6 +266,7 @@ export const qualidadeSiacService = {
         aprovado: t.aprovado,
         externo,
         registrado_em: t.created_at ?? null,
+        data_validade: t.data_validade ?? null,
       });
     }
     return porCurso;
@@ -293,6 +297,90 @@ export const qualidadeSiacService = {
         .eq('project_id', projectId)
         .eq('item_id', itemId),
     );
+  },
+
+  // ─── Fase 2: SGQ da organização e serviço controlado na OE ───────────────
+
+  /**
+   * Organização dona do sistema da qualidade que vale para `orgId` (`_qualidade_sgq_da_org`:
+   * `quality_settings.sgq_organization_id`, ou a própria). O banco devolve NULL a quem não é membro
+   * da org nem do SGQ dela — aí fica a própria (a leitura seguinte é recortada pela RLS).
+   */
+  async sgqDaOrganizacao(orgId: string): Promise<string> {
+    const data = ok(
+      await supabase.rpc('_qualidade_sgq_da_org', { p_org: orgId }) as unknown as {
+        data: string | null;
+        error: ErroSupabase;
+      },
+    );
+    return data ?? orgId;
+  },
+
+  /**
+   * Aponta (ou, com `null`, desfaz) a organização dona do SGQ de `orgId`. Só dono/admin das duas
+   * organizações (ou superadmin) — o banco recusa os demais com 42501; sem cadeia (22023).
+   */
+  async definirSgq(orgId: string, sgqOrgId: string | null): Promise<void> {
+    ok(
+      await supabase
+        .from('quality_settings')
+        .upsert({ organization_id: orgId, sgq_organization_id: sgqOrgId }, { onConflict: 'organization_id' }),
+    );
+  },
+
+  /** Serviços ATIVOS do SGQ da organização da OE que a obra não excluiu — a lista do campo da OE. */
+  async servicosParaOE(orgDaOE: string, projectId: string): Promise<ItemControlado[]> {
+    const sgq = await qualidadeSiacService.sgqDaOrganizacao(orgDaOE);
+    const [itens, exclusoes] = await Promise.all([
+      qualidadeSiacService.listarItens(sgq),
+      qualidadeSiacService.listarExclusoes(projectId),
+    ]);
+    const excluidos = new Set(exclusoes.map((e) => e.item_id));
+    return itens.filter((i) => i.tipo === 'SERVICO' && i.situacao === 'ATIVO' && !excluidos.has(i.id));
+  },
+
+  /**
+   * Inspeções aprovadas (`work_order_validations` inspection/approved) das OEs cujo serviço
+   * controlado é do SGQ `sgqOrgId` — de todas as organizações que apontam para ele e da própria —,
+   * com o `obraStatus` da obra. A RLS recorta: OE de SPE só aparece para quem é membro dela.
+   */
+  async inspecoesAprovadas(sgqOrgId: string): Promise<InspecaoAprovada[]> {
+    type Obra = { obra_status: string | null };
+    type OE = { controlled_item_id: string; projects: Obra | Obra[] | null };
+    const data = ok(
+      await supabase
+        .from('work_order_validations')
+        .select(
+          'work_order_id, liberado_em, created_at, executores, '
+            + 'work_orders!inner(controlled_item_id, projects(obra_status:settings->>obraStatus), '
+            + 'quality_controlled_items!inner(organization_id))',
+        )
+        .eq('type', 'inspection')
+        .eq('status', 'approved')
+        .eq('work_orders.quality_controlled_items.organization_id', sgqOrgId) as unknown as {
+        data: Array<{
+          work_order_id: string;
+          liberado_em: string | null;
+          created_at: string;
+          executores: ExecutorDaInspecao[] | null;
+          work_orders: OE | OE[] | null;
+        }> | null;
+        error: ErroSupabase;
+      },
+    );
+    const lista: InspecaoAprovada[] = [];
+    for (const v of data ?? []) {
+      const oe = umOuNulo(v.work_orders);
+      if (!oe?.controlled_item_id) continue;
+      lista.push({
+        work_order_id: v.work_order_id,
+        controlled_item_id: oe.controlled_item_id,
+        obra_status: umOuNulo(oe.projects)?.obra_status ?? null,
+        aprovado_em: v.liberado_em ?? v.created_at,
+        executores: Array.isArray(v.executores) ? v.executores : [],
+      });
+    }
+    return lista;
   },
 
   /** A RPC confere a org, normaliza o CPF e recusa lista final de pessoas vazia (22023). */

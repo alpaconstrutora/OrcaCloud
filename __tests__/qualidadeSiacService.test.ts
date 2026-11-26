@@ -212,6 +212,108 @@ describe('qualidadeSiacService', () => {
     expect(n).toBe(3);
   });
 
+  it('listarTreinamentos lê e devolve data_validade (fase 2: validade passada não conta)', async () => {
+    resposta = {
+      data: [
+        { course_id: 'c1', employee_id: 'e1', data_realizacao: '2026-03-01', aprovado: true, data_validade: '2027-03-01', employees: null },
+        { course_id: 'c1', employee_id: 'e2', data_realizacao: '2026-03-01', aprovado: true, employees: null },
+      ],
+      error: null,
+    };
+    const r = await qualidadeSiacService.listarTreinamentos(['c1']);
+    expect(achar('select')[0].args[0]).toContain('data_validade');
+    expect(r.c1.map((x) => x.data_validade)).toEqual(['2027-03-01', null]);
+  });
+
+  it('sgqDaOrganizacao pergunta ao banco (_qualidade_sgq_da_org); sem resposta = a própria', async () => {
+    resposta = { data: 'alpa', error: null };
+    expect(await qualidadeSiacService.sgqDaOrganizacao('spe')).toBe('alpa');
+    expect(achar('rpc')[0].args).toEqual(['_qualidade_sgq_da_org', { p_org: 'spe' }]);
+
+    resposta = { data: null, error: null };
+    expect(await qualidadeSiacService.sgqDaOrganizacao('spe')).toBe('spe');
+
+    resposta = { data: null, error: { message: 'falhou' } };
+    await expect(qualidadeSiacService.sgqDaOrganizacao('spe')).rejects.toThrow('falhou');
+  });
+
+  it('definirSgq faz upsert por organization_id só com o SGQ (null = a própria); 42501 sobe', async () => {
+    await qualidadeSiacService.definirSgq('spe', 'alpa');
+    const up = achar('upsert')[0];
+    expect(up.args[0]).toEqual({ organization_id: 'spe', sgq_organization_id: 'alpa' });
+    expect(up.args[1]).toEqual({ onConflict: 'organization_id' });
+
+    chamadas.length = 0;
+    await qualidadeSiacService.definirSgq('spe', null);
+    expect(achar('upsert')[0].args[0]).toEqual({ organization_id: 'spe', sgq_organization_id: null });
+
+    resposta = { data: null, error: { message: 'Só o dono ou um administrador da organização pode trocar' } };
+    await expect(qualidadeSiacService.definirSgq('spe', 'alpa')).rejects.toThrow('Só o dono');
+  });
+
+  it('servicosParaOE: serviços ATIVOS do SGQ da org da OE, sem os excluídos da obra', async () => {
+    resposta = { data: 'alpa', error: null }; // rpc
+    respostaPorTabela.quality_controlled_items = {
+      data: [
+        { id: 'forma', tipo: 'SERVICO', situacao: 'ATIVO', codigos: [{ item_code: '1' }] },
+        { id: 'concreto', tipo: 'SERVICO', situacao: 'ATIVO', codigos: [] },
+        { id: 'pintura', tipo: 'SERVICO', situacao: 'DISPENSADO', codigos: [] },
+        { id: 'cimento', tipo: 'MATERIAL', situacao: 'ATIVO', codigos: [] },
+      ],
+      error: null,
+    };
+    respostaPorTabela.quality_project_exclusions = { data: [{ item_id: 'concreto', motivo: 'pré-moldado' }], error: null };
+
+    const r = await qualidadeSiacService.servicosParaOE('spe', 'p1');
+
+    expect(achar('rpc')[0].args).toEqual(['_qualidade_sgq_da_org', { p_org: 'spe' }]);
+    expect(achar('eq').map((c) => c.args)).toContainEqual(['organization_id', 'alpa']);
+    expect(achar('eq').map((c) => c.args)).toContainEqual(['project_id', 'p1']);
+    expect(r.map((i) => i.id)).toEqual(['forma']);
+    expect(r[0].codigos).toEqual(['1']);
+  });
+
+  it('inspecoesAprovadas: validações de inspeção aprovadas de OEs com serviço do SGQ, com o status da obra', async () => {
+    resposta = {
+      data: [
+        {
+          work_order_id: 'wo1', liberado_em: '2026-11-20T10:00:00Z', created_at: '2026-11-20T09:00:00Z',
+          executores: [{ employee_id: 'e1', nome: 'Ana', treinado: true }],
+          work_orders: { controlled_item_id: 'forma', projects: { obra_status: 'Em andamento' } },
+        },
+        {
+          work_order_id: 'wo2', liberado_em: null, created_at: '2026-11-21T09:00:00Z', executores: null,
+          work_orders: [{ controlled_item_id: 'concreto', projects: [{ obra_status: null }] }],
+        },
+      ],
+      error: null,
+    };
+
+    const r = await qualidadeSiacService.inspecoesAprovadas('alpa');
+
+    expect(achar('from')[0].args).toEqual(['work_order_validations']);
+    const sel = achar('select')[0].args[0] as string;
+    expect(sel).toContain('work_orders!inner');
+    expect(sel).toContain('quality_controlled_items!inner');
+    expect(sel).toContain('settings->>obraStatus');
+    const eqs = achar('eq').map((c) => c.args);
+    expect(eqs).toContainEqual(['type', 'inspection']);
+    expect(eqs).toContainEqual(['status', 'approved']);
+    expect(eqs).toContainEqual(['work_orders.quality_controlled_items.organization_id', 'alpa']);
+    expect(r).toEqual([
+      {
+        work_order_id: 'wo1', controlled_item_id: 'forma', obra_status: 'Em andamento', aprovado_em: '2026-11-20T10:00:00Z',
+        executores: [{ employee_id: 'e1', nome: 'Ana', treinado: true }],
+      },
+      { work_order_id: 'wo2', controlled_item_id: 'concreto', obra_status: null, aprovado_em: '2026-11-21T09:00:00Z', executores: [] },
+    ]);
+  });
+
+  it('inspecoesAprovadas: erro sobe como Error', async () => {
+    resposta = { data: null, error: { message: 'sem acesso' } };
+    await expect(qualidadeSiacService.inspecoesAprovadas('alpa')).rejects.toThrow('sem acesso');
+  });
+
   it('erro do supabase vira Error com a mensagem', async () => {
     resposta = { data: null, error: { message: 'permission denied' } };
     await expect(qualidadeSiacService.listarItens('o1')).rejects.toThrow('permission denied');

@@ -1,4 +1,6 @@
 import type {
+  InspecaoAprovada,
+  ItemControlado,
   MetaDoNivel,
   NivelSiac,
   ProcedimentoResumo,
@@ -135,13 +137,31 @@ export function motivoDoProcedimentoNaoContar(p: ProcedimentoResumo): string | n
   return `Este procedimento só conta quando aprovado no GED${p.versao_ativa_em === null ? ' e com uma versão ativa' : ''}.`;
 }
 
+/** Hoje no fuso LOCAL, 'YYYY-MM-DD' (não `toISOString`, que é UTC e vira o dia à noite). */
+export function hojeLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${dois(d.getMonth() + 1)}-${dois(d.getDate())}`;
+}
+
+/** Validade definida e anterior a hoje (o `status` VENCIDO sozinho não tira o treinado). */
+function validadeVencida(reg: RegistroTreinamento, hoje: string): boolean {
+  const v = reg.data_validade;
+  return typeof v === 'string' && v !== '' && v.slice(0, 10) < hoje;
+}
+
 /**
  * Treinamento da revisão vigente: realizado num dia posterior ao da versão ativa, ou no mesmo dia
  * e registrado (`registrado_em`) depois da versão ativa. Mesmo dia sem horário de registro = revisão
- * anterior (não dá para saber qual revisão foi treinada).
+ * anterior (não dá para saber qual revisão foi treinada). Fase 2: com `data_validade` anterior a
+ * `hoje` (data local) não vale — a mesma regra de `_qualidade_treinado_na_revisao` no banco.
  */
-export function treinamentoVigente(reg: RegistroTreinamento, versaoAtivaEm: string | null): boolean {
+export function treinamentoVigente(
+  reg: RegistroTreinamento,
+  versaoAtivaEm: string | null,
+  hoje: string = hojeLocal(),
+): boolean {
   if (versaoAtivaEm === null) return false;
+  if (validadeVencida(reg, hoje)) return false;
   const dia = reg.data_realizacao.slice(0, 10);
   const corte = versaoAtivaEm.slice(0, 10);
   if (dia > corte) return true;
@@ -158,18 +178,21 @@ export interface ContagemTreinados {
 /**
  * Pessoas distintas com treinamento aprovado. Vigente = `treinamentoVigente` (dia posterior ao da
  * versão ativa, ou mesmo dia registrado depois dela). Quem tem registro vigente não entra em
- * `revisaoAnterior`.
+ * `revisaoAnterior`. Registro com validade vencida (fase 2) não conta em lugar nenhum — nem como
+ * revisão anterior.
  */
 export function contarTreinados(
   registros: RegistroTreinamento[],
   versaoAtivaEm: string | null,
+  hoje: string = hojeLocal(),
 ): ContagemTreinados {
   const vigentes = new Map<string, boolean>(); // pessoa -> externo
   const anteriores = new Set<string>();
 
   for (const reg of registros) {
     if (!reg.aprovado) continue;
-    if (treinamentoVigente(reg, versaoAtivaEm)) {
+    if (validadeVencida(reg, hoje)) continue;
+    if (treinamentoVigente(reg, versaoAtivaEm, hoje)) {
       vigentes.set(reg.employee_id, (vigentes.get(reg.employee_id) ?? false) || reg.externo);
     } else {
       anteriores.add(reg.employee_id);
@@ -202,4 +225,69 @@ export const NOTA_DO_TERCEIRO = 'Pessoal de empreiteira cadastrado pelo registro
 export function empreiteiraDaFicha(e?: { notes?: string | null } | null): string {
   const nota = e?.notes ?? '';
   return nota.startsWith(NOTA_DO_TERCEIRO) ? nota.slice(NOTA_DO_TERCEIRO.length).trim() : '';
+}
+
+// ─── Fase 2: serviço controlado na OE ───────────────────────────────────────
+
+const limpo = (c: string | null | undefined): string => (c ?? '').trim();
+
+/**
+ * Serviço controlado sugerido para a OE pelo código do item de orçamento (`sinapiCode`) ou, sem
+ * ele, pelo código do item da atividade de planejamento. Só serviço (material não é serviço da OE).
+ * O código do orçamento vem antes; sem código (ou sem serviço com ele) = null.
+ */
+export function sugerirServico(
+  codigos: { orcamento?: string | null; planejamento?: string | null },
+  itens: ItemControlado[],
+): ItemControlado | null {
+  const servicos = itens.filter((i) => i.tipo === 'SERVICO');
+  for (const codigo of [limpo(codigos.orcamento), limpo(codigos.planejamento)]) {
+    if (codigo === '') continue;
+    const achado = servicos.find((i) => i.codigos.some((c) => limpo(c) === codigo));
+    if (achado) return achado;
+  }
+  return null;
+}
+
+export interface ContagemAplicados {
+  /** Serviços com ao menos 1 inspeção aprovada com TODOS os executores treinados. */
+  aplicados: number;
+  /** Idem, numa obra com `obraStatus === 'Em andamento'` (a mesma inspeção). */
+  emObra: number;
+  /** Por serviço: a inspeção aprovada MAIS RECENTE — x de y executores treinados. */
+  porItem: Record<string, { treinados: number; executores: number }>;
+}
+
+const todaTreinada = (i: InspecaoAprovada): boolean =>
+  i.executores.length > 0 && i.executores.every((e) => e.treinado);
+
+/**
+ * "Aplicados com registro" e "em obra em andamento" do nível (serviços). Conta só os `itens`
+ * recebidos — quem chama passa os que contam (ativos, com procedimento que conta). Inspeção sem
+ * executores não conta.
+ */
+export function contarAplicados(inspecoes: InspecaoAprovada[], itens: ItemControlado[]): ContagemAplicados {
+  const ids = new Set(itens.map((i) => i.id));
+  const aplicados = new Set<string>();
+  const emObra = new Set<string>();
+  const maisRecente = new Map<string, InspecaoAprovada>();
+
+  for (const insp of inspecoes) {
+    const id = insp.controlled_item_id;
+    if (!ids.has(id)) continue;
+    const atual = maisRecente.get(id);
+    if (atual === undefined || instante(insp.aprovado_em) > instante(atual.aprovado_em)) maisRecente.set(id, insp);
+    if (!todaTreinada(insp)) continue;
+    aplicados.add(id);
+    if (insp.obra_status === 'Em andamento') emObra.add(id);
+  }
+
+  const porItem: ContagemAplicados['porItem'] = {};
+  maisRecente.forEach((insp, id) => {
+    porItem[id] = {
+      treinados: insp.executores.filter((e) => e.treinado).length,
+      executores: insp.executores.length,
+    };
+  });
+  return { aplicados: aplicados.size, emObra: emObra.size, porItem };
 }

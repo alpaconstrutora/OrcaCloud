@@ -416,6 +416,11 @@ export interface UserPermissions {
     /** Módulo Qualidade (SiAC) (25/11/2026). Sem valor gravado, herda de Obras — ver utils/permissaoQualidadeSiac.ts. */
     canViewQualitySystem?: boolean;
     canEditQualitySystem?: boolean;
+    /** Qualidade (SiAC) fase 2 (26/11/2026): responder a ficha de OE de serviço controlado e
+     *  "Aprovar inspeção". Dono/admin sempre; os demais só com a chave (false no padrão, sem
+     *  herança). O banco confere o mesmo (`_qualidade_pode`) na org dona do SGQ da OE. */
+    canInspectQualitySystem?: boolean;
+    canReleaseQualitySystem?: boolean;
     /** Diretoria / ÒPURA CEO (17/11/2026). Desligada para todos, sem herança; o banco confere a
      *  mesma flag (`_diretoria_orgs`) — ver utils/permissaoDiretoria.ts. */
     canViewDiretoria?: boolean;

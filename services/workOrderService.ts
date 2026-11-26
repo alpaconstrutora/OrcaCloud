@@ -7,11 +7,20 @@ import type {
   CreateEvidenceInput,
   CreateNonConformanceInput,
   TransitionValidationResult,
+  NonConformanceHistoryRow,
+  OeChecklistResponseHistoryRow,
 } from '../types/operational-control'
 import { ALLOWED_TRANSITIONS } from '../types/operational-control'
 
 // Re-export para uso nos componentes
 export { ALLOWED_TRANSITIONS } from '../types/operational-control'
+
+type ErroBanco = { message: string; code?: string } | null
+
+/** Erro do supabase como `Error` de verdade (a tela mostra `e.message`), com o `code` (42501/P0001…). */
+function erroDoBanco(error: NonNullable<ErroBanco>): Error {
+  return Object.assign(new Error(error.message), { code: error.code })
+}
 
 // ────────────────────────────────────────────────────────────
 // WORK ORDERS — CRUD
@@ -205,21 +214,12 @@ export const workOrderService = {
       }
     }
 
-    // 2. Gates por transição
+    // 2. Checagens próprias do app (as de checklist/NC/executores/inspeção são do banco — passo 3)
     if (newStatus === 'released') {
       if (!wo.team_id) errors.push('Equipe não vinculada')
       if (!wo.responsible_id) errors.push('Responsável não definido')
       if (!wo.planned_start_date || !wo.planned_end_date) errors.push('Datas planejadas não preenchidas')
       if (!wo.planned_cost) errors.push('Custo previsto não informado')
-
-      // Checklist pré-início
-      const pendingPreStart = (wo.checklist_responses ?? []).filter(
-        (r: { item?: { gate: string; required: boolean }; completed: boolean }) =>
-          r.item?.gate === 'pre_start' && r.item?.required && !r.completed
-      )
-      if (pendingPreStart.length > 0) {
-        errors.push(`${pendingPreStart.length} itens obrigatórios do checklist pré-início pendentes`)
-      }
 
       // Predecessora
       if (wo.predecessor && wo.predecessor.status !== 'closed') {
@@ -235,30 +235,21 @@ export const workOrderService = {
       if (wo.completion_pct < minPct) {
         errors.push(`Execução em ${wo.completion_pct}% — mínimo ${minPct}% para solicitar inspeção`)
       }
-
-      const pendingPreCompletion = (wo.checklist_responses ?? []).filter(
-        (r: { item?: { gate: string; required: boolean }; completed: boolean }) =>
-          r.item?.gate === 'pre_completion' && r.item?.required && !r.completed
-      )
-      if (pendingPreCompletion.length > 0) {
-        errors.push(`${pendingPreCompletion.length} itens obrigatórios do checklist pré-conclusão pendentes`)
-      }
-
-      const openNcs = (wo.non_conformances ?? []).filter(
-        (nc: { status: string }) => nc.status === 'open' || nc.status === 'in_treatment'
-      )
-      if (openNcs.length > 0) {
-        errors.push(`${openNcs.length} não conformidade(s) em aberto`)
-      }
     }
 
-    if (newStatus === 'approved') {
-      const inspectionValidation = (wo.validations ?? []).find(
-        (v: { type: string; status: string }) => v.type === 'inspection' && v.status === 'approved'
-      )
-      if (!inspectionValidation) {
-        errors.push('Registro de inspeção aprovada não encontrado')
-      }
+    // 3. Portões do banco (Qualidade SiAC fase 2) — fonte única: checklist ("cumprido" = conforme,
+    // ou não aplicável com observação), NC em aberto, executores da OE controlada, inspeção
+    // aprovada/reprovada pela RPC, medir/encerrar na ordem. O gatilho de status em work_orders
+    // confere o mesmo; aqui é só para mostrar o motivo antes de tentar. Erro da RPC (ex.: 42501)
+    // vira motivo: a transição não fica liberada calada.
+    const { data: portoes, error: erroPortoes } = await supabase.rpc('oe_portoes', {
+      p_work_order_id: workOrderId,
+      p_novo_status: newStatus,
+    })
+    if (erroPortoes) {
+      errors.push(erroPortoes.message)
+    } else {
+      errors.push(...((portoes as string[] | null) ?? []))
     }
 
     return { valid: errors.length === 0, errors }
@@ -281,10 +272,8 @@ export const workOrderService = {
 
     const updatePayload: Record<string, unknown> = { status: newStatus }
 
-    // Ao bloquear: gravar status anterior para poder restaurar
-    if (newStatus === 'blocked') {
-      updatePayload.status_before_block = previousStatus
-    }
+    // Ao bloquear: o BANCO grava status_before_block (o status de antes — gatilho
+    // work_orders_portoes_de_status, Qualidade SiAC fase 2); o que o app mandasse seria ignorado.
     // Ao desbloquear (não é uma transição normal — chame unblock() diretamente)
 
     // Baseline: gravar na primeira liberação
@@ -315,7 +304,8 @@ export const workOrderService = {
       .select()
       .single()
 
-    if (error) throw error
+    // P0001 do gatilho de portões traz os motivos juntos por "; " — sobe como Error com a mensagem.
+    if (error) throw erroDoBanco(error)
 
     // Gravar no histórico
     await supabase.from('work_order_status_log').insert({
@@ -539,6 +529,84 @@ export const workOrderService = {
 
     if (error) throw error
     return data
+  },
+
+  // ────────────────────────────────────────────────────────────
+  // QUALIDADE SiAC (fase 2) — inspeção e NC de OE
+  // ────────────────────────────────────────────────────────────
+
+  /**
+   * "Aprovar inspeção" (OE em pending_inspection): grava a validação (quem/quando, executores com
+   * "treinado na revisão" e a revisão do procedimento, se a OE é de serviço controlado), muda o
+   * status para approved/rejected e grava o histórico. Reprovar exige `notas`. Devolve o id da
+   * validação. P0001 = portões (mensagens por "; "); 42501 = sem permissão.
+   */
+  async aprovarInspecao(workOrderId: string, aprovar: boolean, notas: string): Promise<string> {
+    const { data, error } = await supabase.rpc('quality_aprovar_inspecao', {
+      p_work_order_id: workOrderId,
+      p_aprovar: aprovar,
+      p_notas: notas,
+    })
+    if (error) throw erroDoBanco(error)
+    return data as string
+  },
+
+  /**
+   * Encerra a NC: causa e ação corretiva obrigatórias (o banco também exige — CHECK), foto da
+   * correção opcional. A eficácia fica pendente de verificação.
+   */
+  async encerrarNC(ncId: string, input: { causa: string; acaoCorretiva: string; evidenciaId?: string }): Promise<void> {
+    const causa = input.causa.trim()
+    const acaoCorretiva = input.acaoCorretiva.trim()
+    if (!causa) throw new Error('Informe a causa da não conformidade para encerrá-la.')
+    if (!acaoCorretiva) throw new Error('Informe a ação corretiva para encerrar a não conformidade.')
+
+    const { error } = await supabase
+      .from('non_conformances')
+      .update({
+        status: 'closed',
+        causa,
+        corrective_action: acaoCorretiva,
+        resolution_evidence_id: input.evidenciaId ?? null,
+        closed_at: new Date().toISOString(),
+        eficacia: 'pendente',
+      })
+      .eq('id', ncId)
+    if (error) throw erroDoBanco(error)
+  },
+
+  /**
+   * Verificação de eficácia da NC encerrada. Não eficaz reabre a NC (o histórico guarda o
+   * encerramento anterior). Quem/quando verificou é o banco que grava.
+   */
+  async registrarEficacia(ncId: string, eficaz: boolean): Promise<void> {
+    const patch = eficaz
+      ? { eficacia: 'eficaz' }
+      : { eficacia: 'nao_eficaz', status: 'open', closed_at: null }
+    const { error } = await supabase.from('non_conformances').update(patch).eq('id', ncId)
+    if (error) throw erroDoBanco(error)
+  },
+
+  /** Cada mudança da NC (o estado novo), em ordem cronológica — só leitura. */
+  async listarHistoricoNC(ncId: string): Promise<NonConformanceHistoryRow[]> {
+    const { data, error } = await supabase
+      .from('non_conformance_history')
+      .select('*')
+      .eq('nc_id', ncId)
+      .order('created_at', { ascending: true })
+    if (error) throw erroDoBanco(error)
+    return (data ?? []) as NonConformanceHistoryRow[]
+  },
+
+  /** As respostas anteriores do item (reinspeções), em ordem cronológica — só leitura. */
+  async listarHistoricoResposta(responseId: string): Promise<OeChecklistResponseHistoryRow[]> {
+    const { data, error } = await supabase
+      .from('oe_checklist_response_history')
+      .select('*')
+      .eq('response_id', responseId)
+      .order('created_at', { ascending: true })
+    if (error) throw erroDoBanco(error)
+    return (data ?? []) as OeChecklistResponseHistoryRow[]
   },
 
   // ────────────────────────────────────────────────────────────

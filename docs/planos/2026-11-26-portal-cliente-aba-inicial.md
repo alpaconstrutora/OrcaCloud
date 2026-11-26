@@ -38,7 +38,7 @@ continua abrindo nele" passa nas duas.
 ## Estado
 
 - [x] 1, 2 — vermelho → verde (26/11)
-- [ ] publicado (PR, CI verde, merge, `conferir-producao.sh`)
+- [x] publicado — PR #770 (4174226), domínio servindo 4174226
 
 Prova com cliente real de teste no banco de produção foi barrada pelo classificador (criar dado em
 produção); a prova é o componente montado em teste.

@@ -73,4 +73,5 @@ Documentos e no portal. Teste com dado fictício não fecha o pedido.
 - [ ] Fase A fecha de verdade com a assembleia real do Bella Vista
 - [x] B1 — porta do síndico (migration 20271126860000 aplicada 26/11; Edge Function `sindico-portal-documentos` publicada 26/11: 401 sem cabeçalho e com chave anon, 403 sessão que não é do síndico, 200 OPTIONS)
 - [x] B2 — aba Assembleias no Portal do Síndico (+ Financeiro com a sessão do link, decisão do usuário 26/11)
-- [ ] B3 — PR do app, prova com a síndica de teste (condomínio de teste, conta `+sindico`), limpeza
+- [x] B3 — PR #773 (1e9ad3a) no ar; prova em produção (26/11) com a síndica de teste logada pelo convite (link já corrigido): criou, convocou (evento papel SINDICO), presença 201 na sala e 202 por procurador com arquivo pela `sindico-portal-documentos` (OUTRO, fora do portal, autor na descrição), instalou em 1ª (100%), votos da sala, encerrou REJEITADO, ata ATA visível com 'instalada por TESTE Síndica Portal (SINDICO)'; dados de teste apagados por script
+- [x] Fase B: 3 de 3

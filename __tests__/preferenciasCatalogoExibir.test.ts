@@ -102,6 +102,16 @@ describe('catálogo do que a planta exibe', () => {
     expect((item as { opcoes: { valor: string }[] }).opcoes.map((o) => o.valor)).toEqual(['COMPLETO', 'COMPACTO']);
   });
 
+  it('Árvores e Prédios do entorno da Maquete (26/11/2026): liga-desliga do 3D, ligados por padrão', () => {
+    for (const [item, rotulo] of [
+      ['vista3dArvores', 'Árvores'],
+      ['vista3dPrediosDoEntorno', 'Prédios do entorno'],
+    ] as const) {
+      const i = ITENS_DE_EXIBICAO.find((x) => x.item === item);
+      expect(i).toMatchObject({ grupo: '3D', tipo: 'booleano', padrao: true, rotulo });
+    }
+  });
+
   it('"Camadas por disciplina" (seção do painel) não entra', () => {
     expect(ITENS_DE_EXIBICAO.some((i) => /camadas.*disciplina/i.test(i.rotulo))).toBe(false);
   });

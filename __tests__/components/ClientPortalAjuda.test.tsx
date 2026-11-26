@@ -48,10 +48,19 @@ vi.mock('../../services/contractService', () => ({ contractService: servicoVazio
 vi.mock('../../services/documentService', () => ({ documentService: servicoVazio() }));
 vi.mock('../../services/projectService', () => ({ projectService: servicoVazio() }));
 vi.mock('../../services/orderService', () => ({ orderService: servicoVazio() }));
-vi.mock('../../services/clientPortalService', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../services/clientPortalService')>()),
-  clientPortalService: servicoVazio(),
-}));
+vi.mock('../../services/clientPortalService', async (importOriginal) => {
+  const original = await importOriginal<typeof import('../../services/clientPortalService')>();
+  const vazio = servicoVazio() as Record<string, unknown>;
+  return {
+    ...original,
+    // A aba Condomínio precisa do formato do payload (não de []) para montar.
+    clientPortalService: new Proxy(vazio, {
+      get: (alvo, nome) => (typeof nome === 'string' && nome.startsWith('getCondominio')
+        ? async () => original.CONDOMINIO_VAZIO
+        : (alvo as Record<string | symbol, unknown>)[nome]),
+    }),
+  };
+});
 vi.mock('../../components/ProjectGallery', () => ({ default: () => null }));
 vi.mock('../../components/FinishSelection', () => ({ default: () => null }));
 vi.mock('../../components/ClientList', () => ({ default: () => null }));
@@ -168,5 +177,21 @@ describe('Portal do Cliente › ajuda', () => {
     await waitFor(() => expect(getMine).toHaveBeenCalledWith('cliente', 'org1'));
     expect(getByToken).not.toHaveBeenCalled();
     expect(await painelAjuda()).toBeInTheDocument();
+  });
+});
+
+describe('Portal do Cliente › aba inicial', () => {
+  // 26/11/2026: o condômino com só ['condominio'] abria no `dashboard` (não liberado)
+  // e via o painel genérico "Acompanhamento de Obra". 3 clientes reais estavam assim.
+  it('cliente só com a aba Condomínio abre no Condomínio, não em "Acompanhamento de Obra"', async () => {
+    montar(['condominio']);
+    expect(await screen.findByText('Nenhuma unidade de condomínio')).toBeTruthy();
+    expect(screen.queryByText('Acompanhamento de Obra')).toBeNull();
+  });
+
+  it('cliente com o dashboard liberado continua abrindo nele', async () => {
+    montar(['dashboard', 'condominio']);
+    expect(await screen.findByText('Acompanhamento de Obra')).toBeTruthy();
+    expect(screen.queryByText('Nenhuma unidade de condomínio')).toBeNull();
   });
 });

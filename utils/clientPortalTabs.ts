@@ -49,3 +49,15 @@ export function destinoDaSecao(secao: string): { aba: string; sub: CondominioSec
   const [aba, sub] = secao.split('.');
   return { aba, sub: sub && (CONDOMINIO_SECOES as readonly string[]).includes(sub) ? sub as CondominioSecao : null };
 }
+
+/**
+ * Aba que o portal deve mostrar. A aba inicial era sempre `dashboard`, mesmo para
+ * quem não a tem liberada (26/11/2026: o condômino com só `['condominio']` caía no
+ * painel genérico "Acompanhamento de Obra"; 3 clientes reais estavam assim). Fora
+ * das liberadas, vai para a primeira liberada. O administrador vê todas para
+ * configurar, então não troca; sem nenhuma liberada, não inventa outra.
+ */
+export function abaVisivelDoPortal(atual: string, liberadas: readonly string[], ehAdmin: boolean): string {
+  if (ehAdmin || liberadas.length === 0 || liberadas.includes(atual)) return atual;
+  return liberadas[0];
+}

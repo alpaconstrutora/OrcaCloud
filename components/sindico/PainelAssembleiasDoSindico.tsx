@@ -1,5 +1,5 @@
 import React from 'react';
-import { AlertCircle, Lock, Plus, ShieldCheck, Vote } from 'lucide-react';
+import { AlertCircle, Lock, Plus, Vote } from 'lucide-react';
 import {
     CardHeader, GhostButton, PortalCard, PortalEmpty, PortalLoading, PrimaryButton, PrimaryLink, StatusPill, TextLinkButton,
     type PillTone,
@@ -10,7 +10,9 @@ import AssembleiaSheet from '../condominio/AssembleiaSheet';
 import {
     operacoesDoSindico, type CondominioDoSindico, type IdentidadeDoSindico,
 } from '../../services/sindicoPortalService';
-import type { Assembleia, ResultadoItem, StatusAssembleia } from '../../services/condominioAssembleiaService';
+import {
+    operacoesDoGestor, type Assembleia, type ResultadoItem, type StatusAssembleia,
+} from '../../services/condominioAssembleiaService';
 import { dataHoraBrasilia, ROTULO_RESULTADO, ROTULO_STATUS, ROTULO_TIPO } from '../../utils/assembleiaTextos';
 import { rotaDeEntradaDoPortal } from '../../lib/entradasDoPortal';
 import { ProfileGroup } from '../../types';
@@ -27,8 +29,13 @@ import { ProfileGroup } from '../../types';
  * Exige o SÍNDICO LOGADO (e-mail e senha): as RPCs rodam no modo 'sessao' do resolvedor
  * e recusam o link sozinho (nem executam com a chave anon). Por isso, sem login, o painel
  * não chama o banco — só diz como entrar, com o caminho da entrada do portal. "Logado" quem
- * decide é a casca (entrada por e-mail OU sessão ativa com o link). A administradora
- * (portal aberto pelo app, por clientId) conduz pela tela do gestor no app.
+ * decide é a casca (entrada por e-mail OU sessão ativa com o link).
+ *
+ * A administradora (portal aberto pelo app, por clientId) conduz AQUI também, pela porta
+ * do gestor (`operacoesDoGestor`, as RPCs condominio_assembleia_* que autorizam por membro
+ * da org do condomínio) — a mesma da aba Assembleias do app. Pedido de 25/10/2026: "nao faz
+ * o menor sentido bloquear o portal do condominio na visão do app. Deve ter a mesma
+ * funcionalidade da visão do sindico." A porta do síndico (modo 'sessao') segue só dele.
  *
  * A tela da assembleia e a gaveta vêm com `accent="portal"` (§24) e avisam pelo toast da
  * casca; `onAlterado` relê o portal (o aviso da convocação em Avisos, a ata em Documentos).
@@ -62,7 +69,7 @@ interface Props {
     condominios: CondominioDoSindico[];
     /** Síndico entrou com e-mail e senha (a única entrada com sessão dele). */
     logado: boolean;
-    /** Portal aberto pela administradora no app: ela conduz pela tela do gestor. */
+    /** Portal aberto pela administradora no app: conduz pela porta do gestor. */
     comoAdministradora?: boolean;
     notify: (m: string, t?: 'success' | 'error' | 'warning') => void;
     /** Mudou algo que Avisos/Documentos mostram: a casca relê o portal. */
@@ -75,37 +82,29 @@ const ROTA_DO_LOGIN = rotaDeEntradaDoPortal(ProfileGroup.SINDICO) ?? '/portal-si
 const PainelAssembleiasDoSindico: React.FC<Props> = ({
     identidade, condominios, logado, comoAdministradora = false, notify, onAlterado,
 }) => {
-    const podeConduzir = logado && !comoAdministradora;
-
-    if (!podeConduzir) {
+    if (!logado && !comoAdministradora) {
         return (
             <PortalCard>
                 <CardHeader title="Assembleias" subtitle="Criar, convocar e conduzir a assembleia do condomínio" />
-                {comoAdministradora ? (
-                    <PortalEmpty icon={<ShieldCheck className="w-10 h-10" />}
-                        title="Como administradora, conduza a assembleia pelo app"
-                        subtitle="Condomínios › o condomínio › aba Assembleias. Aqui a condução é do síndico, com o login dele." />
-                ) : (
-                    <>
-                        <PortalEmpty icon={<Lock className="w-10 h-10" />} title={MOTIVO_SEM_SESSAO}
-                            subtitle="Pelo link você consulta o portal; criar, convocar e conduzir a assembleia exige o seu login de síndico." />
-                        <div className="flex justify-center pb-8 -mt-4">
-                            <PrimaryLink href={ROTA_DO_LOGIN}>Entrar com e-mail e senha</PrimaryLink>
-                        </div>
-                    </>
-                )}
+                <PortalEmpty icon={<Lock className="w-10 h-10" />} title={MOTIVO_SEM_SESSAO}
+                    subtitle="Pelo link você consulta o portal; criar, convocar e conduzir a assembleia exige o seu login de síndico." />
+                <div className="flex justify-center pb-8 -mt-4">
+                    <PrimaryLink href={ROTA_DO_LOGIN}>Entrar com e-mail e senha</PrimaryLink>
+                </div>
             </PortalCard>
         );
     }
-    return <ListaDeAssembleias identidade={identidade} condominios={condominios} notify={notify} onAlterado={onAlterado} />;
+    return <ListaDeAssembleias identidade={identidade} condominios={condominios} comoAdministradora={comoAdministradora}
+        notify={notify} onAlterado={onAlterado} />;
 };
 
-const ListaDeAssembleias: React.FC<Omit<Props, 'logado' | 'comoAdministradora'>> = ({ identidade, condominios, notify, onAlterado }) => {
+const ListaDeAssembleias: React.FC<Omit<Props, 'logado'>> = ({ identidade, condominios, comoAdministradora = false, notify, onAlterado }) => {
     const confirm = useConfirm();
     const multi = condominios.length > 1;
     const [condominioId, setCondominioId] = React.useState(condominios[0]?.id ?? '');
     const condominio = condominios.find(c => c.id === condominioId) ?? null;
-    const ops = React.useMemo(() => operacoesDoSindico(identidade, condominioId), [identidade, condominioId]);
+    const ops = React.useMemo(() => (comoAdministradora ? operacoesDoGestor : operacoesDoSindico(identidade, condominioId)),
+        [comoAdministradora, identidade, condominioId]);
 
     const [lista, setLista] = React.useState<Assembleia[]>([]);
     const [carregando, setCarregando] = React.useState(true);

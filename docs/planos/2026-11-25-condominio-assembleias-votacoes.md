@@ -52,6 +52,7 @@ documento e a votação do Portal do Investidor, que é outro domínio.)
 | 26/11 | Condomínio de teste da A9 não pode ser excluído (trava) | **Apagar por script**, desligando a trava só nessa operação |
 | 26/11 | Aplicar e publicar a fase A | **Sim**, após as correções da revisão final e a A10 |
 | 26/11 | Fase B: envio de ata/procuração pelo síndico (o único envio do Portal do Síndico grava no armazenamento do Financeiro) | **Função nova e própria de documentos do condomínio pelo síndico** (`sindico-portal-documentos`), mesma checagem de login/mandato |
+| 26/11 | Portal do Síndico aberto pelo app (administradora) bloqueava a aba Assembleias | **Conduz ali pela porta do gestor** (`operacoesDoGestor`), a mesma da aba do app — regra do usuário de 25/10: "nao faz o menor sentido bloquear o portal do condominio na visão do app. Deve ter a mesma funcionalidade da visão do sindico." A porta do síndico (modo 'sessao') segue só dele |
 
 ## Por que existe
 
@@ -75,3 +76,4 @@ Documentos e no portal. Teste com dado fictício não fecha o pedido.
 - [x] B2 — aba Assembleias no Portal do Síndico (+ Financeiro com a sessão do link, decisão do usuário 26/11)
 - [x] B3 — PR #773 (1e9ad3a) no ar; prova em produção (26/11) com a síndica de teste logada pelo convite (link já corrigido): criou, convocou (evento papel SINDICO), presença 201 na sala e 202 por procurador com arquivo pela `sindico-portal-documentos` (OUTRO, fora do portal, autor na descrição), instalou em 1ª (100%), votos da sala, encerrou REJEITADO, ata ATA visível com 'instalada por TESTE Síndica Portal (SINDICO)'; dados de teste apagados por script
 - [x] Fase B: 3 de 3
+- [ ] Ajuste: administradora conduz a assembleia no Portal do Síndico aberto pelo app (porta do gestor), sem o aviso "conduza pelo app" — testes falham no código anterior e passam no novo; tsc 0; PR + CI + publicação

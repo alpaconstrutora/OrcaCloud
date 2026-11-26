@@ -34,18 +34,32 @@ describe('Conciliados — coluna "Interno: descrição"', () => {
         internal_transaction: { id: `i-${source_system}`, direction: 'CREDIT', amount: 4784.92, transaction_date: '2019-04-10', description, source_system, category: 'Receita de Obra' } as never,
     });
 
+    const renderLista = (matches: VinculoDeConciliacao[]) => render(
+        <ConciliatedTab
+            matches={matches} sortedMatches={matches} conciliatedViewMode="list" setConciliatedViewMode={() => {}}
+            matchSortOrder="desc" setMatchSortOrder={() => {}} onUndoMatch={() => {}}
+        />,
+    );
+
     it('contrato: começa pelo nº e sem CONTRACT_RECURRING; outra origem segue com o código', () => {
-        const matches = [vinculo('CONTRACT_RECURRING', 'Contrato CTL-006-012-0001 — parcela 25/25 (10/04/2019)'), vinculo('BOLETO', 'Energia abril')];
-        render(
-            <ConciliatedTab
-                matches={matches} sortedMatches={matches} conciliatedViewMode="list" setConciliatedViewMode={() => {}}
-                matchSortOrder="desc" setMatchSortOrder={() => {}} categoryOptions={[]}
-                onUndoMatch={() => {}} onUpdateBankCategory={() => {}} onUpdateInternalCategory={() => {}}
-            />,
-        );
+        renderLista([vinculo('CONTRACT_RECURRING', 'Contrato CTL-006-012-0001 — parcela 25/25 (10/04/2019)'), vinculo('BOLETO', 'Energia abril')]);
         expect(screen.getByText('CTL-006-012-0001 — parcela 25/25 (10/04/2019)')).toBeTruthy();
         expect(screen.queryByText(/^Contrato CTL/)).toBeNull();
         expect(screen.queryByText('CONTRACT_RECURRING')).toBeNull();
         expect(screen.getByText('BOLETO')).toBeTruthy();
+    });
+
+    it('sem dropdown de categoria e sem "Vinculado" empilhado no valor', () => {
+        renderLista([vinculo('CONTRACT_RECURRING', 'Contrato CTL-006-012-0001 — parcela 25/25 (10/04/2019)')]);
+        expect(screen.queryByText('Receita de Obra')).toBeNull();
+        expect(screen.queryByText('Pendente')).toBeNull();
+        expect(screen.queryByText('Vinculado')).toBeNull();
+        expect(screen.getByRole('img', { name: 'Vinculado' })).toBeTruthy();
+    });
+
+    it('cabeçalho em dois níveis diz o que é do Extrato e o que é dos Lançamentos', () => {
+        renderLista([vinculo('CONTRACT_RECURRING', 'Contrato CTL-006-012-0001 — parcela 1')]);
+        const grupos = screen.getAllByRole('columnheader').filter(th => th.getAttribute('scope') === 'colgroup');
+        expect(grupos.map(th => [th.textContent, th.getAttribute('colspan')])).toEqual([['Extrato', '3'], ['Lançamentos', '3']]);
     });
 });

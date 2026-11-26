@@ -3708,10 +3708,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     setConciliatedViewMode={setConciliatedViewMode}
                     matchSortOrder={matchSortOrder}
                     setMatchSortOrder={setMatchSortOrder}
-                    categoryOptions={categoryOptions}
                     onUndoMatch={handleUndoMatch}
-                    onUpdateBankCategory={handleUpdateBankCategory}
-                    onUpdateInternalCategory={handleUpdateInternalCategory}
                 />
             ) : (activeView === 'pending' || activeView === 'statement') ? (
                 // 12px entre aviso, Extrato e Lançamentos — cromo da mesma tarefa (guia §20.1).

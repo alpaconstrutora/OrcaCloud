@@ -5,8 +5,8 @@
 --
 -- O que nasce / muda aqui:
 --   • quality_settings.sgq_organization_id — organização dona do sistema da
---     qualidade (as SPEs apontam para a Alpa). Gatilho: só uma org de que quem
---     grava é membro, e nunca a própria.
+--     qualidade (as SPEs apontam para a Alpa). Gatilho: trocar exige dono/admin
+--     da org e do destino (ou superadmin), nunca a própria, sem cadeia.
 --   • quality_controlled_items.checklist_template_id — a "ficha modelo" do serviço
 --     (modelo de checklist do Controle Operacional), sempre da mesma organização.
 --   • oe_checklist_items: criterio, metodo, ativo (item com resposta não se apaga,
@@ -31,11 +31,18 @@
 --   visível (membro da org da obra) apontando para a org do item.
 --   Pergunta 2 — toda função: REVOKE EXECUTE FROM PUBLIC, anon + GRANT a
 --   authenticated. Todas são funções de gatilho (não chamáveis por RPC: "trigger
---   functions can only be called as triggers"). Só as duas que gravam histórico
---   são SECURITY DEFINER (authenticated não tem INSERT nas tabelas de histórico);
---   elas só copiam OLD/NEW da linha que a própria RLS de quem gravou já deixou
---   alterar. As demais são SECURITY INVOKER: a busca passa pela RLS de quem grava
---   (registro que ele não enxerga é recusado — não revela outra organização).
+--   functions can only be called as triggers"). SECURITY DEFINER só em três:
+--   as duas que gravam histórico (authenticated não tem INSERT nas tabelas de
+--   histórico; só copiam OLD/NEW da linha que a RLS de quem gravou já deixou
+--   alterar) e quality_settings_sgq_valido (lê quality_settings de outras orgs
+--   para barrar cadeia; autoriza por is_superadmin()/is_org_manager()). As demais
+--   são SECURITY INVOKER: a busca passa pela RLS de quem grava (registro que ele
+--   não enxerga é recusado — não revela outra organização).
+--
+-- Correção 1 (revisão, 26/11): histórico desacoplado (SET NULL, não CASCADE);
+-- resposta e NC de OE de serviço controlado não se apagam direto; trocar o SGQ
+-- exige dono/admin das duas orgs (ou superadmin) e não forma cadeia; NC aceita o
+-- SET NULL do serviço apagado; eficacia_por/em gravados pelo banco.
 --
 -- Idempotente (IF NOT EXISTS / CREATE OR REPLACE / DROP ... IF EXISTS).
 -- Aplicar com `npx supabase db query --linked -f` — nunca `db push`.
@@ -53,7 +60,8 @@ ALTER TABLE public.quality_settings
 
 COMMENT ON COLUMN public.quality_settings.sgq_organization_id IS
     'Organização dona do sistema da qualidade (SGQ) que vale para esta. NULL = a própria. '
-    'Só uma organização de que quem grava é membro, e nunca a própria (trigger quality_settings_sgq_valido).';
+    'Trocar exige dono/admin da organização e da de destino (ou superadmin); nunca a própria; sem cadeia '
+    '(trigger quality_settings_sgq_valido).';
 
 CREATE INDEX IF NOT EXISTS idx_quality_settings_sgq
     ON public.quality_settings (sgq_organization_id) WHERE sgq_organization_id IS NOT NULL;
@@ -166,14 +174,16 @@ ALTER TABLE public.oe_checklist_responses
 
 -- ── 3. Tabelas de histórico ────────────────────────────────────────────────
 
+-- O histórico é DESACOPLADO da linha-mãe: response_id / nc_id ON DELETE SET NULL
+-- (a linha fica, órfã, com o work_order_id). Antes era CASCADE — apagar a resposta
+-- ou a NC levava o histórico junto e o registro podia ser reescrito sem rastro.
 -- work_order_id SEM FK de propósito: ao apagar a OE, a cascata da NC faz SET NULL
 -- em nc_id da resposta ANTES de a resposta ser apagada — o gatilho de histórico
 -- grava uma linha e a conferência da FK para work_orders (já apagada no mesmo
--- comando) derrubaria a exclusão da OE. A linha some junto com a resposta
--- (response_id ON DELETE CASCADE).
+-- comando) derrubaria a exclusão da OE.
 CREATE TABLE IF NOT EXISTS public.oe_checklist_response_history (
     id              uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    response_id     uuid NOT NULL REFERENCES public.oe_checklist_responses(id) ON DELETE CASCADE,
+    response_id     uuid REFERENCES public.oe_checklist_responses(id) ON DELETE SET NULL,
     work_order_id   uuid NOT NULL,
     item_id         uuid NOT NULL,
     response_status text,
@@ -197,7 +207,8 @@ COMMENT ON TABLE public.oe_checklist_response_history IS
 
 CREATE TABLE IF NOT EXISTS public.non_conformance_history (
     id                uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-    nc_id             uuid NOT NULL REFERENCES public.non_conformances(id) ON DELETE CASCADE,
+    nc_id             uuid REFERENCES public.non_conformances(id) ON DELETE SET NULL,
+    work_order_id     uuid NOT NULL,
     status            text,
     causa             text,
     corrective_action text,
@@ -206,8 +217,32 @@ CREATE TABLE IF NOT EXISTS public.non_conformance_history (
     created_at        timestamptz NOT NULL DEFAULT now()
 );
 
+-- Quem já aplicou a 1ª versão (CASCADE, NOT NULL, sem work_order_id na NC):
+-- leva para o desenho acima. Idempotente.
+ALTER TABLE public.oe_checklist_response_history ALTER COLUMN response_id DROP NOT NULL;
+ALTER TABLE public.oe_checklist_response_history
+    DROP CONSTRAINT IF EXISTS oe_checklist_response_history_response_id_fkey;
+ALTER TABLE public.oe_checklist_response_history
+    ADD CONSTRAINT oe_checklist_response_history_response_id_fkey
+    FOREIGN KEY (response_id) REFERENCES public.oe_checklist_responses(id) ON DELETE SET NULL;
+
+ALTER TABLE public.non_conformance_history ADD COLUMN IF NOT EXISTS work_order_id uuid;
+UPDATE public.non_conformance_history h
+   SET work_order_id = nc.work_order_id
+  FROM public.non_conformances nc
+ WHERE nc.id = h.nc_id AND h.work_order_id IS NULL;
+ALTER TABLE public.non_conformance_history ALTER COLUMN work_order_id SET NOT NULL;
+ALTER TABLE public.non_conformance_history ALTER COLUMN nc_id DROP NOT NULL;
+ALTER TABLE public.non_conformance_history
+    DROP CONSTRAINT IF EXISTS non_conformance_history_nc_id_fkey;
+ALTER TABLE public.non_conformance_history
+    ADD CONSTRAINT non_conformance_history_nc_id_fkey
+    FOREIGN KEY (nc_id) REFERENCES public.non_conformances(id) ON DELETE SET NULL;
+
 CREATE INDEX IF NOT EXISTS idx_non_conformance_history_nc
     ON public.non_conformance_history (nc_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_non_conformance_history_wo
+    ON public.non_conformance_history (work_order_id);
 
 COMMENT ON TABLE public.non_conformance_history IS
     'Qualidade (SiAC): cada mudança de status/causa/ação corretiva/eficácia da NC — o estado NOVO, '
@@ -215,32 +250,86 @@ COMMENT ON TABLE public.non_conformance_history IS
 
 -- ── 4. Gatilhos ────────────────────────────────────────────────────────────
 
--- 4.1 quality_settings: SGQ de outra organização de que quem grava é membro.
--- Conferido só quando o valor muda (INSERT, ou UPDATE que troca o SGQ ou a org):
--- quem é só da SPE ainda pode mexer em outro campo sem ser barrado pelo valor que
--- já estava lá.
+-- 4.1 quality_settings: trocar o SGQ (apontar, trocar, voltar a NULL ou apagar a
+-- linha que aponta) é decisão de DONO/ADMIN — da organização E da organização de
+-- destino — ou de superadmin. Ser membro não basta: qualquer autenticado cria uma
+-- organização (vira owner dela) e, se bastasse ser membro, um membro comum da SPE
+-- apontaria o SGQ para uma org dele e aprovaria inspeções com as permissões de lá.
+-- Sem cadeia: o destino não pode ter SGQ próprio, e uma org que já é dona do SGQ
+-- de outra não pode apontar para uma terceira (22023).
+-- Conferido só quando o SGQ muda: mexer em nivel_alvo não é barrado.
+-- Cascata (org apagada → linha apagada / SGQ vira NULL, pg_trigger_depth() > 1)
+-- passa: quem apaga a organização já foi autorizado lá.
+-- SECURITY DEFINER: a checagem de cadeia lê quality_settings de outras orgs sem
+-- depender da RLS de quem grava (superadmin pode não ser membro). Não recebe
+-- parâmetro; autorização por is_superadmin() / is_org_manager() (auth.jwt()).
 CREATE OR REPLACE FUNCTION public.quality_settings_sgq_valido()
 RETURNS trigger
 LANGUAGE plpgsql
-SECURITY INVOKER
+SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
+DECLARE
+    v_super boolean;
 BEGIN
-    IF NEW.sgq_organization_id IS NULL THEN
-        RETURN NEW;
+    IF pg_trigger_depth() > 1 THEN
+        RETURN coalesce(NEW, OLD);
     END IF;
 
-    IF NEW.sgq_organization_id = NEW.organization_id THEN
+    v_super := public.is_superadmin();
+
+    IF TG_OP = 'DELETE' THEN
+        IF OLD.sgq_organization_id IS NOT NULL
+           AND NOT (v_super OR public.is_org_manager(OLD.organization_id)) THEN
+            RAISE EXCEPTION 'Só o dono ou um administrador da organização pode deixar de usar o sistema da qualidade de outra.'
+                USING ERRCODE = '42501';
+        END IF;
+        RETURN OLD;
+    END IF;
+
+    IF NEW.sgq_organization_id IS NOT NULL AND NEW.sgq_organization_id = NEW.organization_id THEN
         RAISE EXCEPTION 'A organização dona do sistema da qualidade tem de ser outra (sem valor = a própria).'
             USING ERRCODE = '22023';
     END IF;
 
-    IF TG_OP = 'INSERT'
-       OR NEW.sgq_organization_id IS DISTINCT FROM OLD.sgq_organization_id
-       OR NEW.organization_id IS DISTINCT FROM OLD.organization_id THEN
-        IF NEW.sgq_organization_id NOT IN (SELECT public.minhas_orgs_membro()) THEN
-            RAISE EXCEPTION 'Você não é membro da organização escolhida como dona do sistema da qualidade.'
+    IF TG_OP = 'INSERT' AND NEW.sgq_organization_id IS NULL THEN
+        RETURN NEW;
+    END IF;
+    IF TG_OP = 'UPDATE'
+       AND NEW.sgq_organization_id IS NOT DISTINCT FROM OLD.sgq_organization_id
+       AND (NEW.organization_id IS NOT DISTINCT FROM OLD.organization_id
+            OR (NEW.sgq_organization_id IS NULL AND OLD.sgq_organization_id IS NULL)) THEN
+        RETURN NEW;
+    END IF;
+
+    -- Daqui em diante o SGQ mudou (inclui virar NULL).
+    IF NOT (v_super OR public.is_org_manager(NEW.organization_id)) THEN
+        RAISE EXCEPTION 'Só o dono ou um administrador da organização pode trocar a organização dona do sistema da qualidade.'
+            USING ERRCODE = '42501';
+    END IF;
+    IF TG_OP = 'UPDATE' AND NEW.organization_id IS DISTINCT FROM OLD.organization_id
+       AND OLD.sgq_organization_id IS NOT NULL
+       AND NOT (v_super OR public.is_org_manager(OLD.organization_id)) THEN
+        RAISE EXCEPTION 'Só o dono ou um administrador da organização pode trocar a organização dona do sistema da qualidade.'
+            USING ERRCODE = '42501';
+    END IF;
+
+    IF NEW.sgq_organization_id IS NOT NULL THEN
+        IF NOT (v_super OR public.is_org_manager(NEW.sgq_organization_id)) THEN
+            RAISE EXCEPTION 'Só o dono ou um administrador da organização de destino pode torná-la dona do sistema da qualidade de outra.'
                 USING ERRCODE = '42501';
+        END IF;
+        IF EXISTS (SELECT 1 FROM public.quality_settings s
+                    WHERE s.organization_id = NEW.sgq_organization_id
+                      AND s.sgq_organization_id IS NOT NULL) THEN
+            RAISE EXCEPTION 'A organização de destino já usa o sistema da qualidade de outra.'
+                USING ERRCODE = '22023';
+        END IF;
+        IF EXISTS (SELECT 1 FROM public.quality_settings s
+                    WHERE s.sgq_organization_id = NEW.organization_id
+                      AND s.organization_id <> NEW.organization_id) THEN
+            RAISE EXCEPTION 'Esta organização já é a dona do sistema da qualidade de outra e não pode usar o de uma terceira.'
+                USING ERRCODE = '22023';
         END IF;
     END IF;
 
@@ -250,7 +339,7 @@ $$;
 
 DROP TRIGGER IF EXISTS trg_quality_settings_sgq_valido ON public.quality_settings;
 CREATE TRIGGER trg_quality_settings_sgq_valido
-    BEFORE INSERT OR UPDATE ON public.quality_settings
+    BEFORE INSERT OR UPDATE OR DELETE ON public.quality_settings
     FOR EACH ROW EXECUTE FUNCTION public.quality_settings_sgq_valido();
 
 -- 4.2 quality_controlled_items: fase 1 + a ficha modelo da mesma organização.
@@ -460,8 +549,9 @@ CREATE TRIGGER trg_oe_checklist_responses_grava_historico
 
 -- 4.6 non_conformances: serviço controlado vem da OE (o app não escolhe).
 -- Na criação (ou se a NC mudar de OE) copia o da OE; em qualquer outro UPDATE
--- fica o que já estava. INVOKER: a OE já é visível para quem grava a NC (a RLS
--- da NC passa pela OE).
+-- direto fica o que já estava. UPDATE vindo de cascata (pg_trigger_depth() > 1 —
+-- o ON DELETE SET NULL quando o serviço controlado é apagado) passa como veio.
+-- INVOKER: a OE já é visível para quem grava a NC (a RLS da NC passa pela OE).
 CREATE OR REPLACE FUNCTION public.non_conformances_servico_controlado()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -473,12 +563,84 @@ BEGIN
         SELECT wo.controlled_item_id INTO NEW.controlled_item_id
           FROM public.work_orders wo
          WHERE wo.id = NEW.work_order_id;
-    ELSE
+    ELSIF pg_trigger_depth() = 1 THEN
         NEW.controlled_item_id := OLD.controlled_item_id;
     END IF;
     RETURN NEW;
 END;
 $$;
+
+-- 4.6b non_conformances: quem/quando verificou a eficácia é o banco que grava
+-- (auth.uid(), now()) quando `eficacia` muda — o que o app mandar é ignorado.
+CREATE OR REPLACE FUNCTION public.non_conformances_eficacia_autor()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF TG_OP = 'INSERT' OR NEW.eficacia IS DISTINCT FROM OLD.eficacia THEN
+        IF NEW.eficacia IS NULL THEN
+            NEW.eficacia_por := NULL;
+            NEW.eficacia_em  := NULL;
+        ELSE
+            NEW.eficacia_por := auth.uid();
+            NEW.eficacia_em  := now();
+        END IF;
+    ELSE
+        NEW.eficacia_por := OLD.eficacia_por;
+        NEW.eficacia_em  := OLD.eficacia_em;
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_non_conformances_eficacia_autor ON public.non_conformances;
+CREATE TRIGGER trg_non_conformances_eficacia_autor
+    BEFORE INSERT OR UPDATE ON public.non_conformances
+    FOR EACH ROW EXECUTE FUNCTION public.non_conformances_eficacia_autor();
+
+-- 4.6c Registro de inspeção de OE de serviço controlado não se apaga direto:
+-- resposta do checklist e NC (as policies FOR ALL deixam qualquer membro apagar —
+-- apagar e recriar reescreveria o registro; apagar a NC aberta destravaria o
+-- portão). Só DELETE direto (pg_trigger_depth() = 1); a cascata de apagar a OE
+-- inteira passa. INVOKER: quem pode apagar a linha enxerga a OE (a RLS passa por ela).
+CREATE OR REPLACE FUNCTION public.qualidade_bloqueia_exclusao_direta()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF pg_trigger_depth() > 1 THEN
+        RETURN OLD;
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM public.work_orders wo
+                WHERE wo.id = OLD.work_order_id
+                  AND wo.controlled_item_id IS NOT NULL) THEN
+        IF TG_TABLE_NAME = 'non_conformances' THEN
+            RAISE EXCEPTION 'A não conformidade de uma OE de serviço controlado não pode ser apagada — encerre-a com causa e ação corretiva.'
+                USING ERRCODE = '42501';
+        ELSE
+            RAISE EXCEPTION 'A resposta da ficha de verificação de uma OE de serviço controlado não pode ser apagada — responda de novo (a anterior fica no histórico).'
+                USING ERRCODE = '42501';
+        END IF;
+    END IF;
+
+    RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_oe_checklist_responses_bloqueia_exclusao ON public.oe_checklist_responses;
+CREATE TRIGGER trg_oe_checklist_responses_bloqueia_exclusao
+    BEFORE DELETE ON public.oe_checklist_responses
+    FOR EACH ROW EXECUTE FUNCTION public.qualidade_bloqueia_exclusao_direta();
+
+DROP TRIGGER IF EXISTS trg_non_conformances_bloqueia_exclusao ON public.non_conformances;
+CREATE TRIGGER trg_non_conformances_bloqueia_exclusao
+    BEFORE DELETE ON public.non_conformances
+    FOR EACH ROW EXECUTE FUNCTION public.qualidade_bloqueia_exclusao_direta();
 
 DROP TRIGGER IF EXISTS trg_non_conformances_servico_controlado ON public.non_conformances;
 CREATE TRIGGER trg_non_conformances_servico_controlado
@@ -494,8 +656,8 @@ SECURITY DEFINER
 SET search_path = public, pg_temp
 AS $$
 BEGIN
-    INSERT INTO public.non_conformance_history (nc_id, status, causa, corrective_action, eficacia, alterado_por)
-    VALUES (NEW.id, NEW.status, NEW.causa, NEW.corrective_action, NEW.eficacia, auth.uid());
+    INSERT INTO public.non_conformance_history (nc_id, work_order_id, status, causa, corrective_action, eficacia, alterado_por)
+    VALUES (NEW.id, NEW.work_order_id, NEW.status, NEW.causa, NEW.corrective_action, NEW.eficacia, auth.uid());
     RETURN NULL;
 END;
 $$;
@@ -525,14 +687,14 @@ CREATE POLICY oe_checklist_response_history_select ON public.oe_checklist_respon
          WHERE wo.id = oe_checklist_response_history.work_order_id
            AND wo.org_id IN (SELECT public.minhas_orgs_membro())));
 
--- Histórico da NC — igual à da NC (pela OE da NC). Só SELECT.
+-- Histórico da NC — igual à da NC (pela OE). Pelo work_order_id da própria linha:
+-- a linha continua legível se a NC for apagada (nc_id vira NULL). Só SELECT.
 DROP POLICY IF EXISTS non_conformance_history_select ON public.non_conformance_history;
 CREATE POLICY non_conformance_history_select ON public.non_conformance_history
     FOR SELECT TO authenticated
     USING (EXISTS (
-        SELECT 1 FROM public.non_conformances nc
-          JOIN public.work_orders wo ON wo.id = nc.work_order_id
-         WHERE nc.id = non_conformance_history.nc_id
+        SELECT 1 FROM public.work_orders wo
+         WHERE wo.id = non_conformance_history.work_order_id
            AND wo.org_id IN (SELECT public.minhas_orgs_membro())));
 
 REVOKE ALL ON public.oe_checklist_response_history, public.non_conformance_history FROM anon;
@@ -624,5 +786,11 @@ GRANT  EXECUTE ON FUNCTION public.non_conformances_servico_controlado() TO authe
 
 REVOKE EXECUTE ON FUNCTION public.non_conformances_grava_historico() FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.non_conformances_grava_historico() TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.non_conformances_eficacia_autor() FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.non_conformances_eficacia_autor() TO authenticated;
+
+REVOKE EXECUTE ON FUNCTION public.qualidade_bloqueia_exclusao_direta() FROM PUBLIC, anon;
+GRANT  EXECUTE ON FUNCTION public.qualidade_bloqueia_exclusao_direta() TO authenticated;
 
 COMMIT;

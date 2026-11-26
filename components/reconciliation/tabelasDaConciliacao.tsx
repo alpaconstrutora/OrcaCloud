@@ -711,6 +711,10 @@ export function renderPendingInternalCell(key: string, tx: InternalTransaction, 
             const originMeta = ctx.getSourceMeta(tx.source_system);
             const originLink = ctx.getOriginLink(tx);
             const originTextColor = originMeta?.color.split(' ').find(c => c.startsWith('text-')) ?? 'text-gray-600';
+            // Contrato: a descrição já começa pelo nº do contrato, então o rótulo ("Contrato
+            // Recorrente" etc.) não acrescenta nada e só alonga a linha (pedido de 26/11/2026).
+            // Fica só o ícone que abre o contrato; o nome da origem vai no title.
+            const soIcone = !!originLink && !!tx.source_system?.startsWith('CONTRACT_');
             return (
                 <div className="flex items-center gap-2 min-w-0">
                     <p className="text-sm font-normal text-gray-900 truncate" title={ctx.displayTitle(tx)}>
@@ -726,9 +730,10 @@ export function renderPendingInternalCell(key: string, tx: InternalTransaction, 
                             <button
                                 onClick={() => ctx.goToOrigin(tx)}
                                 title={`Abrir em ${originMeta.label}`}
+                                aria-label={`Abrir em ${originMeta.label}`}
                                 className={`shrink-0 flex items-center gap-1 text-xs font-normal hover:underline cursor-pointer ${originTextColor}`}
                             >
-                                {originMeta.label}
+                                {!soIcone && originMeta.label}
                                 <ExternalLink className="w-3 h-3" />
                             </button>
                         ) : (

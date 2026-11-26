@@ -80,4 +80,29 @@ describe('Torres e Unidades › Agrupar', () => {
     expect(chaves.slice(-2)).toEqual([null, 'actions']);
     expect(chaves.filter(Boolean)).toHaveLength(15);
   });
+
+  it('seletor de colunas: esconde a coluna e mantém o cabeçalho do grupo e o total alinhados (25/11/2026)', async () => {
+    render(<UnitEditor tower={TORRE as never} />);
+    await waitFor(() => expect(nomesNaTela()).toHaveLength(3));
+    await userEvent.click(screen.getByRole('button', { name: 'Configurar colunas' }));
+    const dialogo = within(await screen.findByRole('dialog'));
+    // Unidade fica sempre: não é opção do seletor.
+    expect(dialogo.queryByLabelText('Unidade')).not.toBeInTheDocument();
+    await userEvent.click(dialogo.getByLabelText('Vagas'));
+    await userEvent.click(dialogo.getByLabelText('Área privativa (m²)'));
+    await userEvent.click(dialogo.getByRole('button', { name: /Fechar/ }));
+
+    const cabecalhos = screen.getAllByRole('columnheader').map(th => th.textContent ?? '');
+    expect(cabecalhos.some(t => t.startsWith('Vagas'))).toBe(false);
+    expect(cabecalhos.some(t => t.startsWith('Priv.'))).toBe(false);
+    expect(cabecalhos.some(t => t.startsWith('Comum'))).toBe(true);
+    // Cada linha ocupa exatamente as colunas do cabeçalho (o colSpan do rótulo/resto se ajusta).
+    const largura = (tr: Element) => Array.from(tr.children).reduce((s, td) => s + Number(td.getAttribute('colspan') ?? 1), 0);
+    // Todos os <th>, inclusive o espaçador (aria-hidden, fora do papel columnheader).
+    const total = document.querySelectorAll('thead th').length;
+    const linhas = Array.from(document.querySelectorAll('tbody tr, tfoot tr'));
+    expect(linhas.length).toBeGreaterThan(3);
+    for (const tr of linhas) expect(largura(tr)).toBe(total);
+    expect(document.querySelectorAll('colgroup col')).toHaveLength(total);
+  });
 });

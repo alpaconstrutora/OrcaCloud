@@ -353,7 +353,7 @@ export class ErroAssembleia extends Error {
     }
 }
 
-/** Uma frase por HINT levantado nas migrations A1–A3 (conferido por grep no teste). */
+/** Uma frase por HINT levantado nas migrations A1–A3 e B1 (conferido por grep no teste). */
 const FRASE_DO_HINT: Record<string, string> = {
     antes_do_horario: 'Ainda não chegou o horário desta convocação.',
     assembleia_travada: 'Esta assembleia não aceita mais mudanças neste estado.',
@@ -382,6 +382,11 @@ const FRASE_DO_HINT: Record<string, string> = {
     unidade_fora: 'Esta unidade não participa da assembleia.',
     unidade_impedida: 'Unidade impedida de votar.',
     sem_direito_de_voto: 'Só o proprietário da unidade, com login próprio, pode votar.',
+    // Fase B (B1) — a porta do síndico e a pauta gravada por ela.
+    itens_invalidos: 'A pauta não está no formato esperado: envie a lista de itens.',
+    sindico_sem_sessao: 'Para conduzir a assembleia, entre no Portal do Síndico com seu e-mail e senha.',
+    sindico_sem_acesso: 'Acesso de síndico não reconhecido: o link expirou ou o mandato não está vigente. Fale com a administradora.',
+    sindico_fora_do_mandato: 'Este condomínio não está no seu mandato de síndico.',
 };
 
 /** Excluir o aviso da convocação ou a ata (ON DELETE SET NULL) — a frase do banco é a certa. */

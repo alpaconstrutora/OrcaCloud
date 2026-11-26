@@ -105,7 +105,7 @@ describe('traduzirErroAssembleia — frases fixas do plano', () => {
 });
 
 describe('traduzirErroAssembleia — demais HINTs do banco', () => {
-    // Lista conferida por grep nas três migrations (A1–A3): todo HINT tem frase própria.
+    // Lista conferida por grep nas migrations da fase A (A1–A3) e da B1: todo HINT tem frase própria.
     const HINTS = [
         'antes_do_horario', 'assembleia_travada', 'convocacao_invalida', 'deliberacoes_invalidas',
         'documento_invalido', 'edital_nao_confirmado', 'estado', 'item_fora', 'nao_encontrada',
@@ -113,6 +113,8 @@ describe('traduzirErroAssembleia — demais HINTs do banco', () => {
         'procuracao_invalida', 'sem_corpo', 'sem_datas', 'sem_itens', 'sem_mesa', 'sem_motivo',
         'sem_presenca', 'sem_quorum_primeira', 'sem_unidades', 'tem_voto_presencial',
         'unidade_fora', 'unidade_impedida', 'sem_direito_de_voto', 'motivo_longo',
+        // B1 (porta do síndico)
+        'itens_invalidos', 'sindico_sem_sessao', 'sindico_sem_acesso', 'sindico_fora_do_mandato',
     ];
 
     // 'estado' fica de fora de propósito: a frase do banco diz o estado (teste abaixo).
@@ -127,7 +129,7 @@ describe('traduzirErroAssembleia — demais HINTs do banco', () => {
         const path = await import('node:path');
         const pasta = path.join(process.cwd(), 'supabase', 'migrations');
         const achados = new Set<string>();
-        for (const f of readdirSync(pasta).filter(n => /^aplicar_2027112586\d+_condominio_assembleias/.test(n))) {
+        for (const f of readdirSync(pasta).filter(n => /^aplicar_202711(25|26)86\d+_condominio_assembleias/.test(n))) {
             for (const x of readFileSync(path.join(pasta, f), 'utf8').matchAll(/HINT = '([a-z_]+)'/g)) achados.add(x[1]);
         }
         expect(achados.size).toBeGreaterThan(0);

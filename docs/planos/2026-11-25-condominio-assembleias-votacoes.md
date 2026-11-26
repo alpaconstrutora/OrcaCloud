@@ -939,12 +939,23 @@ service_role e devolve `{ documentoId }`. Recusa e apaga o arquivo se a linha fa
 `sindico_portal_assembleia_leituras(p_token, p_client_id, p_assembleia) RETURNS int`. Também
 `sindico_portal_assembleia_impedimentos`, `_marcar_impedida` e `_cotas_conferidas` (A10).
 
-- [ ] **1. Teste**: `síndico logado convoca e encerra`; `síndico só por link (sem
+- [x] **1. Teste**: `síndico logado convoca e encerra`; `síndico só por link (sem
   sessão) recusado`; `mandato vencido recusado`; `síndico de outro prédio recusado`;
   `evento registra papel SINDICO`; `gestor e síndico na mesma assembleia: segundo
   Encerrar recebe assembleia_travada`.
-- [ ] **2–4.** Ensaio sem → falha; migration; ensaio com → `TUDO OK`.
-- [ ] **5. Commit** `feat(portal-sindico): síndico conduz assembleia`.
+- [x] **2–4.** Ensaio sem → falha; migration; ensaio com → `TUDO OK`.
+- [x] **5. Commit** `feat(portal-sindico): síndico conduz assembleia`.
+
+**Execução (26/11):** migration `aplicar_20271126860000_condominio_assembleias_sindico.sql`
+(NÃO aplicada — fica para a B3), prova `scripts/teste-condominio-assembleias-sindico.sql`,
+Edge Function `sindico-portal-documentos` (NÃO publicada) com regras puras em `regras.ts`
+(`__tests__/sindicoPortalDocumentosRegras.test.ts`). Desvio do texto acima, de propósito:
+o **ator** do síndico passado ao núcleo é o `client_id` dele (devolvido pelo resolvedor em
+modo 'sessao'), não o `auth.uid()` — o retrato da A2 busca o nome de quem instalou em
+`clients` quando o papel é SINDICO; com o `auth.uid()` a ata sairia "pelo síndico", sem o
+nome. Erros da porta: 42501 com HINT `sindico_sem_sessao` | `sindico_sem_acesso` |
+`sindico_fora_do_mandato` (frases em `FRASE_DO_HINT`). A 2ª chamada de Encerrar recebe
+`estado` ("já foi encerrada") — o núcleo confere o estado antes da trava.
 
 ### Task B2: Portal do Síndico: aba Assembleias
 
@@ -976,4 +987,4 @@ service_role e devolve `{ documentoId }`. Recusa e apaga o arquivo se a linha fa
 
 - [x] Desenho aprovado pelo usuário (25/11/2026)
 - [ ] Fase A: 0 de 9
-- [ ] Fase B: 0 de 3
+- [ ] Fase B: 1 de 3 (B1 commitada; migration e function ainda não aplicadas/publicadas)

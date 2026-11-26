@@ -75,15 +75,15 @@ describe('PainelCamadas · mapa de fundo', () => {
     render(<Controlado />);
     await user.click(screen.getByRole('button', { name: 'Expandir Terreno' }));
     await user.click(within(linhaDoMapa('RUAS')).getByRole('button', { name: 'Exibir Mapa: ruas' }));
-    expect(mapa).toEqual({ RUAS: 'VISIVEL', RELEVO: 'OCULTA' });
+    expect(mapa).toEqual({ SATELITE: 'OCULTA', RUAS: 'VISIVEL', RELEVO: 'OCULTA' });
     await user.click(within(linhaDoMapa('RELEVO')).getByRole('button', { name: /Mapa: relevo em meio-tom/ }));
-    expect(mapa).toEqual({ RUAS: 'VISIVEL', RELEVO: 'ATENUADA' });
+    expect(mapa).toEqual({ SATELITE: 'OCULTA', RUAS: 'VISIVEL', RELEVO: 'ATENUADA' });
     expect(camadas).toBe(ESTADOS_PADRAO);
     // O olho do Terreno esconde o lote e não toca no mapa.
     const terreno = document.querySelector('li[data-camada="TERRENO"]') as HTMLElement;
     await user.click(within(terreno).getByRole('button', { name: 'Ocultar Terreno' }));
     expect(camadas.TERRENO).toBe('OCULTA');
-    expect(mapa).toEqual({ RUAS: 'VISIVEL', RELEVO: 'ATENUADA' });
+    expect(mapa).toEqual({ SATELITE: 'OCULTA', RUAS: 'VISIVEL', RELEVO: 'ATENUADA' });
   });
 
   it('"Ocultar todas" também esconde o mapa; "Mostrar todas" não liga o mapa', async () => {
@@ -130,4 +130,17 @@ describe('PainelCamadas · mapa de fundo', () => {
     );
     expect(screen.queryByRole('button', { name: 'Expandir Terreno' })).toBeNull();
   });
+
+  it('Mapa: satélite (26/11/2026): a linha existe; sem a chave da Esri, o olho fica desligado e diz por quê', async () => {
+    const user = userEvent.setup();
+    render(<Controlado />);
+    await user.click(screen.getByRole('button', { name: 'Expandir Terreno' }));
+    const linha = document.querySelector('li[data-mapa="SATELITE"]') as HTMLElement;
+    expect(within(linha).getByText('Mapa: satélite')).toBeTruthy();
+    // O ambiente de teste não tem VITE_ARCGIS_API_KEY.
+    const olho = within(linha).getByRole('button', { name: 'Exibir Mapa: satélite' });
+    expect(olho).toBeDisabled();
+    expect(olho.getAttribute('title')).toMatch(/chave da Esri/i);
+  });
 });
+

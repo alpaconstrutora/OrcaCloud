@@ -22,7 +22,8 @@ import { FONTE_DO_MAPA, ladrilhoFracionario, urlDoLadrilho, zoomDoLadrilho, type
 import { geoParaLocal, localParaGeo } from '../../../utils/blueprintTopografia';
 
 const q = new URLSearchParams(location.search);
-const fonte = (q.get('fonte') === 'RELEVO' ? 'RELEVO' : 'RUAS') as FonteDoMapa;
+// `?fonte=SATELITE` (26/11/2026): o satélite da Esri (precisa de VITE_ARCGIS_API_KEY no ambiente do Vite).
+const fonte = (q.get('fonte') === 'RELEVO' ? 'RELEVO' : q.get('fonte') === 'SATELITE' ? 'SATELITE' : 'RUAS') as FonteDoMapa;
 const giro = Number(q.get('giro') ?? 0) || 0;
 const opacidade = q.get('meio') ? 0.45 : 1;
 /** O portão mede sem o lote: o preenchimento verde dele tinge as cores do mapa. */

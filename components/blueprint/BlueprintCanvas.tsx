@@ -91,7 +91,9 @@ import {
   afimDoLadrilho,
   estiloDaGrade,
   FONTE_DO_MAPA,
+  ladrilhoAcima,
   ladrilhosDaArea,
+  NIVEIS_DE_RECUO,
   urlDoLadrilho,
   zoomDoLadrilho,
   type FonteDoMapa,
@@ -2646,7 +2648,11 @@ export default function BlueprintCanvas({
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => setLadrilhosCarregados((n) => n + 1);
-    img.onerror = () => c.set(url, 'erro');
+    // 26/11/2026: o erro também redesenha — é o que faz o recuo para o pai acontecer.
+    img.onerror = () => {
+      c.set(url, 'erro');
+      setLadrilhosCarregados((n) => n + 1);
+    };
     img.src = url;
     c.set(url, img);
     // Teto do cache: os mais antigos saem (a ordem do Map é a de inserção).
@@ -3956,7 +3962,19 @@ export default function BlueprintCanvas({
       for (const { fonte, opacidade } of mapaDeFundo.fontes) {
         const z = zoomDoLadrilho(vista.escala, g.latitude, FONTE_DO_MAPA[fonte].maxNativeZoom);
         for (const t of ladrilhosDaArea(cantosDaTela, g, z)) {
-          const img = imagemDoLadrilho(urlDoLadrilho(fonte, t));
+          // 26/11/2026: ladrilho que falhou (o satélite fora das cidades, acima do zoom 17) → o recorte do pai.
+          let img: HTMLImageElement | null = null;
+          let recorte = { sx: 0, sy: 0, lado: 256 };
+          for (let n = 0; n <= NIVEIS_DE_RECUO && t.z - n >= 0; n++) {
+            const r = ladrilhoAcima(t, n);
+            const url = urlDoLadrilho(fonte, r.pai);
+            img = imagemDoLadrilho(url);
+            if (img) {
+              recorte = r.recorte;
+              break;
+            }
+            if (ladrilhos.current.get(url) !== 'erro') break; // ainda carregando: espera, não sobe
+          }
           if (!img) continue;
           const a = afimDoLadrilho(t, g);
           const o = paraTela(a.origem);
@@ -3967,7 +3985,7 @@ export default function BlueprintCanvas({
           ctx.setTransform((ex.x - o.x) * dpr, (ex.y - o.y) * dpr, (ey.x - o.x) * dpr, (ey.y - o.y) * dpr, o.x * dpr, o.y * dpr);
           // Meio pixel a mais de cada lado do ladrilho: sem ele a junta entre dois
           // vizinhos aparece como um fio branco no zoom em que a escala não é inteira.
-          ctx.drawImage(img, 0, 0, 256, 256, -0.25, -0.25, 256.5, 256.5);
+          ctx.drawImage(img, recorte.sx, recorte.sy, recorte.lado, recorte.lado, -0.25, -0.25, 256.5, 256.5);
           ctx.restore();
         }
       }

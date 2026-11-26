@@ -101,7 +101,7 @@ import { cotaDaSeta, inserirCanto, moverCanto, moverLado, removerCanto } from '.
 import { PlatoNo3d, type PainelDoPlatoNo3d } from './PainelDoPlato3d';
 import { travarOrtogonal } from '../../utils/blueprintKernel';
 import { formatarCotaM } from '../../utils/blueprintTopografia';
-import { uvNaCaixa, type PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaDeFundo';
+import { FONTE_DO_MAPA, ladrilhoAcima, NIVEIS_DE_RECUO, urlDoLadrilho, uvNaCaixa, type PlanoDaTexturaDoMapa } from '../../utils/blueprintMapaDeFundo';
 import { doDesenhoParaMundo, ESCALA_DO_DESENHO_NO_MUNDO, planoNoMundo } from '../../utils/blueprint3dEspelho';
 import type { ArmaduraDaPeca, HipotesesDeArmadura } from '../../utils/blueprintArmadura';
 import { ehTransversal, segmentosDaArmaduraDoModelo } from '../../utils/blueprintArmaduraGeometria';
@@ -1213,9 +1213,26 @@ function useTexturaDoMapa(m: { plano: PlanoDaTexturaDoMapa; chave: string } | nu
     const t = new THREE.CanvasTexture(canvas);
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 8;
-    const imagens = new Map<string, HTMLImageElement>();
+    const imagens = new Map<string, HTMLImageElement | 'erro'>();
     let vivo = true;
     let agendado = 0;
+    /** Carrega (uma vez) e devolve a imagem pronta, `'erro'`, ou `null` enquanto carrega. */
+    const imagem = (url: string): HTMLImageElement | 'erro' | null => {
+      const ja = imagens.get(url);
+      if (ja === 'erro') return 'erro';
+      if (ja) return ja.complete && ja.naturalWidth ? ja : null;
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => agendar();
+      // 26/11/2026: o erro (o satélite sem imagem nesse zoom, fora das cidades) redesenha — e o recuo pede o pai.
+      img.onerror = () => {
+        imagens.set(url, 'erro');
+        agendar();
+      };
+      img.src = url;
+      imagens.set(url, img);
+      return null;
+    };
     const redesenhar = () => {
       agendado = 0;
       if (!vivo) return;
@@ -1226,11 +1243,23 @@ function useTexturaDoMapa(m: { plano: PlanoDaTexturaDoMapa; chave: string } | nu
       for (const c of plano.camadas) {
         ctx.globalAlpha = c.opacidade;
         for (const l of c.ladrilhos) {
-          const img = imagens.get(l.url);
-          if (!img || !img.complete || !img.naturalWidth) continue;
+          // O ladrilho, ou — se ele falhou — o recorte do pai (até NIVEIS_DE_RECUO acima). Carregando: espera.
+          let img: HTMLImageElement | null = null;
+          let recorte = { sx: 0, sy: 0, lado: 256 };
+          for (let n = 0; n <= NIVEIS_DE_RECUO && l.ladrilho.z - n >= 0; n++) {
+            const r = ladrilhoAcima(l.ladrilho, n);
+            const e = imagem(n === 0 ? l.url : urlDoLadrilho(c.fonte, r.pai));
+            if (e === 'erro') continue;
+            if (e) {
+              img = e;
+              recorte = r.recorte;
+            }
+            break;
+          }
+          if (!img) continue;
           ctx.setTransform(...l.matriz);
           // Meio pixel a mais de cada lado: sem ele a junta entre ladrilhos vira fio claro.
-          ctx.drawImage(img, 0, 0, 256, 256, -0.25, -0.25, 256.5, 256.5);
+          ctx.drawImage(img, recorte.sx, recorte.sy, recorte.lado, recorte.lado, -0.25, -0.25, 256.5, 256.5);
         }
       }
       ctx.setTransform(1, 0, 0, 1, 0, 0);
@@ -1240,16 +1269,7 @@ function useTexturaDoMapa(m: { plano: PlanoDaTexturaDoMapa; chave: string } | nu
     const agendar = () => {
       if (!agendado) agendado = requestAnimationFrame(redesenhar);
     };
-    for (const c of plano.camadas) {
-      for (const l of c.ladrilhos) {
-        if (imagens.has(l.url)) continue;
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        img.onload = agendar;
-        img.src = l.url;
-        imagens.set(l.url, img);
-      }
-    }
+    // Os ladrilhos começam a carregar no primeiro desenho (o `imagem` de cada um).
     redesenhar();
     setTextura(t);
     return () => {
@@ -3948,6 +3968,11 @@ function idsDoModelo(model: Props['model']): Set<string> {
 
 export default function Blueprint3DViewer(props: Props) {
   const sobreOPlato = useRef({ mesh: false, alca: false });
+  /** Os créditos do canto do 3D: os da maquete (no estilo Maquete) e os do mapa colado no relevo (26/11/2026). */
+  const creditosDo3d = [
+    ...(props.estilo === 'MAQUETE' ? (props.notasDaMaquete ?? []) : []),
+    ...new Set((props.mapaNoRelevo?.plano.camadas ?? []).map((c) => FONTE_DO_MAPA[c.fonte].atribuicaoTexto)),
+  ];
   const controlsRef = useRef<{ target?: THREE.Vector3; update?: () => void } | null>(null);
   const { model, mostrarTerreno, relevo, relevoChave, alturaDoChao, onToggleFullscreen, isFullscreen = false } = props;
 
@@ -4139,13 +4164,14 @@ export default function Blueprint3DViewer(props: Props) {
         </div>
       )}
 
-      {props.estilo === 'MAQUETE' && (props.notasDaMaquete?.length ?? 0) > 0 && (
+      {creditosDo3d.length > 0 && (
         // Créditos das fontes (exigidos pelas licenças) e o motivo quando algo não veio. Embaixo à
         // esquerda, ACIMA da linha da dica: em cima à esquerda mora a barra de captura da aba 3D
         // ("HD 1920 × 1080 / Exportar imagem") e a nota a cobria (print do usuário, 25/11/2026);
         // à direita ficam os botões.
+        // 26/11/2026: na mesma caixa, os créditos do MAPA colado no relevo (ruas, relevo, satélite da Esri).
         <div className="pointer-events-none absolute bottom-16 left-2 z-10 max-w-[55%] space-y-0.5 rounded-[6px] bg-white/85 px-2 py-1 text-[11px] text-slate-600" data-testid="notas-da-maquete">
-          {props.notasDaMaquete!.map((n) => (
+          {creditosDo3d.map((n) => (
             <p key={n}>{n}</p>
           ))}
         </div>

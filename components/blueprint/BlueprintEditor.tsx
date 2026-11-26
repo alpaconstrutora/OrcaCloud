@@ -604,7 +604,7 @@ import { blueprintTravaService } from '../../services/blueprintTravaService';
 import { bloqueioDasTravas, idsTravados, type TravaExplicita } from '../../utils/blueprintColaboracao';
 import TelaAntesDepois from './TelaAntesDepois';
 import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
-import { FONTES_DO_MAPA, MAPA_OCULTO, OPACIDADE_DO_MAPA, planoDaTexturaDoMapa, sanearEstadosDoMapa, type EstadosDoMapa } from '../../utils/blueprintMapaDeFundo';
+import { FONTES_DO_MAPA, MAPA_OCULTO, OPACIDADE_DO_MAPA, motivoDaFonteIndisponivel, planoDaTexturaDoMapa, sanearEstadosDoMapa, type EstadosDoMapa } from '../../utils/blueprintMapaDeFundo';
 import { ESTADOS_PADRAO as CAMADAS_TODAS_VISIVEIS, classificarPecas, comTerrenoAVista, conflitoVisivel, contagemPorCamada, estadoDoOverlay, estadosDasChavesAntigas, estadosIguais, idsPorEstado, isolar, sanearEstados, type AlvoDeCamada, type EstadosDasCamadas } from '../../utils/blueprintCamadasPorDisciplina';
 import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
 import { blueprintStudyPermissionService, type PermissaoGravada } from '../../services/blueprintStudyPermissionService';
@@ -3506,7 +3506,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const estadosDoMapa = useMemo(() => sanearEstadosDoMapa(mapaSalvo), [mapaSalvo]);
   const mapaDeFundo = useMemo(() => {
     const g = editor.model.georreferencia;
-    const fontes = FONTES_DO_MAPA.filter((f) => estadosDoMapa[f] !== 'OCULTA').map((f) => ({ fonte: f, opacidade: OPACIDADE_DO_MAPA[estadosDoMapa[f]] }));
+    // 26/11/2026: o satélite sem a chave da Esri não baixa nada (a linha das Camadas diz por quê).
+    const fontes = FONTES_DO_MAPA.filter((f) => estadosDoMapa[f] !== 'OCULTA' && motivoDaFonteIndisponivel(f) === null).map((f) => ({ fonte: f, opacidade: OPACIDADE_DO_MAPA[estadosDoMapa[f]] }));
     return g && fontes.length > 0 ? { georreferencia: g, fontes } : null;
   }, [editor.model.georreferencia, estadosDoMapa]);
   const classificacaoDasPecas = useMemo(() => classificarPecas(editor.model), [editor.model]);

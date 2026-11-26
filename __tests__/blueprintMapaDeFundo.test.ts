@@ -8,6 +8,7 @@ import {
   planoDaTexturaDoMapa,
   uvNaCaixa,
   type CamadaDaTexturaDoMapa,
+  type EstadosDoMapa,
   estiloDaGrade,
   algumMapaAVista,
   alternarMeioTomDoMapa,
@@ -123,6 +124,18 @@ describe('estado das linhas do mapa', () => {
     expect(alternarOlhoDoMapa({ RUAS: 'ATENUADA', RELEVO: 'OCULTA' }, 'RUAS').RUAS).toBe('OCULTA');
     expect(algumMapaAVista(MAPA_OCULTO)).toBe(false);
     expect(algumMapaAVista({ RUAS: 'OCULTA', RELEVO: 'ATENUADA' })).toBe(true);
+  });
+  // 26/11/2026: os mapas são opacos — ruas e relevo ligados escondiam o satélite por baixo. Um por vez.
+  it('um mapa de fundo por vez: ligar um (olho ou meio-tom) desliga os outros', () => {
+    const tudo: EstadosDoMapa = { SATELITE: 'OCULTA', RUAS: 'VISIVEL', RELEVO: 'ATENUADA' };
+    expect(alternarOlhoDoMapa(tudo, 'SATELITE')).toEqual({ SATELITE: 'VISIVEL', RUAS: 'OCULTA', RELEVO: 'OCULTA' });
+    expect(alternarMeioTomDoMapa(tudo, 'SATELITE')).toEqual({ SATELITE: 'ATENUADA', RUAS: 'OCULTA', RELEVO: 'OCULTA' });
+    // Desligar não liga nada.
+    expect(alternarOlhoDoMapa({ SATELITE: 'VISIVEL', RUAS: 'OCULTA', RELEVO: 'OCULTA' }, 'SATELITE')).toEqual(MAPA_OCULTO);
+  });
+  it('o salvo com mais de um mapa ligado fica só com o de cima (o último desenhado), que é o que já se via', () => {
+    expect(sanearEstadosDoMapa({ SATELITE: 'VISIVEL', RUAS: 'VISIVEL', RELEVO: 'VISIVEL' })).toEqual({ SATELITE: 'OCULTA', RUAS: 'OCULTA', RELEVO: 'VISIVEL' });
+    expect(sanearEstadosDoMapa({ SATELITE: 'VISIVEL', RUAS: 'ATENUADA' })).toEqual({ SATELITE: 'OCULTA', RUAS: 'ATENUADA', RELEVO: 'OCULTA' });
   });
   it('URL com subdomínio e o ladrilho', () => {
     expect(urlDoLadrilho('RUAS', { z: 17, x: 48_772, y: 74_472 })).toMatch(/^https:\/\/[abc]\.tile\.openstreetmap\.org\/17\/48772\/74472\.png$/);

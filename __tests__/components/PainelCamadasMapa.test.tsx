@@ -76,14 +76,15 @@ describe('PainelCamadas · mapa de fundo', () => {
     await user.click(screen.getByRole('button', { name: 'Expandir Terreno' }));
     await user.click(within(linhaDoMapa('RUAS')).getByRole('button', { name: 'Exibir Mapa: ruas' }));
     expect(mapa).toEqual({ SATELITE: 'OCULTA', RUAS: 'VISIVEL', RELEVO: 'OCULTA' });
+    // Um mapa de fundo por vez (26/11/2026): ligar o relevo desliga as ruas.
     await user.click(within(linhaDoMapa('RELEVO')).getByRole('button', { name: /Mapa: relevo em meio-tom/ }));
-    expect(mapa).toEqual({ SATELITE: 'OCULTA', RUAS: 'VISIVEL', RELEVO: 'ATENUADA' });
+    expect(mapa).toEqual({ SATELITE: 'OCULTA', RUAS: 'OCULTA', RELEVO: 'ATENUADA' });
     expect(camadas).toBe(ESTADOS_PADRAO);
     // O olho do Terreno esconde o lote e não toca no mapa.
     const terreno = document.querySelector('li[data-camada="TERRENO"]') as HTMLElement;
     await user.click(within(terreno).getByRole('button', { name: 'Ocultar Terreno' }));
     expect(camadas.TERRENO).toBe('OCULTA');
-    expect(mapa).toEqual({ SATELITE: 'OCULTA', RUAS: 'VISIVEL', RELEVO: 'ATENUADA' });
+    expect(mapa).toEqual({ SATELITE: 'OCULTA', RUAS: 'OCULTA', RELEVO: 'ATENUADA' });
   });
 
   it('"Ocultar todas" também esconde o mapa; "Mostrar todas" não liga o mapa', async () => {

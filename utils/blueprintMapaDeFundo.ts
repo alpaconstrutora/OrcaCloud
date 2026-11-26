@@ -94,11 +94,20 @@ export const OPACIDADE_DO_MAPA: Record<EstadoDaCamada, number> = { VISIVEL: 1, A
 export function sanearEstadosDoMapa(raw: unknown): EstadosDoMapa {
   const o = raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const ok = (v: unknown): v is EstadoDaCamada => v === 'VISIVEL' || v === 'ATENUADA' || v === 'OCULTA';
-  return {
+  const e: EstadosDoMapa = {
     SATELITE: ok(o.SATELITE) ? o.SATELITE : 'OCULTA',
     RUAS: ok(o.RUAS) ? o.RUAS : 'OCULTA',
     RELEVO: ok(o.RELEVO) ? o.RELEVO : 'OCULTA',
   };
+  // Um mapa por vez (26/11/2026): o salvo de antes, com mais de um ligado, fica com o de CIMA — o último de
+  // FONTES_DO_MAPA, a ordem em que se desenha —, que era o que a pessoa via.
+  const deCima = [...FONTES_DO_MAPA].reverse().find((f) => e[f] !== 'OCULTA');
+  return deCima ? soEle(deCima, e[deCima]) : e;
+}
+
+/** Só `f` no estado `estado`; os outros mapas ocultos. */
+function soEle(f: FonteDoMapa, estado: EstadoDaCamada): EstadosDoMapa {
+  return { ...MAPA_OCULTO, [f]: estado };
 }
 
 /** Por que a fonte não pode ser ligada agora (`null` = pode). Hoje só o satélite depende de algo: a chave da Esri. */
@@ -107,14 +116,19 @@ export function motivoDaFonteIndisponivel(f: FonteDoMapa, chave: string = CHAVE_
   return null;
 }
 
-/** O olho: oculto → visível; qualquer outro → oculto (a mesma regra das camadas). */
+/*
+ * UM mapa de fundo por vez (26/11/2026): os três são opacos e se empilham — com ruas e relevo ligados, o satélite
+ * por baixo não aparecia. Ligar um (olho ou meio-tom) desliga os outros; desligar não liga nada.
+ */
+
+/** O olho: oculto → visível (e os outros ocultos); qualquer outro → oculto (a mesma regra das camadas). */
 export function alternarOlhoDoMapa(e: EstadosDoMapa, f: FonteDoMapa): EstadosDoMapa {
-  return { ...e, [f]: e[f] === 'OCULTA' ? 'VISIVEL' : 'OCULTA' };
+  return e[f] === 'OCULTA' ? soEle(f, 'VISIVEL') : { ...e, [f]: 'OCULTA' };
 }
 
-/** O meio-tom: atenuado → visível; senão → atenuado (inclusive o oculto, que volta em meio-tom). */
+/** O meio-tom: atenuado → visível; senão → atenuado (inclusive o oculto, que volta em meio-tom). Os outros ocultos. */
 export function alternarMeioTomDoMapa(e: EstadosDoMapa, f: FonteDoMapa): EstadosDoMapa {
-  return { ...e, [f]: e[f] === 'ATENUADA' ? 'VISIVEL' : 'ATENUADA' };
+  return soEle(f, e[f] === 'ATENUADA' ? 'VISIVEL' : 'ATENUADA');
 }
 
 export const algumMapaAVista = (e: EstadosDoMapa) => FONTES_DO_MAPA.some((f) => e[f] !== 'OCULTA');

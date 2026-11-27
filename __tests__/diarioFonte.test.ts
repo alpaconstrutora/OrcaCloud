@@ -97,23 +97,30 @@ function esperarSoCaminhoDoLink() {
 describe('fonteDiarioDoLink · RPCs', () => {
   beforeEach(zerar)
 
-  it('modo e podeAprovarNoLink vêm das opções', () => {
-    expect(fonteDiarioDoLink('tk', { podeAprovar: true }).modo).toBe('link')
-    expect(fonteDiarioDoLink('tk', { podeAprovar: true }).podeAprovarNoLink).toBe(true)
-    expect(fonteDiarioDoLink('tk', { podeAprovar: false }).podeAprovarNoLink).toBe(false)
+  it('modo link; aprovar não é da fonte (vem do diário aberto, `pode_aprovar`)', () => {
+    const f = fonteDiarioDoLink('tk')
+    expect(f.modo).toBe('link')
+    expect('podeAprovarNoLink' in f).toBe(false)
+  })
+
+  it('abrir devolve o pode_aprovar do diário como o banco mandou', async () => {
+    mocks.rpc.mockResolvedValueOnce({ data: { id: 'd1', name: 'D', organization_id: null, pode_aprovar: true, settings: {} }, error: null })
+    const d = await fonteDiarioDoLink('tk').carregarDiario('d1')
+    expect(mocks.rpc).toHaveBeenCalledWith('celular_diario_abrir', { p_token: 'tk', p_project_id: 'd1' })
+    expect(d.pode_aprovar).toBe(true)
   })
 
   it('salvarRegistro → celular_diario_salvar com token, projeto e o registro', async () => {
     const e = entrada()
     mocks.rpc.mockResolvedValue(ok({ entries: [e], anterior: null }))
-    const r = await fonteDiarioDoLink('tk', { podeAprovar: false }).salvarRegistro('p', e)
+    const r = await fonteDiarioDoLink('tk').salvarRegistro('p', e)
     expect(mocks.rpc).toHaveBeenCalledWith('celular_diario_salvar', { p_token: 'tk', p_project_id: 'p', p_entry: e })
     expect(r).toEqual({ entries: [e], anterior: null })
   })
 
   it('excluirRegistro → celular_diario_excluir; resposta vazia vira lista vazia', async () => {
     mocks.rpc.mockResolvedValue(ok(null))
-    const r = await fonteDiarioDoLink('tk', { podeAprovar: false }).excluirRegistro('p', 'e1')
+    const r = await fonteDiarioDoLink('tk').excluirRegistro('p', 'e1')
     expect(mocks.rpc).toHaveBeenCalledWith('celular_diario_excluir', { p_token: 'tk', p_project_id: 'p', p_entry_id: 'e1' })
     expect(r).toEqual({ entries: [], anterior: null })
   })
@@ -126,7 +133,7 @@ describe('fonteDiarioDoLink · RPCs', () => {
       .mockResolvedValueOnce(ok(projetos))
       .mockResolvedValueOnce(ok(diario))
       .mockResolvedValueOnce(ok(efetivo))
-    const f = fonteDiarioDoLink('tk', { podeAprovar: false })
+    const f = fonteDiarioDoLink('tk')
     expect(await f.listarProjetos()).toEqual(projetos)
     expect(await f.carregarDiario('d1')).toEqual(diario)
     expect(await f.listarColaboradores('org-da-sessao')).toEqual(efetivo)
@@ -140,7 +147,7 @@ describe('fonteDiarioDoLink · RPCs', () => {
   it('carregarPlanejamento → celular_planejamento_ler; nulos viram cronograma nulo e orçamento vazio', async () => {
     mocks.rpc.mockResolvedValueOnce(ok({ schedule: cronograma([{ id: 'i1' }]), budget: [{ id: 'i1', quantity: 2 }] }))
     mocks.rpc.mockResolvedValueOnce(ok({ schedule: null, budget: null }))
-    const f = fonteDiarioDoLink('tk', { podeAprovar: false })
+    const f = fonteDiarioDoLink('tk')
     const r = await f.carregarPlanejamento('d1', 'pl1')
     expect(mocks.rpc).toHaveBeenCalledWith('celular_planejamento_ler', { p_token: 'tk', p_diario_id: 'd1', p_planejamento_id: 'pl1' })
     expect(r.schedule?.itemSchedules).toEqual([{ id: 'i1' }])
@@ -151,7 +158,7 @@ describe('fonteDiarioDoLink · RPCs', () => {
   it('gravarEvolucao sem mudança: nenhuma gravação, devolve null', async () => {
     mocks.rpc.mockResolvedValueOnce(ok({ schedule: cronograma([{ id: 'i1', manualRealPct: 40 }]), budget: [] }))
     const entries = [entrada({ activities: [{ itemId: 'i1', evolution: 40 } as never] })]
-    const r = await fonteDiarioDoLink('tk', { podeAprovar: false }).gravarEvolucao('d1', 'pl1', entries)
+    const r = await fonteDiarioDoLink('tk').gravarEvolucao('d1', 'pl1', entries)
     expect(r).toBeNull()
     expect(mocks.rpc).toHaveBeenCalledTimes(1)
     expect(mocks.rpc.mock.calls[0][0]).toBe('celular_planejamento_ler')
@@ -160,7 +167,7 @@ describe('fonteDiarioDoLink · RPCs', () => {
   it('gravarEvolucao sem cronograma: nenhuma gravação, devolve null', async () => {
     mocks.rpc.mockResolvedValueOnce(ok({ schedule: null, budget: [] }))
     const entries = [entrada({ activities: [{ itemId: 'i1', evolution: 40 } as never] })]
-    expect(await fonteDiarioDoLink('tk', { podeAprovar: false }).gravarEvolucao('d1', 'pl1', entries)).toBeNull()
+    expect(await fonteDiarioDoLink('tk').gravarEvolucao('d1', 'pl1', entries)).toBeNull()
     expect(mocks.rpc).toHaveBeenCalledTimes(1)
   })
 
@@ -175,7 +182,7 @@ describe('fonteDiarioDoLink · RPCs', () => {
       entrada({ activities: [{ itemId: 'i1', evolution: 40 } as never, { itemId: 'i2', evolution: 70 } as never] }),
       entrada({ id: 'e2', activities: [{ itemId: 'novo', evolution: 15 } as never] }),
     ]
-    const r = await fonteDiarioDoLink('tk', { podeAprovar: false }).gravarEvolucao('d1', 'pl1', entries)
+    const r = await fonteDiarioDoLink('tk').gravarEvolucao('d1', 'pl1', entries)
     expect(mocks.rpc).toHaveBeenLastCalledWith('celular_planejamento_gravar_evolucao', {
       p_token: 'tk', p_diario_id: 'd1', p_planejamento_id: 'pl1', p_evolucao: { i2: 70, novo: 15 },
     })
@@ -191,7 +198,7 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
     mocks.invoke.mockResolvedValue(ok({ path: `o1/${PROJ}/u.jpg`, token: 'up-tk' }))
     mocks.uploadToSignedUrl.mockResolvedValue(ok({ path: `o1/${PROJ}/u.jpg` }))
     const foto = new File(['x'], 'foto.jpg', { type: 'image/jpeg' })
-    const path = await fonteDiarioDoLink('tk', { podeAprovar: false }).subirFoto({ orgId: 'org-da-sessao', projectId: PROJ, file: foto })
+    const path = await fonteDiarioDoLink('tk').subirFoto({ orgId: 'org-da-sessao', projectId: PROJ, file: foto })
     expect(mocks.comprimirFoto).toHaveBeenCalledWith(foto)
     expect(mocks.invoke).toHaveBeenCalledWith('celular-diario-midia', {
       body: { acao: 'subir', token: 'tk', project_id: PROJ, ext: 'jpg' },
@@ -207,7 +214,7 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
     mocks.comprimirFoto.mockResolvedValue(jpeg)
     mocks.invoke.mockResolvedValue(ok({ path: 'o1/p/u.jpg', token: 'up-tk' }))
     mocks.uploadToSignedUrl.mockResolvedValue(ok({}))
-    await fonteDiarioDoLink('tk', { podeAprovar: false })
+    await fonteDiarioDoLink('tk')
       .subirFoto({ orgId: 'o', projectId: PROJ, file: new File(['x'], 'foto.heic', { type: 'image/heic' }) })
     expect(mocks.invoke.mock.calls[0][1].body.ext).toBe('jpg')
     expect(mocks.uploadToSignedUrl.mock.calls[0][2]).toBe(jpeg)
@@ -215,7 +222,7 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
 
   it('subirFoto: formato que a Edge não aceita é recusado ANTES de chamá-la', async () => {
     const pdf = new File(['%PDF'], 'laudo.pdf', { type: 'application/pdf' })
-    await expect(fonteDiarioDoLink('tk', { podeAprovar: false }).subirFoto({ orgId: 'o', projectId: PROJ, file: pdf }))
+    await expect(fonteDiarioDoLink('tk').subirFoto({ orgId: 'o', projectId: PROJ, file: pdf }))
       .rejects.toThrow('Formato de arquivo não aceito pelo link do celular — envie uma foto (JPG, PNG, WEBP, GIF ou HEIC).')
     expect(mocks.invoke).not.toHaveBeenCalled()
     expect(mocks.uploadToSignedUrl).not.toHaveBeenCalled()
@@ -225,14 +232,14 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
     mocks.invoke.mockResolvedValue(ok({ path: 'o1/p/u.jpg', token: 'up-tk' }))
     const erro = { message: 'falhou o envio' }
     mocks.uploadToSignedUrl.mockResolvedValue({ data: null, error: erro })
-    await expect(fonteDiarioDoLink('tk', { podeAprovar: false })
+    await expect(fonteDiarioDoLink('tk')
       .subirFoto({ orgId: 'o', projectId: PROJ, file: new File(['x'], 'a.png', { type: 'image/png' }) }))
       .rejects.toEqual(erro)
   })
 
   it('assinarFotos: só path vai à Edge; o mapa volta como a Edge devolveu', async () => {
     mocks.invoke.mockResolvedValue(ok({ urls: { 'o/p/a.jpg': 'https://assinada/a' } }))
-    const r = await fonteDiarioDoLink('tk', { podeAprovar: false }).assinarFotos(['data:x', 'o/p/a.jpg'])
+    const r = await fonteDiarioDoLink('tk').assinarFotos(['data:x', 'o/p/a.jpg'])
     expect(mocks.invoke).toHaveBeenCalledWith('celular-diario-midia', {
       body: { acao: 'assinar', token: 'tk', paths: ['o/p/a.jpg'] },
     })
@@ -241,7 +248,7 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
   })
 
   it('assinarFotos: sem path nenhum → {} sem chamar a Edge', async () => {
-    expect(await fonteDiarioDoLink('tk', { podeAprovar: false }).assinarFotos(['data:x', 'https://y', ''])).toEqual({})
+    expect(await fonteDiarioDoLink('tk').assinarFotos(['data:x', 'https://y', ''])).toEqual({})
     expect(mocks.invoke).not.toHaveBeenCalled()
   })
 
@@ -249,14 +256,14 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
     const paths = Array.from({ length: 230 }, (_, i) => `o/p/${i}.jpg`)
     mocks.invoke.mockImplementation(async (_fn: string, { body }: { body: { paths: string[] } }) =>
       ok({ urls: Object.fromEntries(body.paths.map(p => [p, `u:${p}`])) }))
-    const r = await fonteDiarioDoLink('tk', { podeAprovar: false }).assinarFotos(paths)
+    const r = await fonteDiarioDoLink('tk').assinarFotos(paths)
     expect(mocks.invoke.mock.calls.map(c => c[1].body.paths.length)).toEqual([100, 100, 30])
     expect(Object.keys(r)).toHaveLength(230)
   })
 
   it('removerFotos → Edge remover só com paths; falha vira console.warn, não erro', async () => {
     mocks.invoke.mockResolvedValueOnce(ok({ removidos: ['o/p/a.jpg'] }))
-    const f = fonteDiarioDoLink('tk', { podeAprovar: false })
+    const f = fonteDiarioDoLink('tk')
     await f.removerFotos(PROJ, ['data:x', 'o/p/a.jpg'])
     expect(mocks.invoke).toHaveBeenCalledWith('celular-diario-midia', {
       body: { acao: 'remover', token: 'tk', project_id: PROJ, paths: ['o/p/a.jpg'] },
@@ -276,7 +283,7 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
 
   it('assinarFotos: path acima de 300 caracteres fica fora (derrubaria o lote na Edge)', async () => {
     mocks.invoke.mockResolvedValue(ok({ urls: { 'o/p/a.jpg': 'https://assinada/a' } }))
-    const r = await fonteDiarioDoLink('tk', { podeAprovar: false }).assinarFotos(['x'.repeat(301), 'o/p/a.jpg'])
+    const r = await fonteDiarioDoLink('tk').assinarFotos(['x'.repeat(301), 'o/p/a.jpg'])
     expect(mocks.invoke).toHaveBeenCalledTimes(1)
     expect(mocks.invoke.mock.calls[0][1].body.paths).toEqual(['o/p/a.jpg'])
     expect(r).toEqual({ 'o/p/a.jpg': 'https://assinada/a' })
@@ -286,7 +293,7 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
     const paths = Array.from({ length: 230 }, (_, i) => `o/p/${i}.jpg`)
     const soltar: (() => void)[] = []
     mocks.invoke.mockImplementation(() => new Promise(res => { soltar.push(() => res(ok({ removidos: [] }))) }))
-    const pronto = fonteDiarioDoLink('tk', { podeAprovar: false }).removerFotos(PROJ, paths)
+    const pronto = fonteDiarioDoLink('tk').removerFotos(PROJ, paths)
     // Em paralelo: os 3 lotes já saíram antes de qualquer resposta chegar.
     await waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(3))
     expect(mocks.invoke.mock.calls.map(c => c[1].body.paths.length)).toEqual([100, 100, 30])
@@ -303,7 +310,7 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
       .mockResolvedValueOnce(erroDaEdge(403, { error: MENSAGEM_LINK_RECUSADO }))
       .mockResolvedValueOnce(ok({ removidos: [] }))
       .mockResolvedValueOnce(erroDaEdge(403, { error: MENSAGEM_LINK_RECUSADO }))
-    await expect(fonteDiarioDoLink('tk', { aoRecusar, podeAprovar: false }).removerFotos(PROJ, paths)).resolves.toBeUndefined()
+    await expect(fonteDiarioDoLink('tk', { aoRecusar }).removerFotos(PROJ, paths)).resolves.toBeUndefined()
     expect(mocks.invoke).toHaveBeenCalledTimes(3)
     expect(aoRecusar).toHaveBeenCalledTimes(1)
     warn.mockRestore()
@@ -311,7 +318,7 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
 
   it('erro 400 da Edge vira Error com a mensagem do corpo', async () => {
     mocks.invoke.mockResolvedValue(erroDaEdge(400, { error: 'paths deve ter de 1 a 100 caminhos' }))
-    await expect(fonteDiarioDoLink('tk', { podeAprovar: false }).assinarFotos(['o/p/a.jpg']))
+    await expect(fonteDiarioDoLink('tk').assinarFotos(['o/p/a.jpg']))
       .rejects.toThrow('paths deve ter de 1 a 100 caminhos')
   })
 })
@@ -321,7 +328,7 @@ describe('fonteDiarioDoLink · recusa do token', () => {
 
   it('RPC: 42501 "link inválido ou vencido" → aoRecusar e throw; outro 42501 → só throw', async () => {
     const aoRecusar = vi.fn()
-    const f = fonteDiarioDoLink('tk', { aoRecusar, podeAprovar: false })
+    const f = fonteDiarioDoLink('tk', { aoRecusar })
     const recusa = { code: '42501', message: MENSAGEM_LINK_RECUSADO }
     mocks.rpc.mockResolvedValueOnce({ data: null, error: recusa })
     await expect(f.salvarRegistro('p', entrada())).rejects.toEqual(recusa)
@@ -335,7 +342,7 @@ describe('fonteDiarioDoLink · recusa do token', () => {
 
   it('Edge: 403 com a mensagem da recusa → aoRecusar e throw com code 42501; outro 403 → só throw', async () => {
     const aoRecusar = vi.fn()
-    const f = fonteDiarioDoLink('tk', { aoRecusar, podeAprovar: false })
+    const f = fonteDiarioDoLink('tk', { aoRecusar })
     mocks.invoke.mockResolvedValueOnce(erroDaEdge(403, { error: MENSAGEM_LINK_RECUSADO }))
     await expect(f.assinarFotos(['o/p/a.jpg'])).rejects.toMatchObject({ code: '42501', message: MENSAGEM_LINK_RECUSADO })
     expect(aoRecusar).toHaveBeenCalledTimes(1)
@@ -356,7 +363,7 @@ describe('fonteDiarioDoLink · recusa do token', () => {
   it('Edge: 429 (limite de uso do link) → erro com a mensagem da Edge e code 54000; NÃO é recusa do link', async () => {
     const LIMITE = 'Limite de uso do link atingido — tente de novo na próxima hora.'
     const aoRecusar = vi.fn()
-    const f = fonteDiarioDoLink('tk', { aoRecusar, podeAprovar: false })
+    const f = fonteDiarioDoLink('tk', { aoRecusar })
     mocks.invoke.mockResolvedValueOnce(erroDaEdge(429, { error: LIMITE }))
     const falha = await f.subirFoto({ orgId: 'o', projectId: PROJ, file: new File(['x'], 'a.jpg', { type: 'image/jpeg' }) })
       .catch((e: unknown) => e)
@@ -384,7 +391,7 @@ describe('fonteDiarioLogado · os serviços de hoje', () => {
 
   it('modo logado, sem decisão de aprovação própria', () => {
     expect(fonteDiarioLogado.modo).toBe('logado')
-    expect(fonteDiarioLogado.podeAprovarNoLink).toBeNull()
+    expect('podeAprovarNoLink' in fonteDiarioLogado).toBe(false)
   })
 
   it('salvar/excluir pelas RPCs diary_* de sempre', async () => {
@@ -440,7 +447,7 @@ describe('fonteDiarioLogado · os serviços de hoje', () => {
     const lidas: DiarioFonte[] = []
     const Sonda = () => { lidas.push(useDiarioFonte()); return null }
     renderToString(React.createElement(Sonda))
-    const doLink = fonteDiarioDoLink('tk', { podeAprovar: true })
+    const doLink = fonteDiarioDoLink('tk')
     renderToString(React.createElement(DiarioFonteContext.Provider, { value: doLink }, React.createElement(Sonda)))
     expect(lidas[0]).toBe(fonteDiarioLogado)
     expect(lidas[1]).toBe(doLink)

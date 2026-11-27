@@ -68,7 +68,6 @@ const PROJETOS = [{ id: 'd1', name: 'Diário Torre A', settings: { classificatio
 function criarFonte() {
   const fonte = {
     modo: 'link' as const,
-    podeAprovarNoLink: false,
     carregarDiario: vi.fn(async () => DIARIO),
     salvarRegistro: vi.fn(async (_id: string, entry: DiaryEntry) => ({ entries: [APROVADO, entry], anterior: null })),
     excluirRegistro: vi.fn(async () => ({ entries: [], anterior: null })),
@@ -276,8 +275,9 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
     expect(antes.plan).toBe(1)
   })
 
-  it('link que aprova: registro Aprovado fica livre — lixeira e Salvar habilitados', async () => {
-    const fonte = { ...criarFonte(), podeAprovarNoLink: true }
+  it('link que aprova NESTE diário (pode_aprovar do diário aberto): registro Aprovado fica livre — lixeira e Salvar habilitados', async () => {
+    const fonte = criarFonte()
+    fonte.carregarDiario.mockResolvedValue({ ...DIARIO, pode_aprovar: true })
     montar(fonte)
     fireEvent.click(await abrirDiario())
     const salvar = await screen.findByRole('button', { name: /Salvar registro/ })
@@ -294,7 +294,7 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
     sondas.supabase.rpc = rpc
     const aoRecusar = vi.fn()
     // salvarRegistro é o da fonte do link de verdade, com o mesmo critério de recusa do gate.
-    const doLink = fonteDiarioDoLink('tok', { aoRecusar, podeAprovar: false })
+    const doLink = fonteDiarioDoLink('tok', { aoRecusar })
     const fonte = { ...criarFonte(), salvarRegistro: vi.fn(doLink.salvarRegistro) }
     const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
     montar(fonte)

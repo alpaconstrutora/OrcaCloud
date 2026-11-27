@@ -36,7 +36,8 @@ export interface SessaoCelular {
   nome: string
   org_id: string
   org_nome: string
-  /** Se o dono do link aprova registro do Diário (`fn_pode_aprovar_diario_de`, calculado no banco). */
+  /** Se o dono do link aprova registro do Diário NA ORG DO LINK. O Diário pelo link não usa mais:
+   *  aprovar segue a org do diário aberto (`celular_diario_abrir` → `pode_aprovar`, 27/11/2026). */
   pode_aprovar_diario: boolean
 }
 

@@ -67,6 +67,8 @@ interface LoadedProject {
     name: string;
     settings: ProjectSettings;
     organization_id?: string;
+    /** Só no link: se o dono do link aprova neste diário (org DO diário). */
+    pode_aprovar?: boolean;
 }
 
 interface DiaryMobileAppProps {
@@ -1089,9 +1091,10 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     const [toast, setToast] = useState<string | null>(null);
     const [erroSalvar, setErroSalvar] = useState<string | null>(null);
     const fonte = useDiarioFonte();
-    // Regra dos Hooks: o hook roda sempre; no link vale o que `celular_sessao` disse.
+    // Regra dos Hooks: o hook roda sempre; no link vale o que `celular_diario_abrir` disse
+    // para ESTE diário — o link abre diários de várias organizações do dono.
     const aprovacaoDaSessao = useDiaryAprovacao(project?.organization_id ?? project?.settings?.organizationId ?? null);
-    const podeAprovarNoLink = fonte.podeAprovarNoLink;
+    const podeAprovarNoLink = fonte.modo === 'link' ? project?.pode_aprovar === true : null;
     const aprovacao = useMemo<AprovacaoDiario>(() => (
         podeAprovarNoLink === null
             ? aprovacaoDaSessao

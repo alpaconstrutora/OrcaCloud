@@ -24,8 +24,9 @@ const TTL_SEGUNDOS = 60 * 60;
 // sem login: subir, ver (assinar) e remover fotos.
 //
 // ⚠️ A AUTORIZAÇÃO NÃO É REESCRITA AQUI (REGRA #7, pergunta 3). Quem decide o
-// que o token pode é o banco: `celular_diario_autoriza` (projeto da org do link),
-// `celular_diario_midia_permitida` (path citado em registro da org) e
+// que o token pode é o banco: `celular_diario_autoriza` (projeto de org de que o
+// dono do link é membro — devolve a org DO DIÁRIO, que monta o path; 27/11/2026),
+// `celular_diario_midia_permitida` (path citado em registro da mesma org) e
 // `celular_diario_midia_orfa` (path do projeto que nenhum registro cita mais).
 // O limite de uso por link (subir 120/h, assinar 600/h) também é do banco
 // (`_celular_cota`, 54000), e aqui vira 429.

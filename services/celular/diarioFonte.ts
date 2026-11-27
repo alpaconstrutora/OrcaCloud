@@ -26,7 +26,9 @@ import { ehRecusaDoLink } from './tarefasFonte'
  *    RPCs `celular_*` e a Edge `celular-diario-midia`, que resolvem o token no
  *    banco. Nunca `supabase.from`, nunca upload/assinatura/remoção direta no
  *    storage, nunca `projectService`: um navegador logado com OUTRA pessoa abrindo
- *    o link tem de gravar como o dono do link, na organização do link.
+ *    o link tem de gravar como o dono do link. Desde 27/11/2026 o Diário pelo link
+ *    vale para TODAS as organizações de que o dono é membro (o banco confere a cada
+ *    chamada — `aplicar_20271127100000`); Tarefas seguem na organização do link.
  *
  * Erros do banco são lançados como vieram — a tela decide a frase.
  */
@@ -36,6 +38,12 @@ export interface DiarioCarregado {
   id: string
   name: string
   organization_id?: string | null
+  /**
+   * Só no link (`celular_diario_abrir`): se o dono do link aprova registro NESTE
+   * diário — `fn_pode_aprovar_diario_de` na organização do diário. No logado vale
+   * `useDiaryAprovacao`.
+   */
+  pode_aprovar?: boolean
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   settings: Record<string, any>
 }
@@ -61,12 +69,10 @@ export interface ProjetoDoLink {
 
 export interface DiarioFonte {
   modo: 'logado' | 'link'
-  /** null no logado (vale useDiaryAprovacao); no link, o que celular_sessao disse. */
-  podeAprovarNoLink: boolean | null
   carregarDiario(projectId: string): Promise<DiarioCarregado>
   salvarRegistro(projectId: string, entry: DiaryEntry): Promise<DiaryWriteResult>
   excluirRegistro(projectId: string, entryId: string): Promise<DiaryWriteResult>
-  /** `orgId` vale só no logado; no link a organização é a do token. */
+  /** `orgId` vale só no logado; no link vêm os colaboradores de todas as organizações do dono. */
   listarColaboradores(orgId: string | null): Promise<ColaboradorRh[]>
   carregarPlanejamento(diarioId: string, planejamentoId: string): Promise<{ schedule: ProjectSchedule | null; budget: BudgetEntry[] }>
   /** Empurra a evolução das atividades vinculadas; `null` = nada mudou (ou não há cronograma). */
@@ -91,7 +97,6 @@ export interface DiarioFonteDoLink extends DiarioFonte {
 // ── Fonte logada (os serviços de hoje, sem mudar consultas) ───────────────────
 export const fonteDiarioLogado: DiarioFonte = {
   modo: 'logado',
-  podeAprovarNoLink: null,
 
   async carregarDiario(projectId) {
     const p = await projectService.loadProject(projectId)
@@ -137,8 +142,6 @@ export const MENSAGEM_FORMATO_NAO_ACEITO =
 export interface OpcoesFonteDiarioDoLink {
   /** Chamado quando o banco recusa o token com a tela aberta (link revogado ou vencido no meio do uso). */
   aoRecusar?: () => void
-  /** Se o dono do link aprova registro (`celular_sessao`). */
-  podeAprovar: boolean
 }
 
 /** Só path de bucket, sem repetir e dentro do teto da Edge (um path inválido derrubaria o lote inteiro). */
@@ -188,7 +191,7 @@ async function erroDaEdge(error: unknown): Promise<unknown> {
   return Object.assign(falha, { status: ctx.status, ...(code ? { code } : {}) })
 }
 
-export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink): DiarioFonteDoLink {
+export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink = {}): DiarioFonteDoLink {
   /** Chama a RPC e lança o erro do banco; se for a recusa do token, avisa `aoRecusar` antes. */
   async function chamar<T>(rpc: string, args: Record<string, unknown> = {}): Promise<T> {
     const { data, error } = await supabase.rpc(rpc, { p_token: token, ...args })
@@ -225,7 +228,6 @@ export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink):
 
   return {
     modo: 'link',
-    podeAprovarNoLink: opts.podeAprovar,
 
     listarProjetos: async () => (await chamar<ProjetoDoLink[] | null>('celular_diarios_listar')) ?? [],
 
@@ -237,7 +239,7 @@ export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink):
     excluirRegistro: async (projectId, entryId) =>
       toResult(await chamar('celular_diario_excluir', { p_project_id: projectId, p_entry_id: entryId })),
 
-    // `orgId` não entra: o efetivo é o da organização do token.
+    // `orgId` não entra: o efetivo é o das organizações do dono do link.
     listarColaboradores: async () => (await chamar<ColaboradorRh[] | null>('celular_efetivo_listar')) ?? [],
 
     carregarPlanejamento,
@@ -261,7 +263,7 @@ export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink):
       return gravado ?? null
     },
 
-    // `orgId` não entra: o path é montado pela Edge com a organização do token.
+    // `orgId` não entra: o path é montado pela Edge com a organização do diário.
     async subirFoto({ projectId, file }) {
       if (!projectId) throw new Error('Diário sem projeto: não há onde guardar o arquivo.')
       const enviar = await comprimirFoto(file)

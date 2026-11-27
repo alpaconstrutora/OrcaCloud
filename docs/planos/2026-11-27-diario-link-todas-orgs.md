@@ -135,3 +135,8 @@ Nenhum dos dois seguia a regra — tudo preso à org em que o link foi gerado:
   aceito: org_id)"; Pedido Fast falha em "membro de o2: obras da org do link E de o2". Front: `tsc` 0; 12 arquivos,
   140 testes verdes (novo: `TasksMobileAppLinkTodasOrgs`). Pendente: o usuário aplica a migration; Edge publicada pelo
   usuário depois do merge.
+- 2026-11-27: **item 5 feito** — migration aplicada pelo usuário (da pasta desta frente). Conferido no banco:
+  `celular_responsaveis_listar(text, uuid)` é a única sobrecarga, `celular_sessao` com `orgs`, `_celular_pedido_fast_autoriza`
+  com `fn_pode_criar_pedido_em_alguma_de`. **Item 7 feito** — em produção: Tarefas, Pedido Fast e Diário `TUDO OK`.
+  Caso do Iago: orgs Alpa (4 tarefas abertas visíveis, pode pedir, 16 obras) e Garden SPE (pode pedir, 2 obras) —
+  as obras da Garden entram na lista do Pedido Fast pelo link. Item 6: CI do PR #790, merge, publicar a Edge.

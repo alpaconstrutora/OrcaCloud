@@ -12,7 +12,8 @@
 //   • Organização — o que é da org: logo, código, nome, regime de tributos;
 //   • as abas da EMPRESA MATRIZ (Identificação, Sócios, Contas, …) — só org PJ;
 //     é ali que CNPJ, contato e endereço se editam, e o banco espelha na org;
-//   • Empresas do grupo — as demais empresas da org (SPE ligada, holding…).
+//   • Empresas do grupo — as demais empresas da org (SPE ligada, holding…);
+//   • Módulos — quais módulos a organização tem (27/11/2026, OrganizationModulos).
 // Org PF não tem matriz (`companies` não comporta CPF): Organização + Empresas do grupo.
 //
 // Os três painéis ficam MONTADOS e só o ativo aparece: trocar de aba não pode
@@ -32,8 +33,9 @@ import { TabsBar, TabsBarItem } from './ui/TabsBar';
 import OrganizationPage from './OrganizationPage';
 import CompanyDetailPage, { CompanyDetailTab, buildCompanyDetailTabs } from './CompanyDetailPage';
 import CompaniesModule from './CompaniesModule';
+import OrganizationModulos from './OrganizationModulos';
 
-type Aba = 'organizacao' | 'grupo' | CompanyDetailTab;
+type Aba = 'organizacao' | 'grupo' | 'modulos' | CompanyDetailTab;
 
 interface Props {
     organization: Organization;
@@ -53,6 +55,7 @@ const OrganizationDetail: React.FC<Props> = ({ organization, onSave, onBack, onI
     const [carregando, setCarregando] = useState(true);
     const [erro, setErro] = useState<string | null>(null);
     const [orgDirty, setOrgDirty] = useState(false);
+    const [modulosDirty, setModulosDirty] = useState(false);
 
     const carregarEmpresas = useCallback(async () => {
         setCarregando(true);
@@ -77,6 +80,7 @@ const OrganizationDetail: React.FC<Props> = ({ organization, onSave, onBack, onI
         { id: 'organizacao', label: 'Organização' },
         ...abasDaMatriz.map(t => ({ id: t.id as Aba, label: t.label })),
         { id: 'grupo', label: 'Empresas do grupo', badge: outrasEmpresas || undefined },
+        { id: 'modulos', label: 'Módulos' },
     ];
 
     // Matriz salva: o banco já copiou CNPJ/contato/endereço para a org; a lista de
@@ -87,10 +91,11 @@ const OrganizationDetail: React.FC<Props> = ({ organization, onSave, onBack, onI
     };
 
     const voltar = async () => {
-        if (orgDirty) {
+        if (orgDirty || modulosDirty) {
+            const abasPendentes = [orgDirty && 'Organização', modulosDirty && 'Módulos'].filter(Boolean).join(' e ');
             const ok = await confirm({
                 title: 'Sair sem salvar?',
-                message: 'Há alterações não salvas na aba Organização. Se sair agora, elas serão perdidas.',
+                message: `Há alterações não salvas na aba ${abasPendentes}. Se sair agora, elas serão perdidas.`,
                 variant: 'warning',
                 confirmLabel: 'Sair e descartar',
                 cancelLabel: 'Continuar editando',
@@ -167,6 +172,10 @@ const OrganizationDetail: React.FC<Props> = ({ organization, onSave, onBack, onI
 
             <div className={aba === 'grupo' ? '' : 'hidden'}>
                 <CompaniesModule orgId={organization.id} embedded ocultarMatriz />
+            </div>
+
+            <div className={aba === 'modulos' ? '' : 'hidden'}>
+                <OrganizationModulos organization={organization} onDirtyChange={setModulosDirty} />
             </div>
         </div>
     );

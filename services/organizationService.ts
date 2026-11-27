@@ -280,6 +280,26 @@ export const organizationService = {
         };
     },
 
+    /**
+     * Ficha da organização › Módulos (27/11/2026). Grava SÓ `settings.modulos_da_organizacao`,
+     * sobre o `settings` lido do banco agora — não sobre o objeto em memória, que pode estar
+     * velho (outra aba pode ter mudado `module_visibility` ou o regime de tributos).
+     * Guarda só os desligados: `{ obras: false }`. A RLS deixa owner/admin gravar; update
+     * recusado pela RLS volta sem linha e sem erro, por isso o `select` conferido.
+     */
+    async salvarModulosDaOrganizacao(orgId: string, modulos: Record<string, boolean>): Promise<Organization['settings']> {
+        const { data: atual, error: erroLeitura } = await supabase
+            .from('organizations').select('settings').eq('id', orgId).single();
+        if (erroLeitura) throw erroLeitura;
+        const desligados = Object.fromEntries(Object.entries(modulos).filter(([, ligado]) => ligado === false));
+        const settings = { ...((atual?.settings as Organization['settings']) ?? {}), modulos_da_organizacao: desligados };
+        const { data, error } = await supabase
+            .from('organizations').update({ settings }).eq('id', orgId).select('id');
+        if (error) throw error;
+        if (!data?.length) throw new Error('Sem permissão para alterar esta organização: só o proprietário ou um administrador dela pode.');
+        return settings;
+    },
+
     async updateOrganization(id: string, org: Partial<Organization>): Promise<Organization> {
         // 1. Update basic info
         const { data, error } = await supabase

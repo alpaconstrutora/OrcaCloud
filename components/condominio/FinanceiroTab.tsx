@@ -49,6 +49,8 @@ import type { Empreendimento } from '../../types/empreendimento';
 import { podeFecharRateio, situacaoDaAprovacao, ROTULO_DA_APROVACAO, type SituacaoDaAprovacao } from '../../utils/aprovacaoRateio';
 import { mandatoVigente } from '../../utils/mandatoSindico';
 import { orgDoCondominio } from '../../utils/orgDoCondominio';
+import { motivoSemContaDeRecebimento, type SituacaoContaDeRecebimento } from '../../utils/contaDeRecebimentoCondominio';
+import { useStore } from '../../store/useStore';
 
 // §8 — decisão do síndico em texto colorido (Portal do Síndico F3).
 const COR_APROVACAO: Record<SituacaoDaAprovacao, string> = {
@@ -604,6 +606,27 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
     const [rateios, setRateios] = React.useState<Rateio[]>([]);
     const [loading, setLoading] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
+
+    // ── Conta de recebimento (27/11/2026) ─────────────────────────────────
+    // A emissão não pergunta a conta: usa a conta Asaas da org do condomínio.
+    // Mostrar qual é (ou que não há) e desligar "Emitir boletos" com o motivo.
+    const [contaReceb, setContaReceb] = React.useState<SituacaoContaDeRecebimento | null>(null);
+    const [contaRecebErro, setContaRecebErro] = React.useState<string | null>(null);
+    React.useEffect(() => {
+        let vivo = true;
+        setContaReceb(null); setContaRecebErro(null);
+        condominioCobrancaService.contaDeRecebimento(orgId)
+            .then(s => { if (vivo) setContaReceb(s); })
+            .catch(e => { if (vivo) setContaRecebErro(e instanceof Error ? e.message : 'Não foi possível ler a conta de recebimento.'); });
+        return () => { vivo = false; };
+    }, [orgId]);
+    const motivoSemConta = motivoSemContaDeRecebimento(contaReceb);
+    /** Minha Organização › Contas — o mesmo caminho do menu (aba do store + tela pelo hash). */
+    const irParaContas = () => {
+        useStore.getState().setManagementTab('accounts');
+        window.location.hash = '#/organization';
+    };
+
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
         setNotification({ message, type });
@@ -1311,9 +1334,40 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
             </div>
 
             {/* Qual centro de custo alimenta o rateio — sem isso, "de onde vêm as
-                despesas?" só se responde abrindo o código. */}
-            {centros.length > 0 && (
+                despesas?" só se responde abrindo o código. E, na primeira linha,
+                por qual conta os boletos saem (27/11/2026): a emissão não pergunta,
+                usa a conta Asaas da org do condomínio. */}
+            {(centros.length > 0 || contaReceb || contaRecebErro) && (
                 <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3 space-y-1">
+                    {(contaReceb || contaRecebErro) && (
+                        <div className="flex items-center justify-between gap-3">
+                            {contaRecebErro ? (
+                                <p className="text-sm text-red-600 min-w-0">Não foi possível ver a conta de recebimento: {contaRecebErro}</p>
+                            ) : contaReceb?.conta ? (
+                                <p className="text-sm text-gray-600 min-w-0">
+                                    <span className="text-gray-400">Boletos saem pela conta</span>{' '}
+                                    <span className="font-medium text-gray-800">{contaReceb.conta.nome}</span>
+                                    {contaReceb.conta.ambiente === 'sandbox' && <span className="text-amber-700"> (Asaas de teste — sandbox)</span>}
+                                    {!contaReceb.conta.propria && (
+                                        <span className="text-gray-400"> — emprestada de <span className="text-gray-800">{contaReceb.conta.orgDona}</span></span>
+                                    )}
+                                </p>
+                            ) : (
+                                <p className="text-sm text-amber-700 min-w-0 flex items-start gap-1.5">
+                                    <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> {motivoSemConta}
+                                </p>
+                            )}
+                            {!contaRecebErro && (
+                                <button
+                                    type="button"
+                                    onClick={irParaContas}
+                                    className="h-8 px-2.5 rounded-[6px] text-sm font-medium text-blue-600 hover:bg-blue-50 transition-all shrink-0 whitespace-nowrap"
+                                >
+                                    {contaReceb?.conta ? 'Ver contas' : 'Cadastrar conta'}
+                                </button>
+                            )}
+                        </div>
+                    )}
                     {/* Um por linha: com mais de um centro de custo, a despesa do
                         rateio é a SOMA — e cada um pode ser desvinculado sozinho.
                         Vincular mais um: Empreendimento › Vinculações, ou o
@@ -1697,16 +1751,21 @@ const FinanceiroTab: React.FC<Props> = ({ empreendimento, onAbrirRateio }) => {
                                                         {!!r.cobranca_gerada_em
                                                             && (emissoes[r.id]?.emitidas ?? 0) < (emissoes[r.id]?.total ?? 1)
                                                             && (
-                                                            <ActionIconButton
-                                                                kind="share"
-                                                                title={emitindo === r.id
-                                                                    ? 'Emitindo no Asaas...'
-                                                                    : 'Emitir boletos no Asaas (não se desfaz)'}
-                                                                icon={emitindo === r.id
-                                                                    ? <Loader2 className="w-4 h-4 animate-spin" />
-                                                                    : <Send className="w-4 h-4" />}
-                                                                onClick={() => { if (emitindo !== r.id) emitirBoletos(r); }}
-                                                            />
+                                                            // Sem conta de recebimento: desligado com o motivo. O span
+                                                            // carrega o title (ActionIconButton desligado não tem hover).
+                                                            <span className="inline-flex" title={motivoSemConta ?? undefined}>
+                                                                <ActionIconButton
+                                                                    kind="share"
+                                                                    title={emitindo === r.id
+                                                                        ? 'Emitindo no Asaas...'
+                                                                        : 'Emitir boletos no Asaas (não se desfaz)'}
+                                                                    icon={emitindo === r.id
+                                                                        ? <Loader2 className="w-4 h-4 animate-spin" />
+                                                                        : <Send className="w-4 h-4" />}
+                                                                    disabled={!!motivoSemConta}
+                                                                    onClick={() => { if (emitindo !== r.id) emitirBoletos(r); }}
+                                                                />
+                                                            </span>
                                                         )}
                                                         {/* Continua alcançável DEPOIS de gerada, de
                                                             propósito. Desde que o lote deixou de abortar

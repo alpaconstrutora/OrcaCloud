@@ -14,6 +14,7 @@
 import { supabase } from '../lib/supabase';
 import { clientChargeService, type BillingType } from './clientChargeService';
 import { STATUS_COBRANCA_ENCERRADA } from '../utils/asaasEventos';
+import type { ContaDeRecebimento, SituacaoContaDeRecebimento } from '../utils/contaDeRecebimentoCondominio';
 import {
     condominioRateioService, CRITERIO_LABEL,
     type Rateio, type PagadorDaCota,
@@ -422,6 +423,19 @@ export const condominioCobrancaService = {
             if (rid && saida[rid]) saida[rid].emitidas++;
         }
         return saida;
+    },
+
+    /**
+     * Conta Asaas pela qual a emissão vai sair (27/11/2026). RPC e não
+     * `asaasContaService.contaDaOrg`: no navegador aquela função roda com a RLS e
+     * não enxerga a conta emprestada de uma org de que o usuário não é membro.
+     */
+    async contaDeRecebimento(orgId: string): Promise<SituacaoContaDeRecebimento> {
+        const { data, error } = await supabase.rpc('condominio_conta_recebimento', { p_org: orgId });
+        if (error) throw new Error(error.message);
+        const r = data as { ok: boolean; motivo?: string; orgNome?: string | null; conta?: ContaDeRecebimento | null; problema?: string | null } | null;
+        if (!r?.ok) throw new Error(r?.motivo ?? 'Não foi possível ler a conta de recebimento.');
+        return { orgNome: r.orgNome ?? null, conta: r.conta ?? null, problema: r.problema ?? null };
     },
 };
 

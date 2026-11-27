@@ -81,3 +81,9 @@ Tarefas e Pedido Fast pelo link **não mudam** nesta frente (seguem na org do li
   contraprova sem a migration: falha em "listar = todos os projetos das orgs de que o dono do link é membro".
   Front: `tsc` 0 erro; 7 arquivos de teste, 113 testes verdes. Aplicar a migration foi barrado pelo modo automático —
   **pendente: o usuário aplica**; depois, prova em produção (item 3), caso real (item 4) e merge do front.
+- 2026-11-27: **item 1 feito** — migration aplicada pelo usuário (1ª tentativa rodou de `C:\D\frentes\sindico-g7-ficha`,
+  pasta sem `supabase/.temp/project-ref`: saiu sem erro e sem aplicar nada; a 2ª, da pasta desta frente, aplicou).
+  Conferido no banco: `_celular_orgs_do_usuario` existe, `celular_diarios_listar` e `celular_diario_abrir` novos.
+  **Item 3 feito** — prova em produção: `TUDO OK`. **Item 4 feito** — orgs do Iago pela função nova: lista os diários
+  Coronel Lambert e Igreja (Alpa) e **Garden Cambuhy `5627cec6…` (Garden SPE)**; o link dele (org Alpa) segue válido.
+  Item 2: aguardando CI do PR #789 para o merge.

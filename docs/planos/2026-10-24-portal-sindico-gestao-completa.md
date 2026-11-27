@@ -285,4 +285,27 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     resolvedor grava `last_used_at` do link → "cannot execute UPDATE in a read-only transaction" pelo link (a prova
     SQL, sem token, não passava por ali) → voláteis; e o contato repetia o telefone → uma vez só.
   - [ ] PR + CI + publicação.
-- [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7
+- [ ] **G4 — Manutenção e equipamentos** (mesmo pedido de 26/11/2026).
+  Desenho: o app grava direto nas tabelas e a regra mora no banco (concluir a OS → `trg_maintenance_order_completed`
+  recalcula o próximo vencimento do item; código patrimonial em `fn_opura_assets_codigo`; texto de marca/modelo em
+  `fn_catalogo_espelho`). O portal grava nas MESMAS tabelas por RPC, e os gatilhos valem igual. Abas Manutenção (sub-abas
+  Ordens de serviço / Plano de manutenção — nada abaixo de tabela) e Equipamentos com painéis próprios do síndico (antes,
+  a vitrine só-leitura do Portal do Cliente). OS não se apaga pelo portal: concluída é o registro técnico do prédio; a que
+  não vai acontecer é cancelada com motivo. Marca/modelo pelo NOME: acha ou cria no catálogo da org (regra de
+  `brandModelService.resolverMarcaModelo`). Equipamento com OS no histórico não se remove.
+  **Pronto quando:** síndico abre e conclui OS, cadastra equipamento com marca/modelo.
+  - [x] Migration `aplicar_20271126950200_portal_sindico_manutencao` APLICADA (26/11). Prova em bloco desfeito com a
+    administradora no 010: item do plano (6 meses, próximo 15/12); OS do plano ABERTA → com data AGENDADA; concluir no
+    futuro recusado; concluir em 20/11 → item com última 20/11 e próximo 20/05/27 (o gatilho); editar concluída recusado;
+    equipamento "Schneider Motobombas" / "BC-92" com código OPR-PRE-0001, marca e modelo no catálogo (espaços
+    normalizados; a mesma marca em outra caixa reaproveitada); modelo sem marca recusado; remover com OS recusado;
+    cancelar sem motivo recusado, com motivo → CANCELADA com o motivo nos achados; tirar do plano → inativo; de fora
+    recusado. Achado da prova: ler o resultado no MESMO comando SQL da gravação vê o retrato de antes — separar.
+  - [x] Tela: `PainelManutencaoDoSindico` (+ `useManutencaoDoPredio`, condomínio escolhido lembrado entre as duas abas) e
+    `PainelEquipamentosDoSindico`; regras em `utils/manutencaoDoSindico.ts` (4 testes); `sindicoManutencao.test` (4). tsc 0.
+  - [x] Playwright (harness temporário, apagado; leituras reais, escritas bloqueadas), desktop e 390px: ordens, plano com
+    item VENCIDO, "Abrir OS" do item, equipamentos do 007, "Informe a marca do modelo."; 0 escrita, 0 erro, sem rolagem
+    lateral. **O print achou:** cada aba começava no 1º condomínio (Equipamentos no 007 depois de escolher o 010 em
+    Manutenção) → escolha compartilhada.
+  - [ ] PR + CI + publicação.
+- [ ] G5 · [ ] G6 · [ ] G7

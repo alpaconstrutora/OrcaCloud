@@ -6,6 +6,7 @@ import type {
 import type { EstadoDoSindico } from '../utils/acessoDoSindico';
 import type { ContaDoCondominio, TituloDoCondominio } from '../utils/financeiroDoSindico';
 import type { LinhaPagamentoAvulso } from '../utils/pagamentoAvulso';
+import type { ManutencaoDoPredio } from '../utils/manutencaoDoSindico';
 import type {
     ContratoDoCondominio, FormContaDoFornecedor, FormContrato, FornecedorDoCondominio,
 } from '../utils/fornecedoresDoSindico';
@@ -557,6 +558,78 @@ export const sindicoPortalService = {
             ...params(id), p_empreendimento_id: condominioId, p_contrato_id: contratoId, p_fim: fim, p_motivo: motivo,
         }, 'Não foi possível encerrar o contrato.');
         return { canceladas: Number(r.canceladas) || 0, mantidas: Number(r.mantidas) || 0 };
+    },
+
+    // ── G4: manutenção e equipamentos (26/11/2026) ────────────────────────────
+    async getManutencao(id: IdentidadeDoSindico, condominioId: string): Promise<ManutencaoDoPredio> {
+        const { data, error } = await supabase.rpc('sindico_portal_manutencao', { ...params(id), p_empreendimento_id: condominioId });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as Partial<ManutencaoDoPredio> & { ok?: boolean; motivo?: string };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível carregar a manutenção.');
+        return {
+            sistemas: r.sistemas ?? [], plano: r.plano ?? null, itens: r.itens ?? [], ordens: r.ordens ?? [],
+            ativos: r.ativos ?? [], marcas: r.marcas ?? [], podeOperar: !!r.podeOperar, motivoNaoOpera: r.motivoNaoOpera ?? null,
+        };
+    },
+
+    /** `osId` vazio = abrir. Sem data prevista nasce ABERTA; com data, AGENDADA. */
+    async salvarOs(id: IdentidadeDoSindico, condominioId: string, osId: string | null, dados: {
+        descricao: string; tipo: string; prioridade: string; sistemaId: string | null; itemId: string | null;
+        ativoId: string | null; fornecedorId: string | null; previsto: string | null;
+    }): Promise<string> {
+        const r = await escrever('sindico_portal_os_salvar', {
+            ...params(id), p_empreendimento_id: condominioId, p_os_id: osId, p_dados: dados,
+        }, 'Não foi possível salvar a ordem de serviço.');
+        return r.id as string;
+    },
+
+    /** Devolve o próximo vencimento do item do plano (o gatilho recalcula). */
+    async concluirOs(id: IdentidadeDoSindico, condominioId: string, osId: string, data: string, custo: number | null, achados: string):
+        Promise<{ proximoDoPlano: string | null }> {
+        const r = await escrever('sindico_portal_os_concluir', {
+            ...params(id), p_empreendimento_id: condominioId, p_os_id: osId, p_data: data, p_custo: custo, p_achados: achados,
+        }, 'Não foi possível concluir a ordem.');
+        return { proximoDoPlano: (r.proximoDoPlano as string | null) ?? null };
+    },
+
+    async cancelarOs(id: IdentidadeDoSindico, condominioId: string, osId: string, motivo: string): Promise<void> {
+        await escrever('sindico_portal_os_cancelar', {
+            ...params(id), p_empreendimento_id: condominioId, p_os_id: osId, p_motivo: motivo,
+        }, 'Não foi possível cancelar a ordem.');
+    },
+
+    /** `itemId` vazio = incluir (cria o plano vigente se não houver). */
+    async salvarItemDoPlano(id: IdentidadeDoSindico, condominioId: string, itemId: string | null, dados: {
+        descricao: string; sistemaId: string | null; periodicidadeValor: number; periodicidadeUnidade: string;
+        responsavel: string | null; proximo: string | null;
+    }): Promise<string> {
+        const r = await escrever('sindico_portal_plano_item_salvar', {
+            ...params(id), p_empreendimento_id: condominioId, p_item_id: itemId, p_dados: dados,
+        }, 'Não foi possível salvar o item do plano.');
+        return r.id as string;
+    },
+
+    async removerItemDoPlano(id: IdentidadeDoSindico, condominioId: string, itemId: string): Promise<void> {
+        await escrever('sindico_portal_plano_item_remover', {
+            ...params(id), p_empreendimento_id: condominioId, p_item_id: itemId,
+        }, 'Não foi possível tirar o item do plano.');
+    },
+
+    /** Marca e modelo pelo NOME: o banco acha no catálogo da org ou cria. */
+    async salvarEquipamento(id: IdentidadeDoSindico, condominioId: string, ativoId: string | null, dados: {
+        nome: string; sistemaId: string | null; marca: string; modelo: string; serie: string; local: string;
+        compra: string | null; garantiaAte: string | null; obs: string;
+    }): Promise<{ id: string; codigo: string | null }> {
+        const r = await escrever('sindico_portal_ativo_salvar', {
+            ...params(id), p_empreendimento_id: condominioId, p_ativo_id: ativoId, p_dados: dados,
+        }, 'Não foi possível salvar o equipamento.');
+        return { id: r.id as string, codigo: (r.codigo as string | null) ?? null };
+    },
+
+    async removerEquipamento(id: IdentidadeDoSindico, condominioId: string, ativoId: string): Promise<void> {
+        await escrever('sindico_portal_ativo_remover', {
+            ...params(id), p_empreendimento_id: condominioId, p_ativo_id: ativoId,
+        }, 'Não foi possível remover o equipamento.');
     },
 
     async receberTitulo(id: IdentidadeDoSindico, tituloId: string, recebimento: {

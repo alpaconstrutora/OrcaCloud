@@ -32,6 +32,9 @@ import type { Empreendimento } from '../../types/empreendimento';
 import { mandatoVencido as mandatoJaVenceu } from '../../utils/mandatoSindico';
 import { orgDoCondominio } from '../../utils/orgDoCondominio';
 import { useStore } from '../../store/useStore';
+import { financialRegistryService } from '../../services/financialRegistryService';
+import type { PaymentAccount } from '../../types/financial';
+import { gruposDeContas, MOTIVO_SEM_ORG_PROPRIA } from '../../utils/contaDoCondominio';
 
 export type Aba = 'ficha' | 'ocupacoes' | 'fracoes' | 'documentos' | 'ativos' | 'manutencao' | 'financeiro' | 'assembleias' | 'comunicacao';
 
@@ -121,7 +124,21 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
         // partir do vencimento — aqui só se guarda a política do condomínio.
         cobranca_multa_percent: String((e as any).cobranca_multa_percent ?? 2),
         cobranca_juros_mes_percent: String((e as any).cobranca_juros_mes_percent ?? 1),
+        // Conta do condomínio (27/11/2026): vale para tudo dele — lançamento novo sem
+        // conta, na org do condomínio, recebe esta (gatilho no banco).
+        condominio_payment_account_id: e.condominio_payment_account_id || '',
     });
+
+    // Contas de Minha Organização › Contas que o usuário enxerga (ativas; a gravada
+    // fica na lista mesmo inativa). Falhar aqui não derruba a Ficha.
+    const [contas, setContas] = React.useState<PaymentAccount[]>([]);
+    React.useEffect(() => {
+        let vivo = true;
+        financialRegistryService.listPaymentAccounts(undefined, undefined, { incluirInativas: true })
+            .then(l => { if (vivo) setContas(l); })
+            .catch(() => { if (vivo) setContas([]); });
+        return () => { vivo = false; };
+    }, []);
 
     const carregarCentros = React.useCallback(async () => {
         try {
@@ -220,6 +237,7 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                 cobranca_multa_percent: Number(ficha.cobranca_multa_percent.replace(',', '.')) || 0,
                 cobranca_juros_mes_percent: Number(ficha.cobranca_juros_mes_percent.replace(',', '.')) || 0,
             };
+            if (e.condominio_org_id) campos.condominio_payment_account_id = ficha.condominio_payment_account_id || null;
             if (ehDaDona) {
                 Object.assign(campos, {
                     sindico_client_id: ficha.sindico_client_id || null,
@@ -547,6 +565,36 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
                                 </p>
                             </div>
                           </div>
+                        </div>
+                    </div>
+
+                    {/* Conta do condomínio (27/11/2026) — a escolha vale para tudo dele. */}
+                    <div className="mt-8 pt-6 border-t border-gray-100">
+                        <p className="text-sm font-medium text-gray-800">Conta do condomínio</p>
+                        <p className="text-xs text-gray-400 mt-0.5 mb-4">
+                            Cotas, despesas, receitas e contratos novos do condomínio usam esta conta quando não
+                            escolherem outra — pelo app e pelo Portal do Síndico. Conta de outra organização passa
+                            a atender o condomínio ("Atende também" em Minha Organização › Contas).
+                        </p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            <div title={!e.condominio_org_id ? MOTIVO_SEM_ORG_PROPRIA : undefined}>
+                                <label htmlFor="ficha-conta-condominio" className="text-xs font-semibold text-slate-500">Conta</label>
+                                <select
+                                    id="ficha-conta-condominio"
+                                    value={ficha.condominio_payment_account_id}
+                                    disabled={!e.condominio_org_id}
+                                    onChange={ev => setFicha(f => ({ ...f, condominio_payment_account_id: ev.target.value }))}
+                                    className="mt-1 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+                                >
+                                    <option value="">Nenhuma</option>
+                                    {gruposDeContas(contas, minhasOrgs, ficha.condominio_payment_account_id).map(g => (
+                                        <optgroup key={g.orgId} label={g.orgNome}>
+                                            {g.contas.map(c => <option key={c.id} value={c.id}>{c.rotulo}</option>)}
+                                        </optgroup>
+                                    ))}
+                                </select>
+                                {!e.condominio_org_id && <p className="text-xs text-gray-400 mt-1">{MOTIVO_SEM_ORG_PROPRIA}</p>}
+                            </div>
                         </div>
                     </div>
 

@@ -7,6 +7,7 @@ import type { EstadoDoSindico } from '../utils/acessoDoSindico';
 import type { ContaDoCondominio, TituloDoCondominio } from '../utils/financeiroDoSindico';
 import type { LinhaPagamentoAvulso } from '../utils/pagamentoAvulso';
 import type { FormMorador, UnidadeComMoradores } from '../utils/moradoresDoSindico';
+import { camposDaFicha, type FichaDoCondominio, type FormFicha } from '../utils/fichaDoSindico';
 import type { ManutencaoDoPredio } from '../utils/manutencaoDoSindico';
 import type { DocumentoDoPredio } from '../utils/documentosDoSindico';
 import type { DocumentoCategoria } from './condominioComunicacaoService';
@@ -719,6 +720,22 @@ export const sindicoPortalService = {
         if (error) throw new Error(await motivoDaFunction(error, 'Não foi possível enviar o convite.'));
         if (!data?.ok) throw new Error(data?.error || 'Não foi possível enviar o convite.');
         return { kind: data.kind === 'recovery' ? 'recovery' : 'invite' };
+    },
+
+    // ── G7: ficha do condomínio (26/11/2026) ──────────────────────────────────
+    async getFicha(id: IdentidadeDoSindico, condominioId: string): Promise<{ ficha: FichaDoCondominio; motivoNaoOpera: string | null }> {
+        const { data, error } = await supabase.rpc('sindico_portal_ficha', { ...params(id), p_empreendimento_id: condominioId });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as { ok?: boolean; motivo?: string; ficha?: FichaDoCondominio; motivoNaoOpera?: string | null };
+        if (!r.ok || !r.ficha) throw new Error(r.motivo || 'Não foi possível carregar a ficha.');
+        return { ficha: r.ficha, motivoNaoOpera: r.motivoNaoOpera ?? null };
+    },
+
+    /** Só os dados do condomínio; síndico, mandato e aprovação são da administradora. */
+    async salvarFicha(id: IdentidadeDoSindico, condominioId: string, f: FormFicha): Promise<void> {
+        await escrever('sindico_portal_ficha_salvar', {
+            ...params(id), p_empreendimento_id: condominioId, p_campos: camposDaFicha(f),
+        }, 'Não foi possível salvar a ficha.');
     },
 
     async receberTitulo(id: IdentidadeDoSindico, tituloId: string, recebimento: {

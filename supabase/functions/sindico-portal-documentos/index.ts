@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { exigirUsuario, respostaDeErro } from "../_shared/auth.ts"
-import { BUCKET, caminhoDoDocumento, descricaoDoEnvio, recusaPeloTamanhoDoCorpo, validarPedido } from "./regras.ts"
+import { BUCKET, caminhoDoDocumento, descricaoDoEnvio, recusaPeloTamanhoDoCorpo, validarPedido, validarRemocao } from "./regras.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -38,6 +38,12 @@ const json = (body: unknown, status = 200) =>
 // (o caminho de condominioComunicacaoService.uploadDocumento) e a linha em
 // condominio_documentos. Se a linha falhar, o arquivo é apagado (sem órfão no bucket).
 // O caminho nunca vai ao navegador (bucket privado não é dado de portal).
+//
+// G5 (26/11/2026, aba Documentos do portal): `finalidade=documento` no FormData → as 7
+// categorias do condomínio e a autorização `sindico_portal_documento_autorizar` (o síndico
+// logado OU a administradora pelo app — modo 'operar'). E `{ acao: 'remover' }` em JSON
+// (`removerDocumento`, no fim): o banco apaga a linha e devolve o caminho; o arquivo sai
+// depois, pela service_role — o Storage não deixa apagar objeto por SQL.
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
     if (req.method !== 'POST') return json({ error: 'Método não permitido' }, 405);
@@ -45,6 +51,10 @@ serve(async (req: Request) => {
     // 1. Usuário de verdade (sem header, ou só a chave anon → 401).
     const usuario = await exigirUsuario(req);
     if (!usuario.ok) return respostaDeErro(usuario, corsHeaders);
+
+    if ((req.headers.get('content-type') || '').toLowerCase().startsWith('application/json')) {
+        return await removerDocumento(req);
+    }
 
     const ehMultipart = (req.headers.get('content-type') || '').toLowerCase().startsWith('multipart/form-data');
     if (!ehMultipart) return json({ error: 'Envie o arquivo como multipart/form-data.' }, 400);
@@ -68,6 +78,7 @@ serve(async (req: Request) => {
         categoria: form.get('categoria'),
         titulo: form.get('titulo'),
         visivelPortal: form.get('visivelPortal'),
+        finalidade: form.get('finalidade'),
     }, arquivo ? { name: arquivo.name, type: arquivo.type, size: arquivo.size } : null);
     if (!validacao.ok) return json({ error: validacao.erro }, validacao.status);
     const pedido = validacao.pedido;
@@ -80,9 +91,14 @@ serve(async (req: Request) => {
     const comoChamador = createClient(supabaseUrl, anonKey, {
         global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
     });
-    const { data: auth, error: erroAuth } = await comoChamador.rpc('sindico_portal_assembleia_autorizar_documento', {
-        p_token: pedido.token, p_client_id: pedido.clientId, p_empreendimento: pedido.empreendimentoId,
-    });
+    const { data: auth, error: erroAuth } = pedido.finalidade === 'documento'
+        ? await comoChamador.rpc('sindico_portal_documento_autorizar', {
+            p_token: pedido.token, p_client_id: pedido.clientId, p_empreendimento: pedido.empreendimentoId,
+            p_titulo: pedido.titulo, p_categoria: pedido.categoria,
+        })
+        : await comoChamador.rpc('sindico_portal_assembleia_autorizar_documento', {
+            p_token: pedido.token, p_client_id: pedido.clientId, p_empreendimento: pedido.empreendimentoId,
+        });
     if (erroAuth) {
         console.error('[sindico-portal-documentos] autorizar_documento:', erroAuth);
         return json({ error: 'Não foi possível validar o acesso' }, 403);
@@ -121,7 +137,11 @@ serve(async (req: Request) => {
         file_name: arquivo!.name,
         mime_type: pedido.tipo,
         file_size: arquivo!.size,
-        descricao: descricaoDoEnvio(cadastro?.name ?? null, new Date()),
+        // Pela aba Documentos o banco devolve o AUTOR (`nome`: o síndico, ou "Fulano
+        // (administradora)") e `como`; pela assembleia, o nome do cadastro do síndico.
+        descricao: pedido.finalidade === 'documento'
+            ? descricaoDoEnvio(typeof auth.nome === 'string' ? auth.nome : null, new Date(), { administradora: auth.como === 'administradora' })
+            : descricaoDoEnvio(cadastro?.name ?? null, new Date()),
         visivel_portal: pedido.visivelPortal,
     }).select('id').single();
     if (erroLinha || !linha?.id) {
@@ -134,3 +154,46 @@ serve(async (req: Request) => {
 
     return json({ documentoId: linha.id });
 });
+
+// ── Remover (G5) ─────────────────────────────────────────────────────────────
+// O banco decide e apaga a linha com a credencial de QUEM CHAMOU
+// (`sindico_portal_documento_remover`: síndico logado OU a administradora; documento do
+// condomínio; nunca a ata vinculada a uma assembleia nem uma procuração). Só depois a
+// service_role tira o arquivo. Falha ao tirar o arquivo não desfaz a remoção (a linha já
+// foi): fica registrada no log, como no `removeDocumento` do app.
+async function removerDocumento(req: Request): Promise<Response> {
+    let corpo: unknown;
+    try {
+        corpo = await req.json();
+    } catch {
+        return json({ error: 'Corpo inválido.' }, 400);
+    }
+    const validacao = validarRemocao(corpo);
+    if (!validacao.ok) return json({ error: validacao.erro }, validacao.status);
+    const pedido = validacao.pedido;
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
+    const anonKey = Deno.env.get('SUPABASE_ANON_KEY') ?? '';
+    const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
+    const comoChamador = createClient(supabaseUrl, anonKey, {
+        global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
+    });
+    const { data: r, error } = await comoChamador.rpc('sindico_portal_documento_remover', {
+        p_token: pedido.token, p_client_id: pedido.clientId, p_empreendimento: pedido.empreendimentoId,
+        p_documento: pedido.documentoId,
+    });
+    if (error) {
+        console.error('[sindico-portal-documentos] documento_remover:', error);
+        return json({ error: 'Não foi possível validar o acesso' }, 403);
+    }
+    if (!r?.ok) return json({ error: r?.motivo || 'Sem permissão' }, 403);
+
+    if (typeof r.storagePath === 'string' && r.storagePath) {
+        const admin = createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false },
+        });
+        const { error: erroArquivo } = await admin.storage.from(BUCKET).remove([r.storagePath]);
+        if (erroArquivo) console.warn('[sindico-portal-documentos] arquivo órfão no bucket:', r.storagePath, erroArquivo.message);
+    }
+    return json({ ok: true });
+}

@@ -7,6 +7,8 @@ import type { EstadoDoSindico } from '../utils/acessoDoSindico';
 import type { ContaDoCondominio, TituloDoCondominio } from '../utils/financeiroDoSindico';
 import type { LinhaPagamentoAvulso } from '../utils/pagamentoAvulso';
 import type { ManutencaoDoPredio } from '../utils/manutencaoDoSindico';
+import type { DocumentoDoPredio } from '../utils/documentosDoSindico';
+import type { DocumentoCategoria } from './condominioComunicacaoService';
 import type {
     ContratoDoCondominio, FormContaDoFornecedor, FormContrato, FornecedorDoCondominio,
 } from '../utils/fornecedoresDoSindico';
@@ -630,6 +632,49 @@ export const sindicoPortalService = {
         await escrever('sindico_portal_ativo_remover', {
             ...params(id), p_empreendimento_id: condominioId, p_ativo_id: ativoId,
         }, 'Não foi possível remover o equipamento.');
+    },
+
+    // ── G5: documentos do condomínio (26/11/2026) ─────────────────────────────
+    async getDocumentos(id: IdentidadeDoSindico, condominioId: string): Promise<{ documentos: DocumentoDoPredio[]; motivoNaoOpera: string | null }> {
+        const { data, error } = await supabase.rpc('sindico_portal_documentos', { ...params(id), p_empreendimento_id: condominioId });
+        if (error) throw new Error(error.message);
+        const r = (data ?? {}) as { ok?: boolean; motivo?: string; documentos?: DocumentoDoPredio[]; motivoNaoOpera?: string | null };
+        if (!r.ok) throw new Error(r.motivo || 'Não foi possível carregar os documentos.');
+        return { documentos: r.documentos ?? [], motivoNaoOpera: r.motivoNaoOpera ?? null };
+    },
+
+    /** Sobe pela Edge (`finalidade=documento`): o banco autoriza, a service_role grava. */
+    async enviarDocumento(id: IdentidadeDoSindico, condominioId: string, dados: {
+        titulo: string; categoria: DocumentoCategoria; visivelPortal: boolean; arquivo: File;
+    }): Promise<string> {
+        const form = new FormData();
+        if (id.token) form.append('token', id.token);
+        if (id.clientId) form.append('clientId', id.clientId);
+        form.append('empreendimentoId', condominioId);
+        form.append('finalidade', 'documento');
+        form.append('categoria', dados.categoria);
+        form.append('titulo', dados.titulo);
+        form.append('visivelPortal', dados.visivelPortal ? 'true' : 'false');
+        form.append('file', dados.arquivo);
+        const { data, error } = await supabase.functions.invoke('sindico-portal-documentos', { body: form });
+        if (error) throw new Error(await motivoDaFunction(error, 'Não foi possível enviar o documento.'));
+        if (!data?.documentoId) throw new Error(data?.error || 'Não foi possível enviar o documento.');
+        return data.documentoId as string;
+    },
+
+    async visibilidadeDocumento(id: IdentidadeDoSindico, condominioId: string, documentoId: string, visivel: boolean): Promise<void> {
+        await escrever('sindico_portal_documento_visibilidade', {
+            ...params(id), p_empreendimento_id: condominioId, p_documento: documentoId, p_visivel: visivel,
+        }, 'Não foi possível mudar a visibilidade.');
+    },
+
+    /** O banco apaga a linha; a Edge tira o arquivo do bucket (o Storage não deixa por SQL). */
+    async removerDocumento(id: IdentidadeDoSindico, condominioId: string, documentoId: string): Promise<void> {
+        const { data, error } = await supabase.functions.invoke('sindico-portal-documentos', {
+            body: { acao: 'remover', token: id.token ?? null, clientId: id.clientId ?? null, empreendimentoId: condominioId, documentoId },
+        });
+        if (error) throw new Error(await motivoDaFunction(error, 'Não foi possível remover o documento.'));
+        if (!data?.ok) throw new Error(data?.error || 'Não foi possível remover o documento.');
     },
 
     async receberTitulo(id: IdentidadeDoSindico, tituloId: string, recebimento: {

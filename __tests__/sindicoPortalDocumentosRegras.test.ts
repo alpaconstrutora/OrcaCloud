@@ -15,6 +15,8 @@ import {
     TETO_DO_CORPO_BYTES,
     recusaPeloTamanhoDoCorpo,
     descricaoDoEnvio,
+    validarRemocao,
+    CATEGORIAS_DOCUMENTO,
 } from '../supabase/functions/sindico-portal-documentos/regras';
 import {
     BUCKET_DOCUMENTOS,
@@ -46,7 +48,7 @@ describe('sindico-portal-documentos · validarPedido', () => {
             ok: true,
             pedido: {
                 token: null, clientId: CLI, empreendimentoId: EMP, categoria: 'ATA',
-                titulo: 'Ata da AGE — Obras', visivelPortal: true, tipo: 'application/pdf',
+                titulo: 'Ata da AGE — Obras', visivelPortal: true, tipo: 'application/pdf', finalidade: 'assembleia',
             },
         });
     });
@@ -141,6 +143,42 @@ describe('sindico-portal-documentos · autor do envio na descrição (M3)', () =
     });
 });
 
+describe('sindico-portal-documentos · aba Documentos do portal (G5)', () => {
+    const doc = (extra: Record<string, unknown>) => validarPedido({ ...campos, finalidade: 'documento', ...extra }, pdf);
+
+    it('as 7 categorias do condomínio; OUTRO pode ir ao portal (não é a procuração)', () => {
+        expect(CATEGORIAS_DOCUMENTO).toEqual(['CONVENCAO', 'REGULAMENTO', 'ATA', 'MANUAL', 'LAUDO', 'SEGURO', 'OUTRO']);
+        const r = doc({ categoria: 'laudo', visivelPortal: 'true' });
+        expect(r.ok && r.pedido).toMatchObject({ categoria: 'LAUDO', visivelPortal: true, finalidade: 'documento' });
+        const outro = doc({ categoria: 'OUTRO', visivelPortal: 'true' });
+        expect(outro.ok && outro.pedido.visivelPortal).toBe(true);
+    });
+
+    it('sem finalidade continua a assembleia; finalidade desconhecida e categoria fora da lista são recusadas', () => {
+        const r = validarPedido({ ...campos, categoria: 'LAUDO' }, pdf);
+        expect(r).toEqual({ ok: false, status: 400, erro: 'Categoria inválida: o síndico envia a ata (ATA) ou a procuração (OUTRO).' });
+        expect(doc({ finalidade: 'outra' })).toEqual({ ok: false, status: 400, erro: 'Finalidade inválida.' });
+        expect(doc({ categoria: 'PLANTA' })).toEqual({ ok: false, status: 400, erro: 'Categoria inválida.' });
+    });
+
+    it('autor: a administradora sai com o nome que o banco devolveu', () => {
+        const quando = new Date('2026-11-26T22:05:00Z');
+        expect(descricaoDoEnvio('Dev (administradora)', quando, { administradora: true }))
+            .toBe('Enviado por Dev (administradora) pelo Portal do Síndico em 26/11/2026 às 19:05 (horário de Brasília)');
+        expect(descricaoDoEnvio('Maria', quando)).toMatch(/^Enviado pelo síndico Maria /);
+    });
+
+    it('remover: ação, condomínio, documento e acesso conferidos; pelo link o clientId não vai', () => {
+        const ok = validarRemocao({ acao: 'remover', token: 'tok', clientId: CLI, empreendimentoId: EMP, documentoId: CLI });
+        expect(ok).toEqual({ ok: true, pedido: { token: 'tok', clientId: null, empreendimentoId: EMP, documentoId: CLI } });
+        expect(validarRemocao({ acao: 'apagar' })).toEqual({ ok: false, status: 400, erro: 'Ação inválida.' });
+        expect(validarRemocao({ acao: 'remover', empreendimentoId: EMP, documentoId: 'x', clientId: CLI }))
+            .toEqual({ ok: false, status: 400, erro: 'Informe o documento (documentoId).' });
+        expect(validarRemocao({ acao: 'remover', empreendimentoId: EMP, documentoId: CLI }))
+            .toEqual({ ok: false, status: 400, erro: 'Informe o acesso do síndico (token ou clientId).' });
+    });
+});
+
 describe('sindico-portal-documentos · caminho no bucket', () => {
     it('{org}/{empreendimento}/{uuid}.{ext}, como uploadDocumento', () => {
         expect(caminhoDoDocumento(ORG, EMP, ID, 'Procuração 101.PDF')).toBe(`${ORG}/${EMP}/${ID}.pdf`);
@@ -179,7 +217,24 @@ describe('sindico-portal-documentos · o portão está no código (REGRA #7, per
 
     it('a linha grava o autor na descrição, com o nome do cadastro do síndico (M3)', () => {
         expect(fonte).toMatch(/\.from\('clients'\)\.select\('name'\)\.eq\('id', auth\.clientId\)/);
-        expect(fonte).toMatch(/descricao: descricaoDoEnvio\(/);
+        // Assembleia: o nome do cadastro do síndico; aba Documentos (G5): o autor que o banco devolveu.
+        expect(fonte).toMatch(/descricaoDoEnvio\(cadastro\?\.name \?\? null, new Date\(\)\)/);
+        expect(fonte).toMatch(/descricao: pedido\.finalidade === 'documento'/);
+    });
+
+    it('G5: documento autoriza pela RPC própria ANTES da service_role; remover chama o banco antes de tirar o arquivo', () => {
+        const usuario = fonte.indexOf('await exigirUsuario(req)');
+        const rpcDoc = fonte.indexOf("rpc('sindico_portal_documento_autorizar'");
+        const admin = fonte.indexOf('createClient(supabaseUrl, serviceRoleKey');
+        expect(rpcDoc).toBeGreaterThan(usuario);
+        expect(admin).toBeGreaterThan(rpcDoc);
+        // A remoção só é alcançada depois de exigirUsuario.
+        expect(fonte.indexOf('return await removerDocumento(req)')).toBeGreaterThan(usuario);
+        const corpo = fonte.slice(fonte.indexOf('async function removerDocumento'));
+        const rpcRemover = corpo.indexOf("rpc('sindico_portal_documento_remover'");
+        expect(rpcRemover).toBeGreaterThan(0);
+        expect(corpo.indexOf('createClient(supabaseUrl, serviceRoleKey')).toBeGreaterThan(rpcRemover);
+        expect(corpo.indexOf('.remove([r.storagePath])')).toBeGreaterThan(rpcRemover);
     });
 
     it('a RPC roda com a credencial de quem chamou, e a falha da linha apaga o arquivo', () => {

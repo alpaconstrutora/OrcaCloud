@@ -7,7 +7,7 @@ import {
     KpiStrip, PortalCard, CardHeader, DetailField, fmtBRLCents, fmtDate, type KpiItem,
 } from '../portal/PortalKit';
 import {
-    PainelDocumentos, competencia,
+    competencia,
 } from '../client/CondominioTab';
 import { usePersistedState } from '../ui/TableUtils';
 import { supabase } from '../../lib/supabase';
@@ -17,6 +17,7 @@ import PainelChamadosDoSindico from './PainelChamadosDoSindico';
 import PainelFinanceiroDoSindico from './PainelFinanceiroDoSindico';
 import PainelManutencaoDoSindico from './PainelManutencaoDoSindico';
 import PainelEquipamentosDoSindico from './PainelEquipamentosDoSindico';
+import PainelDocumentosDoSindico from './PainelDocumentosDoSindico';
 import PainelAssembleiasDoSindico from './PainelAssembleiasDoSindico';
 import { useSindicoPortal } from './useSindicoPortal';
 import { sindicoPortalService, type IdentidadeDoSindico, type PortalSindico } from '../../services/sindicoPortalService';
@@ -132,8 +133,6 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
     const multi = (dados?.condominios.length ?? 0) > 1;
     const titulo = !dados ? '' : multi ? `${dados.condominios.length} condomínios` : (dados.condominios[0]?.nome ?? '');
 
-    const resolverDocumento = React.useCallback(
-        (documentoId: string) => sindicoPortalService.abrirDocumento(identidade, documentoId), [identidade]);
     const resolverComprovantes = React.useCallback(
         (rateioId: string) => sindicoPortalService.comprovantesDoRateio(identidade, rateioId), [identidade]);
 
@@ -260,10 +259,10 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
                                     logado={!!onLogout || sessaoAtiva || comoAdministradora} notify={notify} onAlteradoPortal={recarregar}
                                     resolverComprovantes={resolverComprovantes} />
                             )}
+                            {/* G5 (26/11/2026): o síndico envia, mostra/esconde e remove documentos. */}
                             {aba === 'documentos' && (
-                                <PortalCard className="p-4 md:p-6">
-                                    <PainelDocumentos documentos={dados.documentos} multi={multi} onResolverDocumento={resolverDocumento} marcarInternos />
-                                </PortalCard>
+                                <PainelDocumentosDoSindico identidade={identidade} condominios={dados.condominios}
+                                    logado={!!onLogout || sessaoAtiva || comoAdministradora} notify={notify} onAlterado={recarregar} />
                             )}
                             {/* G4 (26/11/2026): o síndico opera manutenção e equipamentos — mesma regra de login do Financeiro. */}
                             {aba === 'manutencao' && (

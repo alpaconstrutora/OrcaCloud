@@ -308,4 +308,27 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     lateral. **O print achou:** cada aba começava no 1º condomínio (Equipamentos no 007 depois de escolher o 010 em
     Manutenção) → escolha compartilhada.
   - [ ] PR + CI + publicação.
-- [ ] G5 · [ ] G6 · [ ] G7
+- [ ] **G5 — Documentos** (mesmo pedido de 26/11/2026).
+  Desenho: no app o gestor sobe direto ao bucket (RLS de membro). O síndico não é membro: o arquivo sobe pela Edge
+  `sindico-portal-documentos` (a da ata/procuração da assembleia, fase B) com `finalidade=documento` — as 7 categorias do
+  condomínio, visibilidade escolhida — e a autorização `sindico_portal_documento_autorizar` (síndico logado OU a
+  administradora pelo app, recorte por condomínio; devolve o autor para a descrição). Remover: o banco apaga a linha e
+  devolve o caminho (`sindico_portal_documento_remover`), e a Edge tira o arquivo — o Storage não deixa apagar objeto por
+  SQL (`protect_objects_delete`). Ata vinculada a assembleia e procuração de unidade não saem (a FK da ata é SET NULL: a
+  assembleia perderia a ata calada; a da procuração não tem ação: erro cru). Sem `finalidade`, a Edge segue a assembleia.
+  **Pronto quando:** documento enviado pelo síndico aparece para o morador se marcado visível.
+  - [x] Migration `aplicar_20271126950300_portal_sindico_documentos` APLICADA (26/11). Prova em bloco desfeito com a
+    administradora no 010: ler (id, categoria, visível, motivo de preso); autorizar devolve a org, "Dev (administradora)"
+    e `como`; visibilidade liga; remover por outro condomínio recusado; remover apaga a linha e devolve o caminho;
+    eventos DOCUMENTO_*; de fora recusado; link sem login recusado.
+  - [x] Edge: `regras.ts` (finalidade, 7 categorias, `validarRemocao`, autor administradora) e `index.ts` (ramo do
+    documento; `removerDocumento` depois de `exigirUsuario`, RPC antes da service_role). Testes das regras 26/26 (as
+    travas estruturais da fase B seguem valendo e ganharam as da G5).
+  - [x] Tela: `PainelDocumentosDoSindico` (enviar, mostrar/esconder, abrir, remover; condomínio lembrado); regras em
+    `utils/documentosDoSindico.ts`; `sindicoDocumentos.test` (3). tsc 0. Playwright (harness temporário, apagado; leituras
+    reais, escritas e Edge bloqueadas), desktop e 390px: lista vazia do 007, título sugerido pelo nome do arquivo
+    ("laudo spda 2026"); 0 escrita, 0 erro, sem rolagem lateral.
+  - [ ] Publicar a Edge `sindico-portal-documentos` (o deploy de função é do usuário — `[Production Deploy]`); até lá o
+    envio e a remoção pela aba Documentos recusam (a Edge publicada só conhece a assembleia).
+  - [ ] PR + CI + publicação.
+- [ ] G6 · [ ] G7

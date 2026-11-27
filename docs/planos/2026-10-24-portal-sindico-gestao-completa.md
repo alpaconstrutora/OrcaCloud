@@ -256,4 +256,33 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     não havia barra de abas (só a Visão geral) → a barra vai no pé do quadro.
   - [x] PR + CI + publicação — PR #161, squash `7408df3` (25/10/2026); CI de `main` verde;
     `conferir-producao.sh "Abrir o portal do síndico"` ✅.
-- [ ] G3 · [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7
+- [ ] **G3 — Fornecedores e contratos recorrentes** (usuário: "resolva as Pendências que continuam", 26/11/2026).
+  Desenho: duas sub-abas novas do Financeiro (os cadastros do contrato — centros, contas financeiras, fornecedores — já
+  vêm na leitura do Financeiro, por condomínio).
+  - Fornecedores: listar o que a org do condomínio enxerga (dela ou disponibilizado por outra empresa — este só se
+    consulta, botão diz por quê); editar o cadastro DA org; trocar o nome acompanha os títulos em aberto com a regra
+    do app (`utils/clientPropagacao.ts`: BOLETO só o `party_name`; conta a pagar em RASCUNHO e mês fechado ficam);
+    conta bancária / PIX: nova, editar, principal, desativar (nunca apaga).
+  - Contratos: o app gera a série no NAVEGADOR (`syncRecurringToFinance`); aqui a regra de vencimentos foi para o
+    banco (`fn_contrato_vencimentos`) e provada por paridade com `buildRecurringDueDates` (400 casos aleatórios,
+    4.472 vencimentos, 0 divergência). Dia de vencimento 1–28: de 29 a 31 o `setMonth` do JavaScript transborda
+    (31/01 + 1 mês = 03/03) e a série DO APP pula fevereiro — defeito do app, registrado, não copiado. Sem fim = até
+    o 1º vencimento futuro + 11 ciclos (a janela do app). Número da sequência SUPPLY_CONTRACT da org. Título de org
+    de condomínio não passa pela alçada. Encerrar: fim + `Encerrado`, parcela em aberto depois do fim cancelada.
+  **Pronto quando:** contrato criado pelo portal gera as parcelas em Contas a pagar.
+  - [x] Migrations `aplicar_20271126950000_portal_sindico_fornecedores` e `…950100_portal_sindico_contratos` APLICADAS
+    (26/11). Provas em bloco desfeito com a administradora: fornecedor criado, título lançado, editar o nome atualizou
+    1 título; nome vazio recusado; PIX nasce principal, conta nova principal tira a marca, desativar; PIX sem tipo
+    recusado; fornecedor de outra org recusado ("só quem o cadastrou altera") e `editavel=false` na lista; de fora
+    recusado. Contrato: dia 31 / valor 0 / fim antes do início / fornecedor de fora recusados; sem fim = 12 parcelas
+    "Fatura Contrato CTS-010-001-0001 (1) - dezembro de 2026", centro e fornecedor certos, sem marca do síndico
+    (gatilho #161); encerrar sem motivo recusado; encerrar em 31/03/27 cancelou 8 e manteve 4; de novo recusado.
+  - [x] Tela: sub-abas **Contratos** e **Fornecedores** (`PainelContratosDoSindico`, `PainelFornecedoresDoSindico`);
+    regras em `utils/fornecedoresDoSindico.ts` (6 testes); `sindicoFornecedoresContratos.test` (4). tsc 0.
+  - [x] Playwright (harness temporário, apagado; leituras reais do 010, escritas bloqueadas), desktop e 390px: os 5
+    fornecedores do 010 são da construtora → Editar desligado com o motivo; prévia "15 parcelas … 3 já nascem
+    vencidas"; 0 escrita, 0 erro, sem rolagem lateral. **O print achou:** as 3 leituras novas estavam STABLE e o
+    resolvedor grava `last_used_at` do link → "cannot execute UPDATE in a read-only transaction" pelo link (a prova
+    SQL, sem token, não passava por ali) → voláteis; e o contato repetia o telefone → uma vez só.
+  - [ ] PR + CI + publicação.
+- [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7

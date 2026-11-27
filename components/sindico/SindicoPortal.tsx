@@ -7,7 +7,7 @@ import {
     KpiStrip, PortalCard, CardHeader, DetailField, fmtBRLCents, fmtDate, type KpiItem,
 } from '../portal/PortalKit';
 import {
-    PainelDocumentos, PainelEquipamentos, PainelManutencao, competencia,
+    PainelDocumentos, competencia,
 } from '../client/CondominioTab';
 import { usePersistedState } from '../ui/TableUtils';
 import { supabase } from '../../lib/supabase';
@@ -15,6 +15,8 @@ import PainelUnidadesDoPredio from './PainelUnidadesDoPredio';
 import PainelAvisosDoSindico from './PainelAvisosDoSindico';
 import PainelChamadosDoSindico from './PainelChamadosDoSindico';
 import PainelFinanceiroDoSindico from './PainelFinanceiroDoSindico';
+import PainelManutencaoDoSindico from './PainelManutencaoDoSindico';
+import PainelEquipamentosDoSindico from './PainelEquipamentosDoSindico';
 import PainelAssembleiasDoSindico from './PainelAssembleiasDoSindico';
 import { useSindicoPortal } from './useSindicoPortal';
 import { sindicoPortalService, type IdentidadeDoSindico, type PortalSindico } from '../../services/sindicoPortalService';
@@ -258,16 +260,19 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = 
                                     logado={!!onLogout || sessaoAtiva || comoAdministradora} notify={notify} onAlteradoPortal={recarregar}
                                     resolverComprovantes={resolverComprovantes} />
                             )}
-                            {(aba === 'documentos' || aba === 'manutencao' || aba === 'equipamentos') && (
+                            {aba === 'documentos' && (
                                 <PortalCard className="p-4 md:p-6">
-                                    {aba === 'documentos' && (
-                                        <PainelDocumentos documentos={dados.documentos} multi={multi} onResolverDocumento={resolverDocumento} marcarInternos />
-                                    )}
-                                    {aba === 'manutencao' && (
-                                        <PainelManutencao manutencao={dados.manutencao} ordens={dados.ordens} multi={multi} mostrarCusto />
-                                    )}
-                                    {aba === 'equipamentos' && <PainelEquipamentos ativos={dados.ativos} multi={multi} />}
+                                    <PainelDocumentos documentos={dados.documentos} multi={multi} onResolverDocumento={resolverDocumento} marcarInternos />
                                 </PortalCard>
+                            )}
+                            {/* G4 (26/11/2026): o síndico opera manutenção e equipamentos — mesma regra de login do Financeiro. */}
+                            {aba === 'manutencao' && (
+                                <PainelManutencaoDoSindico identidade={identidade} condominios={dados.condominios}
+                                    logado={!!onLogout || sessaoAtiva || comoAdministradora} notify={notify} />
+                            )}
+                            {aba === 'equipamentos' && (
+                                <PainelEquipamentosDoSindico identidade={identidade} condominios={dados.condominios}
+                                    logado={!!onLogout || sessaoAtiva || comoAdministradora} notify={notify} />
                             )}
                         </div>
                     )}
